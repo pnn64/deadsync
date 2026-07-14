@@ -1,11 +1,8 @@
 use deadlib_render::{
-    BlendMode, ClockDomainTrace, DrawFrame, DrawFrameView, DrawStats, FastTMeshMap,
-    PresentModePolicy, PresentModeTrace, PresentStats, RenderList, RetainedTMeshGeometry,
-    SamplerDesc, SamplerFilter, SamplerWrap, TMeshGeometryId, TMeshRetireStats, TextureHandle,
-    TexturedMeshVertex, drain_tmesh_cache,
-    draw_prep::{
-        self, DrawOp, DrawScratch, TMeshCacheResult, TMeshPrewarmStats, TexturedMeshSource,
-    },
+    BlendMode, ClockDomainTrace, DrawStats, FastU64Map, PresentModePolicy, PresentModeTrace,
+    PresentStats, RenderList, SamplerDesc, SamplerFilter, SamplerWrap, TMeshCacheKey,
+    TextureHandle, TexturedMeshVertex,
+    draw_prep::{self, DrawOp, DrawScratch, TexturedMeshSource},
 };
 use glam::Mat4 as Matrix4;
 use image::RgbaImage;
@@ -19,14 +16,13 @@ use std::{
     error::Error,
     mem,
     sync::{Arc, mpsc},
-    time::{Duration, Instant},
+    time::Instant,
 };
 use wgpu::util::DeviceExt;
 use winit::window::Window;
 
 const WGPU_IMAGE_WAIT_THRESHOLD_US: u32 = 1_000;
 const WGPU_BACK_PRESSURE_THRESHOLD_US: u32 = 1_000;
-const WGPU_TMESH_CACHE_MAX_ENTRIES: usize = 4_096;
 const WGPU_TMESH_CACHE_MAX_BYTES: usize = 16 * 1024 * 1024;
 const LOGICAL_HEIGHT: f32 = 480.0;
 const DESIGN_WIDTH_16_9: f32 = 854.0;
@@ -175,19 +171,6 @@ struct CachedTMeshGeom {
     vertex_count: u32,
 }
 
-#[inline]
-fn cached_tmesh_count_ok(
-    resident_vertex_count: u32,
-    draw_vertex_count: u32,
-    stats: &mut DrawStats,
-) -> bool {
-    if resident_vertex_count == draw_vertex_count {
-        return true;
-    }
-    stats.cached_tmesh_misses = stats.cached_tmesh_misses.saturating_add(1);
-    false
-}
-
 #[derive(Clone, Copy, Debug, Default)]
 struct PresentCompletion {
     present_id: u32,
@@ -244,13 +227,7 @@ pub struct State {
     instance_buffer: wgpu::Buffer,
     instance_capacity: usize,
     prep: DrawScratch,
-    // Render-thread-only, transition-epoch cache. It is prewarmed before live
-    // rendering, capped by `WGPU_TMESH_CACHE_MAX_ENTRIES` and
-    // `WGPU_TMESH_CACHE_MAX_BYTES`, and saturates on a miss rather than pruning
-    // during gameplay. Transition retirement drains the full bounded map and
-    // reports entry/byte counts. wgpu owns deferred destruction for resources
-    // still referenced by submitted GPU work.
-    cached_tmesh: FastTMeshMap<CachedTMeshGeom>,
+    cached_tmesh: FastU64Map<CachedTMeshGeom>,
     cached_tmesh_bytes: usize,
     mesh_vertex_buffer: wgpu::Buffer,
     mesh_vertex_capacity: usize,
@@ -561,7 +538,7 @@ fn init(
             tmesh_instance_capacity,
             64,
         ),
-        cached_tmesh: FastTMeshMap::default(),
+        cached_tmesh: FastU64Map::default(),
         cached_tmesh_bytes: 0,
         mesh_vertex_buffer,
         mesh_vertex_capacity,
@@ -914,34 +891,22 @@ pub fn update_texture(
     Ok(())
 }
 
-#[inline(always)]
-const fn tmesh_cache_has_room(entries: usize, cached_bytes: usize, new_bytes: usize) -> bool {
-    entries < WGPU_TMESH_CACHE_MAX_ENTRIES
-        && new_bytes <= WGPU_TMESH_CACHE_MAX_BYTES
-        && cached_bytes.saturating_add(new_bytes) <= WGPU_TMESH_CACHE_MAX_BYTES
-}
-
 fn ensure_cached_tmesh(
     device: &wgpu::Device,
-    cached_tmesh: &mut FastTMeshMap<CachedTMeshGeom>,
+    cached_tmesh: &mut FastU64Map<CachedTMeshGeom>,
     cached_tmesh_bytes: &mut usize,
-    geometry_id: TMeshGeometryId,
+    cache_key: TMeshCacheKey,
     vertices: &[deadlib_render::TexturedMeshVertex],
-) -> TMeshCacheResult {
-    if vertices.is_empty() {
-        return TMeshCacheResult::IdentityMismatch;
-    }
-    if let Some(entry) = cached_tmesh.get(&geometry_id) {
-        return if entry.vertex_count == vertices.len() as u32 {
-            TMeshCacheResult::Resident
-        } else {
-            TMeshCacheResult::IdentityMismatch
-        };
+) -> bool {
+    if let Some(entry) = cached_tmesh.get(&cache_key) {
+        return entry.vertex_count == vertices.len() as u32;
     }
 
-    let bytes = std::mem::size_of_val(vertices);
-    if !tmesh_cache_has_room(cached_tmesh.len(), *cached_tmesh_bytes, bytes) {
-        return TMeshCacheResult::CapacityExceeded;
+    let bytes = vertices.len() * std::mem::size_of::<TexturedMeshVertex>();
+    if bytes > WGPU_TMESH_CACHE_MAX_BYTES
+        || cached_tmesh_bytes.saturating_add(bytes) > WGPU_TMESH_CACHE_MAX_BYTES
+    {
+        return false;
     }
 
     let buffer = Arc::new(
@@ -952,48 +917,14 @@ fn ensure_cached_tmesh(
         }),
     );
     cached_tmesh.insert(
-        geometry_id,
+        cache_key,
         CachedTMeshGeom {
             buffer,
             vertex_count: vertices.len() as u32,
         },
     );
     *cached_tmesh_bytes = cached_tmesh_bytes.saturating_add(bytes);
-    TMeshCacheResult::Uploaded
-}
-
-/// Uploads immutable textured-mesh geometry before direct frame submission.
-///
-/// The renderer thread owns the entry- and byte-capped cache. It saturates when
-/// either limit is full; prewarming never scans, prunes, or destroys resident
-/// geometry.
-pub fn prewarm_textured_meshes(
-    state: &mut State,
-    geometries: &[RetainedTMeshGeometry],
-) -> TMeshPrewarmStats {
-    let mut stats = TMeshPrewarmStats::default();
-    for geometry in geometries {
-        let vertices = geometry.vertices();
-        let result = ensure_cached_tmesh(
-            &state.device,
-            &mut state.cached_tmesh,
-            &mut state.cached_tmesh_bytes,
-            geometry.id(),
-            vertices,
-        );
-        stats.record(result, vertices.len());
-    }
-    stats
-}
-
-/// Retires every retained textured-mesh buffer at a transition boundary.
-///
-/// Dropping the cache's `Arc<Buffer>` handles does not require an explicit
-/// device poll or wait: wgpu keeps submitted resources alive until the GPU no
-/// longer references them and completes destruction through its normal
-/// resource-lifetime tracking.
-pub fn retire_textured_meshes(state: &mut State) -> TMeshRetireStats {
-    drain_tmesh_cache(&mut state.cached_tmesh, &mut state.cached_tmesh_bytes, drop)
+    true
 }
 
 #[inline(always)]
@@ -1008,168 +939,101 @@ pub fn capture_frame(state: &mut State) -> Result<RgbaImage, Box<dyn Error>> {
         .ok_or_else(|| std::io::Error::other("No captured screenshot frame available").into())
 }
 
-#[inline(always)]
-fn duration_us(elapsed: Duration) -> u32 {
-    let elapsed = elapsed.as_micros();
-    if elapsed > u128::from(u32::MAX) {
-        u32::MAX
-    } else {
-        elapsed as u32
-    }
-}
-
-#[inline(always)]
-fn elapsed_us_since(started: Instant) -> u32 {
-    duration_us(started.elapsed())
-}
-
 pub fn draw(
     state: &mut State,
     render_list: &RenderList,
     textures: &impl TextureLookup,
     apply_present_back_pressure: bool,
 ) -> Result<DrawStats, Box<dyn Error>> {
-    let (width, height) = state.window_size;
-    if width == 0 || height == 0 {
-        return Ok(DrawStats::default());
+    #[inline(always)]
+    fn elapsed_us_since(started: Instant) -> u32 {
+        let elapsed = started.elapsed().as_micros();
+        if elapsed > u128::from(u32::MAX) {
+            u32::MAX
+        } else {
+            elapsed as u32
+        }
     }
 
-    let mut prep = mem::take(&mut state.prep);
-    let draw_prep_started = Instant::now();
-    let mut cache_upload_time = Duration::ZERO;
-    let (frame, frame_prepare) = {
+    let mut stats = DrawStats::default();
+    let (width, height) = state.window_size;
+    if width == 0 || height == 0 {
+        return Ok(stats);
+    }
+
+    {
+        let prep = &mut state.prep;
         let device = &state.device;
         let cached_tmesh = &mut state.cached_tmesh;
         let cached_tmesh_bytes = &mut state.cached_tmesh_bytes;
-        draw_prep::prepare_render_list(render_list, &mut prep, |geometry_id, vertices| {
-            let upload_started = Instant::now();
-            let result = ensure_cached_tmesh(
+        let _prep_stats = draw_prep::prepare(render_list, prep, |cache_key, vertices| {
+            ensure_cached_tmesh(
                 device,
                 cached_tmesh,
                 cached_tmesh_bytes,
-                geometry_id,
+                cache_key,
                 vertices,
-            );
-            if result.upload_attempted() {
-                cache_upload_time = cache_upload_time.saturating_add(upload_started.elapsed());
-            }
-            result
-        })
-    };
-    let draw_prep_time = draw_prep_started.elapsed();
-    let mut stats = DrawStats {
-        draw_prep_us: duration_us(draw_prep_time.saturating_sub(cache_upload_time)),
-        backend_upload_us: duration_us(cache_upload_time),
-        frame_prepare,
-        ..DrawStats::default()
-    };
-    let result = draw_frame_view(
-        state,
-        frame,
-        textures,
-        apply_present_back_pressure,
-        &mut stats,
-        false,
-    );
-    state.prep = prep;
-    result
-}
-
-pub fn draw_frame(
-    state: &mut State,
-    frame: &DrawFrame,
-    textures: &impl TextureLookup,
-    apply_present_back_pressure: bool,
-) -> Result<DrawStats, Box<dyn Error>> {
-    let mut stats = DrawStats {
-        frame_prepare: frame.prepare_stats(),
-        ..DrawStats::default()
-    };
-    draw_frame_view(
-        state,
-        frame.view(),
-        textures,
-        apply_present_back_pressure,
-        &mut stats,
-        true,
-    )
-}
-
-fn draw_frame_view(
-    state: &mut State,
-    frame: DrawFrameView<'_>,
-    textures: &impl TextureLookup,
-    apply_present_back_pressure: bool,
-    stats: &mut DrawStats,
-    collect_run_stats: bool,
-) -> Result<DrawStats, Box<dyn Error>> {
-    let (width, height) = state.window_size;
-    if width == 0 || height == 0 {
-        return Ok(*stats);
+            )
+        });
     }
 
-    let backend_upload_started = Instant::now();
-    let instance_len = frame.sprite_instances.len();
+    let instance_len = render_list.sprite_instances.len();
     ensure_instance_capacity(state, instance_len);
     if instance_len > 0 {
         state.queue.write_buffer(
             &state.instance_buffer,
             0,
-            cast_slice(frame.sprite_instances),
+            cast_slice(render_list.sprite_instances.as_slice()),
         );
     }
-    let mesh_len = frame.mesh_vertices.len();
+    let mesh_len = state.prep.mesh_vertices.len();
     ensure_mesh_vertex_capacity(state, mesh_len);
     if mesh_len > 0 {
         state.queue.write_buffer(
             &state.mesh_vertex_buffer,
             0,
-            cast_slice(frame.mesh_vertices),
+            cast_slice(state.prep.mesh_vertices.as_slice()),
         );
     }
-    let tmesh_len = frame.tmesh_vertices.len();
+    let tmesh_len = state.prep.tmesh_vertices.len();
     ensure_tmesh_vertex_capacity(state, tmesh_len);
     if tmesh_len > 0 {
         state.queue.write_buffer(
             &state.tmesh_vertex_buffer,
             0,
-            cast_slice(frame.tmesh_vertices),
+            cast_slice(state.prep.tmesh_vertices.as_slice()),
         );
     }
-    let tmesh_instance_len = frame.tmesh_instances.len();
+    let tmesh_instance_len = state.prep.tmesh_instances.len();
     ensure_tmesh_instance_capacity(state, tmesh_instance_len);
     if tmesh_instance_len > 0 {
         state.queue.write_buffer(
             &state.tmesh_instance_buffer,
             0,
-            cast_slice(frame.tmesh_instances),
+            cast_slice(state.prep.tmesh_instances.as_slice()),
         );
     }
-    upload_projections(state, frame.cameras);
-    stats.backend_upload_us = stats
-        .backend_upload_us
-        .saturating_add(elapsed_us_since(backend_upload_started));
+    upload_projections(state, &render_list.cameras);
 
     let acquire_started = Instant::now();
-    let (surface_frame, suboptimal) = match state.surface.get_current_texture() {
-        wgpu::CurrentSurfaceTexture::Success(surface_frame) => (surface_frame, false),
-        wgpu::CurrentSurfaceTexture::Suboptimal(surface_frame) => (surface_frame, true),
+    let (frame, suboptimal) = match state.surface.get_current_texture() {
+        wgpu::CurrentSurfaceTexture::Success(frame) => (frame, false),
+        wgpu::CurrentSurfaceTexture::Suboptimal(frame) => (frame, true),
         wgpu::CurrentSurfaceTexture::Lost | wgpu::CurrentSurfaceTexture::Outdated => {
             stats.acquire_us = elapsed_us_since(acquire_started);
             reconfigure_surface(state);
-            return Ok(*stats);
+            return Ok(stats);
         }
         wgpu::CurrentSurfaceTexture::Timeout
         | wgpu::CurrentSurfaceTexture::Occluded
         | wgpu::CurrentSurfaceTexture::Validation => {
             stats.acquire_us = elapsed_us_since(acquire_started);
-            return Ok(*stats);
+            return Ok(stats);
         }
     };
     stats.acquire_us = elapsed_us_since(acquire_started);
     let waited_for_image = stats.acquire_us >= WGPU_IMAGE_WAIT_THRESHOLD_US;
-    let backend_setup_started = Instant::now();
-    let surface_view = surface_frame
+    let view = frame
         .texture
         .create_view(&wgpu::TextureViewDescriptor::default());
     let mut encoder = state
@@ -1177,22 +1041,19 @@ fn draw_frame_view(
         .create_command_encoder(&wgpu::CommandEncoderDescriptor {
             label: Some("wgpu encoder"),
         });
-    stats.backend_setup_us = elapsed_us_since(backend_setup_started);
 
-    let backend_record_started = Instant::now();
-    let mut tmesh_vpf = 0u32;
     {
         let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("wgpu render pass"),
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                view: &surface_view,
+                view: &view,
                 depth_slice: None,
                 resolve_target: None,
                 ops: wgpu::Operations {
                     load: wgpu::LoadOp::Clear(wgpu::Color {
-                        r: f64::from(frame.clear_color[0]),
-                        g: f64::from(frame.clear_color[1]),
-                        b: f64::from(frame.clear_color[2]),
+                        r: f64::from(render_list.clear_color[0]),
+                        g: f64::from(render_list.clear_color[1]),
+                        b: f64::from(render_list.clear_color[2]),
                         a: 1.0,
                     }),
                     store: wgpu::StoreOp::Store,
@@ -1211,7 +1072,7 @@ fn draw_frame_view(
             multiview_mask: None,
         });
 
-        let camera_count = frame.cameras.len();
+        let camera_count = render_list.cameras.len();
         let texture_group = match state.proj {
             ProjState::Immediates => 0,
             ProjState::Uniform { .. } => 1,
@@ -1223,13 +1084,9 @@ fn draw_frame_view(
         let mut last_camera: Option<u8> = None;
         let mut last_tmesh_source: Option<TexturedMeshSource> = None;
         let mut last_tmesh_depth_test: Option<bool> = None;
-        for op in frame.ops {
+        for op in &state.prep.ops {
             match op {
                 DrawOp::Sprite(run) => {
-                    if collect_run_stats {
-                        stats.frame_prepare.sprite_runs =
-                            stats.frame_prepare.sprite_runs.saturating_add(1);
-                    }
                     let Some(tex) = textures.wgpu_texture(run.texture_handle) else {
                         continue;
                     };
@@ -1258,7 +1115,7 @@ fn draw_frame_view(
                             &state.proj,
                             run.camera,
                             camera_count,
-                            frame.cameras,
+                            &render_list.cameras,
                             state.projection,
                         );
                         last_camera = Some(run.camera);
@@ -1274,10 +1131,6 @@ fn draw_frame_view(
                     );
                 }
                 DrawOp::Mesh(run) => {
-                    if collect_run_stats {
-                        stats.frame_prepare.mesh_runs =
-                            stats.frame_prepare.mesh_runs.saturating_add(1);
-                    }
                     if run.vertex_count == 0 {
                         continue;
                     }
@@ -1300,7 +1153,7 @@ fn draw_frame_view(
                             &state.proj,
                             run.camera,
                             camera_count,
-                            frame.cameras,
+                            &render_list.cameras,
                             state.projection,
                         );
                         last_camera = Some(run.camera);
@@ -1311,13 +1164,6 @@ fn draw_frame_view(
                     );
                 }
                 DrawOp::TexturedMesh(run) => {
-                    if collect_run_stats {
-                        stats.frame_prepare.tmesh_runs =
-                            stats.frame_prepare.tmesh_runs.saturating_add(1);
-                    }
-                    let tri_count = run.source.vertex_count() / 3;
-                    tmesh_vpf =
-                        tmesh_vpf.saturating_add(tri_count.saturating_mul(run.instance_count));
                     if run.source.vertex_count() == 0 || run.instance_count == 0 {
                         continue;
                     }
@@ -1351,7 +1197,7 @@ fn draw_frame_view(
                             &state.proj,
                             run.camera,
                             camera_count,
-                            frame.cameras,
+                            &render_list.cameras,
                             state.projection,
                         );
                         last_camera = Some(run.camera);
@@ -1370,18 +1216,10 @@ fn draw_frame_view(
                             TexturedMeshSource::Transient { .. } => {
                                 pass.set_vertex_buffer(0, state.tmesh_vertex_buffer.slice(..));
                             }
-                            TexturedMeshSource::Cached {
-                                geometry_id,
-                                vertex_count,
-                            } => {
-                                let Some(entry) = state.cached_tmesh.get(&geometry_id) else {
-                                    stats.cached_tmesh_misses =
-                                        stats.cached_tmesh_misses.saturating_add(1);
+                            TexturedMeshSource::Cached { cache_key, .. } => {
+                                let Some(entry) = state.cached_tmesh.get(&cache_key) else {
                                     continue;
                                 };
-                                if !cached_tmesh_count_ok(entry.vertex_count, vertex_count, stats) {
-                                    continue;
-                                }
                                 pass.set_vertex_buffer(0, entry.buffer.slice(..));
                             }
                         }
@@ -1421,7 +1259,7 @@ fn draw_frame_view(
             });
             encoder.copy_texture_to_buffer(
                 wgpu::TexelCopyTextureInfo {
-                    texture: &surface_frame.texture,
+                    texture: &frame.texture,
                     mip_level: 0,
                     origin: wgpu::Origin3d::ZERO,
                     aspect: wgpu::TextureAspect::All,
@@ -1458,7 +1296,6 @@ fn draw_frame_view(
     } else {
         None
     };
-    stats.backend_record_us = elapsed_us_since(backend_record_started);
 
     let submitted_present_id = next_present_id(state);
     let submit_started = Instant::now();
@@ -1473,7 +1310,7 @@ fn draw_frame_view(
         });
     });
     let present_started = Instant::now();
-    surface_frame.present();
+    frame.present();
     stats.present_us = elapsed_us_since(present_started);
     let mut back_pressure_waited = false;
     if apply_present_back_pressure && screenshot_readback.is_none() {
@@ -1576,8 +1413,15 @@ fn draw_frame_view(
         reconfigure_surface(state);
     }
 
+    let mut tmesh_vpf = 0u32;
+    for op in &state.prep.ops {
+        if let DrawOp::TexturedMesh(run) = op {
+            let tri_count = run.source.vertex_count() / 3;
+            tmesh_vpf = tmesh_vpf.saturating_add(tri_count.saturating_mul(run.instance_count));
+        }
+    }
     stats.vertices = (instance_len as u32) * 4 + mesh_len as u32 + tmesh_vpf;
-    Ok(*stats)
+    Ok(stats)
 }
 
 #[inline(always)]
@@ -1639,7 +1483,6 @@ pub fn resize(state: &mut State, width: u32, height: u32) {
 }
 
 pub fn cleanup(state: &mut State) {
-    let _ = retire_textured_meshes(state);
     info!("{} (wgpu) backend cleanup complete.", state.api.name());
 }
 
@@ -2487,30 +2330,3 @@ const TMESH_SHADER_IMM: &str = include_str!("shaders/wgpu_tmesh.wgsl");
 const SHADER_UBO: &str = include_str!("shaders/wgpu_sprite_ubo.wgsl");
 const MESH_SHADER_UBO: &str = include_str!("shaders/wgpu_mesh_ubo.wgsl");
 const TMESH_SHADER_UBO: &str = include_str!("shaders/wgpu_tmesh_ubo.wgsl");
-
-#[cfg(test)]
-mod tests {
-    use super::{
-        DrawStats, WGPU_TMESH_CACHE_MAX_BYTES, WGPU_TMESH_CACHE_MAX_ENTRIES, cached_tmesh_count_ok,
-        tmesh_cache_has_room,
-    };
-
-    #[test]
-    fn cached_tmesh_draw_count_mismatch_is_reported_and_skipped() {
-        let mut stats = DrawStats::default();
-        assert!(cached_tmesh_count_ok(6, 6, &mut stats));
-        assert_eq!(stats.cached_tmesh_misses, 0);
-
-        assert!(!cached_tmesh_count_ok(6, 9, &mut stats));
-        assert_eq!(stats.cached_tmesh_misses, 1);
-    }
-
-    #[test]
-    fn cached_tmesh_capacity_caps_entries_and_bytes() {
-        assert!(tmesh_cache_has_room(WGPU_TMESH_CACHE_MAX_ENTRIES - 1, 0, 1));
-        assert!(!tmesh_cache_has_room(WGPU_TMESH_CACHE_MAX_ENTRIES, 0, 1));
-        assert!(tmesh_cache_has_room(0, 0, WGPU_TMESH_CACHE_MAX_BYTES));
-        assert!(!tmesh_cache_has_room(0, 1, WGPU_TMESH_CACHE_MAX_BYTES));
-        assert!(!tmesh_cache_has_room(0, usize::MAX, 1));
-    }
-}

@@ -1,11 +1,7 @@
 use deadlib_render::{
-    BlendMode, DrawFrame, DrawFrameView, DrawStats, FastTMeshMap, RenderList,
-    RetainedTMeshGeometry, SamplerDesc, SamplerFilter, SamplerWrap, SpriteInstanceRaw,
-    TMeshGeometryId, TMeshRetireStats, TextureHandle, TexturedMeshInstanceRaw, TexturedMeshVertex,
-    drain_tmesh_cache,
-    draw_prep::{
-        self, DrawOp, DrawScratch, TMeshCacheResult, TMeshPrewarmStats, TexturedMeshSource,
-    },
+    BlendMode, DrawStats, FastU64Map, RenderList, SamplerDesc, SamplerFilter, SamplerWrap,
+    SpriteInstanceRaw, TMeshCacheKey, TextureHandle, TexturedMeshInstanceRaw, TexturedMeshVertex,
+    draw_prep::{self, DrawOp, DrawScratch, TexturedMeshSource},
 };
 use glam::Mat4 as Matrix4;
 use glow::{HasContext, PixelPackData, PixelUnpackData, UniformLocation};
@@ -19,14 +15,7 @@ use glutin::{
 use image::RgbaImage;
 use log::{debug, info, warn};
 use raw_window_handle::{HasDisplayHandle, HasWindowHandle, RawWindowHandle};
-use std::{
-    error::Error,
-    ffi::CStr,
-    mem,
-    num::NonZeroU32,
-    sync::Arc,
-    time::{Duration, Instant},
-};
+use std::{error::Error, ffi::CStr, mem, num::NonZeroU32, sync::Arc, time::Instant};
 use winit::window::Window;
 
 #[cfg(all(unix, not(target_os = "macos")))]
@@ -83,7 +72,6 @@ fn set_macos_opengl_high_dpi_surface(window: &Window, enabled: bool) {
 
 const OPENGL_PRESENT_SPIKE_US: u32 = 3_000;
 const OPENGL_GPU_WAIT_SPIKE_US: u32 = 1_000;
-const OPENGL_TMESH_CACHE_MAX_ENTRIES: usize = 4_096;
 const OPENGL_TMESH_CACHE_MAX_BYTES: usize = 16 * 1024 * 1024;
 const LOGICAL_HEIGHT: f32 = 480.0;
 const DESIGN_WIDTH_16_9: f32 = 854.0;
@@ -213,19 +201,6 @@ struct CachedTMeshGeom {
     vertex_count: u32,
 }
 
-#[inline]
-fn cached_tmesh_count_ok(
-    resident_vertex_count: u32,
-    draw_vertex_count: u32,
-    stats: &mut DrawStats,
-) -> bool {
-    if resident_vertex_count == draw_vertex_count {
-        return true;
-    }
-    stats.cached_tmesh_misses = stats.cached_tmesh_misses.saturating_add(1);
-    false
-}
-
 #[derive(Clone, Copy)]
 struct LegacySpriteUniforms {
     center: UniformLocation,
@@ -279,13 +254,7 @@ pub struct State {
     tmesh_vbo: glow::Buffer,
     tmesh_instance_vbo: Option<glow::Buffer>,
     prep: DrawScratch,
-    // Render-thread-only, transition-epoch cache. It is prewarmed before live
-    // rendering, capped by `OPENGL_TMESH_CACHE_MAX_ENTRIES` and
-    // `OPENGL_TMESH_CACHE_MAX_BYTES`, and saturates on a miss rather than
-    // pruning during gameplay. Transition retirement drains the full bounded
-    // map and reports entry/byte counts; `cleanup` uses that same path. OpenGL
-    // performs the final destruction in its owning context.
-    cached_tmesh: FastTMeshMap<CachedTMeshGeom>,
+    cached_tmesh: FastU64Map<CachedTMeshGeom>,
     cached_tmesh_bytes: usize,
     vsync_enabled: bool,
     screenshot_requested: bool,
@@ -690,7 +659,7 @@ pub fn init(
         tmesh_vbo,
         tmesh_instance_vbo,
         prep: DrawScratch::with_capacity(1024, 1024, 256, 64),
-        cached_tmesh: FastTMeshMap::default(),
+        cached_tmesh: FastU64Map::default(),
         cached_tmesh_bytes: 0,
         vsync_enabled,
         screenshot_requested: false,
@@ -876,56 +845,29 @@ pub fn delete_texture(state: &State, texture: &Texture) {
     }
 }
 
-#[inline(always)]
-fn duration_us(elapsed: Duration) -> u32 {
-    let elapsed = elapsed.as_micros();
-    if elapsed > u128::from(u32::MAX) {
-        u32::MAX
-    } else {
-        elapsed as u32
-    }
-}
-
-#[inline(always)]
-fn elapsed_us_since(started: Instant) -> u32 {
-    duration_us(started.elapsed())
-}
-
-#[inline(always)]
-const fn tmesh_cache_has_room(entries: usize, cached_bytes: usize, new_bytes: usize) -> bool {
-    entries < OPENGL_TMESH_CACHE_MAX_ENTRIES
-        && new_bytes <= OPENGL_TMESH_CACHE_MAX_BYTES
-        && cached_bytes.saturating_add(new_bytes) <= OPENGL_TMESH_CACHE_MAX_BYTES
-}
-
 fn ensure_cached_tmesh(
     gl: &glow::Context,
-    cached_tmesh: &mut FastTMeshMap<CachedTMeshGeom>,
+    cached_tmesh: &mut FastU64Map<CachedTMeshGeom>,
     cached_tmesh_bytes: &mut usize,
-    geometry_id: TMeshGeometryId,
+    cache_key: TMeshCacheKey,
     vertices: &[deadlib_render::TexturedMeshVertex],
-) -> TMeshCacheResult {
-    if vertices.is_empty() {
-        return TMeshCacheResult::IdentityMismatch;
-    }
-    if let Some(entry) = cached_tmesh.get(&geometry_id) {
-        return if entry.vertex_count == vertices.len() as u32 {
-            TMeshCacheResult::Resident
-        } else {
-            TMeshCacheResult::IdentityMismatch
-        };
+) -> bool {
+    if let Some(entry) = cached_tmesh.get(&cache_key) {
+        return entry.vertex_count == vertices.len() as u32;
     }
 
-    let bytes = std::mem::size_of_val(vertices);
-    if !tmesh_cache_has_room(cached_tmesh.len(), *cached_tmesh_bytes, bytes) {
-        return TMeshCacheResult::CapacityExceeded;
+    let bytes = vertices.len() * std::mem::size_of::<TexturedMeshVertex>();
+    if bytes > OPENGL_TMESH_CACHE_MAX_BYTES
+        || cached_tmesh_bytes.saturating_add(bytes) > OPENGL_TMESH_CACHE_MAX_BYTES
+    {
+        return false;
     }
 
     // SAFETY: the OpenGL context is current on this thread while draw prep runs,
     // and the uploaded slice remains alive for the duration of the call.
     let vbo = unsafe {
         let Ok(vbo) = gl.create_buffer() else {
-            return TMeshCacheResult::UploadFailed;
+            return false;
         };
         gl.bind_buffer(glow::ARRAY_BUFFER, Some(vbo));
         gl.buffer_data_u8_slice(
@@ -938,58 +880,14 @@ fn ensure_cached_tmesh(
     };
 
     cached_tmesh.insert(
-        geometry_id,
+        cache_key,
         CachedTMeshGeom {
             vbo,
             vertex_count: vertices.len() as u32,
         },
     );
     *cached_tmesh_bytes = cached_tmesh_bytes.saturating_add(bytes);
-    TMeshCacheResult::Uploaded
-}
-
-/// Uploads immutable textured-mesh geometry before direct frame submission.
-///
-/// The renderer thread owns the entry- and byte-capped cache. It saturates when
-/// either limit is full; prewarming never scans, prunes, or destroys resident
-/// geometry.
-pub fn prewarm_textured_meshes(
-    state: &mut State,
-    geometries: &[RetainedTMeshGeometry],
-) -> TMeshPrewarmStats {
-    let mut stats = TMeshPrewarmStats::default();
-    for geometry in geometries {
-        let vertices = geometry.vertices();
-        let result = ensure_cached_tmesh(
-            &state.gl,
-            &mut state.cached_tmesh,
-            &mut state.cached_tmesh_bytes,
-            geometry.id(),
-            vertices,
-        );
-        stats.record(result, vertices.len());
-    }
-    stats
-}
-
-/// Retires every retained textured-mesh buffer at a transition boundary.
-///
-/// This must run on the renderer thread while its OpenGL context is current.
-/// `glDeleteBuffers` marks each object for deletion; OpenGL keeps storage alive
-/// for earlier submitted commands and bound references, so no `glFinish` or
-/// other transition-time GPU synchronization is necessary.
-pub fn retire_textured_meshes(state: &mut State) -> TMeshRetireStats {
-    let gl = &state.gl;
-    drain_tmesh_cache(
-        &mut state.cached_tmesh,
-        &mut state.cached_tmesh_bytes,
-        |geom| {
-            // SAFETY: cached VBOs were created by this context, the context is
-            // current on this renderer thread, and draining transfers their
-            // sole backend ownership so every name is deleted exactly once.
-            unsafe { gl.delete_buffer(geom.vbo) };
-        },
-    )
+    true
 }
 
 #[inline(always)]
@@ -1003,78 +901,19 @@ pub fn draw(
     textures: &impl TextureLookup,
     apply_present_back_pressure: bool,
 ) -> Result<DrawStats, Box<dyn Error>> {
+    #[inline(always)]
+    fn elapsed_us_since(started: Instant) -> u32 {
+        let elapsed = started.elapsed().as_micros();
+        if elapsed > u128::from(u32::MAX) {
+            u32::MAX
+        } else {
+            elapsed as u32
+        }
+    }
+
     let (width, height) = state.window_size;
     if width == 0 || height == 0 {
         return Ok(DrawStats::default());
-    }
-
-    let mut prep = mem::take(&mut state.prep);
-    let draw_prep_started = Instant::now();
-    let mut cache_upload_time = Duration::ZERO;
-    let (frame, frame_prepare) = {
-        let gl = &state.gl;
-        let cached_tmesh = &mut state.cached_tmesh;
-        let cached_tmesh_bytes = &mut state.cached_tmesh_bytes;
-        draw_prep::prepare_render_list(render_list, &mut prep, |geometry_id, vertices| {
-            let upload_started = Instant::now();
-            let result =
-                ensure_cached_tmesh(gl, cached_tmesh, cached_tmesh_bytes, geometry_id, vertices);
-            if result.upload_attempted() {
-                cache_upload_time = cache_upload_time.saturating_add(upload_started.elapsed());
-            }
-            result
-        })
-    };
-    let draw_prep_time = draw_prep_started.elapsed();
-    let mut stats = DrawStats {
-        draw_prep_us: duration_us(draw_prep_time.saturating_sub(cache_upload_time)),
-        backend_upload_us: duration_us(cache_upload_time),
-        frame_prepare,
-        ..DrawStats::default()
-    };
-    let result = draw_frame_view(
-        state,
-        frame,
-        textures,
-        apply_present_back_pressure,
-        &mut stats,
-        false,
-    );
-    state.prep = prep;
-    result
-}
-
-pub fn draw_frame(
-    state: &mut State,
-    frame: &DrawFrame,
-    textures: &impl TextureLookup,
-    apply_present_back_pressure: bool,
-) -> Result<DrawStats, Box<dyn Error>> {
-    let mut stats = DrawStats {
-        frame_prepare: frame.prepare_stats(),
-        ..DrawStats::default()
-    };
-    draw_frame_view(
-        state,
-        frame.view(),
-        textures,
-        apply_present_back_pressure,
-        &mut stats,
-        true,
-    )
-}
-
-fn draw_frame_view(
-    state: &mut State,
-    frame: DrawFrameView<'_>,
-    textures: &impl TextureLookup,
-    apply_present_back_pressure: bool,
-    stats: &mut DrawStats,
-    collect_run_stats: bool,
-) -> Result<DrawStats, Box<dyn Error>> {
-    let (width, height) = state.window_size;
-    if width == 0 || height == 0 {
-        return Ok(*stats);
     }
 
     #[inline(always)]
@@ -1128,15 +967,29 @@ fn draw_frame_view(
         *last = Some(want);
     }
 
+    let backend_prepare_started = Instant::now();
+    {
+        let prep = &mut state.prep;
+        let gl = &state.gl;
+        let cached_tmesh = &mut state.cached_tmesh;
+        let cached_tmesh_bytes = &mut state.cached_tmesh_bytes;
+        let _prep_stats = draw_prep::prepare(render_list, prep, |cache_key, vertices| {
+            ensure_cached_tmesh(gl, cached_tmesh, cached_tmesh_bytes, cache_key, vertices)
+        });
+    }
+    let mut stats = DrawStats::default();
+    stats.backend_prepare_us = elapsed_us_since(backend_prepare_started);
+
     let mut vertices: u32 = 0;
+
+    let backend_record_started = Instant::now();
     // SAFETY: the OpenGL context in `state` is current on this thread for drawing,
     // and all buffer uploads reference slices that remain alive for the duration of
     // each call.
     unsafe {
         let gl = &state.gl;
 
-        let backend_setup_started = Instant::now();
-        let c = frame.clear_color;
+        let c = render_list.clear_color;
         gl.color_mask(true, true, true, true);
         gl.clear_color(c[0], c[1], c[2], 1.0);
         gl.clear_depth(1.0);
@@ -1162,52 +1015,46 @@ fn draw_frame_view(
         let mut last_tmesh_instance_start: Option<u32> = None;
         let mut last_tmesh_source: Option<TexturedMeshSource> = None;
         let mut last_depth_test = Some(false);
-        stats.backend_setup_us = elapsed_us_since(backend_setup_started);
 
-        let backend_upload_started = Instant::now();
-        if state.path == GlPath::Modern && !frame.sprite_instances.is_empty() {
+        if state.path == GlPath::Modern && !render_list.sprite_instances.is_empty() {
             let shared_instance_vbo = state
                 .shared_instance_vbo
                 .expect("modern OpenGL path creates a sprite instance VBO");
             gl.bind_buffer(glow::ARRAY_BUFFER, Some(shared_instance_vbo));
             gl.buffer_data_u8_slice(
                 glow::ARRAY_BUFFER,
-                bytemuck::cast_slice(frame.sprite_instances),
+                bytemuck::cast_slice(render_list.sprite_instances.as_slice()),
                 glow::DYNAMIC_DRAW,
             );
         }
-        if !frame.mesh_vertices.is_empty() {
+        if !state.prep.mesh_vertices.is_empty() {
             gl.bind_buffer(glow::ARRAY_BUFFER, Some(state.mesh_vbo));
             gl.buffer_data_u8_slice(
                 glow::ARRAY_BUFFER,
-                bytemuck::cast_slice(frame.mesh_vertices),
+                bytemuck::cast_slice(state.prep.mesh_vertices.as_slice()),
                 glow::DYNAMIC_DRAW,
             );
         }
-        if !frame.tmesh_vertices.is_empty() {
+        if !state.prep.tmesh_vertices.is_empty() {
             gl.bind_buffer(glow::ARRAY_BUFFER, Some(state.tmesh_vbo));
             gl.buffer_data_u8_slice(
                 glow::ARRAY_BUFFER,
-                bytemuck::cast_slice(frame.tmesh_vertices),
+                bytemuck::cast_slice(state.prep.tmesh_vertices.as_slice()),
                 glow::DYNAMIC_DRAW,
             );
         }
-        if state.path == GlPath::Modern && !frame.tmesh_instances.is_empty() {
+        if state.path == GlPath::Modern && !state.prep.tmesh_instances.is_empty() {
             let tmesh_instance_vbo = state
                 .tmesh_instance_vbo
                 .expect("modern OpenGL path creates a textured mesh instance VBO");
             gl.bind_buffer(glow::ARRAY_BUFFER, Some(tmesh_instance_vbo));
             gl.buffer_data_u8_slice(
                 glow::ARRAY_BUFFER,
-                bytemuck::cast_slice(frame.tmesh_instances),
+                bytemuck::cast_slice(state.prep.tmesh_instances.as_slice()),
                 glow::DYNAMIC_DRAW,
             );
         }
-        stats.backend_upload_us = stats
-            .backend_upload_us
-            .saturating_add(elapsed_us_since(backend_upload_started));
 
-        let backend_record_started = Instant::now();
         if state.path == GlPath::Modern {
             let shared_vao = state
                 .shared_vao
@@ -1225,17 +1072,13 @@ fn draw_frame_view(
                 .tmesh_instance_vbo
                 .expect("modern OpenGL path creates a textured mesh instance VBO");
 
-            for op in frame.ops.iter().copied() {
+            for op in state.prep.ops.iter().copied() {
                 match op {
                     DrawOp::Sprite(run) => {
-                        if collect_run_stats {
-                            stats.frame_prepare.sprite_runs =
-                                stats.frame_prepare.sprite_runs.saturating_add(1);
-                        }
                         apply_blend(gl, run.blend, &mut last_blend);
                         apply_depth_test(gl, false, &mut last_depth_test);
 
-                        let cam = frame
+                        let cam = render_list
                             .cameras
                             .get(run.camera as usize)
                             .copied()
@@ -1368,10 +1211,6 @@ fn draw_frame_view(
                         vertices = vertices.saturating_add(4 * run.instance_count);
                     }
                     DrawOp::Mesh(run) => {
-                        if collect_run_stats {
-                            stats.frame_prepare.mesh_runs =
-                                stats.frame_prepare.mesh_runs.saturating_add(1);
-                        }
                         if run.vertex_count == 0 {
                             continue;
                         }
@@ -1379,7 +1218,7 @@ fn draw_frame_view(
                         apply_blend(gl, run.blend, &mut last_blend);
                         apply_depth_test(gl, false, &mut last_depth_test);
 
-                        let cam = frame
+                        let cam = render_list
                             .cameras
                             .get(run.camera as usize)
                             .copied()
@@ -1407,10 +1246,6 @@ fn draw_frame_view(
                         vertices = vertices.saturating_add(run.vertex_count);
                     }
                     DrawOp::TexturedMesh(run) => {
-                        if collect_run_stats {
-                            stats.frame_prepare.tmesh_runs =
-                                stats.frame_prepare.tmesh_runs.saturating_add(1);
-                        }
                         apply_blend(gl, run.blend, &mut last_blend);
                         apply_depth_test(gl, run.depth_test, &mut last_depth_test);
 
@@ -1427,26 +1262,9 @@ fn draw_frame_view(
                             let stride = std::mem::size_of::<TexturedMeshVertex>() as i32;
                             let Some(vertex_buffer) = (match run.source {
                                 TexturedMeshSource::Transient { .. } => Some(state.tmesh_vbo),
-                                TexturedMeshSource::Cached {
-                                    geometry_id,
-                                    vertex_count,
-                                } => match state.cached_tmesh.get(&geometry_id) {
-                                    Some(entry)
-                                        if cached_tmesh_count_ok(
-                                            entry.vertex_count,
-                                            vertex_count,
-                                            stats,
-                                        ) =>
-                                    {
-                                        Some(entry.vbo)
-                                    }
-                                    Some(_) => None,
-                                    None => {
-                                        stats.cached_tmesh_misses =
-                                            stats.cached_tmesh_misses.saturating_add(1);
-                                        None
-                                    }
-                                },
+                                TexturedMeshSource::Cached { cache_key, .. } => {
+                                    state.cached_tmesh.get(&cache_key).map(|entry| entry.vbo)
+                                }
                             }) else {
                                 continue;
                             };
@@ -1560,7 +1378,7 @@ fn draw_frame_view(
                             last_tmesh_instance_start = Some(run.instance_start);
                         }
 
-                        let cam = frame
+                        let cam = render_list
                             .cameras
                             .get(run.camera as usize)
                             .copied()
@@ -1606,17 +1424,13 @@ fn draw_frame_view(
                 .legacy_tmesh_uniforms
                 .expect("legacy OpenGL path creates textured mesh uniforms");
 
-            for op in frame.ops.iter().copied() {
+            for op in state.prep.ops.iter().copied() {
                 match op {
                     DrawOp::Sprite(run) => {
-                        if collect_run_stats {
-                            stats.frame_prepare.sprite_runs =
-                                stats.frame_prepare.sprite_runs.saturating_add(1);
-                        }
                         apply_blend(gl, run.blend, &mut last_blend);
                         apply_depth_test(gl, false, &mut last_depth_test);
 
-                        let cam = frame
+                        let cam = render_list
                             .cameras
                             .get(run.camera as usize)
                             .copied()
@@ -1666,7 +1480,8 @@ fn draw_frame_view(
 
                         let end = run.instance_start.saturating_add(run.instance_count);
                         for idx in run.instance_start..end {
-                            let Some(instance) = frame.sprite_instances.get(idx as usize) else {
+                            let Some(instance) = render_list.sprite_instances.get(idx as usize)
+                            else {
                                 continue;
                             };
                             gl.uniform_4_f32(
@@ -1734,10 +1549,6 @@ fn draw_frame_view(
                         }
                     }
                     DrawOp::Mesh(run) => {
-                        if collect_run_stats {
-                            stats.frame_prepare.mesh_runs =
-                                stats.frame_prepare.mesh_runs.saturating_add(1);
-                        }
                         if run.vertex_count == 0 {
                             continue;
                         }
@@ -1745,7 +1556,7 @@ fn draw_frame_view(
                         apply_blend(gl, run.blend, &mut last_blend);
                         apply_depth_test(gl, false, &mut last_depth_test);
 
-                        let cam = frame
+                        let cam = render_list
                             .cameras
                             .get(run.camera as usize)
                             .copied()
@@ -1787,10 +1598,6 @@ fn draw_frame_view(
                         vertices = vertices.saturating_add(run.vertex_count);
                     }
                     DrawOp::TexturedMesh(run) => {
-                        if collect_run_stats {
-                            stats.frame_prepare.tmesh_runs =
-                                stats.frame_prepare.tmesh_runs.saturating_add(1);
-                        }
                         apply_blend(gl, run.blend, &mut last_blend);
                         apply_depth_test(gl, run.depth_test, &mut last_depth_test);
 
@@ -1809,26 +1616,9 @@ fn draw_frame_view(
                             let stride = std::mem::size_of::<TexturedMeshVertex>() as i32;
                             let Some(vertex_buffer) = (match run.source {
                                 TexturedMeshSource::Transient { .. } => Some(state.tmesh_vbo),
-                                TexturedMeshSource::Cached {
-                                    geometry_id,
-                                    vertex_count,
-                                } => match state.cached_tmesh.get(&geometry_id) {
-                                    Some(entry)
-                                        if cached_tmesh_count_ok(
-                                            entry.vertex_count,
-                                            vertex_count,
-                                            stats,
-                                        ) =>
-                                    {
-                                        Some(entry.vbo)
-                                    }
-                                    Some(_) => None,
-                                    None => {
-                                        stats.cached_tmesh_misses =
-                                            stats.cached_tmesh_misses.saturating_add(1);
-                                        None
-                                    }
-                                },
+                                TexturedMeshSource::Cached { cache_key, .. } => {
+                                    state.cached_tmesh.get(&cache_key).map(|entry| entry.vbo)
+                                }
                             }) else {
                                 continue;
                             };
@@ -1861,7 +1651,7 @@ fn draw_frame_view(
                             last_tmesh_source = Some(run.source);
                         }
 
-                        let cam = frame
+                        let cam = render_list
                             .cameras
                             .get(run.camera as usize)
                             .copied()
@@ -1890,7 +1680,8 @@ fn draw_frame_view(
                         let tri_count = run.source.vertex_count() / 3;
                         let end = run.instance_start.saturating_add(run.instance_count);
                         for idx in run.instance_start..end {
-                            let Some(instance) = frame.tmesh_instances.get(idx as usize) else {
+                            let Some(instance) = state.prep.tmesh_instances.get(idx as usize)
+                            else {
                                 continue;
                             };
                             let model = [
@@ -1954,8 +1745,8 @@ fn draw_frame_view(
             gl.bind_vertex_array(None);
         }
         gl.use_program(None);
-        stats.backend_record_us = elapsed_us_since(backend_record_started);
     }
+    stats.backend_record_us = elapsed_us_since(backend_record_started);
 
     if state.screenshot_requested {
         state.screenshot_requested = false;
@@ -2011,7 +1802,7 @@ fn draw_frame_view(
         );
     }
     stats.vertices = vertices;
-    Ok(*stats)
+    Ok(stats)
 }
 
 pub fn capture_frame(state: &mut State) -> Result<RgbaImage, Box<dyn Error>> {
@@ -2060,7 +1851,6 @@ pub fn resize(state: &mut State, width: u32, height: u32) {
 
 pub fn cleanup(state: &mut State) {
     info!("Cleaning up OpenGL resources...");
-    let _ = retire_textured_meshes(state);
     // SAFETY: all GL object handles below were created by this backend and are
     // still owned by `state`, so deleting them once during cleanup is valid.
     unsafe {
@@ -2082,6 +1872,10 @@ pub fn cleanup(state: &mut State) {
         if let Some(vao) = state.tmesh_vao {
             state.gl.delete_vertex_array(vao);
         }
+        for geom in state.cached_tmesh.drain().map(|(_, geom)| geom) {
+            state.gl.delete_buffer(geom.vbo);
+        }
+        state.cached_tmesh_bytes = 0;
         state.gl.delete_buffer(state.tmesh_vbo);
         if let Some(vbo) = state.tmesh_instance_vbo {
             state.gl.delete_buffer(vbo);
@@ -2582,33 +2376,7 @@ fn surface_extent(width: u32, height: u32) -> (NonZeroU32, NonZeroU32) {
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        DrawStats, GlVersion, OPENGL_TMESH_CACHE_MAX_BYTES, OPENGL_TMESH_CACHE_MAX_ENTRIES,
-        cached_tmesh_count_ok, parse_gl_version, surface_extent, tmesh_cache_has_room,
-    };
-
-    #[test]
-    fn cached_tmesh_draw_count_mismatch_is_reported_and_skipped() {
-        let mut stats = DrawStats::default();
-        assert!(cached_tmesh_count_ok(6, 6, &mut stats));
-        assert_eq!(stats.cached_tmesh_misses, 0);
-
-        assert!(!cached_tmesh_count_ok(6, 9, &mut stats));
-        assert_eq!(stats.cached_tmesh_misses, 1);
-    }
-
-    #[test]
-    fn cached_tmesh_capacity_caps_entries_and_bytes() {
-        assert!(tmesh_cache_has_room(
-            OPENGL_TMESH_CACHE_MAX_ENTRIES - 1,
-            0,
-            1
-        ));
-        assert!(!tmesh_cache_has_room(OPENGL_TMESH_CACHE_MAX_ENTRIES, 0, 1));
-        assert!(tmesh_cache_has_room(0, 0, OPENGL_TMESH_CACHE_MAX_BYTES));
-        assert!(!tmesh_cache_has_room(0, 1, OPENGL_TMESH_CACHE_MAX_BYTES));
-        assert!(!tmesh_cache_has_room(0, usize::MAX, 1));
-    }
+    use super::{GlVersion, parse_gl_version, surface_extent};
 
     #[test]
     fn surface_extent_clamps_zero_dims() {

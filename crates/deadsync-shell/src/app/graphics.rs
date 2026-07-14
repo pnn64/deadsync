@@ -257,7 +257,6 @@ impl App {
         // Renderer reinit reloads fonts, so cached layouts must be dropped before compose.
         self.ui_text_layout_cache.clear();
         self.gameplay_text_layout_cache.clear();
-        self.sandbox_direct_cache.invalidate();
 
         window.set_visible(true);
         // Seed window focus from the OS now that the window is visible. If the

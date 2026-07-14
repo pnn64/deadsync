@@ -3,7 +3,6 @@ use deadsync_profile as profile_data;
 use deadsync_score as score_data;
 use deadsync_score::stage_stats;
 mod commands;
-mod compiled_present;
 mod graphics;
 mod input_routing;
 mod screen_nav;
@@ -11,9 +10,6 @@ mod screenshot;
 mod smx_runtime;
 mod updater;
 
-use self::compiled_present::{
-    SandboxDirectCache, SandboxDirectEligibility, SandboxDirectKey, SelectMusicBgCache,
-};
 use self::screenshot::auto_screenshot_eval_results;
 use crate::command::Command;
 use crate::course::{
@@ -367,14 +363,11 @@ fn build_course_summary_eval_state(
     state
 }
 
-fn prewarm_gameplay_presentation(
+fn prewarm_gameplay_text_layout_cache(
     assets: &AssetManager,
     metrics: &Metrics,
     cache: &mut compose::TextLayoutCache,
-    actors: &mut Vec<Actor>,
-    compose_scratch: &mut compose::ComposeScratch,
     state: &mut gameplay::State,
-    backend: Option<&mut renderer_backend::Backend>,
 ) {
     let started = Instant::now();
     // Gameplay prewarm owns the whole cache for the next song, so start from an
@@ -385,55 +378,23 @@ fn prewarm_gameplay_presentation(
 
     let fonts = assets.fonts();
     screens::components::gameplay::gameplay_stats::refresh_density_graph_meshes(state);
-    actors.clear();
+    let mut actors = Vec::with_capacity(256);
     gameplay::push_actors(
-        actors,
+        &mut actors,
         state,
         assets,
         gameplay::ActorViewOverride::default(),
         arrow_effect_time_seconds(started),
     );
-    let mut render = compose::build_screen_cached_with_scratch_and_texture_context(
-        actors,
+    let _ = compose::build_screen_cached_with_texture_context(
+        &actors,
         [0.0, 0.0, 0.0, 1.0],
         metrics,
         fonts,
         0.0,
         cache,
-        compose_scratch,
         &PRESENT_TEXTURE_CONTEXT,
     );
-    let tmesh_started = Instant::now();
-    let mut geometries = retained_tmeshes(&render);
-    let composed_geometries = geometries.len();
-    state.append_retained_models(&mut geometries);
-    dedup_retained_tmeshes(&mut geometries);
-    let tmesh_stats = backend
-        .and_then(|backend| backend.tmesh_epoch().map(|epoch| (backend, epoch)))
-        .and_then(
-            |(backend, epoch)| match backend.prewarm_textured_meshes(epoch, &geometries) {
-                Ok(stats) if stats.ready() => Some(stats),
-                Ok(stats) => {
-                    warn!(
-                        "Gameplay retained-geometry prewarm incomplete: requested={} resident={} uploaded={} unavailable={} capacity_exceeded={} identity_mismatch={} upload_failed={}",
-                        stats.requested,
-                        stats.resident,
-                        stats.uploaded,
-                        stats.unavailable,
-                        stats.capacity_exceeded,
-                        stats.identity_mismatch,
-                        stats.upload_failed,
-                    );
-                    Some(stats)
-                }
-                Err(error) => {
-                    warn!("Gameplay retained-geometry prewarm failed: {error}");
-                    None
-                }
-            },
-        );
-    compose_scratch.recycle_render_list(&mut render);
-    actors.clear();
     gameplay::prewarm_text_layout(cache, fonts, state);
     screens::components::gameplay::gameplay_stats::prewarm_text_layout(cache, fonts, assets, state);
     screens::components::gameplay::notefield::prewarm_text_layout(cache, fonts, state);
@@ -443,44 +404,11 @@ fn prewarm_gameplay_presentation(
 
     let stats = cache.frame_stats();
     debug!(
-        "Gameplay presentation prewarm: entries={} shared={} scratch_growth={} objects={} sprites={} retained={} composed_retained={} model_inventory={} resident={} uploaded={} unavailable={} tmesh_ms={:.3} elapsed_ms={:.3}",
+        "Gameplay text cache prewarm: entries={} shared={} elapsed_ms={:.3}",
         stats.owned_entries,
         stats.shared_aliases,
-        compose_scratch.frame_stats().scratch_growth_events,
-        compose_scratch.frame_stats().render_objects,
-        compose_scratch.frame_stats().sprite_instances,
-        geometries.len(),
-        composed_geometries,
-        geometries.len().saturating_sub(composed_geometries),
-        tmesh_stats.map_or(0, |stats| stats.resident),
-        tmesh_stats.map_or(0, |stats| stats.uploaded),
-        tmesh_stats.map_or(0, |stats| stats.unavailable),
-        tmesh_started.elapsed().as_secs_f64() * 1000.0,
         started.elapsed().as_secs_f64() * 1000.0,
     );
-}
-
-/// Collects each retained identity once for transition-time GPU prewarm.
-fn retained_tmeshes(render: &renderer::RenderList) -> Vec<renderer::RetainedTMeshGeometry> {
-    let mut geometries = Vec::new();
-    for object in &render.objects {
-        let renderer::ObjectType::TexturedMesh {
-            vertices: renderer::TexturedMeshVertices::Retained(geometry),
-            ..
-        } = &object.object_type
-        else {
-            continue;
-        };
-        geometries.push(geometry.as_ref().clone());
-    }
-    dedup_retained_tmeshes(&mut geometries);
-    geometries
-}
-
-fn dedup_retained_tmeshes(geometries: &mut Vec<renderer::RetainedTMeshGeometry>) {
-    let mut identities = renderer::FastTMeshMap::<()>::default();
-    identities.reserve(geometries.len());
-    geometries.retain(|geometry| identities.insert(geometry.id(), ()).is_none());
 }
 
 #[inline(always)]
@@ -960,8 +888,6 @@ pub struct App {
     gameplay_text_layout_cache: compose::TextLayoutCache,
     ui_compose_scratch: compose::ComposeScratch,
     gameplay_compose_scratch: compose::ComposeScratch,
-    select_music_bg_cache: SelectMusicBgCache,
-    sandbox_direct_cache: SandboxDirectCache,
     actor_scratch: Vec<Actor>,
     state: AppState,
     software_renderer_threads: u8,
@@ -2351,61 +2277,10 @@ impl App {
 
         self.sync_gameplay_background();
         self.sync_theme_background_video(total_elapsed);
-        if self.state.screens.current_screen != CurrentScreen::Sandbox {
-            self.sandbox_direct_cache.invalidate();
-        }
-        let sandbox_screen = self.state.screens.current_screen == CurrentScreen::Sandbox;
-        let sandbox_direct_key = sandbox_screen.then(|| {
-            let config = config::get();
-            SandboxDirectKey::new(&self.state.shell.metrics, &config)
-        });
-        let tmesh_epoch = self
-            .backend
-            .as_ref()
-            .and_then(renderer_backend::Backend::tmesh_epoch);
-        let sandbox_direct_eligibility = SandboxDirectEligibility {
-            sandbox_screen,
-            idle_transition: matches!(self.state.shell.transition, TransitionState::Idle),
-            empty_input_log: self.state.screens.sandbox_state.last_inputs.is_empty(),
-            hardware_backend: tmesh_epoch.is_some(),
-            debug_overlays_hidden: !self.state.shell.overlay_mode.shows_fps()
-                && !self.state.shell.frame_stats.enabled(),
-            interaction_hidden: self.state.shell.interaction.message().is_none(),
-            screenshot_hidden: self.state.shell.screenshot.flash_alpha(redraw_started) <= 0.0,
-        };
-        let mut sandbox_direct = sandbox_direct_eligibility.ready()
-            && sandbox_direct_key.is_some_and(|key| {
-                self.sandbox_direct_cache
-                    .frame(
-                        key,
-                        tmesh_epoch.expect("direct Sandbox frame requires a geometry epoch"),
-                        &PRESENT_TEXTURE_CONTEXT,
-                    )
-                    .is_some()
-            });
         let actor_build_started = Instant::now();
         let arrow_effect_time_s = arrow_effect_time_seconds(actor_build_started);
-        let compiled_select_music_bg =
-            if self.state.screens.current_screen == CurrentScreen::SelectMusic {
-                let params = select_music::visual_bg_params(&self.state.screens.select_music_state);
-                self.select_music_bg_cache.prepare(
-                    params,
-                    &self.state.shell.metrics,
-                    self.asset_manager.fonts(),
-                    &mut self.ui_text_layout_cache,
-                    &PRESENT_TEXTURE_CONTEXT,
-                )
-            } else {
-                false
-            };
-        let (mut actors, mut clear_color) = if sandbox_direct {
-            let mut actors = std::mem::take(&mut self.actor_scratch);
-            actors.clear();
-            (actors, [0.03, 0.03, 0.03, 1.0])
-        } else {
-            self.get_current_actors(arrow_effect_time_s, compiled_select_music_bg)
-        };
-        let mut actor_build_us = elapsed_us_since(actor_build_started);
+        let (mut actors, clear_color) = self.get_current_actors(arrow_effect_time_s);
+        let actor_build_us = elapsed_us_since(actor_build_started);
         self.state.shell.update_fps_stats(redraw_started);
         let screens = &self.state.screens;
         let current_screen = screens.current_screen;
@@ -2537,146 +2412,14 @@ impl App {
             );
             upload_us = elapsed_us_since(upload_started);
         }
-        if sandbox_direct
-            && self
-                .sandbox_direct_cache
-                .frame(
-                    sandbox_direct_key.expect("direct Sandbox frame requires a cache key"),
-                    tmesh_epoch.expect("direct Sandbox frame requires a geometry epoch"),
-                    &PRESENT_TEXTURE_CONTEXT,
-                )
-                .is_none()
-        {
-            sandbox_direct = false;
-            actors.clear();
-            self.actor_scratch = actors;
-            let actor_build_started = Instant::now();
-            (actors, clear_color) = self.get_current_actors(arrow_effect_time_s, false);
-            actor_build_us = elapsed_us_since(actor_build_started);
-        }
         let fonts = self.asset_manager.fonts();
         let build_screen_started = Instant::now();
-        let (mut screen, text_layout, compose_frame, direct_prepare) = if self
-            .state
-            .screens
-            .current_screen
-            == CurrentScreen::Gameplay
-        {
-            let text_layout_cache = &mut self.gameplay_text_layout_cache;
-            let compose_scratch = &mut self.gameplay_compose_scratch;
-            text_layout_cache.begin_frame_stats();
-            let screen = compose::build_screen_cached_with_scratch_and_texture_context(
-                &actors,
-                clear_color,
-                &self.state.shell.metrics,
-                fonts,
-                total_elapsed,
-                text_layout_cache,
-                compose_scratch,
-                &PRESENT_TEXTURE_CONTEXT,
-            );
-            (
-                screen,
-                text_layout_cache.frame_stats(),
-                compose_scratch.frame_stats(),
-                None,
-            )
-        } else {
-            let text_layout_cache = &mut self.ui_text_layout_cache;
-            let compose_scratch = &mut self.ui_compose_scratch;
-            text_layout_cache.begin_frame_stats();
-            if sandbox_direct_eligibility.ready() && !sandbox_direct {
-                let key = sandbox_direct_key
-                    .expect("eligible Sandbox frame must have a direct cache key");
-                if let (Some(backend), Some(epoch)) = (self.backend.as_mut(), tmesh_epoch) {
-                    sandbox_direct = self.sandbox_direct_cache.prepare(
-                        key,
-                        epoch,
-                        &actors,
-                        &self.state.shell.metrics,
-                        fonts,
-                        text_layout_cache,
-                        &PRESENT_TEXTURE_CONTEXT,
-                        |frame| {
-                            backend
-                                .prepare_draw_frame(frame)
-                                .map(|result| (result.prepared, result.stats))
-                        },
-                    );
-                }
-            }
-            let direct_prepare = sandbox_direct.then(|| {
-                self.sandbox_direct_cache
-                    .frame(
-                        sandbox_direct_key.expect("direct Sandbox frame requires a cache key"),
-                        tmesh_epoch.expect("direct Sandbox frame requires a geometry epoch"),
-                        &PRESENT_TEXTURE_CONTEXT,
-                    )
-                    .expect("eligible prepared Sandbox frame must remain current")
-                    .frame()
-                    .prepare_stats()
-            });
-            let screen = if sandbox_direct {
-                renderer::RenderList {
-                    clear_color,
-                    cameras: Vec::new(),
-                    sprite_instances: Vec::new(),
-                    objects: Vec::new(),
-                }
-            } else if compiled_select_music_bg {
-                let compiled = self.select_music_bg_cache.frame().map(|frame| {
-                    compose::build_screen_cached_with_scratch_and_texture_context_and_root_prefix(
-                        &actors,
-                        clear_color,
-                        &self.state.shell.metrics,
-                        fonts,
-                        total_elapsed,
-                        text_layout_cache,
-                        compose_scratch,
-                        &PRESENT_TEXTURE_CONTEXT,
-                        frame.prefix,
-                        &frame.patches,
-                    )
-                });
-                match compiled {
-                    Some(Ok(screen)) => screen,
-                    Some(Err(error)) => {
-                        self.select_music_bg_cache
-                            .invalidate_after_compose_error(&error);
-                        compiled_present::prepend_legacy_tiled_background(
-                            &mut actors,
-                            select_music::visual_bg_params(&self.state.screens.select_music_state),
-                        );
-                        compose::build_screen_cached_with_scratch_and_texture_context(
-                            &actors,
-                            clear_color,
-                            &self.state.shell.metrics,
-                            fonts,
-                            total_elapsed,
-                            text_layout_cache,
-                            compose_scratch,
-                            &PRESENT_TEXTURE_CONTEXT,
-                        )
-                    }
-                    None => {
-                        compiled_present::prepend_legacy_tiled_background(
-                            &mut actors,
-                            select_music::visual_bg_params(&self.state.screens.select_music_state),
-                        );
-                        compose::build_screen_cached_with_scratch_and_texture_context(
-                            &actors,
-                            clear_color,
-                            &self.state.shell.metrics,
-                            fonts,
-                            total_elapsed,
-                            text_layout_cache,
-                            compose_scratch,
-                            &PRESENT_TEXTURE_CONTEXT,
-                        )
-                    }
-                }
-            } else {
-                compose::build_screen_cached_with_scratch_and_texture_context(
+        let (mut screen, text_layout) =
+            if self.state.screens.current_screen == CurrentScreen::Gameplay {
+                let text_layout_cache = &mut self.gameplay_text_layout_cache;
+                let compose_scratch = &mut self.gameplay_compose_scratch;
+                text_layout_cache.begin_frame_stats();
+                let screen = compose::build_screen_cached_with_scratch_and_texture_context(
                     &actors,
                     clear_color,
                     &self.state.shell.metrics,
@@ -2685,19 +2428,24 @@ impl App {
                     text_layout_cache,
                     compose_scratch,
                     &PRESENT_TEXTURE_CONTEXT,
-                )
+                );
+                (screen, text_layout_cache.frame_stats())
+            } else {
+                let text_layout_cache = &mut self.ui_text_layout_cache;
+                let compose_scratch = &mut self.ui_compose_scratch;
+                text_layout_cache.begin_frame_stats();
+                let screen = compose::build_screen_cached_with_scratch_and_texture_context(
+                    &actors,
+                    clear_color,
+                    &self.state.shell.metrics,
+                    fonts,
+                    total_elapsed,
+                    text_layout_cache,
+                    compose_scratch,
+                    &PRESENT_TEXTURE_CONTEXT,
+                );
+                (screen, text_layout_cache.frame_stats())
             };
-            (
-                screen,
-                text_layout_cache.frame_stats(),
-                if sandbox_direct {
-                    compose::ComposeFrameStats::default()
-                } else {
-                    compose_scratch.frame_stats()
-                },
-                direct_prepare,
-            )
-        };
         let build_screen_us = elapsed_us_since(build_screen_started);
         let resolve_textures_us = 0;
         let compose_us: u32 = actor_build_us
@@ -2707,23 +2455,9 @@ impl App {
             actor_build_us,
             build_screen_us,
             resolve_textures_us,
-            render_objects: direct_prepare.map_or_else(
-                || saturating_u32(screen.objects.len()),
-                |stats| stats.render_objects,
-            ),
-            render_cameras: if sandbox_direct {
-                self.sandbox_direct_cache
-                    .frame(
-                        sandbox_direct_key.expect("direct Sandbox frame requires a cache key"),
-                        tmesh_epoch.expect("direct Sandbox frame requires a geometry epoch"),
-                        &PRESENT_TEXTURE_CONTEXT,
-                    )
-                    .map_or(0, |frame| saturating_u32(frame.frame().cameras.len()))
-            } else {
-                saturating_u32(screen.cameras.len())
-            },
+            render_objects: saturating_u32(screen.objects.len()),
+            render_cameras: saturating_u32(screen.cameras.len()),
             text_layout,
-            compose: compose_frame,
         };
 
         let apply_present_back_pressure = self.apply_present_back_pressure();
@@ -2733,42 +2467,17 @@ impl App {
                 backend.request_screenshot();
             }
             let draw_started = Instant::now();
-            let draw_result = if sandbox_direct {
-                let frame = self
-                    .sandbox_direct_cache
-                    .frame(
-                        sandbox_direct_key.expect("direct Sandbox frame requires a cache key"),
-                        tmesh_epoch.expect("direct Sandbox frame requires a geometry epoch"),
-                        &PRESENT_TEXTURE_CONTEXT,
-                    )
-                    .expect("eligible prepared Sandbox frame must remain current");
-                backend.draw_frame(
-                    frame,
-                    self.asset_manager.textures(),
-                    apply_present_back_pressure,
-                )
-            } else {
-                backend.draw(
-                    &screen,
-                    self.asset_manager.textures(),
-                    apply_present_back_pressure,
-                )
-            };
-            match draw_result {
+            match backend.draw(
+                &screen,
+                self.asset_manager.textures(),
+                apply_present_back_pressure,
+            ) {
                 Ok(stats) => {
                     draw_stats = stats;
                     self.state.shell.current_frame_vpf = stats.vertices;
                     self.state.shell.last_present_stats = stats.present_stats;
                     draw_us = elapsed_us_since(draw_started);
                     capture_screenshot = true;
-                    if sandbox_direct && stats.cached_tmesh_misses > 0 {
-                        self.sandbox_direct_cache.disable_after_cached_tmesh_miss(
-                            sandbox_direct_key.expect("direct Sandbox frame requires a cache key"),
-                            tmesh_epoch.expect("direct Sandbox frame requires a geometry epoch"),
-                            &PRESENT_TEXTURE_CONTEXT,
-                            stats.cached_tmesh_misses,
-                        );
-                    }
                 }
                 Err(e) => {
                     error!("Failed to draw frame: {e}");
@@ -2776,13 +2485,11 @@ impl App {
                     return;
                 }
             }
-            if !sandbox_direct {
-                if self.state.screens.current_screen == CurrentScreen::Gameplay {
-                    self.gameplay_compose_scratch
-                        .recycle_render_list(&mut screen);
-                } else {
-                    self.ui_compose_scratch.recycle_render_list(&mut screen);
-                }
+            if self.state.screens.current_screen == CurrentScreen::Gameplay {
+                self.gameplay_compose_scratch
+                    .recycle_render_list(&mut screen);
+            } else {
+                self.ui_compose_scratch.recycle_render_list(&mut screen);
             }
         }
         if capture_screenshot {
@@ -2953,8 +2660,6 @@ impl App {
             ),
             ui_compose_scratch: compose::ComposeScratch::default(),
             gameplay_compose_scratch: compose::ComposeScratch::default(),
-            select_music_bg_cache: SelectMusicBgCache::default(),
-            sandbox_direct_cache: SandboxDirectCache::default(),
             actor_scratch: Vec::with_capacity(256),
             state,
             software_renderer_threads,
@@ -4590,11 +4295,7 @@ impl App {
         ));
     }
 
-    fn get_current_actors(
-        &mut self,
-        arrow_effect_time_s: f32,
-        compiled_select_music_bg: bool,
-    ) -> (Vec<Actor>, [f32; 4]) {
+    fn get_current_actors(&mut self, arrow_effect_time_s: f32) -> (Vec<Actor>, [f32; 4]) {
         const CLEAR: [f32; 4] = [0.03, 0.03, 0.03, 1.0];
         let mut screen_alpha_multiplier = 1.0;
 
@@ -4766,18 +4467,12 @@ impl App {
                 profile_load::push_actors(&mut actors, &self.state.screens.profile_load_state);
             }
             CurrentScreen::SelectMusic => {
-                let state = &self.state.screens.select_music_state;
-                let stage = self.state.session.played_stages.len() + 1;
-                if compiled_select_music_bg {
-                    select_music::push_actors_without_visual_bg(
-                        &mut actors,
-                        state,
-                        &self.asset_manager,
-                        stage,
-                    );
-                } else {
-                    select_music::push_actors(&mut actors, state, &self.asset_manager, stage);
-                }
+                select_music::push_actors(
+                    &mut actors,
+                    &self.state.screens.select_music_state,
+                    &self.asset_manager,
+                    self.state.session.played_stages.len() + 1,
+                );
             }
             CurrentScreen::SelectCourse => select_course::push_actors(
                 &mut actors,
@@ -6193,21 +5888,17 @@ impl App {
                     }
                 }
                 let asset_prewarm_ms = asset_prewarm_started.elapsed().as_secs_f64() * 1000.0;
-                let presentation_prewarm_started = Instant::now();
-                prewarm_gameplay_presentation(
+                let text_prewarm_started = Instant::now();
+                prewarm_gameplay_text_layout_cache(
                     &self.asset_manager,
                     &self.state.shell.metrics,
                     &mut self.gameplay_text_layout_cache,
-                    &mut self.actor_scratch,
-                    &mut self.gameplay_compose_scratch,
                     &mut gs,
-                    self.backend.as_mut(),
                 );
-                let presentation_prewarm_ms =
-                    presentation_prewarm_started.elapsed().as_secs_f64() * 1000.0;
+                let text_prewarm_ms = text_prewarm_started.elapsed().as_secs_f64() * 1000.0;
                 let song = gs.song();
                 debug!(
-                    "Practice transition timing: song='{}' payload_ms={payload_ms:.3} init_ms={init_ms:.3} sfx_prewarm_ms={sfx_prewarm_ms:.3} asset_prewarm_ms={asset_prewarm_ms:.3} presentation_prewarm_ms={presentation_prewarm_ms:.3}",
+                    "Practice transition timing: song='{}' payload_ms={payload_ms:.3} init_ms={init_ms:.3} sfx_prewarm_ms={sfx_prewarm_ms:.3} asset_prewarm_ms={asset_prewarm_ms:.3} text_prewarm_ms={text_prewarm_ms:.3}",
                     song.title
                 );
                 commands.push(Command::SetPackBanner(gs.pack_banner_path.clone()));
@@ -6573,23 +6264,19 @@ impl App {
                     }
                 }
                 let asset_prewarm_ms = asset_prewarm_started.elapsed().as_secs_f64() * 1000.0;
-                let presentation_prewarm_started = Instant::now();
-                prewarm_gameplay_presentation(
+                let text_prewarm_started = Instant::now();
+                prewarm_gameplay_text_layout_cache(
                     &self.asset_manager,
                     &self.state.shell.metrics,
                     &mut self.gameplay_text_layout_cache,
-                    &mut self.actor_scratch,
-                    &mut self.gameplay_compose_scratch,
                     &mut gs,
-                    self.backend.as_mut(),
                 );
-                let presentation_prewarm_ms =
-                    presentation_prewarm_started.elapsed().as_secs_f64() * 1000.0;
+                let text_prewarm_ms = text_prewarm_started.elapsed().as_secs_f64() * 1000.0;
                 let total_ms = gameplay_entry_started.elapsed().as_secs_f64() * 1000.0;
                 let song = gs.song();
                 if total_ms >= 50.0 {
                     info!(
-                        "Gameplay transition timing: song='{}' restart={} payload_source={} payload_ms={payload_ms:.3} init_ms={init_ms:.3} sfx_prewarm_ms={sfx_prewarm_ms:.3} asset_prewarm_ms={asset_prewarm_ms:.3} presentation_prewarm_ms={presentation_prewarm_ms:.3} elapsed_ms={total_ms:.3}",
+                        "Gameplay transition timing: song='{}' restart={} payload_source={} payload_ms={payload_ms:.3} init_ms={init_ms:.3} sfx_prewarm_ms={sfx_prewarm_ms:.3} asset_prewarm_ms={asset_prewarm_ms:.3} text_prewarm_ms={text_prewarm_ms:.3} elapsed_ms={total_ms:.3}",
                         song.title,
                         prev == CurrentScreen::Gameplay,
                         if reusing_gameplay_payload {
@@ -6600,7 +6287,7 @@ impl App {
                     );
                 } else {
                     debug!(
-                        "Gameplay transition timing: song='{}' restart={} payload_source={} payload_ms={payload_ms:.3} init_ms={init_ms:.3} sfx_prewarm_ms={sfx_prewarm_ms:.3} asset_prewarm_ms={asset_prewarm_ms:.3} presentation_prewarm_ms={presentation_prewarm_ms:.3} elapsed_ms={total_ms:.3}",
+                        "Gameplay transition timing: song='{}' restart={} payload_source={} payload_ms={payload_ms:.3} init_ms={init_ms:.3} sfx_prewarm_ms={sfx_prewarm_ms:.3} asset_prewarm_ms={asset_prewarm_ms:.3} text_prewarm_ms={text_prewarm_ms:.3} elapsed_ms={total_ms:.3}",
                         song.title,
                         prev == CurrentScreen::Gameplay,
                         if reusing_gameplay_payload {

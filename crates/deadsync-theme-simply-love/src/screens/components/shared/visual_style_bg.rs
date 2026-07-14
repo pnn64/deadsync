@@ -35,7 +35,6 @@ const UV_VEL: [[f32; 2]; 10] = [
 ];
 const SHARED_BG_ZOOM: f32 = 1.3;
 const SHARED_BG_UV_SPAN: f32 = 1.0;
-pub const TILED_SPRITE_COUNT: usize = UV_VEL.len();
 
 #[derive(Clone, Copy)]
 struct TiledStyleState;
@@ -46,7 +45,6 @@ pub struct State {
     technique: technique_bg::State,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Params {
     pub active_color_index: i32,
     pub backdrop_rgba: [f32; 4],
@@ -133,38 +131,6 @@ impl State {
         self.push_at_elapsed(&mut actors, params, elapsed_s);
         actors
     }
-}
-
-/// Whether the current visual style uses the simple tiled background without
-/// consulting Technique/SRPG runtime state.
-#[inline]
-pub fn tiled_style_active() -> bool {
-    !matches!(visual_style(), VisualStyle::Technique | VisualStyle::Srpg9)
-}
-
-/// Builds the immutable portion of the tiled background at an explicit phase.
-///
-/// This bypasses visual-style dispatch and is intended for a caller that has
-/// already checked [`tiled_style_active`].
-pub fn build_tiled_at_elapsed(params: Params, elapsed_s: f64) -> Vec<Actor> {
-    let mut actors = Vec::with_capacity(TILED_SPRITE_COUNT + 1);
-    TiledStyleState::new().push_at_elapsed(&mut actors, &params, elapsed_s);
-    actors
-}
-
-#[inline]
-pub fn build_tiled(params: Params) -> Vec<Actor> {
-    build_tiled_at_elapsed(params, global_elapsed_s())
-}
-
-#[inline]
-pub fn tiled_uv_rects_at(elapsed_s: f64) -> [[f32; 4]; TILED_SPRITE_COUNT] {
-    std::array::from_fn(|index| scrolled_uv_rect(UV_VEL[index], elapsed_s))
-}
-
-#[inline]
-pub fn current_tiled_uv_rects() -> [[f32; 4]; TILED_SPRITE_COUNT] {
-    tiled_uv_rects_at(global_elapsed_s())
 }
 
 fn push_shared_bg(out: &mut Vec<Actor>, x: f32, y: f32, rgba: [f32; 4], uv: [f32; 4]) {
@@ -363,23 +329,5 @@ mod tests {
             "got {}",
             global_elapsed_s()
         );
-    }
-
-    #[test]
-    fn tiled_uv_rects_match_snapshot_sprites() {
-        let elapsed_s = 123.456;
-        let expected_rects = tiled_uv_rects_at(elapsed_s);
-        let actors = build_tiled_at_elapsed(params(), elapsed_s);
-        assert_eq!(actors.len(), TILED_SPRITE_COUNT + 1);
-
-        for (index, expected) in expected_rects.iter().enumerate() {
-            let Actor::Sprite { uv_rect, .. } = &actors[index + 1] else {
-                panic!("tiled actor {} is not a sprite", index + 1);
-            };
-            let rect = uv_rect.expect("tiled sprite has an explicit UV rect");
-            assert_eq!(rect, *expected);
-            assert!((rect[2] - rect[0] - SHARED_BG_UV_SPAN).abs() < 1e-6);
-            assert!((rect[3] - rect[1] - SHARED_BG_UV_SPAN).abs() < 1e-6);
-        }
     }
 }

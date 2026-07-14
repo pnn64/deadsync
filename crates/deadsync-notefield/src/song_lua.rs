@@ -229,6 +229,7 @@ pub fn song_lua_player_y_fold_actor(actor: Actor, pivot_x: f32, rotation_y_deg: 
             tint,
             glow,
             vertices,
+            geom_cache_key,
             uv_scale,
             uv_offset,
             uv_tex_shift,
@@ -248,6 +249,7 @@ pub fn song_lua_player_y_fold_actor(actor: Actor, pivot_x: f32, rotation_y_deg: 
                 tint,
                 glow,
                 vertices,
+                geom_cache_key,
                 uv_scale,
                 uv_offset,
                 uv_tex_shift,
@@ -435,9 +437,7 @@ mod tests {
     };
     use deadlib_present::actors::{Actor, SizeSpec, TextContent};
     use deadlib_present::dsl::{SpriteBuilder, TextBuilder};
-    use deadlib_render::{
-        BlendMode, MeshVertex, RetainedTMeshGeometry, TexturedMeshVertex, TexturedMeshVertices,
-    };
+    use deadlib_render::{BlendMode, MeshVertex, TexturedMeshVertex};
     use glam::{Mat4 as Matrix4, Vec3 as Vector3};
     use std::sync::Arc;
 
@@ -675,11 +675,6 @@ mod tests {
             color: [0.9, 0.8, 0.7, 0.6],
             tex_matrix_scale: [1.25, 0.75],
         }]);
-        let geometry = Arc::new(
-            RetainedTMeshGeometry::new(73, Arc::clone(&textured_vertices))
-                .expect("fold fixture geometry is valid"),
-        );
-        let geometry_id = geometry.id();
         let textured_mesh = Actor::TexturedMesh {
             align: [0.1, 0.9],
             offset: [140.0, 23.0],
@@ -689,7 +684,8 @@ mod tests {
             texture: Arc::clone(&texture),
             tint: [0.11, 0.22, 0.33, 0.44],
             glow: [0.55, 0.66, 0.77, 0.88],
-            vertices: TexturedMeshVertices::Retained(Arc::clone(&geometry)),
+            vertices: Arc::clone(&textured_vertices),
+            geom_cache_key: 73,
             uv_scale: [1.5, 2.5],
             uv_offset: [0.15, 0.25],
             uv_tex_shift: [0.35, 0.45],
@@ -708,6 +704,7 @@ mod tests {
             tint,
             glow,
             vertices,
+            geom_cache_key,
             uv_scale,
             uv_offset,
             uv_tex_shift,
@@ -729,11 +726,8 @@ mod tests {
         assert!(Arc::ptr_eq(&folded_texture, &texture));
         assert_eq!(tint, [0.11, 0.22, 0.33, 0.44]);
         assert_eq!(glow, [0.55, 0.66, 0.77, 0.88]);
-        let TexturedMeshVertices::Retained(folded_geometry) = vertices else {
-            panic!("fold should preserve retained geometry");
-        };
-        assert!(Arc::ptr_eq(&folded_geometry, &geometry));
-        assert_eq!(folded_geometry.id(), geometry_id);
+        assert!(Arc::ptr_eq(&vertices, &textured_vertices));
+        assert_eq!(geom_cache_key, 73);
         assert_eq!(uv_scale, [1.5, 2.5]);
         assert_eq!(uv_offset, [0.15, 0.25]);
         assert_eq!(uv_tex_shift, [0.35, 0.45]);

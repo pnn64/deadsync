@@ -5,25 +5,16 @@ use ash::{
     vk,
 };
 use deadlib_render::{
-    BlendMode, ClockDomainTrace, DrawFrame, DrawFrameView, DrawStats, FastTMeshMap, MeshVertex,
-    PresentModePolicy, PresentModeTrace, PresentStats, RenderList, RetainedTMeshGeometry,
-    SamplerDesc, SamplerFilter, SamplerWrap, SpriteInstanceRaw as InstanceData, TMeshGeometryId,
-    TMeshRetireStats, TextureHandle, TexturedMeshInstanceRaw as TexturedMeshInstanceGpu,
-    TexturedMeshVertex, drain_tmesh_cache,
-    draw_prep::{
-        self, DrawOp, DrawScratch, TMeshCacheResult, TMeshPrewarmStats, TexturedMeshSource,
-    },
+    BlendMode, ClockDomainTrace, DrawStats, FastU64Map, MeshVertex, PresentModePolicy,
+    PresentModeTrace, PresentStats, RenderList, SamplerDesc, SamplerFilter, SamplerWrap,
+    SpriteInstanceRaw as InstanceData, TMeshCacheKey, TextureHandle,
+    TexturedMeshInstanceRaw as TexturedMeshInstanceGpu, TexturedMeshVertex,
+    draw_prep::{self, DrawOp, DrawScratch, TexturedMeshSource},
 };
 use glam::Mat4 as Matrix4;
 use image::RgbaImage;
 use log::{debug, error, info, warn};
-use std::{
-    collections::HashMap,
-    error::Error,
-    ffi, mem,
-    sync::Arc,
-    time::{Duration, Instant},
-};
+use std::{collections::HashMap, error::Error, ffi, mem, sync::Arc, time::Instant};
 #[cfg(windows)]
 use windows::Win32::System::Performance;
 use winit::{
@@ -38,7 +29,6 @@ const DESCRIPTOR_POOL_SET_CAPACITY: u32 = 1024;
 const VULKAN_IMAGE_WAIT_THRESHOLD_US: u32 = 1_000;
 const VULKAN_BACK_PRESSURE_THRESHOLD_US: u32 = 1_000;
 const VULKAN_PRESENT_DISPLAY_TIMING_TELEMETRY: bool = false;
-const VULKAN_TMESH_CACHE_MAX_ENTRIES: usize = 4_096;
 const VULKAN_TMESH_CACHE_MAX_BYTES: usize = 16 * 1024 * 1024;
 const LOGICAL_HEIGHT: f32 = 480.0;
 const DESIGN_WIDTH_16_9: f32 = 854.0;
@@ -110,19 +100,6 @@ struct RetiredTexture {
 struct CachedTMeshGeom {
     buffer: BufferResource,
     vertex_count: u32,
-}
-
-#[inline]
-fn cached_tmesh_count_ok(
-    resident_vertex_count: u32,
-    draw_vertex_count: u32,
-    stats: &mut DrawStats,
-) -> bool {
-    if resident_vertex_count == draw_vertex_count {
-        return true;
-    }
-    stats.cached_tmesh_misses = stats.cached_tmesh_misses.saturating_add(1);
-    false
 }
 
 struct SwapchainResources {
@@ -200,10 +177,6 @@ pub struct State {
     surface_loader: surface::Instance,
     pdevice: vk::PhysicalDevice,
     device: Option<Arc<Device>>,
-    // Render-thread synchronization fact. Queue submissions clear it; a
-    // successful device-wide wait sets it so immediate teardown need not wait
-    // a second time.
-    device_known_idle: bool,
     queue: vk::Queue,
     command_pool: vk::CommandPool,
     swapchain_resources: SwapchainResources,
@@ -247,11 +220,7 @@ pub struct State {
     tmesh_capacity_instances: usize,       // total textured mesh instances across ring
     per_frame_stride_tmesh_instances: usize, // textured mesh instances reserved per frame
     prep: DrawScratch,
-    // Render-thread-only, transition-epoch cache capped by both
-    // `VULKAN_TMESH_CACHE_MAX_ENTRIES` and `VULKAN_TMESH_CACHE_MAX_BYTES`.
-    // Gameplay misses saturate instead of pruning; explicit retirement waits
-    // for known device idleness before draining every bounded entry.
-    cached_tmesh: FastTMeshMap<CachedTMeshGeom>,
+    cached_tmesh: FastU64Map<CachedTMeshGeom>,
     cached_tmesh_bytes: usize,
     pending_tex_upload_cmd: Option<vk::CommandBuffer>, // batched texture upload cmd
     pending_tex_staging: Vec<BufferResource>, // keep staging alive until upload batch flush
@@ -356,7 +325,6 @@ pub fn init(
         surface_loader,
         pdevice,
         device: device.clone(),
-        device_known_idle: false,
         queue,
         command_pool,
         swapchain_resources,
@@ -400,7 +368,7 @@ pub fn init(
         tmesh_capacity_instances: 0,
         per_frame_stride_tmesh_instances: 0,
         prep: DrawScratch::with_capacity(1024, 1024, 256, 64),
-        cached_tmesh: FastTMeshMap::default(),
+        cached_tmesh: FastU64Map::default(),
         cached_tmesh_bytes: 0,
         pending_tex_upload_cmd: None,
         pending_tex_staging: Vec::new(),
@@ -1207,7 +1175,6 @@ fn submit_pending_texture_uploads(state: &mut State, frame: usize) -> Result<(),
     unsafe {
         device.end_command_buffer(cmd)?;
         let submit = vk::SubmitInfo::default().command_buffers(std::slice::from_ref(&cmd));
-        state.device_known_idle = false;
         device.queue_submit(state.queue, &[submit], vk::Fence::null())?;
     }
     state.submitted_tex_uploads.push(SubmittedTextureUpload {
@@ -1274,37 +1241,17 @@ pub fn retire_all_textures(state: &mut State) {
     state.retired_textures.clear();
 }
 
-fn wait_device_idle(state: &mut State) -> Result<(), vk::Result> {
-    if state.device_known_idle {
-        return Ok(());
-    }
-    let Some(device) = state.device.as_ref().map(Arc::clone) else {
-        state.device_known_idle = true;
-        return Ok(());
-    };
-    // SAFETY: `device` is the live logical device owned by this renderer. A
-    // successful wait establishes the fact consumed by retirement/cleanup;
-    // failure deliberately leaves the state non-idle so teardown must retry.
-    unsafe {
-        device.device_wait_idle()?;
-    }
-    state.device_known_idle = true;
-    Ok(())
-}
-
 pub fn wait_for_idle(state: &mut State) {
-    if let Err(error) = flush_pending_uploads(state) {
-        warn!("Failed to flush Vulkan uploads before idle wait: {error}");
-    }
-    match wait_device_idle(state) {
-        Ok(()) => {
-            retire_submitted_uploads(state);
-            retire_all_textures(state);
+    let _ = flush_pending_uploads(state);
+    if let Some(device) = &state.device {
+        // SAFETY: `device` is the live Vulkan logical device for this backend,
+        // and this wait is only used before tearing down or reclaiming resources.
+        unsafe {
+            let _ = device.device_wait_idle();
         }
-        Err(error) => warn!(
-            "Vulkan idle wait failed; backend-owned resource retirement deferred to final cleanup: {error:?}"
-        ),
     }
+    retire_submitted_uploads(state);
+    retire_all_textures(state);
 }
 
 pub fn create_texture(
@@ -1500,129 +1447,64 @@ pub fn capture_frame(state: &mut State) -> Result<RgbaImage, Box<dyn Error>> {
         .ok_or_else(|| std::io::Error::other("No captured screenshot frame available").into())
 }
 
-#[inline(always)]
-fn duration_us(elapsed: Duration) -> u32 {
-    let elapsed = elapsed.as_micros();
-    if elapsed > u128::from(u32::MAX) {
-        u32::MAX
-    } else {
-        elapsed as u32
-    }
-}
-
-#[inline(always)]
-fn elapsed_us_since(started: Instant) -> u32 {
-    duration_us(started.elapsed())
-}
-
 pub fn draw(
     state: &mut State,
     render_list: &RenderList,
     textures: &impl TextureLookup,
     apply_present_back_pressure: bool,
 ) -> Result<DrawStats, Box<dyn Error>> {
-    if !state.swapchain_valid || state.window_size.width == 0 || state.window_size.height == 0 {
-        return Ok(DrawStats::default());
+    #[inline(always)]
+    fn elapsed_us_since(started: Instant) -> u32 {
+        let elapsed = started.elapsed().as_micros();
+        if elapsed > u128::from(u32::MAX) {
+            u32::MAX
+        } else {
+            elapsed as u32
+        }
     }
 
-    let mut prep = mem::take(&mut state.prep);
-    let draw_prep_started = Instant::now();
-    let mut cache_upload_time = Duration::ZERO;
-    let (frame, frame_prepare) = {
+    let mut stats = DrawStats::default();
+
+    if !state.swapchain_valid || state.window_size.width == 0 || state.window_size.height == 0 {
+        return Ok(stats);
+    }
+    stats.present_stats.mode = vk_present_mode_trace(state.swapchain_resources.present_mode);
+    stats.present_stats.refresh_ns = state.present_telemetry.refresh_ns;
+
+    {
+        let prep = &mut state.prep;
         let instance = &state.instance;
         let device = Arc::clone(state.device.as_ref().unwrap());
         let pdevice = state.pdevice;
         let cached_tmesh = &mut state.cached_tmesh;
         let cached_tmesh_bytes = &mut state.cached_tmesh_bytes;
-        draw_prep::prepare_render_list(render_list, &mut prep, |geometry_id, vertices| {
-            let upload_started = Instant::now();
-            let result = match ensure_cached_tmesh(
-                instance,
-                device.as_ref(),
-                pdevice,
-                cached_tmesh,
-                cached_tmesh_bytes,
-                geometry_id,
-                vertices,
-            ) {
-                Ok(cached) => cached,
-                Err(e) => {
-                    warn!(
-                        "Failed to cache Vulkan textured mesh {:#x}/{:#x}: {e}",
-                        geometry_id.logical_key(),
-                        geometry_id.fingerprint(),
-                    );
-                    TMeshCacheResult::UploadFailed
-                }
-            };
-            if result.upload_attempted() {
-                cache_upload_time = cache_upload_time.saturating_add(upload_started.elapsed());
-            }
-            result
-        })
-    };
-    let draw_prep_time = draw_prep_started.elapsed();
-    let mut stats = DrawStats {
-        draw_prep_us: duration_us(draw_prep_time.saturating_sub(cache_upload_time)),
-        backend_upload_us: duration_us(cache_upload_time),
-        frame_prepare,
-        ..DrawStats::default()
-    };
-    let result = draw_frame_view(
-        state,
-        frame,
-        textures,
-        apply_present_back_pressure,
-        &mut stats,
-        false,
-    );
-    state.prep = prep;
-    result
-}
-
-pub fn draw_frame(
-    state: &mut State,
-    frame: &DrawFrame,
-    textures: &impl TextureLookup,
-    apply_present_back_pressure: bool,
-) -> Result<DrawStats, Box<dyn Error>> {
-    let mut stats = DrawStats {
-        frame_prepare: frame.prepare_stats(),
-        ..DrawStats::default()
-    };
-    draw_frame_view(
-        state,
-        frame.view(),
-        textures,
-        apply_present_back_pressure,
-        &mut stats,
-        true,
-    )
-}
-
-fn draw_frame_view(
-    state: &mut State,
-    frame: DrawFrameView<'_>,
-    textures: &impl TextureLookup,
-    apply_present_back_pressure: bool,
-    stats: &mut DrawStats,
-    collect_run_stats: bool,
-) -> Result<DrawStats, Box<dyn Error>> {
-    if !state.swapchain_valid || state.window_size.width == 0 || state.window_size.height == 0 {
-        return Ok(*stats);
+        let _prep_stats =
+            draw_prep::prepare(
+                render_list,
+                prep,
+                |cache_key, vertices| match ensure_cached_tmesh(
+                    instance,
+                    device.as_ref(),
+                    pdevice,
+                    cached_tmesh,
+                    cached_tmesh_bytes,
+                    cache_key,
+                    vertices,
+                ) {
+                    Ok(cached) => cached,
+                    Err(e) => {
+                        warn!("Failed to cache Vulkan textured mesh {cache_key:#x}: {e}");
+                        false
+                    }
+                },
+            );
     }
-    // Any error after this point must force teardown to establish idleness
-    // again. Successful queue submission also makes the device genuinely busy.
-    state.device_known_idle = false;
-    stats.present_stats.mode = vk_present_mode_trace(state.swapchain_resources.present_mode);
-    stats.present_stats.refresh_ns = state.present_telemetry.refresh_ns;
 
-    let needed_instances = frame.sprite_instances.len();
-    let needed_mesh_vertices = frame.mesh_vertices.len();
-    let needed_tmesh_vertices = frame.tmesh_vertices.len();
-    let needed_tmesh_instances = frame.tmesh_instances.len();
+    let needed_instances = render_list.sprite_instances.len();
+    let needed_mesh_vertices = state.prep.mesh_vertices.len();
+    let needed_tmesh_vertices = state.prep.tmesh_vertices.len();
+    let needed_tmesh_instances = state.prep.tmesh_instances.len();
 
-    let backend_upload_started = Instant::now();
     let base_first_instance = if needed_instances > 0 {
         Some(ensure_instance_ring_capacity(state, needed_instances)?)
     } else {
@@ -1646,9 +1528,6 @@ fn draw_frame_view(
     } else {
         None
     };
-    stats.backend_upload_us = stats
-        .backend_upload_us
-        .saturating_add(elapsed_us_since(backend_upload_started));
 
     // SAFETY: We wait on the current frame fence before reusing its command buffer or writing into
     // this frame's ring-buffer slice, so the GPU is done reading prior submissions. All Vulkan
@@ -1682,7 +1561,7 @@ fn draw_frame_view(
             Err(vk::Result::ERROR_OUT_OF_DATE_KHR) => {
                 stats.acquire_us = elapsed_us_since(acquire_started);
                 recreate_swapchain_and_dependents(state)?;
-                return Ok(*stats);
+                return Ok(stats);
             }
             Err(e) => return Err(e.into()),
         };
@@ -1711,7 +1590,7 @@ fn draw_frame_view(
         )?;
         stats.backend_setup_us = elapsed_us_since(backend_setup_started);
 
-        let backend_upload_started = Instant::now();
+        let backend_prepare_started = Instant::now();
         let inst_base_ptr = base_first_instance.map_or(std::ptr::null_mut(), |b| {
             state.instance_ring_ptr.add(b as usize)
         });
@@ -1727,7 +1606,7 @@ fn draw_frame_view(
         if needed_instances > 0 {
             debug_assert!(!inst_base_ptr.is_null(), "instance ring missing");
             std::ptr::copy_nonoverlapping(
-                frame.sprite_instances.as_ptr(),
+                render_list.sprite_instances.as_ptr(),
                 inst_base_ptr,
                 needed_instances,
             );
@@ -1735,7 +1614,7 @@ fn draw_frame_view(
         if needed_mesh_vertices > 0 {
             debug_assert!(!mesh_base_ptr.is_null(), "mesh ring missing");
             std::ptr::copy_nonoverlapping(
-                frame.mesh_vertices.as_ptr(),
+                state.prep.mesh_vertices.as_ptr(),
                 mesh_base_ptr,
                 needed_mesh_vertices,
             );
@@ -1743,7 +1622,7 @@ fn draw_frame_view(
         if needed_tmesh_vertices > 0 {
             debug_assert!(!tmesh_base_ptr.is_null(), "textured mesh ring missing");
             std::ptr::copy_nonoverlapping(
-                frame.tmesh_vertices.as_ptr(),
+                state.prep.tmesh_vertices.as_ptr(),
                 tmesh_base_ptr,
                 needed_tmesh_vertices,
             );
@@ -1754,17 +1633,15 @@ fn draw_frame_view(
                 "textured mesh instance ring missing"
             );
             std::ptr::copy_nonoverlapping(
-                frame.tmesh_instances.as_ptr(),
+                state.prep.tmesh_instances.as_ptr(),
                 tmesh_instance_base_ptr,
                 needed_tmesh_instances,
             );
         }
-        stats.backend_upload_us = stats
-            .backend_upload_us
-            .saturating_add(elapsed_us_since(backend_upload_started));
+        stats.backend_prepare_us = elapsed_us_since(backend_prepare_started);
 
         let backend_record_started = Instant::now();
-        let c = frame.clear_color;
+        let c = render_list.clear_color;
         let clear_value = vk::ClearValue {
             color: vk::ClearColorValue {
                 float32: [c[0], c[1], c[2], c[3]],
@@ -1806,13 +1683,9 @@ fn draw_frame_view(
         let mut last_camera: Option<u8> = None;
         let mut last_tmesh_source: Option<TexturedMeshSource> = None;
         let mut vertices_drawn: u32 = 0;
-        for op in frame.ops {
+        for op in &state.prep.ops {
             match op {
                 DrawOp::Sprite(run) => {
-                    if collect_run_stats {
-                        stats.frame_prepare.sprite_runs =
-                            stats.frame_prepare.sprite_runs.saturating_add(1);
-                    }
                     let Some(set) = textures
                         .vulkan_texture(run.texture_handle)
                         .map(|texture| texture.descriptor_set)
@@ -1837,7 +1710,7 @@ fn draw_frame_view(
                     }
 
                     if last_camera != Some(run.camera) {
-                        let vp = frame
+                        let vp = render_list
                             .cameras
                             .get(run.camera as usize)
                             .copied()
@@ -1872,10 +1745,6 @@ fn draw_frame_view(
                     vertices_drawn = vertices_drawn.saturating_add(4 * run.instance_count);
                 }
                 DrawOp::Mesh(draw) => {
-                    if collect_run_stats {
-                        stats.frame_prepare.mesh_runs =
-                            stats.frame_prepare.mesh_runs.saturating_add(1);
-                    }
                     if !matches!(bound, Bound::Mesh) {
                         device.cmd_bind_pipeline(
                             cmd,
@@ -1890,7 +1759,7 @@ fn draw_frame_view(
                     }
 
                     if last_camera != Some(draw.camera) {
-                        let vp = frame
+                        let vp = render_list
                             .cameras
                             .get(draw.camera as usize)
                             .copied()
@@ -1913,10 +1782,6 @@ fn draw_frame_view(
                     vertices_drawn = vertices_drawn.saturating_add(draw.vertex_count);
                 }
                 DrawOp::TexturedMesh(draw) => {
-                    if collect_run_stats {
-                        stats.frame_prepare.tmesh_runs =
-                            stats.frame_prepare.tmesh_runs.saturating_add(1);
-                    }
                     let Some(set) = textures
                         .vulkan_texture(draw.texture_handle)
                         .map(|texture| texture.descriptor_set_repeat)
@@ -1946,18 +1811,10 @@ fn draw_frame_view(
                                 };
                                 vb
                             }
-                            TexturedMeshSource::Cached {
-                                geometry_id,
-                                vertex_count,
-                            } => {
-                                let Some(entry) = state.cached_tmesh.get(&geometry_id) else {
-                                    stats.cached_tmesh_misses =
-                                        stats.cached_tmesh_misses.saturating_add(1);
+                            TexturedMeshSource::Cached { cache_key, .. } => {
+                                let Some(entry) = state.cached_tmesh.get(&cache_key) else {
                                     continue;
                                 };
-                                if !cached_tmesh_count_ok(entry.vertex_count, vertex_count, stats) {
-                                    continue;
-                                }
                                 entry.buffer.buffer
                             }
                         };
@@ -1966,7 +1823,7 @@ fn draw_frame_view(
                     }
 
                     if last_camera != Some(draw.camera) {
-                        let vp = frame
+                        let vp = render_list
                             .cameras
                             .get(draw.camera as usize)
                             .copied()
@@ -2133,7 +1990,6 @@ fn draw_frame_view(
             .command_buffers(std::slice::from_ref(&cmd))
             .signal_semaphores(&sig);
         let submit_started = Instant::now();
-        state.device_known_idle = false;
         device.queue_submit(state.queue, &[submit], fence)?;
         stats.submit_us = elapsed_us_since(submit_started);
 
@@ -2242,7 +2098,7 @@ fn draw_frame_view(
         stats.present_stats.queue_idle_waited = queue_idle_waited;
         state.current_frame = (state.current_frame + 1) % MAX_FRAMES_IN_FLIGHT;
         stats.vertices = vertices_drawn;
-        Ok(*stats)
+        Ok(stats)
     }
 }
 
@@ -2251,23 +2107,18 @@ pub fn cleanup(state: &mut State) {
     if let Err(e) = submit_pending_texture_uploads(state, state.current_frame) {
         error!("Failed to submit pending texture uploads during cleanup: {e}");
     }
-    match wait_device_idle(state) {
-        Ok(()) => {}
-        Err(vk::Result::ERROR_DEVICE_LOST) => warn!(
-            "Vulkan device was lost during cleanup; proceeding with terminal lost-device teardown"
-        ),
-        Err(error) => error!(
-            "Vulkan idle wait failed during final cleanup; proceeding with best-effort teardown: {error:?}"
-        ),
+    // SAFETY: If a logical device still exists, waiting for idle guarantees no in-flight work
+    // still references resources we are about to destroy below.
+    unsafe {
+        if let Some(device) = &state.device {
+            let _ = device.device_wait_idle();
+        }
     }
     retire_all_submitted_texture_uploads(state);
     retire_all_textures(state);
 
-    // SAFETY: After a successful wait, no submitted work references these
-    // resources. If waiting reported DEVICE_LOST (or another terminal cleanup
-    // error), this is one-way best-effort teardown: the backend publishes no
-    // handles afterward and destroys the logical device before returning. The
-    // state must never be reused after this point.
+    // SAFETY: The device is idle, so it is valid to tear down swapchain resources, mapped rings,
+    // pipelines, descriptor pools/layouts, the device, and finally the instance-owned objects.
     unsafe {
         cleanup_swapchain_and_dependents(state);
 
@@ -2328,12 +2179,10 @@ pub fn cleanup(state: &mut State) {
             }
             destroy_buffer(state.device.as_ref().unwrap(), &ring);
         }
-        let device = Arc::clone(state.device.as_ref().unwrap());
-        let _ = drain_cached_tmesh(
-            &mut state.cached_tmesh,
-            &mut state.cached_tmesh_bytes,
-            |buffer| destroy_buffer(device.as_ref(), &buffer),
-        );
+        for geom in state.cached_tmesh.drain().map(|(_, geom)| geom) {
+            destroy_buffer(state.device.as_ref().unwrap(), &geom.buffer);
+        }
+        state.cached_tmesh_bytes = 0;
         for sampler in state.sampler_cache.values() {
             state
                 .device
@@ -3010,55 +2859,32 @@ fn create_gpu_buffer(
 }
 
 fn destroy_buffer(device: &Device, buffer: &BufferResource) {
-    // SAFETY: `buffer` owns this Vulkan buffer/allocation pair. Normal callers
-    // have established GPU completion; final cleanup may also call this while
-    // irreversibly dismantling a lost/unrecoverable logical device.
+    // SAFETY: `buffer` owns this Vulkan buffer/allocation pair and callers only invoke this after
+    // GPU work that might reference it has completed.
     unsafe {
         device.destroy_buffer(buffer.buffer, None);
         device.free_memory(buffer.memory, None);
     }
 }
 
-fn drain_cached_tmesh(
-    cached_tmesh: &mut FastTMeshMap<CachedTMeshGeom>,
-    cached_tmesh_bytes: &mut usize,
-    mut destroy: impl FnMut(BufferResource),
-) -> TMeshRetireStats {
-    drain_tmesh_cache(cached_tmesh, cached_tmesh_bytes, |geometry| {
-        destroy(geometry.buffer);
-    })
-}
-
-#[inline(always)]
-const fn tmesh_cache_has_room(entries: usize, cached_bytes: usize, new_bytes: usize) -> bool {
-    entries < VULKAN_TMESH_CACHE_MAX_ENTRIES
-        && new_bytes <= VULKAN_TMESH_CACHE_MAX_BYTES
-        && cached_bytes.saturating_add(new_bytes) <= VULKAN_TMESH_CACHE_MAX_BYTES
-}
-
 fn ensure_cached_tmesh(
     instance: &Instance,
     device: &Device,
     pdevice: vk::PhysicalDevice,
-    cached_tmesh: &mut FastTMeshMap<CachedTMeshGeom>,
+    cached_tmesh: &mut FastU64Map<CachedTMeshGeom>,
     cached_tmesh_bytes: &mut usize,
-    geometry_id: TMeshGeometryId,
+    cache_key: TMeshCacheKey,
     vertices: &[deadlib_render::TexturedMeshVertex],
-) -> Result<TMeshCacheResult, Box<dyn Error>> {
-    if vertices.is_empty() {
-        return Ok(TMeshCacheResult::IdentityMismatch);
-    }
-    if let Some(entry) = cached_tmesh.get(&geometry_id) {
-        return Ok(if entry.vertex_count == vertices.len() as u32 {
-            TMeshCacheResult::Resident
-        } else {
-            TMeshCacheResult::IdentityMismatch
-        });
+) -> Result<bool, Box<dyn Error>> {
+    if let Some(entry) = cached_tmesh.get(&cache_key) {
+        return Ok(entry.vertex_count == vertices.len() as u32);
     }
 
-    let bytes = std::mem::size_of_val(vertices);
-    if !tmesh_cache_has_room(cached_tmesh.len(), *cached_tmesh_bytes, bytes) {
-        return Ok(TMeshCacheResult::CapacityExceeded);
+    let bytes = vertices.len() * std::mem::size_of::<TexturedMeshVertex>();
+    if bytes > VULKAN_TMESH_CACHE_MAX_BYTES
+        || cached_tmesh_bytes.saturating_add(bytes) > VULKAN_TMESH_CACHE_MAX_BYTES
+    {
+        return Ok(false);
     }
 
     let size = bytes as vk::DeviceSize;
@@ -3071,102 +2897,24 @@ fn ensure_cached_tmesh(
         vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
     )?;
 
-    // SAFETY: `memory` is a HOST_VISIBLE allocation created on this device and
-    // `size` is the allocation's requested range.
-    let mapped = unsafe { device.map_memory(memory, 0, size, vk::MemoryMapFlags::empty()) };
-    let mapped = match mapped {
-        Ok(mapped) => mapped,
-        Err(error) => {
-            destroy_buffer(device, &BufferResource { buffer, memory });
-            return Err(error.into());
-        }
-    };
-    // SAFETY: the successful mapping covers the complete vertex payload. The
-    // source and destination do not overlap, and the allocation remains mapped
-    // until after the initialized data has been copied.
+    // SAFETY: `memory` is a HOST_VISIBLE allocation created on this device and the
+    // mapped range is fully written with initialized vertex data before unmapping.
     unsafe {
+        let mapped = device.map_memory(memory, 0, size, vk::MemoryMapFlags::empty())?;
         let dst = mapped.cast::<TexturedMeshVertex>();
         std::ptr::copy_nonoverlapping(vertices.as_ptr(), dst, vertices.len());
         device.unmap_memory(memory);
     }
 
     cached_tmesh.insert(
-        geometry_id,
+        cache_key,
         CachedTMeshGeom {
             buffer: BufferResource { buffer, memory },
             vertex_count: vertices.len() as u32,
         },
     );
     *cached_tmesh_bytes = cached_tmesh_bytes.saturating_add(bytes);
-    Ok(TMeshCacheResult::Uploaded)
-}
-
-/// Retires all Vulkan textured-mesh cache entries at an explicit transition.
-///
-/// The empty fast path performs no device wait. For a populated cache, waiting
-/// for the device to become idle is the commit point: a wait failure leaves all
-/// buffers and byte accounting intact, while success destroys every entry.
-pub fn retire_textured_meshes(state: &mut State) -> Result<TMeshRetireStats, vk::Result> {
-    if state.cached_tmesh.is_empty() {
-        return Ok(TMeshRetireStats::default());
-    }
-    let device = Arc::clone(
-        state
-            .device
-            .as_ref()
-            .expect("a populated Vulkan geometry cache requires a live device"),
-    );
-    // Establishing known-idle state is the commit point. Failure leaves the
-    // complete cache and its byte accounting untouched.
-    wait_device_idle(state)?;
-    Ok(drain_cached_tmesh(
-        &mut state.cached_tmesh,
-        &mut state.cached_tmesh_bytes,
-        |buffer| destroy_buffer(device.as_ref(), &buffer),
-    ))
-}
-
-/// Uploads immutable textured-mesh geometry before direct frame submission.
-///
-/// The renderer thread owns the entry- and byte-capped cache. It saturates when
-/// either limit is full; prewarming never scans, prunes, or destroys resident
-/// geometry.
-pub fn prewarm_textured_meshes(
-    state: &mut State,
-    geometries: &[RetainedTMeshGeometry],
-) -> TMeshPrewarmStats {
-    let mut stats = TMeshPrewarmStats::default();
-    let Some(device) = state.device.as_ref().map(Arc::clone) else {
-        for geometry in geometries {
-            stats.record(TMeshCacheResult::UploadFailed, geometry.vertices().len());
-        }
-        return stats;
-    };
-
-    for geometry in geometries {
-        let vertices = geometry.vertices();
-        let result = match ensure_cached_tmesh(
-            &state.instance,
-            device.as_ref(),
-            state.pdevice,
-            &mut state.cached_tmesh,
-            &mut state.cached_tmesh_bytes,
-            geometry.id(),
-            vertices,
-        ) {
-            Ok(result) => result,
-            Err(error) => {
-                warn!(
-                    "Failed to prewarm Vulkan textured mesh {:#x}/{:#x}: {error}",
-                    geometry.id().logical_key(),
-                    geometry.id().fingerprint(),
-                );
-                TMeshCacheResult::UploadFailed
-            }
-        };
-        stats.record(result, vertices.len());
-    }
-    stats
+    Ok(true)
 }
 
 fn find_memory_type(
@@ -4227,7 +3975,7 @@ fn cleanup_swapchain_and_dependents(state: &mut State) {
 
 fn recreate_swapchain_and_dependents(state: &mut State) -> Result<(), Box<dyn Error>> {
     debug!("Recreating swapchain...");
-    let device = Arc::clone(state.device.as_ref().unwrap());
+    let device = state.device.as_ref().unwrap();
 
     // Some platforms (notably under certain compositors or when minimized)
     // can temporarily report a surface with all extents set to zero. In that
@@ -4259,15 +4007,17 @@ fn recreate_swapchain_and_dependents(state: &mut State) -> Result<(), Box<dyn Er
 
     state.swapchain_valid = false;
 
-    // Waiting for idle ensures no queue submission still references the old
-    // swapchain resources before we replace and destroy them below.
-    wait_device_idle(state)?;
+    // SAFETY: Waiting for idle ensures no queue submission still references the old swapchain
+    // resources before we replace and destroy them below.
+    unsafe {
+        device.device_wait_idle()?;
+    }
 
     let old_swapchain = state.swapchain_resources.swapchain;
 
     let new_resources = create_swapchain(
         &state.instance,
-        device.as_ref(),
+        device,
         state.pdevice,
         state.surface,
         &state.surface_loader,
@@ -4279,11 +4029,7 @@ fn recreate_swapchain_and_dependents(state: &mut State) -> Result<(), Box<dyn Er
 
     let old = std::mem::replace(&mut state.swapchain_resources, new_resources);
 
-    recreate_framebuffers(
-        device.as_ref(),
-        &mut state.swapchain_resources,
-        state.render_pass,
-    )?;
+    recreate_framebuffers(device, &mut state.swapchain_resources, state.render_pass)?;
 
     // SAFETY: The device is idle, so the old swapchain image views/framebuffers/swapchain are no
     // longer referenced by in-flight work and can be destroyed here.
@@ -4338,69 +4084,4 @@ fn ortho_for_window(width: u32, height: u32) -> Matrix4 {
     let half_w = 0.5 * w;
     let half_h = 0.5 * h;
     Matrix4::orthographic_rh_gl(-half_w, half_w, -half_h, half_h, -1.0, 1.0)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::{
-        BufferResource, CachedTMeshGeom, DrawStats, VULKAN_TMESH_CACHE_MAX_BYTES,
-        VULKAN_TMESH_CACHE_MAX_ENTRIES, cached_tmesh_count_ok, drain_cached_tmesh,
-        tmesh_cache_has_room,
-    };
-    use ash::vk;
-    use deadlib_render::{FastTMeshMap, TMeshGeometryId, TexturedMeshVertex};
-
-    #[test]
-    fn cached_tmesh_draw_count_mismatch_is_reported_and_skipped() {
-        let mut stats = DrawStats::default();
-        assert!(cached_tmesh_count_ok(6, 6, &mut stats));
-        assert_eq!(stats.cached_tmesh_misses, 0);
-
-        assert!(!cached_tmesh_count_ok(6, 9, &mut stats));
-        assert_eq!(stats.cached_tmesh_misses, 1);
-    }
-
-    #[test]
-    fn cached_tmesh_capacity_caps_entries_and_bytes() {
-        assert!(tmesh_cache_has_room(
-            VULKAN_TMESH_CACHE_MAX_ENTRIES - 1,
-            0,
-            1
-        ));
-        assert!(!tmesh_cache_has_room(VULKAN_TMESH_CACHE_MAX_ENTRIES, 0, 1));
-        assert!(tmesh_cache_has_room(0, 0, VULKAN_TMESH_CACHE_MAX_BYTES));
-        assert!(!tmesh_cache_has_room(0, 1, VULKAN_TMESH_CACHE_MAX_BYTES));
-        assert!(!tmesh_cache_has_room(0, usize::MAX, 1));
-    }
-
-    #[test]
-    fn cached_tmesh_drain_reports_entries_and_bytes() {
-        let mut cache = FastTMeshMap::default();
-        for logical_key in [7, 9] {
-            let id = TMeshGeometryId::new(logical_key, &[TexturedMeshVertex::default()])
-                .expect("test geometry identity is valid");
-            cache.insert(
-                id,
-                CachedTMeshGeom {
-                    buffer: BufferResource {
-                        buffer: vk::Buffer::null(),
-                        memory: vk::DeviceMemory::null(),
-                    },
-                    vertex_count: 1,
-                },
-            );
-        }
-        let mut cached_bytes = 320;
-        let mut destroyed = 0usize;
-
-        let stats = drain_cached_tmesh(&mut cache, &mut cached_bytes, |_| {
-            destroyed += 1;
-        });
-
-        assert_eq!(stats.entries, 2);
-        assert_eq!(stats.bytes, 320);
-        assert_eq!(destroyed, 2);
-        assert!(cache.is_empty());
-        assert_eq!(cached_bytes, 0);
-    }
 }

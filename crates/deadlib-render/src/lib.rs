@@ -1,193 +1,16 @@
 pub mod draw_prep;
 
-pub use draw_prep::{
-    DrawFrame, DrawFrameView, FrameCapacity, FramePrepareStats, TMeshPrewarmStats,
-};
-
 use glam::Mat4 as Matrix4;
 use std::ops::Deref;
-use std::{
-    collections::HashMap,
-    hash::{BuildHasherDefault, Hasher},
-    num::NonZeroU64,
-    sync::{
-        Arc,
-        atomic::{AtomicU64, Ordering},
-    },
-};
+use std::{collections::HashMap, hash::BuildHasherDefault, sync::Arc};
 use twox_hash::XxHash64;
 
 // --- Public Data Contract ---
 pub type TextureHandle = u64;
 pub const INVALID_TEXTURE_HANDLE: TextureHandle = 0;
 pub type FastU64Map<V> = HashMap<u64, V, BuildHasherDefault<XxHash64>>;
-pub type FastTMeshMap<V> = HashMap<TMeshGeometryId, V, BuildHasherDefault<XxHash64>>;
 pub type TMeshCacheKey = u64;
 pub const INVALID_TMESH_CACHE_KEY: TMeshCacheKey = 0;
-
-static NEXT_TMESH_CACHE_EPOCH: AtomicU64 = AtomicU64::new(1);
-
-/// Process-unique generation of one hardware retained-geometry cache.
-///
-/// Epochs are created only at backend creation and committed cache retirement
-/// boundaries. Direct frames carry the epoch they were prewarmed against, so a
-/// frame from an older cache generation cannot accidentally address newly
-/// uploaded resources.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub struct TMeshCacheEpoch(NonZeroU64);
-
-impl TMeshCacheEpoch {
-    /// Allocates a process-unique epoch.
-    ///
-    /// Exhausting every non-zero `u64` value is impossible in a real process;
-    /// panic instead of wrapping because reuse would violate stale-frame safety.
-    #[inline]
-    pub fn fresh() -> Self {
-        let value = NEXT_TMESH_CACHE_EPOCH
-            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |value| {
-                value.checked_add(1)
-            })
-            .expect("retained textured-mesh cache epoch space exhausted");
-        Self(NonZeroU64::new(value).expect("cache epoch counter starts non-zero"))
-    }
-}
-
-/// Resources released by one complete retained-geometry cache retirement.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct TMeshRetireStats {
-    pub entries: usize,
-    pub bytes: usize,
-}
-
-/// Drains a backend's complete retained-geometry cache and resets accounting.
-///
-/// The render thread is the sole cache owner. Backends provide the resource
-/// destruction operation because GPU handles and synchronization remain local
-/// to their implementation.
-pub fn drain_tmesh_cache<V>(
-    cache: &mut FastTMeshMap<V>,
-    cached_bytes: &mut usize,
-    mut retire: impl FnMut(V),
-) -> TMeshRetireStats {
-    let stats = TMeshRetireStats {
-        entries: cache.len(),
-        bytes: *cached_bytes,
-    };
-    *cached_bytes = 0;
-    for value in cache.drain().map(|(_, value)| value) {
-        retire(value);
-    }
-    stats
-}
-
-/// Stable identity for one immutable textured-mesh geometry payload.
-///
-/// The logical key names the resource while the fingerprint identifies its
-/// exact vertex bytes. Keeping both in draw ops lets multiple revisions of a
-/// logical resource coexist in a backend cache without relying on allocation
-/// addresses or hashing vertices on live frames.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub struct TMeshGeometryId {
-    logical_key: NonZeroU64,
-    fingerprint: u64,
-}
-
-impl TMeshGeometryId {
-    /// Builds an identity once, when immutable geometry is created.
-    ///
-    /// Invalid logical keys and empty payloads have no cache identity and stay
-    /// on the transient/no-draw paths respectively.
-    #[inline]
-    pub fn new(logical_key: TMeshCacheKey, vertices: &[TexturedMeshVertex]) -> Option<Self> {
-        if vertices.is_empty() {
-            return None;
-        }
-        let logical_key = NonZeroU64::new(logical_key)?;
-        Some(Self {
-            logical_key,
-            fingerprint: tmesh_fingerprint(vertices),
-        })
-    }
-
-    /// Builds an identity for geometry with no separate stable asset key.
-    ///
-    /// The logical key and fingerprint use independent hash seeds. Hashing is
-    /// still performed only once at immutable-resource creation.
-    #[inline]
-    pub fn from_content(vertices: &[TexturedMeshVertex]) -> Option<Self> {
-        if vertices.is_empty() {
-            return None;
-        }
-        let logical_key =
-            NonZeroU64::new(tmesh_hash(vertices, 0x9e37_79b9_7f4a_7c15)).unwrap_or(NonZeroU64::MIN);
-        Some(Self {
-            logical_key,
-            fingerprint: tmesh_fingerprint(vertices),
-        })
-    }
-
-    #[inline(always)]
-    pub const fn logical_key(self) -> TMeshCacheKey {
-        self.logical_key.get()
-    }
-
-    #[inline(always)]
-    pub const fn fingerprint(self) -> u64 {
-        self.fingerprint
-    }
-}
-
-/// Immutable textured-mesh bytes bound to their complete cache identity.
-///
-/// Construction hashes the bytes once, at resource creation. The private
-/// fields make it impossible for safe code to pair an identity with unrelated
-/// geometry later in the presentation or render pipeline.
-#[derive(Clone, Debug)]
-pub struct RetainedTMeshGeometry {
-    id: TMeshGeometryId,
-    vertices: Arc<[TexturedMeshVertex]>,
-}
-
-impl RetainedTMeshGeometry {
-    #[inline]
-    pub fn new(logical_key: TMeshCacheKey, vertices: Arc<[TexturedMeshVertex]>) -> Option<Self> {
-        let id = TMeshGeometryId::new(logical_key, vertices.as_ref())?;
-        Some(Self { id, vertices })
-    }
-
-    #[inline]
-    pub fn from_content(vertices: Arc<[TexturedMeshVertex]>) -> Option<Self> {
-        let id = TMeshGeometryId::from_content(vertices.as_ref())?;
-        Some(Self { id, vertices })
-    }
-
-    #[inline(always)]
-    pub const fn id(&self) -> TMeshGeometryId {
-        self.id
-    }
-
-    #[inline(always)]
-    pub fn vertices(&self) -> &[TexturedMeshVertex] {
-        self.vertices.as_ref()
-    }
-}
-
-/// Deterministically identifies the exact immutable textured-mesh payload.
-///
-/// `TexturedMeshVertex` is `Pod`, so its byte representation contains no
-/// uninitialized padding. Hashing that representation distinguishes every bit
-/// sent to the GPU, including floating-point bit patterns.
-#[inline]
-pub fn tmesh_fingerprint(vertices: &[TexturedMeshVertex]) -> u64 {
-    tmesh_hash(vertices, 0)
-}
-
-#[inline]
-fn tmesh_hash(vertices: &[TexturedMeshVertex], seed: u64) -> u64 {
-    let mut hasher = XxHash64::with_seed(seed);
-    hasher.write(bytemuck::cast_slice(vertices));
-    hasher.finish()
-}
 
 pub struct TextureHandleMap<V> {
     slots: Vec<Option<V>>,
@@ -308,33 +131,16 @@ impl Default for TexturedMeshVertex {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub enum TexturedMeshVertices {
-    Retained(Arc<RetainedTMeshGeometry>),
     Shared(Arc<[TexturedMeshVertex]>),
     Transient(Vec<TexturedMeshVertex>),
-}
-
-impl TexturedMeshVertices {
-    #[inline(always)]
-    pub fn retained(&self) -> Option<&RetainedTMeshGeometry> {
-        match self {
-            Self::Retained(geometry) => Some(geometry.as_ref()),
-            Self::Shared(_) | Self::Transient(_) => None,
-        }
-    }
-
-    #[inline(always)]
-    pub fn geometry_id(&self) -> Option<TMeshGeometryId> {
-        self.retained().map(RetainedTMeshGeometry::id)
-    }
 }
 
 impl AsRef<[TexturedMeshVertex]> for TexturedMeshVertices {
     #[inline(always)]
     fn as_ref(&self) -> &[TexturedMeshVertex] {
         match self {
-            Self::Retained(geometry) => geometry.vertices(),
             Self::Shared(vertices) => vertices.as_ref(),
             Self::Transient(vertices) => vertices.as_slice(),
         }
@@ -502,6 +308,7 @@ pub enum ObjectType {
     TexturedMesh {
         instance: TexturedMeshInstanceRaw,
         vertices: TexturedMeshVertices,
+        geom_cache_key: TMeshCacheKey,
         depth_test: bool,
     },
 }
@@ -780,27 +587,12 @@ pub struct PresentStats {
 #[derive(Clone, Copy, Debug, Default)]
 pub struct DrawStats {
     pub vertices: u32,
-    /// Number of legacy `RenderList` submissions represented by these stats.
-    pub render_list_submissions: u32,
-    /// Number of prepared `DrawFrame` submissions represented by these stats.
-    pub direct_frame_submissions: u32,
-    /// True when submission consumed a prepared frame and skipped draw prep.
-    pub draw_prep_bypassed: bool,
-    /// CPU time spent converting a legacy `RenderList` into flat draw runs.
-    /// Direct `DrawFrame` submissions leave this at zero.
-    pub draw_prep_us: u32,
-    /// Counts and capacity telemetry produced while preparing this frame.
-    pub frame_prepare: FramePrepareStats,
-    /// Cached textured-mesh runs skipped because backend geometry was absent.
-    pub cached_tmesh_misses: u32,
     pub acquire_us: u32,
     pub submit_us: u32,
     pub present_us: u32,
     pub present_stats: PresentStats,
     pub gpu_wait_us: u32,
     pub backend_setup_us: u32,
-    /// CPU time spent growing/filling backend upload buffers after draw prep.
-    pub backend_upload_us: u32,
     pub backend_prepare_us: u32,
     pub backend_record_us: u32,
 }
@@ -849,42 +641,6 @@ impl core::str::FromStr for PresentModePolicy {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn tmesh_cache_epochs_are_unique_and_niche_optimized() {
-        let first = TMeshCacheEpoch::fresh();
-        let second = TMeshCacheEpoch::fresh();
-
-        assert_ne!(first, second);
-        assert_eq!(size_of::<TMeshCacheEpoch>(), 8);
-        assert_eq!(size_of::<Option<TMeshCacheEpoch>>(), 8);
-    }
-
-    #[test]
-    fn draining_tmesh_cache_retires_every_entry_and_resets_bytes() {
-        let vertices = [TexturedMeshVertex::default(); 3];
-        let first = TMeshGeometryId::new(1, &vertices).expect("non-empty geometry");
-        let second = TMeshGeometryId::new(2, &vertices).expect("non-empty geometry");
-        let mut cache = FastTMeshMap::default();
-        cache.insert(first, 11);
-        cache.insert(second, 29);
-        let mut bytes = 384;
-        let mut retired = Vec::new();
-
-        let stats = drain_tmesh_cache(&mut cache, &mut bytes, |value| retired.push(value));
-
-        retired.sort_unstable();
-        assert_eq!(retired, [11, 29]);
-        assert_eq!(
-            stats,
-            TMeshRetireStats {
-                entries: 2,
-                bytes: 384
-            }
-        );
-        assert!(cache.is_empty());
-        assert_eq!(bytes, 0);
-    }
 
     #[test]
     fn present_mode_policy_choices_match_options_order() {

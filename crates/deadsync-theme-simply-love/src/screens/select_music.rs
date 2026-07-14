@@ -10389,41 +10389,10 @@ pub fn music_wheel_runtime_request(state: &State) -> MusicWheelRuntimeRequest<'_
 }
 
 pub fn push_actors(
-    actors: &mut Vec<Actor>,
-    state: &State,
-    asset_manager: &AssetManager,
-    stage_number: usize,
-) {
-    push_actors_impl(actors, state, asset_manager, stage_number, true);
-}
-
-/// Builds Select Music without its first root-level visual-style background.
-/// The shell uses this only when an equivalent compiled prefix is ready; the
-/// regular [`push_actors`] path remains the authoritative fallback.
-pub fn push_actors_without_visual_bg(
-    actors: &mut Vec<Actor>,
-    state: &State,
-    asset_manager: &AssetManager,
-    stage_number: usize,
-) {
-    push_actors_impl(actors, state, asset_manager, stage_number, false);
-}
-
-#[inline]
-pub fn visual_bg_params(state: &State) -> visual_style_bg::Params {
-    visual_style_bg::Params {
-        active_color_index: state.active_color_index,
-        backdrop_rgba: [0.0, 0.0, 0.0, 1.0],
-        alpha_mul: 1.0,
-    }
-}
-
-fn push_actors_impl(
     mut actors: &mut Vec<Actor>,
     state: &State,
     asset_manager: &AssetManager,
     stage_number: usize,
-    include_visual_bg: bool,
 ) {
     actors.reserve(256);
     let side = deadsync_profile::compat::get_session_player_side();
@@ -10442,9 +10411,14 @@ fn push_actors_impl(
     let allow_gs_fetch = allow_gs_fetch_for_selection(state);
     let cfg = config::get();
 
-    if include_visual_bg {
-        state.bg.push(actors, visual_bg_params(state));
-    }
+    state.bg.push(
+        actors,
+        visual_style_bg::Params {
+            active_color_index: state.active_color_index,
+            backdrop_rgba: [0.0, 0.0, 0.0, 1.0],
+            alpha_mul: 1.0,
+        },
+    );
     actors.push(sl_select_music_bg_flash());
 
     let select_music_label = tr("ScreenTitles", "SelectMusic");

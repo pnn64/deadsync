@@ -1,5 +1,4 @@
 use crate::actors::{self, SizeSpec};
-use crate::compiled_scene::{CompiledRootPrefix, RootPrefixError, SpriteUvRectPatch};
 use crate::{anim, font, space};
 use deadlib_render as renderer;
 use deadlib_render::{BlendMode, RenderList, RenderObject};
@@ -134,84 +133,19 @@ pub fn build_screen_cached_with_scratch_and_texture_context<T: TextureContext + 
     scratch: &mut ComposeScratch,
     texture_ctx: &T,
 ) -> RenderList {
-    build_screen_cached_with_scratch_and_texture_context_impl(
-        actors,
-        clear_color,
-        m,
-        fonts,
-        total_elapsed,
-        text_cache,
-        scratch,
-        texture_ctx,
-        None,
-    )
-}
-
-/// Composes legacy root actors after a cold-validated compiled sprite prefix.
-///
-/// `actors` must omit the actors represented by `root_prefix`. Patch handles
-/// are validated before warmed compose buffers are taken from `scratch`, so an
-/// invalid/stale patch leaves all recycled storage intact.
-#[allow(clippy::too_many_arguments)]
-#[inline]
-pub fn build_screen_cached_with_scratch_and_texture_context_and_root_prefix<
-    T: TextureContext + ?Sized,
->(
-    actors: &[actors::Actor],
-    clear_color: [f32; 4],
-    m: &Metrics,
-    fonts: &HashMap<&'static str, font::Font>,
-    total_elapsed: f32,
-    text_cache: &mut TextLayoutCache,
-    scratch: &mut ComposeScratch,
-    texture_ctx: &T,
-    root_prefix: &CompiledRootPrefix,
-    uv_patches: &[SpriteUvRectPatch],
-) -> Result<RenderList, RootPrefixError> {
-    root_prefix.validate_uv_rect_patches(uv_patches)?;
-    Ok(build_screen_cached_with_scratch_and_texture_context_impl(
-        actors,
-        clear_color,
-        m,
-        fonts,
-        total_elapsed,
-        text_cache,
-        scratch,
-        texture_ctx,
-        Some((root_prefix, uv_patches)),
-    ))
-}
-
-#[allow(clippy::too_many_arguments)]
-fn build_screen_cached_with_scratch_and_texture_context_impl<T: TextureContext + ?Sized>(
-    actors: &[actors::Actor],
-    clear_color: [f32; 4],
-    m: &Metrics,
-    fonts: &HashMap<&'static str, font::Font>,
-    total_elapsed: f32,
-    text_cache: &mut TextLayoutCache,
-    scratch: &mut ComposeScratch,
-    texture_ctx: &T,
-    root_prefix: Option<(&CompiledRootPrefix, &[SpriteUvRectPatch])>,
-) -> RenderList {
-    let scratch_capacity_before = ComposeScratchCapacity::capture(scratch);
     let mut objects = std::mem::take(&mut scratch.objects);
     objects.clear();
-    let prefix_primitives = root_prefix.map_or(0, |(prefix, _)| prefix.primitive_count());
-    let prefix_sprites = root_prefix.map_or(0, |(prefix, _)| prefix.sprite_count());
-    let legacy_capacity = actors.len().saturating_mul(4);
-    let object_capacity = legacy_capacity.saturating_add(prefix_primitives).max(64);
-    let sprite_capacity = legacy_capacity.saturating_add(prefix_sprites).max(64);
+    let object_capacity = actors.len().saturating_mul(4).max(64);
     if objects.capacity() < object_capacity {
         objects.reserve(object_capacity - objects.len());
     }
     debug_assert!(objects.capacity() >= object_capacity);
     let mut sprite_instances = std::mem::take(&mut scratch.sprite_instances);
     sprite_instances.clear();
-    if sprite_instances.capacity() < sprite_capacity {
-        sprite_instances.reserve(sprite_capacity - sprite_instances.len());
+    if sprite_instances.capacity() < object_capacity {
+        sprite_instances.reserve(object_capacity - sprite_instances.len());
     }
-    debug_assert!(sprite_instances.capacity() >= sprite_capacity);
+    debug_assert!(sprite_instances.capacity() >= object_capacity);
     let mut cameras = std::mem::take(&mut scratch.cameras);
     cameras.clear();
     if cameras.capacity() < 4 {
@@ -223,7 +157,7 @@ fn build_screen_cached_with_scratch_and_texture_context_impl<T: TextureContext +
     cameras.push(Matrix4::orthographic_rh_gl(
         m.left, m.right, m.bottom, m.top, -1.0, 1.0,
     ));
-    let mut order_counter = root_prefix.map_or(0, |(prefix, _)| prefix.order_span());
+    let mut order_counter: u32 = 0;
     let mut masks = std::mem::take(&mut scratch.masks);
     masks.clear();
     if masks.capacity() < 8 {
@@ -239,10 +173,6 @@ fn build_screen_cached_with_scratch_and_texture_context_impl<T: TextureContext +
     };
     let parent_z: i16 = 0;
     let camera: u8 = 0;
-
-    if let Some((prefix, patches)) = root_prefix {
-        prefix.append_to(&mut sprite_instances, &mut objects, patches);
-    }
 
     build_actor_list(
         actors,
@@ -266,7 +196,7 @@ fn build_screen_cached_with_scratch_and_texture_context_impl<T: TextureContext +
 
     // Prefer the dense stable z-bucket pass for common dense ranges, but fall
     // back to `(z, order)` sorting when insertion order and draw order differ.
-    let sort_mode = sort_render_objects(&mut objects, scratch);
+    sort_render_objects(&mut objects, scratch);
     scratch.masks = masks;
     scratch.texture_cache = texture_cache;
 
@@ -280,36 +210,6 @@ fn build_screen_cached_with_scratch_and_texture_context_impl<T: TextureContext +
         }
     }
 
-    let mut scratch_capacity_after = ComposeScratchCapacity::capture(scratch);
-    scratch_capacity_after.objects = objects.capacity();
-    scratch_capacity_after.sprite_instances = sprite_instances.capacity();
-    scratch_capacity_after.cameras = cameras.capacity();
-    scratch.frame_stats = ComposeFrameStats {
-        sort_mode,
-        sort_fallback_count: u32::from(matches!(
-            sort_mode,
-            RenderSortMode::OrderedZComparison
-                | RenderSortMode::SparseComparison
-                | RenderSortMode::DenseThenComparison
-        )),
-        texture: scratch.texture_cache.frame_stats,
-        scratch_growth_events: scratch_capacity_before.growth_events(scratch_capacity_after),
-        compiled_prefix_primitives: saturating_u32(prefix_primitives),
-        compiled_prefix_sprites: saturating_u32(prefix_sprites),
-        compiled_prefix_patches: saturating_u32(
-            root_prefix.map_or(0, |(_, patches)| patches.len()),
-        ),
-        render_objects: saturating_u32(objects.len()),
-        sprite_instances: saturating_u32(sprite_instances.len()),
-        cameras: saturating_u32(cameras.len()),
-        object_capacity: objects.capacity(),
-        sprite_capacity: sprite_instances.capacity(),
-        camera_capacity: cameras.capacity(),
-        mask_capacity: scratch.masks.capacity(),
-        z_count_capacity: scratch.z_counts.capacity(),
-        z_permutation_capacity: scratch.z_perm.capacity(),
-    };
-
     // Texture handles are resolved during composition and cached per frame so
     // draw prep/backends only see compact render objects.
     RenderList {
@@ -317,124 +217,6 @@ fn build_screen_cached_with_scratch_and_texture_context_impl<T: TextureContext +
         cameras,
         sprite_instances,
         objects,
-    }
-}
-
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub enum RenderSortMode {
-    /// Zero or one render object required no ordering work.
-    #[default]
-    Trivial,
-    /// Objects were already ordered by `(z, order)`.
-    AlreadyOrdered,
-    /// Objects had monotonic z values but needed a comparison sort for order.
-    OrderedZComparison,
-    /// A dense z range was ordered with the reusable bucket scratch.
-    DenseBuckets,
-    /// A sparse z range required a comparison sort.
-    SparseComparison,
-    /// Dense bucketing exposed non-monotonic explicit order values and needed
-    /// a final comparison sort.
-    DenseThenComparison,
-}
-
-impl RenderSortMode {
-    #[inline(always)]
-    pub const fn as_str(self) -> &'static str {
-        match self {
-            Self::Trivial => "trivial",
-            Self::AlreadyOrdered => "ordered",
-            Self::OrderedZComparison => "z_comparison",
-            Self::DenseBuckets => "dense_buckets",
-            Self::SparseComparison => "sparse_comparison",
-            Self::DenseThenComparison => "dense_then_comparison",
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct TextureLookupFrameStats {
-    pub registry_invalidations: u32,
-    pub dims_hits: u32,
-    pub dims_misses: u32,
-    pub sheet_hits: u32,
-    pub sheet_misses: u32,
-    pub handle_hits: u32,
-    pub handle_misses: u32,
-    pub unresolved_handles: u32,
-}
-
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct ComposeFrameStats {
-    pub sort_mode: RenderSortMode,
-    pub sort_fallback_count: u32,
-    pub texture: TextureLookupFrameStats,
-    pub scratch_growth_events: u32,
-    pub compiled_prefix_primitives: u32,
-    pub compiled_prefix_sprites: u32,
-    pub compiled_prefix_patches: u32,
-    pub render_objects: u32,
-    pub sprite_instances: u32,
-    pub cameras: u32,
-    pub object_capacity: usize,
-    pub sprite_capacity: usize,
-    pub camera_capacity: usize,
-    pub mask_capacity: usize,
-    pub z_count_capacity: usize,
-    pub z_permutation_capacity: usize,
-}
-
-#[derive(Clone, Copy, Debug, Default)]
-struct ComposeScratchCapacity {
-    objects: usize,
-    sprite_instances: usize,
-    cameras: usize,
-    masks: usize,
-    z_counts: usize,
-    z_perm: usize,
-    text_builders: usize,
-    recycled_text_buffers: usize,
-    texture_dims: usize,
-    texture_sheets: usize,
-    texture_handles: usize,
-}
-
-impl ComposeScratchCapacity {
-    #[inline(always)]
-    fn capture(scratch: &ComposeScratch) -> Self {
-        Self {
-            objects: scratch.objects.capacity(),
-            sprite_instances: scratch.sprite_instances.capacity(),
-            cameras: scratch.cameras.capacity(),
-            masks: scratch.masks.capacity(),
-            z_counts: scratch.z_counts.capacity(),
-            z_perm: scratch.z_perm.capacity(),
-            text_builders: scratch.transient_text_mesh_builders.capacity(),
-            recycled_text_buffers: scratch.recycled_text_mesh_vertices.capacity(),
-            texture_dims: scratch.texture_cache.dims.capacity(),
-            texture_sheets: scratch.texture_cache.sheets.capacity(),
-            texture_handles: scratch.texture_cache.handles.capacity(),
-        }
-    }
-
-    #[inline(always)]
-    fn growth_events(self, after: Self) -> u32 {
-        [
-            after.objects > self.objects,
-            after.sprite_instances > self.sprite_instances,
-            after.cameras > self.cameras,
-            after.masks > self.masks,
-            after.z_counts > self.z_counts,
-            after.z_perm > self.z_perm,
-            after.text_builders > self.text_builders,
-            after.recycled_text_buffers > self.recycled_text_buffers,
-            after.texture_dims > self.texture_dims,
-            after.texture_sheets > self.texture_sheets,
-            after.texture_handles > self.texture_handles,
-        ]
-        .into_iter()
-        .map(u32::from)
-        .sum()
     }
 }
 
@@ -449,15 +231,9 @@ pub struct ComposeScratch {
     texture_cache: TextureLookupCache,
     transient_text_mesh_builders: Vec<TextMeshBatchBuilder>,
     recycled_text_mesh_vertices: Vec<Vec<renderer::TexturedMeshVertex>>,
-    frame_stats: ComposeFrameStats,
 }
 
 impl ComposeScratch {
-    #[inline(always)]
-    pub const fn frame_stats(&self) -> ComposeFrameStats {
-        self.frame_stats
-    }
-
     pub fn recycle_render_list(&mut self, render: &mut RenderList) {
         let mut objects = std::mem::take(&mut render.objects);
         for obj in objects.drain(..) {
@@ -497,12 +273,9 @@ impl ComposeScratch {
     }
 }
 
-fn sort_render_objects(
-    objects: &mut [RenderObject],
-    scratch: &mut ComposeScratch,
-) -> RenderSortMode {
+fn sort_render_objects(objects: &mut [RenderObject], scratch: &mut ComposeScratch) {
     if objects.len() < 2 {
-        return RenderSortMode::Trivial;
+        return;
     }
 
     let mut min_z = objects[0].z;
@@ -519,18 +292,18 @@ fn sort_render_objects(
         prev_key = key;
     }
     if sorted_by_key {
-        return RenderSortMode::AlreadyOrdered;
+        return;
     }
     if sorted_by_z {
         objects.sort_unstable_by_key(|o| (o.z, o.order));
-        return RenderSortMode::OrderedZComparison;
+        return;
     }
 
     let range = (i32::from(max_z) - i32::from(min_z) + 1) as usize;
     let dense_range_limit = objects.len().saturating_mul(8).max(256);
     if range > dense_range_limit {
         objects.sort_unstable_by_key(|o| (o.z, o.order));
-        return RenderSortMode::SparseComparison;
+        return;
     }
 
     scratch.z_counts.clear();
@@ -566,24 +339,20 @@ fn sort_render_objects(
         }
     }
 
-    let mode = if objects
+    if objects
         .windows(2)
         .any(|pair| (pair[0].z, pair[0].order) > (pair[1].z, pair[1].order))
     {
         // Some compose paths append later objects before assigning their final
         // draw order, so stable z-bucketing alone is not always sufficient.
         objects.sort_unstable_by_key(|o| (o.z, o.order));
-        RenderSortMode::DenseThenComparison
-    } else {
-        RenderSortMode::DenseBuckets
-    };
+    }
 
     debug_assert!(
         objects
             .windows(2)
             .all(|pair| (pair[0].z, pair[0].order) <= (pair[1].z, pair[1].order))
     );
-    mode
 }
 
 #[derive(Clone, Copy)]
@@ -611,7 +380,8 @@ struct CachedLine {
 #[derive(Clone)]
 struct CachedTextMeshBatch {
     texture_key: *const str,
-    geometry: Arc<renderer::RetainedTMeshGeometry>,
+    geom_cache_key: renderer::TMeshCacheKey,
+    vertices: Arc<[renderer::TexturedMeshVertex]>,
 }
 
 #[derive(Default)]
@@ -736,17 +506,14 @@ struct TextureLookupCache {
     dims: TextureMetaMap,
     sheets: TextureSheetMap,
     handles: TextureHandleLookupMap,
-    frame_stats: TextureLookupFrameStats,
 }
 
 impl TextureLookupCache {
     fn begin_frame<T: TextureContext + ?Sized>(&mut self, texture_ctx: &T) {
-        self.frame_stats = TextureLookupFrameStats::default();
         let generation = texture_ctx.texture_registry_generation();
         if self.generation == generation {
             return;
         }
-        self.frame_stats.registry_invalidations = 1;
         self.generation = generation;
         self.dims.clear();
         self.sheets.clear();
@@ -774,13 +541,11 @@ impl TextureLookupCache {
     ) -> Option<TextureMeta> {
         let key_ptr = Self::ptr_cache_key(key_ptr);
         let fingerprint = Self::key_fingerprint(key);
-        if let Some(entry) = self.dims.get(&key_ptr)
-            && entry.fingerprint == fingerprint
-        {
-            self.frame_stats.dims_hits = self.frame_stats.dims_hits.saturating_add(1);
-            return Some(entry.value);
+        if let Some(entry) = self.dims.get(&key_ptr) {
+            if entry.fingerprint == fingerprint {
+                return Some(entry.value);
+            }
         }
-        self.frame_stats.dims_misses = self.frame_stats.dims_misses.saturating_add(1);
         let meta = texture_ctx.texture_dims(key)?;
         self.dims.insert(
             key_ptr,
@@ -801,13 +566,11 @@ impl TextureLookupCache {
     ) -> (u32, u32) {
         let key_ptr = Self::ptr_cache_key(key_ptr);
         let fingerprint = Self::key_fingerprint(key);
-        if let Some(entry) = self.sheets.get(&key_ptr)
-            && entry.fingerprint == fingerprint
-        {
-            self.frame_stats.sheet_hits = self.frame_stats.sheet_hits.saturating_add(1);
-            return entry.value;
+        if let Some(entry) = self.sheets.get(&key_ptr) {
+            if entry.fingerprint == fingerprint {
+                return entry.value;
+            }
         }
-        self.frame_stats.sheet_misses = self.frame_stats.sheet_misses.saturating_add(1);
         let dims = texture_ctx.sprite_sheet_dims(key);
         self.sheets.insert(
             key_ptr,
@@ -828,22 +591,12 @@ impl TextureLookupCache {
     ) -> renderer::TextureHandle {
         let key_ptr = Self::ptr_cache_key(key_ptr);
         let fingerprint = Self::key_fingerprint(key);
-        if let Some(entry) = self.handles.get(&key_ptr)
-            && entry.fingerprint == fingerprint
-        {
-            self.frame_stats.handle_hits = self.frame_stats.handle_hits.saturating_add(1);
-            self.frame_stats.unresolved_handles = self
-                .frame_stats
-                .unresolved_handles
-                .saturating_add(u32::from(entry.value == renderer::INVALID_TEXTURE_HANDLE));
-            return entry.value;
+        if let Some(entry) = self.handles.get(&key_ptr) {
+            if entry.fingerprint == fingerprint {
+                return entry.value;
+            }
         }
-        self.frame_stats.handle_misses = self.frame_stats.handle_misses.saturating_add(1);
         let handle = texture_ctx.texture_handle(key);
-        self.frame_stats.unresolved_handles = self
-            .frame_stats
-            .unresolved_handles
-            .saturating_add(u32::from(handle == renderer::INVALID_TEXTURE_HANDLE));
         self.handles.insert(
             key_ptr,
             TextureCacheEntry {
@@ -1208,13 +961,13 @@ fn text_layout_mesh_seed(key: TextLayoutKey, text: &str) -> u64 {
 #[inline(always)]
 fn text_batch_cache_key(
     layout_seed: u64,
-    texture_key: &str,
+    texture_key: *const str,
     stroke: bool,
     align: actors::TextAlign,
 ) -> u64 {
     let mut hasher = rustc_hash::FxHasher::default();
     layout_seed.hash(&mut hasher);
-    texture_key.hash(&mut hasher);
+    (texture_key as *const () as usize).hash(&mut hasher);
     stroke.hash(&mut hasher);
     match align {
         actors::TextAlign::Left => 0u8,
@@ -1222,7 +975,12 @@ fn text_batch_cache_key(
         actors::TextAlign::Right => 2u8,
     }
     .hash(&mut hasher);
-    hasher.finish().max(1)
+    let key = hasher.finish();
+    if key == renderer::INVALID_TMESH_CACHE_KEY {
+        layout_seed ^ 1
+    } else {
+        key
+    }
 }
 
 #[inline(always)]
@@ -1697,16 +1455,10 @@ fn finish_text_mesh_batches(
         if builder.vertices.is_empty() {
             continue;
         }
-        // SAFETY: the pointer comes from immutable font storage retained for
-        // the complete lifetime of this cached text layout.
-        let texture_key = unsafe { str_from_cached_ptr(builder.texture_key) };
-        let vertices: Arc<[renderer::TexturedMeshVertex]> = Arc::from(builder.vertices);
-        let logical_key = text_batch_cache_key(layout_seed, texture_key, stroke, align);
-        let geometry = renderer::RetainedTMeshGeometry::new(logical_key, vertices)
-            .expect("nonempty cached text geometry has a valid logical key");
         out.push(CachedTextMeshBatch {
             texture_key: builder.texture_key,
-            geometry: Arc::new(geometry),
+            geom_cache_key: text_batch_cache_key(layout_seed, builder.texture_key, stroke, align),
+            vertices: Arc::from(builder.vertices),
         });
     }
     out
@@ -2740,6 +2492,7 @@ fn build_actor_recursive<'a, T: TextureContext + ?Sized>(
             tint,
             glow,
             vertices,
+            geom_cache_key,
             uv_scale,
             uv_offset,
             uv_tex_shift,
@@ -2775,7 +2528,8 @@ fn build_actor_recursive<'a, T: TextureContext + ?Sized>(
                         *uv_tex_shift,
                         false,
                     ),
-                    vertices: vertices.clone(),
+                    vertices: renderer::TexturedMeshVertices::Shared(Arc::clone(vertices)),
+                    geom_cache_key: *geom_cache_key,
                     depth_test: *depth_test,
                 },
                 texture_handle,
@@ -2806,7 +2560,8 @@ fn build_actor_recursive<'a, T: TextureContext + ?Sized>(
                             *uv_tex_shift,
                             true,
                         ),
-                        vertices: vertices.clone(),
+                        vertices: renderer::TexturedMeshVertices::Shared(Arc::clone(vertices)),
+                        geom_cache_key: *geom_cache_key,
                         depth_test: *depth_test,
                     },
                     texture_handle,
@@ -3870,7 +3625,8 @@ fn push_text_mesh_batches<T: TextureContext + ?Sized>(
                     [0.0, 0.0],
                     false,
                 ),
-                vertices: renderer::TexturedMeshVertices::Retained(Arc::clone(&batch.geometry)),
+                vertices: renderer::TexturedMeshVertices::Shared(Arc::clone(&batch.vertices)),
+                geom_cache_key: batch.geom_cache_key,
                 depth_test: false,
             },
             texture_handle: texture_cache.texture_handle(
@@ -3926,6 +3682,7 @@ fn push_transient_text_mesh_builders<T: TextureContext + ?Sized>(
                     false,
                 ),
                 vertices: renderer::TexturedMeshVertices::Transient(builder.vertices),
+                geom_cache_key: renderer::INVALID_TMESH_CACHE_KEY,
                 depth_test: false,
             },
             texture_handle: texture_cache.texture_handle(
@@ -4637,6 +4394,7 @@ fn clip_textured_mesh_to_world_rect(
                 texture_mask,
             ),
             vertices: renderer::TexturedMeshVertices::Transient(out),
+            geom_cache_key: renderer::INVALID_TMESH_CACHE_KEY,
             depth_test: false,
         },
         sprite: None,
@@ -4713,6 +4471,7 @@ fn clip_rotated_sprite_to_world_rect(
                 texture_mask,
             ),
             vertices: renderer::TexturedMeshVertices::Transient(out.into_vec()),
+            geom_cache_key: renderer::INVALID_TMESH_CACHE_KEY,
             depth_test: false,
         },
         sprite: None,
@@ -4722,19 +4481,18 @@ fn clip_rotated_sprite_to_world_rect(
 #[cfg(test)]
 mod tests {
     use super::{
-        CachedTextLayout, CachedTextMeshVariants, ComposeScratch, RenderSortMode, TextAttrCursor,
-        TextLayoutCache, TextLayoutKey, TextureCacheEntry, TextureContext, TextureLookupCache,
-        TextureMeta, WorldRect, build_cached_text_layout, build_screen,
-        build_screen_cached_with_scratch, clip_object_to_world_masks,
-        clip_sprite_object_to_world_rect, fold_sprite_xy_rot, resolve_sprite_size_like_sm,
-        sort_render_objects, str_ptr, wrap_text_lines_by_words,
+        CachedTextLayout, CachedTextMeshVariants, ComposeScratch, TextAttrCursor, TextLayoutCache,
+        TextLayoutKey, TextureCacheEntry, TextureContext, TextureLookupCache, TextureMeta,
+        WorldRect, build_cached_text_layout, build_screen, build_screen_cached_with_scratch,
+        clip_object_to_world_masks, clip_sprite_object_to_world_rect, fold_sprite_xy_rot,
+        resolve_sprite_size_like_sm, sort_render_objects, str_ptr, wrap_text_lines_by_words,
     };
     use crate::actors::{Actor, SizeSpec, SpriteSource, TextAlign, TextAttribute, TextContent};
     use crate::font::{Font, Glyph};
     use crate::space::Metrics;
     use deadlib_render::{
-        BlendMode, MeshVertex, ObjectType, RenderObject, RetainedTMeshGeometry, SpriteInstanceRaw,
-        TexturedMeshInstanceRaw, TexturedMeshVertex, TexturedMeshVertices,
+        BlendMode, INVALID_TMESH_CACHE_KEY, MeshVertex, ObjectType, RenderObject,
+        SpriteInstanceRaw, TMeshCacheKey, TexturedMeshInstanceRaw, TexturedMeshVertex,
     };
     use glam::Mat4 as Matrix4;
     use std::collections::HashMap;
@@ -5062,48 +4820,6 @@ mod tests {
         }
     }
 
-    fn test_solid_sprite(z: i16) -> Actor {
-        Actor::Sprite {
-            align: [0.0, 0.0],
-            offset: [0.0, 0.0],
-            world_z: 0.0,
-            size: [SizeSpec::Px(10.0), SizeSpec::Px(10.0)],
-            source: SpriteSource::Solid,
-            tint: [1.0; 4],
-            glow: [0.0; 4],
-            z,
-            cell: None,
-            grid: None,
-            uv_rect: None,
-            visible: true,
-            flip_x: false,
-            flip_y: false,
-            cropleft: 0.0,
-            cropright: 0.0,
-            croptop: 0.0,
-            cropbottom: 0.0,
-            fadeleft: 0.0,
-            faderight: 0.0,
-            fadetop: 0.0,
-            fadebottom: 0.0,
-            blend: BlendMode::Alpha,
-            mask_source: false,
-            mask_dest: false,
-            rot_x_deg: 0.0,
-            rot_y_deg: 0.0,
-            rot_z_deg: 0.0,
-            local_offset: [0.0, 0.0],
-            local_offset_rot_sin_cos: [0.0, 1.0],
-            texcoordvelocity: None,
-            animate: false,
-            state_delay: 0.0,
-            scale: [1.0, 1.0],
-            shadow_len: [0.0, 0.0],
-            shadow_color: [0.0; 4],
-            effect: Default::default(),
-        }
-    }
-
     #[test]
     fn wrapwidthpixels_wraps_on_spaces() {
         let lines = wrap_text_lines_by_words("A BB CCC", 3, 1, |word| word.len() as i32);
@@ -5360,39 +5076,21 @@ mod tests {
             cache.texture_handle(&texture_ctx, key_ptr, key.as_ref()),
             11
         );
-        let missing = Arc::<str>::from("missing_frame_tex");
-        assert_eq!(
-            cache.texture_handle(
-                &texture_ctx,
-                missing.as_ref() as *const str,
-                missing.as_ref(),
-            ),
-            deadlib_render::INVALID_TEXTURE_HANDLE,
-        );
         assert!(
             cache
                 .texture_dims(&texture_ctx, key_ptr, "other_frame_tex")
                 .is_none()
         );
-        assert_eq!(cache.frame_stats.dims_hits, 1);
-        assert_eq!(cache.frame_stats.dims_misses, 1);
-        assert_eq!(cache.frame_stats.sheet_hits, 1);
-        assert_eq!(cache.frame_stats.sheet_misses, 0);
-        assert_eq!(cache.frame_stats.handle_hits, 1);
-        assert_eq!(cache.frame_stats.handle_misses, 1);
-        assert_eq!(cache.frame_stats.unresolved_handles, 1);
 
         cache.begin_frame(&texture_ctx);
 
-        assert_eq!(cache.frame_stats, Default::default());
         assert_eq!(cache.dims.len(), 1);
         assert_eq!(cache.sheets.len(), 1);
-        assert_eq!(cache.handles.len(), 2);
+        assert_eq!(cache.handles.len(), 1);
 
         cache.generation = cache.generation.wrapping_sub(1);
         cache.begin_frame(&texture_ctx);
 
-        assert_eq!(cache.frame_stats.registry_invalidations, 1);
         assert!(cache.dims.is_empty());
         assert!(cache.sheets.is_empty());
         assert!(cache.handles.is_empty());
@@ -5560,6 +5258,7 @@ mod tests {
                         TexturedMeshVertex::default();
                         6
                     ]),
+                    geom_cache_key: INVALID_TMESH_CACHE_KEY,
                     depth_test: false,
                 },
                 texture_handle: 9,
@@ -5583,9 +5282,8 @@ mod tests {
         let mut objects = vec![test_render_object(5, 2), test_render_object(5, 1)];
         let mut scratch = ComposeScratch::default();
 
-        let mode = sort_render_objects(&mut objects, &mut scratch);
+        sort_render_objects(&mut objects, &mut scratch);
 
-        assert_eq!(mode, RenderSortMode::OrderedZComparison);
         let keys = objects
             .iter()
             .map(|obj| (obj.z, obj.order))
@@ -5603,9 +5301,8 @@ mod tests {
         ];
         let mut scratch = ComposeScratch::default();
 
-        let mode = sort_render_objects(&mut objects, &mut scratch);
+        sort_render_objects(&mut objects, &mut scratch);
 
-        assert_eq!(mode, RenderSortMode::DenseThenComparison);
         let keys = objects
             .iter()
             .map(|obj| (obj.z, obj.order))
@@ -5614,64 +5311,14 @@ mod tests {
     }
 
     #[test]
-    fn compose_stats_report_warmed_scratch_and_texture_cache() {
+    fn shadowed_textured_mesh_keeps_geom_cache_key() {
+        const CACHE_KEY: TMeshCacheKey = 77;
         let metrics = Metrics {
             left: 0.0,
             right: 100.0,
             top: 100.0,
             bottom: 0.0,
         };
-        let actors = [test_solid_sprite(0), test_solid_sprite(0)];
-        let fonts = HashMap::new();
-        let mut text_cache = TextLayoutCache::default();
-        let mut scratch = ComposeScratch::default();
-
-        let mut first = build_screen_cached_with_scratch(
-            &actors,
-            [0.0, 0.0, 0.0, 1.0],
-            &metrics,
-            &fonts,
-            0.0,
-            &mut text_cache,
-            &mut scratch,
-        );
-        let cold = scratch.frame_stats();
-        assert!(cold.scratch_growth_events > 0);
-        assert_eq!(cold.render_objects, 2);
-        assert_eq!(cold.sprite_instances, 2);
-        assert_eq!(cold.sort_mode, RenderSortMode::AlreadyOrdered);
-        assert_eq!(cold.texture.handle_misses, 1);
-        assert_eq!(cold.texture.handle_hits, 1);
-
-        scratch.recycle_render_list(&mut first);
-        let _second = build_screen_cached_with_scratch(
-            &actors,
-            [0.0, 0.0, 0.0, 1.0],
-            &metrics,
-            &fonts,
-            0.0,
-            &mut text_cache,
-            &mut scratch,
-        );
-        let warm = scratch.frame_stats();
-        assert_eq!(warm.scratch_growth_events, 0);
-        assert_eq!(warm.texture.handle_misses, 0);
-        assert_eq!(warm.texture.handle_hits, 2);
-    }
-
-    #[test]
-    fn shadowed_textured_mesh_keeps_geometry_id() {
-        const CACHE_KEY: u64 = 77;
-        let metrics = Metrics {
-            left: 0.0,
-            right: 100.0,
-            top: 100.0,
-            bottom: 0.0,
-        };
-        let vertices: Arc<[TexturedMeshVertex]> = Arc::from(vec![TexturedMeshVertex::default(); 3]);
-        let geometry = RetainedTMeshGeometry::new(CACHE_KEY, vertices)
-            .expect("shadow fixture geometry is valid");
-        let geometry_id = geometry.id();
         let mesh = Actor::TexturedMesh {
             align: [0.0, 0.0],
             offset: [10.0, 20.0],
@@ -5681,7 +5328,8 @@ mod tests {
             texture: Arc::from("mesh"),
             tint: [0.25, 0.5, 0.75, 0.8],
             glow: [1.0, 1.0, 1.0, 0.0],
-            vertices: TexturedMeshVertices::Retained(Arc::new(geometry)),
+            vertices: Arc::from(vec![TexturedMeshVertex::default(); 3]),
+            geom_cache_key: CACHE_KEY,
             uv_scale: [1.0, 1.0],
             uv_offset: [0.0, 0.0],
             uv_tex_shift: [0.0, 0.0],
@@ -5715,17 +5363,17 @@ mod tests {
             (
                 deadlib_render::ObjectType::TexturedMesh {
                     instance: shadow_instance,
-                    vertices: shadow_vertices,
+                    geom_cache_key: shadow_key,
                     ..
                 },
                 deadlib_render::ObjectType::TexturedMesh {
                     instance: original_instance,
-                    vertices: original_vertices,
+                    geom_cache_key: original_key,
                     ..
                 },
             ) => {
-                assert_eq!(shadow_vertices.geometry_id(), Some(geometry_id));
-                assert_eq!(original_vertices.geometry_id(), Some(geometry_id));
+                assert_eq!(*shadow_key, CACHE_KEY);
+                assert_eq!(*original_key, CACHE_KEY);
                 assert_eq!(original_instance.tint, [0.25, 0.5, 0.75, 0.8]);
                 assert_eq!(shadow_instance.tint, [0.125, 0.125, 0.5625, 0.4]);
             }
@@ -5789,10 +5437,8 @@ mod tests {
             texture: Arc::from("mesh"),
             tint: [0.8, 0.6, 0.4, 0.5],
             glow: [0.5, 0.25, 1.0, 0.4],
-            vertices: TexturedMeshVertices::Shared(Arc::from(vec![
-                TexturedMeshVertex::default();
-                3
-            ])),
+            vertices: Arc::from(vec![TexturedMeshVertex::default(); 3]),
+            geom_cache_key: INVALID_TMESH_CACHE_KEY,
             uv_scale: [1.0, 1.0],
             uv_offset: [0.0, 0.0],
             uv_tex_shift: [0.0, 0.0],
@@ -5939,11 +5585,14 @@ mod tests {
         assert_eq!(render.objects.len(), 1);
         match &render.objects[0].object_type {
             ObjectType::TexturedMesh {
-                instance, vertices, ..
+                instance,
+                vertices,
+                geom_cache_key,
+                ..
             } => {
                 assert_eq!(instance.tint, [0.5, 0.75, 1.0, 1.0]);
                 assert_eq!(vertices.len(), 12);
-                assert!(vertices.retained().is_some());
+                assert_ne!(*geom_cache_key, INVALID_TMESH_CACHE_KEY);
             }
             _ => panic!("expected batched text to use textured mesh"),
         }
@@ -5992,9 +5641,13 @@ mod tests {
 
         assert_eq!(render.objects.len(), 1);
         match &render.objects[0].object_type {
-            ObjectType::TexturedMesh { vertices, .. } => {
+            ObjectType::TexturedMesh {
+                vertices,
+                geom_cache_key,
+                ..
+            } => {
                 assert!(!vertices.is_empty());
-                assert!(vertices.retained().is_none());
+                assert_eq!(*geom_cache_key, INVALID_TMESH_CACHE_KEY);
             }
             _ => panic!("expected clipped batched text to remain textured mesh"),
         }
@@ -6043,8 +5696,8 @@ mod tests {
 
         assert_eq!(render.objects.len(), 1);
         match &render.objects[0].object_type {
-            ObjectType::TexturedMesh { vertices, .. } => {
-                assert!(vertices.retained().is_some());
+            ObjectType::TexturedMesh { geom_cache_key, .. } => {
+                assert_ne!(*geom_cache_key, INVALID_TMESH_CACHE_KEY);
             }
             _ => panic!("expected fully inside clipped text to keep cached textured mesh"),
         }
@@ -6093,9 +5746,13 @@ mod tests {
 
         assert_eq!(render.objects.len(), 1);
         match &render.objects[0].object_type {
-            ObjectType::TexturedMesh { vertices, .. } => {
+            ObjectType::TexturedMesh {
+                vertices,
+                geom_cache_key,
+                ..
+            } => {
                 assert_eq!(vertices.len(), 12);
-                assert!(vertices.retained().is_some());
+                assert_ne!(*geom_cache_key, INVALID_TMESH_CACHE_KEY);
             }
             _ => panic!("expected centered text to use batched textured mesh"),
         }
@@ -6150,9 +5807,13 @@ mod tests {
 
         assert_eq!(render.objects.len(), 1);
         match &render.objects[0].object_type {
-            ObjectType::TexturedMesh { vertices, .. } => {
+            ObjectType::TexturedMesh {
+                vertices,
+                geom_cache_key,
+                ..
+            } => {
                 assert_eq!(vertices.len(), 12);
-                assert!(vertices.retained().is_none());
+                assert_eq!(*geom_cache_key, INVALID_TMESH_CACHE_KEY);
                 assert_eq!(vertices[0].color, [1.0; 4]);
                 assert_eq!(vertices[6].color, [0.0, 1.0, 0.0, 1.0]);
             }
@@ -6279,12 +5940,13 @@ mod tests {
         };
         let ObjectType::TexturedMesh {
             vertices: jittered_vertices,
+            geom_cache_key,
             ..
         } = &jittered.objects[0].object_type
         else {
             panic!("expected jittered text mesh");
         };
-        assert!(jittered_vertices.retained().is_none());
+        assert_eq!(*geom_cache_key, INVALID_TMESH_CACHE_KEY);
         assert_ne!(jittered_vertices[0].pos, base_vertices[0].pos);
     }
 
@@ -6343,12 +6005,13 @@ mod tests {
         };
         let ObjectType::TexturedMesh {
             vertices: distorted_vertices,
+            geom_cache_key,
             ..
         } = &distorted.objects[0].object_type
         else {
             panic!("expected distorted text mesh");
         };
-        assert!(distorted_vertices.retained().is_none());
+        assert_eq!(*geom_cache_key, INVALID_TMESH_CACHE_KEY);
         assert!(
             base_vertices
                 .iter()
@@ -6412,15 +6075,17 @@ mod tests {
             (
                 ObjectType::TexturedMesh {
                     vertices: first_vertices,
+                    geom_cache_key: first_key,
                     ..
                 },
                 ObjectType::TexturedMesh {
                     vertices: second_vertices,
+                    geom_cache_key: second_key,
                     ..
                 },
             ) => {
-                assert!(first_vertices.retained().is_none());
-                assert!(second_vertices.retained().is_none());
+                assert_eq!(*first_key, INVALID_TMESH_CACHE_KEY);
+                assert_eq!(*second_key, INVALID_TMESH_CACHE_KEY);
                 assert_eq!(first_vertices[0].color, [1.0; 4]);
                 assert_eq!(second_vertices[0].color, [0.0, 1.0, 0.0, 1.0]);
             }

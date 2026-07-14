@@ -18,8 +18,7 @@ use deadsync_config::prelude as config;
 use deadsync_profile as profile_data;
 use deadsync_profile::compat as profile;
 use deadsync_theme_simply_love::{SimplyLoveQrLoginService, screens, visual_styles};
-use log::{debug, info, warn};
-use std::time::Instant;
+use log::{debug, info};
 use winit::event_loop::ActiveEventLoop;
 
 impl App {
@@ -74,25 +73,6 @@ impl App {
             && let Some(gs) = self.state.screens.gameplay_state.as_mut()
         {
             crate::gameplay_runtime::exit(gs);
-        }
-        if plan.rotate_tmesh_epoch {
-            self.sandbox_direct_cache.invalidate();
-            if let Some(backend) = self.backend.as_mut()
-                && backend.tmesh_epoch().is_some()
-            {
-                let started = Instant::now();
-                match backend.advance_tmesh_epoch() {
-                    Ok((_epoch, retired)) => debug!(
-                        "Retained geometry epoch advanced: entries={} bytes={} elapsed_ms={:.3}",
-                        retired.entries,
-                        retired.bytes,
-                        started.elapsed().as_secs_f64() * 1000.0,
-                    ),
-                    Err(error) => warn!(
-                        "Retained geometry retirement failed; direct submission disabled until renderer recreation: {error}"
-                    ),
-                }
-            }
         }
         self.state.screens.current_screen = target;
         self.sync_gameplay_input_capture();

@@ -61,7 +61,6 @@ pub struct ScreenChangePlan {
     pub leave_lobby: bool,
     pub exit_gameplay: bool,
     pub clear_text_layout_cache: bool,
-    pub rotate_tmesh_epoch: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -195,16 +194,10 @@ impl TransitionState {
 }
 
 pub fn screen_change_plan(previous: Screen, target: Screen) -> ScreenChangePlan {
-    let gameplay_epoch = |screen| matches!(screen, Screen::Gameplay | Screen::Practice);
     ScreenChangePlan {
         leave_lobby: previous != target && matches!(target, Screen::Menu),
         exit_gameplay: previous == Screen::Gameplay && target != Screen::Gameplay,
         clear_text_layout_cache: previous != target,
-        // Keep one reusable menu-domain cache instead of forcing retained UI
-        // uploads onto every fade-in. Songs get isolated epochs, including
-        // same-screen restart/reload transitions, so gameplay never inherits
-        // menu churn and old song geometry is retired before the next domain.
-        rotate_tmesh_epoch: gameplay_epoch(previous) || gameplay_epoch(target),
     }
 }
 
@@ -751,7 +744,6 @@ mod tests {
                 leave_lobby: true,
                 exit_gameplay: true,
                 clear_text_layout_cache: true,
-                rotate_tmesh_epoch: true,
             }
         );
         assert_eq!(
@@ -760,7 +752,6 @@ mod tests {
                 leave_lobby: false,
                 exit_gameplay: false,
                 clear_text_layout_cache: false,
-                rotate_tmesh_epoch: false,
             }
         );
         assert_eq!(
@@ -769,14 +760,8 @@ mod tests {
                 leave_lobby: true,
                 exit_gameplay: false,
                 clear_text_layout_cache: true,
-                rotate_tmesh_epoch: false,
             }
         );
-        assert!(!screen_change_plan(Screen::Menu, Screen::Options).rotate_tmesh_epoch);
-        assert!(screen_change_plan(Screen::Menu, Screen::Gameplay).rotate_tmesh_epoch);
-        assert!(screen_change_plan(Screen::Gameplay, Screen::Evaluation).rotate_tmesh_epoch);
-        assert!(screen_change_plan(Screen::Gameplay, Screen::Gameplay).rotate_tmesh_epoch);
-        assert!(screen_change_plan(Screen::Practice, Screen::Practice).rotate_tmesh_epoch);
     }
 
     #[test]

@@ -513,7 +513,7 @@ fn replace_unicode_markers(text: &str) -> Cow<'_, str> {
 /// - `&NAME;` (`FontCharAliases` like `&START;`, `&MENULEFT;`)
 /// - `&#NNNN;` (decimal) and `&xNNNN;` (hex) Unicode markers
 pub fn replace_markers(text: &str) -> Cow<'_, str> {
-    if !text.as_bytes().contains(&b'&') || !text.as_bytes().contains(&b';') {
+    if !text.as_bytes().contains(&b'&') {
         return Cow::Borrowed(text);
     }
 
@@ -2918,14 +2918,6 @@ mod tests {
     #[test]
     fn replace_markers_keeps_plain_text_borrowed() {
         assert!(matches!(replace_markers("plain text"), Cow::Borrowed(_)));
-    }
-
-    #[test]
-    fn replace_markers_keeps_plain_ampersands_borrowed() {
-        assert!(matches!(
-            replace_markers("Actor System & Input Sandbox"),
-            Cow::Borrowed(_)
-        ));
     }
 
     #[test]
