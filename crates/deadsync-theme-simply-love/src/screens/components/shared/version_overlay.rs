@@ -68,10 +68,9 @@ fn log_warning_text(level: LogLevel) -> Option<&'static str> {
 pub fn build(
     side: VersionOverlaySide,
     log_level: LogLevel,
-    version: &'static str,
     build_hash: Option<&'static str>,
 ) -> Vec<Actor> {
-    let text = version_text(version, build_hash);
+    let text = version_text(deadsync_version::current_static(), build_hash);
     let w = screen_width();
     let h = screen_height();
     let warning = log_warning_text(log_level);

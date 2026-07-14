@@ -4662,7 +4662,6 @@ impl App {
             actors.extend(screens::components::shared::version_overlay::build(
                 config.version_overlay_side,
                 config.log_level,
-                env!("CARGO_PKG_VERSION"),
                 option_env!("DEADSYNC_BUILD_HASH"),
             ));
         }
