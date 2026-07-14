@@ -23,6 +23,7 @@ mod offset_prompt;
 mod pad_config;
 mod player_options;
 mod profile_import;
+mod profile_load;
 mod profile_session;
 mod qr_login;
 mod restart;

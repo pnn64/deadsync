@@ -2514,7 +2514,7 @@ fn select_course_score_pane_is_shell_prepared() {
             "Select Course composition still reads score/profile runtime through {runtime_access}"
         );
     }
-    assert!(screen.contains("scores::played_chart_counts_for_machine"));
+    assert!(!screen.contains("scores::played_chart_counts_for_machine"));
     assert!(screen.contains("pub fn score_runtime_request"));
     assert!(screen.contains("state.score_view"));
 
@@ -2544,6 +2544,76 @@ fn select_course_score_pane_is_shell_prepared() {
         assert!(
             shell.contains(runtime_owner),
             "shell must own Select Course score operation {runtime_owner}"
+        );
+    }
+}
+
+#[test]
+fn profile_load_preparation_worker_is_shell_owned() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let profile_load = fs::read_to_string(
+        root.join("crates/deadsync-theme-simply-love/src/screens/profile_load.rs"),
+    )
+    .expect("Simply Love Profile Load source should be readable");
+    for runtime_work in [
+        "std::thread::spawn",
+        "mpsc::",
+        "score_compat",
+        "select_music::init",
+        "select_course::init",
+        "SelectMusicInitView",
+    ] {
+        assert!(
+            !profile_load.contains(runtime_work),
+            "Profile Load screen still executes runtime work through {runtime_work}"
+        );
+    }
+    assert!(profile_load.contains("pub fn sync_ready"));
+    assert!(profile_load.contains("state.ready"));
+    assert!(profile_load.contains("ThemeEffect::Navigate(state.next_screen)"));
+
+    let select_course = fs::read_to_string(
+        root.join("crates/deadsync-theme-simply-love/src/screens/select_course.rs"),
+    )
+    .expect("Select Course source should be readable");
+    assert!(!select_course.contains("deadsync_online::score_compat"));
+    assert!(!select_course.contains("scores::played_chart_counts_for_machine"));
+    assert!(select_course.contains("pub fn init(init_view: SelectCourseInitView)"));
+    assert!(select_course.contains("init_view.played_chart_counts"));
+
+    let views = fs::read_to_string(root.join("crates/deadsync-theme-simply-love/src/views.rs"))
+        .expect("Simply Love views should be readable");
+    assert!(views.contains("pub struct SelectCourseInitView"));
+    assert!(views.contains("pub played_chart_counts: Vec<(String, u32)>"));
+
+    let service = fs::read_to_string(root.join("crates/deadsync-shell/src/profile_load.rs"))
+        .expect("shell Profile Load service should be readable");
+    for runtime_owner in [
+        "std::thread::spawn",
+        "mpsc::sync_channel(1)",
+        "scores::prewarm_select_music_score_caches",
+        "scores::played_chart_counts_for_machine",
+        "select_music::init(init)",
+        "select_course::init(select_course_init_view())",
+    ] {
+        assert!(
+            service.contains(runtime_owner),
+            "shell must own Profile Load operation {runtime_owner}"
+        );
+    }
+
+    let app = fs::read_to_string(root.join("crates/deadsync-shell/src/app/mod.rs"))
+        .expect("shell app should be readable");
+    for integration in [
+        "profile_load: crate::profile_load::Service",
+        "fn poll_profile_load",
+        ".start(play_mode, crate::select_music::init_view())",
+        "self.profile_load.poll()",
+        "profile_load::sync_ready",
+    ] {
+        assert!(
+            app.contains(integration),
+            "shell must integrate Profile Load through {integration}"
         );
     }
 }

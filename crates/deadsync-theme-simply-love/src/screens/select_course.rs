@@ -14,8 +14,8 @@ use crate::screens::input as screen_input;
 use crate::screens::{Screen, ThemeEffect};
 pub use crate::views::{CourseStagePlan, SelectedCoursePlan};
 use crate::views::{
-    MusicWheelRankSource, MusicWheelRuntimeRequest, MusicWheelRuntimeView, SelectCourseRuntimeView,
-    SelectCourseScoreRequest, SelectCourseScoreView,
+    MusicWheelRankSource, MusicWheelRuntimeRequest, MusicWheelRuntimeView, SelectCourseInitView,
+    SelectCourseRuntimeView, SelectCourseScoreRequest, SelectCourseScoreView,
 };
 use deadlib_present::actors::{Actor, SizeSpec};
 use deadlib_present::cache::{TextCache, cached_text};
@@ -26,7 +26,6 @@ use deadlib_present::space::{
 use deadsync_chart::song::standard_difficulty_index;
 use deadsync_chart::{ChartData, SongData};
 use deadsync_input::{InputEvent, PadDir, VirtualAction};
-use deadsync_online::score_compat as scores;
 use deadsync_profile as profile_data;
 use deadsync_profile::compat as profile;
 use deadsync_simfile::course::{
@@ -257,7 +256,9 @@ fn song_dir_key(song: &SongData) -> Option<String> {
         .map(|s| s.trim().to_ascii_lowercase())
 }
 
-fn build_song_lookup() -> (
+fn build_song_lookup(
+    played_chart_counts: &[(String, u32)],
+) -> (
     HashMap<(String, String), Arc<SongData>>,
     HashMap<String, Arc<SongData>>,
     HashMap<String, Vec<Arc<SongData>>>,
@@ -296,12 +297,12 @@ fn build_song_lookup() -> (
     drop(song_cache);
 
     let mut song_play_counts: HashMap<String, u32> = HashMap::new();
-    for (chart_hash, plays) in scores::played_chart_counts_for_machine() {
+    for (chart_hash, plays) in played_chart_counts {
         if let Some(song_key) = chart_to_song_key.get(chart_hash.as_str()) {
             song_play_counts
                 .entry(song_key.clone())
-                .and_modify(|count| *count = count.saturating_add(plays))
-                .or_insert(plays);
+                .and_modify(|count| *count = count.saturating_add(*plays))
+                .or_insert(*plays);
         }
     }
 
@@ -441,10 +442,11 @@ fn make_course_song(meta: &CourseMeta) -> SongData {
     }
 }
 
-fn build_init_data() -> InitData {
+fn build_init_data(init_view: &SelectCourseInitView) -> InitData {
     let translated_titles = crate::config::get().translated_titles;
     let target_chart_type = profile::get_session_play_style().chart_type();
-    let (by_group_song, by_song, songs_by_group, all_songs, song_play_counts) = build_song_lookup();
+    let (by_group_song, by_song, songs_by_group, all_songs, song_play_counts) =
+        build_song_lookup(&init_view.played_chart_counts);
     let course_cache = get_course_cache();
 
     let mut grouped: HashMap<String, Vec<Arc<CourseMeta>>> = HashMap::new();
@@ -869,8 +871,8 @@ fn restore_last_course(state: &mut State) {
     );
 }
 
-pub fn init() -> State {
-    let init = build_init_data();
+pub fn init(init_view: SelectCourseInitView) -> State {
+    let init = build_init_data(&init_view);
     let mut state = State {
         entries: Vec::new(),
         selected_index: 0,

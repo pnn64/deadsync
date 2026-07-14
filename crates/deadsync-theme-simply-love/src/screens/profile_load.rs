@@ -5,8 +5,6 @@ use crate::screens::{Screen, ThemeEffect};
 use deadlib_present::actors::Actor;
 use deadlib_present::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 use deadsync_profile as profile_data;
-use deadsync_profile::compat as profile;
-use std::sync::mpsc;
 
 // Simply Love: BGAnimations/ScreenProfileLoad overlay.lua
 const TWEENTIME: f32 = 0.325;
@@ -18,111 +16,36 @@ const MIN_SHOW_SECS: f32 = TWEENTIME * 3.0 + CONTINUE_DELAY;
 pub struct State {
     pub active_color_index: i32,
     elapsed: f32,
-    rx: Option<mpsc::Receiver<PreparedState>>,
-    prepared_select_music: Option<crate::screens::select_music::State>,
-    prepared_select_course: Option<crate::screens::select_course::State>,
-    select_music_init: crate::views::SelectMusicInitView,
+    ready: bool,
     next_screen: Screen,
-}
-
-enum PreparedState {
-    Music(crate::screens::select_music::State),
-    Course(crate::screens::select_course::State),
 }
 
 pub fn init() -> State {
     State {
         active_color_index: deadlib_present::color::DEFAULT_COLOR_INDEX,
         elapsed: 0.0,
-        rx: None,
-        prepared_select_music: None,
-        prepared_select_course: None,
-        select_music_init: crate::views::SelectMusicInitView::default(),
+        ready: false,
         next_screen: Screen::SelectMusic,
     }
 }
 
-pub fn on_enter(state: &mut State, select_music_init: crate::views::SelectMusicInitView) {
+pub fn on_enter(state: &mut State, play_mode: profile_data::PlayMode) {
     state.elapsed = 0.0;
-    state.prepared_select_music = None;
-    state.prepared_select_course = None;
-    state.rx = None;
-    state.select_music_init = select_music_init;
-    state.next_screen = match profile::get_session_play_mode() {
+    state.ready = false;
+    state.next_screen = match play_mode {
         profile_data::PlayMode::Marathon => Screen::SelectCourse,
         profile_data::PlayMode::Regular => Screen::SelectMusic,
     };
-
-    let (tx, rx) = mpsc::channel();
-    let play_mode = profile::get_session_play_mode();
-    let select_music_init = state.select_music_init.clone();
-    std::thread::spawn(move || {
-        let prepared = match play_mode {
-            profile_data::PlayMode::Marathon => {
-                PreparedState::Course(crate::screens::select_course::init())
-            }
-            profile_data::PlayMode::Regular => {
-                deadsync_online::score_compat::prewarm_select_music_score_caches();
-                PreparedState::Music(crate::screens::select_music::init(select_music_init))
-            }
-        };
-        let _ = tx.send(prepared);
-    });
-    state.rx = Some(rx);
 }
 
-pub fn take_prepared_select_music(
-    state: &mut State,
-) -> Option<crate::screens::select_music::State> {
-    state.prepared_select_music.take()
-}
-
-pub fn take_prepared_select_course(
-    state: &mut State,
-) -> Option<crate::screens::select_course::State> {
-    state.prepared_select_course.take()
+#[inline(always)]
+pub fn sync_ready(state: &mut State, ready: bool) {
+    state.ready = ready;
 }
 
 pub fn update(state: &mut State, dt: f32) -> Option<ThemeEffect> {
     state.elapsed += dt.max(0.0);
-
-    if state.prepared_select_music.is_none()
-        && state.prepared_select_course.is_none()
-        && let Some(rx) = &state.rx
-    {
-        match rx.try_recv() {
-            Ok(PreparedState::Music(sm)) => {
-                state.prepared_select_music = Some(sm);
-                state.next_screen = Screen::SelectMusic;
-                state.rx = None;
-            }
-            Ok(PreparedState::Course(sc)) => {
-                state.prepared_select_course = Some(sc);
-                state.next_screen = Screen::SelectCourse;
-                state.rx = None;
-            }
-            Err(mpsc::TryRecvError::Empty) => {}
-            Err(mpsc::TryRecvError::Disconnected) => {
-                // Defensive fallback: avoid hanging on a failed loader thread.
-                match state.next_screen {
-                    Screen::SelectCourse => {
-                        state.prepared_select_course = Some(crate::screens::select_course::init());
-                    }
-                    _ => {
-                        state.prepared_select_music = Some(crate::screens::select_music::init(
-                            state.select_music_init.clone(),
-                        ));
-                        state.next_screen = Screen::SelectMusic;
-                    }
-                }
-                state.rx = None;
-            }
-        }
-    }
-
-    if state.elapsed >= MIN_SHOW_SECS
-        && (state.prepared_select_music.is_some() || state.prepared_select_course.is_some())
-    {
+    if state.elapsed >= MIN_SHOW_SECS && state.ready {
         return Some(ThemeEffect::Navigate(state.next_screen));
     }
     None
@@ -185,4 +108,33 @@ pub fn get_actors(state: &State) -> Vec<Actor> {
     let mut actors = Vec::with_capacity(4);
     push_actors(&mut actors, state);
     actors
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn readiness_gates_the_theme_owned_redirect() {
+        let mut state = init();
+        on_enter(&mut state, profile_data::PlayMode::Regular);
+        assert!(update(&mut state, MIN_SHOW_SECS).is_none());
+
+        sync_ready(&mut state, true);
+        assert!(matches!(
+            update(&mut state, 0.0),
+            Some(ThemeEffect::Navigate(Screen::SelectMusic))
+        ));
+    }
+
+    #[test]
+    fn marathon_mode_redirects_to_select_course() {
+        let mut state = init();
+        on_enter(&mut state, profile_data::PlayMode::Marathon);
+        sync_ready(&mut state, true);
+        assert!(matches!(
+            update(&mut state, MIN_SHOW_SECS),
+            Some(ThemeEffect::Navigate(Screen::SelectCourse))
+        ));
+    }
 }

@@ -507,7 +507,8 @@ impl ScreensState {
         select_music_state.preferred_difficulty_index = preferred_difficulty_index;
         select_music_state.selected_steps_index = preferred_difficulty_index;
 
-        let mut select_course_state = select_course::init();
+        let mut select_course_state =
+            select_course::init(crate::profile_load::select_course_init_view());
         select_course_state.active_color_index = color_index;
 
         let mut select_style_state = select_style::init();
@@ -702,45 +703,10 @@ impl ScreensState {
                 select_mode::update(&mut self.select_play_mode_state, delta_time),
                 false,
             ),
-            CurrentScreen::ProfileLoad => {
-                let action = profile_load::update(&mut self.profile_load_state, delta_time);
-                if matches!(
-                    action,
-                    Some(ThemeEffect::Navigate(CurrentScreen::SelectMusic))
-                ) && let Some(sm) =
-                    profile_load::take_prepared_select_music(&mut self.profile_load_state)
-                {
-                    self.select_music_state = sm;
-                    self.select_music_state.active_color_index =
-                        self.profile_load_state.active_color_index;
-
-                    let preferred = session.preferred_difficulty_index;
-                    self.select_music_state.selected_steps_index = preferred;
-                    self.select_music_state.preferred_difficulty_index = preferred;
-
-                    let p2_pref = profile::preferred_difficulty_for_side(
-                        profile_data::PlayerSide::P2,
-                        profile::get_session_play_style(),
-                    );
-                    self.select_music_state.p2_selected_steps_index = p2_pref;
-                    self.select_music_state.p2_preferred_difficulty_index = p2_pref;
-
-                    // Treat the initial selection as already "settled" so preview/graphs can start
-                    // immediately after the transition, matching ITG/Simply Love behavior.
-                    select_music::trigger_immediate_refresh(&mut self.select_music_state);
-                } else if matches!(
-                    action,
-                    Some(ThemeEffect::Navigate(CurrentScreen::SelectCourse))
-                ) && let Some(sc) =
-                    profile_load::take_prepared_select_course(&mut self.profile_load_state)
-                {
-                    self.select_course_state = sc;
-                    self.select_course_state.active_color_index =
-                        self.profile_load_state.active_color_index;
-                    select_course::trigger_immediate_refresh(&mut self.select_course_state);
-                }
-                (action, false)
-            }
+            CurrentScreen::ProfileLoad => (
+                profile_load::update(&mut self.profile_load_state, delta_time),
+                false,
+            ),
             CurrentScreen::Evaluation => {
                 if let Some(start) = session.session_start_time {
                     self.evaluation_state.session_elapsed = now.duration_since(start).as_secs_f32();
@@ -881,6 +847,7 @@ pub struct App {
     dynamic_media: DynamicMedia,
     options_song_pack_generation: u64,
     profile_import: crate::profile_import::Service,
+    profile_load: crate::profile_load::Service,
     qr_login: crate::qr_login::Service,
     score_import: crate::score_import::Service,
     sync_analysis: crate::sync_analysis::Service,
@@ -927,6 +894,38 @@ impl App {
             options_song_pack_view(),
         );
         self.options_song_pack_generation = generation;
+    }
+
+    fn poll_profile_load(&mut self) {
+        if self.state.screens.current_screen != CurrentScreen::ProfileLoad {
+            return;
+        }
+        let Some(prepared) = self.profile_load.poll() else {
+            return;
+        };
+        match prepared {
+            crate::profile_load::PreparedState::Music(mut state) => {
+                state.active_color_index = self.state.screens.profile_load_state.active_color_index;
+                let preferred = self.state.session.preferred_difficulty_index;
+                state.selected_steps_index = preferred;
+                state.preferred_difficulty_index = preferred;
+
+                let p2_preferred = profile::preferred_difficulty_for_side(
+                    profile_data::PlayerSide::P2,
+                    profile::get_session_play_style(),
+                );
+                state.p2_selected_steps_index = p2_preferred;
+                state.p2_preferred_difficulty_index = p2_preferred;
+                select_music::trigger_immediate_refresh(&mut state);
+                self.state.screens.select_music_state = state;
+            }
+            crate::profile_load::PreparedState::Course(mut state) => {
+                state.active_color_index = self.state.screens.profile_load_state.active_color_index;
+                select_course::trigger_immediate_refresh(&mut state);
+                self.state.screens.select_course_state = state;
+            }
+        }
+        profile_load::sync_ready(&mut self.state.screens.profile_load_state, true);
     }
 
     fn poll_profile_import(&mut self) {
@@ -2176,6 +2175,7 @@ impl App {
         self.drive_smx_light_brightness();
         self.state.shell.interaction.update_message(redraw_started);
         self.sync_options_song_packs();
+        self.poll_profile_load();
         self.poll_profile_import();
         self.poll_qr_login();
         self.poll_score_import();
@@ -2649,6 +2649,7 @@ impl App {
             dynamic_media: DynamicMedia::new(),
             options_song_pack_generation: deadsync_simfile::runtime_cache::song_cache_generation(),
             profile_import: crate::profile_import::Service::default(),
+            profile_load: crate::profile_load::Service::default(),
             qr_login: crate::qr_login::Service::default(),
             score_import: crate::score_import::Service::default(),
             sync_analysis: crate::sync_analysis::Service::default(),
@@ -5536,10 +5537,10 @@ impl App {
             self.state.screens.profile_load_state.active_color_index = current_color_index;
             let profiles = profile::load_default_profiles_for_joined_sides();
             self.sync_profile_load_state(&profiles);
-            profile_load::on_enter(
-                &mut self.state.screens.profile_load_state,
-                crate::select_music::init_view(),
-            );
+            let play_mode = profile::get_session_play_mode();
+            profile_load::on_enter(&mut self.state.screens.profile_load_state, play_mode);
+            self.profile_load
+                .start(play_mode, crate::select_music::init_view());
         } else if target == CurrentScreen::PlayerOptions {
             if prev == CurrentScreen::SelectCourse {
                 if !self.start_course_run_from_selected() {
@@ -6725,7 +6726,8 @@ impl App {
                 _ => {
                     let current_color_index =
                         self.state.screens.select_course_state.active_color_index;
-                    self.state.screens.select_course_state = select_course::init();
+                    self.state.screens.select_course_state =
+                        select_course::init(crate::profile_load::select_course_init_view());
                     self.state.screens.select_course_state.active_color_index = current_color_index;
                     select_course::trigger_immediate_refresh(
                         &mut self.state.screens.select_course_state,

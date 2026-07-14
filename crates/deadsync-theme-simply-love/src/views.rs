@@ -191,6 +191,12 @@ pub struct SelectCourseRuntimeView {
     pub score: SelectCourseScoreView,
 }
 
+/// Shell-prepared machine play history used while resolving dynamic courses.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct SelectCourseInitView {
+    pub played_chart_counts: Vec<(String, u32)>,
+}
+
 /// Shell-prepared runtime data consumed by Simply Love's Select Music screen.
 #[derive(Clone, Debug)]
 pub struct SelectMusicRuntimeView {
