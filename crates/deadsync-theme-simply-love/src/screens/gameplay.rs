@@ -1865,6 +1865,40 @@ fn step_stats_score_pos(
     }
 }
 
+fn gameplay_bpm_x(
+    position: crate::config::GameplayBpmPosition,
+    num_players: usize,
+    play_style: profile_data::PlayStyle,
+    player_side: profile_data::PlayerSide,
+    playfield_center_x: f32,
+    field_width: f32,
+    nps_graph_at_top: bool,
+) -> f32 {
+    if position == crate::config::GameplayBpmPosition::NearField
+        && num_players == 1
+        && play_style == profile_data::PlayStyle::Single
+    {
+        let side = if player_side == profile_data::PlayerSide::P1 {
+            1.0
+        } else {
+            -1.0
+        };
+        return playfield_center_x + side * (field_width * 0.5 + 20.0);
+    }
+
+    let note_field_is_centered = (playfield_center_x - screen_center_x()).abs() < 1.0;
+    if num_players == 1 && note_field_is_centered && nps_graph_at_top {
+        let side_shift = if player_side == profile_data::PlayerSide::P1 {
+            0.3
+        } else {
+            -0.3
+        };
+        return screen_center_x() + screen_width() * side_shift;
+    }
+
+    screen_center_x()
+}
+
 #[inline(always)]
 fn ranges_overlap(a_center: f32, a_size: f32, b_center: f32, b_size: f32) -> bool {
     let a_half = a_size * 0.5;
@@ -8677,6 +8711,7 @@ pub fn push_actors(
     let play_style = hud_snapshot.play_style;
     let player_side = hud_snapshot.player_side;
     let is_p2_single = profile_data::is_single_p2_side(play_style, player_side);
+    let runtime_player_is_p2 = profile_data::runtime_player_is_p2(play_style, player_side);
     let center_1player_notefield =
         cfg.center_1player_notefield || notefield_view.force_center_1player;
     let centered_single_notefield = play_style == profile_data::PlayStyle::Single
@@ -9186,7 +9221,7 @@ pub fn push_actors(
             )
         }
         _ => {
-            let placement = if is_p2_single {
+            let placement = if runtime_player_is_p2 {
                 FieldPlacement::P2
             } else {
                 FieldPlacement::P1
@@ -9354,7 +9389,7 @@ pub fn push_actors(
                 );
                 2
             }
-            _ if is_p2_single => {
+            _ if runtime_player_is_p2 => {
                 players[0] = (
                     0,
                     profile_data::PlayerSide::P2,
@@ -9699,31 +9734,15 @@ pub fn push_actors(
             let rate_center_y = 12.0f64.mul_add(frame_zoom, frame_origin_y);
             let bpm_final_zoom = 1.0 * frame_zoom;
             let rate_final_zoom = 0.5 * frame_zoom;
-            let mut bpm_x = screen_center_x();
-            if cfg.gameplay_bpm_position == crate::config::GameplayBpmPosition::NearField
-                && state.num_players() == 1
-                && play_style == profile_data::PlayStyle::Single
-            {
-                let side = if player_side == profile_data::PlayerSide::P1 {
-                    1.0
-                } else {
-                    -1.0
-                };
-                bpm_x = playfield_center_x + side * (notefield_width(0) * 0.5 + 20.0);
-            }
-            let note_field_is_centered = (playfield_center_x - screen_center_x()).abs() < 1.0;
-            if cfg.gameplay_bpm_position != crate::config::GameplayBpmPosition::NearField
-                && state.num_players() == 1
-                && note_field_is_centered
-                && state.profiles()[0].nps_graph_at_top
-            {
-                let side_shift = if player_side == profile_data::PlayerSide::P1 {
-                    0.3
-                } else {
-                    -0.3
-                };
-                bpm_x = screen_center_x() + screen_width() * side_shift;
-            }
+            let bpm_x = gameplay_bpm_x(
+                cfg.gameplay_bpm_position,
+                state.num_players(),
+                play_style,
+                player_side,
+                playfield_center_x,
+                notefield_width(0),
+                state.profiles()[0].nps_graph_at_top,
+            );
             actors.push(act!(text:
                 font("miso"): settext(bpm_text):
                 align(0.5, 0.5): xy(bpm_x, bpm_center_y):
@@ -9787,7 +9806,7 @@ pub fn push_actors(
                         }
                     }
                     _ => {
-                        if is_p2_single {
+                        if runtime_player_is_p2 {
                             color::decorative_rgba(state.active_color_index() - 2)
                         } else {
                             color::decorative_rgba(state.active_color_index())
@@ -9837,7 +9856,7 @@ pub fn push_actors(
                     life_players[1] = (1, profile_data::PlayerSide::P2);
                     2
                 }
-                _ if is_p2_single => {
+                _ if runtime_player_is_p2 => {
                     life_players[0] = (0, profile_data::PlayerSide::P2);
                     1
                 }
@@ -11240,6 +11259,39 @@ mod tests {
             side_difficulty_meter_x(profile_data::PlayerSide::P2),
             screen_width() - DIFFICULTY_METER_SIZE * 0.5
         );
+    }
+
+    #[test]
+    fn doubles_bpm_ignores_position_option() {
+        let center_x = screen_center_x();
+        let double_field_width = 8.0 * 64.0;
+        for side in [profile_data::PlayerSide::P1, profile_data::PlayerSide::P2] {
+            let bpm_x = |position, nps_graph_at_top| {
+                gameplay_bpm_x(
+                    position,
+                    1,
+                    profile_data::PlayStyle::Double,
+                    side,
+                    center_x,
+                    double_field_width,
+                    nps_graph_at_top,
+                )
+            };
+
+            assert_eq!(
+                bpm_x(crate::config::GameplayBpmPosition::TopCenter, false),
+                center_x
+            );
+            assert_eq!(
+                bpm_x(crate::config::GameplayBpmPosition::NearField, false),
+                center_x
+            );
+
+            let top_center = bpm_x(crate::config::GameplayBpmPosition::TopCenter, true);
+            let near_field = bpm_x(crate::config::GameplayBpmPosition::NearField, true);
+            assert_eq!(near_field, top_center);
+            assert_ne!(top_center, center_x);
+        }
     }
 
     fn test_proxy_overlay(player_index: usize) -> SongLuaOverlayActor {
