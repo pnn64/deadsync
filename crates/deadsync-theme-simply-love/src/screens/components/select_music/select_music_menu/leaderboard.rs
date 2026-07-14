@@ -127,8 +127,9 @@ fn apply_leaderboard_side_snapshot(
 
     let mut panes = snapshot.data.map_or_else(Vec::new, |data| {
         data.panes
-            .into_iter()
-            .filter(should_show_overlay_pane)
+            .iter()
+            .filter(|pane| should_show_overlay_pane(pane))
+            .cloned()
             .collect()
     });
     if let Some(machine) = side.machine_pane.clone() {

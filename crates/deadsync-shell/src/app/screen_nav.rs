@@ -145,8 +145,9 @@ impl App {
             let current_color_index = self.state.screens.select_style_state.active_color_index;
             self.state.screens.select_style_state = select_style::init();
             self.state.screens.select_style_state.active_color_index = current_color_index;
-            let p1_joined = profile::is_session_side_joined(profile_data::PlayerSide::P1);
-            let p2_joined = profile::is_session_side_joined(profile_data::PlayerSide::P2);
+            let session = profile::get_session_snapshot();
+            let p1_joined = session.side_joined(profile_data::PlayerSide::P1);
+            let p2_joined = session.side_joined(profile_data::PlayerSide::P2);
             select_style::set_selected_index(
                 &mut self.state.screens.select_style_state,
                 if p1_joined && p2_joined { 1 } else { 0 },

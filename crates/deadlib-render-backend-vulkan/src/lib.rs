@@ -1134,20 +1134,19 @@ fn begin_pending_texture_upload_cmd(
 
 fn retire_submitted_texture_uploads(state: &mut State, frame: usize) {
     let device = state.device.as_ref().unwrap();
-    let mut keep = Vec::with_capacity(state.submitted_tex_uploads.len());
-    for batch in mem::take(&mut state.submitted_tex_uploads) {
+    let command_pool = state.command_pool;
+    state.submitted_tex_uploads.retain_mut(|batch| {
         if batch.frame != frame {
-            keep.push(batch);
-            continue;
+            return true;
         }
         unsafe {
-            device.free_command_buffers(state.command_pool, &[batch.cmd]);
+            device.free_command_buffers(command_pool, &[batch.cmd]);
         }
-        for staging in batch.staging {
+        for staging in batch.staging.drain(..) {
             destroy_buffer(device, &staging);
         }
-    }
-    state.submitted_tex_uploads = keep;
+        false
+    });
 }
 
 fn retire_all_submitted_texture_uploads(state: &mut State) {
@@ -1208,13 +1207,9 @@ fn retire_completed_textures(state: &mut State) {
         return;
     }
 
-    let mut keep = Vec::with_capacity(state.retired_textures.len());
-    for retired in mem::take(&mut state.retired_textures) {
-        if retired.retire_after_present_id != 0 && retired.retire_after_present_id > completed {
-            keep.push(retired);
-        }
-    }
-    state.retired_textures = keep;
+    state.retired_textures.retain(|retired| {
+        retired.retire_after_present_id != 0 && retired.retire_after_present_id > completed
+    });
 }
 
 pub fn retire_textures(state: &mut State, textures: Vec<Texture>) {
@@ -1478,26 +1473,25 @@ pub fn draw(
         let pdevice = state.pdevice;
         let cached_tmesh = &mut state.cached_tmesh;
         let cached_tmesh_bytes = &mut state.cached_tmesh_bytes;
-        let _prep_stats =
-            draw_prep::prepare(
-                render_list,
-                prep,
-                |cache_key, vertices| match ensure_cached_tmesh(
-                    instance,
-                    device.as_ref(),
-                    pdevice,
-                    cached_tmesh,
-                    cached_tmesh_bytes,
-                    cache_key,
-                    vertices,
-                ) {
-                    Ok(cached) => cached,
-                    Err(e) => {
-                        warn!("Failed to cache Vulkan textured mesh {cache_key:#x}: {e}");
-                        false
-                    }
-                },
-            );
+        draw_prep::prepare(
+            render_list,
+            prep,
+            |cache_key, vertices| match ensure_cached_tmesh(
+                instance,
+                device.as_ref(),
+                pdevice,
+                cached_tmesh,
+                cached_tmesh_bytes,
+                cache_key,
+                vertices,
+            ) {
+                Ok(cached) => cached,
+                Err(e) => {
+                    warn!("Failed to cache Vulkan textured mesh {cache_key:#x}: {e}");
+                    false
+                }
+            },
+        );
     }
 
     let needed_instances = render_list.sprite_instances.len();

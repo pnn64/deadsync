@@ -990,7 +990,6 @@ dependencies = [
  "log",
  "rustc-hash 2.1.2",
  "smallvec",
- "twox-hash",
 ]
 
 [[package]]
@@ -999,8 +998,8 @@ version = "0.1.0"
 dependencies = [
  "bytemuck",
  "glam",
+ "rustc-hash 2.1.2",
  "serde",
- "twox-hash",
 ]
 
 [[package]]
@@ -1028,6 +1027,7 @@ dependencies = [
  "glam",
  "image",
  "log",
+ "rayon",
  "softbuffer",
  "winit",
 ]
@@ -1090,7 +1090,7 @@ dependencies = [
 
 [[package]]
 name = "deadsync"
-version = "0.4.2562"
+version = "0.4.2590"
 dependencies = [
  "deadlib-platform",
  "deadlib-present",
@@ -1525,7 +1525,7 @@ dependencies = [
 
 [[package]]
 name = "deadsync-theme-simply-love"
-version = "0.4.2562"
+version = "0.4.2590"
 dependencies = [
  "bitflags 2.13.0",
  "chrono",
@@ -1580,7 +1580,7 @@ dependencies = [
 
 [[package]]
 name = "deadsync-version"
-version = "0.4.2562"
+version = "0.4.2590"
 dependencies = [
  "log",
  "semver",

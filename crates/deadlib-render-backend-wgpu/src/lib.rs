@@ -207,6 +207,7 @@ pub struct State {
     queue: wgpu::Queue,
     config: wgpu::SurfaceConfiguration,
     projection: Matrix4,
+    projection_upload: Vec<u8>,
     bind_layout: wgpu::BindGroupLayout,
     samplers: HashMap<SamplerDesc, wgpu::Sampler>,
     shader: wgpu::ShaderModule,
@@ -513,6 +514,7 @@ fn init(
         queue,
         config,
         projection,
+        projection_upload: Vec::new(),
         bind_layout,
         samplers: HashMap::new(),
         shader,
@@ -966,7 +968,7 @@ pub fn draw(
         let device = &state.device;
         let cached_tmesh = &mut state.cached_tmesh;
         let cached_tmesh_bytes = &mut state.cached_tmesh_bytes;
-        let _prep_stats = draw_prep::prepare(render_list, prep, |cache_key, vertices| {
+        draw_prep::prepare(render_list, prep, |cache_key, vertices| {
             ensure_cached_tmesh(
                 device,
                 cached_tmesh,
@@ -1042,6 +1044,7 @@ pub fn draw(
             label: Some("wgpu encoder"),
         });
 
+    let mut vertices_drawn = 0u32;
     {
         let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("wgpu render pass"),
@@ -1129,6 +1132,7 @@ pub fn draw(
                         0,
                         run.instance_start..(run.instance_start + run.instance_count),
                     );
+                    vertices_drawn = vertices_drawn.saturating_add(4 * run.instance_count);
                 }
                 DrawOp::Mesh(run) => {
                     if run.vertex_count == 0 {
@@ -1162,6 +1166,7 @@ pub fn draw(
                         run.vertex_start..(run.vertex_start + run.vertex_count),
                         0..1,
                     );
+                    vertices_drawn = vertices_drawn.saturating_add(run.vertex_count);
                 }
                 DrawOp::TexturedMesh(run) => {
                     if run.source.vertex_count() == 0 || run.instance_count == 0 {
@@ -1231,6 +1236,9 @@ pub fn draw(
                         draw_start..draw_end,
                         run.instance_start..(run.instance_start + run.instance_count),
                     );
+                    let tri_count = run.source.vertex_count() / 3;
+                    vertices_drawn =
+                        vertices_drawn.saturating_add(tri_count.saturating_mul(run.instance_count));
                 }
             }
         }
@@ -1413,14 +1421,7 @@ pub fn draw(
         reconfigure_surface(state);
     }
 
-    let mut tmesh_vpf = 0u32;
-    for op in &state.prep.ops {
-        if let DrawOp::TexturedMesh(run) = op {
-            let tri_count = run.source.vertex_count() / 3;
-            tmesh_vpf = tmesh_vpf.saturating_add(tri_count.saturating_mul(run.instance_count));
-        }
-    }
-    stats.vertices = (instance_len as u32) * 4 + mesh_len as u32 + tmesh_vpf;
+    stats.vertices = vertices_drawn;
     Ok(stats)
 }
 
@@ -1435,16 +1436,23 @@ fn upload_projections(state: &mut State, cameras: &[Matrix4]) {
     let ProjState::Uniform { buffer, stride, .. } = &state.proj else {
         return;
     };
-    for (i, &vp) in cameras.iter().enumerate() {
+    let stride = *stride as usize;
+    debug_assert!(stride >= PROJ_BYTES as usize);
+    state.projection_upload.resize(needed * stride, 0);
+    for (i, vp) in cameras
+        .iter()
+        .copied()
+        .chain(std::iter::once(state.projection))
+        .enumerate()
+    {
         let arr = vp.to_cols_array_2d();
-        let offset = (i as u64) * *stride;
-        state.queue.write_buffer(buffer, offset, cast_slice(&arr));
+        let bytes = cast_slice(&arr);
+        let offset = i * stride;
+        state.projection_upload[offset..offset + bytes.len()].copy_from_slice(bytes);
     }
-    let fallback_offset = (cameras.len() as u64) * *stride;
-    let fallback = state.projection.to_cols_array_2d();
     state
         .queue
-        .write_buffer(buffer, fallback_offset, cast_slice(&fallback));
+        .write_buffer(buffer, 0, &state.projection_upload);
 }
 
 fn set_camera(

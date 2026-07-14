@@ -2244,7 +2244,9 @@ pub fn prepare_update(state: &mut State) -> (bool, ThemeEffect) {
         {
             clear_lobby_disconnect_holds(state);
             effect = crate::effects::lobby(crate::SimplyLoveLobbyRequest::Disconnect);
-            lobby_data::apply_local_lobby_disconnect(&mut state.lobby_view.snapshot);
+            lobby_data::apply_local_lobby_disconnect(std::sync::Arc::make_mut(
+                &mut state.lobby_view.snapshot,
+            ));
             state.lobby_view.reconnect_status_text = None;
         }
 

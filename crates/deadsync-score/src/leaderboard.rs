@@ -3,7 +3,7 @@ use deadsync_core::input::InputSource;
 use deadsync_core::song_time::{SongTimeNs, song_time_ns_invalid};
 use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
-use std::sync::{LazyLock, Mutex, MutexGuard};
+use std::sync::{Arc, LazyLock, Mutex, MutexGuard};
 use std::time::{Duration, Instant};
 
 use crate::{LocalReplayEdge, ScoreImportEndpoint};
@@ -603,8 +603,8 @@ pub struct PlayerLeaderboardData {
 
 #[derive(Debug, Clone)]
 pub enum PlayerLeaderboardCacheValue {
-    Ready(PlayerLeaderboardData),
-    Error(String),
+    Ready(Arc<PlayerLeaderboardData>),
+    Error(Arc<str>),
 }
 
 #[derive(Debug, Clone)]
@@ -776,7 +776,7 @@ impl PlayerLeaderboardCacheState {
                         self.by_key.insert(
                             key.clone(),
                             PlayerLeaderboardCacheEntry {
-                                value: PlayerLeaderboardCacheValue::Ready(data),
+                                value: PlayerLeaderboardCacheValue::Ready(Arc::new(data)),
                                 max_entries: requested_max_entries,
                                 refreshed_at: refresh_finished_at,
                                 retry_after: None,
@@ -800,7 +800,7 @@ impl PlayerLeaderboardCacheState {
                             self.by_key.insert(
                                 key.clone(),
                                 PlayerLeaderboardCacheEntry {
-                                    value: PlayerLeaderboardCacheValue::Error(error),
+                                    value: PlayerLeaderboardCacheValue::Error(error.into()),
                                     max_entries: requested_max_entries,
                                     refreshed_at: refresh_finished_at,
                                     retry_after,
@@ -1015,8 +1015,8 @@ pub struct PlayerLeaderboardCacheKeyRef<'a> {
 #[derive(Debug, Clone)]
 pub struct CachedPlayerLeaderboardData {
     pub loading: bool,
-    pub data: Option<PlayerLeaderboardData>,
-    pub error: Option<String>,
+    pub data: Option<Arc<PlayerLeaderboardData>>,
+    pub error: Option<Arc<str>>,
 }
 
 impl CachedPlayerLeaderboardData {
@@ -1033,7 +1033,7 @@ impl CachedPlayerLeaderboardData {
     pub fn ready(data: PlayerLeaderboardData) -> Self {
         Self {
             loading: false,
-            data: Some(data),
+            data: Some(Arc::new(data)),
             error: None,
         }
     }
@@ -1043,7 +1043,7 @@ impl CachedPlayerLeaderboardData {
         Self {
             loading: false,
             data: None,
-            error: Some(error),
+            error: Some(error.into()),
         }
     }
 }
@@ -1058,12 +1058,16 @@ pub fn player_leaderboard_snapshot_from_entry(
     entry: &PlayerLeaderboardCacheEntry,
 ) -> CachedPlayerLeaderboardData {
     match &entry.value {
-        PlayerLeaderboardCacheValue::Ready(data) => {
-            CachedPlayerLeaderboardData::ready(data.clone())
-        }
-        PlayerLeaderboardCacheValue::Error(error) => {
-            CachedPlayerLeaderboardData::error(error.clone())
-        }
+        PlayerLeaderboardCacheValue::Ready(data) => CachedPlayerLeaderboardData {
+            loading: false,
+            data: Some(Arc::clone(data)),
+            error: None,
+        },
+        PlayerLeaderboardCacheValue::Error(error) => CachedPlayerLeaderboardData {
+            loading: false,
+            data: None,
+            error: Some(Arc::clone(error)),
+        },
     }
 }
 
@@ -1335,6 +1339,37 @@ mod tests {
     }
 
     #[test]
+    fn leaderboard_snapshots_share_cached_payloads() {
+        let data = Arc::new(PlayerLeaderboardData {
+            panes: vec![LeaderboardPane {
+                name: "GrooveStats".to_string(),
+                entries: vec![entry(1, "player", true, false)],
+                is_ex: false,
+                disabled: false,
+                personalized: true,
+                arrowcloud_kind: None,
+            }],
+            srpg_self_score: None,
+            itl_self_score: None,
+            itl_self_rank: None,
+        });
+        let cache_entry = PlayerLeaderboardCacheEntry {
+            value: PlayerLeaderboardCacheValue::Ready(Arc::clone(&data)),
+            max_entries: 5,
+            refreshed_at: Instant::now(),
+            retry_after: None,
+        };
+
+        let first = player_leaderboard_snapshot_from_entry(&cache_entry);
+        let second = player_leaderboard_snapshot_from_entry(&cache_entry);
+        assert!(Arc::ptr_eq(first.data.as_ref().unwrap(), &data));
+        assert!(Arc::ptr_eq(
+            first.data.as_ref().unwrap(),
+            second.data.as_ref().unwrap()
+        ));
+    }
+
+    #[test]
     fn leaderboard_date_formats_date_time_prefixes() {
         assert_eq!(format_leaderboard_date("2023-04-15"), "Apr 15, 2023");
         assert_eq!(
@@ -1527,12 +1562,12 @@ mod tests {
     fn player_leaderboard_cache_reuses_success_until_more_rows_are_needed() {
         let now = Instant::now();
         let ready = PlayerLeaderboardCacheEntry {
-            value: PlayerLeaderboardCacheValue::Ready(PlayerLeaderboardData {
+            value: PlayerLeaderboardCacheValue::Ready(Arc::new(PlayerLeaderboardData {
                 panes: Vec::new(),
                 srpg_self_score: None,
                 itl_self_score: None,
                 itl_self_rank: None,
-            }),
+            })),
             max_entries: 5,
             refreshed_at: now,
             retry_after: None,
@@ -1563,12 +1598,12 @@ mod tests {
         ));
 
         let cooled_down_ready = PlayerLeaderboardCacheEntry {
-            value: PlayerLeaderboardCacheValue::Ready(PlayerLeaderboardData {
+            value: PlayerLeaderboardCacheValue::Ready(Arc::new(PlayerLeaderboardData {
                 panes: Vec::new(),
                 srpg_self_score: None,
                 itl_self_score: None,
                 itl_self_rank: None,
-            }),
+            })),
             max_entries: 5,
             refreshed_at: now,
             retry_after: Some(now + std::time::Duration::from_secs(10)),
@@ -1587,7 +1622,7 @@ mod tests {
         ));
 
         let stale_error = PlayerLeaderboardCacheEntry {
-            value: PlayerLeaderboardCacheValue::Error("boom".to_string()),
+            value: PlayerLeaderboardCacheValue::Error(Arc::from("boom")),
             max_entries: 5,
             refreshed_at: now - std::time::Duration::from_secs(10),
             retry_after: Some(now - std::time::Duration::from_millis(1)),
@@ -1753,12 +1788,12 @@ mod tests {
     #[test]
     fn newer_player_leaderboard_entry_blocks_older_fetch_result() {
         let newer_entry = PlayerLeaderboardCacheEntry {
-            value: PlayerLeaderboardCacheValue::Ready(PlayerLeaderboardData {
+            value: PlayerLeaderboardCacheValue::Ready(Arc::new(PlayerLeaderboardData {
                 panes: Vec::new(),
                 srpg_self_score: None,
                 itl_self_score: None,
                 itl_self_rank: None,
-            }),
+            })),
             max_entries: 0,
             refreshed_at: Instant::now(),
             retry_after: None,
@@ -1770,12 +1805,12 @@ mod tests {
         ));
 
         let older_entry = PlayerLeaderboardCacheEntry {
-            value: PlayerLeaderboardCacheValue::Ready(PlayerLeaderboardData {
+            value: PlayerLeaderboardCacheValue::Ready(Arc::new(PlayerLeaderboardData {
                 panes: Vec::new(),
                 srpg_self_score: None,
                 itl_self_score: None,
                 itl_self_rank: None,
-            }),
+            })),
             max_entries: 0,
             refreshed_at: Instant::now() - std::time::Duration::from_secs(1),
             retry_after: None,
@@ -1848,12 +1883,12 @@ mod tests {
         cache.by_key.insert(
             key.clone(),
             PlayerLeaderboardCacheEntry {
-                value: PlayerLeaderboardCacheValue::Ready(PlayerLeaderboardData {
+                value: PlayerLeaderboardCacheValue::Ready(Arc::new(PlayerLeaderboardData {
                     panes: Vec::new(),
                     srpg_self_score: Some(9910),
                     itl_self_score: None,
                     itl_self_rank: None,
-                }),
+                })),
                 max_entries: 5,
                 refreshed_at: request_started_at - std::time::Duration::from_secs(1),
                 retry_after: None,

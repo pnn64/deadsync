@@ -69,7 +69,9 @@ use crate::screen_flow::{
 };
 use crate::screenshot::{AutoScreenshotFrameContext, auto_screenshot_frame_plan};
 use crate::session::SessionState as ShellSessionState;
-use crate::session_results::{post_select_display_stages, stage_summary_from_score_info};
+use crate::session_results::{
+    post_select_display_stage_count, post_select_display_stages, stage_summary_from_score_info,
+};
 use crate::stutter_diag::{
     STUTTER_DIAG_FRAME_CAPACITY, STUTTER_DIAG_WINDOW_NS, StutterDiagDumpContext,
     stutter_diag_dump_lines,
@@ -127,6 +129,7 @@ use winit::{
 };
 
 use log::{debug, error, info, trace, warn};
+use smallvec::SmallVec;
 use std::borrow::Cow;
 use std::{
     error::Error,
@@ -240,16 +243,15 @@ fn gameplay_viewport(metrics: Metrics) -> GameplayViewport {
 }
 
 fn gameplay_session() -> GameplaySession {
+    let (session, active_profile_ids) = profile::get_session_snapshot_with_active_ids();
     GameplaySession {
-        play_style: gameplay_play_style_from_profile(profile::get_session_play_style()),
-        player_side: gameplay_player_side_from_profile(profile::get_session_player_side()),
+        play_style: gameplay_play_style_from_profile(session.play_style),
+        player_side: gameplay_player_side_from_profile(session.player_side),
         joined_sides: std::array::from_fn(|idx| {
-            profile::is_session_side_joined(profile_data::player_side_for_index(idx))
+            session.side_joined(profile_data::player_side_for_index(idx))
         }),
-        active_profile_ids: std::array::from_fn(|idx| {
-            profile::active_local_profile_id_for_side(profile_data::player_side_for_index(idx))
-        }),
-        tick_mode: gameplay_tick_mode_from_profile(profile::get_session_timing_tick_mode()),
+        active_profile_ids,
+        tick_mode: gameplay_tick_mode_from_profile(session.timing_tick_mode),
     }
 }
 
@@ -348,11 +350,12 @@ fn build_course_summary_eval_state(
     session_elapsed: f32,
     gameplay_elapsed: f32,
 ) -> evaluation::State {
+    let profile_session = profile::get_session_snapshot();
     let score_info = build_course_summary_score_info(
         stage,
         course_graph_stages,
-        profile::get_session_play_style(),
-        profile::get_session_player_side(),
+        profile_session.play_style,
+        profile_session.player_side,
     );
     let mut state = evaluation::init_from_score_info(score_info, stage.duration_seconds);
     state.active_color_index = active_color_index;
@@ -367,6 +370,7 @@ fn prewarm_gameplay_text_layout_cache(
     assets: &AssetManager,
     metrics: &Metrics,
     cache: &mut compose::TextLayoutCache,
+    compose_scratch: &mut compose::ComposeScratch,
     state: &mut gameplay::State,
 ) {
     let started = Instant::now();
@@ -374,7 +378,7 @@ fn prewarm_gameplay_text_layout_cache(
     // empty working set instead of scan-pruning stale entries from older screens.
     cache.clear();
     cache.configure(GAMEPLAY_TEXT_LAYOUT_CACHE_LIMIT);
-    cache.begin_frame_stats();
+    cache.begin_frame_stats(true);
 
     let fonts = assets.fonts();
     screens::components::gameplay::gameplay_stats::refresh_density_graph_meshes(state);
@@ -386,15 +390,17 @@ fn prewarm_gameplay_text_layout_cache(
         gameplay::ActorViewOverride::default(),
         arrow_effect_time_seconds(started),
     );
-    let _ = compose::build_screen_cached_with_texture_context(
+    let mut render = compose::build_screen_cached_with_scratch_and_texture_context(
         &actors,
         [0.0, 0.0, 0.0, 1.0],
         metrics,
         fonts,
         0.0,
         cache,
+        compose_scratch,
         &PRESENT_TEXTURE_CONTEXT,
     );
+    compose_scratch.recycle_render_list(&mut render);
     gameplay::prewarm_text_layout(cache, fonts, state);
     screens::components::gameplay::gameplay_stats::prewarm_text_layout(cache, fonts, assets, state);
     screens::components::gameplay::notefield::prewarm_text_layout(cache, fonts, state);
@@ -1064,8 +1070,7 @@ impl App {
         }
     }
 
-    fn sync_lights(&mut self, delta_time: f32, elapsed_seconds: f32) {
-        let config = config::get();
+    fn sync_lights(&mut self, delta_time: f32, elapsed_seconds: f32, config: &config::Config) {
         self.lights
             .set_driver(config.lights_driver, config.lights_com_port.as_str());
         self.lights
@@ -1078,15 +1083,18 @@ impl App {
         if let Some(context) = plan.screen_mode {
             self.lights.set_mode(lights::screen_light_mode(context));
         }
+        let session = profile::get_session_snapshot();
         self.lights.set_joined([
-            profile::is_session_side_joined(profile_data::PlayerSide::P1),
-            profile::is_session_side_joined(profile_data::PlayerSide::P2),
+            session.side_joined(profile_data::PlayerSide::P1),
+            session.side_joined(profile_data::PlayerSide::P2),
         ]);
         self.lights.set_hide_flags(self.current_light_hide_flags());
         self.sync_gameplay_light_blinks(
             plan.gameplay_target,
             config.lights_simplify_bass,
             plan.smx_panels_enabled,
+            session.play_style,
+            session.player_side,
         );
         // Per-player pack overrides, resolved per pad slot so that in versus
         // mode P1's pad uses P1's pack and P2's pad uses P2's pack. One profile
@@ -1103,7 +1111,11 @@ impl App {
             bg_packs,
             judge_packs,
         );
-        self.sync_smx_pad_blackout(plan.smx_panels_enabled);
+        self.sync_smx_pad_blackout(
+            plan.smx_panels_enabled,
+            session.play_style,
+            session.player_side,
+        );
         if plan.smx_select_music_beat {
             // One f32 per frame; the driver drops it unless the background is
             // actually beat-locked.
@@ -1116,9 +1128,10 @@ impl App {
     }
 
     fn lobby_runtime_view() -> SimplyLoveLobbyRuntimeView {
+        let (snapshot, reconnect_status_text) = deadsync_online::lobbies::runtime_view();
         SimplyLoveLobbyRuntimeView {
-            snapshot: deadsync_online::lobbies::runtime_snapshot(),
-            reconnect_status_text: deadsync_online::lobbies::runtime_reconnect_status_text(),
+            snapshot,
+            reconnect_status_text,
             disconnect_hold_seconds: deadsync_online::lobbies::LOBBY_DISCONNECT_HOLD_SECONDS,
         }
     }
@@ -1194,6 +1207,12 @@ impl App {
     }
 
     fn evaluation_runtime_view(state: &evaluation::State) -> EvaluationRuntimeView {
+        let config = config::get();
+        let profile_view = profile_data::runtime_scorebox_view(
+            config.enable_groovestats,
+            config.enable_arrowcloud,
+            config.auto_populate_gs_scores,
+        );
         let leaderboard_requests = evaluation::leaderboard_requests(state);
         let leaderboards: [Option<deadsync_score::CachedPlayerLeaderboardData>; MAX_PLAYERS] =
             std::array::from_fn(|player_idx| {
@@ -1201,9 +1220,10 @@ impl App {
                     return None;
                 }
                 let score_info = state.score_info.get(player_idx)?.as_ref()?;
-                scores::get_or_fetch_player_leaderboards_for_side(
+                scores::get_or_fetch_player_leaderboards_for_profile(
                     score_info.chart.short_hash.as_str(),
-                    score_info.side,
+                    &profile_view.sides[profile_data::player_side_index(score_info.side)]
+                        .leaderboard,
                     EVALUATION_LEADERBOARD_ROWS,
                 )
             });
@@ -1221,7 +1241,7 @@ impl App {
                     return ScoreboxSideView::default();
                 };
                 Self::scorebox_side_view(
-                    score_info.side,
+                    profile_view.sides[profile_data::player_side_index(score_info.side)].clone(),
                     Some(score_info.chart.short_hash.clone()),
                     leaderboards[player_idx].clone(),
                 )
@@ -1265,13 +1285,10 @@ impl App {
         }
     }
 
-    fn sync_select_music_runtime_view(&mut self) {
+    fn sync_select_music_runtime_view(&mut self, config: &config::Config) {
         if self.state.screens.current_screen != CurrentScreen::SelectMusic {
             return;
         }
-        let music_wheel = Self::prepare_music_wheel_runtime(
-            select_music::music_wheel_runtime_request(&self.state.screens.select_music_state),
-        );
         let lobby = Self::refresh_lobby_runtime_view();
         let downloads =
             if select_music::downloads_overlay_visible(&self.state.screens.select_music_state) {
@@ -1297,13 +1314,41 @@ impl App {
             select_music::scorebox_runtime_request(&self.state.screens.select_music_state);
         let leaderboard_request =
             select_music::leaderboard_runtime_request(&self.state.screens.select_music_state);
-        let play_style = profile::get_session_play_style();
-        let session_side = profile::get_session_player_side();
+        let arrow_bounce_offset = -10.0 * config.global_offset_seconds;
+        let policy = SelectMusicPolicyView {
+            dedicated_menu_only: config.only_dedicated_menu_buttons,
+            fsr_profiles: config.use_fsrs,
+            replays: config.machine_enable_replays,
+            profile_switch: config.allow_switch_profile_in_menu,
+            keyboard_features: config.keyboard_features,
+        };
+        let sync_graph_mode = config.null_or_die_sync_graph;
+        let sync_confidence_percent = config.null_or_die_confidence_percent;
+        let scorebox_enabled = config.show_select_music_scorebox
+            && (config.select_music_scorebox_cycle_itg
+                || config.select_music_scorebox_cycle_ex
+                || config.select_music_scorebox_cycle_hard_ex
+                || config.select_music_scorebox_cycle_tournaments);
+        let enable_groovestats = config.enable_groovestats;
+        let enable_arrowcloud = config.enable_arrowcloud;
+        let auto_populate_gs_scores = config.auto_populate_gs_scores;
+        let profile_view = profile_data::runtime_scorebox_view(
+            enable_groovestats,
+            enable_arrowcloud,
+            auto_populate_gs_scores,
+        );
+        let music_wheel = Self::prepare_music_wheel_runtime(
+            select_music::music_wheel_runtime_request(&self.state.screens.select_music_state),
+            &profile_view,
+        );
         let mut scorebox_hashes: [Option<String>; 2] = Default::default();
-        if play_style == profile_data::PlayStyle::Versus {
+        if profile_view.play_style == profile_data::PlayStyle::Versus {
             scorebox_hashes = scorebox_request.chart_hashes;
         } else {
-            let side = if profile_data::runtime_player_is_p2(play_style, session_side) {
+            let side = if profile_data::runtime_player_is_p2(
+                profile_view.play_style,
+                profile_view.player_side,
+            ) {
                 profile_data::PlayerSide::P2
             } else {
                 profile_data::PlayerSide::P1
@@ -1311,70 +1356,26 @@ impl App {
             scorebox_hashes[profile_data::player_side_index(side)] =
                 scorebox_request.chart_hashes[0].clone();
         }
-        let (
-            arrow_bounce_offset,
-            policy,
-            sync_graph_mode,
-            sync_confidence_percent,
-            scorebox_enabled,
-        ) = {
-            let config = config::get();
-            (
-                -10.0 * config.global_offset_seconds,
-                SelectMusicPolicyView {
-                    dedicated_menu_only: config.only_dedicated_menu_buttons,
-                    fsr_profiles: config.use_fsrs,
-                    replays: config.machine_enable_replays,
-                    profile_switch: config.allow_switch_profile_in_menu,
-                    keyboard_features: config.keyboard_features,
-                },
-                config.null_or_die_sync_graph,
-                config.null_or_die_confidence_percent,
-                config.show_select_music_scorebox
-                    && (config.select_music_scorebox_cycle_itg
-                        || config.select_music_scorebox_cycle_ex
-                        || config.select_music_scorebox_cycle_hard_ex
-                        || config.select_music_scorebox_cycle_tournaments),
-            )
-        };
-        let prepare_scorebox = |side, chart_hash: Option<String>| {
-            let leaderboards = (scorebox_request.leaderboards_allowed && scorebox_enabled)
-                .then(|| {
-                    chart_hash.as_deref().and_then(|hash| {
-                        scores::get_or_fetch_player_leaderboards_for_side(
-                            hash,
-                            side,
-                            scorebox_request.max_entries,
-                        )
-                    })
+        let scorebox_leaderboards: [Option<deadsync_score::CachedPlayerLeaderboardData>; 2] =
+            std::array::from_fn(|side_idx| {
+                if !(scorebox_request.leaderboards_allowed && scorebox_enabled) {
+                    return None;
+                }
+                scorebox_hashes[side_idx].as_deref().and_then(|hash| {
+                    scores::get_or_fetch_player_leaderboards_for_profile(
+                        hash,
+                        &profile_view.sides[side_idx].leaderboard,
+                        scorebox_request.max_entries,
+                    )
                 })
-                .flatten();
-            Self::scorebox_side_view(side, chart_hash, leaderboards)
-        };
-        let scoreboxes = [
-            prepare_scorebox(
-                profile_data::PlayerSide::P1,
-                scorebox_hashes[profile_data::player_side_index(profile_data::PlayerSide::P1)]
-                    .clone(),
-            ),
-            prepare_scorebox(
-                profile_data::PlayerSide::P2,
-                scorebox_hashes[profile_data::player_side_index(profile_data::PlayerSide::P2)]
-                    .clone(),
-            ),
-        ];
+            });
         let leaderboard =
             leaderboard_request.map_or_else(SelectMusicLeaderboardView::default, |request| {
                 SelectMusicLeaderboardView {
                     sides: std::array::from_fn(|side_idx| {
-                        let side = if side_idx == 0 {
-                            profile_data::PlayerSide::P1
-                        } else {
-                            profile_data::PlayerSide::P2
-                        };
                         let chart_hash = request.chart_hashes[side_idx].clone();
-                        let joined = profile::is_session_side_joined(side);
-                        let player = profile::get_for_side(side);
+                        let player = &profile_view.sides[side_idx];
+                        let joined = player.joined;
                         let machine_entries = if joined {
                             chart_hash
                                 .as_deref()
@@ -1388,11 +1389,11 @@ impl App {
                         } else {
                             Vec::new()
                         };
-                        let leaderboards = if joined && !player.groovestats_api_key.is_empty() {
+                        let leaderboards = if player.leaderboard.gs_active {
                             chart_hash.as_deref().and_then(|hash| {
-                                scores::get_or_fetch_player_leaderboards_for_side(
+                                scores::get_or_fetch_player_leaderboards_for_profile(
                                     hash,
-                                    side,
+                                    &player.leaderboard,
                                     request.max_entries,
                                 )
                             })
@@ -1407,6 +1408,13 @@ impl App {
                     }),
                 }
             });
+        let [p1_profile, p2_profile] = profile_view.sides;
+        let [p1_hash, p2_hash] = scorebox_hashes;
+        let [p1_leaderboards, p2_leaderboards] = scorebox_leaderboards;
+        let scoreboxes = [
+            Self::scorebox_side_view(p1_profile, p1_hash, p1_leaderboards),
+            Self::scorebox_side_view(p2_profile, p2_hash, p2_leaderboards),
+        ];
         select_music::sync_runtime_view(
             &mut self.state.screens.select_music_state,
             SelectMusicRuntimeView {
@@ -1429,36 +1437,45 @@ impl App {
     }
 
     fn scorebox_side_view(
-        side: profile_data::PlayerSide,
+        player: profile_data::ScoreboxProfileView,
         chart_hash: Option<String>,
         leaderboards: Option<deadsync_score::CachedPlayerLeaderboardData>,
     ) -> ScoreboxSideView {
-        let player = profile::get_for_side(side);
-        let groovestats_active = scores::is_gs_active_for_side(side);
+        let profile_id = player.leaderboard.persistent_profile_id();
         let local_itg = chart_hash.as_deref().and_then(|hash| {
-            scores::get_cached_local_score_for_side(hash, side).map(|score| ScoreboxLocalView {
-                score_10000: score.score_percent * 10000.0,
-                failed: score.grade == deadsync_score::Grade::Failed,
-            })
+            profile_id
+                .and_then(|profile_id| scores::get_cached_local_score_for_profile(profile_id, hash))
+                .map(|score| ScoreboxLocalView {
+                    score_10000: score.score_percent * 10000.0,
+                    failed: score.grade == deadsync_score::Grade::Failed,
+                })
         });
         let local_ex = chart_hash.as_deref().and_then(|hash| {
-            scores::get_cached_local_ex_score_for_side(hash, side).map(|score| ScoreboxLocalView {
-                score_10000: score.percent * 100.0,
-                failed: score.is_fail,
-            })
-        });
-        let local_hard_ex = chart_hash.as_deref().and_then(|hash| {
-            scores::get_cached_local_hard_ex_score_for_side(hash, side).map(|score| {
-                ScoreboxLocalView {
+            profile_id
+                .and_then(|profile_id| {
+                    scores::get_cached_local_ex_score_for_profile(profile_id, hash)
+                })
+                .map(|score| ScoreboxLocalView {
                     score_10000: score.percent * 100.0,
                     failed: score.is_fail,
-                }
-            })
+                })
+        });
+        let local_hard_ex = chart_hash.as_deref().and_then(|hash| {
+            profile_id
+                .and_then(|profile_id| {
+                    scores::get_cached_local_hard_ex_score_for_profile(profile_id, hash)
+                })
+                .map(|score| ScoreboxLocalView {
+                    score_10000: score.percent * 100.0,
+                    failed: score.is_fail,
+                })
         });
         let local_itl = chart_hash.as_deref().and_then(|hash| {
-            scores::get_cached_itl_score_for_side(hash, side).map(|score| ScoreboxLocalView {
-                score_10000: f64::from(score.ex_hundredths),
-                failed: false,
+            scores::get_cached_itl_score_for_profile(hash, profile_id).map(|score| {
+                ScoreboxLocalView {
+                    score_10000: f64::from(score.ex_hundredths),
+                    failed: false,
+                }
             })
         });
         let machine_itg = chart_hash.as_deref().and_then(|hash| {
@@ -1469,10 +1486,10 @@ impl App {
             })
         });
         ScoreboxSideView {
-            joined: profile::is_session_side_joined(side),
+            joined: player.joined,
             chart_hash,
-            groovestats_active,
-            show_ex_score: player.show_ex_score,
+            groovestats_active: player.leaderboard.gs_active,
+            show_ex_score: player.leaderboard.show_ex_score,
             display_name: player.display_name,
             groovestats_username: player.groovestats_username,
             player_initials: player.player_initials,
@@ -1489,18 +1506,16 @@ impl App {
     /// caches, and online snapshots are captured once per frame. The large
     /// entry match is intentionally kept here because splitting it would pass
     /// the same runtime context through several single-use wrappers.
-    fn prepare_music_wheel_runtime(request: MusicWheelRuntimeRequest<'_>) -> MusicWheelRuntimeView {
-        let play_style = profile::get_session_play_style();
-        let sides = [profile_data::PlayerSide::P1, profile_data::PlayerSide::P2];
-        let joined =
-            std::array::from_fn(|side_idx| profile::is_session_side_joined(sides[side_idx]));
-        let profile_ids: [Option<String>; 2] = std::array::from_fn(|side_idx| {
-            joined[side_idx]
-                .then(|| profile::active_local_profile_id_for_side(sides[side_idx]))
-                .flatten()
+    fn prepare_music_wheel_runtime(
+        request: MusicWheelRuntimeRequest<'_>,
+        profiles: &profile_data::ScoreboxRuntimeView,
+    ) -> MusicWheelRuntimeView {
+        let joined = [profiles.sides[0].joined, profiles.sides[1].joined];
+        let profile_ids: [Option<&str>; 2] = std::array::from_fn(|side_idx| {
+            profiles.sides[side_idx].leaderboard.persistent_profile_id()
         });
         for side_idx in 0..2 {
-            let Some(profile_id) = profile_ids[side_idx].as_deref() else {
+            let Some(profile_id) = profile_ids[side_idx] else {
                 continue;
             };
             if request.read_scores {
@@ -1510,15 +1525,18 @@ impl App {
                 scores::ensure_itl_wheel_caches_loaded(profile_id);
             }
         }
-        let itl_contexts: [Option<scores::ItlWheelSideContext>; 2] =
+        let itl_contexts: [Option<scores::ItlWheelSideContext<'_>>; 2] =
             std::array::from_fn(|side_idx| {
+                let fetch = request.sides[side_idx];
                 (joined[side_idx]
                     && (request.rank_source != MusicWheelRankSource::None
-                        || request.read_itl_scores))
+                        || request.read_itl_scores
+                        || fetch.fetch_itl_rank
+                        || fetch.fetch_itl_score
+                        || fetch.fetch_srpg_score))
                     .then(|| {
-                        scores::ItlWheelSideContext::for_side(
-                            sides[side_idx],
-                            profile_ids[side_idx].as_deref().map(Arc::from),
+                        scores::ItlWheelSideContext::for_profile(
+                            &profiles.sides[side_idx].leaderboard,
                         )
                     })
             });
@@ -1526,37 +1544,51 @@ impl App {
             if !joined[side_idx] {
                 continue;
             }
-            let side = sides[side_idx];
             let Some(chart_hash) = side_request.chart_hash else {
                 continue;
             };
-            if side_request.fetch_itl_rank {
-                let _ = scores::get_or_fetch_itl_tournament_rank_for_side(chart_hash, side);
-            }
-            if side_request.fetch_itl_score {
-                let _ = scores::get_or_fetch_itl_self_score_for_side(chart_hash, side);
-            }
-            if side_request.fetch_srpg_score
-                && let Some(context) = itl_contexts[side_idx].as_ref()
-            {
-                let _ = context.get_or_fetch_srpg_self_score(chart_hash);
+            if let Some(context) = itl_contexts[side_idx].as_ref() {
+                if side_request.fetch_itl_rank {
+                    let _ = context.get_or_fetch_tournament_rank(chart_hash);
+                }
+                if side_request.fetch_itl_score {
+                    let _ = context.get_or_fetch_self_ex_score(chart_hash);
+                }
+                if side_request.fetch_srpg_score {
+                    let _ = context.get_or_fetch_srpg_self_score(chart_hash);
+                }
             }
         }
         let overall_ranks: [Option<Arc<std::collections::HashMap<String, u32>>>; 2] =
             std::array::from_fn(|side_idx| {
                 (joined[side_idx] && request.rank_source == MusicWheelRankSource::Overall).then(
-                    || scores::get_cached_itl_tournament_overall_ranks_for_side(sides[side_idx]),
+                    || {
+                        scores::get_cached_itl_tournament_overall_ranks_for_profile(
+                            side_idx,
+                            joined[side_idx],
+                            &profiles.sides[side_idx].leaderboard,
+                        )
+                    },
                 )
             });
+        let favorite_queries = request.slots.map(|slot| match slot {
+            MusicWheelSlotRuntimeRequest::Empty => profile_data::FavoriteMembershipQuery::None,
+            MusicWheelSlotRuntimeRequest::Pack { key } => {
+                profile_data::FavoriteMembershipQuery::Pack(key)
+            }
+            MusicWheelSlotRuntimeRequest::Song { song, .. } => {
+                profile_data::FavoriteMembershipQuery::Song(song)
+            }
+        });
+        let favorite_membership = profile_data::runtime_favorite_membership(&favorite_queries);
         let slots = std::array::from_fn(|slot_idx| {
             let mut view = MusicWheelSlotRuntimeView::default();
             match request.slots[slot_idx] {
                 MusicWheelSlotRuntimeRequest::Empty => {}
-                MusicWheelSlotRuntimeRequest::Pack { key } => {
+                MusicWheelSlotRuntimeRequest::Pack { .. } => {
                     for side_idx in 0..2 {
-                        view.sides[side_idx].favorite = joined[side_idx]
-                            && key
-                                .is_some_and(|key| profile::is_pack_favorite(sides[side_idx], key));
+                        view.sides[side_idx].favorite =
+                            joined[side_idx] && favorite_membership[slot_idx][side_idx];
                     }
                 }
                 MusicWheelSlotRuntimeRequest::Song {
@@ -1572,15 +1604,11 @@ impl App {
                         if !joined[side_idx] {
                             continue;
                         }
-                        let side = sides[side_idx];
                         let chart_hash = chart_hashes[side_idx];
-                        let profile_id = profile_ids[side_idx].as_deref();
+                        let profile_id = profile_ids[side_idx];
                         let context = itl_contexts[side_idx].as_ref();
                         let side_view = &mut view.sides[side_idx];
-                        side_view.favorite = song
-                            .charts
-                            .iter()
-                            .any(|chart| profile::is_favorite(side, &chart.short_hash));
+                        side_view.favorite = favorite_membership[slot_idx][side_idx];
                         side_view.locked = unlock_song_dir.is_some_and(|song_dir| {
                             !scores::is_itl_song_folder_unlocked_with_profile(song_dir, profile_id)
                         });
@@ -1637,24 +1665,32 @@ impl App {
         });
         MusicWheelRuntimeView {
             joined,
-            play_style,
+            play_style: profiles.play_style,
             slots,
         }
     }
 
-    fn prepare_select_course_score(request: SelectCourseScoreRequest<'_>) -> SelectCourseScoreView {
-        let play_style = profile::get_session_play_style();
-        let session_side = profile::get_session_player_side();
-        let pane_side = if profile_data::is_single_p2_side(play_style, session_side) {
-            profile_data::PlayerSide::P2
-        } else {
-            profile_data::PlayerSide::P1
-        };
-        let mode_show_ex_score = profile::get_for_side(profile_data::PlayerSide::P1).show_ex_score;
-        let pane_profile = profile::get_for_side(pane_side);
+    fn prepare_select_course_score(
+        request: SelectCourseScoreRequest<'_>,
+        profiles: &profile_data::ScoreboxRuntimeView,
+    ) -> SelectCourseScoreView {
+        let pane_side =
+            if profile_data::is_single_p2_side(profiles.play_style, profiles.player_side) {
+                profile_data::PlayerSide::P2
+            } else {
+                profile_data::PlayerSide::P1
+            };
+        let pane_profile = &profiles.sides[profile_data::player_side_index(pane_side)];
         let player_score_percent = request
             .course_hash
-            .and_then(|hash| scores::get_cached_local_score_for_side(hash, pane_side))
+            .and_then(|hash| {
+                pane_profile
+                    .leaderboard
+                    .persistent_profile_id()
+                    .and_then(|profile_id| {
+                        scores::get_cached_local_score_for_profile(profile_id, hash)
+                    })
+            })
             .filter(|score| {
                 score.grade != deadsync_score::Grade::Failed || score.score_percent > 0.0
             })
@@ -1669,25 +1705,32 @@ impl App {
                 (Some(initials), Some(score.score_percent))
             });
         SelectCourseScoreView {
-            mode_show_ex_score,
-            pane_show_ex_score: pane_profile.show_ex_score,
-            player_initials: pane_profile.player_initials,
+            mode_show_ex_score: profiles.sides[0].leaderboard.show_ex_score,
+            pane_show_ex_score: pane_profile.leaderboard.show_ex_score,
+            player_initials: pane_profile.player_initials.clone(),
             player_score_percent,
             machine_initials,
             machine_score_percent,
         }
     }
 
-    fn sync_select_course_runtime_view(&mut self) {
+    fn sync_select_course_runtime_view(&mut self, config: &config::Config) {
         if self.state.screens.current_screen != CurrentScreen::SelectCourse {
             return;
         }
+        let profile_view = profile_data::runtime_scorebox_view(
+            config.enable_groovestats,
+            config.enable_arrowcloud,
+            config.auto_populate_gs_scores,
+        );
         let music_wheel = Self::prepare_music_wheel_runtime(
             select_course::music_wheel_runtime_request(&self.state.screens.select_course_state),
+            &profile_view,
         );
-        let score = Self::prepare_select_course_score(select_course::score_runtime_request(
-            &self.state.screens.select_course_state,
-        ));
+        let score = Self::prepare_select_course_score(
+            select_course::score_runtime_request(&self.state.screens.select_course_state),
+            &profile_view,
+        );
         select_course::sync_runtime_view(
             &mut self.state.screens.select_course_state,
             SelectCourseRuntimeView { music_wheel, score },
@@ -1743,6 +1786,8 @@ impl App {
         target: GameplayLightSyncTarget,
         simplify_bass: bool,
         smx_enabled: bool,
+        play_style: profile_data::PlayStyle,
+        player_side: profile_data::PlayerSide,
     ) {
         match target {
             GameplayLightSyncTarget::Gameplay => {
@@ -1750,7 +1795,7 @@ impl App {
                     self.gameplay_lights
                         .queue_blinks(&mut self.lights, gs, simplify_bass);
                     if smx_enabled {
-                        self.smx_panels.update(gs);
+                        self.smx_panels.update(gs, play_style, player_side);
                     } else {
                         self.smx_panels.deactivate();
                     }
@@ -1765,7 +1810,8 @@ impl App {
                         simplify_bass,
                     );
                     if smx_enabled {
-                        self.smx_panels.update(&ps.gameplay);
+                        self.smx_panels
+                            .update(&ps.gameplay, play_style, player_side);
                     } else {
                         self.smx_panels.deactivate();
                     }
@@ -1930,12 +1976,17 @@ impl App {
     /// Black out the unused pad slot when a single player is in game mode.
     /// In Versus / Doubles both pads are in use; in Single play the non-session slot
     /// gets solid black so only the pad the player stands on is lit.
-    fn sync_smx_pad_blackout(&mut self, enabled: bool) {
+    fn sync_smx_pad_blackout(
+        &mut self,
+        enabled: bool,
+        play_style: profile_data::PlayStyle,
+        player_side: profile_data::PlayerSide,
+    ) {
         let blackout = smx_pad_blackout(
             self.state.screens.current_screen,
             enabled,
-            profile::get_session_play_style(),
-            profile::get_session_player_side(),
+            play_style,
+            player_side,
         );
         if blackout != self.smx_blackout_synced {
             self.smx_blackout_synced = blackout;
@@ -2240,7 +2291,11 @@ impl App {
                     screen: current_screen,
                     already_taken: self.state.screens.evaluation_state.auto_screenshot_taken,
                     ready: auto_screenshot_ready,
-                    mask: config::get().auto_screenshot_eval,
+                    mask: if current_screen == CurrentScreen::Evaluation {
+                        config::get().auto_screenshot_eval
+                    } else {
+                        0
+                    },
                 },
                 auto_screenshot_eval_results(&self.state.screens.evaluation_state),
             );
@@ -2260,10 +2315,11 @@ impl App {
             }
             None => {}
         }
-        self.sync_select_music_runtime_view();
-        self.sync_select_course_runtime_view();
+        let frame_config = config::get();
+        self.sync_select_music_runtime_view(&frame_config);
+        self.sync_select_course_runtime_view(&frame_config);
         let update_us: u32 = elapsed_us_since(update_started);
-        self.sync_lights(delta_time, total_elapsed);
+        self.sync_lights(delta_time, total_elapsed, &frame_config);
 
         if self.window.as_ref().map(|w| w.id()) != Some(window.id()) {
             self.state.shell.last_frame_end_time = Instant::now();
@@ -2275,34 +2331,18 @@ impl App {
             return;
         }
 
-        self.sync_gameplay_background();
-        self.sync_theme_background_video(total_elapsed);
+        self.sync_gameplay_background(frame_config.show_video_backgrounds);
+        self.sync_theme_background_video(total_elapsed, &frame_config);
         let actor_build_started = Instant::now();
         let arrow_effect_time_s = arrow_effect_time_seconds(actor_build_started);
-        let (mut actors, clear_color) = self.get_current_actors(arrow_effect_time_s);
+        let (mut actors, clear_color) = self.get_current_actors(arrow_effect_time_s, &frame_config);
         let actor_build_us = elapsed_us_since(actor_build_started);
         self.state.shell.update_fps_stats(redraw_started);
         let screens = &self.state.screens;
         let current_screen = screens.current_screen;
-        let (show_select_music_video_banners, show_select_music_banners) = {
-            let cfg = config::get();
-            (
-                cfg.show_select_music_video_banners,
-                cfg.show_select_music_banners,
-            )
-        };
-        let post_select_banner_paths = if show_select_music_video_banners
-            && matches!(
-                current_screen,
-                CurrentScreen::EvaluationSummary | CurrentScreen::Initials
-            ) {
-            self.post_select_display_stages()
-                .iter()
-                .filter_map(|stage| stage.song.banner_path.clone())
-                .collect::<Vec<_>>()
-        } else {
-            Vec::new()
-        };
+        let show_select_music_video_banners = frame_config.show_select_music_video_banners;
+        let show_select_music_banners = frame_config.show_select_music_banners;
+        let show_course_individual_scores = frame_config.show_course_individual_scores;
         if let Some(backend) = &mut self.backend {
             let upload_started = Instant::now();
             let gameplay_time = match current_screen {
@@ -2316,85 +2356,107 @@ impl App {
                 }),
                 _ => None,
             };
-            match current_screen {
-                CurrentScreen::SelectMusic => {
-                    let state = &screens.select_music_state;
-                    let desired_path = if show_select_music_video_banners
-                        && show_select_music_banners
-                        && state.banner_high_quality_requested
-                    {
-                        match state.entries.get(state.selected_index) {
-                            Some(select_music::MusicWheelEntry::Song(song)) => {
-                                song.banner_path.as_deref()
+            {
+                let post_select_stages = if show_select_music_video_banners
+                    && matches!(
+                        current_screen,
+                        CurrentScreen::EvaluationSummary | CurrentScreen::Initials
+                    ) {
+                    Some(post_select_display_stages(
+                        &self.state.session.played_stages,
+                        &self.state.session.course_individual_stage_indices,
+                        show_course_individual_scores,
+                    ))
+                } else {
+                    None
+                };
+                let post_select_banner_paths: SmallVec<[&Path; 8]> = post_select_stages
+                    .iter()
+                    .flat_map(|stages| stages.iter())
+                    .filter_map(|stage| stage.song.banner_path.as_deref())
+                    .collect();
+                match current_screen {
+                    CurrentScreen::SelectMusic => {
+                        let state = &screens.select_music_state;
+                        let desired_path = if show_select_music_video_banners
+                            && show_select_music_banners
+                            && state.banner_high_quality_requested
+                        {
+                            match state.entries.get(state.selected_index) {
+                                Some(select_music::MusicWheelEntry::Song(song)) => {
+                                    song.banner_path.as_deref()
+                                }
+                                Some(select_music::MusicWheelEntry::PackHeader {
+                                    banner_path,
+                                    ..
+                                }) => banner_path.as_deref(),
+                                _ => None,
                             }
-                            Some(select_music::MusicWheelEntry::PackHeader {
-                                banner_path, ..
-                            }) => banner_path.as_deref(),
-                            _ => None,
-                        }
-                    } else {
-                        None
-                    };
-                    self.dynamic_media.sync_active_banner_video(
-                        &mut self.asset_manager,
-                        backend,
-                        desired_path,
-                    );
-                }
-                CurrentScreen::SelectCourse => {
-                    let state = &screens.select_course_state;
-                    let desired_path = if show_select_music_video_banners
-                        && show_select_music_banners
-                        && state.banner_high_quality_requested
-                    {
-                        match state.entries.get(state.selected_index) {
-                            Some(select_music::MusicWheelEntry::Song(song)) => {
-                                song.banner_path.as_deref()
+                        } else {
+                            None
+                        };
+                        self.dynamic_media.sync_active_banner_video(
+                            &mut self.asset_manager,
+                            backend,
+                            desired_path,
+                        );
+                    }
+                    CurrentScreen::SelectCourse => {
+                        let state = &screens.select_course_state;
+                        let desired_path = if show_select_music_video_banners
+                            && show_select_music_banners
+                            && state.banner_high_quality_requested
+                        {
+                            match state.entries.get(state.selected_index) {
+                                Some(select_music::MusicWheelEntry::Song(song)) => {
+                                    song.banner_path.as_deref()
+                                }
+                                Some(select_music::MusicWheelEntry::PackHeader {
+                                    banner_path,
+                                    ..
+                                }) => banner_path.as_deref(),
+                                _ => None,
                             }
-                            Some(select_music::MusicWheelEntry::PackHeader {
-                                banner_path, ..
-                            }) => banner_path.as_deref(),
-                            _ => None,
-                        }
-                    } else {
-                        None
-                    };
-                    self.dynamic_media.sync_active_banner_video(
-                        &mut self.asset_manager,
-                        backend,
-                        desired_path,
-                    );
-                }
-                CurrentScreen::Evaluation => {
-                    let desired_path = if show_select_music_video_banners {
-                        screens
-                            .evaluation_state
-                            .score_info
-                            .iter()
-                            .flatten()
-                            .find_map(|score| score.song.banner_path.as_deref())
-                    } else {
-                        None
-                    };
-                    self.dynamic_media.sync_active_banner_video(
-                        &mut self.asset_manager,
-                        backend,
-                        desired_path,
-                    );
-                }
-                CurrentScreen::EvaluationSummary | CurrentScreen::Initials => {
-                    self.dynamic_media.sync_active_banner_videos(
-                        &mut self.asset_manager,
-                        backend,
-                        &post_select_banner_paths,
-                    );
-                }
-                _ => {
-                    self.dynamic_media.sync_active_banner_video(
-                        &mut self.asset_manager,
-                        backend,
-                        None,
-                    );
+                        } else {
+                            None
+                        };
+                        self.dynamic_media.sync_active_banner_video(
+                            &mut self.asset_manager,
+                            backend,
+                            desired_path,
+                        );
+                    }
+                    CurrentScreen::Evaluation => {
+                        let desired_path = if show_select_music_video_banners {
+                            screens
+                                .evaluation_state
+                                .score_info
+                                .iter()
+                                .flatten()
+                                .find_map(|score| score.song.banner_path.as_deref())
+                        } else {
+                            None
+                        };
+                        self.dynamic_media.sync_active_banner_video(
+                            &mut self.asset_manager,
+                            backend,
+                            desired_path,
+                        );
+                    }
+                    CurrentScreen::EvaluationSummary | CurrentScreen::Initials => {
+                        self.dynamic_media.sync_active_banner_videos(
+                            &mut self.asset_manager,
+                            backend,
+                            &post_select_banner_paths,
+                        );
+                    }
+                    _ => {
+                        self.dynamic_media.sync_active_banner_video(
+                            &mut self.asset_manager,
+                            backend,
+                            None,
+                        );
+                    }
                 }
             }
             self.dynamic_media.queue_video_frames(
@@ -2414,11 +2476,12 @@ impl App {
         }
         let fonts = self.asset_manager.fonts();
         let build_screen_started = Instant::now();
+        let collect_text_layout_stats = stutter_diag_enabled();
         let (mut screen, text_layout) =
             if self.state.screens.current_screen == CurrentScreen::Gameplay {
                 let text_layout_cache = &mut self.gameplay_text_layout_cache;
                 let compose_scratch = &mut self.gameplay_compose_scratch;
-                text_layout_cache.begin_frame_stats();
+                text_layout_cache.begin_frame_stats(collect_text_layout_stats);
                 let screen = compose::build_screen_cached_with_scratch_and_texture_context(
                     &actors,
                     clear_color,
@@ -2433,7 +2496,7 @@ impl App {
             } else {
                 let text_layout_cache = &mut self.ui_text_layout_cache;
                 let compose_scratch = &mut self.ui_compose_scratch;
-                text_layout_cache.begin_frame_stats();
+                text_layout_cache.begin_frame_stats(collect_text_layout_stats);
                 let screen = compose::build_screen_cached_with_scratch_and_texture_context(
                     &actors,
                     clear_color,
@@ -2485,12 +2548,12 @@ impl App {
                     return;
                 }
             }
-            if self.state.screens.current_screen == CurrentScreen::Gameplay {
-                self.gameplay_compose_scratch
-                    .recycle_render_list(&mut screen);
-            } else {
-                self.ui_compose_scratch.recycle_render_list(&mut screen);
-            }
+        }
+        if self.state.screens.current_screen == CurrentScreen::Gameplay {
+            self.gameplay_compose_scratch
+                .recycle_render_list(&mut screen);
+        } else {
+            self.ui_compose_scratch.recycle_render_list(&mut screen);
         }
         if capture_screenshot {
             self.capture_pending_screenshot(redraw_started);
@@ -2808,8 +2871,8 @@ impl App {
                     let plan = profile_selection_plan(
                         &profile_data,
                         ProfileSelectionContext {
-                            play_style: profile::get_session_play_style(),
-                            active_side: profile::get_session_player_side(),
+                            play_style: session.play_style,
+                            active_side: session.active_side,
                             fast_switch,
                             current_screen: self.state.screens.current_screen,
                             show_groovestats_login,
@@ -3418,8 +3481,9 @@ impl App {
         active_color_index: i32,
         return_screen: CurrentScreen,
     ) -> bool {
-        let play_style = profile::get_session_play_style();
-        let player_side = profile::get_session_player_side();
+        let session = profile::get_session_snapshot();
+        let play_style = session.play_style;
+        let player_side = session.player_side;
         let target_chart_type = play_style.chart_type();
         let fallback_steps = self.state.session.preferred_difficulty_index;
         let chart_steps_index = restart_chart_steps(
@@ -3737,11 +3801,12 @@ impl App {
         eval_state: &evaluation::State,
     ) -> Option<stage_stats::StageSummary> {
         let in_course_run = self.state.session.course_run.is_some();
+        let session = profile::get_session_snapshot();
         let stage_summary = stage_summary_from_score_info(
             &eval_state.score_info,
             eval_state.stage_duration_seconds,
-            profile::get_session_play_style(),
-            profile::get_session_player_side(),
+            session.play_style,
+            session.player_side,
         );
         if let Some(stage) = stage_summary.as_ref() {
             for side in [profile_data::PlayerSide::P1, profile_data::PlayerSide::P2] {
@@ -3860,11 +3925,22 @@ impl App {
             stage_stats::total_stage_duration_seconds(&self.state.session.played_stages);
     }
 
-    fn post_select_display_stages(&self) -> Cow<'_, [stage_stats::StageSummary]> {
+    fn post_select_display_stages(
+        &self,
+        show_course_individual_scores: bool,
+    ) -> Cow<'_, [stage_stats::StageSummary]> {
         post_select_display_stages(
             &self.state.session.played_stages,
             &self.state.session.course_individual_stage_indices,
-            config::get().show_course_individual_scores,
+            show_course_individual_scores,
+        )
+    }
+
+    fn post_select_display_stage_count(&self, show_course_individual_scores: bool) -> usize {
+        post_select_display_stage_count(
+            self.state.session.played_stages.len(),
+            &self.state.session.course_individual_stage_indices,
+            show_course_individual_scores,
         )
     }
 
@@ -3884,13 +3960,14 @@ impl App {
     }
 
     fn apply_select_music_join(&mut self, join_side: profile_data::PlayerSide) {
-        let play_style = profile::get_session_play_style();
+        let session = profile::get_session_snapshot();
+        let play_style = session.play_style;
         let p1_pref =
             profile::preferred_difficulty_for_side(profile_data::PlayerSide::P1, play_style);
         let p2_pref =
             profile::preferred_difficulty_for_side(profile_data::PlayerSide::P2, play_style);
 
-        let side = profile::get_session_player_side();
+        let side = session.player_side;
         let sm = &mut self.state.screens.select_music_state;
         let plan = select_music_join_plan(SelectMusicJoinContext {
             active_side: side,
@@ -3950,9 +4027,10 @@ impl App {
             | CurrentScreen::SelectPlayMode => true,
             _ => false,
         };
+        let session = profile::get_session_snapshot();
         let joined = [
-            profile::is_session_side_joined(profile_data::PlayerSide::P1),
-            profile::is_session_side_joined(profile_data::PlayerSide::P2),
+            session.side_joined(profile_data::PlayerSide::P1),
+            session.side_joined(profile_data::PlayerSide::P2),
         ];
         let Some(join_side) = late_join_side(
             ev.pressed,
@@ -3960,7 +4038,7 @@ impl App {
             LateJoinContext {
                 screen,
                 screen_allows_join,
-                play_style: profile::get_session_play_style(),
+                play_style: session.play_style,
                 joined,
             },
         ) else {
@@ -4059,14 +4137,13 @@ impl App {
             .and_then(|ix| state.background_changes.get(ix))
     }
 
-    fn sync_gameplay_background(&mut self) {
+    fn sync_gameplay_background(&mut self, show_video_backgrounds: bool) {
         if !matches!(
             self.state.screens.current_screen,
             CurrentScreen::Gameplay | CurrentScreen::Practice
         ) {
             return;
         }
-        let show_video_backgrounds = config::get().show_video_backgrounds;
         let (desired_path, desired_key, gameplay_time_sec, background_rate) = {
             let gs = match self.state.screens.current_screen {
                 CurrentScreen::Gameplay => self.state.screens.gameplay_state.as_mut(),
@@ -4178,7 +4255,7 @@ impl App {
         }
     }
 
-    fn sync_theme_background_video(&mut self, ui_time_sec: f32) {
+    fn sync_theme_background_video(&mut self, ui_time_sec: f32, config: &config::Config) {
         if matches!(
             self.state.screens.current_screen,
             CurrentScreen::Gameplay | CurrentScreen::Practice
@@ -4187,8 +4264,7 @@ impl App {
             return;
         }
 
-        let cfg = config::get();
-        let path = (cfg.visual_style.is_srpg() && cfg.show_video_backgrounds)
+        let path = (config.visual_style.is_srpg() && config.show_video_backgrounds)
             .then(visual_styles::shared_background_video_asset_path)
             .flatten()
             .map(|path| dirs::app_dirs().resolve_asset_path(path));
@@ -4203,7 +4279,7 @@ impl App {
             backend,
             path,
             ui_time_sec,
-            cfg.show_video_backgrounds,
+            config.show_video_backgrounds,
         );
         let srpg_key = if key == "__black" { None } else { Some(key) };
         screens::components::shared::visual_style_bg::set_srpg_background_key(srpg_key);
@@ -4296,7 +4372,11 @@ impl App {
         ));
     }
 
-    fn get_current_actors(&mut self, arrow_effect_time_s: f32) -> (Vec<Actor>, [f32; 4]) {
+    fn get_current_actors(
+        &mut self,
+        arrow_effect_time_s: f32,
+        config: &config::Config,
+    ) -> (Vec<Actor>, [f32; 4]) {
         const CLEAR: [f32; 4] = [0.03, 0.03, 0.03, 1.0];
         let mut screen_alpha_multiplier = 1.0;
 
@@ -4492,7 +4572,7 @@ impl App {
                 );
             }
             CurrentScreen::EvaluationSummary => {
-                let stages = self.post_select_display_stages();
+                let stages = self.post_select_display_stages(config.show_course_individual_scores);
                 evaluation_summary::push_actors(
                     &mut actors,
                     &self.state.screens.evaluation_summary_state,
@@ -4501,7 +4581,7 @@ impl App {
                 );
             }
             CurrentScreen::Initials => {
-                let stages = self.post_select_display_stages();
+                let stages = self.post_select_display_stages(config.show_course_individual_scores);
                 initials::push_actors(
                     &mut actors,
                     &self.state.screens.initials_state,
@@ -4541,11 +4621,10 @@ impl App {
         // Bottom-corner build watermark so videos / screenshots always
         // carry the running version. Default on; user-toggleable via
         // Options, with a separate Left/Right side preference.
-        let cfg = config::get();
-        if cfg.show_version_overlay {
+        if config.show_version_overlay {
             actors.extend(screens::components::shared::version_overlay::build(
-                cfg.version_overlay_side,
-                cfg.log_level,
+                config.version_overlay_side,
+                config.log_level,
                 env!("CARGO_PKG_VERSION"),
                 option_env!("DEADSYNC_BUILD_HASH"),
             ));
@@ -5304,6 +5383,7 @@ impl App {
         target: CurrentScreen,
     ) -> Vec<Command> {
         let player_options = if prev == CurrentScreen::PlayerOptions {
+            let session = profile::get_session_snapshot();
             self.state
                 .screens
                 .player_options_state
@@ -5312,8 +5392,8 @@ impl App {
                     speed_mod: &state.speed_mod,
                     chart_difficulty_index: state.chart_difficulty_index,
                     music_rate: state.music_rate,
-                    play_style: profile::get_session_play_style(),
-                    player_side: profile::get_session_player_side(),
+                    play_style: session.play_style,
+                    player_side: session.player_side,
                 })
         } else {
             None
@@ -5390,8 +5470,9 @@ impl App {
         profiles: &[profile_data::Profile; profile_data::PLAYER_SLOTS],
     ) {
         self.state.session.combo_carry = profile::combo_carry_for_profiles(profiles);
-        let play_style = profile::get_session_play_style();
-        let active_side = profile::get_session_player_side();
+        let session = profile::get_session_snapshot();
+        let play_style = session.play_style;
+        let active_side = session.player_side;
         let active_ix = profile_data::player_side_index(active_side);
         self.state.session.preferred_difficulty_index =
             profile::preferred_difficulty_for_profile(&profiles[active_ix], play_style);
@@ -5477,23 +5558,23 @@ impl App {
                 let p2 = self.state.screens.menu_state.started_by_p2;
                 select_profile::set_joined(&mut self.state.screens.select_profile_state, !p2, p2);
             } else if prev == CurrentScreen::SelectMusic {
-                let p1_joined = profile::is_session_side_joined(profile_data::PlayerSide::P1);
-                let p2_joined = profile::is_session_side_joined(profile_data::PlayerSide::P2);
+                let session = profile::get_session_snapshot();
                 select_profile::set_joined(
                     &mut self.state.screens.select_profile_state,
-                    p1_joined,
-                    p2_joined,
+                    session.side_joined(profile_data::PlayerSide::P1),
+                    session.side_joined(profile_data::PlayerSide::P2),
                 );
             }
         } else if target == CurrentScreen::SelectStyle {
             let current_color_index = self.state.screens.select_style_state.active_color_index;
             self.state.screens.select_style_state = select_style::init();
             self.state.screens.select_style_state.active_color_index = current_color_index;
-            let p1_joined = profile::is_session_side_joined(profile_data::PlayerSide::P1);
-            let p2_joined = profile::is_session_side_joined(profile_data::PlayerSide::P2);
+            let session = profile::get_session_snapshot();
             select_style::set_selected_index(
                 &mut self.state.screens.select_style_state,
-                if p1_joined && p2_joined {
+                if session.side_joined(profile_data::PlayerSide::P1)
+                    && session.side_joined(profile_data::PlayerSide::P2)
+                {
                     1 // "2 Players"
                 } else {
                     0 // "1 Player"
@@ -5726,8 +5807,9 @@ impl App {
                     })
                     .flatten();
                 let song_arc = po_state.song.clone();
-                let play_style = profile::get_session_play_style();
-                let player_side = profile::get_session_player_side();
+                let session = profile::get_session_snapshot();
+                let play_style = session.play_style;
+                let player_side = session.player_side;
                 let chart_plan = gameplay_chart_entry_plan(
                     &song_arc,
                     po_state.chart_steps_index,
@@ -5894,6 +5976,7 @@ impl App {
                     &self.asset_manager,
                     &self.state.shell.metrics,
                     &mut self.gameplay_text_layout_cache,
+                    &mut self.gameplay_compose_scratch,
                     &mut gs,
                 );
                 let text_prewarm_ms = text_prewarm_started.elapsed().as_secs_f64() * 1000.0;
@@ -5984,8 +6067,9 @@ impl App {
             });
             if let Some(mut po_state) = self.state.screens.player_options_state.take() {
                 let song_arc = po_state.song.clone();
-                let play_style = profile::get_session_play_style();
-                let player_side = profile::get_session_player_side();
+                let session = profile::get_session_snapshot();
+                let play_style = session.play_style;
+                let player_side = session.player_side;
                 let chart_plan = gameplay_chart_entry_plan(
                     &song_arc,
                     po_state.chart_steps_index,
@@ -6270,6 +6354,7 @@ impl App {
                     &self.asset_manager,
                     &self.state.shell.metrics,
                     &mut self.gameplay_text_layout_cache,
+                    &mut self.gameplay_compose_scratch,
                     &mut gs,
                 );
                 let text_prewarm_ms = text_prewarm_started.elapsed().as_secs_f64() * 1000.0;
@@ -6398,7 +6483,9 @@ impl App {
                 .evaluation_summary_state
                 .active_color_index = color_idx;
 
-            let display_stages = self.post_select_display_stages().into_owned();
+            let display_stages = self
+                .post_select_display_stages(config::get().show_course_individual_scores)
+                .into_owned();
             if let Some(backend) = self.backend.as_mut() {
                 for stage in display_stages.iter() {
                     if let Some(path) = stage.song.banner_path.as_ref() {
@@ -6427,7 +6514,9 @@ impl App {
             };
             self.state.screens.initials_state = initials::init();
             self.state.screens.initials_state.active_color_index = color_idx;
-            let display_stages = self.post_select_display_stages().into_owned();
+            let display_stages = self
+                .post_select_display_stages(config::get().show_course_individual_scores)
+                .into_owned();
             initials::set_highscore_lists(&mut self.state.screens.initials_state, &display_stages);
 
             if let Some(backend) = self.backend.as_mut() {
@@ -6464,6 +6553,7 @@ impl App {
         if target == CurrentScreen::SelectMusic {
             self.state.session.clear_course_runtime();
             self.begin_play_session();
+            let profile_session = profile::get_session_snapshot();
 
             match prev {
                 CurrentScreen::PlayerOptions => {
@@ -6474,8 +6564,7 @@ impl App {
                         .preferred_difficulty_index = preferred;
 
                     if let Some(po) = self.state.screens.player_options_state.as_ref() {
-                        let play_style = profile::get_session_play_style();
-                        match play_style {
+                        match profile_session.play_style {
                             profile_data::PlayStyle::Versus => {
                                 self.state.screens.select_music_state.selected_steps_index =
                                     po.chart_steps_index[0];
@@ -6493,8 +6582,8 @@ impl App {
                                     .p2_preferred_difficulty_index = po.chart_difficulty_index[1];
                             }
                             profile_data::PlayStyle::Single | profile_data::PlayStyle::Double => {
-                                let side = profile::get_session_player_side();
-                                let idx = profile_data::player_side_index(side);
+                                let idx =
+                                    profile_data::player_side_index(profile_session.player_side);
                                 self.state.screens.select_music_state.selected_steps_index =
                                     po.chart_steps_index[idx];
                                 self.state
@@ -6515,7 +6604,7 @@ impl App {
                         .entries
                         .get(self.state.screens.select_music_state.selected_index)
                     {
-                        let chart_type = profile::get_session_play_style().chart_type();
+                        let chart_type = profile_session.play_style.chart_type();
                         if song
                             .chart_for_steps_index(chart_type, desired_steps_index)
                             .is_none()
@@ -6571,7 +6660,7 @@ impl App {
 
                     let p2_pref = profile::preferred_difficulty_for_side(
                         profile_data::PlayerSide::P2,
-                        profile::get_session_play_style(),
+                        profile_session.play_style,
                     );
                     self.state
                         .screens
@@ -6632,7 +6721,7 @@ impl App {
                 .get(self.state.screens.select_music_state.selected_index)
             {
                 Some(select_music::MusicWheelEntry::Song(song)) => {
-                    let chart_type = profile::get_session_play_style().chart_type();
+                    let chart_type = profile_session.play_style.chart_type();
                     song.chart_for_steps_index(
                         chart_type,
                         self.state.screens.select_music_state.selected_steps_index,
@@ -6652,7 +6741,7 @@ impl App {
                 chart_opt: chart_to_graph,
             });
 
-            if profile::get_session_play_style() == profile_data::PlayStyle::Versus {
+            if profile_session.play_style == profile_data::PlayStyle::Versus {
                 let chart_to_graph_p2 = match self
                     .state
                     .screens
@@ -6661,7 +6750,7 @@ impl App {
                     .get(self.state.screens.select_music_state.selected_index)
                 {
                     Some(select_music::MusicWheelEntry::Song(song)) => {
-                        let chart_type = profile::get_session_play_style().chart_type();
+                        let chart_type = profile_session.play_style.chart_type();
                         song.chart_for_steps_index(
                             chart_type,
                             self.state

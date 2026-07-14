@@ -250,7 +250,8 @@ impl App {
                 screens::evaluation::handle_input(&mut self.state.screens.evaluation_state, &ev)
             }
             CurrentScreen::EvaluationSummary => {
-                let num_stages = self.post_select_display_stages().len();
+                let num_stages = self
+                    .post_select_display_stage_count(config::get().show_course_individual_scores);
                 screens::evaluation_summary::handle_input(
                     &mut self.state.screens.evaluation_summary_state,
                     num_stages,

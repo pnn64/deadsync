@@ -90,10 +90,11 @@ pub fn persist_gameplay_combo_carry<EvaluationPage>(
     autoplay_used: bool,
     player_combos: [Option<u32>; MAX_PLAYERS],
 ) {
+    let profile_session = profile::get_session_snapshot();
     let updates = gameplay_combo_carry_updates(GameplayComboCarryContext {
         autoplay_used,
-        play_style: profile::get_session_play_style(),
-        active_side: profile::get_session_player_side(),
+        play_style: profile_session.play_style,
+        active_side: profile_session.player_side,
         player_combos,
     });
     for update in updates.into_iter().flatten() {
@@ -113,14 +114,14 @@ pub const fn course_last_played_sides(
 }
 
 pub fn record_last_played_course(course_path: &Path, difficulty_name: &str) {
-    let play_style = profile::get_session_play_style();
-    for side in course_last_played_sides(play_style, profile::get_session_player_side())
+    let session = profile::get_session_snapshot();
+    for side in course_last_played_sides(session.play_style, session.player_side)
         .into_iter()
         .flatten()
     {
         profile::update_last_played_course_for_side(
             side,
-            play_style,
+            session.play_style,
             course_path,
             Some(difficulty_name),
         );

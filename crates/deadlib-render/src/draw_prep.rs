@@ -4,11 +4,9 @@ use crate::{
     TexturedMeshVertices,
 };
 use glam::Vec4 as Vector4;
-use std::{collections::HashMap, hash::BuildHasherDefault};
-use twox_hash::XxHash64;
+use std::collections::HashMap;
 
-type TMeshHasher = BuildHasherDefault<XxHash64>;
-type TMeshGeomMap = HashMap<TMeshGeomKey, FrameTMeshGeom, TMeshHasher>;
+type TMeshGeomMap = HashMap<TMeshGeomKey, FrameTMeshGeom, rustc_hash::FxBuildHasher>;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct SpriteRun {
@@ -87,12 +85,6 @@ pub struct DrawScratch {
     cached_tmesh: FastU64Map<bool>,
 }
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
-pub struct PrepareStats {
-    pub dynamic_upload_vertices: u64,
-    pub cached_upload_vertices: u64,
-}
-
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 struct TMeshGeomKey {
     ptr: usize,
@@ -119,11 +111,8 @@ impl DrawScratch {
             tmesh_vertices: Vec::with_capacity(tmesh_vertices),
             tmesh_instances: Vec::with_capacity(tmesh_instances),
             ops: Vec::with_capacity(ops),
-            shared_tmesh_geom: HashMap::with_capacity_and_hasher(
-                ops,
-                BuildHasherDefault::default(),
-            ),
-            cached_tmesh: FastU64Map::with_capacity_and_hasher(ops, BuildHasherDefault::default()),
+            shared_tmesh_geom: HashMap::with_capacity_and_hasher(ops, Default::default()),
+            cached_tmesh: FastU64Map::with_capacity_and_hasher(ops, Default::default()),
         }
     }
 }
@@ -132,13 +121,9 @@ impl DrawScratch {
 fn transient_tmesh_source(
     scratch: &mut DrawScratch,
     vertices: &[TexturedMeshVertex],
-    stats: &mut PrepareStats,
 ) -> TexturedMeshSource {
     let vertex_start = scratch.tmesh_vertices.len() as u32;
     scratch.tmesh_vertices.extend_from_slice(vertices);
-    stats.dynamic_upload_vertices = stats
-        .dynamic_upload_vertices
-        .saturating_add(vertices.len() as u64);
     let vertex_count = vertices.len() as u32;
     TexturedMeshSource::Transient {
         vertex_start,
@@ -151,7 +136,6 @@ fn transient_tmesh_source(
 fn shared_tmesh_source(
     scratch: &mut DrawScratch,
     vertices: &[TexturedMeshVertex],
-    stats: &mut PrepareStats,
     shared_tmesh_geom_cleared: &mut bool,
 ) -> TexturedMeshSource {
     if !*shared_tmesh_geom_cleared {
@@ -173,9 +157,6 @@ fn shared_tmesh_source(
 
     let vertex_start = scratch.tmesh_vertices.len() as u32;
     scratch.tmesh_vertices.extend_from_slice(vertices);
-    stats.dynamic_upload_vertices = stats
-        .dynamic_upload_vertices
-        .saturating_add(vertices.len() as u64);
     let vertex_count = vertices.len() as u32;
     let geom_run_key = ((vertex_start as u64) << 32) | u64::from(vertex_count);
     scratch.shared_tmesh_geom.insert(
@@ -197,8 +178,7 @@ pub fn prepare<EnsureCached>(
     render_list: &RenderList,
     scratch: &mut DrawScratch,
     mut ensure_cached_tmesh: EnsureCached,
-) -> PrepareStats
-where
+) where
     EnsureCached: FnMut(TMeshCacheKey, &[TexturedMeshVertex]) -> bool,
 {
     let objects_len = render_list.objects.len();
@@ -213,7 +193,6 @@ where
     }
     debug_assert!(scratch.ops.capacity() >= objects_len);
 
-    let mut stats = PrepareStats::default();
     let mut shared_tmesh_geom_cleared = false;
     let mut cached_tmesh_cleared = false;
     let mut i = 0usize;
@@ -333,11 +312,6 @@ where
                     } else {
                         let cached = ensure_cached_tmesh(*geom_cache_key, vertices.as_ref());
                         scratch.cached_tmesh.insert(*geom_cache_key, cached);
-                        if cached {
-                            stats.cached_upload_vertices = stats
-                                .cached_upload_vertices
-                                .saturating_add(vertices.len() as u64);
-                        }
                         cached
                     };
                     if cached {
@@ -348,12 +322,11 @@ where
                     } else {
                         match vertices {
                             TexturedMeshVertices::Transient(vertices) => {
-                                transient_tmesh_source(scratch, vertices.as_slice(), &mut stats)
+                                transient_tmesh_source(scratch, vertices.as_slice())
                             }
                             TexturedMeshVertices::Shared(vertices) => shared_tmesh_source(
                                 scratch,
                                 vertices.as_ref(),
-                                &mut stats,
                                 &mut shared_tmesh_geom_cleared,
                             ),
                         }
@@ -361,12 +334,11 @@ where
                 } else {
                     match vertices {
                         TexturedMeshVertices::Transient(vertices) => {
-                            transient_tmesh_source(scratch, vertices.as_slice(), &mut stats)
+                            transient_tmesh_source(scratch, vertices.as_slice())
                         }
                         TexturedMeshVertices::Shared(vertices) => shared_tmesh_source(
                             scratch,
                             vertices.as_ref(),
-                            &mut stats,
                             &mut shared_tmesh_geom_cleared,
                         ),
                     }
@@ -401,8 +373,6 @@ where
             }
         }
     }
-
-    stats
 }
 
 #[cfg(test)]

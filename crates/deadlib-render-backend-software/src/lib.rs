@@ -5,16 +5,8 @@ use deadlib_render::{
 use glam::{Mat4 as Matrix4, Vec4 as Vector4};
 use image::RgbaImage;
 use log::info;
-use std::{
-    error::Error,
-    num::NonZeroU32,
-    sync::{
-        Arc,
-        atomic::{AtomicU32, AtomicUsize, Ordering},
-    },
-    thread,
-    time::Instant,
-};
+use rayon::prelude::*;
+use std::{error::Error, num::NonZeroU32, sync::Arc, time::Instant};
 use winit::{dpi::PhysicalSize, window::Window};
 
 const SOFTWARE_ROW_CHUNK: usize = 32;
@@ -35,8 +27,16 @@ pub struct State {
     _context: softbuffer::Context<Arc<Window>>,
     surface: softbuffer::Surface<Arc<Window>, Arc<Window>>,
     window_size: PhysicalSize<u32>,
+    surface_resize_pending: bool,
     projection: Matrix4,
     thread_hint: Option<usize>,
+    available_threads: usize,
+    worker_pool: Option<WorkerPool>,
+}
+
+struct WorkerPool {
+    threads: usize,
+    pool: rayon::ThreadPool,
 }
 
 pub fn init(window: Arc<Window>, _vsync_enabled: bool) -> Result<State, Box<dyn Error>> {
@@ -47,18 +47,47 @@ pub fn init(window: Arc<Window>, _vsync_enabled: bool) -> Result<State, Box<dyn 
 
     let context = softbuffer::Context::new(window.clone())?;
     let surface = softbuffer::Surface::new(&context, window)?;
+    let available_threads = std::thread::available_parallelism()
+        .map(std::num::NonZero::get)
+        .unwrap_or(1)
+        .max(1);
 
     Ok(State {
         _context: context,
         surface,
         window_size,
+        surface_resize_pending: true,
         projection,
         thread_hint: None,
+        available_threads,
+        worker_pool: None,
     })
 }
 
 pub const fn set_thread_hint(state: &mut State, threads: Option<usize>) {
     state.thread_hint = threads;
+}
+
+fn ensure_worker_pool(state: &mut State, threads: usize) -> Result<(), Box<dyn Error>> {
+    if threads <= 1 {
+        state.worker_pool = None;
+        return Ok(());
+    }
+    if state
+        .worker_pool
+        .as_ref()
+        .is_some_and(|pool| pool.threads == threads)
+    {
+        return Ok(());
+    }
+    state.worker_pool = Some(WorkerPool {
+        threads,
+        pool: rayon::ThreadPoolBuilder::new()
+            .num_threads(threads)
+            .thread_name(|index| format!("software-render-{index}"))
+            .build()?,
+    });
+    Ok(())
 }
 
 #[inline(always)]
@@ -103,11 +132,26 @@ pub fn draw(
         return Ok(DrawStats::default());
     }
 
-    let resize_w = NonZeroU32::new(width).unwrap();
-    let resize_h = NonZeroU32::new(height).unwrap();
+    let objects = render_list.objects.as_slice();
+    let threads = match state.thread_hint {
+        Some(threads) if threads >= 1 => threads.min(state.available_threads),
+        _ => state.available_threads,
+    };
+    let use_parallel = threads > 1 && h >= SOFTWARE_ROW_CHUNK * 2 && !objects.is_empty();
+    ensure_worker_pool(state, threads)?;
 
-    state.surface.resize(resize_w, resize_h)?;
+    if state.surface_resize_pending {
+        let resize_w = NonZeroU32::new(width).unwrap();
+        let resize_h = NonZeroU32::new(height).unwrap();
+        state.surface.resize(resize_w, resize_h)?;
+        state.surface_resize_pending = false;
+    }
 
+    let worker_pool = if use_parallel {
+        state.worker_pool.as_ref().map(|worker| &worker.pool)
+    } else {
+        None
+    };
     let mut buffer = state.surface.buffer_mut()?;
     let clear = pack_rgba(render_list.clear_color);
     for pixel in buffer.iter_mut() {
@@ -116,96 +160,51 @@ pub fn draw(
 
     let default_proj = state.projection;
     let cameras = render_list.cameras.as_slice();
-    let objects = render_list.objects.as_slice();
     let sprite_instances = render_list.sprite_instances.as_slice();
-    let vertex_counter = AtomicU32::new(0);
-
-    let threads_auto = thread::available_parallelism()
-        .map(std::num::NonZero::get)
-        .unwrap_or(1)
-        .max(1);
-
-    let threads = match state.thread_hint {
-        Some(t) if t >= 1 => t.min(threads_auto),
-        _ => threads_auto,
-    };
-
-    let use_parallel = threads > 1 && h >= SOFTWARE_ROW_CHUNK * 2 && !objects.is_empty();
-
-    if use_parallel {
-        let next_row = AtomicUsize::new(0);
-        let buffer_addr = buffer.as_mut_ptr() as usize;
-        let buffer_len = buffer.len();
-
-        thread::scope(|scope| {
-            for _worker in 0..threads {
-                let width = w;
-                let height = h;
-                let counter = &vertex_counter;
-                let next_row = &next_row;
-
-                scope.spawn(move || {
-                    let mut local_vertices: u32 = 0;
-
-                    loop {
-                        let y_start = next_row.fetch_add(SOFTWARE_ROW_CHUNK, Ordering::Relaxed);
-                        if y_start >= height {
-                            break;
-                        }
-                        let y_end = (y_start + SOFTWARE_ROW_CHUNK).min(height);
-                        let offset = y_start * width;
-                        let len = (y_end - y_start) * width;
-                        debug_assert!(offset + len <= buffer_len);
-                        // SAFETY: each worker claims a unique row range from `next_row`,
-                        // so these slices never overlap. `buffer` lives until the scoped
-                        // threads join, and `offset + len` stays within bounds.
-                        let stripe = unsafe {
-                            std::slice::from_raw_parts_mut(
-                                (buffer_addr as *mut u32).add(offset),
-                                len,
-                            )
-                        };
-                        local_vertices = local_vertices.saturating_add(draw_rows(
-                            objects,
-                            sprite_instances,
-                            cameras,
-                            default_proj,
-                            textures,
-                            width,
-                            height,
-                            y_start,
-                            y_end,
-                            stripe,
-                        ));
-                    }
-
-                    counter.fetch_add(local_vertices, Ordering::Relaxed);
-                });
-            }
-        });
+    let vertices = if let Some(worker_pool) = worker_pool {
+        let pixels: &mut [u32] = &mut buffer;
+        worker_pool.install(|| {
+            pixels
+                .par_chunks_mut(w * SOFTWARE_ROW_CHUNK)
+                .enumerate()
+                .map(|(chunk_index, stripe)| {
+                    let y_start = chunk_index * SOFTWARE_ROW_CHUNK;
+                    let y_end = y_start + stripe.len() / w;
+                    draw_rows(
+                        objects,
+                        sprite_instances,
+                        cameras,
+                        default_proj,
+                        textures,
+                        w,
+                        h,
+                        y_start,
+                        y_end,
+                        stripe,
+                    )
+                })
+                .reduce(|| 0, u32::saturating_add)
+        })
     } else {
-        vertex_counter.store(
-            draw_rows(
-                objects,
-                sprite_instances,
-                cameras,
-                default_proj,
-                textures,
-                w,
-                h,
-                0,
-                h,
-                &mut buffer,
-            ),
-            Ordering::Relaxed,
-        );
-    }
+        draw_rows(
+            objects,
+            sprite_instances,
+            cameras,
+            default_proj,
+            textures,
+            w,
+            h,
+            0,
+            h,
+            &mut buffer,
+        )
+    };
 
     let present_started = Instant::now();
     buffer.present()?;
 
     Ok(DrawStats {
-        vertices: vertex_counter.load(Ordering::Relaxed),
+        vertices,
         present_us: elapsed_us_since(present_started),
         ..DrawStats::default()
     })
@@ -309,7 +308,9 @@ fn draw_rows(
 }
 
 pub fn resize(state: &mut State, width: u32, height: u32) {
-    state.window_size = PhysicalSize::new(width, height);
+    let window_size = PhysicalSize::new(width, height);
+    state.surface_resize_pending |= state.window_size != window_size;
+    state.window_size = window_size;
     if width == 0 || height == 0 {
         return;
     }

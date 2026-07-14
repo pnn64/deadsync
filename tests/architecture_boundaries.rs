@@ -2167,6 +2167,42 @@ fn simply_love_test_lights_uses_shell_prepared_state() {
     let shell = fs::read_to_string(root.join("crates/deadsync-shell/src/lighting.rs"))
         .expect("shell lighting owner should be readable");
     assert!(shell.contains("pub fn lights_test_view"));
+    let smx_slots = shell
+        .split_once("fn smx_slot_for_gameplay")
+        .and_then(|(_, rest)| rest.split_once("#[cfg(test)]"))
+        .map(|(body, _)| body)
+        .expect("SMX gameplay slot mapping should be present");
+    assert!(smx_slots.contains("play_style: PlayStyle"));
+    assert!(smx_slots.contains("player_side: PlayerSide"));
+    assert!(
+        !smx_slots.contains("profile::"),
+        "SMX gameplay slot mapping should use its explicit session inputs"
+    );
+
+    let app = fs::read_to_string(root.join("crates/deadsync-shell/src/app/mod.rs"))
+        .expect("shell app owner should be readable");
+    let sync_lights = app
+        .split_once("fn sync_lights")
+        .and_then(|(_, rest)| rest.split_once("fn lobby_runtime_view"))
+        .map(|(body, _)| body)
+        .expect("shell lighting frame sync should be present");
+    assert_eq!(
+        sync_lights
+            .matches("profile::get_session_snapshot()")
+            .count(),
+        1,
+        "shell lighting should share one session snapshot per frame"
+    );
+    for repeated_session_read in [
+        "profile::get_session_joined_mask()",
+        "profile::get_session_play_style()",
+        "profile::get_session_player_side()",
+    ] {
+        assert!(
+            !sync_lights.contains(repeated_session_read),
+            "shell lighting still locks session through {repeated_session_read}"
+        );
+    }
     let screen = fs::read_to_string(theme.join("src/screens/test_lights.rs"))
         .expect("test-lights screen should be readable");
     assert!(screen.contains("lights: LightsTestView"));
@@ -2301,7 +2337,7 @@ fn select_music_leaderboard_refresh_is_shell_owned() {
             && views.contains("pub scoreboxes: [ScoreboxSideView; 2]")
     );
     assert!(effects.contains("RefreshPlayerLeaderboard {"));
-    assert!(shell.contains("scores::is_gs_active_for_side"));
+    assert!(shell.contains("profile_data::runtime_scorebox_view"));
     assert!(shell.contains("SimplyLoveOnlineRequest::RefreshPlayerLeaderboard"));
     assert!(shell.contains("scores::refresh_player_leaderboards_for_side"));
 }
@@ -2347,14 +2383,30 @@ fn simply_love_scorebox_uses_shell_prepared_runtime_data() {
         .expect("shell app should be readable");
     assert!(shell.contains("fn scorebox_side_view"));
     for runtime_owner in [
-        "scores::get_cached_local_score_for_side",
-        "scores::get_cached_local_ex_score_for_side",
-        "scores::get_cached_local_hard_ex_score_for_side",
-        "scores::get_cached_itl_score_for_side",
+        "scores::get_cached_local_score_for_profile",
+        "scores::get_cached_local_ex_score_for_profile",
+        "scores::get_cached_local_hard_ex_score_for_profile",
+        "scores::get_cached_itl_score_for_profile",
         "scores::get_machine_record_local",
-        "scores::get_or_fetch_player_leaderboards_for_side",
+        "scores::get_or_fetch_player_leaderboards_for_profile",
     ] {
         assert!(shell.contains(runtime_owner));
+    }
+    let scorebox_runtime = shell
+        .split_once("fn scorebox_side_view")
+        .and_then(|(_, rest)| rest.split_once("fn prepare_music_wheel_runtime"))
+        .map(|(body, _)| body)
+        .expect("shell scorebox runtime function should be present");
+    for redundant_read in [
+        "get_cached_local_score_for_side",
+        "get_cached_local_ex_score_for_side",
+        "get_cached_local_hard_ex_score_for_side",
+        "get_cached_itl_score_for_side",
+    ] {
+        assert!(
+            !scorebox_runtime.contains(redundant_read),
+            "scorebox runtime still reacquires profile identity through {redundant_read}"
+        );
     }
 }
 
@@ -2406,7 +2458,30 @@ fn select_music_leaderboard_overlay_runtime_is_shell_prepared() {
     assert!(shell.contains("select_music::leaderboard_runtime_request"));
     assert!(shell.contains("SelectMusicLeaderboardSideView"));
     assert!(shell.contains("scores::get_machine_leaderboard_local_with_names"));
-    assert!(shell.contains("scores::get_or_fetch_player_leaderboards_for_side"));
+    assert!(shell.contains("scores::get_or_fetch_player_leaderboards_for_profile"));
+
+    let select_music_runtime = shell
+        .split_once("fn sync_select_music_runtime_view")
+        .and_then(|(_, rest)| rest.split_once("fn scorebox_side_view"))
+        .map(|(body, _)| body)
+        .expect("shell Select Music runtime function should be present");
+    for redundant_read in [
+        "profile::get_for_side",
+        "profile::is_session_side_joined",
+        "scores::is_gs_active_for_side",
+        "scores::get_or_fetch_player_leaderboards_for_side",
+    ] {
+        assert!(
+            !select_music_runtime.contains(redundant_read),
+            "Select Music profile preparation still performs redundant read {redundant_read}"
+        );
+    }
+    assert!(
+        select_music_runtime.contains("profile_data::runtime_scorebox_view")
+            && select_music_runtime
+                .contains("scores::get_or_fetch_player_leaderboards_for_profile"),
+        "Select Music must reuse one compact profile snapshot for scorebox and leaderboard work"
+    );
 }
 
 #[test]
@@ -2478,10 +2553,11 @@ fn music_wheel_runtime_data_is_shell_prepared() {
         "context.cached_local_itl_score(song)",
         "context.cached_self_ex_score(chart_hash)",
         "scores::is_itl_song_folder_unlocked_with_profile",
-        "profile::is_favorite",
-        "profile::is_pack_favorite",
-        "scores::get_or_fetch_itl_self_score_for_side",
-        "scores::get_or_fetch_itl_tournament_rank_for_side",
+        "profile_data::runtime_favorite_membership",
+        "scores::ItlWheelSideContext::for_profile",
+        "context.get_or_fetch_self_ex_score",
+        "context.get_or_fetch_tournament_rank",
+        "scores::get_cached_itl_tournament_overall_ranks_for_profile",
         ".get_or_fetch_srpg_self_score",
         "select_music::music_wheel_runtime_request",
         "select_course::music_wheel_runtime_request",
@@ -2489,6 +2565,26 @@ fn music_wheel_runtime_data_is_shell_prepared() {
         assert!(
             shell.contains(shell_owner),
             "shell must own music-wheel operation {shell_owner}"
+        );
+    }
+    let wheel_runtime = shell
+        .split_once("fn prepare_music_wheel_runtime")
+        .and_then(|(_, rest)| rest.split_once("fn prepare_select_course_score"))
+        .map(|(body, _)| body)
+        .expect("shell music-wheel runtime function should be present");
+    for repeated_profile_read in [
+        "profile::is_favorite",
+        "profile::is_pack_favorite",
+        "profile::get_session_play_style",
+        "profile::is_session_side_joined",
+        "profile::active_local_profile_id_for_side",
+        "ItlWheelSideContext::for_side",
+        "get_or_fetch_itl_self_score_for_side",
+        "get_or_fetch_itl_tournament_rank_for_side",
+    ] {
+        assert!(
+            !wheel_runtime.contains(repeated_profile_read),
+            "music-wheel runtime still performs repeated profile reads through {repeated_profile_read}"
         );
     }
 }
@@ -2537,13 +2633,30 @@ fn select_course_score_pane_is_shell_prepared() {
     for runtime_owner in [
         "fn prepare_select_course_score",
         "select_course::score_runtime_request",
-        "scores::get_cached_local_score_for_side",
+        "profile_data::runtime_scorebox_view",
+        "scores::get_cached_local_score_for_profile",
         "scores::get_machine_record_local",
         "SelectCourseRuntimeView { music_wheel, score }",
     ] {
         assert!(
             shell.contains(runtime_owner),
             "shell must own Select Course score operation {runtime_owner}"
+        );
+    }
+    let course_score_runtime = shell
+        .split_once("fn prepare_select_course_score")
+        .and_then(|(_, rest)| rest.split_once("fn sync_select_course_runtime_view"))
+        .map(|(body, _)| body)
+        .expect("shell Select Course score runtime function should be present");
+    for repeated_profile_read in [
+        "profile::get_session_play_style",
+        "profile::get_session_player_side",
+        "profile::get_for_side",
+        "get_cached_local_score_for_side",
+    ] {
+        assert!(
+            !course_score_runtime.contains(repeated_profile_read),
+            "Select Course score preparation still repeats profile state through {repeated_profile_read}"
         );
     }
 }
@@ -2762,15 +2875,14 @@ fn select_music_lobby_runtime_is_shell_owned() {
         .expect("Simply Love effects should be readable");
     assert!(
         views.contains("pub struct SimplyLoveLobbyRuntimeView")
-            && views.contains("pub snapshot: deadsync_online::lobbies::Snapshot")
+            && views.contains("pub snapshot: std::sync::Arc<deadsync_online::lobbies::Snapshot>",)
             && effects.contains("pub enum SimplyLoveLobbyRequest")
     );
 
     let shell = fs::read_to_string(root.join("crates/deadsync-shell/src/app/mod.rs"))
         .expect("shell app should be readable");
     for shell_owner in [
-        "deadsync_online::lobbies::runtime_snapshot",
-        "deadsync_online::lobbies::runtime_reconnect_status_text",
+        "deadsync_online::lobbies::runtime_view",
         "SimplyLoveOnlineRequest::Lobby(request)",
         "runtime_search_lobbies_default()",
         "runtime_create_lobby_with_password_default",
@@ -2784,6 +2896,31 @@ fn select_music_lobby_runtime_is_shell_owned() {
         assert!(
             shell.contains(shell_owner),
             "shell must own Select Music lobby operation {shell_owner}"
+        );
+    }
+
+    let online = fs::read_to_string(root.join("crates/deadsync-online/src/lobbies.rs"))
+        .expect("online lobby runtime should be readable");
+    assert!(
+        online.contains("pub fn runtime_view() -> (Arc<Snapshot>, Option<String>)")
+            && !online.contains("pub fn runtime_snapshot()")
+            && !online.contains("pub fn runtime_reconnect_status_text()"),
+        "lobby view preparation must clone the runtime snapshot only once"
+    );
+    let machine_state = online
+        .split_once("pub fn runtime_local_lobby_machine_state_value")
+        .and_then(|(_, rest)| rest.split_once("pub fn local_lobby_machine_player"))
+        .map(|(body, _)| body)
+        .expect("runtime local lobby machine-state function should be present");
+    assert!(machine_state.contains("deadsync_profile::runtime_session_players_view()"));
+    for repeated_profile_read in [
+        "runtime_profile_for_side",
+        "runtime_session_side_joined",
+        "runtime_session_player_side",
+    ] {
+        assert!(
+            !machine_state.contains(repeated_profile_read),
+            "lobby machine-state preparation still repeats profile state through {repeated_profile_read}"
         );
     }
 }
@@ -2973,7 +3110,8 @@ fn evaluation_leaderboards_are_shell_prepared() {
         "scores::get_machine_leaderboard_local",
         "scores::get_personal_leaderboard_local_for_side",
         "scores::groovestats_eval_state_from_gameplay",
-        "scores::get_or_fetch_player_leaderboards_for_side",
+        "scores::get_or_fetch_player_leaderboards_for_profile",
+        "profile_data::runtime_scorebox_view",
         "evaluation::leaderboard_requests",
     ] {
         assert!(
@@ -7851,5 +7989,25 @@ fn root_source_is_binary_only() {
         files,
         ["src/main.rs"],
         "the root package should remain a binary-only entry point"
+    );
+}
+
+#[test]
+fn player_leaderboard_runtime_callbacks_stay_allocation_free() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let source = fs::read_to_string(root.join("crates/deadsync-online/src/player_leaderboards.rs"))
+        .expect("player leaderboard runtime source should be readable");
+
+    assert!(
+        !source.contains("Arc<dyn Fn"),
+        "player leaderboard runtime callbacks must remain concrete function pointers"
+    );
+    assert!(
+        source.contains("cache_itl_self: fn(")
+            && source.contains("cache_imported_score: fn(")
+            && source.contains(
+                "profile_snapshot_for_side: fn(PlayerSide) -> GameplayScoreboxProfileSnapshot",
+            ),
+        "player leaderboard runtime must keep its non-capturing callbacks allocation-free"
     );
 }

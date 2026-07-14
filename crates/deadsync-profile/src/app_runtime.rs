@@ -363,8 +363,16 @@ pub fn cached_local_scalar_score_for_side(
     hard_ex: bool,
 ) -> Option<deadsync_score::LocalScalarScore> {
     let profile_id = crate::runtime_active_local_profile_id_for_side(side)?;
+    cached_local_scalar_score_for_id(&profile_id, chart_hash, hard_ex)
+}
+
+pub fn cached_local_scalar_score_for_id(
+    profile_id: &str,
+    chart_hash: &str,
+    hard_ex: bool,
+) -> Option<deadsync_score::LocalScalarScore> {
     deadsync_score::runtime_read_logged_local_scalar_score_for_profile(
-        &profile_id,
+        profile_id,
         chart_hash,
         hard_ex,
         score_profile_paths_for_id,
@@ -378,11 +386,25 @@ pub fn cached_local_ex_score_for_side(
     cached_local_scalar_score_for_side(chart_hash, side, false)
 }
 
+pub fn cached_local_ex_score_for_id(
+    profile_id: &str,
+    chart_hash: &str,
+) -> Option<deadsync_score::LocalScalarScore> {
+    cached_local_scalar_score_for_id(profile_id, chart_hash, false)
+}
+
 pub fn cached_local_hard_ex_score_for_side(
     chart_hash: &str,
     side: PlayerSide,
 ) -> Option<deadsync_score::LocalScalarScore> {
     cached_local_scalar_score_for_side(chart_hash, side, true)
+}
+
+pub fn cached_local_hard_ex_score_for_id(
+    profile_id: &str,
+    chart_hash: &str,
+) -> Option<deadsync_score::LocalScalarScore> {
+    cached_local_scalar_score_for_id(profile_id, chart_hash, true)
 }
 
 pub fn machine_record_local(chart_hash: &str) -> Option<(String, deadsync_score::CachedScore)> {
@@ -642,11 +664,14 @@ pub fn cached_itl_score_for_side(
     side: PlayerSide,
 ) -> Option<deadsync_score::CachedItlScore> {
     let profile_id = crate::runtime_active_local_profile_id_for_side(side);
-    deadsync_score::runtime_cached_itl_chart_score(
-        profile_id.as_deref(),
-        chart_hash,
-        read_itl_file_for_id,
-    )
+    cached_itl_score_for_id(chart_hash, profile_id.as_deref())
+}
+
+pub fn cached_itl_score_for_id(
+    chart_hash: &str,
+    profile_id: Option<&str>,
+) -> Option<deadsync_score::CachedItlScore> {
+    deadsync_score::runtime_cached_itl_chart_score(profile_id, chart_hash, read_itl_file_for_id)
 }
 
 pub fn cached_itl_score_for_song(
@@ -743,15 +768,6 @@ pub fn cached_online_itl_self_rank_for_key_assume_loaded(
     )
 }
 
-pub fn cached_online_itl_self_rank_for_side(chart_hash: &str, side: PlayerSide) -> Option<u32> {
-    if !crate::runtime_session_side_joined(side) {
-        return None;
-    }
-    let api_key = crate::runtime_groovestats_api_key_for_side(side);
-    let profile_id = crate::runtime_active_local_profile_id_for_side(side);
-    cached_online_itl_self_rank_for_key(chart_hash, profile_id.as_deref(), &api_key)
-}
-
 pub fn cached_online_itl_self_score_for_key(
     chart_hash: &str,
     profile_id: Option<&str>,
@@ -775,30 +791,15 @@ pub fn cached_online_itl_self_score_for_key_assume_loaded(
     )
 }
 
-pub fn cached_online_itl_self_score_for_side(chart_hash: &str, side: PlayerSide) -> Option<u32> {
-    if !crate::runtime_session_side_joined(side) {
-        return None;
-    }
-    let api_key = crate::runtime_groovestats_api_key_for_side(side);
-    let profile_id = crate::runtime_active_local_profile_id_for_side(side);
-    cached_online_itl_self_score_for_key(chart_hash, profile_id.as_deref(), &api_key)
+pub struct ItlWheelSideCache<'a> {
+    leaderboard_snapshot: &'a deadsync_score::GameplayScoreboxProfileSnapshot,
 }
 
-pub struct ItlWheelSideCache {
-    profile_id: Option<Arc<str>>,
-    api_key: String,
-    leaderboard_snapshot: deadsync_score::GameplayScoreboxProfileSnapshot,
-}
-
-impl ItlWheelSideCache {
-    pub fn for_side(
-        side: PlayerSide,
-        profile_id: Option<Arc<str>>,
-        leaderboard_snapshot: deadsync_score::GameplayScoreboxProfileSnapshot,
+impl<'a> ItlWheelSideCache<'a> {
+    pub const fn new(
+        leaderboard_snapshot: &'a deadsync_score::GameplayScoreboxProfileSnapshot,
     ) -> Self {
         Self {
-            profile_id,
-            api_key: crate::runtime_groovestats_api_key_for_side(side),
             leaderboard_snapshot,
         }
     }
@@ -811,14 +812,17 @@ impl ItlWheelSideCache {
         &self,
         song: &deadsync_chart::SongData,
     ) -> Option<deadsync_score::CachedItlScore> {
-        cached_itl_score_for_song_assume_loaded(song, self.profile_id.as_deref())
+        cached_itl_score_for_song_assume_loaded(
+            song,
+            self.leaderboard_snapshot.persistent_profile_id(),
+        )
     }
 
     pub fn cached_self_ex_score(&self, chart_hash: &str) -> Option<u32> {
         cached_online_itl_self_score_for_key_assume_loaded(
             chart_hash,
-            self.profile_id.as_deref(),
-            &self.api_key,
+            self.leaderboard_snapshot.persistent_profile_id(),
+            self.leaderboard_snapshot.api_key(),
         )
     }
 
@@ -837,37 +841,26 @@ impl ItlWheelSideCache {
         .or_else(|| {
             cached_online_itl_self_rank_for_key_assume_loaded(
                 chart_hash,
-                self.profile_id.as_deref(),
-                &self.api_key,
+                self.leaderboard_snapshot.persistent_profile_id(),
+                self.leaderboard_snapshot.api_key(),
             )
         })
     }
 }
 
-pub fn cached_itl_tournament_rank_for_side(
-    chart_hash: &str,
-    side: PlayerSide,
-    leaderboard_snapshot: &deadsync_score::GameplayScoreboxProfileSnapshot,
-) -> Option<u32> {
-    deadsync_score::runtime_cached_player_leaderboard_itl_self_rank(
-        chart_hash,
-        leaderboard_snapshot,
-    )
-    .or_else(|| cached_online_itl_self_rank_for_side(chart_hash, side))
-}
-
-pub fn cached_itl_tournament_overall_ranks_for_side(
-    side: PlayerSide,
+pub fn cached_itl_tournament_overall_ranks_for_profile(
+    side_idx: usize,
+    joined: bool,
+    api_key: &str,
+    profile_id: Option<&str>,
     song_cache_generation: u64,
     song_cache: &[deadsync_chart::SongPack],
 ) -> Arc<HashMap<String, u32>> {
-    let api_key = crate::runtime_groovestats_api_key_for_side(side);
-    let profile_id = crate::runtime_active_local_profile_id_for_side(side);
     deadsync_score::runtime_online_itl_overall_ranks_for_side(
-        player_side_index(side),
-        crate::runtime_session_side_joined(side),
-        api_key.as_str(),
-        profile_id.as_deref(),
+        side_idx,
+        joined,
+        api_key,
+        profile_id,
         song_cache_generation,
         song_cache,
         |profile_id| {
@@ -1238,14 +1231,6 @@ pub fn scorebox_profile_snapshot_from_config(
         cfg.enable_arrowcloud,
         cfg.auto_populate_gs_scores,
         persistent_profile_id,
-    )
-}
-
-pub fn is_groovestats_active_for_side_from_config(side: PlayerSide) -> bool {
-    crate::groovestats_side_active(
-        config::get().enable_groovestats,
-        crate::runtime_session_side_joined(side),
-        &crate::runtime_profile_for_side(side).groovestats_api_key,
     )
 }
 
@@ -1756,14 +1741,14 @@ mod tests {
         deadsync_score::runtime_seed_player_leaderboard_entry(
             key.clone(),
             deadsync_score::PlayerLeaderboardCacheEntry {
-                value: deadsync_score::PlayerLeaderboardCacheValue::Ready(
+                value: deadsync_score::PlayerLeaderboardCacheValue::Ready(std::sync::Arc::new(
                     deadsync_score::PlayerLeaderboardData {
                         panes: Vec::new(),
                         srpg_self_score: Some(9_910),
                         itl_self_score: None,
                         itl_self_rank: None,
                     },
-                ),
+                )),
                 max_entries: 5,
                 refreshed_at: Instant::now(),
                 retry_after: None,

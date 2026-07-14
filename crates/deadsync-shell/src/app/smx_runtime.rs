@@ -164,18 +164,20 @@ impl App {
     /// - **Single pad:** persist its hardware jumper side.
     /// The ambiguous same-jumper-two-pad case is left for the user to assign.
     pub(super) fn reconcile_smx_assignment(&mut self) {
+        let screen = self.state.screens.current_screen;
         let smx_input = config::get().smx_input;
+        if matches!(screen, CurrentScreen::Gameplay | CurrentScreen::Practice) || !smx_input {
+            return;
+        }
         let (p1, p2) = config::smx_pad_assignment();
+        if p1.is_some() || p2.is_some() {
+            return;
+        }
         let a = deadsync_smx::get_info(0);
         let b = deadsync_smx::get_info(1);
-        let Some(plan) = smx_runtime_assignment_plan(
-            self.state.screens.current_screen,
-            smx_input,
-            p1.as_deref(),
-            p2.as_deref(),
-            &a,
-            &b,
-        ) else {
+        let Some(plan) =
+            smx_runtime_assignment_plan(screen, smx_input, p1.as_deref(), p2.as_deref(), &a, &b)
+        else {
             return;
         };
         match plan.source {
@@ -392,13 +394,19 @@ impl App {
     /// the last non-gameplay frame stays valid and the profile lock stays off the
     /// gameplay loop. With SMX input off there are no light sends, so hold at full.
     pub(super) fn drive_smx_light_brightness(&mut self) {
-        let profile_resolved = [
-            profile::pad_light_brightness_for_pad(false),
-            profile::pad_light_brightness_for_pad(true),
-        ];
+        let screen = self.state.screens.current_screen;
+        if matches!(screen, CurrentScreen::Gameplay | CurrentScreen::Practice) {
+            return;
+        }
+        let smx_input = config::get().smx_input;
+        let profile_resolved = if smx_input {
+            profile::pad_light_brightness()
+        } else {
+            [100, 100]
+        };
         let Some(plan) = smx_light_brightness_plan(
-            self.state.screens.current_screen,
-            config::get().smx_input,
+            screen,
+            smx_input,
             self.smx_light_brightness,
             profile_resolved,
         ) else {

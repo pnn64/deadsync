@@ -1283,7 +1283,7 @@ mod tests {
         let snapshot = score_data::CachedPlayerLeaderboardData {
             loading: false,
             error: None,
-            data: Some(score_data::PlayerLeaderboardData {
+            data: Some(std::sync::Arc::new(score_data::PlayerLeaderboardData {
                 panes: vec![
                     pane("GrooveStats", vec![entry(1, "itg", false, false)]),
                     score_data::LeaderboardPane {
@@ -1298,7 +1298,7 @@ mod tests {
                 srpg_self_score: None,
                 itl_self_score: None,
                 itl_self_rank: None,
-            }),
+            })),
         };
 
         let profile_snapshot = scorebox_profile(false);

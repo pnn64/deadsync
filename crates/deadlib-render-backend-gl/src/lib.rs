@@ -973,7 +973,7 @@ pub fn draw(
         let gl = &state.gl;
         let cached_tmesh = &mut state.cached_tmesh;
         let cached_tmesh_bytes = &mut state.cached_tmesh_bytes;
-        let _prep_stats = draw_prep::prepare(render_list, prep, |cache_key, vertices| {
+        draw_prep::prepare(render_list, prep, |cache_key, vertices| {
             ensure_cached_tmesh(gl, cached_tmesh, cached_tmesh_bytes, cache_key, vertices)
         });
     }

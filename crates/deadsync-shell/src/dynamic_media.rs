@@ -348,7 +348,7 @@ impl DynamicMedia {
         &mut self,
         assets: &mut AssetManager,
         backend: &mut Backend,
-        desired_paths: &[PathBuf],
+        desired_paths: &[&Path],
     ) {
         let stale_keys = self
             .active_banner_videos
@@ -370,8 +370,8 @@ impl DynamicMedia {
             if self
                 .active_banner_videos
                 .values()
-                .any(|state| state.path.as_path() == path.as_path())
-                || self.pending_banner_video_preps.contains(path)
+                .any(|state| state.path.as_path() == *path)
+                || self.pending_banner_video_preps.contains(*path)
             {
                 continue;
             }
@@ -972,15 +972,14 @@ impl DynamicMedia {
     fn drain_banner_video_preps_multi(
         &mut self,
         assets: &mut AssetManager,
-        desired_paths: &[PathBuf],
+        desired_paths: &[&Path],
     ) {
         while let Ok(result) = self.banner_video_prep_rx.try_recv() {
             match result {
                 BannerVideoPrepResult::Ready(prepared) => {
                     self.pending_banner_video_preps.remove(&prepared.path);
                     if !desired_paths.iter().any(|path| {
-                        dynamic::is_dynamic_video_path(path)
-                            && path.as_path() == prepared.path.as_path()
+                        dynamic::is_dynamic_video_path(path) && *path == prepared.path.as_path()
                     }) {
                         retire_video_player(prepared.player);
                         continue;
@@ -1000,8 +999,7 @@ impl DynamicMedia {
                 BannerVideoPrepResult::Failed { path, msg } => {
                     self.pending_banner_video_preps.remove(&path);
                     if desired_paths.iter().any(|desired| {
-                        dynamic::is_dynamic_video_path(desired)
-                            && desired.as_path() == path.as_path()
+                        dynamic::is_dynamic_video_path(desired) && *desired == path.as_path()
                     }) {
                         warn!("Failed to start banner video '{}': {msg}", path.display());
                     }

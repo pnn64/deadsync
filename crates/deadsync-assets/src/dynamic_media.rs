@@ -112,11 +112,11 @@ pub fn replace_texture_key_set(
     stale
 }
 
-pub fn dynamic_video_path_in_set(path: &Path, desired_paths: &[PathBuf]) -> bool {
+pub fn dynamic_video_path_in_set(path: &Path, desired_paths: &[&Path]) -> bool {
     dynamic::is_dynamic_video_path(path)
         && desired_paths
             .iter()
-            .any(|desired| path == desired.as_path() && dynamic::is_dynamic_video_path(desired))
+            .any(|desired| path == *desired && dynamic::is_dynamic_video_path(desired))
 }
 
 pub fn push_gameplay_media_paths<'a>(
@@ -567,6 +567,7 @@ mod tests {
     #[test]
     fn dynamic_video_path_in_set_requires_video_path_match() {
         let desired = [PathBuf::from("movie.mp4"), PathBuf::from("still.png")];
+        let desired = desired.each_ref().map(PathBuf::as_path);
 
         assert!(dynamic_video_path_in_set(Path::new("movie.mp4"), &desired));
         assert!(!dynamic_video_path_in_set(Path::new("still.png"), &desired));

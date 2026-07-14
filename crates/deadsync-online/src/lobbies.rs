@@ -5,7 +5,7 @@ use std::fmt::{self, Display, Formatter};
 use std::io::ErrorKind;
 use std::net::TcpStream;
 use std::sync::mpsc::{self, Receiver, Sender};
-use std::sync::{LazyLock, Mutex};
+use std::sync::{Arc, LazyLock, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 use tungstenite::stream::MaybeTlsStream;
@@ -599,26 +599,25 @@ pub fn runtime_local_lobby_machine_state_value(
     p1_stats: Option<&MachinePlayerStats>,
     p2_stats: Option<&MachinePlayerStats>,
 ) -> Value {
-    let p1_profile = deadsync_profile::runtime_profile_for_side(PlayerSide::P1);
-    let p2_profile = deadsync_profile::runtime_profile_for_side(PlayerSide::P2);
+    let players = deadsync_profile::runtime_session_players_view();
     local_lobby_machine_state_value(
         LocalLobbyPlayer {
             side: PlayerSide::P1,
-            display_name: p1_profile.display_name.as_str(),
-            joined: deadsync_profile::runtime_session_side_joined(PlayerSide::P1),
+            display_name: players.display_names[0].as_str(),
+            joined: players.joined[0],
             screen_name,
             ready: p1_ready,
             stats: p1_stats,
         },
         LocalLobbyPlayer {
             side: PlayerSide::P2,
-            display_name: p2_profile.display_name.as_str(),
-            joined: deadsync_profile::runtime_session_side_joined(PlayerSide::P2),
+            display_name: players.display_names[1].as_str(),
+            joined: players.joined[1],
             screen_name,
             ready: p2_ready,
             stats: p2_stats,
         },
-        deadsync_profile::runtime_session_player_side(),
+        players.active_side,
     )
 }
 
@@ -1067,8 +1066,8 @@ const DEFAULT_RUNTIME_HOOKS: LobbyRuntimeHooks = LobbyRuntimeHooks::new(
     log_malformed_payload,
 );
 
-static RUNTIME_SNAPSHOT: LazyLock<Mutex<Snapshot>> =
-    LazyLock::new(|| Mutex::new(Snapshot::default()));
+static RUNTIME_SNAPSHOT: LazyLock<Mutex<Arc<Snapshot>>> =
+    LazyLock::new(|| Mutex::new(Arc::new(Snapshot::default())));
 static RUNTIME_COMMAND_TX: LazyLock<Mutex<Option<Sender<LobbyCommand>>>> =
     LazyLock::new(|| Mutex::new(None));
 static RUNTIME_LAST_MACHINE_STATE_SIG: LazyLock<Mutex<Option<String>>> =
@@ -1077,14 +1076,19 @@ static RUNTIME_RECONNECT_STATE: LazyLock<Mutex<ReconnectState>> =
     LazyLock::new(|| Mutex::new(ReconnectState::default()));
 static RUNTIME_TEST_MUTEX: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
 
-pub fn runtime_snapshot() -> Snapshot {
-    RUNTIME_SNAPSHOT.lock().unwrap().clone()
+pub fn runtime_view() -> (Arc<Snapshot>, Option<String>) {
+    let snapshot = Arc::clone(&RUNTIME_SNAPSHOT.lock().unwrap());
+    let reconnect_status = RUNTIME_RECONNECT_STATE
+        .lock()
+        .unwrap()
+        .status_text(&snapshot.connection, Instant::now());
+    (snapshot, reconnect_status)
 }
 
 #[doc(hidden)]
 pub fn runtime_with_snapshot_for_test<R>(snapshot: Snapshot, f: impl FnOnce() -> R) -> R {
     let _guard = RUNTIME_TEST_MUTEX.lock().unwrap();
-    let prev = std::mem::replace(&mut *RUNTIME_SNAPSHOT.lock().unwrap(), snapshot);
+    let prev = std::mem::replace(&mut *RUNTIME_SNAPSHOT.lock().unwrap(), Arc::new(snapshot));
     let result = f();
     *RUNTIME_SNAPSHOT.lock().unwrap() = prev;
     result
@@ -1177,7 +1181,7 @@ pub fn runtime_leave_lobby(hooks: LobbyRuntimeHooks) {
     *RUNTIME_LAST_MACHINE_STATE_SIG.lock().unwrap() = None;
     let should_send_leave = {
         let mut snapshot = RUNTIME_SNAPSHOT.lock().unwrap();
-        apply_local_lobby_leave(&mut snapshot)
+        apply_local_lobby_leave(Arc::make_mut(&mut *snapshot))
     };
     if should_send_leave {
         let _ = runtime_send_command(hooks, LobbyCommand::Leave);
@@ -1225,7 +1229,7 @@ pub fn runtime_update_machine_state_sides_with_stats(
 }
 
 pub fn runtime_select_song(hooks: LobbyRuntimeHooks, song_info: LobbySongInfo) {
-    let snapshot = RUNTIME_SNAPSHOT.lock().unwrap().clone();
+    let snapshot = Arc::clone(&RUNTIME_SNAPSHOT.lock().unwrap());
     if let Some(command) = select_song_command(&snapshot, song_info) {
         let _ = runtime_send_command(hooks, command);
     }
@@ -1238,12 +1242,12 @@ pub fn runtime_disconnect() {
     }
     *RUNTIME_LAST_MACHINE_STATE_SIG.lock().unwrap() = None;
     let mut snapshot = RUNTIME_SNAPSHOT.lock().unwrap();
-    apply_local_lobby_disconnect(&mut snapshot);
+    apply_local_lobby_disconnect(Arc::make_mut(&mut *snapshot));
 }
 
 pub fn runtime_poll_reconnect(hooks: LobbyRuntimeHooks) {
     let target = {
-        let snapshot = RUNTIME_SNAPSHOT.lock().unwrap().clone();
+        let snapshot = Arc::clone(&RUNTIME_SNAPSHOT.lock().unwrap());
         if matches!(
             snapshot.connection,
             ConnectionState::Connected | ConnectionState::Connecting
@@ -1266,12 +1270,6 @@ pub fn runtime_poll_reconnect(hooks: LobbyRuntimeHooks) {
     );
 }
 
-pub fn runtime_reconnect_status_text() -> Option<String> {
-    let snapshot = RUNTIME_SNAPSHOT.lock().unwrap().clone();
-    let reconnect = RUNTIME_RECONNECT_STATE.lock().unwrap();
-    reconnect.status_text(&snapshot.connection, Instant::now())
-}
-
 pub fn log_malformed_payload(event: Option<&str>, error: &str, raw_text: &str) {
     match event {
         Some(event) => log::warn!("Ignoring malformed lobby payload for event '{event}': {error}"),
@@ -1290,10 +1288,11 @@ fn runtime_ensure_worker(hooks: LobbyRuntimeHooks) {
     *tx_slot = Some(tx);
     drop(tx_slot);
 
-    let mut snapshot = RUNTIME_SNAPSHOT.lock().unwrap();
+    let mut snapshot_guard = RUNTIME_SNAPSHOT.lock().unwrap();
+    let snapshot = Arc::make_mut(&mut *snapshot_guard);
     snapshot.connection = ConnectionState::Connecting;
     snapshot.last_status = None;
-    drop(snapshot);
+    drop(snapshot_guard);
 
     thread::spawn(move || runtime_worker_main(rx, hooks));
 }
@@ -1330,7 +1329,7 @@ fn runtime_handle_connection_loss(connection: ConnectionState) {
     let preserve_joined = runtime_should_preserve_joined_lobby();
     {
         let mut snapshot = RUNTIME_SNAPSHOT.lock().unwrap();
-        apply_lobby_connection_loss(&mut snapshot, connection, preserve_joined);
+        apply_lobby_connection_loss(Arc::make_mut(&mut *snapshot), connection, preserve_joined);
     }
     *RUNTIME_LAST_MACHINE_STATE_SIG.lock().unwrap() = None;
     RUNTIME_COMMAND_TX.lock().unwrap().take();
@@ -1346,6 +1345,7 @@ fn runtime_worker_main(rx: Receiver<LobbyCommand>, hooks: LobbyRuntimeHooks) {
         |text| runtime_handle_text_message(text, hooks.malformed_payload),
         || {
             let mut snapshot = RUNTIME_SNAPSHOT.lock().unwrap();
+            let snapshot = Arc::make_mut(&mut *snapshot);
             snapshot.connection = ConnectionState::Connected;
             snapshot.last_status = None;
         },
@@ -1368,7 +1368,7 @@ fn runtime_handle_text_message(
     let clear_machine_state_sig = {
         let mut reconnect = RUNTIME_RECONNECT_STATE.lock().unwrap();
         let mut snapshot = RUNTIME_SNAPSHOT.lock().unwrap();
-        apply_lobby_inbound_effect(&mut snapshot, &mut reconnect, effect)
+        apply_lobby_inbound_effect(Arc::make_mut(&mut *snapshot), &mut reconnect, effect)
     };
     if clear_machine_state_sig {
         *RUNTIME_LAST_MACHINE_STATE_SIG.lock().unwrap() = None;
@@ -1397,7 +1397,7 @@ mod tests {
     }
 
     fn reset_runtime_test_state() {
-        *RUNTIME_SNAPSHOT.lock().unwrap() = Snapshot::default();
+        *RUNTIME_SNAPSHOT.lock().unwrap() = Arc::new(Snapshot::default());
         *RUNTIME_LAST_MACHINE_STATE_SIG.lock().unwrap() = None;
         *RUNTIME_RECONNECT_STATE.lock().unwrap() = ReconnectState::default();
         RUNTIME_COMMAND_TX.lock().unwrap().take();
@@ -1486,6 +1486,29 @@ mod tests {
             reconnect.status_text(&ConnectionState::Error("closed".to_string()), now),
             Some("Connection lost. Retrying in 3s...".to_string())
         );
+    }
+
+    #[test]
+    fn runtime_view_uses_one_snapshot_for_lobby_and_reconnect_state() {
+        let _guard = RUNTIME_TEST_MUTEX.lock().unwrap();
+        reset_runtime_test_state();
+        RUNTIME_RECONNECT_STATE
+            .lock()
+            .unwrap()
+            .set_join_target("ROOM".to_string(), "PASS".to_string());
+        Arc::make_mut(&mut *RUNTIME_SNAPSHOT.lock().unwrap()).connection =
+            ConnectionState::Connecting;
+
+        let (snapshot, reconnect_status) = runtime_view();
+        let (same_snapshot, _) = runtime_view();
+        assert!(Arc::ptr_eq(&snapshot, &same_snapshot));
+        assert_eq!(snapshot.connection, ConnectionState::Connecting);
+        assert_eq!(
+            reconnect_status.as_deref(),
+            Some("Reconnecting to lobby...")
+        );
+
+        reset_runtime_test_state();
     }
 
     #[test]
@@ -1720,6 +1743,7 @@ mod tests {
         };
         {
             let mut snapshot = RUNTIME_SNAPSHOT.lock().unwrap();
+            let snapshot = Arc::make_mut(&mut *snapshot);
             snapshot.connection = ConnectionState::Connected;
             snapshot.joined_lobby = Some(JoinedLobby {
                 code: "ABCD".to_string(),
@@ -1776,6 +1800,7 @@ mod tests {
         };
         {
             let mut snapshot = RUNTIME_SNAPSHOT.lock().unwrap();
+            let snapshot = Arc::make_mut(&mut *snapshot);
             snapshot.connection = ConnectionState::Connected;
             snapshot.joined_lobby = Some(JoinedLobby {
                 code: "ABCD".to_string(),

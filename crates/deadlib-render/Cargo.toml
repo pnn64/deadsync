@@ -7,8 +7,8 @@ license = "GPL-3.0"
 [dependencies]
 bytemuck = { version = "1.25.0", features = ["derive"] }
 glam = "0.33.1"
+rustc-hash = "2.1.2"
 serde = { version = "1.0.228", features = ["derive"] }
-twox-hash = "2.1.2"
 
 [lints.clippy]
 perf = { level = "warn", priority = -1 }

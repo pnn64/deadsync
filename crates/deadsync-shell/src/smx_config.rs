@@ -406,6 +406,17 @@ mod tests {
             smx_runtime_assignment_plan(
                 Screen::Menu,
                 true,
+                Some("saved"),
+                None,
+                &info(true, false, true, "P1"),
+                &disconnected,
+            )
+            .is_none()
+        );
+        assert!(
+            smx_runtime_assignment_plan(
+                Screen::Menu,
+                true,
                 None,
                 None,
                 &info(true, false, true, "P1"),

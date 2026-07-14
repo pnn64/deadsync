@@ -1,16 +1,14 @@
 use std::{
     cell::RefCell,
     collections::{HashMap, hash_map::Entry as HashEntry},
-    hash::BuildHasherDefault,
 };
 
 use crate::anim::{Step, TweenSeq, TweenState};
-use twox_hash::XxHash64;
 
 const FNV_OFFSET: u64 = 0xcbf29ce484222325;
 const FNV_PRIME: u64 = 0x100000001b3;
 
-type TweenMap = HashMap<u64, Entry, BuildHasherDefault<XxHash64>>;
+type TweenMap = HashMap<u64, Entry, rustc_hash::FxBuildHasher>;
 
 struct Entry {
     seq: TweenSeq,
@@ -20,8 +18,7 @@ struct Entry {
 struct Registry {
     map: TweenMap,
     frame: u64,
-    seen_ids: Vec<u64>,
-    stale_ids: Vec<u64>,
+    active_ids: Vec<u64>,
 }
 
 impl Default for Registry {
@@ -29,8 +26,7 @@ impl Default for Registry {
         Self {
             map: TweenMap::default(),
             frame: 0,
-            seen_ids: Vec::new(),
-            stale_ids: Vec::new(),
+            active_ids: Vec::new(),
         }
     }
 }
@@ -51,29 +47,25 @@ pub fn tick(dt: f32) {
         let frame = r.frame.wrapping_add(1);
         r.frame = frame;
 
-        // Dense id lists avoid scanning every hash bucket every frame. `seen_ids`
-        // contains ids materialized last frame; `stale_ids` contains ids from the
-        // frame before that, which now need one last liveness check.
-        let mut stale_ids = std::mem::take(&mut r.stale_ids);
-        for id in stale_ids.drain(..) {
-            let drop = r
-                .map
-                .get(&id)
-                .is_some_and(|entry| !seen_recently(entry.last_seen_frame, frame));
-            if drop {
-                r.map.remove(&id);
+        // Traverse only active ids instead of every hash bucket. Each live tween
+        // is checked and advanced through one entry lookup; unseen tweens drop
+        // after one absent materialization frame.
+        let Registry {
+            map, active_ids, ..
+        } = &mut *r;
+        active_ids.retain(|&id| match map.entry(id) {
+            HashEntry::Occupied(mut occupied)
+                if seen_recently(occupied.get().last_seen_frame, frame) =>
+            {
+                occupied.get_mut().seq.update(dt);
+                true
             }
-        }
-
-        let mut seen_ids = std::mem::take(&mut r.seen_ids);
-        for &id in &seen_ids {
-            if let Some(entry) = r.map.get_mut(&id) {
-                entry.seq.update(dt);
+            HashEntry::Occupied(occupied) => {
+                occupied.remove();
+                false
             }
-        }
-
-        std::mem::swap(&mut r.stale_ids, &mut seen_ids);
-        r.seen_ids = stale_ids;
+            HashEntry::Vacant(_) => false,
+        });
     });
 }
 
@@ -83,13 +75,12 @@ pub fn materialize(id: u64, initial: TweenState, steps: &[Step]) -> TweenState {
     REG.with(|r| {
         let mut r = r.borrow_mut();
         let frame = r.frame;
-        let mut mark_seen = false;
+        let mut activate = false;
         let state = match r.map.entry(id) {
             HashEntry::Occupied(mut occupied) => {
                 let ent = occupied.get_mut();
                 if ent.last_seen_frame != frame {
                     ent.last_seen_frame = frame;
-                    mark_seen = true;
                 }
                 *ent.seq.state()
             }
@@ -103,12 +94,12 @@ pub fn materialize(id: u64, initial: TweenState, steps: &[Step]) -> TweenState {
                     seq: tw,
                     last_seen_frame: frame,
                 });
-                mark_seen = true;
+                activate = true;
                 state
             }
         };
-        if mark_seen {
-            r.seen_ids.push(id);
+        if activate {
+            r.active_ids.push(id);
         }
         state
     })
@@ -156,6 +147,10 @@ mod tests {
         REG.with(|r| r.borrow().map.len())
     }
 
+    fn active_id_len() -> usize {
+        REG.with(|r| r.borrow().active_ids.len())
+    }
+
     fn legacy_site_id(file: &'static str, line: u32, col: u32, extra: u64) -> u64 {
         let mut h = FNV_OFFSET;
         for &b in file.as_bytes() {
@@ -192,6 +187,7 @@ mod tests {
 
         let _ = materialize(1, TweenState::default(), &steps);
         let _ = materialize(1, TweenState::default(), &steps);
+        assert_eq!(active_id_len(), 1);
 
         tick(0.25);
 

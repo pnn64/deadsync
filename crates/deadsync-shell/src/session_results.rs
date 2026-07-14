@@ -3,6 +3,7 @@ use deadsync_profile::{PlayStyle, PlayerSide, player_side_index};
 use deadsync_score::stage_stats::{PlayerStageSummary, StageSummary};
 use deadsync_theme_simply_love::views::ScoreInfo;
 use std::borrow::Cow;
+use std::ops::Range;
 
 fn notes_hit(score: &ScoreInfo) -> u32 {
     score.column_judgments.iter().fold(0, |total, column| {
@@ -112,6 +113,10 @@ pub fn post_select_display_stages<'a>(
         return Cow::Borrowed(stages);
     }
 
+    if let Some(range) = contiguous_visible_stage_range(stages.len(), hidden_indices) {
+        return Cow::Borrowed(&stages[range]);
+    }
+
     let mut filtered = Vec::with_capacity(stages.len().saturating_sub(hidden_indices.len()));
     let mut hidden_idx = 0usize;
     for (idx, stage) in stages.iter().enumerate() {
@@ -124,4 +129,79 @@ pub fn post_select_display_stages<'a>(
         filtered.push(stage.clone());
     }
     Cow::Owned(filtered)
+}
+
+pub fn post_select_display_stage_count(
+    stage_count: usize,
+    hidden_indices: &[usize],
+    show_course_individual_scores: bool,
+) -> usize {
+    if show_course_individual_scores || hidden_indices.is_empty() || stage_count == 0 {
+        return stage_count;
+    }
+
+    let mut visible = stage_count;
+    let mut hidden_idx = 0usize;
+    for idx in 0..stage_count {
+        while hidden_idx < hidden_indices.len() && hidden_indices[hidden_idx] < idx {
+            hidden_idx += 1;
+        }
+        if hidden_idx < hidden_indices.len() && hidden_indices[hidden_idx] == idx {
+            visible -= 1;
+        }
+    }
+    visible
+}
+
+fn contiguous_visible_stage_range(
+    stage_count: usize,
+    hidden_indices: &[usize],
+) -> Option<Range<usize>> {
+    let mut hidden_idx = 0usize;
+    let mut visible_start = None;
+    let mut visible_end = 0usize;
+    let mut hidden_after_visible = false;
+
+    for idx in 0..stage_count {
+        while hidden_idx < hidden_indices.len() && hidden_indices[hidden_idx] < idx {
+            hidden_idx += 1;
+        }
+        let hidden = hidden_idx < hidden_indices.len() && hidden_indices[hidden_idx] == idx;
+        if hidden {
+            hidden_after_visible |= visible_start.is_some();
+            continue;
+        }
+        if hidden_after_visible {
+            return None;
+        }
+        visible_start.get_or_insert(idx);
+        visible_end = idx + 1;
+    }
+
+    Some(visible_start.map_or(0..0, |start| start..visible_end))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{contiguous_visible_stage_range, post_select_display_stage_count};
+
+    #[test]
+    fn visible_stage_range_borrows_common_course_shapes() {
+        assert_eq!(contiguous_visible_stage_range(4, &[0, 1, 2]), Some(3..4));
+        assert_eq!(contiguous_visible_stage_range(4, &[2, 3]), Some(0..2));
+        assert_eq!(contiguous_visible_stage_range(4, &[0, 1, 2, 3]), Some(0..0));
+    }
+
+    #[test]
+    fn visible_stage_range_rejects_disjoint_results() {
+        assert_eq!(contiguous_visible_stage_range(4, &[1]), None);
+        assert_eq!(contiguous_visible_stage_range(5, &[0, 2, 4]), None);
+    }
+
+    #[test]
+    fn display_stage_count_does_not_materialize_disjoint_results() {
+        assert_eq!(post_select_display_stage_count(5, &[0, 2, 4], false), 2);
+        assert_eq!(post_select_display_stage_count(5, &[0, 2, 4], true), 5);
+        assert_eq!(post_select_display_stage_count(3, &[1, 1, 8], false), 2);
+    }
 }

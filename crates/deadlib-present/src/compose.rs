@@ -309,11 +309,24 @@ fn sort_render_objects(objects: &mut [RenderObject], scratch: &mut ComposeScratc
     scratch.z_counts.clear();
     scratch.z_counts.resize(range, 0);
     scratch.z_perm.clear();
-    scratch.z_perm.resize(objects.len(), 0);
+    scratch.z_perm.resize(range, 0);
 
     let min_z_i = i32::from(min_z);
+    let mut buckets_ordered = true;
     for obj in objects.iter() {
-        scratch.z_counts[(i32::from(obj.z) - min_z_i) as usize] += 1;
+        let bucket = (i32::from(obj.z) - min_z_i) as usize;
+        let bucket_seen = scratch.z_counts[bucket] != 0;
+        let previous_order = &mut scratch.z_perm[bucket];
+        let order = obj.order as usize;
+        buckets_ordered &= !bucket_seen || *previous_order <= order;
+        *previous_order = order;
+        scratch.z_counts[bucket] += 1;
+    }
+    if !buckets_ordered {
+        // Some compose paths append later objects before assigning their final
+        // draw order. Skip permutation when stable bucketing cannot order them.
+        objects.sort_unstable_by_key(|o| (o.z, o.order));
+        return;
     }
 
     let mut next = 0usize;
@@ -323,6 +336,8 @@ fn sort_render_objects(objects: &mut [RenderObject], scratch: &mut ComposeScratc
         next += bucket_len;
     }
 
+    scratch.z_perm.clear();
+    scratch.z_perm.resize(objects.len(), 0);
     for (old_idx, obj) in objects.iter().enumerate() {
         let bucket = (i32::from(obj.z) - min_z_i) as usize;
         let new_idx = scratch.z_counts[bucket];
@@ -337,15 +352,6 @@ fn sort_render_objects(objects: &mut [RenderObject], scratch: &mut ComposeScratc
             objects.swap(current, next);
             scratch.z_perm.swap(current, next);
         }
-    }
-
-    if objects
-        .windows(2)
-        .any(|pair| (pair[0].z, pair[0].order) > (pair[1].z, pair[1].order))
-    {
-        // Some compose paths append later objects before assigning their final
-        // draw order, so stable z-bucketing alone is not always sufficient.
-        objects.sort_unstable_by_key(|o| (o.z, o.order));
     }
 
     debug_assert!(
@@ -365,8 +371,6 @@ struct CachedGlyph {
     offset: [f32; 2],
     advance_i32: i32,
     char_index: usize,
-    fill_batch_index: u32,
-    fill_vertex_start: u32,
     draw_quad: bool,
 }
 
@@ -492,17 +496,19 @@ type SharedAliasMap = HashMap<usize, SharedLayoutEntry, TextLayoutHasher>;
 #[derive(Clone, Copy)]
 struct TextureCacheEntry<T> {
     fingerprint: u64,
+    validated_frame: u64,
     value: T,
 }
 
-type TextureMetaMap = HashMap<usize, TextureCacheEntry<TextureMeta>, TextLayoutHasher>;
-type TextureSheetMap = HashMap<usize, TextureCacheEntry<(u32, u32)>, TextLayoutHasher>;
-type TextureHandleLookupMap =
-    HashMap<usize, TextureCacheEntry<renderer::TextureHandle>, TextLayoutHasher>;
+type TextureLookupMap<T> = HashMap<usize, TextureCacheEntry<T>, TextLayoutHasher>;
+type TextureMetaMap = TextureLookupMap<TextureMeta>;
+type TextureSheetMap = TextureLookupMap<(u32, u32)>;
+type TextureHandleLookupMap = TextureLookupMap<renderer::TextureHandle>;
 
 #[derive(Default)]
 struct TextureLookupCache {
     generation: u64,
+    frame: u64,
     dims: TextureMetaMap,
     sheets: TextureSheetMap,
     handles: TextureHandleLookupMap,
@@ -510,11 +516,20 @@ struct TextureLookupCache {
 
 impl TextureLookupCache {
     fn begin_frame<T: TextureContext + ?Sized>(&mut self, texture_ctx: &T) {
+        self.frame = self.frame.wrapping_add(1);
+        if self.frame == 0 {
+            self.clear_entries();
+            self.frame = 1;
+        }
         let generation = texture_ctx.texture_registry_generation();
         if self.generation == generation {
             return;
         }
         self.generation = generation;
+        self.clear_entries();
+    }
+
+    fn clear_entries(&mut self) {
         self.dims.clear();
         self.sheets.clear();
         self.handles.clear();
@@ -533,6 +548,30 @@ impl TextureLookupCache {
     }
 
     #[inline(always)]
+    fn validated_value<T: Copy>(
+        frame: u64,
+        entries: &mut TextureLookupMap<T>,
+        key_ptr: usize,
+        key: &str,
+    ) -> Result<T, u64> {
+        // The actor tree and cached font storage stay alive for the whole compose
+        // call, so a key address validated in this frame cannot change contents.
+        // Revalidate on the next frame to protect against allocator address reuse.
+        if let Some(entry) = entries.get_mut(&key_ptr) {
+            if entry.validated_frame == frame {
+                return Ok(entry.value);
+            }
+            let fingerprint = Self::key_fingerprint(key);
+            if entry.fingerprint == fingerprint {
+                entry.validated_frame = frame;
+                return Ok(entry.value);
+            }
+            return Err(fingerprint);
+        }
+        Err(Self::key_fingerprint(key))
+    }
+
+    #[inline(always)]
     fn texture_dims<T: TextureContext + ?Sized>(
         &mut self,
         texture_ctx: &T,
@@ -540,17 +579,16 @@ impl TextureLookupCache {
         key: &str,
     ) -> Option<TextureMeta> {
         let key_ptr = Self::ptr_cache_key(key_ptr);
-        let fingerprint = Self::key_fingerprint(key);
-        if let Some(entry) = self.dims.get(&key_ptr) {
-            if entry.fingerprint == fingerprint {
-                return Some(entry.value);
-            }
-        }
+        let fingerprint = match Self::validated_value(self.frame, &mut self.dims, key_ptr, key) {
+            Ok(meta) => return Some(meta),
+            Err(fingerprint) => fingerprint,
+        };
         let meta = texture_ctx.texture_dims(key)?;
         self.dims.insert(
             key_ptr,
             TextureCacheEntry {
                 fingerprint,
+                validated_frame: self.frame,
                 value: meta,
             },
         );
@@ -565,17 +603,16 @@ impl TextureLookupCache {
         key: &str,
     ) -> (u32, u32) {
         let key_ptr = Self::ptr_cache_key(key_ptr);
-        let fingerprint = Self::key_fingerprint(key);
-        if let Some(entry) = self.sheets.get(&key_ptr) {
-            if entry.fingerprint == fingerprint {
-                return entry.value;
-            }
-        }
+        let fingerprint = match Self::validated_value(self.frame, &mut self.sheets, key_ptr, key) {
+            Ok(dims) => return dims,
+            Err(fingerprint) => fingerprint,
+        };
         let dims = texture_ctx.sprite_sheet_dims(key);
         self.sheets.insert(
             key_ptr,
             TextureCacheEntry {
                 fingerprint,
+                validated_frame: self.frame,
                 value: dims,
             },
         );
@@ -590,17 +627,16 @@ impl TextureLookupCache {
         key: &str,
     ) -> renderer::TextureHandle {
         let key_ptr = Self::ptr_cache_key(key_ptr);
-        let fingerprint = Self::key_fingerprint(key);
-        if let Some(entry) = self.handles.get(&key_ptr) {
-            if entry.fingerprint == fingerprint {
-                return entry.value;
-            }
-        }
+        let fingerprint = match Self::validated_value(self.frame, &mut self.handles, key_ptr, key) {
+            Ok(handle) => return handle,
+            Err(fingerprint) => fingerprint,
+        };
         let handle = texture_ctx.texture_handle(key);
         self.handles.insert(
             key_ptr,
             TextureCacheEntry {
                 fingerprint,
+                validated_frame: self.frame,
                 value: handle,
             },
         );
@@ -640,7 +676,7 @@ pub struct TextLayoutCache {
     max_entries: usize,
     max_aliases: usize,
     use_tick: u64,
-    frame_stats: TextLayoutFrameStats,
+    frame_stats: Option<TextLayoutFrameStats>,
     uncached_layout: Option<Arc<CachedTextLayout>>,
 }
 
@@ -662,7 +698,7 @@ impl TextLayoutCache {
             max_entries,
             max_aliases: max_entries,
             use_tick: 0,
-            frame_stats: TextLayoutFrameStats::default(),
+            frame_stats: None,
             uncached_layout: None,
         }
     }
@@ -686,21 +722,26 @@ impl TextLayoutCache {
         self.entry_count = 0;
         self.alias_count = 0;
         self.use_tick = 0;
-        self.frame_stats = TextLayoutFrameStats::default();
+        self.frame_stats = None;
         self.uncached_layout = None;
     }
 
+    /// Reset optional per-frame instrumentation. Disable it on ordinary frames
+    /// so cache hits do not pay for diagnostic counter updates.
     #[inline(always)]
-    pub fn begin_frame_stats(&mut self) {
-        self.frame_stats = TextLayoutFrameStats::default();
+    pub fn begin_frame_stats(&mut self, enabled: bool) {
+        self.frame_stats = enabled.then(TextLayoutFrameStats::default);
     }
 
     #[inline(always)]
     pub fn frame_stats(&self) -> TextLayoutFrameStats {
+        let Some(frame_stats) = self.frame_stats else {
+            return TextLayoutFrameStats::default();
+        };
         TextLayoutFrameStats {
             owned_entries: saturating_u32(self.entry_count),
             shared_aliases: saturating_u32(self.alias_count),
-            ..self.frame_stats
+            ..frame_stats
         }
     }
 
@@ -725,13 +766,14 @@ impl TextLayoutCache {
 
     #[inline(always)]
     fn record_layout_build(&mut self, layout: &CachedTextLayout) {
-        self.frame_stats.misses = self.frame_stats.misses.saturating_add(1);
-        self.frame_stats.built_lines = self
-            .frame_stats
+        let Some(frame_stats) = self.frame_stats.as_mut() else {
+            return;
+        };
+        frame_stats.misses = frame_stats.misses.saturating_add(1);
+        frame_stats.built_lines = frame_stats
             .built_lines
             .saturating_add(saturating_u32(layout.lines.len()));
-        self.frame_stats.built_glyphs = self
-            .frame_stats
+        frame_stats.built_glyphs = frame_stats
             .built_glyphs
             .saturating_add(saturating_u32(layout.glyph_count));
     }
@@ -841,7 +883,9 @@ impl TextLayoutCache {
         {
             entry.last_used = tick;
             let layout_index = entry.layout_index;
-            self.frame_stats.owned_hits = self.frame_stats.owned_hits.saturating_add(1);
+            if let Some(frame_stats) = self.frame_stats.as_mut() {
+                frame_stats.owned_hits = frame_stats.owned_hits.saturating_add(1);
+            }
             return self.layouts[layout_index].as_ref();
         }
         let layout = Arc::new(build_cached_text_layout(
@@ -877,7 +921,9 @@ impl TextLayoutCache {
         {
             entry.last_used = tick;
             let layout_index = entry.layout_index;
-            self.frame_stats.shared_hits = self.frame_stats.shared_hits.saturating_add(1);
+            if let Some(frame_stats) = self.frame_stats.as_mut() {
+                frame_stats.shared_hits = frame_stats.shared_hits.saturating_add(1);
+            }
             return self.layouts[layout_index].as_ref();
         }
 
@@ -888,7 +934,9 @@ impl TextLayoutCache {
         {
             entry.last_used = tick;
             let layout_index = entry.layout_index;
-            self.frame_stats.owned_hits = self.frame_stats.owned_hits.saturating_add(1);
+            if let Some(frame_stats) = self.frame_stats.as_mut() {
+                frame_stats.owned_hits = frame_stats.owned_hits.saturating_add(1);
+            }
             if self.alias_count < self.max_aliases {
                 let replaced = self.shared_aliases.entry(key).or_default().insert(
                     text_key,
@@ -1002,8 +1050,6 @@ fn cached_glyph(
         offset: glyph.offset,
         advance_i32: glyph.advance_i32,
         char_index,
-        fill_batch_index: 0,
-        fill_vertex_start: 0,
         draw_quad,
     }
 }
@@ -1011,28 +1057,6 @@ fn cached_glyph(
 #[inline(always)]
 fn glyph_has_fill_quad(glyph: &CachedGlyph) -> bool {
     glyph.draw_quad && glyph.size[0].abs() >= 1e-6 && glyph.size[1].abs() >= 1e-6
-}
-
-fn assign_fill_batch_slots(glyphs: &mut [CachedGlyph]) {
-    let mut batches: SmallVec<[(*const str, u32); 8]> = SmallVec::new();
-    for glyph in glyphs {
-        if !glyph_has_fill_quad(glyph) {
-            continue;
-        }
-        let batch_index = if let Some(index) = batches
-            .iter()
-            .position(|(texture_key, _)| std::ptr::addr_eq(*texture_key, glyph.texture_key))
-        {
-            index
-        } else {
-            batches.push((glyph.texture_key, 0));
-            batches.len().saturating_sub(1)
-        };
-        let (_, next_vertex) = &mut batches[batch_index];
-        glyph.fill_batch_index = batch_index as u32;
-        glyph.fill_vertex_start = *next_vertex;
-        *next_vertex = next_vertex.saturating_add(6);
-    }
 }
 
 #[inline(always)]
@@ -1808,8 +1832,6 @@ fn build_cached_text_layout(
         start_char = char_index.saturating_add(1);
     }
 
-    assign_fill_batch_slots(&mut glyphs);
-
     CachedTextLayout {
         layout_seed,
         font_height: font.height,
@@ -2026,6 +2048,7 @@ fn sprite_source_handle(
 fn push_shadow_objects_for_range(
     out: &mut Vec<RenderObject>,
     sprite_instances: &mut Vec<renderer::SpriteInstanceRaw>,
+    recycled_vertices: &mut Vec<Vec<renderer::TexturedMeshVertex>>,
     start: usize,
     end: usize,
     len: [f32; 2],
@@ -2034,8 +2057,7 @@ fn push_shadow_objects_for_range(
     let t_world = Matrix4::from_translation(Vector3::new(len[0], len[1], 0.0));
     for i in start..end {
         let obj = &out[i];
-        let mut obj_type = obj.object_type.clone();
-        match &mut obj_type {
+        let obj_type = match &obj.object_type {
             renderer::ObjectType::Sprite(sprite_index) => {
                 let mut sprite = sprite_instances[*sprite_index as usize];
                 let mut shadow_tint = color;
@@ -2043,19 +2065,33 @@ fn push_shadow_objects_for_range(
                 sprite.tint = shadow_tint;
                 sprite.center[0] += len[0];
                 sprite.center[1] += len[1];
-                *sprite_index = sprite_instances.len() as u32;
+                let sprite_index = sprite_instances.len() as u32;
                 sprite_instances.push(sprite);
+                renderer::ObjectType::Sprite(sprite_index)
             }
             renderer::ObjectType::Mesh {
-                transform, tint, ..
+                transform,
+                tint,
+                vertices,
             } => {
+                let mut tint = *tint;
                 tint[0] *= color[0];
                 tint[1] *= color[1];
                 tint[2] *= color[2];
                 tint[3] *= color[3];
-                *transform = t_world * *transform;
+                renderer::ObjectType::Mesh {
+                    transform: t_world * *transform,
+                    tint,
+                    vertices: Arc::clone(vertices),
+                }
             }
-            renderer::ObjectType::TexturedMesh { instance, .. } => {
+            renderer::ObjectType::TexturedMesh {
+                instance,
+                vertices,
+                geom_cache_key,
+                depth_test,
+            } => {
+                let mut instance = *instance;
                 let mut shadow_tint = color;
                 shadow_tint[0] *= instance.tint[0];
                 shadow_tint[1] *= instance.tint[1];
@@ -2063,8 +2099,26 @@ fn push_shadow_objects_for_range(
                 shadow_tint[3] *= instance.tint[3];
                 instance.tint = shadow_tint;
                 instance.set_transform(t_world * instance.transform());
+                let vertices = match vertices {
+                    renderer::TexturedMeshVertices::Shared(vertices) => {
+                        renderer::TexturedMeshVertices::Shared(Arc::clone(vertices))
+                    }
+                    renderer::TexturedMeshVertices::Transient(vertices) => {
+                        let mut shadow_vertices =
+                            take_recycled_text_mesh_vertices(recycled_vertices);
+                        shadow_vertices.clear();
+                        shadow_vertices.extend_from_slice(vertices);
+                        renderer::TexturedMeshVertices::Transient(shadow_vertices)
+                    }
+                };
+                renderer::ObjectType::TexturedMesh {
+                    instance,
+                    vertices,
+                    geom_cache_key: *geom_cache_key,
+                    depth_test: *depth_test,
+                }
             }
-        }
+        };
 
         out.push(renderer::RenderObject {
             object_type: obj_type,
@@ -2370,6 +2424,7 @@ fn build_actor_recursive<'a, T: TextureContext + ?Sized>(
                 push_shadow_objects_for_range(
                     out,
                     sprite_instances,
+                    &mut scratch.recycled_text_mesh_vertices,
                     before,
                     end,
                     *shadow_len,
@@ -2608,6 +2663,7 @@ fn build_actor_recursive<'a, T: TextureContext + ?Sized>(
                 push_shadow_objects_for_range(
                     out,
                     sprite_instances,
+                    &mut scratch.recycled_text_mesh_vertices,
                     start,
                     end,
                     *len,
@@ -2903,6 +2959,7 @@ fn build_actor_recursive<'a, T: TextureContext + ?Sized>(
                     push_shadow_objects_for_range(
                         out,
                         sprite_instances,
+                        &mut scratch.recycled_text_mesh_vertices,
                         before,
                         end,
                         *shadow_len,
@@ -3765,7 +3822,7 @@ fn clip_objects_range_to_world_masks(
     for read in start..len {
         let keep = {
             let obj = &mut objects[read];
-            clip_object_to_world_masks(obj, sprite_instances, masks)
+            clip_object_to_world_masks(obj, sprite_instances, masks, recycled_vertices)
         };
         if keep {
             if write != read {
@@ -3823,19 +3880,27 @@ fn clip_object_to_world_masks(
     obj: &mut RenderObject,
     sprite_instances: &mut [renderer::SpriteInstanceRaw],
     masks: &[WorldRect],
+    recycled_vertices: &mut Vec<Vec<renderer::TexturedMeshVertex>>,
 ) -> bool {
     let mut best_obj: Option<ClippedSpriteObject> = None;
     let mut best_area = -1.0_f32;
     for &mask in masks {
-        let Some(candidate) =
-            clipped_sprite_object_to_world_rect(obj, sprite_instances, mask, None)
-        else {
+        let Some(candidate) = clipped_sprite_object_to_world_rect(
+            obj,
+            sprite_instances,
+            mask,
+            Some(&mut *recycled_vertices),
+        ) else {
             continue;
         };
         let area = object_world_area(&candidate, sprite_instances);
         if area > best_area {
             best_area = area;
-            best_obj = Some(candidate);
+            if let Some(previous) = best_obj.replace(candidate) {
+                recycle_transient_object_vertices(previous.object_type, recycled_vertices);
+            }
+        } else {
+            recycle_transient_object_vertices(candidate.object_type, recycled_vertices);
         }
     }
     if let Some(chosen) = best_obj {
@@ -3844,11 +3909,30 @@ fn clip_object_to_world_masks(
         {
             sprite_instances[*index as usize] = sprite;
         }
-        obj.object_type = chosen.object_type;
+        let source = std::mem::replace(&mut obj.object_type, chosen.object_type);
+        recycle_transient_object_vertices(source, recycled_vertices);
         true
     } else {
         false
     }
+}
+
+fn recycle_transient_object_vertices(
+    object_type: renderer::ObjectType,
+    recycled_vertices: &mut Vec<Vec<renderer::TexturedMeshVertex>>,
+) {
+    let renderer::ObjectType::TexturedMesh {
+        vertices: renderer::TexturedMeshVertices::Transient(mut vertices),
+        ..
+    } = object_type
+    else {
+        return;
+    };
+    if recycled_vertices.len() >= MAX_RECYCLED_TEXT_MESH_VERTEX_BUFFERS {
+        return;
+    }
+    vertices.clear();
+    recycled_vertices.push(vertices);
 }
 
 fn clip_objects_range_to_world_rect(
@@ -3976,7 +4060,7 @@ fn clipped_sprite_object_to_world_rect(
     obj: &RenderObject,
     sprite_instances: &[renderer::SpriteInstanceRaw],
     clip: WorldRect,
-    recycled_vertices: Option<&mut Vec<Vec<renderer::TexturedMeshVertex>>>,
+    mut recycled_vertices: Option<&mut Vec<Vec<renderer::TexturedMeshVertex>>>,
 ) -> Option<ClippedSpriteObject> {
     if clip.left >= clip.right || clip.bottom >= clip.top {
         return None;
@@ -4077,9 +4161,12 @@ fn clipped_sprite_object_to_world_rect(
             })
         }
         renderer::ObjectType::TexturedMesh {
-            instance, vertices, ..
+            instance,
+            vertices: mesh_vertices,
+            geom_cache_key,
+            depth_test,
         } => {
-            let vertices = vertices.as_ref();
+            let vertices = mesh_vertices.as_ref();
             let transform = instance.transform();
             let Some(bounds) = textured_mesh_world_bounds(vertices, transform) else {
                 return None;
@@ -4096,8 +4183,27 @@ fn clipped_sprite_object_to_world_rect(
                 && bounds.bottom >= clip.bottom
                 && bounds.top <= clip.top
             {
+                let vertices = match mesh_vertices {
+                    renderer::TexturedMeshVertices::Shared(vertices) => {
+                        renderer::TexturedMeshVertices::Shared(Arc::clone(vertices))
+                    }
+                    renderer::TexturedMeshVertices::Transient(vertices) => {
+                        let mut cloned = recycled_vertices
+                            .as_mut()
+                            .map(|pool| take_recycled_text_mesh_vertices(*pool))
+                            .unwrap_or_default();
+                        cloned.clear();
+                        cloned.extend_from_slice(vertices);
+                        renderer::TexturedMeshVertices::Transient(cloned)
+                    }
+                };
                 return Some(ClippedSpriteObject {
-                    object_type: obj.object_type.clone(),
+                    object_type: renderer::ObjectType::TexturedMesh {
+                        instance: *instance,
+                        vertices,
+                        geom_cache_key: *geom_cache_key,
+                        depth_test: *depth_test,
+                    },
                     sprite: None,
                 });
             }
@@ -4485,7 +4591,8 @@ mod tests {
         TextLayoutKey, TextureCacheEntry, TextureContext, TextureLookupCache, TextureMeta,
         WorldRect, build_cached_text_layout, build_screen, build_screen_cached_with_scratch,
         clip_object_to_world_masks, clip_sprite_object_to_world_rect, fold_sprite_xy_rot,
-        resolve_sprite_size_like_sm, sort_render_objects, str_ptr, wrap_text_lines_by_words,
+        push_shadow_objects_for_range, resolve_sprite_size_like_sm, sort_render_objects, str_ptr,
+        wrap_text_lines_by_words,
     };
     use crate::actors::{Actor, SizeSpec, SpriteSource, TextAlign, TextAttribute, TextContent};
     use crate::font::{Font, Glyph};
@@ -4967,6 +5074,7 @@ mod tests {
                     top: 5.0,
                 },
             ],
+            &mut Vec::new(),
         ));
 
         if let ObjectType::Sprite(index) = &obj.object_type {
@@ -4977,6 +5085,64 @@ mod tests {
         } else {
             panic!("expected sprite to remain in fast clip path");
         }
+    }
+
+    #[test]
+    fn multi_mask_transient_mesh_reuses_candidate_buffers() {
+        let source = vec![TexturedMeshVertex::default(); 3];
+        let mut obj = RenderObject {
+            object_type: ObjectType::TexturedMesh {
+                instance: TexturedMeshInstanceRaw::new(
+                    Matrix4::IDENTITY,
+                    [1.0; 4],
+                    [1.0, 1.0],
+                    [0.0, 0.0],
+                    [0.0, 0.0],
+                    false,
+                ),
+                vertices: deadlib_render::TexturedMeshVertices::Transient(source),
+                geom_cache_key: INVALID_TMESH_CACHE_KEY,
+                depth_test: false,
+            },
+            texture_handle: 0,
+            blend: BlendMode::Alpha,
+            z: 0,
+            order: 0,
+            camera: 0,
+        };
+        let first = Vec::with_capacity(3);
+        let chosen = Vec::with_capacity(3);
+        let chosen_ptr = chosen.as_ptr();
+        let mut recycled_vertices = vec![first, chosen];
+
+        assert!(clip_object_to_world_masks(
+            &mut obj,
+            &mut [],
+            &[
+                WorldRect {
+                    left: -1.0,
+                    right: 1.0,
+                    bottom: -1.0,
+                    top: 1.0,
+                },
+                WorldRect {
+                    left: -2.0,
+                    right: 2.0,
+                    bottom: -2.0,
+                    top: 2.0,
+                },
+            ],
+            &mut recycled_vertices,
+        ));
+
+        let ObjectType::TexturedMesh { vertices, .. } = &obj.object_type else {
+            panic!("clipped object should remain a textured mesh");
+        };
+        let deadlib_render::TexturedMeshVertices::Transient(vertices) = vertices else {
+            panic!("clipped transient geometry should remain recyclable");
+        };
+        assert_eq!(vertices.as_ptr(), chosen_ptr);
+        assert_eq!(recycled_vertices.len(), 2);
     }
 
     #[test]
@@ -5036,7 +5202,7 @@ mod tests {
         let key_ptr = key.as_ref() as *const str;
         let key_addr = TextureLookupCache::ptr_cache_key(key_ptr);
         let fingerprint = TextureLookupCache::key_fingerprint(key.as_ref());
-        cache.generation = texture_ctx.generation;
+        cache.begin_frame(&texture_ctx);
         texture_ctx
             .dims
             .insert(String::from(key.as_ref()), TextureMeta { w: 64, h: 32 });
@@ -5045,6 +5211,7 @@ mod tests {
             key_addr,
             TextureCacheEntry {
                 fingerprint,
+                validated_frame: cache.frame,
                 value: TextureMeta { w: 64, h: 32 },
             },
         );
@@ -5052,6 +5219,7 @@ mod tests {
             key_addr,
             TextureCacheEntry {
                 fingerprint,
+                validated_frame: cache.frame,
                 value: (4, 2),
             },
         );
@@ -5059,6 +5227,7 @@ mod tests {
             key_addr,
             TextureCacheEntry {
                 fingerprint,
+                validated_frame: cache.frame,
                 value: 11,
             },
         );
@@ -5076,13 +5245,18 @@ mod tests {
             cache.texture_handle(&texture_ctx, key_ptr, key.as_ref()),
             11
         );
+
+        cache.begin_frame(&texture_ctx);
         assert!(
             cache
                 .texture_dims(&texture_ctx, key_ptr, "other_frame_tex")
                 .is_none()
         );
-
-        cache.begin_frame(&texture_ctx);
+        assert_eq!(
+            cache.texture_dims(&texture_ctx, key_ptr, key.as_ref()),
+            Some(TextureMeta { w: 64, h: 32 })
+        );
+        assert_eq!(cache.dims[&key_addr].validated_frame, cache.frame);
 
         assert_eq!(cache.dims.len(), 1);
         assert_eq!(cache.sheets.len(), 1);
@@ -5213,6 +5387,26 @@ mod tests {
     }
 
     #[test]
+    fn text_layout_frame_stats_are_opt_in() {
+        let mut cache = TextLayoutCache::new(4);
+        let layout = test_layout();
+
+        cache.record_layout_build(&layout);
+        assert_eq!(cache.frame_stats().misses, 0);
+
+        cache.begin_frame_stats(true);
+        cache.record_layout_build(&layout);
+        let stats = cache.frame_stats();
+        assert_eq!(stats.misses, 1);
+        assert_eq!(stats.built_lines, layout.lines.len() as u32);
+        assert_eq!(stats.built_glyphs, layout.glyph_count as u32);
+
+        cache.begin_frame_stats(false);
+        cache.record_layout_build(&layout);
+        assert_eq!(cache.frame_stats().misses, 0);
+    }
+
+    #[test]
     fn text_layout_cache_saturates_at_capacity() {
         let key = TextLayoutKey {
             font_key: 7,
@@ -5275,6 +5469,61 @@ mod tests {
         assert_eq!(scratch.recycled_text_mesh_vertices.len(), 1);
         assert!(scratch.recycled_text_mesh_vertices[0].is_empty());
         assert!(scratch.recycled_text_mesh_vertices[0].capacity() >= 6);
+    }
+
+    #[test]
+    fn transient_mesh_shadow_reuses_vertex_buffer() {
+        let source = vec![TexturedMeshVertex::default(); 6];
+        let mut objects = vec![RenderObject {
+            object_type: ObjectType::TexturedMesh {
+                instance: TexturedMeshInstanceRaw::new(
+                    Matrix4::IDENTITY,
+                    [1.0; 4],
+                    [1.0, 1.0],
+                    [0.0, 0.0],
+                    [0.0, 0.0],
+                    false,
+                ),
+                vertices: deadlib_render::TexturedMeshVertices::Transient(source.clone()),
+                geom_cache_key: INVALID_TMESH_CACHE_KEY,
+                depth_test: false,
+            },
+            texture_handle: 9,
+            blend: BlendMode::Alpha,
+            z: 0,
+            order: 0,
+            camera: 0,
+        }];
+        let mut sprite_instances = Vec::new();
+        let recycled = Vec::with_capacity(source.len());
+        let recycled_ptr = recycled.as_ptr();
+        let mut recycled_vertices = vec![recycled];
+
+        push_shadow_objects_for_range(
+            &mut objects,
+            &mut sprite_instances,
+            &mut recycled_vertices,
+            0,
+            1,
+            [2.0, 3.0],
+            [0.5; 4],
+        );
+
+        assert!(recycled_vertices.is_empty());
+        let ObjectType::TexturedMesh { vertices, .. } = &objects[1].object_type else {
+            panic!("shadow should remain a textured mesh");
+        };
+        let deadlib_render::TexturedMeshVertices::Transient(vertices) = vertices else {
+            panic!("transient shadow should keep recyclable ownership");
+        };
+        assert_eq!(vertices.as_ptr(), recycled_ptr);
+        assert_eq!(vertices.len(), source.len());
+        assert!(vertices.iter().zip(&source).all(|(actual, expected)| {
+            actual.pos == expected.pos
+                && actual.uv == expected.uv
+                && actual.color == expected.color
+                && actual.tex_matrix_scale == expected.tex_matrix_scale
+        }));
     }
 
     #[test]

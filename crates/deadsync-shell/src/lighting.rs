@@ -12,7 +12,6 @@ use deadsync_lights::cabinet_chart::{
 use deadsync_lights::{
     ButtonLight, CabinetLight, HideFlags, Mode, Player, ScreenLightContext, State as LightState,
 };
-use deadsync_profile::compat as profile;
 use deadsync_profile::{
     HideLightType, PlayStyle, PlayerSide, physical_player_slot_for_chart_pad, player_side_index,
 };
@@ -395,10 +394,13 @@ impl SmxPanelDriver {
     pub fn update<Profile, OverlayActor, CapturedActor, StateDelta>(
         &mut self,
         state: &GameplayRuntimeState<Profile, OverlayActor, CapturedActor, StateDelta>,
+        play_style: PlayStyle,
+        player_side: PlayerSide,
     ) where
         Profile: GameplayProfileData,
     {
-        self.inner.update(state, smx_slot_for_gameplay(state));
+        self.inner
+            .update(state, smx_slot_for_gameplay(state, play_style, player_side));
     }
 
     pub fn deactivate(&mut self) {
@@ -432,15 +434,15 @@ impl SmxPanelDriver {
 
 fn smx_slot_for_gameplay<Profile, OverlayActor, CapturedActor, StateDelta>(
     state: &GameplayRuntimeState<Profile, OverlayActor, CapturedActor, StateDelta>,
+    play_style: PlayStyle,
+    player_side: PlayerSide,
 ) -> [usize; PADS]
 where
     Profile: GameplayProfileData,
 {
-    let play_style = profile::get_session_play_style();
-    let session_side = profile::get_session_player_side();
     let doubles = state.cols_per_player() >= 8 && state.num_players() == 1;
     std::array::from_fn(|pad| {
-        physical_player_slot_for_chart_pad(play_style, session_side, doubles, pad)
+        physical_player_slot_for_chart_pad(play_style, player_side, doubles, pad)
     })
 }
 

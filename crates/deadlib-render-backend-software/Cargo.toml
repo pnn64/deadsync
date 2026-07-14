@@ -9,6 +9,7 @@ deadlib-render = { path = "../deadlib-render" }
 glam = "0.33.1"
 image = "0.25.10"
 log = "0.4.33"
+rayon = "1.11.0"
 softbuffer = "0.4.8"
 winit = "0.30.13"
 

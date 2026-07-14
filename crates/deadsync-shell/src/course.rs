@@ -181,6 +181,10 @@ pub fn score_info_from_stage(
     let personal_record_highlight_rank = local_score_valid
         .then_some(personal_record_highlight_rank)
         .flatten();
+    let profile = profile::get_for_side(side);
+    let speed_mod = profile.scroll_speed;
+    let mods_text = profile_data::evaluation_mods_text(&profile, speed_mod);
+    let disabled_timing_windows = profile.timing_windows.disabled_windows();
 
     Some(ScoreInfo {
         song: stage.song.clone(),
@@ -199,11 +203,8 @@ pub fn score_info_from_stage(
         earned_grade_points: player.earned_grade_points,
         possible_grade_points: player.possible_grade_points,
         grade: player.grade,
-        speed_mod: profile::get_for_side(side).scroll_speed,
-        mods_text: {
-            let profile = profile::get_for_side(side);
-            profile_data::evaluation_mods_text(&profile, profile.scroll_speed)
-        },
+        speed_mod,
+        mods_text,
         hands_achieved: player.hands_achieved,
         hands_total: player.hands_total,
         holds_held: player.holds_held,
@@ -243,9 +244,7 @@ pub fn score_info_from_stage(
         show_hard_ex_score: player.show_hard_ex_score,
         show_fa_plus_pane: player.show_fa_plus_pane,
         track_early_judgments: player.track_early_judgments,
-        disabled_timing_windows: profile::get_for_side(side)
-            .timing_windows
-            .disabled_windows(),
+        disabled_timing_windows,
         machine_records,
         machine_record_highlight_rank,
         personal_records,

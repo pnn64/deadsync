@@ -6079,9 +6079,8 @@ fn publish_lobby_confirmed_song_selection(state: &mut State) {
 }
 
 fn sync_lobby_select_music(state: &mut State) {
-    let snapshot = std::mem::take(&mut state.lobby_view.snapshot);
+    let snapshot = std::sync::Arc::clone(&state.lobby_view.snapshot);
     sync_lobby_select_music_with(state, &snapshot);
-    state.lobby_view.snapshot = snapshot;
 }
 
 fn sync_lobby_select_music_with(state: &mut State, snapshot: &lobby_data::Snapshot) {
@@ -13200,7 +13199,7 @@ mod tests {
             last_status: None,
         };
 
-        state.lobby_view.snapshot = snapshot;
+        state.lobby_view.snapshot = std::sync::Arc::new(snapshot);
         assert_eq!(
             select_music_lobby_lock_text(&state).as_deref(),
             Some("Waiting for players to finish evaluation...")

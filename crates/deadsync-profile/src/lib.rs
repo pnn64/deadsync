@@ -180,6 +180,36 @@ pub fn runtime_gameplay_hud_snapshot() -> GameplayHudSnapshot {
     )
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SessionPlayersView {
+    pub active_side: PlayerSide,
+    pub joined: [bool; PLAYER_SLOTS],
+    pub display_names: [String; PLAYER_SLOTS],
+}
+
+pub fn session_players_view(
+    profiles: &[Profile; PLAYER_SLOTS],
+    joined_mask: u8,
+    active_side: PlayerSide,
+) -> SessionPlayersView {
+    SessionPlayersView {
+        active_side,
+        joined: [
+            player_side_is_joined(joined_mask, PlayerSide::P1),
+            player_side_is_joined(joined_mask, PlayerSide::P2),
+        ],
+        display_names: std::array::from_fn(|side_idx| profiles[side_idx].display_name.clone()),
+    }
+}
+
+pub fn runtime_session_players_view() -> SessionPlayersView {
+    let (joined_mask, active_side) = {
+        let session = runtime_lock_session();
+        (session.joined_mask, session.player_side)
+    };
+    session_players_view(&runtime_lock_profiles(), joined_mask, active_side)
+}
+
 pub fn runtime_set_avatar_texture_key_for_side(side: PlayerSide, key: Option<String>) {
     let mut profiles = runtime_lock_profiles();
     set_avatar_texture_key_for_side(&mut profiles, side, key);
@@ -589,17 +619,15 @@ pub fn runtime_local_profile_id_for_pad(is_p2_side: bool) -> Option<String> {
     runtime_active_local_profile_id_for_side(side)
 }
 
-pub fn runtime_pad_light_brightness_for_pad(is_p2_side: bool) -> u8 {
+pub fn runtime_pad_light_brightness() -> [u8; PLAYER_SLOTS] {
     let (play_style, player_side) = {
         let session = runtime_lock_session();
         (session.play_style, session.player_side)
     };
-    pad_light_brightness_for_physical_pad(
-        &runtime_lock_profiles(),
-        play_style,
-        player_side,
-        is_p2_side,
-    )
+    let profiles = runtime_lock_profiles();
+    std::array::from_fn(|pad| {
+        pad_light_brightness_for_physical_pad(&profiles, play_style, player_side, pad == 1)
+    })
 }
 
 pub fn runtime_smx_pack_names_for_profiles<T: Copy>(
@@ -612,6 +640,29 @@ pub fn runtime_smx_pack_names_for_profiles<T: Copy>(
 
 pub fn runtime_session_music_rate() -> f32 {
     runtime_lock_session().music_rate()
+}
+
+pub fn runtime_session_snapshot() -> SessionSnapshot {
+    SessionSnapshot::from_state(&runtime_lock_session())
+}
+
+pub fn runtime_session_snapshot_with_active_ids()
+-> (SessionSnapshot, [Option<String>; PLAYER_SLOTS]) {
+    let session = runtime_lock_session();
+    session_snapshot_with_active_ids(&session)
+}
+
+fn session_snapshot_with_active_ids(
+    session: &SessionState,
+) -> (SessionSnapshot, [Option<String>; PLAYER_SLOTS]) {
+    (
+        SessionSnapshot::from_state(session),
+        std::array::from_fn(|idx| {
+            session
+                .active_local_profile_id(player_side_for_index(idx))
+                .map(str::to_owned)
+        }),
+    )
 }
 
 pub fn runtime_set_session_music_rate(rate: f32) {
@@ -750,6 +801,12 @@ pub fn runtime_toggle_favorite_for_side(
 pub fn runtime_profile_has_favorite_for_side(side: PlayerSide, chart_hash: &str) -> bool {
     let profiles = runtime_lock_profiles();
     profile_has_favorite(&profiles, side, chart_hash)
+}
+
+pub fn runtime_favorite_membership<const N: usize>(
+    queries: &[FavoriteMembershipQuery<'_>; N],
+) -> [[bool; PLAYER_SLOTS]; N] {
+    favorite_membership(&runtime_lock_profiles(), queries)
 }
 
 pub fn runtime_seed_favorite_for_side(side: PlayerSide, chart_hash: &str) {
@@ -1901,6 +1958,83 @@ pub fn runtime_scorebox_profile_snapshot_for_side(
     )
 }
 
+#[derive(Debug, Clone)]
+pub struct ScoreboxProfileView {
+    pub leaderboard: deadsync_score::GameplayScoreboxProfileSnapshot,
+    pub joined: bool,
+    pub display_name: String,
+    pub groovestats_username: String,
+    pub player_initials: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct ScoreboxRuntimeView {
+    pub play_style: PlayStyle,
+    pub player_side: PlayerSide,
+    pub sides: [ScoreboxProfileView; PLAYER_SLOTS],
+}
+
+pub fn scorebox_runtime_view(
+    profiles: &[Profile; PLAYER_SLOTS],
+    active_profiles: &[ActiveProfile; PLAYER_SLOTS],
+    joined_mask: u8,
+    play_style: PlayStyle,
+    player_side: PlayerSide,
+    enable_groovestats: bool,
+    enable_arrowcloud: bool,
+    auto_populate_gs_scores: bool,
+) -> ScoreboxRuntimeView {
+    ScoreboxRuntimeView {
+        play_style,
+        player_side,
+        sides: std::array::from_fn(|side_idx| {
+            let side = [PlayerSide::P1, PlayerSide::P2][side_idx];
+            let profile = &profiles[side_idx];
+            let joined = player_side_is_joined(joined_mask, side);
+            ScoreboxProfileView {
+                leaderboard: scorebox_profile_snapshot(
+                    profile,
+                    joined,
+                    enable_groovestats,
+                    enable_arrowcloud,
+                    auto_populate_gs_scores,
+                    active_profile_local_id(&active_profiles[side_idx]).map(str::to_string),
+                ),
+                joined,
+                display_name: profile.display_name.clone(),
+                groovestats_username: profile.groovestats_username.clone(),
+                player_initials: profile.player_initials.clone(),
+            }
+        }),
+    }
+}
+
+pub fn runtime_scorebox_view(
+    enable_groovestats: bool,
+    enable_arrowcloud: bool,
+    auto_populate_gs_scores: bool,
+) -> ScoreboxRuntimeView {
+    let (play_style, player_side, joined_mask, active_profiles) = {
+        let session = runtime_lock_session();
+        (
+            session.play_style,
+            session.player_side,
+            session.joined_mask,
+            session.active_profiles.clone(),
+        )
+    };
+    scorebox_runtime_view(
+        &runtime_lock_profiles(),
+        &active_profiles,
+        joined_mask,
+        play_style,
+        player_side,
+        enable_groovestats,
+        enable_arrowcloud,
+        auto_populate_gs_scores,
+    )
+}
+
 pub fn gameplay_hud_snapshot_from_parts(
     play_style: PlayStyle,
     player_side: PlayerSide,
@@ -2284,6 +2418,31 @@ pub fn profile_has_favorite(
     profiles[player_side_index(side)]
         .favorites
         .contains(chart_hash)
+}
+
+#[derive(Clone, Copy, Debug)]
+pub enum FavoriteMembershipQuery<'a> {
+    None,
+    Pack(Option<&'a str>),
+    Song(&'a deadsync_chart::SongData),
+}
+
+pub fn favorite_membership<const N: usize>(
+    profiles: &[Profile; PLAYER_SLOTS],
+    queries: &[FavoriteMembershipQuery<'_>; N],
+) -> [[bool; PLAYER_SLOTS]; N] {
+    std::array::from_fn(|query_idx| {
+        std::array::from_fn(|side_idx| match queries[query_idx] {
+            FavoriteMembershipQuery::None | FavoriteMembershipQuery::Pack(None) => false,
+            FavoriteMembershipQuery::Pack(Some(pack)) => {
+                profiles[side_idx].favorited_packs.contains(pack)
+            }
+            FavoriteMembershipQuery::Song(song) => song
+                .charts
+                .iter()
+                .any(|chart| profiles[side_idx].favorites.contains(&chart.short_hash)),
+        })
+    })
 }
 
 pub fn toggle_favorited_pack_for_side(
@@ -3363,6 +3522,34 @@ pub struct SessionState {
     pub play_style: PlayStyle,
     pub play_mode: PlayMode,
     pub player_side: PlayerSide,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct SessionSnapshot {
+    pub joined_mask: u8,
+    pub music_rate: f32,
+    pub timing_tick_mode: TimingTickMode,
+    pub play_style: PlayStyle,
+    pub play_mode: PlayMode,
+    pub player_side: PlayerSide,
+}
+
+impl SessionSnapshot {
+    pub const fn from_state(session: &SessionState) -> Self {
+        Self {
+            joined_mask: session.joined_mask,
+            music_rate: session.music_rate,
+            timing_tick_mode: session.timing_tick_mode,
+            play_style: session.play_style,
+            play_mode: session.play_mode,
+            player_side: session.player_side,
+        }
+    }
+
+    #[inline(always)]
+    pub const fn side_joined(self, side: PlayerSide) -> bool {
+        player_side_is_joined(self.joined_mask, side)
+    }
 }
 
 impl Default for SessionState {
@@ -9305,6 +9492,83 @@ mod tests {
     }
 
     #[test]
+    fn scorebox_runtime_view_reads_both_sides_from_one_session() {
+        let active_profiles = [
+            ActiveProfile::Local {
+                id: "p1-profile".to_string(),
+            },
+            ActiveProfile::Local {
+                id: "p2-profile".to_string(),
+            },
+        ];
+        let mut profiles = [Profile::default(), Profile::default()];
+        profiles[0].display_name = "Player One".to_string();
+        profiles[0].player_initials = "P1".to_string();
+        profiles[0].groovestats_username = "one".to_string();
+        profiles[0].groovestats_api_key = "key-one".to_string();
+        profiles[1].display_name = "Player Two".to_string();
+        profiles[1].player_initials = "P2".to_string();
+        profiles[1].groovestats_username = "two".to_string();
+        profiles[1].groovestats_api_key = "key-two".to_string();
+
+        let view = scorebox_runtime_view(
+            &profiles,
+            &active_profiles,
+            SESSION_JOINED_MASK_P2,
+            PlayStyle::Versus,
+            PlayerSide::P2,
+            true,
+            false,
+            true,
+        );
+
+        assert_eq!(view.play_style, PlayStyle::Versus);
+        assert_eq!(view.player_side, PlayerSide::P2);
+        assert!(!view.sides[0].joined);
+        assert!(!view.sides[0].leaderboard.gs_active);
+        assert_eq!(view.sides[0].display_name, "Player One");
+        assert_eq!(view.sides[0].player_initials, "P1");
+        assert!(view.sides[1].joined);
+        assert!(view.sides[1].leaderboard.gs_active);
+        assert_eq!(view.sides[1].leaderboard.gs_username(), "two");
+        assert_eq!(
+            view.sides[1].leaderboard.persistent_profile_id(),
+            Some("p2-profile")
+        );
+    }
+
+    #[test]
+    fn session_players_view_reads_names_and_join_state_together() {
+        let mut profiles = [Profile::default(), Profile::default()];
+        profiles[0].display_name = "Alice".to_string();
+        profiles[1].display_name = "Bob".to_string();
+
+        let view = session_players_view(&profiles, SESSION_JOINED_MASK_P1, PlayerSide::P2);
+
+        assert_eq!(view.active_side, PlayerSide::P2);
+        assert_eq!(view.joined, [true, false]);
+        assert_eq!(view.display_names, ["Alice", "Bob"]);
+    }
+
+    #[test]
+    fn favorite_membership_batches_both_sides() {
+        let mut profiles = [Profile::default(), Profile::default()];
+        profiles[0].favorited_packs.insert("Pack A".to_string());
+        profiles[1].favorited_packs.insert("Pack B".to_string());
+        let queries = [
+            FavoriteMembershipQuery::Pack(Some("Pack A")),
+            FavoriteMembershipQuery::Pack(Some("Pack B")),
+            FavoriteMembershipQuery::Pack(None),
+            FavoriteMembershipQuery::None,
+        ];
+
+        assert_eq!(
+            favorite_membership(&profiles, &queries),
+            [[true, false], [false, true], [false, false], [false, false]]
+        );
+    }
+
+    #[test]
     fn profile_combo_carry_uses_loaded_profile_combos() {
         let mut profiles = [Profile::default(), Profile::default()];
         profiles[0].current_combo = 12;
@@ -9933,6 +10197,47 @@ mod tests {
         assert_eq!(session.play_mode(), PlayMode::Marathon);
         session.set_player_side(PlayerSide::P2);
         assert_eq!(session.player_side(), PlayerSide::P2);
+    }
+
+    #[test]
+    fn session_snapshot_copies_runtime_fields_and_join_state() {
+        let session = SessionState {
+            joined_mask: SESSION_JOINED_MASK_P2,
+            music_rate: 1.5,
+            timing_tick_mode: TimingTickMode::Hit,
+            play_style: PlayStyle::Double,
+            play_mode: PlayMode::Marathon,
+            player_side: PlayerSide::P2,
+            ..SessionState::default()
+        };
+
+        let snapshot = SessionSnapshot::from_state(&session);
+        assert_eq!(snapshot.joined_mask, SESSION_JOINED_MASK_P2);
+        assert_eq!(snapshot.music_rate, 1.5);
+        assert_eq!(snapshot.timing_tick_mode, TimingTickMode::Hit);
+        assert_eq!(snapshot.play_style, PlayStyle::Double);
+        assert_eq!(snapshot.play_mode, PlayMode::Marathon);
+        assert_eq!(snapshot.player_side, PlayerSide::P2);
+        assert!(!snapshot.side_joined(PlayerSide::P1));
+        assert!(snapshot.side_joined(PlayerSide::P2));
+    }
+
+    #[test]
+    fn session_snapshot_with_active_ids_uses_one_session_state() {
+        let session = SessionState {
+            active_profiles: [
+                ActiveProfile::Local {
+                    id: "local-p1".to_owned(),
+                },
+                ActiveProfile::Guest,
+            ],
+            play_style: PlayStyle::Versus,
+            ..SessionState::default()
+        };
+
+        let (snapshot, active_ids) = session_snapshot_with_active_ids(&session);
+        assert_eq!(snapshot.play_style, PlayStyle::Versus);
+        assert_eq!(active_ids, [Some("local-p1".to_owned()), None]);
     }
 
     #[test]

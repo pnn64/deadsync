@@ -15,12 +15,10 @@ use std::time::Instant;
 const EVENT_WHEEL_FETCH_ENTRIES: usize = 5;
 const ITL_WHEEL_FETCH_ENTRIES: usize = 5;
 
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 pub struct PlayerLeaderboardFetchHandlers {
-    pub cache_itl_self:
-        Arc<dyn Fn(Option<String>, String, String, Option<u32>, Option<u32>) + Send + Sync>,
-    pub cache_imported_score:
-        Arc<dyn Fn(String, String, String, ImportedPlayerScore) + Send + Sync>,
+    pub cache_itl_self: fn(Option<String>, String, String, Option<u32>, Option<u32>),
+    pub cache_imported_score: fn(String, String, String, ImportedPlayerScore),
 }
 
 pub fn fetch_player_leaderboards(
@@ -145,109 +143,23 @@ pub fn get_or_fetch_player_leaderboards(
     Some(plan.snapshot)
 }
 
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 pub struct PlayerLeaderboardRuntime {
     service: groovestats::Service,
     handlers: PlayerLeaderboardFetchHandlers,
-    profile_snapshot_for_side:
-        Arc<dyn Fn(PlayerSide) -> GameplayScoreboxProfileSnapshot + Send + Sync>,
+    profile_snapshot_for_side: fn(PlayerSide) -> GameplayScoreboxProfileSnapshot,
 }
 
 impl PlayerLeaderboardRuntime {
-    pub fn new(
-        service: groovestats::Service,
-        handlers: PlayerLeaderboardFetchHandlers,
-        profile_snapshot_for_side: impl Fn(PlayerSide) -> GameplayScoreboxProfileSnapshot
-        + Send
-        + Sync
-        + 'static,
-    ) -> Self {
-        Self {
-            service,
-            handlers,
-            profile_snapshot_for_side: Arc::new(profile_snapshot_for_side),
-        }
-    }
-
     pub fn from_app_runtime() -> Self {
-        let handlers = PlayerLeaderboardFetchHandlers {
-            cache_itl_self: Arc::new(
-                |profile_id, api_key, chart_hash, itl_self_score, itl_self_rank| {
-                    deadsync_profile::app_runtime::set_cached_online_itl_self_score(
-                        profile_id.as_deref(),
-                        api_key.as_str(),
-                        chart_hash.as_str(),
-                        itl_self_score,
-                    );
-                    deadsync_profile::app_runtime::set_cached_online_itl_self_rank(
-                        profile_id.as_deref(),
-                        api_key.as_str(),
-                        chart_hash.as_str(),
-                        itl_self_rank,
-                    );
-                },
-            ),
-            cache_imported_score: Arc::new(move |profile_id, username, chart_hash, imported| {
-                let song_cache = deadsync_simfile::runtime_cache::get_song_cache();
-                deadsync_profile::app_runtime::cache_gs_score_from_leaderboard_import(
-                    profile_id.as_str(),
-                    username.as_str(),
-                    chart_hash.as_str(),
-                    imported,
-                    |score| imported_score_chart_stats(score, &song_cache, chart_hash.as_str()),
-                );
-            }),
-        };
-        Self::new(
-            crate::runtime::active_groovestats_service(),
-            handlers,
-            |side| {
-                let cfg = deadsync_config::runtime::get();
-                deadsync_profile::runtime_scorebox_profile_snapshot_for_side(
-                    side,
-                    cfg.enable_groovestats,
-                    cfg.enable_arrowcloud,
-                    cfg.auto_populate_gs_scores,
-                )
+        Self {
+            service: crate::runtime::active_groovestats_service(),
+            handlers: PlayerLeaderboardFetchHandlers {
+                cache_itl_self,
+                cache_imported_score,
             },
-        )
-    }
-
-    pub fn cached_itl_self_rank_for_side(&self, chart_hash: &str, side: PlayerSide) -> Option<u32> {
-        let snapshot = (self.profile_snapshot_for_side)(side);
-        deadsync_profile::app_runtime::cached_itl_tournament_rank_for_side(
-            chart_hash, side, &snapshot,
-        )
-    }
-
-    pub fn get_or_fetch_itl_self_score_for_side(
-        &self,
-        chart_hash: &str,
-        side: PlayerSide,
-    ) -> Option<u32> {
-        if let Some(score) =
-            deadsync_profile::app_runtime::cached_online_itl_self_score_for_side(chart_hash, side)
-        {
-            return Some(score);
+            profile_snapshot_for_side,
         }
-        // Keep the wheel's ITL prefetch aligned with the Select Music scorebox
-        // cache width. Smaller requests seed the shared leaderboard cache with
-        // partial panes, so the scorebox briefly renders a truncated list
-        // before refetching the remaining rows.
-        let _ = self.get_or_fetch_for_side(chart_hash, side, ITL_WHEEL_FETCH_ENTRIES)?;
-        deadsync_profile::app_runtime::cached_online_itl_self_score_for_side(chart_hash, side)
-    }
-
-    pub fn get_or_fetch_itl_tournament_rank_for_side(
-        &self,
-        chart_hash: &str,
-        side: PlayerSide,
-    ) -> Option<u32> {
-        if let Some(rank) = self.cached_itl_self_rank_for_side(chart_hash, side) {
-            return Some(rank);
-        }
-        let _ = self.get_or_fetch_for_side(chart_hash, side, ITL_WHEEL_FETCH_ENTRIES)?;
-        self.cached_itl_self_rank_for_side(chart_hash, side)
     }
 
     pub fn get_or_fetch_for_side(
@@ -272,7 +184,7 @@ impl PlayerLeaderboardRuntime {
             profile_snapshot,
             max_entries,
             false,
-            self.handlers.clone(),
+            self.handlers,
         )
     }
 
@@ -289,7 +201,7 @@ impl PlayerLeaderboardRuntime {
             &profile_snapshot,
             max_entries,
             true,
-            self.handlers.clone(),
+            self.handlers,
         )
     }
 
@@ -301,31 +213,72 @@ impl PlayerLeaderboardRuntime {
         );
     }
 
-    pub fn wheel_side_context(
+    pub fn wheel_profile_context<'a>(
         &self,
-        side: PlayerSide,
-        profile_id: Option<Arc<str>>,
-    ) -> ItlWheelSideContext {
-        let leaderboard_snapshot = (self.profile_snapshot_for_side)(side);
+        leaderboard_snapshot: &'a GameplayScoreboxProfileSnapshot,
+    ) -> ItlWheelSideContext<'a> {
         ItlWheelSideContext {
-            cache: deadsync_profile::app_runtime::ItlWheelSideCache::for_side(
-                side,
-                profile_id,
-                leaderboard_snapshot,
-            ),
-            runtime: self.clone(),
+            cache: deadsync_profile::app_runtime::ItlWheelSideCache::new(leaderboard_snapshot),
+            runtime: *self,
         }
     }
 }
 
-pub struct ItlWheelSideContext {
-    cache: deadsync_profile::app_runtime::ItlWheelSideCache,
+fn cache_itl_self(
+    profile_id: Option<String>,
+    api_key: String,
+    chart_hash: String,
+    itl_self_score: Option<u32>,
+    itl_self_rank: Option<u32>,
+) {
+    deadsync_profile::app_runtime::set_cached_online_itl_self_score(
+        profile_id.as_deref(),
+        api_key.as_str(),
+        chart_hash.as_str(),
+        itl_self_score,
+    );
+    deadsync_profile::app_runtime::set_cached_online_itl_self_rank(
+        profile_id.as_deref(),
+        api_key.as_str(),
+        chart_hash.as_str(),
+        itl_self_rank,
+    );
+}
+
+fn cache_imported_score(
+    profile_id: String,
+    username: String,
+    chart_hash: String,
+    imported: ImportedPlayerScore,
+) {
+    let song_cache = deadsync_simfile::runtime_cache::get_song_cache();
+    deadsync_profile::app_runtime::cache_gs_score_from_leaderboard_import(
+        profile_id.as_str(),
+        username.as_str(),
+        chart_hash.as_str(),
+        imported,
+        |score| imported_score_chart_stats(score, &song_cache, chart_hash.as_str()),
+    );
+}
+
+fn profile_snapshot_for_side(side: PlayerSide) -> GameplayScoreboxProfileSnapshot {
+    let cfg = deadsync_config::runtime::get();
+    deadsync_profile::runtime_scorebox_profile_snapshot_for_side(
+        side,
+        cfg.enable_groovestats,
+        cfg.enable_arrowcloud,
+        cfg.auto_populate_gs_scores,
+    )
+}
+
+pub struct ItlWheelSideContext<'a> {
+    cache: deadsync_profile::app_runtime::ItlWheelSideCache<'a>,
     runtime: PlayerLeaderboardRuntime,
 }
 
-impl ItlWheelSideContext {
-    pub fn for_side(side: PlayerSide, profile_id: Option<Arc<str>>) -> Self {
-        PlayerLeaderboardRuntime::from_app_runtime().wheel_side_context(side, profile_id)
+impl<'a> ItlWheelSideContext<'a> {
+    pub fn for_profile(profile: &'a GameplayScoreboxProfileSnapshot) -> Self {
+        PlayerLeaderboardRuntime::from_app_runtime().wheel_profile_context(profile)
     }
 
     pub fn cached_local_itl_score(
@@ -337,6 +290,20 @@ impl ItlWheelSideContext {
 
     pub fn cached_self_ex_score(&self, chart_hash: &str) -> Option<u32> {
         self.cache.cached_self_ex_score(chart_hash)
+    }
+
+    pub fn get_or_fetch_self_ex_score(&self, chart_hash: &str) -> Option<u32> {
+        if let Some(score) = self.cached_self_ex_score(chart_hash) {
+            return Some(score);
+        }
+        // Keep wheel prefetches aligned with the Select Music scorebox cache
+        // width so a smaller request cannot seed a temporarily truncated pane.
+        let _ = self.runtime.get_or_fetch_for_profile(
+            chart_hash,
+            self.cache.leaderboard_snapshot(),
+            ITL_WHEEL_FETCH_ENTRIES,
+        )?;
+        self.cached_self_ex_score(chart_hash)
     }
 
     pub fn cached_srpg_self_score(&self, chart_hash: &str) -> Option<u32> {
@@ -358,13 +325,18 @@ impl ItlWheelSideContext {
     pub fn cached_tournament_rank(&self, chart_hash: &str) -> Option<u32> {
         self.cache.cached_tournament_rank(chart_hash)
     }
-}
 
-pub fn cached_itl_tournament_rank_for_side_from_app_runtime(
-    chart_hash: &str,
-    side: PlayerSide,
-) -> Option<u32> {
-    PlayerLeaderboardRuntime::from_app_runtime().cached_itl_self_rank_for_side(chart_hash, side)
+    pub fn get_or_fetch_tournament_rank(&self, chart_hash: &str) -> Option<u32> {
+        if let Some(rank) = self.cached_tournament_rank(chart_hash) {
+            return Some(rank);
+        }
+        let _ = self.runtime.get_or_fetch_for_profile(
+            chart_hash,
+            self.cache.leaderboard_snapshot(),
+            ITL_WHEEL_FETCH_ENTRIES,
+        )?;
+        self.cached_tournament_rank(chart_hash)
+    }
 }
 
 pub fn get_or_fetch_player_leaderboards_for_side_from_app_runtime(
@@ -406,29 +378,18 @@ pub fn invalidate_player_leaderboards_for_side_from_app_runtime(
     PlayerLeaderboardRuntime::from_app_runtime().invalidate_for_side(chart_hash, side);
 }
 
-pub fn cached_itl_tournament_overall_ranks_for_side_from_app_runtime(
-    side: PlayerSide,
+pub fn cached_itl_tournament_overall_ranks_for_profile_from_app_runtime(
+    side_idx: usize,
+    joined: bool,
+    profile: &GameplayScoreboxProfileSnapshot,
 ) -> Arc<HashMap<String, u32>> {
     let song_cache = deadsync_simfile::runtime_cache::get_song_cache();
-    deadsync_profile::app_runtime::cached_itl_tournament_overall_ranks_for_side(
-        side,
+    deadsync_profile::app_runtime::cached_itl_tournament_overall_ranks_for_profile(
+        side_idx,
+        joined,
+        profile.api_key(),
+        profile.persistent_profile_id(),
         deadsync_simfile::runtime_cache::song_cache_generation(),
         song_cache.as_slice(),
     )
-}
-
-pub fn get_or_fetch_itl_self_score_for_side_from_app_runtime(
-    chart_hash: &str,
-    side: PlayerSide,
-) -> Option<u32> {
-    PlayerLeaderboardRuntime::from_app_runtime()
-        .get_or_fetch_itl_self_score_for_side(chart_hash, side)
-}
-
-pub fn get_or_fetch_itl_tournament_rank_for_side_from_app_runtime(
-    chart_hash: &str,
-    side: PlayerSide,
-) -> Option<u32> {
-    PlayerLeaderboardRuntime::from_app_runtime()
-        .get_or_fetch_itl_tournament_rank_for_side(chart_hash, side)
 }
