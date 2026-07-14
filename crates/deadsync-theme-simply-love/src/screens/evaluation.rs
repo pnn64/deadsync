@@ -155,7 +155,7 @@ thread_local! {
     static SONG_LENGTH_CACHE: RefCell<TextCache<i32>> = RefCell::new(HashMap::with_capacity(2048));
     static RECORD_TEXT_CACHE: RefCell<TextCache<(u32, u8)>> = RefCell::new(HashMap::with_capacity(256));
     static DIFFICULTY_TEXT_CACHE: RefCell<TextCache<(&'static str, &'static str)>> = RefCell::new(HashMap::with_capacity(64));
-    static REMAINING_TIME_CACHE: RefCell<TextCache<u32>> = RefCell::new(HashMap::with_capacity(2048));
+    static FAIL_LABEL_CACHE: RefCell<TextCache<(u32, Option<(u32, u32)>)>> = RefCell::new(HashMap::with_capacity(2048));
     static TOTAL_LABEL_CACHE: RefCell<TextCache<u32>> = RefCell::new(HashMap::with_capacity(512));
     static STR_REF_CACHE: RefCell<SharedStrCache> = RefCell::new(HashMap::with_capacity(4096));
 }
@@ -814,16 +814,32 @@ mod tests {
     use super::{
         CellIcon, CourseGraphStage, EvalPane, Nice69Buf, SUBMIT_FOOTER_F5_LABEL,
         SimplyLoveGrooveStatsService, SubmitFooterCell, active_groovestats_service_name,
-        course_graph_stage_spans, course_graph_stripe_actors, eval_grade_for_result,
-        eval_pane_cycle, eval_pane_shift, eval_pane_skip_duplicate, leaderboard_requests,
-        stage_in_stinger_texture_key, submission_retry_available, submit_footer_gs_label,
-        submit_footer_gs_label_for, submit_footer_lines,
+        build_fail_label_text, cached_fail_label_text, course_graph_stage_spans,
+        course_graph_stripe_actors, eval_grade_for_result, eval_pane_cycle, eval_pane_shift,
+        eval_pane_skip_duplicate, leaderboard_requests, stage_in_stinger_texture_key,
+        submission_retry_available, submit_footer_gs_label, submit_footer_gs_label_for,
+        submit_footer_lines,
     };
     use crate::assets::i18n;
-    use deadlib_present::actors::Actor;
+    use deadlib_present::actors::{Actor, TextAlign};
     use deadsync_chart::{ArrowStats, ChartData, StaminaCounts, TechCounts};
     use deadsync_score as score_data;
     use std::sync::Arc;
+
+    #[test]
+    fn fail_label_appends_stream_measure_progress() {
+        assert_eq!(&*cached_fail_label_text(125.9, None), "2:05");
+        assert_eq!(&*cached_fail_label_text(125.9, Some((3, 8))), "2:05\n3/8");
+    }
+
+    #[test]
+    fn fail_label_centers_each_line() {
+        let Actor::Text { align_text, .. } = build_fail_label_text("9:49\n23/352".into(), 0.0, 0.0)
+        else {
+            panic!("failure label should be text");
+        };
+        assert_eq!(align_text, TextAlign::Center);
+    }
 
     #[test]
     fn prepared_score_service_selects_boogiestats_labels() {
@@ -1850,6 +1866,7 @@ pub struct State {
     pub gameplay_elapsed: f32,
     pub stage_duration_seconds: f32,
     pub score_info: [Option<ScoreInfo>; MAX_PLAYERS],
+    fail_stream_progress: [Option<(u32, u32)>; MAX_PLAYERS],
     pub event_progress: [Vec<score_data::EventProgress>; MAX_PLAYERS],
     pub density_graph_mesh: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS],
     pub timing_hist_mesh: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS],
@@ -1909,6 +1926,7 @@ impl Clone for State {
             gameplay_elapsed: self.gameplay_elapsed,
             stage_duration_seconds: self.stage_duration_seconds,
             score_info: self.score_info.clone(),
+            fail_stream_progress: self.fail_stream_progress,
             event_progress: self.event_progress.clone(),
             density_graph_mesh: self.density_graph_mesh.clone(),
             timing_hist_mesh: self.timing_hist_mesh.clone(),
@@ -1959,6 +1977,7 @@ impl Clone for State {
 
 pub fn init(gameplay_results: Option<gameplay::State>, init_view: EvaluationInitView) -> State {
     let mut score_info: [Option<ScoreInfo>; MAX_PLAYERS] = std::array::from_fn(|_| None);
+    let mut fail_stream_progress = [None; MAX_PLAYERS];
     let mut density_graph_mesh: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS] =
         std::array::from_fn(|_| None);
     let mut timing_hist_mesh: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS] =
@@ -2005,6 +2024,15 @@ pub fn init(gameplay_results: Option<gameplay::State>, init_view: EvaluationInit
             let prof = &gs.profiles()[player_idx];
             let col_offset = player_idx.saturating_mul(cols_per_player);
             let stream_segments = gs.stream_segments_for_results(player_idx);
+            fail_stream_progress[player_idx] = p.fail_time.and_then(|fail_time| {
+                let timing = gs.timing_for_player(player_idx)?;
+                let chart = gs.gameplay_chart(player_idx)?;
+                deadsync_gameplay::zmod_fail_stream_progress_for_note_data(
+                    &chart.notes,
+                    cols_per_player,
+                    timing.get_beat_for_time(fail_time),
+                )
+            });
 
             // Compute timing statistics across all non-miss tap judgments
             let stats = timing_stats::compute_note_timing_stats(notes);
@@ -2490,6 +2518,7 @@ pub fn init(gameplay_results: Option<gameplay::State>, init_view: EvaluationInit
         gameplay_elapsed: 0.0,
         stage_duration_seconds,
         score_info,
+        fail_stream_progress,
         event_progress: std::array::from_fn(|_| Vec::new()),
         density_graph_mesh,
         timing_hist_mesh,
@@ -2650,6 +2679,7 @@ pub fn init_from_score_info(
         gameplay_elapsed: 0.0,
         stage_duration_seconds,
         score_info,
+        fail_stream_progress: [None; MAX_PLAYERS],
         event_progress: std::array::from_fn(|_| Vec::new()),
         density_graph_mesh,
         timing_hist_mesh,
@@ -3489,25 +3519,44 @@ fn format_session_time(seconds_total: f32) -> Arc<str> {
 }
 
 #[inline(always)]
-fn cached_remaining_time_text(seconds_total: f32) -> Arc<str> {
+fn cached_fail_label_text(seconds_total: f32, stream_progress: Option<(u32, u32)>) -> Arc<str> {
     let seconds_total = if !seconds_total.is_finite() || seconds_total < 0.0 {
         0_u64
     } else {
         seconds_total as u64
     };
-    let key = seconds_total.min(u32::MAX as u64) as u32;
-    cached_text(&REMAINING_TIME_CACHE, key, TEXT_CACHE_LIMIT, || {
-        if seconds_total >= 3600 {
-            format!(
-                "{}:{:02}:{:02}",
-                seconds_total / 3600,
-                (seconds_total % 3600) / 60,
-                seconds_total % 60
-            )
-        } else {
-            format!("{}:{:02}", seconds_total / 60, seconds_total % 60)
-        }
-    })
+    let seconds_key = seconds_total.min(u32::MAX as u64) as u32;
+    cached_text(
+        &FAIL_LABEL_CACHE,
+        (seconds_key, stream_progress),
+        TEXT_CACHE_LIMIT,
+        || {
+            let time = if seconds_total >= 3600 {
+                format!(
+                    "{}:{:02}:{:02}",
+                    seconds_total / 3600,
+                    (seconds_total % 3600) / 60,
+                    seconds_total % 60
+                )
+            } else {
+                format!("{}:{:02}", seconds_total / 60, seconds_total % 60)
+            };
+            match stream_progress {
+                Some((run, total)) => format!("{time}\n{run}/{total}"),
+                None => time,
+            }
+        },
+    )
+}
+
+fn build_fail_label_text(label: Arc<str>, x: f32, y: f32) -> Actor {
+    act!(text:
+        font("miso"): settext(label):
+        align(0.5, 0.5): xy(x, y):
+        zoom(0.625): horizalign(center):
+        diffuse(1.0, 0.0, 0.0, 1.0):
+        z(8)
+    )
 }
 
 #[inline(always)]
@@ -5210,35 +5259,53 @@ pub fn push_actors(actors: &mut Vec<Actor>, state: &State, asset_manager: &Asset
                                 fail_time.max(0.0) / rate
                             };
                             let remaining = (total_display - death_display).max(0.0);
-                            let remaining_str = cached_remaining_time_text(remaining);
+                            let stream_progress = state.fail_stream_progress[player_idx];
+                            let fail_label = cached_fail_label_text(remaining, stream_progress);
+                            let label_lines = if stream_progress.is_some() { 2.0 } else { 1.0 };
                             // SL/zmod/Arrow Cloud Graphs.lua:
                             // width = text_width * 0.65, addx = max(width * 0.8, 10), parent zoom=1.25.
                             let fail_box_scale = 1.25_f32;
                             let (inner_w, outer_w, inner_h, outer_h, addx) = asset_manager
                                 .with_fonts(|all_fonts| {
                                     asset_manager.with_font("miso", |miso_font| {
-                                        let text_w = font::measure_line_width_logical(
-                                            miso_font,
-                                            &remaining_str,
-                                            all_fonts,
-                                        )
+                                        let text_w = fail_label
+                                            .lines()
+                                            .map(|line| {
+                                                font::measure_line_width_logical(
+                                                    miso_font, line, all_fonts,
+                                                )
+                                            })
+                                            .max()
+                                            .unwrap_or(0)
                                             as f32;
                                         let base_w = (text_w * 0.65).max(1.0);
                                         let base_addx = (base_w * 0.8).max(10.0);
                                         (
                                             base_w * fail_box_scale,
                                             (base_w + 1.0) * fail_box_scale,
-                                            10.0 * fail_box_scale,
-                                            11.0 * fail_box_scale,
+                                            10.0 * label_lines * fail_box_scale,
+                                            (10.0 * label_lines + 1.0) * fail_box_scale,
                                             base_addx * fail_box_scale,
                                         )
                                     })
                                 })
-                                .unwrap_or((30.0, 31.25, 12.5, 13.75, 12.5));
+                                .unwrap_or((
+                                    30.0,
+                                    31.25,
+                                    10.0 * label_lines * fail_box_scale,
+                                    (10.0 * label_lines + 1.0) * fail_box_scale,
+                                    12.5,
+                                ));
 
                             // SL/zmod/Arrow Cloud place this at GraphHeight-10 (inside the graph),
-                            // not below the panel.
-                            let box_center_y = graph_height - 10.0;
+                            // moving its two-line version up by one unscaled row.
+                            let box_center_y = graph_height
+                                - 10.0
+                                - if stream_progress.is_some() {
+                                    10.0 * fail_box_scale
+                                } else {
+                                    0.0
+                                };
                             let box_center_x = x + addx;
 
                             life_children.push(act!(quad:
@@ -5253,12 +5320,10 @@ pub fn push_actors(actors: &mut Vec<Actor>, state: &State, asset_manager: &Asset
                                 diffuse(0.0, 0.0, 0.0, 1.0):
                                 z(7)
                             ));
-                            life_children.push(act!(text:
-                                font("miso"): settext(remaining_str):
-                                align(0.5, 0.5): xy(box_center_x, box_center_y):
-                                zoom(0.625):
-                                diffuse(1.0, 0.0, 0.0, 1.0):
-                                z(8)
+                            life_children.push(build_fail_label_text(
+                                fail_label,
+                                box_center_x,
+                                box_center_y,
                             ));
                         }
 

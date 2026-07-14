@@ -208,6 +208,38 @@ pub fn stream_segments_for_note_data(
     zmod_stream_totals_for_densities(&densities, constant_bpm)
 }
 
+/// Returns the failed measure's one-based position within a 16th-note stream.
+///
+/// Mirrors zmod's `TrackFailTime.lua`: the failed measure must contain at least
+/// 16 note rows and belong to a contiguous run of measures meeting that same
+/// threshold.
+pub fn zmod_fail_stream_progress_for_note_data(
+    notes: &[u8],
+    lanes: usize,
+    fail_beat: f32,
+) -> Option<(u32, u32)> {
+    if !fail_beat.is_finite() || fail_beat < 0.0 {
+        return None;
+    }
+
+    let current_measure = (fail_beat / 4.0).floor() as usize;
+    let densities = measure_densities(notes, lanes);
+    if densities.get(current_measure).copied().unwrap_or(0) < 16 {
+        return None;
+    }
+
+    let segment = stream_sequences_threshold(&densities, 16)
+        .into_iter()
+        .find(|segment| {
+            !segment.is_break
+                && current_measure >= segment.start
+                && current_measure < segment.end
+        })?;
+    let run = current_measure.saturating_sub(segment.start) + 1;
+    let total = segment.end.saturating_sub(segment.start);
+    Some((u32::try_from(run).ok()?, u32::try_from(total).ok()?))
+}
+
 pub fn measure_counter_segments_for_densities(
     densities: &[usize],
     notes_threshold: Option<usize>,
@@ -274,4 +306,3 @@ pub fn resolve_target_score_percent(
     }
     .unwrap_or(89.0)
 }
-

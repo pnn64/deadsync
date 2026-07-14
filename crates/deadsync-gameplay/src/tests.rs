@@ -10108,6 +10108,30 @@ mod tests {
     }
 
     #[test]
+    fn zmod_fail_stream_progress_reports_measure_within_stream() {
+        let data = dense_note_data(4, 16, 4);
+
+        assert_eq!(
+            zmod_fail_stream_progress_for_note_data(&data, 4, 9.0),
+            Some((3, 4))
+        );
+    }
+
+    #[test]
+    fn zmod_fail_stream_progress_requires_sixteenth_density() {
+        let data = dense_note_data(4, 15, 4);
+
+        assert_eq!(
+            zmod_fail_stream_progress_for_note_data(&data, 4, 9.0),
+            None
+        );
+        assert_eq!(
+            zmod_fail_stream_progress_for_note_data(&data, 4, f32::NAN),
+            None
+        );
+    }
+
+    #[test]
     fn measure_counter_segments_use_optional_threshold() {
         let densities = [12usize, 12, 0, 16];
 
