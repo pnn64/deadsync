@@ -264,6 +264,17 @@ impl DownloadState {
         self.unlock_cache.clone()
     }
 
+    pub fn forget_cached_destination(&mut self, url: &str, destination: &str) -> bool {
+        let removed = self
+            .unlock_cache
+            .get_mut(url)
+            .is_some_and(|packs| packs.remove(destination).is_some());
+        if self.unlock_cache.get(url).is_some_and(HashMap::is_empty) {
+            self.unlock_cache.remove(url);
+        }
+        removed
+    }
+
     pub fn queue_ready_song_reload_dir(&mut self, path: PathBuf) {
         if self
             .ready_song_reload_dirs
@@ -308,10 +319,21 @@ pub fn runtime_take_ready_song_reload_request() -> Vec<PathBuf> {
         .take_ready_song_reload_request()
 }
 
-pub fn runtime_cache_snapshot(hooks: UnlockDownloadRuntimeHooks) -> UnlockCache {
-    let mut state = RUNTIME_DOWNLOAD_STATE.lock().unwrap();
-    state.ensure_cache_loaded_with(hooks.load_unlock_cache);
-    state.unlock_cache.clone()
+pub fn runtime_forget_cached_destination(
+    hooks: UnlockDownloadRuntimeHooks,
+    url: &str,
+    destination: &str,
+) {
+    let cache = {
+        let mut state = RUNTIME_DOWNLOAD_STATE.lock().unwrap();
+        state.ensure_cache_loaded_with(hooks.load_unlock_cache);
+        state
+            .forget_cached_destination(url, destination)
+            .then(|| state.unlock_cache.clone())
+    };
+    if let Some(cache) = cache {
+        (hooks.write_unlock_cache)(&cache);
+    }
 }
 
 pub fn runtime_queue_event_unlock_download(
@@ -371,6 +393,10 @@ fn runtime_download_worker(
     match result {
         UnlockDownloadWorkerResult::Success(success) => {
             runtime_mark_cache_success(hooks, success.url.as_str(), success.destination.as_str());
+            crate::srpg_shop::runtime_mark_downloaded(
+                success.url.as_str(),
+                success.destination.as_str(),
+            );
             runtime_queue_ready_song_reload_dir(success.destination_pack);
             runtime_set_download_progress(id, success.final_bytes, success.final_bytes);
             runtime_finish_download(id, None);
@@ -854,6 +880,26 @@ mod tests {
             "https://example.com/unlock.zip",
             "Other Pack"
         ));
+    }
+
+    #[test]
+    fn forgotten_destination_can_be_downloaded_again() {
+        let url = "https://example.com/unlock.zip";
+        let mut state = DownloadState::default();
+        state.ensure_cache_loaded_with(|| {
+            HashMap::from([(
+                url.to_string(),
+                HashMap::from([("Stamina RPG 10 - Shops".to_string(), true)]),
+            )])
+        });
+
+        assert!(state.forget_cached_destination(url, "Stamina RPG 10 - Shops"));
+        assert!(!cache_has_destination(
+            &state.unlock_cache,
+            url,
+            "Stamina RPG 10 - Shops"
+        ));
+        assert!(!state.forget_cached_destination(url, "Stamina RPG 10 - Shops"));
     }
 
     #[test]

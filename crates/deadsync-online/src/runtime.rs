@@ -1,10 +1,11 @@
 use crate::downloads::{
     UnlockCache, UnlockDownloadRuntimeHooks, read_unlock_cache_file,
-    runtime_queue_event_unlock_download, unlock_destination_roots as download_destination_roots,
+    runtime_forget_cached_destination, runtime_queue_event_unlock_download,
+    unlock_destination_roots as download_destination_roots,
     unlock_downloads_available as downloads_available, write_unlock_cache_file,
 };
 pub use crate::downloads::{
-    runtime_cache_snapshot, runtime_completion_counts as unlock_download_completion_counts,
+    runtime_completion_counts as unlock_download_completion_counts,
     runtime_snapshots as unlock_download_snapshots,
     runtime_take_ready_song_reload_request as take_ready_song_reload_request,
 };
@@ -61,8 +62,9 @@ pub fn queue_event_unlock_download(url: &str, unlock_name: &str, pack_name: &str
     runtime_queue_event_unlock_download(DOWNLOAD_RUNTIME_HOOKS, url, unlock_name, pack_name);
 }
 
-pub fn unlock_cache_snapshot() -> UnlockCache {
-    runtime_cache_snapshot(DOWNLOAD_RUNTIME_HOOKS)
+pub fn forget_cached_unlock(url: &str, pack_name: &str) {
+    let destination = crate::downloads::sanitize_pack_name(pack_name);
+    runtime_forget_cached_destination(DOWNLOAD_RUNTIME_HOOKS, url, &destination);
 }
 
 fn downloads_dir() -> PathBuf {

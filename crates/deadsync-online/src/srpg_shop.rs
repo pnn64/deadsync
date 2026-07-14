@@ -1,4 +1,3 @@
-use crate::downloads::cache_has_destination;
 use deadsync_config::prelude::SrpgShopFolder;
 use deadsync_net::{self as network, AgentConfig, HttpAgent};
 use serde::Deserialize;
@@ -117,23 +116,28 @@ static RUNTIME: LazyLock<Mutex<RuntimeState>> =
     LazyLock::new(|| Mutex::new(RuntimeState::default()));
 
 pub fn runtime_snapshot() -> Arc<SrpgShopSnapshot> {
-    let snapshot = Arc::clone(&RUNTIME.lock().unwrap().snapshot);
-    if snapshot.shops.is_empty() {
-        return snapshot;
-    }
+    Arc::clone(&RUNTIME.lock().unwrap().snapshot)
+}
+
+pub(crate) fn runtime_mark_downloaded(url: &str, destination: &str) {
     let folder = deadsync_config::runtime::get().srpg_shop_folder;
-    let cache = crate::runtime::unlock_cache_snapshot();
-    let mut annotated = (*snapshot).clone();
-    for shop in &mut annotated.shops {
-        let destination = download_folder(shop.id, folder);
+    let mut runtime = RUNTIME.lock().unwrap();
+    let mut snapshot = (*runtime.snapshot).clone();
+    let mut changed = false;
+    for shop in &mut snapshot.shops {
+        if download_folder(shop.id, folder) != destination {
+            continue;
+        }
         for item in &mut shop.items {
-            item.downloaded |= item
-                .download_url
-                .as_deref()
-                .is_some_and(|url| cache_has_destination(&cache, url, destination));
+            if item.download_url.as_deref() == Some(url) && !item.downloaded {
+                item.downloaded = true;
+                changed = true;
+            }
         }
     }
-    Arc::new(annotated)
+    if changed {
+        runtime.snapshot = Arc::new(snapshot);
+    }
 }
 
 pub const fn download_folder(shop_id: u32, folder: SrpgShopFolder) -> &'static str {
@@ -359,7 +363,6 @@ fn fetch_shop(
     let mut items = parse_catalog(&catalog, shop_id, lifetime_balance)?;
     merge_downloads(&mut items, parse_downloads(&downloads)?);
     retain_song_unlocks(&mut items);
-    order_shop_items(&mut items);
     Ok(SrpgShop {
         id: shop_id,
         balance,
@@ -369,10 +372,6 @@ fn fetch_shop(
 
 fn retain_song_unlocks(items: &mut Vec<SrpgShopItem>) {
     items.retain(|item| item.kind == SrpgShopItemKind::Song);
-}
-
-fn order_shop_items(items: &mut [SrpgShopItem]) {
-    items.sort_by_key(|item| item.owned);
 }
 
 fn annotate_installed_songs(snapshot: &mut SrpgShopSnapshot) {
@@ -941,42 +940,25 @@ mod tests {
     }
 
     #[test]
-    fn purchasable_songs_stay_before_owned_songs() {
-        let mut items = vec![
-            SrpgShopItem {
-                item_id: "1".to_string(),
-                kind: SrpgShopItemKind::Song,
-                name: "Owned".to_string(),
-                description: String::new(),
-                effect: String::new(),
-                cost: None,
-                difficulty: Some(11),
-                bpm: Some(120),
-                type_id: 1,
-                owned: true,
+    fn ownership_changes_do_not_reorder_songs() {
+        let body = r#"{"data":[["7","chart.png","Astral Apocalypse","Purchase to unlock","Difficulty: 27|Speed Tier: 260 BPM","2","0","1037","0","0","0","1","27","260","0"],["8","chart.png","Postlude Evangelist","Purchase to unlock","Difficulty: 20|Speed Tier: 200 BPM","2","0","640","0","0","0","1","20","200","0"]]}"#;
+        let mut items = parse_catalog(body, 0, 0).expect("catalog");
+        merge_downloads(
+            &mut items,
+            vec![ParsedDownload {
+                item_id: "8".to_string(),
+                name: "Postlude Evangelist".to_string(),
+                details: "20 200".to_string(),
+                url: "https://example.test/postlude.zip".to_string(),
                 site_downloaded: false,
-                downloaded: false,
-                download_url: Some("https://example.test/owned.zip".to_string()),
-            },
-            SrpgShopItem {
-                item_id: "2".to_string(),
-                kind: SrpgShopItemKind::Song,
-                name: "Purchasable".to_string(),
-                description: String::new(),
-                effect: String::new(),
-                cost: Some(100),
-                difficulty: Some(12),
-                bpm: Some(130),
-                type_id: 1,
-                owned: false,
-                site_downloaded: false,
-                downloaded: false,
-                download_url: None,
-            },
-        ];
-        order_shop_items(&mut items);
-        assert_eq!(items[0].name, "Purchasable");
-        assert_eq!(items[1].name, "Owned");
+            }],
+        );
+        retain_song_unlocks(&mut items);
+
+        assert_eq!(items[0].name, "Postlude Evangelist");
+        assert!(items[0].owned);
+        assert_eq!(items[1].name, "Astral Apocalypse");
+        assert!(!items[1].owned);
     }
 
     #[test]
@@ -995,9 +977,10 @@ mod tests {
         )
         .expect("simfile");
 
-        let keys = installed_song_keys(&[pack]);
+        let keys = installed_song_keys(std::slice::from_ref(&pack));
         assert!(keys.contains(&song_key("Lost Requiem (Medium) (CMOD)")));
         fs::remove_dir_all(root).expect("cleanup");
+        assert!(installed_song_keys(&[pack]).is_empty());
     }
 
     #[test]

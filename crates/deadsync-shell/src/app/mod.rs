@@ -3278,11 +3278,9 @@ impl App {
                     SimplyLoveOnlineRequest::DownloadSrpgShopUnlock { shop_id, name, url },
                 ) => {
                     let folder = deadsync_config::runtime::get().srpg_shop_folder;
-                    deadsync_online::runtime::queue_event_unlock_download(
-                        &url,
-                        &name,
-                        deadsync_online::srpg_shop::download_folder(shop_id, folder),
-                    );
+                    let pack_name = deadsync_online::srpg_shop::download_folder(shop_id, folder);
+                    deadsync_online::runtime::forget_cached_unlock(&url, pack_name);
+                    deadsync_online::runtime::queue_event_unlock_download(&url, &name, pack_name);
                     Vec::new()
                 }
                 SimplyLoveRuntimeRequest::Online(

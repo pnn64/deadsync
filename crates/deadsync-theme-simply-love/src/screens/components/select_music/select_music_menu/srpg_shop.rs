@@ -20,6 +20,7 @@ const VIEW_ROWS: usize = 7;
 const SHOP_IMAGE_H: f32 = PANEL_W * 9.0 / 16.0;
 const HEADER_H: f32 = 54.0;
 const HEADER_Y: f32 = -PANEL_H * 0.5 + HEADER_H * 0.5;
+const HEADER_CONTENT_Y: f32 = HEADER_Y - 8.0;
 const LIST_MARGIN: f32 = 11.5;
 
 #[derive(Clone, Copy)]
@@ -447,7 +448,7 @@ pub fn build_srpg_shop_overlay(
     ));
     actors.push(act!(text:
         font(current_machine_font_key(FontRole::Header)): settext("SRPG SHOP"):
-        align(0.5, 0.5): xy(cx - 143.0, cy + HEADER_Y): maxwidth(250.0):
+        align(0.5, 0.5): xy(cx - 143.0, cy + HEADER_CONTENT_Y): maxwidth(250.0):
         zoom(0.42): diffuse(1.0, 1.0, 1.0, 1.0): z(Z + 5): horizalign(center)
     ));
 
@@ -491,13 +492,13 @@ fn push_tabs(actors: &mut Vec<Actor>, selected: usize, cx: f32, cy: f32) {
         let x = start_x + index as f32 * 64.0;
         let active = index == selected;
         actors.push(act!(quad:
-            align(0.5, 0.5): xy(x, cy + HEADER_Y): zoomto(58.0, 30.0):
+            align(0.5, 0.5): xy(x, cy + HEADER_CONTENT_Y): zoomto(58.0, 30.0):
             diffuse(shop.tint[0], shop.tint[1], shop.tint[2], if active { 0.92 } else { 0.30 }):
             z(Z + 5)
         ));
         actors.push(act!(text:
             font(current_machine_font_key(FontRole::Bold)): settext(shop.short_name):
-            align(0.5, 0.5): xy(x, cy + HEADER_Y): zoom(0.25):
+            align(0.5, 0.5): xy(x, cy + HEADER_CONTENT_Y): zoom(0.25):
             diffuse(1.0, 1.0, 1.0, if active { 1.0 } else { 0.65 }): z(Z + 6):
             horizalign(center)
         ));
@@ -1004,6 +1005,8 @@ mod tests {
         assert_eq!(SHOPS[2].tint, [0.75, 0.46, 1.0]);
         assert_eq!(SHOPS[3].tint, [1.0, 0.72, 0.20]);
         assert!(((PANEL_W / SHOP_IMAGE_H) - 16.0 / 9.0).abs() < 0.0001);
+        assert!(HEADER_CONTENT_Y < HEADER_Y);
+        assert!(HEADER_CONTENT_Y - 15.0 >= -PANEL_H * 0.5);
     }
 
     #[test]
