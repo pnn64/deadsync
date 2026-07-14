@@ -14,7 +14,7 @@ const CATALOG_API: &str = "https://srpg10.groovestats.com/api/gen-shop-list-upda
 const DOWNLOADS_API: &str = "https://srpg10.groovestats.com/api/gen-shop-downloads.php";
 const PURCHASE_API: &str = "https://srpg10.groovestats.com/api/gen-shop-buy-sell.php";
 const USER_AGENT: &str = "DeadSync SRPG10 Shop/1.0";
-pub const SRPG_SHOP_IDS: [u32; 4] = [0, 2, 3, 4];
+pub const SRPG_SHOP_IDS: [u32; 4] = [3, 0, 2, 4];
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum SrpgShopPhase {
@@ -132,14 +132,14 @@ pub fn runtime_snapshot() -> Arc<SrpgShopSnapshot> {
 
 pub const fn download_folder(shop_id: u32, folder: SrpgShopFolder) -> &'static str {
     match folder {
-        SrpgShopFolder::Unlocks => "SRPG10 Unlocks",
-        SrpgShopFolder::Shops => "SRPG10 - Shops",
+        SrpgShopFolder::Unlocks => "Stamina RPG 10 Unlocks",
+        SrpgShopFolder::Shops => "Stamina RPG 10 - Shops",
         SrpgShopFolder::Faction => match shop_id {
-            0 => "SRPG10 - DPRT",
-            2 => "SRPG10 - Footspeed Empire",
-            3 => "SRPG10 - Stamina Nation",
-            4 => "SRPG10 - Nomads",
-            _ => "SRPG10 - Shops",
+            0 => "Stamina RPG 10 - DPRT",
+            2 => "Stamina RPG 10 - FE",
+            3 => "Stamina RPG 10 - SN",
+            4 => "Stamina RPG 10 - NEP",
+            _ => "Stamina RPG 10 - Shops",
         },
     }
 }
@@ -198,7 +198,6 @@ pub fn runtime_refresh(username: String, password: String) {
 }
 
 pub fn runtime_purchase(shop_id: u32, item_id: String, type_id: u8) {
-    let destination = download_folder(shop_id, deadsync_config::runtime::get().srpg_shop_folder);
     let (generation, session, mut previous) = {
         let mut runtime = RUNTIME.lock().unwrap();
         let Some(session) = runtime.session.clone() else {
@@ -221,16 +220,9 @@ pub fn runtime_purchase(shop_id: u32, item_id: String, type_id: u8) {
         let purchase = purchase(&session, shop_id, &item_id, type_id);
         let result = match purchase {
             Ok(result) if result.errors.is_empty() => {
-                if let Some(download) = result.download.as_ref() {
-                    crate::runtime::queue_event_unlock_download(
-                        &download.url,
-                        &download.name,
-                        destination,
-                    );
-                }
                 let notice = result.download.map_or_else(
                     || "Purchase complete.".to_string(),
-                    |download| format!("Unlocked {} and queued its download.", download.name),
+                    |download| format!("Unlocked {}. Press START to download it.", download.name),
                 );
                 fetch_snapshot(&session, None).map(|mut snapshot| {
                     snapshot.message = Some(notice);
@@ -359,13 +351,6 @@ fn fetch_shop(
     let mut items = parse_catalog(&catalog, shop_id, lifetime_balance)?;
     merge_downloads(&mut items, parse_downloads(&downloads)?);
     retain_song_unlocks(&mut items);
-    items.sort_by(|a, b| {
-        b.owned.cmp(&a.owned).then_with(|| {
-            a.name
-                .to_ascii_lowercase()
-                .cmp(&b.name.to_ascii_lowercase())
-        })
-    });
     Ok(SrpgShop {
         id: shop_id,
         balance,
@@ -379,7 +364,6 @@ fn retain_song_unlocks(items: &mut Vec<SrpgShopItem>) {
 
 struct PurchaseDownload {
     name: String,
-    url: String,
 }
 
 struct PurchaseResult {
@@ -430,7 +414,6 @@ fn parse_purchase(body: &str) -> Result<PurchaseResult, SrpgShopError> {
         .and_then(download_from_object)
         .map(|download| PurchaseDownload {
             name: download.name,
-            url: download.url,
         });
     Ok(PurchaseResult { errors, download })
 }
@@ -803,12 +786,14 @@ mod tests {
     }
 
     #[test]
-    fn shop_catalog_omits_relics() {
-        let body = r#"{"data":[["7","chart.png","Fast Song","Purchase to unlock","Difficulty: 14|Speed Tier: 180 BPM","2","0","1234","0","0","0","1","14","180","0"],["2","axe.png","Stone Axe","Useful","Lv. 1 EP","0","0","294","0","0","0","0","---","---","---"]]}"#;
+    fn shop_catalog_omits_relics_and_preserves_website_order() {
+        let body = r#"{"data":[["7","chart.png","Zeta Song","Purchase to unlock","Difficulty: 14|Speed Tier: 180 BPM","2","0","1234","0","0","0","1","14","180","0"],["2","axe.png","Stone Axe","Useful","Lv. 1 EP","0","0","294","0","0","0","0","---","---","---"],["8","chart.png","Alpha Song","Purchase to unlock","Difficulty: 15|Speed Tier: 190 BPM","2","0","1235","0","0","0","1","15","190","0"]]}"#;
         let mut items = parse_catalog(body, 0, 0).expect("catalog");
         retain_song_unlocks(&mut items);
-        assert_eq!(items.len(), 1);
+        assert_eq!(items.len(), 2);
         assert_eq!(items[0].kind, SrpgShopItemKind::Song);
+        assert_eq!(items[0].name, "Zeta Song");
+        assert_eq!(items[1].name, "Alpha Song");
     }
 
     #[test]
@@ -864,13 +849,27 @@ mod tests {
     fn maps_shop_folder_policies_to_pack_names() {
         assert_eq!(
             download_folder(0, SrpgShopFolder::Unlocks),
-            "SRPG10 Unlocks"
+            "Stamina RPG 10 Unlocks"
         );
-        assert_eq!(download_folder(2, SrpgShopFolder::Shops), "SRPG10 - Shops");
-        assert_eq!(download_folder(0, SrpgShopFolder::Faction), "SRPG10 - DPRT");
+        assert_eq!(
+            download_folder(2, SrpgShopFolder::Shops),
+            "Stamina RPG 10 - Shops"
+        );
+        assert_eq!(
+            download_folder(0, SrpgShopFolder::Faction),
+            "Stamina RPG 10 - DPRT"
+        );
+        assert_eq!(
+            download_folder(2, SrpgShopFolder::Faction),
+            "Stamina RPG 10 - FE"
+        );
         assert_eq!(
             download_folder(3, SrpgShopFolder::Faction),
-            "SRPG10 - Stamina Nation"
+            "Stamina RPG 10 - SN"
+        );
+        assert_eq!(
+            download_folder(4, SrpgShopFolder::Faction),
+            "Stamina RPG 10 - NEP"
         );
     }
 
@@ -896,10 +895,6 @@ mod tests {
         assert!(result.errors.is_empty());
         let download = result.download.expect("download");
         assert_eq!(download.name, "Fast Song");
-        assert_eq!(
-            download.url,
-            "https://srpg10.groovestats.com/downloads/unlocks/7.zip"
-        );
 
         let result =
             parse_purchase(r#"{"errors":["Not enough Gold"]}"#).expect("purchase error response");

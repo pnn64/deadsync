@@ -3648,6 +3648,21 @@ const fn overlay_nav_dir(action: VirtualAction) -> Option<NavDirection> {
 }
 
 #[inline(always)]
+const fn overlay_ud_dir(action: VirtualAction) -> Option<NavDirection> {
+    match action {
+        VirtualAction::p1_up
+        | VirtualAction::p1_menu_up
+        | VirtualAction::p2_up
+        | VirtualAction::p2_menu_up => Some(NavDirection::Left),
+        VirtualAction::p1_down
+        | VirtualAction::p1_menu_down
+        | VirtualAction::p2_down
+        | VirtualAction::p2_menu_down => Some(NavDirection::Right),
+        _ => None,
+    }
+}
+
+#[inline(always)]
 const fn wheel_lr_dir(dir: PadDir) -> Option<NavDirection> {
     match dir {
         PadDir::Left => Some(NavDirection::Left),
@@ -5703,6 +5718,18 @@ fn select_music_menu_move(state: &mut State, delta: isize) -> bool {
     true
 }
 
+fn srpg_shop_move(state: &mut State, delta: isize) -> bool {
+    if !select_music_menu::move_srpg_shop_selection(
+        &mut state.srpg_shop_overlay,
+        &state.srpg_shop_snapshot,
+        delta,
+    ) {
+        return false;
+    }
+    queue_sfx(state, "assets/sounds/change.ogg");
+    true
+}
+
 fn update_overlay_nav_hold(state: &mut State) {
     let Some(dir) = state.overlay_nav_held_direction else {
         return;
@@ -5717,6 +5744,7 @@ fn update_overlay_nav_hold(state: &mut State) {
     };
 
     let overlay_active = state.select_music_menu.is_visible()
+        || srpg_shop_overlay_visible(state)
         || matches!(
             state.song_search,
             select_music_menu::SongSearchState::Results(_)
@@ -5733,8 +5761,9 @@ fn update_overlay_nav_hold(state: &mut State) {
         return;
     }
 
-    let moved = if let select_music_menu::SongSearchState::Results(results) = &mut state.song_search
-    {
+    let moved = if srpg_shop_overlay_visible(state) {
+        srpg_shop_move(state, overlay_nav_delta(dir))
+    } else if let select_music_menu::SongSearchState::Results(results) = &mut state.song_search {
         if results.input_lock > 0.0 {
             false
         } else {
@@ -7818,6 +7847,17 @@ fn handle_srpg_shop_overlay_input(state: &mut State, ev: &InputEvent) -> ThemeEf
     if modal_blocks_arrow(state, ev.action) {
         return ThemeEffect::None;
     }
+    let dir = overlay_ud_dir(ev.action);
+    if let Some(dir) = dir {
+        if !ev.pressed {
+            release_overlay_nav_hold(state, dir);
+            return ThemeEffect::None;
+        }
+    } else if !ev.pressed {
+        return ThemeEffect::None;
+    } else {
+        clear_overlay_nav_hold(state);
+    }
     let outcome = select_music_menu::handle_srpg_shop_input(
         &mut state.srpg_shop_overlay,
         ev,
@@ -7826,6 +7866,9 @@ fn handle_srpg_shop_overlay_input(state: &mut State, ev: &InputEvent) -> ThemeEf
     match outcome {
         select_music_menu::SrpgShopInputOutcome::ChangedSelection => {
             queue_sfx(state, "assets/sounds/change.ogg");
+            if let Some(dir) = dir {
+                start_overlay_nav_hold(state, dir);
+            }
         }
         select_music_menu::SrpgShopInputOutcome::Closed => {
             queue_sfx(state, "assets/sounds/start.ogg");
@@ -7872,7 +7915,11 @@ fn handle_srpg_shop_overlay_input(state: &mut State, ev: &InputEvent) -> ThemeEf
                 },
             );
         }
-        select_music_menu::SrpgShopInputOutcome::None => {}
+        select_music_menu::SrpgShopInputOutcome::None => {
+            if let Some(dir) = dir {
+                start_overlay_nav_hold(state, dir);
+            }
+        }
     }
     ThemeEffect::None
 }
@@ -10037,7 +10084,7 @@ fn update_impl(state: &mut State, dt: f32, smx: &SmxAssignmentView) -> ThemeEffe
             }
         }
     }
-    if state.select_music_menu.is_visible() {
+    if state.select_music_menu.is_visible() || srpg_shop_overlay_visible(state) {
         update_overlay_nav_hold(state);
     }
 
@@ -13643,6 +13690,20 @@ mod tests {
 
         assert!(!super::advance_nav_hold(&mut state, 0.249));
         assert!(super::advance_nav_hold(&mut state, 0.002));
+    }
+
+    #[test]
+    fn srpg_shop_hold_navigation_uses_up_and_down_only() {
+        assert_eq!(
+            super::overlay_ud_dir(VirtualAction::p1_up),
+            Some(super::NavDirection::Left)
+        );
+        assert_eq!(
+            super::overlay_ud_dir(VirtualAction::p2_menu_down),
+            Some(super::NavDirection::Right)
+        );
+        assert_eq!(super::overlay_ud_dir(VirtualAction::p1_left), None);
+        assert_eq!(super::overlay_ud_dir(VirtualAction::p2_menu_right), None);
     }
 
     #[test]

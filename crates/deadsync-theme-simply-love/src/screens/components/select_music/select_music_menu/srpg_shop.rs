@@ -17,6 +17,7 @@ const LIST_X: f32 = 157.0;
 const LIST_Y: f32 = -96.0;
 const ROW_H: f32 = 37.0;
 const VIEW_ROWS: usize = 7;
+const SHOP_IMAGE_H: f32 = PANEL_W * 9.0 / 16.0;
 
 #[derive(Clone, Copy)]
 struct ShopMeta {
@@ -29,32 +30,32 @@ struct ShopMeta {
 
 const SHOPS: [ShopMeta; 4] = [
     ShopMeta {
-        name: "Border Shop",
-        short_name: "GOLD",
-        currency: "Gold",
-        image: "srpg10_shop/tevshopc.jpg",
-        tint: [1.0, 0.72, 0.20],
-    },
-    ShopMeta {
-        name: "Memepeace Company Store",
-        short_name: "JEJ",
-        currency: "Jej Points",
-        image: "srpg10_shop/levitasshopc.jpg",
-        tint: [0.75, 0.46, 1.0],
-    },
-    ShopMeta {
         name: "Bronze Bistro",
-        short_name: "BISTRO",
+        short_name: "SN",
         currency: "Bistro Bucks",
         image: "srpg10_shop/remsshopc.jpg",
         tint: [1.0, 0.40, 0.18],
     },
     ShopMeta {
+        name: "Border Shop",
+        short_name: "DPRT",
+        currency: "Gold",
+        image: "srpg10_shop/tevshopc.jpg",
+        tint: [0.30, 0.84, 1.0],
+    },
+    ShopMeta {
+        name: "Memepeace Company Store",
+        short_name: "FE",
+        currency: "Jej Points",
+        image: "srpg10_shop/levitasshopc.jpg",
+        tint: [0.75, 0.46, 1.0],
+    },
+    ShopMeta {
         name: "Wandering Caravan",
-        short_name: "STAMPS",
+        short_name: "NEP",
         currency: "Wide Stamps",
         image: "srpg10_shop/janus5kshopd.jpg",
-        tint: [0.30, 0.84, 1.0],
+        tint: [1.0, 0.72, 0.20],
     },
 ];
 
@@ -138,9 +139,31 @@ pub fn update_srpg_shop_overlay(state: &mut SrpgShopOverlayState, snapshot: &Srp
             .map_or(0, |shop| shop.items.len());
         overlay.item_indices[index] = overlay.item_indices[index].min(len);
     }
+    if snapshot.phase == SrpgShopPhase::Ready
+        && overlay
+            .local_message
+            .as_deref()
+            .is_some_and(|message| message.starts_with("Purchasing "))
+    {
+        overlay.local_message = snapshot.message.clone();
+    }
     if snapshot.phase != SrpgShopPhase::Ready {
         overlay.confirm = None;
     }
+}
+
+pub fn move_srpg_shop_selection(
+    state: &mut SrpgShopOverlayState,
+    snapshot: &SrpgShopSnapshot,
+    delta: isize,
+) -> bool {
+    if snapshot.phase != SrpgShopPhase::Ready {
+        return false;
+    }
+    let SrpgShopOverlayState::Visible(overlay) = state else {
+        return false;
+    };
+    move_item(overlay, snapshot, delta) == SrpgShopInputOutcome::ChangedSelection
 }
 
 pub fn handle_srpg_shop_input(
@@ -380,7 +403,7 @@ pub fn build_srpg_shop_overlay(
         diffuse(meta.tint[0], meta.tint[1], meta.tint[2], 1.0): z(Z + 1)
     ));
     actors.push(act!(sprite(meta.image):
-        align(0.5, 0.5): xy(cx, cy): zoomto(PANEL_W, PANEL_H):
+        align(0.5, 0.5): xy(cx, cy): zoomto(PANEL_W, SHOP_IMAGE_H):
         diffuse(0.72, 0.72, 0.72, 1.0): z(Z + 2)
     ));
     actors.push(act!(quad:
@@ -821,7 +844,7 @@ mod tests {
         SrpgShopSnapshot {
             phase: SrpgShopPhase::Ready,
             shops: vec![SrpgShop {
-                id: 0,
+                id: 3,
                 balance: 2_000,
                 items: vec![SrpgShopItem {
                     item_id: "7".to_string(),
@@ -869,7 +892,7 @@ mod tests {
                 &snapshot(false, false)
             ),
             SrpgShopInputOutcome::Purchase {
-                shop_id: 0,
+                shop_id: 3,
                 item_id: "7".to_string(),
                 type_id: 1,
             }
@@ -891,7 +914,7 @@ mod tests {
                 &snapshot(true, false)
             ),
             SrpgShopInputOutcome::Download {
-                shop_id: 0,
+                shop_id: 3,
                 name: "Fast Song".to_string(),
                 url: "https://example.test/song.zip".to_string(),
             }
@@ -908,7 +931,7 @@ mod tests {
                 &snapshot(true, false)
             ),
             SrpgShopInputOutcome::DownloadAll {
-                shop_id: 0,
+                shop_id: 3,
                 downloads: vec![SrpgShopDownload {
                     name: "Fast Song".to_string(),
                     url: "https://example.test/song.zip".to_string(),
@@ -933,5 +956,33 @@ mod tests {
     #[test]
     fn formats_shop_balances_with_grouping() {
         assert_eq!(format_number(1_234_567), "1,234,567");
+    }
+
+    #[test]
+    fn faction_tabs_use_expected_order_and_colors() {
+        assert_eq!(SRPG_SHOP_IDS, [3, 0, 2, 4]);
+        assert_eq!(
+            SHOPS.map(|shop| shop.short_name),
+            ["SN", "DPRT", "FE", "NEP"]
+        );
+        assert_eq!(SHOPS[0].tint, [1.0, 0.40, 0.18]);
+        assert_eq!(SHOPS[1].tint, [0.30, 0.84, 1.0]);
+        assert_eq!(SHOPS[2].tint, [0.75, 0.46, 1.0]);
+        assert_eq!(SHOPS[3].tint, [1.0, 0.72, 0.20]);
+        assert!(((PANEL_W / SHOP_IMAGE_H) - 16.0 / 9.0).abs() < 0.0001);
+    }
+
+    #[test]
+    fn repeated_navigation_uses_the_same_selection_move() {
+        let mut state = show_srpg_shop_overlay(PlayerSide::P1);
+        assert!(move_srpg_shop_selection(
+            &mut state,
+            &snapshot(false, false),
+            1
+        ));
+        let SrpgShopOverlayState::Visible(overlay) = state else {
+            panic!("shop should remain visible");
+        };
+        assert_eq!(overlay.item_indices[0], 1);
     }
 }
