@@ -175,6 +175,9 @@ const NAV_INITIAL_HOLD_DELAY: Duration = Duration::from_millis(250);
 const OVERLAY_NAV_INITIAL_HOLD_DELAY: Duration = Duration::from_millis(375);
 const OVERLAY_NAV_REPEAT_SCROLL_INTERVAL: Duration = Duration::from_millis(125);
 const DOUBLE_TAP_WINDOW: Duration = Duration::from_millis(300);
+// Simply Love [ScreenSelectMusic] CodeTogglePatternInfo="Select,Select".
+// ITGmania InputQueueCode gives a two-press code (presses - 1) * 0.6s.
+const TOGGLE_PATTERN_INFO_CODE_WINDOW: Duration = Duration::from_millis(600);
 // ITGmania InputQueue: g_fSimultaneousThreshold = 0.05f.
 const CHORD_SIMULTANEOUS_WINDOW: Duration = Duration::from_millis(50);
 const PREVIEW_DELAY_SECONDS: f32 = 0.25;
@@ -1030,6 +1033,32 @@ struct PlaylistCacheEntry {
     entries: Vec<MusicWheelEntry>,
 }
 
+#[derive(Debug, Default)]
+struct PatternInfoState {
+    visible: [bool; 2],
+    last_select_at: [Option<Instant>; 2],
+}
+
+fn register_pattern_info_select(
+    state: &mut PatternInfoState,
+    side: profile_data::PlayerSide,
+    timestamp: Instant,
+) -> bool {
+    let index = profile_data::player_side_index(side);
+    let matched = state.last_select_at[index].is_some_and(|last| {
+        timestamp
+            .checked_duration_since(last)
+            .is_some_and(|elapsed| elapsed <= TOGGLE_PATTERN_INFO_CODE_WINDOW)
+    });
+    // ITGmania's InputQueue keeps the newest press, so a third quick press can
+    // match the second one rather than starting a fresh pair.
+    state.last_select_at[index] = Some(timestamp);
+    if matched {
+        state.visible[index] = !state.visible[index];
+    }
+    matched
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum SmxPadProfileEvent {
     Applied {
@@ -1165,6 +1194,7 @@ pub struct State {
     p2_chord_down_pressed_at: Option<Instant>,
     p1_select_held: bool,
     p2_select_held: bool,
+    pattern_info: PatternInfoState,
     menu_chord_left_pressed_at: Option<Instant>,
     menu_chord_right_pressed_at: Option<Instant>,
     exit_code: ExitCodeTracker,
@@ -2892,6 +2922,7 @@ pub fn init(init_view: SelectMusicInitView) -> State {
         p2_chord_down_pressed_at: None,
         p1_select_held: false,
         p2_select_held: false,
+        pattern_info: PatternInfoState::default(),
         menu_chord_left_pressed_at: None,
         menu_chord_right_pressed_at: None,
         exit_code: Default::default(),
@@ -3108,6 +3139,7 @@ pub fn init_placeholder() -> State {
         p2_chord_down_pressed_at: None,
         p1_select_held: false,
         p2_select_held: false,
+        pattern_info: PatternInfoState::default(),
         menu_chord_left_pressed_at: None,
         menu_chord_right_pressed_at: None,
         exit_code: Default::default(),
@@ -9546,6 +9578,14 @@ fn handle_input_impl(state: &mut State, ev: &InputEvent, fine: bool) -> ThemeEff
                 begin_exit_prompt(state);
                 ThemeEffect::None
             }
+            VirtualAction::p1_select if ev.pressed => {
+                register_pattern_info_select(
+                    &mut state.pattern_info,
+                    profile_data::PlayerSide::P1,
+                    ev.timestamp,
+                );
+                ThemeEffect::None
+            }
 
             VirtualAction::p2_left | VirtualAction::p2_menu_left => handle_pad_dir(
                 state,
@@ -9580,6 +9620,14 @@ fn handle_input_impl(state: &mut State, ev: &InputEvent, fine: bool) -> ThemeEff
             }
             VirtualAction::p2_back if ev.pressed => {
                 begin_exit_prompt(state);
+                ThemeEffect::None
+            }
+            VirtualAction::p2_select if ev.pressed => {
+                register_pattern_info_select(
+                    &mut state.pattern_info,
+                    profile_data::PlayerSide::P2,
+                    ev.timestamp,
+                );
                 ThemeEffect::None
             }
             _ => ThemeEffect::None,
@@ -11248,22 +11296,26 @@ pub fn push_actors(
 
     if cfg.show_select_music_breakdown {
         if is_versus {
-            actors.push(build_breakdown_panel(
-                screen_center_y() + 23.0,
-                false,
-                &state.current_graph_key,
-                state.current_graph_mesh.clone(),
-                preview_marker_p1,
-                disp_chart_p1,
-            ));
-            actors.push(build_breakdown_panel(
-                screen_center_y() + 111.0,
-                true,
-                &state.current_graph_key_p2,
-                state.current_graph_mesh_p2.clone(),
-                preview_marker_p2,
-                disp_chart_p2,
-            ));
+            if !state.pattern_info.visible[0] {
+                actors.push(build_breakdown_panel(
+                    screen_center_y() + 23.0,
+                    false,
+                    &state.current_graph_key,
+                    state.current_graph_mesh.clone(),
+                    preview_marker_p1,
+                    disp_chart_p1,
+                ));
+            }
+            if !state.pattern_info.visible[1] {
+                actors.push(build_breakdown_panel(
+                    screen_center_y() + 111.0,
+                    true,
+                    &state.current_graph_key_p2,
+                    state.current_graph_mesh_p2.clone(),
+                    preview_marker_p2,
+                    disp_chart_p2,
+                ));
+            }
         } else {
             let graph_cy = screen_center_y()
                 + if step_artist_expanded {
@@ -11417,21 +11469,51 @@ pub fn push_actors(
         );
     }
 
-    if !is_versus {
-        let pat_cx = chart_info_cx;
-        let pat_cy = screen_center_y()
-            + if step_artist_expanded {
-                if is_p2_single { 28.0 } else { 120.0 }
-            } else if is_p2_single {
-                23.0
-            } else {
-                111.0
-            };
-        let pat_h = if step_artist_expanded {
-            graph_h - 10.0
+    let single_pattern_y = screen_center_y()
+        + if step_artist_expanded {
+            if is_p2_single { 28.0 } else { 120.0 }
+        } else if is_p2_single {
+            23.0
         } else {
-            64.0
+            111.0
         };
+    let single_pattern_h = if step_artist_expanded {
+        graph_h - 10.0
+    } else {
+        graph_h
+    };
+    let pattern_panels = if is_versus {
+        [
+            state.pattern_info.visible[0].then_some((
+                chart_info_cx,
+                screen_center_y() + 23.0,
+                graph_h,
+                disp_chart_p1,
+                false,
+            )),
+            state.pattern_info.visible[1].then_some((
+                chart_info_cx,
+                screen_center_y() + 111.0,
+                graph_h,
+                disp_chart_p2,
+                false,
+            )),
+        ]
+    } else {
+        [
+            Some((
+                chart_info_cx,
+                single_pattern_y,
+                single_pattern_h,
+                disp_chart_p1,
+                step_artist_expanded,
+            )),
+            None,
+        ]
+    };
+    for (pat_cx, pat_cy, pat_h, disp_chart_p1, step_artist_expanded) in
+        pattern_panels.into_iter().flatten()
+    {
         actors.push(act!(quad: align(0.5, 0.5): xy(pat_cx, pat_cy): setsize(panel_w, pat_h): z(120): diffuse(UI_BOX_BG_COLOR[0], UI_BOX_BG_COLOR[1], UI_BOX_BG_COLOR[2], UI_BOX_BG_COLOR[3])));
         if show_stamina_panel(pattern_info_mode, disp_chart_p1) {
             let (
@@ -12528,6 +12610,59 @@ mod tests {
             ),
             profile_data::PlayerSide::P2
         );
+    }
+
+    #[test]
+    fn pattern_info_select_code_matches_itgmania_timing() {
+        let start = Instant::now();
+        let mut state = super::PatternInfoState::default();
+
+        assert!(!super::register_pattern_info_select(
+            &mut state,
+            profile_data::PlayerSide::P1,
+            start,
+        ));
+        assert!(!super::register_pattern_info_select(
+            &mut state,
+            profile_data::PlayerSide::P1,
+            start + Duration::from_millis(601),
+        ));
+        assert!(!state.visible[0]);
+
+        // The 0.6s boundary is inclusive, and the newest press remains in the
+        // queue so each subsequent quick press matches the preceding one.
+        assert!(super::register_pattern_info_select(
+            &mut state,
+            profile_data::PlayerSide::P1,
+            start + Duration::from_millis(1201),
+        ));
+        assert!(state.visible[0]);
+        assert!(super::register_pattern_info_select(
+            &mut state,
+            profile_data::PlayerSide::P1,
+            start + Duration::from_millis(1801),
+        ));
+        assert!(!state.visible[0]);
+        assert!(!state.visible[1]);
+    }
+
+    #[test]
+    fn pattern_info_select_code_is_per_player() {
+        let start = Instant::now();
+        let mut state = super::PatternInfoState::default();
+
+        for side in [profile_data::PlayerSide::P1, profile_data::PlayerSide::P2] {
+            assert!(!super::register_pattern_info_select(
+                &mut state, side, start,
+            ));
+        }
+        assert!(super::register_pattern_info_select(
+            &mut state,
+            profile_data::PlayerSide::P2,
+            start + Duration::from_millis(300),
+        ));
+
+        assert_eq!(state.visible, [false, true]);
     }
 
     fn input_event(action: VirtualAction, source: InputSource, pressed: bool) -> InputEvent {
