@@ -170,21 +170,25 @@ pub fn runtime_refresh(username: String, password: String) {
         return;
     }
 
-    let generation = {
+    let (generation, previous) = {
         let mut runtime = RUNTIME.lock().unwrap();
         runtime.generation = runtime.generation.wrapping_add(1);
+        let previous = Arc::clone(&runtime.snapshot);
         runtime.session = None;
         runtime.snapshot = Arc::new(SrpgShopSnapshot {
             phase: SrpgShopPhase::Loading,
             shops: Vec::new(),
             message: Some("Signing in to SRPG10...".to_string()),
         });
-        runtime.generation
+        (runtime.generation, previous)
     };
 
     thread::spawn(move || {
         let result = login(&username, &password).and_then(|(session, shop_zero_html)| {
-            fetch_snapshot(&session, Some(shop_zero_html)).map(|snapshot| (session, snapshot))
+            fetch_snapshot(&session, Some(shop_zero_html)).map(|mut snapshot| {
+                preserve_snapshot_order(&mut snapshot, &previous);
+                (session, snapshot)
+            })
         });
         let mut runtime = RUNTIME.lock().unwrap();
         if runtime.generation != generation {
@@ -235,6 +239,7 @@ pub fn runtime_purchase(shop_id: u32, item_id: String, type_id: u8) {
                     |download| format!("Unlocked {}. Press START to download it.", download.name),
                 );
                 fetch_snapshot(&session, None).map(|mut snapshot| {
+                    preserve_snapshot_order(&mut snapshot, &previous);
                     snapshot.message = Some(notice);
                     snapshot
                 })
@@ -363,6 +368,7 @@ fn fetch_shop(
     let mut items = parse_catalog(&catalog, shop_id, lifetime_balance)?;
     merge_downloads(&mut items, parse_downloads(&downloads)?);
     retain_song_unlocks(&mut items);
+    order_shop_items(&mut items);
     Ok(SrpgShop {
         id: shop_id,
         balance,
@@ -372,6 +378,36 @@ fn fetch_shop(
 
 fn retain_song_unlocks(items: &mut Vec<SrpgShopItem>) {
     items.retain(|item| item.kind == SrpgShopItemKind::Song);
+}
+
+fn preserve_snapshot_order(snapshot: &mut SrpgShopSnapshot, previous: &SrpgShopSnapshot) {
+    for shop in &mut snapshot.shops {
+        let Some(old_shop) = previous.shops.iter().find(|old| old.id == shop.id) else {
+            continue;
+        };
+        let mut remaining = std::mem::take(&mut shop.items);
+        let mut ordered = Vec::with_capacity(remaining.len());
+        for old_item in &old_shop.items {
+            if let Some(index) = remaining
+                .iter()
+                .position(|item| item.item_id == old_item.item_id)
+            {
+                ordered.push(remaining.remove(index));
+            }
+        }
+        ordered.extend(remaining);
+        shop.items = ordered;
+    }
+}
+
+fn order_shop_items(items: &mut [SrpgShopItem]) {
+    items.sort_by_key(|item| {
+        (
+            item.difficulty.unwrap_or(u32::MAX),
+            item.bpm.unwrap_or(u32::MAX),
+            item.item_id.parse::<u64>().unwrap_or(u64::MAX),
+        )
+    });
 }
 
 fn annotate_installed_songs(snapshot: &mut SrpgShopSnapshot) {
@@ -954,11 +990,94 @@ mod tests {
             }],
         );
         retain_song_unlocks(&mut items);
+        order_shop_items(&mut items);
 
         assert_eq!(items[0].name, "Postlude Evangelist");
         assert!(items[0].owned);
         assert_eq!(items[1].name, "Astral Apocalypse");
         assert!(!items[1].owned);
+    }
+
+    #[test]
+    fn owned_and_buyable_songs_share_one_status_independent_order() {
+        let mut items = vec![
+            test_item("600", "Buyable 18", 18, 180, false),
+            test_item("582", "Owned 11", 11, 120, true),
+            test_item("601", "Buyable 19", 19, 190, false),
+        ];
+
+        order_shop_items(&mut items);
+
+        assert_eq!(
+            items
+                .iter()
+                .map(|item| item.name.as_str())
+                .collect::<Vec<_>>(),
+            ["Owned 11", "Buyable 18", "Buyable 19"]
+        );
+    }
+
+    #[test]
+    fn refresh_preserves_existing_item_slots() {
+        let previous = SrpgShopSnapshot {
+            phase: SrpgShopPhase::Ready,
+            shops: vec![SrpgShop {
+                id: 3,
+                balance: 0,
+                items: vec![
+                    test_item("7", "First", 18, 180, false),
+                    test_item("8", "Second", 18, 180, false),
+                ],
+            }],
+            message: None,
+        };
+        let mut refreshed = SrpgShopSnapshot {
+            phase: SrpgShopPhase::Ready,
+            shops: vec![SrpgShop {
+                id: 3,
+                balance: 0,
+                items: vec![
+                    test_item("8", "Second", 18, 180, false),
+                    test_item("7", "First", 18, 180, true),
+                ],
+            }],
+            message: None,
+        };
+
+        preserve_snapshot_order(&mut refreshed, &previous);
+
+        assert_eq!(
+            refreshed.shops[0]
+                .items
+                .iter()
+                .map(|item| (item.name.as_str(), item.owned))
+                .collect::<Vec<_>>(),
+            [("First", true), ("Second", false)]
+        );
+    }
+
+    fn test_item(
+        item_id: &str,
+        name: &str,
+        difficulty: u32,
+        bpm: u32,
+        owned: bool,
+    ) -> SrpgShopItem {
+        SrpgShopItem {
+            item_id: item_id.to_string(),
+            kind: SrpgShopItemKind::Song,
+            name: name.to_string(),
+            description: String::new(),
+            effect: String::new(),
+            cost: (!owned).then_some(100),
+            difficulty: Some(difficulty),
+            bpm: Some(bpm),
+            type_id: 1,
+            owned,
+            site_downloaded: false,
+            downloaded: false,
+            download_url: owned.then(|| format!("https://example.test/{item_id}.zip")),
+        }
     }
 
     #[test]
