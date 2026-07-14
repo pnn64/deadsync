@@ -21,7 +21,9 @@ use deadlib_present::space::widescale;
 use deadlib_present::space::{
     is_wide, screen_center_x, screen_center_y, screen_height, screen_width,
 };
-use deadlib_render::{BlendMode, MeshVertex, TexturedMeshVertex, TexturedMeshVertices};
+use deadlib_render::{
+    BlendMode, MeshVertex, RetainedTMeshGeometry, TexturedMeshVertex, TexturedMeshVertices,
+};
 use deadsync_assets::noteskin::{self, Noteskin, SpriteSlot};
 use deadsync_assets::song_lua::{
     CompiledSongLua, SongLuaCapturedActor, SongLuaOverlayActor, SongLuaOverlayBlendMode,
@@ -714,6 +716,20 @@ impl State {
                 acc
             },
         )
+    }
+
+    /// Appends all immutable noteskin model geometry prepared for active players.
+    ///
+    /// The shell calls this during transition prewarm so models that are not
+    /// visible in the initial gameplay frame are resident before live play.
+    pub fn append_retained_models(&self, out: &mut Vec<RetainedTMeshGeometry>) {
+        for cache in self
+            .notefield_model_cache
+            .iter()
+            .take(self.gameplay.num_players().min(MAX_PLAYERS))
+        {
+            cache.borrow().append_retained(out);
+        }
     }
 }
 

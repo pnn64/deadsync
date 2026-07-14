@@ -1,7 +1,7 @@
 use crate::{
     BlendMode, FastTMeshMap, INVALID_TEXTURE_HANDLE, MeshVertex, ObjectType, RenderList,
-    SpriteInstanceRaw, TMeshGeometryId, TextureHandle, TexturedMeshInstanceRaw, TexturedMeshVertex,
-    TexturedMeshVertices,
+    RetainedTMeshGeometry, SpriteInstanceRaw, TMeshGeometryId, TextureHandle,
+    TexturedMeshInstanceRaw, TexturedMeshVertex, TexturedMeshVertices,
 };
 use glam::{Mat4 as Matrix4, Vec4 as Vector4};
 use std::{
@@ -205,6 +205,7 @@ pub struct DrawFrame {
     pub tmesh_vertices: Vec<TexturedMeshVertex>,
     pub tmesh_instances: Vec<TexturedMeshInstanceRaw>,
     pub ops: Vec<DrawOp>,
+    retained_tmeshes: Vec<RetainedTMeshGeometry>,
 }
 
 impl DrawFrame {
@@ -218,6 +219,7 @@ impl DrawFrame {
             tmesh_vertices: Vec::with_capacity(capacity.tmesh_vertices),
             tmesh_instances: Vec::with_capacity(capacity.tmesh_instances),
             ops: Vec::with_capacity(capacity.ops),
+            retained_tmeshes: Vec::new(),
         }
     }
 
@@ -231,6 +233,7 @@ impl DrawFrame {
         self.tmesh_vertices.clear();
         self.tmesh_instances.clear();
         self.ops.clear();
+        self.retained_tmeshes.clear();
     }
 
     pub fn reserve(&mut self, capacity: FrameCapacity) {
@@ -252,6 +255,19 @@ impl DrawFrame {
             tmesh_instances: self.tmesh_instances.capacity(),
             ops: self.ops.capacity(),
         }
+    }
+
+    /// Binds the immutable geometry owners referenced by this frame's cached
+    /// textured-mesh ops. Compiled presentation calls this once on its cold
+    /// path; backend preparation consumes the same frame and sidecar set.
+    #[inline]
+    pub fn set_retained_tmeshes(&mut self, geometries: Vec<RetainedTMeshGeometry>) {
+        self.retained_tmeshes = geometries;
+    }
+
+    #[inline(always)]
+    pub fn retained_tmeshes(&self) -> &[RetainedTMeshGeometry] {
+        self.retained_tmeshes.as_slice()
     }
 
     /// Describes an already-flat direct frame without traversing its draw ops.
@@ -285,6 +301,13 @@ impl DrawFrame {
             tmesh_instances: self.tmesh_instances.as_slice(),
             ops: self.ops.as_slice(),
         }
+    }
+}
+
+impl AsRef<DrawFrame> for DrawFrame {
+    #[inline(always)]
+    fn as_ref(&self) -> &DrawFrame {
+        self
     }
 }
 
@@ -763,11 +786,13 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::{DrawScratch, TMeshCacheResult, TMeshPrewarmStats, prepare};
+    use super::{DrawFrame, DrawScratch, TMeshCacheResult, TMeshPrewarmStats, prepare};
     use crate::{
-        BlendMode, INVALID_TEXTURE_HANDLE, ObjectType, RenderList, RenderObject, SpriteInstanceRaw,
+        BlendMode, INVALID_TEXTURE_HANDLE, ObjectType, RenderList, RenderObject,
+        RetainedTMeshGeometry, SpriteInstanceRaw, TexturedMeshVertex,
     };
     use glam::Mat4 as Matrix4;
+    use std::sync::Arc;
 
     fn sprite_object(order: u32) -> RenderObject {
         RenderObject {
@@ -837,5 +862,18 @@ mod tests {
                 uploaded_vertices: 7,
             }
         );
+    }
+
+    #[test]
+    fn draw_frame_binds_and_clears_retained_geometry_sidecars() {
+        let vertices = Arc::from([TexturedMeshVertex::default()]);
+        let geometry = RetainedTMeshGeometry::new(1, vertices).expect("retained geometry");
+        let mut frame = DrawFrame::default();
+
+        frame.set_retained_tmeshes(vec![geometry]);
+        assert_eq!(frame.retained_tmeshes().len(), 1);
+
+        frame.begin([0.0, 0.0, 0.0, 1.0]);
+        assert!(frame.retained_tmeshes().is_empty());
     }
 }

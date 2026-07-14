@@ -1,7 +1,8 @@
 use deadlib_render::{
     BlendMode, ClockDomainTrace, DrawFrame, DrawFrameView, DrawStats, FastTMeshMap,
     PresentModePolicy, PresentModeTrace, PresentStats, RenderList, RetainedTMeshGeometry,
-    SamplerDesc, SamplerFilter, SamplerWrap, TMeshGeometryId, TextureHandle, TexturedMeshVertex,
+    SamplerDesc, SamplerFilter, SamplerWrap, TMeshGeometryId, TMeshRetireStats, TextureHandle,
+    TexturedMeshVertex, drain_tmesh_cache,
     draw_prep::{
         self, DrawOp, DrawScratch, TMeshCacheResult, TMeshPrewarmStats, TexturedMeshSource,
     },
@@ -25,6 +26,7 @@ use winit::window::Window;
 
 const WGPU_IMAGE_WAIT_THRESHOLD_US: u32 = 1_000;
 const WGPU_BACK_PRESSURE_THRESHOLD_US: u32 = 1_000;
+const WGPU_TMESH_CACHE_MAX_ENTRIES: usize = 4_096;
 const WGPU_TMESH_CACHE_MAX_BYTES: usize = 16 * 1024 * 1024;
 const LOGICAL_HEIGHT: f32 = 480.0;
 const DESIGN_WIDTH_16_9: f32 = 854.0;
@@ -242,6 +244,12 @@ pub struct State {
     instance_buffer: wgpu::Buffer,
     instance_capacity: usize,
     prep: DrawScratch,
+    // Render-thread-only, transition-epoch cache. It is prewarmed before live
+    // rendering, capped by `WGPU_TMESH_CACHE_MAX_ENTRIES` and
+    // `WGPU_TMESH_CACHE_MAX_BYTES`, and saturates on a miss rather than pruning
+    // during gameplay. Transition retirement drains the full bounded map and
+    // reports entry/byte counts. wgpu owns deferred destruction for resources
+    // still referenced by submitted GPU work.
     cached_tmesh: FastTMeshMap<CachedTMeshGeom>,
     cached_tmesh_bytes: usize,
     mesh_vertex_buffer: wgpu::Buffer,
@@ -906,6 +914,13 @@ pub fn update_texture(
     Ok(())
 }
 
+#[inline(always)]
+const fn tmesh_cache_has_room(entries: usize, cached_bytes: usize, new_bytes: usize) -> bool {
+    entries < WGPU_TMESH_CACHE_MAX_ENTRIES
+        && new_bytes <= WGPU_TMESH_CACHE_MAX_BYTES
+        && cached_bytes.saturating_add(new_bytes) <= WGPU_TMESH_CACHE_MAX_BYTES
+}
+
 fn ensure_cached_tmesh(
     device: &wgpu::Device,
     cached_tmesh: &mut FastTMeshMap<CachedTMeshGeom>,
@@ -925,9 +940,7 @@ fn ensure_cached_tmesh(
     }
 
     let bytes = std::mem::size_of_val(vertices);
-    if bytes > WGPU_TMESH_CACHE_MAX_BYTES
-        || cached_tmesh_bytes.saturating_add(bytes) > WGPU_TMESH_CACHE_MAX_BYTES
-    {
+    if !tmesh_cache_has_room(cached_tmesh.len(), *cached_tmesh_bytes, bytes) {
         return TMeshCacheResult::CapacityExceeded;
     }
 
@@ -951,8 +964,9 @@ fn ensure_cached_tmesh(
 
 /// Uploads immutable textured-mesh geometry before direct frame submission.
 ///
-/// The renderer thread owns the cache. It is byte-capped and saturates when
-/// full; prewarming never scans, prunes, or destroys resident geometry.
+/// The renderer thread owns the entry- and byte-capped cache. It saturates when
+/// either limit is full; prewarming never scans, prunes, or destroys resident
+/// geometry.
 pub fn prewarm_textured_meshes(
     state: &mut State,
     geometries: &[RetainedTMeshGeometry],
@@ -970,6 +984,16 @@ pub fn prewarm_textured_meshes(
         stats.record(result, vertices.len());
     }
     stats
+}
+
+/// Retires every retained textured-mesh buffer at a transition boundary.
+///
+/// Dropping the cache's `Arc<Buffer>` handles does not require an explicit
+/// device poll or wait: wgpu keeps submitted resources alive until the GPU no
+/// longer references them and completes destruction through its normal
+/// resource-lifetime tracking.
+pub fn retire_textured_meshes(state: &mut State) -> TMeshRetireStats {
+    drain_tmesh_cache(&mut state.cached_tmesh, &mut state.cached_tmesh_bytes, drop)
 }
 
 #[inline(always)]
@@ -1615,6 +1639,7 @@ pub fn resize(state: &mut State, width: u32, height: u32) {
 }
 
 pub fn cleanup(state: &mut State) {
+    let _ = retire_textured_meshes(state);
     info!("{} (wgpu) backend cleanup complete.", state.api.name());
 }
 
@@ -2465,7 +2490,10 @@ const TMESH_SHADER_UBO: &str = include_str!("shaders/wgpu_tmesh_ubo.wgsl");
 
 #[cfg(test)]
 mod tests {
-    use super::{DrawStats, cached_tmesh_count_ok};
+    use super::{
+        DrawStats, WGPU_TMESH_CACHE_MAX_BYTES, WGPU_TMESH_CACHE_MAX_ENTRIES, cached_tmesh_count_ok,
+        tmesh_cache_has_room,
+    };
 
     #[test]
     fn cached_tmesh_draw_count_mismatch_is_reported_and_skipped() {
@@ -2475,5 +2503,14 @@ mod tests {
 
         assert!(!cached_tmesh_count_ok(6, 9, &mut stats));
         assert_eq!(stats.cached_tmesh_misses, 1);
+    }
+
+    #[test]
+    fn cached_tmesh_capacity_caps_entries_and_bytes() {
+        assert!(tmesh_cache_has_room(WGPU_TMESH_CACHE_MAX_ENTRIES - 1, 0, 1));
+        assert!(!tmesh_cache_has_room(WGPU_TMESH_CACHE_MAX_ENTRIES, 0, 1));
+        assert!(tmesh_cache_has_room(0, 0, WGPU_TMESH_CACHE_MAX_BYTES));
+        assert!(!tmesh_cache_has_room(0, 1, WGPU_TMESH_CACHE_MAX_BYTES));
+        assert!(!tmesh_cache_has_room(0, usize::MAX, 1));
     }
 }

@@ -9,8 +9,9 @@ use deadlib_present::font::Font;
 use deadlib_present::space::Metrics;
 use deadlib_present::texture::{TextureContext, TextureMeta};
 use deadlib_render::{
-    INVALID_TEXTURE_HANDLE, RetainedTMeshGeometry, TextureHandle, draw_prep::TMeshPrewarmStats,
+    INVALID_TEXTURE_HANDLE, TMeshCacheEpoch, TextureHandle, draw_prep::TMeshPrewarmStats,
 };
+use deadlib_renderer::PreparedDrawFrame;
 use deadsync_config::{
     app_config::Config,
     theme::{LogLevel, MachineFont, VersionOverlaySide},
@@ -301,9 +302,26 @@ impl SelectMusicBgCache {
     }
 }
 
-struct SandboxEntry {
+pub(super) trait SandboxPreparedFrame {
+    fn epoch(&self) -> TMeshCacheEpoch;
+    fn owner(&self) -> &CompiledDrawFrame;
+}
+
+impl SandboxPreparedFrame for PreparedDrawFrame<CompiledDrawFrame> {
+    #[inline(always)]
+    fn epoch(&self) -> TMeshCacheEpoch {
+        self.epoch()
+    }
+
+    #[inline(always)]
+    fn owner(&self) -> &CompiledDrawFrame {
+        self.owner()
+    }
+}
+
+struct SandboxEntry<F> {
     key: SandboxDirectKey,
-    frame: CompiledDrawFrame,
+    frame: F,
 }
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -319,13 +337,14 @@ struct SandboxCacheStats {
 /// One-entry retained frame for the quiet, idle Sandbox canary.
 ///
 /// Owner/thread model: shell render thread only. Lifetime/capacity: one whole
-/// frame for the current Sandbox visit; all frame and geometry storage is
-/// exact-sized during its first eligible menu frame. Warmup: after live asset
-/// uploads and before the first direct submission. Misses, unsupported actors,
+/// frame for the current Sandbox visit and backend geometry epoch; all frame
+/// and geometry storage is exact-sized during its first eligible menu frame.
+/// Warmup: after live asset uploads and before the first direct submission.
+/// Misses, stale epochs, unsupported actors,
 /// software rendering, overlays, and incomplete backend prewarm use the legacy
 /// frame unchanged. Eviction/replacement occurs on key/resource changes or
-/// renderer recreation; destruction is therefore outside gameplay on the
-/// owner thread. Rebuild/fallback/prewarm totals are logged, while successful
+/// renderer recreation; backend destruction is therefore outside gameplay on
+/// the owner thread. Rebuild/fallback/prewarm totals are logged, while successful
 /// submissions are counted in `DrawStats`. A backend cached-geometry miss
 /// disables direct submission for the current key/resource epoch after that
 /// submission, avoiding an incomplete-frame rebuild loop. A screen exit,
@@ -333,49 +352,62 @@ struct SandboxCacheStats {
 /// prewarm attempt. Warm hits perform revision checks only; they do no actor
 /// build, composition, draw prep, allocation, cache pruning, upload, or resource
 /// destruction.
-#[derive(Default)]
-pub struct SandboxDirectCache {
-    entry: Option<SandboxEntry>,
-    failed: Option<(SandboxDirectKey, u64)>,
+pub struct SandboxDirectCache<F = PreparedDrawFrame<CompiledDrawFrame>> {
+    entry: Option<SandboxEntry<F>>,
+    failed: Option<(SandboxDirectKey, u64, TMeshCacheEpoch)>,
     stats: SandboxCacheStats,
 }
 
-impl SandboxDirectCache {
+impl<F> Default for SandboxDirectCache<F> {
+    fn default() -> Self {
+        Self {
+            entry: None,
+            failed: None,
+            stats: SandboxCacheStats::default(),
+        }
+    }
+}
+
+impl<F: SandboxPreparedFrame> SandboxDirectCache<F> {
     pub fn frame<T: TextureContext + ?Sized>(
         &self,
         key: SandboxDirectKey,
+        epoch: TMeshCacheEpoch,
         textures: &T,
-    ) -> Option<&CompiledDrawFrame> {
+    ) -> Option<&F> {
         let entry = self.entry.as_ref()?;
         (entry.key == key
+            && entry.frame.epoch() == epoch
             && entry
                 .frame
+                .owner()
                 .is_current(key.metrics.fingerprint(), 0, textures))
         .then_some(&entry.frame)
     }
 
     #[allow(clippy::too_many_arguments)]
-    pub fn prepare<T, F, E>(
+    pub fn prepare<T, P, E>(
         &mut self,
         key: SandboxDirectKey,
+        epoch: TMeshCacheEpoch,
         actors: &[Actor],
         metrics: &Metrics,
         fonts: &HashMap<&'static str, Font>,
         text_cache: &mut TextLayoutCache,
         textures: &T,
-        prewarm: F,
+        prewarm: P,
     ) -> bool
     where
         T: TextureContext + ?Sized,
-        F: FnOnce(&[RetainedTMeshGeometry]) -> Result<TMeshPrewarmStats, E>,
+        P: FnOnce(CompiledDrawFrame) -> Result<(Option<F>, TMeshPrewarmStats), E>,
         E: fmt::Display,
     {
-        if self.frame(key, textures).is_some() {
+        if self.frame(key, epoch, textures).is_some() {
             return true;
         }
 
         let texture_generation = textures.texture_registry_generation();
-        if self.failed == Some((key, texture_generation)) {
+        if self.failed == Some((key, texture_generation, epoch)) {
             return self.fallback();
         }
 
@@ -394,16 +426,18 @@ impl SandboxDirectCache {
             Err(error) => {
                 warn!("Sandbox direct frame unavailable; using legacy actors: {error}");
                 self.entry = None;
-                self.failed = Some((key, texture_generation));
+                self.failed = Some((key, texture_generation, epoch));
                 return self.fallback();
             }
         };
 
-        let prewarm_stats = match prewarm(frame.geometries()) {
-            Ok(stats) if stats.ready() => stats,
-            Ok(stats) => {
+        let (prepared, prewarm_stats) = match prewarm(frame) {
+            Ok((Some(prepared), stats)) if stats.ready() && prepared.epoch() == epoch => {
+                (prepared, stats)
+            }
+            Ok((prepared, stats)) => {
                 warn!(
-                    "Sandbox direct-frame geometry prewarm incomplete; using legacy actors: requested={} resident={} uploaded={} unavailable={} capacity_exceeded={} identity_mismatch={} upload_failed={}",
+                    "Sandbox direct-frame geometry prewarm incomplete; using legacy actors: requested={} resident={} uploaded={} unavailable={} capacity_exceeded={} identity_mismatch={} upload_failed={} prepared={} current_epoch={}",
                     stats.requested,
                     stats.resident,
                     stats.uploaded,
@@ -411,15 +445,19 @@ impl SandboxDirectCache {
                     stats.capacity_exceeded,
                     stats.identity_mismatch,
                     stats.upload_failed,
+                    prepared.is_some(),
+                    prepared
+                        .as_ref()
+                        .is_some_and(|prepared| prepared.epoch() == epoch),
                 );
                 self.entry = None;
-                self.failed = Some((key, texture_generation));
+                self.failed = Some((key, texture_generation, epoch));
                 return self.fallback();
             }
             Err(error) => {
                 warn!("Sandbox direct-frame geometry prewarm failed; using legacy actors: {error}");
                 self.entry = None;
-                self.failed = Some((key, texture_generation));
+                self.failed = Some((key, texture_generation, epoch));
                 return self.fallback();
             }
         };
@@ -440,7 +478,10 @@ impl SandboxDirectCache {
             prewarm_stats.uploaded,
             prewarm_stats.uploaded_vertices,
         );
-        self.entry = Some(SandboxEntry { key, frame });
+        self.entry = Some(SandboxEntry {
+            key,
+            frame: prepared,
+        });
         self.failed = None;
         true
     }
@@ -456,6 +497,7 @@ impl SandboxDirectCache {
     pub fn disable_after_cached_tmesh_miss<T: TextureContext + ?Sized>(
         &mut self,
         key: SandboxDirectKey,
+        epoch: TMeshCacheEpoch,
         textures: &T,
         misses: u32,
     ) {
@@ -464,7 +506,7 @@ impl SandboxDirectCache {
         }
 
         self.entry = None;
-        self.failed = Some((key, textures.texture_registry_generation()));
+        self.failed = Some((key, textures.texture_registry_generation(), epoch));
         self.stats.runtime_miss_frames = self.stats.runtime_miss_frames.saturating_add(1);
         self.stats.runtime_misses = self.stats.runtime_misses.saturating_add(u64::from(misses));
         if self.stats.runtime_miss_frames.is_power_of_two() {
@@ -641,6 +683,46 @@ mod tests {
         generation: Cell<u64>,
         handle_calls: Cell<u32>,
         background_key: &'static str,
+    }
+
+    struct TestPreparedFrame {
+        owner: CompiledDrawFrame,
+        epoch: TMeshCacheEpoch,
+    }
+
+    impl TestPreparedFrame {
+        fn frame(&self) -> &deadlib_render::DrawFrame {
+            self.owner.frame()
+        }
+
+        fn owner(&self) -> &CompiledDrawFrame {
+            &self.owner
+        }
+    }
+
+    impl SandboxPreparedFrame for TestPreparedFrame {
+        fn epoch(&self) -> TMeshCacheEpoch {
+            self.epoch
+        }
+
+        fn owner(&self) -> &CompiledDrawFrame {
+            &self.owner
+        }
+    }
+
+    fn prepared_frame(
+        epoch: TMeshCacheEpoch,
+        owner: CompiledDrawFrame,
+    ) -> (Option<TestPreparedFrame>, TMeshPrewarmStats) {
+        let requested = owner.geometries().len() as u32;
+        (
+            Some(TestPreparedFrame { owner, epoch }),
+            TMeshPrewarmStats {
+                requested,
+                resident: requested,
+                ..TMeshPrewarmStats::default()
+            },
+        )
     }
 
     impl TextureContext for TestTextures {
@@ -892,19 +974,21 @@ mod tests {
         let actors = visual_style_bg::build_tiled_at_elapsed(params(), 0.0);
         let fonts = HashMap::new();
         let mut text_cache = TextLayoutCache::default();
-        let mut cache = SandboxDirectCache::default();
+        let mut cache = SandboxDirectCache::<TestPreparedFrame>::default();
         let key = sandbox_key(&metrics);
+        let mut epoch = TMeshCacheEpoch::fresh();
 
         assert!(cache.prepare(
             key,
+            epoch,
             &actors,
             &metrics,
             &fonts,
             &mut text_cache,
             &textures,
-            |_| Ok::<_, &'static str>(TMeshPrewarmStats::default()),
+            |frame| Ok::<_, &'static str>(prepared_frame(epoch, frame)),
         ));
-        assert!(cache.frame(key, &textures).is_some());
+        assert!(cache.frame(key, epoch, &textures).is_some());
         assert_eq!(cache.stats.rebuilds, 1);
         assert!(
             cache
@@ -918,6 +1002,7 @@ mod tests {
                         ),
                         ..key
                     },
+                    epoch,
                     &textures,
                 )
                 .is_none()
@@ -929,23 +1014,39 @@ mod tests {
                         window_px: (key.window_px.0.wrapping_add(1), key.window_px.1),
                         ..key
                     },
+                    epoch,
                     &textures,
                 )
                 .is_none()
         );
 
-        textures.generation.set(21);
-        assert!(cache.frame(key, &textures).is_none());
+        epoch = TMeshCacheEpoch::fresh();
+        assert!(cache.frame(key, epoch, &textures).is_none());
         assert!(cache.prepare(
             key,
+            epoch,
             &actors,
             &metrics,
             &fonts,
             &mut text_cache,
             &textures,
-            |_| Ok::<_, &'static str>(TMeshPrewarmStats::default()),
+            |frame| Ok::<_, &'static str>(prepared_frame(epoch, frame)),
         ));
         assert_eq!(cache.stats.rebuilds, 2);
+
+        textures.generation.set(21);
+        assert!(cache.frame(key, epoch, &textures).is_none());
+        assert!(cache.prepare(
+            key,
+            epoch,
+            &actors,
+            &metrics,
+            &fonts,
+            &mut text_cache,
+            &textures,
+            |frame| Ok::<_, &'static str>(prepared_frame(epoch, frame)),
+        ));
+        assert_eq!(cache.stats.rebuilds, 3);
     }
 
     #[test]
@@ -960,24 +1061,31 @@ mod tests {
         let actors = visual_style_bg::build_tiled_at_elapsed(params(), 0.0);
         let fonts = HashMap::new();
         let mut text_cache = TextLayoutCache::default();
-        let mut cache = SandboxDirectCache::default();
+        let mut cache = SandboxDirectCache::<TestPreparedFrame>::default();
         let key = sandbox_key(&metrics);
+        let epoch = TMeshCacheEpoch::fresh();
 
         assert!(!cache.prepare(
             key,
+            epoch,
             &actors,
             &metrics,
             &fonts,
             &mut text_cache,
             &textures,
-            |_| Ok::<_, &'static str>(TMeshPrewarmStats {
-                requested: 1,
-                unavailable: 1,
-                capacity_exceeded: 1,
-                ..TMeshPrewarmStats::default()
-            }),
+            |_| {
+                Ok::<_, &'static str>((
+                    None,
+                    TMeshPrewarmStats {
+                        requested: 1,
+                        unavailable: 1,
+                        capacity_exceeded: 1,
+                        ..TMeshPrewarmStats::default()
+                    },
+                ))
+            },
         ));
-        assert!(cache.frame(key, &textures).is_none());
+        assert!(cache.frame(key, epoch, &textures).is_none());
         assert_eq!(cache.stats.fallbacks, 1);
     }
 
@@ -993,58 +1101,62 @@ mod tests {
         let actors = visual_style_bg::build_tiled_at_elapsed(params(), 0.0);
         let fonts = HashMap::new();
         let mut text_cache = TextLayoutCache::default();
-        let mut cache = SandboxDirectCache::default();
+        let mut cache = SandboxDirectCache::<TestPreparedFrame>::default();
         let key = sandbox_key(&metrics);
+        let epoch = TMeshCacheEpoch::fresh();
 
         assert!(cache.prepare(
             key,
+            epoch,
             &actors,
             &metrics,
             &fonts,
             &mut text_cache,
             &textures,
-            |_| Ok::<_, &'static str>(TMeshPrewarmStats::default()),
+            |frame| Ok::<_, &'static str>(prepared_frame(epoch, frame)),
         ));
-        cache.disable_after_cached_tmesh_miss(key, &textures, 0);
-        assert!(cache.frame(key, &textures).is_some());
+        cache.disable_after_cached_tmesh_miss(key, epoch, &textures, 0);
+        assert!(cache.frame(key, epoch, &textures).is_some());
 
-        cache.disable_after_cached_tmesh_miss(key, &textures, 2);
-        assert!(cache.frame(key, &textures).is_none());
+        cache.disable_after_cached_tmesh_miss(key, epoch, &textures, 2);
+        assert!(cache.frame(key, epoch, &textures).is_none());
         assert_eq!(cache.stats.runtime_miss_frames, 1);
         assert_eq!(cache.stats.runtime_misses, 2);
 
         let mut prewarm_called = false;
         assert!(!cache.prepare(
             key,
+            epoch,
             &actors,
             &metrics,
             &fonts,
             &mut text_cache,
             &textures,
-            |_| {
+            |frame| {
                 prewarm_called = true;
-                Ok::<_, &'static str>(TMeshPrewarmStats::default())
+                Ok::<_, &'static str>(prepared_frame(epoch, frame))
             },
         ));
         assert!(!prewarm_called);
-        assert!(cache.frame(key, &textures).is_none());
+        assert!(cache.frame(key, epoch, &textures).is_none());
         assert_eq!(cache.stats.rebuilds, 1);
 
         textures.generation.set(36);
         assert!(cache.prepare(
             key,
+            epoch,
             &actors,
             &metrics,
             &fonts,
             &mut text_cache,
             &textures,
-            |_| {
+            |frame| {
                 prewarm_called = true;
-                Ok::<_, &'static str>(TMeshPrewarmStats::default())
+                Ok::<_, &'static str>(prepared_frame(epoch, frame))
             },
         ));
         assert!(prewarm_called);
-        assert!(cache.frame(key, &textures).is_some());
+        assert!(cache.frame(key, epoch, &textures).is_some());
         assert_eq!(cache.stats.rebuilds, 2);
     }
 
@@ -1090,26 +1202,22 @@ mod tests {
         .expect("quiet Sandbox snapshot must remain in the immutable subset");
 
         let mut text_cache = TextLayoutCache::default();
-        let mut cache = SandboxDirectCache::default();
+        let mut cache = SandboxDirectCache::<TestPreparedFrame>::default();
+        let epoch = TMeshCacheEpoch::fresh();
         assert!(cache.prepare(
             key,
+            epoch,
             &actors,
             &metrics,
             &fonts,
             &mut text_cache,
             &textures,
-            |geometries| {
-                Ok::<_, &'static str>(TMeshPrewarmStats {
-                    requested: geometries.len() as u32,
-                    resident: geometries.len() as u32,
-                    ..TMeshPrewarmStats::default()
-                })
-            },
+            |frame| Ok::<_, &'static str>(prepared_frame(epoch, frame)),
         ));
         let direct = cache
-            .frame(key, &textures)
+            .frame(key, epoch, &textures)
             .expect("prepared direct frame remains current");
-        assert!(!direct.geometries().is_empty());
+        assert!(!direct.owner().geometries().is_empty());
 
         let mut compose_scratch = ComposeScratch::default();
         let legacy = build_screen_cached_with_scratch_and_texture_context(

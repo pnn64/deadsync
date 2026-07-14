@@ -570,10 +570,10 @@ impl CompiledScene {
             .tmesh_instances
             .extend_from_slice(view.tmesh_instances);
         frame.ops.extend_from_slice(view.ops);
+        frame.set_retained_tmeshes(geometries);
 
         Ok(CompiledDrawFrame {
             frame,
-            geometries,
             stamp: self.stamp,
             scene_id: self.scene_id,
         })
@@ -693,7 +693,6 @@ impl CompiledRootPrefix {
 /// vertex buffer and is uploaded on each submission.
 pub struct CompiledDrawFrame {
     frame: RenderDrawFrame,
-    geometries: Vec<RetainedTMeshGeometry>,
     stamp: CompileStamp,
     scene_id: u64,
 }
@@ -706,7 +705,7 @@ impl CompiledDrawFrame {
 
     #[inline(always)]
     pub fn geometries(&self) -> &[RetainedTMeshGeometry] {
-        self.geometries.as_slice()
+        self.frame.retained_tmeshes()
     }
 
     #[inline(always)]
@@ -755,6 +754,13 @@ impl CompiledDrawFrame {
             return Err(PatchError::MissingSpriteInstance(id));
         }
         Ok(instance)
+    }
+}
+
+impl AsRef<RenderDrawFrame> for CompiledDrawFrame {
+    #[inline(always)]
+    fn as_ref(&self) -> &RenderDrawFrame {
+        &self.frame
     }
 }
 

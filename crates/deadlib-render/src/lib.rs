@@ -10,7 +10,10 @@ use std::{
     collections::HashMap,
     hash::{BuildHasherDefault, Hasher},
     num::NonZeroU64,
-    sync::Arc,
+    sync::{
+        Arc,
+        atomic::{AtomicU64, Ordering},
+    },
 };
 use twox_hash::XxHash64;
 
@@ -21,6 +24,61 @@ pub type FastU64Map<V> = HashMap<u64, V, BuildHasherDefault<XxHash64>>;
 pub type FastTMeshMap<V> = HashMap<TMeshGeometryId, V, BuildHasherDefault<XxHash64>>;
 pub type TMeshCacheKey = u64;
 pub const INVALID_TMESH_CACHE_KEY: TMeshCacheKey = 0;
+
+static NEXT_TMESH_CACHE_EPOCH: AtomicU64 = AtomicU64::new(1);
+
+/// Process-unique generation of one hardware retained-geometry cache.
+///
+/// Epochs are created only at backend creation and committed cache retirement
+/// boundaries. Direct frames carry the epoch they were prewarmed against, so a
+/// frame from an older cache generation cannot accidentally address newly
+/// uploaded resources.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct TMeshCacheEpoch(NonZeroU64);
+
+impl TMeshCacheEpoch {
+    /// Allocates a process-unique epoch.
+    ///
+    /// Exhausting every non-zero `u64` value is impossible in a real process;
+    /// panic instead of wrapping because reuse would violate stale-frame safety.
+    #[inline]
+    pub fn fresh() -> Self {
+        let value = NEXT_TMESH_CACHE_EPOCH
+            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |value| {
+                value.checked_add(1)
+            })
+            .expect("retained textured-mesh cache epoch space exhausted");
+        Self(NonZeroU64::new(value).expect("cache epoch counter starts non-zero"))
+    }
+}
+
+/// Resources released by one complete retained-geometry cache retirement.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct TMeshRetireStats {
+    pub entries: usize,
+    pub bytes: usize,
+}
+
+/// Drains a backend's complete retained-geometry cache and resets accounting.
+///
+/// The render thread is the sole cache owner. Backends provide the resource
+/// destruction operation because GPU handles and synchronization remain local
+/// to their implementation.
+pub fn drain_tmesh_cache<V>(
+    cache: &mut FastTMeshMap<V>,
+    cached_bytes: &mut usize,
+    mut retire: impl FnMut(V),
+) -> TMeshRetireStats {
+    let stats = TMeshRetireStats {
+        entries: cache.len(),
+        bytes: *cached_bytes,
+    };
+    *cached_bytes = 0;
+    for value in cache.drain().map(|(_, value)| value) {
+        retire(value);
+    }
+    stats
+}
 
 /// Stable identity for one immutable textured-mesh geometry payload.
 ///
@@ -791,6 +849,42 @@ impl core::str::FromStr for PresentModePolicy {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn tmesh_cache_epochs_are_unique_and_niche_optimized() {
+        let first = TMeshCacheEpoch::fresh();
+        let second = TMeshCacheEpoch::fresh();
+
+        assert_ne!(first, second);
+        assert_eq!(size_of::<TMeshCacheEpoch>(), 8);
+        assert_eq!(size_of::<Option<TMeshCacheEpoch>>(), 8);
+    }
+
+    #[test]
+    fn draining_tmesh_cache_retires_every_entry_and_resets_bytes() {
+        let vertices = [TexturedMeshVertex::default(); 3];
+        let first = TMeshGeometryId::new(1, &vertices).expect("non-empty geometry");
+        let second = TMeshGeometryId::new(2, &vertices).expect("non-empty geometry");
+        let mut cache = FastTMeshMap::default();
+        cache.insert(first, 11);
+        cache.insert(second, 29);
+        let mut bytes = 384;
+        let mut retired = Vec::new();
+
+        let stats = drain_tmesh_cache(&mut cache, &mut bytes, |value| retired.push(value));
+
+        retired.sort_unstable();
+        assert_eq!(retired, [11, 29]);
+        assert_eq!(
+            stats,
+            TMeshRetireStats {
+                entries: 2,
+                bytes: 384
+            }
+        );
+        assert!(cache.is_empty());
+        assert_eq!(bytes, 0);
+    }
 
     #[test]
     fn present_mode_policy_choices_match_options_order() {

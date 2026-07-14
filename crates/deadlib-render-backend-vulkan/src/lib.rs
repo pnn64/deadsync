@@ -8,7 +8,8 @@ use deadlib_render::{
     BlendMode, ClockDomainTrace, DrawFrame, DrawFrameView, DrawStats, FastTMeshMap, MeshVertex,
     PresentModePolicy, PresentModeTrace, PresentStats, RenderList, RetainedTMeshGeometry,
     SamplerDesc, SamplerFilter, SamplerWrap, SpriteInstanceRaw as InstanceData, TMeshGeometryId,
-    TextureHandle, TexturedMeshInstanceRaw as TexturedMeshInstanceGpu, TexturedMeshVertex,
+    TMeshRetireStats, TextureHandle, TexturedMeshInstanceRaw as TexturedMeshInstanceGpu,
+    TexturedMeshVertex, drain_tmesh_cache,
     draw_prep::{
         self, DrawOp, DrawScratch, TMeshCacheResult, TMeshPrewarmStats, TexturedMeshSource,
     },
@@ -37,6 +38,7 @@ const DESCRIPTOR_POOL_SET_CAPACITY: u32 = 1024;
 const VULKAN_IMAGE_WAIT_THRESHOLD_US: u32 = 1_000;
 const VULKAN_BACK_PRESSURE_THRESHOLD_US: u32 = 1_000;
 const VULKAN_PRESENT_DISPLAY_TIMING_TELEMETRY: bool = false;
+const VULKAN_TMESH_CACHE_MAX_ENTRIES: usize = 4_096;
 const VULKAN_TMESH_CACHE_MAX_BYTES: usize = 16 * 1024 * 1024;
 const LOGICAL_HEIGHT: f32 = 480.0;
 const DESIGN_WIDTH_16_9: f32 = 854.0;
@@ -198,6 +200,10 @@ pub struct State {
     surface_loader: surface::Instance,
     pdevice: vk::PhysicalDevice,
     device: Option<Arc<Device>>,
+    // Render-thread synchronization fact. Queue submissions clear it; a
+    // successful device-wide wait sets it so immediate teardown need not wait
+    // a second time.
+    device_known_idle: bool,
     queue: vk::Queue,
     command_pool: vk::CommandPool,
     swapchain_resources: SwapchainResources,
@@ -241,6 +247,10 @@ pub struct State {
     tmesh_capacity_instances: usize,       // total textured mesh instances across ring
     per_frame_stride_tmesh_instances: usize, // textured mesh instances reserved per frame
     prep: DrawScratch,
+    // Render-thread-only, transition-epoch cache capped by both
+    // `VULKAN_TMESH_CACHE_MAX_ENTRIES` and `VULKAN_TMESH_CACHE_MAX_BYTES`.
+    // Gameplay misses saturate instead of pruning; explicit retirement waits
+    // for known device idleness before draining every bounded entry.
     cached_tmesh: FastTMeshMap<CachedTMeshGeom>,
     cached_tmesh_bytes: usize,
     pending_tex_upload_cmd: Option<vk::CommandBuffer>, // batched texture upload cmd
@@ -346,6 +356,7 @@ pub fn init(
         surface_loader,
         pdevice,
         device: device.clone(),
+        device_known_idle: false,
         queue,
         command_pool,
         swapchain_resources,
@@ -1196,6 +1207,7 @@ fn submit_pending_texture_uploads(state: &mut State, frame: usize) -> Result<(),
     unsafe {
         device.end_command_buffer(cmd)?;
         let submit = vk::SubmitInfo::default().command_buffers(std::slice::from_ref(&cmd));
+        state.device_known_idle = false;
         device.queue_submit(state.queue, &[submit], vk::Fence::null())?;
     }
     state.submitted_tex_uploads.push(SubmittedTextureUpload {
@@ -1262,17 +1274,37 @@ pub fn retire_all_textures(state: &mut State) {
     state.retired_textures.clear();
 }
 
-pub fn wait_for_idle(state: &mut State) {
-    let _ = flush_pending_uploads(state);
-    if let Some(device) = &state.device {
-        // SAFETY: `device` is the live Vulkan logical device for this backend,
-        // and this wait is only used before tearing down or reclaiming resources.
-        unsafe {
-            let _ = device.device_wait_idle();
-        }
+fn wait_device_idle(state: &mut State) -> Result<(), vk::Result> {
+    if state.device_known_idle {
+        return Ok(());
     }
-    retire_submitted_uploads(state);
-    retire_all_textures(state);
+    let Some(device) = state.device.as_ref().map(Arc::clone) else {
+        state.device_known_idle = true;
+        return Ok(());
+    };
+    // SAFETY: `device` is the live logical device owned by this renderer. A
+    // successful wait establishes the fact consumed by retirement/cleanup;
+    // failure deliberately leaves the state non-idle so teardown must retry.
+    unsafe {
+        device.device_wait_idle()?;
+    }
+    state.device_known_idle = true;
+    Ok(())
+}
+
+pub fn wait_for_idle(state: &mut State) {
+    if let Err(error) = flush_pending_uploads(state) {
+        warn!("Failed to flush Vulkan uploads before idle wait: {error}");
+    }
+    match wait_device_idle(state) {
+        Ok(()) => {
+            retire_submitted_uploads(state);
+            retire_all_textures(state);
+        }
+        Err(error) => warn!(
+            "Vulkan idle wait failed; backend-owned resource retirement deferred to final cleanup: {error:?}"
+        ),
+    }
 }
 
 pub fn create_texture(
@@ -1579,6 +1611,9 @@ fn draw_frame_view(
     if !state.swapchain_valid || state.window_size.width == 0 || state.window_size.height == 0 {
         return Ok(*stats);
     }
+    // Any error after this point must force teardown to establish idleness
+    // again. Successful queue submission also makes the device genuinely busy.
+    state.device_known_idle = false;
     stats.present_stats.mode = vk_present_mode_trace(state.swapchain_resources.present_mode);
     stats.present_stats.refresh_ns = state.present_telemetry.refresh_ns;
 
@@ -2098,6 +2133,7 @@ fn draw_frame_view(
             .command_buffers(std::slice::from_ref(&cmd))
             .signal_semaphores(&sig);
         let submit_started = Instant::now();
+        state.device_known_idle = false;
         device.queue_submit(state.queue, &[submit], fence)?;
         stats.submit_us = elapsed_us_since(submit_started);
 
@@ -2215,18 +2251,23 @@ pub fn cleanup(state: &mut State) {
     if let Err(e) = submit_pending_texture_uploads(state, state.current_frame) {
         error!("Failed to submit pending texture uploads during cleanup: {e}");
     }
-    // SAFETY: If a logical device still exists, waiting for idle guarantees no in-flight work
-    // still references resources we are about to destroy below.
-    unsafe {
-        if let Some(device) = &state.device {
-            let _ = device.device_wait_idle();
-        }
+    match wait_device_idle(state) {
+        Ok(()) => {}
+        Err(vk::Result::ERROR_DEVICE_LOST) => warn!(
+            "Vulkan device was lost during cleanup; proceeding with terminal lost-device teardown"
+        ),
+        Err(error) => error!(
+            "Vulkan idle wait failed during final cleanup; proceeding with best-effort teardown: {error:?}"
+        ),
     }
     retire_all_submitted_texture_uploads(state);
     retire_all_textures(state);
 
-    // SAFETY: The device is idle, so it is valid to tear down swapchain resources, mapped rings,
-    // pipelines, descriptor pools/layouts, the device, and finally the instance-owned objects.
+    // SAFETY: After a successful wait, no submitted work references these
+    // resources. If waiting reported DEVICE_LOST (or another terminal cleanup
+    // error), this is one-way best-effort teardown: the backend publishes no
+    // handles afterward and destroys the logical device before returning. The
+    // state must never be reused after this point.
     unsafe {
         cleanup_swapchain_and_dependents(state);
 
@@ -2287,10 +2328,12 @@ pub fn cleanup(state: &mut State) {
             }
             destroy_buffer(state.device.as_ref().unwrap(), &ring);
         }
-        for geom in state.cached_tmesh.drain().map(|(_, geom)| geom) {
-            destroy_buffer(state.device.as_ref().unwrap(), &geom.buffer);
-        }
-        state.cached_tmesh_bytes = 0;
+        let device = Arc::clone(state.device.as_ref().unwrap());
+        let _ = drain_cached_tmesh(
+            &mut state.cached_tmesh,
+            &mut state.cached_tmesh_bytes,
+            |buffer| destroy_buffer(device.as_ref(), &buffer),
+        );
         for sampler in state.sampler_cache.values() {
             state
                 .device
@@ -2967,12 +3010,30 @@ fn create_gpu_buffer(
 }
 
 fn destroy_buffer(device: &Device, buffer: &BufferResource) {
-    // SAFETY: `buffer` owns this Vulkan buffer/allocation pair and callers only invoke this after
-    // GPU work that might reference it has completed.
+    // SAFETY: `buffer` owns this Vulkan buffer/allocation pair. Normal callers
+    // have established GPU completion; final cleanup may also call this while
+    // irreversibly dismantling a lost/unrecoverable logical device.
     unsafe {
         device.destroy_buffer(buffer.buffer, None);
         device.free_memory(buffer.memory, None);
     }
+}
+
+fn drain_cached_tmesh(
+    cached_tmesh: &mut FastTMeshMap<CachedTMeshGeom>,
+    cached_tmesh_bytes: &mut usize,
+    mut destroy: impl FnMut(BufferResource),
+) -> TMeshRetireStats {
+    drain_tmesh_cache(cached_tmesh, cached_tmesh_bytes, |geometry| {
+        destroy(geometry.buffer);
+    })
+}
+
+#[inline(always)]
+const fn tmesh_cache_has_room(entries: usize, cached_bytes: usize, new_bytes: usize) -> bool {
+    entries < VULKAN_TMESH_CACHE_MAX_ENTRIES
+        && new_bytes <= VULKAN_TMESH_CACHE_MAX_BYTES
+        && cached_bytes.saturating_add(new_bytes) <= VULKAN_TMESH_CACHE_MAX_BYTES
 }
 
 fn ensure_cached_tmesh(
@@ -2996,9 +3057,7 @@ fn ensure_cached_tmesh(
     }
 
     let bytes = std::mem::size_of_val(vertices);
-    if bytes > VULKAN_TMESH_CACHE_MAX_BYTES
-        || cached_tmesh_bytes.saturating_add(bytes) > VULKAN_TMESH_CACHE_MAX_BYTES
-    {
+    if !tmesh_cache_has_room(cached_tmesh.len(), *cached_tmesh_bytes, bytes) {
         return Ok(TMeshCacheResult::CapacityExceeded);
     }
 
@@ -3042,10 +3101,36 @@ fn ensure_cached_tmesh(
     Ok(TMeshCacheResult::Uploaded)
 }
 
+/// Retires all Vulkan textured-mesh cache entries at an explicit transition.
+///
+/// The empty fast path performs no device wait. For a populated cache, waiting
+/// for the device to become idle is the commit point: a wait failure leaves all
+/// buffers and byte accounting intact, while success destroys every entry.
+pub fn retire_textured_meshes(state: &mut State) -> Result<TMeshRetireStats, vk::Result> {
+    if state.cached_tmesh.is_empty() {
+        return Ok(TMeshRetireStats::default());
+    }
+    let device = Arc::clone(
+        state
+            .device
+            .as_ref()
+            .expect("a populated Vulkan geometry cache requires a live device"),
+    );
+    // Establishing known-idle state is the commit point. Failure leaves the
+    // complete cache and its byte accounting untouched.
+    wait_device_idle(state)?;
+    Ok(drain_cached_tmesh(
+        &mut state.cached_tmesh,
+        &mut state.cached_tmesh_bytes,
+        |buffer| destroy_buffer(device.as_ref(), &buffer),
+    ))
+}
+
 /// Uploads immutable textured-mesh geometry before direct frame submission.
 ///
-/// The renderer thread owns the cache. It is byte-capped and saturates when
-/// full; prewarming never scans, prunes, or destroys resident geometry.
+/// The renderer thread owns the entry- and byte-capped cache. It saturates when
+/// either limit is full; prewarming never scans, prunes, or destroys resident
+/// geometry.
 pub fn prewarm_textured_meshes(
     state: &mut State,
     geometries: &[RetainedTMeshGeometry],
@@ -4142,7 +4227,7 @@ fn cleanup_swapchain_and_dependents(state: &mut State) {
 
 fn recreate_swapchain_and_dependents(state: &mut State) -> Result<(), Box<dyn Error>> {
     debug!("Recreating swapchain...");
-    let device = state.device.as_ref().unwrap();
+    let device = Arc::clone(state.device.as_ref().unwrap());
 
     // Some platforms (notably under certain compositors or when minimized)
     // can temporarily report a surface with all extents set to zero. In that
@@ -4174,17 +4259,15 @@ fn recreate_swapchain_and_dependents(state: &mut State) -> Result<(), Box<dyn Er
 
     state.swapchain_valid = false;
 
-    // SAFETY: Waiting for idle ensures no queue submission still references the old swapchain
-    // resources before we replace and destroy them below.
-    unsafe {
-        device.device_wait_idle()?;
-    }
+    // Waiting for idle ensures no queue submission still references the old
+    // swapchain resources before we replace and destroy them below.
+    wait_device_idle(state)?;
 
     let old_swapchain = state.swapchain_resources.swapchain;
 
     let new_resources = create_swapchain(
         &state.instance,
-        device,
+        device.as_ref(),
         state.pdevice,
         state.surface,
         &state.surface_loader,
@@ -4196,7 +4279,11 @@ fn recreate_swapchain_and_dependents(state: &mut State) -> Result<(), Box<dyn Er
 
     let old = std::mem::replace(&mut state.swapchain_resources, new_resources);
 
-    recreate_framebuffers(device, &mut state.swapchain_resources, state.render_pass)?;
+    recreate_framebuffers(
+        device.as_ref(),
+        &mut state.swapchain_resources,
+        state.render_pass,
+    )?;
 
     // SAFETY: The device is idle, so the old swapchain image views/framebuffers/swapchain are no
     // longer referenced by in-flight work and can be destroyed here.
@@ -4255,7 +4342,13 @@ fn ortho_for_window(width: u32, height: u32) -> Matrix4 {
 
 #[cfg(test)]
 mod tests {
-    use super::{DrawStats, cached_tmesh_count_ok};
+    use super::{
+        BufferResource, CachedTMeshGeom, DrawStats, VULKAN_TMESH_CACHE_MAX_BYTES,
+        VULKAN_TMESH_CACHE_MAX_ENTRIES, cached_tmesh_count_ok, drain_cached_tmesh,
+        tmesh_cache_has_room,
+    };
+    use ash::vk;
+    use deadlib_render::{FastTMeshMap, TMeshGeometryId, TexturedMeshVertex};
 
     #[test]
     fn cached_tmesh_draw_count_mismatch_is_reported_and_skipped() {
@@ -4265,5 +4358,49 @@ mod tests {
 
         assert!(!cached_tmesh_count_ok(6, 9, &mut stats));
         assert_eq!(stats.cached_tmesh_misses, 1);
+    }
+
+    #[test]
+    fn cached_tmesh_capacity_caps_entries_and_bytes() {
+        assert!(tmesh_cache_has_room(
+            VULKAN_TMESH_CACHE_MAX_ENTRIES - 1,
+            0,
+            1
+        ));
+        assert!(!tmesh_cache_has_room(VULKAN_TMESH_CACHE_MAX_ENTRIES, 0, 1));
+        assert!(tmesh_cache_has_room(0, 0, VULKAN_TMESH_CACHE_MAX_BYTES));
+        assert!(!tmesh_cache_has_room(0, 1, VULKAN_TMESH_CACHE_MAX_BYTES));
+        assert!(!tmesh_cache_has_room(0, usize::MAX, 1));
+    }
+
+    #[test]
+    fn cached_tmesh_drain_reports_entries_and_bytes() {
+        let mut cache = FastTMeshMap::default();
+        for logical_key in [7, 9] {
+            let id = TMeshGeometryId::new(logical_key, &[TexturedMeshVertex::default()])
+                .expect("test geometry identity is valid");
+            cache.insert(
+                id,
+                CachedTMeshGeom {
+                    buffer: BufferResource {
+                        buffer: vk::Buffer::null(),
+                        memory: vk::DeviceMemory::null(),
+                    },
+                    vertex_count: 1,
+                },
+            );
+        }
+        let mut cached_bytes = 320;
+        let mut destroyed = 0usize;
+
+        let stats = drain_cached_tmesh(&mut cache, &mut cached_bytes, |_| {
+            destroyed += 1;
+        });
+
+        assert_eq!(stats.entries, 2);
+        assert_eq!(stats.bytes, 320);
+        assert_eq!(destroyed, 2);
+        assert!(cache.is_empty());
+        assert_eq!(cached_bytes, 0);
     }
 }

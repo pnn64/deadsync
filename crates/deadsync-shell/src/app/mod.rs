@@ -367,13 +367,14 @@ fn build_course_summary_eval_state(
     state
 }
 
-fn prewarm_gameplay_text_layout_cache(
+fn prewarm_gameplay_presentation(
     assets: &AssetManager,
     metrics: &Metrics,
     cache: &mut compose::TextLayoutCache,
     actors: &mut Vec<Actor>,
     compose_scratch: &mut compose::ComposeScratch,
     state: &mut gameplay::State,
+    backend: Option<&mut renderer_backend::Backend>,
 ) {
     let started = Instant::now();
     // Gameplay prewarm owns the whole cache for the next song, so start from an
@@ -402,6 +403,35 @@ fn prewarm_gameplay_text_layout_cache(
         compose_scratch,
         &PRESENT_TEXTURE_CONTEXT,
     );
+    let tmesh_started = Instant::now();
+    let mut geometries = retained_tmeshes(&render);
+    let composed_geometries = geometries.len();
+    state.append_retained_models(&mut geometries);
+    dedup_retained_tmeshes(&mut geometries);
+    let tmesh_stats = backend
+        .and_then(|backend| backend.tmesh_epoch().map(|epoch| (backend, epoch)))
+        .and_then(
+            |(backend, epoch)| match backend.prewarm_textured_meshes(epoch, &geometries) {
+                Ok(stats) if stats.ready() => Some(stats),
+                Ok(stats) => {
+                    warn!(
+                        "Gameplay retained-geometry prewarm incomplete: requested={} resident={} uploaded={} unavailable={} capacity_exceeded={} identity_mismatch={} upload_failed={}",
+                        stats.requested,
+                        stats.resident,
+                        stats.uploaded,
+                        stats.unavailable,
+                        stats.capacity_exceeded,
+                        stats.identity_mismatch,
+                        stats.upload_failed,
+                    );
+                    Some(stats)
+                }
+                Err(error) => {
+                    warn!("Gameplay retained-geometry prewarm failed: {error}");
+                    None
+                }
+            },
+        );
     compose_scratch.recycle_render_list(&mut render);
     actors.clear();
     gameplay::prewarm_text_layout(cache, fonts, state);
@@ -413,14 +443,44 @@ fn prewarm_gameplay_text_layout_cache(
 
     let stats = cache.frame_stats();
     debug!(
-        "Gameplay presentation prewarm: entries={} shared={} scratch_growth={} objects={} sprites={} elapsed_ms={:.3}",
+        "Gameplay presentation prewarm: entries={} shared={} scratch_growth={} objects={} sprites={} retained={} composed_retained={} model_inventory={} resident={} uploaded={} unavailable={} tmesh_ms={:.3} elapsed_ms={:.3}",
         stats.owned_entries,
         stats.shared_aliases,
         compose_scratch.frame_stats().scratch_growth_events,
         compose_scratch.frame_stats().render_objects,
         compose_scratch.frame_stats().sprite_instances,
+        geometries.len(),
+        composed_geometries,
+        geometries.len().saturating_sub(composed_geometries),
+        tmesh_stats.map_or(0, |stats| stats.resident),
+        tmesh_stats.map_or(0, |stats| stats.uploaded),
+        tmesh_stats.map_or(0, |stats| stats.unavailable),
+        tmesh_started.elapsed().as_secs_f64() * 1000.0,
         started.elapsed().as_secs_f64() * 1000.0,
     );
+}
+
+/// Collects each retained identity once for transition-time GPU prewarm.
+fn retained_tmeshes(render: &renderer::RenderList) -> Vec<renderer::RetainedTMeshGeometry> {
+    let mut geometries = Vec::new();
+    for object in &render.objects {
+        let renderer::ObjectType::TexturedMesh {
+            vertices: renderer::TexturedMeshVertices::Retained(geometry),
+            ..
+        } = &object.object_type
+        else {
+            continue;
+        };
+        geometries.push(geometry.as_ref().clone());
+    }
+    dedup_retained_tmeshes(&mut geometries);
+    geometries
+}
+
+fn dedup_retained_tmeshes(geometries: &mut Vec<renderer::RetainedTMeshGeometry>) {
+    let mut identities = renderer::FastTMeshMap::<()>::default();
+    identities.reserve(geometries.len());
+    geometries.retain(|geometry| identities.insert(geometry.id(), ()).is_none());
 }
 
 #[inline(always)]
@@ -2299,14 +2359,15 @@ impl App {
             let config = config::get();
             SandboxDirectKey::new(&self.state.shell.metrics, &config)
         });
+        let tmesh_epoch = self
+            .backend
+            .as_ref()
+            .and_then(renderer_backend::Backend::tmesh_epoch);
         let sandbox_direct_eligibility = SandboxDirectEligibility {
             sandbox_screen,
             idle_transition: matches!(self.state.shell.transition, TransitionState::Idle),
             empty_input_log: self.state.screens.sandbox_state.last_inputs.is_empty(),
-            hardware_backend: self
-                .backend
-                .as_ref()
-                .is_some_and(renderer_backend::Backend::supports_direct_frame),
+            hardware_backend: tmesh_epoch.is_some(),
             debug_overlays_hidden: !self.state.shell.overlay_mode.shows_fps()
                 && !self.state.shell.frame_stats.enabled(),
             interaction_hidden: self.state.shell.interaction.message().is_none(),
@@ -2315,7 +2376,11 @@ impl App {
         let mut sandbox_direct = sandbox_direct_eligibility.ready()
             && sandbox_direct_key.is_some_and(|key| {
                 self.sandbox_direct_cache
-                    .frame(key, &PRESENT_TEXTURE_CONTEXT)
+                    .frame(
+                        key,
+                        tmesh_epoch.expect("direct Sandbox frame requires a geometry epoch"),
+                        &PRESENT_TEXTURE_CONTEXT,
+                    )
                     .is_some()
             });
         let actor_build_started = Instant::now();
@@ -2477,6 +2542,7 @@ impl App {
                 .sandbox_direct_cache
                 .frame(
                     sandbox_direct_key.expect("direct Sandbox frame requires a cache key"),
+                    tmesh_epoch.expect("direct Sandbox frame requires a geometry epoch"),
                     &PRESENT_TEXTURE_CONTEXT,
                 )
                 .is_none()
@@ -2522,25 +2588,32 @@ impl App {
             if sandbox_direct_eligibility.ready() && !sandbox_direct {
                 let key = sandbox_direct_key
                     .expect("eligible Sandbox frame must have a direct cache key");
-                sandbox_direct = self.backend.as_mut().is_some_and(|backend| {
-                    self.sandbox_direct_cache.prepare(
+                if let (Some(backend), Some(epoch)) = (self.backend.as_mut(), tmesh_epoch) {
+                    sandbox_direct = self.sandbox_direct_cache.prepare(
                         key,
+                        epoch,
                         &actors,
                         &self.state.shell.metrics,
                         fonts,
                         text_layout_cache,
                         &PRESENT_TEXTURE_CONTEXT,
-                        |geometries| backend.prewarm_textured_meshes(geometries),
-                    )
-                });
+                        |frame| {
+                            backend
+                                .prepare_draw_frame(frame)
+                                .map(|result| (result.prepared, result.stats))
+                        },
+                    );
+                }
             }
             let direct_prepare = sandbox_direct.then(|| {
                 self.sandbox_direct_cache
                     .frame(
                         sandbox_direct_key.expect("direct Sandbox frame requires a cache key"),
+                        tmesh_epoch.expect("direct Sandbox frame requires a geometry epoch"),
                         &PRESENT_TEXTURE_CONTEXT,
                     )
                     .expect("eligible prepared Sandbox frame must remain current")
+                    .frame()
                     .prepare_stats()
             });
             let screen = if sandbox_direct {
@@ -2642,6 +2715,7 @@ impl App {
                 self.sandbox_direct_cache
                     .frame(
                         sandbox_direct_key.expect("direct Sandbox frame requires a cache key"),
+                        tmesh_epoch.expect("direct Sandbox frame requires a geometry epoch"),
                         &PRESENT_TEXTURE_CONTEXT,
                     )
                     .map_or(0, |frame| saturating_u32(frame.frame().cameras.len()))
@@ -2664,11 +2738,12 @@ impl App {
                     .sandbox_direct_cache
                     .frame(
                         sandbox_direct_key.expect("direct Sandbox frame requires a cache key"),
+                        tmesh_epoch.expect("direct Sandbox frame requires a geometry epoch"),
                         &PRESENT_TEXTURE_CONTEXT,
                     )
                     .expect("eligible prepared Sandbox frame must remain current");
                 backend.draw_frame(
-                    frame.frame(),
+                    frame,
                     self.asset_manager.textures(),
                     apply_present_back_pressure,
                 )
@@ -2689,6 +2764,7 @@ impl App {
                     if sandbox_direct && stats.cached_tmesh_misses > 0 {
                         self.sandbox_direct_cache.disable_after_cached_tmesh_miss(
                             sandbox_direct_key.expect("direct Sandbox frame requires a cache key"),
+                            tmesh_epoch.expect("direct Sandbox frame requires a geometry epoch"),
                             &PRESENT_TEXTURE_CONTEXT,
                             stats.cached_tmesh_misses,
                         );
@@ -6117,19 +6193,21 @@ impl App {
                     }
                 }
                 let asset_prewarm_ms = asset_prewarm_started.elapsed().as_secs_f64() * 1000.0;
-                let text_prewarm_started = Instant::now();
-                prewarm_gameplay_text_layout_cache(
+                let presentation_prewarm_started = Instant::now();
+                prewarm_gameplay_presentation(
                     &self.asset_manager,
                     &self.state.shell.metrics,
                     &mut self.gameplay_text_layout_cache,
                     &mut self.actor_scratch,
                     &mut self.gameplay_compose_scratch,
                     &mut gs,
+                    self.backend.as_mut(),
                 );
-                let text_prewarm_ms = text_prewarm_started.elapsed().as_secs_f64() * 1000.0;
+                let presentation_prewarm_ms =
+                    presentation_prewarm_started.elapsed().as_secs_f64() * 1000.0;
                 let song = gs.song();
                 debug!(
-                    "Practice transition timing: song='{}' payload_ms={payload_ms:.3} init_ms={init_ms:.3} sfx_prewarm_ms={sfx_prewarm_ms:.3} asset_prewarm_ms={asset_prewarm_ms:.3} text_prewarm_ms={text_prewarm_ms:.3}",
+                    "Practice transition timing: song='{}' payload_ms={payload_ms:.3} init_ms={init_ms:.3} sfx_prewarm_ms={sfx_prewarm_ms:.3} asset_prewarm_ms={asset_prewarm_ms:.3} presentation_prewarm_ms={presentation_prewarm_ms:.3}",
                     song.title
                 );
                 commands.push(Command::SetPackBanner(gs.pack_banner_path.clone()));
@@ -6495,21 +6573,23 @@ impl App {
                     }
                 }
                 let asset_prewarm_ms = asset_prewarm_started.elapsed().as_secs_f64() * 1000.0;
-                let text_prewarm_started = Instant::now();
-                prewarm_gameplay_text_layout_cache(
+                let presentation_prewarm_started = Instant::now();
+                prewarm_gameplay_presentation(
                     &self.asset_manager,
                     &self.state.shell.metrics,
                     &mut self.gameplay_text_layout_cache,
                     &mut self.actor_scratch,
                     &mut self.gameplay_compose_scratch,
                     &mut gs,
+                    self.backend.as_mut(),
                 );
-                let text_prewarm_ms = text_prewarm_started.elapsed().as_secs_f64() * 1000.0;
+                let presentation_prewarm_ms =
+                    presentation_prewarm_started.elapsed().as_secs_f64() * 1000.0;
                 let total_ms = gameplay_entry_started.elapsed().as_secs_f64() * 1000.0;
                 let song = gs.song();
                 if total_ms >= 50.0 {
                     info!(
-                        "Gameplay transition timing: song='{}' restart={} payload_source={} payload_ms={payload_ms:.3} init_ms={init_ms:.3} sfx_prewarm_ms={sfx_prewarm_ms:.3} asset_prewarm_ms={asset_prewarm_ms:.3} text_prewarm_ms={text_prewarm_ms:.3} elapsed_ms={total_ms:.3}",
+                        "Gameplay transition timing: song='{}' restart={} payload_source={} payload_ms={payload_ms:.3} init_ms={init_ms:.3} sfx_prewarm_ms={sfx_prewarm_ms:.3} asset_prewarm_ms={asset_prewarm_ms:.3} presentation_prewarm_ms={presentation_prewarm_ms:.3} elapsed_ms={total_ms:.3}",
                         song.title,
                         prev == CurrentScreen::Gameplay,
                         if reusing_gameplay_payload {
@@ -6520,7 +6600,7 @@ impl App {
                     );
                 } else {
                     debug!(
-                        "Gameplay transition timing: song='{}' restart={} payload_source={} payload_ms={payload_ms:.3} init_ms={init_ms:.3} sfx_prewarm_ms={sfx_prewarm_ms:.3} asset_prewarm_ms={asset_prewarm_ms:.3} text_prewarm_ms={text_prewarm_ms:.3} elapsed_ms={total_ms:.3}",
+                        "Gameplay transition timing: song='{}' restart={} payload_source={} payload_ms={payload_ms:.3} init_ms={init_ms:.3} sfx_prewarm_ms={sfx_prewarm_ms:.3} asset_prewarm_ms={asset_prewarm_ms:.3} presentation_prewarm_ms={presentation_prewarm_ms:.3} elapsed_ms={total_ms:.3}",
                         song.title,
                         prev == CurrentScreen::Gameplay,
                         if reusing_gameplay_payload {

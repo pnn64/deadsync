@@ -88,6 +88,20 @@ impl ModelMeshCache {
         self.stats = ModelMeshCacheStats::default();
     }
 
+    /// Appends every immutable model geometry already owned by this cache.
+    ///
+    /// Gameplay constructs the bounded cache during song setup. This method
+    /// only clones the retained owners into transition-owned output; it never
+    /// builds geometry, hashes vertices, or mutates cache state.
+    pub fn append_retained(&self, out: &mut Vec<RetainedTMeshGeometry>) {
+        out.reserve(self.entries.len());
+        out.extend(
+            self.entries
+                .values()
+                .map(|entry| entry.geometry.as_ref().clone()),
+        );
+    }
+
     #[inline(always)]
     pub fn prewarm_slot<S: NoteskinSlot>(&mut self, slot: &S) {
         if slot.model().is_none_or(|model| model.vertices.is_empty()) {
@@ -779,7 +793,11 @@ mod tests {
 
         cache.prewarm_slot(&slot);
 
+        let mut geometries = Vec::new();
+        cache.append_retained(&mut geometries);
+
         assert!(cache.entries.is_empty());
+        assert!(geometries.is_empty());
         assert_eq!(cache.stats(), ModelMeshCacheStats::default());
     }
 
@@ -794,8 +812,49 @@ mod tests {
 
         cache.prewarm_slot(&slot);
 
+        let mut geometries = Vec::new();
+        cache.append_retained(&mut geometries);
+
         assert!(cache.entries.is_empty());
+        assert!(geometries.is_empty());
         assert_eq!(cache.stats(), ModelMeshCacheStats::default());
+    }
+
+    #[test]
+    fn retained_inventory_exposes_every_prewarmed_model() {
+        let first = TestSlot::model();
+        let mut second = TestSlot::model();
+        second
+            .model
+            .as_mut()
+            .expect("second test slot should have a model")
+            .vertices = Arc::from([ModelVertex {
+            pos: [9.0, 8.0, 7.0],
+            uv: [0.6, 0.4],
+            tex_matrix_scale: [3.0, 2.0],
+        }]);
+        let expected = [
+            RetainedTMeshGeometry::from_content(build_model_geometry(&first))
+                .expect("first test geometry should be retained")
+                .id(),
+            RetainedTMeshGeometry::from_content(build_model_geometry(&second))
+                .expect("second test geometry should be retained")
+                .id(),
+        ];
+        assert_ne!(expected[0], expected[1]);
+
+        let mut cache = ModelMeshCache::with_capacity(2);
+        cache.prewarm_slot(&first);
+        cache.prewarm_slot(&second);
+        let mut geometries = Vec::new();
+        cache.append_retained(&mut geometries);
+
+        assert_eq!(geometries.len(), expected.len());
+        assert!(
+            expected
+                .into_iter()
+                .all(|id| geometries.iter().any(|geometry| geometry.id() == id))
+        );
     }
 
     #[test]

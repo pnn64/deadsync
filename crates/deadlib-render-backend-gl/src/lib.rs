@@ -1,7 +1,8 @@
 use deadlib_render::{
     BlendMode, DrawFrame, DrawFrameView, DrawStats, FastTMeshMap, RenderList,
     RetainedTMeshGeometry, SamplerDesc, SamplerFilter, SamplerWrap, SpriteInstanceRaw,
-    TMeshGeometryId, TextureHandle, TexturedMeshInstanceRaw, TexturedMeshVertex,
+    TMeshGeometryId, TMeshRetireStats, TextureHandle, TexturedMeshInstanceRaw, TexturedMeshVertex,
+    drain_tmesh_cache,
     draw_prep::{
         self, DrawOp, DrawScratch, TMeshCacheResult, TMeshPrewarmStats, TexturedMeshSource,
     },
@@ -82,6 +83,7 @@ fn set_macos_opengl_high_dpi_surface(window: &Window, enabled: bool) {
 
 const OPENGL_PRESENT_SPIKE_US: u32 = 3_000;
 const OPENGL_GPU_WAIT_SPIKE_US: u32 = 1_000;
+const OPENGL_TMESH_CACHE_MAX_ENTRIES: usize = 4_096;
 const OPENGL_TMESH_CACHE_MAX_BYTES: usize = 16 * 1024 * 1024;
 const LOGICAL_HEIGHT: f32 = 480.0;
 const DESIGN_WIDTH_16_9: f32 = 854.0;
@@ -277,6 +279,12 @@ pub struct State {
     tmesh_vbo: glow::Buffer,
     tmesh_instance_vbo: Option<glow::Buffer>,
     prep: DrawScratch,
+    // Render-thread-only, transition-epoch cache. It is prewarmed before live
+    // rendering, capped by `OPENGL_TMESH_CACHE_MAX_ENTRIES` and
+    // `OPENGL_TMESH_CACHE_MAX_BYTES`, and saturates on a miss rather than
+    // pruning during gameplay. Transition retirement drains the full bounded
+    // map and reports entry/byte counts; `cleanup` uses that same path. OpenGL
+    // performs the final destruction in its owning context.
     cached_tmesh: FastTMeshMap<CachedTMeshGeom>,
     cached_tmesh_bytes: usize,
     vsync_enabled: bool,
@@ -883,6 +891,13 @@ fn elapsed_us_since(started: Instant) -> u32 {
     duration_us(started.elapsed())
 }
 
+#[inline(always)]
+const fn tmesh_cache_has_room(entries: usize, cached_bytes: usize, new_bytes: usize) -> bool {
+    entries < OPENGL_TMESH_CACHE_MAX_ENTRIES
+        && new_bytes <= OPENGL_TMESH_CACHE_MAX_BYTES
+        && cached_bytes.saturating_add(new_bytes) <= OPENGL_TMESH_CACHE_MAX_BYTES
+}
+
 fn ensure_cached_tmesh(
     gl: &glow::Context,
     cached_tmesh: &mut FastTMeshMap<CachedTMeshGeom>,
@@ -902,9 +917,7 @@ fn ensure_cached_tmesh(
     }
 
     let bytes = std::mem::size_of_val(vertices);
-    if bytes > OPENGL_TMESH_CACHE_MAX_BYTES
-        || cached_tmesh_bytes.saturating_add(bytes) > OPENGL_TMESH_CACHE_MAX_BYTES
-    {
+    if !tmesh_cache_has_room(cached_tmesh.len(), *cached_tmesh_bytes, bytes) {
         return TMeshCacheResult::CapacityExceeded;
     }
 
@@ -937,8 +950,9 @@ fn ensure_cached_tmesh(
 
 /// Uploads immutable textured-mesh geometry before direct frame submission.
 ///
-/// The renderer thread owns the cache. It is byte-capped and saturates when
-/// full; prewarming never scans, prunes, or destroys resident geometry.
+/// The renderer thread owns the entry- and byte-capped cache. It saturates when
+/// either limit is full; prewarming never scans, prunes, or destroys resident
+/// geometry.
 pub fn prewarm_textured_meshes(
     state: &mut State,
     geometries: &[RetainedTMeshGeometry],
@@ -956,6 +970,26 @@ pub fn prewarm_textured_meshes(
         stats.record(result, vertices.len());
     }
     stats
+}
+
+/// Retires every retained textured-mesh buffer at a transition boundary.
+///
+/// This must run on the renderer thread while its OpenGL context is current.
+/// `glDeleteBuffers` marks each object for deletion; OpenGL keeps storage alive
+/// for earlier submitted commands and bound references, so no `glFinish` or
+/// other transition-time GPU synchronization is necessary.
+pub fn retire_textured_meshes(state: &mut State) -> TMeshRetireStats {
+    let gl = &state.gl;
+    drain_tmesh_cache(
+        &mut state.cached_tmesh,
+        &mut state.cached_tmesh_bytes,
+        |geom| {
+            // SAFETY: cached VBOs were created by this context, the context is
+            // current on this renderer thread, and draining transfers their
+            // sole backend ownership so every name is deleted exactly once.
+            unsafe { gl.delete_buffer(geom.vbo) };
+        },
+    )
 }
 
 #[inline(always)]
@@ -2026,6 +2060,7 @@ pub fn resize(state: &mut State, width: u32, height: u32) {
 
 pub fn cleanup(state: &mut State) {
     info!("Cleaning up OpenGL resources...");
+    let _ = retire_textured_meshes(state);
     // SAFETY: all GL object handles below were created by this backend and are
     // still owned by `state`, so deleting them once during cleanup is valid.
     unsafe {
@@ -2047,10 +2082,6 @@ pub fn cleanup(state: &mut State) {
         if let Some(vao) = state.tmesh_vao {
             state.gl.delete_vertex_array(vao);
         }
-        for geom in state.cached_tmesh.drain().map(|(_, geom)| geom) {
-            state.gl.delete_buffer(geom.vbo);
-        }
-        state.cached_tmesh_bytes = 0;
         state.gl.delete_buffer(state.tmesh_vbo);
         if let Some(vbo) = state.tmesh_instance_vbo {
             state.gl.delete_buffer(vbo);
@@ -2551,7 +2582,10 @@ fn surface_extent(width: u32, height: u32) -> (NonZeroU32, NonZeroU32) {
 
 #[cfg(test)]
 mod tests {
-    use super::{DrawStats, GlVersion, cached_tmesh_count_ok, parse_gl_version, surface_extent};
+    use super::{
+        DrawStats, GlVersion, OPENGL_TMESH_CACHE_MAX_BYTES, OPENGL_TMESH_CACHE_MAX_ENTRIES,
+        cached_tmesh_count_ok, parse_gl_version, surface_extent, tmesh_cache_has_room,
+    };
 
     #[test]
     fn cached_tmesh_draw_count_mismatch_is_reported_and_skipped() {
@@ -2561,6 +2595,19 @@ mod tests {
 
         assert!(!cached_tmesh_count_ok(6, 9, &mut stats));
         assert_eq!(stats.cached_tmesh_misses, 1);
+    }
+
+    #[test]
+    fn cached_tmesh_capacity_caps_entries_and_bytes() {
+        assert!(tmesh_cache_has_room(
+            OPENGL_TMESH_CACHE_MAX_ENTRIES - 1,
+            0,
+            1
+        ));
+        assert!(!tmesh_cache_has_room(OPENGL_TMESH_CACHE_MAX_ENTRIES, 0, 1));
+        assert!(tmesh_cache_has_room(0, 0, OPENGL_TMESH_CACHE_MAX_BYTES));
+        assert!(!tmesh_cache_has_room(0, 1, OPENGL_TMESH_CACHE_MAX_BYTES));
+        assert!(!tmesh_cache_has_room(0, usize::MAX, 1));
     }
 
     #[test]
