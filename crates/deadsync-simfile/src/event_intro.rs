@@ -10,6 +10,16 @@ pub fn song_pack_group(song: &SongData) -> Option<&str> {
         .and_then(|s| s.to_str())
 }
 
+pub fn is_srpg_event_group(pack_group: &str) -> bool {
+    let lower = pack_group.trim().to_ascii_lowercase();
+    lower.chars().any(|c| c.is_ascii_digit())
+        && (lower.contains("stamina rpg") || lower.contains("srpg"))
+}
+
+pub fn is_srpg_event_song(song: &SongData) -> bool {
+    song_pack_group(song).is_some_and(is_srpg_event_group)
+}
+
 fn itl_event_intro_name(pack_group: &str) -> Option<String> {
     let name = pack_group.trim();
     let lower = name.to_ascii_lowercase();
@@ -156,6 +166,17 @@ mod tests {
     fn gameplay_event_intro_uses_srpg_name() {
         let song = test_song("Songs/Stamina RPG 9/Example/song.ssc", ["hard", "medium"]);
         assert_eq!(gameplay_event_intro_text(&song).as_ref(), "Stamina RPG 9");
+    }
+
+    #[test]
+    fn srpg_event_detection_accepts_current_event_names() {
+        assert!(is_srpg_event_group("Stamina RPG 10"));
+        assert!(is_srpg_event_group("Stamina RPG 10 Unlocks"));
+        assert!(is_srpg_event_group("SRPG10"));
+        assert!(is_srpg_event_group("SRPG9"));
+        assert!(!is_srpg_event_group("ITL Online 2026"));
+        assert!(!is_srpg_event_group("Stamina RPG Songs"));
+        assert!(!is_srpg_event_group("RPG Songs"));
     }
 
     #[test]

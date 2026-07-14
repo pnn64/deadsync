@@ -18,6 +18,7 @@ use deadsync_chart::{
 };
 use deadsync_profile as profile_data;
 use deadsync_score as score_data;
+use deadsync_simfile::event_intro::is_srpg_event_song;
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
@@ -89,24 +90,6 @@ fn song_select_bg_path(song: &SongData, mode: SelectMusicSongSelectBgMode) -> Op
             song.background_path.as_ref().or(song.banner_path.as_ref())
         }
     }
-}
-
-fn song_pack_group(song: &SongData) -> Option<&str> {
-    song.simfile_path
-        .parent()
-        .and_then(|p| p.parent())
-        .and_then(|p| p.file_name())
-        .and_then(|s| s.to_str())
-}
-
-fn is_srpg_event_group(group: &str) -> bool {
-    let lower = group.trim().to_ascii_lowercase();
-    lower.chars().any(|c| c.is_ascii_digit())
-        && (lower.contains("stamina rpg") || lower.contains("srpg"))
-}
-
-pub(crate) fn is_srpg_event_song(song: &SongData) -> bool {
-    song_pack_group(song).is_some_and(is_srpg_event_group)
 }
 
 fn push_unique_path(paths: &mut Vec<PathBuf>, path: &Path) {
@@ -1409,9 +1392,8 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
 #[cfg(test)]
 mod tests {
     use super::{
-        choose_itl_wheel_score, is_srpg_event_group, itl_fetch_flags, itl_rank_color,
-        itl_wheel_mode_for_sides, runtime_slot_requests, song_select_bg_path, srpg_rate_color,
-        visible_song_select_bg_paths,
+        choose_itl_wheel_score, itl_fetch_flags, itl_rank_color, itl_wheel_mode_for_sides,
+        runtime_slot_requests, song_select_bg_path, srpg_rate_color, visible_song_select_bg_paths,
     };
     use crate::config::{
         SelectMusicItlRankMode, SelectMusicItlWheelMode, SelectMusicSongSelectBgMode,
@@ -1630,17 +1612,6 @@ mod tests {
             ),
             (false, false, true)
         );
-    }
-
-    #[test]
-    fn srpg_event_group_detection_accepts_current_event_names() {
-        assert!(is_srpg_event_group("Stamina RPG 10"));
-        assert!(is_srpg_event_group("Stamina RPG 10 Unlocks"));
-        assert!(is_srpg_event_group("SRPG10"));
-        assert!(is_srpg_event_group("SRPG9"));
-        assert!(!is_srpg_event_group("ITL Online 2026"));
-        assert!(!is_srpg_event_group("Stamina RPG Songs"));
-        assert!(!is_srpg_event_group("RPG Songs"));
     }
 
     #[test]

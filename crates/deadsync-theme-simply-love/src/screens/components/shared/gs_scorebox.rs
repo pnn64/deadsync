@@ -853,7 +853,7 @@ fn push_srpg_logo_overlay(
     );
     push_centered_logo(
         actors,
-        srpg_logo_texture(),
+        srpg_logo_texture_key(),
         center_x,
         center_y,
         zoom,
@@ -863,7 +863,7 @@ fn push_srpg_logo_overlay(
     );
 }
 
-fn srpg_logo_texture() -> &'static str {
+pub(crate) fn srpg_logo_texture_key() -> &'static str {
     let cfg = config::get();
     match cfg.srpg_variant {
         SrpgVariant::Srpg10 if cfg.visual_style.is_srpg() => "srpg10_logo_alt.png",

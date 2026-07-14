@@ -40,6 +40,7 @@ pub(crate) fn build_pane_percentage_display(
             | EvalPane::QrCode
             | EvalPane::GrooveStats
             | EvalPane::GrooveStatsEx
+            | EvalPane::Srpg
             | EvalPane::Itl
             | EvalPane::ArrowCloud
             | EvalPane::TestInput
@@ -88,6 +89,7 @@ pub(crate) fn build_pane_percentage_display(
         EvalPane::QrCode => {}
         EvalPane::GrooveStats => {}
         EvalPane::GrooveStatsEx => {}
+        EvalPane::Srpg => {}
         EvalPane::Itl => {}
         EvalPane::ArrowCloud => {}
         EvalPane::TestInput => {}

@@ -1421,21 +1421,30 @@ mod tests {
 
         for window in cycle.windows(2) {
             assert_eq!(
-                eval_pane_shift(window[0], 1, false, true, true, false, true),
+                eval_pane_shift(window[0], 1, false, true, true, false, false, true),
                 window[1]
             );
             assert_eq!(
-                eval_pane_shift(window[1], -1, false, true, true, false, true),
+                eval_pane_shift(window[1], -1, false, true, true, false, false, true),
                 window[0]
             );
         }
 
         assert_eq!(
-            eval_pane_shift(cycle[cycle.len() - 1], 1, false, true, true, false, true),
+            eval_pane_shift(
+                cycle[cycle.len() - 1],
+                1,
+                false,
+                true,
+                true,
+                false,
+                false,
+                true,
+            ),
             cycle[0]
         );
         assert_eq!(
-            eval_pane_shift(cycle[0], -1, false, true, true, false, true),
+            eval_pane_shift(cycle[0], -1, false, true, true, false, false, true),
             cycle[cycle.len() - 1]
         );
     }
@@ -1459,11 +1468,40 @@ mod tests {
 
         for window in cycle.windows(2) {
             assert_eq!(
-                eval_pane_shift(window[0], 1, false, true, true, true, true),
+                eval_pane_shift(window[0], 1, false, true, true, false, true, true),
                 window[1]
             );
             assert_eq!(
-                eval_pane_shift(window[1], -1, false, true, true, true, true),
+                eval_pane_shift(window[1], -1, false, true, true, false, true, true),
+                window[0]
+            );
+        }
+    }
+
+    #[test]
+    fn eval_pane_shift_adds_srpg_pane_for_event_songs() {
+        let cycle = [
+            EvalPane::Standard,
+            EvalPane::FaPlus,
+            EvalPane::Column,
+            EvalPane::MachineRecords,
+            EvalPane::QrCode,
+            EvalPane::GrooveStats,
+            EvalPane::GrooveStatsEx,
+            EvalPane::Srpg,
+            EvalPane::ArrowCloud,
+            EvalPane::Timing,
+            EvalPane::TimingEx,
+            EvalPane::TestInput,
+        ];
+
+        for window in cycle.windows(2) {
+            assert_eq!(
+                eval_pane_shift(window[0], 1, false, true, true, true, false, true),
+                window[1]
+            );
+            assert_eq!(
+                eval_pane_shift(window[1], -1, false, true, true, true, false, true),
                 window[0]
             );
         }
@@ -1489,28 +1527,37 @@ mod tests {
 
         for window in cycle.windows(2) {
             assert_eq!(
-                eval_pane_shift(window[0], 1, true, true, true, false, true),
+                eval_pane_shift(window[0], 1, true, true, true, false, false, true),
                 window[1]
             );
             assert_eq!(
-                eval_pane_shift(window[1], -1, true, true, true, false, true),
+                eval_pane_shift(window[1], -1, true, true, true, false, false, true),
                 window[0]
             );
         }
 
         assert_eq!(
-            eval_pane_shift(cycle[cycle.len() - 1], 1, true, true, true, false, true),
+            eval_pane_shift(
+                cycle[cycle.len() - 1],
+                1,
+                true,
+                true,
+                true,
+                false,
+                false,
+                true,
+            ),
             cycle[0]
         );
         assert_eq!(
-            eval_pane_shift(cycle[0], -1, true, true, true, false, true),
+            eval_pane_shift(cycle[0], -1, true, true, true, false, false, true),
             cycle[cycle.len() - 1]
         );
     }
 
     #[test]
     fn eval_pane_skip_duplicate_advances_auto_switch_collision() {
-        let panes = eval_pane_cycle(false, false, true, false, false, false, false);
+        let panes = eval_pane_cycle(false, false, true, false, false, false, false, false);
 
         assert_eq!(
             eval_pane_skip_duplicate(EvalPane::GrooveStats, EvalPane::GrooveStats, 1, &panes),
@@ -1553,6 +1600,7 @@ pub(crate) enum EvalPane {
     QrCode,
     GrooveStats,
     GrooveStatsEx,
+    Srpg,
     Itl,
     ArrowCloud,
     Timing,
@@ -1598,10 +1646,17 @@ fn eval_has_itl_pane(has_online_panes: bool, score_info: &ScoreInfo) -> bool {
 }
 
 #[inline(always)]
+fn eval_has_srpg_pane(has_online_panes: bool, score_info: &ScoreInfo) -> bool {
+    eval_has_gs_pane(has_online_panes)
+        && deadsync_simfile::event_intro::is_srpg_event_song(&score_info.song)
+}
+
+#[inline(always)]
 fn eval_pane_cycle(
     has_hard_ex: bool,
     has_qr: bool,
     has_gs: bool,
+    has_srpg: bool,
     has_itl: bool,
     has_arrowcloud: bool,
     has_test_input: bool,
@@ -1621,6 +1676,9 @@ fn eval_pane_cycle(
     if has_gs {
         panes.push(EvalPane::GrooveStats);
         panes.push(EvalPane::GrooveStatsEx);
+    }
+    if has_srpg {
+        panes.push(EvalPane::Srpg);
     }
     if has_itl {
         panes.push(EvalPane::Itl);
@@ -1664,6 +1722,7 @@ fn eval_pane_shift(
     has_hard_ex: bool,
     has_qr: bool,
     has_gs: bool,
+    has_srpg: bool,
     has_itl: bool,
     has_arrowcloud: bool,
 ) -> EvalPane {
@@ -1671,6 +1730,7 @@ fn eval_pane_shift(
         has_hard_ex,
         has_qr,
         has_gs,
+        has_srpg,
         has_itl,
         has_arrowcloud,
         true,
@@ -2948,6 +3008,7 @@ pub fn update(state: &mut State, dt: f32) -> ThemeEffect {
                     si.show_hard_ex_score,
                     false,
                     eval_has_gs_pane(state.allow_online_panes),
+                    eval_has_srpg_pane(state.allow_online_panes, si),
                     eval_has_itl_pane(state.allow_online_panes, si),
                     eval_has_arrowcloud_pane(state.allow_online_panes, gs_side),
                     eval_has_test_input_pane(),
@@ -3820,12 +3881,14 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
                 Some(score_data::GrooveStatsSubmitUiStatus::Submitted)
             );
         let has_itl = eval_has_itl_pane(has_online_panes, si);
+        let has_srpg = eval_has_srpg_pane(has_online_panes, si);
         let has_arrowcloud = eval_has_arrowcloud_pane(has_online_panes, gs_side);
 
         let panes = eval_pane_cycle(
             has_hard_ex,
             has_qr,
             has_gs,
+            has_srpg,
             has_itl,
             has_arrowcloud,
             eval_has_test_input_pane(),
@@ -4683,6 +4746,10 @@ pub fn push_actors(actors: &mut Vec<Actor>, state: &State, asset_manager: &Asset
                     &state.scoreboxes[player_idx],
                 )),
                 EvalPane::GrooveStatsEx => actors.extend(eval_panes::build_gs_ex_records_pane(
+                    controller,
+                    &state.scoreboxes[player_idx],
+                )),
+                EvalPane::Srpg => actors.extend(eval_panes::build_srpg_records_pane(
                     controller,
                     &state.scoreboxes[player_idx],
                 )),

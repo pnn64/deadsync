@@ -1,5 +1,7 @@
 use crate::act;
-use crate::screens::components::shared::gs_scorebox::entries_with_local_self_state;
+use crate::screens::components::shared::gs_scorebox::{
+    entries_with_local_self_state, srpg_logo_texture_key,
+};
 use crate::views::ScoreboxSideView;
 use deadlib_present::actors::{Actor, SizeSpec};
 use deadlib_present::color;
@@ -25,6 +27,7 @@ const GS_SELF_COLOR: [f32; 4] = color::rgba_hex("#A1FF94");
 enum RecordsPaneKind {
     GrooveStatsItg,
     GrooveStatsEx,
+    Srpg,
     ItlEx,
     ArrowCloudHardEx,
 }
@@ -35,15 +38,19 @@ impl RecordsPaneKind {
         match self {
             Self::GrooveStatsItg => pane.is_groovestats() && !pane.is_ex,
             Self::GrooveStatsEx => pane.is_groovestats() && pane.is_ex,
+            Self::Srpg => {
+                score_data::scorebox_pane_kind(pane) == score_data::ScoreboxPaneKind::Srpg
+            }
             Self::ItlEx => pane.name.to_ascii_lowercase().contains("itl") && pane.is_ex,
             Self::ArrowCloudHardEx => pane.is_arrowcloud() && pane.is_hard_ex(),
         }
     }
 
     #[inline(always)]
-    const fn logo(self) -> &'static str {
+    fn logo(self) -> &'static str {
         match self {
             Self::ItlEx => "ITL.png",
+            Self::Srpg => srpg_logo_texture_key(),
             Self::ArrowCloudHardEx => "arrowcloud.png",
             Self::GrooveStatsItg => "GrooveStats.png",
             Self::GrooveStatsEx => "BoogieStatsEX.png",
@@ -51,10 +58,12 @@ impl RecordsPaneKind {
     }
 
     #[inline(always)]
-    const fn logo_zoom(self, pane_zoom: f32) -> f32 {
+    fn logo_zoom(self, pane_zoom: f32, logo: &str) -> f32 {
         match self {
             Self::ArrowCloudHardEx => 0.22,
             Self::ItlEx => 0.45,
+            Self::Srpg if logo == "srpg10_logo_alt.png" => 0.06,
+            Self::Srpg => 0.12,
             Self::GrooveStatsItg | Self::GrooveStatsEx => 1.5 * pane_zoom,
         }
     }
@@ -216,10 +225,11 @@ fn build_records_pane(
     }
 
     let mut children = Vec::with_capacity(GS_RECORD_ROWS * 4 + 1);
-    children.push(act!(sprite_static(kind.logo()):
+    let logo = kind.logo();
+    children.push(act!(sprite_static(logo):
         align(0.5, 0.5):
         xy(0.0, 100.0 * pane_zoom):
-        zoom(kind.logo_zoom(pane_zoom)):
+        zoom(kind.logo_zoom(pane_zoom, logo)):
         diffuse(1.0, 1.0, 1.0, 0.5):
         z(100)
     ));
@@ -300,6 +310,13 @@ pub fn build_itl_records_pane(
     build_records_pane(controller, runtime, RecordsPaneKind::ItlEx)
 }
 
+pub fn build_srpg_records_pane(
+    controller: profile_data::PlayerSide,
+    runtime: &ScoreboxSideView,
+) -> Vec<Actor> {
+    build_records_pane(controller, runtime, RecordsPaneKind::Srpg)
+}
+
 pub fn build_arrowcloud_records_pane(
     controller: profile_data::PlayerSide,
     runtime: &ScoreboxSideView,
@@ -344,6 +361,7 @@ mod tests {
         let panes = [
             pane("GrooveStats", false, None),
             pane("GrooveStats", true, None),
+            pane("Stamina RPG 10", false, None),
             pane("ITL Online 2026", true, None),
             pane(
                 "ArrowCloud",
@@ -354,13 +372,15 @@ mod tests {
 
         assert!(RecordsPaneKind::GrooveStatsItg.matches(&panes[0]));
         assert!(RecordsPaneKind::GrooveStatsEx.matches(&panes[1]));
-        assert!(RecordsPaneKind::ItlEx.matches(&panes[2]));
-        assert!(RecordsPaneKind::ArrowCloudHardEx.matches(&panes[3]));
+        assert!(RecordsPaneKind::Srpg.matches(&panes[2]));
+        assert!(RecordsPaneKind::ItlEx.matches(&panes[3]));
+        assert!(RecordsPaneKind::ArrowCloudHardEx.matches(&panes[4]));
 
         assert!(!RecordsPaneKind::GrooveStatsItg.matches(&panes[1]));
         assert!(!RecordsPaneKind::GrooveStatsEx.matches(&panes[0]));
         assert!(!RecordsPaneKind::ItlEx.matches(&panes[1]));
-        assert!(!RecordsPaneKind::ArrowCloudHardEx.matches(&panes[2]));
+        assert!(!RecordsPaneKind::Srpg.matches(&panes[3]));
+        assert!(!RecordsPaneKind::ArrowCloudHardEx.matches(&panes[3]));
     }
 
     #[test]
