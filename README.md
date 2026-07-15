@@ -158,7 +158,7 @@ See [Frame-Statistics Overlay](docs/frame-stats-overlay.md) for how to read the 
 ### Profile & Online Features
 A `save` directory is created inside the data directory to store your personal data (see [Data Directories](#data-directories) for its location).
 
-*   To enable online features with **GrooveStats**, edit `<data dir>/save/profiles/00000000/groovestats.ini` and add your API key and username. This allows the game to fetch your online scores.
+*   To enable online features with **GrooveStats**, edit `<data dir>/save/profiles/00000000/groovestats.ini` and add your API key and username. This allows the game to fetch your online scores. The SRPG Shop also requires `Password=<your GrooveStats password>` in that file.
 *   You can also change your in-game display name in `<data dir>/save/profiles/00000000/profile.ini`.
 
 ### Custom sound packs
