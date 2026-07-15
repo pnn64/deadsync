@@ -12286,20 +12286,13 @@ mod tests {
     }
 
     #[test]
-    fn song_lua_kenpo_rgb_aft_initial_state_combines_if_present() {
+    fn song_lua_rgb_aft_fixture_initial_state_combines() {
         let manifest = workspace_root();
-        let Some(root) = [
-            manifest.join("../lua-songs/[11] KENPO SAITO (DX) [Scrypts]"),
-            manifest.join("songs/ITL Online 2026/[11] KENPO SAITO (DX) [Scrypts]"),
-            manifest.join("songs/lua-songs/[11] KENPO SAITO (DX) [Scrypts]"),
-        ]
-        .into_iter()
-        .find(|root| root.join("template/main.lua").is_file()) else {
-            return;
-        };
-        let entry = root.join("template/main.lua");
+        let root = manifest.join("tests/fixtures/song_lua");
+        let entry = root.join("aft.lua");
+        assert!(entry.is_file(), "missing fixture: {}", entry.display());
         let mut context =
-            deadsync_assets::song_lua::SongLuaCompileContext::new(&root, "KENPO SAITO");
+            deadsync_assets::song_lua::SongLuaCompileContext::new(&root, "RGB AFT Fixture");
         context.style_name = "double".to_string();
         let compiled = deadsync_assets::song_lua::compile_song_lua(&entry, &context).unwrap();
         let states = compiled
@@ -12320,12 +12313,12 @@ mod tests {
             .overlays
             .iter()
             .position(|overlay| overlay.name.as_deref() == Some("AFTSpriteR"))
-            .expect("KENPO sample should compile AFTSpriteR");
+            .expect("fixture should compile AFTSpriteR");
 
         let Some((leader, group)) =
             song_lua_rgb_aft_group_for(&compiled.overlays, &states, &order, red_index)
         else {
-            panic!("KENPO initial RGB AFT state should combine before rgbsplit");
+            panic!("fixture RGB AFT state should combine before rgbsplit");
         };
 
         assert!(group.contains(&leader));

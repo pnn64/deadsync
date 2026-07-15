@@ -413,9 +413,11 @@ mod tests {
     #[test]
     fn seek_matches_linear_decode_after_warmup() {
         let path = fixture_path();
-        if !path.exists() {
-            return;
-        }
+        assert!(
+            path.is_file(),
+            "missing bundled fixture: {}",
+            path.display()
+        );
         let opened = open_file(&path).expect("open fixture");
         let channels = opened.channels;
         let sample_rate = opened.sample_rate_hz as usize;
@@ -446,9 +448,11 @@ mod tests {
     #[test]
     fn packet_snap_never_moves_start_earlier() {
         let path = fixture_path();
-        if !path.exists() {
-            return;
-        }
+        assert!(
+            path.is_file(),
+            "missing bundled fixture: {}",
+            path.display()
+        );
 
         for target in [0.25, 1.0, 2.125, 3.5] {
             let snapped = snap_start_forward_to_packet(&path, target)

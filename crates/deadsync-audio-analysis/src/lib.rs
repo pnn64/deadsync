@@ -164,10 +164,12 @@ mod tests {
 
     #[test]
     fn computes_loudness_for_credits_ogg() {
-        let path = PathBuf::from("../../assets/music/credits.ogg");
-        if !path.exists() {
-            return;
-        }
+        let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../assets/music/credits.ogg");
+        assert!(
+            path.is_file(),
+            "missing bundled fixture: {}",
+            path.display()
+        );
         let info = compute_loudness(&path).expect("loudness");
         assert!(info.lufs.is_finite(), "lufs={}", info.lufs);
         assert!(

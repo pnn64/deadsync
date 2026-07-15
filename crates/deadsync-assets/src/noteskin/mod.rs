@@ -323,12 +323,28 @@ mod tests {
         itg_register_texture_dims_for_path(path);
     }
 
-    fn load_optional_itg_skin(style: &Style, skin: &str) -> Option<super::Noteskin> {
-        match load_itg_skin(style, skin) {
-            Ok(ns) => Some(ns),
-            Err(err) if err.contains("not found under") => None,
-            Err(err) => panic!("{skin} should load from assets/noteskins: {err}"),
+    fn load_fixture_itg_skin(
+        style: &Style,
+        skin: &str,
+        textures: &[&str],
+    ) -> (super::Noteskin, PathBuf) {
+        let source = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("tests/fixtures/noteskins/dance")
+            .join(skin);
+        let root = temp_noteskin_root(skin);
+        let target = root.join("dance").join(skin);
+        fs::create_dir_all(&target).unwrap();
+        for entry in fs::read_dir(&source).unwrap() {
+            let entry = entry.unwrap();
+            assert!(entry.file_type().unwrap().is_file());
+            fs::copy(entry.path(), target.join(entry.file_name())).unwrap();
         }
+        for texture in textures {
+            write_noteskin_png(&target.join(texture));
+        }
+        let noteskin = load_itg(&root, "dance", skin, style)
+            .unwrap_or_else(|err| panic!("fixture dance/{skin} should load: {err}"));
+        (noteskin, root)
     }
 
     #[test]
@@ -629,13 +645,13 @@ mod tests {
 
     #[test]
     fn howdy_receptor_none_command_keeps_init_zoom_static() {
+        clear_itg_runtime_caches();
         let style = Style {
             num_cols: 4,
             num_players: 1,
         };
-        let Some(ns) = load_optional_itg_skin(&style, "howdy") else {
-            return;
-        };
+        let (ns, root) =
+            load_fixture_itg_skin(&style, "howdy", &["Down Tap Note.png", "Down Receptor.png"]);
         let receptor = ns
             .receptor_off
             .first()
@@ -651,19 +667,23 @@ mod tests {
             (behavior.sample_zoom(0.8) - 1.0).abs() <= 1e-6,
             "howdy constant-size NoneCommand should not start a shrink/return pulse"
         );
+
+        clear_itg_runtime_caches();
+        let _ = fs::remove_dir_all(root);
     }
 
     #[test]
-    fn cf_chrome_family_receptor_none_command_drives_empty_press_pulse() {
+    fn command_stack_receptor_none_command_drives_press_pulse() {
         clear_itg_runtime_caches();
         let style = Style {
             num_cols: 4,
             num_players: 1,
         };
-        let Some(ns) = load_optional_itg_skin(&style, "CF_VIBRANTALLOY") else {
-            clear_itg_runtime_caches();
-            return;
-        };
+        let (ns, root) = load_fixture_itg_skin(
+            &style,
+            "command-stack",
+            &["Down Tap Note.png", "Down Receptor.png"],
+        );
         let behavior = ns.receptor_step_behavior_for_col(0, None);
 
         assert!((behavior.duration - 0.11).abs() <= 1e-6);
@@ -671,6 +691,7 @@ mod tests {
         assert!((behavior.sample_zoom(0.0) - 1.0).abs() <= 1e-6);
 
         clear_itg_runtime_caches();
+        let _ = fs::remove_dir_all(root);
     }
 
     #[test]
@@ -2230,16 +2251,24 @@ return skin
     }
 
     #[test]
-    fn cf_chrome_family_tap_explosions_keep_button_rotation() {
+    fn command_stack_tap_explosions_keep_button_rotation() {
         clear_itg_runtime_caches();
         let style = Style {
             num_cols: 4,
             num_players: 1,
         };
-        let Some(ns) = load_optional_itg_skin(&style, "CF_VIBRANTALLOY") else {
-            clear_itg_runtime_caches();
-            return;
-        };
+        let (ns, root) = load_fixture_itg_skin(
+            &style,
+            "command-stack",
+            &[
+                "Down Tap Note.png",
+                "Down Receptor.png",
+                "Down Flash.png",
+                "Down Glow.png",
+                "Down Spark.png",
+                "Down Mine Emitter.png",
+            ],
+        );
 
         for window in ["W1", "W2", "W3", "W4", "W5"] {
             for (col, expected_rotation) in [90, 0, 180, -90].into_iter().enumerate() {
@@ -2274,35 +2303,44 @@ return skin
         }
 
         clear_itg_runtime_caches();
+        let _ = fs::remove_dir_all(root);
     }
 
     #[test]
-    fn cf_chrome_family_mine_explosion_uses_emitter_commands_without_spin() {
+    fn command_stack_mine_explosion_uses_emitter_commands_without_spin() {
         clear_itg_runtime_caches();
         let style = Style {
             num_cols: 4,
             num_players: 1,
         };
-        let Some(ns) = load_optional_itg_skin(&style, "CF_VIBRANTALLOY") else {
-            clear_itg_runtime_caches();
-            return;
-        };
+        let (ns, root) = load_fixture_itg_skin(
+            &style,
+            "command-stack",
+            &[
+                "Down Tap Note.png",
+                "Down Receptor.png",
+                "Down Flash.png",
+                "Down Glow.png",
+                "Down Spark.png",
+                "Down Mine Emitter.png",
+            ],
+        );
         let mine = ns
             .mine_hit_explosion
             .as_ref()
-            .expect("CF_VIBRANTALLOY should define a hit-mine explosion");
+            .expect("command-stack should define a hit-mine explosion");
 
         assert!(
             mine.layers.iter().any(|layer| !layer.animation.blend_add),
-            "CF mine explosion should keep the normal ECommand layer"
+            "fixture mine explosion should keep the normal ECommand layer"
         );
         assert!(
             mine.layers.iter().any(|layer| layer.animation.blend_add),
-            "CF mine explosion should keep the additive E2Command layer"
+            "fixture mine explosion should keep the additive E2Command layer"
         );
         assert!(
             (mine.duration() - 64.0 / 60.0).abs() <= 1e-6,
-            "CF mine explosion should use the emitter E/E2 duration, got {}",
+            "fixture mine explosion should use the emitter E/E2 duration, got {}",
             mine.duration()
         );
         for (idx, layer) in mine.layers.iter().enumerate() {
@@ -2325,6 +2363,7 @@ return skin
         }
 
         clear_itg_runtime_caches();
+        let _ = fs::remove_dir_all(root);
     }
 
     #[test]

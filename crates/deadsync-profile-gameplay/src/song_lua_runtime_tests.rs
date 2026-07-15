@@ -662,18 +662,12 @@ fn song_lua_confusion_offset_ease_scales_like_itgmania() {
 }
 
 #[test]
-fn riddle_beat_70_confusion_offset_reaches_runtime_windows_if_present() {
+fn confusion_offset_fixture_reaches_runtime_windows() {
     let root = deadsync_root();
-    let Some(song_root) = [
-        root.join("../lua-songs/Riddle"),
-        root.join("songs/lua-songs/Riddle"),
-    ]
-    .into_iter()
-    .find(|root| root.join("lua/default.lua").is_file()) else {
-        return;
-    };
-    let entry = song_root.join("lua/default.lua");
-    let context = test_song_lua_double_context(&song_root, "Riddle");
+    let song_root = root.join("tests/fixtures/song_lua");
+    let entry = song_root.join("runtime-constants.lua");
+    assert!(entry.is_file(), "missing fixture: {}", entry.display());
+    let context = test_song_lua_double_context(&song_root, "Constant Mod Fixture");
     let compiled = compile_song_lua_with_default_host(
         &entry,
         &context,
@@ -707,19 +701,12 @@ fn riddle_beat_70_confusion_offset_reaches_runtime_windows_if_present() {
 }
 
 #[test]
-fn kenpo_flash_mods_reach_runtime_windows_if_present() {
+fn transform_ease_fixture_reaches_runtime_windows() {
     let root = deadsync_root();
-    let Some(song_root) = [
-        root.join("../lua-songs/[11] KENPO SAITO (DX) [Scrypts]"),
-        root.join("songs/ITL Online 2026/[11] KENPO SAITO (DX) [Scrypts]"),
-        root.join("songs/lua-songs/[11] KENPO SAITO (DX) [Scrypts]"),
-    ]
-    .into_iter()
-    .find(|root| root.join("template/main.lua").is_file()) else {
-        return;
-    };
-    let entry = song_root.join("template/main.lua");
-    let context = test_song_lua_double_context(&song_root, "KENPO SAITO");
+    let song_root = root.join("tests/fixtures/song_lua");
+    let entry = song_root.join("runtime-eases.lua");
+    assert!(entry.is_file(), "missing fixture: {}", entry.display());
+    let context = test_song_lua_double_context(&song_root, "Transform Ease Fixture");
     let compiled = compile_song_lua_with_default_host(
         &entry,
         &context,

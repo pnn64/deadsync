@@ -1,8 +1,6 @@
-use deadlib_present::anim::{EffectClock, EffectMode};
 use deadsync_assets::song_lua::{
-    SongLuaCompileContext, SongLuaDifficulty, SongLuaEaseTarget, SongLuaOverlayBlendMode,
-    SongLuaOverlayKind, SongLuaPlayerContext, SongLuaSpeedMod, THEME_RECEPTOR_Y_STD,
-    compile_song_lua,
+    SongLuaCompileContext, SongLuaDifficulty, SongLuaOverlayBlendMode, SongLuaOverlayKind,
+    SongLuaPlayerContext, SongLuaSpeedMod, compile_song_lua,
 };
 use std::fs;
 use std::path::PathBuf;
@@ -200,15 +198,12 @@ return Def.ActorFrame{{
 }
 
 #[test]
-fn compile_song_lua_supports_flip69_sample_if_present() {
-    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("songs/ITL Online 2026 Unlocks/[10] flip69 (DX) [Telperion]");
-    let entry = root.join("multitap/Default.lua");
-    if !entry.is_file() {
-        return;
-    }
+fn compile_song_lua_loads_bundled_noteskin_actor_fixture() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/song_lua");
+    let entry = root.join("noteskin-overlay.lua");
+    assert!(entry.is_file(), "missing fixture: {}", entry.display());
 
-    let mut context = SongLuaCompileContext::new(&root, "[5604] [10] flip69");
+    let mut context = SongLuaCompileContext::new(&root, "Noteskin Overlay Fixture");
     context.style_name = "double".to_string();
     context.music_length_seconds = 48.0;
     context.players = [
@@ -228,29 +223,13 @@ fn compile_song_lua_supports_flip69_sample_if_present() {
     ];
 
     let compiled = compile_song_lua(&entry, &context).unwrap();
-    assert!(!compiled.overlays.is_empty());
-    assert!(!compiled.overlay_eases.is_empty());
-    assert!(!compiled.note_hides.is_empty());
-    let field = compiled
+    let arrow_index = compiled
         .overlays
         .iter()
-        .find(|overlay| overlay.name.as_deref() == Some("MultitapFrameP1"))
+        .position(|overlay| overlay.name.as_deref() == Some("FixtureArrow"))
         .unwrap();
-    assert_eq!(field.initial_state.x, context.players[0].screen_x);
-    assert_eq!(field.initial_state.y, context.players[0].screen_y);
-    let first_arrow = compiled
-        .overlays
-        .iter()
-        .position(|overlay| overlay.name.as_deref() == Some("MultitapArrowP1_1"))
-        .unwrap();
-    assert!(
-        compiled
-            .overlay_eases
-            .iter()
-            .any(|ease| { ease.overlay_index == first_arrow && ease.to.rot_z_deg == Some(90.0) })
-    );
-    let SongLuaOverlayKind::NoteskinActor { slots } = &compiled.overlays[first_arrow].kind else {
-        panic!("ddr-note multitap arrow should reuse the loaded noteskin actor");
+    let SongLuaOverlayKind::NoteskinActor { slots } = &compiled.overlays[arrow_index].kind else {
+        panic!("fixture arrow should reuse the bundled ddr-note actor");
     };
     assert!(slots.len() >= 2);
     assert!(slots.iter().any(|slot| {
@@ -277,72 +256,16 @@ fn compile_song_lua_supports_flip69_sample_if_present() {
         })
     }));
     assert!(slots.iter().any(|slot| slot.uv_velocity[1] < -0.5));
-    let first_frame = compiled
-        .overlays
-        .iter()
-        .position(|overlay| overlay.name.as_deref() == Some("MultitapP1_1"))
-        .unwrap();
-    assert!(compiled.overlay_eases.iter().any(|ease| {
-        ease.overlay_index == first_frame
-            && ease
-                .to
-                .y
-                .is_some_and(|y| (y - THEME_RECEPTOR_Y_STD).abs() <= 0.01)
-    }));
-    let first_deco = compiled
-        .overlays
-        .iter()
-        .position(|overlay| overlay.name.as_deref() == Some("MultitapDeco1_1"))
-        .unwrap();
-    assert!(compiled.overlay_eases.iter().any(|ease| {
-        ease.overlay_index == first_deco
-            && ease
-                .to
-                .effect_color1
-                .is_some_and(|color| color[0] > 0.99 && color[1] < 0.6 && color[2] < 0.6)
-    }));
-    let first_deco_child = compiled
-        .overlays
-        .iter()
-        .position(|overlay| overlay.parent_index == Some(first_deco))
-        .unwrap();
-    assert!(compiled.overlay_eases.iter().any(|ease| {
-        ease.overlay_index == first_deco_child
-            && ease
-                .to
-                .effect_color1
-                .is_some_and(|color| color[0] > 0.99 && color[1] < 0.6 && color[2] < 0.6)
-    }));
-    let explosion_message = "__songlua_multitap_explosion_p1_4";
-    assert!(compiled.messages.iter().any(|message| {
-        message.message == explosion_message && (message.beat - 40.0).abs() <= 0.01
-    }));
-    assert!(compiled.overlays.iter().any(|overlay| {
-        overlay.message_commands.iter().any(|command| {
-            command.message == explosion_message
-                && command
-                    .blocks
-                    .iter()
-                    .any(|block| block.delta.visible.is_some() || block.delta.diffuse.is_some())
-        })
-    }));
+    assert_eq!(compiled.overlays[arrow_index].initial_state.rot_z_deg, 90.0);
 }
 
 #[test]
-fn compile_song_lua_supports_kenpo_sample_if_present() {
-    let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let Some(root) = [
-        manifest.join("../lua-songs/[11] KENPO SAITO (DX) [Scrypts]"),
-        manifest.join("songs/ITL Online 2026/[11] KENPO SAITO (DX) [Scrypts]"),
-        manifest.join("songs/lua-songs/[11] KENPO SAITO (DX) [Scrypts]"),
-    ]
-    .into_iter()
-    .find(|root| root.join("template/main.lua").is_file()) else {
-        return;
-    };
-    let entry = root.join("template/main.lua");
+fn compile_song_lua_supports_rgb_aft_fixture() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/song_lua");
+    let entry = root.join("aft.lua");
+    assert!(entry.is_file(), "missing fixture: {}", entry.display());
 
-    let mut context = SongLuaCompileContext::new(&root, "KENPO SAITO");
+    let mut context = SongLuaCompileContext::new(&root, "RGB AFT Fixture");
     context.style_name = "double".to_string();
     context.players = [
         SongLuaPlayerContext {
@@ -360,61 +283,14 @@ fn compile_song_lua_supports_kenpo_sample_if_present() {
     ];
 
     let compiled = compile_song_lua(&entry, &context).unwrap();
-    assert_eq!(compiled.info.unsupported_function_eases, 0);
-    assert!(compiled.hidden_players[0] || compiled.hidden_players[1]);
+    assert!(compiled.hidden_players[0]);
     assert!(!compiled.player_actors[0].initial_state.visible);
-    let proxy_index = compiled
-        .overlays
-        .iter()
-        .position(|overlay| overlay.name.as_deref() == Some("ProxyOverlay"))
-        .expect("KENPO sample should compile the overlay proxy");
-    let white_flash_index = compiled
-        .overlays
-        .iter()
-        .position(|overlay| overlay.name.as_deref() == Some("WhiteFlashSprite"))
-        .expect("KENPO sample should compile the white flash quad");
-    let black_fade_index = compiled
-        .overlays
-        .iter()
-        .position(|overlay| overlay.name.as_deref() == Some("BlackFadeSprite"))
-        .expect("KENPO sample should compile the black fade quad");
-    let pp1_index = compiled
-        .overlays
-        .iter()
-        .position(|overlay| overlay.name.as_deref() == Some("PP[1]"))
-        .expect("KENPO sample should compile the player proxy actor");
-    assert!(proxy_index < white_flash_index);
-    assert!(white_flash_index < black_fade_index);
-    assert_eq!(
-        compiled.overlays[white_flash_index].initial_state.size,
-        Some([1920.0, 1440.0])
-    );
-    let has_white_flash_ease =
-        |start: f32, limit: f32, from_alpha: f32, to_alpha: f32, easing: &str| {
-            compiled.overlay_eases.iter().any(|ease| {
-                ease.overlay_index == white_flash_index
-                    && (ease.start - start).abs() <= 0.001
-                    && (ease.limit - limit).abs() <= 0.001
-                    && ease.easing.as_deref() == Some(easing)
-                    && ease
-                        .from
-                        .diffuse
-                        .is_some_and(|color| (color[3] - from_alpha).abs() <= 0.001)
-                    && ease
-                        .to
-                        .diffuse
-                        .is_some_and(|color| (color[3] - to_alpha).abs() <= 0.001)
-            })
-        };
-    assert!(has_white_flash_ease(27.0, 1.0, 0.0, 1.0, "linear"));
-    assert!(has_white_flash_ease(28.0, 0.5, 1.0, 0.0, "outExpo"));
     let bg_quad = compiled
         .overlays
         .iter()
         .find(|overlay| overlay.name.as_deref() == Some("BGQuad"))
-        .expect("KENPO sample should compile the black AFT backing quad");
+        .expect("fixture should compile the black AFT backing quad");
     assert_eq!(bg_quad.initial_state.diffuse, [0.0, 0.0, 0.0, 1.0]);
-    assert!(bg_quad.initial_state.size.is_some());
     assert!(
         compiled
             .overlays
@@ -436,57 +312,9 @@ fn compile_song_lua_supports_kenpo_sample_if_present() {
             .overlays
             .iter()
             .find(|overlay| overlay.name.as_deref() == Some(name))
-            .unwrap_or_else(|| panic!("KENPO sample should compile {name}"));
+            .unwrap_or_else(|| panic!("fixture should compile {name}"));
         assert_eq!(overlay.initial_state.diffuse, diffuse);
         assert_eq!(overlay.initial_state.blend, SongLuaOverlayBlendMode::Add);
         assert_eq!(overlay.initial_state.effect_magnitude, [0.0; 3]);
     }
-    assert!(compiled.eases.iter().any(|ease| {
-        matches!(ease.target, SongLuaEaseTarget::Mod(ref name) if name == "tiny")
-            && (ease.start - 26.5).abs() <= 0.001
-            && (ease.limit - 1.5).abs() <= 0.001
-            && (ease.to + 200.0).abs() <= 0.001
-    }));
-    assert!(compiled.eases.iter().any(|ease| {
-        matches!(ease.target, SongLuaEaseTarget::Mod(ref name) if name == "flip")
-            && (ease.start - 26.5).abs() <= 0.001
-            && (ease.limit - 1.5).abs() <= 0.001
-            && (ease.to - 50.0).abs() <= 0.001
-    }));
-    assert!(compiled.eases.iter().any(|ease| {
-        matches!(ease.target, SongLuaEaseTarget::Mod(ref name) if name == "dark")
-            && (ease.start - 28.0).abs() <= 0.001
-            && (ease.limit - 0.1).abs() <= 0.001
-            && (ease.to - 100.0).abs() <= 0.001
-    }));
-    assert!(compiled.eases.iter().any(|ease| {
-        matches!(ease.target, SongLuaEaseTarget::Mod(ref name) if name == "skewx")
-            && (ease.start - 166.0).abs() <= 0.001
-            && (ease.limit - 0.125).abs() <= 0.001
-            && (ease.to.abs() - 3.0).abs() <= 0.001
-    }));
-    assert!(compiled.eases.iter().any(|ease| {
-        matches!(ease.target, SongLuaEaseTarget::Mod(ref name) if name == "skewx")
-            && (ease.start - 182.0).abs() <= 0.001
-            && (ease.limit - 0.125).abs() <= 0.001
-            && (ease.to.abs() - 3.0).abs() <= 0.001
-    }));
-    assert!(compiled.eases.iter().any(|ease| {
-        matches!(ease.target, SongLuaEaseTarget::PlayerRotationX)
-            && (ease.start - 189.0).abs() <= 0.001
-            && (ease.limit - 1.0).abs() <= 0.001
-            && (ease.to - 20.0).abs() <= 0.001
-    }));
-    assert!(compiled.overlay_eases.iter().any(|ease| {
-        ease.overlay_index == pp1_index
-            && (ease.start - 189.0).abs() <= 0.001
-            && (ease.limit - 1.0).abs() <= 0.001
-            && ease.to.effect_mode == Some(EffectMode::Wag)
-            && ease
-                .to
-                .effect_magnitude
-                .is_some_and(|value| value == [0.0, 20.0, 0.0])
-            && ease.to.effect_clock == Some(EffectClock::Beat)
-            && ease.to.effect_period.is_some_and(|value| value == 1.0)
-    }));
 }

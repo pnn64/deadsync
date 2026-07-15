@@ -4031,6 +4031,18 @@ mod tests {
     fn deadsync_root() -> PathBuf {
         PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..")
     }
+
+    fn song_lua_fixture(name: &str) -> (PathBuf, PathBuf) {
+        let root = deadsync_root().join("tests/fixtures/song_lua");
+        let entry = root.join(name);
+        assert!(
+            entry.is_file(),
+            "missing song Lua fixture: {}",
+            entry.display()
+        );
+        (root, entry)
+    }
+
     fn test_dir(name: &str) -> PathBuf {
         let dir = std::env::temp_dir().join(format!(
             "deadsync-song-lua-crate-{name}-{}",
@@ -15295,14 +15307,10 @@ return Def.ActorFrame {}
     }
 
     #[test]
-    fn compile_song_lua_supports_spooky_sample_if_present() {
-        let root = deadsync_root().join("../lua-songs/[07] Spooky (SM) [Scrypts]");
-        let entry = root.join("lua/default.lua");
-        if !entry.is_file() {
-            return;
-        }
+    fn compile_song_lua_supports_player_function_ease_fixture() {
+        let (root, entry) = song_lua_fixture("player-eases.lua");
 
-        let mut context = SongLuaCompileContext::new(&root, "Spooky");
+        let mut context = SongLuaCompileContext::new(&root, "Player Ease Fixture");
         context.players = [
             SongLuaPlayerContext {
                 enabled: true,
@@ -15321,7 +15329,7 @@ return Def.ActorFrame {}
         let compiled = test_compile_song_lua(&entry, &context).unwrap();
         assert_eq!(compiled.messages.len(), 2);
         assert_eq!(compiled.overlays.len(), 3);
-        assert!(compiled.eases.len() >= 300);
+        assert_eq!(compiled.eases.len(), 2);
         assert!(compiled.eases.iter().all(|ease| ease.easing.is_some()));
         assert!(
             compiled
@@ -15351,14 +15359,10 @@ return Def.ActorFrame {}
     }
 
     #[test]
-    fn compile_song_lua_supports_media_offline_sample_if_present() {
-        let root = deadsync_root().join("../lua-songs/[10] media offline (SM) [Snap]");
-        let entry = root.join("lua/_script.lua");
-        if !entry.is_file() {
-            return;
-        }
+    fn compile_song_lua_supports_named_mod_ease_fixture() {
+        let (root, entry) = song_lua_fixture("mod-eases.lua");
 
-        let mut context = SongLuaCompileContext::new(&root, "media offline");
+        let mut context = SongLuaCompileContext::new(&root, "Named Mod Ease Fixture");
         context.players = [
             SongLuaPlayerContext {
                 enabled: true,
@@ -15376,7 +15380,7 @@ return Def.ActorFrame {}
 
         let compiled = test_compile_song_lua(&entry, &context).unwrap();
         assert!(!compiled.time_mods.is_empty());
-        assert_eq!(compiled.eases.len(), 44);
+        assert_eq!(compiled.eases.len(), 11);
         assert!(compiled.eases.iter().all(|ease| ease.easing.is_some()));
         assert!(
             compiled
@@ -15398,15 +15402,10 @@ return Def.ActorFrame {}
     }
 
     #[test]
-    fn compile_song_lua_supports_cosmic_railroad_sample_if_present() {
-        let root = deadsync_root()
-            .join("songs/lua-songs/[11] CO5M1C R4ILR0AD (SH) [TaroNuke vs. Scrypts]");
-        let entry = root.join("lua/default.lua");
-        if !entry.is_file() {
-            return;
-        }
+    fn compile_song_lua_preserves_runtime_mod_targets_from_fixture() {
+        let (root, entry) = song_lua_fixture("mod-eases.lua");
 
-        let mut context = SongLuaCompileContext::new(&root, "CO5M1C R4ILR0AD");
+        let mut context = SongLuaCompileContext::new(&root, "Runtime Mod Target Fixture");
         context.players = [
             SongLuaPlayerContext {
                 enabled: true,
@@ -15423,8 +15422,8 @@ return Def.ActorFrame {}
         ];
 
         let compiled = test_compile_song_lua(&entry, &context).unwrap();
-        assert_eq!(compiled.eases.len(), 548);
-        assert_eq!(compiled.overlay_eases.len(), 8);
+        assert_eq!(compiled.eases.len(), 11);
+        assert_eq!(compiled.overlays.len(), 1);
         assert!(compiled.eases.iter().all(|ease| ease.easing.is_some()));
         for target in [
             "tiny",
@@ -15440,28 +15439,18 @@ return Def.ActorFrame {}
                 compiled.eases.iter().any(
                     |ease| matches!(ease.target, SongLuaEaseTarget::Mod(ref name) if name == target)
                 ),
-                "missing Cosmic runtime mod target {target}"
+                "missing fixture runtime mod target {target}"
             );
         }
-        assert!(
-            compiled
-                .eases
-                .iter()
-                .any(|ease| matches!(ease.target, SongLuaEaseTarget::PlayerRotationZ))
-        );
         assert_eq!(compiled.info.unsupported_function_eases, 0);
         assert_eq!(compiled.info.unsupported_function_actions, 0);
     }
 
     #[test]
-    fn compile_song_lua_captures_riddle_column_bounces_if_present() {
-        let root = deadsync_root().join("songs/lua-songs/Riddle");
-        let entry = root.join("lua/default.lua");
-        if !entry.is_file() {
-            return;
-        }
+    fn compile_song_lua_captures_double_column_bounce_fixture() {
+        let (root, entry) = song_lua_fixture("column-bounces.lua");
 
-        let mut context = SongLuaCompileContext::new(&root, "Riddle");
+        let mut context = SongLuaCompileContext::new(&root, "Column Bounce Fixture");
         context.style_name = "double".to_string();
         context.players = [
             SongLuaPlayerContext {
@@ -15499,14 +15488,10 @@ return Def.ActorFrame {}
     }
 
     #[test]
-    fn compile_song_lua_supports_step_your_game_up_sample_if_present() {
-        let root = deadsync_root().join("../lua-songs/Step Your Game Up (Director's Cut)");
-        let entry = root.join("lua/default.lua");
-        if !entry.is_file() {
-            return;
-        }
+    fn compile_song_lua_supports_basic_mod_overlay_fixture() {
+        let (root, entry) = song_lua_fixture("basic.lua");
 
-        let mut context = SongLuaCompileContext::new(&root, "Step Your Game Up");
+        let mut context = SongLuaCompileContext::new(&root, "Basic Mod Overlay Fixture");
         context.players = [
             SongLuaPlayerContext {
                 enabled: true,
@@ -15528,14 +15513,10 @@ return Def.ActorFrame {}
     }
 
     #[test]
-    fn compile_song_lua_supports_godspeed_sample_if_present() {
-        let root = deadsync_root().join("../lua-songs/[12] Godspeed (SX) [G. Rosewood]");
-        let entry = root.join("lua/_script.lua");
-        if !entry.is_file() {
-            return;
-        }
+    fn compile_song_lua_supports_elastic_mod_ease_fixture() {
+        let (root, entry) = song_lua_fixture("mod-eases.lua");
 
-        let mut context = SongLuaCompileContext::new(&root, "Godspeed");
+        let mut context = SongLuaCompileContext::new(&root, "Elastic Mod Ease Fixture");
         context.players = [
             SongLuaPlayerContext {
                 enabled: true,
@@ -15553,7 +15534,7 @@ return Def.ActorFrame {}
 
         let compiled = test_compile_song_lua(&entry, &context).unwrap();
         assert!(!compiled.time_mods.is_empty());
-        assert_eq!(compiled.eases.len(), 37);
+        assert_eq!(compiled.eases.len(), 11);
         assert!(compiled.eases.iter().all(|ease| ease.easing.is_some()));
         assert!(
             compiled
@@ -15567,18 +15548,17 @@ return Def.ActorFrame {}
     }
 
     #[test]
-    fn compile_song_lua_supports_vector_field_sample_if_present() {
-        let root = deadsync_root().join("../lua-songs/Vector Field");
-        let entry = root.join("template/main.lua");
-        if !entry.is_file() {
-            return;
-        }
+    fn compile_song_lua_supports_overlay_fixture() {
+        let (root, entry) = song_lua_fixture("basic.lua");
 
-        let compiled =
-            test_compile_song_lua(&entry, &SongLuaCompileContext::new(&root, "Vector Field"))
-                .unwrap();
+        let compiled = test_compile_song_lua(
+            &entry,
+            &SongLuaCompileContext::new(&root, "Overlay Fixture"),
+        )
+        .unwrap();
         assert!(!compiled.overlays.is_empty());
     }
+
     #[test]
     fn difficulty_from_value_accepts_stepmania_names() {
         let lua = Lua::new();
