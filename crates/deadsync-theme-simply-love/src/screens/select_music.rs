@@ -497,7 +497,6 @@ fn preview_song_sec(state: &State) -> Option<f64> {
 fn preview_marker(
     displayed: Option<&DisplayedChart>,
     preview_sec: Option<f64>,
-    graph_left: f32,
     graph_w: f32,
 ) -> Option<PreviewMarker> {
     let displayed = displayed?;
@@ -513,50 +512,22 @@ fn preview_marker(
         .max(first_second + 0.001);
     let (window_w_px, _) = current_window_px();
     let px_per_unit = window_w_px as f32 / screen_width().max(1.0);
-    let unit_per_px = if px_per_unit.is_finite() && px_per_unit > 0.0 {
-        1.0 / px_per_unit
+    let width = if px_per_unit.is_finite() && px_per_unit > 0.0 {
+        3.0 / px_per_unit
     } else {
-        1.0
+        3.0
     };
-    let width_px = 2.0_f32;
-    let width_units = width_px * unit_per_px;
-    let max_x = (graph_w - width_units).max(0.0);
+    let max_x = (graph_w - width).max(0.0);
     let x = (((preview_sec as f32 - first_second) / (last_second - first_second)).clamp(0.0, 1.0)
         * max_x)
         .clamp(0.0, max_x);
-    let left_px = (graph_left + x) * px_per_unit;
-    let right_px = left_px + width_px;
-    let start_px = left_px.floor() as i32;
-    let end_px = right_px.ceil() as i32;
-    let mut marker = PreviewMarker::default();
-    for px in start_px..end_px {
-        if marker.len == marker.cols.len() {
-            break;
-        }
-        let overlap = (right_px.min(px as f32 + 1.0) - left_px.max(px as f32)).clamp(0.0, 1.0);
-        if overlap <= 0.0 {
-            continue;
-        }
-        let col_x = (px as f32 * unit_per_px - graph_left).clamp(0.0, graph_w - unit_per_px);
-        marker.cols[marker.len] = PreviewMarkerCol {
-            x: col_x,
-            a: overlap,
-        };
-        marker.len += 1;
-    }
-    (marker.len > 0).then_some(marker)
+    Some(PreviewMarker { x, width })
 }
 
-#[derive(Clone, Copy, Debug, Default)]
-struct PreviewMarkerCol {
-    x: f32,
-    a: f32,
-}
-
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Copy, Debug)]
 struct PreviewMarker {
-    cols: [PreviewMarkerCol; 4],
-    len: usize,
+    x: f32,
+    width: f32,
 }
 
 #[inline(always)]
@@ -11414,12 +11385,6 @@ pub fn push_actors(
     let graph_body_h = 47.0_f32;
     let chart_info_cx = screen_center_x() - 182.0 - if is_wide() { 5.0 } else { 0.0 };
     let graph_left = chart_info_cx - 0.5 * panel_w;
-    let (window_w_px, _) = current_window_px();
-    let marker_col_w = if window_w_px > 0 {
-        screen_width() / window_w_px as f32
-    } else {
-        1.0
-    };
     let breakdown_style = presentation.breakdown_style;
     let pattern_info_mode = presentation.pattern_info_mode;
     let preview_sec = if state.policy.media.show_preview_marker {
@@ -11427,18 +11392,8 @@ pub fn push_actors(
     } else {
         None
     };
-    let preview_marker_p1 = preview_marker(
-        state.displayed_chart_p1.as_ref(),
-        preview_sec,
-        graph_left,
-        panel_w,
-    );
-    let preview_marker_p2 = preview_marker(
-        state.displayed_chart_p2.as_ref(),
-        preview_sec,
-        graph_left,
-        panel_w,
-    );
+    let preview_marker_p1 = preview_marker(state.displayed_chart_p1.as_ref(), preview_sec, panel_w);
+    let preview_marker_p2 = preview_marker(state.displayed_chart_p2.as_ref(), preview_sec, panel_w);
     let build_breakdown_panel = |graph_cy: f32,
                                  is_p2_layout: bool,
                                  graph_key: &String,
@@ -11523,15 +11478,15 @@ pub fn push_actors(
                 ));
             }
             if let Some(marker) = preview_marker {
-                for col in marker.cols.iter().take(marker.len) {
-                    graph_kids.push(act!(quad:
-                        align(0.0, 0.0):
-                        xy(col.x, 0.0):
-                        setsize(marker_col_w, graph_h):
-                        diffuse(1.0, 1.0, 1.0, col.a):
-                        z(1)
-                    ));
-                }
+                graph_kids.push(act!(quad:
+                    align(0.0, 0.0):
+                    xy(marker.x, 0.0):
+                    setsize(marker.width, graph_h):
+                    diffuse(1.0, 1.0, 1.0, 1.0):
+                    fadeleft(1.0 / 3.0):
+                    faderight(1.0 / 3.0):
+                    z(1)
+                ));
             }
             let peak_y = if step_artist_expanded { -50.0 } else { -9.0 };
             graph_kids.push(act!(text: font("miso"): settext(peak): align(0.0, 0.5): xy(peak_x, peak_y): zoom(0.8): diffuse(1.0, 1.0, 1.0, 1.0): z(2)));
