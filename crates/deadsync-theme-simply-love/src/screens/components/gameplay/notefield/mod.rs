@@ -12,7 +12,7 @@ use deadsync_gameplay::{
 };
 use deadsync_notefield::{
     BuiltNotefield, ComboHudFrame, ComboMilestoneAssets, CounterHudFrame, ErrorBarHudFrame,
-    ErrorBarModes, IndicatorSprite, JudgmentHudFrame, LayoutMiniIndicatorPosition,
+    ErrorBarModes, HoldMeshScratch, IndicatorSprite, JudgmentHudFrame, LayoutMiniIndicatorPosition,
     MeasureCounterOptions, MeasureLineMode, MiniHudFrame, ModelMeshCache, NotefieldChartView,
     NotefieldComposeRequest, NotefieldFeedbackFrameView, NotefieldFieldFrameView,
     NotefieldFrameFeatures, NotefieldGeometry, NotefieldHudFrameView, NotefieldLaneFeedback,
@@ -184,6 +184,7 @@ pub(crate) fn compose_frame(
     arrow_effect_time_s: f32,
     noteskin_assets: &GameplayNoteskinAssets,
     model_caches: &[RefCell<ModelMeshCache>; MAX_PLAYERS],
+    hold_mesh_scratch: &[RefCell<HoldMeshScratch>; MAX_PLAYERS],
     profile: &profile_data::Profile,
     placement: FieldPlacement,
     play_style: profile_data::PlayStyle,
@@ -481,6 +482,7 @@ pub(crate) fn compose_frame(
         actors,
         hud_actors,
         &mut model_cache,
+        &mut hold_mesh_scratch[player_idx].borrow_mut(),
         &request,
         &prepared,
         &field_frame,

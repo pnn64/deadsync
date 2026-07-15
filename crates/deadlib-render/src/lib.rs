@@ -109,7 +109,14 @@ pub struct MeshVertex {
 
 #[repr(C)]
 #[derive(
-    Clone, Copy, Debug, serde::Serialize, serde::Deserialize, bytemuck::Pod, bytemuck::Zeroable,
+    Clone,
+    Copy,
+    Debug,
+    PartialEq,
+    serde::Serialize,
+    serde::Deserialize,
+    bytemuck::Pod,
+    bytemuck::Zeroable,
 )]
 pub struct TexturedMeshVertex {
     pub pos: [f32; 3],
@@ -133,6 +140,7 @@ impl Default for TexturedMeshVertex {
 #[derive(Clone)]
 pub enum TexturedMeshVertices {
     Shared(Arc<[TexturedMeshVertex]>),
+    Reusable(Arc<Vec<TexturedMeshVertex>>),
     Transient(Vec<TexturedMeshVertex>),
 }
 
@@ -141,6 +149,7 @@ impl AsRef<[TexturedMeshVertex]> for TexturedMeshVertices {
     fn as_ref(&self) -> &[TexturedMeshVertex] {
         match self {
             Self::Shared(vertices) => vertices.as_ref(),
+            Self::Reusable(vertices) => vertices.as_slice(),
             Self::Transient(vertices) => vertices.as_slice(),
         }
     }

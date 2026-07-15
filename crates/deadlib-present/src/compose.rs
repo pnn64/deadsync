@@ -2103,6 +2103,9 @@ fn push_shadow_objects_for_range(
                     renderer::TexturedMeshVertices::Shared(vertices) => {
                         renderer::TexturedMeshVertices::Shared(Arc::clone(vertices))
                     }
+                    renderer::TexturedMeshVertices::Reusable(vertices) => {
+                        renderer::TexturedMeshVertices::Reusable(Arc::clone(vertices))
+                    }
                     renderer::TexturedMeshVertices::Transient(vertices) => {
                         let mut shadow_vertices =
                             take_recycled_text_mesh_vertices(recycled_vertices);
@@ -2212,6 +2215,190 @@ fn build_actor_list<'a, T: TextureContext + ?Sized>(
     }
 }
 
+struct TexturedMeshActorView<'a> {
+    align: [f32; 2],
+    offset: [f32; 2],
+    world_z: f32,
+    size: [actors::SizeSpec; 2],
+    local_transform: Matrix4,
+    texture: &'a Arc<str>,
+    tint: [f32; 4],
+    glow: [f32; 4],
+    vertices: renderer::TexturedMeshVertices,
+    geom_cache_key: renderer::TMeshCacheKey,
+    uv_scale: [f32; 2],
+    uv_offset: [f32; 2],
+    uv_tex_shift: [f32; 2],
+    depth_test: bool,
+    visible: bool,
+    blend: BlendMode,
+    z: i16,
+}
+
+fn textured_mesh_actor_view(actor: &actors::Actor) -> Option<TexturedMeshActorView<'_>> {
+    let (
+        align,
+        offset,
+        world_z,
+        size,
+        local_transform,
+        texture,
+        tint,
+        glow,
+        geom_cache_key,
+        uv_scale,
+        uv_offset,
+        uv_tex_shift,
+        depth_test,
+        visible,
+        blend,
+        z,
+    ) = match actor {
+        actors::Actor::TexturedMesh {
+            align,
+            offset,
+            world_z,
+            size,
+            local_transform,
+            texture,
+            tint,
+            glow,
+            geom_cache_key,
+            uv_scale,
+            uv_offset,
+            uv_tex_shift,
+            depth_test,
+            visible,
+            blend,
+            z,
+            ..
+        }
+        | actors::Actor::ReusableTexturedMesh {
+            align,
+            offset,
+            world_z,
+            size,
+            local_transform,
+            texture,
+            tint,
+            glow,
+            geom_cache_key,
+            uv_scale,
+            uv_offset,
+            uv_tex_shift,
+            depth_test,
+            visible,
+            blend,
+            z,
+            ..
+        } => (
+            *align,
+            *offset,
+            *world_z,
+            *size,
+            *local_transform,
+            texture,
+            *tint,
+            *glow,
+            *geom_cache_key,
+            *uv_scale,
+            *uv_offset,
+            *uv_tex_shift,
+            *depth_test,
+            *visible,
+            *blend,
+            *z,
+        ),
+        _ => return None,
+    };
+    let vertices = match actor {
+        actors::Actor::TexturedMesh { vertices, .. } => {
+            renderer::TexturedMeshVertices::Shared(Arc::clone(vertices))
+        }
+        actors::Actor::ReusableTexturedMesh { vertices, .. } => {
+            renderer::TexturedMeshVertices::Reusable(Arc::clone(vertices))
+        }
+        _ => unreachable!("textured mesh fields were matched above"),
+    };
+    Some(TexturedMeshActorView {
+        align,
+        offset,
+        world_z,
+        size,
+        local_transform,
+        texture,
+        tint,
+        glow,
+        vertices,
+        geom_cache_key,
+        uv_scale,
+        uv_offset,
+        uv_tex_shift,
+        depth_test,
+        visible,
+        blend,
+        z,
+    })
+}
+
+#[allow(clippy::too_many_arguments)]
+fn build_textured_mesh_actor<T: TextureContext + ?Sized>(
+    mesh: TexturedMeshActorView<'_>,
+    parent: SmRect,
+    m: &Metrics,
+    base_z: i16,
+    camera: u8,
+    style: ComposeStyle,
+    order_counter: &mut u32,
+    out: &mut Vec<RenderObject>,
+    texture_cache: &mut TextureLookupCache,
+    texture_ctx: &T,
+) {
+    if !mesh.visible || mesh.vertices.is_empty() {
+        return;
+    }
+
+    let rect = place_rect(parent, mesh.align, mesh.offset, mesh.size);
+    let base_x = m.left + rect.x;
+    let base_y = m.top - rect.y;
+    let transform = Matrix4::from_translation(Vector3::new(base_x, base_y, mesh.world_z))
+        * Matrix4::from_scale(Vector3::new(1.0, -1.0, 1.0))
+        * mesh.local_transform;
+    let texture_key = mesh.texture.as_ref();
+    let texture_key_ptr = str_ptr(texture_key);
+    let texture_handle = texture_cache.texture_handle(texture_ctx, texture_key_ptr, texture_key);
+    let actor_blend = style.blend.unwrap_or(mesh.blend);
+    let layer = base_z.saturating_add(mesh.z);
+    let mut push_pass = |tint: [f32; 4], texture_mask: bool| {
+        let order = *order_counter;
+        *order_counter = order.saturating_add(1);
+        out.push(renderer::RenderObject {
+            object_type: renderer::ObjectType::TexturedMesh {
+                instance: renderer::TexturedMeshInstanceRaw::new(
+                    transform,
+                    mul_rgba(tint, style.tint),
+                    mesh.uv_scale,
+                    mesh.uv_offset,
+                    mesh.uv_tex_shift,
+                    texture_mask,
+                ),
+                vertices: mesh.vertices.clone(),
+                geom_cache_key: mesh.geom_cache_key,
+                depth_test: mesh.depth_test,
+            },
+            texture_handle,
+            blend: actor_blend,
+            z: layer,
+            order,
+            camera,
+        });
+    };
+    push_pass(mesh.tint, false);
+    if mesh.glow[3] > 0.0001 {
+        push_pass(mesh.glow, true);
+    }
+}
+
 #[inline(always)]
 fn build_actor_recursive<'a, T: TextureContext + ?Sized>(
     actor: &'a actors::Actor,
@@ -2232,6 +2419,21 @@ fn build_actor_recursive<'a, T: TextureContext + ?Sized>(
     texture_ctx: &T,
     total_elapsed: f32,
 ) {
+    if let Some(mesh) = textured_mesh_actor_view(actor) {
+        build_textured_mesh_actor(
+            mesh,
+            parent,
+            m,
+            base_z,
+            camera,
+            style,
+            order_counter,
+            out,
+            texture_cache,
+            texture_ctx,
+        );
+        return;
+    }
     match actor {
         actors::Actor::Sprite {
             align,
@@ -2537,104 +2739,8 @@ fn build_actor_recursive<'a, T: TextureContext + ?Sized>(
             }
         }
 
-        actors::Actor::TexturedMesh {
-            align,
-            offset,
-            world_z,
-            size,
-            local_transform,
-            texture,
-            tint,
-            glow,
-            vertices,
-            geom_cache_key,
-            uv_scale,
-            uv_offset,
-            uv_tex_shift,
-            depth_test,
-            visible,
-            blend,
-            z,
-        } => {
-            if !*visible || vertices.is_empty() {
-                return;
-            }
-
-            let rect = place_rect(parent, *align, *offset, *size);
-            let base_x = m.left + rect.x;
-            let base_y = m.top - rect.y;
-            let transform = Matrix4::from_translation(Vector3::new(base_x, base_y, *world_z))
-                * Matrix4::from_scale(Vector3::new(1.0, -1.0, 1.0))
-                * *local_transform;
-
-            let before = out.len();
-            let texture_key = texture.as_ref();
-            let texture_key_ptr = str_ptr(texture_key);
-            let texture_handle =
-                texture_cache.texture_handle(texture_ctx, texture_key_ptr, texture_key);
-            let actor_blend = style.blend.unwrap_or(*blend);
-            out.push(renderer::RenderObject {
-                object_type: renderer::ObjectType::TexturedMesh {
-                    instance: renderer::TexturedMeshInstanceRaw::new(
-                        transform,
-                        mul_rgba(*tint, style.tint),
-                        *uv_scale,
-                        *uv_offset,
-                        *uv_tex_shift,
-                        false,
-                    ),
-                    vertices: renderer::TexturedMeshVertices::Shared(Arc::clone(vertices)),
-                    geom_cache_key: *geom_cache_key,
-                    depth_test: *depth_test,
-                },
-                texture_handle,
-                blend: actor_blend,
-                z: 0,
-                order: 0,
-                camera,
-            });
-
-            let layer = base_z.saturating_add(*z);
-            for obj in out.iter_mut().skip(before) {
-                obj.z = layer;
-                obj.order = {
-                    let o = *order_counter;
-                    *order_counter += 1;
-                    o
-                };
-            }
-            if glow[3] > 0.0001 {
-                let before = out.len();
-                out.push(renderer::RenderObject {
-                    object_type: renderer::ObjectType::TexturedMesh {
-                        instance: renderer::TexturedMeshInstanceRaw::new(
-                            transform,
-                            mul_rgba(*glow, style.tint),
-                            *uv_scale,
-                            *uv_offset,
-                            *uv_tex_shift,
-                            true,
-                        ),
-                        vertices: renderer::TexturedMeshVertices::Shared(Arc::clone(vertices)),
-                        geom_cache_key: *geom_cache_key,
-                        depth_test: *depth_test,
-                    },
-                    texture_handle,
-                    blend: actor_blend,
-                    z: 0,
-                    order: 0,
-                    camera,
-                });
-
-                for obj in out.iter_mut().skip(before) {
-                    obj.z = layer;
-                    obj.order = {
-                        let o = *order_counter;
-                        *order_counter += 1;
-                        o
-                    };
-                }
-            }
+        actors::Actor::TexturedMesh { .. } | actors::Actor::ReusableTexturedMesh { .. } => {
+            unreachable!("textured meshes are composed before the general actor match")
         }
 
         actors::Actor::Shadow { len, color, child } => {
@@ -4187,6 +4293,9 @@ fn clipped_sprite_object_to_world_rect(
                     renderer::TexturedMeshVertices::Shared(vertices) => {
                         renderer::TexturedMeshVertices::Shared(Arc::clone(vertices))
                     }
+                    renderer::TexturedMeshVertices::Reusable(vertices) => {
+                        renderer::TexturedMeshVertices::Reusable(Arc::clone(vertices))
+                    }
                     renderer::TexturedMeshVertices::Transient(vertices) => {
                         let mut cloned = recycled_vertices
                             .as_mut()
@@ -5667,6 +5776,52 @@ mod tests {
             panic!("expected mesh object");
         };
         assert_eq!(*tint, [0.5, 0.25, 0.1, 0.5]);
+    }
+
+    #[test]
+    fn reusable_textured_mesh_preserves_shared_vec_storage() {
+        let metrics = Metrics {
+            left: 0.0,
+            right: 100.0,
+            top: 100.0,
+            bottom: 0.0,
+        };
+        let vertices = Arc::new(vec![TexturedMeshVertex::default(); 6]);
+        let actor = Actor::ReusableTexturedMesh {
+            align: [0.0, 0.0],
+            offset: [0.0, 0.0],
+            world_z: 0.0,
+            size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
+            local_transform: Matrix4::IDENTITY,
+            texture: Arc::from("reusable"),
+            tint: [1.0; 4],
+            glow: [1.0, 1.0, 1.0, 0.0],
+            vertices: Arc::clone(&vertices),
+            geom_cache_key: deadlib_render::INVALID_TMESH_CACHE_KEY,
+            uv_scale: [1.0; 2],
+            uv_offset: [0.0; 2],
+            uv_tex_shift: [0.0; 2],
+            depth_test: true,
+            visible: true,
+            blend: BlendMode::Alpha,
+            z: 0,
+        };
+        let render = build_screen(
+            &[actor],
+            [0.0, 0.0, 0.0, 1.0],
+            &metrics,
+            &HashMap::new(),
+            0.0,
+        );
+
+        let deadlib_render::ObjectType::TexturedMesh {
+            vertices: deadlib_render::TexturedMeshVertices::Reusable(render_vertices),
+            ..
+        } = &render.objects[0].object_type
+        else {
+            panic!("reusable actor should preserve reusable renderer storage");
+        };
+        assert!(Arc::ptr_eq(render_vertices, &vertices));
     }
 
     #[test]

@@ -1,5 +1,5 @@
 use crate::{
-    HoldBodyCapRequest, HoldComposeControl, HoldEntryPlanRequest, HoldPathSample,
+    HoldBodyCapRequest, HoldComposeControl, HoldEntryPlanRequest, HoldMeshScratch, HoldPathSample,
     MeasureComposeRequest, MeasureLineMode, MineLayerRequest, ModelMeshCache, NoteAlphaParams,
     NoteLayerRequest, NoteXParams, NotefieldComposeRequest, NotefieldFeedbackFrameView,
     PreparedNotefield, PreparedNotefieldNotes, TornadoBounds, VisualEffectParams,
@@ -47,6 +47,7 @@ pub fn compose_notefield_field<S, F>(
     actors: &mut Vec<Actor>,
     cue_hud_actors: &mut Vec<Actor>,
     model_cache: &mut ModelMeshCache,
+    hold_mesh_scratch: &mut HoldMeshScratch,
     request: &NotefieldComposeRequest<'_, S>,
     prepared: &PreparedNotefield<'_, S>,
     frame: &NotefieldFieldFrameView<'_>,
@@ -56,6 +57,7 @@ where
     S: NoteskinSlot,
     F: Fn(&S) -> SpriteSource,
 {
+    hold_mesh_scratch.begin_frame();
     let field_start = actors.len();
     actors.reserve(prepared.frame_plan.field_actor_reserve);
     cue_hud_actors.reserve(prepared.frame_plan.hud_actor_reserve);
@@ -67,6 +69,7 @@ where
         actors,
         cue_hud_actors,
         model_cache,
+        hold_mesh_scratch,
         request,
         prepared,
         notes,
@@ -89,6 +92,7 @@ fn compose_field_contents<S, F>(
     actors: &mut Vec<Actor>,
     cue_hud_actors: &mut Vec<Actor>,
     model_cache: &mut ModelMeshCache,
+    hold_mesh_scratch: &mut HoldMeshScratch,
     request: &NotefieldComposeRequest<'_, S>,
     prepared: &PreparedNotefield<'_, S>,
     note_inputs: &PreparedNotefieldNotes<'_, S>,
@@ -385,6 +389,7 @@ fn compose_field_contents<S, F>(
         };
         if compose_hold_body_caps(
             actors,
+            hold_mesh_scratch,
             HoldBodyCapRequest {
                 body_slot: hold_plan.body_slot,
                 top_cap_slot: hold_plan.top_cap_slot,

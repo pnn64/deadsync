@@ -242,6 +242,28 @@ pub enum Actor {
         z: i16,
     },
 
+    /// Dynamic textured mesh backed by storage retained by its owner across frames.
+    /// The owner must not mutate the buffer while any cloned actor is live.
+    ReusableTexturedMesh {
+        align: [f32; 2],
+        offset: [f32; 2],
+        world_z: f32,
+        size: [SizeSpec; 2],
+        local_transform: Matrix4,
+        texture: Arc<str>,
+        tint: [f32; 4],
+        glow: [f32; 4],
+        vertices: Arc<Vec<TexturedMeshVertex>>,
+        geom_cache_key: TMeshCacheKey,
+        uv_scale: [f32; 2],
+        uv_offset: [f32; 2],
+        uv_tex_shift: [f32; 2],
+        depth_test: bool,
+        visible: bool,
+        blend: BlendMode,
+        z: i16,
+    },
+
     /// Frame/group box
     Frame {
         align: [f32; 2],
@@ -319,7 +341,8 @@ impl Actor {
                 }
                 *vertices = Arc::from(out);
             }
-            Self::TexturedMesh { tint, glow, .. } => {
+            Self::TexturedMesh { tint, glow, .. }
+            | Self::ReusableTexturedMesh { tint, glow, .. } => {
                 tint[3] *= alpha;
                 glow[3] *= alpha;
             }
@@ -395,7 +418,7 @@ pub fn actor_tree_stats(actors: &[Actor]) -> ActorTreeStats {
             Actor::Mesh { .. } => {
                 stats.meshes = stats.meshes.saturating_add(1);
             }
-            Actor::TexturedMesh { .. } => {
+            Actor::TexturedMesh { .. } | Actor::ReusableTexturedMesh { .. } => {
                 stats.textured_meshes = stats.textured_meshes.saturating_add(1);
             }
             Actor::Frame { children, .. } => {

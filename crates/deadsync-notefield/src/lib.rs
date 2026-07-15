@@ -41,7 +41,10 @@ pub use frame_hud::{
     ComboHudFrame, CounterHudFrame, ErrorBarHudFrame, JudgmentHudFrame, MiniHudFrame,
     NotefieldHudComposeResult, NotefieldHudFrameView, TapJudgmentHudFrame, compose_notefield_hud,
 };
-pub use holds::offset_center;
+pub use holds::{HoldMeshScratch, HoldMeshScratchStats, offset_center};
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub use holds::{bench_fresh_hold_mesh_frame, bench_reused_hold_mesh_frame};
 pub use judgment_feedback::{IndicatorSprite, TapJudgmentSprite};
 pub use measure_lines::MeasureLineMode;
 pub use mini_indicator::{

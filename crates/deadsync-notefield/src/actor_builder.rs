@@ -112,7 +112,9 @@ impl BuiltNotefield {
 
 pub(crate) fn actor_with_world_z(mut actor: Actor, world_z: f32) -> Actor {
     match &mut actor {
-        Actor::Sprite { world_z: z, .. } | Actor::TexturedMesh { world_z: z, .. } => *z = world_z,
+        Actor::Sprite { world_z: z, .. }
+        | Actor::TexturedMesh { world_z: z, .. }
+        | Actor::ReusableTexturedMesh { world_z: z, .. } => *z = world_z,
         _ => {}
     }
     actor

@@ -7,8 +7,8 @@ use crate::transforms::{
 use deadlib_present::actors::{Actor, SizeSpec, SpriteSource};
 use deadlib_present::dsl::SpriteBuilder;
 use deadlib_render::{BlendMode, TexturedMeshVertex};
-use deadsync_core::note::NoteType;
 use deadsync_core::song_time::SongTimeNs;
+use deadsync_core::{input::MAX_COLS, note::NoteType};
 use deadsync_gameplay::let_go_head_beat as gameplay_let_go_head_beat;
 use deadsync_noteskin::{HoldVisuals, NoteAnimPart, NoteskinSlot};
 use glam::Mat4 as Matrix4;
@@ -84,7 +84,7 @@ pub(crate) struct HoldPathSample {
 }
 
 /// Canonical body and cap inputs after concrete noteskin/state resolution.
-#[derive(Clone, Copy, Debug)]
+#[derive(Debug)]
 pub(crate) struct HoldBodyCapRequest<'a, S> {
     pub body_slot: Option<&'a S>,
     pub top_cap_slot: Option<&'a S>,
@@ -116,6 +116,14 @@ pub(crate) struct HoldBodyCapRequest<'a, S> {
     pub glow_z: i16,
 }
 
+impl<S> Copy for HoldBodyCapRequest<'_, S> {}
+
+impl<S> Clone for HoldBodyCapRequest<'_, S> {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+
 /// Whether body/cap composition reached the hold-head stage.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum HoldComposeControl {
@@ -129,6 +137,151 @@ struct RenderedHoldBody {
     bottom: Option<f32>,
     head_row: Option<[[f32; 3]; 2]>,
     tail_row: Option<[[f32; 3]; 2]>,
+}
+
+const HOLD_BODY_BUFFER_VERTICES: usize = 2048;
+const HOLD_CAP_BUFFER_VERTICES: usize = 6;
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct HoldMeshScratchStats {
+    pub buffer_grows: u64,
+    pub capacity_grows: u64,
+    pub busy_replacements: u64,
+    pub saturated_pairs: u64,
+    pub high_water_pairs: usize,
+}
+
+struct HoldMeshBufferPool {
+    buffers: Vec<Arc<Vec<TexturedMeshVertex>>>,
+    cursor: usize,
+    max_buffers: usize,
+    initial_capacity: usize,
+    stats: HoldMeshScratchStats,
+}
+
+impl HoldMeshBufferPool {
+    fn new(initial_buffers: usize, max_buffers: usize, initial_capacity: usize) -> Self {
+        let initial_buffers = initial_buffers.min(max_buffers);
+        Self {
+            buffers: (0..initial_buffers)
+                .map(|_| Arc::new(Vec::with_capacity(initial_capacity)))
+                .collect(),
+            cursor: 0,
+            max_buffers,
+            initial_capacity,
+            stats: HoldMeshScratchStats::default(),
+        }
+    }
+
+    #[inline(always)]
+    fn begin_frame(&mut self) {
+        self.cursor = 0;
+    }
+
+    fn acquire_pair(&mut self) -> Option<usize> {
+        let end = self.cursor.saturating_add(2);
+        if end > self.max_buffers {
+            self.stats.saturated_pairs = self.stats.saturated_pairs.saturating_add(1);
+            return None;
+        }
+        while self.buffers.len() < end {
+            self.buffers
+                .push(Arc::new(Vec::with_capacity(self.initial_capacity)));
+            self.stats.buffer_grows = self.stats.buffer_grows.saturating_add(1);
+        }
+        let start = self.cursor;
+        self.cursor = end;
+        self.stats.high_water_pairs = self.stats.high_water_pairs.max(end / 2);
+        for buffer in &mut self.buffers[start..end] {
+            if Arc::get_mut(buffer).is_none() {
+                *buffer = Arc::new(Vec::with_capacity(self.initial_capacity));
+                self.stats.busy_replacements = self.stats.busy_replacements.saturating_add(1);
+            }
+            let vertices = Arc::get_mut(buffer).expect("replacement buffer must be unique");
+            vertices.clear();
+            if vertices.capacity() < self.initial_capacity {
+                vertices.reserve_exact(self.initial_capacity - vertices.capacity());
+                self.stats.capacity_grows = self.stats.capacity_grows.saturating_add(1);
+            }
+        }
+        Some(start)
+    }
+
+    fn pair_mut(
+        &mut self,
+        start: usize,
+    ) -> (&mut Vec<TexturedMeshVertex>, &mut Vec<TexturedMeshVertex>) {
+        let (before_second, from_second) = self.buffers.split_at_mut(start + 1);
+        let first =
+            Arc::get_mut(&mut before_second[start]).expect("acquired buffer must be unique");
+        let second = Arc::get_mut(&mut from_second[0]).expect("acquired buffer must be unique");
+        (first, second)
+    }
+
+    fn shared_pair(
+        &self,
+        start: usize,
+    ) -> (Arc<Vec<TexturedMeshVertex>>, Arc<Vec<TexturedMeshVertex>>) {
+        (
+            Arc::clone(&self.buffers[start]),
+            Arc::clone(&self.buffers[start + 1]),
+        )
+    }
+}
+
+/// Per-player reusable storage for transformed hold bodies and caps.
+///
+/// Owner: the game-thread notefield state for one player. Thread safety: none;
+/// callers hold `&mut self`. Lifetime: one song. Capacity: one body and two cap
+/// pairs per lane are populated at song construction, bounded at the engine's
+/// maximum column count. Warmup: gameplay state construction. A malformed chart
+/// with overlapping holds saturates to the allocation-backed compatibility path;
+/// there is no scan, eviction, or destruction on a frame. Buffers are freed with
+/// gameplay state. Counters expose growth, saturation, and unexpected outstanding
+/// actor references. Normal-frame work is bounded to clearing six vectors per
+/// visible hold; retained capacity is not initialized or scanned.
+pub struct HoldMeshScratch {
+    bodies: HoldMeshBufferPool,
+    caps: HoldMeshBufferPool,
+}
+
+impl Default for HoldMeshScratch {
+    fn default() -> Self {
+        Self::with_columns(0)
+    }
+}
+
+impl HoldMeshScratch {
+    pub fn with_columns(columns: usize) -> Self {
+        let columns = columns.min(MAX_COLS);
+        Self {
+            bodies: HoldMeshBufferPool::new(columns * 2, MAX_COLS * 2, HOLD_BODY_BUFFER_VERTICES),
+            caps: HoldMeshBufferPool::new(columns * 4, MAX_COLS * 4, HOLD_CAP_BUFFER_VERTICES),
+        }
+    }
+
+    #[inline(always)]
+    pub fn begin_frame(&mut self) {
+        self.bodies.begin_frame();
+        self.caps.begin_frame();
+    }
+
+    pub fn stats(&self) -> HoldMeshScratchStats {
+        let body = self.bodies.stats;
+        let cap = self.caps.stats;
+        HoldMeshScratchStats {
+            buffer_grows: body.buffer_grows.saturating_add(cap.buffer_grows),
+            capacity_grows: body.capacity_grows.saturating_add(cap.capacity_grows),
+            busy_replacements: body.busy_replacements.saturating_add(cap.busy_replacements),
+            saturated_pairs: body.saturated_pairs.saturating_add(cap.saturated_pairs),
+            high_water_pairs: body.high_water_pairs.saturating_add(cap.high_water_pairs),
+        }
+    }
+
+    pub fn reset_stats(&mut self) {
+        self.bodies.stats = HoldMeshScratchStats::default();
+        self.caps.stats = HoldMeshScratchStats::default();
+    }
 }
 
 /// Resolve the beat used by a hold head without exposing gameplay hold state to
@@ -272,6 +425,7 @@ pub(crate) fn hold_entry_plan<T>(request: HoldEntryPlanRequest<'_, T>) -> HoldEn
 /// UV clipping, actor ordering, and glow passes remain shared by every theme.
 pub(crate) fn compose_hold_body_caps<S, F, P>(
     actors: &mut Vec<Actor>,
+    mesh_scratch: &mut HoldMeshScratch,
     request: HoldBodyCapRequest<'_, S>,
     sample_path: &P,
     sprite_source: &F,
@@ -281,13 +435,26 @@ where
     F: Fn(&S) -> SpriteSource,
     P: Fn(f32) -> HoldPathSample,
 {
-    let rendered = compose_hold_body(actors, &request, sample_path, sprite_source);
-    if compose_top_cap(actors, &request, &rendered, sample_path, sprite_source)
-        == HoldComposeControl::AbortHold
+    let rendered = compose_hold_body(actors, mesh_scratch, &request, sample_path, sprite_source);
+    if compose_top_cap(
+        actors,
+        mesh_scratch,
+        &request,
+        &rendered,
+        sample_path,
+        sprite_source,
+    ) == HoldComposeControl::AbortHold
     {
         return HoldComposeControl::AbortHold;
     }
-    compose_bottom_cap(actors, &request, &rendered, sample_path, sprite_source)
+    compose_bottom_cap(
+        actors,
+        mesh_scratch,
+        &request,
+        &rendered,
+        sample_path,
+        sprite_source,
+    )
 }
 
 fn hold_alpha<S>(request: &HoldBodyCapRequest<'_, S>, sample: HoldPathSample) -> f32 {
@@ -367,6 +534,7 @@ fn compose_hold_sprite<S, F>(
 
 fn compose_hold_body<S, F, P>(
     actors: &mut Vec<Actor>,
+    mesh_scratch: &mut HoldMeshScratch,
     request: &HoldBodyCapRequest<'_, S>,
     sample_path: &P,
     sprite_source: &F,
@@ -457,6 +625,7 @@ where
     } else {
         compose_sliced_hold_body(
             actors,
+            mesh_scratch,
             request,
             body_slot,
             body_top,
@@ -619,12 +788,13 @@ where
 #[allow(clippy::too_many_arguments)]
 fn compose_sliced_hold_body<S, F, P>(
     actors: &mut Vec<Actor>,
+    mesh_scratch: &mut HoldMeshScratch,
     request: &HoldBodyCapRequest<'_, S>,
     slot: &S,
     body_top: f32,
     body_bottom: f32,
     segment_height: f32,
-    mut phase: f32,
+    phase: f32,
     phase_end: f32,
     max_segments: usize,
     uv: [f32; 4],
@@ -637,11 +807,118 @@ where
     F: Fn(&S) -> SpriteSource,
     P: Fn(f32) -> HoldPathSample,
 {
+    let use_mesh = slot.model().is_none() && request.rotation_y_deg.abs() <= f32::EPSILON;
+    let pooled_pair = use_mesh
+        .then(|| mesh_scratch.bodies.acquire_pair())
+        .flatten();
+    let mut owned_diffuse = Vec::new();
+    let mut owned_glow = Vec::new();
+    let rendered = if let Some(start) = pooled_pair {
+        let (diffuse, glow) = mesh_scratch.bodies.pair_mut(start);
+        compose_sliced_hold_body_into(
+            actors,
+            request,
+            slot,
+            body_top,
+            body_bottom,
+            segment_height,
+            phase,
+            phase_end,
+            max_segments,
+            uv,
+            phase_offset,
+            sample_path,
+            sprite_source,
+            diffuse,
+            glow,
+        )
+    } else {
+        compose_sliced_hold_body_into(
+            actors,
+            request,
+            slot,
+            body_top,
+            body_bottom,
+            segment_height,
+            phase,
+            phase_end,
+            max_segments,
+            uv,
+            phase_offset,
+            sample_path,
+            sprite_source,
+            &mut owned_diffuse,
+            &mut owned_glow,
+        )
+    };
+
+    if let Some(start) = pooled_pair {
+        let (diffuse, glow) = mesh_scratch.bodies.shared_pair(start);
+        if !diffuse.is_empty() {
+            actors.push(hold_reusable_strip_actor(
+                slot.texture_key_shared(),
+                diffuse,
+                BlendMode::Alpha,
+                request.depth_test,
+                request.body_z,
+            ));
+        }
+        if !glow.is_empty() {
+            actors.push(hold_reusable_strip_glow_actor(
+                slot.texture_key_shared(),
+                glow,
+                request.depth_test,
+                request.glow_z,
+            ));
+        }
+    } else {
+        if !owned_diffuse.is_empty() {
+            actors.push(hold_strip_actor(
+                slot.texture_key_shared(),
+                Arc::from(owned_diffuse),
+                BlendMode::Alpha,
+                request.depth_test,
+                request.body_z,
+            ));
+        }
+        if !owned_glow.is_empty() {
+            actors.push(hold_strip_glow_actor(
+                slot.texture_key_shared(),
+                Arc::from(owned_glow),
+                request.depth_test,
+                request.glow_z,
+            ));
+        }
+    }
+    rendered
+}
+
+#[allow(clippy::too_many_arguments)]
+fn compose_sliced_hold_body_into<S, F, P>(
+    actors: &mut Vec<Actor>,
+    request: &HoldBodyCapRequest<'_, S>,
+    slot: &S,
+    body_top: f32,
+    body_bottom: f32,
+    segment_height: f32,
+    mut phase: f32,
+    phase_end: f32,
+    max_segments: usize,
+    uv: [f32; 4],
+    phase_offset: f32,
+    sample_path: &P,
+    sprite_source: &F,
+    diffuse_vertices: &mut Vec<TexturedMeshVertex>,
+    glow_vertices: &mut Vec<TexturedMeshVertex>,
+) -> RenderedHoldBody
+where
+    S: NoteskinSlot,
+    F: Fn(&S) -> SpriteSource,
+    P: Fn(f32) -> HoldPathSample,
+{
     let [u0, u1, v_top, v_bottom] = uv;
     let slice_step = if request.depth_test { 4.0 } else { 16.0 };
     let use_mesh = slot.model().is_none() && request.rotation_y_deg.abs() <= f32::EPSILON;
-    let mut diffuse_vertices: Option<Vec<TexturedMeshVertex>> = None;
-    let mut glow_vertices: Option<Vec<TexturedMeshVertex>> = None;
     let mut prev_row: Option<[[f32; 3]; 2]> = None;
     let mut rendered = RenderedHoldBody::default();
     let mut emitted = 0;
@@ -721,8 +998,8 @@ where
                     slice_bottom,
                     &mut prev_row,
                     &mut rendered,
-                    &mut diffuse_vertices,
-                    &mut glow_vertices,
+                    diffuse_vertices,
+                    glow_vertices,
                 );
             } else {
                 compose_hold_sprite(
@@ -750,23 +1027,6 @@ where
         emitted += 1;
     }
 
-    if let Some(vertices) = diffuse_vertices.filter(|vertices| !vertices.is_empty()) {
-        actors.push(hold_strip_actor(
-            slot.texture_key_shared(),
-            Arc::from(vertices),
-            BlendMode::Alpha,
-            request.depth_test,
-            request.body_z,
-        ));
-    }
-    if let Some(vertices) = glow_vertices.filter(|vertices| !vertices.is_empty()) {
-        actors.push(hold_strip_glow_actor(
-            slot.texture_key_shared(),
-            Arc::from(vertices),
-            request.depth_test,
-            request.glow_z,
-        ));
-    }
     rendered
 }
 
@@ -783,8 +1043,8 @@ fn append_hold_body_mesh_slice<S>(
     bottom_y: f32,
     prev_row: &mut Option<[[f32; 3]; 2]>,
     rendered: &mut RenderedHoldBody,
-    diffuse_vertices: &mut Option<Vec<TexturedMeshVertex>>,
-    glow_vertices: &mut Option<Vec<TexturedMeshVertex>>,
+    diffuse_vertices: &mut Vec<TexturedMeshVertex>,
+    glow_vertices: &mut Vec<TexturedMeshVertex>,
 ) {
     let top_alpha = hold_alpha(request, top);
     let bottom_alpha = hold_alpha(request, bottom);
@@ -839,9 +1099,7 @@ fn append_hold_body_mesh_slice<S>(
         ],
     );
     if top_alpha > f32::EPSILON || bottom_alpha > f32::EPSILON {
-        diffuse_vertices
-            .get_or_insert_with(|| Vec::with_capacity(96))
-            .extend_from_slice(&hold_strip_quad(top_row, bottom_row));
+        diffuse_vertices.extend_from_slice(&hold_strip_quad(top_row, bottom_row));
     }
     if top_glow > f32::EPSILON || bottom_glow > f32::EPSILON {
         let top_glow_row = hold_strip_row_from_positions(
@@ -860,9 +1118,7 @@ fn append_hold_body_mesh_slice<S>(
             v1,
             hold_glow_color(bottom_glow),
         );
-        glow_vertices
-            .get_or_insert_with(|| Vec::with_capacity(96))
-            .extend_from_slice(&hold_strip_quad(top_glow_row, bottom_glow_row));
+        glow_vertices.extend_from_slice(&hold_strip_quad(top_glow_row, bottom_glow_row));
     }
     rendered.tail_row = Some([bottom_row[0].pos, bottom_row[1].pos]);
     *prev_row = Some([bottom_row[0].pos, bottom_row[1].pos]);
@@ -870,6 +1126,7 @@ fn append_hold_body_mesh_slice<S>(
 
 fn compose_top_cap<S, F, P>(
     actors: &mut Vec<Actor>,
+    mesh_scratch: &mut HoldMeshScratch,
     request: &HoldBodyCapRequest<'_, S>,
     rendered: &RenderedHoldBody,
     sample_path: &P,
@@ -1001,6 +1258,7 @@ where
         };
         compose_cap_mesh(
             actors,
+            mesh_scratch,
             slot,
             top_row,
             bottom_row,
@@ -1038,6 +1296,7 @@ where
 #[allow(clippy::too_many_arguments)]
 fn compose_cap_mesh<S>(
     actors: &mut Vec<Actor>,
+    mesh_scratch: &mut HoldMeshScratch,
     slot: &S,
     top_row: [TexturedMeshVertex; 2],
     bottom_row: [TexturedMeshVertex; 2],
@@ -1050,16 +1309,9 @@ fn compose_cap_mesh<S>(
 ) where
     S: NoteskinSlot,
 {
-    if top_alpha > f32::EPSILON || bottom_alpha > f32::EPSILON {
-        actors.push(hold_strip_actor(
-            slot.texture_key_shared(),
-            Arc::new(hold_strip_quad(top_row, bottom_row)),
-            BlendMode::Alpha,
-            request.depth_test,
-            request.cap_z,
-        ));
-    }
-    if top_glow > f32::EPSILON || bottom_glow > f32::EPSILON {
+    let diffuse_quad = (top_alpha > f32::EPSILON || bottom_alpha > f32::EPSILON)
+        .then(|| hold_strip_quad(top_row, bottom_row));
+    let glow_quad = (top_glow > f32::EPSILON || bottom_glow > f32::EPSILON).then(|| {
         let [u0, v0, u1, v1] = uv;
         let top_glow_row = hold_strip_row_from_positions(
             top_row[0].pos,
@@ -1077,9 +1329,56 @@ fn compose_cap_mesh<S>(
             v1,
             hold_glow_color(bottom_glow),
         );
+        hold_strip_quad(top_glow_row, bottom_glow_row)
+    });
+    if diffuse_quad.is_none() && glow_quad.is_none() {
+        return;
+    }
+
+    if let Some(start) = mesh_scratch.caps.acquire_pair() {
+        {
+            let (diffuse, glow) = mesh_scratch.caps.pair_mut(start);
+            if let Some(vertices) = diffuse_quad {
+                diffuse.extend_from_slice(&vertices);
+            }
+            if let Some(vertices) = glow_quad {
+                glow.extend_from_slice(&vertices);
+            }
+        }
+        let (diffuse, glow) = mesh_scratch.caps.shared_pair(start);
+        if !diffuse.is_empty() {
+            actors.push(hold_reusable_strip_actor(
+                slot.texture_key_shared(),
+                diffuse,
+                BlendMode::Alpha,
+                request.depth_test,
+                request.cap_z,
+            ));
+        }
+        if !glow.is_empty() {
+            actors.push(hold_reusable_strip_glow_actor(
+                slot.texture_key_shared(),
+                glow,
+                request.depth_test,
+                request.glow_z,
+            ));
+        }
+        return;
+    }
+
+    if let Some(vertices) = diffuse_quad {
+        actors.push(hold_strip_actor(
+            slot.texture_key_shared(),
+            Arc::new(vertices),
+            BlendMode::Alpha,
+            request.depth_test,
+            request.cap_z,
+        ));
+    }
+    if let Some(vertices) = glow_quad {
         actors.push(hold_strip_glow_actor(
             slot.texture_key_shared(),
-            Arc::new(hold_strip_quad(top_glow_row, bottom_glow_row)),
+            Arc::new(vertices),
             request.depth_test,
             request.glow_z,
         ));
@@ -1088,6 +1387,7 @@ fn compose_cap_mesh<S>(
 
 fn compose_bottom_cap<S, F, P>(
     actors: &mut Vec<Actor>,
+    mesh_scratch: &mut HoldMeshScratch,
     request: &HoldBodyCapRequest<'_, S>,
     rendered: &RenderedHoldBody,
     sample_path: &P,
@@ -1228,6 +1528,7 @@ where
         );
         compose_cap_mesh(
             actors,
+            mesh_scratch,
             slot,
             top_row,
             bottom_row,
@@ -1530,6 +1831,182 @@ pub(crate) fn hold_strip_glow_actor(
     }
 }
 
+fn hold_reusable_strip_actor(
+    texture: Arc<str>,
+    vertices: Arc<Vec<TexturedMeshVertex>>,
+    blend: BlendMode,
+    depth_test: bool,
+    z: i16,
+) -> Actor {
+    Actor::ReusableTexturedMesh {
+        align: [0.0, 0.0],
+        offset: [0.0, 0.0],
+        world_z: 0.0,
+        size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
+        local_transform: Matrix4::IDENTITY,
+        texture,
+        tint: [1.0, 1.0, 1.0, 1.0],
+        glow: [1.0, 1.0, 1.0, 0.0],
+        vertices,
+        geom_cache_key: deadlib_render::INVALID_TMESH_CACHE_KEY,
+        uv_scale: [1.0, 1.0],
+        uv_offset: [0.0, 0.0],
+        uv_tex_shift: [0.0, 0.0],
+        depth_test,
+        visible: true,
+        blend,
+        z,
+    }
+}
+
+fn hold_reusable_strip_glow_actor(
+    texture: Arc<str>,
+    vertices: Arc<Vec<TexturedMeshVertex>>,
+    depth_test: bool,
+    z: i16,
+) -> Actor {
+    Actor::ReusableTexturedMesh {
+        align: [0.0, 0.0],
+        offset: [0.0, 0.0],
+        world_z: 0.0,
+        size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
+        local_transform: Matrix4::IDENTITY,
+        texture,
+        tint: [1.0, 1.0, 1.0, 0.0],
+        glow: [1.0, 1.0, 1.0, 1.0],
+        vertices,
+        geom_cache_key: deadlib_render::INVALID_TMESH_CACHE_KEY,
+        uv_scale: [1.0, 1.0],
+        uv_offset: [0.0, 0.0],
+        uv_tex_shift: [0.0, 0.0],
+        depth_test,
+        visible: true,
+        blend: BlendMode::Alpha,
+        z,
+    }
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn bench_fresh_hold_mesh_frame(
+    actors: &mut Vec<Actor>,
+    texture: &Arc<str>,
+    holds: usize,
+    body_vertices: usize,
+) -> usize {
+    actors.clear();
+    for _ in 0..holds {
+        for glow in [false, true] {
+            let vertices = vec![TexturedMeshVertex::default(); body_vertices];
+            actors.push(if glow {
+                hold_strip_glow_actor(Arc::clone(texture), Arc::from(vertices), true, 111)
+            } else {
+                hold_strip_actor(
+                    Arc::clone(texture),
+                    Arc::from(vertices),
+                    BlendMode::Alpha,
+                    true,
+                    110,
+                )
+            });
+        }
+        for _ in 0..2 {
+            let vertices = [TexturedMeshVertex::default(); HOLD_CAP_BUFFER_VERTICES];
+            actors.push(hold_strip_actor(
+                Arc::clone(texture),
+                Arc::new(vertices),
+                BlendMode::Alpha,
+                true,
+                110,
+            ));
+            actors.push(hold_strip_glow_actor(
+                Arc::clone(texture),
+                Arc::new(vertices),
+                true,
+                111,
+            ));
+        }
+    }
+    hold_mesh_vertex_count(actors)
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn bench_reused_hold_mesh_frame(
+    actors: &mut Vec<Actor>,
+    scratch: &mut HoldMeshScratch,
+    texture: &Arc<str>,
+    holds: usize,
+    body_vertices: usize,
+) -> usize {
+    actors.clear();
+    scratch.begin_frame();
+    for _ in 0..holds {
+        let body_start = scratch
+            .bodies
+            .acquire_pair()
+            .expect("benchmark hold count must fit the body pool");
+        {
+            let (diffuse, glow) = scratch.bodies.pair_mut(body_start);
+            diffuse.resize(body_vertices, TexturedMeshVertex::default());
+            glow.resize(body_vertices, TexturedMeshVertex::default());
+        }
+        let (diffuse, glow) = scratch.bodies.shared_pair(body_start);
+        actors.push(hold_reusable_strip_actor(
+            Arc::clone(texture),
+            diffuse,
+            BlendMode::Alpha,
+            true,
+            110,
+        ));
+        actors.push(hold_reusable_strip_glow_actor(
+            Arc::clone(texture),
+            glow,
+            true,
+            111,
+        ));
+
+        for _ in 0..2 {
+            let cap_start = scratch
+                .caps
+                .acquire_pair()
+                .expect("benchmark hold count must fit the cap pool");
+            {
+                let (diffuse, glow) = scratch.caps.pair_mut(cap_start);
+                diffuse.resize(HOLD_CAP_BUFFER_VERTICES, TexturedMeshVertex::default());
+                glow.resize(HOLD_CAP_BUFFER_VERTICES, TexturedMeshVertex::default());
+            }
+            let (diffuse, glow) = scratch.caps.shared_pair(cap_start);
+            actors.push(hold_reusable_strip_actor(
+                Arc::clone(texture),
+                diffuse,
+                BlendMode::Alpha,
+                true,
+                110,
+            ));
+            actors.push(hold_reusable_strip_glow_actor(
+                Arc::clone(texture),
+                glow,
+                true,
+                111,
+            ));
+        }
+    }
+    hold_mesh_vertex_count(actors)
+}
+
+#[cfg(feature = "bench-support")]
+fn hold_mesh_vertex_count(actors: &[Actor]) -> usize {
+    actors
+        .iter()
+        .map(|actor| match actor {
+            Actor::TexturedMesh { vertices, .. } => vertices.len(),
+            Actor::ReusableTexturedMesh { vertices, .. } => vertices.len(),
+            _ => 0,
+        })
+        .sum()
+}
+
 pub(crate) const fn tap_part_for_note_type(note_type: NoteType) -> NoteAnimPart {
     match note_type {
         NoteType::Lift => NoteAnimPart::Lift,
@@ -1792,7 +2269,9 @@ mod tests {
 
     fn actor_z(actor: &Actor) -> i16 {
         match actor {
-            Actor::Sprite { z, .. } | Actor::TexturedMesh { z, .. } => *z,
+            Actor::Sprite { z, .. }
+            | Actor::TexturedMesh { z, .. }
+            | Actor::ReusableTexturedMesh { z, .. } => *z,
             _ => panic!("expected drawable hold actor"),
         }
     }
@@ -1803,9 +2282,12 @@ mod tests {
         let top = TestSlot::sprite("top");
         let bottom = TestSlot::sprite("bottom");
         let mut actors = Vec::new();
+        let mut mesh_scratch = HoldMeshScratch::with_columns(1);
+        mesh_scratch.begin_frame();
 
         let control = compose_hold_body_caps(
             &mut actors,
+            &mut mesh_scratch,
             body_cap_request(Some(&body), Some(&top), Some(&bottom)),
             &straight_path,
             &test_source,
@@ -1844,13 +2326,21 @@ mod tests {
         request.use_legacy_sprites = false;
         request.depth_test = true;
         let mut actors = Vec::new();
+        let mut mesh_scratch = HoldMeshScratch::with_columns(1);
+        mesh_scratch.begin_frame();
 
-        compose_hold_body_caps(&mut actors, request, &straight_path, &test_source);
+        compose_hold_body_caps(
+            &mut actors,
+            &mut mesh_scratch,
+            request,
+            &straight_path,
+            &test_source,
+        );
 
         assert_eq!(actors.len(), 2);
         assert_eq!(actors.iter().map(actor_z).collect::<Vec<_>>(), [110, 111]);
         for actor in &actors {
-            let Actor::TexturedMesh {
+            let Actor::ReusableTexturedMesh {
                 vertices,
                 depth_test,
                 world_z,
@@ -1868,17 +2358,122 @@ mod tests {
     }
 
     #[test]
+    fn sliced_body_mesh_reuses_vertex_storage_across_frames() {
+        let body = TestSlot::sprite("body-reuse");
+        let mut request = body_cap_request(Some(&body), None, None);
+        request.use_legacy_sprites = false;
+        request.depth_test = true;
+        let mut actors = Vec::new();
+        let mut mesh_scratch = HoldMeshScratch::with_columns(1);
+
+        mesh_scratch.begin_frame();
+        compose_hold_body_caps(
+            &mut actors,
+            &mut mesh_scratch,
+            request,
+            &straight_path,
+            &test_source,
+        );
+        let first_ptrs = actors
+            .iter()
+            .map(|actor| match actor {
+                Actor::ReusableTexturedMesh { vertices, .. } => vertices.as_ptr(),
+                _ => panic!("sliced hold should use reusable mesh storage"),
+            })
+            .collect::<Vec<_>>();
+        let first_vertices = actors
+            .iter()
+            .map(|actor| match actor {
+                Actor::ReusableTexturedMesh { vertices, .. } => vertices.as_slice().to_vec(),
+                _ => unreachable!(),
+            })
+            .collect::<Vec<_>>();
+
+        actors.clear();
+        mesh_scratch.begin_frame();
+        compose_hold_body_caps(
+            &mut actors,
+            &mut mesh_scratch,
+            request,
+            &straight_path,
+            &test_source,
+        );
+        for ((actor, first_ptr), first_vertices) in
+            actors.iter().zip(first_ptrs).zip(first_vertices)
+        {
+            let Actor::ReusableTexturedMesh { vertices, .. } = actor else {
+                panic!("sliced hold should keep reusable mesh storage");
+            };
+            assert_eq!(vertices.as_ptr(), first_ptr);
+            assert_eq!(vertices.as_slice(), first_vertices.as_slice());
+        }
+        assert_eq!(
+            mesh_scratch.stats(),
+            HoldMeshScratchStats {
+                high_water_pairs: 1,
+                ..HoldMeshScratchStats::default()
+            }
+        );
+    }
+
+    #[test]
+    fn hold_mesh_scratch_replaces_buffers_still_owned_by_a_render_list() {
+        let mut scratch = HoldMeshScratch::with_columns(1);
+        scratch.begin_frame();
+        let first = scratch.bodies.acquire_pair().expect("prewarmed body pair");
+        let (held_diffuse, held_glow) = scratch.bodies.shared_pair(first);
+
+        scratch.begin_frame();
+        let second = scratch
+            .bodies
+            .acquire_pair()
+            .expect("replacement body pair");
+        let (next_diffuse, next_glow) = scratch.bodies.shared_pair(second);
+
+        assert!(!Arc::ptr_eq(&held_diffuse, &next_diffuse));
+        assert!(!Arc::ptr_eq(&held_glow, &next_glow));
+        assert_eq!(scratch.stats().busy_replacements, 2);
+    }
+
+    #[test]
+    fn hold_mesh_scratch_saturates_without_growing_past_lane_bound() {
+        let mut scratch = HoldMeshScratch::with_columns(MAX_COLS);
+        scratch.begin_frame();
+        for _ in 0..MAX_COLS {
+            assert!(scratch.bodies.acquire_pair().is_some());
+        }
+        assert!(scratch.bodies.acquire_pair().is_none());
+        assert_eq!(scratch.bodies.buffers.len(), MAX_COLS * 2);
+        assert_eq!(
+            scratch.stats(),
+            HoldMeshScratchStats {
+                saturated_pairs: 1,
+                high_water_pairs: MAX_COLS,
+                ..HoldMeshScratchStats::default()
+            }
+        );
+    }
+
+    #[test]
     fn model_body_uses_phase_clock_and_sliced_sprite_fallback() {
         let body = TestSlot::model("model-body");
         let mut request = body_cap_request(Some(&body), None, None);
         request.use_legacy_sprites = false;
         let source_calls = Cell::new(0);
         let mut actors = Vec::new();
+        let mut mesh_scratch = HoldMeshScratch::with_columns(1);
+        mesh_scratch.begin_frame();
 
-        compose_hold_body_caps(&mut actors, request, &straight_path, &|slot| {
-            source_calls.set(source_calls.get() + 1);
-            test_source(slot)
-        });
+        compose_hold_body_caps(
+            &mut actors,
+            &mut mesh_scratch,
+            request,
+            &straight_path,
+            &|slot| {
+                source_calls.set(source_calls.get() + 1);
+                test_source(slot)
+            },
+        );
 
         assert!(!actors.is_empty());
         assert!(
@@ -1902,8 +2497,16 @@ mod tests {
         request.top_cap_uv_translation = [0.01, 0.02];
         request.bottom_cap_uv_translation = [0.01, 0.02];
         let mut actors = Vec::new();
+        let mut mesh_scratch = HoldMeshScratch::with_columns(1);
+        mesh_scratch.begin_frame();
 
-        compose_hold_body_caps(&mut actors, request, &straight_path, &test_source);
+        compose_hold_body_caps(
+            &mut actors,
+            &mut mesh_scratch,
+            request,
+            &straight_path,
+            &test_source,
+        );
 
         assert_eq!(actors.len(), 4);
         let Actor::Sprite {
@@ -1942,8 +2545,16 @@ mod tests {
             ..NoteAlphaParams::default()
         };
         let mut actors = Vec::new();
+        let mut mesh_scratch = HoldMeshScratch::with_columns(1);
+        mesh_scratch.begin_frame();
 
-        let control = compose_hold_body_caps(&mut actors, request, &straight_path, &test_source);
+        let control = compose_hold_body_caps(
+            &mut actors,
+            &mut mesh_scratch,
+            request,
+            &straight_path,
+            &test_source,
+        );
 
         assert_eq!(control, HoldComposeControl::AbortHold);
         assert!(

@@ -50,7 +50,7 @@ use deadsync_gameplay::{
 };
 use deadsync_input::{InputEvent, VirtualAction};
 use deadsync_notefield::{
-    FieldPlacement, ModelMeshCache, ModelMeshCacheStats, ProxyCaptureRequests,
+    FieldPlacement, HoldMeshScratch, ModelMeshCache, ModelMeshCacheStats, ProxyCaptureRequests,
     SongLuaPlayerTransformRequest, ViewOverride, noteskin_model_actor_from_draw,
     song_lua_player_skew_x_matrix, song_lua_player_skew_y_matrix, song_lua_player_transform_matrix,
     song_lua_player_y_fold_actor,
@@ -557,6 +557,7 @@ pub struct State {
     pub(crate) song_banner_key: Option<Arc<str>>,
     pub(crate) pack_banner_key: Option<Arc<str>>,
     pub(crate) notefield_model_cache: [RefCell<ModelMeshCache>; MAX_PLAYERS],
+    pub(crate) notefield_hold_mesh_scratch: [RefCell<HoldMeshScratch>; MAX_PLAYERS],
     pub background_path_dirty: bool,
     pub background_changes: Vec<SongBackgroundChange>,
     pub next_background_change_ix: usize,
@@ -636,6 +637,10 @@ impl State {
             .map(crate::assets::media_path_key);
         let notefield_model_cache =
             notefield_model_cache_from_assets(&noteskin_assets, gameplay.num_players());
+        let notefield_hold_mesh_scratch = std::array::from_fn(|player| {
+            let columns = usize::from(player < gameplay.num_players()) * gameplay.cols_per_player();
+            RefCell::new(HoldMeshScratch::with_columns(columns))
+        });
         let background_transition_start_time = gameplay.current_music_time_display();
         let next_background_change_ix = background_changes
             .iter()
@@ -678,6 +683,7 @@ impl State {
             song_banner_key,
             pack_banner_key,
             notefield_model_cache,
+            notefield_hold_mesh_scratch,
             background_path_dirty: true,
             background_changes,
             next_background_change_ix,
@@ -4708,7 +4714,8 @@ fn song_lua_proxy_actor_has_z(actor: &Actor) -> bool {
         Actor::Sprite { z, .. }
         | Actor::Text { z, .. }
         | Actor::Mesh { z, .. }
-        | Actor::TexturedMesh { z, .. } => *z != 0,
+        | Actor::TexturedMesh { z, .. }
+        | Actor::ReusableTexturedMesh { z, .. } => *z != 0,
         Actor::Frame { z, children, .. } => {
             *z != 0 || children.iter().any(song_lua_proxy_actor_has_z)
         }
@@ -4727,6 +4734,7 @@ fn song_lua_proxy_actor_z(actor: &Actor) -> i16 {
         | Actor::Text { z, .. }
         | Actor::Mesh { z, .. }
         | Actor::TexturedMesh { z, .. }
+        | Actor::ReusableTexturedMesh { z, .. }
         | Actor::Frame { z, .. }
         | Actor::SharedFrame { z, .. } => *z,
         Actor::Shadow { child, .. } => song_lua_proxy_actor_z(child),
@@ -4938,6 +4946,43 @@ fn song_lua_proxy_local_actor(actor: Actor) -> Actor {
             blend,
             ..
         } => Actor::TexturedMesh {
+            align,
+            offset,
+            world_z,
+            size,
+            local_transform,
+            texture,
+            tint,
+            glow,
+            vertices,
+            geom_cache_key,
+            uv_scale,
+            uv_offset,
+            uv_tex_shift,
+            depth_test,
+            visible,
+            blend,
+            z: 0,
+        },
+        Actor::ReusableTexturedMesh {
+            align,
+            offset,
+            world_z,
+            size,
+            local_transform,
+            texture,
+            tint,
+            glow,
+            vertices,
+            geom_cache_key,
+            uv_scale,
+            uv_offset,
+            uv_tex_shift,
+            depth_test,
+            visible,
+            blend,
+            ..
+        } => Actor::ReusableTexturedMesh {
             align,
             offset,
             world_z,
@@ -5666,6 +5711,43 @@ fn song_lua_style_capture_actor(
             blend: actor_blend,
             z,
         } => Actor::TexturedMesh {
+            align,
+            offset,
+            world_z,
+            size,
+            local_transform,
+            texture,
+            tint: song_lua_capture_tint(actor_tint, capture_tint),
+            glow: song_lua_capture_tint(glow, capture_tint),
+            vertices,
+            geom_cache_key,
+            uv_scale,
+            uv_offset,
+            uv_tex_shift,
+            depth_test,
+            visible,
+            blend: blend.unwrap_or(actor_blend),
+            z: song_lua_add_z(z, z_shift),
+        },
+        Actor::ReusableTexturedMesh {
+            align,
+            offset,
+            world_z,
+            size,
+            local_transform,
+            texture,
+            tint: actor_tint,
+            glow,
+            vertices,
+            geom_cache_key,
+            uv_scale,
+            uv_offset,
+            uv_tex_shift,
+            depth_test,
+            visible,
+            blend: actor_blend,
+            z,
+        } => Actor::ReusableTexturedMesh {
             align,
             offset,
             world_z,
@@ -9098,6 +9180,7 @@ pub fn push_actors(
                 arrow_effect_time_s,
                 &state.noteskin_assets,
                 &state.notefield_model_cache,
+                &state.notefield_hold_mesh_scratch,
                 profile,
                 placement,
                 play_style,

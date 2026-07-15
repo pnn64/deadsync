@@ -329,6 +329,11 @@ pub fn prepare<EnsureCached>(
                                 vertices.as_ref(),
                                 &mut shared_tmesh_geom_cleared,
                             ),
+                            TexturedMeshVertices::Reusable(vertices) => shared_tmesh_source(
+                                scratch,
+                                vertices.as_slice(),
+                                &mut shared_tmesh_geom_cleared,
+                            ),
                         }
                     }
                 } else {
@@ -339,6 +344,11 @@ pub fn prepare<EnsureCached>(
                         TexturedMeshVertices::Shared(vertices) => shared_tmesh_source(
                             scratch,
                             vertices.as_ref(),
+                            &mut shared_tmesh_geom_cleared,
+                        ),
+                        TexturedMeshVertices::Reusable(vertices) => shared_tmesh_source(
+                            scratch,
+                            vertices.as_slice(),
                             &mut shared_tmesh_geom_cleared,
                         ),
                     }
@@ -379,9 +389,12 @@ pub fn prepare<EnsureCached>(
 mod tests {
     use super::{DrawScratch, prepare};
     use crate::{
-        BlendMode, INVALID_TEXTURE_HANDLE, ObjectType, RenderList, RenderObject, SpriteInstanceRaw,
+        BlendMode, INVALID_TEXTURE_HANDLE, INVALID_TMESH_CACHE_KEY, ObjectType, RenderList,
+        RenderObject, SpriteInstanceRaw, TexturedMeshInstanceRaw, TexturedMeshVertex,
+        TexturedMeshVertices,
     };
     use glam::Mat4 as Matrix4;
+    use std::sync::Arc;
 
     fn sprite_object(order: u32) -> RenderObject {
         RenderObject {
@@ -420,5 +433,44 @@ mod tests {
         prepare(&render_list, &mut scratch, |_, _| false);
 
         assert!(scratch.ops.capacity() >= render_list.objects.len());
+    }
+
+    #[test]
+    fn prepare_copies_reusable_geometry_once_for_multiple_passes() {
+        let vertices = Arc::new(vec![TexturedMeshVertex::default(); 6]);
+        let objects = (0..2)
+            .map(|order| RenderObject {
+                object_type: ObjectType::TexturedMesh {
+                    instance: TexturedMeshInstanceRaw::new(
+                        Matrix4::IDENTITY,
+                        [1.0; 4],
+                        [1.0; 2],
+                        [0.0; 2],
+                        [0.0; 2],
+                        order != 0,
+                    ),
+                    vertices: TexturedMeshVertices::Reusable(Arc::clone(&vertices)),
+                    geom_cache_key: INVALID_TMESH_CACHE_KEY,
+                    depth_test: true,
+                },
+                texture_handle: 1,
+                blend: BlendMode::Alpha,
+                z: 0,
+                order,
+                camera: 0,
+            })
+            .collect();
+        let render_list = RenderList {
+            clear_color: [0.0, 0.0, 0.0, 1.0],
+            cameras: vec![Matrix4::IDENTITY],
+            sprite_instances: Vec::new(),
+            objects,
+        };
+        let mut scratch = DrawScratch::with_capacity(0, 0, 0, 2);
+
+        prepare(&render_list, &mut scratch, |_, _| false);
+
+        assert_eq!(scratch.tmesh_vertices.len(), vertices.len());
+        assert_eq!(scratch.tmesh_instances.len(), 2);
     }
 }

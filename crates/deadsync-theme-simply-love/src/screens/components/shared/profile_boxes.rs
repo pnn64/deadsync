@@ -1022,6 +1022,21 @@ fn apply_zoom_to_actor(actor: &mut Actor, pivot: [f32; 2], zoom: f32) {
             }
             *vertices = std::sync::Arc::from(out);
         }
+        Actor::ReusableTexturedMesh {
+            offset,
+            size,
+            local_transform,
+            ..
+        } => {
+            offset[0] = scale_about(offset[0], pivot[0], zoom);
+            offset[1] = scale_about(offset[1], pivot[1], zoom);
+            for s in size.iter_mut() {
+                if let actors::SizeSpec::Px(v) = s {
+                    *v *= zoom;
+                }
+            }
+            *local_transform *= glam::Mat4::from_scale(glam::Vec3::splat(zoom));
+        }
         Actor::Text {
             offset,
             scale,
@@ -1111,7 +1126,7 @@ fn apply_offset_to_actor(actor: &mut Actor, dx: f32, dy: f32) {
             offset[0] += dx;
             offset[1] += dy;
         }
-        Actor::TexturedMesh { offset, .. } => {
+        Actor::TexturedMesh { offset, .. } | Actor::ReusableTexturedMesh { offset, .. } => {
             offset[0] += dx;
             offset[1] += dy;
         }
@@ -1149,6 +1164,7 @@ fn apply_z_offset(actor: &mut Actor, dz: i16) {
         | Actor::Text { z, .. }
         | Actor::Mesh { z, .. }
         | Actor::TexturedMesh { z, .. }
+        | Actor::ReusableTexturedMesh { z, .. }
         | Actor::Frame { z, .. }
         | Actor::SharedFrame { z, .. } => *z = z.saturating_add(dz),
         Actor::Camera { .. }
@@ -1199,6 +1215,7 @@ fn apply_clip_rect_to_actor(actor: &mut Actor, rect: [f32; 4]) {
         Actor::Sprite { .. }
         | Actor::Mesh { .. }
         | Actor::TexturedMesh { .. }
+        | Actor::ReusableTexturedMesh { .. }
         | Actor::CameraPush { .. }
         | Actor::CameraPop => {}
     }

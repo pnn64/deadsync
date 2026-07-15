@@ -259,6 +259,46 @@ pub fn song_lua_player_y_fold_actor(actor: Actor, pivot_x: f32, rotation_y_deg: 
                 z,
             }
         }
+        Actor::ReusableTexturedMesh {
+            align,
+            mut offset,
+            world_z,
+            size,
+            local_transform,
+            texture,
+            tint,
+            glow,
+            vertices,
+            geom_cache_key,
+            uv_scale,
+            uv_offset,
+            uv_tex_shift,
+            depth_test,
+            visible,
+            blend,
+            z,
+        } => {
+            offset[0] = song_lua_fold_x_around_pivot(offset[0], pivot_x, cos_y);
+            Actor::ReusableTexturedMesh {
+                align,
+                offset,
+                world_z,
+                size,
+                local_transform,
+                texture,
+                tint,
+                glow,
+                vertices,
+                geom_cache_key,
+                uv_scale,
+                uv_offset,
+                uv_tex_shift,
+                depth_test,
+                visible,
+                blend,
+                z,
+            }
+        }
         Actor::Frame {
             mut offset,
             children,
@@ -494,6 +534,7 @@ mod tests {
             | Actor::Text { offset, .. }
             | Actor::Mesh { offset, .. }
             | Actor::TexturedMesh { offset, .. }
+            | Actor::ReusableTexturedMesh { offset, .. }
             | Actor::Frame { offset, .. }
             | Actor::SharedFrame { offset, .. } => offset[0],
             other => panic!("actor has no direct x offset: {other:?}"),
