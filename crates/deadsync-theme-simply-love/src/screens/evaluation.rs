@@ -620,6 +620,37 @@ fn course_graph_raw_seconds(stages: &[CourseGraphStage]) -> f32 {
     stages.iter().map(course_graph_stage_seconds).sum()
 }
 
+fn course_graph_peak_nps(stages: &[CourseGraphStage]) -> f64 {
+    stages.iter().fold(0.0, |peak, stage| {
+        let stage_peak = stage.chart.max_nps;
+        if stage_peak.is_finite() {
+            peak.max(stage_peak)
+        } else {
+            peak
+        }
+    })
+}
+
+#[inline(always)]
+fn valid_music_rate(music_rate: f32) -> f32 {
+    if music_rate.is_finite() && music_rate > 0.0 {
+        music_rate
+    } else {
+        1.0
+    }
+}
+
+#[inline(always)]
+fn eval_graph_x(time: f32, first: f32, last: f32, graph_width: f32) -> f32 {
+    let duration = (last - first).max(0.001);
+    ((time - first) / duration).clamp(0.0, 1.0) * graph_width.max(0.0)
+}
+
+#[inline(always)]
+fn fail_seconds_remaining(last: f32, fail_time: f32, music_rate: f32) -> f32 {
+    ((last - fail_time.max(0.0)) / valid_music_rate(music_rate)).max(0.0)
+}
+
 fn course_graph_stage_spans(stages: &[CourseGraphStage], graph_width: f32) -> Vec<(f32, f32)> {
     let total = course_graph_raw_seconds(stages);
     let width = graph_width.max(0.0);
@@ -650,16 +681,17 @@ fn build_course_density_graph_mesh(
         return None;
     }
 
-    let rate = if music_rate.is_finite() && music_rate > 0.0 {
-        music_rate
-    } else {
-        1.0
-    };
+    let rate = valid_music_rate(music_rate);
+    // Simply Love measures both values in rate-adjusted seconds.  Keeping
+    // both divisions here makes the cancellation explicit and prevents the
+    // numerator-only rate scaling that previously shortened the course graph.
+    let display_total = total / rate;
+    let peak_nps = course_graph_peak_nps(stages);
     let mut x = 0.0_f32;
     let mut out = Vec::new();
     for stage in stages {
         let stage_seconds = course_graph_stage_seconds(stage);
-        let stage_width = stage_seconds / rate / total * width;
+        let stage_width = (stage_seconds / rate) / display_total * width;
         if stage_width <= 0.0 {
             continue;
         }
@@ -668,7 +700,7 @@ fn build_course_density_graph_mesh(
         let last = stage_seconds.max(first + 0.001);
         let mut verts = deadlib_present::density::build_density_histogram_mesh(
             &stage.chart.measure_nps_vec,
-            stage.chart.max_nps,
+            peak_nps,
             &stage.chart.measure_seconds_vec,
             first,
             last,
@@ -816,11 +848,11 @@ mod tests {
     use super::{
         CellIcon, CourseGraphStage, EvalPane, Nice69Buf, SUBMIT_FOOTER_F5_LABEL,
         SimplyLoveGrooveStatsService, SubmitFooterCell, active_groovestats_service_name,
-        build_fail_label_text, cached_fail_label_text, course_graph_stage_spans,
-        course_graph_stripe_actors, eval_grade_for_result, eval_pane_cycle, eval_pane_shift,
-        eval_pane_skip_duplicate, leaderboard_requests, stage_in_stinger_texture_key,
-        submission_retry_available, submit_footer_gs_label, submit_footer_gs_label_for,
-        submit_footer_lines,
+        build_course_density_graph_mesh, build_fail_label_text, cached_fail_label_text,
+        course_graph_stage_spans, course_graph_stripe_actors, eval_grade_for_result, eval_graph_x,
+        eval_pane_cycle, eval_pane_shift, eval_pane_skip_duplicate, fail_seconds_remaining,
+        leaderboard_requests, stage_in_stinger_texture_key, submission_retry_available,
+        submit_footer_gs_label, submit_footer_gs_label_for, submit_footer_lines,
     };
     use crate::assets::i18n;
     use deadlib_present::actors::{Actor, TextAlign};
@@ -966,6 +998,53 @@ mod tests {
         assert!((spans[1].1 - 300.0).abs() < 0.001);
         assert!((spans[2].0 - 400.0).abs() < 0.001);
         assert!((spans[2].1 - 100.0).abs() < 0.001);
+    }
+
+    fn test_course_density_stage(song_last_second: f32, max_nps: f64) -> CourseGraphStage {
+        let mut stage = test_course_graph_stage(song_last_second);
+        let chart = Arc::make_mut(&mut stage.chart);
+        chart.max_nps = max_nps;
+        chart.measure_nps_vec = vec![max_nps, max_nps, 0.0];
+        chart.measure_seconds_vec = vec![0.0, song_last_second * 0.5, song_last_second];
+        stage
+    }
+
+    #[test]
+    fn course_density_fills_width_at_rate_and_uses_course_peak() {
+        let stages = [
+            test_course_density_stage(10.0, 5.0),
+            test_course_density_stage(10.0, 10.0),
+        ];
+
+        let mesh = build_course_density_graph_mesh(&stages, 200.0, 64.0, 1.5)
+            .expect("course density mesh");
+        let max_x = mesh.iter().map(|v| v.pos[0]).fold(0.0_f32, f32::max);
+        let first_stage_top = mesh
+            .iter()
+            .filter(|v| v.pos[0] < 99.9)
+            .map(|v| v.pos[1])
+            .fold(f32::INFINITY, f32::min);
+        let second_stage_top = mesh
+            .iter()
+            .filter(|v| v.pos[0] >= 100.0)
+            .map(|v| v.pos[1])
+            .fold(f32::INFINITY, f32::min);
+
+        assert!((max_x - 200.0).abs() < 0.001);
+        assert!((first_stage_top - 32.0).abs() < 0.001);
+        assert!(second_stage_top.abs() < 0.001);
+    }
+
+    #[test]
+    fn life_and_fail_positions_do_not_use_scatter_padding() {
+        assert!((eval_graph_x(100.0, 0.0, 100.0, 300.0) - 300.0).abs() < 0.001);
+        assert!((eval_graph_x(50.0, 0.0, 100.0, 300.0) - 150.0).abs() < 0.001);
+    }
+
+    #[test]
+    fn fail_remaining_time_uses_precise_song_end_and_rate() {
+        let remaining = fail_seconds_remaining(100.75, 40.25, 1.5);
+        assert!((remaining - 40.333_332).abs() < 0.001);
     }
 
     #[test]
@@ -2022,7 +2101,6 @@ pub fn init(gameplay_results: Option<gameplay::State>, init_view: EvaluationInit
             let notes = &gs.notes()[start..end];
             let column_judgment_eligible = &gs.column_judgment_eligible()[start..end];
             let note_times = &gs.note_time_cache_ns()[start..end];
-            let hold_end_times = &gs.hold_end_time_cache_ns()[start..end];
             let p = &gs.players()[player_idx];
             let prof = &gs.profiles()[player_idx];
             let col_offset = player_idx.saturating_mul(cols_per_player);
@@ -2122,27 +2200,10 @@ pub fn init(gameplay_results: Option<gameplay::State>, init_view: EvaluationInit
                 }
             };
             let graph_first_second = 0.0_f32.min(gs.timing().get_time_for_beat(0.0));
-            let chart_last_second = {
-                let mut latest_ns: i64 = i64::MIN;
-                for (idx, &t_ns) in note_times.iter().enumerate() {
-                    if !deadsync_core::song_time::song_time_ns_invalid(t_ns) && t_ns > latest_ns {
-                        latest_ns = t_ns;
-                    }
-                    if let Some(end_ns) = hold_end_times.get(idx).copied().flatten()
-                        && !deadsync_core::song_time::song_time_ns_invalid(end_ns)
-                        && end_ns > latest_ns
-                    {
-                        latest_ns = end_ns;
-                    }
-                }
-                if latest_ns == i64::MIN {
-                    (gs.song().total_length_seconds.max(0) as f32).max(graph_first_second + 0.001)
-                } else {
-                    deadsync_core::song_time::song_time_ns_to_seconds(latest_ns)
-                        .max(graph_first_second + 0.001)
-                }
-            };
-            let graph_last_second = chart_last_second;
+            let graph_last_second = gs
+                .song()
+                .precise_last_second()
+                .max(graph_first_second + 0.001);
             let totals = gs.display_totals_for_player(player_idx);
 
             let score_percent = judgment::calculate_itg_score_percent_from_counts(
@@ -5125,14 +5186,12 @@ pub fn push_actors(actors: &mut Vec<Actor>, state: &State, asset_manager: &Asset
                             Vec::with_capacity(si.life_history.len() * 2 + 16);
                         let first = si.graph_first_second;
                         let last = si.graph_last_second.max(first + 0.001_f32);
-                        let dur = (last - first).max(0.001_f32);
-                        let padding = 0.05;
 
                         let mut last_x = -999.0_f32;
                         let mut last_y = -999.0_f32;
 
                         for &(t, life) in &si.life_history {
-                            let x = ((t - first) / (dur + padding)).clamp(0.0, 1.0) * graph_width;
+                            let x = eval_graph_x(t, first, last, graph_width);
                             // Simply Love nudges GraphDisplay's white life line down by 1px
                             // (`self:GetChild("Line"):addy(1)`), so keep a matching inset.
                             let y = ((1.0 - life).clamp(0.0, 1.0) * graph_height + 1.0)
@@ -5178,8 +5237,7 @@ pub fn push_actors(actors: &mut Vec<Actor>, state: &State, asset_manager: &Asset
 
                         // Life history only stores change points; once life stops changing
                         // (e.g. capped at full), continue the final segment to graph end.
-                        let end_x =
-                            ((last - first) / (dur + padding)).clamp(0.0, 1.0) * graph_width;
+                        let end_x = eval_graph_x(last, first, last, graph_width);
                         if last_x > -900.0 {
                             let w = (end_x - last_x).max(0.0);
                             if w > 0.5 {
@@ -5193,8 +5251,7 @@ pub fn push_actors(actors: &mut Vec<Actor>, state: &State, asset_manager: &Asset
                         }
 
                         if let Some((barely_time, barely_life)) = barely_marker_sample(si) {
-                            let x = ((barely_time - first) / (dur + padding)).clamp(0.0, 1.0)
-                                * graph_width;
+                            let x = eval_graph_x(barely_time, first, last, graph_width);
                             let y = ((1.0 - barely_life).clamp(0.0, 1.0) * graph_height + 1.0)
                                 .clamp(1.0, (graph_height - 1.0).max(1.0));
                             // Keep a tiny marker on the life line, then animate the label/arrow
@@ -5247,8 +5304,7 @@ pub fn push_actors(actors: &mut Vec<Actor>, state: &State, asset_manager: &Asset
                         }
 
                         if let Some(fail_time) = si.fail_time {
-                            let x = ((fail_time - first) / (dur + padding)).clamp(0.0, 1.0)
-                                * graph_width;
+                            let x = eval_graph_x(fail_time, first, last, graph_width);
 
                             life_children.push(act!(quad:
                                 align(0.5, 0.0): xy(x, 0.0):
@@ -5257,23 +5313,11 @@ pub fn push_actors(actors: &mut Vec<Actor>, state: &State, asset_manager: &Asset
                                 z(5)
                             ));
 
-                            let base_total = si.song.total_length_seconds.max(0) as f32;
-                            let rate = if si.music_rate.is_finite() && si.music_rate > 0.0 {
-                                si.music_rate
-                            } else {
-                                1.0
-                            };
-                            let total_display = if rate == 0.0 {
-                                base_total
-                            } else {
-                                base_total / rate
-                            };
-                            let death_display = if rate == 0.0 {
-                                fail_time.max(0.0)
-                            } else {
-                                fail_time.max(0.0) / rate
-                            };
-                            let remaining = (total_display - death_display).max(0.0);
+                            let remaining = fail_seconds_remaining(
+                                si.song.precise_last_second(),
+                                fail_time,
+                                si.music_rate,
+                            );
                             let stream_progress = state.fail_stream_progress[player_idx];
                             let fail_label = cached_fail_label_text(remaining, stream_progress);
                             let label_lines = if stream_progress.is_some() { 2.0 } else { 1.0 };

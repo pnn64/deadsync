@@ -127,6 +127,7 @@ pub fn build_course_summary_stage(input: CourseSummaryInput<'_>) -> Option<Stage
     let duration_seconds = input.course_total_seconds.max(played_duration_seconds);
     summary_song.music_length_seconds = duration_seconds;
     summary_song.total_length_seconds = duration_seconds.round() as i32;
+    summary_song.precise_last_second_seconds = duration_seconds;
     let summary_song = Arc::new(summary_song);
 
     let mut players: [Option<PlayerStageSummary>; MAX_PLAYERS] = std::array::from_fn(|_| None);
@@ -562,7 +563,9 @@ mod tests {
             difficulty_name: "Hard",
             meter: Some(12),
             song_stub: song_a.as_ref(),
-            course_total_seconds: song_a.precise_last_second() + song_b.precise_last_second(),
+            course_total_seconds: song_a.precise_last_second()
+                + song_b.precise_last_second()
+                + 0.25,
             totals: [
                 CourseSummaryTotals {
                     possible_grade_points: 1000,
@@ -578,7 +581,8 @@ mod tests {
         .expect("course summary");
 
         let player = summary.players[0].as_ref().expect("P1 summary");
-        assert!((summary.duration_seconds - 150.0).abs() <= f32::EPSILON);
+        assert!((summary.duration_seconds - 150.25).abs() <= f32::EPSILON);
+        assert!((summary.song.precise_last_second() - 150.25).abs() <= f32::EPSILON);
         assert!((player.score_percent - 0.5).abs() <= f64::EPSILON);
         assert_eq!(player.earned_grade_points, 500);
         assert_eq!(player.possible_grade_points, 1000);
