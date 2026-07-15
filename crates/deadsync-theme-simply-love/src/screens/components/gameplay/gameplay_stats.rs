@@ -1058,33 +1058,26 @@ pub fn push_heart_rates(actors: &mut Vec<Actor>, state: &State, playfield_center
         };
         let x = layout.sidepane_center_x + x_sign * 94.0 * layout.banner_data_zoom;
         let y = layout.sidepane_center_y - 37.0 * layout.banner_data_zoom;
-        let player_rgba = if side == profile_data::PlayerSide::P1 {
-            color::decorative_rgba(state.active_color_index())
-        } else {
-            color::decorative_rgba(state.active_color_index() - 2)
-        };
-        let rgba = reading
-            .bpm
-            .map(heart_rate_zone_color)
-            .unwrap_or(player_rgba);
-        let alpha = if reading.connected {
-            rgba[3]
-        } else {
-            rgba[3] * 0.45
-        };
+        let alpha = if reading.connected { 1.0 } else { 0.45 };
         let bpm = reading.bpm.unwrap_or(0);
         let pulse = heart_pulse_scale(elapsed, bpm);
-        let size = 24.0 * layout.banner_data_zoom * pulse;
+        let heart_width = 24.0 * layout.banner_data_zoom * pulse;
+        let heart_height = 20.4 * layout.banner_data_zoom * pulse;
+        let heart_rgba = HEART_RATE_ZONE_RGBA[4];
+        let text_rgba = reading
+            .bpm
+            .map(heart_rate_zone_color)
+            .unwrap_or(color::JUDGMENT_FA_PLUS_WHITE_RGBA);
         let text = heart_rate_text(reading.bpm);
         actors.push(act!(sprite("heart.png"):
-            align(0.5, 0.5): xy(x, y): zoomto(size, size):
-            diffuse(rgba[0], rgba[1], rgba[2], alpha): z(72)
+            align(0.5, 0.5): xy(x, y): zoomto(heart_width, heart_height):
+            diffuse(heart_rgba[0], heart_rgba[1], heart_rgba[2], alpha): z(72)
         ));
         actors.push(act!(text:
             font("miso"): settext(text): align(0.0, 0.5): horizalign(left):
             xy(x + 16.0 * layout.banner_data_zoom, y):
             zoom(2.0 * layout.banner_data_zoom):
-            diffuse(1.0, 1.0, 1.0, alpha): z(72)
+            diffuse(text_rgba[0], text_rgba[1], text_rgba[2], alpha): z(72)
         ));
     }
 }
