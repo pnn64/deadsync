@@ -448,6 +448,12 @@ fn update_name_entry_blink(state: &mut State, dt: f32) {
 pub fn update(state: &mut State, dt: f32) -> Option<ThemeEffect> {
     update_hold_scroll(state);
     update_name_entry_blink(state, dt);
+    if state.selected != state.prev_selected {
+        state.prev_selected = state.selected;
+        state
+            .pending_effects
+            .push(crate::effects::sfx("assets/sounds/change.ogg"));
+    }
     let effects = std::mem::take(&mut state.pending_effects);
     match effects.len() {
         0 => None,
@@ -2829,6 +2835,26 @@ mod tests {
             )) if path == "assets/sounds/start.ogg"
         ));
         assert!(matches!(effects[1], ThemeEffect::Navigate(Screen::Options)));
+    }
+
+    #[test]
+    fn profile_list_up_and_down_emit_one_change_sfx() {
+        let mut state = state_with_profile_row();
+
+        for (action, selected) in [(VirtualAction::p1_down, 1), (VirtualAction::p1_up, 0)] {
+            press(&mut state, action);
+            assert_eq!(state.selected, selected);
+            let Some(effect) = update(&mut state, 0.0) else {
+                panic!("expected profile-list navigation SFX");
+            };
+            assert!(matches!(
+                effect,
+                ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Audio(
+                    deadsync_theme::AudioRequest::PlaySfx(path)
+                )) if path == "assets/sounds/change.ogg"
+            ));
+            assert!(update(&mut state, 0.0).is_none());
+        }
     }
 
     #[test]
