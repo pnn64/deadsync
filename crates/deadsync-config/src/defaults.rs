@@ -56,6 +56,7 @@ pub const DEFAULT_MACHINE_SHOW_SELECT_STYLE: bool = true;
 pub const DEFAULT_MACHINE_SHOW_SELECT_PLAY_MODE: bool = true;
 pub const DEFAULT_DELAYED_BACK: bool = true;
 pub const DEFAULT_MACHINE_ENABLE_REPLAYS: bool = true;
+pub const DEFAULT_MACHINE_ENABLE_HEART_RATE_MONITORS: bool = false;
 pub const DEFAULT_MACHINE_ALLOW_PER_PLAYER_GLOBAL_OFFSETS: bool = false;
 pub const DEFAULT_MACHINE_PACK_INI_OFFSETS: bool = false;
 pub const DEFAULT_MACHINE_SHOW_EVAL_SUMMARY: bool = true;
@@ -126,5 +127,6 @@ mod tests {
         assert!(DEFAULT_HIDE_MOUSE_CURSOR);
         assert_eq!(DEFAULT_MUSIC_WHEEL_SWITCH_SPEED, 15);
         assert_eq!(DEFAULT_BG_BRIGHTNESS, 0.7);
+        assert!(!DEFAULT_MACHINE_ENABLE_HEART_RATE_MONITORS);
     }
 }

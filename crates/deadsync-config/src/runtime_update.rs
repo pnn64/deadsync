@@ -131,6 +131,7 @@ update_config_fn!(pub fn update_machine_nice_sound(enabled: bool) => set_machine
 update_config_fn!(pub fn update_machine_show_name_entry(enabled: bool) => set_machine_show_name_entry);
 update_config_fn!(pub fn update_machine_show_gameover(enabled: bool) => set_machine_show_gameover);
 update_config_fn!(pub fn update_machine_enable_replays(enabled: bool) => set_machine_enable_replays);
+update_config_fn!(pub fn update_machine_enable_heart_rate_monitors(enabled: bool) => set_machine_enable_heart_rate_monitors);
 update_config_fn!(pub fn update_machine_allow_per_player_global_offsets(enabled: bool) => set_machine_allow_per_player_global_offsets);
 update_config_fn!(pub fn update_machine_pack_ini_offsets(enabled: bool) => set_machine_pack_ini_offsets);
 update_config_fn!(pub fn update_machine_default_sync_offset(offset: DefaultSyncOffset) => set_machine_default_sync_offset);

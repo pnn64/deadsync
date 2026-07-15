@@ -121,6 +121,12 @@ pub fn update_player_initials_for_side(side: PlayerSide, initials: &str) {
     profile_ini_update(side, |profile| profile.set_player_initials(initials))
 }
 
+pub fn update_heart_rate_device_id_for_side(side: PlayerSide, device_id: Option<String>) {
+    // Guest changes remain active for the session; the persistence callback
+    // intentionally has no profile directory to write for guests.
+    profile_ini_update(side, |profile| profile.set_heart_rate_device_id(device_id))
+}
+
 pub fn update_scroll_speed_for_side(side: PlayerSide, setting: ScrollSpeedSetting) {
     // Guest changes should persist for the active session; save_* no-ops for guests.
     profile_ini_update(side, |profile| profile.set_scroll_speed(setting))

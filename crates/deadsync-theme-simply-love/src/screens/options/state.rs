@@ -762,6 +762,12 @@ pub fn init(
     set_choice_by_id(
         &mut state.sub[SubmenuKind::Machine].choice_indices,
         MACHINE_OPTIONS_ROWS,
+        SubRowId::HeartRateMonitors,
+        usize::from(cfg.machine_enable_heart_rate_monitors),
+    );
+    set_choice_by_id(
+        &mut state.sub[SubmenuKind::Machine].choice_indices,
+        MACHINE_OPTIONS_ROWS,
         SubRowId::PerPlayerGlobalOffsets,
         usize::from(cfg.machine_allow_per_player_global_offsets),
     );

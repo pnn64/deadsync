@@ -131,6 +131,15 @@ pub fn runtime_profile_for_side(side: PlayerSide) -> Profile {
     runtime_lock_profiles()[player_side_index(side)].clone()
 }
 
+pub fn with_runtime_heart_rate_device_ids<R>(
+    read: impl FnOnce([Option<&str>; PLAYER_SLOTS]) -> R,
+) -> R {
+    let profiles = runtime_lock_profiles();
+    read(std::array::from_fn(|player| {
+        profiles[player].heart_rate_device_id.as_deref()
+    }))
+}
+
 pub fn profile_combo_carry(profiles: &[Profile; PLAYER_SLOTS]) -> [u32; PLAYER_SLOTS] {
     std::array::from_fn(|idx| profiles[idx].current_combo)
 }
@@ -2580,6 +2589,10 @@ pub fn apply_loaded_profile_data(
             .map(|initials| sanitize_player_initials(&initials))
             .filter(|initials| !initials.is_empty())
             .unwrap_or_else(|| default_profile.player_initials.clone());
+        profile.heart_rate_device_id = profile_get("userprofile", "HeartRateDeviceId")
+            .map(|id| id.trim().to_owned())
+            .filter(|id| !id.is_empty())
+            .or_else(|| default_profile.heart_rate_device_id.clone());
 
         let mut load_player_options = |section: &str, default: &PlayerOptionsData| {
             load_player_options_section(
@@ -7665,6 +7678,9 @@ pub fn append_userprofile_section(content: &mut String, guid: &str, profile: &Pr
     push_profile_guid_line(content, guid);
     content.push_str(&format!("DisplayName={}\n", profile.display_name));
     content.push_str(&format!("PlayerInitials={}\n", profile.player_initials));
+    if let Some(id) = profile.heart_rate_device_id.as_deref() {
+        content.push_str(&format!("HeartRateDeviceId={id}\n"));
+    }
     content.push('\n');
 }
 
@@ -7867,6 +7883,8 @@ pub fn api_key_from_ini_text(text: &str) -> Option<String> {
 pub struct Profile {
     pub display_name: String,
     pub player_initials: String,
+    /// Platform-stable BLE peripheral identifier selected for this player.
+    pub heart_rate_device_id: Option<String>,
     // Profile stats (Simply Love / StepMania semantics).
     pub weight_pounds: i32,
     pub birth_year: i32,
@@ -8082,6 +8100,7 @@ impl Default for Profile {
         Self {
             display_name: "Player 1".to_string(),
             player_initials: "P1".to_string(),
+            heart_rate_device_id: None,
             weight_pounds: 0,
             birth_year: 0,
             calories_burned_today: 0.0,
@@ -8321,6 +8340,13 @@ impl Profile {
         }
         self.player_initials = initials;
         true
+    }
+
+    pub fn set_heart_rate_device_id(&mut self, device_id: Option<String>) -> bool {
+        let device_id = device_id
+            .map(|id| id.trim().to_owned())
+            .filter(|id| !id.is_empty());
+        set_value_if_changed(&mut self.heart_rate_device_id, device_id)
     }
 
     pub fn set_scroll_speed(&mut self, setting: ScrollSpeedSetting) -> bool {
@@ -11718,6 +11744,7 @@ mod tests {
         let mut profile = Profile {
             display_name: "Test Player".to_string(),
             player_initials: "TEST".to_string(),
+            heart_rate_device_id: Some("AA:BB:CC:DD:EE:FF".to_string()),
             weight_pounds: 165,
             birth_year: 2000,
             calories_burned_day: "2026-06-23".to_string(),
@@ -11735,6 +11762,7 @@ mod tests {
         assert!(profile_ini.contains("[userprofile]\nGuid=profile-guid\n"));
         assert!(profile_ini.contains("DisplayName=Test Player\n"));
         assert!(profile_ini.contains("PlayerInitials=TEST\n"));
+        assert!(profile_ini.contains("HeartRateDeviceId=AA:BB:CC:DD:EE:FF\n"));
         assert!(profile_ini.contains("[Editable]\nWeightPounds=165\nBirthYear=2000\n"));
         assert!(profile_ini.contains("IgnoreStepCountCalories=1\n"));
         assert!(profile_ini.contains("[LastPlayedSingles]\n"));
@@ -12007,6 +12035,10 @@ ApiKey = gs-key
         let profile_values = HashMap::from([
             (("userprofile", "DisplayName"), "Alice".to_string()),
             (("userprofile", "PlayerInitials"), " a-b_c ".to_string()),
+            (
+                ("userprofile", "HeartRateDeviceId"),
+                " AA:BB:CC:DD:EE:FF ".to_string(),
+            ),
             (("Editable", "WeightPounds"), "180".to_string()),
             (("Stats", "IgnoreStepCountCalories"), "1".to_string()),
             (("Stats", "CaloriesBurnedDate"), today.to_string()),
@@ -12042,6 +12074,10 @@ ApiKey = gs-key
 
         assert_eq!(profile.display_name, "Alice");
         assert_eq!(profile.player_initials, "ABC");
+        assert_eq!(
+            profile.heart_rate_device_id.as_deref(),
+            Some("AA:BB:CC:DD:EE:FF")
+        );
         assert_eq!(profile.weight_pounds, 180);
         assert!(profile.ignore_step_count_calories);
         assert_eq!(profile.calories_burned_day, today);

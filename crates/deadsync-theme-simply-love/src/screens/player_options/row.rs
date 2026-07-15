@@ -32,6 +32,7 @@ pub enum RowId {
     GlobalOffsetShift,
     MusicRate,
     Stepchart,
+    HeartRateMonitor,
     WhatComesNext,
     Exit,
     // Advanced pane

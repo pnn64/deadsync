@@ -441,6 +441,7 @@ pub enum SimplyLoveMachineConfigRequest {
     VisualStyle(VisualStyle),
     SrpgVariant(SrpgVariant),
     EnableReplays(bool),
+    EnableHeartRateMonitors(bool),
     AllowPerPlayerGlobalOffsets(bool),
     PackIniOffsets(bool),
     DefaultSyncOffset(DefaultSyncOffset),

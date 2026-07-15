@@ -423,6 +423,7 @@ fn apply_machine_flow(
     cfg.machine_show_select_style = loaded.machine_show_select_style;
     cfg.machine_show_select_play_mode = loaded.machine_show_select_play_mode;
     cfg.machine_enable_replays = loaded.machine_enable_replays;
+    cfg.machine_enable_heart_rate_monitors = loaded.machine_enable_heart_rate_monitors;
     cfg.machine_allow_per_player_global_offsets = loaded.machine_allow_per_player_global_offsets;
     cfg.machine_pack_ini_offsets = loaded.machine_pack_ini_offsets;
     cfg.machine_default_sync_offset = loaded.machine_default_sync_offset;

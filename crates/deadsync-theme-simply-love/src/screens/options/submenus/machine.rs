@@ -167,6 +167,15 @@ pub(in crate::screens::options) const MACHINE_OPTIONS_ROWS: &[SubRow] = &[
         inline: true,
     },
     SubRow {
+        id: SubRowId::HeartRateMonitors,
+        label: lookup_key("OptionsMachine", "HeartRateMonitors"),
+        choices: &[
+            localized_choice("Common", "Off"),
+            localized_choice("Common", "On"),
+        ],
+        inline: true,
+    },
+    SubRow {
         id: SubRowId::PerPlayerGlobalOffsets,
         label: lookup_key("OptionsMachine", "PerPlayerGlobalOffsets"),
         choices: &[
@@ -391,6 +400,14 @@ pub(in crate::screens::options) const MACHINE_OPTIONS_ITEMS: &[Item] = &[
         help: &[HelpEntry::Paragraph(lookup_key(
             "OptionsMachineHelp",
             "ReplaysHelp",
+        ))],
+    },
+    Item {
+        id: ItemId::MchHeartRateMonitors,
+        name: lookup_key("OptionsMachine", "HeartRateMonitors"),
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsMachineHelp",
+            "HeartRateMonitorsHelp",
         ))],
     },
     Item {

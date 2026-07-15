@@ -1,0 +1,13 @@
+[package]
+name = "deadsync-heart-rate"
+version = "0.1.0"
+edition = "2024"
+license = "GPL-3.0"
+
+[target.'cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))'.dependencies]
+btleplug = "0.12"
+futures-util = "0.3"
+tokio = { version = "1", features = ["rt", "sync", "time"] }
+
+[lints.clippy]
+perf = { level = "warn", priority = -1 }

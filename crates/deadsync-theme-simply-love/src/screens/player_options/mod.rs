@@ -80,6 +80,20 @@ pub use render::{get_actors, push_actors};
 pub use row::{FixedStepchart, RowId};
 pub use state::State;
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct HeartRateDeviceView {
+    pub id: String,
+    pub label: String,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct HeartRateDevicesView {
+    pub supported: bool,
+    pub scanning: bool,
+    pub devices: Vec<HeartRateDeviceView>,
+    pub error: Option<String>,
+}
+
 const CHANGE_VALUE_SFX: &str = "assets/sounds/change_value.ogg";
 const NEXT_ROW_SFX: &str = "assets/sounds/next_row.ogg";
 const PREV_ROW_SFX: &str = "assets/sounds/prev_row.ogg";
@@ -135,12 +149,20 @@ pub fn init(
     fixed_stepchart: Option<FixedStepchart>,
     noteskin_catalog: NoteskinCatalogView,
     smx_gif_catalog: SmxGifCatalogView,
+    heart_rate_devices: HeartRateDevicesView,
 ) -> State {
     let session_music_rate = deadsync_profile::compat::get_session_music_rate();
     let allow_per_player_global_offsets =
         crate::config::get().machine_allow_per_player_global_offsets;
     let p1_profile = deadsync_profile::compat::get_for_side(profile_data::PlayerSide::P1);
     let p2_profile = deadsync_profile::compat::get_for_side(profile_data::PlayerSide::P2);
+    let player_profiles = [p1_profile.clone(), p2_profile.clone()];
+    let (heart_rate_choices, heart_rate_choice_ids) =
+        if crate::config::get().machine_enable_heart_rate_monitors {
+            heart_rate_choices(&heart_rate_devices, &player_profiles)
+        } else {
+            (Vec::new(), Vec::new())
+        };
 
     let speed_mod_p1 = SpeedMod::from(p1_profile.scroll_speed);
     let speed_mod_p2 = SpeedMod::from(p2_profile.scroll_speed);
@@ -167,6 +189,7 @@ pub fn init(
         &noteskin_names,
         &smx_bg_pack_names,
         &smx_judge_pack_names,
+        &heart_rate_choices,
         return_screen,
         fixed_stepchart.as_ref(),
     );
@@ -180,6 +203,7 @@ pub fn init(
         &noteskin_names,
         &smx_bg_pack_names,
         &smx_judge_pack_names,
+        &heart_rate_choices,
         return_screen,
         fixed_stepchart.as_ref(),
     );
@@ -193,6 +217,7 @@ pub fn init(
         &noteskin_names,
         &smx_bg_pack_names,
         &smx_judge_pack_names,
+        &heart_rate_choices,
         return_screen,
         fixed_stepchart.as_ref(),
     );
@@ -206,10 +231,10 @@ pub fn init(
         &noteskin_names,
         &smx_bg_pack_names,
         &smx_judge_pack_names,
+        &heart_rate_choices,
         return_screen,
         fixed_stepchart.as_ref(),
     );
-    let player_profiles = [p1_profile.clone(), p2_profile.clone()];
     // Each `BitmaskBinding` lives on exactly one pane's row, and
     // `apply_derived_masks` is a pure function of `profile`, so calling
     // `apply_profile_defaults` once per (pane, player) with the same
@@ -332,6 +357,7 @@ pub fn init(
         start_input: [PlayerStartInput::default(); PLAYER_SLOTS],
         allow_per_player_global_offsets,
         player_profiles,
+        heart_rate_choice_ids,
         noteskin,
         preview_time: 0.0,
         preview_beat: 0.0,
@@ -343,7 +369,75 @@ pub fn init(
         pending_audio: Vec::with_capacity(4),
     };
     sync_speed_mod_type_rows(&mut state);
+    sync_heart_rate_selections(&mut state);
     state
+}
+
+fn heart_rate_choices(
+    devices: &HeartRateDevicesView,
+    profiles: &[deadsync_profile::Profile; PLAYER_SLOTS],
+) -> (Vec<String>, Vec<Option<String>>) {
+    let mut choices = vec![tr("Common", "Off").to_string()];
+    let mut ids = vec![None];
+    for device in &devices.devices {
+        if ids.iter().flatten().any(|id| id == &device.id) {
+            continue;
+        }
+        choices.push(if device.label == device.id {
+            device.label.clone()
+        } else {
+            format!("{} ({})", device.label, device.id)
+        });
+        ids.push(Some(device.id.clone()));
+    }
+    for profile in profiles {
+        let Some(id) = profile.heart_rate_device_id.as_ref() else {
+            continue;
+        };
+        if ids.iter().flatten().any(|known| known == id) {
+            continue;
+        }
+        choices.push(format!("Saved: {id}"));
+        ids.push(Some(id.clone()));
+    }
+    (choices, ids)
+}
+
+fn sync_heart_rate_selections(state: &mut State) {
+    let selected: [Option<String>; PLAYER_SLOTS] =
+        std::array::from_fn(|player| state.player_profiles[player].heart_rate_device_id.clone());
+    let ids = state.heart_rate_choice_ids.clone();
+    let Some(row) = state.panes[OptionsPane::Main.index()]
+        .row_map
+        .get_mut(RowId::HeartRateMonitor)
+    else {
+        return;
+    };
+    for player in 0..PLAYER_SLOTS {
+        row.selected_choice_index[player] = ids
+            .iter()
+            .position(|id| id == &selected[player])
+            .unwrap_or(0);
+    }
+}
+
+pub fn set_heart_rate_devices(state: &mut State, devices: &HeartRateDevicesView) {
+    if !crate::config::get().machine_enable_heart_rate_monitors {
+        return;
+    }
+    let (choices, ids) = heart_rate_choices(devices, &state.player_profiles);
+    let Some(row) = state.panes[OptionsPane::Main.index()]
+        .row_map
+        .get_mut(RowId::HeartRateMonitor)
+    else {
+        return;
+    };
+    if row.choices == choices && state.heart_rate_choice_ids == ids {
+        return;
+    }
+    row.choices = choices;
+    state.heart_rate_choice_ids = ids;
+    sync_heart_rate_selections(state);
 }
 
 fn sync_speed_mod_type_row(row_map: &mut RowMap, speed_mod: &[SpeedMod; PLAYER_SLOTS]) {

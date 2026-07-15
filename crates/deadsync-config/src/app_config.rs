@@ -211,6 +211,8 @@ pub struct Config {
     pub machine_evaluation_style: MachineEvaluationStyle,
     /// Machine-wide replay recording and replay menu visibility.
     pub machine_enable_replays: bool,
+    /// Enable BLE heart-rate discovery and per-player monitor selection.
+    pub machine_enable_heart_rate_monitors: bool,
     /// Allow players to add a personal timing shift on top of machine global offset.
     pub machine_allow_per_player_global_offsets: bool,
     /// Apply ITGmania Pack.ini SyncOffset values to gameplay timing.
@@ -437,6 +439,7 @@ impl Default for Config {
             machine_evaluation_style: machine.machine_evaluation_style,
             delayed_back: runtime.delayed_back,
             machine_enable_replays: machine.machine_enable_replays,
+            machine_enable_heart_rate_monitors: machine.machine_enable_heart_rate_monitors,
             machine_allow_per_player_global_offsets: machine
                 .machine_allow_per_player_global_offsets,
             machine_pack_ini_offsets: machine.machine_pack_ini_offsets,

@@ -1,8 +1,8 @@
 use crate::bools::{parse_bool_str, parse_loose_bool_str};
 use crate::defaults::{
     DEFAULT_ALLOW_SWITCH_PROFILE_IN_MENU, DEFAULT_KEYBOARD_FEATURES,
-    DEFAULT_MACHINE_ALLOW_PER_PLAYER_GLOBAL_OFFSETS, DEFAULT_MACHINE_ENABLE_REPLAYS,
-    DEFAULT_MACHINE_NICE_SOUND, DEFAULT_MACHINE_PACK_INI_OFFSETS,
+    DEFAULT_MACHINE_ALLOW_PER_PLAYER_GLOBAL_OFFSETS, DEFAULT_MACHINE_ENABLE_HEART_RATE_MONITORS,
+    DEFAULT_MACHINE_ENABLE_REPLAYS, DEFAULT_MACHINE_NICE_SOUND, DEFAULT_MACHINE_PACK_INI_OFFSETS,
     DEFAULT_MACHINE_SHOW_EVAL_SUMMARY, DEFAULT_MACHINE_SHOW_GAMEOVER,
     DEFAULT_MACHINE_SHOW_NAME_ENTRY, DEFAULT_MACHINE_SHOW_SELECT_COLOR,
     DEFAULT_MACHINE_SHOW_SELECT_PLAY_MODE, DEFAULT_MACHINE_SHOW_SELECT_PROFILE,
@@ -1428,6 +1428,7 @@ pub struct MachineFlowOptions {
     pub machine_show_select_style: bool,
     pub machine_show_select_play_mode: bool,
     pub machine_enable_replays: bool,
+    pub machine_enable_heart_rate_monitors: bool,
     pub machine_allow_per_player_global_offsets: bool,
     pub machine_pack_ini_offsets: bool,
     pub machine_default_sync_offset: DefaultSyncOffset,
@@ -1451,6 +1452,7 @@ impl Default for MachineFlowOptions {
             machine_show_select_style: DEFAULT_MACHINE_SHOW_SELECT_STYLE,
             machine_show_select_play_mode: DEFAULT_MACHINE_SHOW_SELECT_PLAY_MODE,
             machine_enable_replays: DEFAULT_MACHINE_ENABLE_REPLAYS,
+            machine_enable_heart_rate_monitors: DEFAULT_MACHINE_ENABLE_HEART_RATE_MONITORS,
             machine_allow_per_player_global_offsets:
                 DEFAULT_MACHINE_ALLOW_PER_PLAYER_GLOBAL_OFFSETS,
             machine_pack_ini_offsets: DEFAULT_MACHINE_PACK_INI_OFFSETS,
@@ -1514,6 +1516,10 @@ pub fn load_machine_flow_options(
             .get("Theme", "MachineEnableReplays")
             .and_then(|value| parse_loose_bool_str(&value))
             .unwrap_or(default.machine_enable_replays),
+        machine_enable_heart_rate_monitors: conf
+            .get("Theme", "MachineEnableHeartRateMonitors")
+            .and_then(|value| parse_loose_bool_str(&value))
+            .unwrap_or(default.machine_enable_heart_rate_monitors),
         machine_allow_per_player_global_offsets: conf
             .get("Theme", "MachineAllowPerPlayerGlobalOffsets")
             .and_then(|value| parse_loose_bool_str(&value))
@@ -1678,6 +1684,11 @@ pub fn push_theme_option_lines(
     );
     push_bool(
         content,
+        "MachineEnableHeartRateMonitors",
+        machine.machine_enable_heart_rate_monitors,
+    );
+    push_bool(
+        content,
         "MachineAllowPerPlayerGlobalOffsets",
         machine.machine_allow_per_player_global_offsets,
     );
@@ -1777,6 +1788,7 @@ mod tests {
             machine_show_select_style: true,
             machine_show_select_play_mode: true,
             machine_enable_replays: true,
+            machine_enable_heart_rate_monitors: false,
             machine_allow_per_player_global_offsets: false,
             machine_pack_ini_offsets: false,
             machine_default_sync_offset: DefaultSyncOffset::Null,
@@ -1825,6 +1837,7 @@ SelectMusicShortcutLoadSongs=KeyL\n\
 SelectMusicShortcutTestInput=KeyT\n\
 MachineShowSelectStyle=1\n\
 MachineEnableReplays=1\n\
+MachineEnableHeartRateMonitors=0\n\
 MachineAllowPerPlayerGlobalOffsets=0\n\
 MachinePackIniOffsets=0\n\
 MachineDefaultSyncOffset=NULL\n\
@@ -2364,6 +2377,7 @@ MachineEvaluationStyle=Default\n\
             MachineShowSelectStyle=0
             MachineShowSelectPlayMode=0
             MachineEnableReplays=0
+            MachineEnableHeartRateMonitors=1
             MachineAllowPerPlayerGlobalOffsets=1
             MachinePackIniOffsets=1
             MachineDefaultSyncOffset=ITG
@@ -2387,6 +2401,7 @@ MachineEvaluationStyle=Default\n\
         assert!(!loaded.machine_show_select_style);
         assert!(!loaded.machine_show_select_play_mode);
         assert!(!loaded.machine_enable_replays);
+        assert!(loaded.machine_enable_heart_rate_monitors);
         assert!(loaded.machine_allow_per_player_global_offsets);
         assert!(loaded.machine_pack_ini_offsets);
         assert_eq!(loaded.machine_default_sync_offset, DefaultSyncOffset::Itg);
@@ -2423,6 +2438,7 @@ MachineEvaluationStyle=Default\n\
             MachineShowSelectStyle=bad
             MachineShowSelectPlayMode=bad
             MachineEnableReplays=bad
+            MachineEnableHeartRateMonitors=bad
             MachineAllowPerPlayerGlobalOffsets=bad
             MachinePackIniOffsets=bad
             DefaultSyncOffset=ITG
@@ -2469,6 +2485,10 @@ MachineEvaluationStyle=Default\n\
         assert_eq!(
             loaded.machine_enable_replays,
             default.machine_enable_replays
+        );
+        assert_eq!(
+            loaded.machine_enable_heart_rate_monitors,
+            default.machine_enable_heart_rate_monitors
         );
         assert_eq!(
             loaded.machine_allow_per_player_global_offsets,

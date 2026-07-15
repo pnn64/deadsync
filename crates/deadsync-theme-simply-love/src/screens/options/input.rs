@@ -549,6 +549,9 @@ pub(super) fn apply_submenu_choice_delta(
                     SubRowId::Replays => {
                         crate::SimplyLoveMachineConfigRequest::EnableReplays(enabled)
                     }
+                    SubRowId::HeartRateMonitors => {
+                        crate::SimplyLoveMachineConfigRequest::EnableHeartRateMonitors(enabled)
+                    }
                     SubRowId::PerPlayerGlobalOffsets => {
                         crate::SimplyLoveMachineConfigRequest::AllowPerPlayerGlobalOffsets(enabled)
                     }

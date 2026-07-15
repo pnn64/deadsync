@@ -108,6 +108,7 @@ pub enum ItemId {
     MchVisualStyle,
     MchThemeVariant,
     MchReplays,
+    MchHeartRateMonitors,
     MchPerPlayerGlobalOffsets,
     MchPackIniOffsets,
     MchDefaultSyncOffset,

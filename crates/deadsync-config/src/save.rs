@@ -560,6 +560,7 @@ fn machine_flow_options(cfg: &Config) -> MachineFlowOptions {
         machine_show_select_style: cfg.machine_show_select_style,
         machine_show_select_play_mode: cfg.machine_show_select_play_mode,
         machine_enable_replays: cfg.machine_enable_replays,
+        machine_enable_heart_rate_monitors: cfg.machine_enable_heart_rate_monitors,
         machine_allow_per_player_global_offsets: cfg.machine_allow_per_player_global_offsets,
         machine_pack_ini_offsets: cfg.machine_pack_ini_offsets,
         machine_default_sync_offset: cfg.machine_default_sync_offset,

@@ -20,6 +20,7 @@ deadsync-chart = { path = "../deadsync-chart" }
 deadsync-config = { path = "../deadsync-config" }
 deadsync-core = { path = "../deadsync-core" }
 deadsync-gameplay = { path = "../deadsync-gameplay" }
+deadsync-heart-rate = { path = "../deadsync-heart-rate" }
 deadsync-input = { path = "../deadsync-input" }
 deadsync-input-fsr = { path = "../deadsync-input-fsr" }
 deadsync-input-native = { path = "../deadsync-input-native" }

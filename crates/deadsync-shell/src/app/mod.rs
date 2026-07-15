@@ -652,12 +652,17 @@ impl ScreensState {
                 screens::smx_assign::update(&mut self.smx_assign_state, delta_time, smx_assignment),
                 false,
             ),
-            CurrentScreen::PlayerOptions => (
-                self.player_options_state
-                    .as_mut()
-                    .and_then(|pos| player_options::update(pos, delta_time, asset_manager)),
-                false,
-            ),
+            CurrentScreen::PlayerOptions => {
+                if let Some(state) = self.player_options_state.as_mut() {
+                    crate::heart_rate::refresh_player_options(state);
+                }
+                (
+                    self.player_options_state
+                        .as_mut()
+                        .and_then(|pos| player_options::update(pos, delta_time, asset_manager)),
+                    false,
+                )
+            }
             CurrentScreen::Sandbox => {
                 sandbox::update(&mut self.sandbox_state, delta_time);
                 (None, false)
@@ -2058,6 +2063,7 @@ impl App {
         self.poll_score_import();
         self.poll_sync_analysis();
         self.sync_active_online_runtime_view();
+        crate::heart_rate::sync_runtime();
 
         let mut upload_us: u32 = 0;
         let mut draw_us: u32 = 0;
@@ -3322,6 +3328,7 @@ impl App {
             }),
             noteskin_catalog_view(),
             crate::smx_config::smx_gif_catalog_view(),
+            crate::heart_rate::devices_view(),
         ));
         true
     }
@@ -3358,6 +3365,7 @@ impl App {
             None,
             noteskin_catalog_view(),
             crate::smx_config::smx_gif_catalog_view(),
+            crate::heart_rate::devices_view(),
         );
         po_state.music_rate = music_rate;
         po_state.speed_mod =
@@ -5529,6 +5537,7 @@ impl App {
                     None,
                     noteskin_catalog_view(),
                     crate::smx_config::smx_gif_catalog_view(),
+                    crate::heart_rate::devices_view(),
                 ));
             }
         } else if target == CurrentScreen::Gameplay && prev == CurrentScreen::Gameplay {
@@ -5595,6 +5604,7 @@ impl App {
                     None,
                     noteskin_catalog_view(),
                     crate::smx_config::smx_gif_catalog_view(),
+                    crate::heart_rate::devices_view(),
                 ));
             }
         }

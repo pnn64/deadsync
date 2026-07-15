@@ -46,12 +46,14 @@ thread_local! {
     static GAME_TIME_CACHE: RefCell<TextCache<(u32, u8)>> = RefCell::new(HashMap::with_capacity(1024));
     static GAME_TIME_WIDTH_CACHE: RefCell<HashMap<(u32, u8), f32>> = RefCell::new(HashMap::with_capacity(1024));
     static LIVE_TIMING_PAIR_CACHE: RefCell<TextCache<(i32, i32)>> = RefCell::new(HashMap::with_capacity(4096));
+    static HEART_RATE_TEXT_CACHE: RefCell<TextCache<u16>> = RefCell::new(HashMap::with_capacity(256));
     static STR_REF_CACHE: RefCell<SharedStrCache> = RefCell::new(HashMap::with_capacity(512));
 }
 
 static DIGIT_TEXT: LazyLock<[Arc<str>; 10]> =
     LazyLock::new(|| ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"].map(Arc::<str>::from));
 static SLASH_TEXT: LazyLock<Arc<str>> = LazyLock::new(|| Arc::<str>::from("/"));
+static HEART_RATE_UNKNOWN_TEXT: LazyLock<Arc<str>> = LazyLock::new(|| Arc::<str>::from("--"));
 static LIVE_TIMING_LABELS: LazyLock<[Arc<str>; 3]> = LazyLock::new(|| {
     [
         Arc::<str>::from("Mean (64n/All [ms])"),
@@ -965,6 +967,93 @@ fn step_stats_pane_layout(
         notefield_width: notefield_width(state),
         wide: is_wide(),
     })
+}
+
+fn cached_heart_rate_text(bpm: u16) -> Arc<str> {
+    // Owner: render thread. Lifetime: session. Capacity: 512 readings. Misses
+    // only format one tiny integer; the cache saturates without pruning or
+    // destructor work on gameplay frames.
+    cached_text(&HEART_RATE_TEXT_CACHE, bpm, 512, || bpm.to_string())
+}
+
+fn heart_pulse_scale(elapsed: f32, bpm: u16) -> f32 {
+    if bpm == 0 || !elapsed.is_finite() {
+        return 1.0;
+    }
+    let period = 60.0 / f32::from(bpm);
+    let phase = elapsed.rem_euclid(period) / period;
+    if phase < 0.12 {
+        1.0 + 0.20 * (1.0 - phase / 0.12)
+    } else if (0.18..0.30).contains(&phase) {
+        1.0 + 0.09 * (1.0 - (phase - 0.18) / 0.12)
+    } else {
+        1.0
+    }
+}
+
+#[cfg(test)]
+mod heart_rate_tests {
+    use super::heart_pulse_scale;
+
+    #[test]
+    fn heart_pulse_repeats_at_the_reported_rate() {
+        let period = 60.0 / 120.0;
+        assert!((heart_pulse_scale(0.0, 120) - heart_pulse_scale(period, 120)).abs() < 0.0001);
+        assert!(heart_pulse_scale(0.0, 120) > heart_pulse_scale(0.10, 120));
+    }
+
+    #[test]
+    fn missing_rate_keeps_the_heart_still() {
+        assert_eq!(heart_pulse_scale(10.0, 0), 1.0);
+        assert_eq!(heart_pulse_scale(f32::NAN, 120), 1.0);
+    }
+}
+
+pub fn push_heart_rates(actors: &mut Vec<Actor>, state: &State, playfield_center_x: f32) {
+    let elapsed = state.gameplay.total_elapsed_in_screen();
+    for player_idx in 0..state.num_players() {
+        let side = gameplay_screen::runtime_profile_side(state, player_idx);
+        let side_idx = profile_data::player_side_index(side);
+        let reading = state.heart_rate_view.players[side_idx];
+        if !reading.configured {
+            continue;
+        }
+        let layout = step_stats_pane_layout(state, playfield_center_x, side);
+        let x_sign = if side == profile_data::PlayerSide::P1 {
+            1.0
+        } else {
+            -1.0
+        };
+        let x = layout.sidepane_center_x + x_sign * 94.0 * layout.banner_data_zoom;
+        let y = layout.sidepane_center_y - 37.0 * layout.banner_data_zoom;
+        let rgba = if side == profile_data::PlayerSide::P1 {
+            color::decorative_rgba(state.active_color_index())
+        } else {
+            color::decorative_rgba(state.active_color_index() - 2)
+        };
+        let alpha = if reading.connected {
+            rgba[3]
+        } else {
+            rgba[3] * 0.45
+        };
+        let bpm = reading.bpm.unwrap_or(0);
+        let pulse = heart_pulse_scale(elapsed, bpm);
+        let size = 19.0 * layout.banner_data_zoom * pulse;
+        let text = reading
+            .bpm
+            .map(cached_heart_rate_text)
+            .unwrap_or_else(|| Arc::clone(&HEART_RATE_UNKNOWN_TEXT));
+        actors.push(act!(sprite("heart.png"):
+            align(0.5, 0.5): xy(x, y): zoomto(size, size):
+            diffuse(rgba[0], rgba[1], rgba[2], alpha): z(72)
+        ));
+        actors.push(act!(text:
+            font("miso"): settext(text): align(0.0, 0.5): horizalign(left):
+            xy(x + 13.0 * layout.banner_data_zoom, y):
+            zoom(0.82 * layout.banner_data_zoom):
+            diffuse(rgba[0], rgba[1], rgba[2], alpha): z(72)
+        ));
+    }
 }
 
 fn song_info_text_zoom(layout: StepStatsPaneLayout) -> f32 {

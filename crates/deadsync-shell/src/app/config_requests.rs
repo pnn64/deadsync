@@ -113,6 +113,9 @@ pub(super) fn execute_machine(request: SimplyLoveMachineConfigRequest) {
         Request::VisualStyle(style) => config::update_visual_style(style),
         Request::SrpgVariant(variant) => config::update_srpg_variant(variant),
         Request::EnableReplays(enabled) => config::update_machine_enable_replays(enabled),
+        Request::EnableHeartRateMonitors(enabled) => {
+            config::update_machine_enable_heart_rate_monitors(enabled)
+        }
         Request::AllowPerPlayerGlobalOffsets(enabled) => {
             config::update_machine_allow_per_player_global_offsets(enabled)
         }

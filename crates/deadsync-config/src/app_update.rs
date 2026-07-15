@@ -322,6 +322,10 @@ pub fn set_machine_enable_replays(cfg: &mut Config, enabled: bool) -> bool {
     set_if_changed(&mut cfg.machine_enable_replays, enabled)
 }
 
+pub fn set_machine_enable_heart_rate_monitors(cfg: &mut Config, enabled: bool) -> bool {
+    set_if_changed(&mut cfg.machine_enable_heart_rate_monitors, enabled)
+}
+
 pub fn set_machine_allow_per_player_global_offsets(cfg: &mut Config, enabled: bool) -> bool {
     set_if_changed(&mut cfg.machine_allow_per_player_global_offsets, enabled)
 }

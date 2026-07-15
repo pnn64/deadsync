@@ -237,6 +237,26 @@ const NOTE_SKIN: CustomBinding = CustomBinding {
         )
     },
 };
+
+const HEART_RATE_MONITOR: CustomBinding = CustomBinding {
+    apply: |state, player_idx, row_id, delta, wrap| {
+        let Some(choice_idx) = choice::cycle_choice_index(state, player_idx, row_id, delta, wrap)
+        else {
+            return Outcome::NONE;
+        };
+        let device_id = state
+            .heart_rate_choice_ids
+            .get(choice_idx)
+            .cloned()
+            .unwrap_or(None);
+        state.player_profiles[player_idx].set_heart_rate_device_id(device_id.clone());
+        let (should_persist, side) = choice::persist_ctx(player_idx);
+        if should_persist {
+            gp::update_heart_rate_device_id_for_side(side, device_id);
+        }
+        Outcome::persisted()
+    },
+};
 const MINE_SKIN: CustomBinding = CustomBinding {
     apply: |state, player_idx, row_id, delta, wrap| {
         apply_noteskin_delta(
@@ -959,6 +979,7 @@ pub(super) fn build_main_rows(
     preferred_difficulty_index: [usize; PLAYER_SLOTS],
     session_music_rate: f32,
     noteskin_names: &[String],
+    heart_rate_choices: &[String],
     return_screen: Screen,
     fixed_stepchart: Option<&FixedStepchart>,
 ) -> RowMap {
@@ -1126,6 +1147,15 @@ pub(super) fn build_main_rows(
         .with_initial_choice_indices(initial_stepchart_choice_index)
         .with_choice_difficulty_indices(stepchart_choice_indices),
     );
+    if !heart_rate_choices.is_empty() {
+        b.push(Row::custom(
+            RowId::HeartRateMonitor,
+            lookup_key("PlayerOptions", "HeartRateMonitor"),
+            lookup_key("PlayerOptionsHelp", "HeartRateMonitorHelp"),
+            HEART_RATE_MONITOR,
+            heart_rate_choices.to_vec(),
+        ));
+    }
     b.push(
         Row::custom(
             RowId::WhatComesNext,

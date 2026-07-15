@@ -215,6 +215,7 @@ fn sequence_effects(first: ThemeEffect, second: ThemeEffect) -> ThemeEffect {
 }
 
 pub(crate) fn update(state: &mut gameplay::State, delta_time: f32) -> ThemeEffect {
+    crate::heart_rate::refresh_gameplay(state);
     let (run_core, lobby_effect) = gameplay::prepare_update(state);
     if !run_core {
         return lobby_effect;

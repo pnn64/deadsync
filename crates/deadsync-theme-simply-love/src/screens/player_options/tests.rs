@@ -1574,6 +1574,7 @@ pub(super) mod tests {
             None,
             test_noteskin_catalog(),
             deadsync_theme::views::SmxGifCatalogView::default(),
+            super::HeartRateDevicesView::default(),
         );
         let active = session_active_players();
         let first_row = state.pane().selected_row[P1];
@@ -1616,6 +1617,7 @@ pub(super) mod tests {
             None,
             test_noteskin_catalog(),
             deadsync_theme::views::SmxGifCatalogView::default(),
+            super::HeartRateDevicesView::default(),
         );
         let active = session_active_players();
         let last_row = state.pane().row_map.len().saturating_sub(1);
@@ -1652,6 +1654,7 @@ pub(super) mod tests {
             None,
             test_noteskin_catalog(),
             deadsync_theme::views::SmxGifCatalogView::default(),
+            super::HeartRateDevicesView::default(),
         );
         (state, asset_manager)
     }
@@ -1672,8 +1675,39 @@ pub(super) mod tests {
             None,
             test_noteskin_catalog(),
             deadsync_theme::views::SmxGifCatalogView::default(),
+            super::HeartRateDevicesView::default(),
         );
         (state, asset_manager)
+    }
+
+    #[test]
+    fn heart_rate_choices_keep_saved_devices_that_are_not_broadcasting() {
+        ensure_i18n();
+        let mut p1 = Profile::default();
+        p1.heart_rate_device_id = Some("saved-id".to_owned());
+        let profiles = [p1, Profile::default()];
+        let devices = super::HeartRateDevicesView {
+            supported: true,
+            scanning: true,
+            devices: vec![super::HeartRateDeviceView {
+                id: "nearby-id".to_owned(),
+                label: "Nearby HRM".to_owned(),
+            }],
+            error: None,
+        };
+
+        let (choices, ids) = super::heart_rate_choices(&devices, &profiles);
+
+        assert_eq!(
+            ids,
+            vec![
+                None,
+                Some("nearby-id".to_owned()),
+                Some("saved-id".to_owned())
+            ]
+        );
+        assert!(choices[1].contains("Nearby HRM"));
+        assert_eq!(choices[2], "Saved: saved-id");
     }
 
     fn assert_sfx(effect: &ThemeEffect, expected_path: &str) {
@@ -2445,6 +2479,7 @@ pub(super) mod tests {
 
     fn build_all_pane_row_maps(state: &super::State) -> Vec<(super::OptionsPane, RowMap)> {
         let noteskin_names = test_noteskin_catalog().names;
+        let heart_rate_choices = vec!["Off".to_owned()];
         [
             super::OptionsPane::Main,
             super::OptionsPane::Display,
@@ -2463,6 +2498,7 @@ pub(super) mod tests {
                 &noteskin_names,
                 &[],
                 &[],
+                &heart_rate_choices,
                 Screen::SelectMusic,
                 state.fixed_stepchart.as_ref(),
             );
@@ -2484,6 +2520,7 @@ pub(super) mod tests {
             state.music_rate,
             super::OptionsPane::Advanced,
             &noteskin_names,
+            &[],
             &[],
             &[],
             return_screen,
@@ -2988,6 +3025,7 @@ pub(super) mod tests {
             &noteskin_names,
             &[],
             &[],
+            &[],
             Screen::SelectMusic,
             state.fixed_stepchart.as_ref(),
         );
@@ -3042,6 +3080,7 @@ pub(super) mod tests {
             state.music_rate,
             super::OptionsPane::Display,
             &noteskin_names,
+            &[],
             &[],
             &[],
             Screen::SelectMusic,
@@ -3101,6 +3140,7 @@ pub(super) mod tests {
             &noteskin_names,
             &[],
             &[],
+            &[],
             Screen::SelectMusic,
             state.fixed_stepchart.as_ref(),
         );
@@ -3112,6 +3152,7 @@ pub(super) mod tests {
             state.music_rate,
             super::OptionsPane::Display,
             &noteskin_names,
+            &[],
             &[],
             &[],
             Screen::SelectMusic,
@@ -3186,6 +3227,7 @@ pub(super) mod tests {
             state.music_rate,
             super::OptionsPane::Advanced,
             &noteskin_names,
+            &[],
             &[],
             &[],
             Screen::SelectMusic,

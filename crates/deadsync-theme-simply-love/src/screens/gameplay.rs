@@ -523,6 +523,18 @@ pub struct SmxSensorPadView {
     pub panels: [SmxSensorPanelView; SMX_SENSOR_PANEL_COUNT],
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct HeartRatePlayerView {
+    pub configured: bool,
+    pub connected: bool,
+    pub bpm: Option<u16>,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct HeartRateView {
+    pub players: [HeartRatePlayerView; MAX_PLAYERS],
+}
+
 pub struct State {
     pub gameplay: GameplayCoreState,
     pub noteskin_assets: GameplayNoteskinAssets,
@@ -557,6 +569,7 @@ pub struct State {
     pub background_transition_start_time: f32,
     pub song_lua_sound_paths: Vec<PathBuf>,
     smx_sensor_views: [Option<SmxSensorPadView>; 2],
+    pub heart_rate_view: HeartRateView,
     // Time banked toward the next shell-owned sensor refresh. Seeded to fire on
     // the first frame.
     smx_sensor_refresh_accum: f32,
@@ -677,6 +690,7 @@ impl State {
             background_transition_start_time,
             song_lua_sound_paths,
             smx_sensor_views: [None, None],
+            heart_rate_view: HeartRateView::default(),
             smx_sensor_refresh_accum: SMX_SENSOR_REFRESH_INTERVAL,
             song_lua_overlay_order,
             song_lua_background_visual_layer_orders,
@@ -2462,6 +2476,14 @@ pub fn set_smx_sensor_pad_view(
     if let Some(slot) = state.smx_sensor_views.get_mut(store_idx) {
         *slot = view;
     }
+}
+
+pub fn set_heart_rate_view(state: &mut State, view: HeartRateView) {
+    state.heart_rate_view = view;
+}
+
+pub fn runtime_profile_side(state: &State, player_idx: usize) -> profile_data::PlayerSide {
+    profile_side_from_gameplay(state.runtime_player_side(player_idx))
 }
 
 pub fn smx_sensor_profile_enabled() -> bool {
@@ -10295,6 +10317,7 @@ pub fn push_actors(
                 );
             }
         }
+        gameplay_stats::push_heart_rates(&mut actors, state, playfield_center_x);
         song_lua_capture_new_actors(&mut underlay_proxy_source, &mut actors, underlay_tail_start);
     }
     let song_foreground_state = song_lua_song_foreground_state(state);

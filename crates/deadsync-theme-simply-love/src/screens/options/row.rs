@@ -95,6 +95,7 @@ pub enum SubRowId {
     VisualStyle,
     ThemeVariant,
     Replays,
+    HeartRateMonitors,
     PerPlayerGlobalOffsets,
     PackIniOffsets,
     DefaultSyncOffset,

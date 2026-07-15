@@ -12,6 +12,7 @@ mod gameplay_entry;
 mod gameplay_prewarm;
 mod gameplay_runtime;
 mod graphics;
+mod heart_rate;
 mod input;
 mod input_backend;
 mod input_trace;

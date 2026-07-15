@@ -81,6 +81,7 @@ pub(super) fn build_rows(
     noteskin_names: &[String],
     smx_bg_pack_names: &[String],
     smx_judge_pack_names: &[String],
+    heart_rate_choices: &[String],
     return_screen: Screen,
     fixed_stepchart: Option<&FixedStepchart>,
 ) -> RowMap {
@@ -92,6 +93,7 @@ pub(super) fn build_rows(
             preferred_difficulty_index,
             session_music_rate,
             noteskin_names,
+            heart_rate_choices,
             return_screen,
             fixed_stepchart,
         ),
