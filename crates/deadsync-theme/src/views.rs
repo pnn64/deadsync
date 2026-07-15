@@ -16,7 +16,7 @@ use std::sync::Arc;
 /// Shell-prepared audio clock values used by theme preview presentation.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct AudioPlaybackView {
-    pub music_stream_position_seconds: f64,
+    pub music_position_seconds: f64,
 }
 
 /// One shell-resolved application path and its platform-friendly label.

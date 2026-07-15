@@ -36,8 +36,8 @@ impl App {
             } else {
                 Default::default()
             };
-        let music_stream_position_seconds = if deadsync_audio_stream::is_initialized() {
-            f64::from(deadsync_audio_stream::get_music_stream_position_seconds())
+        let music_position_seconds = if deadsync_audio_stream::is_initialized() {
+            f64::from(deadsync_audio_stream::get_music_stream_clock_snapshot().music_seconds)
         } else {
             0.0
         };
@@ -140,7 +140,7 @@ impl App {
             &mut self.state.screens.select_music_state,
             SelectMusicRuntimeView {
                 audio_playback: AudioPlaybackView {
-                    music_stream_position_seconds,
+                    music_position_seconds,
                 },
                 lobby,
                 downloads,

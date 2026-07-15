@@ -484,23 +484,13 @@ fn beat_at_sec(song: &SongData, target_sec: f64) -> f64 {
 
 #[inline(always)]
 fn preview_song_sec(state: &State) -> Option<f64> {
-    let start_sec = f64::from(state.currently_playing_preview_start_sec?);
-    let length_sec = f64::from(state.currently_playing_preview_length_sec?);
-    let stream_sec = state.audio_playback.music_stream_position_seconds;
-    if !stream_sec.is_finite() || stream_sec < 0.0 {
+    state.currently_playing_preview_start_sec?;
+    state.currently_playing_preview_length_sec?;
+    let music_sec = state.audio_playback.music_position_seconds;
+    if !music_sec.is_finite() {
         return None;
     }
-    let rate = profile::get_session_music_rate();
-    let rate = f64::from(if rate.is_finite() && rate > 0.0 {
-        rate
-    } else {
-        1.0
-    });
-    let mut rel_song_sec = stream_sec * rate;
-    if length_sec.is_finite() && length_sec > 0.0 {
-        rel_song_sec = rel_song_sec.rem_euclid(length_sec);
-    }
-    Some(start_sec + rel_song_sec)
+    Some(music_sec)
 }
 
 #[inline(always)]
@@ -13377,7 +13367,7 @@ mod tests {
     }
 
     #[test]
-    fn preview_time_uses_the_shell_prepared_audio_view() {
+    fn preview_time_uses_shell_music_position() {
         let mut state = init_placeholder();
         state.currently_playing_preview_start_sec = Some(10.0);
         state.currently_playing_preview_length_sec = Some(8.0);
@@ -13385,7 +13375,7 @@ mod tests {
             &mut state,
             crate::views::SelectMusicRuntimeView {
                 audio_playback: deadsync_theme::views::AudioPlaybackView {
-                    music_stream_position_seconds: 2.5,
+                    music_position_seconds: 12.5,
                 },
                 lobby: Default::default(),
                 downloads: vec![crate::views::SelectMusicDownloadView {
@@ -13457,15 +13447,7 @@ mod tests {
             state.policy.presentation.breakdown_style,
             crate::config::BreakdownStyle::Sn
         );
-        let rate = deadsync_profile::compat::get_session_music_rate();
-        let rate = f64::from(if rate.is_finite() && rate > 0.0 {
-            rate
-        } else {
-            1.0
-        });
-
-        let expected = 10.0 + (2.5 * rate).rem_euclid(8.0);
-        assert_eq!(super::preview_song_sec(&state), Some(expected));
+        assert_eq!(super::preview_song_sec(&state), Some(12.5));
     }
 
     #[test]
