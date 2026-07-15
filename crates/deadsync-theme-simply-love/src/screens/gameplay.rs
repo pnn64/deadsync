@@ -3,6 +3,9 @@ use crate::assets::AssetManager;
 use crate::assets::i18n::{tr, tr_fmt};
 use crate::assets::sprite_sheet_dims;
 use crate::assets::{FontRole, current_machine_font_key, visual_styles};
+use crate::screens::components::gameplay::score_counter::{
+    ScoreCounterParams, prewarm_score_counter_layout, push_score_counter,
+};
 use crate::screens::components::gameplay::{gameplay_stats, notefield, step_stats_gifs};
 use crate::screens::components::shared::banner as shared_banner;
 use crate::screens::components::shared::gs_scorebox;
@@ -10,7 +13,9 @@ use crate::screens::components::shared::lobby_hud;
 use crate::screens::components::shared::screen_bar::{self, AvatarParams, ScreenBarParams};
 use crate::screens::{Screen, ThemeEffect};
 use crate::views::SimplyLoveLobbyRuntimeView;
-use deadlib_present::actors::{Actor, SizeSpec, SpriteSource, TextAttribute, TextContent};
+use deadlib_present::actors::{
+    Actor, SizeSpec, SpriteSource, TextAlign, TextAttribute, TextContent,
+};
 use deadlib_present::anim::EffectState;
 use deadlib_present::cache::{TextCache, cached_text};
 use deadlib_present::color;
@@ -2561,7 +2566,6 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
 }
 
 thread_local! {
-    static SCORE_2DP_CACHE: RefCell<TextCache<u32>> = RefCell::new(HashMap::with_capacity(1024));
     static RATE_TEXT_CACHE: RefCell<TextCache<u32>> = RefCell::new(HashMap::with_capacity(128));
     static BPM_TEXT_CACHE: RefCell<TextCache<(u64, bool)>> = RefCell::new(HashMap::with_capacity(512));
     static LIFE_PERCENT_TEXT_CACHE: RefCell<TextCache<u32>> =
@@ -2587,16 +2591,6 @@ fn empty_text() -> Arc<str> {
 }
 
 #[inline(always)]
-fn quantize_centi_u32(value: f64) -> u32 {
-    let value = if value.is_finite() {
-        value.max(0.0)
-    } else {
-        0.0
-    };
-    ((value * 100.0).round()).clamp(0.0, u32::MAX as f64) as u32
-}
-
-#[inline(always)]
 fn quantize_tenths_u32(value: f32) -> u32 {
     let value = if value.is_finite() {
         value.max(0.0)
@@ -2604,14 +2598,6 @@ fn quantize_tenths_u32(value: f32) -> u32 {
         0.0
     };
     ((value * 10.0).round()).clamp(0.0, u32::MAX as f32) as u32
-}
-
-#[inline(always)]
-fn cached_score_2dp(value: f64) -> Arc<str> {
-    let key = quantize_centi_u32(value);
-    cached_text(&SCORE_2DP_CACHE, key, TEXT_CACHE_LIMIT, || {
-        format!("{:.2}", key as f64 / 100.0)
-    })
 }
 
 #[inline(always)]
@@ -2779,15 +2765,7 @@ pub fn prewarm_text_layout(
     state: &State,
 ) {
     let cfg = crate::config::get();
-    for centi in 0..=10_000 {
-        let text = cached_score_2dp(centi as f64 / 100.0);
-        cache.prewarm_text(
-            fonts,
-            current_machine_font_key(FontRole::Numbers),
-            text.as_ref(),
-            None,
-        );
-    }
+    prewarm_score_counter_layout(cache, fonts, current_machine_font_key(FontRole::Numbers));
     for tenths in 0..=1_000 {
         let text = cached_life_percent_text(tenths as f32 / 10.0);
         cache.prewarm_text(fonts, "miso", text.as_ref(), None);
@@ -9752,35 +9730,39 @@ pub fn push_actors(
             if !profile.hide_score && !hide_score_for_top_graph && !score_in_versus_step_stats {
                 let show_ex_score = profile.show_ex_score;
                 let show_hard_ex_score = show_ex_score && profile.show_hard_ex_score;
-                let (score_text, score_color) = if show_ex_score {
+                let (score_value, score_color) = if show_ex_score {
                     let blue_window_ms = player_blue_window_ms(state, player_idx);
                     let ex_percent = state.display_gameplay_ex_score_percent(
                         player_idx,
                         score_display_mode_from_profile(profile.score_display_mode),
                         blue_window_ms,
                     );
-                    (
-                        cached_score_2dp(ex_percent.max(0.0)),
-                        color::JUDGMENT_RGBA[0],
-                    )
+                    (ex_percent.max(0.0), color::JUDGMENT_RGBA[0])
                 } else {
                     let score_percent = state.display_gameplay_itg_score_percent(
                         player_idx,
                         score_display_mode_from_profile(profile.score_display_mode),
                     );
-                    (cached_score_2dp(score_percent), [1.0, 1.0, 1.0, 1.0])
+                    (score_percent, [1.0, 1.0, 1.0, 1.0])
                 };
 
                 let is_p2_side = player_side == profile_data::PlayerSide::P2;
                 // Arrow Cloud parity: EX remains the "normal" score position/anchor.
                 // H.EX is placed at a different x on P2 so it appears to the left of EX.
-                actors.push(act!(text:
-                    font(current_machine_font_key(FontRole::Numbers)): settext(score_text):
-                    align(1.0, 1.0): xy(score_x, score_y):
-                    zoom(score_zoom): horizalign(right):
-                    diffuse(score_color[0], score_color[1], score_color[2], score_color[3]):
-                    z(90)
-                ));
+                push_score_counter(
+                    actors,
+                    asset_manager.fonts(),
+                    ScoreCounterParams {
+                        value: score_value,
+                        font: current_machine_font_key(FontRole::Numbers),
+                        position: [score_x, score_y],
+                        align: [1.0, 1.0],
+                        text_align: TextAlign::Right,
+                        zoom: score_zoom,
+                        color: score_color,
+                        z: 90,
+                    },
+                );
 
                 if show_hard_ex_score {
                     let blue_window_ms = player_blue_window_ms(state, player_idx);
@@ -9807,25 +9789,24 @@ pub fn push_actors(
                     };
                     let hard_ex_zoom = step_stats_score_pos.map_or(0.25, |_| 0.13);
 
-                    if is_p2_side {
-                        actors.push(act!(text:
-                            font(current_machine_font_key(FontRole::Numbers)):
-                            settext(cached_score_2dp(hard_ex_percent.max(0.0))):
-                            align(1.0, 0.0): xy(hard_ex_x, hard_ex_y):
-                            zoom(hard_ex_zoom): horizalign(right):
-                            diffuse(hex[0], hex[1], hex[2], hex[3]):
-                            z(90)
-                        ));
-                    } else {
-                        actors.push(act!(text:
-                            font(current_machine_font_key(FontRole::Numbers)):
-                            settext(cached_score_2dp(hard_ex_percent.max(0.0))):
-                            align(0.0, 0.0): xy(hard_ex_x, hard_ex_y):
-                            zoom(hard_ex_zoom): horizalign(left):
-                            diffuse(hex[0], hex[1], hex[2], hex[3]):
-                            z(90)
-                        ));
-                    }
+                    push_score_counter(
+                        actors,
+                        asset_manager.fonts(),
+                        ScoreCounterParams {
+                            value: hard_ex_percent.max(0.0),
+                            font: current_machine_font_key(FontRole::Numbers),
+                            position: [hard_ex_x, hard_ex_y],
+                            align: if is_p2_side { [1.0, 0.0] } else { [0.0, 0.0] },
+                            text_align: if is_p2_side {
+                                TextAlign::Right
+                            } else {
+                                TextAlign::Left
+                            },
+                            zoom: hard_ex_zoom,
+                            color: hex,
+                            z: 90,
+                        },
+                    );
                 }
             }
         }

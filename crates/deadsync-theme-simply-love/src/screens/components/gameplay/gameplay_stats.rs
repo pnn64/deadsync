@@ -2,6 +2,9 @@ use crate::act;
 use crate::assets::AssetManager;
 use crate::assets::i18n::{LookupKey, lookup_key, tr};
 use crate::assets::{FontRole, current_machine_font_key};
+use crate::screens::components::gameplay::score_counter::{
+    ScoreCounterParams, prewarm_score_counter_layout, push_score_counter,
+};
 use crate::screens::components::gameplay::step_stats_gifs;
 use crate::screens::components::shared::gs_scorebox;
 use crate::screens::gameplay::{self as gameplay_screen, State};
@@ -10,7 +13,7 @@ use crate::step_stats::{
     STEP_STATS_BANNER_H, STEP_STATS_BANNER_W, StepStatsGraphRect, StepStatsPaneLayout,
     StepStatsPaneParams,
 };
-use deadlib_present::actors::{Actor, SizeSpec};
+use deadlib_present::actors::{Actor, SizeSpec, TextAlign};
 use deadlib_present::cache::{SharedStrCache, TextCache, cached_shared_str, cached_text};
 use deadlib_present::color;
 use deadlib_present::compose::TextLayoutCache;
@@ -49,7 +52,6 @@ thread_local! {
     static PADDED_BRIGHT_CACHE: RefCell<TextCache<(u32, u8)>> = RefCell::new(HashMap::with_capacity(2048));
     static BLUE_WINDOW_LABEL_CACHE: RefCell<TextCache<i32>> = RefCell::new(HashMap::with_capacity(64));
     static PEAK_NPS_CACHE: RefCell<TextCache<u32>> = RefCell::new(HashMap::with_capacity(512));
-    static SCORE_2DP_CACHE: RefCell<TextCache<u32>> = RefCell::new(HashMap::with_capacity(1024));
     static GAME_TIME_CACHE: RefCell<TextCache<(u32, u8)>> = RefCell::new(HashMap::with_capacity(1024));
     static GAME_TIME_WIDTH_CACHE: RefCell<HashMap<(u32, u8), f32>> = RefCell::new(HashMap::with_capacity(1024));
     static LIVE_TIMING_PAIR_CACHE: RefCell<TextCache<(i32, i32)>> = RefCell::new(HashMap::with_capacity(4096));
@@ -530,24 +532,6 @@ fn cached_peak_nps_text(peak: f32) -> Arc<str> {
 }
 
 #[inline(always)]
-fn quantize_centi_u32(value: f64) -> u32 {
-    let value = if value.is_finite() {
-        value.max(0.0)
-    } else {
-        0.0
-    };
-    ((value * 100.0).round()).clamp(0.0, u32::MAX as f64) as u32
-}
-
-#[inline(always)]
-fn cached_score_2dp(value: f64) -> Arc<str> {
-    let key = quantize_centi_u32(value);
-    cached_text(&SCORE_2DP_CACHE, key, TEXT_CACHE_LIMIT, || {
-        format!("{:.2}", key as f64 / 100.0)
-    })
-}
-
-#[inline(always)]
 fn cached_game_time(seconds: u32, mode: u8) -> Arc<str> {
     cached_text(&GAME_TIME_CACHE, (seconds, mode), TEXT_CACHE_LIMIT, || {
         let seconds = seconds as u64;
@@ -761,6 +745,7 @@ pub fn prewarm_text_layout(
     asset_manager: &AssetManager,
     state: &State,
 ) {
+    prewarm_score_counter_layout(cache, fonts, current_machine_font_key(FontRole::Numbers));
     let mut max_count = 0u32;
     for player in 0..state.num_players() {
         let totals = state.display_totals_for_player(player);
@@ -1374,18 +1359,16 @@ pub fn push_versus_step_stats(
             continue;
         }
 
-        let (score_text, score_color) = if player_profile.show_ex_score {
+        let (score_value, score_color) = if player_profile.show_ex_score {
             let blue_window_ms = player_blue_window_ms(state, player_idx);
             (
-                cached_score_2dp(
-                    state
-                        .display_gameplay_ex_score_percent(
-                            player_idx,
-                            score_display_mode_from_profile(player_profile.score_display_mode),
-                            blue_window_ms,
-                        )
-                        .max(0.0),
-                ),
+                state
+                    .display_gameplay_ex_score_percent(
+                        player_idx,
+                        score_display_mode_from_profile(player_profile.score_display_mode),
+                        blue_window_ms,
+                    )
+                    .max(0.0),
                 color::JUDGMENT_RGBA[0],
             )
         } else {
@@ -1393,19 +1376,23 @@ pub fn push_versus_step_stats(
                 player_idx,
                 score_display_mode_from_profile(player_profile.score_display_mode),
             );
-            (cached_score_2dp(score_percent), [1.0, 1.0, 1.0, 1.0])
+            (score_percent, [1.0, 1.0, 1.0, 1.0])
         };
         let x = center_x + if player_idx == 0 { -7.0 } else { 65.0 };
-        actors.push(act!(text:
-            font(current_machine_font_key(FontRole::Numbers)):
-            settext(score_text):
-            align(1.0, 1.0):
-            horizalign(right):
-            xy(x, screen_center_y() - 150.0):
-            zoom(0.25):
-            diffuse(score_color[0], score_color[1], score_color[2], score_color[3]):
-            z(z_fg)
-        ));
+        push_score_counter(
+            actors,
+            asset_manager.fonts(),
+            ScoreCounterParams {
+                value: score_value,
+                font: current_machine_font_key(FontRole::Numbers),
+                position: [x, screen_center_y() - 150.0],
+                align: [1.0, 1.0],
+                text_align: TextAlign::Right,
+                zoom: 0.25,
+                color: score_color,
+                z: z_fg,
+            },
+        );
 
         if player_profile.show_ex_score && player_profile.show_hard_ex_score {
             let blue_window_ms = player_blue_window_ms(state, player_idx);
@@ -1415,29 +1402,28 @@ pub fn push_versus_step_stats(
                 blue_window_ms,
             );
             let hex = color::HARD_EX_SCORE_RGBA;
-            if player_idx == 0 {
-                actors.push(act!(text:
-                    font(current_machine_font_key(FontRole::Numbers)):
-                    settext(cached_score_2dp(hard_ex_percent.max(0.0))):
-                    align(0.0, 0.0):
-                    horizalign(left):
-                    xy(x + 1.0, screen_center_y() - 154.0):
-                    zoom(0.13):
-                    diffuse(hex[0], hex[1], hex[2], hex[3]):
-                    z(z_fg)
-                ));
-            } else {
-                actors.push(act!(text:
-                    font(current_machine_font_key(FontRole::Numbers)):
-                    settext(cached_score_2dp(hard_ex_percent.max(0.0))):
-                    align(1.0, 0.0):
-                    horizalign(right):
-                    xy(x - 52.0, screen_center_y() - 154.0):
-                    zoom(0.13):
-                    diffuse(hex[0], hex[1], hex[2], hex[3]):
-                    z(z_fg)
-                ));
-            }
+            let is_p1 = player_idx == 0;
+            push_score_counter(
+                actors,
+                asset_manager.fonts(),
+                ScoreCounterParams {
+                    value: hard_ex_percent.max(0.0),
+                    font: current_machine_font_key(FontRole::Numbers),
+                    position: [
+                        if is_p1 { x + 1.0 } else { x - 52.0 },
+                        screen_center_y() - 154.0,
+                    ],
+                    align: if is_p1 { [0.0, 0.0] } else { [1.0, 0.0] },
+                    text_align: if is_p1 {
+                        TextAlign::Left
+                    } else {
+                        TextAlign::Right
+                    },
+                    zoom: 0.13,
+                    color: hex,
+                    z: z_fg,
+                },
+            );
         }
     }
 

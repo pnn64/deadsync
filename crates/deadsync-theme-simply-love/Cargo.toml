@@ -5,7 +5,13 @@ edition = "2024"
 license = "GPL-3.0"
 
 [features]
+bench-support = []
 test-support = []
+
+[[bench]]
+name = "score_counter"
+harness = false
+required-features = ["bench-support"]
 
 [dependencies]
 deadlib-assets = { path = "../deadlib-assets" }
