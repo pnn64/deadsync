@@ -16,8 +16,8 @@ const POSITIVE_GREEN: [f32; 4] = [0.0, 1.0, 0.0, 1.0];
 const NEGATIVE_RED: [f32; 4] = [1.0, 0.0, 0.0, 1.0];
 const WHITE: [f32; 4] = [1.0, 1.0, 1.0, 1.0];
 const BLACK: [f32; 4] = [0.0, 0.0, 0.0, 1.0];
-const BODY_FONT_HEIGHT: f32 = 19.0;
-const BODY_LINE_SPACING: f32 = 24.0;
+const BODY_FALLBACK_HEIGHT: f32 = 15.0;
+const BODY_FALLBACK_SPACING: f32 = 24.0;
 const UPPER_ROW_HEIGHT: f32 = 25.0;
 const UPPER_HEADER_FONT: &str = "wendy";
 const OVERLAY_ROW_HEIGHT: f32 = 24.0;
@@ -317,6 +317,12 @@ struct BodyLayout {
     zoom: f32,
 }
 
+#[derive(Clone, Copy)]
+struct BodyBounds {
+    top_y: f32,
+    max_height: f32,
+}
+
 struct HeaderLayout {
     text: String,
     zoom: f32,
@@ -382,14 +388,14 @@ where
 fn body_layout_with_measure<F>(
     text: &str,
     pane_width: f32,
-    pane_height: f32,
-    row_height: f32,
+    max_height: f32,
+    font_height: f32,
+    line_spacing: f32,
     mut measure: F,
 ) -> BodyLayout
 where
     F: FnMut(&str) -> f32,
 {
-    let max_height = pane_height - row_height * 1.5;
     let mut best = BodyLayout {
         text: text.to_string(),
         zoom: 0.1,
@@ -399,7 +405,7 @@ where
         let zoom = zoom_step as f32 / 20.0;
         let wrapped = wrap_text_with_measure(text, pane_width, zoom, &mut measure);
         let line_count = wrapped.split('\n').count().max(1) as f32;
-        let block_height = BODY_FONT_HEIGHT + (line_count - 1.0).max(0.0) * BODY_LINE_SPACING;
+        let block_height = font_height + (line_count - 1.0).max(0.0) * line_spacing;
         let layout = BodyLayout {
             text: wrapped,
             zoom,
@@ -451,25 +457,44 @@ where
 }
 
 #[inline(always)]
+fn body_bounds(pane_height: f32, row_height: f32, bottom_reserved: f32) -> BodyBounds {
+    BodyBounds {
+        top_y: -pane_height * 0.5 + row_height * 1.5,
+        max_height: pane_height - row_height * 1.5 - bottom_reserved,
+    }
+}
+
+#[inline(always)]
 fn body_layout(
     asset_manager: &AssetManager,
     text: &str,
     pane_width: f32,
-    pane_height: f32,
-    row_height: f32,
+    max_height: f32,
 ) -> BodyLayout {
     asset_manager
         .with_fonts(|all_fonts| {
             asset_manager.with_font("miso", |miso_font| {
-                body_layout_with_measure(text, pane_width, pane_height, row_height, |candidate| {
-                    font::measure_line_width_logical(miso_font, candidate, all_fonts) as f32
-                })
+                body_layout_with_measure(
+                    text,
+                    pane_width,
+                    max_height,
+                    miso_font.height.max(1) as f32,
+                    miso_font.line_spacing.max(1) as f32,
+                    |candidate| {
+                        font::measure_line_width_logical(miso_font, candidate, all_fonts) as f32
+                    },
+                )
             })
         })
         .unwrap_or_else(|| {
-            body_layout_with_measure(text, pane_width, pane_height, row_height, |candidate| {
-                candidate.chars().count() as f32 * 8.0
-            })
+            body_layout_with_measure(
+                text,
+                pane_width,
+                max_height,
+                BODY_FALLBACK_HEIGHT,
+                BODY_FALLBACK_SPACING,
+                |candidate| candidate.chars().count() as f32 * 8.0,
+            )
         })
 }
 
@@ -653,23 +678,16 @@ fn build_body_text(
     asset_manager: &AssetManager,
     text: String,
     wrap_width: f32,
-    pane_height: f32,
-    row_height: f32,
+    bounds: BodyBounds,
     default_number_color: [f32; 4],
     z: i16,
 ) -> Actor {
-    let layout = body_layout(
-        asset_manager,
-        text.as_str(),
-        wrap_width,
-        pane_height,
-        row_height,
-    );
+    let layout = body_layout(asset_manager, text.as_str(), wrap_width, bounds.max_height);
     let mut actor = act!(text:
         font("miso"):
         settext(layout.text):
         align(0.5, 0.0):
-        xy(0.0, -pane_height * 0.5 + row_height * 1.5):
+        xy(0.0, bounds.top_y):
         zoom(layout.zoom):
         wrapwidthpixels(wrap_width / layout.zoom):
         horizalign(center):
@@ -880,8 +898,7 @@ fn build_upper_panel(
         asset_manager,
         build_box_body(progress),
         pane_width - border_width,
-        pane_height,
-        UPPER_ROW_HEIGHT,
+        body_bounds(pane_height, UPPER_ROW_HEIGHT, 0.0),
         event_color,
         2,
     ));
@@ -913,6 +930,11 @@ fn build_overlay_panel(
     let header_y = -pane_height * 0.5 + 12.0;
     let header_bar_y = -pane_height * 0.5 + OVERLAY_ROW_HEIGHT * 0.5;
     let has_more_info = progress.overlay_pages.len() > 1;
+    let bottom_reserved = if has_more_info {
+        OVERLAY_ROW_HEIGHT
+    } else {
+        0.0
+    };
     let single_player = pane_width > OVERLAY_LB_GRID_W;
     let mut children = Vec::with_capacity(11 + OVERLAY_LB_ROWS * 5);
     children.push(act!(quad:
@@ -984,8 +1006,7 @@ fn build_overlay_panel(
             asset_manager,
             text.clone(),
             pane_width,
-            pane_height,
-            OVERLAY_ROW_HEIGHT,
+            body_bounds(pane_height, OVERLAY_ROW_HEIGHT, bottom_reserved),
             event_color,
             4,
         )),
@@ -993,8 +1014,7 @@ fn build_overlay_panel(
             asset_manager,
             build_overlay_body(progress),
             pane_width,
-            pane_height,
-            OVERLAY_ROW_HEIGHT,
+            body_bounds(pane_height, OVERLAY_ROW_HEIGHT, bottom_reserved),
             event_color,
             4,
         )),
@@ -1154,7 +1174,8 @@ pub fn build_event_overlay(
 #[cfg(test)]
 mod tests {
     use super::{
-        OVERLAY_ROW_HEIGHT, UPPER_ROW_HEIGHT, body_layout_with_measure, header_layout_with_measure,
+        BODY_FALLBACK_HEIGHT, BODY_FALLBACK_SPACING, OVERLAY_ROW_HEIGHT, UPPER_ROW_HEIGHT,
+        body_layout_with_measure, header_layout_with_measure,
     };
 
     #[test]
@@ -1162,15 +1183,17 @@ mod tests {
         let short = body_layout_with_measure(
             "Completed the \"Short Achievement\" Achievement!",
             330.0,
-            360.0,
-            OVERLAY_ROW_HEIGHT,
+            360.0 - OVERLAY_ROW_HEIGHT * 2.5,
+            BODY_FALLBACK_HEIGHT,
+            BODY_FALLBACK_SPACING,
             |candidate| candidate.chars().count() as f32 * 8.0,
         );
         let long = body_layout_with_measure(
             "Completed the \"This Achievement Title Is Extremely Long And Should Wrap Instead Of Shrinking The Popup Text\" Achievement!",
             330.0,
-            360.0,
-            OVERLAY_ROW_HEIGHT,
+            360.0 - OVERLAY_ROW_HEIGHT * 2.5,
+            BODY_FALLBACK_HEIGHT,
+            BODY_FALLBACK_SPACING,
             |candidate| candidate.chars().count() as f32 * 8.0,
         );
         assert_eq!(short.zoom, 1.0);
@@ -1187,11 +1210,33 @@ mod tests {
         let layout = body_layout_with_measure(
             text.as_str(),
             330.0,
-            180.0,
-            OVERLAY_ROW_HEIGHT,
+            180.0 - OVERLAY_ROW_HEIGHT * 2.5,
+            BODY_FALLBACK_HEIGHT,
+            BODY_FALLBACK_SPACING,
             |candidate| candidate.chars().count() as f32 * 8.0,
         );
         assert!(layout.zoom < 1.0);
+    }
+
+    #[test]
+    fn tall_body_text_reserves_more_information_row() {
+        let text = (0..14)
+            .map(|idx| format!("Line {idx}"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        let layout = body_layout_with_measure(
+            text.as_str(),
+            330.0,
+            360.0 - OVERLAY_ROW_HEIGHT * 2.5,
+            BODY_FALLBACK_HEIGHT,
+            BODY_FALLBACK_SPACING,
+            |candidate| candidate.chars().count() as f32 * 8.0,
+        );
+        let block_height = BODY_FALLBACK_HEIGHT + 13.0 * BODY_FALLBACK_SPACING;
+        let available_height = 360.0 - OVERLAY_ROW_HEIGHT * 2.5;
+
+        assert!((layout.zoom - 0.9).abs() < f32::EPSILON);
+        assert!(block_height * layout.zoom <= available_height);
     }
 
     #[test]
