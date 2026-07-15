@@ -290,19 +290,11 @@ pub fn init(
     );
 
     let cols_per_player = deadsync_profile::compat::get_session_play_style().cols_per_player();
-    let mut initial_noteskin_names = vec![profile_data::NoteSkin::DEFAULT_NAME.to_string()];
-    for profile in &player_profiles {
-        push_noteskin_name_once(&mut initial_noteskin_names, &profile.noteskin);
-        if let Some(skin) = profile.mine_noteskin.as_ref() {
-            push_noteskin_name_once(&mut initial_noteskin_names, skin);
-        }
-        if let Some(skin) = profile.receptor_noteskin.as_ref() {
-            push_noteskin_name_once(&mut initial_noteskin_names, skin);
-        }
-        if let Some(skin) = profile.tap_explosion_noteskin.as_ref() {
-            push_noteskin_name_once(&mut initial_noteskin_names, skin);
-        }
-    }
+    // PlayerOptions is initialized while the previous screen still shows its
+    // "Entering Options..." overlay. Resolve every row-selectable noteskin now
+    // so changing any of the noteskin preview rows never performs first-use
+    // parsing or model loading on the input path.
+    let initial_noteskin_names = preview_noteskin_names(noteskin_names, &player_profiles);
     let mut noteskin_cache = build_noteskin_cache(cols_per_player, &initial_noteskin_names);
     let noteskin_previews: [PlayerNoteskinPreviews; PLAYER_SLOTS] = std::array::from_fn(|i| {
         let profile_noteskin = &player_profiles[i].noteskin;

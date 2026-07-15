@@ -13,9 +13,9 @@ pub(super) mod tests {
         count_visible_rows, effective_scroll_speed_with_alt, handle_arcade_start_event,
         handle_nav_event, handle_start_event, hud_offset_choices, init_cycle_row_from_binding,
         init_numeric_row_from_binding, is_row_visible, judgment_tilt_options_visible,
-        on_start_press, player_option_column_x, prepend_pending_audio, queue_audio, queue_sfx,
-        repeat_held_arcade_start, row_f_pos_for_index, row_visibility, session_active_players,
-        sync_profile_scroll_speed, sync_speed_mod_type_row, update,
+        on_start_press, player_option_column_x, prepend_pending_audio, preview_noteskin_names,
+        queue_audio, queue_sfx, repeat_held_arcade_start, row_f_pos_for_index, row_visibility,
+        session_active_players, sync_profile_scroll_speed, sync_speed_mod_type_row, update,
     };
     use crate::assets::AssetManager;
     use crate::assets::i18n::{LookupKey, lookup_key};
@@ -48,6 +48,16 @@ pub(super) mod tests {
         NoteskinCatalogView {
             names: vec![deadsync_profile::NoteSkin::DEFAULT_NAME.to_owned()],
         }
+    }
+
+    #[test]
+    fn preview_cache_plan_keeps_every_catalog_noteskin() {
+        let names = preview_noteskin_names(
+            vec!["cel".to_owned(), "metal".to_owned()],
+            &[Profile::default(), Profile::default()],
+        );
+
+        assert_eq!(names, ["cel", "metal", "default"]);
     }
 
     fn test_row(

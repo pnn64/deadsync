@@ -216,8 +216,17 @@ pub(super) struct PlayerNoteskinPreviews {
     pub(super) tap_explosion: Option<Arc<Noteskin>>,
 }
 
-/// Owns the noteskin loading subsystem: the shared cache and the per-player
-/// resolved previews.
+/// Screen-lifetime noteskin preview cache owned by the app/game thread.
+///
+/// This is single-thread-only and is warmed with the complete noteskin catalog
+/// before the first Player Options frame, while "Entering Options..." remains
+/// visible. Its capacity is bounded by the catalog plus profile-only fallback
+/// names. Normal option changes only clone cached `Arc`s; no disk access,
+/// parsing, pruning, or eviction occurs on a live screen frame. Entries are
+/// destroyed when the screen state is dropped. The underlying loader reports
+/// failed loads through its existing warnings; cache hits need no per-frame
+/// instrumentation because their worst-case work is a bounded hash lookup and
+/// `Arc` clone.
 pub(super) struct NoteskinState {
     pub(super) cache: HashMap<String, Arc<Noteskin>>,
     pub(super) previews: [PlayerNoteskinPreviews; PLAYER_SLOTS],

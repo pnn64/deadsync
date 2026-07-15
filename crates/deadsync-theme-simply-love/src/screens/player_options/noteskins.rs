@@ -46,6 +46,31 @@ pub(super) fn build_noteskin_cache(
     cache
 }
 
+pub(super) fn preview_noteskin_names(
+    mut names: Vec<String>,
+    profiles: &[profile_data::Profile],
+) -> Vec<String> {
+    if !names
+        .iter()
+        .any(|name| name.eq_ignore_ascii_case(profile_data::NoteSkin::DEFAULT_NAME))
+    {
+        names.push(profile_data::NoteSkin::DEFAULT_NAME.to_string());
+    }
+    for profile in profiles {
+        push_noteskin_name_once(&mut names, &profile.noteskin);
+        if let Some(skin) = profile.mine_noteskin.as_ref() {
+            push_noteskin_name_once(&mut names, skin);
+        }
+        if let Some(skin) = profile.receptor_noteskin.as_ref() {
+            push_noteskin_name_once(&mut names, skin);
+        }
+        if let Some(skin) = profile.tap_explosion_noteskin.as_ref() {
+            push_noteskin_name_once(&mut names, skin);
+        }
+    }
+    names
+}
+
 pub(super) fn push_noteskin_name_once(names: &mut Vec<String>, skin: &profile_data::NoteSkin) {
     if skin.is_none_choice() {
         return;
