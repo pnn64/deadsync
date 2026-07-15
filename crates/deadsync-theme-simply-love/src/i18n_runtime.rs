@@ -42,10 +42,6 @@ fn language_file_path(languages_dir: &Path, locale: &str) -> PathBuf {
     languages_dir.join(format!("{locale}.ini"))
 }
 
-pub fn languages_dir_path(exe_dir: &Path) -> PathBuf {
-    exe_dir.join("assets").join("languages")
-}
-
 pub fn locale_file_exists(languages_dir: &Path, code: &str) -> bool {
     language_file_path(languages_dir, code).exists()
 }
@@ -285,14 +281,6 @@ mod tests {
     #[test]
     fn raw_os_locale_returns_none_without_nonempty_values() {
         assert_eq!(raw_os_locale_from_values(["", "  "]), None);
-    }
-
-    #[test]
-    fn languages_dir_path_uses_exe_assets_languages() {
-        assert_eq!(
-            languages_dir_path(Path::new("/game")),
-            PathBuf::from("/game/assets/languages")
-        );
     }
 
     #[test]

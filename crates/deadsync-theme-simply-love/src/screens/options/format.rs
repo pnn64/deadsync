@@ -42,8 +42,3 @@ pub(super) fn tenths_from_f64(value: f64) -> i32 {
     let nudge = scaled.signum() * scaled.abs().max(1.0) * f64::EPSILON * 16.0;
     (scaled + nudge).round() as i32
 }
-
-#[inline(always)]
-pub(super) fn f64_from_tenths(value: i32) -> f64 {
-    value as f64 / 10.0
-}

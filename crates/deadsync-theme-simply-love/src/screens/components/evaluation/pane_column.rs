@@ -1,7 +1,6 @@
 use crate::act;
 use crate::assets::{self, AssetManager};
 use crate::screens::evaluation::{ColumnJudgments, ScoreInfo};
-use deadlib_platform::dirs;
 use deadlib_present::actors::Actor;
 use deadlib_present::color;
 use deadlib_present::font;
@@ -44,7 +43,7 @@ fn pane3_solid_arrow_texture(texture_key: &str) -> String {
     }
 
     let candidate = Path::new("assets").join(texture_key);
-    let path = dirs::app_dirs().resolve_asset_path(&candidate.to_string_lossy());
+    let path = deadsync_assets::resolve_asset_path(&candidate.to_string_lossy());
     let Ok(src) = assets::open_image_fallback(&path).map(|img| img.to_rgba8()) else {
         return texture_key.to_string();
     };

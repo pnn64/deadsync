@@ -2,11 +2,14 @@ use deadsync_profile as profile_data;
 #[cfg(test)]
 use deadsync_score as score_data;
 use deadsync_score::stage_stats;
+mod audio_requests;
 mod commands;
+mod config_requests;
 mod graphics;
 mod input_routing;
 mod screen_nav;
 mod screenshot;
+mod select_music_views;
 mod smx_runtime;
 mod updater;
 
@@ -170,8 +173,8 @@ use deadsync_rules::scroll::ScrollSpeedSetting;
 #[cfg(test)]
 use deadsync_rules::timing as timing_rules;
 use deadsync_theme::views::{
-    AppPathView, AppPathsView, AudioOptionsView, AudioOutputDeviceView, AudioPlaybackView,
-    DensityGraphView as DensityGraphSource, NoteskinCatalogView, SmxAssignmentView,
+    AppPathView, AppPathsView, DensityGraphView as DensityGraphSource, NoteskinCatalogView,
+    SmxAssignmentView,
 };
 use deadsync_theme::{AudioRequest, PlatformRequest, RevealPathKind};
 use deadsync_theme_simply_love::screens::SimplyLoveScreen as CurrentScreen;
@@ -180,10 +183,8 @@ use deadsync_theme_simply_love::views::{
     MusicWheelRankSource, MusicWheelRuntimeRequest, MusicWheelRuntimeView,
     MusicWheelSlotRuntimeRequest, MusicWheelSlotRuntimeView, ScoreboxLocalView,
     ScoreboxMachineView, ScoreboxSideView, SelectCourseRuntimeView, SelectCourseScoreRequest,
-    SelectCourseScoreView, SelectMusicDownloadView, SelectMusicLeaderboardSideView,
-    SelectMusicLeaderboardView, SelectMusicPolicyView, SelectMusicRuntimeView,
-    SimplyLoveDensityGraphSlot as DensityGraphSlot, SimplyLoveGrooveStatsService,
-    SimplyLoveLobbyRuntimeView,
+    SelectCourseScoreView, SimplyLoveDensityGraphSlot as DensityGraphSlot,
+    SimplyLoveGrooveStatsService, SimplyLoveLobbyRuntimeView,
 };
 use deadsync_theme_simply_love::{
     SimplyLoveConfigRequest, SimplyLoveEffect as ThemeEffect, SimplyLoveHardwareRequest,
@@ -422,33 +423,6 @@ fn arrow_effect_time_seconds(at: Instant) -> f32 {
     deadlib_platform::host_time::instant_nanos(at) as f32 / 1_000_000_000.0
 }
 
-fn audio_options_view() -> AudioOptionsView {
-    let output_devices = if deadsync_audio_stream::is_initialized() {
-        deadsync_audio_stream::startup_output_devices()
-            .into_iter()
-            .map(|device| AudioOutputDeviceView {
-                name: device.name,
-                is_default: device.is_default,
-                sample_rates_hz: device.sample_rates_hz,
-            })
-            .collect()
-    } else {
-        Vec::new()
-    };
-    #[cfg(target_os = "linux")]
-    let available_backend_names = deadsync_audio_stream::available_linux_backends()
-        .into_iter()
-        .map(|backend| backend.as_str().to_owned())
-        .collect();
-    #[cfg(not(target_os = "linux"))]
-    let available_backend_names = Vec::new();
-
-    AudioOptionsView {
-        output_devices,
-        available_backend_names,
-    }
-}
-
 fn app_path_view(path: PathBuf) -> AppPathView {
     AppPathView {
         display: deadlib_platform::dirs::path_shorthand(&path),
@@ -526,10 +500,13 @@ impl ScreensState {
         let mut profile_load_state = profile_load::init();
         profile_load_state.active_color_index = color_index;
 
+        let app_paths = app_paths_view();
+        let init_songs_root = app_paths.songs.path.clone();
+        let init_courses_root = app_paths.courses.path.clone();
         let mut options_state = options::init(
             updater::capabilities(),
-            app_paths_view(),
-            audio_options_view(),
+            app_paths,
+            audio_requests::options_view(),
             graphics::options_graphics_view(),
             options_song_pack_view(),
             noteskin_catalog_view(),
@@ -559,7 +536,7 @@ impl ScreensState {
         let mut smx_assign_state = screens::smx_assign::init();
         smx_assign_state.active_color_index = color_index;
 
-        let mut init_state = init::init();
+        let mut init_state = init::init(init_songs_root, init_courses_root);
         init_state.active_color_index = color_index;
 
         let mut evaluation_state = evaluation::init(None, EvaluationInitView::default());
@@ -1283,164 +1260,6 @@ impl App {
             }
             _ => {}
         }
-    }
-
-    fn sync_select_music_runtime_view(&mut self, config: &config::Config) {
-        if self.state.screens.current_screen != CurrentScreen::SelectMusic {
-            return;
-        }
-        let lobby = Self::refresh_lobby_runtime_view();
-        let downloads =
-            if select_music::downloads_overlay_visible(&self.state.screens.select_music_state) {
-                deadsync_online::runtime::unlock_download_snapshots()
-                    .into_iter()
-                    .map(|snapshot| SelectMusicDownloadView {
-                        name: snapshot.name,
-                        current_bytes: snapshot.current_bytes,
-                        total_bytes: snapshot.total_bytes,
-                        complete: snapshot.complete,
-                        error_message: snapshot.error_message,
-                    })
-                    .collect()
-            } else {
-                Vec::new()
-            };
-        let srpg_shop =
-            if select_music::srpg_shop_overlay_visible(&self.state.screens.select_music_state) {
-                deadsync_online::srpg_shop::runtime_snapshot()
-            } else {
-                Default::default()
-            };
-        let music_stream_position_seconds = if deadsync_audio_stream::is_initialized() {
-            f64::from(deadsync_audio_stream::get_music_stream_position_seconds())
-        } else {
-            0.0
-        };
-        let scorebox_request =
-            select_music::scorebox_runtime_request(&self.state.screens.select_music_state);
-        let leaderboard_request =
-            select_music::leaderboard_runtime_request(&self.state.screens.select_music_state);
-        let arrow_bounce_offset = -10.0 * config.global_offset_seconds;
-        let policy = SelectMusicPolicyView {
-            dedicated_menu_only: config.only_dedicated_menu_buttons,
-            fsr_profiles: config.use_fsrs,
-            replays: config.machine_enable_replays,
-            profile_switch: config.allow_switch_profile_in_menu,
-            keyboard_features: config.keyboard_features,
-        };
-        let sync_graph_mode = config.null_or_die_sync_graph;
-        let sync_confidence_percent = config.null_or_die_confidence_percent;
-        let scorebox_enabled = config.show_select_music_scorebox
-            && (config.select_music_scorebox_cycle_itg
-                || config.select_music_scorebox_cycle_ex
-                || config.select_music_scorebox_cycle_hard_ex
-                || config.select_music_scorebox_cycle_tournaments);
-        let enable_groovestats = config.enable_groovestats;
-        let enable_arrowcloud = config.enable_arrowcloud;
-        let auto_populate_gs_scores = config.auto_populate_gs_scores;
-        let profile_view = profile_data::runtime_scorebox_view(
-            enable_groovestats,
-            enable_arrowcloud,
-            auto_populate_gs_scores,
-        );
-        let music_wheel = Self::prepare_music_wheel_runtime(
-            select_music::music_wheel_runtime_request(&self.state.screens.select_music_state),
-            &profile_view,
-        );
-        let mut scorebox_hashes: [Option<String>; 2] = Default::default();
-        if profile_view.play_style == profile_data::PlayStyle::Versus {
-            scorebox_hashes = scorebox_request.chart_hashes;
-        } else {
-            let side = if profile_data::runtime_player_is_p2(
-                profile_view.play_style,
-                profile_view.player_side,
-            ) {
-                profile_data::PlayerSide::P2
-            } else {
-                profile_data::PlayerSide::P1
-            };
-            scorebox_hashes[profile_data::player_side_index(side)] =
-                scorebox_request.chart_hashes[0].clone();
-        }
-        let scorebox_leaderboards: [Option<deadsync_score::CachedPlayerLeaderboardData>; 2] =
-            std::array::from_fn(|side_idx| {
-                if !(scorebox_request.leaderboards_allowed && scorebox_enabled) {
-                    return None;
-                }
-                scorebox_hashes[side_idx].as_deref().and_then(|hash| {
-                    scores::get_or_fetch_player_leaderboards_for_profile(
-                        hash,
-                        &profile_view.sides[side_idx].leaderboard,
-                        scorebox_request.max_entries,
-                    )
-                })
-            });
-        let leaderboard =
-            leaderboard_request.map_or_else(SelectMusicLeaderboardView::default, |request| {
-                SelectMusicLeaderboardView {
-                    sides: std::array::from_fn(|side_idx| {
-                        let chart_hash = request.chart_hashes[side_idx].clone();
-                        let player = &profile_view.sides[side_idx];
-                        let joined = player.joined;
-                        let machine_entries = if joined {
-                            chart_hash
-                                .as_deref()
-                                .map(|hash| {
-                                    scores::get_machine_leaderboard_local_with_names(
-                                        hash,
-                                        request.max_entries,
-                                    )
-                                })
-                                .unwrap_or_default()
-                        } else {
-                            Vec::new()
-                        };
-                        let leaderboards = if player.leaderboard.gs_active {
-                            chart_hash.as_deref().and_then(|hash| {
-                                scores::get_or_fetch_player_leaderboards_for_profile(
-                                    hash,
-                                    &player.leaderboard,
-                                    request.max_entries,
-                                )
-                            })
-                        } else {
-                            None
-                        };
-                        SelectMusicLeaderboardSideView {
-                            chart_hash,
-                            machine_entries,
-                            leaderboards,
-                        }
-                    }),
-                }
-            });
-        let [p1_profile, p2_profile] = profile_view.sides;
-        let [p1_hash, p2_hash] = scorebox_hashes;
-        let [p1_leaderboards, p2_leaderboards] = scorebox_leaderboards;
-        let scoreboxes = [
-            Self::scorebox_side_view(p1_profile, p1_hash, p1_leaderboards),
-            Self::scorebox_side_view(p2_profile, p2_hash, p2_leaderboards),
-        ];
-        select_music::sync_runtime_view(
-            &mut self.state.screens.select_music_state,
-            SelectMusicRuntimeView {
-                audio_playback: AudioPlaybackView {
-                    music_stream_position_seconds,
-                },
-                lobby,
-                downloads,
-                srpg_shop,
-                arrow_bounce_offset,
-                policy,
-                music_wheel,
-                scoreboxes,
-                leaderboard,
-                unlock_downloads_available: deadsync_online::runtime::unlock_downloads_available(),
-                ready_song_reload_dirs: deadsync_online::runtime::take_ready_song_reload_request(),
-                sync_graph_mode,
-                sync_confidence_percent,
-            },
-        );
     }
 
     fn scorebox_side_view(
@@ -2665,7 +2484,7 @@ impl App {
         self.state.screens.options_state = options::init(
             updater::capabilities(),
             app_paths_view(),
-            audio_options_view(),
+            audio_requests::options_view(),
             graphics::options_graphics_view(),
             options_song_pack_view(),
             noteskin_catalog_view(),
@@ -2989,42 +2808,8 @@ impl App {
                     }
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::Audio(AudioRequest::PlaySfx(path)) => {
-                    deadsync_audio_stream::play_sfx(&path);
-                    Vec::new()
-                }
-                SimplyLoveRuntimeRequest::Audio(AudioRequest::PlayMusic {
-                    path,
-                    cut,
-                    looping,
-                    rate,
-                }) => {
-                    deadsync_audio_stream::play_music(
-                        path,
-                        deadsync_audio_stream::Cut {
-                            start_sec: cut.start_sec,
-                            length_sec: cut.length_sec,
-                            fade_in_sec: cut.fade_in_sec,
-                            fade_out_sec: cut.fade_out_sec,
-                        },
-                        looping,
-                        rate,
-                    );
-                    Vec::new()
-                }
-                SimplyLoveRuntimeRequest::Audio(AudioRequest::StopMusic) => {
-                    deadsync_audio_stream::stop_music();
-                    Vec::new()
-                }
-                SimplyLoveRuntimeRequest::Audio(AudioRequest::SetMusicRate(rate)) => {
-                    deadsync_audio_stream::set_music_rate(rate);
-                    Vec::new()
-                }
-                SimplyLoveRuntimeRequest::Audio(AudioRequest::PrewarmReplayGain(paths)) => {
-                    deadsync_audio_replaygain::prewarm_paths(
-                        paths,
-                        deadsync_audio_replaygain::Priority::Background,
-                    );
+                SimplyLoveRuntimeRequest::Audio(request) => {
+                    audio_requests::execute(request);
                     Vec::new()
                 }
                 SimplyLoveRuntimeRequest::Graphics(request) => {
@@ -3053,6 +2838,38 @@ impl App {
                 }
                 SimplyLoveRuntimeRequest::Config(SimplyLoveConfigRequest::PersistColor(index)) => {
                     crate::smx_config::set_theme_color(index);
+                    Vec::new()
+                }
+                SimplyLoveRuntimeRequest::Config(SimplyLoveConfigRequest::Advanced(request)) => {
+                    config_requests::execute_advanced(request);
+                    Vec::new()
+                }
+                SimplyLoveRuntimeRequest::Config(SimplyLoveConfigRequest::Course(request)) => {
+                    config_requests::execute_course(request);
+                    Vec::new()
+                }
+                SimplyLoveRuntimeRequest::Config(SimplyLoveConfigRequest::Gameplay(request)) => {
+                    config_requests::execute_gameplay(request);
+                    Vec::new()
+                }
+                SimplyLoveRuntimeRequest::Config(SimplyLoveConfigRequest::Lights(request)) => {
+                    config_requests::execute_lights(request);
+                    Vec::new()
+                }
+                SimplyLoveRuntimeRequest::Config(SimplyLoveConfigRequest::Machine(request)) => {
+                    config_requests::execute_machine(request);
+                    Vec::new()
+                }
+                SimplyLoveRuntimeRequest::Config(SimplyLoveConfigRequest::NullOrDie(request)) => {
+                    config_requests::execute_null_or_die(request);
+                    Vec::new()
+                }
+                SimplyLoveRuntimeRequest::Config(SimplyLoveConfigRequest::Online(request)) => {
+                    config_requests::execute_online(request);
+                    Vec::new()
+                }
+                SimplyLoveRuntimeRequest::Config(SimplyLoveConfigRequest::SelectMusic(request)) => {
+                    config_requests::execute_select_music(request);
                     Vec::new()
                 }
                 SimplyLoveRuntimeRequest::Hardware(SimplyLoveHardwareRequest::TestLightsAuto) => {
@@ -6669,6 +6486,7 @@ impl App {
                 CurrentScreen::Gameplay | CurrentScreen::Practice | CurrentScreen::Evaluation => {
                     select_music::reset_preview_after_gameplay(
                         &mut self.state.screens.select_music_state,
+                        crate::select_music::history_view(),
                     );
                 }
                 CurrentScreen::EvaluationSummary => {
@@ -6685,7 +6503,7 @@ impl App {
                     let current_color_index =
                         self.state.screens.select_music_state.active_color_index;
                     self.state.screens.select_music_state =
-                        select_music::init(crate::select_music::init_view());
+                        select_music::init(crate::select_music::prepared_init_view());
                     self.state.screens.select_music_state.active_color_index = current_color_index;
                     let preferred = self.state.session.preferred_difficulty_index;
                     self.state.screens.select_music_state.selected_steps_index = preferred;

@@ -66,6 +66,7 @@ fn prepare(request: PrepareRequest) -> PreparedState {
     match request {
         PrepareRequest::Music(init) => {
             scores::prewarm_select_music_score_caches();
+            let init = crate::select_music::prepare_init_view(init);
             PreparedState::Music(select_music::init(init))
         }
         PrepareRequest::Course => {

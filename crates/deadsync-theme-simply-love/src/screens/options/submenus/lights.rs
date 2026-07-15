@@ -1,8 +1,7 @@
 use super::super::*;
 
 pub(in crate::screens::options) use crate::config::{
-    lights_driver_choice_index, lights_driver_from_choice, lights_gameplay_pad_choice_index,
-    lights_gameplay_pad_from_choice,
+    lights_driver_choice_index, lights_gameplay_pad_choice_index,
 };
 
 pub(in crate::screens::options) const LIGHTS_OPTIONS_ROWS: &[SubRow] = &[

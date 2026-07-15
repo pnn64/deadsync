@@ -1,6 +1,5 @@
 use crate::act;
 use crate::assets;
-use deadlib_platform::dirs;
 use deadlib_present::actors::Actor;
 use deadlib_render::SamplerDesc;
 use deadsync_rules::judgment::{self, JudgeGrade};
@@ -572,7 +571,7 @@ fn affluent_rot_bucket(rot_deg: f32) -> u32 {
 
 fn load_grade_rgba(key: &str) -> Option<RgbaImage> {
     let path = Path::new("assets").join("graphics").join(key);
-    let path = dirs::app_dirs().resolve_asset_path(&path.to_string_lossy());
+    let path = deadsync_assets::resolve_asset_path(&path.to_string_lossy());
     assets::open_image_fallback(&path)
         .map(|img| img.to_rgba8())
         .ok()

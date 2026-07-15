@@ -81,6 +81,16 @@ pub struct AudioOutputDeviceView {
 pub struct AudioOptionsView {
     pub output_devices: Vec<AudioOutputDeviceView>,
     pub available_backend_names: Vec<String>,
+    pub output_device: Option<u16>,
+    pub output_mode: crate::AudioOutputModeChoice,
+    pub selected_backend_name: String,
+    pub sample_rate_hz: Option<u32>,
+    pub preserve_pitch: bool,
+    pub replay_gain: bool,
+    pub master_volume: u8,
+    pub music_volume: u8,
+    pub sfx_volume: u8,
+    pub assist_tick_volume: u8,
 }
 
 /// One renderer-neutral video mode advertised by a host monitor.
@@ -113,6 +123,7 @@ pub struct GraphicsOptionsView {
     pub present_policy: PresentPolicyChoice,
     pub high_dpi: bool,
     pub software_thread_choices: Vec<u8>,
+    pub software_threads: u8,
 }
 
 /// Audio timing telemetry translated by the shell for theme diagnostics.
@@ -524,11 +535,27 @@ mod tests {
                 sample_rates_hz: vec![44_100, 48_000],
             }],
             available_backend_names: vec!["Auto".to_owned(), "ALSA".to_owned()],
+            output_device: Some(0),
+            output_mode: crate::AudioOutputModeChoice::Shared,
+            selected_backend_name: "ALSA".to_owned(),
+            sample_rate_hz: Some(48_000),
+            preserve_pitch: true,
+            replay_gain: false,
+            master_volume: 90,
+            music_volume: 80,
+            sfx_volume: 70,
+            assist_tick_volume: 60,
         };
 
         assert_eq!(view.output_devices[0].name, "Primary");
         assert_eq!(view.output_devices[0].sample_rates_hz, [44_100, 48_000]);
         assert_eq!(view.available_backend_names, ["Auto", "ALSA"]);
+        assert_eq!(view.output_device, Some(0));
+        assert_eq!(view.output_mode, crate::AudioOutputModeChoice::Shared);
+        assert_eq!(view.selected_backend_name, "ALSA");
+        assert_eq!(view.sample_rate_hz, Some(48_000));
+        assert!(view.preserve_pitch);
+        assert_eq!(view.master_volume, 90);
     }
 
     #[test]

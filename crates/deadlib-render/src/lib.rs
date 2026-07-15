@@ -483,23 +483,6 @@ pub fn build_software_thread_choices() -> Vec<u8> {
     out
 }
 
-pub fn software_thread_choice_index(values: &[u8], thread_count: u8) -> usize {
-    values
-        .iter()
-        .position(|&value| value == thread_count)
-        .unwrap_or_else(|| {
-            values
-                .iter()
-                .enumerate()
-                .min_by_key(|(_, value)| value.abs_diff(thread_count))
-                .map_or(0, |(idx, _)| idx)
-        })
-}
-
-pub fn software_thread_from_choice(values: &[u8], idx: usize) -> u8 {
-    values.get(idx).copied().unwrap_or(0)
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PresentModePolicy {
     Mailbox,
@@ -703,16 +686,5 @@ mod tests {
         assert!(choices.len() >= 3);
         assert!(choices.windows(2).all(|pair| pair[0] < pair[1]));
         assert!(choices.len() <= 33);
-    }
-
-    #[test]
-    fn software_thread_choice_helpers_round_to_nearest() {
-        let choices = [0, 1, 2, 4, 8];
-        assert_eq!(software_thread_choice_index(&choices, 4), 3);
-        assert_eq!(software_thread_choice_index(&choices, 3), 2);
-        assert_eq!(software_thread_choice_index(&choices, 7), 4);
-        assert_eq!(software_thread_choice_index(&[], 7), 0);
-        assert_eq!(software_thread_from_choice(&choices, 4), 8);
-        assert_eq!(software_thread_from_choice(&choices, 99), 0);
     }
 }

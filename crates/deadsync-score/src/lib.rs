@@ -1671,6 +1671,52 @@ impl HeldScoreCaches {
             .map(|ac| ac.to_cached_score());
         best_cached_itg_score([local, gs, ac])
     }
+
+    /// Snapshot every merged "best ITG" score for a loaded profile.
+    ///
+    /// Entries are sorted by chart hash so prepared runtime views can use
+    /// binary search without rebuilding a map in the presentation layer.
+    pub fn merged_profile_scores(&self, profile_id: &str) -> Vec<(String, CachedScore)> {
+        if profile_id.trim().is_empty() {
+            return Vec::new();
+        }
+        let local = self.local.loaded_profiles.get(profile_id);
+        let gs = self.gs.loaded_profiles.get(profile_id);
+        let ac = self.ac.loaded_profiles.get(profile_id);
+        let capacity = local.map_or(0, |idx| idx.best_itg.len())
+            + gs.map_or(0, HashMap::len)
+            + ac.map_or(0, HashMap::len);
+        let mut merged = HashMap::with_capacity(capacity);
+        let mut insert = |chart_hash: &str, score: CachedScore| {
+            merged
+                .entry(chart_hash.to_string())
+                .and_modify(|best| {
+                    *best = best_cached_itg_score([Some(*best), Some(score)])
+                        .expect("two scores always produce a best score");
+                })
+                .or_insert(score);
+        };
+        if let Some(index) = local {
+            for (chart_hash, score) in &index.best_itg {
+                insert(chart_hash, *score);
+            }
+        }
+        if let Some(scores) = gs {
+            for (chart_hash, score) in scores {
+                insert(chart_hash, *score);
+            }
+        }
+        if let Some(scores) = ac {
+            for (chart_hash, score) in scores {
+                if let Some(score) = score.itg {
+                    insert(chart_hash, score.to_cached_score());
+                }
+            }
+        }
+        let mut merged: Vec<_> = merged.into_iter().collect();
+        merged.sort_unstable_by(|(a, _), (b, _)| a.cmp(b));
+        merged
+    }
 }
 
 /// Maximum number of attempts before the backoff schedule saturates. For

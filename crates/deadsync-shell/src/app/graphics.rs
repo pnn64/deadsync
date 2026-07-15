@@ -119,6 +119,7 @@ pub(super) fn options_graphics_view() -> GraphicsOptionsView {
         present_policy: theme_present_policy(cfg.present_mode_policy),
         high_dpi: cfg.high_dpi,
         software_thread_choices: deadlib_render::build_software_thread_choices(),
+        software_threads: cfg.software_renderer_threads,
     }
 }
 
@@ -155,7 +156,12 @@ impl App {
             present_mode_policy,
             max_fps,
             high_dpi,
+            software_threads,
         } = request;
+        if let Some(software_threads) = software_threads {
+            config::update_software_renderer_threads(software_threads);
+            self.software_renderer_threads = software_threads;
+        }
         let renderer = renderer.map(runtime_backend_type);
         let display_mode = display_mode.map(runtime_display_mode);
         let present_mode_policy = present_mode_policy.map(runtime_present_mode_policy);

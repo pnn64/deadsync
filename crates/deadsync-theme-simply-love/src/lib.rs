@@ -14,18 +14,22 @@ pub mod views;
 pub mod visual_styles;
 
 pub use effects::{
-    SimplyLoveConfigRequest, SimplyLoveDebugRequest, SimplyLoveEffect,
-    SimplyLoveEffectRouteContext, SimplyLoveEffectRoutePlan, SimplyLoveHardwareRequest,
-    SimplyLoveItgImportSummary, SimplyLoveItgProfileCandidate, SimplyLoveLobbyRequest,
-    SimplyLoveMediaRequest, SimplyLoveOnlineRequest, SimplyLoveProfileImportEvent,
-    SimplyLoveProfileRequest, SimplyLoveQrLoginEvent, SimplyLoveQrLoginRequest,
-    SimplyLoveQrLoginService, SimplyLoveQrLoginSlot, SimplyLoveQrLoginSlotAvailability,
-    SimplyLoveRuntimeRequest, SimplyLoveScoreImportEvent, SimplyLoveScoreImportProfile,
-    SimplyLoveScoreImportProgress, SimplyLoveScoreImportRequest, SimplyLoveScoreImportSummary,
-    SimplyLoveSyncEvent, SimplyLoveSyncKernel, SimplyLoveSyncKernelTarget, SimplyLoveSyncOwner,
-    SimplyLoveSyncPlotView, SimplyLoveSyncRequest, SimplyLoveSyncResult, SimplyLoveSyncSongResult,
-    SimplyLoveSyncStreamEvent, SimplyLoveSyncTarget, SimplyLoveUpdaterRequest,
-    resolve_effect_route,
+    SimplyLoveAdvancedConfigRequest, SimplyLoveConfigRequest, SimplyLoveCourseConfigRequest,
+    SimplyLoveDebugRequest, SimplyLoveEffect, SimplyLoveEffectRouteContext,
+    SimplyLoveEffectRoutePlan, SimplyLoveGameplayConfigRequest, SimplyLoveGameplayPadLights,
+    SimplyLoveHardwareRequest, SimplyLoveItgImportSummary, SimplyLoveItgProfileCandidate,
+    SimplyLoveLightsConfigRequest, SimplyLoveLightsDriver, SimplyLoveLobbyRequest,
+    SimplyLoveMachineConfigRequest, SimplyLoveMediaRequest, SimplyLoveNullOrDieConfigRequest,
+    SimplyLoveNullOrDieGraph, SimplyLoveOnlineConfigRequest, SimplyLoveOnlineRequest,
+    SimplyLoveProfileImportEvent, SimplyLoveProfileRequest, SimplyLoveQrLoginEvent,
+    SimplyLoveQrLoginPolicy, SimplyLoveQrLoginRequest, SimplyLoveQrLoginService,
+    SimplyLoveQrLoginSlot, SimplyLoveQrLoginSlotAvailability, SimplyLoveRuntimeRequest,
+    SimplyLoveScoreImportEvent, SimplyLoveScoreImportProfile, SimplyLoveScoreImportProgress,
+    SimplyLoveScoreImportRequest, SimplyLoveScoreImportSummary, SimplyLoveSelectMusicConfigRequest,
+    SimplyLoveSrpgShopFolder, SimplyLoveSyncEvent, SimplyLoveSyncKernel,
+    SimplyLoveSyncKernelTarget, SimplyLoveSyncOwner, SimplyLoveSyncPlotView, SimplyLoveSyncRequest,
+    SimplyLoveSyncResult, SimplyLoveSyncSongResult, SimplyLoveSyncStreamEvent,
+    SimplyLoveSyncTarget, SimplyLoveUpdaterRequest, resolve_effect_route,
 };
 
 pub struct SimplyLoveTheme;

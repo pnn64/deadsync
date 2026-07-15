@@ -101,7 +101,7 @@ pub fn menu_music_asset_path() -> &'static str {
 
 #[inline(always)]
 pub fn srpg10_gameover_music_path() -> std::path::PathBuf {
-    deadlib_platform::dirs::app_dirs().resolve_asset_path(SRPG10_GAMEOVER_MUSIC)
+    deadsync_assets::resolve_asset_path(SRPG10_GAMEOVER_MUSIC)
 }
 
 pub fn menu_music_resolved_path() -> std::path::PathBuf {
@@ -109,14 +109,12 @@ pub fn menu_music_resolved_path() -> std::path::PathBuf {
         current_style(),
         current_srpg_variant(),
         deadsync_assets::audio_folder::random_music_path,
-        |path| deadlib_platform::dirs::app_dirs().resolve_asset_path(path),
+        deadsync_assets::resolve_asset_path,
     )
 }
 
 pub fn bundled_music_paths() -> Vec<std::path::PathBuf> {
-    crate::resources::resolved_bundled_music_paths(|path| {
-        deadlib_platform::dirs::app_dirs().resolve_asset_path(path)
-    })
+    crate::resources::resolved_bundled_music_paths(deadsync_assets::resolve_asset_path)
 }
 
 #[inline(always)]

@@ -78,9 +78,11 @@ pub(super) fn apply_submenu_choice_delta(
                         VOLUME_MIN_PERCENT,
                         VOLUME_MAX_PERCENT,
                     ) {
-                        config::update_master_volume(state.master_volume_pct as u8);
-                        queue_sfx(state, "assets/sounds/change_value.ogg");
                         clear_render_cache(state);
+                        return Some(volume_change_effect(
+                            AudioVolumeTarget::Master,
+                            state.master_volume_pct as u8,
+                        ));
                     }
                     return None;
                 }
@@ -91,9 +93,11 @@ pub(super) fn apply_submenu_choice_delta(
                         VOLUME_MIN_PERCENT,
                         VOLUME_MAX_PERCENT,
                     ) {
-                        config::update_sfx_volume(state.sfx_volume_pct as u8);
-                        queue_sfx(state, "assets/sounds/change_value.ogg");
                         clear_render_cache(state);
+                        return Some(volume_change_effect(
+                            AudioVolumeTarget::Sfx,
+                            state.sfx_volume_pct as u8,
+                        ));
                     }
                     return None;
                 }
@@ -104,9 +108,11 @@ pub(super) fn apply_submenu_choice_delta(
                         VOLUME_MIN_PERCENT,
                         VOLUME_MAX_PERCENT,
                     ) {
-                        config::update_assist_tick_volume(state.assist_tick_volume_pct as u8);
-                        queue_sfx(state, "assets/sounds/change_value.ogg");
                         clear_render_cache(state);
+                        return Some(volume_change_effect(
+                            AudioVolumeTarget::AssistTick,
+                            state.assist_tick_volume_pct as u8,
+                        ));
                     }
                     return None;
                 }
@@ -117,9 +123,11 @@ pub(super) fn apply_submenu_choice_delta(
                         VOLUME_MIN_PERCENT,
                         VOLUME_MAX_PERCENT,
                     ) {
-                        config::update_music_volume(state.music_volume_pct as u8);
-                        queue_sfx(state, "assets/sounds/change_value.ogg");
                         clear_render_cache(state);
+                        return Some(volume_change_effect(
+                            AudioVolumeTarget::Music,
+                            state.music_volume_pct as u8,
+                        ));
                     }
                     return None;
                 }
@@ -133,9 +141,11 @@ pub(super) fn apply_submenu_choice_delta(
                 GLOBAL_OFFSET_MIN_MS,
                 GLOBAL_OFFSET_MAX_MS,
             ) {
-                config::update_global_offset(state.global_offset_ms as f32 / 1000.0);
                 queue_sfx(state, "assets/sounds/change_value.ogg");
                 clear_render_cache(state);
+                return Some(audio_requests_effect(vec![
+                    AudioRequest::SetGlobalOffsetMillis(state.global_offset_ms),
+                ]));
             }
             return None;
         }
@@ -198,11 +208,13 @@ pub(super) fn apply_submenu_choice_delta(
                         NULL_OR_DIE_POSITIVE_MS_MIN_TENTHS,
                         NULL_OR_DIE_POSITIVE_MS_MAX_TENTHS,
                     ) {
-                        config::update_null_or_die_fingerprint_ms(f64_from_tenths(
-                            state.null_or_die_fingerprint_tenths,
-                        ));
                         queue_sfx(state, "assets/sounds/change_value.ogg");
                         clear_render_cache(state);
+                        return Some(null_or_die_config_effect(
+                            crate::SimplyLoveNullOrDieConfigRequest::FingerprintTenths(
+                                state.null_or_die_fingerprint_tenths,
+                            ),
+                        ));
                     }
                     return None;
                 }
@@ -213,11 +225,13 @@ pub(super) fn apply_submenu_choice_delta(
                         NULL_OR_DIE_POSITIVE_MS_MIN_TENTHS,
                         NULL_OR_DIE_POSITIVE_MS_MAX_TENTHS,
                     ) {
-                        config::update_null_or_die_window_ms(f64_from_tenths(
-                            state.null_or_die_window_tenths,
-                        ));
                         queue_sfx(state, "assets/sounds/change_value.ogg");
                         clear_render_cache(state);
+                        return Some(null_or_die_config_effect(
+                            crate::SimplyLoveNullOrDieConfigRequest::WindowTenths(
+                                state.null_or_die_window_tenths,
+                            ),
+                        ));
                     }
                     return None;
                 }
@@ -228,11 +242,13 @@ pub(super) fn apply_submenu_choice_delta(
                         NULL_OR_DIE_POSITIVE_MS_MIN_TENTHS,
                         NULL_OR_DIE_POSITIVE_MS_MAX_TENTHS,
                     ) {
-                        config::update_null_or_die_step_ms(f64_from_tenths(
-                            state.null_or_die_step_tenths,
-                        ));
                         queue_sfx(state, "assets/sounds/change_value.ogg");
                         clear_render_cache(state);
+                        return Some(null_or_die_config_effect(
+                            crate::SimplyLoveNullOrDieConfigRequest::StepTenths(
+                                state.null_or_die_step_tenths,
+                            ),
+                        ));
                     }
                     return None;
                 }
@@ -243,11 +259,13 @@ pub(super) fn apply_submenu_choice_delta(
                         NULL_OR_DIE_MAGIC_OFFSET_MIN_TENTHS,
                         NULL_OR_DIE_MAGIC_OFFSET_MAX_TENTHS,
                     ) {
-                        config::update_null_or_die_magic_offset_ms(f64_from_tenths(
-                            state.null_or_die_magic_offset_tenths,
-                        ));
                         queue_sfx(state, "assets/sounds/change_value.ogg");
                         clear_render_cache(state);
+                        return Some(null_or_die_config_effect(
+                            crate::SimplyLoveNullOrDieConfigRequest::MagicOffsetTenths(
+                                state.null_or_die_magic_offset_tenths,
+                            ),
+                        ));
                     }
                     return None;
                 }
@@ -359,10 +377,6 @@ pub(super) fn apply_submenu_choice_delta(
                 ),
             ));
         }
-        if row.id == SubRowId::SoftwareRendererThreads {
-            let threads = software_thread_from_choice(&state.software_thread_choices, new_index);
-            config::update_software_renderer_threads(threads);
-        }
     } else if matches!(kind, SubmenuKind::InputBackend) {
         let row = &rows[row_index];
         if row.id == SubRowId::GamepadBackend {
@@ -451,21 +465,23 @@ pub(super) fn apply_submenu_choice_delta(
         }
     } else if matches!(kind, SubmenuKind::Lights) {
         let row = &rows[row_index];
-        if row.id == SubRowId::LightsDriver {
-            config::update_lights_driver(lights_driver_from_choice(new_index));
-        }
-        if row.id == SubRowId::GameplayPadLights {
-            config::update_lights_gameplay_pad_lights(lights_gameplay_pad_from_choice(new_index));
-        }
-        if row.id == SubRowId::LightsSimplifyBass {
-            config::update_lights_simplify_bass(yes_no_from_choice(new_index));
-        }
+        let request = match row.id {
+            SubRowId::LightsDriver => {
+                crate::SimplyLoveLightsConfigRequest::Driver(lights_driver_from_index(new_index))
+            }
+            SubRowId::GameplayPadLights => crate::SimplyLoveLightsConfigRequest::GameplayPadLights(
+                gameplay_pad_lights_from_index(new_index),
+            ),
+            SubRowId::LightsSimplifyBass => {
+                crate::SimplyLoveLightsConfigRequest::SimplifyBass(yes_no_from_choice(new_index))
+            }
+            _ => return None,
+        };
+        action = Some(lights_config_effect(request));
     } else if matches!(kind, SubmenuKind::Machine) {
         let row = &rows[row_index];
         let enabled = new_index == 1;
         match row.id {
-            SubRowId::SelectProfile => config::update_machine_show_select_profile(enabled),
-            SubRowId::SelectColor => config::update_machine_show_select_color(enabled),
             SubRowId::PreferredColor => {
                 state.active_color_index = new_index as i32;
                 action = Some(ThemeEffect::Runtime(
@@ -474,307 +490,463 @@ pub(super) fn apply_submenu_choice_delta(
                     ),
                 ));
             }
-            SubRowId::SelectStyle => config::update_machine_show_select_style(enabled),
-            SubRowId::PreferredStyle => config::update_machine_preferred_style(
-                machine_preferred_play_style_from_choice(new_index),
-            ),
-            SubRowId::SelectPlayMode => config::update_machine_show_select_play_mode(enabled),
-            SubRowId::PreferredMode => config::update_machine_preferred_play_mode(
-                machine_preferred_play_mode_from_choice(new_index),
-            ),
-            SubRowId::Font => config::update_machine_font(machine_font_from_choice(new_index)),
-            SubRowId::BarColor => {
-                config::update_machine_bar_color(machine_bar_color_from_choice(new_index))
+            id => {
+                let request = match id {
+                    SubRowId::SelectProfile => {
+                        crate::SimplyLoveMachineConfigRequest::ShowSelectProfile(enabled)
+                    }
+                    SubRowId::SelectColor => {
+                        crate::SimplyLoveMachineConfigRequest::ShowSelectColor(enabled)
+                    }
+                    SubRowId::SelectStyle => {
+                        crate::SimplyLoveMachineConfigRequest::ShowSelectStyle(enabled)
+                    }
+                    SubRowId::PreferredStyle => {
+                        crate::SimplyLoveMachineConfigRequest::PreferredPlayStyle(
+                            machine_preferred_play_style_from_choice(new_index),
+                        )
+                    }
+                    SubRowId::SelectPlayMode => {
+                        crate::SimplyLoveMachineConfigRequest::ShowSelectPlayMode(enabled)
+                    }
+                    SubRowId::PreferredMode => {
+                        crate::SimplyLoveMachineConfigRequest::PreferredPlayMode(
+                            machine_preferred_play_mode_from_choice(new_index),
+                        )
+                    }
+                    SubRowId::Font => crate::SimplyLoveMachineConfigRequest::Font(
+                        machine_font_from_choice(new_index),
+                    ),
+                    SubRowId::BarColor => crate::SimplyLoveMachineConfigRequest::BarColor(
+                        machine_bar_color_from_choice(new_index),
+                    ),
+                    SubRowId::EvaluationStyle => {
+                        crate::SimplyLoveMachineConfigRequest::EvaluationStyle(
+                            machine_evaluation_style_from_choice(new_index),
+                        )
+                    }
+                    SubRowId::EvalSummary => {
+                        crate::SimplyLoveMachineConfigRequest::ShowEvaluationSummary(enabled)
+                    }
+                    SubRowId::NiceSound => {
+                        crate::SimplyLoveMachineConfigRequest::NiceSound(enabled)
+                    }
+                    SubRowId::NameEntry => {
+                        crate::SimplyLoveMachineConfigRequest::ShowNameEntry(enabled)
+                    }
+                    SubRowId::GameoverScreen => {
+                        crate::SimplyLoveMachineConfigRequest::ShowGameover(enabled)
+                    }
+                    SubRowId::MenuMusic => {
+                        crate::SimplyLoveMachineConfigRequest::MenuMusic(enabled)
+                    }
+                    SubRowId::VisualStyle => crate::SimplyLoveMachineConfigRequest::VisualStyle(
+                        visual_style_from_choice(new_index),
+                    ),
+                    SubRowId::ThemeVariant => crate::SimplyLoveMachineConfigRequest::SrpgVariant(
+                        srpg_variant_from_choice(new_index),
+                    ),
+                    SubRowId::Replays => {
+                        crate::SimplyLoveMachineConfigRequest::EnableReplays(enabled)
+                    }
+                    SubRowId::PerPlayerGlobalOffsets => {
+                        crate::SimplyLoveMachineConfigRequest::AllowPerPlayerGlobalOffsets(enabled)
+                    }
+                    SubRowId::PackIniOffsets => {
+                        crate::SimplyLoveMachineConfigRequest::PackIniOffsets(enabled)
+                    }
+                    SubRowId::DefaultSyncOffset => {
+                        crate::SimplyLoveMachineConfigRequest::DefaultSyncOffset(
+                            default_sync_offset_from_choice(new_index),
+                        )
+                    }
+                    SubRowId::KeyboardFeatures => {
+                        crate::SimplyLoveMachineConfigRequest::KeyboardFeatures(enabled)
+                    }
+                    SubRowId::VideoBgs => {
+                        crate::SimplyLoveMachineConfigRequest::ShowVideoBackgrounds(enabled)
+                    }
+                    SubRowId::RandomBackgroundMode => {
+                        crate::SimplyLoveMachineConfigRequest::RandomBackgroundMode(
+                            random_background_mode_from_choice(new_index),
+                        )
+                    }
+                    SubRowId::VersionOverlay => {
+                        crate::SimplyLoveMachineConfigRequest::ShowVersionOverlay(enabled)
+                    }
+                    SubRowId::VersionOverlaySide => {
+                        crate::SimplyLoveMachineConfigRequest::VersionOverlaySide(
+                            version_overlay_side_from_choice(new_index),
+                        )
+                    }
+                    SubRowId::WriteCurrentScreen => {
+                        crate::SimplyLoveMachineConfigRequest::WriteCurrentScreen(enabled)
+                    }
+                    _ => return None,
+                };
+                action = Some(machine_config_effect(request));
             }
-            SubRowId::EvaluationStyle => config::update_machine_evaluation_style(
-                machine_evaluation_style_from_choice(new_index),
-            ),
-            SubRowId::EvalSummary => config::update_machine_show_eval_summary(enabled),
-            SubRowId::NiceSound => config::update_machine_nice_sound(enabled),
-            SubRowId::NameEntry => config::update_machine_show_name_entry(enabled),
-            SubRowId::GameoverScreen => config::update_machine_show_gameover(enabled),
-            SubRowId::MenuMusic => config::update_menu_music(enabled),
-            SubRowId::VisualStyle => {
-                config::update_visual_style(visual_style_from_choice(new_index))
-            }
-            SubRowId::ThemeVariant => {
-                config::update_srpg_variant(srpg_variant_from_choice(new_index))
-            }
-            SubRowId::Replays => config::update_machine_enable_replays(enabled),
-            SubRowId::PerPlayerGlobalOffsets => {
-                config::update_machine_allow_per_player_global_offsets(enabled)
-            }
-            SubRowId::PackIniOffsets => config::update_machine_pack_ini_offsets(enabled),
-            SubRowId::DefaultSyncOffset => config::update_machine_default_sync_offset(
-                default_sync_offset_from_choice(new_index),
-            ),
-            SubRowId::KeyboardFeatures => config::update_keyboard_features(enabled),
-            SubRowId::VideoBgs => config::update_show_video_backgrounds(enabled),
-            SubRowId::RandomBackgroundMode => {
-                config::update_random_background_mode(random_background_mode_from_choice(new_index))
-            }
-            SubRowId::VersionOverlay => config::update_show_version_overlay(enabled),
-            SubRowId::VersionOverlaySide => {
-                config::update_version_overlay_side(version_overlay_side_from_choice(new_index))
-            }
-            SubRowId::WriteCurrentScreen => config::update_write_current_screen(enabled),
-            _ => {}
         }
     } else if matches!(kind, SubmenuKind::Advanced) {
         let row = &rows[row_index];
-        if row.id == SubRowId::DefaultFailType {
-            config::update_default_fail_type(default_fail_type_from_choice(new_index));
-        } else if row.id == SubRowId::BannerCache {
-            config::update_banner_cache(new_index == 1);
-        } else if row.id == SubRowId::CdTitleCache {
-            config::update_cdtitle_cache(new_index == 1);
-        } else if row.id == SubRowId::SongParsingThreads {
-            let threads = software_thread_from_choice(&state.software_thread_choices, new_index);
-            config::update_song_parsing_threads(threads);
-        } else if row.id == SubRowId::CacheSongs {
-            config::update_cache_songs(new_index == 1);
-        } else if row.id == SubRowId::FastLoad {
-            config::update_fastload(new_index == 1);
-        }
+        let request = match row.id {
+            SubRowId::DefaultFailType => crate::SimplyLoveAdvancedConfigRequest::DefaultFailType(
+                default_fail_type_from_choice(new_index),
+            ),
+            SubRowId::BannerCache => {
+                crate::SimplyLoveAdvancedConfigRequest::BannerCache(new_index == 1)
+            }
+            SubRowId::CdTitleCache => {
+                crate::SimplyLoveAdvancedConfigRequest::CdTitleCache(new_index == 1)
+            }
+            SubRowId::SongParsingThreads => {
+                crate::SimplyLoveAdvancedConfigRequest::SongParsingThreads(
+                    thread_count_from_choice(&state.software_thread_choices, new_index),
+                )
+            }
+            SubRowId::CacheSongs => {
+                crate::SimplyLoveAdvancedConfigRequest::CacheSongs(new_index == 1)
+            }
+            SubRowId::FastLoad => crate::SimplyLoveAdvancedConfigRequest::FastLoad(new_index == 1),
+            _ => return None,
+        };
+        action = Some(advanced_config_effect(request));
     } else if matches!(kind, SubmenuKind::NullOrDieOptions) {
         let row = &rows[row_index];
-        if row.id == SubRowId::SyncGraph {
-            config::update_null_or_die_sync_graph(sync_graph_mode_from_choice(new_index));
-        } else if row.id == SubRowId::SyncConfidence {
-            config::update_null_or_die_confidence_percent(sync_confidence_from_choice(new_index));
-        } else if row.id == SubRowId::PackSyncThreads {
-            let threads = software_thread_from_choice(&state.software_thread_choices, new_index);
-            config::update_null_or_die_pack_sync_threads(threads);
-        } else if row.id == SubRowId::KernelTarget {
-            config::update_null_or_die_kernel_target(null_or_die_kernel_target_from_choice(
-                new_index,
-            ));
-        } else if row.id == SubRowId::KernelType {
-            config::update_null_or_die_kernel_type(null_or_die_kernel_type_from_choice(new_index));
-        } else if row.id == SubRowId::FullSpectrogram {
-            config::update_null_or_die_full_spectrogram(yes_no_from_choice(new_index));
-        }
+        let request = match row.id {
+            SubRowId::SyncGraph => {
+                crate::SimplyLoveNullOrDieConfigRequest::SyncGraph(match new_index {
+                    0 => crate::SimplyLoveNullOrDieGraph::Frequency,
+                    1 => crate::SimplyLoveNullOrDieGraph::BeatIndex,
+                    _ => crate::SimplyLoveNullOrDieGraph::PostKernelFingerprint,
+                })
+            }
+            SubRowId::SyncConfidence => crate::SimplyLoveNullOrDieConfigRequest::ConfidencePercent(
+                sync_confidence_from_choice(new_index),
+            ),
+            SubRowId::PackSyncThreads => crate::SimplyLoveNullOrDieConfigRequest::PackSyncThreads(
+                thread_count_from_choice(&state.software_thread_choices, new_index),
+            ),
+            SubRowId::KernelTarget => {
+                crate::SimplyLoveNullOrDieConfigRequest::KernelTarget(if new_index == 1 {
+                    crate::SimplyLoveSyncKernelTarget::Accumulator
+                } else {
+                    crate::SimplyLoveSyncKernelTarget::Digest
+                })
+            }
+            SubRowId::KernelType => {
+                crate::SimplyLoveNullOrDieConfigRequest::Kernel(if new_index == 1 {
+                    crate::SimplyLoveSyncKernel::Loudest
+                } else {
+                    crate::SimplyLoveSyncKernel::Rising
+                })
+            }
+            SubRowId::FullSpectrogram => crate::SimplyLoveNullOrDieConfigRequest::FullSpectrogram(
+                yes_no_from_choice(new_index),
+            ),
+            _ => return None,
+        };
+        action = Some(null_or_die_config_effect(request));
     } else if matches!(kind, SubmenuKind::Course) {
         let row = &rows[row_index];
         let enabled = yes_no_from_choice(new_index);
-        match row.id {
-            SubRowId::ShowRandomCourses => config::update_show_random_courses(enabled),
-            SubRowId::ShowMostPlayed => config::update_show_most_played_courses(enabled),
-            SubRowId::ShowIndividualScores => config::update_show_course_individual_scores(enabled),
-            SubRowId::AutosubmitIndividual => {
-                config::update_autosubmit_course_scores_individually(enabled)
+        let request = match row.id {
+            SubRowId::ShowRandomCourses => {
+                crate::SimplyLoveCourseConfigRequest::ShowRandom(enabled)
             }
-            _ => {}
-        }
+            SubRowId::ShowMostPlayed => {
+                crate::SimplyLoveCourseConfigRequest::ShowMostPlayed(enabled)
+            }
+            SubRowId::ShowIndividualScores => {
+                crate::SimplyLoveCourseConfigRequest::ShowIndividualScores(enabled)
+            }
+            SubRowId::AutosubmitIndividual => {
+                crate::SimplyLoveCourseConfigRequest::AutosubmitIndividual(enabled)
+            }
+            _ => return None,
+        };
+        action = Some(course_config_effect(request));
     } else if matches!(kind, SubmenuKind::Gameplay) {
         let row = &rows[row_index];
-        if row.id == SubRowId::BgBrightness {
-            config::update_bg_brightness(bg_brightness_from_choice(new_index));
-        } else if row.id == SubRowId::CenteredP1Notefield {
-            config::update_center_1player_notefield(new_index == 1);
-        } else if row.id == SubRowId::ZmodRatingBox {
-            config::update_zmod_rating_box_text(new_index == 1);
-        } else if row.id == SubRowId::BpmDecimal {
-            config::update_show_bpm_decimal(new_index == 1);
-        } else if row.id == SubRowId::BpmPosition {
-            let position = if new_index == 1 {
-                config::GameplayBpmPosition::NearField
-            } else {
-                config::GameplayBpmPosition::TopCenter
-            };
-            config::update_gameplay_bpm_position(position);
-        } else if row.id == SubRowId::DelayedBack {
-            // Choice 0 = Instant (delayed_back = false), 1 = Hold (delayed_back = true).
-            config::update_delayed_back(new_index == 1);
-        }
+        let request = match row.id {
+            SubRowId::BgBrightness => {
+                crate::SimplyLoveGameplayConfigRequest::BackgroundBrightnessTenths(
+                    new_index.min(10) as u8,
+                )
+            }
+            SubRowId::CenteredP1Notefield => {
+                crate::SimplyLoveGameplayConfigRequest::CenterPlayerOneNotefield(new_index == 1)
+            }
+            SubRowId::ZmodRatingBox => {
+                crate::SimplyLoveGameplayConfigRequest::ZmodRatingBoxText(new_index == 1)
+            }
+            SubRowId::BpmDecimal => {
+                crate::SimplyLoveGameplayConfigRequest::ShowBpmDecimal(new_index == 1)
+            }
+            SubRowId::BpmPosition => {
+                crate::SimplyLoveGameplayConfigRequest::BpmNearField(new_index == 1)
+            }
+            SubRowId::DelayedBack => {
+                crate::SimplyLoveGameplayConfigRequest::DelayedBack(new_index == 1)
+            }
+            _ => return None,
+        };
+        action = Some(gameplay_config_effect(request));
     } else if matches!(kind, SubmenuKind::Sound) {
         let row = &rows[row_index];
         match row.id {
-            SubRowId::MasterVolume => {
-                let vol = master_volume_from_choice(new_index);
-                config::update_master_volume(vol);
-            }
-            SubRowId::SfxVolume => {
-                let vol = master_volume_from_choice(new_index);
-                config::update_sfx_volume(vol);
-            }
-            SubRowId::AssistTickVolume => {
-                let vol = master_volume_from_choice(new_index);
-                config::update_assist_tick_volume(vol);
-            }
-            SubRowId::MusicVolume => {
-                let vol = master_volume_from_choice(new_index);
-                config::update_music_volume(vol);
-            }
             SubRowId::SoundDevice => {
                 let device = sound_device_from_choice(state, new_index);
-                config::update_audio_output_device(device);
-                let current_rate = config::get().audio_sample_rate_hz;
+                state.audio_options.output_device = device;
+                let current_rate = state.audio_options.sample_rate_hz;
                 let rate_choice = sample_rate_choice_index(state, current_rate);
+                let mut requests = vec![AudioRequest::SetOutputDevice(device)];
                 if current_rate.is_some() && rate_choice == 0 {
-                    config::update_audio_sample_rate(None);
+                    state.audio_options.sample_rate_hz = None;
+                    requests.push(AudioRequest::SetSampleRate(None));
                 }
                 set_sound_choice_index(state, SubRowId::AudioSampleRate, rate_choice);
+                action = Some(audio_requests_effect(requests));
             }
             SubRowId::AudioOutputMode => {
-                config::update_audio_output_mode(audio_output_mode_from_choice(new_index));
+                let mode = AudioOutputModeChoice::from_choice(new_index);
+                state.audio_options.output_mode = mode;
+                action = Some(audio_requests_effect(vec![AudioRequest::SetOutputMode(
+                    mode,
+                )]));
                 #[cfg(target_os = "linux")]
                 set_sound_choice_index(state, SubRowId::AlsaExclusive, 0);
             }
             #[cfg(target_os = "linux")]
             SubRowId::LinuxAudioBackend => {
-                let backend = linux_audio_backend_from_choice(state, new_index);
-                config::update_linux_audio_backend(backend);
-                if matches!(backend, config::LinuxAudioBackend::Alsa) {
-                    set_sound_choice_index(
-                        state,
-                        SubRowId::AlsaExclusive,
-                        alsa_exclusive_choice_index(config::get().audio_output_mode),
-                    );
+                let backend_name =
+                    linux_audio_backend_name_from_choice(state, new_index).to_owned();
+                state.audio_options.selected_backend_name = backend_name.clone();
+                let mut requests = vec![AudioRequest::SetOutputBackend(backend_name.clone())];
+                if backend_name.eq_ignore_ascii_case("ALSA") {
+                    let exclusive_index = state.audio_options.output_mode.exclusive_choice_index();
+                    set_sound_choice_index(state, SubRowId::AlsaExclusive, exclusive_index);
                 } else {
-                    if matches!(
-                        config::get().audio_output_mode,
-                        config::AudioOutputMode::Exclusive
-                    ) {
-                        config::update_audio_output_mode(selected_audio_output_mode(state));
+                    if state.audio_options.output_mode == AudioOutputModeChoice::Exclusive {
+                        let mode = selected_audio_output_mode(state);
+                        state.audio_options.output_mode = mode;
+                        requests.push(AudioRequest::SetOutputMode(mode));
                     }
                     set_sound_choice_index(state, SubRowId::AlsaExclusive, 0);
                 }
+                action = Some(audio_requests_effect(requests));
             }
             #[cfg(target_os = "linux")]
             SubRowId::AlsaExclusive => {
-                let mode = audio_output_mode_from_alsa_choice(
-                    selected_audio_output_mode(state),
-                    new_index,
-                );
-                config::update_audio_output_mode(mode);
+                let mode = selected_audio_output_mode(state).with_exclusive(new_index == 1);
+                state.audio_options.output_mode = mode;
+                action = Some(audio_requests_effect(vec![AudioRequest::SetOutputMode(
+                    mode,
+                )]));
             }
             SubRowId::AudioSampleRate => {
                 let rate = sample_rate_from_choice(state, new_index);
-                config::update_audio_sample_rate(rate);
+                state.audio_options.sample_rate_hz = rate;
+                action = Some(audio_requests_effect(vec![AudioRequest::SetSampleRate(
+                    rate,
+                )]));
             }
             SubRowId::MineSounds => {
-                config::update_mine_hit_sound(new_index == 1);
+                action = Some(audio_requests_effect(vec![AudioRequest::SetMineHitSound(
+                    new_index == 1,
+                )]));
             }
             SubRowId::RateModPreservesPitch => {
-                config::update_rate_mod_preserves_pitch(new_index == 1);
+                let enabled = new_index == 1;
+                state.audio_options.preserve_pitch = enabled;
+                action = Some(audio_requests_effect(vec![AudioRequest::SetPreservePitch(
+                    enabled,
+                )]));
             }
             SubRowId::ReplayGain => {
-                config::update_enable_replaygain(new_index == 1);
+                let enabled = new_index == 1;
+                state.audio_options.replay_gain = enabled;
+                action = Some(audio_requests_effect(vec![AudioRequest::SetReplayGain(
+                    enabled,
+                )]));
             }
             _ => {}
         }
     } else if matches!(kind, SubmenuKind::SelectMusic) {
         let row = &rows[row_index];
-        if row.id == SubRowId::ShowBanners {
-            config::update_show_select_music_banners(yes_no_from_choice(new_index));
-        } else if row.id == SubRowId::ShowVideoBanners {
-            config::update_show_select_music_video_banners(yes_no_from_choice(new_index));
-        } else if row.id == SubRowId::ShowBreakdown {
-            config::update_show_select_music_breakdown(yes_no_from_choice(new_index));
-        } else if row.id == SubRowId::BreakdownStyle {
-            config::update_select_music_breakdown_style(breakdown_style_from_choice(new_index));
-        } else if row.id == SubRowId::ShowNativeLanguage {
-            config::update_translated_titles(translated_titles_from_choice(new_index));
-        } else if row.id == SubRowId::MusicWheelSpeed {
-            config::update_music_wheel_switch_speed(music_wheel_scroll_speed_from_choice(
-                new_index,
-            ));
-        } else if row.id == SubRowId::MusicWheelStyle {
-            config::update_select_music_wheel_style(select_music_wheel_style_from_choice(
-                new_index,
-            ));
-        } else if row.id == SubRowId::SeriesSort {
-            config::update_sort_music_wheel_by_series(yes_no_from_choice(new_index));
-        } else if row.id == SubRowId::SongSelectBg {
-            config::update_select_music_song_select_bg_mode(
-                select_music_song_select_bg_mode_from_choice(new_index),
-            );
-        } else if row.id == SubRowId::SwitchProfile {
-            config::update_allow_switch_profile_in_menu(yes_no_from_choice(new_index));
-        } else if row.id == SubRowId::ShowCdTitles {
-            config::update_show_select_music_cdtitles(yes_no_from_choice(new_index));
-        } else if row.id == SubRowId::ShowWheelGrades {
-            config::update_show_music_wheel_grades(yes_no_from_choice(new_index));
-        } else if row.id == SubRowId::ShowWheelLamps {
-            config::update_show_music_wheel_lamps(yes_no_from_choice(new_index));
-        } else if row.id == SubRowId::ItlRank {
-            config::update_select_music_itl_rank_mode(select_music_itl_rank_mode_from_choice(
-                new_index,
-            ));
-        } else if row.id == SubRowId::ItlWheelData {
-            config::update_select_music_itl_wheel_mode(select_music_itl_wheel_mode_from_choice(
-                new_index,
-            ));
-        } else if row.id == SubRowId::NewPackBadge {
-            config::update_select_music_new_pack_mode(select_music_new_pack_mode_from_choice(
-                new_index,
-            ));
-        } else if row.id == SubRowId::FolderStats {
-            config::update_show_select_music_folder_stats(yes_no_from_choice(new_index));
-        } else if row.id == SubRowId::ShowPatternInfo {
-            config::update_select_music_pattern_info_mode(
-                select_music_pattern_info_mode_from_choice(new_index),
-            );
-        } else if row.id == SubRowId::StepArtistBox {
-            config::update_select_music_step_artist_box_mode(
-                select_music_step_artist_box_mode_from_choice(new_index),
-            );
-        } else if row.id == SubRowId::MusicPreviews {
-            config::update_show_select_music_previews(yes_no_from_choice(new_index));
-        } else if row.id == SubRowId::PreviewMarker {
-            config::update_show_select_music_preview_marker(yes_no_from_choice(new_index));
-        } else if row.id == SubRowId::LoopMusic {
-            config::update_select_music_preview_loop(new_index == 1);
-        } else if row.id == SubRowId::PreviewStartsImmediately {
-            config::update_select_music_preview_starts_immediately(yes_no_from_choice(new_index));
-        } else if row.id == SubRowId::ShowGameplayTimer {
-            config::update_show_select_music_gameplay_timer(yes_no_from_choice(new_index));
-        } else if row.id == SubRowId::ShowStageDisplay {
-            config::update_show_select_music_stage_display(yes_no_from_choice(new_index));
-        } else if row.id == SubRowId::ShowGsBox {
-            config::update_show_select_music_scorebox(yes_no_from_choice(new_index));
-        } else if row.id == SubRowId::GsBoxPlacement {
-            config::update_select_music_scorebox_placement(
-                select_music_scorebox_placement_from_choice(new_index),
-            );
-        }
+        let request = match row.id {
+            SubRowId::ShowBanners => crate::SimplyLoveSelectMusicConfigRequest::ShowBanners(
+                yes_no_from_choice(new_index),
+            ),
+            SubRowId::ShowVideoBanners => {
+                crate::SimplyLoveSelectMusicConfigRequest::ShowVideoBanners(yes_no_from_choice(
+                    new_index,
+                ))
+            }
+            SubRowId::ShowBreakdown => crate::SimplyLoveSelectMusicConfigRequest::ShowBreakdown(
+                yes_no_from_choice(new_index),
+            ),
+            SubRowId::BreakdownStyle => crate::SimplyLoveSelectMusicConfigRequest::BreakdownStyle(
+                breakdown_style_from_choice(new_index),
+            ),
+            SubRowId::ShowNativeLanguage => {
+                crate::SimplyLoveSelectMusicConfigRequest::TranslatedTitles(
+                    translated_titles_from_choice(new_index),
+                )
+            }
+            SubRowId::MusicWheelSpeed => {
+                crate::SimplyLoveSelectMusicConfigRequest::WheelSwitchSpeed(
+                    music_wheel_scroll_speed_from_choice(new_index),
+                )
+            }
+            SubRowId::MusicWheelStyle => crate::SimplyLoveSelectMusicConfigRequest::WheelStyle(
+                select_music_wheel_style_from_choice(new_index),
+            ),
+            SubRowId::SeriesSort => crate::SimplyLoveSelectMusicConfigRequest::SortBySeries(
+                yes_no_from_choice(new_index),
+            ),
+            SubRowId::SongSelectBg => {
+                crate::SimplyLoveSelectMusicConfigRequest::SongSelectBackground(
+                    select_music_song_select_bg_mode_from_choice(new_index),
+                )
+            }
+            SubRowId::SwitchProfile => {
+                crate::SimplyLoveSelectMusicConfigRequest::AllowProfileSwitch(yes_no_from_choice(
+                    new_index,
+                ))
+            }
+            SubRowId::ShowCdTitles => crate::SimplyLoveSelectMusicConfigRequest::ShowCdTitles(
+                yes_no_from_choice(new_index),
+            ),
+            SubRowId::ShowWheelGrades => {
+                crate::SimplyLoveSelectMusicConfigRequest::ShowWheelGrades(yes_no_from_choice(
+                    new_index,
+                ))
+            }
+            SubRowId::ShowWheelLamps => crate::SimplyLoveSelectMusicConfigRequest::ShowWheelLamps(
+                yes_no_from_choice(new_index),
+            ),
+            SubRowId::ItlRank => crate::SimplyLoveSelectMusicConfigRequest::ItlRankMode(
+                select_music_itl_rank_mode_from_choice(new_index),
+            ),
+            SubRowId::ItlWheelData => crate::SimplyLoveSelectMusicConfigRequest::ItlWheelMode(
+                select_music_itl_wheel_mode_from_choice(new_index),
+            ),
+            SubRowId::NewPackBadge => crate::SimplyLoveSelectMusicConfigRequest::NewPackMode(
+                select_music_new_pack_mode_from_choice(new_index),
+            ),
+            SubRowId::FolderStats => crate::SimplyLoveSelectMusicConfigRequest::ShowFolderStats(
+                yes_no_from_choice(new_index),
+            ),
+            SubRowId::ShowPatternInfo => {
+                crate::SimplyLoveSelectMusicConfigRequest::PatternInfoMode(
+                    select_music_pattern_info_mode_from_choice(new_index),
+                )
+            }
+            SubRowId::StepArtistBox => {
+                crate::SimplyLoveSelectMusicConfigRequest::StepArtistBoxMode(
+                    select_music_step_artist_box_mode_from_choice(new_index),
+                )
+            }
+            SubRowId::MusicPreviews => crate::SimplyLoveSelectMusicConfigRequest::ShowPreviews(
+                yes_no_from_choice(new_index),
+            ),
+            SubRowId::PreviewMarker => {
+                crate::SimplyLoveSelectMusicConfigRequest::ShowPreviewMarker(yes_no_from_choice(
+                    new_index,
+                ))
+            }
+            SubRowId::LoopMusic => {
+                crate::SimplyLoveSelectMusicConfigRequest::PreviewLoop(new_index == 1)
+            }
+            SubRowId::PreviewStartsImmediately => {
+                crate::SimplyLoveSelectMusicConfigRequest::PreviewStartsImmediately(
+                    yes_no_from_choice(new_index),
+                )
+            }
+            SubRowId::ShowGameplayTimer => {
+                crate::SimplyLoveSelectMusicConfigRequest::ShowGameplayTimer(yes_no_from_choice(
+                    new_index,
+                ))
+            }
+            SubRowId::ShowStageDisplay => {
+                crate::SimplyLoveSelectMusicConfigRequest::ShowStageDisplay(yes_no_from_choice(
+                    new_index,
+                ))
+            }
+            SubRowId::ShowGsBox => crate::SimplyLoveSelectMusicConfigRequest::ShowScorebox(
+                yes_no_from_choice(new_index),
+            ),
+            SubRowId::GsBoxPlacement => {
+                crate::SimplyLoveSelectMusicConfigRequest::ScoreboxPlacement(
+                    select_music_scorebox_placement_from_choice(new_index),
+                )
+            }
+            _ => return None,
+        };
+        action = Some(select_music_config_effect(request));
     } else if matches!(kind, SubmenuKind::GrooveStats) {
         let row = &rows[row_index];
-        if row.id == SubRowId::EnableGrooveStats {
-            let enabled = yes_no_from_choice(new_index);
-            config::update_enable_groovestats(enabled);
-            action = Some(online_reinitialize_effect());
-        } else if row.id == SubRowId::ShowSrpgShop {
-            config::update_show_srpg_shop(yes_no_from_choice(new_index));
-        } else if row.id == SubRowId::SrpgShopFolder {
-            config::update_srpg_shop_folder(srpg_shop_folder_from_choice(new_index));
-        } else if row.id == SubRowId::EnableBoogieStats {
-            config::update_enable_boogiestats(yes_no_from_choice(new_index));
-            action = Some(online_reinitialize_effect());
-        } else if row.id == SubRowId::AutoPopulateScores {
-            config::update_auto_populate_gs_scores(yes_no_from_choice(new_index));
-        } else if row.id == SubRowId::AutoDownloadUnlocks {
-            config::update_auto_download_unlocks(yes_no_from_choice(new_index));
-        } else if row.id == SubRowId::SeparateUnlocksByPlayer {
-            config::update_separate_unlocks_by_player(yes_no_from_choice(new_index));
-        } else if row.id == SubRowId::GrooveStatsQrLogin {
-            config::update_groovestats_qr_login_when(groovestats_qr_login_when_from_choice(
-                new_index,
-            ));
-        }
+        let enabled = yes_no_from_choice(new_index);
+        let request = match row.id {
+            SubRowId::EnableGrooveStats => {
+                crate::SimplyLoveOnlineConfigRequest::EnableGrooveStats(enabled)
+            }
+            SubRowId::ShowSrpgShop => crate::SimplyLoveOnlineConfigRequest::ShowSrpgShop(enabled),
+            SubRowId::SrpgShopFolder => crate::SimplyLoveOnlineConfigRequest::SrpgShopFolder(
+                srpg_shop_folder_from_index(new_index),
+            ),
+            SubRowId::EnableBoogieStats => {
+                crate::SimplyLoveOnlineConfigRequest::EnableBoogieStats(enabled)
+            }
+            SubRowId::AutoPopulateScores => {
+                crate::SimplyLoveOnlineConfigRequest::AutoPopulateScores(enabled)
+            }
+            SubRowId::AutoDownloadUnlocks => {
+                crate::SimplyLoveOnlineConfigRequest::AutoDownloadUnlocks(enabled)
+            }
+            SubRowId::SeparateUnlocksByPlayer => {
+                crate::SimplyLoveOnlineConfigRequest::SeparateUnlocksByPlayer(enabled)
+            }
+            SubRowId::GrooveStatsQrLogin => {
+                crate::SimplyLoveOnlineConfigRequest::GrooveStatsQrLogin(
+                    qr_login_policy_from_index(new_index),
+                )
+            }
+            _ => return None,
+        };
+        let effect = online_config_effect(request);
+        action = Some(
+            if matches!(
+                row.id,
+                SubRowId::EnableGrooveStats | SubRowId::EnableBoogieStats
+            ) {
+                ThemeEffect::Batch(vec![effect, online_reinitialize_effect()])
+            } else {
+                effect
+            },
+        );
     } else if matches!(kind, SubmenuKind::ArrowCloud) {
         let row = &rows[row_index];
-        if row.id == SubRowId::EnableArrowCloud {
-            config::update_enable_arrowcloud(yes_no_from_choice(new_index));
-            action = Some(online_reinitialize_effect());
-        } else if row.id == SubRowId::ArrowCloudSubmitFails {
-            config::update_submit_arrowcloud_fails(yes_no_from_choice(new_index));
-        } else if row.id == SubRowId::ArrowCloudQrLogin {
-            config::update_arrowcloud_qr_login_when(arrowcloud_qr_login_when_from_choice(
-                new_index,
-            ));
-        }
+        let enabled = yes_no_from_choice(new_index);
+        let request = match row.id {
+            SubRowId::EnableArrowCloud => {
+                crate::SimplyLoveOnlineConfigRequest::EnableArrowCloud(enabled)
+            }
+            SubRowId::ArrowCloudSubmitFails => {
+                crate::SimplyLoveOnlineConfigRequest::SubmitArrowCloudFails(enabled)
+            }
+            SubRowId::ArrowCloudQrLogin => crate::SimplyLoveOnlineConfigRequest::ArrowCloudQrLogin(
+                qr_login_policy_from_index(new_index),
+            ),
+            _ => return None,
+        };
+        let effect = online_config_effect(request);
+        action = Some(if row.id == SubRowId::EnableArrowCloud {
+            ThemeEffect::Batch(vec![effect, online_reinitialize_effect()])
+        } else {
+            effect
+        });
     } else if matches!(kind, SubmenuKind::ScoreImport) {
         let row = &rows[row_index];
         if row.id == SubRowId::ScoreImportEndpoint {
@@ -789,6 +961,47 @@ fn online_reinitialize_effect() -> ThemeEffect {
     ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Online(
         crate::SimplyLoveOnlineRequest::Reinitialize,
     ))
+}
+
+const fn qr_login_policy_from_index(index: usize) -> crate::SimplyLoveQrLoginPolicy {
+    match index {
+        0 => crate::SimplyLoveQrLoginPolicy::Always,
+        2 => crate::SimplyLoveQrLoginPolicy::Disabled,
+        _ => crate::SimplyLoveQrLoginPolicy::Sometimes,
+    }
+}
+
+const fn srpg_shop_folder_from_index(index: usize) -> crate::SimplyLoveSrpgShopFolder {
+    match index {
+        1 => crate::SimplyLoveSrpgShopFolder::Shops,
+        2 => crate::SimplyLoveSrpgShopFolder::Faction,
+        _ => crate::SimplyLoveSrpgShopFolder::Unlocks,
+    }
+}
+
+pub(super) const fn lights_driver_from_index(index: usize) -> crate::SimplyLoveLightsDriver {
+    match index {
+        1 => crate::SimplyLoveLightsDriver::Snek,
+        2 => crate::SimplyLoveLightsDriver::Litboard,
+        3 => crate::SimplyLoveLightsDriver::Win32Serial,
+        4 => crate::SimplyLoveLightsDriver::Fusion,
+        5 => crate::SimplyLoveLightsDriver::Gpb,
+        6 => crate::SimplyLoveLightsDriver::PacDrive,
+        7 => crate::SimplyLoveLightsDriver::PiuioLeds,
+        8 => crate::SimplyLoveLightsDriver::Itgio,
+        9 => crate::SimplyLoveLightsDriver::HidBlueDot,
+        10 => crate::SimplyLoveLightsDriver::Stac2,
+        11 => crate::SimplyLoveLightsDriver::MinimaidHid,
+        _ => crate::SimplyLoveLightsDriver::Off,
+    }
+}
+
+const fn gameplay_pad_lights_from_index(index: usize) -> crate::SimplyLoveGameplayPadLights {
+    if index == 1 {
+        crate::SimplyLoveGameplayPadLights::Chart
+    } else {
+        crate::SimplyLoveGameplayPadLights::Input
+    }
 }
 
 pub(super) fn single_pad_assignment_request(
@@ -1325,16 +1538,14 @@ pub(super) fn activate_current_selection(
                         .copied()
                         .unwrap_or(0)
                         .min(SELECT_MUSIC_SCOREBOX_CYCLE_NUM_CHOICES.saturating_sub(1));
-                    toggle_select_music_scorebox_cycle_option(state, choice_idx);
-                    return ThemeEffect::None;
+                    return toggle_select_music_scorebox_cycle_option(state, choice_idx);
                 } else if row_id == Some(SubRowId::ChartInfo) {
                     let choice_idx = submenu_cursor_indices(state, kind)
                         .get(row_idx)
                         .copied()
                         .unwrap_or(0)
                         .min(SELECT_MUSIC_CHART_INFO_NUM_CHOICES.saturating_sub(1));
-                    toggle_select_music_chart_info_option(state, choice_idx);
-                    return ThemeEffect::None;
+                    return toggle_select_music_chart_info_option(state, choice_idx);
                 }
             }
             if matches!(kind, SubmenuKind::Gameplay)
@@ -1347,8 +1558,7 @@ pub(super) fn activate_current_selection(
                         .copied()
                         .unwrap_or(0)
                         .min(config::AUTO_SS_NUM_FLAGS.saturating_sub(1));
-                    toggle_auto_screenshot_option(state, choice_idx);
-                    return ThemeEffect::None;
+                    return toggle_auto_screenshot_option(state, choice_idx);
                 }
             }
             if selected_row == total - 1 {

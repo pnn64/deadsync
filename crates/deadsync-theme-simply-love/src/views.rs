@@ -302,12 +302,33 @@ pub struct SelectMusicPlaylistView {
     pub text: String,
 }
 
-/// Filesystem-derived data prepared once when Select Music is entered.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+/// Shell-prepared play history for one Select Music player side.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct SelectMusicHistorySideView {
+    pub available: bool,
+    pub played_chart_counts: Vec<(String, u32)>,
+    pub recent_chart_hashes: Vec<String>,
+    /// Merged local/online best scores sorted by chart hash.
+    pub cached_scores: Vec<(String, deadsync_score::CachedScore)>,
+}
+
+/// Cache-derived play history used by Simply Love's popularity and recent
+/// sorts. Ranking and wheel presentation remain theme-owned.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct SelectMusicHistoryView {
+    pub machine_played_chart_counts: Vec<(String, u32)>,
+    pub machine_recent_chart_hashes: Vec<String>,
+    pub sides: [SelectMusicHistorySideView; 2],
+}
+
+/// Filesystem- and runtime-derived data prepared when Select Music is entered.
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct SelectMusicInitView {
     pub songs_root: PathBuf,
     pub courses_root: PathBuf,
     pub playlists: Vec<SelectMusicPlaylistView>,
+    pub history: SelectMusicHistoryView,
+    pub policy: SelectMusicPolicyView,
 }
 
 /// Shell-prepared song packs used by Simply Love's Options import/sync UI.
@@ -318,6 +339,116 @@ pub struct OptionsSongPackView {
     pub songs: Vec<Arc<deadsync_chart::SongData>>,
 }
 
+/// Shell-prepared media policy consumed by Simply Love's Select Music screen.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct SelectMusicMediaPolicyView {
+    pub show_banners: bool,
+    pub show_cdtitles: bool,
+    pub show_folder_stats: bool,
+    pub show_previews: bool,
+    pub preview_loop: bool,
+    pub preview_starts_immediately: bool,
+    pub show_preview_marker: bool,
+    pub replay_gain: bool,
+    pub song_select_bg_mode: deadsync_config::prelude::SelectMusicSongSelectBgMode,
+}
+
+/// Shell-prepared score and tournament policy consumed by Simply Love's wheel.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct SelectMusicWheelPolicyView {
+    pub show_grades: bool,
+    pub show_lamps: bool,
+    pub itl_rank_mode: deadsync_config::prelude::SelectMusicItlRankMode,
+    pub itl_score_mode: deadsync_config::prelude::SelectMusicItlWheelMode,
+}
+
+impl Default for SelectMusicWheelPolicyView {
+    fn default() -> Self {
+        Self {
+            show_grades: false,
+            show_lamps: false,
+            itl_rank_mode: deadsync_config::prelude::SelectMusicItlRankMode::None,
+            itl_score_mode: deadsync_config::prelude::SelectMusicItlWheelMode::Score,
+        }
+    }
+}
+
+/// Shell-prepared wheel and menu interaction policy for Select Music.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct SelectMusicInteractionPolicyView {
+    pub wheel_switch_speed: u8,
+    pub wheel_style: deadsync_config::prelude::SelectMusicWheelStyle,
+    pub sort_by_series: bool,
+    pub new_pack_mode: deadsync_config::prelude::NewPackMode,
+    pub show_srpg_shop: bool,
+    pub practice_shortcut: deadsync_input::KeyCode,
+    pub song_search_shortcut: deadsync_input::KeyCode,
+    pub reload_shortcut: deadsync_input::KeyCode,
+    pub test_input_shortcut: deadsync_input::KeyCode,
+}
+
+impl Default for SelectMusicInteractionPolicyView {
+    fn default() -> Self {
+        Self {
+            wheel_switch_speed: deadsync_config::prelude::DEFAULT_MUSIC_WHEEL_SWITCH_SPEED,
+            wheel_style: deadsync_config::prelude::SelectMusicWheelStyle::Itg,
+            sort_by_series: false,
+            new_pack_mode: deadsync_config::prelude::NewPackMode::Disabled,
+            show_srpg_shop: deadsync_config::prelude::DEFAULT_SHOW_SRPG_SHOP,
+            practice_shortcut: deadsync_input::KeyCode::KeyP,
+            song_search_shortcut: deadsync_input::KeyCode::KeyS,
+            reload_shortcut: deadsync_input::KeyCode::KeyL,
+            test_input_shortcut: deadsync_input::KeyCode::KeyT,
+        }
+    }
+}
+
+/// Shell-prepared visibility and layout policy for Select Music composition.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct SelectMusicPresentationPolicyView {
+    pub show_scorebox: bool,
+    pub scorebox_cycle_enabled: bool,
+    pub scorebox_in_step_pane: bool,
+    pub show_stage_display: bool,
+    pub show_gameplay_timer: bool,
+    pub step_artist_expanded: bool,
+    pub breakdown_style: deadsync_config::prelude::BreakdownStyle,
+    pub pattern_info_mode: deadsync_config::prelude::SelectMusicPatternInfoMode,
+    pub chart_info_peak_nps: bool,
+    pub chart_info_effective_bpm: bool,
+    pub chart_info_matrix_rating: bool,
+    pub show_breakdown: bool,
+    pub pack_ini_offsets: bool,
+    pub default_sync_offset: deadsync_config::prelude::DefaultSyncOffset,
+}
+
+impl Default for SelectMusicPresentationPolicyView {
+    fn default() -> Self {
+        Self {
+            show_scorebox: deadsync_config::prelude::DEFAULT_SHOW_SELECT_MUSIC_SCOREBOX,
+            scorebox_cycle_enabled:
+                deadsync_config::prelude::DEFAULT_SELECT_MUSIC_SCOREBOX_CYCLE_ITG
+                    || deadsync_config::prelude::DEFAULT_SELECT_MUSIC_SCOREBOX_CYCLE_EX
+                    || deadsync_config::prelude::DEFAULT_SELECT_MUSIC_SCOREBOX_CYCLE_HARD_EX
+                    || deadsync_config::prelude::DEFAULT_SELECT_MUSIC_SCOREBOX_CYCLE_TOURNAMENTS,
+            scorebox_in_step_pane: false,
+            show_stage_display: deadsync_config::prelude::DEFAULT_SHOW_SELECT_MUSIC_STAGE_DISPLAY,
+            show_gameplay_timer: deadsync_config::prelude::DEFAULT_SHOW_SELECT_MUSIC_GAMEPLAY_TIMER,
+            step_artist_expanded: false,
+            breakdown_style: deadsync_config::prelude::BreakdownStyle::Sl,
+            pattern_info_mode: deadsync_config::prelude::SelectMusicPatternInfoMode::Tech,
+            chart_info_peak_nps: deadsync_config::prelude::DEFAULT_SELECT_MUSIC_CHART_INFO_PEAK_NPS,
+            chart_info_effective_bpm:
+                deadsync_config::prelude::DEFAULT_SELECT_MUSIC_CHART_INFO_EFFECTIVE_BPM,
+            chart_info_matrix_rating:
+                deadsync_config::prelude::DEFAULT_SELECT_MUSIC_CHART_INFO_MATRIX_RATING,
+            show_breakdown: deadsync_config::prelude::DEFAULT_SHOW_SELECT_MUSIC_BREAKDOWN,
+            pack_ini_offsets: deadsync_config::prelude::DEFAULT_MACHINE_PACK_INI_OFFSETS,
+            default_sync_offset: deadsync_config::prelude::DefaultSyncOffset::Null,
+        }
+    }
+}
+
 /// Runtime/config policy used to expose Select Music features and input paths.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct SelectMusicPolicyView {
@@ -326,6 +457,10 @@ pub struct SelectMusicPolicyView {
     pub replays: bool,
     pub profile_switch: bool,
     pub keyboard_features: bool,
+    pub media: SelectMusicMediaPolicyView,
+    pub wheel: SelectMusicWheelPolicyView,
+    pub interaction: SelectMusicInteractionPolicyView,
+    pub presentation: SelectMusicPresentationPolicyView,
 }
 
 /// Simply Love's two density-graph texture targets.

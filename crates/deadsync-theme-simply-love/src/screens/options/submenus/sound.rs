@@ -1,16 +1,5 @@
 use super::super::*;
 
-#[cfg(target_os = "linux")]
-pub(in crate::screens::options) use crate::config::{
-    alsa_exclusive_choice_index, audio_output_mode_from_alsa_choice,
-};
-pub(in crate::screens::options) use crate::config::{
-    audio_output_mode_choice_index, audio_output_mode_from_choice, audio_sample_rate_choice_index,
-    audio_sample_rate_choices, audio_sample_rate_from_choice,
-    audio_volume_choice_index as master_volume_choice_index,
-    audio_volume_from_choice as master_volume_from_choice,
-};
-
 pub(in crate::screens::options) const SOUND_OPTIONS_ROWS: &[SubRow] = &[
     SubRow {
         id: SubRowId::SoundDevice,
@@ -268,14 +257,6 @@ pub(in crate::screens::options) fn build_sound_device_options(
 
 #[cfg(target_os = "linux")]
 #[inline(always)]
-pub(in crate::screens::options) fn linux_backend_label(
-    backend: config::LinuxAudioBackend,
-) -> std::sync::Arc<str> {
-    linux_backend_name_label(backend.as_str())
-}
-
-#[cfg(target_os = "linux")]
-#[inline(always)]
 fn linux_backend_name_label(name: &str) -> std::sync::Arc<str> {
     if name.eq_ignore_ascii_case("auto") {
         tr("Common", "Auto")
@@ -332,6 +313,21 @@ pub(in crate::screens::options) fn sound_sample_rate_choices(state: &State) -> V
     audio_sample_rate_choices(&[])
 }
 
+fn audio_sample_rate_choices(sample_rates_hz: &[u32]) -> Vec<Option<u32>> {
+    let mut choices = Vec::with_capacity(sample_rates_hz.len() + 1);
+    choices.push(None);
+    for &hz in sample_rates_hz {
+        let rate = Some(hz);
+        if !choices.contains(&rate) {
+            choices.push(rate);
+        }
+    }
+    if choices.len() == 1 {
+        choices.extend([Some(44_100), Some(48_000)]);
+    }
+    choices
+}
+
 pub(in crate::screens::options) fn sound_device_from_choice(
     state: &State,
     idx: usize,
@@ -346,7 +342,7 @@ pub(in crate::screens::options) fn sound_device_from_choice(
 #[inline(always)]
 pub(in crate::screens::options) fn selected_audio_output_mode(
     state: &State,
-) -> config::AudioOutputMode {
+) -> AudioOutputModeChoice {
     sound_row_index(SubRowId::AudioOutputMode)
         .and_then(|idx| {
             state.sub[SubmenuKind::Sound]
@@ -354,65 +350,54 @@ pub(in crate::screens::options) fn selected_audio_output_mode(
                 .get(idx)
                 .copied()
         })
-        .map(audio_output_mode_from_choice)
-        .unwrap_or(config::AudioOutputMode::Auto)
+        .map(AudioOutputModeChoice::from_choice)
+        .unwrap_or_default()
 }
 
 #[cfg(target_os = "linux")]
 pub(in crate::screens::options) fn linux_audio_backend_choice_index(
     state: &State,
-    backend: config::LinuxAudioBackend,
+    backend_name: &str,
 ) -> usize {
-    let target = linux_backend_label(backend).to_string();
     state
-        .linux_backend_choices
+        .audio_options
+        .available_backend_names
         .iter()
-        .position(|choice| *choice == target)
+        .position(|choice| choice.eq_ignore_ascii_case(backend_name))
         .unwrap_or(0)
 }
 
 #[cfg(target_os = "linux")]
-pub(in crate::screens::options) fn linux_audio_backend_from_choice(
+pub(in crate::screens::options) fn linux_audio_backend_name_from_choice(
     state: &State,
     idx: usize,
-) -> config::LinuxAudioBackend {
-    match state
-        .linux_backend_choices
+) -> &str {
+    state
+        .audio_options
+        .available_backend_names
         .get(idx)
         .map(String::as_str)
         .unwrap_or("Auto")
-    {
-        "PipeWire" => config::LinuxAudioBackend::PipeWire,
-        "PulseAudio" => config::LinuxAudioBackend::PulseAudio,
-        "JACK" => config::LinuxAudioBackend::Jack,
-        "ALSA" => config::LinuxAudioBackend::Alsa,
-        _ => config::LinuxAudioBackend::Auto,
-    }
 }
 
 #[cfg(target_os = "linux")]
 #[inline(always)]
-pub(in crate::screens::options) fn selected_linux_audio_backend(
-    state: &State,
-) -> config::LinuxAudioBackend {
-    sound_row_index(SubRowId::LinuxAudioBackend)
+pub(in crate::screens::options) fn selected_linux_audio_backend_name(state: &State) -> &str {
+    let index = sound_row_index(SubRowId::LinuxAudioBackend)
         .and_then(|idx| {
             state.sub[SubmenuKind::Sound]
                 .choice_indices
                 .get(idx)
                 .copied()
         })
-        .map(|idx| linux_audio_backend_from_choice(state, idx))
-        .unwrap_or(config::LinuxAudioBackend::Auto)
+        .unwrap_or(0);
+    linux_audio_backend_name_from_choice(state, index)
 }
 
 #[cfg(target_os = "linux")]
 #[inline(always)]
 pub(in crate::screens::options) fn sound_show_alsa_exclusive(state: &State) -> bool {
-    matches!(
-        selected_linux_audio_backend(state),
-        config::LinuxAudioBackend::Alsa
-    )
+    selected_linux_audio_backend_name(state).eq_ignore_ascii_case("ALSA")
 }
 
 #[cfg(target_os = "linux")]
@@ -450,14 +435,15 @@ pub(in crate::screens::options) fn sample_rate_choice_index(
     state: &State,
     rate: Option<u32>,
 ) -> usize {
-    let choices = sound_sample_rate_choices(state);
-    audio_sample_rate_choice_index(&choices, rate)
+    sound_sample_rate_choices(state)
+        .iter()
+        .position(|&value| value == rate)
+        .unwrap_or(0)
 }
 
 pub(in crate::screens::options) fn sample_rate_from_choice(
     state: &State,
     idx: usize,
 ) -> Option<u32> {
-    let choices = sound_sample_rate_choices(state);
-    audio_sample_rate_from_choice(&choices, idx)
+    sound_sample_rate_choices(state).get(idx).copied().flatten()
 }

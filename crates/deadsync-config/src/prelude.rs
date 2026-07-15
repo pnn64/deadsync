@@ -8,12 +8,6 @@ pub use deadsync_lights::{DriverKind as LightsDriverKind, GameplayPadLightMode};
 pub use deadsync_smx::SmxPadPreset;
 
 pub use crate::app_config::{Config, DisplayMode};
-pub use crate::audio::{
-    alsa_exclusive_choice_index, audio_output_mode_choice_index,
-    audio_output_mode_from_alsa_choice, audio_output_mode_from_choice,
-    audio_sample_rate_choice_index, audio_sample_rate_choices, audio_sample_rate_from_choice,
-    audio_volume_choice_index, audio_volume_from_choice,
-};
 pub use crate::defaults::*;
 pub use crate::folders::AdditionalSongFolder;
 pub use crate::frame_pacing::{

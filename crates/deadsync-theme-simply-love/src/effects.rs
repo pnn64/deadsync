@@ -1,5 +1,13 @@
 use crate::screens::SimplyLoveScreen;
 use crate::views::{DensityGraphView, SimplyLoveDensityGraphSlot};
+use deadsync_config::prelude::{
+    BreakdownStyle, DefaultFailType, DefaultSyncOffset, MachineBarColor, MachineEvaluationStyle,
+    MachineFont, MachinePreferredPlayMode, MachinePreferredPlayStyle, NewPackMode,
+    RandomBackgroundMode, SelectMusicItlRankMode, SelectMusicItlWheelMode,
+    SelectMusicPatternInfoMode, SelectMusicScoreboxPlacement, SelectMusicSongSelectBgMode,
+    SelectMusicStepArtistBoxMode, SelectMusicWheelStyle, SrpgVariant, VersionOverlaySide,
+    VisualStyle,
+};
 use deadsync_profile::{ActiveProfile, PlayerSide};
 use deadsync_simfile::sync_offset::SongOffsetSyncChange;
 use deadsync_theme::{AudioRequest, GraphicsRequest, PlatformRequest};
@@ -379,11 +387,198 @@ pub struct SimplyLoveSyncResult {
     pub confidence: f64,
 }
 
+/// Select Music preferences chosen by Simply Love and persisted by the shell.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SimplyLoveSelectMusicConfigRequest {
+    ShowBanners(bool),
+    ShowVideoBanners(bool),
+    ShowBreakdown(bool),
+    BreakdownStyle(BreakdownStyle),
+    TranslatedTitles(bool),
+    WheelSwitchSpeed(u8),
+    WheelStyle(SelectMusicWheelStyle),
+    SortBySeries(bool),
+    SongSelectBackground(SelectMusicSongSelectBgMode),
+    AllowProfileSwitch(bool),
+    ShowCdTitles(bool),
+    ShowWheelGrades(bool),
+    ShowWheelLamps(bool),
+    ItlRankMode(SelectMusicItlRankMode),
+    ItlWheelMode(SelectMusicItlWheelMode),
+    NewPackMode(NewPackMode),
+    ShowFolderStats(bool),
+    PatternInfoMode(SelectMusicPatternInfoMode),
+    StepArtistBoxMode(SelectMusicStepArtistBoxMode),
+    ShowPreviews(bool),
+    ShowPreviewMarker(bool),
+    PreviewLoop(bool),
+    PreviewStartsImmediately(bool),
+    ShowGameplayTimer(bool),
+    ShowStageDisplay(bool),
+    ShowScorebox(bool),
+    ScoreboxPlacement(SelectMusicScoreboxPlacement),
+    ScoreboxCycleMask(u8),
+    ChartInfoMask(u8),
+}
+
+/// Machine preferences chosen by Simply Love and persisted by the shell.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SimplyLoveMachineConfigRequest {
+    ShowSelectProfile(bool),
+    ShowSelectColor(bool),
+    ShowSelectStyle(bool),
+    PreferredPlayStyle(MachinePreferredPlayStyle),
+    ShowSelectPlayMode(bool),
+    PreferredPlayMode(MachinePreferredPlayMode),
+    Font(MachineFont),
+    BarColor(MachineBarColor),
+    EvaluationStyle(MachineEvaluationStyle),
+    ShowEvaluationSummary(bool),
+    NiceSound(bool),
+    ShowNameEntry(bool),
+    ShowGameover(bool),
+    MenuMusic(bool),
+    VisualStyle(VisualStyle),
+    SrpgVariant(SrpgVariant),
+    EnableReplays(bool),
+    AllowPerPlayerGlobalOffsets(bool),
+    PackIniOffsets(bool),
+    DefaultSyncOffset(DefaultSyncOffset),
+    KeyboardFeatures(bool),
+    ShowVideoBackgrounds(bool),
+    RandomBackgroundMode(RandomBackgroundMode),
+    ShowVersionOverlay(bool),
+    VersionOverlaySide(VersionOverlaySide),
+    WriteCurrentScreen(bool),
+}
+
+/// Advanced loading preferences chosen by Simply Love and persisted by shell.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SimplyLoveAdvancedConfigRequest {
+    DefaultFailType(DefaultFailType),
+    BannerCache(bool),
+    CdTitleCache(bool),
+    SongParsingThreads(u8),
+    CacheSongs(bool),
+    FastLoad(bool),
+}
+
+/// Course preferences chosen by Simply Love and persisted by shell.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SimplyLoveCourseConfigRequest {
+    ShowRandom(bool),
+    ShowMostPlayed(bool),
+    ShowIndividualScores(bool),
+    AutosubmitIndividual(bool),
+}
+
+/// Gameplay presentation preferences chosen by Simply Love and persisted by shell.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SimplyLoveGameplayConfigRequest {
+    BackgroundBrightnessTenths(u8),
+    CenterPlayerOneNotefield(bool),
+    ZmodRatingBoxText(bool),
+    ShowBpmDecimal(bool),
+    BpmNearField(bool),
+    DelayedBack(bool),
+    AutoScreenshotMask(u8),
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SimplyLoveNullOrDieGraph {
+    Frequency,
+    BeatIndex,
+    PostKernelFingerprint,
+}
+
+/// Null-or-Die preferences chosen by Simply Love and persisted by shell.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SimplyLoveNullOrDieConfigRequest {
+    SyncGraph(SimplyLoveNullOrDieGraph),
+    ConfidencePercent(u8),
+    PackSyncThreads(u8),
+    FingerprintTenths(i32),
+    WindowTenths(i32),
+    StepTenths(i32),
+    MagicOffsetTenths(i32),
+    KernelTarget(SimplyLoveSyncKernelTarget),
+    Kernel(SimplyLoveSyncKernel),
+    FullSpectrogram(bool),
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SimplyLoveQrLoginPolicy {
+    Always,
+    Sometimes,
+    Disabled,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SimplyLoveSrpgShopFolder {
+    Unlocks,
+    Shops,
+    Faction,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SimplyLoveLightsDriver {
+    Off,
+    Snek,
+    Litboard,
+    Win32Serial,
+    Fusion,
+    Gpb,
+    PacDrive,
+    PiuioLeds,
+    Itgio,
+    HidBlueDot,
+    Stac2,
+    MinimaidHid,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SimplyLoveGameplayPadLights {
+    Input,
+    Chart,
+}
+
+/// Cabinet light preferences chosen by Simply Love and persisted by shell.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SimplyLoveLightsConfigRequest {
+    Driver(SimplyLoveLightsDriver),
+    GameplayPadLights(SimplyLoveGameplayPadLights),
+    SimplifyBass(bool),
+}
+
+/// Online preferences chosen by Simply Love and persisted by shell.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SimplyLoveOnlineConfigRequest {
+    EnableGrooveStats(bool),
+    ShowSrpgShop(bool),
+    SrpgShopFolder(SimplyLoveSrpgShopFolder),
+    EnableBoogieStats(bool),
+    AutoPopulateScores(bool),
+    AutoDownloadUnlocks(bool),
+    SeparateUnlocksByPlayer(bool),
+    GrooveStatsQrLogin(SimplyLoveQrLoginPolicy),
+    EnableArrowCloud(bool),
+    SubmitArrowCloudFails(bool),
+    ArrowCloudQrLogin(SimplyLoveQrLoginPolicy),
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SimplyLoveConfigRequest {
     ShowOverlay(u8),
     MouseCursorHidden(bool),
     PersistColor(i32),
+    Advanced(SimplyLoveAdvancedConfigRequest),
+    Course(SimplyLoveCourseConfigRequest),
+    Gameplay(SimplyLoveGameplayConfigRequest),
+    Lights(SimplyLoveLightsConfigRequest),
+    Machine(SimplyLoveMachineConfigRequest),
+    NullOrDie(SimplyLoveNullOrDieConfigRequest),
+    Online(SimplyLoveOnlineConfigRequest),
+    SelectMusic(SimplyLoveSelectMusicConfigRequest),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

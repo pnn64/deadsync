@@ -23,3 +23,9 @@ pub use textures::{
     canonical_texture_key, held_miss_texture_choices, hold_judgment_texture_choices,
     judgment_texture_choices,
 };
+
+/// Resolve a bundled or data-overlay asset without exposing platform paths to
+/// asset consumers.
+pub fn resolve_asset_path(path: &str) -> std::path::PathBuf {
+    deadlib_platform::dirs::app_dirs().resolve_asset_path(path)
+}

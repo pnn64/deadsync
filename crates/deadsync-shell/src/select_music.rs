@@ -1,5 +1,11 @@
+use deadsync_config::prelude as config;
+use deadsync_online::score_compat as scores;
 use deadsync_profile::{PlayerSide, compat as profile};
-use deadsync_theme_simply_love::views::{SelectMusicInitView, SelectMusicPlaylistView};
+use deadsync_theme_simply_love::views::{
+    SelectMusicHistorySideView, SelectMusicHistoryView, SelectMusicInitView,
+    SelectMusicInteractionPolicyView, SelectMusicMediaPolicyView, SelectMusicPlaylistView,
+    SelectMusicPolicyView, SelectMusicPresentationPolicyView, SelectMusicWheelPolicyView,
+};
 use log::warn;
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
@@ -140,9 +146,215 @@ pub(crate) fn init_view() -> SelectMusicInitView {
     let dirs = deadlib_platform::dirs::app_dirs();
     let mut playlists = machine_playlists();
     playlists.extend(profile_playlists());
+    let cfg = config::get();
     SelectMusicInitView {
         songs_root: dirs.songs_dir(),
         courses_root: dirs.courses_dir(),
         playlists,
+        history: Default::default(),
+        policy: policy_view(&cfg),
+    }
+}
+
+pub(crate) fn policy_view(config: &config::Config) -> SelectMusicPolicyView {
+    SelectMusicPolicyView {
+        dedicated_menu_only: config.only_dedicated_menu_buttons,
+        fsr_profiles: config.use_fsrs,
+        replays: config.machine_enable_replays,
+        profile_switch: config.allow_switch_profile_in_menu,
+        keyboard_features: config.keyboard_features,
+        media: SelectMusicMediaPolicyView {
+            show_banners: config.show_select_music_banners,
+            show_cdtitles: config.show_select_music_cdtitles,
+            show_folder_stats: config.show_select_music_folder_stats,
+            show_previews: config.show_select_music_previews,
+            preview_loop: config.select_music_preview_loop,
+            preview_starts_immediately: config.select_music_preview_starts_immediately,
+            show_preview_marker: config.show_select_music_preview_marker,
+            replay_gain: config.enable_replaygain,
+            song_select_bg_mode: config.select_music_song_select_bg_mode,
+        },
+        wheel: SelectMusicWheelPolicyView {
+            show_grades: config.show_music_wheel_grades,
+            show_lamps: config.show_music_wheel_lamps,
+            itl_rank_mode: config.select_music_itl_rank_mode,
+            itl_score_mode: config.select_music_itl_wheel_mode,
+        },
+        interaction: SelectMusicInteractionPolicyView {
+            wheel_switch_speed: config.music_wheel_switch_speed,
+            wheel_style: config.select_music_wheel_style,
+            sort_by_series: config.sort_music_wheel_by_series,
+            new_pack_mode: config.select_music_new_pack_mode,
+            show_srpg_shop: config.show_srpg_shop,
+            practice_shortcut: config.music_select_shortcut_practice,
+            song_search_shortcut: config.music_select_shortcut_song_search,
+            reload_shortcut: config.music_select_shortcut_load_songs,
+            test_input_shortcut: config.music_select_shortcut_test_input,
+        },
+        presentation: SelectMusicPresentationPolicyView {
+            show_scorebox: config.show_select_music_scorebox,
+            scorebox_cycle_enabled: config.select_music_scorebox_cycle_itg
+                || config.select_music_scorebox_cycle_ex
+                || config.select_music_scorebox_cycle_hard_ex
+                || config.select_music_scorebox_cycle_tournaments,
+            scorebox_in_step_pane: config.select_music_scorebox_placement
+                == config::SelectMusicScoreboxPlacement::StepPane,
+            show_stage_display: config.show_select_music_stage_display,
+            show_gameplay_timer: config.show_select_music_gameplay_timer,
+            step_artist_expanded: config
+                .select_music_step_artist_box_mode
+                .is_expanded(config.theme_flag),
+            breakdown_style: config.select_music_breakdown_style,
+            pattern_info_mode: config.select_music_pattern_info_mode,
+            chart_info_peak_nps: config.select_music_chart_info_peak_nps,
+            chart_info_effective_bpm: config.select_music_chart_info_effective_bpm,
+            chart_info_matrix_rating: config.select_music_chart_info_matrix_rating,
+            show_breakdown: config.show_select_music_breakdown,
+            pack_ini_offsets: config.machine_pack_ini_offsets,
+            default_sync_offset: config.machine_default_sync_offset,
+        },
+    }
+}
+
+pub(crate) fn history_view() -> SelectMusicHistoryView {
+    let profile_ids: [Option<String>; 2] = std::array::from_fn(|side_idx| {
+        let side = [PlayerSide::P1, PlayerSide::P2][side_idx];
+        profile::active_local_profile_id_for_side(side)
+    });
+    for profile_id in profile_ids.iter().flatten() {
+        profile::ensure_score_caches_loaded_for_id(profile_id);
+    }
+    let machine_played_chart_counts = scores::played_chart_counts_for_machine();
+    let machine_recent_chart_hashes = scores::recent_played_chart_hashes_for_machine();
+    let mut sides = std::array::from_fn(|side_idx| {
+        let Some(profile_id) = profile_ids[side_idx].as_deref() else {
+            return SelectMusicHistorySideView::default();
+        };
+        SelectMusicHistorySideView {
+            available: true,
+            played_chart_counts: scores::played_chart_counts_for_profile(profile_id),
+            recent_chart_hashes: scores::recent_played_chart_hashes_for_profile(profile_id),
+            cached_scores: Vec::new(),
+        }
+    });
+    let score_caches = scores::lock_score_caches();
+    for (side, profile_id) in sides.iter_mut().zip(profile_ids.iter()) {
+        if let Some(profile_id) = profile_id {
+            side.cached_scores = score_caches.merged_profile_scores(profile_id);
+        }
+    }
+    SelectMusicHistoryView {
+        machine_played_chart_counts,
+        machine_recent_chart_hashes,
+        sides,
+    }
+}
+
+pub(crate) fn prepare_init_view(mut view: SelectMusicInitView) -> SelectMusicInitView {
+    view.history = history_view();
+    view
+}
+
+pub(crate) fn prepared_init_view() -> SelectMusicInitView {
+    scores::prewarm_select_music_score_caches();
+    prepare_init_view(init_view())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn policy_view_maps_media_and_wheel_runtime_flags() {
+        let config = config::Config {
+            show_select_music_banners: true,
+            show_select_music_previews: true,
+            enable_replaygain: true,
+            show_music_wheel_grades: true,
+            show_music_wheel_lamps: false,
+            select_music_itl_rank_mode: config::SelectMusicItlRankMode::Overall,
+            select_music_itl_wheel_mode: config::SelectMusicItlWheelMode::PointsAndScore,
+            music_wheel_switch_speed: 22,
+            select_music_wheel_style: config::SelectMusicWheelStyle::Iidx,
+            sort_music_wheel_by_series: true,
+            select_music_new_pack_mode: config::NewPackMode::OpenPack,
+            show_srpg_shop: false,
+            music_select_shortcut_practice: deadsync_input::KeyCode::KeyQ,
+            music_select_shortcut_song_search: deadsync_input::KeyCode::KeyW,
+            music_select_shortcut_load_songs: deadsync_input::KeyCode::KeyE,
+            music_select_shortcut_test_input: deadsync_input::KeyCode::KeyR,
+            show_select_music_scorebox: false,
+            select_music_scorebox_cycle_itg: false,
+            select_music_scorebox_cycle_ex: false,
+            select_music_scorebox_cycle_hard_ex: false,
+            select_music_scorebox_cycle_tournaments: true,
+            select_music_scorebox_placement: config::SelectMusicScoreboxPlacement::StepPane,
+            show_select_music_stage_display: false,
+            show_select_music_gameplay_timer: false,
+            select_music_step_artist_box_mode: config::SelectMusicStepArtistBoxMode::Expanded,
+            select_music_breakdown_style: config::BreakdownStyle::Sn,
+            select_music_pattern_info_mode: config::SelectMusicPatternInfoMode::Stamina,
+            select_music_chart_info_peak_nps: false,
+            select_music_chart_info_effective_bpm: true,
+            select_music_chart_info_matrix_rating: true,
+            show_select_music_breakdown: false,
+            machine_pack_ini_offsets: true,
+            machine_default_sync_offset: config::DefaultSyncOffset::Itg,
+            ..Default::default()
+        };
+
+        let view = policy_view(&config);
+
+        assert!(view.media.show_banners);
+        assert!(view.media.show_previews);
+        assert!(view.media.replay_gain);
+        assert!(view.wheel.show_grades);
+        assert!(!view.wheel.show_lamps);
+        assert_eq!(
+            view.wheel.itl_rank_mode,
+            config::SelectMusicItlRankMode::Overall
+        );
+        assert_eq!(
+            view.wheel.itl_score_mode,
+            config::SelectMusicItlWheelMode::PointsAndScore
+        );
+        assert_eq!(view.interaction.wheel_switch_speed, 22);
+        assert_eq!(
+            view.interaction.wheel_style,
+            config::SelectMusicWheelStyle::Iidx
+        );
+        assert!(view.interaction.sort_by_series);
+        assert_eq!(
+            view.interaction.new_pack_mode,
+            config::NewPackMode::OpenPack
+        );
+        assert!(!view.interaction.show_srpg_shop);
+        assert_eq!(
+            view.interaction.song_search_shortcut,
+            deadsync_input::KeyCode::KeyW
+        );
+        assert!(!view.presentation.show_scorebox);
+        assert!(view.presentation.scorebox_cycle_enabled);
+        assert!(view.presentation.scorebox_in_step_pane);
+        assert!(!view.presentation.show_stage_display);
+        assert!(!view.presentation.show_gameplay_timer);
+        assert!(view.presentation.step_artist_expanded);
+        assert_eq!(
+            view.presentation.breakdown_style,
+            config::BreakdownStyle::Sn
+        );
+        assert_eq!(
+            view.presentation.pattern_info_mode,
+            config::SelectMusicPatternInfoMode::Stamina
+        );
+        assert!(!view.presentation.chart_info_peak_nps);
+        assert!(view.presentation.chart_info_effective_bpm);
+        assert!(view.presentation.chart_info_matrix_rating);
+        assert!(!view.presentation.show_breakdown);
+        assert!(view.presentation.pack_ini_offsets);
+        assert_eq!(
+            view.presentation.default_sync_offset,
+            config::DefaultSyncOffset::Itg
+        );
     }
 }

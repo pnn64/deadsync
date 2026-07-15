@@ -2,18 +2,16 @@ use crate::act;
 use crate::assets::{self, AssetManager, visual_styles};
 use crate::assets::{FontRole, current_machine_font_key};
 use crate::config::{
-    self, SimpleIni, arrowcloud_qr_login_when_choice_index, arrowcloud_qr_login_when_from_choice,
-    breakdown_style_choice_index, breakdown_style_from_choice, default_fail_type_choice_index,
-    default_fail_type_from_choice, default_sync_offset_choice_index,
-    default_sync_offset_from_choice, groovestats_qr_login_when_choice_index,
-    groovestats_qr_login_when_from_choice, log_level_choice_index, log_level_from_choice,
+    self, SimpleIni, arrowcloud_qr_login_when_choice_index, breakdown_style_choice_index,
+    breakdown_style_from_choice, default_fail_type_choice_index, default_fail_type_from_choice,
+    default_sync_offset_choice_index, default_sync_offset_from_choice,
+    groovestats_qr_login_when_choice_index, log_level_choice_index, log_level_from_choice,
     machine_bar_color_choice_index, machine_bar_color_from_choice,
     machine_evaluation_style_choice_index, machine_evaluation_style_from_choice,
     machine_font_choice_index, machine_font_from_choice, machine_preferred_play_mode_choice_index,
     machine_preferred_play_mode_from_choice, machine_preferred_play_style_choice_index,
     machine_preferred_play_style_from_choice, null_or_die_kernel_target_choice_index,
-    null_or_die_kernel_target_from_choice, null_or_die_kernel_type_choice_index,
-    null_or_die_kernel_type_from_choice, random_background_mode_choice_index,
+    null_or_die_kernel_type_choice_index, random_background_mode_choice_index,
     random_background_mode_from_choice, select_music_itl_rank_mode_choice_index,
     select_music_itl_rank_mode_from_choice, select_music_itl_wheel_mode_choice_index,
     select_music_itl_wheel_mode_from_choice, select_music_new_pack_mode_choice_index,
@@ -22,9 +20,8 @@ use crate::config::{
     select_music_scorebox_placement_from_choice, select_music_song_select_bg_mode_choice_index,
     select_music_song_select_bg_mode_from_choice, select_music_step_artist_box_mode_choice_index,
     select_music_step_artist_box_mode_from_choice, select_music_wheel_style_choice_index,
-    select_music_wheel_style_from_choice, srpg_shop_folder_choice_index,
-    srpg_shop_folder_from_choice, srpg_variant_choice_index, srpg_variant_from_choice,
-    sync_graph_mode_choice_index, sync_graph_mode_from_choice, version_overlay_side_choice_index,
+    select_music_wheel_style_from_choice, srpg_shop_folder_choice_index, srpg_variant_choice_index,
+    srpg_variant_from_choice, sync_graph_mode_choice_index, version_overlay_side_choice_index,
     version_overlay_side_from_choice, visual_style_choice_index, visual_style_from_choice,
 };
 #[cfg(target_os = "windows")]
@@ -38,7 +35,6 @@ use crate::screens::select_music;
 use crate::screens::{Screen, ThemeEffect};
 use crate::views::{OptionsSongPackView, SimplyLoveUpdaterCapabilities, SimplyLoveUpdaterView};
 use deadlib_present::space::{is_wide, screen_height, screen_width, widescale};
-use deadlib_render::{software_thread_choice_index, software_thread_from_choice};
 use deadsync_input::{InputEvent, VirtualAction};
 use deadsync_profile::compat as profile;
 use deadsync_score as score_data;
@@ -47,7 +43,10 @@ use deadsync_theme::views::{
     AppPathKind, AppPathsView, AudioOptionsView, GraphicsMonitorView, GraphicsOptionsView,
     NoteskinCatalogView, SmxAssignmentView, SmxGifCatalogView,
 };
-use deadsync_theme::{DisplayModeChoice, FullscreenChoice, PresentPolicyChoice, RendererChoice};
+use deadsync_theme::{
+    AudioOutputModeChoice, AudioRequest, AudioVolumeTarget, DisplayModeChoice, FullscreenChoice,
+    PresentPolicyChoice, RendererChoice, thread_choice_index, thread_count_from_choice,
+};
 use std::borrow::Cow;
 use std::cell::{Cell, RefCell};
 use std::collections::HashSet;
@@ -112,6 +111,83 @@ pub use update::{
 #[inline(always)]
 fn queue_sfx(state: &mut State, path: &'static str) {
     state.pending_sfx.push(path);
+}
+
+fn volume_change_effect(target: AudioVolumeTarget, percent: u8) -> ThemeEffect {
+    ThemeEffect::Batch(vec![
+        ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Audio(
+            AudioRequest::SetVolume { target, percent },
+        )),
+        ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Audio(
+            AudioRequest::PlaySfx("assets/sounds/change_value.ogg".to_owned()),
+        )),
+    ])
+}
+
+fn audio_requests_effect(requests: Vec<AudioRequest>) -> ThemeEffect {
+    let mut effects = requests
+        .into_iter()
+        .map(|request| ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Audio(request)));
+    let Some(first) = effects.next() else {
+        return ThemeEffect::None;
+    };
+    let rest: Vec<_> = effects.collect();
+    if rest.is_empty() {
+        first
+    } else {
+        let mut batch = Vec::with_capacity(rest.len() + 1);
+        batch.push(first);
+        batch.extend(rest);
+        ThemeEffect::Batch(batch)
+    }
+}
+
+fn select_music_config_effect(request: crate::SimplyLoveSelectMusicConfigRequest) -> ThemeEffect {
+    ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Config(
+        crate::SimplyLoveConfigRequest::SelectMusic(request),
+    ))
+}
+
+fn machine_config_effect(request: crate::SimplyLoveMachineConfigRequest) -> ThemeEffect {
+    ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Config(
+        crate::SimplyLoveConfigRequest::Machine(request),
+    ))
+}
+
+fn advanced_config_effect(request: crate::SimplyLoveAdvancedConfigRequest) -> ThemeEffect {
+    ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Config(
+        crate::SimplyLoveConfigRequest::Advanced(request),
+    ))
+}
+
+fn course_config_effect(request: crate::SimplyLoveCourseConfigRequest) -> ThemeEffect {
+    ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Config(
+        crate::SimplyLoveConfigRequest::Course(request),
+    ))
+}
+
+fn gameplay_config_effect(request: crate::SimplyLoveGameplayConfigRequest) -> ThemeEffect {
+    ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Config(
+        crate::SimplyLoveConfigRequest::Gameplay(request),
+    ))
+}
+
+fn lights_config_effect(request: crate::SimplyLoveLightsConfigRequest) -> ThemeEffect {
+    ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Config(
+        crate::SimplyLoveConfigRequest::Lights(request),
+    ))
+}
+
+fn null_or_die_config_effect(request: crate::SimplyLoveNullOrDieConfigRequest) -> ThemeEffect {
+    ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Config(
+        crate::SimplyLoveConfigRequest::NullOrDie(request),
+    ))
+}
+
+fn online_config_effect(request: crate::SimplyLoveOnlineConfigRequest) -> ThemeEffect {
+    ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Config(
+        crate::SimplyLoveConfigRequest::Online(request),
+    ))
 }
 
 fn queue_sync(state: &mut State, request: crate::SimplyLoveSyncRequest) {

@@ -105,6 +105,200 @@ fn smx_underglow_choice_emits_shell_hardware_request() {
     ));
 }
 
+#[test]
+fn select_music_choice_emits_shell_config_request() {
+    let asset_manager = AssetManager::new();
+    let mut state = init();
+    state.view = OptionsView::Submenu(SubmenuKind::SelectMusic);
+    let row = select_visible_row(&mut state, SubmenuKind::SelectMusic, SubRowId::ShowBanners);
+
+    let effect = apply_submenu_choice_delta(&mut state, &asset_manager, 1, NavWrap::Wrap)
+        .expect("Select Music choice should emit shell config work");
+    let enabled = state.sub[SubmenuKind::SelectMusic].cursor_indices[row] == 1;
+
+    assert!(matches!(
+        effect,
+        ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Config(
+            crate::SimplyLoveConfigRequest::SelectMusic(
+                crate::SimplyLoveSelectMusicConfigRequest::ShowBanners(value)
+            )
+        )) if value == enabled
+    ));
+}
+
+#[test]
+fn machine_choice_emits_shell_config_request() {
+    let asset_manager = AssetManager::new();
+    let mut state = init();
+    state.view = OptionsView::Submenu(SubmenuKind::Machine);
+    let row = select_visible_row(&mut state, SubmenuKind::Machine, SubRowId::SelectProfile);
+
+    let effect = apply_submenu_choice_delta(&mut state, &asset_manager, 1, NavWrap::Wrap)
+        .expect("Machine choice should emit shell config work");
+    let enabled = state.sub[SubmenuKind::Machine].cursor_indices[row] == 1;
+
+    assert!(matches!(
+        effect,
+        ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Config(
+            crate::SimplyLoveConfigRequest::Machine(
+                crate::SimplyLoveMachineConfigRequest::ShowSelectProfile(value)
+            )
+        )) if value == enabled
+    ));
+}
+
+#[test]
+fn advanced_choice_emits_shell_config_request() {
+    let asset_manager = AssetManager::new();
+    let mut state = init();
+    state.view = OptionsView::Submenu(SubmenuKind::Advanced);
+    let row = select_visible_row(&mut state, SubmenuKind::Advanced, SubRowId::BannerCache);
+
+    let effect = apply_submenu_choice_delta(&mut state, &asset_manager, 1, NavWrap::Wrap)
+        .expect("Advanced choice should emit shell config work");
+    let enabled = state.sub[SubmenuKind::Advanced].cursor_indices[row] == 1;
+
+    assert!(matches!(
+        effect,
+        ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Config(
+            crate::SimplyLoveConfigRequest::Advanced(
+                crate::SimplyLoveAdvancedConfigRequest::BannerCache(value)
+            )
+        )) if value == enabled
+    ));
+}
+
+#[test]
+fn course_choice_emits_shell_config_request() {
+    let asset_manager = AssetManager::new();
+    let mut state = init();
+    state.view = OptionsView::Submenu(SubmenuKind::Course);
+    let row = select_visible_row(&mut state, SubmenuKind::Course, SubRowId::ShowRandomCourses);
+
+    let effect = apply_submenu_choice_delta(&mut state, &asset_manager, 1, NavWrap::Wrap)
+        .expect("Course choice should emit shell config work");
+    let enabled = state.sub[SubmenuKind::Course].cursor_indices[row] == 1;
+
+    assert!(matches!(
+        effect,
+        ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Config(
+            crate::SimplyLoveConfigRequest::Course(
+                crate::SimplyLoveCourseConfigRequest::ShowRandom(value)
+            )
+        )) if value == enabled
+    ));
+}
+
+#[test]
+fn gameplay_choice_emits_shell_config_request() {
+    let asset_manager = AssetManager::new();
+    let mut state = init();
+    state.view = OptionsView::Submenu(SubmenuKind::Gameplay);
+    let row = select_visible_row(
+        &mut state,
+        SubmenuKind::Gameplay,
+        SubRowId::CenteredP1Notefield,
+    );
+
+    let effect = apply_submenu_choice_delta(&mut state, &asset_manager, 1, NavWrap::Wrap)
+        .expect("Gameplay choice should emit shell config work");
+    let enabled = state.sub[SubmenuKind::Gameplay].cursor_indices[row] == 1;
+
+    assert!(matches!(
+        effect,
+        ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Config(
+            crate::SimplyLoveConfigRequest::Gameplay(
+                crate::SimplyLoveGameplayConfigRequest::CenterPlayerOneNotefield(value)
+            )
+        )) if value == enabled
+    ));
+}
+
+#[test]
+fn lights_driver_choice_emits_shell_config_request() {
+    let asset_manager = AssetManager::new();
+    let mut state = init();
+    state.view = OptionsView::Submenu(SubmenuKind::Lights);
+    let row = select_visible_row(&mut state, SubmenuKind::Lights, SubRowId::LightsDriver);
+
+    let effect = apply_submenu_choice_delta(&mut state, &asset_manager, 1, NavWrap::Wrap)
+        .expect("Lights driver choice should emit shell config work");
+    let driver = lights_driver_from_index(state.sub[SubmenuKind::Lights].cursor_indices[row]);
+
+    assert!(matches!(
+        effect,
+        ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Config(
+            crate::SimplyLoveConfigRequest::Lights(
+                crate::SimplyLoveLightsConfigRequest::Driver(value)
+            )
+        )) if value == driver
+    ));
+}
+
+#[test]
+fn null_or_die_timing_choice_emits_shell_config_request() {
+    let asset_manager = AssetManager::new();
+    let mut state = init();
+    state.view = OptionsView::Submenu(SubmenuKind::NullOrDieOptions);
+    select_visible_row(
+        &mut state,
+        SubmenuKind::NullOrDieOptions,
+        SubRowId::Fingerprint,
+    );
+    let delta = if state.null_or_die_fingerprint_tenths < NULL_OR_DIE_POSITIVE_MS_MAX_TENTHS {
+        1
+    } else {
+        -1
+    };
+
+    let effect = apply_submenu_choice_delta(&mut state, &asset_manager, delta, NavWrap::Clamp)
+        .expect("Null-or-Die timing choice should emit shell config work");
+
+    assert!(matches!(
+        effect,
+        ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Config(
+            crate::SimplyLoveConfigRequest::NullOrDie(
+                crate::SimplyLoveNullOrDieConfigRequest::FingerprintTenths(value)
+            )
+        )) if value == state.null_or_die_fingerprint_tenths
+    ));
+}
+
+#[test]
+fn online_enable_choice_persists_before_reinitializing_services() {
+    let asset_manager = AssetManager::new();
+    let mut state = init();
+    state.view = OptionsView::Submenu(SubmenuKind::GrooveStats);
+    let row = select_visible_row(
+        &mut state,
+        SubmenuKind::GrooveStats,
+        SubRowId::EnableGrooveStats,
+    );
+
+    let effect = apply_submenu_choice_delta(&mut state, &asset_manager, 1, NavWrap::Wrap)
+        .expect("online enable choice should emit shell work");
+    let enabled = state.sub[SubmenuKind::GrooveStats].cursor_indices[row] == 1;
+    let ThemeEffect::Batch(effects) = effect else {
+        panic!("online enable choice should persist before reinitializing services");
+    };
+
+    assert_eq!(effects.len(), 2);
+    assert!(matches!(
+        &effects[0],
+        ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Config(
+            crate::SimplyLoveConfigRequest::Online(
+                crate::SimplyLoveOnlineConfigRequest::EnableGrooveStats(value)
+            )
+        )) if *value == enabled
+    ));
+    assert!(matches!(
+        &effects[1],
+        ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Online(
+            crate::SimplyLoveOnlineRequest::Reinitialize
+        ))
+    ));
+}
+
 fn input_event(action: VirtualAction, pressed: bool) -> InputEvent {
     let now = Instant::now();
     InputEvent {
@@ -243,10 +437,30 @@ fn audio_options_view_builds_and_rebuilds_localized_device_labels() {
             },
         ],
         available_backend_names: vec!["Auto".to_owned(), "ALSA".to_owned()],
+        output_device: Some(1),
+        output_mode: AudioOutputModeChoice::Shared,
+        selected_backend_name: "ALSA".to_owned(),
+        sample_rate_hz: Some(48_000),
+        preserve_pitch: true,
+        replay_gain: true,
+        master_volume: 91,
+        music_volume: 81,
+        sfx_volume: 71,
+        assist_tick_volume: 61,
     };
     let mut state = init_with_audio(audio_options.clone());
 
     assert_eq!(state.audio_options, audio_options);
+    assert_eq!(state.audio_options.output_device, Some(1));
+    assert_eq!(
+        state.audio_options.output_mode,
+        AudioOutputModeChoice::Shared
+    );
+    assert_eq!(state.audio_options.sample_rate_hz, Some(48_000));
+    assert!(state.audio_options.preserve_pitch);
+    assert!(state.audio_options.replay_gain);
+    assert_eq!(state.master_volume_pct, 91);
+    assert_eq!(state.music_volume_pct, 81);
     assert_eq!(state.sound_device_options.len(), 3);
     assert_eq!(state.sound_device_options[0].config_index, None);
     assert_eq!(
@@ -261,6 +475,14 @@ fn audio_options_view_builds_and_rebuilds_localized_device_labels() {
     assert_eq!(state.sound_device_options[1].config_index, Some(0));
     assert_eq!(state.sound_device_options[2].label, "Secondary Device");
     assert_eq!(state.sound_device_options[2].config_index, Some(1));
+    assert_eq!(
+        get_choice_by_id(
+            &state.sub[SubmenuKind::Sound].choice_indices,
+            SOUND_OPTIONS_ROWS,
+            SubRowId::SoundDevice,
+        ),
+        Some(2)
+    );
 
     state.sound_device_options.clear();
     state.i18n_revision = u64::MAX;
@@ -276,6 +498,102 @@ fn audio_options_view_builds_and_rebuilds_localized_device_labels() {
         state.linux_backend_choices,
         [tr("Common", "Auto").to_string(), "ALSA".to_owned()]
     );
+}
+
+#[test]
+fn sound_device_change_emits_output_and_invalid_rate_requests() {
+    let asset_manager = AssetManager::new();
+    let mut state = init_with_audio(AudioOptionsView {
+        output_devices: vec![AudioOutputDeviceView {
+            name: "48 kHz only".to_owned(),
+            is_default: false,
+            sample_rates_hz: vec![48_000],
+        }],
+        output_device: None,
+        sample_rate_hz: Some(44_100),
+        ..AudioOptionsView::default()
+    });
+    state.view = OptionsView::Submenu(SubmenuKind::Sound);
+    select_visible_row(&mut state, SubmenuKind::Sound, SubRowId::SoundDevice);
+
+    let effect = apply_submenu_choice_delta(&mut state, &asset_manager, 1, NavWrap::Clamp)
+        .expect("device change should emit requests");
+
+    assert_eq!(state.audio_options.output_device, Some(0));
+    assert_eq!(state.audio_options.sample_rate_hz, None);
+    assert_eq!(sample_rate_choice_index(&state, None), 0);
+    let ThemeEffect::Batch(effects) = effect else {
+        panic!("expected batched device/rate requests");
+    };
+    assert_eq!(effects.len(), 2);
+    assert!(matches!(
+        &effects[0],
+        ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Audio(
+            AudioRequest::SetOutputDevice(Some(0))
+        ))
+    ));
+    assert!(matches!(
+        &effects[1],
+        ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Audio(
+            AudioRequest::SetSampleRate(None)
+        ))
+    ));
+}
+
+#[test]
+fn sound_runtime_toggles_emit_neutral_audio_requests() {
+    let asset_manager = AssetManager::new();
+    let mut state = init_with_audio(AudioOptionsView {
+        preserve_pitch: false,
+        replay_gain: false,
+        ..AudioOptionsView::default()
+    });
+    state.view = OptionsView::Submenu(SubmenuKind::Sound);
+
+    select_visible_row(
+        &mut state,
+        SubmenuKind::Sound,
+        SubRowId::RateModPreservesPitch,
+    );
+    let pitch = apply_submenu_choice_delta(&mut state, &asset_manager, 1, NavWrap::Clamp);
+    assert!(matches!(
+        pitch,
+        Some(ThemeEffect::Runtime(
+            crate::SimplyLoveRuntimeRequest::Audio(AudioRequest::SetPreservePitch(true))
+        ))
+    ));
+    assert!(state.audio_options.preserve_pitch);
+
+    select_visible_row(&mut state, SubmenuKind::Sound, SubRowId::ReplayGain);
+    let replay_gain = apply_submenu_choice_delta(&mut state, &asset_manager, 1, NavWrap::Clamp);
+    assert!(matches!(
+        replay_gain,
+        Some(ThemeEffect::Runtime(
+            crate::SimplyLoveRuntimeRequest::Audio(AudioRequest::SetReplayGain(true))
+        ))
+    ));
+    assert!(state.audio_options.replay_gain);
+
+    set_sound_choice_index(&mut state, SubRowId::MineSounds, 0);
+    select_visible_row(&mut state, SubmenuKind::Sound, SubRowId::MineSounds);
+    let mine_sound = apply_submenu_choice_delta(&mut state, &asset_manager, 1, NavWrap::Clamp);
+    assert!(matches!(
+        mine_sound,
+        Some(ThemeEffect::Runtime(
+            crate::SimplyLoveRuntimeRequest::Audio(AudioRequest::SetMineHitSound(true))
+        ))
+    ));
+
+    state.global_offset_ms = 0;
+    select_visible_row(&mut state, SubmenuKind::Sound, SubRowId::GlobalOffset);
+    let global_offset = apply_submenu_choice_delta(&mut state, &asset_manager, 1, NavWrap::Clamp);
+    assert!(matches!(
+        global_offset,
+        Some(ThemeEffect::Runtime(
+            crate::SimplyLoveRuntimeRequest::Audio(AudioRequest::SetGlobalOffsetMillis(1))
+        ))
+    ));
+    assert_eq!(state.global_offset_ms, 1);
 }
 
 fn age_start_hold(state: &mut State, side: profile_data::PlayerSide) {
@@ -402,18 +720,45 @@ fn smx_config_items_match_rows() {
 #[test]
 fn lights_driver_choices_roundtrip() {
     let cases = [
-        LightsDriverKind::Off,
-        LightsDriverKind::Snek,
-        LightsDriverKind::Litboard,
-        LightsDriverKind::Win32Serial,
-        LightsDriverKind::Fusion,
-        LightsDriverKind::Gpb,
-        LightsDriverKind::PacDrive,
-        LightsDriverKind::PiuioLeds,
-        LightsDriverKind::Itgio,
-        LightsDriverKind::HidBlueDot,
-        LightsDriverKind::Stac2,
-        LightsDriverKind::MinimaidHid,
+        (LightsDriverKind::Off, crate::SimplyLoveLightsDriver::Off),
+        (LightsDriverKind::Snek, crate::SimplyLoveLightsDriver::Snek),
+        (
+            LightsDriverKind::Litboard,
+            crate::SimplyLoveLightsDriver::Litboard,
+        ),
+        (
+            LightsDriverKind::Win32Serial,
+            crate::SimplyLoveLightsDriver::Win32Serial,
+        ),
+        (
+            LightsDriverKind::Fusion,
+            crate::SimplyLoveLightsDriver::Fusion,
+        ),
+        (LightsDriverKind::Gpb, crate::SimplyLoveLightsDriver::Gpb),
+        (
+            LightsDriverKind::PacDrive,
+            crate::SimplyLoveLightsDriver::PacDrive,
+        ),
+        (
+            LightsDriverKind::PiuioLeds,
+            crate::SimplyLoveLightsDriver::PiuioLeds,
+        ),
+        (
+            LightsDriverKind::Itgio,
+            crate::SimplyLoveLightsDriver::Itgio,
+        ),
+        (
+            LightsDriverKind::HidBlueDot,
+            crate::SimplyLoveLightsDriver::HidBlueDot,
+        ),
+        (
+            LightsDriverKind::Stac2,
+            crate::SimplyLoveLightsDriver::Stac2,
+        ),
+        (
+            LightsDriverKind::MinimaidHid,
+            crate::SimplyLoveLightsDriver::MinimaidHid,
+        ),
     ];
 
     assert_eq!(LIGHTS_OPTIONS_ROWS[0].choices.len(), cases.len());
@@ -421,9 +766,9 @@ fn lights_driver_choices_roundtrip() {
         !LIGHTS_OPTIONS_ROWS[0].inline,
         "the driver list is too long to render every choice in one row"
     );
-    for driver in cases {
+    for (driver, request_driver) in cases {
         let idx = lights_driver_choice_index(driver);
-        assert_eq!(lights_driver_from_choice(idx), driver);
+        assert_eq!(lights_driver_from_index(idx), request_driver);
         assert!(matches!(
             LIGHTS_OPTIONS_ROWS[0].choices[idx],
             Choice::Literal(label) if label == driver.as_str()
@@ -542,7 +887,10 @@ fn link_row_pages_lr_moves_rows_in_standard_mode() {
 #[test]
 fn value_rows_keep_left_right_for_adjustment() {
     let asset_manager = AssetManager::new();
-    let mut state = init();
+    let mut state = init_with_audio(AudioOptionsView {
+        master_volume: 50,
+        ..AudioOptionsView::default()
+    });
     state.view = OptionsView::Submenu(SubmenuKind::Sound);
     select_visible_row(&mut state, SubmenuKind::Sound, SubRowId::MasterVolume);
 
@@ -553,6 +901,38 @@ fn value_rows_keep_left_right_for_adjustment() {
     press(&mut state, &asset_manager, VirtualAction::p1_left);
     assert_eq!(state.sub_selected, row_before);
     assert!(state.master_volume_pct < volume_before);
+}
+
+#[test]
+fn volume_rows_emit_shell_request_before_feedback_sound() {
+    let asset_manager = AssetManager::new();
+    let mut state = init_with_audio(AudioOptionsView {
+        master_volume: 50,
+        ..AudioOptionsView::default()
+    });
+    state.view = OptionsView::Submenu(SubmenuKind::Sound);
+    select_visible_row(&mut state, SubmenuKind::Sound, SubRowId::MasterVolume);
+
+    let Some(ThemeEffect::Batch(effects)) =
+        apply_submenu_choice_delta(&mut state, &asset_manager, 1, NavWrap::Wrap)
+    else {
+        panic!("volume adjustment should emit an ordered request batch");
+    };
+    assert!(matches!(
+        effects[0],
+        ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Audio(
+            deadsync_theme::AudioRequest::SetVolume {
+                target: deadsync_theme::AudioVolumeTarget::Master,
+                percent: 51,
+            }
+        ))
+    ));
+    assert!(matches!(
+        &effects[1],
+        ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Audio(
+            deadsync_theme::AudioRequest::PlaySfx(path)
+        )) if path == "assets/sounds/change_value.ogg"
+    ));
 }
 
 #[test]
@@ -1245,4 +1625,38 @@ fn input_backend_back_returns_to_input_after_visiting_smx_config() {
     cancel_current_view(&mut state);
     settle_submenu(&mut state, &asset_manager);
     assert_eq!(state.view, OptionsView::Submenu(SubmenuKind::Input));
+}
+
+#[test]
+fn graphics_threads_emit_neutral_request_on_exit() {
+    let asset_manager = AssetManager::new();
+    let mut state = init();
+    state.view = OptionsView::Submenu(SubmenuKind::Graphics);
+    *get_choice_by_id_mut(
+        &mut state.sub[SubmenuKind::Graphics].choice_indices,
+        GRAPHICS_OPTIONS_ROWS,
+        SubRowId::SoftwareRendererThreads,
+    )
+    .expect("software thread row") = 2;
+    state.submenu_transition = SubmenuTransition::FadeOutToMain;
+
+    let effect = update(
+        &mut state,
+        SUBMENU_FADE_DURATION + 0.001,
+        &asset_manager,
+        &SmxAssignmentView::default(),
+    );
+
+    assert!(
+        matches!(
+            &effect,
+            Some(ThemeEffect::Runtime(
+                crate::SimplyLoveRuntimeRequest::Graphics(deadsync_theme::GraphicsRequest {
+                    software_threads: Some(2),
+                    ..
+                })
+            ))
+        ),
+        "unexpected effect: {effect:?}"
+    );
 }

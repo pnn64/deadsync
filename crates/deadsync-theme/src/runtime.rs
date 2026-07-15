@@ -32,9 +32,74 @@ pub enum AudioRequest {
     },
     StopMusic,
     SetMusicRate(f32),
+    SetVolume {
+        target: AudioVolumeTarget,
+        percent: u8,
+    },
+    SetOutputDevice(Option<u16>),
+    SetOutputMode(AudioOutputModeChoice),
+    SetOutputBackend(String),
+    SetSampleRate(Option<u32>),
+    SetMineHitSound(bool),
+    SetGlobalOffsetMillis(i32),
+    SetPreservePitch(bool),
+    SetReplayGain(bool),
     /// Warm loudness metadata for theme-selected preview media without
     /// exposing the analysis service or its scheduling policy to the theme.
     PrewarmReplayGain(Vec<PathBuf>),
+}
+
+/// Backend-neutral audio mix channel exposed to theme option screens.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum AudioVolumeTarget {
+    Master,
+    Music,
+    Sfx,
+    AssistTick,
+}
+
+/// Audio-backend-neutral output policy exposed to theme option screens.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum AudioOutputModeChoice {
+    #[default]
+    Auto,
+    Shared,
+    Exclusive,
+}
+
+impl AudioOutputModeChoice {
+    /// Collapse exclusive output into the shared base choice so a concrete
+    /// theme can present exclusivity as a separate capability-dependent row.
+    #[inline(always)]
+    pub const fn choice_index(self) -> usize {
+        match self {
+            Self::Auto => 0,
+            Self::Shared | Self::Exclusive => 1,
+        }
+    }
+
+    #[inline(always)]
+    pub const fn from_choice(index: usize) -> Self {
+        if index == 1 { Self::Shared } else { Self::Auto }
+    }
+
+    #[inline(always)]
+    pub const fn exclusive_choice_index(self) -> usize {
+        if matches!(self, Self::Exclusive) {
+            1
+        } else {
+            0
+        }
+    }
+
+    #[inline(always)]
+    pub const fn with_exclusive(self, enabled: bool) -> Self {
+        match (enabled, self) {
+            (true, _) => Self::Exclusive,
+            (false, Self::Exclusive) => Self::Shared,
+            (false, mode) => mode,
+        }
+    }
 }
 
 /// Platform work requested by a concrete theme and executed by the shell.
@@ -212,6 +277,25 @@ impl Default for PresentPolicyChoice {
     }
 }
 
+/// Resolve a configured thread count against a shell-prepared choice list.
+pub fn thread_choice_index(values: &[u8], thread_count: u8) -> usize {
+    values
+        .iter()
+        .position(|&value| value == thread_count)
+        .unwrap_or_else(|| {
+            values
+                .iter()
+                .enumerate()
+                .min_by_key(|(_, value)| value.abs_diff(thread_count))
+                .map_or(0, |(idx, _)| idx)
+        })
+}
+
+/// Translate a theme choice index back to its neutral thread count.
+pub fn thread_count_from_choice(values: &[u8], index: usize) -> u8 {
+    values.get(index).copied().unwrap_or(0)
+}
+
 /// Renderer-independent graphics changes requested by a concrete theme.
 ///
 /// The shell maps these semantic choices to its renderer, window, and persisted
@@ -226,6 +310,7 @@ pub struct GraphicsRequest {
     pub present_mode_policy: Option<PresentPolicyChoice>,
     pub max_fps: Option<u16>,
     pub high_dpi: Option<bool>,
+    pub software_threads: Option<u8>,
 }
 
 #[cfg(test)]
@@ -249,11 +334,50 @@ mod tests {
     }
 
     #[test]
+    fn thread_choices_use_prepared_values() {
+        let choices = [0, 1, 2, 4, 8];
+        assert_eq!(thread_choice_index(&choices, 4), 3);
+        assert_eq!(thread_choice_index(&choices, 5), 3);
+        assert_eq!(thread_count_from_choice(&choices, 2), 2);
+        assert_eq!(thread_count_from_choice(&choices, 99), 0);
+    }
+
+    #[test]
     fn audio_request_owns_its_theme_asset_key() {
         let request = AudioRequest::PlaySfx("assets/sounds/start.ogg".to_owned());
         assert_eq!(
             request,
             AudioRequest::PlaySfx("assets/sounds/start.ogg".to_owned())
+        );
+    }
+
+    #[test]
+    fn volume_request_uses_neutral_mix_target() {
+        assert_eq!(
+            AudioRequest::SetVolume {
+                target: AudioVolumeTarget::AssistTick,
+                percent: 42,
+            },
+            AudioRequest::SetVolume {
+                target: AudioVolumeTarget::AssistTick,
+                percent: 42,
+            }
+        );
+    }
+
+    #[test]
+    fn output_mode_choice_keeps_alsa_exclusive_separate() {
+        assert_eq!(AudioOutputModeChoice::Auto.choice_index(), 0);
+        assert_eq!(AudioOutputModeChoice::Shared.choice_index(), 1);
+        assert_eq!(AudioOutputModeChoice::Exclusive.choice_index(), 1);
+        assert_eq!(
+            AudioOutputModeChoice::from_choice(1).with_exclusive(true),
+            AudioOutputModeChoice::Exclusive
+        );
+        assert_eq!(AudioOutputModeChoice::Exclusive.exclusive_choice_index(), 1);
+        assert_eq!(
+            AudioOutputModeChoice::Exclusive.with_exclusive(false),
+            AudioOutputModeChoice::Shared
         );
     }
 

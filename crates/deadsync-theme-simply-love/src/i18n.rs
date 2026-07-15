@@ -4,7 +4,7 @@ use std::path::PathBuf;
 pub use crate::i18n_runtime::{LookupKey, current_locale, lookup_key, revision, tr, tr_fmt};
 
 fn languages_dir_path() -> PathBuf {
-    crate::i18n_runtime::languages_dir_path(&deadlib_platform::dirs::app_dirs().exe_dir)
+    deadsync_assets::resolve_asset_path("assets/languages")
 }
 
 /// Initialize the i18n system. Call once at startup after config is loaded.

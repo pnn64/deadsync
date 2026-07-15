@@ -226,6 +226,7 @@ pub struct State {
     pub(super) vsync_at_load: bool,
     pub(super) present_mode_policy_at_load: PresentPolicyChoice,
     pub(super) high_dpi_at_load: bool,
+    pub(super) software_threads_at_load: u8,
     pub(super) display_mode_choices: Vec<String>,
     pub(super) software_thread_choices: Vec<u8>,
     pub(super) software_thread_labels: Vec<String>,
@@ -277,6 +278,10 @@ pub fn init(
     let software_thread_labels = software_thread_choice_labels(&software_thread_choices);
     let max_fps_choices = build_max_fps_choices();
     let sound_device_options = build_sound_device_options(&audio_options);
+    let master_volume_pct = i32::from(audio_options.master_volume.min(100));
+    let sfx_volume_pct = i32::from(audio_options.sfx_volume.min(100));
+    let assist_tick_volume_pct = i32::from(audio_options.assist_tick_volume.min(100));
+    let music_volume_pct = i32::from(audio_options.music_volume.min(100));
     #[cfg(target_os = "linux")]
     let linux_backend_choices = build_linux_backend_choices(&audio_options);
     let machine_noteskin = profile::machine_default_noteskin();
@@ -348,10 +353,10 @@ pub fn init(
         sound_device_options,
         #[cfg(target_os = "linux")]
         linux_backend_choices,
-        master_volume_pct: i32::from(cfg.master_volume.clamp(0, 100)),
-        sfx_volume_pct: i32::from(cfg.sfx_volume.clamp(0, 100)),
-        assist_tick_volume_pct: i32::from(cfg.assist_tick_volume.clamp(0, 100)),
-        music_volume_pct: i32::from(cfg.music_volume.clamp(0, 100)),
+        master_volume_pct,
+        sfx_volume_pct,
+        assist_tick_volume_pct,
+        music_volume_pct,
         smx_default_light_brightness_pct: i32::from(cfg.smx_default_light_brightness.min(100)),
         global_offset_ms: {
             let ms = (cfg.global_offset_seconds * 1000.0).round() as i32;
@@ -390,6 +395,7 @@ pub fn init(
         vsync_at_load: graphics_options.vsync,
         present_mode_policy_at_load: graphics_options.present_policy,
         high_dpi_at_load: graphics_options.high_dpi,
+        software_threads_at_load: graphics_options.software_threads,
         display_mode_choices: build_display_mode_choices(&[]),
         software_thread_choices,
         software_thread_labels,
@@ -509,9 +515,9 @@ pub fn init(
         GRAPHICS_OPTIONS_ROWS,
         SubRowId::SoftwareRendererThreads,
     ) {
-        *slot = software_thread_choice_index(
+        *slot = thread_choice_index(
             &state.software_thread_choices,
-            cfg.software_renderer_threads,
+            graphics_options.software_threads,
         );
     }
     #[cfg(target_os = "windows")]
@@ -830,8 +836,7 @@ pub fn init(
         ADVANCED_OPTIONS_ROWS,
         SubRowId::SongParsingThreads,
     ) {
-        *slot =
-            software_thread_choice_index(&state.software_thread_choices, cfg.song_parsing_threads);
+        *slot = thread_choice_index(&state.software_thread_choices, cfg.song_parsing_threads);
     }
     set_choice_by_id(
         &mut state.sub[SubmenuKind::Advanced].choice_indices,
@@ -861,7 +866,7 @@ pub fn init(
         &mut state.sub[SubmenuKind::NullOrDieOptions].choice_indices,
         NULL_OR_DIE_OPTIONS_ROWS,
         SubRowId::PackSyncThreads,
-        software_thread_choice_index(
+        thread_choice_index(
             &state.software_thread_choices,
             cfg.null_or_die_pack_sync_threads,
         ),
@@ -951,49 +956,29 @@ pub fn init(
         auto_screenshot_cursor_index(cfg.auto_screenshot_eval),
     );
 
-    set_choice_by_id(
-        &mut state.sub[SubmenuKind::Sound].choice_indices,
-        SOUND_OPTIONS_ROWS,
-        SubRowId::MasterVolume,
-        master_volume_choice_index(cfg.master_volume),
+    let sound_device_idx = sound_device_choice_index(
+        &state.sound_device_options,
+        state.audio_options.output_device,
     );
-    set_choice_by_id(
-        &mut state.sub[SubmenuKind::Sound].choice_indices,
-        SOUND_OPTIONS_ROWS,
-        SubRowId::SfxVolume,
-        master_volume_choice_index(cfg.sfx_volume),
-    );
-    set_choice_by_id(
-        &mut state.sub[SubmenuKind::Sound].choice_indices,
-        SOUND_OPTIONS_ROWS,
-        SubRowId::AssistTickVolume,
-        master_volume_choice_index(cfg.assist_tick_volume),
-    );
-    set_choice_by_id(
-        &mut state.sub[SubmenuKind::Sound].choice_indices,
-        SOUND_OPTIONS_ROWS,
-        SubRowId::MusicVolume,
-        master_volume_choice_index(cfg.music_volume),
-    );
-    let sound_device_idx =
-        sound_device_choice_index(&state.sound_device_options, cfg.audio_output_device_index);
     set_sound_choice_index(&mut state, SubRowId::SoundDevice, sound_device_idx);
+    let output_mode = state.audio_options.output_mode;
     set_sound_choice_index(
         &mut state,
         SubRowId::AudioOutputMode,
-        audio_output_mode_choice_index(cfg.audio_output_mode),
+        output_mode.choice_index(),
     );
     #[cfg(target_os = "linux")]
-    let linux_backend_idx = linux_audio_backend_choice_index(&state, cfg.linux_audio_backend);
+    let linux_backend_idx =
+        linux_audio_backend_choice_index(&state, &state.audio_options.selected_backend_name);
     #[cfg(target_os = "linux")]
     set_sound_choice_index(&mut state, SubRowId::LinuxAudioBackend, linux_backend_idx);
     #[cfg(target_os = "linux")]
     set_sound_choice_index(
         &mut state,
         SubRowId::AlsaExclusive,
-        alsa_exclusive_choice_index(cfg.audio_output_mode),
+        output_mode.exclusive_choice_index(),
     );
-    let sound_rate_idx = sample_rate_choice_index(&state, cfg.audio_sample_rate_hz);
+    let sound_rate_idx = sample_rate_choice_index(&state, state.audio_options.sample_rate_hz);
     set_sound_choice_index(&mut state, SubRowId::AudioSampleRate, sound_rate_idx);
     set_choice_by_id(
         &mut state.sub[SubmenuKind::Sound].choice_indices,
@@ -1005,13 +990,13 @@ pub fn init(
         &mut state.sub[SubmenuKind::Sound].choice_indices,
         SOUND_OPTIONS_ROWS,
         SubRowId::RateModPreservesPitch,
-        usize::from(cfg.rate_mod_preserves_pitch),
+        usize::from(state.audio_options.preserve_pitch),
     );
     set_choice_by_id(
         &mut state.sub[SubmenuKind::Sound].choice_indices,
         SOUND_OPTIONS_ROWS,
         SubRowId::ReplayGain,
-        usize::from(cfg.enable_replaygain),
+        usize::from(state.audio_options.replay_gain),
     );
     set_choice_by_id(
         &mut state.sub[SubmenuKind::SelectMusic].choice_indices,

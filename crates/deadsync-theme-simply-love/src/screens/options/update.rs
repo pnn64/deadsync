@@ -359,6 +359,7 @@ fn update_impl(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Opti
                 desired_present_mode_policy,
                 desired_max_fps,
                 desired_high_dpi,
+                desired_software_threads,
             ) = if leaving_graphics {
                 let vsync = get_choice_by_id(
                     &state.sub[SubmenuKind::Graphics].choice_indices,
@@ -375,9 +376,18 @@ fn update_impl(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Opti
                     Some(selected_present_mode_policy(state)),
                     Some(selected_max_fps(state)),
                     Some(selected_high_dpi(state)),
+                    Some(thread_count_from_choice(
+                        &state.software_thread_choices,
+                        get_choice_by_id(
+                            &state.sub[SubmenuKind::Graphics].choice_indices,
+                            GRAPHICS_OPTIONS_ROWS,
+                            SubRowId::SoftwareRendererThreads,
+                        )
+                        .unwrap_or(0),
+                    )),
                 )
             } else {
-                (None, None, None, None, None, None, None, None)
+                (None, None, None, None, None, None, None, None, None)
             };
             let step = if SUBMENU_FADE_DURATION > 0.0 {
                 dt / SUBMENU_FADE_DURATION
@@ -411,6 +421,7 @@ fn update_impl(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Opti
                 let mut present_mode_policy_change: Option<PresentPolicyChoice> = None;
                 let mut max_fps_change: Option<u16> = None;
                 let mut high_dpi_change: Option<bool> = None;
+                let mut software_threads_change: Option<u8> = None;
 
                 if let Some(renderer) = desired_renderer
                     && renderer != state.video_renderer_at_load
@@ -455,6 +466,12 @@ fn update_impl(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Opti
                         resolution_change = desired_resolution;
                     }
                 }
+                if let Some(software_threads) = desired_software_threads
+                    && software_threads != state.software_threads_at_load
+                {
+                    software_threads_change = Some(software_threads);
+                    state.software_threads_at_load = software_threads;
+                }
 
                 if renderer_change.is_some()
                     || display_mode_change.is_some()
@@ -464,6 +481,7 @@ fn update_impl(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Opti
                     || present_mode_policy_change.is_some()
                     || max_fps_change.is_some()
                     || high_dpi_change.is_some()
+                    || software_threads_change.is_some()
                 {
                     pending_action = Some(ThemeEffect::Runtime(
                         crate::SimplyLoveRuntimeRequest::Graphics(GraphicsRequest {
@@ -475,6 +493,7 @@ fn update_impl(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Opti
                             present_mode_policy: present_mode_policy_change,
                             max_fps: max_fps_change,
                             high_dpi: high_dpi_change,
+                            software_threads: software_threads_change,
                         }),
                     ));
                 }

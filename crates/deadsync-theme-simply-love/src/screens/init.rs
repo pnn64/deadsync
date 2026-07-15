@@ -3,7 +3,6 @@ use crate::assets::i18n::tr;
 use crate::assets::{FontRole, current_machine_font_key_for_text};
 use crate::screens::components::shared::{loading_bar, visual_style_bg};
 use crate::screens::{Screen, ThemeEffect};
-use deadlib_platform::dirs;
 use deadlib_present::actors::Actor;
 use deadlib_present::color;
 use deadlib_present::space::{
@@ -164,16 +163,20 @@ pub struct State {
     phase: InitPhase,
     loader_started: bool,
     loading: Option<LoadingState>,
+    songs_root: PathBuf,
+    courses_root: PathBuf,
     pub active_color_index: i32,
     bg: visual_style_bg::State,
 }
 
-pub fn init() -> State {
+pub fn init(songs_root: PathBuf, courses_root: PathBuf) -> State {
     State {
         elapsed: 0.0,
         phase: InitPhase::Loading,
         loader_started: false,
         loading: None,
+        songs_root,
+        courses_root,
         active_color_index: color::DEFAULT_COLOR_INDEX,
         bg: visual_style_bg::State::new(),
     }
@@ -330,6 +333,8 @@ fn speed_text(loading: &LoadingState, done: usize, elapsed_s: f32) -> Arc<str> {
 fn start_loading_thread(state: &mut State) {
     let (tx, rx) = mpsc::channel::<LoadingMsg>();
     state.loading = Some(LoadingState::new(rx));
+    let songs_root = state.songs_root.clone();
+    let courses_root = state.courses_root.clone();
 
     std::thread::spawn(move || {
         let _ = tx.send(LoadingMsg::Phase(LoadingPhase::Songs));
@@ -341,8 +346,7 @@ fn start_loading_thread(state: &mut State) {
                 song: song.to_owned(),
             });
         };
-        let dirs = dirs::app_dirs();
-        song_loading::scan_and_load_songs_with_progress_counts(&dirs.songs_dir(), &mut on_song);
+        song_loading::scan_and_load_songs_with_progress_counts(&songs_root, &mut on_song);
 
         let _ = tx.send(LoadingMsg::Phase(LoadingPhase::Courses));
         let mut on_course = |done: usize, total: usize, group: &str, course: &str| {
@@ -354,8 +358,8 @@ fn start_loading_thread(state: &mut State) {
             });
         };
         song_loading::scan_and_load_courses_with_progress_counts(
-            &dirs.courses_dir(),
-            &dirs.songs_dir(),
+            &courses_root,
+            &songs_root,
             &mut on_course,
         );
 
