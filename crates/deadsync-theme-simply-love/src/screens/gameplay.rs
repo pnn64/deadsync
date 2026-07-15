@@ -1913,6 +1913,27 @@ fn gameplay_bpm_x(
     screen_center_x()
 }
 
+fn upper_nps_graph_x(
+    player_side: profile_data::PlayerSide,
+    notefield_x: f32,
+    graph_w: f32,
+    note_field_offset_x: i32,
+) -> f32 {
+    let base_x = if (notefield_x - screen_center_x()).abs() < 1.0 {
+        screen_center_x() - graph_w * 0.5
+    } else if player_side == profile_data::PlayerSide::P1 {
+        screen_center_x() - graph_w - widescale(45.0, 95.0)
+    } else {
+        screen_center_x() + widescale(45.0, 95.0)
+    };
+    let side_sign = if player_side == profile_data::PlayerSide::P1 {
+        -1.0
+    } else {
+        1.0
+    };
+    base_x + side_sign * note_field_offset_x.clamp(0, 50) as f32
+}
+
 #[inline(always)]
 fn ranges_overlap(a_center: f32, a_size: f32, b_center: f32, b_size: f32) -> bool {
     let a_half = a_size * 0.5;
@@ -9436,7 +9457,6 @@ pub fn push_actors(
         };
 
         let is_ultrawide = screen_width() / screen_height().max(1.0) > (21.0 / 9.0);
-        let graph_center_shift = widescale(45.0, 95.0);
         let graph = state.gameplay.density_graph_view();
 
         for &(player_idx, player_side, field_x, _, _, _) in &players[..player_count] {
@@ -9449,14 +9469,12 @@ pub fn push_actors(
             if graph_w <= 0.0 || graph_h <= 0.0 || graph_mesh_h <= 0.0 {
                 continue;
             }
-            let note_field_is_centered = (field_x - screen_center_x()).abs() < 1.0;
-            let x = if note_field_is_centered {
-                screen_center_x() - graph_w * 0.5
-            } else if player_side == profile_data::PlayerSide::P1 {
-                screen_center_x() - graph_w - graph_center_shift
-            } else {
-                screen_center_x() + graph_center_shift
-            };
+            let x = upper_nps_graph_x(
+                player_side,
+                field_x,
+                graph_w,
+                state.profiles()[player_idx].note_field_offset_x,
+            );
             let y_bottom = 71.0;
             let y_top = y_bottom - graph_h;
             let y_mesh_top = y_bottom - graph_mesh_h;
@@ -11281,6 +11299,37 @@ mod tests {
         assert_eq!(
             side_difficulty_meter_x(profile_data::PlayerSide::P2),
             screen_width() - DIFFICULTY_METER_SIZE * 0.5
+        );
+    }
+
+    #[test]
+    fn upper_nps_graph_tracks_centered_target_x_offset() {
+        let center_x = screen_center_x();
+        let graph_w = 226.0;
+
+        assert_eq!(
+            upper_nps_graph_x(profile_data::PlayerSide::P1, center_x, graph_w, 20),
+            center_x - graph_w * 0.5 - 20.0
+        );
+        assert_eq!(
+            upper_nps_graph_x(profile_data::PlayerSide::P2, center_x, graph_w, 20),
+            center_x - graph_w * 0.5 + 20.0
+        );
+    }
+
+    #[test]
+    fn upper_nps_graph_tracks_side_target_x_offset() {
+        let center_x = screen_center_x();
+        let graph_w = 226.0;
+        let center_shift = widescale(45.0, 95.0);
+
+        assert_eq!(
+            upper_nps_graph_x(profile_data::PlayerSide::P1, center_x - 100.0, graph_w, 20),
+            center_x - graph_w - center_shift - 20.0
+        );
+        assert_eq!(
+            upper_nps_graph_x(profile_data::PlayerSide::P2, center_x + 100.0, graph_w, 20),
+            center_x + center_shift + 20.0
         );
     }
 
