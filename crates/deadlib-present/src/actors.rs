@@ -1,7 +1,154 @@
 use crate::anim;
 use deadlib_render::{BlendMode, MeshVertex, TMeshCacheKey, TextureHandle, TexturedMeshVertex};
 use glam::Mat4 as Matrix4;
+use std::cell::{Cell, Ref, RefCell};
+use std::collections::HashMap;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
+
+static NEXT_RESOURCE_ARENA_ID: AtomicU32 = AtomicU32::new(1);
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ActorTextureId(pub(crate) u32);
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct ActorResourceStats {
+    pub texture_hits: u32,
+    pub texture_misses: u32,
+    pub texture_saturated: u32,
+    pub textures: u32,
+}
+
+struct ActorResourceStorage {
+    textures: Vec<Arc<str>>,
+    texture_ids: HashMap<usize, ActorTextureId>,
+}
+
+/// Song-lifetime ownership arena for resources referenced by transient actors.
+///
+/// Owner/thread model: the gameplay state owns this arena and the main thread
+/// alone builds and composes actors from it. Capacity is a fixed texture count,
+/// populated during gameplay transition prewarm. A miss clones one texture key
+/// and inserts it until growth is locked; later misses fall back to their owned
+/// source without allocating or scanning.
+/// Entries are never evicted and are destroyed with gameplay state at the
+/// screen transition. Hit/miss/saturation counters are exposed below. Each
+/// miss is one bounded hash insertion; hits are one relaxed atomic load.
+pub struct ActorResourceArena {
+    arena_id: u32,
+    max_textures: usize,
+    storage: RefCell<ActorResourceStorage>,
+    texture_hits: Cell<u32>,
+    texture_misses: Cell<u32>,
+    texture_saturated: Cell<u32>,
+    growth_locked: Cell<bool>,
+}
+
+impl ActorResourceArena {
+    pub fn new(max_textures: usize) -> Self {
+        let max_textures = max_textures.min((u32::MAX - 1) as usize);
+        let arena_id = NEXT_RESOURCE_ARENA_ID
+            .fetch_add(1, Ordering::Relaxed)
+            .max(1);
+        Self {
+            arena_id,
+            max_textures,
+            storage: RefCell::new(ActorResourceStorage {
+                textures: Vec::with_capacity(max_textures.min(256)),
+                texture_ids: HashMap::with_capacity(max_textures.min(256)),
+            }),
+            texture_hits: Cell::new(0),
+            texture_misses: Cell::new(0),
+            texture_saturated: Cell::new(0),
+            growth_locked: Cell::new(false),
+        }
+    }
+
+    #[inline(always)]
+    pub fn texture_source(
+        &self,
+        key: &Arc<str>,
+        handle: TextureHandle,
+        generation: u64,
+        cached_arena_texture: &AtomicU64,
+    ) -> SpriteSource {
+        let cached = cached_arena_texture.load(Ordering::Relaxed);
+        let cached_arena = (cached >> 32) as u32;
+        let cached_id = cached as u32;
+        if cached_arena == self.arena_id && cached_id != 0 {
+            self.texture_hits
+                .set(self.texture_hits.get().saturating_add(1));
+            return SpriteSource::ArenaTextureHandle {
+                id: ActorTextureId(cached_id - 1),
+                handle,
+                generation,
+            };
+        }
+
+        let key_ptr = key.as_ptr() as usize;
+        let mut storage = self.storage.borrow_mut();
+        let id = if let Some(id) = storage.texture_ids.get(&key_ptr).copied() {
+            self.texture_hits
+                .set(self.texture_hits.get().saturating_add(1));
+            id
+        } else if !self.growth_locked.get() && storage.textures.len() < self.max_textures {
+            let id = ActorTextureId(storage.textures.len() as u32);
+            storage.textures.push(Arc::clone(key));
+            storage.texture_ids.insert(key_ptr, id);
+            self.texture_misses
+                .set(self.texture_misses.get().saturating_add(1));
+            id
+        } else {
+            self.texture_saturated
+                .set(self.texture_saturated.get().saturating_add(1));
+            return SpriteSource::TextureHandle {
+                key: Arc::clone(key),
+                handle,
+                generation,
+            };
+        };
+        drop(storage);
+        cached_arena_texture.store(
+            (u64::from(self.arena_id) << 32) | u64::from(id.0.saturating_add(1)),
+            Ordering::Relaxed,
+        );
+        SpriteSource::ArenaTextureHandle {
+            id,
+            handle,
+            generation,
+        }
+    }
+
+    #[inline(always)]
+    pub(crate) fn texture_keys(&self) -> Ref<'_, [Arc<str>]> {
+        Ref::map(self.storage.borrow(), |storage| storage.textures.as_slice())
+    }
+
+    pub fn stats(&self) -> ActorResourceStats {
+        ActorResourceStats {
+            texture_hits: self.texture_hits.get(),
+            texture_misses: self.texture_misses.get(),
+            texture_saturated: self.texture_saturated.get(),
+            textures: self.storage.borrow().textures.len().min(u32::MAX as usize) as u32,
+        }
+    }
+
+    pub fn reset_stats(&self) {
+        self.texture_hits.set(0);
+        self.texture_misses.set(0);
+        self.texture_saturated.set(0);
+    }
+
+    pub fn lock_growth(&self) {
+        self.growth_locked.set(true);
+    }
+}
+
+impl Default for ActorResourceArena {
+    fn default() -> Self {
+        Self::new(4096)
+    }
+}
 
 #[derive(Clone, Debug)]
 pub enum Background {
@@ -41,6 +188,11 @@ pub enum SpriteSource {
         handle: TextureHandle,
         generation: u64,
     },
+    ArenaTextureHandle {
+        id: ActorTextureId,
+        handle: TextureHandle,
+        generation: u64,
+    },
     Texture(Arc<str>),
     Solid,
 }
@@ -57,6 +209,7 @@ impl SpriteSource {
             Self::TextureStatic(key) => Some(key),
             Self::TextureStaticHandle { key, .. } => Some(key),
             Self::TextureHandle { key, .. } => Some(key.as_ref()),
+            Self::ArenaTextureHandle { .. } => None,
             Self::Texture(key) => Some(key.as_ref()),
             Self::Solid => None,
         }
@@ -535,6 +688,7 @@ impl From<&Arc<str>> for TextContent {
 mod tests {
     use super::*;
     use deadlib_render::BlendMode;
+    use std::sync::atomic::AtomicU64;
 
     fn approx_eq(lhs: f32, rhs: f32) {
         assert!((lhs - rhs).abs() < 1e-6, "expected {rhs}, got {lhs}");
@@ -666,5 +820,84 @@ mod tests {
         assert_eq!(stats.texts, 1);
         assert_eq!(stats.text_chars, 1);
         assert_eq!(stats.cameras, 1);
+    }
+
+    #[test]
+    fn actor_resource_arena_owns_texture_once() {
+        let key: Arc<str> = Arc::from("noteskin/tap");
+        let cached = AtomicU64::new(0);
+        let arena = ActorResourceArena::new(4);
+
+        let first = arena.texture_source(&key, 17, 3, &cached);
+        let second = arena.texture_source(&key, 17, 3, &cached);
+
+        let (
+            SpriteSource::ArenaTextureHandle { id: first_id, .. },
+            SpriteSource::ArenaTextureHandle { id: second_id, .. },
+        ) = (first, second)
+        else {
+            panic!("warmed texture sources should use arena IDs");
+        };
+        assert_eq!(first_id, second_id);
+        assert_eq!(Arc::strong_count(&key), 2);
+        assert_eq!(
+            arena.texture_keys()[first_id.0 as usize].as_ref(),
+            key.as_ref()
+        );
+        assert_eq!(
+            arena.stats(),
+            ActorResourceStats {
+                texture_hits: 1,
+                texture_misses: 1,
+                texture_saturated: 0,
+                textures: 1,
+            }
+        );
+    }
+
+    #[test]
+    fn actor_resource_arena_saturates_without_eviction() {
+        let key: Arc<str> = Arc::from("noteskin/tap");
+        let cached = AtomicU64::new(0);
+        let arena = ActorResourceArena::new(0);
+
+        let source = arena.texture_source(&key, 17, 3, &cached);
+
+        assert!(matches!(source, SpriteSource::TextureHandle { .. }));
+        assert_eq!(Arc::strong_count(&key), 2);
+        assert_eq!(arena.stats().texture_saturated, 1);
+        assert_eq!(arena.stats().textures, 0);
+    }
+
+    #[test]
+    fn actor_resource_arena_saturates_new_keys_after_growth_lock() {
+        let first_key: Arc<str> = Arc::from("noteskin/tap");
+        let second_key: Arc<str> = Arc::from("noteskin/mine");
+        let first_cached = AtomicU64::new(0);
+        let second_cached = AtomicU64::new(0);
+        let arena = ActorResourceArena::new(4);
+        let _ = arena.texture_source(&first_key, 17, 3, &first_cached);
+        arena.lock_growth();
+
+        let source = arena.texture_source(&second_key, 18, 3, &second_cached);
+
+        assert!(matches!(source, SpriteSource::TextureHandle { .. }));
+        assert_eq!(arena.stats().textures, 1);
+        assert_eq!(arena.stats().texture_saturated, 1);
+    }
+
+    #[test]
+    fn cached_texture_id_rebinds_to_new_arena() {
+        let key: Arc<str> = Arc::from("noteskin/tap");
+        let cached = AtomicU64::new(0);
+        let first_arena = ActorResourceArena::new(1);
+        let second_arena = ActorResourceArena::new(1);
+
+        let _ = first_arena.texture_source(&key, 17, 3, &cached);
+        let source = second_arena.texture_source(&key, 17, 3, &cached);
+
+        assert!(matches!(source, SpriteSource::ArenaTextureHandle { .. }));
+        assert_eq!(first_arena.stats().texture_misses, 1);
+        assert_eq!(second_arena.stats().texture_misses, 1);
     }
 }

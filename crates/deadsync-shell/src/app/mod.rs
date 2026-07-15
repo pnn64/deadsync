@@ -391,16 +391,18 @@ fn prewarm_gameplay_text_layout_cache(
         gameplay::ActorViewOverride::default(),
         arrow_effect_time_seconds(started),
     );
-    let mut render = compose::build_screen_cached_with_scratch_and_texture_context(
-        &actors,
-        [0.0, 0.0, 0.0, 1.0],
-        metrics,
-        fonts,
-        0.0,
-        cache,
-        compose_scratch,
-        &PRESENT_TEXTURE_CONTEXT,
-    );
+    let mut render =
+        compose::build_screen_cached_with_scratch_and_texture_context_and_actor_resources(
+            &actors,
+            [0.0, 0.0, 0.0, 1.0],
+            metrics,
+            fonts,
+            0.0,
+            cache,
+            compose_scratch,
+            &PRESENT_TEXTURE_CONTEXT,
+            state.actor_resources(),
+        );
     compose_scratch.recycle_render_list(&mut render);
     gameplay::prewarm_text_layout(cache, fonts, state);
     screens::components::gameplay::gameplay_stats::prewarm_text_layout(cache, fonts, assets, state);
@@ -410,10 +412,14 @@ fn prewarm_gameplay_text_layout_cache(
     cache.lock_growth();
 
     let stats = cache.frame_stats();
+    let actor_resources = state.actor_resources().stats();
     debug!(
-        "Gameplay text cache prewarm: entries={} shared={} elapsed_ms={:.3}",
+        "Gameplay cache prewarm: text_entries={} shared={} actor_textures={} actor_misses={} actor_saturated={} elapsed_ms={:.3}",
         stats.owned_entries,
         stats.shared_aliases,
+        actor_resources.textures,
+        actor_resources.texture_misses,
+        actor_resources.texture_saturated,
         started.elapsed().as_secs_f64() * 1000.0,
     );
 }
@@ -2315,12 +2321,29 @@ impl App {
         let fonts = self.asset_manager.fonts();
         let build_screen_started = Instant::now();
         let collect_text_layout_stats = stutter_diag_enabled();
-        let (mut screen, text_layout) =
-            if self.state.screens.current_screen == CurrentScreen::Gameplay {
-                let text_layout_cache = &mut self.gameplay_text_layout_cache;
-                let compose_scratch = &mut self.gameplay_compose_scratch;
-                text_layout_cache.begin_frame_stats(collect_text_layout_stats);
-                let screen = compose::build_screen_cached_with_scratch_and_texture_context(
+        let actor_resources = match self.state.screens.current_screen {
+            CurrentScreen::Gameplay => self
+                .state
+                .screens
+                .gameplay_state
+                .as_ref()
+                .map(gameplay::State::actor_resources),
+            CurrentScreen::Practice => self
+                .state
+                .screens
+                .practice_state
+                .as_ref()
+                .map(|state| state.gameplay.actor_resources()),
+            _ => None,
+        };
+        let (mut screen, text_layout) = if self.state.screens.current_screen
+            == CurrentScreen::Gameplay
+        {
+            let text_layout_cache = &mut self.gameplay_text_layout_cache;
+            let compose_scratch = &mut self.gameplay_compose_scratch;
+            text_layout_cache.begin_frame_stats(collect_text_layout_stats);
+            let screen = if let Some(actor_resources) = actor_resources {
+                compose::build_screen_cached_with_scratch_and_texture_context_and_actor_resources(
                     &actors,
                     clear_color,
                     &self.state.shell.metrics,
@@ -2329,13 +2352,10 @@ impl App {
                     text_layout_cache,
                     compose_scratch,
                     &PRESENT_TEXTURE_CONTEXT,
-                );
-                (screen, text_layout_cache.frame_stats())
+                    actor_resources,
+                )
             } else {
-                let text_layout_cache = &mut self.ui_text_layout_cache;
-                let compose_scratch = &mut self.ui_compose_scratch;
-                text_layout_cache.begin_frame_stats(collect_text_layout_stats);
-                let screen = compose::build_screen_cached_with_scratch_and_texture_context(
+                compose::build_screen_cached_with_scratch_and_texture_context(
                     &actors,
                     clear_color,
                     &self.state.shell.metrics,
@@ -2344,9 +2364,39 @@ impl App {
                     text_layout_cache,
                     compose_scratch,
                     &PRESENT_TEXTURE_CONTEXT,
-                );
-                (screen, text_layout_cache.frame_stats())
+                )
             };
+            (screen, text_layout_cache.frame_stats())
+        } else {
+            let text_layout_cache = &mut self.ui_text_layout_cache;
+            let compose_scratch = &mut self.ui_compose_scratch;
+            text_layout_cache.begin_frame_stats(collect_text_layout_stats);
+            let screen = if let Some(actor_resources) = actor_resources {
+                compose::build_screen_cached_with_scratch_and_texture_context_and_actor_resources(
+                    &actors,
+                    clear_color,
+                    &self.state.shell.metrics,
+                    fonts,
+                    total_elapsed,
+                    text_layout_cache,
+                    compose_scratch,
+                    &PRESENT_TEXTURE_CONTEXT,
+                    actor_resources,
+                )
+            } else {
+                compose::build_screen_cached_with_scratch_and_texture_context(
+                    &actors,
+                    clear_color,
+                    &self.state.shell.metrics,
+                    fonts,
+                    total_elapsed,
+                    text_layout_cache,
+                    compose_scratch,
+                    &PRESENT_TEXTURE_CONTEXT,
+                )
+            };
+            (screen, text_layout_cache.frame_stats())
+        };
         let build_screen_us = elapsed_us_since(build_screen_started);
         let resolve_textures_us = 0;
         let compose_us: u32 = actor_build_us

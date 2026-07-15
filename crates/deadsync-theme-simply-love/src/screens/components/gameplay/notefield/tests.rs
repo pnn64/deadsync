@@ -1,6 +1,11 @@
-use super::{error_bar_trim_max_window_ix, hold_explosion_enabled, judgment_frame_size};
+use super::{
+    error_bar_trim_max_window_ix, hold_explosion_enabled, judgment_frame_size,
+    prewarm_actor_resources,
+};
 use crate::assets;
 use crate::notefield_style::notefield_style;
+use crate::screens::gameplay::GameplayNoteskinAssets;
+use deadlib_present::actors::ActorResourceArena;
 use deadsync_assets::noteskin::load_itg_skin;
 use deadsync_core::note::NoteType;
 use deadsync_gameplay::{ActiveHold, hold_explosion_active, hold_head_render_flags};
@@ -8,6 +13,7 @@ use deadsync_notefield::{error_bar_boundaries_s, offset_center};
 use deadsync_noteskin::{NUM_QUANTIZATIONS, NoteskinSlot, Quantization, Style};
 use deadsync_profile as profile_data;
 use deadsync_rules::timing;
+use std::sync::Arc;
 
 fn note_slot_base_size<S: NoteskinSlot>(slot: &S, scale: f32) -> [f32; 2] {
     if let Some(model) = slot.model() {
@@ -18,6 +24,35 @@ fn note_slot_base_size<S: NoteskinSlot>(slot: &S, scale: f32) -> [f32; 2] {
     }
     let logical = slot.logical_size();
     [logical[0] * scale, logical[1] * scale]
+}
+
+#[test]
+fn actor_resource_prewarm_covers_every_noteskin_slot() {
+    let style = Style {
+        num_cols: 4,
+        num_players: 1,
+    };
+    let noteskin = Arc::new(
+        load_itg_skin(&style, "default").expect("dance/default should load from assets/noteskins"),
+    );
+    let assets = GameplayNoteskinAssets {
+        noteskin: [Some(Arc::clone(&noteskin)), None],
+        mine_noteskin: [Some(Arc::clone(&noteskin)), None],
+        receptor_noteskin: [Some(Arc::clone(&noteskin)), None],
+        tap_explosion_noteskin: [Some(Arc::clone(&noteskin)), None],
+    };
+    let profiles = std::array::from_fn(|_| profile_data::Profile::default());
+    let arena = ActorResourceArena::default();
+
+    prewarm_actor_resources(&arena, &assets, &profiles, 1);
+    let warmed = arena.stats();
+    noteskin.for_each_slot(|slot| {
+        let _ = slot.actor_texture_source(&arena);
+    });
+
+    assert!(warmed.textures > 0);
+    assert_eq!(arena.stats().texture_misses, warmed.texture_misses);
+    assert_eq!(arena.stats().texture_saturated, 0);
 }
 
 #[test]

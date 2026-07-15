@@ -1,7 +1,7 @@
 use crate::assets;
 use crate::notefield_style::notefield_style;
 use crate::screens::gameplay::{GameplayCoreState as State, GameplayNoteskinAssets};
-use deadlib_present::actors::{Actor, IntoTextureKey};
+use deadlib_present::actors::{Actor, ActorResourceArena, IntoTextureKey};
 use deadlib_present::color;
 use deadlib_present::space::*;
 use deadsync_assets::noteskin::SpriteSlot;
@@ -183,6 +183,7 @@ pub(crate) fn compose_frame(
     player_idx: usize,
     arrow_effect_time_s: f32,
     noteskin_assets: &GameplayNoteskinAssets,
+    actor_resources: &ActorResourceArena,
     model_caches: &[RefCell<ModelMeshCache>; MAX_PLAYERS],
     hold_mesh_scratch: &[RefCell<HoldMeshScratch>; MAX_PLAYERS],
     profile: &profile_data::Profile,
@@ -444,7 +445,7 @@ pub(crate) fn compose_frame(
     let mc_font_name = zmod_small_combo_font(profile.combo_font);
     let blind_active = prepared.blind_active;
 
-    let noteskin_sprite_source = |slot: &SpriteSlot| slot.texture_key_handle().into_sprite_source();
+    let noteskin_sprite_source = |slot: &SpriteSlot| slot.actor_texture_source(actor_resources);
     let feedback_frame = NotefieldFeedbackFrameView {
         column_cues: options
             .frame_features
@@ -585,7 +586,7 @@ pub(crate) fn compose_frame(
         Some(TapJudgmentHudFrame {
             render,
             sprite: TapJudgmentSprite {
-                source: texture.texture_key_handle().into_sprite_source(),
+                source: texture.actor_texture_source(actor_resources),
                 frame_size: judgment_frame_size(texture.key.as_ref()),
                 frame_cols: frame_cols as usize,
             },
@@ -597,7 +598,7 @@ pub(crate) fn compose_frame(
     let held_miss_sprite = (!blind_active && held_misses.iter().any(Option::is_some))
         .then(|| {
             held_miss_texture.map(|texture| IndicatorSprite {
-                source: texture.texture_key_handle().into_sprite_source(),
+                source: texture.actor_texture_source(actor_resources),
                 scale: if assets::parse_texture_hints(texture.key.as_ref()).doubleres {
                     0.5
                 } else {
@@ -607,9 +608,7 @@ pub(crate) fn compose_frame(
         })
         .flatten();
     let hold_sprite = (!blind_active && hold_judgments.iter().any(Option::is_some))
-        .then(|| {
-            hold_judgment_texture.map(|texture| texture.texture_key_handle().into_sprite_source())
-        })
+        .then(|| hold_judgment_texture.map(|texture| texture.actor_texture_source(actor_resources)))
         .flatten();
     let hud_frame = NotefieldHudFrameView {
         combo: combo_frame,
@@ -632,6 +631,40 @@ pub(crate) fn compose_frame(
         judgment_actors: hud_result.judgment_actors,
         combo_actors: hud_result.combo_actors,
     }
+}
+
+pub(crate) fn prewarm_actor_resources(
+    arena: &ActorResourceArena,
+    noteskin_assets: &GameplayNoteskinAssets,
+    profiles: &[profile_data::Profile; MAX_PLAYERS],
+    num_players: usize,
+) {
+    for noteskins in [
+        &noteskin_assets.noteskin,
+        &noteskin_assets.mine_noteskin,
+        &noteskin_assets.receptor_noteskin,
+        &noteskin_assets.tap_explosion_noteskin,
+    ] {
+        for noteskin in noteskins.iter().take(num_players).flatten() {
+            noteskin.for_each_slot(|slot| {
+                let _ = slot.actor_texture_source(arena);
+            });
+        }
+    }
+
+    for profile in profiles.iter().take(num_players) {
+        for texture in [
+            resolved_judgment_texture(profile),
+            resolved_hold_judgment_texture(profile),
+            resolved_held_miss_texture(profile),
+        ]
+        .into_iter()
+        .flatten()
+        {
+            let _ = texture.actor_texture_source(arena);
+        }
+    }
+    arena.lock_growth();
 }
 
 #[cfg(test)]

@@ -133,6 +133,62 @@ pub fn build_screen_cached_with_scratch_and_texture_context<T: TextureContext + 
     scratch: &mut ComposeScratch,
     texture_ctx: &T,
 ) -> RenderList {
+    build_screen_cached_with_scratch_and_texture_context_impl(
+        actors,
+        clear_color,
+        m,
+        fonts,
+        total_elapsed,
+        text_cache,
+        scratch,
+        texture_ctx,
+        None,
+    )
+}
+
+#[inline(always)]
+#[allow(clippy::too_many_arguments)]
+pub fn build_screen_cached_with_scratch_and_texture_context_and_actor_resources<
+    T: TextureContext + ?Sized,
+>(
+    actors: &[actors::Actor],
+    clear_color: [f32; 4],
+    m: &Metrics,
+    fonts: &HashMap<&'static str, font::Font>,
+    total_elapsed: f32,
+    text_cache: &mut TextLayoutCache,
+    scratch: &mut ComposeScratch,
+    texture_ctx: &T,
+    actor_resources: &actors::ActorResourceArena,
+) -> RenderList {
+    build_screen_cached_with_scratch_and_texture_context_impl(
+        actors,
+        clear_color,
+        m,
+        fonts,
+        total_elapsed,
+        text_cache,
+        scratch,
+        texture_ctx,
+        Some(actor_resources),
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn build_screen_cached_with_scratch_and_texture_context_impl<T: TextureContext + ?Sized>(
+    actors: &[actors::Actor],
+    clear_color: [f32; 4],
+    m: &Metrics,
+    fonts: &HashMap<&'static str, font::Font>,
+    total_elapsed: f32,
+    text_cache: &mut TextLayoutCache,
+    scratch: &mut ComposeScratch,
+    texture_ctx: &T,
+    actor_resources: Option<&actors::ActorResourceArena>,
+) -> RenderList {
+    // Hold one immutable arena borrow for the whole composition pass. Resolving
+    // an actor ID is then a bounds-checked slice access, not a RefCell borrow.
+    let actor_textures = actor_resources.map(actors::ActorResourceArena::texture_keys);
     let mut objects = std::mem::take(&mut scratch.objects);
     objects.clear();
     let object_capacity = actors.len().saturating_mul(4).max(64);
@@ -191,6 +247,7 @@ pub fn build_screen_cached_with_scratch_and_texture_context<T: TextureContext + 
         text_cache,
         &mut texture_cache,
         texture_ctx,
+        actor_textures.as_deref(),
         total_elapsed,
     );
 
@@ -2038,6 +2095,11 @@ fn sprite_source_handle(
             handle,
             generation: handle_generation,
             ..
+        }
+        | actors::SpriteSource::ArenaTextureHandle {
+            handle,
+            generation: handle_generation,
+            ..
         } if *handle != renderer::INVALID_TEXTURE_HANDLE && *handle_generation == generation => {
             Some(*handle)
         }
@@ -2178,6 +2240,7 @@ fn build_actor_list<'a, T: TextureContext + ?Sized>(
     text_cache: &mut TextLayoutCache,
     texture_cache: &mut TextureLookupCache,
     texture_ctx: &T,
+    actor_textures: Option<&[Arc<str>]>,
     total_elapsed: f32,
 ) {
     let mut active_camera = camera;
@@ -2209,6 +2272,7 @@ fn build_actor_list<'a, T: TextureContext + ?Sized>(
                 text_cache,
                 texture_cache,
                 texture_ctx,
+                actor_textures,
                 total_elapsed,
             ),
         }
@@ -2417,6 +2481,7 @@ fn build_actor_recursive<'a, T: TextureContext + ?Sized>(
     text_cache: &mut TextLayoutCache,
     texture_cache: &mut TextureLookupCache,
     texture_ctx: &T,
+    actor_textures: Option<&[Arc<str>]>,
     total_elapsed: f32,
 ) {
     if let Some(mesh) = textured_mesh_actor_view(actor) {
@@ -2478,6 +2543,20 @@ fn build_actor_recursive<'a, T: TextureContext + ?Sized>(
                 return;
             }
 
+            let arena_texture_key =
+                if let actors::SpriteSource::ArenaTextureHandle { id, .. } = source {
+                    let Some(textures) = actor_textures else {
+                        debug_assert!(false, "arena texture actor composed without its arena");
+                        return;
+                    };
+                    let Some(key) = textures.get(id.0 as usize) else {
+                        debug_assert!(false, "arena texture actor has an invalid texture ID");
+                        return;
+                    };
+                    Some(key.as_ref())
+                } else {
+                    None
+                };
             let (is_solid, texture_name, texture_key_ptr) = match source {
                 actors::SpriteSource::TextureStatic(name) => (false, *name, str_ptr(name)),
                 actors::SpriteSource::TextureStaticHandle { key, .. } => {
@@ -2489,6 +2568,10 @@ fn build_actor_recursive<'a, T: TextureContext + ?Sized>(
                 }
                 actors::SpriteSource::TextureHandle { key, .. } => {
                     let name = key.as_ref();
+                    (false, name, str_ptr(name))
+                }
+                actors::SpriteSource::ArenaTextureHandle { .. } => {
+                    let name = arena_texture_key.expect("arena texture key resolved above");
                     (false, name, str_ptr(name))
                 }
                 actors::SpriteSource::Solid => (true, "__white", str_ptr("__white")),
@@ -2762,6 +2845,7 @@ fn build_actor_recursive<'a, T: TextureContext + ?Sized>(
                 text_cache,
                 texture_cache,
                 texture_ctx,
+                actor_textures,
                 total_elapsed,
             );
             let end = out.len();
@@ -2801,6 +2885,7 @@ fn build_actor_recursive<'a, T: TextureContext + ?Sized>(
                 text_cache,
                 texture_cache,
                 texture_ctx,
+                actor_textures,
                 total_elapsed,
             );
         }
@@ -3204,6 +3289,7 @@ fn build_actor_recursive<'a, T: TextureContext + ?Sized>(
                 text_cache,
                 texture_cache,
                 texture_ctx,
+                actor_textures,
                 total_elapsed,
             );
         }
@@ -3340,6 +3426,7 @@ fn build_actor_recursive<'a, T: TextureContext + ?Sized>(
                 text_cache,
                 texture_cache,
                 texture_ctx,
+                actor_textures,
                 total_elapsed,
             );
         }
@@ -4699,11 +4786,15 @@ mod tests {
         CachedTextLayout, CachedTextMeshVariants, ComposeScratch, TextAttrCursor, TextLayoutCache,
         TextLayoutKey, TextureCacheEntry, TextureContext, TextureLookupCache, TextureMeta,
         WorldRect, build_cached_text_layout, build_screen, build_screen_cached_with_scratch,
+        build_screen_cached_with_scratch_and_texture_context,
+        build_screen_cached_with_scratch_and_texture_context_and_actor_resources,
         clip_object_to_world_masks, clip_sprite_object_to_world_rect, fold_sprite_xy_rot,
         push_shadow_objects_for_range, resolve_sprite_size_like_sm, sort_render_objects, str_ptr,
         wrap_text_lines_by_words,
     };
-    use crate::actors::{Actor, SizeSpec, SpriteSource, TextAlign, TextAttribute, TextContent};
+    use crate::actors::{
+        Actor, ActorResourceArena, SizeSpec, SpriteSource, TextAlign, TextAttribute, TextContent,
+    };
     use crate::font::{Font, Glyph};
     use crate::space::Metrics;
     use deadlib_render::{
@@ -4713,6 +4804,7 @@ mod tests {
     use glam::Mat4 as Matrix4;
     use std::collections::HashMap;
     use std::sync::Arc;
+    use std::sync::atomic::AtomicU64;
 
     #[derive(Default)]
     struct TestTextureContext {
@@ -4778,6 +4870,48 @@ mod tests {
         let mut glyph = test_glyph(texture_key);
         glyph.stroke_texture_key = Some(Arc::clone(stroke_key));
         glyph
+    }
+
+    fn test_sprite(source: SpriteSource) -> Actor {
+        Actor::Sprite {
+            align: [0.0, 0.0],
+            offset: [4.0, 8.0],
+            world_z: 0.0,
+            size: [SizeSpec::Px(16.0), SizeSpec::Px(32.0)],
+            source,
+            tint: [0.8, 0.6, 0.4, 1.0],
+            glow: [0.0; 4],
+            z: 2,
+            cell: None,
+            grid: None,
+            uv_rect: None,
+            visible: true,
+            flip_x: false,
+            flip_y: false,
+            cropleft: 0.0,
+            cropright: 0.0,
+            croptop: 0.0,
+            cropbottom: 0.0,
+            fadeleft: 0.0,
+            faderight: 0.0,
+            fadetop: 0.0,
+            fadebottom: 0.0,
+            blend: BlendMode::Alpha,
+            mask_source: false,
+            mask_dest: false,
+            rot_x_deg: 0.0,
+            rot_y_deg: 0.0,
+            rot_z_deg: 0.0,
+            local_offset: [0.0, 0.0],
+            local_offset_rot_sin_cos: [0.0, 1.0],
+            texcoordvelocity: None,
+            animate: false,
+            state_delay: 0.0,
+            scale: [1.0, 1.0],
+            shadow_len: [0.0, 0.0],
+            shadow_color: [0.0; 4],
+            effect: Default::default(),
+        }
     }
 
     #[test]
@@ -5377,6 +5511,72 @@ mod tests {
         assert!(cache.dims.is_empty());
         assert!(cache.sheets.is_empty());
         assert!(cache.handles.is_empty());
+    }
+
+    #[test]
+    fn arena_texture_actor_composes_like_owned_texture_actor() {
+        let key: Arc<str> = Arc::from("noteskin/tap");
+        let mut texture_ctx = TestTextureContext {
+            generation: 3,
+            ..TestTextureContext::default()
+        };
+        texture_ctx.handles.insert(key.to_string(), 17);
+        let metrics = Metrics {
+            left: 0.0,
+            right: 100.0,
+            top: 100.0,
+            bottom: 0.0,
+        };
+        let fonts = HashMap::new();
+
+        let owned = [test_sprite(SpriteSource::TextureHandle {
+            key: Arc::clone(&key),
+            handle: 17,
+            generation: 3,
+        })];
+        let arena = ActorResourceArena::new(1);
+        let cached = AtomicU64::new(0);
+        let arena_actor = [test_sprite(arena.texture_source(&key, 17, 3, &cached))];
+        let mut owned_cache = TextLayoutCache::default();
+        let mut owned_scratch = ComposeScratch::default();
+        let mut arena_cache = TextLayoutCache::default();
+        let mut arena_scratch = ComposeScratch::default();
+
+        let owned_render = build_screen_cached_with_scratch_and_texture_context(
+            &owned,
+            [0.0; 4],
+            &metrics,
+            &fonts,
+            0.0,
+            &mut owned_cache,
+            &mut owned_scratch,
+            &texture_ctx,
+        );
+        let arena_render = build_screen_cached_with_scratch_and_texture_context_and_actor_resources(
+            &arena_actor,
+            [0.0; 4],
+            &metrics,
+            &fonts,
+            0.0,
+            &mut arena_cache,
+            &mut arena_scratch,
+            &texture_ctx,
+            &arena,
+        );
+
+        assert_eq!(arena_render.objects.len(), owned_render.objects.len());
+        assert_eq!(arena_render.sprite_instances, owned_render.sprite_instances);
+        assert_eq!(arena_render.objects[0].texture_handle, 17);
+        assert_eq!(
+            arena_render.objects[0].texture_handle,
+            owned_render.objects[0].texture_handle
+        );
+        assert_eq!(arena_render.objects[0].z, owned_render.objects[0].z);
+        assert_eq!(arena_render.objects[0].order, owned_render.objects[0].order);
+        assert_eq!(
+            arena_render.objects[0].camera,
+            owned_render.objects[0].camera
+        );
     }
 
     #[test]

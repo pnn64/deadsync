@@ -865,6 +865,9 @@ pub fn sprite_native_dims<T: TextureContext + ?Sized>(
         SpriteSource::Texture(key) | SpriteSource::TextureHandle { key, .. } => {
             texture_native_dims(key.as_ref(), uv, cell, grid, texture_ctx)
         }
+        // Arena sources are final actor payloads whose dimensions were resolved
+        // by their owning noteskin/widget before the texture key was replaced.
+        SpriteSource::ArenaTextureHandle { .. } => [0.0, 0.0],
     }
 }
 

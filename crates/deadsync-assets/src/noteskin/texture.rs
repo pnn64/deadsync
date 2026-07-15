@@ -1,6 +1,8 @@
 use crate as assets;
 use deadlib_platform::dirs;
-use deadlib_present::actors::TextureKeyHandle;
+use deadlib_present::actors::{
+    ActorResourceArena, SpriteSource as ActorSpriteSource, TextureKeyHandle,
+};
 use deadlib_render::{SamplerDesc, TexturedMeshVertex};
 use deadsync_noteskin::ModelVertex;
 use deadsync_noteskin::mine::{
@@ -36,6 +38,7 @@ pub enum SpriteSource {
         tex_dims: (u32, u32),
         cached_handle: AtomicU64,
         cached_generation: AtomicU64,
+        cached_actor_texture: AtomicU64,
     },
     Animated {
         texture_key: Arc<str>,
@@ -48,6 +51,7 @@ pub enum SpriteSource {
         frame_durations: Option<Arc<[f32]>>,
         cached_handle: AtomicU64,
         cached_generation: AtomicU64,
+        cached_actor_texture: AtomicU64,
     },
 }
 
@@ -103,6 +107,41 @@ impl SpriteSource {
             handle,
             generation,
         }
+    }
+
+    #[inline(always)]
+    pub fn actor_texture_source(&self, arena: &ActorResourceArena) -> ActorSpriteSource {
+        let (texture_key, cached_handle, cached_generation, cached_actor_texture) = match self {
+            Self::Atlas {
+                texture_key,
+                cached_handle,
+                cached_generation,
+                cached_actor_texture,
+                ..
+            }
+            | Self::Animated {
+                texture_key,
+                cached_handle,
+                cached_generation,
+                cached_actor_texture,
+                ..
+            } => (
+                texture_key,
+                cached_handle,
+                cached_generation,
+                cached_actor_texture,
+            ),
+        };
+        let generation = assets::texture_registry_generation();
+        let mut handle = cached_handle.load(Ordering::Relaxed);
+        if handle == deadlib_render::INVALID_TEXTURE_HANDLE
+            || cached_generation.load(Ordering::Relaxed) != generation
+        {
+            handle = assets::texture_handle(texture_key.as_ref());
+            cached_handle.store(handle, Ordering::Relaxed);
+            cached_generation.store(generation, Ordering::Relaxed);
+        }
+        arena.texture_source(texture_key, handle, generation, cached_actor_texture)
     }
 
     pub fn frame_count(&self) -> usize {
@@ -172,6 +211,11 @@ impl SpriteSlot {
     #[inline(always)]
     pub fn texture_key_handle(&self) -> TextureKeyHandle {
         self.source.texture_key_handle()
+    }
+
+    #[inline(always)]
+    pub fn actor_texture_source(&self, arena: &ActorResourceArena) -> ActorSpriteSource {
+        self.source.actor_texture_source(arena)
     }
 
     pub const fn size(&self) -> [i32; 2] {
@@ -398,6 +442,7 @@ pub fn test_model_slot() -> SpriteSlot {
             tex_dims: (64, 64),
             cached_handle: AtomicU64::new(deadlib_render::INVALID_TEXTURE_HANDLE),
             cached_generation: AtomicU64::new(u64::MAX),
+            cached_actor_texture: AtomicU64::new(0),
         }),
         uv_velocity: [0.0, 0.0],
         uv_offset: [0.0, 0.0],
@@ -517,6 +562,7 @@ fn source_from_plan(plan: SpriteSourcePlan) -> Arc<SpriteSource> {
             tex_dims,
             cached_handle: AtomicU64::new(deadlib_render::INVALID_TEXTURE_HANDLE),
             cached_generation: AtomicU64::new(u64::MAX),
+            cached_actor_texture: AtomicU64::new(0),
         }),
         SpriteSourcePlan::Animated {
             texture_key,
@@ -538,6 +584,7 @@ fn source_from_plan(plan: SpriteSourcePlan) -> Arc<SpriteSource> {
             frame_durations: frame_durations.map(Arc::<[f32]>::from),
             cached_handle: AtomicU64::new(deadlib_render::INVALID_TEXTURE_HANDLE),
             cached_generation: AtomicU64::new(u64::MAX),
+            cached_actor_texture: AtomicU64::new(0),
         }),
     }
 }
@@ -830,6 +877,31 @@ fn build_mine_gradient_slot(colors: &[[f32; 4]]) -> SpriteSlot {
 #[cfg(test)]
 mod contract_tests {
     use super::*;
+
+    #[test]
+    fn noteskin_actor_source_uses_arena_ownership() {
+        let slot = test_model_slot();
+        let arena = ActorResourceArena::new(1);
+
+        let first = slot.actor_texture_source(&arena);
+        let second = slot.actor_texture_source(&arena);
+
+        assert!(matches!(
+            first,
+            ActorSpriteSource::ArenaTextureHandle { .. }
+        ));
+        assert!(matches!(
+            second,
+            ActorSpriteSource::ArenaTextureHandle { .. }
+        ));
+        let texture_key = match slot.source.as_ref() {
+            SpriteSource::Atlas { texture_key, .. }
+            | SpriteSource::Animated { texture_key, .. } => texture_key,
+        };
+        assert_eq!(Arc::strong_count(texture_key), 2);
+        assert_eq!(arena.stats().texture_misses, 1);
+        assert_eq!(arena.stats().texture_hits, 1);
+    }
 
     #[test]
     fn noteskin_slot_contract_preserves_data_and_identity() {

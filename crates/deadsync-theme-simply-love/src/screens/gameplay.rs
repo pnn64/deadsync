@@ -14,7 +14,7 @@ use crate::screens::components::shared::screen_bar::{self, AvatarParams, ScreenB
 use crate::screens::{Screen, ThemeEffect};
 use crate::views::SimplyLoveLobbyRuntimeView;
 use deadlib_present::actors::{
-    Actor, SizeSpec, SpriteSource, TextAlign, TextAttribute, TextContent,
+    Actor, ActorResourceArena, SizeSpec, SpriteSource, TextAlign, TextAttribute, TextContent,
 };
 use deadlib_present::anim::EffectState;
 use deadlib_present::cache::{TextCache, cached_text};
@@ -589,6 +589,7 @@ pub struct State {
     song_lua_capture_state_scratch: Vec<SongLuaOverlayState>,
     song_lua_order_scratch: Vec<usize>,
     song_lua_capture_order_scratch: Vec<usize>,
+    actor_resources: ActorResourceArena,
     notefield_actor_scratch: [Vec<Actor>; MAX_PLAYERS],
     notefield_hud_actor_scratch: [Vec<Actor>; MAX_PLAYERS],
     player_actor_scratch: [Vec<Actor>; MAX_PLAYERS],
@@ -646,6 +647,13 @@ impl State {
             let columns = usize::from(player < gameplay.num_players()) * gameplay.cols_per_player();
             RefCell::new(HoldMeshScratch::with_columns(columns))
         });
+        let actor_resources = ActorResourceArena::default();
+        notefield::prewarm_actor_resources(
+            &actor_resources,
+            &noteskin_assets,
+            &step_stats_profiles,
+            gameplay.num_players(),
+        );
         let background_transition_start_time = gameplay.current_music_time_display();
         let next_background_change_ix = background_changes
             .iter()
@@ -713,6 +721,7 @@ impl State {
             song_lua_capture_state_scratch: Vec::new(),
             song_lua_order_scratch: Vec::new(),
             song_lua_capture_order_scratch: Vec::new(),
+            actor_resources,
             notefield_actor_scratch: std::array::from_fn(|_| Vec::new()),
             notefield_hud_actor_scratch: std::array::from_fn(|_| Vec::new()),
             player_actor_scratch: std::array::from_fn(|_| Vec::new()),
@@ -723,6 +732,11 @@ impl State {
         for cache in &self.notefield_model_cache {
             cache.borrow_mut().reset_stats();
         }
+    }
+
+    #[inline(always)]
+    pub fn actor_resources(&self) -> &ActorResourceArena {
+        &self.actor_resources
     }
 
     pub fn notefield_model_cache_stats(&self) -> [ModelMeshCacheStats; MAX_PLAYERS] {
@@ -9157,6 +9171,7 @@ pub fn push_actors(
                 player_idx,
                 arrow_effect_time_s,
                 &state.noteskin_assets,
+                state.actor_resources(),
                 &state.notefield_model_cache,
                 &state.notefield_hold_mesh_scratch,
                 profile,

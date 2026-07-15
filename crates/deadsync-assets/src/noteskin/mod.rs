@@ -2027,6 +2027,7 @@ return skin
             tex_dims: (2048, 2048),
             cached_handle: AtomicU64::new(deadlib_render::INVALID_TEXTURE_HANDLE),
             cached_generation: AtomicU64::new(u64::MAX),
+            cached_actor_texture: AtomicU64::new(0),
         });
         slot.model = None;
         let (cols, rows) = crate::sprite_sheet_dims(&key);
@@ -2107,6 +2108,7 @@ return skin
             tex_dims: (2048, 2048),
             cached_handle: AtomicU64::new(deadlib_render::INVALID_TEXTURE_HANDLE),
             cached_generation: AtomicU64::new(u64::MAX),
+            cached_actor_texture: AtomicU64::new(0),
         });
         slot.model = None;
 
