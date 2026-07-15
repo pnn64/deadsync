@@ -946,8 +946,8 @@ fn push_rank_marker(
         settext(row.rank.clone()):
         align(1.0, 0.5):
         xy(rank_x, y):
-        zoom(0.87 * zoom):
         maxwidth(30.0):
+        zoom(0.87 * zoom):
         diffuse(rank_color[0], rank_color[1], rank_color[2], rank_color[3]):
         z(z_base + 3):
         horizalign(right)
@@ -982,8 +982,8 @@ fn push_rows(
             settext(row.name.clone()):
             align(0.0, 0.5):
             xy(name_x, y):
-            zoom(0.87 * zoom):
             maxwidth(100.0):
+            zoom(0.87 * zoom):
             diffuse(name_col[0], name_col[1], name_col[2], name_col[3]):
             z(z_base + 3):
             horizalign(left)
@@ -1270,6 +1270,38 @@ mod tests {
         let stale = select_music_scorebox_view(&runtime, Some("other"), false);
         assert_eq!(stale.player_name, "----");
         assert_eq!(stale.machine_name, "----");
+    }
+
+    #[test]
+    fn scorebox_text_width_caps_precede_zoom() {
+        let mut rows = empty_rows();
+        rows[1] = GameplayScoreboxRow {
+            rank: owned_text("123456789."),
+            name: owned_text("DF.LemmingOnTheRun"),
+            score: owned_text("100.00"),
+            rank_color: [1.0; 4],
+            name_color: [1.0; 4],
+            score_color: [1.0; 4],
+        };
+        let mut actors = Vec::new();
+        push_rows(&mut actors, &rows, 0.0, 0.0, 0.5, 0, 1.0);
+
+        for (text, width) in [("123456789.", 30.0), ("DF.LemmingOnTheRun", 100.0)] {
+            let Some(Actor::Text {
+                scale,
+                max_width,
+                max_w_pre_zoom,
+                ..
+            }) = actors.iter().find(
+                |actor| matches!(actor, Actor::Text { content, .. } if content.as_str() == text),
+            )
+            else {
+                panic!("expected scorebox text actor for {text}");
+            };
+            assert_eq!(*scale, [0.435; 2]);
+            assert_eq!(*max_width, Some(width));
+            assert!(*max_w_pre_zoom);
+        }
     }
 
     #[test]
