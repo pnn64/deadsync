@@ -4654,15 +4654,76 @@ fn push_line_segment(
     out.push(MeshVertex { pos: d, color });
 }
 
+// A 5x time zoom makes the typical 5-6% kernel-response band occupy roughly
+// one quarter of the horizontal graph while leaving useful context around it.
+const SYNC_HORIZONTAL_TIME_FRACTION: f32 = 0.2;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct SyncGraphCols {
+    total: usize,
+    first: usize,
+    end: usize,
+}
+
+fn sync_graph_cols(
+    total: usize,
+    times_ms: &[f64],
+    orientation: GraphOrientation,
+    focus_ms: Option<f64>,
+) -> SyncGraphCols {
+    if total == 0 || orientation == GraphOrientation::Vertical {
+        return SyncGraphCols {
+            total,
+            first: 0,
+            end: total,
+        };
+    }
+
+    let min_cols = total.min(8);
+    let visible =
+        ((total as f32 * SYNC_HORIZONTAL_TIME_FRACTION).round() as usize).clamp(min_cols, total);
+    let focus = focus_ms.filter(|value| value.is_finite()).unwrap_or(0.0);
+    let focus_col = if times_ms.len() == total {
+        let next = times_ms.partition_point(|value| *value < focus);
+        match (next.checked_sub(1), (next < total).then_some(next)) {
+            (Some(before), Some(after)) => {
+                if (times_ms[before] - focus).abs() <= (times_ms[after] - focus).abs() {
+                    before
+                } else {
+                    after
+                }
+            }
+            (Some(before), None) => before,
+            (None, Some(after)) => after,
+            (None, None) => total / 2,
+        }
+    } else {
+        total / 2
+    };
+    let first = focus_col.saturating_sub(visible / 2).min(total - visible);
+    SyncGraphCols {
+        total,
+        first,
+        end: first + visible,
+    }
+}
+
 fn build_sync_curve_mesh(
     values: &[f64],
     edge_discard: usize,
+    cols: SyncGraphCols,
     graph_w: f32,
     graph_h: f32,
     orientation: GraphOrientation,
     color: [f32; 4],
 ) -> Option<Arc<[MeshVertex]>> {
-    if values.len() < 2 || graph_w <= 0.0 || graph_h <= 0.0 {
+    if values.len() < 2
+        || cols.total != values.len()
+        || cols.end > values.len()
+        || cols.end.saturating_sub(cols.first) < 2
+        || graph_w <= 0.0
+        || graph_h <= 0.0
+    {
         return None;
     }
     let edge = edge_discard.min(values.len() / 2);
@@ -4680,11 +4741,12 @@ fn build_sync_curve_mesh(
     let x_right = graph_w * 0.9;
     let y_top = graph_h * 0.1;
     let y_bottom = graph_h * 0.9;
-    let mut out: Vec<MeshVertex> = Vec::with_capacity(values.len().saturating_sub(1) * 6);
-    for i in 0..values.len().saturating_sub(1) {
-        let denom = values.len().saturating_sub(1) as f32;
-        let axis0 = i as f32 / denom;
-        let axis1 = (i + 1) as f32 / denom;
+    let visible_len = cols.end - cols.first;
+    let mut out = Vec::with_capacity(visible_len.saturating_sub(1) * 6);
+    for i in cols.first..cols.end.saturating_sub(1) {
+        let denom = visible_len.saturating_sub(1) as f32;
+        let axis0 = (i - cols.first) as f32 / denom;
+        let axis1 = (i + 1 - cols.first) as f32 / denom;
         let t0 = sync_heat_norm01(values[i], min_value, max_value) as f32;
         let t1 = sync_heat_norm01(values[i + 1], min_value, max_value) as f32;
         let (x0, y0, x1, y1) = match orientation {
@@ -4795,18 +4857,25 @@ fn build_sync_heat_image(
     matrix: &[f64],
     total_rows: usize,
     data_rows: usize,
-    cols: usize,
+    cols: SyncGraphCols,
     graph_size: [f32; 2],
     orientation: GraphOrientation,
     clim_pct: Option<(f64, f64)>,
 ) -> Option<RgbaImage> {
     let [graph_w, graph_h] = graph_size;
-    if data_rows == 0 || cols == 0 || graph_w <= 0.0 || graph_h <= 0.0 {
+    let visible_cols = cols.end.saturating_sub(cols.first);
+    if data_rows == 0
+        || cols.total == 0
+        || cols.end > cols.total
+        || visible_cols == 0
+        || graph_w <= 0.0
+        || graph_h <= 0.0
+    {
         return None;
     }
     let image_h = (graph_h.round() as u32).max(1);
     let image_w = (graph_w.round() as u32).max(1);
-    let used = data_rows.saturating_mul(cols).min(matrix.len());
+    let used = data_rows.saturating_mul(cols.total).min(matrix.len());
     let (lo, hi) = sync_heat_value_range(&matrix[..used], clim_pct)?;
     let mut image = RgbaImage::new(image_w, image_h);
     for py in 0..image_h as usize {
@@ -4815,18 +4884,21 @@ fn build_sync_heat_image(
                 // Screen y=0 is data row 0 so streamed rows fill downward.
                 GraphOrientation::Vertical => (
                     ((py * total_rows) / image_h as usize).min(total_rows.saturating_sub(1)),
-                    (px * cols / image_w as usize).min(cols.saturating_sub(1)),
+                    cols.first
+                        + (px * visible_cols / image_w as usize)
+                            .min(visible_cols.saturating_sub(1)),
                 ),
                 // Transpose the row axis so streamed rows fill left-to-right;
                 // the fingerprint-time axis grows upward to match null-or-die.
                 GraphOrientation::Horizontal => (
                     ((px * total_rows) / image_w as usize).min(total_rows.saturating_sub(1)),
-                    (((image_h as usize - 1 - py) * cols) / image_h as usize)
-                        .min(cols.saturating_sub(1)),
+                    cols.first
+                        + (((image_h as usize - 1 - py) * visible_cols) / image_h as usize)
+                            .min(visible_cols.saturating_sub(1)),
                 ),
             };
             let rgba = if row < data_rows {
-                let value = matrix[row * cols + col];
+                let value = matrix[row * cols.total + col];
                 let color = sync_viridis(sync_heat_norm01(value, lo, hi));
                 Rgba([
                     (color[0] * 255.0).round().clamp(0.0, 255.0) as u8,
@@ -4932,8 +5004,18 @@ fn sync_beat_rate(overlay: &NullOrDieOverlayData) -> Option<u32> {
     Some(rate.round().max(0.0) as u32)
 }
 
+fn sync_overlay_graph_cols(overlay: &NullOrDieOverlayData) -> SyncGraphCols {
+    sync_graph_cols(
+        overlay.cols,
+        &overlay.times_ms,
+        overlay.graph_orientation,
+        overlay.final_bias_ms.or(overlay.preview_bias_ms),
+    )
+}
+
 fn refresh_sync_overlay_heat_texture(overlay: &mut NullOrDieOverlayData) {
     let (graph_w, graph_h) = sync_overlay_graph_size();
+    let cols = sync_overlay_graph_cols(overlay);
     let Some((matrix, total_rows, data_rows)) = sync_heat_source(overlay) else {
         return;
     };
@@ -4942,7 +5024,7 @@ fn refresh_sync_overlay_heat_texture(overlay: &mut NullOrDieOverlayData) {
         matrix,
         total_rows,
         data_rows,
-        overlay.cols,
+        cols,
         [graph_w, graph_h],
         overlay.graph_orientation,
         clim_pct,
@@ -4961,9 +5043,11 @@ fn refresh_sync_overlay_heat_texture(overlay: &mut NullOrDieOverlayData) {
 
 fn refresh_sync_overlay_curve_mesh(overlay: &mut NullOrDieOverlayData) {
     let (graph_w, graph_h) = sync_overlay_graph_size();
+    let cols = sync_overlay_graph_cols(overlay);
     overlay.curve_mesh = build_sync_curve_mesh(
         &overlay.convolution,
         overlay.edge_discard,
+        cols,
         graph_w,
         graph_h,
         overlay.graph_orientation,
@@ -5013,6 +5097,7 @@ fn build_null_or_die_overlay(
     let (graph_w, graph_h) = sync_overlay_graph_size();
     let graph_x = pane_left + 40.0;
     let graph_y = pane_top + 116.0;
+    let graph_center_x = graph_x + graph_w * 0.5;
     let graph_center_y = graph_y + graph_h * 0.5;
     let graph_bottom = graph_y + graph_h;
 
@@ -5079,14 +5164,14 @@ fn build_null_or_die_overlay(
     ));
     actors.push(act!(quad:
         align(0.5, 0.5):
-        xy(pane_cx, graph_center_y):
+        xy(graph_center_x, graph_center_y):
         zoomto(graph_w + 2.0, graph_h + 2.0):
         diffuse(1.0, 1.0, 1.0, 1.0):
         z(SYNC_OVERLAY_Z + 3)
     ));
     actors.push(act!(quad:
         align(0.5, 0.5):
-        xy(pane_cx, graph_center_y):
+        xy(graph_center_x, graph_center_y):
         zoomto(graph_w, graph_h):
         diffuse(0.0, 0.0, 0.0, 1.0):
         z(SYNC_OVERLAY_Z + 4)
@@ -5136,7 +5221,7 @@ fn build_null_or_die_overlay(
         font("miso"):
         settext(sync_graph_label(overlay)):
         align(0.5, 0.5):
-        xy(pane_cx, graph_y - 14.0):
+        xy(graph_center_x, graph_y - 14.0):
         zoom(0.8):
         diffuse(0.75, 0.75, 0.75, 1.0):
         z(SYNC_OVERLAY_Z + 5):
@@ -5152,7 +5237,7 @@ fn build_null_or_die_overlay(
         )),
         GraphOrientation::Horizontal => actors.push(act!(quad:
             align(0.5, 0.0):
-            xy(pane_cx, graph_y):
+            xy(graph_center_x, graph_y):
             zoomto(1.0, graph_h):
             diffuse(0.25, 0.25, 0.25, 1.0):
             z(SYNC_OVERLAY_Z + 5)
@@ -5180,7 +5265,7 @@ fn build_null_or_die_overlay(
             font("miso"):
             settext(placeholder_text):
             align(0.5, 0.5):
-            xy(pane_cx, graph_center_y):
+            xy(graph_center_x, graph_center_y):
             zoom(0.9):
             maxwidth(graph_w - 30.0):
             diffuse(0.6, 0.6, 0.6, 1.0):
@@ -5190,10 +5275,14 @@ fn build_null_or_die_overlay(
     }
 
     if let Some(bias_ms) = sync_marker_bias_ms(overlay) {
+        let cols = sync_overlay_graph_cols(overlay);
+        let visible_times = overlay
+            .times_ms
+            .get(cols.first..cols.end)
+            .unwrap_or(overlay.times_ms.as_slice());
         match overlay.graph_orientation {
             GraphOrientation::Vertical => {
-                let marker_x =
-                    graph_x + sync_bias_axis_pos(bias_ms, &overlay.times_ms, graph_w, false);
+                let marker_x = graph_x + sync_bias_axis_pos(bias_ms, visible_times, graph_w, false);
                 actors.push(act!(quad:
                     align(0.5, 0.5):
                     xy(marker_x, graph_center_y):
@@ -5203,11 +5292,10 @@ fn build_null_or_die_overlay(
                 ));
             }
             GraphOrientation::Horizontal => {
-                let marker_y =
-                    graph_y + sync_bias_axis_pos(bias_ms, &overlay.times_ms, graph_h, true);
+                let marker_y = graph_y + sync_bias_axis_pos(bias_ms, visible_times, graph_h, true);
                 actors.push(act!(quad:
                     align(0.5, 0.5):
-                    xy(pane_cx, marker_y):
+                    xy(graph_center_x, marker_y):
                     zoomto(graph_w, 2.0):
                     diffuse(0.9, 0.1, 0.1, 1.0):
                     z(SYNC_OVERLAY_Z + 7)
@@ -5220,10 +5308,12 @@ fn build_null_or_die_overlay(
     let status_y = graph_bottom + 22.0;
     // Right-align labels ending at a fixed x left-of-center, then start the
     // value just past that anchor so the colons of all labeled rows line up.
-    // The anchor is offset from pane center so the whole block reads as a
-    // single visually centered column.
+    let status_center_x = pane_cx;
+    let status_max_w = pane_w - 26.0;
+    let warning_max_w = pane_w - 30.0;
     let colon_anchor_x = pane_cx - 30.0;
     let value_x = colon_anchor_x + 6.0;
+    let value_max_w = pane_w * 0.5 - 10.0;
     for (i, line) in status_lines.iter().enumerate() {
         let line_y = status_y + (i as f32) * SYNC_READY_LINE_STEP;
         match line {
@@ -5232,9 +5322,9 @@ fn build_null_or_die_overlay(
                     font("miso"):
                     settext(Arc::clone(text)):
                     align(0.5, 0.5):
-                    xy(pane_cx, line_y):
+                    xy(status_center_x, line_y):
                     zoom(SYNC_READY_TEXT_ZOOM):
-                    maxwidth(pane_w - 26.0):
+                    maxwidth(status_max_w):
                     diffuse(1.0, 1.0, 1.0, 1.0):
                     z(SYNC_OVERLAY_Z + 4):
                     horizalign(center)
@@ -5257,7 +5347,7 @@ fn build_null_or_die_overlay(
                     align(0.0, 0.5):
                     xy(value_x, line_y):
                     zoom(SYNC_READY_TEXT_ZOOM):
-                    maxwidth(pane_w * 0.5 - 10.0):
+                    maxwidth(value_max_w):
                     diffuse(1.0, 1.0, 1.0, 1.0):
                     z(SYNC_OVERLAY_Z + 4):
                     horizalign(left)
@@ -5275,9 +5365,9 @@ fn build_null_or_die_overlay(
             font("miso"):
             settext(warning):
             align(0.5, 0.5):
-            xy(pane_cx, warning_y):
+            xy(status_center_x, warning_y):
             zoom(SYNC_READY_TEXT_ZOOM * 0.85):
-            maxwidth(pane_w - 30.0):
+            maxwidth(warning_max_w):
             diffuse(1.0, 0.9, 0.5, 1.0):
             z(SYNC_OVERLAY_Z + 4):
             horizalign(center)
@@ -12787,14 +12877,15 @@ fn handle_exit_prompt_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
 #[cfg(test)]
 mod tests {
     use super::{
-        PREVIEW_DELAY_SECONDS, ProfileBoxEffectOutcome, WheelSortMode, build_displayed_entries,
-        build_playlist_entries_from_text, build_playlist_song_lookup, build_sync_heat_image,
-        delayed_selection_updates_blocked, first_song_entry_index, handle_confirm,
-        handle_raw_key_event, init_placeholder, keymap_has_player_input,
+        PREVIEW_DELAY_SECONDS, ProfileBoxEffectOutcome, SyncGraphCols, WheelSortMode,
+        build_displayed_entries, build_playlist_entries_from_text, build_playlist_song_lookup,
+        build_sync_heat_image, delayed_selection_updates_blocked, first_song_entry_index,
+        handle_confirm, handle_raw_key_event, init_placeholder, keymap_has_player_input,
         maybe_prewarm_replaygain_for_pack, maybe_refresh_select_music_leaderboard,
         prepend_pending_effect, profile_boxes, reset_preview_after_gameplay,
         route_profile_box_effect, select_music_lobby_lock_text, select_music_lobby_lock_text_for,
-        solo_runtime_side, steps_index_for_side, sync_bias_axis_pos, sync_low_confidence_warning,
+        solo_runtime_side, steps_index_for_side, sync_bias_axis_pos, sync_graph_cols,
+        sync_low_confidence_warning, sync_overlay_graph_size,
     };
     use crate::config::{GraphOrientation, SelectMusicWheelStyle};
     use crate::screens::ThemeEffect;
@@ -14447,7 +14538,11 @@ mod tests {
             &matrix,
             2,
             2,
-            2,
+            SyncGraphCols {
+                total: 2,
+                first: 0,
+                end: 2,
+            },
             [2.0, 2.0],
             GraphOrientation::Vertical,
             None,
@@ -14457,7 +14552,11 @@ mod tests {
             &matrix,
             2,
             2,
-            2,
+            SyncGraphCols {
+                total: 2,
+                first: 0,
+                end: 2,
+            },
             [2.0, 2.0],
             GraphOrientation::Horizontal,
             None,
@@ -14471,11 +14570,76 @@ mod tests {
     }
 
     #[test]
+    fn horizontal_sync_heat_uses_zoomed_columns() {
+        let matrix = [0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0];
+        let full = build_sync_heat_image(
+            &matrix,
+            1,
+            1,
+            SyncGraphCols {
+                total: 10,
+                first: 0,
+                end: 10,
+            },
+            [10.0, 1.0],
+            GraphOrientation::Vertical,
+            None,
+        )
+        .unwrap();
+        let zoomed = build_sync_heat_image(
+            &matrix,
+            1,
+            1,
+            SyncGraphCols {
+                total: 10,
+                first: 4,
+                end: 6,
+            },
+            [1.0, 2.0],
+            GraphOrientation::Horizontal,
+            None,
+        )
+        .unwrap();
+
+        assert_eq!(zoomed.get_pixel(0, 0), full.get_pixel(5, 0));
+        assert_eq!(zoomed.get_pixel(0, 1), full.get_pixel(4, 0));
+    }
+
+    #[test]
     fn horizontal_sync_bias_axis_runs_bottom_to_top() {
         let times = [-10.0, 10.0];
         assert_eq!(sync_bias_axis_pos(-10.0, &times, 101.0, true), 100.0);
         assert_eq!(sync_bias_axis_pos(0.0, &times, 101.0, true), 50.0);
         assert_eq!(sync_bias_axis_pos(10.0, &times, 101.0, true), 0.0);
+    }
+
+    #[test]
+    fn horizontal_sync_graph_keeps_wide_layout() {
+        let (graph_w, graph_h) = sync_overlay_graph_size();
+        assert_eq!(graph_h, 132.0);
+        assert!(graph_w > graph_h * 3.0);
+    }
+
+    #[test]
+    fn horizontal_sync_graph_zooms_to_relevant_time() {
+        let times = (-50..50).map(f64::from).collect::<Vec<_>>();
+        let cols = sync_graph_cols(
+            times.len(),
+            &times,
+            GraphOrientation::Horizontal,
+            Some(-10.0),
+        );
+
+        assert_eq!(cols.end - cols.first, 20);
+        assert!(cols.first <= 40 && cols.end > 40);
+        assert_eq!(
+            sync_graph_cols(times.len(), &times, GraphOrientation::Vertical, Some(-10.0),),
+            SyncGraphCols {
+                total: 100,
+                first: 0,
+                end: 100,
+            }
+        );
     }
 
     #[test]
