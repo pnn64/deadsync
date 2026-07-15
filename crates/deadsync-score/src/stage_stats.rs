@@ -61,6 +61,7 @@ pub struct PlayerStageSummary {
     pub show_hard_ex_score: bool,
     pub show_fa_plus_pane: bool,
     pub track_early_judgments: bool,
+    pub dim_post_fail_scatter: bool,
 }
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -335,6 +336,7 @@ pub fn build_course_summary_stage(input: CourseSummaryInput<'_>) -> Option<Stage
             show_ex_score: show_ex,
             show_hard_ex_score: show_hard_ex,
             track_early_judgments,
+            dim_post_fail_scatter: first_player.dim_post_fail_scatter,
         });
     }
 
@@ -530,6 +532,7 @@ mod tests {
             show_hard_ex_score: true,
             show_fa_plus_pane: true,
             track_early_judgments: true,
+            dim_post_fail_scatter: true,
         }
     }
 

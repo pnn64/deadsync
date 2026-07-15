@@ -244,6 +244,7 @@ pub fn score_info_from_stage(
         show_hard_ex_score: player.show_hard_ex_score,
         show_fa_plus_pane: player.show_fa_plus_pane,
         track_early_judgments: player.track_early_judgments,
+        dim_post_fail_scatter: player.dim_post_fail_scatter,
         disabled_timing_windows,
         machine_records,
         machine_record_highlight_rank,

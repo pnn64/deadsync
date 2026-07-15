@@ -272,6 +272,8 @@ pub fn build_scatter_mesh(
     scatter: &[ScatterPoint],
     first_second: f32,
     last_second: f32,
+    fail_time: Option<f32>,
+    dim_post_fail_scatter: bool,
     graph_width: f32,
     graph_height: f32,
     worst_window_ms: f32,
@@ -308,6 +310,7 @@ pub fn build_scatter_mesh(
             None => sp.time_sec - (worst / 1000.0),
         };
         let x = ((x_time - first_second) / denom).clamp(0.0, 1.0) * w;
+        let post_fail = dim_post_fail_scatter && fail_time.is_some_and(|fail| x_time > fail);
 
         match sp.offset_ms {
             Some(off_ms) => {
@@ -315,20 +318,18 @@ pub fn build_scatter_mesh(
                 let x = x.clamp(0.0, (w - POINT_W).max(0.0));
                 let y = (t * (h - POINT_H).max(0.0)).clamp(0.0, (h - POINT_H).max(0.0));
                 let base = color_for_scatter(sp, off_ms.abs(), timing_windows_ms, scale);
-                let c = [base[0], base[1], base[2], scatter_hit_alpha(scale)];
+                let alpha = if post_fail {
+                    0.333
+                } else {
+                    scatter_hit_alpha(scale)
+                };
+                let c = [base[0], base[1], base[2], alpha];
                 push_quad(&mut out, x, y, POINT_W, POINT_H, c);
             }
             None => {
                 let x = x.clamp(0.0, (w - MISS_W).max(0.0));
                 let base = miss_color_for_scatter(sp, scale);
-                let miss_alpha = if matches!(
-                    scale,
-                    ScatterPlotScale::Itg | ScatterPlotScale::Ex | ScatterPlotScale::HardEx
-                ) {
-                    0.3
-                } else {
-                    0.333
-                };
+                let miss_alpha = if post_fail { 0.08 } else { 0.3 };
                 let c = [base[0], base[1], base[2], miss_alpha];
                 let h1 = if sp.miss_because_held { h * 0.5 } else { 0.0 };
                 let h2 = if sp.miss_because_held { h } else { h * 0.5 };
@@ -491,12 +492,21 @@ mod tests {
         }
     }
 
+    fn miss_point() -> ScatterPoint {
+        ScatterPoint {
+            offset_ms: None,
+            ..scatter_point(0.0)
+        }
+    }
+
     #[test]
     fn judgment_scatter_hits_use_full_alpha() {
         let verts = build_scatter_mesh(
             &[scatter_point(120.0)],
             0.0,
             2.0,
+            None,
+            false,
             100.0,
             50.0,
             180.0,
@@ -519,6 +529,8 @@ mod tests {
             &[scatter_point(10.0)],
             0.0,
             2.0,
+            None,
+            false,
             100.0,
             50.0,
             180.0,
@@ -537,6 +549,8 @@ mod tests {
             &[point],
             0.0,
             2.0,
+            None,
+            false,
             100.0,
             50.0,
             180.0,
@@ -550,5 +564,68 @@ mod tests {
                 .iter()
                 .all(|v| v.color == [purple[0], purple[1], purple[2], 0.666])
         );
+    }
+
+    #[test]
+    fn post_fail_scatter_uses_reference_hit_and_miss_alpha() {
+        let hit = build_scatter_mesh(
+            &[scatter_point(10.0)],
+            0.0,
+            2.0,
+            Some(0.5),
+            true,
+            100.0,
+            50.0,
+            180.0,
+            ScatterPlotScale::Itg,
+        );
+        let miss = build_scatter_mesh(
+            &[miss_point()],
+            0.0,
+            2.0,
+            Some(0.5),
+            true,
+            100.0,
+            50.0,
+            180.0,
+            ScatterPlotScale::Arrow,
+        );
+
+        assert!(hit.iter().all(|v| v.color[3] == 0.333));
+        assert!(miss.iter().all(|v| v.color[3] == 0.08));
+    }
+
+    #[test]
+    fn post_fail_scatter_dim_can_be_disabled() {
+        let verts = build_scatter_mesh(
+            &[miss_point()],
+            0.0,
+            2.0,
+            Some(0.5),
+            false,
+            100.0,
+            50.0,
+            180.0,
+            ScatterPlotScale::Arrow,
+        );
+
+        assert!(verts.iter().all(|v| v.color[3] == 0.3));
+    }
+
+    #[test]
+    fn scatter_point_at_fail_time_is_not_dimmed() {
+        let verts = build_scatter_mesh(
+            &[scatter_point(0.0)],
+            0.0,
+            2.0,
+            Some(1.0),
+            true,
+            100.0,
+            50.0,
+            180.0,
+            ScatterPlotScale::Itg,
+        );
+
+        assert!(verts.iter().all(|v| v.color[3] == 1.0));
     }
 }

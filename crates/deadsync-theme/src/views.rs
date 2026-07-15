@@ -293,6 +293,7 @@ pub struct EvaluationView<N, S> {
     pub show_hard_ex_score: bool,
     pub show_fa_plus_pane: bool,
     pub track_early_judgments: bool,
+    pub dim_post_fail_scatter: bool,
     pub disabled_timing_windows: [bool; 5],
     pub machine_records: Vec<LeaderboardEntry>,
     pub machine_record_highlight_rank: Option<u32>,

@@ -7167,6 +7167,7 @@ mod tests {
             show_hard_ex_score: false,
             show_fa_plus_pane: false,
             track_early_judgments: false,
+            dim_post_fail_scatter: true,
             disabled_timing_windows: [false; 5],
             machine_records: Vec::new(),
             machine_record_highlight_rank: None,
@@ -7266,6 +7267,7 @@ mod tests {
             show_hard_ex_score: true,
             show_fa_plus_pane: true,
             track_early_judgments: true,
+            dim_post_fail_scatter: true,
         }
     }
 

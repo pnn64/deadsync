@@ -2554,6 +2554,27 @@ pub(super) mod tests {
     }
 
     #[test]
+    fn results_extras_include_post_fail_scatter_dimming() {
+        ensure_i18n();
+        let (state, _asset_manager) = setup_state();
+        let rows = build_all_pane_row_maps(&state);
+        let advanced = rows
+            .iter()
+            .find_map(|(pane, rows)| (*pane == OptionsPane::Advanced).then_some(rows))
+            .expect("Advanced pane present");
+        let choices = &advanced
+            .get(RowId::ResultsExtras)
+            .expect("Results Extras row present")
+            .choices;
+
+        assert_eq!(choices.len(), 3);
+        assert_eq!(
+            choices[2],
+            crate::assets::i18n::tr("PlayerOptions", "ResultsExtrasDimPostFailScatter").as_ref()
+        );
+    }
+
+    #[test]
     fn display_pane_owns_display_rows_and_main_keeps_shared_rows() {
         ensure_i18n();
         let (state, _asset_manager) = setup_state();

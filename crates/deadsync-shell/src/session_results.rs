@@ -60,6 +60,7 @@ fn player_stage_summary(score: &ScoreInfo) -> PlayerStageSummary {
         show_ex_score: score.show_ex_score,
         show_hard_ex_score: score.show_hard_ex_score,
         track_early_judgments: score.track_early_judgments,
+        dim_post_fail_scatter: score.dim_post_fail_scatter,
     }
 }
 

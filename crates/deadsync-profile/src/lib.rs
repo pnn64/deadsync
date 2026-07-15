@@ -6465,6 +6465,7 @@ pub struct PlayerOptionsData {
     pub split_15_10ms: bool,
     pub track_early_judgments: bool,
     pub scale_scatterplot: bool,
+    pub dim_post_fail_scatter: bool,
     pub scatterplot_max_window: ScatterplotMaxWindow,
     pub score_position: ScorePosition,
     pub score_display_mode: ScoreDisplayMode,
@@ -6608,6 +6609,7 @@ fn default_player_options() -> PlayerOptionsData {
         split_15_10ms: false,
         track_early_judgments: false,
         scale_scatterplot: false,
+        dim_post_fail_scatter: true,
         scatterplot_max_window: ScatterplotMaxWindow::Off,
         score_position: ScorePosition::Normal,
         score_display_mode: ScoreDisplayMode::Normal,
@@ -6830,6 +6832,11 @@ where
         .or_else(|| get("ScatterplotGreatMax"))
         .and_then(|s| s.parse::<u8>().ok())
         .map_or(options.scale_scatterplot, |v| v != 0);
+    options.dim_post_fail_scatter = load_u8_bool(
+        &mut get,
+        "DimPostFailScatter",
+        options.dim_post_fail_scatter,
+    );
     options.scatterplot_max_window = get("ScatterplotMaxWindow")
         .and_then(|s| ScatterplotMaxWindow::from_str(&s).ok())
         .unwrap_or(options.scatterplot_max_window);
@@ -7408,6 +7415,10 @@ pub fn append_player_options_section(
         i32::from(options.scale_scatterplot)
     ));
     content.push_str(&format!(
+        "DimPostFailScatter={}\n",
+        i32::from(options.dim_post_fail_scatter)
+    ));
+    content.push_str(&format!(
         "ScatterplotMaxWindow={}\n",
         options.scatterplot_max_window
     ));
@@ -7958,6 +7969,9 @@ pub struct Profile {
     // toggle). Off uses the original behavior of an Excellent floor with
     // no upper cap.
     pub scale_scatterplot: bool,
+    // Dim evaluation scatter data positioned after the player's fail time,
+    // matching the iamchris/Arrow Cloud graph treatment.
+    pub dim_post_fail_scatter: bool,
     // Hard cap for the evaluation scatter plot's vertical scale. When
     // anything other than `Off`, this overrides `scale_scatterplot`'s
     // tier-snapped behavior and clamps the worst-window ms to the
@@ -8156,6 +8170,7 @@ impl Default for Profile {
             split_15_10ms: player_options.split_15_10ms,
             track_early_judgments: player_options.track_early_judgments,
             scale_scatterplot: player_options.scale_scatterplot,
+            dim_post_fail_scatter: player_options.dim_post_fail_scatter,
             scatterplot_max_window: player_options.scatterplot_max_window,
             score_position: player_options.score_position,
             score_display_mode: player_options.score_display_mode,
@@ -8614,6 +8629,10 @@ impl Profile {
         set_value_if_changed(&mut self.scale_scatterplot, enabled)
     }
 
+    pub fn set_dim_post_fail_scatter(&mut self, enabled: bool) -> bool {
+        set_value_if_changed(&mut self.dim_post_fail_scatter, enabled)
+    }
+
     pub fn set_split_15_10ms(&mut self, enabled: bool) -> bool {
         set_value_if_changed(&mut self.split_15_10ms, enabled)
     }
@@ -9068,6 +9087,7 @@ impl Profile {
             split_15_10ms: self.split_15_10ms,
             track_early_judgments: self.track_early_judgments,
             scale_scatterplot: self.scale_scatterplot,
+            dim_post_fail_scatter: self.dim_post_fail_scatter,
             scatterplot_max_window: self.scatterplot_max_window,
             score_position: self.score_position,
             score_display_mode: self.score_display_mode,
@@ -9205,6 +9225,7 @@ impl Profile {
         self.split_15_10ms = options.split_15_10ms;
         self.track_early_judgments = options.track_early_judgments;
         self.scale_scatterplot = options.scale_scatterplot;
+        self.dim_post_fail_scatter = options.dim_post_fail_scatter;
         self.scatterplot_max_window = options.scatterplot_max_window;
         self.score_position = options.score_position;
         self.score_display_mode = options.score_display_mode;
@@ -10129,6 +10150,7 @@ mod tests {
             ("Split1510ms", "1"),
             ("TrackEarlyJudgments", "1"),
             ("ScatterplotGreatMax", "1"),
+            ("DimPostFailScatter", "0"),
             ("ScatterplotMaxWindow", "Excellent"),
             ("ScorePosition", "Step Statistics"),
             ("ScoreDisplay", "Predictive"),
@@ -10164,6 +10186,7 @@ mod tests {
         assert!(options.split_15_10ms);
         assert!(options.track_early_judgments);
         assert!(options.scale_scatterplot);
+        assert!(!options.dim_post_fail_scatter);
         assert_eq!(
             options.scatterplot_max_window,
             ScatterplotMaxWindow::Excellent
@@ -11589,6 +11612,7 @@ mod tests {
         assert!(content.contains("ColumnFlashSize=Compact\n"));
         assert!(content.contains("MiniPercent=42\n"));
         assert!(content.contains("GlobalOffsetShiftMs=-9\n"));
+        assert!(content.contains("DimPostFailScatter=1\n"));
     }
 
     #[test]

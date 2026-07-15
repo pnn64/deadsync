@@ -976,10 +976,12 @@ const RESULTS_EXTRAS: BitmaskBinding = fanout_bitmask_binding!(
     fields = [
         (TRACK_EARLY_JUDGMENTS, track_early_judgments),
         (SCALE_SCATTERPLOT, scale_scatterplot),
+        (DIM_POST_FAIL_SCATTER, dim_post_fail_scatter),
     ],
     persist_for_side = |s, p| {
         gp::update_track_early_judgments_for_side(s, p.track_early_judgments);
         gp::update_scale_scatterplot_for_side(s, p.scale_scatterplot);
+        gp::update_dim_post_fail_scatter_for_side(s, p.dim_post_fail_scatter);
     },
     sync_visibility = false,
 );
@@ -2056,6 +2058,7 @@ pub(super) fn build_advanced_rows(return_screen: Screen) -> RowMap {
         vec![
             tr("PlayerOptions", "ResultsExtrasTrackEarlyJudgments").to_string(),
             tr("PlayerOptions", "ResultsExtrasScaleScatterplot").to_string(),
+            tr("PlayerOptions", "ResultsExtrasDimPostFailScatter").to_string(),
         ],
     ));
     b.push(Row::cycle(

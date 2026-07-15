@@ -447,6 +447,10 @@ pub fn update_scale_scatterplot_for_side(side: PlayerSide, enabled: bool) {
     profile_ini_update(side, |profile| profile.set_scale_scatterplot(enabled))
 }
 
+pub fn update_dim_post_fail_scatter_for_side(side: PlayerSide, enabled: bool) {
+    profile_ini_update(side, |profile| profile.set_dim_post_fail_scatter(enabled))
+}
+
 pub fn update_split_15_10ms_for_side(side: PlayerSide, enabled: bool) {
     profile_ini_update(side, |profile| profile.set_split_15_10ms(enabled))
 }

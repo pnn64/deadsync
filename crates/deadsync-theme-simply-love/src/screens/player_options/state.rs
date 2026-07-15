@@ -140,6 +140,7 @@ bitflags! {
     pub struct ResultsExtrasMask: u8 {
         const TRACK_EARLY_JUDGMENTS = 1 << 0;
         const SCALE_SCATTERPLOT     = 1 << 1;
+        const DIM_POST_FAIL_SCATTER = 1 << 2;
     }
 }
 
