@@ -914,6 +914,7 @@ where
         },
         chart_runtime: GameplayChartRuntimeState {
             notes,
+            column_judgment_eligible: vec![false; notes_len],
             note_ranges: GameplayNoteRangeState::new(note_ranges),
             note_count_stats: GameplayNoteCountStatsState::new(note_count_stats),
             lane_indices: GameplayLaneIndexState::new(
@@ -968,7 +969,10 @@ where
             },
         },
         hold_runtime: GameplayHoldRuntimeState::new(notes_len, decaying_hold_capacity),
-        players_runtime: GameplayPlayersRuntimeState { players },
+        players_runtime: GameplayPlayersRuntimeState {
+            players,
+            column_judgments_active: [true; MAX_PLAYERS],
+        },
         display: GameplayDisplayRuntimeState {
             cue_runtime: GameplayCueRuntimeState::new(
                 measure_counter_segments,
@@ -1101,4 +1105,3 @@ where
     }
     state
 }
-

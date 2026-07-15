@@ -122,6 +122,10 @@ pub struct PlayerRuntime {
 #[derive(Clone, Debug)]
 pub struct GameplayPlayersRuntimeState {
     pub players: [PlayerRuntime; MAX_PLAYERS],
+    /// Latched once at frame start. ITGmania publishes HealthState_Dead after
+    /// the frame's JudgmentMessages, so the judgment that drains life to zero
+    /// (and any other judgments in that update) must remain eligible.
+    pub column_judgments_active: [bool; MAX_PLAYERS],
 }
 
 #[derive(Clone, Debug)]
@@ -784,4 +788,3 @@ pub const COLUMN_FLASH_MISS_DURATION: f32 = 0.16;
 pub const COLUMN_FLASH_JUDGMENT_DURATION: f32 = 0.33;
 pub const COMBO_HUNDRED_MILESTONE_DURATION: f32 = 0.6;
 pub const COMBO_THOUSAND_MILESTONE_DURATION: f32 = 0.7;
-

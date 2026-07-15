@@ -167,6 +167,8 @@ where
             return action;
         }
 
+        self.latch_column_judgment_health();
+
         let trace_enabled = log::log_enabled!(log::Level::Trace);
         let frame_trace_started = if trace_enabled {
             Some(Instant::now())
@@ -629,6 +631,11 @@ where
     }
 
     #[inline(always)]
+    pub fn column_judgment_eligible(&self) -> &[bool] {
+        &self.chart_runtime.column_judgment_eligible
+    }
+
+    #[inline(always)]
     pub fn players(&self) -> &[PlayerRuntime; MAX_PLAYERS] {
         &self.players_runtime.players
     }
@@ -706,6 +713,7 @@ where
     #[inline(always)]
     pub fn clear_notes(&mut self) {
         self.chart_runtime.notes.clear();
+        self.chart_runtime.column_judgment_eligible.clear();
     }
 
     #[inline(always)]
@@ -1737,6 +1745,7 @@ where
             &mut self.chart_runtime.row_entries,
             &self.chart_runtime.note_time_cache_ns,
         );
+        self.chart_runtime.column_judgment_eligible.fill(false);
         self.disable_score_for_practice();
 
         self.progress.stage.reset_for_practice();

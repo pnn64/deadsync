@@ -245,6 +245,10 @@ impl GameplayMineScanState {
 #[derive(Clone, Debug)]
 pub struct GameplayChartRuntimeState {
     pub notes: Vec<Note>,
+    /// Notes whose row-final judgment was broadcast before the player's
+    /// published health state became dead. This is a song-lifetime bitset,
+    /// allocated during gameplay setup and never resized on a live frame.
+    pub column_judgment_eligible: Vec<bool>,
     pub note_ranges: GameplayNoteRangeState,
     pub note_count_stats: GameplayNoteCountStatsState,
     pub lane_indices: GameplayLaneIndexState,
@@ -650,4 +654,3 @@ pub fn gameplay_runtime_charts(
     }
     runtime_charts
 }
-

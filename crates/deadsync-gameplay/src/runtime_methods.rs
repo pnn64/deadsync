@@ -1098,6 +1098,13 @@ where
         }
     }
 
+    fn latch_column_judgment_health(&mut self) {
+        self.players_runtime.column_judgments_active = std::array::from_fn(|player| {
+            player < self.setup.num_players
+                && !player_runtime_is_dead(&self.players_runtime.players[player])
+        });
+    }
+
     pub fn finalize_row_judgment(
         &mut self,
         player: usize,
@@ -1117,6 +1124,20 @@ where
         self.apply_autosync_for_row_hits(row_entry_index);
         let final_judgment = plan.judgment;
         self.chart_runtime.row_entries[row_entry_index].final_outcome = Some(plan.outcome);
+        if self.players_runtime.column_judgments_active[player] {
+            let row = &self.chart_runtime.row_entries[row_entry_index];
+            let note_indices = row.nonmine_note_indices;
+            let note_count = usize::from(row.nonmine_note_count);
+            for &note_index in &note_indices[..note_count] {
+                if let Some(eligible) = self
+                    .chart_runtime
+                    .column_judgment_eligible
+                    .get_mut(note_index)
+                {
+                    *eligible = true;
+                }
+            }
+        }
         record_player_live_timing_stats(&mut self.players_runtime.players[player], &final_judgment);
         if plan.record_display_window_counts {
             self.progress.window_counts.record_judgment(
@@ -2037,4 +2058,3 @@ where
         );
     }
 }
-

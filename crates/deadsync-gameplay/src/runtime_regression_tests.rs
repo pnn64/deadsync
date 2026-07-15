@@ -295,6 +295,10 @@ mod runtime_regression_tests {
         );
         debug_assert_eq!(
             state.chart_runtime.notes.len(),
+            state.chart_runtime.column_judgment_eligible.len()
+        );
+        debug_assert_eq!(
+            state.chart_runtime.notes.len(),
             state.hold_runtime.hold_decay_active.len()
         );
         debug_assert_eq!(
@@ -1149,6 +1153,58 @@ mod runtime_regression_tests {
             })
         );
         assert_eq!(state.players_runtime.players[0].judgment_counts[miss_ix], 1);
+    }
+
+    #[test]
+    fn column_judgments_include_fatal_frame_then_stop() {
+        let mut state = regression_state();
+        let rows = [0, 48, 96];
+        state.chart_runtime.notes = vec![
+            note_with_judgment(0, rows[0], NoteType::Tap, JudgeGrade::Miss, 0.0),
+            note_with_judgment(0, rows[1], NoteType::Tap, JudgeGrade::Fantastic, 4.0),
+            note_with_judgment(0, rows[2], NoteType::Tap, JudgeGrade::Excellent, 18.0),
+        ];
+        state.chart_runtime.note_time_cache_ns = vec![
+            song_time_ns_from_seconds(1.0),
+            song_time_ns_from_seconds(1.5),
+            song_time_ns_from_seconds(2.0),
+        ];
+        state.chart_runtime.column_judgment_eligible = vec![false; 3];
+        state.chart_runtime.row_entries = rows
+            .iter()
+            .enumerate()
+            .map(|(note_index, &row_index)| {
+                test_row_entry_with_times(
+                    &state.chart_runtime.notes,
+                    &state.chart_runtime.note_time_cache_ns,
+                    row_index,
+                    vec![note_index],
+                )
+            })
+            .collect();
+        state.players_runtime.players[0].life = 0.001;
+
+        state.latch_column_judgment_health();
+        state.finalize_row_judgment(0, rows[0], 0, false);
+        assert!(state.players_runtime.players[0].is_failing);
+
+        // HealthState_Dead is published after the update's JudgmentMessages,
+        // so another judgment finalized in the fatal update is still tracked.
+        state.finalize_row_judgment(0, rows[1], 1, false);
+        state.latch_column_judgment_health();
+        state.finalize_row_judgment(0, rows[2], 2, false);
+
+        assert_eq!(
+            state.chart_runtime.column_judgment_eligible,
+            [true, true, false]
+        );
+        assert_eq!(
+            state.players_runtime.players[0]
+                .judgment_counts
+                .iter()
+                .sum::<u32>(),
+            3
+        );
     }
 
     #[test]

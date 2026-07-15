@@ -2018,6 +2018,7 @@ pub fn init(gameplay_results: Option<gameplay::State>, init_view: EvaluationInit
             let noteskin = gs.noteskin_assets.noteskin[player_idx].take();
             let (start, end) = gs.note_range_for_player(player_idx);
             let notes = &gs.notes()[start..end];
+            let column_judgment_eligible = &gs.column_judgment_eligible()[start..end];
             let note_times = &gs.note_time_cache_ns()[start..end];
             let hold_end_times = &gs.hold_end_time_cache_ns()[start..end];
             let p = &gs.players()[player_idx];
@@ -2237,6 +2238,7 @@ pub fn init(gameplay_results: Option<gameplay::State>, init_view: EvaluationInit
 
             let column_judgments = score_data::compute_column_judgments(
                 notes,
+                column_judgment_eligible,
                 cols_per_player,
                 col_offset,
                 prof.show_fa_plus_window,

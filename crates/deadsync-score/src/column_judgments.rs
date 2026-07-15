@@ -103,10 +103,16 @@ fn add_column_judgment(slot: &mut ColumnJudgments, judgment: &Judgment, show_fa_
 
 pub fn compute_column_judgments(
     notes: &[Note],
+    eligible: &[bool],
     cols_per_player: usize,
     col_offset: usize,
     show_fa_plus_window: bool,
 ) -> Vec<ColumnJudgments> {
+    assert_eq!(
+        notes.len(),
+        eligible.len(),
+        "column-judgment eligibility must align with notes"
+    );
     let cols = cols_per_player;
     let mut out = vec![ColumnJudgments::default(); cols];
     if cols == 0 {
@@ -122,20 +128,26 @@ pub fn compute_column_judgments(
         }
 
         let row_notes = &notes[row_start..row_end];
+        let row_eligible = &eligible[row_start..row_end];
         let mut row_has_unjudged_note = false;
         let row_judgment =
-            judgment::aggregate_row_final_judgment(row_notes.iter().filter_map(|note| {
-                if !note_counts_for_column_judgments(note)
-                    || column_judgment_col(note, col_offset, cols).is_none()
-                {
-                    return None;
-                }
-                let Some(judgment) = note.result.as_ref() else {
-                    row_has_unjudged_note = true;
-                    return None;
-                };
-                Some(judgment)
-            }));
+            judgment::aggregate_row_final_judgment(row_notes.iter().zip(row_eligible).filter_map(
+                |(note, &eligible)| {
+                    if !eligible {
+                        return None;
+                    }
+                    if !note_counts_for_column_judgments(note)
+                        || column_judgment_col(note, col_offset, cols).is_none()
+                    {
+                        return None;
+                    }
+                    let Some(judgment) = note.result.as_ref() else {
+                        row_has_unjudged_note = true;
+                        return None;
+                    };
+                    Some(judgment)
+                },
+            ));
         if row_has_unjudged_note {
             row_start = row_end;
             continue;
@@ -153,8 +165,8 @@ pub fn compute_column_judgments(
             })
             .and_then(|note| note.early_result.as_ref());
 
-        for note in row_notes {
-            if !note_counts_for_column_judgments(note) {
+        for (note, &eligible) in row_notes.iter().zip(row_eligible) {
+            if !eligible || !note_counts_for_column_judgments(note) {
                 continue;
             }
             let Some(col) = column_judgment_col(note, col_offset, cols) else {
@@ -220,8 +232,8 @@ mod tests {
             None,
         )];
 
-        let with_fa = compute_column_judgments(&notes, 1, 0, true);
-        let without_fa = compute_column_judgments(&notes, 1, 0, false);
+        let with_fa = compute_column_judgments(&notes, &[true], 1, 0, true);
+        let without_fa = compute_column_judgments(&notes, &[true], 1, 0, false);
 
         assert_eq!(with_fa[0].w1, 1);
         assert_eq!(with_fa[0].early_w1, 1);
@@ -236,7 +248,7 @@ mod tests {
             Some(judgment(JudgeGrade::WayOff, Some(TimingWindow::W5), -18.0)),
         )];
 
-        let out = compute_column_judgments(&notes, 1, 0, false);
+        let out = compute_column_judgments(&notes, &[true], 1, 0, false);
 
         assert_eq!(out[0].w2, 1);
         assert_eq!(out[0].early_w2, 1);
@@ -252,7 +264,7 @@ mod tests {
             Some(judgment(JudgeGrade::Decent, Some(TimingWindow::W4), -16.0)),
         )];
 
-        let out = compute_column_judgments(&notes, 1, 0, true);
+        let out = compute_column_judgments(&notes, &[true], 1, 0, true);
 
         assert_eq!(out[0].w0, 1);
         assert_eq!(out[0].early_total_w0, 1);
@@ -274,7 +286,7 @@ mod tests {
             ),
         ];
 
-        let out = compute_column_judgments(&notes, 4, 0, false);
+        let out = compute_column_judgments(&notes, &[true; 2], 4, 0, false);
 
         assert_eq!(out[0].w1, 1);
         assert_eq!(out[1].w1, 1);
@@ -293,7 +305,7 @@ mod tests {
             ),
         ];
 
-        let out = compute_column_judgments(&notes, 4, 0, false);
+        let out = compute_column_judgments(&notes, &[true; 2], 4, 0, false);
 
         assert_eq!(out[0].miss, 1);
         assert_eq!(out[1].miss, 1);
@@ -314,11 +326,36 @@ mod tests {
             ),
         ];
 
-        let out = compute_column_judgments(&notes, 4, 0, false);
+        let out = compute_column_judgments(&notes, &[true; 2], 4, 0, false);
 
         assert_eq!(out[0].miss, 1);
         assert_eq!(out[1].miss, 1);
         assert_eq!(out[0].held_miss, 1);
         assert_eq!(out[1].held_miss, 0);
+    }
+
+    #[test]
+    fn counts_fatal_row_and_excludes_rows_after_death() {
+        let mut before = tap_note(
+            0,
+            judgment(JudgeGrade::Fantastic, Some(TimingWindow::W1), 4.0),
+            None,
+        );
+        before.row_index = 0;
+        let mut fatal = tap_note(0, judgment(JudgeGrade::Miss, None, 0.0), None);
+        fatal.row_index = 48;
+        let mut after = tap_note(
+            0,
+            judgment(JudgeGrade::Excellent, Some(TimingWindow::W2), 18.0),
+            None,
+        );
+        after.row_index = 96;
+        let notes = [before, fatal, after];
+
+        let out = compute_column_judgments(&notes, &[true, true, false], 1, 0, false);
+
+        assert_eq!(out[0].w1, 1);
+        assert_eq!(out[0].miss, 1);
+        assert_eq!(out[0].w2, 0);
     }
 }
