@@ -321,6 +321,35 @@ pub struct ScreensState {
 
 pub type SessionState = ShellSessionState<evaluation::State>;
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct InputRoutePolicy {
+    only_dedicated_menu_buttons: bool,
+    keyboard_features: bool,
+    smx_input: bool,
+    smx_panel_lights: bool,
+}
+
+impl InputRoutePolicy {
+    const fn from_config(cfg: &config::Config) -> Self {
+        Self {
+            only_dedicated_menu_buttons: cfg.only_dedicated_menu_buttons,
+            keyboard_features: cfg.keyboard_features,
+            smx_input: cfg.smx_input,
+            smx_panel_lights: cfg.smx_panel_lights,
+        }
+    }
+
+    fn from_runtime() -> Self {
+        let cfg = config::input_routing_config();
+        Self {
+            only_dedicated_menu_buttons: cfg.only_dedicated_menu_buttons,
+            keyboard_features: cfg.keyboard_features,
+            smx_input: cfg.smx_input,
+            smx_panel_lights: cfg.smx_panel_lights,
+        }
+    }
+}
+
 /// Pure-ish container for the high-level game state.
 /// This keeps screen flow, timing and UI state separate from the window/renderer shell.
 pub struct AppState {
@@ -328,6 +357,7 @@ pub struct AppState {
     screens: ScreensState,
     session: SessionState,
     gameplay_offset_save_prompt: Option<GameplayOffsetSavePrompt>,
+    play_input_policy: InputRoutePolicy,
 }
 
 fn apply_course_summary_column_judgments(
@@ -604,12 +634,13 @@ impl ScreensState {
         session: &SessionState,
         asset_manager: &AssetManager,
         smx_assignment: &SmxAssignmentView,
+        gameplay_smx_input: bool,
     ) -> (Option<ThemeEffect>, bool) {
         match self.current_screen {
             CurrentScreen::Gameplay => self
                 .gameplay_state
                 .as_mut()
-                .map(|gs| crate::gameplay_runtime::update(gs, delta_time))
+                .map(|gs| crate::gameplay_runtime::update(gs, delta_time, gameplay_smx_input))
                 .map_or((None, false), |action| (Some(action), false)),
             CurrentScreen::Practice => self
                 .practice_state
@@ -783,6 +814,7 @@ impl AppState {
             screens,
             session,
             gameplay_offset_save_prompt: None,
+            play_input_policy: InputRoutePolicy::from_config(&cfg),
         }
     }
 }
@@ -884,6 +916,15 @@ fn apply_music_preferences(state: &mut select_music::State, p1: usize, p2: usize
 }
 
 impl App {
+    #[inline(always)]
+    fn input_route_policy(&self, screen: CurrentScreen) -> InputRoutePolicy {
+        if matches!(screen, CurrentScreen::Gameplay | CurrentScreen::Practice) {
+            self.state.play_input_policy
+        } else {
+            InputRoutePolicy::from_runtime()
+        }
+    }
+
     fn sync_options_song_packs(&mut self) {
         if self.state.screens.current_screen != CurrentScreen::Options {
             return;
@@ -2129,7 +2170,11 @@ impl App {
         {
             // Keep gameplay stepping under evaluation fades so late judgments
             // and HUD animations settle while transition input remains blocked.
-            lobby_effect_only(crate::gameplay_runtime::update(gs, delta_time))
+            lobby_effect_only(crate::gameplay_runtime::update(
+                gs,
+                delta_time,
+                self.state.play_input_policy.smx_input,
+            ))
         } else {
             None
         };
@@ -2150,6 +2195,7 @@ impl App {
                     &self.state.session,
                     &self.asset_manager,
                     &smx_assignment,
+                    self.state.play_input_policy.smx_input,
                 );
                 if let Some(action) = action
                     && !matches!(action, ThemeEffect::None)
@@ -3348,7 +3394,7 @@ impl App {
                 .expect("prompt presence checked above"),
             ev.pressed,
             ev.action,
-            config::input_routing_config().only_dedicated_menu_buttons,
+            self.state.play_input_policy.only_dedicated_menu_buttons,
         );
         match input {
             OffsetPromptInput::Consumed => {}
@@ -4989,7 +5035,8 @@ impl App {
                     raw_key.code,
                     ctrl_held,
                     shift_held,
-                    config::input_routing_config().keyboard_features,
+                    self.input_route_policy(CurrentScreen::Practice)
+                        .keyboard_features,
                 ) {
                     self.try_practice_reload(event_loop, "Ctrl+Shift+R");
                     return true;
@@ -5019,7 +5066,8 @@ impl App {
                     raw_key.code,
                     ctrl_held,
                     shift_held,
-                    config::input_routing_config().keyboard_features,
+                    self.input_route_policy(CurrentScreen::Evaluation)
+                        .keyboard_features,
                     self.state.session.course_run.is_some(),
                     screens::evaluation::submission_retry_available(
                         &self.state.screens.evaluation_state,
@@ -5267,22 +5315,23 @@ impl App {
         // the pack's `press` animation on that panel's low-priority layer. Gated on
         // smx_panel_lights; gated on non-gameplay so the judgement/sustain layers
         // (which are higher priority) own gameplay fully.
-        let input_cfg = config::input_routing_config();
-        if let Some(plan) = smx_panel_press_feedback_plan(
-            input_cfg.smx_input,
-            input_cfg.smx_panel_lights,
-            self.state.screens.current_screen,
-            &self.smx_blackout_synced,
-            &ev,
-        ) {
-            self.smx_panels
-                .on_raw_panel(plan.pad_slot, plan.panel, plan.pressed);
+        let current_screen = self.state.screens.current_screen;
+        if current_screen != CurrentScreen::Gameplay {
+            let input_policy = self.input_route_policy(current_screen);
+            if let Some(plan) = smx_panel_press_feedback_plan(
+                input_policy.smx_input,
+                input_policy.smx_panel_lights,
+                current_screen,
+                &self.smx_blackout_synced,
+                &ev,
+            ) {
+                self.smx_panels
+                    .on_raw_panel(plan.pad_slot, plan.panel, plan.pressed);
+            }
         }
 
-        let Some(plan) = queued_input_flush_plan(
-            self.state.screens.current_screen,
-            &self.state.shell.transition,
-        ) else {
+        let Some(plan) = queued_input_flush_plan(current_screen, &self.state.shell.transition)
+        else {
             logical_input::clear_debounce_state();
             self.lights.clear_button_pressed();
             self.clear_gameplay_input_events();
@@ -5773,6 +5822,7 @@ impl App {
                 let last_played_idx = chart_plan.last_played_index;
 
                 let cfg = config::get();
+                self.state.play_input_policy = InputRoutePolicy::from_config(&cfg);
                 let global_offset_seconds = cfg.global_offset_seconds;
                 let pack_sync_offset_seconds =
                     deadsync_simfile::runtime_cache::pack_sync_offset_for_song_config(
@@ -5856,7 +5906,7 @@ impl App {
                     gameplay_charts,
                     gameplay_viewport(self.state.shell.metrics),
                     gameplay_session(),
-                    gameplay_config_from_config(&config::get()),
+                    gameplay_config_from_config(&cfg),
                     po_state.active_color_index,
                     po_state.music_rate,
                     scroll_speeds,
@@ -5936,7 +5986,7 @@ impl App {
                     song.title
                 );
                 commands.push(Command::SetPackBanner(gs.pack_banner_path.clone()));
-                let show_video_backgrounds = config::get().show_video_backgrounds;
+                let show_video_backgrounds = cfg.show_video_backgrounds;
                 let background_path =
                     Self::refresh_gameplay_background_path(&mut gs, show_video_backgrounds);
                 commands.push(Command::SetDynamicBackground(background_path));
@@ -6041,6 +6091,7 @@ impl App {
 
                 let gameplay_entry_started = Instant::now();
                 let cfg = config::get();
+                self.state.play_input_policy = InputRoutePolicy::from_config(&cfg);
                 let global_offset_seconds = cfg.global_offset_seconds;
                 let pack_sync_offset_seconds =
                     deadsync_simfile::runtime_cache::pack_sync_offset_for_song_config(
@@ -6215,21 +6266,20 @@ impl App {
                             course.banner_path.clone(),
                         )
                     });
-                let stage_intro_text: Arc<str> =
-                    if let Some(course) = self.state.session.course_run.as_ref() {
-                        let stage_num = course.next_stage_index.saturating_add(1);
-                        let total = course.stages.len().max(1);
-                        Arc::from(format!("STAGE {stage_num} / {total}"))
-                    } else if config::get().keyboard_features
-                        && self.state.session.gameplay_restart_count > 0
-                    {
-                        Arc::from(format!(
-                            "RESTART {}",
-                            self.state.session.gameplay_restart_count
-                        ))
-                    } else {
-                        deadsync_simfile::event_intro::gameplay_event_intro_text(song_arc.as_ref())
-                    };
+                let stage_intro_text: Arc<str> = if let Some(course) =
+                    self.state.session.course_run.as_ref()
+                {
+                    let stage_num = course.next_stage_index.saturating_add(1);
+                    let total = course.stages.len().max(1);
+                    Arc::from(format!("STAGE {stage_num} / {total}"))
+                } else if cfg.keyboard_features && self.state.session.gameplay_restart_count > 0 {
+                    Arc::from(format!(
+                        "RESTART {}",
+                        self.state.session.gameplay_restart_count
+                    ))
+                } else {
+                    deadsync_simfile::event_intro::gameplay_event_intro_text(song_arc.as_ref())
+                };
                 let combo_carry = self.state.session.combo_carry;
                 let init_started = Instant::now();
                 let mut gs = gameplay::init(
@@ -6238,7 +6288,7 @@ impl App {
                     gameplay_charts,
                     gameplay_viewport(self.state.shell.metrics),
                     gameplay_session(),
-                    gameplay_config_from_config(&config::get()),
+                    gameplay_config_from_config(&cfg),
                     color_index,
                     po_state.music_rate,
                     scroll_speeds,
@@ -6334,14 +6384,14 @@ impl App {
                     );
                 }
                 commands.push(Command::SetPackBanner(gs.pack_banner_path.clone()));
-                let show_video_backgrounds = config::get().show_video_backgrounds;
+                let show_video_backgrounds = cfg.show_video_backgrounds;
                 let background_path =
                     Self::refresh_gameplay_background_path(&mut gs, show_video_backgrounds);
                 commands.push(Command::SetDynamicBackground(background_path));
                 self.state.screens.gameplay_state = Some(gs);
                 if let Some(gs) = self.state.screens.gameplay_state.as_mut() {
                     gameplay::sync_lobby_runtime_view(gs, Self::refresh_lobby_runtime_view());
-                    crate::gameplay_runtime::enter(gs);
+                    crate::gameplay_runtime::enter(gs, self.state.play_input_policy.smx_input);
                 }
                 // Song Start / Restart SFX (zmod parity, issue #375). At this
                 // point `gameplay_restart_count` has already been zeroed for

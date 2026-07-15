@@ -106,10 +106,9 @@ impl App {
             plan.allow_commands,
         );
         crate::gameplay_runtime::drain(gs);
-        let keyboard_features = config::input_routing_config().keyboard_features;
         match allowed_gameplay_raw_action(
             action,
-            keyboard_features,
+            self.state.play_input_policy.keyboard_features,
             self.state.session.course_run.is_some(),
         ) {
             Some(RawKeyAction::Restart) => {
@@ -146,7 +145,8 @@ impl App {
             ev.action,
             PreScreenInputContext {
                 screen: current_screen,
-                only_dedicated_menu_buttons: config::input_routing_config()
+                only_dedicated_menu_buttons: self
+                    .input_route_policy(current_screen)
                     .only_dedicated_menu_buttons,
                 evaluation_test_input_active,
                 gameplay_offset_prompt_active: self.state.gameplay_offset_save_prompt.is_some(),

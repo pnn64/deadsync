@@ -24,7 +24,7 @@ pub use keymap::{
     any_player_has_four_way_menu_buttons, any_player_has_three_key_menu_buttons,
     clear_debounce_state, drain_debounced_input_events_with, get_keymap, map_keycode_event_with,
     map_keycode_event_with_host, map_pad_event_with, map_raw_key_event_with,
-    set_input_debounce_seconds, set_keymap, set_only_dedicated_menu_buttons, with_keymap,
+    set_input_debounce_seconds, set_keymap, with_keymap,
 };
 
 pub const INPUT_SLOT_INVALID: u32 = u32::MAX;
@@ -577,7 +577,6 @@ fn emit_normalized_action(
 pub fn emit_normalized_actions(
     direct_mask: u32,
     pressed: bool,
-    only_dedicated_menu_buttons: bool,
     mut emit: impl FnMut(VirtualAction, bool),
 ) {
     if direct_mask == 0 {
@@ -587,9 +586,6 @@ pub fn emit_normalized_actions(
     for_each_action(direct_mask, |action| {
         emit_normalized_action(action, pressed, direct_mask, &mut emitted, &mut emit)
     });
-    if only_dedicated_menu_buttons && pressed {
-        return;
-    }
     for_each_action(secondary_menu_mask(direct_mask), |action| {
         emit_normalized_action(action, pressed, direct_mask, &mut emitted, &mut emit)
     });
@@ -689,9 +685,9 @@ mod tests {
     };
     use std::time::Instant;
 
-    fn normalized(mask: u32, pressed: bool, dedicated_only: bool) -> Vec<(VirtualAction, bool)> {
+    fn normalized(mask: u32, pressed: bool) -> Vec<(VirtualAction, bool)> {
         let mut out = Vec::new();
-        emit_normalized_actions(mask, pressed, dedicated_only, |action, pressed| {
+        emit_normalized_actions(mask, pressed, |action, pressed| {
             out.push((action, pressed));
         });
         out
@@ -974,23 +970,18 @@ mod tests {
     #[test]
     fn normalized_actions_emit_menu_aliases_like_engine_input() {
         assert_eq!(
-            normalized(VirtualAction::p1_left.bit(), true, false),
+            normalized(VirtualAction::p1_left.bit(), true),
             vec![(VirtualAction::p1_left, true)]
         );
         assert_eq!(
             normalized(
                 VirtualAction::p1_left.bit() | VirtualAction::p1_menu_left.bit(),
                 true,
-                false,
             ),
             vec![(VirtualAction::p1_left, true)]
         );
         assert_eq!(
-            normalized(VirtualAction::p1_left.bit(), true, true),
-            vec![(VirtualAction::p1_left, true)]
-        );
-        assert_eq!(
-            normalized(VirtualAction::p1_left.bit(), false, true),
+            normalized(VirtualAction::p1_left.bit(), false),
             vec![
                 (VirtualAction::p1_left, false),
                 (VirtualAction::p1_menu_left, false),

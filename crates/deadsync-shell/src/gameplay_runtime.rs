@@ -1,4 +1,3 @@
-use deadsync_config::prelude as config;
 use deadsync_gameplay::{
     GameplayAudioCommand, GameplayAudioSnapshot, GameplayMusicCut, GameplaySessionCommand,
     GameplayStreamClockSnapshot,
@@ -63,8 +62,8 @@ fn update_smx_sensor_view(
     view
 }
 
-fn enter_smx_sensors(state: &mut gameplay::State) {
-    let plan = gameplay::smx_sensor_pad_plan(state, config::get().smx_input);
+fn enter_smx_sensors(state: &mut gameplay::State, smx_input: bool) {
+    let plan = gameplay::smx_sensor_pad_plan(state, smx_input);
     for (store_idx, sdk_pad) in plan.into_iter().flatten() {
         deadsync_smx::set_test_mode(sdk_pad, deadsync_smx::SensorTestMode::CalibratedValues);
         let view = deadsync_smx::get_config(sdk_pad)
@@ -74,13 +73,13 @@ fn enter_smx_sensors(state: &mut gameplay::State) {
     }
 }
 
-fn refresh_smx_sensors(state: &mut gameplay::State, delta_time: f32) {
+fn refresh_smx_sensors(state: &mut gameplay::State, delta_time: f32, smx_input: bool) {
     if !gameplay::smx_sensor_refresh_due(state, delta_time) {
         gameplay::report_smx_sensor_profile();
         return;
     }
     let profile_started = gameplay::smx_sensor_profile_enabled().then(Instant::now);
-    let plan = gameplay::smx_sensor_pad_plan(state, config::get().smx_input);
+    let plan = gameplay::smx_sensor_pad_plan(state, smx_input);
     for (store_idx, sdk_pad) in plan.into_iter().flatten() {
         let data = deadsync_smx::get_test_data(sdk_pad);
         let view = if let Some(view) = gameplay::smx_sensor_pad_view(state, store_idx) {
@@ -196,9 +195,9 @@ fn play_song_lua_sfx(path: &Path) {
     deadsync_audio_stream::play_preloaded_sfx(key.as_ref());
 }
 
-pub(crate) fn enter(state: &mut gameplay::State) {
+pub(crate) fn enter(state: &mut gameplay::State, smx_input: bool) {
     gameplay::on_enter(state);
-    enter_smx_sensors(state);
+    enter_smx_sensors(state, smx_input);
     drain(state);
 }
 
@@ -214,14 +213,14 @@ fn sequence_effects(first: ThemeEffect, second: ThemeEffect) -> ThemeEffect {
     }
 }
 
-pub(crate) fn update(state: &mut gameplay::State, delta_time: f32) -> ThemeEffect {
+pub(crate) fn update(state: &mut gameplay::State, delta_time: f32, smx_input: bool) -> ThemeEffect {
     crate::heart_rate::refresh_gameplay(state);
     let (run_core, lobby_effect) = gameplay::prepare_update(state);
     if !run_core {
         return lobby_effect;
     }
 
-    refresh_smx_sensors(state, delta_time);
+    refresh_smx_sensors(state, delta_time, smx_input);
 
     // A lobby can queue stage music during `prepare_update`. Execute it before
     // taking the clock snapshot so the deterministic update sees the new

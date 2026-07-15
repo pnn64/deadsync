@@ -99,6 +99,5 @@ fn apply_input_runtime_state() {
             dedicated_menu_navigation_label(state.three_key_navigation)
         );
     }
-    deadsync_input::set_only_dedicated_menu_buttons(state.dedicated.enabled);
     deadsync_input::set_input_debounce_seconds(state.input_debounce_seconds);
 }

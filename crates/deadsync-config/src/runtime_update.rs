@@ -280,7 +280,6 @@ pub fn update_three_key_navigation(enabled: bool) {
             crate::update::dedicated_menu_navigation_label(enabled)
         );
     }
-    deadsync_input::set_only_dedicated_menu_buttons(update.dedicated.enabled);
     save_without_keymaps();
 }
 
@@ -323,7 +322,6 @@ pub fn update_only_dedicated_menu_buttons(enabled: bool) {
     if !update.changed {
         return;
     }
-    deadsync_input::set_only_dedicated_menu_buttons(update.dedicated.enabled);
     save_without_keymaps();
 }
 

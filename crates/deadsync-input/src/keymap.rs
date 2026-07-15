@@ -1,7 +1,7 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::sync::RwLock;
-use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 
 use winit::keyboard::KeyCode;
@@ -265,7 +265,6 @@ static KEYMAP: std::sync::LazyLock<RwLock<Keymap>> =
 static COMPILED_KEYMAP: std::sync::LazyLock<RwLock<CompiledKeymap>> =
     std::sync::LazyLock::new(|| RwLock::new(CompiledKeymap::default()));
 static COMPILED_KEYMAP_GEN: AtomicU64 = AtomicU64::new(1);
-static ONLY_DEDICATED_MENU_BUTTONS: AtomicBool = AtomicBool::new(false);
 static INPUT_DEBOUNCE_SECONDS_BITS: AtomicU32 = AtomicU32::new((0.02f32).to_bits());
 
 thread_local! {
@@ -329,11 +328,6 @@ fn with_compiled_keymap<R>(f: impl FnOnce(&CompiledKeymap) -> R) -> R {
         }
         f(&local.borrow().1)
     })
-}
-
-#[inline(always)]
-pub fn set_only_dedicated_menu_buttons(enabled: bool) {
-    ONLY_DEDICATED_MENU_BUTTONS.store(enabled, Ordering::Relaxed);
 }
 
 #[inline(always)]
@@ -657,23 +651,18 @@ fn pad_button_slot_from_compiled(km: &CompiledKeymap, id: PadId, code_slot: u32)
 }
 
 fn emit_input_events_from_edge(edge: DebouncedEdge, mut emit: impl FnMut(InputEvent)) {
-    emit_normalized_actions(
-        edge.action_mask,
-        edge.pressed,
-        ONLY_DEDICATED_MENU_BUTTONS.load(Ordering::Relaxed),
-        |action, pressed| {
-            emit(InputEvent::new(
-                action,
-                edge.input_slot,
-                pressed,
-                edge.source,
-                edge.timestamp,
-                edge.timestamp_host_nanos,
-                edge.stored_at,
-                edge.emitted_at,
-            ));
-        },
-    );
+    emit_normalized_actions(edge.action_mask, edge.pressed, |action, pressed| {
+        emit(InputEvent::new(
+            action,
+            edge.input_slot,
+            pressed,
+            edge.source,
+            edge.timestamp,
+            edge.timestamp_host_nanos,
+            edge.stored_at,
+            edge.emitted_at,
+        ));
+    });
 }
 
 #[inline(always)]
@@ -732,23 +721,18 @@ pub fn map_keycode_event_with_host(
     else {
         return;
     };
-    emit_normalized_actions(
-        binding.mask,
-        pressed,
-        ONLY_DEDICATED_MENU_BUTTONS.load(Ordering::Relaxed),
-        |action, pressed| {
-            emit(InputEvent::new(
-                action,
-                binding.slot,
-                pressed,
-                InputSource::Keyboard,
-                timestamp,
-                timestamp_host_nanos,
-                timestamp,
-                timestamp,
-            ));
-        },
-    );
+    emit_normalized_actions(binding.mask, pressed, |action, pressed| {
+        emit(InputEvent::new(
+            action,
+            binding.slot,
+            pressed,
+            InputSource::Keyboard,
+            timestamp,
+            timestamp_host_nanos,
+            timestamp,
+            timestamp,
+        ));
+    });
 }
 
 #[inline(always)]
@@ -857,7 +841,6 @@ mod tests {
     impl Drop for TestReset {
         fn drop(&mut self) {
             if let Some(original) = self.0.take() {
-                set_only_dedicated_menu_buttons(false);
                 set_keymap(original);
             }
         }
@@ -887,8 +870,6 @@ mod tests {
             &[InputBinding::Key(KeyCode::ArrowLeft)],
         );
         set_keymap(km);
-        set_only_dedicated_menu_buttons(false);
-
         let timestamp = Instant::now();
         let mut actual = Vec::new();
         map_keycode_event_with(KeyCode::ArrowLeft, true, timestamp, |event| {
@@ -917,8 +898,6 @@ mod tests {
             &[InputBinding::PadDir(PadDir::Left)],
         );
         set_keymap(km);
-        set_only_dedicated_menu_buttons(false);
-
         let timestamp = Instant::now();
         let event = PadEvent::Dir {
             id: PadId(1),
@@ -960,8 +939,6 @@ mod tests {
             &[InputBinding::Key(KeyCode::ArrowLeft)],
         );
         set_keymap(km);
-        set_only_dedicated_menu_buttons(false);
-
         let timestamp = Instant::now();
         let mut actual = Vec::new();
         map_keycode_event_with(KeyCode::ArrowLeft, true, timestamp, |event| {
@@ -981,7 +958,7 @@ mod tests {
     }
 
     #[test]
-    fn map_keycode_event_with_keeps_release_alias_in_dedicated_mode() {
+    fn map_keycode_event_with_keeps_release_alias() {
         let _guard = lock_test_guard();
         let _reset = TestReset::capture();
         let mut km = Keymap::default();
@@ -990,8 +967,6 @@ mod tests {
             &[InputBinding::Key(KeyCode::ArrowLeft)],
         );
         set_keymap(km);
-        set_only_dedicated_menu_buttons(true);
-
         let timestamp = Instant::now();
         let mut actual = Vec::new();
         map_keycode_event_with(KeyCode::ArrowLeft, false, timestamp, |event| {
@@ -1218,8 +1193,6 @@ mod tests {
             &[InputBinding::Key(KeyCode::ArrowLeft)],
         );
         set_keymap(km);
-        set_only_dedicated_menu_buttons(false);
-
         let t0 = Instant::now();
         let press = RawKeyboardEvent {
             code: KeyCode::ArrowLeft,
