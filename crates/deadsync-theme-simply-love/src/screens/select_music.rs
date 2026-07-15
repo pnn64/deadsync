@@ -1491,6 +1491,15 @@ fn apply_initial_steps_for_song(
     false
 }
 
+/// Resolve both player slots to real charts without changing their preferences.
+pub fn select_preferred_steps(state: &mut State) {
+    let Some(MusicWheelEntry::Song(song)) = state.entries.get(state.selected_index).cloned() else {
+        return;
+    };
+    let chart_type = profile::get_session_play_style().chart_type();
+    apply_initial_steps_for_song(state, song.as_ref(), chart_type, None);
+}
+
 fn rebuild_displayed_entries(state: &mut State) {
     state.entries = build_displayed_entries(
         &state.all_entries,

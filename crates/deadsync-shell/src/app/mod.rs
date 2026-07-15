@@ -868,6 +868,15 @@ fn execute_platform_request(request: PlatformRequest) {
     }
 }
 
+fn apply_music_preferences(state: &mut select_music::State, p1: usize, p2: usize) {
+    state.selected_steps_index = p1;
+    state.preferred_difficulty_index = p1;
+    state.p2_selected_steps_index = p2;
+    state.p2_preferred_difficulty_index = p2;
+    select_music::select_preferred_steps(state);
+    select_music::trigger_immediate_refresh(state);
+}
+
 impl App {
     fn sync_options_song_packs(&mut self) {
         if self.state.screens.current_screen != CurrentScreen::Options {
@@ -895,16 +904,11 @@ impl App {
             crate::profile_load::PreparedState::Music(mut state) => {
                 state.active_color_index = self.state.screens.profile_load_state.active_color_index;
                 let preferred = self.state.session.preferred_difficulty_index;
-                state.selected_steps_index = preferred;
-                state.preferred_difficulty_index = preferred;
-
                 let p2_preferred = profile::preferred_difficulty_for_side(
                     profile_data::PlayerSide::P2,
                     profile::get_session_play_style(),
                 );
-                state.p2_selected_steps_index = p2_preferred;
-                state.p2_preferred_difficulty_index = p2_preferred;
-                select_music::trigger_immediate_refresh(&mut state);
+                apply_music_preferences(&mut state, preferred, p2_preferred);
                 self.state.screens.select_music_state = state;
             }
             crate::profile_load::PreparedState::Course(mut state) => {
@@ -3845,32 +3849,7 @@ impl App {
         sm.preferred_difficulty_index = plan.preferred_difficulty;
         sm.p2_selected_steps_index = plan.p2_selected_steps;
         sm.p2_preferred_difficulty_index = plan.p2_preferred_difficulty;
-
-        if let Some(select_music::MusicWheelEntry::Song(song)) =
-            sm.entries.get(sm.selected_index).cloned()
-        {
-            let best_playable = |preferred: usize| {
-                let mut best = None;
-                let mut min_diff = i32::MAX;
-                for i in 0..STANDARD_DIFFICULTY_COUNT {
-                    if select_music::is_difficulty_playable(&song, i) {
-                        let diff = (i as i32 - preferred as i32).abs();
-                        if diff < min_diff {
-                            min_diff = diff;
-                            best = Some(i);
-                        }
-                    }
-                }
-                best
-            };
-
-            if let Some(idx) = best_playable(sm.preferred_difficulty_index) {
-                sm.selected_steps_index = idx;
-            }
-            if let Some(idx) = best_playable(sm.p2_preferred_difficulty_index) {
-                sm.p2_selected_steps_index = idx;
-            }
-        }
+        select_music::select_preferred_steps(sm);
 
         self.state.session.preferred_difficulty_index = sm.preferred_difficulty_index;
         select_music::trigger_immediate_refresh(sm);
@@ -7109,6 +7088,21 @@ mod tests {
             precise_last_second_seconds: 0.0,
             charts: vec![test_chart(hashes[0]), test_chart(hashes[1])],
         }
+    }
+
+    #[test]
+    fn music_preferences_snap_missing_medium() {
+        let chart_type = profile::get_session_play_style().chart_type();
+        let mut song = test_song("song.ssc", 0.0, ["hard", "unused"]);
+        song.charts = vec![test_chart_with(chart_type, "Hard", "hard")];
+
+        let mut state = select_music::init_placeholder();
+        state.entries = vec![select_music::MusicWheelEntry::Song(Arc::new(song))];
+        apply_music_preferences(&mut state, 2, 2);
+
+        assert_eq!(state.selected_steps_index, 3);
+        assert_eq!(state.p2_selected_steps_index, 3);
+        assert_eq!(state.preferred_difficulty_index, 2);
     }
 
     fn test_score_info(
