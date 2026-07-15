@@ -83,10 +83,11 @@ pub use crate::options::{windows_pad_backend_choice_index, windows_pad_backend_f
 pub use crate::pad_order::pad_index_for_uuid_saved as pad_index_for_uuid;
 pub use crate::runtime::{
     additional_song_folder_roots, audio_mix_levels, default_profiles, flush_pending_saves, get,
-    group_is_never_cached, machine_default_noteskin, never_cache_list, null_or_die_bias_cfg,
-    smx_pad_assignment, song_path_is_writable,
+    group_is_never_cached, input_routing_config, machine_default_noteskin, never_cache_list,
+    null_or_die_bias_cfg, smx_pad_assignment, song_path_is_writable,
 };
 pub use crate::runtime_load::{bootstrap_log_to_file, bootstrap_show_console, load};
+pub use crate::runtime_state::InputRoutingConfig;
 pub use crate::runtime_update::*;
 pub use crate::theme::{
     AUTO_SS_CLEARS, AUTO_SS_FAILS, AUTO_SS_FLAG_NAMES, AUTO_SS_NUM_FLAGS, AUTO_SS_PBS,

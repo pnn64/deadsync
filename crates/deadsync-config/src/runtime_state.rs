@@ -24,7 +24,10 @@ use deadsync_input::Keymap;
 use null_or_die::BiasCfg;
 use std::fmt::Display;
 use std::path::Path;
-use std::sync::{Mutex, MutexGuard};
+use std::sync::{
+    Mutex, MutexGuard,
+    atomic::{AtomicU8, Ordering},
+};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RuntimeStateOptions {
@@ -81,6 +84,46 @@ pub struct InputRuntimeState {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct InputRoutingConfig {
+    pub only_dedicated_menu_buttons: bool,
+    pub keyboard_features: bool,
+    pub smx_input: bool,
+    pub smx_panel_lights: bool,
+}
+
+impl InputRoutingConfig {
+    const ONLY_DEDICATED_MENU_BUTTONS: u8 = 1 << 0;
+    const KEYBOARD_FEATURES: u8 = 1 << 1;
+    const SMX_INPUT: u8 = 1 << 2;
+    const SMX_PANEL_LIGHTS: u8 = 1 << 3;
+
+    fn from_config(cfg: &Config) -> Self {
+        Self {
+            only_dedicated_menu_buttons: cfg.only_dedicated_menu_buttons,
+            keyboard_features: cfg.keyboard_features,
+            smx_input: cfg.smx_input,
+            smx_panel_lights: cfg.smx_panel_lights,
+        }
+    }
+
+    const fn from_bits(bits: u8) -> Self {
+        Self {
+            only_dedicated_menu_buttons: bits & Self::ONLY_DEDICATED_MENU_BUTTONS != 0,
+            keyboard_features: bits & Self::KEYBOARD_FEATURES != 0,
+            smx_input: bits & Self::SMX_INPUT != 0,
+            smx_panel_lights: bits & Self::SMX_PANEL_LIGHTS != 0,
+        }
+    }
+
+    const fn bits(self) -> u8 {
+        (self.only_dedicated_menu_buttons as u8) * Self::ONLY_DEDICATED_MENU_BUTTONS
+            | (self.keyboard_features as u8) * Self::KEYBOARD_FEATURES
+            | (self.smx_input as u8) * Self::SMX_INPUT
+            | (self.smx_panel_lights as u8) * Self::SMX_PANEL_LIGHTS
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ThreeKeyNavigationUpdate {
     pub changed: bool,
     pub dedicated: DedicatedMenuNavigation,
@@ -101,6 +144,7 @@ pub struct SmxUnderglowColors {
 
 pub struct RuntimeConfigStore {
     config: Mutex<Config>,
+    input_routing_bits: AtomicU8,
     machine_default_noteskin: Mutex<String>,
     additional_song_folders: Mutex<Vec<AdditionalSongFolder>>,
     never_cache_list: Mutex<Vec<String>>,
@@ -113,8 +157,11 @@ pub struct RuntimeConfigStore {
 
 impl RuntimeConfigStore {
     pub fn new() -> Self {
+        let config = Config::default();
+        let input_routing_bits = InputRoutingConfig::from_config(&config).bits();
         Self {
-            config: Mutex::new(Config::default()),
+            config: Mutex::new(config),
+            input_routing_bits: AtomicU8::new(input_routing_bits),
             machine_default_noteskin: Mutex::new(DEFAULT_MACHINE_NOTESKIN.to_string()),
             additional_song_folders: Mutex::new(Vec::new()),
             never_cache_list: Mutex::new(Vec::new()),
@@ -135,15 +182,31 @@ impl RuntimeConfigStore {
         *self.lock_config()
     }
 
+    #[inline(always)]
+    pub fn input_routing_config(&self) -> InputRoutingConfig {
+        InputRoutingConfig::from_bits(self.input_routing_bits.load(Ordering::Acquire))
+    }
+
+    #[inline(always)]
+    fn publish_input_routing_config(&self, cfg: &Config) {
+        self.input_routing_bits.store(
+            InputRoutingConfig::from_config(cfg).bits(),
+            Ordering::Release,
+        );
+    }
+
     pub fn publish_config(&self, cfg: Config) -> PublishedConfigEffects {
         let effects = PublishedConfigEffects::from_config(&cfg);
         *self.lock_config() = cfg;
+        self.publish_input_routing_config(&cfg);
         effects
     }
 
     pub fn update_config(&self, apply: impl FnOnce(&mut Config) -> bool) -> bool {
         let mut cfg = self.lock_config();
-        apply(&mut cfg)
+        let changed = apply(&mut cfg);
+        self.publish_input_routing_config(&cfg);
+        changed
     }
 
     pub fn update_three_key_navigation(
@@ -167,6 +230,7 @@ impl RuntimeConfigStore {
         if dedicated.disabled_by_missing_bindings {
             cfg.only_dedicated_menu_buttons = dedicated.enabled;
         }
+        self.publish_input_routing_config(&cfg);
         ThreeKeyNavigationUpdate {
             changed: true,
             dedicated,
@@ -182,6 +246,7 @@ impl RuntimeConfigStore {
         let dedicated = resolve_dedicated_menu_navigation(enabled, dedicated_bindings_supported);
         let enabled = dedicated.enabled;
         let changed = set_if_changed(&mut cfg.only_dedicated_menu_buttons, enabled);
+        self.publish_input_routing_config(&cfg);
         DedicatedMenuButtonsUpdate {
             changed,
             dedicated,
@@ -463,6 +528,7 @@ impl RuntimeConfigStore {
         if dedicated.disabled_by_missing_bindings {
             cfg.only_dedicated_menu_buttons = dedicated.enabled;
         }
+        self.publish_input_routing_config(&cfg);
         InputRuntimeState {
             dedicated,
             three_key_navigation: cfg.three_key_navigation,
@@ -788,6 +854,49 @@ DefaultLocalProfileIDP2= profile-2\n"));
         assert!(!effects.preserve_pitch_enabled);
         assert_eq!(effects.overscan, (1, 2, 3, 4));
         assert!(!effects.log_to_file);
+    }
+
+    #[test]
+    fn runtime_config_store_publishes_input_routing_config() {
+        let store = RuntimeConfigStore::new();
+        let cfg = Config {
+            only_dedicated_menu_buttons: true,
+            keyboard_features: true,
+            smx_input: true,
+            smx_panel_lights: false,
+            ..Config::default()
+        };
+
+        store.publish_config(cfg);
+        assert_eq!(
+            store.input_routing_config(),
+            InputRoutingConfig {
+                only_dedicated_menu_buttons: true,
+                keyboard_features: true,
+                smx_input: true,
+                smx_panel_lights: false,
+            }
+        );
+
+        assert!(store.update_smx_panel_lights(true));
+        assert!(store.update_config(|cfg| {
+            cfg.keyboard_features = false;
+            true
+        }));
+        assert!(
+            store
+                .update_only_dedicated_menu_buttons(false, true)
+                .changed
+        );
+        assert_eq!(
+            store.input_routing_config(),
+            InputRoutingConfig {
+                only_dedicated_menu_buttons: false,
+                keyboard_features: false,
+                smx_input: true,
+                smx_panel_lights: true,
+            }
+        );
     }
 
     #[test]

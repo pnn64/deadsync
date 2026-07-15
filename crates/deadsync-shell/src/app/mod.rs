@@ -3348,7 +3348,7 @@ impl App {
                 .expect("prompt presence checked above"),
             ev.pressed,
             ev.action,
-            config::get().only_dedicated_menu_buttons,
+            config::input_routing_config().only_dedicated_menu_buttons,
         );
         match input {
             OffsetPromptInput::Consumed => {}
@@ -3950,6 +3950,12 @@ impl App {
             | CurrentScreen::SelectPlayMode => true,
             _ => false,
         };
+        if !screen_allows_join
+            || !ev.pressed
+            || !matches!(ev.action, VirtualAction::p1_start | VirtualAction::p2_start)
+        {
+            return None;
+        }
         let session = profile::get_session_snapshot();
         let joined = [
             session.side_joined(profile_data::PlayerSide::P1),
@@ -4983,7 +4989,7 @@ impl App {
                     raw_key.code,
                     ctrl_held,
                     shift_held,
-                    config::get().keyboard_features,
+                    config::input_routing_config().keyboard_features,
                 ) {
                     self.try_practice_reload(event_loop, "Ctrl+Shift+R");
                     return true;
@@ -5013,7 +5019,7 @@ impl App {
                     raw_key.code,
                     ctrl_held,
                     shift_held,
-                    config::get().keyboard_features,
+                    config::input_routing_config().keyboard_features,
                     self.state.session.course_run.is_some(),
                     screens::evaluation::submission_retry_available(
                         &self.state.screens.evaluation_state,
@@ -5261,10 +5267,10 @@ impl App {
         // the pack's `press` animation on that panel's low-priority layer. Gated on
         // smx_panel_lights; gated on non-gameplay so the judgement/sustain layers
         // (which are higher priority) own gameplay fully.
-        let cfg = config::get();
+        let input_cfg = config::input_routing_config();
         if let Some(plan) = smx_panel_press_feedback_plan(
-            cfg.smx_input,
-            cfg.smx_panel_lights,
+            input_cfg.smx_input,
+            input_cfg.smx_panel_lights,
             self.state.screens.current_screen,
             &self.smx_blackout_synced,
             &ev,

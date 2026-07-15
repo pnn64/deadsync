@@ -1,6 +1,6 @@
 use crate::app_config::Config;
 use crate::folders::AdditionalSongFolder;
-use crate::runtime_state::RuntimeConfigStore;
+use crate::runtime_state::{InputRoutingConfig, RuntimeConfigStore};
 use crate::save::build_default_app_config_file;
 use deadlib_platform::coalesced_write::CoalescedFileWriter;
 use deadlib_platform::dirs;
@@ -46,6 +46,11 @@ pub fn create_default_config_file() -> Result<(), std::io::Error> {
 
 pub fn get() -> Config {
     RUNTIME_CONFIG.config()
+}
+
+#[inline(always)]
+pub fn input_routing_config() -> InputRoutingConfig {
+    RUNTIME_CONFIG.input_routing_config()
 }
 
 pub fn audio_mix_levels() -> AudioMixLevels {
