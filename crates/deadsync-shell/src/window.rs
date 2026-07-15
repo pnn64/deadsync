@@ -9,6 +9,8 @@ use deadlib_renderer::{render_size_for_window, request_window_size, with_request
 use deadsync_config::app_config::DisplayMode;
 use winit::dpi::{PhysicalPosition, PhysicalSize};
 use winit::event_loop::ActiveEventLoop;
+#[cfg(target_os = "macos")]
+use winit::platform::macos::WindowAttributesExtMacOS;
 use winit::window::{Icon, Window};
 
 const WINDOW_ICON_PATHS: [&str; 2] = [
