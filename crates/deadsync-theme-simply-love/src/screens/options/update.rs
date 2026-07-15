@@ -139,9 +139,9 @@ pub fn sync_vsync(state: &mut State, enabled: bool) {
     if let Some(slot) = get_choice_by_id_mut(
         &mut state.sub[SubmenuKind::Graphics].choice_indices,
         GRAPHICS_OPTIONS_ROWS,
-        SubRowId::VSync,
+        SubRowId::PresentMode,
     ) {
-        *slot = yes_no_choice_index(enabled);
+        *slot = present_mode_choice_index(enabled, state.present_mode_policy_at_load);
     }
     sync_submenu_cursor_indices(state);
     clear_render_cache(state);
@@ -177,7 +177,7 @@ pub fn sync_present_mode_policy(state: &mut State, mode: PresentPolicyChoice) {
         GRAPHICS_OPTIONS_ROWS,
         SubRowId::PresentMode,
     ) {
-        *slot = mode.choice_index();
+        *slot = present_mode_choice_index(state.vsync_at_load, mode);
     }
     sync_submenu_cursor_indices(state);
     clear_render_cache(state);
@@ -361,19 +361,14 @@ fn update_impl(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Opti
                 desired_high_dpi,
                 desired_software_threads,
             ) = if leaving_graphics {
-                let vsync = get_choice_by_id(
-                    &state.sub[SubmenuKind::Graphics].choice_indices,
-                    GRAPHICS_OPTIONS_ROWS,
-                    SubRowId::VSync,
-                )
-                .is_none_or(yes_no_from_choice);
+                let (vsync, present_mode_policy) = selected_present_config(state);
                 (
                     Some(selected_video_renderer(state)),
                     Some(selected_display_mode(state)),
                     Some(selected_resolution(state)),
                     Some(selected_display_monitor(state)),
                     Some(vsync),
-                    Some(selected_present_mode_policy(state)),
+                    Some(present_mode_policy),
                     Some(selected_max_fps(state)),
                     Some(selected_high_dpi(state)),
                     Some(thread_count_from_choice(

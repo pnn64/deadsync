@@ -17,7 +17,6 @@ pub enum SubRowId {
     DisplayResolution,
     RefreshRate,
     FullscreenType,
-    VSync,
     PresentMode,
     MaxFps,
     MaxFpsValue,

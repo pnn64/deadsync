@@ -820,6 +820,37 @@ fn graphics_overscan_item_matches_row() {
 }
 
 #[test]
+fn graphics_presentation_modes_share_one_row() {
+    let state = init();
+    let row_idx = row_position(GRAPHICS_OPTIONS_ROWS, SubRowId::PresentMode)
+        .expect("presentation mode row should exist");
+    let row = &GRAPHICS_OPTIONS_ROWS[row_idx];
+
+    assert_eq!(row.choices.len(), 3);
+    assert_eq!(GRAPHICS_OPTIONS_ITEMS[row_idx].id, ItemId::GfxPresentMode);
+    assert_eq!(
+        selected_present_config(&state),
+        (false, PresentPolicyChoice::Mailbox)
+    );
+    assert_eq!(
+        present_mode_choice_index(true, PresentPolicyChoice::Immediate),
+        0
+    );
+    assert_eq!(
+        present_config_from_choice(0, PresentPolicyChoice::Immediate),
+        (true, PresentPolicyChoice::Immediate)
+    );
+    assert_eq!(
+        present_config_from_choice(1, PresentPolicyChoice::Immediate),
+        (false, PresentPolicyChoice::Mailbox)
+    );
+    assert_eq!(
+        present_config_from_choice(2, PresentPolicyChoice::Mailbox),
+        (false, PresentPolicyChoice::Immediate)
+    );
+}
+
+#[test]
 fn p2_can_navigate_and_change_system_options() {
     let asset_manager = AssetManager::new();
     let mut state = init();

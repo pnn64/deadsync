@@ -476,14 +476,8 @@ pub fn init(
     set_choice_by_id(
         &mut state.sub[SubmenuKind::Graphics].choice_indices,
         GRAPHICS_OPTIONS_ROWS,
-        SubRowId::VSync,
-        yes_no_choice_index(graphics_options.vsync),
-    );
-    set_choice_by_id(
-        &mut state.sub[SubmenuKind::Graphics].choice_indices,
-        GRAPHICS_OPTIONS_ROWS,
         SubRowId::PresentMode,
-        graphics_options.present_policy.choice_index(),
+        present_mode_choice_index(graphics_options.vsync, graphics_options.present_policy),
     );
     sync_max_fps(&mut state, graphics_options.max_fps);
     set_choice_by_id(

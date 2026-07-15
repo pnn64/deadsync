@@ -71,18 +71,13 @@ pub(in crate::screens::options) const GRAPHICS_OPTIONS_ROWS: &[SubRow] = &[
         inline: true,
     },
     SubRow {
-        id: SubRowId::VSync,
-        label: lookup_key("OptionsGraphics", "VSync"),
-        choices: &[
-            localized_choice("Common", "No"),
-            localized_choice("Common", "Yes"),
-        ],
-        inline: true,
-    },
-    SubRow {
         id: SubRowId::PresentMode,
         label: lookup_key("OptionsGraphics", "PresentMode"),
-        choices: &[literal_choice("Mailbox"), literal_choice("Immediate")],
+        choices: &[
+            localized_choice("OptionsGraphics", "PresentModeVSync"),
+            localized_choice("OptionsGraphics", "PresentModeMailbox"),
+            localized_choice("OptionsGraphics", "PresentModeImmediate"),
+        ],
         inline: true,
     },
     SubRow {
@@ -207,14 +202,6 @@ pub(in crate::screens::options) const GRAPHICS_OPTIONS_ITEMS: &[Item] = &[
         help: &[HelpEntry::Paragraph(lookup_key(
             "OptionsGraphicsHelp",
             "FullscreenTypeHelp",
-        ))],
-    },
-    Item {
-        id: ItemId::GfxVSync,
-        name: lookup_key("OptionsGraphics", "VSync"),
-        help: &[HelpEntry::Paragraph(lookup_key(
-            "OptionsGraphicsHelp",
-            "VSyncHelp",
         ))],
     },
     Item {
@@ -561,18 +548,36 @@ pub(in crate::screens::options) fn on_max_fps_value_row(state: &State) -> bool {
     )
 }
 
-pub(in crate::screens::options) fn selected_present_mode_policy(
+pub(in crate::screens::options) const fn present_mode_choice_index(
+    vsync: bool,
+    policy: PresentPolicyChoice,
+) -> usize {
+    if vsync { 0 } else { policy.choice_index() + 1 }
+}
+
+pub(in crate::screens::options) const fn present_config_from_choice(
+    index: usize,
+    synced_policy: PresentPolicyChoice,
+) -> (bool, PresentPolicyChoice) {
+    match index {
+        0 => (true, synced_policy),
+        2 => (false, PresentPolicyChoice::Immediate),
+        _ => (false, PresentPolicyChoice::Mailbox),
+    }
+}
+
+pub(in crate::screens::options) fn selected_present_config(
     state: &State,
-) -> PresentPolicyChoice {
-    get_choice_by_id(
+) -> (bool, PresentPolicyChoice) {
+    let index = get_choice_by_id(
         &state.sub[SubmenuKind::Graphics].choice_indices,
         GRAPHICS_OPTIONS_ROWS,
         SubRowId::PresentMode,
     )
-    .map_or(
-        state.present_mode_policy_at_load,
-        PresentPolicyChoice::from_choice,
-    )
+    .unwrap_or_else(|| {
+        present_mode_choice_index(state.vsync_at_load, state.present_mode_policy_at_load)
+    });
+    present_config_from_choice(index, state.present_mode_policy_at_load)
 }
 
 pub(in crate::screens::options) fn selected_high_dpi(state: &State) -> bool {
@@ -633,18 +638,8 @@ pub(in crate::screens::options) fn graphics_show_software_threads(state: &State)
 }
 
 #[inline(always)]
-pub(in crate::screens::options) fn graphics_show_present_mode(state: &State) -> bool {
-    get_choice_by_id(
-        &state.sub[SubmenuKind::Graphics].choice_indices,
-        GRAPHICS_OPTIONS_ROWS,
-        SubRowId::VSync,
-    )
-    .is_some_and(|idx| !yes_no_from_choice(idx))
-}
-
-#[inline(always)]
 pub(in crate::screens::options) fn graphics_show_max_fps(state: &State) -> bool {
-    graphics_show_present_mode(state)
+    !selected_present_config(state).0
 }
 
 #[inline(always)]

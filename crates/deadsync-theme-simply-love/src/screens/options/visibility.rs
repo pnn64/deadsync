@@ -97,7 +97,6 @@ pub(super) fn submenu_visible_row_indices(
     match kind {
         SubmenuKind::Graphics => {
             let show_sw = graphics_show_software_threads(state);
-            let show_present_mode = graphics_show_present_mode(state);
             let show_max_fps = graphics_show_max_fps(state);
             let show_max_fps_value = graphics_show_max_fps_value(state);
             let show_high_dpi = graphics_show_high_dpi(state);
@@ -105,8 +104,6 @@ pub(super) fn submenu_visible_row_indices(
                 .enumerate()
                 .filter_map(|(idx, row)| {
                     if row.id == SubRowId::SoftwareRendererThreads && !show_sw {
-                        None
-                    } else if row.id == SubRowId::PresentMode && !show_present_mode {
                         None
                     } else if row.id == SubRowId::MaxFps && !show_max_fps {
                         None
