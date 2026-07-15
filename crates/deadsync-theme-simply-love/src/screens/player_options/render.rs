@@ -907,10 +907,11 @@ fn draw_player_heart_rate_preview(actors: &mut Vec<Actor>, rc: &RowCtx, player_i
         bpm,
     );
     let center_x = rc.fc.preview_x[player_idx];
-    let heart_size = 26.0 * pulse;
+    let heart_width = 22.0 * pulse;
+    let heart_height = 18.7 * pulse;
     actors.push(act!(sprite("heart.png"):
         align(0.5, 0.5): xy(center_x - 10.0, rc.current_row_y):
-        zoomto(heart_size, heart_size):
+        zoomto(heart_width, heart_height):
         diffuse(rgba[0], rgba[1], rgba[2], rgba[3]):
         z(Z_ROW_FOREGROUND + 1)
     ));

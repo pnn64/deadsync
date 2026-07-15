@@ -4,7 +4,8 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use btleplug::api::{
-    Central, CharPropFlags, Manager as _, Peripheral as _, ScanFilter, bleuuid::uuid_from_u16,
+    Central, CharPropFlags, Manager as _, Peripheral as _, PeripheralProperties, ScanFilter,
+    bleuuid::uuid_from_u16,
 };
 use btleplug::platform::{Adapter, Manager, Peripheral};
 use futures_util::StreamExt;
@@ -147,7 +148,7 @@ fn start_worker() -> Runtime {
 
 #[derive(Debug)]
 enum MonitorEvent {
-    Connected(String),
+    Connected(String, Option<String>),
     Bpm(String, u16),
     Disconnected(String),
 }
@@ -202,8 +203,20 @@ async fn run_enabled(
         let stopped = prune_monitors(&current, &mut monitors, &mut connecting, &mut last_attempt);
         disconnect_devices(&stopped, &devices).await;
         while let Ok(event) = event_rx.try_recv() {
-            let id = apply_monitor_event(shared, &current, event);
+            let (id, label) = apply_monitor_event(shared, &current, event);
             connecting.remove(&id);
+            let label_changed = if let Some(label) = label
+                && let Some((current_label, _)) = devices.get_mut(&id)
+                && *current_label != label
+            {
+                *current_label = label;
+                true
+            } else {
+                false
+            };
+            if label_changed {
+                publish_devices(shared, &devices);
+            }
         }
 
         let selected: HashSet<&str> = current
@@ -299,14 +312,23 @@ async fn discover_devices(
                 continue;
             }
             let id = peripheral.id().to_string();
-            let label = properties
-                .local_name
-                .filter(|name| !name.trim().is_empty())
-                .unwrap_or_else(|| "Heart Rate Monitor".to_owned());
+            let label = device_name(&properties).unwrap_or_else(|| "Heart Rate Monitor".to_owned());
             devices.insert(id, (label, peripheral));
         }
     }
     Ok(())
+}
+
+fn device_name(properties: &PeripheralProperties) -> Option<String> {
+    [
+        properties.local_name.as_deref(),
+        properties.advertisement_name.as_deref(),
+    ]
+    .into_iter()
+    .flatten()
+    .map(str::trim)
+    .find(|name| !name.is_empty())
+    .map(str::to_owned)
 }
 
 fn publish_devices(shared: &Arc<RwLock<Shared>>, devices: &HashMap<String, (String, Peripheral)>) {
@@ -423,6 +445,10 @@ async fn monitor_device(
         .await
         .map_err(|_| "Timed out discovering heart-rate services".to_owned())?
         .map_err(|e| e.to_string())?;
+    let label = match tokio::time::timeout(CONNECT_TIMEOUT, peripheral.properties()).await {
+        Ok(Ok(Some(properties))) => device_name(&properties),
+        _ => None,
+    };
     let measurement_uuid = uuid_from_u16(HEART_RATE_MEASUREMENT_UUID);
     let characteristic = peripheral
         .characteristics()
@@ -437,7 +463,7 @@ async fn monitor_device(
         .await
         .map_err(|_| "Timed out subscribing to heart-rate notifications".to_owned())?
         .map_err(|e| e.to_string())?;
-    let _ = events.send(MonitorEvent::Connected(id.to_owned()));
+    let _ = events.send(MonitorEvent::Connected(id.to_owned(), label));
     while let Some(notification) = notifications.next().await {
         if notification.uuid == measurement_uuid
             && let Ok(bpm) = parse_heart_rate_measurement(&notification.value)
@@ -452,11 +478,11 @@ fn apply_monitor_event(
     shared: &Arc<RwLock<Shared>>,
     desired: &Desired,
     event: MonitorEvent,
-) -> String {
-    let (id, connected, bpm) = match event {
-        MonitorEvent::Connected(id) => (id, true, None),
-        MonitorEvent::Bpm(id, bpm) => (id, true, Some(bpm)),
-        MonitorEvent::Disconnected(id) => (id, false, None),
+) -> (String, Option<String>) {
+    let (id, connected, bpm, label) = match event {
+        MonitorEvent::Connected(id, label) => (id, true, None, label),
+        MonitorEvent::Bpm(id, bpm) => (id, true, Some(bpm), None),
+        MonitorEvent::Disconnected(id) => (id, false, None, None),
     };
     let mut shared = shared.write().unwrap_or_else(|e| e.into_inner());
     for (player, selected) in desired.device_ids.iter().enumerate() {
@@ -468,7 +494,7 @@ fn apply_monitor_event(
             };
         }
     }
-    id
+    (id, label)
 }
 
 fn set_connecting(shared: &Arc<RwLock<Shared>>, desired: &Desired, id: &str) {
@@ -553,5 +579,24 @@ mod tests {
         assert!(!scan_needed(true, true, false, false));
         assert!(!scan_needed(false, true, true, false));
         assert!(scan_needed(false, false, true, true));
+    }
+
+    #[test]
+    fn device_name_uses_advertisement_and_prefers_gap_name() {
+        let advertisement_only = PeripheralProperties {
+            advertisement_name: Some("  COROS PACE  ".to_owned()),
+            ..PeripheralProperties::default()
+        };
+        assert_eq!(
+            device_name(&advertisement_only).as_deref(),
+            Some("COROS PACE")
+        );
+
+        let both = PeripheralProperties {
+            local_name: Some("Polar H10".to_owned()),
+            advertisement_name: Some("Polar Advertisement".to_owned()),
+            ..PeripheralProperties::default()
+        };
+        assert_eq!(device_name(&both).as_deref(), Some("Polar H10"));
     }
 }

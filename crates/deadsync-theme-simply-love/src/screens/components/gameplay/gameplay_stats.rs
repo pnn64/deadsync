@@ -35,6 +35,13 @@ const TIME_PREWARM_CAP_S: u32 = 600;
 const PEAK_NPS_GRAPH_PAD: f32 = 4.0;
 const PEAK_NPS_ALPHA: f32 = 0.75;
 const DISABLED_WINDOW_RGBA: [f32; 4] = color::JUDGMENT_FA_PLUS_WHITE_EVAL_DIM_RGBA;
+const HEART_RATE_ZONE_RGBA: [[f32; 4]; 5] = [
+    color::rgba_hex("#5CE087"),
+    color::rgba_hex("#FFFF00"),
+    color::rgba_hex("#FF9F1C"),
+    color::rgba_hex("#FF6B6B"),
+    color::rgba_hex("#FF3030"),
+];
 
 thread_local! {
     static PADDED_NUM_CACHE: RefCell<TextCache<(u32, u8)>> = RefCell::new(HashMap::with_capacity(2048));
@@ -996,9 +1003,19 @@ pub(crate) fn heart_pulse_scale(elapsed: f32, bpm: u16) -> f32 {
     }
 }
 
+fn heart_rate_zone_color(bpm: u16) -> [f32; 4] {
+    HEART_RATE_ZONE_RGBA[match bpm {
+        ..=119 => 0,
+        120..=139 => 1,
+        140..=159 => 2,
+        160..=179 => 3,
+        180.. => 4,
+    }]
+}
+
 #[cfg(test)]
 mod heart_rate_tests {
-    use super::heart_pulse_scale;
+    use super::{HEART_RATE_ZONE_RGBA, heart_pulse_scale, heart_rate_zone_color};
 
     #[test]
     fn heart_pulse_repeats_at_the_reported_rate() {
@@ -1011,6 +1028,16 @@ mod heart_rate_tests {
     fn missing_rate_keeps_the_heart_still() {
         assert_eq!(heart_pulse_scale(10.0, 0), 1.0);
         assert_eq!(heart_pulse_scale(f32::NAN, 120), 1.0);
+    }
+
+    #[test]
+    fn heart_rate_colors_cover_twenty_bpm_zones() {
+        assert_eq!(heart_rate_zone_color(100), HEART_RATE_ZONE_RGBA[0]);
+        assert_eq!(heart_rate_zone_color(120), HEART_RATE_ZONE_RGBA[1]);
+        assert_eq!(heart_rate_zone_color(140), HEART_RATE_ZONE_RGBA[2]);
+        assert_eq!(heart_rate_zone_color(160), HEART_RATE_ZONE_RGBA[3]);
+        assert_eq!(heart_rate_zone_color(180), HEART_RATE_ZONE_RGBA[4]);
+        assert_eq!(heart_rate_zone_color(200), HEART_RATE_ZONE_RGBA[4]);
     }
 }
 
@@ -1031,11 +1058,15 @@ pub fn push_heart_rates(actors: &mut Vec<Actor>, state: &State, playfield_center
         };
         let x = layout.sidepane_center_x + x_sign * 94.0 * layout.banner_data_zoom;
         let y = layout.sidepane_center_y - 37.0 * layout.banner_data_zoom;
-        let rgba = if side == profile_data::PlayerSide::P1 {
+        let player_rgba = if side == profile_data::PlayerSide::P1 {
             color::decorative_rgba(state.active_color_index())
         } else {
             color::decorative_rgba(state.active_color_index() - 2)
         };
+        let rgba = reading
+            .bpm
+            .map(heart_rate_zone_color)
+            .unwrap_or(player_rgba);
         let alpha = if reading.connected {
             rgba[3]
         } else {
@@ -1043,7 +1074,7 @@ pub fn push_heart_rates(actors: &mut Vec<Actor>, state: &State, playfield_center
         };
         let bpm = reading.bpm.unwrap_or(0);
         let pulse = heart_pulse_scale(elapsed, bpm);
-        let size = 19.0 * layout.banner_data_zoom * pulse;
+        let size = 24.0 * layout.banner_data_zoom * pulse;
         let text = heart_rate_text(reading.bpm);
         actors.push(act!(sprite("heart.png"):
             align(0.5, 0.5): xy(x, y): zoomto(size, size):
@@ -1051,9 +1082,9 @@ pub fn push_heart_rates(actors: &mut Vec<Actor>, state: &State, playfield_center
         ));
         actors.push(act!(text:
             font("miso"): settext(text): align(0.0, 0.5): horizalign(left):
-            xy(x + 13.0 * layout.banner_data_zoom, y):
-            zoom(1.64 * layout.banner_data_zoom):
-            diffuse(rgba[0], rgba[1], rgba[2], alpha): z(72)
+            xy(x + 16.0 * layout.banner_data_zoom, y):
+            zoom(2.0 * layout.banner_data_zoom):
+            diffuse(1.0, 1.0, 1.0, alpha): z(72)
         ));
     }
 }
