@@ -474,6 +474,7 @@ fn system_options(cfg: &Config) -> SystemOptions {
         smx_input: cfg.smx_input,
         smx_manages_pad_config: cfg.smx_manages_pad_config,
         smx_panel_lights: cfg.smx_panel_lights,
+        smx_idle_lights_black: cfg.smx_idle_lights_black,
         smx_underglow_theme: cfg.smx_underglow_theme,
         smx_underglow_grb: cfg.smx_underglow_grb,
         smx_pad_gifs_pack: cfg.smx_pad_gifs_pack,

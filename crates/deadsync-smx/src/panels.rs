@@ -275,6 +275,23 @@ impl PanelFx {
         self.backgrounds = std::array::from_fn(|_| None);
     }
 
+    /// Drop one pad slot's per-panel effects, keeping its background.
+    pub fn clear_panels_for_pad(&mut self, pad: usize) {
+        if pad < PADS {
+            self.panels[pad] = std::array::from_fn(|_| PanelState::default());
+        }
+    }
+
+    /// Full reset of one pad slot: its per-panel effects plus its background,
+    /// leaving the other pad untouched. Used when handing a single pad back to
+    /// its firmware lighting while its neighbour keeps animating.
+    pub fn clear_pad(&mut self, pad: usize) {
+        self.clear_panels_for_pad(pad);
+        if pad < PADS {
+            self.backgrounds[pad] = None;
+        }
+    }
+
     /// Advance all playback by `dt_s`, rebuild the reused both-pads RGB frame, and return
     /// it. Every panel is filled, so all 1350 bytes are overwritten and the buffer needs
     /// no clear.
@@ -557,6 +574,96 @@ fn composite_led(
 /// coalesces to the newest frame, so this only governs how often we rebuild a frame.
 const FRAME_INTERVAL: Duration = Duration::from_micros(33_333);
 
+/// How often an unchanged frame is re-sent anyway. The pad firmware falls back
+/// to its built-in auto lights after `autoLightsTimeout` without receiving a
+/// lights command (a pad-config value in 128ms units, default ~896ms), and
+/// there is no way to disable that fallback: holding any static frame (a black
+/// background between judgement events, a paused animation) requires periodic
+/// refreshes. 400ms keeps a wide margin under the default timeout while
+/// cutting a static frame's USB traffic from 30 sends/s to 2.5.
+const RESEND_INTERVAL: Duration = Duration::from_millis(400);
+
+/// Whether one pad's wire bytes must go out now: always for the first frame
+/// after an (in)activation, on any byte change, or when the unchanged frame
+/// has been held for `RESEND_INTERVAL` (the firmware-takeover keepalive).
+fn should_send(last: Option<&[u8]>, buf: &[u8], since_last_send: Duration) -> bool {
+    match last {
+        Some(last) => last != buf || since_last_send >= RESEND_INTERVAL,
+        None => true,
+    }
+}
+
+/// Frame transmitter with per-pad duplicate suppression and the firmware
+/// keepalive. Compares the final wire bytes (after the user brightness scale),
+/// so a brightness change alone still triggers a send even when the composited
+/// frame is identical.
+///
+/// Dedup and the keepalive are tracked per pad: a pad holding a static frame
+/// keeps its own 400ms refresh cadence regardless of how often its neighbour
+/// changes, and a pad the worker doesn't own is never sent to at all, so its
+/// firmware auto-lighting resumes.
+struct LightsTx {
+    last: [u8; FRAME_BYTES],
+    have_last: [bool; PADS],
+    sent_at: [Instant; PADS],
+}
+
+impl LightsTx {
+    fn new() -> Self {
+        Self {
+            last: [0u8; FRAME_BYTES],
+            have_last: [false; PADS],
+            sent_at: [Instant::now(); PADS],
+        }
+    }
+
+    /// Forget a pad's last-sent frame so its next send goes out unconditionally.
+    /// Called on that pad's every active transition: while we didn't own it the
+    /// pad was showing firmware content, so an identical-looking frame must still
+    /// be re-sent to take the LEDs back.
+    fn invalidate_pad(&mut self, pad: usize) {
+        if pad < PADS {
+            self.have_last[pad] = false;
+        }
+    }
+
+    /// Send the pads named by `owned`; the rest are left to their firmware.
+    fn send(&mut self, frame: &[u8; FRAME_BYTES], owned: [bool; PADS]) {
+        let Some(m) = crate::manager() else { return };
+        let mut buf = *frame;
+        // Apply the user brightness as a final per-slot scale. 100/100 is an
+        // exact identity, so skip the pass on the common full-brightness path.
+        let brightness = crate::light_brightness();
+        if brightness != [100, 100] {
+            crate::apply_brightness(&mut buf, brightness);
+        }
+        let now = Instant::now();
+        // Decide per pad, then send once: both pads' commands ride the same
+        // queued frame, so an owned pad never drifts out of phase with its
+        // neighbour. A pad we don't own is masked out entirely rather than sent
+        // black, which is what lets its firmware reclaim the LEDs.
+        let mut mask = [false; PADS];
+        for pad in 0..PADS {
+            if !owned[pad] {
+                continue;
+            }
+            let range = pad * BYTES_PER_PAD..(pad + 1) * BYTES_PER_PAD;
+            let last = self.have_last[pad].then_some(&self.last[range.clone()]);
+            mask[pad] = should_send(last, &buf[range], now.duration_since(self.sent_at[pad]));
+        }
+        if !mask.iter().any(|&m| m) {
+            return;
+        }
+        for pad in (0..PADS).filter(|&pad| mask[pad]) {
+            let range = pad * BYTES_PER_PAD..(pad + 1) * BYTES_PER_PAD;
+            self.last[range.clone()].copy_from_slice(&buf[range]);
+            self.have_last[pad] = true;
+            self.sent_at[pad] = now;
+        }
+        m.set_lights_for_pads(&buf, mask);
+    }
+}
+
 /// Messages from the app to the worker. Pad/panel/animation are resolved
 /// app-side (including registry lookups) so the worker stays free of app policy
 /// and style knowledge; animations travel as cheap `Arc` handles.
@@ -592,9 +699,10 @@ enum Ev {
         pad: u8,
         panel: u8,
     },
-    /// Enter (true) or leave (false) active panel effect ownership. Leaving hands the pad
-    /// back to its firmware idle lighting.
-    Active(bool),
+    /// Enter (true) or leave (false) active panel effect ownership of one pad slot.
+    /// Leaving hands that pad back to its firmware idle lighting, independently of
+    /// the other pad.
+    Active { pad: u8, active: bool },
     /// Force a pad slot to solid black (true) or restore normal compositing (false).
     Blackout {
         pad: u8,
@@ -701,10 +809,14 @@ impl SmxPanelLights {
         });
     }
 
-    /// Mark whether panel effects are active. On `false` the worker clears the panels and
-    /// hands the pad back to its firmware idle lighting.
-    pub fn set_active(&self, active: bool) {
-        self.send(Ev::Active(active));
+    /// Mark whether panel effects are active for one pad slot. On `false` the worker
+    /// clears that pad and hands it back to its firmware idle lighting, leaving the
+    /// other pad as it was.
+    pub fn set_active_for_pad(&self, pad: usize, active: bool) {
+        self.send(Ev::Active {
+            pad: pad as u8,
+            active,
+        });
     }
 
     /// Force pad slot `pad` to solid black (`on = true`) or restore normal compositing.
@@ -731,7 +843,12 @@ impl SmxPanelLights {
 impl Drop for SmxPanelLights {
     fn drop(&mut self) {
         if let Some(tx) = self.tx.take() {
-            let _ = tx.send(Ev::Active(false));
+            for pad in 0..PADS {
+                let _ = tx.send(Ev::Active {
+                    pad: pad as u8,
+                    active: false,
+                });
+            }
             let _ = tx.send(Ev::Shutdown);
         }
         if let Some(join) = self.join.take() {
@@ -742,13 +859,16 @@ impl Drop for SmxPanelLights {
 
 fn run_worker(rx: Receiver<Ev>) {
     let mut fx = PanelFx::new();
-    let mut active = false;
+    let mut lights = LightsTx::new();
+    let mut active = [false; PADS];
     let mut last_tick = Instant::now();
 
     'outer: loop {
-        // Active: wake at most one frame out to decay flashes and keep the pad ours.
-        // Idle: nothing to tick, so block until the next event instead of spinning at 30Hz.
-        let next = if active {
+        // Any pad active: wake at most one frame out to decay flashes and keep that pad
+        // ours. All idle: nothing to tick, so block until the next event instead of
+        // spinning at 30Hz.
+        let any_active = active.iter().any(|&a| a);
+        let next = if any_active {
             match rx.recv_timeout(FRAME_INTERVAL) {
                 Ok(ev) => Some(ev),
                 Err(RecvTimeoutError::Timeout) => None,
@@ -764,39 +884,44 @@ fn run_worker(rx: Receiver<Ev>) {
         if let Some(ev) = next {
             let was_active = active;
             // Apply this event, then drain any burst queued behind it.
-            if handle(&mut fx, &mut active, ev) {
+            if handle(&mut fx, &mut lights, &mut active, ev) {
                 break 'outer;
             }
             while let Ok(ev) = rx.try_recv() {
-                if handle(&mut fx, &mut active, ev) {
+                if handle(&mut fx, &mut lights, &mut active, ev) {
                     break 'outer;
                 }
             }
-            if active && !was_active {
+            if active.iter().any(|&a| a) && !was_active.iter().any(|&a| a) {
                 // Just woke from the idle block; start the frame clock fresh so the first
                 // tick uses a normal dt instead of the whole idle gap.
                 last_tick = Instant::now();
             }
         }
 
-        if active {
+        if active.iter().any(|&a| a) {
             let now = Instant::now();
             let dt = now.saturating_duration_since(last_tick);
             if dt >= FRAME_INTERVAL {
                 last_tick = now;
-                send_lights(fx.tick(dt.as_secs_f32()));
+                lights.send(fx.tick(dt.as_secs_f32()), active);
             }
         }
     }
 
-    // On exit, leave the panels dark and restore the pad firmware idle lighting.
+    // On exit, leave any pad we still own dark, then restore firmware idle lighting on
+    // both. A pad already released above is masked out of the send and simply stays with
+    // its firmware.
     fx.clear_all();
-    send_lights(fx.tick(0.0));
+    for pad in 0..PADS {
+        lights.invalidate_pad(pad);
+    }
+    lights.send(fx.tick(0.0), active);
     reenable_auto();
 }
 
 /// Apply one event to the effect state. Returns `true` when the worker should stop.
-fn handle(fx: &mut PanelFx, active: &mut bool, ev: Ev) -> bool {
+fn handle(fx: &mut PanelFx, lights: &mut LightsTx, active: &mut [bool; PADS], ev: Ev) -> bool {
     match ev {
         Ev::Background { pad, background } => fx.set_background_for_pad(pad.into(), background),
         Ev::Beat(beat) => fx.set_beat(beat),
@@ -816,18 +941,28 @@ fn handle(fx: &mut PanelFx, active: &mut bool, ev: Ev) -> bool {
         Ev::PressRelease { pad, panel } => fx.release_press_overlay(pad.into(), panel.into()),
         Ev::Blackout { pad, on } => fx.set_pad_blackout(pad.into(), on),
         Ev::ClearPanels => fx.clear_panels(),
-        Ev::Active(a) => {
-            *active = a;
+        Ev::Active { pad, active: a } => {
+            let pad = usize::from(pad);
+            if pad >= PADS {
+                return false;
+            }
+            active[pad] = a;
+            // Either transition means this pad's ownership is changing hands:
+            // forget its duplicate-suppression state so its next frame goes
+            // out unconditionally.
+            lights.invalidate_pad(pad);
             if a {
-                // Entering a screen: drop stale per-panel effects but keep any
-                // background the app set up for it.
-                fx.clear_panels();
+                // Entering a screen: drop this pad's stale per-panel effects but
+                // keep any background the app set up for it.
+                fx.clear_panels_for_pad(pad);
             } else {
-                // Going idle: drop everything, push one black frame, and hand
-                // the pad back to firmware.
-                fx.clear_all();
-                send_lights(fx.tick(0.0));
-                reenable_auto();
+                // Going idle: drop this pad's effects and hand it straight back to
+                // firmware. Deliberately no black frame: sending one would re-disable
+                // the auto-lighting we are asking for. The other pad keeps animating,
+                // and `reenable_auto_lights_for_pad` drops only this pad's share of
+                // any frame already queued.
+                fx.clear_pad(pad);
+                reenable_auto_for_pad(pad);
             }
         }
         Ev::Shutdown => return true,
@@ -835,26 +970,15 @@ fn handle(fx: &mut PanelFx, active: &mut bool, ev: Ev) -> bool {
     false
 }
 
-fn send_lights(frame: &[u8]) {
-    let Some(m) = crate::manager() else { return };
-    // Apply the user brightness as a final per-slot scale. 100/100 is an exact
-    // identity, so skip the copy on the common full-brightness path. Otherwise scale
-    // into a stack buffer (no heap on the 30Hz worker) and send that.
-    let brightness = crate::light_brightness();
-    if brightness == [100, 100] || frame.len() > FRAME_BYTES {
-        m.set_lights(frame);
-        return;
-    }
-    let mut buf = [0u8; FRAME_BYTES];
-    let n = frame.len();
-    buf[..n].copy_from_slice(frame);
-    crate::apply_brightness(&mut buf[..n], brightness);
-    m.set_lights(&buf[..n]);
-}
-
 fn reenable_auto() {
     if let Some(m) = crate::manager() {
         m.reenable_auto_lights();
+    }
+}
+
+fn reenable_auto_for_pad(pad: usize) {
+    if let Some(m) = crate::manager() {
+        m.reenable_auto_lights_for_pad(pad);
     }
 }
 
@@ -951,7 +1075,7 @@ mod tests {
         // With no SMX manager initialized, set_lights and reenable are no-ops, so this
         // exercises the channel, thread, event handling, and a clean Drop/join.
         let lights = SmxPanelLights::new();
-        lights.set_active(true);
+        lights.set_active_for_pad(0, true);
         lights.set_background_for_pad(0, Some((bg_anim(&[1, 2], 0), Clock::Realtime)));
         lights.set_beat(1.5);
         lights.play_overlay(
@@ -961,7 +1085,7 @@ mod tests {
             OverlayDrive::OneShot { pressed: false },
         );
         lights.release_overlay(0, 3);
-        lights.set_active(false);
+        lights.set_active_for_pad(0, false);
         drop(lights); // joins the worker thread
     }
 
@@ -1345,6 +1469,43 @@ mod tests {
     }
 
     #[test]
+    fn clear_pad_drops_only_that_pads_background_and_panels() {
+        let mut fx = PanelFx::new();
+        fx.set_background_for_pad(0, Some((bg_anim(&[10], 0), Clock::Realtime)));
+        fx.set_background_for_pad(1, Some((bg_anim(&[20], 0), Clock::Realtime)));
+        fx.play_overlay(
+            0,
+            1,
+            panel_anim(&[91], 0),
+            OverlayDrive::Sustain { resume: false },
+        );
+
+        // Releasing pad 0 to its firmware must not disturb pad 1's animation.
+        fx.clear_pad(0);
+        let frame = fx.tick(0.0);
+        assert_eq!(led0(frame, 0, 1), 0, "released pad keeps nothing");
+        assert_eq!(led0(frame, 1, 1), 20, "the other pad keeps its background");
+    }
+
+    #[test]
+    fn clear_panels_for_pad_keeps_that_pads_background_and_the_other_pad() {
+        let mut fx = PanelFx::new();
+        fx.set_background_for_pad(0, Some((bg_anim(&[10], 0), Clock::Realtime)));
+        fx.set_background_for_pad(1, Some((bg_anim(&[20], 0), Clock::Realtime)));
+        fx.play_overlay(
+            0,
+            1,
+            panel_anim(&[91], 0),
+            OverlayDrive::Sustain { resume: false },
+        );
+
+        fx.clear_panels_for_pad(0);
+        let frame = fx.tick(0.0);
+        assert_eq!(led0(frame, 0, 1), 10, "overlay gone, background stays");
+        assert_eq!(led0(frame, 1, 1), 20, "the other pad is untouched");
+    }
+
+    #[test]
     fn clear_panels_keeps_the_background_and_clear_all_drops_it() {
         let mut fx = PanelFx::new();
         fx.set_background_for_pad(0, Some((bg_anim(&[10], 0), Clock::Realtime)));
@@ -1368,6 +1529,32 @@ mod tests {
 
         fx.clear_all();
         assert!(fx.tick(0.0).iter().all(|&b| b == 0));
+    }
+
+    // Wire-frame duplicate suppression + keepalive
+
+    #[test]
+    fn should_send_first_frame_changes_and_keepalive() {
+        let black = [0u8; FRAME_BYTES];
+        let mut lit = [0u8; FRAME_BYTES];
+        lit[0] = 1;
+
+        // No last frame (fresh activation): always send.
+        assert!(should_send(None, &black, Duration::ZERO));
+        // Unchanged frame inside the keepalive window: suppressed.
+        assert!(!should_send(Some(&black), &black, Duration::from_millis(100)));
+        // Any byte change sends immediately.
+        assert!(should_send(Some(&black), &lit, Duration::ZERO));
+        // Unchanged frame held past the keepalive: re-sent so the pad
+        // firmware's auto-lights timeout never elapses.
+        assert!(should_send(Some(&black), &black, RESEND_INTERVAL));
+    }
+
+    #[test]
+    fn keepalive_interval_stays_under_the_default_firmware_timeout() {
+        // SMXConfig.autoLightsTimeout default: 1000/128 units of 128ms.
+        let default_timeout = Duration::from_millis((1000 / 128) * 128);
+        assert!(RESEND_INTERVAL * 2 <= default_timeout);
     }
 
     #[test]

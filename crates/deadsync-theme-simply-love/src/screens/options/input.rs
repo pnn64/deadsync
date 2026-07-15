@@ -453,6 +453,11 @@ pub(super) fn apply_submenu_choice_delta(
             };
             config::update_smx_judge_gifs_pack(pack);
         }
+        if row.id == SubRowId::SmxIdleLights {
+            // Index 0 = Firmware (release idle pads to the pad's built-in
+            // lighting), 1 = Black (keep the LEDs and hold idle pads dark).
+            config::update_smx_idle_lights_black(new_index == 1);
+        }
         if row.id == SubRowId::SmxSinglePadPlayer {
             // Pin the lone connected pad's serial to the chosen side (index 0 = P1,
             // 1 = P2). The SDK then relocates it to that slot. Row is only shown

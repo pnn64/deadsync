@@ -669,15 +669,16 @@ assets/
 
 Both trees also ship a `dance/none` pack: an empty pack whose `gifpack.ini`
 declares `Fallback = "none"`, so every role resolves to nothing. Select it to
-turn that group off entirely (backgrounds dark, or judgement effects dark)
-without touching the master Panel Lights toggle, and independently per group
-and per player.
+turn that group off entirely without touching the master Panel Lights toggle,
+and independently per group and per player. What "off" looks like on the pad
+is controlled by **Idle Pad Lights** (see below): the pads either revert to
+their firmware lighting or hold solid black.
 
 **Selecting a pack:** the machine defaults live on the StepManiaX options
 page (**Pad Lights Pack** for backgrounds, **Judgement Pack** for judgement
-gifs; the rows appear once Panel Lights is on). Each player can override both
-per profile in **Player Options**; a profile with no override follows the
-machine default. A pack dropped into `dance/` while the game is running shows
+gifs, and **Idle Pad Lights** for what an empty pad shows; the rows appear
+once Panel Lights is on). Each player can override both packs per profile in
+**Player Options**; a profile with no override follows the machine default. A pack dropped into `dance/` while the game is running shows
 up in the selectors right away (the list is re-scanned each time), but its
 GIFs are only decoded at first use after launch, so restart the game to
 actually see a brand-new pack's animations.
@@ -765,11 +766,28 @@ via `gifpack.ini` (see §11e). A role the selected pack lists under
 `Fallback` pack, no `common`, and no `default`-role fallback (steps 6-8 are
 skipped) — that role shows no animation at all.
 
-What "no animation" looks like depends on the screen. During gameplay the
-game still owns the pad LEDs (judgement effects may fire), so the background
-is solid black. On every other screen a pad with nothing to show is handed
-back to the firmware, which resumes the pad's own built-in lighting (its
-stored idle and step animations) until the game next takes the LEDs.
+What a pad shows when nothing resolves at all is controlled by the **Idle Pad
+Lights** option on the StepManiaX options page. **Firmware** (the default) hands
+an empty pad back to its built-in lighting (the idle and step animations stored
+on the pad), while **Black** keeps ownership of the LEDs and holds the pad dark;
+panel press animations still play under **Black**, since the game is still
+driving the panels.
+
+The game takes a pad's LEDs only when it has something to draw on them: a
+background, or (during gameplay) a judgement pack that can actually fire. So
+during a song a pad with an empty background but a real judgement pack is
+**solid black** between events, because a judgement can land at any moment, while
+a pad with the `none` judgement pack is left to its firmware for the whole song:
+nothing would ever draw on it. **Black** overrides this and holds the pad dark
+either way.
+
+Ownership is decided **per pad**. Because each player can pick their own packs,
+one pad may resolve a background while the other resolves nothing: the first
+keeps animating and the second goes back to its firmware (or holds black),
+independently. A pad handed back to its firmware shows the firmware's own step
+lighting rather than the game's press animation, since the game no longer drives
+it. Frames for the two pads are still sent together, so pads that are both driven
+stay in step with each other.
 
 The table below lists **role names** (the internal key used for lookup). The
 corresponding filename is `{role}_{size}.gif` — for grade-tagged roles like

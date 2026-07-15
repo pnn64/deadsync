@@ -74,6 +74,7 @@ pub enum ItemId {
     InpSmxDefaultLightBrightness,
     InpSmxBgPack,
     InpSmxJudgePack,
+    InpSmxIdleLights,
     InpSmxAssignPads,
     InpSmxSwapPads,
     InpMenuNavigation,

@@ -423,6 +423,10 @@ impl SmxPanelDriver {
         self.inner.set_pad_blackout(pad, on);
     }
 
+    pub fn set_idle_black(&mut self, on: bool) {
+        self.inner.set_idle_black(on);
+    }
+
     pub fn on_raw_panel(&self, pad: usize, panel: usize, pressed: bool) {
         self.inner.on_raw_panel(pad, panel, pressed);
     }

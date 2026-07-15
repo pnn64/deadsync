@@ -138,6 +138,10 @@ pub fn set_smx_panel_lights(cfg: &mut Config, enabled: bool) -> bool {
     set_if_changed(&mut cfg.smx_panel_lights, enabled)
 }
 
+pub fn set_smx_idle_lights_black(cfg: &mut Config, black: bool) -> bool {
+    set_if_changed(&mut cfg.smx_idle_lights_black, black)
+}
+
 pub fn set_smx_pad_gifs_pack(cfg: &mut Config, pack: crate::options::SmxPackName) -> bool {
     set_if_changed(&mut cfg.smx_pad_gifs_pack, pack)
 }

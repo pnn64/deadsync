@@ -95,6 +95,7 @@ pub(in crate::screens::options) const INPUT_OPTIONS_ITEMS: &[Item] = &[
             HelpEntry::Bullet(lookup_key("OptionsInput", "Debounce")),
             HelpEntry::Bullet(lookup_key("OptionsInput", "SmxBgPack")),
             HelpEntry::Bullet(lookup_key("OptionsInput", "SmxJudgePack")),
+            HelpEntry::Bullet(lookup_key("OptionsInput", "SmxIdleLights")),
         ],
     },
     Item {
@@ -335,6 +336,18 @@ pub(in crate::screens::options) const SMX_CONFIG_OPTIONS_ROWS: &[SubRow] = &[
         inline: true,
     },
     SubRow {
+        // What an idle pad shows when gif lighting has nothing to display for
+        // the current screen: release it to the pad firmware's built-in
+        // lighting, or keep the LEDs and hold it black.
+        id: SubRowId::SmxIdleLights,
+        label: lookup_key("OptionsInput", "SmxIdleLights"),
+        choices: &[
+            localized_choice("OptionsInput", "SmxIdleLightsFirmware"),
+            localized_choice("OptionsInput", "SmxIdleLightsBlack"),
+        ],
+        inline: true,
+    },
+    SubRow {
         id: SubRowId::SmxAssignPads,
         label: lookup_key("OptionsInput", "SmxAssignPads"),
         choices: &[localized_choice("Common", "Open")],
@@ -427,6 +440,14 @@ pub(in crate::screens::options) const SMX_CONFIG_OPTIONS_ITEMS: &[Item] = &[
         help: &[HelpEntry::Paragraph(lookup_key(
             "OptionsInputHelp",
             "SmxJudgePackHelp",
+        ))],
+    },
+    Item {
+        id: ItemId::InpSmxIdleLights,
+        name: lookup_key("OptionsInput", "SmxIdleLights"),
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsInputHelp",
+            "SmxIdleLightsHelp",
         ))],
     },
     Item {

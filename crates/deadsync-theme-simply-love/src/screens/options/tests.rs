@@ -753,6 +753,7 @@ fn smx_config_items_match_rows() {
         ),
         (SubRowId::SmxBgPack, ItemId::InpSmxBgPack),
         (SubRowId::SmxJudgePack, ItemId::InpSmxJudgePack),
+        (SubRowId::SmxIdleLights, ItemId::InpSmxIdleLights),
         (SubRowId::SmxAssignPads, ItemId::InpSmxAssignPads),
         (SubRowId::SmxSwapPads, ItemId::InpSmxSwapPads),
     ];

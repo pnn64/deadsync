@@ -1687,6 +1687,17 @@ impl App {
         );
         let role = frame_plan.role;
 
+        // Idle-black mode: when the feature is on and the screen would normally
+        // show a background (role is Some) but nothing resolves for it, keep the
+        // worker active so the pads hold solid black instead of reverting to the
+        // pad firmware's built-in lighting. Screens with no role (Init,
+        // TestLights, pad assignment, the SMX options assignment preview) still
+        // release the pads: they drive the LEDs themselves. Runs before the
+        // dedup key check below because the option is not part of the key; the
+        // driver dedups the value itself.
+        self.smx_panels
+            .set_idle_black(role.is_some() && config::get().smx_idle_lights_black);
+
         // A song rescan may have changed per-song/per-pack files; drop the
         // scoped cache and force a re-resolve (a recycled `Arc` pointer must not
         // read as the same song).

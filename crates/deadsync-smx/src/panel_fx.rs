@@ -41,6 +41,44 @@ pub struct JudgementGifs {
 }
 
 impl JudgementGifs {
+    /// Whether any animation at all resolved. `false` means no gameplay event on this
+    /// pad can ever draw anything (an empty judgement pack), so the pad is left to its
+    /// firmware rather than being owned and held black for the whole song.
+    pub fn has_any(&self) -> bool {
+        let Self {
+            fantastic_blue,
+            fantastic_white,
+            excellent,
+            great,
+            decent,
+            way_off,
+            miss,
+            mine,
+            ok,
+            bad,
+            freeze,
+            roll,
+            press,
+        } = self;
+        [
+            fantastic_blue,
+            fantastic_white,
+            excellent,
+            great,
+            decent,
+            way_off,
+            miss,
+            mine,
+            ok,
+            bad,
+            freeze,
+            roll,
+            press,
+        ]
+        .iter()
+        .any(|slot| slot.is_some())
+    }
+
     /// Resolve the standard judgement names from a registry through the usual
     /// pack-then-size fallback. `_25` is the baseline both pad layouts render.
     pub fn resolve(registry: &GifRegistry, pack: Option<&str>) -> Self {
