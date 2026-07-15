@@ -265,6 +265,35 @@ fn null_or_die_timing_choice_emits_shell_config_request() {
 }
 
 #[test]
+fn null_or_die_orientation_emits_shell_config_request() {
+    let asset_manager = AssetManager::new();
+    let mut state = init();
+    state.view = OptionsView::Submenu(SubmenuKind::NullOrDieOptions);
+    let row = select_visible_row(
+        &mut state,
+        SubmenuKind::NullOrDieOptions,
+        SubRowId::GraphOrientation,
+    );
+
+    let effect = apply_submenu_choice_delta(&mut state, &asset_manager, 1, NavWrap::Wrap)
+        .expect("Null-or-Die graph orientation should emit shell config work");
+    let expected = if state.sub[SubmenuKind::NullOrDieOptions].cursor_indices[row] == 1 {
+        crate::SimplyLoveGraphOrientation::Horizontal
+    } else {
+        crate::SimplyLoveGraphOrientation::Vertical
+    };
+
+    assert!(matches!(
+        effect,
+        ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Config(
+            crate::SimplyLoveConfigRequest::NullOrDie(
+                crate::SimplyLoveNullOrDieConfigRequest::GraphOrientation(value)
+            )
+        )) if value == expected
+    ));
+}
+
+#[test]
 fn online_enable_choice_persists_before_reinitializing_services() {
     let asset_manager = AssetManager::new();
     let mut state = init();

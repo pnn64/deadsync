@@ -214,6 +214,7 @@ pub enum ItemId {
 
     // Null-or-Die Settings submenu
     NodSyncGraph,
+    NodGraphOrientation,
     NodSyncConfidence,
     NodPackSyncThreads,
     NodFingerprint,

@@ -213,6 +213,7 @@ pub struct SelectMusicRuntimeView {
     pub unlock_downloads_available: bool,
     pub ready_song_reload_dirs: Vec<PathBuf>,
     pub sync_graph_mode: deadsync_config::prelude::SyncGraphMode,
+    pub sync_graph_orientation: deadsync_config::prelude::GraphOrientation,
     pub sync_confidence_percent: u8,
 }
 
@@ -231,6 +232,7 @@ impl Default for SelectMusicRuntimeView {
             unlock_downloads_available: false,
             ready_song_reload_dirs: Vec::new(),
             sync_graph_mode: deadsync_config::prelude::SyncGraphMode::PostKernelFingerprint,
+            sync_graph_orientation: deadsync_config::prelude::GraphOrientation::Vertical,
             sync_confidence_percent: 80,
         }
     }

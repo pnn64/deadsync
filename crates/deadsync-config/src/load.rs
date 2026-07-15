@@ -296,6 +296,7 @@ fn apply_system_hardware_opts(
 
 fn apply_null_or_die_opts(loaded: NullOrDieOptions, cfg: &mut Config) {
     cfg.null_or_die_sync_graph = loaded.sync_graph;
+    cfg.null_or_die_graph_orientation = loaded.graph_orientation;
     cfg.null_or_die_confidence_percent = loaded.confidence_percent;
     cfg.null_or_die_pack_sync_threads = loaded.pack_sync_threads;
     cfg.null_or_die_fingerprint_ms = loaded.fingerprint_ms;

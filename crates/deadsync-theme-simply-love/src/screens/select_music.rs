@@ -2,7 +2,9 @@ use crate::act;
 use crate::assets::i18n::{tr, tr_fmt};
 use crate::assets::{self, AssetManager};
 use crate::assets::{FontRole, current_machine_font_key};
-use crate::config::{BreakdownStyle, NewPackMode, SelectMusicPatternInfoMode, SyncGraphMode};
+use crate::config::{
+    BreakdownStyle, GraphOrientation, NewPackMode, SelectMusicPatternInfoMode, SyncGraphMode,
+};
 
 use crate::rgba_const;
 use crate::screens::components::{
@@ -565,6 +567,7 @@ pub fn sync_runtime_view(state: &mut State, view: SelectMusicRuntimeView) {
         .ready_song_reload_dirs
         .extend(view.ready_song_reload_dirs);
     state.sync_graph_mode = view.sync_graph_mode;
+    state.sync_graph_orientation = view.sync_graph_orientation;
     state.sync_confidence_percent = view.sync_confidence_percent.min(100);
 }
 
@@ -864,6 +867,7 @@ struct NullOrDieOverlayData {
     kernel_target: crate::SimplyLoveSyncKernelTarget,
     kernel_type: crate::SimplyLoveSyncKernel,
     graph_mode: SyncGraphMode,
+    graph_orientation: GraphOrientation,
     confidence_threshold: f64,
     cols: usize,
     freq_rows: usize,
@@ -1192,6 +1196,7 @@ pub struct State {
     unlock_downloads_available: bool,
     ready_song_reload_dirs: Vec<PathBuf>,
     sync_graph_mode: SyncGraphMode,
+    sync_graph_orientation: GraphOrientation,
     sync_confidence_percent: u8,
     songs_root: PathBuf,
     courses_root: PathBuf,
@@ -2950,6 +2955,7 @@ pub fn init(init_view: SelectMusicInitView) -> State {
         unlock_downloads_available: false,
         ready_song_reload_dirs: Vec::new(),
         sync_graph_mode: SyncGraphMode::PostKernelFingerprint,
+        sync_graph_orientation: GraphOrientation::Vertical,
         sync_confidence_percent: 80,
         songs_root: init_view.songs_root,
         courses_root: init_view.courses_root,
@@ -3171,6 +3177,7 @@ pub fn init_placeholder() -> State {
         unlock_downloads_available: false,
         ready_song_reload_dirs: Vec::new(),
         sync_graph_mode: SyncGraphMode::PostKernelFingerprint,
+        sync_graph_orientation: GraphOrientation::Vertical,
         sync_confidence_percent: 80,
         songs_root: PathBuf::new(),
         courses_root: PathBuf::new(),
@@ -4598,18 +4605,21 @@ fn push_reload_overlay(actors: &mut Vec<Actor>, reload: &ReloadUiState, active_c
 }
 
 #[inline(always)]
-fn sync_bias_to_graph_x(bias_ms: f64, times_ms: &[f64], graph_w: f32) -> f32 {
-    if times_ms.len() < 2 || graph_w <= 0.0 {
-        return graph_w * 0.5;
+fn sync_bias_axis_pos(bias_ms: f64, times_ms: &[f64], axis_len: f32, reverse: bool) -> f32 {
+    if times_ms.len() < 2 || axis_len <= 0.0 {
+        return axis_len * 0.5;
     }
     let start = times_ms[0];
     let end = *times_ms.last().unwrap_or(&start);
     let span = end - start;
     if !span.is_finite() || span.abs() < f64::EPSILON {
-        return graph_w * 0.5;
+        return axis_len * 0.5;
     }
-    let t = ((bias_ms - start) / span).clamp(0.0, 1.0) as f32;
-    t * (graph_w - 1.0).max(0.0)
+    let mut t = ((bias_ms - start) / span).clamp(0.0, 1.0) as f32;
+    if reverse {
+        t = 1.0 - t;
+    }
+    t * (axis_len - 1.0).max(0.0)
 }
 
 fn push_line_segment(
@@ -4649,6 +4659,7 @@ fn build_sync_curve_mesh(
     edge_discard: usize,
     graph_w: f32,
     graph_h: f32,
+    orientation: GraphOrientation,
     color: [f32; 4],
 ) -> Option<Arc<[MeshVertex]>> {
     if values.len() < 2 || graph_w <= 0.0 || graph_h <= 0.0 {
@@ -4665,17 +4676,31 @@ fn build_sync_curve_mesh(
         min_value = min_value.min(value);
         max_value = max_value.max(value);
     }
+    let x_left = graph_w * 0.1;
+    let x_right = graph_w * 0.9;
     let y_top = graph_h * 0.1;
     let y_bottom = graph_h * 0.9;
     let mut out: Vec<MeshVertex> = Vec::with_capacity(values.len().saturating_sub(1) * 6);
     for i in 0..values.len().saturating_sub(1) {
         let denom = values.len().saturating_sub(1) as f32;
-        let x0 = (i as f32 / denom) * (graph_w - 1.0).max(0.0);
-        let x1 = ((i + 1) as f32 / denom) * (graph_w - 1.0).max(0.0);
+        let axis0 = i as f32 / denom;
+        let axis1 = (i + 1) as f32 / denom;
         let t0 = sync_heat_norm01(values[i], min_value, max_value) as f32;
         let t1 = sync_heat_norm01(values[i + 1], min_value, max_value) as f32;
-        let y0 = y_bottom + (y_top - y_bottom) * t0;
-        let y1 = y_bottom + (y_top - y_bottom) * t1;
+        let (x0, y0, x1, y1) = match orientation {
+            GraphOrientation::Vertical => (
+                axis0 * (graph_w - 1.0).max(0.0),
+                y_bottom + (y_top - y_bottom) * t0,
+                axis1 * (graph_w - 1.0).max(0.0),
+                y_bottom + (y_top - y_bottom) * t1,
+            ),
+            GraphOrientation::Horizontal => (
+                x_left + (x_right - x_left) * t0,
+                (1.0 - axis0) * (graph_h - 1.0).max(0.0),
+                x_left + (x_right - x_left) * t1,
+                (1.0 - axis1) * (graph_h - 1.0).max(0.0),
+            ),
+        };
         push_line_segment(&mut out, x0, y0, x1, y1, 1.5, color);
     }
     if out.is_empty() {
@@ -4771,10 +4796,11 @@ fn build_sync_heat_image(
     total_rows: usize,
     data_rows: usize,
     cols: usize,
-    graph_w: f32,
-    graph_h: f32,
+    graph_size: [f32; 2],
+    orientation: GraphOrientation,
     clim_pct: Option<(f64, f64)>,
 ) -> Option<RgbaImage> {
+    let [graph_w, graph_h] = graph_size;
     if data_rows == 0 || cols == 0 || graph_w <= 0.0 || graph_h <= 0.0 {
         return None;
     }
@@ -4784,14 +4810,22 @@ fn build_sync_heat_image(
     let (lo, hi) = sync_heat_value_range(&matrix[..used], clim_pct)?;
     let mut image = RgbaImage::new(image_w, image_h);
     for py in 0..image_h as usize {
-        // Top-down row mapping: screen y=0 is data row 0 so streaming
-        // analysis modes (BeatIndex, PostKernelFingerprint while running)
-        // visually fill the heat map from the top down rather than
-        // growing upward from the bottom.
-        let row = ((py * total_rows) / image_h as usize).min(total_rows.saturating_sub(1));
         for px in 0..image_w as usize {
+            let (row, col) = match orientation {
+                // Screen y=0 is data row 0 so streamed rows fill downward.
+                GraphOrientation::Vertical => (
+                    ((py * total_rows) / image_h as usize).min(total_rows.saturating_sub(1)),
+                    (px * cols / image_w as usize).min(cols.saturating_sub(1)),
+                ),
+                // Transpose the row axis so streamed rows fill left-to-right;
+                // the fingerprint-time axis grows upward to match null-or-die.
+                GraphOrientation::Horizontal => (
+                    ((px * total_rows) / image_w as usize).min(total_rows.saturating_sub(1)),
+                    (((image_h as usize - 1 - py) * cols) / image_h as usize)
+                        .min(cols.saturating_sub(1)),
+                ),
+            };
             let rgba = if row < data_rows {
-                let col = (px * cols / image_w as usize).min(cols.saturating_sub(1));
                 let value = matrix[row * cols + col];
                 let color = sync_viridis(sync_heat_norm01(value, lo, hi));
                 Rgba([
@@ -4909,8 +4943,8 @@ fn refresh_sync_overlay_heat_texture(overlay: &mut NullOrDieOverlayData) {
         total_rows,
         data_rows,
         overlay.cols,
-        graph_w,
-        graph_h,
+        [graph_w, graph_h],
+        overlay.graph_orientation,
         clim_pct,
     ) else {
         return;
@@ -4932,6 +4966,7 @@ fn refresh_sync_overlay_curve_mesh(overlay: &mut NullOrDieOverlayData) {
         overlay.edge_discard,
         graph_w,
         graph_h,
+        overlay.graph_orientation,
         [1.0, 1.0, 1.0, 1.0],
     );
 }
@@ -5107,13 +5142,22 @@ fn build_null_or_die_overlay(
         z(SYNC_OVERLAY_Z + 5):
         horizalign(center)
     ));
-    actors.push(act!(quad:
-        align(0.0, 0.5):
-        xy(graph_x, graph_center_y):
-        zoomto(graph_w, 1.0):
-        diffuse(0.25, 0.25, 0.25, 1.0):
-        z(SYNC_OVERLAY_Z + 5)
-    ));
+    match overlay.graph_orientation {
+        GraphOrientation::Vertical => actors.push(act!(quad:
+            align(0.0, 0.5):
+            xy(graph_x, graph_center_y):
+            zoomto(graph_w, 1.0):
+            diffuse(0.25, 0.25, 0.25, 1.0):
+            z(SYNC_OVERLAY_Z + 5)
+        )),
+        GraphOrientation::Horizontal => actors.push(act!(quad:
+            align(0.5, 0.0):
+            xy(pane_cx, graph_y):
+            zoomto(1.0, graph_h):
+            diffuse(0.25, 0.25, 0.25, 1.0):
+            z(SYNC_OVERLAY_Z + 5)
+        )),
+    }
 
     if let Some(mesh) = overlay.curve_mesh.clone() {
         actors.push(Actor::Mesh {
@@ -5146,14 +5190,30 @@ fn build_null_or_die_overlay(
     }
 
     if let Some(bias_ms) = sync_marker_bias_ms(overlay) {
-        let marker_x = graph_x + sync_bias_to_graph_x(bias_ms, &overlay.times_ms, graph_w);
-        actors.push(act!(quad:
-            align(0.5, 0.5):
-            xy(marker_x, graph_center_y):
-            zoomto(2.0, graph_h):
-            diffuse(0.9, 0.1, 0.1, 1.0):
-            z(SYNC_OVERLAY_Z + 7)
-        ));
+        match overlay.graph_orientation {
+            GraphOrientation::Vertical => {
+                let marker_x =
+                    graph_x + sync_bias_axis_pos(bias_ms, &overlay.times_ms, graph_w, false);
+                actors.push(act!(quad:
+                    align(0.5, 0.5):
+                    xy(marker_x, graph_center_y):
+                    zoomto(2.0, graph_h):
+                    diffuse(0.9, 0.1, 0.1, 1.0):
+                    z(SYNC_OVERLAY_Z + 7)
+                ));
+            }
+            GraphOrientation::Horizontal => {
+                let marker_y =
+                    graph_y + sync_bias_axis_pos(bias_ms, &overlay.times_ms, graph_h, true);
+                actors.push(act!(quad:
+                    align(0.5, 0.5):
+                    xy(pane_cx, marker_y):
+                    zoomto(graph_w, 2.0):
+                    diffuse(0.9, 0.1, 0.1, 1.0):
+                    z(SYNC_OVERLAY_Z + 7)
+                ));
+            }
+        }
     }
 
     let status_lines = build_sync_status_lines(overlay);
@@ -7423,6 +7483,7 @@ fn show_sync_song_overlay(state: &mut State) {
     prepare_sync_overlay(state);
 
     let graph_mode = state.sync_graph_mode;
+    let graph_orientation = state.sync_graph_orientation;
     let confidence_threshold = f64::from(state.sync_confidence_percent) / 100.0;
 
     let simfile_path = song.simfile_path.clone();
@@ -7452,6 +7513,7 @@ fn show_sync_song_overlay(state: &mut State) {
         kernel_target: crate::SimplyLoveSyncKernelTarget::Digest,
         kernel_type: crate::SimplyLoveSyncKernel::Rising,
         graph_mode,
+        graph_orientation,
         confidence_threshold,
         cols: 0,
         freq_rows: 0,
@@ -12726,15 +12788,15 @@ fn handle_exit_prompt_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
 mod tests {
     use super::{
         PREVIEW_DELAY_SECONDS, ProfileBoxEffectOutcome, WheelSortMode, build_displayed_entries,
-        build_playlist_entries_from_text, build_playlist_song_lookup,
+        build_playlist_entries_from_text, build_playlist_song_lookup, build_sync_heat_image,
         delayed_selection_updates_blocked, first_song_entry_index, handle_confirm,
         handle_raw_key_event, init_placeholder, keymap_has_player_input,
         maybe_prewarm_replaygain_for_pack, maybe_refresh_select_music_leaderboard,
         prepend_pending_effect, profile_boxes, reset_preview_after_gameplay,
         route_profile_box_effect, select_music_lobby_lock_text, select_music_lobby_lock_text_for,
-        solo_runtime_side, steps_index_for_side, sync_low_confidence_warning,
+        solo_runtime_side, steps_index_for_side, sync_bias_axis_pos, sync_low_confidence_warning,
     };
-    use crate::config::SelectMusicWheelStyle;
+    use crate::config::{GraphOrientation, SelectMusicWheelStyle};
     use crate::screens::ThemeEffect;
     use deadsync_chart::{SongData, SongPack, SyncPref};
     use deadsync_core::input::InputSource;
@@ -13050,6 +13112,7 @@ mod tests {
             kernel_target: crate::SimplyLoveSyncKernelTarget::Digest,
             kernel_type: crate::SimplyLoveSyncKernel::Rising,
             graph_mode: crate::config::SyncGraphMode::PostKernelFingerprint,
+            graph_orientation: crate::config::GraphOrientation::Vertical,
             confidence_threshold: 0.8,
             cols,
             freq_rows: 0,
@@ -13376,6 +13439,7 @@ mod tests {
                 unlock_downloads_available: true,
                 ready_song_reload_dirs: vec![std::path::PathBuf::from("Songs/Unlocks")],
                 sync_graph_mode: crate::config::SyncGraphMode::Frequency,
+                sync_graph_orientation: crate::config::GraphOrientation::Horizontal,
                 sync_confidence_percent: 75,
             },
         );
@@ -13387,6 +13451,10 @@ mod tests {
         assert_eq!(
             state.sync_graph_mode,
             crate::config::SyncGraphMode::Frequency
+        );
+        assert_eq!(
+            state.sync_graph_orientation,
+            crate::config::GraphOrientation::Horizontal
         );
         assert_eq!(state.sync_confidence_percent, 75);
         assert!(state.policy.media.show_previews);
@@ -14370,6 +14438,44 @@ mod tests {
         });
 
         assert_eq!(heat_alpha, Some(super::SYNC_HEAT_ALPHA));
+    }
+
+    #[test]
+    fn horizontal_sync_heat_transposes_graph_axes() {
+        let matrix = [0.0, 1.0, 2.0, 3.0];
+        let vertical = build_sync_heat_image(
+            &matrix,
+            2,
+            2,
+            2,
+            [2.0, 2.0],
+            GraphOrientation::Vertical,
+            None,
+        )
+        .unwrap();
+        let horizontal = build_sync_heat_image(
+            &matrix,
+            2,
+            2,
+            2,
+            [2.0, 2.0],
+            GraphOrientation::Horizontal,
+            None,
+        )
+        .unwrap();
+
+        assert_eq!(horizontal.get_pixel(0, 0), vertical.get_pixel(1, 0));
+        assert_eq!(horizontal.get_pixel(1, 0), vertical.get_pixel(1, 1));
+        assert_eq!(horizontal.get_pixel(0, 1), vertical.get_pixel(0, 0));
+        assert_eq!(horizontal.get_pixel(1, 1), vertical.get_pixel(0, 1));
+    }
+
+    #[test]
+    fn horizontal_sync_bias_axis_runs_bottom_to_top() {
+        let times = [-10.0, 10.0];
+        assert_eq!(sync_bias_axis_pos(-10.0, &times, 101.0, true), 100.0);
+        assert_eq!(sync_bias_axis_pos(0.0, &times, 101.0, true), 50.0);
+        assert_eq!(sync_bias_axis_pos(10.0, &times, 101.0, true), 0.0);
     }
 
     #[test]

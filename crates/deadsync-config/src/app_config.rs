@@ -19,7 +19,7 @@ use deadsync_audio::{AudioOutputMode, LinuxAudioBackend};
 use deadsync_input_native::WindowsPadBackend;
 use deadsync_lights::{DriverKind as LightsDriverKind, GameplayPadLightMode, SerialPortName};
 use deadsync_smx::SmxPadPreset;
-use null_or_die::{BiasKernel, KernelTarget};
+use null_or_die::{BiasKernel, GraphOrientation, KernelTarget};
 use winit::keyboard::KeyCode;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -239,6 +239,8 @@ pub struct Config {
     pub default_fail_type: DefaultFailType,
     /// Choose which null-or-die sync graph the Select Music overlay displays.
     pub null_or_die_sync_graph: SyncGraphMode,
+    /// Choose which axis the null-or-die graph rows occupy.
+    pub null_or_die_graph_orientation: GraphOrientation,
     /// Minimum confidence percent required for pack sync saves.
     pub null_or_die_confidence_percent: u8,
     /// Worker threads for null-or-die pack/all sync analysis.
@@ -453,6 +455,7 @@ impl Default for Config {
             gameplay_bpm_position: theme.gameplay_bpm_position,
             default_fail_type: system.default_fail_type,
             null_or_die_sync_graph: null_or_die.sync_graph,
+            null_or_die_graph_orientation: null_or_die.graph_orientation,
             null_or_die_confidence_percent: null_or_die.confidence_percent,
             null_or_die_pack_sync_threads: null_or_die.pack_sync_threads,
             null_or_die_fingerprint_ms: null_or_die.fingerprint_ms,

@@ -175,6 +175,7 @@ pub enum SubRowId {
     SyncPacks,
     // Null-or-Die Settings
     SyncGraph,
+    GraphOrientation,
     SyncConfidence,
     PackSyncThreads,
     Fingerprint,

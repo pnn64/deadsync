@@ -624,6 +624,13 @@ pub(super) fn apply_submenu_choice_delta(
                     _ => crate::SimplyLoveNullOrDieGraph::PostKernelFingerprint,
                 })
             }
+            SubRowId::GraphOrientation => {
+                crate::SimplyLoveNullOrDieConfigRequest::GraphOrientation(if new_index == 1 {
+                    crate::SimplyLoveGraphOrientation::Horizontal
+                } else {
+                    crate::SimplyLoveGraphOrientation::Vertical
+                })
+            }
             SubRowId::SyncConfidence => crate::SimplyLoveNullOrDieConfigRequest::ConfidencePercent(
                 sync_confidence_from_choice(new_index),
             ),

@@ -10,12 +10,13 @@ use crate::ini::SimpleIni;
 use crate::numbers::parse_auto_threads_u8;
 use crate::theme::SyncGraphMode;
 use crate::writer::{push_bool, push_line};
-use null_or_die::{BiasCfg, BiasKernel, KernelTarget};
+use null_or_die::{BiasCfg, BiasKernel, GraphOrientation, KernelTarget};
 use std::str::FromStr;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct NullOrDieOptions {
     pub sync_graph: SyncGraphMode,
+    pub graph_orientation: GraphOrientation,
     pub confidence_percent: u8,
     pub pack_sync_threads: u8,
     pub fingerprint_ms: f64,
@@ -31,6 +32,7 @@ impl Default for NullOrDieOptions {
     fn default() -> Self {
         Self {
             sync_graph: SyncGraphMode::PostKernelFingerprint,
+            graph_orientation: GraphOrientation::Vertical,
             confidence_percent: DEFAULT_NULL_OR_DIE_CONFIDENCE_PERCENT,
             pack_sync_threads: DEFAULT_NULL_OR_DIE_PACK_SYNC_THREADS,
             fingerprint_ms: DEFAULT_NULL_OR_DIE_FINGERPRINT_MS,
@@ -50,6 +52,10 @@ pub fn load_null_or_die_options(conf: &SimpleIni, default: NullOrDieOptions) -> 
             .get("Options", "NullOrDieSyncGraph")
             .and_then(|value| SyncGraphMode::from_str(&value).ok())
             .unwrap_or(default.sync_graph),
+        graph_orientation: conf
+            .get("Options", "NullOrDieGraphOrientation")
+            .and_then(|value| parse_null_or_die_graph_orientation(&value))
+            .unwrap_or(default.graph_orientation),
         confidence_percent: conf
             .get("Options", "NullOrDieConfidencePercent")
             .and_then(|value| value.parse::<u8>().ok())
@@ -132,6 +138,30 @@ pub fn clamp_null_or_die_magic_offset_ms(value: f64) -> f64 {
 }
 
 #[inline(always)]
+pub const fn null_or_die_graph_orientation_str(orientation: GraphOrientation) -> &'static str {
+    match orientation {
+        GraphOrientation::Vertical => "Vertical",
+        GraphOrientation::Horizontal => "Horizontal",
+    }
+}
+
+pub fn parse_null_or_die_graph_orientation(raw: &str) -> Option<GraphOrientation> {
+    match raw.trim().to_ascii_lowercase().as_str() {
+        "vertical" => Some(GraphOrientation::Vertical),
+        "horizontal" => Some(GraphOrientation::Horizontal),
+        _ => None,
+    }
+}
+
+#[inline(always)]
+pub const fn null_or_die_graph_orientation_choice_index(orientation: GraphOrientation) -> usize {
+    match orientation {
+        GraphOrientation::Vertical => 0,
+        GraphOrientation::Horizontal => 1,
+    }
+}
+
+#[inline(always)]
 pub const fn null_or_die_kernel_target_str(target: KernelTarget) -> &'static str {
     match target {
         KernelTarget::Digest => "Digest",
@@ -211,6 +241,11 @@ pub fn push_null_or_die_option_lines(content: &mut String, options: NullOrDieOpt
     push_line(content, "NullOrDieSyncGraph", options.sync_graph.as_str());
     push_line(
         content,
+        "NullOrDieGraphOrientation",
+        null_or_die_graph_orientation_str(options.graph_orientation),
+    );
+    push_line(
+        content,
         "NullOrDieConfidencePercent",
         clamp_null_or_die_confidence_percent(options.confidence_percent),
     );
@@ -273,6 +308,7 @@ pub fn null_or_die_bias_cfg(options: NullOrDieOptions) -> BiasCfg {
 pub fn null_or_die_options_from_config(cfg: Config) -> NullOrDieOptions {
     NullOrDieOptions {
         sync_graph: cfg.null_or_die_sync_graph,
+        graph_orientation: cfg.null_or_die_graph_orientation,
         confidence_percent: cfg.null_or_die_confidence_percent,
         pack_sync_threads: cfg.null_or_die_pack_sync_threads,
         fingerprint_ms: cfg.null_or_die_fingerprint_ms,
@@ -292,6 +328,7 @@ mod tests {
     fn default_options() -> NullOrDieOptions {
         NullOrDieOptions {
             sync_graph: SyncGraphMode::Frequency,
+            graph_orientation: GraphOrientation::Vertical,
             confidence_percent: 80,
             pack_sync_threads: 0,
             fingerprint_ms: 12.0,
@@ -334,6 +371,19 @@ mod tests {
     #[test]
     fn kernel_choices_match_options_order() {
         assert_eq!(
+            null_or_die_graph_orientation_choice_index(GraphOrientation::Vertical),
+            0
+        );
+        assert_eq!(
+            null_or_die_graph_orientation_choice_index(GraphOrientation::Horizontal),
+            1
+        );
+        assert_eq!(
+            parse_null_or_die_graph_orientation(" HORIZONTAL "),
+            Some(GraphOrientation::Horizontal)
+        );
+
+        assert_eq!(
             null_or_die_kernel_target_choice_index(KernelTarget::Digest),
             0
         );
@@ -368,6 +418,7 @@ mod tests {
             r#"
             [Options]
             NullOrDieSyncGraph=PostKernel
+            NullOrDieGraphOrientation=Horizontal
             NullOrDieConfidencePercent=200
             PackSyncThreads=4
             NullOrDieFingerprintMs=10.05
@@ -383,6 +434,7 @@ mod tests {
         let loaded = load_null_or_die_options(&conf, default_options());
 
         assert_eq!(loaded.sync_graph, SyncGraphMode::PostKernelFingerprint);
+        assert_eq!(loaded.graph_orientation, GraphOrientation::Horizontal);
         assert_eq!(loaded.confidence_percent, 100);
         assert_eq!(loaded.pack_sync_threads, 4);
         assert_tenths_eq(loaded.fingerprint_ms, 101);
@@ -402,6 +454,7 @@ mod tests {
             r#"
             [Options]
             NullOrDieSyncGraph=bad
+            NullOrDieGraphOrientation=bad
             NullOrDieConfidencePercent=bad
             PackSyncThreads=bad
             NullOrDieFingerprintMs=bad
@@ -425,6 +478,7 @@ mod tests {
             &mut content,
             NullOrDieOptions {
                 sync_graph: SyncGraphMode::PostKernelFingerprint,
+                graph_orientation: GraphOrientation::Horizontal,
                 confidence_percent: 250,
                 pack_sync_threads: 4,
                 fingerprint_ms: 10.05,
@@ -440,6 +494,7 @@ mod tests {
         assert_eq!(
             content,
             "NullOrDieSyncGraph=PostKernelFingerprint\n\
+NullOrDieGraphOrientation=Horizontal\n\
 NullOrDieConfidencePercent=100\n\
 PackSyncThreads=4\n\
 NullOrDieFingerprintMs=10.1\n\
@@ -456,6 +511,7 @@ NullOrDieFullSpectrogram=1\n"
     fn bias_cfg_clamps_runtime_values() {
         let cfg = null_or_die_bias_cfg(NullOrDieOptions {
             sync_graph: SyncGraphMode::Frequency,
+            graph_orientation: GraphOrientation::Horizontal,
             confidence_percent: 80,
             pack_sync_threads: 0,
             fingerprint_ms: 0.0,

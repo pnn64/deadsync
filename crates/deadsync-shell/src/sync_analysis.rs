@@ -9,7 +9,7 @@ use deadsync_theme_simply_love::{
 };
 use null_or_die::{
     BiasCfg, BiasEstimateWithPlot, BiasKernel, BiasRuntime, BiasStreamCfg, BiasStreamEvent,
-    GraphOrientation, KernelTarget, estimate_bias_with_beat_fn_stream_reuse,
+    KernelTarget, estimate_bias_with_beat_fn_stream_reuse,
 };
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -122,7 +122,7 @@ fn run_song(
     let cfg = config::null_or_die_bias_cfg();
     let stream_cfg = BiasStreamCfg {
         emit_freq_delta,
-        orientation: GraphOrientation::Horizontal,
+        orientation: config::get().null_or_die_graph_orientation,
     };
     let kernel = cfg.kernel_type;
     let result = analyze_song_chart_stream(
@@ -217,7 +217,7 @@ fn run_pack(
     let cfg = Arc::new(config::null_or_die_bias_cfg());
     let stream_cfg = BiasStreamCfg {
         emit_freq_delta: false,
-        orientation: GraphOrientation::Horizontal,
+        orientation: config::get().null_or_die_graph_orientation,
     };
     let (job_tx, job_rx) = mpsc::channel::<(usize, SimplyLoveSyncTarget)>();
     let job_rx = Arc::new(Mutex::new(job_rx));

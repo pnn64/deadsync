@@ -18,7 +18,7 @@ use deadsync_audio::LinuxAudioBackend;
 use deadsync_input_native::WindowsPadBackend;
 use deadsync_lights::{DriverKind as LightsDriverKind, GameplayPadLightMode};
 use log::warn;
-use null_or_die::{BiasKernel, KernelTarget};
+use null_or_die::{BiasKernel, GraphOrientation, KernelTarget};
 
 macro_rules! update_config_fn {
     ($(#[$meta:meta])* $vis:vis fn $name:ident($arg:ident: $ty:ty) => $setter:ident) => {
@@ -198,6 +198,7 @@ update_config_fn!(pub fn update_gameplay_bpm_position(position: GameplayBpmPosit
 update_config_fn!(pub fn update_default_fail_type(fail_type: DefaultFailType) => set_default_fail_type);
 
 update_config_fn!(pub fn update_null_or_die_sync_graph(mode: SyncGraphMode) => set_null_or_die_sync_graph);
+update_config_fn!(pub fn update_null_or_die_graph_orientation(orientation: GraphOrientation) => set_null_or_die_graph_orientation);
 update_config_fn!(pub fn update_null_or_die_confidence_percent(value: u8) => set_null_or_die_confidence_percent);
 update_config_fn!(pub fn update_null_or_die_pack_sync_threads(threads: u8) => set_null_or_die_pack_sync_threads);
 update_config_fn!(pub fn update_null_or_die_fingerprint_ms(value: f64) => set_null_or_die_fingerprint_ms);

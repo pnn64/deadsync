@@ -492,10 +492,17 @@ pub enum SimplyLoveNullOrDieGraph {
     PostKernelFingerprint,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SimplyLoveGraphOrientation {
+    Vertical,
+    Horizontal,
+}
+
 /// Null-or-Die preferences chosen by Simply Love and persisted by shell.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SimplyLoveNullOrDieConfigRequest {
     SyncGraph(SimplyLoveNullOrDieGraph),
+    GraphOrientation(SimplyLoveGraphOrientation),
     ConfidencePercent(u8),
     PackSyncThreads(u8),
     FingerprintTenths(i32),

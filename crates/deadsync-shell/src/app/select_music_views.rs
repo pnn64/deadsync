@@ -48,6 +48,7 @@ impl App {
         let arrow_bounce_offset = -10.0 * config.global_offset_seconds;
         let policy = crate::select_music::policy_view(config);
         let sync_graph_mode = config.null_or_die_sync_graph;
+        let sync_graph_orientation = config.null_or_die_graph_orientation;
         let sync_confidence_percent = config.null_or_die_confidence_percent;
         let scorebox_enabled = config.show_select_music_scorebox
             && (config.select_music_scorebox_cycle_itg
@@ -153,6 +154,7 @@ impl App {
                 unlock_downloads_available: deadsync_online::runtime::unlock_downloads_available(),
                 ready_song_reload_dirs: deadsync_online::runtime::take_ready_song_reload_request(),
                 sync_graph_mode,
+                sync_graph_orientation,
                 sync_confidence_percent,
             },
         );

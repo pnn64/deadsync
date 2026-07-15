@@ -27,6 +27,15 @@ pub(in crate::screens::options) const NULL_OR_DIE_OPTIONS_ROWS: &[SubRow] = &[
         inline: false,
     },
     SubRow {
+        id: SubRowId::GraphOrientation,
+        label: lookup_key("OptionsNullOrDie", "GraphOrientation"),
+        choices: &[
+            localized_choice("OptionsNullOrDie", "GraphOrientationVertical"),
+            localized_choice("OptionsNullOrDie", "GraphOrientationHorizontal"),
+        ],
+        inline: false,
+    },
+    SubRow {
         id: SubRowId::SyncConfidence,
         label: lookup_key("OptionsNullOrDie", "SyncConfidence"),
         choices: &[
@@ -147,6 +156,14 @@ pub(in crate::screens::options) const NULL_OR_DIE_OPTIONS_ITEMS: &[Item] = &[
         help: &[HelpEntry::Paragraph(lookup_key(
             "OptionsNullOrDieHelp",
             "SyncGraphHelp",
+        ))],
+    },
+    Item {
+        id: ItemId::NodGraphOrientation,
+        name: lookup_key("OptionsNullOrDie", "GraphOrientation"),
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsNullOrDieHelp",
+            "GraphOrientationHelp",
         ))],
     },
     Item {

@@ -1,11 +1,11 @@
 use deadsync_config::prelude as config;
 use deadsync_theme_simply_love::{
     SimplyLoveAdvancedConfigRequest, SimplyLoveCourseConfigRequest,
-    SimplyLoveGameplayConfigRequest, SimplyLoveGameplayPadLights, SimplyLoveLightsConfigRequest,
-    SimplyLoveLightsDriver, SimplyLoveMachineConfigRequest, SimplyLoveNullOrDieConfigRequest,
-    SimplyLoveNullOrDieGraph, SimplyLoveOnlineConfigRequest, SimplyLoveQrLoginPolicy,
-    SimplyLoveSelectMusicConfigRequest, SimplyLoveSrpgShopFolder, SimplyLoveSyncKernel,
-    SimplyLoveSyncKernelTarget,
+    SimplyLoveGameplayConfigRequest, SimplyLoveGameplayPadLights, SimplyLoveGraphOrientation,
+    SimplyLoveLightsConfigRequest, SimplyLoveLightsDriver, SimplyLoveMachineConfigRequest,
+    SimplyLoveNullOrDieConfigRequest, SimplyLoveNullOrDieGraph, SimplyLoveOnlineConfigRequest,
+    SimplyLoveQrLoginPolicy, SimplyLoveSelectMusicConfigRequest, SimplyLoveSrpgShopFolder,
+    SimplyLoveSyncKernel, SimplyLoveSyncKernelTarget,
 };
 use null_or_die::{BiasKernel, KernelTarget};
 
@@ -141,6 +141,12 @@ pub(super) fn execute_null_or_die(request: SimplyLoveNullOrDieConfigRequest) {
                 config::SyncGraphMode::PostKernelFingerprint
             }
         }),
+        Request::GraphOrientation(orientation) => {
+            config::update_null_or_die_graph_orientation(match orientation {
+                SimplyLoveGraphOrientation::Vertical => config::GraphOrientation::Vertical,
+                SimplyLoveGraphOrientation::Horizontal => config::GraphOrientation::Horizontal,
+            })
+        }
         Request::ConfidencePercent(percent) => {
             config::update_null_or_die_confidence_percent(percent)
         }

@@ -32,10 +32,12 @@ pub use crate::machine::{
 };
 pub use crate::null_or_die::{
     clamp_null_or_die_confidence_percent, clamp_null_or_die_magic_offset_ms,
-    clamp_null_or_die_positive_ms, null_or_die_kernel_target_choice_index,
+    clamp_null_or_die_positive_ms, null_or_die_graph_orientation_choice_index,
+    null_or_die_graph_orientation_str, null_or_die_kernel_target_choice_index,
     null_or_die_kernel_target_from_choice, null_or_die_kernel_target_str,
     null_or_die_kernel_type_choice_index, null_or_die_kernel_type_from_choice,
-    null_or_die_kernel_type_str, parse_null_or_die_kernel_target, parse_null_or_die_kernel_type,
+    null_or_die_kernel_type_str, parse_null_or_die_graph_orientation,
+    parse_null_or_die_kernel_target, parse_null_or_die_kernel_type,
 };
 pub use crate::options::{
     MAX_FPS_DEFAULT, MAX_FPS_HOLD_FAST_AFTER, MAX_FPS_HOLD_FASTER_AFTER,
@@ -98,3 +100,4 @@ pub use crate::theme::{
     VersionOverlaySide, VisualStyle, auto_screenshot_bit, auto_screenshot_eval_matches,
     auto_screenshot_mask_from_str, auto_screenshot_mask_to_str,
 };
+pub use null_or_die::GraphOrientation;

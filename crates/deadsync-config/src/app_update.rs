@@ -21,7 +21,7 @@ use deadsync_input::clamp_input_debounce_seconds;
 use deadsync_input_native::WindowsPadBackend;
 use deadsync_lights::{DriverKind as LightsDriverKind, GameplayPadLightMode};
 use deadsync_smx::SmxPadPreset;
-use null_or_die::{BiasKernel, KernelTarget};
+use null_or_die::{BiasKernel, GraphOrientation, KernelTarget};
 
 pub fn set_display_mode(cfg: &mut Config, mode: DisplayMode) -> bool {
     match mode {
@@ -632,6 +632,10 @@ pub fn set_show_bpm_decimal(cfg: &mut Config, enabled: bool) -> bool {
 
 pub fn set_null_or_die_sync_graph(cfg: &mut Config, mode: SyncGraphMode) -> bool {
     set_if_changed(&mut cfg.null_or_die_sync_graph, mode)
+}
+
+pub fn set_null_or_die_graph_orientation(cfg: &mut Config, orientation: GraphOrientation) -> bool {
+    set_if_changed(&mut cfg.null_or_die_graph_orientation, orientation)
 }
 
 pub fn set_null_or_die_confidence_percent(cfg: &mut Config, value: u8) -> bool {
