@@ -746,7 +746,8 @@ pub(in crate::screens::options) fn max_fps_seed_value(state: &State, max_fps: u1
         60_000
     };
 
-    clamped_max_fps(((refresh_mhz + 500) / 1000) as u16)
+    let recommended = ((refresh_mhz + 500) / 1000).saturating_mul(3);
+    clamped_max_fps(recommended.min(u32::from(u16::MAX)) as u16)
 }
 
 pub(in crate::screens::options) fn seed_max_fps_value_choice(state: &mut State, max_fps: u16) {

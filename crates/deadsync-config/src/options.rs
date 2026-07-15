@@ -59,7 +59,7 @@ pub const SELECT_MUSIC_CHART_INFO_NUM_CHOICES: usize = 3;
 pub const MUSIC_WHEEL_SCROLL_SPEED_VALUES: [u8; 7] = [5, 10, 15, 25, 30, 45, 100];
 pub const SHOW_STATS_MODE_MAX: u8 = 3;
 pub const MAX_FPS_MIN: u16 = 5;
-pub const MAX_FPS_MAX: u16 = 1000;
+pub const MAX_FPS_MAX: u16 = 2_500;
 pub const MAX_FPS_STEP: u16 = 1;
 pub const MAX_FPS_DEFAULT: u16 = 60;
 pub const MAX_FPS_HOLD_FAST_AFTER: Duration = Duration::from_millis(700);
@@ -3362,6 +3362,7 @@ mod tests {
     #[test]
     fn max_fps_choices_are_single_fps_steps() {
         let choices = build_max_fps_choices();
+        assert_eq!(MAX_FPS_MAX, 2_500);
         assert_eq!(choices.first().copied(), Some(MAX_FPS_MIN));
         assert_eq!(choices.get(1).copied(), Some(MAX_FPS_MIN + MAX_FPS_STEP));
         assert_eq!(choices.last().copied(), Some(MAX_FPS_MAX));

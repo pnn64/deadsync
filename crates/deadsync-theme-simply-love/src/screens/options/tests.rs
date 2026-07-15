@@ -649,6 +649,28 @@ fn max_fps_choices_are_single_fps_steps() {
 }
 
 #[test]
+fn max_fps_seed_uses_triple_monitor_refresh() {
+    let mut state = init();
+    state.refresh_rate_choices = vec![60_000, 144_000];
+
+    set_choice_by_id(
+        &mut state.sub[SubmenuKind::Graphics].choice_indices,
+        GRAPHICS_OPTIONS_ROWS,
+        SubRowId::RefreshRate,
+        0,
+    );
+    assert_eq!(max_fps_seed_value(&state, 0), 180);
+
+    set_choice_by_id(
+        &mut state.sub[SubmenuKind::Graphics].choice_indices,
+        GRAPHICS_OPTIONS_ROWS,
+        SubRowId::RefreshRate,
+        1,
+    );
+    assert_eq!(max_fps_seed_value(&state, 0), 432);
+}
+
+#[test]
 fn max_fps_hold_delta_accelerates() {
     assert_eq!(max_fps_hold_delta(1, Duration::from_millis(300)), 5);
     assert_eq!(max_fps_hold_delta(1, Duration::from_millis(700)), 10);
