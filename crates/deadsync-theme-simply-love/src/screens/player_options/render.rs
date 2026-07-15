@@ -879,8 +879,48 @@ pub(super) fn draw_single_value_with_preview(actors: &mut Vec<Actor>, rc: &RowCt
             draw_noteskin_family_preview(actors, rc, primary_player_idx)
         }
         RowId::ComboFont => draw_combo_preview(actors, rc, primary_player_idx),
+        RowId::HeartRateMonitor => draw_heart_rate_preview(actors, rc, primary_player_idx),
         _ => {}
     }
+}
+
+fn draw_heart_rate_preview(actors: &mut Vec<Actor>, rc: &RowCtx, primary_player_idx: usize) {
+    draw_player_heart_rate_preview(actors, rc, primary_player_idx);
+    if rc.fc.show_p2 && primary_player_idx != P2 {
+        draw_player_heart_rate_preview(actors, rc, P2);
+    }
+}
+
+fn draw_player_heart_rate_preview(actors: &mut Vec<Actor>, rc: &RowCtx, player_idx: usize) {
+    if rc.fc.state.player_profiles[player_idx]
+        .heart_rate_device_id
+        .is_none()
+    {
+        return;
+    }
+    let reading = rc.fc.state.heart_rate_readings[player_idx];
+    let mut rgba = color::decorative_rgba(player_color_index(rc.fc.state, player_idx));
+    rgba[3] = if reading.connected { rc.a } else { rc.a * 0.45 };
+    let bpm = reading.bpm.unwrap_or(0);
+    let pulse = crate::screens::components::gameplay::gameplay_stats::heart_pulse_scale(
+        rc.fc.state.preview_time,
+        bpm,
+    );
+    let center_x = rc.fc.preview_x[player_idx];
+    let heart_size = 26.0 * pulse;
+    actors.push(act!(sprite("heart.png"):
+        align(0.5, 0.5): xy(center_x - 10.0, rc.current_row_y):
+        zoomto(heart_size, heart_size):
+        diffuse(rgba[0], rgba[1], rgba[2], rgba[3]):
+        z(Z_ROW_FOREGROUND + 1)
+    ));
+    let text = crate::screens::components::gameplay::gameplay_stats::heart_rate_text(reading.bpm);
+    actors.push(act!(text:
+        font("miso"): settext(text): align(0.0, 0.5): horizalign(left):
+        xy(center_x + 9.0, rc.current_row_y): zoom(1.0):
+        diffuse(rgba[0], rgba[1], rgba[2], rgba[3]):
+        z(Z_ROW_FOREGROUND + 1)
+    ));
 }
 
 fn draw_value_text(actors: &mut Vec<Actor>, rc: &RowCtx, primary_player_idx: usize) {

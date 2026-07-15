@@ -86,12 +86,20 @@ pub struct HeartRateDeviceView {
     pub label: String,
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct HeartRateReadingView {
+    pub configured: bool,
+    pub connected: bool,
+    pub bpm: Option<u16>,
+}
+
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct HeartRateDevicesView {
     pub supported: bool,
     pub scanning: bool,
     pub devices: Vec<HeartRateDeviceView>,
     pub error: Option<String>,
+    pub readings: [HeartRateReadingView; PLAYER_SLOTS],
 }
 
 const CHANGE_VALUE_SFX: &str = "assets/sounds/change_value.ogg";
@@ -358,6 +366,7 @@ pub fn init(
         allow_per_player_global_offsets,
         player_profiles,
         heart_rate_choice_ids,
+        heart_rate_readings: heart_rate_devices.readings,
         noteskin,
         preview_time: 0.0,
         preview_beat: 0.0,
@@ -383,11 +392,7 @@ fn heart_rate_choices(
         if ids.iter().flatten().any(|id| id == &device.id) {
             continue;
         }
-        choices.push(if device.label == device.id {
-            device.label.clone()
-        } else {
-            format!("{} ({})", device.label, device.id)
-        });
+        choices.push(device.label.clone());
         ids.push(Some(device.id.clone()));
     }
     for profile in profiles {
@@ -397,7 +402,7 @@ fn heart_rate_choices(
         if ids.iter().flatten().any(|known| known == id) {
             continue;
         }
-        choices.push(format!("Saved: {id}"));
+        choices.push("Saved HRM".to_owned());
         ids.push(Some(id.clone()));
     }
     (choices, ids)
@@ -425,6 +430,7 @@ pub fn set_heart_rate_devices(state: &mut State, devices: &HeartRateDevicesView)
     if !crate::config::get().machine_enable_heart_rate_monitors {
         return;
     }
+    state.heart_rate_readings = devices.readings;
     let (choices, ids) = heart_rate_choices(devices, &state.player_profiles);
     let Some(row) = state.panes[OptionsPane::Main.index()]
         .row_map

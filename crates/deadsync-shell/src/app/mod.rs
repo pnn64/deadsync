@@ -2063,7 +2063,9 @@ impl App {
         self.poll_score_import();
         self.poll_sync_analysis();
         self.sync_active_online_runtime_view();
-        crate::heart_rate::sync_runtime();
+        crate::heart_rate::sync_runtime(
+            self.state.screens.current_screen == CurrentScreen::PlayerOptions,
+        );
 
         let mut upload_us: u32 = 0;
         let mut draw_us: u32 = 0;

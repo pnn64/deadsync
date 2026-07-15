@@ -1,7 +1,7 @@
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex, OnceLock, RwLock};
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use btleplug::api::{
     Central, CharPropFlags, Manager as _, Peripheral as _, ScanFilter, bleuuid::uuid_from_u16,
@@ -17,10 +17,12 @@ const HEART_RATE_SERVICE_UUID: u16 = 0x180d;
 const HEART_RATE_MEASUREMENT_UUID: u16 = 0x2a37;
 const SCAN_POLL_INTERVAL: Duration = Duration::from_millis(250);
 const RETRY_INTERVAL: Duration = Duration::from_secs(2);
+const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 struct Desired {
     enabled: bool,
+    discover: bool,
     device_ids: [Option<String>; 2],
 }
 
@@ -51,13 +53,14 @@ struct Runtime {
 
 static RUNTIME: OnceLock<Runtime> = OnceLock::new();
 
-pub fn configure(enabled: bool, device_ids: [Option<&str>; 2]) {
+pub fn configure(enabled: bool, discover: bool, device_ids: [Option<&str>; 2]) {
     if !enabled && RUNTIME.get().is_none() {
         return;
     }
     let runtime = RUNTIME.get_or_init(start_worker);
     let mut desired = runtime.desired.lock().unwrap_or_else(|e| e.into_inner());
     if desired.enabled == enabled
+        && desired.discover == discover
         && desired
             .device_ids
             .iter()
@@ -70,6 +73,7 @@ pub fn configure(enabled: bool, device_ids: [Option<&str>; 2]) {
         std::array::from_fn(|player| desired.device_ids[player].as_deref() != device_ids[player]);
     let next = Desired {
         enabled,
+        discover,
         device_ids: device_ids.map(|id| id.map(str::to_owned)),
     };
     *desired = next.clone();
@@ -176,40 +180,108 @@ async fn run_enabled(
     let scan_filter = ScanFilter {
         services: vec![uuid_from_u16(HEART_RATE_SERVICE_UUID)],
     };
-    for adapter in &adapters {
-        adapter
-            .start_scan(scan_filter.clone())
-            .await
-            .map_err(|e| e.to_string())?;
-    }
-    set_scanning(shared, true);
 
     let (event_tx, mut event_rx) = mpsc::unbounded_channel();
     let mut monitors: HashMap<String, JoinHandle<()>> = HashMap::new();
     let mut devices: HashMap<String, (String, Peripheral)> = HashMap::new();
+    let mut connecting = HashSet::new();
+    let mut last_attempt: HashMap<String, Instant> = HashMap::new();
+    let mut scanning = false;
 
     loop {
         let current = desired.lock().unwrap_or_else(|e| e.into_inner()).clone();
         if !current.enabled {
             stop_scans(&adapters).await;
+            let stopped: Vec<String> = monitors.keys().cloned().collect();
             monitors.into_values().for_each(|task| task.abort());
+            disconnect_devices(&stopped, &devices).await;
             set_disabled(shared);
             return Ok(());
         }
 
-        discover_devices(&adapters, &mut devices).await?;
-        publish_devices(shared, &devices);
-        reconcile_monitors(&current, &devices, &event_tx, &mut monitors);
+        let stopped = prune_monitors(&current, &mut monitors, &mut connecting, &mut last_attempt);
+        disconnect_devices(&stopped, &devices).await;
         while let Ok(event) = event_rx.try_recv() {
-            apply_monitor_event(shared, &current, event);
+            let id = apply_monitor_event(shared, &current, event);
+            connecting.remove(&id);
+        }
+
+        let selected: HashSet<&str> = current
+            .device_ids
+            .iter()
+            .flatten()
+            .map(String::as_str)
+            .collect();
+        let missing_device = selected.iter().any(|id| !devices.contains_key(*id));
+        let should_scan = scan_needed(
+            !connecting.is_empty(),
+            current.discover,
+            !monitors.is_empty(),
+            missing_device,
+        );
+        if should_scan && !scanning {
+            start_scans(&adapters, &scan_filter).await?;
+            scanning = true;
+            set_scanning(shared, true);
+        } else if !should_scan && scanning {
+            stop_scans(&adapters).await;
+            scanning = false;
+            set_scanning(shared, false);
+        }
+        if scanning {
+            discover_devices(&adapters, &mut devices).await?;
+            publish_devices(shared, &devices);
+        }
+
+        let ready = ready_monitors(&current, &devices, &monitors, &last_attempt);
+        if !ready.is_empty() {
+            // Match the standalone reader: Windows BLE connection setup is
+            // unreliable while discovery is still active.
+            if scanning {
+                stop_scans(&adapters).await;
+                scanning = false;
+                set_scanning(shared, false);
+            }
+            spawn_monitors(
+                ready,
+                &current,
+                shared,
+                &event_tx,
+                &mut monitors,
+                &mut connecting,
+                &mut last_attempt,
+            );
         }
         tokio::time::sleep(SCAN_POLL_INTERVAL).await;
     }
 }
 
+async fn start_scans(adapters: &[Adapter], filter: &ScanFilter) -> Result<(), String> {
+    for adapter in adapters {
+        adapter
+            .start_scan(filter.clone())
+            .await
+            .map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+fn scan_needed(connecting: bool, discover: bool, has_monitor: bool, missing_device: bool) -> bool {
+    !connecting && (missing_device || (discover && !has_monitor))
+}
+
 async fn stop_scans(adapters: &[Adapter]) {
     for adapter in adapters {
         let _ = adapter.stop_scan().await;
+    }
+}
+
+async fn disconnect_devices(ids: &[String], devices: &HashMap<String, (String, Peripheral)>) {
+    for id in ids {
+        let Some((_, peripheral)) = devices.get(id) else {
+            continue;
+        };
+        let _ = tokio::time::timeout(CONNECT_TIMEOUT, peripheral.disconnect()).await;
     }
 }
 
@@ -227,7 +299,10 @@ async fn discover_devices(
                 continue;
             }
             let id = peripheral.id().to_string();
-            let label = properties.local_name.unwrap_or_else(|| id.clone());
+            let label = properties
+                .local_name
+                .filter(|name| !name.trim().is_empty())
+                .unwrap_or_else(|| "Heart Rate Monitor".to_owned());
             devices.insert(id, (label, peripheral));
         }
     }
@@ -245,43 +320,83 @@ fn publish_devices(shared: &Arc<RwLock<Shared>>, devices: &HashMap<String, (Stri
     snapshot.sort_unstable_by(|a, b| a.label.cmp(&b.label).then_with(|| a.id.cmp(&b.id)));
     let mut shared = shared.write().unwrap_or_else(|e| e.into_inner());
     shared.discovery.devices = snapshot;
-    shared.discovery.scanning = true;
     shared.discovery.error = None;
 }
 
-fn reconcile_monitors(
+fn prune_monitors(
     desired: &Desired,
-    devices: &HashMap<String, (String, Peripheral)>,
-    event_tx: &mpsc::UnboundedSender<MonitorEvent>,
     monitors: &mut HashMap<String, JoinHandle<()>>,
-) {
+    connecting: &mut HashSet<String>,
+    last_attempt: &mut HashMap<String, Instant>,
+) -> Vec<String> {
     let selected: HashSet<&str> = desired
         .device_ids
         .iter()
         .flatten()
         .map(String::as_str)
         .collect();
+    let mut stopped = Vec::new();
     monitors.retain(|id, task| {
         let keep = selected.contains(id.as_str()) && !task.is_finished();
         if !keep {
             task.abort();
+            connecting.remove(id);
+            stopped.push(id.clone());
         }
         keep
     });
-    for id in selected {
-        if monitors.contains_key(id) {
+    connecting.retain(|id| selected.contains(id.as_str()) && monitors.contains_key(id));
+    last_attempt.retain(|id, _| selected.contains(id.as_str()));
+    stopped
+}
+
+fn ready_monitors(
+    desired: &Desired,
+    devices: &HashMap<String, (String, Peripheral)>,
+    monitors: &HashMap<String, JoinHandle<()>>,
+    last_attempt: &HashMap<String, Instant>,
+) -> Vec<(String, Peripheral)> {
+    let now = Instant::now();
+    let mut seen = HashSet::new();
+    let mut ready = Vec::new();
+    for id in desired.device_ids.iter().flatten() {
+        if !seen.insert(id.as_str())
+            || monitors.contains_key(id)
+            || last_attempt
+                .get(id)
+                .is_some_and(|last| now.duration_since(*last) < RETRY_INTERVAL)
+        {
             continue;
         }
-        let Some((_, peripheral)) = devices.get(id) else {
-            continue;
-        };
-        let id = id.to_owned();
-        let peripheral = peripheral.clone();
+        if let Some((_, peripheral)) = devices.get(id) {
+            ready.push((id.clone(), peripheral.clone()));
+        }
+    }
+    ready
+}
+
+#[allow(clippy::too_many_arguments)]
+fn spawn_monitors(
+    ready: Vec<(String, Peripheral)>,
+    desired: &Desired,
+    shared: &Arc<RwLock<Shared>>,
+    event_tx: &mpsc::UnboundedSender<MonitorEvent>,
+    monitors: &mut HashMap<String, JoinHandle<()>>,
+    connecting: &mut HashSet<String>,
+    last_attempt: &mut HashMap<String, Instant>,
+) {
+    // Establish one GATT connection at a time. Windows adapters are notably
+    // less reliable when discovery or another connection races service setup.
+    for (id, peripheral) in ready.into_iter().take(1) {
         let events = event_tx.clone();
+        set_connecting(shared, desired, &id);
+        connecting.insert(id.clone());
+        last_attempt.insert(id.clone(), Instant::now());
         monitors.insert(
             id.clone(),
             tokio::spawn(async move {
                 if monitor_device(&peripheral, &id, &events).await.is_err() {
+                    let _ = tokio::time::timeout(CONNECT_TIMEOUT, peripheral.disconnect()).await;
                     let _ = events.send(MonitorEvent::Disconnected(id));
                 }
             }),
@@ -294,12 +409,19 @@ async fn monitor_device(
     id: &str,
     events: &mpsc::UnboundedSender<MonitorEvent>,
 ) -> Result<(), String> {
-    if !peripheral.is_connected().await.map_err(|e| e.to_string())? {
-        peripheral.connect().await.map_err(|e| e.to_string())?;
-    }
-    peripheral
-        .discover_services()
+    let connected = tokio::time::timeout(CONNECT_TIMEOUT, peripheral.is_connected())
         .await
+        .map_err(|_| "Timed out checking heart-rate monitor connection".to_owned())?
+        .map_err(|e| e.to_string())?;
+    if !connected {
+        tokio::time::timeout(CONNECT_TIMEOUT, peripheral.connect())
+            .await
+            .map_err(|_| "Timed out connecting to heart-rate monitor".to_owned())?
+            .map_err(|e| e.to_string())?;
+    }
+    tokio::time::timeout(CONNECT_TIMEOUT, peripheral.discover_services())
+        .await
+        .map_err(|_| "Timed out discovering heart-rate services".to_owned())?
         .map_err(|e| e.to_string())?;
     let measurement_uuid = uuid_from_u16(HEART_RATE_MEASUREMENT_UUID);
     let characteristic = peripheral
@@ -307,13 +429,13 @@ async fn monitor_device(
         .into_iter()
         .find(|c| c.uuid == measurement_uuid && c.properties.contains(CharPropFlags::NOTIFY))
         .ok_or_else(|| "Heart Rate Measurement notifications are unavailable".to_owned())?;
-    let mut notifications = peripheral
-        .notifications()
+    let mut notifications = tokio::time::timeout(CONNECT_TIMEOUT, peripheral.notifications())
         .await
+        .map_err(|_| "Timed out opening heart-rate notifications".to_owned())?
         .map_err(|e| e.to_string())?;
-    peripheral
-        .subscribe(&characteristic)
+    tokio::time::timeout(CONNECT_TIMEOUT, peripheral.subscribe(&characteristic))
         .await
+        .map_err(|_| "Timed out subscribing to heart-rate notifications".to_owned())?
         .map_err(|e| e.to_string())?;
     let _ = events.send(MonitorEvent::Connected(id.to_owned()));
     while let Some(notification) = notifications.next().await {
@@ -326,7 +448,11 @@ async fn monitor_device(
     Err("Heart-rate notification stream ended".to_owned())
 }
 
-fn apply_monitor_event(shared: &Arc<RwLock<Shared>>, desired: &Desired, event: MonitorEvent) {
+fn apply_monitor_event(
+    shared: &Arc<RwLock<Shared>>,
+    desired: &Desired,
+    event: MonitorEvent,
+) -> String {
     let (id, connected, bpm) = match event {
         MonitorEvent::Connected(id) => (id, true, None),
         MonitorEvent::Bpm(id, bpm) => (id, true, Some(bpm)),
@@ -339,6 +465,20 @@ fn apply_monitor_event(shared: &Arc<RwLock<Shared>>, desired: &Desired, event: M
                 configured: true,
                 connected,
                 bpm: bpm.or(shared.readings[player].bpm).filter(|_| connected),
+            };
+        }
+    }
+    id
+}
+
+fn set_connecting(shared: &Arc<RwLock<Shared>>, desired: &Desired, id: &str) {
+    let mut shared = shared.write().unwrap_or_else(|e| e.into_inner());
+    for (player, selected) in desired.device_ids.iter().enumerate() {
+        if selected.as_deref() == Some(id) {
+            shared.readings[player] = PlayerReading {
+                configured: true,
+                connected: false,
+                bpm: None,
             };
         }
     }
@@ -405,5 +545,13 @@ mod tests {
         assert!(parse_heart_rate_measurement(&[]).is_err());
         assert!(parse_heart_rate_measurement(&[0x00]).is_err());
         assert!(parse_heart_rate_measurement(&[0x01, 1]).is_err());
+    }
+
+    #[test]
+    fn scan_stops_during_connection_and_live_preview() {
+        assert!(scan_needed(false, true, false, false));
+        assert!(!scan_needed(true, true, false, false));
+        assert!(!scan_needed(false, true, true, false));
+        assert!(scan_needed(false, false, true, true));
     }
 }

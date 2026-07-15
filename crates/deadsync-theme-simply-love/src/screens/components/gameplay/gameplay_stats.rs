@@ -976,7 +976,12 @@ fn cached_heart_rate_text(bpm: u16) -> Arc<str> {
     cached_text(&HEART_RATE_TEXT_CACHE, bpm, 512, || bpm.to_string())
 }
 
-fn heart_pulse_scale(elapsed: f32, bpm: u16) -> f32 {
+pub(crate) fn heart_rate_text(bpm: Option<u16>) -> Arc<str> {
+    bpm.map(cached_heart_rate_text)
+        .unwrap_or_else(|| Arc::clone(&HEART_RATE_UNKNOWN_TEXT))
+}
+
+pub(crate) fn heart_pulse_scale(elapsed: f32, bpm: u16) -> f32 {
     if bpm == 0 || !elapsed.is_finite() {
         return 1.0;
     }
@@ -1039,10 +1044,7 @@ pub fn push_heart_rates(actors: &mut Vec<Actor>, state: &State, playfield_center
         let bpm = reading.bpm.unwrap_or(0);
         let pulse = heart_pulse_scale(elapsed, bpm);
         let size = 19.0 * layout.banner_data_zoom * pulse;
-        let text = reading
-            .bpm
-            .map(cached_heart_rate_text)
-            .unwrap_or_else(|| Arc::clone(&HEART_RATE_UNKNOWN_TEXT));
+        let text = heart_rate_text(reading.bpm);
         actors.push(act!(sprite("heart.png"):
             align(0.5, 0.5): xy(x, y): zoomto(size, size):
             diffuse(rgba[0], rgba[1], rgba[2], alpha): z(72)
@@ -1050,7 +1052,7 @@ pub fn push_heart_rates(actors: &mut Vec<Actor>, state: &State, playfield_center
         actors.push(act!(text:
             font("miso"): settext(text): align(0.0, 0.5): horizalign(left):
             xy(x + 13.0 * layout.banner_data_zoom, y):
-            zoom(0.82 * layout.banner_data_zoom):
+            zoom(1.64 * layout.banner_data_zoom):
             diffuse(rgba[0], rgba[1], rgba[2], alpha): z(72)
         ));
     }

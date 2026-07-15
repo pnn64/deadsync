@@ -158,6 +158,7 @@ pub const BASE_TEXTURE_ASSETS: &[TextureAssetSpec] = &[
     texture_asset("rounded-square.png"),
     texture_asset("circle.png"),
     texture_asset("swoosh.png"),
+    texture_asset("heart.png"),
     TextureAssetSpec {
         key: "graphics/menu_bg_technique/arrow_tex.png",
         path: "menu_bg_technique/arrow_tex.png",
@@ -1104,6 +1105,7 @@ mod tests {
     fn initial_texture_assets_include_base_and_theme_catalogs() {
         let assets: Vec<_> = initial_texture_assets().collect();
         assert!(assets.iter().any(|asset| asset.key == "logo.png"));
+        assert!(assets.iter().any(|asset| asset.key == "heart.png"));
         assert!(assets.iter().any(|asset| asset.key == SRPG10_TITLE_LOGO));
         assert!(
             assets

@@ -310,6 +310,7 @@ pub struct State {
     pub(super) allow_per_player_global_offsets: bool,
     pub player_profiles: [deadsync_profile::Profile; PLAYER_SLOTS],
     pub(super) heart_rate_choice_ids: Vec<Option<String>>,
+    pub(super) heart_rate_readings: [HeartRateReadingView; PLAYER_SLOTS],
     pub(super) noteskin: NoteskinState,
     pub(super) preview_time: f32,
     pub(super) preview_beat: f32,

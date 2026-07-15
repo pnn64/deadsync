@@ -1,15 +1,22 @@
 use deadsync_config::prelude as config;
 use deadsync_theme_simply_love::screens::{gameplay, player_options};
 
-pub(crate) fn sync_runtime() {
+pub(crate) fn sync_runtime(discover: bool) {
     let enabled = config::get().machine_enable_heart_rate_monitors;
     deadsync_profile::with_runtime_heart_rate_device_ids(|ids| {
-        deadsync_heart_rate::configure(enabled, ids);
+        deadsync_heart_rate::configure(enabled, discover, ids);
     });
 }
 
 pub(crate) fn devices_view() -> player_options::HeartRateDevicesView {
     let snapshot = deadsync_heart_rate::discovery_snapshot();
+    let readings = deadsync_heart_rate::player_readings().map(|reading| {
+        player_options::HeartRateReadingView {
+            configured: reading.configured,
+            connected: reading.connected,
+            bpm: reading.bpm,
+        }
+    });
     player_options::HeartRateDevicesView {
         supported: snapshot.supported,
         scanning: snapshot.scanning,
@@ -22,6 +29,7 @@ pub(crate) fn devices_view() -> player_options::HeartRateDevicesView {
             })
             .collect(),
         error: snapshot.error,
+        readings,
     }
 }
 

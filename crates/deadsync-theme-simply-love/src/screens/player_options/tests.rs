@@ -1694,6 +1694,7 @@ pub(super) mod tests {
                 label: "Nearby HRM".to_owned(),
             }],
             error: None,
+            readings: [super::HeartRateReadingView::default(); 2],
         };
 
         let (choices, ids) = super::heart_rate_choices(&devices, &profiles);
@@ -1706,8 +1707,9 @@ pub(super) mod tests {
                 Some("saved-id".to_owned())
             ]
         );
-        assert!(choices[1].contains("Nearby HRM"));
-        assert_eq!(choices[2], "Saved: saved-id");
+        assert_eq!(choices[1], "Nearby HRM");
+        assert_eq!(choices[2], "Saved HRM");
+        assert!(choices.iter().all(|choice| !choice.contains("saved-id")));
     }
 
     fn assert_sfx(effect: &ThemeEffect, expected_path: &str) {
