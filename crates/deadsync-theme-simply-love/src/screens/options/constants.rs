@@ -91,6 +91,9 @@ pub(super) const DESC_TITLE_SIDE_PAD_PX: f32 = 7.5;
 pub(super) const DESC_BULLET_TOP_PAD_PX: f32 = 23.25;
 pub(super) const DESC_BULLET_SIDE_PAD_PX: f32 = 7.5;
 pub(super) const DESC_BULLET_INDENT_PX: f32 = 10.0;
+pub(super) const DESC_BOTTOM_PAD_PX: f32 = 9.75;
+pub(super) const DESC_TITLE_LINE_H_PX: f32 = 20.0;
+pub(super) const DESC_BODY_LINE_H_PX: f32 = 18.0;
 pub(super) const DESC_TITLE_ZOOM: f32 = 1.0;
 pub(super) const DESC_BODY_ZOOM: f32 = 1.0;
 

@@ -161,6 +161,129 @@ pub(super) fn wrap_miso_text(
         .unwrap_or_else(|| raw_text.to_string())
 }
 
+fn help_block_height(block: &RenderedHelpBlock) -> f32 {
+    match block {
+        RenderedHelpBlock::Paragraph { line_count, .. } => {
+            DESC_TITLE_LINE_H_PX * *line_count as f32
+        }
+        RenderedHelpBlock::Bullet { line_count, .. } => DESC_BODY_LINE_H_PX * *line_count as f32,
+    }
+}
+
+fn help_blocks_height(blocks: &[RenderedHelpBlock]) -> f32 {
+    blocks.iter().enumerate().fold(0.0, |height, (idx, block)| {
+        let paragraph_gap =
+            if idx + 1 < blocks.len() && matches!(block, RenderedHelpBlock::Paragraph { .. }) {
+                DESC_BULLET_TOP_PAD_PX
+            } else {
+                0.0
+            };
+        height + help_block_height(block) + paragraph_gap
+    })
+}
+
+fn truncate_help_block(block: RenderedHelpBlock, max_lines: usize) -> RenderedHelpBlock {
+    let (text, is_bullet) = match block {
+        RenderedHelpBlock::Paragraph { text, .. } => (text, false),
+        RenderedHelpBlock::Bullet { text, .. } => (text, true),
+    };
+    let mut truncated = text
+        .lines()
+        .take(max_lines.saturating_sub(1))
+        .collect::<Vec<_>>()
+        .join("\n");
+    if !truncated.is_empty() {
+        truncated.push('\n');
+    }
+    if is_bullet && max_lines == 1 {
+        truncated.push_str("\u{2022} ...");
+    } else {
+        truncated.push_str("...");
+    }
+    let text = Arc::from(truncated);
+    if is_bullet {
+        RenderedHelpBlock::Bullet {
+            text,
+            line_count: max_lines,
+        }
+    } else {
+        RenderedHelpBlock::Paragraph {
+            text,
+            line_count: max_lines,
+        }
+    }
+}
+
+fn fit_help_blocks(blocks: Vec<RenderedHelpBlock>) -> Vec<RenderedHelpBlock> {
+    let max_height = DESC_H - DESC_TITLE_TOP_PAD_PX - DESC_BOTTOM_PAD_PX;
+    if help_blocks_height(&blocks) <= max_height {
+        return blocks;
+    }
+
+    let mut fitted = Vec::with_capacity(blocks.len());
+    let mut remaining = max_height;
+    let block_count = blocks.len();
+    for (idx, block) in blocks.into_iter().enumerate() {
+        let line_height = match &block {
+            RenderedHelpBlock::Paragraph { .. } => DESC_TITLE_LINE_H_PX,
+            RenderedHelpBlock::Bullet { .. } => DESC_BODY_LINE_H_PX,
+        };
+        let paragraph_gap =
+            if idx + 1 < block_count && matches!(&block, RenderedHelpBlock::Paragraph { .. }) {
+                DESC_BULLET_TOP_PAD_PX
+            } else {
+                0.0
+            };
+        let full_height = help_block_height(&block) + paragraph_gap;
+        let more_blocks = idx + 1 < block_count;
+        let ellipsis_height = DESC_TITLE_LINE_H_PX.max(DESC_BODY_LINE_H_PX);
+        let fits = if more_blocks {
+            full_height + ellipsis_height <= remaining
+        } else {
+            full_height <= remaining
+        };
+        if fits {
+            remaining -= full_height;
+            fitted.push(block);
+            continue;
+        }
+
+        let max_lines = (remaining / line_height).floor() as usize;
+        if max_lines > 0 {
+            fitted.push(truncate_help_block(block, max_lines));
+        }
+        break;
+    }
+    fitted
+}
+
+#[cfg(test)]
+mod description_tests {
+    use super::*;
+
+    #[test]
+    fn overflowing_help_ends_inside_panel_with_ellipsis() {
+        let mut blocks = vec![RenderedHelpBlock::Paragraph {
+            text: Arc::from("Two-line description\nfor this menu."),
+            line_count: 2,
+        }];
+        blocks.extend((0..30).map(|idx| RenderedHelpBlock::Bullet {
+            text: Arc::from(format!("\u{2022} Feature {idx}")),
+            line_count: 1,
+        }));
+
+        let fitted = fit_help_blocks(blocks);
+        let max_height = DESC_H - DESC_TITLE_TOP_PAD_PX - DESC_BOTTOM_PAD_PX;
+        assert!(help_blocks_height(&fitted) <= max_height);
+        assert!(fitted.len() < 31);
+        assert!(matches!(
+            fitted.last(),
+            Some(RenderedHelpBlock::Bullet { text, line_count: 1 })
+                if text.as_ref() == "\u{2022} ..."
+        ));
+    }
+}
+
 pub(super) fn build_description_layout(
     asset_manager: &AssetManager,
     key: DescriptionCacheKey,
@@ -266,7 +389,10 @@ pub(super) fn build_description_layout(
         }
     }
 
-    DescriptionLayout { key, blocks }
+    DescriptionLayout {
+        key,
+        blocks: fit_help_blocks(blocks),
+    }
 }
 
 pub(super) fn description_layout(
@@ -1234,8 +1360,8 @@ pub fn push_actors(
         let mut cursor_y = DESC_TITLE_TOP_PAD_PX.mul_add(s, list_y);
         let desc_layout = description_layout(state, asset_manager, desc_key, item, s);
         let title_side_pad = DESC_TITLE_SIDE_PAD_PX * s;
-        let title_step_px = 20.0 * s;
-        let body_step_px = 18.0 * s;
+        let title_step_px = DESC_TITLE_LINE_H_PX * s;
+        let body_step_px = DESC_BODY_LINE_H_PX * s;
         let bullet_side_pad = DESC_BULLET_SIDE_PAD_PX * s;
 
         for block in &desc_layout.blocks {
