@@ -3487,12 +3487,27 @@ fn preview_mute_allowed(state: &State) -> bool {
 }
 
 #[inline(always)]
-fn toggle_preview_mute(state: &mut State) {
+fn toggle_preview_mute(state: &mut State, resume_immediately: bool) {
     state.preview_music_muted = !state.preview_music_muted;
     if state.preview_music_muted {
         clear_preview(state);
     } else {
         state.time_since_selection_change = PREVIEW_DELAY_SECONDS;
+        if resume_immediately
+            && state.policy.media.show_previews
+            && allow_gs_fetch_for_selection(state)
+        {
+            let selected_song = match state.entries.get(state.selected_index) {
+                Some(MusicWheelEntry::Song(song)) => Some(song.clone()),
+                _ => None,
+            };
+            sync_preview_song(
+                state,
+                selected_song.as_ref(),
+                state.policy.media.preview_loop,
+                true,
+            );
+        }
     }
 }
 
@@ -9416,7 +9431,11 @@ fn configurable_shortcut_action(
     None
 }
 
-fn handle_mute_hotkey(state: &mut State, key: Option<&RawKeyboardEvent>) -> Option<ThemeEffect> {
+fn handle_mute_hotkey(
+    state: &mut State,
+    key: Option<&RawKeyboardEvent>,
+    resume_immediately: bool,
+) -> Option<ThemeEffect> {
     let key = key?;
     if key.pressed
         && key.code == KeyCode::KeyM
@@ -9424,10 +9443,15 @@ fn handle_mute_hotkey(state: &mut State, key: Option<&RawKeyboardEvent>) -> Opti
         && !key_bound_to_player_input(key)
         && preview_hotkey_allowed(state)
     {
-        toggle_preview_mute(state);
+        toggle_preview_mute(state, resume_immediately);
         return Some(ThemeEffect::ConsumeInput);
     }
     None
+}
+
+pub fn handle_player_options_mute_hotkey(state: &mut State, key: &RawKeyboardEvent) -> ThemeEffect {
+    let effect = handle_mute_hotkey(state, Some(key), true).unwrap_or(ThemeEffect::None);
+    prepend_pending_runtime(state, effect)
 }
 
 #[inline(always)]
@@ -9618,7 +9642,7 @@ fn handle_raw_key_event_impl(
         return handle_lobby_overlay_raw_key(state, key, text);
     }
 
-    if let Some(action) = handle_mute_hotkey(state, key) {
+    if let Some(action) = handle_mute_hotkey(state, key, false) {
         return action;
     }
 
@@ -12880,12 +12904,12 @@ mod tests {
         PREVIEW_DELAY_SECONDS, ProfileBoxEffectOutcome, SyncGraphCols, WheelSortMode,
         build_displayed_entries, build_playlist_entries_from_text, build_playlist_song_lookup,
         build_sync_heat_image, delayed_selection_updates_blocked, first_song_entry_index,
-        handle_confirm, handle_raw_key_event, init_placeholder, keymap_has_player_input,
-        maybe_prewarm_replaygain_for_pack, maybe_refresh_select_music_leaderboard,
-        prepend_pending_effect, profile_boxes, reset_preview_after_gameplay,
-        route_profile_box_effect, select_music_lobby_lock_text, select_music_lobby_lock_text_for,
-        solo_runtime_side, steps_index_for_side, sync_bias_axis_pos, sync_graph_cols,
-        sync_low_confidence_warning, sync_overlay_graph_size,
+        handle_confirm, handle_player_options_mute_hotkey, handle_raw_key_event, init_placeholder,
+        keymap_has_player_input, maybe_prewarm_replaygain_for_pack,
+        maybe_refresh_select_music_leaderboard, prepend_pending_effect, profile_boxes,
+        reset_preview_after_gameplay, route_profile_box_effect, select_music_lobby_lock_text,
+        select_music_lobby_lock_text_for, solo_runtime_side, steps_index_for_side,
+        sync_bias_axis_pos, sync_graph_cols, sync_low_confidence_warning, sync_overlay_graph_size,
     };
     use crate::config::{GraphOrientation, SelectMusicWheelStyle};
     use crate::screens::ThemeEffect;
@@ -14191,6 +14215,45 @@ mod tests {
         assert!(matches!(action, ThemeEffect::ConsumeInput));
         assert!(!state.preview_music_muted);
         assert_eq!(state.time_since_selection_change, PREVIEW_DELAY_SECONDS);
+    }
+
+    #[test]
+    fn player_options_mute_hotkey_resumes_preview_immediately() {
+        let mut state = init_placeholder();
+        state.policy.media.show_previews = true;
+        let mut song = (*test_song("preview")).clone();
+        song.music_path = Some(PathBuf::from("preview.ogg"));
+        song.sample_start = Some(1.0);
+        song.sample_length = Some(10.0);
+        state.entries = vec![super::MusicWheelEntry::Song(Arc::new(song))];
+        state.selected_index = 0;
+        state.currently_playing_preview_path = Some(PathBuf::from("preview.ogg"));
+        state.currently_playing_preview_start_sec = Some(1.0);
+        state.currently_playing_preview_length_sec = Some(10.0);
+
+        let action =
+            handle_player_options_mute_hotkey(&mut state, &raw_key(KeyCode::KeyM, true, false));
+        assert_stop_then_consume(action);
+
+        let action =
+            handle_player_options_mute_hotkey(&mut state, &raw_key(KeyCode::KeyM, true, false));
+        let ThemeEffect::Batch(effects) = action else {
+            panic!("expected play-music request before consumed input");
+        };
+        assert!(matches!(
+            effects.as_slice(),
+            [
+                ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Audio(
+                    deadsync_theme::AudioRequest::PlayMusic { path, .. }
+                )),
+                ThemeEffect::ConsumeInput,
+            ] if path == &PathBuf::from("preview.ogg")
+        ));
+        assert!(!state.preview_music_muted);
+        assert_eq!(
+            state.currently_playing_preview_path,
+            Some(PathBuf::from("preview.ogg"))
+        );
     }
 
     #[test]

@@ -4876,6 +4876,26 @@ impl App {
                     return true;
                 }
             }
+            RawKeyScreenRoute::PlayerOptions => {
+                let returns_to_select_music = self
+                    .state
+                    .screens
+                    .player_options_state
+                    .as_ref()
+                    .is_some_and(|state| state.return_screen == CurrentScreen::SelectMusic);
+                if returns_to_select_music {
+                    let action = screens::select_music::handle_player_options_mute_hotkey(
+                        &mut self.state.screens.select_music_state,
+                        &raw_key,
+                    );
+                    if !matches!(action, ThemeEffect::None) {
+                        if let Err(e) = self.handle_action(action, event_loop) {
+                            log::error!("Failed to handle PlayerOptions mute shortcut: {e}");
+                        }
+                        return true;
+                    }
+                }
+            }
             RawKeyScreenRoute::Practice => {
                 if practice_reload_shortcut(
                     raw_key.pressed,

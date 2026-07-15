@@ -120,6 +120,7 @@ pub enum RawKeyScreenRoute {
     OverscanAdjustment,
     Input,
     SelectMusic,
+    PlayerOptions,
     Practice,
     Evaluation,
 }
@@ -329,6 +330,7 @@ pub const fn raw_key_screen_route(screen: Screen) -> RawKeyScreenRoute {
         Screen::OverscanAdjustment => RawKeyScreenRoute::OverscanAdjustment,
         Screen::Input => RawKeyScreenRoute::Input,
         Screen::SelectMusic => RawKeyScreenRoute::SelectMusic,
+        Screen::PlayerOptions => RawKeyScreenRoute::PlayerOptions,
         Screen::Practice => RawKeyScreenRoute::Practice,
         Screen::Evaluation => RawKeyScreenRoute::Evaluation,
         _ => RawKeyScreenRoute::None,
@@ -959,6 +961,10 @@ mod tests {
         assert_eq!(
             raw_key_screen_route(Screen::Evaluation),
             RawKeyScreenRoute::Evaluation
+        );
+        assert_eq!(
+            raw_key_screen_route(Screen::PlayerOptions),
+            RawKeyScreenRoute::PlayerOptions
         );
         assert_eq!(
             raw_key_screen_route(Screen::Gameplay),
