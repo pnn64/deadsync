@@ -751,6 +751,25 @@ impl GifRegistry {
             .is_some_and(|m| m.match_color_to_difficulty.contains(role))
     }
 
+    /// Whether `pack` declares `name` under `CanBeEmpty` in its background
+    /// `gifpack.ini` and supplies no gif for it (either size): the pack has
+    /// explicitly resolved `name` to nothing. Callers walking a role-level
+    /// fallback chain (e.g. screen role, then the `default` role) must stop at
+    /// such a name rather than resurrect an animation from a later candidate;
+    /// `background()` itself already returns `None` for it. A supplied gif
+    /// always wins over the declaration, and `None` or the default pack has no
+    /// declarations.
+    pub fn background_declared_empty(&self, pack: Option<&str>, name: &str, size: PadSize) -> bool {
+        let Some(p) = pack.filter(|p| *p != DEFAULT_PACK) else {
+            return false;
+        };
+        self.background_pack_meta
+            .get(p)
+            .is_some_and(|m| m.can_be_empty.contains(name))
+            && !self.backgrounds.contains_key(&key(p, name, size))
+            && !self.backgrounds.contains_key(&key(p, name, size.other()))
+    }
+
     pub fn is_empty(&self) -> bool {
         self.backgrounds.is_empty() && self.judgements.is_empty()
     }
@@ -1584,6 +1603,45 @@ mod tests {
         );
         // "ok" is not listed: still gets the automatic default-pack fallback.
         assert!(reg.judgement(Some("foo"), "ok", PadSize::Leds25).is_some());
+    }
+
+    #[test]
+    fn background_declared_empty_flags_only_declared_and_unsupplied_names() {
+        let mut reg = GifRegistry::default();
+        reg.backgrounds.insert(
+            key(DEFAULT_PACK, "gameplay", PadSize::Leds25),
+            dummy_variants(),
+        );
+        reg.backgrounds
+            .insert(key("foo", "default", PadSize::Leds25), dummy_variants());
+        reg.background_pack_meta.insert(
+            "foo".to_owned(),
+            PackMeta {
+                fallback: PackFallback::Auto,
+                can_be_empty: ["gameplay".to_owned(), "default".to_owned()]
+                    .into_iter()
+                    .collect(),
+                match_color_to_difficulty: Default::default(),
+                merge_common_bpm_variants: Default::default(),
+                merge_fallback_bpm_variants: Default::default(),
+            },
+        );
+
+        // Declared and unsupplied: explicitly empty, and background() agrees.
+        assert!(reg.background_declared_empty(Some("foo"), "gameplay", PadSize::Leds25));
+        assert!(
+            reg.background(Some("foo"), "gameplay", PadSize::Leds25, None)
+                .is_none()
+        );
+        // Declared but supplied (either size): the pack's own gif wins.
+        assert!(!reg.background_declared_empty(Some("foo"), "default", PadSize::Leds16));
+        // Not declared: missing names still use the regular fallbacks.
+        assert!(!reg.background_declared_empty(Some("foo"), "song_select", PadSize::Leds25));
+        // No pack (or the default pack) has no declarations.
+        assert!(!reg.background_declared_empty(None, "gameplay", PadSize::Leds25));
+        assert!(!reg.background_declared_empty(Some(DEFAULT_PACK), "gameplay", PadSize::Leds25));
+        // A pack without a gifpack.ini has none either.
+        assert!(!reg.background_declared_empty(Some("bar"), "gameplay", PadSize::Leds25));
     }
 
     #[test]

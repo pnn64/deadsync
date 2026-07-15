@@ -564,7 +564,11 @@ pub fn init(
         SubRowId::SmxDefaultPadConfig,
         cfg.smx_default_pad_config.index(),
     );
-    // Bg/judge pack selections: index 0 = default, 1..N = user packs.
+    // Bg/judge pack selections: index 0 = default, 1..N = user packs. These rows'
+    // real choice lists are provided dynamically by the layout (the static row
+    // definition holds a single placeholder), so write the index directly like the
+    // noteskin and software-thread rows do; `set_choice_by_id` would clamp it to
+    // the placeholder length and always show "Default".
     let bg_pack_idx = if cfg.smx_pad_gifs_pack.is_empty() {
         0
     } else {
@@ -575,12 +579,13 @@ pub fn init(
             .map(|i| i + 1)
             .unwrap_or(0)
     };
-    set_choice_by_id(
+    if let Some(slot) = get_choice_by_id_mut(
         &mut state.sub[SubmenuKind::SmxConfig].choice_indices,
         SMX_CONFIG_OPTIONS_ROWS,
         SubRowId::SmxBgPack,
-        bg_pack_idx,
-    );
+    ) {
+        *slot = bg_pack_idx;
+    }
     let judge_pack_idx = if cfg.smx_judge_gifs_pack.is_empty() {
         0
     } else {
@@ -591,12 +596,13 @@ pub fn init(
             .map(|i| i + 1)
             .unwrap_or(0)
     };
-    set_choice_by_id(
+    if let Some(slot) = get_choice_by_id_mut(
         &mut state.sub[SubmenuKind::SmxConfig].choice_indices,
         SMX_CONFIG_OPTIONS_ROWS,
         SubRowId::SmxJudgePack,
-        judge_pack_idx,
-    );
+    ) {
+        *slot = judge_pack_idx;
+    }
     // Single-pad P1/P2 picker: reflect the slot the SDK currently has the lone pad
     // in (slot 1 = P2, index 1; slot 0 = P1, index 0). The slot already accounts for
     // both the saved serial assignment and the hardware jumper, so reading it covers
