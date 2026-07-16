@@ -543,6 +543,12 @@ pub struct HeartRateView {
 
 pub struct State {
     pub gameplay: GameplayCoreState,
+    /// Game-thread, song-lifetime identity for the fixed two HUD slots. Built
+    /// during gameplay setup, read immutably thereafter, and dropped with the
+    /// screen; there are no misses, eviction, synchronization, allocations, or
+    /// per-frame maintenance. The `gameplay_hud_snapshot` benchmark covers its
+    /// old/new allocation and worst-sample costs.
+    hud_snapshot: profile_data::GameplayHudSnapshot,
     pub noteskin_assets: GameplayNoteskinAssets,
     pub density_graph: DensityGraphRenderState,
     pub step_stats_extra_resolved: [profile_data::StepStatsExtra; MAX_PLAYERS],
@@ -690,6 +696,7 @@ impl State {
         scorebox_data: GameplayScoreboxData,
     ) -> Self {
         let density_graph = DensityGraphRenderState::from_gameplay(&gameplay);
+        let hud_snapshot = profile::gameplay_hud_snapshot();
         let step_stats_profiles =
             std::array::from_fn(|player| gameplay.profiles()[player].0.clone());
         let step_stats_extra_resolved =
@@ -748,6 +755,7 @@ impl State {
             .collect();
         Self {
             gameplay,
+            hud_snapshot,
             noteskin_assets,
             density_graph,
             step_stats_extra_resolved,
@@ -2915,8 +2923,8 @@ pub fn prewarm_text_layout(
     cache: &mut TextLayoutCache,
     fonts: &HashMap<&'static str, font::Font>,
     state: &State,
+    cfg: &crate::config::Config,
 ) {
-    let cfg = crate::config::get();
     prewarm_score_counter_layout(cache, fonts, current_machine_font_key(FontRole::Numbers));
     for tenths in 0..=1_000 {
         let text = cached_life_percent_text(tenths as f32 / 10.0);
@@ -8976,6 +8984,7 @@ pub fn push_actors(
     asset_manager: &AssetManager,
     view: ActorViewOverride,
     arrow_effect_time_s: f32,
+    cfg: &crate::config::Config,
 ) {
     let mut song_lua_overlay_order = std::mem::take(&mut state.song_lua_overlay_order);
     let mut song_lua_background_visual_layer_orders =
@@ -9004,8 +9013,7 @@ pub fn push_actors(
 
     let notefield_view = view.notefield;
     let hide_gameplay_hud = view.hide_gameplay_hud;
-    let cfg = crate::config::get();
-    let hud_snapshot = profile::gameplay_hud_snapshot();
+    let hud_snapshot = &state.hud_snapshot;
     actors.reserve(96);
     let play_style = hud_snapshot.play_style;
     let player_side = hud_snapshot.player_side;

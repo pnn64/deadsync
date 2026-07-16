@@ -734,6 +734,7 @@ pub fn push_actors(
     state: &mut State,
     asset_manager: &AssetManager,
     arrow_effect_time_s: f32,
+    cfg: &crate::config::Config,
 ) {
     actors.reserve(128);
     let view = practice_view(state);
@@ -743,6 +744,7 @@ pub fn push_actors(
         asset_manager,
         view,
         arrow_effect_time_s,
+        cfg,
     );
     if matches!(state.mode, Mode::Editing) {
         append_edit_markers(state, actors);

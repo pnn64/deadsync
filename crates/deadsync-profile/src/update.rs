@@ -7,8 +7,8 @@ use crate::{
     MiniIndicatorSubtractiveDisplay, NoCmodAlternative, NoteSkin, Perspective, PlayStyle,
     PlayerSide, Profile, RemoveMask, ScatterplotMaxWindow, ScoreDisplayMode, ScorePosition,
     ScrollOption, StepStatisticsMask, StepStatsExtra, TapExplosionMask, TargetScoreSetting,
-    TimingWindowsOption, TurnOption, VisualEffectsMask, runtime_session_side_guest,
-    runtime_update_profile_for_side,
+    TimingWindowsOption, TurnOption, VisualEffectsMask, runtime_mark_heart_rate_devices_changed,
+    runtime_session_side_guest, runtime_update_profile_for_side,
 };
 use chrono::Local;
 use deadsync_rules::scroll::ScrollSpeedSetting;
@@ -124,7 +124,20 @@ pub fn update_player_initials_for_side(side: PlayerSide, initials: &str) {
 pub fn update_heart_rate_device_id_for_side(side: PlayerSide, device_id: Option<String>) {
     // Guest changes remain active for the session; the persistence callback
     // intentionally has no profile directory to write for guests.
-    profile_ini_update(side, |profile| profile.set_heart_rate_device_id(device_id))
+    let changed = runtime_update_profile_for_side(side, |profile| {
+        profile.set_heart_rate_device_id(device_id)
+    });
+    persist_profile_update(
+        side,
+        if changed {
+            ProfileUpdatePersistence::Ini
+        } else {
+            ProfileUpdatePersistence::None
+        },
+    );
+    if changed {
+        runtime_mark_heart_rate_devices_changed();
+    }
 }
 
 pub fn update_scroll_speed_for_side(side: PlayerSide, setting: ScrollSpeedSetting) {

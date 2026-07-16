@@ -1,4 +1,5 @@
 use std::collections::{HashMap, HashSet};
+use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, Mutex, OnceLock, RwLock};
 use std::thread;
 use std::time::{Duration, Instant};
@@ -30,7 +31,6 @@ struct Desired {
 #[derive(Debug)]
 struct Shared {
     discovery: DiscoverySnapshot,
-    readings: [PlayerReading; 2],
 }
 
 impl Default for Shared {
@@ -42,9 +42,34 @@ impl Default for Shared {
                 devices: Vec::new(),
                 error: None,
             },
-            readings: [PlayerReading::default(); 2],
         }
     }
+}
+
+// Gameplay reads these two packed latest values without touching the discovery
+// lock. Bits 0/1 are configured/connected; the remaining bits encode BPM + 1
+// so zero remains `None`.
+static PLAYER_READINGS: [AtomicU32; 2] = [AtomicU32::new(0), AtomicU32::new(0)];
+
+#[inline(always)]
+fn encode_reading(reading: PlayerReading) -> u32 {
+    u32::from(reading.configured)
+        | (u32::from(reading.connected) << 1)
+        | (reading.bpm.map_or(0, |bpm| u32::from(bpm) + 1) << 2)
+}
+
+#[inline(always)]
+fn decode_reading(bits: u32) -> PlayerReading {
+    PlayerReading {
+        configured: bits & 1 != 0,
+        connected: bits & 2 != 0,
+        bpm: (bits >> 2).checked_sub(1).map(|bpm| bpm as u16),
+    }
+}
+
+#[inline(always)]
+fn publish_reading(player: usize, reading: PlayerReading) {
+    PLAYER_READINGS[player].store(encode_reading(reading), Ordering::Release);
 }
 
 struct Runtime {
@@ -80,36 +105,27 @@ pub fn configure(enabled: bool, discover: bool, device_ids: [Option<&str>; 2]) {
     *desired = next.clone();
     drop(desired);
 
-    let mut shared = runtime.shared.write().unwrap_or_else(|e| e.into_inner());
-    for (player, (reading, id)) in shared
-        .readings
-        .iter_mut()
-        .zip(next.device_ids.iter())
-        .enumerate()
-    {
-        if !next.enabled || id.is_none() {
-            *reading = PlayerReading::default();
+    let readings = player_readings();
+    for (player, (reading, id)) in readings.into_iter().zip(next.device_ids.iter()).enumerate() {
+        let reading = if !next.enabled || id.is_none() {
+            PlayerReading::default()
         } else if changed_players[player] {
-            *reading = PlayerReading {
+            PlayerReading {
                 configured: true,
                 ..PlayerReading::default()
-            };
+            }
         } else {
-            reading.configured = true;
-        }
+            PlayerReading {
+                configured: true,
+                ..reading
+            }
+        };
+        publish_reading(player, reading);
     }
 }
 
 pub fn player_readings() -> [PlayerReading; 2] {
-    RUNTIME
-        .get()
-        .map_or([PlayerReading::default(); 2], |runtime| {
-            runtime
-                .shared
-                .read()
-                .unwrap_or_else(|e| e.into_inner())
-                .readings
-        })
+    std::array::from_fn(|player| decode_reading(PLAYER_READINGS[player].load(Ordering::Acquire)))
 }
 
 pub fn discovery_snapshot() -> DiscoverySnapshot {
@@ -203,7 +219,7 @@ async fn run_enabled(
         let stopped = prune_monitors(&current, &mut monitors, &mut connecting, &mut last_attempt);
         disconnect_devices(&stopped, &devices).await;
         while let Ok(event) = event_rx.try_recv() {
-            let (id, label) = apply_monitor_event(shared, &current, event);
+            let (id, label) = apply_monitor_event(&current, event);
             connecting.remove(&id);
             let label_changed = if let Some(label) = label
                 && let Some((current_label, _)) = devices.get_mut(&id)
@@ -258,7 +274,6 @@ async fn run_enabled(
             spawn_monitors(
                 ready,
                 &current,
-                shared,
                 &event_tx,
                 &mut monitors,
                 &mut connecting,
@@ -401,7 +416,6 @@ fn ready_monitors(
 fn spawn_monitors(
     ready: Vec<(String, Peripheral)>,
     desired: &Desired,
-    shared: &Arc<RwLock<Shared>>,
     event_tx: &mpsc::UnboundedSender<MonitorEvent>,
     monitors: &mut HashMap<String, JoinHandle<()>>,
     connecting: &mut HashSet<String>,
@@ -411,7 +425,7 @@ fn spawn_monitors(
     // less reliable when discovery or another connection races service setup.
     for (id, peripheral) in ready.into_iter().take(1) {
         let events = event_tx.clone();
-        set_connecting(shared, desired, &id);
+        set_connecting(desired, &id);
         connecting.insert(id.clone());
         last_attempt.insert(id.clone(), Instant::now());
         monitors.insert(
@@ -474,38 +488,39 @@ async fn monitor_device(
     Err("Heart-rate notification stream ended".to_owned())
 }
 
-fn apply_monitor_event(
-    shared: &Arc<RwLock<Shared>>,
-    desired: &Desired,
-    event: MonitorEvent,
-) -> (String, Option<String>) {
+fn apply_monitor_event(desired: &Desired, event: MonitorEvent) -> (String, Option<String>) {
     let (id, connected, bpm, label) = match event {
         MonitorEvent::Connected(id, label) => (id, true, None, label),
         MonitorEvent::Bpm(id, bpm) => (id, true, Some(bpm), None),
         MonitorEvent::Disconnected(id) => (id, false, None, None),
     };
-    let mut shared = shared.write().unwrap_or_else(|e| e.into_inner());
     for (player, selected) in desired.device_ids.iter().enumerate() {
         if selected.as_deref() == Some(id.as_str()) {
-            shared.readings[player] = PlayerReading {
-                configured: true,
-                connected,
-                bpm: bpm.or(shared.readings[player].bpm).filter(|_| connected),
-            };
+            let current = decode_reading(PLAYER_READINGS[player].load(Ordering::Acquire));
+            publish_reading(
+                player,
+                PlayerReading {
+                    configured: true,
+                    connected,
+                    bpm: bpm.or(current.bpm).filter(|_| connected),
+                },
+            );
         }
     }
     (id, label)
 }
 
-fn set_connecting(shared: &Arc<RwLock<Shared>>, desired: &Desired, id: &str) {
-    let mut shared = shared.write().unwrap_or_else(|e| e.into_inner());
+fn set_connecting(desired: &Desired, id: &str) {
     for (player, selected) in desired.device_ids.iter().enumerate() {
         if selected.as_deref() == Some(id) {
-            shared.readings[player] = PlayerReading {
-                configured: true,
-                connected: false,
-                bpm: None,
-            };
+            publish_reading(
+                player,
+                PlayerReading {
+                    configured: true,
+                    connected: false,
+                    bpm: None,
+                },
+            );
         }
     }
 }
@@ -514,7 +529,9 @@ fn set_disabled(shared: &Arc<RwLock<Shared>>) {
     let mut shared = shared.write().unwrap_or_else(|e| e.into_inner());
     shared.discovery.scanning = false;
     shared.discovery.error = None;
-    shared.readings = [PlayerReading::default(); 2];
+    for player in 0..2 {
+        publish_reading(player, PlayerReading::default());
+    }
 }
 
 fn set_scanning(shared: &Arc<RwLock<Shared>>, scanning: bool) {
@@ -527,9 +544,11 @@ fn set_error(shared: &Arc<RwLock<Shared>>, error: String) {
     let mut shared = shared.write().unwrap_or_else(|e| e.into_inner());
     shared.discovery.scanning = false;
     shared.discovery.error = Some(error);
-    for reading in &mut shared.readings {
+    for player in 0..2 {
+        let mut reading = decode_reading(PLAYER_READINGS[player].load(Ordering::Acquire));
         reading.connected = false;
         reading.bpm = None;
+        publish_reading(player, reading);
     }
 }
 
@@ -571,6 +590,22 @@ mod tests {
         assert!(parse_heart_rate_measurement(&[]).is_err());
         assert!(parse_heart_rate_measurement(&[0x00]).is_err());
         assert!(parse_heart_rate_measurement(&[0x01, 1]).is_err());
+    }
+
+    #[test]
+    fn packed_player_reading_round_trips_all_states() {
+        for configured in [false, true] {
+            for connected in [false, true] {
+                for bpm in [None, Some(0), Some(72), Some(u16::MAX)] {
+                    let reading = PlayerReading {
+                        configured,
+                        connected,
+                        bpm,
+                    };
+                    assert_eq!(decode_reading(encode_reading(reading)), reading);
+                }
+            }
+        }
     }
 
     #[test]

@@ -18,10 +18,9 @@ impl App {
     /// Drive the Configure Pads screen: enable live FSR reads while it's open,
     /// apply queued threshold edits, and refresh the pad snapshot.
     #[inline(always)]
-    pub(super) fn sync_pad_config_fsr(&mut self) {
+    pub(super) fn sync_pad_config_fsr(&mut self, cfg: &config::Config) {
         use screens::pad_config;
         let screen = self.state.screens.current_screen;
-        let cfg = config::get();
         let Some(plan) = pad_config_fsr_plan(
             screen,
             cfg.use_fsrs,
@@ -163,9 +162,9 @@ impl App {
     /// - **Two pads, distinct jumpers:** persist the jumper-derived P1/P2 map.
     /// - **Single pad:** persist its hardware jumper side.
     /// The ambiguous same-jumper-two-pad case is left for the user to assign.
-    pub(super) fn reconcile_smx_assignment(&mut self) {
+    pub(super) fn reconcile_smx_assignment(&mut self, cfg: &config::Config) {
         let screen = self.state.screens.current_screen;
-        let smx_input = config::get().smx_input;
+        let smx_input = cfg.smx_input;
         if matches!(screen, CurrentScreen::Gameplay | CurrentScreen::Practice) || !smx_input {
             return;
         }
@@ -205,11 +204,16 @@ impl App {
     /// From the main Menu, if two pads share a P1/P2 jumper and no assignment
     /// resolves them, open the assignment screen automatically (once per conflict
     /// episode). Cancelling won't re-prompt until the conflict clears and returns.
-    pub(super) fn maybe_autoprompt_smx_assign(&mut self) {
+    pub(super) fn maybe_autoprompt_smx_assign(&mut self, cfg: &config::Config) {
+        if self.state.screens.current_screen != CurrentScreen::Menu
+            || !matches!(self.state.shell.transition, TransitionState::Idle)
+        {
+            return;
+        }
         let plan = smx_autoprompt_plan(
             self.state.screens.current_screen,
-            matches!(self.state.shell.transition, TransitionState::Idle),
-            config::get().smx_input,
+            true,
+            cfg.smx_input,
             deadsync_smx::conflict_warning_active(),
             self.state.screens.smx_autoprompt_latched,
         );
@@ -234,18 +238,22 @@ impl App {
     /// and the theme underglow on leaving the page, unless the assignment screen
     /// is taking the lights over. (Driven from the app loop so the lifecycle is
     /// in one place.)
-    pub(super) fn drive_smx_options_lights(&mut self, dt: f32) {
+    pub(super) fn drive_smx_options_lights(&mut self, dt: f32, cfg: &config::Config) {
         let active = smx_options_light_preview_active(
             self.state.screens.current_screen,
-            config::get().smx_input,
+            cfg.smx_input,
             options::is_smx_config_view(&self.state.screens.options_state),
         );
 
-        let cfg = config::get();
+        let colors = if active {
+            deadsync_smx::player_indicator_colors()
+        } else {
+            [None, None]
+        };
         let restore_underglow = self.state.screens.smx_options_light_preview.update(
             active,
             dt,
-            deadsync_smx::player_indicator_colors(),
+            colors,
             cfg.smx_default_light_brightness,
             (cfg.smx_underglow_theme, cfg.smx_underglow_grb),
             self.state.screens.current_screen == CurrentScreen::SmxAssignPads,
@@ -262,10 +270,10 @@ impl App {
     /// the user previews the brightness they're picking. Restores auto-lighting
     /// once no side is previewing (or on leaving the page). Sent every frame; the
     /// SDK coalesces light writes to the pad's refresh rate.
-    pub(super) fn drive_smx_player_options_lights(&mut self, dt: f32) {
+    pub(super) fn drive_smx_player_options_lights(&mut self, dt: f32, cfg: &config::Config) {
         let preview = smx_player_options_light_preview_allowed(
             self.state.screens.current_screen,
-            config::get().smx_input,
+            cfg.smx_input,
         )
         .then(|| {
             self.state
@@ -284,7 +292,7 @@ impl App {
         );
     }
 
-    pub(super) fn apply_smx_managed_preset(&mut self) {
+    pub(super) fn apply_smx_managed_preset(&mut self, cfg: &config::Config) {
         use pad_config_sync::PadConfigSignature;
 
         // Skip entirely on the gameplay hot path. Pad config can't change mid-song
@@ -307,7 +315,6 @@ impl App {
             self.pad_config_sync.apply_intent(intent);
         }
 
-        let cfg = config::get();
         // Only query the SMX manager when the managed-config feature is actually on.
         // With it off (or SMX input disabled) there is nothing to resolve or write, so
         // skip the per-pad `get_info` lock entirely and just clear the cached signature.
@@ -393,12 +400,12 @@ impl App {
     /// a per-player profile value that can't change mid-song, so the value resolved on
     /// the last non-gameplay frame stays valid and the profile lock stays off the
     /// gameplay loop. With SMX input off there are no light sends, so hold at full.
-    pub(super) fn drive_smx_light_brightness(&mut self) {
+    pub(super) fn drive_smx_light_brightness(&mut self, cfg: &config::Config) {
         let screen = self.state.screens.current_screen;
         if matches!(screen, CurrentScreen::Gameplay | CurrentScreen::Practice) {
             return;
         }
-        let smx_input = config::get().smx_input;
+        let smx_input = cfg.smx_input;
         let profile_resolved = if smx_input {
             profile::pad_light_brightness()
         } else {

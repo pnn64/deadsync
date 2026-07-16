@@ -463,6 +463,7 @@ fn prewarm_gameplay_text_layout_cache(
     cache: &mut compose::TextLayoutCache,
     compose_scratch: &mut compose::ComposeScratch,
     state: &mut gameplay::State,
+    config: &config::Config,
 ) {
     let started = Instant::now();
     // Gameplay prewarm owns the whole cache for the next song, so start from an
@@ -481,6 +482,7 @@ fn prewarm_gameplay_text_layout_cache(
         assets,
         gameplay::ActorViewOverride::default(),
         arrow_effect_time_seconds(started),
+        config,
     );
     let mut render =
         compose::build_screen_cached_with_scratch_and_texture_context_and_actor_resources(
@@ -495,7 +497,7 @@ fn prewarm_gameplay_text_layout_cache(
             state.actor_resources(),
         );
     compose_scratch.recycle_render_list(&mut render);
-    gameplay::prewarm_text_layout(cache, fonts, state);
+    gameplay::prewarm_text_layout(cache, fonts, state, config);
     screens::components::gameplay::gameplay_stats::prewarm_text_layout(cache, fonts, assets, state);
     screens::components::gameplay::notefield::prewarm_text_layout(cache, fonts, state);
     // Keep a bounded song-local allowance for genuinely dynamic values. Reserving
@@ -940,6 +942,7 @@ pub struct App {
     options_song_pack_generation: u64,
     profile_import: crate::profile_import::Service,
     profile_load: crate::profile_load::Service,
+    heart_rate: crate::heart_rate::Runtime,
     qr_login: crate::qr_login::Service,
     score_import: crate::score_import::Service,
     sync_analysis: crate::sync_analysis::Service,
@@ -1207,6 +1210,8 @@ impl App {
         self.sync_smx_pad_gifs(
             plan.smx_panels_enabled,
             config.smx_input,
+            config.smx_idle_lights_black,
+            config.simply_love_color,
             bg_packs,
             judge_packs,
         );
@@ -1782,6 +1787,8 @@ impl App {
         &mut self,
         enabled: bool,
         smx_input: bool,
+        idle_black: bool,
+        theme_index: i32,
         bg_packs: [config::SmxPackName; 2],
         judge_packs: [config::SmxPackName; 2],
     ) {
@@ -1802,8 +1809,7 @@ impl App {
         // release the pads: they drive the LEDs themselves. Runs before the
         // dedup key check below because the option is not part of the key; the
         // driver dedups the value itself.
-        self.smx_panels
-            .set_idle_black(role.is_some() && config::get().smx_idle_lights_black);
+        self.smx_panels.set_idle_black(role.is_some() && idle_black);
 
         // A song rescan may have changed per-song/per-pack files; drop the
         // scoped cache and force a re-resolve (a recycled `Arc` pointer must not
@@ -1915,6 +1921,7 @@ impl App {
                                 role,
                                 eval_difficulty,
                                 anim,
+                                theme_index,
                             ));
                         }
                     }
@@ -2047,6 +2054,7 @@ impl App {
         role: &'static str,
         difficulty: Option<&'static str>,
         anim: std::sync::Arc<deadsync_smx::gifs::FullPadAnim>,
+        theme_index: i32,
     ) -> std::sync::Arc<deadsync_smx::gifs::FullPadAnim> {
         let Some(difficulty) = difficulty else {
             return anim;
@@ -2057,7 +2065,6 @@ impl App {
         {
             return anim;
         }
-        let theme_index = config::get().simply_love_color;
         let cache_key = (
             pack_str
                 .unwrap_or(deadsync_smx::gifs::DEFAULT_PACK)
@@ -2194,14 +2201,17 @@ impl App {
         deadlib_present::runtime::tick(logic_dt);
         screens::components::shared::visual_style_bg::tick_global(logic_dt);
 
+        // One immutable configuration snapshot owns this frame. Downstream
+        // gameplay and device helpers must not reacquire the global config lock.
+        let frame_config = config::get();
         self.sync_gameplay_input_capture();
-        self.sync_pad_config_fsr();
-        self.reconcile_smx_assignment();
-        self.maybe_autoprompt_smx_assign();
-        self.drive_smx_options_lights(delta_time);
-        self.drive_smx_player_options_lights(delta_time);
-        self.apply_smx_managed_preset();
-        self.drive_smx_light_brightness();
+        self.sync_pad_config_fsr(&frame_config);
+        self.reconcile_smx_assignment(&frame_config);
+        self.maybe_autoprompt_smx_assign(&frame_config);
+        self.drive_smx_options_lights(delta_time, &frame_config);
+        self.drive_smx_player_options_lights(delta_time, &frame_config);
+        self.apply_smx_managed_preset(&frame_config);
+        self.drive_smx_light_brightness(&frame_config);
         self.state.shell.interaction.update_message(redraw_started);
         self.sync_options_song_packs();
         self.poll_profile_load();
@@ -2210,7 +2220,8 @@ impl App {
         self.poll_score_import();
         self.poll_sync_analysis();
         self.sync_active_online_runtime_view();
-        crate::heart_rate::sync_runtime(
+        self.heart_rate.sync(
+            frame_config.machine_enable_heart_rate_monitors,
             self.state.screens.current_screen == CurrentScreen::PlayerOptions,
         );
 
@@ -2301,7 +2312,6 @@ impl App {
             }
             None => {}
         }
-        let frame_config = config::get();
         self.sync_select_music_runtime_view(&frame_config);
         self.sync_select_course_runtime_view(&frame_config);
         let update_us: u32 = elapsed_us_since(update_started);
@@ -2769,6 +2779,7 @@ impl App {
             options_song_pack_generation: deadsync_simfile::runtime_cache::song_cache_generation(),
             profile_import: crate::profile_import::Service::default(),
             profile_load: crate::profile_load::Service::default(),
+            heart_rate: crate::heart_rate::Runtime::default(),
             qr_login: crate::qr_login::Service::default(),
             score_import: crate::score_import::Service::default(),
             sync_analysis: crate::sync_analysis::Service::default(),
@@ -4523,6 +4534,7 @@ impl App {
                             ..Default::default()
                         },
                         arrow_effect_time_s,
+                        config,
                     );
                 }
             }
@@ -4536,6 +4548,7 @@ impl App {
                         ps,
                         &self.asset_manager,
                         arrow_effect_time_s,
+                        config,
                     );
                 }
             }
@@ -6084,6 +6097,7 @@ impl App {
                     &mut self.gameplay_text_layout_cache,
                     &mut self.gameplay_compose_scratch,
                     &mut gs,
+                    &cfg,
                 );
                 let text_prewarm_ms = text_prewarm_started.elapsed().as_secs_f64() * 1000.0;
                 let song = gs.song();
@@ -6467,6 +6481,7 @@ impl App {
                     &mut self.gameplay_text_layout_cache,
                     &mut self.gameplay_compose_scratch,
                     &mut gs,
+                    &cfg,
                 );
                 let text_prewarm_ms = text_prewarm_started.elapsed().as_secs_f64() * 1000.0;
                 let total_ms = gameplay_entry_started.elapsed().as_secs_f64() * 1000.0;

@@ -9,6 +9,7 @@ use std::fmt::Write as _;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, LazyLock, Mutex, MutexGuard};
 
 #[derive(Clone, Default, PartialEq, Eq)]
@@ -100,6 +101,17 @@ static RUNTIME_PROFILE_DIR_CACHE: LazyLock<Mutex<Option<RuntimeProfileDirCache>>
 
 static RUNTIME_SESSION_LOCK_WAIT_STATS: lock_wait::LockWaitStats = lock_wait::LockWaitStats::new();
 static RUNTIME_PROFILES_LOCK_WAIT_STATS: lock_wait::LockWaitStats = lock_wait::LockWaitStats::new();
+static HEART_RATE_DEVICE_GENERATION: AtomicU64 = AtomicU64::new(1);
+
+#[inline(always)]
+pub fn runtime_heart_rate_device_generation() -> u64 {
+    HEART_RATE_DEVICE_GENERATION.load(Ordering::Acquire)
+}
+
+#[inline(always)]
+pub(crate) fn runtime_mark_heart_rate_devices_changed() {
+    HEART_RATE_DEVICE_GENERATION.fetch_add(1, Ordering::Release);
+}
 
 #[inline(always)]
 pub fn runtime_lock_session() -> MutexGuard<'static, SessionState> {
@@ -402,6 +414,7 @@ pub fn runtime_set_guest_profile_for_side(
 ) {
     runtime_lock_profiles()[player_side_index(side)] =
         guest_profile(noteskin, pad_light_brightness);
+    runtime_mark_heart_rate_devices_changed();
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -442,6 +455,8 @@ pub fn runtime_apply_loaded_profile_data_for_side(
     );
     profile.avatar_path = avatar_path;
     profile.avatar_texture_key = None;
+    drop(profiles);
+    runtime_mark_heart_rate_devices_changed();
 }
 
 #[derive(Debug)]

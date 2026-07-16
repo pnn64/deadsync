@@ -507,6 +507,7 @@ return Def.ActorFrame{}
                         times.dedup_by(|a, b| (*a - *b).abs() <= 0.001);
 
                         let assets = crate::assets::AssetManager::new();
+                        let config = deadsync_config::prelude::Config::default();
                         for time in times {
                             state.clock.song_position.current_music_time_display = time;
                             state.clock.visible_timing.current_music_time = [time; MAX_PLAYERS];
@@ -520,6 +521,7 @@ return Def.ActorFrame{}
                                 &assets,
                                 screen_gameplay::ActorViewOverride::default(),
                                 123.0,
+                                &config,
                             );
                         }
                     },
