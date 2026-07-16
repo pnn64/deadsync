@@ -8,6 +8,7 @@ use deadsync_config::prelude::{
     SelectMusicStepArtistBoxMode, SelectMusicWheelStyle, SrpgVariant, VersionOverlaySide,
     VisualStyle,
 };
+use deadsync_input::{InputBinding, KeyCode, VirtualAction};
 use deadsync_profile::{ActiveProfile, PlayerSide};
 use deadsync_simfile::sync_offset::SongOffsetSyncChange;
 use deadsync_theme::{AudioRequest, GraphicsRequest, PlatformRequest};
@@ -421,6 +422,25 @@ pub enum SimplyLoveSelectMusicConfigRequest {
     ChartInfoMask(u8),
 }
 
+/// Input mappings chosen by Simply Love and persisted by the shell.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SimplyLoveMappingsConfigRequest {
+    BindKeyboard {
+        action: VirtualAction,
+        index: usize,
+        code: KeyCode,
+    },
+    BindGamepad {
+        action: VirtualAction,
+        index: usize,
+        binding: InputBinding,
+    },
+    Clear {
+        action: VirtualAction,
+        index: usize,
+    },
+}
+
 /// Machine preferences chosen by Simply Love and persisted by the shell.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SimplyLoveMachineConfigRequest {
@@ -585,6 +605,7 @@ pub enum SimplyLoveConfigRequest {
     Gameplay(SimplyLoveGameplayConfigRequest),
     Lights(SimplyLoveLightsConfigRequest),
     Machine(SimplyLoveMachineConfigRequest),
+    Mappings(SimplyLoveMappingsConfigRequest),
     NullOrDie(SimplyLoveNullOrDieConfigRequest),
     Online(SimplyLoveOnlineConfigRequest),
     SelectMusic(SimplyLoveSelectMusicConfigRequest),

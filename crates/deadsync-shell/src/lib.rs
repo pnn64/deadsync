@@ -19,6 +19,7 @@ mod input_trace;
 mod interaction;
 mod lighting;
 mod main_menu;
+mod mappings;
 mod navigation;
 mod offset_prompt;
 mod pad_config;

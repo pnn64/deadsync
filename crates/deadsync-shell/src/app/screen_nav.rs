@@ -154,7 +154,7 @@ impl App {
             );
         } else if target_screen == CurrentScreen::Mappings {
             let color_index = self.state.screens.options_state.active_color_index;
-            self.state.screens.mappings_state = mappings::init();
+            self.state.screens.mappings_state = mappings::init(crate::mappings::runtime_view());
             self.state.screens.mappings_state.active_color_index = color_index;
         } else if target_screen == CurrentScreen::TestLights {
             let color_index = self.state.screens.options_state.active_color_index;

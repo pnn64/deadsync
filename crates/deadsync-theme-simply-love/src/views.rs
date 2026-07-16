@@ -1,5 +1,6 @@
 use deadlib_render::{ClockDomainTrace, PresentModeTrace};
 use deadsync_assets::noteskin::Noteskin;
+use deadsync_input::Keymap;
 use deadsync_profile::PlayerSide;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -18,6 +19,24 @@ pub type CourseStagePlan = CourseStageView;
 pub type SelectedCoursePlan = SelectedCourseView;
 pub type DensityGraphSource = DensityGraphView;
 pub type TimingHealth = TimingHealthView<PresentModeTrace, ClockDomainTrace, AudioTimingView>;
+
+/// Shell-prepared keymap state consumed by Simply Love's mappings screen.
+#[derive(Clone, Debug)]
+pub struct MappingsRuntimeView {
+    pub keymap: Keymap,
+    pub input_debounce_seconds: f32,
+    pub dedicated_three_key_nav: bool,
+}
+
+impl Default for MappingsRuntimeView {
+    fn default() -> Self {
+        Self {
+            keymap: deadsync_input::default_keymap(),
+            input_debounce_seconds: 0.02,
+            dedicated_three_key_nav: false,
+        }
+    }
+}
 
 /// One player's shell-prepared local records and online eligibility state used
 /// while constructing an Evaluation screen.

@@ -184,7 +184,7 @@ impl MenuLrChordTracker {
     }
 }
 
-fn three_key_menu_action_enabled(
+pub(super) fn three_key_menu_action_enabled(
     chord: &mut MenuLrChordTracker,
     ev: &InputEvent,
     enabled: bool,

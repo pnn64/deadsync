@@ -1,10 +1,14 @@
 use crate::act;
 use crate::assets::AssetManager;
 use crate::assets::{FontRole, current_machine_font_key};
+use crate::effects::{
+    SimplyLoveConfigRequest, SimplyLoveMappingsConfigRequest, SimplyLoveRuntimeRequest,
+};
 use crate::screens::components::shared::screen_bar::{ScreenBarPosition, ScreenBarTitlePlacement};
 use crate::screens::components::shared::{screen_bar, transitions, visual_style_bg};
 use crate::screens::input as screen_input;
 use crate::screens::{Screen, ThemeEffect};
+use crate::views::MappingsRuntimeView;
 use deadlib_present::actors::Actor;
 use deadlib_present::color;
 use deadlib_present::font;
@@ -14,7 +18,9 @@ use deadsync_input::KeyCode;
 use deadsync_input::RawKeyboardEvent;
 use deadsync_input::{
     GamepadCodeBinding, InputBinding, InputEvent, Keymap, PadEvent, VirtualAction,
-    any_player_has_dedicated_menu_buttons_for_mode, clamp_input_debounce_seconds, with_keymap,
+    clamp_input_debounce_seconds, cleared_keymap, editable_key_binding_slot_indices,
+    protected_default_key_for_action, updated_keymap_unique_gamepad,
+    updated_keymap_unique_keyboard,
 };
 use std::time::{Duration, Instant};
 
@@ -207,6 +213,7 @@ enum ThreeKeyFocus {
 
 pub struct State {
     pub active_color_index: i32,
+    runtime: MappingsRuntimeView,
     bg: visual_style_bg::State,
     /// 0..NUM_MAPPING_ROWS-1 = mapping rows, `NUM_MAPPING_ROWS` = Exit.
     selected_row: usize,
@@ -237,9 +244,10 @@ pub struct State {
     menu_lr_undo_slot: Option<ActiveSlot>,
 }
 
-pub fn init() -> State {
+pub fn init(runtime: MappingsRuntimeView) -> State {
     State {
         active_color_index: color::DEFAULT_COLOR_INDEX,
+        runtime,
         bg: visual_style_bg::State::new(),
         selected_row: 0,
         prev_selected_row: 0,
@@ -348,9 +356,9 @@ fn set_active_slot(state: &mut State, new_slot: ActiveSlot) {
 }
 
 #[inline(always)]
-fn capture_debounce_window() -> Duration {
+fn capture_debounce_window(state: &State) -> Duration {
     Duration::from_secs_f32(clamp_input_debounce_seconds(
-        crate::config::get().input_debounce_seconds,
+        state.runtime.input_debounce_seconds,
     ))
 }
 
@@ -360,7 +368,7 @@ fn begin_capture(state: &mut State, timestamp: Instant) {
     state.capture_row = Some(state.selected_row);
     state.capture_slot = Some(state.active_slot);
     state.capture_pulse_t = 0.0;
-    state.capture_ignore_until = Some(timestamp + capture_debounce_window());
+    state.capture_ignore_until = Some(timestamp + capture_debounce_window(state));
     state.capture_keyboard_arming_key = None;
     state.nav_key_held_direction = None;
     state.nav_key_held_since = None;
@@ -409,21 +417,41 @@ fn focused_binding_target(state: &State) -> Option<(VirtualAction, usize)> {
     }
 }
 
-#[inline(always)]
-fn clear_focused_binding(state: &State) -> bool {
-    let Some((action, index)) = focused_binding_target(state) else {
-        return false;
+fn supports_three_key_nav(keymap: &Keymap) -> bool {
+    let player_has = |left, right, start| {
+        [left, right, start]
+            .into_iter()
+            .all(|action| keymap.binding_at(action, 0).is_some())
     };
-    let cleared = crate::config::clear_keymap_binding(action, index);
-    if cleared
-        && crate::config::get().only_dedicated_menu_buttons
-        && !any_player_has_dedicated_menu_buttons_for_mode(
-            crate::config::get().three_key_navigation,
-        )
-    {
-        crate::config::update_only_dedicated_menu_buttons(false);
+    player_has(
+        VirtualAction::p1_menu_left,
+        VirtualAction::p1_menu_right,
+        VirtualAction::p1_start,
+    ) || player_has(
+        VirtualAction::p2_menu_left,
+        VirtualAction::p2_menu_right,
+        VirtualAction::p2_start,
+    )
+}
+
+fn apply_keymap(state: &mut State, keymap: Keymap) {
+    state.runtime.keymap = keymap;
+    if state.runtime.dedicated_three_key_nav && !supports_three_key_nav(&state.runtime.keymap) {
+        state.runtime.dedicated_three_key_nav = false;
     }
-    cleared
+}
+
+#[inline(always)]
+fn clear_focused_binding(state: &mut State) -> Option<SimplyLoveMappingsConfigRequest> {
+    let Some((action, index)) = focused_binding_target(state) else {
+        return None;
+    };
+    let (keymap, changed) = cleared_keymap(&state.runtime.keymap, action, index);
+    if !changed {
+        return None;
+    }
+    apply_keymap(state, keymap);
+    Some(SimplyLoveMappingsConfigRequest::Clear { action, index })
 }
 
 const RAW_NAV_ACTION_PRIORITY: [VirtualAction; 18] = [
@@ -466,8 +494,18 @@ fn keymap_raw_nav_action(keymap: &Keymap, key_event: &RawKeyboardEvent) -> Optio
 }
 
 #[inline(always)]
-fn mapped_raw_nav_action(key_event: &RawKeyboardEvent) -> Option<VirtualAction> {
-    with_keymap(|keymap| keymap_raw_nav_action(keymap, key_event))
+fn mapped_raw_nav_action(state: &State, key_event: &RawKeyboardEvent) -> Option<VirtualAction> {
+    keymap_raw_nav_action(&state.runtime.keymap, key_event)
+}
+
+fn config_effect(request: SimplyLoveMappingsConfigRequest) -> ThemeEffect {
+    ThemeEffect::Runtime(SimplyLoveRuntimeRequest::Config(
+        SimplyLoveConfigRequest::Mappings(request),
+    ))
+}
+
+fn mapping_change_effect(path: &str, request: SimplyLoveMappingsConfigRequest) -> ThemeEffect {
+    crate::effects::sfx_then(path, config_effect(request))
 }
 
 #[inline(always)]
@@ -611,7 +649,8 @@ pub fn handle_raw_key_event(state: &mut State, key_event: &RawKeyboardEvent) -> 
         if state.capture_keyboard_arming_key == Some(code) {
             if !is_pressed {
                 state.capture_keyboard_arming_key = None;
-                state.capture_ignore_until = Some(key_event.timestamp + capture_debounce_window());
+                state.capture_ignore_until =
+                    Some(key_event.timestamp + capture_debounce_window(state));
             }
             return ThemeEffect::None;
         }
@@ -643,16 +682,17 @@ pub fn handle_raw_key_event(state: &mut State, key_event: &RawKeyboardEvent) -> 
                     ActiveSlot::P1Primary | ActiveSlot::P2Primary => 1,
                     ActiveSlot::P1Secondary | ActiveSlot::P2Secondary => 2,
                 };
-                crate::config::update_keymap_binding_unique_keyboard(action, index, code);
-                effect = crate::effects::sfx(CHANGE_VALUE_SFX);
-
-                if crate::config::get().only_dedicated_menu_buttons
-                    && !any_player_has_dedicated_menu_buttons_for_mode(
-                        crate::config::get().three_key_navigation,
-                    )
-                {
-                    crate::config::update_only_dedicated_menu_buttons(false);
-                }
+                let keymap =
+                    updated_keymap_unique_keyboard(&state.runtime.keymap, action, index, code);
+                apply_keymap(state, keymap);
+                effect = mapping_change_effect(
+                    CHANGE_VALUE_SFX,
+                    SimplyLoveMappingsConfigRequest::BindKeyboard {
+                        action,
+                        index,
+                        code,
+                    },
+                );
             }
         }
 
@@ -695,8 +735,8 @@ pub fn handle_raw_key_event(state: &mut State, key_event: &RawKeyboardEvent) -> 
             }
         }
         KeyCode::Delete | KeyCode::Backspace => {
-            if is_pressed && clear_focused_binding(state) {
-                return crate::effects::sfx(CHANGE_SFX);
+            if is_pressed && let Some(request) = clear_focused_binding(state) {
+                return mapping_change_effect(CHANGE_SFX, request);
             }
         }
         KeyCode::Enter => {
@@ -719,7 +759,7 @@ pub fn handle_raw_key_event(state: &mut State, key_event: &RawKeyboardEvent) -> 
             }
         }
         _ => {
-            if let Some(action) = mapped_raw_nav_action(key_event) {
+            if let Some(action) = mapped_raw_nav_action(state, key_event) {
                 let was_capture_active = state.capture_active;
                 let action = handle_input(state, &input_event_from_raw(action, key_event));
                 if !was_capture_active && state.capture_active {
@@ -799,16 +839,17 @@ pub fn handle_raw_pad_event(state: &mut State, pad_event: &PadEvent) -> (bool, T
                 ActiveSlot::P1Primary | ActiveSlot::P2Primary => 1,
                 ActiveSlot::P1Secondary | ActiveSlot::P2Secondary => 2,
             };
-            crate::config::update_keymap_binding_unique_gamepad(action, index, binding);
-            effect = crate::effects::sfx(CHANGE_VALUE_SFX);
-
-            if crate::config::get().only_dedicated_menu_buttons
-                && !any_player_has_dedicated_menu_buttons_for_mode(
-                    crate::config::get().three_key_navigation,
-                )
-            {
-                crate::config::update_only_dedicated_menu_buttons(false);
-            }
+            let keymap =
+                updated_keymap_unique_gamepad(&state.runtime.keymap, action, index, binding);
+            apply_keymap(state, keymap);
+            effect = mapping_change_effect(
+                CHANGE_VALUE_SFX,
+                SimplyLoveMappingsConfigRequest::BindGamepad {
+                    action,
+                    index,
+                    binding,
+                },
+            );
         }
     }
 
@@ -818,7 +859,11 @@ pub fn handle_raw_pad_event(state: &mut State, pad_event: &PadEvent) -> (bool, T
 }
 
 pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
-    let three_key_action = screen_input::three_key_menu_action(&mut state.menu_lr_chord, ev);
+    let three_key_action = screen_input::three_key_menu_action_enabled(
+        &mut state.menu_lr_chord,
+        ev,
+        state.runtime.dedicated_three_key_nav,
+    );
     // While capturing, lock navigation and only allow backing out
     // of the screen; candidate keys are handled in handle_raw_key_event.
     if state.capture_active {
@@ -832,7 +877,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
         return ThemeEffect::None;
     }
 
-    if screen_input::dedicated_three_key_nav_enabled() {
+    if state.runtime.dedicated_three_key_nav {
         match ev.action {
             VirtualAction::p1_left
             | VirtualAction::p1_menu_left
@@ -1070,7 +1115,7 @@ fn format_binding_for_display(binding: InputBinding) -> String {
 
 #[inline(always)]
 fn editable_slot_indices_for_action(keymap: &Keymap, action: VirtualAction) -> (usize, usize) {
-    crate::config::editable_key_binding_slot_indices(keymap, action)
+    editable_key_binding_slot_indices(keymap, action)
 }
 
 pub fn push_actors(
@@ -1396,7 +1441,8 @@ pub fn push_actors(
                 p2_secondary_text,
                 p1_default_text,
                 p2_default_text,
-            ) = with_keymap(|keymap| {
+            ) = {
+                let keymap = &state.runtime.keymap;
                 // Actions whose protected default is still present use
                 // [default, primary, secondary]. Others use
                 // [primary, secondary].
@@ -1416,11 +1462,11 @@ pub fn push_actors(
                     .map_or_else(|| "------".to_string(), format_binding_for_display);
 
                 let p1_default_text = p1_act_opt
-                    .and_then(|act| crate::config::protected_default_key_for_action(keymap, act))
+                    .and_then(|act| protected_default_key_for_action(keymap, act))
                     .map(|code| format!("{code:?}"))
                     .unwrap_or_else(|| "------".to_string());
                 let p2_default_text = p2_act_opt
-                    .and_then(|act| crate::config::protected_default_key_for_action(keymap, act))
+                    .and_then(|act| protected_default_key_for_action(keymap, act))
                     .map(|code| format!("{code:?}"))
                     .unwrap_or_else(|| "------".to_string());
 
@@ -1432,7 +1478,7 @@ pub fn push_actors(
                     p1_default_text,
                     p2_default_text,
                 )
-            });
+            };
             let active_value_color = if is_active { col_white } else { col_gray };
 
             // Heartbeat-style pulse for the slot currently being captured.
@@ -1808,10 +1854,14 @@ mod tests {
     use super::{
         ActiveSlot, NAV_INITIAL_HOLD_DELAY, NAV_REPEAT_SCROLL_INTERVAL, NUM_MAPPING_ROWS,
         NavDirection, begin_capture, handle_input, handle_raw_key_event, handle_raw_pad_event,
-        init, invalid_capture_key, keymap_raw_nav_action, repeat_navigation,
+        init as init_with_runtime, invalid_capture_key, keymap_raw_nav_action, repeat_navigation,
     };
-    use crate::effects::{SimplyLoveEffect, SimplyLoveRuntimeRequest};
+    use crate::effects::{
+        SimplyLoveConfigRequest, SimplyLoveEffect, SimplyLoveMappingsConfigRequest,
+        SimplyLoveRuntimeRequest,
+    };
     use crate::screens::Screen;
+    use crate::views::MappingsRuntimeView;
     use deadsync_core::input::InputSource;
     use deadsync_input::KeyCode;
     use deadsync_input::RawKeyboardEvent;
@@ -1820,6 +1870,10 @@ mod tests {
     };
     use deadsync_theme::AudioRequest;
     use std::time::{Duration, Instant};
+
+    fn init() -> super::State {
+        init_with_runtime(MappingsRuntimeView::default())
+    }
 
     fn input_event(action: VirtualAction, pressed: bool, source: InputSource) -> InputEvent {
         let now = Instant::now();
@@ -1974,6 +2028,82 @@ mod tests {
             &raw_key(KeyCode::Enter, true, t0 + Duration::from_millis(3)),
         );
         assert!(state.capture_active);
+    }
+
+    #[test]
+    fn keyboard_capture_updates_view_before_requesting_shell_persistence() {
+        let mut state = init();
+        let t0 = Instant::now();
+        begin_capture(&mut state, t0);
+
+        let effect = handle_raw_key_event(
+            &mut state,
+            &raw_key(KeyCode::KeyQ, true, t0 + Duration::from_millis(250)),
+        );
+
+        assert_eq!(
+            state
+                .runtime
+                .keymap
+                .binding_at(VirtualAction::p1_menu_left, 0),
+            Some(InputBinding::Key(KeyCode::KeyQ))
+        );
+        let SimplyLoveEffect::Batch(effects) = effect else {
+            panic!("expected sound followed by a mappings persistence request");
+        };
+        assert_sfx(&effects[0], "assets/sounds/change_value.ogg");
+        assert!(matches!(
+            effects[1],
+            SimplyLoveEffect::Runtime(SimplyLoveRuntimeRequest::Config(
+                SimplyLoveConfigRequest::Mappings(SimplyLoveMappingsConfigRequest::BindKeyboard {
+                    action: VirtualAction::p1_menu_left,
+                    index: 1,
+                    code: KeyCode::KeyQ,
+                })
+            ))
+        ));
+    }
+
+    #[test]
+    fn clearing_required_binding_disables_local_dedicated_navigation() {
+        let mut runtime = MappingsRuntimeView::default();
+        runtime.keymap.bind(
+            VirtualAction::p1_menu_left,
+            &[InputBinding::Key(KeyCode::KeyQ)],
+        );
+        runtime.keymap.bind(
+            VirtualAction::p1_menu_right,
+            &[InputBinding::Key(KeyCode::KeyE)],
+        );
+        runtime.dedicated_three_key_nav = true;
+        let mut state = init_with_runtime(runtime);
+
+        let effect =
+            handle_raw_key_event(&mut state, &raw_key(KeyCode::Delete, true, Instant::now()));
+
+        assert!(!state.runtime.dedicated_three_key_nav);
+        assert_eq!(
+            state
+                .runtime
+                .keymap
+                .binding_at(VirtualAction::p1_menu_left, 0),
+            None
+        );
+        assert!(matches!(
+            effect,
+            SimplyLoveEffect::Batch(ref effects)
+                if matches!(
+                    effects.get(1),
+                    Some(SimplyLoveEffect::Runtime(SimplyLoveRuntimeRequest::Config(
+                        SimplyLoveConfigRequest::Mappings(
+                            SimplyLoveMappingsConfigRequest::Clear {
+                                action: VirtualAction::p1_menu_left,
+                                index: 1,
+                            }
+                        )
+                    )))
+                )
+        ));
     }
 
     #[test]

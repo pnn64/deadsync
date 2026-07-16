@@ -625,7 +625,7 @@ impl ScreensState {
         let mut manage_local_profiles_state = manage_local_profiles::init();
         manage_local_profiles_state.active_color_index = color_index;
 
-        let mut mappings_state = mappings::init();
+        let mut mappings_state = mappings::init(crate::mappings::runtime_view());
         mappings_state.active_color_index = color_index;
 
         let mut input_state = input_screen::init();
@@ -3099,6 +3099,10 @@ impl App {
                 }
                 SimplyLoveRuntimeRequest::Config(SimplyLoveConfigRequest::Machine(request)) => {
                     config_requests::execute_machine(request);
+                    Vec::new()
+                }
+                SimplyLoveRuntimeRequest::Config(SimplyLoveConfigRequest::Mappings(request)) => {
+                    crate::mappings::execute(request);
                     Vec::new()
                 }
                 SimplyLoveRuntimeRequest::Config(SimplyLoveConfigRequest::NullOrDie(request)) => {
@@ -5633,7 +5637,7 @@ impl App {
                 .active_color_index = color_index;
         } else if target == CurrentScreen::Mappings {
             let color_index = self.state.screens.options_state.active_color_index;
-            self.state.screens.mappings_state = mappings::init();
+            self.state.screens.mappings_state = mappings::init(crate::mappings::runtime_view());
             self.state.screens.mappings_state.active_color_index = color_index;
         } else if target == CurrentScreen::TestLights {
             let color_index = self.state.screens.options_state.active_color_index;

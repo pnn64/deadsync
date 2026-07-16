@@ -3965,6 +3965,59 @@ fn simply_love_main_menu_uses_prepared_runtime_view() {
 }
 
 #[test]
+fn simply_love_mappings_uses_shell_prepared_config_state() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let screen =
+        fs::read_to_string(root.join("crates/deadsync-theme-simply-love/src/screens/mappings.rs"))
+            .expect("Simply Love mappings screen should be readable");
+    let views = fs::read_to_string(root.join("crates/deadsync-theme-simply-love/src/views.rs"))
+        .expect("Simply Love views should be readable");
+    let effects = fs::read_to_string(root.join("crates/deadsync-theme-simply-love/src/effects.rs"))
+        .expect("Simply Love effects should be readable");
+    let shell = fs::read_to_string(root.join("crates/deadsync-shell/src/mappings.rs"))
+        .expect("shell mappings adapter should be readable");
+    let shell_app = fs::read_to_string(root.join("crates/deadsync-shell/src/app/mod.rs"))
+        .expect("shell runtime executor should be readable");
+
+    for runtime_read in [
+        "crate::config",
+        "deadsync_config",
+        "with_keymap",
+        "get_keymap",
+        "update_keymap_binding_unique_keyboard_saved",
+        "update_keymap_binding_unique_gamepad_saved",
+    ] {
+        assert!(
+            !screen.contains(runtime_read),
+            "Simply Love mappings still reads runtime service {runtime_read}"
+        );
+    }
+    assert!(
+        views.contains("pub struct MappingsRuntimeView")
+            && views.contains("pub keymap: Keymap")
+            && views.contains("pub input_debounce_seconds: f32")
+            && views.contains("pub dedicated_three_key_nav: bool")
+    );
+    assert!(
+        effects.contains("pub enum SimplyLoveMappingsConfigRequest")
+            && effects.contains("Mappings(SimplyLoveMappingsConfigRequest)")
+            && screen.contains("updated_keymap_unique_keyboard")
+            && screen.contains("updated_keymap_unique_gamepad")
+            && screen.contains("cleared_keymap")
+    );
+    assert!(
+        shell.contains("pub(crate) fn runtime_view() -> MappingsRuntimeView")
+            && shell.contains("keymap: get_keymap()")
+            && shell.contains("pub(crate) fn execute(request: SimplyLoveMappingsConfigRequest)")
+            && shell.contains("config::update_keymap_binding_unique_keyboard")
+            && shell.contains("config::update_keymap_binding_unique_gamepad")
+            && shell.contains("config::clear_keymap_binding")
+            && shell.contains("config::update_only_dedicated_menu_buttons(false)")
+            && shell_app.contains("SimplyLoveConfigRequest::Mappings(request)")
+    );
+}
+
+#[test]
 fn simply_love_gameplay_smx_execution_is_shell_owned() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let theme =
