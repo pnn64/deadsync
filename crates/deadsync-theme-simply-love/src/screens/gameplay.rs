@@ -2784,16 +2784,18 @@ fn cached_bpm_text(bpm: f64, show_decimal: bool) -> Arc<str> {
             format!("{rounded:.0}")
         });
     }
-    let rounded_tenth = (bpm * 10.0).round() / 10.0;
-    let rounded_tenth = rounded_tenth.max(0.0);
-    let key = (rounded_tenth.to_bits(), true);
+    let rounded_thousandth = (bpm * 1_000.0).round() / 1_000.0;
+    let rounded_thousandth = rounded_thousandth.max(0.0);
+    let key = (rounded_thousandth.to_bits(), true);
     cached_text(&BPM_TEXT_CACHE, key, TEXT_CACHE_LIMIT, || {
-        let nearest_int = rounded_tenth.round();
-        if (rounded_tenth - nearest_int).abs() <= 0.001 {
-            format!("{nearest_int:.0}")
-        } else {
-            format!("{rounded_tenth:.1}")
+        let mut text = format!("{rounded_thousandth:.3}");
+        while text.ends_with('0') {
+            text.pop();
         }
+        if text.ends_with('.') {
+            text.pop();
+        }
+        text
     })
 }
 
@@ -11361,6 +11363,21 @@ mod tests {
         assert_eq!(song_meter_progress(2.0, 2.0, 12.0), 0.0);
         assert!((song_meter_progress(7.0, 2.0, 12.0) - 0.5).abs() <= 1e-6);
         assert_eq!(song_meter_progress(12.0, 2.0, 12.0), 1.0);
+    }
+
+    #[test]
+    fn bpm_decimal_shows_authored_precision_without_trailing_zeroes() {
+        assert_eq!(
+            cached_bpm_text(f64::from(100.001_f32), true).as_ref(),
+            "100.001"
+        );
+        assert_eq!(
+            cached_bpm_text(f64::from(133.33_f32), true).as_ref(),
+            "133.33"
+        );
+        assert_eq!(cached_bpm_text(100.000, true).as_ref(), "100");
+        assert_eq!(cached_bpm_text(150.0, true).as_ref(), "150");
+        assert_eq!(cached_bpm_text(100.001, false).as_ref(), "100");
     }
 
     #[test]

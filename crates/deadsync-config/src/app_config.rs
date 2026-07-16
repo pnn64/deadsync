@@ -230,7 +230,7 @@ pub struct Config {
     pub machine_show_gameover: bool,
     /// zmod parity: gameplay/eval difficulty meter also displays text labels.
     pub zmod_rating_box_text: bool,
-    /// Show one decimal place for live gameplay BPM when BPM is non-integer.
+    /// Show up to three decimal places for live gameplay BPM.
     pub show_bpm_decimal: bool,
     /// Where to place the live gameplay BPM display.
     pub gameplay_bpm_position: GameplayBpmPosition,
