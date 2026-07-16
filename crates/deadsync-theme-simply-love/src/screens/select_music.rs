@@ -714,6 +714,22 @@ enum NavDirection {
     Right,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct InputId {
+    source: InputSource,
+    slot: u32,
+}
+
+impl InputId {
+    #[inline(always)]
+    const fn from_event(ev: &InputEvent) -> Self {
+        Self {
+            source: ev.source,
+            slot: ev.input_slot,
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq)]
 enum OutPromptState {
     None,
@@ -1186,6 +1202,8 @@ pub struct State {
     pattern_info: PatternInfoState,
     menu_chord_left_pressed_at: Option<Instant>,
     menu_chord_right_pressed_at: Option<Instant>,
+    menu_chord_left_input: Option<InputId>,
+    menu_chord_right_input: Option<InputId>,
     exit_code: ExitCodeTracker,
     favorite_code: crate::screens::favorite_code::FavoriteCodeTracker,
     last_steps_nav_dir_p1: Option<PadDir>,
@@ -3018,6 +3036,8 @@ pub fn init(init_view: SelectMusicInitView) -> State {
         pattern_info: PatternInfoState::default(),
         menu_chord_left_pressed_at: None,
         menu_chord_right_pressed_at: None,
+        menu_chord_left_input: None,
+        menu_chord_right_input: None,
         exit_code: Default::default(),
         favorite_code: Default::default(),
         last_steps_nav_dir_p1: None,
@@ -3246,6 +3266,8 @@ pub fn init_placeholder() -> State {
         pattern_info: PatternInfoState::default(),
         menu_chord_left_pressed_at: None,
         menu_chord_right_pressed_at: None,
+        menu_chord_left_input: None,
+        menu_chord_right_input: None,
         exit_code: Default::default(),
         favorite_code: Default::default(),
         last_steps_nav_dir_p1: None,
@@ -3652,6 +3674,8 @@ fn clear_menu_chord(state: &mut State) {
     state.menu_chord_mask = 0;
     state.menu_chord_left_pressed_at = None;
     state.menu_chord_right_pressed_at = None;
+    state.menu_chord_left_input = None;
+    state.menu_chord_right_input = None;
 }
 
 #[inline(always)]
@@ -9119,7 +9143,24 @@ pub fn handle_pad_dir(
     pressed: bool,
     timestamp: Instant,
 ) -> ThemeEffect {
-    let effect = handle_pad_dir_impl(state, side, dir, pressed, timestamp);
+    let effect = handle_pad_dir_impl(state, side, dir, pressed, timestamp, None);
+    prepend_pending_runtime(state, effect)
+}
+
+fn handle_pad_dir_event(
+    state: &mut State,
+    side: profile_data::PlayerSide,
+    dir: PadDir,
+    ev: &InputEvent,
+) -> ThemeEffect {
+    let effect = handle_pad_dir_impl(
+        state,
+        side,
+        dir,
+        ev.pressed,
+        ev.timestamp,
+        Some(InputId::from_event(ev)),
+    );
     prepend_pending_runtime(state, effect)
 }
 
@@ -9129,6 +9170,7 @@ fn handle_pad_dir_impl(
     dir: PadDir,
     pressed: bool,
     timestamp: Instant,
+    input: Option<InputId>,
 ) -> ThemeEffect {
     let exit_code_entered =
         pressed && wheel_lr_dir(dir).is_some_and(|dir| state.exit_code.check(side, dir, timestamp));
@@ -9149,8 +9191,11 @@ fn handle_pad_dir_impl(
         match dir {
             PadDir::Right => {
                 // Simply Love [ScreenSelectMusic]: CodeSortList4 = "Left-Right".
+                if state.menu_chord_mask & MENU_CHORD_RIGHT == 0 {
+                    state.menu_chord_right_pressed_at = Some(timestamp);
+                    state.menu_chord_right_input = input;
+                }
                 state.menu_chord_mask |= MENU_CHORD_RIGHT;
-                state.menu_chord_right_pressed_at = Some(timestamp);
                 if try_open_select_music_menu(state) {
                     return finish(state, exit_code_entered);
                 }
@@ -9170,8 +9215,11 @@ fn handle_pad_dir_impl(
                 start_nav_hold(state, NavDirection::Right);
             }
             PadDir::Left => {
+                if state.menu_chord_mask & MENU_CHORD_LEFT == 0 {
+                    state.menu_chord_left_pressed_at = Some(timestamp);
+                    state.menu_chord_left_input = input;
+                }
                 state.menu_chord_mask |= MENU_CHORD_LEFT;
-                state.menu_chord_left_pressed_at = Some(timestamp);
                 if try_open_select_music_menu(state) {
                     return finish(state, exit_code_entered);
                 }
@@ -9273,8 +9321,12 @@ fn handle_pad_dir_impl(
                 state.p1_chord_down_pressed_at = None;
             }
             PadDir::Left => {
+                if input.is_some() && state.menu_chord_left_input != input {
+                    return finish(state, exit_code_entered);
+                }
                 state.menu_chord_mask &= !MENU_CHORD_LEFT;
                 state.menu_chord_left_pressed_at = None;
+                state.menu_chord_left_input = None;
                 if state.nav_key_held_direction == Some(NavDirection::Left) {
                     if nav_hold_started(state)
                         && state.wheel_offset_from_selection.abs()
@@ -9289,8 +9341,12 @@ fn handle_pad_dir_impl(
                 }
             }
             PadDir::Right => {
+                if input.is_some() && state.menu_chord_right_input != input {
+                    return finish(state, exit_code_entered);
+                }
                 state.menu_chord_mask &= !MENU_CHORD_RIGHT;
                 state.menu_chord_right_pressed_at = None;
+                state.menu_chord_right_input = None;
                 if state.nav_key_held_direction == Some(NavDirection::Right) {
                     if nav_hold_started(state)
                         && state.wheel_offset_from_selection.abs()
@@ -10077,20 +10133,12 @@ fn handle_input_impl(state: &mut State, ev: &InputEvent, fine: bool) -> ThemeEff
             action if direct_lr_blocked_by_dedicated_menu(action, only_dedicated_menu_buttons) => {
                 ThemeEffect::None
             }
-            VirtualAction::p1_left | VirtualAction::p1_menu_left => handle_pad_dir(
-                state,
-                profile_data::PlayerSide::P1,
-                PadDir::Left,
-                ev.pressed,
-                ev.timestamp,
-            ),
-            VirtualAction::p1_right | VirtualAction::p1_menu_right => handle_pad_dir(
-                state,
-                profile_data::PlayerSide::P1,
-                PadDir::Right,
-                ev.pressed,
-                ev.timestamp,
-            ),
+            VirtualAction::p1_left | VirtualAction::p1_menu_left => {
+                handle_pad_dir_event(state, profile_data::PlayerSide::P1, PadDir::Left, ev)
+            }
+            VirtualAction::p1_right | VirtualAction::p1_menu_right => {
+                handle_pad_dir_event(state, profile_data::PlayerSide::P1, PadDir::Right, ev)
+            }
             VirtualAction::p1_up | VirtualAction::p1_menu_up => handle_pad_dir(
                 state,
                 profile_data::PlayerSide::P1,
@@ -10129,20 +10177,12 @@ fn handle_input_impl(state: &mut State, ev: &InputEvent, fine: bool) -> ThemeEff
                 ThemeEffect::None
             }
 
-            VirtualAction::p2_left | VirtualAction::p2_menu_left => handle_pad_dir(
-                state,
-                profile_data::PlayerSide::P2,
-                PadDir::Left,
-                ev.pressed,
-                ev.timestamp,
-            ),
-            VirtualAction::p2_right | VirtualAction::p2_menu_right => handle_pad_dir(
-                state,
-                profile_data::PlayerSide::P2,
-                PadDir::Right,
-                ev.pressed,
-                ev.timestamp,
-            ),
+            VirtualAction::p2_left | VirtualAction::p2_menu_left => {
+                handle_pad_dir_event(state, profile_data::PlayerSide::P2, PadDir::Left, ev)
+            }
+            VirtualAction::p2_right | VirtualAction::p2_menu_right => {
+                handle_pad_dir_event(state, profile_data::PlayerSide::P2, PadDir::Right, ev)
+            }
             VirtualAction::p2_up | VirtualAction::p2_menu_up => {
                 handle_pad_dir_p2(state, PadDir::Up, ev.pressed, ev.timestamp)
             }
@@ -10181,20 +10221,12 @@ fn handle_input_impl(state: &mut State, ev: &InputEvent, fine: bool) -> ThemeEff
             action if direct_lr_blocked_by_dedicated_menu(action, only_dedicated_menu_buttons) => {
                 ThemeEffect::None
             }
-            VirtualAction::p2_left | VirtualAction::p2_menu_left => handle_pad_dir(
-                state,
-                profile_data::PlayerSide::P2,
-                PadDir::Left,
-                ev.pressed,
-                ev.timestamp,
-            ),
-            VirtualAction::p2_right | VirtualAction::p2_menu_right => handle_pad_dir(
-                state,
-                profile_data::PlayerSide::P2,
-                PadDir::Right,
-                ev.pressed,
-                ev.timestamp,
-            ),
+            VirtualAction::p2_left | VirtualAction::p2_menu_left => {
+                handle_pad_dir_event(state, profile_data::PlayerSide::P2, PadDir::Left, ev)
+            }
+            VirtualAction::p2_right | VirtualAction::p2_menu_right => {
+                handle_pad_dir_event(state, profile_data::PlayerSide::P2, PadDir::Right, ev)
+            }
             VirtualAction::p2_up | VirtualAction::p2_menu_up => {
                 handle_pad_dir_p2(state, PadDir::Up, ev.pressed, ev.timestamp)
             }
@@ -10222,20 +10254,12 @@ fn handle_input_impl(state: &mut State, ev: &InputEvent, fine: bool) -> ThemeEff
             action if direct_lr_blocked_by_dedicated_menu(action, only_dedicated_menu_buttons) => {
                 ThemeEffect::None
             }
-            VirtualAction::p1_left | VirtualAction::p1_menu_left => handle_pad_dir(
-                state,
-                profile_data::PlayerSide::P1,
-                PadDir::Left,
-                ev.pressed,
-                ev.timestamp,
-            ),
-            VirtualAction::p1_right | VirtualAction::p1_menu_right => handle_pad_dir(
-                state,
-                profile_data::PlayerSide::P1,
-                PadDir::Right,
-                ev.pressed,
-                ev.timestamp,
-            ),
+            VirtualAction::p1_left | VirtualAction::p1_menu_left => {
+                handle_pad_dir_event(state, profile_data::PlayerSide::P1, PadDir::Left, ev)
+            }
+            VirtualAction::p1_right | VirtualAction::p1_menu_right => {
+                handle_pad_dir_event(state, profile_data::PlayerSide::P1, PadDir::Right, ev)
+            }
             VirtualAction::p1_up | VirtualAction::p1_menu_up => handle_pad_dir(
                 state,
                 profile_data::PlayerSide::P1,
@@ -13182,16 +13206,25 @@ mod tests {
     }
 
     fn input_event(action: VirtualAction, source: InputSource, pressed: bool) -> InputEvent {
-        let now = Instant::now();
+        input_event_at(action, source, 0, pressed, Instant::now())
+    }
+
+    fn input_event_at(
+        action: VirtualAction,
+        source: InputSource,
+        input_slot: u32,
+        pressed: bool,
+        timestamp: Instant,
+    ) -> InputEvent {
         InputEvent {
             action,
-            input_slot: 0,
+            input_slot,
             pressed,
             source,
-            timestamp: now,
+            timestamp,
             timestamp_host_nanos: 0,
-            stored_at: now,
-            emitted_at: now,
+            stored_at: timestamp,
+            emitted_at: timestamp,
         }
     }
 
@@ -14437,6 +14470,68 @@ mod tests {
             VirtualAction::p1_left,
             false
         ));
+    }
+
+    #[test]
+    fn dedicated_wheel_hold_ignores_gameplay_arrow_alias_releases() {
+        let mut state = init_placeholder();
+        state.entries = test_entries();
+        state.selected_index = 2;
+        state.prev_selected_index = 2;
+        state.policy.dedicated_menu_only = true;
+
+        let now = Instant::now();
+        let menu_slot = 100;
+        super::handle_input(
+            &mut state,
+            &input_event_at(
+                VirtualAction::p1_menu_left,
+                InputSource::Gamepad,
+                menu_slot,
+                true,
+                now,
+            ),
+            false,
+        );
+        state.nav_key_held_elapsed = Duration::from_secs(1);
+
+        for (idx, (gameplay, menu_alias)) in [
+            (VirtualAction::p1_left, VirtualAction::p1_menu_left),
+            (VirtualAction::p1_down, VirtualAction::p1_menu_down),
+            (VirtualAction::p1_up, VirtualAction::p1_menu_up),
+            (VirtualAction::p1_right, VirtualAction::p1_menu_right),
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            let slot = idx as u32 + 1;
+            let timestamp = now + Duration::from_millis(idx as u64 + 1);
+            for event in [
+                input_event_at(gameplay, InputSource::Gamepad, slot, true, timestamp),
+                input_event_at(gameplay, InputSource::Gamepad, slot, false, timestamp),
+                input_event_at(menu_alias, InputSource::Gamepad, slot, false, timestamp),
+            ] {
+                super::handle_input(&mut state, &event, false);
+            }
+            assert_eq!(
+                state.nav_key_held_direction,
+                Some(super::NavDirection::Left)
+            );
+            assert_eq!(state.nav_key_held_elapsed, Duration::from_secs(1));
+        }
+
+        super::handle_input(
+            &mut state,
+            &input_event_at(
+                VirtualAction::p1_menu_left,
+                InputSource::Gamepad,
+                menu_slot,
+                false,
+                now + Duration::from_millis(10),
+            ),
+            false,
+        );
+        assert_eq!(state.nav_key_held_direction, None);
     }
 
     #[test]
