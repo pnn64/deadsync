@@ -202,6 +202,11 @@ const GAMEPLAY_OFFSET_PROMPT_Z_CURSOR: i16 = 31991;
 const GAMEPLAY_OFFSET_PROMPT_Z_TEXT: i16 = 31993;
 const UI_TEXT_LAYOUT_CACHE_LIMIT: usize = 4_096;
 const GAMEPLAY_TEXT_LAYOUT_CACHE_LIMIT: usize = 32_768;
+/// Game-thread, song-lifetime reserve for values not known at transition prewarm.
+/// Owned and shared text each receive this allowance, bounded by the 32K hard cap.
+/// Misses build once and remain until the next song; overflow saturates without
+/// eviction, scanning, or live-frame destruction.
+const GAMEPLAY_TEXT_LAYOUT_LIVE_RESERVE: usize = 4_096;
 const LIVE_TEXTURE_UPLOAD_MAX_OPS: usize = 2;
 const LIVE_TEXTURE_UPLOAD_MAX_BYTES: usize = 8 * 1024 * 1024;
 const EVALUATION_LEADERBOARD_ROWS: usize = 10;
@@ -492,9 +497,9 @@ fn prewarm_gameplay_text_layout_cache(
     gameplay::prewarm_text_layout(cache, fonts, state);
     screens::components::gameplay::gameplay_stats::prewarm_text_layout(cache, fonts, assets, state);
     screens::components::gameplay::notefield::prewarm_text_layout(cache, fonts, state);
-    // Freeze the gameplay cache after prewarm so live-song misses saturate instead
-    // of triggering prune work on a frame.
-    cache.lock_growth();
+    // Keep a bounded song-local allowance for genuinely dynamic values. Reserving
+    // it here avoids layout-arena growth and all pruning during live gameplay.
+    cache.lock_growth_with_reserve(GAMEPLAY_TEXT_LAYOUT_LIVE_RESERVE);
 
     let stats = cache.frame_stats();
     let actor_resources = state.actor_resources().stats();

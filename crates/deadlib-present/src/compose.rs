@@ -724,6 +724,17 @@ pub struct TextLayoutFrameStats {
     pub shared_aliases: u32,
 }
 
+/// Persistent bitmap-text layout storage owned by one presentation caller.
+///
+/// The cache is single-threaded (`&mut self`) and lives for whatever scope its
+/// owner chooses; DeadSync uses separate UI and song-lifetime gameplay instances.
+/// Callers prewarm before a live interval, then either freeze exactly or allow a
+/// bounded late reserve. A retained miss builds once, while overflow builds an
+/// uncached result without eviction, scans, or destructor cascades. `clear()` or
+/// dropping the owner destroys entries outside the live interval. Optional
+/// per-frame hit/miss and built-glyph counters are exposed through
+/// `begin_frame_stats`/`frame_stats`. Worst-case work is one full layout build per
+/// uncached text actor in a frame; cache maintenance itself is constant-time.
 pub struct TextLayoutCache {
     layouts: Vec<Arc<CachedTextLayout>>,
     owned_entries: HashMap<TextLayoutKey, OwnedLayoutMap, TextLayoutHasher>,
@@ -770,6 +781,27 @@ impl TextLayoutCache {
     pub fn lock_growth(&mut self) {
         self.max_entries = self.entry_count.max(1);
         self.max_aliases = self.alias_count;
+    }
+
+    /// Freeze the prewarmed working set while retaining a bounded number of
+    /// later owned texts and shared-text aliases. Pointer storage is reserved
+    /// now so a live miss never grows the layout arena itself. Once either late
+    /// allowance is full, that class saturates without scanning or pruning.
+    pub fn lock_growth_with_reserve(&mut self, additional_entries: usize) {
+        self.max_entries = self
+            .entry_count
+            .saturating_add(additional_entries)
+            .min(self.max_entries)
+            .max(1);
+        self.max_aliases = self
+            .alias_count
+            .saturating_add(additional_entries)
+            .min(self.max_aliases);
+        let additional_layouts = self
+            .max_entries
+            .saturating_sub(self.entry_count)
+            .saturating_add(self.max_aliases.saturating_sub(self.alias_count));
+        self.layouts.reserve(additional_layouts);
     }
 
     pub fn clear(&mut self) {
@@ -4789,8 +4821,8 @@ mod tests {
         build_screen_cached_with_scratch_and_texture_context,
         build_screen_cached_with_scratch_and_texture_context_and_actor_resources,
         clip_object_to_world_masks, clip_sprite_object_to_world_rect, fold_sprite_xy_rot,
-        push_shadow_objects_for_range, resolve_sprite_size_like_sm, sort_render_objects, str_ptr,
-        wrap_text_lines_by_words,
+        font_chain_key, push_shadow_objects_for_range, resolve_sprite_size_like_sm,
+        sort_render_objects, str_ptr, wrap_text_lines_by_words,
     };
     use crate::actors::{
         Actor, ActorResourceArena, SizeSpec, SpriteSource, TextAlign, TextAttribute, TextContent,
@@ -5693,6 +5725,53 @@ mod tests {
         assert_eq!(cache.entry_count, 1);
         assert!(cache.owned_layout(key, "beta").is_none());
         assert!(cache.uncached_layout.is_some());
+    }
+
+    #[test]
+    fn lock_growth_with_reserve_retains_late_owned_misses_until_full() {
+        let fonts = HashMap::from([("test", test_font())]);
+        let mut cache = TextLayoutCache::new(3);
+        cache.prewarm_text(&fonts, "test", "A", None);
+        cache.lock_growth_with_reserve(1);
+        cache.begin_frame_stats(true);
+
+        cache.prewarm_text(&fonts, "test", "B", None);
+        cache.prewarm_text(&fonts, "test", "B", None);
+        cache.prewarm_text(&fonts, "test", "AB", None);
+        cache.prewarm_text(&fonts, "test", "AB", None);
+
+        let stats = cache.frame_stats();
+        assert_eq!(stats.owned_hits, 1);
+        assert_eq!(stats.misses, 3);
+        assert_eq!(stats.owned_entries, 2);
+    }
+
+    #[test]
+    fn lock_growth_with_reserve_retains_late_shared_aliases_until_full() {
+        let fonts = HashMap::from([("test", test_font())]);
+        let font = &fonts["test"];
+        let key = TextLayoutKey {
+            font_key: font_chain_key(font, &fonts),
+            line_spacing: font.line_spacing,
+            wrap_width_pixels: -1,
+        };
+        let mut cache = TextLayoutCache::new(3);
+        let first = Arc::<str>::from("A");
+        let retained = Arc::<str>::from("B");
+        let saturated = Arc::<str>::from("AB");
+        let _ = cache.get_or_build_shared(key, font, &fonts, &first);
+        cache.lock_growth_with_reserve(1);
+        cache.begin_frame_stats(true);
+
+        let _ = cache.get_or_build_shared(key, font, &fonts, &retained);
+        let _ = cache.get_or_build_shared(key, font, &fonts, &retained);
+        let _ = cache.get_or_build_shared(key, font, &fonts, &saturated);
+        let _ = cache.get_or_build_shared(key, font, &fonts, &saturated);
+
+        let stats = cache.frame_stats();
+        assert_eq!(stats.shared_hits, 1);
+        assert_eq!(stats.misses, 3);
+        assert_eq!(stats.shared_aliases, 2);
     }
 
     #[test]

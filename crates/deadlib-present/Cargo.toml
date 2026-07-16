@@ -12,6 +12,11 @@ name = "actor_lifecycle"
 harness = false
 required-features = ["bench-support"]
 
+[[bench]]
+name = "text_layout_saturation"
+harness = false
+required-features = ["bench-support"]
+
 [dependencies]
 deadlib-render = { path = "../deadlib-render" }
 glam = "0.33.1"
