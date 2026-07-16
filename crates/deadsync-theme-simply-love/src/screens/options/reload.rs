@@ -100,6 +100,31 @@ pub(super) fn start_reload_songs_and_courses(state: &mut State) {
     });
 }
 
+pub(super) fn start_reload_song_dirs(state: &mut State, pack_dirs: Vec<PathBuf>) {
+    if state.reload_ui.is_some() || pack_dirs.is_empty() {
+        return;
+    }
+
+    clear_navigation_holds(state);
+    let (tx, rx) = std::sync::mpsc::channel::<ReloadMsg>();
+    state.reload_ui = Some(ReloadUiState::new(rx));
+    let songs_root = state.app_paths.songs.path.clone();
+
+    std::thread::spawn(move || {
+        let _ = tx.send(ReloadMsg::Phase(ReloadPhase::Songs));
+        let mut on_song = |done: usize, total: usize, pack: &str, song: &str| {
+            let _ = tx.send(ReloadMsg::Song {
+                done,
+                total,
+                pack: pack.to_owned(),
+                song: song.to_owned(),
+            });
+        };
+        song_loading::reload_song_dirs_with_progress_counts(&songs_root, &pack_dirs, &mut on_song);
+        let _ = tx.send(ReloadMsg::Done);
+    });
+}
+
 pub(super) fn poll_reload_ui(reload: &mut ReloadUiState) {
     while let Ok(msg) = reload.rx.try_recv() {
         match msg {

@@ -19,6 +19,7 @@ pub enum ItemId {
     OnlineScoreServices,
     NullOrDieOptions,
     FoldersOptions,
+    DownloadPacks,
     ReloadSongsCourses,
     CheckForUpdates,
     RollBackVersion,
@@ -506,6 +507,14 @@ pub const ITEMS: &[Item] = &[
             HelpEntry::Bullet(lookup_key("OptionsFolders", "LogFile")),
             HelpEntry::Bullet(lookup_key("OptionsFolders", "ConfigFile")),
         ],
+    },
+    Item {
+        id: ItemId::DownloadPacks,
+        name: lookup_key("Options", "DownloadPacks"),
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsHelp",
+            "DownloadPacksHelp",
+        ))],
     },
     Item {
         id: ItemId::ReloadSongsCourses,

@@ -124,6 +124,11 @@ pub enum SimplyLoveOnlineRequest {
         name: String,
         url: String,
     },
+    EnsureStepManiaOnlineCatalog,
+    RefreshStepManiaOnlineCatalog,
+    DownloadStepManiaOnlinePack {
+        pack_id: u64,
+    },
     PurchaseSrpgShopItem {
         shop_id: u32,
         item_id: String,

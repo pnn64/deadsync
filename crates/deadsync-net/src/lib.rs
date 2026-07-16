@@ -2,6 +2,7 @@ use serde::Serialize;
 use serde::de::DeserializeOwned;
 use std::error::Error;
 use std::fmt::{self, Display, Formatter};
+use std::io::Read;
 use std::sync::LazyLock;
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
@@ -10,6 +11,8 @@ pub const DEFAULT_REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
 
 // Match Simply Love / ITGmania's GrooveStats request timeout (60s).
 pub const GROOVESTATS_REQUEST_TIMEOUT: Duration = Duration::from_secs(60);
+const STREAM_CONNECT_TIMEOUT: Duration = Duration::from_secs(15);
+const STREAM_RESOLVE_TIMEOUT: Duration = Duration::from_secs(10);
 pub type HttpAgent = ureq::Agent;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -91,6 +94,29 @@ pub fn read_text_body_or_empty(response: ureq::http::Response<ureq::Body>) -> St
     response.into_body().read_to_string().unwrap_or_default()
 }
 
+/// Reads a UTF-8 response body without allowing an untrusted endpoint to grow
+/// memory beyond `max_bytes`.
+pub fn read_text_body_bounded(
+    response: ureq::http::Response<ureq::Body>,
+    max_bytes: usize,
+) -> Result<String, NetworkError> {
+    let mut body = response.into_body();
+    let limit = u64::try_from(max_bytes)
+        .unwrap_or(u64::MAX)
+        .saturating_add(1);
+    let mut bytes = Vec::with_capacity(max_bytes.min(64 * 1024));
+    let mut reader = body.as_reader().take(limit);
+    reader
+        .read_to_end(&mut bytes)
+        .map_err(|error| request_error(error.to_string()))?;
+    if bytes.len() > max_bytes {
+        return Err(NetworkError::Decode(format!(
+            "response body exceeds {max_bytes} bytes"
+        )));
+    }
+    String::from_utf8(bytes).map_err(|error| NetworkError::Decode(error.to_string()))
+}
+
 pub fn log_body_snippet(text: &str) -> String {
     const MAX_LOG_CHARS: usize = 256;
     if text.is_empty() {
@@ -122,12 +148,30 @@ static GROOVESTATS_AGENT: LazyLock<ureq::Agent> = LazyLock::new(|| {
     })
 });
 
+// Large downloads intentionally have no global timeout: a legitimate archive
+// can take minutes on a slow connection. Connect and DNS resolution remain
+// bounded so an unreachable service still fails promptly. The process-wide
+// agent also keeps its connection pool across sequential downloads.
+static STREAMING_AGENT: LazyLock<ureq::Agent> = LazyLock::new(|| {
+    ureq::Agent::config_builder()
+        .timeout_connect(Some(STREAM_CONNECT_TIMEOUT))
+        .timeout_resolve(Some(STREAM_RESOLVE_TIMEOUT))
+        .build()
+        .into()
+});
+
 pub fn get_agent() -> ureq::Agent {
     DEFAULT_AGENT.clone()
 }
 
 pub fn get_groovestats_agent() -> ureq::Agent {
     GROOVESTATS_AGENT.clone()
+}
+
+/// Returns the shared agent for streaming downloads that must not have a
+/// whole-request deadline.
+pub fn get_streaming_agent() -> ureq::Agent {
+    STREAMING_AGENT.clone()
 }
 
 pub fn get_json<T>(url: &str) -> Result<T, NetworkError>
@@ -229,6 +273,29 @@ mod tests {
             .expect("response");
 
         assert_eq!(read_text_body_or_empty(response), "ok");
+    }
+
+    #[test]
+    fn bounded_text_body_accepts_the_limit() {
+        let response = ureq::http::Response::builder()
+            .status(200)
+            .body(ureq::Body::builder().data("four"))
+            .expect("response");
+
+        assert_eq!(read_text_body_bounded(response, 4).unwrap(), "four");
+    }
+
+    #[test]
+    fn bounded_text_body_rejects_one_byte_over_the_limit() {
+        let response = ureq::http::Response::builder()
+            .status(200)
+            .body(ureq::Body::builder().data("five!"))
+            .expect("response");
+
+        assert!(matches!(
+            read_text_body_bounded(response, 4),
+            Err(NetworkError::Decode(message)) if message.contains("exceeds 4 bytes")
+        ));
     }
 
     #[test]

@@ -1009,6 +1009,17 @@ impl App {
         self.options_song_pack_generation = generation;
     }
 
+    fn sync_options_stepmaniaonline(&mut self) {
+        if self.state.screens.current_screen != CurrentScreen::Options {
+            return;
+        }
+        options::sync_stepmaniaonline(
+            &mut self.state.screens.options_state,
+            deadsync_online::stepmaniaonline::runtime_snapshot(),
+            deadsync_online::stepmaniaonline::runtime_take_ready_song_dirs(),
+        );
+    }
+
     fn poll_profile_load(&mut self) {
         if self.state.screens.current_screen != CurrentScreen::ProfileLoad {
             return;
@@ -2214,6 +2225,7 @@ impl App {
         self.drive_smx_light_brightness(&frame_config);
         self.state.shell.interaction.update_message(redraw_started);
         self.sync_options_song_packs();
+        self.sync_options_stepmaniaonline();
         self.poll_profile_load();
         self.poll_profile_import();
         self.poll_qr_login();
@@ -3343,6 +3355,29 @@ impl App {
                     let pack_name = deadsync_online::srpg_shop::download_folder(shop_id, folder);
                     deadsync_online::runtime::forget_cached_unlock(&url, pack_name);
                     deadsync_online::runtime::queue_event_unlock_download(&url, &name, pack_name);
+                    Vec::new()
+                }
+                SimplyLoveRuntimeRequest::Online(
+                    SimplyLoveOnlineRequest::EnsureStepManiaOnlineCatalog,
+                ) => {
+                    deadsync_online::stepmaniaonline::runtime_ensure_catalog();
+                    Vec::new()
+                }
+                SimplyLoveRuntimeRequest::Online(
+                    SimplyLoveOnlineRequest::RefreshStepManiaOnlineCatalog,
+                ) => {
+                    deadsync_online::stepmaniaonline::runtime_refresh_catalog();
+                    Vec::new()
+                }
+                SimplyLoveRuntimeRequest::Online(
+                    SimplyLoveOnlineRequest::DownloadStepManiaOnlinePack { pack_id },
+                ) => {
+                    if let Err(error) = deadsync_online::stepmaniaonline::runtime_queue_download(
+                        pack_id,
+                        dirs::app_dirs().songs_dir(),
+                    ) {
+                        warn!("Could not queue StepManiaOnline pack {pack_id}: {error}");
+                    }
                     Vec::new()
                 }
                 SimplyLoveRuntimeRequest::Online(
@@ -4972,6 +5007,11 @@ impl App {
                     Some(text),
                 )
             }
+            RawKeyTextRoute::Options => screens::options::handle_raw_key_event(
+                &mut self.state.screens.options_state,
+                None,
+                Some(text),
+            ),
             RawKeyTextRoute::SelectMusic => screens::select_music::handle_raw_key_event(
                 &mut self.state.screens.select_music_state,
                 None,
@@ -5106,6 +5146,19 @@ impl App {
                 if !matches!(action, ThemeEffect::None) {
                     if let Err(e) = self.handle_action(action, event_loop) {
                         log::error!("Failed to handle Input raw key action: {e}");
+                    }
+                    return true;
+                }
+            }
+            RawKeyScreenRoute::Options => {
+                let action = screens::options::handle_raw_key_event(
+                    &mut self.state.screens.options_state,
+                    Some(&raw_key),
+                    None,
+                );
+                if !matches!(action, ThemeEffect::None) {
+                    if let Err(e) = self.handle_action(action, event_loop) {
+                        log::error!("Failed to handle Options raw key action: {e}");
                     }
                     return true;
                 }

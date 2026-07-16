@@ -49,6 +49,7 @@ pub(super) fn clear_navigation_holds(state: &mut State) {
 
 pub fn sync_song_packs(state: &mut State, song_packs: Vec<OptionsSongPackView>) {
     state.song_packs = song_packs;
+    sync_installed_packs(&mut state.download_packs_overlay, &state.song_packs);
     refresh_score_import_pack_options(state);
     refresh_sync_pack_options(state);
     clear_render_cache(state);
@@ -257,6 +258,13 @@ pub(super) fn sync_smx_assignment(state: &mut State, view: &SmxAssignmentView) {
 }
 
 fn update_impl(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Option<ThemeEffect> {
+    if !overlay_visible(&state.download_packs_overlay)
+        && state.reload_ui.is_none()
+        && !state.pending_pack_reload_dirs.is_empty()
+    {
+        let dirs = std::mem::take(&mut state.pending_pack_reload_dirs);
+        start_reload_song_dirs(state, dirs);
+    }
     if state.reload_ui.is_some() {
         let done = {
             let reload = state.reload_ui.as_mut().unwrap();
@@ -267,6 +275,9 @@ fn update_impl(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Opti
             state.reload_ui = None;
             refresh_score_import_pack_options(state);
         }
+        return None;
+    }
+    if update_browser(state, dt) {
         return None;
     }
     if let Some(score_import) = state.score_import_ui.as_mut() {

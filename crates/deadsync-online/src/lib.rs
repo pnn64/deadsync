@@ -7,6 +7,7 @@ pub mod runtime;
 pub mod score_compat;
 pub mod score_import;
 pub mod srpg_shop;
+pub mod stepmaniaonline;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum OnlineRequestError {

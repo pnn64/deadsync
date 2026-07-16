@@ -1491,6 +1491,19 @@ pub(super) fn activate_current_selection(
                     state.submenu_transition = SubmenuTransition::FadeOutToSubmenu;
                     state.submenu_fade_t = 0.0;
                 }
+                ItemId::DownloadPacks => {
+                    queue_sfx(state, "assets/sounds/start.ogg");
+                    clear_navigation_holds(state);
+                    show_overlay(
+                        &mut state.download_packs_overlay,
+                        &state.stepmaniaonline_snapshot,
+                        &state.song_packs,
+                    );
+                    queue_online(
+                        state,
+                        crate::SimplyLoveOnlineRequest::EnsureStepManiaOnlineCatalog,
+                    );
+                }
                 ItemId::NullOrDieOptions => {
                     queue_sfx(state, "assets/sounds/start.ogg");
                     refresh_null_or_die_options(state);
@@ -1882,6 +1895,9 @@ fn handle_input_impl(
     }
     if state.reload_ui.is_some() {
         return ThemeEffect::None;
+    }
+    if let Some(effect) = handle_browser_input(state, ev) {
+        return effect;
     }
     let three_key_action = screen_input::three_key_menu_action(&mut state.menu_lr_chord, ev);
     if state.score_import_pack_picker.is_some() {

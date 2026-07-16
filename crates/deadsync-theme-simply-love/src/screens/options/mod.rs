@@ -36,7 +36,7 @@ use crate::screens::select_music;
 use crate::screens::{Screen, ThemeEffect};
 use crate::views::{OptionsSongPackView, SimplyLoveUpdaterCapabilities, SimplyLoveUpdaterView};
 use deadlib_present::space::{is_wide, screen_height, screen_width, widescale};
-use deadsync_input::{InputEvent, VirtualAction};
+use deadsync_input::{InputEvent, KeyCode, RawKeyboardEvent, VirtualAction};
 use deadsync_profile::compat as profile;
 use deadsync_score as score_data;
 use deadsync_simfile::app_runtime as song_loading;
@@ -51,6 +51,7 @@ use deadsync_theme::{
 use std::borrow::Cow;
 use std::cell::{Cell, RefCell};
 use std::collections::HashSet;
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -85,6 +86,8 @@ use score_import::*;
 mod pack_sync;
 pub(crate) mod qr_login;
 use pack_sync::*;
+mod download_packs;
+use download_packs::*;
 mod layout;
 mod transitions;
 use layout::*;
@@ -96,6 +99,7 @@ mod render;
 use render::*;
 
 // Public API re-exports
+pub use download_packs::{handle_raw_key_event, sync_stepmaniaonline};
 pub use input::handle_input;
 pub use layout::clear_submenu_row_layout_cache;
 pub use render::{clear_description_layout_cache, clear_render_cache, get_actors, push_actors};

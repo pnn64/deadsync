@@ -107,6 +107,7 @@ pub enum PreScreenInputRoute {
 pub enum RawKeyTextRoute {
     Ignore,
     ManageLocalProfiles,
+    Options,
     SelectMusic,
 }
 
@@ -119,6 +120,7 @@ pub enum RawKeyScreenRoute {
     ManageLocalProfiles,
     OverscanAdjustment,
     Input,
+    Options,
     SelectMusic,
     PlayerOptions,
     Practice,
@@ -315,6 +317,7 @@ pub fn pre_screen_input_route(
 pub const fn raw_key_text_route(screen: Screen) -> RawKeyTextRoute {
     match screen {
         Screen::ManageLocalProfiles => RawKeyTextRoute::ManageLocalProfiles,
+        Screen::Options => RawKeyTextRoute::Options,
         Screen::SelectMusic => RawKeyTextRoute::SelectMusic,
         _ => RawKeyTextRoute::Ignore,
     }
@@ -329,6 +332,7 @@ pub const fn raw_key_screen_route(screen: Screen) -> RawKeyScreenRoute {
         Screen::ManageLocalProfiles => RawKeyScreenRoute::ManageLocalProfiles,
         Screen::OverscanAdjustment => RawKeyScreenRoute::OverscanAdjustment,
         Screen::Input => RawKeyScreenRoute::Input,
+        Screen::Options => RawKeyScreenRoute::Options,
         Screen::SelectMusic => RawKeyScreenRoute::SelectMusic,
         Screen::PlayerOptions => RawKeyScreenRoute::PlayerOptions,
         Screen::Practice => RawKeyScreenRoute::Practice,
@@ -939,6 +943,10 @@ mod tests {
             RawKeyTextRoute::ManageLocalProfiles
         );
         assert_eq!(
+            raw_key_text_route(Screen::Options),
+            RawKeyTextRoute::Options
+        );
+        assert_eq!(
             raw_key_text_route(Screen::SelectMusic),
             RawKeyTextRoute::SelectMusic
         );
@@ -957,6 +965,10 @@ mod tests {
         assert_eq!(
             raw_key_screen_route(Screen::Mappings),
             RawKeyScreenRoute::Mappings
+        );
+        assert_eq!(
+            raw_key_screen_route(Screen::Options),
+            RawKeyScreenRoute::Options
         );
         assert_eq!(
             raw_key_screen_route(Screen::Evaluation),
