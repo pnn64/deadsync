@@ -136,7 +136,7 @@ pub(crate) fn compose_receptor_actors<'a, S, F, P>(
         let rotation = slot.sprite_def().rotation_deg as f32 + reverse.base_rotation_z();
         let frame = slot.frame_index(request.elapsed, request.beat);
         let uv = slot.uv_for_frame_at(frame, request.elapsed);
-        let draw = slot.model_draw_at(request.elapsed, request.beat);
+        let draw = model_cache.draw_at(slot, request.elapsed, request.beat);
         let base_size = effect_size(slot, request.field_zoom, request.effect_zoom);
         let size = [base_size[0] * draw.zoom[0], base_size[1] * draw.zoom[1]];
         let color = request.pulse.color_for_beat(request.beat);
@@ -176,7 +176,7 @@ pub(crate) fn compose_receptor_actors<'a, S, F, P>(
 
     if let Some(slot) = request.hold_slot {
         let draw = song_lua_note_model_draw(
-            slot.model_draw_at(request.elapsed, request.beat),
+            model_cache.draw_at(slot, request.elapsed, request.beat),
             request.rotation_y_deg,
         );
         let frame = slot.frame_index(request.elapsed, request.beat);
@@ -274,7 +274,7 @@ pub(crate) fn compose_receptor_actors<'a, S, F, P>(
         if alpha > f32::EPSILON {
             let frame = slot.frame_index(request.elapsed, request.beat);
             let uv = slot.uv_for_frame_at(frame, request.elapsed);
-            let draw = slot.model_draw_at(request.elapsed, request.beat);
+            let draw = model_cache.draw_at(slot, request.elapsed, request.beat);
             let base_size = effect_size(slot, request.field_zoom, request.effect_zoom);
             let reverse = press.reverse.unwrap_or_default().state(request.reverse);
             let rotation = slot.sprite_def().rotation_deg as f32 + reverse.base_rotation_z();
@@ -791,7 +791,7 @@ mod tests {
         assert_eq!(
             cache.stats(),
             ModelMeshCacheStats {
-                hits: 1,
+                hits: 2,
                 misses: 1,
                 saturated_misses: 0,
             }

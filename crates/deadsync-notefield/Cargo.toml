@@ -17,6 +17,11 @@ name = "placement_plan"
 harness = false
 required-features = ["bench-support"]
 
+[[bench]]
+name = "slot_frame_cache"
+harness = false
+required-features = ["bench-support"]
+
 [dependencies]
 deadlib-present = { path = "../deadlib-present" }
 deadlib-render = { path = "../deadlib-render" }

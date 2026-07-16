@@ -1054,11 +1054,13 @@ fn prewarm_notefield_model_cache_slots(
         .flatten()
         {
             skin.for_each_slot(|slot| {
-                if slot.model.is_some() {
-                    cache.prewarm_slot(slot);
-                }
+                debug_assert!(
+                    cache.prewarm_slot(slot),
+                    "noteskin slot frame cache exceeded its fixed capacity"
+                );
             });
         }
+        cache.seal();
         cache.reset_stats();
     }
 }
@@ -1069,7 +1071,7 @@ pub(crate) fn notefield_model_cache_from_assets(
 ) -> [RefCell<ModelMeshCache>; MAX_PLAYERS] {
     let cache: [RefCell<ModelMeshCache>; MAX_PLAYERS] = std::array::from_fn(|player| {
         RefCell::new(if player < num_players {
-            ModelMeshCache::with_capacity(96)
+            ModelMeshCache::with_capacity(512)
         } else {
             ModelMeshCache::default()
         })

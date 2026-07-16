@@ -97,6 +97,17 @@ pub struct ModelTweenSegment {
     pub to: ModelDrawState,
 }
 
+/// Monotonic cursor for a compiled model tween timeline.
+///
+/// Backward time movement resets it to the first segment, preserving seek
+/// correctness without allocating or rebuilding timeline state.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct ModelTweenCursor {
+    next_segment: usize,
+    last_time: f32,
+    initialized: bool,
+}
+
 #[derive(Debug, Clone, Copy, Default)]
 pub struct ModelAutoRotKey {
     pub frame: f32,
@@ -347,6 +358,47 @@ pub fn model_draw_at(
     sanitize_model_draw(out)
 }
 
+/// Evaluates a compiled model tween timeline without revisiting segments that
+/// completed at an earlier monotonic timestamp.
+pub fn model_draw_at_cursor(
+    base_draw: ModelDrawState,
+    timeline: &[ModelTweenSegment],
+    effect: ModelEffectState,
+    auto_rot_total_frames: f32,
+    auto_rot_z_keys: &[ModelAutoRotKey],
+    clock: [f32; 2],
+    cursor: &mut ModelTweenCursor,
+) -> ModelDrawState {
+    let [time, beat] = clock;
+    let local = time.max(0.0);
+    if !cursor.initialized || local < cursor.last_time || cursor.next_segment > timeline.len() {
+        cursor.next_segment = 0;
+    }
+    while let Some(seg) = timeline.get(cursor.next_segment) {
+        let start = seg.start.max(0.0);
+        let duration = seg.duration.max(0.0);
+        if local < start || (duration > f32::EPSILON && local - start < duration) {
+            break;
+        }
+        cursor.next_segment += 1;
+    }
+    cursor.last_time = local;
+    cursor.initialized = true;
+    let base_draw = cursor
+        .next_segment
+        .checked_sub(1)
+        .map_or(base_draw, |index| timeline[index].to);
+    model_draw_at(
+        base_draw,
+        &timeline[cursor.next_segment..],
+        effect,
+        auto_rot_total_frames,
+        auto_rot_z_keys,
+        time,
+        beat,
+    )
+}
+
 #[inline(always)]
 pub fn model_glow_with_draw(
     draw: ModelDrawState,
@@ -418,9 +470,31 @@ fn sanitize_model_draw(mut out: ModelDrawState) -> ModelDrawState {
 mod tests {
     use super::{
         ModelAutoRotKey, ModelDrawState, ModelEffectClock, ModelEffectMode, ModelEffectState,
-        ModelTweenSegment, TweenType, glowshift_mix, model_auto_rot_z_at, model_draw_at,
-        model_effect_clock_units, model_effect_mix, model_glow_with_draw, model_texture_uv_params,
+        ModelTweenCursor, ModelTweenSegment, TweenType, glowshift_mix, model_auto_rot_z_at,
+        model_draw_at, model_draw_at_cursor, model_effect_clock_units, model_effect_mix,
+        model_glow_with_draw, model_texture_uv_params,
     };
+
+    fn assert_draw_bits_eq(actual: ModelDrawState, expected: ModelDrawState) {
+        for (actual, expected) in actual.pos.into_iter().zip(expected.pos) {
+            assert_eq!(actual.to_bits(), expected.to_bits());
+        }
+        for (actual, expected) in actual.rot.into_iter().zip(expected.rot) {
+            assert_eq!(actual.to_bits(), expected.to_bits());
+        }
+        for (actual, expected) in actual.zoom.into_iter().zip(expected.zoom) {
+            assert_eq!(actual.to_bits(), expected.to_bits());
+        }
+        for (actual, expected) in actual.tint.into_iter().zip(expected.tint) {
+            assert_eq!(actual.to_bits(), expected.to_bits());
+        }
+        for (actual, expected) in actual.glow.into_iter().zip(expected.glow) {
+            assert_eq!(actual.to_bits(), expected.to_bits());
+        }
+        assert_eq!(actual.vert_align.to_bits(), expected.vert_align.to_bits());
+        assert_eq!(actual.blend_add, expected.blend_add);
+        assert_eq!(actual.visible, expected.visible);
+    }
 
     #[test]
     fn model_effect_clock_units_select_time_or_beat() {
@@ -537,6 +611,77 @@ mod tests {
         assert_eq!(draw.rot[2], 75.0);
         assert_eq!(draw.zoom[0], 1.5);
         assert_eq!(draw.tint, [1.0, 0.0, 0.5, 0.75]);
+    }
+
+    #[test]
+    fn cursor_draw_is_bit_exact_across_frames_and_backward_seeks() {
+        let base = ModelDrawState::default();
+        let first = ModelDrawState {
+            pos: [8.0, -2.0, 1.0],
+            rot: [5.0, 10.0, 20.0],
+            tint: [0.8, 0.7, 0.6, 0.9],
+            ..base
+        };
+        let second = ModelDrawState {
+            pos: [12.0, 4.0, -3.0],
+            rot: [15.0, 30.0, 60.0],
+            zoom: [1.25, 0.75, 2.0],
+            glow: [0.1, 0.2, 0.3, 0.4],
+            ..first
+        };
+        let third = ModelDrawState {
+            visible: false,
+            blend_add: true,
+            ..second
+        };
+        let timeline = [
+            ModelTweenSegment {
+                start: 0.0,
+                duration: 1.0,
+                tween: TweenType::Accelerate,
+                from: base,
+                to: first,
+            },
+            ModelTweenSegment {
+                start: 1.0,
+                duration: 2.0,
+                tween: TweenType::Decelerate,
+                from: first,
+                to: second,
+            },
+            ModelTweenSegment {
+                start: 3.0,
+                duration: 0.0,
+                tween: TweenType::Linear,
+                from: second,
+                to: third,
+            },
+        ];
+        let effect = ModelEffectState {
+            mode: ModelEffectMode::Spin,
+            magnitude: [2.0, 3.0, 4.0],
+            ..ModelEffectState::default()
+        };
+        let auto_rot = [ModelAutoRotKey {
+            frame: 0.0,
+            z_deg: 11.0,
+        }];
+        let mut cursor = ModelTweenCursor::default();
+
+        for time in [-1.0, 0.0, 0.25, 1.0, 1.75, 3.0, 5.0, 1.25, 4.0] {
+            let expected =
+                model_draw_at(base, &timeline, effect, 30.0, &auto_rot, time, time * 4.0);
+            let actual = model_draw_at_cursor(
+                base,
+                &timeline,
+                effect,
+                30.0,
+                &auto_rot,
+                [time, time * 4.0],
+                &mut cursor,
+            );
+            assert_draw_bits_eq(actual, expected);
+        }
     }
 
     #[test]

@@ -60,6 +60,7 @@ where
     S: NoteskinSlot,
     F: Fn(&S) -> SpriteSource,
 {
+    model_cache.begin_frame();
     hold_mesh_scratch.begin_frame();
     let field_start = actors.len();
     actors.reserve(prepared.frame_plan.field_actor_reserve);
@@ -470,7 +471,7 @@ fn compose_field_contents<S, F>(
         let hold_head_translation = ns.part_uv_translation(hold_parts.head, note.beat, false);
         let head_slot = head_slot.and_then(|slot| {
             let draw = song_lua_note_model_draw(
-                slot.model_draw_at(elapsed, current_beat),
+                model_cache.draw_at(slot, elapsed, current_beat),
                 note_rotation_y,
             );
             if !draw.visible {
@@ -590,7 +591,7 @@ fn compose_field_contents<S, F>(
             );
             let size = scale_sprite_to_arrow(note_slot.size(), hold_head_target_arrow_px);
             let draw = song_lua_note_model_draw(
-                note_slot.model_draw_at(elapsed, current_beat),
+                model_cache.draw_at(note_slot, elapsed, current_beat),
                 note_rotation_y,
             );
             let rotation = -note_slot.sprite_def().rotation_deg as f32;
@@ -976,7 +977,7 @@ fn compose_visible_notes<S, F>(
                 let size = scale_sprite_to_arrow(note_slot.size(), target_arrow_px);
                 let center = [column_center_x, y_pos];
                 let draw = song_lua_note_model_draw(
-                    note_slot.model_draw_at(elapsed, current_beat),
+                    model_cache.draw_at(note_slot, elapsed, current_beat),
                     note_rotation_y,
                 );
                 let rotation = -note_slot.sprite_def().rotation_deg as f32;
@@ -1032,7 +1033,10 @@ fn compose_noteskin_layer<S, F>(
     S: NoteskinSlot,
     F: Fn(&S) -> SpriteSource,
 {
-    let draw = song_lua_note_model_draw(slot.model_draw_at(elapsed, current_beat), rotation_y_deg);
+    let draw = song_lua_note_model_draw(
+        model_cache.draw_at(slot, elapsed, current_beat),
+        rotation_y_deg,
+    );
     if !draw.visible {
         return;
     }
@@ -1121,7 +1125,10 @@ fn compose_single_slot<S, F>(
     };
     let uv = translated_uv_rect(slot.uv_for_frame_at(frame_index, uv_elapsed), translation);
     let size = note_slot_base_size(slot, scale);
-    let draw = song_lua_note_model_draw(slot.model_draw_at(elapsed, current_beat), rotation_y_deg);
+    let draw = song_lua_note_model_draw(
+        model_cache.draw_at(slot, elapsed, current_beat),
+        rotation_y_deg,
+    );
     let rotation = -slot.sprite_def().rotation_deg as f32;
     compose_note_layer(
         actors,

@@ -1,17 +1,27 @@
 use deadlib_present::actors::{Actor, SizeSpec};
 use deadlib_render::{BlendMode, TMeshCacheKey, TexturedMeshVertex};
-use deadsync_noteskin::{ModelDrawState, ModelMesh, NoteskinSlot, model_vertex_for_sprite};
+use deadsync_noteskin::{
+    ModelDrawState, ModelMesh, ModelTweenCursor, NoteskinSlot, model_vertex_for_sprite,
+};
 use glam::{Mat4 as Matrix4, Vec3 as Vector3, Vec4};
-use std::collections::HashMap;
-use std::hash::{BuildHasherDefault, Hash, Hasher};
 use std::sync::Arc;
-use twox_hash::XxHash64;
 
 const MODEL_MESH_CACHE_LIMIT: usize = 512;
+const SLOT_LOOKUP_SIZE: usize = MODEL_MESH_CACHE_LIMIT * 2;
 
-#[derive(Clone, Copy, PartialEq, Eq, Hash)]
-struct ModelMeshCacheKey {
-    slot: *const (),
+#[derive(Clone, Copy, Default)]
+struct SlotLookup {
+    stable_id: u64,
+    slot_index: u16,
+}
+
+struct SlotFrameState {
+    geometry: Option<(TMeshCacheKey, Arc<[TexturedMeshVertex]>)>,
+    draw: ModelDrawState,
+    draw_time: u32,
+    draw_beat: u32,
+    draw_frame: u64,
+    tween_cursor: ModelTweenCursor,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -21,25 +31,42 @@ pub struct ModelMeshCacheStats {
     pub saturated_misses: u64,
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct NoteskinFrameCacheStats {
+    pub hits: u64,
+    pub evaluations: u64,
+    pub unregistered_misses: u64,
+    pub saturated_misses: u64,
+}
+
 /// Per-player notefield model geometry cache.
 ///
 /// Owner: gameplay screen logic, one cache per active player notefield.
 /// Threading: single game/render frame path; callers hold it behind `RefCell`.
 /// Lifetime: gameplay screen/session, cleared or rebuilt at song transitions.
-/// Capacity: fixed entry cap; default starts empty, gameplay prewarms with 96.
-/// Warmup: the gameplay adapter prewarms visible model slots before live play.
-/// Miss: builds CPU vertex data from an already-loaded noteskin slot, with no
-/// disk I/O, parsing, GPU upload, or asset registration.
+/// Capacity: 512 dense slot states and a fixed 1,024-cell lookup table.
+/// Warmup: the gameplay adapter registers every noteskin slot and then seals
+/// growth before live play.
+/// Miss: before sealing, registers the slot and prebuilds model geometry. A
+/// sealed draw miss evaluates directly and is instrumented without retaining
+/// state; the existing actor fallback may rebuild geometry to preserve output.
 /// Eviction: none during gameplay; once full, insertions saturate and count a
 /// `saturated_misses` event instead of pruning.
 /// Destruction: entries drop with the gameplay screen or explicit cache clear.
-/// Instrumentation: hit, miss, and saturated miss counters.
-/// Worst-case frame cost: one bounded model vertex conversion per miss.
-/// Identity invariant: one cache serves one concrete `NoteskinSlot` type whose
-/// slot addresses remain stable for the cache lifetime.
+/// Instrumentation: geometry hit/miss counters plus frame draw evaluations,
+/// hits, unregistered misses, and saturation.
+/// Worst-case registered-slot frame cost: one draw evaluation per unique
+/// `(slot, time, beat)` tuple; no allocation, pruning, or geometry conversion.
+/// A sealed unregistered model is a counted prewarm failure and retains the
+/// legacy conversion fallback for visual correctness.
+/// Identity invariant: stable IDs are unique within the noteskin runtime.
 pub struct ModelMeshCache {
-    entries: HashMap<ModelMeshCacheKey, Arc<[TexturedMeshVertex]>, BuildHasherDefault<XxHash64>>,
+    slots: Vec<SlotFrameState>,
+    lookup: Box<[SlotLookup]>,
+    frame: u64,
+    sealed: bool,
     stats: ModelMeshCacheStats,
+    frame_stats: NoteskinFrameCacheStats,
 }
 
 impl Default for ModelMeshCache {
@@ -52,8 +79,12 @@ impl ModelMeshCache {
     #[inline(always)]
     pub fn with_capacity(capacity: usize) -> Self {
         Self {
-            entries: HashMap::with_capacity_and_hasher(capacity, BuildHasherDefault::default()),
+            slots: Vec::with_capacity(capacity.min(MODEL_MESH_CACHE_LIMIT)),
+            lookup: vec![SlotLookup::default(); SLOT_LOOKUP_SIZE].into_boxed_slice(),
+            frame: 1,
+            sealed: false,
             stats: ModelMeshCacheStats::default(),
+            frame_stats: NoteskinFrameCacheStats::default(),
         }
     }
 
@@ -65,14 +96,64 @@ impl ModelMeshCache {
     #[inline(always)]
     pub fn reset_stats(&mut self) {
         self.stats = ModelMeshCacheStats::default();
+        self.frame_stats = NoteskinFrameCacheStats::default();
     }
 
     #[inline(always)]
-    pub fn prewarm_slot<S: NoteskinSlot>(&mut self, slot: &S) {
-        if slot.model().is_none() {
-            return;
+    pub const fn frame_stats(&self) -> NoteskinFrameCacheStats {
+        self.frame_stats
+    }
+
+    #[inline(always)]
+    pub fn begin_frame(&mut self) {
+        self.frame = self.frame.wrapping_add(1).max(1);
+    }
+
+    #[inline(always)]
+    pub fn seal(&mut self) {
+        self.sealed = true;
+    }
+
+    #[inline(always)]
+    pub fn prewarm_slot<S: NoteskinSlot>(&mut self, slot: &S) -> bool {
+        if slot.model().is_some() {
+            let _ = self.get_or_insert_slot(slot);
+        } else {
+            let _ = self.ensure_slot(slot);
         }
-        let _ = self.get_or_insert_with(slot, || build_model_geometry(slot));
+        let retained = self.find_slot(slot.stable_id()).is_some();
+        if !retained {
+            self.frame_stats.saturated_misses = self.frame_stats.saturated_misses.saturating_add(1);
+        }
+        retained
+    }
+
+    #[inline(always)]
+    pub fn draw_at<S: NoteskinSlot>(&mut self, slot: &S, time: f32, beat: f32) -> ModelDrawState {
+        let Some(index) = self
+            .find_slot(slot.stable_id())
+            .or_else(|| self.ensure_slot(slot))
+        else {
+            self.frame_stats.unregistered_misses =
+                self.frame_stats.unregistered_misses.saturating_add(1);
+            self.frame_stats.saturated_misses = self.frame_stats.saturated_misses.saturating_add(1);
+            return slot.model_draw_at(time, beat);
+        };
+        let state = &mut self.slots[index];
+        if state.draw_frame == self.frame
+            && state.draw_time == time.to_bits()
+            && state.draw_beat == beat.to_bits()
+        {
+            self.frame_stats.hits = self.frame_stats.hits.saturating_add(1);
+            return state.draw;
+        }
+        let draw = slot.model_draw_at_cursor(time, beat, &mut state.tween_cursor);
+        state.draw = draw;
+        state.draw_time = time.to_bits();
+        state.draw_beat = beat.to_bits();
+        state.draw_frame = self.frame;
+        self.frame_stats.evaluations = self.frame_stats.evaluations.saturating_add(1);
+        draw
     }
 
     #[inline(always)]
@@ -80,8 +161,14 @@ impl ModelMeshCache {
         &mut self,
         slot: &S,
     ) -> Option<(TMeshCacheKey, Arc<[TexturedMeshVertex]>)> {
-        slot.model()
-            .map(|_| self.get_or_insert_with(slot, || build_model_geometry(slot)))
+        slot.model()?;
+        if let Some(index) = self.find_slot(slot.stable_id())
+            && let Some((key, vertices)) = &self.slots[index].geometry
+        {
+            self.stats.hits = self.stats.hits.saturating_add(1);
+            return Some((*key, vertices.clone()));
+        }
+        Some(self.get_or_insert_with(slot, || build_model_geometry(slot)))
     }
 
     #[inline(always)]
@@ -94,35 +181,106 @@ impl ModelMeshCache {
         S: NoteskinSlot,
         F: FnOnce() -> Arc<[TexturedMeshVertex]>,
     {
-        let key = model_cache_key(slot);
-        let geom_cache_key = hashed_model_cache_key(&key);
-        if let Some(vertices) = self.entries.get(&key) {
+        let stable_id = slot.stable_id();
+        let geom_cache_key = hashed_model_cache_key(stable_id);
+        if let Some(index) = self.find_slot(stable_id)
+            && let Some((_, vertices)) = &self.slots[index].geometry
+        {
             self.stats.hits = self.stats.hits.saturating_add(1);
             return (geom_cache_key, vertices.clone());
         }
         self.stats.misses = self.stats.misses.saturating_add(1);
         let vertices = build();
-        if self.entries.len() < MODEL_MESH_CACHE_LIMIT {
-            self.entries.insert(key, vertices.clone());
+        if let Some(index) = self.register_slot(slot, Some((geom_cache_key, vertices.clone()))) {
+            if self.slots[index].geometry.is_none() {
+                self.slots[index].geometry = Some((geom_cache_key, vertices.clone()));
+            }
         } else {
             self.stats.saturated_misses = self.stats.saturated_misses.saturating_add(1);
         }
         (geom_cache_key, vertices)
     }
-}
 
-#[inline(always)]
-fn model_cache_key<S: NoteskinSlot>(slot: &S) -> ModelMeshCacheKey {
-    ModelMeshCacheKey {
-        slot: slot as *const S as *const (),
+    #[inline(always)]
+    fn ensure_slot<S: NoteskinSlot>(&mut self, slot: &S) -> Option<usize> {
+        if let Some(index) = self.find_slot(slot.stable_id()) {
+            return Some(index);
+        }
+        if self.sealed {
+            return None;
+        }
+        let geometry = slot.model().map(|_| {
+            (
+                hashed_model_cache_key(slot.stable_id()),
+                build_model_geometry(slot),
+            )
+        });
+        if geometry.is_some() {
+            self.stats.misses = self.stats.misses.saturating_add(1);
+        }
+        self.register_slot(slot, geometry)
+    }
+
+    fn register_slot<S: NoteskinSlot>(
+        &mut self,
+        slot: &S,
+        geometry: Option<(TMeshCacheKey, Arc<[TexturedMeshVertex]>)>,
+    ) -> Option<usize> {
+        let stable_id = slot.stable_id();
+        if let Some(index) = self.find_slot(stable_id) {
+            return Some(index);
+        }
+        if self.sealed || self.slots.len() >= MODEL_MESH_CACHE_LIMIT {
+            return None;
+        }
+        let index = self.slots.len();
+        self.slots.push(SlotFrameState {
+            geometry,
+            draw: ModelDrawState::default(),
+            draw_time: 0,
+            draw_beat: 0,
+            draw_frame: 0,
+            tween_cursor: ModelTweenCursor::default(),
+        });
+        let mut cell = slot_lookup_start(stable_id);
+        loop {
+            if self.lookup[cell].stable_id == 0 {
+                self.lookup[cell] = SlotLookup {
+                    stable_id,
+                    slot_index: index as u16,
+                };
+                return Some(index);
+            }
+            cell = (cell + 1) & (SLOT_LOOKUP_SIZE - 1);
+        }
+    }
+
+    #[inline(always)]
+    fn find_slot(&self, stable_id: u64) -> Option<usize> {
+        let mut cell = slot_lookup_start(stable_id);
+        loop {
+            let entry = self.lookup[cell];
+            if entry.stable_id == stable_id {
+                return Some(entry.slot_index as usize);
+            }
+            if entry.stable_id == 0 {
+                return None;
+            }
+            cell = (cell + 1) & (SLOT_LOOKUP_SIZE - 1);
+        }
     }
 }
 
 #[inline(always)]
-fn hashed_model_cache_key(key: &ModelMeshCacheKey) -> TMeshCacheKey {
-    let mut hasher = XxHash64::default();
-    key.hash(&mut hasher);
-    hasher.finish().max(1)
+fn slot_lookup_start(stable_id: u64) -> usize {
+    let mixed = stable_id.wrapping_mul(0x9e37_79b9_7f4a_7c15);
+    ((mixed ^ (mixed >> 32)) as usize) & (SLOT_LOOKUP_SIZE - 1)
+}
+
+#[inline(always)]
+fn hashed_model_cache_key(stable_id: u64) -> TMeshCacheKey {
+    let mixed = stable_id.wrapping_mul(0x9e37_79b9_7f4a_7c15);
+    (mixed ^ (mixed >> 32)).max(1)
 }
 
 #[inline(always)]
@@ -142,6 +300,237 @@ fn build_model_geometry<S: NoteskinSlot>(slot: &S) -> Arc<[TexturedMeshVertex]> 
     }
     Arc::from(vertices)
 }
+
+#[cfg(feature = "bench-support")]
+mod bench_support {
+    use super::*;
+    use deadsync_noteskin::{
+        ModelEffectState, ModelTweenSegment, ModelVertex, SpriteDefinition, TweenType,
+        model_draw_at, model_draw_at_cursor,
+    };
+    use std::collections::HashMap;
+    use std::hash::BuildHasherDefault;
+    use twox_hash::XxHash64;
+
+    const UNIQUE_SLOTS: usize = 8;
+    const VISIBLE_NOTES: usize = 512;
+    const TIMELINE_SEGMENTS: usize = 64;
+
+    struct BenchSlot {
+        id: u64,
+        def: SpriteDefinition,
+        model: ModelMesh,
+        timeline: Arc<[ModelTweenSegment]>,
+        texture: Arc<str>,
+    }
+
+    impl NoteskinSlot for BenchSlot {
+        fn sprite_def(&self) -> &SpriteDefinition {
+            &self.def
+        }
+
+        fn source_size(&self) -> [i32; 2] {
+            [64, 64]
+        }
+
+        fn texture_key_shared(&self) -> Arc<str> {
+            self.texture.clone()
+        }
+
+        fn model(&self) -> Option<&ModelMesh> {
+            Some(&self.model)
+        }
+
+        fn base_rot_sin_cos(&self) -> [f32; 2] {
+            [0.0, 1.0]
+        }
+
+        fn frame_index(&self, _time: f32, _beat: f32) -> usize {
+            0
+        }
+
+        fn frame_index_from_phase(&self, _phase: f32) -> usize {
+            0
+        }
+
+        fn uv_for_frame_at(&self, _frame_index: usize, _elapsed: f32) -> [f32; 4] {
+            [0.0, 0.0, 1.0, 1.0]
+        }
+
+        fn model_draw_at(&self, time: f32, beat: f32) -> ModelDrawState {
+            model_draw_at(
+                ModelDrawState::default(),
+                &self.timeline,
+                ModelEffectState::default(),
+                0.0,
+                &[],
+                time,
+                beat,
+            )
+        }
+
+        fn stable_id(&self) -> u64 {
+            self.id
+        }
+
+        fn model_draw_at_cursor(
+            &self,
+            time: f32,
+            beat: f32,
+            cursor: &mut ModelTweenCursor,
+        ) -> ModelDrawState {
+            model_draw_at_cursor(
+                ModelDrawState::default(),
+                &self.timeline,
+                ModelEffectState::default(),
+                0.0,
+                &[],
+                [time, beat],
+                cursor,
+            )
+        }
+
+        fn model_glow_with_draw(
+            &self,
+            _draw: ModelDrawState,
+            _time: f32,
+            _beat: f32,
+            _diffuse_alpha: f32,
+        ) -> Option<[f32; 4]> {
+            None
+        }
+
+        fn model_uv_params(&self, _uv_rect: [f32; 4]) -> ([f32; 2], [f32; 2], [f32; 2]) {
+            ([1.0; 2], [0.0; 2], [0.0; 2])
+        }
+    }
+
+    #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+    pub struct SlotFrameBenchOutput {
+        pub checksum: u64,
+        pub draws: u64,
+        pub geometry_clones: u64,
+    }
+
+    pub struct SlotFrameBench {
+        slots: Vec<BenchSlot>,
+        old_geometry: HashMap<u64, Arc<[TexturedMeshVertex]>, BuildHasherDefault<XxHash64>>,
+        cache: ModelMeshCache,
+    }
+
+    impl Default for SlotFrameBench {
+        fn default() -> Self {
+            let slots: Vec<_> = (0..UNIQUE_SLOTS)
+                .map(|index| bench_slot(index as u64 + 1))
+                .collect();
+            let old_geometry = slots
+                .iter()
+                .map(|slot| (slot.id, build_model_geometry(slot)))
+                .collect();
+            let mut cache = ModelMeshCache::with_capacity(MODEL_MESH_CACHE_LIMIT);
+            for slot in &slots {
+                cache.prewarm_slot(slot);
+            }
+            cache.seal();
+            cache.reset_stats();
+            Self {
+                slots,
+                old_geometry,
+                cache,
+            }
+        }
+    }
+
+    impl SlotFrameBench {
+        pub fn old_frame(&mut self, frame: usize) -> SlotFrameBenchOutput {
+            let time = frame as f32 / 120.0;
+            let beat = time * 4.0;
+            let mut output = SlotFrameBenchOutput::default();
+            for note in 0..VISIBLE_NOTES {
+                let slot = &self.slots[note % self.slots.len()];
+                let draw = slot.model_draw_at(time, beat);
+                let geometry = self.old_geometry.get(&slot.id).expect("prewarmed").clone();
+                mix_output(&mut output, draw, geometry.len());
+            }
+            output
+        }
+
+        pub fn new_frame(&mut self, frame: usize) -> SlotFrameBenchOutput {
+            let time = frame as f32 / 120.0;
+            let beat = time * 4.0;
+            self.cache.begin_frame();
+            let mut output = SlotFrameBenchOutput::default();
+            for note in 0..VISIBLE_NOTES {
+                let slot = &self.slots[note % self.slots.len()];
+                let draw = self.cache.draw_at(slot, time, beat);
+                let (_, geometry) = self.cache.get_or_insert_slot(slot).expect("prewarmed");
+                mix_output(&mut output, draw, geometry.len());
+            }
+            output
+        }
+
+        pub fn fixed_bytes(&self) -> usize {
+            self.cache.slots.capacity() * std::mem::size_of::<SlotFrameState>()
+                + self.cache.lookup.len() * std::mem::size_of::<SlotLookup>()
+        }
+
+        pub const fn visible_notes() -> usize {
+            VISIBLE_NOTES
+        }
+
+        pub const fn unique_slots() -> usize {
+            UNIQUE_SLOTS
+        }
+    }
+
+    fn bench_slot(id: u64) -> BenchSlot {
+        let mut timeline = Vec::with_capacity(TIMELINE_SEGMENTS);
+        let mut from = ModelDrawState::default();
+        for segment in 0..TIMELINE_SEGMENTS {
+            let to = ModelDrawState {
+                pos: [segment as f32 * 0.25, id as f32, 0.0],
+                rot: [0.0, 0.0, segment as f32 * 3.0],
+                zoom: [1.0 + segment as f32 * 0.001, 1.0, 1.0],
+                ..from
+            };
+            timeline.push(ModelTweenSegment {
+                start: segment as f32 * 0.05,
+                duration: 0.05,
+                tween: TweenType::Linear,
+                from,
+                to,
+            });
+            from = to;
+        }
+        BenchSlot {
+            id,
+            def: SpriteDefinition::default(),
+            model: ModelMesh {
+                vertices: Arc::from([ModelVertex {
+                    pos: [0.0; 3],
+                    uv: [0.0; 2],
+                    tex_matrix_scale: [1.0; 2],
+                }]),
+                bounds: [0.0, 0.0, 0.0, 64.0, 64.0, 0.0],
+            },
+            timeline: Arc::from(timeline),
+            texture: Arc::from("slot-frame-bench"),
+        }
+    }
+
+    #[inline(always)]
+    fn mix_output(output: &mut SlotFrameBenchOutput, draw: ModelDrawState, geometry_len: usize) {
+        output.checksum = output.checksum.rotate_left(7)
+            ^ draw.pos[0].to_bits() as u64
+            ^ ((draw.rot[2].to_bits() as u64) << 32)
+            ^ geometry_len as u64;
+        output.draws += 1;
+        output.geometry_clones += 1;
+    }
+}
+
+#[cfg(feature = "bench-support")]
+pub use bench_support::{SlotFrameBench, SlotFrameBenchOutput};
 
 #[inline(always)]
 fn model_tint(color: [f32; 4], draw: ModelDrawState) -> [f32; 4] {
@@ -563,7 +952,7 @@ mod tests {
     }
 
     #[test]
-    fn cached_geometry_reuses_exact_pointer_key() {
+    fn cached_geometry_reuses_stable_slot_key() {
         let slot = TestSlot::model();
         let mut cache = ModelMeshCache::default();
         let mut builds = 0usize;
@@ -576,11 +965,9 @@ mod tests {
             builds += 1;
             Arc::from(vec![TexturedMeshVertex::default()])
         });
-        let mut hasher = XxHash64::default();
-        (&slot as *const TestSlot).hash(&mut hasher);
 
         assert_eq!(builds, 1);
-        assert_eq!(key_a, hasher.finish().max(1));
+        assert_eq!(key_a, hashed_model_cache_key(slot.stable_id()));
         assert_eq!(key_a, key_b);
         assert!(Arc::ptr_eq(&verts_a, &verts_b));
         assert_eq!(
@@ -637,7 +1024,7 @@ mod tests {
             });
         }
         assert_eq!(builds, MODEL_MESH_CACHE_LIMIT + 1);
-        assert_eq!(cache.entries.len(), MODEL_MESH_CACHE_LIMIT);
+        assert_eq!(cache.slots.len(), MODEL_MESH_CACHE_LIMIT);
         assert_eq!(
             cache.stats(),
             ModelMeshCacheStats {
@@ -655,7 +1042,7 @@ mod tests {
             Arc::from([TexturedMeshVertex::default()])
         });
         assert_eq!(builds, MODEL_MESH_CACHE_LIMIT + 2);
-        assert_eq!(cache.entries.len(), MODEL_MESH_CACHE_LIMIT);
+        assert_eq!(cache.slots.len(), MODEL_MESH_CACHE_LIMIT);
         assert_eq!(
             cache.stats(),
             ModelMeshCacheStats {
@@ -667,7 +1054,7 @@ mod tests {
 
         cache.reset_stats();
         assert_eq!(cache.stats(), ModelMeshCacheStats::default());
-        assert_eq!(cache.entries.len(), MODEL_MESH_CACHE_LIMIT);
+        assert_eq!(cache.slots.len(), MODEL_MESH_CACHE_LIMIT);
         cache.get_or_insert_with(slots[0].as_ref(), || {
             panic!("resetting stats must not clear retained geometry")
         });
@@ -682,15 +1069,62 @@ mod tests {
     }
 
     #[test]
-    fn prewarm_ignores_slots_without_models() {
+    fn prewarm_registers_non_model_slots_without_geometry() {
         let mut slot = TestSlot::model();
         slot.model = None;
         let mut cache = ModelMeshCache::with_capacity(1);
 
         cache.prewarm_slot(&slot);
 
-        assert!(cache.entries.is_empty());
+        assert_eq!(cache.slots.len(), 1);
+        assert!(cache.slots[0].geometry.is_none());
         assert_eq!(cache.stats(), ModelMeshCacheStats::default());
+    }
+
+    #[test]
+    fn frame_cache_evaluates_each_slot_time_once_per_frame() {
+        let slot = TestSlot::model();
+        let mut cache = ModelMeshCache::with_capacity(1);
+        cache.prewarm_slot(&slot);
+        cache.seal();
+        cache.reset_stats();
+        cache.begin_frame();
+
+        let first = cache.draw_at(&slot, 1.25, 4.0);
+        let second = cache.draw_at(&slot, 1.25, 4.0);
+
+        assert_eq!(first.pos, second.pos);
+        assert_eq!(
+            cache.frame_stats(),
+            NoteskinFrameCacheStats {
+                hits: 1,
+                evaluations: 1,
+                unregistered_misses: 0,
+                saturated_misses: 0,
+            }
+        );
+        cache.begin_frame();
+        let _ = cache.draw_at(&slot, 1.25, 4.0);
+        assert_eq!(cache.frame_stats().evaluations, 2);
+    }
+
+    #[test]
+    fn sealed_frame_cache_saturates_without_allocating_or_retaining() {
+        let registered = TestSlot::model();
+        let missed = TestSlot::model();
+        let mut cache = ModelMeshCache::with_capacity(1);
+        cache.prewarm_slot(&registered);
+        cache.seal();
+        cache.reset_stats();
+        cache.begin_frame();
+
+        let expected = missed.model_draw_at(2.0, 8.0);
+        let actual = cache.draw_at(&missed, 2.0, 8.0);
+
+        assert_eq!(actual.pos, expected.pos);
+        assert_eq!(cache.slots.len(), 1);
+        assert_eq!(cache.frame_stats().unregistered_misses, 1);
+        assert_eq!(cache.frame_stats().saturated_misses, 1);
     }
 
     #[test]

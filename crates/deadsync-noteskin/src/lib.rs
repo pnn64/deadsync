@@ -21,9 +21,9 @@ pub mod sprite;
 
 pub use draw::{
     ModelAutoRotKey, ModelDrawState, ModelEffectClock, ModelEffectMode, ModelEffectState,
-    ModelMesh, ModelTweenSegment, ModelVertex, TweenType, glowshift_mix, model_auto_rot_z_at,
-    model_draw_at, model_effect_clock_units, model_effect_mix, model_glow_at, model_glow_with_draw,
-    model_texture_uv_params,
+    ModelMesh, ModelTweenCursor, ModelTweenSegment, ModelVertex, TweenType, glowshift_mix,
+    model_auto_rot_z_at, model_draw_at, model_draw_at_cursor, model_effect_clock_units,
+    model_effect_mix, model_glow_at, model_glow_with_draw, model_texture_uv_params,
 };
 pub use explosion::{
     ExplosionAnimation, ExplosionSegment, ExplosionState, ExplosionVisualState, GlowEffect,

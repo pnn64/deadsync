@@ -1,4 +1,4 @@
-use crate::draw::{ModelDrawState, ModelMesh, ModelVertex};
+use crate::draw::{ModelDrawState, ModelMesh, ModelTweenCursor, ModelVertex};
 use crate::script::SpriteAnimationCommandPlan;
 use std::path::Path;
 use std::sync::Arc;
@@ -108,6 +108,21 @@ pub trait NoteskinSlot: Sized {
     fn frame_index_from_phase(&self, phase: f32) -> usize;
     fn uv_for_frame_at(&self, frame_index: usize, elapsed: f32) -> [f32; 4];
     fn model_draw_at(&self, time: f32, beat: f32) -> ModelDrawState;
+
+    #[inline(always)]
+    fn stable_id(&self) -> u64 {
+        (self as *const Self as usize as u64).max(1)
+    }
+
+    #[inline(always)]
+    fn model_draw_at_cursor(
+        &self,
+        time: f32,
+        beat: f32,
+        _cursor: &mut ModelTweenCursor,
+    ) -> ModelDrawState {
+        self.model_draw_at(time, beat)
+    }
     fn model_glow_with_draw(
         &self,
         draw: ModelDrawState,

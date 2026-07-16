@@ -63,9 +63,13 @@ pub use note_placement::{NotefieldPlacementScratch, NotefieldPlacementScratchSta
 pub use note_placement::{PlacementBench, PlacementBenchFrame};
 pub use notes::ScrollTravel;
 pub use noteskin_model::{
-    ModelMeshCache, ModelMeshCacheStats, noteskin_model_actor, noteskin_model_actor_from_draw,
+    ModelMeshCache, ModelMeshCacheStats, NoteskinFrameCacheStats, noteskin_model_actor,
+    noteskin_model_actor_from_draw,
     noteskin_model_actor_from_draw_depth_sorted_affine_cached_geometry,
 };
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub use noteskin_model::{SlotFrameBench, SlotFrameBenchOutput};
 pub use placement::{
     FieldLayout, FieldPlacement, HudLayoutYs, LayoutMiniIndicatorPosition, ProxyCaptureRequests,
     ViewOverride, ZmodLayoutParams, ZmodLayoutYs,

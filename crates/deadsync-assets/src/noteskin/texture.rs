@@ -14,14 +14,14 @@ use deadsync_noteskin::script::apply_sprite_animation_command_plans;
 #[cfg(test)]
 use deadsync_noteskin::script::apply_sprite_animation_script_plans;
 use deadsync_noteskin::{
-    AnimationRate, ModelAutoRotKey, ModelDrawState, ModelEffectState, ModelMesh, ModelTweenSegment,
-    NoteskinSlot, SpriteDefinition, SpriteSlotPlan, SpriteSourcePlan,
+    AnimationRate, ModelAutoRotKey, ModelDrawState, ModelEffectState, ModelMesh, ModelTweenCursor,
+    ModelTweenSegment, NoteskinSlot, SpriteDefinition, SpriteSlotPlan, SpriteSourcePlan,
     generated_animation_sprite_slot_plan, itg_all_frames_sprite_slot_plan_from_path,
     itg_animation_sprite_slot_plan_from_path, itg_frame_sprite_slot_plan_from_path,
-    itg_sprite_animation_slot_plan, itg_sprite_slot_plan_from_path, model_draw_at, model_glow_at,
-    model_glow_with_draw, model_vertex_for_sprite, neg_rot_sin_cos, sprite_animated_uv,
-    sprite_atlas_uv, sprite_frame_index, sprite_frame_index_from_phase, sprite_scrolled_uv,
-    sprite_sheet_frame,
+    itg_sprite_animation_slot_plan, itg_sprite_slot_plan_from_path, model_draw_at,
+    model_draw_at_cursor, model_glow_at, model_glow_with_draw, model_vertex_for_sprite,
+    neg_rot_sin_cos, sprite_animated_uv, sprite_atlas_uv, sprite_frame_index,
+    sprite_frame_index_from_phase, sprite_scrolled_uv, sprite_sheet_frame,
 };
 use image::image_dimensions;
 use log::warn;
@@ -169,8 +169,18 @@ impl SpriteSource {
     }
 }
 
-#[derive(Debug, Clone)]
+static NEXT_SLOT_ID: AtomicU64 = AtomicU64::new(1);
+
+#[inline(always)]
+fn next_slot_id() -> u64 {
+    let id = NEXT_SLOT_ID.fetch_add(1, Ordering::Relaxed);
+    assert_ne!(id, 0, "noteskin slot ID space exhausted");
+    id
+}
+
+#[derive(Debug)]
 pub struct SpriteSlot {
+    stable_id: u64,
     pub def: SpriteDefinition,
     pub(crate) base_rot_sin_cos: [f32; 2],
     pub source_size: [i32; 2],
@@ -185,6 +195,28 @@ pub struct SpriteSlot {
     pub model_effect: ModelEffectState,
     pub model_auto_rot_total_frames: f32,
     pub model_auto_rot_z_keys: Arc<[ModelAutoRotKey]>,
+}
+
+impl Clone for SpriteSlot {
+    fn clone(&self) -> Self {
+        Self {
+            stable_id: next_slot_id(),
+            def: self.def.clone(),
+            base_rot_sin_cos: self.base_rot_sin_cos,
+            source_size: self.source_size,
+            source: self.source.clone(),
+            uv_velocity: self.uv_velocity,
+            uv_offset: self.uv_offset,
+            uv_cycle_seconds: self.uv_cycle_seconds,
+            note_color_translate: self.note_color_translate,
+            model: self.model.clone(),
+            model_draw: self.model_draw,
+            model_timeline: self.model_timeline.clone(),
+            model_effect: self.model_effect,
+            model_auto_rot_total_frames: self.model_auto_rot_total_frames,
+            model_auto_rot_z_keys: self.model_auto_rot_z_keys.clone(),
+        }
+    }
 }
 
 impl SpriteSlot {
@@ -262,6 +294,24 @@ impl SpriteSlot {
             self.model_auto_rot_z_keys.as_ref(),
             time,
             beat,
+        )
+    }
+
+    #[inline(always)]
+    pub fn model_draw_at_cursor(
+        &self,
+        time: f32,
+        beat: f32,
+        cursor: &mut ModelTweenCursor,
+    ) -> ModelDrawState {
+        model_draw_at_cursor(
+            self.model_draw,
+            self.model_timeline.as_ref(),
+            self.model_effect,
+            self.model_auto_rot_total_frames,
+            self.model_auto_rot_z_keys.as_ref(),
+            [time, beat],
+            cursor,
         )
     }
 
@@ -397,6 +447,21 @@ impl NoteskinSlot for SpriteSlot {
     }
 
     #[inline(always)]
+    fn stable_id(&self) -> u64 {
+        self.stable_id
+    }
+
+    #[inline(always)]
+    fn model_draw_at_cursor(
+        &self,
+        time: f32,
+        beat: f32,
+        cursor: &mut ModelTweenCursor,
+    ) -> ModelDrawState {
+        SpriteSlot::model_draw_at_cursor(self, time, beat, cursor)
+    }
+
+    #[inline(always)]
     fn model_glow_with_draw(
         &self,
         draw: ModelDrawState,
@@ -434,6 +499,7 @@ pub fn build_model_geometry(slot: &SpriteSlot) -> Arc<[TexturedMeshVertex]> {
 
 pub fn test_model_slot() -> SpriteSlot {
     SpriteSlot {
+        stable_id: next_slot_id(),
         def: SpriteDefinition::default(),
         base_rot_sin_cos: [0.0, 1.0],
         source_size: [64, 64],
@@ -591,6 +657,7 @@ fn source_from_plan(plan: SpriteSourcePlan) -> Arc<SpriteSource> {
 
 fn slot_from_plan(plan: SpriteSlotPlan) -> SpriteSlot {
     SpriteSlot {
+        stable_id: next_slot_id(),
         def: plan.def,
         base_rot_sin_cos: [0.0, 1.0],
         source_size: plan.source_size,
@@ -906,6 +973,7 @@ mod contract_tests {
     #[test]
     fn noteskin_slot_contract_preserves_data_and_identity() {
         let slot = test_model_slot();
+        let cloned_slot = slot.clone();
         let contract_def = <SpriteSlot as NoteskinSlot>::sprite_def(&slot);
         let contract_key = <SpriteSlot as NoteskinSlot>::texture_key_shared(&slot);
         let inherent_key = slot.texture_key_shared();
@@ -918,6 +986,14 @@ mod contract_tests {
             contract_model,
             slot.model.as_deref().expect("test model")
         ));
+        assert_eq!(
+            <SpriteSlot as NoteskinSlot>::stable_id(&slot),
+            slot.stable_id
+        );
+        assert_ne!(
+            <SpriteSlot as NoteskinSlot>::stable_id(&slot),
+            <SpriteSlot as NoteskinSlot>::stable_id(&cloned_slot)
+        );
         assert_eq!(
             <SpriteSlot as NoteskinSlot>::source_size(&slot),
             slot.source_size

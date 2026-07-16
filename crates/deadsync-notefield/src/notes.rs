@@ -194,7 +194,7 @@ fn compose_mine_slot<S, F, Z>(
 {
     let slot = pass.slot;
     let draw = song_lua_note_model_draw(
-        slot.model_draw_at(request.display_time_s, request.current_beat),
+        model_cache.draw_at(slot, request.display_time_s, request.current_beat),
         request.rotation_y_deg,
     );
     if !draw.visible {
@@ -1390,7 +1390,7 @@ mod tests {
         assert_eq!(
             cache.stats(),
             ModelMeshCacheStats {
-                hits: 1,
+                hits: 2,
                 misses: 1,
                 saturated_misses: 0,
             }
