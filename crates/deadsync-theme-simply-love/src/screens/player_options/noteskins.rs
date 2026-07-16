@@ -71,6 +71,48 @@ pub(super) fn preview_noteskin_names(
     names
 }
 
+pub(super) fn init_noteskin_state(
+    cols_per_player: usize,
+    noteskin_names: &[String],
+    profiles: &[profile_data::Profile; PLAYER_SLOTS],
+    prewarm_catalog: bool,
+) -> NoteskinState {
+    if !prewarm_catalog {
+        return NoteskinState {
+            cache: HashMap::new(),
+            previews: std::array::from_fn(|_| PlayerNoteskinPreviews::default()),
+        };
+    }
+
+    let initial_names = preview_noteskin_names(noteskin_names.to_vec(), profiles);
+    let mut cache = build_noteskin_cache(cols_per_player, &initial_names);
+    let previews = std::array::from_fn(|i| {
+        let profile_noteskin = &profiles[i].noteskin;
+        PlayerNoteskinPreviews {
+            base: cached_or_load_noteskin(&mut cache, profile_noteskin, cols_per_player),
+            mine: resolved_noteskin_override_preview(
+                &mut cache,
+                profile_noteskin,
+                profiles[i].mine_noteskin.as_ref(),
+                cols_per_player,
+            ),
+            receptor: resolved_noteskin_override_preview(
+                &mut cache,
+                profile_noteskin,
+                profiles[i].receptor_noteskin.as_ref(),
+                cols_per_player,
+            ),
+            tap_explosion: resolved_tap_explosion_preview(
+                &mut cache,
+                profile_noteskin,
+                profiles[i].tap_explosion_noteskin.as_ref(),
+                cols_per_player,
+            ),
+        }
+    });
+    NoteskinState { cache, previews }
+}
+
 pub(super) fn push_noteskin_name_once(names: &mut Vec<String>, skin: &profile_data::NoteSkin) {
     if skin.is_none_choice() {
         return;

@@ -159,6 +159,72 @@ pub fn init(
     smx_gif_catalog: SmxGifCatalogView,
     heart_rate_devices: HeartRateDevicesView,
 ) -> State {
+    init_with_noteskin_prewarm(
+        song,
+        chart_steps_index,
+        preferred_difficulty_index,
+        active_color_index,
+        return_screen,
+        fixed_stepchart,
+        noteskin_catalog,
+        smx_gif_catalog,
+        heart_rate_devices,
+        true,
+    )
+}
+
+pub fn init_for_gameplay(
+    song: Arc<SongData>,
+    chart_steps_index: [usize; PLAYER_SLOTS],
+    preferred_difficulty_index: [usize; PLAYER_SLOTS],
+    active_color_index: i32,
+    return_screen: Screen,
+    fixed_stepchart: Option<FixedStepchart>,
+    noteskin_catalog: NoteskinCatalogView,
+    smx_gif_catalog: SmxGifCatalogView,
+    heart_rate_devices: HeartRateDevicesView,
+) -> State {
+    init_with_noteskin_prewarm(
+        song,
+        chart_steps_index,
+        preferred_difficulty_index,
+        active_color_index,
+        return_screen,
+        fixed_stepchart,
+        noteskin_catalog,
+        smx_gif_catalog,
+        heart_rate_devices,
+        false,
+    )
+}
+
+pub fn prewarm_noteskin_previews(state: &mut State) {
+    let noteskin_names = state.panes[OptionsPane::Main.index()]
+        .row_map
+        .get(RowId::NoteSkin)
+        .map(|row| row.choices.clone())
+        .unwrap_or_default();
+    let cols_per_player = deadsync_profile::compat::get_session_play_style().cols_per_player();
+    state.noteskin = init_noteskin_state(
+        cols_per_player,
+        &noteskin_names,
+        &state.player_profiles,
+        true,
+    );
+}
+
+fn init_with_noteskin_prewarm(
+    song: Arc<SongData>,
+    chart_steps_index: [usize; PLAYER_SLOTS],
+    preferred_difficulty_index: [usize; PLAYER_SLOTS],
+    active_color_index: i32,
+    return_screen: Screen,
+    fixed_stepchart: Option<FixedStepchart>,
+    noteskin_catalog: NoteskinCatalogView,
+    smx_gif_catalog: SmxGifCatalogView,
+    heart_rate_devices: HeartRateDevicesView,
+    prewarm_noteskin_catalog: bool,
+) -> State {
     let session_music_rate = deadsync_profile::compat::get_session_music_rate();
     let allow_per_player_global_offsets =
         crate::config::get().machine_allow_per_player_global_offsets;
@@ -290,40 +356,15 @@ pub fn init(
     );
 
     let cols_per_player = deadsync_profile::compat::get_session_play_style().cols_per_player();
-    // PlayerOptions is initialized while the previous screen still shows its
-    // "Entering Options..." overlay. Resolve every row-selectable noteskin now
-    // so changing any of the noteskin preview rows never performs first-use
-    // parsing or model loading on the input path.
-    let initial_noteskin_names = preview_noteskin_names(noteskin_names, &player_profiles);
-    let mut noteskin_cache = build_noteskin_cache(cols_per_player, &initial_noteskin_names);
-    let noteskin_previews: [PlayerNoteskinPreviews; PLAYER_SLOTS] = std::array::from_fn(|i| {
-        let profile_noteskin = &player_profiles[i].noteskin;
-        PlayerNoteskinPreviews {
-            base: cached_or_load_noteskin(&mut noteskin_cache, profile_noteskin, cols_per_player),
-            mine: resolved_noteskin_override_preview(
-                &mut noteskin_cache,
-                profile_noteskin,
-                player_profiles[i].mine_noteskin.as_ref(),
-                cols_per_player,
-            ),
-            receptor: resolved_noteskin_override_preview(
-                &mut noteskin_cache,
-                profile_noteskin,
-                player_profiles[i].receptor_noteskin.as_ref(),
-                cols_per_player,
-            ),
-            tap_explosion: resolved_tap_explosion_preview(
-                &mut noteskin_cache,
-                profile_noteskin,
-                player_profiles[i].tap_explosion_noteskin.as_ref(),
-                cols_per_player,
-            ),
-        }
-    });
-    let noteskin = NoteskinState {
-        cache: noteskin_cache,
-        previews: noteskin_previews,
-    };
+    // Only real Player Options entry runs the catalog warmup while the previous
+    // screen shows "Entering Options...". Direct song starts leave this empty;
+    // Gameplay loads and prewarms only the active players' resolved settings.
+    let noteskin = init_noteskin_state(
+        cols_per_player,
+        &noteskin_names,
+        &player_profiles,
+        prewarm_noteskin_catalog,
+    );
     let active = session_active_players();
     let main_row_tweens = init_row_tweens(
         &main_row_map,

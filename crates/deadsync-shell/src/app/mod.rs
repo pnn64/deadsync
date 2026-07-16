@@ -3442,14 +3442,23 @@ impl App {
         true
     }
 
-    fn prepare_player_options_for_course_stage(&mut self, color_index: i32) -> bool {
+    fn prepare_player_options_for_course_stage(
+        &mut self,
+        color_index: i32,
+        prewarm_noteskin_catalog: bool,
+    ) -> bool {
         let Some(course_run) = self.state.session.course_run.as_ref() else {
             return false;
         };
         let Some(stage) = course_run.stages.get(course_run.next_stage_index) else {
             return false;
         };
-        self.state.screens.player_options_state = Some(player_options::init(
+        let init = if prewarm_noteskin_catalog {
+            player_options::init
+        } else {
+            player_options::init_for_gameplay
+        };
+        self.state.screens.player_options_state = Some(init(
             stage.song.clone(),
             stage.steps_index,
             stage.preferred_difficulty_index,
@@ -3488,7 +3497,7 @@ impl App {
             player_side,
         );
 
-        let mut po_state = player_options::init(
+        let mut po_state = player_options::init_for_gameplay(
             song,
             chart_steps_index,
             chart_steps_index,
@@ -5626,7 +5635,7 @@ impl App {
                     return;
                 }
                 let color_index = self.state.screens.select_course_state.active_color_index;
-                if !self.prepare_player_options_for_course_stage(color_index) {
+                if !self.prepare_player_options_for_course_stage(color_index, true) {
                     self.state.screens.player_options_state = None;
                     warn!("Unable to prepare PlayerOptions for the selected course.");
                 }
@@ -5682,7 +5691,7 @@ impl App {
                     self.state.screens.select_course_state.active_color_index,
                     |gs| gs.gameplay.active_color_index(),
                 );
-                if !self.prepare_player_options_for_course_stage(color_index) {
+                if !self.prepare_player_options_for_course_stage(color_index, false) {
                     self.state.screens.player_options_state = None;
                     warn!("Unable to prepare gameplay for the next course stage.");
                 }
@@ -5700,7 +5709,7 @@ impl App {
                     return;
                 }
                 let color_index = self.state.screens.select_course_state.active_color_index;
-                if !self.prepare_player_options_for_course_stage(color_index) {
+                if !self.prepare_player_options_for_course_stage(color_index, false) {
                     warn!("Unable to prepare gameplay for the selected course stage.");
                 }
             } else {
@@ -5731,7 +5740,7 @@ impl App {
                     (song.clone(), steps, pref)
                 };
                 let color_index = self.state.screens.select_music_state.active_color_index;
-                self.state.screens.player_options_state = Some(player_options::init(
+                self.state.screens.player_options_state = Some(player_options::init_for_gameplay(
                     song_arc,
                     chart_steps_index,
                     preferred_difficulty_index,
@@ -5848,6 +5857,7 @@ impl App {
                             "Failed to load practice payload for '{}': {}",
                             song_arc.title, e
                         );
+                        player_options::prewarm_noteskin_previews(&mut po_state);
                         self.commit_screen_change(CurrentScreen::PlayerOptions);
                         self.state.screens.player_options_state = Some(po_state);
                         return commands;
@@ -6176,6 +6186,7 @@ impl App {
                                 "Failed to load gameplay payload for '{}': {}",
                                 song_arc.title, e
                             );
+                            player_options::prewarm_noteskin_previews(&mut po_state);
                             self.commit_screen_change(CurrentScreen::PlayerOptions);
                             self.state.screens.player_options_state = Some(po_state);
                             return commands;
@@ -6847,6 +6858,10 @@ impl App {
             };
             commands.push(Command::SetBanner(banner_path));
             commands.push(Command::SetCdTitle(None));
+        }
+        if prev == CurrentScreen::PlayerOptions && target != CurrentScreen::PlayerOptions {
+            self.state.screens.player_options_state = None;
+            deadsync_assets::noteskin::clear_itg_runtime_caches();
         }
         commands
     }

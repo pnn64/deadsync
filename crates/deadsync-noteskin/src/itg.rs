@@ -2,7 +2,7 @@ use log::warn;
 use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex, OnceLock};
+use std::sync::{Arc, Mutex, OnceLock, Weak};
 
 use crate::{
     NoteAnimPart, NoteColorType, NoteDisplayMetrics, NotePartAnimation, NotePartTextureTranslate,
@@ -38,8 +38,20 @@ pub struct ItgSkinCacheKey {
     skin: String,
 }
 
+/// Process-wide lookup index for caller-owned noteskin runtimes.
+///
+/// The mutex makes lookup thread-safe, but entries are weak so the index never
+/// extends a runtime beyond its screen/song owner. Player Options populates it
+/// during entry; gameplay populates only its resolved skins before the song.
+/// The touched-key count is bounded by installed skins times encountered play
+/// styles and is cleared at the Player Options exit boundary or after source
+/// changes. A miss loads synchronously and therefore must stay on transition
+/// paths, never a live gameplay frame. There is no eviction or destruction
+/// work here: the last owning `Arc` drops the runtime in that owner's context.
+/// Existing loader warnings provide miss-failure instrumentation; a hit is one
+/// bounded hash lookup plus `Weak::upgrade`.
 pub struct ItgSkinRuntimeCache<T> {
-    entries: Mutex<HashMap<ItgSkinCacheKey, Arc<T>>>,
+    entries: Mutex<HashMap<ItgSkinCacheKey, Weak<T>>>,
 }
 
 #[derive(Debug, Clone)]
@@ -75,7 +87,7 @@ impl<T> ItgSkinRuntimeCache<T> {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .get(&key)
-            .cloned()
+            .and_then(Weak::upgrade)
         {
             return Ok(cached);
         }
@@ -85,8 +97,11 @@ impl<T> ItgSkinRuntimeCache<T> {
             .entries
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let entry = guard.entry(key).or_insert_with(|| loaded.clone());
-        Ok(entry.clone())
+        if let Some(cached) = guard.get(&key).and_then(Weak::upgrade) {
+            return Ok(cached);
+        }
+        guard.insert(key, Arc::downgrade(&loaded));
+        Ok(loaded)
     }
 }
 
@@ -1222,6 +1237,17 @@ mod tests {
         assert!(Arc::ptr_eq(&first, &second));
         assert_eq!(first.as_str(), "loaded");
 
+        drop(first);
+        drop(second);
+        let released = cache
+            .get_or_load(&style, "cel", || {
+                loads += 1;
+                Ok("released".to_string())
+            })
+            .unwrap();
+        assert_eq!(loads, 2);
+        assert_eq!(released.as_str(), "released");
+
         cache.clear();
         let reloaded = cache
             .get_or_load(&style, "cel", || {
@@ -1229,7 +1255,7 @@ mod tests {
                 Ok("reloaded".to_string())
             })
             .unwrap();
-        assert_eq!(loads, 2);
+        assert_eq!(loads, 3);
         assert_eq!(reloaded.as_str(), "reloaded");
     }
 

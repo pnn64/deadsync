@@ -110,33 +110,6 @@ pub fn load_itg_skin_cached(style: &Style, skin: &str) -> Result<Arc<Noteskin>, 
         .get_or_load(style, skin, || load_itg_skin(style, skin))
 }
 
-pub fn prewarm_itg_preview_cache() {
-    let _ = compile_all_itg_caches_with_progress(|_, _, _, _| {});
-    let roots = noteskin_roots();
-    let skins = noteskin_itg::discover_skins(&roots, "dance");
-    let styles = [
-        Style {
-            num_cols: 4,
-            num_players: 1,
-        },
-        Style {
-            num_cols: 8,
-            num_players: 1,
-        },
-    ];
-
-    for style in styles {
-        for skin in &skins {
-            if let Err(err) = load_itg_skin_cached(&style, skin) {
-                warn!(
-                    "noteskin prewarm failed for '{}' ({} columns): {}",
-                    skin, style.num_cols, err
-                );
-            }
-        }
-    }
-}
-
 pub type CompileAllItgSummary = noteskin_compiler::CompileAllItgSummary;
 
 pub fn compile_all_itg_caches_with_progress<F>(mut on_progress: F) -> CompileAllItgSummary
