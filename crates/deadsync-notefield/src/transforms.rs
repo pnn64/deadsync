@@ -592,7 +592,7 @@ pub(crate) fn appearance_note_glow(
     params: NoteAlphaParams,
 ) -> f32 {
     let percent_visible = appearance_note_alpha(y, elapsed, mini, params);
-    sm_scale((percent_visible - 0.5).abs(), 0.0, 0.5, 1.3, 0.0).max(0.0)
+    appearance_note_glow_from_alpha(percent_visible)
 }
 
 pub(crate) fn appearance_note_actor_alpha(
@@ -601,11 +601,17 @@ pub(crate) fn appearance_note_actor_alpha(
     mini: f32,
     params: NoteAlphaParams,
 ) -> f32 {
-    if appearance_note_alpha(y, elapsed, mini, params) > 0.5 {
-        1.0
-    } else {
-        0.0
-    }
+    appearance_note_actor_alpha_from_alpha(appearance_note_alpha(y, elapsed, mini, params))
+}
+
+#[inline(always)]
+pub(crate) fn appearance_note_glow_from_alpha(percent_visible: f32) -> f32 {
+    sm_scale((percent_visible - 0.5).abs(), 0.0, 0.5, 1.3, 0.0).max(0.0)
+}
+
+#[inline(always)]
+pub(crate) fn appearance_note_actor_alpha_from_alpha(percent_visible: f32) -> f32 {
+    if percent_visible > 0.5 { 1.0 } else { 0.0 }
 }
 
 pub(crate) fn appearance_needs_rows(appearance: NoteAlphaParams) -> bool {

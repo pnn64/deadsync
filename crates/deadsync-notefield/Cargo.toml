@@ -12,6 +12,11 @@ name = "hold_mesh"
 harness = false
 required-features = ["bench-support"]
 
+[[bench]]
+name = "placement_plan"
+harness = false
+required-features = ["bench-support"]
+
 [dependencies]
 deadlib-present = { path = "../deadlib-present" }
 deadlib-render = { path = "../deadlib-render" }

@@ -14,6 +14,7 @@ mod judgment_feedback;
 mod measure_actors;
 mod measure_lines;
 mod mini_indicator;
+mod note_placement;
 mod notes;
 mod noteskin_model;
 mod placement;
@@ -56,6 +57,10 @@ pub use mini_indicator::{
     zmod_resolved_combo_color, zmod_resolved_mini_indicator_mode, zmod_static_combo_color,
     zmod_stream_prog_completion_for_beat,
 };
+pub use note_placement::{NotefieldPlacementScratch, NotefieldPlacementScratchStats};
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub use note_placement::{PlacementBench, PlacementBenchFrame};
 pub use notes::ScrollTravel;
 pub use noteskin_model::{
     ModelMeshCache, ModelMeshCacheStats, noteskin_model_actor, noteskin_model_actor_from_draw,
@@ -92,6 +97,7 @@ pub(crate) use mini_indicator::{
     stream_segment_index_exclusive_end, zmod_broken_run_counter_text, zmod_broken_run_segment,
     zmod_measure_counter_text, zmod_run_timer_index,
 };
+pub(crate) use note_placement::{NotePlacement, NotefieldPlacementPlan};
 pub(crate) use notes::{
     MineLayerRequest, NoteLayerRequest, ScrollTravelRequest, compose_mine_layers,
     compose_note_layer, for_each_visible_hold_index, for_each_visible_note_index,
@@ -109,7 +115,8 @@ pub(crate) use receptors::{
 };
 pub(crate) use transforms::{
     AccelYParams, NoteAlphaParams, NoteXParams, VisualEffectParams, appearance_note_actor_alpha,
-    appearance_note_glow, beat_factor, compute_invert_distances, compute_tornado_bounds,
+    appearance_note_actor_alpha_from_alpha, appearance_note_alpha, appearance_note_glow,
+    appearance_note_glow_from_alpha, beat_factor, compute_invert_distances, compute_tornado_bounds,
     gameplay_visual_effect_params, move_col_extra, note_world_z_for_bumpy, note_x_offset,
     smoothstep01, tipsy_y_extra, visual_arrow_effect_zoom, visual_confusion_rotation_deg,
     visual_hold_body_needs_z_buffer, visual_note_rotation_z, visual_pulse_zoom_for_y,
@@ -162,9 +169,9 @@ use notes::{find_first_displayed_beat, find_last_displayed_beat, note_itg_row};
 use placement::{default_column_x, hud_layout_ys, hud_y, zmod_layout_ys};
 #[cfg(test)]
 use transforms::{
-    appearance_needs_rows, appearance_note_alpha, apply_accel_y, apply_accel_y_with_peak,
-    beat_x_extra, bumpy_angle, drunk_x_extra, itg_actor_rotation_z, mod_divisor, note_x_extra,
-    quantize_step, signed_effect_active, sm_scale, tiny_spacing_scale, tornado_x_extra,
+    appearance_needs_rows, apply_accel_y, apply_accel_y_with_peak, beat_x_extra, bumpy_angle,
+    drunk_x_extra, itg_actor_rotation_z, mod_divisor, note_x_extra, quantize_step,
+    signed_effect_active, sm_scale, tiny_spacing_scale, tornado_x_extra,
     visual_effect_params_for_col, visual_pulse_inner_zoom,
 };
 #[cfg(test)]

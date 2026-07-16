@@ -16,9 +16,9 @@ use deadsync_notefield::{
     MeasureCounterOptions, MeasureLineMode, MiniHudFrame, ModelMeshCache, NotefieldChartView,
     NotefieldComposeRequest, NotefieldFeedbackFrameView, NotefieldFieldFrameView,
     NotefieldFrameFeatures, NotefieldGeometry, NotefieldHudFrameView, NotefieldLaneFeedback,
-    NotefieldNoteskinView, NotefieldOptions, NotefieldSongLuaView, NotefieldVisualState,
-    TapJudgmentHudFrame, TapJudgmentSprite, ZmodLayoutParams, compose_notefield_field,
-    compose_notefield_hud, prepare_notefield,
+    NotefieldNoteskinView, NotefieldOptions, NotefieldPlacementScratch, NotefieldSongLuaView,
+    NotefieldVisualState, TapJudgmentHudFrame, TapJudgmentSprite, ZmodLayoutParams,
+    compose_notefield_field, compose_notefield_hud, prepare_notefield,
 };
 use deadsync_notefield::{FieldPlacement, ProxyCaptureRequests, ViewOverride};
 use deadsync_profile as profile_data;
@@ -186,6 +186,7 @@ pub(crate) fn compose_frame(
     actor_resources: &ActorResourceArena,
     model_caches: &[RefCell<ModelMeshCache>; MAX_PLAYERS],
     hold_mesh_scratch: &[RefCell<HoldMeshScratch>; MAX_PLAYERS],
+    placement_scratch: &[RefCell<NotefieldPlacementScratch>; MAX_PLAYERS],
     profile: &profile_data::Profile,
     placement: FieldPlacement,
     play_style: profile_data::PlayStyle,
@@ -484,6 +485,7 @@ pub(crate) fn compose_frame(
         hud_actors,
         &mut model_cache,
         &mut hold_mesh_scratch[player_idx].borrow_mut(),
+        &mut placement_scratch[player_idx].borrow_mut(),
         &request,
         &prepared,
         &field_frame,
