@@ -470,6 +470,7 @@ fn prewarm_gameplay_text_layout_cache(
     cache.clear();
     cache.configure(GAMEPLAY_TEXT_LAYOUT_CACHE_LIMIT);
     cache.begin_frame_stats(true);
+    compose_scratch.clear_retained_frames();
 
     let fonts = assets.fonts();
     screens::components::gameplay::gameplay_stats::refresh_density_graph_meshes(state);
@@ -503,15 +504,20 @@ fn prewarm_gameplay_text_layout_cache(
 
     let stats = cache.frame_stats();
     let actor_resources = state.actor_resources().stats();
+    let retained_frames = compose_scratch.retained_frame_stats();
     debug!(
-        "Gameplay cache prewarm: text_entries={} shared={} actor_textures={} actor_misses={} actor_saturated={} elapsed_ms={:.3}",
+        "Gameplay cache prewarm: text_entries={} shared={} actor_textures={} actor_misses={} actor_saturated={} retained_entries={} retained_misses={} retained_saturated={} elapsed_ms={:.3}",
         stats.owned_entries,
         stats.shared_aliases,
         actor_resources.textures,
         actor_resources.texture_misses,
         actor_resources.texture_saturated,
+        retained_frames.entries,
+        retained_frames.misses,
+        retained_frames.saturated,
         started.elapsed().as_secs_f64() * 1000.0,
     );
+    compose_scratch.reset_retained_frame_stats();
 }
 
 #[inline(always)]
@@ -2481,6 +2487,10 @@ impl App {
         let fonts = self.asset_manager.fonts();
         let build_screen_started = Instant::now();
         let collect_text_layout_stats = stutter_diag_enabled();
+        let uses_gameplay_present = matches!(
+            self.state.screens.current_screen,
+            CurrentScreen::Gameplay | CurrentScreen::Practice
+        );
         let actor_resources = match self.state.screens.current_screen {
             CurrentScreen::Gameplay => self
                 .state
@@ -2496,9 +2506,7 @@ impl App {
                 .map(|state| state.gameplay.actor_resources()),
             _ => None,
         };
-        let (mut screen, text_layout) = if self.state.screens.current_screen
-            == CurrentScreen::Gameplay
-        {
+        let (mut screen, text_layout) = if uses_gameplay_present {
             let text_layout_cache = &mut self.gameplay_text_layout_cache;
             let compose_scratch = &mut self.gameplay_compose_scratch;
             text_layout_cache.begin_frame_stats(collect_text_layout_stats);
@@ -2597,7 +2605,7 @@ impl App {
                 }
             }
         }
-        if self.state.screens.current_screen == CurrentScreen::Gameplay {
+        if uses_gameplay_present {
             self.gameplay_compose_scratch
                 .recycle_render_list(&mut screen);
         } else {

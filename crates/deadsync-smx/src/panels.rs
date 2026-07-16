@@ -702,7 +702,10 @@ enum Ev {
     /// Enter (true) or leave (false) active panel effect ownership of one pad slot.
     /// Leaving hands that pad back to its firmware idle lighting, independently of
     /// the other pad.
-    Active { pad: u8, active: bool },
+    Active {
+        pad: u8,
+        active: bool,
+    },
     /// Force a pad slot to solid black (true) or restore normal compositing (false).
     Blackout {
         pad: u8,
@@ -1542,7 +1545,11 @@ mod tests {
         // No last frame (fresh activation): always send.
         assert!(should_send(None, &black, Duration::ZERO));
         // Unchanged frame inside the keepalive window: suppressed.
-        assert!(!should_send(Some(&black), &black, Duration::from_millis(100)));
+        assert!(!should_send(
+            Some(&black),
+            &black,
+            Duration::from_millis(100)
+        ));
         // Any byte change sends immediately.
         assert!(should_send(Some(&black), &lit, Duration::ZERO));
         // Unchanged frame held past the keepalive: re-sent so the pad

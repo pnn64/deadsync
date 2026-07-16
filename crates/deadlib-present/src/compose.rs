@@ -13,6 +13,7 @@ use std::sync::Arc;
 /* ======================= RENDERER SCREEN BUILDER ======================= */
 
 const MAX_RECYCLED_TEXT_MESH_VERTEX_BUFFERS: usize = 512;
+const MAX_RETAINED_FRAME_ENTRIES: usize = 64;
 
 pub use crate::texture::{NullTextureContext, TextureContext, TextureMeta};
 
@@ -288,6 +289,7 @@ pub struct ComposeScratch {
     texture_cache: TextureLookupCache,
     transient_text_mesh_builders: Vec<TextMeshBatchBuilder>,
     recycled_text_mesh_vertices: Vec<Vec<renderer::TexturedMeshVertex>>,
+    retained_frames: RetainedFrameCache,
 }
 
 impl ComposeScratch {
@@ -316,6 +318,22 @@ impl ComposeScratch {
         self.cameras = cameras;
     }
 
+    /// Starts a new song-lifetime retained presentation working set.
+    pub fn clear_retained_frames(&mut self) {
+        self.retained_frames.entries.clear();
+        self.retained_frames.stats = RetainedFrameCacheStats::default();
+    }
+
+    pub fn retained_frame_stats(&self) -> RetainedFrameCacheStats {
+        let mut stats = self.retained_frames.stats;
+        stats.entries = saturating_u32(self.retained_frames.entries.len());
+        stats
+    }
+
+    pub fn reset_retained_frame_stats(&mut self) {
+        self.retained_frames.stats = RetainedFrameCacheStats::default();
+    }
+
     #[inline(always)]
     fn transient_text_mesh_scratch(
         &mut self,
@@ -328,6 +346,47 @@ impl ComposeScratch {
             &mut self.recycled_text_mesh_vertices,
         )
     }
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct RetainedFrameCacheStats {
+    pub hits: u32,
+    pub misses: u32,
+    pub saturated: u32,
+    pub entries: u32,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+struct RetainedFrameKey {
+    frame_id: u64,
+    parent: [u32; 4],
+    metrics: [u32; 4],
+    tint: [u32; 4],
+    base_z: i16,
+    blend: u8,
+}
+
+struct CachedRetainedFrame {
+    objects: Vec<RenderObject>,
+    sprite_instances: Vec<renderer::SpriteInstanceRaw>,
+}
+
+/// Precomposed immutable actor fragments owned by the gameplay compose scratch.
+///
+/// Owner/thread model: the game/render frame loop is the sole owner and caller.
+/// Lifetime: one song, cleared explicitly before gameplay prewarm. Capacity: 64
+/// placement variants. Warmup: gameplay's transition prewarm composes every
+/// retained fragment once. A hit copies compact render objects/instances and
+/// does not traverse actors or query text layout. A miss composes once and
+/// inserts if capacity remains. Saturation bypasses insertion; there is no scan,
+/// eviction, or destruction on live frames. Entries are destroyed on the next
+/// song transition. Counters are exposed through `retained_frame_stats`. Hit
+/// cost is linear only in the fragment's final render-object count; misses are
+/// bounded by the immutable child count supplied by the screen.
+#[derive(Default)]
+struct RetainedFrameCache {
+    entries: HashMap<RetainedFrameKey, CachedRetainedFrame, rustc_hash::FxBuildHasher>,
+    stats: RetainedFrameCacheStats,
 }
 
 fn sort_render_objects(objects: &mut [RenderObject], scratch: &mut ComposeScratch) {
@@ -1994,6 +2053,89 @@ struct SmRect {
 }
 
 #[inline(always)]
+fn retained_frame_key(
+    frame_id: u64,
+    parent: SmRect,
+    metrics: &Metrics,
+    base_z: i16,
+    style: ComposeStyle,
+) -> RetainedFrameKey {
+    RetainedFrameKey {
+        frame_id,
+        parent: [
+            parent.x.to_bits(),
+            parent.y.to_bits(),
+            parent.w.to_bits(),
+            parent.h.to_bits(),
+        ],
+        metrics: [
+            metrics.left.to_bits(),
+            metrics.right.to_bits(),
+            metrics.top.to_bits(),
+            metrics.bottom.to_bits(),
+        ],
+        tint: style.tint.map(f32::to_bits),
+        base_z,
+        blend: match style.blend {
+            None => 0,
+            Some(BlendMode::Alpha) => 1,
+            Some(BlendMode::Add) => 2,
+            Some(BlendMode::Multiply) => 3,
+            Some(BlendMode::Subtract) => 4,
+        },
+    }
+}
+
+fn capture_retained_frame(
+    objects: &[RenderObject],
+    sprite_instances: &[renderer::SpriteInstanceRaw],
+    object_start: usize,
+    sprite_start: usize,
+) -> Option<CachedRetainedFrame> {
+    let sprite_start_u32 = u32::try_from(sprite_start).ok()?;
+    let mut cached_objects = Vec::with_capacity(objects.len().saturating_sub(object_start));
+    for source in objects.get(object_start..)? {
+        let mut object = source.clone();
+        match &mut object.object_type {
+            renderer::ObjectType::Sprite(index) => {
+                *index = index.checked_sub(sprite_start_u32)?;
+            }
+            renderer::ObjectType::TexturedMesh {
+                vertices: renderer::TexturedMeshVertices::Transient(_),
+                ..
+            } => return None,
+            _ => {}
+        }
+        object.order = 0;
+        cached_objects.push(object);
+    }
+    Some(CachedRetainedFrame {
+        objects: cached_objects,
+        sprite_instances: sprite_instances.get(sprite_start..)?.to_vec(),
+    })
+}
+
+fn append_retained_frame(
+    cached: &CachedRetainedFrame,
+    order_counter: &mut u32,
+    out: &mut Vec<RenderObject>,
+    sprite_instances: &mut Vec<renderer::SpriteInstanceRaw>,
+) {
+    let sprite_start = sprite_instances.len().min(u32::MAX as usize) as u32;
+    sprite_instances.extend_from_slice(&cached.sprite_instances);
+    out.reserve(cached.objects.len());
+    for source in &cached.objects {
+        let mut object = source.clone();
+        if let renderer::ObjectType::Sprite(index) = &mut object.object_type {
+            *index = index.saturating_add(sprite_start);
+        }
+        object.order = *order_counter;
+        *order_counter = order_counter.saturating_add(1);
+        out.push(object);
+    }
+}
+
+#[inline(always)]
 fn lerp_f32(a: f32, b: f32, t: f32) -> f32 {
     (b - a).mul_add(t, a)
 }
@@ -3462,6 +3604,76 @@ fn build_actor_recursive<'a, T: TextureContext + ?Sized>(
                 total_elapsed,
             );
         }
+
+        actors::Actor::RetainedFrame {
+            align,
+            offset,
+            size,
+            frame,
+            z,
+            tint,
+            blend,
+            visible,
+        } => {
+            if !*visible {
+                return;
+            }
+            let rect = place_rect(parent, *align, *offset, *size);
+            let layer = base_z.saturating_add(*z);
+            let child_style = style.child(*tint, *blend);
+            let cacheable = camera == 0 && masks.is_empty();
+            let key = retained_frame_key(frame.id(), rect, m, layer, child_style);
+
+            if cacheable {
+                let RetainedFrameCache { entries, stats } = &mut scratch.retained_frames;
+                if let Some(cached) = entries.get(&key) {
+                    stats.hits = stats.hits.saturating_add(1);
+                    append_retained_frame(cached, order_counter, out, sprite_instances);
+                    return;
+                }
+                stats.misses = stats.misses.saturating_add(1);
+            }
+
+            let object_start = out.len();
+            let sprite_start = sprite_instances.len();
+            let camera_start = cameras.len();
+            let mask_start = masks.len();
+            build_actor_list(
+                frame.children(),
+                rect,
+                m,
+                fonts,
+                scratch,
+                layer,
+                camera,
+                child_style,
+                cameras,
+                masks,
+                order_counter,
+                out,
+                sprite_instances,
+                text_cache,
+                texture_cache,
+                texture_ctx,
+                actor_textures,
+                total_elapsed,
+            );
+
+            if !cacheable || cameras.len() != camera_start || masks.len() != mask_start {
+                return;
+            }
+            let Some(cached) =
+                capture_retained_frame(out, sprite_instances, object_start, sprite_start)
+            else {
+                return;
+            };
+            let cache = &mut scratch.retained_frames;
+            if cache.entries.len() < MAX_RETAINED_FRAME_ENTRIES {
+                cache.entries.insert(key, cached);
+            } else {
+                cache.stats.saturated = cache.stats.saturated.saturating_add(1);
+            }
+        }
     }
 }
 
@@ -4825,7 +5037,8 @@ mod tests {
         sort_render_objects, str_ptr, wrap_text_lines_by_words,
     };
     use crate::actors::{
-        Actor, ActorResourceArena, SizeSpec, SpriteSource, TextAlign, TextAttribute, TextContent,
+        Actor, ActorResourceArena, RetainedActorFrame, SizeSpec, SpriteSource, TextAlign,
+        TextAttribute, TextContent,
     };
     use crate::font::{Font, Glyph};
     use crate::space::Metrics;
@@ -6016,6 +6229,117 @@ mod tests {
             }
             _ => panic!("expected textured-mesh objects"),
         }
+    }
+
+    #[test]
+    fn retained_frame_composes_once_then_reuses_compact_output() {
+        let metrics = Metrics {
+            left: 0.0,
+            right: 100.0,
+            top: 100.0,
+            bottom: 0.0,
+        };
+        let sprite = Actor::Sprite {
+            align: [0.0, 0.0],
+            offset: [12.0, 18.0],
+            world_z: 0.0,
+            size: [SizeSpec::Px(10.0), SizeSpec::Px(14.0)],
+            source: SpriteSource::Solid,
+            tint: [0.8, 0.6, 0.4, 0.5],
+            glow: [0.0; 4],
+            z: 7,
+            cell: None,
+            grid: None,
+            uv_rect: None,
+            visible: true,
+            flip_x: false,
+            flip_y: false,
+            cropleft: 0.0,
+            cropright: 0.0,
+            croptop: 0.0,
+            cropbottom: 0.0,
+            fadeleft: 0.0,
+            faderight: 0.0,
+            fadetop: 0.0,
+            fadebottom: 0.0,
+            blend: BlendMode::Alpha,
+            mask_source: false,
+            mask_dest: false,
+            rot_x_deg: 0.0,
+            rot_y_deg: 0.0,
+            rot_z_deg: 0.0,
+            local_offset: [0.0, 0.0],
+            local_offset_rot_sin_cos: [0.0, 1.0],
+            texcoordvelocity: None,
+            animate: false,
+            state_delay: 0.0,
+            scale: [1.0, 1.0],
+            shadow_len: [0.0; 2],
+            shadow_color: [0.0; 4],
+            effect: Default::default(),
+        };
+        let frame = Arc::new(RetainedActorFrame::new(vec![sprite]));
+        let actors = [Actor::RetainedFrame {
+            align: [0.0, 0.0],
+            offset: [0.0, 0.0],
+            size: [SizeSpec::Fill, SizeSpec::Fill],
+            frame,
+            z: 3,
+            tint: [0.5, 0.25, 1.0, 0.5],
+            blend: None,
+            visible: true,
+        }];
+        let fonts = HashMap::new();
+        let mut text_cache = TextLayoutCache::new(1);
+        let mut scratch = ComposeScratch::default();
+
+        let mut first = build_screen_cached_with_scratch(
+            &actors,
+            [0.0; 4],
+            &metrics,
+            &fonts,
+            0.0,
+            &mut text_cache,
+            &mut scratch,
+        );
+        let first_instance = first.sprite_instances[0];
+        assert_eq!(first.objects[0].z, 10);
+        assert_eq!(scratch.retained_frame_stats().misses, 1);
+        assert_eq!(scratch.retained_frame_stats().entries, 1);
+        scratch.recycle_render_list(&mut first);
+
+        let second = build_screen_cached_with_scratch(
+            &actors,
+            [0.0; 4],
+            &metrics,
+            &fonts,
+            1.0,
+            &mut text_cache,
+            &mut scratch,
+        );
+        assert_eq!(second.objects.len(), 1);
+        assert_eq!(second.objects[0].z, 10);
+        assert_eq!(second.objects[0].order, 0);
+        assert_eq!(second.sprite_instances, vec![first_instance]);
+        assert_eq!(second.sprite_instances[0].tint, [0.4, 0.15, 0.4, 0.25]);
+        let stats = scratch.retained_frame_stats();
+        assert_eq!(stats.hits, 1);
+        assert_eq!(stats.misses, 1);
+        assert_eq!(stats.entries, 1);
+    }
+
+    #[test]
+    fn retained_frame_clear_starts_a_fresh_song_working_set() {
+        let mut scratch = ComposeScratch::default();
+        scratch.retained_frames.stats.hits = 4;
+        scratch.retained_frames.stats.misses = 2;
+
+        scratch.clear_retained_frames();
+
+        assert_eq!(
+            scratch.retained_frame_stats(),
+            super::RetainedFrameCacheStats::default()
+        );
     }
 
     #[test]

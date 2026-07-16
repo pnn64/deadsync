@@ -7,6 +7,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
 
 static NEXT_RESOURCE_ARENA_ID: AtomicU32 = AtomicU32::new(1);
+static NEXT_RETAINED_FRAME_ID: AtomicU64 = AtomicU64::new(1);
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ActorTextureId(pub(crate) u32);
@@ -439,6 +440,20 @@ pub enum Actor {
         blend: Option<BlendMode>,
     },
 
+    /// Immutable actor children whose composed output may be retained by the
+    /// song-local composition cache. The wrapper stays compact and may change
+    /// placement, visibility, tint, blend, and z without rebuilding children.
+    RetainedFrame {
+        align: [f32; 2],
+        offset: [f32; 2],
+        size: [SizeSpec; 2],
+        frame: Arc<RetainedActorFrame>,
+        z: i16,
+        tint: [f32; 4],
+        blend: Option<BlendMode>,
+        visible: bool,
+    },
+
     /// Camera wrapper: renders all child actors using the provided view-projection matrix.
     /// The matrix is expected to map world coordinates to clip space.
     Camera {
@@ -462,6 +477,29 @@ pub enum Actor {
 }
 
 impl Actor {
+    fn retained_static(&self) -> bool {
+        match self {
+            Self::Sprite {
+                texcoordvelocity,
+                animate,
+                effect,
+                ..
+            } => texcoordvelocity.is_none() && !*animate && effect.mode == anim::EffectMode::None,
+            Self::Text { jitter, effect, .. } => !*jitter && effect.mode == anim::EffectMode::None,
+            Self::Frame { children, .. } | Self::Camera { children, .. } => {
+                children.iter().all(Self::retained_static)
+            }
+            Self::SharedFrame { children, .. } => children.iter().all(Self::retained_static),
+            Self::Shadow { child, .. } => child.retained_static(),
+            Self::Mesh { .. }
+            | Self::TexturedMesh { .. }
+            | Self::ReusableTexturedMesh { .. }
+            | Self::RetainedFrame { .. }
+            | Self::CameraPush { .. }
+            | Self::CameraPop => true,
+        }
+    }
+
     pub fn mul_alpha(&mut self, alpha: f32) {
         match self {
             Self::Sprite {
@@ -519,6 +557,7 @@ impl Actor {
                 }
                 tint[3] *= alpha;
             }
+            Self::RetainedFrame { tint, .. } => tint[3] *= alpha,
             Self::Camera { children, .. } => {
                 for child in children {
                     child.mul_alpha(alpha);
@@ -586,6 +625,12 @@ pub fn actor_tree_stats(actors: &[Actor]) -> ActorTreeStats {
                     visit(stats, child);
                 }
             }
+            Actor::RetainedFrame { frame, .. } => {
+                stats.frames = stats.frames.saturating_add(1);
+                for child in frame.children() {
+                    visit(stats, child);
+                }
+            }
             Actor::Camera { children, .. } => {
                 stats.cameras = stats.cameras.saturating_add(1);
                 for child in children {
@@ -608,6 +653,44 @@ pub fn actor_tree_stats(actors: &[Actor]) -> ActorTreeStats {
         visit(&mut stats, actor);
     }
     stats
+}
+
+/// Song-owned immutable presentation fragment.
+///
+/// The screen state owns this value for one song and may emit cheap
+/// `Actor::RetainedFrame` wrappers every frame. Children must not depend on a
+/// frame clock; animation belongs in the wrapper's compact live values or in a
+/// separate dynamic actor fragment. Composition output is retained outside this
+/// value and is explicitly cleared at gameplay prewarm/transition boundaries.
+#[derive(Debug)]
+pub struct RetainedActorFrame {
+    id: u64,
+    children: Arc<[Actor]>,
+}
+
+impl RetainedActorFrame {
+    pub fn new(children: Vec<Actor>) -> Self {
+        debug_assert!(
+            children.iter().all(Actor::retained_static),
+            "retained actor frames cannot contain frame-clock animation"
+        );
+        Self {
+            id: NEXT_RETAINED_FRAME_ID
+                .fetch_add(1, Ordering::Relaxed)
+                .max(1),
+            children: Arc::from(children),
+        }
+    }
+
+    #[inline(always)]
+    pub(crate) fn id(&self) -> u64 {
+        self.id
+    }
+
+    #[inline(always)]
+    pub fn children(&self) -> &[Actor] {
+        &self.children
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]

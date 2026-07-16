@@ -14,7 +14,8 @@ use crate::screens::components::shared::screen_bar::{self, AvatarParams, ScreenB
 use crate::screens::{Screen, ThemeEffect};
 use crate::views::SimplyLoveLobbyRuntimeView;
 use deadlib_present::actors::{
-    Actor, ActorResourceArena, SizeSpec, SpriteSource, TextAlign, TextAttribute, TextContent,
+    Actor, ActorResourceArena, RetainedActorFrame, SizeSpec, SpriteSource, TextAlign,
+    TextAttribute, TextContent,
 };
 use deadlib_present::anim::EffectState;
 use deadlib_present::cache::{TextCache, cached_text};
@@ -593,6 +594,67 @@ pub struct State {
     notefield_actor_scratch: [Vec<Actor>; MAX_PLAYERS],
     notefield_hud_actor_scratch: [Vec<Actor>; MAX_PLAYERS],
     player_actor_scratch: [Vec<Actor>; MAX_PLAYERS],
+    presentation_skeleton: GameplayPresentationSkeleton,
+}
+
+const STATIC_FILTER: usize = 0;
+const STATIC_HEADER: usize = 1;
+const STATIC_DIFFICULTY_P1: usize = 2;
+const STATIC_DIFFICULTY_P2: usize = 3;
+const STATIC_SONG_METER: usize = 4;
+const STATIC_LIFE_P1: usize = 5;
+const STATIC_LIFE_P2: usize = 6;
+const STATIC_FOOTER: usize = 7;
+const STATIC_NPS_P1: usize = 8;
+const STATIC_NPS_P2: usize = 9;
+const STATIC_FRAGMENT_COUNT: usize = 10;
+
+/// Fixed song-static gameplay presentation fragments.
+///
+/// Owner/thread model: gameplay `State`, used only by the game/render frame
+/// loop. Lifetime/capacity: ten fixed slots for one song. Warmup: all visible
+/// slots are built during the existing gameplay transition prewarm. A hit emits
+/// one compact retained-frame wrapper; a miss builds that immutable slot once.
+/// There is no eviction, scan, or live-frame pruning. Screen-size changes clear
+/// the fixed slots because their absolute layout is no longer valid; normal
+/// destruction occurs with gameplay state. Composition exposes retained-frame
+/// hit/miss/saturation counters. Worst-case live work is one slot rebuild after
+/// an external resize; steady gameplay only clones one `Arc` per visible slot.
+#[derive(Default)]
+struct GameplayPresentationSkeleton {
+    screen_size: [u32; 2],
+    initialized: bool,
+    frames: [Option<Arc<RetainedActorFrame>>; STATIC_FRAGMENT_COUNT],
+}
+
+impl GameplayPresentationSkeleton {
+    fn prepare(&mut self) {
+        let screen_size = [screen_width().to_bits(), screen_height().to_bits()];
+        if self.initialized && self.screen_size == screen_size {
+            return;
+        }
+        self.screen_size = screen_size;
+        self.initialized = true;
+        self.frames.fill(None);
+    }
+
+    fn push(&mut self, slot: usize, out: &mut Vec<Actor>, build: impl FnOnce(&mut Vec<Actor>)) {
+        let frame = self.frames[slot].get_or_insert_with(|| {
+            let mut children = Vec::new();
+            build(&mut children);
+            Arc::new(RetainedActorFrame::new(children))
+        });
+        out.push(Actor::RetainedFrame {
+            align: [0.0, 0.0],
+            offset: [0.0, 0.0],
+            size: [SizeSpec::Fill, SizeSpec::Fill],
+            frame: Arc::clone(frame),
+            z: 0,
+            tint: [1.0; 4],
+            blend: None,
+            visible: true,
+        });
+    }
 }
 
 impl State {
@@ -725,6 +787,7 @@ impl State {
             notefield_actor_scratch: std::array::from_fn(|_| Vec::new()),
             notefield_hud_actor_scratch: std::array::from_fn(|_| Vec::new()),
             player_actor_scratch: std::array::from_fn(|_| Vec::new()),
+            presentation_skeleton: GameplayPresentationSkeleton::default(),
         }
     }
 
@@ -4776,6 +4839,9 @@ fn song_lua_proxy_actor_has_z(actor: &Actor) -> bool {
         Actor::SharedFrame { z, children, .. } => {
             *z != 0 || children.iter().any(song_lua_proxy_actor_has_z)
         }
+        Actor::RetainedFrame { z, frame, .. } => {
+            *z != 0 || frame.children().iter().any(song_lua_proxy_actor_has_z)
+        }
         Actor::Camera { children, .. } => children.iter().any(song_lua_proxy_actor_has_z),
         Actor::Shadow { child, .. } => song_lua_proxy_actor_has_z(child),
         Actor::CameraPush { .. } | Actor::CameraPop => false,
@@ -4790,7 +4856,8 @@ fn song_lua_proxy_actor_z(actor: &Actor) -> i16 {
         | Actor::TexturedMesh { z, .. }
         | Actor::ReusableTexturedMesh { z, .. }
         | Actor::Frame { z, .. }
-        | Actor::SharedFrame { z, .. } => *z,
+        | Actor::SharedFrame { z, .. }
+        | Actor::RetainedFrame { z, .. } => *z,
         Actor::Shadow { child, .. } => song_lua_proxy_actor_z(child),
         Actor::Camera { .. } | Actor::CameraPush { .. } | Actor::CameraPop => 0,
     }
@@ -5088,6 +5155,25 @@ fn song_lua_proxy_local_actor(actor: Actor) -> Actor {
             z: 0,
             tint,
             blend,
+        },
+        Actor::RetainedFrame {
+            align,
+            offset,
+            size,
+            frame,
+            tint,
+            blend,
+            visible,
+            ..
+        } => Actor::RetainedFrame {
+            align,
+            offset,
+            size,
+            frame,
+            z: 0,
+            tint,
+            blend,
+            visible,
         },
         Actor::Camera {
             view_proj,
@@ -5856,6 +5942,25 @@ fn song_lua_style_capture_actor(
             z: song_lua_add_z(z, z_shift),
             tint: song_lua_capture_tint(actor_tint, capture_tint),
             blend: blend.or(actor_blend),
+        },
+        Actor::RetainedFrame {
+            align,
+            offset,
+            size,
+            frame,
+            z,
+            tint: actor_tint,
+            blend: actor_blend,
+            visible,
+        } => Actor::RetainedFrame {
+            align,
+            offset,
+            size,
+            frame,
+            z: song_lua_add_z(z, z_shift),
+            tint: song_lua_capture_tint(actor_tint, capture_tint),
+            blend: blend.or(actor_blend),
+            visible,
         },
         Actor::Camera {
             view_proj,
@@ -8878,6 +8983,8 @@ pub fn push_actors(
     let mut notefield_actor_scratch = std::mem::take(&mut state.notefield_actor_scratch);
     let mut notefield_hud_actor_scratch = std::mem::take(&mut state.notefield_hud_actor_scratch);
     let mut player_actor_scratch = std::mem::take(&mut state.player_actor_scratch);
+    let mut presentation_skeleton = std::mem::take(&mut state.presentation_skeleton);
+    presentation_skeleton.prepare();
     for actors in &mut player_actor_scratch {
         actors.clear();
     }
@@ -9492,20 +9599,29 @@ pub fn push_actors(
 
     // Background filter per-player (Simply Love parity): draw behind each notefield, not full-screen.
     let underlay_start = actors.len();
-    for &(player_idx, field_x) in &per_player_fields {
-        if player_idx == usize::MAX || player_idx >= state.num_players() {
-            continue;
-        }
-        let filter_alpha = state.profiles()[player_idx].background_filter.alpha();
-        if filter_alpha <= 0.0 {
-            continue;
-        }
-        actors.push(act!(quad:
-            align(0.5, 0.5): xy(field_x, screen_center_y()):
-            zoomto(notefield_width(player_idx), screen_height()):
-            diffuse(0.0, 0.0, 0.0, filter_alpha):
-            z(-99)
-        ));
+    let has_background_filter = per_player_fields.iter().any(|&(player_idx, _)| {
+        player_idx != usize::MAX
+            && player_idx < state.num_players()
+            && state.profiles()[player_idx].background_filter.alpha() > 0.0
+    });
+    if has_background_filter {
+        presentation_skeleton.push(STATIC_FILTER, &mut actors, |actors| {
+            for &(player_idx, field_x) in &per_player_fields {
+                if player_idx == usize::MAX || player_idx >= state.num_players() {
+                    continue;
+                }
+                let filter_alpha = state.profiles()[player_idx].background_filter.alpha();
+                if filter_alpha <= 0.0 {
+                    continue;
+                }
+                actors.push(act!(quad:
+                    align(0.5, 0.5): xy(field_x, screen_center_y()):
+                    zoomto(notefield_width(player_idx), screen_height()):
+                    diffuse(0.0, 0.0, 0.0, filter_alpha):
+                    z(-99)
+                ));
+            }
+        });
     }
     song_lua_capture_new_actors(&mut underlay_proxy_source, &mut actors, underlay_start);
 
@@ -9514,12 +9630,14 @@ pub fn push_actors(
     if !hide_gameplay_hud {
         let underlay_start = actors.len();
         let header_rgba = gameplay_header_rgba(cfg.gameplay_bg_color);
-        actors.push(act!(quad:
-            align(0.5, 0.0): xy(screen_center_x(), 0.0):
-            setsize(screen_width(), 80.0):
-            diffuse(header_rgba[0], header_rgba[1], header_rgba[2], header_rgba[3]):
-            z(83)
-        ));
+        presentation_skeleton.push(STATIC_HEADER, &mut actors, |actors| {
+            actors.push(act!(quad:
+                align(0.5, 0.0): xy(screen_center_x(), 0.0):
+                setsize(screen_width(), 80.0):
+                diffuse(header_rgba[0], header_rgba[1], header_rgba[2], header_rgba[3]):
+                z(83)
+            ));
+        });
         song_lua_capture_new_actors(&mut underlay_proxy_source, &mut actors, underlay_start);
     }
 
@@ -9622,12 +9740,15 @@ pub fn push_actors(
                 1.0
             };
 
-            actors.push(act!(quad:
-                align(0.0, 0.0): xy(x, y_top):
-                zoomto(graph_w, graph_h):
-                diffuse(30.0 / 255.0, 40.0 / 255.0, 47.0 / 255.0, graph_bg_alpha):
-                z(84)
-            ));
+            let static_slot = [STATIC_NPS_P1, STATIC_NPS_P2][player_idx.min(1)];
+            presentation_skeleton.push(static_slot, &mut actors, |actors| {
+                actors.push(act!(quad:
+                    align(0.0, 0.0): xy(x, y_top):
+                    zoomto(graph_w, graph_h):
+                    diffuse(30.0 / 255.0, 40.0 / 255.0, 47.0 / 255.0, graph_bg_alpha):
+                    z(84)
+                ));
+            });
 
             if let Some(mesh) = &state.density_graph.top_mesh[player_idx]
                 && !mesh.is_empty()
@@ -9732,38 +9853,40 @@ pub fn push_actors(
                 notefield_width(player_idx),
                 diff_x,
             );
-            let chart = &state.charts()[player_idx];
-            let difficulty_color =
-                color::difficulty_rgba(&chart.difficulty, state.active_color_index());
-            let meter_text = cached_meter_text(chart.meter);
-            let meter_detail_text = color::difficulty_display_name_for_song(
-                &chart.difficulty,
-                &state.song().title,
-                true,
-            );
-
             // Difficulty Box
             let y = DIFFICULTY_METER_Y;
-            actors.push(act!(quad:
-                align(0.5, 0.5): xy(diff_x, y): zoomto(30.0, 30.0):
-                diffuse(difficulty_color[0], difficulty_color[1], difficulty_color[2], 1.0):
-                z(90)
-            ));
-            let meter_y = if cfg.zmod_rating_box_text { -4.0 } else { 0.0 };
-            actors.push(act!(text:
-                font(current_machine_font_key(FontRole::Header)): settext(meter_text): align(0.5, 0.5): xy(diff_x, y + meter_y):
-                zoom(0.4): diffuse(0.0, 0.0, 0.0, 1.0): z(90)
-            ));
-            if cfg.zmod_rating_box_text {
-                actors.push(act!(text:
-                    font("miso"):
-                    settext(meter_detail_text):
-                    align(0.5, 0.5): xy(diff_x, y + 9.5):
-                    zoom(0.5):
-                    diffuse(0.0, 0.0, 0.0, 1.0):
+            let static_slot = [STATIC_DIFFICULTY_P1, STATIC_DIFFICULTY_P2][player_idx.min(1)];
+            presentation_skeleton.push(static_slot, &mut actors, |actors| {
+                let chart = &state.charts()[player_idx];
+                let difficulty_color =
+                    color::difficulty_rgba(&chart.difficulty, state.active_color_index());
+                let meter_text = cached_meter_text(chart.meter);
+                let meter_detail_text = color::difficulty_display_name_for_song(
+                    &chart.difficulty,
+                    &state.song().title,
+                    true,
+                );
+                actors.push(act!(quad:
+                    align(0.5, 0.5): xy(diff_x, y): zoomto(30.0, 30.0):
+                    diffuse(difficulty_color[0], difficulty_color[1], difficulty_color[2], 1.0):
                     z(90)
                 ));
-            }
+                let meter_y = if cfg.zmod_rating_box_text { -4.0 } else { 0.0 };
+                actors.push(act!(text:
+                    font(current_machine_font_key(FontRole::Header)): settext(meter_text): align(0.5, 0.5): xy(diff_x, y + meter_y):
+                    zoom(0.4): diffuse(0.0, 0.0, 0.0, 1.0): z(90)
+                ));
+                if cfg.zmod_rating_box_text {
+                    actors.push(act!(text:
+                        font("miso"):
+                        settext(meter_detail_text):
+                        align(0.5, 0.5): xy(diff_x, y + 9.5):
+                        zoom(0.5):
+                        diffuse(0.0, 0.0, 0.0, 1.0):
+                        z(90)
+                    ));
+                }
+            });
 
             // Score Display
             let note_field_is_centered = (field_x - screen_center_x()).abs() < 1.0;
@@ -9949,14 +10072,21 @@ pub fn push_actors(
             let box_cx = screen_center_x();
             let box_cy = 20.0;
             let box_left = box_cx - w * 0.5;
-            actors.push(act!(quad:
-                align(0.5, 0.5): xy(box_cx, box_cy): zoomto(w, h):
-                diffuse(1.0, 1.0, 1.0, 1.0): z(90)
-            ));
-            actors.push(act!(quad:
-                align(0.5, 0.5): xy(box_cx, box_cy): zoomto(w - 4.0, h - 4.0):
-                diffuse(0.0, 0.0, 0.0, 1.0): z(91)
-            ));
+            presentation_skeleton.push(STATIC_SONG_METER, &mut actors, |actors| {
+                actors.push(act!(quad:
+                    align(0.5, 0.5): xy(box_cx, box_cy): zoomto(w, h):
+                    diffuse(1.0, 1.0, 1.0, 1.0): z(90)
+                ));
+                actors.push(act!(quad:
+                    align(0.5, 0.5): xy(box_cx, box_cy): zoomto(w - 4.0, h - 4.0):
+                    diffuse(0.0, 0.0, 0.0, 1.0): z(91)
+                ));
+                actors.push(act!(text:
+                    font("miso"): settext(state.song_full_title.clone()): align(0.5, 0.5): xy(box_cx, box_cy):
+                    zoom(0.8): shadowlength(0.6): maxwidth(screen_width() / 2.5 - 10.0):
+                    horizalign(center): z(93)
+                ));
+            });
             let progress = song_meter_progress(
                 song_time_ns_to_seconds(state.current_music_time_ns()),
                 state.song().precise_first_second(),
@@ -9968,12 +10098,6 @@ pub fn push_actors(
                     diffuse(player_color[0], player_color[1], player_color[2], 1.0): z(92)
                 ));
             }
-            let full_title = state.song_full_title.clone();
-            actors.push(act!(text:
-                font("miso"): settext(full_title): align(0.5, 0.5): xy(box_cx, box_cy):
-                zoom(0.8): shadowlength(0.6): maxwidth(screen_width() / 2.5 - 10.0):
-                horizalign(center): z(93)
-            ));
         }
         // --- Life Meter ---
         {
@@ -10074,6 +10198,7 @@ pub fn push_actors(
                 } else {
                     0.0
                 };
+                let static_life_slot = [STATIC_LIFE_P1, STATIC_LIFE_P2][player_idx.min(1)];
 
                 match state.profiles()[player_idx].lifemeter_type {
                     profile_data::LifeMeterType::Standard => {
@@ -10093,14 +10218,16 @@ pub fn push_actors(
                             };
 
                         // Frames/border
-                        actors.push(act!(quad:
-                            align(0.5, 0.5): xy(meter_cx, meter_cy): zoomto(w + 4.0, h + 4.0):
-                            diffuse(1.0, 1.0, 1.0, 1.0): z(90)
-                        ));
-                        actors.push(act!(quad:
-                            align(0.5, 0.5): xy(meter_cx, meter_cy): zoomto(w, h):
-                            diffuse(0.0, 0.0, 0.0, 1.0): z(91)
-                        ));
+                        presentation_skeleton.push(static_life_slot, &mut actors, |actors| {
+                            actors.push(act!(quad:
+                                align(0.5, 0.5): xy(meter_cx, meter_cy): zoomto(w + 4.0, h + 4.0):
+                                diffuse(1.0, 1.0, 1.0, 1.0): z(90)
+                            ));
+                            actors.push(act!(quad:
+                                align(0.5, 0.5): xy(meter_cx, meter_cy): zoomto(w, h):
+                                diffuse(0.0, 0.0, 0.0, 1.0): z(91)
+                            ));
+                        });
 
                         let filled_width = w * life_for_render;
                         // Never draw swoosh if dead OR nothing to fill.
@@ -10269,14 +10396,16 @@ pub fn push_actors(
 
                         let cy = bar_h + 10.0;
                         // Frames/border
-                        actors.push(act!(quad:
-                            align(0.5, 0.5): xy(x, cy): zoomto(bar_w + 2.0, bar_h + 2.0):
-                            diffuse(1.0, 1.0, 1.0, 1.0): z(90)
-                        ));
-                        actors.push(act!(quad:
-                            align(0.5, 0.5): xy(x, cy): zoomto(bar_w, bar_h):
-                            diffuse(0.0, 0.0, 0.0, 1.0): z(91)
-                        ));
+                        presentation_skeleton.push(static_life_slot, &mut actors, |actors| {
+                            actors.push(act!(quad:
+                                align(0.5, 0.5): xy(x, cy): zoomto(bar_w + 2.0, bar_h + 2.0):
+                                diffuse(1.0, 1.0, 1.0, 1.0): z(90)
+                            ));
+                            actors.push(act!(quad:
+                                align(0.5, 0.5): xy(x, cy): zoomto(bar_w, bar_h):
+                                diffuse(0.0, 0.0, 0.0, 1.0): z(91)
+                            ));
+                        });
 
                         let filled_h = bar_h * life_for_render;
 
@@ -10428,18 +10557,20 @@ pub fn push_actors(
                     profile_data::PlayerSide::P2 => (None, p2_footer_text, None, p2_footer_avatar),
                 }
             };
-        actors.push(screen_bar::build_no_background(ScreenBarParams {
-            title: "",
-            title_placement: screen_bar::ScreenBarTitlePlacement::Center,
-            position: screen_bar::ScreenBarPosition::Bottom,
-            transparent: true,
-            fg_color: [1.0; 4],
-            left_text: footer_left,
-            center_text: None,
-            right_text: footer_right,
-            left_avatar,
-            right_avatar,
-        }));
+        presentation_skeleton.push(STATIC_FOOTER, &mut actors, |actors| {
+            actors.push(screen_bar::build_no_background(ScreenBarParams {
+                title: "",
+                title_placement: screen_bar::ScreenBarTitlePlacement::Center,
+                position: screen_bar::ScreenBarPosition::Bottom,
+                transparent: true,
+                fg_color: [1.0; 4],
+                left_text: footer_left,
+                center_text: None,
+                right_text: footer_right,
+                left_avatar,
+                right_avatar,
+            }));
+        });
         let show_step_stats = match play_style {
             profile_data::PlayStyle::Single | profile_data::PlayStyle::Double => state
                 .profiles()
@@ -10603,6 +10734,7 @@ pub fn push_actors(
     state.notefield_actor_scratch = notefield_actor_scratch;
     state.notefield_hud_actor_scratch = notefield_hud_actor_scratch;
     state.player_actor_scratch = player_actor_scratch;
+    state.presentation_skeleton = presentation_skeleton;
 }
 
 // ─── SMX sensor display profiling ──────────────────────────────────────────────
@@ -11210,6 +11342,30 @@ mod tests {
         assert_eq!(song_meter_progress(2.0, 2.0, 12.0), 0.0);
         assert!((song_meter_progress(7.0, 2.0, 12.0) - 0.5).abs() <= 1e-6);
         assert_eq!(song_meter_progress(12.0, 2.0, 12.0), 1.0);
+    }
+
+    #[test]
+    fn gameplay_presentation_skeleton_builds_each_slot_once() {
+        let builds = std::cell::Cell::new(0usize);
+        let mut skeleton = GameplayPresentationSkeleton::default();
+        let mut actors = Vec::new();
+
+        for _ in 0..2 {
+            skeleton.push(STATIC_HEADER, &mut actors, |children| {
+                builds.set(builds.get() + 1);
+                children.push(Actor::CameraPop);
+            });
+        }
+
+        assert_eq!(builds.get(), 1);
+        let [
+            Actor::RetainedFrame { frame: first, .. },
+            Actor::RetainedFrame { frame: second, .. },
+        ] = actors.as_slice()
+        else {
+            panic!("static slots should emit retained frame wrappers");
+        };
+        assert!(Arc::ptr_eq(first, second));
     }
 
     #[test]

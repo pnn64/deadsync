@@ -342,6 +342,28 @@ pub fn song_lua_player_y_fold_actor(actor: Actor, pivot_x: f32, rotation_y_deg: 
                 blend,
             }
         }
+        Actor::RetainedFrame {
+            align,
+            mut offset,
+            size,
+            frame,
+            z,
+            tint,
+            blend,
+            visible,
+        } => {
+            offset[0] = song_lua_fold_x_around_pivot(offset[0], pivot_x, cos_y);
+            Actor::RetainedFrame {
+                align,
+                offset,
+                size,
+                frame,
+                z,
+                tint,
+                blend,
+                visible,
+            }
+        }
         Actor::Camera {
             view_proj,
             children,

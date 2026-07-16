@@ -92,7 +92,7 @@ const CREDITS: &[CreditLine] = &[
     name("CernaML"),
     name("gooseguy123"),
     name("Ash"),
-    name("Kerpa"),    
+    name("Kerpa"),
     spacer(),
     spacer(),
     section("DeadSync Supporters"),

@@ -1102,6 +1102,15 @@ fn apply_zoom_to_actor(actor: &mut Actor, pivot: [f32; 2], zoom: f32) {
                 }
             }
         }
+        Actor::RetainedFrame { offset, size, .. } => {
+            offset[0] = scale_about(offset[0], pivot[0], zoom);
+            offset[1] = scale_about(offset[1], pivot[1], zoom);
+            for s in size.iter_mut() {
+                if let actors::SizeSpec::Px(v) = s {
+                    *v *= zoom;
+                }
+            }
+        }
         Actor::Camera { children, .. } => {
             for child in children {
                 apply_zoom_to_actor(child, pivot, zoom);
@@ -1144,7 +1153,7 @@ fn apply_offset_to_actor(actor: &mut Actor, dx: f32, dy: f32) {
             offset[0] += dx;
             offset[1] += dy;
         }
-        Actor::SharedFrame { offset, .. } => {
+        Actor::SharedFrame { offset, .. } | Actor::RetainedFrame { offset, .. } => {
             offset[0] += dx;
             offset[1] += dy;
         }
@@ -1166,7 +1175,8 @@ fn apply_z_offset(actor: &mut Actor, dz: i16) {
         | Actor::TexturedMesh { z, .. }
         | Actor::ReusableTexturedMesh { z, .. }
         | Actor::Frame { z, .. }
-        | Actor::SharedFrame { z, .. } => *z = z.saturating_add(dz),
+        | Actor::SharedFrame { z, .. }
+        | Actor::RetainedFrame { z, .. } => *z = z.saturating_add(dz),
         Actor::Camera { .. }
         | Actor::CameraPush { .. }
         | Actor::CameraPop
@@ -1186,7 +1196,7 @@ fn apply_z_offset(actor: &mut Actor, dz: i16) {
             }
         }
         Actor::Shadow { child, .. } => apply_z_offset(child, dz),
-        Actor::CameraPush { .. } | Actor::CameraPop => {}
+        Actor::RetainedFrame { .. } | Actor::CameraPush { .. } | Actor::CameraPop => {}
         _ => {}
     }
 }
@@ -1216,6 +1226,7 @@ fn apply_clip_rect_to_actor(actor: &mut Actor, rect: [f32; 4]) {
         | Actor::Mesh { .. }
         | Actor::TexturedMesh { .. }
         | Actor::ReusableTexturedMesh { .. }
+        | Actor::RetainedFrame { .. }
         | Actor::CameraPush { .. }
         | Actor::CameraPop => {}
     }
