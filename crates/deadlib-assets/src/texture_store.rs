@@ -5,7 +5,10 @@ use crate::{
 };
 use deadlib_render::{SamplerDesc, TextureHandle, TextureHandleMap};
 use image::RgbaImage;
-use std::{collections::HashMap, sync::Arc};
+use std::{
+    collections::HashMap,
+    sync::{Arc, mpsc::SyncSender},
+};
 
 pub struct TextureStore<T> {
     textures: TextureHandleMap<T>,
@@ -150,6 +153,22 @@ impl<T> TextureStore<T> {
 
     pub fn queue_texture_upload(&mut self, key: String, image: RgbaImage) {
         self.queue_texture_upload_with_sampler(key, image, SamplerDesc::default());
+    }
+
+    pub fn queue_recyclable_texture_upload(
+        &mut self,
+        key: String,
+        image: RgbaImage,
+        recycle_tx: SyncSender<Vec<u8>>,
+    ) {
+        self.reserve_texture_handle(key.clone());
+        register_texture_dims(&key, image.width(), image.height());
+        self.pending_texture_uploads.push_recyclable(
+            key,
+            image,
+            SamplerDesc::default(),
+            recycle_tx,
+        );
     }
 
     pub fn queue_texture_upload_with_sampler(

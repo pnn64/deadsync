@@ -797,7 +797,7 @@ impl DynamicMedia {
                 .map_or(0.0, |start| start.elapsed().as_secs_f32());
             if let Some(frame) = video.player.take_due_frame(play_time) {
                 video.started_at.get_or_insert_with(Instant::now);
-                assets.queue_texture_upload(key.clone(), frame);
+                assets.queue_video_frame_upload(key.clone(), frame);
             }
         }
 
@@ -809,7 +809,7 @@ impl DynamicMedia {
             if let Some(video) = state.video.as_mut()
                 && let Some(frame) = video.take_due_frame(play_time)
             {
-                assets.queue_texture_upload(state.key.clone(), frame);
+                assets.queue_video_frame_upload(state.key.clone(), frame);
             }
         }
 
@@ -819,7 +819,7 @@ impl DynamicMedia {
                 continue;
             }
             if let Some(frame) = player.take_due_frame(song_lua_play_time) {
-                assets.queue_texture_upload(key.clone(), frame);
+                assets.queue_video_frame_upload(key.clone(), frame);
             }
         }
     }

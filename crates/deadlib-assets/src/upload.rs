@@ -1,6 +1,10 @@
 use deadlib_render::SamplerDesc;
 use image::RgbaImage;
-use std::{collections::HashMap, collections::VecDeque, sync::Arc};
+use std::{
+    collections::HashMap,
+    collections::VecDeque,
+    sync::{Arc, mpsc::SyncSender},
+};
 
 #[derive(Clone, Copy)]
 pub struct TextureUploadBudget {
@@ -9,9 +13,45 @@ pub struct TextureUploadBudget {
 }
 
 pub struct PendingTextureUpload {
-    pub image: Arc<RgbaImage>,
+    image: Option<UploadImage>,
+    recycle_tx: Option<SyncSender<Vec<u8>>>,
     pub sampler: SamplerDesc,
     pub bytes: usize,
+}
+
+enum UploadImage {
+    Shared(Arc<RgbaImage>),
+    Recyclable(RgbaImage),
+}
+
+impl UploadImage {
+    fn as_image(&self) -> &RgbaImage {
+        match self {
+            Self::Shared(image) => image,
+            Self::Recyclable(image) => image,
+        }
+    }
+}
+
+impl PendingTextureUpload {
+    #[inline(always)]
+    pub fn image(&self) -> &RgbaImage {
+        self.image
+            .as_ref()
+            .map(UploadImage::as_image)
+            .expect("pending texture upload image must be present")
+    }
+}
+
+impl Drop for PendingTextureUpload {
+    fn drop(&mut self) {
+        let (Some(UploadImage::Recyclable(image)), Some(recycle_tx)) =
+            (self.image.take(), self.recycle_tx.take())
+        else {
+            return;
+        };
+        let _ = recycle_tx.try_send(image.into_raw());
+    }
 }
 
 #[derive(Default)]
@@ -27,11 +67,37 @@ impl TextureUploadQueue {
     }
 
     pub fn push(&mut self, key: String, image: Arc<RgbaImage>, sampler: SamplerDesc) {
-        let bytes = image.as_raw().len();
+        self.push_inner(key, UploadImage::Shared(image), sampler, None);
+    }
+
+    pub fn push_recyclable(
+        &mut self,
+        key: String,
+        image: RgbaImage,
+        sampler: SamplerDesc,
+        recycle_tx: SyncSender<Vec<u8>>,
+    ) {
+        self.push_inner(
+            key,
+            UploadImage::Recyclable(image),
+            sampler,
+            Some(recycle_tx),
+        );
+    }
+
+    fn push_inner(
+        &mut self,
+        key: String,
+        image: UploadImage,
+        sampler: SamplerDesc,
+        recycle_tx: Option<SyncSender<Vec<u8>>>,
+    ) {
+        let bytes = image.as_image().as_raw().len();
         if let Some(old) = self.entries.insert(
             key.clone(),
             PendingTextureUpload {
-                image,
+                image: Some(image),
+                recycle_tx,
                 sampler,
                 bytes,
             },
@@ -89,6 +155,7 @@ impl TextureUploadQueue {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::mpsc::sync_channel;
 
     fn blank_rgba(width: u32, height: u32) -> RgbaImage {
         RgbaImage::from_pixel(width, height, image::Rgba([0, 0, 0, 0]))
@@ -137,6 +204,27 @@ mod tests {
                 .pop_next(budget, 2, first.bytes + second.bytes)
                 .is_none()
         );
+    }
+
+    #[test]
+    fn replaced_recyclable_upload_returns_its_pixel_buffer() {
+        let mut queue = TextureUploadQueue::default();
+        let (recycle_tx, recycle_rx) = sync_channel(1);
+        let image = RgbaImage::from_raw(1, 1, vec![1, 2, 3, 4]).unwrap();
+        queue.push_recyclable(
+            "video".to_string(),
+            image,
+            SamplerDesc::default(),
+            recycle_tx,
+        );
+
+        queue.push(
+            "video".to_string(),
+            Arc::new(blank_rgba(1, 1)),
+            SamplerDesc::default(),
+        );
+
+        assert_eq!(recycle_rx.try_recv().unwrap(), vec![1, 2, 3, 4]);
     }
 
     #[test]

@@ -207,6 +207,12 @@ impl AssetManager {
         self.store.queue_texture_upload(key, image);
     }
 
+    pub fn queue_video_frame_upload(&mut self, key: String, frame: deadlib_video::VideoFrame) {
+        let (image, recycle_tx) = frame.into_upload_parts();
+        self.store
+            .queue_recyclable_texture_upload(key, image, recycle_tx);
+    }
+
     pub fn queue_pending_generated_textures(&mut self) {
         self.store.queue_pending_generated_textures();
     }

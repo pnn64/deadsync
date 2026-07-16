@@ -10,6 +10,10 @@ log = "0.4.33"
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.150"
 
+[[bench]]
+name = "frame_recycling"
+harness = false
+
 [lints.clippy]
 perf = { level = "warn", priority = -1 }
 
