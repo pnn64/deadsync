@@ -18,6 +18,11 @@ harness = false
 required-features = ["bench-support"]
 
 [[bench]]
+name = "text_page_ids"
+harness = false
+required-features = ["bench-support"]
+
+[[bench]]
 name = "retained_skeleton"
 harness = false
 required-features = ["bench-support"]

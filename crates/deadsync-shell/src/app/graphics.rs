@@ -259,8 +259,8 @@ impl App {
         ));
         let window = startup.window;
         let backend = startup.backend;
-        // Text layout cache entries borrow glyph texture keys from font storage.
-        // Renderer reinit reloads fonts, so cached layouts must be dropped before compose.
+        // Renderer reinit reloads font geometry and replaces the texture registry,
+        // so discard cached layouts and their generation-bound page handles.
         self.ui_text_layout_cache.clear();
         self.gameplay_text_layout_cache.clear();
 

@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 pub mod actors;
 pub mod anim;
 pub mod cache;

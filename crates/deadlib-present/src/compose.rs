@@ -5,9 +5,10 @@ use deadlib_render::{BlendMode, RenderList, RenderObject};
 use glam::{Mat4 as Matrix4, Vec2 as Vector2, Vec3 as Vector3, Vec4 as Vector4};
 use smallvec::SmallVec;
 use space::Metrics;
-use std::cell::OnceCell;
+use std::cell::{Cell, OnceCell};
 use std::collections::HashMap;
 use std::hash::{DefaultHasher, Hash, Hasher};
+use std::num::NonZeroU32;
 use std::sync::Arc;
 
 /* ======================= RENDERER SCREEN BUILDER ======================= */
@@ -481,10 +482,85 @@ fn sort_render_objects(objects: &mut [RenderObject], scratch: &mut ComposeScratc
     );
 }
 
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+struct TextPageId(NonZeroU32);
+
+impl TextPageId {
+    #[inline(always)]
+    fn from_index(index: usize) -> Self {
+        let one_based =
+            u32::try_from(index.saturating_add(1)).expect("text layout exceeded the page ID range");
+        Self(NonZeroU32::new(one_based).expect("text page IDs are one-based"))
+    }
+
+    #[inline(always)]
+    const fn index(self) -> usize {
+        self.0.get() as usize - 1
+    }
+}
+
+/// One layout-owned texture page and its single-threaded registry lookup cache.
+///
+/// The entry lives and is destroyed with the text layout. Layout construction
+/// bounds capacity to its unique pages, and normal prewarm populates handles.
+/// A miss or generation change performs one registry lookup and overwrites the
+/// old value in constant time; there is no eviction or frame-dependent scan.
+/// Registry lookup instrumentation remains owned by `TextureContext`. Worst-case
+/// compose work is one lookup per visible page after a registry generation bump.
+struct CachedTextPage {
+    key: Arc<str>,
+    handle: Cell<renderer::TextureHandle>,
+    generation_stamp: Cell<u64>,
+}
+
+impl CachedTextPage {
+    fn new(key: Arc<str>) -> Self {
+        Self {
+            key,
+            handle: Cell::new(renderer::INVALID_TEXTURE_HANDLE),
+            generation_stamp: Cell::new(0),
+        }
+    }
+
+    #[inline(always)]
+    fn texture_handle<T: TextureContext + ?Sized>(
+        &self,
+        generation: u64,
+        texture_ctx: &T,
+    ) -> renderer::TextureHandle {
+        // Zero is the uncached stamp. At the single wrapping generation value,
+        // deliberately query every time instead of risking a false initial hit.
+        let stamp = generation.wrapping_add(1);
+        if stamp != 0 && self.generation_stamp.get() == stamp {
+            return self.handle.get();
+        }
+        let handle = texture_ctx.texture_handle(self.key.as_ref());
+        self.handle.set(handle);
+        self.generation_stamp.set(stamp);
+        handle
+    }
+}
+
+type TextPageBuilder = SmallVec<[CachedTextPage; 2]>;
+
+#[inline(always)]
+fn intern_text_page(pages: &mut TextPageBuilder, key: &Arc<str>) -> TextPageId {
+    if let Some(index) = pages
+        .iter()
+        .position(|page| Arc::ptr_eq(&page.key, key) || page.key.as_ref() == key.as_ref())
+    {
+        return TextPageId::from_index(index);
+    }
+    let id = TextPageId::from_index(pages.len());
+    pages.push(CachedTextPage::new(Arc::clone(key)));
+    id
+}
+
 #[derive(Clone, Copy)]
 struct CachedGlyph {
-    texture_key: *const str,
-    stroke_texture_key: Option<*const str>,
+    texture_page: TextPageId,
+    stroke_page: Option<TextPageId>,
     uv_scale: [f32; 2],
     uv_offset: [f32; 2],
     size: [f32; 2],
@@ -503,7 +579,7 @@ struct CachedLine {
 
 #[derive(Clone)]
 struct CachedTextMeshBatch {
-    texture_key: *const str,
+    texture_page: TextPageId,
     geom_cache_key: renderer::TMeshCacheKey,
     vertices: Arc<[renderer::TexturedMeshVertex]>,
 }
@@ -546,13 +622,33 @@ struct CachedTextLayout {
     line_spacing: i32,
     max_logical_width_i: i32,
     glyph_count: usize,
+    texture_pages: Box<[CachedTextPage]>,
     lines: Vec<CachedLine>,
     glyphs: Vec<CachedGlyph>,
     fill_batches: CachedTextMeshVariants,
     stroke_batches: CachedTextMeshVariants,
 }
 
+/// Sizes of the cached text records whose representation is exercised by the
+/// text-page benchmark. Kept behind bench support so private layout details do
+/// not become part of the presentation API.
+#[cfg(feature = "bench-support")]
+pub fn benchmark_text_layout_type_sizes() -> (usize, usize, usize) {
+    (
+        std::mem::size_of::<CachedGlyph>(),
+        std::mem::size_of::<CachedTextMeshBatch>(),
+        std::mem::size_of::<CachedTextLayout>(),
+    )
+}
+
 impl CachedTextLayout {
+    #[inline(always)]
+    fn texture_page(&self, id: TextPageId) -> &CachedTextPage {
+        self.texture_pages
+            .get(id.index())
+            .expect("cached text page ID belongs to its layout")
+    }
+
     #[inline(always)]
     fn fill_batches(&self, align: actors::TextAlign) -> &[CachedTextMeshBatch] {
         self.fill_batches.get_or_init(align, |align| {
@@ -1161,13 +1257,13 @@ fn text_layout_mesh_seed(key: TextLayoutKey, text: &str) -> u64 {
 #[inline(always)]
 fn text_batch_cache_key(
     layout_seed: u64,
-    texture_key: *const str,
+    texture_page: TextPageId,
     stroke: bool,
     align: actors::TextAlign,
 ) -> u64 {
     let mut hasher = rustc_hash::FxHasher::default();
     layout_seed.hash(&mut hasher);
-    (texture_key as *const () as usize).hash(&mut hasher);
+    texture_page.hash(&mut hasher);
     stroke.hash(&mut hasher);
     match align {
         actors::TextAlign::Left => 0u8,
@@ -1177,7 +1273,7 @@ fn text_batch_cache_key(
     .hash(&mut hasher);
     let key = hasher.finish();
     if key == renderer::INVALID_TMESH_CACHE_KEY {
-        layout_seed ^ 1
+        layout_seed.wrapping_add(1).max(1)
     } else {
         key
     }
@@ -1185,17 +1281,17 @@ fn text_batch_cache_key(
 
 #[inline(always)]
 fn cached_glyph(
-    _font: &font::Font,
+    texture_pages: &mut TextPageBuilder,
     glyph: &font::Glyph,
     char_index: usize,
     draw_quad: bool,
 ) -> CachedGlyph {
     CachedGlyph {
-        texture_key: std::ptr::from_ref(glyph.texture_key.as_ref()),
-        stroke_texture_key: glyph
+        texture_page: intern_text_page(texture_pages, &glyph.texture_key),
+        stroke_page: glyph
             .stroke_texture_key
             .as_ref()
-            .map(|stroke_key| std::ptr::from_ref(stroke_key.as_ref())),
+            .map(|stroke_key| intern_text_page(texture_pages, stroke_key)),
         uv_scale: glyph.uv_scale,
         uv_offset: glyph.uv_offset,
         size: glyph.size,
@@ -1446,7 +1542,7 @@ impl<'a> TextAttrCursor<'a> {
 }
 
 fn flush_wrapped_word(
-    font: &font::Font,
+    texture_pages: &mut TextPageBuilder,
     lines: &mut Vec<CachedLine>,
     max_logical_width_i: &mut i32,
     line_width: &mut i32,
@@ -1475,7 +1571,7 @@ fn flush_wrapped_word(
         *line_width += space_width + *word_width;
         if let Some(glyph) = space_glyph {
             glyphs.push(cached_glyph(
-                font,
+                texture_pages,
                 glyph,
                 word_space_before.unwrap_or(word_first_char.saturating_sub(1)),
                 draws_space,
@@ -1502,7 +1598,7 @@ fn flush_wrapped_word(
 }
 
 struct TextMeshBatchBuilder {
-    texture_key: *const str,
+    texture_page: TextPageId,
     vertices: Vec<renderer::TexturedMeshVertex>,
 }
 
@@ -1517,16 +1613,16 @@ fn take_recycled_text_mesh_vertices(
 fn text_mesh_batch_builder<'a>(
     builders: &'a mut Vec<TextMeshBatchBuilder>,
     recycled_vertices: &mut Vec<Vec<renderer::TexturedMeshVertex>>,
-    texture_key: *const str,
+    texture_page: TextPageId,
 ) -> &'a mut TextMeshBatchBuilder {
     if let Some(index) = builders
         .iter()
-        .position(|builder| std::ptr::addr_eq(builder.texture_key, texture_key))
+        .position(|builder| builder.texture_page == texture_page)
     {
         return &mut builders[index];
     }
     builders.push(TextMeshBatchBuilder {
-        texture_key,
+        texture_page,
         vertices: take_recycled_text_mesh_vertices(recycled_vertices),
     });
     builders
@@ -1538,7 +1634,7 @@ fn text_mesh_batch_builder<'a>(
 fn push_text_mesh_quad_with_color(
     builders: &mut Vec<TextMeshBatchBuilder>,
     recycled_vertices: &mut Vec<Vec<renderer::TexturedMeshVertex>>,
-    texture_key: *const str,
+    texture_page: TextPageId,
     quad_x: f32,
     quad_y: f32,
     size: [f32; 2],
@@ -1546,7 +1642,7 @@ fn push_text_mesh_quad_with_color(
     uv_offset: [f32; 2],
     color: [f32; 4],
 ) {
-    let out = &mut text_mesh_batch_builder(builders, recycled_vertices, texture_key).vertices;
+    let out = &mut text_mesh_batch_builder(builders, recycled_vertices, texture_page).vertices;
     let x0 = quad_x;
     let y0 = quad_y;
     let x1 = quad_x + size[0];
@@ -1600,7 +1696,7 @@ fn push_text_mesh_quad_with_color(
 fn push_text_mesh_quad(
     builders: &mut Vec<TextMeshBatchBuilder>,
     recycled_vertices: &mut Vec<Vec<renderer::TexturedMeshVertex>>,
-    texture_key: *const str,
+    texture_page: TextPageId,
     quad_x: f32,
     quad_y: f32,
     size: [f32; 2],
@@ -1610,7 +1706,7 @@ fn push_text_mesh_quad(
     push_text_mesh_quad_with_color(
         builders,
         recycled_vertices,
-        texture_key,
+        texture_page,
         quad_x,
         quad_y,
         size,
@@ -1632,8 +1728,8 @@ fn finish_text_mesh_batches(
             continue;
         }
         out.push(CachedTextMeshBatch {
-            texture_key: builder.texture_key,
-            geom_cache_key: text_batch_cache_key(layout_seed, builder.texture_key, stroke, align),
+            texture_page: builder.texture_page,
+            geom_cache_key: text_batch_cache_key(layout_seed, builder.texture_page, stroke, align),
             vertices: Arc::from(builder.vertices),
         });
     }
@@ -1673,14 +1769,14 @@ fn build_text_mesh_batches_for_align(
         let line_glyphs =
             &glyphs[line.glyph_start..line.glyph_start.saturating_add(line.glyph_len)];
         for glyph in line_glyphs {
-            let texture_key = if stroke {
-                glyph.stroke_texture_key
+            let texture_page = if stroke {
+                glyph.stroke_page
             } else if glyph_has_fill_quad(glyph) {
-                Some(glyph.texture_key)
+                Some(glyph.texture_page)
             } else {
                 None
             };
-            let Some(texture_key) = texture_key else {
+            let Some(texture_page) = texture_page else {
                 pen_x_logical += glyph.advance_i32;
                 continue;
             };
@@ -1690,7 +1786,7 @@ fn build_text_mesh_batches_for_align(
             push_text_mesh_quad(
                 &mut builders,
                 &mut recycled_vertices,
-                texture_key,
+                texture_page,
                 quad_x_logical,
                 quad_y_logical,
                 glyph.size,
@@ -1708,7 +1804,7 @@ fn build_text_mesh_batches_for_align(
 fn push_transient_text_mesh_quad(
     builders: &mut Vec<TextMeshBatchBuilder>,
     recycled_vertices: &mut Vec<Vec<renderer::TexturedMeshVertex>>,
-    texture_key: *const str,
+    texture_page: TextPageId,
     quad_x: f32,
     quad_y: f32,
     size: [f32; 2],
@@ -1720,7 +1816,7 @@ fn push_transient_text_mesh_quad(
     char_index: usize,
 ) {
     const CORNERS: [usize; 6] = [0, 2, 3, 0, 3, 1];
-    let out = &mut text_mesh_batch_builder(builders, recycled_vertices, texture_key).vertices;
+    let out = &mut text_mesh_batch_builder(builders, recycled_vertices, texture_page).vertices;
     let x0 = quad_x;
     let y0 = quad_y;
     let x1 = quad_x + size[0];
@@ -1786,14 +1882,14 @@ fn build_transient_text_mesh_builders(
         let line_glyphs =
             &layout.glyphs[line.glyph_start..line.glyph_start.saturating_add(line.glyph_len)];
         for glyph in line_glyphs {
-            let texture_key = if stroke {
-                glyph.stroke_texture_key
+            let texture_page = if stroke {
+                glyph.stroke_page
             } else if glyph_has_fill_quad(glyph) {
-                Some(glyph.texture_key)
+                Some(glyph.texture_page)
             } else {
                 None
             };
-            let Some(texture_key) = texture_key else {
+            let Some(texture_page) = texture_page else {
                 pen_x_logical += glyph.advance_i32;
                 continue;
             };
@@ -1803,7 +1899,7 @@ fn build_transient_text_mesh_builders(
             push_transient_text_mesh_quad(
                 builders,
                 recycled_vertices,
-                texture_key,
+                texture_page,
                 pen_x_logical as f32 + glyph.offset[0],
                 baseline_local_logical + glyph.offset[1],
                 glyph.size,
@@ -1870,6 +1966,7 @@ fn build_cached_text_layout(
             .saturating_add(1),
     );
     let mut glyphs = Vec::with_capacity(text.len());
+    let mut texture_pages = TextPageBuilder::new();
     let mut start_char = 0usize;
 
     for src in text.split('\n') {
@@ -1881,7 +1978,7 @@ fn build_cached_text_layout(
                 if let Some(glyph) = font::find_glyph(font, ch, fonts) {
                     width_i32 += glyph.advance_i32;
                     glyphs.push(cached_glyph(
-                        font,
+                        &mut texture_pages,
                         glyph,
                         char_index,
                         ch != ' ' || draws_space,
@@ -1913,7 +2010,7 @@ fn build_cached_text_layout(
         for ch in src.chars() {
             if ch == ' ' {
                 flush_wrapped_word(
-                    font,
+                    &mut texture_pages,
                     &mut lines,
                     &mut max_logical_width_i,
                     &mut line_width,
@@ -1939,14 +2036,14 @@ fn build_cached_text_layout(
                 }
                 if let Some(glyph) = font::find_glyph(font, ch, fonts) {
                     word_width += glyph.advance_i32;
-                    word_glyphs.push(cached_glyph(font, glyph, char_index, true));
+                    word_glyphs.push(cached_glyph(&mut texture_pages, glyph, char_index, true));
                 }
             }
             char_index += 1;
         }
 
         flush_wrapped_word(
-            font,
+            &mut texture_pages,
             &mut lines,
             &mut max_logical_width_i,
             &mut line_width,
@@ -1990,6 +2087,7 @@ fn build_cached_text_layout(
         line_spacing,
         max_logical_width_i,
         glyph_count: glyphs.len(),
+        texture_pages: texture_pages.into_vec().into_boxed_slice(),
         lines,
         glyphs,
         fill_batches: CachedTextMeshVariants::default(),
@@ -2035,15 +2133,6 @@ where
         out.push(line.into_boxed_str());
     }
     out
-}
-
-#[inline(always)]
-// SAFETY: Callers must only pass pointers captured from cached string storage that remains valid
-// and immutable for at least the lifetime of the returned borrow.
-unsafe fn str_from_cached_ptr<'a>(ptr: *const str) -> &'a str {
-    // SAFETY: callers only pass pointers captured from cached font glyph storage
-    // that outlives the returned borrow for the duration of render-list assembly.
-    unsafe { &*ptr }
 }
 
 /* ======================= ACTOR -> OBJECT CONVERSION ======================= */
@@ -3150,12 +3239,13 @@ fn build_actor_recursive<'a, T: TextureContext + ?Sized>(
                     if attributes.is_empty() && !*jitter && text_distortion <= 1e-6 {
                         push_text_mesh_batches(
                             out,
+                            layout,
                             layout.fill_batches(*align_text),
                             &placement,
                             [1.0; 4],
                             *local_transform,
                             m,
-                            texture_cache,
+                            texture_cache.generation,
                             texture_ctx,
                         );
                         if let Some(clip_world) = clip_world {
@@ -3173,12 +3263,13 @@ fn build_actor_recursive<'a, T: TextureContext + ?Sized>(
                             let stroke_start_sprite = sprite_instances.len();
                             push_text_mesh_batches(
                                 out,
+                                layout,
                                 layout.stroke_batches(*align_text),
                                 &placement,
                                 stroke_rgba,
                                 *local_transform,
                                 m,
-                                texture_cache,
+                                texture_cache.generation,
                                 texture_ctx,
                             );
                             if let Some(clip_world) = clip_world {
@@ -3216,12 +3307,13 @@ fn build_actor_recursive<'a, T: TextureContext + ?Sized>(
                         );
                         push_transient_text_mesh_builders(
                             out,
+                            layout,
                             builders,
                             &placement,
                             [1.0; 4],
                             *local_transform,
                             m,
-                            texture_cache,
+                            texture_cache.generation,
                             texture_ctx,
                         );
                         if let Some(clip_world) = clip_world {
@@ -3250,23 +3342,25 @@ fn build_actor_recursive<'a, T: TextureContext + ?Sized>(
                                 );
                                 push_transient_text_mesh_builders(
                                     out,
+                                    layout,
                                     builders,
                                     &placement,
                                     stroke_rgba,
                                     *local_transform,
                                     m,
-                                    texture_cache,
+                                    texture_cache.generation,
                                     texture_ctx,
                                 );
                             } else {
                                 push_text_mesh_batches(
                                     out,
+                                    layout,
                                     layout.stroke_batches(*align_text),
                                     &placement,
                                     stroke_rgba,
                                     *local_transform,
                                     m,
-                                    texture_cache,
+                                    texture_cache.generation,
                                     texture_ctx,
                                 );
                             }
@@ -4089,12 +4183,13 @@ const fn quantize_up_even_i32(v: i32) -> i32 {
 
 fn push_text_mesh_batches<T: TextureContext + ?Sized>(
     out: &mut Vec<RenderObject>,
+    layout: &CachedTextLayout,
     batches: &[CachedTextMeshBatch],
     placement: &TextLayoutPlacement,
     tint: [f32; 4],
     local_transform: Matrix4,
     m: &Metrics,
-    texture_cache: &mut TextureLookupCache,
+    texture_generation: u64,
     texture_ctx: &T,
 ) {
     if batches.is_empty() || tint[3] <= 0.0 {
@@ -4110,9 +4205,6 @@ fn push_text_mesh_batches<T: TextureContext + ?Sized>(
 
     out.reserve(batches.len());
     for batch in batches {
-        // SAFETY: `batch.texture_key` is captured from immutable font storage and
-        // remains valid while the cached text layout is alive.
-        let texture_key = unsafe { str_from_cached_ptr(batch.texture_key) };
         out.push(RenderObject {
             object_type: renderer::ObjectType::TexturedMesh {
                 instance: renderer::TexturedMeshInstanceRaw::new(
@@ -4127,11 +4219,9 @@ fn push_text_mesh_batches<T: TextureContext + ?Sized>(
                 geom_cache_key: batch.geom_cache_key,
                 depth_test: false,
             },
-            texture_handle: texture_cache.texture_handle(
-                texture_ctx,
-                batch.texture_key,
-                texture_key,
-            ),
+            texture_handle: layout
+                .texture_page(batch.texture_page)
+                .texture_handle(texture_generation, texture_ctx),
             blend: BlendMode::Alpha,
             z: 0,
             order: 0,
@@ -4142,12 +4232,13 @@ fn push_text_mesh_batches<T: TextureContext + ?Sized>(
 
 fn push_transient_text_mesh_builders<T: TextureContext + ?Sized>(
     out: &mut Vec<RenderObject>,
+    layout: &CachedTextLayout,
     builders: &mut Vec<TextMeshBatchBuilder>,
     placement: &TextLayoutPlacement,
     tint: [f32; 4],
     local_transform: Matrix4,
     m: &Metrics,
-    texture_cache: &mut TextureLookupCache,
+    texture_generation: u64,
     texture_ctx: &T,
 ) {
     if builders.is_empty() || tint[3] <= 0.0 {
@@ -4166,9 +4257,6 @@ fn push_transient_text_mesh_builders<T: TextureContext + ?Sized>(
         if builder.vertices.is_empty() {
             continue;
         }
-        // SAFETY: `builder.texture_key` is captured from immutable font storage and
-        // remains valid while the cached text layout is alive.
-        let texture_key = unsafe { str_from_cached_ptr(builder.texture_key) };
         out.push(RenderObject {
             object_type: renderer::ObjectType::TexturedMesh {
                 instance: renderer::TexturedMeshInstanceRaw::new(
@@ -4183,11 +4271,9 @@ fn push_transient_text_mesh_builders<T: TextureContext + ?Sized>(
                 geom_cache_key: renderer::INVALID_TMESH_CACHE_KEY,
                 depth_test: false,
             },
-            texture_handle: texture_cache.texture_handle(
-                texture_ctx,
-                builder.texture_key,
-                texture_key,
-            ),
+            texture_handle: layout
+                .texture_page(builder.texture_page)
+                .texture_handle(texture_generation, texture_ctx),
             blend: BlendMode::Alpha,
             z: 0,
             order: 0,
@@ -5031,14 +5117,16 @@ fn clip_rotated_sprite_to_world_rect(
 #[cfg(test)]
 mod tests {
     use super::{
-        CachedTextLayout, CachedTextMeshVariants, ComposeScratch, TextAttrCursor, TextLayoutCache,
-        TextLayoutKey, TextureCacheEntry, TextureContext, TextureLookupCache, TextureMeta,
-        WorldRect, build_cached_text_layout, build_screen, build_screen_cached_with_scratch,
+        CachedGlyph, CachedTextLayout, CachedTextMeshBatch, CachedTextMeshVariants, CachedTextPage,
+        ComposeScratch, TextAttrCursor, TextLayoutCache, TextLayoutKey, TextMeshBatchBuilder,
+        TextPageId, TextureCacheEntry, TextureContext, TextureLookupCache, TextureMeta, WorldRect,
+        build_cached_text_layout, build_screen, build_screen_cached_with_scratch,
         build_screen_cached_with_scratch_and_texture_context,
         build_screen_cached_with_scratch_and_texture_context_and_actor_resources,
-        clip_object_to_world_masks, clip_sprite_object_to_world_rect, fold_sprite_xy_rot,
-        font_chain_key, push_shadow_objects_for_range, resolve_sprite_size_like_sm,
-        sort_render_objects, str_ptr, wrap_text_lines_by_words,
+        build_transient_text_mesh_builders, clip_object_to_world_masks,
+        clip_sprite_object_to_world_rect, fold_sprite_xy_rot, font_chain_key,
+        push_shadow_objects_for_range, resolve_sprite_size_like_sm, sort_render_objects, str_ptr,
+        wrap_text_lines_by_words,
     };
     use crate::actors::{
         Actor, ActorResourceArena, RetainedActorFrame, SizeSpec, SpriteSource, TextAlign,
@@ -5051,6 +5139,7 @@ mod tests {
         SpriteInstanceRaw, TMeshCacheKey, TexturedMeshInstanceRaw, TexturedMeshVertex,
     };
     use glam::Mat4 as Matrix4;
+    use std::cell::Cell;
     use std::collections::HashMap;
     use std::sync::Arc;
     use std::sync::atomic::AtomicU64;
@@ -5105,6 +5194,7 @@ mod tests {
             line_spacing: 10,
             max_logical_width_i: 0,
             glyph_count: 0,
+            texture_pages: Vec::new().into_boxed_slice(),
             lines: Vec::new(),
             glyphs: Vec::new(),
             fill_batches: CachedTextMeshVariants::default(),
@@ -5384,6 +5474,102 @@ mod tests {
         }
     }
 
+    fn test_split_stroke_font(
+        fill_a: &Arc<str>,
+        fill_b: &Arc<str>,
+        stroke_a: &Arc<str>,
+        stroke_b: &Arc<str>,
+    ) -> Font {
+        let glyph_a = test_stroked_glyph(fill_a, stroke_a);
+        let glyph_b = test_stroked_glyph(fill_b, stroke_b);
+        let glyph_map = HashMap::from([('A', glyph_a.clone()), ('B', glyph_b.clone())]);
+        let mut ascii = std::array::from_fn(|_| None);
+        ascii['A' as usize] = Some(glyph_a);
+        ascii['B' as usize] = Some(glyph_b);
+        let stroke_texture_map = HashMap::from([
+            (fill_a.to_string(), stroke_a.to_string()),
+            (fill_b.to_string(), stroke_b.to_string()),
+        ]);
+        Font {
+            glyph_map,
+            ascii_glyphs: Box::new(ascii),
+            default_glyph: None,
+            line_spacing: 10,
+            height: 10,
+            fallback_font_name: None,
+            cache_tag: 4,
+            chain_key: 4,
+            default_stroke_color: [1.0; 4],
+            stroke_texture_map,
+            texture_hints_map: HashMap::new(),
+        }
+    }
+
+    fn test_stroked_text_actor() -> Actor {
+        Actor::Text {
+            align: [0.0, 0.0],
+            offset: [10.0, 20.0],
+            local_transform: Matrix4::IDENTITY,
+            color: [1.0; 4],
+            stroke_color: Some([1.0; 4]),
+            glow: [0.0; 4],
+            font: "test",
+            content: TextContent::static_str("AB"),
+            attributes: Vec::new(),
+            align_text: TextAlign::Left,
+            z: 0,
+            scale: [1.0, 1.0],
+            fit_width: None,
+            fit_height: None,
+            line_spacing: None,
+            wrap_width_pixels: None,
+            max_width: None,
+            max_height: None,
+            max_w_pre_zoom: false,
+            max_h_pre_zoom: false,
+            jitter: false,
+            distortion: 0.0,
+            clip: None,
+            mask_dest: false,
+            blend: BlendMode::Alpha,
+            shadow_len: [0.0, 0.0],
+            shadow_color: [0.0; 4],
+            effect: Default::default(),
+        }
+    }
+
+    #[derive(Default)]
+    struct CountingPageContext {
+        generation: Cell<u64>,
+        handle_calls: Cell<u32>,
+    }
+
+    impl TextureContext for CountingPageContext {
+        fn texture_registry_generation(&self) -> u64 {
+            self.generation.get()
+        }
+
+        fn texture_dims(&self, _key: &str) -> Option<TextureMeta> {
+            None
+        }
+
+        fn sprite_sheet_dims(&self, _key: &str) -> (u32, u32) {
+            (1, 1)
+        }
+
+        fn texture_handle(&self, key: &str) -> deadlib_render::TextureHandle {
+            self.handle_calls.set(self.handle_calls.get() + 1);
+            let page = match key {
+                "fill_a" => 1,
+                "fill_b" => 2,
+                "stroke_a" => 3,
+                "stroke_b" => 4,
+                _ => panic!("unexpected text page {key}"),
+            };
+            self.generation.get().wrapping_mul(100).wrapping_add(page)
+        }
+    }
+
     #[test]
     fn text_layout_builds_only_requested_fill_align() {
         let fonts = HashMap::from([("test", test_font())]);
@@ -5417,6 +5603,250 @@ mod tests {
         assert!(layout.stroke_batches.is_built(TextAlign::Left));
         assert!(!layout.stroke_batches.is_built(TextAlign::Center));
         assert!(!layout.fill_batches.is_built(TextAlign::Left));
+    }
+
+    #[cfg(target_pointer_width = "64")]
+    #[test]
+    fn text_page_ids_shrink_cached_records() {
+        assert_eq!(std::mem::size_of::<TextPageId>(), 4);
+        assert_eq!(std::mem::size_of::<Option<TextPageId>>(), 4);
+        assert_eq!(std::mem::size_of::<CachedGlyph>(), 56);
+        assert_eq!(std::mem::size_of::<CachedTextMeshBatch>(), 32);
+        assert_eq!(std::mem::size_of::<TextMeshBatchBuilder>(), 32);
+        assert_eq!(std::mem::size_of::<CachedTextPage>(), 32);
+    }
+
+    #[test]
+    fn cached_layout_owns_font_pages() {
+        let fill_a = Arc::<str>::from("fill_a");
+        let fill_b = Arc::<str>::from("fill_b");
+        let stroke_a = Arc::<str>::from("stroke_a");
+        let stroke_b = Arc::<str>::from("stroke_b");
+        let weak_pages = [
+            Arc::downgrade(&fill_a),
+            Arc::downgrade(&fill_b),
+            Arc::downgrade(&stroke_a),
+            Arc::downgrade(&stroke_b),
+        ];
+        let mut fonts = HashMap::from([(
+            "test",
+            test_split_stroke_font(&fill_a, &fill_b, &stroke_a, &stroke_b),
+        )]);
+        let font = fonts.get("test").expect("test font");
+        let key = TextLayoutKey {
+            font_key: font_chain_key(font, &fonts),
+            line_spacing: font.line_spacing,
+            wrap_width_pixels: -1,
+        };
+        let mut cache = TextLayoutCache::new(1);
+        cache.prewarm_text(&fonts, "test", "AB", None);
+
+        fonts.remove("test");
+        drop((fill_a, fill_b, stroke_a, stroke_b));
+
+        let layout = cache.owned_layout(key, "AB").expect("cached layout");
+        assert_eq!(layout.texture_pages.len(), 4);
+        assert!(weak_pages.iter().all(|page| page.strong_count() == 1));
+
+        cache.clear();
+        assert!(weak_pages.iter().all(|page| page.strong_count() == 0));
+    }
+
+    #[test]
+    fn cached_layout_dedupes_equal_page_keys() {
+        let page_a = Arc::<str>::from("equal_page");
+        let page_b = Arc::<str>::from(String::from("equal_page"));
+        assert!(!Arc::ptr_eq(&page_a, &page_b));
+        let glyph_a = test_glyph(&page_a);
+        let glyph_b = test_glyph(&page_b);
+        let glyph_map = HashMap::from([('A', glyph_a.clone()), ('B', glyph_b.clone())]);
+        let mut ascii = std::array::from_fn(|_| None);
+        ascii['A' as usize] = Some(glyph_a);
+        ascii['B' as usize] = Some(glyph_b);
+        let font = Font {
+            glyph_map,
+            ascii_glyphs: Box::new(ascii),
+            default_glyph: None,
+            line_spacing: 10,
+            height: 10,
+            fallback_font_name: None,
+            cache_tag: 5,
+            chain_key: 5,
+            default_stroke_color: [0.0; 4],
+            stroke_texture_map: HashMap::new(),
+            texture_hints_map: HashMap::new(),
+        };
+        let fonts = HashMap::from([("test", font)]);
+        let font = fonts.get("test").expect("test font");
+        let layout = build_cached_text_layout(font, &fonts, "AB", 10, -1, 29);
+
+        assert_eq!(layout.texture_pages.len(), 1);
+        assert_eq!(layout.glyphs[0].texture_page, layout.glyphs[1].texture_page);
+        let batches = layout.fill_batches(TextAlign::Left);
+        assert_eq!(batches.len(), 1);
+        assert_eq!(batches[0].vertices.len(), 12);
+    }
+
+    #[test]
+    fn cached_and_transient_pages_match() {
+        let fill_a = Arc::<str>::from("fill_a");
+        let fill_b = Arc::<str>::from("fill_b");
+        let stroke_a = Arc::<str>::from("stroke_a");
+        let stroke_b = Arc::<str>::from("stroke_b");
+        let fonts = HashMap::from([(
+            "test",
+            test_split_stroke_font(&fill_a, &fill_b, &stroke_a, &stroke_b),
+        )]);
+        let font = fonts.get("test").expect("test font");
+        let layout = build_cached_text_layout(font, &fonts, "ABA\nBA", 10, -1, 31);
+        let mut builders = Vec::new();
+        let mut recycled = Vec::new();
+
+        let fill = layout.fill_batches(TextAlign::Center);
+        assert_eq!(fill.len(), 2);
+        assert_eq!(
+            layout.texture_page(fill[0].texture_page).key.as_ref(),
+            "fill_a"
+        );
+        assert_eq!(
+            layout.texture_page(fill[1].texture_page).key.as_ref(),
+            "fill_b"
+        );
+        assert_eq!([fill[0].vertices.len(), fill[1].vertices.len()], [18, 12]);
+        assert!(
+            fill.iter()
+                .all(|batch| batch.geom_cache_key != INVALID_TMESH_CACHE_KEY)
+        );
+        assert_ne!(fill[0].geom_cache_key, fill[1].geom_cache_key);
+        build_transient_text_mesh_builders(
+            &layout,
+            TextAlign::Center,
+            &[],
+            None,
+            0.0,
+            false,
+            &mut builders,
+            &mut recycled,
+        );
+        assert_eq!(builders.len(), fill.len());
+        for (builder, batch) in builders.iter().zip(fill) {
+            assert_eq!(builder.texture_page, batch.texture_page);
+            assert_eq!(builder.vertices.as_slice(), batch.vertices.as_ref());
+        }
+
+        let stroke = layout.stroke_batches(TextAlign::Center);
+        assert_eq!(stroke.len(), 2);
+        assert_eq!(
+            layout.texture_page(stroke[0].texture_page).key.as_ref(),
+            "stroke_a"
+        );
+        assert_eq!(
+            layout.texture_page(stroke[1].texture_page).key.as_ref(),
+            "stroke_b"
+        );
+        build_transient_text_mesh_builders(
+            &layout,
+            TextAlign::Center,
+            &[],
+            None,
+            0.0,
+            true,
+            &mut builders,
+            &mut recycled,
+        );
+        assert_eq!(builders.len(), stroke.len());
+        for (builder, batch) in builders.iter().zip(stroke) {
+            assert_eq!(builder.texture_page, batch.texture_page);
+            assert_eq!(builder.vertices.as_slice(), batch.vertices.as_ref());
+        }
+    }
+
+    #[test]
+    fn text_page_handles_follow_registry_generation() {
+        let fill_a = Arc::<str>::from("fill_a");
+        let fill_b = Arc::<str>::from("fill_b");
+        let stroke_a = Arc::<str>::from("stroke_a");
+        let stroke_b = Arc::<str>::from("stroke_b");
+        let fonts = HashMap::from([(
+            "test",
+            test_split_stroke_font(&fill_a, &fill_b, &stroke_a, &stroke_b),
+        )]);
+        let actors = [test_stroked_text_actor()];
+        let metrics = Metrics {
+            left: 0.0,
+            right: 200.0,
+            top: 100.0,
+            bottom: 0.0,
+        };
+        let textures = CountingPageContext::default();
+        textures.generation.set(1);
+        let mut cache = TextLayoutCache::new(1);
+
+        let first = build_screen_cached_with_scratch_and_texture_context(
+            &actors,
+            [0.0; 4],
+            &metrics,
+            &fonts,
+            0.0,
+            &mut cache,
+            &mut ComposeScratch::default(),
+            &textures,
+        );
+        assert_eq!(textures.handle_calls.get(), 4);
+        assert_eq!(
+            first
+                .objects
+                .iter()
+                .map(|object| object.texture_handle)
+                .collect::<Vec<_>>(),
+            [101, 102, 103, 104]
+        );
+
+        let _ = build_screen_cached_with_scratch_and_texture_context(
+            &actors,
+            [0.0; 4],
+            &metrics,
+            &fonts,
+            0.0,
+            &mut cache,
+            &mut ComposeScratch::default(),
+            &textures,
+        );
+        assert_eq!(textures.handle_calls.get(), 4);
+
+        textures.generation.set(2);
+        let refreshed = build_screen_cached_with_scratch_and_texture_context(
+            &actors,
+            [0.0; 4],
+            &metrics,
+            &fonts,
+            0.0,
+            &mut cache,
+            &mut ComposeScratch::default(),
+            &textures,
+        );
+        assert_eq!(textures.handle_calls.get(), 8);
+        assert_eq!(
+            refreshed
+                .objects
+                .iter()
+                .map(|object| object.texture_handle)
+                .collect::<Vec<_>>(),
+            [201, 202, 203, 204]
+        );
+    }
+
+    #[test]
+    fn max_generation_never_hits_uncached_stamp() {
+        let textures = CountingPageContext::default();
+        textures.generation.set(u64::MAX);
+        let page = CachedTextPage::new(Arc::from("fill_a"));
+
+        let first = page.texture_handle(u64::MAX, &textures);
+        let second = page.texture_handle(u64::MAX, &textures);
+
+        assert_eq!(first, second);
+        assert_eq!(textures.handle_calls.get(), 2);
     }
 
     #[test]
