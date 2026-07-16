@@ -2,9 +2,8 @@ use crate::telemetry::{
     publish_output_timing, publish_output_timing_quality, report_audio_render_callback,
 };
 use deadlib_platform::host_time::now_nanos;
-use deadsync_audio::ring as internal;
 use deadsync_audio::{
-    AudioOutputMode, AudioRenderMaps, OutputBackendReady, OutputTelemetryClock,
+    AudioOutputMode, AudioRenderHandle, OutputBackendReady, OutputTelemetryClock,
     OutputTimingQuality, QueuedSfx, RenderState,
 };
 use log::{info, warn};
@@ -15,7 +14,6 @@ use spa::param::format_utils;
 use spa::pod::Pod;
 use std::io::Cursor;
 use std::mem;
-use std::sync::Arc;
 use std::sync::mpsc::{Receiver, Sender, channel};
 use std::thread::{self, JoinHandle};
 
@@ -65,14 +63,13 @@ struct CallbackState {
 
 impl CallbackState {
     fn new(
-        music_ring: Arc<internal::SpscRingI16>,
+        render_handle: AudioRenderHandle,
         sfx_receiver: Receiver<QueuedSfx>,
-        render_maps: AudioRenderMaps,
         sample_rate_hz: u32,
         channels: usize,
     ) -> Self {
         Self {
-            render: RenderState::new(music_ring, channels, render_maps),
+            render: RenderState::new(render_handle, channels),
             sfx_receiver,
             format: spa::param::audio::AudioInfoRaw::new(),
             fallback_rate_hz: sample_rate_hz.max(1),
@@ -150,23 +147,15 @@ pub fn prepare(
 
 pub fn start(
     prep: PipeWireOutputPrep,
-    music_ring: Arc<internal::SpscRingI16>,
+    render_handle: AudioRenderHandle,
     sfx_receiver: Receiver<QueuedSfx>,
-    render_maps: AudioRenderMaps,
 ) -> Result<PipeWireOutputStream, String> {
     let (ready_tx, ready_rx) = channel::<Result<(), String>>();
     let (stop_sender, stop_receiver) = pw::channel::channel::<()>();
     let thread = thread::Builder::new()
         .name("pipewire_out".to_string())
         .spawn(move || {
-            let _ = render_thread(
-                prep,
-                music_ring,
-                sfx_receiver,
-                render_maps,
-                stop_receiver,
-                ready_tx,
-            );
+            let _ = render_thread(prep, render_handle, sfx_receiver, stop_receiver, ready_tx);
         })
         .map_err(|e| format!("failed to spawn PipeWire render thread: {e}"))?;
     match ready_rx.recv() {
@@ -189,9 +178,8 @@ pub fn start(
 
 fn render_thread(
     prep: PipeWireOutputPrep,
-    music_ring: Arc<internal::SpscRingI16>,
+    render_handle: AudioRenderHandle,
     sfx_receiver: Receiver<QueuedSfx>,
-    render_maps: AudioRenderMaps,
     stop_receiver: pw::channel::Receiver<()>,
     ready_tx: Sender<Result<(), String>>,
 ) -> Result<(), String> {
@@ -204,9 +192,8 @@ fn render_thread(
         .connect_rc(None)
         .map_err(|e| format!("failed to connect to PipeWire core: {e}"))?;
     let state = CallbackState::new(
-        music_ring,
+        render_handle,
         sfx_receiver,
-        render_maps,
         prep.sample_rate_hz,
         prep.channels,
     );

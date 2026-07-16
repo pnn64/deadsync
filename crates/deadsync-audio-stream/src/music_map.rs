@@ -1,55 +1,63 @@
-use deadsync_audio::ring::{self, SpscRingMusicSeg};
 use deadsync_audio::{
-    AudioRenderMaps, PlaybackPosMap, bump_music_map_generation, music_track_start_frame,
+    PlaybackPosMap, PlayedMapReader, bump_music_map_generation, music_map_generation,
+    music_track_start_frame,
 };
-use std::sync::{Arc, LazyLock, Mutex};
+use std::sync::{LazyLock, Mutex};
 
-static QUEUED_MUSIC_MAP_SEGS: LazyLock<Arc<SpscRingMusicSeg>> =
-    LazyLock::new(|| ring::music_seg_ring_new(ring::MUSIC_SEG_RING_CAP));
-static PLAYED_MUSIC_MAP_SEGS: LazyLock<Arc<SpscRingMusicSeg>> =
-    LazyLock::new(|| ring::music_seg_ring_new(ring::MUSIC_SEG_RING_CAP));
-static PLAYBACK_POS_MAP: LazyLock<Mutex<PlaybackPosMap>> =
-    LazyLock::new(|| Mutex::new(PlaybackPosMap::default()));
+#[derive(Default)]
+struct MusicMapRuntime {
+    played: Option<PlayedMapReader>,
+    map: PlaybackPosMap,
+}
+
+static MUSIC_MAP_RUNTIME: LazyLock<Mutex<MusicMapRuntime>> =
+    LazyLock::new(|| Mutex::new(MusicMapRuntime::default()));
 
 pub fn force_music_map_runtime() {
-    LazyLock::force(&QUEUED_MUSIC_MAP_SEGS);
-    LazyLock::force(&PLAYED_MUSIC_MAP_SEGS);
-    LazyLock::force(&PLAYBACK_POS_MAP);
+    LazyLock::force(&MUSIC_MAP_RUNTIME);
+}
+
+pub fn install_played_map(played: PlayedMapReader) {
+    let mut runtime = MUSIC_MAP_RUNTIME.lock().unwrap();
+    runtime.played = Some(played);
+    runtime.map.clear();
 }
 
 #[inline(always)]
-pub fn queued_music_map() -> Arc<SpscRingMusicSeg> {
-    QUEUED_MUSIC_MAP_SEGS.clone()
+pub fn clear_music_pos_map() -> u64 {
+    let mut runtime = MUSIC_MAP_RUNTIME.lock().unwrap();
+    let generation = bump_music_map_generation();
+    runtime.map.clear();
+    while runtime
+        .played
+        .as_mut()
+        .and_then(PlayedMapReader::pop)
+        .is_some()
+    {}
+    generation
 }
 
-#[inline(always)]
-pub fn music_render_maps() -> AudioRenderMaps {
-    AudioRenderMaps::new(QUEUED_MUSIC_MAP_SEGS.clone(), PLAYED_MUSIC_MAP_SEGS.clone())
-}
-
-#[inline(always)]
-pub fn clear_music_pos_map() {
-    ring::music_seg_ring_clear(&QUEUED_MUSIC_MAP_SEGS);
-    ring::music_seg_ring_clear(&PLAYED_MUSIC_MAP_SEGS);
-    PLAYBACK_POS_MAP.lock().unwrap().clear();
-    bump_music_map_generation();
-}
-
-fn drain_played_map(map: &mut PlaybackPosMap) {
-    while let Some(seg) = ring::music_seg_ring_pop(&PLAYED_MUSIC_MAP_SEGS) {
-        map.insert(seg);
+fn drain_played_map(runtime: &mut MusicMapRuntime) {
+    let generation = music_map_generation();
+    while let Some((seg_generation, seg)) = runtime.played.as_mut().and_then(PlayedMapReader::pop) {
+        if seg_generation == generation {
+            runtime.map.insert(seg);
+        }
     }
 }
 
 pub fn lookup_music_position(stream_frames: f64, sample_rate: u32) -> Option<(f32, f32)> {
-    let mut map = PLAYBACK_POS_MAP.lock().unwrap();
-    drain_played_map(&mut map);
-    map.search(stream_frames).map(|(music_sec, sec_per_frame)| {
-        (
-            music_sec as f32,
-            (sec_per_frame * sample_rate as f64) as f32,
-        )
-    })
+    let mut runtime = MUSIC_MAP_RUNTIME.lock().unwrap();
+    drain_played_map(&mut runtime);
+    runtime
+        .map
+        .search(stream_frames)
+        .map(|(music_sec, sec_per_frame)| {
+            (
+                music_sec as f32,
+                (sec_per_frame * sample_rate as f64) as f32,
+            )
+        })
 }
 
 pub fn assist_tick_stream_frame_for_music_seconds(music_seconds: f64) -> Option<u64> {
@@ -57,9 +65,9 @@ pub fn assist_tick_stream_frame_for_music_seconds(music_seconds: f64) -> Option<
         return None;
     }
     let track_frame = {
-        let mut map = PLAYBACK_POS_MAP.lock().unwrap();
-        drain_played_map(&mut map);
-        map.invert(music_seconds)?
+        let mut runtime = MUSIC_MAP_RUNTIME.lock().unwrap();
+        drain_played_map(&mut runtime);
+        runtime.map.invert(music_seconds)?
     };
     if !track_frame.is_finite() || track_frame < 0.0 {
         return None;

@@ -266,8 +266,10 @@ pub fn music_gain_snap_generation() -> u64 {
 }
 
 #[inline(always)]
-pub fn bump_music_map_generation() {
-    MUSIC_MAP_GEN.fetch_add(1, Ordering::Release);
+pub fn bump_music_map_generation() -> u64 {
+    MUSIC_MAP_GEN
+        .fetch_add(1, Ordering::Release)
+        .wrapping_add(1)
 }
 
 #[inline(always)]

@@ -1,15 +1,13 @@
 use crate::telemetry::{publish_output_timing, report_audio_render_callback};
 use deadlib_platform::windows_rt::{ThreadRole, boost_current_thread};
-use deadsync_audio::ring as internal;
 use deadsync_audio::{
-    AudioOutputMode, AudioRenderMaps, OutputBackendReady, OutputTelemetryClock,
+    AudioOutputMode, AudioRenderHandle, OutputBackendReady, OutputTelemetryClock,
     OutputTimingQuality, QueuedSfx, RenderState,
 };
 use log::{error, warn};
 use std::ffi::c_void;
 use std::mem::size_of;
 use std::slice;
-use std::sync::Arc;
 use std::sync::mpsc::{Receiver, Sender, channel};
 use std::thread::{self, JoinHandle};
 use windows::Win32::Devices::FunctionDiscovery;
@@ -228,9 +226,8 @@ pub fn prepare(
 
 pub fn start(
     prep: WasapiOutputPrep,
-    music_ring: Arc<internal::SpscRingI16>,
+    render_handle: AudioRenderHandle,
     sfx_receiver: Receiver<QueuedSfx>,
-    render_maps: AudioRenderMaps,
 ) -> Result<WasapiOutputStream, String> {
     // SAFETY: creating an unnamed auto-reset event requires no borrowed Rust
     // memory; the returned handle is owned by the caller and closed on all exit
@@ -244,9 +241,8 @@ pub fn start(
         .spawn(move || {
             render_thread(
                 prep,
-                music_ring,
+                render_handle,
                 sfx_receiver,
-                render_maps,
                 HANDLE(stop_event_thread as *mut _),
                 ready_tx,
             )
@@ -287,21 +283,14 @@ pub fn start(
 
 fn render_thread(
     prep: WasapiOutputPrep,
-    music_ring: Arc<internal::SpscRingI16>,
+    render_handle: AudioRenderHandle,
     sfx_receiver: Receiver<QueuedSfx>,
-    render_maps: AudioRenderMaps,
     stop_event: HANDLE,
     ready_tx: Sender<Result<(), String>>,
 ) {
     let _thread_policy = boost_current_thread(ThreadRole::AudioRender);
-    if let Err(err) = render_thread_inner(
-        prep,
-        music_ring,
-        sfx_receiver,
-        render_maps,
-        stop_event,
-        &ready_tx,
-    ) && ready_tx.send(Err(err.clone())).is_err()
+    if let Err(err) = render_thread_inner(prep, render_handle, sfx_receiver, stop_event, &ready_tx)
+        && ready_tx.send(Err(err.clone())).is_err()
     {
         error!("WASAPI render thread failed: {err}");
     }
@@ -309,9 +298,8 @@ fn render_thread(
 
 fn render_thread_inner(
     prep: WasapiOutputPrep,
-    music_ring: Arc<internal::SpscRingI16>,
+    render_handle: AudioRenderHandle,
     sfx_receiver: Receiver<QueuedSfx>,
-    render_maps: AudioRenderMaps,
     stop_event: HANDLE,
     ready_tx: &Sender<Result<(), String>>,
 ) -> Result<(), String> {
@@ -375,7 +363,7 @@ fn render_thread_inner(
             .map_err(|e| format!("failed to query WASAPI buffer size: {e}"))?
     };
 
-    let mut render = RenderState::new(music_ring, prep.channels, render_maps);
+    let mut render = RenderState::new(render_handle, prep.channels);
     write_frames(
         &audio_clock,
         &render_client,

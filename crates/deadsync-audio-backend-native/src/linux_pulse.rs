@@ -3,9 +3,8 @@ use crate::telemetry::{
     report_audio_render_callback,
 };
 use deadlib_platform::host_time::now_nanos;
-use deadsync_audio::ring as internal;
 use deadsync_audio::{
-    AudioOutputMode, AudioRenderMaps, OutputBackendReady, OutputTelemetryClock,
+    AudioOutputMode, AudioRenderHandle, OutputBackendReady, OutputTelemetryClock,
     OutputTimingQuality, QueuedSfx, RenderState,
 };
 use libloading::Library;
@@ -213,9 +212,8 @@ pub fn prepare(
 
 pub fn start(
     prep: PulseOutputPrep,
-    music_ring: Arc<internal::SpscRingI16>,
+    render_handle: AudioRenderHandle,
     sfx_receiver: Receiver<QueuedSfx>,
-    render_maps: AudioRenderMaps,
 ) -> Result<PulseOutputStream, String> {
     let stop_flag = Arc::new(AtomicBool::new(false));
     let stop_flag_thread = stop_flag.clone();
@@ -225,9 +223,8 @@ pub fn start(
         .spawn(move || {
             render_thread(
                 prep,
-                music_ring,
+                render_handle,
                 sfx_receiver,
-                render_maps,
                 stop_flag_thread,
                 ready_tx,
             )
@@ -372,29 +369,21 @@ impl PulseClockHealth {
 
 fn render_thread(
     prep: PulseOutputPrep,
-    music_ring: Arc<internal::SpscRingI16>,
+    render_handle: AudioRenderHandle,
     sfx_receiver: Receiver<QueuedSfx>,
-    render_maps: AudioRenderMaps,
     stop_flag: Arc<AtomicBool>,
     ready_tx: Sender<Result<(), String>>,
 ) {
-    if let Err(err) = render_thread_inner(
-        prep,
-        music_ring,
-        sfx_receiver,
-        render_maps,
-        &stop_flag,
-        &ready_tx,
-    ) {
+    if let Err(err) = render_thread_inner(prep, render_handle, sfx_receiver, &stop_flag, &ready_tx)
+    {
         let _ = ready_tx.send(Err(err));
     }
 }
 
 fn render_thread_inner(
     prep: PulseOutputPrep,
-    music_ring: Arc<internal::SpscRingI16>,
+    render_handle: AudioRenderHandle,
     sfx_receiver: Receiver<QueuedSfx>,
-    render_maps: AudioRenderMaps,
     stop_flag: &AtomicBool,
     ready_tx: &Sender<Result<(), String>>,
 ) -> Result<(), String> {
@@ -415,7 +404,7 @@ fn render_thread_inner(
         return Ok(());
     }
 
-    let mut render = RenderState::new(music_ring, prep.channels, render_maps);
+    let mut render = RenderState::new(render_handle, prep.channels);
     let mut mix = vec![0i16; prep.period_frames as usize * prep.channels];
     let mut clock_health = PulseClockHealth::new();
     while !stop_flag.load(Ordering::Relaxed) {

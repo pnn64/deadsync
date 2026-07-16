@@ -2,9 +2,8 @@ use crate::telemetry::{
     publish_output_timing, publish_output_timing_quality, report_audio_render_callback,
 };
 use deadlib_platform::host_time::now_nanos;
-use deadsync_audio::ring as internal;
 use deadsync_audio::{
-    AudioOutputMode, AudioRenderMaps, OutputBackendReady, OutputTelemetryClock,
+    AudioOutputMode, AudioRenderHandle, OutputBackendReady, OutputTelemetryClock,
     OutputTimingQuality, QueuedSfx, RenderState,
 };
 use libloading::Library;
@@ -12,7 +11,6 @@ use log::{info, warn};
 use std::ffi::{c_char, c_int, c_uint, c_void};
 use std::ptr;
 use std::slice;
-use std::sync::Arc;
 use std::sync::OnceLock;
 use std::sync::mpsc::Receiver;
 
@@ -439,9 +437,8 @@ pub fn prepare(
 
 pub fn start(
     prep: JackOutputPrep,
-    music_ring: Arc<internal::SpscRingI16>,
+    render_handle: AudioRenderHandle,
     sfx_receiver: Receiver<QueuedSfx>,
-    render_maps: AudioRenderMaps,
 ) -> Result<JackOutputStream, String> {
     let JackOutputPrep {
         mut client,
@@ -451,7 +448,7 @@ pub fn start(
     } = prep;
     let callback_state = Box::new(JackCallbackState {
         api: client.api,
-        render: RenderState::new(music_ring, 2, render_maps),
+        render: RenderState::new(render_handle, 2),
         sfx_receiver,
         port_l: client.port_l,
         port_r: client.port_r,

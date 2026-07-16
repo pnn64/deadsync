@@ -16,9 +16,10 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{Receiver, Sender, SyncSender, channel};
 use std::thread;
 
+use crate::music_map::install_played_map;
 use crate::{
     MusicStreamRuntime, OutputFormat, SfxCache, StreamCommand, clear_music_pos_map,
-    force_music_map_runtime, music_render_maps, music_stream_clock_snapshot, new_music_sample_ring,
+    force_music_map_runtime, music_stream_clock_snapshot,
 };
 
 static ENGINE_INIT_CFG: OnceLock<InitConfig> = OnceLock::new();
@@ -129,9 +130,11 @@ pub fn set_preserve_pitch_enabled(enabled: bool) {
     // called during config load before the audio engine exists, and forcing
     // the LazyLock there would open the output device too early.
     if is_initialized() {
-        let _ = ENGINE
-            .command_sender
-            .send(StreamCommand::SetPreservePitch(enabled));
+        let generation = clear_music_pos_map();
+        let _ = ENGINE.command_sender.send(StreamCommand::SetPreservePitch {
+            enabled,
+            generation,
+        });
     }
 }
 
@@ -229,19 +232,19 @@ fn resolve_asset_path(path: &str) -> PathBuf {
 }
 
 #[inline(always)]
-fn reset_music_stream_clock() {
+fn reset_music_stream_clock() -> u64 {
     // Reset immediately on the caller thread so async command handoff can't
     // leak the previous track's stream position into gameplay timing.
     deadsync_audio::reset_music_stream_clock_state();
     // Invalidate any assist ticks scheduled against the previous timeline; their
     // absolute target frames no longer correspond to the music position.
     deadsync_audio::bump_assist_sfx_generation();
-    clear_music_pos_map();
+    clear_music_pos_map()
 }
 
 pub fn play_music(path: PathBuf, cut: Cut, looping: bool, rate: f32) {
     let rate = normalized_music_rate(rate);
-    reset_music_stream_clock();
+    let generation = reset_music_stream_clock();
     deadsync_audio::seed_music_stream_clock(cut.start_sec, rate);
 
     let track_id = deadsync_audio::next_music_track_id();
@@ -261,6 +264,7 @@ pub fn play_music(path: PathBuf, cut: Cut, looping: bool, rate: f32) {
         looping,
         rate,
         preserve_pitch: preserve_pitch_enabled(),
+        generation,
     });
 }
 
@@ -279,18 +283,21 @@ pub fn set_music_replaygain_if_matches(track_id: u64, gain_linear: f32) {
 }
 
 pub fn stop_music() {
-    reset_music_stream_clock();
+    let generation = reset_music_stream_clock();
     deadsync_audio::reset_music_target_gain();
     deadsync_audio::snap_music_gain_generation();
-    let _ = ENGINE.command_sender.send(StreamCommand::StopMusic);
+    let _ = ENGINE
+        .command_sender
+        .send(StreamCommand::StopMusic { generation });
 }
 
 pub fn set_music_rate(rate: f32) {
     let rate = normalized_music_rate(rate);
     deadsync_audio::set_music_clock_rate(rate);
+    let generation = clear_music_pos_map();
     let _ = ENGINE
         .command_sender
-        .send(StreamCommand::SetMusicRate(rate));
+        .send(StreamCommand::SetMusicRate { rate, generation });
 }
 
 /// Returns the elapsed real time (in seconds) of the currently playing music
@@ -363,15 +370,15 @@ fn audio_manager_thread(
     ready_sender: Sender<Result<AudioThreadReady, String>>,
     launch: NativeBackendLaunch,
 ) {
-    let music_ring = new_music_sample_ring();
-    let (mut _backend, ready, sfx_sender) =
-        match start_output_backend(launch, music_ring.clone(), music_render_maps()) {
-            Ok(output) => output,
-            Err(err) => {
-                let _ = ready_sender.send(Err(err));
-                return;
-            }
-        };
+    let (mut _backend, ready, sfx_sender, stream_handle) = match start_output_backend(launch) {
+        Ok(output) => output,
+        Err(err) => {
+            let _ = ready_sender.send(Err(err));
+            return;
+        }
+    };
+    let deadsync_audio::AudioStreamHandle { writer, played_map } = stream_handle;
+    install_played_map(played_map);
     let stream_output = OutputFormat {
         sample_rate_hz: ready.device_sample_rate,
         channels: ready.device_channels,
@@ -383,11 +390,17 @@ fn audio_manager_thread(
         }))
         .is_err()
     {
+        drop(_backend);
+        drop(writer);
         return;
     }
 
-    let mut music_runtime = MusicStreamRuntime::new(music_ring, stream_output);
+    let mut music_runtime = MusicStreamRuntime::new(writer, stream_output);
     while let Ok(command) = command_receiver.recv() {
         music_runtime.handle(command);
     }
+    // Stop and join the render callback while the recycle consumer still owns
+    // the pool. Pooled blocks are then destroyed here on the manager thread.
+    drop(_backend);
+    drop(music_runtime);
 }

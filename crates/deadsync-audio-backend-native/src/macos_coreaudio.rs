@@ -10,9 +10,8 @@ use coreaudio::audio_unit::macos_helpers::{
 use coreaudio::audio_unit::render_callback::{self, data};
 use coreaudio::audio_unit::{AudioUnit, Element, SampleFormat, Scope, StreamFormat};
 use deadlib_platform::host_time::now_nanos;
-use deadsync_audio::ring as internal;
 use deadsync_audio::{
-    AudioOutputMode, AudioRenderMaps, OutputBackendReady, OutputTelemetryClock,
+    AudioOutputMode, AudioRenderHandle, OutputBackendReady, OutputTelemetryClock,
     OutputTimingQuality, QueuedSfx, RenderState,
 };
 use log::{info, warn};
@@ -26,7 +25,6 @@ use objc2_core_audio::{
 use objc2_core_foundation::{CFRetained, CFString};
 use std::mem::size_of;
 use std::ptr::{NonNull, null};
-use std::sync::Arc;
 use std::sync::mpsc::Receiver;
 
 pub struct CoreAudioOutputPrep {
@@ -196,12 +194,11 @@ pub fn prepare(
 
 pub fn start(
     mut prep: CoreAudioOutputPrep,
-    music_ring: Arc<internal::SpscRingI16>,
+    render_handle: AudioRenderHandle,
     sfx_receiver: Receiver<QueuedSfx>,
-    render_maps: AudioRenderMaps,
 ) -> Result<CoreAudioOutputStream, String> {
     let host_clock = CoreAudioHostClock::calibrate()?;
-    let mut render = RenderState::new(music_ring, prep.channels, render_maps);
+    let mut render = RenderState::new(render_handle, prep.channels);
     let sample_rate_hz = prep.sample_rate_hz;
     let buffer_frames = prep.buffer_frames.max(1);
     let device_name = prep.device_name.clone();

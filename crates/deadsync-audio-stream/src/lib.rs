@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 mod clock;
 mod music_map;
 mod runtime;
@@ -10,7 +12,7 @@ use deadlib_platform::windows_rt::{ThreadRole, boost_current_thread};
 pub use deadsync_audio::{
     Cut, InitConfig, MusicStreamClockSnapshot, OutputDeviceInfo, OutputTimingSnapshot,
 };
-use deadsync_audio::{MusicMapSeg, ring as internal};
+use deadsync_audio::{MusicBlockTiming, MusicBlockWriter};
 use deadsync_audio_decode as decode;
 use deadsync_audio_decode::resample::{
     OUT_FRAMES_PER_CALL, PLANAR_INPUT_CAP_FRAMES, PlanarAccum, apply_fade_envelope,
@@ -22,13 +24,13 @@ use rubato::{Resampler, SincFixedOut};
 use smallvec::SmallVec;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
 use std::thread;
 
 pub use clock::{music_stream_clock_snapshot, timing_diag_enabled};
 pub use music_map::{
     assist_tick_stream_frame_for_music_seconds, clear_music_pos_map, force_music_map_runtime,
-    lookup_music_position, music_render_maps, queued_music_map,
+    lookup_music_position,
 };
 #[cfg(target_os = "linux")]
 pub use runtime::available_linux_backends;
@@ -42,7 +44,7 @@ pub use runtime::{
     timing_diag_last_callback_gap_ns,
 };
 pub use sfx_cache::SfxCache;
-pub use stream_runtime::{MusicStreamRuntime, StreamCommand, new_music_sample_ring};
+pub use stream_runtime::{MusicStreamRuntime, StreamCommand};
 use stretch::SolaStretcher;
 
 const SILENCE_CHUNK_FRAMES: usize = 2048;
@@ -64,18 +66,18 @@ pub struct OutputFormat {
     pub channels: usize,
 }
 
-#[derive(Clone)]
 pub struct MusicDecodeContext {
     pub output: OutputFormat,
-    pub queued_music_map: Arc<internal::SpscRingMusicSeg>,
+    pub generation: u64,
 }
 
 /// A handle to a streaming music track.
 pub struct MusicStream {
-    pub thread: thread::JoinHandle<()>,
+    pub thread: thread::JoinHandle<MusicBlockWriter>,
     pub stop_signal: Arc<AtomicBool>,
     pub rate_bits: Arc<AtomicU32>,
     pub preserve_pitch: Arc<AtomicBool>,
+    pub generation: Arc<std::sync::atomic::AtomicU64>,
 }
 
 pub fn snap_music_start_sec(path: &Path, start_sec: f64) -> f64 {
@@ -91,60 +93,52 @@ pub fn snap_music_start_sec(path: &Path, start_sec: f64) -> f64 {
     snapped
 }
 
-fn push_music_block_with_map(
-    sample_ring: &internal::SpscRingI16,
-    seg_ring: &internal::SpscRingMusicSeg,
+fn push_music_block(
+    writer: &mut MusicBlockWriter,
     block: &[i16],
     out_channels: usize,
-    music_start_sec: f64,
-    music_sec_per_frame: f64,
+    timing: MusicBlockTiming,
+    generation_source: &AtomicU64,
     stop: &AtomicBool,
 ) -> Result<f64, Box<dyn std::error::Error + Send + Sync>> {
     if block.is_empty() || out_channels == 0 {
-        return Ok(music_start_sec);
+        return Ok(timing.music_start_sec);
     }
+    debug_assert_eq!(writer.channels(), out_channels);
     let mut sample_offset = 0usize;
-    let mut next_music_sec = music_start_sec;
+    let mut next_music_sec = timing.music_start_sec;
     while sample_offset < block.len() {
         if stop.load(Ordering::Relaxed) {
             return Ok(next_music_sec);
         }
-        let free_samples = internal::ring_free_samples(sample_ring);
-        if free_samples < out_channels || !internal::music_seg_ring_has_space(seg_ring) {
-            thread::sleep(std::time::Duration::from_micros(300));
-            continue;
+        if generation_source.load(Ordering::Acquire) != timing.generation {
+            let remaining_frames = (block.len() - sample_offset) / out_channels;
+            return Ok(next_music_sec + remaining_frames as f64 * timing.music_sec_per_frame);
         }
-        let chunk_samples =
-            (block.len() - sample_offset).min(free_samples - (free_samples % out_channels));
-        if chunk_samples == 0 {
-            thread::sleep(std::time::Duration::from_micros(300));
-            continue;
-        }
-        let chunk_frames = chunk_samples / out_channels;
-        let pushed = internal::ring_push(
-            sample_ring,
-            &block[sample_offset..sample_offset + chunk_samples],
+        let pushed = writer.try_push(
+            &block[sample_offset..],
+            MusicBlockTiming {
+                generation: timing.generation,
+                music_start_sec: next_music_sec,
+                music_sec_per_frame: timing.music_sec_per_frame,
+            },
         );
-        debug_assert_eq!(pushed, chunk_samples);
-        let seg = MusicMapSeg {
-            stream_frame_start: 0,
-            frames: chunk_frames as i64,
-            music_start_sec: next_music_sec,
-            music_sec_per_frame,
-        };
-        let pushed_seg = internal::music_seg_ring_push(seg_ring, seg);
-        debug_assert!(pushed_seg);
-        sample_offset += chunk_samples;
-        next_music_sec += chunk_frames as f64 * music_sec_per_frame;
+        if pushed == 0 {
+            thread::sleep(std::time::Duration::from_micros(300));
+            continue;
+        }
+        let chunk_frames = pushed / out_channels;
+        sample_offset += pushed;
+        next_music_sec += chunk_frames as f64 * timing.music_sec_per_frame;
     }
     Ok(next_music_sec)
 }
 
-fn push_silence_with_map(
-    sample_ring: &internal::SpscRingI16,
-    seg_ring: &internal::SpscRingMusicSeg,
+fn push_silence(
+    writer: &mut MusicBlockWriter,
     silence_frames: usize,
     out_channels: usize,
+    generation_source: &AtomicU64,
     music_start_sec: f64,
     music_sec_per_frame: f64,
     stop: &AtomicBool,
@@ -158,13 +152,17 @@ fn push_silence_with_map(
     while frames_left > 0 {
         let chunk_frames = frames_left.min(SILENCE_CHUNK_FRAMES);
         let chunk_samples = chunk_frames * out_channels;
-        next_music_sec = push_music_block_with_map(
-            sample_ring,
-            seg_ring,
+        let generation = generation_source.load(Ordering::Acquire);
+        next_music_sec = push_music_block(
+            writer,
             &silence_chunk[..chunk_samples],
             out_channels,
-            next_music_sec,
-            music_sec_per_frame,
+            MusicBlockTiming {
+                generation,
+                music_start_sec: next_music_sec,
+                music_sec_per_frame,
+            },
+            generation_source,
             stop,
         )?;
         frames_left -= chunk_frames;
@@ -178,29 +176,41 @@ pub fn spawn_music_decoder_thread(
     looping: bool,
     rate_bits: Arc<AtomicU32>,
     preserve_pitch: Arc<AtomicBool>,
-    ring: Arc<internal::SpscRingI16>,
+    writer: MusicBlockWriter,
     context: MusicDecodeContext,
 ) -> MusicStream {
     let stop_signal = Arc::new(AtomicBool::new(false));
     let stop_signal_clone = stop_signal.clone();
     let rate_bits_clone = rate_bits.clone();
     let preserve_pitch_clone = preserve_pitch.clone();
+    let generation = Arc::new(std::sync::atomic::AtomicU64::new(context.generation));
+    let generation_clone = generation.clone();
 
     let thread = thread::spawn(move || {
-        #[cfg(windows)]
-        let _thread_policy = boost_current_thread(ThreadRole::AudioDecode);
-        if let Err(e) = music_decoder_thread_loop(
-            path,
-            cut,
-            looping,
-            rate_bits_clone,
-            preserve_pitch_clone,
-            ring,
-            stop_signal_clone,
-            context,
-        ) {
-            error!("Music decoder thread failed: {e}");
+        let mut writer = writer;
+        // Dev/test profiles unwind and can return the writer after a decoder
+        // panic. Shipped profiles abort the process per the workspace policy.
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            #[cfg(windows)]
+            let _thread_policy = boost_current_thread(ThreadRole::AudioDecode);
+            music_decoder_thread_loop(
+                path,
+                cut,
+                looping,
+                rate_bits_clone,
+                preserve_pitch_clone,
+                generation_clone,
+                &mut writer,
+                stop_signal_clone,
+                context,
+            )
+        }));
+        match result {
+            Ok(Ok(())) => {}
+            Ok(Err(err)) => error!("Music decoder thread failed: {err}"),
+            Err(_) => error!("Music decoder thread panicked; transport writer recovered."),
         }
+        writer
     });
 
     MusicStream {
@@ -208,6 +218,7 @@ pub fn spawn_music_decoder_thread(
         stop_signal,
         rate_bits,
         preserve_pitch,
+        generation,
     }
 }
 
@@ -245,7 +256,11 @@ fn music_output_start_sec(
 
 #[cfg(test)]
 mod tests {
-    use super::{music_output_start_sec, seek_preroll_in_frames};
+    use super::{music_output_start_sec, push_music_block, seek_preroll_in_frames};
+    use deadsync_audio::{MusicBlockTiming, music_transport};
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+    use std::time::{Duration, Instant};
 
     #[test]
     fn seeked_map_starts_at_decoder_frame() {
@@ -260,6 +275,71 @@ mod tests {
         assert_eq!(seek_preroll_in_frames(true, 44_100, 44_120), 0);
         assert_eq!(seek_preroll_in_frames(false, 44_100, 0), 0);
     }
+
+    #[test]
+    fn generation_change_cancels_a_backpressured_block() {
+        const CHANNELS: usize = 2;
+        const GENERATION: u64 = 7;
+        const SEC_PER_FRAME: f64 = 0.125;
+        const TIMEOUT: Duration = Duration::from_secs(1);
+
+        let (mut stream, _render) = music_transport(CHANNELS);
+        let full_block = vec![1; 256 * CHANNELS];
+        let timing = MusicBlockTiming {
+            generation: GENERATION,
+            music_start_sec: 0.0,
+            music_sec_per_frame: SEC_PER_FRAME,
+        };
+        let mut filled = 0;
+        while stream.writer.try_push(&full_block, timing) != 0 {
+            filled += 1;
+        }
+        assert!(filled > 0);
+
+        let generation = Arc::new(AtomicU64::new(GENERATION));
+        let stop = Arc::new(AtomicBool::new(false));
+        let entered = Arc::new(AtomicBool::new(false));
+        let generation_thread = generation.clone();
+        let stop_thread = stop.clone();
+        let entered_thread = entered.clone();
+        let mut writer = stream.writer;
+        let thread = std::thread::spawn(move || {
+            entered_thread.store(true, Ordering::Release);
+            let result = push_music_block(
+                &mut writer,
+                &[7, 8],
+                CHANNELS,
+                MusicBlockTiming {
+                    generation: GENERATION,
+                    music_start_sec: 3.25,
+                    music_sec_per_frame: SEC_PER_FRAME,
+                },
+                &generation_thread,
+                &stop_thread,
+            );
+            (writer, result)
+        });
+
+        while !entered.load(Ordering::Acquire) {
+            std::thread::yield_now();
+        }
+        std::thread::sleep(Duration::from_millis(2));
+        generation.store(GENERATION + 1, Ordering::Release);
+        let deadline = Instant::now() + TIMEOUT;
+        while !thread.is_finished() && Instant::now() < deadline {
+            std::thread::yield_now();
+        }
+        if !thread.is_finished() {
+            stop.store(true, Ordering::Release);
+        }
+        let (_writer, result) = thread.join().expect("producer did not panic");
+        assert!(
+            Instant::now() < deadline,
+            "generation reset did not unblock producer"
+        );
+        let next_sec = result.expect("canceling a stale block succeeds");
+        assert_eq!(next_sec.to_bits(), (3.25 + SEC_PER_FRAME).to_bits());
+    }
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -269,7 +349,8 @@ fn music_decoder_thread_loop(
     looping: bool,
     rate_bits: Arc<AtomicU32>,
     preserve_pitch: Arc<AtomicBool>,
-    ring: Arc<internal::SpscRingI16>,
+    generation: Arc<std::sync::atomic::AtomicU64>,
+    writer: &mut MusicBlockWriter,
     stop: Arc<AtomicBool>,
     context: MusicDecodeContext,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
@@ -280,7 +361,6 @@ fn music_decoder_thread_loop(
 
     let out_ch = context.output.channels;
     let out_hz = context.output.sample_rate_hz;
-    let queued_music_map = context.queued_music_map;
     let is_ogg_stream = matches!(&reader, decode::Reader::Ogg(_));
 
     debug!(
@@ -298,11 +378,11 @@ fn music_decoder_thread_loop(
         let silence_duration_sec = -cut.start_sec;
         let silence_frames = (silence_duration_sec * f64::from(out_hz)).round() as usize;
         if silence_frames > 0 {
-            let _ = push_silence_with_map(
-                &ring,
-                &queued_music_map,
+            let _ = push_silence(
+                writer,
                 silence_frames,
                 out_ch,
+                &generation,
                 cut.start_sec,
                 1.0 / f64::from(out_hz.max(1)),
                 &stop,
@@ -320,16 +400,12 @@ fn music_decoder_thread_loop(
     let mut out_tmp = Vec::with_capacity(OUT_FRAMES_PER_CALL * out_ch);
     let mut pkt_buf = Vec::new();
 
+    let mut output_generation;
     'main_loop: loop {
-        // Read `rate_bits` (Acquire) before `preserve_pitch` (Acquire), paired
-        // with the manager thread's `Release` stores. Rate and preserve-pitch
-        // are written by two independent commands, so their relative order is
-        // not guaranteed and a transient mixed view (e.g. new pitch flag with
-        // the old rate) is still possible for one packet. That is harmless: the
-        // next loop iteration reconciles the mode and `SetPreservePitch` clears
-        // the ring, so any briefly-wrong SOLA mode is never heard. The ordered
-        // Acquire/Release pair simply keeps that window to a single packet
-        // rather than letting a stale value linger.
+        // Load the generation before the settings it tags. Observing a newly
+        // published generation therefore also observes the preceding setting
+        // stores; new settings paired with an old generation are discarded.
+        output_generation = generation.load(Ordering::Acquire);
         let mut current_rate_f32 = f32::from_bits(rate_bits.load(Ordering::Acquire));
         if !current_rate_f32.is_finite() || current_rate_f32 <= 0.0 {
             current_rate_f32 = 1.0;
@@ -399,7 +475,7 @@ fn music_decoder_thread_loop(
         let mut seek_ok = false;
         let mut seek_start_frame = 0u64;
         if start_floor > 0 && !bypass_seek {
-            let seek_frame = start_floor.saturating_sub(internal::PREROLL_IN_FRAMES);
+            let seek_frame = start_floor.saturating_sub(deadsync_audio::ring::PREROLL_IN_FRAMES);
             match reader.seek_frame(seek_frame) {
                 Ok(()) => {
                     seek_ok = true;
@@ -500,7 +576,8 @@ fn music_decoder_thread_loop(
                 slice = &pkt_buf[drop_samples..];
                 to_drop_in = 0;
             }
-            // Load rate first, then preserve_pitch — see note above.
+            // Load the generation before the settings it tags — see note above.
+            output_generation = generation.load(Ordering::Acquire);
             let desired_rate = f32::from_bits(rate_bits.load(Ordering::Acquire));
             let mut desired_rate = if desired_rate.is_finite() && desired_rate > 0.0 {
                 desired_rate
@@ -598,13 +675,16 @@ fn music_decoder_thread_loop(
                     let frames = (direct.len() / in_ch) as u64;
                     if in_ch == out_ch && fade_spec.is_none() {
                         frames_emitted_total = frames_emitted_total.saturating_add(frames);
-                        next_music_output_sec = push_music_block_with_map(
-                            &ring,
-                            &queued_music_map,
+                        next_music_output_sec = push_music_block(
+                            writer,
                             direct,
                             out_ch,
-                            next_music_output_sec,
-                            music_sec_per_frame,
+                            MusicBlockTiming {
+                                generation: output_generation,
+                                music_start_sec: next_music_output_sec,
+                                music_sec_per_frame,
+                            },
+                            &generation,
                             &stop,
                         )?;
                     } else {
@@ -618,13 +698,16 @@ fn music_decoder_thread_loop(
                             apply_fade_envelope(&mut out_tmp, out_ch, frames_emitted_total, fade);
                         }
                         frames_emitted_total = frames_emitted_total.saturating_add(frames);
-                        next_music_output_sec = push_music_block_with_map(
-                            &ring,
-                            &queued_music_map,
+                        next_music_output_sec = push_music_block(
+                            writer,
                             &out_tmp,
                             out_ch,
-                            next_music_output_sec,
-                            music_sec_per_frame,
+                            MusicBlockTiming {
+                                generation: output_generation,
+                                music_start_sec: next_music_output_sec,
+                                music_sec_per_frame,
+                            },
+                            &generation,
                             &stop,
                         )?;
                     }
@@ -703,13 +786,16 @@ fn music_decoder_thread_loop(
                     }
                     frames_emitted_total =
                         frames_emitted_total.saturating_add((out_tmp.len() / out_ch) as u64);
-                    next_music_output_sec = push_music_block_with_map(
-                        &ring,
-                        &queued_music_map,
+                    next_music_output_sec = push_music_block(
+                        writer,
                         &out_tmp,
                         out_ch,
-                        next_music_output_sec,
-                        music_sec_per_frame,
+                        MusicBlockTiming {
+                            generation: output_generation,
+                            music_start_sec: next_music_output_sec,
+                            music_sec_per_frame,
+                        },
+                        &generation,
                         &stop,
                     )?;
                 }
@@ -791,13 +877,16 @@ fn music_decoder_thread_loop(
                         }
                         frames_emitted_total =
                             frames_emitted_total.saturating_add((out_tmp.len() / out_ch) as u64);
-                        next_music_output_sec = push_music_block_with_map(
-                            &ring,
-                            &queued_music_map,
+                        next_music_output_sec = push_music_block(
+                            writer,
                             &out_tmp,
                             out_ch,
-                            next_music_output_sec,
-                            music_sec_per_frame,
+                            MusicBlockTiming {
+                                generation: output_generation,
+                                music_start_sec: next_music_output_sec,
+                                music_sec_per_frame,
+                            },
+                            &generation,
                             &stop,
                         )?;
                     }
@@ -820,13 +909,16 @@ fn music_decoder_thread_loop(
                     if let Some(fade) = fade_spec {
                         apply_fade_envelope(&mut out_tmp, out_ch, frames_emitted_total, fade);
                     }
-                    let _ = push_music_block_with_map(
-                        &ring,
-                        &queued_music_map,
+                    let _ = push_music_block(
+                        writer,
                         &out_tmp,
                         out_ch,
-                        next_music_output_sec,
-                        music_sec_per_frame,
+                        MusicBlockTiming {
+                            generation: output_generation,
+                            music_start_sec: next_music_output_sec,
+                            music_sec_per_frame,
+                        },
+                        &generation,
                         &stop,
                     )?;
                 }

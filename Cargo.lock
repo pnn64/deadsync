@@ -1201,7 +1201,7 @@ dependencies = [
 
 [[package]]
 name = "deadsync"
-version = "0.4.2655"
+version = "0.4.2656"
 dependencies = [
  "deadlib-platform",
  "deadlib-present",
@@ -1251,6 +1251,9 @@ dependencies = [
 [[package]]
 name = "deadsync-audio"
 version = "0.1.0"
+dependencies = [
+ "rtrb",
+]
 
 [[package]]
 name = "deadsync-audio-analysis"
@@ -1646,7 +1649,7 @@ dependencies = [
 
 [[package]]
 name = "deadsync-theme-simply-love"
-version = "0.4.2655"
+version = "0.4.2656"
 dependencies = [
  "bitflags 2.13.0",
  "chrono",
@@ -1700,7 +1703,7 @@ dependencies = [
 
 [[package]]
 name = "deadsync-version"
-version = "0.4.2655"
+version = "0.4.2656"
 dependencies = [
  "log",
  "semver",
@@ -4514,6 +4517,12 @@ dependencies = [
 name = "rssp-core"
 version = "0.4.53"
 source = "git+https://github.com/pnn64/rssp?branch=main#bd90d19506d3664c615714f6df67e09aea990067"
+
+[[package]]
+name = "rtrb"
+version = "0.3.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4ade083ccbb4bf536df69d1f6432cc23deb7acccff86b183f3923a6fd56a1153"
 
 [[package]]
 name = "rubato"

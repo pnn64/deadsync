@@ -1,6 +1,6 @@
 use deadsync_audio::{
-    AudioOutputMode, AudioRenderMaps, InitConfig, OutputBackendReady, OutputDeviceInfo, QueuedSfx,
-    ring as internal,
+    AudioOutputMode, AudioStreamHandle, InitConfig, OutputBackendReady, OutputDeviceInfo,
+    QueuedSfx, music_transport,
 };
 
 #[cfg(target_os = "freebsd")]
@@ -21,7 +21,6 @@ use crate::macos_coreaudio;
 #[cfg(target_os = "linux")]
 use deadsync_audio::LinuxAudioBackend;
 use log::{debug, info, warn};
-use std::sync::Arc;
 use std::sync::mpsc::{SyncSender, sync_channel};
 
 pub const SFX_QUEUE_CAP: usize = 128;
@@ -530,13 +529,12 @@ pub fn build_audio_launch(cfg: &InitConfig) -> (Vec<OutputDeviceProbe>, NativeBa
 #[cfg(target_os = "linux")]
 fn start_linux_alsa_backend(
     alsa: AlsaBackendHint,
-    music_ring: Arc<internal::SpscRingI16>,
-    render_maps: AudioRenderMaps,
 ) -> Result<
     (
         NativeOutputBackend,
         OutputBackendReady,
         SyncSender<QueuedSfx>,
+        AudioStreamHandle,
     ),
     String,
 > {
@@ -555,22 +553,27 @@ fn start_linux_alsa_backend(
     )?;
     let mut ready = prep.ready();
     ready.requested_output_mode = alsa.output_mode;
+    let (stream_handle, render_handle) = music_transport(ready.device_channels);
     let (sfx_sender, sfx_receiver) = sync_channel::<QueuedSfx>(SFX_QUEUE_CAP);
-    let stream = crate::linux_alsa::start(prep, music_ring, sfx_receiver, render_maps)?;
-    Ok((NativeOutputBackend::Alsa(stream), ready, sfx_sender))
+    let stream = crate::linux_alsa::start(prep, render_handle, sfx_receiver)?;
+    Ok((
+        NativeOutputBackend::Alsa(stream),
+        ready,
+        sfx_sender,
+        stream_handle,
+    ))
 }
 
 #[cfg(target_os = "linux")]
 #[cfg(has_jack_audio)]
 fn start_linux_jack_backend(
     jack: JackBackendHint,
-    music_ring: Arc<internal::SpscRingI16>,
-    render_maps: AudioRenderMaps,
 ) -> Result<
     (
         NativeOutputBackend,
         OutputBackendReady,
         SyncSender<QueuedSfx>,
+        AudioStreamHandle,
     ),
     String,
 > {
@@ -581,22 +584,27 @@ fn start_linux_jack_backend(
         crate::linux_jack::prepare(jack.requested_device_name.clone(), jack.requested_rate_hz)?;
     let mut ready = prep.ready();
     ready.requested_output_mode = jack.output_mode;
+    let (stream_handle, render_handle) = music_transport(ready.device_channels);
     let (sfx_sender, sfx_receiver) = sync_channel::<QueuedSfx>(SFX_QUEUE_CAP);
-    let stream = crate::linux_jack::start(prep, music_ring, sfx_receiver, render_maps)?;
-    Ok((NativeOutputBackend::Jack(stream), ready, sfx_sender))
+    let stream = crate::linux_jack::start(prep, render_handle, sfx_receiver)?;
+    Ok((
+        NativeOutputBackend::Jack(stream),
+        ready,
+        sfx_sender,
+        stream_handle,
+    ))
 }
 
 #[cfg(target_os = "linux")]
 #[cfg(has_pipewire_audio)]
 fn start_linux_pipewire_backend(
     pipewire: PipeWireBackendHint,
-    music_ring: Arc<internal::SpscRingI16>,
-    render_maps: AudioRenderMaps,
 ) -> Result<
     (
         NativeOutputBackend,
         OutputBackendReady,
         SyncSender<QueuedSfx>,
+        AudioStreamHandle,
     ),
     String,
 > {
@@ -616,22 +624,27 @@ fn start_linux_pipewire_backend(
     )?;
     let mut ready = prep.ready();
     ready.requested_output_mode = pipewire.output_mode;
+    let (stream_handle, render_handle) = music_transport(ready.device_channels);
     let (sfx_sender, sfx_receiver) = sync_channel::<QueuedSfx>(SFX_QUEUE_CAP);
-    let stream = crate::linux_pipewire::start(prep, music_ring, sfx_receiver, render_maps)?;
-    Ok((NativeOutputBackend::PipeWire(stream), ready, sfx_sender))
+    let stream = crate::linux_pipewire::start(prep, render_handle, sfx_receiver)?;
+    Ok((
+        NativeOutputBackend::PipeWire(stream),
+        ready,
+        sfx_sender,
+        stream_handle,
+    ))
 }
 
 #[cfg(target_os = "linux")]
 #[cfg(has_pulse_audio)]
 fn start_linux_pulse_backend(
     pulse: PulseBackendHint,
-    music_ring: Arc<internal::SpscRingI16>,
-    render_maps: AudioRenderMaps,
 ) -> Result<
     (
         NativeOutputBackend,
         OutputBackendReady,
         SyncSender<QueuedSfx>,
+        AudioStreamHandle,
     ),
     String,
 > {
@@ -651,21 +664,26 @@ fn start_linux_pulse_backend(
     )?;
     let mut ready = prep.ready();
     ready.requested_output_mode = pulse.output_mode;
+    let (stream_handle, render_handle) = music_transport(ready.device_channels);
     let (sfx_sender, sfx_receiver) = sync_channel::<QueuedSfx>(SFX_QUEUE_CAP);
-    let stream = crate::linux_pulse::start(prep, music_ring, sfx_receiver, render_maps)?;
-    Ok((NativeOutputBackend::Pulse(stream), ready, sfx_sender))
+    let stream = crate::linux_pulse::start(prep, render_handle, sfx_receiver)?;
+    Ok((
+        NativeOutputBackend::Pulse(stream),
+        ready,
+        sfx_sender,
+        stream_handle,
+    ))
 }
 
 #[cfg(target_os = "freebsd")]
 fn start_freebsd_pcm_backend(
     pcm: FreeBsdPcmBackendHint,
-    music_ring: Arc<internal::SpscRingI16>,
-    render_maps: AudioRenderMaps,
 ) -> Result<
     (
         NativeOutputBackend,
         OutputBackendReady,
         SyncSender<QueuedSfx>,
+        AudioStreamHandle,
     ),
     String,
 > {
@@ -680,21 +698,26 @@ fn start_freebsd_pcm_backend(
     )?;
     let mut ready = prep.ready();
     ready.requested_output_mode = pcm.output_mode;
+    let (stream_handle, render_handle) = music_transport(ready.device_channels);
     let (sfx_sender, sfx_receiver) = sync_channel::<QueuedSfx>(SFX_QUEUE_CAP);
-    let stream = crate::freebsd_pcm::start(prep, music_ring, sfx_receiver, render_maps)?;
-    Ok((NativeOutputBackend::FreeBsdPcm(stream), ready, sfx_sender))
+    let stream = crate::freebsd_pcm::start(prep, render_handle, sfx_receiver)?;
+    Ok((
+        NativeOutputBackend::FreeBsdPcm(stream),
+        ready,
+        sfx_sender,
+        stream_handle,
+    ))
 }
 
 #[cfg(target_os = "macos")]
 fn start_macos_coreaudio_backend(
     coreaudio: CoreAudioBackendHint,
-    music_ring: Arc<internal::SpscRingI16>,
-    render_maps: AudioRenderMaps,
 ) -> Result<
     (
         NativeOutputBackend,
         OutputBackendReady,
         SyncSender<QueuedSfx>,
+        AudioStreamHandle,
     ),
     String,
 > {
@@ -709,20 +732,25 @@ fn start_macos_coreaudio_backend(
     )?;
     let mut ready = prep.ready();
     ready.requested_output_mode = coreaudio.output_mode;
+    let (stream_handle, render_handle) = music_transport(ready.device_channels);
     let (sfx_sender, sfx_receiver) = sync_channel::<QueuedSfx>(SFX_QUEUE_CAP);
-    let stream = crate::macos_coreaudio::start(prep, music_ring, sfx_receiver, render_maps)?;
-    Ok((NativeOutputBackend::CoreAudio(stream), ready, sfx_sender))
+    let stream = crate::macos_coreaudio::start(prep, render_handle, sfx_receiver)?;
+    Ok((
+        NativeOutputBackend::CoreAudio(stream),
+        ready,
+        sfx_sender,
+        stream_handle,
+    ))
 }
 
 pub fn start_output_backend(
     launch: NativeBackendLaunch,
-    music_ring: Arc<internal::SpscRingI16>,
-    render_maps: AudioRenderMaps,
 ) -> Result<
     (
         NativeOutputBackend,
         OutputBackendReady,
         SyncSender<QueuedSfx>,
+        AudioStreamHandle,
     ),
     String,
 > {
@@ -793,7 +821,7 @@ pub fn start_output_backend(
             let Some(alsa) = alsa else {
                 return Err("Linux ALSA backend hint unavailable.".to_string());
             };
-            start_linux_alsa_backend(alsa, music_ring, render_maps)
+            start_linux_alsa_backend(alsa)
         }
         LinuxAudioBackend::Jack => {
             #[cfg(has_jack_audio)]
@@ -801,7 +829,7 @@ pub fn start_output_backend(
                 let Some(jack) = jack else {
                     return Err("JACK backend hint unavailable.".to_string());
                 };
-                start_linux_jack_backend(jack, music_ring, render_maps)
+                start_linux_jack_backend(jack)
             }
             #[cfg(not(has_jack_audio))]
             {
@@ -814,7 +842,7 @@ pub fn start_output_backend(
                 let Some(pipewire) = pipewire else {
                     return Err("PipeWire backend hint unavailable.".to_string());
                 };
-                return start_linux_pipewire_backend(pipewire, music_ring, render_maps);
+                return start_linux_pipewire_backend(pipewire);
             }
             #[cfg(not(has_pipewire_audio))]
             {
@@ -827,7 +855,7 @@ pub fn start_output_backend(
                 let Some(pulse) = pulse else {
                     return Err("PulseAudio backend hint unavailable.".to_string());
                 };
-                start_linux_pulse_backend(pulse, music_ring, render_maps)
+                start_linux_pulse_backend(pulse)
             }
             #[cfg(not(has_pulse_audio))]
             {
@@ -843,7 +871,7 @@ pub fn start_output_backend(
                         "Linux ALSA backend hint unavailable for exclusive output.".to_string()
                     );
                 };
-                return start_linux_alsa_backend(alsa, music_ring, render_maps);
+                return start_linux_alsa_backend(alsa);
             }
             if explicit_device_requested {
                 let Some(alsa) = alsa else {
@@ -852,7 +880,7 @@ pub fn start_output_backend(
                             .to_string(),
                     );
                 };
-                return start_linux_alsa_backend(alsa, music_ring, render_maps).map_err(|err| {
+                return start_linux_alsa_backend(alsa).map_err(|err| {
                     format!(
                         "failed to start native ALSA output for the selected Sound Device: {err}"
                     )
@@ -860,11 +888,7 @@ pub fn start_output_backend(
             }
             #[cfg(has_pipewire_audio)]
             if let Some(pipewire) = pipewire {
-                match start_linux_pipewire_backend(
-                    pipewire,
-                    music_ring.clone(),
-                    render_maps.clone(),
-                ) {
+                match start_linux_pipewire_backend(pipewire) {
                     Ok(output) => return Ok(output),
                     Err(err) => {
                         warn!(
@@ -877,7 +901,7 @@ pub fn start_output_backend(
             if crate::linux_pulse::is_available()
                 && let Some(pulse) = pulse
             {
-                match start_linux_pulse_backend(pulse, music_ring.clone(), render_maps.clone()) {
+                match start_linux_pulse_backend(pulse) {
                     Ok(output) => return Ok(output),
                     Err(err) => {
                         warn!(
@@ -887,14 +911,14 @@ pub fn start_output_backend(
                 }
             }
             if let Some(alsa) = alsa {
-                match start_linux_alsa_backend(alsa, music_ring.clone(), render_maps.clone()) {
+                match start_linux_alsa_backend(alsa) {
                     Ok(output) => return Ok(output),
                     Err(err) => {
                         #[cfg(has_jack_audio)]
                         if crate::linux_jack::is_available()
                             && let Some(jack) = jack
                         {
-                            match start_linux_jack_backend(jack, music_ring, render_maps) {
+                            match start_linux_jack_backend(jack) {
                                 Ok(output) => return Ok(output),
                                 Err(jack_err) => {
                                     return Err(format!(
@@ -912,26 +936,29 @@ pub fn start_output_backend(
     }
     #[cfg(target_os = "freebsd")]
     if let Some(pcm) = freebsd_pcm {
-        return start_freebsd_pcm_backend(pcm.clone(), music_ring, render_maps)
+        return start_freebsd_pcm_backend(pcm.clone())
             .map_err(|err| format!("failed to start native FreeBSD PCM output: {err}"));
     }
 
     #[cfg(target_os = "macos")]
     if let Some(coreaudio) = coreaudio {
-        return start_macos_coreaudio_backend(coreaudio.clone(), music_ring, render_maps).map_err(
-            |err| {
-                format!(
-                    "failed to start native CoreAudio output for '{}': {err}",
-                    coreaudio.device_name
-                )
-            },
-        );
+        return start_macos_coreaudio_backend(coreaudio.clone()).map_err(|err| {
+            format!(
+                "failed to start native CoreAudio output for '{}': {err}",
+                coreaudio.device_name
+            )
+        });
     }
 
     #[cfg(windows)]
     if let Some(wasapi) = wasapi {
-        let (stream, ready, sfx_sender) = start_wasapi_backend(wasapi, music_ring, render_maps)?;
-        return Ok((NativeOutputBackend::Wasapi(stream), ready, sfx_sender));
+        let (stream, ready, sfx_sender, stream_handle) = start_wasapi_backend(wasapi)?;
+        return Ok((
+            NativeOutputBackend::Wasapi(stream),
+            ready,
+            sfx_sender,
+            stream_handle,
+        ));
     }
 
     #[cfg(not(target_os = "linux"))]
@@ -943,13 +970,12 @@ pub fn start_output_backend(
 #[cfg(windows)]
 fn start_wasapi_backend(
     wasapi: WasapiBackendHint,
-    music_ring: Arc<internal::SpscRingI16>,
-    render_maps: AudioRenderMaps,
 ) -> Result<
     (
         crate::windows_wasapi::WasapiOutputStream,
         OutputBackendReady,
         SyncSender<QueuedSfx>,
+        AudioStreamHandle,
     ),
     String,
 > {
@@ -973,13 +999,14 @@ fn start_wasapi_backend(
     })?;
     let mut ready = prep.ready();
     ready.requested_output_mode = wasapi.output_mode;
+    let (stream_handle, render_handle) = music_transport(ready.device_channels);
     let (sfx_sender, sfx_receiver) = sync_channel::<QueuedSfx>(SFX_QUEUE_CAP);
-    let stream = crate::windows_wasapi::start(prep, music_ring, sfx_receiver, render_maps)
-        .map_err(|err| {
+    let stream =
+        crate::windows_wasapi::start(prep, render_handle, sfx_receiver).map_err(|err| {
             format!(
                 "failed to start native WASAPI output for '{}': {err}",
                 wasapi.device_name
             )
         })?;
-    Ok((stream, ready, sfx_sender))
+    Ok((stream, ready, sfx_sender, stream_handle))
 }
