@@ -4,14 +4,13 @@ use crate::assets::i18n::tr;
 use crate::assets::{FontRole, current_machine_font_key};
 use crate::screens::components::shared::{transitions, visual_style_bg};
 use crate::screens::{Screen, ThemeEffect};
+use crate::views::{PostSongPlayerView, PostSongRuntimeView};
 use deadlib_present::actors::{Actor, SizeSpec};
 use deadlib_present::cache::{SharedStrCache, cached_shared_str};
 use deadlib_present::color;
 use deadlib_present::space::{screen_center_x, screen_center_y, screen_height};
 use deadsync_input::{InputEvent, VirtualAction};
-use deadsync_online::score_compat as scores;
 use deadsync_profile as profile_data;
-use deadsync_profile::compat as profile;
 use deadsync_score as score_data;
 use deadsync_score::stage_stats;
 use std::cell::RefCell;
@@ -137,6 +136,7 @@ pub struct State {
     finish_hold_elapsed: Option<f32>,
     players: [PlayerEntry; 2],
     highscore_lists: [Vec<Option<StageHighScores>>; 2],
+    runtime: PostSongRuntimeView,
 }
 
 fn player_color_rgba(side: profile_data::PlayerSide, active_color_index: i32) -> [f32; 4] {
@@ -371,6 +371,7 @@ fn highscore_rank_window(highlight_rank: Option<u32>) -> (u32, u32) {
 fn find_chart_score_cache<'a>(
     chart_caches: &'a mut Vec<ChartScoreCache>,
     chart_hash: &str,
+    leaderboards: &HashMap<String, Vec<score_data::LeaderboardEntry>>,
 ) -> &'a mut ChartScoreCache {
     if let Some(idx) = chart_caches
         .iter()
@@ -379,7 +380,7 @@ fn find_chart_score_cache<'a>(
         return &mut chart_caches[idx];
     }
 
-    let entries = scores::get_machine_leaderboard_local(chart_hash, usize::MAX);
+    let entries = leaderboards.get(chart_hash).cloned().unwrap_or_default();
     chart_caches.push(ChartScoreCache {
         chart_hash: chart_hash.to_string(),
         used: vec![false; entries.len()],
@@ -463,6 +464,7 @@ fn build_side_highscore_lists(
     side: profile_data::PlayerSide,
     initials: &str,
     stages: &[stage_stats::StageSummary],
+    leaderboards: &HashMap<String, Vec<score_data::LeaderboardEntry>>,
 ) -> Vec<Option<StageHighScores>> {
     let mut out = vec![None; stages.len()];
     let mut chart_caches: Vec<ChartScoreCache> = Vec::with_capacity(stages.len());
@@ -477,8 +479,11 @@ fn build_side_highscore_lists(
             continue;
         };
 
-        let cache =
-            find_chart_score_cache(&mut chart_caches, player_stage.chart.short_hash.as_str());
+        let cache = find_chart_score_cache(
+            &mut chart_caches,
+            player_stage.chart.short_hash.as_str(),
+            leaderboards,
+        );
         let highlight = consume_highlight_rank(
             cache.entries.as_slice(),
             cache.used.as_mut_slice(),
@@ -501,18 +506,28 @@ pub fn set_highscore_lists(state: &mut State, stages: &[stage_stats::StageSummar
         .clone();
 
     state.highscore_lists[profile_data::player_side_index(profile_data::PlayerSide::P1)] =
-        build_side_highscore_lists(profile_data::PlayerSide::P1, p1_initials.as_str(), stages);
+        build_side_highscore_lists(
+            profile_data::PlayerSide::P1,
+            p1_initials.as_str(),
+            stages,
+            &state.runtime.machine_leaderboards,
+        );
     state.highscore_lists[profile_data::player_side_index(profile_data::PlayerSide::P2)] =
-        build_side_highscore_lists(profile_data::PlayerSide::P2, p2_initials.as_str(), stages);
+        build_side_highscore_lists(
+            profile_data::PlayerSide::P2,
+            p2_initials.as_str(),
+            stages,
+            &state.runtime.machine_leaderboards,
+        );
 }
 
-fn player_entry_for(side: profile_data::PlayerSide) -> PlayerEntry {
-    let joined = profile::is_session_side_joined(side);
-    let persistent = joined && !profile::is_session_side_guest(side);
+fn player_entry_for(player: &PostSongPlayerView) -> PlayerEntry {
+    let joined = player.joined;
+    let persistent = joined && !player.guest;
     let can_enter = persistent;
 
     let name = if persistent {
-        profile::get_for_side(side).player_initials
+        player.player_initials.clone()
     } else {
         String::new()
     };
@@ -588,17 +603,18 @@ fn update_hold_scroll(p: &mut PlayerEntry) -> bool {
     true
 }
 
-pub fn init() -> State {
+pub fn init(runtime: PostSongRuntimeView) -> State {
     State {
         active_color_index: color::DEFAULT_COLOR_INDEX, // overwritten by app
         bg: visual_style_bg::State::new(),
         elapsed: 0.0,
         finish_hold_elapsed: None,
         players: [
-            player_entry_for(profile_data::PlayerSide::P1),
-            player_entry_for(profile_data::PlayerSide::P2),
+            player_entry_for(&runtime.players[0]),
+            player_entry_for(&runtime.players[1]),
         ],
         highscore_lists: [Vec::new(), Vec::new()],
+        runtime,
     }
 }
 
@@ -606,28 +622,36 @@ fn all_done(state: &State) -> bool {
     state.players.iter().filter(|p| p.can_enter).all(|p| p.done)
 }
 
-fn start_finish(state: &mut State) {
+fn start_finish(state: &mut State) -> ThemeEffect {
     if state.finish_hold_elapsed.is_some() {
-        return;
+        return ThemeEffect::None;
     }
 
+    let mut updates: [Option<String>; 2] = [None, None];
     for side in [profile_data::PlayerSide::P1, profile_data::PlayerSide::P2] {
         let ix = profile_data::player_side_index(side);
         let p = &state.players[ix];
         if !(p.joined && p.can_enter) {
             continue;
         }
-        if profile::is_session_side_guest(side) {
+        if state.runtime.players[ix].guest {
             continue;
         }
         let name = sanitize_name(&p.name);
         if name.is_empty() {
             continue;
         }
-        profile::update_player_initials_for_side(side, &name);
+        updates[ix] = Some(name);
     }
 
     state.finish_hold_elapsed = Some(0.0);
+    if updates.iter().all(Option::is_none) {
+        ThemeEffect::None
+    } else {
+        ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Profile(
+            crate::SimplyLoveProfileRequest::UpdateInitials(updates),
+        ))
+    }
 }
 
 pub fn update(state: &mut State, dt: f32) -> Option<ThemeEffect> {
@@ -811,11 +835,12 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
         _ => ThemeEffect::None,
     };
 
-    if all_done(state) {
-        start_finish(state);
-    }
-
-    effect
+    let finish = if all_done(state) {
+        start_finish(state)
+    } else {
+        ThemeEffect::None
+    };
+    crate::effects::sequence(effect, finish)
 }
 
 fn stage_index_for(elapsed: f32, num_stages: usize) -> usize {
@@ -880,9 +905,7 @@ fn build_banner_and_title(state: &State, stages: &[stage_stats::StageSummary]) -
         z(11)
     ));
 
-    let title = stage
-        .song
-        .display_title(crate::config::get().translated_titles);
+    let title = stage.song.display_title(state.runtime.translated_titles);
     actors.push(act!(text:
         font("miso"):
         settext(cached_str_ref(title)):
@@ -1219,6 +1242,7 @@ pub fn out_transition() -> (Vec<Actor>, f32) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use deadsync_core::input::InputSource;
 
     fn player(focus_char_index1: i32, name: &str) -> PlayerEntry {
         PlayerEntry {
@@ -1248,5 +1272,43 @@ mod tests {
         let mut letter = player(3, "");
         assert_eq!(handle_start(&mut letter), "assets/sounds/start.ogg");
         assert_eq!(letter.name, "A");
+    }
+
+    #[test]
+    fn finishing_name_entry_requests_audio_before_profile_persistence() {
+        let mut runtime = PostSongRuntimeView::default();
+        runtime.players[0].joined = true;
+        runtime.players[0].player_initials = "ABC".to_owned();
+        let mut state = init(runtime);
+        let now = Instant::now();
+        let effect = handle_input(
+            &mut state,
+            &InputEvent {
+                action: VirtualAction::p1_start,
+                input_slot: 0,
+                pressed: true,
+                source: InputSource::Keyboard,
+                timestamp: now,
+                timestamp_host_nanos: 0,
+                stored_at: now,
+                emitted_at: now,
+            },
+        );
+
+        let ThemeEffect::Batch(effects) = effect else {
+            panic!("expected ordered initials effects");
+        };
+        assert!(matches!(
+            &effects[0],
+            ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Audio(
+                deadsync_theme::AudioRequest::PlaySfx(path)
+            )) if path == "assets/sounds/start.ogg"
+        ));
+        assert!(matches!(
+            &effects[1],
+            ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Profile(
+                crate::SimplyLoveProfileRequest::UpdateInitials(updates)
+            )) if updates[0].as_deref() == Some("ABC") && updates[1].is_none()
+        ));
     }
 }

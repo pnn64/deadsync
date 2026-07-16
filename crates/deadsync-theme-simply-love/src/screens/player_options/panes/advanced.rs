@@ -1010,7 +1010,7 @@ const MINI_INDICATOR: CustomBinding = CustomBinding {
         state.player_profiles[player_idx].mini_indicator = mini_indicator;
         state.player_profiles[player_idx].subtractive_scoring = subtractive_scoring;
         state.player_profiles[player_idx].pacemaker = pacemaker;
-        let (should_persist, side) = choice::persist_ctx(player_idx);
+        let (should_persist, side) = choice::persist_ctx(state, player_idx);
         if should_persist {
             let profile_ref = &state.player_profiles[player_idx];
             gp::update_mini_indicator_for_side(side, mini_indicator);
@@ -1047,7 +1047,7 @@ const JUDGMENT_TILT_INTENSITY: CustomBinding = CustomBinding {
         let mult =
             round_to_step(mult, TILT_INTENSITY_STEP).clamp(TILT_INTENSITY_MIN, TILT_INTENSITY_MAX);
         state.player_profiles[player_idx].tilt_multiplier = mult;
-        let (should_persist, side) = choice::persist_ctx(player_idx);
+        let (should_persist, side) = choice::persist_ctx(state, player_idx);
         if should_persist {
             gp::update_tilt_multiplier_for_side(side, mult);
         }
@@ -1076,7 +1076,7 @@ const AVERAGE_ERROR_BAR_INTENSITY: CustomBinding = CustomBinding {
         };
         let value = deadsync_profile::clamp_average_error_bar_intensity(raw);
         state.player_profiles[player_idx].average_error_bar_intensity = value;
-        let (should_persist, side) = choice::persist_ctx(player_idx);
+        let (should_persist, side) = choice::persist_ctx(state, player_idx);
         if should_persist {
             gp::update_average_error_bar_intensity_for_side(side, value);
         }
@@ -1105,7 +1105,7 @@ const AVERAGE_ERROR_BAR_INTERVAL: CustomBinding = CustomBinding {
         };
         let value = deadsync_profile::clamp_average_error_bar_interval_ms(raw);
         state.player_profiles[player_idx].average_error_bar_interval_ms = value;
-        let (should_persist, side) = choice::persist_ctx(player_idx);
+        let (should_persist, side) = choice::persist_ctx(state, player_idx);
         if should_persist {
             gp::update_average_error_bar_interval_ms_for_side(side, value);
         }
@@ -1132,7 +1132,7 @@ const TEXT_ERROR_BAR_THRESHOLD: CustomBinding = CustomBinding {
             return Outcome::persisted();
         };
         state.player_profiles[player_idx].text_error_bar_threshold_ms = value;
-        let (should_persist, side) = choice::persist_ctx(player_idx);
+        let (should_persist, side) = choice::persist_ctx(state, player_idx);
         if should_persist {
             gp::update_text_error_bar_threshold_ms_for_side(side, value);
         }
@@ -1161,7 +1161,7 @@ const LONG_ERROR_BAR_INTENSITY: CustomBinding = CustomBinding {
         };
         let value = deadsync_profile::clamp_long_error_bar_intensity(raw);
         state.player_profiles[player_idx].long_error_bar_intensity = value;
-        let (should_persist, side) = choice::persist_ctx(player_idx);
+        let (should_persist, side) = choice::persist_ctx(state, player_idx);
         if should_persist {
             gp::update_long_error_bar_intensity_for_side(side, value);
         }
@@ -1190,7 +1190,7 @@ const LONG_ERROR_BAR_THRESHOLD: CustomBinding = CustomBinding {
         };
         let value = deadsync_profile::clamp_long_error_bar_threshold_ms(raw);
         state.player_profiles[player_idx].long_error_bar_threshold_ms = value;
-        let (should_persist, side) = choice::persist_ctx(player_idx);
+        let (should_persist, side) = choice::persist_ctx(state, player_idx);
         if should_persist {
             gp::update_long_error_bar_threshold_ms_for_side(side, value);
         }
@@ -1218,7 +1218,7 @@ const LONG_ERROR_BAR_MIN_SAMPLES: CustomBinding = CustomBinding {
         };
         let value = deadsync_profile::clamp_long_error_bar_min_samples(raw);
         state.player_profiles[player_idx].long_error_bar_min_samples = value;
-        let (should_persist, side) = choice::persist_ctx(player_idx);
+        let (should_persist, side) = choice::persist_ctx(state, player_idx);
         if should_persist {
             gp::update_long_error_bar_min_samples_for_side(side, value);
         }
@@ -1266,7 +1266,7 @@ const JUDGMENT_TILT_MIN_THRESHOLD: CustomBinding = CustomBinding {
             (min_ms, max_ms)
         };
         set_tilt_threshold_row(state, player_idx, RowId::JudgmentTiltMaxThreshold, max_ms);
-        let (should_persist, side) = choice::persist_ctx(player_idx);
+        let (should_persist, side) = choice::persist_ctx(state, player_idx);
         if should_persist {
             gp::update_tilt_thresholds_for_side(side, min_ms, max_ms);
         }
@@ -1289,7 +1289,7 @@ const JUDGMENT_TILT_MAX_THRESHOLD: CustomBinding = CustomBinding {
             (min_ms, max_ms)
         };
         set_tilt_threshold_row(state, player_idx, RowId::JudgmentTiltMinThreshold, min_ms);
-        let (should_persist, side) = choice::persist_ctx(player_idx);
+        let (should_persist, side) = choice::persist_ctx(state, player_idx);
         if should_persist {
             gp::update_tilt_thresholds_for_side(side, min_ms, max_ms);
         }
@@ -1305,7 +1305,7 @@ const MEASURE_COUNTER_LOOKAHEAD: CustomBinding = CustomBinding {
         };
         let lookahead = (new_index as u8).min(4);
         state.player_profiles[player_idx].measure_counter_lookahead = lookahead;
-        let (should_persist, side) = choice::persist_ctx(player_idx);
+        let (should_persist, side) = choice::persist_ctx(state, player_idx);
         if should_persist {
             gp::update_measure_counter_lookahead_for_side(side, lookahead);
         }
@@ -1333,7 +1333,7 @@ const CUSTOM_BLUE_FANTASTIC_WINDOW_MS: CustomBinding = CustomBinding {
         };
         let ms = deadsync_profile::clamp_custom_fantastic_window_ms(raw);
         state.player_profiles[player_idx].custom_fantastic_window_ms = ms;
-        let (should_persist, side) = choice::persist_ctx(player_idx);
+        let (should_persist, side) = choice::persist_ctx(state, player_idx);
         if should_persist {
             gp::update_custom_fantastic_window_ms_for_side(side, ms);
         }
@@ -1361,7 +1361,7 @@ const CROSSOVER_CUE_DURATION: CustomBinding = CustomBinding {
         };
         let ms = deadsync_profile::clamp_crossover_cue_duration_ms(raw);
         state.player_profiles[player_idx].crossover_cue_duration_ms = ms;
-        let (should_persist, side) = choice::persist_ctx(player_idx);
+        let (should_persist, side) = choice::persist_ctx(state, player_idx);
         if should_persist {
             gp::update_crossover_cue_duration_ms_for_side(side, ms);
         }
@@ -1389,7 +1389,7 @@ const CROSSOVER_CUE_QUANTIZATION: CustomBinding = CustomBinding {
         };
         let q = deadsync_profile::clamp_crossover_cue_quantization(raw);
         state.player_profiles[player_idx].crossover_cue_quantization = q;
-        let (should_persist, side) = choice::persist_ctx(player_idx);
+        let (should_persist, side) = choice::persist_ctx(state, player_idx);
         if should_persist {
             gp::update_crossover_cue_quantization_for_side(side, q);
         }
@@ -1417,7 +1417,7 @@ fn step_stats_extra_label_key(setting: StepStatsExtra) -> &'static str {
     }
 }
 
-pub(super) fn build_advanced_rows(return_screen: Screen) -> RowMap {
+pub(super) fn build_advanced_rows(return_screen: Screen, scorebox_available: bool) -> RowMap {
     let pack_info_label = if return_screen == Screen::SelectCourse {
         tr("PlayerOptions", "StepStatisticsCourseBanner")
     } else {
@@ -1431,7 +1431,7 @@ pub(super) fn build_advanced_rows(return_screen: Screen) -> RowMap {
         tr("PlayerOptions", "GameplayExtrasLiveTimingStats").to_string(),
         tr("PlayerOptions", "GameplayExtrasColumnCountdown").to_string(),
     ];
-    if deadsync_online::score_compat::is_gs_get_scores_service_allowed() {
+    if scorebox_available {
         gameplay_extras_choices
             .push(tr("PlayerOptions", "GameplayExtrasDisplayScorebox").to_string());
     }

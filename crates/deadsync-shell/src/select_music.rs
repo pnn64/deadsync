@@ -3,8 +3,9 @@ use deadsync_online::score_compat as scores;
 use deadsync_profile::{PlayerSide, compat as profile};
 use deadsync_theme_simply_love::views::{
     SelectMusicHistorySideView, SelectMusicHistoryView, SelectMusicInitView,
-    SelectMusicInteractionPolicyView, SelectMusicMediaPolicyView, SelectMusicPlaylistView,
-    SelectMusicPolicyView, SelectMusicPresentationPolicyView, SelectMusicWheelPolicyView,
+    SelectMusicInteractionPolicyView, SelectMusicLastPlayedView, SelectMusicMediaPolicyView,
+    SelectMusicPlaylistView, SelectMusicPolicyView, SelectMusicPresentationPolicyView,
+    SelectMusicProfileView, SelectMusicSessionView, SelectMusicWheelPolicyView,
 };
 use log::warn;
 use std::collections::HashSet;
@@ -147,12 +148,56 @@ pub(crate) fn init_view() -> SelectMusicInitView {
     let mut playlists = machine_playlists();
     playlists.extend(profile_playlists());
     let cfg = config::get();
+    let session = session_view();
     SelectMusicInitView {
         songs_root: dirs.songs_dir(),
         courses_root: dirs.courses_dir(),
         playlists,
         history: Default::default(),
         policy: policy_view(&cfg),
+        profiles: profile_view(),
+        last_played: last_played_view(session),
+        favorites: deadsync_profile::runtime_favorite_snapshot(),
+        known_packs: deadsync_profile::runtime_known_pack_snapshot(),
+        session,
+    }
+}
+
+pub(crate) fn session_view() -> SelectMusicSessionView {
+    let session = profile::get_session_snapshot();
+    SelectMusicSessionView {
+        play_style: session.play_style,
+        player_side: session.player_side,
+        joined: std::array::from_fn(|idx| {
+            session.side_joined(deadsync_profile::player_side_for_index(idx))
+        }),
+        guest: std::array::from_fn(|idx| {
+            profile::is_session_side_guest(deadsync_profile::player_side_for_index(idx))
+        }),
+        music_rate: session.music_rate,
+    }
+}
+
+pub(crate) fn profile_view() -> SelectMusicProfileView {
+    let players = deadsync_profile::runtime_session_players_view();
+    SelectMusicProfileView {
+        display_names: players.display_names,
+        local_profile_ids: std::array::from_fn(|idx| {
+            profile::active_local_profile_id_for_side(deadsync_profile::player_side_for_index(idx))
+        }),
+        pad_profile_ids: std::array::from_fn(|idx| {
+            profile::active_local_profile_id_for_pad(idx == 1)
+        }),
+    }
+}
+
+fn last_played_view(session: SelectMusicSessionView) -> SelectMusicLastPlayedView {
+    let profile = profile::get();
+    let last_played = profile.last_played(session.play_style);
+    SelectMusicLastPlayedView {
+        song_music_path: last_played.song_music_path.clone(),
+        chart_hash: last_played.chart_hash.clone(),
+        difficulty_index: last_played.difficulty_index,
     }
 }
 

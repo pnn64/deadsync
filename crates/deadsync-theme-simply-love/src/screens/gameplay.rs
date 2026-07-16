@@ -12,7 +12,7 @@ use crate::screens::components::shared::gs_scorebox;
 use crate::screens::components::shared::lobby_hud;
 use crate::screens::components::shared::screen_bar::{self, AvatarParams, ScreenBarParams};
 use crate::screens::{Screen, ThemeEffect};
-use crate::views::SimplyLoveLobbyRuntimeView;
+use crate::views::{GameplayInitView, GameplayRuntimeView};
 use deadlib_present::actors::{
     Actor, ActorResourceArena, RetainedActorFrame, SizeSpec, SpriteSource, TextAlign,
     TextAttribute, TextContent,
@@ -67,7 +67,6 @@ use deadsync_noteskin::{
 use deadsync_online::lobbies as lobby_data;
 use deadsync_online::score_compat as scores;
 use deadsync_profile as profile_data;
-use deadsync_profile::compat as profile;
 use deadsync_profile_gameplay::{
     GameplayProfile, SongLuaRuntimeOverlayStateDelta, gameplay_pack_data,
     gameplay_runtime_profile_data, profile_side_from_gameplay, score_display_mode_from_profile,
@@ -560,7 +559,7 @@ pub struct State {
     pub pack_banner_path: Option<PathBuf>,
     pub scorebox_profile_snapshot: [score_data::GameplayScoreboxProfileSnapshot; MAX_PLAYERS],
     pub scorebox_side_snapshot: [Option<score_data::CachedPlayerLeaderboardData>; MAX_PLAYERS],
-    lobby_view: SimplyLoveLobbyRuntimeView,
+    runtime_view: GameplayRuntimeView,
     pub lobby_music_started: bool,
     pub lobby_ready_p1: bool,
     pub lobby_ready_p2: bool,
@@ -680,6 +679,7 @@ impl State {
             Arc::from(""),
             None,
             GameplayScoreboxData::default(),
+            GameplayInitView::default(),
         )
     }
 
@@ -694,16 +694,17 @@ impl State {
         pack_group: Arc<str>,
         pack_banner_path: Option<PathBuf>,
         scorebox_data: GameplayScoreboxData,
+        init_view: GameplayInitView,
     ) -> Self {
         let density_graph = DensityGraphRenderState::from_gameplay(&gameplay);
-        let hud_snapshot = profile::gameplay_hud_snapshot();
+        let hud_snapshot = init_view.hud;
         let step_stats_profiles =
             std::array::from_fn(|player| gameplay.profiles()[player].0.clone());
         let step_stats_extra_resolved =
             step_stats_gifs::resolve_random_extras(&step_stats_profiles);
         let song = gameplay.song();
         let song_full_title: Arc<str> =
-            Arc::from(song.display_full_title(crate::config::get().translated_titles));
+            Arc::from(song.display_full_title(init_view.runtime.policy.translated_titles));
         let song_banner_key = song
             .banner_path
             .as_deref()
@@ -767,7 +768,7 @@ impl State {
             pack_banner_path,
             scorebox_profile_snapshot: scorebox_data.profile_snapshot,
             scorebox_side_snapshot: scorebox_data.side_snapshot,
-            lobby_view: Default::default(),
+            runtime_view: init_view.runtime,
             lobby_music_started: false,
             lobby_ready_p1: false,
             lobby_ready_p2: false,
@@ -892,7 +893,7 @@ pub fn visible_banner_paths(state: &State) -> [Option<&Path>; 2] {
             p.step_statistics
         });
     let (song_visible, pack_visible) = banner_visibility(
-        profile::get_session_play_style(),
+        state.runtime_view.play_style,
         state.num_cols(),
         is_wide(),
         screen_width() / screen_height().max(1.0) > (21.0 / 9.0),
@@ -1819,13 +1820,6 @@ fn build_song_lua_runtime_windows_for_data(
     )
 }
 
-fn random_background_movies_enabled() -> bool {
-    matches!(
-        crate::config::get().random_background_mode,
-        crate::config::RandomBackgroundMode::RandomMovies
-    )
-}
-
 pub fn init(
     song: Arc<SongData>,
     charts: [Arc<ChartData>; MAX_PLAYERS],
@@ -1848,10 +1842,11 @@ pub fn init(
     course_display_info: Option<CourseDisplayInfo>,
     course_banner_path: Option<PathBuf>,
     combo_carry: [u32; MAX_PLAYERS],
+    init_view: GameplayInitView,
 ) -> State {
     let random_movie_paths = deadsync_simfile::app_runtime::random_movie_paths(
         &song,
-        random_background_movies_enabled(),
+        init_view.runtime.policy.random_background_movies,
     );
     let cols_per_player = session.play_style.cols_per_player();
     let num_players = session.play_style.player_count();
@@ -1928,6 +1923,7 @@ pub fn init(
         pack_group,
         pack_banner_path,
         scorebox_data,
+        init_view,
     )
 }
 
@@ -1948,11 +1944,10 @@ const fn map_gameplay_action(action: GameplayAction) -> ThemeEffect {
     }
 }
 
-fn local_lobby_side_is_active(side: profile_data::PlayerSide) -> bool {
-    let p1_joined = profile::is_session_side_joined(profile_data::PlayerSide::P1);
-    let p2_joined = profile::is_session_side_joined(profile_data::PlayerSide::P2);
+fn local_lobby_side_is_active(state: &State, side: profile_data::PlayerSide) -> bool {
+    let [p1_joined, p2_joined] = state.runtime_view.joined;
     if !(p1_joined || p2_joined) {
-        return profile::get_session_player_side() == side;
+        return state.runtime_view.player_side == side;
     }
     match side {
         profile_data::PlayerSide::P1 => p1_joined,
@@ -2003,7 +1998,7 @@ fn gameplay_player_index_for_side(state: &State, side: profile_data::PlayerSide)
     if state.num_players() >= 2 {
         return Some(profile_data::player_side_index(side));
     }
-    if state.num_players() == 0 || profile::get_session_player_side() != side {
+    if state.num_players() == 0 || state.runtime_view.player_side != side {
         return None;
     }
     Some(0)
@@ -2238,7 +2233,7 @@ fn gameplay_lobby_player_stats(
 }
 
 fn update_lobby_machine_state(state: &State) -> ThemeEffect {
-    if !lobby_data::can_update_machine_state(&state.lobby_view.snapshot) {
+    if !lobby_data::can_update_machine_state(&state.runtime_view.lobby.snapshot) {
         return ThemeEffect::None;
     }
 
@@ -2254,8 +2249,8 @@ fn update_lobby_machine_state(state: &State) -> ThemeEffect {
 
 fn local_lobby_ready_tuple(state: &State) -> (bool, bool) {
     (
-        local_lobby_side_is_active(profile_data::PlayerSide::P1) && state.lobby_ready_p1,
-        local_lobby_side_is_active(profile_data::PlayerSide::P2) && state.lobby_ready_p2,
+        local_lobby_side_is_active(state, profile_data::PlayerSide::P1) && state.lobby_ready_p1,
+        local_lobby_side_is_active(state, profile_data::PlayerSide::P2) && state.lobby_ready_p2,
     )
 }
 
@@ -2263,11 +2258,11 @@ fn local_lobby_players_ready(state: &State) -> bool {
     let (p1_ready, p2_ready) = local_lobby_ready_tuple(state);
     let mut any_active = false;
     let mut all_ready = true;
-    if local_lobby_side_is_active(profile_data::PlayerSide::P1) {
+    if local_lobby_side_is_active(state, profile_data::PlayerSide::P1) {
         any_active = true;
         all_ready &= p1_ready;
     }
-    if local_lobby_side_is_active(profile_data::PlayerSide::P2) {
+    if local_lobby_side_is_active(state, profile_data::PlayerSide::P2) {
         any_active = true;
         all_ready &= p2_ready;
     }
@@ -2275,19 +2270,19 @@ fn local_lobby_players_ready(state: &State) -> bool {
 }
 
 fn set_all_local_lobby_players_ready(state: &mut State, ready: bool) {
-    state.lobby_ready_p1 = local_lobby_side_is_active(profile_data::PlayerSide::P1) && ready;
-    state.lobby_ready_p2 = local_lobby_side_is_active(profile_data::PlayerSide::P2) && ready;
+    state.lobby_ready_p1 = local_lobby_side_is_active(state, profile_data::PlayerSide::P1) && ready;
+    state.lobby_ready_p2 = local_lobby_side_is_active(state, profile_data::PlayerSide::P2) && ready;
 }
 
 fn set_local_lobby_player_ready(state: &mut State, side: profile_data::PlayerSide) {
     match side {
         profile_data::PlayerSide::P1
-            if local_lobby_side_is_active(profile_data::PlayerSide::P1) =>
+            if local_lobby_side_is_active(state, profile_data::PlayerSide::P1) =>
         {
             state.lobby_ready_p1 = true;
         }
         profile_data::PlayerSide::P2
-            if local_lobby_side_is_active(profile_data::PlayerSide::P2) =>
+            if local_lobby_side_is_active(state, profile_data::PlayerSide::P2) =>
         {
             state.lobby_ready_p2 = true;
         }
@@ -2307,12 +2302,12 @@ fn set_lobby_disconnect_hold(
 ) {
     match side {
         profile_data::PlayerSide::P1
-            if local_lobby_side_is_active(profile_data::PlayerSide::P1) =>
+            if local_lobby_side_is_active(state, profile_data::PlayerSide::P1) =>
         {
             state.lobby_disconnect_hold_p1 = started_at;
         }
         profile_data::PlayerSide::P2
-            if local_lobby_side_is_active(profile_data::PlayerSide::P2) =>
+            if local_lobby_side_is_active(state, profile_data::PlayerSide::P2) =>
         {
             state.lobby_disconnect_hold_p2 = started_at;
         }
@@ -2332,7 +2327,9 @@ fn lobby_disconnect_hold_elapsed(state: &State) -> Option<f32> {
 }
 
 fn gameplay_requires_lobby_wait(state: &State) -> bool {
-    lobby_data::gameplay_lobby_wait_required(state.lobby_view.snapshot.joined_lobby.as_ref())
+    lobby_data::gameplay_lobby_wait_required(
+        state.runtime_view.lobby.snapshot.joined_lobby.as_ref(),
+    )
 }
 
 fn gameplay_lobby_wait_text_for(
@@ -2365,11 +2362,11 @@ fn gameplay_lobby_wait_text(state: &State) -> Option<String> {
         return None;
     }
 
-    let joined = state.lobby_view.snapshot.joined_lobby.as_ref()?;
+    let joined = state.runtime_view.lobby.snapshot.joined_lobby.as_ref()?;
     gameplay_lobby_wait_text_for(
         joined,
         local_lobby_players_ready(state),
-        state.lobby_view.reconnect_status_text.as_deref(),
+        state.runtime_view.lobby.reconnect_status_text.as_deref(),
     )
 }
 
@@ -2378,7 +2375,7 @@ fn gameplay_lobby_disconnect_prompt(state: &State) -> Option<String> {
     let Some(elapsed) = lobby_disconnect_hold_elapsed(state) else {
         return Some(tr("Lobby", "DisconnectBasicPrompt").to_string());
     };
-    let remaining = (state.lobby_view.disconnect_hold_seconds - elapsed).ceil() as i32;
+    let remaining = (state.runtime_view.lobby.disconnect_hold_seconds - elapsed).ceil() as i32;
     let remaining = remaining.max(0);
     Some(
         tr_fmt(
@@ -2467,8 +2464,8 @@ pub fn on_exit(state: &mut State) {
 }
 
 #[inline(always)]
-pub fn sync_lobby_runtime_view(state: &mut State, view: SimplyLoveLobbyRuntimeView) {
-    state.lobby_view = view;
+pub fn sync_runtime_view(state: &mut State, view: GameplayRuntimeView) {
+    state.runtime_view = view;
 }
 
 /// Runs concrete-theme work that must happen before the deterministic gameplay
@@ -2480,14 +2477,14 @@ pub fn prepare_update(state: &mut State) -> (bool, ThemeEffect) {
     let mut effect = ThemeEffect::None;
     if !state.lobby_music_started {
         if lobby_disconnect_hold_elapsed(state)
-            .is_some_and(|elapsed| elapsed >= state.lobby_view.disconnect_hold_seconds)
+            .is_some_and(|elapsed| elapsed >= state.runtime_view.lobby.disconnect_hold_seconds)
         {
             clear_lobby_disconnect_holds(state);
             effect = crate::effects::lobby(crate::SimplyLoveLobbyRequest::Disconnect);
             lobby_data::apply_local_lobby_disconnect(std::sync::Arc::make_mut(
-                &mut state.lobby_view.snapshot,
+                &mut state.runtime_view.lobby.snapshot,
             ));
-            state.lobby_view.reconnect_status_text = None;
+            state.runtime_view.lobby.reconnect_status_text = None;
         }
 
         effect = crate::effects::sequence(effect, update_lobby_machine_state(state));
@@ -2613,7 +2610,7 @@ pub fn smx_sensor_pad_plan(state: &State, smx_input: bool) -> [Option<(usize, us
     if !smx_input {
         return out;
     }
-    if profile::get_session_play_style() == profile_data::PlayStyle::Double {
+    if state.runtime_view.play_style == profile_data::PlayStyle::Double {
         // One player drives both pads; key the sensor arrays by SDK pad.
         if state.profiles()[0].smx_fsr_display {
             out = [Some((0, 0)), Some((1, 1))];
@@ -3035,9 +3032,9 @@ pub fn in_transition(
             gs,
             asset_manager,
             text.as_ref(),
-            profile::get_session_play_style(),
-            profile::get_session_player_side(),
-            crate::config::get().center_1player_notefield,
+            gs.runtime_view.play_style,
+            gs.runtime_view.player_side,
+            gs.runtime_view.policy.center_single_notefield,
         )
     });
     let splode_tex = visual_styles::gameplayin_splode_texture_key();
@@ -9274,7 +9271,7 @@ pub fn push_actors(
 
     if !hide_gameplay_hud {
         let overlay_start = actors.len();
-        if let Some(joined) = state.lobby_view.snapshot.joined_lobby.as_ref() {
+        if let Some(joined) = state.runtime_view.lobby.snapshot.joined_lobby.as_ref() {
             actors.extend(lobby_hud::build_panel(lobby_hud::RenderParams {
                 screen_name: "ScreenGameplay",
                 joined,

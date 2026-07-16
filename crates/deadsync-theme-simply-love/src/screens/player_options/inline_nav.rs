@@ -228,7 +228,7 @@ pub(super) fn move_selection_vertical(
         &state.pane().row_map,
         active,
         state.option_masks,
-        state.allow_per_player_global_offsets,
+        state.policy,
     );
     let current_row =
         state.pane().selected_row[idx].min(state.pane().row_map.len().saturating_sub(1));

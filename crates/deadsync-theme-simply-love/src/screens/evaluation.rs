@@ -41,13 +41,12 @@ use std::time::Instant;
 use crate::screens::ThemeEffect;
 pub use crate::views::{CourseGraphStage, ScoreInfo};
 use crate::views::{
-    EvaluationInitView, EvaluationRuntimeView, EvaluationSubmissionView, ScoreboxSideView,
-    SimplyLoveGrooveStatsService,
+    EvaluationContextView, EvaluationInitView, EvaluationRuntimeView, EvaluationSubmissionView,
+    ScoreboxSideView, SimplyLoveGrooveStatsService,
 };
 use deadsync_input::RawKeyboardEvent;
 use deadsync_input::{InputEvent, PadEvent, VirtualAction, pad_dir_from_action};
 use deadsync_profile as profile_data;
-use deadsync_profile::compat as profile;
 pub use deadsync_score::ColumnJudgments;
 // Keyboard handling is centralized in app via virtual actions
 use chrono::Local;
@@ -793,6 +792,7 @@ fn build_eval_scatter_bg_mesh(
 fn build_eval_timing_hist_mesh(
     si: &ScoreInfo,
     scale: eval_graphs::TimingHistogramScale,
+    smooth: bool,
 ) -> Option<Arc<[MeshVertex]>> {
     const PANE_W: f32 = 300.0;
     const PANE_H: f32 = 180.0;
@@ -806,7 +806,7 @@ fn build_eval_timing_hist_mesh(
         graph_h,
         PANE_H,
         scale,
-        crate::config::get().smooth_histogram,
+        smooth,
     );
     (!verts.is_empty()).then(|| Arc::from(verts.into_boxed_slice()))
 }
@@ -1717,35 +1717,28 @@ const fn eval_pane_default_for(show_fa_plus_pane: bool) -> EvalPane {
 }
 
 #[inline(always)]
-fn eval_has_gs_pane(has_online_panes: bool) -> bool {
-    has_online_panes && crate::config::get().enable_groovestats
+const fn eval_has_gs_pane(has_online_panes: bool, enable_groovestats: bool) -> bool {
+    has_online_panes && enable_groovestats
 }
 
 #[inline(always)]
-fn eval_has_arrowcloud_pane(has_online_panes: bool, side: profile_data::PlayerSide) -> bool {
-    if !has_online_panes {
-        return false;
-    }
-
-    let cfg = crate::config::get();
-    if !cfg.enable_groovestats || !cfg.enable_arrowcloud {
-        return false;
-    }
-
-    let side_profile = profile::get_for_side(side);
-    !side_profile.groovestats_api_key.trim().is_empty()
-        && !side_profile.arrowcloud_api_key.trim().is_empty()
+const fn eval_has_arrowcloud_pane(
+    has_online_panes: bool,
+    enable_groovestats: bool,
+    enable_arrowcloud: bool,
+    player_linked: bool,
+) -> bool {
+    has_online_panes && enable_groovestats && enable_arrowcloud && player_linked
 }
 
 #[inline(always)]
-fn eval_has_itl_pane(has_online_panes: bool, score_info: &ScoreInfo) -> bool {
-    eval_has_gs_pane(has_online_panes) && score_info.itl.active
+const fn eval_has_itl_pane(has_gs: bool, score_info: &ScoreInfo) -> bool {
+    has_gs && score_info.itl.active
 }
 
 #[inline(always)]
-fn eval_has_srpg_pane(has_online_panes: bool, score_info: &ScoreInfo) -> bool {
-    eval_has_gs_pane(has_online_panes)
-        && deadsync_simfile::event_intro::is_srpg_event_song(&score_info.song)
+fn eval_has_srpg_pane(has_gs: bool, score_info: &ScoreInfo) -> bool {
+    has_gs && deadsync_simfile::event_intro::is_srpg_event_song(&score_info.song)
 }
 
 #[inline(always)]
@@ -1798,11 +1791,11 @@ fn eval_pane_cycle(
 }
 
 #[inline(always)]
-fn eval_has_test_input_pane() -> bool {
+const fn eval_has_test_input_pane(only_dedicated_menu_buttons: bool) -> bool {
     // SL parity: ScreenEvaluation Pane6 is gated on OnlyDedicatedMenuButtons so
     // that pad arrows can't accidentally cycle panes while the player is testing
     // their inputs and get stuck on the TestInput pane.
-    crate::config::get().only_dedicated_menu_buttons
+    only_dedicated_menu_buttons
 }
 
 #[inline(always)]
@@ -1947,6 +1940,8 @@ pub struct State {
     pub gameplay_elapsed: f32,
     pub stage_duration_seconds: f32,
     pub score_info: [Option<ScoreInfo>; MAX_PLAYERS],
+    context: EvaluationContextView,
+    favorites: [bool; MAX_PLAYERS],
     fail_stream_progress: [Option<(u32, u32)>; MAX_PLAYERS],
     pub event_progress: [Vec<score_data::EventProgress>; MAX_PLAYERS],
     pub density_graph_mesh: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS],
@@ -2007,6 +2002,8 @@ impl Clone for State {
             gameplay_elapsed: self.gameplay_elapsed,
             stage_duration_seconds: self.stage_duration_seconds,
             score_info: self.score_info.clone(),
+            context: self.context.clone(),
+            favorites: self.favorites,
             fail_stream_progress: self.fail_stream_progress,
             event_progress: self.event_progress.clone(),
             density_graph_mesh: self.density_graph_mesh.clone(),
@@ -2057,6 +2054,8 @@ impl Clone for State {
 }
 
 pub fn init(gameplay_results: Option<gameplay::State>, init_view: EvaluationInitView) -> State {
+    let context = init_view.context;
+    let policy = context.policy;
     let mut score_info: [Option<ScoreInfo>; MAX_PLAYERS] = std::array::from_fn(|_| None);
     let mut fail_stream_progress = [None; MAX_PLAYERS];
     let mut density_graph_mesh: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS] =
@@ -2087,7 +2086,6 @@ pub fn init(gameplay_results: Option<gameplay::State>, init_view: EvaluationInit
     let mut active_graph: [EvalGraphPane; MAX_PLAYERS] = [EvalGraphPane::Itg; MAX_PLAYERS];
     let mut stage_duration_seconds: f32 = 0.0;
     if let Some(mut gs) = gameplay_results {
-        let cfg = crate::config::get();
         stage_duration_seconds = gs.total_elapsed_in_screen();
 
         let cols_per_player = gs.cols_per_player();
@@ -2220,7 +2218,7 @@ pub fn init(gameplay_results: Option<gameplay::State>, init_view: EvaluationInit
                     profile_data::PlayerSide::P2
                 }
             } else {
-                profile::get_session_player_side()
+                context.player_side
             };
             let player_init = &init_view.players[player_idx];
             let machine_records = player_init.machine_records.clone();
@@ -2246,21 +2244,21 @@ pub fn init(gameplay_results: Option<gameplay::State>, init_view: EvaluationInit
             let chart_hash = gs.charts()[player_idx].short_hash.as_str();
             let lua_submit_allowed = score_data::lua_submit_allowed(gs.song().has_lua, chart_hash);
             let course_life_submit_eligible = gs.course_stage_life_submit_eligible(player_idx);
-            let expected_groovestats_submit = cfg.enable_groovestats
+            let expected_groovestats_submit = policy.enable_groovestats
                 && passed
                 && groovestats.valid
                 && course_life_submit_eligible
                 && prof.groovestats_is_pad_player
                 && (!gs.course_display_is_course_stage()
-                    || cfg.autosubmit_course_scores_individually)
+                    || policy.autosubmit_course_scores_individually)
                 && !prof.groovestats_api_key.trim().is_empty();
-            let expected_arrowcloud_submit = cfg.enable_arrowcloud
+            let expected_arrowcloud_submit = policy.enable_arrowcloud
                 && !disqualified
-                && (passed || (failed && cfg.submit_arrowcloud_fails))
+                && (passed || (failed && policy.submit_arrowcloud_fails))
                 && lua_submit_allowed
-                && (course_life_submit_eligible || (failed && cfg.submit_arrowcloud_fails))
+                && (course_life_submit_eligible || (failed && policy.submit_arrowcloud_fails))
                 && (!gs.course_display_is_course_stage()
-                    || cfg.autosubmit_course_scores_individually)
+                    || policy.autosubmit_course_scores_individually)
                 && !prof.arrowcloud_api_key.trim().is_empty();
             let earned_machine_record = local_score_valid
                 && machine_record_highlight_rank
@@ -2377,7 +2375,7 @@ pub fn init(gameplay_results: Option<gameplay::State>, init_view: EvaluationInit
             });
         }
 
-        let play_style = profile::get_session_play_style();
+        let play_style = context.play_style;
         let graph_width: f32 = if play_style == profile_data::PlayStyle::Versus {
             300.0
         } else {
@@ -2502,7 +2500,7 @@ pub fn init(gameplay_results: Option<gameplay::State>, init_view: EvaluationInit
                     graph_h,
                     PANE_H,
                     eval_graphs::TimingHistogramScale::Itg,
-                    crate::config::get().smooth_histogram,
+                    policy.smooth_histogram,
                 );
                 (!verts.is_empty()).then(|| Arc::from(verts.into_boxed_slice()))
             };
@@ -2520,7 +2518,7 @@ pub fn init(gameplay_results: Option<gameplay::State>, init_view: EvaluationInit
                     graph_h,
                     PANE_H,
                     eval_graphs::TimingHistogramScale::Ex,
-                    crate::config::get().smooth_histogram,
+                    policy.smooth_histogram,
                 );
                 (!verts.is_empty()).then(|| Arc::from(verts.into_boxed_slice()))
             };
@@ -2538,7 +2536,7 @@ pub fn init(gameplay_results: Option<gameplay::State>, init_view: EvaluationInit
                     graph_h,
                     PANE_H,
                     eval_graphs::TimingHistogramScale::HardEx,
-                    crate::config::get().smooth_histogram,
+                    policy.smooth_histogram,
                 );
                 (!verts.is_empty()).then(|| Arc::from(verts.into_boxed_slice()))
             };
@@ -2560,7 +2558,7 @@ pub fn init(gameplay_results: Option<gameplay::State>, init_view: EvaluationInit
                 });
             }
             profile_data::PlayStyle::Single | profile_data::PlayStyle::Double => {
-                let joined = profile::get_session_player_side();
+                let joined = context.player_side;
                 let primary = score_info[0].as_ref().map_or(EvalPane::Standard, |si| {
                     eval_pane_default_for(si.show_fa_plus_pane)
                 });
@@ -2594,6 +2592,8 @@ pub fn init(gameplay_results: Option<gameplay::State>, init_view: EvaluationInit
         gameplay_elapsed: 0.0,
         stage_duration_seconds,
         score_info,
+        context,
+        favorites: [false; MAX_PLAYERS],
         fail_stream_progress,
         event_progress: std::array::from_fn(|_| Vec::new()),
         density_graph_mesh,
@@ -2642,10 +2642,11 @@ pub fn init(gameplay_results: Option<gameplay::State>, init_view: EvaluationInit
 pub fn init_from_score_info(
     score_info: [Option<ScoreInfo>; MAX_PLAYERS],
     stage_duration_seconds: f32,
+    context: EvaluationContextView,
 ) -> State {
     let mut active_pane: [EvalPane; MAX_PLAYERS] = [EvalPane::Standard; MAX_PLAYERS];
     let mut active_graph: [EvalGraphPane; MAX_PLAYERS] = [EvalGraphPane::Itg; MAX_PLAYERS];
-    let play_style = profile::get_session_play_style();
+    let play_style = context.play_style;
     match play_style {
         profile_data::PlayStyle::Versus => {
             active_pane[0] = score_info[0].as_ref().map_or(EvalPane::Standard, |si| {
@@ -2662,7 +2663,7 @@ pub fn init_from_score_info(
             });
         }
         profile_data::PlayStyle::Single | profile_data::PlayStyle::Double => {
-            let joined = profile::get_session_player_side();
+            let joined = context.player_side;
             let primary = score_info[0].as_ref().map_or(EvalPane::Standard, |si| {
                 eval_pane_default_for(si.show_fa_plus_pane)
             });
@@ -2734,17 +2735,29 @@ pub fn init_from_score_info(
     let timing_hist_mesh: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS] =
         std::array::from_fn(|player_idx| {
             let si = score_info.get(player_idx).and_then(|s| s.as_ref())?;
-            build_eval_timing_hist_mesh(si, eval_graphs::TimingHistogramScale::Itg)
+            build_eval_timing_hist_mesh(
+                si,
+                eval_graphs::TimingHistogramScale::Itg,
+                context.policy.smooth_histogram,
+            )
         });
     let timing_hist_mesh_ex: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS] =
         std::array::from_fn(|player_idx| {
             let si = score_info.get(player_idx).and_then(|s| s.as_ref())?;
-            build_eval_timing_hist_mesh(si, eval_graphs::TimingHistogramScale::Ex)
+            build_eval_timing_hist_mesh(
+                si,
+                eval_graphs::TimingHistogramScale::Ex,
+                context.policy.smooth_histogram,
+            )
         });
     let timing_hist_mesh_hard_ex: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS] =
         std::array::from_fn(|player_idx| {
             let si = score_info.get(player_idx).and_then(|s| s.as_ref())?;
-            build_eval_timing_hist_mesh(si, eval_graphs::TimingHistogramScale::HardEx)
+            build_eval_timing_hist_mesh(
+                si,
+                eval_graphs::TimingHistogramScale::HardEx,
+                context.policy.smooth_histogram,
+            )
         });
 
     State {
@@ -2755,6 +2768,8 @@ pub fn init_from_score_info(
         gameplay_elapsed: 0.0,
         stage_duration_seconds,
         score_info,
+        context,
+        favorites: [false; MAX_PLAYERS],
         fail_stream_progress: [None; MAX_PLAYERS],
         event_progress: std::array::from_fn(|_| Vec::new()),
         density_graph_mesh,
@@ -2983,7 +2998,7 @@ fn score_info_is_nice(si: &ScoreInfo) -> bool {
 /// with Simply Love's `nice.ogg` bundled; drop additional `.ogg` files in to
 /// randomize, or disable the clip via `MachineNiceSound`.
 fn sync_nice_sfx(state: &mut State) {
-    if state.nice_sfx_played || !crate::config::get().machine_nice_sound {
+    if state.nice_sfx_played || !state.context.policy.machine_nice_sound {
         return;
     }
     let is_nice = state.score_info.iter().flatten().any(score_info_is_nice);
@@ -3035,10 +3050,12 @@ fn sync_missing_submit_status_fallbacks(state: &mut State) {
 
 #[inline(always)]
 pub fn sync_runtime_view(state: &mut State, view: EvaluationRuntimeView) {
+    state.context = view.context;
     state.lobby_view = view.lobby;
     state.groovestats_service = view.groovestats_service;
     state.submissions = view.submissions;
     state.scoreboxes = view.scoreboxes;
+    state.favorites = view.favorites;
 }
 
 #[inline(always)]
@@ -3086,7 +3103,7 @@ pub fn update(state: &mut State, dt: f32) -> ThemeEffect {
     sync_missing_submit_status_fallbacks(state);
     sync_submit_record_sfx(state);
     sync_nice_sfx(state);
-    let play_style = profile::get_session_play_style();
+    let play_style = state.context.play_style;
     for controller_idx in 0..MAX_PLAYERS {
         if state.active_pane[controller_idx] != EvalPane::QrCode {
             continue;
@@ -3098,7 +3115,7 @@ pub fn update(state: &mut State, dt: f32) -> ThemeEffect {
         };
         let gs_side = profile_data::runtime_player_side(
             play_style,
-            profile::get_session_player_side(),
+            state.context.player_side,
             controller_idx,
         );
         if matches!(
@@ -3110,14 +3127,24 @@ pub fn update(state: &mut State, dt: f32) -> ThemeEffect {
             state.active_pane[controller_idx] = EvalPane::GrooveStats;
             state.leaderboards_requested[player_idx] = true;
             if play_style != profile_data::PlayStyle::Versus {
+                let has_gs = eval_has_gs_pane(
+                    state.allow_online_panes,
+                    state.context.policy.enable_groovestats,
+                );
+                let player = &state.context.players[profile_data::player_side_index(gs_side)];
                 let panes = eval_pane_cycle(
                     si.show_hard_ex_score,
                     false,
-                    eval_has_gs_pane(state.allow_online_panes),
-                    eval_has_srpg_pane(state.allow_online_panes, si),
-                    eval_has_itl_pane(state.allow_online_panes, si),
-                    eval_has_arrowcloud_pane(state.allow_online_panes, gs_side),
-                    eval_has_test_input_pane(),
+                    has_gs,
+                    eval_has_srpg_pane(has_gs, si),
+                    eval_has_itl_pane(has_gs, si),
+                    eval_has_arrowcloud_pane(
+                        state.allow_online_panes,
+                        state.context.policy.enable_groovestats,
+                        state.context.policy.enable_arrowcloud,
+                        player.groovestats_linked && player.arrowcloud_linked,
+                    ),
+                    eval_has_test_input_pane(state.context.policy.only_dedicated_menu_buttons),
                     eval_has_arrow_timing_pane(si),
                 );
                 let other_idx = 1 - controller_idx;
@@ -3133,21 +3160,21 @@ pub fn update(state: &mut State, dt: f32) -> ThemeEffect {
     effect
 }
 
-fn local_lobby_player_count() -> usize {
-    let mut count = 0usize;
-    for side in [profile_data::PlayerSide::P1, profile_data::PlayerSide::P2] {
-        if profile::is_session_side_joined(side) {
-            count += 1;
-        }
-    }
+fn local_lobby_player_count(state: &State) -> usize {
+    let count = state
+        .context
+        .players
+        .iter()
+        .filter(|player| player.joined)
+        .count();
     if count == 0 { 1 } else { count }
 }
 
-fn local_lobby_side_is_active(side: profile_data::PlayerSide) -> bool {
-    let p1_joined = profile::is_session_side_joined(profile_data::PlayerSide::P1);
-    let p2_joined = profile::is_session_side_joined(profile_data::PlayerSide::P2);
+fn local_lobby_side_is_active(state: &State, side: profile_data::PlayerSide) -> bool {
+    let p1_joined = state.context.players[0].joined;
+    let p2_joined = state.context.players[1].joined;
     if !(p1_joined || p2_joined) {
-        return profile::get_session_player_side() == side;
+        return state.context.player_side == side;
     }
     match side {
         profile_data::PlayerSide::P1 => p1_joined,
@@ -3201,12 +3228,12 @@ fn set_lobby_disconnect_hold(
 ) {
     match side {
         profile_data::PlayerSide::P1
-            if local_lobby_side_is_active(profile_data::PlayerSide::P1) =>
+            if local_lobby_side_is_active(state, profile_data::PlayerSide::P1) =>
         {
             state.lobby_disconnect_hold_p1 = started_at;
         }
         profile_data::PlayerSide::P2
-            if local_lobby_side_is_active(profile_data::PlayerSide::P2) =>
+            if local_lobby_side_is_active(state, profile_data::PlayerSide::P2) =>
         {
             state.lobby_disconnect_hold_p2 = started_at;
         }
@@ -3227,7 +3254,7 @@ fn lobby_disconnect_hold_elapsed(state: &State) -> Option<f32> {
 
 fn evaluation_lobby_lock_text(state: &State) -> Option<String> {
     let joined = state.lobby_view.snapshot.joined_lobby.as_ref()?;
-    if joined.players.len() <= local_lobby_player_count() {
+    if joined.players.len() <= local_lobby_player_count(state) {
         return None;
     }
     if let Some(text) = state.lobby_view.reconnect_status_text.as_ref() {
@@ -3299,10 +3326,10 @@ fn eval_grade_for_result(
 }
 
 pub fn all_joined_players_failed(state: &State) -> bool {
-    let play_style = profile::get_session_play_style();
+    let play_style = state.context.play_style;
     let mut found_player = false;
     for side in [profile_data::PlayerSide::P1, profile_data::PlayerSide::P2] {
-        if !profile::is_session_side_joined(side) {
+        if !state.context.players[profile_data::player_side_index(side)].joined {
             continue;
         }
         let idx = profile_data::runtime_player_index(play_style, side);
@@ -3717,9 +3744,27 @@ fn prepend_sfx(path_opt: Option<&str>, effect: ThemeEffect) -> ThemeEffect {
     }
 }
 
+fn favorite_toggle_effect(
+    side: profile_data::PlayerSide,
+    chart_hash: String,
+    is_now_favorite: bool,
+) -> ThemeEffect {
+    let sound = if is_now_favorite {
+        "assets/sounds/favorite.ogg"
+    } else {
+        "assets/sounds/unfavorite.ogg"
+    };
+    crate::effects::sequence(
+        crate::effects::sfx(sound),
+        ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Profile(
+            crate::SimplyLoveProfileRequest::ToggleFavorite { side, chart_hash },
+        )),
+    )
+}
+
 #[cfg(test)]
 mod input_audio_effect_tests {
-    use super::{Screen, ThemeEffect, prepend_sfx};
+    use super::{Screen, ThemeEffect, favorite_toggle_effect, prepend_sfx, profile_data};
     use deadsync_theme::AudioRequest;
 
     fn assert_sfx_then(effect: ThemeEffect, expected_path: &str, expected_next: Screen) {
@@ -3794,6 +3839,28 @@ mod input_audio_effect_tests {
             Screen::SelectMusic,
         );
     }
+
+    #[test]
+    fn favorite_sound_precedes_typed_persistence() {
+        let effect =
+            favorite_toggle_effect(profile_data::PlayerSide::P2, "chart".to_string(), true);
+        let ThemeEffect::Batch(effects) = effect else {
+            panic!("favorite sound and persistence should remain ordered");
+        };
+
+        assert!(matches!(
+            &effects[0],
+            ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Audio(
+                AudioRequest::PlaySfx(path)
+            )) if path == "assets/sounds/favorite.ogg"
+        ));
+        assert!(matches!(
+            &effects[1],
+            ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Profile(
+                crate::SimplyLoveProfileRequest::ToggleFavorite { side, chart_hash }
+            )) if *side == profile_data::PlayerSide::P2 && chart_hash == "chart"
+        ));
+    }
 }
 
 pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
@@ -3806,13 +3873,13 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
     // they must NOT also trigger pane cycling, favorite-code tracking, or other
     // arrow-driven side effects. Short-circuit before the rest of the handler.
     if ev.action.is_gameplay_arrow()
-        && crate::config::get().only_dedicated_menu_buttons
+        && state.context.policy.only_dedicated_menu_buttons
         && test_input_pane_active(state)
     {
         return ThemeEffect::None;
     }
 
-    let chord_side = if crate::config::get().three_key_navigation {
+    let chord_side = if state.context.policy.three_key_navigation {
         state.menu_lr_chord.update(ev)
     } else {
         None
@@ -3823,19 +3890,27 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
         state.menu_lr_undo[profile_data::player_side_index(side)] = 0;
     }
     // Track favorite pad code on arrow presses (not menu buttons)
-    let mut favorite_sfx = None;
+    let mut favorite_effect = ThemeEffect::None;
     if ev.pressed {
         if let Some(dir) = pad_dir_from_action(ev.action) {
             if let Some(side) = state.favorite_code.check(dir, ev.timestamp) {
                 // Toggle favorite for the chart that was just played
-                for si in state.score_info.iter().flatten() {
+                for (player_idx, si) in
+                    state
+                        .score_info
+                        .iter()
+                        .enumerate()
+                        .filter_map(|(player_idx, score_info)| {
+                            score_info.as_ref().map(|si| (player_idx, si))
+                        })
+                {
                     if si.side == side {
-                        let is_now_fav = profile::toggle_favorite(side, &si.chart.short_hash);
-                        favorite_sfx = Some(if is_now_fav {
-                            "assets/sounds/favorite.ogg"
-                        } else {
-                            "assets/sounds/unfavorite.ogg"
-                        });
+                        state.favorites[player_idx] = !state.favorites[player_idx];
+                        favorite_effect = favorite_toggle_effect(
+                            side,
+                            si.chart.short_hash.clone(),
+                            state.favorites[player_idx],
+                        );
                         break;
                     }
                 }
@@ -3868,16 +3943,16 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
             }
             _ => {}
         }
-        return prepend_sfx(favorite_sfx, ThemeEffect::None);
+        return crate::effects::sequence(favorite_effect, ThemeEffect::None);
     }
     if !ev.pressed {
-        return prepend_sfx(favorite_sfx, ThemeEffect::None);
+        return crate::effects::sequence(favorite_effect, ThemeEffect::None);
     }
     if state.auto_advance_seconds.is_some() {
-        return prepend_sfx(favorite_sfx, ThemeEffect::None);
+        return crate::effects::sequence(favorite_effect, ThemeEffect::None);
     }
     if state.event_overlay_visible {
-        let play_style = profile::get_session_play_style();
+        let play_style = state.context.play_style;
         let mut shift_event_page = |controller: profile_data::PlayerSide, dir: i32| {
             let player_idx = profile_data::runtime_player_index(play_style, controller);
             let Some(si) = state.score_info.get(player_idx).and_then(|s| s.as_ref()) else {
@@ -3905,15 +3980,15 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
             if undo != 0 {
                 let _ = shift_event_page(side, i32::from(undo));
             }
-            return prepend_sfx(
-                favorite_sfx,
+            return crate::effects::sequence(
+                favorite_effect,
                 ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Media(
                     crate::SimplyLoveMediaRequest::Screenshot(Some(side)),
                 )),
             );
         }
-        return prepend_sfx(
-            favorite_sfx,
+        return crate::effects::sequence(
+            favorite_effect,
             match ev.action {
                 VirtualAction::p1_back
                 | VirtualAction::p1_start
@@ -3972,7 +4047,14 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
         Screen::SelectMusic
     };
 
-    let play_style = profile::get_session_play_style();
+    let play_style = state.context.play_style;
+    let enable_groovestats = state.context.policy.enable_groovestats;
+    let enable_arrowcloud = state.context.policy.enable_arrowcloud;
+    let only_dedicated_menu_buttons = state.context.policy.only_dedicated_menu_buttons;
+    let arrowcloud_linked: [bool; MAX_PLAYERS] = std::array::from_fn(|player_idx| {
+        let player = &state.context.players[player_idx];
+        player.groovestats_linked && player.arrowcloud_linked
+    });
     let player_idx_for_controller = |controller: profile_data::PlayerSide| {
         if play_style == profile_data::PlayStyle::Versus {
             profile_data::player_side_index(controller)
@@ -3992,12 +4074,12 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
         let gs_side = if play_style == profile_data::PlayStyle::Versus {
             controller
         } else {
-            profile::get_session_player_side()
+            state.context.player_side
         };
         if has_online_panes {
             state.leaderboards_requested[player_idx] = true;
         }
-        let has_gs = eval_has_gs_pane(has_online_panes);
+        let has_gs = eval_has_gs_pane(has_online_panes, enable_groovestats);
         let has_qr = has_gs
             && !matches!(
                 state.submissions[player_idx]
@@ -4005,9 +4087,14 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
                     .or(state.submit_groovestats_fallback[player_idx]),
                 Some(score_data::GrooveStatsSubmitUiStatus::Submitted)
             );
-        let has_itl = eval_has_itl_pane(has_online_panes, si);
-        let has_srpg = eval_has_srpg_pane(has_online_panes, si);
-        let has_arrowcloud = eval_has_arrowcloud_pane(has_online_panes, gs_side);
+        let has_itl = eval_has_itl_pane(has_gs, si);
+        let has_srpg = eval_has_srpg_pane(has_gs, si);
+        let has_arrowcloud = eval_has_arrowcloud_pane(
+            has_online_panes,
+            enable_groovestats,
+            enable_arrowcloud,
+            arrowcloud_linked[profile_data::player_side_index(gs_side)],
+        );
 
         let panes = eval_pane_cycle(
             has_hard_ex,
@@ -4016,7 +4103,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
             has_srpg,
             has_itl,
             has_arrowcloud,
-            eval_has_test_input_pane(),
+            eval_has_test_input_pane(only_dedicated_menu_buttons),
             eval_has_arrow_timing_pane(si),
         );
         state.active_pane[controller_idx] =
@@ -4060,8 +4147,8 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
         if undo != 0 {
             let _ = shift_pane_for(side, i32::from(undo));
         }
-        return prepend_sfx(
-            favorite_sfx,
+        return crate::effects::sequence(
+            favorite_effect,
             ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Media(
                 crate::SimplyLoveMediaRequest::Screenshot(Some(side)),
             )),
@@ -4130,11 +4217,11 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
         }
         _ => ThemeEffect::None,
     };
-    prepend_sfx(favorite_sfx, effect)
+    crate::effects::sequence(favorite_effect, effect)
 }
 
 pub fn push_actors(actors: &mut Vec<Actor>, state: &State, asset_manager: &AssetManager) {
-    let cfg = crate::config::get();
+    let policy = &state.context.policy;
     let sl_header_alpha = eval_panes::eval_style_alpha(1.0, 0.5);
     let sl_panel_alpha = eval_panes::eval_style_alpha(1.0, 0.75);
     actors.reserve(20);
@@ -4167,14 +4254,14 @@ pub fn push_actors(actors: &mut Vec<Actor>, state: &State, asset_manager: &Asset
     actors.push(timers::build_session(format_session_time(
         state.session_elapsed,
     )));
-    if cfg.show_select_music_gameplay_timer {
+    if policy.show_gameplay_timer {
         actors.push(timers::build_gameplay(format_session_time(
             state.gameplay_elapsed,
         )));
     }
 
-    let play_style = profile::get_session_play_style();
-    let player_side = profile::get_session_player_side();
+    let play_style = state.context.play_style;
+    let player_side = state.context.player_side;
 
     let Some(score_info) = state.score_info.iter().find_map(|s| s.as_ref()) else {
         let no_data_text = tr("Evaluation", "NoScoreDataAvailable");
@@ -4230,7 +4317,7 @@ pub fn push_actors(actors: &mut Vec<Actor>, state: &State, asset_manager: &Asset
         // leaf actors and reallocating the `banner_key` / `full_title` Strings.
         let chrome_key = ChromeCacheKey {
             active_color_index: state.active_color_index,
-            translated_titles: cfg.translated_titles,
+            translated_titles: policy.translated_titles,
             header_alpha_bits: sl_header_alpha.to_bits(),
         };
 
@@ -4251,7 +4338,7 @@ pub fn push_actors(actors: &mut Vec<Actor>, state: &State, asset_manager: &Asset
                     BANNER_FALLBACK_KEYS[state.active_color_index.rem_euclid(12) as usize]
                         .to_string()
                 });
-            let full_title = score_info.song.display_full_title(cfg.translated_titles);
+            let full_title = score_info.song.display_full_title(policy.translated_titles);
             let children: Arc<[Actor]> = Arc::from(vec![
                 shared_banner::sprite(banner_key, 0.0, 66.0, 418.0, 164.0, 0.7, 0),
                 act!(quad: align(0.5, 0.5): xy(0.0, 0.0): setsize(418.0, 25.0): zoom(0.7): diffuse(0.117, 0.157, 0.184, sl_header_alpha): z(1)),
@@ -4442,7 +4529,7 @@ pub fn push_actors(actors: &mut Vec<Actor>, state: &State, asset_manager: &Asset
             {
                 let difficulty_color =
                     color::difficulty_rgba(&si.chart.difficulty, state.active_color_index);
-                if cfg.zmod_rating_box_text {
+                if policy.zmod_rating_box_text {
                     let difficulty_display_name = color::difficulty_display_name_for_song(
                         &si.chart.difficulty,
                         &si.song.title,
@@ -4531,7 +4618,7 @@ pub fn push_actors(actors: &mut Vec<Actor>, state: &State, asset_manager: &Asset
             // when enabled and a `69` shows up anywhere notable in the score,
             // draw nice.png just below the letter grade, matching SL's placement
             // (x = grade x, y = cy - 94, zoom 0.4).
-            if cfg.machine_nice_sound && score_info_is_nice(si) {
+            if policy.machine_nice_sound && score_info_is_nice(si) {
                 actors.push(act!(sprite("nice.png"):
                     align(0.5, 0.5):
                     xy(upper_origin_x + 70.0 * dir, cy - 94.0):
@@ -4556,7 +4643,7 @@ pub fn push_actors(actors: &mut Vec<Actor>, state: &State, asset_manager: &Asset
                 step_artist_lines.push(chart_name.to_owned());
             }
 
-            if cfg.zmod_rating_box_text {
+            if policy.zmod_rating_box_text {
                 let step_artist_text = step_artist_lines.join("\n");
                 if !step_artist_text.is_empty() {
                     let line_count = step_artist_lines.len().max(1);
@@ -4662,12 +4749,12 @@ pub fn push_actors(actors: &mut Vec<Actor>, state: &State, asset_manager: &Asset
             // Breakdown Text (under grade). Arrow Cloud leaves this empty in
             // course mode; the course breakdown is the lower graph instead.
             if !si.is_course_summary() {
-                let breakdown_x = if cfg.zmod_rating_box_text {
+                let breakdown_x = if policy.zmod_rating_box_text {
                     upper_origin_x + 148.0 * dir
                 } else {
                     upper_origin_x + 150.0 * dir
                 };
-                let breakdown_width = if cfg.zmod_rating_box_text {
+                let breakdown_width = if policy.zmod_rating_box_text {
                     let banner_half_w = 418.0 * 0.7 * 0.5;
                     let banner_edge_x = screen_center_x() + banner_half_w * dir;
                     ((breakdown_x - banner_edge_x) * dir - 5.0).max(24.0)
@@ -4676,13 +4763,13 @@ pub fn push_actors(actors: &mut Vec<Actor>, state: &State, asset_manager: &Asset
                 };
                 let breakdown_text = {
                     let chart = &si.chart;
-                    let (detailed, partial, simple) = match cfg.select_music_breakdown_style {
-                        crate::config::BreakdownStyle::Sn => (
+                    let (detailed, partial, simple) = match policy.breakdown_style {
+                        deadsync_config::prelude::BreakdownStyle::Sn => (
                             &chart.sn_detailed_breakdown,
                             &chart.sn_partial_breakdown,
                             &chart.sn_simple_breakdown,
                         ),
-                        crate::config::BreakdownStyle::Sl => (
+                        deadsync_config::prelude::BreakdownStyle::Sl => (
                             &chart.detailed_breakdown,
                             &chart.partial_breakdown,
                             &chart.simple_breakdown,
@@ -4720,7 +4807,7 @@ pub fn push_actors(actors: &mut Vec<Actor>, state: &State, asset_manager: &Asset
 
                 {
                     let x = breakdown_x;
-                    let y = if cfg.zmod_rating_box_text {
+                    let y = if policy.zmod_rating_box_text {
                         cy - 97.0
                     } else {
                         cy - 95.0
@@ -4730,8 +4817,12 @@ pub fn push_actors(actors: &mut Vec<Actor>, state: &State, asset_manager: &Asset
                     } else {
                         1.0
                     };
-                    let align_y = if cfg.zmod_rating_box_text { 1.0 } else { 0.5 };
-                    if cfg.zmod_rating_box_text {
+                    let align_y = if policy.zmod_rating_box_text {
+                        1.0
+                    } else {
+                        0.5
+                    };
+                    if policy.zmod_rating_box_text {
                         let (bg_w, bg_h) = asset_manager
                             .with_fonts(|all_fonts| {
                                 asset_manager.with_font("miso", |miso_font| {
@@ -4762,7 +4853,11 @@ pub fn push_actors(actors: &mut Vec<Actor>, state: &State, asset_manager: &Asset
                             z(102)
                         ));
                     }
-                    let text_z = if cfg.zmod_rating_box_text { 103 } else { 101 };
+                    let text_z = if policy.zmod_rating_box_text {
+                        103
+                    } else {
+                        101
+                    };
                     if side == profile_data::PlayerSide::P1 {
                         actors.push(act!(text: font("miso"): settext(breakdown_text):
                             align(align_x, align_y): xy(x, y): zoom(0.7):
@@ -5036,7 +5131,7 @@ pub fn push_actors(actors: &mut Vec<Actor>, state: &State, asset_manager: &Asset
                 1
             };
             let graph_mode = state.active_graph[graph_controller_idx];
-            let shade = crate::config::get().shade_scatterplot_judgments;
+            let shade = policy.shade_scatterplot_judgments;
             let graph_key = GraphCacheKey {
                 graph: graph_mode,
                 versus: play_style == profile_data::PlayStyle::Versus,
@@ -5459,7 +5554,7 @@ pub fn push_actors(actors: &mut Vec<Actor>, state: &State, asset_manager: &Asset
     // collapse them into one summary line; keep stacked lines for pending/timeouts.
     {
         for side in [profile_data::PlayerSide::P1, profile_data::PlayerSide::P2] {
-            if !profile::is_session_side_joined(side) {
+            if !state.context.players[profile_data::player_side_index(side)].joined {
                 continue;
             }
             let player_idx = profile_data::runtime_player_index(play_style, side);
@@ -5640,47 +5735,39 @@ pub fn push_actors(actors: &mut Vec<Actor>, state: &State, asset_manager: &Asset
     }
 
     // 3. Bottom Bar
-    let play_style = profile::get_session_play_style();
-    let player_side = profile::get_session_player_side();
-
-    let (p1_avatar_key, p1_display_name) =
-        profile::footer_fields_for_side(profile_data::PlayerSide::P1);
-    let (p2_avatar_key, p2_display_name) =
-        profile::footer_fields_for_side(profile_data::PlayerSide::P2);
-    let p1_avatar = p1_avatar_key
+    let p1 = &state.context.players[0];
+    let p2 = &state.context.players[1];
+    let p1_avatar = p1
+        .avatar_texture_key
         .as_deref()
         .map(|texture_key| AvatarParams { texture_key });
-    let p2_avatar = p2_avatar_key
+    let p2_avatar = p2
+        .avatar_texture_key
         .as_deref()
         .map(|texture_key| AvatarParams { texture_key });
-
-    let p1_joined = profile::is_session_side_joined(profile_data::PlayerSide::P1);
-    let p2_joined = profile::is_session_side_joined(profile_data::PlayerSide::P2);
-    let p1_guest = profile::is_session_side_guest(profile_data::PlayerSide::P1);
-    let p2_guest = profile::is_session_side_guest(profile_data::PlayerSide::P2);
 
     let insert_card = tr("Common", "InsertCard");
 
-    let (p1_footer_text, p1_footer_avatar) = if p1_joined {
+    let (p1_footer_text, p1_footer_avatar) = if p1.joined {
         (
-            Some(if p1_guest {
+            Some(if p1.guest {
                 insert_card.as_ref()
             } else {
-                p1_display_name.as_str()
+                p1.display_name.as_str()
             }),
-            if p1_guest { None } else { p1_avatar },
+            if p1.guest { None } else { p1_avatar },
         )
     } else {
         (None, None)
     };
-    let (p2_footer_text, p2_footer_avatar) = if p2_joined {
+    let (p2_footer_text, p2_footer_avatar) = if p2.joined {
         (
-            Some(if p2_guest {
+            Some(if p2.guest {
                 insert_card.as_ref()
             } else {
-                p2_display_name.as_str()
+                p2.display_name.as_str()
             }),
-            if p2_guest { None } else { p2_avatar },
+            if p2.guest { None } else { p2_avatar },
         )
     } else {
         (None, None)

@@ -9,7 +9,7 @@ use deadsync_config::prelude::{
     VisualStyle,
 };
 use deadsync_input::{InputBinding, KeyCode, VirtualAction};
-use deadsync_profile::{ActiveProfile, PlayerSide};
+use deadsync_profile::{ActiveProfile, PlayMode, PlayStyle, PlayerSide};
 use deadsync_simfile::sync_offset::SongOffsetSyncChange;
 use deadsync_theme::{AudioRequest, GraphicsRequest, PlatformRequest};
 use std::path::PathBuf;
@@ -36,6 +36,27 @@ pub enum SimplyLoveProfileRequest {
         p1_joined: bool,
         p2_joined: bool,
         fast_switch: bool,
+    },
+    SetPlayStyle(PlayStyle),
+    SetSession {
+        play_style: PlayStyle,
+        player_side: PlayerSide,
+        joined: [bool; 2],
+    },
+    SetMusicRate(f32),
+    SetPlayMode(PlayMode),
+    UpdateInitials([Option<String>; 2]),
+    ToggleFavorite {
+        side: deadsync_profile::PlayerSide,
+        chart_hash: String,
+    },
+    TogglePackFavorite {
+        side: deadsync_profile::PlayerSide,
+        pack_name: String,
+    },
+    MarkPacksKnown {
+        profile_ids: Vec<String>,
+        pack_names: Vec<String>,
     },
     DiscoverItgProfiles,
     BrowseItgProfiles {

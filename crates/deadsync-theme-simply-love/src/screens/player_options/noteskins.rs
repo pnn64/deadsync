@@ -217,8 +217,8 @@ pub(super) fn sync_noteskin_previews_for_player(
     noteskin: &mut NoteskinState,
     profile: &profile_data::Profile,
     player_idx: usize,
+    cols_per_player: usize,
 ) {
-    let cols_per_player = deadsync_profile::compat::get_session_play_style().cols_per_player();
     let noteskin_setting = profile.noteskin.clone();
     let mine_noteskin_setting = profile.mine_noteskin.clone();
     let receptor_noteskin_setting = profile.receptor_noteskin.clone();

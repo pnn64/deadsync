@@ -11,6 +11,7 @@ use crate::screens::components::shared::{
 };
 use crate::screens::input as screen_input;
 use crate::screens::{Screen, ThemeEffect};
+use crate::views::PostSongRuntimeView;
 use chrono::Local;
 use deadlib_present::actors::{Actor, SizeSpec};
 use deadlib_present::color;
@@ -19,7 +20,6 @@ use deadsync_chart::ChartData;
 use deadsync_chart::SongData;
 use deadsync_input::{InputEvent, VirtualAction};
 use deadsync_profile as profile_data;
-use deadsync_profile::compat as profile;
 use deadsync_score as score_data;
 use deadsync_score::stage_stats;
 use std::collections::HashSet;
@@ -39,13 +39,14 @@ pub struct State {
     pub return_to: Screen,
     menu_lr_chord: screen_input::MenuLrChordTracker,
     menu_lr_undo: [i8; 2],
+    runtime: PostSongRuntimeView,
 }
 
-pub fn init() -> State {
-    init_for_return(Screen::Initials)
+pub fn init(runtime: PostSongRuntimeView) -> State {
+    init_for_return(runtime, Screen::Initials)
 }
 
-pub fn init_for_return(return_to: Screen) -> State {
+pub fn init_for_return(runtime: PostSongRuntimeView, return_to: Screen) -> State {
     State {
         active_color_index: color::DEFAULT_COLOR_INDEX,
         bg: visual_style_bg::State::new(),
@@ -54,6 +55,7 @@ pub fn init_for_return(return_to: Screen) -> State {
         return_to,
         menu_lr_chord: screen_input::MenuLrChordTracker::default(),
         menu_lr_undo: [0; 2],
+        runtime,
     }
 }
 
@@ -76,7 +78,7 @@ fn shift_page(state: &mut State, num_stages: usize, dir: i32) -> bool {
 }
 
 pub fn handle_input(state: &mut State, num_stages: usize, ev: &InputEvent) -> ThemeEffect {
-    let chord_side = if crate::config::get().three_key_navigation {
+    let chord_side = if state.runtime.three_key_navigation {
         state.menu_lr_chord.update(ev)
     } else {
         None
@@ -549,7 +551,6 @@ pub fn push_actors(
     stages: &[stage_stats::StageSummary],
     _asset_manager: &AssetManager,
 ) {
-    let cfg = crate::config::get();
     actors.reserve(32);
 
     // Background
@@ -631,44 +632,36 @@ pub fn push_actors(
             stage,
             show_profile_names,
             state.active_color_index,
-            cfg.translated_titles,
-            cfg.zmod_rating_box_text,
+            state.runtime.translated_titles,
+            state.runtime.zmod_rating_box_text,
             state.elapsed,
         ));
     }
 
     // --- Footer decorations (avatars + date/time) ---
     {
-        let play_style = profile::get_session_play_style();
-        let player_side = profile::get_session_player_side();
-
-        let p1_profile = profile::get_for_side(profile_data::PlayerSide::P1);
-        let p2_profile = profile::get_for_side(profile_data::PlayerSide::P2);
-
-        let p1_joined = profile::is_session_side_joined(profile_data::PlayerSide::P1);
-        let p2_joined = profile::is_session_side_joined(profile_data::PlayerSide::P2);
-        let p1_guest = profile::is_session_side_guest(profile_data::PlayerSide::P1);
-        let p2_guest = profile::is_session_side_guest(profile_data::PlayerSide::P2);
-
-        let p1_avatar_key = if p1_joined && !p1_guest {
-            p1_profile.avatar_texture_key
+        let p1 = &state.runtime.players[0];
+        let p2 = &state.runtime.players[1];
+        let p1_avatar_key = if p1.joined && !p1.guest {
+            p1.avatar_texture_key.as_deref()
         } else {
             None
         };
-        let p2_avatar_key = if p2_joined && !p2_guest {
-            p2_profile.avatar_texture_key
+        let p2_avatar_key = if p2.joined && !p2.guest {
+            p2.avatar_texture_key.as_deref()
         } else {
             None
         };
 
-        let (left_avatar, right_avatar) = if play_style == profile_data::PlayStyle::Versus {
-            (p1_avatar_key.as_deref(), p2_avatar_key.as_deref())
-        } else {
-            match player_side {
-                profile_data::PlayerSide::P1 => (p1_avatar_key.as_deref(), None),
-                profile_data::PlayerSide::P2 => (None, p2_avatar_key.as_deref()),
-            }
-        };
+        let (left_avatar, right_avatar) =
+            if state.runtime.play_style == profile_data::PlayStyle::Versus {
+                (p1_avatar_key, p2_avatar_key)
+            } else {
+                match state.runtime.player_side {
+                    profile_data::PlayerSide::P1 => (p1_avatar_key, None),
+                    profile_data::PlayerSide::P2 => (None, p2_avatar_key),
+                }
+            };
 
         if let Some(key) = left_avatar {
             actors.push(act!(sprite(key):

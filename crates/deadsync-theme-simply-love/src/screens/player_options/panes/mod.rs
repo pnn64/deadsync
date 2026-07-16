@@ -84,6 +84,9 @@ pub(super) fn build_rows(
     heart_rate_choices: &[String],
     return_screen: Screen,
     fixed_stepchart: Option<&FixedStepchart>,
+    play_style: profile_data::PlayStyle,
+    persisted_player_idx: usize,
+    scorebox_available: bool,
 ) -> RowMap {
     match pane {
         OptionsPane::Main => build_main_rows(
@@ -96,6 +99,8 @@ pub(super) fn build_rows(
             heart_rate_choices,
             return_screen,
             fixed_stepchart,
+            play_style,
+            persisted_player_idx,
         ),
         OptionsPane::Display => build_display_rows(
             noteskin_names,
@@ -103,7 +108,7 @@ pub(super) fn build_rows(
             smx_judge_pack_names,
             return_screen,
         ),
-        OptionsPane::Advanced => build_advanced_rows(return_screen),
+        OptionsPane::Advanced => build_advanced_rows(return_screen, scorebox_available),
         OptionsPane::Uncommon => build_uncommon_rows(return_screen),
     }
 }

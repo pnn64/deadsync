@@ -7,6 +7,7 @@ use crate::screens::components::shared::screen_bar::{
 use crate::screens::components::shared::{transitions, visual_style_bg};
 use crate::screens::input as screen_input;
 use crate::screens::{Screen, ThemeEffect};
+use crate::views::{PlayerOptionsInitView, PlayerOptionsPolicyView};
 use deadlib_present::actors::Actor;
 use deadlib_present::color;
 use deadlib_present::space::{screen_center_x, screen_center_y, screen_height, widescale};
@@ -158,6 +159,7 @@ pub fn init(
     noteskin_catalog: NoteskinCatalogView,
     smx_gif_catalog: SmxGifCatalogView,
     heart_rate_devices: HeartRateDevicesView,
+    init_view: PlayerOptionsInitView,
 ) -> State {
     init_with_noteskin_prewarm(
         song,
@@ -169,6 +171,7 @@ pub fn init(
         noteskin_catalog,
         smx_gif_catalog,
         heart_rate_devices,
+        init_view,
         true,
     )
 }
@@ -183,6 +186,7 @@ pub fn init_for_gameplay(
     noteskin_catalog: NoteskinCatalogView,
     smx_gif_catalog: SmxGifCatalogView,
     heart_rate_devices: HeartRateDevicesView,
+    init_view: PlayerOptionsInitView,
 ) -> State {
     init_with_noteskin_prewarm(
         song,
@@ -194,6 +198,7 @@ pub fn init_for_gameplay(
         noteskin_catalog,
         smx_gif_catalog,
         heart_rate_devices,
+        init_view,
         false,
     )
 }
@@ -204,9 +209,8 @@ pub fn prewarm_noteskin_previews(state: &mut State) {
         .get(RowId::NoteSkin)
         .map(|row| row.choices.clone())
         .unwrap_or_default();
-    let cols_per_player = deadsync_profile::compat::get_session_play_style().cols_per_player();
     state.noteskin = init_noteskin_state(
-        cols_per_player,
+        state.cols_per_player,
         &noteskin_names,
         &state.player_profiles,
         true,
@@ -223,23 +227,28 @@ fn init_with_noteskin_prewarm(
     noteskin_catalog: NoteskinCatalogView,
     smx_gif_catalog: SmxGifCatalogView,
     heart_rate_devices: HeartRateDevicesView,
+    init_view: PlayerOptionsInitView,
     prewarm_noteskin_catalog: bool,
 ) -> State {
-    let session_music_rate = deadsync_profile::compat::get_session_music_rate();
-    let allow_per_player_global_offsets =
-        crate::config::get().machine_allow_per_player_global_offsets;
-    let p1_profile = deadsync_profile::compat::get_for_side(profile_data::PlayerSide::P1);
-    let p2_profile = deadsync_profile::compat::get_for_side(profile_data::PlayerSide::P2);
-    let player_profiles = [p1_profile.clone(), p2_profile.clone()];
-    let (heart_rate_choices, heart_rate_choice_ids) =
-        if crate::config::get().machine_enable_heart_rate_monitors {
-            heart_rate_choices(&heart_rate_devices, &player_profiles)
-        } else {
-            (Vec::new(), Vec::new())
-        };
+    let PlayerOptionsInitView {
+        policy,
+        play_style,
+        player_side,
+        joined,
+        music_rate: session_music_rate,
+        profiles: player_profiles,
+    } = init_view;
+    let active = active_players(play_style, player_side, joined);
+    let persisted_player_idx = persisted_player_idx(play_style, player_side);
+    let cols_per_player = play_style.cols_per_player();
+    let (heart_rate_choices, heart_rate_choice_ids) = if policy.heart_rate_monitors {
+        heart_rate_choices(&heart_rate_devices, &player_profiles)
+    } else {
+        (Vec::new(), Vec::new())
+    };
 
-    let speed_mod_p1 = SpeedMod::from(p1_profile.scroll_speed);
-    let speed_mod_p2 = SpeedMod::from(p2_profile.scroll_speed);
+    let speed_mod_p1 = SpeedMod::from(player_profiles[P1].scroll_speed);
+    let speed_mod_p2 = SpeedMod::from(player_profiles[P2].scroll_speed);
     let chart_difficulty_index: [usize; PLAYER_SLOTS] = std::array::from_fn(|player_idx| {
         let steps_idx = chart_steps_index[player_idx];
         let mut diff_idx =
@@ -266,6 +275,9 @@ fn init_with_noteskin_prewarm(
         &heart_rate_choices,
         return_screen,
         fixed_stepchart.as_ref(),
+        play_style,
+        persisted_player_idx,
+        policy.scorebox_available,
     );
     let mut display_row_map = build_rows(
         &song,
@@ -280,6 +292,9 @@ fn init_with_noteskin_prewarm(
         &heart_rate_choices,
         return_screen,
         fixed_stepchart.as_ref(),
+        play_style,
+        persisted_player_idx,
+        policy.scorebox_available,
     );
     let mut advanced_row_map = build_rows(
         &song,
@@ -294,6 +309,9 @@ fn init_with_noteskin_prewarm(
         &heart_rate_choices,
         return_screen,
         fixed_stepchart.as_ref(),
+        play_style,
+        persisted_player_idx,
+        policy.scorebox_available,
     );
     let mut uncommon_row_map = build_rows(
         &song,
@@ -308,6 +326,9 @@ fn init_with_noteskin_prewarm(
         &heart_rate_choices,
         return_screen,
         fixed_stepchart.as_ref(),
+        play_style,
+        persisted_player_idx,
+        policy.scorebox_available,
     );
     // Each `BitmaskBinding` lives on exactly one pane's row, and
     // `apply_derived_masks` is a pure function of `profile`, so calling
@@ -355,7 +376,6 @@ fn init_with_noteskin_prewarm(
         &mut p2_masks,
     );
 
-    let cols_per_player = deadsync_profile::compat::get_session_play_style().cols_per_player();
     // Only real Player Options entry runs the catalog warmup while the previous
     // screen shows "Entering Options...". Direct song starts leave this empty;
     // Gameplay loads and prewarms only the active players' resolved settings.
@@ -365,13 +385,12 @@ fn init_with_noteskin_prewarm(
         &player_profiles,
         prewarm_noteskin_catalog,
     );
-    let active = session_active_players();
     let main_row_tweens = init_row_tweens(
         &main_row_map,
         [0; PLAYER_SLOTS],
         active,
         [p1_masks, p2_masks],
-        allow_per_player_global_offsets,
+        policy,
     );
     let mut panes = [
         PaneState::new(main_row_map),
@@ -396,7 +415,11 @@ fn init_with_noteskin_prewarm(
         bg: visual_style_bg::State::new(),
         nav_input: [PlayerNavInput::default(); PLAYER_SLOTS],
         start_input: [PlayerStartInput::default(); PLAYER_SLOTS],
-        allow_per_player_global_offsets,
+        policy,
+        play_style,
+        active,
+        persisted_player_idx,
+        cols_per_player,
         player_profiles,
         heart_rate_choice_ids,
         heart_rate_readings: heart_rate_devices.readings,
@@ -460,7 +483,7 @@ fn sync_heart_rate_selections(state: &mut State) {
 }
 
 pub fn set_heart_rate_devices(state: &mut State, devices: &HeartRateDevicesView) {
-    if !crate::config::get().machine_enable_heart_rate_monitors {
+    if !state.policy.heart_rate_monitors {
         return;
     }
     state.heart_rate_readings = devices.readings;
@@ -513,7 +536,7 @@ pub fn out_transition() -> (Vec<Actor>, f32) {
 /// choices are `0..=100%`, so the selected choice index is the percent.
 pub fn pad_light_brightness_preview(state: &State) -> [Option<u8>; PLAYER_SLOTS] {
     let pane = state.pane();
-    let active = session_active_players();
+    let active = state.active;
     let mut preview: [Option<u8>; PLAYER_SLOTS] = std::array::from_fn(|idx| {
         if !active[idx] {
             return None;
@@ -524,10 +547,8 @@ pub fn pad_light_brightness_preview(state: &State) -> [Option<u8>; PLAYER_SLOTS]
     // In Doubles a single player owns BOTH pads, so the brightness value applies
     // to both (see `pad_light_brightness_for_pad`). Mirror the lone active side's
     // preview onto the other pad so both light up while the value is being tuned.
-    if matches!(
-        deadsync_profile::compat::get_session_play_style(),
-        profile_data::PlayStyle::Double
-    ) && let Some(pct) = preview.iter().flatten().copied().next()
+    if matches!(state.play_style, profile_data::PlayStyle::Double)
+        && let Some(pct) = preview.iter().flatten().copied().next()
     {
         preview = [Some(pct); PLAYER_SLOTS];
     }
@@ -535,14 +556,12 @@ pub fn pad_light_brightness_preview(state: &State) -> [Option<u8>; PLAYER_SLOTS]
 }
 
 #[inline(always)]
-fn session_active_players() -> [bool; PLAYER_SLOTS] {
-    let play_style = deadsync_profile::compat::get_session_play_style();
-    let side = deadsync_profile::compat::get_session_player_side();
-    let joined = [
-        deadsync_profile::compat::is_session_side_joined(profile_data::PlayerSide::P1),
-        deadsync_profile::compat::is_session_side_joined(profile_data::PlayerSide::P2),
-    ];
-    let joined_count = usize::from(joined[P1]) + usize::from(joined[P2]);
+const fn active_players(
+    play_style: profile_data::PlayStyle,
+    side: profile_data::PlayerSide,
+    joined: [bool; PLAYER_SLOTS],
+) -> [bool; PLAYER_SLOTS] {
+    let joined_count = joined[P1] as usize + joined[P2] as usize;
     match play_style {
         profile_data::PlayStyle::Versus => {
             if joined_count > 0 {
@@ -565,19 +584,15 @@ fn session_active_players() -> [bool; PLAYER_SLOTS] {
 }
 
 #[inline(always)]
-fn arcade_options_navigation_active() -> bool {
-    crate::config::get().arcade_options_navigation
-}
-
-#[inline(always)]
 const fn pane_uses_arcade_next_row(pane: OptionsPane) -> bool {
     !matches!(pane, OptionsPane::Main)
 }
 
 #[inline(always)]
-fn session_persisted_player_idx() -> usize {
-    let play_style = deadsync_profile::compat::get_session_play_style();
-    let side = deadsync_profile::compat::get_session_player_side();
+const fn persisted_player_idx(
+    play_style: profile_data::PlayStyle,
+    side: profile_data::PlayerSide,
+) -> usize {
     match play_style {
         profile_data::PlayStyle::Versus => P1,
         profile_data::PlayStyle::Single | profile_data::PlayStyle::Double => match side {

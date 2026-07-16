@@ -10,6 +10,7 @@ pub mod pad_display;
 pub mod profile_boxes;
 pub mod qr_code;
 pub mod screen_bar;
+pub mod select_flow_footer;
 pub mod stats_overlay;
 mod technique_bg;
 pub mod test_input;

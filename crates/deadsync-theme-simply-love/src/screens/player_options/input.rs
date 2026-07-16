@@ -8,8 +8,8 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Optio
     const PREVIEW_BPM: f32 = 120.0;
     state.preview_time += dt;
     state.preview_beat += dt * (PREVIEW_BPM / 60.0);
-    let active = session_active_players();
-    let arcade_style = crate::config::get().arcade_options_navigation;
+    let active = state.active;
+    let arcade_style = state.policy.arcade_navigation;
     let mut pending_action: Option<ThemeEffect> = None;
     sync_selected_rows_with_visibility(state, active);
 
@@ -146,14 +146,14 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Optio
             state.pane().selected_row,
             active,
             state.option_masks,
-            state.allow_per_player_global_offsets,
+            state.policy,
         );
     } else {
         let visibility = row_visibility(
             &state.pane().row_map,
             active,
             state.option_masks,
-            state.allow_per_player_global_offsets,
+            state.policy,
         );
         let visible_rows = count_visible_rows(&state.pane().row_map, visibility);
         if visible_rows == 0 {
@@ -712,10 +712,10 @@ fn handle_input_inner(
     asset_manager: &AssetManager,
     ev: &InputEvent,
 ) -> ThemeEffect {
-    let active = session_active_players();
+    let active = state.active;
     let dedicated_three_key = screen_input::dedicated_three_key_nav_enabled();
-    let arcade_style = crate::config::get().arcade_options_navigation;
-    if arcade_options_navigation_active() || dedicated_three_key {
+    let arcade_style = state.policy.arcade_navigation;
+    if state.policy.arcade_navigation || dedicated_three_key {
         screen_input::track_menu_lr_chord(&mut state.menu_lr_chord, ev);
     }
     let three_key_action = (!dedicated_three_key)

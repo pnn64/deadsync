@@ -4,16 +4,16 @@ use crate::assets::i18n::tr;
 use crate::assets::{FontRole, current_machine_font_key};
 use crate::screens::ThemeEffect;
 use crate::screens::components::shared::screen_bar::{
-    AvatarParams, ScreenBarParams, ScreenBarPosition, ScreenBarTitlePlacement,
+    ScreenBarParams, ScreenBarPosition, ScreenBarTitlePlacement,
 };
-use crate::screens::components::shared::{screen_bar, visual_style_bg};
+use crate::screens::components::shared::{screen_bar, select_flow_footer, visual_style_bg};
 use crate::screens::select_mode_flow::{self as mode_flow, Choice, InputEffect, State as ModeFlow};
+use crate::views::SelectFlowRuntimeView;
 use deadlib_present::actors::Actor;
 use deadlib_present::color;
 use deadlib_present::font;
 use deadlib_present::space::{screen_center_x, screen_center_y};
 use deadsync_input::InputEvent;
-use deadsync_profile as profile_data;
 use deadsync_theme::AudioRequest;
 
 /* ------------------------------ layout ------------------------------- */
@@ -64,20 +64,26 @@ pub struct State {
     pub active_color_index: i32,
     flow: ModeFlow,
     bg: visual_style_bg::State,
+    runtime: SelectFlowRuntimeView,
 }
 
-pub fn init() -> State {
+pub fn init(runtime: SelectFlowRuntimeView) -> State {
+    let mut flow = ModeFlow::default();
+    flow.reset(runtime.play_mode);
     State {
         active_color_index: color::DEFAULT_COLOR_INDEX,
-        flow: ModeFlow::default(),
+        flow,
         bg: visual_style_bg::State::new(),
+        runtime,
     }
 }
 
 pub fn on_enter(state: &mut State) {
-    state
-        .flow
-        .reset(deadsync_profile::compat::get_session_play_mode());
+    state.flow.reset(state.runtime.play_mode);
+}
+
+pub fn sync_runtime_view(state: &mut State, runtime: SelectFlowRuntimeView) {
+    state.runtime = runtime;
 }
 
 pub fn in_transition() -> (Vec<Actor>, f32) {
@@ -142,10 +148,13 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
         )),
         InputEffect::Confirm(play_mode) => {
             let _ = exit_anim_t(true);
-            deadsync_profile::compat::set_session_play_mode(play_mode);
-            ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Audio(
-                AudioRequest::PlaySfx("assets/sounds/start.ogg".to_owned()),
-            ))
+            state.runtime.play_mode = play_mode;
+            crate::effects::sfx_then(
+                "assets/sounds/start.ogg",
+                ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Profile(
+                    crate::SimplyLoveProfileRequest::SetPlayMode(play_mode),
+                )),
+            )
         }
         InputEffect::Back => {
             let _ = exit_anim_t(true);
@@ -220,61 +229,7 @@ pub fn push_actors(actors: &mut Vec<Actor>, state: &State, asset_manager: &Asset
         right_avatar: None,
     }));
 
-    let p1_profile = deadsync_profile::compat::get_for_side(profile_data::PlayerSide::P1);
-    let p2_profile = deadsync_profile::compat::get_for_side(profile_data::PlayerSide::P2);
-    let p1_avatar = p1_profile
-        .avatar_texture_key
-        .as_deref()
-        .map(|texture_key| AvatarParams { texture_key });
-    let p2_avatar = p2_profile
-        .avatar_texture_key
-        .as_deref()
-        .map(|texture_key| AvatarParams { texture_key });
-
-    let p1_joined = deadsync_profile::compat::is_session_side_joined(profile_data::PlayerSide::P1);
-    let p2_joined = deadsync_profile::compat::is_session_side_joined(profile_data::PlayerSide::P2);
-    let p1_guest = deadsync_profile::compat::is_session_side_guest(profile_data::PlayerSide::P1);
-    let p2_guest = deadsync_profile::compat::is_session_side_guest(profile_data::PlayerSide::P2);
-
-    let insert_card = tr("Common", "InsertCard");
-    let press_start = tr("Common", "PressStart");
-    let (footer_left, left_avatar) = if p1_joined {
-        (
-            Some(if p1_guest {
-                insert_card.as_ref()
-            } else {
-                p1_profile.display_name.as_str()
-            }),
-            if p1_guest { None } else { p1_avatar },
-        )
-    } else {
-        (Some(press_start.as_ref()), None)
-    };
-    let (footer_right, right_avatar) = if p2_joined {
-        (
-            Some(if p2_guest {
-                insert_card.as_ref()
-            } else {
-                p2_profile.display_name.as_str()
-            }),
-            if p2_guest { None } else { p2_avatar },
-        )
-    } else {
-        (Some(press_start.as_ref()), None)
-    };
-    let event_mode = tr("Common", "EventMode");
-    actors.push(screen_bar::build(ScreenBarParams {
-        title: &event_mode,
-        title_placement: ScreenBarTitlePlacement::Center,
-        position: ScreenBarPosition::Bottom,
-        transparent: false,
-        fg_color: [1.0; 4],
-        left_text: footer_left,
-        center_text: None,
-        right_text: footer_right,
-        left_avatar,
-        right_avatar,
-    }));
+    select_flow_footer::push(actors, &state.runtime.players);
 
     // Grey backgrounds (SL: ScreenSelectPlayMode underlay/default.lua).
     let bg1_a = fade_after(exit_t, 0.4, 0.1);
@@ -544,4 +499,46 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     let mut actors = Vec::with_capacity(256);
     push_actors(&mut actors, state, asset_manager);
     actors
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use deadsync_core::input::InputSource;
+    use deadsync_input::VirtualAction;
+    use std::time::Instant;
+
+    #[test]
+    fn confirm_requests_audio_before_profile_update() {
+        let mut state = init(SelectFlowRuntimeView::default());
+        let now = Instant::now();
+        let effect = handle_input(
+            &mut state,
+            &InputEvent {
+                action: VirtualAction::p1_start,
+                input_slot: 0,
+                pressed: true,
+                source: InputSource::Keyboard,
+                timestamp: now,
+                timestamp_host_nanos: 0,
+                stored_at: now,
+                emitted_at: now,
+            },
+        );
+        let ThemeEffect::Batch(effects) = effect else {
+            panic!("expected batched confirm effect");
+        };
+        assert!(matches!(
+            &effects[0],
+            ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Audio(
+                AudioRequest::PlaySfx(path)
+            )) if path == "assets/sounds/start.ogg"
+        ));
+        assert!(matches!(
+            effects[1],
+            ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Profile(
+                crate::SimplyLoveProfileRequest::SetPlayMode(_)
+            ))
+        ));
+    }
 }

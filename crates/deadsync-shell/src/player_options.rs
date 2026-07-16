@@ -1,7 +1,33 @@
 use crate::Command;
 use deadsync_core::input::MAX_PLAYERS;
-use deadsync_profile::{PlayStyle, PlayerSide, player_side_index};
+use deadsync_profile::compat as profile;
+use deadsync_profile::{self as profile_data, PlayStyle, PlayerSide, player_side_index};
 use deadsync_theme_simply_love::screens::player_options::{SpeedMod, scroll_speed_for_mod};
+use deadsync_theme_simply_love::views::{PlayerOptionsInitView, PlayerOptionsPolicyView};
+
+pub(crate) fn init_view() -> PlayerOptionsInitView {
+    let config = deadsync_config::prelude::get();
+    let session = profile::get_session_snapshot();
+    PlayerOptionsInitView {
+        policy: PlayerOptionsPolicyView {
+            allow_per_player_global_offsets: config.machine_allow_per_player_global_offsets,
+            heart_rate_monitors: config.machine_enable_heart_rate_monitors,
+            arcade_navigation: config.arcade_options_navigation,
+            smx_input: config.smx_input,
+            smx_panel_lights: config.smx_panel_lights,
+            scorebox_available: deadsync_online::score_compat::is_gs_get_scores_service_allowed(),
+        },
+        play_style: session.play_style,
+        player_side: session.player_side,
+        joined: std::array::from_fn(|idx| {
+            session.side_joined(profile_data::player_side_for_index(idx))
+        }),
+        music_rate: session.music_rate,
+        profiles: std::array::from_fn(|idx| {
+            profile::get_for_side(profile_data::player_side_for_index(idx))
+        }),
+    }
+}
 
 pub struct PlayerOptionsPersistPlan {
     pub commands: Vec<Command>,

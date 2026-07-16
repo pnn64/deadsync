@@ -90,6 +90,10 @@ impl App {
         let prev = self.state.screens.current_screen;
         self.commit_screen_change(target_screen);
         if target_screen == CurrentScreen::SelectColor {
+            select_color::sync_runtime_view(
+                &mut self.state.screens.select_color_state,
+                crate::select_flow::runtime_view(),
+            );
             select_color::on_enter(&mut self.state.screens.select_color_state);
         }
         if target_screen == CurrentScreen::ArrowCloudLogin {
@@ -143,15 +147,9 @@ impl App {
             }
         } else if target_screen == CurrentScreen::SelectStyle {
             let current_color_index = self.state.screens.select_style_state.active_color_index;
-            self.state.screens.select_style_state = select_style::init();
+            self.state.screens.select_style_state =
+                select_style::init(crate::select_flow::runtime_view());
             self.state.screens.select_style_state.active_color_index = current_color_index;
-            let session = profile::get_session_snapshot();
-            let p1_joined = session.side_joined(profile_data::PlayerSide::P1);
-            let p2_joined = session.side_joined(profile_data::PlayerSide::P2);
-            select_style::set_selected_index(
-                &mut self.state.screens.select_style_state,
-                if p1_joined && p2_joined { 1 } else { 0 },
-            );
         } else if target_screen == CurrentScreen::Mappings {
             let color_index = self.state.screens.options_state.active_color_index;
             self.state.screens.mappings_state = mappings::init(crate::mappings::runtime_view());
@@ -345,6 +343,10 @@ impl App {
             self.state.gameplay_offset_save_prompt = None;
         }
         if target == CurrentScreen::SelectColor {
+            select_color::sync_runtime_view(
+                &mut self.state.screens.select_color_state,
+                crate::select_flow::runtime_view(),
+            );
             select_color::on_enter(&mut self.state.screens.select_color_state);
         }
         if target == CurrentScreen::ArrowCloudLogin {

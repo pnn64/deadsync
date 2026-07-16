@@ -24,9 +24,9 @@ use crate::views::{
     MUSIC_WHEEL_SLOT_COUNT, MusicWheelRankSource, MusicWheelRuntimeRequest, MusicWheelRuntimeView,
     MusicWheelSideRuntimeRequest, MusicWheelSlotRuntimeRequest, ScoreboxSideView,
     SelectMusicDownloadView, SelectMusicHistorySideView, SelectMusicHistoryView,
-    SelectMusicInitView, SelectMusicLeaderboardRequest, SelectMusicPlaylistView,
-    SelectMusicPolicyView, SelectMusicRuntimeView, SelectMusicScoreboxRequest,
-    SimplyLoveLobbyRuntimeView,
+    SelectMusicInitView, SelectMusicLastPlayedView, SelectMusicLeaderboardRequest,
+    SelectMusicPlaylistView, SelectMusicPolicyView, SelectMusicProfileView, SelectMusicRuntimeView,
+    SelectMusicScoreboxRequest, SelectMusicSessionView, SimplyLoveLobbyRuntimeView,
 };
 use deadlib_present::actors::{Actor, SizeSpec, SpriteSource};
 use deadlib_present::cache::{SharedStrCache, TextCache, cached_shared_str, cached_text};
@@ -553,6 +553,16 @@ pub fn selection_anim_beat(state: &State) -> f32 {
 
 #[inline(always)]
 pub fn sync_runtime_view(state: &mut State, view: SelectMusicRuntimeView) {
+    state.session = view.session;
+    state.profiles = view.profiles;
+    if let Some(favorites) = view.favorites {
+        state.favorites = favorites;
+        state.favorites_entries =
+            build_favorites_view_entries(&state.group_entries, state.session, &state.favorites);
+        if state.sort_mode == WheelSortMode::Favorites {
+            apply_wheel_sort(state, WheelSortMode::Favorites);
+        }
+    }
     state.audio_playback = view.audio_playback;
     state.lobby_view = view.lobby;
     state.downloads = view.downloads;
@@ -585,6 +595,11 @@ pub fn srpg_shop_overlay_visible(state: &State) -> bool {
         state.srpg_shop_overlay,
         select_music_menu::SrpgShopOverlayState::Visible(_)
     )
+}
+
+#[inline(always)]
+pub fn local_profile_ids(state: &State) -> &[Option<String>; 2] {
+    &state.profiles.local_profile_ids
 }
 
 #[inline(always)]
@@ -1143,6 +1158,7 @@ pub struct State {
     /// against re-enqueueing every frame while the same pack is expanded.
     last_replaygain_prewarmed_pack: Option<String>,
     pending_audio: Vec<AudioRequest>,
+    pending_profile: Vec<crate::SimplyLoveProfileRequest>,
     pending_sync: Vec<crate::SimplyLoveSyncRequest>,
     pending_hardware: Vec<crate::SimplyLoveHardwareRequest>,
     pending_online: Vec<crate::SimplyLoveOnlineRequest>,
@@ -1189,6 +1205,11 @@ pub struct State {
     lobby_view: SimplyLoveLobbyRuntimeView,
     arrow_bounce_offset: f32,
     policy: SelectMusicPolicyView,
+    session: SelectMusicSessionView,
+    profiles: SelectMusicProfileView,
+    last_played: SelectMusicLastPlayedView,
+    favorites: profile_data::FavoriteSnapshot,
+    known_packs: profile_data::KnownPackSnapshot,
     music_wheel: MusicWheelRuntimeView,
     downloads: Vec<SelectMusicDownloadView>,
     srpg_shop_snapshot: Arc<deadsync_online::srpg_shop::SrpgShopSnapshot>,
@@ -1246,9 +1267,13 @@ fn history_score(
         .map(|index| history.cached_scores[index].1)
 }
 
-fn song_has_cached_score(song: &SongData, history: &SelectMusicHistoryView) -> bool {
+fn song_has_cached_score(
+    song: &SongData,
+    history: &SelectMusicHistoryView,
+    session: SelectMusicSessionView,
+) -> bool {
     for side in [profile_data::PlayerSide::P1, profile_data::PlayerSide::P2] {
-        if !profile::is_session_side_joined(side) {
+        if !session.side_joined(side) {
             continue;
         }
         let side_history = &history.sides[profile_data::player_side_index(side)];
@@ -1261,17 +1286,20 @@ fn song_has_cached_score(song: &SongData, history: &SelectMusicHistoryView) -> b
     false
 }
 
-fn joined_local_profile_ids() -> Vec<String> {
+fn joined_local_profile_ids(
+    session: SelectMusicSessionView,
+    profiles: &SelectMusicProfileView,
+) -> Vec<String> {
     let mut profile_ids = Vec::with_capacity(2);
     for side in [profile_data::PlayerSide::P1, profile_data::PlayerSide::P2] {
-        if !profile::is_session_side_joined(side) {
+        if !session.side_joined(side) {
             continue;
         }
-        let Some(profile_id) = profile::active_local_profile_id_for_side(side) else {
+        let Some(profile_id) = profiles.local_profile_id(side) else {
             continue;
         };
-        if !profile_ids.iter().any(|id| id == &profile_id) {
-            profile_ids.push(profile_id);
+        if !profile_ids.iter().any(|id| id == profile_id) {
+            profile_ids.push(profile_id.to_owned());
         }
     }
     profile_ids
@@ -1282,17 +1310,67 @@ fn sync_new_pack_names(
     scanned_pack_names: Vec<String>,
     scored_pack_names: &HashSet<String>,
     mode: NewPackMode,
-) -> HashSet<String> {
+    profiles: &SelectMusicProfileView,
+    known_packs: &mut profile_data::KnownPackSnapshot,
+) -> (HashSet<String>, Vec<crate::SimplyLoveProfileRequest>) {
     match mode {
         NewPackMode::Disabled => {
-            profile::mark_packs_known(profile_ids, scanned_pack_names.iter().map(String::as_str));
-            HashSet::new()
+            for (idx, profile_id) in profiles.local_profile_ids.iter().enumerate() {
+                if profile_id
+                    .as_ref()
+                    .is_some_and(|id| profile_ids.contains(id))
+                {
+                    known_packs.names[idx].extend(scanned_pack_names.iter().cloned());
+                }
+            }
+            let requests = (!profile_ids.is_empty() && !scanned_pack_names.is_empty())
+                .then(|| crate::SimplyLoveProfileRequest::MarkPacksKnown {
+                    profile_ids: profile_ids.to_vec(),
+                    pack_names: scanned_pack_names,
+                })
+                .into_iter()
+                .collect();
+            (HashSet::new(), requests)
         }
-        NewPackMode::OpenPack => profile::sync_known_packs(profile_ids, &scanned_pack_names),
-        NewPackMode::HasScore => scanned_pack_names
-            .into_iter()
-            .filter(|name| !scored_pack_names.contains(name.as_str()))
-            .collect(),
+        NewPackMode::OpenPack => {
+            let mut unknown = HashSet::new();
+            let mut requests = Vec::new();
+            for profile_id in profile_ids {
+                let Some(side_idx) = profiles
+                    .local_profile_ids
+                    .iter()
+                    .position(|id| id.as_deref() == Some(profile_id.as_str()))
+                else {
+                    continue;
+                };
+                if known_packs.names[side_idx].is_empty() && !scanned_pack_names.is_empty() {
+                    for (idx, id) in profiles.local_profile_ids.iter().enumerate() {
+                        if id.as_deref() == Some(profile_id) {
+                            known_packs.names[idx].extend(scanned_pack_names.iter().cloned());
+                        }
+                    }
+                    requests.push(crate::SimplyLoveProfileRequest::MarkPacksKnown {
+                        profile_ids: vec![profile_id.clone()],
+                        pack_names: scanned_pack_names.clone(),
+                    });
+                } else {
+                    unknown.extend(
+                        scanned_pack_names
+                            .iter()
+                            .filter(|name| !known_packs.names[side_idx].contains(name.as_str()))
+                            .cloned(),
+                    );
+                }
+            }
+            (unknown, requests)
+        }
+        NewPackMode::HasScore => (
+            scanned_pack_names
+                .into_iter()
+                .filter(|name| !scored_pack_names.contains(name.as_str()))
+                .collect(),
+            Vec::new(),
+        ),
     }
 }
 
@@ -1310,7 +1388,7 @@ fn maybe_clear_selected_pack_on_score(state: &mut State, mode: NewPackMode) {
         return;
     };
     let song = song.clone();
-    if !song_has_cached_score(&song, &state.history) {
+    if !song_has_cached_score(&song, &state.history, state.session) {
         return;
     }
     let Some(pack_name) = group_name_for_song(&state.entries, &song) else {
@@ -1319,9 +1397,12 @@ fn maybe_clear_selected_pack_on_score(state: &mut State, mode: NewPackMode) {
     state.new_pack_names.remove(&pack_name);
 }
 
-pub fn is_difficulty_playable(song: &Arc<SongData>, difficulty_index: usize) -> bool {
-    let target_chart_type = profile::get_session_play_style().chart_type();
-    song.has_standard_difficulty(target_chart_type, difficulty_index)
+pub fn is_difficulty_playable(
+    song: &Arc<SongData>,
+    chart_type: &str,
+    difficulty_index: usize,
+) -> bool {
+    song.has_standard_difficulty(chart_type, difficulty_index)
 }
 
 fn sync_versus_music_selection(state: &mut State, song: &SongData, chart_type: &str) {
@@ -1462,7 +1543,7 @@ pub fn select_preferred_steps(state: &mut State) {
     let Some(MusicWheelEntry::Song(song)) = state.entries.get(state.selected_index).cloned() else {
         return;
     };
-    let chart_type = profile::get_session_play_style().chart_type();
+    let chart_type = state.session.play_style.chart_type();
     apply_initial_steps_for_song(state, song.as_ref(), chart_type, None);
 }
 
@@ -2221,20 +2302,23 @@ fn build_top_grades_grouped_entries_for_side(
     entries
 }
 
-fn build_favorites_view_entries(grouped_entries: &[MusicWheelEntry]) -> Vec<MusicWheelEntry> {
-    let p1_joined = profile::is_session_side_joined(profile_data::PlayerSide::P1);
-    let p2_joined = profile::is_session_side_joined(profile_data::PlayerSide::P2);
+fn build_favorites_view_entries(
+    grouped_entries: &[MusicWheelEntry],
+    session: SelectMusicSessionView,
+    favorites: &profile_data::FavoriteSnapshot,
+) -> Vec<MusicWheelEntry> {
+    let p1_joined = session.side_joined(profile_data::PlayerSide::P1);
+    let p2_joined = session.side_joined(profile_data::PlayerSide::P2);
 
     let pack_is_favorited = |pack_key: &str| -> bool {
-        (p1_joined && profile::is_pack_favorite(profile_data::PlayerSide::P1, pack_key))
-            || (p2_joined && profile::is_pack_favorite(profile_data::PlayerSide::P2, pack_key))
+        (p1_joined && favorites.pack_names[0].contains(pack_key))
+            || (p2_joined && favorites.pack_names[1].contains(pack_key))
     };
 
     let song_is_favorited = |song: &SongData| -> bool {
         song.charts.iter().any(|chart| {
-            (p1_joined && profile::is_favorite(profile_data::PlayerSide::P1, &chart.short_hash))
-                || (p2_joined
-                    && profile::is_favorite(profile_data::PlayerSide::P2, &chart.short_hash))
+            (p1_joined && favorites.chart_hashes[0].contains(&chart.short_hash))
+                || (p2_joined && favorites.chart_hashes[1].contains(&chart.short_hash))
         })
     };
 
@@ -2576,7 +2660,8 @@ fn apply_wheel_sort(state: &mut State, sort_mode: WheelSortMode) {
         }
         WheelSortMode::Favorites => {
             // Rebuild favorites on the fly so toggling is immediately reflected
-            state.favorites_entries = build_favorites_view_entries(&state.group_entries);
+            state.favorites_entries =
+                build_favorites_view_entries(&state.group_entries, state.session, &state.favorites);
             state.all_entries = state.favorites_entries.clone();
             state.expanded_pack_name = selected_song
                 .as_ref()
@@ -2648,13 +2733,13 @@ pub fn init(init_view: SelectMusicInitView) -> State {
     let song_cache = get_song_cache();
     let lock_wait = lock_started.elapsed();
 
-    let target_chart_type = profile::get_session_play_style().chart_type();
+    let target_chart_type = init_view.session.play_style.chart_type();
     let total_packs = song_cache.len();
     let total_songs: usize = song_cache.iter().map(|p| p.songs.len()).sum();
     let interaction = init_view.policy.interaction;
     let new_pack_mode = interaction.new_pack_mode;
     let clear_new_packs_on_score = new_pack_mode == NewPackMode::HasScore;
-    let joined_profile_ids = joined_local_profile_ids();
+    let joined_profile_ids = joined_local_profile_ids(init_view.session, &init_view.profiles);
 
     let mut all_entries = Vec::with_capacity(total_packs.saturating_add(total_songs));
     let mut scanned_pack_names = Vec::with_capacity(total_packs);
@@ -2663,8 +2748,7 @@ pub fn init(init_view: SelectMusicInitView) -> State {
     let mut song_has_edit_ptrs = HashSet::with_capacity(total_songs);
     let mut scored_pack_names = HashSet::new();
 
-    let profile_data = profile::get();
-    let last_played = profile_data.last_played(profile::get_session_play_style());
+    let last_played = init_view.last_played.clone();
     let max_diff_index = STANDARD_DIFFICULTY_COUNT.saturating_sub(1);
     let initial_diff_index = if max_diff_index == 0 {
         0
@@ -2708,7 +2792,7 @@ pub fn init(init_view: SelectMusicInitView) -> State {
             }
             if clear_new_packs_on_score
                 && !pack_has_cached_score
-                && song_has_cached_score(song, &init_view.history)
+                && song_has_cached_score(song, &init_view.history, init_view.session)
             {
                 pack_has_cached_score = true;
             }
@@ -2800,15 +2884,19 @@ pub fn init(init_view: SelectMusicInitView) -> State {
         build_top_grades_grouped_entries_for_side(&all_entries, target_chart_type, p1_history);
     let top_grades_p2_entries =
         build_top_grades_grouped_entries_for_side(&all_entries, target_chart_type, p2_history);
-    let favorites_entries = build_favorites_view_entries(&all_entries);
+    let favorites_entries =
+        build_favorites_view_entries(&all_entries, init_view.session, &init_view.favorites);
     let playlist_library =
         build_playlist_library(&all_entries, &init_view.playlists, &init_view.songs_root);
 
-    let new_pack_names = sync_new_pack_names(
+    let mut known_packs = init_view.known_packs;
+    let (new_pack_names, pending_profile) = sync_new_pack_names(
         &joined_profile_ids,
         scanned_pack_names,
         &scored_pack_names,
         new_pack_mode,
+        &init_view.profiles,
+        &mut known_packs,
     );
     // ITGmania falls back to the first selectable song and opens its group.
     let initial_expanded_pack_name = last_pack_name.or_else(|| first_header_name(&all_entries));
@@ -2894,6 +2982,7 @@ pub fn init(init_view: SelectMusicInitView) -> State {
         expanded_pack_name: initial_expanded_pack_name,
         last_replaygain_prewarmed_pack: None,
         pending_audio: Vec::new(),
+        pending_profile,
         pending_sync: Vec::new(),
         pending_hardware: Vec::new(),
         pending_online: Vec::new(),
@@ -2948,6 +3037,11 @@ pub fn init(init_view: SelectMusicInitView) -> State {
         lobby_view: SimplyLoveLobbyRuntimeView::default(),
         arrow_bounce_offset: 0.0,
         policy: init_view.policy,
+        session: init_view.session,
+        profiles: init_view.profiles,
+        last_played: init_view.last_played,
+        favorites: init_view.favorites,
+        known_packs,
         music_wheel: MusicWheelRuntimeView::default(),
         downloads: Vec::new(),
         srpg_shop_snapshot: Default::default(),
@@ -3043,8 +3137,8 @@ pub fn init(init_view: SelectMusicInitView) -> State {
 }
 
 pub fn init_placeholder() -> State {
-    let profile_data = profile::get();
-    let last_played = profile_data.last_played(profile::get_session_play_style());
+    let session = SelectMusicSessionView::default();
+    let last_played = SelectMusicLastPlayedView::default();
     let max_diff_index = STANDARD_DIFFICULTY_COUNT.saturating_sub(1);
     let initial_diff_index = if max_diff_index == 0 {
         0
@@ -3116,6 +3210,7 @@ pub fn init_placeholder() -> State {
         expanded_pack_name: None,
         last_replaygain_prewarmed_pack: None,
         pending_audio: Vec::new(),
+        pending_profile: Vec::new(),
         pending_sync: Vec::new(),
         pending_hardware: Vec::new(),
         pending_online: Vec::new(),
@@ -3170,6 +3265,11 @@ pub fn init_placeholder() -> State {
         lobby_view: SimplyLoveLobbyRuntimeView::default(),
         arrow_bounce_offset: 0.0,
         policy: SelectMusicPolicyView::default(),
+        session,
+        profiles: SelectMusicProfileView::default(),
+        last_played,
+        favorites: Default::default(),
+        known_packs: Default::default(),
         music_wheel: MusicWheelRuntimeView::default(),
         downloads: Vec::new(),
         srpg_shop_snapshot: Default::default(),
@@ -3343,6 +3443,35 @@ fn queue_audio(state: &mut State, request: AudioRequest) {
 }
 
 #[inline(always)]
+fn queue_profile(state: &mut State, request: crate::SimplyLoveProfileRequest) {
+    state.pending_profile.push(request);
+}
+
+fn set_session(
+    state: &mut State,
+    play_style: profile_data::PlayStyle,
+    player_side: profile_data::PlayerSide,
+    joined: [bool; 2],
+) {
+    state.session.play_style = play_style;
+    state.session.player_side = player_side;
+    state.session.joined = joined;
+    queue_profile(
+        state,
+        crate::SimplyLoveProfileRequest::SetSession {
+            play_style,
+            player_side,
+            joined,
+        },
+    );
+}
+
+fn set_music_rate(state: &mut State, rate: f32) {
+    state.session.music_rate = rate;
+    queue_profile(state, crate::SimplyLoveProfileRequest::SetMusicRate(rate));
+}
+
+#[inline(always)]
 fn queue_sfx(state: &mut State, path: &'static str) {
     queue_audio(state, AudioRequest::PlaySfx(path.to_owned()));
 }
@@ -3371,6 +3500,7 @@ fn queue_lobby_sounds(state: &mut State) {
 
 fn prepend_pending_runtime(state: &mut State, effect: ThemeEffect) -> ThemeEffect {
     let request_count = state.pending_audio.len()
+        + state.pending_profile.len()
         + state.pending_sync.len()
         + state.pending_hardware.len()
         + state.pending_online.len();
@@ -3380,6 +3510,12 @@ fn prepend_pending_runtime(state: &mut State, effect: ThemeEffect) -> ThemeEffec
 
     let has_effect = !matches!(effect, ThemeEffect::None);
     let mut effects = Vec::with_capacity(request_count + usize::from(has_effect));
+    effects.extend(
+        state
+            .pending_profile
+            .drain(..)
+            .map(|request| ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Profile(request))),
+    );
     effects.extend(
         state.pending_hardware.drain(..).map(|request| {
             ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Hardware(request))
@@ -3441,7 +3577,7 @@ fn sync_preview_song(
                     path,
                     cut,
                     looping: loop_preview,
-                    rate: deadsync_profile::compat::get_session_music_rate(),
+                    rate: state.session.music_rate,
                 },
             );
         } else {
@@ -3555,38 +3691,55 @@ fn advance_nav_hold(state: &mut State, dt: f32) -> bool {
 }
 
 fn toggle_favorite_for_selected_entry(state: &mut State, side: profile_data::PlayerSide) {
+    let side_idx = profile_data::player_side_index(side);
+    let has_local_profile = state.profiles.local_profile_id(side).is_some();
     match state.entries.get(state.selected_index).cloned() {
         Some(MusicWheelEntry::Song(song)) => {
-            let target_chart_type = profile::get_session_play_style().chart_type();
+            let target_chart_type = state.session.play_style.chart_type();
             if let Some(chart) =
                 song.chart_for_steps_index(target_chart_type, state.selected_steps_index)
             {
-                let is_now_fav = profile::toggle_favorite(side, &chart.short_hash);
-                state.favorites_entries = build_favorites_view_entries(&state.group_entries);
-                queue_sfx(
-                    state,
-                    if is_now_fav {
-                        "assets/sounds/start.ogg"
-                    } else {
-                        "assets/sounds/start.ogg"
-                    },
+                if has_local_profile {
+                    profile_data::toggle_favorite_hash(
+                        &mut state.favorites.chart_hashes[side_idx],
+                        &chart.short_hash,
+                    );
+                    queue_profile(
+                        state,
+                        crate::SimplyLoveProfileRequest::ToggleFavorite {
+                            side,
+                            chart_hash: chart.short_hash.clone(),
+                        },
+                    );
+                }
+                state.favorites_entries = build_favorites_view_entries(
+                    &state.group_entries,
+                    state.session,
+                    &state.favorites,
                 );
+                queue_sfx(state, "assets/sounds/start.ogg");
             }
         }
         Some(entry @ MusicWheelEntry::PackHeader { .. }) => {
             let Some(pack_key) = entry.pack_key() else {
                 return;
             };
-            let is_now_fav = profile::toggle_pack_favorite(side, pack_key);
-            state.favorites_entries = build_favorites_view_entries(&state.group_entries);
-            queue_sfx(
-                state,
-                if is_now_fav {
-                    "assets/sounds/start.ogg"
-                } else {
-                    "assets/sounds/start.ogg"
-                },
-            );
+            if has_local_profile {
+                profile_data::toggle_favorited_pack(
+                    &mut state.favorites.pack_names[side_idx],
+                    pack_key,
+                );
+                queue_profile(
+                    state,
+                    crate::SimplyLoveProfileRequest::TogglePackFavorite {
+                        side,
+                        pack_name: pack_key.to_owned(),
+                    },
+                );
+            }
+            state.favorites_entries =
+                build_favorites_view_entries(&state.group_entries, state.session, &state.favorites);
+            queue_sfx(state, "assets/sounds/start.ogg");
         }
         None => {}
     }
@@ -3837,7 +3990,7 @@ fn build_pad_profile_menu_items(state: &State) -> Option<Vec<select_music_menu::
     if !state.policy.fsr_profiles {
         return None;
     }
-    let style = profile::get_session_play_style();
+    let style = state.session.play_style;
     let mut pads: Vec<(bool, Option<String>, usize)> = Vec::new(); // (p2, profile_id?, slot)
     for slot in 0..2 {
         if !state.smx_pads[slot].connected {
@@ -3849,7 +4002,7 @@ fn build_pad_profile_menu_items(state: &State) -> Option<Vec<select_music_menu::
         // In play? Doubles/Versus drive both pads; Singles only the joined side.
         let in_play = match style {
             profile_data::PlayStyle::Double | profile_data::PlayStyle::Versus => true,
-            profile_data::PlayStyle::Single => profile::is_session_side_joined(if is_p2 {
+            profile_data::PlayStyle::Single => state.session.side_joined(if is_p2 {
                 profile_data::PlayerSide::P2
             } else {
                 profile_data::PlayerSide::P1
@@ -3858,7 +4011,7 @@ fn build_pad_profile_menu_items(state: &State) -> Option<Vec<select_music_menu::
         if !in_play {
             continue;
         }
-        let pid = profile::active_local_profile_id_for_pad(is_p2);
+        let pid = state.profiles.pad_profile_ids[slot].clone();
         pads.push((is_p2, pid, slot));
     }
     if pads.is_empty() {
@@ -3934,8 +4087,8 @@ fn build_select_music_menu(state: &State) -> select_music_menu::MenuLists {
         .get(state.selected_index)
         .and_then(MusicWheelEntry::pack_key)
         .is_some();
-    let p1_joined = profile::is_session_side_joined(profile_data::PlayerSide::P1);
-    let p2_joined = profile::is_session_side_joined(profile_data::PlayerSide::P2);
+    let p1_joined = state.session.side_joined(profile_data::PlayerSide::P1);
+    let p2_joined = state.session.side_joined(profile_data::PlayerSide::P2);
     let single_player_joined = p1_joined ^ p2_joined;
 
     let mut standalone = Vec::with_capacity(8);
@@ -3960,9 +4113,15 @@ fn build_select_music_menu(state: &State) -> select_music_menu::MenuLists {
     let sorts = select_music_menu::SORT_ITEMS.iter().cloned().collect();
 
     let p1_has_profile = p1_joined
-        && profile::active_local_profile_id_for_side(profile_data::PlayerSide::P1).is_some();
+        && state
+            .profiles
+            .local_profile_id(profile_data::PlayerSide::P1)
+            .is_some();
     let p2_has_profile = p2_joined
-        && profile::active_local_profile_id_for_side(profile_data::PlayerSide::P2).is_some();
+        && state
+            .profiles
+            .local_profile_id(profile_data::PlayerSide::P2)
+            .is_some();
     let profile_items = if p1_has_profile || p2_has_profile {
         let mut items = Vec::with_capacity(8);
         if p1_has_profile {
@@ -4010,7 +4169,7 @@ fn build_select_music_menu(state: &State) -> select_music_menu::MenuLists {
         }
     }
 
-    let styles = match (profile::get_session_play_style(), single_player_joined) {
+    let styles = match (state.session.play_style, single_player_joined) {
         (profile_data::PlayStyle::Single, true) => {
             Some(vec![select_music_menu::ITEM_SWITCH_TO_DOUBLE])
         }
@@ -4110,15 +4269,15 @@ fn show_pad_config_overlay(state: &mut State) {
     // Show the pads for the active sides. Doubles and Versus both drive two
     // physical pads (in Versus the second side may be a guest, but its pad is
     // still in play and tunable), so show both; Singles shows just the joined side.
-    let (mut p1, mut p2) = match profile::get_session_play_style() {
+    let (mut p1, mut p2) = match state.session.play_style {
         profile_data::PlayStyle::Double | profile_data::PlayStyle::Versus => (true, true),
         profile_data::PlayStyle::Single => (
-            profile::is_session_side_joined(profile_data::PlayerSide::P1),
-            profile::is_session_side_joined(profile_data::PlayerSide::P2),
+            state.session.side_joined(profile_data::PlayerSide::P1),
+            state.session.side_joined(profile_data::PlayerSide::P2),
         ),
     };
     if !p1 && !p2 {
-        match profile::get_session_player_side() {
+        match state.session.player_side {
             profile_data::PlayerSide::P1 => p1 = true,
             profile_data::PlayerSide::P2 => p2 = true,
         }
@@ -4200,8 +4359,8 @@ fn show_profile_switch_overlay(state: &mut State) {
     profile_boxes::set_fast_switch(&mut overlay, true);
     profile_boxes::set_joined(
         &mut overlay,
-        profile::is_session_side_joined(profile_data::PlayerSide::P1),
-        profile::is_session_side_joined(profile_data::PlayerSide::P2),
+        state.session.side_joined(profile_data::PlayerSide::P1),
+        state.session.side_joined(profile_data::PlayerSide::P2),
     );
     state.profile_switch_overlay = Some(overlay);
     state.profile_switch_overlay_is_late_join = false;
@@ -5655,7 +5814,7 @@ fn refresh_after_reload(state: &mut State) {
             _ => None,
         }
     };
-    let target_chart_type = profile::get_session_play_style().chart_type();
+    let target_chart_type = state.session.play_style.chart_type();
     let selected_hash_p1 = selected_song
         .as_ref()
         .and_then(|song| song.chart_for_steps_index(target_chart_type, state.selected_steps_index))
@@ -5677,6 +5836,7 @@ fn refresh_after_reload(state: &mut State) {
     let preferred_difficulty_index = state.preferred_difficulty_index;
     let p2_preferred_difficulty_index = state.p2_preferred_difficulty_index;
     let pending_audio = std::mem::take(&mut state.pending_audio);
+    let pending_profile = std::mem::take(&mut state.pending_profile);
     let audio_playback = state.audio_playback;
     let arrow_bounce_offset = state.arrow_bounce_offset;
     let policy = state.policy;
@@ -5688,6 +5848,11 @@ fn refresh_after_reload(state: &mut State) {
         courses_root: state.courses_root.clone(),
         playlists: state.playlist_views.clone(),
         history: state.history.clone(),
+        session: state.session,
+        profiles: state.profiles.clone(),
+        last_played: state.last_played.clone(),
+        favorites: state.favorites.clone(),
+        known_packs: state.known_packs.clone(),
         policy,
     };
 
@@ -5697,6 +5862,7 @@ fn refresh_after_reload(state: &mut State) {
     refreshed.p2_preferred_difficulty_index = p2_preferred_difficulty_index;
     refreshed.active_playlist_id = active_playlist_id;
     refreshed.pending_audio = pending_audio;
+    refreshed.pending_profile = pending_profile;
     refreshed.audio_playback = audio_playback;
     refreshed.arrow_bounce_offset = arrow_bounce_offset;
     refreshed.policy = policy;
@@ -5834,6 +6000,7 @@ fn refresh_after_style_switch(state: &mut State) {
     let session_elapsed = state.session_elapsed;
     let gameplay_elapsed = state.gameplay_elapsed;
     let pending_audio = std::mem::take(&mut state.pending_audio);
+    let pending_profile = std::mem::take(&mut state.pending_profile);
     let audio_playback = state.audio_playback;
     let arrow_bounce_offset = state.arrow_bounce_offset;
     let policy = state.policy;
@@ -5845,6 +6012,11 @@ fn refresh_after_style_switch(state: &mut State) {
         courses_root: state.courses_root.clone(),
         playlists: state.playlist_views.clone(),
         history: state.history.clone(),
+        session: state.session,
+        profiles: state.profiles.clone(),
+        last_played: state.last_played.clone(),
+        favorites: state.favorites.clone(),
+        known_packs: state.known_packs.clone(),
         policy,
     };
 
@@ -5854,6 +6026,7 @@ fn refresh_after_style_switch(state: &mut State) {
     refreshed.session_elapsed = session_elapsed;
     refreshed.gameplay_elapsed = gameplay_elapsed;
     refreshed.pending_audio = pending_audio;
+    refreshed.pending_profile = pending_profile;
     refreshed.audio_playback = audio_playback;
     refreshed.arrow_bounce_offset = arrow_bounce_offset;
     refreshed.policy = policy;
@@ -6002,9 +6175,9 @@ fn selected_chart_hash_for_side(
     song: &SongData,
     side: profile_data::PlayerSide,
 ) -> Option<String> {
-    let target_chart_type = profile::get_session_play_style().chart_type();
+    let target_chart_type = state.session.play_style.chart_type();
     let steps_index = steps_index_for_side(
-        profile::get_session_play_style(),
+        state.session.play_style,
         side,
         state.selected_steps_index,
         state.p2_selected_steps_index,
@@ -6076,7 +6249,7 @@ fn show_replay_overlay(state: &mut State) {
     let Some(MusicWheelEntry::Song(song)) = state.entries.get(state.selected_index) else {
         return;
     };
-    let side = profile::get_session_player_side();
+    let side = state.session.player_side;
     let Some(chart_hash) = selected_chart_hash_for_side(state, song, side) else {
         return;
     };
@@ -6187,10 +6360,7 @@ fn hide_sync_overlay(state: &mut State) {
 
 #[inline(always)]
 fn selected_steps_index_for_sync(state: &State) -> usize {
-    match (
-        profile::get_session_play_style(),
-        profile::get_session_player_side(),
-    ) {
+    match (state.session.play_style, state.session.player_side) {
         (profile_data::PlayStyle::Versus, profile_data::PlayerSide::P2) => {
             state.p2_selected_steps_index
         }
@@ -6200,10 +6370,7 @@ fn selected_steps_index_for_sync(state: &State) -> usize {
 
 #[inline(always)]
 fn preferred_steps_index_for_sync(state: &State) -> usize {
-    match (
-        profile::get_session_play_style(),
-        profile::get_session_player_side(),
-    ) {
+    match (state.session.play_style, state.session.player_side) {
         (profile_data::PlayStyle::Versus, profile_data::PlayerSide::P2) => {
             state.p2_preferred_difficulty_index
         }
@@ -6213,10 +6380,7 @@ fn preferred_steps_index_for_sync(state: &State) -> usize {
 
 #[inline(always)]
 fn set_selected_steps_index_for_sync(state: &mut State, steps_index: usize) {
-    match (
-        profile::get_session_play_style(),
-        profile::get_session_player_side(),
-    ) {
+    match (state.session.play_style, state.session.player_side) {
         (profile_data::PlayStyle::Versus, profile_data::PlayerSide::P2) => {
             state.p2_selected_steps_index = steps_index;
             if steps_index < STANDARD_DIFFICULTY_COUNT {
@@ -6311,11 +6475,14 @@ fn debug_screen_name(screen_name: &str) -> String {
         .to_string()
 }
 
-fn local_lobby_machine_signature() -> String {
+fn local_lobby_machine_signature(
+    session: SelectMusicSessionView,
+    profiles: &SelectMusicProfileView,
+) -> String {
     let mut parts = vec!["ScreenSelectMusic".to_string()];
     let mut any_joined = false;
     for side in [profile_data::PlayerSide::P1, profile_data::PlayerSide::P2] {
-        if !profile::is_session_side_joined(side) {
+        if !session.side_joined(side) {
             continue;
         }
         any_joined = true;
@@ -6323,36 +6490,37 @@ fn local_lobby_machine_signature() -> String {
             profile_data::PlayerSide::P1 => "P1",
             profile_data::PlayerSide::P2 => "P2",
         };
-        let player = profile::get_for_side(side);
-        parts.push(format!("{player_id}:{}", player.display_name));
+        parts.push(format!("{player_id}:{}", profiles.display_name(side)));
     }
     if !any_joined {
-        let side = profile::get_session_player_side();
+        let side = session.player_side;
         let player_id = match side {
             profile_data::PlayerSide::P1 => "P1",
             profile_data::PlayerSide::P2 => "P2",
         };
-        let player = profile::get_for_side(side);
-        parts.push(format!("{player_id}:{}", player.display_name));
+        parts.push(format!("{player_id}:{}", profiles.display_name(side)));
     }
     parts.join("|")
 }
 
-fn local_lobby_player_count() -> usize {
+fn local_lobby_player_count(session: SelectMusicSessionView) -> usize {
     let mut count = 0usize;
     for side in [profile_data::PlayerSide::P1, profile_data::PlayerSide::P2] {
-        if profile::is_session_side_joined(side) {
+        if session.side_joined(side) {
             count += 1;
         }
     }
     if count == 0 { 1 } else { count }
 }
 
-fn local_lobby_side_is_active(side: profile_data::PlayerSide) -> bool {
-    let p1_joined = profile::is_session_side_joined(profile_data::PlayerSide::P1);
-    let p2_joined = profile::is_session_side_joined(profile_data::PlayerSide::P2);
+fn local_lobby_side_is_active(
+    session: SelectMusicSessionView,
+    side: profile_data::PlayerSide,
+) -> bool {
+    let p1_joined = session.side_joined(profile_data::PlayerSide::P1);
+    let p2_joined = session.side_joined(profile_data::PlayerSide::P2);
     if !(p1_joined || p2_joined) {
-        return profile::get_session_player_side() == side;
+        return session.player_side == side;
     }
     match side {
         profile_data::PlayerSide::P1 => p1_joined,
@@ -6377,12 +6545,12 @@ fn set_lobby_disconnect_hold(
 ) {
     match side {
         profile_data::PlayerSide::P1
-            if local_lobby_side_is_active(profile_data::PlayerSide::P1) =>
+            if local_lobby_side_is_active(state.session, profile_data::PlayerSide::P1) =>
         {
             state.lobby_disconnect_hold_p1 = started_at;
         }
         profile_data::PlayerSide::P2
-            if local_lobby_side_is_active(profile_data::PlayerSide::P2) =>
+            if local_lobby_side_is_active(state.session, profile_data::PlayerSide::P2) =>
         {
             state.lobby_disconnect_hold_p2 = started_at;
         }
@@ -6422,7 +6590,7 @@ pub(crate) fn selected_chart_ix_for_sync(
 fn build_local_lobby_song_info(state: &State) -> Option<lobby_data::LobbySongInfo> {
     let song = selected_song_arc(state)?;
     let song_path = lobby_song_path(song.as_ref(), &state.songs_root)?;
-    let chart_type = profile::get_session_play_style().chart_type();
+    let chart_type = state.session.play_style.chart_type();
     let chart = song.chart_for_steps_index(chart_type, selected_steps_index_for_sync(state))?;
     Some(lobby_data::LobbySongInfo {
         song_path,
@@ -6432,7 +6600,7 @@ fn build_local_lobby_song_info(state: &State) -> Option<lobby_data::LobbySongInf
         chart_hash: Some(chart.short_hash.clone()),
         chart_type: Some(chart.chart_type.clone()),
         chart_label: Some(sync_chart_label(chart)),
-        rate: Some(profile::get_session_music_rate()),
+        rate: Some(state.session.music_rate),
     })
 }
 
@@ -6578,10 +6746,10 @@ fn apply_remote_lobby_song_selection(
 
     let old_song_path =
         selected_song_arc(state).and_then(|song| lobby_song_path(song.as_ref(), &state.songs_root));
-    let old_rate = profile::get_session_music_rate();
+    let old_rate = state.session.music_rate;
     focus_song_from_search(state, &target_song);
 
-    let target_chart_type = profile::get_session_play_style().chart_type();
+    let target_chart_type = state.session.play_style.chart_type();
     if let Some(chart_hash) = song_info.chart_hash.as_deref()
         && let Some(index) = target_song.steps_index_for_chart_hash(target_chart_type, chart_hash)
     {
@@ -6599,7 +6767,7 @@ fn apply_remote_lobby_song_selection(
     {
         let rate = rate.clamp(0.5, 3.0);
         if (rate - old_rate).abs() >= 0.0005 {
-            profile::set_session_music_rate(rate);
+            set_music_rate(state, rate);
             rate_changed = true;
         }
     }
@@ -6634,7 +6802,7 @@ fn publish_lobby_confirmed_song_selection(state: &mut State) {
     let Some(joined) = snapshot.joined_lobby.as_ref() else {
         return;
     };
-    if joined.players.len() <= local_lobby_player_count() {
+    if joined.players.len() <= local_lobby_player_count(state.session) {
         return;
     }
     if !matches!(snapshot.connection, lobby_data::ConnectionState::Connected) {
@@ -6697,7 +6865,7 @@ fn sync_lobby_select_music_with(state: &mut State, snapshot: &lobby_data::Snapsh
     // Always republish SelectMusic presence here. The online layer already dedupes
     // identical machine-state payloads, and SelectMusic can be re-entered multiple
     // times during a session while this screen state persists locally.
-    let machine_sig = local_lobby_machine_signature();
+    let machine_sig = local_lobby_machine_signature(state.session, &state.profiles);
     queue_online(
         state,
         crate::SimplyLoveOnlineRequest::Lobby(crate::SimplyLoveLobbyRequest::UpdateMachineState {
@@ -6767,7 +6935,7 @@ fn select_music_lobby_lock_text(state: &State) -> Option<String> {
     let local_song_info = build_local_lobby_song_info(state);
     select_music_lobby_lock_text_for(
         joined,
-        local_lobby_player_count(),
+        local_lobby_player_count(state.session),
         local_song_info.as_ref(),
         state.lobby_view.reconnect_status_text.as_deref(),
     )
@@ -7579,7 +7747,7 @@ fn show_sync_song_overlay(state: &mut State) {
         return;
     };
     let song = song.clone();
-    let target_chart_type = profile::get_session_play_style().chart_type();
+    let target_chart_type = state.session.play_style.chart_type();
     let steps_index = selected_steps_index_for_sync(state);
     let chart_ix = selected_chart_ix_for_sync(song.as_ref(), target_chart_type, steps_index);
     let chart = chart_ix.and_then(|ix| song.charts.get(ix));
@@ -7962,19 +8130,18 @@ fn handle_sync_overlay_input(state: &mut State, ev: &InputEvent) -> ThemeEffect 
 fn switch_single_player_style(state: &mut State, new_style: profile_data::PlayStyle) {
     hide_select_music_menu(state);
 
-    let p1_joined = profile::is_session_side_joined(profile_data::PlayerSide::P1);
-    let p2_joined = profile::is_session_side_joined(profile_data::PlayerSide::P2);
+    let p1_joined = state.session.side_joined(profile_data::PlayerSide::P1);
+    let p2_joined = state.session.side_joined(profile_data::PlayerSide::P2);
     let side = match (p1_joined, p2_joined) {
         (true, false) => profile_data::PlayerSide::P1,
         (false, true) => profile_data::PlayerSide::P2,
-        _ => profile::get_session_player_side(),
+        _ => state.session.player_side,
     };
-    match side {
-        profile_data::PlayerSide::P1 => profile::set_session_joined(true, false),
-        profile_data::PlayerSide::P2 => profile::set_session_joined(false, true),
-    }
-    profile::set_session_player_side(side);
-    profile::set_session_play_style(new_style);
+    let joined = match side {
+        profile_data::PlayerSide::P1 => [true, false],
+        profile_data::PlayerSide::P2 => [false, true],
+    };
+    set_session(state, new_style, side, joined);
     refresh_after_style_switch(state);
     // The style switch remaps which profile each pad uses, so re-resolve both
     // pads (the controller recomputes each pad's active marker). The refresh
@@ -8210,7 +8377,7 @@ fn handle_profile_switch_overlay_input(state: &mut State, ev: &InputEvent) -> Th
                 // state so the late-joiner is fully unjoined again. No menu
                 // to restore — the overlay was opened directly from a Start
                 // press, not from the quick menu.
-                cancel_late_join_session();
+                cancel_late_join_session(state);
                 queue_sfx(state, "assets/sounds/unjoin.ogg");
             } else {
                 restore_select_music_menu_after_profile_overlay(state);
@@ -8223,13 +8390,13 @@ fn handle_profile_switch_overlay_input(state: &mut State, ev: &InputEvent) -> Th
 
 /// Revert the session to single-player after a late-join was cancelled from
 /// the profile-switch overlay. Mirrors the inverse of `try_handle_late_join`.
-fn cancel_late_join_session() {
-    let staying_side = profile::get_session_player_side();
-    match staying_side {
-        profile_data::PlayerSide::P1 => profile::set_session_joined(true, false),
-        profile_data::PlayerSide::P2 => profile::set_session_joined(false, true),
-    }
-    profile::set_session_play_style(profile_data::PlayStyle::Single);
+fn cancel_late_join_session(state: &mut State) {
+    let staying_side = state.session.player_side;
+    let joined = match staying_side {
+        profile_data::PlayerSide::P1 => [true, false],
+        profile_data::PlayerSide::P2 => [false, true],
+    };
+    set_session(state, profile_data::PlayStyle::Single, staying_side, joined);
 }
 
 fn handle_test_input_overlay_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
@@ -8239,7 +8406,7 @@ fn handle_test_input_overlay_input(state: &mut State, ev: &InputEvent) -> ThemeE
         VirtualAction::p2_start | VirtualAction::p2_back => Some(profile_data::PlayerSide::P2),
         _ => None,
     };
-    if ev.pressed && close_side.is_some_and(profile::is_session_side_joined) {
+    if ev.pressed && close_side.is_some_and(|side| state.session.side_joined(side)) {
         hide_test_input_overlay(state);
         queue_sfx(state, "assets/sounds/start.ogg");
     }
@@ -8257,7 +8424,7 @@ fn handle_pad_config_overlay_input(state: &mut State, ev: &InputEvent, fine: boo
                 VirtualAction::p2_back => Some(profile_data::PlayerSide::P2),
                 _ => None,
             };
-            if close_side.is_some_and(profile::is_session_side_joined) {
+            if close_side.is_some_and(|side| state.session.side_joined(side)) {
                 hide_pad_config_overlay(state);
                 queue_sfx(state, "assets/sounds/start.ogg");
             }
@@ -8296,12 +8463,12 @@ fn request_pad_profile_recall(state: &mut State, p2: bool, preset: bool, name: &
             name: name.to_owned(),
         }
     } else {
-        let Some(pid) = profile::active_local_profile_id_for_pad(p2) else {
+        let Some(pid) = state.profiles.pad_profile_id(slot) else {
             return false;
         };
         crate::SimplyLoveHardwareRequest::ApplySmxPadConfig {
             pad: slot,
-            profile_id: pid,
+            profile_id: pid.to_owned(),
             name: name.to_owned(),
         }
     };
@@ -8351,11 +8518,11 @@ fn refresh_sibling_pad_list(state: &mut State, slot: usize, profile_id: &str, re
     // info would be meaningless; the pure helper folds both cases into `None`.
     let other = 1 - slot;
     // Sibling's player side is its slot, not the raw jumper bit.
-    let sibling_profile = profile::active_local_profile_id_for_pad(other == 1);
+    let sibling_profile = state.profiles.pad_profile_id(other);
     if let Some(intent) = sibling_refresh_intent(
         slot,
         state.smx_pads[other].connected,
-        sibling_profile.as_deref(),
+        sibling_profile,
         profile_id,
         reresolve,
     ) {
@@ -8386,7 +8553,7 @@ fn perform_pad_profile_save(state: &mut State) {
     };
     // Player side is the slot, not the raw jumper bit (the serial below still
     // comes from whichever pad occupies this slot).
-    let Some(profile_id) = profile::active_local_profile_id_for_pad(slot == 1) else {
+    let Some(profile_id) = state.profiles.pad_profile_id(slot).map(str::to_owned) else {
         return; // Guest: no profile to save to.
     };
     // Rename: just relabel the existing config (and honor the default toggle,
@@ -8448,7 +8615,10 @@ fn pad_overlay_profile_target(state: &State) -> Option<(String, String, usize)> 
     }
     let name = pad_config::selected_profile_name(&state.pad_config_overlay)?;
     // Player side is the slot (device.index), not the raw jumper bit.
-    let profile_id = profile::active_local_profile_id_for_pad(device.index == 1)?;
+    let profile_id = state
+        .profiles
+        .pad_profile_id(device.index)
+        .map(str::to_owned)?;
     Some((profile_id, name, device.index))
 }
 
@@ -8692,43 +8862,7 @@ fn dispatch_menu_action(
             ThemeEffect::None
         }
         select_music_menu::Action::ToggleFavorite => {
-            // Toggle favorite for the highlighted song chart or real pack header.
-            match state.entries.get(state.selected_index).cloned() {
-                Some(MusicWheelEntry::Song(song)) => {
-                    let target_chart_type = profile::get_session_play_style().chart_type();
-                    if let Some(chart) =
-                        song.chart_for_steps_index(target_chart_type, state.selected_steps_index)
-                    {
-                        let is_now_fav = profile::toggle_favorite(side, &chart.short_hash);
-                        state.favorites_entries =
-                            build_favorites_view_entries(&state.group_entries);
-                        queue_sfx(
-                            state,
-                            if is_now_fav {
-                                "assets/sounds/start.ogg"
-                            } else {
-                                "assets/sounds/start.ogg"
-                            },
-                        );
-                    }
-                }
-                Some(entry @ MusicWheelEntry::PackHeader { .. }) => {
-                    if let Some(pack_key) = entry.pack_key() {
-                        let is_now_fav = profile::toggle_pack_favorite(side, pack_key);
-                        state.favorites_entries =
-                            build_favorites_view_entries(&state.group_entries);
-                        queue_sfx(
-                            state,
-                            if is_now_fav {
-                                "assets/sounds/start.ogg"
-                            } else {
-                                "assets/sounds/start.ogg"
-                            },
-                        );
-                    }
-                }
-                None => {}
-            }
+            toggle_favorite_for_selected_entry(state, side);
             hide_select_music_menu(state);
             ThemeEffect::None
         }
@@ -9066,7 +9200,7 @@ fn handle_pad_dir_impl(
                             .last_steps_nav_time_p1
                             .is_some_and(|t| now.duration_since(t) < DOUBLE_TAP_WINDOW)
                     {
-                        let target_chart_type = profile::get_session_play_style().chart_type();
+                        let target_chart_type = state.session.play_style.chart_type();
                         let list_len = song.steps_len(target_chart_type);
                         let cur = state.selected_steps_index.min(list_len.saturating_sub(1));
 
@@ -9194,7 +9328,7 @@ fn handle_pad_dir_p2(
                     .last_steps_nav_time_p2
                     .is_some_and(|t| now.duration_since(t) < DOUBLE_TAP_WINDOW)
             {
-                let play_style = profile::get_session_play_style();
+                let play_style = state.session.play_style;
                 let target_chart_type = play_style.chart_type();
                 let list_len = song.steps_len(target_chart_type);
                 let cur = steps_index_for_side(
@@ -9346,8 +9480,24 @@ fn handle_confirm_impl(state: &mut State) -> ThemeEffect {
             if state.policy.interaction.new_pack_mode == NewPackMode::OpenPack
                 && state.new_pack_names.remove(&target)
             {
-                let profile_ids = joined_local_profile_ids();
-                profile::mark_pack_known(&profile_ids, &target);
+                let profile_ids = joined_local_profile_ids(state.session, &state.profiles);
+                for (idx, profile_id) in state.profiles.local_profile_ids.iter().enumerate() {
+                    if profile_id
+                        .as_ref()
+                        .is_some_and(|id| profile_ids.contains(id))
+                    {
+                        state.known_packs.names[idx].insert(target.clone());
+                    }
+                }
+                if !profile_ids.is_empty() {
+                    queue_profile(
+                        state,
+                        crate::SimplyLoveProfileRequest::MarkPacksKnown {
+                            profile_ids,
+                            pack_names: vec![target.clone()],
+                        },
+                    );
+                }
             }
             if state.expanded_pack_name.as_ref() == Some(&target) {
                 state.expanded_pack_name = None;
@@ -9720,7 +9870,7 @@ fn handle_raw_key_event_impl(
         let ignore_open_text = matches!(action, select_music_menu::Action::SongSearch);
         // Consume the key even when the dispatched action itself reports
         // ThemeEffect::None, so a successful raw shortcut stays single-action.
-        let side = profile::get_session_player_side();
+        let side = state.session.player_side;
         let action = match dispatch_menu_action(state, action, side) {
             ThemeEffect::None => ThemeEffect::ConsumeInput,
             other => other,
@@ -9751,7 +9901,7 @@ fn handle_raw_key_event_impl(
         && key.code == KeyCode::F7
         && !key_bound_to_player_input(key)
     {
-        let target_chart_type = profile::get_session_play_style().chart_type();
+        let target_chart_type = state.session.play_style.chart_type();
         if let Some(MusicWheelEntry::Song(song)) = state.entries.get(state.selected_index)
             && let Some(chart) =
                 song.chart_for_steps_index(target_chart_type, state.selected_steps_index)
@@ -9921,7 +10071,7 @@ fn handle_input_impl(state: &mut State, ev: &InputEvent, fine: bool) -> ThemeEff
     reset_exit_code_on_non_lr_press(state, ev);
     let only_dedicated_menu_buttons = state.policy.dedicated_menu_only;
 
-    let play_style = deadsync_profile::compat::get_session_play_style();
+    let play_style = state.session.play_style;
     if play_style == profile_data::PlayStyle::Versus {
         return match ev.action {
             action if direct_lr_blocked_by_dedicated_menu(action, only_dedicated_menu_buttons) => {
@@ -10026,7 +10176,7 @@ fn handle_input_impl(state: &mut State, ev: &InputEvent, fine: bool) -> ThemeEff
         };
     }
 
-    match deadsync_profile::compat::get_session_player_side() {
+    match state.session.player_side {
         profile_data::PlayerSide::P2 => match ev.action {
             action if direct_lr_blocked_by_dedicated_menu(action, only_dedicated_menu_buttons) => {
                 ThemeEffect::None
@@ -10344,7 +10494,7 @@ fn update_impl(state: &mut State, dt: f32, smx: &SmxAssignmentView) -> ThemeEffe
         }
 
         if let Some(MusicWheelEntry::Song(song)) = state.entries.get(state.selected_index) {
-            let target_chart_type = profile::get_session_play_style().chart_type();
+            let target_chart_type = state.session.play_style.chart_type();
             if let Some(idx) =
                 song.best_steps_index(target_chart_type, state.preferred_difficulty_index)
             {
@@ -10363,7 +10513,7 @@ fn update_impl(state: &mut State, dt: f32, smx: &SmxAssignmentView) -> ThemeEffe
         _ => None,
     };
     if let Some(song) = selected_song_for_cache {
-        let play_style = profile::get_session_play_style();
+        let play_style = state.session.play_style;
         ensure_chart_cache_for_song(
             state,
             &song,
@@ -10494,7 +10644,7 @@ fn update_impl(state: &mut State, dt: f32, smx: &SmxAssignmentView) -> ThemeEffe
         maybe_prewarm_replaygain_for_pack(state, state.policy.media.replay_gain);
 
     if allow_gs_fetch_for_selection(state) {
-        let play_style = profile::get_session_play_style();
+        let play_style = state.session.play_style;
         let target_chart_type = play_style.chart_type();
         let presentation = state.policy.presentation;
         let show_select_music_leaderboards =
@@ -10599,7 +10749,7 @@ fn update_impl(state: &mut State, dt: f32, smx: &SmxAssignmentView) -> ThemeEffe
                 let primary_side = if is_versus {
                     profile_data::PlayerSide::P1
                 } else {
-                    profile::get_session_player_side()
+                    state.session.player_side
                 };
                 let gs_active = state.scoreboxes[profile_data::player_side_index(primary_side)]
                     .groovestats_active;
@@ -10682,7 +10832,7 @@ pub fn prime_displayed_chart_data(state: &mut State) {
         return;
     };
     let song = song.clone();
-    let play_style = profile::get_session_play_style();
+    let play_style = state.session.play_style;
     let target_chart_type = play_style.chart_type();
     let is_versus = play_style == profile_data::PlayStyle::Versus;
     ensure_chart_cache_for_song(state, &song, target_chart_type, is_versus);
@@ -10931,15 +11081,15 @@ fn push_folder_stats_overlay(
     state: &State,
     asset_manager: &AssetManager,
     side: profile_data::PlayerSide,
-    side_profile: &profile_data::Profile,
+    display_name: &str,
     target_chart_type: &str,
     chart: Option<&ChartData>,
     preferred_difficulty_index: usize,
     is_versus: bool,
 ) {
-    if !profile::is_session_side_joined(side)
-        || profile::is_session_side_guest(side)
-        || side_profile.display_name.trim().is_empty()
+    if !state.session.side_joined(side)
+        || state.session.side_guest(side)
+        || display_name.trim().is_empty()
     {
         return;
     }
@@ -11020,7 +11170,7 @@ fn push_folder_stats_overlay(
     ));
     children.push(act!(text:
         font(font_key):
-        settext(cached_str_ref(&side_profile.display_name)):
+        settext(cached_str_ref(display_name)):
         align(0.5, 0.5):
         xy(cx, sy(-20.0)):
         maxwidth(200.0 * scale):
@@ -11139,7 +11289,7 @@ fn immediate_selected_charts(
 }
 
 pub fn scorebox_runtime_request(state: &State) -> SelectMusicScoreboxRequest {
-    let charts = immediate_selected_charts(state, profile::get_session_play_style());
+    let charts = immediate_selected_charts(state, state.session.play_style);
     SelectMusicScoreboxRequest {
         chart_hashes: charts.map(|chart| chart.map(|chart| chart.short_hash.clone())),
         leaderboards_allowed: allow_gs_fetch_for_selection(state),
@@ -11153,7 +11303,7 @@ pub fn leaderboard_runtime_request(state: &State) -> Option<SelectMusicLeaderboa
 
 pub fn music_wheel_runtime_request(state: &State) -> MusicWheelRuntimeRequest<'_> {
     let policy = state.policy.wheel;
-    let play_style = profile::get_session_play_style();
+    let play_style = state.session.play_style;
     let charts = immediate_selected_charts(state, play_style);
     let slots = music_wheel::runtime_slot_requests(
         &state.entries,
@@ -11209,8 +11359,8 @@ pub fn push_actors(
     stage_number: usize,
 ) {
     actors.reserve(256);
-    let side = deadsync_profile::compat::get_session_player_side();
-    let play_style = deadsync_profile::compat::get_session_play_style();
+    let side = state.session.player_side;
+    let play_style = state.session.play_style;
     let solo_side = solo_runtime_side(play_style, side);
     let is_p2_solo = solo_side == profile_data::PlayerSide::P2;
     let is_p2_single = profile_data::is_single_p2_side(play_style, side);
@@ -11237,9 +11387,6 @@ pub fn push_actors(
 
     let select_music_label = tr("ScreenTitles", "SelectMusic");
     screen_bars::push(&mut actors, select_music_label.as_ref());
-
-    let p1_profile = deadsync_profile::compat::get_for_side(profile_data::PlayerSide::P1);
-    let p2_profile = deadsync_profile::compat::get_for_side(profile_data::PlayerSide::P2);
 
     let scorebox_cycle_enabled = presentation.scorebox_cycle_enabled;
 
@@ -11335,7 +11482,7 @@ pub fn push_actors(
         actors.push(act!(sprite(cdtitle_key.clone()): align(0.5, 0.5): xy(cdtitle_x, cdtitle_y): zoom(cdtitle_zoom): rotationy(cdtitle_rot): setstate(cdtitle_frame): z(101)));
     }
 
-    let music_rate = deadsync_profile::compat::get_session_music_rate();
+    let music_rate = state.session.music_rate;
     if (music_rate - 1.0).abs() > 0.001 {
         let text = cached_music_rate_banner_text(music_rate);
         actors.push(act!(quad: align(0.5, 0.5): xy(banner_cx, banner_cy + 75.0 * banner_zoom): setsize(BANNER_NATIVE_WIDTH * banner_zoom, 14.0 * banner_zoom): z(52): diffuse(0.117, 0.156, 0.184, 0.8)));
@@ -11349,7 +11496,7 @@ pub fn push_actors(
                 state,
                 asset_manager,
                 profile_data::PlayerSide::P1,
-                &p1_profile,
+                state.profiles.display_name(profile_data::PlayerSide::P1),
                 target_chart_type,
                 immediate_chart_p1,
                 state.preferred_difficulty_index,
@@ -11360,20 +11507,19 @@ pub fn push_actors(
                 state,
                 asset_manager,
                 profile_data::PlayerSide::P2,
-                &p2_profile,
+                state.profiles.display_name(profile_data::PlayerSide::P2),
                 target_chart_type,
                 immediate_chart_p2,
                 state.p2_preferred_difficulty_index,
                 true,
             );
         } else {
-            let active_profile = if is_p2_solo { &p2_profile } else { &p1_profile };
             push_folder_stats_overlay(
                 &mut actors,
                 state,
                 asset_manager,
                 solo_side,
-                active_profile,
+                state.profiles.display_name(solo_side),
                 target_chart_type,
                 immediate_chart_p1,
                 state.preferred_difficulty_index,
@@ -12398,7 +12544,7 @@ pub fn push_actors(
                 );
             }
         } else if is_versus {
-            let incumbent = profile::get_session_player_side();
+            let incumbent = state.session.player_side;
             if incumbent == profile_data::PlayerSide::P2 {
                 push_scorebox(
                     profile_data::PlayerSide::P2,
@@ -12546,17 +12692,17 @@ pub fn push_actors(
         return;
     }
     if state.test_input_overlay_visible {
-        let play_style = profile::get_session_play_style();
+        let play_style = state.session.play_style;
         let (mut show_p1, mut show_p2, pad_spacing) = match play_style {
             profile_data::PlayStyle::Double => (true, true, 105.0),
             profile_data::PlayStyle::Single | profile_data::PlayStyle::Versus => (
-                profile::is_session_side_joined(profile_data::PlayerSide::P1),
-                profile::is_session_side_joined(profile_data::PlayerSide::P2),
+                state.session.side_joined(profile_data::PlayerSide::P1),
+                state.session.side_joined(profile_data::PlayerSide::P2),
                 125.0,
             ),
         };
         if !show_p1 && !show_p2 {
-            match profile::get_session_player_side() {
+            match state.session.player_side {
                 profile_data::PlayerSide::P1 => show_p1 = true,
                 profile_data::PlayerSide::P2 => show_p2 = true,
             }
@@ -12923,28 +13069,6 @@ mod tests {
     use std::path::{Path, PathBuf};
     use std::sync::Arc;
     use std::time::{Duration, Instant};
-
-    struct JoinedSidesGuard {
-        p1: bool,
-        p2: bool,
-    }
-
-    impl JoinedSidesGuard {
-        fn set(p1: bool, p2: bool) -> Self {
-            let guard = Self {
-                p1: profile_data::compat::is_session_side_joined(profile_data::PlayerSide::P1),
-                p2: profile_data::compat::is_session_side_joined(profile_data::PlayerSide::P2),
-            };
-            profile_data::compat::set_session_joined(p1, p2);
-            guard
-        }
-    }
-
-    impl Drop for JoinedSidesGuard {
-        fn drop(&mut self) {
-            profile_data::compat::set_session_joined(self.p1, self.p2);
-        }
-    }
 
     fn raw_key(code: KeyCode, pressed: bool, repeat: bool) -> RawKeyboardEvent {
         RawKeyboardEvent {
@@ -13476,6 +13600,122 @@ mod tests {
     }
 
     #[test]
+    fn session_change_updates_local_view_before_shell_persistence() {
+        let mut state = init_placeholder();
+        super::set_session(
+            &mut state,
+            profile_data::PlayStyle::Double,
+            profile_data::PlayerSide::P2,
+            [false, true],
+        );
+        super::queue_sfx(&mut state, "assets/sounds/start.ogg");
+
+        assert_eq!(state.session.play_style, profile_data::PlayStyle::Double);
+        assert_eq!(state.session.player_side, profile_data::PlayerSide::P2);
+        assert_eq!(state.session.joined, [false, true]);
+
+        let ThemeEffect::Batch(effects) =
+            super::prepend_pending_runtime(&mut state, ThemeEffect::None)
+        else {
+            panic!("profile persistence should precede the queued sound");
+        };
+        assert!(matches!(
+            effects.as_slice(),
+            [
+                ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Profile(
+                    crate::SimplyLoveProfileRequest::SetSession {
+                        play_style: profile_data::PlayStyle::Double,
+                        player_side: profile_data::PlayerSide::P2,
+                        joined: [false, true],
+                    }
+                )),
+                ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Audio(
+                    deadsync_theme::AudioRequest::PlaySfx(path)
+                )),
+            ] if path == "assets/sounds/start.ogg"
+        ));
+        assert!(state.pending_profile.is_empty());
+    }
+
+    #[test]
+    fn music_rate_change_updates_local_view_and_queues_shell_persistence() {
+        let mut state = init_placeholder();
+        super::set_music_rate(&mut state, 1.25);
+
+        assert_eq!(state.session.music_rate, 1.25);
+        assert!(matches!(
+            super::prepend_pending_runtime(&mut state, ThemeEffect::None),
+            ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Profile(
+                crate::SimplyLoveProfileRequest::SetMusicRate(rate)
+            )) if (rate - 1.25).abs() <= f32::EPSILON
+        ));
+        assert!(state.pending_profile.is_empty());
+    }
+
+    #[test]
+    fn pack_favorite_updates_local_view_before_shell_persistence() {
+        let mut state = init_placeholder();
+        state.profiles.local_profile_ids[0] = Some("alice".to_string());
+        state.entries = vec![super::MusicWheelEntry::PackHeader {
+            name: "Pack A".to_string(),
+            original_index: 0,
+            banner_path: None,
+            song_count: 1,
+            pack_key: Some("Pack A".to_string()),
+            parent_series: None,
+        }];
+
+        super::toggle_favorite_for_selected_entry(&mut state, profile_data::PlayerSide::P1);
+
+        assert!(state.favorites.pack_names[0].contains("Pack A"));
+        let ThemeEffect::Batch(effects) =
+            super::prepend_pending_runtime(&mut state, ThemeEffect::None)
+        else {
+            panic!("favorite persistence should precede its sound");
+        };
+        assert!(matches!(
+            effects.as_slice(),
+            [
+                ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Profile(
+                    crate::SimplyLoveProfileRequest::TogglePackFavorite { side, pack_name }
+                )),
+                ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Audio(
+                    deadsync_theme::AudioRequest::PlaySfx(path)
+                )),
+            ] if *side == profile_data::PlayerSide::P1
+                && pack_name == "Pack A"
+                && path == "assets/sounds/start.ogg"
+        ));
+    }
+
+    #[test]
+    fn open_pack_mode_seeds_empty_history_through_shell_request() {
+        let profiles = crate::views::SelectMusicProfileView {
+            local_profile_ids: [Some("alice".to_string()), None],
+            ..Default::default()
+        };
+        let mut known = profile_data::KnownPackSnapshot::default();
+        let (new_packs, requests) = super::sync_new_pack_names(
+            &["alice".to_string()],
+            vec!["Pack A".to_string(), "Pack B".to_string()],
+            &std::collections::HashSet::new(),
+            crate::config::NewPackMode::OpenPack,
+            &profiles,
+            &mut known,
+        );
+
+        assert!(new_packs.is_empty());
+        assert_eq!(known.names[0].len(), 2);
+        assert!(matches!(
+            requests.as_slice(),
+            [crate::SimplyLoveProfileRequest::MarkPacksKnown {
+                profile_ids,
+                pack_names,
+            }] if profile_ids == &["alice"] && pack_names == &["Pack A", "Pack B"]
+        ));
+    }
+
+    #[test]
     fn lobby_action_emits_sound_before_shell_request() {
         let mut state = init_placeholder();
         let effect = super::apply_lobby_input_outcome(
@@ -13507,6 +13747,19 @@ mod tests {
         super::sync_runtime_view(
             &mut state,
             crate::views::SelectMusicRuntimeView {
+                session: crate::views::SelectMusicSessionView {
+                    play_style: profile_data::PlayStyle::Versus,
+                    player_side: profile_data::PlayerSide::P2,
+                    joined: [true, true],
+                    guest: [false, true],
+                    music_rate: 1.25,
+                },
+                profiles: crate::views::SelectMusicProfileView {
+                    display_names: ["Alice".to_string(), "Bob".to_string()],
+                    local_profile_ids: [Some("alice".to_string()), None],
+                    pad_profile_ids: [Some("alice".to_string()), Some("alice".to_string())],
+                },
+                favorites: None,
                 audio_playback: deadsync_theme::views::AudioPlaybackView {
                     music_position_seconds: 12.5,
                 },
@@ -13572,6 +13825,19 @@ mod tests {
             crate::config::GraphOrientation::Horizontal
         );
         assert_eq!(state.sync_confidence_percent, 75);
+        assert_eq!(state.session.play_style, profile_data::PlayStyle::Versus);
+        assert_eq!(state.session.player_side, profile_data::PlayerSide::P2);
+        assert_eq!(state.session.joined, [true, true]);
+        assert_eq!(state.session.guest, [false, true]);
+        assert_eq!(state.session.music_rate, 1.25);
+        assert_eq!(state.profiles.display_names, ["Alice", "Bob"]);
+        assert_eq!(
+            state
+                .profiles
+                .local_profile_id(profile_data::PlayerSide::P1),
+            Some("alice")
+        );
+        assert_eq!(state.profiles.pad_profile_id(1), Some("alice"));
         assert!(state.policy.media.show_previews);
         assert!(state.policy.media.replay_gain);
         assert!(state.policy.wheel.show_grades);
@@ -14258,7 +14524,6 @@ mod tests {
 
     #[test]
     fn preview_mute_hotkey_toggles_lobby_locked_wheel() {
-        let _joined_sides = JoinedSidesGuard::set(true, false);
         let mut state = init_placeholder();
         state.currently_playing_preview_path = Some(PathBuf::from("preview.ogg"));
         state.currently_playing_preview_start_sec = Some(1.0);

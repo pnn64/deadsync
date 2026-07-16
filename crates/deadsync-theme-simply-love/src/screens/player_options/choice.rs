@@ -1,5 +1,4 @@
 use super::*;
-use deadsync_profile::compat as gp;
 use deadsync_profile::{PlayStyle, PlayerSide};
 
 // ============================ Dispatchers ============================
@@ -12,9 +11,9 @@ use deadsync_profile::{PlayStyle, PlayerSide};
 /// The typed bindings (`NumericBinding`, `ChoiceBinding<T>`) wrap this
 /// internally via their `apply_for_player` methods below, so the
 /// dispatcher itself never reads it.
-pub(super) fn persist_ctx(player_idx: usize) -> (bool, PlayerSide) {
-    let play_style = gp::get_session_play_style();
-    let persisted_idx = super::session_persisted_player_idx();
+pub(super) fn persist_ctx(state: &State, player_idx: usize) -> (bool, PlayerSide) {
+    let play_style = state.play_style;
+    let persisted_idx = state.persisted_player_idx;
     let should_persist = play_style == PlayStyle::Versus || player_idx == persisted_idx;
     let side = deadsync_profile::player_side_for_index(player_idx);
     (should_persist, side)
@@ -35,7 +34,7 @@ impl NumericBinding {
         value: i32,
     ) -> Outcome {
         let outcome = (self.apply)(&mut state.player_profiles[player_idx], value);
-        let (should_persist, side) = persist_ctx(player_idx);
+        let (should_persist, side) = persist_ctx(state, player_idx);
         if should_persist {
             (self.persist_for_side)(side, value);
         }
@@ -52,7 +51,7 @@ impl<T: Copy + 'static> ChoiceBinding<T> {
         value: T,
     ) -> Outcome {
         let outcome = (self.apply)(&mut state.player_profiles[player_idx], value);
-        let (should_persist, side) = persist_ctx(player_idx);
+        let (should_persist, side) = persist_ctx(state, player_idx);
         if should_persist {
             (self.persist_for_side)(side, value);
         }
@@ -134,7 +133,7 @@ pub(super) fn dispatch_behavior_delta(
         queue_sfx(state, CHANGE_VALUE_SFX);
     }
     if outcome.changed_visibility {
-        super::sync_selected_rows_with_visibility(state, super::session_active_players());
+        super::sync_selected_rows_with_visibility(state, state.active);
     }
 }
 
@@ -196,13 +195,13 @@ pub(super) fn toggle_bitmask_row_generic(state: &mut State, player_idx: usize, i
         stored,
     );
 
-    let (should_persist, side) = persist_ctx(idx);
+    let (should_persist, side) = persist_ctx(state, idx);
     if should_persist {
         (writeback.persist_for_side)(side, &state.player_profiles[idx]);
     }
 
     if writeback.sync_visibility {
-        sync_selected_rows_with_visibility(state, session_active_players());
+        sync_selected_rows_with_visibility(state, state.active);
     }
 
     queue_sfx(state, CHANGE_VALUE_SFX);
@@ -308,11 +307,11 @@ pub(super) fn apply_pane(state: &mut State, pane: OptionsPane) {
     state.pane_mut().reset_cursor();
     state.start_input = [PlayerStartInput::default(); PLAYER_SLOTS];
     state.help_anim_time = [0.0; PLAYER_SLOTS];
-    let active = session_active_players();
-    let allow = state.allow_per_player_global_offsets;
+    let active = state.active;
+    let policy = state.policy;
     let option_masks = state.option_masks;
     let p = state.pane_mut();
-    p.row_tweens = init_row_tweens(&p.row_map, p.selected_row, active, option_masks, allow);
+    p.row_tweens = init_row_tweens(&p.row_map, p.selected_row, active, option_masks, policy);
     state.pane_mut().arcade_row_focus = std::array::from_fn(|player_idx| {
         row_allows_arcade_next_row(state, state.pane().selected_row[player_idx])
     });

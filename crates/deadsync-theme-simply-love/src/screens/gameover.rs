@@ -4,13 +4,12 @@ use crate::assets::i18n::{tr, tr_fmt};
 use crate::assets::{FontRole, current_machine_font_key, visual_styles};
 use crate::screens::components::shared::{transitions, visual_style_bg};
 use crate::screens::{Screen, ThemeEffect};
+use crate::views::{PostSongPlayerView, PostSongRuntimeView};
 use deadlib_present::actors::Actor;
 use deadlib_present::color;
 use deadlib_present::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 use deadsync_input::{InputEvent, VirtualAction};
-use deadsync_online::score_compat as scores;
 use deadsync_profile as profile_data;
-use deadsync_profile::compat as profile;
 use deadsync_score::stage_stats;
 
 /* ---------------------------- transitions ---------------------------- */
@@ -110,21 +109,22 @@ fn format_time_spent(seconds_total: f32) -> String {
 }
 
 fn build_player_lines(
+    player: &PostSongPlayerView,
     side: profile_data::PlayerSide,
     stages: &[stage_stats::StageSummary],
-    total_songs_played: u32,
 ) -> (Vec<String>, Vec<String>) {
     // Profile stats (only for persistent profiles)
     let mut profile_lines: Vec<String> = Vec::with_capacity(3);
-    if profile::is_session_side_joined(side) && !profile::is_session_side_guest(side) {
-        let p = profile::get_for_side(side);
-        profile_lines.push(p.display_name);
+    if player.joined && !player.guest {
+        profile_lines.push(player.display_name.clone());
 
-        if p.ignore_step_count_calories {
+        if player.ignore_step_count_calories {
             profile_lines.push(String::new());
         } else {
-            let cals = if p.calories_burned_today.is_finite() && p.calories_burned_today >= 0.0 {
-                p.calories_burned_today.round() as u32
+            let cals = if player.calories_burned_today.is_finite()
+                && player.calories_burned_today >= 0.0
+            {
+                player.calories_burned_today.round() as u32
             } else {
                 0
             };
@@ -132,8 +132,9 @@ fn build_player_lines(
         }
 
         profile_lines.push(format!(
-            "{}\n{total_songs_played}",
-            tr("GameOver", "TotalSongsPlayed")
+            "{}\n{}",
+            tr("GameOver", "TotalSongsPlayed"),
+            player.total_songs_played,
         ));
     }
 
@@ -164,33 +165,16 @@ pub struct State {
     pub active_color_index: i32,
     bg: visual_style_bg::State,
     elapsed: f32,
-    total_songs_played: [u32; 2],
+    runtime: PostSongRuntimeView,
 }
 
-fn init_inner(scan_totals: bool) -> State {
-    let total_songs_played = if scan_totals {
-        [
-            scores::total_songs_played_for_side(profile_data::PlayerSide::P1),
-            scores::total_songs_played_for_side(profile_data::PlayerSide::P2),
-        ]
-    } else {
-        [0, 0]
-    };
-
+pub fn init(runtime: PostSongRuntimeView) -> State {
     State {
         active_color_index: color::DEFAULT_COLOR_INDEX, // overwritten by app
         bg: visual_style_bg::State::new(),
         elapsed: 0.0,
-        total_songs_played,
+        runtime,
     }
-}
-
-pub fn init() -> State {
-    init_inner(true)
-}
-
-pub fn init_blank() -> State {
-    init_inner(false)
 }
 
 pub fn update(state: &mut State, dt: f32) -> Option<ThemeEffect> {
@@ -261,9 +245,9 @@ pub fn push_actors(
     {
         let cx = screen_center_x();
         let cy = screen_center_y();
-        let zoom = match crate::config::get().machine_font {
-            crate::config::MachineFont::Wendy => 1.2,
-            crate::config::MachineFont::Mega => 1.95,
+        let zoom = match state.runtime.machine_font {
+            deadsync_config::prelude::MachineFont::Wendy => 1.2,
+            deadsync_config::prelude::MachineFont::Mega => 1.95,
         };
 
         actors.push(act!(text:
@@ -291,7 +275,8 @@ pub fn push_actors(
     }
 
     for side in [profile_data::PlayerSide::P1, profile_data::PlayerSide::P2] {
-        if !profile::is_session_side_joined(side) {
+        let player = &state.runtime.players[profile_data::player_side_index(side)];
+        if !player.joined {
             continue;
         }
 
@@ -302,9 +287,8 @@ pub fn push_actors(
         };
 
         // Avatar (persistent profiles only)
-        if !profile::is_session_side_guest(side) {
-            let p = profile::get_for_side(side);
-            if let Some(key) = p.avatar_texture_key {
+        if !player.guest {
+            if let Some(key) = player.avatar_texture_key.as_deref() {
                 actors.push(act!(sprite(key):
                     align(0.0, 0.0):
                     xy(x_pos - AVATAR_DIM * 0.5, AVATAR_Y):
@@ -340,11 +324,7 @@ pub fn push_actors(
             z(12)
         ));
 
-        let (profile_lines, general_lines) = build_player_lines(
-            side,
-            stages,
-            state.total_songs_played[profile_data::player_side_index(side)],
-        );
+        let (profile_lines, general_lines) = build_player_lines(player, side, stages);
 
         for (i, line) in profile_lines.iter().enumerate() {
             let y = (LINE_HEIGHT * (i as f32)) + PROFILE_STATS_Y;

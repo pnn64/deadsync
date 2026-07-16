@@ -14,8 +14,8 @@ use crate::screens::input as screen_input;
 use crate::screens::{Screen, ThemeEffect};
 pub use crate::views::{CourseStagePlan, SelectedCoursePlan};
 use crate::views::{
-    MusicWheelRankSource, MusicWheelRuntimeRequest, MusicWheelRuntimeView, SelectCourseInitView,
-    SelectCourseRuntimeView, SelectCourseScoreRequest, SelectCourseScoreView,
+    MusicWheelRankSource, MusicWheelRuntimeRequest, MusicWheelRuntimeView, SelectCourseContextView,
+    SelectCourseInitView, SelectCourseRuntimeView, SelectCourseScoreRequest, SelectCourseScoreView,
 };
 use deadlib_present::actors::{Actor, SizeSpec};
 use deadlib_present::cache::{TextCache, cached_text};
@@ -24,18 +24,15 @@ use deadlib_present::space::{
     is_wide, screen_center_x, screen_center_y, screen_height, screen_width,
 };
 use deadsync_chart::song::standard_difficulty_index;
-use deadsync_chart::{ChartData, SongData};
+use deadsync_chart::{ChartData, SongData, SongPack};
 use deadsync_input::{InputEvent, PadDir, VirtualAction};
 use deadsync_profile as profile_data;
-use deadsync_profile::compat as profile;
 use deadsync_simfile::course::{
     self, COURSE_RATING_ORDER, CourseEntry, CourseFile, CourseSong, CourseTotals, Difficulty,
     SongSort, StepsSpec, add_chart_totals, course_difficulty_from_meters, course_meter,
     nearest_filled_slot, push_song_bpm_range, resolve_course_chart, resolve_entry_song,
     song_unique_key,
 };
-use deadsync_simfile::runtime_cache::get_course_cache;
-use deadsync_simfile::runtime_cache::get_song_cache;
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::hash::Hasher;
@@ -222,6 +219,7 @@ pub struct State {
     pub wheel_offset_from_selection: f32,
     pub current_banner_key: String,
     pub session_elapsed: f32,
+    context: SelectCourseContextView,
     music_wheel: MusicWheelRuntimeView,
     score_view: SelectCourseScoreView,
 
@@ -257,6 +255,7 @@ fn song_dir_key(song: &SongData) -> Option<String> {
 }
 
 fn build_song_lookup(
+    song_packs: &[SongPack],
     played_chart_counts: &[(String, u32)],
 ) -> (
     HashMap<(String, String), Arc<SongData>>,
@@ -265,14 +264,13 @@ fn build_song_lookup(
     Vec<Arc<SongData>>,
     HashMap<String, u32>,
 ) {
-    let song_cache = get_song_cache();
     let mut by_group_song: HashMap<(String, String), Arc<SongData>> = HashMap::new();
     let mut by_song: HashMap<String, Arc<SongData>> = HashMap::new();
     let mut songs_by_group: HashMap<String, Vec<Arc<SongData>>> = HashMap::new();
     let mut all_songs = Vec::new();
     let mut chart_to_song_key: HashMap<String, String> = HashMap::new();
 
-    for pack in song_cache.iter() {
+    for pack in song_packs {
         let group_key = pack.group_name.trim().to_ascii_lowercase();
         for song in &pack.songs {
             let unique_song_key = song_unique_key(song);
@@ -293,8 +291,6 @@ fn build_song_lookup(
             by_song.entry(song_key).or_insert_with(|| song.clone());
         }
     }
-
-    drop(song_cache);
 
     let mut song_play_counts: HashMap<String, u32> = HashMap::new();
     for (chart_hash, plays) in played_chart_counts {
@@ -443,16 +439,15 @@ fn make_course_song(meta: &CourseMeta) -> SongData {
 }
 
 fn build_init_data(init_view: &SelectCourseInitView) -> InitData {
-    let translated_titles = crate::config::get().translated_titles;
-    let target_chart_type = profile::get_session_play_style().chart_type();
+    let translated_titles = init_view.translated_titles;
+    let target_chart_type = init_view.context.play_style.chart_type();
     let (by_group_song, by_song, songs_by_group, all_songs, song_play_counts) =
-        build_song_lookup(&init_view.played_chart_counts);
-    let course_cache = get_course_cache();
+        build_song_lookup(&init_view.song_packs, &init_view.played_chart_counts);
 
     let mut grouped: HashMap<String, Vec<Arc<CourseMeta>>> = HashMap::new();
     let mut course_meta_by_path: HashMap<PathBuf, Arc<CourseMeta>> = HashMap::new();
 
-    for (path, course) in course_cache.iter() {
+    for (path, course) in &init_view.courses {
         let mut total_seconds = 0i32;
         let mut min_bpm = None;
         let mut max_bpm = None;
@@ -696,7 +691,6 @@ fn rebuild_displayed_entries(state: &mut State) {
         Some(MusicWheelEntry::Song(song)) => Some(song.simfile_path.clone()),
         _ => None,
     };
-    let cfg = crate::config::get();
     state.entries.clear();
     state.entries.reserve(state.all_entries.len());
     for entry in &state.all_entries {
@@ -705,8 +699,9 @@ fn rebuild_displayed_entries(state: &mut State) {
                 .course_meta_by_path
                 .get(&song.simfile_path)
                 .is_none_or(|meta| {
-                    (cfg.show_random_courses || !meta.has_random_entries)
-                        && (cfg.show_most_played_courses || !meta.has_most_played_entries)
+                    (state.context.policy.show_random_courses || !meta.has_random_entries)
+                        && (state.context.policy.show_most_played_courses
+                            || !meta.has_most_played_entries)
                 }),
             _ => true,
         };
@@ -858,17 +853,11 @@ fn selected_banner_path(state: &State) -> Option<PathBuf> {
     }
 }
 
-fn restore_last_course(state: &mut State) {
-    let profile_data = profile::get();
-    let last_played = profile_data.last_played_course(profile::get_session_play_style());
-    let Some(path) = last_played.course_path.as_deref() else {
+fn restore_last_course(state: &mut State, init_view: &SelectCourseInitView) {
+    let Some(path) = init_view.last_course_path.as_deref() else {
         return;
     };
-    restore_selection_for_course(
-        state,
-        Path::new(path),
-        last_played.difficulty_name.as_deref(),
-    );
+    restore_selection_for_course(state, path, init_view.last_course_difficulty.as_deref());
 }
 
 pub fn init(init_view: SelectCourseInitView) -> State {
@@ -881,6 +870,7 @@ pub fn init(init_view: SelectCourseInitView) -> State {
         wheel_offset_from_selection: 0.0,
         current_banner_key: "banner1.png".to_string(),
         session_elapsed: 0.0,
+        context: init_view.context,
         music_wheel: MusicWheelRuntimeView::default(),
         score_view: SelectCourseScoreView::default(),
         all_entries: init.all_entries,
@@ -905,7 +895,7 @@ pub fn init(init_view: SelectCourseInitView) -> State {
         three_key_focus: ThreeKeyFocus::Wheel,
     };
     rebuild_displayed_entries(&mut state);
-    restore_last_course(&mut state);
+    restore_last_course(&mut state, &init_view);
     state
 }
 
@@ -924,8 +914,8 @@ fn music_wheel_settle_offset(state: &mut State, dt: f32) {
 }
 
 #[inline(always)]
-fn music_wheel_hold_spin_speed() -> f32 {
-    let configured = crate::config::get().music_wheel_switch_speed;
+fn music_wheel_hold_spin_speed(state: &State) -> f32 {
+    let configured = state.context.policy.music_wheel_switch_speed;
     if configured == 0 {
         MUSIC_WHEEL_HOLD_SPIN_SPEED_DEFAULT
     } else {
@@ -964,7 +954,7 @@ fn music_wheel_update_hold_scroll(state: &mut State, dt: f32, dir: NavDirection)
         NavDirection::Left => -1.0,
         NavDirection::Right => 1.0,
     };
-    let hold_spin_speed = music_wheel_hold_spin_speed();
+    let hold_spin_speed = music_wheel_hold_spin_speed(state);
     state.wheel_offset_from_selection -= hold_spin_speed * moving * dt;
     state.wheel_offset_from_selection = state.wheel_offset_from_selection.clamp(-1.0, 1.0);
 
@@ -1145,10 +1135,13 @@ pub fn handle_confirm(state: &mut State) -> ThemeEffect {
 }
 
 pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
-    let three_key_action = screen_input::three_key_menu_action(&mut state.menu_lr_chord, ev);
-    if screen_input::dedicated_three_key_nav_enabled()
-        && matches!(state.three_key_focus, ThreeKeyFocus::Wheel)
-    {
+    let dedicated_three_key_nav = state.context.policy.dedicated_three_key_nav;
+    let three_key_action = screen_input::three_key_menu_action_enabled(
+        &mut state.menu_lr_chord,
+        ev,
+        dedicated_three_key_nav,
+    );
+    if dedicated_three_key_nav && matches!(state.three_key_focus, ThreeKeyFocus::Wheel) {
         match ev.action {
             VirtualAction::p1_left
             | VirtualAction::p1_menu_left
@@ -1231,7 +1224,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
         return ThemeEffect::None;
     }
 
-    if screen_input::dedicated_three_key_nav_enabled() {
+    if dedicated_three_key_nav {
         if let Some((_, nav)) = three_key_action {
             return match nav {
                 screen_input::ThreeKeyMenuAction::Prev => {
@@ -1297,7 +1290,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
         }
     }
 
-    let play_style = profile::get_session_play_style();
+    let play_style = state.context.play_style;
     if play_style == profile_data::PlayStyle::Versus {
         return match ev.action {
             VirtualAction::p1_left | VirtualAction::p1_menu_left => {
@@ -1351,7 +1344,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
         };
     }
 
-    match profile::get_session_player_side() {
+    match state.context.player_side {
         profile_data::PlayerSide::P1 => match ev.action {
             VirtualAction::p1_left | VirtualAction::p1_menu_left => {
                 handle_wheel_dir(state, PadDir::Left, ev.pressed, ev.timestamp)
@@ -1606,9 +1599,9 @@ fn course_selection_anim_beat(state: &State) -> f32 {
 }
 
 #[inline(always)]
-fn course_arrow_bounce01(selection_beat: f32) -> f32 {
+fn course_arrow_bounce01(selection_beat: f32, global_offset_seconds: f32) -> f32 {
     // Match SelectMusic arrow timing: effectperiod(1) + effectoffset(-10*GlobalOffsetSeconds).
-    let effect_offset = -10.0 * crate::config::get().global_offset_seconds;
+    let effect_offset = -10.0 * global_offset_seconds;
     let t = (selection_beat + effect_offset).rem_euclid(1.0);
     (t * std::f32::consts::PI).sin().clamp(0.0, 1.0)
 }
@@ -1674,7 +1667,6 @@ fn sl_select_music_bg_flash() -> Actor {
 }
 
 pub fn music_wheel_runtime_request(state: &State) -> MusicWheelRuntimeRequest<'_> {
-    let play_style = profile::get_session_play_style();
     MusicWheelRuntimeRequest {
         read_scores: true,
         rank_source: MusicWheelRankSource::None,
@@ -1685,7 +1677,7 @@ pub fn music_wheel_runtime_request(state: &State) -> MusicWheelRuntimeRequest<'_
             state.selected_index,
             [None, None],
             [0, 0],
-            play_style,
+            state.context.play_style,
         ),
     }
 }
@@ -1707,14 +1699,22 @@ pub fn score_runtime_request(state: &State) -> SelectCourseScoreRequest<'_> {
 
 #[inline(always)]
 pub fn sync_runtime_view(state: &mut State, view: SelectCourseRuntimeView) {
+    let course_filter_changed = state.context.policy.show_random_courses
+        != view.context.policy.show_random_courses
+        || state.context.policy.show_most_played_courses
+            != view.context.policy.show_most_played_courses;
+    state.context = view.context;
     state.music_wheel = view.music_wheel;
     state.score_view = view.score;
+    if course_filter_changed {
+        rebuild_displayed_entries(state);
+    }
 }
 
 pub fn push_actors(actors: &mut Vec<Actor>, state: &State, _asset_manager: &AssetManager) {
     actors.reserve(256);
-    let side = profile::get_session_player_side();
-    let play_style = profile::get_session_play_style();
+    let side = state.context.player_side;
+    let play_style = state.context.play_style;
     let is_p2_single = profile_data::is_single_p2_side(play_style, side);
     let selected_entry = state.entries.get(state.selected_index);
     let selected_meta = selected_course_meta(state);
@@ -1765,7 +1765,7 @@ pub fn push_actors(actors: &mut Vec<Actor>, state: &State, _asset_manager: &Asse
         51,
     ));
 
-    let music_rate = profile::get_session_music_rate();
+    let music_rate = state.context.music_rate;
     let (songs_label, songs_value, bpm_text, len_text, desc_text) =
         match (selected_entry, selected_meta.as_ref()) {
             (Some(MusicWheelEntry::Song(_)), Some(meta)) => {
@@ -2123,7 +2123,10 @@ pub fn push_actors(actors: &mut Vec<Actor>, state: &State, _asset_manager: &Asse
         let selected_slot = (selected_rating_index.saturating_sub(rating_top_index))
             .min(COURSE_RATING_VISIBLE_SLOTS - 1);
         let arrow_y = rating_box_cy + (selected_slot as i32 - 2) as f32 * 30.0 + 1.0;
-        let bounce = course_arrow_bounce01(selection_animation_beat);
+        let bounce = course_arrow_bounce01(
+            selection_animation_beat,
+            state.context.policy.global_offset_seconds,
+        );
         let (arrow_x0, arrow_dx, arrow_rot) = if is_p2_single {
             (rating_box_cx + 8.0, 3.0 * bounce, 180.0)
         } else {

@@ -137,9 +137,17 @@ impl App {
             Self::scorebox_side_view(p1_profile, p1_hash, p1_leaderboards),
             Self::scorebox_side_view(p2_profile, p2_hash, p2_leaderboards),
         ];
+        let session = crate::select_music::session_view();
+        let profiles = crate::select_music::profile_view();
+        let favorites = (select_music::local_profile_ids(&self.state.screens.select_music_state)
+            != &profiles.local_profile_ids)
+            .then(deadsync_profile::runtime_favorite_snapshot);
         select_music::sync_runtime_view(
             &mut self.state.screens.select_music_state,
             SelectMusicRuntimeView {
+                session,
+                profiles,
+                favorites,
                 audio_playback: AudioPlaybackView {
                     music_position_seconds,
                 },

@@ -161,7 +161,7 @@ pub fn apply_no_cmod_alternative(state: &mut State) -> [ScrollSpeedSetting; PLAY
     let is_no_cmod = state.song.is_no_cmod();
     let reference_bpm = reference_bpm_for_song(
         &state.song,
-        resolve_p1_chart(&state.song, &state.chart_steps_index),
+        resolve_p1_chart(&state.song, &state.chart_steps_index, state.play_style),
     );
     let rate = if state.music_rate.is_finite() && state.music_rate > 0.0 {
         state.music_rate
@@ -378,8 +378,9 @@ pub(super) fn crossover_cue_quantization_choices() -> Vec<String> {
 pub(super) fn resolve_p1_chart<'a>(
     song: &'a SongData,
     chart_steps_index: &[usize; PLAYER_SLOTS],
+    play_style: profile_data::PlayStyle,
 ) -> Option<&'a ChartData> {
-    let target_chart_type = deadsync_profile::compat::get_session_play_style().chart_type();
+    let target_chart_type = play_style.chart_type();
     song.chart_for_steps_index(target_chart_type, chart_steps_index[0])
 }
 
@@ -409,7 +410,7 @@ pub(super) fn difficulty_display_name(index: usize) -> String {
 }
 
 pub(super) fn music_rate_display_name(state: &State) -> String {
-    let p1_chart = resolve_p1_chart(&state.song, &state.chart_steps_index);
+    let p1_chart = resolve_p1_chart(&state.song, &state.chart_steps_index, state.play_style);
     let is_random = p1_chart
         .is_some_and(|c| matches!(c.display_bpm, Some(deadsync_chart::ChartDisplayBpm::Random)));
     let bpm_str = if is_random {

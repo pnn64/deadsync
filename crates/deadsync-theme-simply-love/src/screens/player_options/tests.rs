@@ -15,8 +15,8 @@ pub(super) mod tests {
         init_noteskin_state, init_numeric_row_from_binding, is_row_visible,
         judgment_tilt_options_visible, on_start_press, player_option_column_x,
         prepend_pending_audio, preview_noteskin_names, queue_audio, queue_sfx,
-        repeat_held_arcade_start, row_f_pos_for_index, row_visibility, session_active_players,
-        sync_profile_scroll_speed, sync_speed_mod_type_row, update,
+        repeat_held_arcade_start, row_f_pos_for_index, sync_profile_scroll_speed,
+        sync_speed_mod_type_row, update,
     };
     use crate::assets::AssetManager;
     use crate::assets::i18n::{LookupKey, lookup_key};
@@ -49,6 +49,40 @@ pub(super) mod tests {
         NoteskinCatalogView {
             names: vec![deadsync_profile::NoteSkin::DEFAULT_NAME.to_owned()],
         }
+    }
+
+    fn test_init_view() -> crate::views::PlayerOptionsInitView {
+        test_init_view_for(PlayStyle::Single, PlayerSide::P1, [true, false])
+    }
+
+    fn test_init_view_for(
+        play_style: PlayStyle,
+        player_side: PlayerSide,
+        joined: [bool; 2],
+    ) -> crate::views::PlayerOptionsInitView {
+        crate::views::PlayerOptionsInitView {
+            play_style,
+            player_side,
+            joined,
+            music_rate: 1.0,
+            profiles: [Profile::default(), Profile::default()],
+            ..Default::default()
+        }
+    }
+
+    fn session_active_players(state: &super::State) -> [bool; 2] {
+        state.active
+    }
+
+    fn row_visibility(
+        row_map: &RowMap,
+        active: [bool; 2],
+        masks: [PlayerOptionMasks; 2],
+        allow_per_player_global_offsets: bool,
+    ) -> super::super::RowVisibility {
+        let mut policy = crate::views::PlayerOptionsPolicyView::default();
+        policy.allow_per_player_global_offsets = allow_per_player_global_offsets;
+        super::super::row_visibility(row_map, active, masks, policy)
     }
 
     #[test]
@@ -1587,10 +1621,6 @@ pub(super) mod tests {
         ensure_i18n();
         let song = test_song();
 
-        profile::set_session_play_style(PlayStyle::Single);
-        profile::set_session_player_side(PlayerSide::P1);
-        profile::set_session_joined(true, false);
-
         let mut asset_manager = AssetManager::new();
         register_test_fonts(&mut asset_manager);
 
@@ -1604,8 +1634,9 @@ pub(super) mod tests {
             test_noteskin_catalog(),
             deadsync_theme::views::SmxGifCatalogView::default(),
             super::HeartRateDevicesView::default(),
+            test_init_view(),
         );
-        let active = session_active_players();
+        let active = session_active_players(&state);
         let first_row = state.pane().selected_row[P1];
         assert!(handle_arcade_start_event(&mut state, &asset_manager, active, P1).is_none());
         let second_row = state.pane().selected_row[P1];
@@ -1630,10 +1661,6 @@ pub(super) mod tests {
         ensure_i18n();
         let song = test_song();
 
-        profile::set_session_play_style(PlayStyle::Single);
-        profile::set_session_player_side(PlayerSide::P1);
-        profile::set_session_joined(true, false);
-
         let mut asset_manager = AssetManager::new();
         register_test_fonts(&mut asset_manager);
 
@@ -1647,8 +1674,9 @@ pub(super) mod tests {
             test_noteskin_catalog(),
             deadsync_theme::views::SmxGifCatalogView::default(),
             super::HeartRateDevicesView::default(),
+            test_init_view(),
         );
-        let active = session_active_players();
+        let active = session_active_players(&state);
         let last_row = state.pane().row_map.len().saturating_sub(1);
         state.pane_mut().selected_row[P1] = last_row;
         state.pane_mut().prev_selected_row[P1] = last_row;
@@ -1669,9 +1697,6 @@ pub(super) mod tests {
 
     fn setup_state() -> (super::State, AssetManager) {
         let song = test_song();
-        profile::set_session_play_style(PlayStyle::Single);
-        profile::set_session_player_side(PlayerSide::P1);
-        profile::set_session_joined(true, false);
         let mut asset_manager = AssetManager::new();
         register_test_fonts(&mut asset_manager);
         let state = super::init(
@@ -1684,15 +1709,13 @@ pub(super) mod tests {
             test_noteskin_catalog(),
             deadsync_theme::views::SmxGifCatalogView::default(),
             super::HeartRateDevicesView::default(),
+            test_init_view(),
         );
         (state, asset_manager)
     }
 
     fn setup_versus_state() -> (super::State, AssetManager) {
         let song = test_song();
-        profile::set_session_play_style(PlayStyle::Versus);
-        profile::set_session_player_side(PlayerSide::P1);
-        profile::set_session_joined(true, true);
         let mut asset_manager = AssetManager::new();
         register_test_fonts(&mut asset_manager);
         let state = super::init(
@@ -1705,6 +1728,7 @@ pub(super) mod tests {
             test_noteskin_catalog(),
             deadsync_theme::views::SmxGifCatalogView::default(),
             super::HeartRateDevicesView::default(),
+            test_init_view_for(PlayStyle::Versus, PlayerSide::P1, [true, true]),
         );
         (state, asset_manager)
     }
@@ -1792,11 +1816,12 @@ pub(super) mod tests {
         state.pane_mut().selected_row[P1] = rate_row;
         state.pane_mut().prev_selected_row[P1] = rate_row;
         let before = state.music_rate;
+        let active = session_active_players(&state);
 
         handle_nav_event(
             &mut state,
             &asset_manager,
-            session_active_players(),
+            active,
             P1,
             NavDirection::Right,
             true,
@@ -1820,7 +1845,7 @@ pub(super) mod tests {
     fn held_speed_mod_repeat_uses_update_dt() {
         ensure_i18n();
         let (mut state, asset_manager) = setup_state();
-        let active = session_active_players();
+        let active = session_active_players(&state);
         let speed_row = state
             .pane()
             .row_map
@@ -2100,7 +2125,7 @@ pub(super) mod tests {
         state.pane_mut().selected_row[P1] = row_index;
         state.option_masks[P1].scroll = ScrollMask::empty();
 
-        let active = session_active_players();
+        let active = session_active_players(&state);
         handle_start_event(&mut state, &asset_manager, active, P1);
 
         assert_ne!(
@@ -2162,7 +2187,7 @@ pub(super) mod tests {
             .unwrap();
         state.pane_mut().selected_row[P1] = row_index;
 
-        let active = session_active_players();
+        let active = session_active_players(&state);
         // Initially JudgmentTilt=0 (off) so JudgmentTiltIntensity should be hidden.
         assert!(
             !judgment_tilt_options_visible(&state.pane().row_map, active),
@@ -2329,7 +2354,7 @@ pub(super) mod tests {
         state.pane_mut().selected_row[P1] = exit_row;
         state.pane_mut().selected_row[P2] = other_row;
 
-        let active = session_active_players();
+        let active = session_active_players(&state);
         assert_eq!(
             active,
             [true, true],
@@ -2359,7 +2384,7 @@ pub(super) mod tests {
             .expect("Exit should be in Main pane");
         state.pane_mut().selected_row = [exit_row, exit_row];
 
-        let active = session_active_players();
+        let active = session_active_players(&state);
         let action = handle_start_event(&mut state, &asset_manager, active, P2);
         assert!(
             matches!(action, Some(ThemeEffect::Navigate(Screen::Gameplay))),
@@ -2532,6 +2557,9 @@ pub(super) mod tests {
                 &heart_rate_choices,
                 Screen::SelectMusic,
                 state.fixed_stepchart.as_ref(),
+                state.play_style,
+                state.persisted_player_idx,
+                state.policy.scorebox_available,
             );
             (pane, map)
         })
@@ -2556,6 +2584,9 @@ pub(super) mod tests {
             &[],
             return_screen,
             state.fixed_stepchart.as_ref(),
+            state.play_style,
+            state.persisted_player_idx,
+            state.policy.scorebox_available,
         );
         row_map
             .get(RowId::DataVisualizations)
@@ -3080,6 +3111,9 @@ pub(super) mod tests {
             &[],
             Screen::SelectMusic,
             state.fixed_stepchart.as_ref(),
+            state.play_style,
+            state.persisted_player_idx,
+            state.policy.scorebox_available,
         );
         let mut masks = PlayerOptionMasks::default();
         panes::apply_profile_defaults(&mut main_row_map, &profile, P1, &mut masks);
@@ -3137,6 +3171,9 @@ pub(super) mod tests {
             &[],
             Screen::SelectMusic,
             state.fixed_stepchart.as_ref(),
+            state.play_style,
+            state.persisted_player_idx,
+            state.policy.scorebox_available,
         );
         let mut masks = PlayerOptionMasks::default();
         panes::apply_profile_defaults(&mut row_map, &profile, P1, &mut masks);
@@ -3195,6 +3232,9 @@ pub(super) mod tests {
             &[],
             Screen::SelectMusic,
             state.fixed_stepchart.as_ref(),
+            state.play_style,
+            state.persisted_player_idx,
+            state.policy.scorebox_available,
         );
         let mut display_row_map = super::build_rows(
             &state.song,
@@ -3209,6 +3249,9 @@ pub(super) mod tests {
             &[],
             Screen::SelectMusic,
             state.fixed_stepchart.as_ref(),
+            state.play_style,
+            state.persisted_player_idx,
+            state.policy.scorebox_available,
         );
         let mut masks = PlayerOptionMasks::default();
         panes::apply_profile_defaults(&mut main_row_map, &profile, P1, &mut masks);
@@ -3284,6 +3327,9 @@ pub(super) mod tests {
             &[],
             Screen::SelectMusic,
             state.fixed_stepchart.as_ref(),
+            state.play_style,
+            state.persisted_player_idx,
+            state.policy.scorebox_available,
         );
         let mut masks = PlayerOptionMasks::default();
         panes::apply_profile_defaults(&mut row_map, &profile, P1, &mut masks);
@@ -3527,7 +3573,7 @@ pub(super) mod tests {
         state.option_masks[P1].insert = InsertMask::empty();
         state.player_profiles[P1].insert_active_mask = InsertMask::empty();
 
-        let active = session_active_players();
+        let active = session_active_players(&state);
         handle_start_event(&mut state, &asset_manager, active, P1);
 
         assert_eq!(
@@ -3586,7 +3632,7 @@ pub(super) mod tests {
         );
         state.option_masks[P1].insert = InsertMask::empty();
 
-        let active = session_active_players();
+        let active = session_active_players(&state);
         handle_start_event(&mut state, &asset_manager, active, P1);
 
         assert_eq!(
@@ -3628,7 +3674,7 @@ pub(super) mod tests {
         state.option_masks[P1].remove = RemoveMask::empty();
         state.player_profiles[P1].remove_active_mask = RemoveMask::empty();
 
-        let active = session_active_players();
+        let active = session_active_players(&state);
         handle_start_event(&mut state, &asset_manager, active, P1);
 
         assert_eq!(state.option_masks[P1].remove.bits(), 1u8 << 5);
@@ -3671,7 +3717,7 @@ pub(super) mod tests {
         state.option_masks[P1].holds = HoldsMask::empty();
         state.player_profiles[P1].holds_active_mask = HoldsMask::empty();
 
-        let active = session_active_players();
+        let active = session_active_players(&state);
         handle_start_event(&mut state, &asset_manager, active, P1);
 
         assert_eq!(state.option_masks[P1].holds.bits(), 1u8 << 3);
@@ -3710,7 +3756,7 @@ pub(super) mod tests {
         state.option_masks[P1].accel_effects = AccelEffectsMask::empty();
         state.player_profiles[P1].accel_effects_active_mask = AccelEffectsMask::empty();
 
-        let active = session_active_players();
+        let active = session_active_players(&state);
         handle_start_event(&mut state, &asset_manager, active, P1);
 
         assert_eq!(state.option_masks[P1].accel_effects.bits(), 1u8 << 1);
@@ -3763,7 +3809,7 @@ pub(super) mod tests {
         state.option_masks[P1].visual_effects = VisualEffectsMask::empty();
         state.player_profiles[P1].visual_effects_active_mask = VisualEffectsMask::empty();
 
-        let active = session_active_players();
+        let active = session_active_players(&state);
         handle_start_event(&mut state, &asset_manager, active, P1);
 
         assert_eq!(state.option_masks[P1].visual_effects.bits(), 1u16 << 9);
@@ -3811,7 +3857,7 @@ pub(super) mod tests {
         state.option_masks[P1].appearance_effects = AppearanceEffectsMask::empty();
         state.player_profiles[P1].appearance_effects_active_mask = AppearanceEffectsMask::empty();
 
-        let active = session_active_players();
+        let active = session_active_players(&state);
         handle_start_event(&mut state, &asset_manager, active, P1);
 
         assert_eq!(state.option_masks[P1].appearance_effects.bits(), 1u8 << 4);

@@ -2,18 +2,17 @@ use crate::act;
 use crate::assets::i18n::tr;
 use crate::assets::visual_styles;
 use deadlib_present::space::{screen_center_x, screen_center_y, screen_height, screen_width};
-use deadsync_profile::compat as profile;
 // Screen navigation handled in app
-use crate::screens::components::shared::screen_bar::{
-    AvatarParams, ScreenBarPosition, ScreenBarTitlePlacement,
+use crate::screens::components::shared::screen_bar::{ScreenBarPosition, ScreenBarTitlePlacement};
+use crate::screens::components::shared::{
+    screen_bar, select_flow_footer, transitions, visual_style_bg,
 };
-use crate::screens::components::shared::{screen_bar, transitions, visual_style_bg};
+use crate::views::SelectFlowRuntimeView;
 use deadlib_present::actors::Actor;
 use deadlib_present::color;
 // Keyboard handling is centralized in app via virtual actions
 use crate::screens::{Screen, ThemeEffect};
 use deadsync_input::{InputEvent, VirtualAction};
-use deadsync_profile as profile_data;
 
 /* ---------------------------- transitions ---------------------------- */
 const TRANSITION_IN_DURATION: f32 = 0.4;
@@ -62,10 +61,11 @@ pub struct State {
     pub bg_from_index: i32,
     pub bg_to_index: i32,
     pub bg_fade_t: f32, // [0, BG_FADE_DURATION] ; >= dur means finished
+    runtime: SelectFlowRuntimeView,
 }
 
-pub fn init() -> State {
-    let active_color_index = crate::config::get().simply_love_color;
+pub fn init(runtime: SelectFlowRuntimeView) -> State {
+    let active_color_index = runtime.color_index;
     let scroll = active_color_index as f32;
     State {
         active_color_index,
@@ -78,7 +78,12 @@ pub fn init() -> State {
         bg_from_index: active_color_index,
         bg_to_index: active_color_index,
         bg_fade_t: BG_FADE_DURATION, // start "finished"
+        runtime,
     }
+}
+
+pub fn sync_runtime_view(state: &mut State, runtime: SelectFlowRuntimeView) {
+    state.runtime = runtime;
 }
 
 pub const fn snap_scroll_to_active(state: &mut State) {
@@ -164,62 +169,7 @@ pub fn push_actors(actors: &mut Vec<Actor>, state: &State, alpha_multiplier: f32
         fg_color: FG,
     }));
 
-    let p1_profile = profile::get_for_side(profile_data::PlayerSide::P1);
-    let p2_profile = profile::get_for_side(profile_data::PlayerSide::P2);
-    let p1_avatar = p1_profile
-        .avatar_texture_key
-        .as_deref()
-        .map(|texture_key| AvatarParams { texture_key });
-    let p2_avatar = p2_profile
-        .avatar_texture_key
-        .as_deref()
-        .map(|texture_key| AvatarParams { texture_key });
-
-    let p1_joined = profile::is_session_side_joined(profile_data::PlayerSide::P1);
-    let p2_joined = profile::is_session_side_joined(profile_data::PlayerSide::P2);
-    let p1_guest = profile::is_session_side_guest(profile_data::PlayerSide::P1);
-    let p2_guest = profile::is_session_side_guest(profile_data::PlayerSide::P2);
-
-    let insert_card = tr("Common", "InsertCard");
-    let press_start = tr("Common", "PressStart");
-
-    let (footer_left, left_avatar) = if p1_joined {
-        (
-            Some(if p1_guest {
-                insert_card.as_ref()
-            } else {
-                p1_profile.display_name.as_str()
-            }),
-            if p1_guest { None } else { p1_avatar },
-        )
-    } else {
-        (Some(press_start.as_ref()), None)
-    };
-    let (footer_right, right_avatar) = if p2_joined {
-        (
-            Some(if p2_guest {
-                insert_card.as_ref()
-            } else {
-                p2_profile.display_name.as_str()
-            }),
-            if p2_guest { None } else { p2_avatar },
-        )
-    } else {
-        (Some(press_start.as_ref()), None)
-    };
-    let event_mode = tr("Common", "EventMode");
-    actors.push(screen_bar::build(screen_bar::ScreenBarParams {
-        title: &event_mode,
-        title_placement: ScreenBarTitlePlacement::Center,
-        position: ScreenBarPosition::Bottom,
-        transparent: false,
-        left_text: footer_left,
-        center_text: None,
-        right_text: footer_right,
-        left_avatar,
-        right_avatar,
-        fg_color: FG,
-    }));
+    select_flow_footer::push(actors, &state.runtime.players);
 
     let mut wheel_actors = Vec::new();
 
@@ -612,7 +562,7 @@ mod tests {
 
     #[test]
     fn scroll_requests_audio_before_color_persistence() {
-        let mut state = init();
+        let mut state = init(SelectFlowRuntimeView::default());
         let effect = scroll_by(&mut state, 1);
         let expected = state
             .active_color_index
@@ -638,7 +588,7 @@ mod tests {
 
     #[test]
     fn confirm_requests_audio_before_navigation() {
-        let mut state = init();
+        let mut state = init(SelectFlowRuntimeView::default());
         let effect = handle_input(&mut state, &input(VirtualAction::p1_start));
         let ThemeEffect::Batch(effects) = effect else {
             panic!("expected batched confirm effect");

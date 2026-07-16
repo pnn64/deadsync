@@ -179,12 +179,13 @@ use deadsync_theme::views::{
 use deadsync_theme::{AudioRequest, PlatformRequest, RevealPathKind};
 use deadsync_theme_simply_love::screens::SimplyLoveScreen as CurrentScreen;
 use deadsync_theme_simply_love::views::{
-    EvaluationInitPlayerView, EvaluationInitView, EvaluationRuntimeView, EvaluationSubmissionView,
-    MusicWheelRankSource, MusicWheelRuntimeRequest, MusicWheelRuntimeView,
-    MusicWheelSlotRuntimeRequest, MusicWheelSlotRuntimeView, ScoreboxLocalView,
-    ScoreboxMachineView, ScoreboxSideView, SelectCourseRuntimeView, SelectCourseScoreRequest,
-    SelectCourseScoreView, SimplyLoveDensityGraphSlot as DensityGraphSlot,
-    SimplyLoveGrooveStatsService, SimplyLoveLobbyRuntimeView,
+    EvaluationContextView, EvaluationInitPlayerView, EvaluationInitView, EvaluationPlayerView,
+    EvaluationPolicyView, EvaluationRuntimeView, EvaluationSubmissionView, MusicWheelRankSource,
+    MusicWheelRuntimeRequest, MusicWheelRuntimeView, MusicWheelSlotRuntimeRequest,
+    MusicWheelSlotRuntimeView, ScoreboxLocalView, ScoreboxMachineView, ScoreboxSideView,
+    SelectCourseRuntimeView, SelectCourseScoreRequest, SelectCourseScoreView,
+    SimplyLoveDensityGraphSlot as DensityGraphSlot, SimplyLoveGrooveStatsService,
+    SimplyLoveLobbyRuntimeView,
 };
 use deadsync_theme_simply_love::{
     SimplyLoveConfigRequest, SimplyLoveEffect as ThemeEffect, SimplyLoveHardwareRequest,
@@ -379,6 +380,43 @@ fn apply_course_summary_column_judgments(
     }
 }
 
+fn evaluation_context_view() -> EvaluationContextView {
+    let config = config::get();
+    let session = profile::get_session_snapshot();
+    EvaluationContextView {
+        policy: EvaluationPolicyView {
+            enable_groovestats: config.enable_groovestats,
+            enable_arrowcloud: config.enable_arrowcloud,
+            autosubmit_course_scores_individually: config.autosubmit_course_scores_individually,
+            submit_arrowcloud_fails: config.submit_arrowcloud_fails,
+            smooth_histogram: config.smooth_histogram,
+            shade_scatterplot_judgments: config.shade_scatterplot_judgments,
+            only_dedicated_menu_buttons: config.only_dedicated_menu_buttons,
+            three_key_navigation: config.three_key_navigation,
+            machine_nice_sound: config.machine_nice_sound,
+            show_gameplay_timer: config.show_select_music_gameplay_timer,
+            translated_titles: config.translated_titles,
+            zmod_rating_box_text: config.zmod_rating_box_text,
+            breakdown_style: config.select_music_breakdown_style,
+        },
+        play_style: session.play_style,
+        player_side: session.player_side,
+        players: std::array::from_fn(|player_idx| {
+            let side = profile_data::player_side_for_index(player_idx);
+            let side_profile = profile::get_for_side(side);
+            let (avatar_texture_key, display_name) = profile::footer_fields_for_side(side);
+            EvaluationPlayerView {
+                joined: session.side_joined(side),
+                guest: profile::is_session_side_guest(side),
+                avatar_texture_key,
+                display_name,
+                groovestats_linked: !side_profile.groovestats_api_key.trim().is_empty(),
+                arrowcloud_linked: !side_profile.arrowcloud_api_key.trim().is_empty(),
+            }
+        }),
+    }
+}
+
 fn build_course_summary_eval_state(
     stage: &stage_stats::StageSummary,
     course_graph_stages: &[Vec<evaluation::CourseGraphStage>; MAX_PLAYERS],
@@ -393,7 +431,11 @@ fn build_course_summary_eval_state(
         profile_session.play_style,
         profile_session.player_side,
     );
-    let mut state = evaluation::init_from_score_info(score_info, stage.duration_seconds);
+    let mut state = evaluation::init_from_score_info(
+        score_info,
+        stage.duration_seconds,
+        evaluation_context_view(),
+    );
     state.active_color_index = active_color_index;
     state.session_elapsed = session_elapsed;
     state.gameplay_elapsed = gameplay_elapsed;
@@ -574,7 +616,8 @@ impl ScreensState {
         let mut select_profile_state = select_profile::init();
         select_profile_state.active_color_index = color_index;
 
-        let mut select_color_state = select_color::init();
+        let select_flow_view = crate::select_flow::runtime_view();
+        let mut select_color_state = select_color::init(select_flow_view.clone());
         select_color_state.active_color_index = color_index;
         select_color::snap_scroll_to_active(&mut select_color_state);
         select_color_state.bg_from_index = color_index;
@@ -595,10 +638,10 @@ impl ScreensState {
             select_course::init(crate::profile_load::select_course_init_view());
         select_course_state.active_color_index = color_index;
 
-        let mut select_style_state = select_style::init();
+        let mut select_style_state = select_style::init(select_flow_view.clone());
         select_style_state.active_color_index = color_index;
 
-        let mut select_play_mode_state = select_mode::init();
+        let mut select_play_mode_state = select_mode::init(select_flow_view);
         select_play_mode_state.active_color_index = color_index;
 
         let mut profile_load_state = profile_load::init();
@@ -646,13 +689,13 @@ impl ScreensState {
         let mut evaluation_state = evaluation::init(None, EvaluationInitView::default());
         evaluation_state.active_color_index = color_index;
 
-        let mut evaluation_summary_state = evaluation_summary::init();
+        let mut evaluation_summary_state = evaluation_summary::init(Default::default());
         evaluation_summary_state.active_color_index = color_index;
 
-        let mut initials_state = initials::init();
+        let mut initials_state = initials::init(Default::default());
         initials_state.active_color_index = color_index;
 
-        let mut gameover_state = gameover::init_blank();
+        let mut gameover_state = gameover::init(Default::default());
         gameover_state.active_color_index = color_index;
 
         Self {
@@ -1318,6 +1361,7 @@ impl App {
                     itl: scores::itl_eval_state_from_gameplay(gameplay, player_idx),
                 }
             }),
+            context: evaluation_context_view(),
         }
     }
 
@@ -1343,6 +1387,7 @@ impl App {
                 )
             });
         EvaluationRuntimeView {
+            context: evaluation_context_view(),
             lobby: Self::refresh_lobby_runtime_view(),
             groovestats_service: Self::groovestats_service_view(),
             submissions: std::array::from_fn(|player_idx| {
@@ -1360,6 +1405,15 @@ impl App {
                     Some(score_info.chart.short_hash.clone()),
                     leaderboards[player_idx].clone(),
                 )
+            }),
+            favorites: std::array::from_fn(|player_idx| {
+                state
+                    .score_info
+                    .get(player_idx)
+                    .and_then(Option::as_ref)
+                    .is_some_and(|score_info| {
+                        profile::is_favorite(score_info.side, &score_info.chart.short_hash)
+                    })
             }),
         }
     }
@@ -1386,8 +1440,13 @@ impl App {
     fn sync_active_online_runtime_view(&mut self) {
         match self.state.screens.current_screen {
             CurrentScreen::Gameplay => {
+                let config = config::get();
+                let view = crate::gameplay_runtime::runtime_view(
+                    &config,
+                    Self::refresh_lobby_runtime_view(),
+                );
                 if let Some(state) = self.state.screens.gameplay_state.as_mut() {
-                    gameplay::sync_lobby_runtime_view(state, Self::refresh_lobby_runtime_view());
+                    gameplay::sync_runtime_view(state, view);
                 }
             }
             CurrentScreen::Evaluation => {
@@ -1682,6 +1741,7 @@ impl App {
         if self.state.screens.current_screen != CurrentScreen::SelectCourse {
             return;
         }
+        let context = crate::profile_load::select_course_context_view(config);
         let profile_view = profile_data::runtime_scorebox_view(
             config.enable_groovestats,
             config.enable_arrowcloud,
@@ -1697,7 +1757,11 @@ impl App {
         );
         select_course::sync_runtime_view(
             &mut self.state.screens.select_course_state,
-            SelectCourseRuntimeView { music_wheel, score },
+            SelectCourseRuntimeView {
+                context,
+                music_wheel,
+                score,
+            },
         );
     }
 
@@ -3006,6 +3070,66 @@ impl App {
                     }
                     Vec::new()
                 }
+                SimplyLoveRuntimeRequest::Profile(SimplyLoveProfileRequest::SetPlayStyle(
+                    play_style,
+                )) => {
+                    profile::set_session_play_style(play_style);
+                    Vec::new()
+                }
+                SimplyLoveRuntimeRequest::Profile(SimplyLoveProfileRequest::SetSession {
+                    play_style,
+                    player_side,
+                    joined,
+                }) => {
+                    profile::set_session_player_side(player_side);
+                    profile::set_session_joined(joined[0], joined[1]);
+                    profile::set_session_play_style(play_style);
+                    Vec::new()
+                }
+                SimplyLoveRuntimeRequest::Profile(SimplyLoveProfileRequest::SetMusicRate(rate)) => {
+                    profile::set_session_music_rate(rate);
+                    Vec::new()
+                }
+                SimplyLoveRuntimeRequest::Profile(SimplyLoveProfileRequest::SetPlayMode(
+                    play_mode,
+                )) => {
+                    profile::set_session_play_mode(play_mode);
+                    Vec::new()
+                }
+                SimplyLoveRuntimeRequest::Profile(SimplyLoveProfileRequest::UpdateInitials(
+                    updates,
+                )) => {
+                    for (side, initials) in
+                        [profile_data::PlayerSide::P1, profile_data::PlayerSide::P2]
+                            .into_iter()
+                            .zip(updates)
+                    {
+                        if let Some(initials) = initials {
+                            profile::update_player_initials_for_side(side, &initials);
+                        }
+                    }
+                    Vec::new()
+                }
+                SimplyLoveRuntimeRequest::Profile(SimplyLoveProfileRequest::ToggleFavorite {
+                    side,
+                    chart_hash,
+                }) => {
+                    profile::toggle_favorite(side, &chart_hash);
+                    Vec::new()
+                }
+                SimplyLoveRuntimeRequest::Profile(
+                    SimplyLoveProfileRequest::TogglePackFavorite { side, pack_name },
+                ) => {
+                    profile::toggle_pack_favorite(side, &pack_name);
+                    Vec::new()
+                }
+                SimplyLoveRuntimeRequest::Profile(SimplyLoveProfileRequest::MarkPacksKnown {
+                    profile_ids,
+                    pack_names,
+                }) => {
+                    profile::mark_packs_known(&profile_ids, pack_names.iter().map(String::as_str));
+                    Vec::new()
+                }
                 SimplyLoveRuntimeRequest::Profile(
                     SimplyLoveProfileRequest::DiscoverItgProfiles,
                 ) => {
@@ -3612,6 +3736,7 @@ impl App {
             noteskin_catalog_view(),
             crate::smx_config::smx_gif_catalog_view(),
             crate::heart_rate::devices_view(),
+            crate::player_options::init_view(),
         ));
         true
     }
@@ -3649,6 +3774,7 @@ impl App {
             noteskin_catalog_view(),
             crate::smx_config::smx_gif_catalog_view(),
             crate::heart_rate::devices_view(),
+            crate::player_options::init_view(),
         );
         po_state.music_rate = music_rate;
         po_state.speed_mod =
@@ -4192,7 +4318,21 @@ impl App {
         }
 
         if screen == CurrentScreen::SelectStyle {
+            select_style::sync_runtime_view(
+                &mut self.state.screens.select_style_state,
+                crate::select_flow::runtime_view(),
+            );
             select_style::set_selected_index(&mut self.state.screens.select_style_state, 1);
+        } else if screen == CurrentScreen::SelectColor {
+            select_color::sync_runtime_view(
+                &mut self.state.screens.select_color_state,
+                crate::select_flow::runtime_view(),
+            );
+        } else if screen == CurrentScreen::SelectPlayMode {
+            select_mode::sync_runtime_view(
+                &mut self.state.screens.select_play_mode_state,
+                crate::select_flow::runtime_view(),
+            );
         }
         let mut pending = ThemeEffect::None;
         if screen == CurrentScreen::SelectMusic {
@@ -5735,19 +5875,9 @@ impl App {
             }
         } else if target == CurrentScreen::SelectStyle {
             let current_color_index = self.state.screens.select_style_state.active_color_index;
-            self.state.screens.select_style_state = select_style::init();
+            self.state.screens.select_style_state =
+                select_style::init(crate::select_flow::runtime_view());
             self.state.screens.select_style_state.active_color_index = current_color_index;
-            let session = profile::get_session_snapshot();
-            select_style::set_selected_index(
-                &mut self.state.screens.select_style_state,
-                if session.side_joined(profile_data::PlayerSide::P1)
-                    && session.side_joined(profile_data::PlayerSide::P2)
-                {
-                    1 // "2 Players"
-                } else {
-                    0 // "1 Player"
-                },
-            );
         } else if target == CurrentScreen::SelectPlayMode {
             let current_color_index = match prev {
                 CurrentScreen::SelectStyle => {
@@ -5762,7 +5892,8 @@ impl App {
                 CurrentScreen::Menu => self.state.screens.menu_state.active_color_index,
                 _ => self.state.screens.select_play_mode_state.active_color_index,
             };
-            self.state.screens.select_play_mode_state = select_mode::init();
+            self.state.screens.select_play_mode_state =
+                select_mode::init(crate::select_flow::runtime_view());
             self.state.screens.select_play_mode_state.active_color_index = current_color_index;
             select_mode::on_enter(&mut self.state.screens.select_play_mode_state);
         } else if target == CurrentScreen::ProfileLoad {
@@ -5845,6 +5976,7 @@ impl App {
                     noteskin_catalog_view(),
                     crate::smx_config::smx_gif_catalog_view(),
                     crate::heart_rate::devices_view(),
+                    crate::player_options::init_view(),
                 ));
             }
         } else if target == CurrentScreen::Gameplay && prev == CurrentScreen::Gameplay {
@@ -5912,6 +6044,7 @@ impl App {
                     noteskin_catalog_view(),
                     crate::smx_config::smx_gif_catalog_view(),
                     crate::heart_rate::devices_view(),
+                    crate::player_options::init_view(),
                 ));
             }
         }
@@ -6071,6 +6204,8 @@ impl App {
                 // untouched, so song select restores CMod).
                 let scroll_speeds = player_options::apply_no_cmod_alternative(&mut po_state);
 
+                let gameplay_init_view =
+                    crate::gameplay_runtime::init_view(&cfg, Self::refresh_lobby_runtime_view());
                 let init_started = Instant::now();
                 let mut gs = gameplay::init(
                     song_arc,
@@ -6097,6 +6232,7 @@ impl App {
                     None,
                     None,
                     [0; MAX_PLAYERS],
+                    gameplay_init_view,
                 );
                 gs.disable_score_for_practice();
                 let init_ms = init_started.elapsed().as_secs_f64() * 1000.0;
@@ -6459,6 +6595,8 @@ impl App {
                     deadsync_simfile::event_intro::gameplay_event_intro_text(song_arc.as_ref())
                 };
                 let combo_carry = self.state.session.combo_carry;
+                let gameplay_init_view =
+                    crate::gameplay_runtime::init_view(&cfg, Self::refresh_lobby_runtime_view());
                 let init_started = Instant::now();
                 let mut gs = gameplay::init(
                     song_arc,
@@ -6482,6 +6620,7 @@ impl App {
                     course_display_info,
                     course_banner_path,
                     combo_carry,
+                    gameplay_init_view,
                 );
                 let init_ms = init_started.elapsed().as_secs_f64() * 1000.0;
                 let overlay_video_paths = gameplay_overlay_video_paths(
@@ -6573,7 +6712,6 @@ impl App {
                 commands.push(Command::SetDynamicBackground(background_path));
                 self.state.screens.gameplay_state = Some(gs);
                 if let Some(gs) = self.state.screens.gameplay_state.as_mut() {
-                    gameplay::sync_lobby_runtime_view(gs, Self::refresh_lobby_runtime_view());
                     crate::gameplay_runtime::enter(gs, self.state.play_input_policy.smx_input);
                 }
                 // Song Start / Restart SFX (zmod parity, issue #375). At this
@@ -6660,7 +6798,7 @@ impl App {
                 std::mem::take(&mut self.state.session.pending_post_select_summary_exit),
             );
             self.state.screens.evaluation_summary_state =
-                evaluation_summary::init_for_return(return_to);
+                evaluation_summary::init_for_return(crate::post_song::runtime_view(), return_to);
             self.state
                 .screens
                 .evaluation_summary_state
@@ -6695,11 +6833,12 @@ impl App {
                 CurrentScreen::Evaluation => self.state.screens.evaluation_state.active_color_index,
                 _ => self.state.screens.initials_state.active_color_index,
             };
-            self.state.screens.initials_state = initials::init();
-            self.state.screens.initials_state.active_color_index = color_idx;
             let display_stages = self
                 .post_select_display_stages(config::get().show_course_individual_scores)
                 .into_owned();
+            self.state.screens.initials_state =
+                initials::init(crate::post_song::initials_runtime_view(&display_stages));
+            self.state.screens.initials_state.active_color_index = color_idx;
             initials::set_highscore_lists(&mut self.state.screens.initials_state, &display_stages);
 
             if let Some(backend) = self.backend.as_mut() {
@@ -6729,7 +6868,8 @@ impl App {
                 CurrentScreen::Evaluation => self.state.screens.evaluation_state.active_color_index,
                 _ => self.state.screens.gameover_state.active_color_index,
             };
-            self.state.screens.gameover_state = gameover::init();
+            self.state.screens.gameover_state =
+                gameover::init(crate::post_song::gameover_runtime_view());
             self.state.screens.gameover_state.active_color_index = color_idx;
         }
 
@@ -6795,7 +6935,7 @@ impl App {
                             let mut best_match_index = None;
                             let mut min_diff = i32::MAX;
                             for i in 0..STANDARD_DIFFICULTY_COUNT {
-                                if select_music::is_difficulty_playable(song, i) {
+                                if select_music::is_difficulty_playable(song, chart_type, i) {
                                     let diff = (i as i32 - preferred as i32).abs();
                                     if diff < min_diff {
                                         min_diff = diff;
@@ -7720,7 +7860,8 @@ mod tests {
             ScrollSpeedSetting::default(),
             1.0,
         ));
-        let mut course_page = evaluation::init_from_score_info(course_score, 120.0);
+        let mut course_page =
+            evaluation::init_from_score_info(course_score, 120.0, evaluation_context_view());
 
         let mut first = std::array::from_fn(|_| None);
         let mut first_p2 = test_score_info(
@@ -7760,7 +7901,7 @@ mod tests {
             ..Default::default()
         }];
         first[1] = Some(ignored_p1);
-        let first_page = evaluation::init_from_score_info(first, 60.0);
+        let first_page = evaluation::init_from_score_info(first, 60.0, evaluation_context_view());
 
         let mut second = std::array::from_fn(|_| None);
         let mut second_p2 = test_score_info(
@@ -7788,7 +7929,7 @@ mod tests {
             },
         ];
         second[0] = Some(second_p2);
-        let second_page = evaluation::init_from_score_info(second, 60.0);
+        let second_page = evaluation::init_from_score_info(second, 60.0, evaluation_context_view());
 
         apply_course_summary_column_judgments(&mut course_page, &[first_page, second_page]);
 

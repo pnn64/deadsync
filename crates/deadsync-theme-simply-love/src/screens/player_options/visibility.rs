@@ -703,7 +703,7 @@ pub(super) fn row_visibility(
     row_map: &RowMap,
     active: [bool; PLAYER_SLOTS],
     option_masks: [PlayerOptionMasks; PLAYER_SLOTS],
-    allow_per_player_global_offsets: bool,
+    policy: PlayerOptionsPolicyView,
 ) -> RowVisibility {
     RowVisibility {
         show_measure_counter_children: measure_counter_children_visible(row_map, active),
@@ -737,25 +737,16 @@ pub(super) fn row_visibility(
         show_column_flash_judgments: column_flash_judgments_visible(active, option_masks),
         show_live_timing_stats: live_timing_stats_visible(active, option_masks),
         show_crossover_cue_options: crossover_cue_options_visible(row_map, active),
-        show_global_offset_shift: allow_per_player_global_offsets,
+        show_global_offset_shift: policy.allow_per_player_global_offsets,
         show_tap_explosion_options: tap_explosion_options_visible(row_map, active),
         // Pad-light brightness only matters when deadsync is actually driving the
         // SMX pad LEDs: native StepManiaX input on, and Panel Lights on (off
         // leaves the pad's own lighting alone, so the control would do nothing).
-        show_pad_light_brightness: {
-            let cfg = crate::config::get();
-            cfg.smx_input && cfg.smx_panel_lights
-        },
-        show_smx_fsr_display: crate::config::get().smx_input,
-        show_smx_pad_input_display: crate::config::get().smx_input,
-        show_smx_bg_pack: {
-            let cfg = crate::config::get();
-            cfg.smx_input && cfg.smx_panel_lights
-        },
-        show_smx_judge_pack: {
-            let cfg = crate::config::get();
-            cfg.smx_input && cfg.smx_panel_lights
-        },
+        show_pad_light_brightness: policy.smx_input && policy.smx_panel_lights,
+        show_smx_fsr_display: policy.smx_input,
+        show_smx_pad_input_display: policy.smx_input,
+        show_smx_bg_pack: policy.smx_input && policy.smx_panel_lights,
+        show_smx_judge_pack: policy.smx_input && policy.smx_panel_lights,
     }
 }
 
@@ -895,7 +886,7 @@ pub(super) fn sync_selected_rows_with_visibility(state: &mut State, active: [boo
         &state.pane().row_map,
         active,
         state.option_masks,
-        state.allow_per_player_global_offsets,
+        state.policy,
     );
     for player_idx in [P1, P2] {
         let idx =
@@ -915,7 +906,7 @@ pub(super) fn sync_selected_rows_with_visibility(state: &mut State, active: [boo
 
 #[inline(always)]
 pub(super) fn row_allows_arcade_next_row(state: &State, row_idx: usize) -> bool {
-    arcade_options_navigation_active()
+    state.policy.arcade_navigation
         && pane_uses_arcade_next_row(state.current_pane)
         && state
             .pane()
@@ -926,7 +917,7 @@ pub(super) fn row_allows_arcade_next_row(state: &State, row_idx: usize) -> bool 
 
 #[inline(always)]
 pub(super) fn arcade_row_uses_choice_focus(state: &State, player_idx: usize) -> bool {
-    if !arcade_options_navigation_active() || !pane_uses_arcade_next_row(state.current_pane) {
+    if !state.policy.arcade_navigation || !pane_uses_arcade_next_row(state.current_pane) {
         return false;
     }
     let idx = player_idx.min(PLAYER_SLOTS - 1);

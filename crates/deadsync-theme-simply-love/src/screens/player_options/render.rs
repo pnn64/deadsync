@@ -4,7 +4,7 @@ use deadsync_profile::TapExplosionMask;
 
 pub fn push_actors(actors: &mut Vec<Actor>, state: &State, asset_manager: &AssetManager) {
     actors.reserve(64);
-    let active = session_active_players();
+    let active = state.active;
     let show_p2 = active[P1] && active[P2];
     let pane_alpha = state.pane_transition.alpha();
     state.bg.push(
@@ -58,7 +58,7 @@ pub fn push_actors(actors: &mut Vec<Actor>, state: &State, asset_manager: &Asset
         for player_idx in active_player_indices(active) {
             let speed_mod = &state.speed_mod[player_idx];
             let speed_color = color::simply_love_rgba(player_color_index(state, player_idx));
-            let p_chart = resolve_p1_chart(&state.song, &state.chart_steps_index);
+            let p_chart = resolve_p1_chart(&state.song, &state.chart_steps_index, state.play_style);
             let main_scroll =
                 speed_mod_helper_scroll_text(&state.song, p_chart, speed_mod, state.music_rate);
             let speed_prefix = speed_mod.mod_type.prefix();

@@ -250,6 +250,40 @@ pub fn runtime_session_players_view() -> SessionPlayersView {
     session_players_view(&runtime_lock_profiles(), joined_mask, active_side)
 }
 
+/// The favorite sets needed to build profile-aware selection views without
+/// exposing the process-global profile store to presentation crates.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct FavoriteSnapshot {
+    pub chart_hashes: [HashSet<String>; PLAYER_SLOTS],
+    pub pack_names: [HashSet<String>; PLAYER_SLOTS],
+}
+
+pub fn favorite_snapshot(profiles: &[Profile; PLAYER_SLOTS]) -> FavoriteSnapshot {
+    FavoriteSnapshot {
+        chart_hashes: std::array::from_fn(|idx| profiles[idx].favorites.clone()),
+        pack_names: std::array::from_fn(|idx| profiles[idx].favorited_packs.clone()),
+    }
+}
+
+pub fn runtime_favorite_snapshot() -> FavoriteSnapshot {
+    favorite_snapshot(&runtime_lock_profiles())
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct KnownPackSnapshot {
+    pub names: [HashSet<String>; PLAYER_SLOTS],
+}
+
+pub fn known_pack_snapshot(profiles: &[Profile; PLAYER_SLOTS]) -> KnownPackSnapshot {
+    KnownPackSnapshot {
+        names: std::array::from_fn(|idx| profiles[idx].known_pack_names.clone()),
+    }
+}
+
+pub fn runtime_known_pack_snapshot() -> KnownPackSnapshot {
+    known_pack_snapshot(&runtime_lock_profiles())
+}
+
 pub fn runtime_set_avatar_texture_key_for_side(side: PlayerSide, key: Option<String>) {
     let mut profiles = runtime_lock_profiles();
     set_avatar_texture_key_for_side(&mut profiles, side, key);

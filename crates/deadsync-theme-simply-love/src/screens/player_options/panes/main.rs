@@ -204,7 +204,7 @@ fn apply_noteskin_delta(
         .and_then(|r| r.choices.get(new_index))
         .cloned()
         .unwrap_or_default();
-    let (should_persist, side) = choice::persist_ctx(player_idx);
+    let (should_persist, side) = choice::persist_ctx(state, player_idx);
     apply(state, player_idx, &choice, should_persist, side);
     Outcome::persisted()
 }
@@ -232,6 +232,7 @@ const NOTE_SKIN: CustomBinding = CustomBinding {
                     &mut state.noteskin,
                     &state.player_profiles[player_idx],
                     player_idx,
+                    state.cols_per_player,
                 );
             },
         )
@@ -250,7 +251,7 @@ const HEART_RATE_MONITOR: CustomBinding = CustomBinding {
             .cloned()
             .unwrap_or(None);
         state.player_profiles[player_idx].set_heart_rate_device_id(device_id.clone());
-        let (should_persist, side) = choice::persist_ctx(player_idx);
+        let (should_persist, side) = choice::persist_ctx(state, player_idx);
         if should_persist {
             gp::update_heart_rate_device_id_for_side(side, device_id);
         }
@@ -282,6 +283,7 @@ const MINE_SKIN: CustomBinding = CustomBinding {
                     &mut state.noteskin,
                     &state.player_profiles[player_idx],
                     player_idx,
+                    state.cols_per_player,
                 );
             },
         )
@@ -312,6 +314,7 @@ const RECEPTOR_SKIN: CustomBinding = CustomBinding {
                     &mut state.noteskin,
                     &state.player_profiles[player_idx],
                     player_idx,
+                    state.cols_per_player,
                 );
             },
         )
@@ -345,6 +348,7 @@ const TAP_EXPLOSION_SKIN: CustomBinding = CustomBinding {
                     &mut state.noteskin,
                     &state.player_profiles[player_idx],
                     player_idx,
+                    state.cols_per_player,
                 );
             },
         );
@@ -443,7 +447,7 @@ const TYPE_OF_SPEED_MOD: CustomBinding = CustomBinding {
         let new_type = SpeedModType::from_choice_index(new_index);
         let reference_bpm = reference_bpm_for_song(
             &state.song,
-            resolve_p1_chart(&state.song, &state.chart_steps_index),
+            resolve_p1_chart(&state.song, &state.chart_steps_index, state.play_style),
         );
         let rate = if state.music_rate.is_finite() && state.music_rate > 0.0 {
             state.music_rate
@@ -484,7 +488,7 @@ const MINI: CustomBinding = CustomBinding {
             return Outcome::persisted();
         };
         state.player_profiles[player_idx].mini_percent = val;
-        let (should_persist, side) = choice::persist_ctx(player_idx);
+        let (should_persist, side) = choice::persist_ctx(state, player_idx);
         if should_persist {
             gp::update_mini_percent_for_side(side, val);
         }
@@ -503,7 +507,7 @@ const JUDGMENT_FONT: CustomBinding = CustomBinding {
             .map(|choice| JudgmentGraphic::new(choice.key.as_ref()))
             .unwrap_or_default();
         state.player_profiles[player_idx].judgment_graphic = setting;
-        let (should_persist, side) = choice::persist_ctx(player_idx);
+        let (should_persist, side) = choice::persist_ctx(state, player_idx);
         if should_persist {
             gp::update_judgment_graphic_for_side(
                 side,
@@ -525,7 +529,7 @@ const HOLD_JUDGMENT: CustomBinding = CustomBinding {
             .map(|choice| HoldJudgmentGraphic::new(choice.key.as_ref()))
             .unwrap_or_default();
         state.player_profiles[player_idx].hold_judgment_graphic = setting;
-        let (should_persist, side) = choice::persist_ctx(player_idx);
+        let (should_persist, side) = choice::persist_ctx(state, player_idx);
         if should_persist {
             gp::update_hold_judgment_graphic_for_side(
                 side,
@@ -549,7 +553,7 @@ const HELD_GRAPHIC: CustomBinding = CustomBinding {
             .map(|choice| HeldMissGraphic::new(choice.key.as_ref()))
             .unwrap_or_default();
         state.player_profiles[player_idx].held_miss_graphic = setting;
-        let (should_persist, side) = choice::persist_ctx(player_idx);
+        let (should_persist, side) = choice::persist_ctx(state, player_idx);
         if should_persist {
             gp::update_held_miss_graphic_for_side(
                 side,
@@ -882,7 +886,7 @@ const SMX_BG_PACK: CustomBinding = CustomBinding {
                 .cloned()
                 .unwrap_or_default()
         };
-        let (should_persist, side) = choice::persist_ctx(player_idx);
+        let (should_persist, side) = choice::persist_ctx(state, player_idx);
         state.player_profiles[player_idx].smx_bg_pack = if pack.is_empty() {
             None
         } else {
@@ -912,7 +916,7 @@ const SMX_JUDGE_PACK: CustomBinding = CustomBinding {
                 .cloned()
                 .unwrap_or_default()
         };
-        let (should_persist, side) = choice::persist_ctx(player_idx);
+        let (should_persist, side) = choice::persist_ctx(state, player_idx);
         state.player_profiles[player_idx].smx_judge_pack = if pack.is_empty() {
             None
         } else {
@@ -982,11 +986,13 @@ pub(super) fn build_main_rows(
     heart_rate_choices: &[String],
     return_screen: Screen,
     fixed_stepchart: Option<&FixedStepchart>,
+    play_style: profile_data::PlayStyle,
+    persisted_player_idx: usize,
 ) -> RowMap {
     let speed_mod_value_str = speed_mod.display();
     let (stepchart_choices, stepchart_choice_indices, initial_stepchart_choice_index) =
         if let Some(fixed) = fixed_stepchart {
-            let fixed_steps_idx = chart_steps_index[session_persisted_player_idx()];
+            let fixed_steps_idx = chart_steps_index[persisted_player_idx];
             (
                 vec![fixed.label.clone()],
                 vec![fixed_steps_idx],
@@ -995,7 +1001,7 @@ pub(super) fn build_main_rows(
         } else {
             // Build Stepchart choices from the song's charts for the current play style, ordered
             // Beginner..Challenge, then Edit charts.
-            let target_chart_type = deadsync_profile::compat::get_session_play_style().chart_type();
+            let target_chart_type = play_style.chart_type();
             let mut stepchart_choices: Vec<String> = Vec::with_capacity(STANDARD_DIFFICULTY_COUNT);
             let mut stepchart_choice_indices: Vec<usize> =
                 Vec::with_capacity(STANDARD_DIFFICULTY_COUNT);
@@ -1039,7 +1045,7 @@ pub(super) fn build_main_rows(
             // Fallback if none found (defensive; SelectMusic filters songs by play style).
             if stepchart_choices.is_empty() {
                 stepchart_choices.push(tr("PlayerOptions", "CurrentStepchartLabel").to_string());
-                let base_pref = preferred_difficulty_index[session_persisted_player_idx()]
+                let base_pref = preferred_difficulty_index[persisted_player_idx]
                     .min(STANDARD_DIFFICULTY_COUNT.saturating_sub(1));
                 stepchart_choice_indices.push(base_pref);
             }

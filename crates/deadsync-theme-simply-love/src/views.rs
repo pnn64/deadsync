@@ -1,7 +1,7 @@
 use deadlib_render::{ClockDomainTrace, PresentModeTrace};
 use deadsync_assets::noteskin::Noteskin;
 use deadsync_input::Keymap;
-use deadsync_profile::PlayerSide;
+use deadsync_profile::{PlayMode, PlayStyle, PlayerSide};
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -19,6 +19,128 @@ pub type CourseStagePlan = CourseStageView;
 pub type SelectedCoursePlan = SelectedCourseView;
 pub type DensityGraphSource = DensityGraphView;
 pub type TimingHealth = TimingHealthView<PresentModeTrace, ClockDomainTrace, AudioTimingView>;
+
+/// Shell-owned presentation policy used while constructing Gameplay state.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct GameplayPolicyView {
+    pub translated_titles: bool,
+    pub random_background_movies: bool,
+    pub center_single_notefield: bool,
+}
+
+impl Default for GameplayPolicyView {
+    fn default() -> Self {
+        let config = deadsync_config::prelude::Config::default();
+        Self {
+            translated_titles: config.translated_titles,
+            random_background_movies: matches!(
+                config.random_background_mode,
+                deadsync_config::prelude::RandomBackgroundMode::RandomMovies
+            ),
+            center_single_notefield: config.center_1player_notefield,
+        }
+    }
+}
+
+/// Live shell-prepared session and lobby state consumed by Gameplay's screen
+/// logic, separate from the deterministic gameplay simulation state.
+#[derive(Clone, Debug)]
+pub struct GameplayRuntimeView {
+    pub policy: GameplayPolicyView,
+    pub play_style: PlayStyle,
+    pub player_side: PlayerSide,
+    pub joined: [bool; 2],
+    pub lobby: SimplyLoveLobbyRuntimeView,
+}
+
+impl Default for GameplayRuntimeView {
+    fn default() -> Self {
+        Self {
+            policy: GameplayPolicyView::default(),
+            play_style: PlayStyle::default(),
+            player_side: PlayerSide::default(),
+            joined: [true, false],
+            lobby: SimplyLoveLobbyRuntimeView::default(),
+        }
+    }
+}
+
+/// Shell-prepared song-lifetime HUD identity plus the initial live Gameplay
+/// context.
+#[derive(Clone, Debug)]
+pub struct GameplayInitView {
+    pub runtime: GameplayRuntimeView,
+    pub hud: deadsync_profile::GameplayHudSnapshot,
+}
+
+impl Default for GameplayInitView {
+    fn default() -> Self {
+        Self {
+            runtime: GameplayRuntimeView::default(),
+            hud: deadsync_profile::GameplayHudSnapshot {
+                play_style: PlayStyle::default(),
+                player_side: PlayerSide::default(),
+                p1: deadsync_profile::GameplayHudPlayerSnapshot {
+                    joined: true,
+                    guest: true,
+                    ..Default::default()
+                },
+                p2: deadsync_profile::GameplayHudPlayerSnapshot::default(),
+            },
+        }
+    }
+}
+
+/// Shell-owned machine/runtime policy consumed by Player Options.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct PlayerOptionsPolicyView {
+    pub allow_per_player_global_offsets: bool,
+    pub heart_rate_monitors: bool,
+    pub arcade_navigation: bool,
+    pub smx_input: bool,
+    pub smx_panel_lights: bool,
+    pub scorebox_available: bool,
+}
+
+impl Default for PlayerOptionsPolicyView {
+    fn default() -> Self {
+        let config = deadsync_config::prelude::Config::default();
+        Self {
+            allow_per_player_global_offsets: config.machine_allow_per_player_global_offsets,
+            heart_rate_monitors: config.machine_enable_heart_rate_monitors,
+            arcade_navigation: config.arcade_options_navigation,
+            smx_input: config.smx_input,
+            smx_panel_lights: config.smx_panel_lights,
+            scorebox_available: false,
+        }
+    }
+}
+
+/// Shell-prepared session and profile snapshot used for one Player Options
+/// state. Option edits remain local to the screen and use the existing typed
+/// persistence callbacks.
+#[derive(Clone, Debug)]
+pub struct PlayerOptionsInitView {
+    pub policy: PlayerOptionsPolicyView,
+    pub play_style: PlayStyle,
+    pub player_side: PlayerSide,
+    pub joined: [bool; 2],
+    pub music_rate: f32,
+    pub profiles: [deadsync_profile::Profile; 2],
+}
+
+impl Default for PlayerOptionsInitView {
+    fn default() -> Self {
+        Self {
+            policy: PlayerOptionsPolicyView::default(),
+            play_style: PlayStyle::default(),
+            player_side: PlayerSide::default(),
+            joined: [true, false],
+            music_rate: 1.0,
+            profiles: std::array::from_fn(|_| deadsync_profile::Profile::default()),
+        }
+    }
+}
 
 /// Shell-prepared keymap state consumed by Simply Love's mappings screen.
 #[derive(Clone, Debug)]
@@ -38,6 +160,50 @@ impl Default for MappingsRuntimeView {
     }
 }
 
+/// Shell-prepared player data shared by the pre-song selection screens.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct SelectFlowPlayerView {
+    pub joined: bool,
+    pub guest: bool,
+    pub display_name: String,
+    pub avatar_texture_key: Option<String>,
+}
+
+/// Shell-prepared config and session state for Select Color, Style, and Mode.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct SelectFlowRuntimeView {
+    pub players: [SelectFlowPlayerView; 2],
+    pub play_style: PlayStyle,
+    pub play_mode: PlayMode,
+    pub color_index: i32,
+}
+
+/// Shell-prepared profile and score data shared by the post-song screens.
+#[derive(Clone, Debug, Default)]
+pub struct PostSongPlayerView {
+    pub joined: bool,
+    pub guest: bool,
+    pub display_name: String,
+    pub player_initials: String,
+    pub avatar_texture_key: Option<String>,
+    pub calories_burned_today: f32,
+    pub ignore_step_count_calories: bool,
+    pub total_songs_played: u32,
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct PostSongRuntimeView {
+    pub players: [PostSongPlayerView; 2],
+    pub play_style: PlayStyle,
+    pub player_side: PlayerSide,
+    pub machine_font: deadsync_config::prelude::MachineFont,
+    pub translated_titles: bool,
+    pub zmod_rating_box_text: bool,
+    pub three_key_navigation: bool,
+    pub machine_leaderboards:
+        std::collections::HashMap<String, Vec<deadsync_score::LeaderboardEntry>>,
+}
+
 /// One player's shell-prepared local records and online eligibility state used
 /// while constructing an Evaluation screen.
 #[derive(Clone, Debug, Default)]
@@ -48,9 +214,84 @@ pub struct EvaluationInitPlayerView {
     pub itl: deadsync_score::ItlEvalState,
 }
 
+/// Shell-owned Evaluation policy copied into theme state at screen entry and
+/// refreshed while the screen is active.
+#[derive(Clone, Copy, Debug)]
+pub struct EvaluationPolicyView {
+    pub enable_groovestats: bool,
+    pub enable_arrowcloud: bool,
+    pub autosubmit_course_scores_individually: bool,
+    pub submit_arrowcloud_fails: bool,
+    pub smooth_histogram: bool,
+    pub shade_scatterplot_judgments: bool,
+    pub only_dedicated_menu_buttons: bool,
+    pub three_key_navigation: bool,
+    pub machine_nice_sound: bool,
+    pub show_gameplay_timer: bool,
+    pub translated_titles: bool,
+    pub zmod_rating_box_text: bool,
+    pub breakdown_style: deadsync_config::prelude::BreakdownStyle,
+}
+
+impl Default for EvaluationPolicyView {
+    fn default() -> Self {
+        let config = deadsync_config::prelude::Config::default();
+        Self {
+            enable_groovestats: config.enable_groovestats,
+            enable_arrowcloud: config.enable_arrowcloud,
+            autosubmit_course_scores_individually: config.autosubmit_course_scores_individually,
+            submit_arrowcloud_fails: config.submit_arrowcloud_fails,
+            smooth_histogram: config.smooth_histogram,
+            shade_scatterplot_judgments: config.shade_scatterplot_judgments,
+            only_dedicated_menu_buttons: config.only_dedicated_menu_buttons,
+            three_key_navigation: config.three_key_navigation,
+            machine_nice_sound: config.machine_nice_sound,
+            show_gameplay_timer: config.show_select_music_gameplay_timer,
+            translated_titles: config.translated_titles,
+            zmod_rating_box_text: config.zmod_rating_box_text,
+            breakdown_style: config.select_music_breakdown_style,
+        }
+    }
+}
+
+/// One Evaluation footer/online-availability player prepared by the shell.
+#[derive(Clone, Debug, Default)]
+pub struct EvaluationPlayerView {
+    pub joined: bool,
+    pub guest: bool,
+    pub avatar_texture_key: Option<String>,
+    pub display_name: String,
+    pub groovestats_linked: bool,
+    pub arrowcloud_linked: bool,
+}
+
+/// Session and machine context needed by Evaluation's pure screen logic.
+#[derive(Clone, Debug)]
+pub struct EvaluationContextView {
+    pub policy: EvaluationPolicyView,
+    pub play_style: deadsync_profile::PlayStyle,
+    pub player_side: deadsync_profile::PlayerSide,
+    pub players: [EvaluationPlayerView; 2],
+}
+
+impl Default for EvaluationContextView {
+    fn default() -> Self {
+        let mut players = std::array::from_fn(|_| EvaluationPlayerView::default());
+        players[0].joined = true;
+        players[0].guest = true;
+        Self {
+            policy: EvaluationPolicyView::default(),
+            play_style: deadsync_profile::PlayStyle::default(),
+            player_side: deadsync_profile::PlayerSide::default(),
+            players,
+        }
+    }
+}
+
 #[derive(Clone, Debug, Default)]
 pub struct EvaluationInitView {
     pub players: [EvaluationInitPlayerView; 2],
+    pub context: EvaluationContextView,
 }
 
 /// One normalized local score used by Simply Love's selected-chart scorebox.
@@ -206,19 +447,154 @@ pub struct SelectCourseScoreView {
 
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct SelectCourseRuntimeView {
+    pub context: SelectCourseContextView,
     pub music_wheel: MusicWheelRuntimeView,
     pub score: SelectCourseScoreView,
 }
 
-/// Shell-prepared machine play history used while resolving dynamic courses.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+/// Shell-owned policy used by Select Course input and presentation.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct SelectCoursePolicyView {
+    pub show_random_courses: bool,
+    pub show_most_played_courses: bool,
+    pub music_wheel_switch_speed: u8,
+    pub global_offset_seconds: f32,
+    pub dedicated_three_key_nav: bool,
+}
+
+impl Default for SelectCoursePolicyView {
+    fn default() -> Self {
+        let config = deadsync_config::prelude::Config::default();
+        Self {
+            show_random_courses: config.show_random_courses,
+            show_most_played_courses: config.show_most_played_courses,
+            music_wheel_switch_speed: config.music_wheel_switch_speed,
+            global_offset_seconds: config.global_offset_seconds,
+            dedicated_three_key_nav: config.three_key_navigation
+                && config.only_dedicated_menu_buttons,
+        }
+    }
+}
+
+/// Session and machine context consumed by Select Course's pure screen logic.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct SelectCourseContextView {
+    pub policy: SelectCoursePolicyView,
+    pub play_style: deadsync_profile::PlayStyle,
+    pub player_side: deadsync_profile::PlayerSide,
+    pub music_rate: f32,
+}
+
+impl Default for SelectCourseContextView {
+    fn default() -> Self {
+        Self {
+            policy: SelectCoursePolicyView::default(),
+            play_style: deadsync_profile::PlayStyle::default(),
+            player_side: deadsync_profile::PlayerSide::default(),
+            music_rate: 1.0,
+        }
+    }
+}
+
+/// Shell-prepared cache, policy, and profile state used while resolving
+/// dynamic courses.
+#[derive(Clone, Debug, Default)]
 pub struct SelectCourseInitView {
+    pub song_packs: Vec<deadsync_chart::SongPack>,
+    pub courses: Vec<deadsync_simfile::runtime_cache::CourseData>,
     pub played_chart_counts: Vec<(String, u32)>,
+    pub translated_titles: bool,
+    pub last_course_path: Option<PathBuf>,
+    pub last_course_difficulty: Option<String>,
+    pub context: SelectCourseContextView,
+}
+
+/// Live session routing used throughout Select Music without reading the
+/// process-global profile session from theme code.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct SelectMusicSessionView {
+    pub play_style: deadsync_profile::PlayStyle,
+    pub player_side: deadsync_profile::PlayerSide,
+    pub joined: [bool; 2],
+    pub guest: [bool; 2],
+    pub music_rate: f32,
+}
+
+impl SelectMusicSessionView {
+    #[inline(always)]
+    pub const fn side_joined(self, side: deadsync_profile::PlayerSide) -> bool {
+        self.joined[deadsync_profile::player_side_index(side)]
+    }
+
+    #[inline(always)]
+    pub const fn side_guest(self, side: deadsync_profile::PlayerSide) -> bool {
+        self.guest[deadsync_profile::player_side_index(side)]
+    }
+}
+
+impl Default for SelectMusicSessionView {
+    fn default() -> Self {
+        Self {
+            play_style: Default::default(),
+            player_side: Default::default(),
+            joined: [true, false],
+            guest: [true, true],
+            music_rate: 1.0,
+        }
+    }
+}
+
+/// Shell-prepared profile identity and pad routing used by Select Music.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct SelectMusicProfileView {
+    pub display_names: [String; 2],
+    pub local_profile_ids: [Option<String>; 2],
+    pub pad_profile_ids: [Option<String>; 2],
+}
+
+impl SelectMusicProfileView {
+    #[inline(always)]
+    pub fn display_name(&self, side: deadsync_profile::PlayerSide) -> &str {
+        &self.display_names[deadsync_profile::player_side_index(side)]
+    }
+
+    #[inline(always)]
+    pub fn local_profile_id(&self, side: deadsync_profile::PlayerSide) -> Option<&str> {
+        self.local_profile_ids[deadsync_profile::player_side_index(side)].as_deref()
+    }
+
+    #[inline(always)]
+    pub fn pad_profile_id(&self, pad: usize) -> Option<&str> {
+        self.pad_profile_ids.get(pad).and_then(Option::as_deref)
+    }
+}
+
+/// Last selection persisted by the active machine profile and prepared at
+/// Select Music entry.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SelectMusicLastPlayedView {
+    pub song_music_path: Option<String>,
+    pub chart_hash: Option<String>,
+    pub difficulty_index: usize,
+}
+
+impl Default for SelectMusicLastPlayedView {
+    fn default() -> Self {
+        Self {
+            song_music_path: None,
+            chart_hash: None,
+            difficulty_index: 2,
+        }
+    }
 }
 
 /// Shell-prepared runtime data consumed by Simply Love's Select Music screen.
 #[derive(Clone, Debug)]
 pub struct SelectMusicRuntimeView {
+    pub session: SelectMusicSessionView,
+    pub profiles: SelectMusicProfileView,
+    /// Refreshed only when the active local profile IDs change.
+    pub favorites: Option<deadsync_profile::FavoriteSnapshot>,
     pub audio_playback: deadsync_theme::views::AudioPlaybackView,
     pub lobby: SimplyLoveLobbyRuntimeView,
     pub downloads: Vec<SelectMusicDownloadView>,
@@ -239,6 +615,9 @@ pub struct SelectMusicRuntimeView {
 impl Default for SelectMusicRuntimeView {
     fn default() -> Self {
         Self {
+            session: Default::default(),
+            profiles: Default::default(),
+            favorites: None,
             audio_playback: Default::default(),
             lobby: Default::default(),
             downloads: Vec::new(),
@@ -308,10 +687,12 @@ pub struct EvaluationSubmissionView {
 /// Shell-prepared runtime data consumed by Simply Love's Evaluation screen.
 #[derive(Clone, Debug, Default)]
 pub struct EvaluationRuntimeView {
+    pub context: EvaluationContextView,
     pub lobby: SimplyLoveLobbyRuntimeView,
     pub groovestats_service: SimplyLoveGrooveStatsService,
     pub submissions: [EvaluationSubmissionView; 2],
     pub scoreboxes: [ScoreboxSideView; 2],
+    pub favorites: [bool; 2],
 }
 
 /// One playlist file loaded by the shell for Simply Love's playlist wheel.
@@ -350,6 +731,11 @@ pub struct SelectMusicInitView {
     pub playlists: Vec<SelectMusicPlaylistView>,
     pub history: SelectMusicHistoryView,
     pub policy: SelectMusicPolicyView,
+    pub session: SelectMusicSessionView,
+    pub profiles: SelectMusicProfileView,
+    pub last_played: SelectMusicLastPlayedView,
+    pub favorites: deadsync_profile::FavoriteSnapshot,
+    pub known_packs: deadsync_profile::KnownPackSnapshot,
 }
 
 /// Shell-prepared song packs used by Simply Love's Options import/sync UI.

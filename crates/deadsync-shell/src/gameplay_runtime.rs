@@ -1,13 +1,56 @@
+use deadsync_config::prelude as config;
 use deadsync_gameplay::{
     GameplayAudioCommand, GameplayAudioSnapshot, GameplayMusicCut, GameplaySessionCommand,
     GameplayStreamClockSnapshot,
 };
 use deadsync_input::{InputEvent, RawKeyboardEvent};
+use deadsync_profile as profile_data;
+use deadsync_profile::compat as profile;
 use deadsync_profile_gameplay::profile_tick_mode_from_gameplay;
 use deadsync_theme_simply_love::SimplyLoveEffect as ThemeEffect;
 use deadsync_theme_simply_love::screens::{gameplay, practice};
+use deadsync_theme_simply_love::views::{
+    GameplayInitView, GameplayPolicyView, GameplayRuntimeView, SimplyLoveLobbyRuntimeView,
+};
 use std::path::Path;
 use std::time::Instant;
+
+fn policy_view(config: &config::Config) -> GameplayPolicyView {
+    GameplayPolicyView {
+        translated_titles: config.translated_titles,
+        random_background_movies: matches!(
+            config.random_background_mode,
+            config::RandomBackgroundMode::RandomMovies
+        ),
+        center_single_notefield: config.center_1player_notefield,
+    }
+}
+
+pub(crate) fn runtime_view(
+    config: &config::Config,
+    lobby: SimplyLoveLobbyRuntimeView,
+) -> GameplayRuntimeView {
+    let session = profile::get_session_snapshot();
+    GameplayRuntimeView {
+        policy: policy_view(config),
+        play_style: session.play_style,
+        player_side: session.player_side,
+        joined: std::array::from_fn(|idx| {
+            session.side_joined(profile_data::player_side_for_index(idx))
+        }),
+        lobby,
+    }
+}
+
+pub(crate) fn init_view(
+    config: &config::Config,
+    lobby: SimplyLoveLobbyRuntimeView,
+) -> GameplayInitView {
+    GameplayInitView {
+        runtime: runtime_view(config, lobby),
+        hud: profile::gameplay_hud_snapshot(),
+    }
+}
 
 fn smx_sensor_value(data: &deadsync_smx::SensorTestData, panel: usize, fsr: bool) -> Option<u16> {
     data.have_data_from_panel[panel].then(|| {
