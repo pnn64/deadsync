@@ -252,9 +252,11 @@ fn build_screen_cached_with_scratch_and_texture_context_impl<T: TextureContext +
         total_elapsed,
     );
 
-    // Prefer the dense stable z-bucket pass for common dense ranges, but fall
-    // back to `(z, order)` sorting when insertion order and draw order differ.
-    sort_render_objects(&mut objects, scratch);
+    let mut batches = std::mem::take(&mut scratch.batches);
+    if !renderer::build_ordered_render_batches(&objects, &mut batches) {
+        sort_render_objects(&mut objects, scratch);
+        renderer::build_render_batches(&objects, &mut batches);
+    }
     scratch.masks = masks;
     scratch.texture_cache = texture_cache;
 
@@ -275,12 +277,14 @@ fn build_screen_cached_with_scratch_and_texture_context_impl<T: TextureContext +
         cameras,
         sprite_instances,
         objects,
+        batches,
     }
 }
 
 #[derive(Default)]
 pub struct ComposeScratch {
     objects: Vec<RenderObject>,
+    batches: Vec<renderer::RenderBatch>,
     sprite_instances: Vec<renderer::SpriteInstanceRaw>,
     cameras: Vec<Matrix4>,
     masks: Vec<WorldRect>,
@@ -310,6 +314,9 @@ impl ComposeScratch {
             self.recycled_text_mesh_vertices.push(vertices);
         }
         self.objects = objects;
+        let mut batches = std::mem::take(&mut render.batches);
+        batches.clear();
+        self.batches = batches;
         let mut sprite_instances = std::mem::take(&mut render.sprite_instances);
         sprite_instances.clear();
         self.sprite_instances = sprite_instances;
@@ -399,26 +406,26 @@ fn sort_render_objects(objects: &mut [RenderObject], scratch: &mut ComposeScratc
     let mut sorted_by_z = true;
     let mut sorted_by_key = true;
     let mut prev_key = (min_z, objects[0].order);
-    for obj in &objects[1..] {
-        let key = (obj.z, obj.order);
-        sorted_by_z &= prev_key.0 <= obj.z;
+    for object in &objects[1..] {
+        let key = (object.z, object.order);
+        sorted_by_z &= prev_key.0 <= object.z;
         sorted_by_key &= prev_key <= key;
-        min_z = min_z.min(obj.z);
-        max_z = max_z.max(obj.z);
+        min_z = min_z.min(object.z);
+        max_z = max_z.max(object.z);
         prev_key = key;
     }
     if sorted_by_key {
         return;
     }
     if sorted_by_z {
-        objects.sort_unstable_by_key(|o| (o.z, o.order));
+        objects.sort_unstable_by_key(|object| (object.z, object.order));
         return;
     }
 
     let range = (i32::from(max_z) - i32::from(min_z) + 1) as usize;
     let dense_range_limit = objects.len().saturating_mul(8).max(256);
     if range > dense_range_limit {
-        objects.sort_unstable_by_key(|o| (o.z, o.order));
+        objects.sort_unstable_by_key(|object| (object.z, object.order));
         return;
     }
 
@@ -429,19 +436,17 @@ fn sort_render_objects(objects: &mut [RenderObject], scratch: &mut ComposeScratc
 
     let min_z_i = i32::from(min_z);
     let mut buckets_ordered = true;
-    for obj in objects.iter() {
-        let bucket = (i32::from(obj.z) - min_z_i) as usize;
+    for object in objects.iter() {
+        let bucket = (i32::from(object.z) - min_z_i) as usize;
         let bucket_seen = scratch.z_counts[bucket] != 0;
         let previous_order = &mut scratch.z_perm[bucket];
-        let order = obj.order as usize;
+        let order = object.order as usize;
         buckets_ordered &= !bucket_seen || *previous_order <= order;
         *previous_order = order;
         scratch.z_counts[bucket] += 1;
     }
     if !buckets_ordered {
-        // Some compose paths append later objects before assigning their final
-        // draw order. Skip permutation when stable bucketing cannot order them.
-        objects.sort_unstable_by_key(|o| (o.z, o.order));
+        objects.sort_unstable_by_key(|object| (object.z, object.order));
         return;
     }
 
@@ -454,19 +459,18 @@ fn sort_render_objects(objects: &mut [RenderObject], scratch: &mut ComposeScratc
 
     scratch.z_perm.clear();
     scratch.z_perm.resize(objects.len(), 0);
-    for (old_idx, obj) in objects.iter().enumerate() {
-        let bucket = (i32::from(obj.z) - min_z_i) as usize;
-        let new_idx = scratch.z_counts[bucket];
-        scratch.z_counts[bucket] = new_idx + 1;
-        scratch.z_perm[old_idx] = new_idx;
+    for (old_index, object) in objects.iter().enumerate() {
+        let bucket = (i32::from(object.z) - min_z_i) as usize;
+        let new_index = scratch.z_counts[bucket];
+        scratch.z_counts[bucket] = new_index + 1;
+        scratch.z_perm[old_index] = new_index;
     }
 
     for start in 0..objects.len() {
-        let current = start;
-        while scratch.z_perm[current] != current {
-            let next = scratch.z_perm[current];
-            objects.swap(current, next);
-            scratch.z_perm.swap(current, next);
+        while scratch.z_perm[start] != start {
+            let next = scratch.z_perm[start];
+            objects.swap(start, next);
+            scratch.z_perm.swap(start, next);
         }
     }
 
@@ -5083,6 +5087,17 @@ mod tests {
         lines.iter().map(|line| Box::<str>::from(*line)).collect()
     }
 
+    fn test_render_object(z: i16, order: u32) -> RenderObject {
+        RenderObject {
+            object_type: ObjectType::Sprite(0),
+            texture_handle: 0,
+            blend: BlendMode::Alpha,
+            z,
+            order,
+            camera: 0,
+        }
+    }
+
     fn test_layout() -> CachedTextLayout {
         CachedTextLayout {
             layout_seed: 1,
@@ -5402,17 +5417,6 @@ mod tests {
         assert!(layout.stroke_batches.is_built(TextAlign::Left));
         assert!(!layout.stroke_batches.is_built(TextAlign::Center));
         assert!(!layout.fill_batches.is_built(TextAlign::Left));
-    }
-
-    fn test_render_object(z: i16, order: u32) -> RenderObject {
-        RenderObject {
-            object_type: ObjectType::Sprite(0),
-            texture_handle: 0,
-            blend: BlendMode::Alpha,
-            z,
-            order,
-            camera: 0,
-        }
     }
 
     #[test]
@@ -6062,6 +6066,7 @@ mod tests {
                 order: 0,
                 camera: 0,
             }],
+            batches: Vec::new(),
         };
 
         scratch.recycle_render_list(&mut render);
@@ -6128,21 +6133,7 @@ mod tests {
     }
 
     #[test]
-    fn sort_render_objects_repairs_equal_z_order() {
-        let mut objects = vec![test_render_object(5, 2), test_render_object(5, 1)];
-        let mut scratch = ComposeScratch::default();
-
-        sort_render_objects(&mut objects, &mut scratch);
-
-        let keys = objects
-            .iter()
-            .map(|obj| (obj.z, obj.order))
-            .collect::<Vec<_>>();
-        assert_eq!(keys, vec![(5, 1), (5, 2)]);
-    }
-
-    #[test]
-    fn sort_render_objects_falls_back_when_dense_buckets_keep_bad_order() {
+    fn render_objects_remain_ordered_for_direct_backend_consumers() {
         let mut objects = vec![
             test_render_object(5, 3),
             test_render_object(4, 0),
@@ -6153,11 +6144,13 @@ mod tests {
 
         sort_render_objects(&mut objects, &mut scratch);
 
-        let keys = objects
-            .iter()
-            .map(|obj| (obj.z, obj.order))
-            .collect::<Vec<_>>();
-        assert_eq!(keys, vec![(4, 0), (5, 1), (5, 2), (5, 3)]);
+        assert_eq!(
+            objects
+                .iter()
+                .map(|object| (object.z, object.order))
+                .collect::<Vec<_>>(),
+            vec![(4, 0), (5, 1), (5, 2), (5, 3)]
+        );
     }
 
     #[test]
