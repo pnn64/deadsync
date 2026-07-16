@@ -4,13 +4,13 @@ use crate::null_or_die::NullOrDieOptions;
 use crate::options::{RuntimeOptions, SelectMusicOptions, SmxPackName, SystemOptions};
 use crate::theme::{
     ArrowCloudQrLoginWhen, BreakdownStyle, DefaultFailType, DefaultSyncOffset, GameFlag,
-    GameplayBpmPosition, GrooveStatsQrLoginWhen, LanguageFlag, LogLevel, MachineBarColor,
-    MachineEvaluationStyle, MachineFlowOptions, MachineFont, MachinePreferredPlayMode,
-    MachinePreferredPlayStyle, NewPackMode, RandomBackgroundMode, SelectMusicItlRankMode,
-    SelectMusicItlWheelMode, SelectMusicPatternInfoMode, SelectMusicScoreboxPlacement,
-    SelectMusicSongSelectBgMode, SelectMusicStepArtistBoxMode, SelectMusicWheelStyle,
-    SrpgShopFolder, SrpgVariant, SyncGraphMode, ThemeFlag, ThemePresentationOptions,
-    VersionOverlaySide, VisualStyle,
+    GameplayBannerMode, GameplayBpmPosition, GrooveStatsQrLoginWhen, LanguageFlag, LogLevel,
+    MachineBarColor, MachineEvaluationStyle, MachineFlowOptions, MachineFont,
+    MachinePreferredPlayMode, MachinePreferredPlayStyle, NewPackMode, RandomBackgroundMode,
+    SelectMusicItlRankMode, SelectMusicItlWheelMode, SelectMusicPatternInfoMode,
+    SelectMusicScoreboxPlacement, SelectMusicSongSelectBgMode, SelectMusicStepArtistBoxMode,
+    SelectMusicWheelStyle, SrpgShopFolder, SrpgVariant, SyncGraphMode, ThemeFlag,
+    ThemePresentationOptions, VersionOverlaySide, VisualStyle,
 };
 use deadlib_platform::display::FullscreenType;
 use deadlib_present::color::Color;
@@ -234,6 +234,8 @@ pub struct Config {
     pub show_bpm_decimal: bool,
     /// Where to place the live gameplay BPM display.
     pub gameplay_bpm_position: GameplayBpmPosition,
+    /// Playback policy for video banners visible in Gameplay Step Statistics.
+    pub gameplay_banner_mode: GameplayBannerMode,
     /// Require holding Back to leave gameplay instead of exiting on first press.
     pub delayed_back: bool,
     /// Machine default fail behavior (ITGmania DefaultFailType).
@@ -455,6 +457,7 @@ impl Default for Config {
             zmod_rating_box_text: theme.zmod_rating_box_text,
             show_bpm_decimal: theme.show_bpm_decimal,
             gameplay_bpm_position: theme.gameplay_bpm_position,
+            gameplay_banner_mode: theme.gameplay_banner_mode,
             default_fail_type: system.default_fail_type,
             null_or_die_sync_graph: null_or_die.sync_graph,
             null_or_die_graph_orientation: null_or_die.graph_orientation,

@@ -13,6 +13,7 @@ pub struct DynamicVideoState {
     pub player: video::Player,
     pub started_at: Option<Instant>,
     pub path: PathBuf,
+    pub looped: bool,
 }
 
 pub struct PreparedBannerVideo {
@@ -20,11 +21,16 @@ pub struct PreparedBannerVideo {
     pub path: PathBuf,
     pub poster: RgbaImage,
     pub player: video::Player,
+    pub looped: bool,
 }
 
 pub enum BannerVideoPrepResult {
     Ready(PreparedBannerVideo),
-    Failed { path: PathBuf, msg: String },
+    Failed {
+        path: PathBuf,
+        looped: bool,
+        msg: String,
+    },
 }
 
 pub struct PreparedGameplayBackground {
@@ -372,29 +378,30 @@ impl DynamicBackgroundState {
     }
 }
 
-pub fn prepare_banner_video(key: String, path: PathBuf) -> BannerVideoPrepResult {
+pub fn prepare_banner_video(key: String, path: PathBuf, looped: bool) -> BannerVideoPrepResult {
     if !media_cache::banner_cache_options().enabled {
-        return match video::open(&path, true) {
+        return match video::open(&path, looped) {
             Ok(video) => BannerVideoPrepResult::Ready(PreparedBannerVideo {
                 key,
                 path,
                 poster: video.poster,
                 player: video.player,
+                looped,
             }),
-            Err(msg) => BannerVideoPrepResult::Failed { path, msg },
+            Err(msg) => BannerVideoPrepResult::Failed { path, looped, msg },
         };
     }
 
     let poster = match media_cache::load_banner_source_rgba(&path) {
         Ok(rgba) => rgba,
         Err(msg) => {
-            return BannerVideoPrepResult::Failed { path, msg };
+            return BannerVideoPrepResult::Failed { path, looped, msg };
         }
     };
-    let player = match video::open_player(&path, true) {
+    let player = match video::open_player(&path, looped) {
         Ok(player) => player,
         Err(msg) => {
-            return BannerVideoPrepResult::Failed { path, msg };
+            return BannerVideoPrepResult::Failed { path, looped, msg };
         }
     };
     BannerVideoPrepResult::Ready(PreparedBannerVideo {
@@ -402,6 +409,7 @@ pub fn prepare_banner_video(key: String, path: PathBuf) -> BannerVideoPrepResult
         path,
         poster,
         player,
+        looped,
     })
 }
 

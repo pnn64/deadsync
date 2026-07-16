@@ -599,6 +599,50 @@ pub enum GameplayBpmPosition {
     NearField,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GameplayBannerMode {
+    Static,
+    Once,
+    Loop,
+}
+
+impl GameplayBannerMode {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Static => "Static",
+            Self::Once => "Once",
+            Self::Loop => "Loop",
+        }
+    }
+
+    pub const fn looped(self) -> Option<bool> {
+        match self {
+            Self::Static => None,
+            Self::Once => Some(false),
+            Self::Loop => Some(true),
+        }
+    }
+}
+
+impl FromStr for GameplayBannerMode {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mut key = String::with_capacity(s.len());
+        for ch in s.trim().chars() {
+            if ch.is_ascii_alphanumeric() {
+                key.push(ch.to_ascii_lowercase());
+            }
+        }
+        match key.as_str() {
+            "static" | "off" | "false" | "0" => Ok(Self::Static),
+            "once" | "playonce" => Ok(Self::Once),
+            "loop" | "looping" | "on" | "true" | "1" => Ok(Self::Loop),
+            _ => Err(()),
+        }
+    }
+}
+
 impl GameplayBpmPosition {
     pub const fn as_str(self) -> &'static str {
         match self {
@@ -1340,6 +1384,7 @@ pub struct ThemePresentationOptions {
     pub zmod_rating_box_text: bool,
     pub show_bpm_decimal: bool,
     pub gameplay_bpm_position: GameplayBpmPosition,
+    pub gameplay_banner_mode: GameplayBannerMode,
 }
 
 impl Default for ThemePresentationOptions {
@@ -1355,6 +1400,7 @@ impl Default for ThemePresentationOptions {
             zmod_rating_box_text: DEFAULT_ZMOD_RATING_BOX_TEXT,
             show_bpm_decimal: DEFAULT_SHOW_BPM_DECIMAL,
             gameplay_bpm_position: GameplayBpmPosition::TopCenter,
+            gameplay_banner_mode: GameplayBannerMode::Loop,
         }
     }
 }
@@ -1413,6 +1459,11 @@ pub fn load_theme_presentation_options(
             .or_else(|| conf.get("Theme", "BpmPosition"))
             .and_then(|value| GameplayBpmPosition::from_str(&value).ok())
             .unwrap_or(default.gameplay_bpm_position),
+        gameplay_banner_mode: conf
+            .get("Theme", "GameplayBannerMode")
+            .or_else(|| conf.get("Theme", "AnimateBanners"))
+            .and_then(|value| GameplayBannerMode::from_str(&value).ok())
+            .unwrap_or(default.gameplay_banner_mode),
     }
 }
 
@@ -1740,6 +1791,11 @@ pub fn push_theme_option_lines(
         "GameplayBpmPosition",
         presentation.gameplay_bpm_position.as_str(),
     );
+    push_line(
+        content,
+        "GameplayBannerMode",
+        presentation.gameplay_banner_mode.as_str(),
+    );
 }
 
 impl FromStr for LogLevel {
@@ -1773,6 +1829,7 @@ mod tests {
             zmod_rating_box_text: false,
             show_bpm_decimal: false,
             gameplay_bpm_position: GameplayBpmPosition::TopCenter,
+            gameplay_banner_mode: GameplayBannerMode::Loop,
         }
     }
 
@@ -1850,7 +1907,8 @@ MachineEvaluationStyle=Default\n\
 	SimplyLoveColor=2\n\
 	ZmodRatingBoxText=0\n\
 	ShowBpmDecimal=0\n\
-		GameplayBpmPosition=TopCenter\n"
+		GameplayBpmPosition=TopCenter\n\
+		GameplayBannerMode=Loop\n"
         );
     }
 
@@ -2048,6 +2106,7 @@ MachineEvaluationStyle=Default\n\
             ZmodRatingBoxText=1
             ShowBpmDecimal=1
             GameplayBpmPosition=NearField
+            GameplayBannerMode=Once
             "#,
         );
 
@@ -2066,6 +2125,7 @@ MachineEvaluationStyle=Default\n\
         assert!(loaded.zmod_rating_box_text);
         assert!(loaded.show_bpm_decimal);
         assert_eq!(loaded.gameplay_bpm_position, GameplayBpmPosition::NearField);
+        assert_eq!(loaded.gameplay_banner_mode, GameplayBannerMode::Once);
     }
 
     #[test]
@@ -2085,6 +2145,7 @@ MachineEvaluationStyle=Default\n\
             ZmodRatingBoxText=bad
             ShowBpmDecimal=bad
             GameplayBpmPosition=bad
+            GameplayBannerMode=bad
             "#,
         );
 
@@ -2109,6 +2170,7 @@ MachineEvaluationStyle=Default\n\
         assert_eq!(loaded.zmod_rating_box_text, default.zmod_rating_box_text);
         assert_eq!(loaded.show_bpm_decimal, default.show_bpm_decimal);
         assert_eq!(loaded.gameplay_bpm_position, default.gameplay_bpm_position);
+        assert_eq!(loaded.gameplay_banner_mode, default.gameplay_banner_mode);
     }
 
     #[test]
@@ -2126,6 +2188,26 @@ MachineEvaluationStyle=Default\n\
             Ok(GameplayBpmPosition::NearField)
         );
         assert!(GameplayBpmPosition::from_str("bottom").is_err());
+    }
+
+    #[test]
+    fn gameplay_banner_mode_round_trips_and_accepts_zmod_bools() {
+        for mode in [
+            GameplayBannerMode::Static,
+            GameplayBannerMode::Once,
+            GameplayBannerMode::Loop,
+        ] {
+            assert_eq!(GameplayBannerMode::from_str(mode.as_str()), Ok(mode));
+        }
+        assert_eq!(
+            GameplayBannerMode::from_str("false"),
+            Ok(GameplayBannerMode::Static)
+        );
+        assert_eq!(
+            GameplayBannerMode::from_str("true"),
+            Ok(GameplayBannerMode::Loop)
+        );
+        assert!(GameplayBannerMode::from_str("sometimes").is_err());
     }
 
     #[test]

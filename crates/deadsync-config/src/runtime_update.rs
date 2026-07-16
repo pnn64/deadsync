@@ -3,7 +3,7 @@ use crate::app_update as config_update;
 use crate::runtime::{RUNTIME_CONFIG, get, save_without_keymaps};
 use crate::theme::{
     ArrowCloudQrLoginWhen, BreakdownStyle, DefaultFailType, DefaultSyncOffset, GameFlag,
-    GameplayBpmPosition, GrooveStatsQrLoginWhen, LanguageFlag, MachineBarColor,
+    GameplayBannerMode, GameplayBpmPosition, GrooveStatsQrLoginWhen, LanguageFlag, MachineBarColor,
     MachineEvaluationStyle, MachineFont, MachinePreferredPlayMode, MachinePreferredPlayStyle,
     NewPackMode, RandomBackgroundMode, SelectMusicItlRankMode, SelectMusicItlWheelMode,
     SelectMusicPatternInfoMode, SelectMusicScoreboxPlacement, SelectMusicSongSelectBgMode,
@@ -196,6 +196,7 @@ update_config_fn!(pub fn update_autosubmit_course_scores_individually(enabled: b
 update_config_fn!(pub fn update_zmod_rating_box_text(enabled: bool) => set_zmod_rating_box_text);
 update_config_fn!(pub fn update_show_bpm_decimal(enabled: bool) => set_show_bpm_decimal);
 update_config_fn!(pub fn update_gameplay_bpm_position(position: GameplayBpmPosition) => set_gameplay_bpm_position);
+update_config_fn!(pub fn update_gameplay_banner_mode(mode: GameplayBannerMode) => set_gameplay_banner_mode);
 update_config_fn!(pub fn update_default_fail_type(fail_type: DefaultFailType) => set_default_fail_type);
 
 update_config_fn!(pub fn update_null_or_die_sync_graph(mode: SyncGraphMode) => set_null_or_die_sync_graph);

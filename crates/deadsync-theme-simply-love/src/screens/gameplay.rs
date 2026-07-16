@@ -770,6 +770,68 @@ impl DerefMut for State {
     }
 }
 
+fn banner_visibility(
+    play_style: profile_data::PlayStyle,
+    num_cols: usize,
+    wide: bool,
+    ultrawide: bool,
+    first_mask: profile_data::StepStatisticsMask,
+    second_mask: profile_data::StepStatisticsMask,
+) -> (bool, bool) {
+    match play_style {
+        profile_data::PlayStyle::Single if num_cols <= 4 => (
+            first_mask.contains(profile_data::StepStatisticsMask::SONG_BANNER),
+            wide && first_mask.pack_info_enabled(),
+        ),
+        profile_data::PlayStyle::Double if num_cols > 4 && wide && !ultrawide => (
+            first_mask.contains(profile_data::StepStatisticsMask::SONG_BANNER),
+            first_mask.pack_info_enabled(),
+        ),
+        profile_data::PlayStyle::Versus if wide && !ultrawide => (
+            (first_mask | second_mask).contains(profile_data::StepStatisticsMask::SONG_BANNER),
+            false,
+        ),
+        _ => (false, false),
+    }
+}
+
+/// Video banner sources that the current Gameplay Step Statistics layout will draw.
+pub fn visible_banner_paths(state: &State) -> [Option<&Path>; 2] {
+    let first_mask = state
+        .profiles()
+        .first()
+        .map_or(profile_data::StepStatisticsMask::empty(), |p| {
+            p.step_statistics
+        });
+    let second_mask = state
+        .profiles()
+        .get(1)
+        .map_or(profile_data::StepStatisticsMask::empty(), |p| {
+            p.step_statistics
+        });
+    let (song_visible, pack_visible) = banner_visibility(
+        profile::get_session_play_style(),
+        state.num_cols(),
+        is_wide(),
+        screen_width() / screen_height().max(1.0) > (21.0 / 9.0),
+        first_mask,
+        second_mask,
+    );
+
+    [
+        if song_visible {
+            state.song().banner_path.as_deref()
+        } else {
+            None
+        },
+        if pack_visible {
+            state.pack_banner_path.as_deref()
+        } else {
+            None
+        },
+    ]
+}
+
 fn mini_indicator_personal_best_percent(
     chart_hash: &str,
     side: profile_data::PlayerSide,
@@ -14641,5 +14703,36 @@ mod tests {
         let joined = test_joined_lobby(vec![test_lobby_player("ScreenGameplay", true)]);
 
         assert_eq!(gameplay_lobby_wait_text_for(&joined, true, None), None);
+    }
+
+    #[test]
+    fn banner_visibility_matches_step_statistics_layouts() {
+        let empty = profile_data::StepStatisticsMask::empty();
+        let both = profile_data::StepStatisticsMask::SONG_BANNER
+            | profile_data::StepStatisticsMask::PACK_BANNER;
+
+        assert_eq!(
+            banner_visibility(profile_data::PlayStyle::Single, 4, true, false, both, empty),
+            (true, true)
+        );
+        assert_eq!(
+            banner_visibility(
+                profile_data::PlayStyle::Single,
+                4,
+                false,
+                false,
+                both,
+                empty
+            ),
+            (true, false)
+        );
+        assert_eq!(
+            banner_visibility(profile_data::PlayStyle::Versus, 4, true, false, empty, both,),
+            (true, false)
+        );
+        assert_eq!(
+            banner_visibility(profile_data::PlayStyle::Double, 8, true, true, both, empty),
+            (false, false)
+        );
     }
 }

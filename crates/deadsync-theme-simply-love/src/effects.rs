@@ -1,9 +1,9 @@
 use crate::screens::SimplyLoveScreen;
 use crate::views::{DensityGraphView, SimplyLoveDensityGraphSlot};
 use deadsync_config::prelude::{
-    BreakdownStyle, DefaultFailType, DefaultSyncOffset, MachineBarColor, MachineEvaluationStyle,
-    MachineFont, MachinePreferredPlayMode, MachinePreferredPlayStyle, NewPackMode,
-    RandomBackgroundMode, SelectMusicItlRankMode, SelectMusicItlWheelMode,
+    BreakdownStyle, DefaultFailType, DefaultSyncOffset, GameplayBannerMode, MachineBarColor,
+    MachineEvaluationStyle, MachineFont, MachinePreferredPlayMode, MachinePreferredPlayStyle,
+    NewPackMode, RandomBackgroundMode, SelectMusicItlRankMode, SelectMusicItlWheelMode,
     SelectMusicPatternInfoMode, SelectMusicScoreboxPlacement, SelectMusicSongSelectBgMode,
     SelectMusicStepArtistBoxMode, SelectMusicWheelStyle, SrpgVariant, VersionOverlaySide,
     VisualStyle,
@@ -478,6 +478,7 @@ pub enum SimplyLoveCourseConfigRequest {
 pub enum SimplyLoveGameplayConfigRequest {
     BackgroundBrightnessTenths(u8),
     CenterPlayerOneNotefield(bool),
+    BannerMode(GameplayBannerMode),
     ZmodRatingBoxText(bool),
     ShowBpmDecimal(bool),
     BpmNearField(bool),

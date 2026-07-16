@@ -33,6 +33,16 @@ pub(in crate::screens::options) const GAMEPLAY_OPTIONS_ROWS: &[SubRow] = &[
         inline: true,
     },
     SubRow {
+        id: SubRowId::AnimatedBanners,
+        label: lookup_key("OptionsGameplay", "AnimatedBanners"),
+        choices: &[
+            localized_choice("OptionsGameplay", "AnimatedBannersStatic"),
+            localized_choice("OptionsGameplay", "AnimatedBannersOnce"),
+            localized_choice("OptionsGameplay", "AnimatedBannersLoop"),
+        ],
+        inline: true,
+    },
+    SubRow {
         id: SubRowId::ZmodRatingBox,
         label: lookup_key("OptionsGameplay", "ZmodRatingBox"),
         choices: &[
@@ -97,6 +107,14 @@ pub(in crate::screens::options) const GAMEPLAY_OPTIONS_ITEMS: &[Item] = &[
         help: &[HelpEntry::Paragraph(lookup_key(
             "OptionsGameplayHelp",
             "CenteredP1NotefieldHelp",
+        ))],
+    },
+    Item {
+        id: ItemId::GpAnimatedBanners,
+        name: lookup_key("OptionsGameplay", "AnimatedBanners"),
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsGameplayHelp",
+            "AnimatedBannersHelp",
         ))],
     },
     Item {

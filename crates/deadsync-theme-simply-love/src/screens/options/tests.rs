@@ -215,6 +215,31 @@ fn gameplay_choice_emits_shell_config_request() {
 }
 
 #[test]
+fn gameplay_banner_choice_emits_playback_mode_request() {
+    let asset_manager = AssetManager::new();
+    let mut state = init();
+    state.view = OptionsView::Submenu(SubmenuKind::Gameplay);
+    let row = select_visible_row(&mut state, SubmenuKind::Gameplay, SubRowId::AnimatedBanners);
+
+    let effect = apply_submenu_choice_delta(&mut state, &asset_manager, 1, NavWrap::Wrap)
+        .expect("Gameplay banner choice should emit shell config work");
+    let mode = match state.sub[SubmenuKind::Gameplay].cursor_indices[row] {
+        0 => config::GameplayBannerMode::Static,
+        1 => config::GameplayBannerMode::Once,
+        _ => config::GameplayBannerMode::Loop,
+    };
+
+    assert!(matches!(
+        effect,
+        ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Config(
+            crate::SimplyLoveConfigRequest::Gameplay(
+                crate::SimplyLoveGameplayConfigRequest::BannerMode(value)
+            )
+        )) if value == mode
+    ));
+}
+
+#[test]
 fn lights_driver_choice_emits_shell_config_request() {
     let asset_manager = AssetManager::new();
     let mut state = init();

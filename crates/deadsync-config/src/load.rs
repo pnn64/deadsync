@@ -408,6 +408,7 @@ fn apply_theme_presentation(loaded: ThemePresentationOptions, cfg: &mut Config) 
     cfg.zmod_rating_box_text = loaded.zmod_rating_box_text;
     cfg.show_bpm_decimal = loaded.show_bpm_decimal;
     cfg.gameplay_bpm_position = loaded.gameplay_bpm_position;
+    cfg.gameplay_banner_mode = loaded.gameplay_banner_mode;
 }
 
 fn apply_machine_flow(

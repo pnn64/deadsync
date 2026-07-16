@@ -92,13 +92,13 @@ pub use crate::runtime_update::*;
 pub use crate::theme::{
     AUTO_SS_CLEARS, AUTO_SS_FAILS, AUTO_SS_FLAG_NAMES, AUTO_SS_NUM_FLAGS, AUTO_SS_PBS,
     AUTO_SS_QUADS, AUTO_SS_QUINTS, ArrowCloudQrLoginWhen, BreakdownStyle, DefaultFailType,
-    DefaultSyncOffset, GameFlag, GameplayBpmPosition, GrooveStatsQrLoginWhen, LanguageFlag,
-    LogLevel, MACHINE_FONT_VARIANTS, MachineBarColor, MachineEvaluationStyle, MachineFont,
-    MachinePreferredPlayMode, MachinePreferredPlayStyle, NewPackMode, RandomBackgroundMode,
-    SelectMusicItlRankMode, SelectMusicItlWheelMode, SelectMusicPatternInfoMode,
-    SelectMusicScoreboxPlacement, SelectMusicSongSelectBgMode, SelectMusicStepArtistBoxMode,
-    SelectMusicWheelStyle, SrpgShopFolder, SrpgVariant, SyncGraphMode, ThemeFlag,
-    VersionOverlaySide, VisualStyle, auto_screenshot_bit, auto_screenshot_eval_matches,
-    auto_screenshot_mask_from_str, auto_screenshot_mask_to_str,
+    DefaultSyncOffset, GameFlag, GameplayBannerMode, GameplayBpmPosition, GrooveStatsQrLoginWhen,
+    LanguageFlag, LogLevel, MACHINE_FONT_VARIANTS, MachineBarColor, MachineEvaluationStyle,
+    MachineFont, MachinePreferredPlayMode, MachinePreferredPlayStyle, NewPackMode,
+    RandomBackgroundMode, SelectMusicItlRankMode, SelectMusicItlWheelMode,
+    SelectMusicPatternInfoMode, SelectMusicScoreboxPlacement, SelectMusicSongSelectBgMode,
+    SelectMusicStepArtistBoxMode, SelectMusicWheelStyle, SrpgShopFolder, SrpgVariant,
+    SyncGraphMode, ThemeFlag, VersionOverlaySide, VisualStyle, auto_screenshot_bit,
+    auto_screenshot_eval_matches, auto_screenshot_mask_from_str, auto_screenshot_mask_to_str,
 };
 pub use null_or_die::GraphOrientation;

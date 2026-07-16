@@ -8,12 +8,12 @@ use crate::null_or_die::{
 use crate::options::{clamp_bg_brightness, clamp_show_stats_mode, clamped_max_fps};
 use crate::theme::{
     ArrowCloudQrLoginWhen, BreakdownStyle, DefaultFailType, DefaultSyncOffset, GameFlag,
-    GameplayBpmPosition, GrooveStatsQrLoginWhen, LanguageFlag, LogLevel, MachineBarColor,
-    MachineEvaluationStyle, MachineFont, MachinePreferredPlayMode, MachinePreferredPlayStyle,
-    NewPackMode, RandomBackgroundMode, SelectMusicItlRankMode, SelectMusicItlWheelMode,
-    SelectMusicPatternInfoMode, SelectMusicScoreboxPlacement, SelectMusicSongSelectBgMode,
-    SelectMusicStepArtistBoxMode, SelectMusicWheelStyle, SrpgShopFolder, SrpgVariant,
-    SyncGraphMode, ThemeFlag, VersionOverlaySide, VisualStyle,
+    GameplayBannerMode, GameplayBpmPosition, GrooveStatsQrLoginWhen, LanguageFlag, LogLevel,
+    MachineBarColor, MachineEvaluationStyle, MachineFont, MachinePreferredPlayMode,
+    MachinePreferredPlayStyle, NewPackMode, RandomBackgroundMode, SelectMusicItlRankMode,
+    SelectMusicItlWheelMode, SelectMusicPatternInfoMode, SelectMusicScoreboxPlacement,
+    SelectMusicSongSelectBgMode, SelectMusicStepArtistBoxMode, SelectMusicWheelStyle,
+    SrpgShopFolder, SrpgVariant, SyncGraphMode, ThemeFlag, VersionOverlaySide, VisualStyle,
 };
 use deadlib_render::{BackendType, PresentModePolicy};
 use deadsync_audio::{AudioOutputMode, LinuxAudioBackend};
@@ -228,6 +228,10 @@ pub fn set_select_music_scorebox_placement(
 
 pub fn set_gameplay_bpm_position(cfg: &mut Config, position: GameplayBpmPosition) -> bool {
     set_if_changed(&mut cfg.gameplay_bpm_position, position)
+}
+
+pub fn set_gameplay_banner_mode(cfg: &mut Config, mode: GameplayBannerMode) -> bool {
+    set_if_changed(&mut cfg.gameplay_banner_mode, mode)
 }
 
 pub fn set_default_fail_type(cfg: &mut Config, fail_type: DefaultFailType) -> bool {

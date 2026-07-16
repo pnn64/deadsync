@@ -397,6 +397,61 @@ fn build_course_summary_eval_state(
     state
 }
 
+fn sync_gameplay_banners(
+    media: &mut DynamicMedia,
+    assets: &mut AssetManager,
+    backend: &mut renderer_backend::Backend,
+    state: &gameplay::State,
+    mode: config::GameplayBannerMode,
+) {
+    let visible_paths = gameplay::visible_banner_paths(state);
+    let desired_paths: SmallVec<[&Path; 2]> = mode
+        .looped()
+        .into_iter()
+        .flat_map(|_| visible_paths.into_iter().flatten())
+        .collect();
+    media.sync_active_banner_videos(
+        assets,
+        backend,
+        &desired_paths,
+        mode.looped().unwrap_or(false),
+    );
+}
+
+fn prewarm_gameplay_banners(
+    media: &mut DynamicMedia,
+    assets: &mut AssetManager,
+    backend: &mut renderer_backend::Backend,
+    state: &gameplay::State,
+    mode: config::GameplayBannerMode,
+) {
+    let visible_paths: SmallVec<[&Path; 2]> = gameplay::visible_banner_paths(state)
+        .into_iter()
+        .flatten()
+        .collect();
+
+    // A gameplay entry or restart owns a fresh playback interval. Retire menu or
+    // previous-attempt decoders before restoring the first-frame posters.
+    media.sync_active_banner_videos(assets, backend, &[], false);
+    for path in &visible_paths {
+        if deadlib_assets::dynamic::is_dynamic_video_path(path) {
+            if let Err(e) =
+                deadsync_assets::dynamic_media::set_banner_texture_for_path(assets, backend, path)
+            {
+                warn!(
+                    "Failed to reset gameplay banner poster '{}': {e:?}",
+                    path.display()
+                );
+            }
+        } else {
+            media_cache::ensure_banner_texture(assets, backend, path);
+        }
+    }
+    if let Some(looped) = mode.looped() {
+        media.sync_active_banner_videos(assets, backend, &visible_paths, looped);
+    }
+}
+
 fn prewarm_gameplay_text_layout_cache(
     assets: &AssetManager,
     metrics: &Metrics,
@@ -2263,6 +2318,7 @@ impl App {
         let show_select_music_video_banners = frame_config.show_select_music_video_banners;
         let show_select_music_banners = frame_config.show_select_music_banners;
         let show_course_individual_scores = frame_config.show_course_individual_scores;
+        let gameplay_banner_mode = frame_config.gameplay_banner_mode;
         if let Some(backend) = &mut self.backend {
             let upload_started = Instant::now();
             let gameplay_time = match current_screen {
@@ -2319,6 +2375,7 @@ impl App {
                             &mut self.asset_manager,
                             backend,
                             desired_path,
+                            true,
                         );
                     }
                     CurrentScreen::SelectCourse => {
@@ -2344,6 +2401,7 @@ impl App {
                             &mut self.asset_manager,
                             backend,
                             desired_path,
+                            true,
                         );
                     }
                     CurrentScreen::Evaluation => {
@@ -2361,6 +2419,7 @@ impl App {
                             &mut self.asset_manager,
                             backend,
                             desired_path,
+                            true,
                         );
                     }
                     CurrentScreen::EvaluationSummary | CurrentScreen::Initials => {
@@ -2368,13 +2427,33 @@ impl App {
                             &mut self.asset_manager,
                             backend,
                             &post_select_banner_paths,
+                            true,
                         );
+                    }
+                    CurrentScreen::Gameplay | CurrentScreen::Practice => {
+                        let state = match current_screen {
+                            CurrentScreen::Gameplay => screens.gameplay_state.as_ref(),
+                            CurrentScreen::Practice => {
+                                screens.practice_state.as_ref().map(|state| &state.gameplay)
+                            }
+                            _ => None,
+                        };
+                        if let Some(state) = state {
+                            sync_gameplay_banners(
+                                &mut self.dynamic_media,
+                                &mut self.asset_manager,
+                                backend,
+                                state,
+                                gameplay_banner_mode,
+                            );
+                        }
                     }
                     _ => {
                         self.dynamic_media.sync_active_banner_video(
                             &mut self.asset_manager,
                             backend,
                             None,
+                            true,
                         );
                     }
                 }
@@ -5976,9 +6055,13 @@ impl App {
                         backend,
                         &overlay_video_paths,
                     );
-                    if let Some(path) = gs.song().banner_path.as_ref() {
-                        media_cache::ensure_banner_texture(&mut self.asset_manager, backend, path);
-                    }
+                    prewarm_gameplay_banners(
+                        &mut self.dynamic_media,
+                        &mut self.asset_manager,
+                        backend,
+                        &gs,
+                        cfg.gameplay_banner_mode,
+                    );
                 }
                 let asset_prewarm_ms = asset_prewarm_started.elapsed().as_secs_f64() * 1000.0;
                 let text_prewarm_started = Instant::now();
@@ -6355,9 +6438,13 @@ impl App {
                         backend,
                         &overlay_video_paths,
                     );
-                    if let Some(path) = gs.song().banner_path.as_ref() {
-                        media_cache::ensure_banner_texture(&mut self.asset_manager, backend, path);
-                    }
+                    prewarm_gameplay_banners(
+                        &mut self.dynamic_media,
+                        &mut self.asset_manager,
+                        backend,
+                        &gs,
+                        cfg.gameplay_banner_mode,
+                    );
                 }
                 let asset_prewarm_ms = asset_prewarm_started.elapsed().as_secs_f64() * 1000.0;
                 let text_prewarm_started = Instant::now();

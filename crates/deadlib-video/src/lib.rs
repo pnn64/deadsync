@@ -626,8 +626,8 @@ struct ProbeFormat {
 #[cfg(test)]
 mod tests {
     use super::{
-        Info, Player, QueuedFrame, bundled_tool_candidates, parse_duration, parse_rate,
-        resolve_tool_path_in_dirs, take_frame_buffer,
+        Info, Player, QueuedFrame, bundled_tool_candidates, clamp_play_time, decode_command,
+        parse_duration, parse_rate, resolve_tool_path_in_dirs, take_frame_buffer,
     };
     use image::RgbaImage;
     use std::{
@@ -778,5 +778,31 @@ mod tests {
 
         assert_eq!(raw, vec![0; 4]);
         assert_eq!(misses.load(Ordering::Relaxed), 1);
+    }
+
+    #[test]
+    fn looped_decode_restarts_ffmpeg_while_once_holds_the_final_time() {
+        let info = |looped| Info {
+            width: 1,
+            height: 1,
+            fps: 30.0,
+            duration_sec: Some(2.0),
+            looped,
+        };
+        let args = |looped| {
+            decode_command(Path::new("banner.mp4"), info(looped))
+                .get_args()
+                .map(|arg| arg.to_string_lossy().into_owned())
+                .collect::<Vec<_>>()
+        };
+
+        assert!(!args(false).iter().any(|arg| arg == "-stream_loop"));
+        assert!(
+            args(true)
+                .windows(2)
+                .any(|args| args == ["-stream_loop", "-1"])
+        );
+        assert_eq!(clamp_play_time(3.0, info(false)), 2.0);
+        assert_eq!(clamp_play_time(3.0, info(true)), 3.0);
     }
 }

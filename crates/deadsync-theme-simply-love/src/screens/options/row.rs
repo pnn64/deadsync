@@ -107,6 +107,7 @@ pub enum SubRowId {
     // Gameplay Options
     BgBrightness,
     CenteredP1Notefield,
+    AnimatedBanners,
     ZmodRatingBox,
     BpmDecimal,
     BpmPosition,

@@ -946,6 +946,16 @@ pub fn init(
     set_choice_by_id(
         &mut state.sub[SubmenuKind::Gameplay].choice_indices,
         GAMEPLAY_OPTIONS_ROWS,
+        SubRowId::AnimatedBanners,
+        match cfg.gameplay_banner_mode {
+            config::GameplayBannerMode::Static => 0,
+            config::GameplayBannerMode::Once => 1,
+            config::GameplayBannerMode::Loop => 2,
+        },
+    );
+    set_choice_by_id(
+        &mut state.sub[SubmenuKind::Gameplay].choice_indices,
+        GAMEPLAY_OPTIONS_ROWS,
         SubRowId::ZmodRatingBox,
         usize::from(cfg.zmod_rating_box_text),
     );

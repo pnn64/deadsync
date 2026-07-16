@@ -692,6 +692,14 @@ pub(super) fn apply_submenu_choice_delta(
             SubRowId::CenteredP1Notefield => {
                 crate::SimplyLoveGameplayConfigRequest::CenterPlayerOneNotefield(new_index == 1)
             }
+            SubRowId::AnimatedBanners => {
+                let mode = match new_index {
+                    0 => config::GameplayBannerMode::Static,
+                    1 => config::GameplayBannerMode::Once,
+                    _ => config::GameplayBannerMode::Loop,
+                };
+                crate::SimplyLoveGameplayConfigRequest::BannerMode(mode)
+            }
             SubRowId::ZmodRatingBox => {
                 crate::SimplyLoveGameplayConfigRequest::ZmodRatingBoxText(new_index == 1)
             }
