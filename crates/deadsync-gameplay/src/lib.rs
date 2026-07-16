@@ -26,8 +26,8 @@ use deadsync_rules::stream::{
     StreamSegment, measure_densities, stream_sequences_threshold, zmod_stream_totals_full_measures,
 };
 use deadsync_rules::timing::{
-    BeatInfoCache, FA_PLUS_W0_MS, FA_PLUS_W010_MS, TimingData, TimingProfile, TimingProfileNs,
-    TimingSegments, WindowCounts, classify_offset_ns_with_disabled_windows,
+    BeatInfo, BeatInfoCache, FA_PLUS_W0_MS, FA_PLUS_W010_MS, TimingData, TimingProfile,
+    TimingProfileNs, TimingSegments, WindowCounts, classify_offset_ns_with_disabled_windows,
     largest_enabled_tap_window_ns,
 };
 use std::collections::{BTreeMap, VecDeque};

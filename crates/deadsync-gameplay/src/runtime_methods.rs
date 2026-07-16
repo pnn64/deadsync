@@ -968,18 +968,33 @@ where
     }
 
     #[inline(always)]
+    fn missed_note_cutoff_rows(
+        &mut self,
+        music_time_ns: SongTimeNs,
+    ) -> [usize; MAX_PLAYERS] {
+        let music_rate = self.music_rate();
+        let num_players = self.setup.num_players;
+        let GameplayTimingRuntimeState {
+            timing_players,
+            time_to_beat_caches,
+            timing_profile,
+            ..
+        } = &mut self.timing_runtime;
+        let player_refs = std::array::from_fn(|player| timing_players[player].as_ref());
+        time_to_beat_caches.missed_note_cutoff_rows(
+            timing_profile,
+            &player_refs,
+            music_rate,
+            music_time_ns,
+            num_players,
+        )
+    }
+
+    #[inline(always)]
     pub fn apply_time_based_mine_avoidance(&mut self, music_time_ns: SongTimeNs) {
         let music_time_sec = song_time_ns_to_seconds(music_time_ns);
         let log_mine_avoid = log::log_enabled!(log::Level::Trace);
-        let timing_players: [&_; MAX_PLAYERS] =
-            std::array::from_fn(|player| self.timing_runtime.timing_players[player].as_ref());
-        let cutoff_rows = missed_note_cutoff_rows_for_players(
-            &self.timing_runtime.timing_profile,
-            &timing_players,
-            self.music_rate(),
-            music_time_ns,
-            self.setup.num_players,
-        );
+        let cutoff_rows = self.missed_note_cutoff_rows(music_time_ns);
         let player_updates = apply_time_based_mine_avoidance_for_players(
             &mut self.chart_runtime.notes,
             &self.chart_runtime.mine_scan.mine_note_ix,
@@ -1016,15 +1031,7 @@ where
     pub fn apply_time_based_tap_misses(&mut self, music_time_ns: SongTimeNs) {
         let rate = normalized_song_rate(self.music_rate());
         let music_time_sec = song_time_ns_to_seconds(music_time_ns);
-        let timing_players: [&_; MAX_PLAYERS] =
-            std::array::from_fn(|player| self.timing_runtime.timing_players[player].as_ref());
-        let cutoff_rows = missed_note_cutoff_rows_for_players(
-            &self.timing_runtime.timing_profile,
-            &timing_players,
-            self.music_rate(),
-            music_time_ns,
-            self.setup.num_players,
-        );
+        let cutoff_rows = self.missed_note_cutoff_rows(music_time_ns);
         let mut miss_events = [None; 16];
         loop {
             let update = collect_time_based_tap_misses_for_players(
@@ -1496,6 +1503,28 @@ where
     }
 
     #[inline(always)]
+    fn closest_lane_note_search_cached(
+        &mut self,
+        column: usize,
+        player: usize,
+        current_time_ns: SongTimeNs,
+    ) -> LaneNoteSearch {
+        let rows = self.timing_runtime.time_to_beat_caches.lane_search_rows(
+            player,
+            &self.timing_runtime.timing_players[player],
+            current_time_ns,
+        );
+        closest_lane_note_search_with_rows(
+            &self.chart_runtime.lane_indices.note_indices[column],
+            &self.chart_runtime.notes,
+            &self.chart_runtime.note_time_cache_ns,
+            &self.timing_runtime.timing_players[player],
+            current_time_ns,
+            rows,
+        )
+    }
+
+    #[inline(always)]
     pub fn judge_a_tap(&mut self, column: usize, current_time_ns: SongTimeNs) -> bool {
         let rate = normalized_song_rate(self.music_rate());
         let timing_hit_log = timing_hit_log_enabled();
@@ -1508,14 +1537,8 @@ where
         let hide_early_dw_column_flash =
             self.profiles_runtime.profiles[player].hide_early_dw_column_flash();
         let scoring_blocked = self.autoplay_blocks_scoring();
+        let search = self.closest_lane_note_search_cached(column, player, current_time_ns);
         let lane_notes = &self.chart_runtime.lane_indices.note_indices[column];
-        let search = closest_lane_note_search(
-            lane_notes,
-            &self.chart_runtime.notes,
-            &self.chart_runtime.note_time_cache_ns,
-            &self.timing_runtime.timing_players[player],
-            current_time_ns,
-        );
         let current_row_index = search.current_row_index;
         if let Some((note_index, _)) = search.candidate {
             let note_row_index = self.chart_runtime.notes[note_index].row_index;
@@ -1900,14 +1923,7 @@ where
         let hide_early_dw_column_flash =
             self.profiles_runtime.profiles[player].hide_early_dw_column_flash();
         let scoring_blocked = self.autoplay_blocks_scoring();
-        let lane_notes = &self.chart_runtime.lane_indices.note_indices[column];
-        let search = closest_lane_note_search(
-            lane_notes,
-            &self.chart_runtime.notes,
-            &self.chart_runtime.note_time_cache_ns,
-            &self.timing_runtime.timing_players[player],
-            current_time_ns,
-        );
+        let search = self.closest_lane_note_search_cached(column, player, current_time_ns);
         let Some((note_index, _)) = search.candidate else {
             return false;
         };

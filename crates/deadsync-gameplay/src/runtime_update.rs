@@ -333,18 +333,23 @@ where
             .assist_clap
             .note_sfx_generation(assist_sfx_generation);
 
-        let future_row = assist_lookahead_future_row(
-            &self.timing_runtime.timing,
-            self.clock.offsets.global_offset_seconds(),
-            self.clock.audio_clock.output_delay_seconds(),
-            music_time_ns,
-            slope,
-            song_row,
-        );
+        let assist_enabled = self.control.tick_mode == GameplayTimingTickMode::Assist;
+        let future_row = if assist_enabled {
+            self.timing_runtime.time_to_beat_caches.assist_future_row(
+                &self.timing_runtime.timing,
+                self.clock.offsets.global_offset_seconds(),
+                self.clock.audio_clock.output_delay_seconds(),
+                music_time_ns,
+                slope,
+                song_row,
+            )
+        } else {
+            song_row
+        };
         let update = self.control.assist_clap.schedule_update(
             song_row,
             future_row,
-            self.control.tick_mode == GameplayTimingTickMode::Assist,
+            assist_enabled,
             timeline_reset,
         );
         for ix in update.schedule_start..update.schedule_end {
@@ -789,6 +794,17 @@ where
         true
     }
 
+    fn reset_time_to_beat_caches(&mut self) {
+        let GameplayTimingRuntimeState {
+            timing,
+            timing_players,
+            time_to_beat_caches,
+            ..
+        } = &mut self.timing_runtime;
+        let player_refs = std::array::from_fn(|player| timing_players[player].as_ref());
+        time_to_beat_caches.reset(timing, &player_refs);
+    }
+
     pub fn refresh_timing_after_offset_change(&mut self) {
         let timing_players: [&_; MAX_PLAYERS] =
             std::array::from_fn(|player| self.timing_runtime.timing_players[player].as_ref());
@@ -803,9 +819,7 @@ where
             &self.chart_runtime.mine_scan.mine_note_ix,
             &mut self.chart_runtime.mine_scan.mine_note_time_ns,
         );
-        self.timing_runtime
-            .beat_info_cache
-            .reset(&self.timing_runtime.timing);
+        self.reset_time_to_beat_caches();
 
         let (notes_end_time_ns, music_end_time_ns) = compute_end_times_ns(
             &self.chart_runtime.notes,
@@ -1851,8 +1865,8 @@ where
     }
 
     #[inline(always)]
-    pub fn assist_row_no_offset_ns(&self, music_time_ns: SongTimeNs) -> i32 {
-        assist_row_no_offset_for_timing(
+    pub fn assist_row_no_offset_ns(&mut self, music_time_ns: SongTimeNs) -> i32 {
+        self.timing_runtime.time_to_beat_caches.assist_row_no_offset(
             &self.timing_runtime.timing,
             self.clock.offsets.global_offset_seconds(),
             music_time_ns,
@@ -1860,7 +1874,7 @@ where
     }
 
     #[inline(always)]
-    pub fn assist_row_no_offset(&self, music_time: f32) -> i32 {
+    pub fn assist_row_no_offset(&mut self, music_time: f32) -> i32 {
         self.assist_row_no_offset_ns(song_time_ns_from_seconds(music_time))
     }
 
@@ -2855,6 +2869,7 @@ where
     }
 
     pub fn set_current_music_time_ns(&mut self, music_time_ns: SongTimeNs) {
+        self.reset_time_to_beat_caches();
         self.clock.song_position.current_music_time_ns = music_time_ns;
         let display_time_ns = self.clock.display_clock.reset(music_time_ns);
         self.clock.song_position.current_music_time_display =
@@ -2870,16 +2885,13 @@ where
         self.clock.song_position.current_music_time_ns = music_time_ns;
         let beat_info = self
             .timing_runtime
-            .timing
-            .get_beat_info_from_time_ns_cached(
-                music_time_ns,
-                &mut self.timing_runtime.beat_info_cache,
-            );
+            .time_to_beat_caches
+            .song_info(&self.timing_runtime.timing, music_time_ns);
         self.clock.song_position.current_beat = beat_info.beat;
         self.clock.song_position.current_beat_display = self
             .timing_runtime
-            .timing
-            .get_beat_for_time_ns(display_time_ns);
+            .time_to_beat_caches
+            .display_beat(&self.timing_runtime.timing, display_time_ns);
         self.display
             .beat_phase
             .set(beat_info.is_in_freeze, beat_info.is_in_delay);
@@ -2891,7 +2903,11 @@ where
                 player,
                 visible_time_ns,
                 song_time_ns_to_seconds(visible_time_ns),
-                self.timing_runtime.timing_players[player].get_beat_for_time_ns(visible_time_ns),
+                self.timing_runtime.time_to_beat_caches.visible_beat(
+                    player,
+                    &self.timing_runtime.timing_players[player],
+                    visible_time_ns,
+                ),
             );
         }
     }

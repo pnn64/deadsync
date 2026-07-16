@@ -632,7 +632,7 @@ pub struct GameplayClockRuntimeState {
 pub struct GameplayTimingRuntimeState {
     pub timing: Arc<TimingData>,
     pub timing_players: [Arc<TimingData>; MAX_PLAYERS],
-    pub beat_info_cache: BeatInfoCache,
+    pub time_to_beat_caches: GameplayTimeToBeatCaches,
     pub timing_profile: TimingProfile,
     pub player_judgment_timing: [PlayerJudgmentTiming; MAX_PLAYERS],
 }

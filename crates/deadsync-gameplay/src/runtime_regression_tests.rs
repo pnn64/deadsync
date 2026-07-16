@@ -939,6 +939,7 @@ mod runtime_regression_tests {
         state.timing_runtime.timing = Arc::clone(&timing);
         state.timing_runtime.timing_players[0] = Arc::clone(&timing);
         state.timing_runtime.timing_players[1] = timing;
+        state.reset_time_to_beat_caches();
     }
 
     fn song_lua_test_timing() -> TimingData {

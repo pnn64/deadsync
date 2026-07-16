@@ -7,7 +7,9 @@ mod tests {
     };
     use deadsync_core::timing::ROWS_PER_BEAT;
     use deadsync_rules::note::{HoldData, Note};
-    use deadsync_rules::timing::{DelaySegment, FakeSegment, StopSegment, TimingSegments};
+    use deadsync_rules::timing::{
+        DelaySegment, FakeSegment, StopSegment, TimingSegments, WarpSegment,
+    };
     use std::collections::VecDeque;
     use std::path::PathBuf;
 
@@ -13078,6 +13080,156 @@ mod tests {
             assist_row_no_offset_for_timing(&timing, 0.100, music_time_ns),
             ROWS_PER_BEAT as i32
         );
+    }
+
+    fn eventful_cache_timing(global_offset: f32, bpm_scale: f32) -> TimingData {
+        TimingData::from_segments(
+            0.0,
+            global_offset,
+            &TimingSegments {
+                bpms: vec![
+                    (0.0, 120.0 * bpm_scale),
+                    (4.0, 180.0 * bpm_scale),
+                    (8.0, 90.0 * bpm_scale),
+                    (16.0, 240.0 * bpm_scale),
+                ],
+                stops: vec![StopSegment {
+                    beat: 6.0,
+                    duration: 0.250,
+                }],
+                delays: vec![DelaySegment {
+                    beat: 10.0,
+                    duration: 0.125,
+                }],
+                warps: vec![WarpSegment {
+                    beat: 14.0,
+                    length: 1.5,
+                }],
+                ..TimingSegments::default()
+            },
+            &test_row_to_beat(ROWS_PER_BEAT as usize * 24),
+        )
+    }
+
+    fn assert_beat_info_same(actual: BeatInfo, expected: BeatInfo) {
+        assert_eq!(actual.beat.to_bits(), expected.beat.to_bits());
+        assert_eq!(actual.is_in_freeze, expected.is_in_freeze);
+        assert_eq!(actual.is_in_delay, expected.is_in_delay);
+    }
+
+    fn assert_time_to_beat_cache_parity(
+        cache: &mut GameplayTimeToBeatCaches,
+        timing: &TimingData,
+        player_timing: &TimingData,
+        global_offset_seconds: f32,
+        times: impl IntoIterator<Item = SongTimeNs>,
+    ) {
+        let players = std::array::from_fn(|player| {
+            if player == 0 { timing } else { player_timing }
+        });
+        let profile = TimingProfile::default_itg_with_fa_plus();
+        for time_ns in times {
+            assert_beat_info_same(
+                cache.song_info(timing, time_ns),
+                timing.get_beat_info_from_time_ns(time_ns),
+            );
+            let display_time_ns = time_ns.saturating_sub(7_000_000);
+            assert_eq!(
+                cache.display_beat(timing, display_time_ns).to_bits(),
+                timing.get_beat_for_time_ns(display_time_ns).to_bits(),
+            );
+            let assist_row =
+                assist_row_no_offset_for_timing(timing, global_offset_seconds, time_ns);
+            assert_eq!(
+                cache.assist_row_no_offset(timing, global_offset_seconds, time_ns),
+                assist_row,
+            );
+            assert_eq!(
+                cache.assist_future_row(
+                    timing,
+                    global_offset_seconds,
+                    0.030,
+                    time_ns,
+                    1.35,
+                    assist_row,
+                ),
+                assist_lookahead_future_row(
+                    timing,
+                    global_offset_seconds,
+                    0.030,
+                    time_ns,
+                    1.35,
+                    assist_row,
+                ),
+            );
+            for (player, timing_player) in players.iter().take(2).enumerate() {
+                let visible_time_ns = time_ns.saturating_sub((player as i64 + 1) * 11_000_000);
+                assert_eq!(
+                    cache.visible_beat(player, timing_player, visible_time_ns).to_bits(),
+                    timing_player.get_beat_for_time_ns(visible_time_ns).to_bits(),
+                );
+                let expected_rows = lane_search_rows_for_timing(timing_player, time_ns);
+                assert_eq!(cache.lane_search_rows(player, timing_player, time_ns), expected_rows);
+                assert_eq!(cache.lane_search_rows(player, timing_player, time_ns), expected_rows);
+            }
+            let expected_cutoffs =
+                missed_note_cutoff_rows_for_players(&profile, &players, 1.35, time_ns, 2);
+            assert_eq!(
+                cache.missed_note_cutoff_rows(&profile, &players, 1.35, time_ns, 2),
+                expected_cutoffs,
+            );
+            assert_eq!(
+                cache.missed_note_cutoff_rows(&profile, &players, 1.35, time_ns, 2),
+                expected_cutoffs,
+            );
+        }
+    }
+
+    #[test]
+    fn time_to_beat_caches_match_uncached_across_events_and_rewinds() {
+        let timing = eventful_cache_timing(0.012, 1.0);
+        let player_timing = eventful_cache_timing(-0.021, 1.1);
+        let players = std::array::from_fn(|player| {
+            if player == 0 { &timing } else { &player_timing }
+        });
+        let mut cache = GameplayTimeToBeatCaches::new(&timing, &players);
+        let start = song_time_ns_from_seconds(-0.5);
+        let end = timing
+            .get_time_for_beat_ns(24.0)
+            .saturating_add(song_time_ns_from_seconds(0.5));
+        let step = (end - start) / 255;
+
+        assert_time_to_beat_cache_parity(
+            &mut cache,
+            &timing,
+            &player_timing,
+            0.012,
+            (0..=255).map(|i| start.saturating_add(step.saturating_mul(i))),
+        );
+        assert_time_to_beat_cache_parity(
+            &mut cache,
+            &timing,
+            &player_timing,
+            0.012,
+            (0..=64).rev().map(|i| start.saturating_add(step.saturating_mul(i * 3))),
+        );
+    }
+
+    #[test]
+    fn time_to_beat_cache_reset_invalidates_same_timestamp_memos() {
+        let mut timing = eventful_cache_timing(0.0, 1.0);
+        let time_ns = timing.get_time_for_beat_ns(8.0);
+        let players = std::array::from_fn(|_| &timing);
+        let mut cache = GameplayTimeToBeatCaches::new(&timing, &players);
+        let before = cache.lane_search_rows(0, &timing, time_ns);
+
+        timing.set_global_offset_seconds(0.250);
+        let players = std::array::from_fn(|_| &timing);
+        cache.reset(&timing, &players);
+        let after = cache.lane_search_rows(0, &timing, time_ns);
+
+        assert_eq!(after, lane_search_rows_for_timing(&timing, time_ns));
+        assert_ne!(after, before);
     }
 
     #[test]

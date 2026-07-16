@@ -302,14 +302,294 @@ pub fn song_audio_end_time_ns(song: &SongData) -> SongTimeNs {
     song_time_ns_from_seconds(end_seconds)
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct LaneSearchRows {
+    pub current: usize,
+    pub start: usize,
+    pub end: usize,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct LaneSearchMemo {
+    time_ns: SongTimeNs,
+    rows: LaneSearchRows,
+}
+
+#[derive(Clone, Debug)]
+struct LaneSearchTimingCache {
+    current: BeatInfoCache,
+    forward: BeatInfoCache,
+    backward: BeatInfoCache,
+    memo: Option<LaneSearchMemo>,
+}
+
+impl LaneSearchTimingCache {
+    fn new(timing: &TimingData) -> Self {
+        Self {
+            current: BeatInfoCache::new(timing),
+            forward: BeatInfoCache::new(timing),
+            backward: BeatInfoCache::new(timing),
+            memo: None,
+        }
+    }
+
+    fn reset(&mut self, timing: &TimingData) {
+        self.current.reset(timing);
+        self.forward.reset(timing);
+        self.backward.reset(timing);
+        self.memo = None;
+    }
+
+    fn rows(&mut self, timing: &TimingData, time_ns: SongTimeNs) -> LaneSearchRows {
+        if let Some(memo) = self.memo
+            && memo.time_ns == time_ns
+        {
+            return memo.rows;
+        }
+
+        let forward_time_ns = song_time_ns_add_seconds(time_ns, STEP_SEARCH_DISTANCE_SECONDS);
+        let backward_time_ns = song_time_ns_add_seconds(time_ns, -STEP_SEARCH_DISTANCE_SECONDS);
+        let current_beat = timing
+            .get_beat_info_from_time_ns_cached(time_ns, &mut self.current)
+            .beat;
+        let forward_beat = timing
+            .get_beat_info_from_time_ns_cached(forward_time_ns, &mut self.forward)
+            .beat;
+        let backward_beat = timing
+            .get_beat_info_from_time_ns_cached(backward_time_ns, &mut self.backward)
+            .beat;
+        let rows = lane_search_rows_from_beats(timing, current_beat, forward_beat, backward_beat);
+        self.memo = Some(LaneSearchMemo { time_ns, rows });
+        rows
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct CutoffRowsMemo {
+    cutoff_time_ns: SongTimeNs,
+    active_players: usize,
+    rows: [usize; MAX_PLAYERS],
+}
+
+/// Game-thread, song-lifetime caches for monotonic time-to-beat query streams.
+///
+/// The cache has fixed capacity, allocates nothing, and is warmed when gameplay
+/// state is built. Rewinds and timing-offset edits reset every stream together;
+/// normal monotonic queries only walk timing events crossed since the last query.
+/// There is no eviction or deferred destruction. Exact-timestamp cutoff and input
+/// memos stop inserting by replacement and make repeated same-frame work O(1).
+/// The `timing_cache` benchmark is the instrumentation point; runtime counters are
+/// deliberately omitted from the hot path. Worst case after a reset is one full
+/// uncached-equivalent traversal per stream, outside steady-state gameplay.
+#[derive(Clone, Debug)]
+pub struct GameplayTimeToBeatCaches {
+    song: BeatInfoCache,
+    display: BeatInfoCache,
+    visible: [BeatInfoCache; MAX_PLAYERS],
+    cutoff: [BeatInfoCache; MAX_PLAYERS],
+    assist: BeatInfoCache,
+    assist_future: BeatInfoCache,
+    input: [LaneSearchTimingCache; MAX_PLAYERS],
+    cutoff_memo: Option<CutoffRowsMemo>,
+}
+
+impl GameplayTimeToBeatCaches {
+    pub fn new(
+        timing: &TimingData,
+        timing_players: &[&TimingData; MAX_PLAYERS],
+    ) -> Self {
+        Self {
+            song: BeatInfoCache::new(timing),
+            display: BeatInfoCache::new(timing),
+            visible: std::array::from_fn(|player| BeatInfoCache::new(timing_players[player])),
+            cutoff: std::array::from_fn(|player| BeatInfoCache::new(timing_players[player])),
+            assist: BeatInfoCache::new(timing),
+            assist_future: BeatInfoCache::new(timing),
+            input: std::array::from_fn(|player| LaneSearchTimingCache::new(timing_players[player])),
+            cutoff_memo: None,
+        }
+    }
+
+    pub fn reset(
+        &mut self,
+        timing: &TimingData,
+        timing_players: &[&TimingData; MAX_PLAYERS],
+    ) {
+        self.song.reset(timing);
+        self.display.reset(timing);
+        self.assist.reset(timing);
+        self.assist_future.reset(timing);
+        for (((visible, cutoff), input), timing_player) in self
+            .visible
+            .iter_mut()
+            .zip(&mut self.cutoff)
+            .zip(&mut self.input)
+            .zip(timing_players)
+        {
+            visible.reset(timing_player);
+            cutoff.reset(timing_player);
+            input.reset(timing_player);
+        }
+        self.cutoff_memo = None;
+    }
+
+    #[inline(always)]
+    pub fn song_info(&mut self, timing: &TimingData, time_ns: SongTimeNs) -> BeatInfo {
+        timing.get_beat_info_from_time_ns_cached(time_ns, &mut self.song)
+    }
+
+    #[inline(always)]
+    pub fn display_beat(&mut self, timing: &TimingData, time_ns: SongTimeNs) -> f32 {
+        timing
+            .get_beat_info_from_time_ns_cached(time_ns, &mut self.display)
+            .beat
+    }
+
+    #[inline(always)]
+    pub fn visible_beat(
+        &mut self,
+        player: usize,
+        timing: &TimingData,
+        time_ns: SongTimeNs,
+    ) -> f32 {
+        timing
+            .get_beat_info_from_time_ns_cached(time_ns, &mut self.visible[player])
+            .beat
+    }
+
+    pub fn missed_note_cutoff_rows(
+        &mut self,
+        timing_profile: &TimingProfile,
+        timing_players: &[&TimingData; MAX_PLAYERS],
+        music_rate: f32,
+        music_time_ns: SongTimeNs,
+        num_players: usize,
+    ) -> [usize; MAX_PLAYERS] {
+        let cutoff_time_ns =
+            music_time_ns.saturating_sub(max_step_distance_ns(timing_profile, music_rate));
+        let active_players = num_players.min(MAX_PLAYERS);
+        if let Some(memo) = self.cutoff_memo
+            && memo.cutoff_time_ns == cutoff_time_ns
+            && memo.active_players == active_players
+        {
+            return memo.rows;
+        }
+
+        let mut rows = [0; MAX_PLAYERS];
+        for (player, (timing_player, cache)) in timing_players
+            .iter()
+            .zip(&mut self.cutoff)
+            .take(active_players)
+            .enumerate()
+        {
+            let info = timing_player.get_beat_info_from_time_ns_cached(cutoff_time_ns, cache);
+            rows[player] = missed_note_cutoff_row_from_info(timing_player, info);
+        }
+        self.cutoff_memo = Some(CutoffRowsMemo {
+            cutoff_time_ns,
+            active_players,
+            rows,
+        });
+        rows
+    }
+
+    #[inline(always)]
+    pub fn assist_row_no_offset(
+        &mut self,
+        timing: &TimingData,
+        global_offset_seconds: f32,
+        music_time_ns: SongTimeNs,
+    ) -> i32 {
+        assist_row_no_offset_cached(
+            timing,
+            global_offset_seconds,
+            music_time_ns,
+            &mut self.assist,
+        )
+    }
+
+    #[inline(always)]
+    pub fn assist_future_row(
+        &mut self,
+        timing: &TimingData,
+        global_offset_seconds: f32,
+        audio_output_delay_seconds: f32,
+        music_time_ns: SongTimeNs,
+        slope: f32,
+        song_row: i32,
+    ) -> i32 {
+        let horizon = assist_lookahead_music_horizon_seconds(audio_output_delay_seconds, slope);
+        assist_row_no_offset_cached(
+            timing,
+            global_offset_seconds,
+            song_time_ns_add_seconds(music_time_ns, horizon),
+            &mut self.assist_future,
+        )
+        .max(song_row)
+    }
+
+    #[inline(always)]
+    pub fn lane_search_rows(
+        &mut self,
+        player: usize,
+        timing: &TimingData,
+        time_ns: SongTimeNs,
+    ) -> LaneSearchRows {
+        self.input[player].rows(timing, time_ns)
+    }
+}
+
 #[inline(always)]
-pub fn missed_note_cutoff_row_for_timing(timing: &TimingData, cutoff_time_ns: SongTimeNs) -> usize {
-    let beat_info = timing.get_beat_info_from_time_ns(cutoff_time_ns);
+fn lane_search_rows_from_beats(
+    timing: &TimingData,
+    current_beat: f32,
+    forward_beat: f32,
+    backward_beat: f32,
+) -> LaneSearchRows {
+    let current = timing_row_nearest(timing, current_beat);
+    let forward = timing_row_nearest(timing, forward_beat);
+    let backward = timing_row_nearest(timing, backward_beat);
+    let distance = forward
+        .saturating_sub(current)
+        .max(current.saturating_sub(backward))
+        .saturating_add(ROWS_PER_BEAT.max(1) as usize);
+    LaneSearchRows {
+        current,
+        start: current.saturating_sub(distance),
+        end: current.saturating_add(distance),
+    }
+}
+
+#[inline(always)]
+pub fn lane_search_rows_for_timing(
+    timing: &TimingData,
+    time_ns: SongTimeNs,
+) -> LaneSearchRows {
+    let forward_time_ns = song_time_ns_add_seconds(time_ns, STEP_SEARCH_DISTANCE_SECONDS);
+    let backward_time_ns = song_time_ns_add_seconds(time_ns, -STEP_SEARCH_DISTANCE_SECONDS);
+    lane_search_rows_from_beats(
+        timing,
+        timing.get_beat_for_time_ns(time_ns),
+        timing.get_beat_for_time_ns(forward_time_ns),
+        timing.get_beat_for_time_ns(backward_time_ns),
+    )
+}
+
+#[inline(always)]
+fn missed_note_cutoff_row_from_info(timing: &TimingData, beat_info: BeatInfo) -> usize {
     let mut cutoff_note_row = beat_to_note_row(beat_info.beat);
     if beat_info.is_in_freeze && !beat_info.is_in_delay {
         cutoff_note_row = cutoff_note_row.saturating_add(1);
     }
     timing.cutoff_row_for_note_row(cutoff_note_row)
+}
+
+#[inline(always)]
+pub fn missed_note_cutoff_row_for_timing(timing: &TimingData, cutoff_time_ns: SongTimeNs) -> usize {
+    missed_note_cutoff_row_from_info(
+        timing,
+        timing.get_beat_info_from_time_ns(cutoff_time_ns),
+    )
 }
 
 #[inline(always)]
@@ -372,6 +652,20 @@ pub fn assist_row_no_offset_for_timing(
         music_time_ns,
         -global_offset_seconds,
     ));
+    timing_row_floor(timing, beat_no_offset).min(i32::MAX as usize) as i32
+}
+
+#[inline(always)]
+fn assist_row_no_offset_cached(
+    timing: &TimingData,
+    global_offset_seconds: f32,
+    music_time_ns: SongTimeNs,
+    cache: &mut BeatInfoCache,
+) -> i32 {
+    let target_time_ns = song_time_ns_add_seconds(music_time_ns, -global_offset_seconds);
+    let beat_no_offset = timing
+        .get_beat_info_from_time_ns_cached(target_time_ns, cache)
+        .beat;
     timing_row_floor(timing, beat_no_offset).min(i32::MAX as usize) as i32
 }
 
@@ -654,4 +948,3 @@ pub fn build_note_count_stats(notes: &[Note], note_range: (usize, usize)) -> Vec
 
     stats
 }
-

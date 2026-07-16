@@ -129,7 +129,9 @@ where
         );
     }
     let replay_input = GameplayReplayInputState::new(replay_input);
-    let beat_info_cache = BeatInfoCache::new(&timing);
+    let timing_player_refs =
+        std::array::from_fn(|player| timing_players[player].as_ref());
+    let time_to_beat_caches = GameplayTimeToBeatCaches::new(&timing, &timing_player_refs);
     let setup_ms = init_started.elapsed().as_secs_f64() * 1000.0;
 
     let note_build_started = Instant::now();
@@ -908,7 +910,7 @@ where
         timing_runtime: GameplayTimingRuntimeState {
             timing,
             timing_players,
-            beat_info_cache,
+            time_to_beat_caches,
             timing_profile,
             player_judgment_timing,
         },

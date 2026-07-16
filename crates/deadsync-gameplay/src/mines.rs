@@ -78,10 +78,28 @@ pub fn closest_lane_note_search(
     timing: &TimingData,
     current_time_ns: SongTimeNs,
 ) -> LaneNoteSearch {
-    let current_row_index =
-        timing_row_nearest(timing, timing.get_beat_for_time_ns(current_time_ns));
-    let (search_start_row, search_end_row) =
-        step_search_row_bounds(timing, current_time_ns, current_row_index);
+    let rows = lane_search_rows_for_timing(timing, current_time_ns);
+    closest_lane_note_search_with_rows(
+        note_indices,
+        notes,
+        note_times_ns,
+        timing,
+        current_time_ns,
+        rows,
+    )
+}
+
+fn closest_lane_note_search_with_rows(
+    note_indices: &[usize],
+    notes: &[Note],
+    note_times_ns: &[SongTimeNs],
+    timing: &TimingData,
+    current_time_ns: SongTimeNs,
+    rows: LaneSearchRows,
+) -> LaneNoteSearch {
+    let current_row_index = rows.current;
+    let search_start_row = rows.start;
+    let search_end_row = rows.end;
     let (search_start_idx, search_end_idx) =
         lane_note_window_bounds_rows(note_indices, notes, search_start_row, search_end_row);
     let candidate = closest_lane_note_ns(
@@ -671,4 +689,3 @@ pub fn collect_edge_judge_indices(
     judge_indices[0] = lead_note_index;
     Some((judge_indices, 1))
 }
-
