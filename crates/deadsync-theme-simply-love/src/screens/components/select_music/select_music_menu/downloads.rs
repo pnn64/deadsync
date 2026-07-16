@@ -21,6 +21,7 @@ const DOWNLOADS_LIST_Y: f32 = -120.0;
 const DOWNLOADS_AMOUNT_X: f32 = DOWNLOADS_BAR_W + 60.0;
 const DOWNLOADS_CLOSE_HINT_Y: f32 = DOWNLOADS_PANEL_H * 0.5 + 36.0;
 const DOWNLOADS_CLOSE_HINT: &str = "Press &START; to dismiss.";
+const DOWNLOADS_RETRY_HINT: &str = "Press F5 to retry failed downloads.  Press &START; to dismiss.";
 const DOWNLOADS_EMPTY_TEXT: &str = "No Downloads to view";
 const DOWNLOADS_DIM_ALPHA: f32 = 0.875;
 
@@ -166,6 +167,9 @@ pub fn build_downloads_overlay(
         .iter()
         .filter(|snapshot| snapshot.complete)
         .count();
+    let retry_available = snapshots
+        .iter()
+        .any(|snapshot| snapshot.complete && snapshot.error_message.is_some());
     let total = snapshots.len();
     let mut actors = Vec::new();
     let center_x = screen_center_x();
@@ -203,7 +207,7 @@ pub fn build_downloads_overlay(
     ));
     actors.push(act!(text:
         font("miso"):
-        settext(DOWNLOADS_CLOSE_HINT):
+        settext(if retry_available { DOWNLOADS_RETRY_HINT } else { DOWNLOADS_CLOSE_HINT }):
         align(0.5, 0.5):
         xy(center_x, center_y + DOWNLOADS_CLOSE_HINT_Y):
         zoom(0.95):

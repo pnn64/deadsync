@@ -3481,6 +3481,10 @@ impl App {
                     deadsync_online::runtime::queue_event_unlock_download(&url, &name, pack_name);
                     Vec::new()
                 }
+                SimplyLoveRuntimeRequest::Online(SimplyLoveOnlineRequest::RetryUnlockDownloads) => {
+                    deadsync_online::runtime::retry_failed_unlock_downloads();
+                    Vec::new()
+                }
                 SimplyLoveRuntimeRequest::Online(
                     SimplyLoveOnlineRequest::EnsureStepManiaOnlineCatalog,
                 ) => {

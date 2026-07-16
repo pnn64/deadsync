@@ -1,7 +1,7 @@
 use crate::downloads::{
     UnlockCache, UnlockDownloadRuntimeHooks, read_unlock_cache_file,
     runtime_forget_cached_destination, runtime_queue_event_unlock_download,
-    unlock_destination_roots as download_destination_roots,
+    runtime_retry_failed_downloads, unlock_destination_roots as download_destination_roots,
     unlock_downloads_available as downloads_available, write_unlock_cache_file,
 };
 pub use crate::downloads::{
@@ -60,6 +60,10 @@ pub fn unlock_downloads_available() -> bool {
 
 pub fn queue_event_unlock_download(url: &str, unlock_name: &str, pack_name: &str) {
     runtime_queue_event_unlock_download(DOWNLOAD_RUNTIME_HOOKS, url, unlock_name, pack_name);
+}
+
+pub fn retry_failed_unlock_downloads() -> usize {
+    runtime_retry_failed_downloads(DOWNLOAD_RUNTIME_HOOKS)
 }
 
 pub fn forget_cached_unlock(url: &str, pack_name: &str) {

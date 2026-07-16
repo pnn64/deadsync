@@ -145,6 +145,7 @@ pub enum SimplyLoveOnlineRequest {
         name: String,
         url: String,
     },
+    RetryUnlockDownloads,
     EnsureStepManiaOnlineCatalog,
     RefreshStepManiaOnlineCatalog,
     DownloadStepManiaOnlinePack {

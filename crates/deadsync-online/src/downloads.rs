@@ -192,6 +192,24 @@ impl DownloadState {
         (finished, total)
     }
 
+    fn retry_failed(&mut self) -> Vec<EventUnlockDownload> {
+        self.entries
+            .iter_mut()
+            .filter(|entry| entry.complete && entry.error_message.is_some())
+            .map(|entry| {
+                entry.current_bytes = 0;
+                entry.total_bytes = 0;
+                entry.complete = false;
+                entry.error_message = None;
+                EventUnlockDownload {
+                    id: entry.id,
+                    url: entry.url.clone(),
+                    destination: entry.destination.clone(),
+                }
+            })
+            .collect()
+    }
+
     pub fn take_ready_song_reload_request(&mut self) -> Vec<PathBuf> {
         if self.ready_song_reload_dirs.is_empty()
             || self.entries.iter().any(|entry| !entry.complete)
@@ -371,6 +389,19 @@ pub fn runtime_queue_event_unlock_download(
             return;
         }
     };
+    spawn_runtime_download(hooks, download);
+}
+
+pub fn runtime_retry_failed_downloads(hooks: UnlockDownloadRuntimeHooks) -> usize {
+    let downloads = RUNTIME_DOWNLOAD_STATE.lock().unwrap().retry_failed();
+    let count = downloads.len();
+    for download in downloads {
+        spawn_runtime_download(hooks, download);
+    }
+    count
+}
+
+fn spawn_runtime_download(hooks: UnlockDownloadRuntimeHooks, download: EventUnlockDownload) {
     thread::spawn(move || {
         runtime_download_worker(hooks, download.id, download.url, download.destination);
     });
@@ -934,6 +965,46 @@ mod tests {
         assert!(snapshot.complete);
         assert_eq!(snapshot.error_message.as_deref(), Some("failed"));
         assert_eq!(state.completion_counts(), (1, 1));
+    }
+
+    #[test]
+    fn retry_failed_resets_only_failed_downloads() {
+        let mut state = DownloadState::default();
+        state.ensure_cache_loaded_with(UnlockCache::new);
+        for (id, name) in [(1, "Failed"), (2, "Done"), (3, "Active")] {
+            assert_eq!(
+                state.queue_download(
+                    &format!("https://example.com/{id}.zip"),
+                    name.to_string(),
+                    name.to_string(),
+                    || id,
+                ),
+                QueueDownloadResult::Queued(id)
+            );
+        }
+        state.set_download_progress(1, 512, 1_024);
+        state.finish_download(1, Some("timed out".to_string()));
+        state.finish_download(2, None);
+        state.set_download_progress(3, 256, 1_024);
+
+        assert_eq!(
+            state.retry_failed(),
+            vec![EventUnlockDownload {
+                id: 1,
+                url: "https://example.com/1.zip".to_string(),
+                destination: "Failed".to_string(),
+            }]
+        );
+        let snapshots = state.snapshots();
+        assert_eq!(snapshots[0].current_bytes, 0);
+        assert_eq!(snapshots[0].total_bytes, 0);
+        assert!(!snapshots[0].complete);
+        assert_eq!(snapshots[0].error_message, None);
+        assert!(snapshots[1].complete);
+        assert_eq!(snapshots[1].error_message, None);
+        assert_eq!(snapshots[2].current_bytes, 256);
+        assert!(!snapshots[2].complete);
+        assert!(state.retry_failed().is_empty());
     }
 
     #[test]

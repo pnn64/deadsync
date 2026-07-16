@@ -8218,6 +8218,30 @@ fn handle_downloads_overlay_input(state: &mut State, ev: &InputEvent) -> ThemeEf
     ThemeEffect::None
 }
 
+fn handle_downloads_overlay_raw_key(
+    state: &mut State,
+    key: Option<&RawKeyboardEvent>,
+) -> Option<ThemeEffect> {
+    if !downloads_overlay_visible(state) {
+        return None;
+    }
+    let key = key?;
+    if key.code != KeyCode::F5 {
+        return None;
+    }
+    if key.pressed
+        && !key.repeat
+        && state
+            .downloads
+            .iter()
+            .any(|download| download.complete && download.error_message.is_some())
+    {
+        queue_sfx(state, "assets/sounds/start.ogg");
+        queue_online(state, crate::SimplyLoveOnlineRequest::RetryUnlockDownloads);
+    }
+    Some(ThemeEffect::ConsumeInput)
+}
+
 fn handle_srpg_shop_overlay_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
     if modal_blocks_arrow(state, ev.action) {
         return ThemeEffect::None;
@@ -9846,6 +9870,10 @@ fn handle_raw_key_event_impl(
     }
     if !matches!(state.lobby_overlay, lobby_overlay::OverlayState::Hidden) {
         return handle_lobby_overlay_raw_key(state, key, text);
+    }
+
+    if let Some(effect) = handle_downloads_overlay_raw_key(state, key) {
+        return effect;
     }
 
     if let Some(action) = handle_mute_hotkey(state, key, false) {
@@ -13074,12 +13102,13 @@ mod tests {
         PREVIEW_DELAY_SECONDS, ProfileBoxEffectOutcome, SyncGraphCols, WheelSortMode,
         build_displayed_entries, build_playlist_entries_from_text, build_playlist_song_lookup,
         build_sync_heat_image, delayed_selection_updates_blocked, first_song_entry_index,
-        handle_confirm, handle_player_options_mute_hotkey, handle_raw_key_event, init_placeholder,
-        keymap_has_player_input, maybe_prewarm_replaygain_for_pack,
-        maybe_refresh_select_music_leaderboard, prepend_pending_effect, profile_boxes,
-        reset_preview_after_gameplay, route_profile_box_effect, select_music_lobby_lock_text,
-        select_music_lobby_lock_text_for, solo_runtime_side, steps_index_for_side,
-        sync_bias_axis_pos, sync_graph_cols, sync_low_confidence_warning, sync_overlay_graph_size,
+        handle_confirm, handle_downloads_overlay_raw_key, handle_player_options_mute_hotkey,
+        handle_raw_key_event, init_placeholder, keymap_has_player_input,
+        maybe_prewarm_replaygain_for_pack, maybe_refresh_select_music_leaderboard,
+        prepend_pending_effect, profile_boxes, reset_preview_after_gameplay,
+        route_profile_box_effect, select_music_lobby_lock_text, select_music_lobby_lock_text_for,
+        solo_runtime_side, steps_index_for_side, sync_bias_axis_pos, sync_graph_cols,
+        sync_low_confidence_warning, sync_overlay_graph_size,
     };
     use crate::config::{GraphOrientation, SelectMusicWheelStyle};
     use crate::screens::ThemeEffect;
@@ -13118,6 +13147,33 @@ mod tests {
             }
             _ => None,
         }
+    }
+
+    #[test]
+    fn downloads_overlay_f5_queues_failed_retry() {
+        let mut state = init_placeholder();
+        state.downloads_overlay = super::select_music_menu::show_downloads_overlay();
+        state.downloads.push(crate::views::SelectMusicDownloadView {
+            name: "Timed Out Unlock".to_string(),
+            current_bytes: 512,
+            total_bytes: 1_024,
+            complete: true,
+            error_message: Some("timed out".to_string()),
+        });
+
+        let effect =
+            handle_downloads_overlay_raw_key(&mut state, Some(&raw_key(KeyCode::F5, true, false)));
+        assert!(matches!(effect, Some(ThemeEffect::ConsumeInput)));
+        assert!(matches!(
+            state.pending_online.as_slice(),
+            [crate::SimplyLoveOnlineRequest::RetryUnlockDownloads]
+        ));
+
+        state.pending_online.clear();
+        let effect =
+            handle_downloads_overlay_raw_key(&mut state, Some(&raw_key(KeyCode::F5, true, true)));
+        assert!(matches!(effect, Some(ThemeEffect::ConsumeInput)));
+        assert!(state.pending_online.is_empty());
     }
 
     #[test]

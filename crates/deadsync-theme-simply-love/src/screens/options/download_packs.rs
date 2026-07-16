@@ -555,6 +555,7 @@ fn handle_raw_input(
             InputOutcome::EnsureCatalog
         }
         KeyCode::Enter | KeyCode::NumpadEnter => activate_selected(data, snapshot),
+        KeyCode::F5 if !key.repeat => retry_selected(data, snapshot),
         _ => InputOutcome::None,
     }
 }
@@ -641,6 +642,26 @@ fn activate_selected(data: &mut DownloadPacksOverlayData, snapshot: &Snapshot) -
     });
     data.local_message = None;
     InputOutcome::Activated
+}
+
+fn retry_selected(data: &mut DownloadPacksOverlayData, snapshot: &Snapshot) -> InputOutcome {
+    let Some(pack) = selected_pack(data, snapshot) else {
+        return InputOutcome::None;
+    };
+    if !install_for_pack(snapshot, pack.id)
+        .is_some_and(|install| install.phase == InstallPhase::Error)
+    {
+        return InputOutcome::None;
+    }
+    data.local_message = Some(
+        tr_fmt(
+            "OptionsDownloadPacks",
+            "QueuedMessage",
+            &[("name", &pack.name)],
+        )
+        .to_string(),
+    );
+    InputOutcome::Download(pack.id)
 }
 
 fn move_selection(data: &mut DownloadPacksOverlayData, delta: isize) -> InputOutcome {
@@ -948,7 +969,7 @@ pub(super) fn build_overlay(state: &State, active_color_index: i32) -> Option<Ve
             push_catalog(&mut out, data, snapshot, accent, cx, cy);
         }
     }
-    push_footer(&mut out, snapshot, accent, cx, cy);
+    push_footer(&mut out, data, snapshot, accent, cx, cy);
     if let Some(confirm) = data.confirm.as_ref() {
         push_confirmation(&mut out, confirm, accent, cx, cy);
     }
@@ -1262,15 +1283,28 @@ fn push_status(out: &mut Vec<Actor>, message: &str, rgba: [f32; 4], cx: f32, cy:
     ));
 }
 
-fn push_footer(out: &mut Vec<Actor>, snapshot: &Snapshot, accent: [f32; 4], cx: f32, cy: f32) {
+fn push_footer(
+    out: &mut Vec<Actor>,
+    data: &DownloadPacksOverlayData,
+    snapshot: &Snapshot,
+    accent: [f32; 4],
+    cx: f32,
+    cy: f32,
+) {
     let active_download = snapshot.installs.iter().any(|install| {
         matches!(
             install.phase,
             InstallPhase::Queued | InstallPhase::Downloading | InstallPhase::Extracting
         )
     });
+    let selected_failed = selected_pack(data, snapshot).is_some_and(|pack| {
+        install_for_pack(snapshot, pack.id)
+            .is_some_and(|install| install.phase == InstallPhase::Error)
+    });
     let hint = if snapshot.phase == CatalogPhase::Error {
         tr("OptionsDownloadPacks", "RefreshHint")
+    } else if selected_failed {
+        tr("OptionsDownloadPacks", "FooterFailed")
     } else if active_download {
         tr("OptionsDownloadPacks", "FooterBusy")
     } else {
@@ -1731,5 +1765,47 @@ mod tests {
         };
         assert!(data.confirm.is_some());
         assert!(data.query.is_empty());
+    }
+
+    #[test]
+    fn f5_retries_only_the_selected_failed_download() {
+        let mut snapshot = test_snapshot(vec![
+            test_pack(7, "Failed Pack", None),
+            test_pack(8, "Ready Pack", None),
+        ]);
+        snapshot.installs.push(InstallSnapshot {
+            pack_id: 7,
+            phase: InstallPhase::Error,
+            downloaded_bytes: 512,
+            total_bytes: 1_000,
+            message: Some("timed out".to_string()),
+        });
+        let mut data = test_overlay_data();
+        rebuild_results(&mut data, &snapshot, None);
+        let mut state = DownloadPacksOverlayState::Visible(Box::new(data));
+
+        assert_eq!(
+            handle_raw_input(
+                &mut state,
+                Some(&raw_key(KeyCode::F5, true, false)),
+                None,
+                &snapshot,
+            ),
+            InputOutcome::Download(7)
+        );
+
+        let DownloadPacksOverlayState::Visible(data) = &mut state else {
+            unreachable!();
+        };
+        data.selected = 1;
+        assert_eq!(
+            handle_raw_input(
+                &mut state,
+                Some(&raw_key(KeyCode::F5, true, false)),
+                None,
+                &snapshot,
+            ),
+            InputOutcome::None
+        );
     }
 }
