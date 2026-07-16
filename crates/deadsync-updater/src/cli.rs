@@ -397,7 +397,12 @@ fn relaunch_self(_exe: &std::path::Path) -> Result<(), super::UpdaterError> {
     Ok(())
 }
 
-#[cfg(windows)]
+#[cfg(any(
+    windows,
+    target_os = "linux",
+    target_os = "freebsd",
+    target_os = "macos"
+))]
 fn relaunch_with_args(
     exe: &std::path::Path,
     args: &[std::ffi::OsString],
@@ -407,69 +412,6 @@ fn relaunch_with_args(
         .args(args)
         .spawn()
         .map_err(|e| super::UpdaterError::Io(format!("spawn '{}': {e}", exe.display())))?;
-    Ok(())
-}
-
-#[cfg(any(target_os = "linux", target_os = "freebsd", target_os = "macos"))]
-fn relaunch_with_args(
-    exe: &std::path::Path,
-    args: &[std::ffi::OsString],
-) -> Result<(), super::UpdaterError> {
-    use std::ffi::{CString, OsStr, OsString};
-    use std::os::unix::ffi::OsStrExt;
-
-    fn cstring(os: &OsStr, label: &str) -> Result<CString, super::UpdaterError> {
-        CString::new(os.as_bytes())
-            .map_err(|_| super::UpdaterError::Io(format!("{label} contains an interior NUL byte")))
-    }
-
-    let exe_c = cstring(exe.as_os_str(), "executable path")?;
-    let mut argv_c = Vec::with_capacity(args.len() + 1);
-    argv_c.push(exe_c.clone());
-    for arg in args {
-        argv_c.push(cstring(arg.as_os_str(), "process argument")?);
-    }
-    let mut argv: Vec<*mut libc::c_char> = argv_c
-        .iter()
-        .map(|s| s.as_ptr() as *mut libc::c_char)
-        .collect();
-    argv.push(std::ptr::null_mut());
-
-    let mut env_c = Vec::new();
-    for (key, value) in std::env::vars_os() {
-        let mut pair = OsString::from(key);
-        pair.push("=");
-        pair.push(value);
-        env_c.push(cstring(pair.as_os_str(), "environment variable")?);
-    }
-    let mut envp: Vec<*mut libc::c_char> = env_c
-        .iter()
-        .map(|s| s.as_ptr() as *mut libc::c_char)
-        .collect();
-    envp.push(std::ptr::null_mut());
-
-    let mut pid: libc::pid_t = 0;
-    // SAFETY: exe_c, argv, and envp point to NUL-terminated storage
-    // owned by this stack frame and remain alive for the duration of
-    // posix_spawn. Null file-actions and attrs request default spawn
-    // behavior. posix_spawn copies what it needs before returning.
-    let rc = unsafe {
-        libc::posix_spawn(
-            &mut pid,
-            exe_c.as_ptr(),
-            std::ptr::null(),
-            std::ptr::null(),
-            argv.as_mut_ptr(),
-            envp.as_mut_ptr(),
-        )
-    };
-    if rc != 0 {
-        return Err(super::UpdaterError::Io(format!(
-            "posix_spawn '{}': {}",
-            exe.display(),
-            std::io::Error::from_raw_os_error(rc)
-        )));
-    }
     Ok(())
 }
 

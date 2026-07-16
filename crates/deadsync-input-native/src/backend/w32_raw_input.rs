@@ -71,8 +71,9 @@ struct Dev {
     uuid: [u8; 16],
     preparsed: Vec<u8>,
     max_buttons: u32,
-    buttons_prev: Vec<u16>,
-    buttons_now: Vec<u16>,
+    buttons_prev: Box<[u16]>,
+    buttons_prev_len: usize,
+    buttons_now: Box<[u16]>,
     hat_min: i32,
     hat_max: i32,
     dir: [bool; 4],
@@ -625,8 +626,9 @@ fn add_device(ctx: &mut Ctx, h: HANDLE, initial: bool) {
         uuid,
         preparsed,
         max_buttons,
-        buttons_prev: Vec::with_capacity(button_cap),
-        buttons_now: Vec::with_capacity(button_cap),
+        buttons_prev: vec![0; button_cap].into_boxed_slice(),
+        buttons_prev_len: 0,
+        buttons_now: vec![0; button_cap].into_boxed_slice(),
         hat_min,
         hat_max,
         dir: [false; 4],
@@ -669,38 +671,39 @@ fn process_hid_reports<F>(
 ) where
     F: FnMut(PadEvent),
 {
-    if size_bytes < size_of::<RAWINPUTHEADER>() + 8 {
+    let Some((reports, report_size)) = hid_report_payload(buf, size_bytes) else {
         return;
-    }
-    // SAFETY: `size_bytes` was validated against the raw-input header size, and
-    // `buf` is the live owned message buffer for this WM_INPUT dispatch.
-    let base = unsafe { buf.as_mut_ptr().add(size_of::<RAWINPUTHEADER>()) };
-    // SAFETY: `base` points into `buf` and the size check above guarantees at
-    // least the HID report header fields are present.
-    let dw_size_hid = unsafe { ptr::read_unaligned(base.cast::<u32>()) as usize };
-    // SAFETY: same as above for the second HID header field.
-    let dw_count = unsafe { ptr::read_unaligned(base.add(4).cast::<u32>()) as usize };
-    // SAFETY: the HID payload starts immediately after the 8-byte HID header.
-    let data = unsafe { base.add(8) };
-    let total = dw_size_hid.saturating_mul(dw_count);
-    if size_bytes < size_of::<RAWINPUTHEADER>() + 8 + total {
-        return;
-    }
-    // SAFETY: `data` points to the HID report payload within `buf`, and the
-    // bounds check above guarantees `total` bytes are available.
-    let reports = unsafe { std::slice::from_raw_parts_mut(data, total) };
-
-    let mut idx = 0;
-    while idx < dw_count {
-        let start = idx * dw_size_hid;
-        let end = start + dw_size_hid;
-        if end > reports.len() {
-            break;
-        }
-        let report = &mut reports[start..end];
+    };
+    for report in reports.chunks_exact_mut(report_size) {
         process_hid_report(emit_pad, dev, timestamp, host_nanos, report);
-        idx += 1;
     }
+}
+
+fn hid_report_payload(buf: &mut [u8], size_bytes: usize) -> Option<(&mut [u8], usize)> {
+    let header_len = size_of::<RAWINPUTHEADER>();
+    let message = buf.get_mut(..size_bytes)?;
+    let hid = message.get_mut(header_len..)?;
+    if hid.len() < 8 {
+        return None;
+    }
+    let (report_header, payload) = hid.split_at_mut(8);
+    let dw_size_hid = u32::from_ne_bytes([
+        report_header[0],
+        report_header[1],
+        report_header[2],
+        report_header[3],
+    ]) as usize;
+    let dw_count = u32::from_ne_bytes([
+        report_header[4],
+        report_header[5],
+        report_header[6],
+        report_header[7],
+    ]) as usize;
+    if dw_size_hid == 0 {
+        return None;
+    }
+    let total = dw_size_hid.checked_mul(dw_count)?;
+    Some((payload.get_mut(..total)?, dw_size_hid))
 }
 
 fn enumerate_existing(ctx: &mut Ctx) {
@@ -741,10 +744,11 @@ fn emit_button_diff<F>(
 ) where
     F: FnMut(PadEvent),
 {
+    let prev = &dev.buttons_prev[..dev.buttons_prev_len];
     let mut a = 0usize;
     let mut b = 0usize;
-    while a < dev.buttons_prev.len() && b < now.len() {
-        let pa = dev.buttons_prev[a];
+    while a < prev.len() && b < now.len() {
+        let pa = prev[a];
         let nb = now[b];
         if pa == nb {
             a += 1;
@@ -775,8 +779,8 @@ fn emit_button_diff<F>(
             b += 1;
         }
     }
-    while a < dev.buttons_prev.len() {
-        let u = dev.buttons_prev[a];
+    while a < prev.len() {
+        let u = prev[a];
         (emit_pad)(PadEvent::RawButton {
             id: dev.id,
             timestamp,
@@ -816,12 +820,10 @@ fn process_hid_report<F>(
         return;
     }
 
-    dev.buttons_now.clear();
-
     let mut len = dev.max_buttons;
     // SAFETY: `dev.preparsed` is the live preparsed-data blob for this HID, the
-    // report buffer is borrowed mutably for the duration of the call, and
-    // `buttons_now` was pre-sized from `max_buttons` when the device was added.
+    // report is borrowed for the duration of the call, and the initialized
+    // `buttons_now` buffer has exactly `max_buttons` writable entries.
     let status = unsafe {
         HidP_GetUsages(
             HidP_Input,
@@ -837,16 +839,21 @@ fn process_hid_report<F>(
         return;
     }
 
-    // SAFETY: `HidP_GetUsages` wrote exactly `len` initialized entries to the
-    // front of `buttons_now`, and `len <= dev.max_buttons <= capacity`.
-    unsafe {
-        dev.buttons_now.set_len(len as usize);
+    let now_len = len as usize;
+    if now_len > dev.buttons_now.len() {
+        return;
     }
-    dev.buttons_now.sort_unstable();
+    dev.buttons_now[..now_len].sort_unstable();
 
-    emit_button_diff(emit_pad, dev, timestamp, host_nanos, &dev.buttons_now);
+    emit_button_diff(
+        emit_pad,
+        dev,
+        timestamp,
+        host_nanos,
+        &dev.buttons_now[..now_len],
+    );
     std::mem::swap(&mut dev.buttons_prev, &mut dev.buttons_now);
-    dev.buttons_now.clear();
+    dev.buttons_prev_len = now_len;
 
     let mut hat: u32 = 0;
     // SAFETY: `dev.preparsed` is the live preparsed-data blob for this HID, and
@@ -1181,7 +1188,40 @@ pub fn run_keyboard_only(
 
 #[cfg(test)]
 mod tests {
-    use super::rawinput_uuid;
+    use super::{RAWINPUTHEADER, hid_report_payload, rawinput_uuid};
+    use std::mem::size_of;
+
+    fn hid_message(report_size: u32, report_count: u32, payload: &[u8]) -> Vec<u8> {
+        let header_len = size_of::<RAWINPUTHEADER>();
+        let mut message = vec![0; header_len + 8 + payload.len()];
+        message[header_len..header_len + 4].copy_from_slice(&report_size.to_ne_bytes());
+        message[header_len + 4..header_len + 8].copy_from_slice(&report_count.to_ne_bytes());
+        message[header_len + 8..].copy_from_slice(payload);
+        message
+    }
+
+    #[test]
+    fn hid_payload_splits_complete_reports() {
+        let mut message = hid_message(3, 2, &[1, 2, 3, 4, 5, 6, 99]);
+        let message_len = message.len();
+        let (payload, report_size) = hid_report_payload(&mut message, message_len).unwrap();
+        assert_eq!(payload, [1, 2, 3, 4, 5, 6]);
+        assert_eq!(payload.chunks_exact(report_size).len(), 2);
+    }
+
+    #[test]
+    fn hid_payload_rejects_invalid_bounds() {
+        let header_len = size_of::<RAWINPUTHEADER>();
+        let mut message = hid_message(3, 2, &[1, 2, 3, 4, 5, 6]);
+        let message_len = message.len();
+        assert!(hid_report_payload(&mut message, message_len - 1).is_none());
+        assert!(hid_report_payload(&mut message, message_len + 1).is_none());
+        assert!(hid_report_payload(&mut message, header_len + 7).is_none());
+
+        let mut empty_reports = hid_message(0, 2, &[]);
+        let message_len = empty_reports.len();
+        assert!(hid_report_payload(&mut empty_reports, message_len).is_none());
+    }
 
     // A pad that reports a serial keeps the same uuid no matter which port
     // (interface path / RIDI_DEVICENAME) it comes back on. This is the whole

@@ -51,14 +51,14 @@ mod imp {
         // GUI-subsystem build. If we were launched from a terminal, reattach to
         // it so CLI usage still prints; otherwise only create a window when the
         // user asked for one.
-        // SAFETY: `AttachConsole`/`AllocConsole` take no Rust-owned pointers and
-        // we check their results; on success we rebind the process std handles to
-        // the now-current console below.
-        unsafe {
-            let attached = AttachConsole(ATTACH_PARENT_PROCESS).is_ok();
-            if attached || (show && AllocConsole().is_ok()) {
-                bind_std_handles();
-            }
+        // SAFETY: `AttachConsole` takes no Rust-owned pointers, and we check its
+        // result before treating the console as active.
+        let attached = unsafe { AttachConsole(ATTACH_PARENT_PROCESS).is_ok() };
+        // SAFETY: `AllocConsole` takes no arguments, and we check its result
+        // before treating the console as active.
+        let allocated = !attached && show && unsafe { AllocConsole().is_ok() };
+        if attached || allocated {
+            bind_std_handles();
         }
     }
 
@@ -73,8 +73,9 @@ mod imp {
     /// Without this, a GUI-subsystem process has null std handles and all output
     /// is silently discarded even after attaching a console.
     ///
-    /// SAFETY: callers must have an active console (just attached or allocated).
-    unsafe fn bind_std_handles() {
+    /// An active console (just attached or allocated) is a logical precondition;
+    /// without one, opening the console devices simply fails.
+    fn bind_std_handles() {
         // stdout and stderr each get their own `CONOUT$` handle: registering one
         // shared handle in two slots means closing either (e.g. by FFI/C runtime
         // code) would dangle the other.
