@@ -586,7 +586,7 @@ struct CachedTextMeshBatch {
 
 #[derive(Default)]
 struct CachedTextMeshVariants {
-    by_align: [OnceCell<Vec<CachedTextMeshBatch>>; 3],
+    by_align: [OnceCell<Box<[CachedTextMeshBatch]>>; 3],
 }
 
 impl CachedTextMeshVariants {
@@ -605,8 +605,8 @@ impl CachedTextMeshVariants {
         F: FnOnce(actors::TextAlign) -> Vec<CachedTextMeshBatch>,
     {
         self.by_align[Self::index(align)]
-            .get_or_init(|| init(align))
-            .as_slice()
+            .get_or_init(|| init(align).into_boxed_slice())
+            .as_ref()
     }
 
     #[cfg(test)]
@@ -623,8 +623,8 @@ struct CachedTextLayout {
     max_logical_width_i: i32,
     glyph_count: usize,
     texture_pages: Box<[CachedTextPage]>,
-    lines: Vec<CachedLine>,
-    glyphs: Vec<CachedGlyph>,
+    lines: Box<[CachedLine]>,
+    glyphs: Box<[CachedGlyph]>,
     fill_batches: CachedTextMeshVariants,
     stroke_batches: CachedTextMeshVariants,
 }
@@ -895,7 +895,9 @@ pub struct TextLayoutFrameStats {
 /// `begin_frame_stats`/`frame_stats`. Worst-case work is one full layout build per
 /// uncached text actor in a frame; cache maintenance itself is constant-time.
 pub struct TextLayoutCache {
-    layouts: Vec<Arc<CachedTextLayout>>,
+    // Keep arena growth moving pointers instead of large layouts with initialized OnceCells.
+    #[allow(clippy::vec_box)]
+    layouts: Vec<Box<CachedTextLayout>>,
     owned_entries: HashMap<TextLayoutKey, OwnedLayoutMap, TextLayoutHasher>,
     shared_aliases: HashMap<TextLayoutKey, SharedAliasMap, TextLayoutHasher>,
     entry_count: usize,
@@ -904,7 +906,7 @@ pub struct TextLayoutCache {
     max_aliases: usize,
     use_tick: u64,
     frame_stats: Option<TextLayoutFrameStats>,
-    uncached_layout: Option<Arc<CachedTextLayout>>,
+    uncached_layout: Option<Box<CachedTextLayout>>,
 }
 
 impl Default for TextLayoutCache {
@@ -1030,7 +1032,7 @@ impl TextLayoutCache {
         &mut self,
         key: TextLayoutKey,
         text: &str,
-        layout: Arc<CachedTextLayout>,
+        layout: Box<CachedTextLayout>,
         tick: u64,
     ) -> Option<usize> {
         if self.entry_count >= self.max_entries {
@@ -1056,7 +1058,7 @@ impl TextLayoutCache {
         key: TextLayoutKey,
         text_key: usize,
         text: Arc<str>,
-        layout: Arc<CachedTextLayout>,
+        layout: Box<CachedTextLayout>,
         tick: u64,
     ) -> Option<usize> {
         if self.alias_count >= self.max_aliases {
@@ -1136,7 +1138,7 @@ impl TextLayoutCache {
             }
             return self.layouts[layout_index].as_ref();
         }
-        let layout = Arc::new(build_cached_text_layout(
+        let layout = Box::new(build_cached_text_layout(
             font,
             fonts,
             text,
@@ -1200,7 +1202,7 @@ impl TextLayoutCache {
             return self.layouts[layout_index].as_ref();
         }
 
-        let layout = Arc::new(build_cached_text_layout(
+        let layout = Box::new(build_cached_text_layout(
             font,
             fonts,
             text_ref,
@@ -2088,8 +2090,8 @@ fn build_cached_text_layout(
         max_logical_width_i,
         glyph_count: glyphs.len(),
         texture_pages: texture_pages.into_vec().into_boxed_slice(),
-        lines,
-        glyphs,
+        lines: lines.into_boxed_slice(),
+        glyphs: glyphs.into_boxed_slice(),
         fill_batches: CachedTextMeshVariants::default(),
         stroke_batches: CachedTextMeshVariants::default(),
     }
@@ -5195,8 +5197,8 @@ mod tests {
             max_logical_width_i: 0,
             glyph_count: 0,
             texture_pages: Vec::new().into_boxed_slice(),
-            lines: Vec::new(),
-            glyphs: Vec::new(),
+            lines: Box::new([]),
+            glyphs: Box::new([]),
             fill_batches: CachedTextMeshVariants::default(),
             stroke_batches: CachedTextMeshVariants::default(),
         }
@@ -5612,6 +5614,8 @@ mod tests {
         assert_eq!(std::mem::size_of::<Option<TextPageId>>(), 4);
         assert_eq!(std::mem::size_of::<CachedGlyph>(), 56);
         assert_eq!(std::mem::size_of::<CachedTextMeshBatch>(), 32);
+        assert_eq!(std::mem::size_of::<CachedTextMeshVariants>(), 48);
+        assert_eq!(std::mem::size_of::<CachedTextLayout>(), 176);
         assert_eq!(std::mem::size_of::<TextMeshBatchBuilder>(), 32);
         assert_eq!(std::mem::size_of::<CachedTextPage>(), 32);
     }
@@ -6355,7 +6359,7 @@ mod tests {
         let mut cache = TextLayoutCache::new(4);
         assert!(
             cache
-                .insert_owned_layout(key, "alpha", Arc::new(test_layout()), 1)
+                .insert_owned_layout(key, "alpha", Box::new(test_layout()), 1)
                 .is_some()
         );
         assert_eq!(cache.entry_count, 1);
@@ -6366,7 +6370,7 @@ mod tests {
         assert_eq!(cache.max_aliases, 0);
         assert!(
             cache
-                .insert_owned_layout(key, "beta", Arc::new(test_layout()), 2)
+                .insert_owned_layout(key, "beta", Box::new(test_layout()), 2)
                 .is_none()
         );
         assert_eq!(cache.entry_count, 1);
@@ -6452,12 +6456,12 @@ mod tests {
 
         assert!(
             cache
-                .insert_owned_layout(key, "alpha", Arc::new(test_layout()), 1)
+                .insert_owned_layout(key, "alpha", Box::new(test_layout()), 1)
                 .is_some()
         );
         assert!(
             cache
-                .insert_owned_layout(key, "beta", Arc::new(test_layout()), 2)
+                .insert_owned_layout(key, "beta", Box::new(test_layout()), 2)
                 .is_none()
         );
         assert_eq!(cache.entry_count, 1);
