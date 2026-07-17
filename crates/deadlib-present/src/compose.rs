@@ -696,13 +696,11 @@ struct TextLayoutPlacement {
 
 struct OwnedLayoutEntry {
     layout_index: usize,
-    last_used: u64,
 }
 
 struct SharedLayoutEntry {
     _owner: Arc<str>,
     layout_index: usize,
-    last_used: u64,
 }
 
 type TextLayoutHasher = rustc_hash::FxBuildHasher;
@@ -904,7 +902,6 @@ pub struct TextLayoutCache {
     alias_count: usize,
     max_entries: usize,
     max_aliases: usize,
-    use_tick: u64,
     frame_stats: Option<TextLayoutFrameStats>,
     uncached_layout: Option<Box<CachedTextLayout>>,
 }
@@ -926,7 +923,6 @@ impl TextLayoutCache {
             alias_count: 0,
             max_entries,
             max_aliases: max_entries,
-            use_tick: 0,
             frame_stats: None,
             uncached_layout: None,
         }
@@ -971,7 +967,6 @@ impl TextLayoutCache {
         self.shared_aliases.clear();
         self.entry_count = 0;
         self.alias_count = 0;
-        self.use_tick = 0;
         self.frame_stats = None;
         self.uncached_layout = None;
     }
@@ -993,12 +988,6 @@ impl TextLayoutCache {
             shared_aliases: saturating_u32(self.alias_count),
             ..frame_stats
         }
-    }
-
-    #[inline(always)]
-    fn next_use_tick(&mut self) -> u64 {
-        self.use_tick = self.use_tick.saturating_add(1);
-        self.use_tick
     }
 
     #[cfg(test)]
@@ -1033,20 +1022,17 @@ impl TextLayoutCache {
         key: TextLayoutKey,
         text: &str,
         layout: Box<CachedTextLayout>,
-        tick: u64,
     ) -> Option<usize> {
         if self.entry_count >= self.max_entries {
             self.uncached_layout = Some(layout);
             return None;
         }
         let layout_index = self.layouts.len();
-        let replaced = self.owned_entries.entry(key).or_default().insert(
-            text.into(),
-            OwnedLayoutEntry {
-                layout_index,
-                last_used: tick,
-            },
-        );
+        let replaced = self
+            .owned_entries
+            .entry(key)
+            .or_default()
+            .insert(text.into(), OwnedLayoutEntry { layout_index });
         debug_assert!(replaced.is_none());
         self.entry_count += usize::from(replaced.is_none());
         self.layouts.push(layout);
@@ -1059,7 +1045,6 @@ impl TextLayoutCache {
         text_key: usize,
         text: Arc<str>,
         layout: Box<CachedTextLayout>,
-        tick: u64,
     ) -> Option<usize> {
         if self.alias_count >= self.max_aliases {
             self.uncached_layout = Some(layout);
@@ -1071,7 +1056,6 @@ impl TextLayoutCache {
             SharedLayoutEntry {
                 _owner: text,
                 layout_index,
-                last_used: tick,
             },
         );
         debug_assert!(replaced.is_none());
@@ -1125,13 +1109,11 @@ impl TextLayoutCache {
         fonts: &HashMap<&'static str, font::Font>,
         text: &str,
     ) -> &CachedTextLayout {
-        let tick = self.next_use_tick();
         if let Some(entry) = self
             .owned_entries
             .get_mut(&key)
             .and_then(|font_entries| font_entries.get_mut(text))
         {
-            entry.last_used = tick;
             let layout_index = entry.layout_index;
             if let Some(frame_stats) = self.frame_stats.as_mut() {
                 frame_stats.owned_hits = frame_stats.owned_hits.saturating_add(1);
@@ -1147,7 +1129,7 @@ impl TextLayoutCache {
             text_layout_mesh_seed(key, text),
         ));
         self.record_layout_build(layout.as_ref());
-        if let Some(layout_index) = self.insert_owned_layout(key, text, layout, tick) {
+        if let Some(layout_index) = self.insert_owned_layout(key, text, layout) {
             self.layouts[layout_index].as_ref()
         } else {
             self.uncached_layout_ref()
@@ -1161,7 +1143,6 @@ impl TextLayoutCache {
         fonts: &HashMap<&'static str, font::Font>,
         text: &Arc<str>,
     ) -> &CachedTextLayout {
-        let tick = self.next_use_tick();
         let text_key = Arc::as_ptr(text) as *const () as usize;
         let text_ref = text.as_ref();
         if let Some(entry) = self
@@ -1169,7 +1150,6 @@ impl TextLayoutCache {
             .get_mut(&key)
             .and_then(|font_entries| font_entries.get_mut(&text_key))
         {
-            entry.last_used = tick;
             let layout_index = entry.layout_index;
             if let Some(frame_stats) = self.frame_stats.as_mut() {
                 frame_stats.shared_hits = frame_stats.shared_hits.saturating_add(1);
@@ -1182,7 +1162,6 @@ impl TextLayoutCache {
             .get_mut(&key)
             .and_then(|font_entries| font_entries.get_mut(text_ref))
         {
-            entry.last_used = tick;
             let layout_index = entry.layout_index;
             if let Some(frame_stats) = self.frame_stats.as_mut() {
                 frame_stats.owned_hits = frame_stats.owned_hits.saturating_add(1);
@@ -1193,7 +1172,6 @@ impl TextLayoutCache {
                     SharedLayoutEntry {
                         _owner: Arc::clone(text),
                         layout_index,
-                        last_used: tick,
                     },
                 );
                 debug_assert!(replaced.is_none());
@@ -1212,7 +1190,7 @@ impl TextLayoutCache {
         ));
         self.record_layout_build(layout.as_ref());
         if let Some(layout_index) =
-            self.insert_shared_layout(key, text_key, Arc::clone(text), layout, tick)
+            self.insert_shared_layout(key, text_key, Arc::clone(text), layout)
         {
             self.layouts[layout_index].as_ref()
         } else {
@@ -6359,7 +6337,7 @@ mod tests {
         let mut cache = TextLayoutCache::new(4);
         assert!(
             cache
-                .insert_owned_layout(key, "alpha", Box::new(test_layout()), 1)
+                .insert_owned_layout(key, "alpha", Box::new(test_layout()))
                 .is_some()
         );
         assert_eq!(cache.entry_count, 1);
@@ -6370,7 +6348,7 @@ mod tests {
         assert_eq!(cache.max_aliases, 0);
         assert!(
             cache
-                .insert_owned_layout(key, "beta", Box::new(test_layout()), 2)
+                .insert_owned_layout(key, "beta", Box::new(test_layout()))
                 .is_none()
         );
         assert_eq!(cache.entry_count, 1);
@@ -6456,12 +6434,12 @@ mod tests {
 
         assert!(
             cache
-                .insert_owned_layout(key, "alpha", Box::new(test_layout()), 1)
+                .insert_owned_layout(key, "alpha", Box::new(test_layout()))
                 .is_some()
         );
         assert!(
             cache
-                .insert_owned_layout(key, "beta", Box::new(test_layout()), 2)
+                .insert_owned_layout(key, "beta", Box::new(test_layout()))
                 .is_none()
         );
         assert_eq!(cache.entry_count, 1);
