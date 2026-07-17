@@ -181,6 +181,23 @@ mod tests {
     }
 
     #[test]
+    fn sleep_delays_the_following_segment() {
+        reset_registry(0);
+        let steps = [anim::sleep(0.5), anim::linear(0.5).x(10.0).build()];
+
+        materialize(1, TweenState::default(), &steps);
+        tick(0.25);
+        assert_eq!(materialize(1, TweenState::default(), &steps).x, 0.0);
+
+        tick(0.25);
+        assert_eq!(materialize(1, TweenState::default(), &steps).x, 0.0);
+
+        tick(0.25);
+        let state = materialize(1, TweenState::default(), &steps);
+        assert!((state.x - 5.0).abs() < 0.0001);
+    }
+
+    #[test]
     fn duplicate_materialize_in_frame_updates_once() {
         reset_registry(0);
         let steps = [anim::linear(1.0).x(10.0).build()];

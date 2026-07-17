@@ -486,9 +486,31 @@ impl OpPrepared {
     }
 }
 
-/// A single StepMania-like segment (e.g., `linear(0.4)` + property ops).
+/// Compact source description for a StepMania-like tween segment.
+///
+/// This is constructed in actor builders every frame. Runtime-only elapsed and
+/// prepared-operation storage lives in `RuntimeSegment` to keep this payload
+/// allocation-free without embedding that storage in every builder step.
 #[derive(Clone, Debug)]
 pub struct Segment {
+    ease: Ease,
+    dur: f32,
+    build_ops: BuildOps,
+}
+
+impl Segment {
+    fn new(ease: Ease, dur: f32, build_ops: BuildOps) -> Self {
+        Self {
+            ease,
+            dur: dur.max(0.0),
+            build_ops,
+        }
+    }
+}
+
+/// Runtime-only segment state kept out of per-frame actor builders.
+#[derive(Clone, Debug)]
+struct RuntimeSegment {
     ease: Ease,
     dur: f32,
     elapsed: f32,
@@ -498,13 +520,13 @@ pub struct Segment {
     prepared_once: bool,
 }
 
-impl Segment {
-    fn new(ease: Ease, dur: f32, build_ops: BuildOps) -> Self {
+impl RuntimeSegment {
+    fn new(segment: Segment) -> Self {
         Self {
-            ease,
-            dur: dur.max(0.0),
+            ease: segment.ease,
+            dur: segment.dur,
             elapsed: 0.0,
-            build_ops,
+            build_ops: segment.build_ops,
             prepared: SmallVec::new(),
             prepared_once: false,
         }
@@ -1041,7 +1063,7 @@ impl SegmentBuilder {
     }
 
     pub fn build(self) -> Step {
-        Step::Segment(Segment::new(self.ease, self.dur, self.ops))
+        Step(Segment::new(self.ease, self.dur, self.ops))
     }
 }
 
@@ -1062,21 +1084,28 @@ pub fn decelerate(dur: f32) -> SegmentBuilder {
 
 /// Delay with no property changes (StepMania: `sleep(t)`).
 pub fn sleep(dur: f32) -> Step {
-    Step::Sleep(dur.max(0.0))
+    Step(Segment::new(Ease::Linear, dur.max(0.0), SmallVec::new()))
 }
 
 /// A queued step (segment or sleep).
+///
+/// Sleeps are zero-operation linear segments, so the source representation does
+/// not need a size-inflating enum. The segment remains inline because boxing it
+/// would allocate during per-frame actor construction.
 #[derive(Clone, Debug)]
-pub enum Step {
-    Segment(Segment),
-    Sleep(f32),
+pub struct Step(Segment);
+
+impl From<Step> for RuntimeSegment {
+    fn from(step: Step) -> Self {
+        Self::new(step.0)
+    }
 }
 
 #[derive(Clone, Debug)]
 pub struct TweenSeq {
     state: TweenState,
     queue: VecDeque<Step>,
-    current: Option<Step>,
+    current: Option<RuntimeSegment>,
 }
 
 impl TweenSeq {
@@ -1117,7 +1146,7 @@ impl TweenSeq {
         while dt > 0.0 {
             // pull a step if needed
             if self.current.is_none() {
-                self.current = self.queue.pop_front();
+                self.current = self.queue.pop_front().map(RuntimeSegment::from);
                 if self.current.is_none() {
                     // nothing to do
                     break;
@@ -1125,27 +1154,16 @@ impl TweenSeq {
             }
 
             // drive current step
-            let finished_now = match self.current.as_mut().unwrap() {
-                Step::Sleep(t) => {
-                    let take = dt.min(*t);
-                    *t -= take;
-                    dt -= take;
-                    *t <= 0.0
-                }
-                Step::Segment(seg) => {
-                    // Segment::update consumes only part of dt (capped by segment duration)
-                    let before = seg.elapsed;
-                    let done = seg.update(&mut self.state, dt);
-                    let consumed = (seg.elapsed - before).max(0.0);
-                    dt -= consumed;
-                    done
-                }
-            };
+            let seg = self.current.as_mut().unwrap();
+            let before = seg.elapsed;
+            let finished_now = seg.update(&mut self.state, dt);
+            let consumed = (seg.elapsed - before).max(0.0);
+            dt -= consumed;
 
             if finished_now {
                 // Take the finished step out of `current`.
-                if let Some(Step::Segment(seg)) = self.current.take() {
-                    // If it was a segment, snap to exact targets.
+                if let Some(seg) = self.current.take() {
+                    // Snap to exact targets. Sleeps have no prepared operations.
                     for p in &seg.prepared {
                         p.apply_final(&mut self.state);
                     }

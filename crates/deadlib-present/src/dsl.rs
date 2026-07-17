@@ -573,9 +573,18 @@ mod tests {
     use super::*;
     use crate::actors::SpriteSource;
     use crate::texture::{TextureContext, TextureMeta};
+    use std::mem::size_of;
     use std::sync::atomic::{AtomicU64, Ordering};
 
     struct TestTextureContext;
+
+    #[cfg(target_pointer_width = "64")]
+    #[test]
+    fn source_steps_keep_tween_builders_compact() {
+        assert_eq!(size_of::<anim::Step>(), 464);
+        assert_eq!(size_of::<SpriteBuilder>(), 2200);
+        assert_eq!(size_of::<TextBuilder>(), 2152);
+    }
 
     impl TextureContext for TestTextureContext {
         fn texture_registry_generation(&self) -> u64 {

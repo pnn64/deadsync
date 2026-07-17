@@ -1,7 +1,12 @@
 use deadlib_present::actors::{Actor, ActorResourceArena, SizeSpec, SpriteSource};
+use deadlib_present::anim::{self, Step};
+use deadlib_present::dsl::{SpriteBuilder, TextBuilder};
+use deadlib_present::runtime;
 use deadlib_render::BlendMode;
+use smallvec::SmallVec;
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::hint::black_box;
+use std::mem::size_of;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant};
@@ -13,6 +18,7 @@ const SOURCES: usize = 16;
 const SPRITES: usize = 512;
 const WARMUP_FRAMES: usize = 64;
 const MEASURE_FRAMES: usize = 20_000;
+const TWEEN_SITE_BASE: u64 = 0x5457_4545_4E42_454E;
 
 struct CountingAlloc {
     allocs: AtomicU64,
@@ -98,6 +104,13 @@ struct BenchResult {
 }
 
 fn main() {
+    println!(
+        "tween layout: Step={} B, SpriteBuilder={} B, TextBuilder={} B",
+        size_of::<Step>(),
+        size_of::<SpriteBuilder>(),
+        size_of::<TextBuilder>(),
+    );
+
     let sources: Vec<Arc<str>> = (0..SOURCES)
         .map(|source| Arc::from(format!("noteskin/source/{source}")))
         .collect();
@@ -115,6 +128,64 @@ fn main() {
         owned.transient_owners_per_key,
         arena.transient_owners_per_key,
     );
+
+    let tweened = run_tweened_builder();
+    println!("tweened actor builder microbenchmark");
+    print_result("tweened builder", &tweened);
+}
+
+fn run_tweened_builder() -> BenchResult {
+    runtime::clear_all();
+    let mut actors = Vec::with_capacity(SPRITES);
+    for _ in 0..WARMUP_FRAMES {
+        black_box(tweened_frame(&mut actors));
+    }
+
+    let before = ALLOC.snapshot();
+    let started = Instant::now();
+    let mut checksum = 0usize;
+    for _ in 0..MEASURE_FRAMES {
+        checksum = checksum.wrapping_add(black_box(tweened_frame(&mut actors)));
+    }
+    let elapsed = started.elapsed();
+    let alloc = ALLOC.snapshot().delta(before);
+    assert_eq!(alloc.allocs, 0, "tween builders allocated after warmup");
+    assert_eq!(alloc.reallocs, 0, "tween builders reallocated after warmup");
+    runtime::clear_all();
+    BenchResult {
+        elapsed,
+        alloc,
+        transient_owners_per_key: 0,
+        checksum,
+    }
+}
+
+fn tweened_frame(actors: &mut Vec<Actor>) -> usize {
+    runtime::tick(1.0 / 60.0);
+    actors.clear();
+    for sprite in 0..SPRITES {
+        let mut builder = SpriteBuilder::solid();
+        builder.tweensalt(sprite as u64);
+        let mut steps = SmallVec::<[Step; 4]>::new();
+        steps.push(
+            anim::linear(0.25)
+                .xy(sprite as f32, 32.0)
+                .diffuse(0.8, 0.6, 0.4, 1.0)
+                .build(),
+        );
+        steps.push(anim::accelerate(0.2).zoom(1.2, 0.8).rotationz(15.0).build());
+        steps.push(
+            anim::decelerate(0.3)
+                .xy(0.0, 0.0)
+                .glow(1.0, 1.0, 1.0, 0.0)
+                .build(),
+        );
+        steps.push(anim::sleep(0.1));
+        builder.set_tween(steps);
+        actors.push(builder.build(TWEEN_SITE_BASE));
+    }
+    black_box(&*actors);
+    actors.len()
 }
 
 fn run_owned(sources: &[Arc<str>]) -> BenchResult {
