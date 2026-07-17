@@ -1,20 +1,21 @@
 use crate::{
-    HoldBodyCapRequest, HoldComposeControl, HoldEntryPlanRequest, HoldMeshScratch, HoldPathSample,
-    MeasureComposeRequest, MeasureLineMode, MineLayerRequest, ModelMeshCache, NoteAlphaParams,
-    NoteLayerRequest, NotePlacement, NoteXParams, NotefieldComposeRequest,
-    NotefieldFeedbackFrameView, NotefieldPlacementPlan, NotefieldPlacementScratch,
-    PreparedNotefield, PreparedNotefieldNotes, TornadoBounds, VisualEffectParams,
-    appearance_note_actor_alpha, appearance_note_actor_alpha_from_alpha, appearance_note_alpha,
-    appearance_note_glow, appearance_note_glow_from_alpha, compose_hold_body_caps,
-    compose_measure_lines, compose_mine_layers, compose_note_layer, compose_notefield_feedback,
-    for_each_visible_hold_index, for_each_visible_note_index, gameplay_visual_effect_params,
-    hold_entry_head_beat, hold_entry_plan, hold_overlaps_visible_window, hold_parts_for_note_type,
-    mine_hides_after_resolution, mine_part, note_world_z_for_bumpy,
-    note_x_offset as canonical_note_x_offset, notefield_view_proj, offset_center,
-    receptor_row_center as canonical_receptor_row_center, scale_sprite_to_arrow, share_actor_range,
-    song_lua_note_model_draw, tap_part_for_note_type, tap_replacement_head, translated_uv_rect,
-    visual_arrow_effect_zoom, visual_hold_body_needs_z_buffer, visual_note_rotation_z,
-    visual_pulse_zoom_for_y, visual_tiny_zoom, visual_use_legacy_hold_sprites,
+    CapturedActorSource, HoldBodyCapRequest, HoldComposeControl, HoldEntryPlanRequest,
+    HoldMeshScratch, HoldPathSample, MeasureComposeRequest, MeasureLineMode, MineLayerRequest,
+    ModelMeshCache, NoteAlphaParams, NoteLayerRequest, NotePlacement, NoteXParams,
+    NotefieldComposeRequest, NotefieldFeedbackFrameView, NotefieldPlacementPlan,
+    NotefieldPlacementScratch, PreparedNotefield, PreparedNotefieldNotes, TornadoBounds,
+    VisualEffectParams, appearance_note_actor_alpha, appearance_note_actor_alpha_from_alpha,
+    appearance_note_alpha, appearance_note_glow, appearance_note_glow_from_alpha,
+    compose_hold_body_caps, compose_measure_lines, compose_mine_layers, compose_note_layer,
+    compose_notefield_feedback, for_each_visible_hold_index, for_each_visible_note_index,
+    gameplay_visual_effect_params, hold_entry_head_beat, hold_entry_plan,
+    hold_overlaps_visible_window, hold_parts_for_note_type, mine_hides_after_resolution, mine_part,
+    note_world_z_for_bumpy, note_x_offset as canonical_note_x_offset, notefield_view_proj,
+    offset_center, receptor_row_center as canonical_receptor_row_center, scale_sprite_to_arrow,
+    share_actor_range, song_lua_note_model_draw, tap_part_for_note_type, tap_replacement_head,
+    translated_uv_rect, visual_arrow_effect_zoom, visual_hold_body_needs_z_buffer,
+    visual_note_rotation_z, visual_pulse_zoom_for_y, visual_tiny_zoom,
+    visual_use_legacy_hold_sprites,
 };
 use deadlib_present::actors::{Actor, SpriteSource};
 use deadlib_render::BlendMode;
@@ -25,7 +26,6 @@ use deadsync_gameplay::{
 };
 use deadsync_noteskin::{NUM_QUANTIZATIONS, NoteskinSlot};
 use deadsync_rules::note::HoldResult;
-use std::sync::Arc;
 
 /// Borrowed runtime state needed by the canonical field actor pass.
 ///
@@ -40,7 +40,7 @@ pub struct NotefieldFieldFrameView<'a> {
 /// Optional shared field capture produced while preserving the live actor tree.
 #[derive(Clone, Debug, Default)]
 pub struct NotefieldFieldResult {
-    pub captured_actors: Vec<Arc<[Actor]>>,
+    pub captured_actors: Option<CapturedActorSource>,
 }
 
 /// Compose the complete canonical playfield pass in display order:
@@ -87,8 +87,7 @@ where
         .capture_requests
         .note_field
         .then(|| share_actor_range(actors, field_start))
-        .flatten()
-        .unwrap_or_default();
+        .flatten();
     NotefieldFieldResult { captured_actors }
 }
 

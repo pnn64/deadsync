@@ -94,16 +94,18 @@ pub(crate) fn notefield_frame_plan(
 
 pub struct BuiltNotefield {
     pub layout_center_x: f32,
-    pub field_actors: Vec<Arc<[Actor]>>,
-    pub judgment_actors: Option<Vec<Arc<[Actor]>>>,
-    pub combo_actors: Option<Vec<Arc<[Actor]>>>,
+    pub field_actors: Option<CapturedActorSource>,
+    pub judgment_actors: Option<CapturedActorSource>,
+    pub combo_actors: Option<CapturedActorSource>,
 }
+
+pub type CapturedActorSource = [Arc<[Actor]>; 1];
 
 impl BuiltNotefield {
     pub fn empty(layout_center_x: f32) -> Self {
         Self {
             layout_center_x,
-            field_actors: Vec::new(),
+            field_actors: None,
             judgment_actors: None,
             combo_actors: None,
         }
@@ -123,11 +125,11 @@ pub(crate) fn actor_with_world_z(mut actor: Actor, world_z: f32) -> Actor {
 pub(crate) fn share_actor_range(
     actors: &mut Vec<Actor>,
     start: usize,
-) -> Option<Vec<Arc<[Actor]>>> {
+) -> Option<CapturedActorSource> {
     if start >= actors.len() {
         return None;
     }
-    let shared: Arc<[Actor]> = Arc::from(actors.drain(start..).collect::<Vec<_>>());
+    let shared: Arc<[Actor]> = Arc::from_iter(actors.drain(start..));
     actors.push(Actor::SharedFrame {
         align: [0.0, 0.0],
         offset: [0.0, 0.0],
@@ -138,7 +140,7 @@ pub(crate) fn share_actor_range(
         tint: [1.0, 1.0, 1.0, 1.0],
         blend: None,
     });
-    Some(vec![shared])
+    Some([shared])
 }
 
 #[cfg(test)]

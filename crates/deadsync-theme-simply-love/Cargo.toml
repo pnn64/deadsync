@@ -18,6 +18,11 @@ name = "i18n_lookup"
 harness = false
 required-features = ["bench-support"]
 
+[[bench]]
+name = "song_lua_proxy_capture"
+harness = false
+required-features = ["bench-support"]
+
 [dependencies]
 deadlib-assets = { path = "../deadlib-assets" }
 deadlib-present = { path = "../deadlib-present" }

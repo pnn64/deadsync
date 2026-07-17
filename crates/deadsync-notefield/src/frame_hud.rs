@@ -1,4 +1,4 @@
-use crate::actor_builder::share_actor_range;
+use crate::actor_builder::{CapturedActorSource, share_actor_range};
 use crate::combo_feedback::{ComboFeedbackRequest, ComboMilestoneAssets, compose_combo_feedback};
 use crate::compose::{NotefieldComposeRequest, PreparedNotefield};
 use crate::error_bar::{ErrorBarComposeRequest, ErrorBarState, compose_error_bar};
@@ -101,8 +101,8 @@ pub struct NotefieldHudFrameView<'a> {
 
 /// Proxy captures produced while composing the canonical HUD sequence.
 pub struct NotefieldHudComposeResult {
-    pub combo_actors: Option<Vec<Arc<[Actor]>>>,
-    pub judgment_actors: Option<Vec<Arc<[Actor]>>>,
+    pub combo_actors: Option<CapturedActorSource>,
+    pub judgment_actors: Option<CapturedActorSource>,
 }
 
 /// Compose the complete canonical HUD sequence after concrete theme chrome.

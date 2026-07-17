@@ -23,7 +23,9 @@ mod song_lua;
 mod style;
 mod transforms;
 
-pub use actor_builder::{BuiltNotefield, NotefieldFrameFeatures, NotefieldFramePlan};
+pub use actor_builder::{
+    BuiltNotefield, CapturedActorSource, NotefieldFrameFeatures, NotefieldFramePlan,
+};
 pub use combo_feedback::ComboMilestoneAssets;
 pub use compose::{
     MeasureCounterOptions, NotefieldChartView, NotefieldComposeRequest, NotefieldGeometry,
@@ -3664,7 +3666,7 @@ mod tests {
     fn built_notefield_empty_has_no_actor_outputs() {
         let built = BuiltNotefield::empty(320.0);
         assert_eq!(built.layout_center_x, 320.0);
-        assert!(built.field_actors.is_empty());
+        assert!(built.field_actors.is_none());
         assert!(built.judgment_actors.is_none());
         assert!(built.combo_actors.is_none());
     }

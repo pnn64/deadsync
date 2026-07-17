@@ -54,7 +54,7 @@ use deadsync_gameplay::{
 };
 use deadsync_input::{InputEvent, VirtualAction};
 use deadsync_notefield::{
-    FieldPlacement, HoldMeshScratch, ModelMeshCache, ModelMeshCacheStats,
+    CapturedActorSource, FieldPlacement, HoldMeshScratch, ModelMeshCache, ModelMeshCacheStats,
     NotefieldPlacementScratch, ProxyCaptureRequests, SongLuaPlayerTransformRequest, ViewOverride,
     noteskin_model_actor_from_draw, song_lua_player_skew_x_matrix, song_lua_player_skew_y_matrix,
     song_lua_player_transform_matrix, song_lua_player_y_fold_actor,
@@ -4444,6 +4444,27 @@ struct SongLuaScreenProxyRequests {
     overlay: bool,
 }
 
+type SongLuaSingleSource = [Arc<[Actor]>; 1];
+type SongLuaActorSegments = SmallVec<[Arc<[Actor]>; 5]>;
+
+#[derive(Clone, Copy)]
+struct SongLuaCaptureTransform {
+    z_shift: i16,
+    tint: [f32; 4],
+    blend: Option<BlendMode>,
+    playfield_center_x: f32,
+    target_x: f32,
+    target_y: f32,
+    rotation_x: f32,
+    rotation_z: f32,
+    rotation_y: f32,
+    skew_x: f32,
+    skew_y: f32,
+    zoom_x: f32,
+    zoom_y: f32,
+    zoom_z: f32,
+}
+
 #[inline(always)]
 fn song_lua_overlay_is_visible(state: SongLuaOverlayState) -> bool {
     state.visible && state.diffuse[3] > f32::EPSILON
@@ -4451,7 +4472,7 @@ fn song_lua_overlay_is_visible(state: SongLuaOverlayState) -> bool {
 
 #[inline(always)]
 fn song_lua_capture_new_actors(
-    dest: &mut Option<Vec<Arc<[Actor]>>>,
+    dest: &mut Option<SongLuaActorSegments>,
     actors: &mut Vec<Actor>,
     start: usize,
 ) {
@@ -4461,7 +4482,7 @@ fn song_lua_capture_new_actors(
     if start >= actors.len() {
         return;
     }
-    let children = Arc::<[Actor]>::from(actors.drain(start..).collect::<Vec<_>>());
+    let children = Arc::<[Actor]>::from_iter(actors.drain(start..));
     if children.is_empty() {
         return;
     }
@@ -4482,11 +4503,11 @@ fn song_lua_player_child_proxy_source(
     actors: Vec<Actor>,
     origin_x: f32,
     origin_y: f32,
-) -> Option<Vec<Arc<[Actor]>>> {
+) -> Option<SongLuaSingleSource> {
     if actors.is_empty() {
         return None;
     }
-    Some(vec![Arc::from(vec![Actor::Frame {
+    Some([Arc::from([Actor::Frame {
         align: [0.0, 0.0],
         offset: [-origin_x, -origin_y],
         size: [SizeSpec::Fill, SizeSpec::Fill],
@@ -4496,11 +4517,11 @@ fn song_lua_player_child_proxy_source(
     }])])
 }
 
-fn song_lua_share_actor_source_in_place(actors: &mut Vec<Actor>) -> Option<Vec<Arc<[Actor]>>> {
+fn song_lua_share_actor_source_in_place(actors: &mut Vec<Actor>) -> Option<SongLuaSingleSource> {
     if actors.is_empty() {
         return None;
     }
-    let children = Arc::<[Actor]>::from(actors.drain(..).collect::<Vec<_>>());
+    let children = Arc::<[Actor]>::from_iter(actors.drain(..));
     actors.push(Actor::SharedFrame {
         align: [0.0, 0.0],
         offset: [0.0, 0.0],
@@ -4511,33 +4532,144 @@ fn song_lua_share_actor_source_in_place(actors: &mut Vec<Actor>) -> Option<Vec<A
         tint: [1.0; 4],
         blend: None,
     });
-    Some(vec![children])
+    Some([children])
 }
 
-fn song_lua_shared_segment_actors(segments: Vec<Arc<[Actor]>>) -> Vec<Actor> {
-    let mut actors = Vec::with_capacity(segments.len());
-    for segment in segments {
-        actors.push(Actor::SharedFrame {
-            align: [0.0, 0.0],
-            offset: [0.0, 0.0],
-            size: [SizeSpec::Fill, SizeSpec::Fill],
-            children: segment,
-            background: None,
-            z: 0,
-            tint: [1.0; 4],
-            blend: None,
-        });
+fn song_lua_shared_segment_actor(segment: Arc<[Actor]>) -> Actor {
+    Actor::SharedFrame {
+        align: [0.0, 0.0],
+        offset: [0.0, 0.0],
+        size: [SizeSpec::Fill, SizeSpec::Fill],
+        children: segment,
+        background: None,
+        z: 0,
+        tint: [1.0; 4],
+        blend: None,
     }
-    actors
 }
 
-fn song_lua_owned_segment_actors(segments: Vec<Arc<[Actor]>>) -> Vec<Actor> {
-    let mut actors = Vec::new();
-    for segment in segments {
-        actors.reserve(segment.len());
-        actors.extend(segment.iter().cloned());
+fn song_lua_render_captured_source(
+    field_source: Option<&CapturedActorSource>,
+    hud_source: Option<&CapturedActorSource>,
+    transform: SongLuaCaptureTransform,
+) -> Option<SongLuaSingleSource> {
+    if field_source.is_none() && hud_source.is_none() {
+        return None;
     }
-    actors
+    let field_len =
+        field_source.map_or(0, |source| source.iter().map(|segment| segment.len()).sum());
+    let hud_len = hud_source.map_or(0, |source| source.len());
+    let field_has_camera = field_source.is_some_and(|source| {
+        source.iter().any(|segment| {
+            segment.iter().any(|actor| {
+                matches!(
+                    actor,
+                    Actor::Camera { .. } | Actor::CameraPush { .. } | Actor::CameraPop
+                )
+            })
+        })
+    });
+    let field_actors = field_source
+        .into_iter()
+        .flat_map(|source| source.iter())
+        .flat_map(|segment| segment.iter().cloned());
+    let hud_actors = hud_source
+        .into_iter()
+        .flat_map(|source| source.iter())
+        .map(|segment| song_lua_shared_segment_actor(Arc::clone(segment)));
+    let mut out = Vec::new();
+    append_song_lua_player_transform(
+        field_actors,
+        hud_actors,
+        field_len,
+        hud_len,
+        field_has_camera,
+        &mut out,
+        transform.z_shift,
+        transform.tint,
+        transform.blend,
+        transform.playfield_center_x,
+        transform.target_x,
+        transform.target_y,
+        transform.rotation_x,
+        transform.rotation_z,
+        transform.rotation_y,
+        transform.skew_x,
+        transform.skew_y,
+        transform.zoom_x,
+        transform.zoom_y,
+        transform.zoom_z,
+    );
+    song_lua_player_child_proxy_source(out, transform.target_x, transform.target_y)
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn bench_song_lua_proxy_capture_cycles(players: usize, cycles: usize) -> usize {
+    let players = players.clamp(1, 2);
+    let mut root_actors = Vec::with_capacity(96);
+    let mut player_scratch: [Vec<Actor>; 2] = std::array::from_fn(|_| Vec::with_capacity(16));
+    let mut checksum = 0usize;
+
+    for _ in 0..cycles {
+        root_actors.clear();
+        let mut underlay_source = Some(SongLuaActorSegments::new());
+        let mut overlay_source = Some(SongLuaActorSegments::new());
+        for _ in 0..5 {
+            let start = root_actors.len();
+            root_actors.extend((0..4).map(|_| Actor::CameraPop));
+            song_lua_capture_new_actors(&mut underlay_source, &mut root_actors, start);
+        }
+        for _ in 0..4 {
+            let start = root_actors.len();
+            root_actors.extend((0..4).map(|_| Actor::CameraPop));
+            song_lua_capture_new_actors(&mut overlay_source, &mut root_actors, start);
+        }
+
+        for scratch in player_scratch.iter_mut().take(players) {
+            let transform = SongLuaCaptureTransform {
+                z_shift: 0,
+                tint: [1.0; 4],
+                blend: None,
+                playfield_center_x: screen_center_x(),
+                target_x: screen_center_x() + 16.0,
+                target_y: screen_center_y(),
+                rotation_x: 0.0,
+                rotation_z: 0.0,
+                rotation_y: 0.0,
+                skew_x: 0.0,
+                skew_y: 0.0,
+                zoom_x: 1.0,
+                zoom_y: 1.0,
+                zoom_z: 1.0,
+            };
+            let segment = || Arc::<[Actor]>::from_iter((0..8).map(|_| Actor::CameraPop));
+            let field_capture = [segment()];
+            let judgment_capture = [segment()];
+            let combo_capture = [segment()];
+            let field_source =
+                song_lua_render_captured_source(Some(&field_capture), None, transform);
+            let judgment_source =
+                song_lua_render_captured_source(None, Some(&judgment_capture), transform);
+            let combo_source =
+                song_lua_render_captured_source(None, Some(&combo_capture), transform);
+            scratch.clear();
+            scratch.extend((0..12).map(|_| Actor::CameraPop));
+            let player_source = song_lua_share_actor_source_in_place(scratch);
+            checksum = checksum.wrapping_add(
+                field_source.as_ref().map_or(0, |source| source.len())
+                    + judgment_source.as_ref().map_or(0, |source| source.len())
+                    + combo_source.as_ref().map_or(0, |source| source.len())
+                    + player_source.as_ref().map_or(0, |source| source.len()),
+            );
+        }
+        checksum = checksum.wrapping_add(
+            root_actors.len()
+                + underlay_source.as_ref().map_or(0, SmallVec::len)
+                + overlay_source.as_ref().map_or(0, SmallVec::len),
+        );
+    }
+    checksum
 }
 
 #[inline(always)]
@@ -8567,6 +8699,197 @@ fn song_lua_finalize_overlay_actor(
     out
 }
 
+#[inline(always)]
+fn push_song_lua_capture_actor(
+    out: &mut Vec<Actor>,
+    actor: Actor,
+    tint: [f32; 4],
+    blend: Option<BlendMode>,
+    z_shift: i16,
+) {
+    if z_shift == 0 && tint == [1.0; 4] && blend.is_none() {
+        out.push(actor);
+    } else {
+        out.push(song_lua_style_capture_actor(actor, tint, blend, z_shift));
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn append_song_lua_player_transform<F, H>(
+    field_actors: F,
+    hud_actors: H,
+    field_len: usize,
+    hud_len: usize,
+    field_has_camera: bool,
+    out: &mut Vec<Actor>,
+    z_shift: i16,
+    tint: [f32; 4],
+    blend: Option<BlendMode>,
+    playfield_center_x: f32,
+    target_x: f32,
+    target_y: f32,
+    rotation_x_deg: f32,
+    rotation_z_deg: f32,
+    rotation_y_deg: f32,
+    skew_x: f32,
+    skew_y: f32,
+    zoom_x: f32,
+    zoom_y: f32,
+    zoom_z: f32,
+) where
+    F: IntoIterator<Item = Actor>,
+    H: IntoIterator<Item = Actor>,
+{
+    let fold_y = |actor| {
+        if rotation_y_deg.is_finite() && rotation_y_deg.abs() > f32::EPSILON {
+            song_lua_player_y_fold_actor(actor, playfield_center_x, rotation_y_deg)
+        } else {
+            actor
+        }
+    };
+    let Some(player_transform) = song_lua_player_transform_matrix(SongLuaPlayerTransformRequest {
+        screen_width: screen_width(),
+        screen_height: screen_height(),
+        screen_center_y: screen_center_y(),
+        playfield_center_x,
+        target_x,
+        target_y,
+        rotation_x_deg,
+        rotation_z_deg,
+        skew_x,
+        skew_y,
+        zoom_x,
+        zoom_y,
+        zoom_z,
+    }) else {
+        out.reserve(field_len.saturating_add(hud_len));
+        for actor in hud_actors.into_iter().map(fold_y) {
+            push_song_lua_capture_actor(out, actor, [1.0; 4], None, z_shift);
+        }
+        for actor in field_actors.into_iter().map(fold_y) {
+            push_song_lua_capture_actor(out, actor, [1.0; 4], None, z_shift);
+        }
+        return;
+    };
+
+    let root_camera = glam::camera::rh::proj::opengl::orthographic(
+        -0.5 * screen_width(),
+        0.5 * screen_width(),
+        -0.5 * screen_height(),
+        0.5 * screen_height(),
+        -4096.0,
+        4096.0,
+    ) * player_transform;
+    out.reserve(field_len.saturating_add(hud_len).saturating_add(4));
+    if !field_has_camera {
+        if field_len + hud_len == 0 {
+            return;
+        }
+        push_song_lua_capture_actor(
+            out,
+            Actor::CameraPush {
+                view_proj: root_camera,
+            },
+            tint,
+            blend,
+            z_shift,
+        );
+        for actor in hud_actors.into_iter().map(fold_y) {
+            push_song_lua_capture_actor(out, actor, tint, blend, z_shift);
+        }
+        for actor in field_actors.into_iter().map(fold_y) {
+            push_song_lua_capture_actor(out, actor, tint, blend, z_shift);
+        }
+        push_song_lua_capture_actor(out, Actor::CameraPop, tint, blend, z_shift);
+        return;
+    }
+
+    let mut root_open = hud_len > 0;
+    if root_open {
+        push_song_lua_capture_actor(
+            out,
+            Actor::CameraPush {
+                view_proj: root_camera,
+            },
+            tint,
+            blend,
+            z_shift,
+        );
+        for actor in hud_actors.into_iter().map(fold_y) {
+            push_song_lua_capture_actor(out, actor, tint, blend, z_shift);
+        }
+    }
+    let mut field_camera_depth = 0usize;
+    for actor in field_actors.into_iter().map(fold_y) {
+        match actor {
+            Actor::Camera {
+                view_proj,
+                children,
+            } => {
+                if field_camera_depth == 0 && root_open {
+                    push_song_lua_capture_actor(out, Actor::CameraPop, tint, blend, z_shift);
+                    root_open = false;
+                }
+                push_song_lua_capture_actor(
+                    out,
+                    Actor::CameraPush {
+                        view_proj: view_proj * player_transform,
+                    },
+                    tint,
+                    blend,
+                    z_shift,
+                );
+                for child in children {
+                    push_song_lua_capture_actor(out, child, tint, blend, z_shift);
+                }
+                push_song_lua_capture_actor(out, Actor::CameraPop, tint, blend, z_shift);
+            }
+            Actor::CameraPush { view_proj } => {
+                if field_camera_depth == 0 && root_open {
+                    push_song_lua_capture_actor(out, Actor::CameraPop, tint, blend, z_shift);
+                    root_open = false;
+                }
+                push_song_lua_capture_actor(
+                    out,
+                    Actor::CameraPush {
+                        view_proj: view_proj * player_transform,
+                    },
+                    tint,
+                    blend,
+                    z_shift,
+                );
+                field_camera_depth = field_camera_depth.saturating_add(1);
+            }
+            Actor::CameraPop => {
+                push_song_lua_capture_actor(out, Actor::CameraPop, tint, blend, z_shift);
+                field_camera_depth = field_camera_depth.saturating_sub(1);
+            }
+            other if field_camera_depth > 0 => {
+                push_song_lua_capture_actor(out, other, tint, blend, z_shift);
+            }
+            other => {
+                if !root_open {
+                    push_song_lua_capture_actor(
+                        out,
+                        Actor::CameraPush {
+                            view_proj: root_camera,
+                        },
+                        tint,
+                        blend,
+                        z_shift,
+                    );
+                    root_open = true;
+                }
+                push_song_lua_capture_actor(out, other, tint, blend, z_shift);
+            }
+        }
+    }
+    if root_open {
+        push_song_lua_capture_actor(out, Actor::CameraPop, tint, blend, z_shift);
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
 fn apply_song_lua_player_transform(
     field_actors: &mut Vec<Actor>,
     hud_actors: &mut Vec<Actor>,
@@ -8586,161 +8909,37 @@ fn apply_song_lua_player_transform(
     zoom_y: f32,
     zoom_z: f32,
 ) {
-    #[inline(always)]
-    fn push_actor_with_style(
-        out: &mut Vec<Actor>,
-        actor: Actor,
-        tint: [f32; 4],
-        blend: Option<BlendMode>,
-        z_shift: i16,
-    ) {
-        if z_shift == 0 && tint == [1.0; 4] && blend.is_none() {
-            out.push(actor);
-        } else {
-            out.push(song_lua_style_capture_actor(actor, tint, blend, z_shift));
-        }
-    }
-
-    #[inline(always)]
-    fn push_camera_scope(
-        out: &mut Vec<Actor>,
-        view_proj: Matrix4,
-        children: &mut Vec<Actor>,
-        tint: [f32; 4],
-        blend: Option<BlendMode>,
-        z_shift: i16,
-    ) {
-        if children.is_empty() {
-            return;
-        }
-        push_actor_with_style(out, Actor::CameraPush { view_proj }, tint, blend, z_shift);
-        for actor in children.drain(..) {
-            push_actor_with_style(out, actor, tint, blend, z_shift);
-        }
-        push_actor_with_style(out, Actor::CameraPop, tint, blend, z_shift);
-    }
-
     out.clear();
-    if rotation_y_deg.is_finite() && rotation_y_deg.abs() > f32::EPSILON {
-        out.extend(
-            field_actors.drain(..).map(|actor| {
-                song_lua_player_y_fold_actor(actor, playfield_center_x, rotation_y_deg)
-            }),
-        );
-        std::mem::swap(field_actors, out);
-        out.extend(
-            hud_actors.drain(..).map(|actor| {
-                song_lua_player_y_fold_actor(actor, playfield_center_x, rotation_y_deg)
-            }),
-        );
-        std::mem::swap(hud_actors, out);
-    }
-
-    let Some(player_transform) = song_lua_player_transform_matrix(SongLuaPlayerTransformRequest {
-        screen_width: screen_width(),
-        screen_height: screen_height(),
-        screen_center_y: screen_center_y(),
+    let field_len = field_actors.len();
+    let hud_len = hud_actors.len();
+    let field_has_camera = field_actors.iter().any(|actor| {
+        matches!(
+            actor,
+            Actor::Camera { .. } | Actor::CameraPush { .. } | Actor::CameraPop
+        )
+    });
+    append_song_lua_player_transform(
+        field_actors.drain(..),
+        hud_actors.drain(..),
+        field_len,
+        hud_len,
+        field_has_camera,
+        out,
+        z_shift,
+        tint,
+        blend,
         playfield_center_x,
         target_x,
         target_y,
         rotation_x_deg,
         rotation_z_deg,
+        rotation_y_deg,
         skew_x,
         skew_y,
         zoom_x,
         zoom_y,
         zoom_z,
-    }) else {
-        out.reserve(field_actors.len().saturating_add(hud_actors.len()));
-        for actor in hud_actors.drain(..) {
-            push_actor_with_style(out, actor, [1.0; 4], None, z_shift);
-        }
-        for actor in field_actors.drain(..) {
-            push_actor_with_style(out, actor, [1.0; 4], None, z_shift);
-        }
-        return;
-    };
-    // notefield::build may already wrap the lane render in a perspective camera.
-    // Multiply those cameras in place, and only wrap plain HUD actors here, so
-    // the Lua transform affects the whole bundle without being shadowed.
-    let root_camera = glam::camera::rh::proj::opengl::orthographic(
-        -0.5 * screen_width(),
-        0.5 * screen_width(),
-        -0.5 * screen_height(),
-        0.5 * screen_height(),
-        -4096.0,
-        4096.0,
-    ) * player_transform;
-    if !field_actors.iter().any(|actor| {
-        matches!(
-            actor,
-            Actor::Camera { .. } | Actor::CameraPush { .. } | Actor::CameraPop
-        )
-    }) {
-        if !field_actors.is_empty() {
-            hud_actors.extend(field_actors.drain(..));
-        }
-        out.reserve(hud_actors.len().saturating_add(2));
-        push_camera_scope(out, root_camera, hud_actors, tint, blend, z_shift);
-        return;
-    }
-
-    out.reserve(
-        field_actors
-            .len()
-            .saturating_add(hud_actors.len())
-            .saturating_add(4),
     );
-    let mut field_camera_depth = 0usize;
-    for actor in field_actors.drain(..) {
-        match actor {
-            Actor::Camera {
-                view_proj,
-                children,
-            } => {
-                if field_camera_depth == 0 {
-                    push_camera_scope(out, root_camera, hud_actors, tint, blend, z_shift);
-                }
-                push_actor_with_style(
-                    out,
-                    Actor::CameraPush {
-                        view_proj: view_proj * player_transform,
-                    },
-                    tint,
-                    blend,
-                    z_shift,
-                );
-                for child in children {
-                    push_actor_with_style(out, child, tint, blend, z_shift);
-                }
-                push_actor_with_style(out, Actor::CameraPop, tint, blend, z_shift);
-            }
-            Actor::CameraPush { view_proj } => {
-                if field_camera_depth == 0 {
-                    push_camera_scope(out, root_camera, hud_actors, tint, blend, z_shift);
-                }
-                push_actor_with_style(
-                    out,
-                    Actor::CameraPush {
-                        view_proj: view_proj * player_transform,
-                    },
-                    tint,
-                    blend,
-                    z_shift,
-                );
-                field_camera_depth = field_camera_depth.saturating_add(1);
-            }
-            Actor::CameraPop => {
-                push_actor_with_style(out, Actor::CameraPop, tint, blend, z_shift);
-                field_camera_depth = field_camera_depth.saturating_sub(1);
-            }
-            other if field_camera_depth > 0 => {
-                push_actor_with_style(out, other, tint, blend, z_shift);
-            }
-            other => hud_actors.push(other),
-        }
-    }
-    push_camera_scope(out, root_camera, hud_actors, tint, blend, z_shift);
 }
 
 fn song_lua_player_target_x(
@@ -8951,8 +9150,12 @@ pub fn push_actors(
             song_lua_proxy_requests(&layer.overlays, &song_lua_layer_state_scratch),
         );
     }
-    let mut underlay_proxy_source = proxy_requests.underlay.then_some(Vec::new());
-    let mut overlay_proxy_source = proxy_requests.overlay.then_some(Vec::new());
+    let mut underlay_proxy_source = proxy_requests
+        .underlay
+        .then_some(SongLuaActorSegments::new());
+    let mut overlay_proxy_source = proxy_requests
+        .overlay
+        .then_some(SongLuaActorSegments::new());
     // --- Background and Filter ---
     let underlay_start = actors.len();
     push_background(
@@ -9316,35 +9519,26 @@ pub fn push_actors(
                 SongLuaOverlayBlendMode::Multiply => Some(BlendMode::Multiply),
                 SongLuaOverlayBlendMode::Subtract => Some(BlendMode::Subtract),
             };
-            let render_source_bundle = |mut field_bundle, mut hud_bundle| {
-                let mut out = Vec::new();
-                apply_song_lua_player_transform(
-                    &mut field_bundle,
-                    &mut hud_bundle,
-                    &mut out,
-                    z_shift,
-                    player_state.diffuse,
-                    player_blend,
-                    layout_center_x,
-                    target_x,
-                    target_y,
-                    rotation_x,
-                    rotation_z,
-                    rotation_y,
-                    skew_x,
-                    skew_y,
-                    zoom_x,
-                    zoom_y,
-                    zoom_z,
-                );
-                out
+            let capture_transform = SongLuaCaptureTransform {
+                z_shift,
+                tint: player_state.diffuse,
+                blend: player_blend,
+                playfield_center_x: layout_center_x,
+                target_x,
+                target_y,
+                rotation_x,
+                rotation_z,
+                rotation_y,
+                skew_x,
+                skew_y,
+                zoom_x,
+                zoom_y,
+                zoom_z,
             };
-            let note_field_source = requests
-                .note_field
-                .then(|| {
-                    render_source_bundle(song_lua_owned_segment_actors(field_actors), Vec::new())
-                })
-                .and_then(|actors| song_lua_player_child_proxy_source(actors, target_x, target_y));
+            let render_source_bundle = |field_source, hud_source| {
+                song_lua_render_captured_source(field_source, hud_source, capture_transform)
+            };
+            let note_field_source = render_source_bundle(field_actors.as_ref(), None);
             apply_song_lua_player_transform(
                 field_scratch,
                 hud_scratch,
@@ -9378,18 +9572,8 @@ pub fn push_actors(
             };
             let proxy_sources = [
                 note_field_source,
-                judgment_actors
-                    .map(song_lua_shared_segment_actors)
-                    .map(|actors| render_source_bundle(Vec::new(), actors))
-                    .and_then(|actors| {
-                        song_lua_player_child_proxy_source(actors, target_x, target_y)
-                    }),
-                combo_actors
-                    .map(song_lua_shared_segment_actors)
-                    .map(|actors| render_source_bundle(Vec::new(), actors))
-                    .and_then(|actors| {
-                        song_lua_player_child_proxy_source(actors, target_x, target_y)
-                    }),
+                render_source_bundle(None, judgment_actors.as_ref()),
+                render_source_bundle(None, combo_actors.as_ref()),
             ];
             (layout_center_x, player_source, proxy_sources)
         };
@@ -9404,10 +9588,10 @@ pub fn push_actors(
         per_player_fields,
     ): (
         bool,
-        Option<Vec<Arc<[Actor]>>>,
-        Option<Vec<Arc<[Actor]>>>,
-        [Option<Vec<Arc<[Actor]>>>; 3],
-        [Option<Vec<Arc<[Actor]>>>; 3],
+        Option<SongLuaSingleSource>,
+        Option<SongLuaSingleSource>,
+        [Option<SongLuaSingleSource>; 3],
+        [Option<SongLuaSingleSource>; 3],
         f32,
         [(usize, f32); 2],
     ) = match play_style {
@@ -9460,16 +9644,20 @@ pub fn push_actors(
     };
     let replacement_proxy_sources = [
         SongLuaPlayerProxySources {
-            player: p1_player_proxy_source.as_deref(),
-            note_field: p1_proxy_sources[0].as_deref(),
-            judgment: p1_proxy_sources[1].as_deref(),
-            combo: p1_proxy_sources[2].as_deref(),
+            player: p1_player_proxy_source
+                .as_ref()
+                .map(|source| source.as_slice()),
+            note_field: p1_proxy_sources[0].as_ref().map(|source| source.as_slice()),
+            judgment: p1_proxy_sources[1].as_ref().map(|source| source.as_slice()),
+            combo: p1_proxy_sources[2].as_ref().map(|source| source.as_slice()),
         },
         SongLuaPlayerProxySources {
-            player: p2_player_proxy_source.as_deref(),
-            note_field: p2_proxy_sources[0].as_deref(),
-            judgment: p2_proxy_sources[1].as_deref(),
-            combo: p2_proxy_sources[2].as_deref(),
+            player: p2_player_proxy_source
+                .as_ref()
+                .map(|source| source.as_slice()),
+            note_field: p2_proxy_sources[0].as_ref().map(|source| source.as_slice()),
+            judgment: p2_proxy_sources[1].as_ref().map(|source| source.as_slice()),
+            combo: p2_proxy_sources[2].as_ref().map(|source| source.as_slice()),
         },
     ];
     let replacement_active_players = song_lua_replacement_active_players(
@@ -10543,17 +10731,21 @@ pub fn push_actors(
     }
     let song_foreground_state = song_lua_song_foreground_state(state);
     let p1_proxy_slices = [
-        p1_proxy_sources[0].as_deref(),
-        p1_proxy_sources[1].as_deref(),
-        p1_proxy_sources[2].as_deref(),
+        p1_proxy_sources[0].as_ref().map(|source| source.as_slice()),
+        p1_proxy_sources[1].as_ref().map(|source| source.as_slice()),
+        p1_proxy_sources[2].as_ref().map(|source| source.as_slice()),
     ];
     let p2_proxy_slices = [
-        p2_proxy_sources[0].as_deref(),
-        p2_proxy_sources[1].as_deref(),
-        p2_proxy_sources[2].as_deref(),
+        p2_proxy_sources[0].as_ref().map(|source| source.as_slice()),
+        p2_proxy_sources[1].as_ref().map(|source| source.as_slice()),
+        p2_proxy_sources[2].as_ref().map(|source| source.as_slice()),
     ];
-    let p1_player_proxy_slice = p1_player_proxy_source.as_deref();
-    let p2_player_proxy_slice = p2_player_proxy_source.as_deref();
+    let p1_player_proxy_slice = p1_player_proxy_source
+        .as_ref()
+        .map(|source| source.as_slice());
+    let p2_player_proxy_slice = p2_player_proxy_source
+        .as_ref()
+        .map(|source| source.as_slice());
     let underlay_proxy_slice = underlay_proxy_source.as_deref();
     let overlay_proxy_slice = overlay_proxy_source.as_deref();
     let proxy_sources = SongLuaScreenProxySources {
@@ -11666,20 +11858,21 @@ mod tests {
 
     #[test]
     fn song_lua_note_field_proxy_source_preserves_camera_transform() {
-        let segments = vec![Arc::<[Actor]>::from(vec![
+        let segments = [Arc::<[Actor]>::from([
             Actor::CameraPush {
                 view_proj: Matrix4::IDENTITY,
             },
             test_source_actor(),
             Actor::CameraPop,
         ])];
-        let mut field = song_lua_owned_segment_actors(segments);
-        let mut hud = Vec::new();
         let mut out = Vec::new();
 
-        apply_song_lua_player_transform(
-            &mut field,
-            &mut hud,
+        append_song_lua_player_transform(
+            segments.iter().flat_map(|segment| segment.iter().cloned()),
+            std::iter::empty(),
+            3,
+            0,
+            true,
             &mut out,
             0,
             [1.0; 4],
