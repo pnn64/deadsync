@@ -1,5 +1,5 @@
 use deadlib_present::compose::{TextLayoutCache, TextLayoutFrameStats};
-use deadlib_present::font::{Font, Glyph};
+use deadlib_present::font::{Font, FontMap, Glyph};
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::collections::HashMap;
 use std::hint::black_box;
@@ -68,7 +68,7 @@ unsafe impl GlobalAlloc for CountingAlloc {
 }
 
 fn main() {
-    let fonts = HashMap::from([("test", numeric_font())]);
+    let fonts = FontMap::from_iter([("test", numeric_font())]);
     let values = (1..=LIVE_VALUES)
         .map(|value| format!("{}.{:01}", value / 10, value % 10))
         .collect::<Vec<_>>();
@@ -100,11 +100,7 @@ struct BenchResult {
     stats: TextLayoutFrameStats,
 }
 
-fn run_case(
-    fonts: &HashMap<&'static str, Font>,
-    values: &[String],
-    retain_late: bool,
-) -> BenchResult {
+fn run_case(fonts: &FontMap, values: &[String], retain_late: bool) -> BenchResult {
     let mut cache = TextLayoutCache::new(LIVE_VALUES + 1);
     cache.prewarm_text(fonts, "test", "0.0", None);
     if retain_late {

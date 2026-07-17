@@ -25,7 +25,7 @@ pub fn build_screen(
     actors: &[actors::Actor],
     clear_color: [f32; 4],
     m: &Metrics,
-    fonts: &HashMap<&'static str, font::Font>,
+    fonts: &font::FontMap,
     total_elapsed: f32,
 ) -> RenderList {
     build_screen_with_texture_context(
@@ -43,7 +43,7 @@ pub fn build_screen_with_texture_context<T: TextureContext + ?Sized>(
     actors: &[actors::Actor],
     clear_color: [f32; 4],
     m: &Metrics,
-    fonts: &HashMap<&'static str, font::Font>,
+    fonts: &font::FontMap,
     total_elapsed: f32,
     texture_ctx: &T,
 ) -> RenderList {
@@ -64,7 +64,7 @@ pub fn build_screen_cached(
     actors: &[actors::Actor],
     clear_color: [f32; 4],
     m: &Metrics,
-    fonts: &HashMap<&'static str, font::Font>,
+    fonts: &font::FontMap,
     total_elapsed: f32,
     text_cache: &mut TextLayoutCache,
 ) -> RenderList {
@@ -84,7 +84,7 @@ pub fn build_screen_cached_with_texture_context<T: TextureContext + ?Sized>(
     actors: &[actors::Actor],
     clear_color: [f32; 4],
     m: &Metrics,
-    fonts: &HashMap<&'static str, font::Font>,
+    fonts: &font::FontMap,
     total_elapsed: f32,
     text_cache: &mut TextLayoutCache,
     texture_ctx: &T,
@@ -107,7 +107,7 @@ pub fn build_screen_cached_with_scratch(
     actors: &[actors::Actor],
     clear_color: [f32; 4],
     m: &Metrics,
-    fonts: &HashMap<&'static str, font::Font>,
+    fonts: &font::FontMap,
     total_elapsed: f32,
     text_cache: &mut TextLayoutCache,
     scratch: &mut ComposeScratch,
@@ -129,7 +129,7 @@ pub fn build_screen_cached_with_scratch_and_texture_context<T: TextureContext + 
     actors: &[actors::Actor],
     clear_color: [f32; 4],
     m: &Metrics,
-    fonts: &HashMap<&'static str, font::Font>,
+    fonts: &font::FontMap,
     total_elapsed: f32,
     text_cache: &mut TextLayoutCache,
     scratch: &mut ComposeScratch,
@@ -156,7 +156,7 @@ pub fn build_screen_cached_with_scratch_and_texture_context_and_actor_resources<
     actors: &[actors::Actor],
     clear_color: [f32; 4],
     m: &Metrics,
-    fonts: &HashMap<&'static str, font::Font>,
+    fonts: &font::FontMap,
     total_elapsed: f32,
     text_cache: &mut TextLayoutCache,
     scratch: &mut ComposeScratch,
@@ -181,7 +181,7 @@ fn build_screen_cached_with_scratch_and_texture_context_impl<T: TextureContext +
     actors: &[actors::Actor],
     clear_color: [f32; 4],
     m: &Metrics,
-    fonts: &HashMap<&'static str, font::Font>,
+    fonts: &font::FontMap,
     total_elapsed: f32,
     text_cache: &mut TextLayoutCache,
     scratch: &mut ComposeScratch,
@@ -1066,7 +1066,7 @@ impl TextLayoutCache {
 
     pub fn prewarm_text(
         &mut self,
-        fonts: &HashMap<&'static str, font::Font>,
+        fonts: &font::FontMap,
         font_name: &'static str,
         text: &str,
         wrap_width_pixels: Option<i32>,
@@ -1085,7 +1085,7 @@ impl TextLayoutCache {
     fn get_or_build(
         &mut self,
         font: &font::Font,
-        fonts: &HashMap<&'static str, font::Font>,
+        fonts: &font::FontMap,
         content: &actors::TextContent,
         wrap_width_pixels: Option<i32>,
         line_spacing: Option<i32>,
@@ -1106,7 +1106,7 @@ impl TextLayoutCache {
         &mut self,
         key: TextLayoutKey,
         font: &font::Font,
-        fonts: &HashMap<&'static str, font::Font>,
+        fonts: &font::FontMap,
         text: &str,
     ) -> &CachedTextLayout {
         if let Some(entry) = self
@@ -1140,7 +1140,7 @@ impl TextLayoutCache {
         &mut self,
         key: TextLayoutKey,
         font: &font::Font,
-        fonts: &HashMap<&'static str, font::Font>,
+        fonts: &font::FontMap,
         text: &Arc<str>,
     ) -> &CachedTextLayout {
         let text_key = Arc::as_ptr(text) as *const () as usize;
@@ -1208,7 +1208,7 @@ const fn saturating_u32(value: usize) -> u32 {
     }
 }
 
-fn font_chain_key(font: &font::Font, fonts: &HashMap<&'static str, font::Font>) -> u64 {
+fn font_chain_key(font: &font::Font, fonts: &font::FontMap) -> u64 {
     if font.chain_key != 0 {
         return font.chain_key;
     }
@@ -1928,7 +1928,7 @@ fn text_distortion_offset(
 
 fn build_cached_text_layout(
     font: &font::Font,
-    fonts: &HashMap<&'static str, font::Font>,
+    fonts: &font::FontMap,
     text: &str,
     line_spacing: i32,
     wrap_width_pixels: i32,
@@ -2474,7 +2474,7 @@ fn build_actor_list<'a, T: TextureContext + ?Sized>(
     actors: &'a [actors::Actor],
     parent: SmRect,
     m: &Metrics,
-    fonts: &'a HashMap<&'static str, font::Font>,
+    fonts: &'a font::FontMap,
     scratch: &mut ComposeScratch,
     base_z: i16,
     camera: u8,
@@ -2715,7 +2715,7 @@ fn build_actor_recursive<'a, T: TextureContext + ?Sized>(
     actor: &'a actors::Actor,
     parent: SmRect,
     m: &Metrics,
-    fonts: &'a HashMap<&'static str, font::Font>,
+    fonts: &'a font::FontMap,
     scratch: &mut ComposeScratch,
     base_z: i16,
     camera: u8,
@@ -5112,6 +5112,7 @@ mod tests {
         Actor, ActorResourceArena, RetainedActorFrame, SizeSpec, SpriteSource, TextAlign,
         TextAttribute, TextContent,
     };
+    use crate::font;
     use crate::font::{Font, Glyph};
     use crate::space::Metrics;
     use deadlib_render::{
@@ -5262,7 +5263,7 @@ mod tests {
             top: 100.0,
             bottom: 0.0,
         };
-        let fonts = HashMap::new();
+        let fonts = font::FontMap::default();
         let mut text_cache = TextLayoutCache::default();
         let mut scratch = ComposeScratch::default();
         scratch.objects = Vec::with_capacity(100);
@@ -5320,7 +5321,7 @@ mod tests {
             top: 100.0,
             bottom: 0.0,
         };
-        let fonts = HashMap::new();
+        let fonts = font::FontMap::default();
         let nested = [Actor::Camera {
             view_proj,
             children: vec![mesh.clone()],
@@ -5552,7 +5553,7 @@ mod tests {
 
     #[test]
     fn text_layout_builds_only_requested_fill_align() {
-        let fonts = HashMap::from([("test", test_font())]);
+        let fonts = font::FontMap::from_iter([("test", test_font())]);
         let font = fonts.get("test").expect("test font");
         let layout = build_cached_text_layout(font, &fonts, "AB", font.line_spacing, -1, 17);
 
@@ -5572,7 +5573,7 @@ mod tests {
 
     #[test]
     fn text_layout_builds_stroke_batches_only_on_demand() {
-        let fonts = HashMap::from([("test", test_font_with_stroke())]);
+        let fonts = font::FontMap::from_iter([("test", test_font_with_stroke())]);
         let font = fonts.get("test").expect("test font");
         let layout = build_cached_text_layout(font, &fonts, "AB", font.line_spacing, -1, 23);
 
@@ -5610,7 +5611,7 @@ mod tests {
             Arc::downgrade(&stroke_a),
             Arc::downgrade(&stroke_b),
         ];
-        let mut fonts = HashMap::from([(
+        let mut fonts = font::FontMap::from_iter([(
             "test",
             test_split_stroke_font(&fill_a, &fill_b, &stroke_a, &stroke_b),
         )]);
@@ -5658,7 +5659,7 @@ mod tests {
             stroke_texture_map: HashMap::new(),
             texture_hints_map: HashMap::new(),
         };
-        let fonts = HashMap::from([("test", font)]);
+        let fonts = font::FontMap::from_iter([("test", font)]);
         let font = fonts.get("test").expect("test font");
         let layout = build_cached_text_layout(font, &fonts, "AB", 10, -1, 29);
 
@@ -5675,7 +5676,7 @@ mod tests {
         let fill_b = Arc::<str>::from("fill_b");
         let stroke_a = Arc::<str>::from("stroke_a");
         let stroke_b = Arc::<str>::from("stroke_b");
-        let fonts = HashMap::from([(
+        let fonts = font::FontMap::from_iter([(
             "test",
             test_split_stroke_font(&fill_a, &fill_b, &stroke_a, &stroke_b),
         )]);
@@ -5749,7 +5750,7 @@ mod tests {
         let fill_b = Arc::<str>::from("fill_b");
         let stroke_a = Arc::<str>::from("stroke_a");
         let stroke_b = Arc::<str>::from("stroke_b");
-        let fonts = HashMap::from([(
+        let fonts = font::FontMap::from_iter([(
             "test",
             test_split_stroke_font(&fill_a, &fill_b, &stroke_a, &stroke_b),
         )]);
@@ -6188,7 +6189,7 @@ mod tests {
             top: 100.0,
             bottom: 0.0,
         };
-        let fonts = HashMap::new();
+        let fonts = font::FontMap::default();
 
         let owned = [test_sprite(SpriteSource::TextureHandle {
             key: Arc::clone(&key),
@@ -6358,7 +6359,7 @@ mod tests {
 
     #[test]
     fn lock_growth_with_reserve_retains_late_owned_misses_until_full() {
-        let fonts = HashMap::from([("test", test_font())]);
+        let fonts = font::FontMap::from_iter([("test", test_font())]);
         let mut cache = TextLayoutCache::new(3);
         cache.prewarm_text(&fonts, "test", "A", None);
         cache.lock_growth_with_reserve(1);
@@ -6377,7 +6378,7 @@ mod tests {
 
     #[test]
     fn lock_growth_with_reserve_retains_late_shared_aliases_until_full() {
-        let fonts = HashMap::from([("test", test_font())]);
+        let fonts = font::FontMap::from_iter([("test", test_font())]);
         let font = &fonts["test"];
         let key = TextLayoutKey {
             font_key: font_chain_key(font, &fonts),
@@ -6598,7 +6599,7 @@ mod tests {
             color: [0.5, 0.25, 0.75, 0.5],
             child: Box::new(mesh),
         }];
-        let fonts = HashMap::new();
+        let fonts = font::FontMap::default();
         let render = build_screen(&actors, [0.0, 0.0, 0.0, 1.0], &metrics, &fonts, 0.0);
 
         assert_eq!(render.objects.len(), 2);
@@ -6694,7 +6695,7 @@ mod tests {
             blend: None,
             visible: true,
         }];
-        let fonts = HashMap::new();
+        let fonts = font::FontMap::default();
         let mut text_cache = TextLayoutCache::new(1);
         let mut scratch = ComposeScratch::default();
 
@@ -6777,7 +6778,7 @@ mod tests {
             tint: [0.5, 0.25, 0.1, 0.5],
             blend: None,
         }];
-        let fonts = HashMap::new();
+        let fonts = font::FontMap::default();
         let render = build_screen(&actors, [0.0, 0.0, 0.0, 1.0], &metrics, &fonts, 0.0);
 
         let ObjectType::Mesh { tint, .. } = &render.objects[0].object_type else {
@@ -6818,7 +6819,7 @@ mod tests {
             &[actor],
             [0.0, 0.0, 0.0, 1.0],
             &metrics,
-            &HashMap::new(),
+            &font::FontMap::default(),
             0.0,
         );
 
@@ -6869,7 +6870,7 @@ mod tests {
             tint: [0.5, 0.25, 0.1, 0.5],
             blend: None,
         }];
-        let fonts = HashMap::new();
+        let fonts = font::FontMap::default();
         let render = build_screen(&actors, [0.0, 0.0, 0.0, 1.0], &metrics, &fonts, 0.0);
 
         assert_eq!(render.objects.len(), 2);
@@ -6940,7 +6941,7 @@ mod tests {
             tint: [0.5, 0.25, 0.1, 0.5],
             blend: None,
         }];
-        let fonts = HashMap::new();
+        let fonts = font::FontMap::default();
         let render = build_screen(&actors, [0.0, 0.0, 0.0, 1.0], &metrics, &fonts, 0.0);
 
         assert_eq!(render.objects.len(), 2);
@@ -6991,7 +6992,7 @@ mod tests {
             shadow_color: [0.0, 0.0, 0.0, 0.5],
             effect: Default::default(),
         }];
-        let fonts = HashMap::from([("test", test_font())]);
+        let fonts = font::FontMap::from_iter([("test", test_font())]);
         let render = build_screen(&actors, [0.0, 0.0, 0.0, 1.0], &metrics, &fonts, 0.0);
 
         assert_eq!(render.objects.len(), 1);
@@ -7048,7 +7049,7 @@ mod tests {
             shadow_color: [0.0, 0.0, 0.0, 0.5],
             effect: Default::default(),
         }];
-        let fonts = HashMap::from([("test", test_font())]);
+        let fonts = font::FontMap::from_iter([("test", test_font())]);
         let render = build_screen(&actors, [0.0, 0.0, 0.0, 1.0], &metrics, &fonts, 0.0);
 
         assert_eq!(render.objects.len(), 1);
@@ -7103,7 +7104,7 @@ mod tests {
             shadow_color: [0.0, 0.0, 0.0, 0.5],
             effect: Default::default(),
         }];
-        let fonts = HashMap::from([("test", test_font())]);
+        let fonts = font::FontMap::from_iter([("test", test_font())]);
         let render = build_screen(&actors, [0.0, 0.0, 0.0, 1.0], &metrics, &fonts, 0.0);
 
         assert_eq!(render.objects.len(), 1);
@@ -7153,7 +7154,7 @@ mod tests {
             shadow_color: [0.0, 0.0, 0.0, 0.5],
             effect: Default::default(),
         }];
-        let fonts = HashMap::from([("test", test_font())]);
+        let fonts = font::FontMap::from_iter([("test", test_font())]);
         let render = build_screen(&actors, [0.0, 0.0, 0.0, 1.0], &metrics, &fonts, 0.0);
 
         assert_eq!(render.objects.len(), 1);
@@ -7214,7 +7215,7 @@ mod tests {
             shadow_color: [0.0, 0.0, 0.0, 0.5],
             effect: Default::default(),
         }];
-        let fonts = HashMap::from([("test", test_font())]);
+        let fonts = font::FontMap::from_iter([("test", test_font())]);
         let render = build_screen(&actors, [0.0, 0.0, 0.0, 1.0], &metrics, &fonts, 0.0);
 
         assert_eq!(render.objects.len(), 1);
@@ -7283,7 +7284,7 @@ mod tests {
             shadow_color: [0.0, 0.0, 0.0, 0.5],
             effect: Default::default(),
         }];
-        let fonts = HashMap::from([("test", test_font())]);
+        let fonts = font::FontMap::from_iter([("test", test_font())]);
         let render = build_screen(&actors, [1.0; 4], &metrics, &fonts, 0.0);
 
         let ObjectType::TexturedMesh { vertices, .. } = &render.objects[0].object_type else {
@@ -7335,7 +7336,7 @@ mod tests {
             shadow_color: [0.0, 0.0, 0.0, 0.5],
             effect: Default::default(),
         };
-        let fonts = HashMap::from([("test", test_font())]);
+        let fonts = font::FontMap::from_iter([("test", test_font())]);
         let base = build_screen(&[actor.clone()], [1.0; 4], &metrics, &fonts, 0.25);
         let Actor::Text { jitter, .. } = &mut actor else {
             panic!("expected text actor");
@@ -7400,7 +7401,7 @@ mod tests {
             shadow_color: [0.0, 0.0, 0.0, 0.5],
             effect: Default::default(),
         };
-        let fonts = HashMap::from([("test", test_font())]);
+        let fonts = font::FontMap::from_iter([("test", test_font())]);
         let base = build_screen(&[actor.clone()], [1.0; 4], &metrics, &fonts, 0.0);
         let Actor::Text { distortion, .. } = &mut actor else {
             panic!("expected text actor");
@@ -7476,7 +7477,7 @@ mod tests {
             shadow_color: [0.0, 0.0, 0.0, 0.5],
             effect: Default::default(),
         }];
-        let fonts = HashMap::from([("test", test_font_split_pages())]);
+        let fonts = font::FontMap::from_iter([("test", test_font_split_pages())]);
         let render = build_screen(&actors, [0.0, 0.0, 0.0, 1.0], &metrics, &fonts, 0.0);
 
         assert_eq!(render.objects.len(), 2);

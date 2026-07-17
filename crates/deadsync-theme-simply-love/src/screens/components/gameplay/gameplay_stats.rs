@@ -617,7 +617,7 @@ fn game_time_key(seconds: f32, total_seconds: f32) -> (u32, u8) {
 #[inline(always)]
 fn glyph_width_scaled(
     metrics_font: &font::Font,
-    all_fonts: &HashMap<&'static str, font::Font>,
+    all_fonts: &font::FontMap,
     ch: char,
     zoom: f32,
 ) -> f32 {
@@ -750,7 +750,7 @@ fn holds_mines_rolls_label_text(index: usize) -> Arc<str> {
 
 pub fn prewarm_text_layout(
     cache: &mut TextLayoutCache,
-    fonts: &HashMap<&'static str, font::Font>,
+    fonts: &font::FontMap,
     asset_manager: &AssetManager,
     state: &State,
 ) {

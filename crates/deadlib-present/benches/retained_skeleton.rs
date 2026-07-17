@@ -2,7 +2,7 @@ use deadlib_present::actors::{
     Actor, RetainedActorFrame, SizeSpec, SpriteSource, TextAlign, TextContent,
 };
 use deadlib_present::compose::{ComposeScratch, TextLayoutCache, build_screen_cached_with_scratch};
-use deadlib_present::font::{Font, Glyph};
+use deadlib_present::font::{Font, FontMap, Glyph};
 use deadlib_present::space::Metrics;
 use deadlib_render::BlendMode;
 use std::alloc::{GlobalAlloc, Layout, System};
@@ -136,7 +136,7 @@ fn median_result(mut results: Vec<BenchResult>) -> BenchResult {
     results.swap_remove(results.len() / 2)
 }
 
-fn run_rebuilt(fonts: &HashMap<&'static str, Font>) -> BenchResult {
+fn run_rebuilt(fonts: &FontMap) -> BenchResult {
     let static_text: Arc<str> = Arc::from("STATIC HUD");
     let mut actors = Vec::with_capacity(STATIC_QUADS + STATIC_TEXTS + DYNAMIC_QUADS);
     let mut cache = TextLayoutCache::new(8);
@@ -181,7 +181,7 @@ fn run_rebuilt(fonts: &HashMap<&'static str, Font>) -> BenchResult {
     }
 }
 
-fn run_retained(fonts: &HashMap<&'static str, Font>) -> BenchResult {
+fn run_retained(fonts: &FontMap) -> BenchResult {
     let static_text: Arc<str> = Arc::from("STATIC HUD");
     let mut static_actors = Vec::with_capacity(STATIC_QUADS + STATIC_TEXTS);
     push_static_actors(&mut static_actors, &static_text);
@@ -240,7 +240,7 @@ fn rebuilt_frame(
     cache: &mut TextLayoutCache,
     scratch: &mut ComposeScratch,
     metrics: &Metrics,
-    fonts: &HashMap<&'static str, Font>,
+    fonts: &FontMap,
 ) -> usize {
     actors.clear();
     push_static_actors(actors, static_text);
@@ -255,7 +255,7 @@ fn retained_frame(
     cache: &mut TextLayoutCache,
     scratch: &mut ComposeScratch,
     metrics: &Metrics,
-    fonts: &HashMap<&'static str, Font>,
+    fonts: &FontMap,
 ) -> usize {
     actors.clear();
     actors.push(Actor::RetainedFrame {
@@ -311,7 +311,7 @@ fn compose_frame(
     cache: &mut TextLayoutCache,
     scratch: &mut ComposeScratch,
     metrics: &Metrics,
-    fonts: &HashMap<&'static str, Font>,
+    fonts: &FontMap,
 ) -> usize {
     let mut render = build_screen_cached_with_scratch(
         actors,
@@ -408,7 +408,7 @@ fn text_actor(content: Arc<str>, offset: [f32; 2], z: i16) -> Actor {
     }
 }
 
-fn benchmark_fonts() -> HashMap<&'static str, Font> {
+fn benchmark_fonts() -> FontMap {
     let texture: Arc<str> = Arc::from("retained-skeleton-bench");
     let mut glyph_map = HashMap::new();
     for ch in "STATIC HUD".chars() {
@@ -440,7 +440,7 @@ fn benchmark_fonts() -> HashMap<&'static str, Font> {
         stroke_texture_map: HashMap::new(),
         texture_hints_map: HashMap::new(),
     };
-    HashMap::from([("bench", font)])
+    FontMap::from_iter([("bench", font)])
 }
 
 fn print_result(name: &str, result: &BenchResult) {

@@ -2,7 +2,6 @@ use deadlib_present::actors::{Actor, TextAlign, TextContent};
 use deadlib_present::compose::TextLayoutCache;
 use deadlib_present::dsl::TextBuilder;
 use deadlib_present::font;
-use std::collections::HashMap;
 
 const MAX_SCORE_GLYPHS: usize = 11;
 const SCORE_GLYPH_TEXT: [&str; 11] = ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "."];
@@ -88,7 +87,7 @@ fn score_glyph_text(byte: u8) -> &'static str {
 /// perform no string or `Arc<str>` allocation.
 pub fn push_score_counter(
     actors: &mut Vec<Actor>,
-    fonts: &HashMap<&'static str, font::Font>,
+    fonts: &font::FontMap,
     params: ScoreCounterParams,
 ) {
     let Some(metrics_font) = fonts.get(params.font) else {
@@ -133,7 +132,7 @@ pub fn push_score_counter(
 
 pub fn prewarm_score_counter_layout(
     cache: &mut TextLayoutCache,
-    fonts: &HashMap<&'static str, font::Font>,
+    fonts: &font::FontMap,
     font_name: &'static str,
 ) {
     for glyph in SCORE_GLYPH_TEXT {
@@ -149,6 +148,7 @@ mod tests {
     use deadlib_present::space::Metrics;
     use deadlib_render::ObjectType;
     use glam::Vec4;
+    use std::collections::HashMap;
     use std::sync::Arc;
 
     #[test]
@@ -220,7 +220,7 @@ mod tests {
         assert_eq!(cache.frame_stats().owned_entries, 11);
     }
 
-    fn composed_vertices(actors: &[Actor], fonts: &HashMap<&'static str, Font>) -> Vec<[f32; 5]> {
+    fn composed_vertices(actors: &[Actor], fonts: &font::FontMap) -> Vec<[f32; 5]> {
         let metrics = Metrics {
             left: 0.0,
             right: 640.0,
@@ -246,7 +246,7 @@ mod tests {
             .collect()
     }
 
-    fn test_fonts() -> HashMap<&'static str, Font> {
+    fn test_fonts() -> font::FontMap {
         let texture: Arc<str> = Arc::from("score-counter-test");
         let mut glyph_map = HashMap::new();
         for (index, ch) in "0123456789.".chars().enumerate() {
@@ -269,7 +269,7 @@ mod tests {
         let ascii_glyphs = Box::new(std::array::from_fn(|index| {
             char::from_u32(index as u32).and_then(|ch| glyph_map.get(&ch).cloned())
         }));
-        HashMap::from([(
+        font::FontMap::from_iter([(
             "numbers",
             Font {
                 glyph_map,

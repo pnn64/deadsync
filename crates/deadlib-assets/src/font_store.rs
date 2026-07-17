@@ -1,14 +1,13 @@
-use deadlib_present::font::{self, Font};
-use std::collections::HashMap;
+use deadlib_present::font::{self, Font, FontMap};
 
 pub struct FontStore {
-    fonts: HashMap<&'static str, Font>,
+    fonts: FontMap,
 }
 
 impl FontStore {
     pub fn new() -> Self {
         Self {
-            fonts: HashMap::new(),
+            fonts: FontMap::default(),
         }
     }
 
@@ -24,13 +23,13 @@ impl FontStore {
         self.fonts.contains_key(name)
     }
 
-    pub const fn fonts(&self) -> &HashMap<&'static str, Font> {
+    pub const fn fonts(&self) -> &FontMap {
         &self.fonts
     }
 
     pub fn with_fonts<F, R>(&self, f: F) -> R
     where
-        F: FnOnce(&HashMap<&'static str, Font>) -> R,
+        F: FnOnce(&FontMap) -> R,
     {
         f(&self.fonts)
     }
@@ -52,6 +51,7 @@ impl Default for FontStore {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::HashMap;
 
     fn test_font() -> Font {
         Font {

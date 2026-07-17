@@ -77,7 +77,6 @@ use deadsync_score as score_data;
 use glam::{Mat4 as Matrix4, Vec3 as Vector3, Vec4 as Vector4};
 use smallvec::SmallVec;
 use std::cell::RefCell;
-use std::collections::HashMap;
 use std::ops::{Deref, DerefMut};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, OnceLock};
@@ -2809,11 +2808,7 @@ fn cached_autosync_text(state: &State, old_offset: f32, new_offset: f32) -> Arc<
     })
 }
 
-pub fn prewarm_text_layout(
-    cache: &mut TextLayoutCache,
-    fonts: &HashMap<&'static str, font::Font>,
-    state: &State,
-) {
+pub fn prewarm_text_layout(cache: &mut TextLayoutCache, fonts: &font::FontMap, state: &State) {
     let policy = state.runtime_view.policy;
     prewarm_score_counter_layout(
         cache,

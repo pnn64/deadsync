@@ -4,13 +4,12 @@ use deadlib_assets::{
     prepare_required_font_textures, register_texture_dims,
 };
 use deadlib_platform::dirs;
-use deadlib_present::font::Font;
+use deadlib_present::font::{Font, FontMap};
 use deadlib_render::{SamplerDesc, TextureHandle, TextureHandleMap};
 use deadlib_renderer::{Backend, Texture as RendererTexture};
 use deadsync_theme::ThemeAssetManifest;
 use image::RgbaImage;
 use log::{debug, warn};
-use std::collections::HashMap;
 use std::path::Path;
 
 pub struct AssetManager {
@@ -30,7 +29,7 @@ impl AssetManager {
         self.store.register_font(name, font);
     }
 
-    pub const fn fonts(&self) -> &HashMap<&'static str, Font> {
+    pub const fn fonts(&self) -> &FontMap {
         self.store.fonts()
     }
 
@@ -60,7 +59,7 @@ impl AssetManager {
 
     pub fn with_fonts<F, R>(&self, f: F) -> R
     where
-        F: FnOnce(&HashMap<&'static str, Font>) -> R,
+        F: FnOnce(&FontMap) -> R,
     {
         self.store.with_fonts(f)
     }

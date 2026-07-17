@@ -1,7 +1,7 @@
 use deadlib_present::actors::{Actor, TextAlign, TextContent};
 use deadlib_present::compose::{ComposeScratch, TextLayoutCache, build_screen_cached_with_scratch};
 use deadlib_present::dsl::TextBuilder;
-use deadlib_present::font::{Font, Glyph};
+use deadlib_present::font::{Font, FontMap, Glyph};
 use deadlib_present::space::Metrics;
 use deadsync_theme_simply_love::screens::components::gameplay::score_counter::{
     ScoreCounterParams, prewarm_score_counter_layout, push_score_counter,
@@ -119,14 +119,14 @@ fn main() {
     );
 }
 
-fn run_full(fonts: &HashMap<&'static str, Font>) -> BenchResult {
+fn run_full(fonts: &FontMap) -> BenchResult {
     let mut cache = TextLayoutCache::new(1);
     cache.prewarm_text(fonts, "numbers", "0.00", None);
     cache.lock_growth();
     run(fonts, cache, full_string_frame)
 }
 
-fn run_glyphs(fonts: &HashMap<&'static str, Font>) -> BenchResult {
+fn run_glyphs(fonts: &FontMap) -> BenchResult {
     let mut cache = TextLayoutCache::new(11);
     prewarm_score_counter_layout(&mut cache, fonts, "numbers");
     cache.lock_growth();
@@ -139,14 +139,10 @@ type FrameFn = fn(
     &mut TextLayoutCache,
     &mut ComposeScratch,
     &Metrics,
-    &HashMap<&'static str, Font>,
+    &FontMap,
 ) -> usize;
 
-fn run(
-    fonts: &HashMap<&'static str, Font>,
-    mut cache: TextLayoutCache,
-    frame_fn: FrameFn,
-) -> BenchResult {
+fn run(fonts: &FontMap, mut cache: TextLayoutCache, frame_fn: FrameFn) -> BenchResult {
     let metrics = Metrics {
         left: 0.0,
         right: 640.0,
@@ -192,7 +188,7 @@ fn full_string_frame(
     cache: &mut TextLayoutCache,
     scratch: &mut ComposeScratch,
     metrics: &Metrics,
-    fonts: &HashMap<&'static str, Font>,
+    fonts: &FontMap,
 ) -> usize {
     actors.clear();
     for counter in 0..COUNTERS {
@@ -216,7 +212,7 @@ fn glyph_frame(
     cache: &mut TextLayoutCache,
     scratch: &mut ComposeScratch,
     metrics: &Metrics,
-    fonts: &HashMap<&'static str, Font>,
+    fonts: &FontMap,
 ) -> usize {
     actors.clear();
     for counter in 0..COUNTERS {
@@ -244,7 +240,7 @@ fn compose_frame(
     cache: &mut TextLayoutCache,
     scratch: &mut ComposeScratch,
     metrics: &Metrics,
-    fonts: &HashMap<&'static str, Font>,
+    fonts: &FontMap,
 ) -> usize {
     let mut render = build_screen_cached_with_scratch(
         actors,
@@ -267,7 +263,7 @@ fn compose_frame(
     checksum
 }
 
-fn benchmark_fonts() -> HashMap<&'static str, Font> {
+fn benchmark_fonts() -> FontMap {
     let texture: Arc<str> = Arc::from("score-counter-bench");
     let mut glyph_map = HashMap::new();
     for ch in "0123456789.".chars() {
@@ -303,7 +299,7 @@ fn benchmark_fonts() -> HashMap<&'static str, Font> {
         stroke_texture_map: HashMap::new(),
         texture_hints_map: HashMap::new(),
     };
-    HashMap::from([("numbers", font)])
+    FontMap::from_iter([("numbers", font)])
 }
 
 fn print_result(name: &str, result: &BenchResult) {

@@ -3,7 +3,6 @@ use deadlib_present::compose::TextLayoutCache;
 use deadlib_present::font;
 use deadsync_notefield::{MiniIndicatorMode, zmod_broken_run_end};
 use deadsync_profile as profile_data;
-use std::collections::HashMap;
 
 use super::super::display_mods::DISPLAY_MODS_WRAP_WIDTH_PX;
 use super::text::{
@@ -16,11 +15,7 @@ use super::{
     zmod_combo_font_name, zmod_indicator_mode, zmod_small_combo_font,
 };
 
-pub fn prewarm_text_layout(
-    cache: &mut TextLayoutCache,
-    fonts: &HashMap<&'static str, font::Font>,
-    state: &State,
-) {
+pub fn prewarm_text_layout(cache: &mut TextLayoutCache, fonts: &font::FontMap, state: &State) {
     let prewarm_u32 = |cache: &mut TextLayoutCache, font_name: &'static str, value: u32| {
         let text = cached_int_u32(value);
         cache.prewarm_text(fonts, font_name, text.as_ref(), None);

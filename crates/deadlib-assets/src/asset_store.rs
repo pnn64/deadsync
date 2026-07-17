@@ -3,10 +3,10 @@ use crate::{
     prepare_texture_key_load, register_texture_dims,
     upload::{PendingTextureUpload, TextureUploadBudget},
 };
-use deadlib_present::font::Font;
+use deadlib_present::font::{Font, FontMap};
 use deadlib_render::{SamplerDesc, TextureHandle, TextureHandleMap};
 use image::RgbaImage;
-use std::{collections::HashMap, path::PathBuf, sync::mpsc::SyncSender};
+use std::{path::PathBuf, sync::mpsc::SyncSender};
 
 pub enum TextureUploadAction<'a, T> {
     Update {
@@ -55,7 +55,7 @@ impl<T> AssetStore<T> {
         self.font_store.register_font(name, font);
     }
 
-    pub const fn fonts(&self) -> &HashMap<&'static str, Font> {
+    pub const fn fonts(&self) -> &FontMap {
         self.font_store.fonts()
     }
 
@@ -66,7 +66,7 @@ impl<T> AssetStore<T> {
 
     pub fn with_fonts<F, R>(&self, f: F) -> R
     where
-        F: FnOnce(&HashMap<&'static str, Font>) -> R,
+        F: FnOnce(&FontMap) -> R,
     {
         self.font_store.with_fonts(f)
     }

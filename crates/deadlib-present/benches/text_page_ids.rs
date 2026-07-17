@@ -3,7 +3,7 @@ use deadlib_present::compose::{
     ComposeScratch, TextLayoutCache, benchmark_text_layout_type_sizes,
     build_screen_cached_with_scratch_and_texture_context,
 };
-use deadlib_present::font::{Font, Glyph};
+use deadlib_present::font::{Font, FontMap, Glyph};
 use deadlib_present::space::Metrics;
 use deadlib_present::texture::{TextureContext, TextureMeta};
 use deadlib_render::{BlendMode, ObjectType, TexturedMeshVertices};
@@ -358,7 +358,7 @@ fn compose_frame(
     frame: usize,
     actors: &[Actor],
     metrics: &Metrics,
-    fonts: &HashMap<&'static str, Font>,
+    fonts: &FontMap,
     texture_ctx: &BenchTextureContext,
     cache: &mut TextLayoutCache,
     scratch: &mut ComposeScratch,
@@ -457,7 +457,7 @@ fn benchmark_text() -> String {
         .collect()
 }
 
-fn benchmark_fonts() -> HashMap<&'static str, Font> {
+fn benchmark_fonts() -> FontMap {
     let pages: [Arc<str>; PAGE_COUNT] = std::array::from_fn(|page| {
         Arc::from(format!(
             "bench/fonts/multi_page/realistic_texture_page_{page}"
@@ -494,7 +494,7 @@ fn benchmark_fonts() -> HashMap<&'static str, Font> {
         stroke_texture_map: HashMap::new(),
         texture_hints_map: HashMap::new(),
     };
-    HashMap::from([("bench", font)])
+    FontMap::from_iter([("bench", font)])
 }
 
 fn text_actor(content: Arc<str>, mode: TextMode) -> Actor {

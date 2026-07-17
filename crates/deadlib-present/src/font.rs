@@ -557,6 +557,8 @@ pub struct Font {
     pub texture_hints_map: HashMap<String, String>,
 }
 
+pub type FontMap = HashMap<&'static str, Font, rustc_hash::FxBuildHasher>;
+
 pub struct FontLoadData {
     pub font: Font,
     pub required_textures: Vec<PathBuf>,
@@ -598,7 +600,7 @@ fn empty_ascii_glyphs() -> Box<[Option<Glyph>; 128]> {
     Box::new(std::array::from_fn(|_| None))
 }
 
-fn compute_chain_key(start_name: &'static str, fonts: &HashMap<&'static str, Font>) -> u64 {
+fn compute_chain_key(start_name: &'static str, fonts: &FontMap) -> u64 {
     let mut hasher = DefaultHasher::new();
     let mut current = Some(start_name);
     let mut depth = 0usize;
@@ -621,7 +623,7 @@ fn compute_chain_key(start_name: &'static str, fonts: &HashMap<&'static str, Fon
     if key == 0 { 1 } else { key }
 }
 
-pub fn refresh_chain_keys(fonts: &mut HashMap<&'static str, Font>) {
+pub fn refresh_chain_keys(fonts: &mut FontMap) {
     let mut names = fonts.keys().copied().collect::<Vec<_>>();
     names.sort_unstable();
 
@@ -664,10 +666,7 @@ pub fn refresh_chain_keys(fonts: &mut HashMap<&'static str, Font>) {
     }
 }
 
-fn compute_ascii_glyphs(
-    start_name: &'static str,
-    fonts: &HashMap<&'static str, Font>,
-) -> Box<[Option<Glyph>; 128]> {
+fn compute_ascii_glyphs(start_name: &'static str, fonts: &FontMap) -> Box<[Option<Glyph>; 128]> {
     let Some(start_font) = fonts.get(start_name) else {
         return empty_ascii_glyphs();
     };
@@ -2846,11 +2845,7 @@ pub fn parse_with_texture_context(
 /* ======================= API ======================= */
 
 /// Traverses the font fallback chain to find a glyph for a given character.
-pub fn find_glyph<'a>(
-    start_font: &'a Font,
-    c: char,
-    all_fonts: &'a HashMap<&'static str, Font>,
-) -> Option<&'a Glyph> {
+pub fn find_glyph<'a>(start_font: &'a Font, c: char, all_fonts: &'a FontMap) -> Option<&'a Glyph> {
     if c.is_ascii() {
         return start_font.ascii_glyphs[c as usize].as_ref();
     }
@@ -2877,11 +2872,7 @@ pub fn find_glyph<'a>(
 
 /// `StepMania` parity: calculates the logical width of a line by summing the integer advances.
 #[inline(always)]
-pub fn measure_line_width_logical(
-    font: &Font,
-    text: &str,
-    all_fonts: &HashMap<&'static str, Font>,
-) -> i32 {
+pub fn measure_line_width_logical(font: &Font, text: &str, all_fonts: &FontMap) -> i32 {
     text.chars()
         .map(|c| find_glyph(font, c, all_fonts).map_or(0, |glyph| glyph.advance_i32))
         .sum()
