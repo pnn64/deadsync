@@ -1,5 +1,5 @@
 use crate::act;
-use crate::assets::{FontRole, current_machine_font_key};
+use crate::assets::{FontRole, machine_font_key};
 use crate::screens::components::shared::transitions;
 use crate::screens::{Screen, ThemeEffect};
 use deadlib_present::actors::Actor;
@@ -160,12 +160,16 @@ pub fn handle_gamepad_system_event(state: &mut State, ev: &GamepadSystemView) {
     }
 }
 
-pub fn push_actors(actors: &mut Vec<Actor>, state: &State) {
+pub fn push_actors(
+    actors: &mut Vec<Actor>,
+    state: &State,
+    visual_policy: crate::views::SimplyLoveVisualPolicyView,
+) {
     actors.reserve(10 + INPUT_LOG_MAX_ITEMS);
 
     actors.push(act!(text:
         align(0.5, 0.0): xy(screen_center_x(), 20.0):
-        zoomtoheight(15.0): font(current_machine_font_key(FontRole::Header)): settext("Actor System & Input Sandbox"): horizalign(center)
+        zoomtoheight(15.0): font(machine_font_key(visual_policy.machine_font, FontRole::Header)): settext("Actor System & Input Sandbox"): horizalign(center)
     ));
     actors.push(act!(text:
         align(0.5, 0.0): xy(screen_center_x(), 60.0):
@@ -194,7 +198,7 @@ pub fn push_actors(actors: &mut Vec<Actor>, state: &State) {
 
 pub fn get_actors(state: &State) -> Vec<Actor> {
     let mut actors = Vec::with_capacity(10 + INPUT_LOG_MAX_ITEMS);
-    push_actors(&mut actors, state);
+    push_actors(&mut actors, state, Default::default());
     actors
 }
 

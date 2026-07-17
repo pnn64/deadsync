@@ -3,7 +3,9 @@ use deadsync_core::input::MAX_PLAYERS;
 use deadsync_profile::compat as profile;
 use deadsync_profile::{self as profile_data, PlayStyle, PlayerSide, player_side_index};
 use deadsync_theme_simply_love::screens::player_options::{SpeedMod, scroll_speed_for_mod};
-use deadsync_theme_simply_love::views::{PlayerOptionsInitView, PlayerOptionsPolicyView};
+use deadsync_theme_simply_love::views::{
+    PlayerOptionsInitView, PlayerOptionsPlayerView, PlayerOptionsPolicyView,
+};
 
 pub(crate) fn init_view() -> PlayerOptionsInitView {
     let config = deadsync_config::prelude::get();
@@ -13,6 +15,8 @@ pub(crate) fn init_view() -> PlayerOptionsInitView {
             allow_per_player_global_offsets: config.machine_allow_per_player_global_offsets,
             heart_rate_monitors: config.machine_enable_heart_rate_monitors,
             arcade_navigation: config.arcade_options_navigation,
+            dedicated_three_key_nav: config.three_key_navigation
+                && config.only_dedicated_menu_buttons,
             smx_input: config.smx_input,
             smx_panel_lights: config.smx_panel_lights,
             scorebox_available: deadsync_online::score_compat::is_gs_get_scores_service_allowed(),
@@ -23,10 +27,37 @@ pub(crate) fn init_view() -> PlayerOptionsInitView {
             session.side_joined(profile_data::player_side_for_index(idx))
         }),
         music_rate: session.music_rate,
-        profiles: std::array::from_fn(|idx| {
-            profile::get_for_side(profile_data::player_side_for_index(idx))
+        players: std::array::from_fn(|idx| {
+            let profile = profile::get_for_side(profile_data::player_side_for_index(idx));
+            PlayerOptionsPlayerView {
+                options: profile.current_player_options(),
+                heart_rate_device_id: profile.heart_rate_device_id,
+            }
         }),
     }
+}
+
+pub(crate) fn gameplay_profiles(
+    options: &[profile_data::PlayerOptionsData; MAX_PLAYERS],
+    heart_rate_device_ids: &[Option<String>; MAX_PLAYERS],
+) -> [profile_data::Profile; MAX_PLAYERS] {
+    std::array::from_fn(|idx| {
+        gameplay_profile(
+            profile::get_for_side(profile_data::player_side_for_index(idx)),
+            options[idx].clone(),
+            heart_rate_device_ids[idx].clone(),
+        )
+    })
+}
+
+fn gameplay_profile(
+    mut profile: profile_data::Profile,
+    options: profile_data::PlayerOptionsData,
+    heart_rate_device_id: Option<String>,
+) -> profile_data::Profile {
+    profile.set_current_player_options(options);
+    profile.heart_rate_device_id = heart_rate_device_id;
+    profile
 }
 
 pub struct PlayerOptionsPersistPlan {
@@ -85,6 +116,27 @@ mod tests {
 
     fn speed_mod(mod_type: SpeedModType, value: f32) -> SpeedMod {
         SpeedMod { mod_type, value }
+    }
+
+    #[test]
+    fn gameplay_profile_preserves_identity_while_applying_screen_edits() {
+        let mut profile = profile_data::Profile {
+            display_name: "Alice".to_owned(),
+            current_combo: 42,
+            ..Default::default()
+        };
+        profile.mini_percent = 5;
+        let options = profile_data::PlayerOptionsData {
+            mini_percent: 37,
+            ..Default::default()
+        };
+
+        let merged = gameplay_profile(profile, options.clone(), Some("hrm-1".to_owned()));
+
+        assert_eq!(merged.display_name, "Alice");
+        assert_eq!(merged.current_combo, 42);
+        assert_eq!(merged.current_player_options(), options);
+        assert_eq!(merged.heart_rate_device_id.as_deref(), Some("hrm-1"));
     }
 
     #[test]

@@ -1,7 +1,7 @@
 use crate::act;
 use crate::assets::i18n::{tr, tr_fmt};
 use crate::assets::{self, AssetManager};
-use crate::assets::{FontRole, current_machine_font_key};
+use crate::assets::{FontRole, machine_font_key};
 use crate::config::{
     BreakdownStyle, GraphOrientation, NewPackMode, SelectMusicPatternInfoMode, SyncGraphMode,
 };
@@ -22,11 +22,13 @@ use crate::screens::{
 };
 use crate::views::{
     MUSIC_WHEEL_SLOT_COUNT, MusicWheelRankSource, MusicWheelRuntimeRequest, MusicWheelRuntimeView,
-    MusicWheelSideRuntimeRequest, MusicWheelSlotRuntimeRequest, ScoreboxSideView,
-    SelectMusicDownloadView, SelectMusicHistorySideView, SelectMusicHistoryView,
+    MusicWheelSideRuntimeRequest, MusicWheelSlotRuntimeRequest, ProfilePickerView,
+    ScoreboxSideView, SelectMusicDownloadView, SelectMusicHistorySideView, SelectMusicHistoryView,
     SelectMusicInitView, SelectMusicLastPlayedView, SelectMusicLeaderboardRequest,
-    SelectMusicPlaylistView, SelectMusicPolicyView, SelectMusicProfileView, SelectMusicRuntimeView,
-    SelectMusicScoreboxRequest, SelectMusicSessionView, SimplyLoveLobbyRuntimeView,
+    SelectMusicPadProfileView, SelectMusicPlaylistView, SelectMusicPolicyView,
+    SelectMusicProfileView, SelectMusicRuntimeView, SelectMusicScoreboxRequest,
+    SelectMusicSessionView, SimplyLoveContentReloadEvent, SimplyLoveContentReloadPhase,
+    SimplyLoveLobbyRuntimeView,
 };
 use deadlib_present::actors::{Actor, SizeSpec, SpriteSource};
 use deadlib_present::cache::{SharedStrCache, TextCache, cached_shared_str, cached_text};
@@ -48,20 +50,16 @@ use deadsync_input::{
 };
 use deadsync_online::lobbies as lobby_data;
 use deadsync_profile as profile_data;
-use deadsync_profile::compat as profile;
 use deadsync_profile::favorites_view::{
     FavoriteCatalogEntry, FavoriteCatalogHeader, FavoriteViewPlan,
 };
-use deadsync_profile::pad_config as pad_profile_data;
 use deadsync_profile::pad_config_sync::{AppliedPadConfig, PadConfigIntent};
 use deadsync_score as score_data;
-use deadsync_simfile::app_runtime as song_loading;
 use deadsync_simfile::bpm::{beat_at_sec_from_bpms, sec_at_beat_from_bpms};
 use deadsync_simfile::playlist::{
     PlaylistEntry, PlaylistSongLookup, PlaylistSongSource,
     normalize_song_path as normalize_lobby_song_path, song_pack_and_dir_name,
 };
-use deadsync_simfile::runtime_cache::get_song_cache;
 use deadsync_simfile::song_sort::{
     GroupedSongs, SongSortGroup, alpha_group_char, artist_grouped_songs, bpm_grouped_songs,
     genre_grouped_songs, length_grouped_songs, meter_grouped_songs, song_title_sort_key,
@@ -76,7 +74,6 @@ use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
 #[path = "select_music/pack_sync.rs"]
@@ -563,12 +560,17 @@ pub fn sync_runtime_view(state: &mut State, view: SelectMusicRuntimeView) {
             apply_wheel_sort(state, WheelSortMode::Favorites);
         }
     }
+    if let Some(pad_profiles) = view.pad_profiles {
+        state.pad_profiles = pad_profiles;
+        rebuild_select_music_menu(state);
+    }
     state.audio_playback = view.audio_playback;
     state.lobby_view = view.lobby;
     state.downloads = view.downloads;
     state.srpg_shop_snapshot = view.srpg_shop;
     state.arrow_bounce_offset = view.arrow_bounce_offset;
     state.policy = view.policy;
+    pad_config::set_fsr_enabled(&mut state.pad_config_overlay, state.policy.fsr_profiles);
     state.music_wheel = view.music_wheel;
     state.scoreboxes = view.scoreboxes;
     select_music_menu::sync_leaderboard_overlay(&mut state.leaderboard, view.leaderboard);
@@ -579,6 +581,10 @@ pub fn sync_runtime_view(state: &mut State, view: SelectMusicRuntimeView) {
     state.sync_graph_mode = view.sync_graph_mode;
     state.sync_graph_orientation = view.sync_graph_orientation;
     state.sync_confidence_percent = view.sync_confidence_percent.min(100);
+}
+
+pub fn sync_profile_picker(state: &mut State, view: ProfilePickerView) {
+    state.profile_picker = view;
 }
 
 #[inline(always)]
@@ -600,6 +606,20 @@ pub fn srpg_shop_overlay_visible(state: &State) -> bool {
 #[inline(always)]
 pub fn local_profile_ids(state: &State) -> &[Option<String>; 2] {
     &state.profiles.local_profile_ids
+}
+
+#[inline(always)]
+pub fn pad_profile_menu_visible(state: &State) -> bool {
+    state.policy.fsr_profiles && state.select_music_menu.is_visible()
+}
+
+#[inline(always)]
+pub fn pad_profile_rows(state: &State, pad: usize) -> &[SelectMusicPadProfileView] {
+    state
+        .pad_profiles
+        .get(pad)
+        .map(Vec::as_slice)
+        .unwrap_or(&[])
 }
 
 #[inline(always)]
@@ -830,31 +850,8 @@ impl ExitCodeTracker {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum ReloadPhase {
-    Songs,
-    Courses,
-}
-
-enum ReloadMsg {
-    Phase(ReloadPhase),
-    Song {
-        done: usize,
-        total: usize,
-        pack: String,
-        song: String,
-    },
-    Course {
-        done: usize,
-        total: usize,
-        group: String,
-        course: String,
-    },
-    Done,
-}
-
 struct ReloadUiState {
-    phase: ReloadPhase,
+    phase: SimplyLoveContentReloadPhase,
     line2: String,
     line3: String,
     songs_done: usize,
@@ -862,14 +859,14 @@ struct ReloadUiState {
     courses_done: usize,
     courses_total: usize,
     done: bool,
+    song_packs: Option<Vec<SongPack>>,
     started_at: Instant,
-    rx: mpsc::Receiver<ReloadMsg>,
 }
 
 impl ReloadUiState {
-    fn new(rx: mpsc::Receiver<ReloadMsg>) -> Self {
+    fn new() -> Self {
         Self {
-            phase: ReloadPhase::Songs,
+            phase: SimplyLoveContentReloadPhase::Songs,
             line2: String::new(),
             line3: String::new(),
             songs_done: 0,
@@ -877,8 +874,8 @@ impl ReloadUiState {
             courses_done: 0,
             courses_total: 0,
             done: false,
+            song_packs: None,
             started_at: Instant::now(),
-            rx,
         }
     }
 }
@@ -1136,6 +1133,8 @@ pub struct State {
     pub smx_pad_profile_events: Vec<SmxPadProfileEvent>,
     /// Queued requests for the App pad-config controller (drained each frame).
     pub pad_config_intents: Vec<PadConfigIntent>,
+    pad_profiles: [Vec<SelectMusicPadProfileView>; 2],
+    profile_picker: ProfilePickerView,
     profile_switch_overlay: Option<profile_boxes::State>,
     profile_switch_overlay_is_late_join: bool,
     pending_replay: Option<select_music_menu::ReplayStartPayload>,
@@ -1238,6 +1237,8 @@ pub struct State {
     sync_graph_orientation: GraphOrientation,
     sync_confidence_percent: u8,
     songs_root: PathBuf,
+    song_scan_roots: Vec<PathBuf>,
+    song_packs: Vec<SongPack>,
     courses_root: PathBuf,
     preview_music_muted: bool,
     music_wheel_moved: bool,
@@ -1644,23 +1645,15 @@ fn selected_song_arc(state: &State) -> Option<Arc<SongData>> {
     }
 }
 
-fn reload_selected_song(state: &mut State) -> bool {
+fn reload_selected_song(state: &State) -> Option<ThemeEffect> {
     let Some(song) = selected_song_arc(state) else {
-        return false;
+        return None;
     };
-    let simfile_path = song.simfile_path.clone();
-    match song_loading::reload_song_in_cache(&simfile_path) {
-        Ok(_) => {
-            refresh_from_song_cache(state);
-            queue_sfx(state, "assets/sounds/change.ogg");
-            debug!("Force-reloaded song from disk: {}", simfile_path.display());
-            true
-        }
-        Err(e) => {
-            warn!("Force reload failed for '{}': {e}", simfile_path.display());
-            false
-        }
-    }
+    Some(ThemeEffect::Runtime(
+        crate::SimplyLoveRuntimeRequest::Content(crate::SimplyLoveContentRequest::ReloadSong {
+            simfile_path: song.simfile_path.clone(),
+        }),
+    ))
 }
 
 /// The song currently highlighted on the music wheel, if the cursor is on a
@@ -2436,7 +2429,7 @@ fn favorite_music_entries(
 
 fn playlist_song_sources(
     grouped_entries: &[MusicWheelEntry],
-    songs_root: &Path,
+    song_scan_roots: &[PathBuf],
 ) -> Vec<PlaylistSongSource> {
     let mut sources = Vec::new();
     let mut current_group = None;
@@ -2449,7 +2442,7 @@ fn playlist_song_sources(
             MusicWheelEntry::Song(song) => sources.push(PlaylistSongSource {
                 group_name: current_group.clone(),
                 song: song.clone(),
-                lobby_path: lobby_song_path(song.as_ref(), songs_root),
+                lobby_path: lobby_song_path(song.as_ref(), song_scan_roots),
             }),
         }
     }
@@ -2459,11 +2452,11 @@ fn playlist_song_sources(
 
 fn build_playlist_song_lookup(
     grouped_entries: &[MusicWheelEntry],
-    songs_root: &Path,
+    song_scan_roots: &[PathBuf],
 ) -> PlaylistSongLookup {
     deadsync_simfile::playlist::build_playlist_song_lookup(playlist_song_sources(
         grouped_entries,
-        songs_root,
+        song_scan_roots,
     ))
 }
 
@@ -2504,9 +2497,9 @@ fn build_playlist_entries_from_text(
 fn build_playlist_library(
     grouped_entries: &[MusicWheelEntry],
     playlist_views: &[SelectMusicPlaylistView],
-    songs_root: &Path,
+    song_scan_roots: &[PathBuf],
 ) -> Vec<PlaylistCacheEntry> {
-    let lookup = build_playlist_song_lookup(grouped_entries, songs_root);
+    let lookup = build_playlist_song_lookup(grouped_entries, song_scan_roots);
     let mut playlists: Vec<PlaylistCacheEntry> = playlist_views
         .iter()
         .map(|playlist| PlaylistCacheEntry {
@@ -2747,9 +2740,7 @@ fn apply_wheel_sort(state: &mut State, sort_mode: WheelSortMode) {
 pub fn init(init_view: SelectMusicInitView) -> State {
     let started = Instant::now();
     debug!("Preparing SelectMusic state...");
-    let lock_started = Instant::now();
-    let song_cache = get_song_cache();
-    let lock_wait = lock_started.elapsed();
+    let song_cache = &init_view.song_packs;
 
     let target_chart_type = init_view.session.play_style.chart_type();
     let total_packs = song_cache.len();
@@ -2904,8 +2895,11 @@ pub fn init(init_view: SelectMusicInitView) -> State {
         build_top_grades_grouped_entries_for_side(&all_entries, target_chart_type, p2_history);
     let favorites_entries =
         build_favorites_view_entries(&all_entries, init_view.session, &init_view.favorites);
-    let playlist_library =
-        build_playlist_library(&all_entries, &init_view.playlists, &init_view.songs_root);
+    let playlist_library = build_playlist_library(
+        &all_entries,
+        &init_view.playlists,
+        &init_view.song_scan_roots,
+    );
 
     let mut known_packs = init_view.known_packs;
     let (new_pack_names, pending_profile) = sync_new_pack_names(
@@ -2984,6 +2978,8 @@ pub fn init(init_view: SelectMusicInitView) -> State {
         smx_pads: std::array::from_fn(|_| SmxAssignmentPadView::default()),
         smx_pad_profile_events: Vec::new(),
         pad_config_intents: Vec::new(),
+        pad_profiles: Default::default(),
+        profile_picker: init_view.profile_picker,
         profile_switch_overlay: None,
         profile_switch_overlay_is_late_join: false,
         pending_replay: None,
@@ -3072,6 +3068,8 @@ pub fn init(init_view: SelectMusicInitView) -> State {
         sync_graph_orientation: GraphOrientation::Vertical,
         sync_confidence_percent: 80,
         songs_root: init_view.songs_root,
+        song_scan_roots: init_view.song_scan_roots,
+        song_packs: init_view.song_packs,
         courses_root: init_view.courses_root,
         preview_music_muted: false,
         music_wheel_moved: false,
@@ -3135,9 +3133,8 @@ pub fn init(init_view: SelectMusicInitView) -> State {
         if apply_initial_steps_for_song(&mut state, song.as_ref(), target_chart_type, chart_hash) {
             state.prev_selected_index = state.selected_index;
             debug!(
-                "SelectMusic state ready: chart_type={target_chart_type} matched {matched_songs} songs in {matched_packs}/{total_packs} packs ({} total songs), entries {built_entries_len}→{displayed_entries_len}, lock {:?}, rebuild {:?}, total {:?}.",
+                "SelectMusic state ready: chart_type={target_chart_type} matched {matched_songs} songs in {matched_packs}/{total_packs} packs ({} total songs), entries {built_entries_len}→{displayed_entries_len}, rebuild {:?}, total {:?}.",
                 total_songs,
-                lock_wait,
                 rebuild_dur,
                 started.elapsed()
             );
@@ -3147,9 +3144,8 @@ pub fn init(init_view: SelectMusicInitView) -> State {
 
     state.prev_selected_index = state.selected_index;
     debug!(
-        "SelectMusic state ready: chart_type={target_chart_type} matched {matched_songs} songs in {matched_packs}/{total_packs} packs ({} total songs), entries {built_entries_len}→{displayed_entries_len}, lock {:?}, rebuild {:?}, total {:?}.",
+        "SelectMusic state ready: chart_type={target_chart_type} matched {matched_songs} songs in {matched_packs}/{total_packs} packs ({} total songs), entries {built_entries_len}→{displayed_entries_len}, rebuild {:?}, total {:?}.",
         total_songs,
-        lock_wait,
         rebuild_dur,
         started.elapsed()
     );
@@ -3218,6 +3214,8 @@ pub fn init_placeholder() -> State {
         smx_pads: std::array::from_fn(|_| SmxAssignmentPadView::default()),
         smx_pad_profile_events: Vec::new(),
         pad_config_intents: Vec::new(),
+        pad_profiles: Default::default(),
+        profile_picker: ProfilePickerView::default(),
         profile_switch_overlay: None,
         profile_switch_overlay_is_late_join: false,
         pending_replay: None,
@@ -3302,6 +3300,8 @@ pub fn init_placeholder() -> State {
         sync_graph_orientation: GraphOrientation::Vertical,
         sync_confidence_percent: 80,
         songs_root: PathBuf::new(),
+        song_scan_roots: Vec::new(),
+        song_packs: Vec::new(),
         courses_root: PathBuf::new(),
         preview_music_muted: false,
         music_wheel_moved: false,
@@ -4069,23 +4069,11 @@ fn build_pad_profile_menu_items(state: &State) -> Option<Vec<select_music_menu::
         }
         // Saved configs only for a pad that maps to a local profile (a guest pad
         // gets presets only).
-        let Some(pid) = pid else { continue };
-        // Only the configs that match this pad's sensor type (FSR vs load cell).
-        let pad = &state.smx_pads[*slot];
-        let configs: Vec<_> = profile::load_pad_configs(pid)
-            .into_iter()
-            .filter(|c| {
-                pad_profile_data::config_matches(c, &pad.backend_id, pad.pad_type.as_deref())
-            })
-            .collect();
-        for c in &configs {
+        let Some(_) = pid else { continue };
+        for c in &state.pad_profiles[*slot] {
             let active = applied.is_some_and(|a| !a.preset && a.name == c.name);
             let star = if active { "* " } else { "" };
-            let default = if pad_profile_data::is_default_for(c, &pad.serial) {
-                " (default)"
-            } else {
-                ""
-            };
+            let default = if c.is_default { " (default)" } else { "" };
             items.push(select_music_menu::pad_profile_item(
                 format!("{star}{prefix}Pad Profile"),
                 format!("{}{default}", c.name),
@@ -4178,7 +4166,7 @@ fn build_select_music_menu(state: &State) -> select_music_menu::MenuLists {
     if downloads_enabled {
         advanced.push(select_music_menu::ITEM_VIEW_DOWNLOADS);
     }
-    if crate::visual_styles::srpg10_active() && state.policy.interaction.show_srpg_shop {
+    if state.policy.interaction.srpg10_visuals && state.policy.interaction.show_srpg_shop {
         advanced.push(select_music_menu::ITEM_SRPG_SHOP);
     }
     advanced.push(select_music_menu::ITEM_SET_SUMMARY);
@@ -4288,6 +4276,7 @@ fn show_pad_config_overlay(state: &mut State) {
     state.test_input_overlay_visible = false;
     state.pad_config_overlay_visible = true;
     state.pad_config_overlay.active_color_index = state.active_color_index;
+    pad_config::set_fsr_enabled(&mut state.pad_config_overlay, state.policy.fsr_profiles);
     pad_config::reset_modes(&mut state.pad_config_overlay);
 
     // Show the pads for the active sides. Doubles and Versus both drive two
@@ -4356,6 +4345,13 @@ fn start_song_search_prompt(state: &mut State) {
     state.song_search_ignore_next_text = false;
 }
 
+fn active_profile_choices(state: &State) -> [profile_data::ActiveProfile; 2] {
+    std::array::from_fn(|idx| match &state.profiles.local_profile_ids[idx] {
+        Some(id) => profile_data::ActiveProfile::Local { id: id.clone() },
+        None => profile_data::ActiveProfile::Guest,
+    })
+}
+
 fn show_profile_switch_overlay(state: &mut State) {
     clear_preview(state);
     state.select_music_menu = select_music_menu::State::Hidden;
@@ -4378,7 +4374,8 @@ fn show_profile_switch_overlay(state: &mut State) {
     state.last_steps_nav_dir_p2 = None;
     state.last_steps_nav_time_p2 = None;
 
-    let mut overlay = profile_boxes::init_active();
+    let mut overlay =
+        profile_boxes::init_active(state.profile_picker.clone(), active_profile_choices(state));
     overlay.active_color_index = state.active_color_index;
     profile_boxes::set_fast_switch(&mut overlay, true);
     profile_boxes::set_joined(
@@ -4420,7 +4417,11 @@ pub fn open_late_join_profile_overlay(
     state.last_steps_nav_dir_p2 = None;
     state.last_steps_nav_time_p2 = None;
 
-    let mut overlay = profile_boxes::init_late_join(joining_side);
+    let mut overlay = profile_boxes::init_late_join(
+        state.profile_picker.clone(),
+        joining_side,
+        active_profile_choices(state),
+    );
     overlay.active_color_index = state.active_color_index;
     profile_boxes::set_fast_switch(&mut overlay, true);
     profile_boxes::enter_late_join(&mut overlay, joining_side);
@@ -4454,8 +4455,11 @@ fn cancel_song_search(state: &mut State) {
 fn start_song_search_results(state: &mut State, search_text: String) {
     clear_overlay_nav_hold(state);
     state.song_search_ignore_next_text = false;
-    state.song_search =
-        select_music_menu::begin_song_search_results(&state.group_entries, search_text);
+    state.song_search = select_music_menu::begin_song_search_results(
+        &state.group_entries,
+        search_text,
+        state.session.play_style.chart_type(),
+    );
 }
 
 fn focus_song_from_search(state: &mut State, song: &Arc<SongData>) {
@@ -4520,9 +4524,9 @@ fn focus_song_from_search(state: &mut State, song: &Arc<SongData>) {
     state.last_requested_chart_hash_p2 = None;
 }
 
-fn begin_reload_ui(state: &mut State) -> Option<mpsc::Sender<ReloadMsg>> {
+fn begin_reload_ui(state: &mut State) -> bool {
     if state.reload_ui.is_some() {
-        return None;
+        return false;
     }
 
     clear_preview(state);
@@ -4544,108 +4548,74 @@ fn begin_reload_ui(state: &mut State) -> Option<mpsc::Sender<ReloadMsg>> {
     state.last_steps_nav_time_p2 = None;
     state.music_wheel_moved = false;
 
-    let (tx, rx) = mpsc::channel::<ReloadMsg>();
-    state.reload_ui = Some(ReloadUiState::new(rx));
-    Some(tx)
+    state.reload_ui = Some(ReloadUiState::new());
+    true
 }
 
-fn start_reload_songs_and_courses(state: &mut State) {
-    let Some(tx) = begin_reload_ui(state) else {
+fn start_reload_songs_and_courses(state: &mut State) -> ThemeEffect {
+    if !begin_reload_ui(state) {
+        return ThemeEffect::None;
+    }
+    ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Content(
+        crate::SimplyLoveContentRequest::ReloadLibrary {
+            songs_root: state.songs_root.clone(),
+            courses_root: state.courses_root.clone(),
+        },
+    ))
+}
+
+fn start_reload_song_dirs(state: &mut State, pack_dirs: Vec<PathBuf>) -> ThemeEffect {
+    if !begin_reload_ui(state) {
+        return ThemeEffect::None;
+    }
+    ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Content(
+        crate::SimplyLoveContentRequest::ReloadSongDirs {
+            songs_root: state.songs_root.clone(),
+            pack_dirs,
+        },
+    ))
+}
+
+pub fn sync_reload_events(state: &mut State, events: Vec<SimplyLoveContentReloadEvent>) {
+    let Some(reload) = state.reload_ui.as_mut() else {
         return;
     };
-    let songs_root = state.songs_root.clone();
-    let courses_root = state.courses_root.clone();
-
-    std::thread::spawn(move || {
-        let _ = tx.send(ReloadMsg::Phase(ReloadPhase::Songs));
-
-        let mut on_song = |done: usize, total: usize, pack: &str, song: &str| {
-            let _ = tx.send(ReloadMsg::Song {
-                done,
-                total,
-                pack: pack.to_owned(),
-                song: song.to_owned(),
-            });
-        };
-        song_loading::scan_and_load_songs_with_progress_counts(&songs_root, &mut on_song);
-
-        let _ = tx.send(ReloadMsg::Phase(ReloadPhase::Courses));
-
-        let mut on_course = |done: usize, total: usize, group: &str, course: &str| {
-            let _ = tx.send(ReloadMsg::Course {
-                done,
-                total,
-                group: group.to_owned(),
-                course: course.to_owned(),
-            });
-        };
-        song_loading::scan_and_load_courses_with_progress_counts(
-            &courses_root,
-            &songs_root,
-            &mut on_course,
-        );
-
-        let _ = tx.send(ReloadMsg::Done);
-    });
-}
-
-fn start_reload_song_dirs(state: &mut State, pack_dirs: Vec<PathBuf>) {
-    let Some(tx) = begin_reload_ui(state) else {
-        return;
-    };
-    let songs_root = state.songs_root.clone();
-
-    std::thread::spawn(move || {
-        let _ = tx.send(ReloadMsg::Phase(ReloadPhase::Songs));
-
-        let mut on_song = |done: usize, total: usize, pack: &str, song: &str| {
-            let _ = tx.send(ReloadMsg::Song {
-                done,
-                total,
-                pack: pack.to_owned(),
-                song: song.to_owned(),
-            });
-        };
-        song_loading::reload_song_dirs_with_progress_counts(&songs_root, &pack_dirs, &mut on_song);
-
-        let _ = tx.send(ReloadMsg::Done);
-    });
-}
-
-fn poll_reload_ui(reload: &mut ReloadUiState) {
-    while let Ok(msg) = reload.rx.try_recv() {
-        match msg {
-            ReloadMsg::Phase(phase) => {
+    for event in events {
+        match event {
+            SimplyLoveContentReloadEvent::Phase(phase) => {
                 reload.phase = phase;
                 reload.line2.clear();
                 reload.line3.clear();
             }
-            ReloadMsg::Song {
+            SimplyLoveContentReloadEvent::Song {
                 done,
                 total,
                 pack,
                 song,
             } => {
-                reload.phase = ReloadPhase::Songs;
+                reload.phase = SimplyLoveContentReloadPhase::Songs;
                 reload.songs_done = done;
                 reload.songs_total = total;
                 reload.line2 = pack;
                 reload.line3 = song;
             }
-            ReloadMsg::Course {
+            SimplyLoveContentReloadEvent::Course {
                 done,
                 total,
                 group,
                 course,
             } => {
-                reload.phase = ReloadPhase::Courses;
+                reload.phase = SimplyLoveContentReloadPhase::Courses;
                 reload.courses_done = done;
                 reload.courses_total = total;
                 reload.line2 = group;
                 reload.line3 = course;
             }
-            ReloadMsg::Done => {
+            SimplyLoveContentReloadEvent::Artwork { .. }
+            | SimplyLoveContentReloadEvent::Noteskins { .. } => {}
+            SimplyLoveContentReloadEvent::Finished { song_packs } => {
                 reload.done = true;
+                reload.song_packs = Some(song_packs);
             }
         }
     }
@@ -4710,8 +4680,10 @@ fn push_reload_overlay(actors: &mut Vec<Actor>, reload: &ReloadUiState, active_c
         z(1450)
     ));
     let phase_label = match reload.phase {
-        ReloadPhase::Songs => tr("Init", "LoadingSongsText"),
-        ReloadPhase::Courses => tr("Init", "LoadingCoursesText"),
+        SimplyLoveContentReloadPhase::Songs => tr("Init", "LoadingSongsText"),
+        SimplyLoveContentReloadPhase::Courses => tr("Init", "LoadingCoursesText"),
+        SimplyLoveContentReloadPhase::Artwork => tr("Init", "CachingArtworkText"),
+        SimplyLoveContentReloadPhase::Noteskins => tr("Init", "CompilingNoteskinsText"),
     };
     actors.push(act!(text:
         font("miso"):
@@ -5284,6 +5256,7 @@ impl NullOrDieOverlayRefresh {
 fn build_null_or_die_overlay(
     overlay: &NullOrDieOverlayData,
     active_color_index: i32,
+    machine_font: crate::config::MachineFont,
 ) -> Option<Vec<Actor>> {
     let mut actors = Vec::with_capacity(20);
     let pane_w = widescale(520.0, 640.0);
@@ -5340,7 +5313,7 @@ fn build_null_or_die_overlay(
         z(SYNC_OVERLAY_Z + 2)
     ));
     actors.push(act!(text:
-        font(current_machine_font_key(FontRole::Header)):
+        font(machine_font_key(machine_font, FontRole::Header)):
         settext(title):
         align(0.5, 0.5):
         xy(pane_cx, pane_top + 34.0):
@@ -5628,7 +5601,7 @@ fn build_null_or_die_overlay(
                     };
 
                     actors.push(act!(text:
-                        font(current_machine_font_key(FontRole::Header)):
+                        font(machine_font_key(machine_font, FontRole::Header)):
                         settext(tr("SelectMusic", label_key)):
                         align(0.5, 0.5):
                         xy(cx, action_cy):
@@ -5690,19 +5663,26 @@ fn build_null_or_die_overlay(
     Some(actors)
 }
 
-fn build_sync_overlay(state: &SyncOverlayState, active_color_index: i32) -> Option<Vec<Actor>> {
+fn build_sync_overlay(
+    state: &SyncOverlayState,
+    active_color_index: i32,
+    machine_font: crate::config::MachineFont,
+) -> Option<Vec<Actor>> {
     match state {
         SyncOverlayState::Hidden => None,
         SyncOverlayState::NullOrDie(overlay) => {
-            build_null_or_die_overlay(overlay, active_color_index)
+            build_null_or_die_overlay(overlay, active_color_index, machine_font)
         }
-        SyncOverlayState::Manual(overlay) => build_manual_sync_overlay(overlay, active_color_index),
+        SyncOverlayState::Manual(overlay) => {
+            build_manual_sync_overlay(overlay, active_color_index, machine_font)
+        }
     }
 }
 
 fn build_manual_sync_overlay(
     overlay: &ManualSyncOverlayData,
     active_color_index: i32,
+    machine_font: crate::config::MachineFont,
 ) -> Option<Vec<Actor>> {
     let mut actors = Vec::with_capacity(22);
     let accent = color::simply_love_rgba(active_color_index);
@@ -5746,7 +5726,7 @@ fn build_manual_sync_overlay(
         z(SYNC_OVERLAY_Z + 2)
     ));
     actors.push(act!(text:
-        font(current_machine_font_key(FontRole::Header)):
+        font(machine_font_key(machine_font, FontRole::Header)):
         settext(title):
         align(0.5, 0.5):
         xy(pane_cx, pane_top + 36.0):
@@ -5787,7 +5767,7 @@ fn build_manual_sync_overlay(
             z(SYNC_OVERLAY_Z + 4)
         ));
         actors.push(act!(text:
-            font(current_machine_font_key(FontRole::Header)):
+            font(machine_font_key(machine_font, FontRole::Header)):
             settext(tr("Common", "Yes")):
             align(0.5, 0.5):
             xy(choice_yes_x, answer_y):
@@ -5797,7 +5777,7 @@ fn build_manual_sync_overlay(
             horizalign(center)
         ));
         actors.push(act!(text:
-            font(current_machine_font_key(FontRole::Header)):
+            font(machine_font_key(machine_font, FontRole::Header)):
             settext(tr("Common", "No")):
             align(0.5, 0.5):
             xy(choice_no_x, answer_y):
@@ -5823,7 +5803,7 @@ fn build_manual_sync_overlay(
     Some(actors)
 }
 
-fn refresh_after_reload(state: &mut State) {
+fn refresh_after_reload(state: &mut State, song_packs: Vec<SongPack>) {
     let selected_song = selected_song_arc(state);
     let selected_simfile_path = selected_song.as_ref().map(|song| song.simfile_path.clone());
     let selected_pack_name = if let Some(song) = selected_song.as_ref() {
@@ -5869,11 +5849,14 @@ fn refresh_after_reload(state: &mut State) {
     let ready_song_reload_dirs = std::mem::take(&mut state.ready_song_reload_dirs);
     let init_view = SelectMusicInitView {
         songs_root: state.songs_root.clone(),
+        song_scan_roots: state.song_scan_roots.clone(),
         courses_root: state.courses_root.clone(),
+        song_packs,
         playlists: state.playlist_views.clone(),
         history: state.history.clone(),
         session: state.session,
         profiles: state.profiles.clone(),
+        profile_picker: state.profile_picker.clone(),
         last_played: state.last_played.clone(),
         favorites: state.favorites.clone(),
         known_packs: state.known_packs.clone(),
@@ -6031,13 +6014,17 @@ fn refresh_after_style_switch(state: &mut State) {
     let scoreboxes = state.scoreboxes.clone();
     let unlock_downloads_available = state.unlock_downloads_available;
     let ready_song_reload_dirs = std::mem::take(&mut state.ready_song_reload_dirs);
+    let song_packs = std::mem::take(&mut state.song_packs);
     let init_view = SelectMusicInitView {
         songs_root: state.songs_root.clone(),
+        song_scan_roots: state.song_scan_roots.clone(),
         courses_root: state.courses_root.clone(),
+        song_packs,
         playlists: state.playlist_views.clone(),
         history: state.history.clone(),
         session: state.session,
         profiles: state.profiles.clone(),
+        profile_picker: state.profile_picker.clone(),
         last_played: state.last_played.clone(),
         favorites: state.favorites.clone(),
         known_packs: state.known_packs.clone(),
@@ -6277,11 +6264,11 @@ fn show_replay_overlay(state: &mut State) {
     let Some(chart_hash) = selected_chart_hash_for_side(state, song, side) else {
         return;
     };
-    let overlay = select_music_menu::begin_replay_overlay(&chart_hash);
-    if matches!(overlay, select_music_menu::ReplayOverlayState::Hidden) {
+    if chart_hash.trim().is_empty() {
         return;
     }
     state.leaderboard = select_music_menu::LeaderboardOverlayState::Hidden;
+    state.replay_overlay = select_music_menu::ReplayOverlayState::Hidden;
     state.downloads_overlay = select_music_menu::DownloadsOverlayState::Hidden;
     state.srpg_shop_overlay = select_music_menu::SrpgShopOverlayState::Hidden;
     state.lobby_overlay = lobby_overlay::OverlayState::Hidden;
@@ -6289,8 +6276,18 @@ fn show_replay_overlay(state: &mut State) {
     pack_sync::hide_overlay(state);
     state.profile_switch_overlay = None;
     hide_test_input_overlay(state);
-    state.replay_overlay = overlay;
+    queue_online(
+        state,
+        crate::SimplyLoveOnlineRequest::LoadMachineReplays {
+            chart_hash,
+            max_entries: select_music_menu::REPLAY_MAX_ENTRIES,
+        },
+    );
     clear_preview(state);
+}
+
+pub fn sync_machine_replays(state: &mut State, entries: Vec<score_data::MachineReplayEntry>) {
+    state.replay_overlay = select_music_menu::begin_replay_overlay(entries);
 }
 
 fn handle_lobby_overlay_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
@@ -6424,9 +6421,9 @@ fn pack_and_song_name_from_lobby_path(song_path: &str) -> Option<(String, String
     deadsync_simfile::playlist::pack_and_song_name_from_path(song_path)
 }
 
-fn lobby_song_path(song: &SongData, songs_root: &Path) -> Option<String> {
+fn lobby_song_path(song: &SongData, song_scan_roots: &[PathBuf]) -> Option<String> {
     let song_dir = song.simfile_path.parent()?;
-    for root in song_loading::collect_song_scan_roots(songs_root) {
+    for root in song_scan_roots {
         if let Ok(relative) = song_dir.strip_prefix(root.as_path()) {
             let normalized = normalize_lobby_song_path(relative.to_string_lossy().as_ref());
             if !normalized.is_empty() {
@@ -6450,7 +6447,7 @@ fn find_song_by_lobby_path(state: &State, song_path: &str) -> Option<Arc<SongDat
     let needle_leaf = needle.rsplit('/').next().unwrap_or(needle.as_str());
     let needle_pack_and_song = pack_and_song_name_from_lobby_path(song_path);
     if let Some(song) = state.group_entries.iter().find_map(|entry| match entry {
-        MusicWheelEntry::Song(song) => lobby_song_path(song.as_ref(), &state.songs_root)
+        MusicWheelEntry::Song(song) => lobby_song_path(song.as_ref(), &state.song_scan_roots)
             .filter(|path| path.eq_ignore_ascii_case(needle.as_str()))
             .map(|_| song.clone()),
         _ => None,
@@ -6458,11 +6455,10 @@ fn find_song_by_lobby_path(state: &State, song_path: &str) -> Option<Arc<SongDat
         return Some(song);
     }
 
-    let song_cache = get_song_cache();
     let mut leaf_match = None;
-    for pack in song_cache.iter() {
+    for pack in &state.song_packs {
         for song in &pack.songs {
-            let Some(path) = lobby_song_path(song.as_ref(), &state.songs_root) else {
+            let Some(path) = lobby_song_path(song.as_ref(), &state.song_scan_roots) else {
                 continue;
             };
             if path.eq_ignore_ascii_case(needle.as_str()) {
@@ -6613,7 +6609,7 @@ pub(crate) fn selected_chart_ix_for_sync(
 
 fn build_local_lobby_song_info(state: &State) -> Option<lobby_data::LobbySongInfo> {
     let song = selected_song_arc(state)?;
-    let song_path = lobby_song_path(song.as_ref(), &state.songs_root)?;
+    let song_path = lobby_song_path(song.as_ref(), &state.song_scan_roots)?;
     let chart_type = state.session.play_style.chart_type();
     let chart = song.chart_for_steps_index(chart_type, selected_steps_index_for_sync(state))?;
     Some(lobby_data::LobbySongInfo {
@@ -6768,8 +6764,8 @@ fn apply_remote_lobby_song_selection(
         return false;
     };
 
-    let old_song_path =
-        selected_song_arc(state).and_then(|song| lobby_song_path(song.as_ref(), &state.songs_root));
+    let old_song_path = selected_song_arc(state)
+        .and_then(|song| lobby_song_path(song.as_ref(), &state.song_scan_roots));
     let old_rate = state.session.music_rate;
     focus_song_from_search(state, &target_song);
 
@@ -6814,7 +6810,9 @@ fn apply_remote_lobby_song_selection(
     state.last_requested_chart_hash = None;
     state.last_requested_chart_hash_p2 = None;
 
-    if rate_changed || old_song_path != lobby_song_path(target_song.as_ref(), &state.songs_root) {
+    if rate_changed
+        || old_song_path != lobby_song_path(target_song.as_ref(), &state.song_scan_roots)
+    {
         clear_preview(state);
     }
 
@@ -6911,7 +6909,7 @@ fn sync_lobby_select_music_with(state: &mut State, snapshot: &lobby_data::Snapsh
                 != Some(remote_sig.as_str())
             {
                 let matched_path = find_song_by_lobby_path(state, song_info.song_path.as_str())
-                    .and_then(|song| lobby_song_path(song.as_ref(), &state.songs_root));
+                    .and_then(|song| lobby_song_path(song.as_ref(), &state.song_scan_roots));
                 let player_screens = joined
                     .players
                     .iter()
@@ -8550,6 +8548,25 @@ fn sibling_refresh_intent(
     })
 }
 
+fn sibling_refresh_for_state(
+    state: &State,
+    slot: usize,
+    profile_id: &str,
+    reresolve: bool,
+) -> Option<PadConfigIntent> {
+    if slot >= 2 {
+        return None;
+    }
+    let other = 1 - slot;
+    sibling_refresh_intent(
+        slot,
+        state.smx_pads[other].connected,
+        state.profiles.pad_profile_id(other),
+        profile_id,
+        reresolve,
+    )
+}
+
 /// After a management edit to a profile's `padconfig.ini`, queue a refresh for the
 /// *other* pad slot when it views the same profile (always the case in Doubles,
 /// where both pads share the one joined player's profile). The config list is
@@ -8559,21 +8576,7 @@ fn sibling_refresh_intent(
 /// that can change what the sibling should apply (delete); otherwise a list-only
 /// `RefreshList`.
 fn refresh_sibling_pad_list(state: &mut State, slot: usize, profile_id: &str, reresolve: bool) {
-    if slot >= 2 {
-        return; // avoid the 1 - slot underflow below for an unexpected slot
-    }
-    // A disconnected sibling has no list to sync, and its profile read off stale
-    // info would be meaningless; the pure helper folds both cases into `None`.
-    let other = 1 - slot;
-    // Sibling's player side is its slot, not the raw jumper bit.
-    let sibling_profile = state.profiles.pad_profile_id(other);
-    if let Some(intent) = sibling_refresh_intent(
-        slot,
-        state.smx_pads[other].connected,
-        sibling_profile,
-        profile_id,
-        reresolve,
-    ) {
+    if let Some(intent) = sibling_refresh_for_state(state, slot, profile_id, reresolve) {
         state.pad_config_intents.push(intent);
     }
 }
@@ -8607,10 +8610,18 @@ fn perform_pad_profile_save(state: &mut State) {
     // Rename: just relabel the existing config (and honor the default toggle,
     // scoped to the pad being edited).
     if let Some(old) = draft.rename_of {
-        profile::rename_pad_config(&profile_id, &old, &name);
+        queue_hardware(
+            state,
+            crate::SimplyLoveHardwareRequest::RenameSmxPadConfig {
+                profile_id: profile_id.clone(),
+                serial: serial.clone(),
+                old_name: old.clone(),
+                new_name: name.clone(),
+                set_default: draft.set_default,
+            },
+        );
         let pad = slot;
         if draft.set_default {
-            profile::set_default_pad_config(&profile_id, &serial, &name);
             // New default → re-resolve (applies it) and rebuild the list.
             state
                 .pad_config_intents
@@ -8706,10 +8717,17 @@ fn perform_pad_profile_overwrite(state: &mut State) {
 fn perform_pad_profile_set_default(state: &mut State) {
     if let Some((profile_id, name, slot)) = pad_overlay_profile_target(state) {
         // Default is per pad: make this config the default for the cursor pad.
-        let Some(serial) = state.smx_pads.get(slot).map(|pad| pad.serial.as_str()) else {
+        let Some(serial) = state.smx_pads.get(slot).map(|pad| pad.serial.clone()) else {
             return;
         };
-        profile::set_default_pad_config(&profile_id, serial, &name);
+        queue_hardware(
+            state,
+            crate::SimplyLoveHardwareRequest::SetSmxPadConfigDefault {
+                profile_id,
+                serial,
+                name,
+            },
+        );
         // A default change doesn't move the resolve signature, so ask the
         // controller to re-resolve (applies the new default + refreshes marker).
         state
@@ -8721,7 +8739,13 @@ fn perform_pad_profile_set_default(state: &mut State) {
 
 fn perform_pad_profile_delete(state: &mut State) {
     if let Some((profile_id, name, slot)) = pad_overlay_profile_target(state) {
-        profile::delete_pad_config(&profile_id, &name);
+        queue_hardware(
+            state,
+            crate::SimplyLoveHardwareRequest::DeleteSmxPadConfig {
+                profile_id: profile_id.clone(),
+                name: name.clone(),
+            },
+        );
         // It may have been this pad's active/default config; re-resolve so the
         // controller falls back (and the marker updates).
         state
@@ -8955,8 +8979,7 @@ fn dispatch_menu_action(
         }
         select_music_menu::Action::ReloadSongsCourses => {
             hide_select_music_menu(state);
-            start_reload_songs_and_courses(state);
-            ThemeEffect::None
+            start_reload_songs_and_courses(state)
         }
         select_music_menu::Action::ShowLobbies => {
             hide_select_music_menu(state);
@@ -9100,7 +9123,8 @@ fn handle_song_search_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
             close_song_search(state);
             if let Some(song) = picked {
                 focus_song_from_search(state, &song);
-                refresh_after_reload(state);
+                let song_packs = std::mem::take(&mut state.song_packs);
+                refresh_after_reload(state, song_packs);
             }
         }
         VirtualAction::p1_back
@@ -9977,9 +10001,9 @@ fn handle_raw_key_event_impl(
         && !key.repeat
         && state.policy.keyboard_features
         && !key_bound_to_player_input(key)
-        && reload_selected_song(state)
+        && let Some(effect) = reload_selected_song(state)
     {
-        return ThemeEffect::ConsumeInput;
+        return effect;
     }
     if let Some(key) = key
         && key.code == KeyCode::F7
@@ -10408,14 +10432,14 @@ fn update_impl(state: &mut State, dt: f32, smx: &SmxAssignmentView) -> ThemeEffe
     }
 
     if state.reload_ui.is_some() {
-        let done = {
-            let reload = state.reload_ui.as_mut().unwrap();
-            poll_reload_ui(reload);
-            reload.done
-        };
-        if done {
+        let completed_song_packs = state
+            .reload_ui
+            .as_mut()
+            .and_then(|reload| reload.done.then(|| reload.song_packs.take()))
+            .flatten();
+        if let Some(song_packs) = completed_song_packs {
             state.reload_ui = None;
-            refresh_after_reload(state);
+            refresh_after_reload(state, song_packs);
         }
         return ThemeEffect::None;
     }
@@ -10448,8 +10472,7 @@ fn update_impl(state: &mut State, dt: f32, smx: &SmxAssignmentView) -> ThemeEffe
     }
     let reload_dirs = take_ready_song_reload_dirs(state);
     if !reload_dirs.is_empty() {
-        start_reload_song_dirs(state, reload_dirs);
-        return ThemeEffect::None;
+        return start_reload_song_dirs(state, reload_dirs);
     }
 
     match state.out_prompt {
@@ -10849,8 +10872,8 @@ pub fn trigger_immediate_refresh(state: &mut State) {
     state.cdtitle_anim_elapsed = 0.0;
 }
 
-pub fn refresh_from_song_cache(state: &mut State) {
-    refresh_after_reload(state);
+pub fn refresh_from_song_packs(state: &mut State, song_packs: Vec<SongPack>) {
+    refresh_after_reload(state, song_packs);
 }
 
 pub fn reset_preview_after_gameplay(state: &mut State, history: SelectMusicHistoryView) {
@@ -11172,7 +11195,7 @@ fn push_folder_stats_overlay(
     let sx = |local_x: f32| cx + local_x * scale;
     let sy = |local_y: f32| cy + local_y * scale;
     let accent = color::decorative_rgba(state.active_color_index);
-    let font_key = current_machine_font_key(FontRole::Normal);
+    let font_key = machine_font_key(state.policy.machine_font, FontRole::Normal);
 
     let mut children = Vec::with_capacity(18);
     children.push(act!(quad:
@@ -11409,6 +11432,7 @@ pub fn push_actors(
     state: &State,
     asset_manager: &AssetManager,
     stage_number: usize,
+    visual_policy: crate::views::SimplyLoveVisualPolicyView,
 ) {
     actors.reserve(256);
     let side = state.session.player_side;
@@ -11433,12 +11457,23 @@ pub fn push_actors(
             active_color_index: state.active_color_index,
             backdrop_rgba: [0.0, 0.0, 0.0, 1.0],
             alpha_mul: 1.0,
+            visual_policy,
         },
     );
     actors.push(sl_select_music_bg_flash());
 
     let select_music_label = tr("ScreenTitles", "SelectMusic");
-    screen_bars::push(&mut actors, select_music_label.as_ref());
+    screen_bars::push(
+        &mut actors,
+        select_music_label.as_ref(),
+        std::array::from_fn(|idx| screen_bars::Player {
+            joined: state.session.joined[idx],
+            guest: state.session.guest[idx],
+            display_name: &state.profiles.display_names[idx],
+            avatar_texture_key: state.profiles.avatar_texture_keys[idx].as_deref(),
+        }),
+        visual_policy,
+    );
 
     let scorebox_cycle_enabled = presentation.scorebox_cycle_enabled;
 
@@ -11465,22 +11500,33 @@ pub fn push_actors(
     }
 
     // Timer (zmod parity: optional gameplay timer to the right of session timer).
-    actors.push(timers::build_session(format_session_time(
-        state.session_elapsed,
-    )));
+    actors.push(timers::build_session(
+        format_session_time(state.session_elapsed),
+        state.policy.machine_font,
+    ));
     if presentation.show_stage_display {
-        actors.push(screen_bars::build_stage_display(stage_number));
+        actors.push(screen_bars::build_stage_display(
+            stage_number,
+            state.policy.machine_font,
+        ));
     }
     if presentation.show_gameplay_timer {
-        actors.push(timers::build_gameplay(format_session_time(
-            state.gameplay_elapsed,
-        )));
+        actors.push(timers::build_gameplay(
+            format_session_time(state.gameplay_elapsed),
+            state.policy.machine_font,
+        ));
     }
 
     // Pads
     {
-        actors.push(mode_pads::build_label("DS".to_string()));
-        actors.extend(mode_pads::build());
+        actors.push(mode_pads::build_label(
+            "DS".to_string(),
+            state.policy.machine_font,
+        ));
+        actors.extend(mode_pads::build(
+            state.session.play_style,
+            state.session.joined,
+        ));
     }
 
     // Banner
@@ -11953,6 +11999,7 @@ pub fn push_actors(
         select_pane::push_base(
             out,
             select_pane::StatsPaneParams {
+                machine_font: state.policy.machine_font,
                 pane_cx,
                 accent_color: sel_col,
                 values: select_pane::StatsValues {
@@ -12451,7 +12498,7 @@ pub fn push_actors(
         };
         if let Some(chart) = chart {
             let c = color::difficulty_rgba(&chart.difficulty, state.active_color_index);
-            actors.push(act!(text: font(current_machine_font_key(FontRole::Header)): settext(cached_u32_text(chart.meter)): align(0.5, 0.5): xy(lst_cx, lst_cy + y): zoom(0.45): z(122): diffuse(c[0], c[1], c[2], 1.0)));
+            actors.push(act!(text: font(machine_font_key(state.policy.machine_font, FontRole::Header)): settext(cached_u32_text(chart.meter)): align(0.5, 0.5): xy(lst_cx, lst_cy + y): zoom(0.45): z(122): diffuse(c[0], c[1], c[2], 1.0)));
         }
     }
 
@@ -12460,6 +12507,7 @@ pub fn push_actors(
     music_wheel::push(
         &mut actors,
         music_wheel::MusicWheelParams {
+            machine_font: state.policy.machine_font,
             entries: &state.entries,
             selected_index: state.selected_index,
             position_offset_from_selection: state.wheel_offset_from_selection,
@@ -12694,9 +12742,11 @@ pub fn push_actors(
         return;
     }
 
-    if let Some(song_search_overlay) =
-        select_music_menu::build_song_search_overlay(&state.song_search, state.active_color_index)
-    {
+    if let Some(song_search_overlay) = select_music_menu::build_song_search_overlay(
+        &state.song_search,
+        state.active_color_index,
+        state.policy.machine_font,
+    ) {
         actors.extend(song_search_overlay);
         return;
     }
@@ -12713,22 +12763,31 @@ pub fn push_actors(
             asset_manager,
             1.0,
             1451,
+            visual_policy,
         ));
         return;
     }
-    if let Some(replay_overlay) =
-        select_music_menu::build_replay_overlay(&state.replay_overlay, state.active_color_index)
-    {
+    if let Some(replay_overlay) = select_music_menu::build_replay_overlay(
+        &state.replay_overlay,
+        state.active_color_index,
+        state.policy.machine_font,
+    ) {
         actors.extend(replay_overlay);
         return;
     }
-    if let Some(pack_sync_overlay) =
-        pack_sync::build_overlay(&state.pack_sync_overlay, state.active_color_index)
-    {
+    if let Some(pack_sync_overlay) = pack_sync::build_overlay(
+        &state.pack_sync_overlay,
+        state.active_color_index,
+        state.policy.machine_font,
+    ) {
         actors.extend(pack_sync_overlay);
         return;
     }
-    if let Some(sync_overlay) = build_sync_overlay(&state.sync_overlay, state.active_color_index) {
+    if let Some(sync_overlay) = build_sync_overlay(
+        &state.sync_overlay,
+        state.active_color_index,
+        state.policy.machine_font,
+    ) {
         actors.extend(sync_overlay);
         return;
     }
@@ -12773,6 +12832,7 @@ pub fn push_actors(
         state.active_color_index,
         &state.lobby_view.snapshot,
         state.lobby_view.reconnect_status_text.as_deref(),
+        state.policy.machine_font,
     ) {
         actors.extend(lobby_overlay);
         return;
@@ -12785,12 +12845,15 @@ pub fn push_actors(
             z: 1288,
             show_song_info: true,
             status_text: None,
+            joined_sides: state.session.joined,
+            player_side: state.session.player_side,
         }));
     }
 
     if let select_music_menu::State::Visible(ref menu_state) = state.select_music_menu {
         actors.extend(select_music_menu::build_overlay(
             select_music_menu::RenderParams {
+                machine_font: state.policy.machine_font,
                 entries: &menu_state.cached_entries,
                 selected_index: menu_state.selected_index,
                 prev_selected_index: menu_state.prev_selected_index,
@@ -12802,7 +12865,7 @@ pub fn push_actors(
     }
 
     if let Some(leaderboard_overlay) =
-        select_music_menu::build_leaderboard_overlay(&state.leaderboard)
+        select_music_menu::build_leaderboard_overlay(&state.leaderboard, state.policy.machine_font)
     {
         actors.extend(leaderboard_overlay);
     }
@@ -12810,12 +12873,14 @@ pub fn push_actors(
         &state.downloads_overlay,
         state.active_color_index,
         &state.downloads,
+        state.policy.machine_font,
     ) {
         actors.extend(downloads_overlay);
     }
     if let Some(shop_overlay) = select_music_menu::build_srpg_shop_overlay(
         &state.srpg_shop_overlay,
         &state.srpg_shop_snapshot,
+        state.policy.machine_font,
     ) {
         actors.extend(shop_overlay);
     }
@@ -12849,7 +12914,7 @@ pub fn push_actors(
         match state.out_prompt {
             OutPromptState::PressStartForOptions { .. } => {
                 actors.push(act!(text:
-                    font(current_machine_font_key(FontRole::Header)):
+                    font(machine_font_key(state.policy.machine_font, FontRole::Header)):
                     settext(tr("SelectMusic", "PressStartForOptions")):
                     align(0.5, 0.5):
                     xy(screen_center_x(), screen_center_y()):
@@ -12861,7 +12926,7 @@ pub fn push_actors(
             OutPromptState::EnteringOptions { .. } => {
                 // Fade out "Press Start for options"
                 actors.push(act!(text:
-                    font(current_machine_font_key(FontRole::Header)):
+                    font(machine_font_key(state.policy.machine_font, FontRole::Header)):
                     settext(tr("SelectMusic", "PressStartForOptions")):
                     align(0.5, 0.5):
                     xy(screen_center_x(), screen_center_y()):
@@ -12873,7 +12938,7 @@ pub fn push_actors(
 
                 // Fade in "Entering Options..." after 0.1s hibernate
                 actors.push(act!(text:
-                    font(current_machine_font_key(FontRole::Header)):
+                    font(machine_font_key(state.policy.machine_font, FontRole::Header)):
                     settext(tr("SelectMusic", "EnteringOptions")):
                     align(0.5, 0.5):
                     xy(screen_center_x(), screen_center_y()):
@@ -12937,6 +13002,7 @@ pub fn push_actors(
             p2_color,
             choices_alpha,
             1502,
+            state.policy.machine_font,
         );
         push_exit_prompt_choice(
             &mut actors,
@@ -12949,13 +13015,20 @@ pub fn push_actors(
             p2_color,
             choices_alpha,
             1502,
+            state.policy.machine_font,
         );
     }
 }
 
 pub fn get_actors(state: &State, asset_manager: &AssetManager, stage_number: usize) -> Vec<Actor> {
     let mut actors = Vec::with_capacity(256);
-    push_actors(&mut actors, state, asset_manager, stage_number);
+    push_actors(
+        &mut actors,
+        state,
+        asset_manager,
+        stage_number,
+        Default::default(),
+    );
     actors
 }
 
@@ -13010,6 +13083,7 @@ fn push_exit_prompt_choice(
     active_rgba: [f32; 4],
     alpha: f32,
     z: i16,
+    machine_font: crate::config::MachineFont,
 ) {
     let mut rgba = [1.0; 4];
     if active {
@@ -13020,7 +13094,7 @@ fn push_exit_prompt_choice(
     out.push(act!(text:
         align(0.5, 0.5):
         xy(cx, cy):
-        font(current_machine_font_key(FontRole::Header)):
+        font(machine_font_key(machine_font, FontRole::Header)):
         zoom(SL_EXIT_PROMPT_LABEL_ZOOM * choice_zoom):
         settext(label):
         diffuse(rgba[0], rgba[1], rgba[2], rgba[3]):
@@ -13112,6 +13186,7 @@ mod tests {
     };
     use crate::config::{GraphOrientation, SelectMusicWheelStyle};
     use crate::screens::ThemeEffect;
+    use crate::views::ProfilePickerView;
     use deadsync_chart::{SongData, SongPack, SyncPref};
     use deadsync_core::input::InputSource;
     use deadsync_input::{
@@ -13119,7 +13194,7 @@ mod tests {
     };
     use deadsync_online::lobbies as lobby_data;
     use deadsync_profile as profile_data;
-    use std::path::{Path, PathBuf};
+    use std::path::PathBuf;
     use std::sync::Arc;
     use std::time::{Duration, Instant};
 
@@ -13353,7 +13428,11 @@ mod tests {
     #[test]
     fn late_join_profile_selection_emits_fast_request() {
         let joining_side = profile_data::PlayerSide::P2;
-        let mut overlay = profile_boxes::init_late_join(joining_side);
+        let mut overlay = profile_boxes::init_late_join(
+            ProfilePickerView::default(),
+            joining_side,
+            std::array::from_fn(|_| profile_data::ActiveProfile::Guest),
+        );
         profile_boxes::set_fast_switch(&mut overlay, true);
         profile_boxes::enter_late_join(&mut overlay, joining_side);
 
@@ -13845,10 +13924,18 @@ mod tests {
                 },
                 profiles: crate::views::SelectMusicProfileView {
                     display_names: ["Alice".to_string(), "Bob".to_string()],
+                    avatar_texture_keys: [Some("alice-avatar".to_string()), None],
                     local_profile_ids: [Some("alice".to_string()), None],
                     pad_profile_ids: [Some("alice".to_string()), Some("alice".to_string())],
                 },
                 favorites: None,
+                pad_profiles: Some([
+                    vec![crate::views::SelectMusicPadProfileView {
+                        name: "Tournament".to_string(),
+                        is_default: true,
+                    }],
+                    Vec::new(),
+                ]),
                 audio_playback: deadsync_theme::views::AudioPlaybackView {
                     music_position_seconds: 12.5,
                 },
@@ -13863,6 +13950,7 @@ mod tests {
                 srpg_shop: Default::default(),
                 arrow_bounce_offset: -0.25,
                 policy: crate::views::SelectMusicPolicyView {
+                    machine_font: crate::config::MachineFont::Mega,
                     media: crate::views::SelectMusicMediaPolicyView {
                         show_previews: true,
                         replay_gain: true,
@@ -13927,6 +14015,8 @@ mod tests {
             Some("alice")
         );
         assert_eq!(state.profiles.pad_profile_id(1), Some("alice"));
+        assert_eq!(super::pad_profile_rows(&state, 0)[0].name, "Tournament");
+        assert!(super::pad_profile_rows(&state, 0)[0].is_default);
         assert!(state.policy.media.show_previews);
         assert!(state.policy.media.replay_gain);
         assert!(state.policy.wheel.show_grades);
@@ -14374,6 +14464,65 @@ mod tests {
             vec![PathBuf::from("Stamina RPG 10 - Shops")]
         );
         assert!(state.ready_song_reload_dirs.is_empty());
+    }
+
+    #[test]
+    fn ready_song_dirs_cross_typed_shell_reload_request() {
+        let mut state = init_placeholder();
+        state.songs_root = PathBuf::from("Songs");
+        let pack_dirs = vec![PathBuf::from("Songs/Unlocks")];
+
+        let effect = super::start_reload_song_dirs(&mut state, pack_dirs.clone());
+
+        assert!(state.reload_ui.is_some());
+        assert!(matches!(
+            effect,
+            ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Content(
+                crate::SimplyLoveContentRequest::ReloadSongDirs {
+                    songs_root,
+                    pack_dirs: requested_dirs,
+                }
+            )) if songs_root == PathBuf::from("Songs") && requested_dirs == pack_dirs
+        ));
+    }
+
+    #[test]
+    fn shell_reload_events_drive_progress_and_completed_rebuild() {
+        let mut state = init_placeholder();
+        assert!(super::begin_reload_ui(&mut state));
+        super::sync_reload_events(
+            &mut state,
+            vec![
+                crate::views::SimplyLoveContentReloadEvent::Song {
+                    done: 3,
+                    total: 8,
+                    pack: "Pack".to_owned(),
+                    song: "Song".to_owned(),
+                },
+                crate::views::SimplyLoveContentReloadEvent::Finished {
+                    song_packs: Vec::new(),
+                },
+            ],
+        );
+        let reload = state
+            .reload_ui
+            .as_ref()
+            .expect("reload chrome should remain");
+        assert_eq!((reload.songs_done, reload.songs_total), (3, 8));
+        assert_eq!(
+            (reload.line2.as_str(), reload.line3.as_str()),
+            ("Pack", "Song")
+        );
+
+        let effect = super::update_impl(
+            &mut state,
+            0.0,
+            &deadsync_theme::views::SmxAssignmentView::default(),
+        );
+
+        assert!(matches!(effect, ThemeEffect::None));
+        assert!(state.reload_ui.is_none());
+        assert!(state.song_packs.is_empty());
     }
 
     #[test]
@@ -14871,7 +15020,8 @@ mod tests {
         ));
 
         let mut state = init_placeholder();
-        state.song_search = super::select_music_menu::begin_song_search_results(&[], "song".into());
+        state.song_search =
+            super::select_music_menu::begin_song_search_results(&[], "song".into(), "dance-single");
         let action = handle_raw_key_event(
             &mut state,
             Some(&raw_key(KeyCode::Escape, true, false)),
@@ -14997,7 +15147,9 @@ mod tests {
     #[test]
     fn sync_overlay_shows_streamed_heat_while_running() {
         let overlay = test_running_sync_overlay();
-        let actors = super::build_null_or_die_overlay(&overlay, 0).unwrap();
+        let actors =
+            super::build_null_or_die_overlay(&overlay, 0, crate::config::MachineFont::Wendy)
+                .unwrap();
         let heat_alpha = actors.iter().find_map(|actor| match actor {
             deadlib_present::actors::Actor::Sprite { source, tint, .. }
                 if source.texture_key() == Some(super::SYNC_HEAT_TEXTURE_KEY) =>
@@ -15383,7 +15535,7 @@ mod tests {
     #[test]
     fn playlist_parser_supports_sections_and_pack_wildcards() {
         let entries = test_playlist_entries();
-        let lookup = build_playlist_song_lookup(&entries, Path::new("Songs"));
+        let lookup = build_playlist_song_lookup(&entries, &[PathBuf::from("Songs")]);
         let playlist_entries = build_playlist_entries_from_text(
             "---Warmup\nPack A/*\n---Finale\nPack B/Song B1\n",
             "Night Shift",
@@ -15415,7 +15567,7 @@ mod tests {
     #[test]
     fn playlist_parser_uses_playlist_name_when_no_header_exists() {
         let entries = test_playlist_entries();
-        let lookup = build_playlist_song_lookup(&entries, Path::new("Songs"));
+        let lookup = build_playlist_song_lookup(&entries, &[PathBuf::from("Songs")]);
         let playlist_entries = build_playlist_entries_from_text(
             "Pack A/Song A2\nPack B/Song B1\n",
             "Night Shift",

@@ -284,7 +284,7 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Optio
         }
     }
 
-    match prepend_pending_audio(state, pending_action.unwrap_or(ThemeEffect::None)) {
+    match prepend_pending_effects(state, pending_action.unwrap_or(ThemeEffect::None)) {
         ThemeEffect::None => None,
         effect => Some(effect),
     }
@@ -713,13 +713,13 @@ fn handle_input_inner(
     ev: &InputEvent,
 ) -> ThemeEffect {
     let active = state.active;
-    let dedicated_three_key = screen_input::dedicated_three_key_nav_enabled();
+    let dedicated_three_key = state.policy.dedicated_three_key_nav;
     let arcade_style = state.policy.arcade_navigation;
     if state.policy.arcade_navigation || dedicated_three_key {
         screen_input::track_menu_lr_chord(&mut state.menu_lr_chord, ev);
     }
     let three_key_action = (!dedicated_three_key)
-        .then(|| screen_input::three_key_menu_action(&mut state.menu_lr_chord, ev))
+        .then(|| screen_input::three_key_menu_action(&mut state.menu_lr_chord, ev, true))
         .flatten();
     if state.pane_transition.is_active() {
         if let Some((side, screen_input::ThreeKeyMenuAction::Cancel)) = three_key_action {
@@ -921,5 +921,5 @@ pub fn handle_input(
     ev: &InputEvent,
 ) -> ThemeEffect {
     let effect = handle_input_inner(state, asset_manager, ev);
-    prepend_pending_audio(state, effect)
+    prepend_pending_effects(state, effect)
 }

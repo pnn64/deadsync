@@ -1,6 +1,6 @@
 use crate::act;
 use crate::assets::i18n::tr;
-use crate::assets::{FontRole, current_machine_font_key};
+use crate::assets::{FontRole, machine_font_key};
 use crate::screens::components::shared::screen_bar::{
     ScreenBarParams, ScreenBarPosition, ScreenBarTitlePlacement,
 };
@@ -173,7 +173,11 @@ fn push_pad_tiles(
     }
 }
 
-pub fn push_actors(actors: &mut Vec<Actor>, state: &State) {
+pub fn push_actors(
+    actors: &mut Vec<Actor>,
+    state: &State,
+    visual_policy: crate::views::SimplyLoveVisualPolicyView,
+) {
     actors.reserve(128);
     let exit_chosen_anim = state.flow.exit_chosen_anim();
     let exit_t = exit_anim_t(exit_chosen_anim);
@@ -192,6 +196,7 @@ pub fn push_actors(actors: &mut Vec<Actor>, state: &State) {
             active_color_index: state.active_color_index,
             backdrop_rgba: [0.0, 0.0, 0.0, 1.0],
             alpha_mul: 1.0,
+            visual_policy,
         },
     );
 
@@ -207,9 +212,10 @@ pub fn push_actors(actors: &mut Vec<Actor>, state: &State) {
         right_text: None,
         left_avatar: None,
         right_avatar: None,
+        visual_policy,
     }));
 
-    select_flow_footer::push(actors, &state.runtime.players);
+    select_flow_footer::push(actors, &state.runtime.players, visual_policy);
 
     let cx = screen_center_x();
     let cy = screen_center_y() + widescale(CHOICE_Y_OFFSET_4_3, CHOICE_Y_OFFSET_16_9);
@@ -261,14 +267,14 @@ pub fn push_actors(actors: &mut Vec<Actor>, state: &State) {
             z(1):
             shadowlength(1.0):
             diffuse(1.0, 1.0, 1.0, alpha):
-            font(current_machine_font_key(FontRole::Header)): settext(choice_label(choice)): horizalign(center)
+            font(machine_font_key(visual_policy.machine_font, FontRole::Header)): settext(choice_label(choice)): horizalign(center)
         ));
     }
 }
 
 pub fn get_actors(state: &State) -> Vec<Actor> {
     let mut actors = Vec::with_capacity(128);
-    push_actors(&mut actors, state);
+    push_actors(&mut actors, state, Default::default());
     actors
 }
 

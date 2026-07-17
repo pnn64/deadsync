@@ -58,15 +58,15 @@ fn sprite_splash(
     actor
 }
 
-pub fn build(active_color_index: i32) -> Vec<Actor> {
+pub fn build(active_color_index: i32, effects: &crate::visual_styles::EffectAssets) -> Vec<Actor> {
     let mut actors = Vec::with_capacity(32);
     let cx = screen_center_x();
     let cy = screen_center_y();
     let c1 = color1_rgba(active_color_index);
     let c2 = color2_rgba(active_color_index);
-    let flycenter_tex = visual_styles::titlemenu_flycenter_texture_key();
-    let flytop_tex = visual_styles::titlemenu_flytop_texture_key();
-    let flybottom_tex = visual_styles::titlemenu_flybottom_texture_key();
+    let flycenter_tex = effects.titlemenu_flycenter;
+    let flytop_tex = effects.titlemenu_flytop;
+    let flybottom_tex = effects.titlemenu_flybottom;
     // Z-layer above normal UI, but below full-screen fades if they use 1400+.
     let z_layer: i16 = 1300;
 

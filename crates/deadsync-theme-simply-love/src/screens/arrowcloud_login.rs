@@ -31,6 +31,7 @@ pub struct ProfileTarget {
 
 pub struct State {
     pub active_color_index: i32,
+    dedicated_three_key_nav: bool,
     pub(crate) ui: Option<QrLoginUiState>,
     pending_start: Option<crate::SimplyLoveQrLoginRequest>,
     /// `Some` when entered via Manage Local Profiles → Link ArrowCloud,
@@ -47,9 +48,10 @@ pub struct State {
     menu_lr_chord: screen_input::MenuLrChordTracker,
 }
 
-pub fn init() -> State {
+pub fn init(active_color_index: i32, dedicated_three_key_nav: bool) -> State {
     State {
-        active_color_index: crate::config::get().simply_love_color,
+        active_color_index,
+        dedicated_three_key_nav,
         ui: None,
         pending_start: None,
         target_profile: None,
@@ -61,9 +63,14 @@ pub fn init() -> State {
 /// Called every time the app enters this screen.  Spawns a fresh login
 /// UI — single-profile when `target_profile` is `Some`, multi-side
 /// otherwise — and discards any previous instance.
-pub fn on_enter(state: &mut State, request: crate::SimplyLoveQrLoginRequest) {
+pub fn on_enter(
+    state: &mut State,
+    request: crate::SimplyLoveQrLoginRequest,
+    dedicated_three_key_nav: bool,
+) {
     state.ui = Some(create_login_ui(&request));
     state.pending_start = Some(request);
+    state.dedicated_three_key_nav = dedicated_three_key_nav;
     state.menu_lr_chord = screen_input::MenuLrChordTracker::default();
 }
 
@@ -99,7 +106,11 @@ pub fn apply_events(state: &mut State, events: Vec<crate::SimplyLoveQrLoginEvent
 ///
 /// Any other input is consumed.
 pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
-    let three_key = screen_input::three_key_menu_action(&mut state.menu_lr_chord, ev);
+    let three_key = screen_input::three_key_menu_action(
+        &mut state.menu_lr_chord,
+        ev,
+        state.dedicated_three_key_nav,
+    );
     let is_three_key_confirm = matches!(
         three_key,
         Some((_, screen_input::ThreeKeyMenuAction::Confirm))
@@ -162,7 +173,12 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
     ThemeEffect::None
 }
 
-pub fn push_actors(actors: &mut Vec<Actor>, state: &State, alpha_multiplier: f32) {
+pub fn push_actors(
+    actors: &mut Vec<Actor>,
+    state: &State,
+    alpha_multiplier: f32,
+    visual_policy: crate::views::SimplyLoveVisualPolicyView,
+) {
     actors.reserve(32);
 
     // Animated heart background — matches SelectProfile / SelectColor.
@@ -172,6 +188,7 @@ pub fn push_actors(actors: &mut Vec<Actor>, state: &State, alpha_multiplier: f32
             active_color_index: state.active_color_index,
             backdrop_rgba: [0.0, 0.0, 0.0, 1.0],
             alpha_mul: 1.0,
+            visual_policy,
         },
     );
 
@@ -186,6 +203,6 @@ pub fn push_actors(actors: &mut Vec<Actor>, state: &State, alpha_multiplier: f32
 
 pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
     let mut actors = Vec::with_capacity(32);
-    push_actors(&mut actors, state, alpha_multiplier);
+    push_actors(&mut actors, state, alpha_multiplier, Default::default());
     actors
 }

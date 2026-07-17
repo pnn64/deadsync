@@ -1,8 +1,5 @@
 use deadsync_input::VirtualAction;
-use deadsync_profile::{
-    PLAYER_SLOTS, PlayStyle, PlayerSide, Profile, player_side_index, preferred_difficulty_indices,
-    profile_combo_carry,
-};
+use deadsync_profile::{PLAYER_SLOTS, PlayStyle, PlayerSide, player_side_index};
 
 /// Concrete screen identity for Simply Love.
 ///
@@ -118,7 +115,7 @@ impl SimplyLoveScreen {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ProfileSelectionContext {
-    pub play_style: PlayStyle,
+    pub preferred_difficulties: [usize; PLAYER_SLOTS],
     pub active_side: PlayerSide,
     pub fast_switch: bool,
     pub current_screen: SimplyLoveScreen,
@@ -128,7 +125,6 @@ pub struct ProfileSelectionContext {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ProfileSelectionPlan {
-    pub combo_carry: [u32; PLAYER_SLOTS],
     pub preferred_active: usize,
     pub preferred_p2: usize,
     pub refresh_select_music: bool,
@@ -208,12 +204,8 @@ pub const fn select_music_join_plan(context: SelectMusicJoinContext) -> SelectMu
     }
 }
 
-pub fn profile_selection_plan(
-    profiles: &[Profile; PLAYER_SLOTS],
-    context: ProfileSelectionContext,
-) -> ProfileSelectionPlan {
-    let preferred = preferred_difficulty_indices(profiles, context.play_style);
-    let preferred_active = preferred[player_side_index(context.active_side)];
+pub fn profile_selection_plan(context: ProfileSelectionContext) -> ProfileSelectionPlan {
+    let preferred_active = context.preferred_difficulties[player_side_index(context.active_side)];
     let navigation_target = if context.fast_switch {
         (context.current_screen != SimplyLoveScreen::SelectMusic)
             .then_some(SimplyLoveScreen::SelectMusic)
@@ -226,9 +218,8 @@ pub fn profile_selection_plan(
     };
 
     ProfileSelectionPlan {
-        combo_carry: profile_combo_carry(profiles),
         preferred_active,
-        preferred_p2: preferred[player_side_index(PlayerSide::P2)],
+        preferred_p2: context.preferred_difficulties[player_side_index(PlayerSide::P2)],
         refresh_select_music: context.fast_switch,
         navigation_target,
     }
@@ -243,22 +234,48 @@ pub struct SimplyLoveNavigationPlan {
     pub initialize_session_side: bool,
 }
 
+/// Shell-prepared visibility policy for Simply Love's optional flow screens.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct SimplyLoveNavigationPolicy {
+    pub show_select_profile: bool,
+    pub show_select_color: bool,
+    pub show_select_style: bool,
+    pub show_select_play_mode: bool,
+    pub show_eval_summary: bool,
+    pub show_name_entry: bool,
+    pub show_gameover: bool,
+}
+
+impl Default for SimplyLoveNavigationPolicy {
+    fn default() -> Self {
+        Self {
+            show_select_profile: true,
+            show_select_color: true,
+            show_select_style: true,
+            show_select_play_mode: true,
+            show_eval_summary: true,
+            show_name_entry: true,
+            show_gameover: true,
+        }
+    }
+}
+
 #[inline(always)]
 const fn startup_screen_enabled(
-    cfg: &deadsync_config::app_config::Config,
+    policy: SimplyLoveNavigationPolicy,
     screen: SimplyLoveScreen,
 ) -> bool {
     match screen {
-        SimplyLoveScreen::SelectProfile => cfg.machine_show_select_profile,
-        SimplyLoveScreen::SelectColor => cfg.machine_show_select_color,
-        SimplyLoveScreen::SelectStyle => cfg.machine_show_select_style,
-        SimplyLoveScreen::SelectPlayMode => cfg.machine_show_select_play_mode,
+        SimplyLoveScreen::SelectProfile => policy.show_select_profile,
+        SimplyLoveScreen::SelectColor => policy.show_select_color,
+        SimplyLoveScreen::SelectStyle => policy.show_select_style,
+        SimplyLoveScreen::SelectPlayMode => policy.show_select_play_mode,
         _ => true,
     }
 }
 
 fn resolve_startup_target(
-    cfg: &deadsync_config::app_config::Config,
+    policy: SimplyLoveNavigationPolicy,
     target: SimplyLoveScreen,
 ) -> SimplyLoveScreen {
     const ORDER: [SimplyLoveScreen; 4] = [
@@ -274,17 +291,17 @@ fn resolve_startup_target(
         .iter()
         .skip(start_idx)
         .copied()
-        .find(|screen| startup_screen_enabled(cfg, *screen))
+        .find(|screen| startup_screen_enabled(policy, *screen))
         .unwrap_or(SimplyLoveScreen::ProfileLoad)
 }
 
 #[inline(always)]
-const fn first_post_select_target(cfg: &deadsync_config::app_config::Config) -> SimplyLoveScreen {
-    if cfg.machine_show_eval_summary {
+const fn first_post_select_target(policy: SimplyLoveNavigationPolicy) -> SimplyLoveScreen {
+    if policy.show_eval_summary {
         SimplyLoveScreen::EvaluationSummary
-    } else if cfg.machine_show_name_entry {
+    } else if policy.show_name_entry {
         SimplyLoveScreen::Initials
-    } else if cfg.machine_show_gameover {
+    } else if policy.show_gameover {
         SimplyLoveScreen::GameOver
     } else {
         SimplyLoveScreen::Menu
@@ -293,26 +310,26 @@ const fn first_post_select_target(cfg: &deadsync_config::app_config::Config) -> 
 
 #[inline(always)]
 const fn resolve_post_select_target(
-    cfg: &deadsync_config::app_config::Config,
+    policy: SimplyLoveNavigationPolicy,
     target: SimplyLoveScreen,
 ) -> SimplyLoveScreen {
     match target {
-        SimplyLoveScreen::EvaluationSummary => first_post_select_target(cfg),
-        SimplyLoveScreen::Initials if !cfg.machine_show_name_entry => {
-            if cfg.machine_show_gameover {
+        SimplyLoveScreen::EvaluationSummary => first_post_select_target(policy),
+        SimplyLoveScreen::Initials if !policy.show_name_entry => {
+            if policy.show_gameover {
                 SimplyLoveScreen::GameOver
             } else {
                 SimplyLoveScreen::Menu
             }
         }
-        SimplyLoveScreen::GameOver if !cfg.machine_show_gameover => SimplyLoveScreen::Menu,
+        SimplyLoveScreen::GameOver if !policy.show_gameover => SimplyLoveScreen::Menu,
         _ => target,
     }
 }
 
 /// Resolve Simply Love's optional startup and post-play screens.
 pub fn resolve_navigation(
-    cfg: &deadsync_config::app_config::Config,
+    policy: SimplyLoveNavigationPolicy,
     from: SimplyLoveScreen,
     requested: SimplyLoveScreen,
     has_played_stages: bool,
@@ -326,7 +343,7 @@ pub fn resolve_navigation(
     ) && target == SimplyLoveScreen::Menu
         && has_played_stages
     {
-        target = first_post_select_target(cfg);
+        target = first_post_select_target(policy);
         pending_post_select_summary_exit = Some(target == SimplyLoveScreen::EvaluationSummary);
     } else if target == SimplyLoveScreen::EvaluationSummary {
         pending_post_select_summary_exit = Some(false);
@@ -348,26 +365,26 @@ pub fn resolve_navigation(
             | SimplyLoveScreen::ProfileLoad
     );
     if startup_flow {
-        target = resolve_startup_target(cfg, target);
+        target = resolve_startup_target(policy, target);
     }
-    target = resolve_post_select_target(cfg, target);
+    target = resolve_post_select_target(policy, target);
 
     SimplyLoveNavigationPlan {
         target,
         pending_post_select_summary_exit,
         apply_preferred_style: startup_flow
-            && !cfg.machine_show_select_style
+            && !policy.show_select_style
             && matches!(
                 target,
                 SimplyLoveScreen::SelectPlayMode | SimplyLoveScreen::ProfileLoad
             ),
         apply_preferred_play_mode: startup_flow
-            && !cfg.machine_show_select_play_mode
+            && !policy.show_select_play_mode
             && target == SimplyLoveScreen::ProfileLoad,
         initialize_session_side: startup_flow
             && from == SimplyLoveScreen::Menu
             && target != SimplyLoveScreen::SelectProfile
-            && !cfg.machine_show_select_profile
+            && !policy.show_select_profile
             && matches!(
                 target,
                 SimplyLoveScreen::SelectColor
@@ -453,7 +470,6 @@ pub const fn uses_actor_only_transition(from: SimplyLoveScreen, to: SimplyLoveSc
 #[cfg(test)]
 mod tests {
     use super::*;
-    use deadsync_config::app_config::Config;
 
     #[test]
     fn identifiers_are_theme_scoped_and_unique() {
@@ -511,20 +527,35 @@ mod tests {
 
     #[test]
     fn startup_flow_skips_disabled_screens() {
-        let cfg = Config {
-            machine_show_select_profile: false,
-            machine_show_select_color: false,
-            machine_show_select_style: true,
-            ..Config::default()
+        let policy = SimplyLoveNavigationPolicy {
+            show_select_profile: false,
+            show_select_color: false,
+            show_select_style: true,
+            ..Default::default()
         };
         let plan = resolve_navigation(
-            &cfg,
+            policy,
             SimplyLoveScreen::Menu,
             SimplyLoveScreen::SelectProfile,
             false,
         );
         assert_eq!(plan.target, SimplyLoveScreen::SelectStyle);
         assert!(plan.initialize_session_side);
+    }
+
+    #[test]
+    fn profile_selection_uses_prepared_player_values() {
+        let plan = profile_selection_plan(ProfileSelectionContext {
+            preferred_difficulties: [2, 5],
+            active_side: PlayerSide::P2,
+            fast_switch: true,
+            current_screen: SimplyLoveScreen::SelectProfile,
+            show_groovestats_login: false,
+            show_arrowcloud_login: false,
+        });
+        assert_eq!(plan.preferred_active, 5);
+        assert_eq!(plan.preferred_p2, 5);
+        assert_eq!(plan.navigation_target, Some(SimplyLoveScreen::SelectMusic));
     }
 
     #[test]

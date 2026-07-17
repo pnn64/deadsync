@@ -1,31 +1,7 @@
 use super::*;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(super) enum ReloadPhase {
-    Songs,
-    Courses,
-}
-
-#[derive(Debug)]
-pub(super) enum ReloadMsg {
-    Phase(ReloadPhase),
-    Song {
-        done: usize,
-        total: usize,
-        pack: String,
-        song: String,
-    },
-    Course {
-        done: usize,
-        total: usize,
-        group: String,
-        course: String,
-    },
-    Done,
-}
-
 pub(super) struct ReloadUiState {
-    pub(super) phase: ReloadPhase,
+    pub(super) phase: crate::views::SimplyLoveContentReloadPhase,
     pub(super) line2: String,
     pub(super) line3: String,
     pub(super) songs_done: usize,
@@ -34,13 +10,12 @@ pub(super) struct ReloadUiState {
     pub(super) courses_total: usize,
     pub(super) done: bool,
     pub(super) started_at: Instant,
-    pub(super) rx: std::sync::mpsc::Receiver<ReloadMsg>,
 }
 
 impl ReloadUiState {
-    pub(super) fn new(rx: std::sync::mpsc::Receiver<ReloadMsg>) -> Self {
+    pub(super) fn new() -> Self {
         Self {
-            phase: ReloadPhase::Songs,
+            phase: crate::views::SimplyLoveContentReloadPhase::Songs,
             line2: String::new(),
             line3: String::new(),
             songs_done: 0,
@@ -49,115 +24,83 @@ impl ReloadUiState {
             courses_total: 0,
             done: false,
             started_at: Instant::now(),
-            rx,
         }
     }
 }
 
-pub(super) fn start_reload_songs_and_courses(state: &mut State) {
+pub(super) fn start_reload_songs_and_courses(state: &mut State) -> ThemeEffect {
     if state.reload_ui.is_some() {
-        return;
+        return ThemeEffect::None;
     }
 
     // Clear navigation holds so the menu can't "run away" after reload finishes.
     clear_navigation_holds(state);
 
-    let (tx, rx) = std::sync::mpsc::channel::<ReloadMsg>();
-    state.reload_ui = Some(ReloadUiState::new(rx));
-    let songs_root = state.app_paths.songs.path.clone();
-    let courses_root = state.app_paths.courses.path.clone();
-
-    std::thread::spawn(move || {
-        let _ = tx.send(ReloadMsg::Phase(ReloadPhase::Songs));
-
-        let mut on_song = |done: usize, total: usize, pack: &str, song: &str| {
-            let _ = tx.send(ReloadMsg::Song {
-                done,
-                total,
-                pack: pack.to_owned(),
-                song: song.to_owned(),
-            });
-        };
-        song_loading::scan_and_load_songs_with_progress_counts(&songs_root, &mut on_song);
-
-        let _ = tx.send(ReloadMsg::Phase(ReloadPhase::Courses));
-
-        let mut on_course = |done: usize, total: usize, group: &str, course: &str| {
-            let _ = tx.send(ReloadMsg::Course {
-                done,
-                total,
-                group: group.to_owned(),
-                course: course.to_owned(),
-            });
-        };
-        song_loading::scan_and_load_courses_with_progress_counts(
-            &courses_root,
-            &songs_root,
-            &mut on_course,
-        );
-
-        let _ = tx.send(ReloadMsg::Done);
-    });
+    state.reload_ui = Some(ReloadUiState::new());
+    ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Content(
+        crate::SimplyLoveContentRequest::ReloadLibrary {
+            songs_root: state.app_paths.songs.path.clone(),
+            courses_root: state.app_paths.courses.path.clone(),
+        },
+    ))
 }
 
-pub(super) fn start_reload_song_dirs(state: &mut State, pack_dirs: Vec<PathBuf>) {
+pub(super) fn start_reload_song_dirs(state: &mut State, pack_dirs: Vec<PathBuf>) -> ThemeEffect {
     if state.reload_ui.is_some() || pack_dirs.is_empty() {
-        return;
+        return ThemeEffect::None;
     }
 
     clear_navigation_holds(state);
-    let (tx, rx) = std::sync::mpsc::channel::<ReloadMsg>();
-    state.reload_ui = Some(ReloadUiState::new(rx));
-    let songs_root = state.app_paths.songs.path.clone();
-
-    std::thread::spawn(move || {
-        let _ = tx.send(ReloadMsg::Phase(ReloadPhase::Songs));
-        let mut on_song = |done: usize, total: usize, pack: &str, song: &str| {
-            let _ = tx.send(ReloadMsg::Song {
-                done,
-                total,
-                pack: pack.to_owned(),
-                song: song.to_owned(),
-            });
-        };
-        song_loading::reload_song_dirs_with_progress_counts(&songs_root, &pack_dirs, &mut on_song);
-        let _ = tx.send(ReloadMsg::Done);
-    });
+    state.reload_ui = Some(ReloadUiState::new());
+    ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Content(
+        crate::SimplyLoveContentRequest::ReloadSongDirs {
+            songs_root: state.app_paths.songs.path.clone(),
+            pack_dirs,
+        },
+    ))
 }
 
-pub(super) fn poll_reload_ui(reload: &mut ReloadUiState) {
-    while let Ok(msg) = reload.rx.try_recv() {
-        match msg {
-            ReloadMsg::Phase(phase) => {
+pub fn sync_reload_events(
+    state: &mut State,
+    events: Vec<crate::views::SimplyLoveContentReloadEvent>,
+) {
+    let Some(reload) = state.reload_ui.as_mut() else {
+        return;
+    };
+    for event in events {
+        match event {
+            crate::views::SimplyLoveContentReloadEvent::Phase(phase) => {
                 reload.phase = phase;
                 reload.line2.clear();
                 reload.line3.clear();
             }
-            ReloadMsg::Song {
+            crate::views::SimplyLoveContentReloadEvent::Song {
                 done,
                 total,
                 pack,
                 song,
             } => {
-                reload.phase = ReloadPhase::Songs;
+                reload.phase = crate::views::SimplyLoveContentReloadPhase::Songs;
                 reload.songs_done = done;
                 reload.songs_total = total;
                 reload.line2 = pack;
                 reload.line3 = song;
             }
-            ReloadMsg::Course {
+            crate::views::SimplyLoveContentReloadEvent::Course {
                 done,
                 total,
                 group,
                 course,
             } => {
-                reload.phase = ReloadPhase::Courses;
+                reload.phase = crate::views::SimplyLoveContentReloadPhase::Courses;
                 reload.courses_done = done;
                 reload.courses_total = total;
                 reload.line2 = group;
                 reload.line3 = course;
             }
-            ReloadMsg::Done => {
+            crate::views::SimplyLoveContentReloadEvent::Artwork { .. }
+            | crate::views::SimplyLoveContentReloadEvent::Noteskins { .. } => {}
+            crate::views::SimplyLoveContentReloadEvent::Finished { .. } => {
                 reload.done = true;
             }
         }
@@ -228,8 +171,12 @@ pub(super) fn build_reload_overlay_actors(
         z(300)
     ));
     let phase_label = match reload.phase {
-        ReloadPhase::Songs => tr("Init", "LoadingSongsText"),
-        ReloadPhase::Courses => tr("Init", "LoadingCoursesText"),
+        crate::views::SimplyLoveContentReloadPhase::Songs => tr("Init", "LoadingSongsText"),
+        crate::views::SimplyLoveContentReloadPhase::Courses => tr("Init", "LoadingCoursesText"),
+        crate::views::SimplyLoveContentReloadPhase::Artwork => tr("Init", "CachingArtworkText"),
+        crate::views::SimplyLoveContentReloadPhase::Noteskins => {
+            tr("Init", "CompilingNoteskinsText")
+        }
     };
     out.push(act!(text:
         font("miso"):

@@ -263,14 +263,10 @@ fn update_impl(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Opti
         && !state.pending_pack_reload_dirs.is_empty()
     {
         let dirs = std::mem::take(&mut state.pending_pack_reload_dirs);
-        start_reload_song_dirs(state, dirs);
+        return Some(start_reload_song_dirs(state, dirs));
     }
     if state.reload_ui.is_some() {
-        let done = {
-            let reload = state.reload_ui.as_mut().unwrap();
-            poll_reload_ui(reload);
-            reload.done
-        };
+        let done = state.reload_ui.as_ref().is_some_and(|reload| reload.done);
         if done {
             state.reload_ui = None;
             refresh_score_import_pack_options(state);
@@ -321,7 +317,9 @@ fn update_impl(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Opti
                 if matches!(state.view, OptionsView::Submenu(SubmenuKind::InputBackend))
                     && let Some(enabled) = state.pending_dedicated_menu_buttons.take()
                 {
-                    config::update_only_dedicated_menu_buttons(enabled);
+                    pending_action = Some(options_config_effect(
+                        crate::SimplyLoveOptionsConfigRequest::OnlyDedicatedMenuButtons(enabled),
+                    ));
                 }
                 // Switch view to the target submenu, then fade it in.
                 let target_kind = state.pending_submenu_kind.unwrap_or(SubmenuKind::System);

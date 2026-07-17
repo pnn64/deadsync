@@ -11,7 +11,6 @@ use deadsync_noteskin::{NUM_QUANTIZATIONS, Quantization};
 use deadsync_profile as profile_data;
 use image::{Rgba, RgbaImage};
 use std::hash::Hasher;
-use std::path::Path;
 use twox_hash::XxHash64;
 
 use super::utils::{arrow_breakdown_rgba, pane3_origin_x};
@@ -42,9 +41,9 @@ fn pane3_solid_arrow_texture(texture_key: &str) -> String {
         return key;
     }
 
-    let candidate = Path::new("assets").join(texture_key);
-    let path = deadsync_assets::resolve_asset_path(&candidate.to_string_lossy());
-    let Ok(src) = assets::open_image_fallback(&path).map(|img| img.to_rgba8()) else {
+    let Ok(src) = deadsync_assets::open_bundled_image(&format!("assets/{texture_key}"))
+        .map(|img| img.to_rgba8())
+    else {
         return texture_key.to_string();
     };
 

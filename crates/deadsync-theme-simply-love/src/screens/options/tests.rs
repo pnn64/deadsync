@@ -33,24 +33,28 @@ fn test_app_paths() -> AppPathsView {
 }
 
 fn init_with_audio(audio_options: AudioOptionsView) -> State {
-    super::init(
-        SimplyLoveUpdaterCapabilities {
+    super::init(OptionsInitView {
+        config: config::Config::default(),
+        updater_capabilities: SimplyLoveUpdaterCapabilities {
             app_update: true,
             ffmpeg_install: true,
         },
-        test_app_paths(),
-        audio_options,
-        GraphicsOptionsView {
+        app_paths: test_app_paths(),
+        audio: audio_options,
+        graphics: GraphicsOptionsView {
             software_thread_choices: vec![0, 1, 2],
             ..GraphicsOptionsView::default()
         },
-        Vec::new(),
-        NoteskinCatalogView {
+        song_packs: Vec::new(),
+        pack_sync: OptionsPackSyncView::default(),
+        noteskins: NoteskinCatalogView {
             names: vec![profile_data::NoteSkin::DEFAULT_NAME.to_owned()],
         },
-        deadsync_theme::views::SmxAssignmentView::default(),
-        deadsync_theme::views::SmxGifCatalogView::default(),
-    )
+        machine_noteskin: profile_data::NoteSkin::default(),
+        smx_assignment: deadsync_theme::views::SmxAssignmentView::default(),
+        smx_gifs: deadsync_theme::views::SmxGifCatalogView::default(),
+        score_import_profiles: Vec::new(),
+    })
 }
 
 fn updater_view() -> SimplyLoveUpdaterView {
@@ -58,20 +62,89 @@ fn updater_view() -> SimplyLoveUpdaterView {
 }
 
 #[test]
+fn visual_assets_follow_local_machine_choices() {
+    let mut state = init();
+    let rows = submenu_rows(SubmenuKind::Machine);
+    let style_row = rows
+        .iter()
+        .position(|row| row.id == SubRowId::VisualStyle)
+        .expect("machine options should contain visual style");
+    let variant_row = rows
+        .iter()
+        .position(|row| row.id == SubRowId::ThemeVariant)
+        .expect("machine options should contain theme variant");
+    state.sub[SubmenuKind::Machine].choice_indices[style_row] =
+        visual_style_choice_index(config::VisualStyle::Srpg9);
+    state.sub[SubmenuKind::Machine].choice_indices[variant_row] =
+        srpg_variant_choice_index(config::SrpgVariant::Srpg10);
+
+    let selected = selected_visual_assets(&state);
+    let expected = visual_styles::for_style_and_variant(
+        config::VisualStyle::Srpg9,
+        config::SrpgVariant::Srpg10,
+    );
+    assert_eq!(
+        selected.select_color,
+        expected.select_color,
+        "style_choice={} variant_choice={}",
+        state.sub[SubmenuKind::Machine].choice_indices[style_row],
+        state.sub[SubmenuKind::Machine].choice_indices[variant_row]
+    );
+}
+
+#[test]
+fn pack_sync_policy_comes_from_prepared_profile_and_current_options() {
+    let mut state = init();
+    state.pack_sync = OptionsPackSyncView {
+        target_chart_type: "dance-double".to_owned(),
+        preferred_difficulty_index: 4,
+    };
+    set_choice_by_id(
+        &mut state.sub[SubmenuKind::InputBackend].choice_indices,
+        INPUT_BACKEND_OPTIONS_ROWS,
+        SubRowId::MenuNavigation,
+        1,
+    );
+    set_choice_by_id(
+        &mut state.sub[SubmenuKind::InputBackend].choice_indices,
+        INPUT_BACKEND_OPTIONS_ROWS,
+        SubRowId::MenuButtons,
+        1,
+    );
+    set_choice_by_id(
+        &mut state.sub[SubmenuKind::NullOrDieOptions].choice_indices,
+        NULL_OR_DIE_OPTIONS_ROWS,
+        SubRowId::SyncConfidence,
+        sync_confidence_choice_index(75),
+    );
+
+    let navigation = navigation_policy(&state);
+    assert!(navigation.only_dedicated_menu_buttons);
+    assert!(navigation.three_key_navigation);
+    assert_eq!(confidence_percent(&state), 75);
+    assert_eq!(state.pack_sync.target_chart_type, "dance-double");
+    assert_eq!(state.pack_sync.preferred_difficulty_index, 4);
+}
+
+#[test]
 fn smx_gif_choices_come_from_shell_catalog() {
-    let state = super::init(
-        SimplyLoveUpdaterCapabilities::default(),
-        test_app_paths(),
-        AudioOptionsView::default(),
-        GraphicsOptionsView::default(),
-        Vec::new(),
-        NoteskinCatalogView::default(),
-        SmxAssignmentView::default(),
-        SmxGifCatalogView {
+    let state = super::init(OptionsInitView {
+        config: config::Config::default(),
+        updater_capabilities: SimplyLoveUpdaterCapabilities::default(),
+        app_paths: test_app_paths(),
+        audio: AudioOptionsView::default(),
+        graphics: GraphicsOptionsView::default(),
+        song_packs: Vec::new(),
+        pack_sync: OptionsPackSyncView::default(),
+        noteskins: NoteskinCatalogView::default(),
+        machine_noteskin: profile_data::NoteSkin::default(),
+        smx_assignment: SmxAssignmentView::default(),
+        smx_gifs: SmxGifCatalogView {
             background_packs: vec!["Background Pack".to_owned()],
             judgment_packs: vec!["Judgment Pack".to_owned()],
         },
-    );
+        score_import_profiles: Vec::new(),
+    });
 
     assert_eq!(state.smx_bg_pack_choices, ["Background Pack"]);
     assert_eq!(state.smx_judge_pack_choices, ["Judgment Pack"]);
@@ -102,6 +175,75 @@ fn smx_underglow_choice_emits_shell_hardware_request() {
         ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Hardware(
             crate::SimplyLoveHardwareRequest::SetSmxUnderglowTheme(value)
         )) if value == enabled
+    ));
+}
+
+#[test]
+fn system_choice_emits_shell_options_config_request() {
+    let asset_manager = AssetManager::new();
+    let mut state = init();
+    state.view = OptionsView::Submenu(SubmenuKind::System);
+    let row = select_visible_row(&mut state, SubmenuKind::System, SubRowId::LogFile);
+
+    let effect = apply_submenu_choice_delta(&mut state, &asset_manager, 1, NavWrap::Wrap)
+        .expect("system choice should emit shell config work");
+    let enabled = state.sub[SubmenuKind::System].cursor_indices[row] == 1;
+
+    assert!(matches!(
+        effect,
+        ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Config(
+            crate::SimplyLoveConfigRequest::Options(
+                crate::SimplyLoveOptionsConfigRequest::LogToFile(value)
+            )
+        )) if value == enabled
+    ));
+}
+
+#[test]
+fn smx_numeric_choice_emits_shell_options_config_request() {
+    let asset_manager = AssetManager::new();
+    let mut state = init();
+    state.view = OptionsView::Submenu(SubmenuKind::SmxConfig);
+    select_visible_row(
+        &mut state,
+        SubmenuKind::SmxConfig,
+        SubRowId::SmxDefaultLightBrightness,
+    );
+    let delta = if state.smx_default_light_brightness_pct < VOLUME_MAX_PERCENT {
+        1
+    } else {
+        -1
+    };
+
+    let effect = apply_submenu_choice_delta(&mut state, &asset_manager, delta, NavWrap::Clamp)
+        .expect("SMX numeric choice should emit shell config work");
+
+    assert!(matches!(
+        effect,
+        ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Config(
+            crate::SimplyLoveConfigRequest::Options(
+                crate::SimplyLoveOptionsConfigRequest::SmxDefaultLightBrightness(value)
+            )
+        )) if value == state.smx_default_light_brightness_pct as u8
+    ));
+}
+
+#[test]
+fn machine_noteskin_choice_emits_shell_profile_request() {
+    let asset_manager = AssetManager::new();
+    let mut state = init();
+    state.system_noteskin_choices.push("delta".to_owned());
+    state.view = OptionsView::Submenu(SubmenuKind::System);
+    select_visible_row(&mut state, SubmenuKind::System, SubRowId::DefaultNoteSkin);
+
+    let effect = apply_submenu_choice_delta(&mut state, &asset_manager, 1, NavWrap::Wrap)
+        .expect("machine noteskin should emit shell profile work");
+
+    assert!(matches!(
+        effect,
+        ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Profile(
+            crate::SimplyLoveProfileRequest::SetMachineDefaultNoteskin(noteskin)
+        )) if noteskin.as_str() == "delta"
     ));
 }
 
@@ -1660,6 +1802,66 @@ fn update_drain_emits_a_queued_sound_without_follow_up_work() {
         )) if path == "assets/sounds/change.ogg"
     ));
     assert!(state.pending_sfx.is_empty());
+}
+
+#[test]
+fn content_reload_requests_use_prepared_paths() {
+    let mut state = init();
+
+    let effect = start_reload_songs_and_courses(&mut state);
+
+    assert!(matches!(
+        effect,
+        ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Content(
+            crate::SimplyLoveContentRequest::ReloadLibrary {
+                songs_root,
+                courses_root,
+            }
+        )) if songs_root == PathBuf::from("/data/songs")
+            && courses_root == PathBuf::from("/data/courses")
+    ));
+    assert!(state.reload_ui.is_some());
+}
+
+#[test]
+fn shell_content_events_drive_reload_progress_and_completion() {
+    let mut state = init();
+    let _ = start_reload_songs_and_courses(&mut state);
+
+    sync_reload_events(
+        &mut state,
+        vec![
+            crate::views::SimplyLoveContentReloadEvent::Song {
+                done: 3,
+                total: 8,
+                pack: "Pack".to_owned(),
+                song: "Song".to_owned(),
+            },
+            crate::views::SimplyLoveContentReloadEvent::Finished {
+                song_packs: Vec::new(),
+            },
+        ],
+    );
+
+    let reload = state
+        .reload_ui
+        .as_ref()
+        .expect("reload chrome should remain");
+    assert_eq!((reload.songs_done, reload.songs_total), (3, 8));
+    assert_eq!(
+        (reload.line2.as_str(), reload.line3.as_str()),
+        ("Pack", "Song")
+    );
+    assert!(reload.done);
+
+    let effect = update(
+        &mut state,
+        0.0,
+        &AssetManager::new(),
+        &SmxAssignmentView::default(),
+    );
+    assert!(effect.is_none());
+    assert!(state.reload_ui.is_none());
 }
 
 /// Run pending submenu fades to completion (cap iterations so a stuck transition

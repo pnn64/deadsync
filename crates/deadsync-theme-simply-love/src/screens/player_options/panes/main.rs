@@ -2,12 +2,11 @@ use super::super::choice;
 use super::super::row::index_binding;
 use super::*;
 use deadsync_chart::{STANDARD_DIFFICULTY_COUNT, STANDARD_DIFFICULTY_NAMES};
-use deadsync_profile::compat as gp;
 use deadsync_profile::{
     BackgroundFilter, ComboFont, HeldMissGraphic, HoldJudgmentGraphic, JudgmentGraphic,
     MINI_PERCENT_MAX, MINI_PERCENT_MIN, NOTE_FIELD_OFFSET_X_MAX, NOTE_FIELD_OFFSET_X_MIN,
     NOTE_FIELD_OFFSET_Y_MAX, NOTE_FIELD_OFFSET_Y_MIN, NoCmodAlternative, NoteSkin, Perspective,
-    PlayerSide, TapExplosionMask, VISUAL_DELAY_MS_MAX, VISUAL_DELAY_MS_MIN,
+    TapExplosionMask, VISUAL_DELAY_MS_MAX, VISUAL_DELAY_MS_MIN,
 };
 
 // =============================== Bindings ===============================
@@ -16,7 +15,6 @@ const NO_CMOD_ALTERNATIVE: ChoiceBinding<usize> = index_binding!(
     NO_CMOD_ALTERNATIVE_VARIANTS,
     NoCmodAlternative::None,
     no_cmod_alternative,
-    gp::update_no_cmod_alternative_for_side,
     false,
     Some(CycleInit {
         from_profile: |p| {
@@ -31,7 +29,6 @@ const PERSPECTIVE: ChoiceBinding<usize> = index_binding!(
     PERSPECTIVE_VARIANTS,
     Perspective::Overhead,
     perspective,
-    gp::update_perspective_for_side,
     false,
     Some(CycleInit {
         from_profile: |p| {
@@ -46,7 +43,6 @@ const COMBO_FONT: ChoiceBinding<usize> = index_binding!(
     COMBO_FONT_VARIANTS,
     ComboFont::Wendy,
     combo_font,
-    gp::update_combo_font_for_side,
     true,
     Some(CycleInit {
         from_profile: |p| {
@@ -63,7 +59,6 @@ const BACKGROUND_FILTER: NumericBinding = NumericBinding {
         p.background_filter = BackgroundFilter::from_i32(v);
         Outcome::persisted()
     },
-    persist_for_side: gp::update_background_filter_for_side,
     init: Some(NumericInit {
         from_profile: |p| p.background_filter.percent() as i32,
         format: |v| format!("{v}%"),
@@ -76,7 +71,6 @@ const JUDGMENT_OFFSET_X: NumericBinding = NumericBinding {
         p.judgment_offset_x = v;
         Outcome::persisted()
     },
-    persist_for_side: gp::update_judgment_offset_x_for_side,
     init: Some(NumericInit {
         from_profile: |p| p.judgment_offset_x.clamp(HUD_OFFSET_MIN, HUD_OFFSET_MAX),
         format: |v| format!("{v}"),
@@ -88,7 +82,6 @@ const JUDGMENT_OFFSET_Y: NumericBinding = NumericBinding {
         p.judgment_offset_y = v;
         Outcome::persisted()
     },
-    persist_for_side: gp::update_judgment_offset_y_for_side,
     init: Some(NumericInit {
         from_profile: |p| p.judgment_offset_y.clamp(HUD_OFFSET_MIN, HUD_OFFSET_MAX),
         format: |v| format!("{v}"),
@@ -100,7 +93,6 @@ const COMBO_OFFSET_X: NumericBinding = NumericBinding {
         p.combo_offset_x = v;
         Outcome::persisted()
     },
-    persist_for_side: gp::update_combo_offset_x_for_side,
     init: Some(NumericInit {
         from_profile: |p| p.combo_offset_x.clamp(HUD_OFFSET_MIN, HUD_OFFSET_MAX),
         format: |v| format!("{v}"),
@@ -112,7 +104,6 @@ const COMBO_OFFSET_Y: NumericBinding = NumericBinding {
         p.combo_offset_y = v;
         Outcome::persisted()
     },
-    persist_for_side: gp::update_combo_offset_y_for_side,
     init: Some(NumericInit {
         from_profile: |p| p.combo_offset_y.clamp(HUD_OFFSET_MIN, HUD_OFFSET_MAX),
         format: |v| format!("{v}"),
@@ -124,7 +115,6 @@ const NOTEFIELD_OFFSET_X: NumericBinding = NumericBinding {
         p.note_field_offset_x = v;
         Outcome::persisted()
     },
-    persist_for_side: gp::update_notefield_offset_x_for_side,
     init: Some(NumericInit {
         from_profile: |p| p.note_field_offset_x.clamp(0, 50),
         format: |v| format!("{v}"),
@@ -136,7 +126,6 @@ const NOTEFIELD_OFFSET_Y: NumericBinding = NumericBinding {
         p.note_field_offset_y = v;
         Outcome::persisted()
     },
-    persist_for_side: gp::update_notefield_offset_y_for_side,
     init: Some(NumericInit {
         from_profile: |p| p.note_field_offset_y.clamp(-50, 50),
         format: |v| format!("{v}"),
@@ -148,7 +137,6 @@ const VISUAL_DELAY: NumericBinding = NumericBinding {
         p.visual_delay_ms = v;
         Outcome::persisted()
     },
-    persist_for_side: gp::update_visual_delay_ms_for_side,
     init: Some(NumericInit {
         from_profile: |p| p.visual_delay_ms.clamp(-100, 100),
         format: |v| format!("{v}ms"),
@@ -160,7 +148,6 @@ const GLOBAL_OFFSET_SHIFT: NumericBinding = NumericBinding {
         p.global_offset_shift_ms = v;
         Outcome::persisted()
     },
-    persist_for_side: gp::update_global_offset_shift_ms_for_side,
     init: Some(NumericInit {
         from_profile: |p| p.global_offset_shift_ms.clamp(-100, 100),
         format: |v| format!("{v}ms"),
@@ -172,7 +159,6 @@ const SPACING: NumericBinding = NumericBinding {
         p.spacing_percent = v;
         Outcome::persisted()
     },
-    persist_for_side: gp::update_spacing_percent_for_side,
     init: Some(NumericInit {
         from_profile: |p| {
             p.spacing_percent
@@ -185,14 +171,14 @@ const SPACING: NumericBinding = NumericBinding {
 /// Shared boilerplate for a noteskin-style cycle row implemented via
 /// `CustomBinding`: advance the choice index, look up the chosen string, then
 /// hand off to a row-specific `apply` closure that knows how to turn that
-/// string into the right Profile/State write.
+/// string into the right option/state write.
 fn apply_noteskin_delta(
     state: &mut State,
     player_idx: usize,
     row_id: RowId,
     delta: isize,
     wrap: NavWrap,
-    apply: fn(&mut State, usize, &str, bool, PlayerSide),
+    apply: fn(&mut State, usize, &str),
 ) -> Outcome {
     let Some(new_index) = choice::cycle_choice_index(state, player_idx, row_id, delta, wrap) else {
         return Outcome::NONE;
@@ -204,8 +190,7 @@ fn apply_noteskin_delta(
         .and_then(|r| r.choices.get(new_index))
         .cloned()
         .unwrap_or_default();
-    let (should_persist, side) = choice::persist_ctx(state, player_idx);
-    apply(state, player_idx, &choice, should_persist, side);
+    apply(state, player_idx, &choice);
     Outcome::persisted()
 }
 
@@ -217,20 +202,16 @@ const NOTE_SKIN: CustomBinding = CustomBinding {
             row_id,
             delta,
             wrap,
-            |state, player_idx, choice, should_persist, side| {
+            |state, player_idx, choice| {
                 let name = if choice.is_empty() {
                     NoteSkin::DEFAULT_NAME.to_string()
                 } else {
                     choice.to_string()
                 };
-                let setting = NoteSkin::new(&name);
-                state.player_profiles[player_idx].noteskin = setting.clone();
-                if should_persist {
-                    gp::update_noteskin_for_side(side, setting);
-                }
+                state.player_options[player_idx].noteskin = NoteSkin::new(&name);
                 sync_noteskin_previews_for_player(
                     &mut state.noteskin,
-                    &state.player_profiles[player_idx],
+                    &state.player_options[player_idx],
                     player_idx,
                     state.cols_per_player,
                 );
@@ -250,11 +231,7 @@ const HEART_RATE_MONITOR: CustomBinding = CustomBinding {
             .get(choice_idx)
             .cloned()
             .unwrap_or(None);
-        state.player_profiles[player_idx].set_heart_rate_device_id(device_id.clone());
-        let (should_persist, side) = choice::persist_ctx(state, player_idx);
-        if should_persist {
-            gp::update_heart_rate_device_id_for_side(side, device_id);
-        }
+        state.heart_rate_device_ids[player_idx] = device_id;
         Outcome::persisted()
     },
 };
@@ -266,22 +243,19 @@ const MINE_SKIN: CustomBinding = CustomBinding {
             row_id,
             delta,
             wrap,
-            |state, player_idx, choice, should_persist, side| {
+            |state, player_idx, choice| {
                 let match_label = tr("PlayerOptions", MATCH_NOTESKIN_LABEL);
                 let setting = if choice == match_label.as_ref() {
                     None
                 } else {
                     Some(NoteSkin::new(choice))
                 };
-                state.player_profiles[player_idx]
+                state.player_options[player_idx]
                     .mine_noteskin
                     .clone_from(&setting);
-                if should_persist {
-                    gp::update_mine_noteskin_for_side(side, setting);
-                }
                 sync_noteskin_previews_for_player(
                     &mut state.noteskin,
-                    &state.player_profiles[player_idx],
+                    &state.player_options[player_idx],
                     player_idx,
                     state.cols_per_player,
                 );
@@ -297,22 +271,19 @@ const RECEPTOR_SKIN: CustomBinding = CustomBinding {
             row_id,
             delta,
             wrap,
-            |state, player_idx, choice, should_persist, side| {
+            |state, player_idx, choice| {
                 let match_label = tr("PlayerOptions", MATCH_NOTESKIN_LABEL);
                 let setting = if choice == match_label.as_ref() {
                     None
                 } else {
                     Some(NoteSkin::new(choice))
                 };
-                state.player_profiles[player_idx]
+                state.player_options[player_idx]
                     .receptor_noteskin
                     .clone_from(&setting);
-                if should_persist {
-                    gp::update_receptor_noteskin_for_side(side, setting);
-                }
                 sync_noteskin_previews_for_player(
                     &mut state.noteskin,
-                    &state.player_profiles[player_idx],
+                    &state.player_options[player_idx],
                     player_idx,
                     state.cols_per_player,
                 );
@@ -328,7 +299,7 @@ const TAP_EXPLOSION_SKIN: CustomBinding = CustomBinding {
             row_id,
             delta,
             wrap,
-            |state, player_idx, choice, should_persist, side| {
+            |state, player_idx, choice| {
                 let match_label = tr("PlayerOptions", MATCH_NOTESKIN_LABEL);
                 let no_tap_label = tr("PlayerOptions", NO_TAP_EXPLOSION_LABEL);
                 let setting = if choice == match_label.as_ref() {
@@ -338,15 +309,12 @@ const TAP_EXPLOSION_SKIN: CustomBinding = CustomBinding {
                 } else {
                     Some(NoteSkin::new(choice))
                 };
-                state.player_profiles[player_idx]
+                state.player_options[player_idx]
                     .tap_explosion_noteskin
                     .clone_from(&setting);
-                if should_persist {
-                    gp::update_tap_explosion_noteskin_for_side(side, setting);
-                }
                 sync_noteskin_previews_for_player(
                     &mut state.noteskin,
-                    &state.player_profiles[player_idx],
+                    &state.player_options[player_idx],
                     player_idx,
                     state.cols_per_player,
                 );
@@ -389,9 +357,6 @@ const TAP_EXPLOSION_OPTIONS: BitmaskBinding = BitmaskBinding::Generic {
         project: |_m, p, b| {
             p.tap_explosion_active_mask = TapExplosionMask::from_bits_truncate(b as u8);
         },
-        persist_for_side: |s, p| {
-            gp::update_tap_explosion_mask_for_side(s, p.tap_explosion_active_mask);
-        },
         bit_mapping: BitMapping::Explicit(TAP_EXPLOSION_OPTION_BITS),
         sync_visibility: false,
     },
@@ -411,7 +376,10 @@ const MUSIC_RATE: CustomBinding = CustomBinding {
             }
         }
         let music_rate = state.music_rate;
-        gp::set_session_music_rate(music_rate);
+        super::super::queue_profile_request(
+            state,
+            crate::SimplyLoveProfileRequest::SetMusicRate(music_rate),
+        );
         super::super::queue_audio(
             state,
             deadsync_theme::AudioRequest::SetMusicRate(music_rate),
@@ -433,7 +401,7 @@ const SPEED_MOD: CustomBinding = CustomBinding {
             speed_mod.value = speed_mod.value.clamp(increment, upper);
             speed_mod.clone()
         };
-        sync_profile_scroll_speed(&mut state.player_profiles[player_idx], &speed_mod);
+        sync_profile_scroll_speed(&mut state.player_options[player_idx], &speed_mod);
         Outcome::persisted()
     },
 };
@@ -464,7 +432,7 @@ const TYPE_OF_SPEED_MOD: CustomBinding = CustomBinding {
             state.speed_mod[player_idx] = converted.clone();
             converted
         };
-        sync_profile_scroll_speed(&mut state.player_profiles[player_idx], &speed_mod);
+        sync_profile_scroll_speed(&mut state.player_options[player_idx], &speed_mod);
         Outcome::persisted()
     },
 };
@@ -487,11 +455,7 @@ const MINI: CustomBinding = CustomBinding {
         let Ok(val) = choice.trim_end_matches('%').parse::<i32>() else {
             return Outcome::persisted();
         };
-        state.player_profiles[player_idx].mini_percent = val;
-        let (should_persist, side) = choice::persist_ctx(state, player_idx);
-        if should_persist {
-            gp::update_mini_percent_for_side(side, val);
-        }
+        state.player_options[player_idx].mini_percent = val;
         Outcome::persisted()
     },
 };
@@ -506,14 +470,7 @@ const JUDGMENT_FONT: CustomBinding = CustomBinding {
             .get(new_index)
             .map(|choice| JudgmentGraphic::new(choice.key.as_ref()))
             .unwrap_or_default();
-        state.player_profiles[player_idx].judgment_graphic = setting;
-        let (should_persist, side) = choice::persist_ctx(state, player_idx);
-        if should_persist {
-            gp::update_judgment_graphic_for_side(
-                side,
-                state.player_profiles[player_idx].judgment_graphic.clone(),
-            );
-        }
+        state.player_options[player_idx].judgment_graphic = setting;
         Outcome::persisted_with_visibility()
     },
 };
@@ -528,16 +485,7 @@ const HOLD_JUDGMENT: CustomBinding = CustomBinding {
             .get(new_index)
             .map(|choice| HoldJudgmentGraphic::new(choice.key.as_ref()))
             .unwrap_or_default();
-        state.player_profiles[player_idx].hold_judgment_graphic = setting;
-        let (should_persist, side) = choice::persist_ctx(state, player_idx);
-        if should_persist {
-            gp::update_hold_judgment_graphic_for_side(
-                side,
-                state.player_profiles[player_idx]
-                    .hold_judgment_graphic
-                    .clone(),
-            );
-        }
+        state.player_options[player_idx].hold_judgment_graphic = setting;
         Outcome::persisted()
     },
 };
@@ -552,14 +500,7 @@ const HELD_GRAPHIC: CustomBinding = CustomBinding {
             .get(new_index)
             .map(|choice| HeldMissGraphic::new(choice.key.as_ref()))
             .unwrap_or_default();
-        state.player_profiles[player_idx].held_miss_graphic = setting;
-        let (should_persist, side) = choice::persist_ctx(state, player_idx);
-        if should_persist {
-            gp::update_held_miss_graphic_for_side(
-                side,
-                state.player_profiles[player_idx].held_miss_graphic.clone(),
-            );
-        }
+        state.player_options[player_idx].held_miss_graphic = setting;
         Outcome::persisted()
     },
 };
@@ -816,10 +757,9 @@ fn push_background_filter_row(b: &mut RowBuilder) {
 const PAD_LIGHT_BRIGHTNESS: NumericBinding = NumericBinding {
     parse: parse_i32_percent,
     apply: |p, v| {
-        p.set_pad_light_brightness(v.clamp(0, 100) as u8);
+        p.pad_light_brightness = v.clamp(0, 100) as u8;
         Outcome::persisted()
     },
-    persist_for_side: gp::update_pad_light_brightness_for_side,
     init: Some(NumericInit {
         from_profile: |p| i32::from(p.pad_light_brightness),
         format: |v| format!("{v}%"),
@@ -886,15 +826,11 @@ const SMX_BG_PACK: CustomBinding = CustomBinding {
                 .cloned()
                 .unwrap_or_default()
         };
-        let (should_persist, side) = choice::persist_ctx(state, player_idx);
-        state.player_profiles[player_idx].smx_bg_pack = if pack.is_empty() {
+        state.player_options[player_idx].smx_bg_pack = if pack.is_empty() {
             None
         } else {
             Some(pack.clone())
         };
-        if should_persist {
-            gp::update_smx_bg_pack_for_side(side, &pack);
-        }
         Outcome::persisted()
     },
 };
@@ -916,15 +852,11 @@ const SMX_JUDGE_PACK: CustomBinding = CustomBinding {
                 .cloned()
                 .unwrap_or_default()
         };
-        let (should_persist, side) = choice::persist_ctx(state, player_idx);
-        state.player_profiles[player_idx].smx_judge_pack = if pack.is_empty() {
+        state.player_options[player_idx].smx_judge_pack = if pack.is_empty() {
             None
         } else {
             Some(pack.clone())
         };
-        if should_persist {
-            gp::update_smx_judge_pack_for_side(side, &pack);
-        }
         Outcome::persisted()
     },
 };

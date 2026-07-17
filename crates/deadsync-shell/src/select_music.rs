@@ -145,17 +145,21 @@ fn profile_playlists() -> Vec<SelectMusicPlaylistView> {
 
 pub(crate) fn init_view() -> SelectMusicInitView {
     let dirs = deadlib_platform::dirs::app_dirs();
+    let songs_root = dirs.songs_dir();
     let mut playlists = machine_playlists();
     playlists.extend(profile_playlists());
     let cfg = config::get();
     let session = session_view();
     SelectMusicInitView {
-        songs_root: dirs.songs_dir(),
+        song_scan_roots: deadsync_simfile::app_runtime::collect_song_scan_roots(&songs_root),
+        song_packs: deadsync_simfile::runtime_cache::get_song_cache().clone(),
+        songs_root,
         courses_root: dirs.courses_dir(),
         playlists,
         history: Default::default(),
         policy: policy_view(&cfg),
         profiles: profile_view(),
+        profile_picker: crate::local_profiles::picker_view(),
         last_played: last_played_view(session),
         favorites: deadsync_profile::runtime_favorite_snapshot(),
         known_packs: deadsync_profile::runtime_known_pack_snapshot(),
@@ -182,6 +186,11 @@ pub(crate) fn profile_view() -> SelectMusicProfileView {
     let players = deadsync_profile::runtime_session_players_view();
     SelectMusicProfileView {
         display_names: players.display_names,
+        avatar_texture_keys: std::array::from_fn(|idx| {
+            profile::get_for_side(deadsync_profile::player_side_for_index(idx))
+                .avatar_texture_key
+                .clone()
+        }),
         local_profile_ids: std::array::from_fn(|idx| {
             profile::active_local_profile_id_for_side(deadsync_profile::player_side_for_index(idx))
         }),
@@ -203,7 +212,9 @@ fn last_played_view(session: SelectMusicSessionView) -> SelectMusicLastPlayedVie
 
 pub(crate) fn policy_view(config: &config::Config) -> SelectMusicPolicyView {
     SelectMusicPolicyView {
+        machine_font: config.machine_font,
         dedicated_menu_only: config.only_dedicated_menu_buttons,
+        three_key_navigation: config.three_key_navigation,
         fsr_profiles: config.use_fsrs,
         replays: config.machine_enable_replays,
         profile_switch: config.allow_switch_profile_in_menu,
@@ -231,6 +242,8 @@ pub(crate) fn policy_view(config: &config::Config) -> SelectMusicPolicyView {
             sort_by_series: config.sort_music_wheel_by_series,
             new_pack_mode: config.select_music_new_pack_mode,
             show_srpg_shop: config.show_srpg_shop,
+            srpg10_visuals: config.visual_style.is_srpg()
+                && matches!(config.srpg_variant, config::SrpgVariant::Srpg10),
             practice_shortcut: config.music_select_shortcut_practice,
             song_search_shortcut: config.music_select_shortcut_song_search,
             reload_shortcut: config.music_select_shortcut_load_songs,
@@ -312,6 +325,7 @@ mod tests {
     #[test]
     fn policy_view_maps_media_and_wheel_runtime_flags() {
         let config = config::Config {
+            machine_font: config::MachineFont::Mega,
             show_select_music_banners: true,
             show_select_music_previews: true,
             enable_replaygain: true,
@@ -350,6 +364,7 @@ mod tests {
 
         let view = policy_view(&config);
 
+        assert_eq!(view.machine_font, config::MachineFont::Mega);
         assert!(view.media.show_banners);
         assert!(view.media.show_previews);
         assert!(view.media.replay_gain);

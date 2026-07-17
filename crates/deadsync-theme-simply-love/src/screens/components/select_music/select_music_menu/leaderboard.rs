@@ -1,5 +1,6 @@
 use crate::act;
-use crate::assets::{FontRole, current_machine_font_key};
+use crate::assets::{FontRole, machine_font_key};
+use crate::config::MachineFont;
 use crate::screens::components::shared::gs_scorebox::entries_with_local_self_state;
 use crate::views::{
     ScoreboxSideView, SelectMusicLeaderboardRequest, SelectMusicLeaderboardSideView,
@@ -352,7 +353,10 @@ fn leaderboard_icon_bounce_offset(elapsed: f32, dir: f32) -> f32 {
     dir * 10.0 * phase
 }
 
-pub fn build_leaderboard_overlay(state: &LeaderboardOverlayState) -> Option<Vec<Actor>> {
+pub fn build_leaderboard_overlay(
+    state: &LeaderboardOverlayState,
+    machine_font: MachineFont,
+) -> Option<Vec<Actor>> {
     let LeaderboardOverlayState::Visible(overlay) = state else {
         return None;
     };
@@ -446,7 +450,7 @@ pub fn build_leaderboard_overlay(state: &LeaderboardOverlayState) -> Option<Vec<
             z(GS_LEADERBOARD_Z + 5)
         ));
         actors.push(act!(text:
-            font(current_machine_font_key(FontRole::Header)):
+            font(machine_font_key(machine_font, FontRole::Header)):
             settext(header_text):
             align(0.5, 0.5):
             xy(center_x, header_y):
@@ -457,7 +461,7 @@ pub fn build_leaderboard_overlay(state: &LeaderboardOverlayState) -> Option<Vec<
         ));
         if show_ex {
             actors.push(act!(text:
-                font(current_machine_font_key(FontRole::Header)):
+                font(machine_font_key(machine_font, FontRole::Header)):
                 settext("EX"):
                 align(1.0, 0.5):
                 xy(center_x + pane_width * 0.5 - 16.0, header_y):
@@ -468,7 +472,7 @@ pub fn build_leaderboard_overlay(state: &LeaderboardOverlayState) -> Option<Vec<
             ));
         } else if show_itg_arrowcloud {
             actors.push(act!(text:
-                font(current_machine_font_key(FontRole::Header)):
+                font(machine_font_key(machine_font, FontRole::Header)):
                 settext("ITG"):
                 align(1.0, 0.5):
                 xy(center_x + pane_width * 0.5 - 16.0, header_y):
@@ -479,7 +483,7 @@ pub fn build_leaderboard_overlay(state: &LeaderboardOverlayState) -> Option<Vec<
             ));
         } else if show_hard_ex {
             actors.push(act!(text:
-                font(current_machine_font_key(FontRole::Header)):
+                font(machine_font_key(machine_font, FontRole::Header)):
                 settext("H.EX"):
                 align(1.0, 0.5):
                 xy(center_x + pane_width * 0.5 - 16.0, header_y):

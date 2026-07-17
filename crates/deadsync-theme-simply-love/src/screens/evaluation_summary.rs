@@ -1,7 +1,7 @@
 use crate::act;
 use crate::assets::AssetManager;
 use crate::assets::i18n::{tr, tr_fmt};
-use crate::assets::{FontRole, current_machine_font_key};
+use crate::assets::{FontRole, machine_font_key};
 use crate::screens::components::evaluation::eval_grades;
 use crate::screens::components::shared::screen_bar::{
     ScreenBarParams, ScreenBarPosition, ScreenBarTitlePlacement,
@@ -213,6 +213,7 @@ fn build_player_stats(
     active_color_index: i32,
     zmod_rating_box_text: bool,
     elapsed: f32,
+    machine_font: deadsync_config::prelude::MachineFont,
 ) -> Vec<Actor> {
     let (col1x, col2x, grade_x, align1_x, align2_x, align1_text, align2_text, col1_eps) = match side
     {
@@ -276,7 +277,7 @@ fn build_player_stats(
         (0.5, -24.0)
     };
     let mut percent_actor = act!(text:
-        font(current_machine_font_key(FontRole::Header)):
+        font(machine_font_key(machine_font, FontRole::Header)):
         settext(percent_text):
         align(align1_x, 0.5):
         xy(col1x, percent_y):
@@ -295,7 +296,7 @@ fn build_player_stats(
         let ex_text = format!("{:.2}", p.ex_score_percent.max(0.0));
         let (ex_zoom, ex_y) = if showex { (0.48, -32.0) } else { (0.38, -12.0) };
         let mut ex_actor = act!(text:
-            font(current_machine_font_key(FontRole::Header)):
+            font(machine_font_key(machine_font, FontRole::Header)):
             settext(ex_text):
             align(align1_x, 0.5):
             xy(col1x, ex_y):
@@ -338,7 +339,7 @@ fn build_player_stats(
         let diff_color = color::difficulty_rgba(&p.chart.difficulty, active_color_index);
         let (meter_zoom, meter_y) = if show_w0 { (0.3, 5.0) } else { (0.4, -1.0) };
         let mut a = act!(text:
-            font(current_machine_font_key(FontRole::Header)):
+            font(machine_font_key(machine_font, FontRole::Header)):
             settext(p.chart.meter.to_string()):
             align(align1_x, 0.5):
             xy(col1x, meter_y):
@@ -412,7 +413,7 @@ fn build_player_stats(
         };
 
         let mut a = act!(text:
-            font(current_machine_font_key(FontRole::Header)):
+            font(machine_font_key(machine_font, FontRole::Header)):
             settext(count.to_string()):
             align(align2_x, 0.5):
             xy(col2x, y):
@@ -437,6 +438,7 @@ fn build_row(
     translated_titles: bool,
     zmod_rating_box_text: bool,
     elapsed: f32,
+    machine_font: deadsync_config::prelude::MachineFont,
 ) -> Actor {
     let cx = screen_center_x();
     let y = (screen_height() / 4.75) * (row_pos as f32);
@@ -532,6 +534,7 @@ fn build_row(
             active_color_index,
             zmod_rating_box_text,
             elapsed,
+            machine_font,
         ));
     }
 
@@ -550,6 +553,7 @@ pub fn push_actors(
     state: &State,
     stages: &[stage_stats::StageSummary],
     _asset_manager: &AssetManager,
+    visual_policy: crate::views::SimplyLoveVisualPolicyView,
 ) {
     actors.reserve(32);
 
@@ -560,12 +564,14 @@ pub fn push_actors(
             active_color_index: state.active_color_index,
             backdrop_rgba: [0.0, 0.0, 0.0, 1.0],
             alpha_mul: 1.0,
+            visual_policy,
         },
     );
 
     // Top Bar
     let eval_title = tr("EvaluationSummary", "ScreenTitle");
     actors.push(screen_bar::build(ScreenBarParams {
+        visual_policy,
         title: &eval_title,
         title_placement: ScreenBarTitlePlacement::Left,
         position: ScreenBarPosition::Top,
@@ -580,7 +586,7 @@ pub fn push_actors(
 
     if stages.is_empty() {
         actors.push(act!(text:
-            font(current_machine_font_key(FontRole::Header)):
+            font(machine_font_key(state.runtime.machine_font, FontRole::Header)):
             settext(tr("EvaluationSummary", "NoStageDataAvailable")):
             align(0.5, 0.5):
             xy(screen_center_x(), screen_height() * 0.5):
@@ -597,7 +603,7 @@ pub fn push_actors(
 
     // Centered "Page x/y"
     actors.push(act!(text:
-        font(current_machine_font_key(FontRole::Header)):
+        font(machine_font_key(state.runtime.machine_font, FontRole::Header)):
         settext(tr_fmt("EvaluationSummary", "PageFormat", &[("page", &page.to_string()), ("pages", &pages.to_string())])):
         align(0.5, 0.5):
         xy(screen_center_x(), 15.0):
@@ -611,7 +617,7 @@ pub fn push_actors(
     {
         let itg_text_x = screen_width() - 10.0;
         actors.push(act!(text:
-                font(current_machine_font_key(FontRole::Header)):
+                font(machine_font_key(state.runtime.machine_font, FontRole::Header)):
                 settext(tr("EvaluationSummary", "ITGLabel")):
                 align(1.0, 0.5):
             xy(itg_text_x, 15.0):
@@ -635,6 +641,7 @@ pub fn push_actors(
             state.runtime.translated_titles,
             state.runtime.zmod_rating_box_text,
             state.elapsed,
+            state.runtime.machine_font,
         ));
     }
 
@@ -682,7 +689,7 @@ pub fn push_actors(
 
         let timestamp_text = Local::now().format("%Y/%m/%d %H:%M").to_string();
         actors.push(act!(text:
-            font(current_machine_font_key(FontRole::Numbers)):
+            font(machine_font_key(state.runtime.machine_font, FontRole::Numbers)):
             settext(timestamp_text):
             align(0.5, 1.0):
             xy(screen_center_x(), screen_height() - 14.0):
@@ -699,7 +706,13 @@ pub fn get_actors(
     asset_manager: &AssetManager,
 ) -> Vec<Actor> {
     let mut actors = Vec::with_capacity(32);
-    push_actors(&mut actors, state, stages, asset_manager);
+    push_actors(
+        &mut actors,
+        state,
+        stages,
+        asset_manager,
+        Default::default(),
+    );
     actors
 }
 

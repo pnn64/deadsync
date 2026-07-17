@@ -1,6 +1,7 @@
 use crate::act;
 use crate::assets::i18n::tr;
-use crate::assets::{FontRole, current_machine_font_key};
+use crate::assets::{FontRole, machine_font_key};
+use crate::config::MachineFont;
 use deadlib_present::actors::Actor;
 use deadlib_present::space::{is_wide, screen_height, screen_width, widescale};
 use std::sync::Arc;
@@ -25,6 +26,7 @@ pub struct StatsValues {
 }
 
 pub struct StatsPaneParams {
+    pub machine_font: MachineFont,
     pub pane_cx: f32,
     pub accent_color: [f32; 4],
     pub values: StatsValues,
@@ -51,6 +53,7 @@ pub fn layout() -> PaneLayout {
 pub fn push_base(out: &mut Vec<Actor>, p: StatsPaneParams) {
     let StatsPaneParams {
         pane_cx,
+        machine_font,
         accent_color,
         values,
         meter,
@@ -97,7 +100,7 @@ pub fn push_base(out: &mut Vec<Actor>, p: StatsPaneParams) {
 
     if let Some(meter) = meter {
         let mut meter_actor = act!(text:
-            font(current_machine_font_key(FontRole::Header)):
+            font(machine_font_key(machine_font, FontRole::Header)):
             settext(meter):
             align(1.0, 0.5):
             horizalign(right):

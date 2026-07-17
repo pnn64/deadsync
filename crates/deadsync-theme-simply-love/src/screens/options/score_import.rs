@@ -378,46 +378,6 @@ pub(super) fn sync_pack_options(state: &State) -> (Vec<String>, Vec<Option<Strin
     installed_pack_options(state, &tr("OptionsSyncPack", "AllPacks"))
 }
 
-pub(super) fn load_score_import_profiles() -> Vec<crate::SimplyLoveScoreImportProfile> {
-    let mut profiles = Vec::new();
-    for summary in profile::scan_local_profiles() {
-        let profile_dir = profile::local_profile_dir_for_id(summary.id.as_str());
-        let mut gs = SimpleIni::new();
-        let mut ac = SimpleIni::new();
-        let gs_api_key = if gs.load(profile_dir.join("groovestats.ini")).is_ok() {
-            gs.get("GrooveStats", "ApiKey")
-                .map_or_else(String::new, |v| v.trim().to_string())
-        } else {
-            String::new()
-        };
-        let gs_username = if gs_api_key.is_empty() {
-            String::new()
-        } else {
-            gs.get("GrooveStats", "Username")
-                .map_or_else(String::new, |v| v.trim().to_string())
-        };
-        let ac_api_key = if ac.load(profile_dir.join("arrowcloud.ini")).is_ok() {
-            ac.get("ArrowCloud", "ApiKey")
-                .map_or_else(String::new, |v| v.trim().to_string())
-        } else {
-            String::new()
-        };
-        profiles.push(crate::SimplyLoveScoreImportProfile {
-            id: summary.id,
-            display_name: summary.display_name.trim().to_string(),
-            groovestats_api_key: gs_api_key,
-            groovestats_username: gs_username,
-            arrowcloud_api_key: ac_api_key,
-        });
-    }
-    profiles.sort_by(|a, b| {
-        let al = a.display_name.to_ascii_lowercase();
-        let bl = b.display_name.to_ascii_lowercase();
-        al.cmp(&bl).then_with(|| a.id.cmp(&b.id))
-    });
-    profiles
-}
-
 pub(super) fn score_import_profile_eligible(
     endpoint: score_data::ScoreImportEndpoint,
     profile_cfg: &crate::SimplyLoveScoreImportProfile,
@@ -524,7 +484,6 @@ pub(super) fn refresh_sync_pack_options(state: &mut State) {
 }
 
 pub(super) fn refresh_score_import_options(state: &mut State) {
-    state.score_import_profiles = load_score_import_profiles();
     refresh_score_import_profile_options(state);
     refresh_score_import_pack_options(state);
 }
@@ -663,6 +622,7 @@ pub(super) fn toggle_all_score_import_packs(state: &mut State) {
 pub(super) fn build_score_import_pack_picker_actors(
     state: &State,
     active_color_index: i32,
+    machine_font: crate::config::MachineFont,
 ) -> Vec<Actor> {
     let Some(picker) = state.score_import_pack_picker.as_ref() else {
         return Vec::new();
@@ -717,7 +677,7 @@ pub(super) fn build_score_import_pack_picker_actors(
     out.push(act!(text:
         align(0.5, 0.5):
         xy(cx, panel_top + 28.0):
-        font(current_machine_font_key(FontRole::Header)):
+        font(machine_font_key(machine_font, FontRole::Header)):
         zoom(0.72):
         maxwidth(panel_w - 52.0):
         settext(score_import_pack_summary(state)):

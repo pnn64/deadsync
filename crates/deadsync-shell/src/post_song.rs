@@ -29,6 +29,8 @@ pub(crate) fn runtime_view() -> PostSongRuntimeView {
         translated_titles: cfg.translated_titles,
         zmod_rating_box_text: cfg.zmod_rating_box_text,
         three_key_navigation: cfg.three_key_navigation,
+        srpg10_visuals: cfg.visual_style.is_srpg()
+            && matches!(cfg.srpg_variant, config::SrpgVariant::Srpg10),
         machine_leaderboards: Default::default(),
     }
 }

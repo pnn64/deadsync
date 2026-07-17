@@ -1,7 +1,6 @@
 use super::state::PlayerOptionMasks;
 use super::*;
-use deadsync_profile::PlayerSide;
-use deadsync_profile::Profile;
+use deadsync_profile::PlayerOptionsData;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(usize)]
@@ -167,10 +166,9 @@ impl Outcome {
 #[derive(Clone, Copy, Debug)]
 pub struct NumericBinding {
     pub parse: fn(&str) -> Option<i32>,
-    pub apply: fn(&mut Profile, i32) -> Outcome,
-    pub persist_for_side: fn(PlayerSide, i32),
+    pub apply: fn(&mut PlayerOptionsData, i32) -> Outcome,
     /// Opt-in init contract. When `Some`, the row's initial cursor position is
-    /// derived directly from a `Profile` via `init_numeric_row_from_binding`.
+    /// derived directly from a `PlayerOptionsData` via `init_numeric_row_from_binding`.
     /// `None` means the row's selection is initialized elsewhere (today: a
     /// hand-written block in `apply_profile_defaults`).
     pub init: Option<NumericInit>,
@@ -190,10 +188,9 @@ pub enum CycleBinding {
 /// uniformly across all binding types.
 #[derive(Clone, Copy, Debug)]
 pub struct ChoiceBinding<T: Copy + 'static> {
-    pub apply: fn(&mut Profile, T) -> Outcome,
-    pub persist_for_side: fn(PlayerSide, T),
+    pub apply: fn(&mut PlayerOptionsData, T) -> Outcome,
     /// Opt-in init contract. When `Some`, the row's initial cursor position is
-    /// derived directly from a `Profile` via `init_cycle_row_from_binding`.
+    /// derived directly from a `PlayerOptionsData` via `init_cycle_row_from_binding`.
     /// `None` means the row's selection is initialized elsewhere (today: a
     /// hand-written block in `apply_profile_defaults`).
     pub init: Option<CycleInit>,
@@ -212,7 +209,7 @@ pub struct ChoiceBinding<T: Copy + 'static> {
 ///    rows that fan out, derive secondary mask state, or need a
 ///    visibility re-sync after toggle, construct `BitmaskBinding::Generic
 ///    { init, writeback }` directly and set the relevant fields on
-///    `BitmaskWriteback` (`project`, `persist_for_side`, `sync_visibility`).
+///    `BitmaskWriteback` (`project`, `bit_mapping`, `sync_visibility`).
 ///    The generic `toggle_bitmask_row_generic` in `choice.rs` drives
 ///    input for every bitmask row; `writeback.bit_mapping` declares how
 ///    choice indices map to bits.
@@ -265,14 +262,7 @@ pub struct BitmaskWriteback {
     /// bindings only touch the profile; `gameplay_extras` is the
     /// canonical example of a binding that also patches `masks` (it
     /// rebuilds `masks.gameplay_extras_more`).
-    pub project: fn(&mut PlayerOptionMasks, &mut Profile, u32),
-    /// Persist the row's just-projected state for the given side. Called
-    /// after `project`, with the freshly-updated profile, only when
-    /// `persist_ctx` says the active player_idx should write through.
-    /// Bindings read whatever profile fields they need (which may span
-    /// several fields for fan-out rows) and call the appropriate
-    /// `update_*_for_side` setters.
-    pub persist_for_side: fn(PlayerSide, &Profile),
+    pub project: fn(&mut PlayerOptionMasks, &mut PlayerOptionsData, u32),
     /// Declarative choice-index-to-bit mapping. The generic toggle
     /// resolves the focused row's selected choice index through this
     /// mapping; out-of-range indices yield `None` and produce a no-op.
@@ -350,7 +340,7 @@ impl BitMapping {
 pub struct BitmaskInit {
     /// Compute the row's initial bits from the player's profile. Returned
     /// as `u32` for type erasure across the 17 different mask widths.
-    pub from_profile: fn(&Profile) -> u32,
+    pub from_profile: fn(&PlayerOptionsData) -> u32,
     /// Read the row's current bits from a `PlayerOptionMasks`. Used to
     /// compute the cursor index from the *stored* (post-`set_active`) value.
     pub get_active: fn(&PlayerOptionMasks) -> u32,
@@ -413,7 +403,7 @@ impl BitmaskInit {
 pub fn init_bitmask_row_from_binding(
     row: &mut Row,
     binding: &BitmaskBinding,
-    profile: &Profile,
+    profile: &PlayerOptionsData,
     masks: &mut PlayerOptionMasks,
     player_idx: usize,
 ) -> bool {
@@ -427,7 +417,7 @@ pub fn init_bitmask_row_from_binding(
 }
 
 /// Opt-in init contract for a `CycleBinding` row. The function returns the
-/// initial cursor index for a row given the current `Profile`. The helper
+/// initial cursor index for a row given the current `PlayerOptionsData`. The helper
 /// `init_cycle_row_from_binding` clamps the returned index to
 /// `row.choices.len() - 1`, so implementations can return a raw
 /// `position(...).unwrap_or(0)` without separate clamping.
@@ -440,7 +430,7 @@ pub fn init_bitmask_row_from_binding(
 /// `apply_profile_defaults`.
 #[derive(Clone, Copy, Debug)]
 pub struct CycleInit {
-    pub from_profile: fn(&Profile) -> usize,
+    pub from_profile: fn(&PlayerOptionsData) -> usize,
 }
 
 /// Opt-in init contract for a `NumericBinding` row. `from_profile` reads the
@@ -454,7 +444,7 @@ pub struct CycleInit {
 /// `apply_profile_defaults`.
 #[derive(Clone, Copy, Debug)]
 pub struct NumericInit {
-    pub from_profile: fn(&Profile) -> i32,
+    pub from_profile: fn(&PlayerOptionsData) -> i32,
     pub format: fn(i32) -> String,
 }
 
@@ -465,7 +455,7 @@ pub struct NumericInit {
 pub fn init_cycle_row_from_binding<T: Copy + 'static>(
     row: &mut Row,
     binding: &ChoiceBinding<T>,
-    profile: &Profile,
+    profile: &PlayerOptionsData,
     player_idx: usize,
 ) -> bool {
     let Some(init) = binding.init.as_ref() else {
@@ -489,7 +479,7 @@ pub fn init_cycle_row_from_binding<T: Copy + 'static>(
 pub fn init_numeric_row_from_binding(
     row: &mut Row,
     binding: &NumericBinding,
-    profile: &Profile,
+    profile: &PlayerOptionsData,
     player_idx: usize,
 ) -> bool {
     let Some(init) = binding.init.as_ref() else {
@@ -537,10 +527,10 @@ pub(super) fn parse_i32_percent(s: &str) -> Option<i32> {
 /// Build a `ChoiceBinding<usize>` for a row whose choices map 1:1 to a static
 /// `[Enum; N]` variant table. Cuts per-binding boilerplate down to its data.
 macro_rules! index_binding {
-    ($table:expr, $default:expr, $field:ident, $persist:expr, $vis:expr) => {
-        index_binding!($table, $default, $field, $persist, $vis, None)
+    ($table:expr, $default:expr, $field:ident, $vis:expr) => {
+        index_binding!($table, $default, $field, $vis, None)
     };
-    ($table:expr, $default:expr, $field:ident, $persist:expr, $vis:expr, $init:expr) => {
+    ($table:expr, $default:expr, $field:ident, $vis:expr, $init:expr) => {
         $crate::screens::player_options::row::ChoiceBinding::<usize> {
             apply: |p, i| {
                 p.$field = $table.get(i).copied().unwrap_or($default);
@@ -550,7 +540,6 @@ macro_rules! index_binding {
                     $crate::screens::player_options::row::Outcome::persisted()
                 }
             },
-            persist_for_side: |s, i| $persist(s, $table.get(i).copied().unwrap_or($default)),
             init: $init,
         }
     };
@@ -560,9 +549,8 @@ pub(crate) use index_binding;
 
 /// Build a `BitmaskBinding::Generic` for the common case of a mask row that:
 ///
-/// - Reads/writes a single `bitflags!` mask field on `Profile` (`profile_field`).
+/// - Reads/writes a single `bitflags!` mask field on `PlayerOptionsData` (`profile_field`).
 /// - Reads/writes the matching field on `PlayerOptionMasks` (`state_field`).
-/// - Persists via a `(PlayerSide, MaskType) -> ()` updater (`persist`).
 /// - Exposes choices `0..width` mapped 1:1 to bits `0..width`
 ///   (`BitMapping::Sequential { width }`).
 /// - Initializes its cursor at the first active bit.
@@ -584,7 +572,6 @@ pub(crate) use index_binding;
 ///     bits = u8,
 ///     state_field = insert,
 ///     profile_field = insert_active_mask,
-///     persist = gp::update_insert_mask_for_side,
 ///     width = 7,
 /// );
 /// ```
@@ -594,7 +581,6 @@ macro_rules! simple_bitmask_binding {
         bits = $bits_ty:ty,
         state_field = $state_field:ident,
         profile_field = $profile_field:ident,
-        persist = $persist:path,
         width = $width:expr $(,)?
     ) => {
         $crate::screens::player_options::row::BitmaskBinding::Generic {
@@ -614,9 +600,6 @@ macro_rules! simple_bitmask_binding {
             writeback: $crate::screens::player_options::row::BitmaskWriteback {
                 project: |_m, p, b| {
                     p.$profile_field = <$mask_ty>::from_bits_truncate(b as $bits_ty);
-                },
-                persist_for_side: |s, p| {
-                    $persist(s, p.$profile_field);
                 },
                 bit_mapping: $crate::screens::player_options::row::BitMapping::Sequential {
                     width: $width,
@@ -643,14 +626,6 @@ pub(crate) use simple_bitmask_binding;
 /// - `bit_mapping`: `BitMapping::Sequential { width: N }` derived from
 ///   the field count at compile time.
 ///
-/// Persistence is *user-supplied* via the `persist_for_side` argument
-/// (a closure of type `fn(PlayerSide, &Profile)`) so callers can either
-/// invoke a single bulk setter (e.g.
-/// `gp::update_hide_options_for_side(s, p.hide_targets, p.hide_song_bg, ...)`)
-/// or fan out to per-field setters (e.g.
-/// `gp::update_rainbow_max_for_side(s, p.rainbow_max);
-///  gp::update_responsive_colors_for_side(s, p.responsive_colors); ...`).
-///
 /// Set `sync_visibility = true` for rows whose toggled state changes
 /// the visibility of *other* rows (e.g. `Hide`).
 ///
@@ -671,11 +646,6 @@ pub(crate) use simple_bitmask_binding;
 ///         (COMBO_EXPLOSIONS, hide_combo_explosions),
 ///         (USERNAME, hide_username),
 ///     ],
-///     persist_for_side = |s, p| gp::update_hide_options_for_side(
-///         s,
-///         p.hide_targets, p.hide_song_bg, p.hide_combo, p.hide_lifebar,
-///         p.hide_score, p.hide_danger, p.hide_combo_explosions, p.hide_username,
-///     ),
 ///     sync_visibility = true,
 /// );
 /// ```
@@ -685,7 +655,6 @@ macro_rules! fanout_bitmask_binding {
         bits = $bits_ty:ty,
         state_field = $state_field:ident,
         fields = [ $( ( $flag:ident, $profile_field:ident ) ),+ $(,)? ],
-        persist_for_side = $persist:expr,
         sync_visibility = $sync:expr $(,)?
     ) => {
         $crate::screens::player_options::row::BitmaskBinding::Generic {
@@ -717,7 +686,6 @@ macro_rules! fanout_bitmask_binding {
                         p.$profile_field = mask.contains(<$mask_ty>::$flag);
                     )+
                 },
-                persist_for_side: $persist,
                 bit_mapping: $crate::screens::player_options::row::BitMapping::Sequential {
                     // `[(); N]::len()` is const-evaluable; one `()` is
                     // emitted per field so the count matches `fields`.

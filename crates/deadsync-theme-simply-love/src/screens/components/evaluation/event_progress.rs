@@ -1,6 +1,7 @@
 use crate::act;
 use crate::assets::AssetManager;
-use crate::assets::{FontRole, current_machine_font_key_for_text};
+use crate::assets::{FontRole, machine_font_key_for_text};
+use crate::config::MachineFont;
 use crate::screens::components::shared::banner as shared_banner;
 use deadlib_present::actors::{Actor, SizeSpec, TextAttribute};
 use deadlib_present::color::{self, JUDGMENT_RGBA};
@@ -658,8 +659,14 @@ fn build_upper_header_text(
 }
 
 #[inline(always)]
-fn build_header_text(text: String, pane_width: f32, y: f32, z: i16) -> Actor {
-    let font_key = current_machine_font_key_for_text(FontRole::Header, &text);
+fn build_header_text(
+    text: String,
+    pane_width: f32,
+    y: f32,
+    z: i16,
+    machine_font: MachineFont,
+) -> Actor {
+    let font_key = machine_font_key_for_text(machine_font, FontRole::Header, &text);
     act!(text:
         font(font_key):
         settext(text):
@@ -838,7 +845,7 @@ fn build_overlay_leaderboard(
     children
 }
 
-fn build_overlay_banner_and_song(song: &SongData, z: i16) -> Vec<Actor> {
+fn build_overlay_banner_and_song(song: &SongData, translated_titles: bool, z: i16) -> Vec<Actor> {
     let mut children = Vec::with_capacity(2);
     if let Some(banner_path) = song.banner_path.as_ref() {
         let banner_key = banner_path.to_string_lossy().into_owned();
@@ -848,7 +855,7 @@ fn build_overlay_banner_and_song(song: &SongData, z: i16) -> Vec<Actor> {
     }
     children.push(act!(text:
         font("miso"):
-        settext(song.display_full_title(crate::config::get().translated_titles)):
+        settext(song.display_full_title(translated_titles)):
         align(0.5, 0.0):
         xy(0.0, 142.6):
         zoom(0.68):
@@ -920,8 +927,10 @@ fn build_overlay_panel(
     pane_width: f32,
     pane_height: f32,
     song: Option<&SongData>,
+    translated_titles: bool,
     progress: &score_data::EventProgress,
     page_idx: usize,
+    machine_font: MachineFont,
     z: i16,
 ) -> Actor {
     let border_width = 2.0;
@@ -978,10 +987,11 @@ fn build_overlay_panel(
         pane_width,
         header_y,
         4,
+        machine_font,
     ));
     if let Some(badge) = badge {
         children.push(act!(text:
-            font(current_machine_font_key_for_text(FontRole::Header, badge)):
+            font(machine_font_key_for_text(machine_font, FontRole::Header, badge)):
             settext(badge):
             align(0.5, 0.5):
             xy(pane_width * 0.5 - 18.0, header_y):
@@ -999,7 +1009,7 @@ fn build_overlay_panel(
                 4,
             ));
             if let Some(song) = song {
-                children.extend(build_overlay_banner_and_song(song, 4));
+                children.extend(build_overlay_banner_and_song(song, translated_titles, 4));
             }
         }
         Some(score_data::EventOverlayPage::Text(text)) => children.push(build_body_text(
@@ -1114,7 +1124,9 @@ pub fn build_event_overlay(
     asset_manager: &AssetManager,
     single_player: bool,
     song: Option<&SongData>,
+    translated_titles: bool,
     panels: &[(profile_data::PlayerSide, &score_data::EventProgress, usize)],
+    machine_font: MachineFont,
 ) -> Vec<Actor> {
     if panels.is_empty() {
         return Vec::new();
@@ -1151,8 +1163,10 @@ pub fn build_event_overlay(
             pane_width,
             pane_height,
             song,
+            translated_titles,
             progress,
             *page_idx,
+            machine_font,
             2001,
         ));
     }

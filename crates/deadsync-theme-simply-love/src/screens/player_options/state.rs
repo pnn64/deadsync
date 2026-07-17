@@ -323,7 +323,8 @@ pub struct State {
     pub(super) active: [bool; PLAYER_SLOTS],
     pub(super) persisted_player_idx: usize,
     pub(super) cols_per_player: usize,
-    pub player_profiles: [deadsync_profile::Profile; PLAYER_SLOTS],
+    pub player_options: [deadsync_profile::PlayerOptionsData; PLAYER_SLOTS],
+    pub heart_rate_device_ids: [Option<String>; PLAYER_SLOTS],
     pub(super) heart_rate_choice_ids: Vec<Option<String>>,
     pub(super) heart_rate_readings: [HeartRateReadingView; PLAYER_SLOTS],
     pub(super) noteskin: NoteskinState,
@@ -335,8 +336,8 @@ pub struct State {
     pub(super) combo_preview_elapsed: f32,
     pub(super) pane_transition: PaneTransition,
     pub(super) menu_lr_chord: screen_input::MenuLrChordTracker,
-    /// Ordered audio work awaiting emission at the input/update boundary.
-    pub(super) pending_audio: Vec<AudioRequest>,
+    /// Ordered runtime work awaiting emission at the input/update boundary.
+    pub(super) pending_effects: Vec<ThemeEffect>,
 }
 
 /// Per-pane state. Each pane keeps its own row map, cursor, and tween state so

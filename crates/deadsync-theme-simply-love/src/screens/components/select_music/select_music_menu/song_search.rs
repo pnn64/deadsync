@@ -1,10 +1,10 @@
 use crate::act;
-use crate::assets::{FontRole, current_machine_font_key};
+use crate::assets::{FontRole, machine_font_key};
+use crate::config::MachineFont;
 use crate::screens::select_music::MusicWheelEntry;
 use deadlib_present::actors::Actor;
 use deadlib_present::color;
 use deadlib_present::space::{screen_center_x, screen_center_y, screen_height, screen_width};
-use deadsync_profile::compat as profile;
 use deadsync_simfile::song_search::{
     SongSearchCandidate, SongSearchCatalogEntry, build_song_search_candidates,
     song_search_difficulties_text,
@@ -36,6 +36,7 @@ const SONG_SEARCH_WHEEL_FOCUS_SLOT: usize = SONG_SEARCH_WHEEL_SLOTS / 2 - 1;
 #[derive(Clone, Debug)]
 pub struct SongSearchResultsState {
     pub search_text: String,
+    pub chart_type: &'static str,
     pub candidates: Vec<SongSearchCandidate>,
     pub selected_index: usize,
     pub prev_selected_index: usize,
@@ -67,12 +68,12 @@ pub fn begin_song_search_prompt() -> SongSearchState {
 pub fn begin_song_search_results(
     group_entries: &[MusicWheelEntry],
     search_text: String,
+    chart_type: &'static str,
 ) -> SongSearchState {
     let trimmed = search_text.trim().to_string();
     if trimmed.is_empty() {
         return SongSearchState::Hidden;
     }
-    let chart_type = profile::get_session_play_style().chart_type();
     let candidates = build_song_search_candidates(
         group_entries.iter().map(|entry| match entry {
             MusicWheelEntry::PackHeader { name, .. } => {
@@ -85,6 +86,7 @@ pub fn begin_song_search_results(
     );
     SongSearchState::Results(SongSearchResultsState {
         search_text: trimmed,
+        chart_type,
         candidates,
         selected_index: 0,
         prev_selected_index: 0,
@@ -164,6 +166,7 @@ pub fn song_search_focused_candidate(
 pub fn build_song_search_overlay(
     state: &SongSearchState,
     active_color_index: i32,
+    machine_font: MachineFont,
 ) -> Option<Vec<Actor>> {
     let mut actors = Vec::new();
     if matches!(state, SongSearchState::Hidden) {
@@ -211,7 +214,7 @@ pub fn build_song_search_overlay(
                 z(1452)
             ));
             actors.push(act!(text:
-                font(current_machine_font_key(FontRole::Header)):
+                font(machine_font_key(machine_font, FontRole::Header)):
                 settext(SONG_SEARCH_PROMPT_TITLE):
                 align(0.5, 0.5):
                 xy(cx, cy - panel_h * 0.5 + 22.0):
@@ -376,7 +379,6 @@ pub fn build_song_search_overlay(
             }
 
             if let Some(candidate) = song_search_focused_candidate(results) {
-                let chart_type = profile::get_session_play_style().chart_type();
                 let details = [
                     ("Pack", candidate.pack_name.clone()),
                     ("Song", candidate.song.display_title(false).to_string()),
@@ -387,7 +389,7 @@ pub fn build_song_search_overlay(
                     ("BPMs", candidate.song.formatted_chart_display_bpm(None)),
                     (
                         "Difficulties",
-                        song_search_difficulties_text(candidate.song.as_ref(), chart_type),
+                        song_search_difficulties_text(candidate.song.as_ref(), results.chart_type),
                     ),
                 ];
                 for (i, (label, value)) in details.iter().enumerate() {
@@ -487,6 +489,7 @@ mod tests {
         let subtitle = "Subtitle Long Enough To Need Horizontal Compression";
         let state = SongSearchState::Results(SongSearchResultsState {
             search_text: "long".to_string(),
+            chart_type: "dance-single",
             candidates: vec![SongSearchCandidate {
                 pack_name: pack.to_string(),
                 song: test_song(title, subtitle),
@@ -498,7 +501,8 @@ mod tests {
             input_lock: 0.0,
         });
 
-        let actors = build_song_search_overlay(&state, 0).expect("song search should render");
+        let actors = build_song_search_overlay(&state, 0, MachineFont::Wendy)
+            .expect("song search should render");
         let detail_x = screen_center_x() + 40.0;
         let mut found = 0;
 

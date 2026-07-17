@@ -230,7 +230,11 @@ pub fn handle_input(_state: &mut State, event: &InputEvent) -> ThemeEffect {
     }
 }
 
-pub fn push_actors(actors: &mut Vec<Actor>, state: &State) {
+pub fn push_actors(
+    actors: &mut Vec<Actor>,
+    state: &State,
+    visual_policy: crate::views::SimplyLoveVisualPolicyView,
+) {
     actors.reserve(CREDITS.len() * 2 + 12);
     let screen_w = screen_width();
     let screen_h = screen_height();
@@ -241,6 +245,7 @@ pub fn push_actors(actors: &mut Vec<Actor>, state: &State) {
             active_color_index: state.active_color_index,
             backdrop_rgba: [0.0, 0.0, 0.0, 1.0],
             alpha_mul: 1.0,
+            visual_policy,
         },
     );
 
@@ -332,7 +337,7 @@ pub fn push_actors(actors: &mut Vec<Actor>, state: &State) {
 
 pub fn get_actors(state: &State) -> Vec<Actor> {
     let mut actors = Vec::with_capacity(CREDITS.len() * 2 + 12);
-    push_actors(&mut actors, state);
+    push_actors(&mut actors, state, Default::default());
     actors
 }
 

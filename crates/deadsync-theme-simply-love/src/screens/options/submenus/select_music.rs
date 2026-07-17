@@ -544,12 +544,13 @@ pub(in crate::screens::options) fn toggle_select_music_scorebox_cycle_option(
     if bit == 0 {
         return ThemeEffect::None;
     }
-    let mut mask = scorebox_cycle_mask_from_config(&config::get());
+    let mut mask = state.scorebox_cycle_mask;
     if (mask & bit) != 0 {
         mask &= !bit;
     } else {
         mask |= bit;
     }
+    state.scorebox_cycle_mask = mask;
 
     let clamped = choice_idx.min(SELECT_MUSIC_SCOREBOX_CYCLE_NUM_CHOICES.saturating_sub(1));
     if let Some(slot) = get_choice_by_id_mut(
@@ -571,13 +572,15 @@ pub(in crate::screens::options) fn toggle_select_music_scorebox_cycle_option(
 }
 
 #[inline(always)]
-pub(in crate::screens::options) fn select_music_scorebox_cycle_enabled_mask() -> u8 {
-    scorebox_cycle_mask_from_config(&config::get())
+pub(in crate::screens::options) const fn select_music_scorebox_cycle_enabled_mask(
+    state: &State,
+) -> u8 {
+    state.scorebox_cycle_mask
 }
 
 #[inline(always)]
-pub(in crate::screens::options) fn auto_screenshot_enabled_mask() -> u8 {
-    config::get().auto_screenshot_eval
+pub(in crate::screens::options) const fn auto_screenshot_enabled_mask(state: &State) -> u8 {
+    state.auto_screenshot_mask
 }
 
 pub(in crate::screens::options) fn toggle_auto_screenshot_option(
@@ -588,12 +591,13 @@ pub(in crate::screens::options) fn toggle_auto_screenshot_option(
     if bit == 0 {
         return ThemeEffect::None;
     }
-    let mut mask = config::get().auto_screenshot_eval;
+    let mut mask = state.auto_screenshot_mask;
     if (mask & bit) != 0 {
         mask &= !bit;
     } else {
         mask |= bit;
     }
+    state.auto_screenshot_mask = mask;
     let clamped = choice_idx.min(config::AUTO_SS_NUM_FLAGS.saturating_sub(1));
     set_choice_by_id(
         &mut state.sub[SubmenuKind::Gameplay].choice_indices,
@@ -632,7 +636,7 @@ pub(in crate::screens::options) fn toggle_select_music_chart_info_option(
     if bit == 0 {
         return ThemeEffect::None;
     }
-    let mut mask = select_music_chart_info_mask_from_config(&config::get());
+    let mut mask = state.chart_info_mask;
     if (mask & bit) != 0 {
         if (mask & !bit) == 0 {
             return ThemeEffect::None;
@@ -641,6 +645,7 @@ pub(in crate::screens::options) fn toggle_select_music_chart_info_option(
     } else {
         mask |= bit;
     }
+    state.chart_info_mask = mask;
 
     let clamped = choice_idx.min(SELECT_MUSIC_CHART_INFO_NUM_CHOICES.saturating_sub(1));
     if let Some(slot) = get_choice_by_id_mut(
@@ -664,7 +669,6 @@ pub(in crate::screens::options) fn toggle_select_music_chart_info_option(
 }
 
 #[inline(always)]
-pub(in crate::screens::options) fn select_music_chart_info_enabled_mask() -> u8 {
-    let mask = select_music_chart_info_mask_from_config(&config::get());
-    config::select_music_chart_info_enabled_mask(mask)
+pub(in crate::screens::options) fn select_music_chart_info_enabled_mask(state: &State) -> u8 {
+    config::select_music_chart_info_enabled_mask(state.chart_info_mask)
 }

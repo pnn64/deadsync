@@ -1,12 +1,14 @@
 use crate::screens::SimplyLoveScreen;
-use crate::views::{DensityGraphView, SimplyLoveDensityGraphSlot};
+use crate::views::{DensityGraphView, ManageLocalProfilesView, SimplyLoveDensityGraphSlot};
+#[cfg(target_os = "windows")]
+use deadsync_config::prelude::WindowsPadBackend;
 use deadsync_config::prelude::{
-    BreakdownStyle, DefaultFailType, DefaultSyncOffset, GameplayBannerMode, MachineBarColor,
-    MachineEvaluationStyle, MachineFont, MachinePreferredPlayMode, MachinePreferredPlayStyle,
-    NewPackMode, RandomBackgroundMode, SelectMusicItlRankMode, SelectMusicItlWheelMode,
-    SelectMusicPatternInfoMode, SelectMusicScoreboxPlacement, SelectMusicSongSelectBgMode,
-    SelectMusicStepArtistBoxMode, SelectMusicWheelStyle, SrpgVariant, VersionOverlaySide,
-    VisualStyle,
+    BreakdownStyle, DefaultFailType, DefaultSyncOffset, GameplayBannerMode, LanguageFlag, LogLevel,
+    MachineBarColor, MachineEvaluationStyle, MachineFont, MachinePreferredPlayMode,
+    MachinePreferredPlayStyle, NewPackMode, RandomBackgroundMode, SelectMusicItlRankMode,
+    SelectMusicItlWheelMode, SelectMusicPatternInfoMode, SelectMusicScoreboxPlacement,
+    SelectMusicSongSelectBgMode, SelectMusicStepArtistBoxMode, SelectMusicWheelStyle, SmxPackName,
+    SmxPadPreset, SrpgVariant, VersionOverlaySide, VisualStyle,
 };
 use deadsync_input::{InputBinding, KeyCode, VirtualAction};
 use deadsync_profile::{ActiveProfile, PlayMode, PlayStyle, PlayerSide};
@@ -28,6 +30,26 @@ pub enum SimplyLoveMediaRequest {
     },
 }
 
+/// Song/course cache work requested by Simply Love and executed by the shell.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum SimplyLoveContentRequest {
+    InitializeLibrary {
+        songs_root: PathBuf,
+        courses_root: PathBuf,
+    },
+    ReloadLibrary {
+        songs_root: PathBuf,
+        courses_root: PathBuf,
+    },
+    ReloadSongDirs {
+        songs_root: PathBuf,
+        pack_dirs: Vec<PathBuf>,
+    },
+    ReloadSong {
+        simfile_path: PathBuf,
+    },
+}
+
 #[derive(Clone, Debug)]
 pub enum SimplyLoveProfileRequest {
     Select {
@@ -45,6 +67,12 @@ pub enum SimplyLoveProfileRequest {
     },
     SetMusicRate(f32),
     SetPlayMode(PlayMode),
+    SetMachineDefaultNoteskin(deadsync_profile::NoteSkin),
+    UpdatePlayerOptions {
+        side: PlayerSide,
+        options: deadsync_profile::PlayerOptionsData,
+        heart_rate_device_id: Option<String>,
+    },
     UpdateInitials([Option<String>; 2]),
     ToggleFavorite {
         side: deadsync_profile::PlayerSide,
@@ -57,6 +85,20 @@ pub enum SimplyLoveProfileRequest {
     MarkPacksKnown {
         profile_ids: Vec<String>,
         pack_names: Vec<String>,
+    },
+    CreateLocalProfile {
+        display_name: String,
+    },
+    RenameLocalProfile {
+        profile_id: String,
+        display_name: String,
+    },
+    SetDefaultLocalProfile {
+        side: PlayerSide,
+        profile_id: String,
+    },
+    DeleteLocalProfile {
+        profile_id: String,
     },
     DiscoverItgProfiles,
     BrowseItgProfiles {
@@ -116,6 +158,26 @@ pub enum SimplyLoveProfileImportEvent {
     Finished(Result<SimplyLoveItgImportSummary, String>),
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum SimplyLoveLocalProfileEvent {
+    Created {
+        result: Result<String, ()>,
+        view: ManageLocalProfilesView,
+    },
+    Renamed {
+        profile_id: String,
+        result: Result<(), ()>,
+        view: ManageLocalProfilesView,
+    },
+    DefaultSet {
+        view: ManageLocalProfilesView,
+    },
+    Deleted {
+        result: Result<(), ()>,
+        view: ManageLocalProfilesView,
+    },
+}
+
 #[derive(Clone, Debug)]
 pub enum SimplyLoveOnlineRequest {
     Reinitialize,
@@ -135,6 +197,10 @@ pub enum SimplyLoveOnlineRequest {
     RefreshPlayerLeaderboard {
         chart_hash: String,
         side: PlayerSide,
+        max_entries: usize,
+    },
+    LoadMachineReplays {
+        chart_hash: String,
         max_entries: usize,
     },
     RefreshSrpgShop {
@@ -533,6 +599,33 @@ pub enum SimplyLoveGameplayConfigRequest {
     AutoScreenshotMask(u8),
 }
 
+/// System, input, and SMX preferences chosen in Options and persisted by shell.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SimplyLoveOptionsConfigRequest {
+    GameDance,
+    ThemeSimplyLove,
+    Language(LanguageFlag),
+    LogLevel(LogLevel),
+    LogToFile(bool),
+    GfxDebug(bool),
+    #[cfg(target_os = "windows")]
+    WindowsPadBackend(WindowsPadBackend),
+    UseFsrs(bool),
+    ThreeKeyNavigation(bool),
+    ArcadeOptionsNavigation(bool),
+    OnlyDedicatedMenuButtons(bool),
+    SmxInput(bool),
+    SmxPanelLights(bool),
+    SmxManagesPadConfig(bool),
+    SmxDefaultPadConfig(SmxPadPreset),
+    SmxDefaultLightBrightness(u8),
+    SmxPadGifsPack(SmxPackName),
+    SmxJudgeGifsPack(SmxPackName),
+    SmxIdleLightsBlack(bool),
+    VisualDelayMillis(i32),
+    InputDebounceMillis(i32),
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SimplyLoveNullOrDieGraph {
     Frequency,
@@ -627,6 +720,12 @@ pub enum SimplyLoveConfigRequest {
     ShowOverlay(u8),
     MouseCursorHidden(bool),
     PersistColor(i32),
+    Overscan {
+        translate_x: i32,
+        translate_y: i32,
+        add_width: i32,
+        add_height: i32,
+    },
     Advanced(SimplyLoveAdvancedConfigRequest),
     Course(SimplyLoveCourseConfigRequest),
     Gameplay(SimplyLoveGameplayConfigRequest),
@@ -635,6 +734,7 @@ pub enum SimplyLoveConfigRequest {
     Mappings(SimplyLoveMappingsConfigRequest),
     NullOrDie(SimplyLoveNullOrDieConfigRequest),
     Online(SimplyLoveOnlineConfigRequest),
+    Options(SimplyLoveOptionsConfigRequest),
     SelectMusic(SimplyLoveSelectMusicConfigRequest),
 }
 
@@ -665,6 +765,22 @@ pub enum SimplyLoveHardwareRequest {
         name: String,
         set_default: bool,
         overwrite: bool,
+    },
+    RenameSmxPadConfig {
+        profile_id: String,
+        serial: String,
+        old_name: String,
+        new_name: String,
+        set_default: bool,
+    },
+    SetSmxPadConfigDefault {
+        profile_id: String,
+        serial: String,
+        name: String,
+    },
+    DeleteSmxPadConfig {
+        profile_id: String,
+        name: String,
     },
     SetSmxPlayerLights([Option<[u8; 3]>; 2]),
     ReenableSmxAutoLights,
@@ -699,6 +815,7 @@ pub enum SimplyLoveUpdaterRequest {
 pub enum SimplyLoveRuntimeRequest {
     Audio(AudioRequest),
     Media(SimplyLoveMediaRequest),
+    Content(SimplyLoveContentRequest),
     Profile(SimplyLoveProfileRequest),
     Online(SimplyLoveOnlineRequest),
     Graphics(GraphicsRequest),

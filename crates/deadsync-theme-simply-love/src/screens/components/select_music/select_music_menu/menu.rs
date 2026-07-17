@@ -1,7 +1,8 @@
 use std::collections::HashSet;
 
 use crate::act;
-use crate::assets::{FontRole, current_machine_font_key};
+use crate::assets::{FontRole, machine_font_key};
+use crate::config::MachineFont;
 use deadlib_present::actors::Actor;
 use deadlib_present::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 use deadsync_input::{InputEvent, VirtualAction};
@@ -361,6 +362,7 @@ fn activate(state: &mut VisibleState, side: PlayerSide) -> InputOutcome {
 // --- Rendering ---
 
 pub struct RenderParams<'a> {
+    pub machine_font: MachineFont,
     pub entries: &'a [Entry],
     pub selected_index: usize,
     pub prev_selected_index: usize,
@@ -401,7 +403,7 @@ pub fn build_overlay(p: RenderParams<'_>) -> Vec<Actor> {
 
     // Hint text below the menu
     actors.push(act!(text:
-        font(current_machine_font_key(FontRole::Bold)):
+        font(machine_font_key(p.machine_font, FontRole::Bold)):
         settext(HINT_TEXT):
         align(0.5, 0.5):
         xy(cx, cy + HINT_Y_OFFSET):
@@ -429,7 +431,15 @@ pub fn build_overlay(p: RenderParams<'_>) -> Vec<Actor> {
                 .rem_euclid(p.entries.len() as isize)) as usize;
             let entry = &p.entries[entry_idx];
 
-            render_row(&mut actors, entry, slot_pos, cx, cy, &clip_rect);
+            render_row(
+                &mut actors,
+                entry,
+                slot_pos,
+                cx,
+                cy,
+                &clip_rect,
+                p.machine_font,
+            );
         }
     }
 
@@ -443,6 +453,7 @@ fn render_row(
     cx: f32,
     cy: f32,
     clip_rect: &[f32; 4],
+    machine_font: MachineFont,
 ) {
     let focus_lerp = (1.0 - slot_pos.abs()).clamp(0.0, 1.0);
     let row_alpha = 1.0_f32;
@@ -515,7 +526,7 @@ fn render_row(
             ));
             // Category label
             let mut label_actor = act!(text:
-                font(current_machine_font_key(FontRole::Bold)):
+                font(machine_font_key(machine_font, FontRole::Bold)):
                 settext(*label):
                 align(0.0, 0.5):
                 xy(left_x + 27.0, y):
@@ -531,11 +542,31 @@ fn render_row(
         Entry::CategoryItem(item) => {
             let indent_x = left_x + CATEGORY_INDENT;
             let tint = item_tint(item, focus_lerp);
-            render_item_text(actors, item, indent_x, y, row_alpha, &tint, clip_rect, true);
+            render_item_text(
+                actors,
+                item,
+                indent_x,
+                y,
+                row_alpha,
+                &tint,
+                clip_rect,
+                true,
+                machine_font,
+            );
         }
         Entry::StandaloneItem(item) => {
             let tint = item_tint(item, focus_lerp);
-            render_item_text(actors, item, left_x, y, row_alpha, &tint, clip_rect, false);
+            render_item_text(
+                actors,
+                item,
+                left_x,
+                y,
+                row_alpha,
+                &tint,
+                clip_rect,
+                false,
+                machine_font,
+            );
         }
     }
 }
@@ -549,6 +580,7 @@ fn render_item_text(
     tint: &[f32; 3],
     clip_rect: &[f32; 4],
     indented: bool,
+    machine_font: MachineFont,
 ) {
     let max_w = if indented {
         WIDTH - CATEGORY_INDENT - 28.0
@@ -557,7 +589,7 @@ fn render_item_text(
     };
     if !item.top_label.as_str().is_empty() {
         let mut top = act!(text:
-            font(current_machine_font_key(FontRole::Normal)):
+            font(machine_font_key(machine_font, FontRole::Normal)):
             settext(item.top_label.clone()):
             align(0.0, 1.0):
             xy(x, y - 5.0):
@@ -571,7 +603,7 @@ fn render_item_text(
         actors.push(top);
     }
     let mut bottom = act!(text:
-        font(current_machine_font_key(FontRole::Bold)):
+        font(machine_font_key(machine_font, FontRole::Bold)):
         settext(item.bottom_label.clone()):
         align(0.0, 0.5):
         xy(x, y + 4.0):

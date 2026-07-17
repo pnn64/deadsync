@@ -1,6 +1,5 @@
 use crate::act;
 use crate::assets;
-use crate::config::{self, SrpgVariant};
 use crate::scorebox as scorebox_theme;
 use crate::scorebox::{
     SCOREBOX_BORDER, SCOREBOX_H, SCOREBOX_W, ScoreboxCycleState, color_with_alpha, lerp_color,
@@ -33,7 +32,6 @@ const SCOREBOX_HARD_EX_BORDER_TINT: f32 = 0.35;
 const TEXT_CACHE_LIMIT: usize = 8192;
 
 type PaneKind = score_data::ScoreboxPaneKind;
-type SelectMusicPaneFilter = score_data::SelectMusicScoreboxFilter;
 
 thread_local! {
     static SCORE_PERCENT_TEXT_CACHE: RefCell<TextCache<u64>> = RefCell::new(HashMap::with_capacity(2048));
@@ -91,17 +89,6 @@ fn error_text(error: &str) -> &'static str {
         "Timed Out"
     } else {
         "Failed to Load 😞"
-    }
-}
-
-#[inline(always)]
-fn select_music_pane_filter() -> SelectMusicPaneFilter {
-    let cfg = crate::config::get();
-    score_data::SelectMusicScoreboxFilter {
-        itg: cfg.select_music_scorebox_cycle_itg,
-        ex: cfg.select_music_scorebox_cycle_ex,
-        hard_ex: cfg.select_music_scorebox_cycle_hard_ex,
-        tournaments: cfg.select_music_scorebox_cycle_tournaments,
     }
 }
 
@@ -296,7 +283,7 @@ pub fn select_music_scorebox_view(
     if !show_rivals || !runtime.groovestats_active || !chart_matches {
         return view;
     }
-    let filter = select_music_pane_filter();
+    let filter = runtime.pane_filter;
     if !score_data::select_music_scorebox_filter_has_any(filter) {
         return view;
     }
@@ -502,6 +489,7 @@ fn gameplay_pane_from_leaderboard(
 fn gameplay_panes_from_snapshot(
     snapshot: &score_data::CachedPlayerLeaderboardData,
     profile_snapshot: &score_data::GameplayScoreboxProfileSnapshot,
+    filter: score_data::SelectMusicScoreboxFilter,
 ) -> Vec<GameplayScoreboxPane> {
     if snapshot.loading {
         return vec![gameplay_status_pane(
@@ -526,7 +514,6 @@ fn gameplay_panes_from_snapshot(
         )];
     }
 
-    let filter = select_music_pane_filter();
     if !score_data::select_music_scorebox_filter_has_any(filter) {
         return Vec::new();
     }
@@ -563,7 +550,7 @@ fn select_music_panes_from_snapshot(
     let Some(data) = snapshot.data.as_ref() else {
         return vec![gameplay_status_pane(runtime.show_ex_score, "No Scores")];
     };
-    let filter = select_music_pane_filter();
+    let filter = runtime.pane_filter;
     if !score_data::select_music_scorebox_filter_has_any(filter) {
         return Vec::new();
     }
@@ -843,6 +830,7 @@ fn push_srpg_logo_overlay(
     center_y: f32,
     zoom: f32,
     z_base: i16,
+    srpg10: bool,
 ) {
     let alpha = logo_alpha(
         cycle,
@@ -853,7 +841,7 @@ fn push_srpg_logo_overlay(
     );
     push_centered_logo(
         actors,
-        srpg_logo_texture_key(),
+        srpg_logo_texture_key(srpg10),
         center_x,
         center_y,
         zoom,
@@ -863,11 +851,11 @@ fn push_srpg_logo_overlay(
     );
 }
 
-pub(crate) fn srpg_logo_texture_key() -> &'static str {
-    let cfg = config::get();
-    match cfg.srpg_variant {
-        SrpgVariant::Srpg10 if cfg.visual_style.is_srpg() => "srpg10_logo_alt.png",
-        _ => "srpg9_logo_alt.png",
+pub(crate) const fn srpg_logo_texture_key(srpg10: bool) -> &'static str {
+    if srpg10 {
+        "srpg10_logo_alt.png"
+    } else {
+        "srpg9_logo_alt.png"
     }
 }
 
@@ -902,13 +890,14 @@ fn push_header_overlays(
     center_y: f32,
     zoom: f32,
     z_base: i16,
+    srpg10: bool,
 ) {
     push_gs_logo_overlay(actors, cycle, cur, next, center_x, center_y, zoom, z_base);
     push_arrowcloud_logo_overlay(actors, cycle, cur, next, center_x, center_y, zoom, z_base);
     push_ex_header_overlay(actors, cycle, cur, next, center_x, center_y, zoom, z_base);
     push_hard_ex_header_overlay(actors, cycle, cur, next, center_x, center_y, zoom, z_base);
     push_srpg_logo_overlay(
-        actors, cycle, cur.kind, next.kind, center_x, center_y, zoom, z_base,
+        actors, cycle, cur.kind, next.kind, center_x, center_y, zoom, z_base, srpg10,
     );
     push_itl_logo_overlay(
         actors, cycle, cur.kind, next.kind, center_x, center_y, zoom, z_base,
@@ -1021,12 +1010,21 @@ pub fn select_music_scorebox_actors(
         return Vec::new();
     };
     let panes = select_music_panes_from_snapshot(snapshot, runtime);
-    gameplay_scorebox_actors_from_panes(&panes, center_x, center_y, zoom, elapsed_seconds)
+    gameplay_scorebox_actors_from_panes(
+        &panes,
+        runtime.srpg10,
+        center_x,
+        center_y,
+        zoom,
+        elapsed_seconds,
+    )
 }
 
 pub fn gameplay_scorebox_actors_from_snapshot(
     snapshot: Option<&score_data::CachedPlayerLeaderboardData>,
     profile_snapshot: &score_data::GameplayScoreboxProfileSnapshot,
+    filter: score_data::SelectMusicScoreboxFilter,
+    srpg10: bool,
     center_x: f32,
     center_y: f32,
     zoom: f32,
@@ -1041,6 +1039,8 @@ pub fn gameplay_scorebox_actors_from_snapshot(
     gameplay_scorebox_actors_from_cached_snapshot(
         snapshot,
         profile_snapshot,
+        filter,
+        srpg10,
         center_x,
         center_y,
         zoom,
@@ -1051,17 +1051,20 @@ pub fn gameplay_scorebox_actors_from_snapshot(
 pub(crate) fn gameplay_scorebox_actors_from_cached_snapshot(
     snapshot: &score_data::CachedPlayerLeaderboardData,
     profile_snapshot: &score_data::GameplayScoreboxProfileSnapshot,
+    filter: score_data::SelectMusicScoreboxFilter,
+    srpg10: bool,
     center_x: f32,
     center_y: f32,
     zoom: f32,
     elapsed_seconds: f32,
 ) -> Vec<Actor> {
-    let panes = gameplay_panes_from_snapshot(snapshot, profile_snapshot);
-    gameplay_scorebox_actors_from_panes(&panes, center_x, center_y, zoom, elapsed_seconds)
+    let panes = gameplay_panes_from_snapshot(snapshot, profile_snapshot, filter);
+    gameplay_scorebox_actors_from_panes(&panes, srpg10, center_x, center_y, zoom, elapsed_seconds)
 }
 
 fn gameplay_scorebox_actors_from_panes(
     panes: &[GameplayScoreboxPane],
+    srpg10: bool,
     center_x: f32,
     center_y: f32,
     zoom: f32,
@@ -1109,6 +1112,7 @@ fn gameplay_scorebox_actors_from_panes(
         center_y,
         zoom,
         z_base,
+        srpg10,
     );
 
     push_rows(
@@ -1306,12 +1310,6 @@ mod tests {
 
     #[test]
     fn gameplay_panes_respect_select_music_leaderboard_filter() {
-        let prev = crate::config::get();
-        crate::config::update_select_music_scorebox_cycle_itg(false);
-        crate::config::update_select_music_scorebox_cycle_ex(false);
-        crate::config::update_select_music_scorebox_cycle_hard_ex(true);
-        crate::config::update_select_music_scorebox_cycle_tournaments(false);
-
         let snapshot = score_data::CachedPlayerLeaderboardData {
             loading: false,
             error: None,
@@ -1334,15 +1332,15 @@ mod tests {
         };
 
         let profile_snapshot = scorebox_profile(false);
-        let panes = gameplay_panes_from_snapshot(&snapshot, &profile_snapshot);
-
-        crate::config::update_select_music_scorebox_cycle_itg(prev.select_music_scorebox_cycle_itg);
-        crate::config::update_select_music_scorebox_cycle_ex(prev.select_music_scorebox_cycle_ex);
-        crate::config::update_select_music_scorebox_cycle_hard_ex(
-            prev.select_music_scorebox_cycle_hard_ex,
-        );
-        crate::config::update_select_music_scorebox_cycle_tournaments(
-            prev.select_music_scorebox_cycle_tournaments,
+        let panes = gameplay_panes_from_snapshot(
+            &snapshot,
+            &profile_snapshot,
+            score_data::SelectMusicScoreboxFilter {
+                itg: false,
+                ex: false,
+                hard_ex: true,
+                tournaments: false,
+            },
         );
 
         assert_eq!(panes.len(), 1);

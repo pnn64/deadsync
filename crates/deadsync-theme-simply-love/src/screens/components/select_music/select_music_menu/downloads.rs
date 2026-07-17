@@ -1,5 +1,6 @@
 use crate::act;
-use crate::assets::{FontRole, current_machine_font_key};
+use crate::assets::{FontRole, machine_font_key};
+use crate::config::MachineFont;
 use crate::screens::components::shared::loading_bar;
 use crate::views::SelectMusicDownloadView;
 use deadlib_present::actors::Actor;
@@ -159,6 +160,7 @@ pub fn build_downloads_overlay(
     state: &DownloadsOverlayState,
     active_color_index: i32,
     snapshots: &[SelectMusicDownloadView],
+    machine_font: MachineFont,
 ) -> Option<Vec<Actor>> {
     let DownloadsOverlayState::Visible(overlay) = state else {
         return None;
@@ -197,7 +199,7 @@ pub fn build_downloads_overlay(
         z(DOWNLOADS_Z + 2)
     ));
     actors.push(act!(text:
-        font(current_machine_font_key(FontRole::Header)):
+        font(machine_font_key(machine_font, FontRole::Header)):
         settext("View Downloads"):
         align(0.5, 0.5):
         xy(center_x, center_y + DOWNLOADS_TITLE_Y):

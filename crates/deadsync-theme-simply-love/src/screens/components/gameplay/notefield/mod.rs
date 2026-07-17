@@ -183,6 +183,7 @@ pub(crate) fn compose_frame(
     player_idx: usize,
     arrow_effect_time_s: f32,
     noteskin_assets: &GameplayNoteskinAssets,
+    visual_effects: &crate::visual_styles::EffectAssets,
     actor_resources: &ActorResourceArena,
     model_caches: &[RefCell<ModelMeshCache>; MAX_PLAYERS],
     hold_mesh_scratch: &[RefCell<HoldMeshScratch>; MAX_PLAYERS],
@@ -510,10 +511,9 @@ pub(crate) fn compose_frame(
         && !options.hide_combo_explosions
         && !p.combo_milestones.is_empty())
     .then(|| {
-        let combo_splode_tex = assets::visual_styles::combo_100milestone_splode_texture_key();
-        let combo_minisplode_tex =
-            assets::visual_styles::combo_100milestone_minisplode_texture_key();
-        let combo_swoosh_tex = assets::visual_styles::combo_1000milestone_swoosh_texture_key();
+        let combo_splode_tex = visual_effects.combo_100milestone_splode;
+        let combo_minisplode_tex = visual_effects.combo_100milestone_minisplode;
+        let combo_swoosh_tex = visual_effects.combo_1000milestone_swoosh;
         ComboMilestoneAssets {
             burst: "combo_explosion.png".into_sprite_source(),
             hundred: combo_splode_tex.into_sprite_source(),

@@ -448,6 +448,17 @@ pub struct SelectMusicScoreboxFilter {
     pub tournaments: bool,
 }
 
+impl Default for SelectMusicScoreboxFilter {
+    fn default() -> Self {
+        Self {
+            itg: true,
+            ex: true,
+            hard_ex: true,
+            tournaments: true,
+        }
+    }
+}
+
 #[inline(always)]
 pub const fn select_music_scorebox_filter_has_any(filter: SelectMusicScoreboxFilter) -> bool {
     filter.itg || filter.ex || filter.hard_ex || filter.tournaments

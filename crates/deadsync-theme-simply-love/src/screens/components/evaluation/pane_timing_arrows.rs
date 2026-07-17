@@ -1,5 +1,6 @@
 use crate::act;
-use crate::assets::{FontRole, current_machine_font_key_for_text};
+use crate::assets::{FontRole, machine_font_key_for_text};
+use crate::config::MachineFont;
 use crate::screens::evaluation::ScoreInfo;
 use deadlib_present::actors::{Actor, SizeSpec};
 use deadlib_present::color;
@@ -31,6 +32,7 @@ pub fn build_timing_arrows_pane(
     score_info: &ScoreInfo,
     controller: profile_data::PlayerSide,
     preview_elapsed: f32,
+    machine_font: MachineFont,
 ) -> Vec<Actor> {
     let arrows = &score_info.arrow_timing;
     // Singles-only: render nothing if the data isn't a 4-column chart.
@@ -84,7 +86,7 @@ pub fn build_timing_arrows_pane(
     // L/R column headers.
     let foot_labels: [(&str, [f32; 4]); 2] = [("L", LEFT_FOOT_RGBA), ("R", RIGHT_FOOT_RGBA)];
     for (i, (label, color_rgba)) in foot_labels.iter().enumerate() {
-        let foot_header_font = current_machine_font_key_for_text(FontRole::Header, label);
+        let foot_header_font = machine_font_key_for_text(machine_font, FontRole::Header, label);
         children.push(
             act!(text: font(foot_header_font): settext(label.to_string()):
                 align(0.5, 0.5): xy(col_centers[4 + i], header_y):

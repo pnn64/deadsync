@@ -1,7 +1,7 @@
 use crate::act;
 use crate::assets::AssetManager;
 use crate::assets::i18n::{tr, tr_fmt};
-use crate::assets::{FontRole, current_machine_font_key, visual_styles};
+use crate::assets::{FontRole, machine_font_key};
 use crate::screens::components::shared::{transitions, visual_style_bg};
 use crate::screens::{Screen, ThemeEffect};
 use crate::views::{PostSongPlayerView, PostSongRuntimeView};
@@ -179,12 +179,13 @@ pub fn init(runtime: PostSongRuntimeView) -> State {
 
 pub fn update(state: &mut State, dt: f32) -> Option<ThemeEffect> {
     state.elapsed = (state.elapsed + dt).max(0.0);
-    (state.elapsed >= gameover_seconds()).then_some(ThemeEffect::Navigate(Screen::Menu))
+    (state.elapsed >= gameover_seconds(state.runtime.srpg10_visuals))
+        .then_some(ThemeEffect::Navigate(Screen::Menu))
 }
 
 #[inline(always)]
-fn gameover_seconds() -> f32 {
-    if visual_styles::srpg10_active() {
+fn gameover_seconds(srpg10: bool) -> f32 {
+    if srpg10 {
         SRPG10_GAMEOVER_SECONDS
     } else {
         GAMEOVER_SECONDS
@@ -209,6 +210,7 @@ pub fn push_actors(
     state: &State,
     stages: &[stage_stats::StageSummary],
     _asset_manager: &AssetManager,
+    visual_policy: crate::views::SimplyLoveVisualPolicyView,
 ) {
     actors.reserve(64);
 
@@ -219,6 +221,7 @@ pub fn push_actors(
             active_color_index: state.active_color_index,
             backdrop_rgba: [0.0, 0.0, 0.0, 1.0],
             alpha_mul: 1.0,
+            visual_policy,
         },
     );
 
@@ -245,13 +248,14 @@ pub fn push_actors(
     {
         let cx = screen_center_x();
         let cy = screen_center_y();
+        let headline_font = machine_font_key(state.runtime.machine_font, FontRole::Headline);
         let zoom = match state.runtime.machine_font {
             deadsync_config::prelude::MachineFont::Wendy => 1.2,
             deadsync_config::prelude::MachineFont::Mega => 1.95,
         };
 
         actors.push(act!(text:
-            font(current_machine_font_key(FontRole::Headline)):
+            font(headline_font):
             settext(tr("GameOver", "GameText")):
             align(0.5, 0.5):
             xy(cx, cy - 40.0):
@@ -262,7 +266,7 @@ pub fn push_actors(
             decelerate(0.5): croptop(0.0): fadetop(0.0)
         ));
         actors.push(act!(text:
-            font(current_machine_font_key(FontRole::Headline)):
+            font(headline_font):
             settext(tr("GameOver", "OverText")):
             align(0.5, 0.5):
             xy(cx, cy + 40.0):
@@ -364,7 +368,13 @@ pub fn get_actors(
     asset_manager: &AssetManager,
 ) -> Vec<Actor> {
     let mut actors = Vec::with_capacity(64);
-    push_actors(&mut actors, state, stages, asset_manager);
+    push_actors(
+        &mut actors,
+        state,
+        stages,
+        asset_manager,
+        Default::default(),
+    );
     actors
 }
 

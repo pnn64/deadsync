@@ -114,7 +114,9 @@ use deadsync_profile_gameplay::{
     gameplay_player_side_from_profile, gameplay_tick_mode_from_profile,
 };
 use deadsync_simfile::{app_runtime as song_loading, sync_offset};
-use deadsync_theme_simply_love::views::{OptionsSongPackView, TimingHealth};
+use deadsync_theme_simply_love::views::{
+    OptionsInitView, OptionsPackSyncView, OptionsSongPackView, TimingHealth,
+};
 use deadsync_theme_simply_love::{
     screens::{
         self, credits, evaluation, evaluation_summary, gameover, gameplay, init, initials,
@@ -183,14 +185,16 @@ use deadsync_theme_simply_love::views::{
     EvaluationPolicyView, EvaluationRuntimeView, EvaluationSubmissionView, MusicWheelRankSource,
     MusicWheelRuntimeRequest, MusicWheelRuntimeView, MusicWheelSlotRuntimeRequest,
     MusicWheelSlotRuntimeView, ScoreboxLocalView, ScoreboxMachineView, ScoreboxSideView,
-    SelectCourseRuntimeView, SelectCourseScoreRequest, SelectCourseScoreView,
-    SimplyLoveDensityGraphSlot as DensityGraphSlot, SimplyLoveGrooveStatsService,
-    SimplyLoveLobbyRuntimeView,
+    ScreenBarBackgroundView, SelectCourseRuntimeView, SelectCourseScoreRequest,
+    SelectCourseScoreView, SimplyLoveDensityGraphSlot as DensityGraphSlot,
+    SimplyLoveGrooveStatsService, SimplyLoveLobbyRuntimeView, SimplyLoveVisualPolicyView,
+    VisualBackgroundView,
 };
 use deadsync_theme_simply_love::{
-    SimplyLoveConfigRequest, SimplyLoveEffect as ThemeEffect, SimplyLoveHardwareRequest,
-    SimplyLoveLobbyRequest, SimplyLoveOnlineRequest, SimplyLoveProfileRequest,
-    SimplyLoveQrLoginService, SimplyLoveRuntimeRequest, SimplyLoveSyncOwner, SimplyLoveSyncRequest,
+    SimplyLoveConfigRequest, SimplyLoveContentRequest, SimplyLoveEffect as ThemeEffect,
+    SimplyLoveHardwareRequest, SimplyLoveLobbyRequest, SimplyLoveOnlineRequest,
+    SimplyLoveProfileImportEvent, SimplyLoveProfileRequest, SimplyLoveQrLoginService,
+    SimplyLoveRuntimeRequest, SimplyLoveSyncOwner, SimplyLoveSyncRequest,
 };
 
 /// Imperative effects to be executed by the shell.
@@ -396,6 +400,13 @@ fn evaluation_context_view() -> EvaluationContextView {
             machine_nice_sound: config.machine_nice_sound,
             show_gameplay_timer: config.show_select_music_gameplay_timer,
             translated_titles: config.translated_titles,
+            transparent_panels: matches!(
+                config.machine_evaluation_style.resolve(config.visual_style),
+                config::MachineEvaluationStyle::Transparent
+            ),
+            srpg10_visuals: config.visual_style.is_srpg()
+                && matches!(config.srpg_variant, config::SrpgVariant::Srpg10),
+            machine_font: config.machine_font,
             zmod_rating_box_text: config.zmod_rating_box_text,
             breakdown_style: config.select_music_breakdown_style,
         },
@@ -414,6 +425,43 @@ fn evaluation_context_view() -> EvaluationContextView {
                 arrowcloud_linked: !side_profile.arrowcloud_api_key.trim().is_empty(),
             }
         }),
+    }
+}
+
+fn scorebox_pane_filter(config: &config::Config) -> deadsync_score::SelectMusicScoreboxFilter {
+    deadsync_score::SelectMusicScoreboxFilter {
+        itg: config.select_music_scorebox_cycle_itg,
+        ex: config.select_music_scorebox_cycle_ex,
+        hard_ex: config.select_music_scorebox_cycle_hard_ex,
+        tournaments: config.select_music_scorebox_cycle_tournaments,
+    }
+}
+
+fn simply_love_visual_policy(config: &config::Config) -> SimplyLoveVisualPolicyView {
+    let srpg10 =
+        config.visual_style.is_srpg() && matches!(config.srpg_variant, config::SrpgVariant::Srpg10);
+    let background = match config.visual_style {
+        config::VisualStyle::Technique => VisualBackgroundView::Technique,
+        config::VisualStyle::Srpg9 => VisualBackgroundView::Srpg,
+        _ => VisualBackgroundView::Tiled,
+    };
+    let screen_bar = match config.machine_bar_color.resolve(config.visual_style) {
+        config::MachineBarColor::Default => ScreenBarBackgroundView::Default,
+        config::MachineBarColor::Colored => ScreenBarBackgroundView::Colored(if srpg10 {
+            color::srpg10_rgba(config.simply_love_color)
+        } else {
+            color::srpg9_rgba(config.simply_love_color)
+        }),
+        config::MachineBarColor::Transparent => ScreenBarBackgroundView::Transparent,
+    };
+
+    SimplyLoveVisualPolicyView {
+        background,
+        assets: visual_styles::for_style_and_variant(config.visual_style, config.srpg_variant),
+        machine_font: config.machine_font,
+        title_logo_texture_key: srpg10.then_some(visual_styles::SRPG10_TITLE_LOGO),
+        srpg10_tint: srpg10,
+        screen_bar,
     }
 }
 
@@ -524,7 +572,7 @@ fn prewarm_gameplay_text_layout_cache(
         assets,
         gameplay::ActorViewOverride::default(),
         arrow_effect_time_seconds(started),
-        config,
+        simply_love_visual_policy(config),
     );
     let mut render =
         compose::build_screen_cached_with_scratch_and_texture_context_and_actor_resources(
@@ -539,7 +587,7 @@ fn prewarm_gameplay_text_layout_cache(
             state.actor_resources(),
         );
     compose_scratch.recycle_render_list(&mut render);
-    gameplay::prewarm_text_layout(cache, fonts, state, config);
+    gameplay::prewarm_text_layout(cache, fonts, state);
     screens::components::gameplay::gameplay_stats::prewarm_text_layout(cache, fonts, assets, state);
     screens::components::gameplay::notefield::prewarm_text_layout(cache, fonts, state);
     // Keep a bounded song-local allowance for genuinely dynamic values. Reserving
@@ -601,6 +649,18 @@ fn options_song_pack_view() -> Vec<OptionsSongPackView> {
         .collect()
 }
 
+fn options_pack_sync_view() -> OptionsPackSyncView {
+    let play_style = profile::get_session_play_style();
+    let max_difficulty = deadsync_chart::STANDARD_DIFFICULTY_COUNT.saturating_sub(1);
+    OptionsPackSyncView {
+        target_chart_type: play_style.chart_type().to_owned(),
+        preferred_difficulty_index: profile::get()
+            .last_played(play_style)
+            .difficulty_index
+            .min(max_difficulty),
+    }
+}
+
 fn noteskin_catalog_view() -> NoteskinCatalogView {
     let roots = deadlib_platform::dirs::app_dirs().noteskin_roots();
     NoteskinCatalogView {
@@ -608,12 +668,33 @@ fn noteskin_catalog_view() -> NoteskinCatalogView {
     }
 }
 
+fn options_init_view() -> OptionsInitView {
+    OptionsInitView {
+        config: config::get(),
+        updater_capabilities: updater::capabilities(),
+        app_paths: app_paths_view(),
+        audio: audio_requests::options_view(),
+        graphics: graphics::options_graphics_view(),
+        song_packs: options_song_pack_view(),
+        pack_sync: options_pack_sync_view(),
+        noteskins: noteskin_catalog_view(),
+        machine_noteskin: profile::machine_default_noteskin(),
+        smx_assignment: crate::smx_config::smx_assignment_view(),
+        smx_gifs: crate::smx_config::smx_gif_catalog_view(),
+        score_import_profiles: crate::options_runtime::score_import_profiles(),
+    }
+}
+
 impl ScreensState {
-    fn new(color_index: i32, preferred_difficulty_index: usize) -> Self {
+    fn new(
+        color_index: i32,
+        preferred_difficulty_index: usize,
+        dedicated_three_key_nav: bool,
+    ) -> Self {
         let mut menu_state = menu::init();
         menu_state.active_color_index = color_index;
 
-        let mut select_profile_state = select_profile::init();
+        let mut select_profile_state = select_profile::init(crate::local_profiles::picker_view());
         select_profile_state.active_color_index = color_index;
 
         let select_flow_view = crate::select_flow::runtime_view();
@@ -623,11 +704,11 @@ impl ScreensState {
         select_color_state.bg_from_index = color_index;
         select_color_state.bg_to_index = color_index;
 
-        let mut arrowcloud_login_state = screens::arrowcloud_login::init();
-        arrowcloud_login_state.active_color_index = color_index;
+        let arrowcloud_login_state =
+            screens::arrowcloud_login::init(color_index, dedicated_three_key_nav);
 
-        let mut groovestats_login_state = screens::groovestats_login::init();
-        groovestats_login_state.active_color_index = color_index;
+        let groovestats_login_state =
+            screens::groovestats_login::init(color_index, dedicated_three_key_nav);
 
         let mut select_music_state = select_music::init_placeholder();
         select_music_state.active_color_index = color_index;
@@ -650,22 +731,14 @@ impl ScreensState {
         let app_paths = app_paths_view();
         let init_songs_root = app_paths.songs.path.clone();
         let init_courses_root = app_paths.courses.path.clone();
-        let mut options_state = options::init(
-            updater::capabilities(),
-            app_paths,
-            audio_requests::options_view(),
-            graphics::options_graphics_view(),
-            options_song_pack_view(),
-            noteskin_catalog_view(),
-            crate::smx_config::smx_assignment_view(),
-            crate::smx_config::smx_gif_catalog_view(),
-        );
+        let mut options_state = options::init(options_init_view());
         options_state.active_color_index = color_index;
 
         let mut credits_state = credits::init();
         credits_state.active_color_index = color_index;
 
-        let mut manage_local_profiles_state = manage_local_profiles::init();
+        let mut manage_local_profiles_state =
+            manage_local_profiles::init(crate::local_profiles::view());
         manage_local_profiles_state.active_color_index = color_index;
 
         let mut mappings_state = mappings::init(crate::mappings::runtime_view());
@@ -918,7 +991,11 @@ impl AppState {
 
         let shell = ShellState::new(&cfg, overlay_mode);
         let session = SessionState::new(preferred, profile::combo_carry());
-        let screens = ScreensState::new(color_index, preferred);
+        let screens = ScreensState::new(
+            color_index,
+            preferred,
+            cfg.three_key_navigation && cfg.only_dedicated_menu_buttons,
+        );
 
         Self {
             shell,
@@ -985,6 +1062,7 @@ pub struct App {
     options_song_pack_generation: u64,
     profile_import: crate::profile_import::Service,
     profile_load: crate::profile_load::Service,
+    content_reload: crate::content_reload::Service,
     heart_rate: crate::heart_rate::Runtime,
     qr_login: crate::qr_login::Service,
     score_import: crate::score_import::Service,
@@ -1052,6 +1130,32 @@ impl App {
         self.options_song_pack_generation = generation;
     }
 
+    fn sync_content_reload_events(&mut self) {
+        let screen = self.state.screens.current_screen;
+        if !matches!(
+            screen,
+            CurrentScreen::Init | CurrentScreen::Options | CurrentScreen::SelectMusic
+        ) {
+            return;
+        }
+        let events = self.content_reload.poll();
+        if events.is_empty() {
+            return;
+        }
+        match screen {
+            CurrentScreen::Init => {
+                init::sync_loading_events(&mut self.state.screens.init_state, events)
+            }
+            CurrentScreen::Options => {
+                options::sync_reload_events(&mut self.state.screens.options_state, events)
+            }
+            CurrentScreen::SelectMusic => {
+                select_music::sync_reload_events(&mut self.state.screens.select_music_state, events)
+            }
+            _ => unreachable!("content reload events are only polled for reload-capable screens"),
+        }
+    }
+
     fn sync_options_stepmaniaonline(&mut self) {
         if self.state.screens.current_screen != CurrentScreen::Options {
             return;
@@ -1093,6 +1197,15 @@ impl App {
     fn poll_profile_import(&mut self) {
         let events = self.profile_import.poll();
         if !events.is_empty() {
+            if events
+                .iter()
+                .any(|event| matches!(event, SimplyLoveProfileImportEvent::Finished(_)))
+            {
+                manage_local_profiles::sync_runtime_view(
+                    &mut self.state.screens.manage_local_profiles_state,
+                    crate::local_profiles::view(),
+                );
+            }
             manage_local_profiles::apply_import_events(
                 &mut self.state.screens.manage_local_profiles_state,
                 events,
@@ -1367,6 +1480,9 @@ impl App {
 
     fn evaluation_runtime_view(state: &evaluation::State) -> EvaluationRuntimeView {
         let config = config::get();
+        let pane_filter = scorebox_pane_filter(&config);
+        let srpg10 = matches!(config.srpg_variant, config::SrpgVariant::Srpg10)
+            && config.visual_style.is_srpg();
         let profile_view = profile_data::runtime_scorebox_view(
             config.enable_groovestats,
             config.enable_arrowcloud,
@@ -1404,6 +1520,8 @@ impl App {
                     profile_view.sides[profile_data::player_side_index(score_info.side)].clone(),
                     Some(score_info.chart.short_hash.clone()),
                     leaderboards[player_idx].clone(),
+                    pane_filter,
+                    srpg10,
                 )
             }),
             favorites: std::array::from_fn(|player_idx| {
@@ -1463,6 +1581,8 @@ impl App {
         player: profile_data::ScoreboxProfileView,
         chart_hash: Option<String>,
         leaderboards: Option<deadsync_score::CachedPlayerLeaderboardData>,
+        pane_filter: deadsync_score::SelectMusicScoreboxFilter,
+        srpg10: bool,
     ) -> ScoreboxSideView {
         let profile_id = player.leaderboard.persistent_profile_id();
         let local_itg = chart_hash.as_deref().and_then(|hash| {
@@ -1513,6 +1633,8 @@ impl App {
             chart_hash,
             groovestats_active: player.leaderboard.gs_active,
             show_ex_score: player.leaderboard.show_ex_score,
+            pane_filter,
+            srpg10,
             display_name: player.display_name,
             groovestats_username: player.groovestats_username,
             player_initials: player.player_initials,
@@ -1532,6 +1654,7 @@ impl App {
     fn prepare_music_wheel_runtime(
         request: MusicWheelRuntimeRequest<'_>,
         profiles: &profile_data::ScoreboxRuntimeView,
+        config: &config::Config,
     ) -> MusicWheelRuntimeView {
         let joined = [profiles.sides[0].joined, profiles.sides[1].joined];
         let profile_ids: [Option<&str>; 2] = std::array::from_fn(|side_idx| {
@@ -1686,9 +1809,14 @@ impl App {
             }
             view
         });
+        let effective_bar_color = config.machine_bar_color.resolve(config.visual_style);
         MusicWheelRuntimeView {
             joined,
             play_style: profiles.play_style,
+            translated_titles: config.translated_titles,
+            song_bg_dimmed: config.visual_style.is_srpg()
+                || effective_bar_color == config::MachineBarColor::Transparent,
+            section_bg_dimmed: effective_bar_color == config::MachineBarColor::Transparent,
             slots,
         }
     }
@@ -1750,6 +1878,7 @@ impl App {
         let music_wheel = Self::prepare_music_wheel_runtime(
             select_course::music_wheel_runtime_request(&self.state.screens.select_course_state),
             &profile_view,
+            config,
         );
         let score = Self::prepare_select_course_score(
             select_course::score_runtime_request(&self.state.screens.select_course_state),
@@ -1759,6 +1888,7 @@ impl App {
             &mut self.state.screens.select_course_state,
             SelectCourseRuntimeView {
                 context,
+                players: crate::select_flow::players_view(),
                 music_wheel,
                 score,
             },
@@ -2289,6 +2419,7 @@ impl App {
         self.drive_smx_light_brightness(&frame_config);
         self.state.shell.interaction.update_message(redraw_started);
         self.sync_options_song_packs();
+        self.sync_content_reload_events();
         self.sync_options_stepmaniaonline();
         self.poll_profile_load();
         self.poll_profile_import();
@@ -2797,16 +2928,7 @@ impl App {
 
     fn reset_options_state_for_entry(&mut self, from: CurrentScreen) {
         let current_color_index = self.state.screens.options_state.active_color_index;
-        self.state.screens.options_state = options::init(
-            updater::capabilities(),
-            app_paths_view(),
-            audio_requests::options_view(),
-            graphics::options_graphics_view(),
-            options_song_pack_view(),
-            noteskin_catalog_view(),
-            crate::smx_config::smx_assignment_view(),
-            crate::smx_config::smx_gif_catalog_view(),
-        );
+        self.state.screens.options_state = options::init(options_init_view());
         self.state.screens.options_state.active_color_index = current_color_index;
         self.options_song_pack_generation =
             deadsync_simfile::runtime_cache::song_cache_generation();
@@ -2855,6 +2977,7 @@ impl App {
             options_song_pack_generation: deadsync_simfile::runtime_cache::song_cache_generation(),
             profile_import: crate::profile_import::Service::default(),
             profile_load: crate::profile_load::Service::default(),
+            content_reload: crate::content_reload::Service::default(),
             heart_rate: crate::heart_rate::Runtime::default(),
             qr_login: crate::qr_login::Service::default(),
             score_import: crate::score_import::Service::default(),
@@ -3011,18 +3134,19 @@ impl App {
                             ),
                         )
                     };
-                    let plan = profile_selection_plan(
-                        &profile_data,
-                        ProfileSelectionContext {
-                            play_style: session.play_style,
-                            active_side: session.active_side,
-                            fast_switch,
-                            current_screen: self.state.screens.current_screen,
-                            show_groovestats_login,
-                            show_arrowcloud_login,
-                        },
-                    );
-                    self.state.session.combo_carry = plan.combo_carry;
+                    self.state.session.combo_carry =
+                        profile_data::profile_combo_carry(&profile_data);
+                    let plan = profile_selection_plan(ProfileSelectionContext {
+                        preferred_difficulties: profile_data::preferred_difficulty_indices(
+                            &profile_data,
+                            session.play_style,
+                        ),
+                        active_side: session.active_side,
+                        fast_switch,
+                        current_screen: self.state.screens.current_screen,
+                        show_groovestats_login,
+                        show_arrowcloud_login,
+                    });
                     if let Some(backend) = self.backend.as_mut() {
                         self.dynamic_media.set_profile_avatar_for_side(
                             &mut self.asset_manager,
@@ -3096,6 +3220,22 @@ impl App {
                     profile::set_session_play_mode(play_mode);
                     Vec::new()
                 }
+                SimplyLoveRuntimeRequest::Profile(
+                    SimplyLoveProfileRequest::SetMachineDefaultNoteskin(noteskin),
+                ) => {
+                    profile::update_machine_default_noteskin(noteskin);
+                    Vec::new()
+                }
+                SimplyLoveRuntimeRequest::Profile(
+                    SimplyLoveProfileRequest::UpdatePlayerOptions {
+                        side,
+                        options,
+                        heart_rate_device_id,
+                    },
+                ) => {
+                    profile::update_player_options_for_side(side, options, heart_rate_device_id);
+                    Vec::new()
+                }
                 SimplyLoveRuntimeRequest::Profile(SimplyLoveProfileRequest::UpdateInitials(
                     updates,
                 )) => {
@@ -3128,6 +3268,49 @@ impl App {
                     pack_names,
                 }) => {
                     profile::mark_packs_known(&profile_ids, pack_names.iter().map(String::as_str));
+                    Vec::new()
+                }
+                SimplyLoveRuntimeRequest::Profile(
+                    SimplyLoveProfileRequest::CreateLocalProfile { display_name },
+                ) => {
+                    let event = crate::local_profiles::create(&display_name);
+                    manage_local_profiles::apply_local_profile_event(
+                        &mut self.state.screens.manage_local_profiles_state,
+                        event,
+                    );
+                    Vec::new()
+                }
+                SimplyLoveRuntimeRequest::Profile(
+                    SimplyLoveProfileRequest::RenameLocalProfile {
+                        profile_id,
+                        display_name,
+                    },
+                ) => {
+                    let event = crate::local_profiles::rename(&profile_id, &display_name);
+                    manage_local_profiles::apply_local_profile_event(
+                        &mut self.state.screens.manage_local_profiles_state,
+                        event,
+                    );
+                    Vec::new()
+                }
+                SimplyLoveRuntimeRequest::Profile(
+                    SimplyLoveProfileRequest::SetDefaultLocalProfile { side, profile_id },
+                ) => {
+                    let event = crate::local_profiles::set_default(side, profile_id);
+                    manage_local_profiles::apply_local_profile_event(
+                        &mut self.state.screens.manage_local_profiles_state,
+                        event,
+                    );
+                    Vec::new()
+                }
+                SimplyLoveRuntimeRequest::Profile(
+                    SimplyLoveProfileRequest::DeleteLocalProfile { profile_id },
+                ) => {
+                    let event = crate::local_profiles::delete(&profile_id);
+                    manage_local_profiles::apply_local_profile_event(
+                        &mut self.state.screens.manage_local_profiles_state,
+                        event,
+                    );
                     Vec::new()
                 }
                 SimplyLoveRuntimeRequest::Profile(
@@ -3189,6 +3372,46 @@ impl App {
                     audio_requests::execute(request);
                     Vec::new()
                 }
+                SimplyLoveRuntimeRequest::Content(request) => {
+                    match request {
+                        SimplyLoveContentRequest::InitializeLibrary {
+                            songs_root,
+                            courses_root,
+                        } => self
+                            .content_reload
+                            .start_initialization(songs_root, courses_root),
+                        SimplyLoveContentRequest::ReloadLibrary {
+                            songs_root,
+                            courses_root,
+                        } => self.content_reload.start_library(songs_root, courses_root),
+                        SimplyLoveContentRequest::ReloadSongDirs {
+                            songs_root,
+                            pack_dirs,
+                        } => self.content_reload.start_song_dirs(songs_root, pack_dirs),
+                        SimplyLoveContentRequest::ReloadSong { simfile_path } => {
+                            match crate::content_reload::reload_song(&simfile_path) {
+                                Ok(song_packs) => {
+                                    select_music::refresh_from_song_packs(
+                                        &mut self.state.screens.select_music_state,
+                                        song_packs,
+                                    );
+                                    audio_requests::execute(AudioRequest::PlaySfx(
+                                        "assets/sounds/change.ogg".to_owned(),
+                                    ));
+                                    debug!(
+                                        "Force-reloaded song from disk: {}",
+                                        simfile_path.display()
+                                    );
+                                }
+                                Err(error) => warn!(
+                                    "Force reload failed for '{}': {error}",
+                                    simfile_path.display()
+                                ),
+                            }
+                        }
+                    }
+                    Vec::new()
+                }
                 SimplyLoveRuntimeRequest::Graphics(request) => {
                     self.handle_graphics_change(request, event_loop)?;
                     Vec::new()
@@ -3215,6 +3438,15 @@ impl App {
                 }
                 SimplyLoveRuntimeRequest::Config(SimplyLoveConfigRequest::PersistColor(index)) => {
                     crate::smx_config::set_theme_color(index);
+                    Vec::new()
+                }
+                SimplyLoveRuntimeRequest::Config(SimplyLoveConfigRequest::Overscan {
+                    translate_x,
+                    translate_y,
+                    add_width,
+                    add_height,
+                }) => {
+                    config::update_overscan(translate_x, translate_y, add_width, add_height);
                     Vec::new()
                 }
                 SimplyLoveRuntimeRequest::Config(SimplyLoveConfigRequest::Advanced(request)) => {
@@ -3247,6 +3479,10 @@ impl App {
                 }
                 SimplyLoveRuntimeRequest::Config(SimplyLoveConfigRequest::Online(request)) => {
                     config_requests::execute_online(request);
+                    Vec::new()
+                }
+                SimplyLoveRuntimeRequest::Config(SimplyLoveConfigRequest::Options(request)) => {
+                    config_requests::execute_options(request);
                     Vec::new()
                 }
                 SimplyLoveRuntimeRequest::Config(SimplyLoveConfigRequest::SelectMusic(request)) => {
@@ -3358,6 +3594,37 @@ impl App {
                     Vec::new()
                 }
                 SimplyLoveRuntimeRequest::Hardware(
+                    SimplyLoveHardwareRequest::RenameSmxPadConfig {
+                        profile_id,
+                        serial,
+                        old_name,
+                        new_name,
+                        set_default,
+                    },
+                ) => {
+                    profile::rename_pad_config(&profile_id, &old_name, &new_name);
+                    if set_default {
+                        profile::set_default_pad_config(&profile_id, &serial, &new_name);
+                    }
+                    Vec::new()
+                }
+                SimplyLoveRuntimeRequest::Hardware(
+                    SimplyLoveHardwareRequest::SetSmxPadConfigDefault {
+                        profile_id,
+                        serial,
+                        name,
+                    },
+                ) => {
+                    profile::set_default_pad_config(&profile_id, &serial, &name);
+                    Vec::new()
+                }
+                SimplyLoveRuntimeRequest::Hardware(
+                    SimplyLoveHardwareRequest::DeleteSmxPadConfig { profile_id, name },
+                ) => {
+                    profile::delete_pad_config(&profile_id, &name);
+                    Vec::new()
+                }
+                SimplyLoveRuntimeRequest::Hardware(
                     SimplyLoveHardwareRequest::SetSmxPlayerLights(colors),
                 ) => {
                     deadsync_smx::set_player_lights(colors);
@@ -3461,6 +3728,19 @@ impl App {
                     );
                     Vec::new()
                 }
+                SimplyLoveRuntimeRequest::Online(SimplyLoveOnlineRequest::LoadMachineReplays {
+                    chart_hash,
+                    max_entries,
+                }) => {
+                    let entries = scores::get_machine_replays_local(&chart_hash, max_entries);
+                    if self.state.screens.current_screen == CurrentScreen::SelectMusic {
+                        select_music::sync_machine_replays(
+                            &mut self.state.screens.select_music_state,
+                            entries,
+                        );
+                    }
+                    Vec::new()
+                }
                 SimplyLoveRuntimeRequest::Online(SimplyLoveOnlineRequest::RefreshSrpgShop {
                     side,
                 }) => {
@@ -3555,7 +3835,10 @@ impl App {
             return Ok(());
         }
 
-        select_music::refresh_from_song_cache(&mut self.state.screens.select_music_state);
+        select_music::refresh_from_song_packs(
+            &mut self.state.screens.select_music_state,
+            deadsync_simfile::runtime_cache::get_song_cache().clone(),
+        );
         if summary.skipped_read_only > 0
             && let Some(path) = summary.first_skipped_path.as_deref()
         {
@@ -3943,7 +4226,10 @@ impl App {
                 return false;
             }
         };
-        select_music::refresh_from_song_cache(&mut self.state.screens.select_music_state);
+        select_music::refresh_from_song_packs(
+            &mut self.state.screens.select_music_state,
+            deadsync_simfile::runtime_cache::get_song_cache().clone(),
+        );
 
         if !self.try_gameplay_restart(event_loop, label) {
             return false;
@@ -4030,7 +4316,10 @@ impl App {
                 return false;
             }
         };
-        select_music::refresh_from_song_cache(&mut self.state.screens.select_music_state);
+        select_music::refresh_from_song_packs(
+            &mut self.state.screens.select_music_state,
+            deadsync_simfile::runtime_cache::get_song_cache().clone(),
+        );
 
         let target_chart_type = profile::get_session_play_style().chart_type();
         let new_hashes = deadsync_simfile::runtime_cache::reloaded_chart_hashes_for_restart(
@@ -4126,7 +4415,8 @@ impl App {
         // is immediately replaced by a course summary, this is the cue tied to
         // the player's actual exit from gameplay.
         let failed = screens::evaluation::all_joined_players_failed(&eval_snapshot);
-        if visual_styles::srpg10_active() {
+        let config = config::get();
+        if visual_styles::srpg10_active(config.visual_style, config.srpg_variant) {
             let sfx = if failed {
                 visual_styles::SRPG10_EVAL_FAILED_SFX
             } else {
@@ -4535,7 +4825,10 @@ impl App {
         }
 
         let path = (config.visual_style.is_srpg() && config.show_video_backgrounds)
-            .then(visual_styles::shared_background_video_asset_path)
+            .then(|| {
+                visual_styles::for_style_and_variant(config.visual_style, config.srpg_variant)
+                    .shared_background_video
+            })
             .flatten()
             .map(|path| dirs::app_dirs().resolve_asset_path(path));
 
@@ -4668,6 +4961,7 @@ impl App {
 
         let mut actors = std::mem::take(&mut self.actor_scratch);
         actors.clear();
+        let visual_policy = simply_love_visual_policy(config);
 
         match self.state.screens.current_screen {
             CurrentScreen::Menu => {
@@ -4678,6 +4972,7 @@ impl App {
                     &self.state.screens.menu_state,
                     update_tag.as_deref(),
                     screen_alpha_multiplier,
+                    visual_policy,
                 );
             }
             CurrentScreen::Gameplay => {
@@ -4717,7 +5012,7 @@ impl App {
                             ..Default::default()
                         },
                         arrow_effect_time_s,
-                        config,
+                        visual_policy,
                     );
                 }
             }
@@ -4731,7 +5026,7 @@ impl App {
                         ps,
                         &self.asset_manager,
                         arrow_effect_time_s,
-                        config,
+                        visual_policy,
                     );
                 }
             }
@@ -4743,48 +5038,67 @@ impl App {
                     &self.asset_manager,
                     &updater,
                     screen_alpha_multiplier,
+                    visual_policy,
                 );
             }
-            CurrentScreen::Credits => {
-                credits::push_actors(&mut actors, &self.state.screens.credits_state)
-            }
+            CurrentScreen::Credits => credits::push_actors(
+                &mut actors,
+                &self.state.screens.credits_state,
+                visual_policy,
+            ),
             CurrentScreen::ManageLocalProfiles => manage_local_profiles::push_actors(
                 &mut actors,
                 &self.state.screens.manage_local_profiles_state,
                 &self.asset_manager,
                 screen_alpha_multiplier,
+                visual_policy,
             ),
             CurrentScreen::Mappings => mappings::push_actors(
                 &mut actors,
                 &self.state.screens.mappings_state,
                 &self.asset_manager,
                 screen_alpha_multiplier,
+                visual_policy,
             ),
-            CurrentScreen::Input => {
-                input_screen::push_actors(&mut actors, &self.state.screens.input_state)
-            }
+            CurrentScreen::Input => input_screen::push_actors(
+                &mut actors,
+                &self.state.screens.input_state,
+                visual_policy,
+            ),
             CurrentScreen::ConfigurePads => {
-                screens::pad_config::push_actors(&mut actors, &self.state.screens.pad_config_state);
+                screens::pad_config::push_actors(
+                    &mut actors,
+                    &self.state.screens.pad_config_state,
+                    visual_policy,
+                );
             }
             CurrentScreen::TestLights => test_lights::push_actors(
                 &mut actors,
                 &self.state.screens.test_lights_state,
                 lights_test_view(self.lights.state_snapshot(), self.lights.mode()),
                 screen_alpha_multiplier,
+                visual_policy,
             ),
             CurrentScreen::OverscanAdjustment => overscan_adjustment::push_actors(
                 &mut actors,
                 &self.state.screens.overscan_adjustment_state,
                 screen_alpha_multiplier,
+                visual_policy,
             ),
             CurrentScreen::SmxAssignPads => screens::smx_assign::push_actors(
                 &mut actors,
                 &self.state.screens.smx_assign_state,
                 screen_alpha_multiplier,
+                visual_policy,
             ),
             CurrentScreen::PlayerOptions => {
                 if let Some(pos) = &self.state.screens.player_options_state {
-                    player_options::push_actors(&mut actors, pos, &self.asset_manager);
+                    player_options::push_actors(
+                        &mut actors,
+                        pos,
+                        &self.asset_manager,
+                        visual_policy,
+                    );
                 }
             }
             CurrentScreen::SelectProfile => select_profile::push_actors(
@@ -4792,32 +5106,45 @@ impl App {
                 &self.state.screens.select_profile_state,
                 &self.asset_manager,
                 screen_alpha_multiplier,
+                visual_policy,
             ),
             CurrentScreen::SelectColor => select_color::push_actors(
                 &mut actors,
                 &self.state.screens.select_color_state,
                 screen_alpha_multiplier,
+                visual_policy,
             ),
             CurrentScreen::ArrowCloudLogin => screens::arrowcloud_login::push_actors(
                 &mut actors,
                 &self.state.screens.arrowcloud_login_state,
                 screen_alpha_multiplier,
+                visual_policy,
             ),
             CurrentScreen::GrooveStatsLogin => screens::groovestats_login::push_actors(
                 &mut actors,
                 &self.state.screens.groovestats_login_state,
                 screen_alpha_multiplier,
+                visual_policy,
             ),
             CurrentScreen::SelectStyle => {
-                select_style::push_actors(&mut actors, &self.state.screens.select_style_state);
+                select_style::push_actors(
+                    &mut actors,
+                    &self.state.screens.select_style_state,
+                    visual_policy,
+                );
             }
             CurrentScreen::SelectPlayMode => select_mode::push_actors(
                 &mut actors,
                 &self.state.screens.select_play_mode_state,
                 &self.asset_manager,
+                visual_policy,
             ),
             CurrentScreen::ProfileLoad => {
-                profile_load::push_actors(&mut actors, &self.state.screens.profile_load_state);
+                profile_load::push_actors(
+                    &mut actors,
+                    &self.state.screens.profile_load_state,
+                    visual_policy,
+                );
             }
             CurrentScreen::SelectMusic => {
                 select_music::push_actors(
@@ -4825,22 +5152,29 @@ impl App {
                     &self.state.screens.select_music_state,
                     &self.asset_manager,
                     self.state.session.played_stages.len() + 1,
+                    visual_policy,
                 );
             }
             CurrentScreen::SelectCourse => select_course::push_actors(
                 &mut actors,
                 &self.state.screens.select_course_state,
                 &self.asset_manager,
+                visual_policy,
             ),
-            CurrentScreen::Sandbox => {
-                sandbox::push_actors(&mut actors, &self.state.screens.sandbox_state)
+            CurrentScreen::Sandbox => sandbox::push_actors(
+                &mut actors,
+                &self.state.screens.sandbox_state,
+                visual_policy,
+            ),
+            CurrentScreen::Init => {
+                init::push_actors(&mut actors, &self.state.screens.init_state, visual_policy)
             }
-            CurrentScreen::Init => init::push_actors(&mut actors, &self.state.screens.init_state),
             CurrentScreen::Evaluation => {
                 evaluation::push_actors(
                     &mut actors,
                     &self.state.screens.evaluation_state,
                     &self.asset_manager,
+                    visual_policy,
                 );
             }
             CurrentScreen::EvaluationSummary => {
@@ -4850,6 +5184,7 @@ impl App {
                     &self.state.screens.evaluation_summary_state,
                     &stages,
                     &self.asset_manager,
+                    visual_policy,
                 );
             }
             CurrentScreen::Initials => {
@@ -4859,6 +5194,7 @@ impl App {
                     &self.state.screens.initials_state,
                     &stages,
                     &self.asset_manager,
+                    visual_policy,
                 );
             }
             CurrentScreen::GameOver => gameover::push_actors(
@@ -4866,6 +5202,7 @@ impl App {
                 &self.state.screens.gameover_state,
                 &self.state.session.played_stages,
                 &self.asset_manager,
+                visual_policy,
             ),
         };
 
@@ -4922,8 +5259,14 @@ impl App {
                         || *target == CurrentScreen::SelectColor
                         || *target == CurrentScreen::Options)
                 {
+                    let config = config::get();
                     let splash = screens::components::menu::menu_splash::build(
                         self.state.screens.menu_state.active_color_index,
+                        &visual_styles::for_style_and_variant(
+                            config.visual_style,
+                            config.srpg_variant,
+                        )
+                        .effects,
                     );
                     actors.extend(splash);
                 }
@@ -5694,6 +6037,7 @@ impl App {
         prev: CurrentScreen,
         target: CurrentScreen,
     ) -> Vec<Command> {
+        let config = config::get();
         let player_options = if prev == CurrentScreen::PlayerOptions {
             let session = profile::get_session_snapshot();
             self.state
@@ -5713,14 +6057,17 @@ impl App {
         let plan = transition_effect_plan(TransitionEffectContext {
             previous: prev,
             target,
-            menu_music_enabled: config::get().menu_music,
-            gameover_music_enabled: visual_styles::srpg10_active(),
+            menu_music_enabled: config.menu_music,
+            gameover_music_enabled: visual_styles::srpg10_active(
+                config.visual_style,
+                config.srpg_variant,
+            ),
             music_paths: TransitionMusicPaths {
-                menu: visual_styles::menu_music_resolved_path(),
+                menu: screen_nav::menu_music_path(config.visual_style, config.srpg_variant),
                 course: dirs::app_dirs()
                     .resolve_asset_path("assets/music/select_course (loop).ogg"),
                 credits: dirs::app_dirs().resolve_asset_path("assets/music/credits.ogg"),
-                gameover: visual_styles::srpg10_gameover_music_path(),
+                gameover: screen_nav::gameover_music_path(),
             },
             player_options,
             select_music_preferred_difficulty: (prev == CurrentScreen::SelectMusic).then_some(
@@ -5825,9 +6172,15 @@ impl App {
             self.state.screens.credits_state = credits::init();
             self.state.screens.credits_state.active_color_index =
                 self.state.screens.options_state.active_color_index;
+        } else if target == CurrentScreen::ConfigurePads {
+            screens::pad_config::set_fsr_enabled(
+                &mut self.state.screens.pad_config_state,
+                config::get().use_fsrs,
+            );
         } else if target == CurrentScreen::ManageLocalProfiles {
             let color_index = self.state.screens.options_state.active_color_index;
-            self.state.screens.manage_local_profiles_state = manage_local_profiles::init();
+            self.state.screens.manage_local_profiles_state =
+                manage_local_profiles::init(crate::local_profiles::view());
             self.state
                 .screens
                 .manage_local_profiles_state
@@ -5849,7 +6202,10 @@ impl App {
                 .screens
                 .overscan_adjustment_state
                 .active_color_index = color_index;
-            overscan_adjustment::on_enter(&mut self.state.screens.overscan_adjustment_state);
+            overscan_adjustment::on_enter(
+                &mut self.state.screens.overscan_adjustment_state,
+                screen_nav::overscan_view(),
+            );
         } else if target == CurrentScreen::SmxAssignPads {
             let color_index = self.state.screens.options_state.active_color_index;
             self.state.screens.smx_assign_state = screens::smx_assign::init();
@@ -5857,10 +6213,12 @@ impl App {
             screens::smx_assign::on_enter(
                 &mut self.state.screens.smx_assign_state,
                 &crate::smx_config::smx_assignment_view(),
+                prev,
             );
         } else if target == CurrentScreen::SelectProfile {
             let current_color_index = self.state.screens.select_profile_state.active_color_index;
-            self.state.screens.select_profile_state = select_profile::init();
+            self.state.screens.select_profile_state =
+                select_profile::init(crate::local_profiles::picker_view());
             self.state.screens.select_profile_state.active_color_index = current_color_index;
             select_profile::set_fast_switch(
                 &mut self.state.screens.select_profile_state,
@@ -6207,21 +6565,35 @@ impl App {
                 // no-cmod charts (this play only; the persisted profile is
                 // untouched, so song select restores CMod).
                 let scroll_speeds = player_options::apply_no_cmod_alternative(&mut po_state);
+                let player_profiles = crate::player_options::gameplay_profiles(
+                    &po_state.player_options,
+                    &po_state.heart_rate_device_ids,
+                );
 
-                let gameplay_init_view =
-                    crate::gameplay_runtime::init_view(&cfg, Self::refresh_lobby_runtime_view());
+                let gameplay_session = gameplay_session();
+                let gameplay_init_view = crate::gameplay_runtime::init_view(
+                    &cfg,
+                    Self::refresh_lobby_runtime_view(),
+                    song_arc.as_ref(),
+                    &charts,
+                    &gameplay_charts,
+                    &player_profiles,
+                    &gameplay_session,
+                );
+                let practice_runtime_view =
+                    crate::gameplay_runtime::practice_view(&cfg, &gameplay_init_view);
                 let init_started = Instant::now();
                 let mut gs = gameplay::init(
                     song_arc,
                     charts,
                     gameplay_charts,
                     gameplay_viewport(self.state.shell.metrics),
-                    gameplay_session(),
+                    gameplay_session,
                     gameplay_config_from_config(&cfg),
                     po_state.active_color_index,
                     po_state.music_rate,
                     scroll_speeds,
-                    po_state.player_profiles,
+                    player_profiles,
                     None,
                     None,
                     Some(Arc::from("Practice Mode")),
@@ -6238,6 +6610,7 @@ impl App {
                     [0; MAX_PLAYERS],
                     gameplay_init_view,
                 );
+                crate::gameplay_runtime::sync_scores(&mut gs);
                 gs.disable_score_for_practice();
                 let init_ms = init_started.elapsed().as_secs_f64() * 1000.0;
                 let overlay_video_paths = gameplay_overlay_video_paths(
@@ -6307,7 +6680,7 @@ impl App {
                 let background_path =
                     Self::refresh_gameplay_background_path(&mut gs, show_video_backgrounds);
                 commands.push(Command::SetDynamicBackground(background_path));
-                let mut practice_state = practice::init(gs);
+                let mut practice_state = practice::init(gs, practice_runtime_view);
                 if let Some(snapshot) = edit_snapshot {
                     practice::restore_edit_snapshot(&mut practice_state, snapshot);
                 }
@@ -6599,20 +6972,32 @@ impl App {
                     deadsync_simfile::event_intro::gameplay_event_intro_text(song_arc.as_ref())
                 };
                 let combo_carry = self.state.session.combo_carry;
-                let gameplay_init_view =
-                    crate::gameplay_runtime::init_view(&cfg, Self::refresh_lobby_runtime_view());
+                let player_profiles = crate::player_options::gameplay_profiles(
+                    &po_state.player_options,
+                    &po_state.heart_rate_device_ids,
+                );
+                let gameplay_session = gameplay_session();
+                let gameplay_init_view = crate::gameplay_runtime::init_view(
+                    &cfg,
+                    Self::refresh_lobby_runtime_view(),
+                    song_arc.as_ref(),
+                    &charts,
+                    &gameplay_charts,
+                    &player_profiles,
+                    &gameplay_session,
+                );
                 let init_started = Instant::now();
                 let mut gs = gameplay::init(
                     song_arc,
                     charts,
                     gameplay_charts,
                     gameplay_viewport(self.state.shell.metrics),
-                    gameplay_session(),
+                    gameplay_session,
                     gameplay_config_from_config(&cfg),
                     color_index,
                     po_state.music_rate,
                     scroll_speeds,
-                    po_state.player_profiles,
+                    player_profiles,
                     replay_edges,
                     replay_offsets,
                     replay_status_text,
@@ -6626,6 +7011,7 @@ impl App {
                     combo_carry,
                     gameplay_init_view,
                 );
+                crate::gameplay_runtime::sync_scores(&mut gs);
                 let init_ms = init_started.elapsed().as_secs_f64() * 1000.0;
                 let overlay_video_paths = gameplay_overlay_video_paths(
                     gs.song_lua_visuals(),
@@ -6884,6 +7270,10 @@ impl App {
 
             match prev {
                 CurrentScreen::PlayerOptions => {
+                    select_music::sync_profile_picker(
+                        &mut self.state.screens.select_music_state,
+                        crate::local_profiles::picker_view(),
+                    );
                     let preferred = self.state.session.preferred_difficulty_index;
                     self.state
                         .screens
@@ -7482,6 +7872,42 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
 mod tests {
     use super::*;
     use deadsync_chart::{ArrowStats, ChartData, SongData, StaminaCounts, TechCounts};
+
+    #[test]
+    fn visual_policy_resolves_runtime_style_and_bar_choices() {
+        let mut config = config::Config {
+            visual_style: config::VisualStyle::Technique,
+            machine_bar_color: config::MachineBarColor::Transparent,
+            ..Default::default()
+        };
+        let technique = simply_love_visual_policy(&config);
+        assert_eq!(technique.background, VisualBackgroundView::Technique);
+        assert_eq!(technique.screen_bar, ScreenBarBackgroundView::Transparent);
+        assert!(!technique.srpg10_tint);
+
+        config.visual_style = config::VisualStyle::Srpg9;
+        config.srpg_variant = config::SrpgVariant::Srpg10;
+        config.machine_bar_color = config::MachineBarColor::Colored;
+        config.simply_love_color = 4;
+        config.machine_font = config::MachineFont::Mega;
+        let srpg10 = simply_love_visual_policy(&config);
+        assert_eq!(srpg10.background, VisualBackgroundView::Srpg);
+        assert_eq!(
+            srpg10.assets.shared_background,
+            visual_styles::for_style_and_variant(config.visual_style, config.srpg_variant)
+                .shared_background
+        );
+        assert_eq!(
+            srpg10.screen_bar,
+            ScreenBarBackgroundView::Colored(color::srpg10_rgba(4))
+        );
+        assert!(srpg10.srpg10_tint);
+        assert_eq!(srpg10.machine_font, config::MachineFont::Mega);
+        assert_eq!(
+            srpg10.title_logo_texture_key,
+            Some(visual_styles::SRPG10_TITLE_LOGO)
+        );
+    }
 
     #[test]
     fn transition_gameplay_keeps_only_lobby_runtime_effects() {

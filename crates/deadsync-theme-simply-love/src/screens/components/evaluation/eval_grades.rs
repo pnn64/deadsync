@@ -5,7 +5,6 @@ use deadlib_render::SamplerDesc;
 use deadsync_rules::judgment::{self, JudgeGrade};
 use deadsync_score as score_data;
 use image::{Rgba, RgbaImage};
-use std::path::Path;
 
 const DEFAULT_EVAL_ZOOM: f32 = 0.4;
 const LETTER_ZOOM: f32 = 0.85;
@@ -570,9 +569,7 @@ fn affluent_rot_bucket(rot_deg: f32) -> u32 {
 }
 
 fn load_grade_rgba(key: &str) -> Option<RgbaImage> {
-    let path = Path::new("assets").join("graphics").join(key);
-    let path = deadsync_assets::resolve_asset_path(&path.to_string_lossy());
-    assets::open_image_fallback(&path)
+    deadsync_assets::open_bundled_image(&format!("assets/graphics/{key}"))
         .map(|img| img.to_rgba8())
         .ok()
 }

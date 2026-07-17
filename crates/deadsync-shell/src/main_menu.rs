@@ -45,9 +45,13 @@ fn arrowcloud_status(status: ArrowCloudStatus) -> MainMenuArrowCloudStatus {
 }
 
 pub(crate) fn runtime_view() -> MainMenuRuntimeView {
-    let (allow_shutdown_host, smx_input) = {
+    let (allow_shutdown_host, dedicated_three_key_nav, smx_input) = {
         let config = deadsync_config::prelude::get();
-        (config.allow_shutdown_host, config.smx_input)
+        (
+            config.allow_shutdown_host,
+            config.three_key_navigation && config.only_dedicated_menu_buttons,
+            config.smx_input,
+        )
     };
     let (pack_count, song_count) = {
         let song_cache = deadsync_simfile::runtime_cache::get_song_cache();
@@ -65,6 +69,7 @@ pub(crate) fn runtime_view() -> MainMenuRuntimeView {
 
     MainMenuRuntimeView {
         allow_shutdown_host,
+        dedicated_three_key_nav,
         song_count,
         pack_count,
         course_count,

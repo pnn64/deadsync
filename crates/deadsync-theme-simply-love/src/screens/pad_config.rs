@@ -165,6 +165,7 @@ const MAX_PROFILE_NAME_LEN: usize = 24;
 #[derive(Default)]
 pub struct State {
     pub active_color_index: i32,
+    fsr_enabled: bool,
     pads: Vec<PadView>,
     /// Flat cursor index into `simple_slots` (one slot per editable threshold:
     /// single-threshold buttons get one, load-cell buttons get release + press).
@@ -215,6 +216,11 @@ pub fn set_filter(state: &mut State, filter: PadFilter) {
 
 pub fn init() -> State {
     State::default()
+}
+
+/// Apply the shell-owned FSR feature policy to input and presentation.
+pub fn set_fsr_enabled(state: &mut State, enabled: bool) {
+    state.fsr_enabled = enabled;
 }
 
 /// Replace the live pad snapshot (called by the app loop each frame while this
@@ -284,7 +290,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent, fine: bool) -> ThemeEffe
     // don't let directional input edit the (possibly stale) pad snapshot; only Back
     // exits. Without this, edits made here queue and then apply the next time FSRs
     // are re-enabled.
-    if !crate::config::get().use_fsrs {
+    if !state.fsr_enabled {
         if ev.pressed && is_back(ev.action) {
             return ThemeEffect::Navigate(state.return_screen.unwrap_or(Screen::Options));
         }
@@ -589,13 +595,18 @@ pub fn selected_device(state: &State) -> Option<PadDeviceId> {
         .map(|p| p.device_id)
 }
 
-pub fn push_actors(actors: &mut Vec<Actor>, state: &State) {
+pub fn push_actors(
+    actors: &mut Vec<Actor>,
+    state: &State,
+    visual_policy: crate::views::SimplyLoveVisualPolicyView,
+) {
     state.bg.push(
         actors,
         visual_style_bg::Params {
             active_color_index: state.active_color_index,
             backdrop_rgba: [0.0, 0.0, 0.0, 1.0],
             alpha_mul: 1.0,
+            visual_policy,
         },
     );
     push_content(actors, state, false);
@@ -603,7 +614,7 @@ pub fn push_actors(actors: &mut Vec<Actor>, state: &State) {
 
 pub fn get_actors(state: &State) -> Vec<Actor> {
     let mut actors = Vec::new();
-    push_actors(&mut actors, state);
+    push_actors(&mut actors, state, Default::default());
     actors
 }
 
@@ -632,7 +643,7 @@ pub fn push_content(actors: &mut Vec<Actor>, state: &State, as_overlay: bool) {
         z(20.0 + zb)
     ));
 
-    if !crate::config::get().use_fsrs {
+    if !state.fsr_enabled {
         actors.push(act!(text:
             font("miso"):
             settext("FSR support is off."):
@@ -3251,9 +3262,9 @@ mod tests {
 
     #[test]
     fn handle_input_is_inert_while_fsr_support_off() {
-        // In tests config::get().use_fsrs is false - the disabled state the screen
-        // shows. Directional input must not edit or queue commands then; otherwise
-        // they would apply the next time FSRs are re-enabled.
+        // The prepared policy defaults to the disabled state the screen shows.
+        // Directional input must not edit or queue commands then; otherwise they
+        // would apply the next time FSRs are re-enabled.
         let mut s = with_pad();
         assert!(matches!(
             handle_input(&mut s, &ev(VirtualAction::p1_up), false),
@@ -3269,5 +3280,16 @@ mod tests {
             handle_input(&mut s, &ev(VirtualAction::p1_back), false),
             ThemeEffect::Navigate(_)
         ));
+    }
+
+    #[test]
+    fn handle_input_edits_when_shell_enables_fsr_support() {
+        let mut s = with_pad();
+        set_fsr_enabled(&mut s, true);
+        assert!(matches!(
+            handle_input(&mut s, &ev(VirtualAction::p1_up), false),
+            ThemeEffect::None
+        ));
+        assert!(!take_commands(&mut s).is_empty());
     }
 }

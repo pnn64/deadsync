@@ -6,7 +6,7 @@
 
 use crate::act;
 use crate::assets::i18n::tr;
-use crate::assets::{FontRole, current_machine_font_key_for_text};
+use crate::assets::{FontRole, machine_font_key_for_text};
 use crate::screens::components::shared::{transitions, visual_style_bg};
 use crate::screens::{Screen, ThemeEffect};
 use deadlib_present::actors::Actor;
@@ -14,18 +14,6 @@ use deadlib_present::color;
 use deadlib_present::space::{self, screen_center_x, screen_height, screen_width};
 use deadsync_input::{InputEvent, VirtualAction};
 use deadsync_theme::views::SmxAssignmentView;
-use std::sync::Mutex;
-
-/// Screen to return to when the assignment screen finishes/cancels. Set by the
-/// caller right before navigating in (so the Options entry returns to Options and
-/// the auto-prompt returns to the Menu), then consumed by [`on_enter`].
-static PENDING_RETURN: Mutex<Screen> = Mutex::new(Screen::Options);
-
-/// Set where the assignment screen should return to on exit. Call immediately
-/// before navigating to [`Screen::SmxAssignPads`].
-pub fn set_pending_return(screen: Screen) {
-    *PENDING_RETURN.lock().unwrap() = screen;
-}
 
 const TRANSITION_IN_DURATION: f32 = 0.4;
 const TRANSITION_OUT_DURATION: f32 = 0.4;
@@ -85,8 +73,8 @@ pub fn init() -> State {
     }
 }
 
-pub fn on_enter(state: &mut State, view: &SmxAssignmentView) {
-    state.return_screen = *PENDING_RETURN.lock().unwrap();
+pub fn on_enter(state: &mut State, view: &SmxAssignmentView, return_screen: Screen) {
+    state.return_screen = return_screen;
     state.p1_serial = None;
     state.p2_serial = None;
     state.p1_label = None;
@@ -288,7 +276,12 @@ fn light_colors(state: &State, view: &SmxAssignmentView) -> [Option<[u8; 3]>; 2]
 
 // ─── Rendering ───────────────────────────────────────────────────────────────
 
-pub fn push_actors(actors: &mut Vec<Actor>, state: &State, alpha_mul: f32) {
+pub fn push_actors(
+    actors: &mut Vec<Actor>,
+    state: &State,
+    alpha_mul: f32,
+    visual_policy: crate::views::SimplyLoveVisualPolicyView,
+) {
     actors.reserve(16);
     let screen_w = screen_width();
     let screen_h = screen_height();
@@ -299,12 +292,14 @@ pub fn push_actors(actors: &mut Vec<Actor>, state: &State, alpha_mul: f32) {
             active_color_index: state.active_color_index,
             backdrop_rgba: [0.0, 0.0, 0.0, 1.0],
             alpha_mul,
+            visual_policy,
         },
     );
 
     // Title.
     let title = tr("ScreenSmxAssignPads", "HeaderText");
-    let title_font = current_machine_font_key_for_text(FontRole::Header, &title);
+    let title_font =
+        machine_font_key_for_text(visual_policy.machine_font, FontRole::Header, &title);
     let title_scale = if space::is_wide() { 0.6 } else { 0.5 };
     actors.push(act!(text:
         font(title_font):
@@ -413,7 +408,7 @@ pub fn push_actors(actors: &mut Vec<Actor>, state: &State, alpha_mul: f32) {
 
 pub fn get_actors(state: &State, alpha_mul: f32) -> Vec<Actor> {
     let mut actors = Vec::with_capacity(16);
-    push_actors(&mut actors, state, alpha_mul);
+    push_actors(&mut actors, state, alpha_mul, Default::default());
     actors
 }
 
@@ -472,7 +467,7 @@ mod tests {
     fn assignment_uses_prepared_input_and_emits_shell_requests() {
         let idle = assignment_view([0, 0]);
         let mut state = init();
-        on_enter(&mut state, &idle);
+        on_enter(&mut state, &idle, crate::screens::Screen::Options);
         assert!(matches!(
             update(&mut state, 0.0, &idle),
             Some(ThemeEffect::Runtime(SimplyLoveRuntimeRequest::Hardware(
@@ -514,8 +509,9 @@ mod tests {
 
     #[test]
     fn non_options_exit_restores_shell_owned_auto_lights() {
+        let idle = assignment_view([0, 0]);
         let mut state = init();
-        state.return_screen = crate::screens::Screen::Menu;
+        on_enter(&mut state, &idle, crate::screens::Screen::Menu);
         let ThemeEffect::Batch(effects) = exit(&state) else {
             panic!("menu return should restore lights before navigation");
         };

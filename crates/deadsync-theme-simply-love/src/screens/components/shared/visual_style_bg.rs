@@ -1,7 +1,6 @@
 use super::technique_bg;
 use crate::act;
-use crate::assets::visual_styles;
-use crate::config::{self, SrpgVariant, VisualStyle};
+use crate::views::{SimplyLoveVisualPolicyView, VisualBackgroundView};
 use deadlib_present::actors::Actor;
 use deadlib_present::color;
 use deadlib_present::space::{screen_center_x, screen_center_y, screen_height, screen_width};
@@ -49,6 +48,7 @@ pub struct Params {
     pub active_color_index: i32,
     pub backdrop_rgba: [f32; 4],
     pub alpha_mul: f32,
+    pub visual_policy: SimplyLoveVisualPolicyView,
 }
 
 impl Default for State {
@@ -85,7 +85,14 @@ impl TiledStyleState {
             rgba[3] = DIFFUSE_ALPHA[i] * params.alpha_mul;
             let uv = scrolled_uv_rect(UV_VEL[i], elapsed_s);
 
-            push_shared_bg(out, XY[i], XY[i], rgba, uv);
+            push_shared_bg(
+                out,
+                XY[i],
+                XY[i],
+                rgba,
+                uv,
+                params.visual_policy.assets.shared_background,
+            );
         }
     }
 }
@@ -107,19 +114,19 @@ impl State {
     }
 
     pub fn push_at_elapsed(&self, out: &mut Vec<Actor>, params: Params, elapsed_s: f64) {
-        let style = visual_style();
-        if matches!(style, VisualStyle::Technique)
-            && self.technique.push_at_elapsed(
-                out,
-                params.active_color_index,
-                params.backdrop_rgba,
-                params.alpha_mul,
-                elapsed_s,
-            )
-        {
+        if matches!(
+            params.visual_policy.background,
+            VisualBackgroundView::Technique
+        ) && self.technique.push_at_elapsed(
+            out,
+            params.active_color_index,
+            params.backdrop_rgba,
+            params.alpha_mul,
+            elapsed_s,
+        ) {
             return;
         }
-        if matches!(style, VisualStyle::Srpg9) {
+        if matches!(params.visual_policy.background, VisualBackgroundView::Srpg) {
             push_srpg(out, &params);
             return;
         }
@@ -133,23 +140,28 @@ impl State {
     }
 }
 
-fn push_shared_bg(out: &mut Vec<Actor>, x: f32, y: f32, rgba: [f32; 4], uv: [f32; 4]) {
-    out.push(
-        act!(sprite_static(visual_styles::shared_background_texture_key()):
-            xy(x, y):
-            zoom(SHARED_BG_ZOOM):
-            customtexturerect(uv[0], uv[1], uv[2], uv[3]):
-            diffuse(rgba[0], rgba[1], rgba[2], rgba[3]):
-            z(-99)
-        ),
-    );
+fn push_shared_bg(
+    out: &mut Vec<Actor>,
+    x: f32,
+    y: f32,
+    rgba: [f32; 4],
+    uv: [f32; 4],
+    texture_key: &'static str,
+) {
+    out.push(act!(sprite_static(texture_key):
+        xy(x, y):
+        zoom(SHARED_BG_ZOOM):
+        customtexturerect(uv[0], uv[1], uv[2], uv[3]):
+        diffuse(rgba[0], rgba[1], rgba[2], rgba[3]):
+        z(-99)
+    ));
 }
 
 fn push_srpg(out: &mut Vec<Actor>, params: &Params) {
     out.reserve(3);
     let w = screen_width();
     let h = screen_height();
-    let background_key = srpg_background_key();
+    let background_key = srpg_background_key(params.visual_policy.assets.shared_background);
     out.push(act!(quad:
         align(0.0, 0.0):
         xy(0.0, 0.0):
@@ -158,7 +170,8 @@ fn push_srpg(out: &mut Vec<Actor>, params: &Params) {
         z(-100)
     ));
 
-    let mut tint = srpg_background_tint(params.active_color_index);
+    let mut tint =
+        srpg_background_tint(params.active_color_index, params.visual_policy.srpg10_tint);
     tint[0] = (tint[0] * 3.0).min(1.0);
     tint[1] = (tint[1] * 3.0).min(1.0);
     tint[2] = (tint[2] * 3.0).min(1.0);
@@ -185,21 +198,19 @@ pub fn set_srpg_background_key(key: Option<String>) {
     }
 }
 
-fn srpg_background_key() -> Arc<str> {
-    let fallback = || Arc::<str>::from(visual_styles::shared_background_texture_key());
+fn srpg_background_key(fallback_key: &'static str) -> Arc<str> {
+    let fallback = || Arc::<str>::from(fallback_key);
     match SRPG_BACKGROUND_KEY.get_or_init(|| Mutex::new(None)).lock() {
         Ok(slot) => slot.clone().unwrap_or_else(fallback),
         Err(_) => fallback(),
     }
 }
 
-fn srpg_background_tint(active_color_index: i32) -> [f32; 4] {
-    let Ok(cfg) = std::panic::catch_unwind(config::get) else {
-        return color::decorative_rgba(active_color_index);
-    };
-    match cfg.srpg_variant {
-        SrpgVariant::Srpg10 if cfg.visual_style.is_srpg() => color::srpg10_rgba(active_color_index),
-        _ => color::decorative_rgba(active_color_index),
+fn srpg_background_tint(active_color_index: i32, srpg10: bool) -> [f32; 4] {
+    if srpg10 {
+        color::srpg10_rgba(active_color_index)
+    } else {
+        color::decorative_rgba(active_color_index)
     }
 }
 
@@ -208,10 +219,6 @@ fn scrolled_uv_rect(velocity: [f32; 2], elapsed_s: f64) -> [f32; 4] {
     let u0 = (f64::from(velocity[0]) * elapsed_s).rem_euclid(1.0) as f32;
     let v0 = (f64::from(velocity[1]) * elapsed_s).rem_euclid(1.0) as f32;
     [u0, v0, u0 + SHARED_BG_UV_SPAN, v0 + SHARED_BG_UV_SPAN]
-}
-
-fn visual_style() -> VisualStyle {
-    std::panic::catch_unwind(|| config::get().visual_style).unwrap_or(VisualStyle::Hearts)
 }
 
 #[inline]
@@ -252,6 +259,7 @@ mod tests {
             active_color_index: 3,
             backdrop_rgba: [0.0, 0.0, 0.0, 1.0],
             alpha_mul: 1.0,
+            visual_policy: SimplyLoveVisualPolicyView::default(),
         }
     }
 
@@ -267,7 +275,11 @@ mod tests {
         };
         assert_eq!(
             source.texture_key(),
-            Some(visual_styles::for_style(VisualStyle::Hearts).shared_background)
+            Some(
+                SimplyLoveVisualPolicyView::default()
+                    .assets
+                    .shared_background
+            )
         );
         (
             *offset,

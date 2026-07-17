@@ -16,12 +16,11 @@ use super::super::state::{
     ScrollMask, step_statistics_choice_bits, step_statistics_mask_from_choice_bits,
 };
 use super::*;
-use deadsync_profile::compat as gp;
 use deadsync_profile::{
     ColumnFlashBrightness, ColumnFlashSize, ComboColors, ComboMode, ErrorBarMask, ErrorBarTrim,
     LifeMeterType, MeasureCounter, MeasureLines, MiniIndicator, MiniIndicatorColor,
     MiniIndicatorPosition, MiniIndicatorScoreType, MiniIndicatorSize,
-    MiniIndicatorSubtractiveDisplay, PlayerSide, Profile, ScatterplotMaxWindow, ScoreDisplayMode,
+    MiniIndicatorSubtractiveDisplay, PlayerOptionsData, ScatterplotMaxWindow, ScoreDisplayMode,
     ScorePosition, StepStatsExtra, TargetScoreSetting, TimingWindowsOption, TurnOption,
 };
 
@@ -31,7 +30,6 @@ const TURN: ChoiceBinding<usize> = index_binding!(
     TURN_OPTION_VARIANTS,
     TurnOption::None,
     turn_option,
-    gp::update_turn_option_for_side,
     false,
     Some(CycleInit {
         from_profile: |p| {
@@ -46,7 +44,6 @@ const LIFE_METER_TYPE: ChoiceBinding<usize> = index_binding!(
     LIFE_METER_TYPE_VARIANTS,
     LifeMeterType::Standard,
     lifemeter_type,
-    gp::update_lifemeter_type_for_side,
     false,
     Some(CycleInit {
         from_profile: |p| {
@@ -61,7 +58,6 @@ const SCATTERPLOT_MAX_WINDOW: ChoiceBinding<usize> = index_binding!(
     SCATTERPLOT_MAX_WINDOW_VARIANTS,
     ScatterplotMaxWindow::Off,
     scatterplot_max_window,
-    gp::update_scatterplot_max_window_for_side,
     false,
     Some(CycleInit {
         from_profile: |p| {
@@ -76,7 +72,6 @@ const SCORE_POSITION: ChoiceBinding<usize> = index_binding!(
     SCORE_POSITION_VARIANTS,
     ScorePosition::Normal,
     score_position,
-    gp::update_score_position_for_side,
     false,
     Some(CycleInit {
         from_profile: |p| {
@@ -91,7 +86,6 @@ const SCORE_DISPLAY_MODE: ChoiceBinding<usize> = index_binding!(
     SCORE_DISPLAY_MODE_VARIANTS,
     ScoreDisplayMode::Normal,
     score_display_mode,
-    gp::update_score_display_mode_for_side,
     false,
     Some(CycleInit {
         from_profile: |p| {
@@ -106,7 +100,6 @@ const STEP_STATS_EXTRA: ChoiceBinding<usize> = index_binding!(
     STEP_STATS_EXTRA_VARIANTS,
     StepStatsExtra::None,
     step_stats_extra,
-    gp::update_step_stats_extra_for_side,
     false,
     Some(CycleInit {
         from_profile: |p| {
@@ -121,7 +114,6 @@ const TARGET_SCORE: ChoiceBinding<usize> = index_binding!(
     TARGET_SCORE_VARIANTS,
     TargetScoreSetting::S,
     target_score,
-    gp::update_target_score_for_side,
     false,
     Some(CycleInit {
         from_profile: |p| {
@@ -136,7 +128,6 @@ const INDICATOR_SCORE_TYPE: ChoiceBinding<usize> = index_binding!(
     MINI_INDICATOR_SCORE_TYPE_VARIANTS,
     MiniIndicatorScoreType::Itg,
     mini_indicator_score_type,
-    gp::update_mini_indicator_score_type_for_side,
     false,
     Some(CycleInit {
         from_profile: |p| {
@@ -151,7 +142,6 @@ const MINI_INDICATOR_SUBTRACTIVE_DISPLAY: ChoiceBinding<usize> = index_binding!(
     MINI_INDICATOR_SUBTRACTIVE_DISPLAY_VARIANTS,
     MiniIndicatorSubtractiveDisplay::Percent,
     mini_indicator_subtractive_display,
-    gp::update_mini_indicator_subtractive_display_for_side,
     false,
     Some(CycleInit {
         from_profile: |p| {
@@ -166,7 +156,6 @@ const MINI_INDICATOR_SIZE: ChoiceBinding<usize> = index_binding!(
     MINI_INDICATOR_SIZE_VARIANTS,
     MiniIndicatorSize::Default,
     mini_indicator_size,
-    gp::update_mini_indicator_size_for_side,
     false,
     Some(CycleInit {
         from_profile: |p| {
@@ -181,7 +170,6 @@ const MINI_INDICATOR_COLOR: ChoiceBinding<usize> = index_binding!(
     MINI_INDICATOR_COLOR_VARIANTS,
     MiniIndicatorColor::Default,
     mini_indicator_color,
-    gp::update_mini_indicator_color_for_side,
     false,
     Some(CycleInit {
         from_profile: |p| {
@@ -196,7 +184,6 @@ const MINI_INDICATOR_POSITION: ChoiceBinding<usize> = index_binding!(
     MINI_INDICATOR_POSITION_VARIANTS,
     MiniIndicatorPosition::Default,
     mini_indicator_position,
-    gp::update_mini_indicator_position_for_side,
     false,
     Some(CycleInit {
         from_profile: |p| {
@@ -211,7 +198,6 @@ const COMBO_COLORS: ChoiceBinding<usize> = index_binding!(
     COMBO_COLORS_VARIANTS,
     ComboColors::Glow,
     combo_colors,
-    gp::update_combo_colors_for_side,
     false,
     Some(CycleInit {
         from_profile: |p| {
@@ -226,7 +212,6 @@ const COMBO_COLOR_MODE: ChoiceBinding<usize> = index_binding!(
     COMBO_MODE_VARIANTS,
     ComboMode::FullCombo,
     combo_mode,
-    gp::update_combo_mode_for_side,
     false,
     Some(CycleInit {
         from_profile: |p| {
@@ -241,7 +226,6 @@ const ERROR_BAR_TRIM: ChoiceBinding<usize> = index_binding!(
     ERROR_BAR_TRIM_VARIANTS,
     ErrorBarTrim::Off,
     error_bar_trim,
-    gp::update_error_bar_trim_for_side,
     false,
     Some(CycleInit {
         from_profile: |p| {
@@ -256,7 +240,6 @@ const MEASURE_COUNTER: ChoiceBinding<usize> = index_binding!(
     MEASURE_COUNTER_VARIANTS,
     MeasureCounter::None,
     measure_counter,
-    gp::update_measure_counter_for_side,
     true,
     Some(CycleInit {
         from_profile: |p| {
@@ -271,7 +254,6 @@ const MEASURE_LINES: ChoiceBinding<usize> = index_binding!(
     MEASURE_LINES_VARIANTS,
     MeasureLines::Off,
     measure_lines,
-    gp::update_measure_lines_for_side,
     false,
     Some(CycleInit {
         from_profile: |p| {
@@ -286,7 +268,6 @@ const TIMING_WINDOWS: ChoiceBinding<usize> = index_binding!(
     TIMING_WINDOWS_VARIANTS,
     TimingWindowsOption::None,
     timing_windows,
-    gp::update_timing_windows_for_side,
     false,
     Some(CycleInit {
         from_profile: |p| {
@@ -303,7 +284,6 @@ const DENSITY_GRAPH_BACKGROUND: ChoiceBinding<bool> = ChoiceBinding::<bool> {
         p.transparent_density_graph_bg = v;
         Outcome::persisted()
     },
-    persist_for_side: gp::update_transparent_density_graph_bg_for_side,
     init: Some(CycleInit {
         from_profile: |p| {
             if p.transparent_density_graph_bg { 1 } else { 0 }
@@ -315,7 +295,6 @@ const SMX_FSR_DISPLAY: ChoiceBinding<bool> = ChoiceBinding::<bool> {
         p.smx_fsr_display = v;
         Outcome::persisted()
     },
-    persist_for_side: gp::update_smx_fsr_display_for_side,
     init: Some(CycleInit {
         from_profile: |p| if p.smx_fsr_display { 1 } else { 0 },
     }),
@@ -325,7 +304,6 @@ const SMX_PAD_INPUT_DISPLAY: ChoiceBinding<bool> = ChoiceBinding::<bool> {
         p.smx_pad_input_display = v;
         Outcome::persisted()
     },
-    persist_for_side: gp::update_smx_pad_input_display_for_side,
     init: Some(CycleInit {
         from_profile: |p| if p.smx_pad_input_display { 1 } else { 0 },
     }),
@@ -335,7 +313,6 @@ const CARRY_COMBO: ChoiceBinding<bool> = ChoiceBinding::<bool> {
         p.carry_combo_between_songs = v;
         Outcome::persisted()
     },
-    persist_for_side: gp::update_carry_combo_between_songs_for_side,
     init: Some(CycleInit {
         from_profile: |p| {
             if p.carry_combo_between_songs { 1 } else { 0 }
@@ -347,7 +324,6 @@ const LONG_ERROR_BAR: ChoiceBinding<bool> = ChoiceBinding::<bool> {
         p.long_error_bar_enabled = v;
         Outcome::persisted_with_visibility()
     },
-    persist_for_side: gp::update_long_error_bar_enabled_for_side,
     init: Some(CycleInit {
         from_profile: |p| {
             if p.long_error_bar_enabled { 1 } else { 0 }
@@ -359,7 +335,6 @@ const SHORT_AVERAGE_ERROR_BAR: ChoiceBinding<bool> = ChoiceBinding::<bool> {
         p.short_average_error_bar_enabled = v;
         Outcome::persisted()
     },
-    persist_for_side: gp::update_short_average_error_bar_enabled_for_side,
     init: Some(CycleInit {
         from_profile: |p| {
             if p.short_average_error_bar_enabled {
@@ -375,7 +350,6 @@ const CENTER_TICK: ChoiceBinding<bool> = ChoiceBinding::<bool> {
         p.center_tick = v;
         Outcome::persisted()
     },
-    persist_for_side: gp::update_center_tick_for_side,
     init: Some(CycleInit {
         from_profile: |p| if p.center_tick { 1 } else { 0 },
     }),
@@ -385,7 +359,6 @@ const TEXT_ERROR_BAR_MODE: ChoiceBinding<bool> = ChoiceBinding::<bool> {
         p.text_error_bar_scalable = v;
         Outcome::persisted_with_visibility()
     },
-    persist_for_side: gp::update_text_error_bar_scalable_for_side,
     init: Some(CycleInit {
         from_profile: |p| if p.text_error_bar_scalable { 1 } else { 0 },
     }),
@@ -395,7 +368,6 @@ const JUDGMENT_TILT: ChoiceBinding<bool> = ChoiceBinding::<bool> {
         p.judgment_tilt = v;
         Outcome::persisted_with_visibility()
     },
-    persist_for_side: gp::update_judgment_tilt_for_side,
     init: Some(CycleInit {
         from_profile: |p| if p.judgment_tilt { 1 } else { 0 },
     }),
@@ -405,7 +377,6 @@ const JUDGMENT_BEHIND_ARROWS: ChoiceBinding<bool> = ChoiceBinding::<bool> {
         p.judgment_back = v;
         Outcome::persisted()
     },
-    persist_for_side: gp::update_judgment_back_for_side,
     init: Some(CycleInit {
         from_profile: |p| if p.judgment_back { 1 } else { 0 },
     }),
@@ -415,7 +386,6 @@ const OFFSET_INDICATOR: ChoiceBinding<bool> = ChoiceBinding::<bool> {
         p.error_ms_display = v;
         Outcome::persisted()
     },
-    persist_for_side: gp::update_error_ms_display_for_side,
     init: Some(CycleInit {
         from_profile: |p| if p.error_ms_display { 1 } else { 0 },
     }),
@@ -425,7 +395,6 @@ const RESCORE_EARLY_HITS: ChoiceBinding<bool> = ChoiceBinding::<bool> {
         p.rescore_early_hits = v;
         Outcome::persisted_with_visibility()
     },
-    persist_for_side: gp::update_rescore_early_hits_for_side,
     init: Some(CycleInit {
         from_profile: |p| if p.rescore_early_hits { 1 } else { 0 },
     }),
@@ -435,7 +404,6 @@ const CUSTOM_BLUE_FANTASTIC_WINDOW: ChoiceBinding<bool> = ChoiceBinding::<bool> 
         p.custom_fantastic_window = v;
         Outcome::persisted_with_visibility()
     },
-    persist_for_side: gp::update_custom_fantastic_window_for_side,
     init: Some(CycleInit {
         from_profile: |p| if p.custom_fantastic_window { 1 } else { 0 },
     }),
@@ -445,7 +413,6 @@ const CROSSOVER_CUES: ChoiceBinding<bool> = ChoiceBinding::<bool> {
         p.crossover_cues = v;
         Outcome::persisted_with_visibility()
     },
-    persist_for_side: gp::update_crossover_cues_for_side,
     init: Some(CycleInit {
         from_profile: |p| if p.crossover_cues { 1 } else { 0 },
     }),
@@ -455,7 +422,6 @@ const CROSSOVER_CUE_BRACKETS: ChoiceBinding<bool> = ChoiceBinding::<bool> {
         p.crossover_cue_brackets = v;
         Outcome::persisted()
     },
-    persist_for_side: gp::update_crossover_cue_brackets_for_side,
     init: Some(CycleInit {
         from_profile: |p| if p.crossover_cue_brackets { 1 } else { 0 },
     }),
@@ -467,7 +433,6 @@ const ERROR_BAR_OFFSET_X: NumericBinding = NumericBinding {
         p.error_bar_offset_x = v;
         Outcome::persisted()
     },
-    persist_for_side: gp::update_error_bar_offset_x_for_side,
     init: Some(NumericInit {
         from_profile: |p| p.error_bar_offset_x.clamp(HUD_OFFSET_MIN, HUD_OFFSET_MAX),
         format: |v| format!("{v}"),
@@ -479,7 +444,6 @@ const ERROR_BAR_OFFSET_Y: NumericBinding = NumericBinding {
         p.error_bar_offset_y = v;
         Outcome::persisted()
     },
-    persist_for_side: gp::update_error_bar_offset_y_for_side,
     init: Some(NumericInit {
         from_profile: |p| p.error_bar_offset_y.clamp(HUD_OFFSET_MIN, HUD_OFFSET_MAX),
         format: |v| format!("{v}"),
@@ -548,9 +512,6 @@ const SCROLL: BitmaskBinding = BitmaskBinding::Generic {
             p.scroll_option = setting;
             p.reverse_scroll = setting.contains(ScrollOption::Reverse);
         },
-        persist_for_side: |s, p| {
-            gp::update_scroll_option_for_side(s, p.scroll_option);
-        },
         bit_mapping: BitMapping::Sequential { width: 5 },
         sync_visibility: false,
     },
@@ -569,17 +530,6 @@ const HIDE: BitmaskBinding = fanout_bitmask_binding!(
         (COMBO_EXPLOSIONS, hide_combo_explosions),
         (USERNAME, hide_username),
     ],
-    persist_for_side = |s, p| gp::update_hide_options_for_side(
-        s,
-        p.hide_targets,
-        p.hide_song_bg,
-        p.hide_combo,
-        p.hide_lifebar,
-        p.hide_score,
-        p.hide_danger,
-        p.hide_combo_explosions,
-        p.hide_username,
-    ),
     sync_visibility = true,
 );
 const LIFE_BAR_OPTIONS: BitmaskBinding = fanout_bitmask_binding!(
@@ -591,11 +541,6 @@ const LIFE_BAR_OPTIONS: BitmaskBinding = fanout_bitmask_binding!(
         (RESPONSIVE_COLORS, responsive_colors),
         (SHOW_LIFE_PERCENT, show_life_percent),
     ],
-    persist_for_side = |s, p| {
-        gp::update_rainbow_max_for_side(s, p.rainbow_max);
-        gp::update_responsive_colors_for_side(s, p.responsive_colors);
-        gp::update_show_life_percent_for_side(s, p.show_life_percent);
-    },
     sync_visibility = false,
 );
 const STEP_STATISTICS: BitmaskBinding = BitmaskBinding::Generic {
@@ -612,9 +557,6 @@ const STEP_STATISTICS: BitmaskBinding = BitmaskBinding::Generic {
             let mask = step_statistics_mask_from_choice_bits(b);
             p.step_statistics = mask;
             m.step_statistics = mask;
-        },
-        persist_for_side: |s, p| {
-            gp::update_step_statistics_for_side(s, p.step_statistics);
         },
         bit_mapping: BitMapping::Sequential {
             width: STEP_STATISTICS_ROW_WIDTH,
@@ -679,20 +621,6 @@ const GAMEPLAY_EXTRAS: BitmaskBinding = BitmaskBinding::Generic {
             }
             m.gameplay_extras_more = more;
         },
-        persist_for_side: |s, p| {
-            gp::update_gameplay_extras_for_side(
-                s,
-                p.column_flash_on_miss,
-                p.subtractive_scoring,
-                p.pacemaker,
-                p.nps_graph_at_top,
-            );
-            gp::update_column_cues_for_side(s, p.column_cues);
-            gp::update_measure_cues_for_side(s, p.measure_cues);
-            gp::update_column_countdown_for_side(s, p.column_countdown);
-            gp::update_live_timing_stats_enabled_for_side(s, p.live_timing_stats);
-            gp::update_display_scorebox_for_side(s, p.display_scorebox);
-        },
         bit_mapping: BitMapping::Sequential { width: 7 },
         sync_visibility: true,
     },
@@ -717,9 +645,6 @@ const COLUMN_FLASH_JUDGMENTS: BitmaskBinding = BitmaskBinding::Generic {
             p.column_flash_mask = mask;
             m.column_flash = mask;
         },
-        persist_for_side: |s, p| {
-            gp::update_column_flash_mask_for_side(s, p.column_flash_mask);
-        },
         bit_mapping: BitMapping::Sequential { width: 7 },
         sync_visibility: false,
     },
@@ -728,7 +653,6 @@ const COLUMN_FLASH_BRIGHTNESS: ChoiceBinding<usize> = index_binding!(
     COLUMN_FLASH_BRIGHTNESS_VARIANTS,
     ColumnFlashBrightness::Normal,
     column_flash_brightness,
-    gp::update_column_flash_brightness_for_side,
     false,
     Some(CycleInit {
         from_profile: |p| {
@@ -743,7 +667,6 @@ const COLUMN_FLASH_SIZE: ChoiceBinding<usize> = index_binding!(
     COLUMN_FLASH_SIZE_VARIANTS,
     ColumnFlashSize::Default,
     column_flash_size,
-    gp::update_column_flash_size_for_side,
     false,
     Some(CycleInit {
         from_profile: |p| {
@@ -774,9 +697,6 @@ const LIVE_TIMING_STATS: BitmaskBinding = BitmaskBinding::Generic {
             p.live_timing_stats_mask = mask;
             m.live_timing_stats = mask;
         },
-        persist_for_side: |s, p| {
-            gp::update_live_timing_stats_mask_for_side(s, p.live_timing_stats_mask);
-        },
         bit_mapping: BitMapping::Sequential { width: 3 },
         sync_visibility: false,
     },
@@ -784,7 +704,7 @@ const LIVE_TIMING_STATS: BitmaskBinding = BitmaskBinding::Generic {
 const ERROR_BAR: BitmaskBinding = BitmaskBinding::Generic {
     init: BitmaskInit {
         from_profile: |p| {
-            // Profile already stores the desired mask; if it's empty (e.g.
+            // PlayerOptionsData already stores the desired mask; if it's empty (e.g.
             // legacy profile or unset) fall back to the canonical mapping
             // from the visual style + text-mode pair.
             let mask = if p.error_bar_active_mask.is_empty() {
@@ -812,9 +732,6 @@ const ERROR_BAR: BitmaskBinding = BitmaskBinding::Generic {
             p.error_bar = deadsync_profile::error_bar_style_from_mask(mask);
             p.error_bar_text = deadsync_profile::error_bar_text_from_mask(mask);
         },
-        persist_for_side: |s, p| {
-            gp::update_error_bar_mask_for_side(s, p.error_bar_active_mask);
-        },
         bit_mapping: BitMapping::Sequential { width: 5 },
         sync_visibility: true,
     },
@@ -824,9 +741,6 @@ const ERROR_BAR_OPTIONS: BitmaskBinding = fanout_bitmask_binding!(
     bits = u8,
     state_field = error_bar_options,
     fields = [(MOVE_UP, error_bar_up), (MULTI_TICK, error_bar_multi_tick),],
-    persist_for_side = |s, p| {
-        gp::update_error_bar_options_for_side(s, p.error_bar_up, p.error_bar_multi_tick);
-    },
     sync_visibility = false,
 );
 const MEASURE_COUNTER_OPTIONS: BitmaskBinding = fanout_bitmask_binding!(
@@ -840,19 +754,9 @@ const MEASURE_COUNTER_OPTIONS: BitmaskBinding = fanout_bitmask_binding!(
         (BROKEN_RUN_TOTAL, broken_run),
         (RUN_TIMER, run_timer),
     ],
-    persist_for_side = |s, p| {
-        gp::update_measure_counter_options_for_side(
-            s,
-            p.measure_counter_left,
-            p.measure_counter_up,
-            p.measure_counter_vert,
-            p.broken_run,
-            p.run_timer,
-        );
-    },
     sync_visibility = false,
 );
-fn fa_plus_bits_from_profile(p: &Profile) -> u32 {
+fn fa_plus_bits_from_profile(p: &PlayerOptionsData) -> u32 {
     let mut bits = FaPlusMask::empty();
     if p.show_fa_plus_window {
         bits.insert(FaPlusMask::WINDOW);
@@ -878,22 +782,18 @@ fn fa_plus_bits_from_profile(p: &Profile) -> u32 {
 /// Project the full FA+ mask onto every fan-out profile field. Both FA+
 /// rows share the same projection — they only differ in which slice of
 /// `FaPlusMask` they own at toggle time.
-fn project_fa_plus(_m: &mut PlayerOptionMasks, p: &mut Profile, _b: u32, mask: FaPlusMask) {
+fn project_fa_plus(
+    _m: &mut PlayerOptionMasks,
+    p: &mut PlayerOptionsData,
+    _b: u32,
+    mask: FaPlusMask,
+) {
     p.show_fa_plus_window = mask.contains(FaPlusMask::WINDOW);
     p.show_ex_score = mask.contains(FaPlusMask::EX_SCORE);
     p.show_hard_ex_score = mask.contains(FaPlusMask::HARD_EX_SCORE);
     p.show_fa_plus_pane = mask.contains(FaPlusMask::PANE);
     p.fa_plus_10ms_blue_window = mask.contains(FaPlusMask::BLUE_WINDOW_10MS);
     p.split_15_10ms = mask.contains(FaPlusMask::SPLIT_15_10MS);
-}
-
-fn persist_fa_plus(s: PlayerSide, p: &Profile) {
-    gp::update_show_fa_plus_window_for_side(s, p.show_fa_plus_window);
-    gp::update_show_ex_score_for_side(s, p.show_ex_score);
-    gp::update_show_hard_ex_score_for_side(s, p.show_hard_ex_score);
-    gp::update_show_fa_plus_pane_for_side(s, p.show_fa_plus_pane);
-    gp::update_fa_plus_10ms_blue_window_for_side(s, p.fa_plus_10ms_blue_window);
-    gp::update_split_15_10ms_for_side(s, p.split_15_10ms);
 }
 
 const FA_PLUS_OPTIONS: BitmaskBinding = BitmaskBinding::Generic {
@@ -918,7 +818,6 @@ const FA_PLUS_OPTIONS: BitmaskBinding = BitmaskBinding::Generic {
             let mask = m.fa_plus;
             project_fa_plus(m, p, _b, mask);
         },
-        persist_for_side: persist_fa_plus,
         bit_mapping: BitMapping::Sequential { width: 4 },
         // Toggling the WINDOW bit hides/shows FA+ Window Options. We always
         // sync after FA+ Options toggles; sync is cheap and a no-op when
@@ -945,7 +844,6 @@ const FA_PLUS_WINDOW_OPTIONS: BitmaskBinding = BitmaskBinding::Generic {
             let mask = m.fa_plus;
             project_fa_plus(m, p, _b, mask);
         },
-        persist_for_side: persist_fa_plus,
         bit_mapping: BitMapping::Sequential { width: 2 },
         sync_visibility: false,
     },
@@ -959,14 +857,6 @@ const EARLY_DW_OPTIONS: BitmaskBinding = fanout_bitmask_binding!(
         (HIDE_FLASH, hide_early_dw_flash),
         (HIDE_COLUMN_FLASH, hide_early_dw_column_flash),
     ],
-    persist_for_side = |s, p| {
-        gp::update_early_dw_options_for_side(
-            s,
-            p.hide_early_dw_judgments,
-            p.hide_early_dw_flash,
-            p.hide_early_dw_column_flash,
-        );
-    },
     sync_visibility = false,
 );
 const RESULTS_EXTRAS: BitmaskBinding = fanout_bitmask_binding!(
@@ -978,11 +868,6 @@ const RESULTS_EXTRAS: BitmaskBinding = fanout_bitmask_binding!(
         (SCALE_SCATTERPLOT, scale_scatterplot),
         (DIM_POST_FAIL_SCATTER, dim_post_fail_scatter),
     ],
-    persist_for_side = |s, p| {
-        gp::update_track_early_judgments_for_side(s, p.track_early_judgments);
-        gp::update_scale_scatterplot_for_side(s, p.scale_scatterplot);
-        gp::update_dim_post_fail_scatter_for_side(s, p.dim_post_fail_scatter);
-    },
     sync_visibility = false,
 );
 
@@ -1007,21 +892,9 @@ const MINI_INDICATOR: CustomBinding = CustomBinding {
             .unwrap_or(MiniIndicator::None);
         let subtractive_scoring = mini_indicator == MiniIndicator::SubtractiveScoring;
         let pacemaker = mini_indicator == MiniIndicator::Pacemaker;
-        state.player_profiles[player_idx].mini_indicator = mini_indicator;
-        state.player_profiles[player_idx].subtractive_scoring = subtractive_scoring;
-        state.player_profiles[player_idx].pacemaker = pacemaker;
-        let (should_persist, side) = choice::persist_ctx(state, player_idx);
-        if should_persist {
-            let profile_ref = &state.player_profiles[player_idx];
-            gp::update_mini_indicator_for_side(side, mini_indicator);
-            gp::update_gameplay_extras_for_side(
-                side,
-                profile_ref.column_flash_on_miss,
-                subtractive_scoring,
-                pacemaker,
-                profile_ref.nps_graph_at_top,
-            );
-        }
+        state.player_options[player_idx].mini_indicator = mini_indicator;
+        state.player_options[player_idx].subtractive_scoring = subtractive_scoring;
+        state.player_options[player_idx].pacemaker = pacemaker;
         Outcome::persisted_with_visibility()
     },
 };
@@ -1046,11 +919,7 @@ const JUDGMENT_TILT_INTENSITY: CustomBinding = CustomBinding {
         };
         let mult =
             round_to_step(mult, TILT_INTENSITY_STEP).clamp(TILT_INTENSITY_MIN, TILT_INTENSITY_MAX);
-        state.player_profiles[player_idx].tilt_multiplier = mult;
-        let (should_persist, side) = choice::persist_ctx(state, player_idx);
-        if should_persist {
-            gp::update_tilt_multiplier_for_side(side, mult);
-        }
+        state.player_options[player_idx].tilt_multiplier = mult;
         Outcome::persisted()
     },
 };
@@ -1075,11 +944,7 @@ const AVERAGE_ERROR_BAR_INTENSITY: CustomBinding = CustomBinding {
             return Outcome::persisted();
         };
         let value = deadsync_profile::clamp_average_error_bar_intensity(raw);
-        state.player_profiles[player_idx].average_error_bar_intensity = value;
-        let (should_persist, side) = choice::persist_ctx(state, player_idx);
-        if should_persist {
-            gp::update_average_error_bar_intensity_for_side(side, value);
-        }
+        state.player_options[player_idx].average_error_bar_intensity = value;
         Outcome::persisted()
     },
 };
@@ -1104,11 +969,7 @@ const AVERAGE_ERROR_BAR_INTERVAL: CustomBinding = CustomBinding {
             return Outcome::persisted();
         };
         let value = deadsync_profile::clamp_average_error_bar_interval_ms(raw);
-        state.player_profiles[player_idx].average_error_bar_interval_ms = value;
-        let (should_persist, side) = choice::persist_ctx(state, player_idx);
-        if should_persist {
-            gp::update_average_error_bar_interval_ms_for_side(side, value);
-        }
+        state.player_options[player_idx].average_error_bar_interval_ms = value;
         Outcome::persisted()
     },
 };
@@ -1131,11 +992,7 @@ const TEXT_ERROR_BAR_THRESHOLD: CustomBinding = CustomBinding {
         let Some(value) = parse_text_error_bar_threshold_ms(&choice) else {
             return Outcome::persisted();
         };
-        state.player_profiles[player_idx].text_error_bar_threshold_ms = value;
-        let (should_persist, side) = choice::persist_ctx(state, player_idx);
-        if should_persist {
-            gp::update_text_error_bar_threshold_ms_for_side(side, value);
-        }
+        state.player_options[player_idx].text_error_bar_threshold_ms = value;
         Outcome::persisted()
     },
 };
@@ -1160,11 +1017,7 @@ const LONG_ERROR_BAR_INTENSITY: CustomBinding = CustomBinding {
             return Outcome::persisted();
         };
         let value = deadsync_profile::clamp_long_error_bar_intensity(raw);
-        state.player_profiles[player_idx].long_error_bar_intensity = value;
-        let (should_persist, side) = choice::persist_ctx(state, player_idx);
-        if should_persist {
-            gp::update_long_error_bar_intensity_for_side(side, value);
-        }
+        state.player_options[player_idx].long_error_bar_intensity = value;
         Outcome::persisted()
     },
 };
@@ -1189,11 +1042,7 @@ const LONG_ERROR_BAR_THRESHOLD: CustomBinding = CustomBinding {
             return Outcome::persisted();
         };
         let value = deadsync_profile::clamp_long_error_bar_threshold_ms(raw);
-        state.player_profiles[player_idx].long_error_bar_threshold_ms = value;
-        let (should_persist, side) = choice::persist_ctx(state, player_idx);
-        if should_persist {
-            gp::update_long_error_bar_threshold_ms_for_side(side, value);
-        }
+        state.player_options[player_idx].long_error_bar_threshold_ms = value;
         Outcome::persisted()
     },
 };
@@ -1217,11 +1066,7 @@ const LONG_ERROR_BAR_MIN_SAMPLES: CustomBinding = CustomBinding {
             return Outcome::persisted();
         };
         let value = deadsync_profile::clamp_long_error_bar_min_samples(raw);
-        state.player_profiles[player_idx].long_error_bar_min_samples = value;
-        let (should_persist, side) = choice::persist_ctx(state, player_idx);
-        if should_persist {
-            gp::update_long_error_bar_min_samples_for_side(side, value);
-        }
+        state.player_options[player_idx].long_error_bar_min_samples = value;
         Outcome::persisted()
     },
 };
@@ -1256,20 +1101,16 @@ const JUDGMENT_TILT_MIN_THRESHOLD: CustomBinding = CustomBinding {
         let Some(min_ms) = chosen_tilt_threshold_ms(state, player_idx, row_id, delta, wrap) else {
             return Outcome::NONE;
         };
-        let (min_ms, max_ms) = {
-            let profile = &mut state.player_profiles[player_idx];
+        let max_ms = {
+            let profile = &mut state.player_options[player_idx];
             let min_ms = deadsync_profile::clamp_tilt_threshold_ms(min_ms);
             let max_ms = deadsync_profile::clamp_tilt_threshold_ms(profile.tilt_max_threshold_ms)
                 .max(min_ms);
             profile.tilt_min_threshold_ms = min_ms;
             profile.tilt_max_threshold_ms = max_ms;
-            (min_ms, max_ms)
+            max_ms
         };
         set_tilt_threshold_row(state, player_idx, RowId::JudgmentTiltMaxThreshold, max_ms);
-        let (should_persist, side) = choice::persist_ctx(state, player_idx);
-        if should_persist {
-            gp::update_tilt_thresholds_for_side(side, min_ms, max_ms);
-        }
         Outcome::persisted()
     },
 };
@@ -1279,20 +1120,16 @@ const JUDGMENT_TILT_MAX_THRESHOLD: CustomBinding = CustomBinding {
         let Some(max_ms) = chosen_tilt_threshold_ms(state, player_idx, row_id, delta, wrap) else {
             return Outcome::NONE;
         };
-        let (min_ms, max_ms) = {
-            let profile = &mut state.player_profiles[player_idx];
+        let min_ms = {
+            let profile = &mut state.player_options[player_idx];
             let max_ms = deadsync_profile::clamp_tilt_threshold_ms(max_ms);
             let min_ms = deadsync_profile::clamp_tilt_threshold_ms(profile.tilt_min_threshold_ms)
                 .min(max_ms);
             profile.tilt_min_threshold_ms = min_ms;
             profile.tilt_max_threshold_ms = max_ms;
-            (min_ms, max_ms)
+            min_ms
         };
         set_tilt_threshold_row(state, player_idx, RowId::JudgmentTiltMinThreshold, min_ms);
-        let (should_persist, side) = choice::persist_ctx(state, player_idx);
-        if should_persist {
-            gp::update_tilt_thresholds_for_side(side, min_ms, max_ms);
-        }
         Outcome::persisted()
     },
 };
@@ -1304,11 +1141,7 @@ const MEASURE_COUNTER_LOOKAHEAD: CustomBinding = CustomBinding {
             return Outcome::NONE;
         };
         let lookahead = (new_index as u8).min(4);
-        state.player_profiles[player_idx].measure_counter_lookahead = lookahead;
-        let (should_persist, side) = choice::persist_ctx(state, player_idx);
-        if should_persist {
-            gp::update_measure_counter_lookahead_for_side(side, lookahead);
-        }
+        state.player_options[player_idx].measure_counter_lookahead = lookahead;
         Outcome::persisted()
     },
 };
@@ -1332,11 +1165,7 @@ const CUSTOM_BLUE_FANTASTIC_WINDOW_MS: CustomBinding = CustomBinding {
             return Outcome::persisted();
         };
         let ms = deadsync_profile::clamp_custom_fantastic_window_ms(raw);
-        state.player_profiles[player_idx].custom_fantastic_window_ms = ms;
-        let (should_persist, side) = choice::persist_ctx(state, player_idx);
-        if should_persist {
-            gp::update_custom_fantastic_window_ms_for_side(side, ms);
-        }
+        state.player_options[player_idx].custom_fantastic_window_ms = ms;
         Outcome::persisted()
     },
 };
@@ -1360,11 +1189,7 @@ const CROSSOVER_CUE_DURATION: CustomBinding = CustomBinding {
             return Outcome::persisted();
         };
         let ms = deadsync_profile::clamp_crossover_cue_duration_ms(raw);
-        state.player_profiles[player_idx].crossover_cue_duration_ms = ms;
-        let (should_persist, side) = choice::persist_ctx(state, player_idx);
-        if should_persist {
-            gp::update_crossover_cue_duration_ms_for_side(side, ms);
-        }
+        state.player_options[player_idx].crossover_cue_duration_ms = ms;
         Outcome::persisted()
     },
 };
@@ -1388,11 +1213,7 @@ const CROSSOVER_CUE_QUANTIZATION: CustomBinding = CustomBinding {
             return Outcome::persisted();
         };
         let q = deadsync_profile::clamp_crossover_cue_quantization(raw);
-        state.player_profiles[player_idx].crossover_cue_quantization = q;
-        let (should_persist, side) = choice::persist_ctx(state, player_idx);
-        if should_persist {
-            gp::update_crossover_cue_quantization_for_side(side, q);
-        }
+        state.player_options[player_idx].crossover_cue_quantization = q;
         Outcome::persisted()
     },
 };
@@ -2166,13 +1987,13 @@ mod bitmask_binding_init_tests {
     use super::super::super::state::{FaPlusMask, HideMask, PlayerOptionMasks};
     use super::*;
     use crate::assets::i18n::{LookupKey, lookup_key};
-    use deadsync_profile::Profile;
+    use deadsync_profile::PlayerOptionsData;
 
     fn ensure_i18n() {
         use std::sync::Once;
         static INIT: Once = Once::new();
         INIT.call_once(|| {
-            crate::assets::i18n::init("en");
+            crate::assets::i18n::init_for_tests();
         });
     }
 
@@ -2189,7 +2010,6 @@ mod bitmask_binding_init_tests {
             },
             writeback: BitmaskWriteback {
                 project: |_, _, _| {},
-                persist_for_side: |_, _| {},
                 bit_mapping: BitMapping::Sequential { width: 0 },
                 sync_visibility: false,
             },
@@ -2212,7 +2032,7 @@ mod bitmask_binding_init_tests {
     #[test]
     fn hide_binding_init_matches_legacy_path() {
         ensure_i18n();
-        let mut profile = Profile::default();
+        let mut profile = PlayerOptionsData::default();
         profile.hide_targets = false;
         profile.hide_song_bg = true;
         profile.hide_combo = true;
@@ -2244,7 +2064,7 @@ mod bitmask_binding_init_tests {
     #[test]
     fn fa_plus_binding_init_pins_cursor_to_zero() {
         ensure_i18n();
-        let mut profile = Profile::default();
+        let mut profile = PlayerOptionsData::default();
         profile.show_fa_plus_window = false;
         profile.show_ex_score = true;
 
@@ -2271,7 +2091,7 @@ mod bitmask_binding_init_tests {
     #[test]
     fn fa_plus_window_binding_reads_shifted_child_bits() {
         ensure_i18n();
-        let mut profile = Profile::default();
+        let mut profile = PlayerOptionsData::default();
         profile.split_15_10ms = true;
 
         let mut row = make_bitmask_row(
@@ -2314,7 +2134,7 @@ mod bitmask_binding_init_tests {
             (4, ScrollOption::Centered),
         ];
         for (idx, opt) in cases {
-            let mut profile = Profile::default();
+            let mut profile = PlayerOptionsData::default();
             profile.scroll_option = opt;
             let mut row = make_bitmask_row(
                 RowId::Scroll,

@@ -1,5 +1,5 @@
 use crate::act;
-use crate::assets::{FontRole, current_machine_font_key};
+use crate::assets::{FontRole, machine_font_key};
 use crate::config::MachineFont;
 use crate::screens::evaluation::{EvalPane, ScoreInfo};
 use deadlib_present::actors::{Actor, SizeSpec};
@@ -30,6 +30,8 @@ pub(crate) fn build_pane_percentage_display(
     score_info: &ScoreInfo,
     pane: EvalPane,
     controller: profile_data::PlayerSide,
+    transparent: bool,
+    machine_font: MachineFont,
 ) -> Vec<Actor> {
     if matches!(
         pane,
@@ -59,8 +61,7 @@ pub(crate) fn build_pane_percentage_display(
     let ex_percent_text = format!("{:.2}", score_info.ex_score_percent.max(0.0));
     let hard_ex_percent_text = format!("{:.2}", score_info.hard_ex_score_percent.max(0.0));
     let score_bg_color = color::rgba_hex("#101519");
-    let score_bg_alpha = eval_style_alpha(1.0, 0.5);
-    let machine_font = crate::config::get().machine_font;
+    let score_bg_alpha = eval_style_alpha(transparent, 1.0, 0.5);
     let score_zoom = choose_score_zoom(machine_font, SCORE_ZOOM_WENDY, SCORE_ZOOM_MEGA);
     let small_score_zoom =
         choose_score_zoom(machine_font, SMALL_SCORE_ZOOM_WENDY, SMALL_SCORE_ZOOM_MEGA);
@@ -104,7 +105,7 @@ pub(crate) fn build_pane_percentage_display(
                 diffuse(score_bg_color[0], score_bg_color[1], score_bg_color[2], score_bg_alpha)
             ));
             children.push(act!(text:
-                font(current_machine_font_key(FontRole::Headline)):
+                font(machine_font_key(machine_font, FontRole::Headline)):
                 settext(percent_text):
                 align(1.0, 0.5):
                 xy(30.0, -2.0):
@@ -140,7 +141,7 @@ pub(crate) fn build_pane_percentage_display(
                 diffuse(score_bg_color[0], score_bg_color[1], score_bg_color[2], score_bg_alpha)
             ));
             children.push(act!(text:
-                font(current_machine_font_key(FontRole::Headline)):
+                font(machine_font_key(machine_font, FontRole::Headline)):
                 settext(main_text):
                 align(1.0, 0.5):
                 xy(percent_x, 0.0):
@@ -159,7 +160,7 @@ pub(crate) fn build_pane_percentage_display(
                 (32.0, 138.8)
             };
             children.push(act!(text:
-                font(current_machine_font_key(FontRole::Bold)):
+                font(machine_font_key(machine_font, FontRole::Bold)):
                 settext(bottom_label):
                 align(1.0, 0.5):
                 xy(bottom_label_x, 40.0):
@@ -168,7 +169,7 @@ pub(crate) fn build_pane_percentage_display(
                 diffuse(bottom_color[0], bottom_color[1], bottom_color[2], bottom_color[3])
             ));
             children.push(act!(text:
-                font(current_machine_font_key(FontRole::Headline)):
+                font(machine_font_key(machine_font, FontRole::Headline)):
                 settext(bottom_text):
                 align(1.0, 0.5):
                 xy(bottom_value_x, 39.6):
@@ -188,7 +189,7 @@ pub(crate) fn build_pane_percentage_display(
             let ex_color = color::JUDGMENT_RGBA[0];
             let hex_color = color::HARD_EX_SCORE_RGBA;
             children.push(act!(text:
-                font(current_machine_font_key(FontRole::Headline)):
+                font(machine_font_key(machine_font, FontRole::Headline)):
                 settext(ex_percent_text):
                 align(1.0, 0.5):
                 xy(percent_x, 0.0):
@@ -204,7 +205,7 @@ pub(crate) fn build_pane_percentage_display(
             };
             let bottom_label_x = bottom_value_x - 92.0;
             children.push(act!(text:
-                font(current_machine_font_key(FontRole::Bold)):
+                font(machine_font_key(machine_font, FontRole::Bold)):
                 settext("H.EX"):
                 align(1.0, 0.5):
                 xy(bottom_label_x, 40.0):
@@ -213,7 +214,7 @@ pub(crate) fn build_pane_percentage_display(
                 diffuse(hex_color[0], hex_color[1], hex_color[2], hex_color[3])
             ));
             children.push(act!(text:
-                font(current_machine_font_key(FontRole::Headline)):
+                font(machine_font_key(machine_font, FontRole::Headline)):
                 settext(hard_ex_percent_text):
                 align(1.0, 0.5):
                 xy(bottom_value_x, 40.0):
@@ -230,7 +231,7 @@ pub(crate) fn build_pane_percentage_display(
                 diffuse(score_bg_color[0], score_bg_color[1], score_bg_color[2], score_bg_alpha)
             ));
             children.push(act!(text:
-                font(current_machine_font_key(FontRole::Headline)):
+                font(machine_font_key(machine_font, FontRole::Headline)):
                 settext(percent_text):
                 align(1.0, 0.5):
                 xy(percent_x, 0.0):

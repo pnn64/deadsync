@@ -1,14 +1,17 @@
 use crate::Command;
 use crate::interaction::ProcessExitRequest;
 use deadlib_platform::dirs;
+use deadsync_config::app_config::Config;
 use deadsync_profile::PlayerSide;
 #[cfg(test)]
 use deadsync_theme_simply_love::screens::SelectMusicJoinPlan;
 use deadsync_theme_simply_love::screens::SimplyLoveScreen as Screen;
 pub(crate) use deadsync_theme_simply_love::screens::{
     LateJoinContext, ProfileSelectionContext, SelectMusicJoinContext, evaluation_summary_return_to,
-    late_join_side, profile_selection_plan, resolve_navigation as navigation_route_plan,
-    select_music_join_plan,
+    late_join_side, profile_selection_plan, select_music_join_plan,
+};
+use deadsync_theme_simply_love::screens::{
+    SimplyLoveNavigationPlan, SimplyLoveNavigationPolicy, resolve_navigation,
 };
 pub(crate) use deadsync_theme_simply_love::{
     SimplyLoveDebugRequest, SimplyLoveEffect as ThemeEffect, SimplyLoveMediaRequest,
@@ -20,6 +23,32 @@ pub(crate) use deadsync_theme_simply_love::{
     resolve_effect_route as theme_effect_route_plan,
 };
 use std::path::PathBuf;
+
+const fn navigation_policy(config: &Config) -> SimplyLoveNavigationPolicy {
+    SimplyLoveNavigationPolicy {
+        show_select_profile: config.machine_show_select_profile,
+        show_select_color: config.machine_show_select_color,
+        show_select_style: config.machine_show_select_style,
+        show_select_play_mode: config.machine_show_select_play_mode,
+        show_eval_summary: config.machine_show_eval_summary,
+        show_name_entry: config.machine_show_name_entry,
+        show_gameover: config.machine_show_gameover,
+    }
+}
+
+pub(crate) fn navigation_route_plan(
+    config: &Config,
+    from: Screen,
+    requested: Screen,
+    has_played_stages: bool,
+) -> SimplyLoveNavigationPlan {
+    resolve_navigation(
+        navigation_policy(config),
+        from,
+        requested,
+        has_played_stages,
+    )
+}
 
 pub struct OnlineProfileLinkPlan {
     pub target: Screen,
@@ -136,9 +165,8 @@ pub fn theme_effect_execution_plan(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use deadsync_config::app_config::Config;
     use deadsync_input::VirtualAction;
-    use deadsync_profile::{PLAYER_SLOTS, PlayStyle, Profile};
+    use deadsync_profile::PlayStyle;
 
     #[test]
     fn post_select_exit_enters_configured_summary_flow() {
@@ -208,33 +236,16 @@ mod tests {
         }
     }
 
-    fn profiles() -> [Profile; PLAYER_SLOTS] {
-        let mut profiles = std::array::from_fn(|_| Profile::default());
-        profiles[0].current_combo = 12;
-        profiles[1].current_combo = 34;
-        profiles[0]
-            .last_played_mut(PlayStyle::Single)
-            .difficulty_index = 2;
-        profiles[1]
-            .last_played_mut(PlayStyle::Single)
-            .difficulty_index = 5;
-        profiles
-    }
-
     #[test]
     fn fast_profile_switch_refreshes_wheel_and_skips_redundant_navigation() {
-        let plan = profile_selection_plan(
-            &profiles(),
-            ProfileSelectionContext {
-                play_style: PlayStyle::Single,
-                active_side: PlayerSide::P2,
-                fast_switch: true,
-                current_screen: Screen::SelectMusic,
-                show_groovestats_login: true,
-                show_arrowcloud_login: true,
-            },
-        );
-        assert_eq!(plan.combo_carry, [12, 34]);
+        let plan = profile_selection_plan(ProfileSelectionContext {
+            preferred_difficulties: [2, 4],
+            active_side: PlayerSide::P2,
+            fast_switch: true,
+            current_screen: Screen::SelectMusic,
+            show_groovestats_login: true,
+            show_arrowcloud_login: true,
+        });
         assert_eq!(plan.preferred_active, 4);
         assert_eq!(plan.preferred_p2, 4);
         assert!(plan.refresh_select_music);
@@ -243,17 +254,14 @@ mod tests {
 
     #[test]
     fn fast_profile_switch_returns_to_wheel_from_other_screens() {
-        let plan = profile_selection_plan(
-            &profiles(),
-            ProfileSelectionContext {
-                play_style: PlayStyle::Single,
-                active_side: PlayerSide::P1,
-                fast_switch: true,
-                current_screen: Screen::SelectProfile,
-                show_groovestats_login: false,
-                show_arrowcloud_login: false,
-            },
-        );
+        let plan = profile_selection_plan(ProfileSelectionContext {
+            preferred_difficulties: [2, 4],
+            active_side: PlayerSide::P1,
+            fast_switch: true,
+            current_screen: Screen::SelectProfile,
+            show_groovestats_login: false,
+            show_arrowcloud_login: false,
+        });
         assert_eq!(plan.preferred_active, 2);
         assert_eq!(plan.navigation_target, Some(Screen::SelectMusic));
     }
@@ -265,17 +273,14 @@ mod tests {
             (false, true, Screen::ArrowCloudLogin),
             (false, false, Screen::SelectColor),
         ] {
-            let plan = profile_selection_plan(
-                &profiles(),
-                ProfileSelectionContext {
-                    play_style: PlayStyle::Single,
-                    active_side: PlayerSide::P1,
-                    fast_switch: false,
-                    current_screen: Screen::SelectProfile,
-                    show_groovestats_login: groovestats,
-                    show_arrowcloud_login: arrowcloud,
-                },
-            );
+            let plan = profile_selection_plan(ProfileSelectionContext {
+                preferred_difficulties: [2, 4],
+                active_side: PlayerSide::P1,
+                fast_switch: false,
+                current_screen: Screen::SelectProfile,
+                show_groovestats_login: groovestats,
+                show_arrowcloud_login: arrowcloud,
+            });
             assert!(!plan.refresh_select_music);
             assert_eq!(plan.navigation_target, Some(expected));
         }

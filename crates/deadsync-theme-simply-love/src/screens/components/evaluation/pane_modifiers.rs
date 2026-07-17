@@ -10,14 +10,21 @@ pub fn build_modifiers_pane(
     score_info: &ScoreInfo,
     bar_center_x: f32,
     bar_width: f32,
+    transparent: bool,
 ) -> Vec<Actor> {
-    build_modifiers_pane_with_text(score_info.mods_text.clone(), bar_center_x, bar_width)
+    build_modifiers_pane_with_text(
+        score_info.mods_text.clone(),
+        bar_center_x,
+        bar_width,
+        transparent,
+    )
 }
 
 fn build_modifiers_pane_with_text(
     mods_text: Arc<str>,
     bar_center_x: f32,
     bar_width: f32,
+    transparent: bool,
 ) -> Vec<Actor> {
     let frame_center_y = deadlib_present::space::screen_center_y() + 200.5;
     let font_zoom = 0.7;
@@ -28,7 +35,7 @@ fn build_modifiers_pane_with_text(
     let text_y = frame_center_y - 5.0;
 
     let bg = color::rgba_hex("#1E282F");
-    let bg_alpha = eval_style_alpha(1.0, 0.75);
+    let bg_alpha = eval_style_alpha(transparent, 1.0, 0.75);
     vec![
         act!(quad:
             align(0.5, 0.5):
@@ -61,6 +68,7 @@ mod tests {
             Arc::<str>::from("M700, 40% Mini, Overhead, cel"),
             320.0,
             300.0,
+            false,
         );
         let Some(Actor::Text { content, .. }) = actors
             .into_iter()

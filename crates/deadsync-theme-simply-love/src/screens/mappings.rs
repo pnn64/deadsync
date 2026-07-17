@@ -1,6 +1,6 @@
 use crate::act;
 use crate::assets::AssetManager;
-use crate::assets::{FontRole, current_machine_font_key};
+use crate::assets::{FontRole, machine_font_key};
 use crate::effects::{
     SimplyLoveConfigRequest, SimplyLoveMappingsConfigRequest, SimplyLoveRuntimeRequest,
 };
@@ -1123,6 +1123,7 @@ pub fn push_actors(
     state: &State,
     asset_manager: &AssetManager,
     alpha_multiplier: f32,
+    visual_policy: crate::views::SimplyLoveVisualPolicyView,
 ) {
     actors.reserve(256);
 
@@ -1134,6 +1135,7 @@ pub fn push_actors(
             backdrop_rgba: [0.0, 0.0, 0.0, 1.0],
             // Keep hearts always visible for actor-only fades; UI rows fade separately.
             alpha_mul: 1.0,
+            visual_policy,
         },
     );
 
@@ -1146,6 +1148,7 @@ pub fn push_actors(
     /* ------------------------------ TOP BAR ------------------------------- */
     const FG: [f32; 4] = [1.0, 1.0, 1.0, 1.0];
     actors.push(screen_bar::build(screen_bar::ScreenBarParams {
+        visual_policy,
         title: "KEYBOARD/PAD MAPPINGS",
         title_placement: ScreenBarTitlePlacement::Left,
         position: ScreenBarPosition::Top,
@@ -1313,7 +1316,7 @@ pub fn push_actors(
         xy(p1_center_x, header_main_y):
         zoom(header_main_zoom):
         diffuse(1.0, 1.0, 1.0, 1.0):
-        font(current_machine_font_key(FontRole::Header)): settext("Player 1"):
+        font(machine_font_key(state.runtime.machine_font, FontRole::Header)): settext("Player 1"):
         horizalign(center)
     ));
     actors.push(act!(text:
@@ -1321,7 +1324,7 @@ pub fn push_actors(
         xy(p2_center_x, header_main_y):
         zoom(header_main_zoom):
         diffuse(1.0, 1.0, 1.0, 1.0):
-        font(current_machine_font_key(FontRole::Header)): settext("Player 2"):
+        font(machine_font_key(state.runtime.machine_font, FontRole::Header)): settext("Player 2"):
         horizalign(center)
     ));
 
@@ -1335,7 +1338,7 @@ pub fn push_actors(
         xy(p1_primary_x, header_sub_y):
         zoom(header_zoom):
         diffuse(header_dec[0], header_dec[1], header_dec[2], header_dec[3]):
-        font(current_machine_font_key(FontRole::Header)): settext("Primary"):
+        font(machine_font_key(state.runtime.machine_font, FontRole::Header)): settext("Primary"):
         horizalign(center)
     ));
     actors.push(act!(text:
@@ -1343,7 +1346,7 @@ pub fn push_actors(
         xy(p1_secondary_x, header_sub_y):
         zoom(header_zoom):
         diffuse(header_dec[0], header_dec[1], header_dec[2], header_dec[3]):
-        font(current_machine_font_key(FontRole::Header)): settext("Secondary"):
+        font(machine_font_key(state.runtime.machine_font, FontRole::Header)): settext("Secondary"):
         horizalign(center)
     ));
     actors.push(act!(text:
@@ -1351,7 +1354,7 @@ pub fn push_actors(
         xy(p1_default_x, header_sub_y):
         zoom(header_zoom):
         diffuse(header_dec[0], header_dec[1], header_dec[2], header_dec[3]):
-        font(current_machine_font_key(FontRole::Header)): settext("Default"):
+        font(machine_font_key(state.runtime.machine_font, FontRole::Header)): settext("Default"):
         horizalign(center)
     ));
 
@@ -1361,7 +1364,7 @@ pub fn push_actors(
         xy(p2_primary_x, header_sub_y):
         zoom(header_zoom):
         diffuse(header_dec[0], header_dec[1], header_dec[2], header_dec[3]):
-        font(current_machine_font_key(FontRole::Header)): settext("Primary"):
+        font(machine_font_key(state.runtime.machine_font, FontRole::Header)): settext("Primary"):
         horizalign(center)
     ));
     actors.push(act!(text:
@@ -1369,7 +1372,7 @@ pub fn push_actors(
         xy(p2_secondary_x, header_sub_y):
         zoom(header_zoom):
         diffuse(header_dec[0], header_dec[1], header_dec[2], header_dec[3]):
-        font(current_machine_font_key(FontRole::Header)): settext("Secondary"):
+        font(machine_font_key(state.runtime.machine_font, FontRole::Header)): settext("Secondary"):
         horizalign(center)
     ));
     actors.push(act!(text:
@@ -1377,7 +1380,7 @@ pub fn push_actors(
         xy(p2_default_x, header_sub_y):
         zoom(header_zoom):
         diffuse(header_dec[0], header_dec[1], header_dec[2], header_dec[3]):
-        font(current_machine_font_key(FontRole::Header)): settext("Default"):
+        font(machine_font_key(state.runtime.machine_font, FontRole::Header)): settext("Default"):
         horizalign(center)
     ));
 
@@ -1845,7 +1848,13 @@ pub fn get_actors(
     alpha_multiplier: f32,
 ) -> Vec<Actor> {
     let mut actors = Vec::with_capacity(256);
-    push_actors(&mut actors, state, asset_manager, alpha_multiplier);
+    push_actors(
+        &mut actors,
+        state,
+        asset_manager,
+        alpha_multiplier,
+        Default::default(),
+    );
     actors
 }
 

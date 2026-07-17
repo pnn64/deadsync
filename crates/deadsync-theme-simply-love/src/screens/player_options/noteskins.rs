@@ -48,7 +48,7 @@ pub(super) fn build_noteskin_cache(
 
 pub(super) fn preview_noteskin_names(
     mut names: Vec<String>,
-    profiles: &[profile_data::Profile],
+    player_options: &[profile_data::PlayerOptionsData],
 ) -> Vec<String> {
     if !names
         .iter()
@@ -56,15 +56,15 @@ pub(super) fn preview_noteskin_names(
     {
         names.push(profile_data::NoteSkin::DEFAULT_NAME.to_string());
     }
-    for profile in profiles {
-        push_noteskin_name_once(&mut names, &profile.noteskin);
-        if let Some(skin) = profile.mine_noteskin.as_ref() {
+    for options in player_options {
+        push_noteskin_name_once(&mut names, &options.noteskin);
+        if let Some(skin) = options.mine_noteskin.as_ref() {
             push_noteskin_name_once(&mut names, skin);
         }
-        if let Some(skin) = profile.receptor_noteskin.as_ref() {
+        if let Some(skin) = options.receptor_noteskin.as_ref() {
             push_noteskin_name_once(&mut names, skin);
         }
-        if let Some(skin) = profile.tap_explosion_noteskin.as_ref() {
+        if let Some(skin) = options.tap_explosion_noteskin.as_ref() {
             push_noteskin_name_once(&mut names, skin);
         }
     }
@@ -74,7 +74,7 @@ pub(super) fn preview_noteskin_names(
 pub(super) fn init_noteskin_state(
     cols_per_player: usize,
     noteskin_names: &[String],
-    profiles: &[profile_data::Profile; PLAYER_SLOTS],
+    player_options: &[profile_data::PlayerOptionsData; PLAYER_SLOTS],
     prewarm_catalog: bool,
 ) -> NoteskinState {
     if !prewarm_catalog {
@@ -84,28 +84,28 @@ pub(super) fn init_noteskin_state(
         };
     }
 
-    let initial_names = preview_noteskin_names(noteskin_names.to_vec(), profiles);
+    let initial_names = preview_noteskin_names(noteskin_names.to_vec(), player_options);
     let mut cache = build_noteskin_cache(cols_per_player, &initial_names);
     let previews = std::array::from_fn(|i| {
-        let profile_noteskin = &profiles[i].noteskin;
+        let profile_noteskin = &player_options[i].noteskin;
         PlayerNoteskinPreviews {
             base: cached_or_load_noteskin(&mut cache, profile_noteskin, cols_per_player),
             mine: resolved_noteskin_override_preview(
                 &mut cache,
                 profile_noteskin,
-                profiles[i].mine_noteskin.as_ref(),
+                player_options[i].mine_noteskin.as_ref(),
                 cols_per_player,
             ),
             receptor: resolved_noteskin_override_preview(
                 &mut cache,
                 profile_noteskin,
-                profiles[i].receptor_noteskin.as_ref(),
+                player_options[i].receptor_noteskin.as_ref(),
                 cols_per_player,
             ),
             tap_explosion: resolved_tap_explosion_preview(
                 &mut cache,
                 profile_noteskin,
-                profiles[i].tap_explosion_noteskin.as_ref(),
+                player_options[i].tap_explosion_noteskin.as_ref(),
                 cols_per_player,
             ),
         }
@@ -215,14 +215,14 @@ pub(super) fn resolved_tap_explosion_preview(
 
 pub(super) fn sync_noteskin_previews_for_player(
     noteskin: &mut NoteskinState,
-    profile: &profile_data::Profile,
+    options: &profile_data::PlayerOptionsData,
     player_idx: usize,
     cols_per_player: usize,
 ) {
-    let noteskin_setting = profile.noteskin.clone();
-    let mine_noteskin_setting = profile.mine_noteskin.clone();
-    let receptor_noteskin_setting = profile.receptor_noteskin.clone();
-    let tap_explosion_noteskin_setting = profile.tap_explosion_noteskin.clone();
+    let noteskin_setting = options.noteskin.clone();
+    let mine_noteskin_setting = options.mine_noteskin.clone();
+    let receptor_noteskin_setting = options.receptor_noteskin.clone();
+    let tap_explosion_noteskin_setting = options.tap_explosion_noteskin.clone();
     let previews = &mut noteskin.previews[player_idx];
     previews.base =
         cached_or_load_noteskin(&mut noteskin.cache, &noteskin_setting, cols_per_player);

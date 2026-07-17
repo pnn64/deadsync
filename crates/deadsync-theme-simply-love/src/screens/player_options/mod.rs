@@ -110,7 +110,15 @@ const START_SFX: &str = "assets/sounds/start.ogg";
 
 #[inline(always)]
 fn queue_audio(state: &mut State, request: AudioRequest) {
-    state.pending_audio.push(request);
+    state.pending_effects.push(ThemeEffect::Runtime(
+        crate::SimplyLoveRuntimeRequest::Audio(request),
+    ));
+}
+
+fn queue_profile_request(state: &mut State, request: crate::SimplyLoveProfileRequest) {
+    state.pending_effects.push(ThemeEffect::Runtime(
+        crate::SimplyLoveRuntimeRequest::Profile(request),
+    ));
 }
 
 #[inline(always)]
@@ -118,20 +126,15 @@ fn queue_sfx(state: &mut State, path: &'static str) {
     queue_audio(state, AudioRequest::PlaySfx(path.to_owned()));
 }
 
-fn prepend_pending_audio(state: &mut State, effect: ThemeEffect) -> ThemeEffect {
-    let request_count = state.pending_audio.len();
+fn prepend_pending_effects(state: &mut State, effect: ThemeEffect) -> ThemeEffect {
+    let request_count = state.pending_effects.len();
     if request_count == 0 {
         return effect;
     }
 
     let has_effect = !matches!(effect, ThemeEffect::None);
     let mut effects = Vec::with_capacity(request_count + usize::from(has_effect));
-    effects.extend(
-        state
-            .pending_audio
-            .drain(..)
-            .map(|request| ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Audio(request))),
-    );
+    effects.append(&mut state.pending_effects);
     if has_effect {
         effects.push(effect);
     }
@@ -140,6 +143,23 @@ fn prepend_pending_audio(state: &mut State, effect: ThemeEffect) -> ThemeEffect 
     } else {
         ThemeEffect::Batch(effects)
     }
+}
+
+fn queue_profile_update(state: &mut State, player_idx: usize) {
+    let idx = player_idx.min(PLAYER_SLOTS - 1);
+    let (should_persist, side) = choice::persist_ctx(state, idx);
+    if !should_persist {
+        return;
+    }
+    state.pending_effects.push(ThemeEffect::Runtime(
+        crate::SimplyLoveRuntimeRequest::Profile(
+            crate::SimplyLoveProfileRequest::UpdatePlayerOptions {
+                side,
+                options: state.player_options[idx].clone(),
+                heart_rate_device_id: state.heart_rate_device_ids[idx].clone(),
+            },
+        ),
+    ));
 }
 
 #[inline(always)]
@@ -212,7 +232,7 @@ pub fn prewarm_noteskin_previews(state: &mut State) {
     state.noteskin = init_noteskin_state(
         state.cols_per_player,
         &noteskin_names,
-        &state.player_profiles,
+        &state.player_options,
         true,
     );
 }
@@ -236,19 +256,22 @@ fn init_with_noteskin_prewarm(
         player_side,
         joined,
         music_rate: session_music_rate,
-        profiles: player_profiles,
+        players,
     } = init_view;
+    let [p1, p2] = players;
+    let heart_rate_device_ids = [p1.heart_rate_device_id, p2.heart_rate_device_id];
+    let player_options = [p1.options, p2.options];
     let active = active_players(play_style, player_side, joined);
     let persisted_player_idx = persisted_player_idx(play_style, player_side);
     let cols_per_player = play_style.cols_per_player();
     let (heart_rate_choices, heart_rate_choice_ids) = if policy.heart_rate_monitors {
-        heart_rate_choices(&heart_rate_devices, &player_profiles)
+        heart_rate_choices(&heart_rate_devices, &heart_rate_device_ids)
     } else {
         (Vec::new(), Vec::new())
     };
 
-    let speed_mod_p1 = SpeedMod::from(player_profiles[P1].scroll_speed);
-    let speed_mod_p2 = SpeedMod::from(player_profiles[P2].scroll_speed);
+    let speed_mod_p1 = SpeedMod::from(player_options[P1].scroll_speed);
+    let speed_mod_p2 = SpeedMod::from(player_options[P2].scroll_speed);
     let chart_difficulty_index: [usize; PLAYER_SLOTS] = std::array::from_fn(|player_idx| {
         let steps_idx = chart_steps_index[player_idx];
         let mut diff_idx =
@@ -337,41 +360,31 @@ fn init_with_noteskin_prewarm(
     // a per-pane merge step.
     let mut p1_masks = PlayerOptionMasks::default();
     let mut p2_masks = PlayerOptionMasks::default();
-    apply_profile_defaults(&mut main_row_map, &player_profiles[P1], P1, &mut p1_masks);
-    apply_profile_defaults(&mut main_row_map, &player_profiles[P2], P2, &mut p2_masks);
-    apply_profile_defaults(
-        &mut display_row_map,
-        &player_profiles[P1],
-        P1,
-        &mut p1_masks,
-    );
-    apply_profile_defaults(
-        &mut display_row_map,
-        &player_profiles[P2],
-        P2,
-        &mut p2_masks,
-    );
+    apply_profile_defaults(&mut main_row_map, &player_options[P1], P1, &mut p1_masks);
+    apply_profile_defaults(&mut main_row_map, &player_options[P2], P2, &mut p2_masks);
+    apply_profile_defaults(&mut display_row_map, &player_options[P1], P1, &mut p1_masks);
+    apply_profile_defaults(&mut display_row_map, &player_options[P2], P2, &mut p2_masks);
     apply_profile_defaults(
         &mut advanced_row_map,
-        &player_profiles[P1],
+        &player_options[P1],
         P1,
         &mut p1_masks,
     );
     apply_profile_defaults(
         &mut advanced_row_map,
-        &player_profiles[P2],
+        &player_options[P2],
         P2,
         &mut p2_masks,
     );
     apply_profile_defaults(
         &mut uncommon_row_map,
-        &player_profiles[P1],
+        &player_options[P1],
         P1,
         &mut p1_masks,
     );
     apply_profile_defaults(
         &mut uncommon_row_map,
-        &player_profiles[P2],
+        &player_options[P2],
         P2,
         &mut p2_masks,
     );
@@ -382,7 +395,7 @@ fn init_with_noteskin_prewarm(
     let noteskin = init_noteskin_state(
         cols_per_player,
         &noteskin_names,
-        &player_profiles,
+        &player_options,
         prewarm_noteskin_catalog,
     );
     let main_row_tweens = init_row_tweens(
@@ -420,7 +433,8 @@ fn init_with_noteskin_prewarm(
         active,
         persisted_player_idx,
         cols_per_player,
-        player_profiles,
+        player_options,
+        heart_rate_device_ids,
         heart_rate_choice_ids,
         heart_rate_readings: heart_rate_devices.readings,
         noteskin,
@@ -431,7 +445,7 @@ fn init_with_noteskin_prewarm(
         combo_preview_elapsed: 0.0,
         pane_transition: PaneTransition::None,
         menu_lr_chord: screen_input::MenuLrChordTracker::default(),
-        pending_audio: Vec::with_capacity(4),
+        pending_effects: Vec::with_capacity(4),
     };
     sync_speed_mod_type_rows(&mut state);
     sync_heart_rate_selections(&mut state);
@@ -440,7 +454,7 @@ fn init_with_noteskin_prewarm(
 
 fn heart_rate_choices(
     devices: &HeartRateDevicesView,
-    profiles: &[deadsync_profile::Profile; PLAYER_SLOTS],
+    selected_ids: &[Option<String>; PLAYER_SLOTS],
 ) -> (Vec<String>, Vec<Option<String>>) {
     let mut choices = vec![tr("Common", "Off").to_string()];
     let mut ids = vec![None];
@@ -451,8 +465,8 @@ fn heart_rate_choices(
         choices.push(device.label.clone());
         ids.push(Some(device.id.clone()));
     }
-    for profile in profiles {
-        let Some(id) = profile.heart_rate_device_id.as_ref() else {
+    for selected_id in selected_ids {
+        let Some(id) = selected_id.as_ref() else {
             continue;
         };
         if ids.iter().flatten().any(|known| known == id) {
@@ -465,8 +479,6 @@ fn heart_rate_choices(
 }
 
 fn sync_heart_rate_selections(state: &mut State) {
-    let selected: [Option<String>; PLAYER_SLOTS] =
-        std::array::from_fn(|player| state.player_profiles[player].heart_rate_device_id.clone());
     let ids = state.heart_rate_choice_ids.clone();
     let Some(row) = state.panes[OptionsPane::Main.index()]
         .row_map
@@ -477,7 +489,7 @@ fn sync_heart_rate_selections(state: &mut State) {
     for player in 0..PLAYER_SLOTS {
         row.selected_choice_index[player] = ids
             .iter()
-            .position(|id| id == &selected[player])
+            .position(|id| id == &state.heart_rate_device_ids[player])
             .unwrap_or(0);
     }
 }
@@ -487,7 +499,7 @@ pub fn set_heart_rate_devices(state: &mut State, devices: &HeartRateDevicesView)
         return;
     }
     state.heart_rate_readings = devices.readings;
-    let (choices, ids) = heart_rate_choices(devices, &state.player_profiles);
+    let (choices, ids) = heart_rate_choices(devices, &state.heart_rate_device_ids);
     let Some(row) = state.panes[OptionsPane::Main.index()]
         .row_map
         .get_mut(RowId::HeartRateMonitor)

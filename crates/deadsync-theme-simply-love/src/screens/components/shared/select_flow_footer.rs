@@ -25,7 +25,11 @@ fn player_params<'a>(
     )
 }
 
-pub fn push(actors: &mut Vec<Actor>, players: &[SelectFlowPlayerView; 2]) {
+pub fn push(
+    actors: &mut Vec<Actor>,
+    players: &[SelectFlowPlayerView; 2],
+    visual_policy: crate::views::SimplyLoveVisualPolicyView,
+) {
     let insert_card = tr("Common", "InsertCard");
     let press_start = tr("Common", "PressStart");
     let (left_text, left_avatar) =
@@ -44,5 +48,6 @@ pub fn push(actors: &mut Vec<Actor>, players: &[SelectFlowPlayerView; 2]) {
         left_avatar,
         right_avatar,
         fg_color: [1.0; 4],
+        visual_policy,
     }));
 }

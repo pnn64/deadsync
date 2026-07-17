@@ -1,6 +1,6 @@
 use crate::act;
-use crate::assets::{FontRole, current_machine_font_key_for_text};
-use crate::config::{self, MachineBarColor, SrpgVariant};
+use crate::assets::{FontRole, machine_font_key_for_text};
+use crate::views::{ScreenBarBackgroundView, SimplyLoveVisualPolicyView};
 use deadlib_present::actors::{self, Actor, Background, SizeSpec};
 use deadlib_present::cache::{SharedStrCache, cached_shared_str};
 use deadlib_present::color;
@@ -64,6 +64,7 @@ pub struct ScreenBarParams<'a> {
     pub right_avatar: Option<AvatarParams<'a>>,
 
     pub fg_color: [f32; 4], // text color
+    pub visual_policy: SimplyLoveVisualPolicyView,
 }
 
 /// Helper to select a scale factor based on screen aspect ratio.
@@ -76,7 +77,11 @@ fn cached_str_ref(text: &str) -> Arc<str> {
     cached_shared_str(&STR_REF_CACHE, text, TEXT_CACHE_LIMIT)
 }
 
-fn bar_background(transparent: bool, context: ScreenBarContext) -> Option<Background> {
+fn bar_background(
+    transparent: bool,
+    context: ScreenBarContext,
+    policy: SimplyLoveVisualPolicyView,
+) -> Option<Background> {
     if matches!(
         context,
         ScreenBarContext::TitleMenu | ScreenBarContext::NoBackground
@@ -84,24 +89,16 @@ fn bar_background(transparent: bool, context: ScreenBarContext) -> Option<Backgr
         return None;
     }
 
-    let cfg = config::get();
-    match cfg.machine_bar_color.resolve(cfg.visual_style) {
-        MachineBarColor::Default if transparent => None,
-        MachineBarColor::Default => Some(Background::Color(color::rgba_hex("#a6a6a6"))),
-        MachineBarColor::Colored => Some(Background::Color(srpg_bar_rgba(&cfg))),
-        MachineBarColor::Transparent if matches!(context, ScreenBarContext::SelectMusic) => {
+    match policy.screen_bar {
+        ScreenBarBackgroundView::Default if transparent => None,
+        ScreenBarBackgroundView::Default => Some(Background::Color(color::rgba_hex("#a6a6a6"))),
+        ScreenBarBackgroundView::Colored(rgba) => Some(Background::Color(rgba)),
+        ScreenBarBackgroundView::Transparent
+            if matches!(context, ScreenBarContext::SelectMusic) =>
+        {
             Some(Background::Color([0.0, 0.0, 0.0, 0.5]))
         }
-        MachineBarColor::Transparent => None,
-    }
-}
-
-fn srpg_bar_rgba(cfg: &config::Config) -> [f32; 4] {
-    match cfg.srpg_variant {
-        SrpgVariant::Srpg10 if cfg.visual_style.is_srpg() => {
-            color::srpg10_rgba(cfg.simply_love_color)
-        }
-        _ => color::srpg9_rgba(cfg.simply_love_color),
+        ScreenBarBackgroundView::Transparent => None,
     }
 }
 
@@ -128,7 +125,7 @@ fn build_with_context(params: ScreenBarParams, context: ScreenBarContext) -> Act
         ScreenBarPosition::Bottom => ([0.0, 1.0], [0.0, screen_height()]),
     };
 
-    let background = bar_background(params.transparent, context);
+    let background = bar_background(params.transparent, context, params.visual_policy);
 
     let mut children = Vec::with_capacity(4);
     let title = cached_str_ref(params.title);
@@ -164,7 +161,11 @@ fn build_with_context(params: ScreenBarParams, context: ScreenBarContext) -> Act
             };
 
             // Create the actor first without the horizalign, then modify it.
-            let title_font = current_machine_font_key_for_text(FontRole::Header, &title);
+            let title_font = machine_font_key_for_text(
+                params.visual_policy.machine_font,
+                FontRole::Header,
+                &title,
+            );
             let mut title_actor = act!(text:
                 align(title_align[0], title_align[1]):
                 xy(title_xy[0], title_xy[1]):
@@ -185,7 +186,11 @@ fn build_with_context(params: ScreenBarParams, context: ScreenBarContext) -> Act
         /* ============================ BOTTOM BAR ============================ */
         ScreenBarPosition::Bottom => {
             // Center title (Wendy by default; Mega when MachineFont = Mega).
-            let bottom_title_font = current_machine_font_key_for_text(FontRole::Header, &title);
+            let bottom_title_font = machine_font_key_for_text(
+                params.visual_policy.machine_font,
+                FontRole::Header,
+                &title,
+            );
             children.push(act!(text:
                 align(0.5, 0.5):
                 xy(screen_center_x(), 16.0):
@@ -276,6 +281,7 @@ mod tests {
             left_avatar: None,
             right_avatar: None,
             fg_color: [1.0; 4],
+            visual_policy: SimplyLoveVisualPolicyView::default(),
         }
     }
 
@@ -286,5 +292,31 @@ mod tests {
             panic!("screen bar should build a frame");
         };
         assert!(background.is_none());
+    }
+
+    #[test]
+    fn colored_bar_uses_prepared_rgba() {
+        let mut params = empty_bar_params();
+        params.visual_policy.screen_bar = ScreenBarBackgroundView::Colored([0.1, 0.2, 0.3, 1.0]);
+        let Actor::Frame { background, .. } = build(params) else {
+            panic!("screen bar should build a frame");
+        };
+        assert!(matches!(
+            background,
+            Some(Background::Color([0.1, 0.2, 0.3, 1.0]))
+        ));
+    }
+
+    #[test]
+    fn transparent_select_music_bar_keeps_reference_scrim() {
+        let mut params = empty_bar_params();
+        params.visual_policy.screen_bar = ScreenBarBackgroundView::Transparent;
+        let Actor::Frame { background, .. } = build_select_music(params) else {
+            panic!("screen bar should build a frame");
+        };
+        assert!(matches!(
+            background,
+            Some(Background::Color([0.0, 0.0, 0.0, 0.5]))
+        ));
     }
 }

@@ -1,7 +1,7 @@
 use crate::act;
 use crate::assets::AssetManager;
 use crate::assets::i18n::tr;
-use crate::assets::{FontRole, current_machine_font_key};
+use crate::assets::{FontRole, machine_font_key};
 use crate::screens::ThemeEffect;
 use crate::screens::components::shared::screen_bar::{
     ScreenBarParams, ScreenBarPosition, ScreenBarTitlePlacement,
@@ -202,7 +202,12 @@ fn ease01(x: f32, f_ease: f32) -> f32 {
     anim::eval_ease_p_for_f_ease(x, f_ease)
 }
 
-pub fn push_actors(actors: &mut Vec<Actor>, state: &State, asset_manager: &AssetManager) {
+pub fn push_actors(
+    actors: &mut Vec<Actor>,
+    state: &State,
+    asset_manager: &AssetManager,
+    visual_policy: crate::views::SimplyLoveVisualPolicyView,
+) {
     actors.reserve(256);
     let exit_t = exit_anim_t(state.flow.exit_requested());
 
@@ -212,11 +217,13 @@ pub fn push_actors(actors: &mut Vec<Actor>, state: &State, asset_manager: &Asset
             active_color_index: state.active_color_index,
             backdrop_rgba: [0.0, 0.0, 0.0, 1.0],
             alpha_mul: 1.0,
+            visual_policy,
         },
     );
 
     let select_mode = tr("ScreenTitles", "SelectMode");
     actors.push(screen_bar::build(ScreenBarParams {
+        visual_policy,
         title: &select_mode,
         title_placement: ScreenBarTitlePlacement::Left,
         position: ScreenBarPosition::Top,
@@ -229,7 +236,7 @@ pub fn push_actors(actors: &mut Vec<Actor>, state: &State, asset_manager: &Asset
         right_avatar: None,
     }));
 
-    select_flow_footer::push(actors, &state.runtime.players);
+    select_flow_footer::push(actors, &state.runtime.players, visual_policy);
 
     // Grey backgrounds (SL: ScreenSelectPlayMode underlay/default.lua).
     let bg1_a = fade_after(exit_t, 0.4, 0.1);
@@ -288,9 +295,10 @@ pub fn push_actors(actors: &mut Vec<Actor>, state: &State, asset_manager: &Asset
     let label = &labels[selected_index];
     let measured_w = asset_manager.with_fonts(|all_fonts| {
         asset_manager
-            .with_font(current_machine_font_key(FontRole::Header), |f| {
-                font::measure_line_width_logical(f, label, all_fonts) as f32
-            })
+            .with_font(
+                machine_font_key(visual_policy.machine_font, FontRole::Header),
+                |f| font::measure_line_width_logical(f, label, all_fonts) as f32,
+            )
             .unwrap_or(0.0)
     });
     let base_w = if measured_w > 0.0 {
@@ -334,7 +342,7 @@ pub fn push_actors(actors: &mut Vec<Actor>, state: &State, asset_manager: &Asset
         ];
 
         actors.push(act!(text:
-            font(current_machine_font_key(FontRole::Header)):
+            font(machine_font_key(visual_policy.machine_font, FontRole::Header)):
             settext(label.clone()):
             align(1.0, 0.5):
             xy(x, y):
@@ -348,7 +356,7 @@ pub fn push_actors(actors: &mut Vec<Actor>, state: &State, asset_manager: &Asset
     let score_alpha = fade_after(exit_t, 0.4, 0.2);
     let (sx, sy) = root_pt(124.0, -68.0);
     actors.push(act!(text:
-        font(current_machine_font_key(FontRole::Numbers)):
+        font(machine_font_key(visual_policy.machine_font, FontRole::Numbers)):
         settext("77.41"):
         align(0.5, 0.5):
         xy(sx, sy):
@@ -497,7 +505,7 @@ pub fn push_actors(actors: &mut Vec<Actor>, state: &State, asset_manager: &Asset
 
 pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     let mut actors = Vec::with_capacity(256);
-    push_actors(&mut actors, state, asset_manager);
+    push_actors(&mut actors, state, asset_manager, Default::default());
     actors
 }
 

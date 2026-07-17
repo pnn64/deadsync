@@ -17,12 +17,40 @@ use deadlib_present::actors::Actor;
 use deadsync_config::prelude as config;
 use deadsync_profile as profile_data;
 use deadsync_profile::compat as profile;
+use deadsync_theme_simply_love::views::OverscanAdjustmentView;
 use deadsync_theme_simply_love::{SimplyLoveQrLoginService, screens, visual_styles};
 use log::{debug, info};
 use winit::event_loop::ActiveEventLoop;
 
+pub(super) fn menu_music_path(
+    style: config::VisualStyle,
+    variant: config::SrpgVariant,
+) -> std::path::PathBuf {
+    visual_styles::resolve_menu_music_path(
+        style,
+        variant,
+        deadsync_assets::audio_folder::random_music_path,
+        deadsync_assets::resolve_asset_path,
+    )
+}
+
+pub(super) fn gameover_music_path() -> std::path::PathBuf {
+    deadsync_assets::resolve_asset_path(visual_styles::SRPG10_GAMEOVER_MUSIC)
+}
+
+pub(super) fn overscan_view() -> OverscanAdjustmentView {
+    let config = config::get();
+    OverscanAdjustmentView {
+        translate_x: config.center_image_translate_x,
+        translate_y: config.center_image_translate_y,
+        add_width: config.center_image_add_width,
+        add_height: config.center_image_add_height,
+    }
+}
+
 impl App {
     fn enter_arrowcloud_login(&mut self) {
+        let config = config::get();
         let color_index = self.state.screens.menu_state.active_color_index;
         let state = &mut self.state.screens.arrowcloud_login_state;
         state.active_color_index = color_index;
@@ -31,10 +59,15 @@ impl App {
             .as_ref()
             .map(|target| (target.id.clone(), target.display_name.clone()));
         let request = crate::qr_login::request(SimplyLoveQrLoginService::ArrowCloud, target);
-        screens::arrowcloud_login::on_enter(state, request);
+        screens::arrowcloud_login::on_enter(
+            state,
+            request,
+            config.three_key_navigation && config.only_dedicated_menu_buttons,
+        );
     }
 
     fn enter_groovestats_login(&mut self) {
+        let config = config::get();
         let color_index = self.state.screens.menu_state.active_color_index;
         let state = &mut self.state.screens.groovestats_login_state;
         state.active_color_index = color_index;
@@ -43,9 +76,14 @@ impl App {
             .as_ref()
             .map(|target| (target.id.clone(), target.display_name.clone()));
         let show_arrowcloud_next = target.is_none()
-            && crate::qr_login::should_auto_show_arrowcloud(config::get().arrowcloud_qr_login_when);
+            && crate::qr_login::should_auto_show_arrowcloud(config.arrowcloud_qr_login_when);
         let request = crate::qr_login::request(SimplyLoveQrLoginService::GrooveStats, target);
-        screens::groovestats_login::on_enter(state, request, show_arrowcloud_next);
+        screens::groovestats_login::on_enter(
+            state,
+            request,
+            show_arrowcloud_next,
+            config.three_key_navigation && config.only_dedicated_menu_buttons,
+        );
     }
 
     #[inline(always)]
@@ -103,13 +141,14 @@ impl App {
             self.enter_groovestats_login();
         }
 
+        let config = config::get();
         let commands = actor_transition_music_commands(
             prev,
             target_screen,
-            config::get().menu_music,
-            visual_styles::srpg10_active(),
-            visual_styles::menu_music_resolved_path(),
-            visual_styles::srpg10_gameover_music_path(),
+            config.menu_music,
+            visual_styles::srpg10_active(config.visual_style, config.srpg_variant),
+            menu_music_path(config.visual_style, config.srpg_variant),
+            gameover_music_path(),
         );
         let _ = self.run_commands(commands, event_loop);
 
@@ -123,19 +162,22 @@ impl App {
             // The full screen is reached only from Options (Song Select uses an
             // in-place overlay instead): return there and show all pads.
             let pad_state = &mut self.state.screens.pad_config_state;
+            screens::pad_config::set_fsr_enabled(pad_state, config::get().use_fsrs);
             screens::pad_config::set_return_screen(pad_state, CurrentScreen::Options);
             screens::pad_config::set_filter(pad_state, screens::pad_config::PadFilter::All);
             screens::pad_config::reset_modes(pad_state);
         } else if target_screen == CurrentScreen::ManageLocalProfiles {
             let color_index = self.state.screens.options_state.active_color_index;
-            self.state.screens.manage_local_profiles_state = manage_local_profiles::init();
+            self.state.screens.manage_local_profiles_state =
+                manage_local_profiles::init(crate::local_profiles::view());
             self.state
                 .screens
                 .manage_local_profiles_state
                 .active_color_index = color_index;
         } else if target_screen == CurrentScreen::SelectProfile {
             let current_color_index = self.state.screens.select_profile_state.active_color_index;
-            self.state.screens.select_profile_state = select_profile::init();
+            self.state.screens.select_profile_state =
+                select_profile::init(crate::local_profiles::picker_view());
             self.state.screens.select_profile_state.active_color_index = current_color_index;
             select_profile::set_fast_switch(
                 &mut self.state.screens.select_profile_state,
@@ -167,7 +209,10 @@ impl App {
                 .screens
                 .overscan_adjustment_state
                 .active_color_index = color_index;
-            overscan_adjustment::on_enter(&mut self.state.screens.overscan_adjustment_state);
+            overscan_adjustment::on_enter(
+                &mut self.state.screens.overscan_adjustment_state,
+                overscan_view(),
+            );
         } else if target_screen == CurrentScreen::SmxAssignPads {
             let color_index = self.state.screens.options_state.active_color_index;
             self.state.screens.smx_assign_state = screens::smx_assign::init();
@@ -175,6 +220,7 @@ impl App {
             screens::smx_assign::on_enter(
                 &mut self.state.screens.smx_assign_state,
                 &crate::smx_config::smx_assignment_view(),
+                prev,
             );
         }
 
@@ -374,9 +420,10 @@ impl App {
 
     pub(super) fn get_out_transition_for_screen(&self, screen: CurrentScreen) -> (Vec<Actor>, f32) {
         match screen {
-            CurrentScreen::Menu => {
-                menu::out_transition(self.state.screens.menu_state.active_color_index)
-            }
+            CurrentScreen::Menu => menu::out_transition(
+                self.state.screens.menu_state.active_color_index,
+                super::simply_love_visual_policy(&config::get()),
+            ),
             CurrentScreen::Gameplay => gameplay::out_transition(),
             CurrentScreen::Practice => gameplay::out_transition(),
             CurrentScreen::Options => options::out_transition(),
@@ -414,6 +461,7 @@ impl App {
                 self.state.screens.gameplay_state.as_ref(),
                 &self.asset_manager,
                 self.state.session.gameplay_restart_count > 0,
+                super::simply_love_visual_policy(&config::get()),
             ),
             CurrentScreen::Practice => gameplay::in_transition(
                 self.state
@@ -423,6 +471,7 @@ impl App {
                     .map(|state| &state.gameplay),
                 &self.asset_manager,
                 false,
+                super::simply_love_visual_policy(&config::get()),
             ),
             CurrentScreen::Options => options::in_transition(),
             CurrentScreen::Credits => credits::in_transition(),

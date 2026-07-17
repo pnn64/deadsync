@@ -14,7 +14,7 @@ pub(super) mod tests {
         handle_nav_event, handle_start_event, hud_offset_choices, init_cycle_row_from_binding,
         init_noteskin_state, init_numeric_row_from_binding, is_row_visible,
         judgment_tilt_options_visible, on_start_press, player_option_column_x,
-        prepend_pending_audio, preview_noteskin_names, queue_audio, queue_sfx,
+        prepend_pending_effects, preview_noteskin_names, queue_audio, queue_sfx,
         repeat_held_arcade_start, row_f_pos_for_index, sync_profile_scroll_speed,
         sync_speed_mod_type_row, update,
     };
@@ -23,8 +23,7 @@ pub(super) mod tests {
     use crate::screens::{Screen, ThemeEffect};
     use deadlib_present::font::{Font, Glyph};
     use deadsync_chart::{ChartData, SongData};
-    use deadsync_profile::Profile;
-    use deadsync_profile::compat as profile;
+    use deadsync_profile::PlayerOptionsData;
     use deadsync_profile::{
         BackgroundFilter, ComboFont, NoCmodAlternative, Perspective, PlayStyle, PlayerSide,
         ScrollOption, StepStatisticsMask,
@@ -41,7 +40,7 @@ pub(super) mod tests {
         use std::sync::Once;
         static INIT: Once = Once::new();
         INIT.call_once(|| {
-            crate::assets::i18n::init("en");
+            crate::assets::i18n::init_for_tests();
         });
     }
 
@@ -65,7 +64,6 @@ pub(super) mod tests {
             player_side,
             joined,
             music_rate: 1.0,
-            profiles: [Profile::default(), Profile::default()],
             ..Default::default()
         }
     }
@@ -89,7 +87,7 @@ pub(super) mod tests {
     fn preview_cache_plan_keeps_every_catalog_noteskin() {
         let names = preview_noteskin_names(
             vec!["cel".to_owned(), "metal".to_owned()],
-            &[Profile::default(), Profile::default()],
+            &[PlayerOptionsData::default(), PlayerOptionsData::default()],
         );
 
         assert_eq!(names, ["cel", "metal", "default"]);
@@ -100,7 +98,7 @@ pub(super) mod tests {
         let state = init_noteskin_state(
             4,
             &["cel".to_owned(), "metal".to_owned()],
-            &[Profile::default(), Profile::default()],
+            &[PlayerOptionsData::default(), PlayerOptionsData::default()],
             false,
         );
 
@@ -297,19 +295,18 @@ pub(super) mod tests {
 
     /// Stub writeback for synthetic test bindings whose tests only exercise
     /// the init contract (`apply_profile_defaults`). The toggle path is
-    /// never invoked, so `project`/`persist` semantics are irrelevant; the
+    /// never invoked, so `project` semantics are irrelevant; the
     /// mapping still needs to cover the test rows so FirstActiveBit cursor
     /// init can resolve active choices.
     const TEST_WRITEBACK: BitmaskWriteback = BitmaskWriteback {
         project: |_, _, _| {},
-        persist_for_side: |_, _| {},
         bit_mapping: BitMapping::Sequential { width: 32 },
         sync_visibility: false,
     };
 
     #[test]
     fn sync_profile_scroll_speed_matches_speed_mod() {
-        let mut profile = Profile::default();
+        let mut profile = PlayerOptionsData::default();
 
         sync_profile_scroll_speed(
             &mut profile,
@@ -1298,7 +1295,7 @@ pub(super) mod tests {
         // Otherwise persisted profile state for those rows is silently lost
         // the moment the user toggles any choice on those rows.
         ensure_i18n();
-        let mut profile = Profile::default();
+        let mut profile = PlayerOptionsData::default();
         profile.scroll_option = ScrollOption::Reverse.union(ScrollOption::Cross);
 
         let mut main_rows = test_row_map(vec![test_row(
@@ -1377,7 +1374,7 @@ pub(super) mod tests {
     #[test]
     fn init_bitmask_row_cursor_starts_at_first_active_bit() {
         ensure_i18n();
-        let mut profile = Profile::default();
+        let mut profile = PlayerOptionsData::default();
         // Only the second Hide bit (BACKGROUND, 1 << 1) — cursor must land on
         // choice index 1, not 0.
         profile.hide_targets = false;
@@ -1448,7 +1445,7 @@ pub(super) mod tests {
     #[test]
     fn init_fa_plus_options_cursor_always_zero() {
         ensure_i18n();
-        let mut profile = Profile::default();
+        let mut profile = PlayerOptionsData::default();
         // Activate only the second FA+ bit (EX_SCORE = 1 << 1). Under the
         // generic FirstActiveBit policy the cursor would land on 1; FAPlus
         // pins it to 0.
@@ -1519,7 +1516,7 @@ pub(super) mod tests {
     #[test]
     fn init_gameplay_extras_more_derived_from_sibling_profile_fields() {
         ensure_i18n();
-        let mut profile = Profile::default();
+        let mut profile = PlayerOptionsData::default();
         profile.column_cues = true;
         profile.live_timing_stats = true;
         profile.display_scorebox = true;
@@ -1736,9 +1733,7 @@ pub(super) mod tests {
     #[test]
     fn heart_rate_choices_keep_saved_devices_that_are_not_broadcasting() {
         ensure_i18n();
-        let mut p1 = Profile::default();
-        p1.heart_rate_device_id = Some("saved-id".to_owned());
-        let profiles = [p1, Profile::default()];
+        let selected_ids = [Some("saved-id".to_owned()), None];
         let devices = super::HeartRateDevicesView {
             supported: true,
             scanning: true,
@@ -1750,7 +1745,7 @@ pub(super) mod tests {
             readings: [super::HeartRateReadingView::default(); 2],
         };
 
-        let (choices, ids) = super::heart_rate_choices(&devices, &profiles);
+        let (choices, ids) = super::heart_rate_choices(&devices, &selected_ids);
 
         assert_eq!(
             ids,
@@ -1774,6 +1769,32 @@ pub(super) mod tests {
         ));
     }
 
+    fn assert_profile_update_then_sfx(
+        effect: &ThemeEffect,
+        side: PlayerSide,
+        options_data: &PlayerOptionsData,
+        selected_hrm: &Option<String>,
+    ) {
+        let ThemeEffect::Batch(effects) = effect else {
+            panic!("profile update and change cue should be batched");
+        };
+        assert_eq!(effects.len(), 2);
+        let ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Profile(
+            crate::SimplyLoveProfileRequest::UpdatePlayerOptions {
+                side: request_side,
+                options,
+                heart_rate_device_id,
+            },
+        )) = &effects[0]
+        else {
+            panic!("changed player options should be persisted before feedback");
+        };
+        assert_eq!(*request_side, side);
+        assert_eq!(options, options_data);
+        assert_eq!(heart_rate_device_id, selected_hrm);
+        assert_sfx(&effects[1], "assets/sounds/change_value.ogg");
+    }
+
     #[test]
     fn queued_audio_requests_precede_navigation() {
         ensure_i18n();
@@ -1782,7 +1803,7 @@ pub(super) mod tests {
         queue_sfx(&mut state, "assets/sounds/change_value.ogg");
         queue_sfx(&mut state, "assets/sounds/start.ogg");
 
-        let effect = prepend_pending_audio(&mut state, ThemeEffect::Navigate(Screen::Gameplay));
+        let effect = prepend_pending_effects(&mut state, ThemeEffect::Navigate(Screen::Gameplay));
         let ThemeEffect::Batch(effects) = effect else {
             panic!("queued Player Options audio should precede navigation");
         };
@@ -1799,7 +1820,7 @@ pub(super) mod tests {
             effects[3],
             ThemeEffect::Navigate(Screen::Gameplay)
         ));
-        assert!(state.pending_audio.is_empty());
+        assert!(state.pending_effects.is_empty());
     }
 
     #[test]
@@ -1831,14 +1852,20 @@ pub(super) mod tests {
         let ThemeEffect::Batch(effects) = effect else {
             panic!("rate update and change cue should be batched");
         };
-        assert_eq!(effects.len(), 2);
+        assert_eq!(effects.len(), 3);
         assert!(matches!(
             effects[0],
+            ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Profile(
+                crate::SimplyLoveProfileRequest::SetMusicRate(rate)
+            )) if rate == state.music_rate && rate > before
+        ));
+        assert!(matches!(
+            effects[1],
             ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Audio(
                 AudioRequest::SetMusicRate(rate)
             )) if rate == state.music_rate && rate > before
         ));
-        assert_sfx(&effects[1], "assets/sounds/change_value.ogg");
+        assert_sfx(&effects[2], "assets/sounds/change_value.ogg");
     }
 
     #[test]
@@ -1870,7 +1897,12 @@ pub(super) mod tests {
 
         let press_effect = update(&mut state, 0.0, &asset_manager)
             .expect("initial choice change should emit its queued sound");
-        assert_sfx(&press_effect, "assets/sounds/change_value.ogg");
+        assert_profile_update_then_sfx(
+            &press_effect,
+            PlayerSide::P1,
+            &state.player_options[P1],
+            &state.heart_rate_device_ids[P1],
+        );
         assert_eq!(state.speed_mod[P1].value, after_press);
 
         let repeat_effect = update(
@@ -1879,7 +1911,12 @@ pub(super) mod tests {
             &asset_manager,
         )
         .expect("held choice repeat should emit its queued sound");
-        assert_sfx(&repeat_effect, "assets/sounds/change_value.ogg");
+        assert_profile_update_then_sfx(
+            &repeat_effect,
+            PlayerSide::P1,
+            &state.player_options[P1],
+            &state.heart_rate_device_ids[P1],
+        );
         assert!(state.speed_mod[P1].value > after_press);
     }
 
@@ -2033,14 +2070,14 @@ pub(super) mod tests {
             .get_mut(RowId::BackgroundFilter)
             .unwrap()
             .selected_choice_index[P1] = 0;
-        state.player_profiles[P1].background_filter = BackgroundFilter::from_percent(95);
+        state.player_options[P1].background_filter = BackgroundFilter::from_percent(95);
         state.pane_mut().selected_row[P1] = row_index;
 
         // delta=0 should still apply the current choice
         super::change_choice_for_player(&mut state, &asset_manager, P1, 0, super::NavWrap::Wrap);
 
         assert_eq!(
-            state.player_profiles[P1].background_filter,
+            state.player_options[P1].background_filter,
             BackgroundFilter::OFF,
             "delta=0 must apply the current selected index to the profile"
         );
@@ -2101,7 +2138,6 @@ pub(super) mod tests {
             },
             writeback: BitmaskWriteback {
                 project: |_, _, _| {},
-                persist_for_side: |_, _| {},
                 bit_mapping: BitMapping::Sequential { width: 5 },
                 sync_visibility: false,
             },
@@ -2146,7 +2182,6 @@ pub(super) mod tests {
                 p.judgment_tilt = v;
                 super::Outcome::persisted_with_visibility()
             },
-            persist_for_side: profile::update_judgment_tilt_for_side,
             init: None,
         };
         let tilt_row = Row {
@@ -2485,7 +2520,6 @@ pub(super) mod tests {
             },
             writeback: BitmaskWriteback {
                 project: |_, _, _| {},
-                persist_for_side: |_, _| {},
                 bit_mapping: BitMapping::Sequential { width: 5 },
                 sync_visibility: false,
             },
@@ -2713,7 +2747,7 @@ pub(super) mod tests {
     fn pane_switch_refreshes_shared_row_defaults() {
         ensure_i18n();
         let (mut state, _asset_manager) = setup_state();
-        state.player_profiles[P1].mini_percent = 37;
+        state.player_options[P1].mini_percent = 37;
         state.panes[super::OptionsPane::Display.index()]
             .row_map
             .get_mut(RowId::Mini)
@@ -2973,13 +3007,13 @@ pub(super) mod tests {
     fn init_cycle_row_from_binding_uses_init_function() {
         let binding: ChoiceBinding<usize> = ChoiceBinding::<usize> {
             apply: |_, _| super::Outcome::NONE,
-            persist_for_side: |_, _| {},
             init: Some(CycleInit {
                 from_profile: |_| 2,
             }),
         };
         let mut row = cycle_test_row(&["A", "B", "C", "D"], [0, 0]);
-        let applied = init_cycle_row_from_binding(&mut row, &binding, &Profile::default(), P1);
+        let applied =
+            init_cycle_row_from_binding(&mut row, &binding, &PlayerOptionsData::default(), P1);
         assert!(applied, "binding has init; helper must apply it");
         assert_eq!(row.selected_choice_index[P1], 2);
         assert_eq!(row.selected_choice_index[P2], 0, "P2 untouched");
@@ -2989,13 +3023,12 @@ pub(super) mod tests {
     fn init_cycle_row_from_binding_clamps_to_choices_length() {
         let binding: ChoiceBinding<usize> = ChoiceBinding::<usize> {
             apply: |_, _| super::Outcome::NONE,
-            persist_for_side: |_, _| {},
             init: Some(CycleInit {
                 from_profile: |_| 99,
             }),
         };
         let mut row = cycle_test_row(&["A", "B", "C"], [0, 0]);
-        init_cycle_row_from_binding(&mut row, &binding, &Profile::default(), P1);
+        init_cycle_row_from_binding(&mut row, &binding, &PlayerOptionsData::default(), P1);
         assert_eq!(
             row.selected_choice_index[P1], 2,
             "out-of-range init must clamp to choices.len()-1"
@@ -3006,11 +3039,11 @@ pub(super) mod tests {
     fn init_cycle_row_from_binding_returns_false_without_init() {
         let binding: ChoiceBinding<usize> = ChoiceBinding::<usize> {
             apply: |_, _| super::Outcome::NONE,
-            persist_for_side: |_, _| {},
             init: None,
         };
         let mut row = cycle_test_row(&["A", "B", "C"], [1, 1]);
-        let applied = init_cycle_row_from_binding(&mut row, &binding, &Profile::default(), P1);
+        let applied =
+            init_cycle_row_from_binding(&mut row, &binding, &PlayerOptionsData::default(), P1);
         assert!(!applied, "no init contract => helper reports no-op");
         assert_eq!(
             row.selected_choice_index,
@@ -3024,14 +3057,14 @@ pub(super) mod tests {
         let binding = NumericBinding {
             parse: super::parse_i32_percent,
             apply: |_, _| super::Outcome::NONE,
-            persist_for_side: |_, _| {},
             init: Some(NumericInit {
                 from_profile: |_| 50,
                 format: |v| format!("{v}%"),
             }),
         };
         let mut row = numeric_test_row(&["0%", "25%", "50%", "75%", "100%"], [0, 0]);
-        let applied = init_numeric_row_from_binding(&mut row, &binding, &Profile::default(), P2);
+        let applied =
+            init_numeric_row_from_binding(&mut row, &binding, &PlayerOptionsData::default(), P2);
         assert!(applied);
         assert_eq!(row.selected_choice_index[P2], 2);
         assert_eq!(row.selected_choice_index[P1], 0, "P1 untouched");
@@ -3042,14 +3075,14 @@ pub(super) mod tests {
         let binding = NumericBinding {
             parse: super::parse_i32_percent,
             apply: |_, _| super::Outcome::NONE,
-            persist_for_side: |_, _| {},
             init: Some(NumericInit {
                 from_profile: |_| 33,
                 format: |v| format!("{v}%"),
             }),
         };
         let mut row = numeric_test_row(&["0%", "50%", "100%"], [1, 1]);
-        let applied = init_numeric_row_from_binding(&mut row, &binding, &Profile::default(), P1);
+        let applied =
+            init_numeric_row_from_binding(&mut row, &binding, &PlayerOptionsData::default(), P1);
         assert!(
             applied,
             "binding has init; helper applied it (even if no-op)"
@@ -3066,11 +3099,11 @@ pub(super) mod tests {
         let binding = NumericBinding {
             parse: super::parse_i32_percent,
             apply: |_, _| super::Outcome::NONE,
-            persist_for_side: |_, _| {},
             init: None,
         };
         let mut row = numeric_test_row(&["0%", "50%", "100%"], [1, 1]);
-        let applied = init_numeric_row_from_binding(&mut row, &binding, &Profile::default(), P1);
+        let applied =
+            init_numeric_row_from_binding(&mut row, &binding, &PlayerOptionsData::default(), P1);
         assert!(!applied);
         assert_eq!(row.selected_choice_index, [1, 1]);
     }
@@ -3089,14 +3122,14 @@ pub(super) mod tests {
 
         // Mutate every profile field whose Main pane row was migrated to the
         // CycleInit / NumericInit contract.
-        let p = &mut state.player_profiles[P1];
+        let p = &mut state.player_options[P1];
         p.perspective = Perspective::Distant;
         p.combo_font = ComboFont::Wendy;
         p.background_filter = BackgroundFilter::from_i32(42);
         p.visual_delay_ms = 35;
         p.global_offset_shift_ms = -45;
 
-        let profile = state.player_profiles[P1].clone();
+        let profile = state.player_options[P1].clone();
         let noteskin_names = test_noteskin_catalog().names;
         let mut main_row_map = super::build_rows(
             &state.song,
@@ -3144,7 +3177,7 @@ pub(super) mod tests {
         ensure_i18n();
         let (mut state, _asset_manager) = setup_state();
 
-        let p = &mut state.player_profiles[P1];
+        let p = &mut state.player_options[P1];
         p.perspective = Perspective::Distant;
         p.combo_font = ComboFont::Wendy;
         p.background_filter = BackgroundFilter::from_i32(42);
@@ -3156,7 +3189,7 @@ pub(super) mod tests {
         p.note_field_offset_x = 17;
         p.note_field_offset_y = -22;
 
-        let profile = state.player_profiles[P1].clone();
+        let profile = state.player_options[P1].clone();
         let noteskin_names = test_noteskin_catalog().names;
         let mut row_map = super::build_rows(
             &state.song,
@@ -3211,13 +3244,13 @@ pub(super) mod tests {
         ensure_i18n();
         let (mut state, _asset_manager) = setup_state();
 
-        let p = &mut state.player_profiles[P1];
+        let p = &mut state.player_options[P1];
         p.judgment_offset_x = 10_000; // clamps to HUD_OFFSET_MAX
         p.note_field_offset_x = -10; // clamps to 0 (range 0..50)
         p.visual_delay_ms = -10_000; // clamps to -100
         p.spacing_percent = 100_000; // clamps to SPACING_PERCENT_MAX
 
-        let profile = state.player_profiles[P1].clone();
+        let profile = state.player_options[P1].clone();
         let noteskin_names = test_noteskin_catalog().names;
         let mut main_row_map = super::build_rows(
             &state.song,
@@ -3276,7 +3309,7 @@ pub(super) mod tests {
         ensure_i18n();
         let (mut state, _asset_manager) = setup_state();
 
-        let p = &mut state.player_profiles[P1];
+        let p = &mut state.player_options[P1];
         p.turn_option = super::TURN_OPTION_VARIANTS[1];
         p.lifemeter_type = super::LIFE_METER_TYPE_VARIANTS[1];
         p.step_statistics = StepStatisticsMask::SONG_BANNER | StepStatisticsMask::STEP_COUNTS;
@@ -3312,7 +3345,7 @@ pub(super) mod tests {
         p.average_error_bar_intensity = 1.5;
         p.average_error_bar_interval_ms = 700;
 
-        let profile = state.player_profiles[P1].clone();
+        let profile = state.player_options[P1].clone();
         let noteskin_names = test_noteskin_catalog().names;
         let mut row_map = super::build_rows(
             &state.song,
@@ -3556,9 +3589,6 @@ pub(super) mod tests {
                 project: |_, p, b| {
                     p.insert_active_mask = InsertMask::from_bits_truncate(b as u8);
                 },
-                persist_for_side: |s, p| {
-                    profile::update_insert_mask_for_side(s, p.insert_active_mask);
-                },
                 bit_mapping: BitMapping::Sequential { width: 7 },
                 sync_visibility: false,
             },
@@ -3571,7 +3601,7 @@ pub(super) mod tests {
             2,
         );
         state.option_masks[P1].insert = InsertMask::empty();
-        state.player_profiles[P1].insert_active_mask = InsertMask::empty();
+        state.player_options[P1].insert_active_mask = InsertMask::empty();
 
         let active = session_active_players(&state);
         handle_start_event(&mut state, &asset_manager, active, P1);
@@ -3582,7 +3612,7 @@ pub(super) mod tests {
             "Insert bit at choice index 2 should be set"
         );
         assert_eq!(
-            state.player_profiles[P1].insert_active_mask.bits(),
+            state.player_options[P1].insert_active_mask.bits(),
             1u8 << 2,
             "Insert profile should mirror the mask"
         );
@@ -3591,7 +3621,7 @@ pub(super) mod tests {
         handle_start_event(&mut state, &asset_manager, active, P1);
         assert_eq!(state.option_masks[P1].insert, InsertMask::empty());
         assert_eq!(
-            state.player_profiles[P1].insert_active_mask,
+            state.player_options[P1].insert_active_mask,
             InsertMask::empty()
         );
     }
@@ -3614,9 +3644,6 @@ pub(super) mod tests {
             writeback: BitmaskWriteback {
                 project: |_, p, b| {
                     p.insert_active_mask = InsertMask::from_bits_truncate(b as u8);
-                },
-                persist_for_side: |s, p| {
-                    profile::update_insert_mask_for_side(s, p.insert_active_mask);
                 },
                 bit_mapping: BitMapping::Sequential { width: 7 },
                 sync_visibility: false,
@@ -3657,9 +3684,6 @@ pub(super) mod tests {
                 project: |_, p, b| {
                     p.remove_active_mask = RemoveMask::from_bits_truncate(b as u8);
                 },
-                persist_for_side: |s, p| {
-                    profile::update_remove_mask_for_side(s, p.remove_active_mask);
-                },
                 bit_mapping: BitMapping::Sequential { width: 8 },
                 sync_visibility: false,
             },
@@ -3672,16 +3696,13 @@ pub(super) mod tests {
             5,
         );
         state.option_masks[P1].remove = RemoveMask::empty();
-        state.player_profiles[P1].remove_active_mask = RemoveMask::empty();
+        state.player_options[P1].remove_active_mask = RemoveMask::empty();
 
         let active = session_active_players(&state);
         handle_start_event(&mut state, &asset_manager, active, P1);
 
         assert_eq!(state.option_masks[P1].remove.bits(), 1u8 << 5);
-        assert_eq!(
-            state.player_profiles[P1].remove_active_mask.bits(),
-            1u8 << 5
-        );
+        assert_eq!(state.player_options[P1].remove_active_mask.bits(), 1u8 << 5);
     }
 
     #[test]
@@ -3699,9 +3720,6 @@ pub(super) mod tests {
                 project: |_, p, b| {
                     p.holds_active_mask = HoldsMask::from_bits_truncate(b as u8);
                 },
-                persist_for_side: |s, p| {
-                    profile::update_holds_mask_for_side(s, p.holds_active_mask);
-                },
                 bit_mapping: BitMapping::Sequential { width: 5 },
                 sync_visibility: false,
             },
@@ -3715,13 +3733,13 @@ pub(super) mod tests {
             3,
         );
         state.option_masks[P1].holds = HoldsMask::empty();
-        state.player_profiles[P1].holds_active_mask = HoldsMask::empty();
+        state.player_options[P1].holds_active_mask = HoldsMask::empty();
 
         let active = session_active_players(&state);
         handle_start_event(&mut state, &asset_manager, active, P1);
 
         assert_eq!(state.option_masks[P1].holds.bits(), 1u8 << 3);
-        assert_eq!(state.player_profiles[P1].holds_active_mask.bits(), 1u8 << 3);
+        assert_eq!(state.player_options[P1].holds_active_mask.bits(), 1u8 << 3);
     }
 
     #[test]
@@ -3739,9 +3757,6 @@ pub(super) mod tests {
                 project: |_, p, b| {
                     p.accel_effects_active_mask = AccelEffectsMask::from_bits_truncate(b as u8);
                 },
-                persist_for_side: |s, p| {
-                    profile::update_accel_effects_mask_for_side(s, p.accel_effects_active_mask);
-                },
                 bit_mapping: BitMapping::Sequential { width: 5 },
                 sync_visibility: false,
             },
@@ -3754,14 +3769,14 @@ pub(super) mod tests {
             1,
         );
         state.option_masks[P1].accel_effects = AccelEffectsMask::empty();
-        state.player_profiles[P1].accel_effects_active_mask = AccelEffectsMask::empty();
+        state.player_options[P1].accel_effects_active_mask = AccelEffectsMask::empty();
 
         let active = session_active_players(&state);
         handle_start_event(&mut state, &asset_manager, active, P1);
 
         assert_eq!(state.option_masks[P1].accel_effects.bits(), 1u8 << 1);
         assert_eq!(
-            state.player_profiles[P1].accel_effects_active_mask.bits(),
+            state.player_options[P1].accel_effects_active_mask.bits(),
             1u8 << 1
         );
     }
@@ -3780,9 +3795,6 @@ pub(super) mod tests {
             writeback: BitmaskWriteback {
                 project: |_, p, b| {
                     p.visual_effects_active_mask = VisualEffectsMask::from_bits_truncate(b as u16);
-                },
-                persist_for_side: |s, p| {
-                    profile::update_visual_effects_mask_for_side(s, p.visual_effects_active_mask);
                 },
                 bit_mapping: BitMapping::Sequential { width: 10 },
                 sync_visibility: false,
@@ -3807,14 +3819,14 @@ pub(super) mod tests {
             9,
         );
         state.option_masks[P1].visual_effects = VisualEffectsMask::empty();
-        state.player_profiles[P1].visual_effects_active_mask = VisualEffectsMask::empty();
+        state.player_options[P1].visual_effects_active_mask = VisualEffectsMask::empty();
 
         let active = session_active_players(&state);
         handle_start_event(&mut state, &asset_manager, active, P1);
 
         assert_eq!(state.option_masks[P1].visual_effects.bits(), 1u16 << 9);
         assert_eq!(
-            state.player_profiles[P1].visual_effects_active_mask.bits(),
+            state.player_options[P1].visual_effects_active_mask.bits(),
             1u16 << 9
         );
     }
@@ -3837,12 +3849,6 @@ pub(super) mod tests {
                     p.appearance_effects_active_mask =
                         AppearanceEffectsMask::from_bits_truncate(b as u8);
                 },
-                persist_for_side: |s, p| {
-                    profile::update_appearance_effects_mask_for_side(
-                        s,
-                        p.appearance_effects_active_mask,
-                    );
-                },
                 bit_mapping: BitMapping::Sequential { width: 5 },
                 sync_visibility: false,
             },
@@ -3855,14 +3861,14 @@ pub(super) mod tests {
             4,
         );
         state.option_masks[P1].appearance_effects = AppearanceEffectsMask::empty();
-        state.player_profiles[P1].appearance_effects_active_mask = AppearanceEffectsMask::empty();
+        state.player_options[P1].appearance_effects_active_mask = AppearanceEffectsMask::empty();
 
         let active = session_active_players(&state);
         handle_start_event(&mut state, &asset_manager, active, P1);
 
         assert_eq!(state.option_masks[P1].appearance_effects.bits(), 1u8 << 4);
         assert_eq!(
-            state.player_profiles[P1]
+            state.player_options[P1]
                 .appearance_effects_active_mask
                 .bits(),
             1u8 << 4

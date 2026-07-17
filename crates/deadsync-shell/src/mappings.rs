@@ -7,6 +7,7 @@ pub(crate) fn runtime_view() -> MappingsRuntimeView {
     let cfg = config::get();
     MappingsRuntimeView {
         keymap: get_keymap(),
+        machine_font: cfg.machine_font,
         input_debounce_seconds: cfg.input_debounce_seconds,
         dedicated_three_key_nav: cfg.three_key_navigation && cfg.only_dedicated_menu_buttons,
     }

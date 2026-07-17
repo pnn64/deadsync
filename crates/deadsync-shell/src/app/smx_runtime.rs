@@ -20,6 +20,11 @@ impl App {
     #[inline(always)]
     pub(super) fn sync_pad_config_fsr(&mut self, cfg: &config::Config) {
         use screens::pad_config;
+        pad_config::set_fsr_enabled(&mut self.state.screens.pad_config_state, cfg.use_fsrs);
+        pad_config::set_fsr_enabled(
+            &mut self.state.screens.select_music_state.pad_config_overlay,
+            cfg.use_fsrs,
+        );
         let screen = self.state.screens.current_screen;
         let Some(plan) = pad_config_fsr_plan(
             screen,
@@ -226,7 +231,6 @@ impl App {
         if plan.latch {
             self.state.screens.smx_autoprompt_latched = true;
         }
-        screens::smx_assign::set_pending_return(CurrentScreen::Menu);
         self.handle_navigation_action(CurrentScreen::SmxAssignPads);
     }
 

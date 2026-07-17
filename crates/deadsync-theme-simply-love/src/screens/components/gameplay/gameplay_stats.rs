@@ -1,7 +1,7 @@
 use crate::act;
 use crate::assets::AssetManager;
 use crate::assets::i18n::{LookupKey, lookup_key, tr};
-use crate::assets::{FontRole, current_machine_font_key};
+use crate::assets::{FontRole, machine_font_key};
 use crate::screens::components::gameplay::score_counter::{
     ScoreCounterParams, prewarm_score_counter_layout, push_score_counter,
 };
@@ -24,7 +24,6 @@ use deadlib_render::BlendMode;
 use deadsync_core::input::MAX_PLAYERS;
 use deadsync_gameplay::{FantasticWindowOptions, blue_fantastic_window_ms};
 use deadsync_profile as profile_data;
-use deadsync_profile::compat as profile;
 use deadsync_profile_gameplay::score_display_mode_from_profile;
 use deadsync_rules::judgment::{self, JudgeGrade};
 use deadsync_rules::timing::LiveTimingSnapshot;
@@ -70,6 +69,11 @@ static LIVE_TIMING_LABELS: LazyLock<[Arc<str>; 3]> = LazyLock::new(|| {
         Arc::<str>::from("Max (64n/All [ms])"),
     ]
 });
+
+#[inline(always)]
+fn gameplay_font_key(state: &State, role: FontRole) -> &'static str {
+    machine_font_key(state.machine_font(), role)
+}
 
 #[inline(always)]
 fn player_blue_window_ms(state: &State, player_idx: usize) -> f32 {
@@ -619,6 +623,7 @@ fn glyph_width_scaled(
 #[inline(always)]
 fn push_versus_count_texts(
     actors: &mut Vec<Actor>,
+    state: &State,
     is_p1: bool,
     anchor_x: f32,
     y: f32,
@@ -636,7 +641,7 @@ fn push_versus_count_texts(
     if is_p1 {
         if !dim_text.is_empty() {
             let mut a = act!(text:
-                font(current_machine_font_key(FontRole::ScreenEval)): settext(dim_text):
+                font(gameplay_font_key(state, FontRole::ScreenEval)): settext(dim_text):
                 align(0.0, 0.5): xy(anchor_x, y):
                 zoom(numbers_zoom_y):
                 diffuse(dim[0], dim[1], dim[2], dim[3]):
@@ -651,7 +656,7 @@ fn push_versus_count_texts(
         }
         if !bright_text.is_empty() {
             let mut a = act!(text:
-                font(current_machine_font_key(FontRole::ScreenEval)): settext(bright_text):
+                font(gameplay_font_key(state, FontRole::ScreenEval)): settext(bright_text):
                 align(0.0, 0.5): xy(anchor_x + dim_len * digit_w, y):
                 zoom(numbers_zoom_y):
                 diffuse(bright[0], bright[1], bright[2], bright[3]):
@@ -667,7 +672,7 @@ fn push_versus_count_texts(
     } else {
         if !bright_text.is_empty() {
             let mut a = act!(text:
-                font(current_machine_font_key(FontRole::ScreenEval)): settext(bright_text):
+                font(gameplay_font_key(state, FontRole::ScreenEval)): settext(bright_text):
                 align(1.0, 0.5): xy(anchor_x, y):
                 zoom(numbers_zoom_y):
                 diffuse(bright[0], bright[1], bright[2], bright[3]):
@@ -682,7 +687,7 @@ fn push_versus_count_texts(
         }
         if !dim_text.is_empty() {
             let mut a = act!(text:
-                font(current_machine_font_key(FontRole::ScreenEval)): settext(dim_text):
+                font(gameplay_font_key(state, FontRole::ScreenEval)): settext(dim_text):
                 align(1.0, 0.5): xy(anchor_x - bright_len * digit_w, y):
                 zoom(numbers_zoom_y):
                 diffuse(dim[0], dim[1], dim[2], dim[3]):
@@ -745,7 +750,7 @@ pub fn prewarm_text_layout(
     asset_manager: &AssetManager,
     state: &State,
 ) {
-    prewarm_score_counter_layout(cache, fonts, current_machine_font_key(FontRole::Numbers));
+    prewarm_score_counter_layout(cache, fonts, gameplay_font_key(state, FontRole::Numbers));
     let mut max_count = 0u32;
     for player in 0..state.num_players() {
         let totals = state.display_totals_for_player(player);
@@ -767,13 +772,13 @@ pub fn prewarm_text_layout(
         let (dim, bright) = cached_padded_runs(count, digits);
         cache.prewarm_text(
             fonts,
-            current_machine_font_key(FontRole::ScreenEval),
+            gameplay_font_key(state, FontRole::ScreenEval),
             dim.as_ref(),
             None,
         );
         cache.prewarm_text(
             fonts,
-            current_machine_font_key(FontRole::ScreenEval),
+            gameplay_font_key(state, FontRole::ScreenEval),
             bright.as_ref(),
             None,
         );
@@ -781,13 +786,13 @@ pub fn prewarm_text_layout(
     let (dim, bright) = cached_padded_runs(max_count, digits);
     cache.prewarm_text(
         fonts,
-        current_machine_font_key(FontRole::ScreenEval),
+        gameplay_font_key(state, FontRole::ScreenEval),
         dim.as_ref(),
         None,
     );
     cache.prewarm_text(
         fonts,
-        current_machine_font_key(FontRole::ScreenEval),
+        gameplay_font_key(state, FontRole::ScreenEval),
         bright.as_ref(),
         None,
     );
@@ -802,13 +807,13 @@ pub fn prewarm_text_layout(
             let (dim, bright) = cached_padded_runs(count, digits);
             cache.prewarm_text(
                 fonts,
-                current_machine_font_key(FontRole::ScreenEval),
+                gameplay_font_key(state, FontRole::ScreenEval),
                 dim.as_ref(),
                 None,
             );
             cache.prewarm_text(
                 fonts,
-                current_machine_font_key(FontRole::ScreenEval),
+                gameplay_font_key(state, FontRole::ScreenEval),
                 bright.as_ref(),
                 None,
             );
@@ -818,13 +823,13 @@ pub fn prewarm_text_layout(
                 let (dim, bright) = cached_padded_runs(count, digits);
                 cache.prewarm_text(
                     fonts,
-                    current_machine_font_key(FontRole::ScreenEval),
+                    gameplay_font_key(state, FontRole::ScreenEval),
                     dim.as_ref(),
                     None,
                 );
                 cache.prewarm_text(
                     fonts,
-                    current_machine_font_key(FontRole::ScreenEval),
+                    gameplay_font_key(state, FontRole::ScreenEval),
                     bright.as_ref(),
                     None,
                 );
@@ -1209,7 +1214,7 @@ pub fn push_versus_step_stats(
 
     if show_judgments_for[0] || show_judgments_for[1] {
         asset_manager.with_fonts(|all_fonts| {
-            asset_manager.with_font(current_machine_font_key(FontRole::ScreenEval), |f| {
+            asset_manager.with_font(gameplay_font_key(state, FontRole::ScreenEval), |f| {
                 let digit_w = glyph_width_scaled(f, all_fonts, '0', numbers_zoom_x);
                 if digit_w <= 0.0 {
                     return;
@@ -1291,6 +1296,7 @@ pub fn push_versus_step_stats(
                             };
                             push_versus_count_texts(
                                 actors,
+                                state,
                                 is_p1,
                                 anchor_x,
                                 y,
@@ -1331,6 +1337,7 @@ pub fn push_versus_step_stats(
                             };
                             push_versus_count_texts(
                                 actors,
+                                state,
                                 is_p1,
                                 anchor_x,
                                 y,
@@ -1384,7 +1391,7 @@ pub fn push_versus_step_stats(
             asset_manager.fonts(),
             ScoreCounterParams {
                 value: score_value,
-                font: current_machine_font_key(FontRole::Numbers),
+                font: gameplay_font_key(state, FontRole::Numbers),
                 position: [x, screen_center_y() - 150.0],
                 align: [1.0, 1.0],
                 text_align: TextAlign::Right,
@@ -1408,7 +1415,7 @@ pub fn push_versus_step_stats(
                 asset_manager.fonts(),
                 ScoreCounterParams {
                     value: hard_ex_percent.max(0.0),
-                    font: current_machine_font_key(FontRole::Numbers),
+                    font: gameplay_font_key(state, FontRole::Numbers),
                     position: [
                         if is_p1 { x + 1.0 } else { x - 52.0 },
                         screen_center_y() - 154.0,
@@ -1531,7 +1538,7 @@ pub fn push_double_step_stats(
     step_stats_gifs::push_step_stats_extra(
         actors,
         state,
-        profile::get_session_player_side(),
+        gameplay_screen::runtime_profile_side(state, 0),
         0,
         pane_cx,
         pane_cy,
@@ -1563,7 +1570,7 @@ pub fn push_double_step_stats(
         let y_base = -280.0;
 
         asset_manager.with_fonts(|all_fonts| {
-            asset_manager.with_font(current_machine_font_key(FontRole::ScreenEval), |f| {
+            asset_manager.with_font(gameplay_font_key(state, FontRole::ScreenEval), |f| {
                 let numbers_zoom = base_zoom * 0.5;
                 let digit_w = glyph_width_scaled(f, all_fonts, '0', numbers_zoom);
                 if digit_w <= 0.0 {
@@ -1608,7 +1615,7 @@ pub fn push_double_step_stats(
 
                         if !dim_text.is_empty() {
                             actors.push(act!(text:
-                                font(current_machine_font_key(FontRole::ScreenEval)): settext(dim_text):
+                                font(gameplay_font_key(state, FontRole::ScreenEval)): settext(dim_text):
                                 align(0.0, 0.5): xy(numbers_left_x, y_numbers):
                                 zoom(numbers_zoom):
                                 diffuse(dim[0], dim[1], dim[2], dim[3]):
@@ -1618,7 +1625,7 @@ pub fn push_double_step_stats(
                         }
                         if !bright_text.is_empty() {
                             actors.push(act!(text:
-                                font(current_machine_font_key(FontRole::ScreenEval)): settext(bright_text):
+                                font(gameplay_font_key(state, FontRole::ScreenEval)): settext(bright_text):
                                 align(0.0, 0.5): xy(numbers_left_x + dim_len * digit_w, y_numbers):
                                 zoom(numbers_zoom):
                                 diffuse(bright[0], bright[1], bright[2], bright[3]):
@@ -1704,7 +1711,7 @@ pub fn push_double_step_stats(
 
                         if !dim_text.is_empty() {
                             actors.push(act!(text:
-                                font(current_machine_font_key(FontRole::ScreenEval)): settext(dim_text):
+                                font(gameplay_font_key(state, FontRole::ScreenEval)): settext(dim_text):
                                 align(0.0, 0.5): xy(numbers_left_x, y_numbers):
                                 zoom(numbers_zoom):
                                 diffuse(dim[0], dim[1], dim[2], dim[3]):
@@ -1714,7 +1721,7 @@ pub fn push_double_step_stats(
                         }
                         if !bright_text.is_empty() {
                             actors.push(act!(text:
-                                font(current_machine_font_key(FontRole::ScreenEval)): settext(bright_text):
+                                font(gameplay_font_key(state, FontRole::ScreenEval)): settext(bright_text):
                                 align(0.0, 0.5): xy(numbers_left_x + dim_len * digit_w, y_numbers):
                                 zoom(numbers_zoom):
                                 diffuse(bright[0], bright[1], bright[2], bright[3]):
@@ -1768,12 +1775,14 @@ pub fn push_double_step_stats(
     // Scorebox.lua (double): x(GetNotefieldWidth() - 140), y(-115)
     if mask.contains(profile_data::StepStatisticsMask::STEP_COUNTS) && display_scorebox {
         let frame = step_stats_theme::double_scorebox_frame(layout, notefield_width);
-        let side = profile::get_session_player_side();
+        let side = gameplay_screen::runtime_profile_side(state, 0);
         let snapshot = gameplay_screen::scorebox_snapshot_for_side(state, side);
         let profile_snapshot = gameplay_screen::scorebox_profile_for_side(state, side);
         actors.extend(gs_scorebox::gameplay_scorebox_actors_from_snapshot(
             snapshot,
             profile_snapshot,
+            gameplay_screen::scorebox_pane_filter(state),
+            gameplay_screen::scorebox_uses_srpg10(state),
             frame.center_x,
             frame.center_y,
             frame.zoom,
@@ -1882,7 +1891,7 @@ pub fn push_double_step_stats(
             actors,
             state,
             0,
-            profile::get_session_player_side(),
+            gameplay_screen::runtime_profile_side(state, 0),
             double_graph,
             song_info_text_zoom(StepStatsPaneLayout {
                 sidepane_center_x: pane_cx,
@@ -2108,7 +2117,7 @@ fn push_holds_mines_rolls_pane_at(
     actors.reserve(categories.len() * (digits_to_fmt * 2 + 2));
 
     asset_manager.with_fonts(|all_fonts| {
-        asset_manager.with_font(current_machine_font_key(FontRole::ScreenEval), |metrics_font| {
+        asset_manager.with_font(gameplay_font_key(state, FontRole::ScreenEval), |metrics_font| {
             let value_zoom = 0.4 * frame_zoom;
             let label_zoom = 0.833 * frame_zoom;
             const GRAY: [f32; 4] = color::rgba_hex("#5A6166");
@@ -2141,7 +2150,7 @@ fn push_holds_mines_rolls_pane_at(
                     let color = if original_index < possible_split { GRAY } else { white };
                     let x_pos = cursor_x - (char_idx as f32 * digit_width);
                     actors.push(act!(text:
-                        font(current_machine_font_key(FontRole::ScreenEval)): settext(digit_text(possible_bytes[original_index])):
+                        font(gameplay_font_key(state, FontRole::ScreenEval)): settext(digit_text(possible_bytes[original_index])):
                         align(1.0, 0.5): xy(x_pos, item_y):
                         zoom(value_zoom): diffuse(color[0], color[1], color[2], color[3]): z(70)
                     ));
@@ -2149,7 +2158,7 @@ fn push_holds_mines_rolls_pane_at(
                 cursor_x -= possible_bytes.len() as f32 * digit_width;
 
                 actors.push(act!(text:
-                    font(current_machine_font_key(FontRole::ScreenEval)): settext(SLASH_TEXT.clone()):
+                    font(gameplay_font_key(state, FontRole::ScreenEval)): settext(SLASH_TEXT.clone()):
                     align(1.0, 0.5): xy(cursor_x, item_y):
                     zoom(value_zoom): diffuse(GRAY[0], GRAY[1], GRAY[2], GRAY[3]): z(70)
                 ));
@@ -2160,7 +2169,7 @@ fn push_holds_mines_rolls_pane_at(
                     let color = if original_index < achieved_split { GRAY } else { white };
                     let x_pos = cursor_x - (char_idx as f32 * digit_width);
                     actors.push(act!(text:
-                        font(current_machine_font_key(FontRole::ScreenEval)): settext(digit_text(achieved_bytes[original_index])):
+                        font(gameplay_font_key(state, FontRole::ScreenEval)): settext(digit_text(achieved_bytes[original_index])):
                         align(1.0, 0.5): xy(x_pos, item_y):
                         zoom(value_zoom): diffuse(color[0], color[1], color[2], color[3]): z(70)
                     ));
@@ -2224,7 +2233,7 @@ fn build_holds_mines_rolls_pane(
     let row_height = 28.0 * frame.zoom;
     actors.reserve(categories.len() * (digits_to_fmt * 2 + 2));
 
-    asset_manager.with_fonts(|all_fonts| asset_manager.with_font(current_machine_font_key(FontRole::ScreenEval), |metrics_font| {
+    asset_manager.with_fonts(|all_fonts| asset_manager.with_font(gameplay_font_key(state, FontRole::ScreenEval), |metrics_font| {
         let value_zoom = 0.4 * frame.zoom;
         let label_zoom = 0.833 * frame.zoom;
         let gray = color::rgba_hex("#5A6166");
@@ -2266,7 +2275,7 @@ fn build_holds_mines_rolls_pane(
                 };
                 let x_pos = cursor_x - (char_idx as f32 * digit_width);
                 actors.push(act!(text:
-                    font(current_machine_font_key(FontRole::ScreenEval)): settext(digit_text(possible_bytes[original_index])):
+                    font(gameplay_font_key(state, FontRole::ScreenEval)): settext(digit_text(possible_bytes[original_index])):
                     align(1.0, 0.5): xy(x_pos, item_y):
                     zoom(value_zoom): diffuse(color[0], color[1], color[2], color[3]): z(70)
                 ));
@@ -2274,7 +2283,7 @@ fn build_holds_mines_rolls_pane(
             cursor_x -= possible_bytes.len() as f32 * digit_width;
 
             // 2. Draw slash
-            actors.push(act!(text: font(current_machine_font_key(FontRole::ScreenEval)): settext(SLASH_TEXT.clone()): align(1.0, 0.5): xy(cursor_x, item_y): zoom(value_zoom): diffuse(gray[0], gray[1], gray[2], gray[3]): z(70)));
+            actors.push(act!(text: font(gameplay_font_key(state, FontRole::ScreenEval)): settext(SLASH_TEXT.clone()): align(1.0, 0.5): xy(cursor_x, item_y): zoom(value_zoom): diffuse(gray[0], gray[1], gray[2], gray[3]): z(70)));
             cursor_x -= slash_width;
 
             // 3. Draw "achieved" number
@@ -2287,7 +2296,7 @@ fn build_holds_mines_rolls_pane(
                 };
                 let x_pos = cursor_x - (char_idx as f32 * digit_width);
                 actors.push(act!(text:
-                    font(current_machine_font_key(FontRole::ScreenEval)): settext(digit_text(achieved_bytes[original_index])):
+                    font(gameplay_font_key(state, FontRole::ScreenEval)): settext(digit_text(achieved_bytes[original_index])):
                     align(1.0, 0.5): xy(x_pos, item_y):
                     zoom(value_zoom): diffuse(color[0], color[1], color[2], color[3]): z(70)
                 ));
@@ -2321,6 +2330,8 @@ fn build_scorebox_pane(
     actors.extend(gs_scorebox::gameplay_scorebox_actors_from_snapshot(
         gameplay_screen::scorebox_snapshot_for_side(state, player_side),
         gameplay_screen::scorebox_profile_for_side(state, player_side),
+        gameplay_screen::scorebox_pane_filter(state),
+        gameplay_screen::scorebox_uses_srpg10(state),
         frame.center_x,
         frame.center_y,
         frame.zoom,
@@ -2475,7 +2486,7 @@ fn build_side_pane(
 
     if show_judgments || show_duration {
         asset_manager.with_fonts(|all_fonts| {
-            asset_manager.with_font(current_machine_font_key(FontRole::ScreenEval), |f| {
+            asset_manager.with_font(gameplay_font_key(state, FontRole::ScreenEval), |f| {
         let numbers_zoom = final_text_base_zoom * 0.5;
         let max_digit_w = glyph_width_scaled(f, all_fonts, '0', numbers_zoom);
         if max_digit_w <= 0.0 { return; }
@@ -2516,14 +2527,14 @@ fn build_side_pane(
                 if player_side == profile_data::PlayerSide::P1 {
                     if !bright_text.is_empty() {
                         actors.push(act!(text:
-                            font(current_machine_font_key(FontRole::ScreenEval)): settext(bright_text):
+                            font(gameplay_font_key(state, FontRole::ScreenEval)): settext(bright_text):
                             align(1.0, 0.5): xy(numbers_cx, world_y): zoom(numbers_zoom):
                             diffuse(bright[0], bright[1], bright[2], bright[3]): z(71)
                         ));
                     }
                     if !dim_text.is_empty() {
                         actors.push(act!(text:
-                            font(current_machine_font_key(FontRole::ScreenEval)): settext(dim_text):
+                            font(gameplay_font_key(state, FontRole::ScreenEval)): settext(dim_text):
                             align(1.0, 0.5): xy(numbers_cx - bright_len * max_digit_w, world_y):
                             zoom(numbers_zoom):
                             diffuse(dim[0], dim[1], dim[2], dim[3]): z(71)
@@ -2532,7 +2543,7 @@ fn build_side_pane(
                 } else {
                     if !dim_text.is_empty() {
                         actors.push(act!(text:
-                            font(current_machine_font_key(FontRole::ScreenEval)): settext(dim_text):
+                            font(gameplay_font_key(state, FontRole::ScreenEval)): settext(dim_text):
                             align(0.0, 0.5): xy(numbers_cx, world_y): zoom(numbers_zoom):
                             diffuse(dim[0], dim[1], dim[2], dim[3]): z(71):
                             horizalign(left)
@@ -2540,7 +2551,7 @@ fn build_side_pane(
                     }
                     if !bright_text.is_empty() {
                         actors.push(act!(text:
-                            font(current_machine_font_key(FontRole::ScreenEval)): settext(bright_text):
+                            font(gameplay_font_key(state, FontRole::ScreenEval)): settext(bright_text):
                             align(0.0, 0.5): xy(numbers_cx + dim_len * max_digit_w, world_y):
                             zoom(numbers_zoom):
                             diffuse(bright[0], bright[1], bright[2], bright[3]): z(71):
@@ -2627,14 +2638,14 @@ fn build_side_pane(
                 if player_side == profile_data::PlayerSide::P1 {
                     if !bright_text.is_empty() {
                         actors.push(act!(text:
-                            font(current_machine_font_key(FontRole::ScreenEval)): settext(bright_text):
+                            font(gameplay_font_key(state, FontRole::ScreenEval)): settext(bright_text):
                             align(1.0, 0.5): xy(numbers_cx, world_y): zoom(numbers_zoom):
                             diffuse(bright[0], bright[1], bright[2], bright[3]): z(71)
                         ));
                     }
                     if !dim_text.is_empty() {
                         actors.push(act!(text:
-                            font(current_machine_font_key(FontRole::ScreenEval)): settext(dim_text):
+                            font(gameplay_font_key(state, FontRole::ScreenEval)): settext(dim_text):
                             align(1.0, 0.5): xy(numbers_cx - bright_len * max_digit_w, world_y):
                             zoom(numbers_zoom):
                             diffuse(dim[0], dim[1], dim[2], dim[3]): z(71)
@@ -2643,7 +2654,7 @@ fn build_side_pane(
                 } else {
                     if !dim_text.is_empty() {
                         actors.push(act!(text:
-                            font(current_machine_font_key(FontRole::ScreenEval)): settext(dim_text):
+                            font(gameplay_font_key(state, FontRole::ScreenEval)): settext(dim_text):
                             align(0.0, 0.5): xy(numbers_cx, world_y): zoom(numbers_zoom):
                             diffuse(dim[0], dim[1], dim[2], dim[3]): z(71):
                             horizalign(left)
@@ -2651,7 +2662,7 @@ fn build_side_pane(
                     }
                     if !bright_text.is_empty() {
                         actors.push(act!(text:
-                            font(current_machine_font_key(FontRole::ScreenEval)): settext(bright_text):
+                            font(gameplay_font_key(state, FontRole::ScreenEval)): settext(bright_text):
                             align(0.0, 0.5): xy(numbers_cx + dim_len * max_digit_w, world_y):
                             zoom(numbers_zoom):
                             diffuse(bright[0], bright[1], bright[2], bright[3]): z(71):

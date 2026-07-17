@@ -1,5 +1,5 @@
 use super::*;
-use crate::assets::{FontRole, current_machine_font_key};
+use crate::assets::{FontRole, machine_font_key};
 use deadsync_profile::NoCmodAlternative;
 use deadsync_rules::scroll::ScrollSpeedSetting;
 
@@ -139,7 +139,7 @@ pub fn effective_scroll_speed_with_alt(
 
 #[inline(always)]
 pub(super) fn sync_profile_scroll_speed(
-    profile: &mut deadsync_profile::Profile,
+    profile: &mut deadsync_profile::PlayerOptionsData,
     speed_mod: &SpeedMod,
 ) {
     profile.scroll_speed = scroll_speed_for_mod(speed_mod);
@@ -152,9 +152,9 @@ pub(super) fn sync_profile_scroll_speed(
 /// For any player who is on CMod, is about to play a no-cmod chart, and has a
 /// non-`None` alternative configured, their CMod speed is converted (preserving
 /// on-screen speed) to the chosen X/M type. The substitution is written into
-/// the (non-persisted) `player_profiles[..].scroll_speed` snapshot as well as
+/// the (non-persisted) `player_options[..].scroll_speed` snapshot as well as
 /// returned, so both the arrow-scroll path (which reads the returned array) and
-/// the score-validity path (which reads `player_profiles`) observe the same
+/// the score-validity path (which reads `player_options`) observe the same
 /// effective speed. The persisted profile is never touched, so returning to
 /// song select restores the player's real mod automatically.
 pub fn apply_no_cmod_alternative(state: &mut State) -> [ScrollSpeedSetting; PLAYER_SLOTS] {
@@ -171,12 +171,12 @@ pub fn apply_no_cmod_alternative(state: &mut State) -> [ScrollSpeedSetting; PLAY
     std::array::from_fn(|player_idx| {
         let effective = effective_scroll_speed_with_alt(
             &state.speed_mod[player_idx],
-            state.player_profiles[player_idx].no_cmod_alternative,
+            state.player_options[player_idx].no_cmod_alternative,
             is_no_cmod,
             reference_bpm,
             rate,
         );
-        state.player_profiles[player_idx].scroll_speed = effective;
+        state.player_options[player_idx].scroll_speed = effective;
         effective
     })
 }
@@ -513,7 +513,7 @@ pub(super) fn speed_mod_helper_scaled_text(
     chart: Option<&ChartData>,
     speed_mod: &SpeedMod,
     music_rate: f32,
-    profile: &deadsync_profile::Profile,
+    profile: &deadsync_profile::PlayerOptionsData,
 ) -> String {
     let Some((mut lo, mut hi)) = speed_mod_bpm_pair(song, chart, speed_mod, music_rate) else {
         return String::new();
@@ -526,16 +526,26 @@ pub(super) fn speed_mod_helper_scaled_text(
 }
 
 #[inline(always)]
-pub(super) fn measure_wendy_text_width(asset_manager: &AssetManager, text: &str) -> f32 {
+pub(super) fn measure_header_text_width(
+    asset_manager: &AssetManager,
+    text: &str,
+    machine_font: crate::config::MachineFont,
+) -> f32 {
     let mut out_w = 1.0_f32;
     asset_manager.with_fonts(|all_fonts| {
-        asset_manager.with_font(current_machine_font_key(FontRole::Header), |metrics_font| {
-            let w = deadlib_present::font::measure_line_width_logical(metrics_font, text, all_fonts)
-                as f32;
-            if w.is_finite() && w > 0.0 {
-                out_w = w;
-            }
-        });
+        asset_manager.with_font(
+            machine_font_key(machine_font, FontRole::Header),
+            |metrics_font| {
+                let w = deadlib_present::font::measure_line_width_logical(
+                    metrics_font,
+                    text,
+                    all_fonts,
+                ) as f32;
+                if w.is_finite() && w > 0.0 {
+                    out_w = w;
+                }
+            },
+        );
     });
     out_w
 }

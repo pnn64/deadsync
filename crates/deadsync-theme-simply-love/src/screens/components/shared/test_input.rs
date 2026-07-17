@@ -1,5 +1,6 @@
 use crate::act;
-use crate::assets::{FontRole, current_machine_font_key};
+use crate::assets::{FontRole, machine_font_key};
+use crate::config::MachineFont;
 use deadlib_present::actors::Actor;
 use deadlib_present::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 use deadsync_input::KeyCode;
@@ -409,6 +410,7 @@ fn push_pad(
     pad_y: f32,
     show_menu_buttons: bool,
     show_player_label: bool,
+    player_label_font: Option<&'static str>,
     z: f32,
 ) {
     push_pad_scaled(
@@ -419,6 +421,7 @@ fn push_pad(
         pad_y,
         show_menu_buttons,
         show_player_label,
+        player_label_font,
         z,
         1.0,
     );
@@ -432,6 +435,7 @@ fn push_pad_scaled(
     pad_y: f32,
     show_menu_buttons: bool,
     show_player_label: bool,
+    player_label_font: Option<&'static str>,
     z: f32,
     scale: f32,
 ) {
@@ -451,7 +455,7 @@ fn push_pad_scaled(
         z(z)
     ));
 
-    if show_player_label {
+    if show_player_label && let Some(player_label_font) = player_label_font {
         let label = match slot {
             PlayerSlot::P1 => "Player 1",
             PlayerSlot::P2 => "Player 2",
@@ -460,7 +464,7 @@ fn push_pad_scaled(
             align(0.5, 0.5):
             xy(pad_x, pad_y - 130.0 * scale):
             zoom(0.7 * scale):
-            font(current_machine_font_key(FontRole::Header)):
+            font(player_label_font):
             settext(label):
             horizalign(center):
             z(z + 1.0)
@@ -575,11 +579,16 @@ fn push_polling_readout(actors: &mut Vec<Actor>, state: &State, z: f32) {
     ));
 }
 
-pub fn build_test_input_screen_content(state: &State, _active_color_index: i32) -> Vec<Actor> {
+pub fn build_test_input_screen_content(
+    state: &State,
+    _active_color_index: i32,
+    machine_font: MachineFont,
+) -> Vec<Actor> {
     let mut actors = Vec::with_capacity(96);
     let cx = screen_center_x();
     let cy = screen_center_y() - 20.0;
     let pad_spacing = 150.0;
+    let player_label_font = Some(machine_font_key(machine_font, FontRole::Header));
 
     push_pad(
         &mut actors,
@@ -589,6 +598,7 @@ pub fn build_test_input_screen_content(state: &State, _active_color_index: i32) 
         cy,
         true,
         true,
+        player_label_font,
         20.0,
     );
     push_pad(
@@ -599,6 +609,7 @@ pub fn build_test_input_screen_content(state: &State, _active_color_index: i32) 
         cy,
         true,
         true,
+        player_label_font,
         20.0,
     );
 
@@ -653,6 +664,7 @@ pub fn build_evaluation_pad(
         pad_y,
         false,
         false,
+        None,
         100.0,
         scale,
     );
@@ -751,6 +763,7 @@ pub fn build_evaluation_panel(
         pad_y,
         false,
         false,
+        None,
         100.0,
         pad_scale,
     );
@@ -837,6 +850,7 @@ pub fn build_select_music_overlay(
             cy,
             false,
             false,
+            None,
             1451.0,
         );
     }
@@ -849,6 +863,7 @@ pub fn build_select_music_overlay(
             cy,
             false,
             false,
+            None,
             1451.0,
         );
     }

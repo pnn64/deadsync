@@ -3,6 +3,7 @@ use deadsync_config::theme::{MachineFont, SrpgVariant, VisualStyle};
 pub use deadsync_theme::FontRole;
 use std::path::PathBuf;
 
+#[derive(Debug, PartialEq, Eq)]
 pub struct Assets {
     pub select_color: &'static str,
     pub shared_background: &'static str,
@@ -13,6 +14,7 @@ pub struct Assets {
     pub shared_background_size: [u32; 2],
 }
 
+#[derive(Debug, PartialEq, Eq)]
 pub struct EffectAssets {
     pub titlemenu_flycenter: &'static str,
     pub titlemenu_flytop: &'static str,
@@ -585,94 +587,6 @@ pub const fn srpg10_active(style: VisualStyle, variant: SrpgVariant) -> bool {
 }
 
 #[inline(always)]
-pub fn title_logo_texture_key(style: VisualStyle, variant: SrpgVariant) -> Option<&'static str> {
-    srpg10_active(style, variant).then_some(SRPG10_TITLE_LOGO)
-}
-
-#[inline(always)]
-pub fn select_color_texture_key(style: VisualStyle, variant: SrpgVariant) -> &'static str {
-    for_style_and_variant(style, variant).select_color
-}
-
-#[inline(always)]
-pub fn shared_background_texture_key(style: VisualStyle, variant: SrpgVariant) -> &'static str {
-    for_style_and_variant(style, variant).shared_background
-}
-
-#[inline(always)]
-pub fn titlemenu_flycenter_texture_key(style: VisualStyle, variant: SrpgVariant) -> &'static str {
-    for_style_and_variant(style, variant)
-        .effects
-        .titlemenu_flycenter
-}
-
-#[inline(always)]
-pub fn titlemenu_flytop_texture_key(style: VisualStyle, variant: SrpgVariant) -> &'static str {
-    for_style_and_variant(style, variant)
-        .effects
-        .titlemenu_flytop
-}
-
-#[inline(always)]
-pub fn titlemenu_flybottom_texture_key(style: VisualStyle, variant: SrpgVariant) -> &'static str {
-    for_style_and_variant(style, variant)
-        .effects
-        .titlemenu_flybottom
-}
-
-#[inline(always)]
-pub fn gameplayin_splode_texture_key(style: VisualStyle, variant: SrpgVariant) -> &'static str {
-    for_style_and_variant(style, variant)
-        .effects
-        .gameplayin_splode
-}
-
-#[inline(always)]
-pub fn gameplayin_minisplode_texture_key(style: VisualStyle, variant: SrpgVariant) -> &'static str {
-    for_style_and_variant(style, variant)
-        .effects
-        .gameplayin_minisplode
-}
-
-#[inline(always)]
-pub fn combo_100milestone_splode_texture_key(
-    style: VisualStyle,
-    variant: SrpgVariant,
-) -> &'static str {
-    for_style_and_variant(style, variant)
-        .effects
-        .combo_100milestone_splode
-}
-
-#[inline(always)]
-pub fn combo_100milestone_minisplode_texture_key(
-    style: VisualStyle,
-    variant: SrpgVariant,
-) -> &'static str {
-    for_style_and_variant(style, variant)
-        .effects
-        .combo_100milestone_minisplode
-}
-
-#[inline(always)]
-pub fn combo_1000milestone_swoosh_texture_key(
-    style: VisualStyle,
-    variant: SrpgVariant,
-) -> &'static str {
-    for_style_and_variant(style, variant)
-        .effects
-        .combo_1000milestone_swoosh
-}
-
-#[inline(always)]
-pub fn shared_background_video_asset_path(
-    style: VisualStyle,
-    variant: SrpgVariant,
-) -> Option<&'static str> {
-    for_style_and_variant(style, variant).shared_background_video
-}
-
-#[inline(always)]
 pub fn menu_music_asset_path(style: VisualStyle, variant: SrpgVariant) -> &'static str {
     for_style_and_variant(style, variant).menu_music
 }
@@ -757,17 +671,6 @@ pub fn srpg10_faction_name(color_index: i32) -> &'static str {
 }
 
 #[inline(always)]
-pub fn select_color_aspect(style: VisualStyle, variant: SrpgVariant) -> f32 {
-    let size = for_style_and_variant(style, variant).select_color_size;
-    size[0] as f32 / size[1] as f32
-}
-
-#[inline(always)]
-pub fn select_color_zoom_scale(style: VisualStyle, variant: SrpgVariant) -> f32 {
-    566.0 / for_style_and_variant(style, variant).select_color_size[1] as f32
-}
-
-#[inline(always)]
 pub fn is_shared_background_texture(key: &str) -> bool {
     all_assets().any(|asset| asset.shared_background == key)
 }
@@ -788,13 +691,6 @@ pub fn bundled_music_asset_paths() -> impl Iterator<Item = &'static str> {
     ]
     .into_iter()
     .chain(all_assets().map(|assets| assets.menu_music))
-}
-
-pub fn resolved_bundled_music_paths(resolve_asset_path: impl Fn(&str) -> PathBuf) -> Vec<PathBuf> {
-    use std::collections::BTreeSet;
-
-    let rels: BTreeSet<&'static str> = bundled_music_asset_paths().collect();
-    rels.into_iter().map(resolve_asset_path).collect()
 }
 
 const fn style_index(style: VisualStyle) -> usize {
@@ -986,31 +882,10 @@ mod tests {
         assert!(srpg10_active(VisualStyle::Srpg9, SrpgVariant::Srpg10));
         assert!(!srpg10_active(VisualStyle::Srpg9, SrpgVariant::Srpg9));
         assert!(!srpg10_active(VisualStyle::Hearts, SrpgVariant::Srpg10));
-
-        assert_eq!(
-            title_logo_texture_key(VisualStyle::Srpg9, SrpgVariant::Srpg10),
-            Some(SRPG10_TITLE_LOGO)
-        );
-        assert_eq!(
-            title_logo_texture_key(VisualStyle::Hearts, SrpgVariant::Srpg10),
-            None
-        );
     }
 
     #[test]
-    fn asset_key_selectors_follow_variant_assets() {
-        assert_eq!(
-            select_color_texture_key(VisualStyle::Srpg9, SrpgVariant::Srpg10),
-            SRPG10_ASSETS.select_color
-        );
-        assert_eq!(
-            shared_background_texture_key(VisualStyle::Srpg9, SrpgVariant::Srpg10),
-            SRPG10_ASSETS.shared_background
-        );
-        assert_eq!(
-            shared_background_video_asset_path(VisualStyle::Srpg9, SrpgVariant::Srpg10),
-            SRPG10_ASSETS.shared_background_video
-        );
+    fn menu_music_selector_ignores_variant_for_non_srpg_styles() {
         assert_eq!(
             menu_music_asset_path(VisualStyle::Hearts, SrpgVariant::Srpg10),
             for_style(VisualStyle::Hearts).menu_music
@@ -1077,14 +952,6 @@ mod tests {
         let paths: Vec<_> = bundled_music_asset_paths().collect();
         assert!(paths.contains(&SRPG10_GAMEOVER_MUSIC));
         assert!(paths.contains(&"assets/music/in_two (loop).ogg"));
-    }
-
-    #[test]
-    fn resolved_bundled_music_paths_dedupes_and_resolves_assets() {
-        let paths = resolved_bundled_music_paths(|path| PathBuf::from(path));
-
-        assert!(paths.contains(&PathBuf::from(SRPG10_GAMEOVER_MUSIC)));
-        assert!(paths.contains(&PathBuf::from("assets/music/in_two (loop).ogg")));
     }
 
     #[test]

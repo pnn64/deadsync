@@ -12,9 +12,13 @@ fn player_view(side: PlayerSide) -> SelectFlowPlayerView {
     }
 }
 
+pub(crate) fn players_view() -> [SelectFlowPlayerView; 2] {
+    [player_view(PlayerSide::P1), player_view(PlayerSide::P2)]
+}
+
 pub(crate) fn runtime_view() -> SelectFlowRuntimeView {
     SelectFlowRuntimeView {
-        players: [player_view(PlayerSide::P1), player_view(PlayerSide::P2)],
+        players: players_view(),
         play_style: profile::get_session_play_style(),
         play_mode: profile::get_session_play_mode(),
         color_index: config::get().simply_love_color,

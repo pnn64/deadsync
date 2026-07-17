@@ -1,8 +1,9 @@
 use crate::act;
 use crate::assets::i18n::{self, LookupKey, lookup_key};
-use crate::assets::{AssetManager, FontRole, current_machine_font_key};
+use crate::assets::{AssetManager, FontRole, machine_font_key};
 use crate::screens::gameplay as gameplay_screen;
 use crate::screens::{Screen, ThemeEffect};
+use crate::views::PracticeRuntimeView;
 use deadlib_present::actors::Actor;
 use deadlib_present::color;
 use deadlib_present::space::{
@@ -16,7 +17,6 @@ use deadsync_input::KeyCode;
 use deadsync_input::RawKeyboardEvent;
 use deadsync_input::{InputEvent, VirtualAction};
 use deadsync_profile as profile_data;
-use deadsync_profile::compat as profile;
 use deadsync_rules::scroll::ScrollSpeedSetting;
 use deadsync_rules::timing::{SpeedSegment, SpeedUnit, TimingSegments};
 use std::path::Path;
@@ -170,6 +170,7 @@ enum PracticeNavMode {
 
 pub struct State {
     pub gameplay: gameplay_screen::State,
+    runtime: PracticeRuntimeView,
     mode: Mode,
     menu: Option<MenuState>,
     cursor_beat: f32,
@@ -199,6 +200,7 @@ pub struct State {
     music_rate_hold_repeat_left: f32,
     flash: Option<(String, f32)>,
     pending_sfx: Vec<&'static str>,
+    pending_profile: Vec<crate::SimplyLoveProfileRequest>,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -330,10 +332,11 @@ const SNAP_BEATS: [f32; 9] = [
     1.0 / 48.0,
 ];
 
-pub fn init(mut gameplay: gameplay_screen::State) -> State {
+pub fn init(mut gameplay: gameplay_screen::State, runtime: PracticeRuntimeView) -> State {
     gameplay.disable_score_for_practice();
     let mut state = State {
         gameplay,
+        runtime,
         mode: Mode::Editing,
         menu: None,
         cursor_beat: 0.0,
@@ -363,6 +366,7 @@ pub fn init(mut gameplay: gameplay_screen::State) -> State {
         music_rate_hold_repeat_left: MUSIC_RATE_REPEAT_INTERVAL_SECONDS,
         flash: None,
         pending_sfx: Vec::with_capacity(8),
+        pending_profile: Vec::with_capacity(4),
     };
     set_cursor(&mut state, MIN_CURSOR_BEAT);
     snap_display_to_cursor(&mut state);
@@ -391,6 +395,38 @@ fn prepend_pending_sfx(pending_sfx: &mut Vec<&'static str>, effect: ThemeEffect)
     } else {
         ThemeEffect::Batch(effects)
     }
+}
+
+fn prepend_pending_effects(
+    pending_profile: &mut Vec<crate::SimplyLoveProfileRequest>,
+    pending_sfx: &mut Vec<&'static str>,
+    effect: ThemeEffect,
+) -> ThemeEffect {
+    let trailing = prepend_pending_sfx(pending_sfx, effect);
+    if pending_profile.is_empty() {
+        return trailing;
+    }
+
+    let mut effects = Vec::with_capacity(pending_profile.len() + 2);
+    effects.extend(
+        pending_profile
+            .drain(..)
+            .map(|request| ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Profile(request))),
+    );
+    match trailing {
+        ThemeEffect::None => {}
+        ThemeEffect::Batch(mut trailing) => effects.append(&mut trailing),
+        trailing => effects.push(trailing),
+    }
+    if effects.len() == 1 {
+        effects.pop().expect("one queued Practice effect")
+    } else {
+        ThemeEffect::Batch(effects)
+    }
+}
+
+fn finish_effect(state: &mut State, effect: ThemeEffect) -> ThemeEffect {
+    prepend_pending_effects(&mut state.pending_profile, &mut state.pending_sfx, effect)
 }
 
 pub fn edit_snapshot(state: &State) -> EditSnapshot {
@@ -450,7 +486,7 @@ pub fn update(
         fallback_host_nanos,
         snap_music_start,
     );
-    prepend_pending_sfx(&mut state.pending_sfx, effect)
+    finish_effect(state, effect)
 }
 
 fn update_inner(
@@ -486,9 +522,6 @@ fn update_inner(
         audio_snapshot,
         fallback_host_nanos,
     );
-    if matches!(action, GameplayAction::None) {
-        gameplay_screen::refresh_scorebox_snapshots(&mut state.gameplay);
-    }
     let current_time = state.gameplay.current_music_time_seconds();
     let stop_time = state.gameplay.music_time_for_beat(stop_beat);
     if current_time >= stop_time + LOOP_AFTER_SECONDS || !matches!(action, GameplayAction::None) {
@@ -503,7 +536,7 @@ pub fn handle_input(
     snap_music_start: MusicStartSnap,
 ) -> ThemeEffect {
     let effect = handle_input_inner(state, ev, snap_music_start);
-    prepend_pending_sfx(&mut state.pending_sfx, effect)
+    finish_effect(state, effect)
 }
 
 fn handle_input_inner(
@@ -517,7 +550,7 @@ fn handle_input_inner(
 
     if !ev.pressed {
         if matches!(state.mode, Mode::Editing)
-            && let Some(dir) = edit_cursor_hold_dir_for_action(ev.action)
+            && let Some(dir) = edit_cursor_hold_dir_for_action(state, ev.action)
         {
             release_cursor_hold_input(state, dir);
             return ThemeEffect::None;
@@ -544,12 +577,12 @@ fn handle_input_inner(
 }
 
 fn handle_edit_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
-    if let Some(dir) = edit_cursor_hold_dir_for_action(ev.action) {
+    if let Some(dir) = edit_cursor_hold_dir_for_action(state, ev.action) {
         press_cursor_hold_input(state, dir);
         move_cursor_by_hold_dir(state, dir);
         return ThemeEffect::None;
     }
-    if let Some(delta) = edit_snap_delta_for_action(ev.action) {
+    if let Some(delta) = edit_snap_delta_for_action(state, ev.action) {
         change_snap(state, delta);
         return ThemeEffect::None;
     }
@@ -576,10 +609,7 @@ pub fn handle_raw_key_event(
     snap_music_start: MusicStartSnap,
 ) -> (bool, ThemeEffect) {
     let (consumed, effect) = handle_raw_key_event_inner(state, raw_key, snap_music_start);
-    (
-        consumed,
-        prepend_pending_sfx(&mut state.pending_sfx, effect),
-    )
+    (consumed, finish_effect(state, effect))
 }
 
 fn handle_raw_key_event_inner(
@@ -734,7 +764,7 @@ pub fn push_actors(
     state: &mut State,
     asset_manager: &AssetManager,
     arrow_effect_time_s: f32,
-    cfg: &crate::config::Config,
+    visual_policy: crate::views::SimplyLoveVisualPolicyView,
 ) {
     actors.reserve(128);
     let view = practice_view(state);
@@ -744,7 +774,7 @@ pub fn push_actors(
         asset_manager,
         view,
         arrow_effect_time_s,
-        cfg,
+        visual_policy,
     );
     if matches!(state.mode, Mode::Editing) {
         append_edit_markers(state, actors);
@@ -808,7 +838,7 @@ fn handle_menu_input(
     if !ev.pressed {
         return ThemeEffect::None;
     }
-    if let Some(delta) = menu_step_delta_for_action(ev.action) {
+    if let Some(delta) = menu_step_delta_for_action(state, ev.action) {
         step_menu(state, delta);
         return ThemeEffect::None;
     }
@@ -928,9 +958,11 @@ fn action_exit_practice(_state: &mut State, _snap_music_start: MusicStartSnap) -
     ThemeEffect::Navigate(Screen::SelectMusic)
 }
 
-fn practice_nav_mode() -> PracticeNavMode {
-    let cfg = crate::config::get();
-    practice_nav_mode_from_config(cfg.only_dedicated_menu_buttons, cfg.three_key_navigation)
+fn practice_nav_mode(state: &State) -> PracticeNavMode {
+    practice_nav_mode_from_config(
+        state.runtime.only_dedicated_menu_buttons,
+        state.runtime.three_key_navigation,
+    )
 }
 
 const fn practice_nav_mode_from_config(
@@ -946,8 +978,8 @@ const fn practice_nav_mode_from_config(
     }
 }
 
-fn edit_cursor_hold_dir_for_action(action: VirtualAction) -> Option<CursorHoldDir> {
-    edit_cursor_hold_dir_for_action_in_mode(practice_nav_mode(), action)
+fn edit_cursor_hold_dir_for_action(state: &State, action: VirtualAction) -> Option<CursorHoldDir> {
+    edit_cursor_hold_dir_for_action_in_mode(practice_nav_mode(state), action)
 }
 
 const fn edit_cursor_hold_dir_for_action_in_mode(
@@ -981,8 +1013,8 @@ const fn edit_cursor_hold_dir_for_action_in_mode(
     }
 }
 
-fn edit_snap_delta_for_action(action: VirtualAction) -> Option<isize> {
-    edit_snap_delta_for_action_in_mode(practice_nav_mode(), action)
+fn edit_snap_delta_for_action(state: &State, action: VirtualAction) -> Option<isize> {
+    edit_snap_delta_for_action_in_mode(practice_nav_mode(state), action)
 }
 
 const fn edit_snap_delta_for_action_in_mode(
@@ -1008,8 +1040,8 @@ const fn edit_snap_delta_for_action_in_mode(
     }
 }
 
-fn menu_step_delta_for_action(action: VirtualAction) -> Option<isize> {
-    menu_step_delta_for_action_in_mode(practice_nav_mode(), action)
+fn menu_step_delta_for_action(state: &State, action: VirtualAction) -> Option<isize> {
+    menu_step_delta_for_action_in_mode(practice_nav_mode(state), action)
 }
 
 const fn menu_step_delta_for_action_in_mode(
@@ -1395,8 +1427,7 @@ fn update_page_hold(state: &mut State, delta_time: f32) {
 }
 
 fn edit_scroll_hold_delta_time(state: &State, delta_time: f32) -> f32 {
-    let cfg = crate::config::get();
-    delta_time * edit_scroll_hold_rate(state.tab_held, cfg.tab_acceleration)
+    delta_time * edit_scroll_hold_rate(state.tab_held, state.runtime.tab_acceleration)
 }
 
 const fn edit_scroll_hold_rate(tab_held: bool, tab_acceleration: bool) -> f32 {
@@ -1580,7 +1611,9 @@ fn change_music_rate(state: &mut State, delta: f32) -> bool {
         return false;
     }
     let changed = state.gameplay.set_music_rate(new_rate);
-    profile::set_session_music_rate(new_rate);
+    state
+        .pending_profile
+        .push(crate::SimplyLoveProfileRequest::SetMusicRate(new_rate));
     state
         .gameplay
         .push_audio_command(GameplayAudioCommand::SetMusicRate(new_rate));
@@ -1797,7 +1830,7 @@ fn max_play_beat(state: &State) -> f32 {
 }
 
 fn append_edit_markers(state: &State, actors: &mut Vec<Actor>) {
-    let hud = profile::gameplay_hud_snapshot();
+    let hud = &state.runtime.hud;
     let play_style = hud.play_style;
     let is_p2_single = profile_data::is_single_p2_side(play_style, hud.player_side);
 
@@ -2184,8 +2217,9 @@ fn append_snap_cursor_heart(actors: &mut Vec<Actor>, x: f32, y: f32, zoom: f32, 
 
 fn append_edit_overlay(state: &State, actors: &mut Vec<Actor>) {
     let pc = practice_player_color(state);
+    let header_font = machine_font_key(state.gameplay.machine_font(), FontRole::Header);
     actors.push(act!(text:
-        font(current_machine_font_key(FontRole::Header)):
+        font(header_font):
         settext(i18n::tr("Practice", "TitlePracticeMode")):
         align(1.0, 0.5):
         xy(screen_width() - 35.0, 10.0):
@@ -2208,6 +2242,7 @@ fn append_edit_overlay(state: &State, actors: &mut Vec<Actor>) {
         i18n::tr("Practice", "HelpSidebarNavigatingBody"),
         0.0,
         pc,
+        header_font,
     );
     append_help_section(
         actors,
@@ -2215,6 +2250,7 @@ fn append_edit_overlay(state: &State, actors: &mut Vec<Actor>) {
         i18n::tr("Practice", "HelpSidebarMenusBody"),
         EDIT_HELP_MENU_Y,
         pc,
+        header_font,
     );
     append_help_section(
         actors,
@@ -2222,6 +2258,7 @@ fn append_edit_overlay(state: &State, actors: &mut Vec<Actor>) {
         i18n::tr("Practice", "HelpSidebarMiscBody"),
         EDIT_HELP_MISC_Y,
         pc,
+        header_font,
     );
     actors.push(act!(text:
         font("miso"):
@@ -2463,9 +2500,10 @@ fn append_help_section(
     body: Arc<str>,
     y: f32,
     player_color: [f32; 4],
+    header_font: &'static str,
 ) {
     actors.push(act!(text:
-        font(current_machine_font_key(FontRole::Header)):
+        font(header_font):
         settext(label):
         align(0.0, 0.5):
         xy(35.0, y + 10.0):
@@ -2503,8 +2541,8 @@ mod tests {
         edit_snap_delta_for_action_in_mode, fmt_itg_float, fmt_music_rate,
         menu_step_delta_for_action_in_mode, music_rate_delta_for_dir, music_rate_hold_dir_for_key,
         next_display_beat, page_hold_dir_for_key, practice_edit_beat_travel,
-        practice_nav_mode_from_config, prepend_pending_sfx, quantized_music_rate,
-        timing_label_glow_alpha, timing_label_x, timing_speed_label,
+        practice_nav_mode_from_config, prepend_pending_effects, prepend_pending_sfx,
+        quantized_music_rate, timing_label_glow_alpha, timing_label_x, timing_speed_label,
     };
     use crate::SimplyLoveRuntimeRequest;
     use crate::assets::i18n;
@@ -2684,6 +2722,37 @@ mod tests {
             assert_eq!(path, expected);
         }
         assert!(pending.is_empty());
+    }
+
+    #[test]
+    fn practice_rate_persistence_precedes_sound_and_navigation() {
+        let mut profiles = vec![crate::SimplyLoveProfileRequest::SetMusicRate(1.25)];
+        let mut sounds = vec!["assets/sounds/change.ogg"];
+        let ThemeEffect::Batch(effects) = prepend_pending_effects(
+            &mut profiles,
+            &mut sounds,
+            ThemeEffect::Navigate(Screen::PlayerOptions),
+        ) else {
+            panic!("Practice rate change should preserve ordered effects");
+        };
+
+        assert!(matches!(
+            &effects[0],
+            ThemeEffect::Runtime(SimplyLoveRuntimeRequest::Profile(
+                crate::SimplyLoveProfileRequest::SetMusicRate(rate)
+            )) if (*rate - 1.25).abs() < f32::EPSILON
+        ));
+        assert!(matches!(
+            &effects[1],
+            ThemeEffect::Runtime(SimplyLoveRuntimeRequest::Audio(AudioRequest::PlaySfx(path)))
+                if path == "assets/sounds/change.ogg"
+        ));
+        assert!(matches!(
+            effects[2],
+            ThemeEffect::Navigate(Screen::PlayerOptions)
+        ));
+        assert!(profiles.is_empty());
+        assert!(sounds.is_empty());
     }
 
     #[test]

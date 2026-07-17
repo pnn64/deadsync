@@ -140,6 +140,32 @@ pub fn update_heart_rate_device_id_for_side(side: PlayerSide, device_id: Option<
     }
 }
 
+/// Apply the complete Player Options snapshot selected by a screen, preserving
+/// all profile data outside that cohesive option group.
+pub fn update_player_options_for_side(
+    side: PlayerSide,
+    options: crate::PlayerOptionsData,
+    heart_rate_device_id: Option<String>,
+) {
+    let mut heart_rate_changed = false;
+    let changed = runtime_update_profile_for_side(side, |profile| {
+        let options_changed = profile.set_current_player_options(options);
+        heart_rate_changed = profile.set_heart_rate_device_id(heart_rate_device_id);
+        options_changed || heart_rate_changed
+    });
+    persist_profile_update(
+        side,
+        if changed {
+            ProfileUpdatePersistence::Ini
+        } else {
+            ProfileUpdatePersistence::None
+        },
+    );
+    if heart_rate_changed {
+        runtime_mark_heart_rate_devices_changed();
+    }
+}
+
 pub fn update_scroll_speed_for_side(side: PlayerSide, setting: ScrollSpeedSetting) {
     // Guest changes should persist for the active session; save_* no-ops for guests.
     profile_ini_update(side, |profile| profile.set_scroll_speed(setting))

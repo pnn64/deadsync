@@ -20,9 +20,7 @@ use deadsync_score as score_data;
 
 use crate::assets::AssetManager;
 use crate::assets::i18n::{tr, tr_fmt};
-use crate::assets::{
-    FontRole, current_machine_font_key, current_machine_font_key_for_text, visual_styles,
-};
+use crate::assets::{FontRole, machine_font_key, machine_font_key_for_text, visual_styles};
 use crate::screens::gameplay;
 use crate::screens::input as screen_input;
 use crate::views::SimplyLoveLobbyRuntimeView;
@@ -815,6 +813,7 @@ fn course_graph_stripe_actors(
     stages: &[CourseGraphStage],
     graph_width: f32,
     graph_height: f32,
+    transparent: bool,
 ) -> Vec<Actor> {
     const STRIPE_RGBA: [f32; 4] = [
         (16.0 / 255.0) * 1.25 * 1.25,
@@ -822,7 +821,7 @@ fn course_graph_stripe_actors(
         (25.0 / 255.0) * 1.25 * 1.25,
         0.5,
     ];
-    let stripe_alpha = eval_panes::eval_style_alpha(STRIPE_RGBA[3], 0.6);
+    let stripe_alpha = eval_panes::eval_style_alpha(transparent, STRIPE_RGBA[3], 0.6);
 
     let spans = course_graph_stage_spans(stages, graph_width);
     let mut actors = Vec::with_capacity((spans.len() + 1) / 2);
@@ -1055,7 +1054,7 @@ mod tests {
             test_course_graph_stage(10.0),
         ];
 
-        let stripes = course_graph_stripe_actors(&stages, 500.0, 64.0);
+        let stripes = course_graph_stripe_actors(&stages, 500.0, 64.0, false);
 
         assert_eq!(stripes.len(), 2);
         for stripe in stripes {
@@ -3378,8 +3377,8 @@ fn stage_in_result(state: &State) -> (bool, bool) {
 }
 
 #[inline(always)]
-fn stage_in_stinger_seconds(failed: bool) -> f32 {
-    if visual_styles::srpg10_active() {
+fn stage_in_stinger_seconds(failed: bool, srpg10: bool) -> f32 {
+    if srpg10 {
         if failed {
             SRPG10_EVAL_FAILED_SECONDS
         } else {
@@ -3476,11 +3475,12 @@ fn build_srpg10_passed_stinger() -> Vec<Actor> {
 fn build_stage_in_stinger(state: &State) -> Vec<Actor> {
     let (failed, disqualified) = stage_in_result(state);
     let failed = failed || disqualified;
-    if state.screen_elapsed > stage_in_stinger_seconds(failed) {
+    let srpg10 = state.context.policy.srpg10_visuals;
+    if state.screen_elapsed > stage_in_stinger_seconds(failed, srpg10) {
         return vec![];
     }
 
-    if visual_styles::srpg10_active() {
+    if srpg10 {
         return if failed {
             build_srpg10_failed_stinger()
         } else {
@@ -3543,7 +3543,7 @@ fn auto_screenshot_phase(state: &State) -> AutoScreenshotPhase {
     let elapsed = state.screen_elapsed;
 
     let (failed, disqualified) = stage_in_result(state);
-    if elapsed < auto_screenshot_intro_done_seconds(failed || disqualified) {
+    if elapsed < auto_screenshot_intro_done_seconds(state, failed || disqualified) {
         return AutoScreenshotPhase::IntroPlaying;
     }
 
@@ -3559,8 +3559,9 @@ fn auto_screenshot_phase(state: &State) -> AutoScreenshotPhase {
 }
 
 #[inline(always)]
-fn auto_screenshot_intro_done_seconds(failed: bool) -> f32 {
-    stage_in_stinger_seconds(failed).max(eval_panes::pane_stats::rolling_numbers_approach_seconds())
+fn auto_screenshot_intro_done_seconds(state: &State, failed: bool) -> f32 {
+    stage_in_stinger_seconds(failed, state.context.policy.srpg10_visuals)
+        .max(eval_panes::pane_stats::rolling_numbers_approach_seconds())
 }
 
 /// True if any player expected a GrooveStats submit and the response
@@ -4220,10 +4221,15 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
     crate::effects::sequence(favorite_effect, effect)
 }
 
-pub fn push_actors(actors: &mut Vec<Actor>, state: &State, asset_manager: &AssetManager) {
+pub fn push_actors(
+    actors: &mut Vec<Actor>,
+    state: &State,
+    asset_manager: &AssetManager,
+    visual_policy: crate::views::SimplyLoveVisualPolicyView,
+) {
     let policy = &state.context.policy;
-    let sl_header_alpha = eval_panes::eval_style_alpha(1.0, 0.5);
-    let sl_panel_alpha = eval_panes::eval_style_alpha(1.0, 0.75);
+    let sl_header_alpha = eval_panes::eval_style_alpha(policy.transparent_panels, 1.0, 0.5);
+    let sl_panel_alpha = eval_panes::eval_style_alpha(policy.transparent_panels, 1.0, 0.75);
     actors.reserve(20);
 
     // 1. Background
@@ -4233,11 +4239,13 @@ pub fn push_actors(actors: &mut Vec<Actor>, state: &State, asset_manager: &Asset
             active_color_index: state.active_color_index,
             backdrop_rgba: [0.0, 0.0, 0.0, 1.0],
             alpha_mul: 1.0,
+            visual_policy,
         },
     );
 
     // 2. Top Bar
     actors.push(screen_bar::build(ScreenBarParams {
+        visual_policy,
         title: "EVALUATION",
         title_placement: ScreenBarTitlePlacement::Left,
         position: ScreenBarPosition::Top,
@@ -4251,13 +4259,15 @@ pub fn push_actors(actors: &mut Vec<Actor>, state: &State, asset_manager: &Asset
     }));
 
     // Header timers (zmod parity): session timer + optional cumulative gameplay timer.
-    actors.push(timers::build_session(format_session_time(
-        state.session_elapsed,
-    )));
+    actors.push(timers::build_session(
+        format_session_time(state.session_elapsed),
+        policy.machine_font,
+    ));
     if policy.show_gameplay_timer {
-        actors.push(timers::build_gameplay(format_session_time(
-            state.gameplay_elapsed,
-        )));
+        actors.push(timers::build_gameplay(
+            format_session_time(state.gameplay_elapsed),
+            policy.machine_font,
+        ));
     }
 
     let play_style = state.context.play_style;
@@ -4265,7 +4275,8 @@ pub fn push_actors(actors: &mut Vec<Actor>, state: &State, asset_manager: &Asset
 
     let Some(score_info) = state.score_info.iter().find_map(|s| s.as_ref()) else {
         let no_data_text = tr("Evaluation", "NoScoreDataAvailable");
-        let no_data_font = current_machine_font_key_for_text(FontRole::Header, &no_data_text);
+        let no_data_font =
+            machine_font_key_for_text(policy.machine_font, FontRole::Header, &no_data_text);
         actors.push(act!(text:
             font(no_data_font):
             settext(no_data_text):
@@ -4488,7 +4499,8 @@ pub fn push_actors(actors: &mut Vec<Actor>, state: &State, asset_manager: &Asset
 
                 if let Some(rank) = machine_record_rank {
                     let mr_text = cached_record_text(true, rank);
-                    let mr_font = current_machine_font_key_for_text(FontRole::Header, &mr_text);
+                    let mr_font =
+                        machine_font_key_for_text(policy.machine_font, FontRole::Header, &mr_text);
                     actors.push(act!(text: font(mr_font):
                         settext(mr_text):
                         align(0.5, 0.5):
@@ -4500,7 +4512,8 @@ pub fn push_actors(actors: &mut Vec<Actor>, state: &State, asset_manager: &Asset
 
                 if let Some(rank) = personal_record_rank {
                     let pr_text = cached_record_text(false, rank);
-                    let pr_font = current_machine_font_key_for_text(FontRole::Header, &pr_text);
+                    let pr_font =
+                        machine_font_key_for_text(policy.machine_font, FontRole::Header, &pr_text);
                     actors.push(act!(text: font(pr_font):
                         settext(pr_text):
                         align(0.5, 0.5):
@@ -4544,7 +4557,7 @@ pub fn push_actors(actors: &mut Vec<Actor>, state: &State, asset_manager: &Asset
                         diffuse(difficulty_color[0], difficulty_color[1], difficulty_color[2], 1.0)
                     ));
                     actors.push(act!(text:
-                        font(current_machine_font_key(FontRole::Bold)):
+                        font(machine_font_key(policy.machine_font, FontRole::Bold)):
                         settext(si.chart.meter.to_string()):
                         align(0.5, 0.5):
                         xy(box_x, cy - 76.0):
@@ -4603,7 +4616,7 @@ pub fn push_actors(actors: &mut Vec<Actor>, state: &State, asset_manager: &Asset
                         diffuse(difficulty_color[0], difficulty_color[1], difficulty_color[2], 1.0)
                     ));
                     actors.push(act!(text:
-                        font(current_machine_font_key(FontRole::Bold)):
+                        font(machine_font_key(policy.machine_font, FontRole::Bold)):
                         settext(si.chart.meter.to_string()):
                         align(0.5, 0.5):
                         xy(box_x, cy - 71.0):
@@ -4931,7 +4944,11 @@ pub fn push_actors(actors: &mut Vec<Actor>, state: &State, asset_manager: &Asset
             };
 
             actors.extend(eval_panes::build_pane_percentage_display(
-                si, pane, controller,
+                si,
+                pane,
+                controller,
+                policy.transparent_panels,
+                policy.machine_font,
             ));
 
             match pane {
@@ -4940,27 +4957,38 @@ pub fn push_actors(actors: &mut Vec<Actor>, state: &State, asset_manager: &Asset
                     state.timing_hist_mesh[player_idx].as_ref(),
                     controller,
                     eval_graphs::TimingHistogramScale::Itg,
+                    policy.transparent_panels,
+                    policy.machine_font,
                 )),
                 EvalPane::TimingEx => actors.extend(eval_panes::build_timing_pane(
                     si,
                     state.timing_hist_mesh_ex[player_idx].as_ref(),
                     controller,
                     eval_graphs::TimingHistogramScale::Ex,
+                    policy.transparent_panels,
+                    policy.machine_font,
                 )),
                 EvalPane::TimingHardEx => actors.extend(eval_panes::build_timing_pane(
                     si,
                     state.timing_hist_mesh_hard_ex[player_idx].as_ref(),
                     controller,
                     eval_graphs::TimingHistogramScale::HardEx,
+                    policy.transparent_panels,
+                    policy.machine_font,
                 )),
                 EvalPane::TimingArrows => {
                     actors.extend(eval_panes::build_timing_arrows_pane(
                         si,
                         controller,
                         state.screen_elapsed,
+                        policy.machine_font,
                     ));
                 }
-                EvalPane::QrCode => actors.extend(eval_panes::build_gs_qr_pane(si, controller)),
+                EvalPane::QrCode => actors.extend(eval_panes::build_gs_qr_pane(
+                    si,
+                    controller,
+                    policy.machine_font,
+                )),
                 EvalPane::GrooveStats => actors.extend(eval_panes::build_gs_records_pane(
                     controller,
                     &state.scoreboxes[player_idx],
@@ -5009,6 +5037,7 @@ pub fn push_actors(actors: &mut Vec<Actor>, state: &State, asset_manager: &Asset
                         controller,
                         asset_manager,
                         state.screen_elapsed,
+                        policy.machine_font,
                     ));
                 }
                 EvalPane::TestInput => {
@@ -5028,8 +5057,8 @@ pub fn push_actors(actors: &mut Vec<Actor>, state: &State, asset_manager: &Asset
                     let anchor_x = panel_center_x - panel_w_scaled * 0.5;
                     let anchor_y = panel_center_y - panel_h_scaled * 0.5;
 
-                    let title_font = current_machine_font_key(FontRole::Normal);
-                    let body_font = current_machine_font_key(FontRole::Normal);
+                    let title_font = machine_font_key(policy.machine_font, FontRole::Normal);
+                    let body_font = machine_font_key(policy.machine_font, FontRole::Normal);
                     let title = tr("Evaluation", "TestInputTitle");
                     let instructions = tr("Evaluation", "TestInputInstructions");
 
@@ -5087,7 +5116,12 @@ pub fn push_actors(actors: &mut Vec<Actor>, state: &State, asset_manager: &Asset
                 (1, screen_center_x() + 155.0),
             ] {
                 if let Some(si) = state.score_info.get(player_idx).and_then(|s| s.as_ref()) {
-                    actors.extend(eval_panes::build_modifiers_pane(si, center_x, graph_width));
+                    actors.extend(eval_panes::build_modifiers_pane(
+                        si,
+                        center_x,
+                        graph_width,
+                        policy.transparent_panels,
+                    ));
                 }
             }
         } else if let Some(si) = state.score_info.first().and_then(|s| s.as_ref()) {
@@ -5095,6 +5129,7 @@ pub fn push_actors(actors: &mut Vec<Actor>, state: &State, asset_manager: &Asset
                 si,
                 screen_center_x(),
                 graph_width,
+                policy.transparent_panels,
             ));
         }
     }
@@ -5211,6 +5246,7 @@ pub fn push_actors(actors: &mut Vec<Actor>, state: &State, asset_manager: &Asset
                             &si.course_graph_stages,
                             graph_width,
                             graph_height,
+                            policy.transparent_panels,
                         ),
                     },
                     {
@@ -5533,7 +5569,8 @@ pub fn push_actors(actors: &mut Vec<Actor>, state: &State, asset_manager: &Asset
             }
 
             let dq_text = tr("Evaluation", "DisqualifiedFromRanking");
-            let dq_font = current_machine_font_key_for_text(FontRole::Header, &dq_text);
+            let dq_font =
+                machine_font_key_for_text(policy.machine_font, FontRole::Header, &dq_text);
             actors.push(act!(text:
                 font(dq_font):
                 settext(dq_text):
@@ -5569,7 +5606,8 @@ pub fn push_actors(actors: &mut Vec<Actor>, state: &State, asset_manager: &Asset
                     screen_center_x() + 225.0
                 };
                 let banner_text = submit_record_text(banner);
-                let banner_font = current_machine_font_key_for_text(FontRole::Header, &banner_text);
+                let banner_font =
+                    machine_font_key_for_text(policy.machine_font, FontRole::Header, &banner_text);
                 let banner_w = measure_text_width(
                     asset_manager,
                     banner_font,
@@ -5729,9 +5767,12 @@ pub fn push_actors(actors: &mut Vec<Actor>, state: &State, asset_manager: &Asset
     {
         let ds_text_x = screen_width() - widescale(55.0, 62.0);
         let ds_text = "DS";
-        let ds_font = current_machine_font_key_for_text(FontRole::Header, ds_text);
+        let ds_font = machine_font_key_for_text(policy.machine_font, FontRole::Header, ds_text);
         actors.push(act!(text: font(ds_font): settext(ds_text): align(1.0, 0.5): xy(ds_text_x, 15.0): zoom(widescale(0.5, 0.6)): z(121): diffuse(1.0, 1.0, 1.0, 1.0) ));
-        actors.extend(mode_pads::build());
+        actors.extend(mode_pads::build(
+            state.context.play_style,
+            std::array::from_fn(|idx| state.context.players[idx].joined),
+        ));
     }
 
     // 3. Bottom Bar
@@ -5788,6 +5829,7 @@ pub fn push_actors(actors: &mut Vec<Actor>, state: &State, asset_manager: &Asset
             }
         };
     actors.push(screen_bar::build_no_background(ScreenBarParams {
+        visual_policy,
         title: "",
         title_placement: screen_bar::ScreenBarTitlePlacement::Center,
         position: screen_bar::ScreenBarPosition::Bottom,
@@ -5806,7 +5848,7 @@ pub fn push_actors(actors: &mut Vec<Actor>, state: &State, asset_manager: &Asset
     let timestamp_text = now.format("%Y/%m/%d %H:%M").to_string();
 
     actors.push(act!(text:
-        font(current_machine_font_key(FontRole::Numbers)):
+        font(machine_font_key(policy.machine_font, FontRole::Numbers)):
         settext(timestamp_text):
         align(0.5, 1.0): // align bottom-center of text block
         xy(screen_center_x(), screen_height() - 14.0):
@@ -5822,6 +5864,8 @@ pub fn push_actors(actors: &mut Vec<Actor>, state: &State, asset_manager: &Asset
             z: 121,
             show_song_info: false,
             status_text: evaluation_lobby_status_text(state),
+            joined_sides: std::array::from_fn(|idx| state.context.players[idx].joined),
+            player_side: state.context.player_side,
         }));
     }
 
@@ -5860,13 +5904,15 @@ pub fn push_actors(actors: &mut Vec<Actor>, state: &State, asset_manager: &Asset
             asset_manager,
             play_style != profile_data::PlayStyle::Versus,
             overlay_song,
+            policy.translated_titles,
             panels.as_slice(),
+            policy.machine_font,
         ));
     }
 }
 
 pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     let mut actors = Vec::with_capacity(20);
-    push_actors(&mut actors, state, asset_manager);
+    push_actors(&mut actors, state, asset_manager, Default::default());
     actors
 }

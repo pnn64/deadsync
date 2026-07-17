@@ -1,8 +1,8 @@
 use crate::act;
-use crate::assets::{FontRole, current_machine_font_key};
+use crate::assets::{FontRole, machine_font_key};
+use crate::config::MachineFont;
 use crate::config::{
-    self, DefaultSyncOffset, MachineBarColor, SelectMusicItlRankMode, SelectMusicItlWheelMode,
-    SelectMusicSongSelectBgMode,
+    DefaultSyncOffset, SelectMusicItlRankMode, SelectMusicItlWheelMode, SelectMusicSongSelectBgMode,
 };
 use crate::screens::components::shared::banner as shared_banner;
 use crate::screens::select_music::MusicWheelEntry;
@@ -548,6 +548,7 @@ pub(crate) fn runtime_slot_requests<'a>(
 }
 
 pub struct MusicWheelParams<'a> {
+    pub machine_font: MachineFont,
     pub entries: &'a [MusicWheelEntry],
     pub selected_index: usize,
     pub position_offset_from_selection: f32,
@@ -575,16 +576,9 @@ pub struct MusicWheelParams<'a> {
 
 pub fn push(actors: &mut Vec<Actor>, p: MusicWheelParams) {
     actors.reserve(WHEEL_ACTOR_CAPACITY);
-    let cfg = config::get();
-    let translated_titles = cfg.translated_titles;
-    let effective_bar_color = cfg.machine_bar_color.resolve(cfg.visual_style);
-    let song_bg_alpha =
-        if cfg.visual_style.is_srpg() || effective_bar_color == MachineBarColor::Transparent {
-            0.5
-        } else {
-            1.0
-        };
-    let section_bg_alpha = if effective_bar_color == MachineBarColor::Transparent {
+    let translated_titles = p.runtime.translated_titles;
+    let song_bg_alpha = if p.runtime.song_bg_dimmed { 0.5 } else { 1.0 };
+    let section_bg_alpha = if p.runtime.section_bg_dimmed {
         0.5
     } else {
         1.0
@@ -657,9 +651,9 @@ pub fn push(actors: &mut Vec<Actor>, p: MusicWheelParams) {
     let itl_wheel_mode = itl_wheel_mode_for_sides(p.itl_wheel_mode, joined_sides);
     let is_double_style = matches!(play_style, profile_data::PlayStyle::Double);
 
-    let header_font = current_machine_font_key(FontRole::Header);
-    let numbers_font = current_machine_font_key(FontRole::Numbers);
-    let screen_eval_font = current_machine_font_key(FontRole::ScreenEval);
+    let header_font = machine_font_key(p.machine_font, FontRole::Header);
+    let numbers_font = machine_font_key(p.machine_font, FontRole::Numbers);
+    let screen_eval_font = machine_font_key(p.machine_font, FontRole::ScreenEval);
 
     let num_entries = p.entries.len();
 

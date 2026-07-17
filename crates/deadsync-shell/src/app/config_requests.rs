@@ -4,10 +4,53 @@ use deadsync_theme_simply_love::{
     SimplyLoveGameplayConfigRequest, SimplyLoveGameplayPadLights, SimplyLoveGraphOrientation,
     SimplyLoveLightsConfigRequest, SimplyLoveLightsDriver, SimplyLoveMachineConfigRequest,
     SimplyLoveNullOrDieConfigRequest, SimplyLoveNullOrDieGraph, SimplyLoveOnlineConfigRequest,
-    SimplyLoveQrLoginPolicy, SimplyLoveSelectMusicConfigRequest, SimplyLoveSrpgShopFolder,
-    SimplyLoveSyncKernel, SimplyLoveSyncKernelTarget,
+    SimplyLoveOptionsConfigRequest, SimplyLoveQrLoginPolicy, SimplyLoveSelectMusicConfigRequest,
+    SimplyLoveSrpgShopFolder, SimplyLoveSyncKernel, SimplyLoveSyncKernelTarget,
 };
 use null_or_die::{BiasKernel, KernelTarget};
+
+pub(super) fn execute_options(request: SimplyLoveOptionsConfigRequest) {
+    use SimplyLoveOptionsConfigRequest as Request;
+
+    match request {
+        Request::GameDance => config::update_game_flag(config::GameFlag::Dance),
+        Request::ThemeSimplyLove => config::update_theme_flag(config::ThemeFlag::SimplyLove),
+        Request::Language(flag) => {
+            config::update_language_flag(flag);
+            let locale = deadsync_assets::language::resolve_locale(flag);
+            deadsync_theme_simply_love::i18n::set_locale(deadsync_assets::language::load(&locale));
+        }
+        Request::LogLevel(level) => config::update_log_level(level),
+        Request::LogToFile(enabled) => config::update_log_to_file(enabled),
+        Request::GfxDebug(enabled) => config::update_gfx_debug(enabled),
+        #[cfg(target_os = "windows")]
+        Request::WindowsPadBackend(backend) => config::update_windows_gamepad_backend(backend),
+        Request::UseFsrs(enabled) => config::update_use_fsrs(enabled),
+        Request::ThreeKeyNavigation(enabled) => config::update_three_key_navigation(enabled),
+        Request::ArcadeOptionsNavigation(enabled) => {
+            config::update_arcade_options_navigation(enabled)
+        }
+        Request::OnlyDedicatedMenuButtons(enabled) => {
+            config::update_only_dedicated_menu_buttons(enabled)
+        }
+        Request::SmxInput(enabled) => config::update_smx_input(enabled),
+        Request::SmxPanelLights(enabled) => config::update_smx_panel_lights(enabled),
+        Request::SmxManagesPadConfig(enabled) => config::update_smx_manages_pad_config(enabled),
+        Request::SmxDefaultPadConfig(preset) => config::update_smx_default_pad_config(preset),
+        Request::SmxDefaultLightBrightness(percent) => {
+            config::update_smx_default_light_brightness(percent)
+        }
+        Request::SmxPadGifsPack(pack) => config::update_smx_pad_gifs_pack(pack),
+        Request::SmxJudgeGifsPack(pack) => config::update_smx_judge_gifs_pack(pack),
+        Request::SmxIdleLightsBlack(enabled) => config::update_smx_idle_lights_black(enabled),
+        Request::VisualDelayMillis(millis) => {
+            config::update_visual_delay_seconds(millis as f32 / 1000.0)
+        }
+        Request::InputDebounceMillis(millis) => {
+            config::update_input_debounce_seconds(millis as f32 / 1000.0)
+        }
+    }
+}
 
 pub(super) fn execute_lights(request: SimplyLoveLightsConfigRequest) {
     use SimplyLoveLightsConfigRequest as Request;

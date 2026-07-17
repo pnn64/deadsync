@@ -1,8 +1,7 @@
 use crate::act;
 use crate::assets::AssetManager;
 use crate::assets::i18n::{tr, tr_fmt};
-use crate::assets::visual_styles;
-use crate::assets::{FontRole, current_machine_font_key};
+use crate::assets::{FontRole, machine_font_key};
 use crate::screens::components::shared::loading_bar;
 use crate::screens::components::shared::screen_bar::{
     self, ScreenBarPosition, ScreenBarTitlePlacement,
@@ -11,14 +10,14 @@ use crate::screens::components::shared::transitions;
 use crate::screens::components::shared::visual_style_bg;
 use crate::screens::input as screen_input;
 use crate::screens::{Screen, ThemeEffect};
+use crate::views::{LocalProfileView, ManageLocalProfilesView};
 use deadlib_present::actors::Actor;
 use deadlib_present::color;
 use deadlib_present::space::{screen_height, screen_width};
 use deadsync_input::KeyCode;
 use deadsync_input::RawKeyboardEvent;
 use deadsync_input::{InputEvent, VirtualAction};
-use deadsync_profile as profile_data;
-use deadsync_profile::compat as profile;
+use deadsync_profile::PlayerSide;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -275,6 +274,8 @@ pub struct State {
     pub active_color_index: i32,
     bg: visual_style_bg::State,
     rows: Vec<Row>,
+    default_profile_ids: [Option<String>; 2],
+    dedicated_three_key_nav: bool,
     nav_key_held_direction: Option<NavDirection>,
     nav_key_held_since: Option<Instant>,
     nav_key_last_scrolled_at: Option<Instant>,
@@ -290,14 +291,16 @@ pub struct State {
     menu_lr_undo: i8,
 }
 
-pub fn init() -> State {
-    let rows = build_rows();
+pub fn init(view: ManageLocalProfilesView) -> State {
+    let rows = build_rows(view.profiles);
     State {
         selected: 0,
         prev_selected: 0,
         active_color_index: color::DEFAULT_COLOR_INDEX,
         bg: visual_style_bg::State::new(),
         rows,
+        default_profile_ids: view.default_profile_ids,
+        dedicated_three_key_nav: view.dedicated_three_key_nav,
         nav_key_held_direction: None,
         nav_key_held_since: None,
         nav_key_last_scrolled_at: None,
@@ -314,8 +317,7 @@ pub fn init() -> State {
     }
 }
 
-fn build_rows() -> Vec<Row> {
-    let profiles = profile::scan_local_profiles();
+fn build_rows(profiles: Vec<LocalProfileView>) -> Vec<Row> {
     let mut out = Vec::with_capacity(profiles.len() + 2);
     out.push(Row {
         kind: RowKind::CreateNew,
@@ -337,8 +339,10 @@ fn build_rows() -> Vec<Row> {
     out
 }
 
-fn refresh_rows(state: &mut State) {
-    state.rows = build_rows();
+pub fn sync_runtime_view(state: &mut State, view: ManageLocalProfilesView) {
+    state.rows = build_rows(view.profiles);
+    state.default_profile_ids = view.default_profile_ids;
+    state.dedicated_three_key_nav = view.dedicated_three_key_nav;
     if state.rows.is_empty() {
         state.selected = 0;
         state.prev_selected = 0;
@@ -507,47 +511,29 @@ fn validate_profile_name(state: &State, mode: &NameEntryMode, name: &str) -> Res
     Ok(())
 }
 
-fn try_submit_name_entry(state: &mut State, entry: &NameEntryState) -> Result<String, Arc<str>> {
-    validate_profile_name(state, &entry.mode, &entry.value)?;
-    let trimmed = entry.value.trim();
-    match &entry.mode {
-        NameEntryMode::Create => {
-            profile::create_local_profile(trimmed).map_err(|_| tr("Profiles", "CreateFailed"))
-        }
-        NameEntryMode::Rename { id } => profile::rename_local_profile(id, trimmed)
-            .map(|()| id.clone())
-            .map_err(|_| tr("Profiles", "RenameFailed")),
-    }
-}
-
 fn confirm_name_entry(state: &mut State) -> ThemeEffect {
-    let Some(entry) = state.name_entry.take() else {
+    let Some(entry) = state.name_entry.as_ref() else {
         return ThemeEffect::None;
     };
 
-    match try_submit_name_entry(state, &entry) {
-        Ok(id) => {
-            refresh_rows(state);
-            reset_nav_hold(state);
-            if let Some(pos) = state.rows.iter().position(|r| match &r.kind {
-                RowKind::Profile { id: row_id, .. } => row_id == &id,
-                _ => false,
-            }) {
-                state.selected = pos;
-                state.prev_selected = pos;
-            }
-            crate::effects::sfx("assets/sounds/start.ogg")
+    if let Err(error) = validate_profile_name(state, &entry.mode, &entry.value) {
+        if let Some(entry) = state.name_entry.as_mut() {
+            entry.error = Some(error);
         }
-        Err(e) => {
-            state.name_entry = Some(NameEntryState {
-                mode: entry.mode,
-                value: entry.value,
-                error: Some(e),
-                blink_t: entry.blink_t,
-            });
-            ThemeEffect::None
-        }
+        return ThemeEffect::None;
     }
+
+    let display_name = entry.value.trim().to_owned();
+    let request = match &entry.mode {
+        NameEntryMode::Create => {
+            crate::SimplyLoveProfileRequest::CreateLocalProfile { display_name }
+        }
+        NameEntryMode::Rename { id } => crate::SimplyLoveProfileRequest::RenameLocalProfile {
+            profile_id: id.clone(),
+            display_name,
+        },
+    };
+    ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Profile(request))
 }
 
 fn cancel_name_entry(state: &mut State) {
@@ -619,28 +605,18 @@ fn confirm_profile_menu(state: &mut State) -> ThemeEffect {
     };
 
     match action {
-        ProfileMenuAction::SetP1 => {
-            profile::set_default_profile_for_side(
-                profile_data::PlayerSide::P1,
-                profile_data::ActiveProfile::Local {
-                    id: menu.id.clone(),
-                },
-            );
-            refresh_rows(state);
-            cancel_profile_menu(state);
-            crate::effects::sfx("assets/sounds/start.ogg")
-        }
-        ProfileMenuAction::SetP2 => {
-            profile::set_default_profile_for_side(
-                profile_data::PlayerSide::P2,
-                profile_data::ActiveProfile::Local {
-                    id: menu.id.clone(),
-                },
-            );
-            refresh_rows(state);
-            cancel_profile_menu(state);
-            crate::effects::sfx("assets/sounds/start.ogg")
-        }
+        ProfileMenuAction::SetP1 => ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Profile(
+            crate::SimplyLoveProfileRequest::SetDefaultLocalProfile {
+                side: PlayerSide::P1,
+                profile_id: menu.id,
+            },
+        )),
+        ProfileMenuAction::SetP2 => ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Profile(
+            crate::SimplyLoveProfileRequest::SetDefaultLocalProfile {
+                side: PlayerSide::P2,
+                profile_id: menu.id,
+            },
+        )),
         ProfileMenuAction::LinkArrowCloud => {
             cancel_profile_menu(state);
             crate::effects::sfx_then(
@@ -701,29 +677,75 @@ fn selected_after_delete(selected_before: usize, total_after: usize) -> usize {
 }
 
 fn confirm_delete(state: &mut State) -> ThemeEffect {
-    let Some(confirm) = state.delete_confirm.take() else {
+    let Some(confirm) = state.delete_confirm.as_ref() else {
         return ThemeEffect::None;
     };
+    ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Profile(
+        crate::SimplyLoveProfileRequest::DeleteLocalProfile {
+            profile_id: confirm.id.clone(),
+        },
+    ))
+}
 
-    let selected_before = state.selected;
-    match profile::delete_local_profile(&confirm.id) {
-        Ok(()) => {
-            refresh_rows(state);
-            reset_nav_hold(state);
-            let selected = selected_after_delete(selected_before, state.rows.len());
-            state.selected = selected;
-            state.prev_selected = selected;
-            crate::effects::sfx("assets/sounds/start.ogg")
+pub fn apply_local_profile_event(state: &mut State, event: crate::SimplyLoveLocalProfileEvent) {
+    match event {
+        crate::SimplyLoveLocalProfileEvent::Created { result, view } => match result {
+            Ok(profile_id) => {
+                state.name_entry = None;
+                sync_runtime_view(state, view);
+                select_profile_row(state, &profile_id);
+                finish_local_profile_change(state);
+            }
+            Err(()) => set_name_entry_error(state, "CreateFailed"),
+        },
+        crate::SimplyLoveLocalProfileEvent::Renamed {
+            profile_id,
+            result,
+            view,
+        } => match result {
+            Ok(()) => {
+                state.name_entry = None;
+                sync_runtime_view(state, view);
+                select_profile_row(state, &profile_id);
+                finish_local_profile_change(state);
+            }
+            Err(()) => set_name_entry_error(state, "RenameFailed"),
+        },
+        crate::SimplyLoveLocalProfileEvent::DefaultSet { view } => {
+            sync_runtime_view(state, view);
+            cancel_profile_menu(state);
+            finish_local_profile_change(state);
         }
-        Err(_) => {
-            state.delete_confirm = Some(DeleteConfirmState {
-                id: confirm.id,
-                display_name: confirm.display_name,
-                error: Some(tr("Profiles", "DeleteFailed")),
-            });
-            ThemeEffect::None
-        }
+        crate::SimplyLoveLocalProfileEvent::Deleted { result, view } => match result {
+            Ok(()) => {
+                let selected_before = state.selected;
+                state.delete_confirm = None;
+                sync_runtime_view(state, view);
+                let selected = selected_after_delete(selected_before, state.rows.len());
+                state.selected = selected;
+                state.prev_selected = selected;
+                finish_local_profile_change(state);
+            }
+            Err(()) => {
+                if let Some(confirm) = state.delete_confirm.as_mut() {
+                    confirm.error = Some(tr("Profiles", "DeleteFailed"));
+                }
+            }
+        },
     }
+}
+
+fn set_name_entry_error(state: &mut State, key: &str) {
+    if let Some(entry) = state.name_entry.as_mut() {
+        entry.error = Some(tr("Profiles", key));
+    }
+}
+
+fn finish_local_profile_change(state: &mut State) {
+    reset_nav_hold(state);
+    state
+        .pending_effects
+        .push(crate::effects::sfx("assets/sounds/start.ogg"));
 }
 
 fn cancel_delete_confirm(state: &mut State) {
@@ -924,13 +946,11 @@ fn finish_import(state: &mut State, outcome: Result<crate::SimplyLoveItgImportSu
                     .pending_effects
                     .push(crate::effects::sfx("assets/sounds/boom.ogg"));
             } else if summary.canceled {
-                refresh_rows(state);
                 state.import_message = Some(import_canceled_message());
                 state
                     .pending_effects
                     .push(crate::effects::sfx("assets/sounds/change.ogg"));
             } else {
-                refresh_rows(state);
                 select_profile_row(state, &summary.profile_id);
                 state.import_message = Some(import_summary_message(&summary));
                 state
@@ -1261,8 +1281,12 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
         return ThemeEffect::None;
     }
 
-    let three_key_action = screen_input::three_key_menu_action(&mut state.menu_lr_chord, ev);
-    if screen_input::dedicated_three_key_nav_enabled() {
+    let three_key_action = screen_input::three_key_menu_action(
+        &mut state.menu_lr_chord,
+        ev,
+        state.dedicated_three_key_nav,
+    );
+    if state.dedicated_three_key_nav {
         match ev.action {
             VirtualAction::p1_left
             | VirtualAction::p1_menu_left
@@ -1621,9 +1645,11 @@ fn make_bullets(lines: &[&str]) -> String {
 }
 
 fn push_desc(ui: &mut Vec<Actor>, state: &State, s: f32, desc_x: f32, list_y: f32) {
-    let p1 = profile::default_local_profile_id_for_side(profile_data::PlayerSide::P1);
-    let p2 = profile::default_local_profile_id_for_side(profile_data::PlayerSide::P2);
-    let (title, bullets) = help_for_selected(state, p1.as_deref(), p2.as_deref());
+    let (title, bullets) = help_for_selected(
+        state,
+        state.default_profile_ids[0].as_deref(),
+        state.default_profile_ids[1].as_deref(),
+    );
 
     let mut cursor_y = DESC_TITLE_TOP_PAD_PX.mul_add(s, list_y);
     let title_x = desc_x + DESC_TITLE_SIDE_PAD_PX * s;
@@ -1850,11 +1876,18 @@ fn push_popup_box(ui: &mut Vec<Actor>, cx: f32, cy: f32, w: f32, h: f32) {
 
 /// A popup title rendered in the machine Header font, matching the app's
 /// standard popup heading. `top` is the popup box's top edge.
-fn push_popup_title(ui: &mut Vec<Actor>, text: impl Into<String>, cx: f32, top: f32, max_w: f32) {
+fn push_popup_title(
+    ui: &mut Vec<Actor>,
+    text: impl Into<String>,
+    cx: f32,
+    top: f32,
+    max_w: f32,
+    header_font: &'static str,
+) {
     ui.push(act!(text:
         align(0.5, 0.0):
         xy(cx, top + 14.0):
-        font(current_machine_font_key(FontRole::Header)):
+        font(header_font):
         zoom(0.72):
         maxwidth(max_w):
         settext(text.into()):
@@ -1905,7 +1938,12 @@ fn push_overlay_error(
 
 const IMPORT_PICK_MAX_VISIBLE: usize = 8;
 
-fn push_import_picker_overlay(ui: &mut Vec<Actor>, state: &State, asset_manager: &AssetManager) {
+fn push_import_picker_overlay(
+    ui: &mut Vec<Actor>,
+    state: &State,
+    asset_manager: &AssetManager,
+    header_font: &'static str,
+) {
     let Some(picker) = &state.import_picker else {
         return;
     };
@@ -1948,7 +1986,7 @@ fn push_import_picker_overlay(ui: &mut Vec<Actor>, state: &State, asset_manager:
     let block_w = widest_label + ROW_TAG_GAP + tag_w;
     let title_w = measure_text_width(
         asset_manager,
-        current_machine_font_key(FontRole::Header),
+        header_font,
         &tr("Profiles", "ImportPickTitle"),
         0.72,
     );
@@ -1969,6 +2007,7 @@ fn push_import_picker_overlay(ui: &mut Vec<Actor>, state: &State, asset_manager:
         cx,
         top,
         box_w - 40.0,
+        header_font,
     );
 
     // Window the candidate list around the selection (clamped so the synthetic
@@ -2111,7 +2150,7 @@ fn push_import_picker_overlay(ui: &mut Vec<Actor>, state: &State, asset_manager:
     );
 }
 
-fn push_import_progress_overlay(ui: &mut Vec<Actor>, state: &State) {
+fn push_import_progress_overlay(ui: &mut Vec<Actor>, state: &State, header_font: &'static str) {
     let Some(job) = state.import_job.as_ref() else {
         return;
     };
@@ -2133,7 +2172,7 @@ fn push_import_progress_overlay(ui: &mut Vec<Actor>, state: &State) {
     } else {
         tr("Profiles", "ImportInProgress")
     };
-    push_popup_title(ui, heading.to_string(), cx, top, box_w - 40.0);
+    push_popup_title(ui, heading.to_string(), cx, top, box_w - 40.0, header_font);
 
     // Until scores start being written there's no determinate progress yet
     // (file read, resolver build and in-memory score matching are quick) — leave
@@ -2234,7 +2273,12 @@ fn format_eta(secs: u64) -> String {
     }
 }
 
-fn push_import_message_overlay(ui: &mut Vec<Actor>, state: &State, asset_manager: &AssetManager) {
+fn push_import_message_overlay(
+    ui: &mut Vec<Actor>,
+    state: &State,
+    asset_manager: &AssetManager,
+    header_font: &'static str,
+) {
     let Some(message) = &state.import_message else {
         return;
     };
@@ -2252,7 +2296,14 @@ fn push_import_message_overlay(ui: &mut Vec<Actor>, state: &State, asset_manager
 
     push_popup_backdrop(ui, w, h);
     push_popup_box(ui, cx, cy, box_w, box_h);
-    push_popup_title(ui, message.title.to_string(), cx, top, box_w - 40.0);
+    push_popup_title(
+        ui,
+        message.title.to_string(),
+        cx,
+        top,
+        box_w - 40.0,
+        header_font,
+    );
 
     // Two-column ledger, centered as a block: measure the widest label and the
     // widest status so the label/icon/status columns line up, then center the
@@ -2467,6 +2518,7 @@ fn push_row(
     colors: &RowColors,
     p1_id: Option<&str>,
     p2_id: Option<&str>,
+    assets: &'static crate::visual_styles::Assets,
 ) {
     let is_exit = row_is_exit(kind);
     let row_mid_y = (0.5 * ROW_H).mul_add(s, row_y);
@@ -2488,9 +2540,8 @@ fn push_row(
         } else {
             colors.white
         };
-        let visual_style = visual_styles::current_style();
-        let texture = visual_styles::select_color_texture_key();
-        let zoom = HEART_ZOOM * visual_styles::select_color_zoom_scale(visual_style);
+        let texture = assets.select_color;
+        let zoom = HEART_ZOOM * (566.0 / assets.select_color_size[1].max(1) as f32);
         ui.push(act!(sprite(texture):
             align(0.0, 0.5):
             xy(heart_x, row_mid_y):
@@ -2533,6 +2584,7 @@ fn push_rows(
     list_y: f32,
     col_active_bg: [f32; 4],
     col_inactive_bg: [f32; 4],
+    assets: &'static crate::visual_styles::Assets,
 ) {
     let list_w = LIST_W * s;
     let sep_w = SEP_W * s;
@@ -2547,10 +2599,8 @@ fn push_rows(
         black: [0.0, 0.0, 0.0, 1.0],
     };
 
-    let p1 = profile::default_local_profile_id_for_side(profile_data::PlayerSide::P1);
-    let p2 = profile::default_local_profile_id_for_side(profile_data::PlayerSide::P2);
-    let p1_id = p1.as_deref();
-    let p2_id = p2.as_deref();
+    let p1_id = state.default_profile_ids[0].as_deref();
+    let p2_id = state.default_profile_ids[1].as_deref();
 
     for i_vis in 0..VISIBLE_ROWS {
         let row_idx = offset + i_vis;
@@ -2571,6 +2621,7 @@ fn push_rows(
             &colors,
             p1_id,
             p2_id,
+            assets,
         );
     }
 }
@@ -2677,6 +2728,7 @@ pub fn push_actors(
     state: &State,
     asset_manager: &AssetManager,
     alpha_multiplier: f32,
+    visual_policy: crate::views::SimplyLoveVisualPolicyView,
 ) {
     actors.reserve(220);
 
@@ -2686,6 +2738,7 @@ pub fn push_actors(
             active_color_index: state.active_color_index,
             backdrop_rgba: [0.0, 0.0, 0.0, 1.0],
             alpha_mul: 1.0,
+            visual_policy,
         },
     );
 
@@ -2694,8 +2747,10 @@ pub fn push_actors(
     }
 
     let ui_start = actors.len();
+    let header_font = machine_font_key(visual_policy.machine_font, FontRole::Header);
     let title = tr("ScreenTitles", "ManageProfiles");
     actors.push(screen_bar::build(screen_bar::ScreenBarParams {
+        visual_policy,
         title: &title,
         title_placement: ScreenBarTitlePlacement::Left,
         position: ScreenBarPosition::Top,
@@ -2722,6 +2777,7 @@ pub fn push_actors(
         list_y,
         col_active_bg,
         col_inactive_bg,
+        visual_policy.assets,
     );
 
     let list_w = LIST_W * s;
@@ -2731,9 +2787,9 @@ pub fn push_actors(
     push_profile_menu_overlay(actors, state, s, list_x, list_y);
     push_name_entry_overlay(actors, state);
     push_delete_confirm_overlay(actors, state);
-    push_import_picker_overlay(actors, state, asset_manager);
-    push_import_progress_overlay(actors, state);
-    push_import_message_overlay(actors, state, asset_manager);
+    push_import_picker_overlay(actors, state, asset_manager, header_font);
+    push_import_progress_overlay(actors, state, header_font);
+    push_import_message_overlay(actors, state, asset_manager, header_font);
 
     for actor in &mut actors[ui_start..] {
         actor.mul_alpha(alpha_multiplier);
@@ -2746,7 +2802,13 @@ pub fn get_actors(
     alpha_multiplier: f32,
 ) -> Vec<Actor> {
     let mut actors = Vec::with_capacity(220);
-    push_actors(&mut actors, state, asset_manager, alpha_multiplier);
+    push_actors(
+        &mut actors,
+        state,
+        asset_manager,
+        alpha_multiplier,
+        Default::default(),
+    );
     actors
 }
 
@@ -2795,7 +2857,7 @@ mod tests {
     }
 
     fn state_with_profile_row() -> State {
-        let mut state = init();
+        let mut state = init(ManageLocalProfilesView::default());
         state.rows = vec![
             Row {
                 kind: RowKind::CreateNew,
@@ -2813,6 +2875,96 @@ mod tests {
         state.selected = 0;
         state.prev_selected = 0;
         state
+    }
+
+    fn profile_view(id: &str, display_name: &str) -> LocalProfileView {
+        LocalProfileView {
+            id: id.to_owned(),
+            display_name: display_name.to_owned(),
+        }
+    }
+
+    #[test]
+    fn init_uses_shell_prepared_catalog_and_defaults() {
+        let state = init(ManageLocalProfilesView {
+            profiles: vec![profile_view("alice", "Alice")],
+            default_profile_ids: [Some("alice".to_owned()), None],
+            dedicated_three_key_nav: false,
+        });
+
+        assert!(matches!(state.rows[0].kind, RowKind::CreateNew));
+        assert!(matches!(state.rows[1].kind, RowKind::ImportItg));
+        assert!(matches!(
+            &state.rows[2].kind,
+            RowKind::Profile { id, display_name } if id == "alice" && display_name == "Alice"
+        ));
+        assert!(matches!(state.rows[3].kind, RowKind::Exit));
+        assert_eq!(state.default_profile_ids, [Some("alice".to_owned()), None]);
+    }
+
+    #[test]
+    fn create_request_waits_for_shell_result_then_selects_profile() {
+        let mut state = init(ManageLocalProfilesView::default());
+        state.name_entry = Some(NameEntryState {
+            mode: NameEntryMode::Create,
+            value: "Alice".to_owned(),
+            error: None,
+            blink_t: 0.0,
+        });
+
+        assert!(matches!(
+            confirm_name_entry(&mut state),
+            ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Profile(
+                crate::SimplyLoveProfileRequest::CreateLocalProfile { display_name }
+            )) if display_name == "Alice"
+        ));
+        assert!(state.name_entry.is_some());
+
+        apply_local_profile_event(
+            &mut state,
+            crate::SimplyLoveLocalProfileEvent::Created {
+                result: Ok("alice".to_owned()),
+                view: ManageLocalProfilesView {
+                    profiles: vec![profile_view("alice", "Alice")],
+                    default_profile_ids: [Some("alice".to_owned()), None],
+                    dedicated_three_key_nav: false,
+                },
+            },
+        );
+
+        assert!(state.name_entry.is_none());
+        assert_eq!(state.selected, 2);
+        assert!(matches!(
+            update(&mut state, 0.0),
+            Some(ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Audio(
+                deadsync_theme::AudioRequest::PlaySfx(path)
+            ))) if path == "assets/sounds/start.ogg"
+        ));
+    }
+
+    #[test]
+    fn failed_delete_keeps_confirmation_and_sets_error() {
+        let mut state = state_with_profile_row();
+        begin_delete_confirm(&mut state, "test-profile", "Test Profile");
+
+        apply_local_profile_event(
+            &mut state,
+            crate::SimplyLoveLocalProfileEvent::Deleted {
+                result: Err(()),
+                view: ManageLocalProfilesView::default(),
+            },
+        );
+
+        assert!(
+            state
+                .delete_confirm
+                .as_ref()
+                .is_some_and(|confirm| confirm.error.is_some())
+        );
+        assert!(matches!(
+            state.rows[1].kind,
+            RowKind::Profile { ref id, .. } if id == "test-profile"
+        ));
     }
 
     #[test]
@@ -2880,7 +3032,7 @@ mod tests {
 
     #[test]
     fn browse_requests_shell_picker_and_keeps_modal_open() {
-        let mut state = init();
+        let mut state = init(ManageLocalProfilesView::default());
         state.import_picker = Some(ImportPickerState {
             candidates: Vec::new(),
             selected: 0,

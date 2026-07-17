@@ -1,7 +1,7 @@
 use crate::act;
 use crate::assets::i18n::{tr, tr_fmt};
-use crate::assets::{FontRole, current_machine_font_key};
-use crate::config;
+use crate::assets::{FontRole, machine_font_key};
+use crate::config::MachineFont;
 use crate::screens::components::shared::loading_bar;
 use crate::screens::input as screen_input;
 use deadlib_present::actors::Actor;
@@ -24,6 +24,19 @@ pub(crate) struct TargetSpec {
     pub song_title: String,
     pub chart_label: String,
     pub chart_ix: usize,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) struct NavigationPolicy {
+    pub only_dedicated_menu_buttons: bool,
+    pub three_key_navigation: bool,
+}
+
+impl NavigationPolicy {
+    #[inline(always)]
+    const fn dedicated_three_key(self) -> bool {
+        self.only_dedicated_menu_buttons && self.three_key_navigation
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -98,14 +111,8 @@ pub(crate) fn chart_label(chart: &ChartData) -> String {
     }
 }
 
-#[inline(always)]
-fn confidence_threshold_percent() -> u8 {
-    config::get().null_or_die_confidence_percent.min(100)
-}
-
-#[inline(always)]
-fn confidence_threshold() -> f64 {
-    f64::from(confidence_threshold_percent()) / 100.0
+fn confidence_threshold_percent(min_confidence: f64) -> u32 {
+    (min_confidence.clamp(0.0, 1.0) * 100.0).round() as u32
 }
 
 #[inline(always)]
@@ -113,7 +120,11 @@ fn confidence_percent(confidence: Option<f64>) -> u32 {
     (confidence.unwrap_or(0.0).clamp(0.0, 1.0) * 100.0).round() as u32
 }
 
-pub(crate) fn build_overlay(state: &OverlayState, active_color_index: i32) -> Option<Vec<Actor>> {
+pub(crate) fn build_overlay(
+    state: &OverlayState,
+    active_color_index: i32,
+    machine_font: MachineFont,
+) -> Option<Vec<Actor>> {
     let OverlayState::Visible(overlay) = state else {
         return None;
     };
@@ -145,7 +156,7 @@ pub(crate) fn build_overlay(state: &OverlayState, active_color_index: i32) -> Op
         summary.total,
         summary.eligible,
         summary.below_threshold,
-        confidence_threshold_percent(),
+        confidence_threshold_percent(overlay.min_confidence),
         summary.no_change,
         summary.failed
     );
@@ -193,7 +204,7 @@ pub(crate) fn build_overlay(state: &OverlayState, active_color_index: i32) -> Op
         z(OVERLAY_Z + 2)
     ));
     actors.push(act!(text:
-        font(current_machine_font_key(FontRole::Header)):
+        font(machine_font_key(machine_font, FontRole::Header)):
         settext(title):
         align(0.5, 0.5):
         xy(pane_cx, pane_top + 28.0):
@@ -393,7 +404,7 @@ pub(crate) fn build_overlay(state: &OverlayState, active_color_index: i32) -> Op
                 ));
                 let yes_label = tr("PackSync", "YesOption");
                 actors.push(act!(text:
-                    font(current_machine_font_key(FontRole::Header)):
+                    font(machine_font_key(machine_font, FontRole::Header)):
                     settext(yes_label):
                     align(0.5, 0.5):
                     xy(choice_yes_x, answer_y):
@@ -404,7 +415,7 @@ pub(crate) fn build_overlay(state: &OverlayState, active_color_index: i32) -> Op
                 ));
                 let no_label = tr("PackSync", "NoOption");
                 actors.push(act!(text:
-                    font(current_machine_font_key(FontRole::Header)):
+                    font(machine_font_key(machine_font, FontRole::Header)):
                     settext(no_label):
                     align(0.5, 0.5):
                     xy(choice_no_x, answer_y):
@@ -470,12 +481,13 @@ pub(crate) fn begin(
     owner: crate::SimplyLoveSyncOwner,
     pack_name: String,
     targets: Vec<TargetSpec>,
+    confidence_percent: u8,
 ) -> Option<crate::SimplyLoveSyncRequest> {
     if targets.is_empty() {
         return None;
     }
 
-    let min_confidence = confidence_threshold();
+    let min_confidence = f64::from(confidence_percent.min(100)) / 100.0;
     let rows = build_rows(&targets);
     let request_targets = targets
         .into_iter()
@@ -511,8 +523,9 @@ pub(crate) fn poll(state: &mut OverlayState) -> bool {
 pub(crate) fn handle_input(
     state: &mut OverlayState,
     ev: &InputEvent,
+    navigation: NavigationPolicy,
 ) -> crate::screens::ThemeEffect {
-    if screen_input::dedicated_blocks_arrow(ev.action, config::get().only_dedicated_menu_buttons) {
+    if screen_input::dedicated_blocks_arrow(ev.action, navigation.only_dedicated_menu_buttons) {
         return crate::screens::ThemeEffect::None;
     }
 
@@ -520,7 +533,11 @@ pub(crate) fn handle_input(
         let OverlayState::Visible(overlay) = state else {
             return crate::screens::ThemeEffect::None;
         };
-        screen_input::three_key_menu_action(&mut overlay.menu_lr_chord, ev)
+        screen_input::three_key_menu_action_enabled(
+            &mut overlay.menu_lr_chord,
+            ev,
+            navigation.dedicated_three_key(),
+        )
     };
     if !ev.pressed {
         return crate::screens::ThemeEffect::None;
@@ -536,7 +553,7 @@ pub(crate) fn handle_input(
             return crate::screens::ThemeEffect::None;
         };
         let page_delta = view_rows(overlay).saturating_sub(1).max(1) as isize;
-        if screen_input::dedicated_three_key_nav_enabled()
+        if navigation.dedicated_three_key()
             && let Some((_, nav)) = three_key_action
         {
             match overlay.phase {
@@ -629,7 +646,7 @@ pub(crate) fn handle_input(
                 },
                 OverlayPhase::Review => {
                     if let Some(delta) =
-                        review_choice_delta(ev.action, config::get().only_dedicated_menu_buttons)
+                        review_choice_delta(ev.action, navigation.only_dedicated_menu_buttons)
                     {
                         if choose_review_answer(overlay, delta < 0) {
                             play_change = true;
@@ -843,7 +860,7 @@ const fn review_choice_delta(action: VirtualAction, dedicated_menu_only: bool) -
 
 fn save_prompt(overlay: &OverlayStateData) -> String {
     let summary = summary(overlay);
-    let min_conf_pct = confidence_threshold_percent();
+    let min_conf_pct = confidence_threshold_percent(overlay.min_confidence);
     if summary.eligible == 0 {
         return tr_fmt(
             "PackSync",
@@ -917,7 +934,10 @@ fn bar_label(row: &RowState, min_confidence: f64) -> String {
         RowDisposition::BelowThreshold => tr_fmt(
             "PackSync",
             "StatusBelowThresholdFormat",
-            &[("threshold", &confidence_threshold_percent().to_string())],
+            &[(
+                "threshold",
+                &confidence_threshold_percent(min_confidence).to_string(),
+            )],
         )
         .to_string(),
         RowDisposition::NoChange => tr("PackSync", "StatusNoChange").to_string(),
@@ -1068,7 +1088,8 @@ pub(crate) fn apply_event(state: &mut OverlayState, event: crate::SimplyLoveSync
 #[cfg(test)]
 mod tests {
     use super::{
-        RowDisposition, RowPhase, RowState, result_text, review_choice_delta, row_disposition,
+        NavigationPolicy, RowDisposition, RowPhase, RowState, confidence_threshold_percent,
+        result_text, review_choice_delta, row_disposition,
     };
     use deadsync_input::VirtualAction;
     use std::path::PathBuf;
@@ -1098,6 +1119,26 @@ mod tests {
         let row = pack_row(12.5, 0.87);
         let text = result_text(&row, 0.80);
         assert!(text.contains("87% confidence"));
+    }
+
+    #[test]
+    fn pack_sync_runtime_policy_is_explicit_and_bounded() {
+        assert_eq!(confidence_threshold_percent(0.805), 81);
+        assert_eq!(confidence_threshold_percent(2.0), 100);
+        assert!(
+            NavigationPolicy {
+                only_dedicated_menu_buttons: true,
+                three_key_navigation: true,
+            }
+            .dedicated_three_key()
+        );
+        assert!(
+            !NavigationPolicy {
+                only_dedicated_menu_buttons: true,
+                three_key_navigation: false,
+            }
+            .dedicated_three_key()
+        );
     }
 
     #[test]

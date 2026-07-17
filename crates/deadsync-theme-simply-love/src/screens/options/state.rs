@@ -155,6 +155,10 @@ pub struct State {
     pub(super) app_paths: AppPathsView,
     pub(super) audio_options: AudioOptionsView,
     pub(super) song_packs: Vec<OptionsSongPackView>,
+    pub(super) pack_sync: OptionsPackSyncView,
+    pub(super) scorebox_cycle_mask: u8,
+    pub(super) auto_screenshot_mask: u8,
+    pub(super) chart_info_mask: u8,
     pub selected: usize,
     pub(super) prev_selected: usize,
     pub active_color_index: i32, // <-- ADDED
@@ -260,17 +264,21 @@ pub struct State {
     pub(super) i18n_revision: u64,
 }
 
-pub fn init(
-    updater_capabilities: SimplyLoveUpdaterCapabilities,
-    app_paths: AppPathsView,
-    audio_options: AudioOptionsView,
-    graphics_options: GraphicsOptionsView,
-    song_packs: Vec<OptionsSongPackView>,
-    noteskin_catalog: NoteskinCatalogView,
-    smx_assignment: SmxAssignmentView,
-    smx_gif_catalog: SmxGifCatalogView,
-) -> State {
-    let cfg = config::get();
+pub fn init(view: OptionsInitView) -> State {
+    let OptionsInitView {
+        config: cfg,
+        updater_capabilities,
+        app_paths,
+        audio: audio_options,
+        graphics: graphics_options,
+        song_packs,
+        pack_sync,
+        noteskins: noteskin_catalog,
+        machine_noteskin,
+        smx_assignment,
+        smx_gifs: smx_gif_catalog,
+        score_import_profiles,
+    } = view;
     let mut system_noteskin_choices = noteskin_catalog.names;
     if system_noteskin_choices.is_empty() {
         system_noteskin_choices.push(deadsync_profile::NoteSkin::DEFAULT_NAME.to_string());
@@ -287,7 +295,6 @@ pub fn init(
     let music_volume_pct = i32::from(audio_options.music_volume.min(100));
     #[cfg(target_os = "linux")]
     let linux_backend_choices = build_linux_backend_choices(&audio_options);
-    let machine_noteskin = profile::machine_default_noteskin();
     let smx_assignment_status = smx_assignment_status(&smx_assignment);
     let machine_noteskin_idx = system_noteskin_choices
         .iter()
@@ -298,6 +305,10 @@ pub fn init(
         app_paths,
         audio_options,
         song_packs,
+        pack_sync,
+        scorebox_cycle_mask: scorebox_cycle_mask_from_config(&cfg),
+        auto_screenshot_mask: cfg.auto_screenshot_eval,
+        chart_info_mask: select_music_chart_info_mask_from_config(&cfg),
         selected: 0,
         prev_selected: 0,
         active_color_index: cfg.simply_love_color,
@@ -346,7 +357,7 @@ pub fn init(
         smx_judge_pack_choices,
         smx_assignment: smx_assignment.clone(),
         smx_assignment_status,
-        score_import_profiles: Vec::new(),
+        score_import_profiles,
         score_import_profile_choices: vec![
             tr("OptionsScoreImport", "NoEligibleProfiles").to_string(),
         ],

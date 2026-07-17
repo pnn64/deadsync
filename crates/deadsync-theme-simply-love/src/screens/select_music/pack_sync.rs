@@ -5,8 +5,9 @@ use deadsync_profile as profile_data;
 pub(super) fn build_overlay(
     state: &crate::screens::pack_sync::OverlayState,
     active_color_index: i32,
+    machine_font: crate::config::MachineFont,
 ) -> Option<Vec<Actor>> {
-    shared_pack_sync::build_overlay(state, active_color_index)
+    shared_pack_sync::build_overlay(state, active_color_index, machine_font)
 }
 
 pub(super) fn hide_overlay(state: &mut State) {
@@ -29,14 +30,18 @@ pub(super) fn poll(state: &mut State) -> bool {
 }
 
 pub(super) fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
-    shared_pack_sync::handle_input(&mut state.pack_sync_overlay, ev)
+    shared_pack_sync::handle_input(
+        &mut state.pack_sync_overlay,
+        ev,
+        shared_pack_sync::NavigationPolicy {
+            only_dedicated_menu_buttons: state.policy.dedicated_menu_only,
+            three_key_navigation: state.policy.three_key_navigation,
+        },
+    )
 }
 
 fn preferred_difficulty_index(state: &State) -> usize {
-    match (
-        profile::get_session_play_style(),
-        profile::get_session_player_side(),
-    ) {
+    match (state.session.play_style, state.session.player_side) {
         (profile_data::PlayStyle::Versus, profile_data::PlayerSide::P2) => {
             state.p2_preferred_difficulty_index
         }
@@ -72,6 +77,7 @@ fn show_for_group(state: &mut State, pack_group: &str) -> bool {
         crate::SimplyLoveSyncOwner::SelectMusicPack,
         pack_group.to_string(),
         targets,
+        state.sync_confidence_percent,
     );
     if let Some(request) = request {
         queue_sync(state, request);
@@ -85,7 +91,7 @@ fn pack_sync_targets_for_group(
     state: &State,
     pack_group: &str,
 ) -> Option<Vec<shared_pack_sync::TargetSpec>> {
-    let target_chart_type = profile::get_session_play_style().chart_type();
+    let target_chart_type = state.session.play_style.chart_type();
     let preferred_difficulty_index = preferred_difficulty_index(state);
     let mut current_pack_name: Option<&str> = None;
     let mut targets = Vec::new();

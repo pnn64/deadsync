@@ -201,9 +201,9 @@ pub(super) fn handle_browser_input(state: &mut State, event: &InputEvent) -> Opt
         clear_browser_nav_hold(&mut state.download_packs_overlay);
     }
 
-    let outcome = if screen_input::dedicated_three_key_nav_enabled()
+    let outcome = if dedicated_three_key_nav(state)
         && let Some((_, action)) =
-            screen_input::three_key_menu_action(&mut state.menu_lr_chord, event)
+            screen_input::three_key_menu_action(&mut state.menu_lr_chord, event, true)
     {
         handle_three_key_input(
             &mut state.download_packs_overlay,
@@ -886,7 +886,11 @@ fn pack_is_installed(
     installed_names.contains(&canonical_pack_name(&sanitized))
 }
 
-pub(super) fn build_overlay(state: &State, active_color_index: i32) -> Option<Vec<Actor>> {
+pub(super) fn build_overlay(
+    state: &State,
+    active_color_index: i32,
+    machine_font: crate::config::MachineFont,
+) -> Option<Vec<Actor>> {
     let DownloadPacksOverlayState::Visible(data) = &state.download_packs_overlay else {
         return None;
     };
@@ -894,6 +898,8 @@ pub(super) fn build_overlay(state: &State, active_color_index: i32) -> Option<Ve
     let accent = color::simply_love_rgba(active_color_index);
     let cx = screen_center_x();
     let cy = screen_center_y();
+    let header_font = machine_font_key(machine_font, FontRole::Header);
+    let bold_font = machine_font_key(machine_font, FontRole::Bold);
     let mut out = Vec::with_capacity(80);
 
     out.push(act!(quad:
@@ -917,13 +923,13 @@ pub(super) fn build_overlay(state: &State, active_color_index: i32) -> Option<Ve
         zoomto(PANEL_W, HEADER_H): diffuse(0.0, 0.0, 0.0, 0.92): z(Z + 4)
     ));
     out.push(act!(text:
-        font(current_machine_font_key(FontRole::Header)):
+        font(header_font):
         settext(tr("OptionsDownloadPacks", "Title")):
         align(0.0, 0.5): xy(cx - PANEL_W * 0.5 + 18.0, cy - 188.0):
         zoom(0.42): diffuse(1.0, 1.0, 1.0, 1.0): z(Z + 6): horizalign(left)
     ));
     out.push(act!(text:
-        font(current_machine_font_key(FontRole::Bold)):
+        font(bold_font):
         settext(tr("OptionsDownloadPacks", "Source")):
         align(1.0, 0.5): xy(cx + PANEL_W * 0.5 - 16.0, cy - 194.0):
         zoom(0.24): diffuse(accent[0], accent[1], accent[2], 1.0): z(Z + 6): horizalign(right)
@@ -941,22 +947,29 @@ pub(super) fn build_overlay(state: &State, active_color_index: i32) -> Option<Ve
         zoom(0.66): diffuse(0.72, 0.72, 0.76, 1.0): z(Z + 6): horizalign(right)
     ));
 
-    push_search(&mut out, data, accent, cx, cy);
-    push_substyle_buttons(&mut out, data, accent, cx, cy);
+    push_search(&mut out, data, accent, cx, cy, bold_font);
+    push_substyle_buttons(&mut out, data, accent, cx, cy, bold_font);
     match snapshot.phase {
         CatalogPhase::Idle | CatalogPhase::Loading => {
             let message = snapshot
                 .message
                 .clone()
                 .unwrap_or_else(|| tr("OptionsDownloadPacks", "Loading").to_string());
-            push_status(&mut out, &message, [1.0, 1.0, 1.0, 1.0], cx, cy);
+            push_status(&mut out, &message, [1.0, 1.0, 1.0, 1.0], cx, cy, bold_font);
         }
         CatalogPhase::Error => {
             let message = snapshot
                 .message
                 .clone()
                 .unwrap_or_else(|| tr("OptionsDownloadPacks", "LoadError").to_string());
-            push_status(&mut out, &message, [1.0, 0.43, 0.34, 1.0], cx, cy);
+            push_status(
+                &mut out,
+                &message,
+                [1.0, 0.43, 0.34, 1.0],
+                cx,
+                cy,
+                bold_font,
+            );
         }
         CatalogPhase::Ready if data.results.is_empty() => push_status(
             &mut out,
@@ -964,14 +977,15 @@ pub(super) fn build_overlay(state: &State, active_color_index: i32) -> Option<Ve
             [0.85, 0.85, 0.88, 1.0],
             cx,
             cy,
+            bold_font,
         ),
         CatalogPhase::Ready => {
-            push_catalog(&mut out, data, snapshot, accent, cx, cy);
+            push_catalog(&mut out, data, snapshot, accent, cx, cy, bold_font);
         }
     }
     push_footer(&mut out, data, snapshot, accent, cx, cy);
     if let Some(confirm) = data.confirm.as_ref() {
-        push_confirmation(&mut out, confirm, accent, cx, cy);
+        push_confirmation(&mut out, confirm, accent, cx, cy, header_font, bold_font);
     }
     Some(out)
 }
@@ -982,6 +996,7 @@ fn push_search(
     accent: [f32; 4],
     cx: f32,
     cy: f32,
+    bold_font: &'static str,
 ) {
     let y = cy - 145.0;
     out.push(act!(quad:
@@ -993,7 +1008,7 @@ fn push_search(
         diffuse(accent[0], accent[1], accent[2], 1.0): z(Z + 5)
     ));
     out.push(act!(text:
-        font(current_machine_font_key(FontRole::Bold)):
+        font(bold_font):
         settext(tr("OptionsDownloadPacks", "SearchLabel")):
         align(0.0, 0.5): xy(cx - PANEL_W * 0.5 + 28.0, y): zoom(0.25):
         diffuse(accent[0], accent[1], accent[2], 1.0): z(Z + 6): horizalign(left)
@@ -1029,6 +1044,7 @@ fn push_substyle_buttons(
     accent: [f32; 4],
     cx: f32,
     cy: f32,
+    bold_font: &'static str,
 ) {
     let count = data.substyles.len().max(1);
     let total_width = PANEL_W - 28.0;
@@ -1045,7 +1061,7 @@ fn push_substyle_buttons(
             z(Z + 5)
         ));
         out.push(act!(text:
-            font(current_machine_font_key(FontRole::Bold)):
+            font(bold_font):
             settext(substyle_label(&button.key)):
             align(0.5, 0.5): xy(x, y - 4.0): zoom(0.19): maxwidth(button_width - 8.0):
             diffuse(1.0, 1.0, 1.0, if active { 1.0 } else { 0.67 }):
@@ -1077,6 +1093,7 @@ fn push_catalog(
     accent: [f32; 4],
     cx: f32,
     cy: f32,
+    bold_font: &'static str,
 ) {
     let selected = data.selected.min(data.results.len().saturating_sub(1));
     let start = selected
@@ -1101,7 +1118,7 @@ fn push_catalog(
             z(Z + 5)
         ));
         out.push(act!(text:
-            font(current_machine_font_key(FontRole::Bold)): settext(pack.name.clone()):
+            font(bold_font): settext(pack.name.clone()):
             align(0.0, 0.5): xy(list_x - PANE_W * 0.5 + 9.0, y - 5.0):
             zoom(0.25): maxwidth(258.0):
             diffuse(1.0, 1.0, 1.0, if active { 1.0 } else { 0.75 }):
@@ -1116,7 +1133,7 @@ fn push_catalog(
         ));
     }
     if let Some(pack) = selected_pack(data, snapshot) {
-        push_pack_detail(out, data, pack, snapshot, accent, cx, cy);
+        push_pack_detail(out, data, pack, snapshot, accent, cx, cy, bold_font);
     }
 }
 
@@ -1128,6 +1145,7 @@ fn push_pack_detail(
     accent: [f32; 4],
     cx: f32,
     cy: f32,
+    bold_font: &'static str,
 ) {
     let x = cx - PANEL_W * 0.5 + 15.0;
     let install = install_for_pack(snapshot, pack.id);
@@ -1137,7 +1155,7 @@ fn push_pack_detail(
         diffuse(0.0, 0.0, 0.0, 0.76): z(Z + 4)
     ));
     out.push(act!(text:
-        font(current_machine_font_key(FontRole::Bold)): settext(pack.name.clone()):
+        font(bold_font): settext(pack.name.clone()):
         align(0.0, 0.5): xy(x + 9.0, cy - 69.0): zoom(0.34): maxwidth(262.0):
         diffuse(1.0, 1.0, 1.0, 1.0): z(Z + 6): horizalign(left)
     ));
@@ -1148,7 +1166,7 @@ fn push_pack_detail(
     ));
     let (status, status_color) = pack_status(install, installed);
     out.push(act!(text:
-        font(current_machine_font_key(FontRole::Bold)): settext(status):
+        font(bold_font): settext(status):
         align(0.0, 0.5): xy(x + 9.0, cy - 49.0): zoom(0.25): maxwidth(205.0):
         diffuse(status_color[0], status_color[1], status_color[2], status_color[3]):
         z(Z + 6): horizalign(left)
@@ -1173,6 +1191,7 @@ fn push_pack_detail(
         &size_label,
         &format_bytes(pack.size_bytes),
         accent,
+        bold_font,
     );
     push_meta_pair(
         out,
@@ -1183,6 +1202,7 @@ fn push_pack_detail(
         &substyle_label,
         substyle.as_ref(),
         accent,
+        bold_font,
     );
     push_meta_pair(
         out,
@@ -1193,6 +1213,7 @@ fn push_pack_detail(
         &min_version_label,
         min_version.as_ref(),
         accent,
+        bold_font,
     );
 
     if let Some(install) = install
@@ -1210,7 +1231,7 @@ fn push_pack_detail(
         }
     });
     out.push(act!(text:
-        font(current_machine_font_key(FontRole::Bold)): settext(message):
+        font(bold_font): settext(message):
         align(0.0, 1.0): xy(x + 9.0, cy + 177.0): zoom(0.24): maxwidth(264.0):
         diffuse(accent[0], accent[1], accent[2], 1.0): z(Z + 6): horizalign(left)
     ));
@@ -1226,9 +1247,10 @@ fn push_meta_pair(
     right_label: &str,
     right_value: &str,
     accent: [f32; 4],
+    bold_font: &'static str,
 ) {
     out.push(act!(text:
-        font(current_machine_font_key(FontRole::Bold)): settext(left_label.to_owned()):
+        font(bold_font): settext(left_label.to_owned()):
         align(0.0, 0.5): xy(x, y): zoom(0.21): maxwidth(124.0):
         diffuse(accent[0], accent[1], accent[2], 0.92): z(Z + 6): horizalign(left)
     ));
@@ -1238,7 +1260,7 @@ fn push_meta_pair(
         diffuse(0.94, 0.94, 0.96, 1.0): z(Z + 6): horizalign(left)
     ));
     out.push(act!(text:
-        font(current_machine_font_key(FontRole::Bold)): settext(right_label.to_owned()):
+        font(bold_font): settext(right_label.to_owned()):
         align(0.0, 0.5): xy(x + 137.0, y): zoom(0.21): maxwidth(124.0):
         diffuse(accent[0], accent[1], accent[2], 0.92): z(Z + 6): horizalign(left)
     ));
@@ -1270,13 +1292,20 @@ fn push_progress(
     }
 }
 
-fn push_status(out: &mut Vec<Actor>, message: &str, rgba: [f32; 4], cx: f32, cy: f32) {
+fn push_status(
+    out: &mut Vec<Actor>,
+    message: &str,
+    rgba: [f32; 4],
+    cx: f32,
+    cy: f32,
+    bold_font: &'static str,
+) {
     out.push(act!(quad:
         align(0.5, 0.5): xy(cx, cy + 22.0): zoomto(540.0, 128.0):
         diffuse(0.0, 0.0, 0.0, 0.82): z(Z + 5)
     ));
     out.push(act!(text:
-        font(current_machine_font_key(FontRole::Bold)): settext(message.to_owned()):
+        font(bold_font): settext(message.to_owned()):
         align(0.5, 0.5): xy(cx, cy + 10.0): zoom(0.34):
         wrapwidthpixels(1050.0): maxwidth(510.0):
         diffuse(rgba[0], rgba[1], rgba[2], rgba[3]): z(Z + 6): horizalign(center)
@@ -1331,6 +1360,8 @@ fn push_confirmation(
     accent: [f32; 4],
     cx: f32,
     cy: f32,
+    header_font: &'static str,
+    bold_font: &'static str,
 ) {
     out.push(act!(quad:
         align(0.5, 0.5): xy(cx, cy): zoomto(PANEL_W, PANEL_H):
@@ -1345,14 +1376,14 @@ fn push_confirmation(
         diffuse(0.02, 0.02, 0.025, 0.99): z(Z + 21)
     ));
     out.push(act!(text:
-        font(current_machine_font_key(FontRole::Header)):
+        font(header_font):
         settext(tr("OptionsDownloadPacks", "ConfirmTitle")):
         align(0.5, 0.5): xy(cx, cy - 78.0): zoom(0.36):
         diffuse(accent[0], accent[1], accent[2], 1.0): z(Z + 22): horizalign(center)
     ));
     let size = format_bytes(confirm.size_bytes);
     out.push(act!(text:
-        font(current_machine_font_key(FontRole::Bold)):
+        font(bold_font):
         settext(tr_fmt(
             "OptionsDownloadPacks",
             "ConfirmBody",
@@ -1375,7 +1406,7 @@ fn push_confirmation(
             z(Z + 22)
         ));
         out.push(act!(text:
-            font(current_machine_font_key(FontRole::Bold)):
+            font(bold_font):
             settext(tr("OptionsDownloadPacks", key)):
             align(0.5, 0.5): xy(x, cy + 66.0): zoom(0.25):
             diffuse(1.0, 1.0, 1.0, if active { 1.0 } else { 0.65 }):

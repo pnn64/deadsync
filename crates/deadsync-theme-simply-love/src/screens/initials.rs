@@ -1,7 +1,7 @@
 use crate::act;
 use crate::assets::AssetManager;
 use crate::assets::i18n::tr;
-use crate::assets::{FontRole, current_machine_font_key};
+use crate::assets::{FontRole, machine_font_key};
 use crate::screens::components::shared::{transitions, visual_style_bg};
 use crate::screens::{Screen, ThemeEffect};
 use crate::views::{PostSongPlayerView, PostSongRuntimeView};
@@ -927,6 +927,7 @@ fn build_wheel(
     player_frame_x: f32,
     p: &PlayerEntry,
     alpha: f32,
+    headline_font: &'static str,
 ) -> Actor {
     let mut children = Vec::with_capacity(WHEEL_NUM_ITEMS);
 
@@ -957,7 +958,7 @@ fn build_wheel(
         };
 
         let mut actor = act!(text:
-            font(current_machine_font_key(FontRole::Headline)):
+            font(headline_font):
             settext(content):
             align(0.5, 0.5):
             xy(x, 0.0):
@@ -1099,6 +1100,7 @@ fn build_player_frame(side: profile_data::PlayerSide, state: &State) -> Actor {
     let p = &state.players[ix];
     let px = player_frame_x(side);
     let cy = screen_center_y();
+    let headline_font = machine_font_key(state.runtime.machine_font, FontRole::Headline);
 
     let mut children: Vec<Actor> = Vec::with_capacity(32);
 
@@ -1128,7 +1130,7 @@ fn build_player_frame(side: profile_data::PlayerSide, state: &State) -> Actor {
     if p.can_enter {
         // PlayerName text (stays visible even after finishing input).
         children.push(act!(text:
-            font(current_machine_font_key(FontRole::Headline)):
+            font(headline_font):
             settext(p.name.clone()):
             align(0.0, 0.5):
             xy(PLAYERNAME_X, 0.0):
@@ -1156,7 +1158,7 @@ fn build_player_frame(side: profile_data::PlayerSide, state: &State) -> Actor {
                 diffuse(pc[0], pc[1], pc[2], alpha)
             ));
 
-            children.push(build_wheel(side, px, p, alpha));
+            children.push(build_wheel(side, px, p, alpha, headline_font));
         }
     } else if p.joined {
         let pc = player_color_rgba(side, state.active_color_index);
@@ -1188,6 +1190,7 @@ pub fn push_actors(
     state: &State,
     stages: &[stage_stats::StageSummary],
     _asset_manager: &AssetManager,
+    visual_policy: crate::views::SimplyLoveVisualPolicyView,
 ) {
     actors.reserve(64);
 
@@ -1198,6 +1201,7 @@ pub fn push_actors(
             active_color_index: state.active_color_index,
             backdrop_rgba: [0.0, 0.0, 0.0, 1.0],
             alpha_mul: 1.0,
+            visual_policy,
         },
     );
 
@@ -1227,7 +1231,13 @@ pub fn get_actors(
     asset_manager: &AssetManager,
 ) -> Vec<Actor> {
     let mut actors = Vec::with_capacity(64);
-    push_actors(&mut actors, state, stages, asset_manager);
+    push_actors(
+        &mut actors,
+        state,
+        stages,
+        asset_manager,
+        Default::default(),
+    );
     actors
 }
 

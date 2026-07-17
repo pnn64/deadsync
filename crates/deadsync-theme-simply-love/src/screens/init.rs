@@ -1,6 +1,6 @@
 use crate::act;
 use crate::assets::i18n::tr;
-use crate::assets::{FontRole, current_machine_font_key_for_text};
+use crate::assets::{FontRole, machine_font_key_for_text};
 use crate::screens::components::shared::{loading_bar, visual_style_bg};
 use crate::screens::{Screen, ThemeEffect};
 use deadlib_present::actors::Actor;
@@ -8,14 +8,9 @@ use deadlib_present::color;
 use deadlib_present::space::{
     screen_center_x, screen_center_y, screen_height, screen_width, widescale,
 };
-use deadsync_assets::{media_cache, noteskin};
 use deadsync_input::{InputEvent, VirtualAction};
-use deadsync_simfile::app_runtime as song_loading;
-use deadsync_simfile::course as simfile_course;
-use log::info;
 use std::cell::RefCell;
-use std::path::{Path, PathBuf};
-use std::sync::mpsc;
+use std::path::PathBuf;
 use std::sync::{Arc, LazyLock};
 use std::time::Instant;
 
@@ -43,43 +38,6 @@ pub const BAR_SQUISH_DURATION: f32 = 0.35;
 
 const LOADING_BAR_H: f32 = 30.0;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum LoadingPhase {
-    Songs,
-    Courses,
-    Artwork,
-    Noteskins,
-}
-
-enum LoadingMsg {
-    Phase(LoadingPhase),
-    Song {
-        done: usize,
-        total: usize,
-        pack: String,
-        song: String,
-    },
-    Course {
-        done: usize,
-        total: usize,
-        group: String,
-        course: String,
-    },
-    Artwork {
-        done: usize,
-        total: usize,
-        line2: String,
-        line3: String,
-    },
-    Noteskins {
-        done: usize,
-        total: usize,
-        skin: String,
-        status: String,
-    },
-    Done,
-}
-
 #[derive(Clone)]
 struct SpeedTextCache {
     done: usize,
@@ -88,7 +46,7 @@ struct SpeedTextCache {
 }
 
 struct LoadingState {
-    phase: LoadingPhase,
+    phase: crate::views::SimplyLoveContentReloadPhase,
     line2: Arc<str>,
     line3: Arc<str>,
     count_text: Arc<str>,
@@ -102,14 +60,13 @@ struct LoadingState {
     noteskins_total: usize,
     done: bool,
     started_at: Instant,
-    rx: mpsc::Receiver<LoadingMsg>,
     speed_text_cache: RefCell<Option<SpeedTextCache>>,
 }
 
 impl LoadingState {
-    fn new(rx: mpsc::Receiver<LoadingMsg>) -> Self {
+    fn new() -> Self {
         Self {
-            phase: LoadingPhase::Songs,
+            phase: crate::views::SimplyLoveContentReloadPhase::Songs,
             line2: EMPTY_TEXT.clone(),
             line3: EMPTY_TEXT.clone(),
             count_text: EMPTY_TEXT.clone(),
@@ -123,7 +80,6 @@ impl LoadingState {
             noteskins_total: 0,
             done: false,
             started_at: Instant::now(),
-            rx,
             speed_text_cache: RefCell::new(None),
         }
     }
@@ -182,102 +138,33 @@ pub fn init(songs_root: PathBuf, courses_root: PathBuf) -> State {
     }
 }
 
-fn collect_artwork_cache_paths() -> (Vec<PathBuf>, Vec<PathBuf>) {
-    let mut banner = Vec::new();
-    let mut cdtitle = Vec::new();
-    {
-        let song_cache = deadsync_simfile::runtime_cache::get_song_cache();
-        for pack in song_cache.iter() {
-            if let Some(path) = pack.banner_path.as_ref() {
-                banner.push(path.clone());
-            }
-            for song in &pack.songs {
-                if let Some(path) = song.banner_path.as_ref() {
-                    banner.push(path.clone());
-                }
-                if let Some(path) = song.cdtitle_path.as_ref() {
-                    cdtitle.push(path.clone());
-                }
-            }
-        }
-    }
-    {
-        let course_cache = deadsync_simfile::runtime_cache::get_course_cache();
-        for (course_path, course) in course_cache.iter() {
-            if let Some(path) =
-                simfile_course::resolve_course_banner_path(course_path, &course.banner)
-            {
-                banner.push(path);
-            }
-        }
-    }
-    (banner, cdtitle)
-}
-
-fn cache_progress_lines(path: Option<&Path>) -> (String, String) {
-    let Some(path) = path else {
-        return (String::new(), String::new());
-    };
-    let file_name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
-    let file_stem = path
-        .file_stem()
-        .and_then(|n| n.to_str())
-        .unwrap_or(file_name)
-        .to_owned();
-
-    let mut parts: Vec<&str> = Vec::with_capacity(16);
-    for component in path.components() {
-        if let std::path::Component::Normal(name) = component
-            && let Some(name) = name.to_str()
-        {
-            parts.push(name);
-        }
-    }
-
-    if let Some(idx) = parts.iter().position(|p| p.eq_ignore_ascii_case("songs"))
-        && let Some(pack) = parts.get(idx + 1)
-    {
-        let line3 = parts
-            .get(idx + 2)
-            .copied()
-            .filter(|name| !name.eq_ignore_ascii_case(file_name))
-            .map(str::to_owned)
-            .unwrap_or(file_stem);
-        return ((*pack).to_owned(), line3);
-    }
-
-    if let Some(idx) = parts.iter().position(|p| p.eq_ignore_ascii_case("courses"))
-        && let Some(group) = parts.get(idx + 1)
-    {
-        return ((*group).to_owned(), file_stem);
-    }
-
-    let line2 = path
-        .parent()
-        .and_then(|p| p.file_name())
-        .and_then(|n| n.to_str())
-        .unwrap_or("")
-        .to_owned();
-    (line2, file_stem)
-}
-
 #[inline(always)]
-fn arc_phase_label(phase: LoadingPhase) -> Arc<str> {
+fn arc_phase_label(phase: crate::views::SimplyLoveContentReloadPhase) -> Arc<str> {
     match phase {
-        LoadingPhase::Songs => tr("Init", "LoadingSongsText"),
-        LoadingPhase::Courses => tr("Init", "LoadingCoursesText"),
-        LoadingPhase::Artwork => tr("Init", "CachingArtworkText"),
-        LoadingPhase::Noteskins => tr("Init", "CompilingNoteskinsText"),
+        crate::views::SimplyLoveContentReloadPhase::Songs => tr("Init", "LoadingSongsText"),
+        crate::views::SimplyLoveContentReloadPhase::Courses => tr("Init", "LoadingCoursesText"),
+        crate::views::SimplyLoveContentReloadPhase::Artwork => tr("Init", "CachingArtworkText"),
+        crate::views::SimplyLoveContentReloadPhase::Noteskins => {
+            tr("Init", "CompilingNoteskinsText")
+        }
     }
 }
 
 #[inline(always)]
 fn loading_progress_values(loading: &LoadingState) -> (usize, usize, f32) {
     let (done, mut total) = match loading.phase {
-        LoadingPhase::Songs => (loading.songs_done, loading.songs_total),
-        LoadingPhase::Courses => (loading.courses_done, loading.courses_total),
-        LoadingPhase::Artwork => (loading.artwork_done, loading.artwork_total),
-        LoadingPhase::Noteskins => (loading.noteskins_done, loading.noteskins_total),
+        crate::views::SimplyLoveContentReloadPhase::Songs => {
+            (loading.songs_done, loading.songs_total)
+        }
+        crate::views::SimplyLoveContentReloadPhase::Courses => {
+            (loading.courses_done, loading.courses_total)
+        }
+        crate::views::SimplyLoveContentReloadPhase::Artwork => {
+            (loading.artwork_done, loading.artwork_total)
+        }
+        crate::views::SimplyLoveContentReloadPhase::Noteskins => {
+            (loading.noteskins_done, loading.noteskins_total)
+        }
     };
     if total < done {
         total = done;
@@ -330,149 +217,84 @@ fn speed_text(loading: &LoadingState, done: usize, elapsed_s: f32) -> Arc<str> {
     text
 }
 
-fn start_loading_thread(state: &mut State) {
-    let (tx, rx) = mpsc::channel::<LoadingMsg>();
-    state.loading = Some(LoadingState::new(rx));
-    let songs_root = state.songs_root.clone();
-    let courses_root = state.courses_root.clone();
-
-    std::thread::spawn(move || {
-        let _ = tx.send(LoadingMsg::Phase(LoadingPhase::Songs));
-        let mut on_song = |done: usize, total: usize, pack: &str, song: &str| {
-            let _ = tx.send(LoadingMsg::Song {
-                done,
-                total,
-                pack: pack.to_owned(),
-                song: song.to_owned(),
-            });
-        };
-        song_loading::scan_and_load_songs_with_progress_counts(&songs_root, &mut on_song);
-
-        let _ = tx.send(LoadingMsg::Phase(LoadingPhase::Courses));
-        let mut on_course = |done: usize, total: usize, group: &str, course: &str| {
-            let _ = tx.send(LoadingMsg::Course {
-                done,
-                total,
-                group: group.to_owned(),
-                course: course.to_owned(),
-            });
-        };
-        song_loading::scan_and_load_courses_with_progress_counts(
-            &courses_root,
-            &songs_root,
-            &mut on_course,
-        );
-
-        let (banner_paths, cdtitle_paths) = collect_artwork_cache_paths();
-        let artwork_total = media_cache::artwork_cache_jobs(&banner_paths, &cdtitle_paths);
-
-        let _ = tx.send(LoadingMsg::Phase(LoadingPhase::Artwork));
-        info!(
-            "Init loading: caching artwork in one pass (banner={}, cdtitle={}, total jobs={})...",
-            banner_paths.len(),
-            cdtitle_paths.len(),
-            artwork_total
-        );
-        let mut on_artwork = |done: usize, _total: usize, path: Option<&Path>| {
-            let (line2, line3) = cache_progress_lines(path);
-            let _ = tx.send(LoadingMsg::Artwork {
-                done,
-                total: artwork_total,
-                line2,
-                line3,
-            });
-        };
-        media_cache::prewarm_artwork_cache_with_progress(
-            &banner_paths,
-            &cdtitle_paths,
-            &mut on_artwork,
-        );
-        info!("Init loading: artwork cache prewarm complete.");
-
-        let _ = tx.send(LoadingMsg::Phase(LoadingPhase::Noteskins));
-        info!("Init loading: compiling noteskin cache before UI...");
-        let mut on_noteskin = |done: usize, total: usize, skin: &str, status: &str| {
-            let _ = tx.send(LoadingMsg::Noteskins {
-                done,
-                total,
-                skin: skin.to_owned(),
-                status: status.to_owned(),
-            });
-        };
-        let noteskin_summary = noteskin::compile_all_itg_caches_with_progress(&mut on_noteskin);
-        info!(
-            "Init loading: noteskin cache compile complete (total={}, built={}, reused={}, failed={}).",
-            noteskin_summary.total,
-            noteskin_summary.built,
-            noteskin_summary.reused,
-            noteskin_summary.failed
-        );
-        let _ = tx.send(LoadingMsg::Done);
-    });
+fn start_loading(state: &mut State) -> ThemeEffect {
+    state.loading = Some(LoadingState::new());
+    ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Content(
+        crate::SimplyLoveContentRequest::InitializeLibrary {
+            songs_root: state.songs_root.clone(),
+            courses_root: state.courses_root.clone(),
+        },
+    ))
 }
 
-fn poll_loading_state(loading: &mut LoadingState) {
-    while let Ok(msg) = loading.rx.try_recv() {
-        match msg {
-            LoadingMsg::Phase(phase) => {
+pub fn sync_loading_events(
+    state: &mut State,
+    events: Vec<crate::views::SimplyLoveContentReloadEvent>,
+) {
+    let Some(loading) = state.loading.as_mut() else {
+        return;
+    };
+    for event in events {
+        match event {
+            crate::views::SimplyLoveContentReloadEvent::Phase(phase) => {
                 loading.phase = phase;
                 loading.line2 = EMPTY_TEXT.clone();
                 loading.line3 = EMPTY_TEXT.clone();
                 refresh_loading_count_text(loading);
             }
-            LoadingMsg::Song {
+            crate::views::SimplyLoveContentReloadEvent::Song {
                 done,
                 total,
                 pack,
                 song,
             } => {
-                loading.phase = LoadingPhase::Songs;
+                loading.phase = crate::views::SimplyLoveContentReloadPhase::Songs;
                 loading.songs_done = done;
                 loading.songs_total = total;
                 loading.line2 = Arc::<str>::from(pack);
                 loading.line3 = Arc::<str>::from(song);
                 refresh_loading_count_text(loading);
             }
-            LoadingMsg::Course {
+            crate::views::SimplyLoveContentReloadEvent::Course {
                 done,
                 total,
                 group,
                 course,
             } => {
-                loading.phase = LoadingPhase::Courses;
+                loading.phase = crate::views::SimplyLoveContentReloadPhase::Courses;
                 loading.courses_done = done;
                 loading.courses_total = total;
                 loading.line2 = Arc::<str>::from(group);
                 loading.line3 = Arc::<str>::from(course);
                 refresh_loading_count_text(loading);
             }
-            LoadingMsg::Artwork {
+            crate::views::SimplyLoveContentReloadEvent::Artwork {
                 done,
                 total,
                 line2,
                 line3,
             } => {
-                loading.phase = LoadingPhase::Artwork;
+                loading.phase = crate::views::SimplyLoveContentReloadPhase::Artwork;
                 loading.artwork_done = done;
                 loading.artwork_total = total;
                 loading.line2 = Arc::<str>::from(line2);
                 loading.line3 = Arc::<str>::from(line3);
                 refresh_loading_count_text(loading);
             }
-            LoadingMsg::Noteskins {
+            crate::views::SimplyLoveContentReloadEvent::Noteskins {
                 done,
                 total,
                 skin,
                 status,
             } => {
-                loading.phase = LoadingPhase::Noteskins;
+                loading.phase = crate::views::SimplyLoveContentReloadPhase::Noteskins;
                 loading.noteskins_done = done;
                 loading.noteskins_total = total;
                 loading.line2 = Arc::<str>::from(skin);
                 loading.line3 = Arc::<str>::from(status);
                 refresh_loading_count_text(loading);
             }
-            LoadingMsg::Done => {
+            crate::views::SimplyLoveContentReloadEvent::Finished { .. } => {
                 loading.done = true;
                 refresh_loading_count_text(loading);
             }
@@ -506,15 +328,10 @@ pub fn update(state: &mut State, dt: f32) -> ThemeEffect {
     if state.phase == InitPhase::Loading {
         if !state.loader_started {
             state.loader_started = true;
-            start_loading_thread(state);
+            return start_loading(state);
         }
 
-        let done = if let Some(loading) = state.loading.as_mut() {
-            poll_loading_state(loading);
-            loading.done
-        } else {
-            false
-        };
+        let done = state.loading.as_ref().is_some_and(|loading| loading.done);
 
         if done {
             state.loading = None;
@@ -603,17 +420,18 @@ fn loading_progress(loading: Option<&LoadingState>) -> (usize, usize, f32) {
     loading_progress_values(loading)
 }
 
-fn push_loading_overlay(state: &State, actors: &mut Vec<Actor>, loading_elapsed_s: f32) {
+fn push_loading_overlay(
+    state: &State,
+    actors: &mut Vec<Actor>,
+    loading_elapsed_s: f32,
+    machine_font: crate::config::MachineFont,
+) {
     let loading = state.loading.as_ref();
-    let phase = loading.map(|l| l.phase).unwrap_or(LoadingPhase::Songs);
+    let phase = loading
+        .map(|loading| loading.phase)
+        .unwrap_or(crate::views::SimplyLoveContentReloadPhase::Songs);
     let (done, total, progress) = loading_progress(loading);
-    let show_speed_row = matches!(
-        phase,
-        LoadingPhase::Songs
-            | LoadingPhase::Courses
-            | LoadingPhase::Artwork
-            | LoadingPhase::Noteskins
-    ) && total > 0;
+    let show_speed_row = total > 0;
     let speed_text = loading
         .filter(|_| show_speed_row)
         .map(|loading| speed_text(loading, done, loading_elapsed_s.max(0.0)));
@@ -631,7 +449,7 @@ fn push_loading_overlay(state: &State, actors: &mut Vec<Actor>, loading_elapsed_
         z(104.0)
     ));
     let title_text = tr("Init", "TitleText");
-    let title_font = current_machine_font_key_for_text(FontRole::Header, &title_text);
+    let title_font = machine_font_key_for_text(machine_font, FontRole::Header, &title_text);
     actors.push(act!(text:
         font(title_font):
         settext(title_text):
@@ -720,6 +538,7 @@ fn push_actors_with_elapsed_overrides(
     state: &State,
     loading_elapsed_override: Option<f32>,
     bg_elapsed_override: Option<f32>,
+    visual_policy: crate::views::SimplyLoveVisualPolicyView,
 ) {
     actors.reserve(32 + ARROW_COUNT);
 
@@ -728,6 +547,7 @@ fn push_actors_with_elapsed_overrides(
         active_color_index: state.active_color_index,
         backdrop_rgba: [0.0, 0.0, 0.0, 1.0],
         alpha_mul: 1.0,
+        visual_policy,
     };
     if let Some(bg_elapsed_s) = bg_elapsed_override {
         state
@@ -743,7 +563,7 @@ fn push_actors_with_elapsed_overrides(
                 loading.started_at.elapsed().as_secs_f32().max(0.0)
             })
         });
-        push_loading_overlay(state, actors, loading_elapsed_s);
+        push_loading_overlay(state, actors, loading_elapsed_s, visual_policy.machine_font);
         return;
     }
 
@@ -803,12 +623,83 @@ fn push_actors_with_elapsed_overrides(
     }
 }
 
-pub fn push_actors(actors: &mut Vec<Actor>, state: &State) {
-    push_actors_with_elapsed_overrides(actors, state, None, None);
+pub fn push_actors(
+    actors: &mut Vec<Actor>,
+    state: &State,
+    visual_policy: crate::views::SimplyLoveVisualPolicyView,
+) {
+    push_actors_with_elapsed_overrides(actors, state, None, None, visual_policy);
 }
 
 pub fn get_actors(state: &State) -> Vec<Actor> {
     let mut actors = Vec::with_capacity(32 + ARROW_COUNT);
-    push_actors(&mut actors, state);
+    push_actors(&mut actors, state, Default::default());
     actors
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn startup_loading_emits_shell_request() {
+        let mut state = init(PathBuf::from("Songs"), PathBuf::from("Courses"));
+
+        let effect = update(&mut state, 0.0);
+
+        assert!(matches!(
+            effect,
+            ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Content(
+                crate::SimplyLoveContentRequest::InitializeLibrary {
+                    songs_root,
+                    courses_root,
+                }
+            )) if songs_root == PathBuf::from("Songs")
+                && courses_root == PathBuf::from("Courses")
+        ));
+        assert!(state.loading.is_some());
+    }
+
+    #[test]
+    fn shell_events_drive_startup_progress_and_completion() {
+        let mut state = init(PathBuf::from("Songs"), PathBuf::from("Courses"));
+        let _ = update(&mut state, 0.0);
+
+        sync_loading_events(
+            &mut state,
+            vec![
+                crate::views::SimplyLoveContentReloadEvent::Artwork {
+                    done: 4,
+                    total: 9,
+                    line2: "Pack".to_owned(),
+                    line3: "Song".to_owned(),
+                },
+                crate::views::SimplyLoveContentReloadEvent::Noteskins {
+                    done: 2,
+                    total: 3,
+                    skin: "metal".to_owned(),
+                    status: "built".to_owned(),
+                },
+                crate::views::SimplyLoveContentReloadEvent::Finished {
+                    song_packs: Vec::new(),
+                },
+            ],
+        );
+
+        let loading = state
+            .loading
+            .as_ref()
+            .expect("loading chrome should remain");
+        assert_eq!((loading.artwork_done, loading.artwork_total), (4, 9));
+        assert_eq!((loading.noteskins_done, loading.noteskins_total), (2, 3));
+        assert_eq!(
+            (loading.line2.as_ref(), loading.line3.as_ref()),
+            ("metal", "built")
+        );
+        assert!(loading.done);
+
+        assert!(matches!(update(&mut state, 0.0), ThemeEffect::None));
+        assert!(state.loading.is_none());
+        assert!(matches!(state.phase, InitPhase::Playing));
+    }
 }

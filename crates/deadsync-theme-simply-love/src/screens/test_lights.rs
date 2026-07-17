@@ -250,7 +250,13 @@ pub fn out_transition() -> (Vec<Actor>, f32) {
     transitions::fade_out_black(TRANSITION_OUT_DURATION, 1200)
 }
 
-pub fn push_actors(actors: &mut Vec<Actor>, state: &State, lights: LightsTestView, alpha_mul: f32) {
+pub fn push_actors(
+    actors: &mut Vec<Actor>,
+    state: &State,
+    lights: LightsTestView,
+    alpha_mul: f32,
+    visual_policy: crate::views::SimplyLoveVisualPolicyView,
+) {
     actors.reserve(44);
     let screen_w = screen_width();
     let screen_h = screen_height();
@@ -263,6 +269,7 @@ pub fn push_actors(actors: &mut Vec<Actor>, state: &State, lights: LightsTestVie
             active_color_index: state.active_color_index,
             backdrop_rgba: [0.0, 0.0, 0.0, 1.0],
             alpha_mul,
+            visual_policy,
         },
     );
 
@@ -316,7 +323,7 @@ pub fn push_actors(actors: &mut Vec<Actor>, state: &State, lights: LightsTestVie
 
 pub fn get_actors(state: &State, lights: LightsTestView, alpha_mul: f32) -> Vec<Actor> {
     let mut actors = Vec::with_capacity(44);
-    push_actors(&mut actors, state, lights, alpha_mul);
+    push_actors(&mut actors, state, lights, alpha_mul, Default::default());
     actors
 }
 

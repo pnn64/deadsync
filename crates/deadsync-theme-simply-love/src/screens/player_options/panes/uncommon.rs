@@ -1,23 +1,16 @@
 use super::super::row::{index_binding, simple_bitmask_binding};
 use super::*;
-use deadsync_profile::compat as gp;
 use deadsync_profile::{
     AccelEffectsMask, AppearanceEffectsMask, AttackMode, HideLightType, HoldsMask, InsertMask,
     RemoveMask, VisualEffectsMask,
 };
 
-const ATTACKS: ChoiceBinding<usize> = index_binding!(
-    ATTACK_MODE_VARIANTS,
-    AttackMode::On,
-    attack_mode,
-    gp::update_attack_mode_for_side,
-    false
-);
+const ATTACKS: ChoiceBinding<usize> =
+    index_binding!(ATTACK_MODE_VARIANTS, AttackMode::On, attack_mode, false);
 const HIDE_LIGHT_TYPE: ChoiceBinding<usize> = index_binding!(
     HIDE_LIGHT_TYPE_VARIANTS,
     HideLightType::NoHideLights,
     hide_light_type,
-    gp::update_hide_light_type_for_side,
     false
 );
 const INSERT: BitmaskBinding = simple_bitmask_binding!(
@@ -25,7 +18,6 @@ const INSERT: BitmaskBinding = simple_bitmask_binding!(
     bits = u8,
     state_field = insert,
     profile_field = insert_active_mask,
-    persist = gp::update_insert_mask_for_side,
     width = 7,
 );
 const REMOVE: BitmaskBinding = simple_bitmask_binding!(
@@ -33,7 +25,6 @@ const REMOVE: BitmaskBinding = simple_bitmask_binding!(
     bits = u8,
     state_field = remove,
     profile_field = remove_active_mask,
-    persist = gp::update_remove_mask_for_side,
     width = 8,
 );
 const HOLDS: BitmaskBinding = simple_bitmask_binding!(
@@ -41,7 +32,6 @@ const HOLDS: BitmaskBinding = simple_bitmask_binding!(
     bits = u8,
     state_field = holds,
     profile_field = holds_active_mask,
-    persist = gp::update_holds_mask_for_side,
     width = 5,
 );
 const ACCEL: BitmaskBinding = simple_bitmask_binding!(
@@ -49,7 +39,6 @@ const ACCEL: BitmaskBinding = simple_bitmask_binding!(
     bits = u8,
     state_field = accel_effects,
     profile_field = accel_effects_active_mask,
-    persist = gp::update_accel_effects_mask_for_side,
     width = 5,
 );
 const EFFECT: BitmaskBinding = simple_bitmask_binding!(
@@ -57,7 +46,6 @@ const EFFECT: BitmaskBinding = simple_bitmask_binding!(
     bits = u16,
     state_field = visual_effects,
     profile_field = visual_effects_active_mask,
-    persist = gp::update_visual_effects_mask_for_side,
     width = 10,
 );
 const APPEARANCE: BitmaskBinding = simple_bitmask_binding!(
@@ -65,7 +53,6 @@ const APPEARANCE: BitmaskBinding = simple_bitmask_binding!(
     bits = u8,
     state_field = appearance_effects,
     profile_field = appearance_effects_active_mask,
-    persist = gp::update_appearance_effects_mask_for_side,
     width = 5,
 );
 

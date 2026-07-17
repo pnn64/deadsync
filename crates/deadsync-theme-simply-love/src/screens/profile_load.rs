@@ -1,6 +1,6 @@
 use crate::act;
 use crate::assets::i18n::tr;
-use crate::assets::{FontRole, current_machine_font_key};
+use crate::assets::{FontRole, machine_font_key};
 use crate::screens::{Screen, ThemeEffect};
 use deadlib_present::actors::Actor;
 use deadlib_present::space::{screen_center_x, screen_center_y, screen_height, screen_width};
@@ -63,7 +63,11 @@ pub fn out_transition() -> (Vec<Actor>, f32) {
     (vec![], 0.0)
 }
 
-pub fn push_actors(actors: &mut Vec<Actor>, _: &State) {
+pub fn push_actors(
+    actors: &mut Vec<Actor>,
+    _: &State,
+    visual_policy: crate::views::SimplyLoveVisualPolicyView,
+) {
     actors.reserve(4);
     let w = screen_width();
     let h = screen_height();
@@ -96,7 +100,7 @@ pub fn push_actors(actors: &mut Vec<Actor>, _: &State) {
         linear(TWEENTIME): cropleft(1.0)
     ));
     actors.push(act!(text:
-        font(current_machine_font_key(FontRole::Header)): settext(tr("Common", "Loading")):
+        font(machine_font_key(visual_policy.machine_font, FontRole::Header)): settext(tr("Common", "Loading")):
         align(0.5, 0.5): xy(cx, cy):
         zoom(0.6):
         diffuse(0.0, 0.0, 0.0, 1.0):
@@ -106,7 +110,7 @@ pub fn push_actors(actors: &mut Vec<Actor>, _: &State) {
 
 pub fn get_actors(state: &State) -> Vec<Actor> {
     let mut actors = Vec::with_capacity(4);
-    push_actors(&mut actors, state);
+    push_actors(&mut actors, state, Default::default());
     actors
 }
 

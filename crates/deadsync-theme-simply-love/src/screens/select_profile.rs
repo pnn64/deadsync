@@ -1,6 +1,7 @@
 use crate::assets::AssetManager;
 use crate::screens::ThemeEffect;
 use crate::screens::components::shared::profile_boxes;
+use crate::views::ProfilePickerView;
 use deadlib_present::actors::Actor;
 use deadsync_input::InputEvent;
 use deadsync_profile as profile_data;
@@ -13,8 +14,8 @@ pub const fn exit_anim_duration() -> f32 {
 }
 
 #[inline(always)]
-pub fn init() -> State {
-    profile_boxes::init()
+pub fn init(view: ProfilePickerView) -> State {
+    profile_boxes::init(view)
 }
 
 #[inline(always)]
@@ -58,8 +59,15 @@ pub fn push_actors(
     state: &State,
     asset_manager: &AssetManager,
     alpha_multiplier: f32,
+    visual_policy: crate::views::SimplyLoveVisualPolicyView,
 ) {
-    profile_boxes::push_actors(actors, state, asset_manager, alpha_multiplier);
+    profile_boxes::push_actors(
+        actors,
+        state,
+        asset_manager,
+        alpha_multiplier,
+        visual_policy,
+    );
 }
 
 #[inline(always)]
@@ -95,7 +103,7 @@ mod tests {
 
     #[test]
     fn standalone_consumer_preserves_start_sound_before_profile_selection() {
-        let mut state = init();
+        let mut state = init(ProfilePickerView::default());
         set_joined(&mut state, true, false);
 
         let ThemeEffect::Batch(effects) =
@@ -124,7 +132,7 @@ mod tests {
 
     #[test]
     fn fast_switch_is_explicit_in_selection_and_cancel_effects() {
-        let mut state = init();
+        let mut state = init(ProfilePickerView::default());
         set_fast_switch(&mut state, true);
         set_joined(&mut state, true, false);
 
@@ -143,7 +151,7 @@ mod tests {
             ))
         ));
 
-        let mut state = init();
+        let mut state = init(ProfilePickerView::default());
         set_fast_switch(&mut state, true);
         set_joined(&mut state, false, false);
         assert!(matches!(
@@ -151,7 +159,7 @@ mod tests {
             ThemeEffect::Navigate(crate::screens::Screen::SelectMusic)
         ));
 
-        let mut state = init();
+        let mut state = init(ProfilePickerView::default());
         set_joined(&mut state, false, false);
         assert!(matches!(
             handle_input(&mut state, &press(deadsync_input::VirtualAction::p1_back)),

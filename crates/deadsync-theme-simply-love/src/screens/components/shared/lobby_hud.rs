@@ -2,8 +2,7 @@ use crate::act;
 use deadlib_present::actors::Actor;
 use deadlib_present::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 use deadsync_online::lobbies;
-use deadsync_profile as profile_data;
-use deadsync_profile::compat as profile;
+use deadsync_profile::PlayerSide;
 use std::cmp::Ordering;
 
 const PANEL_WIDTH: f32 = 200.0;
@@ -24,10 +23,12 @@ pub struct RenderParams<'a> {
     pub z: i16,
     pub show_song_info: bool,
     pub status_text: Option<String>,
+    pub joined_sides: [bool; 2],
+    pub player_side: PlayerSide,
 }
 
 pub fn build_panel(params: RenderParams<'_>) -> Vec<Actor> {
-    let placement = panel_placement(params.screen_name);
+    let placement = panel_placement(params.screen_name, params.joined_sides, params.player_side);
     let width = panel_width(params.screen_name, placement);
     let body_lines = build_body_lines(
         params.joined,
@@ -208,7 +209,11 @@ fn panel_width(screen_name: &str, placement: PanelPlacement) -> f32 {
     }
 }
 
-fn panel_placement(screen_name: &str) -> PanelPlacement {
+fn panel_placement(
+    screen_name: &str,
+    joined_sides: [bool; 2],
+    player_side: PlayerSide,
+) -> PanelPlacement {
     if screen_name.eq_ignore_ascii_case("ScreenSelectMusic") {
         return PanelPlacement::Left;
     }
@@ -218,7 +223,7 @@ fn panel_placement(screen_name: &str) -> PanelPlacement {
         return PanelPlacement::Left;
     }
 
-    let (p1_joined, p2_joined) = joined_sides();
+    let [p1_joined, p2_joined] = normalized_joined_sides(joined_sides, player_side);
     match (p1_joined, p2_joined) {
         (true, true) => PanelPlacement::Center,
         (true, false) => PanelPlacement::Right,
@@ -226,16 +231,17 @@ fn panel_placement(screen_name: &str) -> PanelPlacement {
     }
 }
 
-fn joined_sides() -> (bool, bool) {
-    let mut p1_joined = profile::is_session_side_joined(profile_data::PlayerSide::P1);
-    let mut p2_joined = profile::is_session_side_joined(profile_data::PlayerSide::P2);
+fn normalized_joined_sides(
+    [mut p1_joined, mut p2_joined]: [bool; 2],
+    player_side: PlayerSide,
+) -> [bool; 2] {
     if !(p1_joined || p2_joined) {
-        match profile::get_session_player_side() {
-            profile_data::PlayerSide::P1 => p1_joined = true,
-            profile_data::PlayerSide::P2 => p2_joined = true,
+        match player_side {
+            PlayerSide::P1 => p1_joined = true,
+            PlayerSide::P2 => p2_joined = true,
         }
     }
-    (p1_joined, p2_joined)
+    [p1_joined, p2_joined]
 }
 
 fn display_x(placement: PanelPlacement, width: f32) -> f32 {
@@ -258,6 +264,39 @@ fn truncate_text(text: &str, max_chars: usize) -> String {
     out.extend(text.chars().take(keep));
     out.push_str("...");
     out
+}
+
+#[cfg(test)]
+mod session_tests {
+    use super::*;
+
+    #[test]
+    fn empty_joined_snapshot_falls_back_to_active_side() {
+        assert_eq!(
+            normalized_joined_sides([false, false], PlayerSide::P1),
+            [true, false]
+        );
+        assert_eq!(
+            normalized_joined_sides([false, false], PlayerSide::P2),
+            [false, true]
+        );
+    }
+
+    #[test]
+    fn gameplay_panel_placement_uses_prepared_joined_sides() {
+        assert_eq!(
+            panel_placement("ScreenGameplay", [true, true], PlayerSide::P1),
+            PanelPlacement::Center
+        );
+        assert_eq!(
+            panel_placement("ScreenGameplay", [true, false], PlayerSide::P1),
+            PanelPlacement::Right
+        );
+        assert_eq!(
+            panel_placement("ScreenGameplay", [false, true], PlayerSide::P2),
+            PanelPlacement::Left
+        );
+    }
 }
 
 #[cfg(test)]

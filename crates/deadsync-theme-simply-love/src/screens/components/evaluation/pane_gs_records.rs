@@ -47,10 +47,10 @@ impl RecordsPaneKind {
     }
 
     #[inline(always)]
-    fn logo(self) -> &'static str {
+    fn logo(self, srpg10: bool) -> &'static str {
         match self {
             Self::ItlEx => "ITL.png",
-            Self::Srpg => srpg_logo_texture_key(),
+            Self::Srpg => srpg_logo_texture_key(srpg10),
             Self::ArrowCloudHardEx => "arrowcloud.png",
             Self::GrooveStatsItg => "GrooveStats.png",
             Self::GrooveStatsEx => "BoogieStatsEX.png",
@@ -225,7 +225,7 @@ fn build_records_pane(
     }
 
     let mut children = Vec::with_capacity(GS_RECORD_ROWS * 4 + 1);
-    let logo = kind.logo();
+    let logo = kind.logo(runtime.srpg10);
     children.push(act!(sprite_static(logo):
         align(0.5, 0.5):
         xy(0.0, 100.0 * pane_zoom):
@@ -385,7 +385,13 @@ mod tests {
 
     #[test]
     fn groovestats_ex_uses_in_pane_ex_logo() {
-        assert_eq!(RecordsPaneKind::GrooveStatsItg.logo(), "GrooveStats.png");
-        assert_eq!(RecordsPaneKind::GrooveStatsEx.logo(), "BoogieStatsEX.png");
+        assert_eq!(
+            RecordsPaneKind::GrooveStatsItg.logo(false),
+            "GrooveStats.png"
+        );
+        assert_eq!(
+            RecordsPaneKind::GrooveStatsEx.logo(false),
+            "BoogieStatsEX.png"
+        );
     }
 }

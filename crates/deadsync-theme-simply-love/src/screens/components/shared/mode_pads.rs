@@ -1,14 +1,14 @@
 use crate::act;
-use crate::assets::{FontRole, current_machine_font_key};
+use crate::assets::{FontRole, machine_font_key};
+use crate::config::MachineFont;
 use crate::screens::components::shared::pad_display;
 use deadlib_present::actors::Actor;
 use deadlib_present::space::{screen_width, widescale};
-use deadsync_profile as profile_data;
-use deadsync_profile::compat as profile;
+use deadsync_profile::PlayStyle;
 
-pub fn build_label(text: String) -> Actor {
+pub fn build_label(text: String, machine_font: MachineFont) -> Actor {
     act!(text:
-        font(current_machine_font_key(FontRole::Header)):
+        font(machine_font_key(machine_font, FontRole::Header)):
         settext(text):
         align(1.0, 0.5):
         xy(screen_width() - widescale(55.0, 62.0), 15.0):
@@ -18,18 +18,15 @@ pub fn build_label(text: String) -> Actor {
     )
 }
 
-fn states() -> [bool; 2] {
-    if profile::get_session_play_style() == profile_data::PlayStyle::Double {
+fn states(play_style: PlayStyle, joined: [bool; 2]) -> [bool; 2] {
+    if play_style == PlayStyle::Double {
         return [true, true];
     }
-    [
-        profile::is_session_side_joined(profile_data::PlayerSide::P1),
-        profile::is_session_side_joined(profile_data::PlayerSide::P2),
-    ]
+    joined
 }
 
-pub fn build() -> [Actor; 2] {
-    let [p1_active, p2_active] = states();
+pub fn build(play_style: PlayStyle, joined: [bool; 2]) -> [Actor; 2] {
+    let [p1_active, p2_active] = states(play_style, joined);
     let pad_zoom = 0.24 * widescale(0.435, 0.525);
     [
         pad_display::build(pad_display::PadDisplayParams {
@@ -47,4 +44,16 @@ pub fn build() -> [Actor; 2] {
             is_active: p2_active,
         }),
     ]
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn double_activates_both_pads_and_other_styles_follow_joined_sides() {
+        assert_eq!(states(PlayStyle::Double, [true, false]), [true, true]);
+        assert_eq!(states(PlayStyle::Single, [false, true]), [false, true]);
+        assert_eq!(states(PlayStyle::Versus, [true, true]), [true, true]);
+    }
 }

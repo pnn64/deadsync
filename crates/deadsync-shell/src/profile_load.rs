@@ -75,6 +75,9 @@ pub(crate) fn select_course_context_view(config: &config::Config) -> SelectCours
         },
         play_style: session.play_style,
         player_side: session.player_side,
+        joined: std::array::from_fn(|idx| {
+            session.side_joined(deadsync_profile::player_side_for_index(idx))
+        }),
         music_rate: session.music_rate,
     }
 }

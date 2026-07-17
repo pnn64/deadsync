@@ -20,12 +20,61 @@ pub type SelectedCoursePlan = SelectedCourseView;
 pub type DensityGraphSource = DensityGraphView;
 pub type TimingHealth = TimingHealthView<PresentModeTrace, ClockDomainTrace, AudioTimingView>;
 
+/// Shell-prepared visual policy shared by screen backgrounds and screen bars.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct SimplyLoveVisualPolicyView {
+    pub background: VisualBackgroundView,
+    pub assets: &'static crate::visual_styles::Assets,
+    pub machine_font: deadsync_config::prelude::MachineFont,
+    pub title_logo_texture_key: Option<&'static str>,
+    pub srpg10_tint: bool,
+    pub screen_bar: ScreenBarBackgroundView,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum VisualBackgroundView {
+    #[default]
+    Tiled,
+    Technique,
+    Srpg,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub enum ScreenBarBackgroundView {
+    #[default]
+    Default,
+    Colored([f32; 4]),
+    Transparent,
+}
+
+impl Default for SimplyLoveVisualPolicyView {
+    fn default() -> Self {
+        Self {
+            background: VisualBackgroundView::Tiled,
+            assets: crate::visual_styles::for_style(deadsync_config::prelude::VisualStyle::Hearts),
+            machine_font: deadsync_config::prelude::MachineFont::default(),
+            title_logo_texture_key: None,
+            srpg10_tint: false,
+            screen_bar: ScreenBarBackgroundView::Default,
+        }
+    }
+}
+
 /// Shell-owned presentation policy used while constructing Gameplay state.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct GameplayPolicyView {
     pub translated_titles: bool,
-    pub random_background_movies: bool,
     pub center_single_notefield: bool,
+    pub background_brightness: f32,
+    pub background_color: deadsync_config::prelude::Color,
+    pub smx_input: bool,
+    pub zmod_rating_box_text: bool,
+    pub show_bpm_decimal: bool,
+    pub bpm_position: deadsync_config::prelude::GameplayBpmPosition,
+    pub machine_font: deadsync_config::prelude::MachineFont,
+    pub scorebox_pane_filter: deadsync_score::SelectMusicScoreboxFilter,
+    pub srpg10_scorebox: bool,
+    pub smx_profile_enabled: bool,
 }
 
 impl Default for GameplayPolicyView {
@@ -33,11 +82,54 @@ impl Default for GameplayPolicyView {
         let config = deadsync_config::prelude::Config::default();
         Self {
             translated_titles: config.translated_titles,
-            random_background_movies: matches!(
-                config.random_background_mode,
-                deadsync_config::prelude::RandomBackgroundMode::RandomMovies
-            ),
             center_single_notefield: config.center_1player_notefield,
+            background_brightness: config.bg_brightness,
+            background_color: config.gameplay_bg_color,
+            smx_input: config.smx_input,
+            zmod_rating_box_text: config.zmod_rating_box_text,
+            show_bpm_decimal: config.show_bpm_decimal,
+            bpm_position: config.gameplay_bpm_position,
+            machine_font: config.machine_font,
+            scorebox_pane_filter: deadsync_score::SelectMusicScoreboxFilter::default(),
+            srpg10_scorebox: false,
+            smx_profile_enabled: false,
+        }
+    }
+}
+
+/// Score/cache data prepared by the shell before Gameplay constructs its
+/// deterministic runtime and song-lifetime presentation state.
+#[derive(Clone, Debug)]
+pub struct GameplayScoreInitView {
+    pub mini_indicator: deadsync_gameplay::GameplayMiniIndicatorData,
+    pub scorebox_profiles: [deadsync_score::GameplayScoreboxProfileSnapshot; 2],
+    pub scorebox_snapshots: [Option<deadsync_score::CachedPlayerLeaderboardData>; 2],
+}
+
+impl Default for GameplayScoreInitView {
+    fn default() -> Self {
+        Self {
+            mini_indicator: Default::default(),
+            scorebox_profiles: std::array::from_fn(|_| Default::default()),
+            scorebox_snapshots: std::array::from_fn(|_| None),
+        }
+    }
+}
+
+/// Live score/cache data polled by the shell while Gameplay is active.
+#[derive(Clone, Debug)]
+pub struct GameplayScoreRuntimeView {
+    /// Newly completed snapshots only; `None` preserves the screen's current
+    /// value without cloning it on steady gameplay frames.
+    pub scorebox_updates: [Option<deadsync_score::CachedPlayerLeaderboardData>; 2],
+    pub itl_cmod_warning: [bool; 2],
+}
+
+impl Default for GameplayScoreRuntimeView {
+    fn default() -> Self {
+        Self {
+            scorebox_updates: std::array::from_fn(|_| None),
+            itl_cmod_warning: [false; 2],
         }
     }
 }
@@ -71,6 +163,8 @@ impl Default for GameplayRuntimeView {
 pub struct GameplayInitView {
     pub runtime: GameplayRuntimeView,
     pub hud: deadsync_profile::GameplayHudSnapshot,
+    pub scores: GameplayScoreInitView,
+    pub background_changes: Vec<deadsync_chart::SongBackgroundChange>,
 }
 
 impl Default for GameplayInitView {
@@ -87,6 +181,28 @@ impl Default for GameplayInitView {
                 },
                 p2: deadsync_profile::GameplayHudPlayerSnapshot::default(),
             },
+            scores: GameplayScoreInitView::default(),
+            background_changes: Vec::new(),
+        }
+    }
+}
+
+/// Shell-prepared runtime policy and HUD routing consumed by Practice.
+#[derive(Clone, Debug)]
+pub struct PracticeRuntimeView {
+    pub only_dedicated_menu_buttons: bool,
+    pub three_key_navigation: bool,
+    pub tab_acceleration: bool,
+    pub hud: deadsync_profile::GameplayHudSnapshot,
+}
+
+impl Default for PracticeRuntimeView {
+    fn default() -> Self {
+        Self {
+            only_dedicated_menu_buttons: false,
+            three_key_navigation: false,
+            tab_acceleration: true,
+            hud: GameplayInitView::default().hud,
         }
     }
 }
@@ -97,6 +213,7 @@ pub struct PlayerOptionsPolicyView {
     pub allow_per_player_global_offsets: bool,
     pub heart_rate_monitors: bool,
     pub arcade_navigation: bool,
+    pub dedicated_three_key_nav: bool,
     pub smx_input: bool,
     pub smx_panel_lights: bool,
     pub scorebox_available: bool,
@@ -109,6 +226,8 @@ impl Default for PlayerOptionsPolicyView {
             allow_per_player_global_offsets: config.machine_allow_per_player_global_offsets,
             heart_rate_monitors: config.machine_enable_heart_rate_monitors,
             arcade_navigation: config.arcade_options_navigation,
+            dedicated_three_key_nav: config.three_key_navigation
+                && config.only_dedicated_menu_buttons,
             smx_input: config.smx_input,
             smx_panel_lights: config.smx_panel_lights,
             scorebox_available: false,
@@ -116,9 +235,16 @@ impl Default for PlayerOptionsPolicyView {
     }
 }
 
-/// Shell-prepared session and profile snapshot used for one Player Options
-/// state. Option edits remain local to the screen and use the existing typed
-/// persistence callbacks.
+/// One player's shell-prepared editable options and HRM selection.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct PlayerOptionsPlayerView {
+    pub options: deadsync_profile::PlayerOptionsData,
+    pub heart_rate_device_id: Option<String>,
+}
+
+/// Shell-prepared session and option snapshot used for one Player Options
+/// state. Option edits remain local to the screen and use typed persistence
+/// requests without retaining profile identity, stats, or credentials.
 #[derive(Clone, Debug)]
 pub struct PlayerOptionsInitView {
     pub policy: PlayerOptionsPolicyView,
@@ -126,7 +252,7 @@ pub struct PlayerOptionsInitView {
     pub player_side: PlayerSide,
     pub joined: [bool; 2],
     pub music_rate: f32,
-    pub profiles: [deadsync_profile::Profile; 2],
+    pub players: [PlayerOptionsPlayerView; 2],
 }
 
 impl Default for PlayerOptionsInitView {
@@ -137,7 +263,7 @@ impl Default for PlayerOptionsInitView {
             player_side: PlayerSide::default(),
             joined: [true, false],
             music_rate: 1.0,
-            profiles: std::array::from_fn(|_| deadsync_profile::Profile::default()),
+            players: std::array::from_fn(|_| PlayerOptionsPlayerView::default()),
         }
     }
 }
@@ -146,6 +272,7 @@ impl Default for PlayerOptionsInitView {
 #[derive(Clone, Debug)]
 pub struct MappingsRuntimeView {
     pub keymap: Keymap,
+    pub machine_font: deadsync_config::prelude::MachineFont,
     pub input_debounce_seconds: f32,
     pub dedicated_three_key_nav: bool,
 }
@@ -154,6 +281,7 @@ impl Default for MappingsRuntimeView {
     fn default() -> Self {
         Self {
             keymap: deadsync_input::default_keymap(),
+            machine_font: deadsync_config::prelude::MachineFont::default(),
             input_debounce_seconds: 0.02,
             dedicated_three_key_nav: false,
         }
@@ -200,6 +328,7 @@ pub struct PostSongRuntimeView {
     pub translated_titles: bool,
     pub zmod_rating_box_text: bool,
     pub three_key_navigation: bool,
+    pub srpg10_visuals: bool,
     pub machine_leaderboards:
         std::collections::HashMap<String, Vec<deadsync_score::LeaderboardEntry>>,
 }
@@ -229,6 +358,9 @@ pub struct EvaluationPolicyView {
     pub machine_nice_sound: bool,
     pub show_gameplay_timer: bool,
     pub translated_titles: bool,
+    pub transparent_panels: bool,
+    pub srpg10_visuals: bool,
+    pub machine_font: deadsync_config::prelude::MachineFont,
     pub zmod_rating_box_text: bool,
     pub breakdown_style: deadsync_config::prelude::BreakdownStyle,
 }
@@ -248,6 +380,16 @@ impl Default for EvaluationPolicyView {
             machine_nice_sound: config.machine_nice_sound,
             show_gameplay_timer: config.show_select_music_gameplay_timer,
             translated_titles: config.translated_titles,
+            transparent_panels: matches!(
+                config.machine_evaluation_style.resolve(config.visual_style),
+                deadsync_config::prelude::MachineEvaluationStyle::Transparent
+            ),
+            srpg10_visuals: config.visual_style.is_srpg()
+                && matches!(
+                    config.srpg_variant,
+                    deadsync_config::prelude::SrpgVariant::Srpg10
+                ),
+            machine_font: config.machine_font,
             zmod_rating_box_text: config.zmod_rating_box_text,
             breakdown_style: config.select_music_breakdown_style,
         }
@@ -316,6 +458,8 @@ pub struct ScoreboxSideView {
     pub chart_hash: Option<String>,
     pub groovestats_active: bool,
     pub show_ex_score: bool,
+    pub pane_filter: deadsync_score::SelectMusicScoreboxFilter,
+    pub srpg10: bool,
     pub display_name: String,
     pub groovestats_username: String,
     pub player_initials: String,
@@ -426,6 +570,9 @@ pub struct MusicWheelSlotRuntimeView {
 pub struct MusicWheelRuntimeView {
     pub joined: [bool; 2],
     pub play_style: deadsync_profile::PlayStyle,
+    pub translated_titles: bool,
+    pub song_bg_dimmed: bool,
+    pub section_bg_dimmed: bool,
     pub slots: [MusicWheelSlotRuntimeView; MUSIC_WHEEL_SLOT_COUNT],
 }
 
@@ -448,6 +595,7 @@ pub struct SelectCourseScoreView {
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct SelectCourseRuntimeView {
     pub context: SelectCourseContextView,
+    pub players: [SelectFlowPlayerView; 2],
     pub music_wheel: MusicWheelRuntimeView,
     pub score: SelectCourseScoreView,
 }
@@ -482,6 +630,7 @@ pub struct SelectCourseContextView {
     pub policy: SelectCoursePolicyView,
     pub play_style: deadsync_profile::PlayStyle,
     pub player_side: deadsync_profile::PlayerSide,
+    pub joined: [bool; 2],
     pub music_rate: f32,
 }
 
@@ -491,6 +640,7 @@ impl Default for SelectCourseContextView {
             policy: SelectCoursePolicyView::default(),
             play_style: deadsync_profile::PlayStyle::default(),
             player_side: deadsync_profile::PlayerSide::default(),
+            joined: [true, false],
             music_rate: 1.0,
         }
     }
@@ -507,6 +657,52 @@ pub struct SelectCourseInitView {
     pub last_course_path: Option<PathBuf>,
     pub last_course_difficulty: Option<String>,
     pub context: SelectCourseContextView,
+}
+
+/// Shell-prepared local profile catalog used by Manage Local Profiles.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct ManageLocalProfilesView {
+    pub profiles: Vec<LocalProfileView>,
+    pub default_profile_ids: [Option<String>; 2],
+    pub dedicated_three_key_nav: bool,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct LocalProfileView {
+    pub id: String,
+    pub display_name: String,
+}
+
+/// Shell-prepared profile-picker catalog shared by Select Profile and the
+/// Select Music profile overlay.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ProfilePickerView {
+    pub profiles: Vec<ProfilePickerEntryView>,
+    pub default_profiles: [deadsync_profile::ActiveProfile; 2],
+    pub three_key_navigation: bool,
+}
+
+impl Default for ProfilePickerView {
+    fn default() -> Self {
+        Self {
+            profiles: Vec::new(),
+            default_profiles: std::array::from_fn(|_| deadsync_profile::ActiveProfile::Guest),
+            three_key_navigation: false,
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ProfilePickerEntryView {
+    pub id: String,
+    pub display_name: String,
+    pub speed_mod: String,
+    pub avatar_key: Option<String>,
+    pub total_songs_played: u32,
+    pub scroll_option: deadsync_profile::ScrollOption,
+    pub mini_indicator: deadsync_profile::MiniIndicator,
+    pub noteskin: deadsync_profile::NoteSkin,
+    pub judgment: deadsync_profile::JudgmentGraphic,
 }
 
 /// Live session routing used throughout Select Music without reading the
@@ -548,8 +744,16 @@ impl Default for SelectMusicSessionView {
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct SelectMusicProfileView {
     pub display_names: [String; 2],
+    pub avatar_texture_keys: [Option<String>; 2],
     pub local_profile_ids: [Option<String>; 2],
     pub pad_profile_ids: [Option<String>; 2],
+}
+
+/// One shell-prepared saved pad config shown in Select Music's quick menu.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct SelectMusicPadProfileView {
+    pub name: String,
+    pub is_default: bool,
 }
 
 impl SelectMusicProfileView {
@@ -595,6 +799,8 @@ pub struct SelectMusicRuntimeView {
     pub profiles: SelectMusicProfileView,
     /// Refreshed only when the active local profile IDs change.
     pub favorites: Option<deadsync_profile::FavoriteSnapshot>,
+    /// Refreshed on demand from the shell-owned pad-config cache.
+    pub pad_profiles: Option<[Vec<SelectMusicPadProfileView>; 2]>,
     pub audio_playback: deadsync_theme::views::AudioPlaybackView,
     pub lobby: SimplyLoveLobbyRuntimeView,
     pub downloads: Vec<SelectMusicDownloadView>,
@@ -618,6 +824,7 @@ impl Default for SelectMusicRuntimeView {
             session: Default::default(),
             profiles: Default::default(),
             favorites: None,
+            pad_profiles: None,
             audio_playback: Default::default(),
             lobby: Default::default(),
             downloads: Vec::new(),
@@ -634,6 +841,49 @@ impl Default for SelectMusicRuntimeView {
             sync_confidence_percent: 80,
         }
     }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SimplyLoveContentReloadPhase {
+    Songs,
+    Courses,
+    Artwork,
+    Noteskins,
+}
+
+/// Progress and completion data produced by the shell-owned content reload
+/// worker. The completed cache snapshot lets the theme rebuild without reading
+/// the process-global runtime cache.
+#[derive(Clone, Debug)]
+pub enum SimplyLoveContentReloadEvent {
+    Phase(SimplyLoveContentReloadPhase),
+    Song {
+        done: usize,
+        total: usize,
+        pack: String,
+        song: String,
+    },
+    Course {
+        done: usize,
+        total: usize,
+        group: String,
+        course: String,
+    },
+    Artwork {
+        done: usize,
+        total: usize,
+        line2: String,
+        line3: String,
+    },
+    Noteskins {
+        done: usize,
+        total: usize,
+        skin: String,
+        status: String,
+    },
+    Finished {
+        song_packs: Vec<deadsync_chart::SongPack>,
+    },
 }
 
 /// One shell-prepared unlock download row rendered by Select Music.
@@ -724,15 +974,18 @@ pub struct SelectMusicHistoryView {
 }
 
 /// Filesystem- and runtime-derived data prepared when Select Music is entered.
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, Default)]
 pub struct SelectMusicInitView {
     pub songs_root: PathBuf,
+    pub song_scan_roots: Vec<PathBuf>,
     pub courses_root: PathBuf,
+    pub song_packs: Vec<deadsync_chart::SongPack>,
     pub playlists: Vec<SelectMusicPlaylistView>,
     pub history: SelectMusicHistoryView,
     pub policy: SelectMusicPolicyView,
     pub session: SelectMusicSessionView,
     pub profiles: SelectMusicProfileView,
+    pub profile_picker: ProfilePickerView,
     pub last_played: SelectMusicLastPlayedView,
     pub favorites: deadsync_profile::FavoriteSnapshot,
     pub known_packs: deadsync_profile::KnownPackSnapshot,
@@ -744,6 +997,52 @@ pub struct OptionsSongPackView {
     pub group_name: String,
     pub display_name: String,
     pub songs: Vec<Arc<deadsync_chart::SongData>>,
+}
+
+/// Shell-prepared profile selection used when Options builds Pack Sync targets.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct OptionsPackSyncView {
+    pub target_chart_type: String,
+    pub preferred_difficulty_index: usize,
+}
+
+/// Shell-prepared machine state used to construct Simply Love's Options
+/// screen. Options legitimately edits nearly the full config surface, so the
+/// copied config is kept whole instead of duplicating its fields in another DTO.
+#[derive(Clone, Debug)]
+pub struct OptionsInitView {
+    pub config: deadsync_config::prelude::Config,
+    pub updater_capabilities: SimplyLoveUpdaterCapabilities,
+    pub app_paths: deadsync_theme::views::AppPathsView,
+    pub audio: deadsync_theme::views::AudioOptionsView,
+    pub graphics: deadsync_theme::views::GraphicsOptionsView,
+    pub song_packs: Vec<OptionsSongPackView>,
+    pub pack_sync: OptionsPackSyncView,
+    pub noteskins: deadsync_theme::views::NoteskinCatalogView,
+    pub machine_noteskin: deadsync_profile::NoteSkin,
+    pub smx_assignment: deadsync_theme::views::SmxAssignmentView,
+    pub smx_gifs: deadsync_theme::views::SmxGifCatalogView,
+    pub score_import_profiles: Vec<crate::SimplyLoveScoreImportProfile>,
+}
+
+/// Shell-prepared saved values edited by the Overscan Adjustment screen.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct OverscanAdjustmentView {
+    pub translate_x: i32,
+    pub translate_y: i32,
+    pub add_width: i32,
+    pub add_height: i32,
+}
+
+impl Default for OptionsPackSyncView {
+    fn default() -> Self {
+        Self {
+            target_chart_type: deadsync_profile::PlayStyle::default()
+                .chart_type()
+                .to_owned(),
+            preferred_difficulty_index: 2,
+        }
+    }
 }
 
 /// Shell-prepared media policy consumed by Simply Love's Select Music screen.
@@ -788,6 +1087,7 @@ pub struct SelectMusicInteractionPolicyView {
     pub sort_by_series: bool,
     pub new_pack_mode: deadsync_config::prelude::NewPackMode,
     pub show_srpg_shop: bool,
+    pub srpg10_visuals: bool,
     pub practice_shortcut: deadsync_input::KeyCode,
     pub song_search_shortcut: deadsync_input::KeyCode,
     pub reload_shortcut: deadsync_input::KeyCode,
@@ -802,6 +1102,7 @@ impl Default for SelectMusicInteractionPolicyView {
             sort_by_series: false,
             new_pack_mode: deadsync_config::prelude::NewPackMode::Disabled,
             show_srpg_shop: deadsync_config::prelude::DEFAULT_SHOW_SRPG_SHOP,
+            srpg10_visuals: false,
             practice_shortcut: deadsync_input::KeyCode::KeyP,
             song_search_shortcut: deadsync_input::KeyCode::KeyS,
             reload_shortcut: deadsync_input::KeyCode::KeyL,
@@ -859,7 +1160,9 @@ impl Default for SelectMusicPresentationPolicyView {
 /// Runtime/config policy used to expose Select Music features and input paths.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct SelectMusicPolicyView {
+    pub machine_font: deadsync_config::prelude::MachineFont,
     pub dedicated_menu_only: bool,
+    pub three_key_navigation: bool,
     pub fsr_profiles: bool,
     pub replays: bool,
     pub profile_switch: bool,
@@ -945,6 +1248,7 @@ pub struct MainMenuSmxConflictView {
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct MainMenuRuntimeView {
     pub allow_shutdown_host: bool,
+    pub dedicated_three_key_nav: bool,
     pub song_count: usize,
     pub pack_count: usize,
     pub course_count: usize,

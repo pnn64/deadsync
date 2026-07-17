@@ -1,5 +1,4 @@
 use super::*;
-use deadsync_chart::STANDARD_DIFFICULTY_COUNT;
 
 #[derive(Clone, Debug)]
 pub(super) struct SyncPackSelection {
@@ -32,18 +31,36 @@ pub(super) fn selected_sync_pack_selection(state: &State) -> SyncPackSelection {
     }
 }
 
-pub(super) fn sync_pack_preferred_difficulty_index() -> usize {
-    let profile_data = profile::get();
-    let play_style = profile::get_session_play_style();
-    let max_diff_index = STANDARD_DIFFICULTY_COUNT.saturating_sub(1);
-    if max_diff_index == 0 {
-        0
-    } else {
-        profile_data
-            .last_played(play_style)
-            .difficulty_index
-            .min(max_diff_index)
+pub(super) fn navigation_policy(state: &State) -> shared_pack_sync::NavigationPolicy {
+    let choices = &state.sub[SubmenuKind::InputBackend].choice_indices;
+    shared_pack_sync::NavigationPolicy {
+        only_dedicated_menu_buttons: get_choice_by_id(
+            choices,
+            INPUT_BACKEND_OPTIONS_ROWS,
+            SubRowId::MenuButtons,
+        ) == Some(1),
+        three_key_navigation: get_choice_by_id(
+            choices,
+            INPUT_BACKEND_OPTIONS_ROWS,
+            SubRowId::MenuNavigation,
+        ) == Some(1),
     }
+}
+
+#[inline(always)]
+pub(super) fn dedicated_three_key_nav(state: &State) -> bool {
+    let policy = navigation_policy(state);
+    policy.three_key_navigation && policy.only_dedicated_menu_buttons
+}
+
+pub(super) fn confidence_percent(state: &State) -> u8 {
+    get_choice_by_id(
+        &state.sub[SubmenuKind::NullOrDieOptions].choice_indices,
+        NULL_OR_DIE_OPTIONS_ROWS,
+        SubRowId::SyncConfidence,
+    )
+    .map(sync_confidence_from_choice)
+    .unwrap_or(80)
 }
 
 pub(super) fn begin_pack_sync(state: &mut State, selection: SyncPackSelection) {
@@ -56,8 +73,8 @@ pub(super) fn begin_pack_sync(state: &mut State, selection: SyncPackSelection) {
 
     clear_navigation_holds(state);
 
-    let target_chart_type = profile::get_session_play_style().chart_type();
-    let preferred_difficulty_index = sync_pack_preferred_difficulty_index();
+    let target_chart_type = state.pack_sync.target_chart_type.as_str();
+    let preferred_difficulty_index = state.pack_sync.preferred_difficulty_index;
     let pack_group = selection.pack_group.as_deref();
     let mut targets = Vec::new();
 
@@ -90,11 +107,13 @@ pub(super) fn begin_pack_sync(state: &mut State, selection: SyncPackSelection) {
             });
         }
     }
+    let confidence_percent = confidence_percent(state);
     let Some(request) = shared_pack_sync::begin(
         &mut state.pack_sync_overlay,
         crate::SimplyLoveSyncOwner::OptionsPack,
         selection.pack_label.clone(),
         targets,
+        confidence_percent,
     ) else {
         log::warn!(
             "Failed to start pack sync for {:?}: no matching charts were found.",
@@ -103,6 +122,11 @@ pub(super) fn begin_pack_sync(state: &mut State, selection: SyncPackSelection) {
         return;
     };
     queue_sync(state, request);
+}
+
+pub(super) fn handle_pack_sync_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
+    let navigation = navigation_policy(state);
+    shared_pack_sync::handle_input(&mut state.pack_sync_overlay, ev, navigation)
 }
 
 pub(super) fn begin_pack_sync_from_confirm(state: &mut State) {

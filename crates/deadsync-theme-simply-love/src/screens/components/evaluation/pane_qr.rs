@@ -1,5 +1,6 @@
 use crate::act;
-use crate::assets::{FontRole, current_machine_font_key};
+use crate::assets::{FontRole, machine_font_key};
+use crate::config::MachineFont;
 use crate::screens::components::shared::qr_code;
 use crate::screens::evaluation::ScoreInfo;
 use deadlib_present::actors::{Actor, SizeSpec};
@@ -18,6 +19,7 @@ const GS_QR_FALLBACK_TEXT: &str = "QR Unavailable";
 pub fn build_gs_qr_pane(
     score_info: &ScoreInfo,
     controller: profile_data::PlayerSide,
+    machine_font: MachineFont,
 ) -> Vec<Actor> {
     let gs_valid = score_info.groovestats.valid;
     let help_text = if gs_valid {
@@ -56,7 +58,7 @@ pub fn build_gs_qr_pane(
         diffuse(score_bg[0], score_bg[1], score_bg[2], 1.0)
     ));
     children.push(act!(text:
-        font(current_machine_font_key(FontRole::Header)):
+        font(machine_font_key(machine_font, FontRole::Header)):
         settext(score_text):
         align(1.0, 0.5):
         xy(left_col_x + 60.0, score_y + 12.0):

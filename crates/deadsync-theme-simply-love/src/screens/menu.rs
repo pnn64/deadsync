@@ -1,6 +1,6 @@
 use crate::act;
 use crate::assets::i18n::{self, tr, tr_fmt};
-use crate::assets::{FontRole, current_machine_font_key};
+use crate::assets::{FontRole, machine_font_key};
 // Screen navigation is handled in app
 use crate::screens::components::menu::logo::{self, LogoParams};
 use crate::screens::components::menu::menu_list::{self};
@@ -155,11 +155,17 @@ pub fn in_transition() -> (Vec<Actor>, f32) {
     transitions::fade_in_black(TRANSITION_IN_DURATION, 1100)
 }
 
-pub fn out_transition(active_color_index: i32) -> (Vec<Actor>, f32) {
+pub fn out_transition(
+    active_color_index: i32,
+    visual_policy: crate::views::SimplyLoveVisualPolicyView,
+) -> (Vec<Actor>, f32) {
     let mut actors: Vec<Actor> = Vec::new();
 
     // Visual-style splash, matching Simply Love's ScreenTitleMenu out.lua look.
-    actors.extend(menu_splash::build(active_color_index));
+    actors.extend(menu_splash::build(
+        active_color_index,
+        &visual_policy.assets.effects,
+    ));
 
     // Full-screen fade to black behind the hearts.
     let fade = transitions::fade_out_black_actor(TRANSITION_OUT_DURATION, 1200);
@@ -373,6 +379,7 @@ pub fn push_actors(
     state: &State,
     update_banner_tag: Option<&str>,
     alpha_multiplier: f32,
+    visual_policy: crate::views::SimplyLoveVisualPolicyView,
 ) {
     sync_i18n_cache(state);
     let lp = LogoParams::default();
@@ -390,6 +397,7 @@ pub fn push_actors(
             active_color_index: state.active_color_index,
             backdrop_rgba: backdrop,
             alpha_mul: 1.0,
+            visual_policy,
         },
     );
 
@@ -404,7 +412,7 @@ pub fn push_actors(
     let info2_y_tl = lp.top_margin - INFO_MARGIN_ABOVE - INFO_PX;
     let info1_y_tl = info2_y_tl - INFO_PX - INFO_GAP;
 
-    let logo_actors = logo::build_logo_default();
+    let logo_actors = logo::build_logo_default(visual_policy.title_logo_texture_key);
     for mut actor in logo_actors {
         if let Actor::Sprite { tint, .. } = &mut actor {
             tint[3] *= alpha_multiplier;
@@ -444,7 +452,7 @@ pub fn push_actors(
         row_spacing: MENU_ROW_SPACING,
         selected_color: selected,
         normal_color: normal,
-        font: current_machine_font_key(FontRole::Bold),
+        font: machine_font_key(visual_policy.machine_font, FontRole::Bold),
     };
     actors.extend(menu_list::build_vertical_menu(params));
 
@@ -455,6 +463,7 @@ pub fn push_actors(
     let press_start = tr("Common", "PressStart");
 
     actors.push(screen_bar::build_title_menu(screen_bar::ScreenBarParams {
+        visual_policy,
         title: event_mode.as_ref(),
         title_placement: screen_bar::ScreenBarTitlePlacement::Center,
         position: screen_bar::ScreenBarPosition::Bottom,
@@ -556,7 +565,13 @@ pub fn get_actors(
     alpha_multiplier: f32,
 ) -> Vec<Actor> {
     let mut actors = Vec::with_capacity(96);
-    push_actors(&mut actors, state, update_banner_tag, alpha_multiplier);
+    push_actors(
+        &mut actors,
+        state,
+        update_banner_tag,
+        alpha_multiplier,
+        Default::default(),
+    );
     actors
 }
 
@@ -613,7 +628,11 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
     {
         state.menu_lr_undo[deadsync_profile::player_side_index(side)] = 0;
     }
-    if let Some((side, nav)) = screen_input::three_key_menu_action(&mut state.menu_lr_chord, ev) {
+    if let Some((side, nav)) = screen_input::three_key_menu_action(
+        &mut state.menu_lr_chord,
+        ev,
+        state.runtime_view.dedicated_three_key_nav,
+    ) {
         let side_ix = deadsync_profile::player_side_index(side);
         return match nav {
             screen_input::ThreeKeyMenuAction::Prev => {

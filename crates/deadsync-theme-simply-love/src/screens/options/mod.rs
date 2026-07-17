@@ -1,8 +1,8 @@
 use crate::act;
-use crate::assets::{self, AssetManager, visual_styles};
-use crate::assets::{FontRole, current_machine_font_key};
+use crate::assets::{AssetManager, visual_styles};
+use crate::assets::{FontRole, machine_font_key};
 use crate::config::{
-    self, SimpleIni, arrowcloud_qr_login_when_choice_index, breakdown_style_choice_index,
+    self, arrowcloud_qr_login_when_choice_index, breakdown_style_choice_index,
     breakdown_style_from_choice, default_fail_type_choice_index, default_fail_type_from_choice,
     default_sync_offset_choice_index, default_sync_offset_from_choice,
     groovestats_qr_login_when_choice_index, log_level_choice_index, log_level_from_choice,
@@ -34,15 +34,15 @@ use crate::screens::input as screen_input;
 use crate::screens::pack_sync as shared_pack_sync;
 use crate::screens::select_music;
 use crate::screens::{Screen, ThemeEffect};
-use crate::views::{OptionsSongPackView, SimplyLoveUpdaterCapabilities, SimplyLoveUpdaterView};
+use crate::views::{
+    OptionsInitView, OptionsPackSyncView, OptionsSongPackView, SimplyLoveUpdaterCapabilities,
+    SimplyLoveUpdaterView,
+};
 use deadlib_present::space::{is_wide, screen_height, screen_width, widescale};
 use deadsync_input::{InputEvent, KeyCode, RawKeyboardEvent, VirtualAction};
-use deadsync_profile::compat as profile;
 use deadsync_score as score_data;
-use deadsync_simfile::app_runtime as song_loading;
 use deadsync_theme::views::{
-    AppPathKind, AppPathsView, AudioOptionsView, GraphicsMonitorView, GraphicsOptionsView,
-    NoteskinCatalogView, SmxAssignmentView, SmxGifCatalogView,
+    AppPathKind, AppPathsView, AudioOptionsView, GraphicsMonitorView, SmxAssignmentView,
 };
 use deadsync_theme::{
     AudioOutputModeChoice, AudioRequest, AudioVolumeTarget, DisplayModeChoice, FullscreenChoice,
@@ -80,6 +80,7 @@ use state::*;
 mod visibility;
 use visibility::*;
 mod reload;
+pub use reload::sync_reload_events;
 use reload::*;
 mod score_import;
 use score_import::*;
@@ -192,6 +193,12 @@ fn null_or_die_config_effect(request: crate::SimplyLoveNullOrDieConfigRequest) -
 fn online_config_effect(request: crate::SimplyLoveOnlineConfigRequest) -> ThemeEffect {
     ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Config(
         crate::SimplyLoveConfigRequest::Online(request),
+    ))
+}
+
+fn options_config_effect(request: crate::SimplyLoveOptionsConfigRequest) -> ThemeEffect {
+    ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Config(
+        crate::SimplyLoveConfigRequest::Options(request),
     ))
 }
 

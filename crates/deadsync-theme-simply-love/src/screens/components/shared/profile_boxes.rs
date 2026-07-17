@@ -1,15 +1,14 @@
 use crate::act;
 use crate::assets::i18n::{tr, tr_fmt};
-use crate::assets::{self, AssetManager, visual_styles};
+use crate::assets::{self, AssetManager};
 use crate::screens::components::shared::screen_bar::{
     ScreenBarParams, ScreenBarPosition, ScreenBarTitlePlacement,
 };
 use crate::screens::components::shared::{screen_bar, visual_style_bg};
 use crate::screens::input as screen_input;
 use crate::screens::{Screen, ThemeEffect};
+use crate::views::ProfilePickerView;
 use deadsync_assets::noteskin::{self, Noteskin};
-use deadsync_online::score_compat as scores;
-use deadsync_profile::compat as profile;
 
 use deadlib_present::actors::{self, Actor};
 use deadlib_present::color;
@@ -19,9 +18,8 @@ use deadsync_input::{InputEvent, VirtualAction};
 use deadsync_notefield::noteskin_model_actor;
 use deadsync_noteskin::{NUM_QUANTIZATIONS, Quantization, Style};
 use deadsync_profile as profile_data;
-use deadsync_rules::scroll::{GUEST_SCROLL_SPEED, ScrollSpeedSetting};
+use deadsync_rules::scroll::GUEST_SCROLL_SPEED;
 use std::collections::HashMap;
-use std::str::FromStr;
 use std::sync::Arc;
 
 /* ---------------------------- transitions ---------------------------- */
@@ -115,6 +113,7 @@ pub struct State {
     p2_selected_index: usize,
     exit_anim: bool,
     choices: Vec<Choice>,
+    three_key_navigation: bool,
     bg: visual_style_bg::State,
     noteskin_cache: NoteskinCache,
     p1_preview_noteskin: Option<Arc<Noteskin>>,
@@ -218,18 +217,6 @@ fn format_total_songs_played(count: u32) -> String {
 }
 
 #[inline(always)]
-fn parse_ini_bool(raw: &str) -> Option<bool> {
-    let v = raw.trim();
-    if v == "1" || v.eq_ignore_ascii_case("true") || v.eq_ignore_ascii_case("yes") {
-        return Some(true);
-    }
-    if v == "0" || v.eq_ignore_ascii_case("false") || v.eq_ignore_ascii_case("no") {
-        return Some(false);
-    }
-    None
-}
-
-#[inline(always)]
 fn format_recent_mods(
     speed_mod: &str,
     scroll: profile_data::ScrollOption,
@@ -293,15 +280,11 @@ fn format_recent_mods(
     out
 }
 
-fn build_choices() -> Vec<Choice> {
-    let mut out = Vec::new();
-
+fn build_choices(view: &ProfilePickerView) -> Vec<Choice> {
+    let mut out = Vec::with_capacity(view.profiles.len() + 1);
     let default_profile = profile_data::Profile::default();
-    let default_speed_mod = format!("{}", default_profile.scroll_speed);
     let guest_speed_mod = format!("{GUEST_SCROLL_SPEED}");
     let default_scroll_option = default_profile.scroll_option;
-    let player_options_section =
-        profile_data::player_options_section(profile::get_session_play_style());
     out.push(Choice {
         kind: profile_data::ActiveProfile::Guest,
         display_name: tr("SelectProfile", "GuestLabel").to_string(),
@@ -313,84 +296,19 @@ fn build_choices() -> Vec<Choice> {
         noteskin: profile_data::NoteSkin::default(),
         judgment: profile_data::JudgmentGraphic::default(),
     });
-    for p in profile::scan_local_profiles() {
-        let total_songs = format_total_songs_played(scores::total_songs_played_for_profile(&p.id));
-        let mut speed_mod = default_speed_mod.clone();
-        let mut scroll_option = default_scroll_option;
-        let mut mini_indicator = profile_data::MiniIndicator::None;
-        let mut noteskin = profile_data::NoteSkin::default();
-        let mut judgment = profile_data::JudgmentGraphic::default();
-        let ini_path = profile::local_profile_dir_for_id(&p.id).join("profile.ini");
-        let mut ini = crate::config::SimpleIni::new();
-        if ini.load(&ini_path).is_ok() {
-            let get_player_option = |key: &str| ini.get(player_options_section, key);
-
-            if let Some(raw) = get_player_option("ScrollSpeed") {
-                let trimmed = raw.trim();
-                speed_mod = if let Ok(setting) = ScrollSpeedSetting::from_str(trimmed) {
-                    format!("{setting}")
-                } else {
-                    trimmed.to_string()
-                };
-            }
-
-            scroll_option = get_player_option("Scroll")
-                .and_then(|s| profile_data::ScrollOption::from_str(&s).ok())
-                .unwrap_or_else(|| {
-                    let reverse_enabled = get_player_option("ReverseScroll")
-                        .and_then(|v| v.parse::<u8>().ok())
-                        .is_some_and(|v| v != 0);
-                    if reverse_enabled {
-                        profile_data::ScrollOption::Reverse
-                    } else {
-                        default_scroll_option
-                    }
-                });
-            mini_indicator = get_player_option("MiniIndicator")
-                .and_then(|v| profile_data::MiniIndicator::from_str(&v).ok())
-                .unwrap_or_else(|| {
-                    let subtractive = get_player_option("SubtractiveScoring")
-                        .and_then(|v| parse_ini_bool(&v))
-                        .unwrap_or(false);
-                    let pacemaker = get_player_option("Pacemaker")
-                        .and_then(|v| parse_ini_bool(&v))
-                        .unwrap_or(false);
-                    if subtractive {
-                        profile_data::MiniIndicator::SubtractiveScoring
-                    } else if pacemaker {
-                        profile_data::MiniIndicator::Pacemaker
-                    } else {
-                        profile_data::MiniIndicator::None
-                    }
-                });
-        }
-        if let Ok(value) = ini
-            .get(player_options_section, "NoteSkin")
-            .unwrap_or_default()
-            .parse::<profile_data::NoteSkin>()
-        {
-            noteskin = value;
-        }
-        if let Ok(value) = ini
-            .get(player_options_section, "JudgmentGraphic")
-            .unwrap_or_default()
-            .parse::<profile_data::JudgmentGraphic>()
-        {
-            judgment = value;
-        }
-
+    for profile in &view.profiles {
         out.push(Choice {
-            kind: profile_data::ActiveProfile::Local { id: p.id },
-            display_name: p.display_name,
-            speed_mod,
-            avatar_key: p
-                .avatar_path
-                .map(|path| path.to_string_lossy().into_owned()),
-            total_songs,
-            scroll_option,
-            mini_indicator,
-            noteskin,
-            judgment,
+            kind: profile_data::ActiveProfile::Local {
+                id: profile.id.clone(),
+            },
+            display_name: profile.display_name.clone(),
+            speed_mod: profile.speed_mod.clone(),
+            avatar_key: profile.avatar_key.clone(),
+            total_songs: format_total_songs_played(profile.total_songs_played),
+            scroll_option: profile.scroll_option,
+            mini_indicator: profile.mini_indicator,
+            noteskin: profile.noteskin.clone(),
+            judgment: profile.judgment.clone(),
         });
     }
     out
@@ -410,17 +328,17 @@ fn selected_index_for(choices: &[Choice], active: profile_data::ActiveProfile) -
 }
 
 fn init_with_profiles(
+    view: ProfilePickerView,
     p1_profile: profile_data::ActiveProfile,
     p2_profile: profile_data::ActiveProfile,
 ) -> State {
-    let choices = build_choices();
+    let choices = build_choices(&view);
     let noteskin_cache = NoteskinCache::new(&choices);
-    let active_color_index = crate::config::get().simply_love_color;
     let p1_selected_index = selected_index_for(&choices, p1_profile);
     let p2_selected_index = selected_index_for(&choices, p2_profile);
 
     let mut state = State {
-        active_color_index,
+        active_color_index: color::DEFAULT_COLOR_INDEX,
         fast_switch: false,
         p1_joined: true,
         p2_joined: false,
@@ -430,6 +348,7 @@ fn init_with_profiles(
         p2_selected_index,
         exit_anim: false,
         choices,
+        three_key_navigation: view.three_key_navigation,
         bg: visual_style_bg::State::new(),
         noteskin_cache,
         p1_preview_noteskin: None,
@@ -458,38 +377,33 @@ fn init_with_profiles(
     state
 }
 
-pub fn init() -> State {
-    init_with_profiles(
-        profile::get_default_profile_for_side(profile_data::PlayerSide::P1),
-        profile::get_default_profile_for_side(profile_data::PlayerSide::P2),
-    )
+pub fn init(view: ProfilePickerView) -> State {
+    let [p1, p2] = view.default_profiles.clone();
+    init_with_profiles(view, p1, p2)
 }
 
-pub fn init_active() -> State {
-    init_with_profiles(
-        profile::get_active_profile_for_side(profile_data::PlayerSide::P1),
-        profile::get_active_profile_for_side(profile_data::PlayerSide::P2),
-    )
+pub fn init_active(
+    view: ProfilePickerView,
+    active_profiles: [profile_data::ActiveProfile; 2],
+) -> State {
+    let [p1, p2] = active_profiles;
+    init_with_profiles(view, p1, p2)
 }
 
-pub fn init_late_join(joining_side: profile_data::PlayerSide) -> State {
+pub fn init_late_join(
+    view: ProfilePickerView,
+    joining_side: profile_data::PlayerSide,
+    active_profiles: [profile_data::ActiveProfile; 2],
+) -> State {
     let p1_profile = match joining_side {
-        profile_data::PlayerSide::P1 => {
-            profile::get_default_profile_for_side(profile_data::PlayerSide::P1)
-        }
-        profile_data::PlayerSide::P2 => {
-            profile::get_active_profile_for_side(profile_data::PlayerSide::P1)
-        }
+        profile_data::PlayerSide::P1 => view.default_profiles[0].clone(),
+        profile_data::PlayerSide::P2 => active_profiles[0].clone(),
     };
     let p2_profile = match joining_side {
-        profile_data::PlayerSide::P1 => {
-            profile::get_active_profile_for_side(profile_data::PlayerSide::P2)
-        }
-        profile_data::PlayerSide::P2 => {
-            profile::get_default_profile_for_side(profile_data::PlayerSide::P2)
-        }
+        profile_data::PlayerSide::P1 => active_profiles[1].clone(),
+        profile_data::PlayerSide::P2 => view.default_profiles[1].clone(),
     };
-    init_with_profiles(p1_profile, p2_profile)
+    init_with_profiles(view, p1_profile, p2_profile)
 }
 
 pub fn set_joined(state: &mut State, p1_joined: bool, p2_joined: bool) {
@@ -711,7 +625,7 @@ fn handle_cancel(state: &mut State, side: profile_data::PlayerSide) -> ThemeEffe
 }
 
 pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
-    let chord_side = if crate::config::get().three_key_navigation {
+    let chord_side = if state.three_key_navigation {
         state.menu_lr_chord.update(ev)
     } else {
         None
@@ -1320,6 +1234,7 @@ fn push_scroller_frame(
     inner_alpha: f32,
     border_rgba: [f32; 4],
     col_overlay: [f32; 4],
+    visual_policy: crate::views::SimplyLoveVisualPolicyView,
 ) {
     // Simply Love parity:
     // - Frame bg uses PlayerColor(P1) => SL.Colors[ActiveColorIndex]
@@ -1448,9 +1363,9 @@ fn push_scroller_frame(
                 diffuse(bg[0], bg[1], bg[2], bg[3] * inner_alpha):
                 z(103)
             ));
-            let visual_style = visual_styles::current_style();
-            let texture = visual_styles::select_color_texture_key();
-            let zoom = AVATAR_HEART_ZOOM * visual_styles::select_color_zoom_scale(visual_style);
+            let texture = visual_policy.assets.select_color;
+            let zoom = AVATAR_HEART_ZOOM
+                * (566.0 / visual_policy.assets.select_color_size[1].max(1) as f32);
             out.push(act!(sprite(texture):
                 align(0.0, 0.0):
                 xy(avatar_x + AVATAR_HEART_X, avatar_y + AVATAR_HEART_Y):
@@ -1698,6 +1613,7 @@ fn build_box_actors(
     state: &State,
     asset_manager: &AssetManager,
     alpha_multiplier: f32,
+    visual_policy: crate::views::SimplyLoveVisualPolicyView,
 ) -> Vec<Actor> {
     if alpha_multiplier <= 0.0 {
         return Vec::new();
@@ -1754,6 +1670,7 @@ fn build_box_actors(
             inner_alpha,
             border_rgba,
             col_overlay,
+            visual_policy,
         );
         for a in &mut scroller_ui {
             a.mul_alpha(if show_scroller { 1.0 } else { 0.0 });
@@ -1841,6 +1758,7 @@ fn build_box_actors(
             inner_alpha,
             border_rgba,
             col_overlay,
+            visual_policy,
         );
         for a in &mut scroller_ui {
             a.mul_alpha(if show_scroller { 1.0 } else { 0.0 });
@@ -1914,8 +1832,9 @@ pub fn get_box_actors_with_z(
     asset_manager: &AssetManager,
     alpha_multiplier: f32,
     z_offset: i16,
+    visual_policy: crate::views::SimplyLoveVisualPolicyView,
 ) -> Vec<Actor> {
-    let mut actors = build_box_actors(state, asset_manager, alpha_multiplier);
+    let mut actors = build_box_actors(state, asset_manager, alpha_multiplier, visual_policy);
     if z_offset != 0 {
         for actor in &mut actors {
             apply_z_offset(actor, z_offset);
@@ -1929,6 +1848,7 @@ pub fn push_actors(
     state: &State,
     asset_manager: &AssetManager,
     alpha_multiplier: f32,
+    visual_policy: crate::views::SimplyLoveVisualPolicyView,
 ) {
     actors.reserve(160);
 
@@ -1938,6 +1858,7 @@ pub fn push_actors(
             active_color_index: state.active_color_index,
             backdrop_rgba: [0.0, 0.0, 0.0, 1.0],
             alpha_mul: 1.0,
+            visual_policy,
         },
     );
 
@@ -1954,6 +1875,7 @@ pub fn push_actors(
         right_text: None,
         left_avatar: None,
         right_avatar: None,
+        visual_policy,
     }));
 
     let press_start = tr("Common", "PressStart");
@@ -1976,8 +1898,14 @@ pub fn push_actors(
         right_text: footer_right,
         left_avatar: None,
         right_avatar: None,
+        visual_policy,
     }));
-    actors.extend(build_box_actors(state, asset_manager, alpha_multiplier));
+    actors.extend(build_box_actors(
+        state,
+        asset_manager,
+        alpha_multiplier,
+        visual_policy,
+    ));
 }
 
 pub fn get_actors(
@@ -1986,6 +1914,58 @@ pub fn get_actors(
     alpha_multiplier: f32,
 ) -> Vec<Actor> {
     let mut actors = Vec::with_capacity(160);
-    push_actors(&mut actors, state, asset_manager, alpha_multiplier);
+    push_actors(
+        &mut actors,
+        state,
+        asset_manager,
+        alpha_multiplier,
+        Default::default(),
+    );
     actors
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::views::ProfilePickerEntryView;
+
+    #[test]
+    fn picker_uses_shell_prepared_choices_and_default_selection() {
+        let state = init(ProfilePickerView {
+            profiles: vec![ProfilePickerEntryView {
+                id: "alice".to_owned(),
+                display_name: "Alice".to_owned(),
+                speed_mod: "C650".to_owned(),
+                avatar_key: Some("alice.png".to_owned()),
+                total_songs_played: 12,
+                scroll_option: profile_data::ScrollOption::Reverse,
+                mini_indicator: profile_data::MiniIndicator::Pacemaker,
+                noteskin: profile_data::NoteSkin::new("cel"),
+                judgment: profile_data::JudgmentGraphic::new("Love"),
+            }],
+            default_profiles: [
+                profile_data::ActiveProfile::Local {
+                    id: "alice".to_owned(),
+                },
+                profile_data::ActiveProfile::Guest,
+            ],
+            three_key_navigation: true,
+        });
+
+        assert_eq!(state.choices.len(), 2);
+        assert_eq!(state.p1_selected_index, 1);
+        assert_eq!(state.p2_selected_index, 0);
+        assert!(state.three_key_navigation);
+        assert_eq!(state.choices[1].display_name, "Alice");
+        assert_eq!(state.choices[1].speed_mod, "C650");
+        assert_eq!(state.choices[1].avatar_key.as_deref(), Some("alice.png"));
+        assert_eq!(
+            state.choices[1].scroll_option,
+            profile_data::ScrollOption::Reverse
+        );
+        assert_eq!(
+            state.choices[1].mini_indicator,
+            profile_data::MiniIndicator::Pacemaker
+        );
+    }
 }

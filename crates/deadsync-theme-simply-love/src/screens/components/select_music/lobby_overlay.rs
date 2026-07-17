@@ -1,5 +1,6 @@
 use crate::act;
-use crate::assets::{FontRole, current_machine_font_key};
+use crate::assets::{FontRole, machine_font_key};
+use crate::config::MachineFont;
 use deadlib_present::actors::Actor;
 use deadlib_present::color;
 use deadlib_present::space::{screen_center_x, screen_center_y, screen_height, screen_width};
@@ -514,6 +515,7 @@ pub fn build_overlay(
     active_color_index: i32,
     snapshot: &lobby_data::Snapshot,
     reconnect_status_text: Option<&str>,
+    machine_font: MachineFont,
 ) -> Option<Vec<Actor>> {
     let OverlayState::Visible(overlay) = state else {
         return None;
@@ -544,7 +546,7 @@ pub fn build_overlay(
         z(OVERLAY_Z + 2)
     ));
     actors.push(act!(text:
-        font(current_machine_font_key(FontRole::Header)):
+        font(machine_font_key(machine_font, FontRole::Header)):
         settext("Online Lobbies"):
         align(0.5, 0.5):
         xy(center_x, center_y + TITLE_Y):
@@ -580,6 +582,7 @@ pub fn build_overlay(
             joined,
             overlay.joined_action_index,
             &select_color,
+            machine_font,
         ));
         return Some(actors);
     }
@@ -620,6 +623,7 @@ pub fn build_overlay(
         overlay,
         snapshot,
         &select_color,
+        machine_font,
     ));
     if let Some(prompt) = overlay.password_prompt.as_ref() {
         actors.extend(build_password_prompt(
@@ -627,6 +631,7 @@ pub fn build_overlay(
             center_y,
             prompt,
             &select_color,
+            machine_font,
         ));
     }
     Some(actors)
@@ -638,6 +643,7 @@ fn build_browse_overlay(
     overlay: &OverlayStateData,
     snapshot: &lobby_data::Snapshot,
     select_color: &[f32; 4],
+    machine_font: MachineFont,
 ) -> Vec<Actor> {
     let mut actors = Vec::new();
 
@@ -671,7 +677,7 @@ fn build_browse_overlay(
             select_color,
         ));
         actors.push(act!(text:
-            font(current_machine_font_key(FontRole::Header)):
+            font(machine_font_key(machine_font, FontRole::Header)):
             settext(lobby.code.clone()):
             align(0.0, 0.5):
             xy(center_x + LOBBY_LIST_X - 164.0, row_y - 7.0):
@@ -739,7 +745,7 @@ fn build_browse_overlay(
             select_color,
         ));
         actors.push(act!(text:
-            font(current_machine_font_key(FontRole::Header)):
+            font(machine_font_key(machine_font, FontRole::Header)):
             settext(*label):
             align(0.5, 0.5):
             xy(center_x + ACTION_PANEL_X, row_y):
@@ -759,6 +765,7 @@ fn build_joined_overlay(
     joined: &lobby_data::JoinedLobby,
     selected_action_index: usize,
     select_color: &[f32; 4],
+    machine_font: MachineFont,
 ) -> Vec<Actor> {
     let mut actors = Vec::new();
     actors.push(act!(text:
@@ -772,7 +779,7 @@ fn build_joined_overlay(
         horizalign(left)
     ));
     actors.push(act!(text:
-        font(current_machine_font_key(FontRole::Header)):
+        font(machine_font_key(machine_font, FontRole::Header)):
         settext(format!("Lobby Code: {}", joined.code)):
         align(0.0, 0.5):
         xy(center_x - 300.0, center_y - 102.0):
@@ -843,7 +850,7 @@ fn build_joined_overlay(
             select_color,
         ));
         actors.push(act!(text:
-            font(current_machine_font_key(FontRole::Header)):
+            font(machine_font_key(machine_font, FontRole::Header)):
             settext(*label):
             align(0.5, 0.5):
             xy(center_x + ACTION_PANEL_X, row_y):
@@ -914,6 +921,7 @@ fn build_password_prompt(
     center_y: f32,
     prompt: &PasswordPromptState,
     select_color: &[f32; 4],
+    machine_font: MachineFont,
 ) -> Vec<Actor> {
     let mut actors = Vec::new();
     let title = password_prompt_title(prompt);
@@ -964,7 +972,7 @@ fn build_password_prompt(
         horizalign(center)
     ));
     actors.push(act!(text:
-        font(current_machine_font_key(FontRole::Header)):
+        font(machine_font_key(machine_font, FontRole::Header)):
         settext(value):
         align(0.5, 0.5):
         xy(center_x, center_y + PASSWORD_PROMPT_VALUE_Y):
@@ -996,7 +1004,7 @@ fn build_password_prompt(
             0.3
         };
         actors.push(act!(text:
-            font(current_machine_font_key(FontRole::Header)):
+            font(machine_font_key(machine_font, FontRole::Header)):
             settext(PASSWORD_CHARS[item.info_index]):
             align(0.5, 0.5):
             xy(
@@ -1009,7 +1017,7 @@ fn build_password_prompt(
             horizalign(center)
         ));
     }
-    push_password_prompt_footer(&mut actors, center_x, center_y);
+    push_password_prompt_footer(&mut actors, center_x, center_y, machine_font);
     actors
 }
 
@@ -1044,14 +1052,19 @@ fn build_box_row(
     ]
 }
 
-fn push_password_prompt_footer(actors: &mut Vec<Actor>, center_x: f32, center_y: f32) {
+fn push_password_prompt_footer(
+    actors: &mut Vec<Actor>,
+    center_x: f32,
+    center_y: f32,
+    machine_font: MachineFont,
+) {
     let y = center_y + PASSWORD_PROMPT_FOOTER_Y;
     for (icon_x, text_x, icon, label) in [
         (-110.0, -90.0, "&BACK;", "remove"),
         (18.0, 38.0, "&OK;", "confirm"),
     ] {
         actors.push(act!(text:
-            font(current_machine_font_key(FontRole::Header)):
+            font(machine_font_key(machine_font, FontRole::Header)):
             settext(icon):
             align(0.5, 0.5):
             xy(center_x + icon_x, y):

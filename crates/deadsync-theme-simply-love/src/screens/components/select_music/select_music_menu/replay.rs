@@ -1,15 +1,15 @@
 use crate::act;
-use crate::assets::{FontRole, current_machine_font_key};
+use crate::assets::{FontRole, machine_font_key};
+use crate::config::MachineFont;
 use deadlib_present::actors::Actor;
 use deadlib_present::color;
 use deadlib_present::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 use deadsync_input::{InputEvent, VirtualAction};
-use deadsync_online::score_compat as scores;
 use deadsync_score as score_data;
 
 pub const REPLAY_FOCUS_TWEEN_SECONDS: f32 = 0.1;
 pub const REPLAY_INPUT_LOCK_SECONDS: f32 = 0.15;
-const REPLAY_MAX_ENTRIES: usize = 1024;
+pub const REPLAY_MAX_ENTRIES: usize = 1024;
 
 const GS_LEADERBOARD_NUM_ENTRIES: usize = 13;
 const GS_LEADERBOARD_ROW_HEIGHT: f32 = 24.0;
@@ -54,11 +54,7 @@ fn replay_total_items(state: &ReplayOverlayStateData) -> usize {
     state.entries.len() + 1
 }
 
-pub fn begin_replay_overlay(chart_hash: &str) -> ReplayOverlayState {
-    if chart_hash.trim().is_empty() {
-        return ReplayOverlayState::Hidden;
-    }
-    let entries = scores::get_machine_replays_local(chart_hash, REPLAY_MAX_ENTRIES);
+pub fn begin_replay_overlay(entries: Vec<score_data::MachineReplayEntry>) -> ReplayOverlayState {
     ReplayOverlayState::Visible(ReplayOverlayStateData {
         entries,
         selected_index: 0,
@@ -178,6 +174,7 @@ pub fn handle_replay_input(state: &mut ReplayOverlayState, ev: &InputEvent) -> R
 pub fn build_replay_overlay(
     state: &ReplayOverlayState,
     active_color_index: i32,
+    machine_font: MachineFont,
 ) -> Option<Vec<Actor>> {
     let ReplayOverlayState::Visible(overlay) = state else {
         return None;
@@ -237,7 +234,7 @@ pub fn build_replay_overlay(
         z(GS_LEADERBOARD_Z + 5)
     ));
     actors.push(act!(text:
-        font(current_machine_font_key(FontRole::Header)):
+        font(machine_font_key(machine_font, FontRole::Header)):
         settext("Play Replay"):
         align(0.5, 0.5):
         xy(pane_cx, header_y):

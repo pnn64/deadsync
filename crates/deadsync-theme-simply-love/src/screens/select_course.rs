@@ -1,7 +1,7 @@
 use crate::act;
 use crate::assets::AssetManager;
 use crate::assets::i18n::tr;
-use crate::assets::{FontRole, current_machine_font_key};
+use crate::assets::{FontRole, machine_font_key};
 use crate::effects::{sfx, sfx_then};
 use crate::rgba_const;
 use crate::screens::components::{
@@ -16,6 +16,7 @@ pub use crate::views::{CourseStagePlan, SelectedCoursePlan};
 use crate::views::{
     MusicWheelRankSource, MusicWheelRuntimeRequest, MusicWheelRuntimeView, SelectCourseContextView,
     SelectCourseInitView, SelectCourseRuntimeView, SelectCourseScoreRequest, SelectCourseScoreView,
+    SelectFlowPlayerView,
 };
 use deadlib_present::actors::{Actor, SizeSpec};
 use deadlib_present::cache::{TextCache, cached_text};
@@ -220,6 +221,7 @@ pub struct State {
     pub current_banner_key: String,
     pub session_elapsed: f32,
     context: SelectCourseContextView,
+    players: [SelectFlowPlayerView; 2],
     music_wheel: MusicWheelRuntimeView,
     score_view: SelectCourseScoreView,
 
@@ -871,6 +873,7 @@ pub fn init(init_view: SelectCourseInitView) -> State {
         current_banner_key: "banner1.png".to_string(),
         session_elapsed: 0.0,
         context: init_view.context,
+        players: Default::default(),
         music_wheel: MusicWheelRuntimeView::default(),
         score_view: SelectCourseScoreView::default(),
         all_entries: init.all_entries,
@@ -1704,6 +1707,7 @@ pub fn sync_runtime_view(state: &mut State, view: SelectCourseRuntimeView) {
         || state.context.policy.show_most_played_courses
             != view.context.policy.show_most_played_courses;
     state.context = view.context;
+    state.players = view.players;
     state.music_wheel = view.music_wheel;
     state.score_view = view.score;
     if course_filter_changed {
@@ -1711,7 +1715,12 @@ pub fn sync_runtime_view(state: &mut State, view: SelectCourseRuntimeView) {
     }
 }
 
-pub fn push_actors(actors: &mut Vec<Actor>, state: &State, _asset_manager: &AssetManager) {
+pub fn push_actors(
+    actors: &mut Vec<Actor>,
+    state: &State,
+    _asset_manager: &AssetManager,
+    visual_policy: crate::views::SimplyLoveVisualPolicyView,
+) {
     actors.reserve(256);
     let side = state.context.player_side;
     let play_style = state.context.play_style;
@@ -1738,17 +1747,35 @@ pub fn push_actors(actors: &mut Vec<Actor>, state: &State, _asset_manager: &Asse
             active_color_index: state.active_color_index,
             backdrop_rgba: [0.0, 0.0, 0.0, 1.0],
             alpha_mul: 1.0,
+            visual_policy,
         },
     );
     actors.push(sl_select_music_bg_flash());
-    screen_bars::push(actors, &tr("ScreenTitles", "SelectCourse"));
-    actors.push(timers::build_session(format_session_time(
-        state.session_elapsed,
-    )));
+    screen_bars::push(
+        actors,
+        &tr("ScreenTitles", "SelectCourse"),
+        std::array::from_fn(|idx| screen_bars::Player {
+            joined: state.players[idx].joined,
+            guest: state.players[idx].guest,
+            display_name: &state.players[idx].display_name,
+            avatar_texture_key: state.players[idx].avatar_texture_key.as_deref(),
+        }),
+        visual_policy,
+    );
+    actors.push(timers::build_session(
+        format_session_time(state.session_elapsed),
+        visual_policy.machine_font,
+    ));
 
     let mode_text = gs_scorebox::select_music_mode_text(state.score_view.mode_show_ex_score);
-    actors.push(mode_pads::build_label(mode_text));
-    actors.extend(mode_pads::build());
+    actors.push(mode_pads::build_label(
+        mode_text,
+        visual_policy.machine_font,
+    ));
+    actors.extend(mode_pads::build(
+        state.context.play_style,
+        state.context.joined,
+    ));
 
     let (banner_zoom, banner_cx, banner_cy) = if is_wide() {
         (0.7655, screen_center_x() - 170.0, 96.0)
@@ -1882,6 +1909,7 @@ pub fn push_actors(actors: &mut Vec<Actor>, state: &State, _asset_manager: &Asse
     select_pane::push_base(
         actors,
         select_pane::StatsPaneParams {
+            machine_font: visual_policy.machine_font,
             pane_cx,
             accent_color: pane_sel_col,
             values: select_pane::StatsValues {
@@ -2108,7 +2136,7 @@ pub fn push_actors(actors: &mut Vec<Actor>, state: &State, _asset_manager: &Asse
                     state.active_color_index,
                 );
                 actors.push(act!(text:
-                    font(current_machine_font_key(FontRole::Header)):
+                    font(machine_font_key(visual_policy.machine_font, FontRole::Header)):
                     settext(meter_text):
                     align(0.5, 0.5):
                     xy(rating_box_cx, y):
@@ -2195,6 +2223,7 @@ pub fn push_actors(actors: &mut Vec<Actor>, state: &State, _asset_manager: &Asse
     music_wheel::push(
         actors,
         music_wheel::MusicWheelParams {
+            machine_font: visual_policy.machine_font,
             entries: &state.entries,
             selected_index: state.selected_index,
             position_offset_from_selection: state.wheel_offset_from_selection,
@@ -2248,7 +2277,7 @@ pub fn push_actors(actors: &mut Vec<Actor>, state: &State, _asset_manager: &Asse
         match state.out_prompt {
             OutPromptState::PressStartForOptions { .. } => {
                 actors.push(act!(text:
-                    font(current_machine_font_key(FontRole::Header)):
+                    font(machine_font_key(visual_policy.machine_font, FontRole::Header)):
                     settext(tr("SelectMusic", "PressStartForOptions")):
                     align(0.5, 0.5):
                     xy(screen_center_x(), screen_center_y()):
@@ -2259,7 +2288,7 @@ pub fn push_actors(actors: &mut Vec<Actor>, state: &State, _asset_manager: &Asse
             }
             OutPromptState::EnteringOptions { .. } => {
                 actors.push(act!(text:
-                    font(current_machine_font_key(FontRole::Header)):
+                    font(machine_font_key(visual_policy.machine_font, FontRole::Header)):
                     settext(tr("SelectMusic", "PressStartForOptions")):
                     align(0.5, 0.5):
                     xy(screen_center_x(), screen_center_y()):
@@ -2269,7 +2298,7 @@ pub fn push_actors(actors: &mut Vec<Actor>, state: &State, _asset_manager: &Asse
                     linear(ENTERING_OPTIONS_FADE_OUT_SECONDS): alpha(0.0)
                 ));
                 actors.push(act!(text:
-                    font(current_machine_font_key(FontRole::Header)):
+                    font(machine_font_key(visual_policy.machine_font, FontRole::Header)):
                     settext(tr("SelectMusic", "EnteringOptions")):
                     align(0.5, 0.5):
                     xy(screen_center_x(), screen_center_y()):
@@ -2336,6 +2365,7 @@ pub fn push_actors(actors: &mut Vec<Actor>, state: &State, _asset_manager: &Asse
             p2_color,
             choices_alpha,
             1502,
+            visual_policy.machine_font,
         );
         push_exit_prompt_choice(
             actors,
@@ -2348,13 +2378,14 @@ pub fn push_actors(actors: &mut Vec<Actor>, state: &State, _asset_manager: &Asse
             p2_color,
             choices_alpha,
             1502,
+            visual_policy.machine_font,
         );
     }
 }
 
 pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     let mut actors = Vec::with_capacity(256);
-    push_actors(&mut actors, state, asset_manager);
+    push_actors(&mut actors, state, asset_manager, Default::default());
     actors
 }
 
@@ -2409,6 +2440,7 @@ fn push_exit_prompt_choice(
     active_rgba: [f32; 4],
     alpha: f32,
     z: i16,
+    machine_font: crate::config::MachineFont,
 ) {
     let mut rgba = [1.0; 4];
     if active {
@@ -2419,7 +2451,7 @@ fn push_exit_prompt_choice(
     out.push(act!(text:
         align(0.5, 0.5):
         xy(cx, cy):
-        font(current_machine_font_key(FontRole::Header)):
+        font(machine_font_key(machine_font, FontRole::Header)):
         zoom(SL_EXIT_PROMPT_LABEL_ZOOM * choice_zoom):
         settext(label):
         diffuse(rgba[0], rgba[1], rgba[2], rgba[3]):

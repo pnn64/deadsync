@@ -231,17 +231,12 @@ const TRANSITION_IN_DURATION: f32 = 0.4;
 const TRANSITION_OUT_DURATION: f32 = 0.4;
 const BACK_HOLD_SECONDS: f32 = 0.33;
 
-#[inline(always)]
-pub fn dedicated_three_key_nav_enabled() -> bool {
-    let cfg = crate::config::get();
-    cfg.three_key_navigation && cfg.only_dedicated_menu_buttons
-}
-
 pub fn three_key_menu_action(
     chord: &mut MenuLrChordTracker,
     ev: &InputEvent,
+    enabled: bool,
 ) -> Option<(PlayerSide, ThreeKeyMenuAction)> {
-    three_key_menu_action_enabled(chord, ev, dedicated_three_key_nav_enabled())
+    three_key_menu_action_enabled(chord, ev, enabled)
 }
 
 pub struct State {
@@ -333,7 +328,11 @@ pub fn handle_raw_pad_event(state: &mut State, pad_event: &PadEvent) {
 
 /* ------------------------------- drawing ------------------------------- */
 
-pub fn push_actors(actors: &mut Vec<Actor>, state: &State) {
+pub fn push_actors(
+    actors: &mut Vec<Actor>,
+    state: &State,
+    visual_policy: crate::views::SimplyLoveVisualPolicyView,
+) {
     actors.reserve(56);
 
     state.bg.push(
@@ -342,17 +341,19 @@ pub fn push_actors(actors: &mut Vec<Actor>, state: &State) {
             active_color_index: state.active_color_index,
             backdrop_rgba: [0.0, 0.0, 0.0, 1.0],
             alpha_mul: 1.0,
+            visual_policy,
         },
     );
 
     actors.extend(test_input::build_test_input_screen_content(
         &state.test_input,
         state.active_color_index,
+        visual_policy.machine_font,
     ));
 }
 
 pub fn get_actors(state: &State) -> Vec<Actor> {
     let mut actors = Vec::with_capacity(56);
-    push_actors(&mut actors, state);
+    push_actors(&mut actors, state, Default::default());
     actors
 }

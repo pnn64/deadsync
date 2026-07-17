@@ -62,7 +62,7 @@ resolver = "3"
 # `version.workspace = true`, so `env!("CARGO_PKG_VERSION")` and
 # `deadsync_version::current()` always agree. Bump THIS line on release.
 [workspace.package]
-version = "0.4.2671"
+version = "0.4.2687"
 
 [[bin]]
 name = "generate_pseudo"
@@ -82,6 +82,7 @@ deadsync-audio-analysis = { path = "crates/deadsync-audio-analysis" }
 deadsync-audio-backend-native = { path = "crates/deadsync-audio-backend-native", optional = true }
 deadsync-audio-replaygain = { path = "crates/deadsync-audio-replaygain" }
 deadsync-audio-stream = { path = "crates/deadsync-audio-stream" }
+deadsync-assets = { path = "crates/deadsync-assets" }
 deadsync-config = { path = "crates/deadsync-config" }
 deadsync-profile = { path = "crates/deadsync-profile" }
 deadsync-shell = { path = "crates/deadsync-shell" }
@@ -92,7 +93,6 @@ log = "0.4.33"
 
 [dev-dependencies]
 deadlib-present = { path = "crates/deadlib-present" }
-deadsync-assets = { path = "crates/deadsync-assets" }
 deadsync-chart = { path = "crates/deadsync-chart" }
 deadsync-core = { path = "crates/deadsync-core" }
 deadsync-rules = { path = "crates/deadsync-rules" }

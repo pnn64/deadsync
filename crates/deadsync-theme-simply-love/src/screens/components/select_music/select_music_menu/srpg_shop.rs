@@ -1,5 +1,6 @@
 use crate::act;
-use crate::assets::{FontRole, current_machine_font_key};
+use crate::assets::{FontRole, machine_font_key};
+use crate::config::MachineFont;
 use deadlib_present::actors::Actor;
 use deadlib_present::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 use deadsync_input::{InputEvent, VirtualAction};
@@ -417,6 +418,7 @@ fn active_shop<'a>(
 pub fn build_srpg_shop_overlay(
     state: &SrpgShopOverlayState,
     snapshot: &SrpgShopSnapshot,
+    machine_font: MachineFont,
 ) -> Option<Vec<Actor>> {
     let SrpgShopOverlayState::Visible(overlay) = state else {
         return None;
@@ -425,6 +427,8 @@ pub fn build_srpg_shop_overlay(
     let cx = screen_center_x();
     let cy = screen_center_y();
     let meta = SHOPS[overlay.shop_index];
+    let header_font = machine_font_key(machine_font, FontRole::Header);
+    let bold_font = machine_font_key(machine_font, FontRole::Bold);
 
     actors.push(act!(quad:
         align(0.0, 0.0): xy(0.0, 0.0): zoomto(screen_width(), screen_height()):
@@ -447,13 +451,20 @@ pub fn build_srpg_shop_overlay(
         diffuse(0.0, 0.0, 0.0, 0.86): z(Z + 4)
     ));
     actors.push(act!(text:
-        font(current_machine_font_key(FontRole::Header)): settext("SRPG SHOP"):
+        font(header_font): settext("SRPG SHOP"):
         align(0.5, 0.5): xy(cx - 143.0, cy + HEADER_CONTENT_Y): maxwidth(250.0):
         zoom(0.42): diffuse(1.0, 1.0, 1.0, 1.0): z(Z + 5): horizalign(center)
     ));
 
-    push_tabs(&mut actors, overlay.shop_index, cx, cy);
-    push_shop_heading(&mut actors, active_shop(overlay, snapshot), meta, cx, cy);
+    push_tabs(&mut actors, overlay.shop_index, cx, cy, bold_font);
+    push_shop_heading(
+        &mut actors,
+        active_shop(overlay, snapshot),
+        meta,
+        cx,
+        cy,
+        bold_font,
+    );
     match snapshot.phase {
         SrpgShopPhase::Idle | SrpgShopPhase::Loading => push_status(
             &mut actors,
@@ -464,6 +475,7 @@ pub fn build_srpg_shop_overlay(
             [1.0, 1.0, 1.0, 1.0],
             cx,
             cy,
+            bold_font,
         ),
         SrpgShopPhase::Error => push_status(
             &mut actors,
@@ -474,19 +486,20 @@ pub fn build_srpg_shop_overlay(
             [1.0, 0.45, 0.35, 1.0],
             cx,
             cy,
+            bold_font,
         ),
         SrpgShopPhase::Ready | SrpgShopPhase::Purchasing => {
-            push_catalog(&mut actors, overlay, snapshot, meta, cx, cy);
+            push_catalog(&mut actors, overlay, snapshot, meta, cx, cy, bold_font);
         }
     }
     push_footer(&mut actors, snapshot.phase, cx, cy);
     if let Some(confirm) = overlay.confirm.as_ref() {
-        push_confirmation(&mut actors, confirm, meta, cx, cy);
+        push_confirmation(&mut actors, confirm, meta, cx, cy, header_font, bold_font);
     }
     Some(actors)
 }
 
-fn push_tabs(actors: &mut Vec<Actor>, selected: usize, cx: f32, cy: f32) {
+fn push_tabs(actors: &mut Vec<Actor>, selected: usize, cx: f32, cy: f32, bold_font: &'static str) {
     let start_x = cx + 53.0;
     for (index, shop) in SHOPS.into_iter().enumerate() {
         let x = start_x + index as f32 * 64.0;
@@ -497,7 +510,7 @@ fn push_tabs(actors: &mut Vec<Actor>, selected: usize, cx: f32, cy: f32) {
             z(Z + 5)
         ));
         actors.push(act!(text:
-            font(current_machine_font_key(FontRole::Bold)): settext(shop.short_name):
+            font(bold_font): settext(shop.short_name):
             align(0.5, 0.5): xy(x, cy + HEADER_CONTENT_Y): zoom(0.25):
             diffuse(1.0, 1.0, 1.0, if active { 1.0 } else { 0.65 }): z(Z + 6):
             horizalign(center)
@@ -511,9 +524,10 @@ fn push_shop_heading(
     meta: ShopMeta,
     cx: f32,
     cy: f32,
+    bold_font: &'static str,
 ) {
     actors.push(act!(text:
-        font(current_machine_font_key(FontRole::Bold)): settext(meta.name):
+        font(bold_font): settext(meta.name):
         align(0.0, 0.5): xy(cx - PANEL_W * 0.5 + 15.0, cy - 153.0): zoom(0.38):
         maxwidth(290.0): diffuse(meta.tint[0], meta.tint[1], meta.tint[2], 1.0):
         z(Z + 6): horizalign(left)
@@ -534,6 +548,7 @@ fn push_catalog(
     meta: ShopMeta,
     cx: f32,
     cy: f32,
+    bold_font: &'static str,
 ) {
     let Some(shop) = active_shop(overlay, snapshot) else {
         push_status(
@@ -542,6 +557,7 @@ fn push_catalog(
             [1.0, 0.5, 0.4, 1.0],
             cx,
             cy,
+            bold_font,
         );
         return;
     };
@@ -552,6 +568,7 @@ fn push_catalog(
             [1.0; 4],
             cx,
             cy,
+            bold_font,
         );
         return;
     }
@@ -592,7 +609,7 @@ fn push_catalog(
             z(Z + 5)
         ));
         actors.push(act!(text:
-            font(current_machine_font_key(FontRole::Bold)): settext(name):
+            font(bold_font): settext(name):
             align(0.0, 0.5): xy(cx + LIST_X - LIST_W * 0.5 + 9.0, y - 5.0): zoom(0.25):
             maxwidth(205.0): diffuse(1.0, 1.0, 1.0, if active { 1.0 } else { 0.76 }):
             z(Z + 6): horizalign(left)
@@ -605,7 +622,7 @@ fn push_catalog(
         ));
     }
     if selected == 0 {
-        push_bulk_detail(actors, overlay, shop, meta, cx, cy);
+        push_bulk_detail(actors, overlay, shop, meta, cx, cy, bold_font);
     } else {
         push_item_detail(
             actors,
@@ -615,6 +632,7 @@ fn push_catalog(
             meta,
             cx,
             cy,
+            bold_font,
         );
     }
 }
@@ -626,6 +644,7 @@ fn push_bulk_detail(
     meta: ShopMeta,
     cx: f32,
     cy: f32,
+    bold_font: &'static str,
 ) {
     let x = cx - PANEL_W * 0.5 + 15.0;
     let ready = ready_count(overlay, shop);
@@ -642,7 +661,7 @@ fn push_bulk_detail(
         diffuse(0.0, 0.0, 0.0, 0.72): z(Z + 4)
     ));
     actors.push(act!(text:
-        font(current_machine_font_key(FontRole::Bold)): settext("DOWNLOAD ALL SONGS"):
+        font(bold_font): settext("DOWNLOAD ALL SONGS"):
         align(0.0, 0.5): xy(x + 4.0, cy - 99.0): zoom(0.34): maxwidth(260.0):
         diffuse(1.0, 1.0, 1.0, 1.0): z(Z + 6): horizalign(left)
     ));
@@ -658,7 +677,7 @@ fn push_bulk_detail(
         diffuse(0.92, 0.92, 0.92, 1.0): z(Z + 6): horizalign(left)
     ));
     actors.push(act!(text:
-        font(current_machine_font_key(FontRole::Bold)): settext(message):
+        font(bold_font): settext(message):
         align(0.0, 1.0): xy(x + 4.0, cy + 123.0): zoom(0.25): maxwidth(264.0):
         diffuse(meta.tint[0], meta.tint[1], meta.tint[2], 1.0): z(Z + 6): horizalign(left)
     ));
@@ -672,6 +691,7 @@ fn push_item_detail(
     meta: ShopMeta,
     cx: f32,
     cy: f32,
+    bold_font: &'static str,
 ) {
     let x = cx - PANEL_W * 0.5 + 15.0;
     actors.push(act!(quad:
@@ -679,7 +699,7 @@ fn push_item_detail(
         diffuse(0.0, 0.0, 0.0, 0.72): z(Z + 4)
     ));
     actors.push(act!(text:
-        font(current_machine_font_key(FontRole::Bold)): settext(item.name.clone()):
+        font(bold_font): settext(item.name.clone()):
         align(0.0, 0.5): xy(x + 4.0, cy - 99.0): zoom(0.34): maxwidth(260.0):
         diffuse(1.0, 1.0, 1.0, 1.0): z(Z + 6): horizalign(left)
     ));
@@ -702,19 +722,26 @@ fn push_item_detail(
         )
     });
     actors.push(act!(text:
-        font(current_machine_font_key(FontRole::Bold)): settext(message.unwrap_or_default()):
+        font(bold_font): settext(message.unwrap_or_default()):
         align(0.0, 1.0): xy(x + 4.0, cy + 123.0): zoom(0.25): maxwidth(264.0):
         diffuse(meta.tint[0], meta.tint[1], meta.tint[2], 1.0): z(Z + 6): horizalign(left)
     ));
 }
 
-fn push_status(actors: &mut Vec<Actor>, message: &str, color: [f32; 4], cx: f32, cy: f32) {
+fn push_status(
+    actors: &mut Vec<Actor>,
+    message: &str,
+    color: [f32; 4],
+    cx: f32,
+    cy: f32,
+    bold_font: &'static str,
+) {
     actors.push(act!(quad:
         align(0.5, 0.5): xy(cx, cy + 20.0): zoomto(520.0, 120.0):
         diffuse(0.0, 0.0, 0.0, 0.82): z(Z + 5)
     ));
     actors.push(act!(text:
-        font(current_machine_font_key(FontRole::Bold)): settext(message.to_owned()):
+        font(bold_font): settext(message.to_owned()):
         align(0.5, 0.5): xy(cx, cy + 10.0): zoom(0.34): wrapwidthpixels(1000.0):
         maxwidth(500.0): diffuse(color[0], color[1], color[2], color[3]): z(Z + 6):
         horizalign(center)
@@ -748,6 +775,8 @@ fn push_confirmation(
     meta: ShopMeta,
     cx: f32,
     cy: f32,
+    header_font: &'static str,
+    bold_font: &'static str,
 ) {
     actors.push(act!(quad:
         align(0.5, 0.5): xy(cx, cy): zoomto(430.0, 170.0):
@@ -758,12 +787,12 @@ fn push_confirmation(
         diffuse(0.02, 0.02, 0.02, 0.98): z(Z + 21)
     ));
     actors.push(act!(text:
-        font(current_machine_font_key(FontRole::Header)): settext("CONFIRM PURCHASE"):
+        font(header_font): settext("CONFIRM PURCHASE"):
         align(0.5, 0.5): xy(cx, cy - 55.0): zoom(0.37):
         diffuse(meta.tint[0], meta.tint[1], meta.tint[2], 1.0): z(Z + 22): horizalign(center)
     ));
     actors.push(act!(text:
-        font(current_machine_font_key(FontRole::Bold)):
+        font(bold_font):
         settext(format!("{}\n{} {}", confirm.name, format_number(confirm.cost), meta.currency)):
         align(0.5, 0.5): xy(cx, cy - 6.0): zoom(0.30): maxwidth(390.0):
         diffuse(1.0, 1.0, 1.0, 1.0): z(Z + 22): horizalign(center)

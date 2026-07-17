@@ -1,5 +1,6 @@
 pub mod audio_folder;
 pub mod dynamic_media;
+pub mod language;
 pub mod manager;
 pub mod media_cache;
 pub mod noteskin;
@@ -28,4 +29,10 @@ pub use textures::{
 /// asset consumers.
 pub fn resolve_asset_path(path: &str) -> std::path::PathBuf {
     deadlib_platform::dirs::app_dirs().resolve_asset_path(path)
+}
+
+/// Open an image from bundled/data-overlay assets without exposing resolution
+/// paths to the presentation consumer.
+pub fn open_bundled_image(path: &str) -> image::ImageResult<image::DynamicImage> {
+    open_image_fallback(&resolve_asset_path(path))
 }

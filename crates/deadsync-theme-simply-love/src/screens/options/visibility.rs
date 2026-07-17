@@ -3,12 +3,15 @@ use super::*;
 /// Returns `true` when the given submenu row should be treated as disabled
 /// (non-interactive and visually dimmed). Add new cases here for any row
 /// that should be conditionally locked based on runtime state.
-pub(super) fn is_submenu_row_disabled(kind: SubmenuKind, id: SubRowId) -> bool {
+pub(super) fn is_submenu_row_disabled(state: &State, kind: SubmenuKind, id: SubRowId) -> bool {
     match (kind, id) {
         (SubmenuKind::InputBackend, SubRowId::MenuButtons) => {
-            !deadsync_input::any_player_has_dedicated_menu_buttons_for_mode(
-                config::get().three_key_navigation,
-            )
+            let three_key_navigation = get_choice_by_id(
+                &state.sub[SubmenuKind::InputBackend].choice_indices,
+                INPUT_BACKEND_OPTIONS_ROWS,
+                SubRowId::MenuNavigation,
+            ) == Some(1);
+            !deadsync_input::any_player_has_dedicated_menu_buttons_for_mode(three_key_navigation)
         }
         _ => false,
     }
@@ -286,11 +289,22 @@ pub(super) fn submenu_visible_row_indices(
                 .iter()
                 .filter(|pad| pad.connected)
                 .count();
-            let panel_lights = config::get().smx_panel_lights;
+            let panel_lights = get_choice_by_id(
+                &state.sub[SubmenuKind::SmxConfig].choice_indices,
+                SMX_CONFIG_OPTIONS_ROWS,
+                SubRowId::SmxPanelLights,
+            )
+            .is_some_and(yes_no_from_choice);
+            let underglow_theme = get_choice_by_id(
+                &state.sub[SubmenuKind::SmxConfig].choice_indices,
+                SMX_CONFIG_OPTIONS_ROWS,
+                SubRowId::SmxUnderglowTheme,
+            )
+            .is_some_and(yes_no_from_choice);
             rows.iter()
                 .enumerate()
                 .filter_map(|(idx, row)| match row.id {
-                    SubRowId::SmxUnderglowGrb if !config::get().smx_underglow_theme => None,
+                    SubRowId::SmxUnderglowGrb if !underglow_theme => None,
                     SubRowId::SmxSinglePadPlayer if pad_count != 1 => None,
                     SubRowId::SmxAssignPads | SubRowId::SmxSwapPads if pad_count != 2 => None,
                     SubRowId::SmxBgPack | SubRowId::SmxJudgePack | SubRowId::SmxIdleLights

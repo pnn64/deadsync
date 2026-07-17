@@ -115,7 +115,12 @@ pub fn out_transition() -> (Vec<Actor>, f32) {
     transitions::fade_out_black(TRANSITION_OUT_DURATION, 1200)
 }
 
-pub fn push_actors(actors: &mut Vec<Actor>, state: &State, alpha_multiplier: f32) {
+pub fn push_actors(
+    actors: &mut Vec<Actor>,
+    state: &State,
+    alpha_multiplier: f32,
+    visual_policy: crate::views::SimplyLoveVisualPolicyView,
+) {
     actors.reserve(64);
 
     // 1) Animated heart background with a short cross-fade between colors.
@@ -128,6 +133,7 @@ pub fn push_actors(actors: &mut Vec<Actor>, state: &State, alpha_multiplier: f32
                 active_color_index: state.bg_to_index,
                 backdrop_rgba: [0.0, 0.0, 0.0, 1.0],
                 alpha_mul: 1.0,
+                visual_policy,
             },
         );
     } else {
@@ -140,6 +146,7 @@ pub fn push_actors(actors: &mut Vec<Actor>, state: &State, alpha_multiplier: f32
                 active_color_index: state.bg_from_index,
                 backdrop_rgba: [0.0, 0.0, 0.0, 1.0],
                 alpha_mul: alpha_from,
+                visual_policy,
             },
         );
         // Top: new color + NO backdrop (avoid double darkening)
@@ -149,6 +156,7 @@ pub fn push_actors(actors: &mut Vec<Actor>, state: &State, alpha_multiplier: f32
                 active_color_index: state.bg_to_index,
                 backdrop_rgba: [0.0, 0.0, 0.0, 0.0],
                 alpha_mul: alpha_to,
+                visual_policy,
             },
         );
     }
@@ -167,9 +175,10 @@ pub fn push_actors(actors: &mut Vec<Actor>, state: &State, alpha_multiplier: f32
         left_avatar: None,
         right_avatar: None,
         fg_color: FG,
+        visual_policy,
     }));
 
-    select_flow_footer::push(actors, &state.runtime.players);
+    select_flow_footer::push(actors, &state.runtime.players, visual_policy);
 
     let mut wheel_actors = Vec::new();
 
@@ -239,9 +248,9 @@ pub fn push_actors(actors: &mut Vec<Actor>, state: &State, alpha_multiplier: f32
     } else {
         0.0
     };
-    let visual_style = visual_styles::current_style();
-    let select_color_texture = visual_styles::select_color_texture_key();
-    let select_color_aspect = visual_styles::select_color_aspect(visual_style);
+    let select_color_texture = visual_policy.assets.select_color;
+    let [select_color_w, select_color_h] = visual_policy.assets.select_color_size;
+    let select_color_aspect = select_color_w as f32 / select_color_h.max(1) as f32;
 
     let x_spacing = w_screen / (num_slots as f32 - 1.0);
 
@@ -286,7 +295,7 @@ pub fn push_actors(actors: &mut Vec<Actor>, state: &State, alpha_multiplier: f32
         let a = o.abs();
 
         // palette color for this slot (stick to integer to avoid “color lerp” look)
-        let tint = select_color_tint(base_i + offset_i);
+        let tint = select_color_tint(base_i + offset_i, visual_policy.srpg10_tint);
 
         // X centered via distance samples (sign from side)
         let x_off = super::select_color::sample_linear(&x_samples, a);
@@ -348,12 +357,17 @@ pub fn push_actors(actors: &mut Vec<Actor>, state: &State, alpha_multiplier: f32
         actor.mul_alpha(alpha_multiplier);
     }
     actors.extend(wheel_actors);
-    push_srpg10_faction_label(actors, state.active_color_index, alpha_multiplier);
+    push_srpg10_faction_label(
+        actors,
+        state.active_color_index,
+        alpha_multiplier,
+        visual_policy.srpg10_tint,
+    );
 }
 
 pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
     let mut actors = Vec::with_capacity(64);
-    push_actors(&mut actors, state, alpha_multiplier);
+    push_actors(&mut actors, state, alpha_multiplier, Default::default());
     actors
 }
 
@@ -365,16 +379,21 @@ fn lerp(a: f32, b: f32, t: f32) -> f32 {
 }
 
 #[inline(always)]
-fn select_color_tint(color_index: i32) -> [f32; 4] {
-    if visual_styles::srpg10_active() {
+fn select_color_tint(color_index: i32, srpg10: bool) -> [f32; 4] {
+    if srpg10 {
         color::srpg10_rgba(color_index)
     } else {
         color::decorative_rgba(color_index)
     }
 }
 
-fn push_srpg10_faction_label(actors: &mut Vec<Actor>, color_index: i32, alpha_multiplier: f32) {
-    if !visual_styles::srpg10_active() {
+fn push_srpg10_faction_label(
+    actors: &mut Vec<Actor>,
+    color_index: i32,
+    alpha_multiplier: f32,
+    srpg10: bool,
+) {
+    if !srpg10 {
         return;
     }
     let alpha = 0.94 * alpha_multiplier;

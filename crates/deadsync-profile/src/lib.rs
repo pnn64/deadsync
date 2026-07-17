@@ -9369,6 +9369,16 @@ impl Profile {
         self.global_offset_shift_ms = options.global_offset_shift_ms;
     }
 
+    /// Replace the live player-option fields without touching identity, stats,
+    /// credentials, favorites, or other concurrently owned profile data.
+    pub fn set_current_player_options(&mut self, options: PlayerOptionsData) -> bool {
+        if self.current_player_options() == options {
+            return false;
+        }
+        self.apply_player_options(&options);
+        true
+    }
+
     #[inline(always)]
     pub const fn player_options(&self, style: PlayStyle) -> &PlayerOptionsData {
         match style {
@@ -13552,5 +13562,22 @@ ApiKey = gs-key
             "judgements/custom.png"
         );
         assert!(HoldJudgmentGraphic::from_str("").is_err());
+    }
+
+    #[test]
+    fn replacing_player_options_preserves_non_option_profile_data() {
+        let mut profile = Profile {
+            display_name: "Keep Me".to_owned(),
+            current_combo: 42,
+            ..Profile::default()
+        };
+        let mut options = profile.current_player_options();
+        options.mini_percent = 35;
+
+        assert!(profile.set_current_player_options(options.clone()));
+        assert_eq!(profile.current_player_options(), options);
+        assert_eq!(profile.display_name, "Keep Me");
+        assert_eq!(profile.current_combo, 42);
+        assert!(!profile.set_current_player_options(options));
     }
 }

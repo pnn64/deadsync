@@ -14,14 +14,15 @@ pub mod views;
 pub mod visual_styles;
 
 pub use effects::{
-    SimplyLoveAdvancedConfigRequest, SimplyLoveConfigRequest, SimplyLoveCourseConfigRequest,
-    SimplyLoveDebugRequest, SimplyLoveEffect, SimplyLoveEffectRouteContext,
-    SimplyLoveEffectRoutePlan, SimplyLoveGameplayConfigRequest, SimplyLoveGameplayPadLights,
-    SimplyLoveGraphOrientation, SimplyLoveHardwareRequest, SimplyLoveItgImportSummary,
-    SimplyLoveItgProfileCandidate, SimplyLoveLightsConfigRequest, SimplyLoveLightsDriver,
-    SimplyLoveLobbyRequest, SimplyLoveMachineConfigRequest, SimplyLoveMappingsConfigRequest,
-    SimplyLoveMediaRequest, SimplyLoveNullOrDieConfigRequest, SimplyLoveNullOrDieGraph,
-    SimplyLoveOnlineConfigRequest, SimplyLoveOnlineRequest, SimplyLoveProfileImportEvent,
+    SimplyLoveAdvancedConfigRequest, SimplyLoveConfigRequest, SimplyLoveContentRequest,
+    SimplyLoveCourseConfigRequest, SimplyLoveDebugRequest, SimplyLoveEffect,
+    SimplyLoveEffectRouteContext, SimplyLoveEffectRoutePlan, SimplyLoveGameplayConfigRequest,
+    SimplyLoveGameplayPadLights, SimplyLoveGraphOrientation, SimplyLoveHardwareRequest,
+    SimplyLoveItgImportSummary, SimplyLoveItgProfileCandidate, SimplyLoveLightsConfigRequest,
+    SimplyLoveLightsDriver, SimplyLoveLobbyRequest, SimplyLoveLocalProfileEvent,
+    SimplyLoveMachineConfigRequest, SimplyLoveMappingsConfigRequest, SimplyLoveMediaRequest,
+    SimplyLoveNullOrDieConfigRequest, SimplyLoveNullOrDieGraph, SimplyLoveOnlineConfigRequest,
+    SimplyLoveOnlineRequest, SimplyLoveOptionsConfigRequest, SimplyLoveProfileImportEvent,
     SimplyLoveProfileRequest, SimplyLoveQrLoginEvent, SimplyLoveQrLoginPolicy,
     SimplyLoveQrLoginRequest, SimplyLoveQrLoginService, SimplyLoveQrLoginSlot,
     SimplyLoveQrLoginSlotAvailability, SimplyLoveRuntimeRequest, SimplyLoveScoreImportEvent,
@@ -46,7 +47,7 @@ impl deadsync_theme::Theme for SimplyLoveTheme {
 }
 
 pub(crate) mod assets {
-    pub use crate::fonts::{FontRole, current_machine_font_key, current_machine_font_key_for_text};
+    pub use crate::fonts::{FontRole, machine_font_key, machine_font_key_for_text};
     pub use crate::{i18n, visual_styles};
     pub use deadsync_assets::*;
 }

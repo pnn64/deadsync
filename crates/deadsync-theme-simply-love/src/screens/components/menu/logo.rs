@@ -1,5 +1,5 @@
 use crate::act;
-use crate::assets::{self, visual_styles};
+use crate::assets;
 use deadlib_present::actors::Actor;
 use deadlib_present::space::screen_center_x;
 
@@ -24,8 +24,8 @@ impl Default for LogoParams {
 
 /// Build the “banner inside logo” stack with the actor DSL.
 /// Returns a `Vec<Actor>` to be included in a screen's actor list.
-pub fn build_logo(params: LogoParams) -> Vec<Actor> {
-    if let Some(texture_key) = visual_styles::title_logo_texture_key() {
+pub fn build_logo(params: LogoParams, title_logo_texture_key: Option<&'static str>) -> Vec<Actor> {
+    if let Some(texture_key) = title_logo_texture_key {
         let dims = assets::texture_dims(texture_key).unwrap_or(assets::TexMeta { w: 1, h: 1 });
         let aspect = if dims.h > 0 {
             dims.w as f32 / dims.h as f32
@@ -78,6 +78,6 @@ pub fn build_logo(params: LogoParams) -> Vec<Actor> {
 }
 
 /// Convenience: build with default params.
-pub fn build_logo_default() -> Vec<Actor> {
-    build_logo(LogoParams::default())
+pub fn build_logo_default(title_logo_texture_key: Option<&'static str>) -> Vec<Actor> {
+    build_logo(LogoParams::default(), title_logo_texture_key)
 }

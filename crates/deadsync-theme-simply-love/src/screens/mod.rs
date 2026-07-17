@@ -41,9 +41,9 @@ pub(crate) use crate::views::{DensityGraphSlot, DensityGraphSource};
 pub(crate) use flow::SimplyLoveScreen as Screen;
 pub use flow::{
     LateJoinContext, ProfileSelectionContext, ProfileSelectionPlan, SelectMusicJoinContext,
-    SelectMusicJoinPlan, SimplyLoveNavigationPlan, SimplyLoveScreen, evaluation_summary_return_to,
-    late_join_side, profile_selection_plan, resolve_navigation, select_music_join_plan,
-    uses_actor_fade, uses_actor_only_transition,
+    SelectMusicJoinPlan, SimplyLoveNavigationPlan, SimplyLoveNavigationPolicy, SimplyLoveScreen,
+    evaluation_summary_return_to, late_join_side, profile_selection_plan, resolve_navigation,
+    select_music_join_plan, uses_actor_fade, uses_actor_only_transition,
 };
 
 #[inline(always)]

@@ -33,6 +33,25 @@ pub(super) struct SubmenuRowLayout {
     pub(super) inline_row: bool,
 }
 
+fn machine_choice_index(state: &State, id: SubRowId) -> usize {
+    submenu_rows(SubmenuKind::Machine)
+        .iter()
+        .position(|row| row.id == id)
+        .and_then(|row_idx| {
+            submenu_choice_indices(state, SubmenuKind::Machine)
+                .get(row_idx)
+                .copied()
+        })
+        .unwrap_or_default()
+}
+
+pub(super) fn selected_visual_assets(state: &State) -> &'static visual_styles::Assets {
+    visual_styles::for_style_and_variant(
+        visual_style_from_choice(machine_choice_index(state, SubRowId::VisualStyle)),
+        srpg_variant_from_choice(machine_choice_index(state, SubRowId::ThemeVariant)),
+    )
+}
+
 #[inline(always)]
 pub(super) fn desc_w_unscaled() -> f32 {
     widescale(DESC_W_43, DESC_W_169)
@@ -289,7 +308,8 @@ pub(super) fn build_submenu_row_layout(
     let mut widths: Vec<f32> = Vec::with_capacity(choice_texts.len());
     let mut text_h = 16.0_f32;
     if is_color_choice {
-        let aspect = visual_styles::select_color_aspect(visual_styles::current_style());
+        let [width, height] = selected_visual_assets(state).select_color_size;
+        let aspect = width as f32 / height.max(1) as f32;
         text_h = COLOR_CHOICE_ICON_H;
         widths.resize(texts.len(), COLOR_CHOICE_ICON_H * aspect);
     } else {

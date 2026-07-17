@@ -2,17 +2,16 @@ use crate::act;
 use crate::assets::AssetManager;
 use crate::assets::i18n::{tr, tr_fmt};
 use crate::assets::sprite_sheet_dims;
-use crate::assets::{FontRole, current_machine_font_key, visual_styles};
+use crate::assets::{FontRole, machine_font_key, visual_styles};
 use crate::screens::components::gameplay::score_counter::{
     ScoreCounterParams, prewarm_score_counter_layout, push_score_counter,
 };
 use crate::screens::components::gameplay::{gameplay_stats, notefield, step_stats_gifs};
 use crate::screens::components::shared::banner as shared_banner;
-use crate::screens::components::shared::gs_scorebox;
 use crate::screens::components::shared::lobby_hud;
 use crate::screens::components::shared::screen_bar::{self, AvatarParams, ScreenBarParams};
 use crate::screens::{Screen, ThemeEffect};
-use crate::views::{GameplayInitView, GameplayRuntimeView};
+use crate::views::{GameplayInitView, GameplayRuntimeView, GameplayScoreRuntimeView};
 use deadlib_present::actors::{
     Actor, ActorResourceArena, RetainedActorFrame, SizeSpec, SpriteSource, TextAlign,
     TextAttribute, TextContent,
@@ -44,15 +43,14 @@ use deadsync_core::song_time::song_time_ns_to_seconds;
 use deadsync_gameplay::{
     AUTOSYNC_OFFSET_SAMPLE_COUNT, AutosyncMode, CourseDisplayCarry, CourseDisplayTiming,
     CourseDisplayTotals, CrossoverRow, ExitTransitionKind, FantasticWindowOptions, GameplayAction,
-    GameplayAudioSnapshot, GameplayConfig, GameplayExit, GameplayMiniIndicatorData,
-    GameplayNoteskinData, GameplayNoteskinEffects, GameplayReceptorGlowBehavior,
-    GameplayReceptorStepBehavior, GameplaySession, GameplayTween, GameplayViewport, HoldToExitKey,
-    LeadInTiming, MINE_EXPLOSION_DURATION, RECEPTOR_STEP_WINDOWS, RECEPTOR_Y_OFFSET_FROM_CENTER,
+    GameplayAudioSnapshot, GameplayConfig, GameplayExit, GameplayNoteskinData,
+    GameplayNoteskinEffects, GameplayReceptorGlowBehavior, GameplayReceptorStepBehavior,
+    GameplaySession, GameplayTween, GameplayViewport, HoldToExitKey, LeadInTiming,
+    MINE_EXPLOSION_DURATION, RECEPTOR_STEP_WINDOWS, RECEPTOR_Y_OFFSET_FROM_CENTER,
     RECEPTOR_Y_OFFSET_FROM_CENTER_REVERSE, ReplayInputEdge, ReplayOffsetSnapshot,
     SongLuaOverlayMessageRuntime, TAP_EXPLOSION_WINDOWS, autosync_mode_status_line,
-    blue_fantastic_window_ms, build_crossover_rows, exit_transition_alpha, gameplay_runtime_charts,
-    handle_core_input, scroll_receptor_y, song_lua_ease_factor, spacing_multiplier_for_percent,
-    update_core,
+    blue_fantastic_window_ms, build_crossover_rows, exit_transition_alpha, handle_core_input,
+    scroll_receptor_y, song_lua_ease_factor, spacing_multiplier_for_percent, update_core,
 };
 use deadsync_input::{InputEvent, VirtualAction};
 use deadsync_notefield::{
@@ -65,7 +63,6 @@ use deadsync_noteskin::{
     ModelDrawState, ReceptorGlowBehavior, ReceptorStepBehavior, Style, TweenType,
 };
 use deadsync_online::lobbies as lobby_data;
-use deadsync_online::score_compat as scores;
 use deadsync_profile as profile_data;
 use deadsync_profile_gameplay::{
     GameplayProfile, SongLuaRuntimeOverlayStateDelta, gameplay_pack_data,
@@ -181,23 +178,6 @@ impl Default for ActorViewOverride {
 #[derive(Clone, Debug)]
 pub struct CourseDisplayInfo {
     pub name: Arc<str>,
-}
-
-#[derive(Clone, Debug)]
-struct GameplayScoreboxData {
-    profile_snapshot: [score_data::GameplayScoreboxProfileSnapshot; MAX_PLAYERS],
-    side_snapshot: [Option<score_data::CachedPlayerLeaderboardData>; MAX_PLAYERS],
-}
-
-impl Default for GameplayScoreboxData {
-    fn default() -> Self {
-        Self {
-            profile_snapshot: std::array::from_fn(|_| {
-                score_data::GameplayScoreboxProfileSnapshot::default()
-            }),
-            side_snapshot: std::array::from_fn(|_| None),
-        }
-    }
 }
 
 // Simply Love ScreenGameplay in/default.lua keeps intro cover actors alive for 2.0s.
@@ -559,6 +539,7 @@ pub struct State {
     pub pack_banner_path: Option<PathBuf>,
     pub scorebox_profile_snapshot: [score_data::GameplayScoreboxProfileSnapshot; MAX_PLAYERS],
     pub scorebox_side_snapshot: [Option<score_data::CachedPlayerLeaderboardData>; MAX_PLAYERS],
+    itl_cmod_warning: [bool; MAX_PLAYERS],
     runtime_view: GameplayRuntimeView,
     pub lobby_music_started: bool,
     pub lobby_ready_p1: bool,
@@ -664,22 +645,34 @@ impl GameplayPresentationSkeleton {
 }
 
 impl State {
+    pub fn machine_font(&self) -> crate::config::MachineFont {
+        self.runtime_view.policy.machine_font
+    }
+
     pub fn from_gameplay(
         gameplay: GameplayCoreState,
         noteskin_assets: GameplayNoteskinAssets,
     ) -> Self {
+        let GameplayInitView {
+            runtime,
+            hud,
+            scores,
+            background_changes,
+        } = GameplayInitView::default();
         Self::from_gameplay_with_screen_data(
             gameplay,
             noteskin_assets,
             Vec::new(),
-            Vec::new(),
+            background_changes,
             Arc::from("EVENT"),
             None,
             None,
             Arc::from(""),
             None,
-            GameplayScoreboxData::default(),
-            GameplayInitView::default(),
+            scores.scorebox_profiles,
+            scores.scorebox_snapshots,
+            runtime,
+            hud,
         )
     }
 
@@ -693,18 +686,19 @@ impl State {
         course_display_info: Option<CourseDisplayInfo>,
         pack_group: Arc<str>,
         pack_banner_path: Option<PathBuf>,
-        scorebox_data: GameplayScoreboxData,
-        init_view: GameplayInitView,
+        scorebox_profile_snapshot: [score_data::GameplayScoreboxProfileSnapshot; MAX_PLAYERS],
+        scorebox_side_snapshot: [Option<score_data::CachedPlayerLeaderboardData>; MAX_PLAYERS],
+        runtime_view: GameplayRuntimeView,
+        hud_snapshot: profile_data::GameplayHudSnapshot,
     ) -> Self {
         let density_graph = DensityGraphRenderState::from_gameplay(&gameplay);
-        let hud_snapshot = init_view.hud;
         let step_stats_profiles =
             std::array::from_fn(|player| gameplay.profiles()[player].0.clone());
         let step_stats_extra_resolved =
             step_stats_gifs::resolve_random_extras(&step_stats_profiles);
         let song = gameplay.song();
         let song_full_title: Arc<str> =
-            Arc::from(song.display_full_title(init_view.runtime.policy.translated_titles));
+            Arc::from(song.display_full_title(runtime_view.policy.translated_titles));
         let song_banner_key = song
             .banner_path
             .as_deref()
@@ -766,9 +760,10 @@ impl State {
             course_display_info,
             pack_group,
             pack_banner_path,
-            scorebox_profile_snapshot: scorebox_data.profile_snapshot,
-            scorebox_side_snapshot: scorebox_data.side_snapshot,
-            runtime_view: init_view.runtime,
+            scorebox_profile_snapshot,
+            scorebox_side_snapshot,
+            itl_cmod_warning: [false; MAX_PLAYERS],
+            runtime_view,
             lobby_music_started: false,
             lobby_ready_p1: false,
             lobby_ready_p2: false,
@@ -913,96 +908,6 @@ pub fn visible_banner_paths(state: &State) -> [Option<&Path>; 2] {
             None
         },
     ]
-}
-
-fn mini_indicator_personal_best_percent(
-    chart_hash: &str,
-    side: profile_data::PlayerSide,
-    score_type: profile_data::MiniIndicatorScoreType,
-) -> Option<f64> {
-    match score_type {
-        profile_data::MiniIndicatorScoreType::Itg => {
-            scores::get_cached_score_for_side(chart_hash, side)
-                .map(|s| (s.score_percent * 100.0).clamp(0.0, 100.0))
-        }
-        profile_data::MiniIndicatorScoreType::Ex => {
-            scores::get_cached_local_ex_score_for_side(chart_hash, side)
-                .map(|s| s.percent.clamp(0.0, 100.0))
-        }
-        profile_data::MiniIndicatorScoreType::HardEx => {
-            scores::get_cached_local_hard_ex_score_for_side(chart_hash, side)
-                .map(|s| s.percent.clamp(0.0, 100.0))
-        }
-    }
-}
-
-fn mini_indicator_machine_best_percent(
-    chart_hash: &str,
-    score_type: profile_data::MiniIndicatorScoreType,
-) -> Option<f64> {
-    match score_type {
-        profile_data::MiniIndicatorScoreType::Itg => scores::get_machine_record_local(chart_hash)
-            .map(|(_, s)| (s.score_percent * 100.0).clamp(0.0, 100.0)),
-        profile_data::MiniIndicatorScoreType::Ex | profile_data::MiniIndicatorScoreType::HardEx => {
-            None
-        }
-    }
-}
-
-fn gameplay_mini_indicator_data(
-    charts: &[Arc<ChartData>; MAX_PLAYERS],
-    player_profiles: &[profile_data::Profile; MAX_PLAYERS],
-    session: &GameplaySession,
-) -> GameplayMiniIndicatorData {
-    let mut data = GameplayMiniIndicatorData::default();
-    let num_players = session.play_style.player_count();
-    for p in 0..num_players {
-        let side = profile_side_from_gameplay(session.runtime_player_side(p));
-        let chart_hash = charts[p].short_hash.as_str();
-        let score_type = player_profiles[p].mini_indicator_score_type;
-        data.personal_best_percent[p] =
-            mini_indicator_personal_best_percent(chart_hash, side, score_type);
-        data.machine_best_percent[p] = mini_indicator_machine_best_percent(chart_hash, score_type);
-    }
-    data
-}
-
-fn gameplay_scorebox_data(
-    charts: &[Arc<ChartData>; MAX_PLAYERS],
-    player_profiles: &[profile_data::Profile; MAX_PLAYERS],
-    session: &GameplaySession,
-) -> GameplayScoreboxData {
-    let mut data = GameplayScoreboxData::default();
-    let num_players = session.play_style.player_count();
-    for p in 0..num_players {
-        let gameplay_side = session.runtime_player_side(p);
-        let side = profile_side_from_gameplay(gameplay_side);
-        data.profile_snapshot[profile_data::player_side_index(side)] =
-            scores::scorebox_profile_snapshot(
-                &player_profiles[p],
-                session.side_joined(gameplay_side),
-                session.active_profile_id_for_side(gameplay_side),
-            );
-    }
-
-    for p in 0..num_players {
-        let side = profile_side_from_gameplay(session.runtime_player_side(p));
-        let idx = profile_data::player_side_index(side);
-        let profile_snapshot = &data.profile_snapshot[idx];
-        if !profile_snapshot.display_scorebox || !profile_snapshot.gs_active {
-            continue;
-        }
-        let chart_hash = charts[p].short_hash.trim();
-        if chart_hash.is_empty() {
-            continue;
-        }
-        data.side_snapshot[idx] = scores::get_or_fetch_player_leaderboards_for_profile(
-            chart_hash,
-            profile_snapshot,
-            gs_scorebox::SCOREBOX_NUM_ENTRIES,
-        );
-    }
-    data
 }
 
 pub(crate) fn gameplay_crossover_annotations_for_player(
@@ -1844,14 +1749,15 @@ pub fn init(
     combo_carry: [u32; MAX_PLAYERS],
     init_view: GameplayInitView,
 ) -> State {
-    let random_movie_paths = deadsync_simfile::app_runtime::random_movie_paths(
-        &song,
-        init_view.runtime.policy.random_background_movies,
-    );
+    let GameplayInitView {
+        runtime,
+        hud,
+        scores,
+        background_changes,
+    } = init_view;
     let cols_per_player = session.play_style.cols_per_player();
     let num_players = session.play_style.player_count();
     let runtime_profile_data = gameplay_runtime_profile_data(&player_profiles, &session);
-    let runtime_charts = gameplay_runtime_charts(&charts, &session);
     let noteskin_assets =
         gameplay_noteskin_assets(cols_per_player, num_players, &runtime_profile_data);
     let noteskin_data =
@@ -1868,16 +1774,6 @@ pub fn init(
     );
     let player_profiles = player_profiles.map(GameplayProfile::from);
     let song_lua_sound_paths = song_lua_sound_paths(&song_lua_data);
-    let background_chart = if session.p2_runtime_player() {
-        &gameplay_charts[1]
-    } else {
-        &gameplay_charts[0]
-    };
-    let background_changes = deadsync_simfile::app_runtime::gameplay_background_changes(
-        &song,
-        background_chart,
-        random_movie_paths,
-    );
     let pack_data = gameplay_pack_data(
         &song,
         course_display_info.as_ref().map(|info| &info.name),
@@ -1886,9 +1782,6 @@ pub fn init(
     let pack_group = pack_data.pack_group;
     let pack_banner_path = pack_data.pack_banner_path;
     let pack_sync_pref = pack_data.sync_pref;
-    let mini_indicator_data =
-        gameplay_mini_indicator_data(&runtime_charts, &runtime_profile_data, &session);
-    let scorebox_data = gameplay_scorebox_data(&runtime_charts, &runtime_profile_data, &session);
     State::from_gameplay_with_screen_data(
         deadsync_gameplay::init_gameplay_runtime(
             song,
@@ -1898,7 +1791,7 @@ pub fn init(
             session,
             config,
             pack_sync_pref,
-            mini_indicator_data,
+            scores.mini_indicator,
             noteskin_data,
             song_lua_data,
             gameplay_crossover_annotations_for_player,
@@ -1922,8 +1815,10 @@ pub fn init(
         course_display_info,
         pack_group,
         pack_banner_path,
-        scorebox_data,
-        init_view,
+        scores.scorebox_profiles,
+        scores.scorebox_snapshots,
+        runtime,
+        hud,
     )
 }
 
@@ -1955,8 +1850,8 @@ fn local_lobby_side_is_active(state: &State, side: profile_data::PlayerSide) -> 
     }
 }
 
-fn intro_text_width(asset_manager: &AssetManager, text: &str) -> f32 {
-    let font_key = current_machine_font_key(FontRole::Header);
+fn intro_text_width(asset_manager: &AssetManager, state: &State, text: &str) -> f32 {
+    let font_key = machine_font_key(state.machine_font(), FontRole::Header);
     asset_manager.with_fonts(|all_fonts| {
         asset_manager
             .with_font(font_key, |f| {
@@ -1990,7 +1885,8 @@ fn intro_text_target_x(
     };
     let notefield_width = state.cols_per_player() as f32 * 64.0;
     screen_center_x()
-        + (notefield_width * 0.5 + intro_text_width(asset_manager, text) * INTRO_TEXT_GETWIDTH_PAD)
+        + (notefield_width * 0.5
+            + intro_text_width(asset_manager, state, text) * INTRO_TEXT_GETWIDTH_PAD)
             * side_sign
 }
 
@@ -2415,34 +2311,14 @@ pub fn scorebox_profile_for_side(
     &state.scorebox_profile_snapshot[profile_data::player_side_index(side)]
 }
 
-pub fn refresh_scorebox_snapshots(state: &mut State) {
-    for p in 0..state.num_players() {
-        let side = profile_side_from_gameplay(state.runtime_player_side(p));
-        let idx = profile_data::player_side_index(side);
-        let profile_snapshot = &state.scorebox_profile_snapshot[idx];
-        if !profile_snapshot.display_scorebox || !profile_snapshot.gs_active {
-            continue;
-        }
-        let needs_refresh = state.scorebox_side_snapshot[idx]
-            .as_ref()
-            .is_some_and(|snapshot| snapshot.loading);
-        if !needs_refresh {
-            continue;
-        }
-        let chart_hash = state.charts()[p].short_hash.trim();
-        if chart_hash.is_empty() {
-            continue;
-        }
-        if let Some(fresh) = scores::get_or_fetch_player_leaderboards_for_profile(
-            chart_hash,
-            profile_snapshot,
-            gs_scorebox::SCOREBOX_NUM_ENTRIES,
-        ) {
-            if !fresh.loading {
-                state.scorebox_side_snapshot[idx] = Some(fresh);
-            }
-        }
-    }
+#[inline(always)]
+pub fn scorebox_pane_filter(state: &State) -> deadsync_score::SelectMusicScoreboxFilter {
+    state.runtime_view.policy.scorebox_pane_filter
+}
+
+#[inline(always)]
+pub fn scorebox_uses_srpg10(state: &State) -> bool {
+    state.runtime_view.policy.srpg10_scorebox
 }
 
 pub fn on_enter(state: &mut State) {
@@ -2466,6 +2342,20 @@ pub fn on_exit(state: &mut State) {
 #[inline(always)]
 pub fn sync_runtime_view(state: &mut State, view: GameplayRuntimeView) {
     state.runtime_view = view;
+}
+
+#[inline(always)]
+pub fn sync_score_runtime_view(state: &mut State, view: GameplayScoreRuntimeView) {
+    for (current, update) in state
+        .scorebox_side_snapshot
+        .iter_mut()
+        .zip(view.scorebox_updates)
+    {
+        if update.is_some() {
+            *current = update;
+        }
+    }
+    state.itl_cmod_warning = view.itl_cmod_warning;
 }
 
 /// Runs concrete-theme work that must happen before the deterministic gameplay
@@ -2510,11 +2400,12 @@ pub fn update(
     audio_snapshot: GameplayAudioSnapshot,
     fallback_host_nanos: impl FnOnce() -> u64,
 ) -> ThemeEffect {
-    let action = update_core(state, delta_time, audio_snapshot, fallback_host_nanos);
-    if matches!(action, GameplayAction::None) {
-        refresh_scorebox_snapshots(state);
-    }
-    map_gameplay_action(action)
+    map_gameplay_action(update_core(
+        state,
+        delta_time,
+        audio_snapshot,
+        fallback_host_nanos,
+    ))
 }
 
 fn song_lua_sound_time_crossed(previous: f32, now: f32, event_second: f32) -> bool {
@@ -2675,16 +2566,16 @@ pub fn runtime_profile_side(state: &State, player_idx: usize) -> profile_data::P
     profile_side_from_gameplay(state.runtime_player_side(player_idx))
 }
 
-pub fn smx_sensor_profile_enabled() -> bool {
-    smx_profile::enabled()
+pub fn smx_sensor_profile_enabled(state: &State) -> bool {
+    state.runtime_view.policy.smx_profile_enabled
 }
 
-pub fn record_smx_sensor_read_ns(elapsed_ns: u64) {
-    smx_profile::record_read(elapsed_ns);
+pub fn record_smx_sensor_read_ns(state: &State, elapsed_ns: u64) {
+    smx_profile::record_read(state.runtime_view.policy.smx_profile_enabled, elapsed_ns);
 }
 
-pub fn report_smx_sensor_profile() {
-    smx_profile::maybe_report();
+pub fn report_smx_sensor_profile(state: &State) {
+    smx_profile::maybe_report(state.runtime_view.policy.smx_profile_enabled);
 }
 
 pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
@@ -2922,9 +2813,13 @@ pub fn prewarm_text_layout(
     cache: &mut TextLayoutCache,
     fonts: &HashMap<&'static str, font::Font>,
     state: &State,
-    cfg: &crate::config::Config,
 ) {
-    prewarm_score_counter_layout(cache, fonts, current_machine_font_key(FontRole::Numbers));
+    let policy = state.runtime_view.policy;
+    prewarm_score_counter_layout(
+        cache,
+        fonts,
+        machine_font_key(state.machine_font(), FontRole::Numbers),
+    );
     for tenths in 0..=1_000 {
         let text = cached_life_percent_text(tenths as f32 / 10.0);
         cache.prewarm_text(fonts, "miso", text.as_ref(), None);
@@ -2934,14 +2829,14 @@ pub fn prewarm_text_layout(
         let meter_text = cached_meter_text(chart.meter);
         cache.prewarm_text(
             fonts,
-            current_machine_font_key(FontRole::Header),
+            machine_font_key(state.machine_font(), FontRole::Header),
             meter_text.as_ref(),
             None,
         );
         let detail = color::difficulty_display_name_for_song(
             &chart.difficulty,
             &state.song().title,
-            cfg.zmod_rating_box_text,
+            policy.zmod_rating_box_text,
         );
         cache.prewarm_text(fonts, "miso", detail, None);
         let Some(gameplay_chart) = state.gameplay_chart(player) else {
@@ -2950,14 +2845,14 @@ pub fn prewarm_text_layout(
         for &(_, bpm) in &gameplay_chart.timing_segments.bpms {
             let text = cached_bpm_text(
                 f64::from(bpm.max(0.0)) * f64::from(state.music_rate()),
-                cfg.show_bpm_decimal,
+                policy.show_bpm_decimal,
             );
             cache.prewarm_text(fonts, "miso", text.as_ref(), None);
         }
     }
     cache.prewarm_text(
         fonts,
-        current_machine_font_key(FontRole::Header),
+        machine_font_key(state.machine_font(), FontRole::Header),
         state.stage_intro_text.as_ref(),
         None,
     );
@@ -3007,6 +2902,7 @@ pub fn in_transition(
     state: Option<&State>,
     asset_manager: &AssetManager,
     is_restart: bool,
+    visual_policy: crate::views::SimplyLoveVisualPolicyView,
 ) -> (Vec<Actor>, f32) {
     if is_restart {
         // SL/zmod parity: on a song restart, skip the splode + stage-text
@@ -3039,8 +2935,8 @@ pub fn in_transition(
             gs.runtime_view.policy.center_single_notefield,
         )
     });
-    let splode_tex = visual_styles::gameplayin_splode_texture_key();
-    let minisplode_tex = visual_styles::gameplayin_minisplode_texture_key();
+    let splode_tex = visual_policy.assets.effects.gameplayin_splode;
+    let minisplode_tex = visual_policy.assets.effects.gameplayin_minisplode;
     let splode_zoom_scale = visual_styles::effect_zoom_scale(splode_tex);
     let minisplode_zoom_scale = visual_styles::effect_zoom_scale(minisplode_tex);
     let mut mirrored_splode = act!(sprite(splode_tex):
@@ -3084,7 +2980,7 @@ pub fn in_transition(
             decelerate(0.8): rotationz(0.0): zoom(0.9 * minisplode_zoom_scale): alpha(0.0)
         ),
         act!(text:
-            font(current_machine_font_key(FontRole::Header)): settext(text):
+            font(machine_font_key(visual_policy.machine_font, FontRole::Header)): settext(text):
             align(0.5, 0.5): xy(screen_center_x(), screen_center_y()):
             shadowlength(1.0):
             diffuse(1.0, 1.0, 1.0, 0.0):
@@ -8983,7 +8879,7 @@ pub fn push_actors(
     asset_manager: &AssetManager,
     view: ActorViewOverride,
     arrow_effect_time_s: f32,
-    cfg: &crate::config::Config,
+    visual_policy: crate::views::SimplyLoveVisualPolicyView,
 ) {
     let mut song_lua_overlay_order = std::mem::take(&mut state.song_lua_overlay_order);
     let mut song_lua_background_visual_layer_orders =
@@ -9018,8 +8914,9 @@ pub fn push_actors(
     let player_side = hud_snapshot.player_side;
     let is_p2_single = profile_data::is_single_p2_side(play_style, player_side);
     let runtime_player_is_p2 = profile_data::runtime_player_is_p2(play_style, player_side);
+    let policy = state.runtime_view.policy;
     let center_1player_notefield =
-        cfg.center_1player_notefield || notefield_view.force_center_1player;
+        policy.center_single_notefield || notefield_view.force_center_1player;
     let centered_single_notefield = play_style == profile_data::PlayStyle::Single
         && state.num_players() == 1
         && center_1player_notefield;
@@ -9058,7 +8955,12 @@ pub fn push_actors(
     let mut overlay_proxy_source = proxy_requests.overlay.then_some(Vec::new());
     // --- Background and Filter ---
     let underlay_start = actors.len();
-    push_background(&mut actors, state, cfg.bg_brightness, cfg.gameplay_bg_color);
+    push_background(
+        &mut actors,
+        state,
+        policy.background_brightness,
+        policy.background_color,
+    );
     for (layer_idx, layer) in song_lua_visuals.background_visual_layers.iter().enumerate() {
         if state.current_music_time_display() < layer.start_second {
             continue;
@@ -9280,6 +9182,8 @@ pub fn push_actors(
                 z: 995,
                 show_song_info: false,
                 status_text: gameplay_lobby_hud_status_text(state),
+                joined_sides: state.runtime_view.joined,
+                player_side: state.runtime_view.player_side,
             }));
         }
         song_lua_capture_new_actors(&mut overlay_proxy_source, &mut actors, overlay_start);
@@ -9360,6 +9264,7 @@ pub fn push_actors(
                 player_idx,
                 arrow_effect_time_s,
                 &state.noteskin_assets,
+                &visual_policy.assets.effects,
                 state.actor_resources(),
                 &state.notefield_model_cache,
                 &state.notefield_hold_mesh_scratch,
@@ -9373,7 +9278,7 @@ pub fn push_actors(
                     judgment: requests.judgment,
                     combo: requests.combo,
                 },
-                scores::should_warn_cmod_for_itl_chart(state, player_idx),
+                state.itl_cmod_warning[player_idx],
                 notefield_view,
                 field_scratch,
                 hud_scratch,
@@ -9650,7 +9555,7 @@ pub fn push_actors(
     // This top strip sits underneath the UpperNPSGraph and other HUD actors.
     if !hide_gameplay_hud {
         let underlay_start = actors.len();
-        let header_rgba = gameplay_header_rgba(cfg.gameplay_bg_color);
+        let header_rgba = gameplay_header_rgba(policy.background_color);
         presentation_skeleton.push(STATIC_HEADER, &mut actors, |actors| {
             actors.push(act!(quad:
                 align(0.5, 0.0): xy(screen_center_x(), 0.0):
@@ -9804,7 +9709,7 @@ pub fn push_actors(
         // edge (P1: left, P2: right) and the input mini-pad just outside the inner
         // edge (P1: right, P2: left). Build per-slot geometry (side + edges) here,
         // where the notefield layout is known.
-        if cfg.smx_input {
+        if policy.smx_input {
             let is_doubles = play_style == profile_data::PlayStyle::Double;
             let is_centered_single = centered_single_notefield;
             let mut field_geom: [Option<(profile_data::PlayerSide, f32, f32)>; 2] = [None, None];
@@ -9827,7 +9732,7 @@ pub fn push_actors(
             let smx_overlay_alpha = view.smx_overlay_alpha.min(exit_alpha);
             if state.profiles()[0].smx_fsr_display || state.profiles()[1].smx_fsr_display {
                 let before = actors.len();
-                smx_profile::time_draw(|| {
+                smx_profile::time_draw(state.runtime_view.policy.smx_profile_enabled, || {
                     push_smx_sensor_display(
                         &mut actors,
                         state,
@@ -9892,12 +9797,16 @@ pub fn push_actors(
                     diffuse(difficulty_color[0], difficulty_color[1], difficulty_color[2], 1.0):
                     z(90)
                 ));
-                let meter_y = if cfg.zmod_rating_box_text { -4.0 } else { 0.0 };
+                let meter_y = if policy.zmod_rating_box_text {
+                    -4.0
+                } else {
+                    0.0
+                };
                 actors.push(act!(text:
-                    font(current_machine_font_key(FontRole::Header)): settext(meter_text): align(0.5, 0.5): xy(diff_x, y + meter_y):
+                    font(machine_font_key(state.machine_font(), FontRole::Header)): settext(meter_text): align(0.5, 0.5): xy(diff_x, y + meter_y):
                     zoom(0.4): diffuse(0.0, 0.0, 0.0, 1.0): z(90)
                 ));
-                if cfg.zmod_rating_box_text {
+                if policy.zmod_rating_box_text {
                     actors.push(act!(text:
                         font("miso"):
                         settext(meter_detail_text):
@@ -9975,7 +9884,7 @@ pub fn push_actors(
                     asset_manager.fonts(),
                     ScoreCounterParams {
                         value: score_value,
-                        font: current_machine_font_key(FontRole::Numbers),
+                        font: machine_font_key(state.machine_font(), FontRole::Numbers),
                         position: [score_x, score_y],
                         align: [1.0, 1.0],
                         text_align: TextAlign::Right,
@@ -10015,7 +9924,7 @@ pub fn push_actors(
                         asset_manager.fonts(),
                         ScoreCounterParams {
                             value: hard_ex_percent.max(0.0),
-                            font: current_machine_font_key(FontRole::Numbers),
+                            font: machine_font_key(state.machine_font(), FontRole::Numbers),
                             position: [hard_ex_x, hard_ex_y],
                             align: if is_p2_side { [1.0, 0.0] } else { [0.0, 0.0] },
                             text_align: if is_p2_side {
@@ -10047,7 +9956,7 @@ pub fn push_actors(
             } else {
                 0.0
             };
-            let bpm_text = cached_bpm_text(display_bpm, cfg.show_bpm_decimal);
+            let bpm_text = cached_bpm_text(display_bpm, policy.show_bpm_decimal);
             // Final world-space positions derived from analyzing the SM Lua transforms.
             // The parent frame is bottom-aligned to y=52, and its children are positioned
             // relative to that y-coordinate, with a zoom of 1.33 applied to the whole group.
@@ -10060,7 +9969,7 @@ pub fn push_actors(
             let bpm_final_zoom = 1.0 * frame_zoom;
             let rate_final_zoom = 0.5 * frame_zoom;
             let bpm_x = gameplay_bpm_x(
-                cfg.gameplay_bpm_position,
+                policy.bpm_position,
                 state.num_players(),
                 play_style,
                 player_side,
@@ -10512,10 +10421,10 @@ pub fn push_actors(
                 state.stage_intro_text.as_ref(),
                 play_style,
                 player_side,
-                cfg.center_1player_notefield,
+                policy.center_single_notefield,
             );
             actors.push(act!(text:
-            font(current_machine_font_key(FontRole::Header)): settext(state.stage_intro_text.clone()):
+            font(machine_font_key(state.machine_font(), FontRole::Header)): settext(state.stage_intro_text.clone()):
             align(0.5, 0.5): xy(text_x, screen_height() - 30.0):
             zoom(0.4):
             shadowlength(1.0):
@@ -10580,6 +10489,7 @@ pub fn push_actors(
             };
         presentation_skeleton.push(STATIC_FOOTER, &mut actors, |actors| {
             actors.push(screen_bar::build_no_background(ScreenBarParams {
+                visual_policy,
                 title: "",
                 title_placement: screen_bar::ScreenBarTitlePlacement::Center,
                 position: screen_bar::ScreenBarPosition::Bottom,
@@ -10811,15 +10721,8 @@ mod smx_profile {
     static READ: Bucket = Bucket::new();
     static DRAW: Bucket = Bucket::new();
 
-    pub(super) fn enabled() -> bool {
-        static ENABLED: OnceLock<bool> = OnceLock::new();
-        *ENABLED.get_or_init(|| {
-            std::env::var("DEADSYNC_SMX_PROFILE").is_ok_and(|v| !v.is_empty() && v != "0")
-        })
-    }
-
-    fn time<T>(bucket: &Bucket, f: impl FnOnce() -> T) -> T {
-        if !enabled() {
+    fn time<T>(enabled: bool, bucket: &Bucket, f: impl FnOnce() -> T) -> T {
+        if !enabled {
             return f();
         }
         let start = Instant::now();
@@ -10828,19 +10731,19 @@ mod smx_profile {
         out
     }
 
-    pub(super) fn record_read(elapsed_ns: u64) {
-        if enabled() {
+    pub(super) fn record_read(enabled: bool, elapsed_ns: u64) {
+        if enabled {
             READ.record(elapsed_ns);
         }
     }
 
-    pub fn time_draw<T>(f: impl FnOnce() -> T) -> T {
-        time(&DRAW, f)
+    pub fn time_draw<T>(enabled: bool, f: impl FnOnce() -> T) -> T {
+        time(enabled, &DRAW, f)
     }
 
     /// Log the rolling window once a second. Cheap no-op when profiling is off.
-    pub fn maybe_report() {
-        if !enabled() {
+    pub fn maybe_report(enabled: bool) {
+        if !enabled {
             return;
         }
         static LAST: OnceLock<Mutex<Instant>> = OnceLock::new();
@@ -11144,7 +11047,7 @@ fn draw_smx_fsr_group(
             None => ("--".to_string(), SMX_SENSOR_VALUE_IDLE_COLOR),
         };
         actors.push(act!(text:
-            font(current_machine_font_key(FontRole::Normal)): settext(value_text):
+            font(machine_font_key(state.machine_font(), FontRole::Normal)): settext(value_text):
             align(0.5, 0.0): xy(x + bar_w * 0.5, group_top):
             zoom(SMX_SENSOR_VALUE_ZOOM * scale):
             diffuse(value_color[0], value_color[1], value_color[2], value_color[3]):
@@ -11154,7 +11057,7 @@ fn draw_smx_fsr_group(
         // Panel letter (L/D/U/R) drawn on the bar near its bottom; the drop
         // shadow keeps it legible over both the dark track and bright fill.
         actors.push(act!(text:
-            font(current_machine_font_key(FontRole::Normal)): settext(label):
+            font(machine_font_key(state.machine_font(), FontRole::Normal)): settext(label):
             align(0.5, 1.0):
             xy(x + bar_w * 0.5, bar_y + bar_h - SMX_SENSOR_LETTER_INSET * scale):
             zoom(SMX_SENSOR_LABEL_ZOOM * scale):
@@ -11323,10 +11226,6 @@ fn draw_smx_mini_pad(
 mod tests {
     use super::*;
     use deadlib_present::actors::TextAttribute;
-    use deadsync_chart::{ArrowStats, StaminaCounts, TechCounts};
-    use deadsync_profile_gameplay::{
-        gameplay_play_style_from_profile, gameplay_player_side_from_profile,
-    };
 
     fn workspace_root() -> std::path::PathBuf {
         let manifest = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
@@ -11413,90 +11312,7 @@ mod tests {
     }
 
     fn ensure_i18n() {
-        crate::assets::i18n::init("en");
-    }
-
-    fn test_chart(hash: &str) -> ChartData {
-        ChartData {
-            chart_type: "dance-single".to_string(),
-            difficulty: "Challenge".to_string(),
-            description: String::new(),
-            chart_name: String::new(),
-            meter: 10,
-            step_artist: String::new(),
-            music_path: None,
-            short_hash: hash.to_string(),
-            stats: ArrowStats::default(),
-            tech_counts: TechCounts::default(),
-            mines_nonfake: 0,
-            stamina_counts: StaminaCounts::default(),
-            total_streams: 0,
-            matrix_rating: 0.0,
-            max_nps: 0.0,
-            sn_detailed_breakdown: String::new(),
-            sn_partial_breakdown: String::new(),
-            sn_simple_breakdown: String::new(),
-            detailed_breakdown: String::new(),
-            partial_breakdown: String::new(),
-            simple_breakdown: String::new(),
-            total_measures: 0,
-            measure_nps_vec: Vec::new(),
-            measure_seconds_vec: Vec::new(),
-            first_second: 0.0,
-            has_note_data: true,
-            has_chart_attacks: false,
-            possible_grade_points: 0,
-            holds_total: 0,
-            rolls_total: 0,
-            mines_total: 0,
-            display_bpm: None,
-            min_bpm: 120.0,
-            max_bpm: 120.0,
-        }
-    }
-
-    #[test]
-    fn p2_solo_scorebox_data_uses_runtime_profile_and_chart() {
-        for play_style in [
-            profile_data::PlayStyle::Single,
-            profile_data::PlayStyle::Double,
-        ] {
-            let charts = [
-                Arc::new(test_chart("p1-hash")),
-                Arc::new(test_chart("p2-hash")),
-            ];
-            let mut player_profiles: [profile_data::Profile; MAX_PLAYERS] =
-                std::array::from_fn(|_| profile_data::Profile::default());
-            player_profiles[0].display_scorebox = false;
-            player_profiles[0].show_ex_score = false;
-            player_profiles[1].display_scorebox = true;
-            player_profiles[1].show_ex_score = true;
-            player_profiles[1].groovestats_username = "p2-user".to_string();
-            let session = GameplaySession {
-                play_style: gameplay_play_style_from_profile(play_style),
-                player_side: gameplay_player_side_from_profile(profile_data::PlayerSide::P2),
-                joined_sides: [false, true],
-                active_profile_ids: [None, Some("p2-profile".to_string())],
-                ..GameplaySession::default()
-            };
-
-            let runtime_profiles = gameplay_runtime_profile_data(&player_profiles, &session);
-            let runtime_charts = gameplay_runtime_charts(&charts, &session);
-            assert_eq!(runtime_charts[0].short_hash, "p2-hash");
-
-            let data = gameplay_scorebox_data(&runtime_charts, &runtime_profiles, &session);
-            let p1_idx = profile_data::player_side_index(profile_data::PlayerSide::P1);
-            let p2_idx = profile_data::player_side_index(profile_data::PlayerSide::P2);
-            assert!(!data.profile_snapshot[p1_idx].display_scorebox);
-            assert!(data.profile_snapshot[p2_idx].display_scorebox);
-            assert!(data.profile_snapshot[p2_idx].show_ex_score);
-            assert_eq!(data.profile_snapshot[p2_idx].gs_username(), "p2-user");
-            assert_eq!(
-                data.profile_snapshot[p2_idx].persistent_profile_id(),
-                Some("p2-profile")
-            );
-            assert!(data.side_snapshot[p2_idx].is_none());
-        }
+        crate::assets::i18n::init_for_tests();
     }
 
     #[test]

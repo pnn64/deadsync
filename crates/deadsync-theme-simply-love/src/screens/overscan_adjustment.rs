@@ -1,12 +1,12 @@
 use crate::act;
 use crate::assets::i18n::tr;
-use crate::assets::{FontRole, current_machine_font_key_for_text};
-use crate::config;
+use crate::assets::{FontRole, machine_font_key_for_text};
 use crate::screens::components::shared::{transitions, visual_style_bg};
 use crate::screens::overscan::{
     Action as OverscanAction, Adjustment, Field, State as OverscanState, Values,
 };
 use crate::screens::{Screen, ThemeEffect};
+use crate::views::OverscanAdjustmentView;
 use deadlib_present::actors::Actor;
 use deadlib_present::color;
 use deadlib_present::space;
@@ -78,13 +78,12 @@ pub fn init() -> State {
     }
 }
 
-pub fn on_enter(state: &mut State) {
-    let cfg = config::get();
+pub fn on_enter(state: &mut State, view: OverscanAdjustmentView) {
     let values = Values {
-        add_height: cfg.center_image_add_height,
-        add_width: cfg.center_image_add_width,
-        translate_x: cfg.center_image_translate_x,
-        translate_y: cfg.center_image_translate_y,
+        add_height: view.add_height,
+        add_width: view.add_width,
+        translate_x: view.translate_x,
+        translate_y: view.translate_y,
     };
     state.edit.reset(values);
     apply_preview(values);
@@ -125,15 +124,17 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
             apply_preview(values);
             ThemeEffect::None
         }
-        OverscanAction::Commit(values) => {
-            config::update_overscan(
-                values.translate_x,
-                values.translate_y,
-                values.add_width,
-                values.add_height,
-            );
-            ThemeEffect::Navigate(Screen::Options)
-        }
+        OverscanAction::Commit(values) => ThemeEffect::Batch(vec![
+            ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Config(
+                crate::SimplyLoveConfigRequest::Overscan {
+                    translate_x: values.translate_x,
+                    translate_y: values.translate_y,
+                    add_width: values.add_width,
+                    add_height: values.add_height,
+                },
+            )),
+            ThemeEffect::Navigate(Screen::Options),
+        ]),
         OverscanAction::Cancel(values) => {
             apply_preview(values);
             ThemeEffect::Navigate(Screen::Options)
@@ -149,7 +150,12 @@ pub fn out_transition() -> (Vec<Actor>, f32) {
     transitions::fade_out_black(TRANSITION_OUT_DURATION, 1200)
 }
 
-pub fn push_actors(actors: &mut Vec<Actor>, state: &State, alpha_mul: f32) {
+pub fn push_actors(
+    actors: &mut Vec<Actor>,
+    state: &State,
+    alpha_mul: f32,
+    visual_policy: crate::views::SimplyLoveVisualPolicyView,
+) {
     actors.reserve(24);
     let screen_w = screen_width();
     let screen_h = screen_height();
@@ -160,6 +166,7 @@ pub fn push_actors(actors: &mut Vec<Actor>, state: &State, alpha_mul: f32) {
             active_color_index: state.active_color_index,
             backdrop_rgba: [0.0, 0.0, 0.0, 1.0],
             alpha_mul,
+            visual_policy,
         },
     );
 
@@ -170,7 +177,8 @@ pub fn push_actors(actors: &mut Vec<Actor>, state: &State, alpha_mul: f32) {
     // Title: machine Header font (Wendy) at the standard screen-title scale,
     // matching how every other screen renders its title.
     let title = tr("ScreenOverscanAdjustment", "HeaderText");
-    let title_font = current_machine_font_key_for_text(FontRole::Header, &title);
+    let title_font =
+        machine_font_key_for_text(visual_policy.machine_font, FontRole::Header, &title);
     let title_scale = if space::is_wide() { 0.6 } else { 0.5 };
     actors.push(act!(text:
         font(title_font):
@@ -229,7 +237,7 @@ pub fn push_actors(actors: &mut Vec<Actor>, state: &State, alpha_mul: f32) {
 
 pub fn get_actors(state: &State, alpha_mul: f32) -> Vec<Actor> {
     let mut actors = Vec::with_capacity(24);
-    push_actors(&mut actors, state, alpha_mul);
+    push_actors(&mut actors, state, alpha_mul, Default::default());
     actors
 }
 
@@ -276,4 +284,60 @@ fn apply_preview(values: Values) {
         values.add_width,
         values.add_height,
     );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use deadsync_core::input::InputSource;
+    use deadsync_input::VirtualAction;
+    use std::time::Instant;
+
+    fn press(action: VirtualAction) -> InputEvent {
+        let now = Instant::now();
+        InputEvent {
+            action,
+            input_slot: 0,
+            pressed: true,
+            source: InputSource::Keyboard,
+            timestamp: now,
+            timestamp_host_nanos: 0,
+            stored_at: now,
+            emitted_at: now,
+        }
+    }
+
+    #[test]
+    fn overscan_commit_emits_config_before_navigation() {
+        let mut state = init();
+        on_enter(
+            &mut state,
+            OverscanAdjustmentView {
+                translate_x: 1,
+                translate_y: 2,
+                add_width: 3,
+                add_height: 4,
+            },
+        );
+        handle_input(&mut state, &press(VirtualAction::p1_right));
+
+        let ThemeEffect::Batch(effects) = handle_input(&mut state, &press(VirtualAction::p1_start))
+        else {
+            panic!("overscan commit should batch persistence before navigation");
+        };
+        assert!(matches!(
+            effects.as_slice(),
+            [
+                ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Config(
+                    crate::SimplyLoveConfigRequest::Overscan {
+                        translate_x: 1,
+                        translate_y: 2,
+                        add_width: 3,
+                        add_height: 5,
+                    }
+                )),
+                ThemeEffect::Navigate(Screen::Options),
+            ]
+        ));
+    }
 }

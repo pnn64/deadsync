@@ -1,8 +1,13 @@
 use super::*;
-use crate::assets::{FontRole, current_machine_font_key};
+use crate::assets::{FontRole, machine_font_key};
 use deadsync_profile::TapExplosionMask;
 
-pub fn push_actors(actors: &mut Vec<Actor>, state: &State, asset_manager: &AssetManager) {
+pub fn push_actors(
+    actors: &mut Vec<Actor>,
+    state: &State,
+    asset_manager: &AssetManager,
+    visual_policy: crate::views::SimplyLoveVisualPolicyView,
+) {
     actors.reserve(64);
     let active = state.active;
     let show_p2 = active[P1] && active[P2];
@@ -13,10 +18,12 @@ pub fn push_actors(actors: &mut Vec<Actor>, state: &State, asset_manager: &Asset
             active_color_index: state.active_color_index,
             backdrop_rgba: [0.0, 0.0, 0.0, 1.0],
             alpha_mul: 1.0,
+            visual_policy,
         },
     );
     let select_modifiers = tr("ScreenTitles", "SelectModifiers");
     actors.push(screen_bar::build(ScreenBarParams {
+        visual_policy,
         title: &select_modifiers,
         title_placement: ScreenBarTitlePlacement::Left,
         position: ScreenBarPosition::Top,
@@ -64,11 +71,12 @@ pub fn push_actors(actors: &mut Vec<Actor>, state: &State, asset_manager: &Asset
             let speed_prefix = speed_mod.mod_type.prefix();
             let speed_text = format!("{speed_prefix}{main_scroll}");
             // zmod uses GetWidth() from the main helper actor (unzoomed width), then +w*0.4.
-            let main_draw_w = measure_wendy_text_width(asset_manager, &speed_text);
+            let main_draw_w =
+                measure_header_text_width(asset_manager, &speed_text, visual_policy.machine_font);
             let speed_x = speed_x_for(player_idx);
 
             actors.push(
-                act!(text: font(current_machine_font_key(FontRole::Header)): settext(speed_text):
+                act!(text: font(machine_font_key(visual_policy.machine_font, FontRole::Header)): settext(speed_text):
                     align(0.5, 0.5): xy(speed_x, speed_mod_y): zoom(speed_mod_zoom):
                     diffuse(speed_color[0], speed_color[1], speed_color[2], pane_alpha):
                     z(Z_SPEED_MOD_TEXT)
@@ -80,12 +88,12 @@ pub fn push_actors(actors: &mut Vec<Actor>, state: &State, asset_manager: &Asset
                 p_chart,
                 speed_mod,
                 state.music_rate,
-                &state.player_profiles[player_idx],
+                &state.player_options[player_idx],
             );
             if scaled_scroll != main_scroll {
                 let scaled_text = format!("{speed_prefix}{scaled_scroll}");
                 let scaled_x = speed_x + main_draw_w * 0.4;
-                actors.push(act!(text: font(current_machine_font_key(FontRole::Header)): settext(scaled_text):
+                actors.push(act!(text: font(machine_font_key(visual_policy.machine_font, FontRole::Header)): settext(scaled_text):
                     align(0.5, 0.5): xy(scaled_x, speed_mod_scaled_y): zoom(speed_mod_scaled_zoom):
                     diffuse(speed_color[0], speed_color[1], speed_color[2], 0.8 * pane_alpha):
                     z(Z_SPEED_MOD_TEXT)
@@ -375,7 +383,7 @@ pub fn push_actors(actors: &mut Vec<Actor>, state: &State, asset_manager: &Asset
 
 pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     let mut actors = Vec::with_capacity(64);
-    push_actors(&mut actors, state, asset_manager);
+    push_actors(&mut actors, state, asset_manager, Default::default());
     actors
 }
 
@@ -892,10 +900,7 @@ fn draw_heart_rate_preview(actors: &mut Vec<Actor>, rc: &RowCtx, primary_player_
 }
 
 fn draw_player_heart_rate_preview(actors: &mut Vec<Actor>, rc: &RowCtx, player_idx: usize) {
-    if rc.fc.state.player_profiles[player_idx]
-        .heart_rate_device_id
-        .is_none()
-    {
+    if rc.fc.state.heart_rate_device_ids[player_idx].is_none() {
         return;
     }
     let reading = rc.fc.state.heart_rate_readings[player_idx];
@@ -1731,15 +1736,18 @@ fn draw_receptorskin_row_preview(actors: &mut Vec<Actor>, rc: &RowCtx, primary_p
 }
 
 fn draw_tap_explosion_row_preview(actors: &mut Vec<Actor>, rc: &RowCtx, primary_player_idx: usize) {
-    if !rc.fc.state.player_profiles[primary_player_idx].tap_explosion_noteskin_hidden()
-        && let Some(explosion_ns) = rc.fc.state.noteskin.previews[primary_player_idx]
-            .tap_explosion
-            .as_deref()
-            .or_else(|| {
-                rc.fc.state.noteskin.previews[primary_player_idx]
-                    .base
-                    .as_deref()
-            })
+    if !deadsync_profile::tap_explosion_skin_hidden(
+        rc.fc.state.player_options[primary_player_idx]
+            .tap_explosion_noteskin
+            .as_ref(),
+    ) && let Some(explosion_ns) = rc.fc.state.noteskin.previews[primary_player_idx]
+        .tap_explosion
+        .as_deref()
+        .or_else(|| {
+            rc.fc.state.noteskin.previews[primary_player_idx]
+                .base
+                .as_deref()
+        })
     {
         let receptor_ns = rc.fc.state.noteskin.previews[primary_player_idx]
             .receptor
@@ -1760,7 +1768,11 @@ fn draw_tap_explosion_row_preview(actors: &mut Vec<Actor>, rc: &RowCtx, primary_
     }
     if rc.fc.show_p2
         && primary_player_idx != P2
-        && !rc.fc.state.player_profiles[P2].tap_explosion_noteskin_hidden()
+        && !deadsync_profile::tap_explosion_skin_hidden(
+            rc.fc.state.player_options[P2]
+                .tap_explosion_noteskin
+                .as_ref(),
+        )
         && let Some(explosion_ns) = rc.fc.state.noteskin.previews[P2]
             .tap_explosion
             .as_deref()

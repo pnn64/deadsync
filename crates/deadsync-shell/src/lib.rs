@@ -1,6 +1,7 @@
 pub mod app;
 
 mod command;
+mod content_reload;
 mod course;
 mod diagnostics;
 mod dynamic_media;
@@ -18,10 +19,12 @@ mod input_backend;
 mod input_trace;
 mod interaction;
 mod lighting;
+mod local_profiles;
 mod main_menu;
 mod mappings;
 mod navigation;
 mod offset_prompt;
+mod options_runtime;
 mod pad_config;
 mod player_options;
 mod post_song;

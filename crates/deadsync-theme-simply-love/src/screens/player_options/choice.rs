@@ -21,9 +21,9 @@ pub(super) fn persist_ctx(state: &State, player_idx: usize) -> (bool, PlayerSide
 
 // ========================= Self-contained binding application =========================
 // Each typed binding owns the full "write to in-memory profile + conditionally
-// persist to the on-disk profile for the right side" dance. The dispatcher
-// hands off a freshly-computed value and reads back an `Outcome`; it does not
-// need to know about `PlayerSide`, `persist_ctx`, or `persist_for_side`.
+// update the local profile" dance. The dispatcher hands off a freshly-computed
+// value and reads back an `Outcome`; persistence is queued once after the
+// resulting player-options snapshot has changed.
 
 impl NumericBinding {
     #[inline]
@@ -33,12 +33,7 @@ impl NumericBinding {
         player_idx: usize,
         value: i32,
     ) -> Outcome {
-        let outcome = (self.apply)(&mut state.player_profiles[player_idx], value);
-        let (should_persist, side) = persist_ctx(state, player_idx);
-        if should_persist {
-            (self.persist_for_side)(side, value);
-        }
-        outcome
+        (self.apply)(&mut state.player_options[player_idx], value)
     }
 }
 
@@ -50,12 +45,7 @@ impl<T: Copy + 'static> ChoiceBinding<T> {
         player_idx: usize,
         value: T,
     ) -> Outcome {
-        let outcome = (self.apply)(&mut state.player_profiles[player_idx], value);
-        let (should_persist, side) = persist_ctx(state, player_idx);
-        if should_persist {
-            (self.persist_for_side)(side, value);
-        }
-        outcome
+        (self.apply)(&mut state.player_options[player_idx], value)
     }
 }
 
@@ -110,6 +100,10 @@ pub(super) fn dispatch_behavior_delta(
     else {
         return;
     };
+    let before = (
+        state.player_options[player_idx].clone(),
+        state.heart_rate_device_ids[player_idx].clone(),
+    );
 
     let outcome = match behavior {
         RowBehavior::Numeric(b) => apply_numeric(state, player_idx, id, delta, b, wrap),
@@ -129,6 +123,13 @@ pub(super) fn dispatch_behavior_delta(
     }
 
     if outcome.persisted {
+        if (
+            state.player_options[player_idx].clone(),
+            state.heart_rate_device_ids[player_idx].clone(),
+        ) != before
+        {
+            queue_profile_update(state, player_idx);
+        }
         super::sync_inline_intent_from_row(state, asset_manager, player_idx, row_index);
         queue_sfx(state, CHANGE_VALUE_SFX);
     }
@@ -152,9 +153,8 @@ pub(super) fn dispatch_behavior_toggle(state: &mut State, player_idx: usize, id:
 /// the focused row matches `id`, computes the target bit via
 /// `writeback.bit_mapping.bit_for_choice`, flips it through
 /// `init.get_active`/`init.set_active`, projects the resulting bits onto
-/// the in-memory profile via `writeback.project_to_profile`, and
-/// (conditionally) persists them for the active side via
-/// `writeback.persist_for_side`. Queues the change-value SFX on success.
+/// the in-memory profile via `writeback.project_to_profile`, queues the changed
+/// snapshot for shell-owned persistence, and queues the change-value SFX.
 ///
 /// Returns `true` when a toggle was applied; `false` when the row was not
 /// focused, the binding was not `Generic`, or the choice index produced
@@ -176,6 +176,10 @@ pub(super) fn toggle_bitmask_row_generic(state: &mut State, player_idx: usize, i
         }
         _ => return false,
     };
+    let before = (
+        state.player_options[idx].clone(),
+        state.heart_rate_device_ids[idx].clone(),
+    );
 
     let row = state.pane().row_map.row(id);
     let choice_index = row.selected_choice_index[idx];
@@ -191,13 +195,16 @@ pub(super) fn toggle_bitmask_row_generic(state: &mut State, player_idx: usize, i
 
     (writeback.project)(
         &mut state.option_masks[idx],
-        &mut state.player_profiles[idx],
+        &mut state.player_options[idx],
         stored,
     );
 
-    let (should_persist, side) = persist_ctx(state, idx);
-    if should_persist {
-        (writeback.persist_for_side)(side, &state.player_profiles[idx]);
+    if (
+        state.player_options[idx].clone(),
+        state.heart_rate_device_ids[idx].clone(),
+    ) != before
+    {
+        queue_profile_update(state, idx);
     }
 
     if writeback.sync_visibility {
@@ -319,7 +326,7 @@ pub(super) fn apply_pane(state: &mut State, pane: OptionsPane) {
 
 fn refresh_pane_defaults(state: &mut State) {
     let pane_idx = state.current_pane.index();
-    let profiles = state.player_profiles.clone();
+    let profiles = state.player_options.clone();
     for player_idx in 0..PLAYER_SLOTS {
         panes::apply_profile_defaults(
             &mut state.panes[pane_idx].row_map,

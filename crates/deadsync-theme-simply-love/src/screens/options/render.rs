@@ -487,6 +487,7 @@ pub(super) fn build_yes_no_confirm_overlay(
     prompt_text: String,
     active_choice: u8,
     active_color_index: i32,
+    machine_font: crate::config::MachineFont,
 ) -> Vec<Actor> {
     let w = screen_width();
     let h = screen_height();
@@ -527,7 +528,7 @@ pub(super) fn build_yes_no_confirm_overlay(
         act!(text:
             align(0.5, 0.5):
             xy(yes_x, answer_y):
-            font(current_machine_font_key(FontRole::Header)):
+            font(machine_font_key(machine_font, FontRole::Header)):
             zoom(0.72):
             settext(tr("Common", "Yes")):
             diffuse(1.0, 1.0, 1.0, 1.0):
@@ -537,7 +538,7 @@ pub(super) fn build_yes_no_confirm_overlay(
         act!(text:
             align(0.5, 0.5):
             xy(no_x, answer_y):
-            font(current_machine_font_key(FontRole::Header)):
+            font(machine_font_key(machine_font, FontRole::Header)):
             zoom(0.72):
             settext(tr("Common", "No")):
             diffuse(1.0, 1.0, 1.0, 1.0):
@@ -553,6 +554,7 @@ pub fn push_actors(
     asset_manager: &AssetManager,
     updater: &SimplyLoveUpdaterView,
     alpha_multiplier: f32,
+    visual_policy: crate::views::SimplyLoveVisualPolicyView,
 ) {
     actors.reserve(320);
     let is_fading_submenu = !matches!(state.submenu_transition, SubmenuTransition::None);
@@ -566,6 +568,7 @@ pub fn push_actors(
             // Keep hearts always visible for actor-only fades (Options/Menu/Mappings);
             // local submenu fades are handled via content_alpha on UI actors only.
             alpha_mul: 1.0,
+            visual_policy,
         },
     );
 
@@ -581,7 +584,9 @@ pub fn push_actors(
         actors.extend(ui_actors);
         return;
     }
-    if let Some(mut ui_actors) = build_overlay(state, state.active_color_index) {
+    if let Some(mut ui_actors) =
+        build_overlay(state, state.active_color_index, visual_policy.machine_font)
+    {
         for actor in &mut ui_actors {
             actor.mul_alpha(alpha_multiplier);
         }
@@ -597,9 +602,11 @@ pub fn push_actors(
         actors.extend(ui_actors);
         return;
     }
-    if let Some(mut ui_actors) =
-        shared_pack_sync::build_overlay(&state.pack_sync_overlay, state.active_color_index)
-    {
+    if let Some(mut ui_actors) = shared_pack_sync::build_overlay(
+        &state.pack_sync_overlay,
+        state.active_color_index,
+        visual_policy.machine_font,
+    ) {
         for actor in &mut ui_actors {
             actor.mul_alpha(alpha_multiplier);
         }
@@ -616,6 +623,7 @@ pub fn push_actors(
         OptionsView::Submenu(kind) => submenu_title(kind),
     };
     actors.push(screen_bar::build(screen_bar::ScreenBarParams {
+        visual_policy,
         title: title_text,
         title_placement: ScreenBarTitlePlacement::Left,
         position: ScreenBarPosition::Top,
@@ -653,10 +661,11 @@ pub fn push_actors(
     let sep_w = SEP_W * s;
     let desc_w = desc_w_unscaled() * s;
     let desc_h = DESC_H * s;
-    let visual_style = visual_styles::current_style();
-    let select_color_texture = visual_styles::select_color_texture_key();
-    let select_color_aspect = visual_styles::select_color_aspect(visual_style);
-    let select_color_zoom = HEART_ZOOM * visual_styles::select_color_zoom_scale(visual_style);
+    let visual_assets = selected_visual_assets(state);
+    let select_color_texture = visual_assets.select_color;
+    let [select_color_w, select_color_h] = visual_assets.select_color_size;
+    let select_color_aspect = select_color_w as f32 / select_color_h.max(1) as f32;
+    let select_color_zoom = HEART_ZOOM * (566.0 / select_color_h.max(1) as f32);
 
     // Separator immediately to the RIGHT of the rows, aligned to the FIRST row top
     actors.push(act!(quad:
@@ -1006,7 +1015,7 @@ pub fn push_actors(
 
                         let row = &rows[actual_row_idx];
                         let label = row.label.get();
-                        let is_disabled = is_submenu_row_disabled(kind, row.id);
+                        let is_disabled = is_submenu_row_disabled(state, kind, row.id);
                         #[cfg(target_os = "linux")]
                         let child_label_indent = if matches!(kind, SubmenuKind::Sound)
                             && sound_parent_row(actual_row_idx).is_some()
@@ -1063,17 +1072,17 @@ pub fn push_actors(
                                 || is_scorebox_cycle_row
                                 || is_auto_screenshot_row;
                             let chart_info_enabled_mask = if is_chart_info_row {
-                                select_music_chart_info_enabled_mask()
+                                select_music_chart_info_enabled_mask(state)
                             } else {
                                 0
                             };
                             let scorebox_enabled_mask = if is_scorebox_cycle_row {
-                                select_music_scorebox_cycle_enabled_mask()
+                                select_music_scorebox_cycle_enabled_mask(state)
                             } else {
                                 0
                             };
                             let auto_screenshot_mask = if is_auto_screenshot_row {
-                                auto_screenshot_enabled_mask()
+                                auto_screenshot_enabled_mask(state)
                             } else {
                                 0
                             };
@@ -1403,6 +1412,7 @@ pub fn push_actors(
         actors.extend(build_score_import_pack_picker_actors(
             state,
             state.active_color_index,
+            visual_policy.machine_font,
         ));
     }
     if let Some(confirm) = &state.score_import_confirm {
@@ -1440,6 +1450,7 @@ pub fn push_actors(
             prompt_text,
             confirm.active_choice,
             state.active_color_index,
+            visual_policy.machine_font,
         ));
     }
     if let Some(confirm) = &state.sync_pack_confirm {
@@ -1455,6 +1466,7 @@ pub fn push_actors(
             prompt_text,
             confirm.active_choice,
             state.active_color_index,
+            visual_policy.machine_font,
         ));
     }
 
@@ -1480,6 +1492,13 @@ pub fn get_actors(
     alpha_multiplier: f32,
 ) -> Vec<Actor> {
     let mut actors = Vec::with_capacity(320);
-    push_actors(&mut actors, state, asset_manager, updater, alpha_multiplier);
+    push_actors(
+        &mut actors,
+        state,
+        asset_manager,
+        updater,
+        alpha_multiplier,
+        Default::default(),
+    );
     actors
 }

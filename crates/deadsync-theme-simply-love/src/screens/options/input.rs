@@ -66,7 +66,7 @@ pub(super) fn apply_submenu_choice_delta(
 
     if let Some(row) = rows.get(row_index) {
         // Block cycling disabled rows (e.g. dedicated menu buttons when unmapped).
-        if is_submenu_row_disabled(kind, row.id) {
+        if is_submenu_row_disabled(state, kind, row.id) {
             return None;
         }
         if matches!(kind, SubmenuKind::Sound) {
@@ -158,11 +158,13 @@ pub(super) fn apply_submenu_choice_delta(
                 VOLUME_MIN_PERCENT,
                 VOLUME_MAX_PERCENT,
             ) {
-                config::update_smx_default_light_brightness(
-                    state.smx_default_light_brightness_pct as u8,
-                );
                 queue_sfx(state, "assets/sounds/change_value.ogg");
                 clear_render_cache(state);
+                return Some(options_config_effect(
+                    crate::SimplyLoveOptionsConfigRequest::SmxDefaultLightBrightness(
+                        state.smx_default_light_brightness_pct as u8,
+                    ),
+                ));
             }
             return None;
         }
@@ -180,9 +182,11 @@ pub(super) fn apply_submenu_choice_delta(
                 VISUAL_DELAY_MIN_MS,
                 VISUAL_DELAY_MAX_MS,
             ) {
-                config::update_visual_delay_seconds(state.visual_delay_ms as f32 / 1000.0);
                 queue_sfx(state, "assets/sounds/change_value.ogg");
                 clear_render_cache(state);
+                return Some(options_config_effect(
+                    crate::SimplyLoveOptionsConfigRequest::VisualDelayMillis(state.visual_delay_ms),
+                ));
             }
             return None;
         }
@@ -193,9 +197,13 @@ pub(super) fn apply_submenu_choice_delta(
                 INPUT_DEBOUNCE_MIN_MS,
                 INPUT_DEBOUNCE_MAX_MS,
             ) {
-                config::update_input_debounce_seconds(state.input_debounce_ms as f32 / 1000.0);
                 queue_sfx(state, "assets/sounds/change_value.ogg");
                 clear_render_cache(state);
+                return Some(options_config_effect(
+                    crate::SimplyLoveOptionsConfigRequest::InputDebounceMillis(
+                        state.input_debounce_ms,
+                    ),
+                ));
             }
             return None;
         }
@@ -318,19 +326,43 @@ pub(super) fn apply_submenu_choice_delta(
     if matches!(kind, SubmenuKind::System) {
         let row = &rows[row_index];
         match row.id {
-            SubRowId::Game => config::update_game_flag(config::GameFlag::Dance),
-            SubRowId::Theme => config::update_theme_flag(config::ThemeFlag::SimplyLove),
-            SubRowId::Language => {
-                let flag = language_flag_from_choice(new_index);
-                config::update_language_flag(flag);
-                assets::i18n::set_locale(&assets::i18n::resolve_locale(flag));
+            SubRowId::Game => {
+                action = Some(options_config_effect(
+                    crate::SimplyLoveOptionsConfigRequest::GameDance,
+                ));
             }
-            SubRowId::LogLevel => config::update_log_level(log_level_from_choice(new_index)),
-            SubRowId::LogFile => config::update_log_to_file(new_index == 1),
+            SubRowId::Theme => {
+                action = Some(options_config_effect(
+                    crate::SimplyLoveOptionsConfigRequest::ThemeSimplyLove,
+                ));
+            }
+            SubRowId::Language => {
+                action = Some(options_config_effect(
+                    crate::SimplyLoveOptionsConfigRequest::Language(language_flag_from_choice(
+                        new_index,
+                    )),
+                ));
+            }
+            SubRowId::LogLevel => {
+                action = Some(options_config_effect(
+                    crate::SimplyLoveOptionsConfigRequest::LogLevel(log_level_from_choice(
+                        new_index,
+                    )),
+                ));
+            }
+            SubRowId::LogFile => {
+                action = Some(options_config_effect(
+                    crate::SimplyLoveOptionsConfigRequest::LogToFile(new_index == 1),
+                ));
+            }
             SubRowId::DefaultNoteSkin => {
-                if let Some(skin_name) = selected_choice.as_deref() {
-                    profile::update_machine_default_noteskin(profile_data::NoteSkin::new(
-                        skin_name,
+                if let Some(skin_name) = selected_choice {
+                    action = Some(ThemeEffect::Runtime(
+                        crate::SimplyLoveRuntimeRequest::Profile(
+                            crate::SimplyLoveProfileRequest::SetMachineDefaultNoteskin(
+                                profile_data::NoteSkin::new(&skin_name),
+                            ),
+                        ),
                     ));
                 }
             }
@@ -366,7 +398,9 @@ pub(super) fn apply_submenu_choice_delta(
             ));
         }
         if row.id == SubRowId::ValidationLayers {
-            config::update_gfx_debug(yes_no_from_choice(new_index));
+            action = Some(options_config_effect(
+                crate::SimplyLoveOptionsConfigRequest::GfxDebug(yes_no_from_choice(new_index)),
+            ));
         }
         if row.id == SubRowId::HideMouseCursor {
             action = Some(ThemeEffect::Runtime(
@@ -382,17 +416,27 @@ pub(super) fn apply_submenu_choice_delta(
         if row.id == SubRowId::GamepadBackend {
             #[cfg(target_os = "windows")]
             {
-                config::update_windows_gamepad_backend(windows_backend_from_choice(new_index));
+                action = Some(options_config_effect(
+                    crate::SimplyLoveOptionsConfigRequest::WindowsPadBackend(
+                        windows_backend_from_choice(new_index),
+                    ),
+                ));
             }
         }
         if row.id == SubRowId::UseFsrs {
-            config::update_use_fsrs(yes_no_from_choice(new_index));
+            action = Some(options_config_effect(
+                crate::SimplyLoveOptionsConfigRequest::UseFsrs(yes_no_from_choice(new_index)),
+            ));
         }
         if row.id == SubRowId::MenuNavigation {
-            config::update_three_key_navigation(new_index == 1);
+            action = Some(options_config_effect(
+                crate::SimplyLoveOptionsConfigRequest::ThreeKeyNavigation(new_index == 1),
+            ));
         }
         if row.id == SubRowId::OptionsNavigation {
-            config::update_arcade_options_navigation(new_index == 1);
+            action = Some(options_config_effect(
+                crate::SimplyLoveOptionsConfigRequest::ArcadeOptionsNavigation(new_index == 1),
+            ));
         }
         if row.id == SubRowId::MenuButtons {
             state.pending_dedicated_menu_buttons = Some(new_index == 1);
@@ -400,10 +444,16 @@ pub(super) fn apply_submenu_choice_delta(
     } else if matches!(kind, SubmenuKind::SmxConfig) {
         let row = &rows[row_index];
         if row.id == SubRowId::SmxInput {
-            config::update_smx_input(yes_no_from_choice(new_index));
+            action = Some(options_config_effect(
+                crate::SimplyLoveOptionsConfigRequest::SmxInput(yes_no_from_choice(new_index)),
+            ));
         }
         if row.id == SubRowId::SmxPanelLights {
-            config::update_smx_panel_lights(yes_no_from_choice(new_index));
+            action = Some(options_config_effect(
+                crate::SimplyLoveOptionsConfigRequest::SmxPanelLights(yes_no_from_choice(
+                    new_index,
+                )),
+            ));
         }
         if row.id == SubRowId::SmxUnderglowTheme {
             action = Some(ThemeEffect::Runtime(
@@ -422,11 +472,17 @@ pub(super) fn apply_submenu_choice_delta(
             ));
         }
         if row.id == SubRowId::SmxManagesPadConfig {
-            config::update_smx_manages_pad_config(yes_no_from_choice(new_index));
+            action = Some(options_config_effect(
+                crate::SimplyLoveOptionsConfigRequest::SmxManagesPadConfig(yes_no_from_choice(
+                    new_index,
+                )),
+            ));
         }
         if row.id == SubRowId::SmxDefaultPadConfig {
-            config::update_smx_default_pad_config(crate::config::SmxPadPreset::from_index(
-                new_index,
+            action = Some(options_config_effect(
+                crate::SimplyLoveOptionsConfigRequest::SmxDefaultPadConfig(
+                    crate::config::SmxPadPreset::from_index(new_index),
+                ),
             ));
         }
         if row.id == SubRowId::SmxBgPack {
@@ -439,7 +495,9 @@ pub(super) fn apply_submenu_choice_delta(
                     .map(|s| crate::config::SmxPackName::parse(s))
                     .unwrap_or_default()
             };
-            config::update_smx_pad_gifs_pack(pack);
+            action = Some(options_config_effect(
+                crate::SimplyLoveOptionsConfigRequest::SmxPadGifsPack(pack),
+            ));
         }
         if row.id == SubRowId::SmxJudgePack {
             let pack = if new_index == 0 {
@@ -451,12 +509,16 @@ pub(super) fn apply_submenu_choice_delta(
                     .map(|s| crate::config::SmxPackName::parse(s))
                     .unwrap_or_default()
             };
-            config::update_smx_judge_gifs_pack(pack);
+            action = Some(options_config_effect(
+                crate::SimplyLoveOptionsConfigRequest::SmxJudgeGifsPack(pack),
+            ));
         }
         if row.id == SubRowId::SmxIdleLights {
             // Index 0 = Firmware (release idle pads to the pad's built-in
             // lighting), 1 = Black (keep the LEDs and hold idle pads dark).
-            config::update_smx_idle_lights_black(new_index == 1);
+            action = Some(options_config_effect(
+                crate::SimplyLoveOptionsConfigRequest::SmxIdleLightsBlack(new_index == 1),
+            ));
         }
         if row.id == SubRowId::SmxSinglePadPlayer {
             // Pin the lone connected pad's serial to the chosen side (index 0 = P1,
@@ -1523,7 +1585,7 @@ pub(super) fn activate_current_selection(
                 }
                 ItemId::ReloadSongsCourses => {
                     queue_sfx(state, "assets/sounds/start.ogg");
-                    start_reload_songs_and_courses(state);
+                    return start_reload_songs_and_courses(state);
                 }
                 ItemId::CheckForUpdates => {
                     queue_sfx(state, "assets/sounds/start.ogg");
@@ -1673,7 +1735,6 @@ pub(super) fn activate_current_selection(
                     match row.id {
                         SubRowId::SmxAssignPads => {
                             queue_sfx(state, "assets/sounds/start.ogg");
-                            crate::screens::smx_assign::set_pending_return(Screen::Options);
                             return ThemeEffect::Navigate(Screen::SmxAssignPads);
                         }
                         SubRowId::SmxSwapPads => {
@@ -1850,7 +1911,7 @@ pub(super) fn activate_current_selection(
                     return ThemeEffect::None;
                 }
             }
-            if screen_input::dedicated_three_key_nav_enabled()
+            if dedicated_three_key_nav(state)
                 && let Some(action) =
                     apply_submenu_choice_delta(state, asset_manager, 1, NavWrap::Wrap)
             {
@@ -1899,7 +1960,9 @@ fn handle_input_impl(
     if let Some(effect) = handle_browser_input(state, ev) {
         return effect;
     }
-    let three_key_action = screen_input::three_key_menu_action(&mut state.menu_lr_chord, ev);
+    let dedicated_three_key = dedicated_three_key_nav(state);
+    let three_key_action =
+        screen_input::three_key_menu_action(&mut state.menu_lr_chord, ev, dedicated_three_key);
     if state.score_import_pack_picker.is_some() {
         if let Some((_, nav)) = three_key_action {
             match nav {
@@ -2033,7 +2096,7 @@ fn handle_input_impl(
         state.pack_sync_overlay,
         shared_pack_sync::OverlayState::Hidden
     ) {
-        return shared_pack_sync::handle_input(&mut state.pack_sync_overlay, ev);
+        return handle_pack_sync_input(state, ev);
     }
     if let Some(confirm) = state.score_import_confirm.as_mut() {
         if let Some((_, nav)) = three_key_action {
@@ -2195,7 +2258,7 @@ fn handle_input_impl(
     if !matches!(state.submenu_transition, SubmenuTransition::None) {
         return ThemeEffect::None;
     }
-    if screen_input::dedicated_three_key_nav_enabled()
+    if dedicated_three_key_nav(state)
         && matches!(state.view, OptionsView::Main | OptionsView::Submenu(_))
         && dedicated_three_key_options_event(ev.action)
     {
