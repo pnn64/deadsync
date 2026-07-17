@@ -10574,29 +10574,24 @@ pub fn push_actors(
         underlay: underlay_proxy_slice,
         overlay: overlay_proxy_slice,
     };
-    let main_layer_actors = {
-        let mut out = Vec::new();
-        push_song_lua_layer_actors(
-            &mut out,
-            &song_lua_visuals.overlays,
-            &mut song_lua_overlay_order,
-            &song_lua_local_state_scratch,
-            &song_lua_overlay_state_scratch,
-            song_foreground_state,
-            &proxy_sources,
-            asset_manager,
-            song_lua_space_width,
-            song_lua_space_height,
-            state.current_music_time_display(),
-            state.current_beat(),
-            state.total_elapsed_in_screen(),
-            &mut song_lua_order_scratch,
-            &mut song_lua_capture_state_scratch,
-            &mut song_lua_capture_order_scratch,
-        );
-        out
-    };
-    actors.extend(main_layer_actors);
+    push_song_lua_layer_actors(
+        actors,
+        &song_lua_visuals.overlays,
+        &mut song_lua_overlay_order,
+        &song_lua_local_state_scratch,
+        &song_lua_overlay_state_scratch,
+        song_foreground_state,
+        &proxy_sources,
+        asset_manager,
+        song_lua_space_width,
+        song_lua_space_height,
+        state.current_music_time_display(),
+        state.current_beat(),
+        state.total_elapsed_in_screen(),
+        &mut song_lua_order_scratch,
+        &mut song_lua_capture_state_scratch,
+        &mut song_lua_capture_order_scratch,
+    );
     if let Some(actor) = build_foreground_media(
         state,
         &song_lua_overlay_state_scratch,
@@ -10628,29 +10623,24 @@ pub fn push_actors(
             &layer.song_foreground,
             layer.song_foreground_events.as_slice(),
         );
-        let layer_actors = {
-            let mut out = Vec::new();
-            push_song_lua_layer_actors(
-                &mut out,
-                &layer.overlays,
-                order_cache,
-                &song_lua_layer_local_state_scratch,
-                &song_lua_layer_state_scratch,
-                song_foreground_state,
-                &proxy_sources,
-                asset_manager,
-                layer.screen_width.max(1.0),
-                layer.screen_height.max(1.0),
-                state.current_music_time_display(),
-                state.current_beat(),
-                state.total_elapsed_in_screen(),
-                &mut song_lua_order_scratch,
-                &mut song_lua_capture_state_scratch,
-                &mut song_lua_capture_order_scratch,
-            );
-            out
-        };
-        actors.extend(layer_actors);
+        push_song_lua_layer_actors(
+            actors,
+            &layer.overlays,
+            order_cache,
+            &song_lua_layer_local_state_scratch,
+            &song_lua_layer_state_scratch,
+            song_foreground_state,
+            &proxy_sources,
+            asset_manager,
+            layer.screen_width.max(1.0),
+            layer.screen_height.max(1.0),
+            state.current_music_time_display(),
+            state.current_beat(),
+            state.total_elapsed_in_screen(),
+            &mut song_lua_order_scratch,
+            &mut song_lua_capture_state_scratch,
+            &mut song_lua_capture_order_scratch,
+        );
     }
     state.song_lua_overlay_order = song_lua_overlay_order;
     state.song_lua_background_visual_layer_orders = song_lua_background_visual_layer_orders;
