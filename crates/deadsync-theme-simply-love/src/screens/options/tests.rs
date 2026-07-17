@@ -1338,6 +1338,42 @@ fn online_scoring_three_key_start_opens_gs_options() {
 }
 
 #[test]
+fn online_scoring_three_key_menu_lr_moves_rows() {
+    let asset_manager = AssetManager::new();
+    let mut state = init();
+    state.view = OptionsView::Submenu(SubmenuKind::OnlineScoring);
+    set_choice_by_id(
+        &mut state.sub[SubmenuKind::InputBackend].choice_indices,
+        INPUT_BACKEND_OPTIONS_ROWS,
+        SubRowId::MenuNavigation,
+        1,
+    );
+    set_choice_by_id(
+        &mut state.sub[SubmenuKind::InputBackend].choice_indices,
+        INPUT_BACKEND_OPTIONS_ROWS,
+        SubRowId::MenuButtons,
+        1,
+    );
+
+    assert_eq!(state.sub_selected, 0);
+    press(&mut state, &asset_manager, VirtualAction::p1_menu_right);
+    assert_eq!(state.sub_selected, 1);
+    assert_eq!(state.nav_key_held_direction, Some(NavDirection::Down));
+    handle_input(
+        &mut state,
+        &asset_manager,
+        &updater_view(),
+        &input_event(VirtualAction::p1_menu_right, false),
+    );
+    assert_eq!(state.nav_key_held_direction, None);
+
+    press(&mut state, &asset_manager, VirtualAction::p1_menu_left);
+    assert_eq!(state.sub_selected, 0);
+    press(&mut state, &asset_manager, VirtualAction::p2_menu_left);
+    assert_eq!(state.sub_selected, ONLINE_SCORING_OPTIONS_ROWS.len());
+}
+
+#[test]
 fn online_scoring_three_key_start_opens_arrowcloud_options() {
     let asset_manager = AssetManager::new();
     let mut state = init();

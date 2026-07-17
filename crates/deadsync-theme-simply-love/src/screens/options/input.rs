@@ -1304,22 +1304,16 @@ pub(super) fn handle_dedicated_three_key_options_input(
             | VirtualAction::p2_left
             | VirtualAction::p2_menu_left => {
                 state.menu_lr_undo = 0;
-                if dedicated_three_key_menu_nav(state.view) {
-                    on_nav_release(state, NavDirection::Up);
-                } else {
-                    on_lr_release(state, -1);
-                }
+                on_nav_release(state, NavDirection::Up);
+                on_lr_release(state, -1);
             }
             VirtualAction::p1_right
             | VirtualAction::p1_menu_right
             | VirtualAction::p2_right
             | VirtualAction::p2_menu_right => {
                 state.menu_lr_undo = 0;
-                if dedicated_three_key_menu_nav(state.view) {
-                    on_nav_release(state, NavDirection::Down);
-                } else {
-                    on_lr_release(state, 1);
-                }
+                on_nav_release(state, NavDirection::Down);
+                on_lr_release(state, 1);
             }
             VirtualAction::p1_start => clear_start_hold(state, profile_data::PlayerSide::P1),
             VirtualAction::p2_start => clear_start_hold(state, profile_data::PlayerSide::P2),
@@ -1360,6 +1354,11 @@ pub(super) fn handle_dedicated_three_key_options_input(
             | VirtualAction::p1_menu_left
             | VirtualAction::p2_left
             | VirtualAction::p2_menu_left => {
+                if selected_row_lr_navigates(state) {
+                    move_options_selection_vertical(state, asset_manager, NavDirection::Up);
+                    on_nav_press(state, NavDirection::Up);
+                    return ThemeEffect::None;
+                }
                 if let Some(action) =
                     apply_submenu_choice_delta(state, asset_manager, -1, NavWrap::Wrap)
                 {
@@ -1373,6 +1372,11 @@ pub(super) fn handle_dedicated_three_key_options_input(
             | VirtualAction::p1_menu_right
             | VirtualAction::p2_right
             | VirtualAction::p2_menu_right => {
+                if selected_row_lr_navigates(state) {
+                    move_options_selection_vertical(state, asset_manager, NavDirection::Down);
+                    on_nav_press(state, NavDirection::Down);
+                    return ThemeEffect::None;
+                }
                 if let Some(action) =
                     apply_submenu_choice_delta(state, asset_manager, 1, NavWrap::Wrap)
                 {
