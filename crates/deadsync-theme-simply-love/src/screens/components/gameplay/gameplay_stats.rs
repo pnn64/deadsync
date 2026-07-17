@@ -29,6 +29,7 @@ use deadsync_profile as profile_data;
 use deadsync_profile_gameplay::score_display_mode_from_profile;
 use deadsync_rules::judgment::{self, JudgeGrade};
 use deadsync_rules::timing::LiveTimingSnapshot;
+use rustc_hash::FxBuildHasher;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::sync::{Arc, LazyLock};
@@ -54,7 +55,8 @@ thread_local! {
     static BLUE_WINDOW_LABEL_CACHE: RefCell<TextCache<i32>> = RefCell::new(text_cache_with_capacity(64));
     static PEAK_NPS_CACHE: RefCell<TextCache<u32>> = RefCell::new(text_cache_with_capacity(512));
     static GAME_TIME_CACHE: RefCell<TextCache<(u32, u8)>> = RefCell::new(text_cache_with_capacity(1024));
-    static GAME_TIME_WIDTH_CACHE: RefCell<HashMap<(u32, u8), f32>> = RefCell::new(HashMap::with_capacity(1024));
+    static GAME_TIME_WIDTH_CACHE: RefCell<HashMap<(u32, u8), f32, FxBuildHasher>> =
+        RefCell::new(HashMap::with_capacity_and_hasher(1024, FxBuildHasher));
     static LIVE_TIMING_PAIR_CACHE: RefCell<TextCache<(i32, i32)>> = RefCell::new(text_cache_with_capacity(4096));
     static HEART_RATE_TEXT_CACHE: RefCell<TextCache<u16>> = RefCell::new(text_cache_with_capacity(256));
     static STR_REF_CACHE: RefCell<SharedStrCache> = RefCell::new(HashMap::with_capacity(512));

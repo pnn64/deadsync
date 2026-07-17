@@ -8,7 +8,9 @@ use crate::screens::components::shared::banner as shared_banner;
 use crate::screens::select_music::MusicWheelEntry;
 use crate::views::{MUSIC_WHEEL_SLOT_COUNT, MusicWheelRuntimeView, MusicWheelSlotRuntimeRequest};
 use deadlib_present::actors::Actor;
-use deadlib_present::cache::{SharedStrCache, cached_shared_str};
+use deadlib_present::cache::{
+    SharedStrCache, TextCache, cached_shared_str, cached_text, text_cache_with_capacity,
+};
 use deadlib_present::color;
 use deadlib_present::space::widescale;
 use deadlib_present::space::{screen_center_x, screen_center_y, screen_height, screen_width};
@@ -177,16 +179,16 @@ fn song_select_bg_sprite(
 }
 
 thread_local! {
-    static ITL_RANK_TEXT_CACHE: RefCell<HashMap<u32, Arc<str>>> =
-        RefCell::new(HashMap::with_capacity(256));
-    static ITL_EX_TEXT_CACHE: RefCell<HashMap<u32, Arc<str>>> =
-        RefCell::new(HashMap::with_capacity(256));
-    static ITL_POINTS_TEXT_CACHE: RefCell<HashMap<u32, Arc<str>>> =
-        RefCell::new(HashMap::with_capacity(256));
-    static SRPG_RATE_TEXT_CACHE: RefCell<HashMap<u32, Arc<str>>> =
-        RefCell::new(HashMap::with_capacity(128));
-    static PACK_COUNT_TEXT_CACHE: RefCell<HashMap<usize, Arc<str>>> =
-        RefCell::new(HashMap::with_capacity(256));
+    static ITL_RANK_TEXT_CACHE: RefCell<TextCache<u32>> =
+        RefCell::new(text_cache_with_capacity(256));
+    static ITL_EX_TEXT_CACHE: RefCell<TextCache<u32>> =
+        RefCell::new(text_cache_with_capacity(256));
+    static ITL_POINTS_TEXT_CACHE: RefCell<TextCache<u32>> =
+        RefCell::new(text_cache_with_capacity(256));
+    static SRPG_RATE_TEXT_CACHE: RefCell<TextCache<u32>> =
+        RefCell::new(text_cache_with_capacity(128));
+    static PACK_COUNT_TEXT_CACHE: RefCell<TextCache<usize>> =
+        RefCell::new(text_cache_with_capacity(256));
     static STR_REF_CACHE: RefCell<SharedStrCache> =
         RefCell::new(HashMap::with_capacity(1024));
 }
@@ -225,85 +227,52 @@ fn digit_text(digit: u8) -> &'static str {
 
 #[inline(always)]
 fn cached_itl_ex_text(ex_hundredths: u32) -> Arc<str> {
-    ITL_EX_TEXT_CACHE.with(|cache| {
-        let mut cache = cache.borrow_mut();
-        if let Some(text) = cache.get(&ex_hundredths) {
-            return text.clone();
-        }
-        let text: Arc<str> = Arc::<str>::from(format!(
-            "{}.{:02}",
-            ex_hundredths / 100,
-            ex_hundredths % 100
-        ));
-        if cache.len() < ITL_EX_TEXT_CACHE_LIMIT {
-            cache.insert(ex_hundredths, text.clone());
-        }
-        text
-    })
+    cached_text(
+        &ITL_EX_TEXT_CACHE,
+        ex_hundredths,
+        ITL_EX_TEXT_CACHE_LIMIT,
+        || format!("{}.{:02}", ex_hundredths / 100, ex_hundredths % 100),
+    )
 }
 
 #[inline(always)]
 fn cached_itl_rank_text(rank: u32) -> Arc<str> {
-    ITL_RANK_TEXT_CACHE.with(|cache| {
-        let mut cache = cache.borrow_mut();
-        if let Some(text) = cache.get(&rank) {
-            return text.clone();
-        }
-        let text: Arc<str> = Arc::<str>::from(rank.to_string());
-        if cache.len() < ITL_RANK_TEXT_CACHE_LIMIT {
-            cache.insert(rank, text.clone());
-        }
-        text
-    })
+    cached_text(
+        &ITL_RANK_TEXT_CACHE,
+        rank,
+        ITL_RANK_TEXT_CACHE_LIMIT,
+        || rank.to_string(),
+    )
 }
 
 #[inline(always)]
 fn cached_itl_points_text(points: u32) -> Arc<str> {
-    ITL_POINTS_TEXT_CACHE.with(|cache| {
-        let mut cache = cache.borrow_mut();
-        if let Some(text) = cache.get(&points) {
-            return text.clone();
-        }
-        let text: Arc<str> = Arc::<str>::from(points.to_string());
-        if cache.len() < ITL_POINTS_TEXT_CACHE_LIMIT {
-            cache.insert(points, text.clone());
-        }
-        text
-    })
+    cached_text(
+        &ITL_POINTS_TEXT_CACHE,
+        points,
+        ITL_POINTS_TEXT_CACHE_LIMIT,
+        || points.to_string(),
+    )
 }
 
 #[inline(always)]
 fn cached_srpg_rate_text(rate_hundredths: u32) -> Arc<str> {
-    SRPG_RATE_TEXT_CACHE.with(|cache| {
-        let mut cache = cache.borrow_mut();
-        if let Some(text) = cache.get(&rate_hundredths) {
-            return text.clone();
-        }
-        let text: Arc<str> = Arc::<str>::from(format!(
-            "{}.{:02}",
-            rate_hundredths / 100,
-            rate_hundredths % 100
-        ));
-        if cache.len() < SRPG_RATE_TEXT_CACHE_LIMIT {
-            cache.insert(rate_hundredths, text.clone());
-        }
-        text
-    })
+    cached_text(
+        &SRPG_RATE_TEXT_CACHE,
+        rate_hundredths,
+        SRPG_RATE_TEXT_CACHE_LIMIT,
+        || format!("{}.{:02}", rate_hundredths / 100, rate_hundredths % 100),
+    )
 }
 
 #[inline(always)]
 fn cached_pack_count_text(count: usize) -> Arc<str> {
-    PACK_COUNT_TEXT_CACHE.with(|cache| {
-        let mut cache = cache.borrow_mut();
-        if let Some(text) = cache.get(&count) {
-            return text.clone();
-        }
-        let text: Arc<str> = Arc::<str>::from(count.to_string());
-        if cache.len() < PACK_COUNT_TEXT_CACHE_LIMIT {
-            cache.insert(count, text.clone());
-        }
-        text
-    })
+    cached_text(
+        &PACK_COUNT_TEXT_CACHE,
+        count,
+        PACK_COUNT_TEXT_CACHE_LIMIT,
+        || count.to_string(),
+    )
 }
 
 #[inline(always)]
