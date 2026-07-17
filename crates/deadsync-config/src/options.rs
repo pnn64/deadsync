@@ -1,7 +1,7 @@
 use crate::bools::{parse_bool_str, parse_loose_bool_str, parse_u8_bool_or_default};
 use crate::defaults::{
-    DEFAULT_ALLOW_SHUTDOWN_HOST, DEFAULT_ARCADE_OPTIONS_NAVIGATION, DEFAULT_AUTO_DOWNLOAD_UNLOCKS,
-    DEFAULT_AUTO_POPULATE_GS_SCORES, DEFAULT_AUTO_SCREENSHOT_EVAL,
+    DEFAULT_ALLOW_SHUTDOWN_HOST, DEFAULT_ALLOW_SONG_DELETION, DEFAULT_ARCADE_OPTIONS_NAVIGATION,
+    DEFAULT_AUTO_DOWNLOAD_UNLOCKS, DEFAULT_AUTO_POPULATE_GS_SCORES, DEFAULT_AUTO_SCREENSHOT_EVAL,
     DEFAULT_AUTOSUBMIT_COURSE_SCORES_INDIVIDUALLY, DEFAULT_BANNER_CACHE, DEFAULT_BG_BRIGHTNESS,
     DEFAULT_CACHE_SONGS, DEFAULT_CDTITLE_CACHE, DEFAULT_CENTER_1PLAYER_NOTEFIELD,
     DEFAULT_CENTER_IMAGE_ADD_HEIGHT, DEFAULT_CENTER_IMAGE_ADD_WIDTH,
@@ -1384,6 +1384,7 @@ pub fn push_select_music_option_lines(content: &mut String, options: SelectMusic
 pub struct RuntimeOptions {
     pub fastload: bool,
     pub cachesongs: bool,
+    pub allow_song_deletion: bool,
     pub song_parsing_threads: u8,
     pub smooth_histogram: bool,
     pub shade_scatterplot_judgments: bool,
@@ -1402,6 +1403,7 @@ impl Default for RuntimeOptions {
         Self {
             fastload: DEFAULT_FASTLOAD,
             cachesongs: DEFAULT_CACHE_SONGS,
+            allow_song_deletion: DEFAULT_ALLOW_SONG_DELETION,
             song_parsing_threads: DEFAULT_SONG_PARSING_THREADS,
             smooth_histogram: DEFAULT_SMOOTH_HISTOGRAM,
             shade_scatterplot_judgments: DEFAULT_SHADE_SCATTERPLOT_JUDGMENTS,
@@ -1426,6 +1428,10 @@ pub fn load_runtime_options(conf: &SimpleIni, default: RuntimeOptions) -> Runtim
         cachesongs: parse_u8_bool_or_default(
             conf.get("Options", "CacheSongs").as_deref(),
             default.cachesongs,
+        ),
+        allow_song_deletion: parse_u8_bool_or_default(
+            conf.get("Options", "AllowSongDeletion").as_deref(),
+            default.allow_song_deletion,
         ),
         song_parsing_threads: conf
             .get("Options", "SongParsingThreads")
@@ -1506,6 +1512,10 @@ pub fn push_stats_overlay_option_lines(content: &mut String, options: StatsOverl
 
 pub fn push_runtime_cache_option_lines(content: &mut String, options: RuntimeOptions) {
     push_bool(content, "CacheSongs", options.cachesongs);
+}
+
+pub fn push_runtime_song_deletion_option_line(content: &mut String, options: RuntimeOptions) {
+    push_bool(content, "AllowSongDeletion", options.allow_song_deletion);
 }
 
 pub fn push_runtime_fastload_option_lines(content: &mut String, options: RuntimeOptions) {
@@ -2338,6 +2348,7 @@ mod tests {
         RuntimeOptions {
             fastload: true,
             cachesongs: true,
+            allow_song_deletion: false,
             song_parsing_threads: 0,
             smooth_histogram: true,
             shade_scatterplot_judgments: false,
@@ -2957,6 +2968,7 @@ mod tests {
             [Options]
             FastLoad=0
             CacheSongs=0
+            AllowSongDeletion=1
             SongParsingThreads=4
             SmoothHistogram=0
             ShadeScatterplotJudgments=1
@@ -2975,6 +2987,7 @@ mod tests {
 
         assert!(!loaded.fastload);
         assert!(!loaded.cachesongs);
+        assert!(loaded.allow_song_deletion);
         assert_eq!(loaded.song_parsing_threads, 4);
         assert!(!loaded.smooth_histogram);
         assert!(loaded.shade_scatterplot_judgments);
@@ -2997,6 +3010,7 @@ mod tests {
             [Options]
             FastLoad=bad
             CacheSongs=bad
+            AllowSongDeletion=bad
             SongParsingThreads=many
             SmoothHistogram=bad
             ShadeScatterplotJudgments=bad
@@ -3298,6 +3312,7 @@ mod tests {
         let options = RuntimeOptions {
             fastload: true,
             cachesongs: false,
+            allow_song_deletion: true,
             song_parsing_threads: 6,
             smooth_histogram: true,
             shade_scatterplot_judgments: false,
@@ -3312,6 +3327,7 @@ mod tests {
         };
 
         push_runtime_cache_option_lines(&mut content, options);
+        push_runtime_song_deletion_option_line(&mut content, options);
         push_runtime_fastload_option_lines(&mut content, options);
         push_runtime_navigation_option_lines(&mut content, options);
         push_runtime_lights_option_lines(&mut content, options);
@@ -3322,6 +3338,7 @@ mod tests {
             content,
             concat!(
                 "CacheSongs=0\n",
+                "AllowSongDeletion=1\n",
                 "FastLoad=1\n",
                 "ArcadeOptionsNavigation=1\n",
                 "DelayedBack=0\n",

@@ -1167,6 +1167,7 @@ pub struct SelectMusicPolicyView {
     pub replays: bool,
     pub profile_switch: bool,
     pub keyboard_features: bool,
+    pub allow_song_deletion: bool,
     pub media: SelectMusicMediaPolicyView,
     pub wheel: SelectMusicWheelPolicyView,
     pub interaction: SelectMusicInteractionPolicyView,

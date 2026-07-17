@@ -33,6 +33,34 @@ pub fn set_song_cache(packs: Vec<SongPack>) {
     SONG_CACHE_GENERATION.fetch_add(1, Ordering::Relaxed);
 }
 
+pub fn song_is_cached(simfile_path: &Path) -> bool {
+    get_song_cache().iter().any(|pack| {
+        pack.songs
+            .iter()
+            .any(|song| song.simfile_path == simfile_path)
+    })
+}
+
+/// Removes a song from the live catalog after its directory has been deleted.
+/// Empty packs are removed with it so the wheel matches a fresh library scan.
+pub fn remove_song(simfile_path: &Path) -> bool {
+    let mut cache = SONG_CACHE.lock().unwrap();
+    let removed = remove_song_from_packs(&mut cache, simfile_path);
+    if removed {
+        SONG_CACHE_GENERATION.fetch_add(1, Ordering::Relaxed);
+    }
+    removed
+}
+
+fn remove_song_from_packs(cache: &mut Vec<SongPack>, simfile_path: &Path) -> bool {
+    let old_song_count = cache.iter().map(|pack| pack.songs.len()).sum::<usize>();
+    for pack in cache.iter_mut() {
+        pack.songs.retain(|song| song.simfile_path != simfile_path);
+    }
+    cache.retain(|pack| !pack.songs.is_empty());
+    cache.iter().map(|pack| pack.songs.len()).sum::<usize>() < old_song_count
+}
+
 pub fn song_pack_group_for_simfile_path<'a>(
     packs: &'a [SongPack],
     simfile_path: &Path,
@@ -338,6 +366,22 @@ mod tests {
 
         assert!(!replace_song_arc_if_same_simfile(&mut current, &updated));
         assert!(Arc::ptr_eq(&current, &original));
+    }
+
+    #[test]
+    fn remove_song_updates_catalog_and_drops_empty_pack() {
+        let first = song("Songs/A/First/song.ssc");
+        let second = song("Songs/B/Second/song.ssc");
+        let mut packs = vec![
+            pack("A", SyncPref::Default, vec![first.clone()]),
+            pack("B", SyncPref::Default, vec![second.clone()]),
+        ];
+
+        assert!(remove_song_from_packs(&mut packs, &first.simfile_path));
+        assert_eq!(packs.len(), 1);
+        assert_eq!(packs[0].songs.len(), 1);
+        assert!(Arc::ptr_eq(&packs[0].songs[0], &second));
+        assert!(!remove_song_from_packs(&mut packs, &first.simfile_path));
     }
 
     #[test]

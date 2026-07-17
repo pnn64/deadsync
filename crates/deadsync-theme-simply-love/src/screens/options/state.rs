@@ -880,6 +880,12 @@ pub fn init(view: OptionsInitView) -> State {
         usize::from(cfg.fastload),
     );
     set_choice_by_id(
+        &mut state.sub[SubmenuKind::Advanced].choice_indices,
+        ADVANCED_OPTIONS_ROWS,
+        SubRowId::AllowSongDeletion,
+        usize::from(cfg.allow_song_deletion),
+    );
+    set_choice_by_id(
         &mut state.sub[SubmenuKind::NullOrDieOptions].choice_indices,
         NULL_OR_DIE_OPTIONS_ROWS,
         SubRowId::SyncGraph,

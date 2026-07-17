@@ -190,6 +190,7 @@ pub enum ItemId {
     AdvSongParsingThreads,
     AdvCacheSongs,
     AdvFastLoad,
+    AdvAllowSongDeletion,
 
     // GrooveStats Options submenu
     GsEnable,
@@ -453,6 +454,7 @@ pub const ITEMS: &[Item] = &[
             HelpEntry::Bullet(lookup_key("OptionsAdvanced", "SongParsingThreads")),
             HelpEntry::Bullet(lookup_key("OptionsAdvanced", "CacheSongs")),
             HelpEntry::Bullet(lookup_key("OptionsAdvanced", "FastLoad")),
+            HelpEntry::Bullet(lookup_key("OptionsAdvanced", "AllowSongDeletion")),
         ],
     },
     Item {

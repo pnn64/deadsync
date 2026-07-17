@@ -107,6 +107,7 @@ pub const DEFAULT_SUBMIT_ARROWCLOUD_FAILS: bool = false;
 pub const DEFAULT_SEPARATE_UNLOCKS_BY_PLAYER: bool = false;
 pub const DEFAULT_FASTLOAD: bool = true;
 pub const DEFAULT_CACHE_SONGS: bool = true;
+pub const DEFAULT_ALLOW_SONG_DELETION: bool = false;
 pub const DEFAULT_SMOOTH_HISTOGRAM: bool = true;
 pub const DEFAULT_SHADE_SCATTERPLOT_JUDGMENTS: bool = false;
 pub const DEFAULT_AUTO_SCREENSHOT_EVAL: u8 = 0;
@@ -129,5 +130,6 @@ mod tests {
         assert_eq!(DEFAULT_MUSIC_WHEEL_SWITCH_SPEED, 15);
         assert_eq!(DEFAULT_BG_BRIGHTNESS, 0.7);
         assert!(!DEFAULT_MACHINE_ENABLE_HEART_RATE_MONITORS);
+        assert!(!DEFAULT_ALLOW_SONG_DELETION);
     }
 }

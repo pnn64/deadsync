@@ -18,13 +18,14 @@ use crate::options::{
     push_runtime_fastload_option_lines, push_runtime_input_debounce_option_lines,
     push_runtime_lights_driver_option_lines, push_runtime_lights_option_lines,
     push_runtime_lights_port_option_lines, push_runtime_menu_option_lines,
-    push_runtime_navigation_option_lines, push_runtime_worker_theme_option_lines,
-    push_select_music_option_lines, push_stats_overlay_option_lines,
-    push_system_banner_cache_option_lines, push_system_bg_brightness_option_lines,
-    push_system_cdtitle_center_option_lines, push_system_course_option_lines,
-    push_system_diagnostics_option_lines, push_system_download_option_lines,
-    push_system_input_hardware_option_lines, push_system_mine_hit_sound_option_lines,
-    push_system_online_option_lines, push_system_translation_option_lines,
+    push_runtime_navigation_option_lines, push_runtime_song_deletion_option_line,
+    push_runtime_worker_theme_option_lines, push_select_music_option_lines,
+    push_stats_overlay_option_lines, push_system_banner_cache_option_lines,
+    push_system_bg_brightness_option_lines, push_system_cdtitle_center_option_lines,
+    push_system_course_option_lines, push_system_diagnostics_option_lines,
+    push_system_download_option_lines, push_system_input_hardware_option_lines,
+    push_system_mine_hit_sound_option_lines, push_system_online_option_lines,
+    push_system_translation_option_lines,
 };
 use crate::runtime_state::{
     RuntimeStateIdTokens, push_pad_order_option_lines, push_runtime_state_id_option_lines,
@@ -135,6 +136,7 @@ where
     push_gameplay_bg_color_option_line(content, options.gameplay_bg_color);
     push_system_banner_cache_option_lines(content, options.system);
     push_runtime_cache_option_lines(content, options.runtime);
+    push_runtime_song_deletion_option_line(content, options.runtime);
     push_never_cache_list_option_line(content, options.never_cache_list);
     push_system_cdtitle_center_option_lines(content, options.system);
     push_system_course_option_lines(content, options.system);
@@ -183,6 +185,7 @@ where
     push_gameplay_bg_color_option_line(content, options.gameplay_bg_color);
     push_system_banner_cache_option_lines(content, options.system);
     push_runtime_cache_option_lines(content, options.runtime);
+    push_runtime_song_deletion_option_line(content, options.runtime);
     push_never_cache_list_option_line(content, options.never_cache_list);
     push_system_cdtitle_center_option_lines(content, options.system);
     push_system_course_option_lines(content, options.system);
@@ -506,6 +509,7 @@ fn runtime_options(cfg: &Config) -> RuntimeOptions {
     RuntimeOptions {
         fastload: cfg.fastload,
         cachesongs: cfg.cachesongs,
+        allow_song_deletion: cfg.allow_song_deletion,
         song_parsing_threads: cfg.song_parsing_threads,
         smooth_histogram: cfg.smooth_histogram,
         shade_scatterplot_judgments: cfg.shade_scatterplot_judgments,

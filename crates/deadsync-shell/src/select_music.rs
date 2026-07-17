@@ -219,6 +219,7 @@ pub(crate) fn policy_view(config: &config::Config) -> SelectMusicPolicyView {
         replays: config.machine_enable_replays,
         profile_switch: config.allow_switch_profile_in_menu,
         keyboard_features: config.keyboard_features,
+        allow_song_deletion: config.allow_song_deletion,
         media: SelectMusicMediaPolicyView {
             show_banners: config.show_select_music_banners,
             show_cdtitles: config.show_select_music_cdtitles,
@@ -359,6 +360,7 @@ mod tests {
             show_select_music_breakdown: false,
             machine_pack_ini_offsets: true,
             machine_default_sync_offset: config::DefaultSyncOffset::Itg,
+            allow_song_deletion: true,
             ..Default::default()
         };
 
@@ -368,6 +370,7 @@ mod tests {
         assert!(view.media.show_banners);
         assert!(view.media.show_previews);
         assert!(view.media.replay_gain);
+        assert!(view.allow_song_deletion);
         assert!(view.wheel.show_grades);
         assert!(!view.wheel.show_lamps);
         assert_eq!(

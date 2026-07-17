@@ -379,6 +379,7 @@ fn apply_runtime_opts(
 ) {
     cfg.fastload = loaded.fastload;
     cfg.cachesongs = loaded.cachesongs;
+    cfg.allow_song_deletion = loaded.allow_song_deletion;
     cfg.song_parsing_threads = loaded.song_parsing_threads;
     cfg.smooth_histogram = loaded.smooth_histogram;
     cfg.shade_scatterplot_judgments = loaded.shade_scatterplot_judgments;

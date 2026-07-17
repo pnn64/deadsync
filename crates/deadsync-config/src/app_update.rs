@@ -518,6 +518,10 @@ pub fn set_fastload(cfg: &mut Config, enabled: bool) -> bool {
     set_if_changed(&mut cfg.fastload, enabled)
 }
 
+pub fn set_allow_song_deletion(cfg: &mut Config, enabled: bool) -> bool {
+    set_if_changed(&mut cfg.allow_song_deletion, enabled)
+}
+
 pub fn set_show_select_music_breakdown(cfg: &mut Config, enabled: bool) -> bool {
     set_if_changed(&mut cfg.show_select_music_breakdown, enabled)
 }

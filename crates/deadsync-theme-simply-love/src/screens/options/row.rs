@@ -155,6 +155,7 @@ pub enum SubRowId {
     SongParsingThreads,
     CacheSongs,
     FastLoad,
+    AllowSongDeletion,
     // GrooveStats Options
     EnableGrooveStats,
     ShowSrpgShop,

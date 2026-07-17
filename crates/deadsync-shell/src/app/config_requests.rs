@@ -88,6 +88,7 @@ pub(super) fn execute_advanced(request: SimplyLoveAdvancedConfigRequest) {
         Request::SongParsingThreads(threads) => config::update_song_parsing_threads(threads),
         Request::CacheSongs(enabled) => config::update_cache_songs(enabled),
         Request::FastLoad(enabled) => config::update_fastload(enabled),
+        Request::AllowSongDeletion(enabled) => config::update_allow_song_deletion(enabled),
     }
 }
 

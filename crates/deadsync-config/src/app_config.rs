@@ -313,6 +313,8 @@ pub struct Config {
     pub separate_unlocks_by_player: bool,
     pub fastload: bool,
     pub cachesongs: bool,
+    /// Allow Ctrl+Backspace in Select Music to permanently delete a song directory.
+    pub allow_song_deletion: bool,
     // Whether to apply Gaussian smoothing to the eval histogram (Simply Love style)
     pub smooth_histogram: bool,
     /// Tint the evaluation scatterplot background in horizontal bands matching
@@ -515,6 +517,7 @@ impl Default for Config {
             separate_unlocks_by_player: system.separate_unlocks_by_player,
             fastload: runtime.fastload,
             cachesongs: runtime.cachesongs,
+            allow_song_deletion: runtime.allow_song_deletion,
             smooth_histogram: runtime.smooth_histogram,
             shade_scatterplot_judgments: runtime.shade_scatterplot_judgments,
             auto_screenshot_eval: select_music.auto_screenshot_eval,
@@ -571,6 +574,7 @@ mod tests {
             Config::default().frame_stats_overlay_style,
             DEFAULT_FRAME_STATS_OVERLAY_STYLE
         );
+        assert!(!Config::default().allow_song_deletion);
         assert_eq!(DEFAULT_MACHINE_NOTESKIN, "cel");
     }
 }

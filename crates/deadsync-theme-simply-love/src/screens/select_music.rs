@@ -148,6 +148,7 @@ const SL_EXIT_PROMPT_INFO_ZOOM: f32 = 0.825;
 const SL_EXIT_PROMPT_INFO_Y_OFFSET: f32 = 30.0;
 const SL_EXIT_PROMPT_ACTIVE_ZOOM: f32 = 1.1;
 const SL_EXIT_PROMPT_INACTIVE_ZOOM: f32 = 0.5;
+const SONG_DELETE_PROMPT_Z: i16 = 1600;
 const SL_EXIT_PROMPT_CHOICE_TWEEN_SECONDS: f32 = 0.1;
 const SL_EXIT_PROMPT_CHOICES_DELAY_SECONDS: f32 = 0.0;
 const SL_EXIT_PROMPT_CHOICES_FADE_SECONDS: f32 = 0.15;
@@ -768,6 +769,16 @@ enum ExitPromptState {
     },
 }
 
+#[derive(Debug)]
+struct SongDeletePromptState {
+    simfile_path: PathBuf,
+    title: String,
+    directory: String,
+    yes_selected: bool,
+    pending: bool,
+    error: Option<String>,
+}
+
 #[derive(Clone, Copy, Debug, Default)]
 struct ExitCodeSideState {
     index: usize,
@@ -1111,6 +1122,7 @@ pub struct State {
     // Internal state
     out_prompt: OutPromptState,
     exit_prompt: ExitPromptState,
+    song_delete_prompt: Option<SongDeletePromptState>,
     reload_ui: Option<ReloadUiState>,
     song_search: select_music_menu::SongSearchState,
     song_search_ignore_next_back_select: bool,
@@ -1654,6 +1666,56 @@ fn reload_selected_song(state: &State) -> Option<ThemeEffect> {
             simfile_path: song.simfile_path.clone(),
         }),
     ))
+}
+
+#[inline(always)]
+fn song_delete_shortcut_allowed(state: &State) -> bool {
+    state.policy.allow_song_deletion
+        && state.nav_key_held_direction.is_none()
+        && state.wheel_offset_from_selection.abs() < 0.0001
+        && state.out_prompt == OutPromptState::None
+        && state.exit_prompt == ExitPromptState::None
+        && state.song_delete_prompt.is_none()
+        && !delayed_selection_updates_blocked(state)
+        && matches!(
+            state.entries.get(state.selected_index),
+            Some(MusicWheelEntry::Song(_))
+        )
+}
+
+fn begin_song_delete_prompt(state: &mut State) -> bool {
+    if !song_delete_shortcut_allowed(state) {
+        return false;
+    }
+    let Some(song) = selected_song_arc(state) else {
+        return false;
+    };
+    let directory = song
+        .simfile_path
+        .parent()
+        .unwrap_or(song.simfile_path.as_path())
+        .display()
+        .to_string();
+    state.song_delete_prompt = Some(SongDeletePromptState {
+        simfile_path: song.simfile_path.clone(),
+        title: song.display_full_title(false),
+        directory,
+        yes_selected: false,
+        pending: false,
+        error: None,
+    });
+    clear_preview(state);
+    clear_nav_hold(state);
+    true
+}
+
+fn close_song_delete_prompt(state: &mut State) {
+    state.song_delete_prompt = None;
+    state.time_since_selection_change = PREVIEW_DELAY_SECONDS;
+    if state.policy.media.show_previews && !state.preview_music_muted {
+        let song = selected_song_arc(state);
+        sync_preview_song(state, song.as_ref(), state.policy.media.preview_loop, true);
+    }
 }
 
 /// The song currently highlighted on the music wheel, if the cursor is on a
@@ -2962,6 +3024,7 @@ pub fn init(init_view: SelectMusicInitView) -> State {
         wheel_offset_from_selection: 0.0,
         out_prompt: OutPromptState::None,
         exit_prompt: ExitPromptState::None,
+        song_delete_prompt: None,
         reload_ui: None,
         song_search: select_music_menu::SongSearchState::Hidden,
         song_search_ignore_next_back_select: false,
@@ -3198,6 +3261,7 @@ pub fn init_placeholder() -> State {
         wheel_offset_from_selection: 0.0,
         out_prompt: OutPromptState::None,
         exit_prompt: ExitPromptState::None,
+        song_delete_prompt: None,
         reload_ui: None,
         song_search: select_music_menu::SongSearchState::Hidden,
         song_search_ignore_next_back_select: false,
@@ -5998,6 +6062,23 @@ fn refresh_after_reload(state: &mut State, song_packs: Vec<SongPack>) {
 
     trigger_immediate_refresh(&mut refreshed);
     *state = refreshed;
+}
+
+pub fn finish_song_deletion(state: &mut State, result: Result<Vec<SongPack>, String>) {
+    match result {
+        Ok(song_packs) => {
+            state.song_delete_prompt = None;
+            refresh_after_reload(state, song_packs);
+        }
+        Err(error) => {
+            if let Some(prompt) = state.song_delete_prompt.as_mut() {
+                prompt.pending = false;
+                prompt.error = Some(
+                    tr_fmt("SelectMusic", "SongDeletionFailed", &[("error", &error)]).to_string(),
+                );
+            }
+        }
+    }
 }
 
 fn refresh_after_style_switch(state: &mut State) {
@@ -9785,6 +9866,9 @@ fn handle_raw_key_event_impl(
     if state.reload_ui.is_some() {
         return ThemeEffect::None;
     }
+    if state.song_delete_prompt.is_some() {
+        return ThemeEffect::None;
+    }
 
     if !matches!(
         state.pack_sync_overlay,
@@ -9974,6 +10058,14 @@ fn handle_raw_key_event_impl(
     if !key.is_some_and(|key| key.pressed) {
         return ThemeEffect::None;
     }
+    if let Some(key) = key
+        && ctrl_held
+        && key.code == KeyCode::Backspace
+        && !key.repeat
+        && begin_song_delete_prompt(state)
+    {
+        return ThemeEffect::ConsumeInput;
+    }
     if let Some(action) = configurable_shortcut_action(state, key) {
         let ignore_open_text = matches!(action, select_music_menu::Action::SongSearch);
         // Consume the key even when the dispatched action itself reports
@@ -10046,6 +10138,10 @@ fn handle_input_impl(state: &mut State, ev: &InputEvent, fine: bool) -> ThemeEff
 
     if state.reload_ui.is_some() {
         return ThemeEffect::None;
+    }
+
+    if state.song_delete_prompt.is_some() {
+        return handle_song_delete_prompt_input(state, ev);
     }
 
     if state.out_prompt != OutPromptState::None {
@@ -10990,7 +11086,8 @@ fn allow_gs_fetch_for_selection(state: &State) -> bool {
 
 #[inline(always)]
 fn delayed_selection_updates_blocked(state: &State) -> bool {
-    state.select_music_menu.is_visible()
+    state.song_delete_prompt.is_some()
+        || state.select_music_menu.is_visible()
         || !matches!(
             state.song_search,
             select_music_menu::SongSearchState::Hidden
@@ -13018,6 +13115,97 @@ pub fn push_actors(
             state.policy.machine_font,
         );
     }
+
+    push_song_delete_prompt(&mut actors, state);
+}
+
+fn push_song_delete_prompt(actors: &mut Vec<Actor>, state: &State) {
+    let Some(prompt) = state.song_delete_prompt.as_ref() else {
+        return;
+    };
+    let cx = screen_center_x();
+    let cy = screen_center_y();
+    let pane_w = 720.0_f32.min(screen_width() - 40.0);
+    let pane_h = 260.0;
+    let accent = color::simply_love_rgba(state.active_color_index);
+    let question = tr_fmt(
+        "SelectMusic",
+        "PermanentlyDeleteSong",
+        &[("title", &prompt.title), ("path", &prompt.directory)],
+    );
+
+    actors.push(act!(quad:
+        align(0.0, 0.0):
+        xy(0.0, 0.0):
+        zoomto(screen_width(), screen_height()):
+        diffuse(0.0, 0.0, 0.0, 0.9):
+        z(SONG_DELETE_PROMPT_Z)
+    ));
+    actors.push(act!(quad:
+        align(0.5, 0.5):
+        xy(cx, cy):
+        zoomto(pane_w, pane_h):
+        diffuse(0.02, 0.02, 0.02, 1.0):
+        z(SONG_DELETE_PROMPT_Z + 1)
+    ));
+    actors.push(act!(text:
+        font("miso"):
+        settext(question):
+        align(0.5, 0.5):
+        xy(cx, cy - 70.0):
+        zoom(0.92):
+        maxwidth(pane_w - 52.0):
+        diffuse(1.0, 1.0, 1.0, 1.0):
+        z(SONG_DELETE_PROMPT_Z + 2):
+        horizalign(center)
+    ));
+
+    let no_x = cx - 100.0;
+    let yes_x = cx + 100.0;
+    let choice_x = if prompt.yes_selected { yes_x } else { no_x };
+    actors.push(act!(quad:
+        align(0.5, 0.5):
+        xy(choice_x, cy + 30.0):
+        zoomto(150.0, 42.0):
+        diffuse(accent[0], accent[1], accent[2], 1.0):
+        z(SONG_DELETE_PROMPT_Z + 2)
+    ));
+    for (label, x) in [(tr("Common", "No"), no_x), (tr("Common", "Yes"), yes_x)] {
+        actors.push(act!(text:
+            font(machine_font_key(state.policy.machine_font, FontRole::Header)):
+            settext(label):
+            align(0.5, 0.5):
+            xy(x, cy + 30.0):
+            zoom(0.72):
+            diffuse(1.0, 1.0, 1.0, 1.0):
+            z(SONG_DELETE_PROMPT_Z + 3):
+            horizalign(center)
+        ));
+    }
+
+    let status = if prompt.pending {
+        tr("SelectMusic", "SongDeletionPending")
+    } else if let Some(error) = prompt.error.as_deref() {
+        Arc::from(error)
+    } else {
+        tr("SelectMusic", "SongDeletionHelp")
+    };
+    let status_color = if prompt.error.is_some() {
+        [1.0, 0.3, 0.3, 1.0]
+    } else {
+        [0.85, 0.85, 0.85, 1.0]
+    };
+    actors.push(act!(text:
+        font("miso"):
+        settext(status):
+        align(0.5, 0.5):
+        xy(cx, cy + 92.0):
+        zoom(0.72):
+        maxwidth(pane_w - 40.0):
+        diffuse(status_color[0], status_color[1], status_color[2], status_color[3]):
+        z(SONG_DELETE_PROMPT_Z + 3):
+        horizalign(center)
+    ));
 }
 
 pub fn get_actors(state: &State, asset_manager: &AssetManager, stage_number: usize) -> Vec<Actor> {
@@ -13030,6 +13218,60 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager, stage_number: usi
         Default::default(),
     );
     actors
+}
+
+fn handle_song_delete_prompt_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
+    if !ev.pressed
+        || state
+            .song_delete_prompt
+            .as_ref()
+            .is_some_and(|prompt| prompt.pending)
+    {
+        return ThemeEffect::None;
+    }
+    match ev.action {
+        VirtualAction::p1_left
+        | VirtualAction::p1_menu_left
+        | VirtualAction::p1_right
+        | VirtualAction::p1_menu_right
+        | VirtualAction::p2_left
+        | VirtualAction::p2_menu_left
+        | VirtualAction::p2_right
+        | VirtualAction::p2_menu_right => {
+            if let Some(prompt) = state.song_delete_prompt.as_mut() {
+                prompt.yes_selected = !prompt.yes_selected;
+                prompt.error = None;
+            }
+            queue_sfx(state, "assets/sounds/change.ogg");
+            ThemeEffect::None
+        }
+        VirtualAction::p1_back
+        | VirtualAction::p2_back
+        | VirtualAction::p1_select
+        | VirtualAction::p2_select => {
+            queue_sfx(state, "assets/sounds/start.ogg");
+            close_song_delete_prompt(state);
+            ThemeEffect::None
+        }
+        VirtualAction::p1_start | VirtualAction::p2_start => {
+            queue_sfx(state, "assets/sounds/start.ogg");
+            let Some(prompt) = state.song_delete_prompt.as_mut() else {
+                return ThemeEffect::None;
+            };
+            if !prompt.yes_selected {
+                close_song_delete_prompt(state);
+                return ThemeEffect::None;
+            }
+            prompt.pending = true;
+            prompt.error = None;
+            ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Content(
+                crate::SimplyLoveContentRequest::DeleteSong {
+                    simfile_path: prompt.simfile_path.clone(),
+                },
+            ))
+        }
+        _ => ThemeEffect::None,
+    }
 }
 
 #[inline(always)]
@@ -15135,6 +15377,70 @@ mod tests {
             super::select_music_menu::SongSearchState::Hidden
         ));
         assert!(!matches!(action, ThemeEffect::ConsumeInput));
+    }
+
+    #[test]
+    fn song_delete_shortcut_requires_enabled_settled_song() {
+        let key = raw_key(KeyCode::Backspace, true, false);
+        let mut state = init_placeholder();
+        state.entries = vec![super::MusicWheelEntry::Song(test_song("Delete Me"))];
+
+        let disabled =
+            super::handle_raw_key_event_with_modifiers(&mut state, Some(&key), None, true, false);
+        assert!(matches!(disabled, ThemeEffect::None));
+        assert!(state.song_delete_prompt.is_none());
+
+        state.policy.allow_song_deletion = true;
+        state.wheel_offset_from_selection = 0.25;
+        let moving =
+            super::handle_raw_key_event_with_modifiers(&mut state, Some(&key), None, true, false);
+        assert!(matches!(moving, ThemeEffect::None));
+        assert!(state.song_delete_prompt.is_none());
+
+        state.wheel_offset_from_selection = 0.0;
+        let opened =
+            super::handle_raw_key_event_with_modifiers(&mut state, Some(&key), None, true, false);
+        assert_stop_then_consume(opened);
+        assert!(
+            state
+                .song_delete_prompt
+                .as_ref()
+                .is_some_and(|prompt| !prompt.yes_selected)
+        );
+    }
+
+    #[test]
+    fn song_delete_prompt_defaults_no_and_requests_selected_song() {
+        let mut state = init_placeholder();
+        let song = test_song("Delete Me");
+        let simfile_path = song.simfile_path.clone();
+        state.entries = vec![super::MusicWheelEntry::Song(song)];
+        state.policy.allow_song_deletion = true;
+        assert!(super::begin_song_delete_prompt(&mut state));
+
+        let start = input_event(VirtualAction::p1_start, InputSource::Keyboard, true);
+        assert!(matches!(
+            super::handle_song_delete_prompt_input(&mut state, &start),
+            ThemeEffect::None
+        ));
+        assert!(state.song_delete_prompt.is_none());
+
+        assert!(super::begin_song_delete_prompt(&mut state));
+        let right = input_event(VirtualAction::p1_right, InputSource::Keyboard, true);
+        super::handle_song_delete_prompt_input(&mut state, &right);
+        let effect = super::handle_song_delete_prompt_input(&mut state, &start);
+        assert!(matches!(
+            effect,
+            ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Content(
+                crate::SimplyLoveContentRequest::DeleteSong { simfile_path: requested }
+            )) if requested == simfile_path
+        ));
+        assert!(
+            state
+                .song_delete_prompt
+                .as_ref()
+                .is_some_and(|prompt| prompt.pending)
+        );
     }
 
     #[test]

@@ -678,6 +678,9 @@ pub(super) fn apply_submenu_choice_delta(
                 crate::SimplyLoveAdvancedConfigRequest::CacheSongs(new_index == 1)
             }
             SubRowId::FastLoad => crate::SimplyLoveAdvancedConfigRequest::FastLoad(new_index == 1),
+            SubRowId::AllowSongDeletion => {
+                crate::SimplyLoveAdvancedConfigRequest::AllowSongDeletion(new_index == 1)
+            }
             _ => return None,
         };
         action = Some(advanced_config_effect(request));

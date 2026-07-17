@@ -48,6 +48,9 @@ pub enum SimplyLoveContentRequest {
     ReloadSong {
         simfile_path: PathBuf,
     },
+    DeleteSong {
+        simfile_path: PathBuf,
+    },
 }
 
 #[derive(Clone, Debug)]
@@ -575,6 +578,7 @@ pub enum SimplyLoveAdvancedConfigRequest {
     SongParsingThreads(u8),
     CacheSongs(bool),
     FastLoad(bool),
+    AllowSongDeletion(bool),
 }
 
 /// Course preferences chosen by Simply Love and persisted by shell.

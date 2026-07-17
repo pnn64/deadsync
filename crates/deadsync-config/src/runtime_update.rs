@@ -101,6 +101,7 @@ update_config_fn!(pub fn update_cdtitle_cache(enabled: bool) => set_cdtitle_cach
 update_config_fn!(pub fn update_song_parsing_threads(threads: u8) => set_song_parsing_threads);
 update_config_fn!(pub fn update_cache_songs(enabled: bool) => set_cache_songs);
 update_config_fn!(pub fn update_fastload(enabled: bool) => set_fastload);
+update_config_fn!(pub fn update_allow_song_deletion(enabled: bool) => set_allow_song_deletion);
 
 update_config_fn!(pub fn update_arcade_options_navigation(enabled: bool) => set_arcade_options_navigation);
 update_config_fn!(pub fn update_delayed_back(enabled: bool) => set_delayed_back);

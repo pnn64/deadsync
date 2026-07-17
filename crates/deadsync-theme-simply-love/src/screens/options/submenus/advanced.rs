@@ -52,6 +52,15 @@ pub(in crate::screens::options) const ADVANCED_OPTIONS_ROWS: &[SubRow] = &[
         ],
         inline: true,
     },
+    SubRow {
+        id: SubRowId::AllowSongDeletion,
+        label: lookup_key("OptionsAdvanced", "AllowSongDeletion"),
+        choices: &[
+            localized_choice("Common", "Off"),
+            localized_choice("Common", "On"),
+        ],
+        inline: true,
+    },
 ];
 
 pub(in crate::screens::options) const ADVANCED_OPTIONS_ITEMS: &[Item] = &[
@@ -101,6 +110,14 @@ pub(in crate::screens::options) const ADVANCED_OPTIONS_ITEMS: &[Item] = &[
         help: &[HelpEntry::Paragraph(lookup_key(
             "OptionsAdvancedHelp",
             "FastLoadHelp",
+        ))],
+    },
+    Item {
+        id: ItemId::AdvAllowSongDeletion,
+        name: lookup_key("OptionsAdvanced", "AllowSongDeletion"),
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsAdvancedHelp",
+            "AllowSongDeletionHelp",
         ))],
     },
     Item {

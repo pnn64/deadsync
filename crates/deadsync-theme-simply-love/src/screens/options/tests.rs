@@ -294,7 +294,11 @@ fn advanced_choice_emits_shell_config_request() {
     let asset_manager = AssetManager::new();
     let mut state = init();
     state.view = OptionsView::Submenu(SubmenuKind::Advanced);
-    let row = select_visible_row(&mut state, SubmenuKind::Advanced, SubRowId::BannerCache);
+    let row = select_visible_row(
+        &mut state,
+        SubmenuKind::Advanced,
+        SubRowId::AllowSongDeletion,
+    );
 
     let effect = apply_submenu_choice_delta(&mut state, &asset_manager, 1, NavWrap::Wrap)
         .expect("Advanced choice should emit shell config work");
@@ -304,7 +308,7 @@ fn advanced_choice_emits_shell_config_request() {
         effect,
         ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Config(
             crate::SimplyLoveConfigRequest::Advanced(
-                crate::SimplyLoveAdvancedConfigRequest::BannerCache(value)
+                crate::SimplyLoveAdvancedConfigRequest::AllowSongDeletion(value)
             )
         )) if value == enabled
     ));

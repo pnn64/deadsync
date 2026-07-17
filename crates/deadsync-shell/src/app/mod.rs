@@ -3409,6 +3409,32 @@ impl App {
                                 ),
                             }
                         }
+                        SimplyLoveContentRequest::DeleteSong { simfile_path } => {
+                            let config = config::get();
+                            let result = if config.allow_song_deletion {
+                                let songs_root = deadlib_platform::dirs::app_dirs().songs_dir();
+                                let roots = deadsync_simfile::app_runtime::collect_song_scan_roots(
+                                    &songs_root,
+                                );
+                                crate::content_reload::delete_song(&simfile_path, &roots)
+                            } else {
+                                Err("AllowSongDeletion is disabled".to_owned())
+                            };
+                            match &result {
+                                Ok(_) => debug!(
+                                    "Permanently deleted song directory for: {}",
+                                    simfile_path.display()
+                                ),
+                                Err(error) => warn!(
+                                    "Song deletion failed for '{}': {error}",
+                                    simfile_path.display()
+                                ),
+                            }
+                            select_music::finish_song_deletion(
+                                &mut self.state.screens.select_music_state,
+                                result,
+                            );
+                        }
                     }
                     Vec::new()
                 }

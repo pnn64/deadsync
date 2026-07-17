@@ -267,9 +267,88 @@ pub(crate) fn reload_song(path: &Path) -> Result<Vec<deadsync_chart::SongPack>, 
     Ok(deadsync_simfile::runtime_cache::get_song_cache().clone())
 }
 
+pub(crate) fn delete_song(
+    simfile_path: &Path,
+    song_scan_roots: &[PathBuf],
+) -> Result<Vec<deadsync_chart::SongPack>, String> {
+    if !deadsync_config::prelude::song_path_is_writable(simfile_path) {
+        return Err(format!(
+            "song is in a read-only additional song folder: {}",
+            simfile_path.display()
+        ));
+    }
+    if !deadsync_simfile::runtime_cache::song_is_cached(simfile_path) {
+        return Err(format!(
+            "song is no longer in the live catalog: {}",
+            simfile_path.display()
+        ));
+    }
+
+    let song_dir = validated_song_dir(simfile_path, song_scan_roots)?;
+    std::fs::remove_dir_all(&song_dir).map_err(|error| {
+        format!(
+            "could not delete song directory '{}': {error}",
+            song_dir.display()
+        )
+    })?;
+    if !deadsync_simfile::runtime_cache::remove_song(simfile_path) {
+        return Err(format!(
+            "deleted '{}' but could not remove it from the live catalog",
+            song_dir.display()
+        ));
+    }
+    Ok(deadsync_simfile::runtime_cache::get_song_cache().clone())
+}
+
+fn validated_song_dir(simfile_path: &Path, song_scan_roots: &[PathBuf]) -> Result<PathBuf, String> {
+    let simfile = std::fs::canonicalize(simfile_path).map_err(|error| {
+        format!(
+            "could not resolve selected simfile '{}': {error}",
+            simfile_path.display()
+        )
+    })?;
+    if !simfile.is_file() {
+        return Err(format!(
+            "selected simfile is not a file: {}",
+            simfile.display()
+        ));
+    }
+    let song_dir = simfile
+        .parent()
+        .ok_or_else(|| format!("selected simfile has no parent: {}", simfile.display()))?;
+
+    for root in song_scan_roots {
+        let Ok(root) = std::fs::canonicalize(root) else {
+            continue;
+        };
+        let Ok(relative) = song_dir.strip_prefix(&root) else {
+            continue;
+        };
+        // A valid song directory is at least root/pack/song. Refuse to remove
+        // a scan root or whole pack even if malformed catalog data points there.
+        if relative.components().count() >= 2 {
+            return Ok(song_dir.to_path_buf());
+        }
+    }
+
+    Err(format!(
+        "song directory is not a safe child of a configured song root: {}",
+        song_dir.display()
+    ))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    fn test_dir(name: &str) -> PathBuf {
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("clock should be after the Unix epoch")
+            .as_nanos();
+        std::env::temp_dir().join(format!("deadsync-song-delete-{name}-{nonce}"))
+    }
 
     #[test]
     fn completed_event_releases_worker_slot() {
@@ -287,6 +366,42 @@ mod tests {
             [SimplyLoveContentReloadEvent::Finished { .. }]
         ));
         assert!(service.rx.is_none());
+    }
+
+    #[test]
+    fn song_delete_path_requires_root_pack_song_depth() {
+        let root = test_dir("depth");
+        let song_dir = root.join("Pack").join("Song");
+        let simfile = song_dir.join("song.ssc");
+        std::fs::create_dir_all(&song_dir).unwrap();
+        std::fs::write(&simfile, "#TITLE:Song;").unwrap();
+
+        assert_eq!(
+            validated_song_dir(&simfile, std::slice::from_ref(&root)).unwrap(),
+            std::fs::canonicalize(&song_dir).unwrap()
+        );
+
+        let pack_simfile = root.join("Pack").join("pack.ssc");
+        std::fs::write(&pack_simfile, "#TITLE:Pack;").unwrap();
+        assert!(validated_song_dir(&pack_simfile, std::slice::from_ref(&root)).is_err());
+
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn song_delete_path_rejects_files_outside_scan_roots() {
+        let root = test_dir("root");
+        let outside = test_dir("outside");
+        let song_dir = outside.join("Pack").join("Song");
+        let simfile = song_dir.join("song.ssc");
+        std::fs::create_dir_all(&root).unwrap();
+        std::fs::create_dir_all(&song_dir).unwrap();
+        std::fs::write(&simfile, "#TITLE:Song;").unwrap();
+
+        assert!(validated_song_dir(&simfile, std::slice::from_ref(&root)).is_err());
+
+        std::fs::remove_dir_all(root).unwrap();
+        std::fs::remove_dir_all(outside).unwrap();
     }
 
     #[test]
