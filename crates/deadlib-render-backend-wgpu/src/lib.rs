@@ -346,6 +346,7 @@ fn init(
         power_preference: wgpu::PowerPreference::HighPerformance,
         compatible_surface: Some(&surface),
         force_fallback_adapter: false,
+        apply_limit_buckets: false,
     }))
     .map_err(|e| format!("No suitable {} adapter found: {e}", api.name()))?;
     log_wgpu_adapter_info(api, &adapter);
@@ -393,6 +394,7 @@ fn init(
     let config = wgpu::SurfaceConfiguration {
         usage: pick_surface_usage(&caps),
         format,
+        color_space: wgpu::SurfaceColorSpace::Auto,
         width: size.width.max(1),
         height: size.height.max(1),
         present_mode,
@@ -1318,7 +1320,7 @@ pub fn draw(
         });
     });
     let present_started = Instant::now();
-    frame.present();
+    state.queue.present(frame);
     stats.present_us = elapsed_us_since(present_started);
     let mut back_pressure_waited = false;
     if apply_present_back_pressure && screenshot_readback.is_none() {
@@ -1349,36 +1351,44 @@ pub fn draw(
         stats.gpu_wait_us = stats.gpu_wait_us.saturating_add(wait_us);
         queue_idle_waited = wait_us != 0;
         if rx.recv().is_ok_and(|res| res.is_ok()) {
-            let data = slice.get_mapped_range();
-            let row_bytes = width * 4;
-            let mut rgba = vec![0u8; row_bytes * height];
-            let swap_rb = matches!(
-                format,
-                wgpu::TextureFormat::Bgra8Unorm | wgpu::TextureFormat::Bgra8UnormSrgb
-            );
-            for y in 0..height {
-                let src = y * padded_row_bytes;
-                // Surface readback rows are already top-to-bottom for this path.
-                let dst = y * row_bytes;
-                if swap_rb {
-                    let mut x = 0usize;
-                    while x < width {
-                        let s = src + x * 4;
-                        let d = dst + x * 4;
-                        rgba[d] = data[s + 2];
-                        rgba[d + 1] = data[s + 1];
-                        rgba[d + 2] = data[s];
-                        rgba[d + 3] = data[s + 3];
-                        x += 1;
+            match slice.get_mapped_range() {
+                Ok(data) => {
+                    let row_bytes = width * 4;
+                    let mut rgba = vec![0u8; row_bytes * height];
+                    let swap_rb = matches!(
+                        format,
+                        wgpu::TextureFormat::Bgra8Unorm | wgpu::TextureFormat::Bgra8UnormSrgb
+                    );
+                    for y in 0..height {
+                        let src = y * padded_row_bytes;
+                        // Surface readback rows are already top-to-bottom for this path.
+                        let dst = y * row_bytes;
+                        if swap_rb {
+                            let mut x = 0usize;
+                            while x < width {
+                                let s = src + x * 4;
+                                let d = dst + x * 4;
+                                rgba[d] = data[s + 2];
+                                rgba[d + 1] = data[s + 1];
+                                rgba[d + 2] = data[s];
+                                rgba[d + 3] = data[s + 3];
+                                x += 1;
+                            }
+                        } else {
+                            rgba[dst..dst + row_bytes].copy_from_slice(&data[src..src + row_bytes]);
+                        }
                     }
-                } else {
-                    rgba[dst..dst + row_bytes].copy_from_slice(&data[src..src + row_bytes]);
+                    drop(data);
+                    readback_buffer.unmap();
+                    if let Some(img) = RgbaImage::from_raw(width as u32, height as u32, rgba) {
+                        state.captured_frame = Some(img);
+                    }
                 }
-            }
-            drop(data);
-            readback_buffer.unmap();
-            if let Some(img) = RgbaImage::from_raw(width as u32, height as u32, rgba) {
-                state.captured_frame = Some(img);
+                Err(err) => {
+                    readback_buffer.unmap();
+                    state.captured_frame = None;
+                    warn!("wgpu screenshot readback failed: {err}");
+                }
             }
         } else {
             readback_buffer.unmap();
@@ -2037,7 +2047,7 @@ fn build_pipeline(
         vertex: wgpu::VertexState {
             module: shader,
             entry_point: Some("vs_main"),
-            buffers: &[vertex_layout(), instance_layout()],
+            buffers: &[Some(vertex_layout()), Some(instance_layout())],
             compilation_options: wgpu::PipelineCompilationOptions::default(),
         },
         fragment: Some(wgpu::FragmentState {
@@ -2085,7 +2095,7 @@ fn build_mesh_pipeline(
         vertex: wgpu::VertexState {
             module: shader,
             entry_point: Some("vs_main"),
-            buffers: &[mesh_vertex_layout()],
+            buffers: &[Some(mesh_vertex_layout())],
             compilation_options: wgpu::PipelineCompilationOptions::default(),
         },
         fragment: Some(wgpu::FragmentState {
@@ -2135,8 +2145,8 @@ fn build_tmesh_pipeline(
             module: shader,
             entry_point: Some("vs_main"),
             buffers: &[
-                textured_mesh_vertex_layout(),
-                textured_mesh_instance_layout(),
+                Some(textured_mesh_vertex_layout()),
+                Some(textured_mesh_instance_layout()),
             ],
             compilation_options: wgpu::PipelineCompilationOptions::default(),
         },
@@ -2329,7 +2339,7 @@ fn ortho_for_window(width: u32, height: u32) -> Matrix4 {
     };
     let half_w = 0.5 * w;
     let half_h = 0.5 * h;
-    Matrix4::orthographic_rh_gl(-half_w, half_w, -half_h, half_h, -1.0, 1.0)
+    glam::camera::rh::proj::opengl::orthographic(-half_w, half_w, -half_h, half_h, -1.0, 1.0)
 }
 
 const SHADER_IMM: &str = include_str!("shaders/wgpu_sprite.wgsl");

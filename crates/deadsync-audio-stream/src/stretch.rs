@@ -578,7 +578,7 @@ mod tests {
             let mut total_out = 0usize;
             let avail = |accum: &Vec<f32>, start: usize| accum.len() - start;
 
-            let mut consume = |accum: &mut Vec<f32>, start: &mut usize| {
+            let consume = |accum: &mut Vec<f32>, start: &mut usize| {
                 while accum.len() - *start >= NEED {
                     *start += NEED;
                 }

@@ -7,10 +7,10 @@ license = "GPL-3.0"
 [dependencies]
 ash = { version = "0.38.0", features = ["linked"] }
 ash-window = "0.13.0"
-bytemuck = { version = "1.25.0", features = ["derive"] }
+bytemuck = { version = "1.25.1", features = ["derive"] }
 deadlib-platform = { path = "../deadlib-platform" }
 deadlib-render = { path = "../deadlib-render" }
-glam = "0.33.1"
+glam = "0.33.2"
 image = "0.25.10"
 log = "0.4.33"
 winit = "0.30.13"

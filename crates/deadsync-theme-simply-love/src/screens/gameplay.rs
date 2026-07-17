@@ -6070,7 +6070,7 @@ fn song_lua_build_capture_actor(
         overlay_space_height,
     ) {
         return Some(Actor::Camera {
-            view_proj: Matrix4::orthographic_rh_gl(
+            view_proj: glam::camera::rh::proj::opengl::orthographic(
                 -0.5 * screen_width(),
                 0.5 * screen_width(),
                 -0.5 * screen_height(),
@@ -6410,7 +6410,7 @@ fn song_lua_overlay_view_proj(
 
     let theta = 0.5 * fov_deg.to_radians();
     let dist = (0.5 * width / theta.tan()).max(1.0);
-    let proj = Matrix4::frustum_rh_gl(
+    let proj = glam::camera::rh::proj::opengl::frustum(
         (vanish_x - 0.5 * width) / dist,
         (vanish_x + 0.5 * width) / dist,
         (vanish_y + 0.5 * height) / dist,
@@ -6420,7 +6420,7 @@ fn song_lua_overlay_view_proj(
     );
     let eye_x = -vanish_x + 0.5 * width;
     let eye_y = -vanish_y + 0.5 * height;
-    let view = Matrix4::look_at_rh(
+    let view = glam::camera::rh::view::look_at_mat4(
         Vector3::new(eye_x, eye_y, dist),
         Vector3::new(eye_x, eye_y, 0.0),
         Vector3::new(0.0, 1.0, 0.0),
@@ -8663,7 +8663,7 @@ fn apply_song_lua_player_transform(
     // notefield::build may already wrap the lane render in a perspective camera.
     // Multiply those cameras in place, and only wrap plain HUD actors here, so
     // the Lua transform affects the whole bundle without being shadowed.
-    let root_camera = Matrix4::orthographic_rh_gl(
+    let root_camera = glam::camera::rh::proj::opengl::orthographic(
         -0.5 * screen_width(),
         0.5 * screen_width(),
         -0.5 * screen_height(),

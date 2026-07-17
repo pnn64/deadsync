@@ -298,7 +298,7 @@ fn technique_view_proj() -> Matrix4 {
     let height = screen_height().max(1.0);
     let theta = 45.0_f32.to_radians();
     let dist = (0.5 * width / theta.tan()).max(1.0);
-    let proj = Matrix4::frustum_rh_gl(
+    let proj = glam::camera::rh::proj::opengl::frustum(
         -0.5 * width / dist,
         0.5 * width / dist,
         -0.5 * height / dist,
@@ -310,7 +310,7 @@ fn technique_view_proj() -> Matrix4 {
     // the origin, unlike StepMania's top-left actor coordinates.
     let eye = Vector3::new(0.0, 0.0, dist);
     let target = Vector3::new(0.0, 0.0, 0.0);
-    proj * Matrix4::look_at_rh(eye, target, Vector3::new(0.0, 1.0, 0.0))
+    proj * glam::camera::rh::view::look_at_mat4(eye, target, Vector3::new(0.0, 1.0, 0.0))
 }
 
 fn random_xd(t: f64) -> f32 {

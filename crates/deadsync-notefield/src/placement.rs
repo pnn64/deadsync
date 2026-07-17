@@ -204,7 +204,7 @@ pub(crate) fn notefield_view_proj(
 
     let eye = Vector3::new(-vp_x + half_w, -vp_y + half_h, dist);
     let at = Vector3::new(-vp_x + half_w, -vp_y + half_h, 0.0);
-    let view = Matrix4::look_at_rh(eye, at, Vector3::Y);
+    let view = glam::camera::rh::view::look_at_mat4(eye, at, Vector3::Y);
 
     let reverse_mult = if reverse { -1.0 } else { 1.0 };
     let tilt = tilt.clamp(-1.0, 1.0);

@@ -1899,7 +1899,7 @@ fn ortho_for_window(width: u32, height: u32) -> Matrix4 {
     };
     let half_w = 0.5 * w;
     let half_h = 0.5 * h;
-    Matrix4::orthographic_rh_gl(-half_w, half_w, -half_h, half_h, -1.0, 1.0)
+    glam::camera::rh::proj::opengl::orthographic(-half_w, half_w, -half_h, half_h, -1.0, 1.0)
 }
 
 fn create_opengl_context(

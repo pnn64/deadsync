@@ -215,7 +215,7 @@ pub fn ortho_for_window(width: u32, height: u32) -> Matrix4 {
     set_current_window_px(width, height);
     let m = metrics_for_window(width, height);
     set_current_metrics(m);
-    Matrix4::orthographic_rh_gl(m.left, m.right, m.bottom, m.top, -1.0, 1.0)
+    glam::camera::rh::proj::opengl::orthographic(m.left, m.right, m.bottom, m.top, -1.0, 1.0)
 }
 
 // -----------------------------------------------------------------------------

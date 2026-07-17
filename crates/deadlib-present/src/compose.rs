@@ -212,7 +212,7 @@ fn build_screen_cached_with_scratch_and_texture_context_impl<T: TextureContext +
     debug_assert!(cameras.capacity() >= 4);
     let mut texture_cache = std::mem::take(&mut scratch.texture_cache);
     texture_cache.begin_frame(texture_ctx);
-    cameras.push(Matrix4::orthographic_rh_gl(
+    cameras.push(glam::camera::rh::proj::opengl::orthographic(
         m.left, m.right, m.bottom, m.top, -1.0, 1.0,
     ));
     let mut order_counter: u32 = 0;

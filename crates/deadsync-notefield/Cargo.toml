@@ -30,7 +30,7 @@ deadsync-gameplay = { path = "../deadsync-gameplay" }
 deadsync-noteskin = { path = "../deadsync-noteskin" }
 deadsync-rules = { path = "../deadsync-rules" }
 deadsync-theme = { path = "../deadsync-theme" }
-glam = "0.33.1"
+glam = "0.33.2"
 twox-hash = "2.1.2"
 
 [lints.clippy]
