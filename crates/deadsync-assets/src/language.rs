@@ -1,10 +1,10 @@
 use deadsync_config::ini::{SimpleIni, unescape_ini_value};
 use deadsync_config::theme::{LanguageFlag, resolve_language_locale};
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-pub type LanguageMap = HashMap<Box<str>, HashMap<Box<str>, Arc<str>>>;
+pub type LanguageMap = FxHashMap<Box<str>, FxHashMap<Box<str>, Arc<str>>>;
 
 /// Language resources prepared at the asset boundary for a concrete theme.
 pub struct LanguageBundle {
@@ -31,9 +31,9 @@ fn load_ini_to_map(path: &Path) -> LanguageMap {
     let mut ini = SimpleIni::new();
     if let Err(e) = ini.load(path) {
         log::warn!("Failed to load language file {}: {e}", path.display());
-        return HashMap::new();
+        return FxHashMap::default();
     }
-    let mut sections: LanguageMap = HashMap::new();
+    let mut sections = LanguageMap::default();
     for (section, props) in ini.sections() {
         let entries = sections.entry(section.as_str().into()).or_default();
         for (key, value) in props {
@@ -66,7 +66,7 @@ fn load_from_dir(languages_dir: &Path, locale: &str) -> LanguageBundle {
     LanguageBundle {
         fallback: load_ini_to_map(&language_file_path(languages_dir, "en")),
         active: if locale == "en" {
-            HashMap::new()
+            LanguageMap::default()
         } else {
             load_ini_to_map(&language_file_path(languages_dir, locale))
         },
