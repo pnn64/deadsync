@@ -1,7 +1,7 @@
 use deadlib_render::{
     BlendMode, INVALID_TMESH_CACHE_KEY, ObjectType, RenderList, RenderObject, SpriteInstanceRaw,
     TexturedMeshInstanceRaw, TexturedMeshVertex, TexturedMeshVertices,
-    build_ordered_render_batches, build_render_batches,
+    build_ordered_render_batches, build_render_batches, build_sorted_render_batches,
     draw_prep::{DrawScratch, prepare},
 };
 use glam::Mat4 as Matrix4;
@@ -112,20 +112,24 @@ fn main() {
     }
     let mut runs = Vec::with_capacity(BENCH_RUNS);
     let mut batch_runs = Vec::with_capacity(BENCH_RUNS);
+    let mut general_batch_runs = Vec::with_capacity(BENCH_RUNS);
     let mut order_scan_runs = Vec::with_capacity(BENCH_RUNS);
     let mut abort_runs = Vec::with_capacity(BENCH_RUNS);
     for _ in 0..BENCH_RUNS {
         runs.push(run(&frame));
         batch_runs.push(run_batch_build(&frame));
+        general_batch_runs.push(run_general_batch_build(&frame));
         order_scan_runs.push(run_order_scan(&frame));
         abort_runs.push(run_ordered_abort(&unordered_objects));
     }
     runs.sort_unstable_by_key(|result| result.elapsed);
     batch_runs.sort_unstable();
+    general_batch_runs.sort_unstable();
     order_scan_runs.sort_unstable();
     abort_runs.sort_unstable();
     let result = runs.swap_remove(BENCH_RUNS / 2);
     let batch_elapsed = batch_runs[BENCH_RUNS / 2];
+    let general_batch_elapsed = general_batch_runs[BENCH_RUNS / 2];
     let order_scan_elapsed = order_scan_runs[BENCH_RUNS / 2];
     let abort_elapsed = abort_runs[BENCH_RUNS / 2];
     let frames = MEASURE_FRAMES as f64;
@@ -145,8 +149,12 @@ fn main() {
         result.ops, result.staged_vertices
     );
     println!(
-        "{:>9.2} us/frame to construct composition batches",
+        "{:>9.2} us/frame to construct sorted composition batches",
         batch_elapsed.as_secs_f64() * 1_000_000.0 / frames,
+    );
+    println!(
+        "{:>9.2} us/frame through general builder on sorted objects",
+        general_batch_elapsed.as_secs_f64() * 1_000_000.0 / frames,
     );
     println!(
         "{:>9.2} us/frame for the removed best-case object-order scan",
@@ -180,18 +188,26 @@ fn run_ordered_abort(objects: &[RenderObject]) -> Duration {
 fn run_batch_build(frame: &RenderList) -> Duration {
     let mut batches = Vec::with_capacity(frame.objects.len());
     for _ in 0..WARMUP_FRAMES {
-        assert!(build_ordered_render_batches(
-            black_box(&frame.objects),
-            &mut batches
-        ));
+        build_sorted_render_batches(black_box(&frame.objects), &mut batches);
         black_box(&batches);
     }
     let started = Instant::now();
     for _ in 0..MEASURE_FRAMES {
-        assert!(build_ordered_render_batches(
-            black_box(&frame.objects),
-            &mut batches
-        ));
+        build_sorted_render_batches(black_box(&frame.objects), &mut batches);
+        black_box(&batches);
+    }
+    started.elapsed()
+}
+
+fn run_general_batch_build(frame: &RenderList) -> Duration {
+    let mut batches = Vec::with_capacity(frame.objects.len());
+    for _ in 0..WARMUP_FRAMES {
+        build_render_batches(black_box(&frame.objects), &mut batches);
+        black_box(&batches);
+    }
+    let started = Instant::now();
+    for _ in 0..MEASURE_FRAMES {
+        build_render_batches(black_box(&frame.objects), &mut batches);
         black_box(&batches);
     }
     started.elapsed()

@@ -256,7 +256,7 @@ fn build_screen_cached_with_scratch_and_texture_context_impl<T: TextureContext +
     let mut batches = std::mem::take(&mut scratch.batches);
     if !renderer::build_ordered_render_batches(&objects, &mut batches) {
         sort_render_objects(&mut objects, scratch);
-        renderer::build_render_batches(&objects, &mut batches);
+        renderer::build_sorted_render_batches(&objects, &mut batches);
     }
     scratch.masks = masks;
     scratch.texture_cache = texture_cache;

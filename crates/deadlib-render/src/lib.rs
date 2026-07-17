@@ -135,6 +135,16 @@ pub fn build_render_batches(objects: &[RenderObject], batches: &mut Vec<RenderBa
     batches.sort_unstable_by_key(|batch| batch.sort_key());
 }
 
+/// Builds batches without sorting when `objects` are already ordered by `(z, order)`.
+pub fn build_sorted_render_batches(objects: &[RenderObject], batches: &mut Vec<RenderBatch>) {
+    debug_assert!(
+        objects
+            .windows(2)
+            .all(|pair| (pair[0].z, pair[0].order) <= (pair[1].z, pair[1].order))
+    );
+    build_render_batches_inner(objects, batches, false);
+}
+
 /// Builds batches without sorting when `objects` are already in draw order.
 /// Returns `false` at the first order inversion and leaves `batches` empty.
 pub fn build_ordered_render_batches(
@@ -882,6 +892,23 @@ mod tests {
 
         assert!(!build_ordered_render_batches(&objects, &mut batches));
         assert!(batches.is_empty());
+    }
+
+    #[test]
+    fn sorted_batch_build_matches_general_builder() {
+        let objects = vec![
+            batch_sprite(4, 0),
+            batch_sprite(5, 1),
+            batch_sprite(5, 2),
+            batch_sprite(5, 3),
+        ];
+        let mut expected = Vec::new();
+        let mut actual = Vec::new();
+
+        build_render_batches(&objects, &mut expected);
+        build_sorted_render_batches(&objects, &mut actual);
+
+        assert_eq!(actual, expected);
     }
 
     #[test]
