@@ -430,8 +430,10 @@ fn compute_ex_score_counts(
 
     let mut idx: usize = 0;
     let len = notes.len();
+    let mut row_judgments: Vec<&Judgment> = Vec::with_capacity(8);
     while idx < len {
         let row_index = notes[idx].row_index;
+        row_judgments.clear();
 
         let row_time_ns = note_times_ns.get(idx).copied().unwrap_or(0);
         let row_is_playable = match fail_time_ns {
@@ -439,7 +441,6 @@ fn compute_ex_score_counts(
             None => true,
         };
 
-        let mut row_judgments: Vec<&Judgment> = Vec::new();
         while idx < len && notes[idx].row_index == row_index {
             let note = &notes[idx];
             if row_is_playable
