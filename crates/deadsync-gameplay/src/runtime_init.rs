@@ -1,4 +1,4 @@
-﻿pub fn init_gameplay_runtime<
+pub fn init_gameplay_runtime<
     Profile,
     BuildSongLuaRuntime,
     OverlayActor,
@@ -129,8 +129,7 @@ where
         );
     }
     let replay_input = GameplayReplayInputState::new(replay_input);
-    let timing_player_refs =
-        std::array::from_fn(|player| timing_players[player].as_ref());
+    let timing_player_refs = std::array::from_fn(|player| timing_players[player].as_ref());
     let time_to_beat_caches = GameplayTimeToBeatCaches::new(&timing, &timing_player_refs);
     let setup_ms = init_started.elapsed().as_secs_f64() * 1000.0;
 
@@ -319,8 +318,7 @@ where
             mines_total[player] = totals.mines;
             hands_total[player] = totals.hands;
             possible_grade_points[player] = judgment::max_grade_points(
-                &notes,
-                note_ranges[player],
+                totals.steps,
                 holds_total[player],
                 rolls_total[player],
                 charts[player].possible_grade_points,

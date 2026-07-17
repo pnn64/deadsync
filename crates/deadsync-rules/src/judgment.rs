@@ -339,44 +339,18 @@ pub fn step_calories(weight_pounds: i32, tracks_held: usize) -> f32 {
 }
 
 #[inline(always)]
-pub fn compute_possible_grade_points(
-    notes: &[Note],
-    note_range: (usize, usize),
-    holds_total: u32,
-    rolls_total: u32,
-) -> i32 {
-    let (start, end) = note_range;
-    if start >= end {
-        return 0;
-    }
-
-    let mut rows = Vec::<usize>::with_capacity(end - start);
-    for n in &notes[start..end] {
-        if n.can_be_judged && !matches!(n.note_type, NoteType::Mine) {
-            rows.push(n.row_index);
-        }
-    }
-    rows.sort_unstable();
-    rows.dedup();
-
-    let num_tap_rows = rows.len() as u64;
-    let pts = (num_tap_rows * 5)
-        + (u64::from(holds_total) * HOLD_SCORE_HELD as u64)
-        + (u64::from(rolls_total) * HOLD_SCORE_HELD as u64);
-    pts as i32
-}
-
-#[inline(always)]
 pub fn max_grade_points(
-    notes: &[Note],
-    note_range: (usize, usize),
+    total_steps: u32,
     holds_total: u32,
     rolls_total: u32,
     base_points: i32,
 ) -> i32 {
+    let points = (u64::from(total_steps) * 5)
+        + (u64::from(holds_total) * HOLD_SCORE_HELD as u64)
+        + (u64::from(rolls_total) * HOLD_SCORE_HELD as u64);
     // ITGmania scores note-changing mods against max(pre, post): inserted notes
     // count, and removed notes still count as misses.
-    compute_possible_grade_points(notes, note_range, holds_total, rolls_total).max(base_points)
+    (points as i32).max(base_points)
 }
 
 // ----------------------------- FA+ EX Scoring -----------------------------
@@ -910,21 +884,14 @@ mod tests {
 
     #[test]
     fn max_grade_points_keeps_removed_notes_in_denominator() {
-        let notes = vec![make_tap(0, JudgeGrade::Fantastic, 0.0)];
-
-        let points = max_grade_points(&notes, (0, notes.len()), 0, 0, 15);
+        let points = max_grade_points(1, 0, 0, 15);
 
         assert_eq!(points, 15);
     }
 
     #[test]
     fn max_grade_points_counts_inserted_notes() {
-        let notes = vec![
-            make_tap(0, JudgeGrade::Fantastic, 0.0),
-            make_tap(48, JudgeGrade::Fantastic, 0.0),
-        ];
-
-        let points = max_grade_points(&notes, (0, notes.len()), 0, 0, 5);
+        let points = max_grade_points(2, 0, 0, 5);
 
         assert_eq!(points, 10);
     }

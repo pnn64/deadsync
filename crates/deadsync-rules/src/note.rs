@@ -1,5 +1,6 @@
 use crate::judgment::Judgment;
 use crate::timing::{TIMING_WINDOW_ADD_S, TimingData};
+use deadsync_core::input::MAX_COLS;
 use deadsync_core::note::NoteType;
 use deadsync_core::song_time::{SongTimeNs, song_time_ns_delta_seconds, song_time_ns_from_seconds};
 
@@ -147,23 +148,6 @@ pub struct NoteCountStat {
     pub notes_upper: usize,
 }
 
-#[inline(always)]
-fn count_total_steps_for_range(notes: &[Note], note_range: (usize, usize)) -> u32 {
-    let (start, end) = note_range;
-    if start >= end {
-        return 0;
-    }
-    let mut rows = Vec::<usize>::with_capacity(end - start);
-    for note in &notes[start..end] {
-        if note.can_be_judged && !matches!(note.note_type, NoteType::Mine) {
-            rows.push(note.row_index);
-        }
-    }
-    rows.sort_unstable();
-    rows.dedup();
-    rows.len() as u32
-}
-
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct PlayerTotals {
     pub steps: u32,
@@ -173,69 +157,76 @@ pub struct PlayerTotals {
     pub hands: u32,
 }
 
-#[inline(always)]
+fn carried_holds_for_row(active_hold_ends: &mut [usize; MAX_COLS], row: usize) -> u32 {
+    let mut count = 0u32;
+    for end in active_hold_ends {
+        if *end == usize::MAX || *end < row {
+            *end = usize::MAX;
+        } else {
+            count += 1;
+        }
+    }
+    count
+}
+
+/// Recompute post-transform chart totals from notes sorted by row.
+///
+/// Gameplay chart transforms establish this ordering before runtime setup, and
+/// the row-index runtime built immediately afterward relies on the same
+/// invariant. Keeping the scan ordered avoids rebuilding and sorting row and
+/// hold collections during every transformed-chart initialization.
 pub fn recompute_player_totals(notes: &[Note], note_range: (usize, usize)) -> PlayerTotals {
     let (start, end) = note_range;
     if start >= end {
         return PlayerTotals::default();
     }
-    let mut totals = PlayerTotals {
-        steps: count_total_steps_for_range(notes, note_range),
-        ..PlayerTotals::default()
-    };
-    let mut row_cells: Vec<(usize, usize)> = Vec::with_capacity(end - start);
-    let mut hold_starts: Vec<usize> = Vec::new();
-    let mut hold_ends: Vec<usize> = Vec::new();
-    for note in &notes[start..end] {
-        if !note.can_be_judged {
-            continue;
-        }
-        match note.note_type {
-            NoteType::Tap => row_cells.push((note.row_index, note.column)),
-            NoteType::Hold => {
-                totals.holds = totals.holds.saturating_add(1);
-                row_cells.push((note.row_index, note.column));
-                if let Some(hold) = note.hold.as_ref() {
-                    hold_starts.push(note.row_index);
-                    hold_ends.push(hold.end_row_index);
-                }
-            }
-            NoteType::Roll => {
-                totals.rolls = totals.rolls.saturating_add(1);
-                row_cells.push((note.row_index, note.column));
-                if let Some(hold) = note.hold.as_ref() {
-                    hold_starts.push(note.row_index);
-                    hold_ends.push(hold.end_row_index);
-                }
-            }
-            NoteType::Mine => totals.mines = totals.mines.saturating_add(1),
-            NoteType::Lift | NoteType::Fake => {}
-        }
-    }
+    let notes = &notes[start..end];
+    debug_assert!(
+        notes
+            .windows(2)
+            .all(|pair| pair[0].row_index <= pair[1].row_index),
+        "player notes must be row-sorted before totals are recomputed"
+    );
 
-    row_cells.sort_unstable();
-    hold_starts.sort_unstable();
-    hold_ends.sort_unstable();
-
-    let mut row_ix = 0usize;
-    let mut hold_start_ix = 0usize;
-    let mut hold_end_ix = 0usize;
-    while row_ix < row_cells.len() {
-        let row = row_cells[row_ix].0;
+    let mut totals = PlayerTotals::default();
+    let mut active_hold_ends = [usize::MAX; MAX_COLS];
+    let mut note_ix = 0usize;
+    while note_ix < notes.len() {
+        let row = notes[note_ix].row_index;
+        let carried_holds = carried_holds_for_row(&mut active_hold_ends, row);
+        let mut has_step = false;
         let mut row_mask = 0u16;
-        while row_ix < row_cells.len() && row_cells[row_ix].0 == row {
-            row_mask |= 1u16 << row_cells[row_ix].1.min(15);
-            row_ix += 1;
+        while note_ix < notes.len() && notes[note_ix].row_index == row {
+            let note = &notes[note_ix];
+            note_ix += 1;
+            if !note.can_be_judged {
+                continue;
+            }
+            has_step |= note.note_type != NoteType::Mine;
+            match note.note_type {
+                NoteType::Tap => row_mask |= 1u16 << note.column.min(15),
+                NoteType::Hold | NoteType::Roll => {
+                    if note.note_type == NoteType::Hold {
+                        totals.holds = totals.holds.saturating_add(1);
+                    } else {
+                        totals.rolls = totals.rolls.saturating_add(1);
+                    }
+                    row_mask |= 1u16 << note.column.min(15);
+                    if let Some(hold) = note.hold.as_ref()
+                        && let Some(end) = active_hold_ends.get_mut(note.column)
+                    {
+                        debug_assert!(*end == usize::MAX || *end <= row, "overlapping holds");
+                        *end = hold.end_row_index;
+                    }
+                }
+                NoteType::Mine => totals.mines = totals.mines.saturating_add(1),
+                NoteType::Lift | NoteType::Fake => {}
+            }
         }
-        while hold_start_ix < hold_starts.len() && hold_starts[hold_start_ix] < row {
-            hold_start_ix += 1;
+        if has_step {
+            totals.steps = totals.steps.wrapping_add(1);
         }
-        while hold_end_ix < hold_ends.len() && hold_ends[hold_end_ix] < row {
-            hold_end_ix += 1;
-        }
-        let notes_on_row = row_mask.count_ones();
-        let carried_holds = hold_start_ix.saturating_sub(hold_end_ix) as u32;
-        if notes_on_row + carried_holds >= 3 {
+        if row_mask != 0 && row_mask.count_ones() + carried_holds >= 3 {
             totals.hands = totals.hands.saturating_add(1);
         }
     }
@@ -335,6 +326,46 @@ mod tests {
         let totals = recompute_player_totals(&notes, (0, notes.len()));
 
         assert_eq!(totals.hands, 1);
+    }
+
+    #[test]
+    fn totals_carry_hold_through_its_end_row() {
+        let notes = vec![
+            test_hold(0, 0, 48, NoteType::Hold),
+            test_note(1, 48, NoteType::Tap),
+            test_note(2, 48, NoteType::Tap),
+        ];
+
+        let totals = recompute_player_totals(&notes, (0, notes.len()));
+
+        assert_eq!(totals.hands, 1);
+    }
+
+    #[test]
+    fn totals_do_not_count_carried_holds_without_a_row_note() {
+        let notes = vec![
+            test_hold(0, 0, 96, NoteType::Hold),
+            test_hold(1, 0, 96, NoteType::Hold),
+            test_hold(2, 0, 96, NoteType::Hold),
+            test_note(3, 48, NoteType::Mine),
+        ];
+
+        let totals = recompute_player_totals(&notes, (0, notes.len()));
+
+        assert_eq!(totals.hands, 1);
+    }
+
+    #[test]
+    fn totals_count_judgable_lift_and_fake_rows_as_steps() {
+        let notes = vec![
+            test_note(0, 48, NoteType::Lift),
+            test_note(1, 96, NoteType::Fake),
+        ];
+
+        let totals = recompute_player_totals(&notes, (0, notes.len()));
+
+        assert_eq!(totals.steps, 2);
+        assert_eq!(totals.hands, 0);
     }
 
     #[test]
