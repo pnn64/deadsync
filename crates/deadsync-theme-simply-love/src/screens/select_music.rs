@@ -119,11 +119,16 @@ const SHOW_OPTIONS_MESSAGE_SECONDS: f32 = 1.5;
 // Simply Love BGAnimations/ScreenSelectMusic background.lua white flash overlay.
 const SL_BG_FLASH_SLEEP_SECONDS: f32 = 0.6;
 const SL_BG_FLASH_FADE_SECONDS: f32 = 0.5;
+const SL_BG_FLASH_TOTAL_SECONDS: f32 = SL_BG_FLASH_SLEEP_SECONDS + SL_BG_FLASH_FADE_SECONDS;
 
 // Simply Love BGAnimations/ScreenSelectMusic overlay/MusicWheelAnimation.lua
 const SL_WHEEL_CASCADE_NUM_VISIBLE_ITEMS: usize = 15;
+const SL_WHEEL_CASCADE_ITEM_COUNT: usize = SL_WHEEL_CASCADE_NUM_VISIBLE_ITEMS - 2;
 const SL_WHEEL_CASCADE_DELAY_STEP_SECONDS: f32 = 0.05;
 const SL_WHEEL_CASCADE_REVEAL_SECONDS: f32 = 0.1;
+const SL_WHEEL_CASCADE_TOTAL_SECONDS: f32 = SL_WHEEL_CASCADE_ITEM_COUNT as f32
+    * SL_WHEEL_CASCADE_DELAY_STEP_SECONDS
+    + SL_WHEEL_CASCADE_REVEAL_SECONDS;
 const SL_WHEEL_CASCADE_FINAL_ALPHA: f32 = 0.25;
 const SL_WHEEL_CASCADE_ROW_Y_UPPER: f32 = 9.0;
 const SL_WHEEL_CASCADE_ROW_Y_LOWER: f32 = 25.0;
@@ -11191,8 +11196,11 @@ fn step_artist_expanded_text(chart: &ChartData) -> (Arc<str>, usize) {
     (cached_str_ref(&text), count)
 }
 
-fn sl_select_music_bg_flash() -> Actor {
-    act!(quad:
+fn push_sl_select_music_bg_flash(actors: &mut Vec<Actor>, selection_animation_timer: f32) {
+    if selection_animation_timer > SL_BG_FLASH_TOTAL_SECONDS {
+        return;
+    }
+    actors.push(act!(quad:
         align(0.0, 0.0):
         xy(0.0, 0.0):
         zoomto(screen_width(), screen_height()):
@@ -11201,13 +11209,19 @@ fn sl_select_music_bg_flash() -> Actor {
         sleep(SL_BG_FLASH_SLEEP_SECONDS):
         linear(SL_BG_FLASH_FADE_SECONDS): alpha(0.0):
         linear(0.0): visible(false)
-    )
+    ));
 }
 
-fn sl_select_music_wheel_cascade_mask() -> Vec<Actor> {
+fn push_sl_select_music_wheel_cascade_mask(
+    actors: &mut Vec<Actor>,
+    selection_animation_timer: f32,
+) {
+    if selection_animation_timer > SL_WHEEL_CASCADE_TOTAL_SECONDS {
+        return;
+    }
     let n = SL_WHEEL_CASCADE_NUM_VISIBLE_ITEMS;
-    let count = n.saturating_sub(2);
-    let mut actors = Vec::with_capacity(count * 2);
+    let count = SL_WHEEL_CASCADE_ITEM_COUNT;
+    actors.reserve(count * 2);
 
     let slot_spacing = screen_height() / n as f32;
     let item_half_h = slot_spacing * 0.5;
@@ -11246,8 +11260,13 @@ fn sl_select_music_wheel_cascade_mask() -> Vec<Actor> {
             linear(0.0): visible(false)
         ));
     }
+}
 
-    actors
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn bench_select_music_intro_frame(selection_animation_timer: f32, actors: &mut Vec<Actor>) {
+    push_sl_select_music_bg_flash(actors, selection_animation_timer);
+    push_sl_select_music_wheel_cascade_mask(actors, selection_animation_timer);
 }
 
 fn push_folder_stats_overlay(
@@ -11559,7 +11578,7 @@ pub fn push_actors(
             visual_policy,
         },
     );
-    actors.push(sl_select_music_bg_flash());
+    push_sl_select_music_bg_flash(&mut actors, state.selection_animation_timer);
 
     let select_music_label = tr("ScreenTitles", "SelectMusic");
     screen_bars::push(
@@ -12644,7 +12663,7 @@ pub fn push_actors(
             runtime: &state.music_wheel,
         },
     );
-    actors.extend(sl_select_music_wheel_cascade_mask());
+    push_sl_select_music_wheel_cascade_mask(&mut actors, state.selection_animation_timer);
 
     // GrooveStats scorebox placement.
     // Auto keeps the current layout, including pane placement for both-GS versus.
@@ -13466,6 +13485,52 @@ mod tests {
             }
             _ => None,
         }
+    }
+
+    #[test]
+    fn select_music_intro_stops_after_tweens_finish() {
+        deadlib_present::runtime::clear_all();
+        let mut actors = Vec::new();
+
+        super::push_sl_select_music_bg_flash(&mut actors, 0.0);
+        super::push_sl_select_music_wheel_cascade_mask(&mut actors, 0.0);
+        assert_eq!(actors.len(), 27);
+
+        actors.clear();
+        super::push_sl_select_music_bg_flash(&mut actors, super::SL_WHEEL_CASCADE_TOTAL_SECONDS);
+        super::push_sl_select_music_wheel_cascade_mask(
+            &mut actors,
+            super::SL_WHEEL_CASCADE_TOTAL_SECONDS,
+        );
+        assert_eq!(actors.len(), 27);
+
+        actors.clear();
+        super::push_sl_select_music_bg_flash(
+            &mut actors,
+            super::SL_WHEEL_CASCADE_TOTAL_SECONDS + 0.001,
+        );
+        super::push_sl_select_music_wheel_cascade_mask(
+            &mut actors,
+            super::SL_WHEEL_CASCADE_TOTAL_SECONDS + 0.001,
+        );
+        assert_eq!(actors.len(), 1);
+
+        actors.clear();
+        super::push_sl_select_music_bg_flash(&mut actors, super::SL_BG_FLASH_TOTAL_SECONDS);
+        super::push_sl_select_music_wheel_cascade_mask(
+            &mut actors,
+            super::SL_BG_FLASH_TOTAL_SECONDS,
+        );
+        assert_eq!(actors.len(), 1);
+
+        actors.clear();
+        super::push_sl_select_music_bg_flash(&mut actors, super::SL_BG_FLASH_TOTAL_SECONDS + 0.001);
+        super::push_sl_select_music_wheel_cascade_mask(
+            &mut actors,
+            super::SL_BG_FLASH_TOTAL_SECONDS + 0.001,
+        );
+        assert!(actors.is_empty());
+        deadlib_present::runtime::clear_all();
     }
 
     #[test]
