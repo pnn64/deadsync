@@ -14,11 +14,11 @@ required-features = ["bench-support"]
 
 [dependencies]
 bincode = "2.0.1"
-bitflags = "2.13.0"
+bitflags = "2.13.1"
 chrono = "0.4.45"
 deadlib-platform = { path = "../deadlib-platform" }
 log = "0.4.33"
-uuid = { version = "1.23.3", features = ["v4", "v5"] }
+uuid = { version = "1.24.0", features = ["v4", "v5"] }
 deadsync-rules = { path = "../deadsync-rules" }
 deadsync-score = { path = "../deadsync-score" }
 deadsync-chart = { path = "../deadsync-chart" }

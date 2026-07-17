@@ -34,13 +34,13 @@ deadsync-simfile = { path = "../deadsync-simfile" }
 deadsync-song-lua = { path = "../deadsync-song-lua" }
 deadsync-theme = { path = "../deadsync-theme" }
 deadsync-version = { path = "../deadsync-version" }
-bitflags = "2.13.0"
+bitflags = "2.13.1"
 chrono = "0.4.45"
 glam = "0.33.2"
 image = "0.25.10"
 log = "0.4.33"
 qrcodegen = "1.8.0"
-rand = "0.10.1"
+rand = "0.10.2"
 rustc-hash = "2.1.3"
 smallvec = "1.15.2"
 twox-hash = "2.1.2"

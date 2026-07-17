@@ -19,10 +19,10 @@ deadsync-simfile = { path = "../deadsync-simfile" }
 deadsync-version = { path = "../deadsync-version" }
 chrono = "0.4.45"
 log = "0.4.33"
-rand = "0.10.1"
+rand = "0.10.2"
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.150"
-tungstenite = "0.29.0"
+tungstenite = "0.30.0"
 zip = { version = "8.6.0", default-features = false, features = ["deflate-flate2-zlib-rs"] }
 
 [lints.clippy]

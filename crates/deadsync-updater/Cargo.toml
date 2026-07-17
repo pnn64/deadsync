@@ -9,7 +9,7 @@ deadlib-platform = { path = "../deadlib-platform" }
 deadsync-version = { path = "../deadsync-version" }
 flate2 = "1.1.9"
 log = "0.4.33"
-rand = "0.10.1"
+rand = "0.10.2"
 semver = "1.0.28"
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.150"
