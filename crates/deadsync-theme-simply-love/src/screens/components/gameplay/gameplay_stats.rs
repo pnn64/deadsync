@@ -14,7 +14,9 @@ use crate::step_stats::{
     StepStatsPaneParams,
 };
 use deadlib_present::actors::{Actor, SizeSpec, TextAlign};
-use deadlib_present::cache::{SharedStrCache, TextCache, cached_shared_str, cached_text};
+use deadlib_present::cache::{
+    SharedStrCache, TextCache, cached_shared_str, cached_text, text_cache_with_capacity,
+};
 use deadlib_present::color;
 use deadlib_present::compose::TextLayoutCache;
 use deadlib_present::density;
@@ -46,15 +48,15 @@ const HEART_RATE_ZONE_RGBA: [[f32; 4]; 5] = [
 ];
 
 thread_local! {
-    static PADDED_NUM_CACHE: RefCell<TextCache<(u32, u8)>> = RefCell::new(HashMap::with_capacity(2048));
-    static PADDED_DIM_CACHE: RefCell<TextCache<(u32, u8)>> = RefCell::new(HashMap::with_capacity(2048));
-    static PADDED_BRIGHT_CACHE: RefCell<TextCache<(u32, u8)>> = RefCell::new(HashMap::with_capacity(2048));
-    static BLUE_WINDOW_LABEL_CACHE: RefCell<TextCache<i32>> = RefCell::new(HashMap::with_capacity(64));
-    static PEAK_NPS_CACHE: RefCell<TextCache<u32>> = RefCell::new(HashMap::with_capacity(512));
-    static GAME_TIME_CACHE: RefCell<TextCache<(u32, u8)>> = RefCell::new(HashMap::with_capacity(1024));
+    static PADDED_NUM_CACHE: RefCell<TextCache<(u32, u8)>> = RefCell::new(text_cache_with_capacity(2048));
+    static PADDED_DIM_CACHE: RefCell<TextCache<(u32, u8)>> = RefCell::new(text_cache_with_capacity(2048));
+    static PADDED_BRIGHT_CACHE: RefCell<TextCache<(u32, u8)>> = RefCell::new(text_cache_with_capacity(2048));
+    static BLUE_WINDOW_LABEL_CACHE: RefCell<TextCache<i32>> = RefCell::new(text_cache_with_capacity(64));
+    static PEAK_NPS_CACHE: RefCell<TextCache<u32>> = RefCell::new(text_cache_with_capacity(512));
+    static GAME_TIME_CACHE: RefCell<TextCache<(u32, u8)>> = RefCell::new(text_cache_with_capacity(1024));
     static GAME_TIME_WIDTH_CACHE: RefCell<HashMap<(u32, u8), f32>> = RefCell::new(HashMap::with_capacity(1024));
-    static LIVE_TIMING_PAIR_CACHE: RefCell<TextCache<(i32, i32)>> = RefCell::new(HashMap::with_capacity(4096));
-    static HEART_RATE_TEXT_CACHE: RefCell<TextCache<u16>> = RefCell::new(HashMap::with_capacity(256));
+    static LIVE_TIMING_PAIR_CACHE: RefCell<TextCache<(i32, i32)>> = RefCell::new(text_cache_with_capacity(4096));
+    static HEART_RATE_TEXT_CACHE: RefCell<TextCache<u16>> = RefCell::new(text_cache_with_capacity(256));
     static STR_REF_CACHE: RefCell<SharedStrCache> = RefCell::new(HashMap::with_capacity(512));
 }
 

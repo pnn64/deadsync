@@ -17,7 +17,7 @@ use deadlib_present::actors::{
     TextAttribute, TextContent,
 };
 use deadlib_present::anim::EffectState;
-use deadlib_present::cache::{TextCache, cached_text};
+use deadlib_present::cache::{TextCache, cached_text, text_cache_with_capacity};
 use deadlib_present::color;
 use deadlib_present::compose::TextLayoutCache;
 use deadlib_present::density::{self, DensityHistCache};
@@ -2614,13 +2614,13 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
 }
 
 thread_local! {
-    static RATE_TEXT_CACHE: RefCell<TextCache<u32>> = RefCell::new(HashMap::with_capacity(128));
-    static BPM_TEXT_CACHE: RefCell<TextCache<(u64, bool)>> = RefCell::new(HashMap::with_capacity(512));
+    static RATE_TEXT_CACHE: RefCell<TextCache<u32>> = RefCell::new(text_cache_with_capacity(128));
+    static BPM_TEXT_CACHE: RefCell<TextCache<(u64, bool)>> = RefCell::new(text_cache_with_capacity(512));
     static LIFE_PERCENT_TEXT_CACHE: RefCell<TextCache<u32>> =
-        RefCell::new(HashMap::with_capacity(1024));
-    static METER_TEXT_CACHE: RefCell<TextCache<u32>> = RefCell::new(HashMap::with_capacity(64));
+        RefCell::new(text_cache_with_capacity(1024));
+    static METER_TEXT_CACHE: RefCell<TextCache<u32>> = RefCell::new(text_cache_with_capacity(64));
     static AUTOSYNC_TEXT_CACHE: RefCell<TextCache<AutosyncTextKey>> =
-        RefCell::new(HashMap::with_capacity(256));
+        RefCell::new(text_cache_with_capacity(256));
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]

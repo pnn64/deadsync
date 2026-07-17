@@ -1,20 +1,19 @@
 use crate::act;
 use crate::views::{TimingHealth, VisibleStutterSample};
 use deadlib_present::actors::Actor;
-use deadlib_present::cache::{TextCache, cached_text};
+use deadlib_present::cache::{TextCache, cached_text, text_cache_with_capacity};
 use deadlib_present::space::{screen_height, screen_width};
 use deadlib_render::BackendType;
 use std::cell::RefCell;
-use std::collections::HashMap;
 use std::sync::Arc;
 
 const TEXT_CACHE_LIMIT: usize = 4096;
 const DEBUG_OVERLAY_Z: i16 = 32020;
 
 thread_local! {
-    static STATS_TEXT_CACHE: RefCell<TextCache<(u32, u32, u8)>> = RefCell::new(HashMap::with_capacity(256));
-    static STUTTER_TIME_CACHE: RefCell<TextCache<u32>> = RefCell::new(HashMap::with_capacity(1024));
-    static STUTTER_LINE_CACHE: RefCell<TextCache<(u32, u32, u32)>> = RefCell::new(HashMap::with_capacity(2048));
+    static STATS_TEXT_CACHE: RefCell<TextCache<(u32, u32, u8)>> = RefCell::new(text_cache_with_capacity(256));
+    static STUTTER_TIME_CACHE: RefCell<TextCache<u32>> = RefCell::new(text_cache_with_capacity(1024));
+    static STUTTER_LINE_CACHE: RefCell<TextCache<(u32, u32, u32)>> = RefCell::new(text_cache_with_capacity(2048));
 }
 
 #[inline(always)]

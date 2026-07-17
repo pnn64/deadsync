@@ -7,11 +7,10 @@ use crate::scorebox::{
 };
 use crate::views::ScoreboxSideView;
 use deadlib_present::actors::Actor;
-use deadlib_present::cache::{TextCache, cached_text};
+use deadlib_present::cache::{TextCache, cached_text, text_cache_with_capacity};
 use deadlib_present::color;
 use deadsync_score as score_data;
 use std::cell::RefCell;
-use std::collections::HashMap;
 use std::sync::{Arc, OnceLock};
 
 pub(crate) const SCOREBOX_NUM_ENTRIES: usize = 5;
@@ -34,9 +33,9 @@ const TEXT_CACHE_LIMIT: usize = 8192;
 type PaneKind = score_data::ScoreboxPaneKind;
 
 thread_local! {
-    static SCORE_PERCENT_TEXT_CACHE: RefCell<TextCache<u64>> = RefCell::new(HashMap::with_capacity(2048));
-    static SCORE_VALUE_TEXT_CACHE: RefCell<TextCache<u64>> = RefCell::new(HashMap::with_capacity(2048));
-    static RANK_TEXT_CACHE: RefCell<TextCache<u32>> = RefCell::new(HashMap::with_capacity(512));
+    static SCORE_PERCENT_TEXT_CACHE: RefCell<TextCache<u64>> = RefCell::new(text_cache_with_capacity(2048));
+    static SCORE_VALUE_TEXT_CACHE: RefCell<TextCache<u64>> = RefCell::new(text_cache_with_capacity(2048));
+    static RANK_TEXT_CACHE: RefCell<TextCache<u32>> = RefCell::new(text_cache_with_capacity(512));
 }
 
 #[inline(always)]

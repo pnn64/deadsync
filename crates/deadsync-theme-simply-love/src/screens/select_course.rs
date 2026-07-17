@@ -19,7 +19,7 @@ use crate::views::{
     SelectFlowPlayerView,
 };
 use deadlib_present::actors::{Actor, SizeSpec};
-use deadlib_present::cache::{TextCache, cached_text};
+use deadlib_present::cache::{TextCache, cached_text, text_cache_with_capacity};
 use deadlib_present::color;
 use deadlib_present::space::{
     is_wide, screen_center_x, screen_center_y, screen_height, screen_width,
@@ -96,8 +96,8 @@ rgba_const!(COURSE_WHEEL_RANDOM_TEXT_COLOR, "#FFFF00");
 const TEXT_CACHE_LIMIT: usize = 4096;
 
 thread_local! {
-    static SCORE_PERCENT_CACHE: RefCell<TextCache<u64>> = RefCell::new(HashMap::with_capacity(1024));
-    static UINT_TEXT_CACHE: RefCell<TextCache<u32>> = RefCell::new(HashMap::with_capacity(1024));
+    static SCORE_PERCENT_CACHE: RefCell<TextCache<u64>> = RefCell::new(text_cache_with_capacity(1024));
+    static UINT_TEXT_CACHE: RefCell<TextCache<u32>> = RefCell::new(text_cache_with_capacity(1024));
 }
 
 #[inline(always)]

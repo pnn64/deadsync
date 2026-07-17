@@ -31,7 +31,9 @@ use crate::views::{
     SimplyLoveLobbyRuntimeView,
 };
 use deadlib_present::actors::{Actor, SizeSpec, SpriteSource};
-use deadlib_present::cache::{SharedStrCache, TextCache, cached_shared_str, cached_text};
+use deadlib_present::cache::{
+    SharedStrCache, TextCache, cached_shared_str, cached_text, text_cache_with_capacity,
+};
 use deadlib_present::color;
 use deadlib_present::font;
 use deadlib_present::space::{
@@ -210,18 +212,18 @@ const NUM_STANDARD_DIFFICULTIES: usize = STANDARD_DIFFICULTY_COUNT;
 const TEXT_CACHE_LIMIT: usize = 8192;
 
 thread_local! {
-    static SESSION_TIME_CACHE: RefCell<TextCache<u32>> = RefCell::new(HashMap::with_capacity(2048));
-    static CHART_LENGTH_CACHE: RefCell<TextCache<i32>> = RefCell::new(HashMap::with_capacity(2048));
-    static BPM_TEXT_CACHE: RefCell<TextCache<(u64, u64, u32)>> = RefCell::new(HashMap::with_capacity(2048));
-    static UINT_TEXT_CACHE: RefCell<TextCache<u32>> = RefCell::new(HashMap::with_capacity(4096));
-    static MUSIC_RATE_FMT_CACHE: RefCell<TextCache<u32>> = RefCell::new(HashMap::with_capacity(256));
-    static MUSIC_RATE_BANNER_CACHE: RefCell<TextCache<u32>> = RefCell::new(HashMap::with_capacity(128));
-    static CHART_INFO_CACHE: RefCell<TextCache<(u8, u32, u64, u64)>> = RefCell::new(HashMap::with_capacity(512));
-    static STAMINA_MONO_CACHE: RefCell<TextCache<u64>> = RefCell::new(HashMap::with_capacity(512));
-    static STAMINA_CANDLES_CACHE: RefCell<TextCache<u64>> = RefCell::new(HashMap::with_capacity(512));
-    static STREAM_TOTAL_CACHE: RefCell<TextCache<(u32, u32)>> = RefCell::new(HashMap::with_capacity(512));
-    static TECH_STREAM_CACHE: RefCell<TextCache<(u32, usize, u32)>> = RefCell::new(HashMap::with_capacity(512));
-    static TOTAL_LABEL_CACHE: RefCell<TextCache<u32>> = RefCell::new(HashMap::with_capacity(512));
+    static SESSION_TIME_CACHE: RefCell<TextCache<u32>> = RefCell::new(text_cache_with_capacity(2048));
+    static CHART_LENGTH_CACHE: RefCell<TextCache<i32>> = RefCell::new(text_cache_with_capacity(2048));
+    static BPM_TEXT_CACHE: RefCell<TextCache<(u64, u64, u32)>> = RefCell::new(text_cache_with_capacity(2048));
+    static UINT_TEXT_CACHE: RefCell<TextCache<u32>> = RefCell::new(text_cache_with_capacity(4096));
+    static MUSIC_RATE_FMT_CACHE: RefCell<TextCache<u32>> = RefCell::new(text_cache_with_capacity(256));
+    static MUSIC_RATE_BANNER_CACHE: RefCell<TextCache<u32>> = RefCell::new(text_cache_with_capacity(128));
+    static CHART_INFO_CACHE: RefCell<TextCache<(u8, u32, u64, u64)>> = RefCell::new(text_cache_with_capacity(512));
+    static STAMINA_MONO_CACHE: RefCell<TextCache<u64>> = RefCell::new(text_cache_with_capacity(512));
+    static STAMINA_CANDLES_CACHE: RefCell<TextCache<u64>> = RefCell::new(text_cache_with_capacity(512));
+    static STREAM_TOTAL_CACHE: RefCell<TextCache<(u32, u32)>> = RefCell::new(text_cache_with_capacity(512));
+    static TECH_STREAM_CACHE: RefCell<TextCache<(u32, usize, u32)>> = RefCell::new(text_cache_with_capacity(512));
+    static TOTAL_LABEL_CACHE: RefCell<TextCache<u32>> = RefCell::new(text_cache_with_capacity(512));
     static STR_REF_CACHE: RefCell<SharedStrCache> = RefCell::new(HashMap::with_capacity(4096));
 }
 
