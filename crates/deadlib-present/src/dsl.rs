@@ -5,6 +5,45 @@ use deadlib_render::BlendMode;
 use glam::Mat4 as Matrix4;
 use smallvec::SmallVec;
 use std::sync::atomic::AtomicU64;
+
+#[doc(hidden)]
+pub type TweenSteps = SmallVec<[anim::Step; 4]>;
+
+#[doc(hidden)]
+pub struct TweenProgramTarget;
+
+impl TweenProgramTarget {
+    pub fn xy(&mut self, _: f32, _: f32) {}
+    pub fn x(&mut self, _: f32) {}
+    pub fn y(&mut self, _: f32) {}
+    pub fn addx(&mut self, _: f32) {}
+    pub fn addy(&mut self, _: f32) {}
+    pub fn diffuse(&mut self, _: [f32; 4]) {}
+    pub fn alpha(&mut self, _: f32) {}
+    pub fn glow(&mut self, _: [f32; 4]) {}
+    pub fn zoom(&mut self, _: f32) {}
+    pub fn zoomx(&mut self, _: f32) {}
+    pub fn zoomy(&mut self, _: f32) {}
+    pub fn addzoomx(&mut self, _: f32) {}
+    pub fn addzoomy(&mut self, _: f32) {}
+    pub fn zoomto(&mut self, _: f32, _: f32) {}
+    pub fn size(&mut self, _: f32, _: f32) {}
+    pub fn cropleft(&mut self, _: f32) {}
+    pub fn cropright(&mut self, _: f32) {}
+    pub fn croptop(&mut self, _: f32) {}
+    pub fn cropbottom(&mut self, _: f32) {}
+    pub fn fadeleft(&mut self, _: f32) {}
+    pub fn faderight(&mut self, _: f32) {}
+    pub fn fadetop(&mut self, _: f32) {}
+    pub fn fadebottom(&mut self, _: f32) {}
+    pub fn visible(&mut self, _: bool) {}
+    pub fn rotationx(&mut self, _: f32) {}
+    pub fn rotationy(&mut self, _: f32) {}
+    pub fn rotationz(&mut self, _: f32) {}
+    pub fn addrotationx(&mut self, _: f32) {}
+    pub fn addrotationy(&mut self, _: f32) {}
+    pub fn addrotationz(&mut self, _: f32) {}
+}
 // PARITY COMMENT STANDARD:
 // PARITY[<Source>]: <mirrored behavior>. Ref: <file/symbol> when known.
 #[doc(hidden)]
@@ -101,6 +140,103 @@ macro_rules! __dsl_apply {
         $crate::__dsl_apply_one!{ $cmd ( $($args)* ) $mods $tw $cur $site }
         $crate::__dsl_apply!( () $mods $tw $cur $site );
     }};
+}
+
+#[macro_export]
+#[doc(hidden)]
+macro_rules! __dsl_apply_split {
+    ( () $mods:ident $tw:ident $cur:ident $in_tween:ident $has_tween:ident $tween_pass:tt ) => { () };
+    ( ($cmd:ident ( $($args:tt)* ) : $($rest:tt)*) $mods:ident $tw:ident $cur:ident $in_tween:ident $has_tween:ident $tween_pass:tt ) => {{
+        $crate::__dsl_apply_split_one!($cmd ($($args)*) $mods $tw $cur $in_tween $has_tween $tween_pass);
+        $crate::__dsl_apply_split!(($($rest)*) $mods $tw $cur $in_tween $has_tween $tween_pass);
+    }};
+    ( ($cmd:ident ( $($args:tt)* )) $mods:ident $tw:ident $cur:ident $in_tween:ident $has_tween:ident $tween_pass:tt ) => {{
+        $crate::__dsl_apply_split_one!($cmd ($($args)*) $mods $tw $cur $in_tween $has_tween $tween_pass);
+        $crate::__dsl_apply_split!(() $mods $tw $cur $in_tween $has_tween $tween_pass);
+    }};
+}
+
+#[macro_export]
+#[doc(hidden)]
+macro_rules! __dsl_apply_segment_control {
+    ($cmd:ident ($($args:tt)*) $mods:ident $tw:ident $cur:ident $in_tween:ident $has_tween:ident false $next:expr) => {{
+        $has_tween = true;
+        $in_tween = $next;
+    }};
+    ($cmd:ident ($($args:tt)*) $mods:ident $tw:ident $cur:ident $in_tween:ident $has_tween:ident true $next:expr) => {{
+        $has_tween = true;
+        $crate::__dsl_apply_one!($cmd ($($args)*) $mods $tw $cur _dummy_site);
+        $in_tween = $next;
+    }};
+}
+
+#[macro_export]
+#[doc(hidden)]
+macro_rules! __dsl_apply_tweenable {
+    ($cmd:ident ($($args:tt)*) $mods:ident $tw:ident $cur:ident $in_tween:ident $has_tween:ident false) => {{
+        if !$in_tween {
+            $crate::__dsl_apply_one!($cmd ($($args)*) $mods $tw $cur _dummy_site);
+        }
+    }};
+    ($cmd:ident ($($args:tt)*) $mods:ident $tw:ident $cur:ident $in_tween:ident $has_tween:ident true) => {{
+        if $in_tween {
+            $crate::__dsl_apply_one!($cmd ($($args)*) $mods $tw $cur _dummy_site);
+        }
+    }};
+}
+
+#[macro_export]
+#[doc(hidden)]
+macro_rules! __dsl_apply_split_one {
+    (linear ($($args:tt)*) $mods:ident $tw:ident $cur:ident $in_tween:ident $has_tween:ident $pass:tt) => { $crate::__dsl_apply_segment_control!(linear ($($args)*) $mods $tw $cur $in_tween $has_tween $pass true) };
+    (accelerate ($($args:tt)*) $mods:ident $tw:ident $cur:ident $in_tween:ident $has_tween:ident $pass:tt) => { $crate::__dsl_apply_segment_control!(accelerate ($($args)*) $mods $tw $cur $in_tween $has_tween $pass true) };
+    (decelerate ($($args:tt)*) $mods:ident $tw:ident $cur:ident $in_tween:ident $has_tween:ident $pass:tt) => { $crate::__dsl_apply_segment_control!(decelerate ($($args)*) $mods $tw $cur $in_tween $has_tween $pass true) };
+    (ease ($($args:tt)*) $mods:ident $tw:ident $cur:ident $in_tween:ident $has_tween:ident $pass:tt) => { $crate::__dsl_apply_segment_control!(ease ($($args)*) $mods $tw $cur $in_tween $has_tween $pass true) };
+    (smooth ($($args:tt)*) $mods:ident $tw:ident $cur:ident $in_tween:ident $has_tween:ident $pass:tt) => { $crate::__dsl_apply_segment_control!(smooth ($($args)*) $mods $tw $cur $in_tween $has_tween $pass true) };
+    (sleep ($($args:tt)*) $mods:ident $tw:ident $cur:ident $in_tween:ident $has_tween:ident $pass:tt) => { $crate::__dsl_apply_segment_control!(sleep ($($args)*) $mods $tw $cur $in_tween $has_tween $pass false) };
+
+    (xy ($($args:tt)*) $mods:ident $tw:ident $cur:ident $in_tween:ident $has_tween:ident $pass:tt) => { $crate::__dsl_apply_tweenable!(xy ($($args)*) $mods $tw $cur $in_tween $has_tween $pass) };
+    (x ($($args:tt)*) $mods:ident $tw:ident $cur:ident $in_tween:ident $has_tween:ident $pass:tt) => { $crate::__dsl_apply_tweenable!(x ($($args)*) $mods $tw $cur $in_tween $has_tween $pass) };
+    (y ($($args:tt)*) $mods:ident $tw:ident $cur:ident $in_tween:ident $has_tween:ident $pass:tt) => { $crate::__dsl_apply_tweenable!(y ($($args)*) $mods $tw $cur $in_tween $has_tween $pass) };
+    (addx ($($args:tt)*) $mods:ident $tw:ident $cur:ident $in_tween:ident $has_tween:ident $pass:tt) => { $crate::__dsl_apply_tweenable!(addx ($($args)*) $mods $tw $cur $in_tween $has_tween $pass) };
+    (addy ($($args:tt)*) $mods:ident $tw:ident $cur:ident $in_tween:ident $has_tween:ident $pass:tt) => { $crate::__dsl_apply_tweenable!(addy ($($args)*) $mods $tw $cur $in_tween $has_tween $pass) };
+    (Center ($($args:tt)*) $mods:ident $tw:ident $cur:ident $in_tween:ident $has_tween:ident $pass:tt) => { $crate::__dsl_apply_tweenable!(Center ($($args)*) $mods $tw $cur $in_tween $has_tween $pass) };
+    (CenterX ($($args:tt)*) $mods:ident $tw:ident $cur:ident $in_tween:ident $has_tween:ident $pass:tt) => { $crate::__dsl_apply_tweenable!(CenterX ($($args)*) $mods $tw $cur $in_tween $has_tween $pass) };
+    (CenterY ($($args:tt)*) $mods:ident $tw:ident $cur:ident $in_tween:ident $has_tween:ident $pass:tt) => { $crate::__dsl_apply_tweenable!(CenterY ($($args)*) $mods $tw $cur $in_tween $has_tween $pass) };
+    (center ($($args:tt)*) $mods:ident $tw:ident $cur:ident $in_tween:ident $has_tween:ident $pass:tt) => { $crate::__dsl_apply_tweenable!(center ($($args)*) $mods $tw $cur $in_tween $has_tween $pass) };
+    (centerx ($($args:tt)*) $mods:ident $tw:ident $cur:ident $in_tween:ident $has_tween:ident $pass:tt) => { $crate::__dsl_apply_tweenable!(centerx ($($args)*) $mods $tw $cur $in_tween $has_tween $pass) };
+    (centery ($($args:tt)*) $mods:ident $tw:ident $cur:ident $in_tween:ident $has_tween:ident $pass:tt) => { $crate::__dsl_apply_tweenable!(centery ($($args)*) $mods $tw $cur $in_tween $has_tween $pass) };
+    (diffuse ($($args:tt)*) $mods:ident $tw:ident $cur:ident $in_tween:ident $has_tween:ident $pass:tt) => { $crate::__dsl_apply_tweenable!(diffuse ($($args)*) $mods $tw $cur $in_tween $has_tween $pass) };
+    (alpha ($($args:tt)*) $mods:ident $tw:ident $cur:ident $in_tween:ident $has_tween:ident $pass:tt) => { $crate::__dsl_apply_tweenable!(alpha ($($args)*) $mods $tw $cur $in_tween $has_tween $pass) };
+    (diffusealpha ($($args:tt)*) $mods:ident $tw:ident $cur:ident $in_tween:ident $has_tween:ident $pass:tt) => { $crate::__dsl_apply_tweenable!(diffusealpha ($($args)*) $mods $tw $cur $in_tween $has_tween $pass) };
+    (glow ($($args:tt)*) $mods:ident $tw:ident $cur:ident $in_tween:ident $has_tween:ident $pass:tt) => { $crate::__dsl_apply_tweenable!(glow ($($args)*) $mods $tw $cur $in_tween $has_tween $pass) };
+    (zoom ($($args:tt)*) $mods:ident $tw:ident $cur:ident $in_tween:ident $has_tween:ident $pass:tt) => { $crate::__dsl_apply_tweenable!(zoom ($($args)*) $mods $tw $cur $in_tween $has_tween $pass) };
+    (zoomx ($($args:tt)*) $mods:ident $tw:ident $cur:ident $in_tween:ident $has_tween:ident $pass:tt) => { $crate::__dsl_apply_tweenable!(zoomx ($($args)*) $mods $tw $cur $in_tween $has_tween $pass) };
+    (zoomy ($($args:tt)*) $mods:ident $tw:ident $cur:ident $in_tween:ident $has_tween:ident $pass:tt) => { $crate::__dsl_apply_tweenable!(zoomy ($($args)*) $mods $tw $cur $in_tween $has_tween $pass) };
+    (addzoomx ($($args:tt)*) $mods:ident $tw:ident $cur:ident $in_tween:ident $has_tween:ident $pass:tt) => { $crate::__dsl_apply_tweenable!(addzoomx ($($args)*) $mods $tw $cur $in_tween $has_tween $pass) };
+    (addzoomy ($($args:tt)*) $mods:ident $tw:ident $cur:ident $in_tween:ident $has_tween:ident $pass:tt) => { $crate::__dsl_apply_tweenable!(addzoomy ($($args)*) $mods $tw $cur $in_tween $has_tween $pass) };
+    (zoomto ($($args:tt)*) $mods:ident $tw:ident $cur:ident $in_tween:ident $has_tween:ident $pass:tt) => { $crate::__dsl_apply_tweenable!(zoomto ($($args)*) $mods $tw $cur $in_tween $has_tween $pass) };
+    (setsize ($($args:tt)*) $mods:ident $tw:ident $cur:ident $in_tween:ident $has_tween:ident $pass:tt) => { $crate::__dsl_apply_tweenable!(setsize ($($args)*) $mods $tw $cur $in_tween $has_tween $pass) };
+    (cropleft ($($args:tt)*) $mods:ident $tw:ident $cur:ident $in_tween:ident $has_tween:ident $pass:tt) => { $crate::__dsl_apply_tweenable!(cropleft ($($args)*) $mods $tw $cur $in_tween $has_tween $pass) };
+    (cropright ($($args:tt)*) $mods:ident $tw:ident $cur:ident $in_tween:ident $has_tween:ident $pass:tt) => { $crate::__dsl_apply_tweenable!(cropright ($($args)*) $mods $tw $cur $in_tween $has_tween $pass) };
+    (croptop ($($args:tt)*) $mods:ident $tw:ident $cur:ident $in_tween:ident $has_tween:ident $pass:tt) => { $crate::__dsl_apply_tweenable!(croptop ($($args)*) $mods $tw $cur $in_tween $has_tween $pass) };
+    (cropbottom ($($args:tt)*) $mods:ident $tw:ident $cur:ident $in_tween:ident $has_tween:ident $pass:tt) => { $crate::__dsl_apply_tweenable!(cropbottom ($($args)*) $mods $tw $cur $in_tween $has_tween $pass) };
+    (fadeleft ($($args:tt)*) $mods:ident $tw:ident $cur:ident $in_tween:ident $has_tween:ident $pass:tt) => { $crate::__dsl_apply_tweenable!(fadeleft ($($args)*) $mods $tw $cur $in_tween $has_tween $pass) };
+    (faderight ($($args:tt)*) $mods:ident $tw:ident $cur:ident $in_tween:ident $has_tween:ident $pass:tt) => { $crate::__dsl_apply_tweenable!(faderight ($($args)*) $mods $tw $cur $in_tween $has_tween $pass) };
+    (fadetop ($($args:tt)*) $mods:ident $tw:ident $cur:ident $in_tween:ident $has_tween:ident $pass:tt) => { $crate::__dsl_apply_tweenable!(fadetop ($($args)*) $mods $tw $cur $in_tween $has_tween $pass) };
+    (fadebottom ($($args:tt)*) $mods:ident $tw:ident $cur:ident $in_tween:ident $has_tween:ident $pass:tt) => { $crate::__dsl_apply_tweenable!(fadebottom ($($args)*) $mods $tw $cur $in_tween $has_tween $pass) };
+    (visible ($($args:tt)*) $mods:ident $tw:ident $cur:ident $in_tween:ident $has_tween:ident $pass:tt) => { $crate::__dsl_apply_tweenable!(visible ($($args)*) $mods $tw $cur $in_tween $has_tween $pass) };
+    (rotationx ($($args:tt)*) $mods:ident $tw:ident $cur:ident $in_tween:ident $has_tween:ident $pass:tt) => { $crate::__dsl_apply_tweenable!(rotationx ($($args)*) $mods $tw $cur $in_tween $has_tween $pass) };
+    (rotationy ($($args:tt)*) $mods:ident $tw:ident $cur:ident $in_tween:ident $has_tween:ident $pass:tt) => { $crate::__dsl_apply_tweenable!(rotationy ($($args)*) $mods $tw $cur $in_tween $has_tween $pass) };
+    (rotationz ($($args:tt)*) $mods:ident $tw:ident $cur:ident $in_tween:ident $has_tween:ident $pass:tt) => { $crate::__dsl_apply_tweenable!(rotationz ($($args)*) $mods $tw $cur $in_tween $has_tween $pass) };
+    (addrotationx ($($args:tt)*) $mods:ident $tw:ident $cur:ident $in_tween:ident $has_tween:ident $pass:tt) => { $crate::__dsl_apply_tweenable!(addrotationx ($($args)*) $mods $tw $cur $in_tween $has_tween $pass) };
+    (addrotationy ($($args:tt)*) $mods:ident $tw:ident $cur:ident $in_tween:ident $has_tween:ident $pass:tt) => { $crate::__dsl_apply_tweenable!(addrotationy ($($args)*) $mods $tw $cur $in_tween $has_tween $pass) };
+    (addrotationz ($($args:tt)*) $mods:ident $tw:ident $cur:ident $in_tween:ident $has_tween:ident $pass:tt) => { $crate::__dsl_apply_tweenable!(addrotationz ($($args)*) $mods $tw $cur $in_tween $has_tween $pass) };
+
+    ($cmd:ident ($($args:tt)*) $mods:ident $tw:ident $cur:ident $in_tween:ident $has_tween:ident false) => {
+        $crate::__dsl_apply_one!($cmd ($($args)*) $mods $tw $cur _dummy_site)
+    };
+    ($cmd:ident ($($args:tt)*) $mods:ident $tw:ident $cur:ident $in_tween:ident $has_tween:ident true) => {};
 }
 
 #[macro_export]
@@ -553,18 +689,35 @@ macro_rules! __dsl_apply_one {
 #[doc(hidden)]
 macro_rules! __act_from_builder {
     (($($tail:tt)+) $builder:expr) => {{
-        let mut __tw = ::smallvec::SmallVec::<[_; 4]>::new();
         let mut __mods = $builder;
-        let mut __cur: ::core::option::Option<$crate::anim::SegmentBuilder> = None;
-        $crate::__dsl_apply!(($($tail)+) __mods __tw __cur _dummy_site);
-        if let ::core::option::Option::Some(seg) = __cur.take() {
-            __tw.push(seg.build());
-        }
-        if !__tw.is_empty() {
-            __mods.set_tween(__tw);
-        }
+        let mut __base_tw = ::std::vec::Vec::<$crate::anim::Step>::new();
+        let mut __base_cur: ::core::option::Option<$crate::anim::SegmentBuilder> = None;
+        let mut __in_tween = false;
+        let mut __has_tween = false;
+        $crate::__dsl_apply_split!(
+            ($($tail)+)
+            __mods __base_tw __base_cur __in_tween __has_tween false
+        );
         const __SITE_BASE: u64 = $crate::runtime::site_base(file!(), line!(), column!());
-        __mods.build(__SITE_BASE)
+        if __has_tween {
+            __mods.build_tweened(__SITE_BASE, || {
+                let mut __mods = $crate::dsl::TweenProgramTarget;
+                let mut __tw = $crate::dsl::TweenSteps::new();
+                let mut __cur: ::core::option::Option<$crate::anim::SegmentBuilder> = None;
+                let mut __in_tween = false;
+                let mut _has_tween = false;
+                $crate::__dsl_apply_split!(
+                    ($($tail)+)
+                    __mods __tw __cur __in_tween _has_tween true
+                );
+                if let ::core::option::Option::Some(seg) = __cur.take() {
+                    __tw.push(seg.build());
+                }
+                __tw
+            })
+        } else {
+            __mods.build(__SITE_BASE)
+        }
     }};
 }
 
@@ -573,6 +726,7 @@ mod tests {
     use super::*;
     use crate::actors::SpriteSource;
     use crate::texture::{TextureContext, TextureMeta};
+    use std::cell::Cell;
     use std::mem::size_of;
     use std::sync::atomic::{AtomicU64, Ordering};
 
@@ -582,8 +736,8 @@ mod tests {
     #[test]
     fn source_steps_keep_tween_builders_compact() {
         assert_eq!(size_of::<anim::Step>(), 464);
-        assert_eq!(size_of::<SpriteBuilder>(), 2200);
-        assert_eq!(size_of::<TextBuilder>(), 2152);
+        assert_eq!(size_of::<SpriteBuilder>(), 328);
+        assert_eq!(size_of::<TextBuilder>(), 280);
     }
 
     impl TextureContext for TestTextureContext {
@@ -728,6 +882,51 @@ mod tests {
     }
 
     #[test]
+    fn act_macro_builds_tween_program_only_on_cache_miss() {
+        fn counted(calls: &Cell<u32>, value: f32) -> f32 {
+            calls.set(calls.get() + 1);
+            value
+        }
+
+        fn build(
+            initial_calls: &Cell<u32>,
+            tween_calls: &Cell<u32>,
+            static_calls: &Cell<u32>,
+        ) -> Actor {
+            crate::__act_from_builder!(
+                (x(counted(initial_calls, 4.0)):
+                linear(counted(tween_calls, 1.0)):
+                x(counted(tween_calls, 10.0)):
+                z(counted(static_calls, 7.0)))
+                SpriteBuilder::solid()
+            )
+        }
+
+        runtime::clear_all();
+        let initial_calls = Cell::new(0);
+        let tween_calls = Cell::new(0);
+        let static_calls = Cell::new(0);
+
+        let _ = build(&initial_calls, &tween_calls, &static_calls);
+        let _ = build(&initial_calls, &tween_calls, &static_calls);
+        assert_eq!(initial_calls.get(), 2);
+        assert_eq!(tween_calls.get(), 2);
+        assert_eq!(static_calls.get(), 2);
+
+        runtime::tick(0.5);
+        let actor = build(&initial_calls, &tween_calls, &static_calls);
+        let Actor::Sprite { offset, z, .. } = actor else {
+            panic!("DSL should build a tweened sprite");
+        };
+        assert!((offset[0] - 7.0).abs() < 0.0001);
+        assert_eq!(z, 7);
+        assert_eq!(initial_calls.get(), 3);
+        assert_eq!(tween_calls.get(), 2);
+        assert_eq!(static_calls.get(), 3);
+        runtime::clear_all();
+    }
+
+    #[test]
     fn sprite_native_dims_resolves_texture_dims() {
         let dims = sprite_native_dims(
             &SpriteSource::TextureStatic("banner"),
@@ -842,12 +1041,13 @@ mod tests {
 
     #[test]
     fn build_with_texture_context_seeds_tween_size_from_texture() {
-        let mut sprite = SpriteBuilder::static_texture("banner");
-        let mut steps = SmallVec::new();
-        steps.push(anim::sleep(0.0));
-        sprite.set_tween(steps);
-
-        let actor = sprite.build_with_texture_context(0, &TestTextureContext);
+        runtime::clear_all();
+        let sprite = SpriteBuilder::static_texture("banner");
+        let actor = sprite.build_tweened_with_texture_context(0, &TestTextureContext, || {
+            let mut steps = TweenSteps::new();
+            steps.push(anim::sleep(0.0));
+            steps
+        });
         let Actor::Sprite { size, scale, .. } = actor else {
             panic!("sprite builder should produce a sprite actor");
         };
@@ -855,6 +1055,7 @@ mod tests {
         assert!(matches!(size[0], crate::actors::SizeSpec::Px(320.0)));
         assert!(matches!(size[1], crate::actors::SizeSpec::Px(120.0)));
         assert_eq!(scale, [1.0, 1.0]);
+        runtime::clear_all();
     }
 }
 
@@ -965,7 +1166,6 @@ pub struct SpriteBuilder {
     shy: f32,
     shc: [f32; 4],
     tween_salt: u64,
-    tw: SmallVec<[anim::Step; 4]>,
 }
 
 impl SpriteBuilder {
@@ -1012,7 +1212,6 @@ impl SpriteBuilder {
             shy: 0.0,
             shc: [0.0, 0.0, 0.0, 0.5],
             tween_salt: 0,
-            tw: SmallVec::new(),
         }
     }
 
@@ -1064,11 +1263,6 @@ impl SpriteBuilder {
     #[inline(always)]
     pub const fn grid(&self) -> Option<(u32, u32)> {
         self.grid
-    }
-
-    #[inline(always)]
-    pub fn set_tween(&mut self, steps: SmallVec<[anim::Step; 4]>) {
-        self.tw = steps;
     }
 
     #[inline(always)]
@@ -1437,6 +1631,78 @@ impl SpriteBuilder {
     pub fn maxheight(&mut self, _h: f32) {}
 
     #[inline(always)]
+    pub fn build_tweened(self, site_base: u64, build_steps: impl FnOnce() -> TweenSteps) -> Actor {
+        self.build_tweened_with_native_dims(site_base, None, build_steps)
+    }
+
+    #[inline(always)]
+    fn build_tweened_with_native_dims(
+        mut self,
+        site_base: u64,
+        native_dims: Option<[f32; 2]>,
+        build_steps: impl FnOnce() -> TweenSteps,
+    ) -> Actor {
+        if self.w == 0.0 && self.h == 0.0 {
+            if let Some([nw, nh]) = native_dims {
+                self.w = nw;
+                self.h = nh;
+            }
+        }
+        let mut init = anim::TweenState::default();
+        init.x = self.x;
+        init.y = self.y;
+        init.w = self.w;
+        init.h = self.h;
+        init.hx = self.hx;
+        init.vy = self.vy;
+        init.tint = self.tint;
+        init.glow = self.glow;
+        init.visible = self.vis;
+        init.flip_x = self.fx;
+        init.flip_y = self.fy;
+        init.rot_x = self.rot_x;
+        init.rot_y = self.rot_y;
+        init.rot_z = self.rot_z;
+        init.fade_l = self.fl;
+        init.fade_r = self.fr;
+        init.fade_t = self.ft;
+        init.fade_b = self.fb;
+        init.crop_l = self.cl;
+        init.crop_r = self.cr;
+        init.crop_t = self.ct;
+        init.crop_b = self.cb;
+        init.scale = [self.sx, self.sy];
+
+        let sid = runtime::site_id(site_base, self.tween_salt);
+        let state = runtime::materialize_lazy(sid, init, build_steps);
+        self.x = state.x;
+        self.y = state.y;
+        self.w = state.w;
+        self.h = state.h;
+        self.hx = state.hx;
+        self.vy = state.vy;
+        self.tint = state.tint;
+        self.glow = state.glow;
+        self.vis = state.visible;
+        self.fx = state.flip_x;
+        self.fy = state.flip_y;
+        self.rot_x = state.rot_x;
+        self.rot_y = state.rot_y;
+        self.rot_z = state.rot_z;
+        self.fl = state.fade_l;
+        self.fr = state.fade_r;
+        self.ft = state.fade_t;
+        self.fb = state.fade_b;
+        self.cl = state.crop_l;
+        self.cr = state.crop_r;
+        self.ct = state.crop_t;
+        self.cb = state.crop_b;
+        self.sx = state.scale[0];
+        self.sy = state.scale[1];
+        self.build_with_native_dims(site_base, None)
+    }
+
+    #[inline(always)]
     pub fn build(self, site_base: u64) -> Actor {
         self.build_with_native_dims(site_base, None)
     }
@@ -1444,71 +1710,9 @@ impl SpriteBuilder {
     #[inline(always)]
     pub fn build_with_native_dims(
         mut self,
-        site_base: u64,
-        native_dims: Option<[f32; 2]>,
+        _site_base: u64,
+        _native_dims: Option<[f32; 2]>,
     ) -> Actor {
-        if !self.tw.is_empty() && self.w == 0.0 && self.h == 0.0 {
-            if let Some([nw, nh]) = native_dims {
-                self.w = nw;
-                self.h = nh;
-            }
-        }
-
-        if !self.tw.is_empty() {
-            let mut init = anim::TweenState::default();
-            init.x = self.x;
-            init.y = self.y;
-            init.w = self.w;
-            init.h = self.h;
-            init.hx = self.hx;
-            init.vy = self.vy;
-            init.tint = self.tint;
-            init.glow = self.glow;
-            init.visible = self.vis;
-            init.flip_x = self.fx;
-            init.flip_y = self.fy;
-            init.rot_x = self.rot_x;
-            init.rot_y = self.rot_y;
-            init.rot_z = self.rot_z;
-            init.fade_l = self.fl;
-            init.fade_r = self.fr;
-            init.fade_t = self.ft;
-            init.fade_b = self.fb;
-            init.crop_l = self.cl;
-            init.crop_r = self.cr;
-            init.crop_t = self.ct;
-            init.crop_b = self.cb;
-            init.scale = [self.sx, self.sy];
-
-            let sid = runtime::site_id(site_base, self.tween_salt);
-            let s = runtime::materialize(sid, init, &self.tw);
-
-            self.x = s.x;
-            self.y = s.y;
-            self.w = s.w;
-            self.h = s.h;
-            self.hx = s.hx;
-            self.vy = s.vy;
-            self.tint = s.tint;
-            self.glow = s.glow;
-            self.vis = s.visible;
-            self.fx = s.flip_x;
-            self.fy = s.flip_y;
-            self.rot_x = s.rot_x;
-            self.rot_y = s.rot_y;
-            self.rot_z = s.rot_z;
-            self.fl = s.fade_l;
-            self.fr = s.fade_r;
-            self.ft = s.fade_t;
-            self.fb = s.fade_b;
-            self.cl = s.crop_l;
-            self.cr = s.crop_r;
-            self.ct = s.crop_t;
-            self.cb = s.crop_b;
-            self.sx = s.scale[0];
-            self.sy = s.scale[1];
-        }
-
         if self.sx < 0.0 {
             self.fx = !self.fx;
             self.sx = -self.sx;
@@ -1581,6 +1785,18 @@ impl SpriteBuilder {
             sprite_native_dims(&self.source, self.uv, self.cell, self.grid, texture_ctx);
         self.build_with_native_dims(site_base, Some(native_dims))
     }
+
+    #[inline(always)]
+    pub fn build_tweened_with_texture_context<T: TextureContext + ?Sized>(
+        self,
+        site_base: u64,
+        texture_ctx: &T,
+        build_steps: impl FnOnce() -> TweenSteps,
+    ) -> Actor {
+        let native_dims =
+            sprite_native_dims(&self.source, self.uv, self.cell, self.grid, texture_ctx);
+        self.build_tweened_with_native_dims(site_base, Some(native_dims), build_steps)
+    }
 }
 
 /* ============================== TEXT =============================== */
@@ -1616,7 +1832,6 @@ pub struct TextBuilder {
     shy: f32,
     shc: [f32; 4],
     tween_salt: u64,
-    tw: SmallVec<[anim::Step; 4]>,
 }
 
 impl TextBuilder {
@@ -1652,13 +1867,7 @@ impl TextBuilder {
             shy: 0.0,
             shc: [0.0, 0.0, 0.0, 0.5],
             tween_salt: 0,
-            tw: SmallVec::new(),
         }
-    }
-
-    #[inline(always)]
-    pub fn set_tween(&mut self, steps: SmallVec<[anim::Step; 4]>) {
-        self.tw = steps;
     }
 
     #[inline(always)]
@@ -1982,30 +2191,35 @@ impl TextBuilder {
     pub fn addrotationz(&mut self, _dd: f32) {}
 
     #[inline(always)]
-    pub fn build(mut self, site_base: u64) -> Actor {
+    pub fn build_tweened(
+        mut self,
+        site_base: u64,
+        build_steps: impl FnOnce() -> TweenSteps,
+    ) -> Actor {
+        let mut init = anim::TweenState::default();
+        init.x = self.x;
+        init.y = self.y;
+        init.tint = self.color;
+        init.glow = self.glow;
+        init.scale = [self.sx, self.sy];
+
+        let sid = runtime::site_id(site_base, self.tween_salt);
+        let state = runtime::materialize_lazy(sid, init, build_steps);
+        self.x = state.x;
+        self.y = state.y;
+        self.color = state.tint;
+        self.glow = state.glow;
+        self.sx = state.scale[0];
+        self.sy = state.scale[1];
+        self.build(site_base)
+    }
+
+    #[inline(always)]
+    pub fn build(mut self, _site_base: u64) -> Actor {
         if self.content.as_str().as_bytes().contains(&b'&')
             && let std::borrow::Cow::Owned(s) = font::replace_markers(self.content.as_str())
         {
             self.content = TextContent::Owned(s);
-        }
-
-        if !self.tw.is_empty() {
-            let mut init = anim::TweenState::default();
-            init.x = self.x;
-            init.y = self.y;
-            init.tint = self.color;
-            init.glow = self.glow;
-            init.scale = [self.sx, self.sy];
-
-            let sid = runtime::site_id(site_base, self.tween_salt);
-            let s = runtime::materialize(sid, init, &self.tw);
-
-            self.x = s.x;
-            self.y = s.y;
-            self.color = s.tint;
-            self.glow = s.glow;
-            self.sx = s.scale[0];
-            self.sy = s.scale[1];
         }
 
         Actor::Text {

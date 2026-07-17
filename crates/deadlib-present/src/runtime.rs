@@ -72,26 +72,53 @@ pub fn tick(dt: f32) {
 /// Get/create a tween at this callsite and return its current state.
 /// `steps` are only enqueued on first sight of this site id.
 pub fn materialize(id: u64, initial: TweenState, steps: &[Step]) -> TweenState {
+    materialize_lazy(id, initial, || steps.iter().cloned())
+}
+
+/// Get/create a tween, constructing its source program only for a vacant entry.
+pub fn materialize_lazy<I>(
+    id: u64,
+    initial: TweenState,
+    build_steps: impl FnOnce() -> I,
+) -> TweenState
+where
+    I: IntoIterator<Item = Step>,
+{
+    let cached = REG.with(|r| {
+        let mut r = r.borrow_mut();
+        let frame = r.frame;
+        r.map.get_mut(&id).map(|entry| {
+            if entry.last_seen_frame != frame {
+                entry.last_seen_frame = frame;
+            }
+            *entry.seq.state()
+        })
+    });
+    if let Some(state) = cached {
+        return state;
+    }
+
+    // Build outside the registry borrow so source expressions may safely
+    // materialize other actors, matching the eager program's reentrancy.
+    let mut tween = TweenSeq::new(initial);
+    for step in build_steps() {
+        tween.push_step(step);
+    }
+
     REG.with(|r| {
         let mut r = r.borrow_mut();
         let frame = r.frame;
         let mut activate = false;
         let state = match r.map.entry(id) {
             HashEntry::Occupied(mut occupied) => {
-                let ent = occupied.get_mut();
-                if ent.last_seen_frame != frame {
-                    ent.last_seen_frame = frame;
-                }
-                *ent.seq.state()
+                let entry = occupied.get_mut();
+                entry.last_seen_frame = frame;
+                *entry.seq.state()
             }
             HashEntry::Vacant(vacant) => {
-                let mut tw = TweenSeq::new(initial);
-                for s in steps {
-                    tw.push_step(s.clone());
-                }
-                let state = *tw.state();
+                let state = *tween.state();
                 vacant.insert(Entry {
-                    seq: tw,
+                    seq: tween,
                     last_seen_frame: frame,
                 });
                 activate = true;
@@ -214,6 +241,34 @@ mod tests {
             "expected x ~= 2.5 after one update, got {}",
             state.x
         );
+    }
+
+    #[test]
+    fn lazy_materialize_builds_program_only_for_vacant_entry() {
+        reset_registry(0);
+        let state = materialize_lazy(1, TweenState::default(), || {
+            [anim::linear(1.0).x(10.0).build()]
+        });
+        assert_eq!(state.x, 0.0);
+
+        let state = materialize_lazy(1, TweenState::default(), || -> [Step; 1] {
+            panic!("cache hits must not rebuild tween steps")
+        });
+        assert_eq!(state.x, 0.0);
+        assert_eq!(registry_len(), 1);
+        assert_eq!(active_id_len(), 1);
+    }
+
+    #[test]
+    fn lazy_program_build_can_materialize_another_actor() {
+        reset_registry(0);
+        materialize_lazy(1, TweenState::default(), || {
+            materialize_lazy(2, TweenState::default(), || [anim::sleep(1.0)]);
+            [anim::sleep(1.0)]
+        });
+
+        assert_eq!(registry_len(), 2);
+        assert_eq!(active_id_len(), 2);
     }
 
     #[test]

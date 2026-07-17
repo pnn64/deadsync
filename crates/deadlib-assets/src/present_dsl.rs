@@ -56,8 +56,20 @@ impl SpriteBuilder {
 
     #[inline(always)]
     pub fn build(self, site_base: u64) -> Actor {
-        self.inner
-            .build_with_texture_context(site_base, &ASSET_TEXTURE_CONTEXT)
+        self.inner.build(site_base)
+    }
+
+    #[inline(always)]
+    pub fn build_tweened(
+        self,
+        site_base: u64,
+        build_steps: impl FnOnce() -> present_dsl::TweenSteps,
+    ) -> Actor {
+        self.inner.build_tweened_with_texture_context(
+            site_base,
+            &ASSET_TEXTURE_CONTEXT,
+            build_steps,
+        )
     }
 }
 

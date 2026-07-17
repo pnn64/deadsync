@@ -1,9 +1,8 @@
 use deadlib_present::actors::{Actor, ActorResourceArena, SizeSpec, SpriteSource};
-use deadlib_present::anim::{self, Step};
+use deadlib_present::anim::Step;
 use deadlib_present::dsl::{SpriteBuilder, TextBuilder};
 use deadlib_present::runtime;
 use deadlib_render::BlendMode;
-use smallvec::SmallVec;
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::hint::black_box;
 use std::mem::size_of;
@@ -18,7 +17,6 @@ const SOURCES: usize = 16;
 const SPRITES: usize = 512;
 const WARMUP_FRAMES: usize = 64;
 const MEASURE_FRAMES: usize = 20_000;
-const TWEEN_SITE_BASE: u64 = 0x5457_4545_4E42_454E;
 
 struct CountingAlloc {
     allocs: AtomicU64,
@@ -164,25 +162,21 @@ fn tweened_frame(actors: &mut Vec<Actor>) -> usize {
     runtime::tick(1.0 / 60.0);
     actors.clear();
     for sprite in 0..SPRITES {
-        let mut builder = SpriteBuilder::solid();
-        builder.tweensalt(sprite as u64);
-        let mut steps = SmallVec::<[Step; 4]>::new();
-        steps.push(
-            anim::linear(0.25)
-                .xy(sprite as f32, 32.0)
-                .diffuse(0.8, 0.6, 0.4, 1.0)
-                .build(),
-        );
-        steps.push(anim::accelerate(0.2).zoom(1.2, 0.8).rotationz(15.0).build());
-        steps.push(
-            anim::decelerate(0.3)
-                .xy(0.0, 0.0)
-                .glow(1.0, 1.0, 1.0, 0.0)
-                .build(),
-        );
-        steps.push(anim::sleep(0.1));
-        builder.set_tween(steps);
-        actors.push(builder.build(TWEEN_SITE_BASE));
+        actors.push(deadlib_present::__act_from_builder!(
+            (tweensalt(sprite):
+            linear(0.25):
+            xy(sprite as f32, 32.0):
+            diffuse(0.8, 0.6, 0.4, 1.0):
+            accelerate(0.2):
+            zoom(1.2):
+            zoomy(0.8):
+            rotationz(15.0):
+            decelerate(0.3):
+            xy(0.0, 0.0):
+            glow(1.0, 1.0, 1.0, 0.0):
+            sleep(0.1))
+            SpriteBuilder::solid()
+        ));
     }
     black_box(&*actors);
     actors.len()
