@@ -1,12 +1,9 @@
-use crate::{ScrollTravel, notes::ScrollRangeKey};
-use deadsync_core::timing::{ROWS_PER_BEAT, beat_to_note_row};
+use crate::ScrollTravel;
+use deadsync_core::timing::ROWS_PER_BEAT;
 use deadsync_rules::note::Note;
 use std::mem::size_of;
 
 const RANGE_GUARD_ROWS: i32 = ROWS_PER_BEAT * 4;
-const MAX_INCREMENT_NS: i64 = 250_000_000;
-const MAX_INCREMENT_BEATS: f32 = 1.0;
-const REANCHOR_BEATS: f32 = 8.0;
 const CAPACITY_WINDOW_BEATS: f32 = 48.0;
 const CAPACITY_MARGIN: usize = 128;
 
@@ -30,18 +27,8 @@ pub(crate) struct NotefieldPlacementPlan<'a> {
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct NotefieldPlacementScratchStats {
     pub full_range_solves: u64,
-    pub incremental_ranges: u64,
     pub capacity_growths: u64,
     pub max_placements: usize,
-}
-
-#[derive(Clone, Copy, Debug)]
-struct RangeCursor {
-    key: ScrollRangeKey,
-    range: Option<(i32, i32)>,
-    search_beat: f32,
-    anchor_beat: f32,
-    current_time_ns: i64,
 }
 
 /// Song-lifetime storage for one player's per-frame note placement plan.
@@ -53,13 +40,13 @@ struct RangeCursor {
 /// A normal frame clears and refills the existing allocation. If malformed or
 /// extreme chart data exceeds the estimate, correctness wins: `Vec` grows once
 /// and `capacity_growths` records the miss. There is no eviction or pruning;
-/// memory is freed when gameplay state is dropped. Range cursors do no timing
-/// samples on incremental frames and fall back to one bounded 44-sample solve
-/// after seeks, modifier changes, stalls, or eight beats of accumulated drift.
+/// memory is freed when gameplay state is dropped. The visible row range is
+/// solved once per frame and shared by tap and hold placement. It cannot be
+/// translated safely between frames because scroll and speed segments may make
+/// displayed row motion nonlinear or stationary.
 #[derive(Debug, Default)]
 pub struct NotefieldPlacementScratch {
     placements: Vec<NotePlacement>,
-    cursor: Option<RangeCursor>,
     stats: NotefieldPlacementScratchStats,
 }
 
@@ -67,7 +54,6 @@ impl NotefieldPlacementScratch {
     pub fn with_notes(notes: &[Note]) -> Self {
         Self {
             placements: Vec::with_capacity(placement_capacity(notes)),
-            cursor: None,
             stats: NotefieldPlacementScratchStats::default(),
         }
     }
@@ -86,47 +72,7 @@ impl NotefieldPlacementScratch {
 
     pub(crate) fn begin_frame(&mut self, travel: &ScrollTravel<'_>) -> Option<(i32, i32)> {
         self.placements.clear();
-        let key = travel.range_key();
-        let search_beat = travel.search_beat();
-        let current_time_ns = travel.current_time_ns();
-        if let Some(cursor) = self.cursor {
-            let delta_beat = search_beat - cursor.search_beat;
-            let delta_ns = current_time_ns.saturating_sub(cursor.current_time_ns);
-            let stalled = delta_ns > 2_000_000 && delta_beat.abs() <= 0.000_01;
-            let can_advance = cursor.key == key
-                && search_beat.is_finite()
-                && (0.0..=MAX_INCREMENT_BEATS).contains(&delta_beat)
-                && (0..=MAX_INCREMENT_NS).contains(&delta_ns)
-                && !stalled
-                && search_beat - cursor.anchor_beat <= REANCHOR_BEATS;
-            if can_advance {
-                let row_delta = beat_to_note_row(search_beat)
-                    .saturating_sub(beat_to_note_row(cursor.search_beat));
-                let range = cursor.range.map(|(low, high)| {
-                    (
-                        low.saturating_add(row_delta),
-                        high.saturating_add(row_delta),
-                    )
-                });
-                self.cursor = Some(RangeCursor {
-                    range,
-                    search_beat,
-                    current_time_ns,
-                    ..cursor
-                });
-                self.stats.incremental_ranges += 1;
-                return range;
-            }
-        }
-
         let range = expand_range(travel.visible_row_range());
-        self.cursor = Some(RangeCursor {
-            key,
-            range,
-            search_beat,
-            anchor_beat: search_beat,
-            current_time_ns,
-        });
         self.stats.full_range_solves += 1;
         range
     }
@@ -447,7 +393,7 @@ mod tests {
     use deadsync_core::song_time::song_time_ns_add_seconds;
     use deadsync_rules::note::Note;
     use deadsync_rules::scroll::ScrollSpeedSetting;
-    use deadsync_rules::timing::{StopSegment, TimingData, TimingSegments};
+    use deadsync_rules::timing::{ScrollSegment, TimingData, TimingSegments};
 
     fn note(beat: f32) -> Note {
         Note {
@@ -485,22 +431,6 @@ mod tests {
         assert_eq!(placement_capacity(&dense), dense.len());
     }
 
-    fn timing() -> TimingData {
-        TimingData::from_segments(
-            0.0,
-            0.0,
-            &TimingSegments {
-                bpms: vec![(0.0, 120.0), (8.0, 180.0), (16.0, 90.0)],
-                stops: vec![StopSegment {
-                    beat: 12.0,
-                    duration: 0.25,
-                }],
-                ..TimingSegments::default()
-            },
-            &[],
-        )
-    }
-
     fn travel<'a>(
         timing: &'a TimingData,
         speed: ScrollSpeedSetting,
@@ -532,104 +462,50 @@ mod tests {
         })
     }
 
-    fn assert_contains(actual: Option<(i32, i32)>, exact: Option<(i32, i32)>) {
-        let (actual_low, actual_high) = actual.expect("planned range");
-        let (exact_low, exact_high) = exact.expect("exact range");
-        assert!(
-            actual_low <= exact_low && actual_high >= exact_high,
-            "planned {actual:?} does not contain exact {exact:?}"
+    #[test]
+    fn opening_note_stays_planned_during_zero_scroll_lead_in() {
+        let timing = TimingData::from_segments(
+            0.0,
+            0.0,
+            &TimingSegments {
+                bpms: vec![(0.0, 120.0)],
+                scrolls: vec![
+                    ScrollSegment {
+                        beat: 0.0,
+                        ratio: 0.0,
+                    },
+                    ScrollSegment {
+                        beat: 4.0,
+                        ratio: 1.0,
+                    },
+                ],
+                ..TimingSegments::default()
+            },
+            &[],
         );
-    }
-
-    #[test]
-    fn incremental_ranges_cover_full_solver_across_scroll_and_accel_modes() {
-        let timing = timing();
-        let modes = [
-            (ScrollSpeedSetting::CMod(600.0), AccelYParams::default()),
-            (ScrollSpeedSetting::XMod(2.0), AccelYParams::default()),
-            (ScrollSpeedSetting::MMod(500.0), AccelYParams::default()),
-            (
-                ScrollSpeedSetting::XMod(1.5),
-                AccelYParams {
-                    boost: 0.35,
-                    brake: 0.2,
-                    wave: 0.25,
-                    boomerang: 0.15,
-                    expand: 0.0,
-                },
-            ),
-        ];
-        for (speed, accel) in modes {
-            let mut scratch = NotefieldPlacementScratch::with_notes(&[]);
-            let start = timing.get_time_for_beat_ns(2.0);
-            for frame in 0..1_000 {
-                let elapsed = frame as f32 / 120.0;
-                let time_ns = song_time_ns_add_seconds(start, elapsed);
-                let travel = travel(&timing, speed, accel, time_ns, elapsed);
-                assert_contains(scratch.begin_frame(&travel), travel.visible_row_range());
-            }
-            let stats = scratch.stats();
-            assert!(stats.incremental_ranges > stats.full_range_solves * 20);
-        }
-    }
-
-    #[test]
-    fn seeks_modifier_changes_and_expand_animation_force_full_solves() {
-        let timing = timing();
         let mut scratch = NotefieldPlacementScratch::with_notes(&[]);
-        let t4 = timing.get_time_for_beat_ns(4.0);
-        let first = travel(
-            &timing,
-            ScrollSpeedSetting::XMod(1.0),
-            AccelYParams::default(),
-            t4,
-            0.0,
-        );
-        scratch.begin_frame(&first);
-        let forward = travel(
-            &timing,
-            ScrollSpeedSetting::XMod(1.0),
-            AccelYParams::default(),
-            song_time_ns_add_seconds(t4, 1.0 / 120.0),
-            1.0 / 120.0,
-        );
-        scratch.begin_frame(&forward);
-        assert_eq!(scratch.stats().incremental_ranges, 1);
-
-        let changed = travel(
-            &timing,
-            ScrollSpeedSetting::MMod(500.0),
-            AccelYParams::default(),
-            song_time_ns_add_seconds(t4, 2.0 / 120.0),
-            2.0 / 120.0,
-        );
-        scratch.begin_frame(&changed);
-        let seek = travel(
-            &timing,
-            ScrollSpeedSetting::MMod(500.0),
-            AccelYParams::default(),
-            timing.get_time_for_beat_ns(1.0),
-            0.0,
-        );
-        scratch.begin_frame(&seek);
-        let expand = AccelYParams {
-            expand: 1.0,
-            ..AccelYParams::default()
-        };
-        scratch.begin_frame(&travel(
-            &timing,
-            ScrollSpeedSetting::MMod(500.0),
-            expand,
-            timing.get_time_for_beat_ns(1.01),
-            0.1,
-        ));
-        scratch.begin_frame(&travel(
-            &timing,
-            ScrollSpeedSetting::MMod(500.0),
-            expand,
-            timing.get_time_for_beat_ns(1.02),
-            0.2,
-        ));
-        assert_eq!(scratch.stats().full_range_solves, 5);
+        let start = timing.get_time_for_beat_ns(-12.0);
+        for frame in 0..600 {
+            let elapsed = frame as f32 / 120.0;
+            let time_ns = song_time_ns_add_seconds(start, elapsed);
+            let travel = travel(
+                &timing,
+                ScrollSpeedSetting::XMod(1.0),
+                AccelYParams::default(),
+                time_ns,
+                elapsed,
+            );
+            let exact = travel.visible_row_range().expect("exact range");
+            assert!(
+                exact.0 <= 0 && exact.1 >= 0,
+                "opening row should remain visible at frame {frame}: {exact:?}"
+            );
+            let planned = scratch.begin_frame(&travel).expect("planned range");
+            assert!(
+                planned.0 <= 0 && planned.1 >= 0,
+                "opening row fell out of the plan at frame {frame}: {planned:?}"
+            );
+        }
+        assert_eq!(scratch.stats().full_range_solves, 600);
     }
 }

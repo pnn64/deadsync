@@ -399,19 +399,6 @@ pub struct ScrollTravel<'a> {
     post_accel_scale: f32,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) struct ScrollRangeKey {
-    timing: *const TimingData,
-    stats: *const NoteCountStat,
-    stats_len: usize,
-    accel: [u32; 5],
-    scroll: [u32; 2],
-    geometry: [u32; 7],
-    edit_beat_spacing: bool,
-    displayed_speed_percent: u32,
-    expand_time: u32,
-}
-
 pub(crate) fn scroll_travel<'a>(request: ScrollTravelRequest<'a>) -> ScrollTravel<'a> {
     let displayed_speed_percent = request
         .timing
@@ -587,51 +574,6 @@ impl ScrollTravel<'_> {
 
     pub fn arrow_effect_time_s(&self) -> f32 {
         self.request.arrow_effect_time_s
-    }
-
-    pub(crate) fn range_key(&self) -> ScrollRangeKey {
-        let scroll = match self.request.scroll_speed {
-            ScrollSpeedSetting::CMod(value) => [0, value.to_bits()],
-            ScrollSpeedSetting::XMod(value) => [1, value.to_bits()],
-            ScrollSpeedSetting::MMod(value) => [2, value.to_bits()],
-        };
-        ScrollRangeKey {
-            timing: self.request.timing,
-            stats: self.request.note_count_stats.as_ptr(),
-            stats_len: self.request.note_count_stats.len(),
-            accel: [
-                self.request.accel.boost.to_bits(),
-                self.request.accel.brake.to_bits(),
-                self.request.accel.wave.to_bits(),
-                self.request.accel.expand.to_bits(),
-                self.request.accel.boomerang.to_bits(),
-            ],
-            scroll,
-            geometry: [
-                self.request.scroll_reference_bpm.to_bits(),
-                self.request.music_rate.to_bits(),
-                self.request.draw_distance_after_targets.to_bits(),
-                self.request.draw_distance_before_targets.to_bits(),
-                self.request.field_zoom.to_bits(),
-                self.request.effect_height.to_bits(),
-                self.request.screen_height.to_bits(),
-            ],
-            edit_beat_spacing: self.request.edit_beat_spacing,
-            displayed_speed_percent: self.displayed_speed_percent.to_bits(),
-            expand_time: if self.request.accel.expand.abs() > f32::EPSILON {
-                self.request.elapsed_screen_s.to_bits()
-            } else {
-                0
-            },
-        }
-    }
-
-    pub(crate) fn search_beat(&self) -> f32 {
-        self.request.search_beat
-    }
-
-    pub(crate) fn current_time_ns(&self) -> SongTimeNs {
-        self.request.current_time_ns
     }
 }
 

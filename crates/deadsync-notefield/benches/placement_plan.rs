@@ -101,7 +101,7 @@ fn main() {
     println!("notefield placement microbenchmark");
     println!("dense four-lane chart, 120 Hz frame progression, {MEASURE_FRAMES} frames");
     print_result("old: 2 solves + repeats", &old);
-    print_result("new: plan + cursor", &new);
+    print_result("new: 1 solve + plan", &new);
     println!(
         "speedup {:.2}x | cycles reduction {:.1}% | fixed plan memory {:.1} KiB",
         old.elapsed.as_secs_f64() / new.elapsed.as_secs_f64(),
