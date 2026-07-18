@@ -2241,6 +2241,8 @@ pub fn push_actors(
             itl_rank_mode: crate::config::SelectMusicItlRankMode::None,
             itl_wheel_mode: crate::config::SelectMusicItlWheelMode::Off,
             song_select_bg_mode: crate::config::SelectMusicSongSelectBgMode::Off,
+            song_select_bg_paths: &[],
+            song_select_bg_texture_keys: &[],
             expanded_series_name: None,
             expanded_pack_name: None,
             new_pack_names: None,
