@@ -2,6 +2,19 @@ use deadsync_chart::notes::ParsedNote;
 use deadsync_core::note::NoteType;
 
 pub fn step_type_lanes(step_type: &str) -> usize {
+    let step_type = step_type.trim();
+    if step_type.eq_ignore_ascii_case("dance-double")
+        || step_type.eq_ignore_ascii_case("dance_double")
+    {
+        8
+    } else {
+        4
+    }
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn step_type_lanes_legacy(step_type: &str) -> usize {
     let normalized = step_type.trim().to_ascii_lowercase().replace('_', "-");
     if normalized == "dance-double" { 8 } else { 4 }
 }
@@ -152,6 +165,8 @@ mod tests {
     fn step_type_lanes_matches_dance_double_only() {
         assert_eq!(step_type_lanes("dance-double"), 8);
         assert_eq!(step_type_lanes("dance_double"), 8);
+        assert_eq!(step_type_lanes(" DANCE_DOUBLE "), 8);
+        assert_eq!(step_type_lanes("dance__double"), 4);
         assert_eq!(step_type_lanes(" dance-single "), 4);
         assert_eq!(step_type_lanes("pump-double"), 4);
     }

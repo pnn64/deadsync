@@ -8,6 +8,17 @@ pub const RANDOM_MOVIES_DIR: &str = "RandomMovies";
 pub const SONG_MOVIES_DIR: &str = "SongMovies";
 
 const BACKGROUND_MAPPING_FILE: &str = "BackgroundMapping.ini";
+const BGCHANGE_MOVIE_EXTENSIONS: [&str; 12] = [
+    "avi", "f4v", "flv", "m4v", "mkv", "mov", "mp4", "mpeg", "mpg", "ogv", "webm", "wmv",
+];
+const SONG_ART_EXTENSIONS: [&str; 5] = ["png", "jpg", "jpeg", "gif", "bmp"];
+
+#[inline]
+fn extension_matches(ext: &str, extensions: &[&str]) -> bool {
+    extensions
+        .iter()
+        .any(|candidate| ext.eq_ignore_ascii_case(candidate))
+}
 
 pub fn collect_media_roots(
     dirname: &str,
@@ -209,6 +220,20 @@ pub fn resolve_foreground_media_path(song_dir: &Path, target: &str) -> Option<Pa
 
 pub fn foreground_media_ext_rank(path: &Path) -> Option<u8> {
     let ext = path.extension()?.to_str()?;
+    if extension_matches(ext, &BGCHANGE_MOVIE_EXTENSIONS) {
+        Some(0)
+    } else {
+        SONG_ART_EXTENSIONS
+            .iter()
+            .position(|candidate| ext.eq_ignore_ascii_case(candidate))
+            .map(|index| index as u8 + 1)
+    }
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn foreground_media_ext_rank_legacy(path: &Path) -> Option<u8> {
+    let ext = path.extension()?.to_str()?;
     if matches!(
         ext.to_ascii_lowercase().as_str(),
         "avi"
@@ -241,6 +266,14 @@ pub fn foreground_media_ext_rank(path: &Path) -> Option<u8> {
 }
 
 pub fn is_bgchange_movie_path(path: &Path) -> bool {
+    path.extension()
+        .and_then(|ext| ext.to_str())
+        .is_some_and(|ext| extension_matches(ext, &BGCHANGE_MOVIE_EXTENSIONS))
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn is_bgchange_movie_path_legacy(path: &Path) -> bool {
     path.extension()
         .and_then(|ext| ext.to_str())
         .is_some_and(|ext| {
@@ -383,6 +416,14 @@ fn parse_ini_sections(text: &str) -> HashMap<String, Vec<(String, String)>> {
 pub fn is_song_art_image(path: &Path) -> bool {
     path.extension()
         .and_then(|ext| ext.to_str())
+        .is_some_and(|ext| extension_matches(ext, &SONG_ART_EXTENSIONS))
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn is_song_art_image_legacy(path: &Path) -> bool {
+    path.extension()
+        .and_then(|ext| ext.to_str())
         .is_some_and(|ext| {
             matches!(
                 ext.to_ascii_lowercase().as_str(),
@@ -431,7 +472,9 @@ mod tests {
         assert_eq!(foreground_media_ext_rank(Path::new("clip.MP4")), Some(0));
         assert_eq!(foreground_media_ext_rank(Path::new("image.png")), Some(1));
         assert_eq!(foreground_media_ext_rank(Path::new("image.jpeg")), Some(3));
+        assert_eq!(foreground_media_ext_rank(Path::new("image.BMP")), Some(5));
         assert_eq!(foreground_media_ext_rank(Path::new("notes.txt")), None);
+        assert_eq!(foreground_media_ext_rank(Path::new("legacy.m2v")), None);
     }
 
     #[test]

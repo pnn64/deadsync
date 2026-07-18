@@ -1,3 +1,4 @@
+use std::cmp::Ordering;
 use std::sync::Arc;
 
 use deadsync_chart::SongData;
@@ -140,6 +141,43 @@ fn song_title_contains(song: &SongData, translit: bool, needle: &str) -> bool {
     )
 }
 
+#[inline]
+fn lowercase_full_title_bytes(song: &SongData) -> impl Iterator<Item = u8> + '_ {
+    let subtitle = song.display_subtitle(false);
+    let has_subtitle = !subtitle.trim().is_empty();
+    song.display_title(false)
+        .bytes()
+        .chain(has_subtitle.then_some(b' '))
+        .chain(if has_subtitle { subtitle } else { "" }.bytes())
+        .map(|byte| byte.to_ascii_lowercase())
+}
+
+#[inline]
+fn display_full_title_cmp(left: &SongData, right: &SongData) -> Ordering {
+    lowercase_full_title_bytes(left).cmp(lowercase_full_title_bytes(right))
+}
+
+fn sort_song_search_candidates(candidates: &mut [SongSearchCandidate]) {
+    candidates.sort_by(|left, right| display_full_title_cmp(&left.song, &right.song));
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn sort_song_search_candidates_for_bench(candidates: &mut [SongSearchCandidate]) {
+    sort_song_search_candidates(candidates);
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn sort_song_search_candidates_legacy(candidates: &mut [SongSearchCandidate]) {
+    candidates.sort_by_cached_key(|candidate| {
+        candidate
+            .song
+            .display_full_title(false)
+            .to_ascii_lowercase()
+    });
+}
+
 pub fn build_song_search_candidates<'a>(
     entries: impl IntoIterator<Item = SongSearchCatalogEntry<'a>>,
     search_text: &str,
@@ -212,7 +250,7 @@ pub fn build_song_search_candidates<'a>(
             }
         }
     }
-    out.sort_by_cached_key(|c| c.song.display_full_title(false).to_ascii_lowercase());
+    sort_song_search_candidates(&mut out);
 
     out
 }
@@ -473,5 +511,48 @@ mod tests {
 
         assert_eq!(candidates.len(), 1);
         assert_eq!(candidates[0].song.title, "Alpha");
+    }
+
+    #[test]
+    fn candidates_sort_by_lowercase_full_title_and_keep_ties_stable() {
+        let beta = test_song_with_bpm("beta", "128", 128.0, 128.0);
+
+        let mut alpha_z = (*test_song_with_bpm("Alpha", "128", 128.0, 128.0)).clone();
+        alpha_z.subtitle = "Zoo".to_string();
+        let alpha_z = Arc::new(alpha_z);
+
+        let alpha_mix_title = test_song_with_bpm("ALPHA MIX", "128", 128.0, 128.0);
+        let mut alpha_mix_parts = (*test_song_with_bpm("Alpha", "128", 128.0, 128.0)).clone();
+        alpha_mix_parts.subtitle = "Mix".to_string();
+        let alpha_mix_parts = Arc::new(alpha_mix_parts);
+
+        let entries = [
+            SongSearchCatalogEntry::PackHeader("Pack"),
+            SongSearchCatalogEntry::Song(&beta),
+            SongSearchCatalogEntry::Song(&alpha_mix_title),
+            SongSearchCatalogEntry::Song(&alpha_z),
+            SongSearchCatalogEntry::Song(&alpha_mix_parts),
+        ];
+
+        let candidates = build_song_search_candidates(entries, "", "dance-single");
+        let titles = candidates
+            .iter()
+            .map(|candidate| {
+                (
+                    candidate.song.title.as_str(),
+                    candidate.song.subtitle.as_str(),
+                )
+            })
+            .collect::<Vec<_>>();
+
+        assert_eq!(
+            titles,
+            [
+                ("ALPHA MIX", ""),
+                ("Alpha", "Mix"),
+                ("Alpha", "Zoo"),
+                ("beta", ""),
+            ]
+        );
     }
 }

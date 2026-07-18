@@ -8,10 +8,17 @@ use deadsync_simfile::changes::{
     extract_foreground_change_sets, extract_foreground_changes, extract_foreground_lua_changes,
     simfile_uses_lua,
 };
-use deadsync_simfile::notes::{parse_chart_notes, parse_chart_notes_legacy};
+use deadsync_simfile::media::{
+    foreground_media_ext_rank, foreground_media_ext_rank_legacy, is_bgchange_movie_path,
+    is_bgchange_movie_path_legacy, is_song_art_image, is_song_art_image_legacy,
+};
+use deadsync_simfile::notes::{
+    parse_chart_notes, parse_chart_notes_legacy, step_type_lanes, step_type_lanes_legacy,
+};
 use deadsync_simfile::song_search::{
     SongSearchCandidate, SongSearchCatalogEntry, build_song_search_candidates,
-    build_song_search_candidates_legacy,
+    build_song_search_candidates_legacy, sort_song_search_candidates_for_bench,
+    sort_song_search_candidates_legacy,
 };
 use deadsync_simfile::song_sort::{
     GroupedSongs, song_meters_for_sort, song_meters_for_sort_legacy, title_grouped_songs,
@@ -21,7 +28,7 @@ use deadsync_simfile::tags::{latest_simfile_tag_value_legacy, latest_simfile_tag
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::fs;
 use std::hint::black_box;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
@@ -38,6 +45,11 @@ const NOTE_ROWS: usize = 65_536;
 const NOTE_ITERATIONS: usize = 128;
 const METER_ITERATIONS: usize = 64;
 const FOREGROUND_ITERATIONS: usize = 64;
+const STEP_TYPE_CALLS: usize = 65_536;
+const STEP_TYPE_ITERATIONS: usize = 128;
+const MEDIA_PATHS: usize = 32_768;
+const MEDIA_ITERATIONS: usize = 128;
+const SEARCH_SORT_ITERATIONS: usize = 32;
 
 struct CountingAlloc {
     allocs: AtomicU64,
@@ -130,6 +142,11 @@ fn main() {
     let simfile = benchmark_simfile();
     benchmark_tag_batch(&simfile);
 
+    benchmark_step_type_matching();
+
+    let media_paths = benchmark_media_paths();
+    benchmark_media_extensions(&media_paths);
+
     let note_data = benchmark_note_data();
     benchmark_note_parsing(&note_data);
 
@@ -138,6 +155,7 @@ fn main() {
 
     let songs: Vec<_> = (0..SONGS).map(benchmark_song).collect();
     benchmark_search(&songs);
+    benchmark_search_sort(&songs);
     benchmark_sort(&songs);
     benchmark_meters(&songs);
 }
@@ -171,6 +189,78 @@ fn benchmark_tag_batch(simfile: &[u8]) {
         simfile.len(),
         TAG_ITERATIONS,
         "bytes",
+        &old,
+        &new,
+    );
+}
+
+fn benchmark_step_type_matching() {
+    const STEP_TYPES: [&str; 8] = [
+        "dance-single",
+        " DANCE-DOUBLE ",
+        "dance_double",
+        "Dance_Double",
+        "pump-double",
+        "dance__double",
+        "lights-cabinet",
+        "",
+    ];
+    for step_type in STEP_TYPES {
+        assert_eq!(
+            step_type_lanes_legacy(step_type),
+            step_type_lanes(step_type),
+            "step-type lane count changed"
+        );
+    }
+
+    let old = measure(STEP_TYPE_ITERATIONS, || {
+        (0..STEP_TYPE_CALLS).fold(0_u64, |checksum, index| {
+            let step_type = black_box(STEP_TYPES[index % STEP_TYPES.len()]);
+            checksum.rotate_left(3) ^ step_type_lanes_legacy(step_type) as u64
+        })
+    });
+    let new = measure(STEP_TYPE_ITERATIONS, || {
+        (0..STEP_TYPE_CALLS).fold(0_u64, |checksum, index| {
+            let step_type = black_box(STEP_TYPES[index % STEP_TYPES.len()]);
+            checksum.rotate_left(3) ^ step_type_lanes(step_type) as u64
+        })
+    });
+    assert_eq!(old.checksum, new.checksum);
+    print_pair(
+        "allocation-free step-type matching",
+        STEP_TYPE_CALLS,
+        STEP_TYPE_ITERATIONS,
+        "types",
+        &old,
+        &new,
+    );
+}
+
+fn benchmark_media_extensions(paths: &[PathBuf]) {
+    for path in paths {
+        assert_eq!(
+            media_classification_legacy(path),
+            media_classification(path),
+            "media extension classification changed"
+        );
+    }
+
+    let old = measure(MEDIA_ITERATIONS, || {
+        black_box(paths).iter().fold(0_u64, |checksum, path| {
+            checksum.rotate_left(5) ^ media_classification_legacy(path)
+        })
+    });
+    let new = measure(MEDIA_ITERATIONS, || {
+        black_box(paths).iter().fold(0_u64, |checksum, path| {
+            checksum.rotate_left(5) ^ media_classification(path)
+        })
+    });
+    assert_eq!(old.checksum, new.checksum);
+    print_pair(
+        "allocation-free media extension checks",
+        paths.len() * 3,
+        MEDIA_ITERATIONS,
+        "checks",
         &old,
         &new,
     );
@@ -281,6 +371,43 @@ fn benchmark_search(songs: &[Arc<SongData>]) {
         "allocation-free search matching",
         songs.len(),
         SEARCH_ITERATIONS,
+        "songs",
+        &old,
+        &new,
+    );
+}
+
+fn benchmark_search_sort(songs: &[Arc<SongData>]) {
+    let candidates = build_song_search_candidates(search_entries(songs), "", "dance-single");
+    let mut old_candidates = candidates.clone();
+    old_candidates.reverse();
+    sort_song_search_candidates_legacy(&mut old_candidates);
+    let mut new_candidates = candidates.clone();
+    new_candidates.reverse();
+    sort_song_search_candidates_for_bench(&mut new_candidates);
+    assert_eq!(
+        candidate_paths(&old_candidates),
+        candidate_paths(&new_candidates),
+        "search result sort order changed"
+    );
+
+    let mut old_candidates = candidates.clone();
+    let old = measure(SEARCH_SORT_ITERATIONS, || {
+        old_candidates.reverse();
+        sort_song_search_candidates_legacy(black_box(&mut old_candidates));
+        candidate_checksum(&old_candidates)
+    });
+    let mut new_candidates = candidates;
+    let new = measure(SEARCH_SORT_ITERATIONS, || {
+        new_candidates.reverse();
+        sort_song_search_candidates_for_bench(black_box(&mut new_candidates));
+        candidate_checksum(&new_candidates)
+    });
+    assert_eq!(old.checksum, new.checksum);
+    print_pair(
+        "allocation-free search sort keys",
+        songs.len(),
+        SEARCH_SORT_ITERATIONS,
         "songs",
         &old,
         &new,
@@ -508,6 +635,18 @@ fn foreground_checksum(
     }) ^ u64::from(has_lua)
 }
 
+fn media_classification(path: &Path) -> u64 {
+    u64::from(foreground_media_ext_rank(path).unwrap_or(u8::MAX))
+        | (u64::from(is_bgchange_movie_path(path)) << 8)
+        | (u64::from(is_song_art_image(path)) << 9)
+}
+
+fn media_classification_legacy(path: &Path) -> u64 {
+    u64::from(foreground_media_ext_rank_legacy(path).unwrap_or(u8::MAX))
+        | (u64::from(is_bgchange_movie_path_legacy(path)) << 8)
+        | (u64::from(is_song_art_image_legacy(path)) << 9)
+}
+
 fn text_checksum(text: &str) -> u64 {
     text.bytes().fold(text.len() as u64, |checksum, byte| {
         checksum.rotate_left(5) ^ u64::from(byte)
@@ -545,6 +684,21 @@ fn benchmark_note_data() -> Vec<u8> {
         data.extend_from_slice(line);
     }
     data
+}
+
+fn benchmark_media_paths() -> Vec<PathBuf> {
+    const EXTENSIONS: [&str; 24] = [
+        "MP4", "avi", "F4V", "flv", "M4V", "mkv", "MOV", "mpeg", "MPG", "ogv", "WEBM", "wmv",
+        "PNG", "jpg", "JPEG", "gif", "BMP", "txt", "INI", "xml", "m2v", "ogg", "", "mp3",
+    ];
+    (0..MEDIA_PATHS)
+        .map(|index| {
+            PathBuf::from(format!(
+                "Songs/Performance/Song{index:05}/asset.{extension}",
+                extension = EXTENSIONS[index % EXTENSIONS.len()]
+            ))
+        })
+        .collect()
 }
 
 struct ForegroundFixture {
