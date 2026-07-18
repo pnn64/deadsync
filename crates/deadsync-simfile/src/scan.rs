@@ -594,8 +594,7 @@ pub fn song_progress_name(path: &Path) -> &str {
 pub fn finalize_loaded_packs(loaded_packs: &mut Vec<SongPack>) {
     loaded_packs.retain(|pack| !pack.songs.is_empty());
     for pack in loaded_packs.iter_mut() {
-        pack.songs
-            .sort_by_cached_key(|song| ItgmaniaSongTitleKey::new(song.as_ref()));
+        sort_songs_itgmania(&mut pack.songs);
     }
     sort_song_packs(loaded_packs);
 }
@@ -1092,6 +1091,74 @@ fn path_key(path: &Path) -> String {
     key
 }
 
+#[inline]
+fn ascii_case_insensitive_cmp(left: &str, right: &str) -> std::cmp::Ordering {
+    left.bytes()
+        .map(|byte| byte.to_ascii_lowercase())
+        .cmp(right.bytes().map(|byte| byte.to_ascii_lowercase()))
+}
+
+#[inline]
+fn itgmania_sort_bytes(text: &str) -> impl Iterator<Item = u8> + '_ {
+    let bytes = text.as_bytes();
+    let bytes = bytes.strip_prefix(b".").unwrap_or(bytes);
+    let first = bytes.first().copied().map(|byte| byte.to_ascii_uppercase());
+    let prefix = first
+        .is_some_and(|byte| !byte.is_ascii_uppercase() && !byte.is_ascii_digit())
+        .then_some(b'~');
+    prefix
+        .into_iter()
+        .chain(bytes.iter().copied().map(|byte| byte.to_ascii_uppercase()))
+}
+
+#[inline]
+fn song_itgmania_cmp(left: &SongData, right: &SongData) -> std::cmp::Ordering {
+    let left_main = if left.translit_title.is_empty() {
+        left.title.as_str()
+    } else {
+        left.translit_title.as_str()
+    };
+    let right_main = if right.translit_title.is_empty() {
+        right.title.as_str()
+    } else {
+        right.translit_title.as_str()
+    };
+
+    let ordering = if left_main == right_main {
+        let left_sub = if left.translit_subtitle.is_empty() {
+            left.subtitle.as_str()
+        } else {
+            left.translit_subtitle.as_str()
+        };
+        let right_sub = if right.translit_subtitle.is_empty() {
+            right.subtitle.as_str()
+        } else {
+            right.translit_subtitle.as_str()
+        };
+        itgmania_sort_bytes(left_sub).cmp(itgmania_sort_bytes(right_sub))
+    } else {
+        itgmania_sort_bytes(left_main).cmp(itgmania_sort_bytes(right_main))
+    };
+    if ordering != std::cmp::Ordering::Equal {
+        return ordering;
+    }
+
+    let left_path = left.simfile_path.to_string_lossy();
+    let right_path = right.simfile_path.to_string_lossy();
+    ascii_case_insensitive_cmp(left_path.as_ref(), right_path.as_ref())
+}
+
+fn sort_songs_itgmania(songs: &mut [Arc<SongData>]) {
+    songs.sort_by(|left, right| song_itgmania_cmp(left, right));
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn sort_songs_itgmania_for_bench(songs: &mut [Arc<SongData>]) {
+    sort_songs_itgmania(songs);
+}
+
+#[cfg(feature = "bench-support")]
 fn itgmania_make_sort_bytes(text: &str) -> Vec<u8> {
     let mut out = text.as_bytes().to_vec();
     out.make_ascii_uppercase();
@@ -1111,6 +1178,7 @@ fn itgmania_make_sort_bytes(text: &str) -> Vec<u8> {
     out
 }
 
+#[cfg(feature = "bench-support")]
 struct ItgmaniaSongTitleKey {
     main_raw: Vec<u8>,
     main_sort: Vec<u8>,
@@ -1118,6 +1186,7 @@ struct ItgmaniaSongTitleKey {
     path_fold: Vec<u8>,
 }
 
+#[cfg(feature = "bench-support")]
 impl ItgmaniaSongTitleKey {
     fn new(song: &SongData) -> Self {
         let main_raw_str = if song.translit_title.is_empty() {
@@ -1147,20 +1216,24 @@ impl ItgmaniaSongTitleKey {
     }
 }
 
+#[cfg(feature = "bench-support")]
 impl PartialEq for ItgmaniaSongTitleKey {
     fn eq(&self, other: &Self) -> bool {
         self.cmp(other) == std::cmp::Ordering::Equal
     }
 }
 
+#[cfg(feature = "bench-support")]
 impl Eq for ItgmaniaSongTitleKey {}
 
+#[cfg(feature = "bench-support")]
 impl PartialOrd for ItgmaniaSongTitleKey {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         Some(self.cmp(other))
     }
 }
 
+#[cfg(feature = "bench-support")]
 impl Ord for ItgmaniaSongTitleKey {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         if self.main_raw == other.main_raw {
@@ -1175,6 +1248,12 @@ impl Ord for ItgmaniaSongTitleKey {
             }
         }
     }
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn sort_songs_itgmania_legacy(songs: &mut [Arc<SongData>]) {
+    songs.sort_by_cached_key(|song| ItgmaniaSongTitleKey::new(song.as_ref()));
 }
 
 fn ci_key(text: &str) -> String {
@@ -1270,6 +1349,37 @@ fn pack_dir_key(path: &Path) -> Option<String> {
 }
 
 fn sort_song_packs(packs: &mut [SongPack]) {
+    if packs.len() < 2 {
+        return;
+    }
+    let mut order = (0..packs.len()).collect::<Vec<_>>();
+    order.sort_by(|&left, &right| {
+        ascii_case_insensitive_cmp(&packs[left].sort_title, &packs[right].sort_title).then_with(
+            || ascii_case_insensitive_cmp(&packs[left].group_name, &packs[right].group_name),
+        )
+    });
+    let mut destinations = vec![0; packs.len()];
+    for (new_index, old_index) in order.into_iter().enumerate() {
+        destinations[old_index] = new_index;
+    }
+    for index in 0..packs.len() {
+        while destinations[index] != index {
+            let destination = destinations[index];
+            packs.swap(index, destination);
+            destinations.swap(index, destination);
+        }
+    }
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn sort_song_packs_for_bench(packs: &mut [SongPack]) {
+    sort_song_packs(packs);
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn sort_song_packs_legacy(packs: &mut [SongPack]) {
     packs.sort_by_cached_key(|pack| {
         (
             pack.sort_title.to_ascii_lowercase(),
@@ -1376,6 +1486,84 @@ mod tests {
             precise_last_second_seconds: 0.0,
             charts: Vec::new(),
         }
+    }
+
+    #[test]
+    fn borrowed_itgmania_song_sort_preserves_special_and_subtitle_order() {
+        let root = PathBuf::from("Songs/Pack");
+        let make_song = |index: usize, title: &str, subtitle: &str| {
+            let mut song = song_data(root.join(format!("Song{index}/song.ssc")), title);
+            song.subtitle = subtitle.to_string();
+            Arc::new(song)
+        };
+        let mut songs = vec![
+            make_song(0, "!Bang", ""),
+            make_song(1, "Same", "Zeta"),
+            make_song(2, "Beta", ""),
+            make_song(3, ".Alpha", ""),
+            make_song(4, "Same", "alpha"),
+            make_song(5, "9 Lives", ""),
+        ];
+
+        sort_songs_itgmania(&mut songs);
+
+        let titles = songs
+            .iter()
+            .map(|song| (song.title.as_str(), song.subtitle.as_str()))
+            .collect::<Vec<_>>();
+        assert_eq!(
+            titles,
+            [
+                ("9 Lives", ""),
+                (".Alpha", ""),
+                ("Beta", ""),
+                ("Same", "alpha"),
+                ("Same", "Zeta"),
+                ("!Bang", ""),
+            ]
+        );
+    }
+
+    #[test]
+    fn borrowed_itgmania_song_sort_uses_path_for_folded_title_ties() {
+        let mut lower = song_data(PathBuf::from("Songs/Pack/Z/song.ssc"), "alpha");
+        lower.subtitle = "First".to_string();
+        let mut upper = song_data(PathBuf::from("Songs/Pack/A/song.ssc"), "ALPHA");
+        upper.subtitle = "Last".to_string();
+        let mut songs = vec![Arc::new(lower), Arc::new(upper)];
+
+        sort_songs_itgmania(&mut songs);
+
+        assert_eq!(
+            songs[0].simfile_path,
+            PathBuf::from("Songs/Pack/A/song.ssc")
+        );
+        assert_eq!(
+            songs[1].simfile_path,
+            PathBuf::from("Songs/Pack/Z/song.ssc")
+        );
+    }
+
+    #[test]
+    fn borrowed_pack_sort_preserves_case_insensitive_tuple_order() {
+        let root = Path::new("Songs");
+        let mut packs = vec![
+            song_pack("Zulu", "alpha", root),
+            song_pack("Beta", "beta", root),
+            song_pack("Able", "ALPHA", root),
+            song_pack("Same", "tie", root),
+            song_pack("same", "TIE", root),
+        ];
+
+        sort_song_packs(&mut packs);
+
+        assert_eq!(
+            packs
+                .iter()
+                .map(|pack| pack.group_name.as_str())
+                .collect::<Vec<_>>(),
+            ["Able", "Zulu", "Beta", "Same", "same"]
+        );
     }
 
     #[test]

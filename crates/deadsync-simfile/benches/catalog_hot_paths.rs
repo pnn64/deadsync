@@ -1,6 +1,12 @@
 use deadsync_chart::notes::ParsedNote;
-use deadsync_chart::{ArrowStats, ChartData, SongData, StaminaCounts, TechCounts};
+use deadsync_chart::{
+    ArrowStats, ChartData, SongData, SongPack, StaminaCounts, SyncPref, TechCounts,
+};
 use deadsync_core::note::NoteType;
+use deadsync_simfile::bgchanges::{
+    bgchange_field_rejects_non_media, bgchange_field_rejects_non_media_legacy,
+    parse_bgchange_color, parse_bgchange_color_legacy,
+};
 use deadsync_simfile::cache::{
     SerializableSongForegroundChange, SerializableSongForegroundLuaChange,
 };
@@ -14,6 +20,10 @@ use deadsync_simfile::media::{
 };
 use deadsync_simfile::notes::{
     parse_chart_notes, parse_chart_notes_legacy, step_type_lanes, step_type_lanes_legacy,
+};
+use deadsync_simfile::scan::{
+    sort_song_packs_for_bench, sort_song_packs_legacy, sort_songs_itgmania_for_bench,
+    sort_songs_itgmania_legacy,
 };
 use deadsync_simfile::song_search::{
     SongSearchCandidate, SongSearchCatalogEntry, build_song_search_candidates,
@@ -50,6 +60,11 @@ const STEP_TYPE_ITERATIONS: usize = 128;
 const MEDIA_PATHS: usize = 32_768;
 const MEDIA_ITERATIONS: usize = 128;
 const SEARCH_SORT_ITERATIONS: usize = 32;
+const CATALOG_SORT_ITERATIONS: usize = 24;
+const PACKS: usize = 4_096;
+const PACK_SORT_ITERATIONS: usize = 48;
+const BGCHANGE_FIELD_CALLS: usize = 65_536;
+const BGCHANGE_FIELD_ITERATIONS: usize = 64;
 
 struct CountingAlloc {
     allocs: AtomicU64,
@@ -143,6 +158,7 @@ fn main() {
     benchmark_tag_batch(&simfile);
 
     benchmark_step_type_matching();
+    benchmark_bgchange_fields();
 
     let media_paths = benchmark_media_paths();
     benchmark_media_extensions(&media_paths);
@@ -154,10 +170,14 @@ fn main() {
     benchmark_foreground_changes(&foreground);
 
     let songs: Vec<_> = (0..SONGS).map(benchmark_song).collect();
+    benchmark_catalog_song_sort(&songs);
     benchmark_search(&songs);
     benchmark_search_sort(&songs);
     benchmark_sort(&songs);
     benchmark_meters(&songs);
+
+    let packs: Vec<_> = (0..PACKS).map(benchmark_pack).collect();
+    benchmark_pack_sort(&packs);
 }
 
 fn benchmark_tag_batch(simfile: &[u8]) {
@@ -231,6 +251,69 @@ fn benchmark_step_type_matching() {
         STEP_TYPE_CALLS,
         STEP_TYPE_ITERATIONS,
         "types",
+        &old,
+        &new,
+    );
+}
+
+fn benchmark_bgchange_fields() {
+    const TARGETS: [&str; 8] = [
+        "movie.mp4",
+        "Theme/Default.XML",
+        "config.ini",
+        "animation.PNG",
+        "visual.INI.backup",
+        "script.lua",
+        "folder.with.dots/clip.webm",
+        "",
+    ];
+    const COLORS: [&str; 8] = [
+        "1,0.5,0",
+        "1^0.5^0^0.75",
+        "#FF8000",
+        "#10203040",
+        " 0.1, 0.2, 0.3, 0.4 ",
+        "1,,0.5,,0",
+        "invalid",
+        "1,2,3,4,5",
+    ];
+    for index in 0..TARGETS.len() {
+        assert_eq!(
+            bgchange_field_rejects_non_media_legacy(TARGETS[index]),
+            bgchange_field_rejects_non_media(TARGETS[index]),
+            "BG-change target validation changed"
+        );
+        assert_eq!(
+            parse_bgchange_color_legacy(COLORS[index]),
+            parse_bgchange_color(COLORS[index]),
+            "BG-change color parsing changed"
+        );
+    }
+
+    let old = measure(BGCHANGE_FIELD_ITERATIONS, || {
+        (0..BGCHANGE_FIELD_CALLS).fold(0_u64, |checksum, index| {
+            let target = black_box(TARGETS[index % TARGETS.len()]);
+            let color = black_box(COLORS[index % COLORS.len()]);
+            checksum.rotate_left(5)
+                ^ u64::from(bgchange_field_rejects_non_media_legacy(target))
+                ^ color_checksum(parse_bgchange_color_legacy(color)).rotate_left(17)
+        })
+    });
+    let new = measure(BGCHANGE_FIELD_ITERATIONS, || {
+        (0..BGCHANGE_FIELD_CALLS).fold(0_u64, |checksum, index| {
+            let target = black_box(TARGETS[index % TARGETS.len()]);
+            let color = black_box(COLORS[index % COLORS.len()]);
+            checksum.rotate_left(5)
+                ^ u64::from(bgchange_field_rejects_non_media(target))
+                ^ color_checksum(parse_bgchange_color(color)).rotate_left(17)
+        })
+    });
+    assert_eq!(old.checksum, new.checksum);
+    print_pair(
+        "allocation-free BG-change fields",
+        BGCHANGE_FIELD_CALLS * 2,
+        BGCHANGE_FIELD_ITERATIONS,
+        "fields",
         &old,
         &new,
     );
@@ -377,6 +460,42 @@ fn benchmark_search(songs: &[Arc<SongData>]) {
     );
 }
 
+fn benchmark_catalog_song_sort(songs: &[Arc<SongData>]) {
+    let mut old_songs = songs.to_vec();
+    old_songs.reverse();
+    sort_songs_itgmania_legacy(&mut old_songs);
+    let mut new_songs = songs.to_vec();
+    new_songs.reverse();
+    sort_songs_itgmania_for_bench(&mut new_songs);
+    assert_eq!(
+        song_paths(&old_songs),
+        song_paths(&new_songs),
+        "catalog song sort order changed"
+    );
+
+    let mut old_songs = songs.to_vec();
+    let old = measure(CATALOG_SORT_ITERATIONS, || {
+        old_songs.reverse();
+        sort_songs_itgmania_legacy(black_box(&mut old_songs));
+        song_checksum(&old_songs)
+    });
+    let mut new_songs = songs.to_vec();
+    let new = measure(CATALOG_SORT_ITERATIONS, || {
+        new_songs.reverse();
+        sort_songs_itgmania_for_bench(black_box(&mut new_songs));
+        song_checksum(&new_songs)
+    });
+    assert_eq!(old.checksum, new.checksum);
+    print_pair(
+        "borrowed catalog song sort keys",
+        songs.len(),
+        CATALOG_SORT_ITERATIONS,
+        "songs",
+        &old,
+        &new,
+    );
+}
+
 fn benchmark_search_sort(songs: &[Arc<SongData>]) {
     let candidates = build_song_search_candidates(search_entries(songs), "", "dance-single");
     let mut old_candidates = candidates.clone();
@@ -470,6 +589,42 @@ fn benchmark_meters(songs: &[Arc<SongData>]) {
     );
 }
 
+fn benchmark_pack_sort(packs: &[SongPack]) {
+    let mut old_packs = packs.to_vec();
+    old_packs.reverse();
+    sort_song_packs_legacy(&mut old_packs);
+    let mut new_packs = packs.to_vec();
+    new_packs.reverse();
+    sort_song_packs_for_bench(&mut new_packs);
+    assert_eq!(
+        pack_names(&old_packs),
+        pack_names(&new_packs),
+        "pack sort order changed"
+    );
+
+    let mut old_packs = packs.to_vec();
+    let old = measure(PACK_SORT_ITERATIONS, || {
+        old_packs.reverse();
+        sort_song_packs_legacy(black_box(&mut old_packs));
+        pack_checksum(&old_packs)
+    });
+    let mut new_packs = packs.to_vec();
+    let new = measure(PACK_SORT_ITERATIONS, || {
+        new_packs.reverse();
+        sort_song_packs_for_bench(black_box(&mut new_packs));
+        pack_checksum(&new_packs)
+    });
+    assert_eq!(old.checksum, new.checksum);
+    print_pair(
+        "borrowed pack sort keys",
+        packs.len(),
+        PACK_SORT_ITERATIONS,
+        "packs",
+        &old,
+        &new,
+    );
+}
+
 fn search_entries(songs: &[Arc<SongData>]) -> impl Iterator<Item = SongSearchCatalogEntry<'_>> {
     std::iter::once(SongSearchCatalogEntry::PackHeader("Performance Pack"))
         .chain(songs.iter().map(SongSearchCatalogEntry::Song))
@@ -552,6 +707,17 @@ fn candidate_paths(candidates: &[SongSearchCandidate]) -> Vec<&std::path::Path> 
         .collect()
 }
 
+fn song_paths(songs: &[Arc<SongData>]) -> Vec<&Path> {
+    songs
+        .iter()
+        .map(|song| song.simfile_path.as_path())
+        .collect()
+}
+
+fn pack_names(packs: &[SongPack]) -> Vec<&str> {
+    packs.iter().map(|pack| pack.group_name.as_str()).collect()
+}
+
 fn grouped_paths(groups: &[GroupedSongs]) -> Vec<&std::path::Path> {
     groups
         .iter()
@@ -565,6 +731,22 @@ fn candidate_checksum(candidates: &[SongSearchCandidate]) -> u64 {
         checksum.rotate_left(9)
             ^ text_checksum(&candidate.pack_name)
             ^ text_checksum(&candidate.song.title).rotate_left(23)
+    })
+}
+
+fn song_checksum(songs: &[Arc<SongData>]) -> u64 {
+    songs.iter().fold(0_u64, |checksum, song| {
+        checksum.rotate_left(7)
+            ^ text_checksum(&song.title)
+            ^ path_checksum(&song.simfile_path).rotate_left(19)
+    })
+}
+
+fn pack_checksum(packs: &[SongPack]) -> u64 {
+    packs.iter().fold(0_u64, |checksum, pack| {
+        checksum.rotate_left(11)
+            ^ text_checksum(&pack.sort_title)
+            ^ text_checksum(&pack.group_name).rotate_left(23)
     })
 }
 
@@ -645,6 +827,18 @@ fn media_classification_legacy(path: &Path) -> u64 {
     u64::from(foreground_media_ext_rank_legacy(path).unwrap_or(u8::MAX))
         | (u64::from(is_bgchange_movie_path_legacy(path)) << 8)
         | (u64::from(is_song_art_image_legacy(path)) << 9)
+}
+
+fn color_checksum(color: Option<[f32; 4]>) -> u64 {
+    color.map_or(0, |color| {
+        color.into_iter().fold(0_u64, |checksum, component| {
+            checksum.rotate_left(13) ^ u64::from(component.to_bits())
+        })
+    })
+}
+
+fn path_checksum(path: &Path) -> u64 {
+    text_checksum(path.to_string_lossy().as_ref())
 }
 
 fn text_checksum(text: &str) -> u64 {
@@ -802,6 +996,27 @@ fn benchmark_song(index: usize) -> Arc<SongData> {
             .map(|chart_index| benchmark_chart(index, chart_index))
             .collect(),
     })
+}
+
+fn benchmark_pack(index: usize) -> SongPack {
+    let shuffled = index.wrapping_mul(2_654_435_761usize) % PACKS;
+    let sort_title = if index.is_multiple_of(13) {
+        format!("PACK {shuffled:05}")
+    } else {
+        format!("Pack {shuffled:05}")
+    };
+    SongPack {
+        group_name: format!("Group {index:05}"),
+        name: sort_title.clone(),
+        sort_title,
+        translit_title: String::new(),
+        series: String::new(),
+        year: 0,
+        sync_pref: SyncPref::Default,
+        directory: PathBuf::from(format!("Songs/Group{index:05}")),
+        banner_path: None,
+        songs: Vec::new(),
+    }
 }
 
 fn benchmark_chart(index: usize, chart_index: usize) -> ChartData {

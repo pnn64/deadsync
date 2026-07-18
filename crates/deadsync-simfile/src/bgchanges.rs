@@ -43,6 +43,20 @@ pub fn split_bgchange_sets_like_itg(changes: &str, entries: &[String]) -> Vec<Ve
 }
 
 pub fn bgchange_field_rejects_non_media(field: &str) -> bool {
+    contains_ignore_ascii_case(field, ".ini") || contains_ignore_ascii_case(field, ".xml")
+}
+
+#[inline]
+fn contains_ignore_ascii_case(haystack: &str, needle: &str) -> bool {
+    haystack
+        .as_bytes()
+        .windows(needle.len())
+        .any(|window| window.eq_ignore_ascii_case(needle.as_bytes()))
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn bgchange_field_rejects_non_media_legacy(field: &str) -> bool {
     let lower = field.to_ascii_lowercase();
     lower.contains(".ini") || lower.contains(".xml")
 }
@@ -84,6 +98,43 @@ pub fn parse_bgchange_effect(
 }
 
 pub fn parse_bgchange_color(field: &str) -> Option<[f32; 4]> {
+    let field = field.trim();
+    if field.is_empty() {
+        return None;
+    }
+    if let Some(hex) = field.strip_prefix('#')
+        && matches!(hex.len(), 6 | 8)
+    {
+        let r = u8::from_str_radix(&hex[0..2], 16).ok()? as f32 / 255.0;
+        let g = u8::from_str_radix(&hex[2..4], 16).ok()? as f32 / 255.0;
+        let b = u8::from_str_radix(&hex[4..6], 16).ok()? as f32 / 255.0;
+        let a = if hex.len() == 8 {
+            u8::from_str_radix(&hex[6..8], 16).ok()? as f32 / 255.0
+        } else {
+            1.0
+        };
+        return Some([r, g, b, a]);
+    }
+    let mut parts = field
+        .split([',', '^'])
+        .map(str::trim)
+        .filter(|part| !part.is_empty());
+    let red = parts.next()?.parse::<f32>().ok()?;
+    let green = parts.next()?.parse::<f32>().ok()?;
+    let blue = parts.next()?.parse::<f32>().ok()?;
+    let alpha = match parts.next() {
+        Some(alpha) => alpha.parse::<f32>().ok()?,
+        None => 1.0,
+    };
+    if parts.next().is_some() {
+        return None;
+    }
+    Some([red, green, blue, alpha])
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn parse_bgchange_color_legacy(field: &str) -> Option<[f32; 4]> {
     let field = field.trim().replace('^', ",");
     if field.is_empty() {
         return None;
