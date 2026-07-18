@@ -677,6 +677,28 @@ pub fn song_lua_message_command_index(
     indices: &BTreeMap<String, usize>,
     message: &str,
 ) -> Option<usize> {
+    const STACK_MESSAGE_BYTES: usize = 128;
+
+    if !message.bytes().any(|byte| byte.is_ascii_uppercase()) {
+        return indices.get(message).copied();
+    }
+    if message.len() <= STACK_MESSAGE_BYTES {
+        let mut normalized = [0u8; STACK_MESSAGE_BYTES];
+        normalized[..message.len()].copy_from_slice(message.as_bytes());
+        normalized[..message.len()].make_ascii_lowercase();
+        let normalized = std::str::from_utf8(&normalized[..message.len()])
+            .expect("ASCII case folding preserves UTF-8");
+        return indices.get(normalized).copied();
+    }
+    indices.get(&message.to_ascii_lowercase()).copied()
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn song_lua_message_command_index_legacy_for_bench(
+    indices: &BTreeMap<String, usize>,
+    message: &str,
+) -> Option<usize> {
     indices.get(&message.to_ascii_lowercase()).copied()
 }
 

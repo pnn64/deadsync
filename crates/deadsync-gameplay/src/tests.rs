@@ -6740,12 +6740,20 @@ mod tests {
 
     #[test]
     fn song_lua_message_command_indices_match_case_insensitively() {
-        let indices =
-            build_song_lua_message_command_indices([(0, "Hide"), (1, "Show"), (2, "hide")]);
+        let long_command = "A".repeat(129);
+        let indices = build_song_lua_message_command_indices([
+            (0, "Hide"),
+            (1, "Show"),
+            (2, "hide"),
+            (3, "ÄHide"),
+            (4, long_command.as_str()),
+        ]);
 
         assert_eq!(song_lua_message_command_index(&indices, "hide"), Some(0));
         assert_eq!(song_lua_message_command_index(&indices, "HIDE"), Some(0));
         assert_eq!(song_lua_message_command_index(&indices, "show"), Some(1));
+        assert_eq!(song_lua_message_command_index(&indices, "ÄHIDE"), Some(3));
+        assert_eq!(song_lua_message_command_index(&indices, &long_command), Some(4));
         assert_eq!(song_lua_message_command_index(&indices, "missing"), None);
     }
 

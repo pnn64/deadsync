@@ -6288,6 +6288,13 @@ pub fn parse_favorited_packs_content(text: &str) -> HashSet<String> {
 
 pub fn render_favorited_packs_content(packs: &HashSet<String>) -> String {
     let mut sorted: Vec<&str> = packs.iter().map(String::as_str).collect();
+    sorted.sort_unstable_by(|a, b| favorites_view::ascii_case_insensitive_cmp(a, b));
+    sorted.join("\n")
+}
+
+#[cfg(feature = "bench-support")]
+pub fn render_favorited_packs_content_legacy_for_bench(packs: &HashSet<String>) -> String {
+    let mut sorted: Vec<&str> = packs.iter().map(String::as_str).collect();
     sorted.sort_unstable_by(|a, b| a.to_ascii_lowercase().cmp(&b.to_ascii_lowercase()));
     sorted.join("\n")
 }
@@ -11169,6 +11176,21 @@ mod tests {
             "Alpha Pack\nmidpack\nzebra mix"
         );
         assert_eq!(render_favorited_packs_content(&HashSet::new()), "");
+    }
+
+    #[test]
+    fn favorited_packs_content_preserves_ascii_case_and_non_ascii_names() {
+        let packs = HashSet::from([
+            "zulu".to_string(),
+            "BETA".to_string(),
+            "Alpha".to_string(),
+            "Äther".to_string(),
+        ]);
+
+        assert_eq!(
+            render_favorited_packs_content(&packs),
+            "Alpha\nBETA\nzulu\nÄther"
+        );
     }
 
     #[test]

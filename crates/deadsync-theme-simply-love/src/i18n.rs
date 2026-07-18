@@ -1,4 +1,9 @@
 pub use crate::i18n_runtime::{LookupKey, current_locale, lookup_key, revision, tr, tr_fmt};
+
+#[cfg(feature = "bench-support")]
+pub use crate::i18n_runtime::{
+    format_translation_template_for_bench, format_translation_template_legacy_for_bench,
+};
 pub use deadsync_assets::language::LanguageBundle;
 
 /// Initialize render-time localization from a prepared asset bundle.

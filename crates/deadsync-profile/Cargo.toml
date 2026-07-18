@@ -12,6 +12,11 @@ name = "gameplay_hud_snapshot"
 harness = false
 required-features = ["bench-support"]
 
+[[bench]]
+name = "favorite_pack_ordering"
+harness = false
+required-features = ["bench-support"]
+
 [dependencies]
 bincode = "2.0.1"
 bitflags = "2.13.1"

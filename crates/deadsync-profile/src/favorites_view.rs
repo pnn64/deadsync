@@ -1,5 +1,5 @@
 use deadsync_chart::SongData;
-use std::sync::Arc;
+use std::{cmp::Ordering, sync::Arc};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct FavoriteCatalogHeader {
@@ -72,7 +72,12 @@ pub fn favorite_view_plan<K: Ord>(
     );
 
     loose_songs.sort_by_cached_key(|song| song_sort_key(song));
-    pack_ranges.sort_by_cached_key(|range| header_sort_key(entries, range.header_index));
+    pack_ranges.sort_by(|left, right| {
+        ascii_case_insensitive_cmp(
+            header_name(entries, left.header_index),
+            header_name(entries, right.header_index),
+        )
+    });
 
     FavoriteViewPlan {
         loose_songs,
@@ -98,11 +103,17 @@ fn close_pack(
     }
 }
 
-fn header_sort_key(entries: &[FavoriteCatalogEntry], header_index: usize) -> String {
+fn header_name(entries: &[FavoriteCatalogEntry], header_index: usize) -> &str {
     match entries.get(header_index) {
-        Some(FavoriteCatalogEntry::Header(header)) => header.name.to_ascii_lowercase(),
-        Some(FavoriteCatalogEntry::Song(_)) | None => String::new(),
+        Some(FavoriteCatalogEntry::Header(header)) => &header.name,
+        Some(FavoriteCatalogEntry::Song(_)) | None => "",
     }
+}
+
+pub(crate) fn ascii_case_insensitive_cmp(left: &str, right: &str) -> Ordering {
+    left.bytes()
+        .map(|byte| byte.to_ascii_lowercase())
+        .cmp(right.bytes().map(|byte| byte.to_ascii_lowercase()))
 }
 
 #[cfg(test)]
@@ -233,5 +244,38 @@ mod tests {
 
         assert_eq!(song_titles(&plan.loose_songs), ["Song A1", "Song A2"]);
         assert!(plan.pack_ranges.is_empty());
+    }
+
+    #[test]
+    fn keeps_favorited_packs_case_insensitively_sorted_with_stable_ties() {
+        let entries = vec![
+            header("beta", Some("beta")),
+            header("Alpha", Some("Alpha")),
+            header("alpha", Some("alpha")),
+            header("Äther", Some("Äther")),
+        ];
+        let plan = favorite_view_plan(&entries, |_| true, |_| false, |song| song.title.clone());
+        let names = plan
+            .pack_ranges
+            .iter()
+            .map(|range| header_name(&entries, range.header_index))
+            .collect::<Vec<_>>();
+
+        assert_eq!(names, ["Alpha", "alpha", "beta", "Äther"]);
+    }
+
+    #[test]
+    fn allocation_free_comparator_matches_lowercase_sort_keys() {
+        let names = ["Alpha", "alpha", "BETA", "zebra", "Äther", "äther", ""];
+
+        for left in names {
+            for right in names {
+                assert_eq!(
+                    ascii_case_insensitive_cmp(left, right),
+                    left.to_ascii_lowercase().cmp(&right.to_ascii_lowercase()),
+                    "comparison changed for {left:?} and {right:?}"
+                );
+            }
+        }
     }
 }

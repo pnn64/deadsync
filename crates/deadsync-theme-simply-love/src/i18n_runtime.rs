@@ -114,11 +114,58 @@ fn ensure_test_init() {
 
 /// Look up a localized string with named placeholder substitution.
 pub fn tr_fmt(section: &str, key: &str, args: &[(&str, &str)]) -> Arc<str> {
-    let mut s = tr(section, key).to_string();
+    format_translation_template(tr(section, key).as_ref(), args)
+}
+
+fn format_translation_template(template: &str, args: &[(&str, &str)]) -> Arc<str> {
+    let extra_capacity = args.iter().fold(0usize, |capacity, (name, value)| {
+        capacity.saturating_add(value.len().saturating_sub(name.len().saturating_add(2)))
+    });
+    let mut s = String::with_capacity(template.len().saturating_add(extra_capacity));
+    s.push_str(template);
     for (name, value) in args {
-        s = s.replace(&format!("{{{name}}}"), value);
+        replace_named_placeholder(&mut s, name, value);
     }
     Arc::from(s)
+}
+
+fn replace_named_placeholder(text: &mut String, name: &str, value: &str) {
+    let mut search_from = 0usize;
+    while let Some(relative_open) = text[search_from..].find('{') {
+        let open = search_from + relative_open;
+        let name_start = open + 1;
+        let name_end = name_start.saturating_add(name.len());
+        let close = name_end.saturating_add(1);
+        let matches = text
+            .get(name_start..name_end)
+            .is_some_and(|candidate| candidate == name)
+            && text.as_bytes().get(name_end) == Some(&b'}');
+        if matches {
+            text.replace_range(open..close, value);
+            search_from = open.saturating_add(value.len());
+        } else {
+            search_from = name_start;
+        }
+    }
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+#[doc(hidden)]
+pub fn format_translation_template_for_bench(template: &str, args: &[(&str, &str)]) -> Arc<str> {
+    format_translation_template(template, args)
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+#[doc(hidden)]
+pub fn format_translation_template_legacy_for_bench(
+    template: &str,
+    args: &[(&str, &str)],
+) -> Arc<str> {
+    let mut text = template.to_owned();
+    for (name, value) in args {
+        text = text.replace(&format!("{{{name}}}"), value);
+    }
+    Arc::from(text)
 }
 
 /// Switch to shell-prepared language resources.
@@ -214,6 +261,21 @@ mod tests {
             )
             .as_ref(),
             "After"
+        );
+    }
+
+    #[test]
+    fn template_formatting_preserves_repeats_cascades_and_missing_names() {
+        let template = "{player}: {score}; again {player}; keep {missing}";
+        let args = [("player", "{alias}"), ("alias", "ALICE"), ("score", "99")];
+
+        assert_eq!(
+            format_translation_template(template, &args).as_ref(),
+            "ALICE: 99; again ALICE; keep {missing}"
+        );
+        assert_eq!(
+            format_translation_template_for_bench(template, &args),
+            format_translation_template_legacy_for_bench(template, &args)
         );
     }
 }
