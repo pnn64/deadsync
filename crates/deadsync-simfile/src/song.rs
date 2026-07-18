@@ -93,12 +93,12 @@ fn build_song_data(
     path: &Path,
     simfile_dir: &Path,
     simfile_data: &[u8],
-    summary: SimfileSummary,
+    mut summary: SimfileSummary,
     song_music_path: Option<PathBuf>,
     music_length_seconds: f32,
     options: &ParseSongOptions,
 ) -> SerializableSongData {
-    let charts = build_charts(&summary, simfile_dir, song_music_path.as_deref());
+    let charts = build_charts(&mut summary, simfile_dir, song_music_path.as_deref());
     let artwork = resolve_song_artwork_like_itg(
         simfile_dir,
         simfile_data,
@@ -171,6 +171,84 @@ fn build_song_data(
 }
 
 fn build_charts(
+    summary: &mut SimfileSummary,
+    simfile_dir: &Path,
+    song_music_path: Option<&Path>,
+) -> Vec<SerializableChartData> {
+    let charts = std::mem::take(&mut summary.charts);
+    let global_time_signatures = summary.normalized_time_signatures.as_str();
+    let allow_steps_timing =
+        rssp::timing::steps_timing_allowed(summary.ssc_version, summary.timing_format);
+    charts
+        .into_iter()
+        .map(|chart| {
+            let lanes = step_type_lanes(&chart.step_type_str);
+            let parsed_notes = parse_chart_notes(&chart.minimized_note_data, lanes);
+            let chart_time_signatures = chart
+                .chart_time_signatures
+                .as_deref()
+                .filter(|s| !s.trim().is_empty());
+            let global_time_signatures =
+                (!global_time_signatures.trim().is_empty()).then_some(global_time_signatures);
+            let time_signature_tag = if allow_steps_timing && chart.chart_has_own_timing {
+                chart_time_signatures
+            } else if allow_steps_timing {
+                chart_time_signatures.or(global_time_signatures)
+            } else {
+                global_time_signatures
+            };
+            let mut timing_segments = timing_segments_from_rssp(chart.timing_segments.as_ref());
+            timing_segments.time_signatures = parse_time_signatures(time_signature_tag);
+            let stamina_counts = build_stamina_counts(&chart);
+            let meter = chart.rating_str.parse().unwrap_or(0);
+            let music_path = chart_music_path(simfile_dir, song_music_path, &chart.music_path);
+            let parsed_notes = parsed_notes.iter().map(CachedParsedNote::from).collect();
+            let min_bpm = min_chart_bpm(&timing_segments.bpms);
+            let max_bpm = max_chart_bpm(&timing_segments.bpms);
+            let timing_segments = (&timing_segments).into();
+            let stats = (&chart.stats).into();
+            let tech_counts = (&chart.tech_counts).into();
+            let stamina_counts = (&stamina_counts).into();
+            let display_bpm = parse_chart_display_bpm(chart.chart_display_bpm.as_deref());
+            SerializableChartData {
+                chart_type: chart.step_type_str,
+                difficulty: chart.difficulty_str,
+                description: chart.description_str,
+                chart_name: chart.chart_name_str,
+                meter,
+                step_artist: chart.step_artist_str,
+                music_path,
+                notes: chart.minimized_note_data,
+                parsed_notes,
+                row_to_beat: chart.row_to_beat,
+                timing_segments,
+                short_hash: chart.short_hash,
+                stats,
+                tech_counts,
+                mines_nonfake: chart.mines_nonfake,
+                stamina_counts,
+                total_streams: chart.total_streams,
+                total_measures: chart.total_measures,
+                matrix_rating: chart.matrix_rating,
+                max_nps: chart.max_nps,
+                sn_detailed_breakdown: chart.sn_detailed_breakdown,
+                sn_partial_breakdown: chart.sn_partial_breakdown,
+                sn_simple_breakdown: chart.sn_simple_breakdown,
+                detailed_breakdown: chart.detailed_breakdown,
+                partial_breakdown: chart.partial_breakdown,
+                simple_breakdown: chart.simple_breakdown,
+                measure_nps_vec: chart.measure_nps_vec,
+                chart_attacks: chart.chart_attacks,
+                display_bpm,
+                min_bpm,
+                max_bpm,
+            }
+        })
+        .collect()
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn build_charts_legacy(
     summary: &SimfileSummary,
     simfile_dir: &Path,
     song_music_path: Option<&Path>,
@@ -237,6 +315,22 @@ fn build_charts(
         .collect()
 }
 
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn build_charts_from_summary_for_bench(
+    mut summary: SimfileSummary,
+) -> Vec<SerializableChartData> {
+    build_charts(&mut summary, Path::new("."), None)
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn build_charts_from_summary_legacy_for_bench(
+    summary: &SimfileSummary,
+) -> Vec<SerializableChartData> {
+    build_charts_legacy(summary, Path::new("."), None)
+}
+
 fn chart_music_path(
     simfile_dir: &Path,
     song_music_path: Option<&Path>,
@@ -282,6 +376,34 @@ fn max_chart_bpm(bpms: &[(f32, f32)]) -> f64 {
 mod tests {
     use super::*;
     use std::time::{SystemTime, UNIX_EPOCH};
+
+    #[test]
+    fn owned_chart_build_preserves_legacy_serialized_payload() {
+        let simfile = b"#TITLE:Owned Charts;\n\
+            #BPMS:0.000=120.000,64.000=180.000;\n\
+            #TIMESIGNATURES:0.000=4=4,32.000=3=4;\n\
+            #NOTES:\n\
+            dance-single:\n\
+            Tester:\n\
+            Challenge:\n\
+            12:\n\
+            0.000,0.000,0.000,0.000,0.000:\n\
+            1000\n0000\n0100\n0000\n,\n2000\n0000\n3000\n0000\n;";
+        let analysis_options = AnalysisOptions {
+            mono_threshold: SONG_ANALYSIS_MONO_THRESHOLD,
+            ..AnalysisOptions::default()
+        };
+        let legacy_summary = analyze(simfile, "sm", &analysis_options).unwrap();
+        let mut owned_summary = analyze(simfile, "sm", &analysis_options).unwrap();
+
+        let legacy = build_charts_legacy(&legacy_summary, Path::new("."), None);
+        let owned = build_charts(&mut owned_summary, Path::new("."), None);
+        let legacy = bincode::encode_to_vec(&legacy, bincode::config::standard()).unwrap();
+        let owned = bincode::encode_to_vec(&owned, bincode::config::standard()).unwrap();
+
+        assert_eq!(owned, legacy);
+        assert!(owned_summary.charts.is_empty());
+    }
 
     #[test]
     fn parses_song_payload_with_injected_music_length() {

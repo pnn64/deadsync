@@ -1,4 +1,5 @@
 use deadsync_chart::SongData;
+use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -250,21 +251,80 @@ pub fn resolve_foreground_media_dir(dir: &Path) -> Option<PathBuf> {
     let Ok(read_dir) = fs::read_dir(dir) else {
         return None;
     };
-    let mut media = read_dir
+    let mut best: Option<(u8, PathBuf)> = None;
+    for path in read_dir
         .flatten()
         .map(|entry| entry.path())
         .filter(|path| path.is_file())
-        .filter_map(|path| {
-            let rank = foreground_media_ext_rank(&path)?;
+    {
+        let Some(rank) = foreground_media_ext_rank(&path) else {
+            continue;
+        };
+        if best.as_ref().is_none_or(|(best_rank, best_path)| {
+            foreground_media_candidate_cmp(rank, &path, *best_rank, best_path).is_lt()
+        }) {
+            best = Some((rank, path));
+        }
+    }
+    best.map(|(_, path)| path)
+}
+
+#[inline]
+fn foreground_media_candidate_cmp(
+    left_rank: u8,
+    left_path: &Path,
+    right_rank: u8,
+    right_path: &Path,
+) -> Ordering {
+    left_rank.cmp(&right_rank).then_with(|| {
+        let left = left_path
+            .file_name()
+            .map(|name| name.to_string_lossy())
+            .unwrap_or_default();
+        let right = right_path
+            .file_name()
+            .map(|name| name.to_string_lossy())
+            .unwrap_or_default();
+        left.bytes()
+            .map(|byte| byte.to_ascii_lowercase())
+            .cmp(right.bytes().map(|byte| byte.to_ascii_lowercase()))
+    })
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn select_foreground_media_index_for_bench(paths: &[PathBuf]) -> Option<usize> {
+    let mut best: Option<(usize, u8)> = None;
+    for (index, path) in paths.iter().enumerate() {
+        let Some(rank) = foreground_media_ext_rank(path) else {
+            continue;
+        };
+        if best.as_ref().is_none_or(|(best_index, best_rank)| {
+            foreground_media_candidate_cmp(rank, path, *best_rank, &paths[*best_index]).is_lt()
+        }) {
+            best = Some((index, rank));
+        }
+    }
+    best.map(|(index, _)| index)
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn select_foreground_media_index_legacy_for_bench(paths: &[PathBuf]) -> Option<usize> {
+    let mut media = paths
+        .iter()
+        .enumerate()
+        .filter_map(|(index, path)| {
+            let rank = foreground_media_ext_rank(path)?;
             let name = path
                 .file_name()
                 .map(|name| name.to_string_lossy().to_ascii_lowercase())
                 .unwrap_or_default();
-            Some(((rank, name), path))
+            Some(((rank, name), index))
         })
         .collect::<Vec<_>>();
     media.sort_by(|left, right| left.0.cmp(&right.0));
-    media.into_iter().next().map(|(_, path)| path)
+    media.into_iter().next().map(|(_, index)| index)
 }
 
 pub fn resolve_foreground_media_path(song_dir: &Path, target: &str) -> Option<PathBuf> {
@@ -719,8 +779,9 @@ bright.ogv=1
         let media_dir = song_dir.join("Visuals");
         fs::create_dir_all(&media_dir).unwrap();
         fs::write(media_dir.join("still.png"), b"png").unwrap();
-        let movie = media_dir.join("clip.mp4");
+        let movie = media_dir.join("alpha.MP4");
         fs::write(&movie, b"mp4").unwrap();
+        fs::write(media_dir.join("clip.mp4"), b"mp4").unwrap();
 
         assert_eq!(
             resolve_foreground_media_dir(&media_dir),

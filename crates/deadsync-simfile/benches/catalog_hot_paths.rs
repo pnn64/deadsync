@@ -10,7 +10,7 @@ use deadsync_simfile::bgchanges::{
     parse_bgchange_color, parse_bgchange_color_legacy,
 };
 use deadsync_simfile::cache::{
-    SerializableSongForegroundChange, SerializableSongForegroundLuaChange,
+    SerializableChartData, SerializableSongForegroundChange, SerializableSongForegroundLuaChange,
 };
 use deadsync_simfile::changes::{
     extract_foreground_change_sets, extract_foreground_changes, extract_foreground_lua_changes,
@@ -21,15 +21,24 @@ use deadsync_simfile::media::{
     collapse_song_asset_path_like_itg_for_bench,
     collapse_song_asset_path_like_itg_legacy_for_bench, foreground_media_ext_rank,
     foreground_media_ext_rank_legacy, is_bgchange_movie_path, is_bgchange_movie_path_legacy,
-    is_song_art_image, is_song_art_image_legacy,
+    is_song_art_image, is_song_art_image_legacy, select_foreground_media_index_for_bench,
+    select_foreground_media_index_legacy_for_bench,
 };
 use deadsync_simfile::notes::{
     parse_chart_notes, parse_chart_notes_legacy, step_type_lanes, step_type_lanes_legacy,
 };
-use deadsync_simfile::playlist::{normalize_song_path, normalize_song_path_legacy};
+use deadsync_simfile::playlist::{
+    PlaylistSongSource, build_playlist_song_lookup, build_playlist_song_lookup_legacy,
+    find_playlist_song_for_bench, find_playlist_song_legacy_for_bench, normalize_song_path,
+    normalize_song_path_legacy,
+};
 use deadsync_simfile::scan::{
     sort_song_packs_for_bench, sort_song_packs_legacy, sort_songs_itgmania_for_bench,
     sort_songs_itgmania_legacy,
+};
+use deadsync_simfile::song::{
+    SONG_ANALYSIS_MONO_THRESHOLD, build_charts_from_summary_for_bench,
+    build_charts_from_summary_legacy_for_bench,
 };
 use deadsync_simfile::song_search::{
     SongSearchCandidate, SongSearchCatalogEntry, build_song_search_candidates,
@@ -43,6 +52,7 @@ use deadsync_simfile::song_sort::{
     title_grouped_songs_legacy,
 };
 use deadsync_simfile::tags::{latest_simfile_tag_value_legacy, latest_simfile_tag_values};
+use rssp::{AnalysisOptions, analyze};
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::fs;
 use std::hint::black_box;
@@ -84,6 +94,9 @@ const BGCHANGE_SUMMARY_CHANGES: usize = 8_192;
 const BGCHANGE_SUMMARY_ITERATIONS: usize = 256;
 const ARTWORK_PATHS: usize = 32_768;
 const ARTWORK_MATCH_ITERATIONS: usize = 64;
+const CHART_BUILD_ITERATIONS: usize = 32;
+const PLAYLIST_LOOKUP_ITERATIONS: usize = 32;
+const MEDIA_SELECTION_ITERATIONS: usize = 128;
 
 struct CountingAlloc {
     allocs: AtomicU64,
@@ -190,14 +203,19 @@ fn main() {
 
     let media_paths = benchmark_media_paths();
     benchmark_media_extensions(&media_paths);
+    benchmark_foreground_media_selection(&media_paths);
 
     let note_data = benchmark_note_data();
     benchmark_note_parsing(&note_data);
+
+    let chart_simfile = benchmark_chart_simfile();
+    benchmark_owned_chart_build(&chart_simfile);
 
     let foreground = ForegroundFixture::new();
     benchmark_foreground_changes(&foreground);
 
     let songs: Vec<_> = (0..SONGS).map(benchmark_song).collect();
+    benchmark_playlist_lookup(&songs);
     benchmark_catalog_song_sort(&songs);
     benchmark_search(&songs);
     benchmark_difficulty_text(&songs);
@@ -586,6 +604,30 @@ fn benchmark_media_extensions(paths: &[PathBuf]) {
     );
 }
 
+fn benchmark_foreground_media_selection(paths: &[PathBuf]) {
+    assert_eq!(
+        select_foreground_media_index_legacy_for_bench(paths),
+        select_foreground_media_index_for_bench(paths),
+        "foreground media selection changed"
+    );
+
+    let old = measure(MEDIA_SELECTION_ITERATIONS, || {
+        select_foreground_media_index_legacy_for_bench(black_box(paths)).unwrap_or_default() as u64
+    });
+    let new = measure(MEDIA_SELECTION_ITERATIONS, || {
+        select_foreground_media_index_for_bench(black_box(paths)).unwrap_or_default() as u64
+    });
+    assert_eq!(old.checksum, new.checksum);
+    print_pair(
+        "single-pass foreground media selection",
+        paths.len(),
+        MEDIA_SELECTION_ITERATIONS,
+        "paths",
+        &old,
+        &new,
+    );
+}
+
 fn benchmark_note_parsing(note_data: &[u8]) {
     let old_notes = parse_chart_notes_legacy(note_data, 4);
     let new_notes = parse_chart_notes(note_data, 4);
@@ -603,6 +645,48 @@ fn benchmark_note_parsing(note_data: &[u8]) {
         NOTE_ROWS,
         NOTE_ITERATIONS,
         "rows",
+        &old,
+        &new,
+    );
+}
+
+fn benchmark_owned_chart_build(simfile_data: &[u8]) {
+    let analysis_options = AnalysisOptions {
+        mono_threshold: SONG_ANALYSIS_MONO_THRESHOLD,
+        ..AnalysisOptions::default()
+    };
+    let legacy_summary = analyze(simfile_data, "sm", &analysis_options).expect("analyze charts");
+    let owned_summary = analyze(simfile_data, "sm", &analysis_options).expect("analyze charts");
+    let legacy = build_charts_from_summary_legacy_for_bench(&legacy_summary);
+    let owned = build_charts_from_summary_for_bench(owned_summary);
+    assert_eq!(
+        bincode::encode_to_vec(&legacy, bincode::config::standard()).expect("encode legacy charts"),
+        bincode::encode_to_vec(&owned, bincode::config::standard()).expect("encode owned charts"),
+        "owned chart build changed serialized output"
+    );
+
+    let mut legacy_summaries = (0..CHART_BUILD_ITERATIONS + 2)
+        .map(|_| analyze(simfile_data, "sm", &analysis_options).expect("analyze chart fixture"))
+        .collect::<Vec<_>>();
+    let old = measure(CHART_BUILD_ITERATIONS, || {
+        let summary = legacy_summaries.pop().expect("legacy chart summary pool");
+        chart_checksum(&build_charts_from_summary_legacy_for_bench(black_box(
+            &summary,
+        )))
+    });
+    let mut owned_summaries = (0..CHART_BUILD_ITERATIONS + 2)
+        .map(|_| analyze(simfile_data, "sm", &analysis_options).expect("analyze chart fixture"))
+        .collect::<Vec<_>>();
+    let new = measure(CHART_BUILD_ITERATIONS, || {
+        let summary = owned_summaries.pop().expect("owned chart summary pool");
+        chart_checksum(&build_charts_from_summary_for_bench(black_box(summary)))
+    });
+    assert_eq!(old.checksum, new.checksum);
+    print_pair(
+        "owned chart buffer transfer",
+        legacy.len(),
+        CHART_BUILD_ITERATIONS,
+        "charts",
         &old,
         &new,
     );
@@ -656,6 +740,70 @@ fn benchmark_foreground_changes(fixture: &ForegroundFixture) {
         fixture.simfile.len(),
         FOREGROUND_ITERATIONS,
         "bytes",
+        &old,
+        &new,
+    );
+}
+
+fn benchmark_playlist_lookup(songs: &[Arc<SongData>]) {
+    let sources = || {
+        songs
+            .iter()
+            .map(|song| PlaylistSongSource {
+                group_name: Some("Performance".to_string()),
+                song: Arc::clone(song),
+                lobby_path: None,
+            })
+            .collect::<Vec<_>>()
+    };
+    let legacy_lookup = build_playlist_song_lookup_legacy(sources());
+    let lookup = build_playlist_song_lookup(sources());
+    let queries = (0..songs.len())
+        .map(|index| {
+            if index.is_multiple_of(2) {
+                format!("Performance/Song{index:05}")
+            } else {
+                format!(" /PERFORMANCE\\SONG{index:05}/ ")
+            }
+        })
+        .collect::<Vec<_>>();
+
+    for query in &queries {
+        assert_eq!(
+            find_playlist_song_legacy_for_bench(&legacy_lookup, query)
+                .as_ref()
+                .map(|song| song.simfile_path.as_path()),
+            find_playlist_song_for_bench(&lookup, query)
+                .as_ref()
+                .map(|song| song.simfile_path.as_path()),
+            "playlist lookup changed for {query:?}"
+        );
+    }
+
+    let old = measure(PLAYLIST_LOOKUP_ITERATIONS, || {
+        black_box(&queries).iter().fold(0_u64, |checksum, query| {
+            let song = find_playlist_song_legacy_for_bench(&legacy_lookup, query);
+            checksum.rotate_left(7)
+                ^ song
+                    .as_ref()
+                    .map_or(0, |song| path_checksum(&song.simfile_path))
+        })
+    });
+    let new = measure(PLAYLIST_LOOKUP_ITERATIONS, || {
+        black_box(&queries).iter().fold(0_u64, |checksum, query| {
+            let song = find_playlist_song_for_bench(&lookup, query);
+            checksum.rotate_left(7)
+                ^ song
+                    .as_ref()
+                    .map_or(0, |song| path_checksum(&song.simfile_path))
+        })
+    });
+    assert_eq!(old.checksum, new.checksum);
+    print_pair(
+        "single-allocation playlist lookup",
+        queries.len(),
+        PLAYLIST_LOOKUP_ITERATIONS,
+        "lookups",
         &old,
         &new,
     );
@@ -1048,6 +1196,24 @@ fn note_checksum(notes: &[ParsedNote]) -> u64 {
     })
 }
 
+fn chart_checksum(charts: &[SerializableChartData]) -> u64 {
+    charts.iter().fold(0_u64, |checksum, chart| {
+        let notes = chart
+            .notes
+            .iter()
+            .fold(0_u64, |sum, byte| sum.rotate_left(3) ^ u64::from(*byte));
+        checksum.rotate_left(11)
+            ^ text_checksum(&chart.chart_type)
+            ^ text_checksum(&chart.difficulty).rotate_left(7)
+            ^ text_checksum(&chart.description).rotate_left(13)
+            ^ text_checksum(&chart.short_hash).rotate_left(19)
+            ^ notes.rotate_left(23)
+            ^ (chart.parsed_notes.len() as u64).rotate_left(29)
+            ^ (chart.row_to_beat.len() as u64).rotate_left(37)
+            ^ (chart.measure_nps_vec.len() as u64).rotate_left(43)
+    })
+}
+
 fn meter_checksum(mut checksum: u64, meters: &[u32]) -> u64 {
     for &meter in meters {
         checksum = checksum.rotate_left(7) ^ u64::from(meter);
@@ -1152,6 +1318,38 @@ fn benchmark_note_data() -> Vec<u8> {
             _ => b"0000\n".as_slice(),
         };
         data.extend_from_slice(line);
+    }
+    data
+}
+
+fn benchmark_chart_simfile() -> Vec<u8> {
+    const CHARTS: usize = 8;
+    const ROWS: usize = 1_024;
+    let mut data = Vec::with_capacity(CHARTS * ROWS * 5 + 1_024);
+    data.extend_from_slice(
+        b"#TITLE:Owned Chart Benchmark;\n#BPMS:0.000=120.000,64.000=180.000;\n\
+          #TIMESIGNATURES:0.000=4=4,32.000=3=4;\n",
+    );
+    for chart in 0..CHARTS {
+        data.extend_from_slice(
+            format!(
+                "#NOTES:\ndance-single:\nBenchmark Chart {chart}:\nChallenge:\n{}:\n\
+                 0.000,0.000,0.000,0.000,0.000:\n",
+                10 + chart
+            )
+            .as_bytes(),
+        );
+        for row in 0..ROWS {
+            let notes = if row.is_multiple_of(64) {
+                b"1000\n".as_slice()
+            } else if row.is_multiple_of(31) {
+                b"0101\n".as_slice()
+            } else {
+                b"0000\n".as_slice()
+            };
+            data.extend_from_slice(notes);
+        }
+        data.extend_from_slice(b";\n");
     }
     data
 }
