@@ -72,8 +72,10 @@ use deadsync_theme::views::{AudioPlaybackView, SmxAssignmentPadView, SmxAssignme
 use deadsync_theme::{AudioCut, AudioRequest};
 use image::{Rgba, RgbaImage};
 use log::{debug, warn};
+use rustc_hash::FxHashMap;
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
+use std::ops::Range;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -1024,6 +1026,91 @@ impl MusicWheelEntry {
     }
 }
 
+struct FolderStatsPackIndex {
+    header_index: usize,
+    entry_range: Range<usize>,
+}
+
+#[derive(Default)]
+struct FolderStatsPackSummaries {
+    by_side_chart: [[FxHashMap<String, score_data::FolderStatsSummary>; 2]; 2],
+}
+
+/// Screen-lifetime folder-stat index and summary cache.
+///
+/// Owner/threading: Select Music owns it on the main thread; `RefCell` only
+/// permits immutable actor composition to populate a missing summary.
+/// Capacity: one index per pack and at most one summary per requested
+/// `(pack, side, single/double, difficulty)` tuple.
+/// Warmup: pack ranges and song identities are indexed when the screen is
+/// initialized. Summaries are populated on their first visible menu frame.
+/// Miss: scans only the selected pack range and performs cached-score lookups.
+/// Hits: two Fx lookups with no allocation or source entry/chart scan.
+/// Eviction: none; history replacement clears summaries and content reload
+/// builds a fresh screen cache. Entries are destroyed with the screen.
+/// Instrumentation: the `select_music_folder_stats` benchmark covers solo and
+/// versus hit paths. Worst-case frame work is one pack scan per newly requested
+/// side/chart-type/difficulty combination.
+#[derive(Default)]
+struct FolderStatsCache {
+    packs: Vec<FolderStatsPackIndex>,
+    pack_by_key: FxHashMap<String, usize>,
+    pack_by_song: FxHashMap<usize, usize>,
+    summaries: RefCell<Vec<FolderStatsPackSummaries>>,
+}
+
+impl FolderStatsCache {
+    fn new(entries: &[MusicWheelEntry]) -> Self {
+        let mut packs: Vec<FolderStatsPackIndex> = Vec::new();
+        let mut pack_by_key = FxHashMap::default();
+        let mut pack_by_song = FxHashMap::default();
+        pack_by_song.reserve(entries.len());
+        let mut current_pack: Option<usize> = None;
+        for (entry_index, entry) in entries.iter().enumerate() {
+            match entry {
+                MusicWheelEntry::PackHeader { pack_key, .. } => {
+                    if let Some(pack_index) = current_pack.take() {
+                        packs[pack_index].entry_range.end = entry_index;
+                    }
+                    if let Some(pack_key) = pack_key {
+                        let pack_index = packs.len();
+                        packs.push(FolderStatsPackIndex {
+                            header_index: entry_index,
+                            entry_range: entry_index + 1..entries.len(),
+                        });
+                        pack_by_key.insert(pack_key.clone(), pack_index);
+                        current_pack = Some(pack_index);
+                    }
+                }
+                MusicWheelEntry::Song(song) => {
+                    if let Some(pack_index) = current_pack {
+                        pack_by_song.insert(Arc::as_ptr(song) as usize, pack_index);
+                    }
+                }
+            }
+        }
+        let summaries = std::iter::repeat_with(FolderStatsPackSummaries::default)
+            .take(packs.len())
+            .collect();
+        Self {
+            packs,
+            pack_by_key,
+            pack_by_song,
+            summaries: RefCell::new(summaries),
+        }
+    }
+
+    fn clear_summaries(&mut self) {
+        for pack in self.summaries.get_mut() {
+            for side in &mut pack.by_side_chart {
+                for chart_type in side {
+                    chart_type.clear();
+                }
+            }
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 struct DisplayedChart {
     song: Arc<SongData>,
@@ -1165,6 +1252,7 @@ pub struct State {
     all_entries: Vec<MusicWheelEntry>,
     series_entries: Vec<MusicWheelEntry>,
     group_entries: Vec<MusicWheelEntry>,
+    folder_stats: FolderStatsCache,
     title_entries: Vec<MusicWheelEntry>,
     artist_entries: Vec<MusicWheelEntry>,
     genre_entries: Vec<MusicWheelEntry>,
@@ -1814,37 +1902,35 @@ fn media_path_key_string(path: &Path) -> String {
     path.to_string_lossy().into_owned()
 }
 
-fn selected_group_header_for_folder_stats(state: &State) -> Option<(&str, Option<&Path>)> {
+fn selected_group_header_for_folder_stats(state: &State) -> Option<(usize, &str, Option<&Path>)> {
     if !matches!(
         state.sort_mode,
         WheelSortMode::Series | WheelSortMode::Group
     ) {
         return None;
     }
-    match state.entries.get(state.selected_index) {
-        Some(MusicWheelEntry::PackHeader {
-            name,
-            banner_path,
-            pack_key: Some(_),
+    let pack_index = match state.entries.get(state.selected_index)? {
+        MusicWheelEntry::PackHeader {
+            pack_key: Some(pack_key),
             ..
-        }) => Some((name.as_str(), banner_path.as_deref())),
-        Some(MusicWheelEntry::PackHeader { .. }) => None,
-        Some(MusicWheelEntry::Song(target_song)) => {
-            let mut current: Option<(&str, Option<&Path>)> = None;
-            for entry in &state.group_entries {
-                match entry {
-                    MusicWheelEntry::PackHeader {
-                        name, banner_path, ..
-                    } => current = Some((name.as_str(), banner_path.as_deref())),
-                    MusicWheelEntry::Song(song) if Arc::ptr_eq(song, target_song) => {
-                        return current;
-                    }
-                    MusicWheelEntry::Song(_) => {}
-                }
-            }
-            None
-        }
-        None => None,
+        } => state
+            .folder_stats
+            .pack_by_key
+            .get(pack_key.as_str())
+            .copied(),
+        MusicWheelEntry::PackHeader { .. } => None,
+        MusicWheelEntry::Song(song) => state
+            .folder_stats
+            .pack_by_song
+            .get(&(Arc::as_ptr(song) as usize))
+            .copied(),
+    }?;
+    let header_index = state.folder_stats.packs.get(pack_index)?.header_index;
+    match state.group_entries.get(header_index)? {
+        MusicWheelEntry::PackHeader {
+            name, banner_path, ..
+        } => Some((pack_index, name.as_str(), banner_path.as_deref())),
+        MusicWheelEntry::Song(_) => None,
     }
 }
 
@@ -1855,30 +1941,55 @@ fn folder_stats_preferred_difficulty(preferred_idx: usize) -> &'static str {
 
 fn build_folder_stats_summary(
     state: &State,
-    group_name: &str,
+    pack_index: usize,
+    side: profile_data::PlayerSide,
     target_chart_type: &str,
     difficulty: &str,
-    history: &SelectMusicHistorySideView,
 ) -> score_data::FolderStatsSummary {
-    let mut songs = Vec::new();
-    let mut in_group = false;
-    for entry in &state.group_entries {
-        match entry {
-            MusicWheelEntry::PackHeader { name, .. } => {
-                if in_group && name != group_name {
-                    break;
-                }
-                in_group = name == group_name;
-            }
-            MusicWheelEntry::Song(song) if in_group => {
-                songs.push(song.as_ref());
-            }
-            MusicWheelEntry::Song(_) => {}
+    let chart_type_index = if target_chart_type.eq_ignore_ascii_case("dance-single") {
+        Some(0)
+    } else if target_chart_type.eq_ignore_ascii_case("dance-double") {
+        Some(1)
+    } else {
+        None
+    };
+    let side_index = profile_data::player_side_index(side);
+    if let Some(chart_type_index) = chart_type_index {
+        let cached = {
+            let summaries = state.folder_stats.summaries.borrow();
+            summaries
+                .get(pack_index)
+                .and_then(|pack| pack.by_side_chart[side_index][chart_type_index].get(difficulty))
+                .copied()
+        };
+        if let Some(summary) = cached {
+            return summary;
         }
     }
-    score_data::folder_stats_summary(songs, target_chart_type, difficulty, |hash| {
+
+    let Some(pack) = state.folder_stats.packs.get(pack_index) else {
+        return score_data::FolderStatsSummary::default();
+    };
+    let history = &state.history.sides[side_index];
+    let songs = state.group_entries[pack.entry_range.clone()]
+        .iter()
+        .filter_map(|entry| match entry {
+            MusicWheelEntry::Song(song) => Some(song.as_ref()),
+            MusicWheelEntry::PackHeader { .. } => None,
+        });
+    let summary = score_data::folder_stats_summary(songs, target_chart_type, difficulty, |hash| {
         history_score(history, hash)
-    })
+    });
+    if let Some(chart_type_index) = chart_type_index
+        && let Some(pack) = state
+            .folder_stats
+            .summaries
+            .borrow_mut()
+            .get_mut(pack_index)
+    {
+        pack.by_side_chart[side_index][chart_type_index].insert(difficulty.to_owned(), summary);
+    }
+    summary
 }
 
 #[inline(always)]
@@ -2997,11 +3108,13 @@ pub fn init(init_view: SelectMusicInitView) -> State {
     } else {
         all_entries.clone()
     };
+    let folder_stats = FolderStatsCache::new(&all_entries);
 
     let mut state = State {
         all_entries: initial_entries,
         series_entries,
         group_entries: all_entries,
+        folder_stats,
         title_entries,
         artist_entries,
         genre_entries,
@@ -3240,6 +3353,7 @@ pub fn init_placeholder() -> State {
         all_entries: Vec::new(),
         series_entries: Vec::new(),
         group_entries: Vec::new(),
+        folder_stats: FolderStatsCache::default(),
         title_entries: Vec::new(),
         artist_entries: Vec::new(),
         genre_entries: Vec::new(),
@@ -10752,7 +10866,7 @@ fn update_impl(state: &mut State, dt: f32, smx: &SmxAssignmentView) -> ThemeEffe
         None
     };
     let new_folder_stats_banner = if state.policy.media.show_folder_stats {
-        selected_group_header_for_folder_stats(state).and_then(|(_, path)| path)
+        selected_group_header_for_folder_stats(state).and_then(|(_, _, path)| path)
     } else {
         None
     };
@@ -11009,6 +11123,7 @@ pub fn refresh_from_song_packs(state: &mut State, song_packs: Vec<SongPack>) {
 
 pub fn reset_preview_after_gameplay(state: &mut State, history: SelectMusicHistoryView) {
     state.history = history;
+    state.folder_stats.clear_summaries();
     let was_recent_sort = state.sort_mode == WheelSortMode::Recent;
     let was_popularity_sort = state.sort_mode == WheelSortMode::Popularity;
     refresh_recent_cache(state);
@@ -11351,6 +11466,148 @@ impl Default for SelectMusicMediaBench {
 }
 
 #[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub struct SelectMusicFolderStatsBench {
+    state: State,
+    assets: AssetManager,
+    smx: SmxAssignmentView,
+    actors: Vec<Actor>,
+}
+
+#[cfg(feature = "bench-support")]
+impl SelectMusicFolderStatsBench {
+    const SONGS: usize = 512;
+
+    pub fn new(versus: bool) -> Self {
+        let songs: Vec<_> = (0..Self::SONGS).map(bench_folder_stats_song).collect();
+        let mut entries = Vec::with_capacity(Self::SONGS + 1);
+        entries.push(MusicWheelEntry::PackHeader {
+            name: "Benchmark Pack".to_string(),
+            original_index: 0,
+            banner_path: None,
+            song_count: Self::SONGS,
+            pack_key: Some("benchmark-pack".to_string()),
+            parent_series: None,
+        });
+        entries.extend(songs.iter().cloned().map(MusicWheelEntry::Song));
+
+        let scores: Vec<_> = songs
+            .iter()
+            .flat_map(|song| {
+                song.charts.iter().map(|chart| {
+                    (
+                        chart.short_hash.clone(),
+                        score_data::CachedScore {
+                            grade: score_data::Grade::Tier02,
+                            score_percent: 0.95,
+                            lamp_index: None,
+                            lamp_judge_count: None,
+                        },
+                    )
+                })
+            })
+            .collect();
+        let mut state = init_placeholder();
+        state.all_entries = entries.clone();
+        state.group_entries = entries.clone();
+        state.folder_stats = FolderStatsCache::new(&state.group_entries);
+        state.entries = entries;
+        state.selected_index = Self::SONGS;
+        state.prev_selected_index = state.selected_index;
+        state.sort_mode = WheelSortMode::Group;
+        state.expanded_pack_name = Some("Benchmark Pack".to_string());
+        state.preferred_difficulty_index = 3;
+        state.p2_preferred_difficulty_index = 3;
+        state.policy.media.show_banners = false;
+        state.policy.media.show_cdtitles = false;
+        state.policy.media.show_folder_stats = true;
+        state.policy.media.show_previews = false;
+        state.session.play_style = if versus {
+            profile_data::PlayStyle::Versus
+        } else {
+            profile_data::PlayStyle::Single
+        };
+        state.session.joined = [true, versus];
+        state.session.guest = [false, !versus];
+        state.profiles.display_names = ["Player 1".to_string(), "Player 2".to_string()];
+        state.history.sides[0].available = true;
+        state.history.sides[0].cached_scores = scores.clone();
+        if versus {
+            state.history.sides[1].available = true;
+            state.history.sides[1].cached_scores = scores;
+        }
+        Self {
+            state,
+            assets: AssetManager::new(),
+            smx: SmxAssignmentView::default(),
+            actors: Vec::with_capacity(256),
+        }
+    }
+
+    pub fn frame(&mut self) -> usize {
+        let effect = update(&mut self.state, 0.0, &self.smx);
+        self.actors.clear();
+        push_actors(
+            &mut self.actors,
+            &self.state,
+            &self.assets,
+            1,
+            crate::views::SimplyLoveVisualPolicyView::default(),
+        );
+        self.actors.len() + usize::from(!matches!(effect, ThemeEffect::None))
+    }
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn bench_folder_stats_song(index: usize) -> Arc<SongData> {
+    let mut song = (*bench_media_song(index)).clone();
+    song.banner_path = None;
+    song.background_path = None;
+    song.cdtitle_path = None;
+    song.charts = STANDARD_DIFFICULTY_NAMES
+        .iter()
+        .enumerate()
+        .map(|(difficulty_index, difficulty)| ChartData {
+            chart_type: "dance-single".to_string(),
+            difficulty: (*difficulty).to_string(),
+            description: String::new(),
+            chart_name: String::new(),
+            meter: 9,
+            step_artist: String::new(),
+            music_path: None,
+            short_hash: format!("bench-{index:04}-{difficulty_index}"),
+            stats: deadsync_chart::ArrowStats::default(),
+            tech_counts: deadsync_chart::TechCounts::default(),
+            mines_nonfake: 0,
+            stamina_counts: deadsync_chart::StaminaCounts::default(),
+            total_streams: 0,
+            matrix_rating: 0.0,
+            max_nps: 0.0,
+            sn_detailed_breakdown: String::new(),
+            sn_partial_breakdown: String::new(),
+            sn_simple_breakdown: String::new(),
+            detailed_breakdown: String::new(),
+            partial_breakdown: String::new(),
+            simple_breakdown: String::new(),
+            total_measures: 0,
+            measure_nps_vec: Vec::new(),
+            measure_seconds_vec: Vec::new(),
+            first_second: 0.0,
+            has_note_data: true,
+            has_chart_attacks: false,
+            possible_grade_points: 0,
+            holds_total: 0,
+            rolls_total: 0,
+            mines_total: 0,
+            display_bpm: None,
+            min_bpm: 120.0,
+            max_bpm: 120.0,
+        })
+        .collect();
+    Arc::new(song)
+}
+
+#[cfg(any(test, feature = "bench-support"))]
 fn bench_media_song(index: usize) -> Arc<SongData> {
     Arc::new(SongData {
         simfile_path: PathBuf::from(format!("Songs/Bench/Song{index}/song.ssc")),
@@ -11406,15 +11663,15 @@ fn push_folder_stats_overlay(
     {
         return;
     }
-    let Some((group_name, banner_path)) = selected_group_header_for_folder_stats(state) else {
+    let Some((pack_index, group_name, banner_path)) = selected_group_header_for_folder_stats(state)
+    else {
         return;
     };
     let difficulty = chart
         .map(|c| c.difficulty.as_str())
         .unwrap_or_else(|| folder_stats_preferred_difficulty(preferred_difficulty_index));
-    let history = &state.history.sides[profile_data::player_side_index(side)];
     let summary =
-        build_folder_stats_summary(state, &group_name, target_chart_type, difficulty, history);
+        build_folder_stats_summary(state, pack_index, side, target_chart_type, difficulty);
 
     let not_wide = screen_width() / screen_height().max(1.0) < 16.0 / 9.0;
     let source_w = if not_wide { 314.0 } else { 418.0 };
@@ -11473,7 +11730,7 @@ fn push_folder_stats_overlay(
     let folder_y = if not_wide { -50.0 } else { -60.0 };
     children.push(act!(text:
         font(font_key):
-        settext(cached_str_ref(&group_name)):
+        settext(cached_str_ref(group_name)):
         align(0.5, 0.5):
         xy(cx, sy(folder_y)):
         maxwidth(200.0 * scale):
@@ -13938,6 +14195,104 @@ mod tests {
             precise_last_second_seconds: 0.0,
             charts: Vec::new(),
         })
+    }
+
+    fn folder_stats_state() -> super::State {
+        let song = super::bench_folder_stats_song(0);
+        let entries = vec![
+            super::MusicWheelEntry::PackHeader {
+                name: "Folder Stats Pack".to_string(),
+                original_index: 0,
+                banner_path: Some(PathBuf::from("folder-stats.png")),
+                song_count: 1,
+                pack_key: Some("folder-stats-pack".to_string()),
+                parent_series: None,
+            },
+            super::MusicWheelEntry::Song(song.clone()),
+        ];
+        let hard_hash = song.charts[3].short_hash.clone();
+        let mut state = init_placeholder();
+        state.all_entries = entries.clone();
+        state.group_entries = entries.clone();
+        state.folder_stats = super::FolderStatsCache::new(&entries);
+        state.entries = entries;
+        state.selected_index = 1;
+        state.sort_mode = WheelSortMode::Group;
+        state.history.sides[0].available = true;
+        state.history.sides[0].cached_scores.push((
+            hard_hash,
+            deadsync_score::CachedScore {
+                grade: deadsync_score::Grade::Tier02,
+                score_percent: 0.95,
+                lamp_index: None,
+                lamp_judge_count: None,
+            },
+        ));
+        state
+    }
+
+    #[test]
+    fn folder_stats_index_resolves_header_and_song_without_scanning() {
+        let mut state = folder_stats_state();
+
+        let (song_pack, song_name, song_banner) =
+            super::selected_group_header_for_folder_stats(&state).expect("song pack");
+        assert_eq!(song_pack, 0);
+        assert_eq!(song_name, "Folder Stats Pack");
+        assert_eq!(
+            song_banner,
+            Some(PathBuf::from("folder-stats.png").as_path())
+        );
+        assert_eq!(state.folder_stats.packs[0].entry_range, 1..2);
+
+        state.selected_index = 0;
+        let (header_pack, header_name, _) =
+            super::selected_group_header_for_folder_stats(&state).expect("header pack");
+        assert_eq!(header_pack, song_pack);
+        assert_eq!(header_name, "Folder Stats Pack");
+    }
+
+    #[test]
+    fn folder_stats_summary_memoizes_and_invalidates_with_history() {
+        let mut state = folder_stats_state();
+
+        let summary = super::build_folder_stats_summary(
+            &state,
+            0,
+            profile_data::PlayerSide::P1,
+            "dance-single",
+            "Hard",
+        );
+        assert_eq!(summary.count_charts, 1);
+        assert_eq!(summary.passes, 1);
+        assert_eq!(
+            state.folder_stats.summaries.borrow()[0].by_side_chart[0][0].len(),
+            1
+        );
+        assert_eq!(
+            super::build_folder_stats_summary(
+                &state,
+                0,
+                profile_data::PlayerSide::P1,
+                "dance-single",
+                "Hard",
+            ),
+            summary
+        );
+
+        let mut history = crate::views::SelectMusicHistoryView::default();
+        history.sides[0].available = true;
+        reset_preview_after_gameplay(&mut state, history);
+        assert!(state.folder_stats.summaries.borrow()[0].by_side_chart[0][0].is_empty());
+        let refreshed = super::build_folder_stats_summary(
+            &state,
+            0,
+            profile_data::PlayerSide::P1,
+            "dance-single",
+            "Hard",
+        );
+        assert_eq!(refreshed.count_charts, 1);
+        assert_eq!(refreshed.passes, 0);
     }
 
     fn test_running_sync_overlay() -> super::NullOrDieOverlayData {
