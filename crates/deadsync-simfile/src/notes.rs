@@ -18,7 +18,24 @@ fn invalidate_hold(
 
 /// Parses minimized chart note data into note events, tracking hold/roll tails.
 pub fn parse_chart_notes(minimized_note_data: &[u8], lanes: usize) -> Vec<ParsedNote> {
-    let mut notes = Vec::new();
+    let note_capacity = minimized_note_data
+        .iter()
+        .filter(|&&ch| {
+            matches!(
+                ch,
+                b'1' | b'F' | b'f' | b'2' | b'4' | b'M' | b'm' | b'L' | b'l'
+            )
+        })
+        .count();
+    parse_chart_notes_with_capacity(minimized_note_data, lanes, note_capacity)
+}
+
+fn parse_chart_notes_with_capacity(
+    minimized_note_data: &[u8],
+    lanes: usize,
+    note_capacity: usize,
+) -> Vec<ParsedNote> {
+    let mut notes = Vec::with_capacity(note_capacity);
     let mut row_index = 0usize;
     let lanes = lanes.max(1);
     let mut hold_heads: Vec<Option<usize>> = vec![None; lanes];
@@ -118,6 +135,12 @@ pub fn parse_chart_notes(minimized_note_data: &[u8], lanes: usize) -> Vec<Parsed
         keep
     });
     notes
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn parse_chart_notes_legacy(minimized_note_data: &[u8], lanes: usize) -> Vec<ParsedNote> {
+    parse_chart_notes_with_capacity(minimized_note_data, lanes, 0)
 }
 
 #[cfg(test)]

@@ -8,9 +8,9 @@ use crate::cache::{
     SerializableSongForegroundLuaChange,
 };
 use crate::media::{
-    is_bgchange_movie_path, is_mac_resource_fork, list_song_dir_rel_entries,
-    path_uses_lua_like_itg, resolve_foreground_media_path, resolve_song_path_like_itg,
-    song_lua_entry_path_like_itg,
+    foreground_media_ext_rank, is_bgchange_movie_path, is_mac_resource_fork,
+    list_song_dir_rel_entries, path_uses_lua_like_itg, resolve_foreground_media_dir,
+    resolve_song_path_like_itg, song_lua_entry_path_like_itg,
 };
 use crate::tags::extract_named_tag_values;
 use deadsync_chart::{SongBackgroundChange, SongBackgroundChangeTarget};
@@ -36,59 +36,86 @@ pub fn extract_foreground_changes(
     song_dir: &Path,
     simfile_data: &[u8],
 ) -> Vec<SerializableSongForegroundChange> {
+    extract_foreground_change_sets_with(song_dir, simfile_data, true, false).media
+}
+
+pub struct ForegroundChangeSets {
+    pub media: Vec<SerializableSongForegroundChange>,
+    pub lua: Vec<SerializableSongForegroundLuaChange>,
+    pub uses_lua: bool,
+}
+
+/// Resolves foreground media and Lua entries in one simfile and directory pass.
+pub fn extract_foreground_change_sets(
+    song_dir: &Path,
+    simfile_data: &[u8],
+) -> ForegroundChangeSets {
+    extract_foreground_change_sets_with(song_dir, simfile_data, true, true)
+}
+
+fn extract_foreground_change_sets_with(
+    song_dir: &Path,
+    simfile_data: &[u8],
+    include_media: bool,
+    include_lua: bool,
+) -> ForegroundChangeSets {
     let entries = list_song_dir_rel_entries(song_dir);
-    let mut out = Vec::new();
+    let mut media = Vec::new();
+    let mut lua = Vec::new();
+    let mut uses_lua = false;
     for raw in extract_named_tag_values(simfile_data, &[b"#FGCHANGES:"]) {
         let text = unescape_tag(decode_bytes(raw).as_ref()).into_owned();
         for fields in split_bgchange_sets_like_itg(&text, &entries) {
-            let Some(start_beat) = parse_start_beat(&fields) else {
-                continue;
-            };
             let Some(target) = fields.get(1) else {
                 continue;
             };
-            let Some(path) = resolve_foreground_media_path(song_dir, target) else {
+            let Some(path) = resolve_song_path_like_itg(song_dir, target) else {
                 continue;
             };
-            out.push(SerializableSongForegroundChange {
-                start_beat,
-                path: path.to_string_lossy().into_owned(),
-            });
+            let path_uses_lua = path_uses_lua_like_itg(&path);
+            uses_lua |= path_uses_lua;
+            let Some(start_beat) = parse_start_beat(&fields) else {
+                continue;
+            };
+            if include_lua && path_uses_lua {
+                let path = song_lua_entry_path_like_itg(path);
+                lua.push(SerializableSongForegroundLuaChange {
+                    start_beat,
+                    path: path.to_string_lossy().into_owned(),
+                });
+            } else if include_media && !path_uses_lua {
+                let path = if path.is_dir() {
+                    resolve_foreground_media_dir(&path)
+                } else {
+                    foreground_media_ext_rank(&path).is_some().then_some(path)
+                };
+                if let Some(path) = path {
+                    media.push(SerializableSongForegroundChange {
+                        start_beat,
+                        path: path.to_string_lossy().into_owned(),
+                    });
+                }
+            }
         }
     }
-    sort_dedup_path_changes(&mut out, |change| change.start_beat, |change| &change.path);
-    out
+    sort_dedup_path_changes(
+        &mut media,
+        |change| change.start_beat,
+        |change| &change.path,
+    );
+    sort_dedup_path_changes(&mut lua, |change| change.start_beat, |change| &change.path);
+    ForegroundChangeSets {
+        media,
+        lua,
+        uses_lua,
+    }
 }
 
 pub fn extract_foreground_lua_changes(
     song_dir: &Path,
     simfile_data: &[u8],
 ) -> Vec<SerializableSongForegroundLuaChange> {
-    let entries = list_song_dir_rel_entries(song_dir);
-    let mut out = Vec::new();
-    for raw in extract_named_tag_values(simfile_data, &[b"#FGCHANGES:"]) {
-        let text = unescape_tag(decode_bytes(raw).as_ref()).into_owned();
-        for fields in split_bgchange_sets_like_itg(&text, &entries) {
-            let Some(start_beat) = parse_start_beat(&fields) else {
-                continue;
-            };
-            let Some(target) = fields.get(1) else {
-                continue;
-            };
-            let Some(path) = resolve_song_path_like_itg(song_dir, target)
-                .filter(|path| path_uses_lua_like_itg(path))
-            else {
-                continue;
-            };
-            let path = song_lua_entry_path_like_itg(path);
-            out.push(SerializableSongForegroundLuaChange {
-                start_beat,
-                path: path.to_string_lossy().into_owned(),
-            });
-        }
-    }
-    sort_dedup_path_changes(&mut out, |change| change.start_beat, |change| &change.path);
-    out
+    extract_foreground_change_sets_with(song_dir, simfile_data, false, true).lua
 }
 
 pub fn extract_background_lua_changes(
@@ -96,8 +123,23 @@ pub fn extract_background_lua_changes(
     simfile_data: &[u8],
     background_tag: &str,
 ) -> Vec<SerializableSongBackgroundLuaChange> {
+    extract_background_lua_change_set(song_dir, simfile_data, background_tag).changes
+}
+
+pub struct BackgroundLuaChangeSet {
+    pub changes: Vec<SerializableSongBackgroundLuaChange>,
+    pub uses_lua: bool,
+}
+
+/// Resolves background Lua entries and detects Lua use in one directory pass.
+pub fn extract_background_lua_change_set(
+    song_dir: &Path,
+    simfile_data: &[u8],
+    background_tag: &str,
+) -> BackgroundLuaChangeSet {
     let entries = list_song_dir_rel_entries(song_dir);
     let mut out = Vec::new();
+    let mut uses_lua = false;
     let mut push_change = |start_beat: f32, path: PathBuf| {
         let path = song_lua_entry_path_like_itg(path);
         out.push(SerializableSongBackgroundLuaChange {
@@ -109,15 +151,13 @@ pub fn extract_background_lua_changes(
     if let Some(path) = resolve_song_path_like_itg(song_dir, background_tag)
         .filter(|path| path_uses_lua_like_itg(path))
     {
+        uses_lua = true;
         push_change(0.0, path);
     }
 
     for raw in extract_bgchanges_values(simfile_data) {
         let text = unescape_tag(decode_bytes(raw).as_ref()).into_owned();
         for fields in split_bgchange_sets_like_itg(&text, &entries) {
-            let Some(start_beat) = parse_start_beat(&fields) else {
-                continue;
-            };
             let Some(target) = fields.get(1) else {
                 continue;
             };
@@ -126,12 +166,19 @@ pub fn extract_background_lua_changes(
             else {
                 continue;
             };
+            uses_lua = true;
+            let Some(start_beat) = parse_start_beat(&fields) else {
+                continue;
+            };
             push_change(start_beat, path);
         }
     }
 
     sort_dedup_path_changes(&mut out, |change| change.start_beat, |change| &change.path);
-    out
+    BackgroundLuaChangeSet {
+        changes: out,
+        uses_lua,
+    }
 }
 
 pub fn resolve_background_changes_from_roots(
@@ -516,21 +563,44 @@ mod tests {
         fs::write(&movie, b"avi").unwrap();
         fs::write(&default_lua, b"lua").unwrap();
 
-        let media = extract_foreground_changes(
-            &song_dir,
-            b"#FGCHANGES:4=animations=1=0=0=0=0,8=scripts=1=0=0=0=0;",
-        );
+        let simfile = b"#FGCHANGES:4=animations=1=0=0=0=0,8=scripts=1=0=0=0=0;";
+        let media = extract_foreground_changes(&song_dir, simfile);
         assert_eq!(media.len(), 1);
         assert_eq!(media[0].start_beat, 4.0);
         assert_eq!(PathBuf::from(&media[0].path), movie);
 
-        let lua = extract_foreground_lua_changes(
-            &song_dir,
-            b"#FGCHANGES:4=animations=1=0=0=0=0,8=scripts=1=0=0=0=0;",
-        );
+        let lua = extract_foreground_lua_changes(&song_dir, simfile);
         assert_eq!(lua.len(), 1);
         assert_eq!(lua[0].start_beat, 8.0);
         assert_eq!(PathBuf::from(&lua[0].path), default_lua);
+
+        let combined = extract_foreground_change_sets(&song_dir, simfile);
+        assert_eq!(combined.media.len(), media.len());
+        assert_eq!(combined.media[0].start_beat, media[0].start_beat);
+        assert_eq!(combined.media[0].path, media[0].path);
+        assert_eq!(combined.lua.len(), lua.len());
+        assert_eq!(combined.lua[0].start_beat, lua[0].start_beat);
+        assert_eq!(combined.lua[0].path, lua[0].path);
+        assert_eq!(simfile_uses_lua(&song_dir, simfile, ""), combined.uses_lua);
+
+        let media_only = b"#FGCHANGES:4=animations=1=0=0=0=0;";
+        let combined = extract_foreground_change_sets(&song_dir, media_only);
+        assert_eq!(combined.media.len(), 1);
+        assert!(combined.lua.is_empty());
+        assert!(!combined.uses_lua);
+        assert!(!simfile_uses_lua(&song_dir, media_only, ""));
+
+        let invalid_beat = b"#FGCHANGES:not-a-beat=scripts=1=0=0=0=0;";
+        let combined = extract_foreground_change_sets(&song_dir, invalid_beat);
+        assert!(combined.lua.is_empty());
+        assert!(combined.uses_lua);
+        assert!(simfile_uses_lua(&song_dir, invalid_beat, ""));
+
+        let invalid_beat = b"#BGCHANGES:not-a-beat=scripts=1=0=0=0=0;";
+        let background = extract_background_lua_change_set(&song_dir, invalid_beat, "");
+        assert!(background.changes.is_empty());
+        assert!(background.uses_lua);
+        assert!(simfile_uses_lua(&song_dir, invalid_beat, ""));
     }
 
     #[test]

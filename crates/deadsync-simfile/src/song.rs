@@ -4,9 +4,8 @@ use crate::cache::{
     SerializableSongData, build_song_meta, parse_chart_display_bpm, update_precise_song_bounds,
 };
 use crate::changes::{
-    extract_background_lua_changes, extract_foreground_changes, extract_foreground_lua_changes,
+    extract_background_lua_change_set, extract_foreground_change_sets,
     resolve_background_changes_from_roots, resolve_background_layer2_changes_from_roots,
-    simfile_uses_lua,
 };
 use crate::media::resolve_song_asset_path_like_itg;
 use crate::notes::{parse_chart_notes, step_type_lanes};
@@ -108,11 +107,10 @@ fn build_song_data(
         &summary.cdtitle_path,
         &summary.jacket_path,
     );
-    let has_lua = simfile_uses_lua(simfile_dir, simfile_data, &summary.background_path);
     let background_lua_changes =
-        extract_background_lua_changes(simfile_dir, simfile_data, &summary.background_path);
-    let foreground_changes = extract_foreground_changes(simfile_dir, simfile_data);
-    let foreground_lua_changes = extract_foreground_lua_changes(simfile_dir, simfile_data);
+        extract_background_lua_change_set(simfile_dir, simfile_data, &summary.background_path);
+    let foreground_changes = extract_foreground_change_sets(simfile_dir, simfile_data);
+    let has_lua = background_lua_changes.uses_lua || foreground_changes.uses_lua;
     let background_changes = resolve_background_changes_from_roots(
         simfile_dir,
         simfile_data,
@@ -149,9 +147,9 @@ fn build_song_data(
             .map(|p| p.to_string_lossy().into_owned()),
         background_changes,
         background_layer2_changes,
-        foreground_changes,
-        background_lua_changes,
-        foreground_lua_changes,
+        foreground_changes: foreground_changes.media,
+        background_lua_changes: background_lua_changes.changes,
+        foreground_lua_changes: foreground_changes.lua,
         has_lua,
         cdtitle_path: artwork
             .cdtitle_path

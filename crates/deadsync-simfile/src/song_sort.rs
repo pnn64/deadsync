@@ -1,6 +1,6 @@
 use deadsync_chart::SongData;
 use std::cmp::Ordering;
-use std::collections::{BTreeMap, HashSet};
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
 const SORT_BPM_DIVISION: i32 = 10;
@@ -110,6 +110,36 @@ pub fn song_length_for_sort(song: &SongData) -> i32 {
 /// Non-edit charts are preferred; edit charts are only included if the song has
 /// no non-edit charts at all.
 pub fn song_meters_for_sort(song: &SongData, chart_type: &str) -> Vec<u32> {
+    let mut meters = Vec::new();
+    let mut has_non_edit = false;
+    for chart in &song.charts {
+        if !chart.chart_type.eq_ignore_ascii_case(chart_type) || !chart.has_note_data {
+            continue;
+        }
+        if !chart.difficulty.eq_ignore_ascii_case("edit") {
+            if !has_non_edit {
+                meters.clear();
+                meters.reserve(song.charts.len());
+                has_non_edit = true;
+            }
+            meters.push(chart.meter);
+        } else if !has_non_edit {
+            if meters.is_empty() {
+                meters.reserve(song.charts.len());
+            }
+            meters.push(chart.meter);
+        }
+    }
+    meters.sort_unstable();
+    meters.dedup();
+    meters
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn song_meters_for_sort_legacy(song: &SongData, chart_type: &str) -> Vec<u32> {
+    use std::collections::HashSet;
+
     let mut non_edit_meters: HashSet<u32> = HashSet::new();
     let mut any_meters: HashSet<u32> = HashSet::new();
     for chart in &song.charts {
@@ -421,11 +451,16 @@ mod tests {
             test_chart("Edit", 19, true),
             test_chart("Hard", 11, true),
             test_chart("Challenge", 13, true),
+            test_chart("Challenge", 13, true),
             test_chart("Medium", 7, false),
         ];
         assert_eq!(song_meters_for_sort(&song, "dance-single"), vec![11, 13]);
 
-        song.charts = vec![test_chart("Edit", 19, true), test_chart("Edit", 21, true)];
+        song.charts = vec![
+            test_chart("Edit", 19, true),
+            test_chart("Edit", 21, true),
+            test_chart("Edit", 19, true),
+        ];
         assert_eq!(song_meters_for_sort(&song, "dance-single"), vec![19, 21]);
     }
 

@@ -1,16 +1,30 @@
+use deadsync_chart::notes::ParsedNote;
 use deadsync_chart::{ArrowStats, ChartData, SongData, StaminaCounts, TechCounts};
+use deadsync_core::note::NoteType;
+use deadsync_simfile::cache::{
+    SerializableSongForegroundChange, SerializableSongForegroundLuaChange,
+};
+use deadsync_simfile::changes::{
+    extract_foreground_change_sets, extract_foreground_changes, extract_foreground_lua_changes,
+    simfile_uses_lua,
+};
+use deadsync_simfile::notes::{parse_chart_notes, parse_chart_notes_legacy};
 use deadsync_simfile::song_search::{
     SongSearchCandidate, SongSearchCatalogEntry, build_song_search_candidates,
     build_song_search_candidates_legacy,
 };
-use deadsync_simfile::song_sort::{GroupedSongs, title_grouped_songs, title_grouped_songs_legacy};
+use deadsync_simfile::song_sort::{
+    GroupedSongs, song_meters_for_sort, song_meters_for_sort_legacy, title_grouped_songs,
+    title_grouped_songs_legacy,
+};
 use deadsync_simfile::tags::{latest_simfile_tag_value_legacy, latest_simfile_tag_values};
 use std::alloc::{GlobalAlloc, Layout, System};
+use std::fs;
 use std::hint::black_box;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 #[global_allocator]
 static ALLOC: CountingAlloc = CountingAlloc::new();
@@ -20,6 +34,10 @@ const TAG_BYTES: usize = 512 * 1024;
 const TAG_ITERATIONS: usize = 256;
 const SEARCH_ITERATIONS: usize = 64;
 const SORT_ITERATIONS: usize = 12;
+const NOTE_ROWS: usize = 65_536;
+const NOTE_ITERATIONS: usize = 128;
+const METER_ITERATIONS: usize = 64;
+const FOREGROUND_ITERATIONS: usize = 64;
 
 struct CountingAlloc {
     allocs: AtomicU64,
@@ -112,9 +130,16 @@ fn main() {
     let simfile = benchmark_simfile();
     benchmark_tag_batch(&simfile);
 
+    let note_data = benchmark_note_data();
+    benchmark_note_parsing(&note_data);
+
+    let foreground = ForegroundFixture::new();
+    benchmark_foreground_changes(&foreground);
+
     let songs: Vec<_> = (0..SONGS).map(benchmark_song).collect();
     benchmark_search(&songs);
     benchmark_sort(&songs);
+    benchmark_meters(&songs);
 }
 
 fn benchmark_tag_batch(simfile: &[u8]) {
@@ -145,6 +170,81 @@ fn benchmark_tag_batch(simfile: &[u8]) {
         "batched artwork tags",
         simfile.len(),
         TAG_ITERATIONS,
+        "bytes",
+        &old,
+        &new,
+    );
+}
+
+fn benchmark_note_parsing(note_data: &[u8]) {
+    let old_notes = parse_chart_notes_legacy(note_data, 4);
+    let new_notes = parse_chart_notes(note_data, 4);
+    assert_eq!(old_notes, new_notes, "parsed notes changed");
+
+    let old = measure(NOTE_ITERATIONS, || {
+        note_checksum(&parse_chart_notes_legacy(black_box(note_data), 4))
+    });
+    let new = measure(NOTE_ITERATIONS, || {
+        note_checksum(&parse_chart_notes(black_box(note_data), 4))
+    });
+    assert_eq!(old.checksum, new.checksum);
+    print_pair(
+        "pre-sized parsed-note buffer",
+        NOTE_ROWS,
+        NOTE_ITERATIONS,
+        "rows",
+        &old,
+        &new,
+    );
+}
+
+fn benchmark_foreground_changes(fixture: &ForegroundFixture) {
+    let old_media = extract_foreground_changes(&fixture.song_dir, &fixture.simfile);
+    let old_lua = extract_foreground_lua_changes(&fixture.song_dir, &fixture.simfile);
+    let old_has_lua = simfile_uses_lua(&fixture.song_dir, &fixture.simfile, "");
+    let new_changes = extract_foreground_change_sets(&fixture.song_dir, &fixture.simfile);
+    assert_eq!(
+        foreground_media_values(&old_media),
+        foreground_media_values(&new_changes.media),
+        "foreground media changes changed"
+    );
+    assert_eq!(
+        foreground_lua_values(&old_lua),
+        foreground_lua_values(&new_changes.lua),
+        "foreground Lua changes changed"
+    );
+    assert_eq!(
+        old_has_lua, new_changes.uses_lua,
+        "foreground Lua detection changed"
+    );
+
+    let old = measure(FOREGROUND_ITERATIONS, || {
+        let media =
+            extract_foreground_changes(black_box(&fixture.song_dir), black_box(&fixture.simfile));
+        let lua = extract_foreground_lua_changes(
+            black_box(&fixture.song_dir),
+            black_box(&fixture.simfile),
+        );
+        let has_lua = simfile_uses_lua(
+            black_box(&fixture.song_dir),
+            black_box(&fixture.simfile),
+            "",
+        );
+        foreground_checksum(&media, &lua, has_lua)
+    });
+    let new = measure(FOREGROUND_ITERATIONS, || {
+        let changes = extract_foreground_change_sets(
+            black_box(&fixture.song_dir),
+            black_box(&fixture.simfile),
+        );
+        let has_lua = changes.uses_lua;
+        foreground_checksum(&changes.media, &changes.lua, has_lua)
+    });
+    assert_eq!(old.checksum, new.checksum);
+    print_pair(
+        "combined foreground extraction",
+        fixture.simfile.len(),
+        FOREGROUND_ITERATIONS,
         "bytes",
         &old,
         &new,
@@ -207,6 +307,36 @@ fn benchmark_sort(songs: &[Arc<SongData>]) {
         "allocation-free title sort",
         songs.len(),
         SORT_ITERATIONS,
+        "songs",
+        &old,
+        &new,
+    );
+}
+
+fn benchmark_meters(songs: &[Arc<SongData>]) {
+    for song in songs {
+        assert_eq!(
+            song_meters_for_sort_legacy(song, "dance-single"),
+            song_meters_for_sort(song, "dance-single"),
+            "song meter values changed"
+        );
+    }
+
+    let old = measure(METER_ITERATIONS, || {
+        black_box(songs).iter().fold(0_u64, |checksum, song| {
+            meter_checksum(checksum, &song_meters_for_sort_legacy(song, "dance-single"))
+        })
+    });
+    let new = measure(METER_ITERATIONS, || {
+        black_box(songs).iter().fold(0_u64, |checksum, song| {
+            meter_checksum(checksum, &song_meters_for_sort(song, "dance-single"))
+        })
+    });
+    assert_eq!(old.checksum, new.checksum);
+    print_pair(
+        "single-vector meter collection",
+        songs.len(),
+        METER_ITERATIONS,
         "songs",
         &old,
         &new,
@@ -322,6 +452,62 @@ fn grouped_checksum(groups: &[GroupedSongs]) -> u64 {
     })
 }
 
+fn note_checksum(notes: &[ParsedNote]) -> u64 {
+    notes.iter().fold(0_u64, |checksum, note| {
+        let note_type = match note.note_type {
+            NoteType::Tap => 1,
+            NoteType::Hold => 2,
+            NoteType::Roll => 3,
+            NoteType::Mine => 4,
+            NoteType::Lift => 5,
+            NoteType::Fake => 6,
+        };
+        checksum.rotate_left(11)
+            ^ note.row_index as u64
+            ^ (note.column as u64).rotate_left(17)
+            ^ (note_type << 29)
+            ^ note.tail_row_index.unwrap_or_default() as u64
+    })
+}
+
+fn meter_checksum(mut checksum: u64, meters: &[u32]) -> u64 {
+    for &meter in meters {
+        checksum = checksum.rotate_left(7) ^ u64::from(meter);
+    }
+    checksum ^ meters.len() as u64
+}
+
+fn foreground_media_values(changes: &[SerializableSongForegroundChange]) -> Vec<(u32, &str)> {
+    changes
+        .iter()
+        .map(|change| (change.start_beat.to_bits(), change.path.as_str()))
+        .collect()
+}
+
+fn foreground_lua_values(changes: &[SerializableSongForegroundLuaChange]) -> Vec<(u32, &str)> {
+    changes
+        .iter()
+        .map(|change| (change.start_beat.to_bits(), change.path.as_str()))
+        .collect()
+}
+
+fn foreground_checksum(
+    media: &[SerializableSongForegroundChange],
+    lua: &[SerializableSongForegroundLuaChange],
+    has_lua: bool,
+) -> u64 {
+    let media_sum = media.iter().fold(0_u64, |checksum, change| {
+        checksum.rotate_left(5)
+            ^ u64::from(change.start_beat.to_bits())
+            ^ text_checksum(&change.path).rotate_left(19)
+    });
+    lua.iter().fold(media_sum, |checksum, change| {
+        checksum.rotate_left(7)
+            ^ u64::from(change.start_beat.to_bits())
+            ^ text_checksum(&change.path).rotate_left(23)
+    }) ^ u64::from(has_lua)
+}
+
 fn text_checksum(text: &str) -> u64 {
     text.bytes().fold(text.len() as u64, |checksum, byte| {
         checksum.rotate_left(5) ^ u64::from(byte)
@@ -340,6 +526,81 @@ fn benchmark_simfile() -> Vec<u8> {
     }
     data.extend_from_slice(b"#CDIMAGE:new\\;image.png;");
     data
+}
+
+fn benchmark_note_data() -> Vec<u8> {
+    let mut data = Vec::with_capacity(NOTE_ROWS * 5);
+    for row in 0..NOTE_ROWS {
+        let line = match row % 64 {
+            0 => b"2000\n".as_slice(),
+            16 => b"3000\n".as_slice(),
+            24 => b"0040\n".as_slice(),
+            40 => b"0030\n".as_slice(),
+            value if value.is_multiple_of(8) => b"1001\n".as_slice(),
+            5 => b"0M00\n".as_slice(),
+            13 => b"000L\n".as_slice(),
+            21 => b"F000\n".as_slice(),
+            _ => b"0000\n".as_slice(),
+        };
+        data.extend_from_slice(line);
+    }
+    data
+}
+
+struct ForegroundFixture {
+    root: PathBuf,
+    song_dir: PathBuf,
+    simfile: Vec<u8>,
+}
+
+impl ForegroundFixture {
+    fn new() -> Self {
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system clock before Unix epoch")
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!(
+            "deadsync-foreground-benchmark-{}-{unique}",
+            std::process::id()
+        ));
+        let song_dir = root.join("Performance Pack").join("Song");
+        let media_dir = song_dir.join("animations");
+        let lua_dir = song_dir.join("scripts");
+        fs::create_dir_all(&media_dir).expect("create benchmark media directory");
+        fs::create_dir_all(&lua_dir).expect("create benchmark Lua directory");
+        fs::write(media_dir.join("clip.avi"), b"benchmark video").expect("write benchmark media");
+        fs::write(lua_dir.join("default.lua"), b"return Def.ActorFrame {}")
+            .expect("write benchmark Lua");
+
+        let mut simfile = Vec::with_capacity(256 * 1024);
+        simfile.extend_from_slice(b"#TITLE:Foreground Benchmark;\n");
+        for index in 0..128 {
+            simfile.extend_from_slice(
+                format!(
+                    "#FGCHANGES:{}=animations=1=0=0=0=0,{}=scripts=1=0=0=0=0;\n",
+                    index * 4,
+                    index * 4 + 2
+                )
+                .as_bytes(),
+            );
+            simfile.extend_from_slice(b"0000\n0000\n1000\n0000\n");
+        }
+        while simfile.len() < 256 * 1024 {
+            simfile.extend_from_slice(b"0000\n0000\n0000\n0000\n");
+        }
+
+        Self {
+            root,
+            song_dir,
+            simfile,
+        }
+    }
+}
+
+impl Drop for ForegroundFixture {
+    fn drop(&mut self) {
+        let _ = fs::remove_dir_all(&self.root);
+    }
 }
 
 fn benchmark_song(index: usize) -> Arc<SongData> {
@@ -383,20 +644,35 @@ fn benchmark_song(index: usize) -> Arc<SongData> {
         first_second: 0.0,
         total_length_seconds: 120 + (index % 240) as i32,
         precise_last_second_seconds: 120.0,
-        charts: vec![benchmark_chart(index)],
+        charts: (0..6)
+            .map(|chart_index| benchmark_chart(index, chart_index))
+            .collect(),
     })
 }
 
-fn benchmark_chart(index: usize) -> ChartData {
+fn benchmark_chart(index: usize, chart_index: usize) -> ChartData {
+    let difficulty = match chart_index {
+        0 => "Beginner",
+        1 => "Easy",
+        2 => "Medium",
+        3 => "Hard",
+        4 => "Challenge",
+        _ => "Edit",
+    };
+    let meter = if chart_index == 4 {
+        5 + (index % 20) as u32
+    } else {
+        5 + ((index + chart_index * 3) % 20) as u32
+    };
     ChartData {
         chart_type: "dance-single".to_string(),
-        difficulty: "Challenge".to_string(),
+        difficulty: difficulty.to_string(),
         description: String::new(),
         chart_name: String::new(),
-        meter: 8 + (index % 20) as u32,
+        meter,
         step_artist: String::new(),
         music_path: None,
-        short_hash: format!("bench-{index:05}"),
+        short_hash: format!("bench-{index:05}-{chart_index}"),
         stats: ArrowStats::default(),
         tech_counts: TechCounts::default(),
         mines_nonfake: 0,
