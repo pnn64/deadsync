@@ -300,13 +300,38 @@ fn build_crossover_cues_core(
                 is_mine: true,
             });
         }
-        if let Some(last) = cues.last() {
+        let overlap = cues.last().map(|last| {
             let prev_end = last.start_time + last.duration;
-            if start_time < prev_end {
-                let duration_difference = prev_end - start_time;
-                start_time = prev_end - fade;
-                cue_duration = cue_duration - duration_difference + fade;
+            // Only one cue is active at a time and each cue drives all of its
+            // columns with a single fade envelope, so a column shared by two
+            // overlapping cues would fade out and back in (a visible reflash).
+            let shares_column = last
+                .columns
+                .iter()
+                .any(|prev_col| columns.iter().any(|c| c.column == prev_col.column));
+            (prev_end, shares_column)
+        });
+        if let Some((prev_end, shares_column)) = overlap
+            && start_time < prev_end
+        {
+            if shares_column {
+                // Merge into the previous cue so the shared column stays lit
+                // continuously across the overlap instead of reflashing.
+                let merged_end = (start_time + cue_duration).max(prev_end);
+                let last = cues
+                    .last_mut()
+                    .expect("cues is non-empty when overlap is Some");
+                last.duration = merged_end - last.start_time;
+                for col in columns {
+                    if !last.columns.iter().any(|c| c.column == col.column) {
+                        last.columns.push(col);
+                    }
+                }
+                continue;
             }
+            let duration_difference = prev_end - start_time;
+            start_time = prev_end - fade;
+            cue_duration = cue_duration - duration_difference + fade;
         }
         cues.push(ColumnCue {
             start_time,

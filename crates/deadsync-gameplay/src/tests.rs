@@ -12300,6 +12300,25 @@ mod tests {
     }
 
     #[test]
+    fn crossover_cue_builder_merges_overlapping_same_column_cues() {
+        // Two crossover cues that overlap in time and share column 1. Merging
+        // keeps that column lit continuously instead of reflashing it.
+        let shared = [
+            xover_anno(0.0, 1, 0b0010, false),
+            xover_anno(0.5, 1, 0b0001, true),
+            xover_anno(0.6, 1, 0b0010, false),
+            xover_anno(0.7, 1, 0b1000, true),
+        ];
+        let cues = build_crossover_cues_core(&shared, xover_time, 0, 500, 8, false, 0.0);
+        assert_eq!(cues.len(), 1);
+        assert_near(cues[0].start_time, -0.5);
+        assert_near(cues[0].duration, 0.875);
+        let mut merged_cols: Vec<usize> = cues[0].columns.iter().map(|c| c.column).collect();
+        merged_cols.sort_unstable();
+        assert_eq!(merged_cols, vec![0, 1, 3]);
+    }
+
+    #[test]
     fn crossover_cue_builder_offsets_columns_and_respects_brackets() {
         let shifted = [
             xover_anno(0.0, 1, 0b0010, false),
