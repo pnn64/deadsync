@@ -502,6 +502,7 @@ mod tests {
     fn texture_choice_actor_source_uses_arena_ownership() {
         let choice = TextureChoice::new("key.png".to_string(), "Key".to_string());
         let arena = ActorResourceArena::new(1);
+        arena.begin_hit_stats(true);
 
         let first = choice.actor_texture_source(&arena);
         let second = choice.actor_texture_source(&arena);

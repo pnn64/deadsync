@@ -33,13 +33,16 @@ struct ActorResourceStorage {
 /// and inserts it until growth is locked; later misses fall back to their owned
 /// source without allocating or scanning.
 /// Entries are never evicted and are destroyed with gameplay state at the
-/// screen transition. Hit/miss/saturation counters are exposed below. Each
-/// miss is one bounded hash insertion; hits are one relaxed atomic load.
+/// screen transition. Miss/saturation counters are always collected; hit
+/// collection is opt-in so ordinary frames do not write diagnostic metadata.
+/// Each miss is one bounded hash insertion; the fastest hit is one relaxed
+/// atomic load plus a predictable disabled-instrumentation branch.
 pub struct ActorResourceArena {
     arena_id: u32,
     max_textures: usize,
     storage: RefCell<ActorResourceStorage>,
     texture_hits: Cell<u32>,
+    collect_hit_stats: Cell<bool>,
     texture_misses: Cell<u32>,
     texture_saturated: Cell<u32>,
     growth_locked: Cell<bool>,
@@ -59,6 +62,7 @@ impl ActorResourceArena {
                 texture_ids: HashMap::with_capacity(max_textures.min(256)),
             }),
             texture_hits: Cell::new(0),
+            collect_hit_stats: Cell::new(false),
             texture_misses: Cell::new(0),
             texture_saturated: Cell::new(0),
             growth_locked: Cell::new(false),
@@ -77,8 +81,10 @@ impl ActorResourceArena {
         let cached_arena = (cached >> 32) as u32;
         let cached_id = cached as u32;
         if cached_arena == self.arena_id && cached_id != 0 {
-            self.texture_hits
-                .set(self.texture_hits.get().saturating_add(1));
+            if self.collect_hit_stats.get() {
+                self.texture_hits
+                    .set(self.texture_hits.get().saturating_add(1));
+            }
             return SpriteSource::ArenaTextureHandle {
                 id: ActorTextureId(cached_id - 1),
                 handle,
@@ -89,8 +95,10 @@ impl ActorResourceArena {
         let key_ptr = key.as_ptr() as usize;
         let mut storage = self.storage.borrow_mut();
         let id = if let Some(id) = storage.texture_ids.get(&key_ptr).copied() {
-            self.texture_hits
-                .set(self.texture_hits.get().saturating_add(1));
+            if self.collect_hit_stats.get() {
+                self.texture_hits
+                    .set(self.texture_hits.get().saturating_add(1));
+            }
             id
         } else if !self.growth_locked.get() && storage.textures.len() < self.max_textures {
             let id = ActorTextureId(storage.textures.len() as u32);
@@ -138,6 +146,13 @@ impl ActorResourceArena {
         self.texture_hits.set(0);
         self.texture_misses.set(0);
         self.texture_saturated.set(0);
+    }
+
+    /// Start or stop optional hit collection and reset its counter.
+    #[inline(always)]
+    pub fn begin_hit_stats(&self, enabled: bool) {
+        self.collect_hit_stats.set(enabled);
+        self.texture_hits.set(0);
     }
 
     pub fn lock_growth(&self) {
@@ -913,6 +928,9 @@ mod tests {
 
         let first = arena.texture_source(&key, 17, 3, &cached);
         let second = arena.texture_source(&key, 17, 3, &cached);
+        assert_eq!(arena.stats().texture_hits, 0);
+        arena.begin_hit_stats(true);
+        let third = arena.texture_source(&key, 17, 3, &cached);
 
         let (
             SpriteSource::ArenaTextureHandle { id: first_id, .. },
@@ -921,7 +939,11 @@ mod tests {
         else {
             panic!("warmed texture sources should use arena IDs");
         };
+        let SpriteSource::ArenaTextureHandle { id: third_id, .. } = third else {
+            panic!("warmed texture sources should use arena IDs");
+        };
         assert_eq!(first_id, second_id);
+        assert_eq!(first_id, third_id);
         assert_eq!(Arc::strong_count(&key), 2);
         assert_eq!(
             arena.texture_keys()[first_id.0 as usize].as_ref(),

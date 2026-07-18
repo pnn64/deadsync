@@ -53,8 +53,9 @@ pub struct NoteskinFrameCacheStats {
 /// Eviction: none during gameplay; once full, insertions saturate and count a
 /// `saturated_misses` event instead of pruning.
 /// Destruction: entries drop with the gameplay screen or explicit cache clear.
-/// Instrumentation: geometry hit/miss counters plus frame draw evaluations,
-/// hits, unregistered misses, and saturation.
+/// Instrumentation: misses and saturation are always collected to diagnose
+/// failed prewarming. Geometry hits, frame hits, and draw evaluations are
+/// opt-in so ordinary frames do not write diagnostic metadata.
 /// Worst-case registered-slot frame cost: one draw evaluation per unique
 /// `(slot, time, beat)` tuple; no allocation, pruning, or geometry conversion.
 /// A sealed unregistered model is a counted prewarm failure and retains the
@@ -65,6 +66,7 @@ pub struct ModelMeshCache {
     lookup: Box<[SlotLookup]>,
     frame: u64,
     sealed: bool,
+    collect_hit_stats: bool,
     stats: ModelMeshCacheStats,
     frame_stats: NoteskinFrameCacheStats,
 }
@@ -83,6 +85,7 @@ impl ModelMeshCache {
             lookup: vec![SlotLookup::default(); SLOT_LOOKUP_SIZE].into_boxed_slice(),
             frame: 1,
             sealed: false,
+            collect_hit_stats: false,
             stats: ModelMeshCacheStats::default(),
             frame_stats: NoteskinFrameCacheStats::default(),
         }
@@ -97,6 +100,15 @@ impl ModelMeshCache {
     pub fn reset_stats(&mut self) {
         self.stats = ModelMeshCacheStats::default();
         self.frame_stats = NoteskinFrameCacheStats::default();
+    }
+
+    /// Start or stop optional hit/evaluation collection and reset those counters.
+    #[inline(always)]
+    pub fn begin_hit_stats(&mut self, enabled: bool) {
+        self.collect_hit_stats = enabled;
+        self.stats.hits = 0;
+        self.frame_stats.hits = 0;
+        self.frame_stats.evaluations = 0;
     }
 
     #[inline(always)]
@@ -144,7 +156,9 @@ impl ModelMeshCache {
             && state.draw_time == time.to_bits()
             && state.draw_beat == beat.to_bits()
         {
-            self.frame_stats.hits = self.frame_stats.hits.saturating_add(1);
+            if self.collect_hit_stats {
+                self.frame_stats.hits = self.frame_stats.hits.saturating_add(1);
+            }
             return state.draw;
         }
         let draw = slot.model_draw_at_cursor(time, beat, &mut state.tween_cursor);
@@ -152,7 +166,9 @@ impl ModelMeshCache {
         state.draw_time = time.to_bits();
         state.draw_beat = beat.to_bits();
         state.draw_frame = self.frame;
-        self.frame_stats.evaluations = self.frame_stats.evaluations.saturating_add(1);
+        if self.collect_hit_stats {
+            self.frame_stats.evaluations = self.frame_stats.evaluations.saturating_add(1);
+        }
         draw
     }
 
@@ -165,7 +181,9 @@ impl ModelMeshCache {
         if let Some(index) = self.find_slot(slot.stable_id())
             && let Some((key, vertices)) = &self.slots[index].geometry
         {
-            self.stats.hits = self.stats.hits.saturating_add(1);
+            if self.collect_hit_stats {
+                self.stats.hits = self.stats.hits.saturating_add(1);
+            }
             return Some((*key, vertices.clone()));
         }
         Some(self.get_or_insert_with(slot, || build_model_geometry(slot)))
@@ -186,7 +204,9 @@ impl ModelMeshCache {
         if let Some(index) = self.find_slot(stable_id)
             && let Some((_, vertices)) = &self.slots[index].geometry
         {
-            self.stats.hits = self.stats.hits.saturating_add(1);
+            if self.collect_hit_stats {
+                self.stats.hits = self.stats.hits.saturating_add(1);
+            }
             return (geom_cache_key, vertices.clone());
         }
         self.stats.misses = self.stats.misses.saturating_add(1);
@@ -965,11 +985,17 @@ mod tests {
             builds += 1;
             Arc::from(vec![TexturedMeshVertex::default()])
         });
+        assert_eq!(cache.stats().hits, 0);
+        cache.begin_hit_stats(true);
+        let (key_c, verts_c) =
+            cache.get_or_insert_with(&slot, || panic!("retained geometry must remain cached"));
 
         assert_eq!(builds, 1);
         assert_eq!(key_a, hashed_model_cache_key(slot.stable_id()));
         assert_eq!(key_a, key_b);
+        assert_eq!(key_a, key_c);
         assert!(Arc::ptr_eq(&verts_a, &verts_b));
+        assert!(Arc::ptr_eq(&verts_a, &verts_c));
         assert_eq!(
             cache.stats(),
             ModelMeshCacheStats {
@@ -1015,6 +1041,7 @@ mod tests {
             .map(|_| Box::new(TestSlot::model()))
             .collect();
         let mut cache = ModelMeshCache::with_capacity(MODEL_MESH_CACHE_LIMIT);
+        cache.begin_hit_stats(true);
         let mut builds = 0usize;
 
         for slot in &slots {
@@ -1093,6 +1120,12 @@ mod tests {
         let first = cache.draw_at(&slot, 1.25, 4.0);
         let second = cache.draw_at(&slot, 1.25, 4.0);
 
+        assert_eq!(first.pos, second.pos);
+        assert_eq!(cache.frame_stats(), NoteskinFrameCacheStats::default());
+        cache.begin_hit_stats(true);
+        cache.begin_frame();
+        let first = cache.draw_at(&slot, 1.25, 4.0);
+        let second = cache.draw_at(&slot, 1.25, 4.0);
         assert_eq!(first.pos, second.pos);
         assert_eq!(
             cache.frame_stats(),
@@ -1239,6 +1272,7 @@ mod tests {
     fn cached_actor_reuses_geometry_and_nonzero_key() {
         let slot = TestSlot::model();
         let mut cache = ModelMeshCache::default();
+        cache.begin_hit_stats(true);
         let actor_a = noteskin_model_actor_from_draw_cached(
             &slot,
             ModelDrawState::default(),

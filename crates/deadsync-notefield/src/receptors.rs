@@ -767,6 +767,7 @@ mod tests {
         let pulse = pulse();
         let mut actors = Vec::new();
         let mut cache = ModelMeshCache::default();
+        cache.begin_hit_stats(true);
 
         compose_receptor_actors(
             &mut actors,

@@ -949,6 +949,7 @@ mod contract_tests {
     fn noteskin_actor_source_uses_arena_ownership() {
         let slot = test_model_slot();
         let arena = ActorResourceArena::new(1);
+        arena.begin_hit_stats(true);
 
         let first = slot.actor_texture_source(&arena);
         let second = slot.actor_texture_source(&arena);

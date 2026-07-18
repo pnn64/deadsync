@@ -985,6 +985,7 @@ mod tests {
         let slot = GlowSlot::model();
         let mut actors = Vec::new();
         let mut cache = ModelMeshCache::with_capacity(1);
+        cache.begin_hit_stats(true);
 
         for _ in 0..2 {
             compose_note_glow(&mut actors, &mut cache, glow_request(&slot), &|_| {
@@ -1146,6 +1147,7 @@ mod tests {
         let slot = GlowSlot::model();
         let mut actors = Vec::new();
         let mut cache = ModelMeshCache::with_capacity(1);
+        cache.begin_hit_stats(true);
 
         compose_note_layer(&mut actors, &mut cache, layer_request(&slot), &|_| {
             panic!("model-backed note layer must not resolve a sprite source")
@@ -1314,6 +1316,7 @@ mod tests {
         fill.draw.rot[2] = 3.0;
         let mut actors = Vec::new();
         let mut cache = ModelMeshCache::with_capacity(1);
+        cache.begin_hit_stats(true);
         let source_calls = Cell::new(0);
 
         compose_mine_layers(
