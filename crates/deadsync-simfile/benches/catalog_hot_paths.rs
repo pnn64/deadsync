@@ -1,16 +1,20 @@
 use deadsync_chart::notes::ParsedNote;
 use deadsync_chart::{
-    ArrowStats, ChartData, SongBackgroundChange, SongBackgroundChangeTarget, SongData, SongPack,
-    StaminaCounts, SyncPref, TechCounts,
+    ArrowStats, ChartData, GameplayChartData, SongBackgroundChange, SongBackgroundChangeTarget,
+    SongData, SongPack, StaminaCounts, SyncPref, TechCounts,
 };
 use deadsync_core::note::NoteType;
+use deadsync_rules::timing::{SpeedUnit, TimingSegments};
 use deadsync_simfile::artwork::{song_art_matches_for_bench, song_art_matches_legacy_for_bench};
 use deadsync_simfile::bgchanges::{
     bgchange_field_rejects_non_media, bgchange_field_rejects_non_media_legacy,
-    parse_bgchange_color, parse_bgchange_color_legacy,
+    parse_bgchange_color, parse_bgchange_color_legacy, split_bgchange_sets_legacy_for_bench,
+    split_bgchange_sets_like_itg,
 };
 use deadsync_simfile::cache::{
-    SerializableChartData, SerializableSongForegroundChange, SerializableSongForegroundLuaChange,
+    CachedChartPayload, CachedParsedNote, CachedTimingSegments, SerializableChartData,
+    SerializableSongData, SerializableSongForegroundChange, SerializableSongForegroundLuaChange,
+    build_requested_gameplay_charts, build_requested_gameplay_charts_legacy,
 };
 use deadsync_simfile::changes::{
     extract_foreground_change_sets, extract_foreground_changes, extract_foreground_lua_changes,
@@ -19,9 +23,10 @@ use deadsync_simfile::changes::{
 };
 use deadsync_simfile::media::{
     collapse_song_asset_path_like_itg_for_bench,
-    collapse_song_asset_path_like_itg_legacy_for_bench, foreground_media_ext_rank,
-    foreground_media_ext_rank_legacy, is_bgchange_movie_path, is_bgchange_movie_path_legacy,
-    is_song_art_image, is_song_art_image_legacy, select_foreground_media_index_for_bench,
+    collapse_song_asset_path_like_itg_legacy_for_bench, find_name_ci_for_bench,
+    find_name_ci_legacy_for_bench, foreground_media_ext_rank, foreground_media_ext_rank_legacy,
+    is_bgchange_movie_path, is_bgchange_movie_path_legacy, is_song_art_image,
+    is_song_art_image_legacy, select_foreground_media_index_for_bench,
     select_foreground_media_index_legacy_for_bench,
 };
 use deadsync_simfile::notes::{
@@ -83,6 +88,8 @@ const PACKS: usize = 4_096;
 const PACK_SORT_ITERATIONS: usize = 48;
 const BGCHANGE_FIELD_CALLS: usize = 65_536;
 const BGCHANGE_FIELD_ITERATIONS: usize = 64;
+const BGCHANGE_SPLIT_SETS: usize = 8_192;
+const BGCHANGE_SPLIT_ITERATIONS: usize = 16;
 const SEARCH_FILTER_CALLS: usize = 65_536;
 const SEARCH_FILTER_ITERATIONS: usize = 32;
 const DIFFICULTY_TEXT_ITERATIONS: usize = 64;
@@ -97,6 +104,9 @@ const ARTWORK_MATCH_ITERATIONS: usize = 64;
 const CHART_BUILD_ITERATIONS: usize = 32;
 const PLAYLIST_LOOKUP_ITERATIONS: usize = 32;
 const MEDIA_SELECTION_ITERATIONS: usize = 128;
+const NAME_LOOKUP_ENTRIES: usize = 8_192;
+const NAME_LOOKUP_ITERATIONS: usize = 128;
+const GAMEPLAY_REQUEST_ITERATIONS: usize = 32;
 
 struct CountingAlloc {
     allocs: AtomicU64,
@@ -191,9 +201,13 @@ fn main() {
 
     benchmark_step_type_matching();
     benchmark_bgchange_fields();
+    let bgchange_text = benchmark_bgchange_text();
+    benchmark_bgchange_splitting(&bgchange_text);
     benchmark_search_filter_parsing();
     benchmark_playlist_path_normalization();
     benchmark_asset_path_collapse();
+    let entry_names = benchmark_entry_names();
+    benchmark_case_insensitive_name_lookup(&entry_names);
 
     let bgchanges = benchmark_bgchanges();
     benchmark_bgchange_summary(&bgchanges);
@@ -210,6 +224,8 @@ fn main() {
 
     let chart_simfile = benchmark_chart_simfile();
     benchmark_owned_chart_build(&chart_simfile);
+    let serializable_song = benchmark_serializable_song(&chart_simfile);
+    benchmark_requested_gameplay_charts(&serializable_song);
 
     let foreground = ForegroundFixture::new();
     benchmark_foreground_changes(&foreground);
@@ -366,6 +382,31 @@ fn benchmark_bgchange_fields() {
     );
 }
 
+fn benchmark_bgchange_splitting(changes: &str) {
+    let legacy = split_bgchange_sets_legacy_for_bench(changes, &[]);
+    let split = split_bgchange_sets_like_itg(changes, &[]);
+    assert_eq!(legacy, split, "BG-change splitting changed");
+
+    let old = measure(BGCHANGE_SPLIT_ITERATIONS, || {
+        bgchange_sets_checksum(&split_bgchange_sets_legacy_for_bench(
+            black_box(changes),
+            &[],
+        ))
+    });
+    let new = measure(BGCHANGE_SPLIT_ITERATIONS, || {
+        bgchange_sets_checksum(&split_bgchange_sets_like_itg(black_box(changes), &[]))
+    });
+    assert_eq!(old.checksum, new.checksum);
+    print_pair(
+        "zero-copy single-line BG-change splitting",
+        BGCHANGE_SPLIT_SETS,
+        BGCHANGE_SPLIT_ITERATIONS,
+        "sets",
+        &old,
+        &new,
+    );
+}
+
 fn benchmark_search_filter_parsing() {
     const QUERIES: [&str; 10] = [
         "",
@@ -497,6 +538,34 @@ fn benchmark_asset_path_collapse() {
         ASSET_PATH_CALLS,
         ASSET_PATH_ITERATIONS,
         "paths",
+        &old,
+        &new,
+    );
+}
+
+fn benchmark_case_insensitive_name_lookup(names: &[String]) {
+    let want = names.last().expect("case-insensitive lookup fixture");
+    let mut mixed_case = want.to_ascii_uppercase();
+    mixed_case.replace_range(..1, &want[..1]);
+    assert_eq!(
+        find_name_ci_legacy_for_bench(names, &mixed_case),
+        find_name_ci_for_bench(names, &mixed_case),
+        "case-insensitive directory-name lookup changed"
+    );
+
+    let old = measure(NAME_LOOKUP_ITERATIONS, || {
+        find_name_ci_legacy_for_bench(black_box(names), black_box(&mixed_case)).unwrap_or_default()
+            as u64
+    });
+    let new = measure(NAME_LOOKUP_ITERATIONS, || {
+        find_name_ci_for_bench(black_box(names), black_box(&mixed_case)).unwrap_or_default() as u64
+    });
+    assert_eq!(old.checksum, new.checksum);
+    print_pair(
+        "allocation-free directory-name lookup",
+        names.len(),
+        NAME_LOOKUP_ITERATIONS,
+        "entries",
         &old,
         &new,
     );
@@ -686,6 +755,41 @@ fn benchmark_owned_chart_build(simfile_data: &[u8]) {
         "owned chart buffer transfer",
         legacy.len(),
         CHART_BUILD_ITERATIONS,
+        "charts",
+        &old,
+        &new,
+    );
+}
+
+fn benchmark_requested_gameplay_charts(song: &SerializableSongData) {
+    let requested = [7, 0, 5, 2];
+    let legacy = build_requested_gameplay_charts_legacy(song, &requested, 0.011)
+        .expect("legacy requested gameplay charts");
+    let selected = build_requested_gameplay_charts(song, &requested, 0.011)
+        .expect("requested gameplay charts");
+    assert_eq!(
+        gameplay_payload_bytes(&legacy),
+        gameplay_payload_bytes(&selected),
+        "requested gameplay chart payload changed"
+    );
+
+    let old = measure(GAMEPLAY_REQUEST_ITERATIONS, || {
+        gameplay_charts_checksum(
+            &build_requested_gameplay_charts_legacy(black_box(song), &requested, 0.011)
+                .expect("legacy requested gameplay charts"),
+        )
+    });
+    let new = measure(GAMEPLAY_REQUEST_ITERATIONS, || {
+        gameplay_charts_checksum(
+            &build_requested_gameplay_charts(black_box(song), &requested, 0.011)
+                .expect("requested gameplay charts"),
+        )
+    });
+    assert_eq!(old.checksum, new.checksum);
+    print_pair(
+        "payload-only requested chart clone",
+        requested.len(),
+        GAMEPLAY_REQUEST_ITERATIONS,
         "charts",
         &old,
         &new,
@@ -1214,6 +1318,94 @@ fn chart_checksum(charts: &[SerializableChartData]) -> u64 {
     })
 }
 
+fn gameplay_payload_bytes(charts: &[GameplayChartData]) -> Vec<Vec<u8>> {
+    charts
+        .iter()
+        .map(|chart| {
+            let payload = CachedChartPayload {
+                notes: chart.notes.clone(),
+                parsed_notes: chart
+                    .parsed_notes
+                    .iter()
+                    .map(CachedParsedNote::from)
+                    .collect(),
+                row_to_beat: chart.row_to_beat.clone(),
+                timing_segments: CachedTimingSegments::from(&chart.timing_segments),
+                chart_attacks: chart.chart_attacks.clone(),
+            };
+            bincode::encode_to_vec(payload, bincode::config::standard())
+                .expect("encode gameplay chart payload")
+        })
+        .collect()
+}
+
+fn gameplay_charts_checksum(charts: &[GameplayChartData]) -> u64 {
+    black_box(charts).iter().fold(0_u64, |checksum, chart| {
+        checksum.rotate_left(11)
+            ^ chart.notes.len() as u64
+            ^ (chart.parsed_notes.len() as u64).rotate_left(13)
+            ^ (chart.row_to_beat.len() as u64).rotate_left(23)
+            ^ timing_segments_checksum(&chart.timing_segments).rotate_left(31)
+            ^ chart
+                .chart_attacks
+                .as_deref()
+                .map_or(0, text_checksum)
+                .rotate_left(41)
+    })
+}
+
+fn timing_segments_checksum(segments: &TimingSegments) -> u64 {
+    let mut checksum = u64::from(segments.beat0_offset_adjust.to_bits());
+    for &(beat, bpm) in &segments.bpms {
+        checksum = checksum.rotate_left(5)
+            ^ u64::from(beat.to_bits())
+            ^ u64::from(bpm.to_bits()).rotate_left(17);
+    }
+    for segment in &segments.stops {
+        checksum = checksum.rotate_left(7)
+            ^ u64::from(segment.beat.to_bits())
+            ^ u64::from(segment.duration.to_bits()).rotate_left(19);
+    }
+    for segment in &segments.delays {
+        checksum = checksum.rotate_left(11)
+            ^ u64::from(segment.beat.to_bits())
+            ^ u64::from(segment.duration.to_bits()).rotate_left(23);
+    }
+    for segment in &segments.warps {
+        checksum = checksum.rotate_left(13)
+            ^ u64::from(segment.beat.to_bits())
+            ^ u64::from(segment.length.to_bits()).rotate_left(29);
+    }
+    for segment in &segments.speeds {
+        let unit = match segment.unit {
+            SpeedUnit::Beats => 1_u64,
+            SpeedUnit::Seconds => 2_u64,
+        };
+        checksum = checksum.rotate_left(17)
+            ^ u64::from(segment.beat.to_bits())
+            ^ u64::from(segment.ratio.to_bits()).rotate_left(31)
+            ^ u64::from(segment.delay.to_bits()).rotate_left(37)
+            ^ unit.rotate_left(43);
+    }
+    for segment in &segments.scrolls {
+        checksum = checksum.rotate_left(19)
+            ^ u64::from(segment.beat.to_bits())
+            ^ u64::from(segment.ratio.to_bits()).rotate_left(41);
+    }
+    for segment in &segments.fakes {
+        checksum = checksum.rotate_left(23)
+            ^ u64::from(segment.beat.to_bits())
+            ^ u64::from(segment.length.to_bits()).rotate_left(43);
+    }
+    for segment in &segments.time_signatures {
+        checksum = checksum.rotate_left(29)
+            ^ u64::from(segment.beat.to_bits())
+            ^ (segment.numerator as u64).rotate_left(47)
+            ^ (segment.denominator as u64).rotate_left(53);
+    }
+    checksum
+}
+
 fn meter_checksum(mut checksum: u64, meters: &[u32]) -> u64 {
     for &meter in meters {
         checksum = checksum.rotate_left(7) ^ u64::from(meter);
@@ -1226,6 +1418,18 @@ fn bgchange_summary_checksum(summary: (bool, Option<usize>, bool, bool)) -> u64 
         | ((summary.1.unwrap_or_default() as u64) << 1)
         | (u64::from(summary.2) << 48)
         | (u64::from(summary.3) << 49)
+}
+
+fn bgchange_sets_checksum(sets: &[Vec<String>]) -> u64 {
+    black_box(sets).iter().fold(0_u64, |checksum, fields| {
+        checksum.rotate_left(7)
+            ^ fields.len() as u64
+            ^ fields.first().map_or(0, |field| text_checksum(field))
+            ^ fields
+                .last()
+                .map_or(0, |field| text_checksum(field))
+                .rotate_left(29)
+    })
 }
 
 fn foreground_media_values(changes: &[SerializableSongForegroundChange]) -> Vec<(u32, &str)> {
@@ -1320,6 +1524,65 @@ fn benchmark_note_data() -> Vec<u8> {
         data.extend_from_slice(line);
     }
     data
+}
+
+fn benchmark_bgchange_text() -> String {
+    let mut changes = String::with_capacity(BGCHANGE_SPLIT_SETS * 72);
+    for index in 0..BGCHANGE_SPLIT_SETS {
+        if index != 0 {
+            changes.push(',');
+        }
+        changes.push_str(&format!(
+            "{:.3}=Visuals/movie{index:05}.mp4=1.000=0=0=0=0==CrossFade",
+            index as f32 * 4.0
+        ));
+    }
+    changes
+}
+
+fn benchmark_entry_names() -> Vec<String> {
+    (0..NAME_LOOKUP_ENTRIES)
+        .map(|index| format!("VisualAsset{index:05}.MP4"))
+        .collect()
+}
+
+fn benchmark_serializable_song(simfile_data: &[u8]) -> SerializableSongData {
+    let analysis_options = AnalysisOptions {
+        mono_threshold: SONG_ANALYSIS_MONO_THRESHOLD,
+        ..AnalysisOptions::default()
+    };
+    let summary = analyze(simfile_data, "sm", &analysis_options).expect("analyze gameplay charts");
+    SerializableSongData {
+        simfile_path: "Songs/Performance/Benchmark/song.sm".to_string(),
+        title: "Gameplay Benchmark".to_string(),
+        subtitle: String::new(),
+        translit_title: String::new(),
+        translit_subtitle: String::new(),
+        artist: "Benchmark".to_string(),
+        genre: "Performance".to_string(),
+        banner_path: None,
+        background_path: None,
+        background_changes: Vec::new(),
+        background_layer2_changes: Vec::new(),
+        foreground_changes: Vec::new(),
+        background_lua_changes: Vec::new(),
+        foreground_lua_changes: Vec::new(),
+        has_lua: false,
+        cdtitle_path: None,
+        music_path: Some("music.ogg".to_string()),
+        display_bpm: "120:180".to_string(),
+        offset: -0.011,
+        sample_start: None,
+        sample_length: None,
+        min_bpm: 120.0,
+        max_bpm: 180.0,
+        normalized_bpms: "120.000,180.000".to_string(),
+        music_length_seconds: 180.0,
+        first_second: 0.0,
+        total_length_seconds: 180,
+        precise_last_second_seconds: 180.0,
+        charts: build_charts_from_summary_for_bench(summary),
+    }
 }
 
 fn benchmark_chart_simfile() -> Vec<u8> {

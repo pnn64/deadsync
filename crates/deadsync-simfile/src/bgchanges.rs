@@ -1,5 +1,15 @@
+use std::borrow::Cow;
+
 pub fn split_bgchange_sets_like_itg(changes: &str, entries: &[String]) -> Vec<Vec<String>> {
     let changes = strip_newlines(changes);
+    split_bgchange_sets(&changes, entries, true)
+}
+
+fn split_bgchange_sets(
+    changes: &str,
+    entries: &[String],
+    compact_field_growth: bool,
+) -> Vec<Vec<String>> {
     if changes.is_empty() {
         return Vec::new();
     }
@@ -8,9 +18,9 @@ pub fn split_bgchange_sets_like_itg(changes: &str, entries: &[String]) -> Vec<Ve
     let mut pnum = 0u8;
     while start <= changes.len() {
         if matches!(pnum, 1 | 7)
-            && let Some(found) = match_bgchange_entry(&changes, start, entries)
+            && let Some(found) = match_bgchange_entry(changes, start, entries)
         {
-            out.last_mut().unwrap().push(found.to_string());
+            push_bgchange_field(out.last_mut().unwrap(), found, compact_field_growth);
             start += found.len();
             if let Some(&delim) = changes.as_bytes().get(start) {
                 pnum = if delim == b'=' { pnum + 1 } else { 0 };
@@ -19,7 +29,11 @@ pub fn split_bgchange_sets_like_itg(changes: &str, entries: &[String]) -> Vec<Ve
             continue;
         }
         if pnum == 0 {
-            out.push(Vec::new());
+            out.push(if compact_field_growth {
+                Vec::with_capacity(4)
+            } else {
+                Vec::new()
+            });
         }
         let rem = &changes[start..];
         let eq = rem.find('=').map(|i| start + i);
@@ -30,16 +44,36 @@ pub fn split_bgchange_sets_like_itg(changes: &str, entries: &[String]) -> Vec<Ve
             .or_else(|| eq.map(|e| (e, pnum + 1)))
             .or_else(|| comma.map(|c| (c, 0)))
         else {
-            out.last_mut().unwrap().push(changes[start..].to_string());
+            push_bgchange_field(
+                out.last_mut().unwrap(),
+                &changes[start..],
+                compact_field_growth,
+            );
             break;
         };
-        out.last_mut()
-            .unwrap()
-            .push(changes[start..end].to_string());
+        push_bgchange_field(
+            out.last_mut().unwrap(),
+            &changes[start..end],
+            compact_field_growth,
+        );
         start = end + 1;
         pnum = next_pnum;
     }
     out
+}
+
+fn push_bgchange_field(fields: &mut Vec<String>, field: &str, compact_field_growth: bool) {
+    if compact_field_growth && fields.len() == 4 && fields.capacity() == 4 {
+        fields.reserve_exact(7);
+    }
+    fields.push(field.to_string());
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn split_bgchange_sets_legacy_for_bench(changes: &str, entries: &[String]) -> Vec<Vec<String>> {
+    let changes = strip_newlines_owned(changes);
+    split_bgchange_sets(&changes, entries, false)
 }
 
 pub fn bgchange_field_rejects_non_media(field: &str) -> bool {
@@ -190,7 +224,14 @@ fn match_bgchange_entry<'a>(changes: &'a str, start: usize, entries: &[String]) 
     None
 }
 
-fn strip_newlines(text: &str) -> String {
+fn strip_newlines(text: &str) -> Cow<'_, str> {
+    if !text.contains('\n') {
+        return Cow::Borrowed(text);
+    }
+    Cow::Owned(strip_newlines_owned(text))
+}
+
+fn strip_newlines_owned(text: &str) -> String {
     let mut out = String::with_capacity(text.len());
     for line in text.lines() {
         out.push_str(line);

@@ -133,14 +133,34 @@ pub fn collapse_song_asset_path_like_itg_legacy_for_bench(path: &str) -> String 
 }
 
 pub fn resolve_song_dir_entry_ci(base: &Path, name: &str) -> Option<PathBuf> {
-    let want = name.to_ascii_lowercase();
     let entries = fs::read_dir(base).ok()?;
     for entry in entries.flatten() {
-        if entry.file_name().to_string_lossy().to_ascii_lowercase() == want {
+        if entry
+            .file_name()
+            .to_string_lossy()
+            .eq_ignore_ascii_case(name)
+        {
             return Some(entry.path());
         }
     }
     None
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn find_name_ci_for_bench(names: &[String], want: &str) -> Option<usize> {
+    names
+        .iter()
+        .position(|name| name.eq_ignore_ascii_case(want))
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn find_name_ci_legacy_for_bench(names: &[String], want: &str) -> Option<usize> {
+    let want = want.to_ascii_lowercase();
+    names
+        .iter()
+        .position(|name| name.to_ascii_lowercase() == want)
 }
 
 pub fn resolve_song_path_like_itg(song_dir: &Path, asset_tag: &str) -> Option<PathBuf> {

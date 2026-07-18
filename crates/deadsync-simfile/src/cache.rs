@@ -1148,7 +1148,49 @@ pub fn build_gameplay_chart(
     )
 }
 
+fn build_gameplay_chart_from_ref(
+    chart: &SerializableChartData,
+    song_offset: f32,
+    global_offset_seconds: f32,
+) -> GameplayChartData {
+    build_gameplay_chart_from_payload(
+        CachedChartPayload {
+            notes: chart.notes.clone(),
+            parsed_notes: chart.parsed_notes.clone(),
+            row_to_beat: chart.row_to_beat.clone(),
+            timing_segments: chart.timing_segments.clone(),
+            chart_attacks: chart.chart_attacks.clone(),
+        },
+        song_offset,
+        global_offset_seconds,
+    )
+}
+
 pub fn build_requested_gameplay_charts(
+    song: &SerializableSongData,
+    requested_chart_ixs: &[usize],
+    global_offset_seconds: f32,
+) -> Result<Vec<GameplayChartData>, String> {
+    let song_offset = song.offset;
+    requested_chart_ixs
+        .iter()
+        .map(|&chart_ix| {
+            let chart = song
+                .charts
+                .get(chart_ix)
+                .ok_or_else(|| format!("Chart index {chart_ix} out of range"))?;
+            Ok(build_gameplay_chart_from_ref(
+                chart,
+                song_offset,
+                global_offset_seconds,
+            ))
+        })
+        .collect()
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+#[doc(hidden)]
+pub fn build_requested_gameplay_charts_legacy(
     song: &SerializableSongData,
     requested_chart_ixs: &[usize],
     global_offset_seconds: f32,
@@ -2243,10 +2285,18 @@ mod tests {
         second.notes = b"second".to_vec();
         song.charts = vec![first, second];
 
+        let legacy = build_requested_gameplay_charts_legacy(&song, &[1, 0], 0.0).unwrap();
         let charts = build_requested_gameplay_charts(&song, &[1, 0], 0.0).unwrap();
 
         assert_eq!(charts[0].notes, b"second");
         assert_eq!(charts[1].notes, b"first");
+        for (chart, legacy) in charts.iter().zip(&legacy) {
+            assert_eq!(chart.notes, legacy.notes);
+            assert_eq!(chart.parsed_notes, legacy.parsed_notes);
+            assert_eq!(chart.row_to_beat, legacy.row_to_beat);
+            assert_eq!(chart.timing_segments.bpms, legacy.timing_segments.bpms);
+            assert_eq!(chart.chart_attacks, legacy.chart_attacks);
+        }
     }
 
     #[test]
