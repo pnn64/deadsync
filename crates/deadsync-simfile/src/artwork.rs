@@ -2,7 +2,7 @@ use crate::media::{
     is_mac_resource_fork, is_song_art_image, resolve_song_asset_path_like_itg, song_art_file_key,
     song_art_file_stem,
 };
-use crate::tags::latest_simfile_tag_value;
+use crate::tags::latest_simfile_tag_values;
 use image::image_dimensions;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -26,14 +26,12 @@ pub fn resolve_song_artwork_like_itg(
     let mut background = resolve_song_asset_path_like_itg(song_dir, background_tag);
     let mut cdtitle = resolve_song_asset_path_like_itg(song_dir, cdtitle_tag);
     let mut jacket = resolve_song_asset_path_like_itg(song_dir, jacket_tag);
-    let mut cdimage = resolve_song_asset_path_like_itg(
-        song_dir,
-        &latest_simfile_tag_value(simfile_data, b"#CDIMAGE:"),
+    let [cdimage_tag, discimage_tag] = latest_simfile_tag_values(
+        simfile_data,
+        [b"#CDIMAGE:".as_slice(), b"#DISCIMAGE:".as_slice()],
     );
-    let mut disc = resolve_song_asset_path_like_itg(
-        song_dir,
-        &latest_simfile_tag_value(simfile_data, b"#DISCIMAGE:"),
-    );
+    let mut cdimage = resolve_song_asset_path_like_itg(song_dir, &cdimage_tag);
+    let mut disc = resolve_song_asset_path_like_itg(song_dir, &discimage_tag);
 
     if banner.is_some() && background.is_some() && cdtitle.is_some() {
         return ResolvedSongArtwork {

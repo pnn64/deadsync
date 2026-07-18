@@ -1,6 +1,52 @@
 use rssp::parse::{decode_bytes, unescape_tag};
 
 pub fn latest_simfile_tag_value(simfile_data: &[u8], tag: &[u8]) -> String {
+    latest_simfile_tag_values(simfile_data, [tag])
+        .into_iter()
+        .next()
+        .unwrap_or_default()
+}
+
+/// Extracts the latest value for each requested tag in one pass over a simfile.
+pub fn latest_simfile_tag_values<const N: usize>(
+    simfile_data: &[u8],
+    tags: [&[u8]; N],
+) -> [String; N] {
+    let mut latest = [None; N];
+    let mut i = 0usize;
+    while i < simfile_data.len() {
+        let Some(pos) = find_byte(&simfile_data[i..], b'#') else {
+            break;
+        };
+        i += pos;
+        let slice = &simfile_data[i..];
+        let Some((tag_index, tag)) = tags
+            .iter()
+            .copied()
+            .enumerate()
+            .find(|(_, tag)| starts_with_ci(slice, tag))
+        else {
+            i += 1;
+            continue;
+        };
+        if let Some((value, adv)) = parse_tag_val(slice, tag.len(), true) {
+            latest[tag_index] = Some(value);
+            i += adv;
+        } else {
+            i += 1;
+        }
+    }
+
+    std::array::from_fn(|index| {
+        latest[index]
+            .map(|raw| unescape_tag(decode_bytes(raw).as_ref()).into_owned())
+            .unwrap_or_default()
+    })
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn latest_simfile_tag_value_legacy(simfile_data: &[u8], tag: &[u8]) -> String {
     extract_named_tag_values(simfile_data, &[tag])
         .last()
         .copied()
@@ -174,5 +220,15 @@ mod tests {
             latest_simfile_tag_value(data, b"#CDIMAGE:"),
             "new;image.png"
         );
+    }
+
+    #[test]
+    fn latest_tag_values_batch_independent_duplicate_tags() {
+        let data = b"#CDIMAGE:old.png;#DISCIMAGE:disc.png;#cdimage:new\\;image.png;";
+        let [cdimage, discimage] =
+            latest_simfile_tag_values(data, [b"#CDIMAGE:".as_slice(), b"#DISCIMAGE:".as_slice()]);
+
+        assert_eq!(cdimage, "new;image.png");
+        assert_eq!(discimage, "disc.png");
     }
 }

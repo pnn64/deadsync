@@ -90,6 +90,56 @@ fn parse_song_search_filter(input: &str) -> SongSearchFilter {
     filter
 }
 
+#[inline]
+fn contains_ignore_ascii_case(haystack: &str, needle: &str) -> bool {
+    let needle = needle.as_bytes();
+    needle.is_empty()
+        || haystack
+            .as_bytes()
+            .windows(needle.len())
+            .any(|window| window.eq_ignore_ascii_case(needle))
+}
+
+#[inline]
+fn joined_contains_ignore_ascii_case(left: &str, right: &str, needle: &str) -> bool {
+    let right = (!right.trim().is_empty()).then_some(right);
+    let joined_len = left
+        .len()
+        .saturating_add(right.map_or(0, |value| value.len().saturating_add(1)));
+    let needle = needle.as_bytes();
+    if needle.is_empty() {
+        return true;
+    }
+    if needle.len() > joined_len {
+        return false;
+    }
+
+    let left = left.as_bytes();
+    let right = right.map(str::as_bytes).unwrap_or_default();
+    (0..=joined_len - needle.len()).any(|start| {
+        needle.iter().enumerate().all(|(offset, expected)| {
+            let index = start + offset;
+            let actual = if index < left.len() {
+                left[index]
+            } else if index == left.len() {
+                b' '
+            } else {
+                right[index - left.len() - 1]
+            };
+            actual.eq_ignore_ascii_case(expected)
+        })
+    })
+}
+
+#[inline]
+fn song_title_contains(song: &SongData, translit: bool, needle: &str) -> bool {
+    joined_contains_ignore_ascii_case(
+        song.display_title(translit),
+        song.display_subtitle(translit),
+        needle,
+    )
+}
+
 pub fn build_song_search_candidates<'a>(
     entries: impl IntoIterator<Item = SongSearchCatalogEntry<'a>>,
     search_text: &str,
@@ -115,17 +165,16 @@ pub fn build_song_search_candidates<'a>(
 
                 let pack_name = current_pack_name.unwrap_or_default();
                 if let Some(pack_term) = &filter.pack_term
-                    && !pack_name.to_ascii_lowercase().contains(pack_term)
+                    && !contains_ignore_ascii_case(pack_name, pack_term)
                 {
                     continue;
                 }
 
-                if let Some(song_term) = &filter.song_term {
-                    let display = song.display_full_title(false).to_ascii_lowercase();
-                    let translit = song.display_full_title(true).to_ascii_lowercase();
-                    if !display.contains(song_term) && !translit.contains(song_term) {
-                        continue;
-                    }
+                if let Some(song_term) = &filter.song_term
+                    && !song_title_contains(song, false, song_term)
+                    && !song_title_contains(song, true, song_term)
+                {
+                    continue;
                 }
 
                 if let Some(diff) = filter.difficulty
@@ -165,6 +214,83 @@ pub fn build_song_search_candidates<'a>(
     }
     out.sort_by_cached_key(|c| c.song.display_full_title(false).to_ascii_lowercase());
 
+    out
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn build_song_search_candidates_legacy<'a>(
+    entries: impl IntoIterator<Item = SongSearchCatalogEntry<'a>>,
+    search_text: &str,
+    chart_type: &str,
+) -> Vec<SongSearchCandidate> {
+    let filter = parse_song_search_filter(search_text);
+    let mut out = Vec::new();
+    let mut current_pack_name: Option<&str> = None;
+
+    for entry in entries {
+        match entry {
+            SongSearchCatalogEntry::PackHeader(name) => current_pack_name = Some(name),
+            SongSearchCatalogEntry::Song(song) => {
+                if !song
+                    .charts
+                    .iter()
+                    .any(|chart| chart.chart_type.eq_ignore_ascii_case(chart_type))
+                {
+                    continue;
+                }
+                let pack_name = current_pack_name.unwrap_or_default();
+                if let Some(pack_term) = &filter.pack_term
+                    && !pack_name.to_ascii_lowercase().contains(pack_term)
+                {
+                    continue;
+                }
+                if let Some(song_term) = &filter.song_term {
+                    let display = song.display_full_title(false).to_ascii_lowercase();
+                    let translit = song.display_full_title(true).to_ascii_lowercase();
+                    if !display.contains(song_term) && !translit.contains(song_term) {
+                        continue;
+                    }
+                }
+                if let Some(diff) = filter.difficulty
+                    && !song.charts.iter().any(|chart| {
+                        chart.chart_type.eq_ignore_ascii_case(chart_type)
+                            && !chart.difficulty.eq_ignore_ascii_case("edit")
+                            && chart.meter == diff as u32
+                    })
+                {
+                    continue;
+                }
+                if let Some(want_tier) = filter.bpm_tier {
+                    let Some((bpm_lo, bpm_hi)) = song.display_bpm_range() else {
+                        continue;
+                    };
+                    let mut lo = song_search_bpm_tier(bpm_lo);
+                    let mut hi = song_search_bpm_tier(bpm_hi);
+                    if lo > hi {
+                        std::mem::swap(&mut lo, &mut hi);
+                    }
+                    if lo == hi {
+                        if want_tier != lo {
+                            continue;
+                        }
+                    } else if want_tier < lo || want_tier > hi {
+                        continue;
+                    }
+                }
+                out.push(SongSearchCandidate {
+                    pack_name: pack_name.to_string(),
+                    song: Arc::clone(song),
+                });
+            }
+        }
+    }
+    out.sort_by_cached_key(|candidate| {
+        candidate
+            .song
+            .display_full_title(false)
+            .to_ascii_lowercase()
+    });
     out
 }
 
@@ -330,5 +456,22 @@ mod tests {
             song_search_difficulties_text(&song, "dance-single"),
             "4   11"
         );
+    }
+
+    #[test]
+    fn song_term_matches_ascii_case_and_title_subtitle_boundary() {
+        let song = test_song_with_bpm("Alpha", "128", 128.0, 128.0);
+        let mut with_subtitle = (*song).clone();
+        with_subtitle.subtitle = "Mix".to_string();
+        let with_subtitle = Arc::new(with_subtitle);
+        let entries = [
+            SongSearchCatalogEntry::PackHeader("WarmUps"),
+            SongSearchCatalogEntry::Song(&with_subtitle),
+        ];
+
+        let candidates = build_song_search_candidates(entries, "warmups/HA mI", "dance-single");
+
+        assert_eq!(candidates.len(), 1);
+        assert_eq!(candidates[0].song.title, "Alpha");
     }
 }
