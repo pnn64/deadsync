@@ -15,19 +15,26 @@ use deadsync_simfile::cache::{
     CachedChartPayload, CachedParsedNote, CachedTimingSegments, SerializableChartData,
     SerializableSongData, SerializableSongForegroundChange, SerializableSongForegroundLuaChange,
     build_requested_gameplay_charts, build_requested_gameplay_charts_legacy,
+    collect_requested_cached_charts_for_bench, collect_requested_cached_charts_legacy_for_bench,
+    encode_chart_payloads_for_bench, encode_chart_payloads_legacy_for_bench,
 };
 use deadsync_simfile::changes::{
     extract_foreground_change_sets, extract_foreground_changes, extract_foreground_lua_changes,
     simfile_uses_lua, summarize_bgchange_fallbacks_for_bench,
     summarize_bgchange_fallbacks_legacy_for_bench,
 };
+use deadsync_simfile::course::{
+    SongSort, select_song_by_play_rank_for_bench, select_song_by_play_rank_legacy_for_bench,
+};
 use deadsync_simfile::media::{
     collapse_song_asset_path_like_itg_for_bench,
     collapse_song_asset_path_like_itg_legacy_for_bench, find_name_ci_for_bench,
     find_name_ci_legacy_for_bench, foreground_media_ext_rank, foreground_media_ext_rank_legacy,
     is_bgchange_movie_path, is_bgchange_movie_path_legacy, is_song_art_image,
-    is_song_art_image_legacy, select_foreground_media_index_for_bench,
-    select_foreground_media_index_legacy_for_bench,
+    is_song_art_image_legacy, parse_ini_sections_for_bench, parse_ini_sections_legacy_for_bench,
+    retain_whitelisted_random_movies_for_bench, retain_whitelisted_random_movies_legacy_for_bench,
+    select_foreground_media_index_for_bench, select_foreground_media_index_legacy_for_bench,
+    sort_random_movie_paths_for_bench, sort_random_movie_paths_legacy_for_bench,
 };
 use deadsync_simfile::notes::{
     parse_chart_notes, parse_chart_notes_legacy, step_type_lanes, step_type_lanes_legacy,
@@ -59,6 +66,7 @@ use deadsync_simfile::song_sort::{
 use deadsync_simfile::tags::{latest_simfile_tag_value_legacy, latest_simfile_tag_values};
 use rssp::{AnalysisOptions, analyze};
 use std::alloc::{GlobalAlloc, Layout, System};
+use std::collections::HashSet;
 use std::fs;
 use std::hint::black_box;
 use std::path::{Path, PathBuf};
@@ -107,6 +115,14 @@ const MEDIA_SELECTION_ITERATIONS: usize = 128;
 const NAME_LOOKUP_ENTRIES: usize = 8_192;
 const NAME_LOOKUP_ITERATIONS: usize = 128;
 const GAMEPLAY_REQUEST_ITERATIONS: usize = 32;
+const RANDOM_MOVIE_SORT_PATHS: usize = 32_768;
+const RANDOM_MOVIE_SORT_ITERATIONS: usize = 16;
+const INI_MAPPING_ENTRIES: usize = 8_192;
+const INI_MAPPING_ITERATIONS: usize = 32;
+const CACHE_PAYLOAD_ITERATIONS: usize = 64;
+const CACHED_CHART_COLLECTION_ITERATIONS: usize = 32;
+const MOVIE_WHITELIST_ITERATIONS: usize = 64;
+const COURSE_RANK_ITERATIONS: usize = 64;
 
 struct CountingAlloc {
     allocs: AtomicU64,
@@ -218,6 +234,11 @@ fn main() {
     let media_paths = benchmark_media_paths();
     benchmark_media_extensions(&media_paths);
     benchmark_foreground_media_selection(&media_paths);
+    let random_movie_paths = benchmark_random_movie_paths();
+    benchmark_random_movie_sort(&random_movie_paths);
+    benchmark_random_movie_whitelist(&random_movie_paths);
+    let ini_mapping = benchmark_ini_mapping();
+    benchmark_ini_parsing(&ini_mapping);
 
     let note_data = benchmark_note_data();
     benchmark_note_parsing(&note_data);
@@ -226,12 +247,15 @@ fn main() {
     benchmark_owned_chart_build(&chart_simfile);
     let serializable_song = benchmark_serializable_song(&chart_simfile);
     benchmark_requested_gameplay_charts(&serializable_song);
+    benchmark_cached_chart_collection(&serializable_song);
+    benchmark_cache_payload_encoding(&serializable_song);
 
     let foreground = ForegroundFixture::new();
     benchmark_foreground_changes(&foreground);
 
     let songs: Vec<_> = (0..SONGS).map(benchmark_song).collect();
     benchmark_playlist_lookup(&songs);
+    benchmark_course_play_rank(&songs);
     benchmark_catalog_song_sort(&songs);
     benchmark_search(&songs);
     benchmark_difficulty_text(&songs);
@@ -697,6 +721,90 @@ fn benchmark_foreground_media_selection(paths: &[PathBuf]) {
     );
 }
 
+fn benchmark_random_movie_sort(paths: &[PathBuf]) {
+    let mut legacy = paths.to_vec();
+    sort_random_movie_paths_legacy_for_bench(&mut legacy);
+    let mut sorted = paths.to_vec();
+    sort_random_movie_paths_for_bench(&mut sorted);
+    assert_eq!(legacy, sorted, "random-movie ordering changed");
+
+    let old = measure(RANDOM_MOVIE_SORT_ITERATIONS, || {
+        let mut paths = black_box(paths).to_vec();
+        sort_random_movie_paths_legacy_for_bench(&mut paths);
+        path_order_checksum(&paths)
+    });
+    let new = measure(RANDOM_MOVIE_SORT_ITERATIONS, || {
+        let mut paths = black_box(paths).to_vec();
+        sort_random_movie_paths_for_bench(&mut paths);
+        path_order_checksum(&paths)
+    });
+    assert_eq!(old.checksum, new.checksum);
+    print_pair(
+        "allocation-free random-movie ordering",
+        paths.len(),
+        RANDOM_MOVIE_SORT_ITERATIONS,
+        "paths",
+        &old,
+        &new,
+    );
+}
+
+fn benchmark_random_movie_whitelist(paths: &[PathBuf]) {
+    let whitelist = paths
+        .iter()
+        .enumerate()
+        .filter(|(index, _)| index % 2 == 0)
+        .filter_map(|(_, path)| path.file_name()?.to_str().map(str::to_owned))
+        .collect::<HashSet<_>>();
+    let legacy = retain_whitelisted_random_movies_legacy_for_bench(paths.to_vec(), &whitelist);
+    let retained = retain_whitelisted_random_movies_for_bench(paths.to_vec(), &whitelist);
+    assert_eq!(legacy, retained, "random-movie whitelist output changed");
+
+    let old = measure(MOVIE_WHITELIST_ITERATIONS, || {
+        path_order_checksum(&retain_whitelisted_random_movies_legacy_for_bench(
+            black_box(paths).to_vec(),
+            &whitelist,
+        ))
+    });
+    let new = measure(MOVIE_WHITELIST_ITERATIONS, || {
+        path_order_checksum(&retain_whitelisted_random_movies_for_bench(
+            black_box(paths).to_vec(),
+            &whitelist,
+        ))
+    });
+    assert_eq!(old.checksum, new.checksum);
+    print_pair(
+        "in-place random-movie whitelist",
+        paths.len(),
+        MOVIE_WHITELIST_ITERATIONS,
+        "paths",
+        &old,
+        &new,
+    );
+}
+
+fn benchmark_ini_parsing(text: &str) {
+    let legacy = parse_ini_sections_legacy_for_bench(text);
+    let parsed = parse_ini_sections_for_bench(text);
+    assert_eq!(legacy, parsed, "INI section parsing changed");
+
+    let old = measure(INI_MAPPING_ITERATIONS, || {
+        ini_sections_checksum(&parse_ini_sections_legacy_for_bench(black_box(text)))
+    });
+    let new = measure(INI_MAPPING_ITERATIONS, || {
+        ini_sections_checksum(&parse_ini_sections_for_bench(black_box(text)))
+    });
+    assert_eq!(old.checksum, new.checksum);
+    print_pair(
+        "borrowed INI section insertion",
+        INI_MAPPING_ENTRIES,
+        INI_MAPPING_ITERATIONS,
+        "entries",
+        &old,
+        &new,
+    );
+}
+
 fn benchmark_note_parsing(note_data: &[u8]) {
     let old_notes = parse_chart_notes_legacy(note_data, 4);
     let new_notes = parse_chart_notes(note_data, 4);
@@ -790,6 +898,66 @@ fn benchmark_requested_gameplay_charts(song: &SerializableSongData) {
         "payload-only requested chart clone",
         requested.len(),
         GAMEPLAY_REQUEST_ITERATIONS,
+        "charts",
+        &old,
+        &new,
+    );
+}
+
+fn benchmark_cached_chart_collection(song: &SerializableSongData) {
+    let all_indices = (0..song.charts.len()).collect::<Vec<_>>();
+    let source = build_requested_gameplay_charts(song, &all_indices, 0.011)
+        .expect("cached gameplay chart source");
+    let requested = [7, 0, 5, 2, 7, 0];
+    let legacy = collect_requested_cached_charts_legacy_for_bench(&source, &requested)
+        .expect("legacy cached chart collection");
+    let collected = collect_requested_cached_charts_for_bench(&source, &requested)
+        .expect("cached chart collection");
+    assert_eq!(
+        gameplay_payload_bytes(&legacy),
+        gameplay_payload_bytes(&collected),
+        "cached gameplay chart collection changed"
+    );
+
+    let old = measure(CACHED_CHART_COLLECTION_ITERATIONS, || {
+        gameplay_charts_checksum(
+            &collect_requested_cached_charts_legacy_for_bench(black_box(&source), &requested)
+                .expect("legacy cached chart collection"),
+        )
+    });
+    let new = measure(CACHED_CHART_COLLECTION_ITERATIONS, || {
+        gameplay_charts_checksum(
+            &collect_requested_cached_charts_for_bench(black_box(&source), &requested)
+                .expect("cached chart collection"),
+        )
+    });
+    assert_eq!(old.checksum, new.checksum);
+    print_pair(
+        "single-copy cached chart collection",
+        requested.len(),
+        CACHED_CHART_COLLECTION_ITERATIONS,
+        "charts",
+        &old,
+        &new,
+    );
+}
+
+fn benchmark_cache_payload_encoding(song: &SerializableSongData) {
+    let legacy = encode_chart_payloads_legacy_for_bench(song);
+    let borrowed = encode_chart_payloads_for_bench(song);
+    assert_eq!(legacy, borrowed, "cache chart payload encoding changed");
+
+    let old = measure(CACHE_PAYLOAD_ITERATIONS, || {
+        encoded_payloads_checksum(&encode_chart_payloads_legacy_for_bench(black_box(song)))
+    });
+    let new = measure(CACHE_PAYLOAD_ITERATIONS, || {
+        encoded_payloads_checksum(&encode_chart_payloads_for_bench(black_box(song)))
+    });
+    assert_eq!(old.checksum, new.checksum);
+    print_pair(
+        "borrowed cache payload encoding",
+        song.charts.len(),
+        CACHE_PAYLOAD_ITERATIONS,
         "charts",
         &old,
         &new,
@@ -1011,6 +1179,63 @@ fn benchmark_catalog_song_sort(songs: &[Arc<SongData>]) {
         "borrowed catalog song sort keys",
         songs.len(),
         CATALOG_SORT_ITERATIONS,
+        "songs",
+        &old,
+        &new,
+    );
+}
+
+fn benchmark_course_play_rank(songs: &[Arc<SongData>]) {
+    let play_counts = (0..songs.len())
+        .map(|index| ((index * 7_919) % 257) as u32)
+        .collect::<Vec<_>>();
+    let pick = songs.len() / 3;
+    for sort in [SongSort::MostPlays, SongSort::FewestPlays] {
+        let legacy = select_song_by_play_rank_legacy_for_bench(songs, &play_counts, sort, pick)
+            .expect("legacy course play rank");
+        let selected = select_song_by_play_rank_for_bench(songs, &play_counts, sort, pick)
+            .expect("course play rank");
+        assert_eq!(
+            legacy.simfile_path, selected.simfile_path,
+            "course play-rank selection changed"
+        );
+    }
+
+    let old = measure(COURSE_RANK_ITERATIONS, || {
+        let most = select_song_by_play_rank_legacy_for_bench(
+            black_box(songs),
+            &play_counts,
+            SongSort::MostPlays,
+            pick,
+        );
+        let fewest = select_song_by_play_rank_legacy_for_bench(
+            black_box(songs),
+            &play_counts,
+            SongSort::FewestPlays,
+            pick,
+        );
+        ranked_song_checksum(most.as_ref()) ^ ranked_song_checksum(fewest.as_ref()).rotate_left(23)
+    });
+    let new = measure(COURSE_RANK_ITERATIONS, || {
+        let most = select_song_by_play_rank_for_bench(
+            black_box(songs),
+            &play_counts,
+            SongSort::MostPlays,
+            pick,
+        );
+        let fewest = select_song_by_play_rank_for_bench(
+            black_box(songs),
+            &play_counts,
+            SongSort::FewestPlays,
+            pick,
+        );
+        ranked_song_checksum(most.as_ref()) ^ ranked_song_checksum(fewest.as_ref()).rotate_left(23)
+    });
+    assert_eq!(old.checksum, new.checksum);
+    print_pair(
+        "partial course play-rank selection",
+        songs.len() * 2,
+        COURSE_RANK_ITERATIONS,
         "songs",
         &old,
         &new,
@@ -1263,6 +1488,12 @@ fn song_checksum(songs: &[Arc<SongData>]) -> u64 {
     })
 }
 
+fn ranked_song_checksum(song: Option<&Arc<SongData>>) -> u64 {
+    song.map_or(0, |song| {
+        path_checksum(&song.simfile_path) ^ text_checksum(&song.title).rotate_left(19)
+    })
+}
+
 fn pack_checksum(packs: &[SongPack]) -> u64 {
     packs.iter().fold(0_u64, |checksum, pack| {
         checksum.rotate_left(11)
@@ -1315,6 +1546,39 @@ fn chart_checksum(charts: &[SerializableChartData]) -> u64 {
             ^ (chart.parsed_notes.len() as u64).rotate_left(29)
             ^ (chart.row_to_beat.len() as u64).rotate_left(37)
             ^ (chart.measure_nps_vec.len() as u64).rotate_left(43)
+    })
+}
+
+fn path_order_checksum(paths: &[PathBuf]) -> u64 {
+    black_box(paths).iter().fold(0_u64, |checksum, path| {
+        checksum.rotate_left(7) ^ path_checksum(path)
+    })
+}
+
+fn ini_sections_checksum(
+    sections: &std::collections::HashMap<String, Vec<(String, String)>>,
+) -> u64 {
+    black_box(sections)
+        .iter()
+        .map(|(section, entries)| {
+            entries.iter().fold(
+                text_checksum(section) ^ entries.len() as u64,
+                |checksum, (key, value)| {
+                    checksum.rotate_left(5)
+                        ^ text_checksum(key)
+                        ^ text_checksum(value).rotate_left(23)
+                },
+            )
+        })
+        .fold(0_u64, u64::wrapping_add)
+}
+
+fn encoded_payloads_checksum(payloads: &[Vec<u8>]) -> u64 {
+    black_box(payloads).iter().fold(0_u64, |checksum, payload| {
+        checksum.rotate_left(11)
+            ^ payload.len() as u64
+            ^ u64::from(payload.first().copied().unwrap_or_default()).rotate_left(23)
+            ^ u64::from(payload.last().copied().unwrap_or_default()).rotate_left(37)
     })
 }
 
@@ -1615,6 +1879,37 @@ fn benchmark_chart_simfile() -> Vec<u8> {
         data.extend_from_slice(b";\n");
     }
     data
+}
+
+fn benchmark_random_movie_paths() -> Vec<PathBuf> {
+    (0..RANDOM_MOVIE_SORT_PATHS)
+        .map(|index| {
+            let shuffled = index.wrapping_mul(8_191) % RANDOM_MOVIE_SORT_PATHS;
+            let prefix = if index.is_multiple_of(2) {
+                "VisualClip"
+            } else {
+                "visualclip"
+            };
+            PathBuf::from(format!(
+                "RandomMovies/Performance/{prefix}{shuffled:05}.MP4"
+            ))
+        })
+        .collect()
+}
+
+fn benchmark_ini_mapping() -> String {
+    const SECTIONS: usize = 32;
+    let entries_per_section = INI_MAPPING_ENTRIES / SECTIONS;
+    let mut text = String::with_capacity(INI_MAPPING_ENTRIES * 48);
+    for section in 0..SECTIONS {
+        text.push_str(&format!("[VisualSection{section:02}]\n"));
+        for entry in 0..entries_per_section {
+            text.push_str(&format!(
+                "movie{section:02}_{entry:04}.mp4=weight-{entry}\n"
+            ));
+        }
+    }
+    text
 }
 
 fn benchmark_media_paths() -> Vec<PathBuf> {

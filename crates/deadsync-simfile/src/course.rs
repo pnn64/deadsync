@@ -459,8 +459,12 @@ fn resolve_sort_pick_song(
     sort: SongSort,
     index: i32,
 ) -> Option<Arc<SongData>> {
-    let mut ranked: Vec<(u32, Arc<SongData>)> = Vec::new();
-    for song in all_songs {
+    if matches!(sort, SongSort::TopGrades | SongSort::LowestGrades) {
+        return None;
+    }
+
+    let mut ranked = Vec::new();
+    for (song_index, song) in all_songs.iter().enumerate() {
         if resolve_course_chart(song, entry, chart_type, course_difficulty).is_none() {
             continue;
         }
@@ -468,19 +472,73 @@ fn resolve_sort_pick_song(
             .get(song_unique_key(song).as_str())
             .copied()
             .unwrap_or(0);
-        ranked.push((plays, song.clone()));
+        ranked.push((plays, song_index));
     }
 
     let pick = index.max(0) as usize;
+    select_song_by_play_rank(all_songs, ranked, sort, pick)
+}
+
+fn select_song_by_play_rank(
+    all_songs: &[Arc<SongData>],
+    mut ranked: Vec<(u32, usize)>,
+    sort: SongSort,
+    pick: usize,
+) -> Option<Arc<SongData>> {
+    if pick >= ranked.len() {
+        return None;
+    }
     match sort {
-        SongSort::MostPlays => ranked.sort_by(|a, b| b.0.cmp(&a.0)),
-        SongSort::FewestPlays => ranked.sort_by(|a, b| a.0.cmp(&b.0)),
+        SongSort::MostPlays => {
+            ranked.select_nth_unstable_by(pick, |a, b| b.0.cmp(&a.0).then(a.1.cmp(&b.1)));
+        }
+        SongSort::FewestPlays => {
+            ranked.select_nth_unstable_by(pick, |a, b| a.0.cmp(&b.0).then(a.1.cmp(&b.1)));
+        }
         SongSort::TopGrades | SongSort::LowestGrades => {
             return None;
         }
     }
+    all_songs.get(ranked[pick].1).cloned()
+}
 
-    ranked.get(pick).map(|(_, song)| song.clone())
+#[cfg(any(test, feature = "bench-support"))]
+#[doc(hidden)]
+pub fn select_song_by_play_rank_for_bench(
+    all_songs: &[Arc<SongData>],
+    play_counts: &[u32],
+    sort: SongSort,
+    pick: usize,
+) -> Option<Arc<SongData>> {
+    let ranked = play_counts
+        .iter()
+        .copied()
+        .take(all_songs.len())
+        .enumerate()
+        .map(|(song_index, plays)| (plays, song_index))
+        .collect();
+    select_song_by_play_rank(all_songs, ranked, sort, pick)
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+#[doc(hidden)]
+pub fn select_song_by_play_rank_legacy_for_bench(
+    all_songs: &[Arc<SongData>],
+    play_counts: &[u32],
+    sort: SongSort,
+    pick: usize,
+) -> Option<Arc<SongData>> {
+    let mut ranked = all_songs
+        .iter()
+        .zip(play_counts)
+        .map(|(song, &plays)| (plays, Arc::clone(song)))
+        .collect::<Vec<_>>();
+    match sort {
+        SongSort::MostPlays => ranked.sort_by(|a, b| b.0.cmp(&a.0)),
+        SongSort::FewestPlays => ranked.sort_by(|a, b| a.0.cmp(&b.0)),
+        SongSort::TopGrades | SongSort::LowestGrades => return None,
+    }
+    ranked.get(pick).map(|(_, song)| Arc::clone(song))
 }
 
 fn random_pick_index(seed: u64, course_path: &Path, entry_index: usize, len: usize) -> usize {
@@ -1400,6 +1458,24 @@ mod tests {
         )
         .expect("random pick");
         assert_eq!(random.simfile_path, slow.simfile_path);
+    }
+
+    #[test]
+    fn play_rank_selection_preserves_stable_ties_and_pick_direction() {
+        let first = song_with_charts("Pack/First/song.ssc", Vec::new());
+        let second = song_with_charts("Pack/Second/song.ssc", Vec::new());
+        let third = song_with_charts("Pack/Third/song.ssc", Vec::new());
+        let songs = vec![first, second.clone(), third.clone()];
+        let ranked = vec![(9, 0), (9, 1), (3, 2)];
+
+        let tied = select_song_by_play_rank(&songs, ranked.clone(), SongSort::MostPlays, 1)
+            .expect("second stable tie");
+        let fewest = select_song_by_play_rank(&songs, ranked, SongSort::FewestPlays, 0)
+            .expect("fewest plays");
+
+        assert!(Arc::ptr_eq(&tied, &second));
+        assert!(Arc::ptr_eq(&fewest, &third));
+        assert!(select_song_by_play_rank(&songs, vec![(9, 0)], SongSort::MostPlays, 1).is_none());
     }
 
     #[test]

@@ -610,6 +610,27 @@ pub struct CachedChartPayload {
     pub chart_attacks: Option<String>,
 }
 
+#[derive(Encode)]
+struct BorrowedCachedChartPayload<'a> {
+    notes: &'a [u8],
+    parsed_notes: &'a [CachedParsedNote],
+    row_to_beat: &'a [f32],
+    timing_segments: &'a CachedTimingSegments,
+    chart_attacks: Option<&'a str>,
+}
+
+impl<'a> From<&'a SerializableChartData> for BorrowedCachedChartPayload<'a> {
+    fn from(chart: &'a SerializableChartData) -> Self {
+        Self {
+            notes: &chart.notes,
+            parsed_notes: &chart.parsed_notes,
+            row_to_beat: &chart.row_to_beat,
+            timing_segments: &chart.timing_segments,
+            chart_attacks: chart.chart_attacks.as_deref(),
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone, Copy, Encode, Decode)]
 pub struct CachedChartPayloadIndex {
     pub offset: u64,
@@ -1391,15 +1412,30 @@ pub fn load_song_cache_file(
     Some(build_song_meta_from_cache(cached_song.data))
 }
 
-pub fn write_song_cache_file(
-    cache_path: &Path,
+fn encode_chart_payloads_borrowed(
     data: &SerializableSongData,
-    global_offset_seconds: f32,
-) -> Result<(), SongCacheWriteError> {
-    let directory_hash = get_song_directory_hash(Path::new(&data.simfile_path))
-        .map_err(SongCacheWriteError::DirectoryHash)?;
-    let payloads = data
-        .charts
+) -> Result<Vec<Vec<u8>>, bincode::error::EncodeError> {
+    data.charts
+        .iter()
+        .map(|chart| {
+            bincode::encode_to_vec(
+                BorrowedCachedChartPayload::from(chart),
+                bincode::config::standard(),
+            )
+        })
+        .collect()
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+#[doc(hidden)]
+pub fn encode_chart_payloads_for_bench(data: &SerializableSongData) -> Vec<Vec<u8>> {
+    encode_chart_payloads_borrowed(data).expect("encode borrowed chart payloads")
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+#[doc(hidden)]
+pub fn encode_chart_payloads_legacy_for_bench(data: &SerializableSongData) -> Vec<Vec<u8>> {
+    data.charts
         .iter()
         .map(|chart| CachedChartPayload {
             notes: chart.notes.clone(),
@@ -1408,21 +1444,34 @@ pub fn write_song_cache_file(
             timing_segments: chart.timing_segments.clone(),
             chart_attacks: chart.chart_attacks.clone(),
         })
-        .collect::<Vec<_>>();
+        .collect::<Vec<_>>()
+        .into_iter()
+        .map(|payload| {
+            bincode::encode_to_vec(payload, bincode::config::standard())
+                .expect("encode owned chart payload")
+        })
+        .collect()
+}
+
+pub fn write_song_cache_file(
+    cache_path: &Path,
+    data: &SerializableSongData,
+    global_offset_seconds: f32,
+) -> Result<(), SongCacheWriteError> {
+    let directory_hash = get_song_directory_hash(Path::new(&data.simfile_path))
+        .map_err(SongCacheWriteError::DirectoryHash)?;
+    let encoded_payloads =
+        encode_chart_payloads_borrowed(data).map_err(|_| SongCacheWriteError::EncodePayload)?;
     let meta = build_cached_song_meta(data, global_offset_seconds);
-    let mut encoded_payloads = Vec::with_capacity(payloads.len());
-    let mut chart_payloads = Vec::with_capacity(payloads.len());
+    let mut chart_payloads = Vec::with_capacity(encoded_payloads.len());
     let mut payload_offset = 0u64;
-    for payload in payloads {
-        let encoded = bincode::encode_to_vec(&payload, bincode::config::standard())
-            .map_err(|_| SongCacheWriteError::EncodePayload)?;
+    for encoded in &encoded_payloads {
         let len = encoded.len() as u64;
         chart_payloads.push(CachedChartPayloadIndex {
             offset: payload_offset,
             len,
         });
         payload_offset = payload_offset.saturating_add(len);
-        encoded_payloads.push(encoded);
     }
     let cached_song = CachedSong {
         cache_version: SONG_CACHE_VERSION,
@@ -1464,6 +1513,52 @@ pub fn load_gameplay_charts_cache_file(
     let (cached_song, payload_start) =
         load_cached_song_for_gameplay(&song.simfile_path, cache_path, verify_freshness)?;
     let song_offset = cached_song.data.offset;
+    collect_requested_cached_charts(requested_chart_ixs, |chart_ix| {
+        let entry = *cached_song.chart_payloads.get(chart_ix)?;
+        let payload = load_cached_chart_payload(cache_path, payload_start, entry)?;
+        Some(build_gameplay_chart_from_payload(
+            payload,
+            song_offset,
+            global_offset_seconds,
+        ))
+    })
+}
+
+fn collect_requested_cached_charts(
+    requested_chart_ixs: &[usize],
+    mut load_chart: impl FnMut(usize) -> Option<GameplayChartData>,
+) -> Option<Vec<GameplayChartData>> {
+    let mut charts = Vec::<GameplayChartData>::with_capacity(requested_chart_ixs.len());
+    let mut loaded_positions = HashMap::<usize, usize>::with_capacity(requested_chart_ixs.len());
+    for &chart_ix in requested_chart_ixs {
+        if let Some(&loaded_position) = loaded_positions.get(&chart_ix) {
+            charts.push(charts.get(loaded_position)?.clone());
+            continue;
+        }
+        let chart = load_chart(chart_ix)?;
+        loaded_positions.insert(chart_ix, charts.len());
+        charts.push(chart);
+    }
+    Some(charts)
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+#[doc(hidden)]
+pub fn collect_requested_cached_charts_for_bench(
+    source: &[GameplayChartData],
+    requested_chart_ixs: &[usize],
+) -> Option<Vec<GameplayChartData>> {
+    collect_requested_cached_charts(requested_chart_ixs, |chart_ix| {
+        source.get(chart_ix).cloned()
+    })
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+#[doc(hidden)]
+pub fn collect_requested_cached_charts_legacy_for_bench(
+    source: &[GameplayChartData],
+    requested_chart_ixs: &[usize],
+) -> Option<Vec<GameplayChartData>> {
     let mut charts = Vec::with_capacity(requested_chart_ixs.len());
     let mut loaded = HashMap::<usize, GameplayChartData>::with_capacity(requested_chart_ixs.len());
     for &chart_ix in requested_chart_ixs {
@@ -1471,9 +1566,7 @@ pub fn load_gameplay_charts_cache_file(
             charts.push(chart.clone());
             continue;
         }
-        let entry = *cached_song.chart_payloads.get(chart_ix)?;
-        let payload = load_cached_chart_payload(cache_path, payload_start, entry)?;
-        let chart = build_gameplay_chart_from_payload(payload, song_offset, global_offset_seconds);
+        let chart = source.get(chart_ix)?.clone();
         loaded.insert(chart_ix, chart.clone());
         charts.push(chart);
     }
@@ -2277,6 +2370,49 @@ mod tests {
     }
 
     #[test]
+    fn cached_chart_collection_loads_once_and_preserves_duplicates() {
+        let payload = |notes: &[u8]| CachedChartPayload {
+            notes: notes.to_vec(),
+            parsed_notes: Vec::new(),
+            row_to_beat: Vec::new(),
+            timing_segments: CachedTimingSegments::from(&TimingSegments::default()),
+            chart_attacks: None,
+        };
+        let source = vec![
+            build_gameplay_chart_from_payload(payload(b"first"), 0.0, 0.0),
+            build_gameplay_chart_from_payload(payload(b"second"), 0.0, 0.0),
+        ];
+        let requested = [1, 0, 1, 1];
+        let mut loads = 0;
+
+        let charts = collect_requested_cached_charts(&requested, |chart_ix| {
+            loads += 1;
+            source.get(chart_ix).cloned()
+        })
+        .unwrap();
+        let legacy = collect_requested_cached_charts_legacy_for_bench(&source, &requested).unwrap();
+
+        assert_eq!(loads, 2);
+        assert_eq!(
+            charts
+                .iter()
+                .map(|chart| chart.notes.as_slice())
+                .collect::<Vec<_>>(),
+            [b"second".as_slice(), b"first", b"second", b"second"]
+        );
+        assert_eq!(
+            charts
+                .iter()
+                .map(|chart| chart.notes.as_slice())
+                .collect::<Vec<_>>(),
+            legacy
+                .iter()
+                .map(|chart| chart.notes.as_slice())
+                .collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
     fn requested_gameplay_charts_preserve_requested_order() {
         let mut song = cached_song(Path::new("song.sm"));
         let mut first = test_serializable_chart("dance-single", "Challenge", 0, None);
@@ -2357,6 +2493,20 @@ mod tests {
 
         assert_eq!(song.first_second, 4.0);
         assert_eq!(song.precise_last_second_seconds, 8.0);
+    }
+
+    #[test]
+    fn borrowed_chart_payload_encoding_matches_owned_shape() {
+        let mut song = cached_song(Path::new("song.ssc"));
+        let mut chart = test_serializable_chart("dance-single", "Challenge", 4, Some(8));
+        chart.notes = b"1000\n2000\n0000\n3000\n".to_vec();
+        chart.chart_attacks = Some("mod,0,1".to_string());
+        song.charts = vec![chart];
+
+        assert_eq!(
+            encode_chart_payloads_for_bench(&song),
+            encode_chart_payloads_legacy_for_bench(&song)
+        );
     }
 
     #[test]

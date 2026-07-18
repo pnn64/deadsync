@@ -466,13 +466,47 @@ fn filtered_random_movie_paths(dir: &Path, whitelist: Option<&HashSet<String>>) 
     let Some(whitelist) = whitelist else {
         return paths;
     };
+    retain_whitelisted_random_movies(paths, whitelist)
+}
+
+#[inline]
+fn random_movie_is_whitelisted(path: &Path, whitelist: &HashSet<String>) -> bool {
+    path.file_name()
+        .and_then(|name| name.to_str())
+        .is_some_and(|name| whitelist.contains(name))
+}
+
+fn retain_whitelisted_random_movies(
+    mut paths: Vec<PathBuf>,
+    whitelist: &HashSet<String>,
+) -> Vec<PathBuf> {
+    if paths
+        .iter()
+        .any(|path| random_movie_is_whitelisted(path, whitelist))
+    {
+        paths.retain(|path| random_movie_is_whitelisted(path, whitelist));
+    }
+    paths
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+#[doc(hidden)]
+pub fn retain_whitelisted_random_movies_for_bench(
+    paths: Vec<PathBuf>,
+    whitelist: &HashSet<String>,
+) -> Vec<PathBuf> {
+    retain_whitelisted_random_movies(paths, whitelist)
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+#[doc(hidden)]
+pub fn retain_whitelisted_random_movies_legacy_for_bench(
+    paths: Vec<PathBuf>,
+    whitelist: &HashSet<String>,
+) -> Vec<PathBuf> {
     let filtered = paths
         .iter()
-        .filter(|path| {
-            path.file_name()
-                .and_then(|name| name.to_str())
-                .is_some_and(|name| whitelist.contains(name))
-        })
+        .filter(|path| random_movie_is_whitelisted(path, whitelist))
         .cloned()
         .collect::<Vec<_>>();
     if filtered.is_empty() { paths } else { filtered }
@@ -489,6 +523,35 @@ fn list_random_movie_paths(dir: &Path) -> Vec<PathBuf> {
             !is_mac_resource_fork(path) && path.is_file() && is_bgchange_movie_path(path)
         })
         .collect::<Vec<_>>();
+    paths.sort_by(|left, right| random_movie_path_cmp(left, right));
+    paths
+}
+
+#[inline]
+fn random_movie_path_cmp(left: &Path, right: &Path) -> Ordering {
+    match (left.file_name(), right.file_name()) {
+        (None, None) => Ordering::Equal,
+        (None, Some(_)) => Ordering::Less,
+        (Some(_), None) => Ordering::Greater,
+        (Some(left), Some(right)) => {
+            let left = left.to_string_lossy();
+            let right = right.to_string_lossy();
+            left.bytes()
+                .map(|byte| byte.to_ascii_lowercase())
+                .cmp(right.bytes().map(|byte| byte.to_ascii_lowercase()))
+        }
+    }
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn sort_random_movie_paths_for_bench(paths: &mut [PathBuf]) {
+    paths.sort_by(|left, right| random_movie_path_cmp(left, right));
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn sort_random_movie_paths_legacy_for_bench(paths: &mut [PathBuf]) {
     paths.sort_by(|a, b| {
         a.file_name()
             .map(|name| name.to_string_lossy().to_ascii_lowercase())
@@ -497,7 +560,6 @@ fn list_random_movie_paths(dir: &Path) -> Vec<PathBuf> {
                     .map(|name| name.to_string_lossy().to_ascii_lowercase()),
             )
     });
-    paths
 }
 
 fn song_group_name(song: &SongData) -> Option<String> {
@@ -530,6 +592,40 @@ fn genre_movie_whitelist(group_dir: &Path, genre: &str) -> Option<HashSet<String
 }
 
 fn parse_ini_sections(text: &str) -> HashMap<String, Vec<(String, String)>> {
+    let mut sections = HashMap::<String, Vec<(String, String)>>::new();
+    let mut current = String::new();
+    for line in text.lines() {
+        let line = line.trim();
+        if line.is_empty() || line.starts_with(';') || line.starts_with('#') {
+            continue;
+        }
+        if line.starts_with('[') && line.ends_with(']') {
+            current = line[1..line.len() - 1].trim().to_owned();
+            sections.entry(current.clone()).or_default();
+            continue;
+        }
+        let Some((key, value)) = line.split_once('=') else {
+            continue;
+        };
+        let pair = (key.trim().to_owned(), value.trim().to_owned());
+        if let Some(section) = sections.get_mut(current.as_str()) {
+            section.push(pair);
+        } else {
+            sections.insert(current.clone(), vec![pair]);
+        }
+    }
+    sections
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn parse_ini_sections_for_bench(text: &str) -> HashMap<String, Vec<(String, String)>> {
+    parse_ini_sections(text)
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn parse_ini_sections_legacy_for_bench(text: &str) -> HashMap<String, Vec<(String, String)>> {
     let mut sections = HashMap::<String, Vec<(String, String)>>::new();
     let mut current = String::new();
     for line in text.lines() {
@@ -755,11 +851,33 @@ bright.ogv=1
     }
 
     #[test]
+    fn movie_whitelist_retains_matches_in_order_or_reuses_fallback() {
+        let paths = vec![
+            PathBuf::from("alpha.mp4"),
+            PathBuf::from("bright.ogv"),
+            PathBuf::from("clip.webm"),
+        ];
+        let selected = HashSet::from(["bright.ogv".to_string(), "clip.webm".to_string()]);
+        let missing = HashSet::from(["missing.mp4".to_string()]);
+
+        assert_eq!(
+            retain_whitelisted_random_movies(paths.clone(), &selected),
+            vec![PathBuf::from("bright.ogv"), PathBuf::from("clip.webm")]
+        );
+        assert_eq!(
+            retain_whitelisted_random_movies(paths.clone(), &missing),
+            paths
+        );
+    }
+
+    #[test]
     fn random_movie_paths_fall_back_to_root_movies() {
         let root = test_dir("random-movies-root");
         let movies = root.join("RandomMovies");
         fs::create_dir_all(&movies).unwrap();
+        let alpha = movies.join("Alpha.MP4");
         let clip = movies.join("clip.webm");
+        fs::write(&alpha, b"movie").unwrap();
         fs::write(&clip, b"movie").unwrap();
         fs::write(movies.join("still.png"), b"png").unwrap();
         let song = test_song(
@@ -772,7 +890,7 @@ bright.ogv=1
 
         let paths = random_movie_paths_for_song(&song, &[movies]);
 
-        assert_eq!(paths, vec![clip]);
+        assert_eq!(paths, vec![alpha, clip]);
         let _ = fs::remove_dir_all(root);
     }
 
