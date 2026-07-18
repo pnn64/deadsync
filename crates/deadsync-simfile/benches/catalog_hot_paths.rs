@@ -21,13 +21,16 @@ use deadsync_simfile::media::{
 use deadsync_simfile::notes::{
     parse_chart_notes, parse_chart_notes_legacy, step_type_lanes, step_type_lanes_legacy,
 };
+use deadsync_simfile::playlist::{normalize_song_path, normalize_song_path_legacy};
 use deadsync_simfile::scan::{
     sort_song_packs_for_bench, sort_song_packs_legacy, sort_songs_itgmania_for_bench,
     sort_songs_itgmania_legacy,
 };
 use deadsync_simfile::song_search::{
     SongSearchCandidate, SongSearchCatalogEntry, build_song_search_candidates,
-    build_song_search_candidates_legacy, sort_song_search_candidates_for_bench,
+    build_song_search_candidates_legacy, parse_song_search_filter_for_bench,
+    parse_song_search_filter_legacy_for_bench, song_search_difficulties_text,
+    song_search_difficulties_text_legacy, sort_song_search_candidates_for_bench,
     sort_song_search_candidates_legacy,
 };
 use deadsync_simfile::song_sort::{
@@ -65,6 +68,11 @@ const PACKS: usize = 4_096;
 const PACK_SORT_ITERATIONS: usize = 48;
 const BGCHANGE_FIELD_CALLS: usize = 65_536;
 const BGCHANGE_FIELD_ITERATIONS: usize = 64;
+const SEARCH_FILTER_CALLS: usize = 65_536;
+const SEARCH_FILTER_ITERATIONS: usize = 32;
+const DIFFICULTY_TEXT_ITERATIONS: usize = 64;
+const PLAYLIST_PATH_CALLS: usize = 65_536;
+const PLAYLIST_PATH_ITERATIONS: usize = 32;
 
 struct CountingAlloc {
     allocs: AtomicU64,
@@ -159,6 +167,8 @@ fn main() {
 
     benchmark_step_type_matching();
     benchmark_bgchange_fields();
+    benchmark_search_filter_parsing();
+    benchmark_playlist_path_normalization();
 
     let media_paths = benchmark_media_paths();
     benchmark_media_extensions(&media_paths);
@@ -172,6 +182,7 @@ fn main() {
     let songs: Vec<_> = (0..SONGS).map(benchmark_song).collect();
     benchmark_catalog_song_sort(&songs);
     benchmark_search(&songs);
+    benchmark_difficulty_text(&songs);
     benchmark_search_sort(&songs);
     benchmark_sort(&songs);
     benchmark_meters(&songs);
@@ -319,6 +330,94 @@ fn benchmark_bgchange_fields() {
     );
 }
 
+fn benchmark_search_filter_parsing() {
+    const QUERIES: [&str; 10] = [
+        "",
+        "SONG 042",
+        "Performance Pack/Song 042",
+        "[12]Song",
+        "[180]Performance/Song",
+        "  [7][220] Finals/Alpha Mix  ",
+        "Pack/[x]Malformed",
+        "[999999999999999999999999]Overflow",
+        "Müsic/曲",
+        "////",
+    ];
+    for query in QUERIES {
+        assert_eq!(
+            parse_song_search_filter_legacy_for_bench(query),
+            parse_song_search_filter_for_bench(query),
+            "search filter changed for {query:?}"
+        );
+    }
+
+    let old = measure(SEARCH_FILTER_ITERATIONS, || {
+        (0..SEARCH_FILTER_CALLS).fold(0_u64, |checksum, index| {
+            let query = black_box(QUERIES[index % QUERIES.len()]);
+            checksum.rotate_left(7) ^ parse_song_search_filter_legacy_for_bench(query)
+        })
+    });
+    let new = measure(SEARCH_FILTER_ITERATIONS, || {
+        (0..SEARCH_FILTER_CALLS).fold(0_u64, |checksum, index| {
+            let query = black_box(QUERIES[index % QUERIES.len()]);
+            checksum.rotate_left(7) ^ parse_song_search_filter_for_bench(query)
+        })
+    });
+    assert_eq!(old.checksum, new.checksum);
+    print_pair(
+        "single-allocation search filter parsing",
+        SEARCH_FILTER_CALLS,
+        SEARCH_FILTER_ITERATIONS,
+        "queries",
+        &old,
+        &new,
+    );
+}
+
+fn benchmark_playlist_path_normalization() {
+    const PATHS: [&str; 10] = [
+        "Songs/Performance Pack/Song 00001",
+        " /Songs\\Performance Pack\\Song 00002/ ",
+        "////Songs//Pack///Song////",
+        "\\\\Songs\\Pack\\Song\\",
+        "Pack/ Song Name /",
+        "Müsic\\曲",
+        "/",
+        "",
+        "  ",
+        "Pack\\Subdir//Song",
+    ];
+    for path in PATHS {
+        assert_eq!(
+            normalize_song_path_legacy(path),
+            normalize_song_path(path),
+            "playlist path normalization changed for {path:?}"
+        );
+    }
+
+    let old = measure(PLAYLIST_PATH_ITERATIONS, || {
+        (0..PLAYLIST_PATH_CALLS).fold(0_u64, |checksum, index| {
+            let path = black_box(PATHS[index % PATHS.len()]);
+            checksum.rotate_left(5) ^ text_checksum(&normalize_song_path_legacy(path))
+        })
+    });
+    let new = measure(PLAYLIST_PATH_ITERATIONS, || {
+        (0..PLAYLIST_PATH_CALLS).fold(0_u64, |checksum, index| {
+            let path = black_box(PATHS[index % PATHS.len()]);
+            checksum.rotate_left(5) ^ text_checksum(&normalize_song_path(path))
+        })
+    });
+    assert_eq!(old.checksum, new.checksum);
+    print_pair(
+        "single-pass playlist path normalization",
+        PLAYLIST_PATH_CALLS,
+        PLAYLIST_PATH_ITERATIONS,
+        "paths",
+        &old,
+        &new,
+    );
+}
+
 fn benchmark_media_extensions(paths: &[PathBuf]) {
     for path in paths {
         assert_eq!(
@@ -454,6 +553,38 @@ fn benchmark_search(songs: &[Arc<SongData>]) {
         "allocation-free search matching",
         songs.len(),
         SEARCH_ITERATIONS,
+        "songs",
+        &old,
+        &new,
+    );
+}
+
+fn benchmark_difficulty_text(songs: &[Arc<SongData>]) {
+    for song in songs {
+        assert_eq!(
+            song_search_difficulties_text_legacy(song, "dance-single"),
+            song_search_difficulties_text(song, "dance-single"),
+            "search difficulty text changed"
+        );
+    }
+
+    let old = measure(DIFFICULTY_TEXT_ITERATIONS, || {
+        black_box(songs).iter().fold(0_u64, |checksum, song| {
+            checksum.rotate_left(7)
+                ^ text_checksum(&song_search_difficulties_text_legacy(song, "dance-single"))
+        })
+    });
+    let new = measure(DIFFICULTY_TEXT_ITERATIONS, || {
+        black_box(songs).iter().fold(0_u64, |checksum, song| {
+            checksum.rotate_left(7)
+                ^ text_checksum(&song_search_difficulties_text(song, "dance-single"))
+        })
+    });
+    assert_eq!(old.checksum, new.checksum);
+    print_pair(
+        "direct search difficulty formatting",
+        songs.len(),
+        DIFFICULTY_TEXT_ITERATIONS,
         "songs",
         &old,
         &new,

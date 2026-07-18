@@ -1,4 +1,6 @@
 use std::cmp::Ordering;
+use std::fmt::Write as _;
+use std::ops::Range;
 use std::sync::Arc;
 
 use deadsync_chart::SongData;
@@ -17,10 +19,21 @@ pub enum SongSearchCatalogEntry<'a> {
 
 #[derive(Default)]
 struct SongSearchFilter {
-    pack_term: Option<String>,
-    song_term: Option<String>,
+    terms: String,
+    pack_term: Option<Range<usize>>,
+    song_term: Option<Range<usize>>,
     difficulty: Option<u8>,
     bpm_tier: Option<i32>,
+}
+
+impl SongSearchFilter {
+    fn pack_term(&self) -> Option<&str> {
+        self.terms.get(self.pack_term.as_ref()?.clone())
+    }
+
+    fn song_term(&self) -> Option<&str> {
+        self.terms.get(self.song_term.as_ref()?.clone())
+    }
 }
 
 #[inline(always)]
@@ -29,6 +42,26 @@ fn song_search_bpm_tier(bpm: f64) -> i32 {
 }
 
 pub fn song_search_difficulties_text(song: &SongData, chart_type: &str) -> String {
+    const ORDER: [&str; 5] = ["beginner", "easy", "medium", "hard", "challenge"];
+    let mut out = String::new();
+    for diff in ORDER {
+        if let Some(chart) = song.charts.iter().find(|c| {
+            c.chart_type.eq_ignore_ascii_case(chart_type) && c.difficulty.eq_ignore_ascii_case(diff)
+        }) {
+            if out.is_empty() {
+                out.reserve(32);
+            } else {
+                out.push_str("   ");
+            }
+            write!(out, "{}", chart.meter).expect("writing to a String cannot fail");
+        }
+    }
+    if out.is_empty() { "-".to_string() } else { out }
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn song_search_difficulties_text_legacy(song: &SongData, chart_type: &str) -> String {
     const ORDER: [&str; 5] = ["beginner", "easy", "medium", "hard", "challenge"];
     let mut out = String::new();
     for diff in ORDER {
@@ -45,9 +78,70 @@ pub fn song_search_difficulties_text(song: &SongData, chart_type: &str) -> Strin
 }
 
 fn parse_song_search_filter(input: &str) -> SongSearchFilter {
+    let mut filter = SongSearchFilter::default();
+    let mut stripped = String::with_capacity(input.len());
+    let mut chars = input.chars().peekable();
+    while let Some(ch) = chars.next() {
+        let ch = ch.to_ascii_lowercase();
+        if ch == '[' {
+            let mut tail = chars.clone();
+            let mut value: u32 = 0;
+            let mut has_digit = false;
+            while let Some(ch) = tail.peek() {
+                let Some(d) = ch.to_digit(10) else {
+                    break;
+                };
+                has_digit = true;
+                value = value.saturating_mul(10).saturating_add(d);
+                tail.next();
+            }
+            if has_digit && tail.next_if_eq(&']').is_some() {
+                if value <= 35 {
+                    filter.difficulty = Some(value as u8);
+                } else {
+                    filter.bpm_tier = Some(song_search_bpm_tier(value as f64));
+                }
+                chars = tail;
+                continue;
+            }
+        }
+        stripped.push(ch);
+    }
+
+    let term_start = stripped.len() - stripped.trim_start().len();
+    let term_end = stripped.trim_end().len();
+    if term_start < term_end {
+        let terms = &stripped[term_start..term_end];
+        if let Some(slash) = terms.find('/') {
+            if slash > 0 {
+                filter.pack_term = Some(term_start..term_start + slash);
+            }
+            let song_start = term_start + slash + 1;
+            if song_start < term_end {
+                filter.song_term = Some(song_start..term_end);
+            }
+        } else {
+            filter.song_term = Some(term_start..term_end);
+        }
+    }
+    filter.terms = stripped;
+    filter
+}
+
+#[cfg(feature = "bench-support")]
+#[derive(Default)]
+struct LegacySongSearchFilter {
+    pack_term: Option<String>,
+    song_term: Option<String>,
+    difficulty: Option<u8>,
+    bpm_tier: Option<i32>,
+}
+
+#[cfg(feature = "bench-support")]
+fn parse_song_search_filter_legacy(input: &str) -> LegacySongSearchFilter {
     let lower = input.to_ascii_lowercase();
     let chars: Vec<char> = lower.chars().collect();
-    let mut filter = SongSearchFilter::default();
+    let mut filter = LegacySongSearchFilter::default();
     let mut stripped = String::with_capacity(lower.len());
     let mut i = 0usize;
     while i < chars.len() {
@@ -89,6 +183,51 @@ fn parse_song_search_filter(input: &str) -> SongSearchFilter {
         filter.song_term = Some(stripped.to_string());
     }
     filter
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn parse_song_search_filter_for_bench(input: &str) -> u64 {
+    let filter = parse_song_search_filter(input);
+    search_filter_checksum(
+        filter.pack_term(),
+        filter.song_term(),
+        filter.difficulty,
+        filter.bpm_tier,
+    )
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn parse_song_search_filter_legacy_for_bench(input: &str) -> u64 {
+    let filter = parse_song_search_filter_legacy(input);
+    search_filter_checksum(
+        filter.pack_term.as_deref(),
+        filter.song_term.as_deref(),
+        filter.difficulty,
+        filter.bpm_tier,
+    )
+}
+
+#[cfg(feature = "bench-support")]
+fn search_filter_checksum(
+    pack_term: Option<&str>,
+    song_term: Option<&str>,
+    difficulty: Option<u8>,
+    bpm_tier: Option<i32>,
+) -> u64 {
+    fn text_checksum(text: Option<&str>) -> u64 {
+        text.map_or(0, |text| {
+            text.bytes().fold(text.len() as u64, |checksum, byte| {
+                checksum.rotate_left(5) ^ u64::from(byte)
+            })
+        })
+    }
+
+    text_checksum(pack_term)
+        ^ text_checksum(song_term).rotate_left(13)
+        ^ u64::from(difficulty.unwrap_or_default()).rotate_left(29)
+        ^ (bpm_tier.unwrap_or_default() as u64).rotate_left(41)
 }
 
 #[inline]
@@ -202,13 +341,13 @@ pub fn build_song_search_candidates<'a>(
                 }
 
                 let pack_name = current_pack_name.unwrap_or_default();
-                if let Some(pack_term) = &filter.pack_term
+                if let Some(pack_term) = filter.pack_term()
                     && !contains_ignore_ascii_case(pack_name, pack_term)
                 {
                     continue;
                 }
 
-                if let Some(song_term) = &filter.song_term
+                if let Some(song_term) = filter.song_term()
                     && !song_title_contains(song, false, song_term)
                     && !song_title_contains(song, true, song_term)
                 {
@@ -278,12 +417,12 @@ pub fn build_song_search_candidates_legacy<'a>(
                     continue;
                 }
                 let pack_name = current_pack_name.unwrap_or_default();
-                if let Some(pack_term) = &filter.pack_term
+                if let Some(pack_term) = filter.pack_term()
                     && !pack_name.to_ascii_lowercase().contains(pack_term)
                 {
                     continue;
                 }
-                if let Some(song_term) = &filter.song_term {
+                if let Some(song_term) = filter.song_term() {
                     let display = song.display_full_title(false).to_ascii_lowercase();
                     let translit = song.display_full_title(true).to_ascii_lowercase();
                     if !display.contains(song_term) && !translit.contains(song_term) {
@@ -444,6 +583,22 @@ mod tests {
     }
 
     #[test]
+    fn search_filter_extracts_tokens_without_changing_term_text() {
+        let filter = parse_song_search_filter("  FINALs/[12]SoNG [180] Mix  ");
+
+        assert_eq!(filter.pack_term(), Some("finals"));
+        assert_eq!(filter.song_term(), Some("song  mix"));
+        assert_eq!(filter.difficulty, Some(12));
+        assert_eq!(filter.bpm_tier, Some(180));
+
+        let malformed = parse_song_search_filter("Pack/[x]ÄBC");
+        assert_eq!(malformed.pack_term(), Some("pack"));
+        assert_eq!(malformed.song_term(), Some("[x]Äbc"));
+        assert_eq!(malformed.difficulty, None);
+        assert_eq!(malformed.bpm_tier, None);
+    }
+
+    #[test]
     fn pack_and_song_terms_filter_candidates() {
         let alpha = test_song_with_bpm("Alpha", "128", 128.0, 128.0);
         let beta = test_song_with_bpm("Beta", "128", 128.0, 128.0);
@@ -494,6 +649,9 @@ mod tests {
             song_search_difficulties_text(&song, "dance-single"),
             "4   11"
         );
+
+        song.charts.clear();
+        assert_eq!(song_search_difficulties_text(&song, "dance-single"), "-");
     }
 
     #[test]

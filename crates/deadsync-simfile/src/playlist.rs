@@ -23,6 +23,23 @@ pub struct PlaylistSongLookup {
 }
 
 pub fn normalize_song_path(song_path: &str) -> String {
+    let song_path = song_path.trim();
+    let mut normalized = String::with_capacity(song_path.len());
+    for segment in song_path
+        .split(['/', '\\'])
+        .filter(|segment| !segment.is_empty())
+    {
+        if !normalized.is_empty() {
+            normalized.push('/');
+        }
+        normalized.push_str(segment);
+    }
+    normalized
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn normalize_song_path_legacy(song_path: &str) -> String {
     song_path
         .trim()
         .trim_matches('/')
@@ -286,6 +303,16 @@ mod tests {
             pack_and_song_name_from_path("Songs/Pack/Song"),
             Some(("Pack".to_string(), "Song".to_string()))
         );
+
+        for (input, expected) in [
+            ("////", ""),
+            ("\\\\Pack\\\\Song\\", "Pack/Song"),
+            (" /Pack\\Song//Chart ", "Pack/Song/Chart"),
+            ("Pack/ Song Name /", "Pack/ Song Name "),
+            (" Müsic\\曲 ", "Müsic/曲"),
+        ] {
+            assert_eq!(normalize_song_path(input), expected);
+        }
     }
 
     #[test]
