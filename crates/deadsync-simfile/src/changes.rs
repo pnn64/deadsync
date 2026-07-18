@@ -254,30 +254,12 @@ fn resolve_background_changes_from_values(
         return out;
     }
 
-    let has_explicit_movie = out.iter().any(|change| {
-        matches!(
-            change.target,
-            SongBackgroundChangeTarget::File(ref path) if is_bgchange_movie_path(path)
-        )
-    });
-    let beat_zero_still_ix = out
-        .iter()
-        .enumerate()
-        .filter(|(_, change)| {
-            change.start_beat <= 0.0
-                && matches!(
-                    change.target,
-                    SongBackgroundChangeTarget::File(ref path) if !is_bgchange_movie_path(path)
-                )
-        })
-        .map(|(ix, _)| ix)
-        .last();
-    let blocks_beat_zero = out.iter().any(|change| {
-        change.start_beat <= 0.0 && !matches!(change.target, SongBackgroundChangeTarget::File(_))
-    });
-    let has_any_file = out
-        .iter()
-        .any(|change| matches!(change.target, SongBackgroundChangeTarget::File(_)));
+    let BgchangeFallbackSummary {
+        has_explicit_movie,
+        beat_zero_still_ix,
+        blocks_beat_zero,
+        has_any_file,
+    } = summarize_bgchange_fallbacks(&out);
     let movies = list_bgchange_song_movies(song_dir);
     if movies.len() == 1 && !has_explicit_movie {
         let movie = movies[0].clone();
@@ -299,6 +281,90 @@ fn resolve_background_changes_from_values(
     }
     out.sort_by(|a, b| a.start_beat.total_cmp(&b.start_beat));
     out
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct BgchangeFallbackSummary {
+    has_explicit_movie: bool,
+    beat_zero_still_ix: Option<usize>,
+    blocks_beat_zero: bool,
+    has_any_file: bool,
+}
+
+fn summarize_bgchange_fallbacks(changes: &[SongBackgroundChange]) -> BgchangeFallbackSummary {
+    let mut summary = BgchangeFallbackSummary {
+        has_explicit_movie: false,
+        beat_zero_still_ix: None,
+        blocks_beat_zero: false,
+        has_any_file: false,
+    };
+    for (index, change) in changes.iter().enumerate() {
+        match &change.target {
+            SongBackgroundChangeTarget::File(path) => {
+                summary.has_any_file = true;
+                if is_bgchange_movie_path(path) {
+                    summary.has_explicit_movie = true;
+                } else if change.start_beat <= 0.0 {
+                    summary.beat_zero_still_ix = Some(index);
+                }
+            }
+            _ if change.start_beat <= 0.0 => summary.blocks_beat_zero = true,
+            _ => {}
+        }
+    }
+    summary
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn summarize_bgchange_fallbacks_for_bench(
+    changes: &[SongBackgroundChange],
+) -> (bool, Option<usize>, bool, bool) {
+    let summary = summarize_bgchange_fallbacks(changes);
+    (
+        summary.has_explicit_movie,
+        summary.beat_zero_still_ix,
+        summary.blocks_beat_zero,
+        summary.has_any_file,
+    )
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+#[allow(clippy::double_ended_iterator_last)]
+pub fn summarize_bgchange_fallbacks_legacy_for_bench(
+    changes: &[SongBackgroundChange],
+) -> (bool, Option<usize>, bool, bool) {
+    let has_explicit_movie = changes.iter().any(|change| {
+        matches!(
+            change.target,
+            SongBackgroundChangeTarget::File(ref path) if is_bgchange_movie_path(path)
+        )
+    });
+    let beat_zero_still_ix = changes
+        .iter()
+        .enumerate()
+        .filter(|(_, change)| {
+            change.start_beat <= 0.0
+                && matches!(
+                    change.target,
+                    SongBackgroundChangeTarget::File(ref path) if !is_bgchange_movie_path(path)
+                )
+        })
+        .map(|(index, _)| index)
+        .last();
+    let blocks_beat_zero = changes.iter().any(|change| {
+        change.start_beat <= 0.0 && !matches!(change.target, SongBackgroundChangeTarget::File(_))
+    });
+    let has_any_file = changes
+        .iter()
+        .any(|change| matches!(change.target, SongBackgroundChangeTarget::File(_)));
+    (
+        has_explicit_movie,
+        beat_zero_still_ix,
+        blocks_beat_zero,
+        has_any_file,
+    )
 }
 
 fn parse_background_change_set(
@@ -528,6 +594,39 @@ mod tests {
     use deadsync_chart::SongBackgroundChangeTarget;
     use std::fs;
     use std::time::{SystemTime, UNIX_EPOCH};
+
+    #[test]
+    fn bgchange_fallback_summary_preserves_last_still_and_flags() {
+        let changes = vec![
+            SongBackgroundChange::new(
+                -4.0,
+                SongBackgroundChangeTarget::File(PathBuf::from("first.png")),
+            ),
+            SongBackgroundChange::new(
+                -2.0,
+                SongBackgroundChangeTarget::Animation("blocked".to_string()),
+            ),
+            SongBackgroundChange::new(
+                0.0,
+                SongBackgroundChangeTarget::File(PathBuf::from("last.jpg")),
+            ),
+            SongBackgroundChange::new(4.0, SongBackgroundChangeTarget::Random),
+            SongBackgroundChange::new(
+                8.0,
+                SongBackgroundChangeTarget::File(PathBuf::from("movie.mp4")),
+            ),
+        ];
+
+        assert_eq!(
+            summarize_bgchange_fallbacks(&changes),
+            BgchangeFallbackSummary {
+                has_explicit_movie: true,
+                beat_zero_still_ix: Some(2),
+                blocks_beat_zero: true,
+                has_any_file: true,
+            }
+        );
+    }
 
     #[test]
     fn simfile_uses_lua_detects_background_and_fgchanges() {

@@ -43,6 +43,54 @@ fn push_media_root(out: &mut Vec<PathBuf>, path: PathBuf) {
 }
 
 pub fn collapse_song_asset_path(path: &str) -> String {
+    collapse_song_asset_path_with(path, false)
+}
+
+fn collapse_song_asset_path_like_itg(path: &str) -> String {
+    collapse_song_asset_path_with(path, true)
+}
+
+fn collapse_song_asset_path_with(path: &str, backslash_separator: bool) -> String {
+    let has_root = path.starts_with('/') || (backslash_separator && path.starts_with('\\'));
+    let content_start = usize::from(has_root);
+    let mut collapsed = String::with_capacity(path.len());
+    if has_root {
+        collapsed.push('/');
+    }
+    for part in path.split(|ch| ch == '/' || (backslash_separator && ch == '\\')) {
+        if part.is_empty() || part == "." {
+            continue;
+        }
+        if part == ".." {
+            let last_start = collapsed
+                .rfind('/')
+                .map_or(content_start, |separator| separator + 1);
+            if last_start < collapsed.len() && &collapsed[last_start..] != ".." {
+                let new_len = if last_start > content_start {
+                    last_start - 1
+                } else {
+                    content_start
+                };
+                collapsed.truncate(new_len);
+            } else {
+                if collapsed.len() > content_start {
+                    collapsed.push('/');
+                }
+                collapsed.push_str("..");
+            }
+            continue;
+        }
+        if collapsed.len() > content_start {
+            collapsed.push('/');
+        }
+        collapsed.push_str(part);
+    }
+    collapsed
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn collapse_song_asset_path_legacy(path: &str) -> String {
     let has_root = path.starts_with('/');
     let mut parts: Vec<&str> = Vec::with_capacity(path.split('/').count());
     for part in path.split('/') {
@@ -71,6 +119,18 @@ pub fn collapse_song_asset_path(path: &str) -> String {
     }
 }
 
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn collapse_song_asset_path_like_itg_for_bench(path: &str) -> String {
+    collapse_song_asset_path_like_itg(path)
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn collapse_song_asset_path_like_itg_legacy_for_bench(path: &str) -> String {
+    collapse_song_asset_path_legacy(&path.replace('\\', "/"))
+}
+
 pub fn resolve_song_dir_entry_ci(base: &Path, name: &str) -> Option<PathBuf> {
     let want = name.to_ascii_lowercase();
     let entries = fs::read_dir(base).ok()?;
@@ -88,7 +148,7 @@ pub fn resolve_song_path_like_itg(song_dir: &Path, asset_tag: &str) -> Option<Pa
         return None;
     }
 
-    let collapsed = collapse_song_asset_path(&asset_tag.replace('\\', "/"));
+    let collapsed = collapse_song_asset_path_like_itg(asset_tag);
     if collapsed.is_empty() {
         return None;
     }
@@ -465,6 +525,8 @@ mod tests {
         assert_eq!(collapse_song_asset_path("/a/../b"), "/b");
         assert_eq!(collapse_song_asset_path("/../b"), "/../b");
         assert_eq!(collapse_song_asset_path("/."), "/");
+        assert_eq!(collapse_song_asset_path("/a/b/../../.."), "/..");
+        assert_eq!(collapse_song_asset_path("a/../../b"), "../b");
     }
 
     #[test]

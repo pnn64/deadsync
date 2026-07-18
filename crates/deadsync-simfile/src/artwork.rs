@@ -1,7 +1,6 @@
-use crate::media::{
-    is_mac_resource_fork, is_song_art_image, resolve_song_asset_path_like_itg, song_art_file_key,
-    song_art_file_stem,
-};
+use crate::media::{is_mac_resource_fork, is_song_art_image, resolve_song_asset_path_like_itg};
+#[cfg(feature = "bench-support")]
+use crate::media::{song_art_file_key, song_art_file_stem};
 use crate::tags::latest_simfile_tag_values;
 use image::image_dimensions;
 use std::fs;
@@ -141,16 +140,7 @@ fn find_song_art_hint(
     ends_with: &[&str],
 ) -> Option<PathBuf> {
     for image in images {
-        let Some(stem) = song_art_file_stem(image) else {
-            continue;
-        };
-        if starts_with.iter().any(|needle| stem.starts_with(needle)) {
-            return Some(image.clone());
-        }
-        if ends_with.iter().any(|needle| stem.ends_with(needle)) {
-            return Some(image.clone());
-        }
-        if contains.iter().any(|needle| stem.contains(needle)) {
+        if song_art_stem_matches(image, starts_with, contains, ends_with) {
             return Some(image.clone());
         }
     }
@@ -160,7 +150,121 @@ fn find_song_art_hint(
 fn song_art_matches(candidate: &Path, selected: &Option<PathBuf>) -> bool {
     selected
         .as_ref()
-        .is_some_and(|path| song_art_file_key(path) == song_art_file_key(candidate))
+        .is_some_and(|path| song_art_paths_match(path, candidate))
+}
+
+#[inline]
+fn ascii_lowercase_starts_with(value: &str, expected: &str) -> bool {
+    value
+        .as_bytes()
+        .get(..expected.len())
+        .is_some_and(|prefix| {
+            prefix
+                .iter()
+                .map(|byte| byte.to_ascii_lowercase())
+                .eq(expected.bytes())
+        })
+}
+
+#[inline]
+fn ascii_lowercase_ends_with(value: &str, expected: &str) -> bool {
+    value
+        .as_bytes()
+        .get(value.len().saturating_sub(expected.len())..)
+        .filter(|suffix| suffix.len() == expected.len())
+        .is_some_and(|suffix| {
+            suffix
+                .iter()
+                .map(|byte| byte.to_ascii_lowercase())
+                .eq(expected.bytes())
+        })
+}
+
+#[inline]
+fn ascii_lowercase_contains(value: &str, expected: &str) -> bool {
+    expected.is_empty()
+        || value.as_bytes().windows(expected.len()).any(|window| {
+            window
+                .iter()
+                .map(|byte| byte.to_ascii_lowercase())
+                .eq(expected.bytes())
+        })
+}
+
+fn song_art_stem_matches(
+    path: &Path,
+    starts_with: &[&str],
+    contains: &[&str],
+    ends_with: &[&str],
+) -> bool {
+    let Some(stem) = path.file_stem() else {
+        return false;
+    };
+    let stem = stem.to_string_lossy();
+    starts_with
+        .iter()
+        .any(|needle| ascii_lowercase_starts_with(&stem, needle))
+        || ends_with
+            .iter()
+            .any(|needle| ascii_lowercase_ends_with(&stem, needle))
+        || contains
+            .iter()
+            .any(|needle| ascii_lowercase_contains(&stem, needle))
+}
+
+fn song_art_paths_match(left: &Path, right: &Path) -> bool {
+    let left = left.to_string_lossy();
+    let right = right.to_string_lossy();
+    left.bytes()
+        .map(|byte| {
+            if byte == b'\\' {
+                b'/'
+            } else {
+                byte.to_ascii_lowercase()
+            }
+        })
+        .eq(right.bytes().map(|byte| {
+            if byte == b'\\' {
+                b'/'
+            } else {
+                byte.to_ascii_lowercase()
+            }
+        }))
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn song_art_matches_for_bench(
+    path: &Path,
+    other: &Path,
+    starts_with: &[&str],
+    contains: &[&str],
+    ends_with: &[&str],
+) -> (bool, bool) {
+    (
+        song_art_stem_matches(path, starts_with, contains, ends_with),
+        song_art_paths_match(path, other),
+    )
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn song_art_matches_legacy_for_bench(
+    path: &Path,
+    other: &Path,
+    starts_with: &[&str],
+    contains: &[&str],
+    ends_with: &[&str],
+) -> (bool, bool) {
+    let stem_matches = song_art_file_stem(path).is_some_and(|stem| {
+        starts_with.iter().any(|needle| stem.starts_with(needle))
+            || ends_with.iter().any(|needle| stem.ends_with(needle))
+            || contains.iter().any(|needle| stem.contains(needle))
+    });
+    (
+        stem_matches,
+        song_art_file_key(path) == song_art_file_key(other),
+    )
 }
 
 fn song_art_is_classified(
@@ -184,6 +288,32 @@ fn song_art_is_classified(
 mod tests {
     use super::*;
     use std::time::{SystemTime, UNIX_EPOCH};
+
+    #[test]
+    fn artwork_hint_and_path_matching_fold_ascii_without_allocated_keys() {
+        let banner = Path::new("Visuals/BANNER.PNG");
+        assert!(song_art_stem_matches(banner, &[], &["banner"], &[]));
+        assert!(song_art_stem_matches(
+            Path::new("jk_Song.JpG"),
+            &["jk_"],
+            &[],
+            &[]
+        ));
+        assert!(song_art_stem_matches(
+            Path::new("Song-CD.png"),
+            &[],
+            &[],
+            &["-cd"]
+        ));
+        assert!(song_art_paths_match(
+            banner,
+            Path::new("visuals\\banner.png")
+        ));
+        assert!(!song_art_paths_match(
+            banner,
+            Path::new("Visuals/background.png")
+        ));
+    }
 
     #[test]
     fn does_not_use_tagged_cdtitle_as_background() {

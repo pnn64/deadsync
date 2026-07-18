@@ -1,8 +1,10 @@
 use deadsync_chart::notes::ParsedNote;
 use deadsync_chart::{
-    ArrowStats, ChartData, SongData, SongPack, StaminaCounts, SyncPref, TechCounts,
+    ArrowStats, ChartData, SongBackgroundChange, SongBackgroundChangeTarget, SongData, SongPack,
+    StaminaCounts, SyncPref, TechCounts,
 };
 use deadsync_core::note::NoteType;
+use deadsync_simfile::artwork::{song_art_matches_for_bench, song_art_matches_legacy_for_bench};
 use deadsync_simfile::bgchanges::{
     bgchange_field_rejects_non_media, bgchange_field_rejects_non_media_legacy,
     parse_bgchange_color, parse_bgchange_color_legacy,
@@ -12,11 +14,14 @@ use deadsync_simfile::cache::{
 };
 use deadsync_simfile::changes::{
     extract_foreground_change_sets, extract_foreground_changes, extract_foreground_lua_changes,
-    simfile_uses_lua,
+    simfile_uses_lua, summarize_bgchange_fallbacks_for_bench,
+    summarize_bgchange_fallbacks_legacy_for_bench,
 };
 use deadsync_simfile::media::{
-    foreground_media_ext_rank, foreground_media_ext_rank_legacy, is_bgchange_movie_path,
-    is_bgchange_movie_path_legacy, is_song_art_image, is_song_art_image_legacy,
+    collapse_song_asset_path_like_itg_for_bench,
+    collapse_song_asset_path_like_itg_legacy_for_bench, foreground_media_ext_rank,
+    foreground_media_ext_rank_legacy, is_bgchange_movie_path, is_bgchange_movie_path_legacy,
+    is_song_art_image, is_song_art_image_legacy,
 };
 use deadsync_simfile::notes::{
     parse_chart_notes, parse_chart_notes_legacy, step_type_lanes, step_type_lanes_legacy,
@@ -73,6 +78,12 @@ const SEARCH_FILTER_ITERATIONS: usize = 32;
 const DIFFICULTY_TEXT_ITERATIONS: usize = 64;
 const PLAYLIST_PATH_CALLS: usize = 65_536;
 const PLAYLIST_PATH_ITERATIONS: usize = 32;
+const ASSET_PATH_CALLS: usize = 65_536;
+const ASSET_PATH_ITERATIONS: usize = 64;
+const BGCHANGE_SUMMARY_CHANGES: usize = 8_192;
+const BGCHANGE_SUMMARY_ITERATIONS: usize = 256;
+const ARTWORK_PATHS: usize = 32_768;
+const ARTWORK_MATCH_ITERATIONS: usize = 64;
 
 struct CountingAlloc {
     allocs: AtomicU64,
@@ -169,6 +180,13 @@ fn main() {
     benchmark_bgchange_fields();
     benchmark_search_filter_parsing();
     benchmark_playlist_path_normalization();
+    benchmark_asset_path_collapse();
+
+    let bgchanges = benchmark_bgchanges();
+    benchmark_bgchange_summary(&bgchanges);
+
+    let artwork_paths = benchmark_artwork_paths();
+    benchmark_artwork_matching(&artwork_paths);
 
     let media_paths = benchmark_media_paths();
     benchmark_media_extensions(&media_paths);
@@ -412,6 +430,126 @@ fn benchmark_playlist_path_normalization() {
         "single-pass playlist path normalization",
         PLAYLIST_PATH_CALLS,
         PLAYLIST_PATH_ITERATIONS,
+        "paths",
+        &old,
+        &new,
+    );
+}
+
+fn benchmark_asset_path_collapse() {
+    const PATHS: [&str; 12] = [
+        "background.png",
+        "Visuals//./background.png",
+        "Visuals/../background.png",
+        "../Shared/./movie.mp4",
+        "../../Shared/../Movies/movie.avi",
+        "/Songs/Pack/Song/../background.png",
+        "/../Songs/Pack/../../Shared/file.png",
+        "Visuals\\Animations\\..\\movie.mp4",
+        "\\Songs\\Pack\\Song\\background.png",
+        "./././",
+        "/.",
+        "",
+    ];
+    for path in PATHS {
+        assert_eq!(
+            collapse_song_asset_path_like_itg_legacy_for_bench(path),
+            collapse_song_asset_path_like_itg_for_bench(path),
+            "asset path collapse changed for {path:?}"
+        );
+    }
+
+    let old = measure(ASSET_PATH_ITERATIONS, || {
+        (0..ASSET_PATH_CALLS).fold(0_u64, |checksum, index| {
+            let path = black_box(PATHS[index % PATHS.len()]);
+            checksum.rotate_left(7)
+                ^ text_checksum(&collapse_song_asset_path_like_itg_legacy_for_bench(path))
+        })
+    });
+    let new = measure(ASSET_PATH_ITERATIONS, || {
+        (0..ASSET_PATH_CALLS).fold(0_u64, |checksum, index| {
+            let path = black_box(PATHS[index % PATHS.len()]);
+            checksum.rotate_left(7)
+                ^ text_checksum(&collapse_song_asset_path_like_itg_for_bench(path))
+        })
+    });
+    assert_eq!(old.checksum, new.checksum);
+    print_pair(
+        "single-pass asset path collapse",
+        ASSET_PATH_CALLS,
+        ASSET_PATH_ITERATIONS,
+        "paths",
+        &old,
+        &new,
+    );
+}
+
+fn benchmark_bgchange_summary(changes: &[SongBackgroundChange]) {
+    assert_eq!(
+        summarize_bgchange_fallbacks_legacy_for_bench(changes),
+        summarize_bgchange_fallbacks_for_bench(changes),
+        "BG-change fallback summary changed"
+    );
+
+    let old = measure(BGCHANGE_SUMMARY_ITERATIONS, || {
+        bgchange_summary_checksum(summarize_bgchange_fallbacks_legacy_for_bench(black_box(
+            changes,
+        )))
+    });
+    let new = measure(BGCHANGE_SUMMARY_ITERATIONS, || {
+        bgchange_summary_checksum(summarize_bgchange_fallbacks_for_bench(black_box(changes)))
+    });
+    assert_eq!(old.checksum, new.checksum);
+    print_pair(
+        "single-pass BG-change fallback summary",
+        changes.len(),
+        BGCHANGE_SUMMARY_ITERATIONS,
+        "changes",
+        &old,
+        &new,
+    );
+}
+
+fn benchmark_artwork_matching(paths: &[(PathBuf, PathBuf)]) {
+    const STARTS_WITH: [&str; 1] = ["jk_"];
+    const CONTAINS: [&str; 3] = ["banner", "background", "albumart"];
+    const ENDS_WITH: [&str; 2] = ["-cd", " title"];
+    for (path, other) in paths {
+        assert_eq!(
+            song_art_matches_legacy_for_bench(path, other, &STARTS_WITH, &CONTAINS, &ENDS_WITH,),
+            song_art_matches_for_bench(path, other, &STARTS_WITH, &CONTAINS, &ENDS_WITH,),
+            "artwork matching changed for {path:?}"
+        );
+    }
+
+    let old = measure(ARTWORK_MATCH_ITERATIONS, || {
+        black_box(paths)
+            .iter()
+            .fold(0_u64, |checksum, (path, other)| {
+                let matched = song_art_matches_legacy_for_bench(
+                    path,
+                    other,
+                    &STARTS_WITH,
+                    &CONTAINS,
+                    &ENDS_WITH,
+                );
+                checksum.rotate_left(5) ^ u64::from(matched.0) ^ (u64::from(matched.1) << 1)
+            })
+    });
+    let new = measure(ARTWORK_MATCH_ITERATIONS, || {
+        black_box(paths)
+            .iter()
+            .fold(0_u64, |checksum, (path, other)| {
+                let matched =
+                    song_art_matches_for_bench(path, other, &STARTS_WITH, &CONTAINS, &ENDS_WITH);
+                checksum.rotate_left(5) ^ u64::from(matched.0) ^ (u64::from(matched.1) << 1)
+            })
+    });
+    assert_eq!(old.checksum, new.checksum);
+    print_pair(
+        "allocation-free artwork matching",
+        paths.len(),
+        ARTWORK_MATCH_ITERATIONS,
         "paths",
         &old,
         &new,
@@ -917,6 +1055,13 @@ fn meter_checksum(mut checksum: u64, meters: &[u32]) -> u64 {
     checksum ^ meters.len() as u64
 }
 
+fn bgchange_summary_checksum(summary: (bool, Option<usize>, bool, bool)) -> u64 {
+    u64::from(summary.0)
+        | ((summary.1.unwrap_or_default() as u64) << 1)
+        | (u64::from(summary.2) << 48)
+        | (u64::from(summary.3) << 49)
+}
+
 fn foreground_media_values(changes: &[SerializableSongForegroundChange]) -> Vec<(u32, &str)> {
     changes
         .iter()
@@ -1022,6 +1167,52 @@ fn benchmark_media_paths() -> Vec<PathBuf> {
                 "Songs/Performance/Song{index:05}/asset.{extension}",
                 extension = EXTENSIONS[index % EXTENSIONS.len()]
             ))
+        })
+        .collect()
+}
+
+fn benchmark_bgchanges() -> Vec<SongBackgroundChange> {
+    (0..BGCHANGE_SUMMARY_CHANGES)
+        .map(|index| {
+            let start_beat = index as f32 - (BGCHANGE_SUMMARY_CHANGES / 2) as f32;
+            let target = if index.is_multiple_of(3) {
+                SongBackgroundChangeTarget::File(PathBuf::from(format!(
+                    "Songs/Performance/Song/background-{index:05}.png"
+                )))
+            } else if index.is_multiple_of(5) {
+                SongBackgroundChangeTarget::NoSongBg
+            } else {
+                SongBackgroundChangeTarget::Animation(format!("Animation {index:05}"))
+            };
+            SongBackgroundChange::new(start_beat, target)
+        })
+        .collect()
+}
+
+fn benchmark_artwork_paths() -> Vec<(PathBuf, PathBuf)> {
+    const NAMES: [&str; 8] = [
+        "Visual-BANNER.PNG",
+        "Song-Background.jpg",
+        "jk_Album.JPEG",
+        "Square-AlbumArt.png",
+        "Song-CD.png",
+        "Event Title.bmp",
+        "regular-image.gif",
+        "Müsic.png",
+    ];
+    (0..ARTWORK_PATHS)
+        .map(|index| {
+            let path = PathBuf::from(format!(
+                "Songs/Performance/Pack{:03}/Song{index:05}/{}",
+                index % 257,
+                NAMES[index % NAMES.len()]
+            ));
+            let other = PathBuf::from(
+                path.to_string_lossy()
+                    .replace('/', "\\")
+                    .to_ascii_uppercase(),
+            );
+            (path, other)
         })
         .collect()
 }
