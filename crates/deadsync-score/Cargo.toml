@@ -12,6 +12,11 @@ name = "scorebox_pane_kind"
 harness = false
 required-features = ["bench-support"]
 
+[[bench]]
+name = "score_import_hashes"
+harness = false
+required-features = ["bench-support"]
+
 [dependencies]
 bincode = "2.0.1"
 chrono = "0.4.45"

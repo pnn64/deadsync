@@ -720,50 +720,84 @@ pub fn file_path_string(path: &Path) -> String {
 
 #[inline(always)]
 pub fn is_song_lua_image_path(path: &Path) -> bool {
-    path.extension()
-        .and_then(|ext| ext.to_str())
-        .is_some_and(|ext| {
-            matches!(
-                ext.to_ascii_lowercase().as_str(),
-                "png" | "jpg" | "jpeg" | "bmp" | "gif" | "webp" | "qoi" | "tif" | "tiff"
-            )
-        })
+    path_has_extension(
+        path,
+        &[
+            "png", "jpg", "jpeg", "bmp", "gif", "webp", "qoi", "tif", "tiff",
+        ],
+    )
 }
 
 #[inline(always)]
 pub fn is_song_lua_video_path(path: &Path) -> bool {
-    path.extension()
-        .and_then(|ext| ext.to_str())
-        .is_some_and(|ext| {
-            matches!(
-                ext.to_ascii_lowercase().as_str(),
-                "mp4" | "avi" | "webm" | "mov" | "mkv" | "mpg" | "mpeg" | "ogv"
-            )
-        })
+    path_has_extension(
+        path,
+        &["mp4", "avi", "webm", "mov", "mkv", "mpg", "mpeg", "ogv"],
+    )
 }
 
 #[inline(always)]
 pub fn is_song_lua_audio_path(path: &Path) -> bool {
-    path.extension()
-        .and_then(|ext| ext.to_str())
-        .is_some_and(|ext| {
-            matches!(
-                ext.to_ascii_lowercase().as_str(),
-                "ogg" | "mp3" | "wav" | "flac" | "opus" | "m4a" | "aac"
-            )
-        })
+    path_has_extension(path, &["ogg", "mp3", "wav", "flac", "opus", "m4a", "aac"])
 }
 
 #[inline(always)]
 pub fn is_song_lua_simfile_path(path: &Path) -> bool {
-    path.extension()
-        .and_then(|ext| ext.to_str())
-        .is_some_and(|ext| matches!(ext.to_ascii_lowercase().as_str(), "sm" | "ssc"))
+    path_has_extension(path, &["sm", "ssc"])
 }
 
 #[inline(always)]
 pub fn is_song_lua_media_path(path: &Path) -> bool {
     is_song_lua_image_path(path) || is_song_lua_video_path(path) || is_song_lua_audio_path(path)
+}
+
+#[inline(always)]
+fn path_has_extension(path: &Path, extensions: &[&str]) -> bool {
+    path.extension()
+        .and_then(|extension| extension.to_str())
+        .is_some_and(|extension| {
+            extensions
+                .iter()
+                .any(|candidate| extension.eq_ignore_ascii_case(candidate))
+        })
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn song_lua_path_classification_for_bench(path: &Path) -> u8 {
+    u8::from(is_song_lua_image_path(path))
+        | (u8::from(is_song_lua_video_path(path)) << 1)
+        | (u8::from(is_song_lua_audio_path(path)) << 2)
+        | (u8::from(is_song_lua_simfile_path(path)) << 3)
+        | (u8::from(is_song_lua_media_path(path)) << 4)
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+#[doc(hidden)]
+pub fn song_lua_path_classification_legacy_for_bench(path: &Path) -> u8 {
+    let classify = |extensions: &[&str]| {
+        path.extension()
+            .and_then(|extension| extension.to_str())
+            .is_some_and(|extension| {
+                let extension = extension.to_ascii_lowercase();
+                extensions.contains(&extension.as_str())
+            })
+    };
+    let image = classify(&[
+        "png", "jpg", "jpeg", "bmp", "gif", "webp", "qoi", "tif", "tiff",
+    ]);
+    let video = classify(&["mp4", "avi", "webm", "mov", "mkv", "mpg", "mpeg", "ogv"]);
+    let audio = classify(&["ogg", "mp3", "wav", "flac", "opus", "m4a", "aac"]);
+    let simfile = classify(&["sm", "ssc"]);
+    let media = classify(&[
+        "png", "jpg", "jpeg", "bmp", "gif", "webp", "qoi", "tif", "tiff",
+    ]) || classify(&["mp4", "avi", "webm", "mov", "mkv", "mpg", "mpeg", "ogv"])
+        || classify(&["ogg", "mp3", "wav", "flac", "opus", "m4a", "aac"]);
+    u8::from(image)
+        | (u8::from(video) << 1)
+        | (u8::from(audio) << 2)
+        | (u8::from(simfile) << 3)
+        | (u8::from(media) << 4)
 }
 
 #[cfg(test)]
@@ -778,6 +812,33 @@ mod tests {
         assert!(is_song_lua_simfile_path(Path::new("chart.ssc")));
         assert!(is_song_lua_media_path(Path::new("music.flac")));
         assert!(!is_song_lua_media_path(Path::new("chart.ssc")));
+    }
+
+    #[test]
+    fn media_path_detection_matches_legacy_edge_cases() {
+        for path in [
+            "banner.PNG",
+            "background.JpEg",
+            "movie.WeBm",
+            "music.FLAC",
+            "chart.SSC",
+            "unknown.bin",
+            "extensionless",
+            "trailing.",
+            "unicode.ÉPNG",
+        ] {
+            let path = Path::new(path);
+            let current = u8::from(is_song_lua_image_path(path))
+                | (u8::from(is_song_lua_video_path(path)) << 1)
+                | (u8::from(is_song_lua_audio_path(path)) << 2)
+                | (u8::from(is_song_lua_simfile_path(path)) << 3)
+                | (u8::from(is_song_lua_media_path(path)) << 4);
+            assert_eq!(
+                current,
+                song_lua_path_classification_legacy_for_bench(path),
+                "classification changed for {path:?}"
+            );
+        }
     }
 
     #[test]

@@ -208,55 +208,61 @@ pub fn load_or_build_cached_dynamic_image(
 
 #[inline(always)]
 pub fn is_cacheable_dynamic_image_path(path: &Path) -> bool {
-    let Some(ext) = path.extension().and_then(|e| e.to_str()) else {
-        return false;
-    };
-    matches!(
-        ext.to_ascii_lowercase().as_str(),
-        "png"
-            | "jpg"
-            | "jpeg"
-            | "gif"
-            | "bmp"
-            | "webp"
-            | "tga"
-            | "tif"
-            | "tiff"
-            | "mp4"
-            | "avi"
-            | "f4v"
-            | "flv"
-            | "m4v"
-            | "mov"
-            | "ogv"
-            | "webm"
-            | "mkv"
-            | "mpg"
-            | "mpeg"
-            | "wmv"
+    path_has_extension(
+        path,
+        &[
+            "png", "jpg", "jpeg", "gif", "bmp", "webp", "tga", "tif", "tiff", "mp4", "avi", "f4v",
+            "flv", "m4v", "mov", "ogv", "webm", "mkv", "mpg", "mpeg", "wmv",
+        ],
     )
 }
 
 #[inline(always)]
 pub fn is_dynamic_video_path(path: &Path) -> bool {
-    let Some(ext) = path.extension().and_then(|e| e.to_str()) else {
-        return false;
-    };
-    matches!(
-        ext.to_ascii_lowercase().as_str(),
-        "mp4"
-            | "avi"
-            | "f4v"
-            | "flv"
-            | "m4v"
-            | "mov"
-            | "ogv"
-            | "webm"
-            | "mkv"
-            | "mpg"
-            | "mpeg"
-            | "wmv"
+    path_has_extension(
+        path,
+        &[
+            "mp4", "avi", "f4v", "flv", "m4v", "mov", "ogv", "webm", "mkv", "mpg", "mpeg", "wmv",
+        ],
     )
+}
+
+#[inline(always)]
+fn path_has_extension(path: &Path, extensions: &[&str]) -> bool {
+    path.extension()
+        .and_then(|extension| extension.to_str())
+        .is_some_and(|extension| {
+            extensions
+                .iter()
+                .any(|candidate| extension.eq_ignore_ascii_case(candidate))
+        })
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+#[doc(hidden)]
+pub fn dynamic_path_classification_legacy_for_bench(path: &Path) -> u8 {
+    let classify = |extensions: &[&str]| {
+        path.extension()
+            .and_then(|extension| extension.to_str())
+            .is_some_and(|extension| {
+                let extension = extension.to_ascii_lowercase();
+                extensions.contains(&extension.as_str())
+            })
+    };
+    let cacheable = classify(&[
+        "png", "jpg", "jpeg", "gif", "bmp", "webp", "tga", "tif", "tiff", "mp4", "avi", "f4v",
+        "flv", "m4v", "mov", "ogv", "webm", "mkv", "mpg", "mpeg", "wmv",
+    ]);
+    let video = classify(&[
+        "mp4", "avi", "f4v", "flv", "m4v", "mov", "ogv", "webm", "mkv", "mpg", "mpeg", "wmv",
+    ]);
+    u8::from(cacheable) | (u8::from(video) << 1)
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn dynamic_path_classification_for_bench(path: &Path) -> u8 {
+    u8::from(is_cacheable_dynamic_image_path(path)) | (u8::from(is_dynamic_video_path(path)) << 1)
 }
 
 pub fn ensure_cached_dynamic_image_on_disk(
@@ -653,6 +659,30 @@ mod tests {
                 "bg.mp4".to_string(),
             ]
         );
+    }
+
+    #[test]
+    fn dynamic_path_classification_preserves_case_insensitive_extensions() {
+        for (path, expected) in [
+            ("banner.PNG", 1),
+            ("background.JpEg", 1),
+            ("movie.MP4", 3),
+            ("clip.WeBm", 3),
+            ("chart.ssc", 0),
+            ("extensionless", 0),
+            ("trailing.", 0),
+            ("unicode.ÉPNG", 0),
+        ] {
+            let path = Path::new(path);
+            let current = u8::from(is_cacheable_dynamic_image_path(path))
+                | (u8::from(is_dynamic_video_path(path)) << 1);
+            assert_eq!(current, expected, "wrong classification for {path:?}");
+            assert_eq!(
+                current,
+                dynamic_path_classification_legacy_for_bench(path),
+                "classification changed for {path:?}"
+            );
+        }
     }
 
     #[test]

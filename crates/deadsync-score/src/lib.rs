@@ -5233,7 +5233,7 @@ pub fn collect_chart_hashes_per_pack_for_import(
         .collect();
 
     let mut out: Vec<(String, Vec<String>)> = Vec::new();
-    let mut seen: HashSet<String> = HashSet::new();
+    let mut seen: HashSet<&str> = HashSet::new();
     for pack in song_packs {
         let group_name = pack.group_name.trim();
         let display_name = if pack.name.trim().is_empty() {
@@ -5252,13 +5252,12 @@ pub fn collect_chart_hashes_per_pack_for_import(
         let mut hashes = Vec::new();
         for song in &pack.songs {
             for chart in &song.charts {
-                let chart_hash = chart.short_hash.trim();
-                if chart_hash.is_empty() || existing_scores.contains(chart_hash) {
-                    continue;
-                }
-                if seen.insert(chart_hash.to_string()) {
-                    hashes.push(chart_hash.to_string());
-                }
+                push_unique_import_chart_hash(
+                    chart.short_hash.as_str(),
+                    existing_scores,
+                    &mut seen,
+                    &mut hashes,
+                );
             }
         }
         if !hashes.is_empty() {
@@ -5266,6 +5265,56 @@ pub fn collect_chart_hashes_per_pack_for_import(
         }
     }
     out
+}
+
+#[inline(always)]
+fn push_unique_import_chart_hash<'a>(
+    raw_chart_hash: &'a str,
+    existing_scores: &HashSet<String>,
+    seen: &mut HashSet<&'a str>,
+    hashes: &mut Vec<String>,
+) {
+    let chart_hash = raw_chart_hash.trim();
+    if chart_hash.is_empty() || existing_scores.contains(chart_hash) {
+        return;
+    }
+    if seen.insert(chart_hash) {
+        hashes.push(chart_hash.to_string());
+    }
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn collect_unique_import_chart_hashes_for_bench<'a>(
+    chart_hashes: &[&'a str],
+    existing_scores: &HashSet<String>,
+) -> Vec<String> {
+    let mut seen = HashSet::with_capacity(chart_hashes.len());
+    let mut hashes = Vec::new();
+    for &chart_hash in chart_hashes {
+        push_unique_import_chart_hash(chart_hash, existing_scores, &mut seen, &mut hashes);
+    }
+    hashes
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+#[doc(hidden)]
+pub fn collect_unique_import_chart_hashes_legacy_for_bench(
+    chart_hashes: &[&str],
+    existing_scores: &HashSet<String>,
+) -> Vec<String> {
+    let mut seen = HashSet::with_capacity(chart_hashes.len());
+    let mut hashes = Vec::new();
+    for &chart_hash in chart_hashes {
+        let chart_hash = chart_hash.trim();
+        if chart_hash.is_empty() || existing_scores.contains(chart_hash) {
+            continue;
+        }
+        if seen.insert(chart_hash.to_string()) {
+            hashes.push(chart_hash.to_string());
+        }
+    }
+    hashes
 }
 
 pub fn gs_lamp_chart_stats_for_hash(
@@ -6348,6 +6397,29 @@ mod tests {
         assert_eq!(Grade::Quint.to_sprite_state(), 0);
         assert_eq!(Grade::Tier01.to_sprite_state(), 1);
         assert_eq!(Grade::Failed.to_sprite_state(), 18);
+    }
+
+    #[test]
+    fn import_chart_hash_deduplication_preserves_order_and_filtering() {
+        let existing_scores = HashSet::from(["existing".to_string()]);
+        let chart_hashes = [
+            " first ", "existing", "second", "first", "", "  ", "third", "second ",
+        ];
+        let expected = vec![
+            "first".to_string(),
+            "second".to_string(),
+            "third".to_string(),
+        ];
+        let mut seen = HashSet::new();
+        let mut current = Vec::new();
+        for chart_hash in chart_hashes {
+            push_unique_import_chart_hash(chart_hash, &existing_scores, &mut seen, &mut current);
+        }
+        assert_eq!(current, expected);
+        assert_eq!(
+            current,
+            collect_unique_import_chart_hashes_legacy_for_bench(&chart_hashes, &existing_scores)
+        );
     }
 
     #[test]
