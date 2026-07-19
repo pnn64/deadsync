@@ -718,7 +718,7 @@ fn handle_input_inner(
     if state.policy.arcade_navigation || dedicated_three_key {
         screen_input::track_menu_lr_chord(&mut state.menu_lr_chord, ev);
     }
-    let three_key_action = (!dedicated_three_key)
+    let three_key_action = dedicated_three_key
         .then(|| screen_input::three_key_menu_action(&mut state.menu_lr_chord, ev, true))
         .flatten();
     if state.pane_transition.is_active() {
