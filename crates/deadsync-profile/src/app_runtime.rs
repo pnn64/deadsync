@@ -1131,10 +1131,7 @@ pub fn load_profiles(
     update_default_profiles: impl FnOnce(Option<String>, Option<String>),
     machine_default_noteskin: NoteSkin,
     machine_default_light_brightness: u8,
-    save_profile_ini: fn(PlayerSide),
-    save_profile_stats: fn(PlayerSide),
 ) {
-    crate::update::set_profile_update_persistence_callbacks(save_profile_ini, save_profile_stats);
     migrate_local_profiles(default_profiles.clone(), update_default_profiles);
     restore_default_profiles(default_profiles);
     load_profile_for_side(
@@ -1156,8 +1153,6 @@ pub fn load_profiles_from_config() {
         config::update_default_profiles,
         machine_default_noteskin_value(),
         machine_default_light_brightness(),
-        save_profile_ini_for_side,
-        save_profile_stats_for_side,
     );
 }
 

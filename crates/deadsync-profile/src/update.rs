@@ -7,66 +7,25 @@ use crate::{
     MiniIndicatorSubtractiveDisplay, NoCmodAlternative, NoteSkin, Perspective, PlayStyle,
     PlayerSide, Profile, RemoveMask, ScatterplotMaxWindow, ScoreDisplayMode, ScorePosition,
     ScrollOption, StepStatisticsMask, StepStatsExtra, TapExplosionMask, TargetScoreSetting,
-    TimingWindowsOption, TurnOption, VisualEffectsMask, runtime_mark_heart_rate_devices_changed,
-    runtime_session_side_guest, runtime_update_profile_for_side,
+    TimingWindowsOption, TurnOption, VisualEffectsMask,
+    app_runtime::{save_profile_ini_for_side, save_profile_stats_for_side},
+    runtime_mark_heart_rate_devices_changed, runtime_session_side_guest,
+    runtime_update_profile_for_side,
 };
 use chrono::Local;
 use deadsync_rules::scroll::ScrollSpeedSetting;
 use std::path::Path;
-use std::sync::OnceLock;
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum ProfileUpdatePersistence {
-    None,
-    Ini,
-    Stats,
-}
-
-#[derive(Clone, Copy)]
-struct ProfileUpdatePersistenceCallbacks {
-    save_ini: fn(PlayerSide),
-    save_stats: fn(PlayerSide),
-}
-
-static PROFILE_UPDATE_PERSISTENCE: OnceLock<ProfileUpdatePersistenceCallbacks> = OnceLock::new();
-
-pub fn set_profile_update_persistence_callbacks(
-    save_ini: fn(PlayerSide),
-    save_stats: fn(PlayerSide),
-) {
-    let _ = PROFILE_UPDATE_PERSISTENCE.set(ProfileUpdatePersistenceCallbacks {
-        save_ini,
-        save_stats,
-    });
-}
-
-fn persist_profile_update(side: PlayerSide, persistence: ProfileUpdatePersistence) {
-    let Some(callbacks) = PROFILE_UPDATE_PERSISTENCE.get() else {
-        return;
-    };
-    match persistence {
-        ProfileUpdatePersistence::None => {}
-        ProfileUpdatePersistence::Ini => (callbacks.save_ini)(side),
-        ProfileUpdatePersistence::Stats => (callbacks.save_stats)(side),
+fn profile_ini_update(side: PlayerSide, update: impl FnOnce(&mut Profile) -> bool) {
+    if runtime_update_profile_for_side(side, update) {
+        save_profile_ini_for_side(side);
     }
 }
 
-fn profile_ini_update(side: PlayerSide, update: impl FnOnce(&mut Profile) -> bool) {
-    let persistence = if runtime_update_profile_for_side(side, update) {
-        ProfileUpdatePersistence::Ini
-    } else {
-        ProfileUpdatePersistence::None
-    };
-    persist_profile_update(side, persistence);
-}
-
 fn profile_stats_update(side: PlayerSide, update: impl FnOnce(&mut Profile) -> bool) {
-    let persistence = if runtime_update_profile_for_side(side, update) {
-        ProfileUpdatePersistence::Stats
-    } else {
-        ProfileUpdatePersistence::None
-    };
-    persist_profile_update(side, persistence);
+    if runtime_update_profile_for_side(side, update) {
+        save_profile_stats_for_side(side);
+    }
 }
 
 pub fn update_last_played_for_side(
@@ -127,15 +86,8 @@ pub fn update_heart_rate_device_id_for_side(side: PlayerSide, device_id: Option<
     let changed = runtime_update_profile_for_side(side, |profile| {
         profile.set_heart_rate_device_id(device_id)
     });
-    persist_profile_update(
-        side,
-        if changed {
-            ProfileUpdatePersistence::Ini
-        } else {
-            ProfileUpdatePersistence::None
-        },
-    );
     if changed {
+        save_profile_ini_for_side(side);
         runtime_mark_heart_rate_devices_changed();
     }
 }
@@ -153,14 +105,9 @@ pub fn update_player_options_for_side(
         heart_rate_changed = profile.set_heart_rate_device_id(heart_rate_device_id);
         options_changed || heart_rate_changed
     });
-    persist_profile_update(
-        side,
-        if changed {
-            ProfileUpdatePersistence::Ini
-        } else {
-            ProfileUpdatePersistence::None
-        },
-    );
+    if changed {
+        save_profile_ini_for_side(side);
+    }
     if heart_rate_changed {
         runtime_mark_heart_rate_devices_changed();
     }
