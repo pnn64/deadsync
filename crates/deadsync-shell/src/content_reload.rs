@@ -1,3 +1,4 @@
+use deadsync_config::prelude as config;
 use deadsync_theme_simply_love::views::{
     SimplyLoveContentReloadEvent, SimplyLoveContentReloadPhase,
 };
@@ -16,6 +17,7 @@ impl Service {
             scan_library(&tx, &songs_root, &courses_root);
             prewarm_artwork(&tx);
             compile_noteskins(&tx);
+            analyze_replaygain(&tx, None);
             send_finished(&tx);
         });
     }
@@ -23,6 +25,7 @@ impl Service {
     pub(crate) fn start_library(&mut self, songs_root: PathBuf, courses_root: PathBuf) {
         self.start(move |tx| {
             scan_library(&tx, &songs_root, &courses_root);
+            analyze_replaygain(&tx, None);
             send_finished(&tx);
         });
     }
@@ -45,6 +48,7 @@ impl Service {
                 &pack_dirs,
                 &mut on_song,
             );
+            analyze_replaygain(&tx, Some(&pack_dirs));
             send_finished(&tx);
         });
     }
@@ -169,6 +173,64 @@ fn compile_noteskins(tx: &Sender<SimplyLoveContentReloadEvent>) {
         "Init loading: noteskin cache compile complete (total={}, built={}, reused={}, failed={}).",
         summary.total, summary.built, summary.reused, summary.failed
     );
+}
+
+/// Frontload ReplayGain (EBU R128 loudness) analysis before the menu appears,
+/// so the first play of any song doesn't audibly adjust loudness a few seconds
+/// in. Runs synchronously with progress, populating the same cache the per-song
+/// preview path uses. Unchanged songs resolve from the cache, so only new or
+/// modified songs are actually recomputed.
+///
+/// When `restrict_to` is `Some`, only songs under those pack directories are
+/// considered (used by targeted song-dir reloads); `None` covers the whole
+/// library (boot and full reload).
+fn analyze_replaygain(tx: &Sender<SimplyLoveContentReloadEvent>, restrict_to: Option<&[PathBuf]>) {
+    if !config::get().enable_replaygain || !deadsync_audio_stream::is_initialized() {
+        return;
+    }
+    let paths = replaygain_music_paths(restrict_to);
+    if paths.is_empty() {
+        return;
+    }
+    let _ = tx.send(SimplyLoveContentReloadEvent::Phase(
+        SimplyLoveContentReloadPhase::ReplayGain,
+    ));
+    info!(
+        "Init loading: analyzing ReplayGain loudness for {} song(s)...",
+        paths.len()
+    );
+    let mut on_song = |done: usize, total: usize, path: &Path| {
+        let (line2, line3) = cache_progress_lines(Some(path));
+        let _ = tx.send(SimplyLoveContentReloadEvent::ReplayGain {
+            done,
+            total,
+            line2,
+            line3,
+        });
+    };
+    deadsync_audio_replaygain::analyze_paths_blocking(paths, &mut on_song);
+    info!("Init loading: ReplayGain analysis complete.");
+}
+
+/// Collects the deduplicated set of song music paths from the loaded song cache.
+/// When `restrict_to` is `Some`, only songs whose music file lives under one of
+/// those pack directories are included.
+fn replaygain_music_paths(restrict_to: Option<&[PathBuf]>) -> Vec<PathBuf> {
+    let mut paths = std::collections::BTreeSet::new();
+    let cache = deadsync_simfile::runtime_cache::get_song_cache();
+    for pack in cache.iter() {
+        for song in &pack.songs {
+            if let Some(path) = song.music_path.as_ref() {
+                if let Some(dirs) = restrict_to
+                    && !dirs.iter().any(|dir| path.starts_with(dir))
+                {
+                    continue;
+                }
+                paths.insert(path.clone());
+            }
+        }
+    }
+    paths.into_iter().collect()
 }
 
 fn artwork_cache_paths() -> (Vec<PathBuf>, Vec<PathBuf>) {

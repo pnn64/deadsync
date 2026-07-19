@@ -849,6 +849,7 @@ pub enum SimplyLoveContentReloadPhase {
     Courses,
     Artwork,
     Noteskins,
+    ReplayGain,
 }
 
 /// Progress and completion data produced by the shell-owned content reload
@@ -880,6 +881,12 @@ pub enum SimplyLoveContentReloadEvent {
         total: usize,
         skin: String,
         status: String,
+    },
+    ReplayGain {
+        done: usize,
+        total: usize,
+        line2: String,
+        line3: String,
     },
     Finished {
         song_packs: Vec<deadsync_chart::SongPack>,

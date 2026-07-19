@@ -7,6 +7,9 @@
 //! - [`prewarm_paths`] - submit a batch of song paths at a priority class.
 //!   Used by the music wheel to warm the cache for every song in a pack
 //!   on expansion.
+//! - [`analyze_paths_blocking`] - synchronously analyze a batch of song paths,
+//!   blocking with progress until all are cached. Used by the boot loader to
+//!   frontload the whole library before the menu appears.
 //! - [`clear_cache`] - drop all in-memory state and the on-disk cache file.
 //!   Intended for debug / a future "rescan" option.
 //!
@@ -336,22 +339,41 @@ fn analyze_one(job: Job) {
         }
     }
 
-    // Short-circuit on a disk cache hit: prewarm_paths intentionally
-    // doesn't canonicalize on the UI thread, so the disk cache lookup
-    // only becomes meaningful for prewarm jobs once the worker has the
-    // canonical path in hand. Without this, every restart re-analyzes
-    // the entire library.
-    if let Some(info) = load_disk_cache(&canonical) {
+    let gain = ensure_gain_linear(&canonical);
+    publish_gain(track_id, gain);
+}
+
+/// Resolve the linear gain for an already-canonicalized `path`, consulting the
+/// in-memory map and the on-disk cache before running the analyzer. The result
+/// (`Ready` or `Failed`) is stored in the in-memory map, and a freshly computed
+/// value is also written to the disk cache.
+fn ensure_gain_linear(canonical: &Path) -> f32 {
+    {
+        let map = in_memory().lock().unwrap();
+        match map.get(canonical) {
+            Some(SlotState::Ready(info)) => return gain_linear_from_info(*info),
+            Some(SlotState::Failed) => return UNITY_GAIN,
+            Some(SlotState::Pending) | None => {}
+        }
+    }
+
+    if let Some(info) = load_disk_cache(canonical) {
         in_memory()
             .lock()
             .unwrap()
-            .insert(canonical, SlotState::Ready(info));
-        publish_gain(track_id, gain_linear_from_info(info));
-        return;
+            .insert(canonical.to_path_buf(), SlotState::Ready(info));
+        return gain_linear_from_info(info);
     }
 
-    let info = match compute_loudness(&canonical) {
-        Ok(info) => info,
+    match compute_loudness(canonical) {
+        Ok(info) => {
+            write_disk_cache(canonical, info);
+            in_memory()
+                .lock()
+                .unwrap()
+                .insert(canonical.to_path_buf(), SlotState::Ready(info));
+            gain_linear_from_info(info)
+        }
         Err(err) => {
             debug!(
                 "ReplayGain analysis failed for {}: {err}",
@@ -360,18 +382,73 @@ fn analyze_one(job: Job) {
             in_memory()
                 .lock()
                 .unwrap()
-                .insert(canonical.clone(), SlotState::Failed);
-            publish_gain(track_id, UNITY_GAIN);
-            return;
+                .insert(canonical.to_path_buf(), SlotState::Failed);
+            UNITY_GAIN
         }
-    };
+    }
+}
 
-    write_disk_cache(&canonical, info);
-    in_memory()
-        .lock()
-        .unwrap()
-        .insert(canonical, SlotState::Ready(info));
-    publish_gain(track_id, gain_linear_from_info(info));
+/// Worker-thread count for the blocking boot/reload analysis. Unlike the async
+/// [`WORKER_THREADS`] pool (kept small so an in-game preview never saturates
+/// user-visible cores), this path blocks the loading screen, so it scales to
+/// all available cores to match the song-scan and artwork-cache phases and
+/// minimize cold-boot time. Bounded by the number of songs so tiny batches
+/// don't spawn idle threads.
+fn blocking_worker_threads(job_count: usize) -> usize {
+    if job_count == 0 {
+        return 0;
+    }
+    std::thread::available_parallelism()
+        .map(std::num::NonZero::get)
+        .unwrap_or(1)
+        .min(job_count)
+}
+
+/// Analyze a batch of song paths synchronously, blocking until every path has a
+/// terminal result (cached, computed, or failed). Reports incremental progress
+/// through `progress(done, total, path)` as each song finishes, where `path` is
+/// the original (pre-canonicalization) path so callers can map it back to a
+/// song/pack for display.
+pub fn analyze_paths_blocking<F>(paths: Vec<PathBuf>, mut progress: F)
+where
+    F: FnMut(usize, usize, &Path),
+{
+    let total = paths.len();
+    if total == 0 {
+        return;
+    }
+
+    let cursor = Mutex::new(paths.into_iter());
+    let (tx, rx) = std::sync::mpsc::channel::<PathBuf>();
+    let threads = blocking_worker_threads(total);
+
+    thread::scope(|scope| {
+        for _ in 0..threads {
+            let cursor = &cursor;
+            let tx = tx.clone();
+            scope.spawn(move || {
+                loop {
+                    let Some(path) = cursor.lock().unwrap().next() else {
+                        break;
+                    };
+                    let canonical = canonicalize_or_clone(&path);
+                    in_memory().lock().unwrap().remove(&canonical);
+                    let _ = ensure_gain_linear(&canonical);
+                    if tx.send(path).is_err() {
+                        break;
+                    }
+                }
+            });
+        }
+        // Drop the extra sender so `rx.recv()` returns once all workers finish.
+        drop(tx);
+
+        let mut done = 0usize;
+        while let Ok(path) = rx.recv() {
+            done += 1;
+            progress(done, total, &path);
+        }
+    });
 }
 
 /* ---------------------------- Disk cache I/O ---------------------------- */
@@ -579,5 +656,23 @@ fn flush_now_with_timeout(timeout: Duration) {
         if result.timed_out() {
             return;
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::blocking_worker_threads;
+
+    #[test]
+    fn blocking_worker_threads_are_bounded_by_jobs() {
+        assert_eq!(blocking_worker_threads(0), 0);
+        assert_eq!(blocking_worker_threads(1), 1);
+        let cores = std::thread::available_parallelism()
+            .map(std::num::NonZero::get)
+            .unwrap_or(1);
+        // Never exceeds the job count, and never exceeds the core count.
+        assert!(blocking_worker_threads(2) <= 2);
+        assert!(blocking_worker_threads(10_000) <= cores);
+        assert_eq!(blocking_worker_threads(10_000), cores.min(10_000));
     }
 }
