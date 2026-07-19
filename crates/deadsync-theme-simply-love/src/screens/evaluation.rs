@@ -45,7 +45,7 @@ use crate::views::{
     ScoreboxSideView, SimplyLoveGrooveStatsService,
 };
 use deadsync_input::RawKeyboardEvent;
-use deadsync_input::{InputEvent, PadEvent, VirtualAction, pad_dir_from_action};
+use deadsync_input::{InputEvent, PadEvent, VirtualAction};
 use deadsync_profile as profile_data;
 pub use deadsync_score::ColumnJudgments;
 // Keyboard handling is centralized in app via virtual actions
@@ -3752,11 +3752,7 @@ fn favorite_toggle_effect(
     chart_hash: String,
     is_now_favorite: bool,
 ) -> ThemeEffect {
-    let sound = if is_now_favorite {
-        "assets/sounds/favorite.ogg"
-    } else {
-        "assets/sounds/unfavorite.ogg"
-    };
+    let sound = crate::screens::favorite_code::toggle_sfx(is_now_favorite);
     crate::effects::sequence(
         crate::effects::sfx(sound),
         ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Profile(
@@ -3787,7 +3783,10 @@ mod input_audio_effect_tests {
 
     #[test]
     fn favorite_sfx_keys_precede_following_effect() {
-        for path in ["assets/sounds/favorite.ogg", "assets/sounds/unfavorite.ogg"] {
+        for path in [
+            "assets/sounds/start.ogg",
+            "assets/sounds/common_invalid.ogg",
+        ] {
             assert_sfx_then(
                 prepend_sfx(Some(path), ThemeEffect::Navigate(Screen::SelectCourse)),
                 path,
@@ -3798,13 +3797,13 @@ mod input_audio_effect_tests {
 
     #[test]
     fn standalone_sfx_has_no_empty_trailing_effect() {
-        let effect = prepend_sfx(Some("assets/sounds/favorite.ogg"), ThemeEffect::None);
+        let effect = prepend_sfx(Some("assets/sounds/start.ogg"), ThemeEffect::None);
 
         assert!(matches!(
             effect,
             ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Audio(
                 AudioRequest::PlaySfx(path)
-            )) if path == "assets/sounds/favorite.ogg"
+            )) if path == "assets/sounds/start.ogg"
         ));
     }
 
@@ -3824,7 +3823,7 @@ mod input_audio_effect_tests {
             Some("assets/sounds/start.ogg"),
             ThemeEffect::Navigate(Screen::SelectMusic),
         );
-        let effect = prepend_sfx(Some("assets/sounds/unfavorite.ogg"), navigation);
+        let effect = prepend_sfx(Some("assets/sounds/common_invalid.ogg"), navigation);
         let ThemeEffect::Batch(effects) = effect else {
             panic!("favorite and navigation sounds should remain ordered");
         };
@@ -3834,7 +3833,7 @@ mod input_audio_effect_tests {
             &effects[0],
             ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Audio(
                 AudioRequest::PlaySfx(path)
-            )) if path == "assets/sounds/unfavorite.ogg"
+            )) if path == "assets/sounds/common_invalid.ogg"
         ));
         assert_sfx_then(
             effects[1].clone(),
@@ -3855,7 +3854,7 @@ mod input_audio_effect_tests {
             &effects[0],
             ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Audio(
                 AudioRequest::PlaySfx(path)
-            )) if path == "assets/sounds/favorite.ogg"
+            )) if path == "assets/sounds/start.ogg"
         ));
         assert!(matches!(
             &effects[1],
@@ -3895,27 +3894,27 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
     // Track favorite pad code on arrow presses (not menu buttons)
     let mut favorite_effect = ThemeEffect::None;
     if ev.pressed {
-        if let Some(dir) = pad_dir_from_action(ev.action) {
-            if let Some(side) = state.favorite_code.check(dir, ev.timestamp) {
-                // Toggle favorite for the chart that was just played
-                for (player_idx, si) in
-                    state
-                        .score_info
-                        .iter()
-                        .enumerate()
-                        .filter_map(|(player_idx, score_info)| {
-                            score_info.as_ref().map(|si| (player_idx, si))
-                        })
-                {
-                    if si.side == side {
-                        state.favorites[player_idx] = !state.favorites[player_idx];
-                        favorite_effect = favorite_toggle_effect(
-                            side,
-                            si.chart.short_hash.clone(),
-                            state.favorites[player_idx],
-                        );
-                        break;
-                    }
+        if let Some(side) = state.favorite_code.check(ev.action, ev.timestamp)
+            && !state.context.players[profile_data::player_side_index(side)].guest
+        {
+            // Toggle favorite for the chart that was just played
+            for (player_idx, si) in
+                state
+                    .score_info
+                    .iter()
+                    .enumerate()
+                    .filter_map(|(player_idx, score_info)| {
+                        score_info.as_ref().map(|si| (player_idx, si))
+                    })
+            {
+                if si.side == side {
+                    state.favorites[player_idx] = !state.favorites[player_idx];
+                    favorite_effect = favorite_toggle_effect(
+                        side,
+                        si.chart.short_hash.clone(),
+                        state.favorites[player_idx],
+                    );
+                    break;
                 }
             }
         }

@@ -3906,54 +3906,68 @@ fn advance_nav_hold(state: &mut State, dt: f32) -> bool {
 
 fn toggle_favorite_for_selected_entry(state: &mut State, side: profile_data::PlayerSide) {
     let side_idx = profile_data::player_side_index(side);
-    let has_local_profile = state.profiles.local_profile_id(side).is_some();
+    if state.profiles.local_profile_id(side).is_none() {
+        return;
+    }
     match state.entries.get(state.selected_index).cloned() {
         Some(MusicWheelEntry::Song(song)) => {
             let target_chart_type = state.session.play_style.chart_type();
-            if let Some(chart) =
-                song.chart_for_steps_index(target_chart_type, state.selected_steps_index)
-            {
-                if has_local_profile {
-                    profile_data::toggle_favorite_hash(
-                        &mut state.favorites.chart_hashes[side_idx],
-                        &chart.short_hash,
-                    );
-                    queue_profile(
-                        state,
-                        crate::SimplyLoveProfileRequest::ToggleFavorite {
-                            side,
-                            chart_hash: chart.short_hash.clone(),
-                        },
-                    );
-                }
+            let steps_index = steps_index_for_side(
+                state.session.play_style,
+                side,
+                state.selected_steps_index,
+                state.p2_selected_steps_index,
+            );
+            if let Some(chart) = song.chart_for_steps_index(target_chart_type, steps_index) {
+                let is_now_favorite = profile_data::toggle_favorite_hash(
+                    &mut state.favorites.chart_hashes[side_idx],
+                    &chart.short_hash,
+                );
+                queue_profile(
+                    state,
+                    crate::SimplyLoveProfileRequest::ToggleFavorite {
+                        side,
+                        chart_hash: chart.short_hash.clone(),
+                    },
+                );
                 state.favorites_entries = build_favorites_view_entries(
                     &state.group_entries,
                     state.session,
                     &state.favorites,
                 );
-                queue_sfx(state, "assets/sounds/start.ogg");
+                if state.sort_mode == WheelSortMode::Favorites {
+                    apply_wheel_sort(state, WheelSortMode::Favorites);
+                }
+                queue_sfx(
+                    state,
+                    crate::screens::favorite_code::toggle_sfx(is_now_favorite),
+                );
             }
         }
         Some(entry @ MusicWheelEntry::PackHeader { .. }) => {
             let Some(pack_key) = entry.pack_key() else {
                 return;
             };
-            if has_local_profile {
-                profile_data::toggle_favorited_pack(
-                    &mut state.favorites.pack_names[side_idx],
-                    pack_key,
-                );
-                queue_profile(
-                    state,
-                    crate::SimplyLoveProfileRequest::TogglePackFavorite {
-                        side,
-                        pack_name: pack_key.to_owned(),
-                    },
-                );
-            }
+            let is_now_favorite = profile_data::toggle_favorited_pack(
+                &mut state.favorites.pack_names[side_idx],
+                pack_key,
+            );
+            queue_profile(
+                state,
+                crate::SimplyLoveProfileRequest::TogglePackFavorite {
+                    side,
+                    pack_name: pack_key.to_owned(),
+                },
+            );
             state.favorites_entries =
                 build_favorites_view_entries(&state.group_entries, state.session, &state.favorites);
-            queue_sfx(state, "assets/sounds/start.ogg");
+            if state.sort_mode == WheelSortMode::Favorites {
+                apply_wheel_sort(state, WheelSortMode::Favorites);
+            }
+            queue_sfx(
+                state,
+                crate::screens::favorite_code::toggle_sfx(is_now_favorite),
+            );
         }
         None => {}
     }
@@ -9443,10 +9457,6 @@ fn handle_pad_dir_impl(
     }
 
     if pressed {
-        // Track favorite code sequence (Simply Love: Favorite1/Favorite2 codes)
-        if let Some(side) = state.favorite_code.check(dir, timestamp) {
-            toggle_favorite_for_selected_entry(state, side);
-        }
         match dir {
             PadDir::Right => {
                 // Simply Love [ScreenSelectMusic]: CodeSortList4 = "Left-Right".
@@ -10400,6 +10410,12 @@ fn handle_input_impl(state: &mut State, ev: &InputEvent, fine: bool) -> ThemeEff
 
     if state.select_music_menu.is_visible() {
         return handle_select_music_menu_input(state, ev);
+    }
+
+    if ev.pressed
+        && let Some(side) = state.favorite_code.check(ev.action, ev.timestamp)
+    {
+        toggle_favorite_for_selected_entry(state, side);
     }
 
     reset_exit_code_on_non_lr_press(state, ev);
@@ -14639,6 +14655,36 @@ mod tests {
             ] if *side == profile_data::PlayerSide::P1
                 && pack_name == "Pack A"
                 && path == "assets/sounds/start.ogg"
+        ));
+    }
+
+    #[test]
+    fn chart_favorite_uses_player_chart_and_toggles_off() {
+        let song = super::bench_folder_stats_song(0);
+        let p1_hash = song.charts[1].short_hash.clone();
+        let p2_hash = song.charts[3].short_hash.clone();
+        let mut state = init_placeholder();
+        state.session.play_style = profile_data::PlayStyle::Versus;
+        state.profiles.local_profile_ids[1] = Some("bob".to_string());
+        state.entries = vec![super::MusicWheelEntry::Song(song)];
+        state.selected_steps_index = 1;
+        state.p2_selected_steps_index = 3;
+
+        super::toggle_favorite_for_selected_entry(&mut state, profile_data::PlayerSide::P2);
+
+        assert!(!state.favorites.chart_hashes[1].contains(&p1_hash));
+        assert!(state.favorites.chart_hashes[1].contains(&p2_hash));
+
+        super::toggle_favorite_for_selected_entry(&mut state, profile_data::PlayerSide::P2);
+
+        assert!(!state.favorites.chart_hashes[1].contains(&p2_hash));
+        assert!(matches!(
+            state.pending_audio.as_slice(),
+            [
+                deadsync_theme::AudioRequest::PlaySfx(added),
+                deadsync_theme::AudioRequest::PlaySfx(removed),
+            ] if added == "assets/sounds/start.ogg"
+                && removed == "assets/sounds/common_invalid.ogg"
         ));
     }
 
