@@ -411,6 +411,74 @@ pub fn apply_mines_insert(
         return;
     }
 
+    let player_rows = player_rows(notes, col_offset, cols);
+    let hold_heads: Vec<(usize, usize)> = notes
+        .iter()
+        .filter_map(|note| {
+            matches!(note.note_type, NoteType::Hold | NoteType::Roll)
+                .then_some((note.column, note.hold.as_ref()?.end_row_index))
+        })
+        .collect();
+    let mut mine_rows = Vec::with_capacity(player_rows.len() / 6 + hold_heads.len() + 1);
+    let mut row_count = 0usize;
+    let mut place_every_rows = 6usize;
+    for row in player_rows {
+        if row < start_row || row > end_row {
+            continue;
+        }
+        row_count = row_count.saturating_add(1);
+        if row_count < place_every_rows {
+            continue;
+        }
+        mine_rows.push(row);
+        row_count = 0;
+        place_every_rows = if place_every_rows == 6 { 7 } else { 6 };
+    }
+
+    let half_beat_rows = (ROWS_PER_BEAT.max(1) / 2) as usize;
+    for (column, end_row_index) in hold_heads {
+        let mine_row = end_row_index.saturating_add(half_beat_rows);
+        if mine_row < start_row || mine_row > end_row {
+            continue;
+        }
+        let range_start = mine_row.saturating_sub(half_beat_rows).saturating_add(1);
+        let range_end = mine_row.saturating_add(half_beat_rows).saturating_sub(1);
+        if track_range_has_any_note(context_notes, column, range_start, range_end)
+            || track_range_has_any_note(notes, column, range_start, range_end)
+        {
+            continue;
+        }
+        if !set_added_mine_note(notes, timing_player, mine_row, column) {
+            continue;
+        }
+        mine_rows.push(mine_row);
+    }
+
+    mine_rows.sort_unstable();
+    mine_rows.dedup();
+    for note in notes {
+        if note.note_type == NoteType::Tap && mine_rows.binary_search(&note.row_index).is_ok() {
+            note.note_type = NoteType::Mine;
+            note.hold = None;
+            note.mine_result = None;
+        }
+    }
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+pub fn apply_mines_insert_legacy_for_bench(
+    notes: &mut Vec<Note>,
+    context_notes: &[Note],
+    timing_player: &TimingData,
+    col_offset: usize,
+    cols: usize,
+    start_row: usize,
+    end_row: usize,
+) {
+    if cols == 0 || cols > MAX_COLS || end_row < start_row {
+        return;
+    }
+
     let mut row_count = 0usize;
     let mut place_every_rows = 6usize;
     for row in player_rows(notes, col_offset, cols) {

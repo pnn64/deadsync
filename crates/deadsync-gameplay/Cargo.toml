@@ -22,6 +22,11 @@ name = "song_lua_messages"
 harness = false
 required-features = ["bench-support"]
 
+[[bench]]
+name = "mines_insert"
+harness = false
+required-features = ["bench-support"]
+
 [dependencies]
 deadsync-chart = { path = "../deadsync-chart" }
 deadsync-core = { path = "../deadsync-core" }

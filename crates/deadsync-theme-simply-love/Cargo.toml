@@ -38,6 +38,11 @@ name = "select_music_folder_stats"
 harness = false
 required-features = ["bench-support"]
 
+[[bench]]
+name = "leaderboard_rows"
+harness = false
+required-features = ["bench-support"]
+
 [dependencies]
 deadlib-assets = { path = "../deadlib-assets" }
 deadlib-present = { path = "../deadlib-present" }

@@ -10,6 +10,7 @@ use deadlib_present::actors::Actor;
 use deadlib_present::cache::{TextCache, cached_text, text_cache_with_capacity};
 use deadlib_present::color;
 use deadsync_score as score_data;
+use std::borrow::Cow;
 use std::cell::RefCell;
 use std::sync::{Arc, OnceLock};
 
@@ -198,7 +199,55 @@ fn local_self_score_10000(view: &ScoreboxSideView, kind: PaneKind) -> Option<(f6
     Some((score.score_10000, score.failed))
 }
 
-pub(crate) fn entries_with_local_self_state(
+pub(crate) fn entries_with_local_self_state<'a>(
+    view: &ScoreboxSideView,
+    pane: &'a score_data::LeaderboardPane,
+) -> Cow<'a, [score_data::LeaderboardEntry]> {
+    let kind = score_data::scorebox_pane_kind(pane);
+    let local_self = local_self_score_10000(view, kind);
+
+    if let Some(index) = pane.entries.iter().position(|entry| entry.is_self) {
+        let entry = &pane.entries[index];
+        if let Some((local_score_10000, local_is_fail)) = local_self
+            && local_is_fail
+            && score_data::same_score_10000(entry.score, local_score_10000)
+        {
+            let mut entries = pane.entries.clone();
+            let entry = &mut entries[index];
+            entry.is_fail = true;
+            if entry.machine_tag.is_none() {
+                entry.machine_tag = local_self_machine_tag(view);
+            }
+            return Cow::Owned(entries);
+        }
+        return Cow::Borrowed(pane.entries.as_slice());
+    }
+
+    if let Some(index) = pane
+        .entries
+        .iter()
+        .position(|entry| leaderboard_entry_matches_local_self(view, entry))
+    {
+        let mut entries = pane.entries.clone();
+        let entry = &mut entries[index];
+        entry.is_self = true;
+        if entry.machine_tag.is_none() {
+            entry.machine_tag = local_self_machine_tag(view);
+        }
+        if let Some((local_score_10000, local_is_fail)) = local_self
+            && local_is_fail
+            && score_data::same_score_10000(entry.score, local_score_10000)
+        {
+            entry.is_fail = true;
+        }
+        return Cow::Owned(entries);
+    }
+
+    Cow::Borrowed(pane.entries.as_slice())
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn entries_with_local_self_state_legacy(
     view: &ScoreboxSideView,
     pane: &score_data::LeaderboardPane,
 ) -> Vec<score_data::LeaderboardEntry> {
@@ -464,8 +513,8 @@ fn scorebox_rows_for_kind(
         return rows;
     }
 
-    let selected = score_data::prioritized_leaderboard_entries(entries, SCOREBOX_NUM_ENTRIES);
-    for (slot, entry) in rows.iter_mut().zip(selected.iter()) {
+    let selected = score_data::prioritized_leaderboard_entry_refs(entries, SCOREBOX_NUM_ENTRIES);
+    for (slot, entry) in rows.iter_mut().zip(selected) {
         *slot = gameplay_row_from_entry(entry, kind);
     }
     rows
@@ -561,9 +610,43 @@ fn select_music_panes_from_snapshot(
     let mut panes = Vec::with_capacity(filtered.len());
     for pane in filtered {
         let entries = entries_with_local_self_state(runtime, pane);
-        panes.push(gameplay_pane_from_leaderboard(pane, entries.as_slice()));
+        panes.push(gameplay_pane_from_leaderboard(pane, entries.as_ref()));
     }
     panes
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn leaderboard_rows_checksum_for_bench(
+    view: &ScoreboxSideView,
+    pane: &score_data::LeaderboardPane,
+) -> u64 {
+    let entries = entries_with_local_self_state(view, pane);
+    let selected = score_data::prioritized_leaderboard_entry_refs(entries.as_ref(), 10);
+    selected.into_iter().fold(0_u64, |checksum, entry| {
+        checksum.rotate_left(5)
+            ^ u64::from(entry.rank)
+            ^ entry.name.len() as u64
+            ^ ((entry.is_self as u64) << 62)
+            ^ ((entry.is_rival as u64) << 61)
+    })
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn leaderboard_rows_checksum_legacy_for_bench(
+    view: &ScoreboxSideView,
+    pane: &score_data::LeaderboardPane,
+) -> u64 {
+    let entries = entries_with_local_self_state_legacy(view, pane);
+    let selected = score_data::prioritized_leaderboard_entries(entries.as_slice(), 10);
+    selected.iter().fold(0_u64, |checksum, entry| {
+        checksum.rotate_left(5)
+            ^ u64::from(entry.rank)
+            ^ entry.name.len() as u64
+            ^ ((entry.is_self as u64) << 62)
+            ^ ((entry.is_rival as u64) << 61)
+    })
 }
 
 #[inline(always)]
@@ -1243,6 +1326,33 @@ mod tests {
 
         assert_eq!(entries.len(), 2);
         assert!(!entries.iter().any(|entry| entry.is_self));
+        assert!(matches!(&entries, Cow::Borrowed(_)));
+    }
+
+    #[test]
+    fn borrowed_leaderboard_state_matches_legacy_owned_rows() {
+        let runtime = ScoreboxSideView::default();
+        let pane = pane(
+            "GrooveStats",
+            vec![
+                entry(1, "world", false, false),
+                entry(2, "rival", false, true),
+                entry(20, "self", true, false),
+            ],
+        );
+        let current = entries_with_local_self_state(&runtime, &pane);
+        let legacy = entries_with_local_self_state_legacy(&runtime, &pane);
+
+        assert!(matches!(&current, Cow::Borrowed(_)));
+        assert_eq!(current.len(), legacy.len());
+        for (current, legacy) in current.iter().zip(&legacy) {
+            assert_eq!(current.rank, legacy.rank);
+            assert_eq!(current.name, legacy.name);
+            assert_eq!(current.machine_tag, legacy.machine_tag);
+            assert_eq!(current.is_self, legacy.is_self);
+            assert_eq!(current.is_rival, legacy.is_rival);
+            assert_eq!(current.is_fail, legacy.is_fail);
+        }
     }
 
     #[test]

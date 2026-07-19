@@ -100,7 +100,7 @@ fn pane_display_entries(
     pane: &score_data::LeaderboardPane,
 ) -> Vec<score_data::LeaderboardEntry> {
     let entries = entries_with_local_self_state(runtime, pane);
-    score_data::prioritized_leaderboard_entries(entries.as_slice(), GS_RECORD_ROWS)
+    score_data::prioritized_leaderboard_entries(entries.as_ref(), GS_RECORD_ROWS)
 }
 
 fn build_records_pane(

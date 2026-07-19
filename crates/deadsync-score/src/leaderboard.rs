@@ -170,15 +170,15 @@ fn next_prioritized_entry<'a>(
         .min_by_key(|entry| entry.rank)
 }
 
-pub fn prioritized_leaderboard_entries(
+pub fn prioritized_leaderboard_entry_refs(
     entries: &[LeaderboardEntry],
     max_rows: usize,
-) -> Vec<LeaderboardEntry> {
+) -> Vec<&LeaderboardEntry> {
     if max_rows == 0 {
         return Vec::new();
     }
     if entries.len() <= max_rows {
-        return entries.to_vec();
+        return entries.iter().collect();
     }
 
     let mut selected = Vec::with_capacity(max_rows);
@@ -205,7 +205,17 @@ pub fn prioritized_leaderboard_entries(
         selected.push(entry);
     }
     selected.sort_unstable_by_key(|entry| entry.rank);
-    selected.into_iter().cloned().collect()
+    selected
+}
+
+pub fn prioritized_leaderboard_entries(
+    entries: &[LeaderboardEntry],
+    max_rows: usize,
+) -> Vec<LeaderboardEntry> {
+    prioritized_leaderboard_entry_refs(entries, max_rows)
+        .into_iter()
+        .cloned()
+        .collect()
 }
 
 pub fn machine_leaderboard_entries(
@@ -1483,6 +1493,27 @@ mod tests {
         let selected = prioritized_leaderboard_entries(&entries, 2);
         let ranks = selected.iter().map(|entry| entry.rank).collect::<Vec<_>>();
         assert_eq!(ranks, vec![1, 20]);
+    }
+
+    #[test]
+    fn prioritized_leaderboard_refs_match_owned_selection_and_ties() {
+        let entries = [
+            entry(2, "rival", false, true),
+            entry(1, "world", false, false),
+            entry(20, "SELF", true, false),
+            entry(20, "self", true, false),
+            entry(3, "extra", false, false),
+        ];
+        let borrowed = prioritized_leaderboard_entry_refs(&entries, 4);
+        let owned = prioritized_leaderboard_entries(&entries, 4);
+
+        assert_eq!(borrowed.len(), owned.len());
+        for (borrowed, owned) in borrowed.into_iter().zip(&owned) {
+            assert_eq!(borrowed.rank, owned.rank);
+            assert_eq!(borrowed.name, owned.name);
+            assert_eq!(borrowed.is_self, owned.is_self);
+            assert_eq!(borrowed.is_rival, owned.is_rival);
+        }
     }
 
     fn pane(

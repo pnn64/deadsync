@@ -14824,6 +14824,66 @@ mod tests {
     }
 
     #[test]
+    fn mines_insert_batched_conversion_matches_legacy_chart() {
+        let last_row = 40 * ROWS_PER_BEAT as usize;
+        let timing = test_timing(last_row);
+        let mut current = (0..120)
+            .map(|index| {
+                let row = index * (ROWS_PER_BEAT as usize / 4);
+                let mut note = test_note_at(
+                    NoteType::Tap,
+                    None,
+                    false,
+                    row,
+                    row as f32 / ROWS_PER_BEAT as f32,
+                );
+                note.column = index % 4;
+                note
+            })
+            .collect::<Vec<_>>();
+        for (index, row) in [24, 96, 240, 480, 1584, 1596].into_iter().enumerate() {
+            let mut hold = test_note_at(
+                NoteType::Hold,
+                Some(test_hold()),
+                false,
+                row,
+                row as f32 / ROWS_PER_BEAT as f32,
+            );
+            hold.column = if index < 4 { index } else { 0 };
+            let hold_data = hold.hold.as_mut().expect("hold fixture");
+            hold_data.end_row_index = row + ROWS_PER_BEAT as usize;
+            hold_data.end_beat = hold_data.end_row_index as f32 / ROWS_PER_BEAT as f32;
+            current.push(hold);
+        }
+        let mut blocker = test_note_at(NoteType::Tap, None, false, 108, 2.25);
+        blocker.column = 1;
+        let context = vec![blocker];
+        let mut legacy = current.clone();
+
+        apply_mines_insert(&mut current, &context, &timing, 0, 4, 0, last_row);
+        apply_mines_insert_legacy_for_bench(
+            &mut legacy,
+            &context,
+            &timing,
+            0,
+            4,
+            0,
+            last_row,
+        );
+
+        assert_eq!(current.len(), legacy.len());
+        for (current, legacy) in current.iter().zip(&legacy) {
+            assert_eq!(current.row_index, legacy.row_index);
+            assert_eq!(current.column, legacy.column);
+            assert_eq!(current.note_type, legacy.note_type);
+            assert_eq!(
+                current.hold.as_ref().map(|hold| hold.end_row_index),
+                legacy.hold.as_ref().map(|hold| hold.end_row_index)
+            );
+        }
+    }
+
+    #[test]
     fn intelligent_insert_adds_middle_tap_between_matching_endpoints() {
         let timing = TimingData::from_segments(
             0.0,

@@ -188,7 +188,7 @@ fn overlay_display_entries(
     pane: &score_data::LeaderboardPane,
 ) -> Vec<score_data::LeaderboardEntry> {
     let entries = entries_with_local_self_state(runtime, pane);
-    score_data::prioritized_leaderboard_entries(entries.as_slice(), GS_LEADERBOARD_NUM_ENTRIES)
+    score_data::prioritized_leaderboard_entries(entries.as_ref(), GS_LEADERBOARD_NUM_ENTRIES)
 }
 
 pub fn show_leaderboard_overlay(
