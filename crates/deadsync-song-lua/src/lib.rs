@@ -34,10 +34,7 @@ mod top_screen;
 mod values;
 mod version;
 
-pub use actions::{
-    SongLuaFunctionActionInput, SongLuaFunctionActionPlan, function_action_plan,
-    read_actions_with_function_capture,
-};
+pub use actions::{SongLuaFunctionActionInput, read_actions_with_function_capture};
 pub use cmd::preprocess_lua_cmd_syntax;
 pub use compat::{SongLuaCompatCallbacks, install_default_stdlib_compat, install_stdlib_compat};
 pub use compile::{compile_song_lua_with_actors, compile_song_lua_with_default_host};

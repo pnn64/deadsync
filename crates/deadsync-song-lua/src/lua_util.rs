@@ -28,17 +28,17 @@ use crate::{
     column_offset_windows_from_samples, compile_song_runtime_delta_values,
     compile_song_runtime_values, create_chunk_env_proxy, create_life_record_table,
     crop_texture_rect, display_bpms_text, effect_clock_label, file_path_string,
-    format_rolling_number, function_action_plan, graph_display_body_size,
-    initial_chunk_environment, input_status_actor_text, is_song_lua_audio_path,
-    is_song_lua_image_path, is_song_lua_media_path, is_song_lua_video_path,
-    message_command_lists_have_listener, note_song_lua_side_effect,
-    offset_texture_rect as song_lua_offset_texture_rect, option_row_default_text,
-    overlay_eases_from_captures, overlay_state_after_blocks, overlay_text_align_label,
-    parse_color_text, parse_overlay_blend_mode, parse_overlay_effect_clock,
-    parse_overlay_effect_mode, parse_overlay_text_align, parse_overlay_text_glow_mode,
-    parse_sprite_sheet_dims, player_child_proxy_name, player_index_from_value, player_number_name,
-    preprocess_lua_cmd_syntax, push_unique_compile_detail, read_actions_with_function_capture,
-    read_boolish, read_f32, read_i32_value, read_song_lua_broadcasts, read_string, read_u32_value,
+    format_rolling_number, graph_display_body_size, initial_chunk_environment,
+    input_status_actor_text, is_song_lua_audio_path, is_song_lua_image_path,
+    is_song_lua_media_path, is_song_lua_video_path, message_command_lists_have_listener,
+    note_song_lua_side_effect, offset_texture_rect as song_lua_offset_texture_rect,
+    option_row_default_text, overlay_eases_from_captures, overlay_state_after_blocks,
+    overlay_text_align_label, parse_color_text, parse_overlay_blend_mode,
+    parse_overlay_effect_clock, parse_overlay_effect_mode, parse_overlay_text_align,
+    parse_overlay_text_glow_mode, parse_sprite_sheet_dims, player_child_proxy_name,
+    player_index_from_value, player_number_name, preprocess_lua_cmd_syntax,
+    push_unique_compile_detail, read_actions_with_function_capture, read_boolish, read_f32,
+    read_i32_value, read_song_lua_broadcasts, read_string, read_u32_value,
     record_unsupported_function_action_capture, register_loader_env, resolve_load_actor_path,
     resolve_script_path, rolling_numbers_format, scale_to_rect_plan, set_compile_song_runtime_beat,
     set_compile_song_runtime_values, set_string_method, song_lua_halign_value,
@@ -8736,28 +8736,58 @@ pub fn compile_overlay_compile_actor_function_action<Kind>(
         function,
         beat,
     )?;
-    let plan = function_action_plan(
-        beat,
-        persists,
-        *counter,
-        capture.overlay_blocks,
-        capture.tracked_blocks,
-        capture.broadcasts,
-        capture.saw_side_effect,
-        |message| overlay_compile_actors_have_message_listener(overlays, tracked_actors, message),
-    );
-    *counter = plan.next_counter;
-    for (overlay_index, command) in plan.overlay_commands {
-        overlays[overlay_index].actor.message_commands.push(command);
+    if !capture.broadcasts.is_empty()
+        && capture
+            .broadcasts
+            .iter()
+            .all(|(_, has_params)| !*has_params)
+    {
+        let mut handled = false;
+        for (message, _) in capture.broadcasts {
+            if overlay_compile_actors_have_message_listener(overlays, tracked_actors, &message) {
+                messages.push(SongLuaMessageEvent {
+                    beat,
+                    message,
+                    persists,
+                });
+                handled = true;
+            }
+        }
+        if handled {
+            return Ok(true);
+        }
     }
-    for (tracked_index, command) in plan.tracked_commands {
+
+    if capture.overlay_blocks.is_empty() && capture.tracked_blocks.is_empty() {
+        return Ok(capture.saw_side_effect);
+    }
+
+    let message = format!("__songlua_overlay_fn_action_{counter}");
+    *counter += 1;
+    for (overlay_index, blocks) in capture.overlay_blocks {
+        overlays[overlay_index]
+            .actor
+            .message_commands
+            .push(SongLuaOverlayMessageCommand {
+                message: message.clone(),
+                blocks,
+            });
+    }
+    for (tracked_index, blocks) in capture.tracked_blocks {
         tracked_actors[tracked_index]
             .actor
             .message_commands
-            .push(command);
+            .push(SongLuaOverlayMessageCommand {
+                message: message.clone(),
+                blocks,
+            });
     }
-    messages.extend(plan.messages);
-    Ok(plan.handled)
+    messages.push(SongLuaMessageEvent {
+        beat,
+        message,
+        persists,
+    });
+    Ok(true)
 }
 
 pub fn read_overlay_compile_actor_actions<Kind>(
