@@ -158,28 +158,51 @@ fn song_folder_name(song: &SongData) -> Option<&str> {
 /// roots and surrounding slashes are stripped. Returns `None` if the path
 /// doesn't have at least a pack and a song component.
 pub fn normalize_song_dir(dir: &str) -> Option<(String, String)> {
+    let mut parts = dir
+        .trim()
+        .split(['/', '\\'])
+        .map(str::trim)
+        .filter(|part| !part.is_empty());
+
+    let first = parts.next()?;
+    let pack =
+        if first.eq_ignore_ascii_case("Songs") || first.eq_ignore_ascii_case("AdditionalSongs") {
+            parts.next()?
+        } else {
+            first
+        };
+
+    let mut song = parts.next()?;
+    for part in parts {
+        song = part;
+    }
+    // The song folder is the last component; anything between pack and song is
+    // unusual but we key on the final folder which is what holds the simfile.
+    Some((pack.to_ascii_lowercase(), song.to_ascii_lowercase()))
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+pub fn normalize_song_dir_legacy_for_bench(dir: &str) -> Option<(String, String)> {
     let trimmed = dir.trim().replace('\\', "/");
     let mut parts: Vec<&str> = trimmed
         .split('/')
         .map(str::trim)
-        .filter(|s| !s.is_empty())
+        .filter(|part| !part.is_empty())
         .collect();
 
-    // Strip a leading song-root component if present.
-    if let Some(first) = parts.first() {
-        if first.eq_ignore_ascii_case("Songs") || first.eq_ignore_ascii_case("AdditionalSongs") {
-            parts.remove(0);
-        }
+    if let Some(first) = parts.first()
+        && (first.eq_ignore_ascii_case("Songs") || first.eq_ignore_ascii_case("AdditionalSongs"))
+    {
+        parts.remove(0);
     }
 
     if parts.len() < 2 {
         return None;
     }
-    let pack = parts[0].to_ascii_lowercase();
-    // The song folder is the last component; anything between pack and song is
-    // unusual but we key on the final folder which is what holds the simfile.
-    let song = parts[parts.len() - 1].to_ascii_lowercase();
-    Some((pack, song))
+    Some((
+        parts[0].to_ascii_lowercase(),
+        parts[parts.len() - 1].to_ascii_lowercase(),
+    ))
 }
 
 #[cfg(test)]
@@ -204,6 +227,14 @@ mod tests {
             normalize_song_dir("Songs\\Win Pack\\Win Song\\"),
             Some(("win pack".into(), "win song".into()))
         );
+        assert_eq!(
+            normalize_song_dir(" / SONGS // My Pack / Bonus / Cool Song / "),
+            Some(("my pack".into(), "cool song".into()))
+        );
+        assert_eq!(
+            normalize_song_dir("AdditionalSongs\\Pack / Nested\\Final Song"),
+            Some(("pack".into(), "final song".into()))
+        );
     }
 
     #[test]
@@ -211,6 +242,28 @@ mod tests {
         assert_eq!(normalize_song_dir("Songs/"), None);
         assert_eq!(normalize_song_dir("Songs/JustAPack/"), None);
         assert_eq!(normalize_song_dir(""), None);
+    }
+
+    #[test]
+    fn song_dir_normalization_matches_legacy_behavior() {
+        for dir in [
+            "Songs/My Pack/Cool Song/",
+            "AdditionalSongs/Pack/Song",
+            "Pack/Song/",
+            "Songs\\Win Pack\\Win Song\\",
+            " / SONGS // My Pack / Bonus / Cool Song / ",
+            "AdditionalSongs\\Pack / Nested\\Final Song",
+            "Songs/Ä Pack/Ö Song/",
+            "Songs/",
+            "Songs/JustAPack/",
+            "",
+        ] {
+            assert_eq!(
+                normalize_song_dir(dir),
+                normalize_song_dir_legacy_for_bench(dir),
+                "normalization changed for {dir:?}"
+            );
+        }
     }
 
     fn chart(diff: &str, desc: &str, name: &str, hash: &str) -> deadsync_chart::ChartData {

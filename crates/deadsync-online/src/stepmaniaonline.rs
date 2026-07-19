@@ -1,6 +1,6 @@
 use deadsync_net as network;
 use std::collections::HashSet;
-use std::fmt::{self, Display, Formatter};
+use std::fmt::{self, Display, Formatter, Write as _};
 use std::fs::{self, File, OpenOptions};
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
@@ -75,18 +75,16 @@ impl PackInfo {
         substyle: Option<String>,
         min_version: Option<String>,
     ) -> Self {
-        let normalized_name = name.to_lowercase();
-        let mut search_text = String::with_capacity(normalized_name.len() + 80);
-        search_text.push_str(normalized_name.as_str());
-        for value in [&sync, &pack_type, &substyle, &min_version]
-            .into_iter()
-            .flatten()
-        {
-            search_text.push(' ');
-            search_text.push_str(value.to_lowercase().as_str());
-        }
-        search_text.push(' ');
-        search_text.push_str(id.to_string().as_str());
+        let (normalized_name, search_text) = pack_search_index(
+            id,
+            name.as_str(),
+            [
+                sync.as_deref(),
+                pack_type.as_deref(),
+                substyle.as_deref(),
+                min_version.as_deref(),
+            ],
+        );
         Self {
             id,
             name,
@@ -100,6 +98,53 @@ impl PackInfo {
             search_text,
         }
     }
+}
+
+fn pack_search_index(id: u64, name: &str, metadata: [Option<&str>; 4]) -> (String, String) {
+    let normalized_name = name.to_lowercase();
+    let capacity = normalized_name.len()
+        + metadata
+            .iter()
+            .flatten()
+            .map(|value| value.len() + 1)
+            .sum::<usize>()
+        + 21;
+    let mut search_text = String::with_capacity(capacity);
+    search_text.push_str(normalized_name.as_str());
+    for value in metadata.into_iter().flatten() {
+        search_text.push(' ');
+        search_text.extend(value.chars().flat_map(char::to_lowercase));
+    }
+    search_text.push(' ');
+    write!(&mut search_text, "{id}").expect("writing to a String cannot fail");
+    (normalized_name, search_text)
+}
+
+#[cfg(feature = "bench-support")]
+pub fn pack_search_index_for_bench(
+    id: u64,
+    name: &str,
+    metadata: [Option<&str>; 4],
+) -> (String, String) {
+    pack_search_index(id, name, metadata)
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+pub fn pack_search_index_legacy_for_bench(
+    id: u64,
+    name: &str,
+    metadata: [Option<&str>; 4],
+) -> (String, String) {
+    let normalized_name = name.to_lowercase();
+    let mut search_text = String::with_capacity(normalized_name.len() + 80);
+    search_text.push_str(normalized_name.as_str());
+    for value in metadata.into_iter().flatten() {
+        search_text.push(' ');
+        search_text.push_str(value.to_lowercase().as_str());
+    }
+    search_text.push(' ');
+    search_text.push_str(id.to_string().as_str());
+    (normalized_name, search_text)
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -1173,6 +1218,29 @@ mod tests {
         assert_eq!(search_catalog(&catalog, "spectrum"), vec![1, 0, 2]);
         assert_eq!(search_catalog(&catalog, "other technical"), vec![2]);
         assert_eq!(search_catalog(&catalog, "   "), vec![0, 1, 2]);
+    }
+
+    #[test]
+    fn catalog_search_index_matches_legacy_unicode_lowercasing() {
+        let cases = [
+            (
+                42,
+                "Technical Spectrum",
+                [Some("9MS"), Some("PAD"), Some("TECH"), Some("StepMania 5")],
+            ),
+            (
+                u64::MAX,
+                "İstanbul Über Mix",
+                [Some("ÄSYNC"), None, Some("Σtyle"), None],
+            ),
+            (7, "Pack", [None, None, None, None]),
+        ];
+        for (id, name, metadata) in cases {
+            assert_eq!(
+                pack_search_index(id, name, metadata),
+                pack_search_index_legacy_for_bench(id, name, metadata)
+            );
+        }
     }
 
     #[test]

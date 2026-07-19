@@ -4,6 +4,14 @@ version = "0.1.0"
 edition = "2024"
 license = "GPL-3.0"
 
+[features]
+bench-support = []
+
+[[bench]]
+name = "song_dir_normalization"
+harness = false
+required-features = ["bench-support"]
+
 [dependencies]
 deadsync-chart = { path = "../deadsync-chart" }
 deadsync-profile = { path = "../deadsync-profile" }

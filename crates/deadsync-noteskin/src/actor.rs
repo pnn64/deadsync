@@ -213,6 +213,18 @@ pub fn is_lua_path(path: &Path) -> bool {
 }
 
 pub fn element_contains_hint(element: &str, hint: &str) -> bool {
+    let hint = hint.as_bytes();
+    if hint.is_empty() {
+        return true;
+    }
+    element
+        .as_bytes()
+        .windows(hint.len())
+        .any(|candidate| candidate.eq_ignore_ascii_case(hint))
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+pub fn element_contains_hint_legacy_for_bench(element: &str, hint: &str) -> bool {
     element
         .to_ascii_lowercase()
         .contains(&hint.to_ascii_lowercase())
@@ -1334,10 +1346,20 @@ return Def.ActorFrame .. {
 
     #[test]
     fn element_hint_matching_is_case_insensitive() {
-        assert!(element_contains_hint(
-            "Down Hold Explosion",
-            "hold explosion"
-        ));
-        assert!(!element_contains_hint("Down Tap Note", "hold explosion"));
+        let cases = [
+            ("Down Hold Explosion", "hold explosion", true),
+            ("Down Tap Note", "hold explosion", false),
+            ("ROLL EXPLOSION", "roll", true),
+            ("Down Hold Explosion", "", true),
+            ("", "hold", false),
+            ("Döwn Hold Explosion", "DÖWN", false),
+        ];
+        for (element, hint, expected) in cases {
+            assert_eq!(element_contains_hint(element, hint), expected);
+            assert_eq!(
+                element_contains_hint(element, hint),
+                element_contains_hint_legacy_for_bench(element, hint)
+            );
+        }
     }
 }
