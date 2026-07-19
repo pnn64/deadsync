@@ -74,10 +74,14 @@ pub struct MusicDecodeContext {
 /// A handle to a streaming music track.
 pub struct MusicStream {
     pub thread: thread::JoinHandle<MusicBlockWriter>,
-    pub stop_signal: Arc<AtomicBool>,
-    pub rate_bits: Arc<AtomicU32>,
-    pub preserve_pitch: Arc<AtomicBool>,
-    pub generation: Arc<std::sync::atomic::AtomicU64>,
+    control: Arc<MusicControl>,
+}
+
+struct MusicControl {
+    stop_signal: AtomicBool,
+    rate_bits: AtomicU32,
+    preserve_pitch: AtomicBool,
+    generation: AtomicU64,
 }
 
 pub fn snap_music_start_sec(path: &Path, start_sec: f64) -> f64 {
@@ -174,17 +178,18 @@ pub fn spawn_music_decoder_thread(
     path: PathBuf,
     cut: Cut,
     looping: bool,
-    rate_bits: Arc<AtomicU32>,
-    preserve_pitch: Arc<AtomicBool>,
+    rate: f32,
+    preserve_pitch: bool,
     writer: MusicBlockWriter,
     context: MusicDecodeContext,
 ) -> MusicStream {
-    let stop_signal = Arc::new(AtomicBool::new(false));
-    let stop_signal_clone = stop_signal.clone();
-    let rate_bits_clone = rate_bits.clone();
-    let preserve_pitch_clone = preserve_pitch.clone();
-    let generation = Arc::new(std::sync::atomic::AtomicU64::new(context.generation));
-    let generation_clone = generation.clone();
+    let control = Arc::new(MusicControl {
+        stop_signal: AtomicBool::new(false),
+        rate_bits: AtomicU32::new(rate.to_bits()),
+        preserve_pitch: AtomicBool::new(preserve_pitch),
+        generation: AtomicU64::new(context.generation),
+    });
+    let decoder_control = Arc::clone(&control);
 
     let thread = thread::spawn(move || {
         let mut writer = writer;
@@ -193,17 +198,7 @@ pub fn spawn_music_decoder_thread(
         let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             #[cfg(windows)]
             let _thread_policy = boost_current_thread(ThreadRole::AudioDecode);
-            music_decoder_thread_loop(
-                path,
-                cut,
-                looping,
-                rate_bits_clone,
-                preserve_pitch_clone,
-                generation_clone,
-                &mut writer,
-                stop_signal_clone,
-                context,
-            )
+            music_decoder_thread_loop(path, cut, looping, &decoder_control, &mut writer, context)
         }));
         match result {
             Ok(Ok(())) => {}
@@ -213,13 +208,7 @@ pub fn spawn_music_decoder_thread(
         writer
     });
 
-    MusicStream {
-        thread,
-        stop_signal,
-        rate_bits,
-        preserve_pitch,
-        generation,
-    }
+    MusicStream { thread, control }
 }
 
 #[inline]
@@ -342,18 +331,20 @@ mod tests {
     }
 }
 
-#[allow(clippy::too_many_arguments)]
 fn music_decoder_thread_loop(
     path: PathBuf,
     cut: Cut,
     looping: bool,
-    rate_bits: Arc<AtomicU32>,
-    preserve_pitch: Arc<AtomicBool>,
-    generation: Arc<std::sync::atomic::AtomicU64>,
+    control: &MusicControl,
     writer: &mut MusicBlockWriter,
-    stop: Arc<AtomicBool>,
     context: MusicDecodeContext,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let MusicControl {
+        stop_signal: stop,
+        rate_bits,
+        preserve_pitch,
+        generation,
+    } = control;
     let opened = decode::open_file(&path)?;
     let mut reader = opened.reader;
     let in_ch = opened.channels;
@@ -382,10 +373,10 @@ fn music_decoder_thread_loop(
                 writer,
                 silence_frames,
                 out_ch,
-                &generation,
+                generation,
                 cut.start_sec,
                 1.0 / f64::from(out_hz.max(1)),
-                &stop,
+                stop,
             )?;
         }
     }
@@ -684,8 +675,8 @@ fn music_decoder_thread_loop(
                                 music_start_sec: next_music_output_sec,
                                 music_sec_per_frame,
                             },
-                            &generation,
-                            &stop,
+                            generation,
+                            stop,
                         )?;
                     } else {
                         out_tmp.clear();
@@ -707,8 +698,8 @@ fn music_decoder_thread_loop(
                                 music_start_sec: next_music_output_sec,
                                 music_sec_per_frame,
                             },
-                            &generation,
-                            &stop,
+                            generation,
+                            stop,
                         )?;
                     }
                 }
@@ -795,8 +786,8 @@ fn music_decoder_thread_loop(
                             music_start_sec: next_music_output_sec,
                             music_sec_per_frame,
                         },
-                        &generation,
-                        &stop,
+                        generation,
+                        stop,
                     )?;
                 }
                 if finished {
@@ -886,8 +877,8 @@ fn music_decoder_thread_loop(
                                 music_start_sec: next_music_output_sec,
                                 music_sec_per_frame,
                             },
-                            &generation,
-                            &stop,
+                            generation,
+                            stop,
                         )?;
                     }
                 }
@@ -918,8 +909,8 @@ fn music_decoder_thread_loop(
                             music_start_sec: next_music_output_sec,
                             music_sec_per_frame,
                         },
-                        &generation,
-                        &stop,
+                        generation,
+                        stop,
                     )?;
                 }
             }

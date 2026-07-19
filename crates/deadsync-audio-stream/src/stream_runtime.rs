@@ -2,8 +2,7 @@ use crate::{MusicDecodeContext, MusicStream, OutputFormat};
 use deadsync_audio::{Cut, MusicBlockWriter, activate_music_track, stop_music_track};
 use log::error;
 use std::path::PathBuf;
-use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
+use std::sync::atomic::Ordering;
 
 pub enum StreamCommand {
     PlayMusic {
@@ -79,14 +78,12 @@ impl MusicStreamRuntime {
             stop_music_track();
             return;
         };
-        let rate_bits = Arc::new(AtomicU32::new(rate.to_bits()));
-        let preserve_pitch_bits = Arc::new(AtomicBool::new(preserve_pitch));
         self.music_stream = Some(crate::spawn_music_decoder_thread(
             path,
             cut,
             looping,
-            rate_bits,
-            preserve_pitch_bits,
+            rate,
+            preserve_pitch,
             writer,
             MusicDecodeContext {
                 output: self.output,
@@ -102,21 +99,23 @@ impl MusicStreamRuntime {
 
     fn set_rate(&mut self, rate: f32, generation: u64) {
         if let Some(stream) = &self.music_stream {
-            stream.rate_bits.store(rate.to_bits(), Ordering::Release);
-            stream.generation.store(generation, Ordering::Release);
+            let control = &stream.control;
+            control.rate_bits.store(rate.to_bits(), Ordering::Release);
+            control.generation.store(generation, Ordering::Release);
         }
     }
 
     fn set_preserve_pitch(&mut self, enabled: bool, generation: u64) {
         if let Some(stream) = &self.music_stream {
-            stream.preserve_pitch.store(enabled, Ordering::Release);
-            stream.generation.store(generation, Ordering::Release);
+            let control = &stream.control;
+            control.preserve_pitch.store(enabled, Ordering::Release);
+            control.generation.store(generation, Ordering::Release);
         }
     }
 
     fn stop_decoder(&mut self) {
         if let Some(old) = self.music_stream.take() {
-            old.stop_signal.store(true, Ordering::Relaxed);
+            old.control.stop_signal.store(true, Ordering::Relaxed);
             match old.thread.join() {
                 Ok(writer) => self.writer = Some(writer),
                 Err(_) => error!("Music decoder thread panicked; its transport writer was lost."),
