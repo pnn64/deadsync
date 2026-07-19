@@ -12,6 +12,11 @@ name = "element_hints"
 harness = false
 required-features = ["bench-support"]
 
+[[bench]]
+name = "compiled_entry_sort"
+harness = false
+required-features = ["bench-support"]
+
 [dependencies]
 bincode = "2.0.1"
 image = "0.25.10"

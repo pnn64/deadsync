@@ -1557,8 +1557,8 @@ pub fn is_itl_unlocks_pack(pack_dir: &str) -> bool {
 
 #[inline(always)]
 pub fn itl_group_name_matches(group_name: &str) -> bool {
-    let group = group_name.to_ascii_lowercase();
-    group.contains("itl online 2026") || group.contains("itl 2026")
+    contains_ignore_ascii_case(group_name, "itl online 2026")
+        || contains_ignore_ascii_case(group_name, "itl 2026")
 }
 
 pub fn itl_song_matches(
@@ -1604,7 +1604,7 @@ pub fn itl_score_for_song(
 
 pub fn itl_chart_no_cmod(subtitle: &str, prev: Option<&ItlHashEntry>) -> bool {
     prev.map_or_else(
-        || subtitle.to_ascii_lowercase().contains("no cmod"),
+        || contains_ignore_ascii_case(subtitle, "no cmod"),
         |data| data.no_cmod,
     )
 }
@@ -1617,11 +1617,40 @@ pub fn itl_event_name_from_group(group_name: Option<&str>) -> String {
 }
 
 pub fn itl_steps_type_from_chart_type(chart_type: &str) -> &'static str {
-    if chart_type.to_ascii_lowercase().contains("double") {
+    if contains_ignore_ascii_case(chart_type, "double") {
         "double"
     } else {
         "single"
     }
+}
+
+#[inline(always)]
+fn contains_ignore_ascii_case(haystack: &str, needle: &str) -> bool {
+    haystack
+        .as_bytes()
+        .windows(needle.len())
+        .any(|window| window.eq_ignore_ascii_case(needle.as_bytes()))
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+pub fn itl_classification_mask_for_bench(group_name: &str, subtitle: &str, chart_type: &str) -> u8 {
+    u8::from(itl_group_name_matches(group_name))
+        | (u8::from(itl_chart_no_cmod(subtitle, None)) << 1)
+        | (u8::from(itl_steps_type_from_chart_type(chart_type) == "double") << 2)
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+pub fn itl_classification_mask_legacy_for_bench(
+    group_name: &str,
+    subtitle: &str,
+    chart_type: &str,
+) -> u8 {
+    let group_name = group_name.to_ascii_lowercase();
+    let subtitle = subtitle.to_ascii_lowercase();
+    let chart_type = chart_type.to_ascii_lowercase();
+    u8::from(group_name.contains("itl online 2026") || group_name.contains("itl 2026"))
+        | (u8::from(subtitle.contains("no cmod")) << 1)
+        | (u8::from(chart_type.contains("double")) << 2)
 }
 
 #[inline(always)]
@@ -2868,6 +2897,25 @@ mod tests {
         assert_eq!(itl_event_name_from_group(None), "ITL Online 2026");
         assert_eq!(itl_steps_type_from_chart_type("dance-double"), "double");
         assert_eq!(itl_steps_type_from_chart_type("dance-single"), "single");
+    }
+
+    #[test]
+    fn itl_classification_matches_allocating_legacy_rules() {
+        let cases = [
+            ("ITL Online 2026", "(NO CMOD)", "dance-double"),
+            ("Some itl 2026 Folder", "", "DANCE-SINGLE"),
+            ("Custom Pack", "No marker", "pump-double"),
+            ("Prélude ITL ONLINE 2026", "No Cmod α", "DOUBLE-β"),
+            ("itl online 2025", "nocmod", "couple"),
+        ];
+
+        for (group_name, subtitle, chart_type) in cases {
+            assert_eq!(
+                itl_classification_mask_for_bench(group_name, subtitle, chart_type),
+                itl_classification_mask_legacy_for_bench(group_name, subtitle, chart_type),
+                "classification mismatch for {group_name:?}, {subtitle:?}, {chart_type:?}"
+            );
+        }
     }
 
     #[test]

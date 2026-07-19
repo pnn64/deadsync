@@ -640,7 +640,27 @@ fn compile_entries(
             out.push(read_entry(button, element, &actor)?);
         }
     }
-    out.sort_by(|left, right| {
+    sort_compiled_loader_entries(&mut out);
+    Ok(out)
+}
+
+fn sort_compiled_loader_entries(entries: &mut [CompiledLoaderEntry]) {
+    entries.sort_by_cached_key(|entry| {
+        (
+            entry.button.to_ascii_lowercase(),
+            entry.element.to_ascii_lowercase(),
+        )
+    });
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+pub fn sort_compiled_loader_entries_for_bench(entries: &mut [CompiledLoaderEntry]) {
+    sort_compiled_loader_entries(entries);
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+pub fn sort_compiled_loader_entries_legacy_for_bench(entries: &mut [CompiledLoaderEntry]) {
+    entries.sort_by(|left, right| {
         (
             left.button.to_ascii_lowercase(),
             left.element.to_ascii_lowercase(),
@@ -650,7 +670,6 @@ fn compile_entries(
                 right.element.to_ascii_lowercase(),
             ))
     });
-    Ok(out)
 }
 
 fn normalize_noteskin_tables(
@@ -846,7 +865,10 @@ fn read_entry(button: &str, element: &str, actor: &Table) -> Result<CompiledLoad
 
 #[cfg(test)]
 mod tests {
-    use super::{compiled_bundle_path, noteskin_actor, noteskin_compiled, noteskin_itg};
+    use super::{
+        compiled_bundle_path, noteskin_actor, noteskin_compiled, noteskin_itg,
+        sort_compiled_loader_entries_for_bench, sort_compiled_loader_entries_legacy_for_bench,
+    };
     use std::{
         ffi::OsStr,
         fs,
@@ -880,6 +902,42 @@ mod tests {
         assert!(
             path.components()
                 .all(|component| component.as_os_str() != OsStr::new(&version_dir))
+        );
+    }
+
+    #[test]
+    fn compiled_loader_entry_sort_matches_legacy_order() {
+        let entry =
+            |button: &str, element: &str, marker: &str| noteskin_compiled::CompiledLoaderEntry {
+                button: button.to_string(),
+                element: element.to_string(),
+                load_button: marker.to_string(),
+                load_element: String::new(),
+                blank: false,
+                rotation_z: None,
+                init_command: None,
+            };
+        let mut current = vec![
+            entry("RIGHT", "Tap Note", "first-right"),
+            entry("down", "Hold Body", "down-hold"),
+            entry("Right", "tap note", "second-right"),
+            entry("LEFT", "Receptor", "left-receptor"),
+            entry("Down", "Explosion", "down-explosion"),
+            entry("Üp", "Tap Note", "non-ascii"),
+        ];
+        let mut legacy = current.clone();
+
+        sort_compiled_loader_entries_for_bench(&mut current);
+        sort_compiled_loader_entries_legacy_for_bench(&mut legacy);
+
+        assert_eq!(current, legacy);
+        assert_eq!(
+            current
+                .iter()
+                .filter(|entry| entry.button.eq_ignore_ascii_case("right"))
+                .map(|entry| entry.load_button.as_str())
+                .collect::<Vec<_>>(),
+            ["first-right", "second-right"]
         );
     }
 

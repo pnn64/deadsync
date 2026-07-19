@@ -657,13 +657,13 @@ impl DynamicMedia {
         let stale_active = self
             .active_song_lua_videos
             .keys()
-            .filter(|key| !desired.contains(*key))
+            .filter(|key| !desired.contains(key.as_str()))
             .cloned()
             .collect::<Vec<_>>();
         let stale_failed = self
             .failed_song_lua_video_keys
             .iter()
-            .filter(|key| !desired.contains(*key))
+            .filter(|key| !desired.contains(key.as_str()))
             .cloned()
             .collect::<Vec<_>>();
 
@@ -682,13 +682,13 @@ impl DynamicMedia {
             if !dynamic::is_dynamic_video_path(path) {
                 continue;
             }
-            let key = path.to_string_lossy().into_owned();
-            if self.active_song_lua_videos.contains_key(&key)
-                || self.failed_song_lua_video_keys.contains(&key)
+            let key = path.to_string_lossy();
+            if self.active_song_lua_videos.contains_key(key.as_ref())
+                || self.failed_song_lua_video_keys.contains(key.as_ref())
             {
                 continue;
             }
-            match prepare_song_lua_video(path, !assets.has_texture_key(&key)) {
+            match prepare_song_lua_video(path, !assets.has_texture_key(key.as_ref())) {
                 SongLuaVideoPrepResult::Ready(prepared) => {
                     match prepared.poster {
                         Ok(Some(poster)) => {

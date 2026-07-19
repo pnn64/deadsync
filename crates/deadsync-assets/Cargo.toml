@@ -4,6 +4,14 @@ version = "0.1.0"
 edition = "2024"
 license = "GPL-3.0"
 
+[features]
+bench-support = []
+
+[[bench]]
+name = "dynamic_video_keys"
+harness = false
+required-features = ["bench-support"]
+
 [dependencies]
 deadlib-assets = { path = "../deadlib-assets" }
 deadlib-platform = { path = "../deadlib-platform" }
