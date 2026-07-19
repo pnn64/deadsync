@@ -241,6 +241,9 @@ pub use song_tables::{
     create_song_options_table, create_song_table, create_song_util_table, create_songman_table,
     create_steps_table, create_trail_table,
 };
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub use tables::prefsmgr_default_value_legacy_for_bench;
 pub use tables::{
     create_author_table, create_background_filter_values, create_branch_table,
     create_charman_table, create_credits_table, create_difficulty_table, create_display_bpms_table,

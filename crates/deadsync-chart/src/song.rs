@@ -306,9 +306,7 @@ impl SongData {
     /// title + subtitle so the tag is found regardless of which field carries
     /// it. Used by the player-options "No CMod alternative" auto-switch.
     pub fn is_no_cmod(&self) -> bool {
-        self.display_full_title(false)
-            .to_ascii_lowercase()
-            .contains("no cmod")
+        title_subtitle_contains_ignore_ascii_case(&self.title, &self.subtitle, "no cmod")
     }
 
     pub fn has_standard_difficulty(&self, chart_type: &str, difficulty_index: usize) -> bool {
@@ -605,6 +603,56 @@ impl SongData {
     }
 }
 
+#[inline]
+fn title_subtitle_contains_ignore_ascii_case(title: &str, subtitle: &str, needle: &str) -> bool {
+    let subtitle = (!subtitle.trim().is_empty()).then_some(subtitle);
+    let joined_len = title
+        .len()
+        .saturating_add(subtitle.map_or(0, |value| value.len().saturating_add(1)));
+    let needle = needle.as_bytes();
+    if needle.is_empty() {
+        return true;
+    }
+    if needle.len() > joined_len {
+        return false;
+    }
+
+    let title = title.as_bytes();
+    let subtitle = subtitle.map(str::as_bytes).unwrap_or_default();
+    (0..=joined_len - needle.len()).any(|start| {
+        needle.iter().enumerate().all(|(offset, expected)| {
+            let index = start + offset;
+            let actual = if index < title.len() {
+                title[index]
+            } else if index == title.len() {
+                b' '
+            } else {
+                subtitle[index - title.len() - 1]
+            };
+            actual.eq_ignore_ascii_case(expected)
+        })
+    })
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+#[doc(hidden)]
+#[inline(always)]
+pub fn title_subtitle_is_no_cmod_for_bench(title: &str, subtitle: &str) -> bool {
+    title_subtitle_contains_ignore_ascii_case(title, subtitle, "no cmod")
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+#[doc(hidden)]
+#[inline(always)]
+pub fn title_subtitle_is_no_cmod_legacy_for_bench(title: &str, subtitle: &str) -> bool {
+    let full_title = if subtitle.trim().is_empty() {
+        title.to_owned()
+    } else {
+        format!("{title} {subtitle}")
+    };
+    full_title.to_ascii_lowercase().contains("no cmod")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -718,6 +766,14 @@ mod tests {
         song.subtitle = "Mix".to_string();
         song.title = "Hard Song [No CMod]".to_string();
         assert!(song.is_no_cmod());
+
+        song.title = "Ends with no".to_string();
+        song.subtitle = "cMoD crossover".to_string();
+        assert!(song.is_no_cmod());
+
+        song.title = "NØ CMOD".to_string();
+        song.subtitle = "   ".to_string();
+        assert!(!song.is_no_cmod());
     }
 
     #[test]

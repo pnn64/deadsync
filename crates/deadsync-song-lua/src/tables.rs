@@ -1798,7 +1798,43 @@ pub fn prefsmgr_default_value(
     display_width: i32,
     display_height: i32,
 ) -> mlua::Result<Value> {
-    let lower = key.to_ascii_lowercase();
+    with_ascii_lowercase(key, |lower| {
+        prefsmgr_default_value_normalized(
+            lua,
+            lower,
+            global_offset_seconds,
+            display_aspect_ratio,
+            display_width,
+            display_height,
+        )
+    })
+}
+
+fn with_ascii_lowercase<R>(key: &str, use_normalized: impl FnOnce(&str) -> R) -> R {
+    const STACK_KEY_BYTES: usize = 128;
+
+    if !key.bytes().any(|byte| byte.is_ascii_uppercase()) {
+        return use_normalized(key);
+    }
+    if key.len() <= STACK_KEY_BYTES {
+        let mut normalized = [0u8; STACK_KEY_BYTES];
+        normalized[..key.len()].copy_from_slice(key.as_bytes());
+        normalized[..key.len()].make_ascii_lowercase();
+        let normalized = std::str::from_utf8(&normalized[..key.len()])
+            .expect("ASCII case folding preserves UTF-8");
+        return use_normalized(normalized);
+    }
+    use_normalized(&key.to_ascii_lowercase())
+}
+
+fn prefsmgr_default_value_normalized(
+    lua: &Lua,
+    lower: &str,
+    global_offset_seconds: f32,
+    display_aspect_ratio: f32,
+    display_width: i32,
+    display_height: i32,
+) -> mlua::Result<Value> {
     if lower == "globaloffsetseconds" {
         Ok(Value::Number(global_offset_seconds as f64))
     } else if lower == "displayaspectratio" {
@@ -1820,7 +1856,7 @@ pub fn prefsmgr_default_value(
     } else if lower.starts_with("timingwindowseconds") {
         Ok(Value::Number(0.0))
     } else if matches!(
-        lower.as_str(),
+        lower,
         "autogengroupcourses"
             | "center1player"
             | "eastereggs"
@@ -1835,7 +1871,7 @@ pub fn prefsmgr_default_value(
     ) {
         Ok(Value::Boolean(false))
     } else if matches!(
-        lower.as_str(),
+        lower,
         "coinspercredit"
             | "customsongsloadtimeout"
             | "customsongsmaxmegabytes"
@@ -1853,7 +1889,7 @@ pub fn prefsmgr_default_value(
             | "soundvolume"
             | "refreshrate"
     ) {
-        let value = match lower.as_str() {
+        let value = match lower {
             "longversongseconds" => 150,
             "marathonversongseconds" => 300,
             "refreshrate" => 60,
@@ -1863,7 +1899,7 @@ pub fn prefsmgr_default_value(
         };
         Ok(Value::Integer(value))
     } else if matches!(
-        lower.as_str(),
+        lower,
         "coinmode"
             | "defaultmodifiers"
             | "editornoteskinp1"
@@ -1874,7 +1910,7 @@ pub fn prefsmgr_default_value(
             | "httpallowhosts"
             | "premium"
     ) {
-        let value = match lower.as_str() {
+        let value = match lower {
             "coinmode" => "CoinMode_Free",
             "displaymode" => "Windowed",
             "displayresolution" => "1920x1080",
@@ -1891,6 +1927,26 @@ pub fn prefsmgr_default_value(
     } else {
         Ok(Value::Nil)
     }
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+#[doc(hidden)]
+pub fn prefsmgr_default_value_legacy_for_bench(
+    lua: &Lua,
+    key: &str,
+    global_offset_seconds: f32,
+    display_aspect_ratio: f32,
+    display_width: i32,
+    display_height: i32,
+) -> mlua::Result<Value> {
+    prefsmgr_default_value_normalized(
+        lua,
+        &key.to_ascii_lowercase(),
+        global_offset_seconds,
+        display_aspect_ratio,
+        display_width,
+        display_height,
+    )
 }
 
 pub fn set_path_methods(
@@ -2667,9 +2723,40 @@ mod tests {
         create_author_table, create_display_bpms_table, create_ex_judgment_counts,
         create_gameplay_layout, create_radar_values_table, create_range_table,
         create_single_value_array, create_song_group_table, create_split_table, create_style_table,
-        create_timing_table, display_bpms_for_args, lua_table_to_string, rotate_lua_table,
-        set_path_methods, set_string_method,
+        create_timing_table, display_bpms_for_args, lua_table_to_string, prefsmgr_default_value,
+        prefsmgr_default_value_legacy_for_bench, rotate_lua_table, set_path_methods,
+        set_string_method,
     };
+
+    #[test]
+    fn prefsmgr_defaults_preserve_case_insensitive_dispatch_and_long_key_fallback() {
+        let lua = Lua::new();
+        let long_key = "A".repeat(129);
+        for key in [
+            "globaloffsetseconds",
+            "GlobalOffsetSeconds",
+            "TIMINGWINDOWSECONDSW1",
+            "SongsPerPlay",
+            "unknown",
+            "ÄGLOBALOFFSETSECONDS",
+            long_key.as_str(),
+        ] {
+            let current = prefsmgr_default_value(&lua, key, 0.02, 16.0 / 9.0, 1280, 720).unwrap();
+            let legacy =
+                prefsmgr_default_value_legacy_for_bench(&lua, key, 0.02, 16.0 / 9.0, 1280, 720)
+                    .unwrap();
+            assert_eq!(
+                current.type_name(),
+                legacy.type_name(),
+                "type changed for {key:?}"
+            );
+            assert_eq!(
+                current.to_string().unwrap(),
+                legacy.to_string().unwrap(),
+                "value changed for {key:?}"
+            );
+        }
+    }
 
     #[test]
     fn split_table_handles_empty_separator() {

@@ -494,21 +494,58 @@ pub fn select_music_scorebox_filtered_panes(
 
 #[inline(always)]
 pub fn scorebox_pane_kind(pane: &LeaderboardPane) -> ScoreboxPaneKind {
+    if let Some(kind) = known_scorebox_pane_kind(pane) {
+        return kind;
+    }
+    if contains_ignore_ascii_case(&pane.name, "srpg")
+        || contains_ignore_ascii_case(&pane.name, "rpg")
+    {
+        ScoreboxPaneKind::Srpg
+    } else if contains_ignore_ascii_case(&pane.name, "itl") {
+        ScoreboxPaneKind::Itl
+    } else if pane.is_ex {
+        ScoreboxPaneKind::Ex
+    } else {
+        ScoreboxPaneKind::Other
+    }
+}
+
+fn known_scorebox_pane_kind(pane: &LeaderboardPane) -> Option<ScoreboxPaneKind> {
     if pane.is_arrowcloud() {
-        return if pane.is_hard_ex() {
+        Some(if pane.is_hard_ex() {
             ScoreboxPaneKind::HardEx
         } else if pane.is_ex {
             ScoreboxPaneKind::Ex
         } else {
             ScoreboxPaneKind::Gs
-        };
-    }
-    if pane.is_groovestats() {
-        return if pane.is_ex {
+        })
+    } else if pane.is_groovestats() {
+        Some(if pane.is_ex {
             ScoreboxPaneKind::Ex
         } else {
             ScoreboxPaneKind::Gs
-        };
+        })
+    } else {
+        None
+    }
+}
+
+#[inline]
+fn contains_ignore_ascii_case(haystack: &str, needle: &str) -> bool {
+    let needle = needle.as_bytes();
+    needle.is_empty()
+        || haystack
+            .as_bytes()
+            .windows(needle.len())
+            .any(|window| window.eq_ignore_ascii_case(needle))
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+#[doc(hidden)]
+#[inline(always)]
+pub fn scorebox_pane_kind_legacy_for_bench(pane: &LeaderboardPane) -> ScoreboxPaneKind {
+    if let Some(kind) = known_scorebox_pane_kind(pane) {
+        return kind;
     }
     let lower = pane.name.to_ascii_lowercase();
     if lower.contains("srpg") || lower.contains("rpg") {
@@ -1497,7 +1534,30 @@ mod tests {
 
         for (pane, kind, mode_text) in cases {
             assert_eq!(scorebox_pane_kind(&pane), kind);
+            assert_eq!(
+                scorebox_pane_kind(&pane),
+                scorebox_pane_kind_legacy_for_bench(&pane)
+            );
             assert_eq!(scorebox_pane_mode_text(kind, &pane), mode_text);
+        }
+    }
+
+    #[test]
+    fn scorebox_pane_kind_preserves_ascii_substring_behavior() {
+        for name in [
+            "pre-RpG-post",
+            "SRPG Event",
+            "ITL Online 2026",
+            "SŘPG Event",
+            "Custom Board",
+            "",
+        ] {
+            let pane = pane(name, false, None);
+            assert_eq!(
+                scorebox_pane_kind(&pane),
+                scorebox_pane_kind_legacy_for_bench(&pane),
+                "classification changed for {name:?}"
+            );
         }
     }
 

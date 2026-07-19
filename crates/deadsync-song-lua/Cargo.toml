@@ -4,6 +4,14 @@ version = "0.1.0"
 edition = "2024"
 license = "GPL-3.0"
 
+[features]
+bench-support = []
+
+[[bench]]
+name = "prefsmgr_defaults"
+harness = false
+required-features = ["bench-support"]
+
 [dependencies]
 deadlib-assets = { path = "../deadlib-assets" }
 deadlib-present = { path = "../deadlib-present" }
