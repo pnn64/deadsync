@@ -9,7 +9,6 @@ pub struct GameplayChartEntryPlan {
     pub charts: [Arc<ChartData>; MAX_PLAYERS],
     pub chart_indices: [usize; MAX_PLAYERS],
     pub resolved_steps_index: [usize; MAX_PLAYERS],
-    pub last_played_index: usize,
 }
 
 fn chart_index(song: &SongData, chart: &ChartData) -> usize {
@@ -62,12 +61,12 @@ pub fn gameplay_chart_entry_plan(
 ) -> GameplayChartEntryPlan {
     let chart_type = play_style.chart_type();
     let mut resolved_steps_index = requested_steps;
-    let (chart_indices, last_played_index) = match play_style {
+    let chart_indices = match play_style {
         PlayStyle::Versus => {
             let p1 = resolve_chart(song, chart_type, requested_steps[0], preferred_steps[0]);
             let p2 = resolve_chart(song, chart_type, requested_steps[1], preferred_steps[1]);
             resolved_steps_index = [p1.0, p2.0];
-            ([p1.1, p2.1], 0)
+            [p1.1, p2.1]
         }
         PlayStyle::Single | PlayStyle::Double => {
             let side = player_side_index(player_side);
@@ -78,16 +77,20 @@ pub fn gameplay_chart_entry_plan(
                 preferred_steps[side],
             );
             resolved_steps_index[side] = resolved.0;
-            ([resolved.1; MAX_PLAYERS], side)
+            [resolved.1; MAX_PLAYERS]
         }
     };
-    let charts = std::array::from_fn(|idx| Arc::new(song.charts[chart_indices[idx]].clone()));
+    let first = Arc::new(song.charts[chart_indices[0]].clone());
+    let second = if chart_indices[0] == chart_indices[1] {
+        Arc::clone(&first)
+    } else {
+        Arc::new(song.charts[chart_indices[1]].clone())
+    };
 
     GameplayChartEntryPlan {
-        charts,
+        charts: [first, second],
         chart_indices,
         resolved_steps_index,
-        last_played_index,
     }
 }
 
@@ -112,12 +115,13 @@ pub fn gameplay_last_played_commands(
             }
         }
         PlayStyle::Single | PlayStyle::Double => {
+            let index = player_side_index(player_side);
             commands.push(Command::UpdateLastPlayed {
                 side: player_side,
                 play_style,
                 music_path: song.music_path.clone(),
-                chart_hash: Some(plan.charts[plan.last_played_index].short_hash.clone()),
-                difficulty_index: preferred_steps[plan.last_played_index],
+                chart_hash: Some(plan.charts[index].short_hash.clone()),
+                difficulty_index: preferred_steps[index],
             });
         }
     }
@@ -238,9 +242,9 @@ mod tests {
 
         assert_eq!(plan.resolved_steps_index, [3, 4]);
         assert_eq!(plan.chart_indices, [1, 1]);
-        assert_eq!(plan.last_played_index, 1);
         assert_eq!(plan.charts[0].short_hash, "challenge");
         assert_eq!(plan.charts[1].short_hash, "challenge");
+        assert!(Arc::ptr_eq(&plan.charts[0], &plan.charts[1]));
         let commands = gameplay_last_played_commands(
             song().as_ref(),
             &plan,

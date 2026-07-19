@@ -6511,7 +6511,7 @@ impl App {
                 let charts = chart_plan.charts;
                 let chart_ixs = chart_plan.chart_indices;
                 let resolved_steps_index = chart_plan.resolved_steps_index;
-                let last_played_idx = chart_plan.last_played_index;
+                let last_played_idx = profile_data::player_side_index(player_side);
 
                 let cfg = config::get();
                 self.state.play_input_policy = InputRoutePolicy::from_config(&cfg);
@@ -6803,7 +6803,7 @@ impl App {
                 let charts = chart_plan.charts;
                 let chart_ixs = chart_plan.chart_indices;
                 let resolved_steps_index = chart_plan.resolved_steps_index;
-                let last_played_idx = chart_plan.last_played_index;
+                let last_played_idx = profile_data::player_side_index(player_side);
 
                 let gameplay_entry_started = Instant::now();
                 let cfg = config::get();
