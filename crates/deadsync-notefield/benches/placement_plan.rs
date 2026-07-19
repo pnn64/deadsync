@@ -90,7 +90,6 @@ struct BenchResult {
     alloc: AllocSnapshot,
     frame_ns: Vec<u64>,
     output: PlacementBenchFrame,
-    fixed_bytes: usize,
 }
 
 fn main() {
@@ -101,12 +100,11 @@ fn main() {
     println!("notefield placement microbenchmark");
     println!("dense four-lane chart, 120 Hz frame progression, {MEASURE_FRAMES} frames");
     print_result("old: 2 solves + repeats", &old);
-    print_result("new: 1 solve + plan", &new);
+    print_result("new: direct 1 solve", &new);
     println!(
-        "speedup {:.2}x | cycles reduction {:.1}% | fixed plan memory {:.1} KiB",
+        "speedup {:.2}x | cycles reduction {:.1}%",
         old.elapsed.as_secs_f64() / new.elapsed.as_secs_f64(),
         100.0 * (1.0 - new.cycles as f64 / old.cycles as f64),
-        new.fixed_bytes as f64 / 1024.0,
     );
 }
 
@@ -115,22 +113,18 @@ fn run_old() -> BenchResult {
     for frame in 0..WARMUP_FRAMES {
         black_box(bench.old_frame(frame));
     }
-    run(0, |frame| bench.old_frame(frame))
+    run(|frame| bench.old_frame(frame))
 }
 
 fn run_new() -> BenchResult {
-    let mut bench = PlacementBench::default();
+    let bench = PlacementBench::default();
     for frame in 0..WARMUP_FRAMES {
         black_box(bench.new_frame(frame));
     }
-    let fixed_bytes = bench.fixed_bytes();
-    let mut result = run(fixed_bytes, |frame| bench.new_frame(frame));
-    assert_eq!(bench.capacity_growths(), 0, "placement scratch grew");
-    result.fixed_bytes = fixed_bytes;
-    result
+    run(|frame| bench.new_frame(frame))
 }
 
-fn run(fixed_bytes: usize, mut frame_fn: impl FnMut(usize) -> PlacementBenchFrame) -> BenchResult {
+fn run(mut frame_fn: impl FnMut(usize) -> PlacementBenchFrame) -> BenchResult {
     let mut frame_ns = Vec::with_capacity(MEASURE_FRAMES);
     let before_alloc = ALLOC.snapshot();
     let before_cycles = read_cycles();
@@ -151,7 +145,6 @@ fn run(fixed_bytes: usize, mut frame_fn: impl FnMut(usize) -> PlacementBenchFram
         alloc: ALLOC.snapshot().delta(before_alloc),
         frame_ns,
         output,
-        fixed_bytes,
     }
 }
 
@@ -174,12 +167,8 @@ fn print_result(name: &str, result: &BenchResult) {
         samples.last().copied().unwrap_or_default(),
     );
     println!(
-        "{:<24} allocs={} reallocs={} bytes={} fixed={} bytes",
-        "memory",
-        result.alloc.allocs,
-        result.alloc.reallocs,
-        result.alloc.bytes,
-        result.fixed_bytes,
+        "{:<24} allocs={} reallocs={} bytes={}",
+        "memory", result.alloc.allocs, result.alloc.reallocs, result.alloc.bytes,
     );
 }
 

@@ -59,7 +59,6 @@ pub use mini_indicator::{
     zmod_resolved_combo_color, zmod_resolved_mini_indicator_mode, zmod_static_combo_color,
     zmod_stream_prog_completion_for_beat,
 };
-pub use note_placement::{NotefieldPlacementScratch, NotefieldPlacementScratchStats};
 #[cfg(feature = "bench-support")]
 #[doc(hidden)]
 pub use note_placement::{PlacementBench, PlacementBenchFrame};
@@ -103,7 +102,6 @@ pub(crate) use mini_indicator::{
     stream_segment_index_exclusive_end, zmod_broken_run_counter_text, zmod_broken_run_segment,
     zmod_measure_counter_text, zmod_run_timer_index,
 };
-pub(crate) use note_placement::{NotePlacement, NotefieldPlacementPlan};
 pub(crate) use notes::{
     MineLayerRequest, NoteLayerRequest, ScrollTravelRequest, compose_mine_layers,
     compose_note_layer, for_each_visible_hold_index, for_each_visible_note_index,

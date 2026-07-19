@@ -1,9 +1,8 @@
 use crate::{
     CapturedActorSource, HoldBodyCapRequest, HoldComposeControl, HoldEntryPlanRequest,
     HoldMeshScratch, HoldPathSample, MeasureComposeRequest, MeasureLineMode, MineLayerRequest,
-    ModelMeshCache, NoteAlphaParams, NoteLayerRequest, NotePlacement, NoteXParams,
-    NotefieldComposeRequest, NotefieldFeedbackFrameView, NotefieldPlacementPlan,
-    NotefieldPlacementScratch, PreparedNotefield, PreparedNotefieldNotes, TornadoBounds,
+    ModelMeshCache, NoteAlphaParams, NoteLayerRequest, NoteXParams, NotefieldComposeRequest,
+    NotefieldFeedbackFrameView, PreparedNotefield, PreparedNotefieldNotes, TornadoBounds,
     VisualEffectParams, appearance_note_actor_alpha, appearance_note_actor_alpha_from_alpha,
     appearance_note_alpha, appearance_note_glow, appearance_note_glow_from_alpha,
     compose_hold_body_caps, compose_measure_lines, compose_mine_layers, compose_note_layer,
@@ -50,7 +49,6 @@ pub fn compose_notefield_field<S, F>(
     cue_hud_actors: &mut Vec<Actor>,
     model_cache: &mut ModelMeshCache,
     hold_mesh_scratch: &mut HoldMeshScratch,
-    placement_scratch: &mut NotefieldPlacementScratch,
     request: &NotefieldComposeRequest<'_, S>,
     prepared: &PreparedNotefield<'_, S>,
     frame: &NotefieldFieldFrameView<'_>,
@@ -74,7 +72,6 @@ where
         cue_hud_actors,
         model_cache,
         hold_mesh_scratch,
-        placement_scratch,
         request,
         prepared,
         notes,
@@ -97,7 +94,6 @@ fn compose_field_contents<S, F>(
     cue_hud_actors: &mut Vec<Actor>,
     model_cache: &mut ModelMeshCache,
     hold_mesh_scratch: &mut HoldMeshScratch,
-    placement_scratch: &mut NotefieldPlacementScratch,
     request: &NotefieldComposeRequest<'_, S>,
     prepared: &PreparedNotefield<'_, S>,
     note_inputs: &PreparedNotefieldNotes<'_, S>,
@@ -213,16 +209,7 @@ fn compose_field_contents<S, F>(
             visual.bumpy_period,
         )
     };
-    let placement_plan = build_note_placement_plan(
-        placement_scratch,
-        request,
-        prepared,
-        note_inputs,
-        frame.completed_rows,
-        &lane_center_x_from_adjusted_travel,
-        &world_z_for_adjusted_travel,
-    );
-    let visible_row_range = placement_plan.visible_row_range;
+    let visible_row_range = crate::note_placement::expand_range(travel.visible_row_range());
 
     let measure_line_mode = if request.view.edit_beat_bars {
         MeasureLineMode::Edit
@@ -654,32 +641,59 @@ fn compose_field_contents<S, F>(
         request,
         prepared,
         note_inputs,
-        placement_plan,
+        frame.completed_rows,
+        visible_row_range,
         &scale_mine_slot,
         sprite_source,
     );
 }
 
 #[allow(clippy::too_many_arguments)]
-fn build_note_placement_plan<'a, S>(
-    scratch: &'a mut NotefieldPlacementScratch,
+fn compose_visible_notes<S, F>(
+    actors: &mut Vec<Actor>,
+    model_cache: &mut ModelMeshCache,
     request: &NotefieldComposeRequest<'_, S>,
     prepared: &PreparedNotefield<'_, S>,
     notes: &PreparedNotefieldNotes<'_, S>,
     completed_rows: CompletedRowVisibility<'_>,
-    lane_center_x: &impl Fn(usize, f32) -> f32,
-    world_z: &impl Fn(usize, f32) -> f32,
-) -> NotefieldPlacementPlan<'a> {
-    debug_assert!(u32::try_from(request.chart.notes.len()).is_ok());
-    let travel = &notes.travel;
-    let visible_row_range = scratch.begin_frame(travel);
-    let frame_plan = prepared.frame_plan;
-    let col_start = frame_plan.col_start;
-    let num_cols = frame_plan.num_cols;
-    let alpha_params = note_alpha_params(request.visual.appearance);
+    visible_row_range: Option<(i32, i32)>,
+    scale_mine_slot: &impl Fn(&S) -> [f32; 2],
+    sprite_source: &F,
+) where
+    S: NoteskinSlot,
+    F: Fn(&S) -> SpriteSource,
+{
+    let style = request.style;
     let elapsed = request.visual.elapsed_screen_s;
+    let visual = request.visual.visual;
+    let field_zoom = prepared.field_zoom;
+    let current_beat = prepared.current_beat;
+    let col_start = prepared.frame_plan.col_start;
+    let num_cols = prepared.frame_plan.num_cols;
+    let alpha_params = note_alpha_params(request.visual.appearance);
     let mini = prepared.mini;
+    let travel = &notes.travel;
+    let ns = notes.base;
+    let mine_ns = notes.mine;
+    let note_display_time = elapsed * notes.note_display_time_scale;
+    let mine_fill_phase = current_beat.rem_euclid(1.0);
+    let draw_hold_same_row = ns.note_display_metrics.draw_hold_head_for_taps_on_same_row;
+    let draw_roll_same_row = ns.note_display_metrics.draw_roll_head_for_taps_on_same_row;
+    let tap_same_row_means_hold = ns.note_display_metrics.tap_hold_roll_on_row_means_hold;
+    let note_rotation_y = 0.0_f32;
+    let flat_tap_face_rotation_y = 0.0_f32;
+    let prefer_sprite_note_path = false;
+
     for local_col in 0..num_cols {
+        let fill_slot = mine_ns.mines.get(local_col).and_then(|slot| slot.as_ref());
+        let fill_gradient_slot = mine_ns
+            .mine_fill_slots
+            .get(local_col)
+            .and_then(|slot| slot.as_ref());
+        let frame_slot = mine_ns
+            .mine_frames
+            .get(local_col)
+            .and_then(|slot| slot.as_ref());
         let col = col_start + local_col;
         let direction = prepared.field.column_dirs[local_col];
         let receptor_y = prepared.field.column_receptor_ys[local_col];
@@ -716,170 +730,139 @@ fn build_note_placement_plan<'a, S>(
                     mini,
                     alpha_params,
                 );
-                let actor_alpha = appearance_note_actor_alpha_from_alpha(percent_visible);
+                let note_alpha = appearance_note_actor_alpha_from_alpha(percent_visible);
                 let glow_alpha = appearance_note_glow_from_alpha(percent_visible);
-                if actor_alpha <= f32::EPSILON && glow_alpha <= f32::EPSILON {
+                if note_alpha <= f32::EPSILON && glow_alpha <= f32::EPSILON {
                     return;
                 }
-                scratch.push(NotePlacement {
-                    note_index: note_index as u32,
-                    local_col: local_col as u8,
+                let column_center_x = prepared.field.playfield_center_x
+                    + note_x_offset(
+                        request.geometry.screen_height,
+                        local_col,
+                        adjusted_travel,
+                        travel.arrow_effect_time_s(),
+                        notes.beat_factor,
+                        visual,
+                        &notes.col_offsets[..num_cols],
+                        &notes.invert_distances[..num_cols],
+                        &notes.tornado_bounds[..num_cols],
+                    );
+                let y_pos = receptor_y + direction * adjusted_travel + lane_offset;
+                let world_z = note_world_z_for_bumpy(
                     adjusted_travel,
-                    center: [
-                        lane_center_x(local_col, adjusted_travel),
-                        receptor_y + direction * adjusted_travel + lane_offset,
-                    ],
-                    actor_alpha,
-                    glow_alpha,
-                    world_z: world_z(local_col, adjusted_travel),
-                });
-            },
-        );
-    }
-    scratch.plan(visible_row_range)
-}
-
-#[allow(clippy::too_many_arguments)]
-fn compose_visible_notes<S, F>(
-    actors: &mut Vec<Actor>,
-    model_cache: &mut ModelMeshCache,
-    request: &NotefieldComposeRequest<'_, S>,
-    prepared: &PreparedNotefield<'_, S>,
-    notes: &PreparedNotefieldNotes<'_, S>,
-    placement_plan: NotefieldPlacementPlan<'_>,
-    scale_mine_slot: &impl Fn(&S) -> [f32; 2],
-    sprite_source: &F,
-) where
-    S: NoteskinSlot,
-    F: Fn(&S) -> SpriteSource,
-{
-    let style = request.style;
-    let elapsed = request.visual.elapsed_screen_s;
-    let visual = request.visual.visual;
-    let field_zoom = prepared.field_zoom;
-    let current_beat = prepared.current_beat;
-    let num_cols = prepared.frame_plan.num_cols;
-    let ns = notes.base;
-    let mine_ns = notes.mine;
-    let note_display_time = elapsed * notes.note_display_time_scale;
-    let mine_fill_phase = current_beat.rem_euclid(1.0);
-    let draw_hold_same_row = ns.note_display_metrics.draw_hold_head_for_taps_on_same_row;
-    let draw_roll_same_row = ns.note_display_metrics.draw_roll_head_for_taps_on_same_row;
-    let tap_same_row_means_hold = ns.note_display_metrics.tap_hold_roll_on_row_means_hold;
-    let note_rotation_y = 0.0_f32;
-    let flat_tap_face_rotation_y = 0.0_f32;
-    let prefer_sprite_note_path = false;
-
-    let mut placement_start = 0;
-    for local_col in 0..num_cols {
-        let fill_slot = mine_ns.mines.get(local_col).and_then(|slot| slot.as_ref());
-        let fill_gradient_slot = mine_ns
-            .mine_fill_slots
-            .get(local_col)
-            .and_then(|slot| slot.as_ref());
-        let frame_slot = mine_ns
-            .mine_frames
-            .get(local_col)
-            .and_then(|slot| slot.as_ref());
-        while placement_start < placement_plan.notes.len()
-            && usize::from(placement_plan.notes[placement_start].local_col) < local_col
-        {
-            placement_start += 1;
-        }
-        let mut placement_end = placement_start;
-        while placement_end < placement_plan.notes.len()
-            && usize::from(placement_plan.notes[placement_end].local_col) == local_col
-        {
-            placement_end += 1;
-        }
-        for placement in &placement_plan.notes[placement_start..placement_end] {
-            let note_index = placement.note_index as usize;
-            let note = &request.chart.notes[note_index];
-            let adjusted_travel = placement.adjusted_travel;
-            let [column_center_x, y_pos] = placement.center;
-            let note_alpha = placement.actor_alpha;
-            let glow_alpha = placement.glow_alpha;
-            let world_z = placement.world_z;
-            let effect_zoom = visual_arrow_effect_zoom(
-                adjusted_travel,
-                gameplay_visual_effect_params(&visual, local_col),
-            );
-            let note_scale = field_zoom * effect_zoom;
-            let target_arrow_px = notes.target_arrow_px * effect_zoom;
-            let scale_mine_for_note = |slot: &S| -> [f32; 2] {
-                let size = scale_mine_slot(slot);
-                [size[0] * effect_zoom, size[1] * effect_zoom]
-            };
-            let note_rotation_z =
-                calc_note_rotation_z(visual, note.beat, current_beat, false, local_col);
-
-            if matches!(note.note_type, NoteType::Mine) {
-                if fill_slot.is_none() && frame_slot.is_none() {
-                    continue;
-                }
-                let mine_uv_phase = mine_ns.tap_mine_uv_phase(elapsed, current_beat, note.beat);
-                let mine_translation = mine_ns.part_uv_translation(mine_part(), note.beat, false);
-                let circle_reference = frame_slot
-                    .map(&scale_mine_for_note)
-                    .or_else(|| fill_slot.map(&scale_mine_for_note))
-                    .unwrap_or([
-                        request.geometry.target_arrow_pixel_size * note_scale,
-                        request.geometry.target_arrow_pixel_size * note_scale,
-                    ]);
-                compose_mine_layers(
-                    actors,
-                    model_cache,
-                    MineLayerRequest {
-                        fill_slot,
-                        gradient_slot: fill_gradient_slot,
-                        frame_slot,
-                        gradient_size: [
-                            circle_reference[0] * style.actors.mine_core_size_ratio,
-                            circle_reference[1] * style.actors.mine_core_size_ratio,
-                        ],
-                        center: [column_center_x, y_pos],
-                        mine_uv_phase,
-                        mine_fill_phase,
-                        elapsed_s: elapsed,
-                        display_time_s: note_display_time,
-                        current_beat,
-                        uv_translation: mine_translation,
-                        rotation_y_deg: note_rotation_y,
-                        note_rotation_z_deg: note_rotation_z,
-                        alpha: note_alpha,
-                        glow_alpha,
-                        note_z: style.actors.note_z,
-                        world_z,
-                        prefer_sprite: prefer_sprite_note_path,
-                    },
-                    &scale_mine_for_note,
-                    sprite_source,
+                    gameplay_visual_effect_params(&visual, local_col).bumpy,
+                    visual.bumpy_offset,
+                    visual.bumpy_period,
                 );
-                continue;
-            }
+                let effect_zoom = visual_arrow_effect_zoom(
+                    adjusted_travel,
+                    gameplay_visual_effect_params(&visual, local_col),
+                );
+                let note_scale = field_zoom * effect_zoom;
+                let target_arrow_px = notes.target_arrow_px * effect_zoom;
+                let scale_mine_for_note = |slot: &S| -> [f32; 2] {
+                    let size = scale_mine_slot(slot);
+                    [size[0] * effect_zoom, size[1] * effect_zoom]
+                };
+                let note_rotation_z =
+                    calc_note_rotation_z(visual, note.beat, current_beat, false, local_col);
 
-            let tap_part = tap_part_for_note_type(note.note_type);
-            let tap_row_flags = request.chart.tap_row_flags(note_index);
-            if let Some(replacement) = tap_replacement_head(
-                note.note_type,
-                tap_row_flags & 0b01 != 0,
-                tap_row_flags & 0b10 != 0,
-                draw_hold_same_row,
-                draw_roll_same_row,
-                tap_same_row_means_hold,
-            ) {
-                let visuals = ns.hold_visuals_for_col(local_col, replacement.is_roll);
-                let part = replacement.part;
-                let phase = ns.part_uv_phase(part, elapsed, current_beat, note.beat);
-                let translation = ns.part_uv_translation(part, note.beat, false);
-                let center = [column_center_x, y_pos];
-                if let Some(head_slots) = visuals
-                    .head_inactive_layers
-                    .as_deref()
-                    .or(visuals.head_active_layers.as_deref())
-                {
-                    for head_slot in head_slots {
-                        compose_noteskin_layer(
+                if matches!(note.note_type, NoteType::Mine) {
+                    if fill_slot.is_none() && frame_slot.is_none() {
+                        return;
+                    }
+                    let mine_uv_phase = mine_ns.tap_mine_uv_phase(elapsed, current_beat, note.beat);
+                    let mine_translation =
+                        mine_ns.part_uv_translation(mine_part(), note.beat, false);
+                    let circle_reference = frame_slot
+                        .map(&scale_mine_for_note)
+                        .or_else(|| fill_slot.map(&scale_mine_for_note))
+                        .unwrap_or([
+                            request.geometry.target_arrow_pixel_size * note_scale,
+                            request.geometry.target_arrow_pixel_size * note_scale,
+                        ]);
+                    compose_mine_layers(
+                        actors,
+                        model_cache,
+                        MineLayerRequest {
+                            fill_slot,
+                            gradient_slot: fill_gradient_slot,
+                            frame_slot,
+                            gradient_size: [
+                                circle_reference[0] * style.actors.mine_core_size_ratio,
+                                circle_reference[1] * style.actors.mine_core_size_ratio,
+                            ],
+                            center: [column_center_x, y_pos],
+                            mine_uv_phase,
+                            mine_fill_phase,
+                            elapsed_s: elapsed,
+                            display_time_s: note_display_time,
+                            current_beat,
+                            uv_translation: mine_translation,
+                            rotation_y_deg: note_rotation_y,
+                            note_rotation_z_deg: note_rotation_z,
+                            alpha: note_alpha,
+                            glow_alpha,
+                            note_z: style.actors.note_z,
+                            world_z,
+                            prefer_sprite: prefer_sprite_note_path,
+                        },
+                        &scale_mine_for_note,
+                        sprite_source,
+                    );
+                    return;
+                }
+
+                let tap_part = tap_part_for_note_type(note.note_type);
+                let tap_row_flags = request.chart.tap_row_flags(note_index);
+                if let Some(replacement) = tap_replacement_head(
+                    note.note_type,
+                    tap_row_flags & 0b01 != 0,
+                    tap_row_flags & 0b10 != 0,
+                    draw_hold_same_row,
+                    draw_roll_same_row,
+                    tap_same_row_means_hold,
+                ) {
+                    let visuals = ns.hold_visuals_for_col(local_col, replacement.is_roll);
+                    let part = replacement.part;
+                    let phase = ns.part_uv_phase(part, elapsed, current_beat, note.beat);
+                    let translation = ns.part_uv_translation(part, note.beat, false);
+                    let center = [column_center_x, y_pos];
+                    if let Some(head_slots) = visuals
+                        .head_inactive_layers
+                        .as_deref()
+                        .or(visuals.head_active_layers.as_deref())
+                    {
+                        for head_slot in head_slots {
+                            compose_noteskin_layer(
+                                actors,
+                                model_cache,
+                                head_slot,
+                                center,
+                                note_scale,
+                                phase,
+                                translation,
+                                elapsed,
+                                current_beat,
+                                note_rotation_y,
+                                flat_tap_face_rotation_y,
+                                note_rotation_z,
+                                [1.0, 1.0, 1.0, note_alpha],
+                                glow_alpha,
+                                style.actors.note_z,
+                                world_z,
+                                prefer_sprite_note_path,
+                                sprite_source,
+                            );
+                        }
+                        return;
+                    }
+                    if let Some(head_slot) = visuals
+                        .head_inactive
+                        .as_ref()
+                        .or(visuals.head_active.as_ref())
+                    {
+                        compose_single_slot(
                             actors,
                             model_cache,
                             head_slot,
@@ -899,112 +882,84 @@ fn compose_visible_notes<S, F>(
                             prefer_sprite_note_path,
                             sprite_source,
                         );
+                        return;
                     }
-                    continue;
                 }
-                if let Some(head_slot) = visuals
-                    .head_inactive
-                    .as_ref()
-                    .or(visuals.head_active.as_ref())
-                {
-                    compose_single_slot(
-                        actors,
-                        model_cache,
-                        head_slot,
-                        center,
-                        note_scale,
-                        phase,
-                        translation,
-                        elapsed,
-                        current_beat,
-                        note_rotation_y,
-                        flat_tap_face_rotation_y,
-                        note_rotation_z,
-                        [1.0, 1.0, 1.0, note_alpha],
-                        glow_alpha,
-                        style.actors.note_z,
-                        world_z,
-                        prefer_sprite_note_path,
-                        sprite_source,
-                    );
-                    continue;
-                }
-            }
 
-            let note_idx = local_col * NUM_QUANTIZATIONS + note.quantization_idx as usize;
-            let translation = ns.part_uv_translation(tap_part, note.beat, false);
-            let lift_layers = (note.note_type == NoteType::Lift)
-                .then(|| ns.lift_note_layers.get(note_idx))
-                .flatten();
-            if let Some(note_slots) = lift_layers.or_else(|| ns.note_layers.get(note_idx)) {
-                let center = [column_center_x, y_pos];
-                let phase = ns.part_uv_phase(tap_part, elapsed, current_beat, note.beat);
-                for note_slot in note_slots.iter() {
-                    compose_noteskin_layer(
+                let note_idx = local_col * NUM_QUANTIZATIONS + note.quantization_idx as usize;
+                let translation = ns.part_uv_translation(tap_part, note.beat, false);
+                let lift_layers = (note.note_type == NoteType::Lift)
+                    .then(|| ns.lift_note_layers.get(note_idx))
+                    .flatten();
+                if let Some(note_slots) = lift_layers.or_else(|| ns.note_layers.get(note_idx)) {
+                    let center = [column_center_x, y_pos];
+                    let phase = ns.part_uv_phase(tap_part, elapsed, current_beat, note.beat);
+                    for note_slot in note_slots.iter() {
+                        compose_noteskin_layer(
+                            actors,
+                            model_cache,
+                            note_slot,
+                            center,
+                            note_scale,
+                            phase,
+                            translation,
+                            elapsed,
+                            current_beat,
+                            note_rotation_y,
+                            flat_tap_face_rotation_y,
+                            note_rotation_z,
+                            [1.0, 1.0, 1.0, note_alpha],
+                            glow_alpha,
+                            style.actors.note_z,
+                            world_z,
+                            prefer_sprite_note_path,
+                            sprite_source,
+                        );
+                    }
+                } else if let Some(note_slot) = ns.notes.get(note_idx) {
+                    let phase = ns.part_uv_phase(tap_part, elapsed, current_beat, note.beat);
+                    let frame_index = note_slot.frame_index_from_phase(phase);
+                    let uv_elapsed = if note_slot.model().is_some() {
+                        phase
+                    } else {
+                        elapsed
+                    };
+                    let uv = translated_uv_rect(
+                        note_slot.uv_for_frame_at(frame_index, uv_elapsed),
+                        translation,
+                    );
+                    let size = scale_sprite_to_arrow(note_slot.size(), target_arrow_px);
+                    let center = [column_center_x, y_pos];
+                    let draw = song_lua_note_model_draw(
+                        model_cache.draw_at(note_slot, elapsed, current_beat),
+                        note_rotation_y,
+                    );
+                    let rotation = -note_slot.sprite_def().rotation_deg as f32;
+                    compose_note_layer(
                         actors,
                         model_cache,
-                        note_slot,
-                        center,
-                        note_scale,
-                        phase,
-                        translation,
-                        elapsed,
-                        current_beat,
-                        note_rotation_y,
-                        flat_tap_face_rotation_y,
-                        note_rotation_z,
-                        [1.0, 1.0, 1.0, note_alpha],
-                        glow_alpha,
-                        style.actors.note_z,
-                        world_z,
-                        prefer_sprite_note_path,
+                        NoteLayerRequest {
+                            slot: note_slot,
+                            draw,
+                            model_center: center,
+                            sprite_center: center,
+                            size,
+                            uv,
+                            rotation_y_deg: flat_tap_face_rotation_y,
+                            model_rotation_z_deg: rotation + note_rotation_z,
+                            sprite_rotation_z_deg: rotation + note_rotation_z,
+                            tint: [1.0, 1.0, 1.0, note_alpha],
+                            glow_alpha,
+                            blend: BlendMode::Alpha,
+                            z: style.actors.note_z,
+                            world_z,
+                            prefer_sprite: prefer_sprite_note_path,
+                        },
                         sprite_source,
                     );
                 }
-            } else if let Some(note_slot) = ns.notes.get(note_idx) {
-                let phase = ns.part_uv_phase(tap_part, elapsed, current_beat, note.beat);
-                let frame_index = note_slot.frame_index_from_phase(phase);
-                let uv_elapsed = if note_slot.model().is_some() {
-                    phase
-                } else {
-                    elapsed
-                };
-                let uv = translated_uv_rect(
-                    note_slot.uv_for_frame_at(frame_index, uv_elapsed),
-                    translation,
-                );
-                let size = scale_sprite_to_arrow(note_slot.size(), target_arrow_px);
-                let center = [column_center_x, y_pos];
-                let draw = song_lua_note_model_draw(
-                    model_cache.draw_at(note_slot, elapsed, current_beat),
-                    note_rotation_y,
-                );
-                let rotation = -note_slot.sprite_def().rotation_deg as f32;
-                compose_note_layer(
-                    actors,
-                    model_cache,
-                    NoteLayerRequest {
-                        slot: note_slot,
-                        draw,
-                        model_center: center,
-                        sprite_center: center,
-                        size,
-                        uv,
-                        rotation_y_deg: flat_tap_face_rotation_y,
-                        model_rotation_z_deg: rotation + note_rotation_z,
-                        sprite_rotation_z_deg: rotation + note_rotation_z,
-                        tint: [1.0, 1.0, 1.0, note_alpha],
-                        glow_alpha,
-                        blend: BlendMode::Alpha,
-                        z: style.actors.note_z,
-                        world_z,
-                        prefer_sprite: prefer_sprite_note_path,
-                    },
-                    sprite_source,
-                );
-            }
-        }
-        placement_start = placement_end;
+            },
+        );
     }
 }
 

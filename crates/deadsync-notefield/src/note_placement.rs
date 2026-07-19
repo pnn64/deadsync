@@ -1,99 +1,8 @@
-use crate::ScrollTravel;
 use deadsync_core::timing::ROWS_PER_BEAT;
-use deadsync_rules::note::Note;
-use std::mem::size_of;
 
 const RANGE_GUARD_ROWS: i32 = ROWS_PER_BEAT * 4;
-const CAPACITY_WINDOW_BEATS: f32 = 48.0;
-const CAPACITY_MARGIN: usize = 128;
 
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
-pub(crate) struct NotePlacement {
-    pub note_index: u32,
-    pub local_col: u8,
-    pub adjusted_travel: f32,
-    pub center: [f32; 2],
-    pub actor_alpha: f32,
-    pub glow_alpha: f32,
-    pub world_z: f32,
-}
-
-#[derive(Clone, Copy, Debug)]
-pub(crate) struct NotefieldPlacementPlan<'a> {
-    pub visible_row_range: Option<(i32, i32)>,
-    pub notes: &'a [NotePlacement],
-}
-
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct NotefieldPlacementScratchStats {
-    pub full_range_solves: u64,
-    pub capacity_growths: u64,
-    pub max_placements: usize,
-}
-
-/// Song-lifetime storage for one player's per-frame note placement plan.
-///
-/// Owner/thread model: the gameplay presentation thread owns this value and
-/// accesses it through the theme's per-player `RefCell`; it is not thread-safe.
-/// Lifetime/capacity: one song, pre-sized from the densest 48-beat chart window
-/// plus a fixed safety margin. Warmup happens while gameplay `State` is built.
-/// A normal frame clears and refills the existing allocation. If malformed or
-/// extreme chart data exceeds the estimate, correctness wins: `Vec` grows once
-/// and `capacity_growths` records the miss. There is no eviction or pruning;
-/// memory is freed when gameplay state is dropped. The visible row range is
-/// solved once per frame and shared by tap and hold placement. It cannot be
-/// translated safely between frames because scroll and speed segments may make
-/// displayed row motion nonlinear or stationary.
-#[derive(Debug, Default)]
-pub struct NotefieldPlacementScratch {
-    placements: Vec<NotePlacement>,
-    stats: NotefieldPlacementScratchStats,
-}
-
-impl NotefieldPlacementScratch {
-    pub fn with_notes(notes: &[Note]) -> Self {
-        Self {
-            placements: Vec::with_capacity(placement_capacity(notes)),
-            stats: NotefieldPlacementScratchStats::default(),
-        }
-    }
-
-    pub fn stats(&self) -> NotefieldPlacementScratchStats {
-        self.stats
-    }
-
-    pub fn capacity(&self) -> usize {
-        self.placements.capacity()
-    }
-
-    pub fn fixed_bytes(&self) -> usize {
-        self.placements.capacity() * size_of::<NotePlacement>()
-    }
-
-    pub(crate) fn begin_frame(&mut self, travel: &ScrollTravel<'_>) -> Option<(i32, i32)> {
-        self.placements.clear();
-        let range = expand_range(travel.visible_row_range());
-        self.stats.full_range_solves += 1;
-        range
-    }
-
-    pub(crate) fn push(&mut self, placement: NotePlacement) {
-        if self.placements.len() == self.placements.capacity() {
-            self.stats.capacity_growths += 1;
-        }
-        self.placements.push(placement);
-        self.stats.max_placements = self.stats.max_placements.max(self.placements.len());
-    }
-
-    pub(crate) fn plan(&self, visible_row_range: Option<(i32, i32)>) -> NotefieldPlacementPlan<'_> {
-        NotefieldPlacementPlan {
-            visible_row_range,
-            notes: &self.placements,
-        }
-    }
-}
-
-fn expand_range(range: Option<(i32, i32)>) -> Option<(i32, i32)> {
+pub(crate) fn expand_range(range: Option<(i32, i32)>) -> Option<(i32, i32)> {
     range.map(|(low, high)| {
         (
             low.saturating_sub(RANGE_GUARD_ROWS),
@@ -102,27 +11,9 @@ fn expand_range(range: Option<(i32, i32)>) -> Option<(i32, i32)> {
     })
 }
 
-fn placement_capacity(notes: &[Note]) -> usize {
-    if notes.is_empty() {
-        return 0;
-    }
-    if notes.iter().any(|note| !note.beat.is_finite()) {
-        return notes.len();
-    }
-    let mut left = 0;
-    let mut densest = 0;
-    for right in 0..notes.len() {
-        while left < right && notes[right].beat - notes[left].beat > CAPACITY_WINDOW_BEATS {
-            left += 1;
-        }
-        densest = densest.max(right - left + 1);
-    }
-    densest.saturating_add(CAPACITY_MARGIN).min(notes.len())
-}
-
 #[cfg(feature = "bench-support")]
 mod bench {
-    use super::{NotePlacement, NotefieldPlacementScratch};
+    use super::expand_range;
     use crate::{
         AccelYParams, ScrollTravel, ScrollTravelRequest, appearance_note_actor_alpha,
         appearance_note_actor_alpha_from_alpha, appearance_note_alpha, appearance_note_glow,
@@ -151,7 +42,6 @@ mod bench {
         timing: TimingData,
         notes: Vec<Note>,
         lanes: [Vec<usize>; LANES],
-        scratch: NotefieldPlacementScratch,
     }
 
     impl Default for PlacementBench {
@@ -187,12 +77,10 @@ mod bench {
                     indices.push(note_index);
                 }
             }
-            let scratch = NotefieldPlacementScratch::with_notes(&notes);
             Self {
                 timing,
                 notes,
                 lanes,
-                scratch,
             }
         }
     }
@@ -235,9 +123,10 @@ mod bench {
             output
         }
 
-        pub fn new_frame(&mut self, frame: usize) -> PlacementBenchFrame {
+        pub fn new_frame(&self, frame: usize) -> PlacementBenchFrame {
             let travel = bench_travel(&self.timing, frame);
-            let range = self.scratch.begin_frame(&travel);
+            let range = expand_range(travel.visible_row_range());
+            let mut output = PlacementBenchFrame::default();
             for (local_col, indices) in self.lanes.iter().enumerate() {
                 for_each_visible_note_index(indices, &self.notes, range, |note_index| {
                     let note = &self.notes[note_index];
@@ -257,41 +146,18 @@ mod bench {
                     if actor_alpha <= f32::EPSILON && glow_alpha <= f32::EPSILON {
                         return;
                     }
-                    self.scratch.push(NotePlacement {
-                        note_index: note_index as u32,
-                        local_col: local_col as u8,
-                        adjusted_travel: adjusted,
-                        center: [
-                            320.0 + local_col as f32 * 64.0 + adjusted * 0.1,
-                            160.0 + adjusted + lane_offset,
-                        ],
+                    add_output(
+                        &mut output,
+                        note_index,
+                        adjusted,
+                        320.0 + local_col as f32 * 64.0 + adjusted * 0.1,
+                        160.0 + adjusted + lane_offset,
                         actor_alpha,
                         glow_alpha,
-                        world_z: 0.0,
-                    });
+                    );
                 });
             }
-            let mut output = PlacementBenchFrame::default();
-            for note in self.scratch.plan(range).notes {
-                add_output(
-                    &mut output,
-                    note.note_index as usize,
-                    note.adjusted_travel,
-                    note.center[0],
-                    note.center[1],
-                    note.actor_alpha,
-                    note.glow_alpha,
-                );
-            }
             output
-        }
-
-        pub fn fixed_bytes(&self) -> usize {
-            self.scratch.fixed_bytes()
-        }
-
-        pub fn capacity_growths(&self) -> u64 {
-            self.scratch.stats().capacity_growths
         }
     }
 
@@ -370,14 +236,13 @@ mod bench {
         use super::{PlacementBench, SONG_FRAMES};
 
         #[test]
-        fn old_and_planned_frames_are_bit_exact_for_full_song_sweep() {
-            let mut bench = PlacementBench::default();
+        fn old_and_direct_frames_are_bit_exact_for_full_song_sweep() {
+            let bench = PlacementBench::default();
             for frame in 0..SONG_FRAMES {
                 let old = bench.old_frame(frame);
                 let new = bench.new_frame(frame);
                 assert_eq!(new, old, "frame {frame}");
             }
-            assert_eq!(bench.capacity_growths(), 0);
         }
     }
 }
@@ -387,29 +252,11 @@ pub use bench::{PlacementBench, PlacementBenchFrame};
 
 #[cfg(test)]
 mod tests {
-    use super::{NotefieldPlacementScratch, RANGE_GUARD_ROWS, expand_range, placement_capacity};
+    use super::{RANGE_GUARD_ROWS, expand_range};
     use crate::{AccelYParams, ScrollTravelRequest, scroll_travel};
-    use deadsync_core::note::NoteType;
     use deadsync_core::song_time::song_time_ns_add_seconds;
-    use deadsync_rules::note::Note;
     use deadsync_rules::scroll::ScrollSpeedSetting;
     use deadsync_rules::timing::{ScrollSegment, TimingData, TimingSegments};
-
-    fn note(beat: f32) -> Note {
-        Note {
-            beat,
-            row_index: 0,
-            column: 0,
-            note_type: NoteType::Tap,
-            quantization_idx: 0,
-            result: None,
-            early_result: None,
-            mine_result: None,
-            hold: None,
-            is_fake: false,
-            can_be_judged: true,
-        }
-    }
 
     #[test]
     fn range_expansion_is_saturating() {
@@ -421,14 +268,6 @@ mod tests {
             expand_range(Some((100, 200))),
             Some((100 - RANGE_GUARD_ROWS, 200 + RANGE_GUARD_ROWS))
         );
-    }
-
-    #[test]
-    fn capacity_tracks_dense_window_and_caps_at_chart_size() {
-        let sparse: Vec<_> = (0..300).map(|i| note(i as f32)).collect();
-        assert!(placement_capacity(&sparse) < sparse.len());
-        let dense: Vec<_> = (0..100).map(|i| note(i as f32 / 100.0)).collect();
-        assert_eq!(placement_capacity(&dense), dense.len());
     }
 
     fn travel<'a>(
@@ -463,7 +302,7 @@ mod tests {
     }
 
     #[test]
-    fn opening_note_stays_planned_during_zero_scroll_lead_in() {
+    fn opening_note_stays_in_expanded_range_during_zero_scroll_lead_in() {
         let timing = TimingData::from_segments(
             0.0,
             0.0,
@@ -483,7 +322,6 @@ mod tests {
             },
             &[],
         );
-        let mut scratch = NotefieldPlacementScratch::with_notes(&[]);
         let start = timing.get_time_for_beat_ns(-12.0);
         for frame in 0..600 {
             let elapsed = frame as f32 / 120.0;
@@ -500,12 +338,11 @@ mod tests {
                 exact.0 <= 0 && exact.1 >= 0,
                 "opening row should remain visible at frame {frame}: {exact:?}"
             );
-            let planned = scratch.begin_frame(&travel).expect("planned range");
+            let expanded = expand_range(Some(exact)).expect("expanded range");
             assert!(
-                planned.0 <= 0 && planned.1 >= 0,
-                "opening row fell out of the plan at frame {frame}: {planned:?}"
+                expanded.0 <= 0 && expanded.1 >= 0,
+                "opening row fell out of the expanded range at frame {frame}: {expanded:?}"
             );
         }
-        assert_eq!(scratch.stats().full_range_solves, 600);
     }
 }

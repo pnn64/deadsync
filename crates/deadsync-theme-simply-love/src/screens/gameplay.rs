@@ -55,7 +55,7 @@ use deadsync_gameplay::{
 use deadsync_input::{InputEvent, VirtualAction};
 use deadsync_notefield::{
     CapturedActorSource, FieldPlacement, HoldMeshScratch, ModelMeshCache, ModelMeshCacheStats,
-    NotefieldPlacementScratch, ProxyCaptureRequests, SongLuaPlayerTransformRequest, ViewOverride,
+    ProxyCaptureRequests, SongLuaPlayerTransformRequest, ViewOverride,
     noteskin_model_actor_from_draw, song_lua_player_skew_x_matrix, song_lua_player_skew_y_matrix,
     song_lua_player_transform_matrix, song_lua_player_y_fold_actor,
 };
@@ -549,7 +549,6 @@ pub struct State {
     pub(crate) pack_banner_key: Option<Arc<str>>,
     pub(crate) notefield_model_cache: [RefCell<ModelMeshCache>; MAX_PLAYERS],
     pub(crate) notefield_hold_mesh_scratch: [RefCell<HoldMeshScratch>; MAX_PLAYERS],
-    pub(crate) notefield_placement_scratch: [RefCell<NotefieldPlacementScratch>; MAX_PLAYERS],
     pub background_path_dirty: bool,
     pub background_changes: Vec<SongBackgroundChange>,
     pub next_background_change_ix: usize,
@@ -711,15 +710,6 @@ impl State {
             let columns = usize::from(player < gameplay.num_players()) * gameplay.cols_per_player();
             RefCell::new(HoldMeshScratch::with_columns(columns))
         });
-        let notefield_placement_scratch = std::array::from_fn(|player| {
-            let notes = if player < gameplay.num_players() {
-                let (start, end) = gameplay.note_range_for_player(player);
-                gameplay.notes().get(start..end).unwrap_or_default()
-            } else {
-                &[]
-            };
-            RefCell::new(NotefieldPlacementScratch::with_notes(notes))
-        });
         let actor_resources = ActorResourceArena::default();
         notefield::prewarm_actor_resources(
             &actor_resources,
@@ -772,7 +762,6 @@ impl State {
             pack_banner_key,
             notefield_model_cache,
             notefield_hold_mesh_scratch,
-            notefield_placement_scratch,
             background_path_dirty: true,
             background_changes,
             next_background_change_ix,
@@ -9466,7 +9455,6 @@ pub fn push_actors(
                 state.actor_resources(),
                 &state.notefield_model_cache,
                 &state.notefield_hold_mesh_scratch,
-                &state.notefield_placement_scratch,
                 profile,
                 placement,
                 play_style,
