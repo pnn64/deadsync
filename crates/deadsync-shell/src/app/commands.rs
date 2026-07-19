@@ -1,13 +1,15 @@
 use super::App;
 use crate::command::{
     BannerSlot, Command, DeferredCommandEffect, DeferredCommandResourceContext,
-    DeferredCommandRootEffect, apply_deferred_command_process_plan, deferred_command_apply_plan,
     execute_command_resources, log_command_timing_for_screen,
 };
 use deadsync_config::prelude as config;
 use deadsync_theme_simply_love::views::SimplyLoveDensityGraphSlot as DensityGraphSlot;
+use log::warn;
 use std::error::Error;
 use winit::event_loop::ActiveEventLoop;
+
+const WHITE_GRAPH_KEY: &str = "__white";
 
 impl App {
     pub(super) fn run_commands(
@@ -74,15 +76,22 @@ impl App {
         effect: DeferredCommandEffect,
         event_loop: Option<&ActiveEventLoop>,
     ) {
-        let plan = deferred_command_apply_plan(effect);
-        if apply_deferred_command_process_plan(plan.process) {
-            if let Some(event_loop) = event_loop {
-                event_loop.exit();
+        match effect {
+            DeferredCommandEffect::None => {}
+            DeferredCommandEffect::ExitNow => {
+                if let Some(event_loop) = event_loop {
+                    event_loop.exit();
+                }
             }
-        }
-        match plan.root_effect {
-            DeferredCommandRootEffect::None => {}
-            DeferredCommandRootEffect::Banner { slot, key } => match slot {
+            DeferredCommandEffect::Shutdown => {
+                if let Err(e) = deadlib_platform::power::shutdown_host() {
+                    warn!("host shutdown failed; exiting application only: {e}");
+                }
+                if let Some(event_loop) = event_loop {
+                    event_loop.exit();
+                }
+            }
+            DeferredCommandEffect::Banner { slot, key } => match slot {
                 BannerSlot::SelectCourse => {
                     self.state.screens.select_course_state.current_banner_key = key;
                 }
@@ -90,48 +99,36 @@ impl App {
                     self.state.screens.select_music_state.current_banner_key = key;
                 }
             },
-            DeferredCommandRootEffect::CdTitle(key) => {
+            DeferredCommandEffect::CdTitle(key) => {
                 self.state.screens.select_music_state.current_cdtitle_key = key;
             }
-            DeferredCommandRootEffect::DensityGraph {
-                slot,
-                mesh,
-                graph_key,
-            } => match slot {
+            DeferredCommandEffect::DensityGraph { slot, mesh } => match slot {
                 DensityGraphSlot::SelectMusicP1 => {
                     self.state.screens.select_music_state.current_graph_mesh = mesh;
-                    self.state.screens.select_music_state.current_graph_key = graph_key.to_string();
+                    self.state.screens.select_music_state.current_graph_key =
+                        WHITE_GRAPH_KEY.to_string();
                 }
                 DensityGraphSlot::SelectMusicP2 => {
                     self.state.screens.select_music_state.current_graph_mesh_p2 = mesh;
                     self.state.screens.select_music_state.current_graph_key_p2 =
-                        graph_key.to_string();
+                        WHITE_GRAPH_KEY.to_string();
                 }
             },
-            DeferredCommandRootEffect::DynamicBackground {
-                media,
-                update_gameplay,
-                update_practice,
-                preserve_dirty,
-            } => {
-                if update_gameplay && let Some(gs) = &mut self.state.screens.gameplay_state {
+            DeferredCommandEffect::DynamicBackground(media) => {
+                if let Some(gs) = &mut self.state.screens.gameplay_state {
                     let was_dirty = gs.background_path_dirty;
                     gs.current_background_path = media.path.clone();
                     gs.current_background_key = media.path_key.clone();
                     gs.background_allow_video = media.allow_video;
-                    if preserve_dirty {
-                        gs.background_path_dirty = was_dirty;
-                    }
+                    gs.background_path_dirty = was_dirty;
                     gs.background_texture_key = media.texture_key.clone();
                 }
-                if update_practice && let Some(ps) = &mut self.state.screens.practice_state {
+                if let Some(ps) = &mut self.state.screens.practice_state {
                     let was_dirty = ps.gameplay.background_path_dirty;
                     ps.gameplay.current_background_path = media.path;
                     ps.gameplay.current_background_key = media.path_key;
                     ps.gameplay.background_allow_video = media.allow_video;
-                    if preserve_dirty {
-                        ps.gameplay.background_path_dirty = was_dirty;
-                    }
+                    ps.gameplay.background_path_dirty = was_dirty;
                     ps.gameplay.background_texture_key = media.texture_key;
                 }
             }

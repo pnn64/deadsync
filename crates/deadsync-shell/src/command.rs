@@ -17,8 +17,6 @@ use std::time::Instant;
 use crate::SessionState;
 use crate::dynamic_media::DynamicMedia;
 
-pub const WHITE_GRAPH_KEY: &str = "__white";
-
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum BannerSlot {
     SelectMusic,
@@ -97,31 +95,6 @@ pub enum DeferredCommandEffect {
     DynamicBackground(DynamicBackgroundMediaResult),
 }
 
-pub enum DeferredCommandRootEffect {
-    None,
-    Banner {
-        slot: BannerSlot,
-        key: String,
-    },
-    CdTitle(Option<String>),
-    DensityGraph {
-        slot: DensityGraphSlot,
-        mesh: Option<Arc<[MeshVertex]>>,
-        graph_key: &'static str,
-    },
-    DynamicBackground {
-        media: DynamicBackgroundMediaResult,
-        update_gameplay: bool,
-        update_practice: bool,
-        preserve_dirty: bool,
-    },
-}
-
-pub struct DeferredCommandApplyPlan {
-    pub process: DeferredCommandProcessPlan,
-    pub root_effect: DeferredCommandRootEffect,
-}
-
 pub struct CommandTimingResult {
     #[cfg(test)]
     pub kind: CommandKind,
@@ -133,75 +106,6 @@ pub struct CommandTimingResult {
 pub struct CommandExecutionResult {
     pub effect: DeferredCommandEffect,
     pub timing: CommandTimingResult,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum DeferredCommandProcessPlan {
-    Continue,
-    ExitNow,
-    Shutdown,
-}
-
-pub fn deferred_command_process_plan(effect: &DeferredCommandEffect) -> DeferredCommandProcessPlan {
-    match effect {
-        DeferredCommandEffect::ExitNow => DeferredCommandProcessPlan::ExitNow,
-        DeferredCommandEffect::Shutdown => DeferredCommandProcessPlan::Shutdown,
-        _ => DeferredCommandProcessPlan::Continue,
-    }
-}
-
-pub fn apply_deferred_command_process_plan(plan: DeferredCommandProcessPlan) -> bool {
-    match plan {
-        DeferredCommandProcessPlan::Continue => false,
-        DeferredCommandProcessPlan::ExitNow => true,
-        DeferredCommandProcessPlan::Shutdown => {
-            if let Err(e) = deadlib_platform::power::shutdown_host() {
-                warn!("host shutdown failed; exiting application only: {e}");
-            }
-            true
-        }
-    }
-}
-
-pub fn deferred_command_apply_plan(effect: DeferredCommandEffect) -> DeferredCommandApplyPlan {
-    let process = deferred_command_process_plan(&effect);
-    if process != DeferredCommandProcessPlan::Continue {
-        return DeferredCommandApplyPlan {
-            process,
-            root_effect: DeferredCommandRootEffect::None,
-        };
-    }
-
-    let root_effect = match effect {
-        DeferredCommandEffect::None => DeferredCommandRootEffect::None,
-        DeferredCommandEffect::ExitNow | DeferredCommandEffect::Shutdown => {
-            DeferredCommandRootEffect::None
-        }
-        DeferredCommandEffect::Banner { slot, key } => {
-            DeferredCommandRootEffect::Banner { slot, key }
-        }
-        DeferredCommandEffect::CdTitle(key) => DeferredCommandRootEffect::CdTitle(key),
-        DeferredCommandEffect::DensityGraph { slot, mesh } => {
-            DeferredCommandRootEffect::DensityGraph {
-                slot,
-                mesh,
-                graph_key: WHITE_GRAPH_KEY,
-            }
-        }
-        DeferredCommandEffect::DynamicBackground(media) => {
-            DeferredCommandRootEffect::DynamicBackground {
-                media,
-                update_gameplay: true,
-                update_practice: true,
-                preserve_dirty: true,
-            }
-        }
-    };
-
-    DeferredCommandApplyPlan {
-        process,
-        root_effect,
-    }
 }
 
 pub fn apply_banner_media(
@@ -757,72 +661,6 @@ mod tests {
                 context,
             ),
             DeferredCommandEffect::Shutdown
-        ));
-    }
-
-    #[test]
-    fn deferred_process_plan_is_pure_before_side_effects() {
-        assert_eq!(
-            deferred_command_process_plan(&DeferredCommandEffect::None),
-            DeferredCommandProcessPlan::Continue,
-        );
-        assert_eq!(
-            deferred_command_process_plan(&DeferredCommandEffect::ExitNow),
-            DeferredCommandProcessPlan::ExitNow,
-        );
-        assert_eq!(
-            deferred_command_process_plan(&DeferredCommandEffect::Shutdown),
-            DeferredCommandProcessPlan::Shutdown,
-        );
-        assert!(!apply_deferred_command_process_plan(
-            DeferredCommandProcessPlan::Continue
-        ));
-    }
-
-    #[test]
-    fn deferred_apply_plan_routes_process_effects_without_root_mutation() {
-        let plan = deferred_command_apply_plan(DeferredCommandEffect::ExitNow);
-        assert_eq!(plan.process, DeferredCommandProcessPlan::ExitNow);
-        assert!(matches!(plan.root_effect, DeferredCommandRootEffect::None));
-
-        let plan = deferred_command_apply_plan(DeferredCommandEffect::Shutdown);
-        assert_eq!(plan.process, DeferredCommandProcessPlan::Shutdown);
-        assert!(matches!(plan.root_effect, DeferredCommandRootEffect::None));
-    }
-
-    #[test]
-    fn deferred_apply_plan_captures_graph_and_background_policy() {
-        let graph = deferred_command_apply_plan(DeferredCommandEffect::DensityGraph {
-            slot: DensityGraphSlot::SelectMusicP2,
-            mesh: None,
-        });
-        assert_eq!(graph.process, DeferredCommandProcessPlan::Continue);
-        assert!(matches!(
-            graph.root_effect,
-            DeferredCommandRootEffect::DensityGraph {
-                slot: DensityGraphSlot::SelectMusicP2,
-                mesh: None,
-                graph_key: WHITE_GRAPH_KEY,
-            }
-        ));
-
-        let background = deferred_command_apply_plan(DeferredCommandEffect::DynamicBackground(
-            DynamicBackgroundMediaResult {
-                path: Some("background.png".into()),
-                path_key: Some(Arc::<str>::from("background-key")),
-                texture_key: Arc::<str>::from("texture-key"),
-                allow_video: true,
-            },
-        ));
-        assert_eq!(background.process, DeferredCommandProcessPlan::Continue);
-        assert!(matches!(
-            background.root_effect,
-            DeferredCommandRootEffect::DynamicBackground {
-                update_gameplay: true,
-                update_practice: true,
-                preserve_dirty: true,
-                ..
-            }
         ));
     }
 
