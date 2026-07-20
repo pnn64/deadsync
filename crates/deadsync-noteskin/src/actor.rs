@@ -335,14 +335,13 @@ fn parse_hex_color(raw: &str) -> Option<[f32; 4]> {
 }
 
 fn parse_color_list(raw: &str) -> Option<[f32; 4]> {
-    let values = raw
-        .split(',')
-        .filter_map(parse_lua_float_expr)
-        .collect::<Vec<_>>();
-    if values.len() < 4 {
-        return None;
-    }
-    Some([values[0], values[1], values[2], values[3]])
+    let mut values = raw.split(',').filter_map(parse_lua_float_expr);
+    Some([
+        values.next()?,
+        values.next()?,
+        values.next()?,
+        values.next()?,
+    ])
 }
 
 fn format_color(color: [f32; 4]) -> String {
@@ -1290,6 +1289,15 @@ fn parse_lua_float_token(raw: &str) -> Option<f32> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn color_list_uses_first_four_valid_components() {
+        assert_eq!(
+            parse_color_list("bad, 0.75, 0.5, 0.25, 1, 0"),
+            Some([0.75, 0.5, 0.25, 1.0])
+        );
+        assert_eq!(parse_color_list("1, bad, 0.5, 0.25"), None);
+    }
 
     #[test]
     fn wrapper_commands_parse_metric_cmd_and_function_forms() {
