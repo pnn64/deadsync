@@ -4824,6 +4824,59 @@ fn gameplay_config_and_profile_runtime_is_shell_prepared() {
 }
 
 #[test]
+fn gameplay_itl_warning_is_song_lifetime_and_catalog_independent() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let runtime = fs::read_to_string(root.join("crates/deadsync-shell/src/gameplay_runtime.rs"))
+        .expect("shell Gameplay adapter should be readable");
+    let live_score_view = runtime
+        .split_once("pub(crate) fn score_runtime_view")
+        .and_then(|(_, rest)| rest.split_once("pub(crate) fn sync_initial_scores"))
+        .map(|(body, _)| body)
+        .expect("live Gameplay score view should be present");
+    assert!(
+        live_score_view.contains("state.itl_cmod_warning_snapshot()"),
+        "live score polling must reuse the song-lifetime ITL warning"
+    );
+    assert!(
+        !live_score_view.contains("should_warn_cmod_for_itl_chart"),
+        "live score polling must not recompute the ITL warning every frame"
+    );
+
+    let initial_score_sync = runtime
+        .split_once("pub(crate) fn sync_initial_scores")
+        .and_then(|(_, rest)| rest.split_once("pub(crate) fn sync_scores"))
+        .map(|(body, _)| body)
+        .expect("initial Gameplay score sync should be present");
+    assert!(
+        initial_score_sync.contains("scores::should_warn_cmod_for_itl_chart"),
+        "Gameplay entry must still prepare the ITL warning"
+    );
+
+    let profile_gameplay =
+        fs::read_to_string(root.join("crates/deadsync-profile-gameplay/src/lib.rs"))
+            .expect("profile Gameplay adapter should be readable");
+    let warning_adapter = profile_gameplay
+        .split_once("pub fn should_warn_itl_cmod_from_app_runtime")
+        .and_then(|(_, rest)| rest.split_once("pub fn itl_save_player_from_runtime"))
+        .map(|(body, _)| body)
+        .expect("ITL warning app-runtime adapter should be present");
+    assert!(
+        warning_adapter.contains("deadsync_simfile::event_intro::song_pack_group(song)")
+            && !warning_adapter.contains("runtime_cache::song_pack_group_for_song"),
+        "ITL warning preparation must derive the current pack without scanning the song catalog"
+    );
+
+    let app = fs::read_to_string(root.join("crates/deadsync-shell/src/app/mod.rs"))
+        .expect("shell app should be readable");
+    assert_eq!(
+        app.matches("crate::gameplay_runtime::sync_initial_scores(&mut gs)")
+            .count(),
+        2,
+        "Gameplay and Practice entry must both initialize song-lifetime score state"
+    );
+}
+
+#[test]
 fn evaluation_score_service_is_shell_prepared() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let evaluation = fs::read_to_string(

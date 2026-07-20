@@ -239,10 +239,20 @@ pub(crate) fn score_runtime_view(state: &gameplay::State) -> GameplayScoreRuntim
     }
     GameplayScoreRuntimeView {
         scorebox_updates,
-        itl_cmod_warning: std::array::from_fn(|player| {
-            player < state.num_players() && scores::should_warn_cmod_for_itl_chart(state, player)
-        }),
+        itl_cmod_warning: state.itl_cmod_warning_snapshot(),
     }
+}
+
+/// Prepare song-invariant score state once, before gameplay begins. In
+/// particular, resolving the ITL warning must never become part of the live
+/// score-polling path: its app-runtime adapter may inspect profile and catalog
+/// state, while the result cannot change during a stage.
+pub(crate) fn sync_initial_scores(state: &mut gameplay::State) {
+    let mut view = score_runtime_view(state);
+    view.itl_cmod_warning = std::array::from_fn(|player| {
+        player < state.num_players() && scores::should_warn_cmod_for_itl_chart(state, player)
+    });
+    gameplay::sync_score_runtime_view(state, view);
 }
 
 pub(crate) fn sync_scores(state: &mut gameplay::State) {

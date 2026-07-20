@@ -1581,12 +1581,15 @@ where
 {
     let song = gs.song();
     let song_dir = deadsync_score::itl_song_dir(song);
-    let group_name = deadsync_simfile::runtime_cache::song_pack_group_for_song(song);
+    // Pack identity is encoded by the catalog layout and Gameplay derives it
+    // the same way during setup. Borrow it from the path instead of scanning
+    // every loaded simfile to rediscover the current song's pack.
+    let group_name = deadsync_simfile::event_intro::song_pack_group(song);
     should_warn_itl_cmod_from_runtime(
         gs,
         player_idx,
         song_dir.as_deref(),
-        group_name.as_deref(),
+        group_name,
         song.display_subtitle(false),
         deadsync_profile::app_runtime::gameplay_side_for_player,
         deadsync_profile::runtime_active_local_profile_id_for_side,

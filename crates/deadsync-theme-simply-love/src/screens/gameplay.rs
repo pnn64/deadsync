@@ -647,6 +647,14 @@ impl State {
         self.runtime_view.policy.machine_font
     }
 
+    /// Song-lifetime ITL warning state prepared by the shell on gameplay entry.
+    /// Live score polling reuses this snapshot instead of re-reading profile or
+    /// song-catalog runtime state every frame.
+    #[inline(always)]
+    pub const fn itl_cmod_warning_snapshot(&self) -> [bool; MAX_PLAYERS] {
+        self.itl_cmod_warning
+    }
+
     pub fn from_gameplay(
         gameplay: GameplayCoreState,
         noteskin_assets: GameplayNoteskinAssets,

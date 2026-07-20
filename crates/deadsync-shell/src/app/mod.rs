@@ -6633,7 +6633,7 @@ impl App {
                     [0; MAX_PLAYERS],
                     gameplay_init_view,
                 );
-                crate::gameplay_runtime::sync_scores(&mut gs);
+                crate::gameplay_runtime::sync_initial_scores(&mut gs);
                 gs.disable_score_for_practice();
                 let init_ms = init_started.elapsed().as_secs_f64() * 1000.0;
                 let overlay_video_paths = gameplay_overlay_video_paths(
@@ -7034,7 +7034,7 @@ impl App {
                     combo_carry,
                     gameplay_init_view,
                 );
-                crate::gameplay_runtime::sync_scores(&mut gs);
+                crate::gameplay_runtime::sync_initial_scores(&mut gs);
                 let init_ms = init_started.elapsed().as_secs_f64() * 1000.0;
                 let overlay_video_paths = gameplay_overlay_video_paths(
                     gs.song_lua_visuals(),
