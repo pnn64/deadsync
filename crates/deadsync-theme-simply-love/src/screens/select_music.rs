@@ -52,9 +52,7 @@ use deadsync_input::{
 };
 use deadsync_online::lobbies as lobby_data;
 use deadsync_profile as profile_data;
-use deadsync_profile::favorites_view::{
-    FavoriteCatalogEntry, FavoriteCatalogHeader, FavoriteViewPlan,
-};
+use deadsync_profile::favorites_view::ascii_case_insensitive_cmp;
 use deadsync_profile::pad_config_sync::{AppliedPadConfig, PadConfigIntent};
 use deadsync_score as score_data;
 use deadsync_simfile::bpm::{beat_at_sec_from_bpms, sec_at_beat_from_bpms};
@@ -2544,62 +2542,63 @@ fn build_favorites_view_entries_with_label(
     mut pack_is_favorited: impl FnMut(&str) -> bool,
     mut song_is_favorited: impl FnMut(&SongData) -> bool,
 ) -> Vec<MusicWheelEntry> {
-    let catalog_entries = favorite_catalog_entries(grouped_entries);
-    let plan = deadsync_profile::favorites_view::favorite_view_plan(
-        &catalog_entries,
-        |pack_key| pack_is_favorited(pack_key),
-        |song| song_is_favorited(song),
-        song_title_sort_key,
-    );
-    favorite_music_entries(grouped_entries, favorites_label, plan)
-}
+    let mut current_header_index = None;
+    let mut current_pack_is_favorited = false;
+    let mut pack_ranges = Vec::<Range<usize>>::new();
+    let mut loose_songs = Vec::new();
 
-fn favorite_catalog_entries(grouped_entries: &[MusicWheelEntry]) -> Vec<FavoriteCatalogEntry> {
-    grouped_entries
-        .iter()
-        .map(|entry| match entry {
-            MusicWheelEntry::PackHeader { name, pack_key, .. } => {
-                FavoriteCatalogEntry::Header(FavoriteCatalogHeader {
-                    name: name.clone(),
-                    pack_key: pack_key.clone(),
-                })
+    for (index, entry) in grouped_entries.iter().enumerate() {
+        match entry {
+            MusicWheelEntry::PackHeader { pack_key, .. } => {
+                if current_pack_is_favorited && let Some(header_index) = current_header_index {
+                    pack_ranges.push(header_index..index);
+                }
+                current_header_index = Some(index);
+                current_pack_is_favorited = pack_key.as_deref().is_some_and(&mut pack_is_favorited);
             }
-            MusicWheelEntry::Song(song) => FavoriteCatalogEntry::Song(song.clone()),
-        })
-        .collect()
-}
+            MusicWheelEntry::Song(song) => {
+                if !current_pack_is_favorited && song_is_favorited(song) {
+                    loose_songs.push(song.clone());
+                }
+            }
+        }
+    }
+    if current_pack_is_favorited && let Some(header_index) = current_header_index {
+        pack_ranges.push(header_index..grouped_entries.len());
+    }
 
-fn favorite_music_entries(
-    grouped_entries: &[MusicWheelEntry],
-    favorites_label: &str,
-    plan: FavoriteViewPlan,
-) -> Vec<MusicWheelEntry> {
-    let total_capacity = plan
-        .loose_songs
+    loose_songs.sort_by_cached_key(|song| song_title_sort_key(song));
+    pack_ranges.sort_by(|left, right| {
+        ascii_case_insensitive_cmp(
+            favorite_header_name(grouped_entries, left.start),
+            favorite_header_name(grouped_entries, right.start),
+        )
+    });
+
+    let total_capacity = loose_songs
         .len()
-        .saturating_add(usize::from(!plan.loose_songs.is_empty()))
-        + plan
-            .pack_ranges
+        .saturating_add(usize::from(!loose_songs.is_empty()))
+        + pack_ranges
             .iter()
-            .map(|range| 1 + range.song_end.saturating_sub(range.song_start))
+            .map(|range| range.end.saturating_sub(range.start))
             .sum::<usize>();
     let mut entries: Vec<MusicWheelEntry> = Vec::with_capacity(total_capacity);
 
-    if !plan.loose_songs.is_empty() {
+    if !loose_songs.is_empty() {
         entries.push(MusicWheelEntry::PackHeader {
             name: favorites_label.to_string(),
             original_index: 0,
             banner_path: None,
-            song_count: plan.loose_songs.len(),
+            song_count: loose_songs.len(),
             pack_key: None,
             parent_series: None,
         });
-        entries.extend(plan.loose_songs.into_iter().map(MusicWheelEntry::Song));
+        entries.extend(loose_songs.into_iter().map(MusicWheelEntry::Song));
     }
 
-    for range in plan.pack_ranges {
-        entries.push(grouped_entries[range.header_index].clone());
-        for entry in &grouped_entries[range.song_start..range.song_end] {
+    for range in pack_ranges {
+        entries.push(grouped_entries[range.start].clone());
+        for entry in &grouped_entries[range.start + 1..range.end] {
             if matches!(entry, MusicWheelEntry::Song(_)) {
                 entries.push(entry.clone());
             }
@@ -2607,6 +2606,13 @@ fn favorite_music_entries(
     }
 
     entries
+}
+
+fn favorite_header_name(entries: &[MusicWheelEntry], index: usize) -> &str {
+    match entries.get(index) {
+        Some(MusicWheelEntry::PackHeader { name, .. }) => name,
+        Some(MusicWheelEntry::Song(_)) | None => "",
+    }
 }
 
 fn playlist_song_sources(
@@ -15140,15 +15146,16 @@ mod tests {
 
     #[test]
     fn favorites_view_keeps_loose_song_favorites_under_favorites_bucket() {
-        let entries = test_entries();
+        let mut entries = test_entries();
+        entries.swap(1, 2);
 
         let favorites = super::build_favorites_view_entries_with(
             &entries,
             |_| false,
-            |song| song.title == "Song A2",
+            |song| song.title == "Song A1" || song.title == "Song A2",
         );
 
-        assert_eq!(favorites.len(), 2);
+        assert_eq!(favorites.len(), 3);
         assert!(matches!(
             favorites[0],
             super::MusicWheelEntry::PackHeader {
@@ -15157,7 +15164,28 @@ mod tests {
                 ..
             } if name == "Favorites"
         ));
-        assert_eq!(song_titles(&favorites), ["Song A2"]);
+        assert_eq!(song_titles(&favorites), ["Song A1", "Song A2"]);
+    }
+
+    #[test]
+    fn favorites_view_sorts_pack_names_case_insensitively_with_stable_ties() {
+        let entries = vec![
+            header("beta", 0, 0, Some("beta")),
+            header("Alpha", 1, 0, Some("Alpha")),
+            header("alpha", 2, 0, Some("alpha")),
+            header("Äther", 3, 0, Some("Äther")),
+        ];
+
+        let favorites = super::build_favorites_view_entries_with(&entries, |_| true, |_| false);
+        let names = favorites
+            .iter()
+            .filter_map(|entry| match entry {
+                super::MusicWheelEntry::PackHeader { name, .. } => Some(name.as_str()),
+                super::MusicWheelEntry::Song(_) => None,
+            })
+            .collect::<Vec<_>>();
+
+        assert_eq!(names, ["Alpha", "alpha", "beta", "Äther"]);
     }
 
     fn test_lobby_song_info(song_path: &str) -> lobby_data::LobbySongInfo {
