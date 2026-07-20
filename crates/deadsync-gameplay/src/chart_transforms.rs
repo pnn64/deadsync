@@ -1122,13 +1122,12 @@ fn turn_take_from(turn: GameplayTurnOption, cols: usize, seed: u64) -> Option<Ve
         (GameplayTurnOption::Right, 4) => Some(vec![1, 3, 0, 2]),
         (GameplayTurnOption::Right, 8) => Some(vec![1, 3, 0, 2, 5, 7, 4, 6]),
         (GameplayTurnOption::Shuffle, _) => {
-            let orig: Vec<usize> = (0..cols).collect();
+            let mut out: Vec<usize> = (0..cols).collect();
             let mut attempt_seed = seed as u32;
             loop {
-                let mut out = orig.clone();
                 let mut rng = TurnRng::new(u64::from(attempt_seed));
                 rng.shuffle(&mut out);
-                if cols <= 1 || out != orig {
+                if cols <= 1 || out.iter().copied().ne(0..cols) {
                     return Some(out);
                 }
                 attempt_seed = attempt_seed.wrapping_add(1);

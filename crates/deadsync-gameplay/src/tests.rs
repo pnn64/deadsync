@@ -15325,6 +15325,17 @@ mod tests {
     }
 
     #[test]
+    fn shuffle_turn_retries_an_identity_permutation() {
+        let mut first = [0, 1, 2, 3];
+        TurnRng::new(29).shuffle(&mut first);
+        assert_eq!(first, [0, 1, 2, 3]);
+        assert_eq!(
+            turn_take_from(GameplayTurnOption::Shuffle, 4, 29),
+            Some(vec![2, 0, 1, 3])
+        );
+    }
+
+    #[test]
     fn turn_seed_uses_simfile_path() {
         let mut first = test_song(0.0, 0.0);
         first.simfile_path = PathBuf::from("packs/a/song.ssc");
