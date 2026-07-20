@@ -15,6 +15,8 @@ mod updater;
 
 use self::screenshot::auto_screenshot_eval_results;
 use crate::command::Command;
+#[cfg(test)]
+use crate::course::{CourseRunState, CourseStageRuntime, score_info_from_stage};
 use crate::course::{
     build_course_graph_stages, build_course_run_from_selection, build_course_summary_score_info,
     build_course_summary_stage, course_display_timing_for_run, merge_course_score_columns,
@@ -86,11 +88,6 @@ use crate::transition_effects::{
 use crate::window_state::{WindowMinimizePlan, exclusive_fullscreen_focus_plan};
 use crate::window_state::{
     apply_shell_surface_active, apply_shell_window_focus, apply_shell_window_occlusion,
-};
-#[cfg(test)]
-use crate::{
-    course::{CourseRunState, CourseStageRuntime, score_info_from_stage},
-    input::raw_keyboard_restart_screen,
 };
 use deadlib_platform::dirs;
 #[cfg(any(target_os = "linux", target_os = "freebsd"))]
@@ -8208,15 +8205,6 @@ mod tests {
             track_early_judgments: true,
             dim_post_fail_scatter: true,
         }
-    }
-
-    #[test]
-    fn raw_keyboard_restart_screen_matches_zmod_restart_flow() {
-        assert!(raw_keyboard_restart_screen(CurrentScreen::Gameplay));
-        assert!(raw_keyboard_restart_screen(CurrentScreen::Evaluation));
-        assert!(!raw_keyboard_restart_screen(
-            CurrentScreen::EvaluationSummary,
-        ));
     }
 
     #[test]

@@ -626,11 +626,6 @@ pub fn smx_panel_press_feedback_plan(
     )
 }
 
-#[inline(always)]
-pub const fn raw_keyboard_restart_screen(screen: Screen) -> bool {
-    matches!(screen, Screen::Gameplay | Screen::Evaluation)
-}
-
 /// Screens that need the low-latency native raw-keyboard hook. On Windows the
 /// hook is otherwise gated off outside gameplay, but Practice mode (the editor)
 /// relies on raw keys for its shortcuts — including the gameplay function keys
@@ -1311,12 +1306,24 @@ mod tests {
             &TransitionState::Idle,
             true,
         ));
+        assert!(raw_keyboard_capture_enabled(
+            true,
+            Screen::Evaluation,
+            &TransitionState::Idle,
+            true,
+        ));
         // Practice (the editor) forwards gameplay function keys to its embedded
         // runtime, so it must keep raw capture enabled even under the Windows
         // gameplay-only scope.
         assert!(raw_keyboard_capture_enabled(
             true,
             Screen::Practice,
+            &TransitionState::Idle,
+            true,
+        ));
+        assert!(!raw_keyboard_capture_enabled(
+            true,
+            Screen::EvaluationSummary,
             &TransitionState::Idle,
             true,
         ));
@@ -1467,14 +1474,12 @@ mod tests {
 
     #[test]
     fn restart_requires_gameplay_or_evaluation_without_prompt_or_course() {
-        assert_eq!(
-            pre_screen_input_route(
-                true,
-                VirtualAction::p1_restart,
-                pre_screen_context(Screen::Gameplay),
-            ),
-            PreScreenInputRoute::Restart,
-        );
+        for screen in [Screen::Gameplay, Screen::Evaluation] {
+            assert_eq!(
+                pre_screen_input_route(true, VirtualAction::p1_restart, pre_screen_context(screen),),
+                PreScreenInputRoute::Restart,
+            );
+        }
         for context in [
             PreScreenInputContext {
                 gameplay_offset_prompt_active: true,
@@ -1484,6 +1489,7 @@ mod tests {
                 course_active: true,
                 ..pre_screen_context(Screen::Evaluation)
             },
+            pre_screen_context(Screen::EvaluationSummary),
             pre_screen_context(Screen::SelectMusic),
         ] {
             assert_eq!(

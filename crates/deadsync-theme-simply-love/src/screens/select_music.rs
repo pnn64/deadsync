@@ -1711,7 +1711,6 @@ fn build_displayed_entries(
     for entry in all_entries {
         match entry {
             MusicWheelEntry::PackHeader {
-                name,
                 pack_key,
                 parent_series,
                 ..
