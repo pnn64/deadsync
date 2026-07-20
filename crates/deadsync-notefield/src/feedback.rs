@@ -7,7 +7,15 @@ use deadsync_rules::scroll::ScrollSpeedSetting;
 use deadsync_theme::{ColumnCueStyle, ColumnFlashLayoutStyle, ColumnFlashStyle, NotefieldStyle};
 use std::sync::Arc;
 
+// Regular column cues fade in/out over this window, matching Simply Love's
+// `ColumnCues.lua` (`fadeTime = 0.15`).
 const COLUMN_CUE_FADE_TIME: f32 = 0.15;
+
+// Crossover cues fade over half that, matching Simply Love's
+// `CrossoverCues.lua` (`fadeTime = 0.075`). This also equals the amount the cue
+// builder overlaps consecutive crossover cues (`CROSSOVER_CUE_FADE_SECONDS`),
+// so a cue's fade-out lines up exactly with the next cue's fade-in.
+const CROSSOVER_CUE_FADE_TIME: f32 = 0.075;
 
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct JudgmentTiltParams {
@@ -156,22 +164,32 @@ pub(crate) fn column_cue_reverse_top_y(
 }
 
 pub(crate) fn column_cue_alpha(elapsed_real: f32, duration_real: f32) -> f32 {
+    column_cue_alpha_with_fade(elapsed_real, duration_real, COLUMN_CUE_FADE_TIME)
+}
+
+// Alpha envelope for a column cue that fades in/out over `fade_time` seconds.
+// Regular column cues and crossover cues use different fade windows (0.15 vs
+// 0.075), so the fade time is passed in rather than hardcoded.
+pub(crate) fn column_cue_alpha_with_fade(
+    elapsed_real: f32,
+    duration_real: f32,
+    fade_time: f32,
+) -> f32 {
     if !elapsed_real.is_finite() || !duration_real.is_finite() {
         return 0.0;
     }
     if elapsed_real < 0.0 || elapsed_real > duration_real {
         return 0.0;
     }
-    if duration_real <= COLUMN_CUE_FADE_TIME * 2.0 {
+    if duration_real <= fade_time * 2.0 {
         return 0.0;
     }
-    if elapsed_real < COLUMN_CUE_FADE_TIME {
-        let t = (elapsed_real / COLUMN_CUE_FADE_TIME).clamp(0.0, 1.0);
+    if elapsed_real < fade_time {
+        let t = (elapsed_real / fade_time).clamp(0.0, 1.0);
         return 1.0 - (1.0 - t) * (1.0 - t);
     }
-    if elapsed_real > duration_real - COLUMN_CUE_FADE_TIME {
-        let t = ((elapsed_real - (duration_real - COLUMN_CUE_FADE_TIME)) / COLUMN_CUE_FADE_TIME)
-            .clamp(0.0, 1.0);
+    if elapsed_real > duration_real - fade_time {
+        let t = ((elapsed_real - (duration_real - fade_time)) / fade_time).clamp(0.0, 1.0);
         return 1.0 - t * t;
     }
     1.0
@@ -260,7 +278,11 @@ fn compose_column_cue(
     };
     let duration_real = cue.duration / rate;
     let elapsed_real = (request.current_music_time - cue.start_time) / rate;
-    let alpha_mul = column_cue_alpha(elapsed_real, duration_real);
+    let fade_time = match kind {
+        ColumnCueKind::Regular => COLUMN_CUE_FADE_TIME,
+        ColumnCueKind::Crossover => CROSSOVER_CUE_FADE_TIME,
+    };
+    let alpha_mul = column_cue_alpha_with_fade(elapsed_real, duration_real, fade_time);
     if alpha_mul <= 0.0 {
         return;
     }
