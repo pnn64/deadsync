@@ -728,25 +728,28 @@ pub fn itg_tap_explosion_sources_for_window<'a, T>(
     out
 }
 
-pub fn itg_tap_explosion_command_with_init<T>(
+pub(crate) fn itg_tap_explosion_command_with_init<T>(
     source: &ItgTapExplosionSource<T>,
     mode: ItgTapExplosionMode,
     command: &str,
-) -> Option<String> {
-    let mut sequence = Vec::with_capacity(4);
-    let mut push_command = |raw: Option<&String>| {
-        if let Some(value) = raw {
-            let trimmed = value.trim();
-            if !trimmed.is_empty() {
-                sequence.push(trimmed.to_string());
-            }
-        }
-    };
-    push_command(source.commands.get("initcommand"));
-    push_command(source.commands.get("judgmentcommand"));
-    push_command(source.commands.get(mode.command_key()));
-    sequence.push(command.trim().to_string());
-    (!sequence.is_empty()).then(|| sequence.join(";"))
+) -> String {
+    let mut sequence = [""; 4];
+    let mut len = 0;
+    for command in [
+        source.commands.get("initcommand"),
+        source.commands.get("judgmentcommand"),
+        source.commands.get(mode.command_key()),
+    ]
+    .into_iter()
+    .flatten()
+    .map(|command| command.trim())
+    .filter(|command| !command.is_empty())
+    {
+        sequence[len] = command;
+        len += 1;
+    }
+    sequence[len] = command.trim();
+    sequence[..=len].join(";")
 }
 
 pub fn itg_tap_explosion_command_for_window<T>(
@@ -1079,6 +1082,28 @@ mod tests {
             Some("diffusealpha,0".to_string())
         );
         assert_eq!(itg_command_with_init(Some("zoom,2"), "  "), None);
+    }
+
+    #[test]
+    fn tap_explosion_command_sequence_preserves_order_and_empty_final_command() {
+        let source = ItgTapExplosionSource::new(
+            "Tap Explosion Bright".to_owned(),
+            (),
+            HashMap::from([
+                ("initcommand".to_owned(), " finish ".to_owned()),
+                ("judgmentcommand".to_owned(), " diffuse ".to_owned()),
+                ("brightcommand".to_owned(), " glow ".to_owned()),
+            ]),
+        );
+
+        assert_eq!(
+            itg_tap_explosion_command_with_init(&source, ItgTapExplosionMode::Bright, " sleep "),
+            "finish;diffuse;glow;sleep"
+        );
+        assert_eq!(
+            itg_tap_explosion_command_with_init(&source, ItgTapExplosionMode::Bright, " "),
+            "finish;diffuse;glow;"
+        );
     }
 
     #[test]

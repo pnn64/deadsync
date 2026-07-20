@@ -610,7 +610,7 @@ pub fn itg_tap_explosion_map_from_sources<T: Clone>(
                         &mut metric_command,
                     )?;
                     let command_with_init =
-                        itg_tap_explosion_command_with_init(source, mode, &command)?;
+                        itg_tap_explosion_command_with_init(source, mode, &command);
                     Some(TapExplosionLayer {
                         slot: source.payload.clone(),
                         animation: parse_explosion_animation(&command_with_init),
