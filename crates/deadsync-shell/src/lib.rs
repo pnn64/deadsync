@@ -1,5 +1,6 @@
 pub mod app;
 
+mod apply_replaygain;
 mod command;
 mod content_reload;
 mod course;

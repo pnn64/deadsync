@@ -84,6 +84,8 @@ pub use reload::sync_reload_events;
 use reload::*;
 mod score_import;
 use score_import::*;
+mod apply_replaygain;
+use apply_replaygain::*;
 mod pack_sync;
 pub(crate) mod qr_login;
 use pack_sync::*;
@@ -254,6 +256,15 @@ pub fn apply_score_import_events(
 ) {
     for event in events {
         apply_score_import_event(state, event);
+    }
+}
+
+pub fn apply_apply_replaygain_events(
+    state: &mut State,
+    events: Vec<crate::views::SimplyLoveApplyReplayGainEvent>,
+) {
+    for event in events {
+        apply_apply_replaygain_event(state, event);
     }
 }
 

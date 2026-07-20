@@ -796,9 +796,138 @@ fn sound_runtime_toggles_emit_neutral_audio_requests() {
     assert_eq!(state.global_offset_ms, 1);
 }
 
+#[test]
+fn apply_replaygain_item_matches_row() {
+    let row_idx =
+        row_position(SOUND_OPTIONS_ROWS, SubRowId::ApplyReplayGain).expect("apply row exists");
+    assert_eq!(SOUND_OPTIONS_ITEMS[row_idx].id, ItemId::SndApplyReplayGain);
+    // The action row directly follows the ReplayGain toggle.
+    let toggle_idx =
+        row_position(SOUND_OPTIONS_ROWS, SubRowId::ReplayGain).expect("toggle row exists");
+    assert_eq!(row_idx, toggle_idx + 1);
+}
+
+#[test]
+fn apply_replaygain_row_visible_only_when_replaygain_on() {
+    let mut state = init_with_audio(AudioOptionsView {
+        replay_gain: false,
+        ..AudioOptionsView::default()
+    });
+    state.view = OptionsView::Submenu(SubmenuKind::Sound);
+
+    let actual =
+        row_position(SOUND_OPTIONS_ROWS, SubRowId::ApplyReplayGain).expect("apply row exists");
+    let hidden = submenu_visible_row_indices(&state, SubmenuKind::Sound, SOUND_OPTIONS_ROWS);
+    assert!(
+        !hidden.contains(&actual),
+        "apply row must be hidden while ReplayGain is Off"
+    );
+
+    set_sound_choice_index(&mut state, SubRowId::ReplayGain, 1);
+    let shown = submenu_visible_row_indices(&state, SubmenuKind::Sound, SOUND_OPTIONS_ROWS);
+    assert!(
+        shown.contains(&actual),
+        "apply row must be visible while ReplayGain is On"
+    );
+}
+
+#[test]
+fn apply_replaygain_start_opens_overlay_and_requests_analysis() {
+    let asset_manager = AssetManager::new();
+    let mut state = init_with_audio(AudioOptionsView {
+        replay_gain: true,
+        ..AudioOptionsView::default()
+    });
+    state.view = OptionsView::Submenu(SubmenuKind::Sound);
+    select_visible_row(&mut state, SubmenuKind::Sound, SubRowId::ApplyReplayGain);
+
+    let effect = press(&mut state, &asset_manager, VirtualAction::p1_start);
+
+    assert!(
+        state.apply_replaygain_ui.is_some(),
+        "starting the action should open the progress overlay"
+    );
+    assert!(
+        effect_contains_content(&effect, crate::SimplyLoveContentRequest::ApplyReplayGain),
+        "start should request bulk ReplayGain analysis"
+    );
+}
+
+#[test]
+fn apply_replaygain_cancel_requests_worker_stop() {
+    let asset_manager = AssetManager::new();
+    let mut state = init_with_audio(AudioOptionsView {
+        replay_gain: true,
+        ..AudioOptionsView::default()
+    });
+    state.view = OptionsView::Submenu(SubmenuKind::Sound);
+    state.apply_replaygain_ui = Some(ApplyReplayGainUiState::new());
+    apply_apply_replaygain_event(
+        &mut state,
+        crate::views::SimplyLoveApplyReplayGainEvent::Started { total: 10 },
+    );
+
+    let effect = press(&mut state, &asset_manager, VirtualAction::p1_back);
+
+    assert!(
+        effect_contains_content(&effect, crate::SimplyLoveContentRequest::SkipReplayGain),
+        "back should request cooperative skip of the analysis pass"
+    );
+    assert!(
+        state
+            .apply_replaygain_ui
+            .as_ref()
+            .is_some_and(|ui| ui.cancel_requested),
+        "cancel should be marked pending, keeping the overlay up"
+    );
+}
+
+#[test]
+fn apply_replaygain_finish_then_dismiss_closes_overlay() {
+    let asset_manager = AssetManager::new();
+    let mut state = init_with_audio(AudioOptionsView {
+        replay_gain: true,
+        ..AudioOptionsView::default()
+    });
+    state.view = OptionsView::Submenu(SubmenuKind::Sound);
+    state.apply_replaygain_ui = Some(ApplyReplayGainUiState::new());
+    apply_apply_replaygain_event(
+        &mut state,
+        crate::views::SimplyLoveApplyReplayGainEvent::Finished {
+            done: 10,
+            total: 10,
+            cancelled: false,
+        },
+    );
+
+    // While finished, pressing Start dismisses the overlay.
+    let _ = press(&mut state, &asset_manager, VirtualAction::p1_start);
+    assert!(
+        state.apply_replaygain_ui.is_none(),
+        "pressing Start after completion should dismiss the overlay"
+    );
+}
+
+/// Returns true when `effect` is, or contains within a batch, a runtime content
+/// request equal to `want`.
+fn effect_contains_content(
+    effect: &ThemeEffect,
+    want: crate::SimplyLoveContentRequest,
+) -> bool {
+    fn is_match(effect: &ThemeEffect, want: &crate::SimplyLoveContentRequest) -> bool {
+        match effect {
+            ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Content(req)) => {
+                std::mem::discriminant(req) == std::mem::discriminant(want)
+            }
+            ThemeEffect::Batch(effects) => effects.iter().any(|e| is_match(e, want)),
+            _ => false,
+        }
+    }
+    is_match(effect, &want)
+}
+
 fn age_start_hold(state: &mut State, side: profile_data::PlayerSide) {
-    let idx = profile_data::player_side_index(side);
-    state.start_input[idx].held = true;
+    let idx = profile_data::player_side_index(side);    state.start_input[idx].held = true;
     state.start_input[idx].held_for = NAV_INITIAL_HOLD_DELAY;
     state.start_input[idx].next_repeat_at = NAV_INITIAL_HOLD_DELAY;
 }

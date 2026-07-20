@@ -893,6 +893,26 @@ pub enum SimplyLoveContentReloadEvent {
     },
 }
 
+/// Progress and completion data produced by the shell-owned bulk ReplayGain
+/// analysis worker triggered from the Sound options "Apply ReplayGain" action.
+#[derive(Clone, Debug)]
+pub enum SimplyLoveApplyReplayGainEvent {
+    /// Emitted once when the worker has enumerated the library and is about to
+    /// begin analysis.
+    Started { total: usize },
+    /// Emitted after each song finishes. `line2`/`line3` carry the pack and
+    /// song labels for display.
+    Progress {
+        done: usize,
+        total: usize,
+        line2: String,
+        line3: String,
+    },
+    /// Emitted once when the worker stops, either because it finished the whole
+    /// library or because it was cancelled.
+    Finished { done: usize, total: usize, cancelled: bool },
+}
+
 /// One shell-prepared unlock download row rendered by Select Music.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SelectMusicDownloadView {

@@ -145,6 +145,7 @@ pub enum ItemId {
     SndGlobalOffset,
     SndRateModPitch,
     SndReplayGain,
+    SndApplyReplayGain,
 
     // Select Music Options submenu
     SmShowBanners,

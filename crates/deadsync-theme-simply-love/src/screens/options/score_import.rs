@@ -72,7 +72,7 @@ const SCORE_IMPORT_PROGRESS_TAU: f32 = 0.4;
 
 /// Format an ETA in seconds as a compact human string (e.g. ``45s``,
 /// ``2m 13s``, ``1h 04m``). Returns ``--`` for absurdly large values.
-fn format_eta(secs: u64) -> String {
+pub(super) fn format_eta(secs: u64) -> String {
     if secs >= 24 * 60 * 60 {
         return "--".to_string();
     }
