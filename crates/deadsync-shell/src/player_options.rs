@@ -16,6 +16,7 @@ pub(crate) fn init_view() -> PlayerOptionsInitView {
             smx_input: config.smx_input,
             smx_panel_lights: config.smx_panel_lights,
             scorebox_available: deadsync_online::score_compat::is_gs_get_scores_service_allowed(),
+            keyboard_features: config.keyboard_features,
         },
         play_style: session.play_style,
         player_side: session.player_side,

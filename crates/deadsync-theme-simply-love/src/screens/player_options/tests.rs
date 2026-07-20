@@ -4235,6 +4235,20 @@ pub(super) mod tests {
     }
 
     #[test]
+    fn focused_match_exposes_help_text() {
+        ensure_i18n();
+        let (state, _asset_manager) = setup_state();
+        let matches = super::search::rebuild_matches(&state, "music");
+        let m = matches
+            .iter()
+            .find(|m| m.row_id == RowId::MusicRate)
+            .expect("Music Rate should match 'music'");
+        let help = super::search::help_text(&state, m).expect("Music Rate has help text");
+        assert!(!help.is_empty());
+        assert!(!help.contains("\\n"), "help must be a single joined line");
+    }
+
+    #[test]
     fn multiline_templated_labels_are_cleaned_to_first_line() {
         ensure_i18n();
         let (state, _asset_manager) = setup_state();
@@ -4260,6 +4274,20 @@ pub(super) mod tests {
 
         search_key(&mut state, Some(&raw_key(deadsync_input::KeyCode::Escape)), None);
         assert!(!state.search.is_open());
+    }
+
+    #[test]
+    fn slash_does_not_open_search_without_keyboard_features() {
+        ensure_i18n();
+        let (mut state, _asset_manager) = setup_state();
+        state.policy.keyboard_features = false;
+
+        let effect = search_key(&mut state, None, Some("/"));
+        assert!(!effect, "key should not be consumed");
+        assert!(
+            !state.search.is_open(),
+            "search must not open on cabinets without keyboard features"
+        );
     }
 
     #[test]

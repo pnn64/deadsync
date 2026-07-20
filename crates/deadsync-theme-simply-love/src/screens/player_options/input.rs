@@ -863,9 +863,9 @@ pub fn handle_raw_key_event(
 ) -> bool {
     use deadsync_input::KeyCode;
 
-    // Not yet open: only `/` (as a typed character) opens the prompt.
+    // Gated on keyboard_features so keyboard-less cabinets never reach it.
     if !state.search.is_open() {
-        if text == Some("/") {
+        if state.policy.keyboard_features && text == Some("/") {
             let opener = search_opener_player(state);
             search::open(state, opener);
             return true;

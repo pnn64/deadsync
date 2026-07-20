@@ -243,6 +243,19 @@ fn current_value(state: &State, m: &SettingMatch, player_idx: usize) -> Option<S
     row.choices.get(idx).map(|c| c.to_string())
 }
 
+/// Row help text joined to one line; `None` when the row has none.
+pub(super) fn help_text(state: &State, m: &SettingMatch) -> Option<String> {
+    let row = state.panes[m.pane.index()].row_map.get(m.row_id)?;
+    let text = row
+        .help
+        .iter()
+        .map(|s| s.trim())
+        .filter(|s| !s.is_empty())
+        .collect::<Vec<_>>()
+        .join(" ");
+    if text.is_empty() { None } else { Some(text) }
+}
+
 fn pane_label(pane: OptionsPane) -> &'static str {
     match pane {
         OptionsPane::Main => "Main",
@@ -261,9 +274,15 @@ pub(super) fn build_overlay(state: &State) -> Option<Vec<Actor>> {
     let cx = screen_center_x();
     let cy = screen_center_y();
     let panel_w = 360.0_f32.min(screen_width() * 0.92);
-    let panel_h = 300.0_f32;
+    let panel_h = 360.0_f32;
     let top = cy - panel_h * 0.5;
+
+    // Theme-native palette, matching the options screen and option rows.
     let theme = color::simply_love_rgba(state.active_color_index);
+    const PANEL_BG: [f32; 4] = color::rgba_hex("#071016");
+    const FOCUS_BG: [f32; 4] = color::rgba_hex("#333333");
+    const GRAY: [f32; 4] = color::rgba_hex("#808080");
+    const WHITE: [f32; 4] = [1.0, 1.0, 1.0, 1.0];
 
     let mut actors = Vec::with_capacity(32);
 
@@ -275,24 +294,23 @@ pub(super) fn build_overlay(state: &State) -> Option<Vec<Actor>> {
     actors.push(act!(quad:
         align(0.5, 0.5): xy(cx, cy):
         zoomto(panel_w + 2.0, panel_h + 2.0):
-        diffuse(1.0, 1.0, 1.0, 1.0): z(Z_PANEL_BORDER)
+        diffuse(WHITE[0], WHITE[1], WHITE[2], 1.0): z(Z_PANEL_BORDER)
     ));
     actors.push(act!(quad:
         align(0.5, 0.5): xy(cx, cy):
         zoomto(panel_w, panel_h):
-        diffuse(0.1, 0.1, 0.1, 1.0): z(Z_PANEL)
+        diffuse(PANEL_BG[0], PANEL_BG[1], PANEL_BG[2], 1.0): z(Z_PANEL)
     ));
 
     actors.push(act!(text:
         font("wendy"): settext("Setting Search"):
         align(0.5, 0.5): xy(cx, top + 20.0): zoom(0.4):
-        diffuse(1.0, 1.0, 1.0, 1.0): z(Z_TEXT): horizalign(center)
+        diffuse(WHITE[0], WHITE[1], WHITE[2], 1.0): z(Z_TEXT): horizalign(center)
     ));
 
-    // Query line: prompt + typed text with an inline ghost completion. The
-    // ghost is drawn by laying the full match label underneath (grey) and the
-    // real-cased typed prefix on top (theme green), so the untyped remainder
-    // shows through as a suggestion — no font measurement required.
+    // Query line: prompt + typed text with an inline ghost. The ghost is drawn
+    // by laying the full label underneath (gray) and the typed prefix on top
+    // (theme color), so the remainder shows through — no font measurement.
     let caret_on = open.blink_t < CURSOR_BLINK_PERIOD * 0.5;
     let query_y = top + 46.0;
     let query_x = cx - panel_w * 0.5 + 14.0;
@@ -300,14 +318,14 @@ pub(super) fn build_overlay(state: &State) -> Option<Vec<Actor>> {
     actors.push(act!(text:
         font("miso"): settext("> "):
         align(0.0, 0.5): xy(query_x, query_y): zoom(0.9):
-        diffuse(0.7, 0.7, 0.7, 1.0): z(Z_TEXT): horizalign(left)
+        diffuse(GRAY[0], GRAY[1], GRAY[2], 1.0): z(Z_TEXT): horizalign(left)
     ));
     if open.query.is_empty() {
         actors.push(act!(text:
             font("miso"): settext("type to search"):
             align(0.0, 0.5): xy(text_x, query_y): zoom(0.9):
             maxwidth(panel_w - 40.0):
-            diffuse(0.5, 0.5, 0.5, 1.0): z(Z_TEXT): horizalign(left)
+            diffuse(GRAY[0], GRAY[1], GRAY[2], 1.0): z(Z_TEXT): horizalign(left)
         ));
     } else {
         let q_chars = open.query.chars().count();
@@ -325,19 +343,17 @@ pub(super) fn build_overlay(state: &State) -> Option<Vec<Actor>> {
         });
         match ghost {
             Some((full_label, prefix)) => {
-                // Grey underlay: the full suggested label.
                 actors.push(act!(text:
                     font("miso"): settext(full_label):
                     align(0.0, 0.5): xy(text_x, query_y): zoom(0.9):
                     maxwidth(panel_w - 40.0):
-                    diffuse(0.5, 0.5, 0.5, 1.0): z(Z_TEXT): horizalign(left)
+                    diffuse(GRAY[0], GRAY[1], GRAY[2], 1.0): z(Z_TEXT): horizalign(left)
                 ));
-                // Green overlay: the typed portion, in the label's own casing.
                 actors.push(act!(text:
                     font("miso"): settext(prefix):
                     align(0.0, 0.5): xy(text_x, query_y): zoom(0.9):
                     maxwidth(panel_w - 40.0):
-                    diffuse(0.4, 1.0, 0.4, 1.0): z(Z_TEXT + 1): horizalign(left)
+                    diffuse(theme[0], theme[1], theme[2], 1.0): z(Z_TEXT + 1): horizalign(left)
                 ));
             }
             None => {
@@ -346,7 +362,7 @@ pub(super) fn build_overlay(state: &State) -> Option<Vec<Actor>> {
                     font("miso"): settext(format!("{}{caret}", open.query)):
                     align(0.0, 0.5): xy(text_x, query_y): zoom(0.9):
                     maxwidth(panel_w - 40.0):
-                    diffuse(0.4, 1.0, 0.4, 1.0): z(Z_TEXT): horizalign(left)
+                    diffuse(theme[0], theme[1], theme[2], 1.0): z(Z_TEXT): horizalign(left)
                 ));
             }
         }
@@ -355,7 +371,7 @@ pub(super) fn build_overlay(state: &State) -> Option<Vec<Actor>> {
     actors.push(act!(quad:
         align(0.5, 0.5): xy(cx, top + 66.0):
         zoomto(panel_w - 20.0, 1.0):
-        diffuse(0.35, 0.35, 0.35, 1.0): z(Z_TEXT)
+        diffuse(GRAY[0], GRAY[1], GRAY[2], 0.5): z(Z_TEXT)
     ));
 
     let list_top = top + 84.0;
@@ -366,7 +382,7 @@ pub(super) fn build_overlay(state: &State) -> Option<Vec<Actor>> {
         actors.push(act!(text:
             font("miso"): settext("No matches"):
             align(0.0, 0.5): xy(list_x, list_top): zoom(0.8):
-            diffuse(0.6, 0.6, 0.6, 1.0): z(Z_TEXT): horizalign(left)
+            diffuse(GRAY[0], GRAY[1], GRAY[2], 1.0): z(Z_TEXT): horizalign(left)
         ));
     }
     let shown = open.matches.len().min(SEARCH_MAX_RESULTS);
@@ -374,41 +390,58 @@ pub(super) fn build_overlay(state: &State) -> Option<Vec<Actor>> {
         let m = &open.matches[i];
         let y = list_top + i as f32 * row_step;
         let focused = i == open.selected_index;
-        let (r, g, b) = if focused {
-            (theme[0], theme[1], theme[2])
+        if focused {
+            actors.push(act!(quad:
+                align(0.0, 0.5): xy(cx - panel_w * 0.5 + 8.0, y):
+                zoomto(panel_w - 16.0, row_step - 2.0):
+                diffuse(FOCUS_BG[0], FOCUS_BG[1], FOCUS_BG[2], 1.0): z(Z_TEXT)
+            ));
+        }
+        let (text_rgb, pane_rgb) = if focused {
+            ([theme[0], theme[1], theme[2]], [theme[0], theme[1], theme[2]])
         } else {
-            (0.85, 0.85, 0.85)
+            ([GRAY[0], GRAY[1], GRAY[2]], [GRAY[0], GRAY[1], GRAY[2]])
         };
         let prefix = if focused { "▸ " } else { "  " };
         actors.push(act!(text:
             font("miso"): settext(format!("{prefix}{}", m.label)):
             align(0.0, 0.5): xy(list_x, y): zoom(0.85):
             maxwidth(panel_w * 0.62):
-            diffuse(r, g, b, 1.0): z(Z_TEXT): horizalign(left)
+            diffuse(text_rgb[0], text_rgb[1], text_rgb[2], 1.0): z(Z_TEXT + 1): horizalign(left)
         ));
         actors.push(act!(text:
             font("miso"): settext(pane_label(m.pane)):
             align(1.0, 0.5): xy(pane_x, y): zoom(0.7):
-            diffuse(0.6, 0.6, 0.75, 1.0): z(Z_TEXT): horizalign(right)
+            diffuse(pane_rgb[0], pane_rgb[1], pane_rgb[2], 1.0): z(Z_TEXT + 1): horizalign(right)
         ));
     }
 
-    // Detail line for the focused match (current value).
+    // Focused match detail: current value, then wrapped help text.
     if let Some(m) = focused_match(open) {
+        let value_y = cy + panel_h * 0.5 - 74.0;
         if let Some(value) = current_value(state, m, open.opener_player) {
             actors.push(act!(text:
                 font("miso"): settext(format!("Current: {value}")):
-                align(0.0, 0.5): xy(list_x, cy + panel_h * 0.5 - 34.0): zoom(0.75):
+                align(0.0, 0.5): xy(list_x, value_y): zoom(0.75):
                 maxwidth(panel_w - 32.0):
-                diffuse(1.0, 1.0, 1.0, 1.0): z(Z_TEXT): horizalign(left)
+                diffuse(WHITE[0], WHITE[1], WHITE[2], 1.0): z(Z_TEXT): horizalign(left)
+            ));
+        }
+        if let Some(help) = help_text(state, m) {
+            actors.push(act!(text:
+                font("miso"): settext(help):
+                align(0.0, 0.0): xy(list_x, value_y + 14.0): zoom(0.72):
+                wrapwidthpixels((panel_w - 32.0) / 0.72):
+                diffuse(GRAY[0], GRAY[1], GRAY[2], 1.0): z(Z_TEXT): horizalign(left)
             ));
         }
     }
 
     actors.push(act!(text:
-        font("miso"): settext("↑↓ move   ⇥ complete   ⏎ go   esc cancel"):
+        font("miso"): settext("Up/Down: Move    Tab: Complete    Enter: Go    Esc: Cancel"):
         align(0.5, 0.5): xy(cx, cy + panel_h * 0.5 - 14.0): zoom(0.7):
-        diffuse(0.7, 0.7, 0.7, 1.0): z(Z_TEXT): horizalign(center)
+        maxwidth(panel_w - 24.0):
+        diffuse(GRAY[0], GRAY[1], GRAY[2], 1.0): z(Z_TEXT): horizalign(center)
     ));
 
     Some(actors)
