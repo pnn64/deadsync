@@ -4235,6 +4235,20 @@ pub(super) mod tests {
     }
 
     #[test]
+    fn multiline_templated_labels_are_cleaned_to_first_line() {
+        ensure_i18n();
+        let (state, _asset_manager) = setup_state();
+        let matches = super::search::rebuild_matches(&state, "");
+        let music_rate = matches
+            .iter()
+            .find(|m| m.row_id == RowId::MusicRate)
+            .expect("Music Rate row should be indexed");
+        // i18n name is "Music Rate\nbpm: {bpm}"; only the first line should show.
+        assert_eq!(music_rate.label, "Music Rate");
+        assert!(!music_rate.label.contains('{'));
+    }
+
+    #[test]
     fn slash_opens_and_escape_closes_search() {
         ensure_i18n();
         let (mut state, _asset_manager) = setup_state();

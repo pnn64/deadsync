@@ -65,6 +65,18 @@ const SEARCH_PANE_ORDER: [OptionsPane; OptionsPane::COUNT] = [
     OptionsPane::Uncommon,
 ];
 
+/// Strip multi-line/templated i18n names down to a single clean label, e.g.
+/// `Music Rate\nbpm: {bpm}` -> `Music Rate`.
+fn clean_label(raw: &str) -> String {
+    let mut end = raw.len();
+    for pat in ["\\n", "\n", "{"] {
+        if let Some(i) = raw.find(pat) {
+            end = end.min(i);
+        }
+    }
+    raw[..end].trim().to_string()
+}
+
 /// Build the ranked match list for `query` from the currently-visible rows.
 pub(super) fn rebuild_matches(state: &State, query: &str) -> Vec<SettingMatch> {
     let q = fuzzy::query_chars(query);
@@ -87,7 +99,7 @@ pub(super) fn rebuild_matches(state: &State, query: &str) -> Vec<SettingMatch> {
             }
             seen[id.index()] = true;
 
-            let label = row.name.get().to_string();
+            let label = clean_label(&row.name.get());
             if q.is_empty() {
                 matches.push(SettingMatch {
                     row_id: id,
