@@ -6625,6 +6625,22 @@ impl App {
                 }
                 return;
             }
+            RawKeyTextRoute::PlayerOptions => {
+                let Some(po_state) = self.state.screens.player_options_state.as_mut() else {
+                    return;
+                };
+                debug_assert!(self.theme_effect_scratch.is_empty());
+                screens::player_options::handle_raw_key_event(
+                    po_state,
+                    None,
+                    Some(text),
+                    &mut self.theme_effect_scratch,
+                );
+                if let Err(e) = self.drain_theme_effects(event_loop) {
+                    log::error!("Failed to handle Player Options text input action: {e}");
+                }
+                return;
+            }
             RawKeyTextRoute::Ignore => ThemeEffect::None,
         };
         if matches!(action, ThemeEffect::None) {
@@ -6790,6 +6806,24 @@ impl App {
                 }
             }
             RawKeyScreenRoute::PlayerOptions => {
+                // Let the setting-search overlay consume control keys
+                // (Backspace/Enter/Escape/arrows/Tab) first.
+                if let Some(po_state) = self.state.screens.player_options_state.as_mut() {
+                    debug_assert!(self.theme_effect_scratch.is_empty());
+                    let consumed = screens::player_options::handle_raw_key_event(
+                        po_state,
+                        Some(&raw_key),
+                        None,
+                        &mut self.theme_effect_scratch,
+                    );
+                    let has_effect = !self.theme_effect_scratch.is_empty();
+                    if let Err(e) = self.drain_theme_effects(event_loop) {
+                        log::error!("Failed to handle Player Options search key: {e}");
+                    }
+                    if consumed || has_effect {
+                        return true;
+                    }
+                }
                 let returns_to_select_music = self
                     .state
                     .screens

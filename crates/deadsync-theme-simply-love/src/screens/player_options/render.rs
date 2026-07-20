@@ -472,6 +472,11 @@ pub fn push_actors(
             ));
         }
     }
+
+    // BIOS-style setting search overlay draws above everything else.
+    if let Some(overlay) = search::build_overlay(state) {
+        actors.extend(overlay);
+    }
 }
 
 fn revealed_text(text: &Arc<str>, visible_chars: usize) -> TextContent {

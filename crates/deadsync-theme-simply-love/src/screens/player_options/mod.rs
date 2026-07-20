@@ -31,6 +31,7 @@ use std::time::Duration;
 // --- Submodules ---
 mod choice;
 mod constants;
+mod fuzzy;
 mod inline_nav;
 mod input;
 mod layout;
@@ -40,6 +41,7 @@ mod panes;
 mod profile;
 mod render;
 mod row;
+mod search;
 mod state;
 mod visibility;
 
@@ -70,12 +72,14 @@ use render::*;
 #[allow(unused_imports)]
 use row::*;
 #[allow(unused_imports)]
+use search::*;
+#[allow(unused_imports)]
 use state::*;
 #[allow(unused_imports)]
 use visibility::*;
 
 // --- External API ---
-pub use input::{handle_input, update};
+pub use input::{handle_input, handle_raw_key_event, update};
 pub use profile::{
     SpeedMod, SpeedModType, apply_no_cmod_alternative, convert_speed_mod_to_type,
     effective_scroll_speed_with_alt, no_cmod_alt_speed_mod_type, scroll_speed_for_mod,
@@ -443,6 +447,7 @@ fn init_with_noteskin_prewarm(
         pane_transition: PaneTransition::None,
         menu_lr_chord: screen_input::MenuLrChordTracker::default(),
         pending_effects: Vec::with_capacity(4),
+        search: search::SettingSearchState::Hidden,
     };
     sync_speed_mod_type_rows(&mut state);
     sync_heart_rate_selections(&mut state);

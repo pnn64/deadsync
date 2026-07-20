@@ -1877,6 +1877,7 @@ dependencies = [
  "rand 0.10.2",
  "rustc-hash 2.1.3",
  "smallvec",
+ "strsim",
  "twox-hash",
  "winit",
 ]

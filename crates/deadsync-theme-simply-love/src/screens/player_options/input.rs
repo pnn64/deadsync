@@ -15,6 +15,7 @@ pub fn update(
     prepare_choice_layouts(state, asset_manager);
     state.preview_time += dt;
     state.preview_beat += dt * (PREVIEW_BPM / 60.0);
+    search::update(&mut state.search, dt);
     let active = state.active;
     let arcade_style = state.policy.arcade_navigation;
     let mut pending_action: Option<ThemeEffect> = None;
@@ -841,6 +842,95 @@ pub fn handle_input(
     ev: &InputEvent,
     effects: &mut Vec<ThemeEffect>,
 ) {
+    // The open overlay owns all input.
+    if state.search.is_open() {
+        return;
+    }
     let effect = handle_input_inner(state, asset_manager, ev);
     append_pending_effects(state, effect, effects);
+}
+
+/// Raw keyboard entry for the setting search: `/` opens, then typing filters,
+/// Tab completes, arrows move, Enter jumps, Escape closes.
+///
+/// The shell delivers control keys via `key` and typed characters via `text`
+/// separately, mirroring the select-music song search.
+pub fn handle_raw_key_event(
+    state: &mut State,
+    key: Option<&deadsync_input::RawKeyboardEvent>,
+    text: Option<&str>,
+    _effects: &mut Vec<ThemeEffect>,
+) -> bool {
+    use deadsync_input::KeyCode;
+
+    // Not yet open: only `/` (as a typed character) opens the prompt.
+    if !state.search.is_open() {
+        if text == Some("/") {
+            let opener = search_opener_player(state);
+            search::open(state, opener);
+            return true;
+        }
+        return false;
+    }
+
+    if let Some(key) = key {
+        if key.pressed {
+            match key.code {
+                KeyCode::Escape => search::close(state),
+                KeyCode::Backspace => {
+                    if search::backspace(state) {
+                        search::close(state);
+                    }
+                }
+                KeyCode::Tab | KeyCode::ArrowRight => search::accept_ghost(state),
+                KeyCode::ArrowUp => search::move_selection(state, -1),
+                KeyCode::ArrowDown => search::move_selection(state, 1),
+                KeyCode::Enter | KeyCode::NumpadEnter => commit_search_jump(state),
+                _ => {}
+            }
+        }
+        return true;
+    }
+
+    if let Some(text) = text {
+        // Ignore the `/` that opened the prompt if it is redelivered as text.
+        if text != "/" || !is_query_empty(state) {
+            search::add_text(state, text);
+        }
+    }
+
+    true
+}
+
+#[inline]
+fn is_query_empty(state: &State) -> bool {
+    matches!(
+        &state.search,
+        search::SettingSearchState::Open(open) if open.query.is_empty()
+    )
+}
+
+/// Slot whose cursor a jump moves: persisted player, else first active, else P1.
+fn search_opener_player(state: &State) -> usize {
+    if state.active[state.persisted_player_idx] {
+        return state.persisted_player_idx;
+    }
+    active_player_indices(state.active)
+        .into_iter()
+        .next()
+        .unwrap_or(P1)
+}
+
+/// Jump the opener's cursor to the focused result and close the overlay.
+fn commit_search_jump(state: &mut State) {
+    let target = match &state.search {
+        search::SettingSearchState::Open(open) => {
+            search::focused_match(open).map(|m| (m.pane, m.row_id, open.opener_player))
+        }
+        search::SettingSearchState::Hidden => None,
+    };
+    if let Some((pane, row_id, player_idx)) = target {
+        jump_to_setting(state, pane, row_id, player_idx);
+    }
+    search::close(state);
 }

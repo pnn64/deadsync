@@ -4192,4 +4192,121 @@ pub(super) mod tests {
             1u8 << 5
         );
     }
+
+    fn raw_key(code: deadsync_input::KeyCode) -> deadsync_input::RawKeyboardEvent {
+        deadsync_input::RawKeyboardEvent {
+            code,
+            pressed: true,
+            repeat: false,
+            timestamp: std::time::Instant::now(),
+            host_nanos: 0,
+        }
+    }
+
+    /// Drive the search's raw-key entry point; returns whether it consumed the key.
+    fn search_key(
+        state: &mut super::State,
+        key: Option<&deadsync_input::RawKeyboardEvent>,
+        text: Option<&str>,
+    ) -> bool {
+        let mut effects = Vec::new();
+        super::handle_raw_key_event(state, key, text, &mut effects)
+    }
+
+    #[test]
+    fn search_index_excludes_exit_and_is_visible_only() {
+        ensure_i18n();
+        let (state, _asset_manager) = setup_state();
+        let matches = super::search::rebuild_matches(&state, "");
+        assert!(
+            matches.iter().all(|m| m.row_id != RowId::Exit),
+            "Exit must never appear in search results"
+        );
+        assert!(
+            matches.iter().any(|m| m.row_id == RowId::SpeedMod),
+            "a common visible row should be indexed"
+        );
+        // No duplicate row ids across panes (e.g. WhatComesNext dedupes).
+        let mut ids: Vec<RowId> = matches.iter().map(|m| m.row_id).collect();
+        let before = ids.len();
+        ids.sort_by_key(|id| id.index());
+        ids.dedup();
+        assert_eq!(before, ids.len(), "search index must not contain duplicates");
+    }
+
+    #[test]
+    fn slash_opens_and_escape_closes_search() {
+        ensure_i18n();
+        let (mut state, _asset_manager) = setup_state();
+        assert!(!state.search.is_open());
+
+        let effect = search_key(&mut state, None, Some("/"));
+        assert!(effect, "key should be consumed");
+        assert!(state.search.is_open());
+
+        search_key(&mut state, Some(&raw_key(deadsync_input::KeyCode::Escape)), None);
+        assert!(!state.search.is_open());
+    }
+
+    #[test]
+    fn slash_that_opened_is_not_added_to_query() {
+        ensure_i18n();
+        let (mut state, _asset_manager) = setup_state();
+        search_key(&mut state, None, Some("/"));
+        // A redelivered `/` on an empty query must be ignored.
+        search_key(&mut state, None, Some("/"));
+        if let super::search::SettingSearchState::Open(open) = &state.search {
+            assert_eq!(open.query, "");
+        } else {
+            panic!("search should be open");
+        }
+    }
+
+    #[test]
+    fn enter_jumps_to_matched_setting_across_panes() {
+        ensure_i18n();
+        let (mut state, _asset_manager) = setup_state();
+        assert_eq!(state.current_pane, OptionsPane::Main);
+
+        search_key(&mut state, None, Some("/"));
+        // "Turn" lives on the Advanced pane.
+        search_key(&mut state, None, Some("turn"));
+        search_key(&mut state, Some(&raw_key(deadsync_input::KeyCode::Enter)), None);
+
+        assert!(!state.search.is_open());
+        assert_eq!(state.current_pane, OptionsPane::Advanced);
+        let landed = state
+            .pane()
+            .row_map
+            .id_at(state.pane().selected_row[P1]);
+        assert_eq!(landed, RowId::Turn);
+    }
+
+    #[test]
+    fn backspace_on_empty_query_closes_search() {
+        ensure_i18n();
+        let (mut state, _asset_manager) = setup_state();
+        search_key(&mut state, None, Some("/"));
+        search_key(&mut state, None, Some("ab"));
+        search_key(&mut state, Some(&raw_key(deadsync_input::KeyCode::Backspace)), None);
+        search_key(&mut state, Some(&raw_key(deadsync_input::KeyCode::Backspace)), None);
+        assert!(state.search.is_open(), "still open with one char removed at a time");
+        search_key(&mut state, Some(&raw_key(deadsync_input::KeyCode::Backspace)), None);
+        assert!(!state.search.is_open(), "backspace on empty query closes search");
+    }
+
+    #[test]
+    fn tab_accepts_ghost_completion() {
+        ensure_i18n();
+        let (mut state, _asset_manager) = setup_state();
+        search_key(&mut state, None, Some("/"));
+        search_key(&mut state, None, Some("spe"));
+        search_key(&mut state, Some(&raw_key(deadsync_input::KeyCode::Tab)), None);
+        if let super::search::SettingSearchState::Open(open) = &state.search {
+            assert!(open.query.to_ascii_lowercase().starts_with("spe"));
+            assert!(open.query.len() > 3, "ghost completion should extend the query");
+        } else {
+            panic!("search should still be open after Tab");
+        }
+    }
 }
