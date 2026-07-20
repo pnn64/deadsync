@@ -400,10 +400,9 @@ fn install_multitap_explosion_messages<Kind>(
     lane: usize,
     pn: usize,
 ) {
-    let message = multitap_explosion_message_name(lane, pn);
+    let message = format!("__songlua_multitap_explosion_p{pn}_{lane}");
     let mut installed = false;
-    let mut targets = vec![explosion_index];
-    targets.extend(overlay_descendants_by_parent(
+    for overlay_index in std::iter::once(explosion_index).chain(overlay_descendants_by_parent(
         overlays.len(),
         explosion_index,
         |index| {
@@ -411,8 +410,7 @@ fn install_multitap_explosion_messages<Kind>(
                 .get(index)
                 .and_then(|overlay| overlay.actor.parent_index)
         },
-    ));
-    for overlay_index in targets {
+    )) {
         let blocks = multitap_explosion_command_blocks(&overlays[overlay_index].actor);
         if blocks.is_empty() {
             continue;
@@ -429,19 +427,15 @@ fn install_multitap_explosion_messages<Kind>(
     if !installed {
         return;
     }
-    messages.extend(multitap_explosion_message_events(descs, lane, pn));
+    push_multitap_explosion_message_events(messages, descs, lane, &message);
 }
 
-pub fn multitap_explosion_message_name(lane: usize, pn: usize) -> String {
-    format!("__songlua_multitap_explosion_p{pn}_{lane}")
-}
-
-pub fn multitap_explosion_message_events(
+fn push_multitap_explosion_message_events(
+    messages: &mut Vec<SongLuaMessageEvent>,
     descs: &[MultitapDesc],
     lane: usize,
-    pn: usize,
-) -> Vec<SongLuaMessageEvent> {
-    let message = multitap_explosion_message_name(lane, pn);
+    message: &str,
+) {
     let mut beats = descs
         .iter()
         .filter(|desc| desc.lane == lane)
@@ -450,14 +444,11 @@ pub fn multitap_explosion_message_events(
         .collect::<Vec<_>>();
     beats.sort_by(f32::total_cmp);
     beats.dedup_by(|left, right| (*left - *right).abs() <= f32::EPSILON);
-    beats
-        .into_iter()
-        .map(|beat| SongLuaMessageEvent {
-            beat,
-            message: message.clone(),
-            persists: false,
-        })
-        .collect()
+    messages.extend(beats.into_iter().map(|beat| SongLuaMessageEvent {
+        beat,
+        message: message.to_owned(),
+        persists: false,
+    }));
 }
 
 pub fn multitap_explosion_command_blocks<Kind>(
@@ -474,6 +465,49 @@ pub fn multitap_explosion_command_blocks<Kind>(
         }
     }
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn explosion_messages_append_sorted_unique_finite_lane_beats() {
+        let descs = [
+            MultitapDesc {
+                lane: 3,
+                taps: vec![2.0, f32::NAN, 1.0],
+                peak: None,
+            },
+            MultitapDesc {
+                lane: 4,
+                taps: vec![0.5],
+                peak: None,
+            },
+            MultitapDesc {
+                lane: 3,
+                taps: vec![1.0, 3.0],
+                peak: None,
+            },
+        ];
+        let mut messages = vec![SongLuaMessageEvent {
+            beat: 0.0,
+            message: "existing".to_owned(),
+            persists: true,
+        }];
+
+        push_multitap_explosion_message_events(&mut messages, &descs, 3, "explosion");
+
+        assert_eq!(
+            messages.iter().map(|event| event.beat).collect::<Vec<_>>(),
+            [0.0, 1.0, 2.0, 3.0]
+        );
+        assert!(
+            messages[1..]
+                .iter()
+                .all(|event| event.message == "explosion" && !event.persists)
+        );
+    }
 }
 
 fn push_overlay_sample_linear_ease(
