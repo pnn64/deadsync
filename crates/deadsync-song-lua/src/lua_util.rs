@@ -10944,31 +10944,31 @@ fn resolve_actor_asset_prefix(script_dir: &Path, raw_path: &Path) -> Option<Path
     {
         return cached;
     }
-    let mut matches = fs::read_dir(&dir)
+    let found = fs::read_dir(&dir)
         .ok()?
         .flatten()
-        .map(|entry| entry.path())
-        .filter(|path| path.is_file() && is_song_lua_media_path(path))
-        .filter(|path| {
-            path.file_name()
-                .and_then(|name| name.to_str())
-                .is_some_and(|name| name.to_ascii_lowercase().starts_with(key.1.as_str()))
+        .filter_map(|entry| {
+            let file_name = entry.file_name();
+            let name = file_name.to_str()?;
+            let path = name
+                .get(..prefix.len())
+                .is_some_and(|start| start.eq_ignore_ascii_case(prefix))
+                .then(|| entry.path())?;
+            (path.is_file() && is_song_lua_media_path(&path)).then_some(path)
         })
-        .collect::<Vec<_>>();
-    matches.sort_by(|left, right| {
-        let left = left
-            .file_name()
-            .and_then(|name| name.to_str())
-            .unwrap_or("")
-            .to_ascii_lowercase();
-        let right = right
-            .file_name()
-            .and_then(|name| name.to_str())
-            .unwrap_or("")
-            .to_ascii_lowercase();
-        left.cmp(&right)
-    });
-    let found = matches.into_iter().next();
+        .min_by(|left, right| {
+            let left = left
+                .file_name()
+                .and_then(|name| name.to_str())
+                .unwrap_or("");
+            let right = right
+                .file_name()
+                .and_then(|name| name.to_str())
+                .unwrap_or("");
+            left.bytes()
+                .map(|byte| byte.to_ascii_lowercase())
+                .cmp(right.bytes().map(|byte| byte.to_ascii_lowercase()))
+        });
     cache
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner)
