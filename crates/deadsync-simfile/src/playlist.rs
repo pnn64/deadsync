@@ -63,14 +63,13 @@ pub fn normalize_song_path_legacy(song_path: &str) -> String {
 }
 
 pub fn pack_and_song_name_from_path(song_path: &str) -> Option<(String, String)> {
-    let normalized = normalize_song_path(song_path);
-    let mut parts = normalized
-        .split('/')
-        .filter(|segment| !segment.is_empty())
-        .collect::<Vec<_>>();
-    let song = parts.pop()?.to_string();
-    let pack = parts.pop()?.to_string();
-    Some((pack, song))
+    let mut parts = song_path
+        .trim()
+        .rsplit(['/', '\\'])
+        .filter(|segment| !segment.is_empty());
+    let song = parts.next()?;
+    let pack = parts.next()?;
+    Some((pack.to_string(), song.to_string()))
 }
 
 pub fn song_pack_and_dir_name(song: &SongData) -> Option<(&str, &str)> {
@@ -424,6 +423,11 @@ mod tests {
             pack_and_song_name_from_path("Songs/Pack/Song"),
             Some(("Pack".to_string(), "Song".to_string()))
         );
+        assert_eq!(
+            pack_and_song_name_from_path(" /Songs\\Pack//Song/ "),
+            Some(("Pack".to_string(), "Song".to_string()))
+        );
+        assert_eq!(pack_and_song_name_from_path("SongOnly"), None);
 
         for (input, expected) in [
             ("////", ""),
