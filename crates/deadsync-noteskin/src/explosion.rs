@@ -750,24 +750,6 @@ pub(crate) fn itg_tap_explosion_command_with_init<T>(
     sequence[..=len].join(";")
 }
 
-pub fn itg_tap_explosion_command_for_window<T>(
-    source: &ItgTapExplosionSource<T>,
-    window: &str,
-    command_key: &str,
-    mut metric_command: impl FnMut(ItgTapExplosionMode, &str) -> Option<String>,
-) -> Option<String> {
-    let metric_key = format!("{window}Command");
-    let command = source
-        .commands
-        .get(command_key)
-        .cloned()
-        .or_else(|| metric_command(source.mode, &metric_key));
-    if window == "Held" && command.as_deref().map_or(true, |cmd| cmd.trim().is_empty()) {
-        return None;
-    }
-    command.filter(|cmd| !cmd.trim().is_empty())
-}
-
 pub fn itg_explosion_wrapper<'a, T>(
     layers: &'a [T],
     active_key: &str,
@@ -1249,48 +1231,6 @@ mod tests {
         assert_eq!(
             itg_hit_mine_command_with_init(None, Some("diffusealpha,0".to_string())),
             Some("diffusealpha,0".to_string())
-        );
-    }
-
-    #[test]
-    fn tap_explosion_command_prefers_source_then_metric() {
-        let source = ItgTapExplosionSource::new(
-            "Tap Explosion Dim W1".to_string(),
-            "slot",
-            HashMap::from([("w1command".to_string(), "zoom,2".to_string())]),
-        );
-        assert_eq!(
-            itg_tap_explosion_command_for_window(&source, "W1", "w1command", |_, _| {
-                Some("zoom,1".to_string())
-            }),
-            Some("zoom,2".to_string())
-        );
-
-        let source =
-            ItgTapExplosionSource::new("Tap Explosion Dim W2".to_string(), "slot", HashMap::new());
-        assert_eq!(
-            itg_tap_explosion_command_for_window(&source, "W2", "w2command", |mode, key| {
-                assert_eq!(mode, ItgTapExplosionMode::Dim);
-                assert_eq!(key, "W2Command");
-                Some("diffusealpha,0".to_string())
-            }),
-            Some("diffusealpha,0".to_string())
-        );
-    }
-
-    #[test]
-    fn tap_explosion_command_drops_empty_held_commands() {
-        let source = ItgTapExplosionSource::new(
-            "Tap Explosion Dim Held".to_string(),
-            "slot",
-            HashMap::from([("heldcommand".to_string(), " ".to_string())]),
-        );
-
-        assert_eq!(
-            itg_tap_explosion_command_for_window(&source, "Held", "heldcommand", |_, _| {
-                Some("zoom,1".to_string())
-            }),
-            None
         );
     }
 

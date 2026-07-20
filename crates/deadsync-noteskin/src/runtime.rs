@@ -3,8 +3,8 @@ use crate::explosion::{
     itg_has_hit_mine_command, itg_has_tap_explosion_command, itg_hit_mine_command_with_init,
     itg_hit_mine_explosion_slot, itg_hold_explosion_slot, itg_is_hit_mine_explosion_element,
     itg_mine_explosion_commands, itg_partition_tap_explosion_sources,
-    itg_tap_explosion_command_for_window, itg_tap_explosion_command_with_init,
-    itg_tap_explosion_key, itg_tap_explosion_sources_for_window, parse_explosion_animation,
+    itg_tap_explosion_command_with_init, itg_tap_explosion_key,
+    itg_tap_explosion_sources_for_window, parse_explosion_animation,
 };
 use crate::script::{itg_active_model_commands, model_draw_program};
 use crate::{
@@ -577,14 +577,14 @@ pub fn itg_tap_explosion_map_from_sources<T: Clone>(
     }
 
     let mut tap_explosions = HashMap::new();
-    for (window, key) in [
-        ("W1", "w1command"),
-        ("W2", "w2command"),
-        ("W3", "w3command"),
-        ("W4", "w4command"),
-        ("W5", "w5command"),
-        ("Miss", "misscommand"),
-        ("Held", "heldcommand"),
+    for (window, key, metric_key) in [
+        ("W1", "w1command", "W1Command"),
+        ("W2", "w2command", "W2Command"),
+        ("W3", "w3command", "W3Command"),
+        ("W4", "w4command", "W4Command"),
+        ("W5", "w5command", "W5Command"),
+        ("Miss", "misscommand", "MissCommand"),
+        ("Held", "heldcommand", "HeldCommand"),
     ] {
         for mode in [ItgTapExplosionMode::Dim, ItgTapExplosionMode::Bright] {
             if mode == ItgTapExplosionMode::Bright && bright_sprites.is_empty() {
@@ -603,14 +603,18 @@ pub fn itg_tap_explosion_map_from_sources<T: Clone>(
             let layers = sources
                 .into_iter()
                 .filter_map(|source| {
-                    let command = itg_tap_explosion_command_for_window(
-                        source,
-                        window,
-                        key,
-                        &mut metric_command,
-                    )?;
+                    let fallback;
+                    let command = if let Some(command) = source.commands.get(key) {
+                        command.as_str()
+                    } else {
+                        fallback = metric_command(source.mode, metric_key)?;
+                        fallback.as_str()
+                    };
+                    if command.trim().is_empty() {
+                        return None;
+                    }
                     let command_with_init =
-                        itg_tap_explosion_command_with_init(source, mode, &command);
+                        itg_tap_explosion_command_with_init(source, mode, command);
                     Some(TapExplosionLayer {
                         slot: source.payload.clone(),
                         animation: parse_explosion_animation(&command_with_init),
@@ -4354,6 +4358,22 @@ mod tests {
         for window in crate::explosion::ITG_TAP_EXPLOSION_WINDOWS {
             assert!(map.contains_key(window));
         }
+    }
+
+    #[test]
+    fn tap_explosion_map_drops_blank_held_command_without_metric_fallback() {
+        let source = ItgTapExplosionSource::new(
+            "Tap Explosion Dim Held".to_owned(),
+            Slot(1),
+            HashMap::from([("heldcommand".to_owned(), " ".to_owned())]),
+        );
+
+        let map = itg_tap_explosion_map_from_sources([source], |_, metric_key| {
+            assert_ne!(metric_key, "HeldCommand");
+            None
+        });
+
+        assert!(map.is_empty());
     }
 
     #[test]
