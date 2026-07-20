@@ -552,15 +552,13 @@ pub fn itg_command_with_init(init_command: Option<&str>, command: &str) -> Optio
     if command.is_empty() {
         return None;
     }
-    let mut sequence = Vec::with_capacity(2);
-    if let Some(init) = init_command
+    let init_command = init_command
         .map(str::trim)
-        .filter(|value| !value.is_empty())
-    {
-        sequence.push(init.to_string());
-    }
-    sequence.push(command.to_string());
-    Some(sequence.join(";"))
+        .filter(|value| !value.is_empty());
+    Some(match init_command {
+        Some(init) => [init, command].join(";"),
+        None => command.to_owned(),
+    })
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
