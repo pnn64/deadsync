@@ -1034,14 +1034,10 @@ fn find_stroke_texture_path(main_path: &Path) -> Option<PathBuf> {
     }
 }
 
-/// Parse range <codeset> [#start-end] from a key (key only).
+/// Parse <codeset> [#start-end] from the value after a `range ` prefix.
 #[inline(always)]
-fn parse_range_key(key: &str) -> Option<(String, Option<(u32, u32)>)> {
-    let k = key.trim_start();
-    if !k.to_ascii_lowercase().starts_with("range ") {
-        return None;
-    }
-    let rest = k[6..].trim_start();
+fn parse_range_spec(spec: &str) -> Option<(&str, Option<(u32, u32)>)> {
+    let rest = spec.trim_start();
     // codeset token ends at whitespace or '#'
     let mut cs_end = rest.len();
     for (i, ch) in rest.char_indices() {
@@ -1056,10 +1052,10 @@ fn parse_range_key(key: &str) -> Option<(String, Option<(u32, u32)>)> {
     let codeset = &rest[..cs_end];
     let tail = rest[cs_end..].trim_start();
     if tail.is_empty() {
-        return Some((codeset.to_string(), None));
+        return Some((codeset, None));
     }
     if !tail.starts_with('#') {
-        return Some((codeset.to_string(), None));
+        return Some((codeset, None));
     }
     let tail = &tail[1..];
     let dash = tail.find('-')?;
@@ -1070,7 +1066,7 @@ fn parse_range_key(key: &str) -> Option<(String, Option<(u32, u32)>)> {
     if end < start {
         return None;
     }
-    Some((codeset.to_string(), Some((start, end))))
+    Some((codeset, Some((start, end))))
 }
 
 #[inline(always)]
@@ -2578,8 +2574,7 @@ pub fn parse_with_texture_context(
         for section_name in &sections_to_check {
             let sec_lc = section_name.clone();
             if let Some(map) = ini_map_lower.get(&sec_lc) {
-                for (raw_key_lc, val_str) in map {
-                    let key_lc = raw_key_lc.as_str();
+                for (key_lc, val_str) in map {
                     if let Some(row_str) = key_lc.strip_prefix("line ") {
                         if let Ok(row) = row_str.trim().parse::<u32>() {
                             if row >= num_frames_high {
@@ -2602,7 +2597,7 @@ pub fn parse_with_texture_context(
                         }
                     } else if key_lc.starts_with("map ") {
                         if let Ok(frame_index) = val_str.parse::<usize>() {
-                            let spec = raw_key_lc[4..].trim();
+                            let spec = key_lc[4..].trim();
                             if let Some(hex) =
                                 spec.strip_prefix("U+").or_else(|| spec.strip_prefix("u+"))
                             {
@@ -2633,11 +2628,11 @@ pub fn parse_with_texture_context(
                                 char_to_frame.insert(ch, frame_index);
                             }
                         }
-                    } else if key_lc.starts_with("range ")
+                    } else if let Some(spec) = key_lc.strip_prefix("range ")
                         && let Ok(first_frame) = val_str.parse::<usize>()
-                        && let Some((codeset, hex)) = parse_range_key(raw_key_lc)
+                        && let Some((codeset, hex)) = parse_range_spec(spec)
                     {
-                        apply_range_mapping(&mut char_to_frame, &codeset, hex, first_frame);
+                        apply_range_mapping(&mut char_to_frame, codeset, hex, first_frame);
                     }
                 }
             }
@@ -2928,5 +2923,27 @@ mod tests {
             replace_markers("Press &START; &#9654;").as_ref(),
             format!("Press {lower} \u{25B6}")
         );
+    }
+
+    #[test]
+    fn parse_range_spec_preserves_supported_syntax() {
+        assert_eq!(parse_range_spec("ascii"), Some(("ascii", None)));
+        assert_eq!(
+            parse_range_spec("  numbers #0-9"),
+            Some(("numbers", Some((0, 9))))
+        );
+        assert_eq!(
+            parse_range_spec("日本語 #3040-309f"),
+            Some(("日本語", Some((0x3040, 0x309f))))
+        );
+        assert_eq!(parse_range_spec("latin1 ignored"), Some(("latin1", None)));
+    }
+
+    #[test]
+    fn parse_range_spec_rejects_missing_or_invalid_ranges() {
+        assert_eq!(parse_range_spec(""), None);
+        assert_eq!(parse_range_spec("#20-7e"), None);
+        assert_eq!(parse_range_spec("unicode #7e-20"), None);
+        assert_eq!(parse_range_spec("unicode #zz-ff"), None);
     }
 }
