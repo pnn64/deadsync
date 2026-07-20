@@ -1288,6 +1288,11 @@ where
     }
 
     #[inline(always)]
+    pub fn crossover_cue_entries(&self, player: usize) -> &[Option<f32>] {
+        self.display.cue_runtime.crossover_cue_entries(player)
+    }
+
+    #[inline(always)]
     pub fn set_column_cues(&mut self, player: usize, cues: Vec<ColumnCue>) {
         self.display
             .cue_runtime
@@ -2899,16 +2904,20 @@ where
         for player in 0..self.setup.num_players {
             let delay = self.clock.visible_timing.visual_delay_seconds(player);
             let visible_time_ns = visible_notefield_time_ns(music_time_ns, delay);
+            let visible_time_seconds = song_time_ns_to_seconds(visible_time_ns);
             self.clock.visible_timing.set_player_time(
                 player,
                 visible_time_ns,
-                song_time_ns_to_seconds(visible_time_ns),
+                visible_time_seconds,
                 self.timing_runtime.time_to_beat_caches.visible_beat(
                     player,
                     &self.timing_runtime.timing_players[player],
                     visible_time_ns,
                 ),
             );
+            self.display
+                .cue_runtime
+                .update_crossover_cue_anchors(player, visible_time_seconds);
         }
     }
 

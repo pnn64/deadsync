@@ -456,6 +456,10 @@ pub(crate) fn compose_frame(
             .frame_features
             .crossover_cues
             .then(|| state.crossover_cues(player_idx)),
+        crossover_cue_entries: options
+            .frame_features
+            .crossover_cues
+            .then(|| state.crossover_cue_entries(player_idx)),
         column_flashes: options
             .frame_features
             .column_flash

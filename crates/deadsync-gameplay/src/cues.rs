@@ -53,8 +53,43 @@ pub fn active_column_cue(cues: &[ColumnCue], current_time: f32) -> Option<&Colum
     idx.checked_sub(1).and_then(|i| cues.get(i))
 }
 
+// Returns the half-open index range of cues whose `[start_time, start_time +
+// duration]` window contains `current_time`, in chronological order.
+// Consecutive crossover cues are built to overlap by the fade time, so up to
+// two cues can be active at once; rendering both lets the outgoing cue's
+// fade-out crossfade with the incoming cue's fade-in.
+#[inline]
+pub fn active_column_cue_range(cues: &[ColumnCue], current_time: f32) -> core::ops::Range<usize> {
+    let end = cues.partition_point(|cue| cue.start_time <= current_time);
+    let mut begin = end;
+    while begin > 0 {
+        let cue = &cues[begin - 1];
+        if current_time < cue.start_time + cue.duration {
+            begin -= 1;
+        } else {
+            break;
+        }
+    }
+    begin..end
+}
+
+// Returns every cue whose `[start_time, start_time + duration]` window contains
+// `current_time`, as a contiguous slice in chronological order. See
+// `active_column_cue_range`.
+#[inline]
+pub fn active_column_cues(cues: &[ColumnCue], current_time: f32) -> &[ColumnCue] {
+    &cues[active_column_cue_range(cues, current_time)]
+}
+
 // Lead-in/out fade applied to every crossover cue.
 pub const CROSSOVER_CUE_FADE_SECONDS: f32 = 0.075;
+
+// When the playhead first crosses a cue's start, the cue's fade-in anchors to
+// its own start only if it was reached within this window; otherwise (a
+// practice-mode seek that lands past it) the cue fades in from the landing
+// point instead of popping in at partial/full alpha. Using the fade time
+// guarantees a cue caught during normal play is still inside its fade-in.
+pub const CROSSOVER_CUE_SEEK_GUARD_SECONDS: f32 = CROSSOVER_CUE_FADE_SECONDS;
 
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub struct CrossoverRow {
@@ -300,13 +335,38 @@ fn build_crossover_cues_core(
                 is_mine: true,
             });
         }
-        if let Some(last) = cues.last() {
+        let overlap = cues.last().map(|last| {
             let prev_end = last.start_time + last.duration;
-            if start_time < prev_end {
-                let duration_difference = prev_end - start_time;
-                start_time = prev_end - fade;
-                cue_duration = cue_duration - duration_difference + fade;
+            // Only one cue is active at a time and each cue drives all of its
+            // columns with a single fade envelope, so a column shared by two
+            // overlapping cues would fade out and back in (a visible reflash).
+            let shares_column = last
+                .columns
+                .iter()
+                .any(|prev_col| columns.iter().any(|c| c.column == prev_col.column));
+            (prev_end, shares_column)
+        });
+        if let Some((prev_end, shares_column)) = overlap
+            && start_time < prev_end
+        {
+            if shares_column {
+                // Merge into the previous cue so the shared column stays lit
+                // continuously across the overlap instead of reflashing.
+                let merged_end = (start_time + cue_duration).max(prev_end);
+                let last = cues
+                    .last_mut()
+                    .expect("cues is non-empty when overlap is Some");
+                last.duration = merged_end - last.start_time;
+                for col in columns {
+                    if !last.columns.iter().any(|c| c.column == col.column) {
+                        last.columns.push(col);
+                    }
+                }
+                continue;
             }
+            let duration_difference = prev_end - start_time;
+            start_time = prev_end - fade;
+            cue_duration = cue_duration - duration_difference + fade;
         }
         cues.push(ColumnCue {
             start_time,

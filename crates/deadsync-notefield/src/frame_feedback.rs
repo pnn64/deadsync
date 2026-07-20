@@ -33,6 +33,8 @@ pub struct NotefieldFeedbackFrameView<'a> {
     pub column_cues: Option<&'a [ColumnCue]>,
     /// Crossover cue columns use chart-global column indices.
     pub crossover_cues: Option<&'a [ColumnCue]>,
+    /// Per-cue fade-in anchor times parallel to `crossover_cues`.
+    pub crossover_cue_entries: Option<&'a [Option<f32>]>,
     /// Column flashes are ordered by local lane within the prepared player span.
     pub column_flashes: Option<&'a [Option<ActiveColumnFlash>]>,
     /// Tap explosions are ordered by local lane within the prepared player span.
@@ -81,6 +83,7 @@ pub(crate) fn compose_notefield_feedback<S, F>(
             style: request.style,
             column_cues: frame.column_cues,
             crossover_cues: frame.crossover_cues,
+            crossover_cue_entries: frame.crossover_cue_entries,
             column_flashes: frame.column_flashes,
             // The regular cue countdown is independent of the crossover-only
             // profile toggle.
@@ -912,6 +915,7 @@ mod tests {
         let frame = NotefieldFeedbackFrameView {
             column_cues: None,
             crossover_cues: None,
+            crossover_cue_entries: None,
             column_flashes: Some(&flashes),
             tap_explosions: &taps,
             mine_explosions: &mines,
@@ -997,6 +1001,7 @@ mod tests {
         let frame = NotefieldFeedbackFrameView {
             column_cues: Some(&cues),
             crossover_cues: None,
+            crossover_cue_entries: None,
             column_flashes: None,
             tap_explosions: &taps,
             mine_explosions: &mines,

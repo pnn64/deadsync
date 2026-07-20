@@ -139,7 +139,9 @@ use error_bar::{
 };
 #[cfg(test)]
 use feedback::{
-    JudgmentTiltParams, TapJudgmentRowsParams, column_cue_alpha, column_cue_height,
+    JudgmentTiltParams, TapJudgmentRowsParams, column_cue_alpha, column_cue_alpha_anchored,
+    column_cue_alpha_with_fade,
+    column_cue_height,
     column_cue_reverse_top_y, column_flash_alpha, column_flash_alpha_at, column_flash_color,
     column_flash_height, column_flash_layout, column_flash_reverse_top_y, crossover_cue_height,
     hold_glow_color, judgment_actor_zoom, judgment_tilt_rotation_deg, tap_judgment_rows,
@@ -200,7 +202,9 @@ mod tests {
         append_mini_part, append_perspective_parts, append_turn_parts, apply_accel_y,
         apply_accel_y_with_peak, average_error_bar_mini_scale, beat_factor, beat_scroll_travel,
         beat_x_extra, bottom_cap_uv_window, bumpy_angle, clamp_rounded_i16,
-        clipped_hold_body_bounds, column_cue_alpha, column_cue_height, column_cue_reverse_top_y,
+        clipped_hold_body_bounds, column_cue_alpha, column_cue_alpha_anchored,
+        column_cue_alpha_with_fade, column_cue_height,
+        column_cue_reverse_top_y,
         column_flash_alpha, column_flash_alpha_at, column_flash_color, column_flash_height,
         column_flash_layout, column_flash_reverse_top_y, combo_actor_zoom,
         compute_invert_distances, compute_tornado_bounds, crossover_cue_height, default_column_x,
@@ -1887,6 +1891,44 @@ mod tests {
         assert_eq!(column_cue_alpha(0.1, 0.3), 0.0);
         assert_eq!(column_cue_alpha(f32::NAN, 1.0), 0.0);
         assert_eq!(column_cue_alpha(0.1, f32::INFINITY), 0.0);
+    }
+
+    #[test]
+    fn crossover_cue_alpha_uses_half_fade_time() {
+        // Crossover cues fade over 0.075s (CrossoverCues.lua), half the regular
+        // ColumnCues fade, so a cue reaches full alpha twice as fast and its
+        // fade-out lines up with the next cue's fade-in.
+        let fade = 0.075;
+        assert!((column_cue_alpha_with_fade(0.0, 1.0, fade) - 0.0).abs() <= 1e-6);
+        assert!((column_cue_alpha_with_fade(0.0375, 1.0, fade) - 0.75).abs() <= 1e-6);
+        assert!((column_cue_alpha_with_fade(0.075, 1.0, fade) - 1.0).abs() <= 1e-6);
+        assert!((column_cue_alpha_with_fade(0.5, 1.0, fade) - 1.0).abs() <= 1e-6);
+        assert!((column_cue_alpha_with_fade(0.925, 1.0, fade) - 1.0).abs() <= 1e-6);
+        assert!((column_cue_alpha_with_fade(0.9625, 1.0, fade) - 0.75).abs() <= 1e-6);
+        assert!((column_cue_alpha_with_fade(1.0, 1.0, fade) - 0.0).abs() <= 1e-6);
+        // The 2-arg regular helper is unchanged (0.15 fade).
+        assert!((column_cue_alpha(0.075, 1.0) - 0.75).abs() <= 1e-6);
+    }
+
+    #[test]
+    fn column_cue_alpha_anchored_matches_natural_when_entry_is_start() {
+        for &elapsed in &[0.0_f32, 0.0375, 0.075, 0.5, 0.925, 0.95, 1.0] {
+            let natural = column_cue_alpha(elapsed, 1.0);
+            let anchored = column_cue_alpha_anchored(elapsed, elapsed, 1.0, 0.15);
+            assert!((natural - anchored).abs() <= 1e-6);
+        }
+    }
+
+    #[test]
+    fn column_cue_alpha_anchored_fades_in_from_entry_without_pop() {
+        // Seeked into the middle of a cue: at the entry instant alpha is 0 (no
+        // pop), then it ramps up over the fade time, using the crossover fade.
+        let fade = 0.075;
+        assert!((column_cue_alpha_anchored(0.0, 0.5, 1.0, fade) - 0.0).abs() <= 1e-6);
+        assert!((column_cue_alpha_anchored(0.0375, 0.5, 1.0, fade) - 0.75).abs() <= 1e-6);
+        assert!((column_cue_alpha_anchored(0.075, 0.5, 1.0, fade) - 1.0).abs() <= 1e-6);
+        // The cue's real fade-out still applies near its end regardless of entry.
+        assert!((column_cue_alpha_anchored(0.5, 0.9625, 1.0, fade) - 0.75).abs() <= 1e-6);
     }
 
     #[test]

@@ -12120,6 +12120,44 @@ mod tests {
         assert_eq!(active_column_cue(&cues, 9.0).unwrap().start_time, 3.0);
     }
 
+    #[test]
+    fn active_column_cues_returns_overlapping_window() {
+        // Two consecutive cues overlapping by the fade time, as the crossover
+        // builder emits them (cue2.start == cue1.end - fade).
+        let fade = CROSSOVER_CUE_FADE_SECONDS;
+        let cues = [
+            ColumnCue {
+                start_time: 1.0,
+                duration: 0.5,
+                columns: Vec::new(),
+            },
+            ColumnCue {
+                start_time: 1.5 - fade,
+                duration: 0.5,
+                columns: Vec::new(),
+            },
+        ];
+
+        // Before anything starts: empty.
+        assert!(active_column_cues(&cues, 0.99).is_empty());
+        // Only the first cue is active well inside its window.
+        let only_first = active_column_cues(&cues, 1.2);
+        assert_eq!(only_first.len(), 1);
+        assert_eq!(only_first[0].start_time, 1.0);
+        // Inside the overlap region both cues render simultaneously.
+        let overlap = active_column_cues(&cues, 1.5 - fade + 0.01);
+        assert_eq!(overlap.len(), 2);
+        assert_eq!(overlap[0].start_time, 1.0);
+        assert_eq!(overlap[1].start_time, 1.5 - fade);
+        // After the first cue ends, only the second remains.
+        let only_second = active_column_cues(&cues, 1.6);
+        assert_eq!(only_second.len(), 1);
+        assert_eq!(only_second[0].start_time, 1.5 - fade);
+        // After both end, and for empty input: empty.
+        assert!(active_column_cues(&cues, 9.0).is_empty());
+        assert!(active_column_cues(&[], 2.0).is_empty());
+    }
+
     fn xover_anno(beat: f32, note_count: u8, column_mask: u8, is_crossover: bool) -> CrossoverRow {
         debug_assert_eq!(
             u32::from(note_count),
@@ -12305,6 +12343,25 @@ mod tests {
         assert_eq!(cues.len(), 1);
         assert_near(cues[0].start_time, 0.5);
         assert_near(cues[0].duration, 0.575);
+    }
+
+    #[test]
+    fn crossover_cue_builder_merges_overlapping_same_column_cues() {
+        // Two crossover cues that overlap in time and share column 1. Merging
+        // keeps that column lit continuously instead of reflashing it.
+        let shared = [
+            xover_anno(0.0, 1, 0b0010, false),
+            xover_anno(0.5, 1, 0b0001, true),
+            xover_anno(0.6, 1, 0b0010, false),
+            xover_anno(0.7, 1, 0b1000, true),
+        ];
+        let cues = build_crossover_cues_core(&shared, xover_time, 0, 500, 8, false, 0.0);
+        assert_eq!(cues.len(), 1);
+        assert_near(cues[0].start_time, -0.5);
+        assert_near(cues[0].duration, 0.875);
+        let mut merged_cols: Vec<usize> = cues[0].columns.iter().map(|c| c.column).collect();
+        merged_cols.sort_unstable();
+        assert_eq!(merged_cols, vec![0, 1, 3]);
     }
 
     #[test]
@@ -13437,6 +13494,55 @@ mod tests {
         assert!(state.column_cues(0).is_empty());
         assert!(state.column_cues(1).is_empty());
         assert!(state.crossover_cues(1).is_empty());
+    }
+
+    #[test]
+    fn crossover_cue_anchor_tracks_entry_time() {
+        let new_state = || {
+            let measure_counter_segments: [Vec<StreamSegment>; MAX_PLAYERS] =
+                std::array::from_fn(|_| Vec::new());
+            let column_cues: [Vec<ColumnCue>; MAX_PLAYERS] = std::array::from_fn(|_| Vec::new());
+            let mut crossover_cues: [Vec<ColumnCue>; MAX_PLAYERS] =
+                std::array::from_fn(|_| Vec::new());
+            // Two well-separated cues so seeking lands clearly inside one.
+            crossover_cues[0].push(ColumnCue {
+                start_time: 1.0,
+                duration: 1.0,
+                columns: Vec::new(),
+            });
+            crossover_cues[0].push(ColumnCue {
+                start_time: 5.0,
+                duration: 1.0,
+                columns: Vec::new(),
+            });
+            GameplayCueRuntimeState::new(measure_counter_segments, column_cues, crossover_cues)
+        };
+
+        // Normal forward play: each cue is caught near its start, so it anchors
+        // to its own start (natural fade-in).
+        let mut state = new_state();
+        state.update_crossover_cue_anchors(0, 0.5);
+        state.update_crossover_cue_anchors(0, 1.0 + 0.01);
+        assert_eq!(state.crossover_cue_entry_time(0, 0), Some(1.0));
+
+        // Seek straight into the middle of cue 1: it anchors to the landing time,
+        // so the renderer fades it in from there instead of popping it in.
+        state.update_crossover_cue_anchors(0, 5.5);
+        assert_eq!(state.crossover_cue_entry_time(0, 1), Some(5.5));
+        // Cue 0 keeps its earlier natural anchor.
+        assert_eq!(state.crossover_cue_entry_time(0, 0), Some(1.0));
+
+        // Rewind before cue 1's start, then catch it from the start: it
+        // re-anchors to its own start.
+        state.update_crossover_cue_anchors(0, 4.0);
+        assert_eq!(state.crossover_cue_entry_time(0, 1), None);
+        state.update_crossover_cue_anchors(0, 5.0 + 0.01);
+        assert_eq!(state.crossover_cue_entry_time(0, 1), Some(5.0));
+
+        // Out-of-range / untracked players have no anchor (callers fall back to
+        // the cue's own start).
+        assert_eq!(state.crossover_cue_entry_time(0, 99), None);
+        assert_eq!(state.crossover_cue_entry_time(1, 0), None);
     }
 
     #[test]

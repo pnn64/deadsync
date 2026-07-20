@@ -1,13 +1,23 @@
 use crate::*;
 use deadlib_present::actors::Actor;
 use deadlib_present::dsl::{SpriteBuilder, TextBuilder};
-use deadsync_gameplay::{ActiveColumnFlash, ColumnCue, active_column_cue, column_flash_duration};
+use deadsync_gameplay::{
+    ActiveColumnFlash, ColumnCue, active_column_cue_range, column_flash_duration,
+};
 use deadsync_rules::judgment::{JudgeGrade, TimingWindow};
 use deadsync_rules::scroll::ScrollSpeedSetting;
 use deadsync_theme::{ColumnCueStyle, ColumnFlashLayoutStyle, ColumnFlashStyle, NotefieldStyle};
 use std::sync::Arc;
 
+// Regular column cues fade in/out over this window, matching Simply Love's
+// `ColumnCues.lua` (`fadeTime = 0.15`).
 const COLUMN_CUE_FADE_TIME: f32 = 0.15;
+
+// Crossover cues fade over half that, matching Simply Love's
+// `CrossoverCues.lua` (`fadeTime = 0.075`). This also equals the amount the cue
+// builder overlaps consecutive crossover cues (`CROSSOVER_CUE_FADE_SECONDS`),
+// so a cue's fade-out lines up exactly with the next cue's fade-in.
+const CROSSOVER_CUE_FADE_TIME: f32 = 0.075;
 
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct JudgmentTiltParams {
@@ -156,25 +166,57 @@ pub(crate) fn column_cue_reverse_top_y(
 }
 
 pub(crate) fn column_cue_alpha(elapsed_real: f32, duration_real: f32) -> f32 {
-    if !elapsed_real.is_finite() || !duration_real.is_finite() {
+    column_cue_alpha_with_fade(elapsed_real, duration_real, COLUMN_CUE_FADE_TIME)
+}
+
+// Alpha envelope for a column cue that fades in/out over `fade_time` seconds.
+// Regular column cues and crossover cues use different fade windows (0.15 vs
+// 0.075), so the fade time is passed in rather than hardcoded. The fade-in is
+// anchored to the cue's own start (the natural, unseeked case).
+pub(crate) fn column_cue_alpha_with_fade(
+    elapsed_real: f32,
+    duration_real: f32,
+    fade_time: f32,
+) -> f32 {
+    column_cue_alpha_anchored(elapsed_real, elapsed_real, duration_real, fade_time)
+}
+
+// Alpha envelope for a column cue whose fade-in is anchored to an arbitrary
+// entry point. `since_entry_real` is the time since the cue first became visible
+// (its natural start during normal play, or the seek-landing time when the
+// playhead jumped into the middle of it); it drives the fade-in. `elapsed_real`
+// is the time since the cue's real start; it drives the fade-out and bounds the
+// cue's lifetime. When `since_entry_real == elapsed_real` this is identical to
+// the natural fade. Anchoring the fade-in lets a seeked-into cue ramp up from 0
+// instead of popping in at full alpha.
+pub(crate) fn column_cue_alpha_anchored(
+    since_entry_real: f32,
+    elapsed_real: f32,
+    duration_real: f32,
+    fade_time: f32,
+) -> f32 {
+    if !since_entry_real.is_finite() || !elapsed_real.is_finite() || !duration_real.is_finite() {
         return 0.0;
     }
     if elapsed_real < 0.0 || elapsed_real > duration_real {
         return 0.0;
     }
-    if duration_real <= COLUMN_CUE_FADE_TIME * 2.0 {
+    if duration_real <= fade_time * 2.0 {
         return 0.0;
     }
-    if elapsed_real < COLUMN_CUE_FADE_TIME {
-        let t = (elapsed_real / COLUMN_CUE_FADE_TIME).clamp(0.0, 1.0);
-        return 1.0 - (1.0 - t) * (1.0 - t);
-    }
-    if elapsed_real > duration_real - COLUMN_CUE_FADE_TIME {
-        let t = ((elapsed_real - (duration_real - COLUMN_CUE_FADE_TIME)) / COLUMN_CUE_FADE_TIME)
-            .clamp(0.0, 1.0);
-        return 1.0 - t * t;
-    }
-    1.0
+    let fade_in = if since_entry_real < fade_time {
+        let t = (since_entry_real / fade_time).clamp(0.0, 1.0);
+        1.0 - (1.0 - t) * (1.0 - t)
+    } else {
+        1.0
+    };
+    let fade_out = if elapsed_real > duration_real - fade_time {
+        let t = ((elapsed_real - (duration_real - fade_time)) / fade_time).clamp(0.0, 1.0);
+        1.0 - t * t
+    } else {
+        1.0
+    };
+    fade_in.min(fade_out)
 }
 
 #[derive(Clone, Copy)]
@@ -182,6 +224,9 @@ pub(crate) struct ColumnFeedbackRequest<'a> {
     pub style: NotefieldStyle,
     pub column_cues: Option<&'a [ColumnCue]>,
     pub crossover_cues: Option<&'a [ColumnCue]>,
+    // Per-cue fade-in anchor times parallel to `crossover_cues`; None entries (or
+    // a missing slice) fall back to each cue's own start (natural fade-in).
+    pub crossover_cue_entries: Option<&'a [Option<f32>]>,
     pub column_flashes: Option<&'a [Option<ActiveColumnFlash>]>,
     pub regular_countdown: bool,
     pub crossover_countdown: bool,
@@ -250,21 +295,32 @@ fn compose_column_cue(
     kind: ColumnCueKind,
     show_countdown: bool,
 ) {
-    let Some(cue) = active_column_cue(cues, request.current_music_time) else {
-        return;
+    // Regular cues never overlap, so at most one is active. Crossover cues are
+    // built to overlap by the fade time, so up to two can be active at once;
+    // rendering both lets the outgoing cue's fade-out crossfade with the
+    // incoming cue's fade-in, matching Simply Love's independent per-column
+    // actors.
+    let active_range = match kind {
+        ColumnCueKind::Regular => {
+            let end = cues.partition_point(|cue| cue.start_time <= request.current_music_time);
+            match end.checked_sub(1) {
+                Some(begin) => begin..end,
+                None => return,
+            }
+        }
+        ColumnCueKind::Crossover => {
+            active_column_cue_range(cues, request.current_music_time)
+        }
     };
+    if active_range.is_empty() {
+        return;
+    }
+
     let rate = if request.music_rate.is_finite() && request.music_rate > 0.0 {
         request.music_rate
     } else {
         1.0
     };
-    let duration_real = cue.duration / rate;
-    let elapsed_real = (request.current_music_time - cue.start_time) / rate;
-    let alpha_mul = column_cue_alpha(elapsed_real, duration_real);
-    if alpha_mul <= 0.0 {
-        return;
-    }
-
     let style = request.style.column_cue;
     let lane_width = ScrollSpeedSetting::ARROW_SPACING * request.field_zoom;
     let cue_height = match kind {
@@ -276,80 +332,107 @@ fn compose_column_cue(
         .min(request.column_xs.len())
         .min(request.column_dirs.len());
 
-    for col_cue in &cue.columns {
-        let local_col = col_cue.column.saturating_sub(request.col_start);
+    for cue_idx in active_range {
+        let cue = &cues[cue_idx];
+        let duration_real = cue.duration / rate;
+        let elapsed_real = (request.current_music_time - cue.start_time) / rate;
+        let alpha_mul = match kind {
+            ColumnCueKind::Regular => column_cue_alpha(elapsed_real, duration_real),
+            ColumnCueKind::Crossover => {
+                // Anchor the fade-in to where the cue first became visible so a
+                // cue you seek into ramps up instead of popping in at full alpha.
+                let entry_time = request
+                    .crossover_cue_entries
+                    .and_then(|entries| entries.get(cue_idx).copied().flatten())
+                    .unwrap_or(cue.start_time);
+                let since_entry_real = (request.current_music_time - entry_time) / rate;
+                column_cue_alpha_anchored(
+                    since_entry_real,
+                    elapsed_real,
+                    duration_real,
+                    CROSSOVER_CUE_FADE_TIME,
+                )
+            }
+        };
+        if alpha_mul <= 0.0 {
+            continue;
+        }
+
+        for col_cue in &cue.columns {
+            let local_col = col_cue.column.saturating_sub(request.col_start);
+            if local_col >= num_cols {
+                continue;
+            }
+            let x = request.playfield_center_x
+                + request.column_xs[local_col] * request.spacing_multiplier * request.field_zoom;
+            let alpha = style.base_alpha * alpha_mul;
+            let rgb = if col_cue.is_mine {
+                style.mine_color
+            } else {
+                style.normal_color
+            };
+            let reverse = request.column_dirs[local_col] < 0.0;
+            let y = if reverse {
+                column_cue_reverse_top_y(
+                    style,
+                    lane_width,
+                    cue_height,
+                    request.field_center_y,
+                    request.style.receptor_reverse_y,
+                )
+            } else {
+                style.top_y + request.field_center_y
+            };
+            append_column_quad(
+                actors,
+                x,
+                y,
+                lane_width,
+                cue_height,
+                reverse,
+                style.body_fade,
+                [rgb[0], rgb[1], rgb[2], alpha],
+                style.body_z,
+            );
+        }
+
+        if !show_countdown || duration_real < 5.0 {
+            continue;
+        }
+        let remaining = duration_real - elapsed_real;
+        if remaining <= 0.5 {
+            continue;
+        }
+        let Some(last_col) = cue.columns.last() else {
+            continue;
+        };
+        let local_col = last_col.column.saturating_sub(request.col_start);
         if local_col >= num_cols {
             continue;
         }
         let x = request.playfield_center_x
             + request.column_xs[local_col] * request.spacing_multiplier * request.field_zoom;
-        let alpha = style.base_alpha * alpha_mul;
-        let rgb = if col_cue.is_mine {
-            style.mine_color
-        } else {
-            style.normal_color
-        };
-        let reverse = request.column_dirs[local_col] < 0.0;
-        let y = if reverse {
-            column_cue_reverse_top_y(
-                style,
-                lane_width,
-                cue_height,
-                request.field_center_y,
-                request.style.receptor_reverse_y,
-            )
-        } else {
-            style.top_y + request.field_center_y
-        };
-        append_column_quad(
-            actors,
-            x,
-            y,
-            lane_width,
-            cue_height,
-            reverse,
-            style.body_fade,
-            [rgb[0], rgb[1], rgb[2], alpha],
-            style.body_z,
-        );
+        let y = request.field_center_y
+            + if request.column_dirs[local_col] < 0.0 {
+                style.countdown_reverse_y
+            } else {
+                style.countdown_normal_y
+            };
+        let mut text = TextBuilder::new();
+        text.font(request.countdown_font);
+        text.settext((request.countdown_text)(remaining.round() as i32).into());
+        text.align(0.5, 0.5);
+        text.xy(x, y);
+        text.zoom(style.countdown_zoom);
+        text.z(style.countdown_z);
+        text.diffuse([
+            style.countdown_color[0],
+            style.countdown_color[1],
+            style.countdown_color[2],
+            alpha_mul,
+        ]);
+        hud_actors.push(text.build(0));
     }
-
-    if !show_countdown || duration_real < 5.0 {
-        return;
-    }
-    let remaining = duration_real - elapsed_real;
-    if remaining <= 0.5 {
-        return;
-    }
-    let Some(last_col) = cue.columns.last() else {
-        return;
-    };
-    let local_col = last_col.column.saturating_sub(request.col_start);
-    if local_col >= num_cols {
-        return;
-    }
-    let x = request.playfield_center_x
-        + request.column_xs[local_col] * request.spacing_multiplier * request.field_zoom;
-    let y = request.field_center_y
-        + if request.column_dirs[local_col] < 0.0 {
-            style.countdown_reverse_y
-        } else {
-            style.countdown_normal_y
-        };
-    let mut text = TextBuilder::new();
-    text.font(request.countdown_font);
-    text.settext((request.countdown_text)(remaining.round() as i32).into());
-    text.align(0.5, 0.5);
-    text.xy(x, y);
-    text.zoom(style.countdown_zoom);
-    text.z(style.countdown_z);
-    text.diffuse([
-        style.countdown_color[0],
-        style.countdown_color[1],
-        style.countdown_color[2],
-        alpha_mul,
-    ]);
-    hud_actors.push(text.build(0));
 }
 
 fn compose_column_flashes(
@@ -781,6 +864,7 @@ mod tests {
             style: style(),
             column_cues,
             crossover_cues,
+            crossover_cue_entries: None,
             column_flashes,
             regular_countdown: true,
             crossover_countdown: false,
