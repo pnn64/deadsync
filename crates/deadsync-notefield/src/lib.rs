@@ -129,8 +129,8 @@ pub(crate) use transforms::{
 
 #[cfg(test)]
 use display_mods::{
-    append_average_error_bar_part, append_mini_part, append_perspective_parts, append_turn_parts,
-    disabled_timing_windows_name, join_display_mod_parts, push_transform_parts,
+    append_average_error_bar_part, append_disabled_timing_windows, append_mini_part,
+    append_perspective_parts, append_turn_parts, push_transform_parts,
 };
 #[cfg(test)]
 use error_bar::{
@@ -198,17 +198,18 @@ mod tests {
         ZmodComboColorStyle, ZmodLayoutParams, ZmodMeasureCounterText, ZmodMiniIndicatorOutput,
         ZmodMiniIndicatorParams, ZmodMiniIndicatorText, actor_with_world_z, appearance_needs_rows,
         appearance_note_actor_alpha, appearance_note_alpha, appearance_note_glow,
-        append_average_error_bar_part, append_beat_bar, append_cue_bar, append_edit_measure_number,
-        append_mini_part, append_perspective_parts, append_turn_parts, apply_accel_y,
-        apply_accel_y_with_peak, average_error_bar_mini_scale, beat_factor, beat_scroll_travel,
-        beat_x_extra, bottom_cap_uv_window, bumpy_angle, clamp_rounded_i16,
+        append_average_error_bar_part, append_beat_bar, append_cue_bar,
+        append_disabled_timing_windows, append_edit_measure_number, append_mini_part,
+        append_perspective_parts, append_turn_parts, apply_accel_y, apply_accel_y_with_peak,
+        average_error_bar_mini_scale, beat_factor, beat_scroll_travel, beat_x_extra,
+        bottom_cap_uv_window, bumpy_angle, clamp_rounded_i16,
         clipped_hold_body_bounds, column_cue_alpha, column_cue_alpha_anchored,
         column_cue_alpha_with_fade, column_cue_height,
         column_cue_reverse_top_y,
         column_flash_alpha, column_flash_alpha_at, column_flash_color, column_flash_height,
         column_flash_layout, column_flash_reverse_top_y, combo_actor_zoom,
         compute_invert_distances, compute_tornado_bounds, crossover_cue_height, default_column_x,
-        disabled_timing_windows_name, drunk_x_extra, edit_bar_candidate_step_rows,
+        drunk_x_extra, edit_bar_candidate_step_rows,
         edit_bar_scroll_speed, edit_beat_bar_info_for_row, edit_beat_scroll_travel,
         effective_mini_value, error_bar_boundaries_s, error_bar_color_for_window,
         error_bar_flash_alpha, error_bar_text_scalable_zoom, error_bar_tick_alpha,
@@ -219,7 +220,7 @@ mod tests {
         hold_head_part_for_roll, hold_indicator_column_x, hold_overlaps_visible_window,
         hold_parts_for_note_type, hold_segment_pose, hold_strip_actor, hold_strip_glow_actor,
         hold_strip_quad, hold_strip_row_3d, hold_tail_cap_bounds, hud_layout_ys, hud_y,
-        itg_actor_glow_alpha, itg_actor_rotation_z, join_display_mod_parts, judgment_actor_zoom,
+        itg_actor_glow_alpha, itg_actor_rotation_z, judgment_actor_zoom,
         judgment_tilt_rotation_deg, maybe_mirror_uv_horiz_for_reverse_flipped,
         mine_hides_after_resolution, mine_part, mod_divisor, mod_percent_key, move_col_extra,
         note_itg_row, note_world_z_for_bumpy, note_x_extra, note_x_offset, notefield_view_proj,
@@ -830,9 +831,9 @@ mod tests {
 
     #[test]
     fn display_mods_mini_keeps_full_percent() {
-        let mut parts = Vec::new();
-        append_mini_part(&mut parts, 100);
-        assert_eq!(parts, vec!["100% Mini".to_string()]);
+        let mut out = String::new();
+        append_mini_part(&mut out, 100);
+        assert_eq!(out, "100%\u{00A0}Mini");
     }
 
     #[test]
@@ -849,10 +850,13 @@ mod tests {
 
     #[test]
     fn display_mods_keep_spaces_inside_one_option_atomic() {
-        let text =
-            join_display_mod_parts(&["devcel-2024".to_string(), "-4ms VisualDelay".to_string()]);
+        let mut params = empty_mods_params();
+        params.noteskin = "custom  skin name ";
 
-        assert_eq!(text, "devcel-2024, -4ms\u{00A0}VisualDelay");
+        assert_eq!(
+            gameplay_mods_text(params),
+            "1x, Overhead, custom\u{00A0}\u{00A0}skin\u{00A0}name\u{00A0}"
+        );
     }
 
     #[test]
@@ -862,125 +866,96 @@ mod tests {
         params.avg_error_bar_intensity_centi = 175;
         params.avg_error_bar_interval_ms = 300;
 
-        let mut parts = Vec::new();
-        append_average_error_bar_part(&mut parts, params);
+        let mut out = String::new();
+        append_average_error_bar_part(&mut out, params);
 
-        assert_eq!(parts, vec!["ErrorBar1.75x(Avg:300ms)".to_string()]);
+        assert_eq!(out, "ErrorBar1.75x(Avg:300ms)");
     }
 
     #[test]
     fn display_mods_skip_average_error_bar_config_when_inactive() {
-        let mut parts = Vec::new();
-        append_average_error_bar_part(&mut parts, empty_mods_params());
+        let mut out = String::new();
+        append_average_error_bar_part(&mut out, empty_mods_params());
 
-        assert!(parts.is_empty());
+        assert!(out.is_empty());
     }
 
     #[test]
     fn display_mods_append_all_active_turns_in_itg_order() {
-        let mut parts = Vec::new();
-        append_turn_parts(&mut parts, DISPLAY_TURN_MIRROR | DISPLAY_TURN_RANDOM);
-        assert_eq!(parts, vec!["Mirror".to_string(), "Random".to_string()]);
+        let mut out = String::new();
+        append_turn_parts(&mut out, DISPLAY_TURN_MIRROR | DISPLAY_TURN_RANDOM);
+        assert_eq!(out, "Mirror, Random");
     }
 
     #[test]
     fn display_mods_use_simply_love_turn_names() {
-        let mut parts = Vec::new();
-        append_turn_parts(&mut parts, DISPLAY_TURN_UD_MIRROR);
-        assert_eq!(parts, vec!["UD-Mirror".to_string()]);
+        let mut out = String::new();
+        append_turn_parts(&mut out, DISPLAY_TURN_UD_MIRROR);
+        assert_eq!(out, "UD-Mirror");
     }
 
     #[test]
     fn display_mods_transform_order_matches_itg() {
-        let mut parts = Vec::new();
+        let mut out = String::new();
         push_transform_parts(
-            &mut parts,
+            &mut out,
             (1 << 0) | (1 << 1) | (1 << 7),
             (1 << 0) | (1 << 1),
             1 << 3,
         );
-        assert_eq!(
-            parts,
-            vec![
-                "NoRolls".to_string(),
-                "NoMines".to_string(),
-                "Little".to_string(),
-                "Wide".to_string(),
-                "Big".to_string(),
-                "Mines".to_string(),
-            ]
-        );
+        assert_eq!(out, "NoRolls, NoMines, Little, Wide, Big, Mines");
     }
 
     #[test]
     fn display_mods_transform_masks_use_legacy_bit_assignments() {
-        let mut parts = Vec::new();
-        push_transform_parts(&mut parts, 0xFF, 0xFF, 0x1F);
+        let mut out = String::new();
+        push_transform_parts(&mut out, 0xFF, 0xFF, 0x1F);
         assert_eq!(
-            parts,
-            vec![
-                "NoHolds".to_string(),
-                "NoRolls".to_string(),
-                "NoMines".to_string(),
-                "Little".to_string(),
-                "Wide".to_string(),
-                "Big".to_string(),
-                "Quick".to_string(),
-                "BMRize".to_string(),
-                "Skippy".to_string(),
-                "Mines".to_string(),
-                "Echo".to_string(),
-                "Stomp".to_string(),
-                "Planted".to_string(),
-                "Floored".to_string(),
-                "Twister".to_string(),
-                "HoldsToRolls".to_string(),
-                "NoJumps".to_string(),
-                "NoHands".to_string(),
-                "NoLifts".to_string(),
-                "NoFakes".to_string(),
-                "NoQuads".to_string(),
-            ]
+            out,
+            concat!(
+                "NoHolds, NoRolls, NoMines, Little, Wide, Big, Quick, BMRize, Skippy, ",
+                "Mines, Echo, Stomp, Planted, Floored, Twister, HoldsToRolls, NoJumps, ",
+                "NoHands, NoLifts, NoFakes, NoQuads"
+            )
         );
     }
 
     #[test]
     fn display_mods_use_itg_disabled_timing_window_names() {
-        assert_eq!(
-            disabled_timing_windows_name((1 << 3) | (1 << 4)),
-            Some("No W4/W5".to_string())
-        );
-        assert_eq!(
-            disabled_timing_windows_name((1 << 0) | (1 << 1)),
-            Some("No W1/W2".to_string())
-        );
+        let mut out = String::new();
+        append_disabled_timing_windows(&mut out, (1 << 3) | (1 << 4));
+        assert_eq!(out, "No\u{00A0}W4/W5");
+
+        out.clear();
+        append_disabled_timing_windows(&mut out, (1 << 0) | (1 << 1));
+        assert_eq!(out, "No\u{00A0}W1/W2");
     }
 
     #[test]
     fn display_mods_perspective_names_match_itg_rules() {
-        let mut parts = Vec::new();
-        append_perspective_parts(&mut parts, 0, 0);
-        assert_eq!(parts, vec!["Overhead".to_string()]);
+        let mut out = String::new();
+        append_perspective_parts(&mut out, 0, 0);
+        assert_eq!(out, "Overhead");
 
-        let mut parts = Vec::new();
-        append_perspective_parts(&mut parts, -100, 100);
-        assert_eq!(parts, vec!["Incoming".to_string()]);
+        let mut out = String::new();
+        append_perspective_parts(&mut out, -100, 100);
+        assert_eq!(out, "Incoming");
 
-        let mut parts = Vec::new();
-        append_perspective_parts(&mut parts, 100, 0);
-        assert_eq!(parts, vec!["Distant".to_string()]);
+        let mut out = String::new();
+        append_perspective_parts(&mut out, 100, 0);
+        assert_eq!(out, "Distant");
 
-        let mut parts = Vec::new();
-        append_perspective_parts(&mut parts, -100, 0);
-        assert_eq!(parts, vec!["Hallway".to_string()]);
+        let mut out = String::new();
+        append_perspective_parts(&mut out, -100, 0);
+        assert_eq!(out, "Hallway");
 
-        let mut parts = Vec::new();
-        append_perspective_parts(&mut parts, 75, 75);
-        assert_eq!(parts, vec!["75% Space".to_string()]);
+        let mut out = String::new();
+        append_perspective_parts(&mut out, 75, 75);
+        assert_eq!(out, "75%\u{00A0}Space");
 
-        let mut parts = Vec::new();
-        append_perspective_parts(&mut parts, 50, 25);
-        assert_eq!(parts, vec!["25% Skew".to_string(), "50% Tilt".to_string()]);
+        let mut out = String::new();
+        append_perspective_parts(&mut out, 50, 25);
+        assert_eq!(out, "25%\u{00A0}Skew, 50%\u{00A0}Tilt");
     }
 
     #[test]

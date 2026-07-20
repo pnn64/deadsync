@@ -1,4 +1,5 @@
 use deadsync_rules::scroll::ScrollSpeedSetting;
+use std::fmt::Write as _;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum GameplayModsAttackMode {
@@ -44,102 +45,120 @@ pub struct GameplayModsTextParams<'a> {
     pub disabled_timing_windows: u8,
 }
 
-fn trim_float2(value: f32) -> String {
-    let mut s = format!("{value:.2}");
-    while s.contains('.') && s.ends_with('0') {
-        s.pop();
-    }
-    if s.ends_with('.') {
-        s.pop();
-    }
-    s
-}
-
-fn format_speed(speed: ScrollSpeedSetting) -> String {
-    match speed {
-        ScrollSpeedSetting::XMod(v) => format!("{}x", trim_float2(v)),
-        ScrollSpeedSetting::CMod(v) => format!("C{}", trim_float2(v)),
-        ScrollSpeedSetting::MMod(v) => format!("m{}", trim_float2(v)),
+fn begin_display_mod_option(out: &mut String) {
+    if !out.is_empty() {
+        out.push_str(", ");
     }
 }
 
-fn append_mod_part(parts: &mut Vec<String>, percent: i16, name: &str) {
-    if percent == 0 {
-        return;
+fn push_atomic_text(out: &mut String, text: &str) {
+    let mut words = text.split(' ');
+    if let Some(first) = words.next() {
+        out.push_str(first);
     }
-    if percent == 100 {
-        parts.push(name.to_string());
-    } else {
-        parts.push(format!("{percent}% {name}"));
-    }
-}
-
-pub(crate) fn append_mini_part(parts: &mut Vec<String>, mini_percent: i16) {
-    if mini_percent != 0 {
-        parts.push(format!("{mini_percent}% Mini"));
-    }
-}
-
-fn append_spacing_part(parts: &mut Vec<String>, spacing_percent: i16) {
-    if spacing_percent != 0 {
-        parts.push(format!("{spacing_percent}% Spacing"));
-    }
-}
-
-pub(crate) fn append_average_error_bar_part(
-    parts: &mut Vec<String>,
-    params: GameplayModsTextParams<'_>,
-) {
-    if params.average_error_bar_active {
-        let intensity = trim_float2(params.avg_error_bar_intensity_centi as f32 / 100.0);
-        parts.push(format!(
-            "ErrorBar{intensity}x(Avg:{}ms)",
-            params.avg_error_bar_interval_ms
-        ));
+    for word in words {
+        out.push('\u{00A0}');
+        out.push_str(word);
     }
 }
 
 fn push_display_mod_option(out: &mut String, option: &str) {
-    if !out.is_empty() {
-        out.push_str(", ");
-    }
-    out.push_str(&option.replace(' ', "\u{00A0}"));
+    begin_display_mod_option(out);
+    push_atomic_text(out, option);
 }
 
-pub(crate) fn join_display_mod_parts(parts: &[String]) -> String {
-    let mut out = String::new();
-    for part in parts {
-        push_display_mod_option(&mut out, part);
+fn push_trimmed_float2(out: &mut String, value: f32) {
+    let start = out.len();
+    write!(out, "{value:.2}").expect("writing to a String cannot fail");
+    if out[start..].contains('.') {
+        while out.ends_with('0') {
+            out.pop();
+        }
+        if out.ends_with('.') {
+            out.pop();
+        }
     }
-    out
 }
 
-pub(crate) fn append_perspective_parts(parts: &mut Vec<String>, tilt: i16, skew: i16) {
+fn append_speed(out: &mut String, speed: ScrollSpeedSetting) {
+    begin_display_mod_option(out);
+    match speed {
+        ScrollSpeedSetting::XMod(value) => {
+            push_trimmed_float2(out, value);
+            out.push('x');
+        }
+        ScrollSpeedSetting::CMod(value) => {
+            out.push('C');
+            push_trimmed_float2(out, value);
+        }
+        ScrollSpeedSetting::MMod(value) => {
+            out.push('m');
+            push_trimmed_float2(out, value);
+        }
+    }
+}
+
+fn append_mod_part(out: &mut String, percent: i16, name: &str) {
+    if percent == 0 {
+        return;
+    }
+    begin_display_mod_option(out);
+    if percent != 100 {
+        write!(out, "{percent}%\u{00A0}").expect("writing to a String cannot fail");
+    }
+    push_atomic_text(out, name);
+}
+
+pub(crate) fn append_mini_part(out: &mut String, mini_percent: i16) {
+    if mini_percent != 0 {
+        begin_display_mod_option(out);
+        write!(out, "{mini_percent}%\u{00A0}Mini").expect("writing to a String cannot fail");
+    }
+}
+
+fn append_spacing_part(out: &mut String, spacing_percent: i16) {
+    if spacing_percent != 0 {
+        begin_display_mod_option(out);
+        write!(out, "{spacing_percent}%\u{00A0}Spacing").expect("writing to a String cannot fail");
+    }
+}
+
+pub(crate) fn append_average_error_bar_part(out: &mut String, params: GameplayModsTextParams<'_>) {
+    if params.average_error_bar_active {
+        begin_display_mod_option(out);
+        out.push_str("ErrorBar");
+        push_trimmed_float2(out, params.avg_error_bar_intensity_centi as f32 / 100.0);
+        write!(out, "x(Avg:{}ms)", params.avg_error_bar_interval_ms)
+            .expect("writing to a String cannot fail");
+    }
+}
+
+pub(crate) fn append_perspective_parts(out: &mut String, tilt: i16, skew: i16) {
     if tilt == 0 && skew == 0 {
-        parts.push("Overhead".to_string());
+        push_display_mod_option(out, "Overhead");
         return;
     }
     if skew == 0 {
         if tilt > 0 {
-            append_mod_part(parts, tilt, "Distant");
+            append_mod_part(out, tilt, "Distant");
         } else {
-            append_mod_part(parts, -tilt, "Hallway");
+            append_mod_part(out, -tilt, "Hallway");
         }
         return;
     }
     if skew == tilt {
-        append_mod_part(parts, skew, "Space");
+        append_mod_part(out, skew, "Space");
         return;
     }
     if skew == -tilt {
-        append_mod_part(parts, skew, "Incoming");
+        append_mod_part(out, skew, "Incoming");
         return;
     }
-    append_mod_part(parts, skew, "Skew");
-    append_mod_part(parts, tilt, "Tilt");
+    append_mod_part(out, skew, "Skew");
+    append_mod_part(out, tilt, "Tilt");
 }
 
-pub(crate) fn append_turn_parts(parts: &mut Vec<String>, bits: u16) {
+pub(crate) fn append_turn_parts(out: &mut String, bits: u16) {
     for (bit, name) in [
         (DISPLAY_TURN_MIRROR, "Mirror"),
         (DISPLAY_TURN_LEFT, "Left"),
@@ -151,7 +170,7 @@ pub(crate) fn append_turn_parts(parts: &mut Vec<String>, bits: u16) {
         (DISPLAY_TURN_RANDOM, "Random"),
     ] {
         if bits & bit != 0 {
-            parts.push(name.to_string());
+            push_display_mod_option(out, name);
         }
     }
 }
@@ -166,99 +185,70 @@ fn attack_mode_name(mode: GameplayModsAttackMode) -> Option<&'static str> {
 }
 
 pub(crate) fn push_transform_parts(
-    parts: &mut Vec<String>,
+    out: &mut String,
     insert_mask: u8,
     remove_mask: u8,
     holds_mask: u8,
 ) {
-    if remove_mask & (1 << 2) != 0 {
-        parts.push("NoHolds".to_string());
-    }
-    if holds_mask & (1 << 3) != 0 {
-        parts.push("NoRolls".to_string());
-    }
-    if remove_mask & (1 << 1) != 0 {
-        parts.push("NoMines".to_string());
-    }
-    if remove_mask & (1 << 0) != 0 {
-        parts.push("Little".to_string());
-    }
-    if insert_mask & (1 << 0) != 0 {
-        parts.push("Wide".to_string());
-    }
-    if insert_mask & (1 << 1) != 0 {
-        parts.push("Big".to_string());
-    }
-    if insert_mask & (1 << 2) != 0 {
-        parts.push("Quick".to_string());
-    }
-    if insert_mask & (1 << 3) != 0 {
-        parts.push("BMRize".to_string());
-    }
-    if insert_mask & (1 << 4) != 0 {
-        parts.push("Skippy".to_string());
-    }
-    if insert_mask & (1 << 7) != 0 {
-        parts.push("Mines".to_string());
-    }
-    if insert_mask & (1 << 5) != 0 {
-        parts.push("Echo".to_string());
-    }
-    if insert_mask & (1 << 6) != 0 {
-        parts.push("Stomp".to_string());
-    }
-    if holds_mask & (1 << 0) != 0 {
-        parts.push("Planted".to_string());
-    }
-    if holds_mask & (1 << 1) != 0 {
-        parts.push("Floored".to_string());
-    }
-    if holds_mask & (1 << 2) != 0 {
-        parts.push("Twister".to_string());
-    }
-    if holds_mask & (1 << 4) != 0 {
-        parts.push("HoldsToRolls".to_string());
-    }
-    if remove_mask & (1 << 3) != 0 {
-        parts.push("NoJumps".to_string());
-    }
-    if remove_mask & (1 << 4) != 0 {
-        parts.push("NoHands".to_string());
-    }
-    if remove_mask & (1 << 6) != 0 {
-        parts.push("NoLifts".to_string());
-    }
-    if remove_mask & (1 << 7) != 0 {
-        parts.push("NoFakes".to_string());
-    }
-    if remove_mask & (1 << 5) != 0 {
-        parts.push("NoQuads".to_string());
+    for (enabled, name) in [
+        (remove_mask & (1 << 2) != 0, "NoHolds"),
+        (holds_mask & (1 << 3) != 0, "NoRolls"),
+        (remove_mask & (1 << 1) != 0, "NoMines"),
+        (remove_mask & (1 << 0) != 0, "Little"),
+        (insert_mask & (1 << 0) != 0, "Wide"),
+        (insert_mask & (1 << 1) != 0, "Big"),
+        (insert_mask & (1 << 2) != 0, "Quick"),
+        (insert_mask & (1 << 3) != 0, "BMRize"),
+        (insert_mask & (1 << 4) != 0, "Skippy"),
+        (insert_mask & (1 << 7) != 0, "Mines"),
+        (insert_mask & (1 << 5) != 0, "Echo"),
+        (insert_mask & (1 << 6) != 0, "Stomp"),
+        (holds_mask & (1 << 0) != 0, "Planted"),
+        (holds_mask & (1 << 1) != 0, "Floored"),
+        (holds_mask & (1 << 2) != 0, "Twister"),
+        (holds_mask & (1 << 4) != 0, "HoldsToRolls"),
+        (remove_mask & (1 << 3) != 0, "NoJumps"),
+        (remove_mask & (1 << 4) != 0, "NoHands"),
+        (remove_mask & (1 << 6) != 0, "NoLifts"),
+        (remove_mask & (1 << 7) != 0, "NoFakes"),
+        (remove_mask & (1 << 5) != 0, "NoQuads"),
+    ] {
+        if enabled {
+            push_display_mod_option(out, name);
+        }
     }
 }
 
-pub(crate) fn disabled_timing_windows_name(bits: u8) -> Option<String> {
+pub(crate) fn append_disabled_timing_windows(out: &mut String, bits: u8) {
     if bits == 0 {
-        return None;
+        return;
     }
-    let mut windows = Vec::new();
-    for ix in 0..5 {
-        if bits & (1 << ix) != 0 {
-            windows.push(format!("W{}", ix + 1));
+    begin_display_mod_option(out);
+    out.push_str("No\u{00A0}");
+    let mut first = true;
+    for ix in 0_u8..5 {
+        if bits & (1_u8 << ix) == 0 {
+            continue;
         }
+        if !first {
+            out.push('/');
+        }
+        out.push('W');
+        out.push(char::from(b'1' + ix));
+        first = false;
     }
-    Some(format!("No {}", windows.join("/")))
 }
 
 pub fn gameplay_mods_text(params: GameplayModsTextParams<'_>) -> String {
-    let mut parts = Vec::new();
-    parts.push(format_speed(params.speed));
+    let mut out = String::with_capacity(64);
+    append_speed(&mut out, params.speed);
     for (percent, name) in
         params
             .accel
             .into_iter()
             .zip(["Boost", "Brake", "Wave", "Expand", "Boomerang"])
     {
-        append_mod_part(&mut parts, percent, name);
+        append_mod_part(&mut out, percent, name);
     }
     for (percent, name) in params.visual.into_iter().zip([
         "Drunk",
@@ -271,17 +261,17 @@ pub fn gameplay_mods_text(params: GameplayModsTextParams<'_>) -> String {
         "Bumpy",
         "Beat",
     ]) {
-        append_mod_part(&mut parts, percent, name);
+        append_mod_part(&mut out, percent, name);
     }
-    append_mini_part(&mut parts, params.mini_percent);
-    append_spacing_part(&mut parts, params.spacing_percent);
+    append_mini_part(&mut out, params.mini_percent);
+    append_spacing_part(&mut out, params.spacing_percent);
     for (percent, name) in
         params
             .appearance
             .into_iter()
             .zip(["Hidden", "Sudden", "Stealth", "Blink", "RandomVanish"])
     {
-        append_mod_part(&mut parts, percent, name);
+        append_mod_part(&mut out, percent, name);
     }
     for (percent, name) in
         params
@@ -289,31 +279,31 @@ pub fn gameplay_mods_text(params: GameplayModsTextParams<'_>) -> String {
             .into_iter()
             .zip(["Reverse", "Split", "Alternate", "Cross", "Centered"])
     {
-        append_mod_part(&mut parts, percent, name);
+        append_mod_part(&mut out, percent, name);
     }
-    append_mod_part(&mut parts, params.dark, "Dark");
-    append_mod_part(&mut parts, params.blind, "Blind");
-    append_mod_part(&mut parts, params.cover, "Hide BG");
+    append_mod_part(&mut out, params.dark, "Dark");
+    append_mod_part(&mut out, params.blind, "Blind");
+    append_mod_part(&mut out, params.cover, "Hide BG");
     if let Some(name) = attack_mode_name(params.attack_mode) {
-        parts.push(name.to_string());
+        push_display_mod_option(&mut out, name);
     }
-    append_turn_parts(&mut parts, params.turn_bits);
+    append_turn_parts(&mut out, params.turn_bits);
     push_transform_parts(
-        &mut parts,
+        &mut out,
         params.insert_mask,
         params.remove_mask,
         params.holds_mask,
     );
-    append_perspective_parts(&mut parts, params.perspective_tilt, params.perspective_skew);
+    append_perspective_parts(&mut out, params.perspective_tilt, params.perspective_skew);
     if !params.noteskin.is_empty() {
-        parts.push(params.noteskin.to_string());
+        push_display_mod_option(&mut out, params.noteskin);
     }
     if params.visual_delay_ms != 0 {
-        parts.push(format!("{}ms VisualDelay", params.visual_delay_ms));
+        begin_display_mod_option(&mut out);
+        write!(out, "{}ms\u{00A0}VisualDelay", params.visual_delay_ms)
+            .expect("writing to a String cannot fail");
     }
-    append_average_error_bar_part(&mut parts, params);
-    if let Some(name) = disabled_timing_windows_name(params.disabled_timing_windows) {
-        parts.push(name);
-    }
-    join_display_mod_parts(&parts)
+    append_average_error_bar_part(&mut out, params);
+    append_disabled_timing_windows(&mut out, params.disabled_timing_windows);
+    out
 }
