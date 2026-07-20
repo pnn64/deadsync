@@ -10,7 +10,8 @@ use deadlib_present::space::{
     screen_center_x, screen_center_y, screen_height, screen_width, widescale,
 };
 use deadsync_gameplay::{
-    GameplayAction, GameplayAudioCommand, GameplayAudioSnapshot, handle_core_input,
+    AutosyncMode, GameplayAction, GameplayAudioCommand, GameplayAudioSnapshot,
+    GameplayOffsetAdjustKey, GameplayRawKeyInput, GameplayTimingTickMode, handle_core_input,
     spacing_multiplier_for_percent, update_core,
 };
 use deadsync_input::KeyCode;
@@ -308,6 +309,22 @@ const HELP_MENU: MenuDef = MenuDef {
         },
         MenuRow {
             label: lookup_key("Practice", "HelpP"),
+            action: None,
+        },
+        MenuRow {
+            label: lookup_key("Practice", "HelpF7Ticks"),
+            action: None,
+        },
+        MenuRow {
+            label: lookup_key("Practice", "HelpF8Autoplay"),
+            action: None,
+        },
+        MenuRow {
+            label: lookup_key("Practice", "HelpF6Autosync"),
+            action: None,
+        },
+        MenuRow {
+            label: lookup_key("Practice", "HelpOffsetKeys"),
             action: None,
         },
         MenuRow {
@@ -645,7 +662,24 @@ fn handle_raw_key_event_inner(
             release_music_rate_hold_input(state, dir);
             return (true, ThemeEffect::None);
         }
+        // Forward gameplay function-key releases (e.g. F11/F12) so the runtime
+        // can clear its offset-adjust hold state.
+        if let Some(input) = gameplay_hotkey_input(raw_key.code) {
+            forward_gameplay_hotkey(state, input, false, raw_key.timestamp);
+            return (true, ThemeEffect::None);
+        }
         return (false, ThemeEffect::None);
+    }
+
+    // Gameplay function keys work everywhere in practice mode (editing,
+    // playback, or with the menu open), mirroring how they behave in gameplay.
+    // Autoplay (F8), assist/hit ticks (F7), AutoSync (F6), and sync-offset
+    // adjustment (F11/F12) are forwarded to the embedded gameplay runtime.
+    if let Some(input) = gameplay_hotkey_input(raw_key.code) {
+        if !raw_key.repeat {
+            forward_gameplay_hotkey(state, input, true, raw_key.timestamp);
+        }
+        return (true, ThemeEffect::None);
     }
 
     // Music rate hotkeys are global within practice mode: they work whether
@@ -757,6 +791,93 @@ fn handle_raw_key_event_inner(
         }
         _ => (false, ThemeEffect::None),
     }
+}
+
+/// Maps the gameplay function keys that Practice forwards to its embedded
+/// gameplay runtime. Mirrors the gameplay screen bindings: F6 AutoSync,
+/// F7 assist/hit ticks, F8 autoplay, F11/F12 sync-offset adjustment.
+fn gameplay_hotkey_input(code: KeyCode) -> Option<GameplayRawKeyInput> {
+    match code {
+        KeyCode::F6 => Some(GameplayRawKeyInput::Autosync),
+        KeyCode::F7 => Some(GameplayRawKeyInput::TimingTick),
+        KeyCode::F8 => Some(GameplayRawKeyInput::Autoplay),
+        KeyCode::F11 => Some(GameplayRawKeyInput::OffsetAdjust(
+            GameplayOffsetAdjustKey::Decrease,
+        )),
+        KeyCode::F12 => Some(GameplayRawKeyInput::OffsetAdjust(
+            GameplayOffsetAdjustKey::Increase,
+        )),
+        _ => None,
+    }
+}
+
+fn forward_gameplay_hotkey(
+    state: &mut State,
+    input: GameplayRawKeyInput,
+    pressed: bool,
+    timestamp: std::time::Instant,
+) {
+    state
+        .gameplay
+        .set_raw_modifier_state(state.shift_held, state.ctrl_held);
+    let now_music_time = state.gameplay.current_music_time_seconds();
+    // No offset-save prompt exists in practice mode, so commands are always
+    // allowed.
+    let _ = state.gameplay.handle_queued_raw_key_input(
+        input,
+        None,
+        pressed,
+        timestamp,
+        now_music_time,
+        true,
+    );
+    if pressed {
+        set_gameplay_hotkey_flash(state, input);
+    }
+}
+
+fn set_gameplay_hotkey_flash(state: &mut State, input: GameplayRawKeyInput) {
+    match input {
+        GameplayRawKeyInput::Autoplay => {
+            let key = if state.gameplay.autoplay_enabled() {
+                "FlashAutoplayOn"
+            } else {
+                "FlashAutoplayOff"
+            };
+            set_flash_tr(state, key);
+        }
+        GameplayRawKeyInput::TimingTick => {
+            let key = match state.gameplay.tick_mode() {
+                GameplayTimingTickMode::Off => "FlashTicksOff",
+                GameplayTimingTickMode::Assist => "FlashTicksAssist",
+                GameplayTimingTickMode::Hit => "FlashTicksHit",
+            };
+            set_flash_tr(state, key);
+        }
+        GameplayRawKeyInput::Autosync => {
+            let key = match state.gameplay.autosync_mode() {
+                AutosyncMode::Off => "FlashAutosyncOff",
+                AutosyncMode::Song => "FlashAutosyncSong",
+                AutosyncMode::Machine => "FlashAutosyncMachine",
+            };
+            set_flash_tr(state, key);
+        }
+        GameplayRawKeyInput::OffsetAdjust(_) => set_offset_adjust_flash(state),
+        GameplayRawKeyInput::Restart | GameplayRawKeyInput::Other => {}
+    }
+}
+
+fn set_offset_adjust_flash(state: &mut State) {
+    // Shift adjusts the machine (global) offset; otherwise the song offset,
+    // matching `offset_adjust_target` for a non-course practice session.
+    let (key, seconds) = if state.shift_held {
+        ("FlashGlobalOffset", state.gameplay.global_offset_seconds())
+    } else {
+        ("FlashSongOffset", state.gameplay.song_offset_seconds())
+    };
+    let ms = format!("{:+.0}", seconds * 1000.0);
+    let text = i18n::tr_fmt("Practice", key, &[("ms", &ms)]).replace("\\n", "\n");
+    state.flash = Some((text, FLASH_DURATION_SECS));
 }
 
 pub fn push_actors(
@@ -2538,7 +2659,7 @@ mod tests {
         MUSIC_RATE_HOTKEY_MIN, MUSIC_RATE_HOTKEY_STEP, MenuDef, MusicRateHoldDir, PageHoldDir,
         PracticeNavMode, SPEED_LABEL_STYLE, TAB_FAST_MULTIPLIER, clamp_selection,
         edit_cursor_hold_dir_for_action_in_mode, edit_scroll_hold_rate,
-        edit_snap_delta_for_action_in_mode, fmt_itg_float, fmt_music_rate,
+        edit_snap_delta_for_action_in_mode, fmt_itg_float, fmt_music_rate, gameplay_hotkey_input,
         menu_step_delta_for_action_in_mode, music_rate_delta_for_dir, music_rate_hold_dir_for_key,
         next_display_beat, page_hold_dir_for_key, practice_edit_beat_travel,
         practice_nav_mode_from_config, prepend_pending_effects, prepend_pending_sfx,
@@ -2547,6 +2668,7 @@ mod tests {
     use crate::SimplyLoveRuntimeRequest;
     use crate::assets::i18n;
     use crate::screens::{Screen, ThemeEffect};
+    use deadsync_gameplay::{GameplayOffsetAdjustKey, GameplayRawKeyInput};
     use deadsync_input::KeyCode;
     use deadsync_input::VirtualAction;
     use deadsync_rules::scroll::ScrollSpeedSetting;
@@ -2574,6 +2696,16 @@ mod tests {
         "FlashInvalidSelectionEnd",
         "FlashSelectionEndSet",
         "FlashSelectionCleared",
+        "FlashAutoplayOn",
+        "FlashAutoplayOff",
+        "FlashTicksAssist",
+        "FlashTicksHit",
+        "FlashTicksOff",
+        "FlashAutosyncOff",
+        "FlashAutosyncSong",
+        "FlashAutosyncMachine",
+        "FlashGlobalOffset",
+        "FlashSongOffset",
         "InfoCurrentBeat",
         "InfoCurrentSecond",
         "InfoSnapTo",
@@ -2675,6 +2807,38 @@ mod tests {
             ),
             None
         );
+    }
+
+    #[test]
+    fn gameplay_hotkey_input_maps_gameplay_function_keys() {
+        assert_eq!(
+            gameplay_hotkey_input(KeyCode::F6),
+            Some(GameplayRawKeyInput::Autosync)
+        );
+        assert_eq!(
+            gameplay_hotkey_input(KeyCode::F7),
+            Some(GameplayRawKeyInput::TimingTick)
+        );
+        assert_eq!(
+            gameplay_hotkey_input(KeyCode::F8),
+            Some(GameplayRawKeyInput::Autoplay)
+        );
+        assert_eq!(
+            gameplay_hotkey_input(KeyCode::F11),
+            Some(GameplayRawKeyInput::OffsetAdjust(
+                GameplayOffsetAdjustKey::Decrease
+            ))
+        );
+        assert_eq!(
+            gameplay_hotkey_input(KeyCode::F12),
+            Some(GameplayRawKeyInput::OffsetAdjust(
+                GameplayOffsetAdjustKey::Increase
+            ))
+        );
+        // F1 opens the practice help menu and must not be treated as a gameplay
+        // hotkey; unrelated keys are ignored too.
+        assert_eq!(gameplay_hotkey_input(KeyCode::F1), None);
+        assert_eq!(gameplay_hotkey_input(KeyCode::Space), None);
     }
 
     #[test]
