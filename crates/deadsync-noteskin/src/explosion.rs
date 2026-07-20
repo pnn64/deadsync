@@ -618,9 +618,9 @@ impl<T> ItgTapExplosionSource<T> {
     }
 
     pub fn is_generic_tap_explosion(&self) -> bool {
-        let element = self.element.trim().to_ascii_lowercase();
-        (element == "tap explosion dim" || element == "tap explosion bright")
-            && itg_tap_explosion_element_window(&self.element).is_none()
+        let element = self.element.trim();
+        element.eq_ignore_ascii_case("tap explosion dim")
+            || element.eq_ignore_ascii_case("tap explosion bright")
     }
 }
 
@@ -642,7 +642,7 @@ pub fn itg_has_hit_mine_command(commands: &HashMap<String, String>) -> bool {
 }
 
 pub fn itg_is_hit_mine_explosion_element(element: &str) -> bool {
-    element.to_ascii_lowercase().contains("hitmine explosion")
+    crate::actor::element_contains_hint(element, "hitmine explosion")
 }
 
 pub fn itg_mine_explosion_commands(commands: &HashMap<String, String>) -> Vec<String> {
@@ -884,14 +884,14 @@ pub fn itg_hit_mine_explosion_slot<'a, L, T>(
 }
 
 pub fn itg_tap_explosion_mode(element: &str) -> Option<ItgTapExplosionMode> {
-    let element = element.to_ascii_lowercase();
-    if element.starts_with("tap explosion bright") {
-        Some(ItgTapExplosionMode::Bright)
-    } else if element.starts_with("tap explosion dim") {
-        Some(ItgTapExplosionMode::Dim)
-    } else {
-        None
-    }
+    let starts_with = |prefix: &str| {
+        element
+            .get(..prefix.len())
+            .is_some_and(|head| head.eq_ignore_ascii_case(prefix))
+    };
+    starts_with("tap explosion bright")
+        .then_some(ItgTapExplosionMode::Bright)
+        .or_else(|| starts_with("tap explosion dim").then_some(ItgTapExplosionMode::Dim))
 }
 
 pub fn itg_tap_explosion_key(window: &str, mode: ItgTapExplosionMode) -> &str {
@@ -939,10 +939,10 @@ pub fn itg_tap_explosion_element_window(element: &str) -> Option<&str> {
         .or_else(|| element.strip_prefix("Tap Explosion Bright "))
         .map(str::trim)
         .filter(|value| {
-            matches!(
-                value.to_ascii_lowercase().as_str(),
-                "w1" | "w2" | "w3" | "w4" | "w5"
-            )
+            let bytes = value.as_bytes();
+            bytes.len() == 2
+                && bytes[0].eq_ignore_ascii_case(&b'w')
+                && matches!(bytes[1], b'1'..=b'5')
         })
 }
 
@@ -1090,6 +1090,35 @@ mod tests {
         let source = ItgTapExplosionSource::new("Explosion".to_string(), 7, commands);
 
         assert_eq!(source.mode, ItgTapExplosionMode::Bright);
+    }
+
+    #[test]
+    fn explosion_element_classifiers_preserve_ascii_case_rules() {
+        assert_eq!(
+            itg_tap_explosion_mode("tAp ExPlOsIoN BrIgHt W1"),
+            Some(ItgTapExplosionMode::Bright)
+        );
+        assert_eq!(itg_tap_explosion_mode("aaaaaaaaaaaaaaaaaaaé"), None);
+        assert!(itg_is_hit_mine_explosion_element(
+            "Fallback HITMINE EXPLOSION glow"
+        ));
+        assert!(!itg_is_hit_mine_explosion_element("Hit Mine Explosion"));
+
+        let generic =
+            ItgTapExplosionSource::new(" tAp ExPlOsIoN dIm ".to_string(), (), HashMap::new());
+        assert!(generic.is_generic_tap_explosion());
+        assert_eq!(
+            itg_tap_explosion_element_window(" Tap Explosion Bright w5 "),
+            Some("w5")
+        );
+        assert_eq!(
+            itg_tap_explosion_element_window("tap explosion bright W5"),
+            None
+        );
+        assert_eq!(
+            itg_tap_explosion_element_window("Tap Explosion Bright W6"),
+            None
+        );
     }
 
     #[test]
