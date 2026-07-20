@@ -43,26 +43,21 @@ pub fn parse_color_text(text: &str) -> Option<[f32; 4]> {
         };
         return Some([r, g, b, a]);
     }
-    let parts = text
+    let mut parts = text
         .split(',')
         .map(str::trim)
-        .filter(|part| !part.is_empty())
-        .collect::<Vec<_>>();
-    match parts.as_slice() {
-        [r, g, b] => Some([
-            r.parse::<f32>().ok()?,
-            g.parse::<f32>().ok()?,
-            b.parse::<f32>().ok()?,
-            1.0,
-        ]),
-        [r, g, b, a] => Some([
-            r.parse::<f32>().ok()?,
-            g.parse::<f32>().ok()?,
-            b.parse::<f32>().ok()?,
-            a.parse::<f32>().ok()?,
-        ]),
-        _ => None,
+        .filter(|part| !part.is_empty());
+    let red = parts.next()?.parse::<f32>().ok()?;
+    let green = parts.next()?.parse::<f32>().ok()?;
+    let blue = parts.next()?.parse::<f32>().ok()?;
+    let alpha = match parts.next() {
+        Some(alpha) => alpha.parse::<f32>().ok()?,
+        None => 1.0,
+    };
+    if parts.next().is_some() {
+        return None;
     }
+    Some([red, green, blue, alpha])
 }
 
 pub fn palette_color(index: i64, palette: &[&str]) -> [f32; 4] {
@@ -498,4 +493,20 @@ fn stage_color_value(value: Value) -> Option<[f32; 4]> {
 
 fn judgment_line_color_value(value: Value) -> Option<[f32; 4]> {
     judgment_line_color(&read_string(value)?)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse_color_text;
+
+    #[test]
+    fn numeric_colors_require_three_or_four_valid_components() {
+        assert_eq!(parse_color_text("1,,0.5,0.25"), Some([1.0, 0.5, 0.25, 1.0]));
+        assert_eq!(
+            parse_color_text("1,0.5,0.25,0.75"),
+            Some([1.0, 0.5, 0.25, 0.75])
+        );
+        assert_eq!(parse_color_text("1,0.5,0.25,1,0"), None);
+        assert_eq!(parse_color_text("1,bad,0.25,1"), None);
+    }
 }
