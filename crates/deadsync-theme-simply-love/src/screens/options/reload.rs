@@ -99,7 +99,8 @@ pub fn sync_reload_events(
                 reload.line3 = course;
             }
             crate::views::SimplyLoveContentReloadEvent::Artwork { .. }
-            | crate::views::SimplyLoveContentReloadEvent::Noteskins { .. } => {}
+            | crate::views::SimplyLoveContentReloadEvent::Noteskins { .. }
+            | crate::views::SimplyLoveContentReloadEvent::ReplayGain { .. } => {}
             crate::views::SimplyLoveContentReloadEvent::Finished { .. } => {
                 reload.done = true;
             }
@@ -176,6 +177,9 @@ pub(super) fn build_reload_overlay_actors(
         crate::views::SimplyLoveContentReloadPhase::Artwork => tr("Init", "CachingArtworkText"),
         crate::views::SimplyLoveContentReloadPhase::Noteskins => {
             tr("Init", "CompilingNoteskinsText")
+        }
+        crate::views::SimplyLoveContentReloadPhase::ReplayGain => {
+            tr("Init", "AnalyzingLoudnessText")
         }
     };
     out.push(act!(text:

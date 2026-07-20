@@ -58,6 +58,8 @@ struct LoadingState {
     artwork_total: usize,
     noteskins_done: usize,
     noteskins_total: usize,
+    replaygain_done: usize,
+    replaygain_total: usize,
     done: bool,
     started_at: Instant,
     speed_text_cache: RefCell<Option<SpeedTextCache>>,
@@ -78,6 +80,8 @@ impl LoadingState {
             artwork_total: 0,
             noteskins_done: 0,
             noteskins_total: 0,
+            replaygain_done: 0,
+            replaygain_total: 0,
             done: false,
             started_at: Instant::now(),
             speed_text_cache: RefCell::new(None),
@@ -147,6 +151,9 @@ fn arc_phase_label(phase: crate::views::SimplyLoveContentReloadPhase) -> Arc<str
         crate::views::SimplyLoveContentReloadPhase::Noteskins => {
             tr("Init", "CompilingNoteskinsText")
         }
+        crate::views::SimplyLoveContentReloadPhase::ReplayGain => {
+            tr("Init", "AnalyzingLoudnessText")
+        }
     }
 }
 
@@ -164,6 +171,9 @@ fn loading_progress_values(loading: &LoadingState) -> (usize, usize, f32) {
         }
         crate::views::SimplyLoveContentReloadPhase::Noteskins => {
             (loading.noteskins_done, loading.noteskins_total)
+        }
+        crate::views::SimplyLoveContentReloadPhase::ReplayGain => {
+            (loading.replaygain_done, loading.replaygain_total)
         }
     };
     if total < done {
@@ -292,6 +302,19 @@ pub fn sync_loading_events(
                 loading.noteskins_total = total;
                 loading.line2 = Arc::<str>::from(skin);
                 loading.line3 = Arc::<str>::from(status);
+                refresh_loading_count_text(loading);
+            }
+            crate::views::SimplyLoveContentReloadEvent::ReplayGain {
+                done,
+                total,
+                line2,
+                line3,
+            } => {
+                loading.phase = crate::views::SimplyLoveContentReloadPhase::ReplayGain;
+                loading.replaygain_done = done;
+                loading.replaygain_total = total;
+                loading.line2 = Arc::<str>::from(line2);
+                loading.line3 = Arc::<str>::from(line3);
                 refresh_loading_count_text(loading);
             }
             crate::views::SimplyLoveContentReloadEvent::Finished { .. } => {

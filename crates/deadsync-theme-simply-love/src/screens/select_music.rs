@@ -4825,7 +4825,8 @@ pub fn sync_reload_events(state: &mut State, events: Vec<SimplyLoveContentReload
                 reload.line3 = course;
             }
             SimplyLoveContentReloadEvent::Artwork { .. }
-            | SimplyLoveContentReloadEvent::Noteskins { .. } => {}
+            | SimplyLoveContentReloadEvent::Noteskins { .. }
+            | SimplyLoveContentReloadEvent::ReplayGain { .. } => {}
             SimplyLoveContentReloadEvent::Finished { song_packs } => {
                 reload.done = true;
                 reload.song_packs = Some(song_packs);
@@ -4897,6 +4898,7 @@ fn push_reload_overlay(actors: &mut Vec<Actor>, reload: &ReloadUiState, active_c
         SimplyLoveContentReloadPhase::Courses => tr("Init", "LoadingCoursesText"),
         SimplyLoveContentReloadPhase::Artwork => tr("Init", "CachingArtworkText"),
         SimplyLoveContentReloadPhase::Noteskins => tr("Init", "CompilingNoteskinsText"),
+        SimplyLoveContentReloadPhase::ReplayGain => tr("Init", "AnalyzingLoudnessText"),
     };
     actors.push(act!(text:
         font("miso"):
