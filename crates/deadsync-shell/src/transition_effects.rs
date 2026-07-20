@@ -1,9 +1,9 @@
 use deadsync_core::input::MAX_PLAYERS;
-use deadsync_profile::{PlayStyle, PlayerSide};
+use deadsync_profile::{PlayStyle, PlayerSide, player_side_index};
 use deadsync_theme_simply_love::screens::SimplyLoveScreen as Screen;
-use deadsync_theme_simply_love::screens::player_options::SpeedMod;
+use deadsync_theme_simply_love::screens::player_options::{SpeedMod, scroll_speed_for_mod};
 
-use crate::{Command, TransitionMusicPaths, player_options_persist_plan, transition_audio_plan};
+use crate::{Command, TransitionMusicPaths, transition_audio_plan};
 
 pub struct PlayerOptionsTransition<'a> {
     pub speed_mod: &'a [SpeedMod; MAX_PLAYERS],
@@ -46,15 +46,32 @@ pub fn transition_effect_plan(context: TransitionEffectContext<'_>) -> Transitio
         Screen::SelectMusic | Screen::PlayerOptions
     ) {
         if let Some(options) = context.player_options {
-            let persist = player_options_persist_plan(
-                options.speed_mod,
-                options.chart_difficulty_index,
-                options.music_rate,
-                options.play_style,
-                options.player_side,
-            );
-            preferred_difficulty_index = Some(persist.preferred_difficulty_index);
-            commands.extend(persist.commands);
+            match options.play_style {
+                PlayStyle::Versus => {
+                    for (index, side) in [(0, PlayerSide::P1), (1, PlayerSide::P2)] {
+                        commands.push(Command::UpdateScrollSpeed {
+                            side,
+                            setting: scroll_speed_for_mod(&options.speed_mod[index]),
+                        });
+                    }
+                }
+                PlayStyle::Single | PlayStyle::Double => {
+                    let index = player_side_index(options.player_side);
+                    commands.push(Command::UpdateScrollSpeed {
+                        side: options.player_side,
+                        setting: scroll_speed_for_mod(&options.speed_mod[index]),
+                    });
+                }
+            }
+            commands.push(Command::UpdateSessionMusicRate(options.music_rate));
+            let index = if options.play_style == PlayStyle::Versus {
+                0
+            } else {
+                player_side_index(options.player_side)
+            };
+            let preferred = options.chart_difficulty_index[index];
+            commands.push(Command::UpdatePreferredDifficulty(preferred));
+            preferred_difficulty_index = Some(preferred);
         }
 
         if !matches!(
@@ -139,14 +156,14 @@ mod tests {
     }
 
     #[test]
-    fn gameplay_handoff_keeps_music_and_persists_options() {
+    fn versus_gameplay_handoff_keeps_music_and_persists_both_players_in_order() {
         let speed_mod = [
             SpeedMod {
-                mod_type: SpeedModType::C,
-                value: 300.0,
+                mod_type: SpeedModType::X,
+                value: 1.5,
             },
             SpeedMod {
-                mod_type: SpeedModType::C,
+                mod_type: SpeedModType::M,
                 value: 600.0,
             },
         ];
@@ -156,18 +173,46 @@ mod tests {
             menu_music_enabled: false,
             gameover_music_enabled: false,
             music_paths: paths(),
-            player_options: Some(options(&speed_mod)),
+            player_options: Some(PlayerOptionsTransition {
+                speed_mod: &speed_mod,
+                chart_difficulty_index: [3, 5],
+                music_rate: 1.1,
+                play_style: PlayStyle::Versus,
+                player_side: PlayerSide::P1,
+            }),
             select_music_preferred_difficulty: None,
         });
 
-        assert_eq!(plan.preferred_difficulty_index, Some(5));
+        assert_eq!(plan.preferred_difficulty_index, Some(3));
+        assert_eq!(plan.commands.len(), 4);
         assert!(
             !plan
                 .commands
                 .iter()
                 .any(|command| matches!(command, Command::StopMusic))
         );
-        assert_eq!(plan.commands.len(), 3);
+        assert!(matches!(
+            plan.commands[0],
+            Command::UpdateScrollSpeed {
+                side: PlayerSide::P1,
+                setting: ScrollSpeedSetting::XMod(1.5),
+            }
+        ));
+        assert!(matches!(
+            plan.commands[1],
+            Command::UpdateScrollSpeed {
+                side: PlayerSide::P2,
+                setting: ScrollSpeedSetting::MMod(600.0),
+            }
+        ));
+        assert!(matches!(
+            plan.commands[2],
+            Command::UpdateSessionMusicRate(1.1)
+        ));
+        assert!(matches!(
+            plan.commands[3],
+            Command::UpdatePreferredDifficulty(3)
+        ));
     }
 
     #[test]

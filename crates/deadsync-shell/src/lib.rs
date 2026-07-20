@@ -60,7 +60,6 @@ pub(crate) use input_trace::GameplayInputTrace;
 pub(crate) use interaction::ExitIntent;
 pub(crate) use interaction::ShellInteractionState;
 pub(crate) use navigation::{TransitionMusicPaths, TransitionState, transition_audio_plan};
-pub(crate) use player_options::player_options_persist_plan;
 pub(crate) use runtime::ShellState;
 pub(crate) use session::SessionState;
 pub(crate) use stutter_diag::StutterDiagRecorder;
