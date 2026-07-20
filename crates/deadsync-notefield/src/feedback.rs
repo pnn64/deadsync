@@ -2,7 +2,7 @@ use crate::*;
 use deadlib_present::actors::Actor;
 use deadlib_present::dsl::{SpriteBuilder, TextBuilder};
 use deadsync_gameplay::{
-    ActiveColumnFlash, ColumnCue, active_column_cue, active_column_cues, column_flash_duration,
+    ActiveColumnFlash, ColumnCue, active_column_cue_range, column_flash_duration,
 };
 use deadsync_rules::judgment::{JudgeGrade, TimingWindow};
 use deadsync_rules::scroll::ScrollSpeedSetting;
@@ -171,13 +171,31 @@ pub(crate) fn column_cue_alpha(elapsed_real: f32, duration_real: f32) -> f32 {
 
 // Alpha envelope for a column cue that fades in/out over `fade_time` seconds.
 // Regular column cues and crossover cues use different fade windows (0.15 vs
-// 0.075), so the fade time is passed in rather than hardcoded.
+// 0.075), so the fade time is passed in rather than hardcoded. The fade-in is
+// anchored to the cue's own start (the natural, unseeked case).
 pub(crate) fn column_cue_alpha_with_fade(
     elapsed_real: f32,
     duration_real: f32,
     fade_time: f32,
 ) -> f32 {
-    if !elapsed_real.is_finite() || !duration_real.is_finite() {
+    column_cue_alpha_anchored(elapsed_real, elapsed_real, duration_real, fade_time)
+}
+
+// Alpha envelope for a column cue whose fade-in is anchored to an arbitrary
+// entry point. `since_entry_real` is the time since the cue first became visible
+// (its natural start during normal play, or the seek-landing time when the
+// playhead jumped into the middle of it); it drives the fade-in. `elapsed_real`
+// is the time since the cue's real start; it drives the fade-out and bounds the
+// cue's lifetime. When `since_entry_real == elapsed_real` this is identical to
+// the natural fade. Anchoring the fade-in lets a seeked-into cue ramp up from 0
+// instead of popping in at full alpha.
+pub(crate) fn column_cue_alpha_anchored(
+    since_entry_real: f32,
+    elapsed_real: f32,
+    duration_real: f32,
+    fade_time: f32,
+) -> f32 {
+    if !since_entry_real.is_finite() || !elapsed_real.is_finite() || !duration_real.is_finite() {
         return 0.0;
     }
     if elapsed_real < 0.0 || elapsed_real > duration_real {
@@ -186,15 +204,19 @@ pub(crate) fn column_cue_alpha_with_fade(
     if duration_real <= fade_time * 2.0 {
         return 0.0;
     }
-    if elapsed_real < fade_time {
-        let t = (elapsed_real / fade_time).clamp(0.0, 1.0);
-        return 1.0 - (1.0 - t) * (1.0 - t);
-    }
-    if elapsed_real > duration_real - fade_time {
+    let fade_in = if since_entry_real < fade_time {
+        let t = (since_entry_real / fade_time).clamp(0.0, 1.0);
+        1.0 - (1.0 - t) * (1.0 - t)
+    } else {
+        1.0
+    };
+    let fade_out = if elapsed_real > duration_real - fade_time {
         let t = ((elapsed_real - (duration_real - fade_time)) / fade_time).clamp(0.0, 1.0);
-        return 1.0 - t * t;
-    }
-    1.0
+        1.0 - t * t
+    } else {
+        1.0
+    };
+    fade_in.min(fade_out)
 }
 
 #[derive(Clone, Copy)]
@@ -202,6 +224,9 @@ pub(crate) struct ColumnFeedbackRequest<'a> {
     pub style: NotefieldStyle,
     pub column_cues: Option<&'a [ColumnCue]>,
     pub crossover_cues: Option<&'a [ColumnCue]>,
+    // Per-cue fade-in anchor times parallel to `crossover_cues`; None entries (or
+    // a missing slice) fall back to each cue's own start (natural fade-in).
+    pub crossover_cue_entries: Option<&'a [Option<f32>]>,
     pub column_flashes: Option<&'a [Option<ActiveColumnFlash>]>,
     pub regular_countdown: bool,
     pub crossover_countdown: bool,
@@ -275,14 +300,19 @@ fn compose_column_cue(
     // rendering both lets the outgoing cue's fade-out crossfade with the
     // incoming cue's fade-in, matching Simply Love's independent per-column
     // actors.
-    let active: &[ColumnCue] = match kind {
-        ColumnCueKind::Regular => match active_column_cue(cues, request.current_music_time) {
-            Some(cue) => std::slice::from_ref(cue),
-            None => return,
-        },
-        ColumnCueKind::Crossover => active_column_cues(cues, request.current_music_time),
+    let active_range = match kind {
+        ColumnCueKind::Regular => {
+            let end = cues.partition_point(|cue| cue.start_time <= request.current_music_time);
+            match end.checked_sub(1) {
+                Some(begin) => begin..end,
+                None => return,
+            }
+        }
+        ColumnCueKind::Crossover => {
+            active_column_cue_range(cues, request.current_music_time)
+        }
     };
-    if active.is_empty() {
+    if active_range.is_empty() {
         return;
     }
 
@@ -302,13 +332,26 @@ fn compose_column_cue(
         .min(request.column_xs.len())
         .min(request.column_dirs.len());
 
-    for cue in active {
+    for cue_idx in active_range {
+        let cue = &cues[cue_idx];
         let duration_real = cue.duration / rate;
         let elapsed_real = (request.current_music_time - cue.start_time) / rate;
         let alpha_mul = match kind {
             ColumnCueKind::Regular => column_cue_alpha(elapsed_real, duration_real),
             ColumnCueKind::Crossover => {
-                column_cue_alpha_with_fade(elapsed_real, duration_real, CROSSOVER_CUE_FADE_TIME)
+                // Anchor the fade-in to where the cue first became visible so a
+                // cue you seek into ramps up instead of popping in at full alpha.
+                let entry_time = request
+                    .crossover_cue_entries
+                    .and_then(|entries| entries.get(cue_idx).copied().flatten())
+                    .unwrap_or(cue.start_time);
+                let since_entry_real = (request.current_music_time - entry_time) / rate;
+                column_cue_alpha_anchored(
+                    since_entry_real,
+                    elapsed_real,
+                    duration_real,
+                    CROSSOVER_CUE_FADE_TIME,
+                )
             }
         };
         if alpha_mul <= 0.0 {
@@ -821,6 +864,7 @@ mod tests {
             style: style(),
             column_cues,
             crossover_cues,
+            crossover_cue_entries: None,
             column_flashes,
             regular_countdown: true,
             crossover_countdown: false,

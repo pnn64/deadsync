@@ -84,6 +84,13 @@ pub fn active_column_cues(cues: &[ColumnCue], current_time: f32) -> &[ColumnCue]
 // Lead-in/out fade applied to every crossover cue.
 pub const CROSSOVER_CUE_FADE_SECONDS: f32 = 0.075;
 
+// When the playhead first crosses a cue's start, the cue's fade-in anchors to
+// its own start only if it was reached within this window; otherwise (a
+// practice-mode seek that lands past it) the cue fades in from the landing
+// point instead of popping in at partial/full alpha. Using the fade time
+// guarantees a cue caught during normal play is still inside its fade-in.
+pub const CROSSOVER_CUE_SEEK_GUARD_SECONDS: f32 = CROSSOVER_CUE_FADE_SECONDS;
+
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub struct CrossoverRow {
     pub beat: f32,
