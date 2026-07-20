@@ -53,6 +53,34 @@ pub fn active_column_cue(cues: &[ColumnCue], current_time: f32) -> Option<&Colum
     idx.checked_sub(1).and_then(|i| cues.get(i))
 }
 
+// Returns the half-open index range of cues whose `[start_time, start_time +
+// duration]` window contains `current_time`, in chronological order.
+// Consecutive crossover cues are built to overlap by the fade time, so up to
+// two cues can be active at once; rendering both lets the outgoing cue's
+// fade-out crossfade with the incoming cue's fade-in.
+#[inline]
+pub fn active_column_cue_range(cues: &[ColumnCue], current_time: f32) -> core::ops::Range<usize> {
+    let end = cues.partition_point(|cue| cue.start_time <= current_time);
+    let mut begin = end;
+    while begin > 0 {
+        let cue = &cues[begin - 1];
+        if current_time < cue.start_time + cue.duration {
+            begin -= 1;
+        } else {
+            break;
+        }
+    }
+    begin..end
+}
+
+// Returns every cue whose `[start_time, start_time + duration]` window contains
+// `current_time`, as a contiguous slice in chronological order. See
+// `active_column_cue_range`.
+#[inline]
+pub fn active_column_cues(cues: &[ColumnCue], current_time: f32) -> &[ColumnCue] {
+    &cues[active_column_cue_range(cues, current_time)]
+}
+
 // Lead-in/out fade applied to every crossover cue.
 pub const CROSSOVER_CUE_FADE_SECONDS: f32 = 0.075;
 

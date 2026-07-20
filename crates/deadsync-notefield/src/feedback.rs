@@ -1,7 +1,9 @@
 use crate::*;
 use deadlib_present::actors::Actor;
 use deadlib_present::dsl::{SpriteBuilder, TextBuilder};
-use deadsync_gameplay::{ActiveColumnFlash, ColumnCue, active_column_cue, column_flash_duration};
+use deadsync_gameplay::{
+    ActiveColumnFlash, ColumnCue, active_column_cue, active_column_cues, column_flash_duration,
+};
 use deadsync_rules::judgment::{JudgeGrade, TimingWindow};
 use deadsync_rules::scroll::ScrollSpeedSetting;
 use deadsync_theme::{ColumnCueStyle, ColumnFlashLayoutStyle, ColumnFlashStyle, NotefieldStyle};
@@ -268,25 +270,27 @@ fn compose_column_cue(
     kind: ColumnCueKind,
     show_countdown: bool,
 ) {
-    let Some(cue) = active_column_cue(cues, request.current_music_time) else {
-        return;
+    // Regular cues never overlap, so at most one is active. Crossover cues are
+    // built to overlap by the fade time, so up to two can be active at once;
+    // rendering both lets the outgoing cue's fade-out crossfade with the
+    // incoming cue's fade-in, matching Simply Love's independent per-column
+    // actors.
+    let active: &[ColumnCue] = match kind {
+        ColumnCueKind::Regular => match active_column_cue(cues, request.current_music_time) {
+            Some(cue) => std::slice::from_ref(cue),
+            None => return,
+        },
+        ColumnCueKind::Crossover => active_column_cues(cues, request.current_music_time),
     };
+    if active.is_empty() {
+        return;
+    }
+
     let rate = if request.music_rate.is_finite() && request.music_rate > 0.0 {
         request.music_rate
     } else {
         1.0
     };
-    let duration_real = cue.duration / rate;
-    let elapsed_real = (request.current_music_time - cue.start_time) / rate;
-    let fade_time = match kind {
-        ColumnCueKind::Regular => COLUMN_CUE_FADE_TIME,
-        ColumnCueKind::Crossover => CROSSOVER_CUE_FADE_TIME,
-    };
-    let alpha_mul = column_cue_alpha_with_fade(elapsed_real, duration_real, fade_time);
-    if alpha_mul <= 0.0 {
-        return;
-    }
-
     let style = request.style.column_cue;
     let lane_width = ScrollSpeedSetting::ARROW_SPACING * request.field_zoom;
     let cue_height = match kind {
@@ -298,80 +302,94 @@ fn compose_column_cue(
         .min(request.column_xs.len())
         .min(request.column_dirs.len());
 
-    for col_cue in &cue.columns {
-        let local_col = col_cue.column.saturating_sub(request.col_start);
+    for cue in active {
+        let duration_real = cue.duration / rate;
+        let elapsed_real = (request.current_music_time - cue.start_time) / rate;
+        let alpha_mul = match kind {
+            ColumnCueKind::Regular => column_cue_alpha(elapsed_real, duration_real),
+            ColumnCueKind::Crossover => {
+                column_cue_alpha_with_fade(elapsed_real, duration_real, CROSSOVER_CUE_FADE_TIME)
+            }
+        };
+        if alpha_mul <= 0.0 {
+            continue;
+        }
+
+        for col_cue in &cue.columns {
+            let local_col = col_cue.column.saturating_sub(request.col_start);
+            if local_col >= num_cols {
+                continue;
+            }
+            let x = request.playfield_center_x
+                + request.column_xs[local_col] * request.spacing_multiplier * request.field_zoom;
+            let alpha = style.base_alpha * alpha_mul;
+            let rgb = if col_cue.is_mine {
+                style.mine_color
+            } else {
+                style.normal_color
+            };
+            let reverse = request.column_dirs[local_col] < 0.0;
+            let y = if reverse {
+                column_cue_reverse_top_y(
+                    style,
+                    lane_width,
+                    cue_height,
+                    request.field_center_y,
+                    request.style.receptor_reverse_y,
+                )
+            } else {
+                style.top_y + request.field_center_y
+            };
+            append_column_quad(
+                actors,
+                x,
+                y,
+                lane_width,
+                cue_height,
+                reverse,
+                style.body_fade,
+                [rgb[0], rgb[1], rgb[2], alpha],
+                style.body_z,
+            );
+        }
+
+        if !show_countdown || duration_real < 5.0 {
+            continue;
+        }
+        let remaining = duration_real - elapsed_real;
+        if remaining <= 0.5 {
+            continue;
+        }
+        let Some(last_col) = cue.columns.last() else {
+            continue;
+        };
+        let local_col = last_col.column.saturating_sub(request.col_start);
         if local_col >= num_cols {
             continue;
         }
         let x = request.playfield_center_x
             + request.column_xs[local_col] * request.spacing_multiplier * request.field_zoom;
-        let alpha = style.base_alpha * alpha_mul;
-        let rgb = if col_cue.is_mine {
-            style.mine_color
-        } else {
-            style.normal_color
-        };
-        let reverse = request.column_dirs[local_col] < 0.0;
-        let y = if reverse {
-            column_cue_reverse_top_y(
-                style,
-                lane_width,
-                cue_height,
-                request.field_center_y,
-                request.style.receptor_reverse_y,
-            )
-        } else {
-            style.top_y + request.field_center_y
-        };
-        append_column_quad(
-            actors,
-            x,
-            y,
-            lane_width,
-            cue_height,
-            reverse,
-            style.body_fade,
-            [rgb[0], rgb[1], rgb[2], alpha],
-            style.body_z,
-        );
+        let y = request.field_center_y
+            + if request.column_dirs[local_col] < 0.0 {
+                style.countdown_reverse_y
+            } else {
+                style.countdown_normal_y
+            };
+        let mut text = TextBuilder::new();
+        text.font(request.countdown_font);
+        text.settext((request.countdown_text)(remaining.round() as i32).into());
+        text.align(0.5, 0.5);
+        text.xy(x, y);
+        text.zoom(style.countdown_zoom);
+        text.z(style.countdown_z);
+        text.diffuse([
+            style.countdown_color[0],
+            style.countdown_color[1],
+            style.countdown_color[2],
+            alpha_mul,
+        ]);
+        hud_actors.push(text.build(0));
     }
-
-    if !show_countdown || duration_real < 5.0 {
-        return;
-    }
-    let remaining = duration_real - elapsed_real;
-    if remaining <= 0.5 {
-        return;
-    }
-    let Some(last_col) = cue.columns.last() else {
-        return;
-    };
-    let local_col = last_col.column.saturating_sub(request.col_start);
-    if local_col >= num_cols {
-        return;
-    }
-    let x = request.playfield_center_x
-        + request.column_xs[local_col] * request.spacing_multiplier * request.field_zoom;
-    let y = request.field_center_y
-        + if request.column_dirs[local_col] < 0.0 {
-            style.countdown_reverse_y
-        } else {
-            style.countdown_normal_y
-        };
-    let mut text = TextBuilder::new();
-    text.font(request.countdown_font);
-    text.settext((request.countdown_text)(remaining.round() as i32).into());
-    text.align(0.5, 0.5);
-    text.xy(x, y);
-    text.zoom(style.countdown_zoom);
-    text.z(style.countdown_z);
-    text.diffuse([
-        style.countdown_color[0],
-        style.countdown_color[1],
-        style.countdown_color[2],
-        alpha_mul,
-    ]);
-    hud_actors.push(text.build(0));
 }
 
 fn compose_column_flashes(
