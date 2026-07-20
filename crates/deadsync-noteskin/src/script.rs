@@ -119,21 +119,13 @@ fn split_script_call_args(raw: &str) -> Vec<String> {
 
 #[inline(always)]
 pub fn split_script_token(token: &str) -> Option<(String, Vec<String>)> {
-    let token = token.trim();
-    let parts = split_script_call_args(token);
+    let mut parts = split_script_call_args(token.trim());
     if parts.is_empty() {
         return None;
     }
-    let command = parts[0].trim().to_ascii_lowercase();
-    if command.is_empty() {
-        return None;
-    }
-    let args = parts
-        .iter()
-        .skip(1)
-        .map(|part| part.trim().to_string())
-        .collect::<Vec<_>>();
-    Some((command, args))
+    let mut command = parts.remove(0);
+    command.make_ascii_lowercase();
+    Some((command, parts))
 }
 
 #[inline(always)]
@@ -1073,6 +1065,15 @@ pub fn model_draw_program(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn script_token_reuses_split_semantics() {
+        let (command, args) =
+            split_script_token(" SetStateProperties, 4, { 0.1, 0.2 }, nested(1, 2) ").unwrap();
+        assert_eq!(command, "setstateproperties");
+        assert_eq!(args, ["4", "{ 0.1, 0.2 }", "nested(1, 2)"]);
+        assert_eq!(split_script_token(" , , "), None);
+    }
 
     #[test]
     fn parent_actor_mod_negative_zoom_flips_sprite_definition() {
