@@ -2616,14 +2616,13 @@ pub fn parse_gs_comment_counts(comment: &str) -> GsCommentCounts {
             continue;
         }
 
-        let suffix = s[idx..].trim().to_ascii_lowercase();
-        match suffix.as_str() {
-            "w" => counts.w = value,
-            "e" => counts.e = value,
-            "g" => counts.g = value,
-            "d" => counts.d = value,
-            "wo" => counts.wo = value,
-            "m" => counts.m = value,
+        match s[idx..].trim().as_bytes() {
+            [b'w' | b'W'] => counts.w = value,
+            [b'e' | b'E'] => counts.e = value,
+            [b'g' | b'G'] => counts.g = value,
+            [b'd' | b'D'] => counts.d = value,
+            [b'w' | b'W', b'o' | b'O'] => counts.wo = value,
+            [b'm' | b'M'] => counts.m = value,
             _ => {}
         }
     }
@@ -8662,6 +8661,33 @@ mod tests {
         assert_eq!(counts.e, 15);
         assert_eq!(counts.g, 2);
         assert_eq!(counts.m, 2);
+    }
+
+    #[test]
+    fn groovestats_comment_counts_accept_mixed_case_suffixes() {
+        let counts = parse_gs_comment_counts("1W, 2E, 3G, 4D, 5wO, 6M");
+        assert_eq!(
+            counts,
+            GsCommentCounts {
+                w: 1,
+                e: 2,
+                g: 3,
+                d: 4,
+                wo: 5,
+                m: 6,
+            }
+        );
+        for comment in ["7wo", "7Wo", "7wO", "7WO"] {
+            assert_eq!(parse_gs_comment_counts(comment).wo, 7);
+        }
+    }
+
+    #[test]
+    fn groovestats_comment_counts_ignore_unknown_suffixes() {
+        assert_eq!(
+            parse_gs_comment_counts("1x, 2miss, 3é, 4, 0W"),
+            GsCommentCounts::default()
+        );
     }
 
     #[test]
