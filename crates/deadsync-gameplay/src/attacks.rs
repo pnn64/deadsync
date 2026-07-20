@@ -3733,23 +3733,16 @@ fn parse_song_lua_mod_amount(word: &str) -> Option<f32> {
 pub fn parse_song_lua_runtime_mods(mods: &str) -> ParsedAttackMods {
     let mut out = ParsedAttackMods::default();
     for token in mods.split(',') {
-        let token = token.trim();
-        if token.is_empty() {
+        let mut parts = token.trim().split_ascii_whitespace();
+        let Some(first) = parts.next() else {
             continue;
-        }
-        let parts: Vec<&str> = token
-            .split_ascii_whitespace()
-            .filter(|part| !part.is_empty())
-            .collect();
-        if parts.is_empty() {
-            continue;
-        }
-        if parts.len() == 1 {
-            if let Some(scroll_speed) = parse_attack_scroll_override(parts[0]) {
+        };
+        let Some(second) = parts.next() else {
+            if let Some(scroll_speed) = parse_attack_scroll_override(first) {
                 out.scroll_speed = Some(scroll_speed);
                 continue;
             }
-            let key = attack_token_key(parts[0]);
+            let key = attack_token_key(first);
             if key.is_empty() {
                 continue;
             }
@@ -3762,35 +3755,35 @@ pub fn parse_song_lua_runtime_mods(mods: &str) -> ParsedAttackMods {
             }
             apply_runtime_mod(&mut out, key.as_str(), Some(100.0), 1.0);
             continue;
-        }
+        };
 
-        if parts[0].starts_with('*') {
-            let approach_speed = parse_attack_approach_prefix(parts[0]).0;
-            if parts.len() == 2 {
-                if let Some(scroll_speed) = parse_attack_scroll_override(parts[1]) {
+        if first.starts_with('*') {
+            let approach_speed = parse_attack_approach_prefix(first).0;
+            let Some(third) = parts.next() else {
+                if let Some(scroll_speed) = parse_attack_scroll_override(second) {
                     out.scroll_speed = Some(scroll_speed);
                     continue;
                 }
-                let key = attack_token_key(parts[1]);
+                let key = attack_token_key(second);
                 if !key.is_empty() {
                     apply_runtime_mod(&mut out, key.as_str(), Some(100.0), approach_speed);
                 }
                 continue;
-            }
-            let key = attack_token_key(parts[2]);
+            };
+            let key = attack_token_key(third);
             if key.is_empty() {
                 continue;
             }
-            let amount = parse_song_lua_mod_amount(parts[1]).unwrap_or(0.0);
+            let amount = parse_song_lua_mod_amount(second).unwrap_or(0.0);
             apply_runtime_mod(&mut out, key.as_str(), Some(amount), approach_speed);
             continue;
         }
 
-        let key = attack_token_key(parts[1]);
+        let key = attack_token_key(second);
         if key.is_empty() {
             continue;
         }
-        let amount = parse_song_lua_mod_amount(parts[0]).unwrap_or(0.0);
+        let amount = parse_song_lua_mod_amount(first).unwrap_or(0.0);
         apply_runtime_mod(&mut out, key.as_str(), Some(amount), 1.0);
     }
     out

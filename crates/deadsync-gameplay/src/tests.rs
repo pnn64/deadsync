@@ -2768,6 +2768,23 @@ mod tests {
     }
 
     #[test]
+    fn song_lua_runtime_mod_parser_handles_each_word_count_form() {
+        let mods = parse_song_lua_runtime_mods(
+            "clearall,drunk,50 reverse ignored,*2 dizzy,*3 25 tipsy ignored,2x",
+        );
+
+        assert!(mods.clear_all);
+        assert_eq!(mods.visual.drunk, Some(1.0));
+        assert_eq!(mods.visual_speed.drunk, Some(1.0));
+        assert_eq!(mods.scroll.reverse, Some(0.5));
+        assert_eq!(mods.visual.dizzy, Some(1.0));
+        assert_eq!(mods.visual_speed.dizzy, Some(2.0));
+        assert_eq!(mods.visual.tipsy, Some(0.25));
+        assert_eq!(mods.visual_speed.tipsy, Some(3.0));
+        assert_eq!(mods.scroll_speed, Some(ScrollSpeedSetting::XMod(2.0)));
+    }
+
+    #[test]
     fn effect_overrides_report_active_scalar_values() {
         assert!(!AccelOverrides::default().any());
         assert!(!AppearanceOverrides::default().any());
