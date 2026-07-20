@@ -631,6 +631,19 @@ pub const fn raw_keyboard_restart_screen(screen: Screen) -> bool {
     matches!(screen, Screen::Gameplay | Screen::Evaluation)
 }
 
+/// Screens that need the low-latency native raw-keyboard hook. On Windows the
+/// hook is otherwise gated off outside gameplay, but Practice mode (the editor)
+/// relies on raw keys for its shortcuts — including the gameplay function keys
+/// (autoplay, assist tick, sync offset) that Practice forwards to its embedded
+/// gameplay runtime — so it must keep raw capture enabled too.
+#[inline(always)]
+pub const fn raw_keyboard_capture_screen(screen: Screen) -> bool {
+    matches!(
+        screen,
+        Screen::Gameplay | Screen::Evaluation | Screen::Practice
+    )
+}
+
 pub fn gameplay_raw_key_route_plan(
     ev: GameplayRawKeyEvent,
     context: GameplayRawKeyRouteContext,
@@ -667,7 +680,7 @@ pub fn raw_keyboard_capture_enabled(
 ) -> bool {
     accepts_live_input
         && (!gameplay_only
-            || (raw_keyboard_restart_screen(screen)
+            || (raw_keyboard_capture_screen(screen)
                 && screen_accepts_queued_input(screen, transition)))
 }
 
@@ -1295,6 +1308,15 @@ mod tests {
         assert!(raw_keyboard_capture_enabled(
             true,
             Screen::Gameplay,
+            &TransitionState::Idle,
+            true,
+        ));
+        // Practice (the editor) forwards gameplay function keys to its embedded
+        // runtime, so it must keep raw capture enabled even under the Windows
+        // gameplay-only scope.
+        assert!(raw_keyboard_capture_enabled(
+            true,
+            Screen::Practice,
             &TransitionState::Idle,
             true,
         ));
