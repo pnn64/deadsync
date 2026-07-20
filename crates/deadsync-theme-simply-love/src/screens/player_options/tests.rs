@@ -4297,16 +4297,29 @@ pub(super) mod tests {
     }
 
     #[test]
-    fn backspace_on_empty_query_closes_search() {
+    fn backspace_never_closes_search() {
         ensure_i18n();
         let (mut state, _asset_manager) = setup_state();
         search_key(&mut state, None, Some("/"));
         search_key(&mut state, None, Some("ab"));
-        search_key(&mut state, Some(&raw_key(deadsync_input::KeyCode::Backspace)), None);
-        search_key(&mut state, Some(&raw_key(deadsync_input::KeyCode::Backspace)), None);
-        assert!(state.search.is_open(), "still open with one char removed at a time");
-        search_key(&mut state, Some(&raw_key(deadsync_input::KeyCode::Backspace)), None);
-        assert!(!state.search.is_open(), "backspace on empty query closes search");
+        // Delete both chars, then press Backspace again on the empty query.
+        for _ in 0..3 {
+            search_key(
+                &mut state,
+                Some(&raw_key(deadsync_input::KeyCode::Backspace)),
+                None,
+            );
+        }
+        assert!(
+            state.search.is_open(),
+            "backspace must never close the search overlay"
+        );
+        if let super::search::SettingSearchState::Open(open) = &state.search {
+            assert_eq!(open.query, "");
+        }
+        // Escape is the only way out.
+        search_key(&mut state, Some(&raw_key(deadsync_input::KeyCode::Escape)), None);
+        assert!(!state.search.is_open());
     }
 
     #[test]

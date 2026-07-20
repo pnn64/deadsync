@@ -185,25 +185,23 @@ pub(super) fn add_text(state: &mut State, text: &str) {
     refresh(state);
 }
 
-/// Delete the last query char. Returns `true` if the query was already empty
-/// (caller treats that as "close the overlay").
-pub(super) fn backspace(state: &mut State) -> bool {
-    let was_empty = match &mut state.search {
+/// Delete the last query char (no-op on an empty query).
+pub(super) fn backspace(state: &mut State) {
+    let changed = match &mut state.search {
         SettingSearchState::Open(open) => {
             if open.query.is_empty() {
-                true
+                false
             } else {
                 open.query.pop();
                 open.selected_index = 0;
-                false
+                true
             }
         }
-        SettingSearchState::Hidden => true,
+        SettingSearchState::Hidden => false,
     };
-    if !was_empty {
+    if changed {
         refresh(state);
     }
-    was_empty
 }
 
 pub(super) fn move_selection(state: &mut State, delta: isize) {
@@ -236,22 +234,6 @@ pub(super) fn accept_ghost(state: &mut State) {
 #[inline(always)]
 pub(super) fn focused_match(open: &SettingSearchOpen) -> Option<&SettingMatch> {
     open.matches.get(open.selected_index)
-}
-
-/// The dimmed completion suffix shown after the caret, when the focused match's
-/// label begins with the typed query (case-insensitive).
-fn ghost_suffix(open: &SettingSearchOpen) -> Option<String> {
-    let m = focused_match(open)?;
-    if open.query.is_empty() {
-        return None;
-    }
-    let label_lower = m.label.to_ascii_lowercase();
-    let query_lower = open.query.to_ascii_lowercase();
-    if label_lower.starts_with(&query_lower) && m.label.len() > open.query.len() {
-        Some(m.label[open.query.len()..].to_string())
-    } else {
-        None
-    }
 }
 
 /// The row's currently selected choice, for the detail line.
@@ -307,58 +289,77 @@ pub(super) fn build_overlay(state: &State) -> Option<Vec<Actor>> {
         diffuse(1.0, 1.0, 1.0, 1.0): z(Z_TEXT): horizalign(center)
     ));
 
-    // Query line: "> " + typed (theme green) + ghost suffix (grey) + caret.
+    // Query line: prompt + typed text with an inline ghost completion. The
+    // ghost is drawn by laying the full match label underneath (grey) and the
+    // real-cased typed prefix on top (theme green), so the untyped remainder
+    // shows through as a suggestion — no font measurement required.
     let caret_on = open.blink_t < CURSOR_BLINK_PERIOD * 0.5;
-    let query_y = top + 48.0;
+    let query_y = top + 46.0;
     let query_x = cx - panel_w * 0.5 + 14.0;
+    let text_x = query_x + 14.0;
     actors.push(act!(text:
         font("miso"): settext("> "):
         align(0.0, 0.5): xy(query_x, query_y): zoom(0.9):
         diffuse(0.7, 0.7, 0.7, 1.0): z(Z_TEXT): horizalign(left)
     ));
-    let typed = if open.query.is_empty() {
-        "type to search".to_string()
-    } else {
-        open.query.clone()
-    };
-    let typed_dim = open.query.is_empty();
-    let (tr, tg, tb) = if typed_dim {
-        (0.5, 0.5, 0.5)
-    } else {
-        (0.4, 1.0, 0.4)
-    };
-    actors.push(act!(text:
-        font("miso"): settext(typed):
-        align(0.0, 0.5): xy(query_x + 14.0, query_y): zoom(0.9):
-        maxwidth(panel_w - 40.0):
-        diffuse(tr, tg, tb, 1.0): z(Z_TEXT): horizalign(left)
-    ));
-    let mut suffix_line = String::new();
-    if let Some(ghost) = ghost_suffix(open) {
-        suffix_line.push_str(&ghost);
-    }
-    if caret_on {
-        suffix_line.push('▮');
-    }
-    if !suffix_line.is_empty() {
-        // Rendered as a continuation of the query; offset roughly past the typed
-        // text. Kept simple: a second dim line just under the query for clarity.
+    if open.query.is_empty() {
         actors.push(act!(text:
-            font("miso"): settext(format!("  {suffix_line}")):
-            align(0.0, 0.5): xy(query_x + 14.0, query_y + 16.0): zoom(0.75):
+            font("miso"): settext("type to search"):
+            align(0.0, 0.5): xy(text_x, query_y): zoom(0.9):
             maxwidth(panel_w - 40.0):
-            diffuse(0.55, 0.55, 0.55, 1.0): z(Z_TEXT): horizalign(left)
+            diffuse(0.5, 0.5, 0.5, 1.0): z(Z_TEXT): horizalign(left)
         ));
+    } else {
+        let q_chars = open.query.chars().count();
+        let ghost = focused_match(open).and_then(|m| {
+            let starts = m
+                .label
+                .to_ascii_lowercase()
+                .starts_with(&open.query.to_ascii_lowercase());
+            if starts && m.label.chars().count() > q_chars {
+                let prefix: String = m.label.chars().take(q_chars).collect();
+                Some((m.label.clone(), prefix))
+            } else {
+                None
+            }
+        });
+        match ghost {
+            Some((full_label, prefix)) => {
+                // Grey underlay: the full suggested label.
+                actors.push(act!(text:
+                    font("miso"): settext(full_label):
+                    align(0.0, 0.5): xy(text_x, query_y): zoom(0.9):
+                    maxwidth(panel_w - 40.0):
+                    diffuse(0.5, 0.5, 0.5, 1.0): z(Z_TEXT): horizalign(left)
+                ));
+                // Green overlay: the typed portion, in the label's own casing.
+                actors.push(act!(text:
+                    font("miso"): settext(prefix):
+                    align(0.0, 0.5): xy(text_x, query_y): zoom(0.9):
+                    maxwidth(panel_w - 40.0):
+                    diffuse(0.4, 1.0, 0.4, 1.0): z(Z_TEXT + 1): horizalign(left)
+                ));
+            }
+            None => {
+                let caret = if caret_on { "▮" } else { "" };
+                actors.push(act!(text:
+                    font("miso"): settext(format!("{}{caret}", open.query)):
+                    align(0.0, 0.5): xy(text_x, query_y): zoom(0.9):
+                    maxwidth(panel_w - 40.0):
+                    diffuse(0.4, 1.0, 0.4, 1.0): z(Z_TEXT): horizalign(left)
+                ));
+            }
+        }
     }
 
     actors.push(act!(quad:
-        align(0.5, 0.5): xy(cx, top + 78.0):
+        align(0.5, 0.5): xy(cx, top + 66.0):
         zoomto(panel_w - 20.0, 1.0):
         diffuse(0.35, 0.35, 0.35, 1.0): z(Z_TEXT)
     ));
 
-    let list_top = top + 96.0;
-    let row_step = 20.0;
+    let list_top = top + 84.0;
+    let row_step = 21.0;
     let list_x = cx - panel_w * 0.5 + 16.0;
     let pane_x = cx + panel_w * 0.5 - 16.0;
     if open.matches.is_empty() {

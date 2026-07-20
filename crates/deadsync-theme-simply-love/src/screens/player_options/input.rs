@@ -878,9 +878,8 @@ pub fn handle_raw_key_event(
             match key.code {
                 KeyCode::Escape => search::close(state),
                 KeyCode::Backspace => {
-                    if search::backspace(state) {
-                        search::close(state);
-                    }
+                    // Only edits the query; Escape is the way out.
+                    search::backspace(state);
                 }
                 KeyCode::Tab | KeyCode::ArrowRight => search::accept_ghost(state),
                 KeyCode::ArrowUp => search::move_selection(state, -1),
