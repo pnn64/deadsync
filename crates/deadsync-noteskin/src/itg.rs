@@ -882,7 +882,7 @@ fn find_child_dir_case_insensitive(parent: &Path, name: &str) -> Option<PathBuf>
 
 fn find_file_with_prefix(dir: &Path, prefix: &str) -> Option<PathBuf> {
     let want = prefix.to_ascii_lowercase();
-    let key = (dir.to_string_lossy().to_ascii_lowercase(), want.clone());
+    let key = (dir.to_string_lossy().to_ascii_lowercase(), want);
     let cache = FILE_PREFIX_CACHE.get_or_init(|| Mutex::new(HashMap::new()));
     if let Some(cached) = cache
         .lock()
@@ -893,49 +893,47 @@ fn find_file_with_prefix(dir: &Path, prefix: &str) -> Option<PathBuf> {
         return cached;
     }
     let entries = fs::read_dir(dir).ok()?;
-    let mut matches: Vec<PathBuf> = entries
-        .flatten()
-        .map(|entry| entry.path())
-        .filter(|path| path.is_file())
-        .filter(|path| {
-            path.file_name()
-                .and_then(|s| s.to_str())
-                .is_some_and(|name| name.to_ascii_lowercase().starts_with(want.as_str()))
-        })
-        .collect();
-
-    if matches.is_empty() {
-        cache
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .insert(key, None);
-        return None;
+    let mut match_count = 0usize;
+    let mut chosen: Option<PathBuf> = None;
+    for entry in entries.flatten() {
+        let file_name = entry.file_name();
+        let Some(name) = file_name.to_str() else {
+            continue;
+        };
+        if !name
+            .get(..prefix.len())
+            .is_some_and(|start| start.eq_ignore_ascii_case(prefix))
+        {
+            continue;
+        }
+        let path = entry.path();
+        if !path.is_file() {
+            continue;
+        }
+        match_count += 1;
+        let comes_first = chosen.as_ref().is_none_or(|current| {
+            let current = current
+                .file_name()
+                .and_then(|name| name.to_str())
+                .unwrap_or("");
+            name.bytes()
+                .map(|byte| byte.to_ascii_lowercase())
+                .lt(current.bytes().map(|byte| byte.to_ascii_lowercase()))
+        });
+        if comes_first {
+            chosen = Some(path);
+        }
     }
 
-    matches.sort_by(|a, b| {
-        let a_name = a
-            .file_name()
-            .and_then(|s| s.to_str())
-            .unwrap_or("")
-            .to_ascii_lowercase();
-        let b_name = b
-            .file_name()
-            .and_then(|s| s.to_str())
-            .unwrap_or("")
-            .to_ascii_lowercase();
-        a_name.cmp(&b_name)
-    });
-
-    if matches.len() > 1 {
+    if let Some(chosen) = chosen.as_ref().filter(|_| match_count > 1) {
         warn!(
             "multiple noteskin files matched prefix '{}' in '{}'; using '{}', ignoring {} others",
             prefix,
             dir.display(),
-            matches[0].display(),
-            matches.len() - 1
+            chosen.display(),
+            match_count - 1
         );
     }
-    let chosen = matches.into_iter().next();
     cache
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner)
@@ -1423,15 +1421,16 @@ mod tests {
         fs::create_dir_all(&dir).unwrap();
 
         assert!(find_file_with_prefix(&dir, "Tap Note").is_none());
-        let path = dir.join("Tap Note 4x1.png");
+        let path = dir.join("tap note alpha.PNG");
         fs::write(&path, []).unwrap();
+        fs::write(dir.join("Tap Note Zulu.png"), []).unwrap();
         assert!(
             find_file_with_prefix(&dir, "Tap Note").is_none(),
             "missing file prefix result should remain cached until refresh"
         );
 
         clear_lookup_caches();
-        assert_eq!(find_file_with_prefix(&dir, "Tap Note"), Some(path));
+        assert_eq!(find_file_with_prefix(&dir, "TAP NOTE"), Some(path));
         let _ = fs::remove_dir_all(&root);
         clear_lookup_caches();
     }
