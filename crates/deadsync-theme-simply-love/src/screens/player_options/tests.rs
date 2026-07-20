@@ -2084,6 +2084,50 @@ pub(super) mod tests {
     }
 
     #[test]
+    fn keyboard_left_right_edit_values_without_dedicated_menu_buttons() {
+        // Regression: on a standard keyboard/pad without dedicated three-key
+        // menu buttons (dedicated_three_key_nav = false), Left/Right must edit
+        // the current row's value, not navigate between rows. Only real
+        // three-key cabinets (dedicated_three_key_nav = true) hijack Left/Right
+        // for Prev/Next row navigation.
+        ensure_i18n();
+        use deadsync_core::input::InputSource;
+        use deadsync_input::{InputEvent, VirtualAction};
+        use std::time::Instant;
+
+        let press = |action| {
+            let now = Instant::now();
+            InputEvent::new(action, 0, true, InputSource::Keyboard, now, 0, now, now)
+        };
+
+        let (mut state, asset_manager) = setup_state();
+        state.policy.dedicated_three_key_nav = false;
+        let speed_row = state
+            .pane()
+            .row_map
+            .display_order()
+            .iter()
+            .position(|&id| id == RowId::SpeedMod)
+            .expect("Speed Mod should be in Main pane");
+        state.pane_mut().selected_row[P1] = speed_row;
+        state.pane_mut().prev_selected_row[P1] = speed_row;
+
+        let before_val = state.speed_mod[P1].value;
+        super::super::input::handle_input(&mut state, &asset_manager, &press(VirtualAction::p1_right));
+
+        assert_eq!(
+            state.pane().selected_row[P1],
+            speed_row,
+            "Right must not move the row cursor without dedicated menu buttons"
+        );
+        assert!(
+            state.speed_mod[P1].value > before_val,
+            "Right must change the selected row's value (was {before_val}, now {})",
+            state.speed_mod[P1].value
+        );
+    }
+
+    #[test]
     fn dispatch_what_comes_next_cycles_and_mirrors() {
         ensure_i18n();
         let (mut state, asset_manager) = setup_state();
