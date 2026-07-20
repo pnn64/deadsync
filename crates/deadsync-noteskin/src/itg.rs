@@ -324,12 +324,11 @@ impl NoteskinData {
 }
 
 pub fn find_texture_with_prefix(data: &NoteskinData, prefix: &str) -> Option<PathBuf> {
-    let want = prefix.to_ascii_lowercase();
     for dir in &data.search_dirs {
         let Ok(entries) = fs::read_dir(dir) else {
             continue;
         };
-        let mut matches = entries
+        let matching = entries
             .flatten()
             .map(|entry| entry.path())
             .filter(|path| path.is_file())
@@ -337,28 +336,29 @@ pub fn find_texture_with_prefix(data: &NoteskinData, prefix: &str) -> Option<Pat
                 path.file_name()
                     .and_then(|s| s.to_str())
                     .is_some_and(|name| {
-                        let name = name.to_ascii_lowercase();
-                        name.starts_with(&want) && name.ends_with(".png")
+                        name.get(..prefix.len())
+                            .is_some_and(|start| start.eq_ignore_ascii_case(prefix))
+                            && name
+                                .get(name.len().saturating_sub(4)..)
+                                .is_some_and(|end| end.eq_ignore_ascii_case(".png"))
                     })
             })
-            .collect::<Vec<_>>();
-        if matches.is_empty() {
-            continue;
+            .min_by(|left, right| {
+                let left = left
+                    .file_name()
+                    .and_then(|name| name.to_str())
+                    .unwrap_or("");
+                let right = right
+                    .file_name()
+                    .and_then(|name| name.to_str())
+                    .unwrap_or("");
+                left.bytes()
+                    .map(|byte| byte.to_ascii_lowercase())
+                    .cmp(right.bytes().map(|byte| byte.to_ascii_lowercase()))
+            });
+        if matching.is_some() {
+            return matching;
         }
-        matches.sort_by(|a, b| {
-            let a_name = a
-                .file_name()
-                .and_then(|s| s.to_str())
-                .unwrap_or("")
-                .to_ascii_lowercase();
-            let b_name = b
-                .file_name()
-                .and_then(|s| s.to_str())
-                .unwrap_or("")
-                .to_ascii_lowercase();
-            a_name.cmp(&b_name)
-        });
-        return matches.into_iter().next();
     }
     None
 }
