@@ -682,50 +682,6 @@ pub fn itg_partition_tap_explosion_sources<T>(
     (dim, bright)
 }
 
-pub fn itg_tap_explosion_sources_for_window<'a, T>(
-    dim_sprites: &'a [ItgTapExplosionSource<T>],
-    bright_sprites: &'a [ItgTapExplosionSource<T>],
-    window: &str,
-    command_key: &str,
-    mode: ItgTapExplosionMode,
-) -> Vec<&'a ItgTapExplosionSource<T>> {
-    let mut out = Vec::new();
-    let (preferred, fallback) = match mode {
-        ItgTapExplosionMode::Dim => (dim_sprites, bright_sprites),
-        ItgTapExplosionMode::Bright => (bright_sprites, dim_sprites),
-    };
-    out.extend(
-        preferred
-            .iter()
-            .filter(|sprite| sprite.applies_to_window(window, command_key)),
-    );
-    let has_preferred = !out.is_empty();
-    if mode == ItgTapExplosionMode::Bright && !has_preferred {
-        return out;
-    }
-    if !has_preferred {
-        out.extend(
-            fallback
-                .iter()
-                .filter(|sprite| sprite.applies_to_window(window, command_key)),
-        );
-    }
-    if out.is_empty() {
-        if let Some(first) = preferred.first() {
-            out.push(first);
-        } else if let Some(first) = fallback.first() {
-            out.push(first);
-        }
-    } else if has_preferred {
-        out.extend(
-            fallback
-                .iter()
-                .filter(|sprite| sprite.applies_to_window(window, command_key)),
-        );
-    }
-    out
-}
-
 pub(crate) fn itg_tap_explosion_command_with_init<T>(
     source: &ItgTapExplosionSource<T>,
     mode: ItgTapExplosionMode,
@@ -1123,50 +1079,6 @@ mod tests {
         assert_eq!(
             itg_tap_explosion_element_window("Tap Explosion Bright W6"),
             None
-        );
-    }
-
-    #[test]
-    fn tap_explosion_sources_include_dim_fallback_for_bright() {
-        let dim = ItgTapExplosionSource::new(
-            "Tap Explosion Dim W1".to_string(),
-            "dim",
-            HashMap::from([("w1command".to_string(), "diffusealpha,1".to_string())]),
-        );
-        let bright = ItgTapExplosionSource::new(
-            "Tap Explosion Bright W1".to_string(),
-            "bright",
-            HashMap::from([("w1command".to_string(), "diffusealpha,1".to_string())]),
-        );
-
-        let bright_sources = itg_tap_explosion_sources_for_window(
-            std::slice::from_ref(&dim),
-            std::slice::from_ref(&bright),
-            "W1",
-            "w1command",
-            ItgTapExplosionMode::Bright,
-        );
-        let dim_sources = itg_tap_explosion_sources_for_window(
-            std::slice::from_ref(&dim),
-            std::slice::from_ref(&bright),
-            "W1",
-            "w1command",
-            ItgTapExplosionMode::Dim,
-        );
-
-        assert_eq!(
-            bright_sources
-                .iter()
-                .map(|source| source.payload)
-                .collect::<Vec<_>>(),
-            vec!["bright", "dim"]
-        );
-        assert_eq!(
-            dim_sources
-                .iter()
-                .map(|source| source.payload)
-                .collect::<Vec<_>>(),
-            vec!["dim", "bright"]
         );
     }
 

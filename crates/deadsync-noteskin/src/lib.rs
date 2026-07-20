@@ -63,8 +63,8 @@ pub use runtime::{
     itg_roll_explosion_from_resolved_layers, itg_roll_explosion_should_use_hold,
     itg_roll_visuals_from_parts, itg_runtime_columns_compiled, itg_slot_with_active_model_draw,
     itg_tap_explosion_map_from_layers, itg_tap_explosion_map_from_resolved_layers,
-    itg_tap_explosion_map_from_sources, itg_tap_explosions_by_col_compiled,
-    itg_tap_note_base_layer, itg_tap_note_column, itg_tap_note_layer_priority, itg_tap_note_layers,
+    itg_tap_explosion_map_from_sources, itg_tap_explosions_by_col_compiled, itg_tap_note_column,
+    itg_tap_note_layers,
 };
 pub use script::{ItgCommandEffect, model_draw_program};
 pub use sprite::{

@@ -3,8 +3,7 @@ use crate::explosion::{
     itg_has_hit_mine_command, itg_has_tap_explosion_command, itg_hit_mine_command_with_init,
     itg_hit_mine_explosion_slot, itg_hold_explosion_slot, itg_is_hit_mine_explosion_element,
     itg_mine_explosion_commands, itg_partition_tap_explosion_sources,
-    itg_tap_explosion_command_with_init, itg_tap_explosion_key,
-    itg_tap_explosion_sources_for_window, parse_explosion_animation,
+    itg_tap_explosion_command_with_init, itg_tap_explosion_key, parse_explosion_animation,
 };
 use crate::script::{itg_active_model_commands, model_draw_program};
 use crate::{
@@ -590,37 +589,62 @@ pub fn itg_tap_explosion_map_from_sources<T: Clone>(
             if mode == ItgTapExplosionMode::Bright && bright_sprites.is_empty() {
                 continue;
             }
-            let sources = itg_tap_explosion_sources_for_window(
-                &dim_sprites,
-                &bright_sprites,
-                window,
-                key,
-                mode,
-            );
-            if sources.is_empty() {
+            let (preferred, fallback_sprites) = match mode {
+                ItgTapExplosionMode::Dim => (&dim_sprites, &bright_sprites),
+                ItgTapExplosionMode::Bright => (&bright_sprites, &dim_sprites),
+            };
+            let has_preferred = preferred
+                .iter()
+                .any(|source| source.applies_to_window(window, key));
+            if mode == ItgTapExplosionMode::Bright && !has_preferred {
                 continue;
             }
-            let layers = sources
-                .into_iter()
-                .filter_map(|source| {
-                    let fallback;
-                    let command = if let Some(command) = source.commands.get(key) {
-                        command.as_str()
-                    } else {
-                        fallback = metric_command(source.mode, metric_key)?;
-                        fallback.as_str()
+
+            let mut layers = Vec::new();
+            let mut add_source = |source: &ItgTapExplosionSource<T>| {
+                let fallback;
+                let command = if let Some(command) = source.commands.get(key) {
+                    command.as_str()
+                } else {
+                    let Some(command) = metric_command(source.mode, metric_key) else {
+                        return;
                     };
-                    if command.trim().is_empty() {
-                        return None;
-                    }
-                    let command_with_init =
-                        itg_tap_explosion_command_with_init(source, mode, command);
-                    Some(TapExplosionLayer {
-                        slot: source.payload.clone(),
-                        animation: parse_explosion_animation(&command_with_init),
-                    })
-                })
-                .collect();
+                    fallback = command;
+                    fallback.as_str()
+                };
+                if command.trim().is_empty() {
+                    return;
+                }
+                let command_with_init = itg_tap_explosion_command_with_init(source, mode, command);
+                layers.push(TapExplosionLayer {
+                    slot: source.payload.clone(),
+                    animation: parse_explosion_animation(&command_with_init),
+                });
+            };
+
+            if has_preferred {
+                for source in preferred
+                    .iter()
+                    .chain(fallback_sprites)
+                    .filter(|source| source.applies_to_window(window, key))
+                {
+                    add_source(source);
+                }
+            } else {
+                let mut has_fallback = false;
+                for source in fallback_sprites
+                    .iter()
+                    .filter(|source| source.applies_to_window(window, key))
+                {
+                    has_fallback = true;
+                    add_source(source);
+                }
+                if !has_fallback
+                    && let Some(source) = preferred.first().or_else(|| fallback_sprites.first())
+                {
+                    add_source(source);
+                }
+            }
             if let Some(explosion) = TapExplosion::from_layers(layers) {
                 tap_explosions.insert(itg_tap_explosion_key(window, mode).to_string(), explosion);
             }
@@ -754,33 +778,6 @@ pub fn itg_tap_note_layers<T>(mut layers: Vec<T>, fallback: impl FnOnce() -> Opt
     layers
 }
 
-pub fn itg_tap_note_layer_priority(has_model: bool, uv_velocity: [f32; 2]) -> u8 {
-    if !has_model {
-        return 2;
-    }
-    if uv_velocity[0].abs() > f32::EPSILON || uv_velocity[1].abs() > f32::EPSILON {
-        0
-    } else {
-        1
-    }
-}
-
-pub fn itg_tap_note_base_layer<T: Clone>(
-    layers: &[T],
-    mut layer_info: impl FnMut(&T) -> (bool, [f32; 2]),
-) -> Option<T> {
-    layers
-        .iter()
-        .find(|layer| {
-            let (has_model, uv_velocity) = layer_info(layer);
-            has_model
-                && (uv_velocity[0].abs() > f32::EPSILON || uv_velocity[1].abs() > f32::EPSILON)
-        })
-        .cloned()
-        .or_else(|| layers.iter().find(|layer| layer_info(layer).0).cloned())
-        .or_else(|| layers.first().cloned())
-}
-
 pub fn itg_tap_note_column<T: Clone>(
     mut layers: Vec<T>,
     quantizations: usize,
@@ -789,16 +786,23 @@ pub fn itg_tap_note_column<T: Clone>(
     if layers.len() > 1 {
         layers.sort_by_key(|layer| {
             let (has_model, uv_velocity) = layer_info(layer);
-            itg_tap_note_layer_priority(has_model, uv_velocity)
+            if !has_model {
+                2
+            } else if uv_velocity[0].abs() > f32::EPSILON || uv_velocity[1].abs() > f32::EPSILON {
+                0
+            } else {
+                1
+            }
         });
     }
-    let base = itg_tap_note_base_layer(&layers, &mut layer_info)?;
-    let mut notes = Vec::with_capacity(quantizations);
-    let mut note_layers = Vec::with_capacity(quantizations);
-    for _ in 0..quantizations {
-        notes.push(layers.first().cloned().unwrap_or_else(|| base.clone()));
-        note_layers.push(Arc::from(layers.clone()));
-    }
+    let base = layers.first()?.clone();
+    let notes = (0..quantizations).map(|_| layers[0].clone()).collect();
+    let note_layers = if quantizations == 0 {
+        Vec::new()
+    } else {
+        let shared: Arc<[T]> = Arc::from(layers.clone());
+        vec![shared; quantizations]
+    };
     Some(ItgTapNoteColumn {
         notes,
         note_layers,
@@ -2396,8 +2400,7 @@ mod tests {
         itg_runtime_columns_compiled, itg_slot_with_active_model_draw,
         itg_tap_explosion_map_from_layers, itg_tap_explosion_map_from_resolved_layers,
         itg_tap_explosion_map_from_sources, itg_tap_explosions_by_col_compiled,
-        itg_tap_note_base_layer, itg_tap_note_column, itg_tap_note_layer_priority,
-        itg_tap_note_layers,
+        itg_tap_note_column, itg_tap_note_layers,
     };
     use crate::explosion::{
         ItgTapExplosionMode, ItgTapExplosionSource, itg_has_tap_explosion_command,
@@ -2956,50 +2959,6 @@ mod tests {
     }
 
     #[test]
-    fn tap_note_layer_priority_prefers_moving_model_layers() {
-        assert_eq!(itg_tap_note_layer_priority(true, [0.0, 1.0]), 0);
-        assert_eq!(itg_tap_note_layer_priority(true, [0.0, 0.0]), 1);
-        assert_eq!(itg_tap_note_layer_priority(false, [1.0, 0.0]), 2);
-    }
-
-    #[test]
-    fn tap_note_base_layer_prefers_moving_model_then_model_then_first() {
-        #[derive(Clone, Debug, PartialEq, Eq)]
-        struct Layer {
-            id: u8,
-            has_model: bool,
-            uv: [i32; 2],
-        }
-
-        let layers = [
-            Layer {
-                id: 1,
-                has_model: false,
-                uv: [9, 0],
-            },
-            Layer {
-                id: 2,
-                has_model: true,
-                uv: [0, 0],
-            },
-            Layer {
-                id: 3,
-                has_model: true,
-                uv: [0, 1],
-            },
-        ];
-        let info = |layer: &Layer| (layer.has_model, [layer.uv[0] as f32, layer.uv[1] as f32]);
-
-        let moving_model = itg_tap_note_base_layer(&layers, info);
-        let static_model = itg_tap_note_base_layer(&layers[..2], info);
-        let first_sprite = itg_tap_note_base_layer(&layers[..1], info);
-
-        assert_eq!(moving_model.map(|layer| layer.id), Some(3));
-        assert_eq!(static_model.map(|layer| layer.id), Some(2));
-        assert_eq!(first_sprite.map(|layer| layer.id), Some(1));
-    }
-
-    #[test]
     fn tap_note_column_sorts_layers_and_expands_quantizations() {
         #[derive(Clone, Debug, PartialEq)]
         struct Layer {
@@ -3043,6 +3002,7 @@ mod tests {
         assert_eq!(column.notes, vec![column.layers[0].clone(); 2]);
         assert_eq!(&*column.note_layers[0], column.layers.as_slice());
         assert_eq!(&*column.note_layers[1], column.layers.as_slice());
+        assert!(Arc::ptr_eq(&column.note_layers[0], &column.note_layers[1]));
     }
 
     #[test]
@@ -4331,7 +4291,22 @@ mod tests {
             map.get("W1Bright").map(|explosion| explosion.slot.clone()),
             Some(Slot(2))
         );
-        assert_eq!(map["W1"].layers.len(), 2);
+        assert_eq!(
+            map["W1"]
+                .layers
+                .iter()
+                .map(|layer| layer.slot.clone())
+                .collect::<Vec<_>>(),
+            vec![Slot(1), Slot(2)]
+        );
+        assert_eq!(
+            map["W1Bright"]
+                .layers
+                .iter()
+                .map(|layer| layer.slot.clone())
+                .collect::<Vec<_>>(),
+            vec![Slot(2), Slot(1)]
+        );
         assert!((map["W1"].duration() - 0.3).abs() <= f32::EPSILON);
         assert!((map["W1Bright"].duration() - 0.3).abs() <= f32::EPSILON);
     }
