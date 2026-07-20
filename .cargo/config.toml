@@ -1,0 +1,22 @@
+# Make `cargo build`/`cargo run` work on macOS without manually exporting
+# LIBRARY_PATH / RUSTFLAGS / DYLD_FALLBACK_LIBRARY_PATH for the Homebrew Vulkan
+# loader (see the macOS section of README.md).
+#
+# The link-search flags are scoped to macOS so they don't affect Linux/Windows
+# builds. Both the Apple Silicon (/opt/homebrew) and Intel (/usr/local) Homebrew
+# prefixes are listed; non-existent search paths are simply ignored by the
+# linker, so this works on either machine.
+
+[target.'cfg(target_os = "macos")']
+rustflags = [
+    "-L", "native=/opt/homebrew/lib",
+    "-L", "native=/opt/homebrew/opt/vulkan-loader/lib",
+    "-L", "native=/usr/local/lib",
+    "-L", "native=/usr/local/opt/vulkan-loader/lib",
+]
+
+# Runtime dylib search path so the freshly built binary can find libvulkan at
+# launch. Cargo only applies these when the variable isn't already set in the
+# environment, so an existing export still wins.
+[env]
+DYLD_FALLBACK_LIBRARY_PATH = "/opt/homebrew/lib:/opt/homebrew/opt/vulkan-loader/lib:/usr/local/lib:/usr/local/opt/vulkan-loader/lib"

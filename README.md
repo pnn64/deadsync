@@ -29,12 +29,39 @@ sudo apt install --no-install-recommends build-essential cmake pkg-config libude
 ```
 
 ### macOS build dependencies (Homebrew)
+
+Install the toolchain and native libraries:
 ```bash
-xcode-select --install
-brew install vulkan-loader molten-vk
+xcode-select --install          # C/C++ toolchain, Git, Python (needed by shaderc-sys)
+brew install cmake vulkan-loader molten-vk
 ```
 
-If linking fails with `library 'vulkan' not found`, export the Homebrew library paths:
+- **CMake** — required to build `shaderc-sys` (the shader compiler) from source.
+- **vulkan-loader** — the `libvulkan` the engine links against and loads at runtime.
+- **molten-vk** — the Vulkan-to-Metal driver that makes Vulkan actually run on Apple GPUs.
+- The **Xcode Command Line Tools** provide the compiler/linker plus the Git and
+  Python that `shaderc-sys` invokes during its build.
+
+You do **not** need the LunarG Vulkan SDK for a normal build/run on macOS — the
+Homebrew loader + MoltenVK are enough. Install the SDK only if you want the
+Vulkan **validation layers** for debugging (`GfxDebug` in `deadsync.ini`).
+
+#### Building and running
+
+The repo ships a `.cargo/config.toml` that adds the Homebrew Vulkan loader to
+the link and runtime search paths for macOS, so no manual environment variables
+are required on either Apple Silicon (`/opt/homebrew`) or Intel (`/usr/local`):
+```bash
+cargo run                       # fast dev build
+cargo run --profile local       # optimized, but faster to link than full release
+cargo build --release           # fully optimized (LTO) build for benchmarking/play
+```
+Before the first run, grant **Input Monitoring** to your terminal (see the
+macOS run note under [Getting Started](#getting-started)) or the game won't
+receive keystrokes.
+
+If you use a non-standard Homebrew prefix and linking still fails with
+`library 'vulkan' not found`, export the paths for your prefix:
 ```bash
 brew_prefix="$(brew --prefix)"
 export LIBRARY_PATH="$brew_prefix/lib:$brew_prefix/opt/vulkan-loader/lib:${LIBRARY_PATH:-}"
