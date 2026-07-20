@@ -1024,7 +1024,7 @@ fn parse_self_chain_commands_scoped(
     context: &CommandContext,
     scope: &HashMap<String, String>,
 ) -> Option<String> {
-    let mut out = Vec::new();
+    let mut out = String::new();
     let mut cursor = 0usize;
     while let Some(rel) = body[cursor..].find("self:") {
         let mut name_start = cursor + rel + 5;
@@ -1033,15 +1033,14 @@ fn parse_self_chain_commands_scoped(
                 cursor = name_start;
                 break;
             };
-            let args = args
-                .into_iter()
-                .map(|arg| context.resolve_command_arg(&arg, scope))
-                .collect::<Vec<_>>();
-            out.push(if args.is_empty() {
-                name
-            } else {
-                format!("{name},{}", args.join(","))
-            });
+            if !out.is_empty() {
+                out.push(';');
+            }
+            out.push_str(name);
+            for arg in args {
+                out.push(',');
+                out.push_str(&context.resolve_command_arg(&arg, scope));
+            }
             cursor = next;
 
             let chain = skip_ws(body, next);
@@ -1052,10 +1051,10 @@ fn parse_self_chain_commands_scoped(
             break;
         }
     }
-    (!out.is_empty()).then(|| out.join(";"))
+    (!out.is_empty()).then_some(out)
 }
 
-fn parse_lua_method_call(body: &str, name_start: usize) -> Option<(String, Vec<String>, usize)> {
+fn parse_lua_method_call(body: &str, name_start: usize) -> Option<(&str, Vec<String>, usize)> {
     let bytes = body.as_bytes();
     let mut name_end = name_start;
     while name_end < bytes.len() && is_lua_ident(bytes[name_end]) {
@@ -1070,7 +1069,7 @@ fn parse_lua_method_call(body: &str, name_start: usize) -> Option<(String, Vec<S
     }
     let close = find_matching(body, open, '(', ')')?;
     Some((
-        body[name_start..name_end].trim().to_string(),
+        body[name_start..name_end].trim(),
         split_call_args(&body[open + 1..close]),
         close + 1,
     ))
@@ -1289,6 +1288,16 @@ fn parse_lua_float_token(raw: &str) -> Option<f32> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn self_chain_commands_append_in_call_order() {
+        let commands = parse_self_chain_commands_scoped(
+            "self:zoom(1):xy(2,3):stoptweening()",
+            &CommandContext::default(),
+            &HashMap::new(),
+        );
+        assert_eq!(commands.as_deref(), Some("zoom,1;xy,2,3;stoptweening"));
+    }
 
     #[test]
     fn color_list_uses_first_four_valid_components() {
