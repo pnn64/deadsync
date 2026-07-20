@@ -4681,7 +4681,7 @@ fn gameplay_and_evaluation_lobby_runtime_is_shell_owned() {
         .expect("shell app should be readable");
     for shell_owner in [
         "fn sync_active_online_runtime_view",
-        "gameplay::sync_runtime_view",
+        "gameplay::sync_lobby_runtime_view",
         "evaluation::sync_runtime_view",
         "SimplyLoveLobbyRequest::UpdateMachineStats",
         "runtime_update_machine_state_sides_with_stats_default",
@@ -4818,8 +4818,69 @@ fn gameplay_config_and_profile_runtime_is_shell_prepared() {
         .expect("shell app should be readable");
     assert!(
         shell.contains("crate::gameplay_runtime::init_view(")
-            && shell.contains("crate::gameplay_runtime::runtime_view(")
-            && shell.contains("gameplay::sync_runtime_view(state, view)")
+            && shell.contains("gameplay::sync_lobby_runtime_view(state, lobby)")
+    );
+}
+
+#[test]
+fn gameplay_frame_hot_path_uses_song_lifetime_caches() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let shell = fs::read_to_string(root.join("crates/deadsync-shell/src/app/mod.rs"))
+        .expect("shell app should be readable");
+    let online_sync = shell
+        .split_once("fn sync_active_online_runtime_view")
+        .and_then(|(_, rest)| rest.split_once("fn scorebox_side_view"))
+        .map(|(body, _)| body)
+        .expect("active online runtime sync should be present");
+    for accidental_full_runtime_read in ["config::get()", "gameplay_runtime::runtime_view"] {
+        assert!(
+            !online_sync.contains(accidental_full_runtime_read),
+            "Gameplay online sync still rebuilds full runtime state through {accidental_full_runtime_read}"
+        );
+    }
+    assert!(
+        online_sync.contains("gameplay::uses_live_lobby_runtime(state)")
+            && online_sync.contains("gameplay::sync_lobby_runtime_view(state, lobby)"),
+        "offline Gameplay must skip lobby runtime work and live lobbies must update only lobby state"
+    );
+
+    let background_sync = shell
+        .split_once("fn sync_gameplay_background")
+        .and_then(|(_, rest)| rest.split_once("fn sync_theme_background_video"))
+        .map(|(body, _)| body)
+        .expect("Gameplay background sync should be present");
+    for removed_frame_allocation in [
+        "current_background_path.clone()",
+        "gameplay_overlay_video_paths",
+    ] {
+        assert!(
+            !background_sync.contains(removed_frame_allocation),
+            "Gameplay background sync still performs {removed_frame_allocation} every frame"
+        );
+    }
+    assert!(
+        background_sync.contains("gameplay::refresh_foreground_media(gs)")
+            && background_sync.contains("gameplay::active_song_lua_video_paths(gs)"),
+        "Gameplay foreground/video state must be advanced from song-lifetime caches"
+    );
+
+    let gameplay =
+        fs::read_to_string(root.join("crates/deadsync-theme-simply-love/src/screens/gameplay.rs"))
+            .expect("Simply Love Gameplay source should be readable");
+    assert!(
+        gameplay.contains("next_song_lua_sound_event_ix")
+            && gameplay.contains("next_foreground_change_ix")
+            && gameplay.contains("song_lua_background_layer_state_scratch")
+            && gameplay.contains("song_lua_foreground_layer_state_scratch"),
+        "Gameplay must retain cursors and reusable per-layer Song-Lua state"
+    );
+
+    let online = fs::read_to_string(root.join("crates/deadsync-online/src/lobbies.rs"))
+        .expect("online lobby runtime should be readable");
+    assert!(
+        online.contains("RUNTIME_LAST_MACHINE_STATE_INPUT")
+            && online.contains("deadsync_profile::runtime_with_session_players"),
+        "live lobby updates must deduplicate raw state before cloning profile names or building JSON"
     );
 }
 

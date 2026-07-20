@@ -29,9 +29,7 @@ use crate::frame_stats::{
 };
 use crate::frame_stutter::{ComposeBreakdown, trace_frame_stutter};
 use crate::gameplay_entry::{gameplay_chart_entry_plan, gameplay_last_played_commands};
-use crate::gameplay_prewarm::{
-    gameplay_overlay_video_paths, prewarm_gameplay_assets, prewarm_gameplay_sfx,
-};
+use crate::gameplay_prewarm::{prewarm_gameplay_assets, prewarm_gameplay_sfx};
 pub use crate::input::UserEvent;
 use crate::input::{
     AppRawKeyShortcut, EvaluationRawKeyShortcut, GameplayQueuedEvent, QueuedInputBatchState,
@@ -814,7 +812,7 @@ impl ScreensState {
         now: Instant,
         session: &SessionState,
         asset_manager: &AssetManager,
-        smx_assignment: &SmxAssignmentView,
+        smx_assignment: Option<&SmxAssignmentView>,
         gameplay_smx_input: bool,
     ) -> (Option<ThemeEffect>, bool) {
         match self.current_screen {
@@ -834,7 +832,7 @@ impl ScreensState {
                     &mut self.options_state,
                     delta_time,
                     asset_manager,
-                    smx_assignment,
+                    smx_assignment.expect("Options requires the live SMX assignment view"),
                 ),
                 false,
             ),
@@ -867,7 +865,11 @@ impl ScreensState {
                 false,
             ),
             CurrentScreen::SmxAssignPads => (
-                screens::smx_assign::update(&mut self.smx_assign_state, delta_time, smx_assignment),
+                screens::smx_assign::update(
+                    &mut self.smx_assign_state,
+                    delta_time,
+                    smx_assignment.expect("SMX assignment requires the live assignment view"),
+                ),
                 false,
             ),
             CurrentScreen::PlayerOptions => {
@@ -953,7 +955,7 @@ impl ScreensState {
                     Some(select_music::update(
                         &mut self.select_music_state,
                         delta_time,
-                        smx_assignment,
+                        smx_assignment.expect("Select Music requires the live SMX assignment view"),
                     )),
                     false,
                 )
@@ -1555,13 +1557,18 @@ impl App {
     fn sync_active_online_runtime_view(&mut self) {
         match self.state.screens.current_screen {
             CurrentScreen::Gameplay => {
-                let config = config::get();
-                let view = crate::gameplay_runtime::runtime_view(
-                    &config,
-                    Self::refresh_lobby_runtime_view(),
-                );
+                let Some(state) = self.state.screens.gameplay_state.as_ref() else {
+                    return;
+                };
+                // Offline stages cannot become lobby stages mid-song. Avoid the
+                // snapshot/reconnect locks entirely unless this stage entered
+                // Gameplay from a joined lobby (including reconnecting lobbies).
+                if !gameplay::uses_live_lobby_runtime(state) {
+                    return;
+                }
+                let lobby = Self::refresh_lobby_runtime_view();
                 if let Some(state) = self.state.screens.gameplay_state.as_mut() {
-                    gameplay::sync_runtime_view(state, view);
+                    gameplay::sync_lobby_runtime_view(state, lobby);
                 }
             }
             CurrentScreen::Evaluation => {
@@ -2469,13 +2476,19 @@ impl App {
         });
         if transition_plan.step_screen {
             if step_plan.step_screen {
-                let smx_assignment = crate::smx_config::smx_assignment_view();
+                let smx_assignment = matches!(
+                    self.state.screens.current_screen,
+                    CurrentScreen::Options
+                        | CurrentScreen::SmxAssignPads
+                        | CurrentScreen::SelectMusic
+                )
+                .then(crate::smx_config::smx_assignment_view);
                 let (action, _) = self.state.screens.step_idle(
                     logic_dt,
                     redraw_started,
                     &self.state.session,
                     &self.asset_manager,
-                    &smx_assignment,
+                    smx_assignment.as_ref(),
                     self.state.play_input_policy.smx_input,
                 );
                 if let Some(action) = action
@@ -4727,7 +4740,7 @@ impl App {
         ) {
             return;
         }
-        let (desired_path, desired_key, gameplay_time_sec, background_rate) = {
+        let (gameplay_time_sec, background_rate, foreground_videos_changed) = {
             let gs = match self.state.screens.current_screen {
                 CurrentScreen::Gameplay => self.state.screens.gameplay_state.as_mut(),
                 CurrentScreen::Practice => self
@@ -4741,8 +4754,7 @@ impl App {
             let Some(gs) = gs else {
                 return;
             };
-            let old_path_key = gs.current_background_key.clone();
-            let old_texture_key = gs.background_texture_key.clone();
+            let foreground_videos_changed = gameplay::refresh_foreground_media(gs);
             let had_pending_background_change = gs.background_path_dirty;
             let mut background_changed = false;
             while let Some(change) = gs.background_changes.get(gs.next_background_change_ix) {
@@ -4755,15 +4767,22 @@ impl App {
             if background_changed {
                 gs.background_path_dirty = true;
             }
+            let should_track_transition = background_changed || had_pending_background_change;
+            let old_path_key = should_track_transition.then(|| gs.current_background_key.clone());
+            let old_texture_key =
+                should_track_transition.then(|| gs.background_texture_key.clone());
             if gs.background_path_dirty || gs.background_allow_video != show_video_backgrounds {
                 Self::refresh_gameplay_background_path(gs, show_video_backgrounds);
             }
-            if (background_changed || had_pending_background_change)
-                && old_path_key != gs.current_background_key
+            if should_track_transition
+                && old_path_key
+                    .as_ref()
+                    .is_some_and(|key| key != &gs.current_background_key)
             {
                 let transition = Self::active_gameplay_background_change(gs)
                     .map(|change| change.transition.clone())
                     .unwrap_or_default();
+                let old_texture_key = old_texture_key.expect("tracked background transition key");
                 if transition.is_empty() || &*old_texture_key == "__black" {
                     gs.previous_background_texture_key = None;
                     gs.background_transition.clear();
@@ -4777,26 +4796,36 @@ impl App {
                 }
             }
             (
-                gs.current_background_path.clone(),
-                gs.current_background_key.clone(),
                 deadsync_core::song_time::song_time_ns_to_seconds(gs.current_music_time_ns()),
                 Self::active_gameplay_background_change(gs)
                     .map(|change| change.rate)
                     .unwrap_or(1.0),
+                foreground_videos_changed,
             )
         };
 
-        let next_key = self.backend.as_mut().and_then(|backend| {
-            self.dynamic_media.sync_gameplay_background(
+        let gs = match self.state.screens.current_screen {
+            CurrentScreen::Gameplay => self.state.screens.gameplay_state.as_ref(),
+            CurrentScreen::Practice => self
+                .state
+                .screens
+                .practice_state
+                .as_ref()
+                .map(|state| &state.gameplay),
+            _ => None,
+        };
+        let next_key = match (gs, self.backend.as_mut()) {
+            (Some(gs), Some(backend)) => self.dynamic_media.sync_gameplay_background(
                 &mut self.asset_manager,
                 backend,
-                desired_path.as_deref(),
-                desired_key.as_deref(),
+                gs.current_background_path.as_deref(),
+                gs.current_background_key.as_deref(),
                 show_video_backgrounds,
                 gameplay_time_sec,
                 background_rate,
-            )
-        });
+            ),
+            _ => None,
+        };
         if let Some(key) = next_key {
             let key = Arc::<str>::from(key);
             match self.state.screens.current_screen {
@@ -4813,27 +4842,27 @@ impl App {
                 _ => {}
             }
         }
-        let gs = match self.state.screens.current_screen {
-            CurrentScreen::Gameplay => self.state.screens.gameplay_state.as_ref(),
-            CurrentScreen::Practice => self
-                .state
-                .screens
-                .practice_state
-                .as_ref()
-                .map(|state| &state.gameplay),
-            _ => None,
-        };
-        if let (Some(backend), Some(gs)) = (self.backend.as_mut(), gs) {
-            let overlay_video_paths = gameplay_overlay_video_paths(
-                gs.song_lua_visuals(),
-                gs.song()
-                    .active_foreground_path(gs.current_beat())
-                    .map(|path| path.as_path()),
-            );
+        if foreground_videos_changed {
+            let gs = match self.state.screens.current_screen {
+                CurrentScreen::Gameplay => self.state.screens.gameplay_state.as_ref(),
+                CurrentScreen::Practice => self
+                    .state
+                    .screens
+                    .practice_state
+                    .as_ref()
+                    .map(|state| &state.gameplay),
+                _ => None,
+            };
+            let Some(gs) = gs else {
+                return;
+            };
+            let Some(backend) = self.backend.as_mut() else {
+                return;
+            };
             self.dynamic_media.sync_active_song_lua_videos(
                 &mut self.asset_manager,
                 backend,
-                &overlay_video_paths,
+                gameplay::active_song_lua_video_paths(gs),
             );
         }
     }
@@ -4843,7 +4872,6 @@ impl App {
             self.state.screens.current_screen,
             CurrentScreen::Gameplay | CurrentScreen::Practice
         ) {
-            screens::components::shared::visual_style_bg::set_srpg_background_key(None);
             return;
         }
 
@@ -6469,6 +6497,12 @@ impl App {
         target: CurrentScreen,
     ) -> Vec<Command> {
         let mut commands = Vec::new();
+        if matches!(target, CurrentScreen::Gameplay | CurrentScreen::Practice) {
+            // The shared SRPG background is hidden for the whole stage. Clear
+            // its key once on entry instead of taking its global mutex every
+            // gameplay frame.
+            screens::components::shared::visual_style_bg::set_srpg_background_key(None);
+        }
         if matches!(prev, CurrentScreen::Gameplay | CurrentScreen::Practice)
             && !matches!(target, CurrentScreen::Gameplay | CurrentScreen::Practice)
             && target != CurrentScreen::Evaluation
@@ -6636,12 +6670,6 @@ impl App {
                 crate::gameplay_runtime::sync_initial_scores(&mut gs);
                 gs.disable_score_for_practice();
                 let init_ms = init_started.elapsed().as_secs_f64() * 1000.0;
-                let overlay_video_paths = gameplay_overlay_video_paths(
-                    gs.song_lua_visuals(),
-                    gs.song()
-                        .active_foreground_path(gs.current_beat())
-                        .map(|path| path.as_path()),
-                );
 
                 let sfx_prewarm_started = Instant::now();
                 prewarm_gameplay_sfx(gs.song_lua_visuals(), &gs.song_lua_sound_paths);
@@ -6672,7 +6700,7 @@ impl App {
                     self.dynamic_media.sync_active_song_lua_videos(
                         &mut self.asset_manager,
                         backend,
-                        &overlay_video_paths,
+                        gameplay::active_song_lua_video_paths(&gs),
                     );
                     prewarm_gameplay_banners(
                         &mut self.dynamic_media,
@@ -7036,12 +7064,6 @@ impl App {
                 );
                 crate::gameplay_runtime::sync_initial_scores(&mut gs);
                 let init_ms = init_started.elapsed().as_secs_f64() * 1000.0;
-                let overlay_video_paths = gameplay_overlay_video_paths(
-                    gs.song_lua_visuals(),
-                    gs.song()
-                        .active_foreground_path(gs.current_beat())
-                        .map(|path| path.as_path()),
-                );
 
                 let sfx_prewarm_started = Instant::now();
                 prewarm_gameplay_sfx(gs.song_lua_visuals(), &gs.song_lua_sound_paths);
@@ -7072,7 +7094,7 @@ impl App {
                     self.dynamic_media.sync_active_song_lua_videos(
                         &mut self.asset_manager,
                         backend,
-                        &overlay_video_paths,
+                        gameplay::active_song_lua_video_paths(&gs),
                     );
                     prewarm_gameplay_banners(
                         &mut self.dynamic_media,

@@ -495,10 +495,11 @@ pub(crate) fn update(state: &mut gameplay::State, delta_time: f32, smx_input: bo
     });
     sync_scores(state);
     drain(state);
+    let current_song_lua_time = state.current_music_time_display();
     gameplay::for_each_song_lua_sound_event(
         state,
         previous_song_lua_time,
-        state.current_music_time_display(),
+        current_song_lua_time,
         play_song_lua_sfx,
     );
     sequence_effects(lobby_effect, effect)

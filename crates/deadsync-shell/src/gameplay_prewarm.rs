@@ -8,7 +8,7 @@ use deadsync_core::input::MAX_PLAYERS;
 use deadsync_gameplay::SongLuaRuntimeVisuals;
 use log::warn;
 use std::collections::HashSet;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::Arc;
 
 fn prewarm_model_texture_key(
@@ -187,39 +187,6 @@ pub fn prewarm_gameplay_assets<CapturedActor, StateDelta>(
     }
 }
 
-pub fn gameplay_song_lua_video_paths<CapturedActor, StateDelta>(
-    song_lua_visuals: &SongLuaRuntimeVisuals<SongLuaOverlayActor, CapturedActor, StateDelta>,
-) -> Vec<PathBuf> {
-    let mut paths = Vec::new();
-    let mut seen = HashSet::new();
-    deadsync_song_lua::push_song_lua_video_paths(&song_lua_visuals.overlays, &mut seen, &mut paths);
-    for layer in &song_lua_visuals.background_visual_layers {
-        deadsync_song_lua::push_song_lua_video_paths(&layer.overlays, &mut seen, &mut paths);
-    }
-    for layer in &song_lua_visuals.foreground_visual_layers {
-        deadsync_song_lua::push_song_lua_video_paths(&layer.overlays, &mut seen, &mut paths);
-    }
-    paths
-}
-
-fn push_active_foreground_video(paths: &mut Vec<PathBuf>, active_foreground: Option<&Path>) {
-    if let Some(path) = active_foreground
-        && deadlib_assets::dynamic::is_dynamic_video_path(path)
-        && !paths.iter().any(|existing| existing == path)
-    {
-        paths.push(path.to_path_buf());
-    }
-}
-
-pub fn gameplay_overlay_video_paths<CapturedActor, StateDelta>(
-    song_lua_visuals: &SongLuaRuntimeVisuals<SongLuaOverlayActor, CapturedActor, StateDelta>,
-    active_foreground: Option<&Path>,
-) -> Vec<PathBuf> {
-    let mut paths = gameplay_song_lua_video_paths(song_lua_visuals);
-    push_active_foreground_video(&mut paths, active_foreground);
-    paths
-}
-
 pub fn prewarm_gameplay_sfx<CapturedActor, StateDelta>(
     song_lua_visuals: &SongLuaRuntimeVisuals<SongLuaOverlayActor, CapturedActor, StateDelta>,
     song_lua_sound_paths: &[PathBuf],
@@ -247,26 +214,5 @@ pub fn prewarm_gameplay_sfx<CapturedActor, StateDelta>(
     for sound_path in sound_paths {
         let key = sound_path.to_string_lossy();
         deadsync_audio_stream::preload_sfx(key.as_ref());
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn active_foreground_adds_only_unique_video_paths() {
-        let video = Path::new("foreground.webm");
-        let mut paths = Vec::new();
-        push_active_foreground_video(&mut paths, Some(video));
-        push_active_foreground_video(&mut paths, Some(video));
-        assert_eq!(paths, [PathBuf::from("foreground.webm")]);
-    }
-
-    #[test]
-    fn active_foreground_ignores_static_images() {
-        let mut paths = Vec::new();
-        push_active_foreground_video(&mut paths, Some(Path::new("foreground.png")));
-        assert!(paths.is_empty());
     }
 }

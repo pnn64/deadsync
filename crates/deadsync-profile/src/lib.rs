@@ -250,6 +250,30 @@ pub fn runtime_session_players_view() -> SessionPlayersView {
     session_players_view(&runtime_lock_profiles(), joined_mask, active_side)
 }
 
+/// Runs `f` with the current local lobby-player metadata without cloning the
+/// profile display names. The session lock is released before the profile lock
+/// is acquired, and the borrowed names are only valid for the closure call.
+pub fn runtime_with_session_players<R>(
+    f: impl FnOnce(PlayerSide, [bool; PLAYER_SLOTS], [&str; PLAYER_SLOTS]) -> R,
+) -> R {
+    let (joined_mask, active_side) = {
+        let session = runtime_lock_session();
+        (session.joined_mask, session.player_side)
+    };
+    let profiles = runtime_lock_profiles();
+    f(
+        active_side,
+        [
+            player_side_is_joined(joined_mask, PlayerSide::P1),
+            player_side_is_joined(joined_mask, PlayerSide::P2),
+        ],
+        [
+            profiles[0].display_name.as_str(),
+            profiles[1].display_name.as_str(),
+        ],
+    )
+}
+
 /// The favorite sets needed to build profile-aware selection views without
 /// exposing the process-global profile store to presentation crates.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]

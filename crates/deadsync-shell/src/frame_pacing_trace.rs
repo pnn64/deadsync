@@ -123,6 +123,42 @@ impl GameplayPacingTrace {
         display_error_seconds: f32,
         display_catching_up: bool,
     ) {
+        self.record_frame_if_enabled(
+            log::log_enabled!(log::Level::Trace),
+            now,
+            gameplay,
+            frame_seconds,
+            pre_redraw_gap_us,
+            request_to_redraw_us,
+            redraw_request_reason,
+            draw_us,
+            draw_stats,
+            display_error_seconds,
+            display_catching_up,
+        );
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn record_frame_if_enabled(
+        &mut self,
+        enabled: bool,
+        now: Instant,
+        gameplay: bool,
+        frame_seconds: f32,
+        pre_redraw_gap_us: u32,
+        request_to_redraw_us: u32,
+        redraw_request_reason: &'static str,
+        draw_us: u32,
+        draw_stats: DrawStats,
+        display_error_seconds: f32,
+        display_catching_up: bool,
+    ) {
+        if !enabled {
+            if self.frames != 0 {
+                self.reset(now);
+            }
+            return;
+        }
         if !gameplay {
             self.reset(now);
             return;
@@ -307,8 +343,8 @@ mod tests {
             backend_record_us: 300,
             ..DrawStats::default()
         };
-        trace.record_frame(
-            now, true, 0.016, 2_000, 500, "chain", 2_500, draw, -0.002, true,
+        trace.record_frame_if_enabled(
+            true, now, true, 0.016, 2_000, 500, "chain", 2_500, draw, -0.002, true,
         );
         assert_eq!(trace.frames, 1);
         assert_eq!(trace.chain_frames, 1);
@@ -317,5 +353,27 @@ mod tests {
         assert_eq!(trace.present_over_1ms, 1);
         assert_eq!(trace.display_error_last_us, -2_000);
         assert_eq!(trace.display_catching_up_frames, 1);
+    }
+
+    #[test]
+    fn disabled_trace_stays_idle() {
+        let now = Instant::now();
+        let mut trace = GameplayPacingTrace::new(now);
+
+        trace.record_frame_if_enabled(
+            false,
+            now,
+            true,
+            0.016,
+            2_000,
+            500,
+            "chain",
+            2_500,
+            DrawStats::default(),
+            -0.002,
+            true,
+        );
+
+        assert_eq!(trace.frames, 0);
     }
 }

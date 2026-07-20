@@ -1072,9 +1072,78 @@ static RUNTIME_COMMAND_TX: LazyLock<Mutex<Option<Sender<LobbyCommand>>>> =
     LazyLock::new(|| Mutex::new(None));
 static RUNTIME_LAST_MACHINE_STATE_SIG: LazyLock<Mutex<Option<String>>> =
     LazyLock::new(|| Mutex::new(None));
+static RUNTIME_LAST_MACHINE_STATE_INPUT: LazyLock<Mutex<Option<RuntimeMachineStateInput>>> =
+    LazyLock::new(|| Mutex::new(None));
 static RUNTIME_RECONNECT_STATE: LazyLock<Mutex<ReconnectState>> =
     LazyLock::new(|| Mutex::new(ReconnectState::default()));
 static RUNTIME_TEST_MUTEX: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
+
+#[derive(Clone, Debug, PartialEq)]
+struct RuntimeMachineStateInput {
+    joined_code: String,
+    screen_name: String,
+    p1_ready: bool,
+    p2_ready: bool,
+    p1_stats: Option<MachinePlayerStats>,
+    p2_stats: Option<MachinePlayerStats>,
+    active_side: PlayerSide,
+    joined: [bool; 2],
+    display_names: [String; 2],
+}
+
+impl RuntimeMachineStateInput {
+    #[allow(clippy::too_many_arguments)]
+    fn matches(
+        &self,
+        joined_code: &str,
+        screen_name: &str,
+        p1_ready: bool,
+        p2_ready: bool,
+        p1_stats: Option<&MachinePlayerStats>,
+        p2_stats: Option<&MachinePlayerStats>,
+        active_side: PlayerSide,
+        joined: [bool; 2],
+        display_names: [&str; 2],
+    ) -> bool {
+        self.joined_code == joined_code
+            && self.screen_name == screen_name
+            && self.p1_ready == p1_ready
+            && self.p2_ready == p2_ready
+            && self.p1_stats.as_ref() == p1_stats
+            && self.p2_stats.as_ref() == p2_stats
+            && self.active_side == active_side
+            && self.joined == joined
+            && self.display_names[0] == display_names[0]
+            && self.display_names[1] == display_names[1]
+    }
+
+    fn machine_state_value(&self) -> Value {
+        local_lobby_machine_state_value(
+            LocalLobbyPlayer {
+                side: PlayerSide::P1,
+                display_name: self.display_names[0].as_str(),
+                joined: self.joined[0],
+                screen_name: self.screen_name.as_str(),
+                ready: self.p1_ready,
+                stats: self.p1_stats.as_ref(),
+            },
+            LocalLobbyPlayer {
+                side: PlayerSide::P2,
+                display_name: self.display_names[1].as_str(),
+                joined: self.joined[1],
+                screen_name: self.screen_name.as_str(),
+                ready: self.p2_ready,
+                stats: self.p2_stats.as_ref(),
+            },
+            self.active_side,
+        )
+    }
+}
+
+fn runtime_clear_machine_state_cache() {
+    *RUNTIME_LAST_MACHINE_STATE_SIG.lock().unwrap() = None;
+    *RUNTIME_LAST_MACHINE_STATE_INPUT.lock().unwrap() = None;
+}
 
 pub fn runtime_view() -> (Arc<Snapshot>, Option<String>) {
     let snapshot = Arc::clone(&RUNTIME_SNAPSHOT.lock().unwrap());
@@ -1116,7 +1185,7 @@ pub fn runtime_leave_lobby_default() {
 }
 
 pub fn runtime_update_machine_state_default(screen_name: &str, ready: bool) {
-    runtime_update_machine_state(DEFAULT_RUNTIME_HOOKS, screen_name, ready);
+    runtime_update_machine_state_sides_with_stats_default(screen_name, ready, ready, None, None);
 }
 
 pub fn runtime_update_machine_state_sides_with_stats_default(
@@ -1126,8 +1195,7 @@ pub fn runtime_update_machine_state_sides_with_stats_default(
     p1_stats: Option<MachinePlayerStats>,
     p2_stats: Option<MachinePlayerStats>,
 ) {
-    runtime_update_machine_state_sides_with_stats(
-        DEFAULT_RUNTIME_HOOKS,
+    runtime_update_default_machine_state_sides_with_stats(
         screen_name,
         p1_ready,
         p2_ready,
@@ -1178,7 +1246,7 @@ pub fn runtime_join_lobby_with_password(hooks: LobbyRuntimeHooks, code: &str, pa
 
 pub fn runtime_leave_lobby(hooks: LobbyRuntimeHooks) {
     runtime_clear_reconnect_target();
-    *RUNTIME_LAST_MACHINE_STATE_SIG.lock().unwrap() = None;
+    runtime_clear_machine_state_cache();
     let should_send_leave = {
         let mut snapshot = RUNTIME_SNAPSHOT.lock().unwrap();
         apply_local_lobby_leave(Arc::make_mut(&mut *snapshot))
@@ -1228,6 +1296,83 @@ pub fn runtime_update_machine_state_sides_with_stats(
     }
 }
 
+fn runtime_update_default_machine_state_sides_with_stats(
+    screen_name: &str,
+    p1_ready: bool,
+    p2_ready: bool,
+    p1_stats: Option<MachinePlayerStats>,
+    p2_stats: Option<MachinePlayerStats>,
+) {
+    let snapshot = Arc::clone(&RUNTIME_SNAPSHOT.lock().unwrap());
+    if !matches!(snapshot.connection, ConnectionState::Connected) {
+        return;
+    }
+    let Some(joined_lobby) = snapshot.joined_lobby.as_ref() else {
+        return;
+    };
+
+    let input =
+        deadsync_profile::runtime_with_session_players(|active_side, joined, display_names| {
+            if RUNTIME_LAST_MACHINE_STATE_INPUT
+                .lock()
+                .unwrap()
+                .as_ref()
+                .is_some_and(|last| {
+                    last.matches(
+                        joined_lobby.code.as_str(),
+                        screen_name,
+                        p1_ready,
+                        p2_ready,
+                        p1_stats.as_ref(),
+                        p2_stats.as_ref(),
+                        active_side,
+                        joined,
+                        display_names,
+                    )
+                })
+            {
+                return None;
+            }
+            Some(RuntimeMachineStateInput {
+                joined_code: joined_lobby.code.clone(),
+                screen_name: screen_name.to_string(),
+                p1_ready,
+                p2_ready,
+                p1_stats: p1_stats.clone(),
+                p2_stats: p2_stats.clone(),
+                active_side,
+                joined,
+                display_names: display_names.map(str::to_string),
+            })
+        });
+    let Some(input) = input else {
+        return;
+    };
+
+    let machine_state = input.machine_state_value();
+    let update = {
+        let last_sig = RUNTIME_LAST_MACHINE_STATE_SIG.lock().unwrap();
+        machine_state_update_command(
+            &snapshot,
+            last_sig.as_deref(),
+            &machine_state,
+            screen_name,
+            p1_ready,
+            p2_ready,
+            p1_stats,
+            p2_stats,
+        )
+    };
+    let Some(update) = update else {
+        *RUNTIME_LAST_MACHINE_STATE_INPUT.lock().unwrap() = Some(input);
+        return;
+    };
+    if runtime_send_command(DEFAULT_RUNTIME_HOOKS, update.command) {
+        *RUNTIME_LAST_MACHINE_STATE_SIG.lock().unwrap() = Some(update.signature);
+        *RUNTIME_LAST_MACHINE_STATE_INPUT.lock().unwrap() = Some(input);
+    }
+}
+
 pub fn runtime_select_song(hooks: LobbyRuntimeHooks, song_info: LobbySongInfo) {
     let snapshot = Arc::clone(&RUNTIME_SNAPSHOT.lock().unwrap());
     if let Some(command) = select_song_command(&snapshot, song_info) {
@@ -1240,7 +1385,7 @@ pub fn runtime_disconnect() {
     if let Some(tx) = RUNTIME_COMMAND_TX.lock().unwrap().take() {
         let _ = tx.send(LobbyCommand::Disconnect);
     }
-    *RUNTIME_LAST_MACHINE_STATE_SIG.lock().unwrap() = None;
+    runtime_clear_machine_state_cache();
     let mut snapshot = RUNTIME_SNAPSHOT.lock().unwrap();
     apply_local_lobby_disconnect(Arc::make_mut(&mut *snapshot));
 }
@@ -1331,7 +1476,7 @@ fn runtime_handle_connection_loss(connection: ConnectionState) {
         let mut snapshot = RUNTIME_SNAPSHOT.lock().unwrap();
         apply_lobby_connection_loss(Arc::make_mut(&mut *snapshot), connection, preserve_joined);
     }
-    *RUNTIME_LAST_MACHINE_STATE_SIG.lock().unwrap() = None;
+    runtime_clear_machine_state_cache();
     RUNTIME_COMMAND_TX.lock().unwrap().take();
     if preserve_joined {
         runtime_schedule_reconnect();
@@ -1371,7 +1516,7 @@ fn runtime_handle_text_message(
         apply_lobby_inbound_effect(Arc::make_mut(&mut *snapshot), &mut reconnect, effect)
     };
     if clear_machine_state_sig {
-        *RUNTIME_LAST_MACHINE_STATE_SIG.lock().unwrap() = None;
+        runtime_clear_machine_state_cache();
     }
     Ok(())
 }
@@ -1398,7 +1543,7 @@ mod tests {
 
     fn reset_runtime_test_state() {
         *RUNTIME_SNAPSHOT.lock().unwrap() = Arc::new(Snapshot::default());
-        *RUNTIME_LAST_MACHINE_STATE_SIG.lock().unwrap() = None;
+        runtime_clear_machine_state_cache();
         *RUNTIME_RECONNECT_STATE.lock().unwrap() = ReconnectState::default();
         RUNTIME_COMMAND_TX.lock().unwrap().take();
     }
@@ -1410,6 +1555,48 @@ mod tests {
         assert!(snapshot.available_lobbies.is_empty());
         assert!(snapshot.joined_lobby.is_none());
         assert!(snapshot.last_status.is_none());
+    }
+
+    #[test]
+    fn runtime_machine_state_input_matches_borrowed_profile_state() {
+        let stats = MachinePlayerStats {
+            score: Some(98.5),
+            ..MachinePlayerStats::default()
+        };
+        let input = RuntimeMachineStateInput {
+            joined_code: "ROOM".to_string(),
+            screen_name: "ScreenGameplay".to_string(),
+            p1_ready: true,
+            p2_ready: false,
+            p1_stats: Some(stats.clone()),
+            p2_stats: None,
+            active_side: PlayerSide::P1,
+            joined: [true, false],
+            display_names: ["Alice".to_string(), "Bob".to_string()],
+        };
+
+        assert!(input.matches(
+            "ROOM",
+            "ScreenGameplay",
+            true,
+            false,
+            Some(&stats),
+            None,
+            PlayerSide::P1,
+            [true, false],
+            ["Alice", "Bob"],
+        ));
+        assert!(!input.matches(
+            "ROOM",
+            "ScreenGameplay",
+            true,
+            false,
+            Some(&stats),
+            None,
+            PlayerSide::P1,
+            [true, false],
+            ["Changed", "Bob"],
+        ));
     }
 
     #[test]
