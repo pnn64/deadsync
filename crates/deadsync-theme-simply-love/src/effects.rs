@@ -55,6 +55,11 @@ pub enum SimplyLoveContentRequest {
     /// (see `deadsync_audio_replaygain::request_skip_blocking_analysis`) so the
     /// loading screen can advance without waiting for every song.
     SkipReplayGain,
+    /// Analyze EBU R128 loudness for the whole song library and populate the
+    /// ReplayGain cache. Progress is reported via
+    /// [`crate::views::SimplyLoveApplyReplayGainEvent`]. Cancel an in-flight
+    /// run with [`SimplyLoveContentRequest::SkipReplayGain`].
+    ApplyReplayGain,
 }
 
 #[derive(Clone, Debug)]

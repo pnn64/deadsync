@@ -267,17 +267,36 @@ pub(super) fn submenu_visible_row_indices(
                 .collect()
         }
         #[cfg(target_os = "linux")]
-        SubmenuKind::Sound => rows
-            .iter()
-            .enumerate()
-            .filter_map(|(idx, row)| {
-                if row.id == SubRowId::AlsaExclusive && !sound_show_alsa_exclusive(state) {
-                    None
-                } else {
-                    Some(idx)
-                }
-            })
-            .collect(),
+        SubmenuKind::Sound => {
+            let show_apply = sound_replaygain_enabled(state);
+            let show_alsa = sound_show_alsa_exclusive(state);
+            rows.iter()
+                .enumerate()
+                .filter_map(|(idx, row)| {
+                    if row.id == SubRowId::AlsaExclusive && !show_alsa {
+                        None
+                    } else if row.id == SubRowId::ApplyReplayGain && !show_apply {
+                        None
+                    } else {
+                        Some(idx)
+                    }
+                })
+                .collect()
+        }
+        #[cfg(not(target_os = "linux"))]
+        SubmenuKind::Sound => {
+            let show_apply = sound_replaygain_enabled(state);
+            rows.iter()
+                .enumerate()
+                .filter_map(|(idx, row)| {
+                    if row.id == SubRowId::ApplyReplayGain && !show_apply {
+                        None
+                    } else {
+                        Some(idx)
+                    }
+                })
+                .collect()
+        }
         SubmenuKind::SmxConfig => {
             // Pad-assignment rows depend on how many StepManiaX pads are connected:
             // one pad gets a simple P1/P2 picker; two pads get the assign + swap

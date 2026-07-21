@@ -96,6 +96,12 @@ pub(in crate::screens::options) const SOUND_OPTIONS_ROWS: &[SubRow] = &[
         ],
         inline: true,
     },
+    SubRow {
+        id: SubRowId::ApplyReplayGain,
+        label: lookup_key("OptionsSound", "ApplyReplayGain"),
+        choices: &[localized_choice("Common", "Start")],
+        inline: false,
+    },
 ];
 
 pub(in crate::screens::options) const SOUND_OPTIONS_ITEMS: &[Item] = &[
@@ -206,6 +212,14 @@ pub(in crate::screens::options) const SOUND_OPTIONS_ITEMS: &[Item] = &[
         ))],
     },
     Item {
+        id: ItemId::SndApplyReplayGain,
+        name: lookup_key("OptionsSound", "ApplyReplayGain"),
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsSoundHelp",
+            "ApplyReplayGainHelp",
+        ))],
+    },
+    Item {
         id: ItemId::Exit,
         name: lookup_key("Options", "Exit"),
         help: &[HelpEntry::Paragraph(lookup_key(
@@ -291,6 +305,18 @@ pub(in crate::screens::options) fn sound_device_choice_index(
 
 pub(in crate::screens::options) fn sound_row_index(id: SubRowId) -> Option<usize> {
     SOUND_OPTIONS_ROWS.iter().position(|row| row.id == id)
+}
+
+/// Live state of the ReplayGain toggle in the Sound submenu (reflects the
+/// user's current, possibly-unsaved, choice). Used to gate the dependent
+/// "Apply ReplayGain" action row.
+pub(in crate::screens::options) fn sound_replaygain_enabled(state: &State) -> bool {
+    get_choice_by_id(
+        &state.sub[SubmenuKind::Sound].choice_indices,
+        SOUND_OPTIONS_ROWS,
+        SubRowId::ReplayGain,
+    )
+    .is_some_and(yes_no_from_choice)
 }
 
 pub(in crate::screens::options) fn selected_sound_device_choice(state: &State) -> usize {

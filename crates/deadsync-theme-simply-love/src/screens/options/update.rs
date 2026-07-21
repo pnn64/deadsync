@@ -282,6 +282,11 @@ fn update_impl(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Opti
         // confirms via input (handled in input.rs).
         return None;
     }
+    if let Some(apply_rg) = state.apply_replaygain_ui.as_mut() {
+        update_apply_replaygain_ui(apply_rg, dt);
+        // No auto-dismiss: the overlay waits for user input once finished.
+        return None;
+    }
     if shared_pack_sync::poll(&mut state.pack_sync_overlay) {
         return None;
     }

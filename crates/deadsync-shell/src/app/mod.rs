@@ -1062,6 +1062,7 @@ pub struct App {
     profile_import: crate::profile_import::Service,
     profile_load: crate::profile_load::Service,
     content_reload: crate::content_reload::Service,
+    apply_replaygain: crate::apply_replaygain::Service,
     heart_rate: crate::heart_rate::Runtime,
     qr_login: crate::qr_login::Service,
     score_import: crate::score_import::Service,
@@ -1216,6 +1217,19 @@ impl App {
         let events = self.score_import.poll();
         if !events.is_empty() {
             options::apply_score_import_events(&mut self.state.screens.options_state, events);
+        }
+    }
+
+    fn poll_apply_replaygain(&mut self) {
+        let events = self.apply_replaygain.poll();
+        if events.is_empty() {
+            return;
+        }
+        if self.state.screens.current_screen == CurrentScreen::Options {
+            options::apply_apply_replaygain_events(
+                &mut self.state.screens.options_state,
+                events,
+            );
         }
     }
 
@@ -2432,6 +2446,7 @@ impl App {
         self.poll_qr_login();
         self.poll_score_import();
         self.poll_sync_analysis();
+        self.poll_apply_replaygain();
         self.sync_active_online_runtime_view();
         self.heart_rate.sync(
             frame_config.machine_enable_heart_rate_monitors,
@@ -2990,6 +3005,7 @@ impl App {
             profile_import: crate::profile_import::Service::default(),
             profile_load: crate::profile_load::Service::default(),
             content_reload: crate::content_reload::Service::default(),
+            apply_replaygain: crate::apply_replaygain::Service::default(),
             heart_rate: crate::heart_rate::Runtime::default(),
             qr_login: crate::qr_login::Service::default(),
             score_import: crate::score_import::Service::default(),
@@ -3449,6 +3465,9 @@ impl App {
                         }
                         SimplyLoveContentRequest::SkipReplayGain => {
                             deadsync_audio_replaygain::request_skip_blocking_analysis();
+                        }
+                        SimplyLoveContentRequest::ApplyReplayGain => {
+                            self.apply_replaygain.start();
                         }
                     }
                     Vec::new()

@@ -1917,6 +1917,17 @@ pub(super) fn activate_current_selection(
                     }
                     return ThemeEffect::None;
                 }
+            } else if matches!(kind, SubmenuKind::Sound) {
+                let rows = submenu_rows(kind);
+                let Some(row_idx) = submenu_visible_row_to_actual(state, kind, selected_row) else {
+                    return ThemeEffect::None;
+                };
+                if let Some(row) = rows.get(row_idx)
+                    && row.id == SubRowId::ApplyReplayGain
+                {
+                    queue_sfx(state, "assets/sounds/start.ogg");
+                    return begin_apply_replaygain(state);
+                }
             }
             if dedicated_three_key_nav(state)
                 && let Some(action) =
@@ -2096,6 +2107,45 @@ fn handle_input_impl(
             state.score_import_ui = None;
             queue_online(state, crate::SimplyLoveOnlineRequest::CancelScoreImport);
             queue_sfx(state, "assets/sounds/change.ogg");
+        }
+        return ThemeEffect::None;
+    }
+    if let Some(apply_rg) = state.apply_replaygain_ui.as_mut() {
+        // After completion, any Confirm/Start/Cancel dismisses the overlay.
+        if apply_rg.finished {
+            let dismiss = matches!(
+                three_key_action,
+                Some((
+                    _,
+                    screen_input::ThreeKeyMenuAction::Cancel
+                        | screen_input::ThreeKeyMenuAction::Confirm
+                ))
+            ) || (ev.pressed
+                && matches!(
+                    ev.action,
+                    VirtualAction::p1_back
+                        | VirtualAction::p2_back
+                        | VirtualAction::p1_start
+                        | VirtualAction::p2_start
+                ));
+            if dismiss {
+                clear_navigation_holds(state);
+                state.apply_replaygain_ui = None;
+                queue_sfx(state, "assets/sounds/start.ogg");
+            }
+            return ThemeEffect::None;
+        }
+        let cancel_requested = matches!(
+            three_key_action,
+            Some((_, screen_input::ThreeKeyMenuAction::Cancel))
+        ) || (ev.pressed
+            && matches!(ev.action, VirtualAction::p1_back | VirtualAction::p2_back));
+        if cancel_requested && !apply_rg.cancel_requested {
+            apply_rg.cancel_requested = true;
+            queue_sfx(state, "assets/sounds/change.ogg");
+            return ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Content(
+                crate::SimplyLoveContentRequest::SkipReplayGain,
+            ));
         }
         return ThemeEffect::None;
     }
