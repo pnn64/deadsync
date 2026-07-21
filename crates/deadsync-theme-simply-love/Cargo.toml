@@ -43,6 +43,26 @@ name = "leaderboard_rows"
 harness = false
 required-features = ["bench-support"]
 
+[[bench]]
+name = "judgment_assets"
+harness = false
+required-features = ["bench-support"]
+
+[[bench]]
+name = "gameplay_hud_text"
+harness = false
+required-features = ["bench-support"]
+
+[[bench]]
+name = "gameplay_actor_transfer"
+harness = false
+required-features = ["bench-support"]
+
+[[bench]]
+name = "direct_notefield_presentation"
+harness = false
+required-features = ["bench-support"]
+
 [dependencies]
 deadlib-assets = { path = "../deadlib-assets" }
 deadlib-present = { path = "../deadlib-present" }

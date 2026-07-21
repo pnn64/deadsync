@@ -1,6 +1,7 @@
 use super::{
-    error_bar_trim_max_window_ix, hold_explosion_enabled, judgment_frame_size,
-    prewarm_actor_resources,
+    JudgmentSpriteMetadata, ResolvedJudgmentAssets, error_bar_trim_max_window_ix,
+    hold_explosion_enabled, judgment_frame_size, prewarm_actor_resources,
+    resolved_held_miss_texture, resolved_hold_judgment_texture, resolved_judgment_texture,
 };
 use crate::assets;
 use crate::notefield_style::notefield_style;
@@ -14,6 +15,82 @@ use deadsync_noteskin::{NUM_QUANTIZATIONS, NoteskinSlot, Quantization, Style};
 use deadsync_profile as profile_data;
 use deadsync_rules::timing;
 use std::sync::Arc;
+
+#[test]
+fn cached_judgment_assets_match_legacy_resolution() {
+    let mut none = profile_data::Profile::default();
+    none.judgment_graphic = profile_data::JudgmentGraphic::new("None");
+    none.hold_judgment_graphic = profile_data::HoldJudgmentGraphic::new("None");
+    none.held_miss_graphic = profile_data::HeldMissGraphic::new("None");
+
+    let mut held_miss = profile_data::Profile::default();
+    held_miss.held_miss_graphic = profile_data::HeldMissGraphic::new("Love");
+
+    for profile in [profile_data::Profile::default(), none, held_miss] {
+        let cached = ResolvedJudgmentAssets::from_profile(&profile);
+        assert_eq!(
+            cached.judgment().map(|texture| texture.key.as_ref()),
+            resolved_judgment_texture(&profile).map(|texture| texture.key.as_ref())
+        );
+        assert_eq!(
+            cached.hold_judgment().map(|texture| texture.key.as_ref()),
+            resolved_hold_judgment_texture(&profile).map(|texture| texture.key.as_ref())
+        );
+        assert_eq!(
+            cached.held_miss().map(|(texture, _)| texture.key.as_ref()),
+            resolved_held_miss_texture(&profile).map(|texture| texture.key.as_ref())
+        );
+
+        let legacy_metadata = resolved_judgment_texture(&profile).map(|texture| {
+            let (frame_cols, frame_rows) = assets::parse_sprite_sheet_dims(texture.key.as_ref());
+            JudgmentSpriteMetadata {
+                frame_size: judgment_frame_size(texture.key.as_ref()),
+                frame_cols: frame_cols as usize,
+                frame_rows: frame_rows as usize,
+            }
+        });
+        assert_eq!(cached.judgment_sprite_metadata(), legacy_metadata);
+
+        if let Some((texture, scale)) = cached.held_miss() {
+            let expected = if assets::parse_texture_hints(texture.key.as_ref()).doubleres {
+                0.5
+            } else {
+                1.0
+            };
+            assert_eq!(scale, expected);
+        }
+    }
+}
+
+#[test]
+fn cached_judgment_metadata_refreshes_only_when_registry_generation_changes() {
+    let cached = ResolvedJudgmentAssets::from_profile(&profile_data::Profile::default());
+    let first = JudgmentSpriteMetadata {
+        frame_size: [128.0, 64.0],
+        frame_cols: 2,
+        frame_rows: 7,
+    };
+    let refreshed = JudgmentSpriteMetadata {
+        frame_size: [256.0, 128.0],
+        frame_cols: 4,
+        frame_rows: 8,
+    };
+
+    assert_eq!(
+        cached.judgment_sprite_metadata_for_generation(10, |_| first),
+        Some(first)
+    );
+    assert_eq!(
+        cached.judgment_sprite_metadata_for_generation(10, |_| {
+            panic!("same registry generation must reuse cached metadata")
+        }),
+        Some(first)
+    );
+    assert_eq!(
+        cached.judgment_sprite_metadata_for_generation(11, |_| refreshed),
+        Some(refreshed)
+    );
+}
 
 fn note_slot_base_size<S: NoteskinSlot>(slot: &S, scale: f32) -> [f32; 2] {
     if let Some(model) = slot.model() {

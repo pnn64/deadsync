@@ -558,6 +558,8 @@ pub struct State {
     pub(crate) pack_banner_key: Option<Arc<str>>,
     pub(crate) notefield_model_cache: [RefCell<ModelMeshCache>; MAX_PLAYERS],
     pub(crate) notefield_hold_mesh_scratch: [RefCell<HoldMeshScratch>; MAX_PLAYERS],
+    notefield_judgment_assets: [notefield::ResolvedJudgmentAssets; MAX_PLAYERS],
+    sync_overlay_text_cache: RefCell<SyncOverlayTextCache>,
     pub background_path_dirty: bool,
     pub background_changes: Vec<SongBackgroundChange>,
     pub next_background_change_ix: usize,
@@ -721,6 +723,9 @@ impl State {
             std::array::from_fn(|player| gameplay.profiles()[player].0.clone());
         let step_stats_extra_resolved =
             step_stats_gifs::resolve_random_extras(&step_stats_profiles);
+        let notefield_judgment_assets = std::array::from_fn(|player| {
+            notefield::ResolvedJudgmentAssets::from_profile(&step_stats_profiles[player])
+        });
         let song = gameplay.song();
         let song_full_title: Arc<str> =
             Arc::from(song.display_full_title(runtime_view.policy.translated_titles));
@@ -744,6 +749,12 @@ impl State {
             &step_stats_profiles,
             gameplay.num_players(),
         );
+        for assets in notefield_judgment_assets
+            .iter()
+            .take(gameplay.num_players())
+        {
+            assets.prewarm();
+        }
         let background_transition_start_time = gameplay.current_music_time_display();
         let next_background_change_ix = background_changes
             .iter()
@@ -793,6 +804,8 @@ impl State {
             pack_banner_key,
             notefield_model_cache,
             notefield_hold_mesh_scratch,
+            notefield_judgment_assets,
+            sync_overlay_text_cache: RefCell::new(SyncOverlayTextCache::default()),
             background_path_dirty: true,
             background_changes,
             next_background_change_ix,
@@ -841,6 +854,14 @@ impl State {
         for cache in &self.notefield_model_cache {
             cache.borrow_mut().reset_stats();
         }
+    }
+
+    #[inline(always)]
+    pub(crate) fn notefield_judgment_assets(
+        &self,
+        player_idx: usize,
+    ) -> &notefield::ResolvedJudgmentAssets {
+        &self.notefield_judgment_assets[player_idx]
     }
 
     #[inline(always)]
@@ -2789,6 +2810,42 @@ thread_local! {
     static METER_TEXT_CACHE: RefCell<TextCache<u32>> = RefCell::new(text_cache_with_capacity(64));
     static AUTOSYNC_TEXT_CACHE: RefCell<TextCache<AutosyncTextKey>> =
         RefCell::new(text_cache_with_capacity(256));
+    static RECENT_BPM_TEXT_CACHE: RefCell<RecentTextCache<(u64, bool)>> =
+        RefCell::new(RecentTextCache::default());
+    static RECENT_LIFE_PERCENT_TEXT_CACHE: RefCell<RecentTextCache<u32>> =
+        RefCell::new(RecentTextCache::default());
+}
+
+struct RecentTextCache<K> {
+    entries: [Option<(K, Arc<str>)>; 2],
+    next: usize,
+}
+
+impl<K> Default for RecentTextCache<K> {
+    fn default() -> Self {
+        Self {
+            entries: [None, None],
+            next: 0,
+        }
+    }
+}
+
+impl<K: Copy + Eq> RecentTextCache<K> {
+    #[inline(always)]
+    fn get_or_insert_with(&mut self, key: K, build: impl FnOnce() -> Arc<str>) -> Arc<str> {
+        if let Some((_, text)) = self
+            .entries
+            .iter()
+            .flatten()
+            .find(|(cached_key, _)| *cached_key == key)
+        {
+            return Arc::clone(text);
+        }
+        let text = build();
+        self.entries[self.next] = Some((key, Arc::clone(&text)));
+        self.next = (self.next + 1) % self.entries.len();
+        text
+    }
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
@@ -2832,7 +2889,7 @@ fn cached_rate_text(rate: f32) -> Arc<str> {
 }
 
 #[inline(always)]
-fn cached_bpm_text(bpm: f64, show_decimal: bool) -> Arc<str> {
+fn shared_cached_bpm_text(bpm: f64, show_decimal: bool) -> Arc<str> {
     if !bpm.is_finite() {
         return Arc::<str>::from("0");
     }
@@ -2859,11 +2916,104 @@ fn cached_bpm_text(bpm: f64, show_decimal: bool) -> Arc<str> {
 }
 
 #[inline(always)]
-fn cached_life_percent_text(life_percent: f32) -> Arc<str> {
+fn cached_bpm_text(bpm: f64, show_decimal: bool) -> Arc<str> {
+    let key = (bpm.to_bits(), show_decimal);
+    RECENT_BPM_TEXT_CACHE.with(|cache| {
+        cache
+            .borrow_mut()
+            .get_or_insert_with(key, || shared_cached_bpm_text(bpm, show_decimal))
+    })
+}
+
+#[inline(always)]
+fn shared_cached_life_percent_text(life_percent: f32) -> Arc<str> {
     let key = quantize_tenths_u32(life_percent);
     cached_text(&LIFE_PERCENT_TEXT_CACHE, key, TEXT_CACHE_LIMIT, || {
         format!("{:.1}%", key as f32 / 10.0)
     })
+}
+
+#[inline(always)]
+fn cached_life_percent_text(life_percent: f32) -> Arc<str> {
+    let key = quantize_tenths_u32(life_percent);
+    RECENT_LIFE_PERCENT_TEXT_CACHE.with(|cache| {
+        cache
+            .borrow_mut()
+            .get_or_insert_with(key, || shared_cached_life_percent_text(life_percent))
+    })
+}
+
+#[cfg(feature = "bench-support")]
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct GameplayHudTextBenchmarkSnapshot {
+    pub bpm: Arc<str>,
+    pub life: Arc<str>,
+    pub overlay: Arc<str>,
+    pub overlay_line_count: usize,
+}
+
+/// Exercises the current steady autoplay HUD text path: shared-cache hits for
+/// dynamic numeric text plus reconstruction of the unchanged status overlay.
+#[cfg(feature = "bench-support")]
+pub fn benchmark_gameplay_hud_text_legacy(
+    bpm: f64,
+    show_bpm_decimal: bool,
+    life_percent: f32,
+    autoplay_line: &str,
+) -> GameplayHudTextBenchmarkSnapshot {
+    let bpm = shared_cached_bpm_text(bpm, show_bpm_decimal);
+    let life = shared_cached_life_percent_text(life_percent);
+    let mut overlay = String::with_capacity(autoplay_line.len());
+    overlay.push_str(autoplay_line);
+    GameplayHudTextBenchmarkSnapshot {
+        bpm,
+        life,
+        overlay: Arc::from(overlay),
+        overlay_line_count: 1,
+    }
+}
+
+#[cfg(feature = "bench-support")]
+pub struct GameplayHudTextBenchmarkCache {
+    overlay: SyncOverlayTextCache,
+    autoplay_line: Arc<str>,
+}
+
+#[cfg(feature = "bench-support")]
+impl GameplayHudTextBenchmarkCache {
+    pub fn new(autoplay_line: &str) -> Self {
+        Self {
+            overlay: SyncOverlayTextCache::default(),
+            autoplay_line: Arc::from(autoplay_line),
+        }
+    }
+
+    pub fn snapshot(
+        &mut self,
+        bpm: f64,
+        show_bpm_decimal: bool,
+        life_percent: f32,
+    ) -> GameplayHudTextBenchmarkSnapshot {
+        let (overlay, overlay_line_count) = self
+            .overlay
+            .resolve(SyncOverlayTextInput {
+                autoplay_enabled: true,
+                replay_status: Some(&self.autoplay_line),
+                timing_tick_status: None,
+                autosync_status: None,
+                initial_global_offset: 0.0,
+                global_offset: 0.0,
+                initial_song_offset: 0.0,
+                song_offset: 0.0,
+            })
+            .expect("autoplay produces one overlay line");
+        GameplayHudTextBenchmarkSnapshot {
+            bpm: cached_bpm_text(bpm, show_bpm_decimal),
+            life: cached_life_percent_text(life_percent),
+            overlay,
+            overlay_line_count,
+        }
+    }
 }
 
 #[inline(always)]
@@ -2893,20 +3043,21 @@ fn quantized_offset_change_line(label: &str, start: f32, new: f32) -> Option<Str
     ))
 }
 
-fn sync_offset_overlay_message(state: &State) -> Option<String> {
+fn sync_offset_overlay_message_from_values(
+    initial_global_offset: f32,
+    global_offset: f32,
+    initial_song_offset: f32,
+    song_offset: f32,
+) -> Option<String> {
     let mut message = String::new();
-    if let Some(global_line) = quantized_offset_change_line(
-        "Global Offset",
-        state.initial_global_offset_seconds(),
-        state.global_offset_seconds(),
-    ) {
+    if let Some(global_line) =
+        quantized_offset_change_line("Global Offset", initial_global_offset, global_offset)
+    {
         message.push_str(&global_line);
     }
-    if let Some(song_line) = quantized_offset_change_line(
-        "Song offset",
-        state.initial_song_offset_seconds(),
-        state.song_offset_seconds(),
-    ) {
+    if let Some(song_line) =
+        quantized_offset_change_line("Song offset", initial_song_offset, song_offset)
+    {
         if !message.is_empty() {
             message.push('\n');
         }
@@ -2915,23 +3066,111 @@ fn sync_offset_overlay_message(state: &State) -> Option<String> {
     (!message.is_empty()).then_some(message)
 }
 
-fn sync_overlay_text(state: &State) -> Option<(Arc<str>, usize)> {
+fn sync_offset_overlay_message(state: &State) -> Option<String> {
+    sync_offset_overlay_message_from_values(
+        state.initial_global_offset_seconds(),
+        state.global_offset_seconds(),
+        state.initial_song_offset_seconds(),
+        state.song_offset_seconds(),
+    )
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+struct SyncOverlayTextKey {
+    autoplay_enabled: bool,
+    timing_tick_status: Option<&'static str>,
+    autosync_status: Option<&'static str>,
+    initial_global_offset_bits: u32,
+    global_offset_bits: u32,
+    initial_song_offset_bits: u32,
+    song_offset_bits: u32,
+}
+
+#[derive(Clone, Copy)]
+struct SyncOverlayTextInput<'a> {
+    autoplay_enabled: bool,
+    replay_status: Option<&'a Arc<str>>,
+    timing_tick_status: Option<&'static str>,
+    autosync_status: Option<&'static str>,
+    initial_global_offset: f32,
+    global_offset: f32,
+    initial_song_offset: f32,
+    song_offset: f32,
+}
+
+impl SyncOverlayTextInput<'_> {
+    fn key(self) -> SyncOverlayTextKey {
+        SyncOverlayTextKey {
+            autoplay_enabled: self.autoplay_enabled,
+            timing_tick_status: self.timing_tick_status,
+            autosync_status: self.autosync_status,
+            initial_global_offset_bits: quantize_offset_seconds(self.initial_global_offset)
+                .to_bits(),
+            global_offset_bits: quantize_offset_seconds(self.global_offset).to_bits(),
+            initial_song_offset_bits: quantize_offset_seconds(self.initial_song_offset).to_bits(),
+            song_offset_bits: quantize_offset_seconds(self.song_offset).to_bits(),
+        }
+    }
+}
+
+#[derive(Default)]
+struct SyncOverlayTextCache {
+    initialized: bool,
+    key: Option<SyncOverlayTextKey>,
+    replay_status: Option<Arc<str>>,
+    value: Option<(Arc<str>, usize)>,
+}
+
+impl SyncOverlayTextCache {
+    fn resolve(&mut self, input: SyncOverlayTextInput<'_>) -> Option<(Arc<str>, usize)> {
+        let key = input.key();
+        let replay_unchanged =
+            self.replay_status.as_deref() == input.replay_status.map(AsRef::as_ref);
+        if self.initialized && self.key == Some(key) && replay_unchanged {
+            return self
+                .value
+                .as_ref()
+                .map(|(text, line_count)| (Arc::clone(text), *line_count));
+        }
+
+        let value = compose_sync_overlay_text(input);
+        self.initialized = true;
+        self.key = Some(key);
+        self.replay_status = input.replay_status.cloned();
+        self.value = value
+            .as_ref()
+            .map(|(text, line_count)| (Arc::clone(text), *line_count));
+        value
+    }
+}
+
+fn autoplay_overlay_text() -> Arc<str> {
+    static AUTOPLAY: OnceLock<Arc<str>> = OnceLock::new();
+    Arc::clone(AUTOPLAY.get_or_init(|| Arc::from("AutoPlay")))
+}
+
+fn compose_sync_overlay_text(input: SyncOverlayTextInput<'_>) -> Option<(Arc<str>, usize)> {
     let mut lines = [""; 4];
     let mut line_count = 0usize;
     let mut total_len = 0usize;
-    let sync_message = sync_offset_overlay_message(state);
-    if state.autoplay_enabled() {
-        let line = state.replay_status_text.as_deref().unwrap_or("AutoPlay");
+    let sync_message = sync_offset_overlay_message_from_values(
+        input.initial_global_offset,
+        input.global_offset,
+        input.initial_song_offset,
+        input.song_offset,
+    );
+    if input.autoplay_enabled {
+        let line = input.replay_status.map(AsRef::as_ref).unwrap_or("AutoPlay");
         lines[line_count] = line;
         line_count += 1;
         total_len += line.len();
     }
-    if let Some(line) = state.timing_tick_status_line() {
+    if let Some(line) = input.timing_tick_status {
         lines[line_count] = line;
         line_count += 1;
         total_len += line.len();
     }
-    if let Some(line) = autosync_mode_status_line(state.autosync_mode()) {
+    if let Some(line) = input.autosync_status {
         lines[line_count] = line;
         line_count += 1;
         total_len += line.len();
@@ -2944,6 +3183,13 @@ fn sync_overlay_text(state: &State) -> Option<(Arc<str>, usize)> {
     if line_count == 0 {
         return None;
     }
+    if line_count == 1 && input.autoplay_enabled {
+        let text = input
+            .replay_status
+            .map(Arc::clone)
+            .unwrap_or_else(autoplay_overlay_text);
+        return Some((text, 1));
+    }
     // Offset overlay text changes during live tweaks, so build this combined
     // string from current state instead of caching by pointer identity.
     let mut out = String::with_capacity(total_len + line_count.saturating_sub(1));
@@ -2953,6 +3199,20 @@ fn sync_overlay_text(state: &State) -> Option<(Arc<str>, usize)> {
         out.push_str(line);
     }
     Some((Arc::<str>::from(out), line_count))
+}
+
+fn sync_overlay_text(state: &State) -> Option<(Arc<str>, usize)> {
+    let input = SyncOverlayTextInput {
+        autoplay_enabled: state.autoplay_enabled(),
+        replay_status: state.replay_status_text.as_ref(),
+        timing_tick_status: state.timing_tick_status_line(),
+        autosync_status: autosync_mode_status_line(state.autosync_mode()),
+        initial_global_offset: state.initial_global_offset_seconds(),
+        global_offset: state.global_offset_seconds(),
+        initial_song_offset: state.initial_song_offset_seconds(),
+        song_offset: state.song_offset_seconds(),
+    };
+    state.sync_overlay_text_cache.borrow_mut().resolve(input)
 }
 
 #[inline(always)]
@@ -9043,7 +9303,7 @@ fn append_song_lua_player_transform<F, H>(
 }
 
 #[allow(clippy::too_many_arguments)]
-fn apply_song_lua_player_transform(
+fn apply_song_lua_player_transform_legacy(
     field_actors: &mut Vec<Actor>,
     hud_actors: &mut Vec<Actor>,
     out: &mut Vec<Actor>,
@@ -9093,6 +9353,163 @@ fn apply_song_lua_player_transform(
         zoom_y,
         zoom_z,
     );
+}
+
+#[allow(clippy::too_many_arguments)]
+fn apply_song_lua_player_transform(
+    field_actors: &mut Vec<Actor>,
+    hud_actors: &mut Vec<Actor>,
+    out: &mut Vec<Actor>,
+    z_shift: i16,
+    tint: [f32; 4],
+    blend: Option<BlendMode>,
+    playfield_center_x: f32,
+    target_x: f32,
+    target_y: f32,
+    rotation_x_deg: f32,
+    rotation_z_deg: f32,
+    rotation_y_deg: f32,
+    skew_x: f32,
+    skew_y: f32,
+    zoom_x: f32,
+    zoom_y: f32,
+    zoom_z: f32,
+) {
+    let direct_identity = z_shift == 0
+        && tint == [1.0; 4]
+        && blend.is_none()
+        && screen_width().is_finite()
+        && screen_height().is_finite()
+        && screen_center_y().is_finite()
+        && playfield_center_x.is_finite()
+        && target_x.is_finite()
+        && target_y.is_finite()
+        && rotation_x_deg.is_finite()
+        && rotation_x_deg.abs() <= f32::EPSILON
+        && rotation_z_deg.is_finite()
+        && rotation_z_deg.abs() <= f32::EPSILON
+        && rotation_y_deg.is_finite()
+        && rotation_y_deg.abs() <= f32::EPSILON
+        && skew_x.is_finite()
+        && skew_x.abs() <= f32::EPSILON
+        && skew_y.is_finite()
+        && skew_y.abs() <= f32::EPSILON
+        && zoom_x.is_finite()
+        && (zoom_x - 1.0).abs() <= f32::EPSILON
+        && zoom_y.is_finite()
+        && (zoom_y - 1.0).abs() <= f32::EPSILON
+        && zoom_z.is_finite()
+        && (zoom_z - 1.0).abs() <= f32::EPSILON
+        && (target_x - playfield_center_x).abs() <= f32::EPSILON
+        && (screen_center_y() - target_y).abs() <= f32::EPSILON;
+    if direct_identity {
+        out.clear();
+        out.reserve(field_actors.len().saturating_add(hud_actors.len()));
+        out.append(hud_actors);
+        out.append(field_actors);
+        return;
+    }
+
+    apply_song_lua_player_transform_legacy(
+        field_actors,
+        hud_actors,
+        out,
+        z_shift,
+        tint,
+        blend,
+        playfield_center_x,
+        target_x,
+        target_y,
+        rotation_x_deg,
+        rotation_z_deg,
+        rotation_y_deg,
+        skew_x,
+        skew_y,
+        zoom_x,
+        zoom_y,
+        zoom_z,
+    );
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn benchmark_present_identity_notefield_legacy(
+    field_actors: &mut Vec<Actor>,
+    hud_actors: &mut Vec<Actor>,
+    out: &mut Vec<Actor>,
+) {
+    apply_song_lua_player_transform_legacy(
+        field_actors,
+        hud_actors,
+        out,
+        0,
+        [1.0; 4],
+        None,
+        screen_center_x(),
+        screen_center_x(),
+        screen_center_y(),
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        1.0,
+        1.0,
+    );
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn benchmark_present_identity_notefield(
+    field_actors: &mut Vec<Actor>,
+    hud_actors: &mut Vec<Actor>,
+    out: &mut Vec<Actor>,
+) {
+    apply_song_lua_player_transform(
+        field_actors,
+        hud_actors,
+        out,
+        0,
+        [1.0; 4],
+        None,
+        screen_center_x(),
+        screen_center_x(),
+        screen_center_y(),
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        1.0,
+        1.0,
+    );
+}
+
+#[inline(always)]
+fn append_player_actors(out: &mut Vec<Actor>, player_scratch: &mut Vec<Actor>) {
+    out.append(player_scratch);
+}
+
+#[inline(always)]
+fn append_player_actors_legacy(out: &mut Vec<Actor>, player_scratch: &mut Vec<Actor>) {
+    out.extend(player_scratch.drain(..));
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn benchmark_append_player_actors_legacy(
+    out: &mut Vec<Actor>,
+    player_scratch: &mut Vec<Actor>,
+) {
+    append_player_actors_legacy(out, player_scratch);
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn benchmark_append_player_actors(out: &mut Vec<Actor>, player_scratch: &mut Vec<Actor>) {
+    append_player_actors(out, player_scratch);
 }
 
 fn song_lua_player_target_x(
@@ -9662,6 +10079,7 @@ pub fn push_actors(
                 combo_actors,
             } = notefield::compose_frame(
                 state,
+                state.notefield_judgment_assets(player_idx),
                 player_idx,
                 arrow_effect_time_s,
                 &state.noteskin_assets,
@@ -9960,13 +10378,13 @@ pub fn push_actors(
     );
     if has_p2_actors {
         if !replacement_active_players[1] {
-            actors.extend(player_actor_scratch[1].drain(..));
+            append_player_actors(actors, &mut player_actor_scratch[1]);
         } else {
             player_actor_scratch[1].clear();
         }
     }
     if !replacement_active_players[0] {
-        actors.extend(player_actor_scratch[0].drain(..));
+        append_player_actors(actors, &mut player_actor_scratch[0]);
     } else {
         player_actor_scratch[0].clear();
     }
@@ -11655,6 +12073,202 @@ mod tests {
         assert_eq!(cached_bpm_text(100.000, true).as_ref(), "100");
         assert_eq!(cached_bpm_text(150.0, true).as_ref(), "150");
         assert_eq!(cached_bpm_text(100.001, false).as_ref(), "100");
+    }
+
+    #[test]
+    fn recent_hud_text_cache_matches_shared_numeric_text() {
+        for (bpm, show_decimal) in [
+            (150.0, false),
+            (133.33, true),
+            (100.001, true),
+            (f64::NAN, true),
+            (f64::INFINITY, false),
+            (150.0, false),
+        ] {
+            assert_eq!(
+                cached_bpm_text(bpm, show_decimal),
+                shared_cached_bpm_text(bpm, show_decimal)
+            );
+        }
+        for life in [87.34, 87.35, 0.0, 100.0, f32::NAN, 87.34] {
+            assert_eq!(
+                cached_life_percent_text(life),
+                shared_cached_life_percent_text(life)
+            );
+        }
+    }
+
+    #[test]
+    fn sync_overlay_cache_preserves_text_and_refreshes_on_input_changes() {
+        let replay_status = Arc::<str>::from("Replay (AutoPlay)");
+        let inputs = [
+            SyncOverlayTextInput {
+                autoplay_enabled: false,
+                replay_status: None,
+                timing_tick_status: None,
+                autosync_status: None,
+                initial_global_offset: 0.0,
+                global_offset: 0.0,
+                initial_song_offset: 0.0,
+                song_offset: 0.0,
+            },
+            SyncOverlayTextInput {
+                autoplay_enabled: true,
+                replay_status: None,
+                timing_tick_status: None,
+                autosync_status: None,
+                initial_global_offset: 0.0,
+                global_offset: 0.0,
+                initial_song_offset: 0.0,
+                song_offset: 0.0,
+            },
+            SyncOverlayTextInput {
+                autoplay_enabled: true,
+                replay_status: Some(&replay_status),
+                timing_tick_status: Some("Assist Tick"),
+                autosync_status: Some("AutoSync Song"),
+                initial_global_offset: -0.010,
+                global_offset: -0.007,
+                initial_song_offset: 0.002,
+                song_offset: -0.001,
+            },
+        ];
+        let mut cache = SyncOverlayTextCache::default();
+        for input in inputs {
+            let expected = compose_sync_overlay_text(input);
+            let actual = cache.resolve(input);
+            assert_eq!(
+                actual.as_ref().map(|(text, lines)| (text.as_ref(), *lines)),
+                expected
+                    .as_ref()
+                    .map(|(text, lines)| (text.as_ref(), *lines))
+            );
+            let repeated = cache.resolve(input);
+            assert_eq!(
+                repeated
+                    .as_ref()
+                    .map(|(text, lines)| (text.as_ref(), *lines)),
+                expected
+                    .as_ref()
+                    .map(|(text, lines)| (text.as_ref(), *lines))
+            );
+            if let (Some((actual, _)), Some((repeated, _))) = (&actual, &repeated) {
+                assert!(Arc::ptr_eq(actual, repeated));
+            }
+        }
+    }
+
+    #[test]
+    fn bulk_player_actor_append_matches_legacy_order_and_reuses_source_capacity() {
+        let make_source = || {
+            (0..64)
+                .map(|index| Actor::CameraPush {
+                    view_proj: Matrix4::from_translation(Vector3::new(index as f32, 0.0, 0.0)),
+                })
+                .collect::<Vec<_>>()
+        };
+        let mut legacy_source = make_source();
+        let mut bulk_source = make_source();
+        let legacy_capacity = legacy_source.capacity();
+        let bulk_capacity = bulk_source.capacity();
+        let mut legacy = vec![Actor::CameraPop];
+        let mut bulk = vec![Actor::CameraPop];
+
+        append_player_actors_legacy(&mut legacy, &mut legacy_source);
+        append_player_actors(&mut bulk, &mut bulk_source);
+
+        let positions = |actors: &[Actor]| {
+            actors
+                .iter()
+                .map(|actor| match actor {
+                    Actor::CameraPop => -1.0,
+                    Actor::CameraPush { view_proj } => view_proj.w_axis.x,
+                    _ => panic!("unexpected actor kind"),
+                })
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(positions(&bulk), positions(&legacy));
+        assert!(legacy_source.is_empty());
+        assert!(bulk_source.is_empty());
+        assert_eq!(legacy_source.capacity(), legacy_capacity);
+        assert_eq!(bulk_source.capacity(), bulk_capacity);
+    }
+
+    #[test]
+    fn identity_notefield_presentation_matches_legacy_order_and_capacity() {
+        let make_actors = |count: usize, base: f32| {
+            (0..count)
+                .map(|index| Actor::CameraPush {
+                    view_proj: Matrix4::from_translation(Vector3::new(
+                        base + index as f32,
+                        0.0,
+                        0.0,
+                    )),
+                })
+                .collect::<Vec<_>>()
+        };
+        let mut legacy_field = make_actors(64, 0.0);
+        let mut legacy_hud = make_actors(8, 1_000.0);
+        let mut direct_field = make_actors(64, 0.0);
+        let mut direct_hud = make_actors(8, 1_000.0);
+        let direct_field_capacity = direct_field.capacity();
+        let direct_hud_capacity = direct_hud.capacity();
+        let mut legacy = vec![Actor::CameraPop];
+        let mut direct = vec![Actor::CameraPop];
+
+        apply_song_lua_player_transform_legacy(
+            &mut legacy_field,
+            &mut legacy_hud,
+            &mut legacy,
+            0,
+            [1.0; 4],
+            None,
+            screen_center_x(),
+            screen_center_x(),
+            screen_center_y(),
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            1.0,
+            1.0,
+            1.0,
+        );
+        apply_song_lua_player_transform(
+            &mut direct_field,
+            &mut direct_hud,
+            &mut direct,
+            0,
+            [1.0; 4],
+            None,
+            screen_center_x(),
+            screen_center_x(),
+            screen_center_y(),
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            1.0,
+            1.0,
+            1.0,
+        );
+
+        let positions = |actors: &[Actor]| {
+            actors
+                .iter()
+                .map(|actor| match actor {
+                    Actor::CameraPush { view_proj } => view_proj.w_axis.x,
+                    _ => panic!("unexpected actor kind"),
+                })
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(positions(&direct), positions(&legacy));
+        assert!(direct_field.is_empty());
+        assert!(direct_hud.is_empty());
+        assert_eq!(direct_field.capacity(), direct_field_capacity);
+        assert_eq!(direct_hud.capacity(), direct_hud_capacity);
     }
 
     #[test]

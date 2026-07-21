@@ -27,6 +27,11 @@ name = "retained_skeleton"
 harness = false
 required-features = ["bench-support"]
 
+[[bench]]
+name = "render_sort"
+harness = false
+required-features = ["bench-support"]
+
 [dependencies]
 deadlib-render = { path = "../deadlib-render" }
 glam = "0.33.2"
