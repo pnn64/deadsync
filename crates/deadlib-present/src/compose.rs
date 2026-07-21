@@ -291,6 +291,8 @@ pub struct ComposeScratch {
     masks: Vec<WorldRect>,
     z_counts: Vec<usize>,
     z_perm: Vec<usize>,
+    sparse_z_keys: Vec<usize>,
+    sparse_z_bucket_by_key: Vec<u8>,
     texture_cache: TextureLookupCache,
     transient_text_mesh_builders: Vec<TextMeshBatchBuilder>,
     recycled_text_mesh_vertices: Vec<Vec<renderer::TexturedMeshVertex>>,
@@ -505,36 +507,49 @@ fn sort_render_objects_impl(
 /// only during the final ordering pass.
 fn sort_render_objects_sparse_buckets(objects: &mut [RenderObject], scratch: &mut ComposeScratch) {
     const MAX_SPARSE_BUCKETS: usize = 64;
+    const Z_KEY_COUNT: usize = u16::MAX as usize + 1;
+    const MISSING_BUCKET: u8 = u8::MAX;
 
-    scratch.z_counts.clear();
+    if scratch.sparse_z_bucket_by_key.len() != Z_KEY_COUNT {
+        scratch
+            .sparse_z_bucket_by_key
+            .resize(Z_KEY_COUNT, MISSING_BUCKET);
+    }
+    for &encoded_z in &scratch.sparse_z_keys {
+        scratch.sparse_z_bucket_by_key[encoded_z] = MISSING_BUCKET;
+    }
+    scratch.sparse_z_keys.clear();
     for object in objects.iter() {
         let encoded_z = (i32::from(object.z) - i32::from(i16::MIN)) as usize;
-        if !scratch.z_counts.contains(&encoded_z) {
-            if scratch.z_counts.len() == MAX_SPARSE_BUCKETS {
+        if scratch.sparse_z_bucket_by_key[encoded_z] == MISSING_BUCKET {
+            if scratch.sparse_z_keys.len() == MAX_SPARSE_BUCKETS {
                 objects.sort_unstable_by_key(|object| (object.z, object.order));
                 return;
             }
-            scratch.z_counts.push(encoded_z);
+            scratch.sparse_z_bucket_by_key[encoded_z] = 0;
+            scratch.sparse_z_keys.push(encoded_z);
         }
     }
-    scratch.z_counts.sort_unstable();
+    scratch.sparse_z_keys.sort_unstable();
+    for (bucket, &encoded_z) in scratch.sparse_z_keys.iter().enumerate() {
+        scratch.sparse_z_bucket_by_key[encoded_z] = bucket as u8;
+    }
 
-    let bucket_count = scratch.z_counts.len();
+    let bucket_count = scratch.sparse_z_keys.len();
+    scratch.z_counts.clear();
+    scratch.z_counts.resize(bucket_count, 0);
     scratch.z_perm.clear();
-    scratch.z_perm.resize(bucket_count.saturating_mul(2), 0);
+    scratch.z_perm.resize(bucket_count, 0);
     let mut buckets_ordered = true;
     for object in objects.iter() {
         let encoded_z = (i32::from(object.z) - i32::from(i16::MIN)) as usize;
-        let bucket = scratch
-            .z_counts
-            .binary_search(&encoded_z)
-            .expect("collected sparse z layer must remain present");
-        let bucket_seen = scratch.z_perm[bucket] != 0;
-        let previous_order = &mut scratch.z_perm[bucket_count + bucket];
+        let bucket = scratch.sparse_z_bucket_by_key[encoded_z] as usize;
+        let bucket_seen = scratch.z_counts[bucket] != 0;
+        let previous_order = &mut scratch.z_perm[bucket];
         let order = object.order as usize;
         buckets_ordered &= !bucket_seen || *previous_order <= order;
         *previous_order = order;
-        scratch.z_perm[bucket] += 1;
+        scratch.z_counts[bucket] += 1;
     }
     if !buckets_ordered {
         objects.sort_unstable_by_key(|object| (object.z, object.order));
@@ -542,26 +557,23 @@ fn sort_render_objects_sparse_buckets(objects: &mut [RenderObject], scratch: &mu
     }
 
     let mut next = 0usize;
-    for count in &mut scratch.z_perm[..bucket_count] {
+    for count in &mut scratch.z_counts {
         let bucket_len = *count;
         *count = next;
         next += bucket_len;
     }
 
-    scratch.z_perm.truncate(bucket_count);
-    scratch.z_perm.resize(bucket_count + objects.len(), 0);
+    scratch.z_perm.clear();
+    scratch.z_perm.resize(objects.len(), 0);
     for (old_index, object) in objects.iter().enumerate() {
         let encoded_z = (i32::from(object.z) - i32::from(i16::MIN)) as usize;
-        let bucket = scratch
-            .z_counts
-            .binary_search(&encoded_z)
-            .expect("collected sparse z layer must remain present");
-        let new_index = scratch.z_perm[bucket];
-        scratch.z_perm[bucket] = new_index + 1;
-        scratch.z_perm[bucket_count + old_index] = new_index;
+        let bucket = scratch.sparse_z_bucket_by_key[encoded_z] as usize;
+        let new_index = scratch.z_counts[bucket];
+        scratch.z_counts[bucket] = new_index + 1;
+        scratch.z_perm[old_index] = new_index;
     }
 
-    let permutation = &mut scratch.z_perm[bucket_count..];
+    let permutation = &mut scratch.z_perm;
     for start in 0..objects.len() {
         while permutation[start] != start {
             let next = permutation[start];
@@ -6757,6 +6769,61 @@ mod tests {
                 .map(|object| (object.z, object.order, object.texture_handle))
                 .collect::<Vec<_>>()
         );
+    }
+
+    #[test]
+    fn sparse_render_sort_reuses_lookup_and_matches_legacy_fallbacks() {
+        fn render_objects(z_values: &[i16], count: usize) -> Vec<RenderObject> {
+            (0..count)
+                .map(|index| RenderObject {
+                    object_type: ObjectType::Sprite(index as u32),
+                    texture_handle: index as u64,
+                    blend: BlendMode::Alpha,
+                    z: z_values[index.wrapping_mul(17).wrapping_add(5) % z_values.len()],
+                    order: index as u32,
+                    camera: 0,
+                })
+                .collect()
+        }
+
+        fn assert_matches_legacy(source: Vec<RenderObject>, scratch: &mut ComposeScratch) {
+            let mut legacy = source.clone();
+            let mut optimized = source;
+
+            sort_render_objects_legacy(&mut legacy, &mut ComposeScratch::default());
+            sort_render_objects(&mut optimized, scratch);
+
+            let fingerprint = |objects: &[RenderObject]| {
+                objects
+                    .iter()
+                    .map(|object| (object.z, object.order, object.texture_handle))
+                    .collect::<Vec<_>>()
+            };
+            assert_eq!(fingerprint(&optimized), fingerprint(&legacy));
+        }
+
+        let mut scratch = ComposeScratch::default();
+        assert_matches_legacy(
+            render_objects(&[-30_000, -1_000, 0, 30_000], 256),
+            &mut scratch,
+        );
+        assert_matches_legacy(
+            render_objects(&[-29_999, -999, 1, 29_999], 256),
+            &mut scratch,
+        );
+
+        let sixty_five_layers: Vec<_> = (0..65)
+            .map(|index| (-30_000 + index * 900) as i16)
+            .collect();
+        assert_matches_legacy(render_objects(&sixty_five_layers, 130), &mut scratch);
+
+        let descending_within_layers = vec![
+            test_render_object(-30_000, 4),
+            test_render_object(30_000, 3),
+            test_render_object(-30_000, 2),
+            test_render_object(30_000, 1),
+        ];
+        assert_matches_legacy(descending_within_layers, &mut scratch);
     }
 
     #[test]
