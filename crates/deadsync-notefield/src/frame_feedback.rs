@@ -782,6 +782,7 @@ mod tests {
                 note_range: (0, notes.len()),
                 lane_note_row_indices: [&[]; MAX_COLS],
                 lane_hold_indices: [&[]; MAX_COLS],
+                note_itg_rows: &[],
                 decaying_hold_indices: &[],
                 tap_row_hold_roll_flags: &[],
                 current_music_time_ns: 100_000_000,

@@ -13357,12 +13357,18 @@ mod tests {
         note_indices[1].push(7);
         note_row_indices[1].push(8);
         hold_indices[1].push(9);
-        let mut state =
-            GameplayLaneIndexState::new(note_indices, note_row_indices, hold_indices, vec![0, 3]);
+        let mut state = GameplayLaneIndexState::new(
+            note_indices,
+            note_row_indices,
+            hold_indices,
+            vec![12, 24],
+            vec![0, 3],
+        );
 
         assert_eq!(state.note_indices(1), &[7]);
         assert_eq!(state.note_row_indices(1), &[8]);
         assert_eq!(state.hold_indices(1), &[9]);
+        assert_eq!(state.note_itg_rows(), &[12, 24]);
         assert_eq!(state.tap_row_hold_roll_flags(1), 3);
         assert!(state.note_indices(MAX_COLS).is_empty());
         assert_eq!(state.tap_row_hold_roll_flags(99), 0);
@@ -13372,6 +13378,7 @@ mod tests {
         assert!(state.note_indices(1).is_empty());
         assert!(state.note_row_indices(1).is_empty());
         assert!(state.hold_indices(1).is_empty());
+        assert!(state.note_itg_rows().is_empty());
         assert_eq!(state.tap_row_hold_roll_flags(1), 0);
     }
 

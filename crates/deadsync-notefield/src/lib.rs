@@ -102,6 +102,8 @@ pub(crate) use mini_indicator::{
     stream_segment_index_exclusive_end, zmod_broken_run_counter_text, zmod_broken_run_segment,
     zmod_measure_counter_text, zmod_run_timer_index,
 };
+#[cfg(any(test, feature = "bench-support"))]
+pub(crate) use notes::for_each_visible_note_index_legacy;
 pub(crate) use notes::{
     MineLayerRequest, NoteLayerRequest, ScrollTravelRequest, compose_mine_layers,
     compose_note_layer, for_each_visible_hold_index, for_each_visible_note_index,
@@ -3839,11 +3841,12 @@ mod tests {
             test_note_at_dense_row(4.0, 1),
         ];
         let note_indices = vec![0usize, 1usize];
+        let note_itg_rows = notes.iter().map(note_itg_row).collect::<Vec<_>>();
         let mut visited = Vec::new();
 
         for_each_visible_note_index(
             &note_indices,
-            &notes,
+            &note_itg_rows,
             Some((beat_to_note_row(3.5), beat_to_note_row(4.5))),
             |note_index| visited.push(note_index),
         );
@@ -3859,11 +3862,12 @@ mod tests {
             test_note_at_dense_row(0.0, 1),
         ];
         let note_indices = vec![0usize, 1usize];
+        let note_itg_rows = notes.iter().map(note_itg_row).collect::<Vec<_>>();
         let mut visited = Vec::new();
 
         for_each_visible_note_index(
             &note_indices,
-            &notes,
+            &note_itg_rows,
             Some((beat_to_note_row(-2.0), beat_to_note_row(0.0))),
             |note_index| visited.push(note_index),
         );
@@ -3875,11 +3879,12 @@ mod tests {
     fn visible_note_window_rejects_fully_negative_ranges() {
         let notes = vec![test_note_at_dense_row(-1.0, 0)];
         let note_indices = vec![0usize];
+        let note_itg_rows = notes.iter().map(note_itg_row).collect::<Vec<_>>();
         let mut visited = Vec::new();
 
         for_each_visible_note_index(
             &note_indices,
-            &notes,
+            &note_itg_rows,
             Some((beat_to_note_row(-4.0), beat_to_note_row(-2.0))),
             |note_index| visited.push(note_index),
         );
@@ -3888,15 +3893,62 @@ mod tests {
     }
 
     #[test]
+    fn cached_visible_note_windows_match_legacy_search_across_range_sweep() {
+        let notes = [
+            (-2.0, 90usize),
+            (-0.01, 70),
+            (0.0, 50),
+            (0.01, 30),
+            (0.5, 20),
+            (3.999, 10),
+            (4.0, 1),
+            (4.011, 0),
+            (12.5, 2),
+            (64.0, 3),
+        ]
+        .into_iter()
+        .map(|(beat, dense_row)| test_note_at_dense_row(beat, dense_row))
+        .collect::<Vec<_>>();
+        let note_itg_rows = notes.iter().map(note_itg_row).collect::<Vec<_>>();
+        let mut note_indices = (0..notes.len()).collect::<Vec<_>>();
+        note_indices.sort_unstable_by_key(|&index| (note_itg_rows[index], index));
+
+        for low in (-120..=3_120).step_by(17) {
+            for width in [0, 1, 47, 48, 97, 384] {
+                let range = Some((low, low + width));
+                let mut legacy = Vec::new();
+                let mut cached = Vec::new();
+                crate::notes::for_each_visible_note_index_legacy(
+                    &note_indices,
+                    &notes,
+                    range,
+                    |index| legacy.push(index),
+                );
+                for_each_visible_note_index(&note_indices, &note_itg_rows, range, |index| {
+                    cached.push(index)
+                });
+                assert_eq!(cached, legacy, "range={range:?}");
+            }
+        }
+    }
+
+    #[test]
     fn visible_hold_window_includes_holds_started_before_range() {
         let notes = vec![test_hold_at_beat(0.0, 8.0), test_hold_at_beat(12.0, 16.0)];
         let hold_indices = vec![0usize, 1usize];
+        let note_itg_rows = notes.iter().map(note_itg_row).collect::<Vec<_>>();
         let visible_range = Some((beat_to_note_row(4.0), beat_to_note_row(5.0)));
         let mut visited = Vec::new();
 
-        for_each_visible_hold_index(&hold_indices, &notes, visible_range, |note_index| {
-            visited.push(note_index);
-        });
+        for_each_visible_hold_index(
+            &hold_indices,
+            &notes,
+            &note_itg_rows,
+            visible_range,
+            |note_index| {
+                visited.push(note_index);
+            },
+        );
 
         assert!(hold_overlaps_visible_window(0, &notes, visible_range));
         assert!(!hold_overlaps_visible_window(1, &notes, visible_range));
@@ -3907,12 +3959,19 @@ mod tests {
     fn visible_hold_window_rejects_fully_negative_ranges() {
         let notes = vec![test_hold_at_beat(-4.0, -1.0)];
         let hold_indices = vec![0usize];
+        let note_itg_rows = notes.iter().map(note_itg_row).collect::<Vec<_>>();
         let visible_range = Some((beat_to_note_row(-4.0), beat_to_note_row(-1.0)));
         let mut visited = Vec::new();
 
-        for_each_visible_hold_index(&hold_indices, &notes, visible_range, |note_index| {
-            visited.push(note_index);
-        });
+        for_each_visible_hold_index(
+            &hold_indices,
+            &notes,
+            &note_itg_rows,
+            visible_range,
+            |note_index| {
+                visited.push(note_index);
+            },
+        );
 
         assert!(!hold_overlaps_visible_window(0, &notes, visible_range));
         assert!(visited.is_empty());

@@ -66,6 +66,7 @@ pub struct NotefieldChartView<'a> {
     pub note_range: (usize, usize),
     pub lane_note_row_indices: [&'a [usize]; MAX_COLS],
     pub lane_hold_indices: [&'a [usize]; MAX_COLS],
+    pub note_itg_rows: &'a [i32],
     pub decaying_hold_indices: &'a [usize],
     pub tap_row_hold_roll_flags: &'a [u8],
     pub current_music_time_ns: i64,

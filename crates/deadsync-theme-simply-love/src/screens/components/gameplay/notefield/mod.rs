@@ -502,6 +502,7 @@ pub(crate) fn compose_frame(
             note_range: state.note_range_for_player(player_idx),
             lane_note_row_indices: from_fn(|col| state.lane_note_row_indices(col)),
             lane_hold_indices: from_fn(|col| state.lane_hold_indices(col)),
+            note_itg_rows: state.note_itg_rows(),
             decaying_hold_indices: state.decaying_hold_indices(),
             tap_row_hold_roll_flags: &state.chart_runtime.lane_indices.tap_row_hold_roll_flags,
             current_music_time_ns: state.current_music_time_ns(),
