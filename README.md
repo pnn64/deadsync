@@ -25,7 +25,7 @@ Before building, ensure you have the following installed on your system:
 ### Linux build dependencies (Ubuntu/Debian)
 ```bash
 sudo apt update
-sudo apt install --no-install-recommends build-essential cmake pkg-config libudev-dev libasound2-dev libvulkan-dev libgl1-mesa-dev
+sudo apt install --no-install-recommends build-essential cmake pkg-config libdbus-1-dev libudev-dev libasound2-dev libvulkan-dev libgl1-mesa-dev
 ```
 
 ### macOS build dependencies (Homebrew)
