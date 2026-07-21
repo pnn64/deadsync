@@ -1,5 +1,6 @@
 use deadlib_present::actors::Actor;
 use deadsync_theme_simply_love::screens::gameplay::{
+    benchmark_append_direct_identity_player_actors, benchmark_append_player_actors,
     benchmark_present_identity_notefield, benchmark_present_identity_notefield_legacy,
 };
 use glam::{Mat4, Vec3};
@@ -117,6 +118,47 @@ fn frame(
     first + last + out.len() as f32
 }
 
+fn assembled_frame(
+    field: &mut Vec<Actor>,
+    hud: &mut Vec<Actor>,
+    player: &mut Vec<Actor>,
+    out: &mut Vec<Actor>,
+    assemble: fn(&mut Vec<Actor>, &mut Vec<Actor>, &mut Vec<Actor>, &mut Vec<Actor>),
+) -> f32 {
+    fill(field, FIELD_ACTORS, 0.0);
+    fill(hud, HUD_ACTORS, 10_000.0);
+    out.clear();
+    assemble(out, field, hud, player);
+    let first = match out.first() {
+        Some(Actor::CameraPush { view_proj }) => view_proj.w_axis.x,
+        _ => -1.0,
+    };
+    let last = match out.last() {
+        Some(Actor::CameraPush { view_proj }) => view_proj.w_axis.x,
+        _ => -1.0,
+    };
+    first + last + out.len() as f32
+}
+
+fn assemble_buffered(
+    out: &mut Vec<Actor>,
+    field: &mut Vec<Actor>,
+    hud: &mut Vec<Actor>,
+    player: &mut Vec<Actor>,
+) {
+    benchmark_present_identity_notefield(field, hud, player);
+    benchmark_append_player_actors(out, player);
+}
+
+fn assemble_direct(
+    out: &mut Vec<Actor>,
+    field: &mut Vec<Actor>,
+    hud: &mut Vec<Actor>,
+    player: &mut Vec<Actor>,
+) {
+    benchmark_append_direct_identity_player_actors(out, field, hud, player);
+}
+
 struct BenchResult {
     elapsed: std::time::Duration,
     allocated: AllocSnapshot,
@@ -150,6 +192,49 @@ fn measure(present: fn(&mut Vec<Actor>, &mut Vec<Actor>, &mut Vec<Actor>)) -> Be
     }
 }
 
+fn measure_assembled(
+    assemble: fn(&mut Vec<Actor>, &mut Vec<Actor>, &mut Vec<Actor>, &mut Vec<Actor>),
+) -> BenchResult {
+    let mut field = Vec::with_capacity(FIELD_ACTORS);
+    let mut hud = Vec::with_capacity(HUD_ACTORS);
+    let mut player = Vec::with_capacity(FIELD_ACTORS + HUD_ACTORS);
+    let mut out = Vec::with_capacity(FIELD_ACTORS + HUD_ACTORS);
+    for _ in 0..WARMUP_FRAMES {
+        black_box(assembled_frame(
+            &mut field,
+            &mut hud,
+            &mut player,
+            &mut out,
+            assemble,
+        ));
+    }
+
+    let before = ALLOC.snapshot();
+    let started = Instant::now();
+    let mut checksum = 0.0f32;
+    for _ in 0..MEASURE_FRAMES {
+        checksum += black_box(assembled_frame(
+            &mut field,
+            &mut hud,
+            &mut player,
+            &mut out,
+            assemble,
+        ));
+    }
+    let elapsed = started.elapsed();
+    let allocated = ALLOC.snapshot().delta(before);
+    assert!(field.is_empty());
+    assert!(hud.is_empty());
+    assert!(player.is_empty());
+    assert_eq!(out.len(), FIELD_ACTORS + HUD_ACTORS);
+
+    BenchResult {
+        elapsed,
+        allocated,
+        checksum,
+    }
+}
+
 fn print_result(label: &str, result: &BenchResult) {
     let frames = MEASURE_FRAMES as f64;
     println!(
@@ -165,10 +250,16 @@ fn print_result(label: &str, result: &BenchResult) {
 fn main() {
     let legacy = measure(benchmark_present_identity_notefield_legacy);
     let direct = measure(benchmark_present_identity_notefield);
+    let buffered = measure_assembled(assemble_buffered);
+    let assembled = measure_assembled(assemble_direct);
     assert_eq!(legacy.checksum, direct.checksum);
-    black_box((legacy.checksum, direct.checksum));
+    assert_eq!(direct.checksum, buffered.checksum);
+    assert_eq!(buffered.checksum, assembled.checksum);
+    black_box((legacy.checksum, direct.checksum, assembled.checksum));
 
     println!("identity notefield presentation benchmark");
     print_result("legacy per-actor", &legacy);
     print_result("direct append", &direct);
+    print_result("buffered final", &buffered);
+    print_result("direct final", &assembled);
 }
