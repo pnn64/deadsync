@@ -1179,6 +1179,76 @@ pub enum SmxPadProfileEvent {
     },
 }
 
+#[derive(Clone, PartialEq, Eq)]
+struct InfoBoxActorKey {
+    box_w_bits: u32,
+    artist_label: Arc<str>,
+    bpm_label: Arc<str>,
+    length_label: Arc<str>,
+    artist: Arc<str>,
+    bpm: Arc<str>,
+    length: Arc<str>,
+}
+
+#[derive(Default)]
+struct InfoBoxActorCache {
+    key: Option<InfoBoxActorKey>,
+    children: Option<Arc<[Actor]>>,
+}
+
+impl InfoBoxActorCache {
+    fn resolve(
+        &mut self,
+        box_w: f32,
+        artist: Arc<str>,
+        bpm: Arc<str>,
+        length: Arc<str>,
+    ) -> Arc<[Actor]> {
+        let key = InfoBoxActorKey {
+            box_w_bits: box_w.to_bits(),
+            artist_label: tr("SelectMusic", "ArtistLabel"),
+            bpm_label: tr("SelectMusic", "BPMLabel"),
+            length_label: tr("SelectMusic", "LengthLabel"),
+            artist,
+            bpm,
+            length,
+        };
+        if self.key.as_ref() == Some(&key) {
+            return Arc::clone(
+                self.children
+                    .as_ref()
+                    .expect("matching info-box cache key should have children"),
+            );
+        }
+
+        let children = Arc::<[Actor]>::from(build_info_box_children(&key, box_w));
+        self.key = Some(key);
+        self.children = Some(Arc::clone(&children));
+        children
+    }
+}
+
+fn build_info_box_children(key: &InfoBoxActorKey, box_w: f32) -> Vec<Actor> {
+    vec![
+        act!(quad: setsize(box_w, 50.0): diffuse(UI_BOX_BG_COLOR[0], UI_BOX_BG_COLOR[1], UI_BOX_BG_COLOR[2], UI_BOX_BG_COLOR[3])),
+        Actor::Frame {
+            align: [0.0, 0.0],
+            offset: [-110.0, -6.0],
+            size: [SizeSpec::Fill, SizeSpec::Fill],
+            background: None,
+            z: 0,
+            children: vec![
+                act!(text: font("miso"): settext(key.artist_label.clone()): align(1.0, 0.0): y(-11.0): maxwidth(44.0): diffuse(0.5, 0.5, 0.5, 1.0): z(52)),
+                act!(text: font("miso"): settext(key.artist.clone()): align(0.0, 0.0): xy(5.0, -11.0): maxwidth(box_w - 60.0): zoomtoheight(15.0): diffuse(1.0, 1.0, 1.0, 1.0): z(52)),
+                act!(text: font("miso"): settext(key.bpm_label.clone()): align(1.0, 0.0): y(10.0): diffuse(0.5, 0.5, 0.5, 1.0): z(52)),
+                act!(text: font("miso"): settext(key.bpm.clone()): align(0.0, 0.0): xy(5.0, 10.0): zoomtoheight(15.0): diffuse(1.0, 1.0, 1.0, 1.0): z(52)),
+                act!(text: font("miso"): settext(key.length_label.clone()): align(1.0, 0.0): xy(box_w - 130.0, 10.0): diffuse(0.5, 0.5, 0.5, 1.0): z(52)),
+                act!(text: font("miso"): settext(key.length.clone()): align(0.0, 0.0): xy(box_w - 125.0, 10.0): zoomtoheight(15.0): diffuse(1.0, 1.0, 1.0, 1.0): z(52)),
+            ],
+        },
+    ]
+}
+
 /// What deadsync last applied to an SMX pad, so the UI can flag the active one.
 /// `preset` = a built-in preset (name is its label); otherwise a saved config.
 /// A request from the Song Select UI to the App-owned pad-config controller
@@ -1286,6 +1356,7 @@ pub struct State {
     pending_hardware: Vec<crate::SimplyLoveHardwareRequest>,
     pending_online: Vec<crate::SimplyLoveOnlineRequest>,
     bg: visual_style_bg::State,
+    info_box_actor_cache: RefCell<InfoBoxActorCache>,
     last_requested_banner_path: Option<PathBuf>,
     last_requested_cdtitle_path: Option<PathBuf>,
     last_requested_folder_stats_banner_path: Option<PathBuf>,
@@ -3202,6 +3273,7 @@ pub fn init(init_view: SelectMusicInitView) -> State {
         pending_hardware: Vec::new(),
         pending_online: Vec::new(),
         bg: visual_style_bg::State::new(),
+        info_box_actor_cache: RefCell::new(InfoBoxActorCache::default()),
         last_requested_banner_path: None,
         last_requested_cdtitle_path: None,
         last_requested_folder_stats_banner_path: None,
@@ -3438,6 +3510,7 @@ pub fn init_placeholder() -> State {
         pending_hardware: Vec::new(),
         pending_online: Vec::new(),
         bg: visual_style_bg::State::new(),
+        info_box_actor_cache: RefCell::new(InfoBoxActorCache::default()),
         last_requested_banner_path: None,
         last_requested_cdtitle_path: None,
         last_requested_folder_stats_banner_path: None,
@@ -12055,6 +12128,26 @@ fn banner_texture_key(state: &State) -> Arc<str> {
     }
 }
 
+fn push_flat_breakdown_child(
+    out: &mut Vec<Actor>,
+    mut actor: Actor,
+    parent_x: f32,
+    parent_y: f32,
+    parent_z: i16,
+) {
+    match &mut actor {
+        Actor::Sprite { offset, z, .. }
+        | Actor::Text { offset, z, .. }
+        | Actor::Mesh { offset, z, .. } => {
+            offset[0] += parent_x;
+            offset[1] += parent_y;
+            *z = parent_z.saturating_add(*z);
+        }
+        _ => unreachable!("breakdown panels only contain sprite, text, and mesh children"),
+    }
+    out.push(actor);
+}
+
 pub fn push_actors(
     mut actors: &mut Vec<Actor>,
     state: &State,
@@ -12147,10 +12240,7 @@ pub fn push_actors(
 
     // Pads
     {
-        actors.push(mode_pads::build_label(
-            "DS".to_string(),
-            state.policy.machine_font,
-        ));
+        actors.push(mode_pads::build_label("DS", state.policy.machine_font));
         actors.extend(mode_pads::build(
             state.session.play_style,
             state.session.joined,
@@ -12288,22 +12378,19 @@ pub fn push_actors(
         None => (cached_str_ref(""), cached_str_ref(""), cached_str_ref("")),
     };
 
-    actors.push(Actor::Frame {
-        align: [0.0, 0.0], offset: [frame_x, frame_y], size: [SizeSpec::Px(box_w), SizeSpec::Px(50.0)], background: None, z: 51,
-        children: vec![
-            act!(quad: setsize(box_w, 50.0): diffuse(UI_BOX_BG_COLOR[0], UI_BOX_BG_COLOR[1], UI_BOX_BG_COLOR[2], UI_BOX_BG_COLOR[3])),
-            Actor::Frame {
-                align: [0.0, 0.0], offset: [-110.0, -6.0], size: [SizeSpec::Fill, SizeSpec::Fill], background: None, z: 0,
-                children: vec![
-                    act!(text: font("miso"): settext(tr("SelectMusic", "ArtistLabel")): align(1.0, 0.0): y(-11.0): maxwidth(44.0): diffuse(0.5, 0.5, 0.5, 1.0): z(52)),
-                    act!(text: font("miso"): settext(artist): align(0.0, 0.0): xy(5.0, -11.0): maxwidth(box_w - 60.0): zoomtoheight(15.0): diffuse(1.0, 1.0, 1.0, 1.0): z(52)),
-                    act!(text: font("miso"): settext(tr("SelectMusic", "BPMLabel")): align(1.0, 0.0): y(10.0): diffuse(0.5, 0.5, 0.5, 1.0): z(52)),
-                    act!(text: font("miso"): settext(bpm): align(0.0, 0.0): xy(5.0, 10.0): zoomtoheight(15.0): diffuse(1.0, 1.0, 1.0, 1.0): z(52)),
-                    act!(text: font("miso"): settext(tr("SelectMusic", "LengthLabel")): align(1.0, 0.0): xy(box_w - 130.0, 10.0): diffuse(0.5, 0.5, 0.5, 1.0): z(52)),
-                    act!(text: font("miso"): settext(len_text): align(0.0, 0.0): xy(box_w - 125.0, 10.0): zoomtoheight(15.0): diffuse(1.0, 1.0, 1.0, 1.0): z(52)),
-                ],
-            },
-        ],
+    let info_box_children = state
+        .info_box_actor_cache
+        .borrow_mut()
+        .resolve(box_w, artist, bpm, len_text);
+    actors.push(Actor::SharedFrame {
+        align: [0.0, 0.0],
+        offset: [frame_x, frame_y],
+        size: [SizeSpec::Px(box_w), SizeSpec::Px(50.0)],
+        children: info_box_children,
+        background: None,
+        z: 51,
+        tint: [1.0; 4],
+        blend: None,
     });
 
     // Chart Stats & Graph
@@ -12437,15 +12524,19 @@ pub fn push_actors(
     };
     let preview_marker_p1 = preview_marker(state.displayed_chart_p1.as_ref(), preview_sec, panel_w);
     let preview_marker_p2 = preview_marker(state.displayed_chart_p2.as_ref(), preview_sec, panel_w);
-    let build_breakdown_panel = |graph_cy: f32,
-                                 is_p2_layout: bool,
-                                 graph_key: &String,
-                                 graph_mesh: Option<Arc<[MeshVertex]>>,
-                                 preview_marker: Option<PreviewMarker>,
-                                 chart: Option<&ChartData>| {
-        let mut graph_kids = vec![
+    let push_breakdown_panel = |out: &mut Vec<Actor>,
+                                graph_cy: f32,
+                                is_p2_layout: bool,
+                                graph_key: &str,
+                                graph_mesh: Option<Arc<[MeshVertex]>>,
+                                preview_marker: Option<PreviewMarker>,
+                                chart: Option<&ChartData>| {
+        let graph_top = graph_cy - 32.0;
+        let mut push_child =
+            |actor: Actor| push_flat_breakdown_child(out, actor, graph_left, graph_top, 51);
+        push_child(
             act!(quad: align(0.0, 0.0): xy(0.0, 0.0): setsize(panel_w, graph_h): diffuse(UI_BOX_BG_COLOR[0], UI_BOX_BG_COLOR[1], UI_BOX_BG_COLOR[2], UI_BOX_BG_COLOR[3])),
-        ];
+        );
 
         if let Some(c) = chart {
             let scaled_peak_nps = if music_rate.is_finite() {
@@ -12506,7 +12597,7 @@ pub fn push_actors(
             if let Some(mesh) = graph_mesh
                 && !mesh.is_empty()
             {
-                graph_kids.push(Actor::Mesh {
+                push_child(Actor::Mesh {
                     align: [0.0, 0.0],
                     offset: [0.0, 0.0],
                     size: [SizeSpec::Px(panel_w), SizeSpec::Px(graph_h)],
@@ -12516,12 +12607,12 @@ pub fn push_actors(
                     z: 0,
                 });
             } else if graph_key != "__white" {
-                graph_kids.push(act!(sprite(graph_key.clone()):
+                push_child(act!(sprite(cached_str_ref(graph_key)):
                     align(0.0, 0.0): xy(0.0, 0.0): setsize(panel_w, graph_h)
                 ));
             }
             if let Some(marker) = preview_marker {
-                graph_kids.push(act!(quad:
+                push_child(act!(quad:
                     align(0.0, 0.0):
                     xy(marker.x, 0.0):
                     setsize(marker.width, graph_h):
@@ -12532,42 +12623,41 @@ pub fn push_actors(
                 ));
             }
             let peak_y = if step_artist_expanded { -50.0 } else { -9.0 };
-            graph_kids.push(act!(text: font("miso"): settext(peak): align(0.0, 0.5): xy(peak_x, peak_y): zoom(0.8): diffuse(1.0, 1.0, 1.0, 1.0): z(2)));
-            graph_kids.push(act!(quad: align(0.0, 0.0): xy(0.0, graph_body_h): setsize(panel_w, graph_h - graph_body_h): diffuse(0.0, 0.0, 0.0, 0.5): z(2)));
-            graph_kids.push(act!(text: font("miso"): settext(bd_text): align(0.5, 0.5): xy(panel_w * 0.5, 55.5): zoom(0.8): maxwidth(panel_w): z(2)));
-        }
-
-        Actor::Frame {
-            align: [0.0, 0.0],
-            offset: [graph_left, graph_cy - 32.0],
-            size: [SizeSpec::Px(panel_w), SizeSpec::Px(graph_h)],
-            background: None,
-            z: 51,
-            children: graph_kids,
+            push_child(
+                act!(text: font("miso"): settext(peak): align(0.0, 0.5): xy(peak_x, peak_y): zoom(0.8): diffuse(1.0, 1.0, 1.0, 1.0): z(2)),
+            );
+            push_child(
+                act!(quad: align(0.0, 0.0): xy(0.0, graph_body_h): setsize(panel_w, graph_h - graph_body_h): diffuse(0.0, 0.0, 0.0, 0.5): z(2)),
+            );
+            push_child(
+                act!(text: font("miso"): settext(bd_text): align(0.5, 0.5): xy(panel_w * 0.5, 55.5): zoom(0.8): maxwidth(panel_w): z(2)),
+            );
         }
     };
 
     if presentation.show_breakdown {
         if is_versus {
             if !state.pattern_info.visible[0] {
-                actors.push(build_breakdown_panel(
+                push_breakdown_panel(
+                    actors,
                     screen_center_y() + 23.0,
                     false,
                     &state.current_graph_key,
                     state.current_graph_mesh.clone(),
                     preview_marker_p1,
                     disp_chart_p1,
-                ));
+                );
             }
             if !state.pattern_info.visible[1] {
-                actors.push(build_breakdown_panel(
+                push_breakdown_panel(
+                    actors,
                     screen_center_y() + 111.0,
                     true,
                     &state.current_graph_key_p2,
                     state.current_graph_mesh_p2.clone(),
                     preview_marker_p2,
                     disp_chart_p2,
-                ));
+                );
             }
         } else {
             let graph_cy = screen_center_y()
@@ -12578,14 +12668,15 @@ pub fn push_actors(
                 } else {
                     23.0
                 };
-            actors.push(build_breakdown_panel(
+            push_breakdown_panel(
+                actors,
                 graph_cy,
                 is_p2_single,
                 &state.current_graph_key,
                 state.current_graph_mesh.clone(),
                 preview_marker_p1,
                 disp_chart_p1,
-            ));
+            );
         }
     }
 
@@ -14051,6 +14142,58 @@ mod tests {
         let fallback_b = banner_texture_key(&state);
         assert_eq!(fallback_a.as_ref(), "banner12.png");
         assert!(Arc::ptr_eq(&fallback_a, &fallback_b));
+    }
+
+    #[test]
+    fn info_box_cache_preserves_children_and_refreshes_changed_content() {
+        let mut cache = super::InfoBoxActorCache::default();
+        let first = cache.resolve(
+            320.0,
+            Arc::from("Artist A"),
+            Arc::from("120"),
+            Arc::from("2:00"),
+        );
+        let legacy = super::build_info_box_children(
+            cache
+                .key
+                .as_ref()
+                .expect("cache should retain its input key"),
+            320.0,
+        );
+        assert_eq!(format!("{legacy:?}"), format!("{:?}", first.as_ref()));
+
+        let repeated = cache.resolve(
+            320.0,
+            Arc::from("Artist A"),
+            Arc::from("120"),
+            Arc::from("2:00"),
+        );
+        assert!(Arc::ptr_eq(&first, &repeated));
+
+        let changed = cache.resolve(
+            320.0,
+            Arc::from("Artist B"),
+            Arc::from("120"),
+            Arc::from("2:00"),
+        );
+        assert!(!Arc::ptr_eq(&first, &changed));
+    }
+
+    #[test]
+    fn flattened_breakdown_children_preserve_parent_offset_and_z() {
+        let mut actors = Vec::new();
+        super::push_flat_breakdown_child(
+            &mut actors,
+            crate::act!(quad: align(0.0, 0.0): xy(4.0, 6.0): setsize(8.0, 10.0): z(2)),
+            100.0,
+            200.0,
+            51,
+        );
+        let deadlib_present::actors::Actor::Sprite { offset, z, .. } = &actors[0] else {
+            panic!("flattened quad should remain a sprite actor");
+        };
+        assert_eq!(*offset, [104.0, 206.0]);
+        assert_eq!(*z, 53);
     }
 
     #[test]

@@ -1,5 +1,7 @@
 use crate::act;
 use deadlib_present::actors::{Actor, SizeSpec};
+use std::cell::RefCell;
+use std::sync::Arc;
 
 // This should match the native resolution of "rounded-square.png" from the theme (64x64).
 const PANEL_NATIVE_SIZE: f32 = 64.0;
@@ -22,19 +24,62 @@ pub struct PadDisplayParams {
     pub is_active: bool,
 }
 
+struct CachedPadChildren {
+    zoom_bits: u32,
+    children: Arc<[Actor]>,
+}
+
+thread_local! {
+    static PAD_CHILDREN_CACHE: RefCell<[Option<CachedPadChildren>; 2]> =
+        const { RefCell::new([None, None]) };
+}
+
 /// Builds a 3x3 pad display actor, positioned and scaled as a group.
 pub fn build(params: PadDisplayParams) -> Actor {
+    let children = cached_children(params.zoom, params.is_active);
+    Actor::SharedFrame {
+        align: [0.5, 0.5],
+        offset: [params.center_x, params.center_y],
+        size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
+        children,
+        background: None,
+        z: params.z,
+        tint: [1.0; 4],
+        blend: None,
+    }
+}
+
+fn cached_children(zoom: f32, is_active: bool) -> Arc<[Actor]> {
+    let slot = usize::from(is_active);
+    PAD_CHILDREN_CACHE.with(|cache| {
+        let mut cache = cache.borrow_mut();
+        if let Some(cached) = cache[slot].as_ref()
+            && cached.zoom_bits == zoom.to_bits()
+        {
+            return Arc::clone(&cached.children);
+        }
+
+        let children = Arc::<[Actor]>::from(build_children(zoom, is_active));
+        cache[slot] = Some(CachedPadChildren {
+            zoom_bits: zoom.to_bits(),
+            children: Arc::clone(&children),
+        });
+        children
+    })
+}
+
+fn build_children(zoom: f32, is_active: bool) -> Vec<Actor> {
     let mut children = Vec::with_capacity(9);
 
     // Choose which layout to use based on whether the player is active.
-    let layout = if params.is_active {
+    let layout = if is_active {
         DANCE_LAYOUT
     } else {
         INACTIVE_LAYOUT
     };
 
     // This is the final size of one panel after zoom.
-    let zoomed_panel_size = PANEL_NATIVE_SIZE * params.zoom;
+    let zoomed_panel_size = PANEL_NATIVE_SIZE * zoom;
 
     // The Lua code positions panels relative to an origin where the center-bottom
     // panel (col=1, row=2) is at (0,0). We replicate this relative positioning by making the parent Frame center-aligned.
@@ -56,20 +101,34 @@ pub fn build(params: PadDisplayParams) -> Actor {
                     xy(x, y):
                     // The base size is set, then scaled by the zoom factor.
                     setsize(PANEL_NATIVE_SIZE, PANEL_NATIVE_SIZE):
-                    zoom(params.zoom):
+                    zoom(zoom):
                     diffuse(color[0], color[1], color[2], color[3])
                 ),
             );
         }
     }
 
-    // The parent Frame groups all panels. Its origin is its center.
-    Actor::Frame {
-        align: [0.5, 0.5],                            // The frame's pivot is its center.
-        offset: [params.center_x, params.center_y], // Position the center at this world coordinate.
-        size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)], // Frame itself has no intrinsic size.
-        children,
-        background: None,
-        z: params.z,
+    children
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn cached_pad_children_match_legacy_content_and_refresh_for_inputs() {
+        let legacy = build_children(0.125, true);
+        let first = cached_children(0.125, true);
+        let repeated = cached_children(0.125, true);
+        assert_eq!(format!("{legacy:?}"), format!("{:?}", first.as_ref()));
+        assert!(Arc::ptr_eq(&first, &repeated));
+
+        let changed_zoom = cached_children(0.25, true);
+        let inactive = cached_children(0.125, false);
+        assert!(!Arc::ptr_eq(&first, &changed_zoom));
+        assert_ne!(
+            format!("{:?}", first.as_ref()),
+            format!("{:?}", inactive.as_ref())
+        );
     }
 }

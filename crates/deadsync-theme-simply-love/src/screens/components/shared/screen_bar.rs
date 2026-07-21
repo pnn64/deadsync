@@ -24,11 +24,13 @@ thread_local! {
         RefCell::new(HashMap::with_capacity(64));
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub enum ScreenBarPosition {
     Top,
     Bottom,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub enum ScreenBarTitlePlacement {
     Left,
     Center,
@@ -47,6 +49,7 @@ pub struct AvatarParams<'a> {
     pub texture_key: &'a str,
 }
 
+#[derive(Clone, Copy)]
 pub struct ScreenBarParams<'a> {
     pub title: &'a str,
     pub title_placement: ScreenBarTitlePlacement,
@@ -65,6 +68,68 @@ pub struct ScreenBarParams<'a> {
 
     pub fg_color: [f32; 4], // text color
     pub visual_policy: SimplyLoveVisualPolicyView,
+}
+
+struct CachedSelectMusicBar {
+    title: Arc<str>,
+    title_placement: ScreenBarTitlePlacement,
+    transparent: bool,
+    left_text: Option<Arc<str>>,
+    center_text: Option<Arc<str>>,
+    right_text: Option<Arc<str>>,
+    left_avatar: Option<Arc<str>>,
+    right_avatar: Option<Arc<str>>,
+    fg_color: [f32; 4],
+    visual_policy: SimplyLoveVisualPolicyView,
+    screen_size_bits: [u32; 2],
+    actor: Actor,
+}
+
+impl CachedSelectMusicBar {
+    fn matches(&self, params: ScreenBarParams<'_>) -> bool {
+        self.title.as_ref() == params.title
+            && self.title_placement == params.title_placement
+            && self.transparent == params.transparent
+            && self.left_text.as_deref() == params.left_text
+            && self.center_text.as_deref() == params.center_text
+            && self.right_text.as_deref() == params.right_text
+            && self.left_avatar.as_deref() == params.left_avatar.map(|avatar| avatar.texture_key)
+            && self.right_avatar.as_deref() == params.right_avatar.map(|avatar| avatar.texture_key)
+            && self.fg_color == params.fg_color
+            && self.visual_policy == params.visual_policy
+            && self.screen_size_bits == current_screen_size_bits()
+    }
+
+    fn new(params: ScreenBarParams<'_>, actor: Actor) -> Self {
+        Self {
+            title: cached_str_ref(params.title),
+            title_placement: params.title_placement,
+            transparent: params.transparent,
+            left_text: params.left_text.map(cached_str_ref),
+            center_text: params.center_text.map(cached_str_ref),
+            right_text: params.right_text.map(cached_str_ref),
+            left_avatar: params
+                .left_avatar
+                .map(|avatar| cached_str_ref(avatar.texture_key)),
+            right_avatar: params
+                .right_avatar
+                .map(|avatar| cached_str_ref(avatar.texture_key)),
+            fg_color: params.fg_color,
+            visual_policy: params.visual_policy,
+            screen_size_bits: current_screen_size_bits(),
+            actor,
+        }
+    }
+}
+
+thread_local! {
+    static SELECT_MUSIC_BAR_CACHE: RefCell<[Option<CachedSelectMusicBar>; 2]> =
+        const { RefCell::new([None, None]) };
+}
+
+#[inline(always)]
+fn current_screen_size_bits() -> [u32; 2] {
+    [screen_width().to_bits(), screen_height().to_bits()]
 }
 
 /// Helper to select a scale factor based on screen aspect ratio.
@@ -107,7 +172,46 @@ pub fn build(params: ScreenBarParams) -> Actor {
 }
 
 pub fn build_select_music(params: ScreenBarParams) -> Actor {
-    build_with_context(params, ScreenBarContext::SelectMusic)
+    let slot = match params.position {
+        ScreenBarPosition::Top => 0,
+        ScreenBarPosition::Bottom => 1,
+    };
+    SELECT_MUSIC_BAR_CACHE.with(|cache| {
+        let mut cache = cache.borrow_mut();
+        if let Some(cached) = cache[slot].as_ref()
+            && cached.matches(params)
+        {
+            return cached.actor.clone();
+        }
+
+        let actor = shared_frame(build_with_context(params, ScreenBarContext::SelectMusic));
+        cache[slot] = Some(CachedSelectMusicBar::new(params, actor.clone()));
+        actor
+    })
+}
+
+fn shared_frame(actor: Actor) -> Actor {
+    let Actor::Frame {
+        align,
+        offset,
+        size,
+        children,
+        background,
+        z,
+    } = actor
+    else {
+        unreachable!("screen bar builders always return frames");
+    };
+    Actor::SharedFrame {
+        align,
+        offset,
+        size,
+        children: Arc::from(children),
+        background,
+        z,
+        tint: [1.0; 4],
+        blend: None,
+    }
 }
 
 pub fn build_title_menu(params: ScreenBarParams) -> Actor {
@@ -311,12 +415,65 @@ mod tests {
     fn transparent_select_music_bar_keeps_reference_scrim() {
         let mut params = empty_bar_params();
         params.visual_policy.screen_bar = ScreenBarBackgroundView::Transparent;
-        let Actor::Frame { background, .. } = build_select_music(params) else {
+        let Actor::SharedFrame { background, .. } = build_select_music(params) else {
             panic!("screen bar should build a frame");
         };
         assert!(matches!(
             background,
             Some(Background::Color([0.0, 0.0, 0.0, 0.5]))
         ));
+    }
+
+    #[test]
+    fn cached_select_music_bar_matches_legacy_children_and_refreshes_text() {
+        let mut params = empty_bar_params();
+        params.left_text = Some("cache-test-left");
+        params.right_text = Some("cache-test-right");
+        let legacy = build_with_context(params, ScreenBarContext::SelectMusic);
+        let cached = build_select_music(params);
+        let repeated = build_select_music(params);
+
+        let Actor::Frame {
+            children: legacy_children,
+            background: legacy_background,
+            ..
+        } = legacy
+        else {
+            panic!("legacy screen bar should be a frame");
+        };
+        let Actor::SharedFrame {
+            children: cached_children,
+            background: cached_background,
+            ..
+        } = cached
+        else {
+            panic!("cached screen bar should be shared");
+        };
+        let Actor::SharedFrame {
+            children: repeated_children,
+            ..
+        } = repeated
+        else {
+            panic!("repeated screen bar should be shared");
+        };
+        assert_eq!(
+            format!("{legacy_children:?}"),
+            format!("{:?}", cached_children.as_ref())
+        );
+        assert_eq!(
+            format!("{legacy_background:?}"),
+            format!("{cached_background:?}")
+        );
+        assert!(Arc::ptr_eq(&cached_children, &repeated_children));
+
+        params.right_text = Some("cache-test-changed");
+        let Actor::SharedFrame {
+            children: changed_children,
+            ..
+        } = build_select_music(params)
+        else {
+            panic!("changed screen bar should be shared");
+        };
+        assert!(!Arc::ptr_eq(&cached_children, &changed_children));
     }
 }
