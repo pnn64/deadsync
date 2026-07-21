@@ -9493,6 +9493,7 @@ fn append_player_actors(out: &mut Vec<Actor>, player_scratch: &mut Vec<Actor>) {
 }
 
 #[inline(always)]
+#[cfg(any(test, feature = "bench-support"))]
 fn append_player_actors_legacy(out: &mut Vec<Actor>, player_scratch: &mut Vec<Actor>) {
     out.extend(player_scratch.drain(..));
 }
