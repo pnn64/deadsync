@@ -1532,6 +1532,17 @@ pub fn runtime_machine_record_logged_local(
     record
 }
 
+/// Read the machine record while constructing profile sources only for the
+/// cache's initial load.
+pub fn runtime_machine_record_logged_local_lazy(
+    chart_hash: &str,
+    profiles: impl FnOnce() -> Vec<LocalScoreProfileSource>,
+) -> Option<(String, CachedScore)> {
+    let (record, result) = runtime_machine_record_local_lazy(chart_hash, profiles);
+    log_score_cache_result("local", result);
+    record
+}
+
 pub fn runtime_total_songs_played_for_profile(
     profile_id: &str,
     score_paths: ProfilePathsFn,
@@ -1564,17 +1575,28 @@ pub fn runtime_played_chart_counts_for_profile(
 pub fn runtime_ensure_machine_local_score_cache_loaded(
     profiles: &[LocalScoreProfileSource],
 ) -> ScoreCacheRuntimeResult {
+    ensure_machine_local_score_cache_loaded_with(&RUNTIME_MACHINE_LOCAL_SCORE_CACHE, || profiles)
+}
+
+fn ensure_machine_local_score_cache_loaded_with<P>(
+    cache: &Mutex<MachineLocalScoreCacheState>,
+    profiles: impl FnOnce() -> P,
+) -> ScoreCacheRuntimeResult
+where
+    P: AsRef<[LocalScoreProfileSource]>,
+{
     let needs_load = {
-        let state = RUNTIME_MACHINE_LOCAL_SCORE_CACHE.lock().unwrap();
+        let state = cache.lock().unwrap();
         !state.loaded
     };
     if !needs_load {
         return ScoreCacheRuntimeResult::default();
     }
 
+    let profiles = profiles();
     let load_started = Instant::now();
-    let best_itg = machine_best_itg_from_profiles(profiles);
-    let mut state = RUNTIME_MACHINE_LOCAL_SCORE_CACHE.lock().unwrap();
+    let best_itg = machine_best_itg_from_profiles(profiles.as_ref());
+    let mut state = cache.lock().unwrap();
     if state.loaded {
         return ScoreCacheRuntimeResult::default();
     }
@@ -1608,11 +1630,26 @@ pub fn runtime_machine_record_local(
     chart_hash: &str,
     profiles: &[LocalScoreProfileSource],
 ) -> (Option<(String, CachedScore)>, ScoreCacheRuntimeResult) {
-    let result = runtime_ensure_machine_local_score_cache_loaded(profiles);
-    let record = RUNTIME_MACHINE_LOCAL_SCORE_CACHE
-        .lock()
-        .unwrap()
-        .record(chart_hash);
+    machine_record_local_with_cache(&RUNTIME_MACHINE_LOCAL_SCORE_CACHE, chart_hash, || profiles)
+}
+
+pub fn runtime_machine_record_local_lazy(
+    chart_hash: &str,
+    profiles: impl FnOnce() -> Vec<LocalScoreProfileSource>,
+) -> (Option<(String, CachedScore)>, ScoreCacheRuntimeResult) {
+    machine_record_local_with_cache(&RUNTIME_MACHINE_LOCAL_SCORE_CACHE, chart_hash, profiles)
+}
+
+fn machine_record_local_with_cache<P>(
+    cache: &Mutex<MachineLocalScoreCacheState>,
+    chart_hash: &str,
+    profiles: impl FnOnce() -> P,
+) -> (Option<(String, CachedScore)>, ScoreCacheRuntimeResult)
+where
+    P: AsRef<[LocalScoreProfileSource]>,
+{
+    let result = ensure_machine_local_score_cache_loaded_with(cache, profiles);
+    let record = cache.lock().unwrap().record(chart_hash);
     (record, result)
 }
 
@@ -6228,6 +6265,7 @@ pub fn arrowcloud_submit_ui_status(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::cell::Cell;
     use std::collections::HashSet;
     use std::fs;
     use std::path::PathBuf;
@@ -6258,6 +6296,41 @@ mod tests {
             is_self: false,
             is_fail: false,
         }
+    }
+
+    #[test]
+    fn machine_record_lazy_loader_runs_only_for_initial_cache_load() {
+        let cache = Mutex::new(MachineLocalScoreCacheState::default());
+        let load_calls = Cell::new(0_u32);
+
+        let (first_record, first_result) =
+            machine_record_local_with_cache(&cache, "chart", || -> Vec<LocalScoreProfileSource> {
+                load_calls.set(load_calls.get() + 1);
+                Vec::new()
+            });
+        assert_eq!(first_record, None);
+        assert!(first_result.load_report.is_some());
+        assert_eq!(load_calls.get(), 1);
+
+        let expected = CachedScore {
+            grade: Grade::Tier03,
+            score_percent: 0.9876,
+            lamp_index: Some(4),
+            lamp_judge_count: Some(7),
+        };
+        cache
+            .lock()
+            .unwrap()
+            .update_if_loaded("chart", expected, "CPU");
+
+        let (second_record, second_result) =
+            machine_record_local_with_cache(&cache, "chart", || -> Vec<LocalScoreProfileSource> {
+                panic!("loaded machine cache must not request profile sources")
+            });
+        assert_eq!(second_record, Some(("CPU".to_owned(), expected)));
+        assert!(second_result.load_report.is_none());
+        assert!(second_result.write_errors.is_empty());
+        assert_eq!(load_calls.get(), 1);
     }
 
     #[test]

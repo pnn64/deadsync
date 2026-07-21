@@ -17,6 +17,11 @@ name = "favorite_pack_ordering"
 harness = false
 required-features = ["bench-support"]
 
+[[bench]]
+name = "machine_record_lookup"
+harness = false
+required-features = ["bench-support"]
+
 [dependencies]
 bincode = "2.0.1"
 bitflags = "2.13.1"

@@ -408,7 +408,10 @@ pub fn cached_local_hard_ex_score_for_id(
 }
 
 pub fn machine_record_local(chart_hash: &str) -> Option<(String, deadsync_score::CachedScore)> {
-    deadsync_score::runtime_machine_record_logged_local(chart_hash, &local_score_profile_sources())
+    deadsync_score::runtime_machine_record_logged_local_lazy(
+        chart_hash,
+        local_score_profile_sources,
+    )
 }
 
 pub fn machine_leaderboard_local(
