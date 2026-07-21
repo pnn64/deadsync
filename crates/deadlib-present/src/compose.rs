@@ -2723,7 +2723,7 @@ struct TexturedMeshActorView<'a> {
     texture: &'a Arc<str>,
     tint: [f32; 4],
     glow: [f32; 4],
-    vertices: renderer::TexturedMeshVertices,
+    vertices: TexturedMeshActorVertices<'a>,
     geom_cache_key: renderer::TMeshCacheKey,
     uv_scale: [f32; 2],
     uv_offset: [f32; 2],
@@ -2732,6 +2732,32 @@ struct TexturedMeshActorView<'a> {
     visible: bool,
     blend: BlendMode,
     z: i16,
+}
+
+#[derive(Clone, Copy)]
+enum TexturedMeshActorVertices<'a> {
+    Shared(&'a Arc<[renderer::TexturedMeshVertex]>),
+    Reusable(&'a Arc<Vec<renderer::TexturedMeshVertex>>),
+}
+
+impl TexturedMeshActorVertices<'_> {
+    #[inline(always)]
+    fn is_empty(self) -> bool {
+        match self {
+            Self::Shared(vertices) => vertices.is_empty(),
+            Self::Reusable(vertices) => vertices.is_empty(),
+        }
+    }
+
+    #[inline(always)]
+    fn clone_for_render(self) -> renderer::TexturedMeshVertices {
+        match self {
+            Self::Shared(vertices) => renderer::TexturedMeshVertices::Shared(Arc::clone(vertices)),
+            Self::Reusable(vertices) => {
+                renderer::TexturedMeshVertices::Reusable(Arc::clone(vertices))
+            }
+        }
+    }
 }
 
 fn textured_mesh_actor_view(actor: &actors::Actor) -> Option<TexturedMeshActorView<'_>> {
@@ -2811,11 +2837,9 @@ fn textured_mesh_actor_view(actor: &actors::Actor) -> Option<TexturedMeshActorVi
         _ => return None,
     };
     let vertices = match actor {
-        actors::Actor::TexturedMesh { vertices, .. } => {
-            renderer::TexturedMeshVertices::Shared(Arc::clone(vertices))
-        }
+        actors::Actor::TexturedMesh { vertices, .. } => TexturedMeshActorVertices::Shared(vertices),
         actors::Actor::ReusableTexturedMesh { vertices, .. } => {
-            renderer::TexturedMeshVertices::Reusable(Arc::clone(vertices))
+            TexturedMeshActorVertices::Reusable(vertices)
         }
         _ => unreachable!("textured mesh fields were matched above"),
     };
@@ -2868,33 +2892,51 @@ fn build_textured_mesh_actor<T: TextureContext + ?Sized>(
     let texture_handle = texture_cache.texture_handle(texture_ctx, texture_key_ptr, texture_key);
     let actor_blend = style.blend.unwrap_or(mesh.blend);
     let layer = base_z.saturating_add(mesh.z);
-    let mut push_pass = |tint: [f32; 4], texture_mask: bool| {
-        let order = *order_counter;
-        *order_counter = order.saturating_add(1);
+    let base_order = *order_counter;
+    *order_counter = base_order.saturating_add(1);
+    out.push(renderer::RenderObject {
+        object_type: renderer::ObjectType::TexturedMesh {
+            instance: renderer::TexturedMeshInstanceRaw::new(
+                transform,
+                mul_rgba(mesh.tint, style.tint),
+                mesh.uv_scale,
+                mesh.uv_offset,
+                mesh.uv_tex_shift,
+                false,
+            ),
+            vertices: mesh.vertices.clone_for_render(),
+            geom_cache_key: mesh.geom_cache_key,
+            depth_test: mesh.depth_test,
+        },
+        texture_handle,
+        blend: actor_blend,
+        z: layer,
+        order: base_order,
+        camera,
+    });
+    if mesh.glow[3] > 0.0001 {
+        let glow_order = *order_counter;
+        *order_counter = glow_order.saturating_add(1);
         out.push(renderer::RenderObject {
             object_type: renderer::ObjectType::TexturedMesh {
                 instance: renderer::TexturedMeshInstanceRaw::new(
                     transform,
-                    mul_rgba(tint, style.tint),
+                    mul_rgba(mesh.glow, style.tint),
                     mesh.uv_scale,
                     mesh.uv_offset,
                     mesh.uv_tex_shift,
-                    texture_mask,
+                    true,
                 ),
-                vertices: mesh.vertices.clone(),
+                vertices: mesh.vertices.clone_for_render(),
                 geom_cache_key: mesh.geom_cache_key,
                 depth_test: mesh.depth_test,
             },
             texture_handle,
             blend: actor_blend,
             z: layer,
-            order,
+            order: glow_order,
             camera,
         });
-    };
-    push_pass(mesh.tint, false);
-    if mesh.glow[3] > 0.0001 {
-        push_pass(mesh.glow, true);
     }
 }
 
