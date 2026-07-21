@@ -11929,7 +11929,7 @@ fn push_folder_stats_overlay(
         settext(cached_str_ref(group_name)):
         align(0.5, 0.5):
         xy(cx, sy(folder_y)):
-        maxwidth(200.0 * scale):
+        maxwidth(200.0):
         zoom(folder_zoom):
         z(124):
         diffuse(1.0, 1.0, 1.0, 1.0)
@@ -11939,7 +11939,7 @@ fn push_folder_stats_overlay(
         settext(cached_str_ref(display_name)):
         align(0.5, 0.5):
         xy(cx, sy(-20.0)):
-        maxwidth(200.0 * scale):
+        maxwidth(200.0):
         zoom(folder_zoom):
         z(124):
         diffuse(1.0, 1.0, 1.0, 1.0)
@@ -14534,6 +14534,50 @@ mod tests {
             super::selected_group_header_for_folder_stats(&state).expect("header pack");
         assert_eq!(header_pack, song_pack);
         assert_eq!(header_name, "Folder Stats Pack");
+    }
+
+    #[test]
+    fn folder_stats_text_keeps_zmod_maxwidth_before_frame_scale() {
+        let mut state = folder_stats_state();
+        state.session.guest[0] = false;
+        let mut actors = Vec::new();
+
+        super::push_folder_stats_overlay(
+            &mut actors,
+            &state,
+            &deadsync_assets::AssetManager::new(),
+            profile_data::PlayerSide::P1,
+            "Rairly",
+            "dance-single",
+            None,
+            3,
+            false,
+        );
+
+        let deadlib_present::actors::Actor::Frame { children, .. } = &actors[0] else {
+            panic!("folder stats should be an actor frame");
+        };
+        for expected in ["Folder Stats Pack", "Rairly"] {
+            let deadlib_present::actors::Actor::Text {
+                max_width,
+                max_w_pre_zoom,
+                ..
+            } = children
+                .iter()
+                .find(|actor| {
+                    matches!(
+                        actor,
+                        deadlib_present::actors::Actor::Text { content, .. }
+                            if content.as_str() == expected
+                    )
+                })
+                .expect("folder and profile names should be rendered")
+            else {
+                unreachable!();
+            };
+            assert_eq!(*max_width, Some(200.0));
+            assert!(*max_w_pre_zoom);
+        }
     }
 
     #[test]
