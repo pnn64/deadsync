@@ -85,9 +85,9 @@ pub enum DeferredCommandEffect {
     Shutdown,
     Banner {
         slot: BannerSlot,
-        key: String,
+        key: Arc<str>,
     },
-    CdTitle(Option<String>),
+    CdTitle(Option<Arc<str>>),
     DensityGraph {
         slot: DensityGraphSlot,
         mesh: Option<Arc<[MeshVertex]>>,
@@ -114,12 +114,12 @@ pub fn apply_banner_media(
     backend: &mut Backend,
     path_opt: Option<PathBuf>,
     fallback_color_index: i32,
-) -> String {
+) -> Arc<str> {
     if let Some(path) = path_opt {
         dynamic_media.set_banner(assets, backend, Some(path))
     } else {
         dynamic_media.destroy_banner(assets, backend);
-        fallback_banner_key(fallback_color_index)
+        Arc::<str>::from(fallback_banner_key(fallback_color_index))
     }
 }
 
@@ -128,7 +128,7 @@ pub fn apply_cdtitle_media(
     assets: &mut AssetManager,
     backend: &mut Backend,
     path_opt: Option<PathBuf>,
-) -> Option<String> {
+) -> Option<Arc<str>> {
     dynamic_media.set_cdtitle(assets, backend, path_opt)
 }
 

@@ -75,7 +75,7 @@ use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::ops::Range;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::sync::{Arc, LazyLock};
 use std::time::{Duration, Instant};
 
 #[path = "select_music/pack_sync.rs"]
@@ -688,10 +688,13 @@ fn compute_preview_cut(song: &SongData) -> Option<(std::path::PathBuf, AudioCut)
     ))
 }
 
+static FALLBACK_BANNER_KEYS: LazyLock<[Arc<str>; 12]> = LazyLock::new(|| {
+    std::array::from_fn(|index| Arc::<str>::from(format!("banner{}.png", index + 1)))
+});
+
 #[inline(always)]
-fn fallback_banner_key(active_color_index: i32) -> String {
-    let banner_num = active_color_index.rem_euclid(12) + 1;
-    format!("banner{banner_num}.png")
+fn fallback_banner_key(active_color_index: i32) -> Arc<str> {
+    FALLBACK_BANNER_KEYS[active_color_index.rem_euclid(12) as usize].clone()
 }
 
 // Optimized formatter
@@ -1199,8 +1202,8 @@ pub struct State {
     pub active_color_index: i32,
     pub selection_animation_timer: f32,
     pub wheel_offset_from_selection: f32,
-    pub current_banner_key: String,
-    pub current_cdtitle_key: Option<String>,
+    pub current_banner_key: Arc<str>,
+    pub current_cdtitle_key: Option<Arc<str>>,
     pub current_graph_key: String,
     pub current_graph_key_p2: String,
     pub current_graph_mesh: Option<Arc<[MeshVertex]>>,
@@ -3207,7 +3210,7 @@ pub fn init(init_view: SelectMusicInitView) -> State {
         banner_high_quality_requested: false,
         cdtitle_spin_elapsed: 0.0,
         cdtitle_anim_elapsed: 0.0,
-        current_banner_key: "banner1.png".to_string(),
+        current_banner_key: Arc::<str>::from("banner1.png"),
         current_cdtitle_key: None,
         last_requested_chart_hash: None,
         current_graph_key: "__white".to_string(),
@@ -3443,7 +3446,7 @@ pub fn init_placeholder() -> State {
         banner_high_quality_requested: false,
         cdtitle_spin_elapsed: 0.0,
         cdtitle_anim_elapsed: 0.0,
-        current_banner_key: "banner1.png".to_string(),
+        current_banner_key: Arc::<str>::from("banner1.png"),
         current_cdtitle_key: None,
         last_requested_chart_hash: None,
         current_graph_key: "__white".to_string(),
@@ -12043,6 +12046,15 @@ pub fn music_wheel_runtime_request(state: &State) -> MusicWheelRuntimeRequest<'_
     }
 }
 
+#[inline(always)]
+fn banner_texture_key(state: &State) -> Arc<str> {
+    if state.policy.media.show_banners {
+        state.current_banner_key.clone()
+    } else {
+        fallback_banner_key(state.active_color_index)
+    }
+}
+
 pub fn push_actors(
     mut actors: &mut Vec<Actor>,
     state: &State,
@@ -12151,13 +12163,8 @@ pub fn push_actors(
     } else {
         (0.75, screen_center_x() - 166.0, 96.0)
     };
-    let banner_key = if state.policy.media.show_banners {
-        state.current_banner_key.clone()
-    } else {
-        fallback_banner_key(state.active_color_index)
-    };
     actors.push(shared_banner::sprite(
-        banner_key,
+        banner_texture_key(state),
         banner_cx,
         banner_cy,
         BANNER_NATIVE_WIDTH,
@@ -13932,15 +13939,15 @@ fn handle_exit_prompt_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
 mod tests {
     use super::{
         PREVIEW_DELAY_SECONDS, ProfileBoxEffectOutcome, SyncGraphCols, WheelSortMode,
-        build_displayed_entries, build_playlist_entries_from_text, build_playlist_song_lookup,
-        build_sync_heat_image, delayed_selection_updates_blocked, first_song_entry_index,
-        handle_confirm, handle_downloads_overlay_raw_key, handle_player_options_mute_hotkey,
-        handle_raw_key_event, init_placeholder, keymap_has_player_input,
-        maybe_prewarm_replaygain_for_pack, maybe_refresh_select_music_leaderboard,
-        prepend_pending_effect, profile_boxes, reset_preview_after_gameplay,
-        route_profile_box_effect, select_music_lobby_lock_text, select_music_lobby_lock_text_for,
-        solo_runtime_side, steps_index_for_side, sync_bias_axis_pos, sync_graph_cols,
-        sync_low_confidence_warning, sync_overlay_graph_size,
+        banner_texture_key, build_displayed_entries, build_playlist_entries_from_text,
+        build_playlist_song_lookup, build_sync_heat_image, delayed_selection_updates_blocked,
+        first_song_entry_index, handle_confirm, handle_downloads_overlay_raw_key,
+        handle_player_options_mute_hotkey, handle_raw_key_event, init_placeholder,
+        keymap_has_player_input, maybe_prewarm_replaygain_for_pack,
+        maybe_refresh_select_music_leaderboard, prepend_pending_effect, profile_boxes,
+        reset_preview_after_gameplay, route_profile_box_effect, select_music_lobby_lock_text,
+        select_music_lobby_lock_text_for, solo_runtime_side, steps_index_for_side,
+        sync_bias_axis_pos, sync_graph_cols, sync_low_confidence_warning, sync_overlay_graph_size,
     };
     use crate::config::{GraphOrientation, SelectMusicWheelStyle};
     use crate::screens::ThemeEffect;
@@ -14026,6 +14033,24 @@ mod tests {
         );
         assert!(actors.is_empty());
         deadlib_present::runtime::clear_all();
+    }
+
+    #[test]
+    fn banner_texture_key_preserves_dynamic_and_fallback_selection() {
+        let mut state = init_placeholder();
+        state.current_banner_key = Arc::<str>::from("dynamic/banner-key");
+        state.policy.media.show_banners = true;
+
+        let dynamic = banner_texture_key(&state);
+        assert_eq!(dynamic.as_ref(), "dynamic/banner-key");
+        assert!(Arc::ptr_eq(&dynamic, &state.current_banner_key));
+
+        state.policy.media.show_banners = false;
+        state.active_color_index = -1;
+        let fallback_a = banner_texture_key(&state);
+        let fallback_b = banner_texture_key(&state);
+        assert_eq!(fallback_a.as_ref(), "banner12.png");
+        assert!(Arc::ptr_eq(&fallback_a, &fallback_b));
     }
 
     #[test]

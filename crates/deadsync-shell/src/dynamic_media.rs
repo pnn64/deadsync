@@ -21,13 +21,13 @@ use std::{
     borrow::Cow,
     collections::{HashMap, HashSet},
     path::{Path, PathBuf},
-    sync::mpsc,
+    sync::{Arc, mpsc},
     thread,
     time::Instant,
 };
 
 struct DynamicBannerState {
-    key: String,
+    key: Arc<str>,
     path: PathBuf,
 }
 
@@ -37,7 +37,7 @@ pub struct DynamicMedia {
     pending_banner_video_preps: HashMap<PathBuf, bool>,
     banner_video_prep_tx: mpsc::Sender<BannerVideoPrepResult>,
     banner_video_prep_rx: mpsc::Receiver<BannerVideoPrepResult>,
-    current_dynamic_cdtitle: Option<(String, PathBuf)>,
+    current_dynamic_cdtitle: Option<(Arc<str>, PathBuf)>,
     current_dynamic_pack_banner: Option<(String, PathBuf)>,
     dynamic_pack_banner_keys: std::collections::HashSet<String>,
     wheel_item_background_keys: HashSet<String>,
@@ -93,7 +93,7 @@ impl DynamicMedia {
     }
 
     pub fn destroy_assets(&mut self, assets: &mut AssetManager, backend: &mut Backend) {
-        let mut keys = Vec::with_capacity(
+        let mut keys: Vec<String> = Vec::with_capacity(
             self.active_banner_videos
                 .len()
                 .saturating_add(self.dynamic_pack_banner_keys.len())
@@ -104,14 +104,14 @@ impl DynamicMedia {
                 .saturating_add(5),
         );
         if let Some(state) = self.current_dynamic_banner.take() {
-            keys.push(state.key);
+            keys.push(state.key.to_string());
         }
         keys.extend(self.active_banner_videos.drain().map(|(key, state)| {
             retire_dynamic_video_state(state);
             key
         }));
         if let Some((key, _)) = self.current_dynamic_cdtitle.take() {
-            keys.push(key);
+            keys.push(key.to_string());
         }
         if let Some((key, _)) = self.current_dynamic_pack_banner.take() {
             self.dynamic_pack_banner_keys.remove(&key);
@@ -152,7 +152,7 @@ impl DynamicMedia {
         assets: &mut AssetManager,
         backend: &mut Backend,
         path_opt: Option<PathBuf>,
-    ) -> Option<String> {
+    ) -> Option<Arc<str>> {
         if let Some(path) = path_opt {
             if let Some((key, current_path)) = self.current_dynamic_cdtitle.as_ref()
                 && current_path == &path
@@ -164,6 +164,7 @@ impl DynamicMedia {
             self.destroy_current_dynamic_cdtitle(assets, backend);
             match create_cdtitle_texture(assets, backend, &path) {
                 Ok(key) => {
+                    let key = Arc::<str>::from(key);
                     self.current_dynamic_cdtitle = Some((key.clone(), path));
                     Some(key)
                 }
@@ -269,7 +270,7 @@ impl DynamicMedia {
         assets: &mut AssetManager,
         backend: &mut Backend,
         path_opt: Option<PathBuf>,
-    ) -> String {
+    ) -> Arc<str> {
         const FALLBACK_KEY: &str = "banner1.png";
 
         if let Some(path) = path_opt {
@@ -283,6 +284,7 @@ impl DynamicMedia {
             self.destroy_current_dynamic_banner(assets, backend);
             match set_banner_texture_for_path(assets, backend, &path) {
                 Ok(key) => {
+                    let key = Arc::<str>::from(key);
                     self.current_dynamic_banner = Some(DynamicBannerState {
                         key: key.clone(),
                         path,
@@ -294,19 +296,19 @@ impl DynamicMedia {
                         "Failed to load banner '{}': {e}. Using fallback.",
                         path.display()
                     );
-                    FALLBACK_KEY.to_string()
+                    Arc::<str>::from(FALLBACK_KEY)
                 }
                 Err(DynamicImageTextureError::Create(e)) => {
                     warn!(
                         "Failed to create GPU texture for banner '{}': {e}. Using fallback.",
                         key
                     );
-                    FALLBACK_KEY.to_string()
+                    Arc::<str>::from(FALLBACK_KEY)
                 }
             }
         } else {
             self.destroy_current_dynamic_banner(assets, backend);
-            FALLBACK_KEY.to_string()
+            Arc::<str>::from(FALLBACK_KEY)
         }
     }
 
@@ -834,12 +836,12 @@ impl DynamicMedia {
     fn texture_key_in_use(&self, key: &str) -> bool {
         self.current_dynamic_banner
             .as_ref()
-            .is_some_and(|state| state.key == key)
+            .is_some_and(|state| state.key.as_ref() == key)
             || self.active_banner_videos.contains_key(key)
             || self
                 .current_dynamic_cdtitle
                 .as_ref()
-                .is_some_and(|(owned, _)| owned == key)
+                .is_some_and(|(owned, _)| owned.as_ref() == key)
             || self
                 .current_dynamic_pack_banner
                 .as_ref()
@@ -878,9 +880,9 @@ impl DynamicMedia {
         &mut self,
         assets: &mut AssetManager,
         backend: &mut Backend,
-        key: String,
+        key: impl AsRef<str>,
     ) {
-        if let Some((handle, texture)) = self.take_releasable_texture(assets, &key) {
+        if let Some((handle, texture)) = self.take_releasable_texture(assets, key.as_ref()) {
             assets.retire_texture(backend, handle, texture);
         }
     }
@@ -1132,7 +1134,7 @@ mod tests {
 
         assets.reserve_texture_handle(key.clone());
         media.current_dynamic_banner = Some(DynamicBannerState {
-            key: key.clone(),
+            key: Arc::from(key.as_str()),
             path: path.clone(),
         });
         media.current_dynamic_background = Some(DynamicBackgroundState::new(
@@ -1159,7 +1161,7 @@ mod tests {
 
         assets.reserve_texture_handle(key.clone());
         media.current_dynamic_banner = Some(DynamicBannerState {
-            key: key.clone(),
+            key: Arc::from(key.as_str()),
             path,
         });
 
