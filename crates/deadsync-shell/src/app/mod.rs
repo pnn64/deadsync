@@ -3447,6 +3447,9 @@ impl App {
                                 result,
                             );
                         }
+                        SimplyLoveContentRequest::SkipReplayGain => {
+                            deadsync_audio_replaygain::request_skip_blocking_analysis();
+                        }
                     }
                     Vec::new()
                 }
