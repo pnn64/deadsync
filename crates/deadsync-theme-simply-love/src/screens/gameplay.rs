@@ -61,7 +61,7 @@ use deadsync_notefield::{
     song_lua_player_transform_matrix, song_lua_player_y_fold_actor,
 };
 use deadsync_noteskin::{
-    ModelDrawState, ReceptorGlowBehavior, ReceptorStepBehavior, Style, TweenType,
+    ModelDrawState, NoteskinSlot, ReceptorGlowBehavior, ReceptorStepBehavior, Style, TweenType,
 };
 use deadsync_online::lobbies as lobby_data;
 use deadsync_profile as profile_data;
@@ -1001,7 +1001,7 @@ fn prewarm_notefield_model_cache_slots(
             skin.for_each_slot(|slot| {
                 debug_assert!(
                     cache.prewarm_slot(slot),
-                    "noteskin slot frame cache exceeded its fixed capacity"
+                    "noteskin slot frame cache was sealed before prewarming completed"
                 );
             });
         }
@@ -1010,13 +1010,31 @@ fn prewarm_notefield_model_cache_slots(
     }
 }
 
+fn notefield_model_cache_slot_count(assets: &GameplayNoteskinAssets, player: usize) -> usize {
+    let mut stable_ids = HashSet::new();
+    for skin in [
+        assets.noteskin[player].as_ref(),
+        assets.mine_noteskin[player].as_ref(),
+        assets.receptor_noteskin[player].as_ref(),
+        assets.tap_explosion_noteskin[player].as_ref(),
+    ]
+    .into_iter()
+    .flatten()
+    {
+        skin.for_each_slot(|slot| {
+            stable_ids.insert(slot.stable_id());
+        });
+    }
+    stable_ids.len()
+}
+
 pub(crate) fn notefield_model_cache_from_assets(
     assets: &GameplayNoteskinAssets,
     num_players: usize,
 ) -> [RefCell<ModelMeshCache>; MAX_PLAYERS] {
     let cache: [RefCell<ModelMeshCache>; MAX_PLAYERS] = std::array::from_fn(|player| {
         RefCell::new(if player < num_players {
-            ModelMeshCache::with_capacity(512)
+            ModelMeshCache::with_capacity(notefield_model_cache_slot_count(assets, player))
         } else {
             ModelMeshCache::default()
         })

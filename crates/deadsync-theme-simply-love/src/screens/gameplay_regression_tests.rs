@@ -28,13 +28,69 @@ mod tests {
     use deadsync_assets::song_lua::compile_song_lua;
     use deadsync_chart::SongData;
     use deadsync_chart::{ChartData, GameplayChartData};
-    use deadsync_noteskin::{ReceptorGlowBehavior, ReceptorStepBehavior, Style, TweenType};
+    use deadsync_noteskin::{
+        NoteskinSlot, ReceptorGlowBehavior, ReceptorStepBehavior, Style, TweenType,
+    };
     use deadsync_profile as profile_data;
     use deadsync_profile::compat as profile;
     use std::sync::{Arc, LazyLock, Mutex};
     use std::{fs, path::PathBuf};
 
     static SESSION_TEST_LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
+
+    #[test]
+    fn model_cache_prewarms_more_than_legacy_slot_limit() {
+        let style = Style {
+            num_cols: 8,
+            num_players: 1,
+        };
+        let load = |name| {
+            Arc::new(
+                noteskin::load_itg_skin(&style, name)
+                    .unwrap_or_else(|error| panic!("dance/{name} should load: {error}")),
+            )
+        };
+        let assets = screen_gameplay::GameplayNoteskinAssets {
+            noteskin: [Some(load("lambda")), None],
+            mine_noteskin: [Some(load("cel")), None],
+            receptor_noteskin: [Some(load("ddr-note")), None],
+            tap_explosion_noteskin: [Some(load("metal")), None],
+        };
+
+        let mut stable_ids = std::collections::HashSet::new();
+        for skin in [
+            assets.noteskin[0].as_ref(),
+            assets.mine_noteskin[0].as_ref(),
+            assets.receptor_noteskin[0].as_ref(),
+            assets.tap_explosion_noteskin[0].as_ref(),
+        ]
+        .into_iter()
+        .flatten()
+        {
+            skin.for_each_slot(|slot| {
+                stable_ids.insert(slot.stable_id());
+            });
+        }
+        assert!(stable_ids.len() > 512);
+
+        let caches = screen_gameplay::notefield_model_cache_from_assets(&assets, 1);
+        let mut cache = caches[0].borrow_mut();
+        for skin in [
+            assets.noteskin[0].as_ref(),
+            assets.mine_noteskin[0].as_ref(),
+            assets.receptor_noteskin[0].as_ref(),
+            assets.tap_explosion_noteskin[0].as_ref(),
+        ]
+        .into_iter()
+        .flatten()
+        {
+            skin.for_each_slot(|slot| {
+                assert!(cache.prewarm_slot(slot), "slot should already be retained");
+            });
+        }
+        assert_eq!(cache.stats().saturated_misses, 0);
+        assert_eq!(cache.frame_stats().saturated_misses, 0);
+    }
 
     #[inline(always)]
     fn init(

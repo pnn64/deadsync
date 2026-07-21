@@ -6,13 +6,12 @@ use deadsync_noteskin::{
 use glam::{Mat4 as Matrix4, Vec3 as Vector3, Vec4};
 use std::sync::Arc;
 
-const MODEL_MESH_CACHE_LIMIT: usize = 512;
-const SLOT_LOOKUP_SIZE: usize = MODEL_MESH_CACHE_LIMIT * 2;
+const MIN_SLOT_LOOKUP_SIZE: usize = 2;
 
 #[derive(Clone, Copy, Default)]
 struct SlotLookup {
     stable_id: u64,
-    slot_index: u16,
+    slot_index: usize,
 }
 
 struct SlotFrameState {
@@ -44,14 +43,16 @@ pub struct NoteskinFrameCacheStats {
 /// Owner: gameplay screen logic, one cache per active player notefield.
 /// Threading: single game/render frame path; callers hold it behind `RefCell`.
 /// Lifetime: gameplay screen/session, cleared or rebuilt at song transitions.
-/// Capacity: 512 dense slot states and a fixed 1,024-cell lookup table.
+/// Capacity: caller-sized dense slot states and a lookup table kept at or below
+/// 50% load. Before sealing, both grow when the initial estimate is too small.
 /// Warmup: the gameplay adapter registers every noteskin slot and then seals
-/// growth before live play.
+/// growth before live play. It supplies the exact unique slot count so normal
+/// prewarming does not reallocate or rehash.
 /// Miss: before sealing, registers the slot and prebuilds model geometry. A
 /// sealed draw miss evaluates directly and is instrumented without retaining
 /// state; the existing actor fallback may rebuild geometry to preserve output.
-/// Eviction: none during gameplay; once full, insertions saturate and count a
-/// `saturated_misses` event instead of pruning.
+/// Eviction: none during gameplay. After sealing, unknown slots count a
+/// `saturated_misses` event instead of growing or pruning.
 /// Destruction: entries drop with the gameplay screen or explicit cache clear.
 /// Instrumentation: misses and saturation are always collected to diagnose
 /// failed prewarming. Geometry hits, frame hits, and draw evaluations are
@@ -81,8 +82,8 @@ impl ModelMeshCache {
     #[inline(always)]
     pub fn with_capacity(capacity: usize) -> Self {
         Self {
-            slots: Vec::with_capacity(capacity.min(MODEL_MESH_CACHE_LIMIT)),
-            lookup: vec![SlotLookup::default(); SLOT_LOOKUP_SIZE].into_boxed_slice(),
+            slots: Vec::with_capacity(capacity),
+            lookup: vec![SlotLookup::default(); lookup_size_for_slots(capacity)].into_boxed_slice(),
             frame: 1,
             sealed: false,
             collect_hit_stats: false,
@@ -250,9 +251,10 @@ impl ModelMeshCache {
         if let Some(index) = self.find_slot(stable_id) {
             return Some(index);
         }
-        if self.sealed || self.slots.len() >= MODEL_MESH_CACHE_LIMIT {
+        if self.sealed {
             return None;
         }
+        self.ensure_lookup_capacity(self.slots.len() + 1);
         let index = self.slots.len();
         self.slots.push(SlotFrameState {
             geometry,
@@ -262,39 +264,73 @@ impl ModelMeshCache {
             draw_frame: 0,
             tween_cursor: ModelTweenCursor::default(),
         });
-        let mut cell = slot_lookup_start(stable_id);
-        loop {
-            if self.lookup[cell].stable_id == 0 {
-                self.lookup[cell] = SlotLookup {
-                    stable_id,
-                    slot_index: index as u16,
-                };
-                return Some(index);
-            }
-            cell = (cell + 1) & (SLOT_LOOKUP_SIZE - 1);
+        insert_lookup_entry(
+            &mut self.lookup,
+            SlotLookup {
+                stable_id,
+                slot_index: index,
+            },
+        );
+        Some(index)
+    }
+
+    fn ensure_lookup_capacity(&mut self, slot_count: usize) {
+        let lookup_size = lookup_size_for_slots(slot_count);
+        if lookup_size <= self.lookup.len() {
+            return;
         }
+
+        let mut lookup = vec![SlotLookup::default(); lookup_size].into_boxed_slice();
+        for entry in self.lookup.iter().copied() {
+            if entry.stable_id != 0 {
+                insert_lookup_entry(&mut lookup, entry);
+            }
+        }
+        self.lookup = lookup;
     }
 
     #[inline(always)]
     fn find_slot(&self, stable_id: u64) -> Option<usize> {
-        let mut cell = slot_lookup_start(stable_id);
+        let lookup_mask = self.lookup.len() - 1;
+        let mut cell = slot_lookup_start(stable_id, lookup_mask);
         loop {
             let entry = self.lookup[cell];
             if entry.stable_id == stable_id {
-                return Some(entry.slot_index as usize);
+                return Some(entry.slot_index);
             }
             if entry.stable_id == 0 {
                 return None;
             }
-            cell = (cell + 1) & (SLOT_LOOKUP_SIZE - 1);
+            cell = (cell + 1) & lookup_mask;
         }
     }
 }
 
+fn lookup_size_for_slots(slot_count: usize) -> usize {
+    slot_count
+        .checked_mul(2)
+        .expect("noteskin slot cache capacity overflow")
+        .max(MIN_SLOT_LOOKUP_SIZE)
+        .checked_next_power_of_two()
+        .expect("noteskin slot lookup capacity overflow")
+}
+
+fn insert_lookup_entry(lookup: &mut [SlotLookup], entry: SlotLookup) {
+    let lookup_mask = lookup.len() - 1;
+    let mut cell = slot_lookup_start(entry.stable_id, lookup_mask);
+    loop {
+        if lookup[cell].stable_id == 0 {
+            lookup[cell] = entry;
+            return;
+        }
+        cell = (cell + 1) & lookup_mask;
+    }
+}
+
 #[inline(always)]
-fn slot_lookup_start(stable_id: u64) -> usize {
+fn slot_lookup_start(stable_id: u64, lookup_mask: usize) -> usize {
     let mixed = stable_id.wrapping_mul(0x9e37_79b9_7f4a_7c15);
-    ((mixed ^ (mixed >> 32)) as usize) & (SLOT_LOOKUP_SIZE - 1)
+    ((mixed ^ (mixed >> 32)) as usize) & lookup_mask
 }
 
 #[inline(always)]
@@ -447,7 +483,7 @@ mod bench_support {
                 .iter()
                 .map(|slot| (slot.id, build_model_geometry(slot)))
                 .collect();
-            let mut cache = ModelMeshCache::with_capacity(MODEL_MESH_CACHE_LIMIT);
+            let mut cache = ModelMeshCache::with_capacity(UNIQUE_SLOTS);
             for slot in &slots {
                 cache.prewarm_slot(slot);
             }
@@ -1036,11 +1072,12 @@ mod tests {
     }
 
     #[test]
-    fn cache_saturates_without_evicting_retained_geometry() {
-        let slots: Vec<Box<TestSlot>> = (0..=MODEL_MESH_CACHE_LIMIT)
+    fn cache_grows_beyond_its_initial_capacity_without_rebuilding_geometry() {
+        const SLOT_COUNT: usize = 700;
+        let slots: Vec<Box<TestSlot>> = (0..SLOT_COUNT)
             .map(|_| Box::new(TestSlot::model()))
             .collect();
-        let mut cache = ModelMeshCache::with_capacity(MODEL_MESH_CACHE_LIMIT);
+        let mut cache = ModelMeshCache::with_capacity(1);
         cache.begin_hit_stats(true);
         let mut builds = 0usize;
 
@@ -1050,38 +1087,39 @@ mod tests {
                 Arc::from([TexturedMeshVertex::default()])
             });
         }
-        assert_eq!(builds, MODEL_MESH_CACHE_LIMIT + 1);
-        assert_eq!(cache.slots.len(), MODEL_MESH_CACHE_LIMIT);
+        assert_eq!(builds, SLOT_COUNT);
+        assert_eq!(cache.slots.len(), SLOT_COUNT);
+        assert!(cache.lookup.len() >= SLOT_COUNT * 2);
+        assert!(cache.lookup.len().is_power_of_two());
         assert_eq!(
             cache.stats(),
             ModelMeshCacheStats {
                 hits: 0,
-                misses: 513,
-                saturated_misses: 1,
+                misses: SLOT_COUNT as u64,
+                saturated_misses: 0,
             }
         );
 
         cache.get_or_insert_with(slots[0].as_ref(), || {
-            panic!("retained geometry must remain cached after saturation")
+            panic!("retained geometry must remain cached after growth")
         });
-        cache.get_or_insert_with(slots[MODEL_MESH_CACHE_LIMIT].as_ref(), || {
-            builds += 1;
-            Arc::from([TexturedMeshVertex::default()])
+        cache.get_or_insert_with(slots[SLOT_COUNT - 1].as_ref(), || {
+            panic!("the last geometry must remain cached after growth")
         });
-        assert_eq!(builds, MODEL_MESH_CACHE_LIMIT + 2);
-        assert_eq!(cache.slots.len(), MODEL_MESH_CACHE_LIMIT);
+        assert_eq!(builds, SLOT_COUNT);
+        assert_eq!(cache.slots.len(), SLOT_COUNT);
         assert_eq!(
             cache.stats(),
             ModelMeshCacheStats {
-                hits: 1,
-                misses: 514,
-                saturated_misses: 2,
+                hits: 2,
+                misses: SLOT_COUNT as u64,
+                saturated_misses: 0,
             }
         );
 
         cache.reset_stats();
         assert_eq!(cache.stats(), ModelMeshCacheStats::default());
-        assert_eq!(cache.slots.len(), MODEL_MESH_CACHE_LIMIT);
+        assert_eq!(cache.slots.len(), SLOT_COUNT);
         cache.get_or_insert_with(slots[0].as_ref(), || {
             panic!("resetting stats must not clear retained geometry")
         });
