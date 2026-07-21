@@ -873,13 +873,15 @@ struct OwnedLayoutEntry {
 }
 
 struct SharedLayoutEntry {
+    layout: TextLayoutKey,
     _owner: Arc<str>,
     layout_index: usize,
 }
 
 type TextLayoutHasher = rustc_hash::FxBuildHasher;
 type OwnedLayoutMap = HashMap<Box<str>, OwnedLayoutEntry, TextLayoutHasher>;
-type SharedAliasMap = HashMap<usize, SharedLayoutEntry, TextLayoutHasher>;
+type SharedAliasEntries = SmallVec<[SharedLayoutEntry; 1]>;
+type SharedAliasMap = HashMap<usize, SharedAliasEntries, TextLayoutHasher>;
 
 #[derive(Clone, Copy)]
 struct TextureCacheEntry<T> {
@@ -1071,7 +1073,7 @@ pub struct TextLayoutCache {
     #[allow(clippy::vec_box)]
     layouts: Vec<Box<CachedTextLayout>>,
     owned_entries: HashMap<TextLayoutKey, OwnedLayoutMap, TextLayoutHasher>,
-    shared_aliases: HashMap<TextLayoutKey, SharedAliasMap, TextLayoutHasher>,
+    shared_aliases: SharedAliasMap,
     entry_count: usize,
     alias_count: usize,
     max_entries: usize,
@@ -1115,9 +1117,10 @@ impl TextLayoutCache {
     }
 
     /// Freeze the prewarmed working set while retaining a bounded number of
-    /// later owned texts and shared-text aliases. Pointer storage is reserved
-    /// now so a live miss never grows the layout arena itself. Once either late
-    /// allowance is full, that class saturates without scanning or pruning.
+    /// later owned texts and shared-text aliases. Layout and top-level alias
+    /// storage are reserved now so the ordinary one-layout-per-pointer miss does
+    /// not grow either collection. Once either late allowance is full, that
+    /// class saturates without scanning or pruning.
     pub fn lock_growth_with_reserve(&mut self, additional_entries: usize) {
         self.max_entries = self
             .entry_count
@@ -1133,6 +1136,8 @@ impl TextLayoutCache {
             .saturating_sub(self.entry_count)
             .saturating_add(self.max_aliases.saturating_sub(self.alias_count));
         self.layouts.reserve(additional_layouts);
+        self.shared_aliases
+            .reserve(self.max_aliases.saturating_sub(self.alias_count));
     }
 
     pub fn clear(&mut self) {
@@ -1225,17 +1230,31 @@ impl TextLayoutCache {
             return None;
         }
         let layout_index = self.layouts.len();
-        let replaced = self.shared_aliases.entry(key).or_default().insert(
-            text_key,
-            SharedLayoutEntry {
-                _owner: text,
-                layout_index,
-            },
-        );
+        let replaced = self.insert_shared_alias(key, text_key, text, layout_index);
         debug_assert!(replaced.is_none());
         self.alias_count += usize::from(replaced.is_none());
         self.layouts.push(layout);
         Some(layout_index)
+    }
+
+    fn insert_shared_alias(
+        &mut self,
+        key: TextLayoutKey,
+        text_key: usize,
+        text: Arc<str>,
+        layout_index: usize,
+    ) -> Option<SharedLayoutEntry> {
+        let entries = self.shared_aliases.entry(text_key).or_default();
+        let new_entry = SharedLayoutEntry {
+            layout: key,
+            _owner: text,
+            layout_index,
+        };
+        if let Some(entry) = entries.iter_mut().find(|entry| entry.layout == key) {
+            return Some(std::mem::replace(entry, new_entry));
+        }
+        entries.push(new_entry);
+        None
     }
 
     pub fn prewarm_text(
@@ -1321,8 +1340,8 @@ impl TextLayoutCache {
         let text_ref = text.as_ref();
         if let Some(entry) = self
             .shared_aliases
-            .get_mut(&key)
-            .and_then(|font_entries| font_entries.get_mut(&text_key))
+            .get_mut(&text_key)
+            .and_then(|entries| entries.iter_mut().find(|entry| entry.layout == key))
         {
             let layout_index = entry.layout_index;
             if let Some(frame_stats) = self.frame_stats.as_mut() {
@@ -1341,13 +1360,8 @@ impl TextLayoutCache {
                 frame_stats.owned_hits = frame_stats.owned_hits.saturating_add(1);
             }
             if self.alias_count < self.max_aliases {
-                let replaced = self.shared_aliases.entry(key).or_default().insert(
-                    text_key,
-                    SharedLayoutEntry {
-                        _owner: Arc::clone(text),
-                        layout_index,
-                    },
-                );
+                let replaced =
+                    self.insert_shared_alias(key, text_key, Arc::clone(text), layout_index);
                 debug_assert!(replaced.is_none());
                 self.alias_count += usize::from(replaced.is_none());
             }
@@ -6576,6 +6590,67 @@ mod tests {
         assert_eq!(stats.shared_hits, 1);
         assert_eq!(stats.misses, 3);
         assert_eq!(stats.shared_aliases, 2);
+    }
+
+    #[test]
+    fn shared_text_aliases_remain_separate_across_layout_keys() {
+        let fonts = font::FontMap::from_iter([("test", test_font())]);
+        let font = &fonts["test"];
+        let default_key = TextLayoutKey {
+            font_key: font_chain_key(font, &fonts),
+            line_spacing: font.line_spacing,
+            wrap_width_pixels: -1,
+        };
+        let spaced_key = TextLayoutKey {
+            line_spacing: font.line_spacing + 3,
+            ..default_key
+        };
+        let text = Arc::<str>::from("AB");
+        let mut cache = TextLayoutCache::new(4);
+        cache.begin_frame_stats(true);
+
+        let default_layout =
+            cache.get_or_build_shared(default_key, font, &fonts, &text) as *const CachedTextLayout;
+        let spaced_layout =
+            cache.get_or_build_shared(spaced_key, font, &fonts, &text) as *const CachedTextLayout;
+        let default_hit =
+            cache.get_or_build_shared(default_key, font, &fonts, &text) as *const CachedTextLayout;
+        let spaced_hit =
+            cache.get_or_build_shared(spaced_key, font, &fonts, &text) as *const CachedTextLayout;
+
+        assert_ne!(default_layout, spaced_layout);
+        assert_eq!(default_layout, default_hit);
+        assert_eq!(spaced_layout, spaced_hit);
+        let stats = cache.frame_stats();
+        assert_eq!(stats.shared_hits, 2);
+        assert_eq!(stats.misses, 2);
+        assert_eq!(stats.shared_aliases, 2);
+    }
+
+    #[test]
+    fn shared_text_alias_reuses_matching_owned_layout() {
+        let fonts = font::FontMap::from_iter([("test", test_font())]);
+        let font = &fonts["test"];
+        let key = TextLayoutKey {
+            font_key: font_chain_key(font, &fonts),
+            line_spacing: font.line_spacing,
+            wrap_width_pixels: -1,
+        };
+        let text = Arc::<str>::from("AB");
+        let mut cache = TextLayoutCache::new(4);
+        cache.prewarm_text(&fonts, "test", text.as_ref(), None);
+        cache.begin_frame_stats(true);
+
+        let first = cache.get_or_build_shared(key, font, &fonts, &text) as *const CachedTextLayout;
+        let second = cache.get_or_build_shared(key, font, &fonts, &text) as *const CachedTextLayout;
+
+        assert_eq!(first, second);
+        assert_eq!(cache.layouts.len(), 1);
+        let stats = cache.frame_stats();
+        assert_eq!(stats.owned_hits, 1);
+        assert_eq!(stats.shared_hits, 1);
+        assert_eq!(stats.misses, 0);
+        assert_eq!(stats.shared_aliases, 1);
     }
 
     #[test]
