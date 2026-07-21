@@ -999,8 +999,12 @@ fn prewarm_notefield_model_cache_slots(
         .flatten()
         {
             skin.for_each_slot(|slot| {
+                // Prewarming is required in optimized builds too. Keep the
+                // side effect outside `debug_assert!`, which does not evaluate
+                // its condition when debug assertions are disabled.
+                let retained = cache.prewarm_slot(slot);
                 debug_assert!(
-                    cache.prewarm_slot(slot),
+                    retained,
                     "noteskin slot frame cache was sealed before prewarming completed"
                 );
             });
