@@ -6,6 +6,7 @@ use std::{
     collections::HashSet,
     fs,
     hash::Hasher,
+    io::Read,
     path::{Path, PathBuf},
     sync::{
         Arc, Mutex,
@@ -73,7 +74,8 @@ fn ensure_cache_parent(cache_path: &Path) -> bool {
     true
 }
 
-fn load_raw_cached_banner_image(cache_path: &Path) -> Option<RgbaImage> {
+#[cfg(feature = "bench-support")]
+fn load_raw_cached_banner_image_legacy(cache_path: &Path) -> Option<RgbaImage> {
     let mut bytes = fs::read(cache_path).ok()?;
     if bytes.len() < BANNER_CACHE_HEADER_SIZE || bytes[..8] != BANNER_CACHE_MAGIC {
         return None;
@@ -86,6 +88,39 @@ fn load_raw_cached_banner_image(cache_path: &Path) -> Option<RgbaImage> {
     }
     let payload = bytes.split_off(BANNER_CACHE_HEADER_SIZE);
     RgbaImage::from_raw(width, height, payload)
+}
+
+fn load_raw_cached_banner_image(cache_path: &Path) -> Option<RgbaImage> {
+    let mut file = fs::File::open(cache_path).ok()?;
+    let file_len = usize::try_from(file.metadata().ok()?.len()).ok()?;
+    let mut header = [0_u8; BANNER_CACHE_HEADER_SIZE];
+    file.read_exact(&mut header).ok()?;
+    if header[..8] != BANNER_CACHE_MAGIC {
+        return None;
+    }
+
+    let width = u32::from_le_bytes([header[8], header[9], header[10], header[11]]);
+    let height = u32::from_le_bytes([header[12], header[13], header[14], header[15]]);
+    let payload_len = usize::try_from(width.checked_mul(height)?.checked_mul(4)?).ok()?;
+    if file_len != BANNER_CACHE_HEADER_SIZE.checked_add(payload_len)? {
+        return None;
+    }
+
+    let mut payload = vec![0_u8; payload_len];
+    file.read_exact(&mut payload).ok()?;
+    RgbaImage::from_raw(width, height, payload)
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn load_raw_cached_banner_image_legacy_for_bench(cache_path: &Path) -> Option<RgbaImage> {
+    load_raw_cached_banner_image_legacy(cache_path)
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn load_raw_cached_banner_image_direct_for_bench(cache_path: &Path) -> Option<RgbaImage> {
+    load_raw_cached_banner_image(cache_path)
 }
 
 pub fn save_raw_cached_banner_image(cache_path: &Path, rgba: &RgbaImage) -> bool {
@@ -733,6 +768,37 @@ mod tests {
         assert_eq!(jobs.len(), 1);
         assert_eq!(jobs[0].label, "Banner");
         assert_eq!(jobs[0].cache_dir, cache_dir);
+    }
+
+    #[test]
+    fn raw_banner_cache_load_round_trips_exact_pixels() {
+        let dir = TempDir::new("raw-cache-round-trip");
+        let cache_path = dir.path().join("banner.rgba");
+        let expected = RgbaImage::from_fn(7, 3, |x, y| {
+            image::Rgba([x as u8, y as u8, x.wrapping_mul(y) as u8, 255])
+        });
+
+        assert!(save_raw_cached_banner_image(&cache_path, &expected));
+        assert_eq!(load_raw_cached_banner_image(&cache_path), Some(expected));
+    }
+
+    #[test]
+    fn raw_banner_cache_load_rejects_wrong_payload_lengths() {
+        let dir = TempDir::new("raw-cache-length-validation");
+        let cache_path = dir.path().join("banner.rgba");
+        let expected = RgbaImage::from_pixel(4, 2, image::Rgba([1, 2, 3, 4]));
+        assert!(save_raw_cached_banner_image(&cache_path, &expected));
+
+        let mut truncated = fs::read(&cache_path).unwrap();
+        truncated.pop();
+        fs::write(&cache_path, truncated).unwrap();
+        assert_eq!(load_raw_cached_banner_image(&cache_path), None);
+
+        assert!(save_raw_cached_banner_image(&cache_path, &expected));
+        let mut oversized = fs::read(&cache_path).unwrap();
+        oversized.push(0);
+        fs::write(&cache_path, oversized).unwrap();
+        assert_eq!(load_raw_cached_banner_image(&cache_path), None);
     }
 
     #[test]

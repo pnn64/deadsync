@@ -12,6 +12,11 @@ name = "dynamic_path_classification"
 harness = false
 required-features = ["bench-support"]
 
+[[bench]]
+name = "raw_banner_cache_load"
+harness = false
+required-features = ["bench-support"]
+
 [dependencies]
 deadlib-present = { path = "../deadlib-present" }
 deadlib-render = { path = "../deadlib-render" }
