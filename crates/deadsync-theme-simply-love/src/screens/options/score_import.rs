@@ -1,4 +1,5 @@
 use super::*;
+use deadsync_profile::favorites_view::ascii_case_insensitive_cmp;
 
 #[derive(Clone, Debug)]
 pub(super) struct ScoreImportPackOption {
@@ -342,11 +343,7 @@ fn installed_pack_entries(state: &State) -> Vec<(String, String)> {
         packs.push((display_name, group_name.to_string()));
     }
 
-    packs.sort_by(|a, b| {
-        a.0.to_ascii_lowercase()
-            .cmp(&b.0.to_ascii_lowercase())
-            .then_with(|| a.1.cmp(&b.1))
-    });
+    packs.sort_by(|a, b| ascii_case_insensitive_cmp(&a.0, &b.0).then_with(|| a.1.cmp(&b.1)));
 
     packs
 }

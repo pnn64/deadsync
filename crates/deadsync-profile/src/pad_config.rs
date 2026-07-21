@@ -8,6 +8,8 @@
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 
+use crate::favorites_view::unicode_case_insensitive_cmp;
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct PadConfigProfile {
     pub name: String,
@@ -219,7 +221,7 @@ pub fn parse(content: &str) -> Vec<PadConfigProfile> {
         );
     }
 
-    out.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+    out.sort_by(|a, b| unicode_case_insensitive_cmp(&a.name, &b.name));
     out
 }
 

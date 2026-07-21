@@ -5256,12 +5256,10 @@ fn sync_lerp(a: f64, b: f64, t: f64) -> f64 {
     a * (1.0 - t) + b * t
 }
 
-fn sync_percentile(values: &[f64], pct: f64) -> f64 {
-    if values.is_empty() {
+fn sync_percentile_from_sorted(sorted: &[f64], pct: f64) -> f64 {
+    if sorted.is_empty() {
         return 0.0;
     }
-    let mut sorted = values.to_vec();
-    sorted.sort_by(f64::total_cmp);
     if sorted.len() == 1 {
         return sorted[0];
     }
@@ -5273,6 +5271,22 @@ fn sync_percentile(values: &[f64], pct: f64) -> f64 {
     } else {
         sync_lerp(sorted[lo], sorted[hi], rank - lo as f64)
     }
+}
+
+fn sync_percentile_pair(values: &[f64], lo_pct: f64, hi_pct: f64) -> (f64, f64) {
+    let mut sorted = values.to_vec();
+    sorted.sort_by(f64::total_cmp);
+    (
+        sync_percentile_from_sorted(&sorted, lo_pct),
+        sync_percentile_from_sorted(&sorted, hi_pct),
+    )
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn sync_percentile_legacy(values: &[f64], pct: f64) -> f64 {
+    let mut sorted = values.to_vec();
+    sorted.sort_by(f64::total_cmp);
+    sync_percentile_from_sorted(&sorted, pct)
 }
 
 #[inline(always)]
@@ -5305,8 +5319,7 @@ fn sync_heat_value_range(values: &[f64], clim_pct: Option<(f64, f64)>) -> Option
         return None;
     }
     if let Some((lo_pct, hi_pct)) = clim_pct {
-        let lo = sync_percentile(values, lo_pct);
-        let hi = sync_percentile(values, hi_pct);
+        let (lo, hi) = sync_percentile_pair(values, lo_pct, hi_pct);
         if hi > lo {
             return Some((lo, hi));
         }
@@ -5320,6 +5333,50 @@ fn sync_heat_value_range(values: &[f64], clim_pct: Option<(f64, f64)>) -> Option
     } else {
         Some((lo - 1.0, hi + 1.0))
     }
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn sync_heat_value_range_legacy(
+    values: &[f64],
+    clim_pct: Option<(f64, f64)>,
+) -> Option<(f64, f64)> {
+    if values.is_empty() {
+        return None;
+    }
+    if let Some((lo_pct, hi_pct)) = clim_pct {
+        let lo = sync_percentile_legacy(values, lo_pct);
+        let hi = sync_percentile_legacy(values, hi_pct);
+        if hi > lo {
+            return Some((lo, hi));
+        }
+    }
+    let lo = values.iter().copied().fold(f64::INFINITY, f64::min);
+    let hi = values.iter().copied().fold(f64::NEG_INFINITY, f64::max);
+    if !lo.is_finite() || !hi.is_finite() {
+        None
+    } else if hi > lo {
+        Some((lo, hi))
+    } else {
+        Some((lo - 1.0, hi + 1.0))
+    }
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn sync_heat_value_range_for_bench(
+    values: &[f64],
+    clim_pct: Option<(f64, f64)>,
+) -> Option<(f64, f64)> {
+    sync_heat_value_range(values, clim_pct)
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn sync_heat_value_range_legacy_for_bench(
+    values: &[f64],
+    clim_pct: Option<(f64, f64)>,
+) -> Option<(f64, f64)> {
+    sync_heat_value_range_legacy(values, clim_pct)
 }
 
 fn build_sync_heat_image(
@@ -16428,6 +16485,30 @@ mod tests {
         assert_eq!(horizontal.get_pixel(1, 0), vertical.get_pixel(1, 1));
         assert_eq!(horizontal.get_pixel(0, 1), vertical.get_pixel(0, 0));
         assert_eq!(horizontal.get_pixel(1, 1), vertical.get_pixel(0, 1));
+    }
+
+    #[test]
+    fn sync_heat_percentile_range_matches_legacy_two_sort_path() {
+        let cases: &[&[f64]] = &[
+            &[],
+            &[4.0],
+            &[3.0, 3.0, 3.0],
+            &[9.0, -1.0, 4.0, 2.0, 8.0, 0.0],
+            &[f64::NEG_INFINITY, -2.0, 7.0, f64::INFINITY],
+            &[f64::NAN, 1.0, -0.0, 0.0, 8.0],
+        ];
+        let percentile_ranges = [None, Some((3.0, 97.0)), Some((10.0, 90.0))];
+
+        let bits = |range: Option<(f64, f64)>| range.map(|(lo, hi)| (lo.to_bits(), hi.to_bits()));
+        for values in cases {
+            for clim_pct in percentile_ranges {
+                assert_eq!(
+                    bits(super::sync_heat_value_range(values, clim_pct)),
+                    bits(super::sync_heat_value_range_legacy(values, clim_pct)),
+                    "range changed for values={values:?}, clim_pct={clim_pct:?}"
+                );
+            }
+        }
     }
 
     #[test]

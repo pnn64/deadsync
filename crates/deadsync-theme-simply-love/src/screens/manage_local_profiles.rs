@@ -18,6 +18,7 @@ use deadsync_input::KeyCode;
 use deadsync_input::RawKeyboardEvent;
 use deadsync_input::{InputEvent, VirtualAction};
 use deadsync_profile::PlayerSide;
+use deadsync_profile::favorites_view::unicode_case_insensitive_cmp;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -866,11 +867,9 @@ fn merge_import_candidates(
             added += 1;
         }
     }
-    picker.candidates.sort_by(|a, b| {
-        a.display_name
-            .to_lowercase()
-            .cmp(&b.display_name.to_lowercase())
-    });
+    picker
+        .candidates
+        .sort_by(|a, b| unicode_case_insensitive_cmp(&a.display_name, &b.display_name));
     added
 }
 

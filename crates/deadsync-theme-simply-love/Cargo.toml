@@ -68,6 +68,11 @@ name = "direct_notefield_presentation"
 harness = false
 required-features = ["bench-support"]
 
+[[bench]]
+name = "sync_heat_range"
+harness = false
+required-features = ["bench-support"]
+
 [dependencies]
 deadlib-assets = { path = "../deadlib-assets" }
 deadlib-present = { path = "../deadlib-present" }

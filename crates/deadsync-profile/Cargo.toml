@@ -22,6 +22,11 @@ name = "machine_record_lookup"
 harness = false
 required-features = ["bench-support"]
 
+[[bench]]
+name = "case_insensitive_ordering"
+harness = false
+required-features = ["bench-support"]
+
 [dependencies]
 bincode = "2.0.1"
 bitflags = "2.13.1"
