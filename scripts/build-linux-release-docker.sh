@@ -50,6 +50,7 @@ apt-get install --no-install-recommends -y \
   pkg-config \
   cmake \
   ninja-build \
+  libdbus-1-dev \
   libasound2-dev \
   libx11-dev \
   libx11-xcb-dev \
@@ -94,6 +95,7 @@ apt-get install --no-install-recommends -y \
   ninja-build \
   gcc-aarch64-linux-gnu \
   libc6-dev-arm64-cross \
+  libdbus-1-dev:arm64 \
   libasound2-dev:arm64 \
   libx11-dev:arm64 \
   libx11-xcb-dev:arm64 \

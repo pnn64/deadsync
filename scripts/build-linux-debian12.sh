@@ -40,6 +40,7 @@ docker run --rm \
       pkg-config \
       cmake \
       ninja-build \
+      libdbus-1-dev \
       libasound2-dev \
       libudev-dev \
       libgl1-mesa-dev \
