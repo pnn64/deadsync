@@ -1372,6 +1372,7 @@ pub struct State {
     cached_chart_ix_p2: Option<usize>,
     cached_edits: Option<EditSortCache>,
     cached_standard_chart_ixs: [Option<usize>; NUM_STANDARD_DIFFICULTIES],
+    wheel_preferred_chart_ixs: FxHashMap<usize, music_wheel::WheelPreferredChartIndices>,
     pack_total_seconds_by_index: Vec<f64>,
     song_has_edit_ptrs: HashSet<usize>,
     pack_sync_prefs: HashMap<String, SyncPref>,
@@ -2943,6 +2944,8 @@ pub fn init(init_view: SelectMusicInitView) -> State {
     let mut pack_sync_prefs = HashMap::with_capacity(total_packs);
     let mut pack_total_seconds_by_index = vec![0.0_f64; total_packs];
     let mut song_has_edit_ptrs = HashSet::with_capacity(total_songs);
+    let mut wheel_preferred_chart_ixs =
+        FxHashMap::with_capacity_and_hasher(total_songs, Default::default());
     let mut scored_pack_names = HashSet::new();
 
     let last_played = init_view.last_played.clone();
@@ -2987,6 +2990,10 @@ pub fn init(init_view: SelectMusicInitView) -> State {
             if has_edit {
                 song_has_edit_ptrs.insert(Arc::as_ptr(song) as usize);
             }
+            wheel_preferred_chart_ixs.insert(
+                Arc::as_ptr(song) as usize,
+                music_wheel::preferred_chart_indices(song, target_chart_type),
+            );
             if clear_new_packs_on_score
                 && !pack_has_cached_score
                 && song_has_cached_score(song, &init_view.history, init_view.session)
@@ -3288,6 +3295,7 @@ pub fn init(init_view: SelectMusicInitView) -> State {
         cached_chart_ix_p2: None,
         cached_edits: None,
         cached_standard_chart_ixs: [None; NUM_STANDARD_DIFFICULTIES],
+        wheel_preferred_chart_ixs,
         pack_total_seconds_by_index,
         song_has_edit_ptrs,
         pack_sync_prefs,
@@ -3523,6 +3531,7 @@ pub fn init_placeholder() -> State {
         cached_chart_ix_p2: None,
         cached_edits: None,
         cached_standard_chart_ixs: [None; NUM_STANDARD_DIFFICULTIES],
+        wheel_preferred_chart_ixs: FxHashMap::default(),
         pack_total_seconds_by_index: Vec::new(),
         song_has_edit_ptrs: HashSet::new(),
         pack_sync_prefs: HashMap::new(),
@@ -11490,6 +11499,94 @@ impl Default for SelectMusicMediaBench {
 
 #[cfg(feature = "bench-support")]
 #[doc(hidden)]
+pub struct SelectMusicWheelChartBench {
+    state: State,
+    assets: AssetManager,
+    actors: Vec<Actor>,
+}
+
+#[cfg(feature = "bench-support")]
+impl SelectMusicWheelChartBench {
+    pub fn new() -> Self {
+        let mut state = init_placeholder();
+        state.entries = (0..MUSIC_WHEEL_SLOT_COUNT)
+            .map(|index| {
+                let mut song = (*bench_folder_stats_song(index)).clone();
+                song.has_lua = true;
+                MusicWheelEntry::Song(Arc::new(song))
+            })
+            .collect();
+        state.wheel_preferred_chart_ixs = state
+            .entries
+            .iter()
+            .filter_map(|entry| match entry {
+                MusicWheelEntry::Song(song) => Some((
+                    Arc::as_ptr(song) as usize,
+                    music_wheel::preferred_chart_indices(song, "dance-single"),
+                )),
+                MusicWheelEntry::PackHeader { .. } => None,
+            })
+            .collect();
+        state.selected_index = MUSIC_WHEEL_SLOT_COUNT / 2;
+        state.prev_selected_index = state.selected_index;
+        state.preferred_difficulty_index = 1;
+        state.p2_preferred_difficulty_index = 3;
+        state.session.play_style = profile_data::PlayStyle::Versus;
+        state.session.joined = [true, true];
+        state.policy.media.show_banners = false;
+        state.policy.media.show_cdtitles = false;
+        state.policy.media.show_folder_stats = false;
+        state.policy.media.show_previews = false;
+        state.policy.media.song_select_bg_mode = crate::config::SelectMusicSongSelectBgMode::Off;
+        state.music_wheel = MusicWheelRuntimeView {
+            joined: state.session.joined,
+            play_style: state.session.play_style,
+            ..MusicWheelRuntimeView::default()
+        };
+        Self {
+            state,
+            assets: AssetManager::new(),
+            actors: Vec::with_capacity(256),
+        }
+    }
+
+    pub fn frame(&mut self) -> usize {
+        let request = music_wheel_runtime_request(&self.state);
+        let request_checksum = request
+            .slots
+            .iter()
+            .map(|slot| match slot {
+                MusicWheelSlotRuntimeRequest::Song { chart_hashes, .. } => chart_hashes
+                    .iter()
+                    .flatten()
+                    .map(|hash| hash.len())
+                    .sum::<usize>(),
+                MusicWheelSlotRuntimeRequest::Empty | MusicWheelSlotRuntimeRequest::Pack { .. } => {
+                    0
+                }
+            })
+            .sum::<usize>();
+        self.actors.clear();
+        push_actors(
+            &mut self.actors,
+            &self.state,
+            &self.assets,
+            1,
+            crate::views::SimplyLoveVisualPolicyView::default(),
+        );
+        self.actors.len().wrapping_add(request_checksum)
+    }
+}
+
+#[cfg(feature = "bench-support")]
+impl Default for SelectMusicWheelChartBench {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
 pub struct SelectMusicFolderStatsBench {
     state: State,
     assets: AssetManager,
@@ -11907,6 +12004,7 @@ pub fn music_wheel_runtime_request(state: &State) -> MusicWheelRuntimeRequest<'_
             state.p2_preferred_difficulty_index,
         ],
         play_style,
+        Some(&state.wheel_preferred_chart_ixs),
     );
     let (selected_chart_hashes, selected_is_srpg) = match slots[MUSIC_WHEEL_SLOT_COUNT / 2] {
         MusicWheelSlotRuntimeRequest::Song {
@@ -13035,11 +13133,6 @@ pub fn push_actors(
                 state.sort_mode,
                 WheelSortMode::Series | WheelSortMode::Group
             ),
-            selected_charts: [immediate_chart_p1, immediate_chart_p2],
-            preferred_difficulty_index: [
-                state.preferred_difficulty_index,
-                state.p2_preferred_difficulty_index,
-            ],
             song_box_color: None,
             song_text_color: None,
             song_text_color_overrides: None,

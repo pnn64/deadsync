@@ -523,6 +523,7 @@ pub enum MusicWheelSlotRuntimeRequest<'a> {
     Song {
         song: &'a deadsync_chart::SongData,
         chart_hashes: [Option<&'a str>; 2],
+        lua_submit_allowed: [bool; 2],
         is_srpg_event: bool,
     },
 }
@@ -563,6 +564,7 @@ pub struct MusicWheelSideRuntimeView {
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct MusicWheelSlotRuntimeView {
     pub sides: [MusicWheelSideRuntimeView; 2],
+    pub lua_submit_allowed: [bool; 2],
 }
 
 /// Fixed-size shell-prepared snapshot consumed by shared wheel composition.

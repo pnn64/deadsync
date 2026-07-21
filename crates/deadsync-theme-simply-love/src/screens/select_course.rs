@@ -1681,6 +1681,7 @@ pub fn music_wheel_runtime_request(state: &State) -> MusicWheelRuntimeRequest<'_
             [None, None],
             [0, 0],
             state.context.play_style,
+            None,
         ),
     }
 }
@@ -2230,8 +2231,6 @@ pub fn push_actors(
             selection_animation_timer: state.selection_animation_timer,
             selection_animation_beat,
             color_pack_headers: true,
-            selected_charts: [None, None],
-            preferred_difficulty_index: [0, 0],
             song_box_color: None,
             song_text_color: Some(COURSE_WHEEL_SONG_TEXT_COLOR),
             song_text_color_overrides: Some(&state.course_text_color_overrides),

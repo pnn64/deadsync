@@ -1744,8 +1744,10 @@ impl App {
                 MusicWheelSlotRuntimeRequest::Song {
                     song,
                     chart_hashes,
+                    lua_submit_allowed,
                     is_srpg_event,
                 } => {
+                    view.lua_submit_allowed = lua_submit_allowed;
                     let unlock_song_dir = deadsync_simfile::playlist::song_pack_and_dir_name(song)
                         .and_then(|(pack_dir, song_dir)| {
                             scores::is_itl_unlocks_pack(pack_dir).then_some(song_dir)
