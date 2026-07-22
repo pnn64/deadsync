@@ -3169,22 +3169,14 @@ pub fn init(init_view: SelectMusicInitView) -> State {
         &init_view.history.sides[profile_data::player_side_index(profile_data::PlayerSide::P1)];
     let p2_history =
         &init_view.history.sides[profile_data::player_side_index(profile_data::PlayerSide::P2)];
-    let popularity_p1_entries = p1_history
-        .available
-        .then(|| build_popularity_grouped_entries_for_profile(&all_entries, p1_history))
-        .unwrap_or_default();
-    let popularity_p2_entries = p2_history
-        .available
-        .then(|| build_popularity_grouped_entries_for_profile(&all_entries, p2_history))
-        .unwrap_or_default();
-    let recent_p1_entries = p1_history
-        .available
-        .then(|| build_recent_grouped_entries_for_profile(&all_entries, p1_history))
-        .unwrap_or_default();
-    let recent_p2_entries = p2_history
-        .available
-        .then(|| build_recent_grouped_entries_for_profile(&all_entries, p2_history))
-        .unwrap_or_default();
+    let popularity_p1_entries = if p1_history
+        .available { build_popularity_grouped_entries_for_profile(&all_entries, p1_history) } else { Default::default() };
+    let popularity_p2_entries = if p2_history
+        .available { build_popularity_grouped_entries_for_profile(&all_entries, p2_history) } else { Default::default() };
+    let recent_p1_entries = if p1_history
+        .available { build_recent_grouped_entries_for_profile(&all_entries, p1_history) } else { Default::default() };
+    let recent_p2_entries = if p2_history
+        .available { build_recent_grouped_entries_for_profile(&all_entries, p2_history) } else { Default::default() };
     let top_grades_p1_entries =
         build_top_grades_grouped_entries_for_side(&all_entries, target_chart_type, p1_history);
     let top_grades_p2_entries =
@@ -4443,7 +4435,7 @@ fn build_select_music_menu(state: &State) -> select_music_menu::MenuLists {
         standalone.push(select_music_menu::ITEM_SORT_BY_FAVORITES);
     }
 
-    let sorts = select_music_menu::SORT_ITEMS.iter().cloned().collect();
+    let sorts = select_music_menu::SORT_ITEMS.to_vec();
 
     let p1_has_profile = p1_joined
         && state
@@ -10960,12 +10952,11 @@ fn update_impl(state: &mut State, dt: f32, smx: &SmxAssignmentView) -> ThemeEffe
                 (state.cdtitle_spin_elapsed + dt).min(CDTITLE_SPIN_SECONDS);
         }
         state.cdtitle_anim_elapsed += dt;
-        if let select_music_menu::State::Visible(ref mut menu_state) = state.select_music_menu {
-            if menu_state.focus_anim_elapsed < select_music_menu::FOCUS_TWEEN_SECONDS {
+        if let select_music_menu::State::Visible(ref mut menu_state) = state.select_music_menu
+            && menu_state.focus_anim_elapsed < select_music_menu::FOCUS_TWEEN_SECONDS {
                 menu_state.focus_anim_elapsed = (menu_state.focus_anim_elapsed + dt)
                     .min(select_music_menu::FOCUS_TWEEN_SECONDS);
             }
-        }
     }
     if state.select_music_menu.is_visible() || srpg_shop_overlay_visible(state) {
         update_overlay_nav_hold(state);
@@ -11998,7 +11989,7 @@ fn push_folder_stats_overlay(
         z(121):
         diffuse(0.0, 0.0, 0.0, 1.0)
     ));
-    if let Some(path) = banner_path.as_deref() {
+    if let Some(path) = banner_path {
         let key = media_path_key_string(path);
         if asset_manager.has_texture_key(&key) {
             children.push(act!(sprite(key):
@@ -12244,7 +12235,7 @@ fn push_flat_breakdown_child(
 }
 
 pub fn push_actors(
-    mut actors: &mut Vec<Actor>,
+    actors: &mut Vec<Actor>,
     state: &State,
     asset_manager: &AssetManager,
     stage_number: usize,
@@ -12276,11 +12267,11 @@ pub fn push_actors(
             visual_policy,
         },
     );
-    push_sl_select_music_bg_flash(&mut actors, state.selection_animation_timer);
+    push_sl_select_music_bg_flash(actors, state.selection_animation_timer);
 
     let select_music_label = tr("ScreenTitles", "SelectMusic");
     screen_bars::push(
-        &mut actors,
+        actors,
         select_music_label.as_ref(),
         std::array::from_fn(|idx| screen_bars::Player {
             joined: state.session.joined[idx],
@@ -12398,7 +12389,7 @@ pub fn push_actors(
     if state.policy.media.show_folder_stats {
         if is_versus {
             push_folder_stats_overlay(
-                &mut actors,
+                actors,
                 state,
                 asset_manager,
                 profile_data::PlayerSide::P1,
@@ -12409,7 +12400,7 @@ pub fn push_actors(
                 true,
             );
             push_folder_stats_overlay(
-                &mut actors,
+                actors,
                 state,
                 asset_manager,
                 profile_data::PlayerSide::P2,
@@ -12421,7 +12412,7 @@ pub fn push_actors(
             );
         } else {
             push_folder_stats_overlay(
-                &mut actors,
+                actors,
                 state,
                 asset_manager,
                 solo_side,
@@ -12539,7 +12530,7 @@ pub fn push_actors(
          line_count: usize,
          layout: step_artist_bar::StepArtistBarLayout| {
             step_artist_bar::push(
-                &mut actors,
+                actors,
                 step_artist_bar::StepArtistBarParams {
                     x0,
                     center_y: y_cen,
@@ -12860,7 +12851,7 @@ pub fn push_actors(
 
     if is_versus {
         push_pane(
-            &mut actors,
+            actors,
             screen_width() * 0.25 - 5.0,
             sel_col_p1,
             profile_data::PlayerSide::P1,
@@ -12874,7 +12865,7 @@ pub fn push_actors(
             immediate_chart_p1,
         );
         push_pane(
-            &mut actors,
+            actors,
             screen_width() * 0.75 + 5.0,
             sel_col_p2,
             profile_data::PlayerSide::P2,
@@ -12894,7 +12885,7 @@ pub fn push_actors(
             screen_width() * 0.25 - 5.0
         };
         push_pane(
-            &mut actors,
+            actors,
             pane_cx,
             sel_col_p1,
             solo_side,
@@ -13051,7 +13042,7 @@ pub fn push_actors(
             let col3_num_x = col3_left + col_w3 * num_anchor_frac;
 
             push_pattern_line(
-                &mut actors,
+                actors,
                 col1_left,
                 col_w1,
                 col1_num_x,
@@ -13060,7 +13051,7 @@ pub fn push_actors(
                 tr("PatternInfo", "Boxes"),
             );
             push_pattern_line(
-                &mut actors,
+                actors,
                 col1_left,
                 col_w1,
                 col1_num_x,
@@ -13069,7 +13060,7 @@ pub fn push_actors(
                 tr("PatternInfo", "Anchors"),
             );
             push_pattern_line(
-                &mut actors,
+                actors,
                 col1_left,
                 col_w1,
                 col1_num_x,
@@ -13078,7 +13069,7 @@ pub fn push_actors(
                 tr("PatternInfo", "Staircases"),
             );
             push_pattern_line(
-                &mut actors,
+                actors,
                 col1_left,
                 col_w1,
                 col1_num_x,
@@ -13088,7 +13079,7 @@ pub fn push_actors(
             );
 
             push_pattern_line(
-                &mut actors,
+                actors,
                 col2_left,
                 col_w2,
                 col2_num_x,
@@ -13097,7 +13088,7 @@ pub fn push_actors(
                 tr("PatternInfo", "Triangles"),
             );
             push_pattern_line(
-                &mut actors,
+                actors,
                 col2_left,
                 col_w2,
                 col2_num_x,
@@ -13106,7 +13097,7 @@ pub fn push_actors(
                 tr("PatternInfo", "HipBreakers"),
             );
             push_pattern_line(
-                &mut actors,
+                actors,
                 col2_left,
                 col_w2,
                 col2_num_x,
@@ -13115,7 +13106,7 @@ pub fn push_actors(
                 tr("PatternInfo", "Doritos"),
             );
             push_pattern_line(
-                &mut actors,
+                actors,
                 col2_left,
                 col_w2,
                 col2_num_x,
@@ -13125,7 +13116,7 @@ pub fn push_actors(
             );
 
             push_pattern_line(
-                &mut actors,
+                actors,
                 col3_left,
                 col_w3,
                 col3_num_x,
@@ -13134,7 +13125,7 @@ pub fn push_actors(
                 tr("PatternInfo", "Spirals"),
             );
             push_pattern_line(
-                &mut actors,
+                actors,
                 col3_left,
                 col_w3,
                 col3_num_x,
@@ -13314,7 +13305,7 @@ pub fn push_actors(
     // Music Wheel
     let selection_animation_beat = sl_selection_anim_beat(entry_opt, state);
     music_wheel::push(
-        &mut actors,
+        actors,
         music_wheel::MusicWheelParams {
             machine_font: state.policy.machine_font,
             entries: &state.entries,
@@ -13351,7 +13342,7 @@ pub fn push_actors(
             runtime: &state.music_wheel,
         },
     );
-    push_sl_select_music_wheel_cascade_mask(&mut actors, state.selection_animation_timer);
+    push_sl_select_music_wheel_cascade_mask(actors, state.selection_animation_timer);
 
     // GrooveStats scorebox placement.
     // Auto keeps the current layout, including pane placement for both-GS versus.
@@ -13544,7 +13535,7 @@ pub fn push_actors(
     }
 
     if let Some(reload) = &state.reload_ui {
-        push_reload_overlay(&mut actors, reload, state.active_color_index);
+        push_reload_overlay(actors, reload, state.active_color_index);
         return;
     }
 
@@ -13798,7 +13789,7 @@ pub fn push_actors(
         let zoom_yes = exit_prompt_choice_zoom(1, active_choice, switch_from, switch_elapsed);
         let cx = screen_center_x();
         push_exit_prompt_choice(
-            &mut actors,
+            actors,
             cx - SL_EXIT_PROMPT_CHOICE_X_OFFSET,
             SL_EXIT_PROMPT_CHOICE_Y,
             tr("Common", "No"),
@@ -13811,7 +13802,7 @@ pub fn push_actors(
             state.policy.machine_font,
         );
         push_exit_prompt_choice(
-            &mut actors,
+            actors,
             cx + SL_EXIT_PROMPT_CHOICE_X_OFFSET,
             SL_EXIT_PROMPT_CHOICE_Y,
             tr("Common", "Yes"),
@@ -13825,7 +13816,7 @@ pub fn push_actors(
         );
     }
 
-    push_song_delete_prompt(&mut actors, state);
+    push_song_delete_prompt(actors, state);
 }
 
 fn push_song_delete_prompt(actors: &mut Vec<Actor>, state: &State) {

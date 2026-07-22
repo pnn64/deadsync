@@ -171,7 +171,7 @@ fn spawn_worker_pool() -> Worker {
     for idx in 0..WORKER_THREADS {
         thread::Builder::new()
             .name(format!("replaygain-analyzer-{idx}"))
-            .spawn(move || worker_loop())
+            .spawn(worker_loop)
             .expect("failed to spawn replaygain worker");
     }
     worker

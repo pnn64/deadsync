@@ -803,14 +803,14 @@ pub fn itg_hold_explosion_slot<L, T: Clone>(
     fallback_slot
 }
 
-pub fn itg_hit_mine_explosion_slot<'a, L, T>(
-    layers: &'a [L],
+pub fn itg_hit_mine_explosion_slot<L, T>(
+    layers: &[L],
     mut has_hit_mine_command: impl FnMut(&L) -> bool,
     mut is_hit_mine_element: impl FnMut(&L) -> bool,
     mut layer_slot: impl FnMut(&L) -> T,
     mut direct_slot: impl FnMut() -> Option<T>,
     actor_slot: impl FnMut() -> Option<T>,
-) -> (Option<&'a L>, Option<T>) {
+) -> (Option<&L>, Option<T>) {
     let source = layers
         .iter()
         .find(|layer| has_hit_mine_command(layer))

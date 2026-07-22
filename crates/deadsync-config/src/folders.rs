@@ -82,7 +82,7 @@ pub fn song_path_is_writable_for_roots(path: &Path, roots: &[AdditionalSongFolde
             best = Some((len, root.writable));
         }
     }
-    best.map_or(true, |(_, writable)| writable)
+    best.is_none_or(|(_, writable)| writable)
 }
 
 fn canonical_or_raw(path: &Path) -> PathBuf {

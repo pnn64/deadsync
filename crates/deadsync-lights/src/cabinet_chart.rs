@@ -178,7 +178,7 @@ fn offset_key_us(seconds: f32) -> i32 {
 }
 
 pub fn cabinet_light_event_enabled(event: CabinetLightEvent, simplify_bass: bool) -> bool {
-    !simplify_bass || !event.simplify_bass_candidate || event.row_index % LIGHTS_QUARTER_ROWS == 0
+    !simplify_bass || !event.simplify_bass_candidate || event.row_index.is_multiple_of(LIGHTS_QUARTER_ROWS)
 }
 
 fn build_cabinet_light_events(

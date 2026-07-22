@@ -365,7 +365,7 @@ pub fn pad_sensor_type(pad: usize) -> Option<SmxPadType> {
 /// firmware bit layout has a single source of truth.
 pub fn enabled_bit(panel: usize, sensor: usize) -> (usize, u8) {
     let byte = panel / 2;
-    let base = if panel % 2 == 0 { 4 } else { 0 };
+    let base = if panel.is_multiple_of(2) { 4 } else { 0 };
     (byte, 1u8 << (base + sensor))
 }
 

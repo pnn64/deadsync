@@ -4180,14 +4180,14 @@ fn fold_sprite_xy_rot(
 }
 
 #[inline(always)]
-fn push_sprite<'a, T: TextureContext + ?Sized>(
+fn push_sprite<T: TextureContext + ?Sized>(
     out: &mut Vec<renderer::RenderObject>,
     sprite_instances: &mut Vec<renderer::SpriteInstanceRaw>,
     camera: u8,
     rect: SmRect,
     m: &Metrics,
     is_solid: bool,
-    texture_id: &'a str,
+    texture_id: &str,
     texture_key_ptr: *const str,
     tint: [f32; 4],
     uv_rect: Option<[f32; 4]>,
@@ -4930,7 +4930,7 @@ fn clipped_sprite_object_to_world_rect(
                     renderer::TexturedMeshVertices::Transient(vertices) => {
                         let mut cloned = recycled_vertices
                             .as_mut()
-                            .map(|pool| take_recycled_text_mesh_vertices(*pool))
+                            .map(|pool| take_recycled_text_mesh_vertices(pool))
                             .unwrap_or_default();
                         cloned.clear();
                         cloned.extend_from_slice(vertices);

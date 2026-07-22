@@ -2261,7 +2261,7 @@ impl<T> NoteskinRuntime<T> {
         self.hold_visuals_for_col(col, is_roll)
             .explosion
             .as_ref()
-            .or_else(|| {
+            .or({
                 if is_roll {
                     self.roll.explosion.as_ref()
                 } else {

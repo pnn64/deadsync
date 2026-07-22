@@ -123,11 +123,10 @@ fn find_noteskin_choice_index(
     match profile_value {
         None => position_eq(match_label).unwrap_or(0),
         Some(skin) => {
-            if let Some(none_label) = none_label {
-                if skin.is_none_choice() {
+            if let Some(none_label) = none_label
+                && skin.is_none_choice() {
                     return position_eq(none_label).unwrap_or(0);
                 }
-            }
             choices
                 .iter()
                 .position(|c| c.eq_ignore_ascii_case(skin.as_str()))

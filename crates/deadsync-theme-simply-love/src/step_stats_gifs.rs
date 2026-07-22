@@ -8,12 +8,12 @@ const BOCCHI_FRAMES: u32 = 18;
 const BOCCHI_DELAY: f32 = 1.0 / 9.0;
 const RIN_CAT_FRAMES: [u16; 6] = [2, 3, 4, 5, 0, 1];
 const RIN_CAT_DELAYS: [f32; 6] = [
-    0.333_333_333_333_333_3,
-    0.333_333_333_333_333_3,
-    0.333_333_333_333_333_4,
-    0.333_333_333_333_333_3,
-    0.333_333_333_333_333_3,
-    0.333_333_333_333_333_4,
+    0.333_333_34,
+    0.333_333_34,
+    0.333_333_34,
+    0.333_333_34,
+    0.333_333_34,
+    0.333_333_34,
 ];
 
 pub const STEP_STATS_GIF_TEXTURES: [&str; 11] = [
@@ -185,14 +185,14 @@ pub fn frame_for_extra(extra: StepStatsExtra, beat: f32) -> u32 {
     match extra {
         StepStatsExtra::AmongUs => mixed_frame(beat, &AMONG_US_FRAMES, &AMONG_US_DELAYS),
         StepStatsExtra::Bocchi => uniform_rotated_frame(beat, BOCCHI_FRAMES, 0, BOCCHI_DELAY),
-        StepStatsExtra::BrodyQuest => uniform_rotated_frame(beat, 84, 0, 0.095_238_095_238_095_2),
-        StepStatsExtra::CatJAM => uniform_rotated_frame(beat, 151, 9, 0.086_092_715_231_788_1),
-        StepStatsExtra::CrabPls => uniform_rotated_frame(beat, 59, 5, 0.067_796_610_169_491_5),
-        StepStatsExtra::DancingDuck => uniform_rotated_frame(beat, 111, 1, 0.144_144_144),
+        StepStatsExtra::BrodyQuest => uniform_rotated_frame(beat, 84, 0, 0.095_238_1),
+        StepStatsExtra::CatJAM => uniform_rotated_frame(beat, 151, 9, 0.086_092_72),
+        StepStatsExtra::CrabPls => uniform_rotated_frame(beat, 59, 5, 0.067_796_61),
+        StepStatsExtra::DancingDuck => uniform_rotated_frame(beat, 111, 1, 0.144_144_15),
         StepStatsExtra::DonChan => mixed_frame(beat, &DONCHAN_FRAMES, &DONCHAN_DELAYS),
         StepStatsExtra::NyanCat => uniform_rotated_frame(beat, 12, 6, 0.166_666_67),
         StepStatsExtra::RinCat => mixed_frame(beat, &RIN_CAT_FRAMES, &RIN_CAT_DELAYS),
-        StepStatsExtra::Snoop => uniform_rotated_frame(beat, 58, 3, 0.068_965_517_24),
+        StepStatsExtra::Snoop => uniform_rotated_frame(beat, 58, 3, 0.068_965_52),
         StepStatsExtra::Sonic => uniform_rotated_frame(beat, 8, 0, 0.125),
         StepStatsExtra::None | StepStatsExtra::ErrorStats | StepStatsExtra::Randomizer => 0,
     }

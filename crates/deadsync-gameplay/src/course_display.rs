@@ -113,21 +113,13 @@ pub fn apply_course_combo_carry_state(
 }
 
 #[derive(Clone, Copy, Debug)]
+#[derive(Default)]
 pub struct DisplayWindowCountsSources {
     pub canonical: WindowCounts,
     pub ten_ms_blue: WindowCounts,
     pub display_blue: WindowCounts,
 }
 
-impl Default for DisplayWindowCountsSources {
-    fn default() -> Self {
-        Self {
-            canonical: WindowCounts::default(),
-            ten_ms_blue: WindowCounts::default(),
-            display_blue: WindowCounts::default(),
-        }
-    }
-}
 
 #[derive(Clone, Copy, Debug, Default)]
 pub struct GameplayWindowCountsState {
@@ -203,18 +195,15 @@ impl GameplayWindowCountsState {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Default)]
 pub enum DisplayWindowCountsMode {
+    #[default]
     Canonical,
     TenMsBlue,
     DisplayBlue,
     CustomBlue { split_ms: f32 },
 }
 
-impl Default for DisplayWindowCountsMode {
-    fn default() -> Self {
-        Self::Canonical
-    }
-}
 
 #[inline(always)]
 fn display_float_match(a: f32, b: f32) -> bool {

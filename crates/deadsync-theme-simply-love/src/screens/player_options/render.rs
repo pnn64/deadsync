@@ -532,7 +532,7 @@ pub(super) fn multi_select_mask(state: &State, row_id: RowId, player_idx: usize)
         DataVisualizations => {
             step_statistics_choice_bits(state.option_masks[player_idx].step_statistics)
         }
-        GameplayExtras => state.option_masks[player_idx].gameplay_extras.bits().into(),
+        GameplayExtras => state.option_masks[player_idx].gameplay_extras.bits(),
         ColumnFlashJudgments => state.option_masks[player_idx].column_flash.bits().into(),
         LiveTimingStats => state.option_masks[player_idx]
             .live_timing_stats

@@ -358,11 +358,10 @@ fn refresh_density_graph_meshes_for_player(state: &mut State, player_idx: usize)
     state
         .gameplay
         .set_density_graph_life_dirty(player_idx, false);
-    if offset_px > prev_offset_px {
-        if let Some(points) = state.gameplay.density_graph_life_points_mut(player_idx) {
+    if offset_px > prev_offset_px
+        && let Some(points) = state.gameplay.density_graph_life_points_mut(player_idx) {
             clip_density_life_points(points, offset_px_f);
         }
-    }
     let Some(points) = state.gameplay.density_graph_life_points(player_idx) else {
         render.life_mesh[player_idx] = None;
         return;

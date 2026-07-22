@@ -1886,12 +1886,11 @@ pub fn sprite_image_frame_size(
     sheet_dims: Option<(u32, u32)>,
 ) -> Option<(f32, f32)> {
     let (mut width, mut height) = texture_size?;
-    if animate || song_lua_valid_sprite_state_index(state_index).is_some() {
-        if let Some((cols, rows)) = sheet_dims {
+    if (animate || song_lua_valid_sprite_state_index(state_index).is_some())
+        && let Some((cols, rows)) = sheet_dims {
             width /= cols.max(1) as f32;
             height /= rows.max(1) as f32;
         }
-    }
     Some((width, height))
 }
 
@@ -15220,7 +15219,7 @@ return Def.ActorFrame{
         );
 
         assert_eq!(samples.len(), 1);
-        assert_eq!(samples[0].1.visible, true);
+        assert!(samples[0].1.visible);
         assert_eq!(samples[0].1.rot_z_deg, 90.0);
 
         let mut eases = Vec::new();
@@ -15931,7 +15930,7 @@ return Def.ActorFrame {}
         assert_eq!(blocks[0].0, 5);
         assert_eq!(blocks[0].1[0].delta.x, Some(12.0));
         assert_eq!(blocks[0].1[0].delta.y, Some(18.0));
-        assert_eq!(actor.get::<bool>("__songlua_visible").unwrap(), true);
+        assert!(actor.get::<bool>("__songlua_visible").unwrap());
         assert_eq!(compile_song_runtime_values(&lua).unwrap(), (2.0, 3.0));
     }
 
@@ -15978,7 +15977,7 @@ return Def.ActorFrame {}
         assert_eq!(eases[0].overlay_index, 1);
         assert_eq!(eases[0].from.x, Some(2.0));
         assert_eq!(eases[0].to.x, Some(6.0));
-        assert_eq!(second.get::<bool>("__songlua_visible").unwrap(), true);
+        assert!(second.get::<bool>("__songlua_visible").unwrap());
         assert_eq!(compile_song_runtime_values(&lua).unwrap(), (2.0, 3.0));
     }
 
@@ -16011,7 +16010,7 @@ return Def.ActorFrame {}
         assert!(capture.tracked_blocks.is_empty());
         assert_eq!(capture.broadcasts, vec![("Hit".to_string(), false)]);
         assert!(capture.saw_side_effect);
-        assert_eq!(actor.get::<bool>("__songlua_visible").unwrap(), true);
+        assert!(actor.get::<bool>("__songlua_visible").unwrap());
         assert_eq!(compile_song_runtime_values(&lua).unwrap(), (2.0, 3.0));
     }
 

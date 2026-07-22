@@ -308,7 +308,7 @@ where
             read_update_function_nested_tables(&lua, &root, &["eases"])?,
             xero_node_tables,
             &host.easing_names,
-            &mut overlays,
+            &overlays,
         )?;
     out.eases.extend(xero_eases);
     out.overlay_eases.extend(xero_overlay_eases);

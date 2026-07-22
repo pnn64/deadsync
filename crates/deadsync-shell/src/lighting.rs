@@ -378,17 +378,11 @@ impl SmxAnimationSyncKey {
 }
 
 /// App-facing adapter around the reusable SMX gameplay panel-light driver.
+#[derive(Default)]
 pub struct SmxPanelDriver {
     inner: smx_driver::SmxPanelDriver,
 }
 
-impl Default for SmxPanelDriver {
-    fn default() -> Self {
-        Self {
-            inner: smx_driver::SmxPanelDriver::default(),
-        }
-    }
-}
 
 impl SmxPanelDriver {
     pub fn update<Profile, OverlayActor, CapturedActor, StateDelta>(

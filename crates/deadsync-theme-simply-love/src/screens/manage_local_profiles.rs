@@ -1127,7 +1127,7 @@ fn fmt_count(n: usize) -> String {
     let mut out = String::with_capacity(digits.len() + digits.len() / 3);
     let len = bytes.len();
     for (i, b) in bytes.iter().enumerate() {
-        if i > 0 && (len - i) % 3 == 0 {
+        if i > 0 && (len - i).is_multiple_of(3) {
             out.push(',');
         }
         out.push(*b as char);
@@ -1973,7 +1973,7 @@ fn push_import_picker_overlay(
     // Fixed name-column width: size for the longest name a profile can have
     // (NAME_MAX_LEN), so the container stays the same width regardless of which
     // profiles are in the list. "M" is the widest glyph, guaranteeing any name fits.
-    let max_name_ref: String = std::iter::repeat('M').take(NAME_MAX_LEN).collect();
+    let max_name_ref: String = std::iter::repeat_n('M', NAME_MAX_LEN).collect();
     let widest_label =
         measure_label_width(asset_manager, &max_name_ref, ROW_ZOOM).max(measure_label_width(
             asset_manager,

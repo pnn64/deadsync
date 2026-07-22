@@ -642,7 +642,7 @@ pub(super) fn update_graphics_row_tweens(state: &mut State, s: f32, list_y: f32,
             .iter()
             .position(|&idx| {
                 rows.get(idx)
-                    .map_or(false, |r| r.id == SubRowId::VideoRenderer)
+                    .is_some_and(|r| r.id == SubRowId::VideoRenderer)
             })
             .and_then(|old_idx| old_tweens.get(old_idx))
             .map(|tw| (tw.y(), tw.a()))
@@ -651,7 +651,7 @@ pub(super) fn update_graphics_row_tweens(state: &mut State, s: f32, list_y: f32,
                     .iter()
                     .position(|&idx| {
                         rows.get(idx)
-                            .map_or(false, |r| r.id == SubRowId::VideoRenderer)
+                            .is_some_and(|r| r.id == SubRowId::VideoRenderer)
                     })
                     .unwrap_or(0);
                 row_dest_for_index(total_rows, selected, renderer_vis_idx, s, list_y)
@@ -670,7 +670,7 @@ pub(super) fn update_graphics_row_tweens(state: &mut State, s: f32, list_y: f32,
                 .or({
                     if rows
                         .get(actual_idx)
-                        .map_or(false, |r| r.id == SubRowId::SoftwareRendererThreads)
+                        .is_some_and(|r| r.id == SubRowId::SoftwareRendererThreads)
                     {
                         Some((parent_from.0, 0.0))
                     } else {

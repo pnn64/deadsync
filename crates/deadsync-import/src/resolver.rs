@@ -115,14 +115,13 @@ fn pick_edit<'a>(
         return None;
     }
     let desc = description.trim();
-    if !desc.is_empty() {
-        if let Some(c) = candidates.iter().find(|c| {
+    if !desc.is_empty()
+        && let Some(c) = candidates.iter().find(|c| {
             c.description.trim().eq_ignore_ascii_case(desc)
                 || c.chart_name.trim().eq_ignore_ascii_case(desc)
         }) {
             return Some(c.short_hash.as_str());
         }
-    }
     // No description match: only safe to assume when there's exactly one edit.
     if candidates.len() == 1 {
         return Some(candidates[0].short_hash.as_str());
@@ -307,10 +306,8 @@ mod tests {
 
     #[test]
     fn picks_standard_difficulty() {
-        let charts = vec![
-            chart("Medium", "", "", "hashmed"),
-            chart("Hard", "", "", "hashhard"),
-        ];
+        let charts = [chart("Medium", "", "", "hashmed"),
+            chart("Hard", "", "", "hashhard")];
         assert_eq!(pick_edit(&[], ""), None);
         // Non-edit resolution is exercised via resolve(); here verify edit pick.
         let hard: Vec<&deadsync_chart::ChartData> = charts.iter().collect();

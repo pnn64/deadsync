@@ -420,14 +420,14 @@ pub(crate) fn field_layout(request: FieldLayoutRequest) -> FieldLayout {
         .map(|y| y + request.notefield_offset_y);
     let receptor_y_centered =
         receptor_y_override.unwrap_or(request.screen_center_y + request.notefield_offset_y);
-    let receptor_y_normal = receptor_y_override.unwrap_or_else(|| {
+    let receptor_y_normal = receptor_y_override.unwrap_or({
         if request.center_receptors_y {
             receptor_y_centered
         } else {
             request.screen_center_y + style.receptor_normal_y + request.notefield_offset_y
         }
     });
-    let receptor_y_reverse = receptor_y_override.unwrap_or_else(|| {
+    let receptor_y_reverse = receptor_y_override.unwrap_or({
         if request.center_receptors_y {
             receptor_y_centered
         } else {

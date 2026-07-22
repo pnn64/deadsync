@@ -279,13 +279,11 @@ fn read_online_keys(dir: &Path) -> ItgOnlineKeys {
 /// never ran Simply Love).
 fn read_simply_love(dir: &Path) -> HashMap<String, String> {
     let mut ini = SimpleIni::new();
-    if let Some(path) = find_case_insensitive(dir, "Simply Love UserPrefs.ini") {
-        if ini.load(&path).is_ok() {
-            if let Some(section) = ini.get_section("Simply Love") {
+    if let Some(path) = find_case_insensitive(dir, "Simply Love UserPrefs.ini")
+        && ini.load(&path).is_ok()
+            && let Some(section) = ini.get_section("Simply Love") {
                 return section.clone();
             }
-        }
-    }
     HashMap::new()
 }
 

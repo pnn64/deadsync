@@ -90,6 +90,12 @@ pub struct DisplayClockDiagRing {
     last_trigger_seq: u64,
 }
 
+impl Default for DisplayClockDiagRing {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl DisplayClockDiagRing {
     #[inline(always)]
     pub const fn new() -> Self {

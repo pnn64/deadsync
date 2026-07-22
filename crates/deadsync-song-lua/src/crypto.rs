@@ -8,7 +8,7 @@ pub fn create_cryptman_table(lua: &Lua) -> mlua::Result<Table> {
         cryptman.set(
             name,
             lua.create_function(|lua, _args: MultiValue| {
-                Ok(Value::String(lua.create_string(&[0_u8; 20])?))
+                Ok(Value::String(lua.create_string([0_u8; 20])?))
             })?,
         )?;
     }
@@ -16,7 +16,7 @@ pub fn create_cryptman_table(lua: &Lua) -> mlua::Result<Table> {
         cryptman.set(
             name,
             lua.create_function(|lua, _args: MultiValue| {
-                Ok(Value::String(lua.create_string(&[0_u8; 32])?))
+                Ok(Value::String(lua.create_string([0_u8; 32])?))
             })?,
         )?;
     }

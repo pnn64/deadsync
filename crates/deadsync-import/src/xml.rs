@@ -280,8 +280,8 @@ fn decode_entities(s: &str) -> String {
     let bytes = s.as_bytes();
     let mut i = 0;
     while i < bytes.len() {
-        if bytes[i] == b'&' {
-            if let Some(semi) = s[i + 1..].find(';') {
+        if bytes[i] == b'&'
+            && let Some(semi) = s[i + 1..].find(';') {
                 let entity = &s[i + 1..i + 1 + semi];
                 let decoded = match entity {
                     "amp" => Some('&'),
@@ -297,7 +297,6 @@ fn decode_entities(s: &str) -> String {
                     continue;
                 }
             }
-        }
         // Not an entity we recognize: copy the byte as a char.
         let ch_len = utf8_char_len(bytes[i]);
         let end = (i + ch_len).min(s.len());

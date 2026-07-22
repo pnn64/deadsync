@@ -262,19 +262,15 @@ fn prepare_field<S>(
 ) -> FieldLayout {
     let num_cols = frame_plan.num_cols;
     let column_reverse_percent = std::array::from_fn(|i| {
-        (i < num_cols)
-            .then(|| {
+        if i < num_cols { {
                 request
                     .visual
                     .scroll
                     .reverse_percent_for_column(i, num_cols)
-            })
-            .unwrap_or_default()
+            } } else { Default::default() }
     });
     let song_lua_column_y_offsets = std::array::from_fn(|i| {
-        (i < num_cols)
-            .then(|| song_lua_column_y_offset(request.song_lua.column_offsets, i, current_time_s))
-            .unwrap_or_default()
+        if i < num_cols { song_lua_column_y_offset(request.song_lua.column_offsets, i, current_time_s) } else { Default::default() }
     });
     field_layout(FieldLayoutRequest {
         style: request.style,

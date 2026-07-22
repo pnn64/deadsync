@@ -1089,7 +1089,7 @@ pub fn install_game_state_globals(
         "currentTimeSongOrCourse",
         lua.create_function({
             let song_runtime = song_runtime.clone();
-            move |_, _args: MultiValue| Ok(song_runtime.get::<f32>(SONG_LUA_RUNTIME_SECONDS_KEY)?)
+            move |_, _args: MultiValue| song_runtime.get::<f32>(SONG_LUA_RUNTIME_SECONDS_KEY)
         })?,
     )?;
     let current_sort_order = lua.create_table()?;
@@ -1338,7 +1338,7 @@ pub fn install_game_state_globals(
         "GetSongBeat",
         lua.create_function({
             let song_runtime = song_runtime.clone();
-            move |_, _args: MultiValue| Ok(song_runtime.get::<f32>(SONG_LUA_RUNTIME_BEAT_KEY)?)
+            move |_, _args: MultiValue| song_runtime.get::<f32>(SONG_LUA_RUNTIME_BEAT_KEY)
         })?,
     )?;
     let song_bps = song_display_bps(context);
@@ -1350,7 +1350,7 @@ pub fn install_game_state_globals(
         "GetCurMusicSeconds",
         lua.create_function({
             let song_runtime = song_runtime.clone();
-            move |_, _args: MultiValue| Ok(song_runtime.get::<f32>(SONG_LUA_RUNTIME_SECONDS_KEY)?)
+            move |_, _args: MultiValue| song_runtime.get::<f32>(SONG_LUA_RUNTIME_SECONDS_KEY)
         })?,
     )?;
     let song_position = create_song_position_table(lua, &song_runtime)?;
@@ -1698,7 +1698,7 @@ pub fn install_cmd_helpers(lua: &Lua) -> mlua::Result<()> {
     globals.set(
         "cmd",
         lua.create_function(move |lua, args: MultiValue| {
-            let command_name = args.get(0).cloned().and_then(read_string);
+            let command_name = args.front().cloned().and_then(read_string);
             let command_args = args.into_iter().skip(1).collect::<Vec<_>>();
             lua.create_function(move |_, actor: Table| {
                 let Some(command_name) = command_name.as_deref() else {

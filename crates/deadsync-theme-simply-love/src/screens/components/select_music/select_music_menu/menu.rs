@@ -58,17 +58,11 @@ pub enum Entry {
 
 /// Tracks which categories are currently expanded.
 #[derive(Clone, Debug)]
+#[derive(Default)]
 pub struct CategoryState {
     pub expanded: HashSet<Category>,
 }
 
-impl Default for CategoryState {
-    fn default() -> Self {
-        Self {
-            expanded: HashSet::new(),
-        }
-    }
-}
 
 impl CategoryState {
     pub fn toggle(&mut self, category: Category) {
@@ -166,8 +160,8 @@ fn build_entries_from_slices(
         }
         return entries;
     }
-    if categories.is_expanded(Category::Profile) {
-        if let Some(profile_items) = items_profile {
+    if categories.is_expanded(Category::Profile)
+        && let Some(profile_items) = items_profile {
             let mut entries = vec![Entry::CategoryHeader {
                 category: Category::Profile,
                 label: "Profile...",
@@ -177,7 +171,6 @@ fn build_entries_from_slices(
             }
             return entries;
         }
-    }
     if categories.is_expanded(Category::Advanced) {
         let mut entries = vec![Entry::CategoryHeader {
             category: Category::Advanced,
@@ -188,8 +181,8 @@ fn build_entries_from_slices(
         }
         return entries;
     }
-    if categories.is_expanded(Category::PadProfile) {
-        if let Some(pad_profile_items) = items_pad_profile {
+    if categories.is_expanded(Category::PadProfile)
+        && let Some(pad_profile_items) = items_pad_profile {
             let mut entries = vec![Entry::CategoryHeader {
                 category: Category::PadProfile,
                 label: "Pad Profile...",
@@ -199,9 +192,8 @@ fn build_entries_from_slices(
             }
             return entries;
         }
-    }
-    if categories.is_expanded(Category::Styles) {
-        if let Some(style_items) = items_styles {
+    if categories.is_expanded(Category::Styles)
+        && let Some(style_items) = items_styles {
             let mut entries = vec![Entry::CategoryHeader {
                 category: Category::Styles,
                 label: "Styles...",
@@ -211,9 +203,8 @@ fn build_entries_from_slices(
             }
             return entries;
         }
-    }
-    if categories.is_expanded(Category::Playlists) {
-        if let Some(playlist_items) = items_playlists {
+    if categories.is_expanded(Category::Playlists)
+        && let Some(playlist_items) = items_playlists {
             let mut entries = vec![Entry::CategoryHeader {
                 category: Category::Playlists,
                 label: "Playlists...",
@@ -223,7 +214,6 @@ fn build_entries_from_slices(
             }
             return entries;
         }
-    }
 
     // No category expanded — show all standalone items + collapsed category headers
     let mut entries = Vec::new();

@@ -45,6 +45,12 @@ pub struct Monitor {
     target_os = "freebsd",
     target_os = "macos"
 ))]
+impl Default for Monitor {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Monitor {
     pub fn new() -> Self {
         Self {

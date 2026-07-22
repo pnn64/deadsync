@@ -119,11 +119,10 @@ fn itg_resolve_relative_or_noteskin_path(
     if rel_path.is_absolute() && rel_path.is_file() {
         return Some(rel_path.to_path_buf());
     }
-    if let Some(parent) = base_file.parent() {
-        if let Some(path) = itg_resolve_relative_file(parent, rel_path) {
+    if let Some(parent) = base_file.parent()
+        && let Some(path) = itg_resolve_relative_file(parent, rel_path) {
             return Some(path);
         }
-    }
     for dir in &data.search_dirs {
         if let Some(path) = itg_resolve_relative_file(dir, rel_path) {
             return Some(path);

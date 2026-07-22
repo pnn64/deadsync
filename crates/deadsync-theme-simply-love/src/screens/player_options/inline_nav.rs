@@ -144,8 +144,8 @@ pub(super) fn commit_inline_focus_selection(
         return false;
     };
     let is_shared = row.mirror_across_players;
-    if let Some(&row_id) = state.pane().row_map.display_order().get(row_idx) {
-        if let Some(row) = state.pane_mut().row_map.get_mut(row_id) {
+    if let Some(&row_id) = state.pane().row_map.display_order().get(row_idx)
+        && let Some(row) = state.pane_mut().row_map.get_mut(row_id) {
             if is_shared {
                 let changed = row.selected_choice_index.iter().any(|&v| v != focus_idx);
                 row.selected_choice_index = [focus_idx; PLAYER_SLOTS];
@@ -155,7 +155,6 @@ pub(super) fn commit_inline_focus_selection(
             row.selected_choice_index[idx] = focus_idx;
             return changed;
         }
-    }
     false
 }
 

@@ -1227,8 +1227,8 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
         return ThemeEffect::None;
     }
 
-    if dedicated_three_key_nav {
-        if let Some((_, nav)) = three_key_action {
+    if dedicated_three_key_nav
+        && let Some((_, nav)) = three_key_action {
             return match nav {
                 screen_input::ThreeKeyMenuAction::Prev => {
                     if matches!(state.three_key_focus, ThreeKeyFocus::Rating) {
@@ -1291,7 +1291,6 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
                 }
             };
         }
-    }
 
     let play_style = state.context.play_style;
     if play_style == profile_data::PlayStyle::Versus {

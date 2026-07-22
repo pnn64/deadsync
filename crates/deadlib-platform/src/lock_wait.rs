@@ -17,6 +17,12 @@ pub struct LockWaitStats {
     last_report_ns: AtomicU64,
 }
 
+impl Default for LockWaitStats {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl LockWaitStats {
     pub const fn new() -> Self {
         Self {

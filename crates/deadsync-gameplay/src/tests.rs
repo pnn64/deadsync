@@ -7612,7 +7612,7 @@ mod tests {
     fn fantastic_feedback_uses_w1_for_bright_tap_explosion() {
         let mut white = test_judgment(JudgeGrade::Fantastic);
         white.window = Some(TimingWindow::W1);
-        let mut blue = white.clone();
+        let mut blue = white;
         blue.window = Some(TimingWindow::W0);
         let options = FantasticFeedbackOptions {
             show_fa_plus_window: true,
@@ -7632,7 +7632,7 @@ mod tests {
         let mut blue = test_judgment(JudgeGrade::Fantastic);
         blue.window = Some(TimingWindow::W0);
         blue.time_error_ms = FA_PLUS_W010_MS;
-        let mut white = blue.clone();
+        let mut white = blue;
         white.time_error_ms = FA_PLUS_W010_MS + 0.001;
         let options = FantasticFeedbackOptions {
             show_fa_plus_window: true,
@@ -12082,7 +12082,7 @@ mod tests {
         assert_near(cues[0].duration, 1.0);
         assert_eq!(cues[0].columns.len(), 1);
         assert_eq!(cues[0].columns[0].column, 0);
-        assert_eq!(cues[0].columns[0].is_mine, false);
+        assert!(!cues[0].columns[0].is_mine);
         assert_near(cues[1].start_time, 1.0);
         assert_near(cues[1].duration, 3.0);
         assert_eq!(cues[1].columns.len(), 1);
@@ -12111,9 +12111,9 @@ mod tests {
         assert_near(cues[0].duration, 1.5);
         assert_eq!(cues[0].columns.len(), 2);
         assert_eq!(cues[0].columns[0].column, 0);
-        assert_eq!(cues[0].columns[0].is_mine, true);
+        assert!(cues[0].columns[0].is_mine);
         assert_eq!(cues[0].columns[1].column, 2);
-        assert_eq!(cues[0].columns[1].is_mine, false);
+        assert!(!cues[0].columns[1].is_mine);
     }
 
     #[test]
@@ -12297,7 +12297,7 @@ mod tests {
         assert_near(cues[0].duration, 0.575);
         assert_eq!(cues[0].columns.len(), 2);
         assert_eq!(cues[0].columns[0].column, 0);
-        assert_eq!(cues[0].columns[0].is_mine, false);
+        assert!(!cues[0].columns[0].is_mine);
         assert_eq!(cues[0].columns[1].column, 1);
 
         let scooby = [
@@ -12309,7 +12309,7 @@ mod tests {
         assert_eq!(cues.len(), 1);
         assert_eq!(cues[0].columns.len(), 3);
         assert_eq!(cues[0].columns[2].column, 3);
-        assert_eq!(cues[0].columns[2].is_mine, true);
+        assert!(cues[0].columns[2].is_mine);
     }
 
     #[test]
@@ -12415,7 +12415,7 @@ mod tests {
         let included = build_crossover_cues_core(&bracket_scooby, xover_time, 0, 500, 8, true, 0.0);
         assert_eq!(included.len(), 1);
         assert_eq!(included[0].columns.len(), 3);
-        assert_eq!(included[0].columns[2].is_mine, true);
+        assert!(included[0].columns[2].is_mine);
     }
 
     #[test]
@@ -12935,7 +12935,7 @@ mod tests {
             &test_row_to_beat(ROWS_PER_BEAT as usize * 2),
         );
         let music_time_ns = timing.get_time_for_beat_ns(1.0);
-        let song_row = ROWS_PER_BEAT as i32;
+        let song_row = ROWS_PER_BEAT;
         let future_time_ns = song_time_ns_add_seconds(music_time_ns, 0.070);
 
         assert_eq!(
@@ -13162,7 +13162,7 @@ mod tests {
         assert!(direct_row > ROWS_PER_BEAT as usize);
         assert_eq!(
             assist_row_no_offset_for_timing(&timing, 0.100, music_time_ns),
-            ROWS_PER_BEAT as i32
+            ROWS_PER_BEAT
         );
     }
 

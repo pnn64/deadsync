@@ -31,7 +31,7 @@ fn extract_covered_keys(ini: &SimpleIni) -> BTreeSet<(String, String)> {
         if section == "Meta" {
             continue;
         }
-        for (key, _value) in props {
+        for key in props.keys() {
             keys.insert((section.clone(), key.clone()));
         }
     }

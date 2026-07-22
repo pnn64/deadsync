@@ -856,7 +856,7 @@ fn ensure_cached_tmesh(
         return entry.vertex_count == vertices.len() as u32;
     }
 
-    let bytes = vertices.len() * std::mem::size_of::<TexturedMeshVertex>();
+    let bytes = std::mem::size_of_val(vertices);
     if bytes > OPENGL_TMESH_CACHE_MAX_BYTES
         || cached_tmesh_bytes.saturating_add(bytes) > OPENGL_TMESH_CACHE_MAX_BYTES
     {

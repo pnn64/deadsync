@@ -467,49 +467,6 @@ pub fn multitap_explosion_command_blocks<Kind>(
     out
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn explosion_messages_append_sorted_unique_finite_lane_beats() {
-        let descs = [
-            MultitapDesc {
-                lane: 3,
-                taps: vec![2.0, f32::NAN, 1.0],
-                peak: None,
-            },
-            MultitapDesc {
-                lane: 4,
-                taps: vec![0.5],
-                peak: None,
-            },
-            MultitapDesc {
-                lane: 3,
-                taps: vec![1.0, 3.0],
-                peak: None,
-            },
-        ];
-        let mut messages = vec![SongLuaMessageEvent {
-            beat: 0.0,
-            message: "existing".to_owned(),
-            persists: true,
-        }];
-
-        push_multitap_explosion_message_events(&mut messages, &descs, 3, "explosion");
-
-        assert_eq!(
-            messages.iter().map(|event| event.beat).collect::<Vec<_>>(),
-            [0.0, 1.0, 2.0, 3.0]
-        );
-        assert!(
-            messages[1..]
-                .iter()
-                .all(|event| event.message == "explosion" && !event.persists)
-        );
-    }
-}
-
 fn push_overlay_sample_linear_ease(
     out: &mut Vec<SongLuaOverlayEase>,
     overlay_index: usize,
@@ -1045,4 +1002,47 @@ pub fn overlay_delta_pair_from_states(
     copy_option_field!(size);
     copy_option_field!(stretch_rect);
     overlay_delta_intersection(&out_from, &out_to)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn explosion_messages_append_sorted_unique_finite_lane_beats() {
+        let descs = [
+            MultitapDesc {
+                lane: 3,
+                taps: vec![2.0, f32::NAN, 1.0],
+                peak: None,
+            },
+            MultitapDesc {
+                lane: 4,
+                taps: vec![0.5],
+                peak: None,
+            },
+            MultitapDesc {
+                lane: 3,
+                taps: vec![1.0, 3.0],
+                peak: None,
+            },
+        ];
+        let mut messages = vec![SongLuaMessageEvent {
+            beat: 0.0,
+            message: "existing".to_owned(),
+            persists: true,
+        }];
+
+        push_multitap_explosion_message_events(&mut messages, &descs, 3, "explosion");
+
+        assert_eq!(
+            messages.iter().map(|event| event.beat).collect::<Vec<_>>(),
+            [0.0, 1.0, 2.0, 3.0]
+        );
+        assert!(
+            messages[1..]
+                .iter()
+                .all(|event| event.message == "explosion" && !event.persists)
+        );
+    }
 }

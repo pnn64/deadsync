@@ -106,7 +106,7 @@ pub fn prewarm_gameplay_assets<CapturedActor, StateDelta>(
                     if seen_song_lua_fonts.insert(*font_name)
                         && assets.with_font(font_name, |_| ()).is_none()
                         && let Err(err) =
-                            assets.load_font_from_ini_path(backend, *font_name, font_path)
+                            assets.load_font_from_ini_path(backend, font_name, font_path)
                     {
                         warn!(
                             "Failed to load song lua bitmap font '{}': {}",

@@ -102,8 +102,6 @@ pub(crate) use mini_indicator::{
     stream_segment_index_exclusive_end, zmod_broken_run_counter_text, zmod_broken_run_segment,
     zmod_measure_counter_text, zmod_run_timer_index,
 };
-#[cfg(any(test, feature = "bench-support"))]
-pub(crate) use notes::for_each_visible_note_index_legacy;
 pub(crate) use notes::{
     MineLayerRequest, NoteLayerRequest, ScrollTravelRequest, compose_mine_layers,
     compose_note_layer, for_each_visible_hold_index, for_each_visible_note_index,
@@ -3833,10 +3831,8 @@ mod tests {
 
     #[test]
     fn visible_note_window_uses_itg_rows_not_dense_rows() {
-        let notes = vec![
-            test_note_at_dense_row(0.0, 0),
-            test_note_at_dense_row(4.0, 1),
-        ];
+        let notes = [test_note_at_dense_row(0.0, 0),
+            test_note_at_dense_row(4.0, 1)];
         let note_indices = vec![0usize, 1usize];
         let note_itg_rows = notes.iter().map(note_itg_row).collect::<Vec<_>>();
         let mut visited = Vec::new();
@@ -3854,10 +3850,8 @@ mod tests {
 
     #[test]
     fn visible_note_window_clamps_negative_track_rows() {
-        let notes = vec![
-            test_note_at_dense_row(-1.0, 0),
-            test_note_at_dense_row(0.0, 1),
-        ];
+        let notes = [test_note_at_dense_row(-1.0, 0),
+            test_note_at_dense_row(0.0, 1)];
         let note_indices = vec![0usize, 1usize];
         let note_itg_rows = notes.iter().map(note_itg_row).collect::<Vec<_>>();
         let mut visited = Vec::new();
@@ -3874,7 +3868,7 @@ mod tests {
 
     #[test]
     fn visible_note_window_rejects_fully_negative_ranges() {
-        let notes = vec![test_note_at_dense_row(-1.0, 0)];
+        let notes = [test_note_at_dense_row(-1.0, 0)];
         let note_indices = vec![0usize];
         let note_itg_rows = notes.iter().map(note_itg_row).collect::<Vec<_>>();
         let mut visited = Vec::new();
