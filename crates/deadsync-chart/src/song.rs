@@ -199,23 +199,7 @@ impl SongData {
     fn is_video_path(path: &Path) -> bool {
         path.extension()
             .and_then(|ext| ext.to_str())
-            .is_some_and(|ext| {
-                matches!(
-                    ext.to_ascii_lowercase().as_str(),
-                    "mp4"
-                        | "avi"
-                        | "f4v"
-                        | "flv"
-                        | "m4v"
-                        | "mov"
-                        | "ogv"
-                        | "webm"
-                        | "mkv"
-                        | "mpg"
-                        | "mpeg"
-                        | "wmv"
-                )
-            })
+            .is_some_and(is_video_extension)
     }
 
     #[inline(always)]
@@ -603,6 +587,65 @@ impl SongData {
     }
 }
 
+#[inline(always)]
+fn is_video_extension(extension: &str) -> bool {
+    let bytes = extension.as_bytes();
+    if !(3..=4).contains(&bytes.len()) {
+        return false;
+    }
+
+    let mut lowercase = [0_u8; 4];
+    for (target, source) in lowercase.iter_mut().zip(bytes) {
+        *target = source.to_ascii_lowercase();
+    }
+    matches!(
+        &lowercase[..bytes.len()],
+        b"mp4"
+            | b"avi"
+            | b"f4v"
+            | b"flv"
+            | b"m4v"
+            | b"mov"
+            | b"ogv"
+            | b"webm"
+            | b"mkv"
+            | b"mpg"
+            | b"mpeg"
+            | b"wmv"
+    )
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn is_video_extension_legacy(extension: &str) -> bool {
+    matches!(
+        extension.to_ascii_lowercase().as_str(),
+        "mp4"
+            | "avi"
+            | "f4v"
+            | "flv"
+            | "m4v"
+            | "mov"
+            | "ogv"
+            | "webm"
+            | "mkv"
+            | "mpg"
+            | "mpeg"
+            | "wmv"
+    )
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn is_video_extension_for_bench(extension: &str) -> bool {
+    is_video_extension(extension)
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn is_video_extension_legacy_for_bench(extension: &str) -> bool {
+    is_video_extension_legacy(extension)
+}
+
 #[inline]
 fn title_subtitle_contains_ignore_ascii_case(title: &str, subtitle: &str, needle: &str) -> bool {
     let subtitle = (!subtitle.trim().is_empty()).then_some(subtitle);
@@ -902,6 +945,20 @@ mod tests {
             song.steps_index_for_chart_hash("dance-single", "later-edit"),
             Some(STANDARD_DIFFICULTY_COUNT + 1)
         );
+    }
+
+    #[test]
+    fn video_extension_matching_preserves_legacy_ascii_rules() {
+        for extension in [
+            "mp4", "MP4", "aVi", "f4v", "FLV", "m4v", "MOV", "ogv", "WEBM", "mkv", "MPG", "mpeg",
+            "WmV", "png", "mp", "mp44", "émp4", "",
+        ] {
+            assert_eq!(
+                is_video_extension(extension),
+                is_video_extension_legacy(extension),
+                "classification changed for {extension:?}"
+            );
+        }
     }
 
     #[test]

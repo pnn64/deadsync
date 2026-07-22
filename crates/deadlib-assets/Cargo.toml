@@ -17,6 +17,11 @@ name = "raw_banner_cache_load"
 harness = false
 required-features = ["bench-support"]
 
+[[bench]]
+name = "graphic_discovery_sort"
+harness = false
+required-features = ["bench-support"]
+
 [dependencies]
 deadlib-present = { path = "../deadlib-present" }
 deadlib-render = { path = "../deadlib-render" }

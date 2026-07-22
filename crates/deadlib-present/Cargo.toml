@@ -37,6 +37,11 @@ name = "textured_mesh_compose"
 harness = false
 required-features = ["bench-support"]
 
+[[bench]]
+name = "font_import_candidates"
+harness = false
+required-features = ["bench-support"]
+
 [dependencies]
 deadlib-render = { path = "../deadlib-render" }
 glam = "0.33.2"
