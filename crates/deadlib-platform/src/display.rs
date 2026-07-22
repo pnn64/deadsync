@@ -886,7 +886,7 @@ mod platform {
         use smithay_client_toolkit::reexports::client::protocol::wl_output;
         use smithay_client_toolkit::reexports::client::{Connection, QueueHandle};
         use smithay_client_toolkit::registry::{ProvidesRegistryState, RegistryState};
-        use smithay_client_toolkit::{delegate_output, delegate_registry, registry_handlers};
+        use smithay_client_toolkit::{delegate_dispatch2, delegate_registry, registry_handlers};
 
         fn snapshot_from_info(info: OutputInfo) -> DisplaySnapshot {
             let OutputInfo {
@@ -949,7 +949,7 @@ mod platform {
             }
         }
 
-        delegate_output!(ListOutputs);
+        delegate_dispatch2!(ListOutputs);
         delegate_registry!(ListOutputs);
 
         impl ProvidesRegistryState for ListOutputs {
