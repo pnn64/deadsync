@@ -46,6 +46,24 @@ impl PlanarAccum {
         for channel in &mut self.channels {
             channel.reserve(frames);
         }
+        if channels == 1 {
+            if let [channel] = self.channels.as_mut_slice() {
+                channel.extend(
+                    interleaved
+                        .iter()
+                        .map(|sample| f32::from(*sample) / 32768.0),
+                );
+                return;
+            }
+        } else if channels == 2
+            && let [left, right] = self.channels.as_mut_slice()
+        {
+            for frame in interleaved.chunks_exact(2) {
+                left.push(f32::from(frame[0]) / 32768.0);
+                right.push(f32::from(frame[1]) / 32768.0);
+            }
+            return;
+        }
         for frame in interleaved.chunks_exact(channels) {
             for (channel, sample) in self.channels.iter_mut().zip(frame.iter()) {
                 channel.push(f32::from(*sample) / 32768.0);
@@ -197,6 +215,54 @@ pub fn drop_front_samples(samples: &mut Vec<i16>, drop_samples: usize) {
     samples.truncate(remaining);
 }
 
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn reuse_seek_tail_for_bench(mut samples: Vec<i16>, drop_samples: usize) -> Vec<i16> {
+    drop_front_samples(&mut samples, drop_samples);
+    samples
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn reuse_seek_tail_legacy_for_bench(samples: Vec<i16>, drop_samples: usize) -> Vec<i16> {
+    samples[drop_samples..].to_vec()
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn push_i16_interleaved_for_bench(
+    accum: &mut PlanarAccum,
+    interleaved: &[i16],
+    channels: usize,
+) {
+    accum.push_i16_interleaved(interleaved, channels);
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+#[doc(hidden)]
+pub fn push_i16_interleaved_legacy_for_bench(
+    accum: &mut PlanarAccum,
+    interleaved: &[i16],
+    channels: usize,
+) {
+    if interleaved.is_empty() || channels == 0 {
+        return;
+    }
+    debug_assert_eq!(channels, accum.channels.len());
+    let frames = interleaved.len() / channels;
+    if frames == 0 {
+        return;
+    }
+    for channel in &mut accum.channels {
+        channel.reserve(frames);
+    }
+    for frame in interleaved.chunks_exact(channels) {
+        for (channel, sample) in accum.channels.iter_mut().zip(frame.iter()) {
+            channel.push(f32::from(*sample) / 32768.0);
+        }
+    }
+}
+
 pub fn apply_fade_envelope(
     samples: &mut [i16],
     channels: usize,
@@ -272,8 +338,9 @@ fn sample_to_i16(sample: f32) -> i16 {
 #[cfg(test)]
 mod tests {
     use super::{
-        PlanarAccum, apply_fade_envelope, drop_front_samples, volume_for_frame,
-        write_channel_mapped_i16, write_resampler_output,
+        PlanarAccum, apply_fade_envelope, drop_front_samples,
+        push_i16_interleaved_legacy_for_bench, volume_for_frame, write_channel_mapped_i16,
+        write_resampler_output,
     };
 
     #[test]
@@ -299,6 +366,22 @@ mod tests {
         assert_eq!(planar.start_frame, 0);
         assert_eq!(planar.available_frames(), 2000);
         assert_eq!(planar.channels[0].len(), 2000);
+    }
+
+    #[test]
+    fn specialized_planar_accum_matches_legacy_channel_mapping() {
+        for channels in 1..=3 {
+            let interleaved = (0..(channels * 17 + 1))
+                .map(|sample| sample as i16 * 97 - 1_000)
+                .collect::<Vec<_>>();
+            let mut expected = PlanarAccum::new(channels, 0);
+            push_i16_interleaved_legacy_for_bench(&mut expected, &interleaved, channels);
+            let mut actual = PlanarAccum::new(channels, 0);
+            actual.push_i16_interleaved(&interleaved, channels);
+
+            assert_eq!(actual.channels, expected.channels);
+            assert_eq!(actual.start_frame, expected.start_frame);
+        }
     }
 
     #[test]
@@ -348,6 +431,19 @@ mod tests {
         drop_front_samples(&mut samples, 2);
 
         assert_eq!(samples, [3, 4, 5]);
+    }
+
+    #[test]
+    fn seek_tail_reuse_matches_legacy_slices() {
+        let original = (0..64).collect::<Vec<i16>>();
+        for drop_samples in [0, 1, 17, 63, 64] {
+            let expected = original[drop_samples..].to_vec();
+            let mut actual = original.clone();
+
+            drop_front_samples(&mut actual, drop_samples);
+
+            assert_eq!(actual, expected);
+        }
     }
 
     #[test]

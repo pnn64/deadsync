@@ -22,6 +22,11 @@ name = "compiled_loader_lookup"
 harness = false
 required-features = ["bench-support"]
 
+[[bench]]
+name = "model_signature"
+harness = false
+required-features = ["bench-support"]
+
 [dependencies]
 bincode = "2.0.1"
 image = "0.25.10"
