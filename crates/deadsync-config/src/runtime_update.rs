@@ -15,6 +15,7 @@ use deadlib_render::{BackendType, PresentModePolicy};
 use deadsync_audio::AudioOutputMode;
 #[cfg(target_os = "linux")]
 use deadsync_audio::LinuxAudioBackend;
+#[cfg(target_os = "windows")]
 use deadsync_input_native::WindowsPadBackend;
 use deadsync_lights::{DriverKind as LightsDriverKind, GameplayPadLightMode};
 use log::warn;
@@ -166,6 +167,7 @@ update_config_fn!(pub fn update_show_select_music_cdtitles(enabled: bool) => set
 update_config_fn!(pub fn update_show_music_wheel_grades(enabled: bool) => set_show_music_wheel_grades);
 update_config_fn!(pub fn update_show_music_wheel_lamps(enabled: bool) => set_show_music_wheel_lamps);
 update_config_fn!(pub fn update_sort_music_wheel_by_series(enabled: bool) => set_sort_music_wheel_by_series);
+update_config_fn!(pub fn update_hide_inactive_series(enabled: bool) => set_hide_inactive_series);
 update_config_fn!(pub fn update_select_music_itl_rank_mode(mode: SelectMusicItlRankMode) => set_select_music_itl_rank_mode);
 update_config_fn!(pub fn update_select_music_itl_wheel_mode(mode: SelectMusicItlWheelMode) => set_select_music_itl_wheel_mode);
 update_config_fn!(pub fn update_select_music_wheel_style(style: SelectMusicWheelStyle) => set_select_music_wheel_style);

@@ -215,7 +215,7 @@ fn analyze_replaygain(tx: &Sender<SimplyLoveContentReloadEvent>, restrict_to: Op
 /// Collects the deduplicated set of song music paths from the loaded song cache.
 /// When `restrict_to` is `Some`, only songs whose music file lives under one of
 /// those pack directories are included.
-fn replaygain_music_paths(restrict_to: Option<&[PathBuf]>) -> Vec<PathBuf> {
+pub(crate) fn replaygain_music_paths(restrict_to: Option<&[PathBuf]>) -> Vec<PathBuf> {
     let mut paths = std::collections::BTreeSet::new();
     let cache = deadsync_simfile::runtime_cache::get_song_cache();
     for pack in cache.iter() {
@@ -265,7 +265,7 @@ fn artwork_cache_paths() -> (Vec<PathBuf>, Vec<PathBuf>) {
     (banner, cdtitle)
 }
 
-fn cache_progress_lines(path: Option<&Path>) -> (String, String) {
+pub(crate) fn cache_progress_lines(path: Option<&Path>) -> (String, String) {
     let Some(path) = path else {
         return (String::new(), String::new());
     };

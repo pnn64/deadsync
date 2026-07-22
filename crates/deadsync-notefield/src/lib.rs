@@ -140,11 +140,10 @@ use error_bar::{
 #[cfg(test)]
 use feedback::{
     JudgmentTiltParams, TapJudgmentRowsParams, column_cue_alpha, column_cue_alpha_anchored,
-    column_cue_alpha_with_fade,
-    column_cue_height,
-    column_cue_reverse_top_y, column_flash_alpha, column_flash_alpha_at, column_flash_color,
-    column_flash_height, column_flash_layout, column_flash_reverse_top_y, crossover_cue_height,
-    hold_glow_color, judgment_actor_zoom, judgment_tilt_rotation_deg, tap_judgment_rows,
+    column_cue_alpha_with_fade, column_cue_height, column_cue_reverse_top_y, column_flash_alpha,
+    column_flash_alpha_at, column_flash_color, column_flash_height, column_flash_layout,
+    column_flash_reverse_top_y, crossover_cue_height, hold_glow_color, judgment_actor_zoom,
+    judgment_tilt_rotation_deg, tap_judgment_rows,
 };
 #[cfg(test)]
 use holds::{
@@ -202,36 +201,34 @@ mod tests {
         append_disabled_timing_windows, append_edit_measure_number, append_mini_part,
         append_perspective_parts, append_turn_parts, apply_accel_y, apply_accel_y_with_peak,
         average_error_bar_mini_scale, beat_factor, beat_scroll_travel, beat_x_extra,
-        bottom_cap_uv_window, bumpy_angle, clamp_rounded_i16,
-        clipped_hold_body_bounds, column_cue_alpha, column_cue_alpha_anchored,
-        column_cue_alpha_with_fade, column_cue_height,
-        column_cue_reverse_top_y,
-        column_flash_alpha, column_flash_alpha_at, column_flash_color, column_flash_height,
-        column_flash_layout, column_flash_reverse_top_y, combo_actor_zoom,
+        bottom_cap_uv_window, bumpy_angle, clamp_rounded_i16, clipped_hold_body_bounds,
+        column_cue_alpha, column_cue_alpha_anchored, column_cue_alpha_with_fade, column_cue_height,
+        column_cue_reverse_top_y, column_flash_alpha, column_flash_alpha_at, column_flash_color,
+        column_flash_height, column_flash_layout, column_flash_reverse_top_y, combo_actor_zoom,
         compute_invert_distances, compute_tornado_bounds, crossover_cue_height, default_column_x,
-        drunk_x_extra, edit_bar_candidate_step_rows,
-        edit_bar_scroll_speed, edit_beat_bar_info_for_row, edit_beat_scroll_travel,
-        effective_mini_value, error_bar_boundaries_s, error_bar_color_for_window,
-        error_bar_flash_alpha, error_bar_text_scalable_zoom, error_bar_tick_alpha,
-        field_effect_height, fill_lane_col_offsets, find_first_displayed_beat,
-        find_last_displayed_beat, for_each_visible_hold_index, for_each_visible_note_index,
-        gameplay_mods_text, gameplay_visual_effect_params, held_miss_zoom,
-        hold_body_bottom_for_tail_cap, hold_body_segment_budget, hold_draw_span, hold_glow_color,
-        hold_head_part_for_roll, hold_indicator_column_x, hold_overlaps_visible_window,
-        hold_parts_for_note_type, hold_segment_pose, hold_strip_actor, hold_strip_glow_actor,
-        hold_strip_quad, hold_strip_row_3d, hold_tail_cap_bounds, hud_layout_ys, hud_y,
-        itg_actor_glow_alpha, itg_actor_rotation_z, judgment_actor_zoom,
-        judgment_tilt_rotation_deg, maybe_mirror_uv_horiz_for_reverse_flipped,
-        mine_hides_after_resolution, mine_part, mod_divisor, mod_percent_key, move_col_extra,
-        note_itg_row, note_world_z_for_bumpy, note_x_extra, note_x_offset, notefield_view_proj,
-        offset_center, player_metric_y, push_transform_parts, quantize_centi_i32,
-        quantize_centi_u32, quantize_step, receptor_row_center, rgba8, scale_cap_to_arrow,
-        scale_effect_size, scale_sprite_to_arrow, share_actor_range, signed_effect_active,
-        sm_scale, smoothstep01, song_time_ns_delta_seconds, song_time_ns_to_seconds,
-        stream_segment_index_exclusive_end, stream_segment_index_inclusive_end, tap_judgment_rows,
-        tap_part_for_note_type, tap_replacement_head, timing_window_from_num, tiny_spacing_scale,
-        tipsy_y_extra, top_cap_rotation_deg, tornado_x_extra, translated_uv_rect,
-        visual_arrow_effect_zoom, visual_confusion_rotation_deg, visual_effect_params_for_col,
+        drunk_x_extra, edit_bar_candidate_step_rows, edit_bar_scroll_speed,
+        edit_beat_bar_info_for_row, edit_beat_scroll_travel, effective_mini_value,
+        error_bar_boundaries_s, error_bar_color_for_window, error_bar_flash_alpha,
+        error_bar_text_scalable_zoom, error_bar_tick_alpha, field_effect_height,
+        fill_lane_col_offsets, find_first_displayed_beat, find_last_displayed_beat,
+        for_each_visible_hold_index, for_each_visible_note_index, gameplay_mods_text,
+        gameplay_visual_effect_params, held_miss_zoom, hold_body_bottom_for_tail_cap,
+        hold_body_segment_budget, hold_draw_span, hold_glow_color, hold_head_part_for_roll,
+        hold_indicator_column_x, hold_overlaps_visible_window, hold_parts_for_note_type,
+        hold_segment_pose, hold_strip_actor, hold_strip_glow_actor, hold_strip_quad,
+        hold_strip_row_3d, hold_tail_cap_bounds, hud_layout_ys, hud_y, itg_actor_glow_alpha,
+        itg_actor_rotation_z, judgment_actor_zoom, judgment_tilt_rotation_deg,
+        maybe_mirror_uv_horiz_for_reverse_flipped, mine_hides_after_resolution, mine_part,
+        mod_divisor, mod_percent_key, move_col_extra, note_itg_row, note_world_z_for_bumpy,
+        note_x_extra, note_x_offset, notefield_view_proj, offset_center, player_metric_y,
+        push_transform_parts, quantize_centi_i32, quantize_centi_u32, quantize_step,
+        receptor_row_center, rgba8, scale_cap_to_arrow, scale_effect_size, scale_sprite_to_arrow,
+        share_actor_range, signed_effect_active, sm_scale, smoothstep01,
+        song_time_ns_delta_seconds, song_time_ns_to_seconds, stream_segment_index_exclusive_end,
+        stream_segment_index_inclusive_end, tap_judgment_rows, tap_part_for_note_type,
+        tap_replacement_head, timing_window_from_num, tiny_spacing_scale, tipsy_y_extra,
+        top_cap_rotation_deg, tornado_x_extra, translated_uv_rect, visual_arrow_effect_zoom,
+        visual_confusion_rotation_deg, visual_effect_params_for_col,
         visual_hold_body_needs_z_buffer, visual_note_rotation_z, visual_pulse_inner_zoom,
         visual_pulse_zoom_for_y, visual_tiny_zoom, visual_use_legacy_hold_sprites,
         zmod_broken_run_counter_text, zmod_broken_run_end, zmod_broken_run_segment,
@@ -3834,16 +3831,15 @@ mod tests {
 
     #[test]
     fn visible_note_window_uses_itg_rows_not_dense_rows() {
-        let notes = vec![
-            test_note_at_dense_row(0.0, 0),
-            test_note_at_dense_row(4.0, 1),
-        ];
+        let notes = [test_note_at_dense_row(0.0, 0),
+            test_note_at_dense_row(4.0, 1)];
         let note_indices = vec![0usize, 1usize];
+        let note_itg_rows = notes.iter().map(note_itg_row).collect::<Vec<_>>();
         let mut visited = Vec::new();
 
         for_each_visible_note_index(
             &note_indices,
-            &notes,
+            &note_itg_rows,
             Some((beat_to_note_row(3.5), beat_to_note_row(4.5))),
             |note_index| visited.push(note_index),
         );
@@ -3854,16 +3850,15 @@ mod tests {
 
     #[test]
     fn visible_note_window_clamps_negative_track_rows() {
-        let notes = vec![
-            test_note_at_dense_row(-1.0, 0),
-            test_note_at_dense_row(0.0, 1),
-        ];
+        let notes = [test_note_at_dense_row(-1.0, 0),
+            test_note_at_dense_row(0.0, 1)];
         let note_indices = vec![0usize, 1usize];
+        let note_itg_rows = notes.iter().map(note_itg_row).collect::<Vec<_>>();
         let mut visited = Vec::new();
 
         for_each_visible_note_index(
             &note_indices,
-            &notes,
+            &note_itg_rows,
             Some((beat_to_note_row(-2.0), beat_to_note_row(0.0))),
             |note_index| visited.push(note_index),
         );
@@ -3873,13 +3868,14 @@ mod tests {
 
     #[test]
     fn visible_note_window_rejects_fully_negative_ranges() {
-        let notes = vec![test_note_at_dense_row(-1.0, 0)];
+        let notes = [test_note_at_dense_row(-1.0, 0)];
         let note_indices = vec![0usize];
+        let note_itg_rows = notes.iter().map(note_itg_row).collect::<Vec<_>>();
         let mut visited = Vec::new();
 
         for_each_visible_note_index(
             &note_indices,
-            &notes,
+            &note_itg_rows,
             Some((beat_to_note_row(-4.0), beat_to_note_row(-2.0))),
             |note_index| visited.push(note_index),
         );
@@ -3888,15 +3884,62 @@ mod tests {
     }
 
     #[test]
+    fn cached_visible_note_windows_match_legacy_search_across_range_sweep() {
+        let notes = [
+            (-2.0, 90usize),
+            (-0.01, 70),
+            (0.0, 50),
+            (0.01, 30),
+            (0.5, 20),
+            (3.999, 10),
+            (4.0, 1),
+            (4.011, 0),
+            (12.5, 2),
+            (64.0, 3),
+        ]
+        .into_iter()
+        .map(|(beat, dense_row)| test_note_at_dense_row(beat, dense_row))
+        .collect::<Vec<_>>();
+        let note_itg_rows = notes.iter().map(note_itg_row).collect::<Vec<_>>();
+        let mut note_indices = (0..notes.len()).collect::<Vec<_>>();
+        note_indices.sort_unstable_by_key(|&index| (note_itg_rows[index], index));
+
+        for low in (-120..=3_120).step_by(17) {
+            for width in [0, 1, 47, 48, 97, 384] {
+                let range = Some((low, low + width));
+                let mut legacy = Vec::new();
+                let mut cached = Vec::new();
+                crate::notes::for_each_visible_note_index_legacy(
+                    &note_indices,
+                    &notes,
+                    range,
+                    |index| legacy.push(index),
+                );
+                for_each_visible_note_index(&note_indices, &note_itg_rows, range, |index| {
+                    cached.push(index)
+                });
+                assert_eq!(cached, legacy, "range={range:?}");
+            }
+        }
+    }
+
+    #[test]
     fn visible_hold_window_includes_holds_started_before_range() {
         let notes = vec![test_hold_at_beat(0.0, 8.0), test_hold_at_beat(12.0, 16.0)];
         let hold_indices = vec![0usize, 1usize];
+        let note_itg_rows = notes.iter().map(note_itg_row).collect::<Vec<_>>();
         let visible_range = Some((beat_to_note_row(4.0), beat_to_note_row(5.0)));
         let mut visited = Vec::new();
 
-        for_each_visible_hold_index(&hold_indices, &notes, visible_range, |note_index| {
-            visited.push(note_index);
-        });
+        for_each_visible_hold_index(
+            &hold_indices,
+            &notes,
+            &note_itg_rows,
+            visible_range,
+            |note_index| {
+                visited.push(note_index);
+            },
+        );
 
         assert!(hold_overlaps_visible_window(0, &notes, visible_range));
         assert!(!hold_overlaps_visible_window(1, &notes, visible_range));
@@ -3907,12 +3950,19 @@ mod tests {
     fn visible_hold_window_rejects_fully_negative_ranges() {
         let notes = vec![test_hold_at_beat(-4.0, -1.0)];
         let hold_indices = vec![0usize];
+        let note_itg_rows = notes.iter().map(note_itg_row).collect::<Vec<_>>();
         let visible_range = Some((beat_to_note_row(-4.0), beat_to_note_row(-1.0)));
         let mut visited = Vec::new();
 
-        for_each_visible_hold_index(&hold_indices, &notes, visible_range, |note_index| {
-            visited.push(note_index);
-        });
+        for_each_visible_hold_index(
+            &hold_indices,
+            &notes,
+            &note_itg_rows,
+            visible_range,
+            |note_index| {
+                visited.push(note_index);
+            },
+        );
 
         assert!(!hold_overlaps_visible_window(0, &notes, visible_range));
         assert!(visited.is_empty());

@@ -13,8 +13,6 @@ pub(crate) fn init_view() -> PlayerOptionsInitView {
             allow_per_player_global_offsets: config.machine_allow_per_player_global_offsets,
             heart_rate_monitors: config.machine_enable_heart_rate_monitors,
             arcade_navigation: config.arcade_options_navigation,
-            dedicated_three_key_nav: config.three_key_navigation
-                && config.only_dedicated_menu_buttons,
             smx_input: config.smx_input,
             smx_panel_lights: config.smx_panel_lights,
             scorebox_available: deadsync_online::score_compat::is_gs_get_scores_service_allowed(),

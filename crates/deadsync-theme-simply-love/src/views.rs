@@ -213,7 +213,6 @@ pub struct PlayerOptionsPolicyView {
     pub allow_per_player_global_offsets: bool,
     pub heart_rate_monitors: bool,
     pub arcade_navigation: bool,
-    pub dedicated_three_key_nav: bool,
     pub smx_input: bool,
     pub smx_panel_lights: bool,
     pub scorebox_available: bool,
@@ -226,8 +225,6 @@ impl Default for PlayerOptionsPolicyView {
             allow_per_player_global_offsets: config.machine_allow_per_player_global_offsets,
             heart_rate_monitors: config.machine_enable_heart_rate_monitors,
             arcade_navigation: config.arcade_options_navigation,
-            dedicated_three_key_nav: config.three_key_navigation
-                && config.only_dedicated_menu_buttons,
             smx_input: config.smx_input,
             smx_panel_lights: config.smx_panel_lights,
             scorebox_available: false,
@@ -895,6 +892,30 @@ pub enum SimplyLoveContentReloadEvent {
     },
 }
 
+/// Progress and completion data produced by the shell-owned bulk ReplayGain
+/// analysis worker triggered from the Sound options "Apply ReplayGain" action.
+#[derive(Clone, Debug)]
+pub enum SimplyLoveApplyReplayGainEvent {
+    /// Emitted once when the worker has enumerated the library and is about to
+    /// begin analysis.
+    Started { total: usize },
+    /// Emitted after each song finishes. `line2`/`line3` carry the pack and
+    /// song labels for display.
+    Progress {
+        done: usize,
+        total: usize,
+        line2: String,
+        line3: String,
+    },
+    /// Emitted once when the worker stops, either because it finished the whole
+    /// library or because it was cancelled.
+    Finished {
+        done: usize,
+        total: usize,
+        cancelled: bool,
+    },
+}
+
 /// One shell-prepared unlock download row rendered by Select Music.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SelectMusicDownloadView {
@@ -1093,6 +1114,7 @@ impl Default for SelectMusicWheelPolicyView {
 pub struct SelectMusicInteractionPolicyView {
     pub wheel_switch_speed: u8,
     pub wheel_style: deadsync_config::prelude::SelectMusicWheelStyle,
+    pub hide_inactive_series: bool,
     pub sort_by_series: bool,
     pub new_pack_mode: deadsync_config::prelude::NewPackMode,
     pub show_srpg_shop: bool,
@@ -1108,6 +1130,7 @@ impl Default for SelectMusicInteractionPolicyView {
         Self {
             wheel_switch_speed: deadsync_config::prelude::DEFAULT_MUSIC_WHEEL_SWITCH_SPEED,
             wheel_style: deadsync_config::prelude::SelectMusicWheelStyle::Itg,
+            hide_inactive_series: false,
             sort_by_series: false,
             new_pack_mode: deadsync_config::prelude::NewPackMode::Disabled,
             show_srpg_shop: deadsync_config::prelude::DEFAULT_SHOW_SRPG_SHOP,

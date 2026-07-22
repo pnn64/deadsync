@@ -2606,7 +2606,7 @@ fn append_menu_row(
 }
 
 fn menu_row_y(idx: usize, row_count: usize) -> f32 {
-    if row_count % 2 == 0 {
+    if row_count.is_multiple_of(2) {
         screen_center_y()
             + EDIT_MENU_ROW_HEIGHT * (idx as f32 - (row_count / 2) as f32)
             + EDIT_MENU_ROW_HEIGHT * 0.5

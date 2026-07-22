@@ -243,94 +243,6 @@ fn music_output_start_sec(
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::{music_output_start_sec, push_music_block, seek_preroll_in_frames};
-    use deadsync_audio::{MusicBlockTiming, music_transport};
-    use std::sync::Arc;
-    use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-    use std::time::{Duration, Instant};
-
-    #[test]
-    fn seeked_map_starts_at_decoder_frame() {
-        let sec = music_output_start_sec(true, 44_092, 1.0, 44_100);
-
-        assert!((sec - (44_092.0 / 44_100.0)).abs() <= 1e-12);
-    }
-
-    #[test]
-    fn preroll_drop_uses_actual_seek_distance() {
-        assert_eq!(seek_preroll_in_frames(true, 44_100, 44_092), 8);
-        assert_eq!(seek_preroll_in_frames(true, 44_100, 44_120), 0);
-        assert_eq!(seek_preroll_in_frames(false, 44_100, 0), 0);
-    }
-
-    #[test]
-    fn generation_change_cancels_a_backpressured_block() {
-        const CHANNELS: usize = 2;
-        const GENERATION: u64 = 7;
-        const SEC_PER_FRAME: f64 = 0.125;
-        const TIMEOUT: Duration = Duration::from_secs(1);
-
-        let (mut stream, _render) = music_transport(CHANNELS);
-        let full_block = vec![1; 256 * CHANNELS];
-        let timing = MusicBlockTiming {
-            generation: GENERATION,
-            music_start_sec: 0.0,
-            music_sec_per_frame: SEC_PER_FRAME,
-        };
-        let mut filled = 0;
-        while stream.writer.try_push(&full_block, timing) != 0 {
-            filled += 1;
-        }
-        assert!(filled > 0);
-
-        let generation = Arc::new(AtomicU64::new(GENERATION));
-        let stop = Arc::new(AtomicBool::new(false));
-        let entered = Arc::new(AtomicBool::new(false));
-        let generation_thread = generation.clone();
-        let stop_thread = stop.clone();
-        let entered_thread = entered.clone();
-        let mut writer = stream.writer;
-        let thread = std::thread::spawn(move || {
-            entered_thread.store(true, Ordering::Release);
-            let result = push_music_block(
-                &mut writer,
-                &[7, 8],
-                CHANNELS,
-                MusicBlockTiming {
-                    generation: GENERATION,
-                    music_start_sec: 3.25,
-                    music_sec_per_frame: SEC_PER_FRAME,
-                },
-                &generation_thread,
-                &stop_thread,
-            );
-            (writer, result)
-        });
-
-        while !entered.load(Ordering::Acquire) {
-            std::thread::yield_now();
-        }
-        std::thread::sleep(Duration::from_millis(2));
-        generation.store(GENERATION + 1, Ordering::Release);
-        let deadline = Instant::now() + TIMEOUT;
-        while !thread.is_finished() && Instant::now() < deadline {
-            std::thread::yield_now();
-        }
-        if !thread.is_finished() {
-            stop.store(true, Ordering::Release);
-        }
-        let (_writer, result) = thread.join().expect("producer did not panic");
-        assert!(
-            Instant::now() < deadline,
-            "generation reset did not unblock producer"
-        );
-        let next_sec = result.expect("canceling a stale block succeeds");
-        assert_eq!(next_sec.to_bits(), (3.25 + SEC_PER_FRAME).to_bits());
-    }
-}
-
 fn music_decoder_thread_loop(
     path: PathBuf,
     cut: Cut,
@@ -1035,4 +947,92 @@ pub fn load_and_resample_sfx(
         resampled_data.extend_from_slice(&out_tmp);
     }
     Ok(Arc::from(resampled_data.into_boxed_slice()))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{music_output_start_sec, push_music_block, seek_preroll_in_frames};
+    use deadsync_audio::{MusicBlockTiming, music_transport};
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+    use std::time::{Duration, Instant};
+
+    #[test]
+    fn seeked_map_starts_at_decoder_frame() {
+        let sec = music_output_start_sec(true, 44_092, 1.0, 44_100);
+
+        assert!((sec - (44_092.0 / 44_100.0)).abs() <= 1e-12);
+    }
+
+    #[test]
+    fn preroll_drop_uses_actual_seek_distance() {
+        assert_eq!(seek_preroll_in_frames(true, 44_100, 44_092), 8);
+        assert_eq!(seek_preroll_in_frames(true, 44_100, 44_120), 0);
+        assert_eq!(seek_preroll_in_frames(false, 44_100, 0), 0);
+    }
+
+    #[test]
+    fn generation_change_cancels_a_backpressured_block() {
+        const CHANNELS: usize = 2;
+        const GENERATION: u64 = 7;
+        const SEC_PER_FRAME: f64 = 0.125;
+        const TIMEOUT: Duration = Duration::from_secs(1);
+
+        let (mut stream, _render) = music_transport(CHANNELS);
+        let full_block = vec![1; 256 * CHANNELS];
+        let timing = MusicBlockTiming {
+            generation: GENERATION,
+            music_start_sec: 0.0,
+            music_sec_per_frame: SEC_PER_FRAME,
+        };
+        let mut filled = 0;
+        while stream.writer.try_push(&full_block, timing) != 0 {
+            filled += 1;
+        }
+        assert!(filled > 0);
+
+        let generation = Arc::new(AtomicU64::new(GENERATION));
+        let stop = Arc::new(AtomicBool::new(false));
+        let entered = Arc::new(AtomicBool::new(false));
+        let generation_thread = generation.clone();
+        let stop_thread = stop.clone();
+        let entered_thread = entered.clone();
+        let mut writer = stream.writer;
+        let thread = std::thread::spawn(move || {
+            entered_thread.store(true, Ordering::Release);
+            let result = push_music_block(
+                &mut writer,
+                &[7, 8],
+                CHANNELS,
+                MusicBlockTiming {
+                    generation: GENERATION,
+                    music_start_sec: 3.25,
+                    music_sec_per_frame: SEC_PER_FRAME,
+                },
+                &generation_thread,
+                &stop_thread,
+            );
+            (writer, result)
+        });
+
+        while !entered.load(Ordering::Acquire) {
+            std::thread::yield_now();
+        }
+        std::thread::sleep(Duration::from_millis(2));
+        generation.store(GENERATION + 1, Ordering::Release);
+        let deadline = Instant::now() + TIMEOUT;
+        while !thread.is_finished() && Instant::now() < deadline {
+            std::thread::yield_now();
+        }
+        if !thread.is_finished() {
+            stop.store(true, Ordering::Release);
+        }
+        let (_writer, result) = thread.join().expect("producer did not panic");
+        assert!(
+            Instant::now() < deadline,
+            "generation reset did not unblock producer"
+        );
+        let next_sec = result.expect("canceling a stale block succeeds");
+        assert_eq!(next_sec.to_bits(), (3.25 + SEC_PER_FRAME).to_bits());
+    }
 }

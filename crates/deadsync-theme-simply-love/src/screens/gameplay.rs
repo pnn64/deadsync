@@ -3696,7 +3696,7 @@ fn push_layer2_bganimations(actors: &mut Vec<Actor>, state: &State) {
         .filter_map(|change| {
             let start = state.timing().get_time_for_beat(change.start_beat);
             let elapsed = state.current_music_time_display() - start;
-            (elapsed >= 0.0 && elapsed <= FLASH_SECONDS).then_some((change, elapsed))
+            (0.0..=FLASH_SECONDS).contains(&elapsed).then_some((change, elapsed))
         })
         .next()
     else {
@@ -8361,7 +8361,7 @@ fn build_song_lua_overlay_actor(
             } else {
                 TextContent::from(text)
             };
-            let font = if asset_manager.with_font(*font_name, |_| ()).is_some() {
+            let font = if asset_manager.with_font(font_name, |_| ()).is_some() {
                 *font_name
             } else {
                 "miso"
@@ -8634,7 +8634,7 @@ fn build_song_lua_overlay_actor(
                 state,
                 body_values,
                 *body_state,
-                *line_state,
+                **line_state,
                 *size,
                 x_scale,
                 y_scale,
@@ -9024,7 +9024,7 @@ fn song_lua_overlay_glow_actor(
                 color,
                 stroke_color,
                 glow: [0.0, 0.0, 0.0, 0.0],
-                font: *font,
+                font,
                 content: content.clone(),
                 attributes,
                 align_text: *align_text,
@@ -9355,6 +9355,37 @@ fn apply_song_lua_player_transform_legacy(
     );
 }
 
+#[inline(always)]
+fn song_lua_player_transform_is_direct_identity(transform: SongLuaCaptureTransform) -> bool {
+    transform.z_shift == 0
+        && transform.tint == [1.0; 4]
+        && transform.blend.is_none()
+        && screen_width().is_finite()
+        && screen_height().is_finite()
+        && screen_center_y().is_finite()
+        && transform.playfield_center_x.is_finite()
+        && transform.target_x.is_finite()
+        && transform.target_y.is_finite()
+        && transform.rotation_x.is_finite()
+        && transform.rotation_x.abs() <= f32::EPSILON
+        && transform.rotation_z.is_finite()
+        && transform.rotation_z.abs() <= f32::EPSILON
+        && transform.rotation_y.is_finite()
+        && transform.rotation_y.abs() <= f32::EPSILON
+        && transform.skew_x.is_finite()
+        && transform.skew_x.abs() <= f32::EPSILON
+        && transform.skew_y.is_finite()
+        && transform.skew_y.abs() <= f32::EPSILON
+        && transform.zoom_x.is_finite()
+        && (transform.zoom_x - 1.0).abs() <= f32::EPSILON
+        && transform.zoom_y.is_finite()
+        && (transform.zoom_y - 1.0).abs() <= f32::EPSILON
+        && transform.zoom_z.is_finite()
+        && (transform.zoom_z - 1.0).abs() <= f32::EPSILON
+        && (transform.target_x - transform.playfield_center_x).abs() <= f32::EPSILON
+        && (screen_center_y() - transform.target_y).abs() <= f32::EPSILON
+}
+
 #[allow(clippy::too_many_arguments)]
 fn apply_song_lua_player_transform(
     field_actors: &mut Vec<Actor>,
@@ -9375,33 +9406,22 @@ fn apply_song_lua_player_transform(
     zoom_y: f32,
     zoom_z: f32,
 ) {
-    let direct_identity = z_shift == 0
-        && tint == [1.0; 4]
-        && blend.is_none()
-        && screen_width().is_finite()
-        && screen_height().is_finite()
-        && screen_center_y().is_finite()
-        && playfield_center_x.is_finite()
-        && target_x.is_finite()
-        && target_y.is_finite()
-        && rotation_x_deg.is_finite()
-        && rotation_x_deg.abs() <= f32::EPSILON
-        && rotation_z_deg.is_finite()
-        && rotation_z_deg.abs() <= f32::EPSILON
-        && rotation_y_deg.is_finite()
-        && rotation_y_deg.abs() <= f32::EPSILON
-        && skew_x.is_finite()
-        && skew_x.abs() <= f32::EPSILON
-        && skew_y.is_finite()
-        && skew_y.abs() <= f32::EPSILON
-        && zoom_x.is_finite()
-        && (zoom_x - 1.0).abs() <= f32::EPSILON
-        && zoom_y.is_finite()
-        && (zoom_y - 1.0).abs() <= f32::EPSILON
-        && zoom_z.is_finite()
-        && (zoom_z - 1.0).abs() <= f32::EPSILON
-        && (target_x - playfield_center_x).abs() <= f32::EPSILON
-        && (screen_center_y() - target_y).abs() <= f32::EPSILON;
+    let direct_identity = song_lua_player_transform_is_direct_identity(SongLuaCaptureTransform {
+        z_shift,
+        tint,
+        blend,
+        playfield_center_x,
+        target_x,
+        target_y,
+        rotation_x: rotation_x_deg,
+        rotation_z: rotation_z_deg,
+        rotation_y: rotation_y_deg,
+        skew_x,
+        skew_y,
+        zoom_x,
+        zoom_y,
+        zoom_z,
+    });
     if direct_identity {
         out.clear();
         out.reserve(field_actors.len().saturating_add(hud_actors.len()));
@@ -9492,8 +9512,72 @@ fn append_player_actors(out: &mut Vec<Actor>, player_scratch: &mut Vec<Actor>) {
     out.append(player_scratch);
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum PlayerActorAssembly {
+    Buffered,
+    DirectIdentity,
+}
+
+#[inline(always)]
+fn player_actor_assembly_for_transform(
+    requests_player_proxy: bool,
+    visible: bool,
+    transform: SongLuaCaptureTransform,
+) -> PlayerActorAssembly {
+    if !requests_player_proxy && visible && song_lua_player_transform_is_direct_identity(transform)
+    {
+        PlayerActorAssembly::DirectIdentity
+    } else {
+        PlayerActorAssembly::Buffered
+    }
+}
+
+#[inline(always)]
+fn player_actor_bundle_len(
+    assembly: PlayerActorAssembly,
+    field_scratch: &[Actor],
+    hud_scratch: &[Actor],
+    player_scratch: &[Actor],
+) -> usize {
+    match assembly {
+        PlayerActorAssembly::Buffered => player_scratch.len(),
+        PlayerActorAssembly::DirectIdentity => {
+            field_scratch.len().saturating_add(hud_scratch.len())
+        }
+    }
+}
+
+#[inline(always)]
+fn append_player_actor_bundle(
+    out: &mut Vec<Actor>,
+    assembly: PlayerActorAssembly,
+    field_scratch: &mut Vec<Actor>,
+    hud_scratch: &mut Vec<Actor>,
+    player_scratch: &mut Vec<Actor>,
+) {
+    match assembly {
+        PlayerActorAssembly::Buffered => append_player_actors(out, player_scratch),
+        PlayerActorAssembly::DirectIdentity => {
+            out.append(hud_scratch);
+            out.append(field_scratch);
+        }
+    }
+}
+
+#[inline(always)]
+fn clear_player_actor_bundle(
+    field_scratch: &mut Vec<Actor>,
+    hud_scratch: &mut Vec<Actor>,
+    player_scratch: &mut Vec<Actor>,
+) {
+    field_scratch.clear();
+    hud_scratch.clear();
+    player_scratch.clear();
+}
+
 #[inline(always)]
 #[cfg(any(test, feature = "bench-support"))]
+#[allow(clippy::extend_with_drain)] // Preserve the slower baseline used by the transfer benchmark.
 fn append_player_actors_legacy(out: &mut Vec<Actor>, player_scratch: &mut Vec<Actor>) {
     out.extend(player_scratch.drain(..));
 }
@@ -9511,6 +9595,24 @@ pub fn benchmark_append_player_actors_legacy(
 #[doc(hidden)]
 pub fn benchmark_append_player_actors(out: &mut Vec<Actor>, player_scratch: &mut Vec<Actor>) {
     append_player_actors(out, player_scratch);
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn benchmark_append_direct_identity_player_actors(
+    out: &mut Vec<Actor>,
+    field_scratch: &mut Vec<Actor>,
+    hud_scratch: &mut Vec<Actor>,
+    player_scratch: &mut Vec<Actor>,
+) {
+    player_scratch.clear();
+    append_player_actor_bundle(
+        out,
+        PlayerActorAssembly::DirectIdentity,
+        field_scratch,
+        hud_scratch,
+        player_scratch,
+    );
 }
 
 fn song_lua_player_target_x(
@@ -9560,7 +9662,7 @@ fn push_song_lua_layer_actors(
         let overlay_state = overlay_states
             .get(idx)
             .copied()
-            .unwrap_or_else(|| SongLuaOverlayState::default());
+            .unwrap_or_else(SongLuaOverlayState::default);
         let actor = match &overlay.kind {
             SongLuaOverlayKind::ActorProxy { target } => {
                 song_lua_proxy_source(target, proxy_sources)
@@ -9644,7 +9746,7 @@ fn push_song_lua_layer_actors(
 }
 
 pub fn push_actors(
-    mut actors: &mut Vec<Actor>,
+    actors: &mut Vec<Actor>,
     state: &mut State,
     asset_manager: &AssetManager,
     view: ActorViewOverride,
@@ -9780,7 +9882,7 @@ pub fn push_actors(
     // --- Background and Filter ---
     let underlay_start = actors.len();
     push_background(
-        &mut actors,
+        actors,
         state,
         policy.background_brightness,
         policy.background_color,
@@ -9804,7 +9906,7 @@ pub fn push_actors(
             layer.song_foreground_events.as_slice(),
         );
         push_song_lua_layer_actors(
-            &mut actors,
+            actors,
             &layer.overlays,
             order_cache,
             local_states,
@@ -9822,7 +9924,7 @@ pub fn push_actors(
             &mut song_lua_capture_order_scratch,
         );
     }
-    song_lua_capture_new_actors(&mut underlay_proxy_source, &mut actors, underlay_start);
+    song_lua_capture_new_actors(&mut underlay_proxy_source, actors, underlay_start);
     let cover_alpha = |player_idx: usize| -> f32 {
         if player_idx >= state.num_players() {
             return 0.0;
@@ -9932,7 +10034,7 @@ pub fn push_actors(
                 z(2101)
             ));
         }
-        song_lua_capture_new_actors(&mut overlay_proxy_source, &mut actors, overlay_start);
+        song_lua_capture_new_actors(&mut overlay_proxy_source, actors, overlay_start);
     }
 
     // Hold START/BACK prompt (Simply Love parity: ScreenGameplay debug text).
@@ -9989,7 +10091,7 @@ pub fn push_actors(
                 z(1000)
             ));
         }
-        song_lua_capture_new_actors(&mut overlay_proxy_source, &mut actors, overlay_start);
+        song_lua_capture_new_actors(&mut overlay_proxy_source, actors, overlay_start);
     }
 
     if !hide_gameplay_hud {
@@ -10005,7 +10107,7 @@ pub fn push_actors(
                 player_side: state.runtime_view.player_side,
             }));
         }
-        song_lua_capture_new_actors(&mut overlay_proxy_source, &mut actors, overlay_start);
+        song_lua_capture_new_actors(&mut overlay_proxy_source, actors, overlay_start);
     }
 
     // The SMX live sensor display and input-driven pad display are positioned
@@ -10025,7 +10127,7 @@ pub fn push_actors(
             ));
         }
     }
-    song_lua_capture_new_actors(&mut overlay_proxy_source, &mut actors, overlay_start);
+    song_lua_capture_new_actors(&mut overlay_proxy_source, actors, overlay_start);
 
     let notefield_width = |player_idx: usize| -> f32 {
         let Some(ns) = state.noteskin_assets.noteskin[player_idx].as_ref() else {
@@ -10155,35 +10257,48 @@ pub fn push_actors(
                 song_lua_render_captured_source(field_source, hud_source, capture_transform)
             };
             let note_field_source = render_source_bundle(field_actors.as_ref(), None);
-            apply_song_lua_player_transform(
-                field_scratch,
-                hud_scratch,
-                player_scratch,
-                z_shift,
-                player_state.diffuse,
-                player_blend,
-                layout_center_x,
-                target_x,
-                target_y,
-                rotation_x,
-                rotation_z,
-                rotation_y,
-                skew_x,
-                skew_y,
-                zoom_x,
-                zoom_y,
-                zoom_z,
+            let assembly = player_actor_assembly_for_transform(
+                requests.player,
+                player_state.visible,
+                capture_transform,
             );
-            let player_source = if requests.player {
-                let source = song_lua_share_actor_source_in_place(player_scratch);
-                if !player_state.visible {
-                    player_scratch.clear();
-                }
-                source
+            if assembly == PlayerActorAssembly::DirectIdentity {
+                player_scratch.clear();
             } else {
-                if !player_state.visible {
-                    player_scratch.clear();
+                apply_song_lua_player_transform(
+                    field_scratch,
+                    hud_scratch,
+                    player_scratch,
+                    z_shift,
+                    player_state.diffuse,
+                    player_blend,
+                    layout_center_x,
+                    target_x,
+                    target_y,
+                    rotation_x,
+                    rotation_z,
+                    rotation_y,
+                    skew_x,
+                    skew_y,
+                    zoom_x,
+                    zoom_y,
+                    zoom_z,
+                );
+            }
+            let player_source = if assembly == PlayerActorAssembly::Buffered {
+                if requests.player {
+                    let source = song_lua_share_actor_source_in_place(player_scratch);
+                    if !player_state.visible {
+                        player_scratch.clear();
+                    }
+                    source
+                } else {
+                    if !player_state.visible {
+                        player_scratch.clear();
+                    }
+                    None
                 }
+            } else {
                 None
             };
             let proxy_sources = [
@@ -10191,7 +10306,7 @@ pub fn push_actors(
                 render_source_bundle(None, judgment_actors.as_ref()),
                 render_source_bundle(None, combo_actors.as_ref()),
             ];
-            (layout_center_x, player_source, proxy_sources)
+            (layout_center_x, player_source, proxy_sources, assembly)
         };
 
     let (
@@ -10200,6 +10315,8 @@ pub fn push_actors(
         p2_player_proxy_source,
         p1_proxy_sources,
         p2_proxy_sources,
+        p1_actor_assembly,
+        p2_actor_assembly,
         playfield_center_x,
         per_player_fields,
     ): (
@@ -10208,17 +10325,19 @@ pub fn push_actors(
         Option<SongLuaSingleSource>,
         [Option<SongLuaSingleSource>; 3],
         [Option<SongLuaSingleSource>; 3],
+        PlayerActorAssembly,
+        PlayerActorAssembly,
         f32,
         [(usize, f32); 2],
     ) = match play_style {
         profile_data::PlayStyle::Versus => {
-            let (p1_x, p1_player_source, p1_sources) = build_player_bundle(
+            let (p1_x, p1_player_source, p1_sources, p1_assembly) = build_player_bundle(
                 0,
                 &state.profiles()[0],
                 FieldPlacement::P1,
                 proxy_requests.players[0],
             );
-            let (p2_x, p2_player_source, p2_sources) = build_player_bundle(
+            let (p2_x, p2_player_source, p2_sources, p2_assembly) = build_player_bundle(
                 1,
                 &state.profiles()[1],
                 FieldPlacement::P2,
@@ -10230,6 +10349,8 @@ pub fn push_actors(
                 p2_player_source,
                 p1_sources,
                 p2_sources,
+                p1_assembly,
+                p2_assembly,
                 p1_x,
                 [(0, p1_x), (1, p2_x)],
             )
@@ -10240,7 +10361,7 @@ pub fn push_actors(
             } else {
                 FieldPlacement::P1
             };
-            let (nf_x, nf_player_source, nf_sources) = build_player_bundle(
+            let (nf_x, nf_player_source, nf_sources, nf_assembly) = build_player_bundle(
                 0,
                 &state.profiles()[0],
                 placement,
@@ -10253,6 +10374,8 @@ pub fn push_actors(
                 None,
                 nf_sources,
                 [None, None, None],
+                nf_assembly,
+                PlayerActorAssembly::Buffered,
                 nf_x,
                 [(0, nf_x), (usize::MAX, 0.0)],
             )
@@ -10324,7 +10447,7 @@ pub fn push_actors(
                 z(-99)
             ));
         }
-        song_lua_capture_new_actors(&mut underlay_proxy_source, &mut actors, underlay_start);
+        song_lua_capture_new_actors(&mut underlay_proxy_source, actors, underlay_start);
     }
 
     // Background filter per-player (Simply Love parity): draw behind each notefield, not full-screen.
@@ -10335,7 +10458,7 @@ pub fn push_actors(
             && state.profiles()[player_idx].background_filter.alpha() > 0.0
     });
     if has_background_filter {
-        presentation_skeleton.push(STATIC_FILTER, &mut actors, |actors| {
+        presentation_skeleton.push(STATIC_FILTER, actors, |actors| {
             for &(player_idx, field_x) in &per_player_fields {
                 if player_idx == usize::MAX || player_idx >= state.num_players() {
                     continue;
@@ -10353,14 +10476,14 @@ pub fn push_actors(
             }
         });
     }
-    song_lua_capture_new_actors(&mut underlay_proxy_source, &mut actors, underlay_start);
+    song_lua_capture_new_actors(&mut underlay_proxy_source, actors, underlay_start);
 
     // Simply Love parity: BGAnimations/ScreenGameplay underlay/Shared/Header.lua.
     // This top strip sits underneath the UpperNPSGraph and other HUD actors.
     if !hide_gameplay_hud {
         let underlay_start = actors.len();
         let header_rgba = gameplay_header_rgba(policy.background_color);
-        presentation_skeleton.push(STATIC_HEADER, &mut actors, |actors| {
+        presentation_skeleton.push(STATIC_HEADER, actors, |actors| {
             actors.push(act!(quad:
                 align(0.5, 0.0): xy(screen_center_x(), 0.0):
                 setsize(screen_width(), 80.0):
@@ -10368,26 +10491,57 @@ pub fn push_actors(
                 z(83)
             ));
         });
-        song_lua_capture_new_actors(&mut underlay_proxy_source, &mut actors, underlay_start);
+        song_lua_capture_new_actors(&mut underlay_proxy_source, actors, underlay_start);
     }
 
+    let p1_actor_count = player_actor_bundle_len(
+        p1_actor_assembly,
+        &notefield_actor_scratch[0],
+        &notefield_hud_actor_scratch[0],
+        &player_actor_scratch[0],
+    );
+    let p2_actor_count = player_actor_bundle_len(
+        p2_actor_assembly,
+        &notefield_actor_scratch[1],
+        &notefield_hud_actor_scratch[1],
+        &player_actor_scratch[1],
+    );
     actors.reserve(
-        player_actor_scratch[0]
-            .len()
-            .saturating_add(player_actor_scratch[1].len())
+        p1_actor_count
+            .saturating_add(p2_actor_count)
             .saturating_add(48),
     );
     if has_p2_actors {
         if !replacement_active_players[1] {
-            append_player_actors(actors, &mut player_actor_scratch[1]);
+            append_player_actor_bundle(
+                actors,
+                p2_actor_assembly,
+                &mut notefield_actor_scratch[1],
+                &mut notefield_hud_actor_scratch[1],
+                &mut player_actor_scratch[1],
+            );
         } else {
-            player_actor_scratch[1].clear();
+            clear_player_actor_bundle(
+                &mut notefield_actor_scratch[1],
+                &mut notefield_hud_actor_scratch[1],
+                &mut player_actor_scratch[1],
+            );
         }
     }
     if !replacement_active_players[0] {
-        append_player_actors(actors, &mut player_actor_scratch[0]);
+        append_player_actor_bundle(
+            actors,
+            p1_actor_assembly,
+            &mut notefield_actor_scratch[0],
+            &mut notefield_hud_actor_scratch[0],
+            &mut player_actor_scratch[0],
+        );
     } else {
-        player_actor_scratch[0].clear();
+        clear_player_actor_bundle(
+            &mut notefield_actor_scratch[0],
+            &mut notefield_hud_actor_scratch[0],
+            &mut player_actor_scratch[0],
+        );
     }
     if !hide_gameplay_hud {
         let underlay_tail_start = actors.len();
@@ -10471,7 +10625,7 @@ pub fn push_actors(
             };
 
             let static_slot = [STATIC_NPS_P1, STATIC_NPS_P2][player_idx.min(1)];
-            presentation_skeleton.push(static_slot, &mut actors, |actors| {
+            presentation_skeleton.push(static_slot, actors, |actors| {
                 actors.push(act!(quad:
                     align(0.0, 0.0): xy(x, y_top):
                     zoomto(graph_w, graph_h):
@@ -10538,7 +10692,7 @@ pub fn push_actors(
                 let before = actors.len();
                 smx_profile::time_draw(state.runtime_view.policy.smx_profile_enabled, || {
                     push_smx_sensor_display(
-                        &mut actors,
+                        actors,
                         state,
                         &field_geom,
                         is_doubles,
@@ -10556,7 +10710,7 @@ pub fn push_actors(
             {
                 let before = actors.len();
                 push_smx_pad_input_display(
-                    &mut actors,
+                    actors,
                     state,
                     &field_geom,
                     is_doubles,
@@ -10586,7 +10740,7 @@ pub fn push_actors(
             // Difficulty Box
             let y = DIFFICULTY_METER_Y;
             let static_slot = [STATIC_DIFFICULTY_P1, STATIC_DIFFICULTY_P2][player_idx.min(1)];
-            presentation_skeleton.push(static_slot, &mut actors, |actors| {
+            presentation_skeleton.push(static_slot, actors, |actors| {
                 let chart = &state.charts()[player_idx];
                 let difficulty_color =
                     color::difficulty_rgba(&chart.difficulty, state.active_color_index());
@@ -10806,7 +10960,7 @@ pub fn push_actors(
             let box_cx = screen_center_x();
             let box_cy = 20.0;
             let box_left = box_cx - w * 0.5;
-            presentation_skeleton.push(STATIC_SONG_METER, &mut actors, |actors| {
+            presentation_skeleton.push(STATIC_SONG_METER, actors, |actors| {
                 actors.push(act!(quad:
                     align(0.5, 0.5): xy(box_cx, box_cy): zoomto(w, h):
                     diffuse(1.0, 1.0, 1.0, 1.0): z(90)
@@ -10952,7 +11106,7 @@ pub fn push_actors(
                             };
 
                         // Frames/border
-                        presentation_skeleton.push(static_life_slot, &mut actors, |actors| {
+                        presentation_skeleton.push(static_life_slot, actors, |actors| {
                             actors.push(act!(quad:
                                 align(0.5, 0.5): xy(meter_cx, meter_cy): zoomto(w + 4.0, h + 4.0):
                                 diffuse(1.0, 1.0, 1.0, 1.0): z(90)
@@ -11130,7 +11284,7 @@ pub fn push_actors(
 
                         let cy = bar_h + 10.0;
                         // Frames/border
-                        presentation_skeleton.push(static_life_slot, &mut actors, |actors| {
+                        presentation_skeleton.push(static_life_slot, actors, |actors| {
                             actors.push(act!(quad:
                                 align(0.5, 0.5): xy(x, cy): zoomto(bar_w + 2.0, bar_h + 2.0):
                                 diffuse(1.0, 1.0, 1.0, 1.0): z(90)
@@ -11291,7 +11445,7 @@ pub fn push_actors(
                     profile_data::PlayerSide::P2 => (None, p2_footer_text, None, p2_footer_avatar),
                 }
             };
-        presentation_skeleton.push(STATIC_FOOTER, &mut actors, |actors| {
+        presentation_skeleton.push(STATIC_FOOTER, actors, |actors| {
             actors.push(screen_bar::build_no_background(ScreenBarParams {
                 visual_policy,
                 title: "",
@@ -11325,25 +11479,25 @@ pub fn push_actors(
         if show_step_stats {
             if state.num_cols() <= 4 && play_style != profile_data::PlayStyle::Versus {
                 gameplay_stats::push_step_stats(
-                    &mut actors,
+                    actors,
                     state,
                     asset_manager,
                     playfield_center_x,
                     player_side,
                 );
             } else if play_style == profile_data::PlayStyle::Versus {
-                gameplay_stats::push_versus_step_stats(&mut actors, state, asset_manager);
+                gameplay_stats::push_versus_step_stats(actors, state, asset_manager);
             } else if play_style == profile_data::PlayStyle::Double {
                 gameplay_stats::push_double_step_stats(
-                    &mut actors,
+                    actors,
                     state,
                     asset_manager,
                     playfield_center_x,
                 );
             }
         }
-        gameplay_stats::push_heart_rates(&mut actors, state, playfield_center_x);
-        song_lua_capture_new_actors(&mut underlay_proxy_source, &mut actors, underlay_tail_start);
+        gameplay_stats::push_heart_rates(actors, state, playfield_center_x);
+        song_lua_capture_new_actors(&mut underlay_proxy_source, actors, underlay_tail_start);
     }
     let song_foreground_state = song_lua_song_foreground_state(state);
     let p1_proxy_slices = [
@@ -12270,6 +12424,135 @@ mod tests {
         assert!(direct_hud.is_empty());
         assert_eq!(direct_field.capacity(), direct_field_capacity);
         assert_eq!(direct_hud.capacity(), direct_hud_capacity);
+    }
+
+    #[test]
+    fn direct_identity_player_bundle_matches_buffered_output_and_fallback_boundaries() {
+        let identity = SongLuaCaptureTransform {
+            z_shift: 0,
+            tint: [1.0; 4],
+            blend: None,
+            playfield_center_x: screen_center_x(),
+            target_x: screen_center_x(),
+            target_y: screen_center_y(),
+            rotation_x: 0.0,
+            rotation_z: 0.0,
+            rotation_y: 0.0,
+            skew_x: 0.0,
+            skew_y: 0.0,
+            zoom_x: 1.0,
+            zoom_y: 1.0,
+            zoom_z: 1.0,
+        };
+        assert_eq!(
+            player_actor_assembly_for_transform(false, true, identity),
+            PlayerActorAssembly::DirectIdentity
+        );
+        assert_eq!(
+            player_actor_assembly_for_transform(true, true, identity),
+            PlayerActorAssembly::Buffered
+        );
+        assert_eq!(
+            player_actor_assembly_for_transform(false, false, identity),
+            PlayerActorAssembly::Buffered
+        );
+        assert_eq!(
+            player_actor_assembly_for_transform(
+                false,
+                true,
+                SongLuaCaptureTransform {
+                    target_x: identity.target_x + 1.0,
+                    ..identity
+                },
+            ),
+            PlayerActorAssembly::Buffered
+        );
+
+        let make_actors = |count: usize, base: f32| {
+            (0..count)
+                .map(|index| Actor::CameraPush {
+                    view_proj: Matrix4::from_translation(Vector3::new(
+                        base + index as f32,
+                        0.0,
+                        0.0,
+                    )),
+                })
+                .collect::<Vec<_>>()
+        };
+        let mut buffered_field = make_actors(64, 0.0);
+        let mut buffered_hud = make_actors(8, 1_000.0);
+        let mut buffered_player = Vec::with_capacity(72);
+        let mut buffered_out = vec![Actor::CameraPop];
+        apply_song_lua_player_transform(
+            &mut buffered_field,
+            &mut buffered_hud,
+            &mut buffered_player,
+            0,
+            [1.0; 4],
+            None,
+            screen_center_x(),
+            screen_center_x(),
+            screen_center_y(),
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            1.0,
+            1.0,
+            1.0,
+        );
+        append_player_actor_bundle(
+            &mut buffered_out,
+            PlayerActorAssembly::Buffered,
+            &mut buffered_field,
+            &mut buffered_hud,
+            &mut buffered_player,
+        );
+
+        let mut direct_field = make_actors(64, 0.0);
+        let mut direct_hud = make_actors(8, 1_000.0);
+        let mut direct_player = Vec::with_capacity(72);
+        let direct_field_capacity = direct_field.capacity();
+        let direct_hud_capacity = direct_hud.capacity();
+        let direct_player_capacity = direct_player.capacity();
+        let mut direct_out = vec![Actor::CameraPop];
+        append_player_actor_bundle(
+            &mut direct_out,
+            PlayerActorAssembly::DirectIdentity,
+            &mut direct_field,
+            &mut direct_hud,
+            &mut direct_player,
+        );
+
+        let positions = |actors: &[Actor]| {
+            actors
+                .iter()
+                .map(|actor| match actor {
+                    Actor::CameraPop => -1.0,
+                    Actor::CameraPush { view_proj } => view_proj.w_axis.x,
+                    _ => panic!("unexpected actor kind"),
+                })
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(positions(&direct_out), positions(&buffered_out));
+        assert!(direct_field.is_empty());
+        assert!(direct_hud.is_empty());
+        assert!(direct_player.is_empty());
+        assert_eq!(direct_field.capacity(), direct_field_capacity);
+        assert_eq!(direct_hud.capacity(), direct_hud_capacity);
+        assert_eq!(direct_player.capacity(), direct_player_capacity);
+
+        direct_field.extend(make_actors(2, 0.0));
+        direct_hud.extend(make_actors(2, 1_000.0));
+        direct_player.extend(make_actors(2, 2_000.0));
+        clear_player_actor_bundle(&mut direct_field, &mut direct_hud, &mut direct_player);
+        assert!(direct_field.is_empty());
+        assert!(direct_hud.is_empty());
+        assert!(direct_player.is_empty());
+        assert_eq!(direct_field.capacity(), direct_field_capacity);
+        assert_eq!(direct_hud.capacity(), direct_hud_capacity);
+        assert_eq!(direct_player.capacity(), direct_player_capacity);
     }
 
     #[test]
@@ -13993,11 +14276,11 @@ mod tests {
                     visible: false,
                     ..SongLuaOverlayState::default()
                 },
-                line_state: SongLuaOverlayState {
+                line_state: Box::new(SongLuaOverlayState {
                     y: 1.0,
                     diffuse: [0.8, 0.7, 0.6, 0.5],
                     ..SongLuaOverlayState::default()
-                },
+                }),
             },
             name: None,
             parent_index: None,
@@ -14053,11 +14336,11 @@ mod tests {
                     diffuse: [0.2, 0.5, 1.0, 0.75],
                     ..SongLuaOverlayState::default()
                 },
-                line_state: SongLuaOverlayState {
+                line_state: Box::new(SongLuaOverlayState {
                     y: 1.0,
                     diffuse: [0.8, 0.7, 0.6, 0.5],
                     ..SongLuaOverlayState::default()
-                },
+                }),
             },
             name: None,
             parent_index: None,

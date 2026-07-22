@@ -38,6 +38,7 @@ pub enum SubRowId {
     GlobalOffset,
     RateModPreservesPitch,
     ReplayGain,
+    ApplyReplayGain,
     #[cfg(target_os = "linux")]
     LinuxAudioBackend,
     #[cfg(target_os = "linux")]
@@ -121,6 +122,7 @@ pub enum SubRowId {
     ShowNativeLanguage,
     MusicWheelSpeed,
     MusicWheelStyle,
+    HideInactiveSeries,
     SeriesSort,
     SongSelectBg,
     SwitchProfile,

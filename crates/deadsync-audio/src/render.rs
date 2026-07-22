@@ -302,6 +302,7 @@ impl RenderState {
         popped_samples
     }
 
+    #[cfg(any(windows, target_os = "linux", target_os = "freebsd"))]
     fn render_i16_chunks<I>(&mut self, out: &mut [i16], total_before: u64, queued_sfx: I) -> usize
     where
         I: IntoIterator<Item = QueuedSfx>,

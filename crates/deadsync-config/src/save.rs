@@ -607,6 +607,7 @@ fn select_music_options(cfg: &Config) -> SelectMusicOptions {
         show_wheel_grades: cfg.show_music_wheel_grades,
         show_wheel_lamps: cfg.show_music_wheel_lamps,
         sort_wheel_by_series: cfg.sort_music_wheel_by_series,
+        hide_inactive_series: cfg.hide_inactive_series,
         itl_rank_mode: cfg.select_music_itl_rank_mode,
         itl_wheel_mode: cfg.select_music_itl_wheel_mode,
         wheel_style: cfg.select_music_wheel_style,

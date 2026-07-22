@@ -1,4 +1,5 @@
 use super::*;
+use deadsync_profile::favorites_view::ascii_case_insensitive_cmp;
 
 #[derive(Clone, Debug)]
 pub(super) struct ScoreImportPackOption {
@@ -72,7 +73,7 @@ const SCORE_IMPORT_PROGRESS_TAU: f32 = 0.4;
 
 /// Format an ETA in seconds as a compact human string (e.g. ``45s``,
 /// ``2m 13s``, ``1h 04m``). Returns ``--`` for absurdly large values.
-fn format_eta(secs: u64) -> String {
+pub(super) fn format_eta(secs: u64) -> String {
     if secs >= 24 * 60 * 60 {
         return "--".to_string();
     }
@@ -342,11 +343,7 @@ fn installed_pack_entries(state: &State) -> Vec<(String, String)> {
         packs.push((display_name, group_name.to_string()));
     }
 
-    packs.sort_by(|a, b| {
-        a.0.to_ascii_lowercase()
-            .cmp(&b.0.to_ascii_lowercase())
-            .then_with(|| a.1.cmp(&b.1))
-    });
+    packs.sort_by(|a, b| ascii_case_insensitive_cmp(&a.0, &b.0).then_with(|| a.1.cmp(&b.1)));
 
     packs
 }

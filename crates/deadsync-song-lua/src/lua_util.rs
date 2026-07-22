@@ -1745,6 +1745,7 @@ pub fn capture_actor_message_commands(
     actor: &Table,
 ) -> Result<SongLuaCapturedMessageCommands, String> {
     let mut out = SongLuaCapturedMessageCommands::default();
+    let mut command_names = Vec::new();
     for pair in actor.clone().pairs::<Value, Value>() {
         let (key, value) = pair.map_err(|err| err.to_string())?;
         let Some(name) = read_string(key) else {
@@ -1753,6 +1754,14 @@ pub fn capture_actor_message_commands(
         if !name.ends_with("MessageCommand") || !matches!(value, Value::Function(_)) {
             continue;
         }
+        command_names.push(name);
+    }
+    command_names.sort_unstable();
+
+    // Capturing a command resets and restores fields on the actor table. Do not
+    // mutate that table while a Lua `pairs` iterator is still traversing it:
+    // Lua's next-key order is unspecified and can otherwise skip commands.
+    for name in command_names {
         let message = name.trim_end_matches("MessageCommand").to_string();
         let blocks = match capture_actor_command_preserving_state(lua, actor, name.as_str()) {
             Ok(blocks) => blocks,
@@ -2160,11 +2169,10 @@ pub fn set_actor_texture_from_path_methods(
         return Ok(false);
     };
     for method_name in method_names {
-        if let Value::String(path) = call_table_method(source, method_name)? {
-            if set_actor_texture_from_path(actor, &path.to_str()?)? {
+        if let Value::String(path) = call_table_method(source, method_name)?
+            && set_actor_texture_from_path(actor, &path.to_str()?)? {
                 return Ok(true);
             }
-        }
     }
     Ok(false)
 }
@@ -3559,11 +3567,10 @@ pub fn install_actor_transform_methods(lua: &Lua, actor: &Table) -> mlua::Result
         lua.create_function({
             let actor = actor.clone();
             move |_, args: MultiValue| {
-                if let Some(value) = method_arg(&args, 0).cloned().and_then(read_f32) {
-                    if value.is_finite() && value > 0.0 {
+                if let Some(value) = method_arg(&args, 0).cloned().and_then(read_f32)
+                    && value.is_finite() && value > 0.0 {
                         actor.set("__songlua_update_rate", value)?;
                     }
-                }
                 Ok(actor.clone())
             }
         })?,
@@ -5404,7 +5411,7 @@ pub fn install_actor_render_compat_methods(lua: &Lua, actor: &Table) -> mlua::Re
         lua.create_function({
             let actor = actor.clone();
             move |lua, args: MultiValue| {
-                let enabled = method_arg(&args, 0).map_or(true, truthy);
+                let enabled = method_arg(&args, 0).is_none_or(truthy);
                 capture_block_set_bool(lua, &actor, "draw_by_z_position", enabled)?;
                 Ok(actor.clone())
             }
@@ -5539,7 +5546,7 @@ pub fn install_actor_visual_text_methods(lua: &Lua, actor: &Table) -> mlua::Resu
         lua.create_function({
             let actor = actor.clone();
             move |lua, args: MultiValue| {
-                let enabled = method_arg(&args, 0).map_or(true, truthy);
+                let enabled = method_arg(&args, 0).is_none_or(truthy);
                 capture_block_set_bool(lua, &actor, "texture_filtering", enabled)?;
                 Ok(actor.clone())
             }
@@ -5551,7 +5558,7 @@ pub fn install_actor_visual_text_methods(lua: &Lua, actor: &Table) -> mlua::Resu
             lua.create_function({
                 let actor = actor.clone();
                 move |lua, args: MultiValue| {
-                    let enabled = method_arg(&args, 0).map_or(true, truthy);
+                    let enabled = method_arg(&args, 0).is_none_or(truthy);
                     capture_block_set_bool(lua, &actor, "depth_test", enabled)?;
                     Ok(actor.clone())
                 }
@@ -8944,7 +8951,7 @@ pub fn actor_pointers_touch_actor(
 
 pub fn function_ease_actor_indices(
     len: usize,
-    mut pointer_at: impl FnMut(usize) -> usize,
+    pointer_at: impl FnMut(usize) -> usize,
     probe_actor_ptrs: &[usize],
 ) -> Vec<usize> {
     if probe_actor_ptrs.is_empty() {
@@ -8952,7 +8959,7 @@ pub fn function_ease_actor_indices(
     }
 
     let probe_actor_ptrs: HashSet<_> = probe_actor_ptrs.iter().copied().collect();
-    let out = actor_indices_for_pointers(len, |index| pointer_at(index), &probe_actor_ptrs);
+    let out = actor_indices_for_pointers(len, pointer_at, &probe_actor_ptrs);
     if out.is_empty() {
         (0..len).collect()
     } else {
@@ -10508,7 +10515,7 @@ where
             size: read_graph_display_size(initial_state, context),
             body_values: read_graph_display_values(actor)?,
             body_state: read_graph_display_body_state(lua, actor)?,
-            line_state: read_graph_display_line_state(lua, actor)?,
+            line_state: Box::new(read_graph_display_line_state(lua, actor)?),
         }
     } else if actor_type.eq_ignore_ascii_case("Quad") {
         SongLuaOverlayKind::Quad

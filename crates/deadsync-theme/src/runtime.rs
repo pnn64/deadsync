@@ -119,6 +119,7 @@ pub enum RevealPathKind {
 /// Renderer selected by a concrete theme without exposing a renderer backend
 /// type through the theme-to-shell boundary.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Default)]
 pub enum RendererChoice {
     #[cfg(all(not(target_pointer_width = "32"), not(target_vendor = "win7")))]
     Vulkan,
@@ -126,6 +127,7 @@ pub enum RendererChoice {
     VulkanWgpu,
     #[cfg(target_os = "macos")]
     Metal,
+    #[default]
     OpenGl,
     OpenGlWgpu,
     Software,
@@ -194,15 +196,12 @@ impl RendererChoice {
     }
 }
 
-impl Default for RendererChoice {
-    fn default() -> Self {
-        Self::OpenGl
-    }
-}
 
 /// Fullscreen policy selected by a concrete theme.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Default)]
 pub enum FullscreenChoice {
+    #[default]
     Exclusive,
     Borderless,
 }
@@ -226,28 +225,22 @@ impl FullscreenChoice {
     }
 }
 
-impl Default for FullscreenChoice {
-    fn default() -> Self {
-        Self::Exclusive
-    }
-}
 
 /// Window mode selected by a concrete theme.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Default)]
 pub enum DisplayModeChoice {
+    #[default]
     Windowed,
     Fullscreen(FullscreenChoice),
 }
 
-impl Default for DisplayModeChoice {
-    fn default() -> Self {
-        Self::Windowed
-    }
-}
 
 /// Presentation policy selected by a concrete theme.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Default)]
 pub enum PresentPolicyChoice {
+    #[default]
     Mailbox,
     Immediate,
 }
@@ -271,11 +264,6 @@ impl PresentPolicyChoice {
     }
 }
 
-impl Default for PresentPolicyChoice {
-    fn default() -> Self {
-        Self::Mailbox
-    }
-}
 
 /// Resolve a configured thread count against a shell-prepared choice list.
 pub fn thread_choice_index(values: &[u8], thread_count: u8) -> usize {

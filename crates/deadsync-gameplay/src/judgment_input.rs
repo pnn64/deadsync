@@ -196,21 +196,13 @@ pub fn blue_fantastic_window_ms_from_profile<Profile: GameplayProfileData>(
 }
 
 #[derive(Clone, Copy, Debug)]
+#[derive(Default)]
 pub struct PlayerJudgmentTiming {
     pub profile_music_ns: TimingProfileNs,
     pub disabled_windows: [bool; 5],
     pub largest_tap_window_music_ns: SongTimeNs,
 }
 
-impl Default for PlayerJudgmentTiming {
-    fn default() -> Self {
-        Self {
-            profile_music_ns: TimingProfileNs::default(),
-            disabled_windows: [false; 5],
-            largest_tap_window_music_ns: 0,
-        }
-    }
-}
 
 #[inline(always)]
 pub fn build_player_judgment_timing_for_options(

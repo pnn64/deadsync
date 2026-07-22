@@ -1205,6 +1205,11 @@ where
     }
 
     #[inline(always)]
+    pub fn note_itg_rows(&self) -> &[i32] {
+        self.chart_runtime.lane_indices.note_itg_rows()
+    }
+
+    #[inline(always)]
     pub fn tap_row_hold_roll_flags(&self, note_index: usize) -> u8 {
         self.chart_runtime
             .lane_indices

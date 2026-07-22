@@ -19,6 +19,7 @@ mod bench {
         appearance_note_actor_alpha_from_alpha, appearance_note_alpha, appearance_note_glow,
         appearance_note_glow_from_alpha, for_each_visible_note_index, scroll_travel,
     };
+    use crate::notes::for_each_visible_note_index_legacy;
     use deadsync_core::note::NoteType;
     use deadsync_core::song_time::song_time_ns_add_seconds;
     use deadsync_core::timing::beat_to_note_row;
@@ -41,6 +42,7 @@ mod bench {
     pub struct PlacementBench {
         timing: TimingData,
         notes: Vec<Note>,
+        note_itg_rows: Vec<i32>,
         lanes: [Vec<usize>; LANES],
     }
 
@@ -77,9 +79,14 @@ mod bench {
                     indices.push(note_index);
                 }
             }
+            let note_itg_rows = notes
+                .iter()
+                .map(|note| beat_to_note_row(note.beat))
+                .collect();
             Self {
                 timing,
                 notes,
+                note_itg_rows,
                 lanes,
             }
         }
@@ -92,7 +99,7 @@ mod bench {
             let _hold_range = travel.visible_row_range();
             let mut output = PlacementBenchFrame::default();
             for (local_col, indices) in self.lanes.iter().enumerate() {
-                for_each_visible_note_index(indices, &self.notes, range, |note_index| {
+                for_each_visible_note_index_legacy(indices, &self.notes, range, |note_index| {
                     let note = &self.notes[note_index];
                     let raw = travel.raw_note(note, false);
                     let adjusted = travel.adjusted(raw);
@@ -128,7 +135,7 @@ mod bench {
             let range = expand_range(travel.visible_row_range());
             let mut output = PlacementBenchFrame::default();
             for (local_col, indices) in self.lanes.iter().enumerate() {
-                for_each_visible_note_index(indices, &self.notes, range, |note_index| {
+                for_each_visible_note_index(indices, &self.note_itg_rows, range, |note_index| {
                     let note = &self.notes[note_index];
                     let adjusted = travel.adjusted(travel.raw_note(note, false));
                     if !(-DRAW_AFTER..=DRAW_BEFORE).contains(&adjusted) {

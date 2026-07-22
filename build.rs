@@ -65,11 +65,10 @@ fn compute_target_dir() -> Result<PathBuf, Box<dyn Error>> {
     // custom profiles. A profile like `[profile.local] inherits = "release"`
     // builds into `target/local/` but reports PROFILE=release, so deriving from
     // OUT_DIR keeps copied assets with the binary that will run.
-    if let Ok(out_dir) = std::env::var("OUT_DIR") {
-        if let Some(profile_dir) = PathBuf::from(out_dir).ancestors().nth(3) {
+    if let Ok(out_dir) = std::env::var("OUT_DIR")
+        && let Some(profile_dir) = PathBuf::from(out_dir).ancestors().nth(3) {
             return Ok(profile_dir.to_path_buf());
         }
-    }
 
     let manifest_dir = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR")?);
     let profile = std::env::var("PROFILE")?;

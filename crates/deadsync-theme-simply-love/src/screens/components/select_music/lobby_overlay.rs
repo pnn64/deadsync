@@ -236,7 +236,7 @@ pub struct OverlayStateData {
 #[derive(Clone, Debug)]
 pub enum OverlayState {
     Hidden,
-    Visible(OverlayStateData),
+    Visible(Box<OverlayStateData>),
 }
 
 #[derive(Clone, Debug)]
@@ -273,7 +273,7 @@ impl SoundCue {
 
 #[inline(always)]
 pub fn show_overlay() -> OverlayState {
-    OverlayState::Visible(OverlayStateData {
+    OverlayState::Visible(Box::new(OverlayStateData {
         browse_index: 0,
         browse_scroll: 0,
         joined_action_index: 0,
@@ -281,7 +281,7 @@ pub fn show_overlay() -> OverlayState {
         notice_text: None,
         notice_time_left: 0.0,
         pending_sounds: Vec::new(),
-    })
+    }))
 }
 
 #[inline(always)]

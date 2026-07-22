@@ -1137,7 +1137,12 @@ fn song_itgmania_cmp(left: &SongData, right: &SongData) -> std::cmp::Ordering {
         };
         itgmania_sort_bytes(left_sub).cmp(itgmania_sort_bytes(right_sub))
     } else {
-        itgmania_sort_bytes(left_main).cmp(itgmania_sort_bytes(right_main))
+        itgmania_sort_bytes(left_main)
+            .cmp(itgmania_sort_bytes(right_main))
+            // `MakeSortString`-equivalent titles must remain in contiguous raw-title groups.
+            // Otherwise exact-title pairs compare by subtitle while folded-title pairs compare
+            // by path, which is non-transitive and can make Rust's slice sort panic.
+            .then_with(|| left_main.cmp(right_main))
     };
     if ordering != std::cmp::Ordering::Equal {
         return ordering;
@@ -1243,7 +1248,7 @@ impl Ord for ItgmaniaSongTitleKey {
             }
         } else {
             match self.main_sort.cmp(&other.main_sort) {
-                std::cmp::Ordering::Equal => self.path_fold.cmp(&other.path_fold),
+                std::cmp::Ordering::Equal => self.main_raw.cmp(&other.main_raw),
                 ordering => ordering,
             }
         }
@@ -1525,10 +1530,10 @@ mod tests {
     }
 
     #[test]
-    fn borrowed_itgmania_song_sort_uses_path_for_folded_title_ties() {
-        let mut lower = song_data(PathBuf::from("Songs/Pack/Z/song.ssc"), "alpha");
+    fn borrowed_itgmania_song_sort_groups_folded_title_ties_by_raw_title() {
+        let mut lower = song_data(PathBuf::from("Songs/Pack/A/song.ssc"), "alpha");
         lower.subtitle = "First".to_string();
-        let mut upper = song_data(PathBuf::from("Songs/Pack/A/song.ssc"), "ALPHA");
+        let mut upper = song_data(PathBuf::from("Songs/Pack/Z/song.ssc"), "ALPHA");
         upper.subtitle = "Last".to_string();
         let mut songs = vec![Arc::new(lower), Arc::new(upper)];
 
@@ -1536,11 +1541,61 @@ mod tests {
 
         assert_eq!(
             songs[0].simfile_path,
-            PathBuf::from("Songs/Pack/A/song.ssc")
+            PathBuf::from("Songs/Pack/Z/song.ssc")
         );
         assert_eq!(
             songs[1].simfile_path,
-            PathBuf::from("Songs/Pack/Z/song.ssc")
+            PathBuf::from("Songs/Pack/A/song.ssc")
+        );
+    }
+
+    #[test]
+    fn borrowed_itgmania_song_comparison_is_total_for_folded_title_collisions() {
+        let make_song = |path: &str, title: &str, subtitle: &str| {
+            let mut song = song_data(PathBuf::from(path), title);
+            song.subtitle = subtitle.to_string();
+            Arc::new(song)
+        };
+        let mut songs = vec![
+            make_song("Songs/Pack/A/song.ssc", "Same", "Zeta"),
+            make_song("Songs/Pack/Z/song.ssc", "Same", "alpha"),
+            make_song("Songs/Pack/M/song.ssc", "same", "Middle"),
+        ];
+
+        for left in &songs {
+            for right in &songs {
+                assert_eq!(
+                    song_itgmania_cmp(left, right),
+                    song_itgmania_cmp(right, left).reverse()
+                );
+            }
+        }
+        for left in &songs {
+            for middle in &songs {
+                for right in &songs {
+                    let left_middle = song_itgmania_cmp(left, middle);
+                    let middle_right = song_itgmania_cmp(middle, right);
+                    if left_middle != std::cmp::Ordering::Greater
+                        && middle_right != std::cmp::Ordering::Greater
+                    {
+                        assert_ne!(song_itgmania_cmp(left, right), std::cmp::Ordering::Greater);
+                    }
+                }
+            }
+        }
+
+        sort_songs_itgmania(&mut songs);
+
+        assert_eq!(
+            songs
+                .iter()
+                .map(|song| song.simfile_path.as_path())
+                .collect::<Vec<_>>(),
+            [
+                Path::new("Songs/Pack/Z/song.ssc"),
+                Path::new("Songs/Pack/A/song.ssc"),
+                Path::new("Songs/Pack/M/song.ssc"),
+            ]
         );
     }
 

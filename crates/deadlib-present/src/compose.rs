@@ -291,6 +291,8 @@ pub struct ComposeScratch {
     masks: Vec<WorldRect>,
     z_counts: Vec<usize>,
     z_perm: Vec<usize>,
+    sparse_z_keys: Vec<usize>,
+    sparse_z_bucket_by_key: Vec<u8>,
     texture_cache: TextureLookupCache,
     transient_text_mesh_builders: Vec<TextMeshBatchBuilder>,
     recycled_text_mesh_vertices: Vec<Vec<renderer::TexturedMeshVertex>>,
@@ -505,36 +507,49 @@ fn sort_render_objects_impl(
 /// only during the final ordering pass.
 fn sort_render_objects_sparse_buckets(objects: &mut [RenderObject], scratch: &mut ComposeScratch) {
     const MAX_SPARSE_BUCKETS: usize = 64;
+    const Z_KEY_COUNT: usize = u16::MAX as usize + 1;
+    const MISSING_BUCKET: u8 = u8::MAX;
 
-    scratch.z_counts.clear();
+    if scratch.sparse_z_bucket_by_key.len() != Z_KEY_COUNT {
+        scratch
+            .sparse_z_bucket_by_key
+            .resize(Z_KEY_COUNT, MISSING_BUCKET);
+    }
+    for &encoded_z in &scratch.sparse_z_keys {
+        scratch.sparse_z_bucket_by_key[encoded_z] = MISSING_BUCKET;
+    }
+    scratch.sparse_z_keys.clear();
     for object in objects.iter() {
         let encoded_z = (i32::from(object.z) - i32::from(i16::MIN)) as usize;
-        if !scratch.z_counts.contains(&encoded_z) {
-            if scratch.z_counts.len() == MAX_SPARSE_BUCKETS {
+        if scratch.sparse_z_bucket_by_key[encoded_z] == MISSING_BUCKET {
+            if scratch.sparse_z_keys.len() == MAX_SPARSE_BUCKETS {
                 objects.sort_unstable_by_key(|object| (object.z, object.order));
                 return;
             }
-            scratch.z_counts.push(encoded_z);
+            scratch.sparse_z_bucket_by_key[encoded_z] = 0;
+            scratch.sparse_z_keys.push(encoded_z);
         }
     }
-    scratch.z_counts.sort_unstable();
+    scratch.sparse_z_keys.sort_unstable();
+    for (bucket, &encoded_z) in scratch.sparse_z_keys.iter().enumerate() {
+        scratch.sparse_z_bucket_by_key[encoded_z] = bucket as u8;
+    }
 
-    let bucket_count = scratch.z_counts.len();
+    let bucket_count = scratch.sparse_z_keys.len();
+    scratch.z_counts.clear();
+    scratch.z_counts.resize(bucket_count, 0);
     scratch.z_perm.clear();
-    scratch.z_perm.resize(bucket_count.saturating_mul(2), 0);
+    scratch.z_perm.resize(bucket_count, 0);
     let mut buckets_ordered = true;
     for object in objects.iter() {
         let encoded_z = (i32::from(object.z) - i32::from(i16::MIN)) as usize;
-        let bucket = scratch
-            .z_counts
-            .binary_search(&encoded_z)
-            .expect("collected sparse z layer must remain present");
-        let bucket_seen = scratch.z_perm[bucket] != 0;
-        let previous_order = &mut scratch.z_perm[bucket_count + bucket];
+        let bucket = scratch.sparse_z_bucket_by_key[encoded_z] as usize;
+        let bucket_seen = scratch.z_counts[bucket] != 0;
+        let previous_order = &mut scratch.z_perm[bucket];
         let order = object.order as usize;
         buckets_ordered &= !bucket_seen || *previous_order <= order;
         *previous_order = order;
-        scratch.z_perm[bucket] += 1;
+        scratch.z_counts[bucket] += 1;
     }
     if !buckets_ordered {
         objects.sort_unstable_by_key(|object| (object.z, object.order));
@@ -542,26 +557,23 @@ fn sort_render_objects_sparse_buckets(objects: &mut [RenderObject], scratch: &mu
     }
 
     let mut next = 0usize;
-    for count in &mut scratch.z_perm[..bucket_count] {
+    for count in &mut scratch.z_counts {
         let bucket_len = *count;
         *count = next;
         next += bucket_len;
     }
 
-    scratch.z_perm.truncate(bucket_count);
-    scratch.z_perm.resize(bucket_count + objects.len(), 0);
+    scratch.z_perm.clear();
+    scratch.z_perm.resize(objects.len(), 0);
     for (old_index, object) in objects.iter().enumerate() {
         let encoded_z = (i32::from(object.z) - i32::from(i16::MIN)) as usize;
-        let bucket = scratch
-            .z_counts
-            .binary_search(&encoded_z)
-            .expect("collected sparse z layer must remain present");
-        let new_index = scratch.z_perm[bucket];
-        scratch.z_perm[bucket] = new_index + 1;
-        scratch.z_perm[bucket_count + old_index] = new_index;
+        let bucket = scratch.sparse_z_bucket_by_key[encoded_z] as usize;
+        let new_index = scratch.z_counts[bucket];
+        scratch.z_counts[bucket] = new_index + 1;
+        scratch.z_perm[old_index] = new_index;
     }
 
-    let permutation = &mut scratch.z_perm[bucket_count..];
+    let permutation = &mut scratch.z_perm;
     for start in 0..objects.len() {
         while permutation[start] != start {
             let next = permutation[start];
@@ -861,13 +873,15 @@ struct OwnedLayoutEntry {
 }
 
 struct SharedLayoutEntry {
+    layout: TextLayoutKey,
     _owner: Arc<str>,
     layout_index: usize,
 }
 
 type TextLayoutHasher = rustc_hash::FxBuildHasher;
 type OwnedLayoutMap = HashMap<Box<str>, OwnedLayoutEntry, TextLayoutHasher>;
-type SharedAliasMap = HashMap<usize, SharedLayoutEntry, TextLayoutHasher>;
+type SharedAliasEntries = SmallVec<[SharedLayoutEntry; 1]>;
+type SharedAliasMap = HashMap<usize, SharedAliasEntries, TextLayoutHasher>;
 
 #[derive(Clone, Copy)]
 struct TextureCacheEntry<T> {
@@ -1059,7 +1073,7 @@ pub struct TextLayoutCache {
     #[allow(clippy::vec_box)]
     layouts: Vec<Box<CachedTextLayout>>,
     owned_entries: HashMap<TextLayoutKey, OwnedLayoutMap, TextLayoutHasher>,
-    shared_aliases: HashMap<TextLayoutKey, SharedAliasMap, TextLayoutHasher>,
+    shared_aliases: SharedAliasMap,
     entry_count: usize,
     alias_count: usize,
     max_entries: usize,
@@ -1103,9 +1117,10 @@ impl TextLayoutCache {
     }
 
     /// Freeze the prewarmed working set while retaining a bounded number of
-    /// later owned texts and shared-text aliases. Pointer storage is reserved
-    /// now so a live miss never grows the layout arena itself. Once either late
-    /// allowance is full, that class saturates without scanning or pruning.
+    /// later owned texts and shared-text aliases. Layout and top-level alias
+    /// storage are reserved now so the ordinary one-layout-per-pointer miss does
+    /// not grow either collection. Once either late allowance is full, that
+    /// class saturates without scanning or pruning.
     pub fn lock_growth_with_reserve(&mut self, additional_entries: usize) {
         self.max_entries = self
             .entry_count
@@ -1121,6 +1136,8 @@ impl TextLayoutCache {
             .saturating_sub(self.entry_count)
             .saturating_add(self.max_aliases.saturating_sub(self.alias_count));
         self.layouts.reserve(additional_layouts);
+        self.shared_aliases
+            .reserve(self.max_aliases.saturating_sub(self.alias_count));
     }
 
     pub fn clear(&mut self) {
@@ -1213,17 +1230,31 @@ impl TextLayoutCache {
             return None;
         }
         let layout_index = self.layouts.len();
-        let replaced = self.shared_aliases.entry(key).or_default().insert(
-            text_key,
-            SharedLayoutEntry {
-                _owner: text,
-                layout_index,
-            },
-        );
+        let replaced = self.insert_shared_alias(key, text_key, text, layout_index);
         debug_assert!(replaced.is_none());
         self.alias_count += usize::from(replaced.is_none());
         self.layouts.push(layout);
         Some(layout_index)
+    }
+
+    fn insert_shared_alias(
+        &mut self,
+        key: TextLayoutKey,
+        text_key: usize,
+        text: Arc<str>,
+        layout_index: usize,
+    ) -> Option<SharedLayoutEntry> {
+        let entries = self.shared_aliases.entry(text_key).or_default();
+        let new_entry = SharedLayoutEntry {
+            layout: key,
+            _owner: text,
+            layout_index,
+        };
+        if let Some(entry) = entries.iter_mut().find(|entry| entry.layout == key) {
+            return Some(std::mem::replace(entry, new_entry));
+        }
+        entries.push(new_entry);
+        None
     }
 
     pub fn prewarm_text(
@@ -1309,8 +1340,8 @@ impl TextLayoutCache {
         let text_ref = text.as_ref();
         if let Some(entry) = self
             .shared_aliases
-            .get_mut(&key)
-            .and_then(|font_entries| font_entries.get_mut(&text_key))
+            .get_mut(&text_key)
+            .and_then(|entries| entries.iter_mut().find(|entry| entry.layout == key))
         {
             let layout_index = entry.layout_index;
             if let Some(frame_stats) = self.frame_stats.as_mut() {
@@ -1329,13 +1360,8 @@ impl TextLayoutCache {
                 frame_stats.owned_hits = frame_stats.owned_hits.saturating_add(1);
             }
             if self.alias_count < self.max_aliases {
-                let replaced = self.shared_aliases.entry(key).or_default().insert(
-                    text_key,
-                    SharedLayoutEntry {
-                        _owner: Arc::clone(text),
-                        layout_index,
-                    },
-                );
+                let replaced =
+                    self.insert_shared_alias(key, text_key, Arc::clone(text), layout_index);
                 debug_assert!(replaced.is_none());
                 self.alias_count += usize::from(replaced.is_none());
             }
@@ -2697,7 +2723,7 @@ struct TexturedMeshActorView<'a> {
     texture: &'a Arc<str>,
     tint: [f32; 4],
     glow: [f32; 4],
-    vertices: renderer::TexturedMeshVertices,
+    vertices: TexturedMeshActorVertices<'a>,
     geom_cache_key: renderer::TMeshCacheKey,
     uv_scale: [f32; 2],
     uv_offset: [f32; 2],
@@ -2706,6 +2732,32 @@ struct TexturedMeshActorView<'a> {
     visible: bool,
     blend: BlendMode,
     z: i16,
+}
+
+#[derive(Clone, Copy)]
+enum TexturedMeshActorVertices<'a> {
+    Shared(&'a Arc<[renderer::TexturedMeshVertex]>),
+    Reusable(&'a Arc<Vec<renderer::TexturedMeshVertex>>),
+}
+
+impl TexturedMeshActorVertices<'_> {
+    #[inline(always)]
+    fn is_empty(self) -> bool {
+        match self {
+            Self::Shared(vertices) => vertices.is_empty(),
+            Self::Reusable(vertices) => vertices.is_empty(),
+        }
+    }
+
+    #[inline(always)]
+    fn clone_for_render(self) -> renderer::TexturedMeshVertices {
+        match self {
+            Self::Shared(vertices) => renderer::TexturedMeshVertices::Shared(Arc::clone(vertices)),
+            Self::Reusable(vertices) => {
+                renderer::TexturedMeshVertices::Reusable(Arc::clone(vertices))
+            }
+        }
+    }
 }
 
 fn textured_mesh_actor_view(actor: &actors::Actor) -> Option<TexturedMeshActorView<'_>> {
@@ -2785,11 +2837,9 @@ fn textured_mesh_actor_view(actor: &actors::Actor) -> Option<TexturedMeshActorVi
         _ => return None,
     };
     let vertices = match actor {
-        actors::Actor::TexturedMesh { vertices, .. } => {
-            renderer::TexturedMeshVertices::Shared(Arc::clone(vertices))
-        }
+        actors::Actor::TexturedMesh { vertices, .. } => TexturedMeshActorVertices::Shared(vertices),
         actors::Actor::ReusableTexturedMesh { vertices, .. } => {
-            renderer::TexturedMeshVertices::Reusable(Arc::clone(vertices))
+            TexturedMeshActorVertices::Reusable(vertices)
         }
         _ => unreachable!("textured mesh fields were matched above"),
     };
@@ -2842,33 +2892,51 @@ fn build_textured_mesh_actor<T: TextureContext + ?Sized>(
     let texture_handle = texture_cache.texture_handle(texture_ctx, texture_key_ptr, texture_key);
     let actor_blend = style.blend.unwrap_or(mesh.blend);
     let layer = base_z.saturating_add(mesh.z);
-    let mut push_pass = |tint: [f32; 4], texture_mask: bool| {
-        let order = *order_counter;
-        *order_counter = order.saturating_add(1);
+    let base_order = *order_counter;
+    *order_counter = base_order.saturating_add(1);
+    out.push(renderer::RenderObject {
+        object_type: renderer::ObjectType::TexturedMesh {
+            instance: renderer::TexturedMeshInstanceRaw::new(
+                transform,
+                mul_rgba(mesh.tint, style.tint),
+                mesh.uv_scale,
+                mesh.uv_offset,
+                mesh.uv_tex_shift,
+                false,
+            ),
+            vertices: mesh.vertices.clone_for_render(),
+            geom_cache_key: mesh.geom_cache_key,
+            depth_test: mesh.depth_test,
+        },
+        texture_handle,
+        blend: actor_blend,
+        z: layer,
+        order: base_order,
+        camera,
+    });
+    if mesh.glow[3] > 0.0001 {
+        let glow_order = *order_counter;
+        *order_counter = glow_order.saturating_add(1);
         out.push(renderer::RenderObject {
             object_type: renderer::ObjectType::TexturedMesh {
                 instance: renderer::TexturedMeshInstanceRaw::new(
                     transform,
-                    mul_rgba(tint, style.tint),
+                    mul_rgba(mesh.glow, style.tint),
                     mesh.uv_scale,
                     mesh.uv_offset,
                     mesh.uv_tex_shift,
-                    texture_mask,
+                    true,
                 ),
-                vertices: mesh.vertices.clone(),
+                vertices: mesh.vertices.clone_for_render(),
                 geom_cache_key: mesh.geom_cache_key,
                 depth_test: mesh.depth_test,
             },
             texture_handle,
             blend: actor_blend,
             z: layer,
-            order,
+            order: glow_order,
             camera,
         });
-    };
-    push_pass(mesh.tint, false);
-    if mesh.glow[3] > 0.0001 {
-        push_pass(mesh.glow, true);
     }
 }
 
@@ -4112,14 +4180,14 @@ fn fold_sprite_xy_rot(
 }
 
 #[inline(always)]
-fn push_sprite<'a, T: TextureContext + ?Sized>(
+fn push_sprite<T: TextureContext + ?Sized>(
     out: &mut Vec<renderer::RenderObject>,
     sprite_instances: &mut Vec<renderer::SpriteInstanceRaw>,
     camera: u8,
     rect: SmRect,
     m: &Metrics,
     is_solid: bool,
-    texture_id: &'a str,
+    texture_id: &str,
     texture_key_ptr: *const str,
     tint: [f32; 4],
     uv_rect: Option<[f32; 4]>,
@@ -4862,7 +4930,7 @@ fn clipped_sprite_object_to_world_rect(
                     renderer::TexturedMeshVertices::Transient(vertices) => {
                         let mut cloned = recycled_vertices
                             .as_mut()
-                            .map(|pool| take_recycled_text_mesh_vertices(*pool))
+                            .map(|pool| take_recycled_text_mesh_vertices(pool))
                             .unwrap_or_default();
                         cloned.clear();
                         cloned.extend_from_slice(vertices);
@@ -6567,6 +6635,67 @@ mod tests {
     }
 
     #[test]
+    fn shared_text_aliases_remain_separate_across_layout_keys() {
+        let fonts = font::FontMap::from_iter([("test", test_font())]);
+        let font = &fonts["test"];
+        let default_key = TextLayoutKey {
+            font_key: font_chain_key(font, &fonts),
+            line_spacing: font.line_spacing,
+            wrap_width_pixels: -1,
+        };
+        let spaced_key = TextLayoutKey {
+            line_spacing: font.line_spacing + 3,
+            ..default_key
+        };
+        let text = Arc::<str>::from("AB");
+        let mut cache = TextLayoutCache::new(4);
+        cache.begin_frame_stats(true);
+
+        let default_layout =
+            cache.get_or_build_shared(default_key, font, &fonts, &text) as *const CachedTextLayout;
+        let spaced_layout =
+            cache.get_or_build_shared(spaced_key, font, &fonts, &text) as *const CachedTextLayout;
+        let default_hit =
+            cache.get_or_build_shared(default_key, font, &fonts, &text) as *const CachedTextLayout;
+        let spaced_hit =
+            cache.get_or_build_shared(spaced_key, font, &fonts, &text) as *const CachedTextLayout;
+
+        assert_ne!(default_layout, spaced_layout);
+        assert_eq!(default_layout, default_hit);
+        assert_eq!(spaced_layout, spaced_hit);
+        let stats = cache.frame_stats();
+        assert_eq!(stats.shared_hits, 2);
+        assert_eq!(stats.misses, 2);
+        assert_eq!(stats.shared_aliases, 2);
+    }
+
+    #[test]
+    fn shared_text_alias_reuses_matching_owned_layout() {
+        let fonts = font::FontMap::from_iter([("test", test_font())]);
+        let font = &fonts["test"];
+        let key = TextLayoutKey {
+            font_key: font_chain_key(font, &fonts),
+            line_spacing: font.line_spacing,
+            wrap_width_pixels: -1,
+        };
+        let text = Arc::<str>::from("AB");
+        let mut cache = TextLayoutCache::new(4);
+        cache.prewarm_text(&fonts, "test", text.as_ref(), None);
+        cache.begin_frame_stats(true);
+
+        let first = cache.get_or_build_shared(key, font, &fonts, &text) as *const CachedTextLayout;
+        let second = cache.get_or_build_shared(key, font, &fonts, &text) as *const CachedTextLayout;
+
+        assert_eq!(first, second);
+        assert_eq!(cache.layouts.len(), 1);
+        let stats = cache.frame_stats();
+        assert_eq!(stats.owned_hits, 1);
+        assert_eq!(stats.shared_hits, 1);
+        assert_eq!(stats.misses, 0);
+        assert_eq!(stats.shared_aliases, 1);
+    }
+
+    #[test]
     fn text_layout_frame_stats_are_opt_in() {
         let mut cache = TextLayoutCache::new(4);
         let layout = test_layout();
@@ -6757,6 +6886,61 @@ mod tests {
                 .map(|object| (object.z, object.order, object.texture_handle))
                 .collect::<Vec<_>>()
         );
+    }
+
+    #[test]
+    fn sparse_render_sort_reuses_lookup_and_matches_legacy_fallbacks() {
+        fn render_objects(z_values: &[i16], count: usize) -> Vec<RenderObject> {
+            (0..count)
+                .map(|index| RenderObject {
+                    object_type: ObjectType::Sprite(index as u32),
+                    texture_handle: index as u64,
+                    blend: BlendMode::Alpha,
+                    z: z_values[index.wrapping_mul(17).wrapping_add(5) % z_values.len()],
+                    order: index as u32,
+                    camera: 0,
+                })
+                .collect()
+        }
+
+        fn assert_matches_legacy(source: Vec<RenderObject>, scratch: &mut ComposeScratch) {
+            let mut legacy = source.clone();
+            let mut optimized = source;
+
+            sort_render_objects_legacy(&mut legacy, &mut ComposeScratch::default());
+            sort_render_objects(&mut optimized, scratch);
+
+            let fingerprint = |objects: &[RenderObject]| {
+                objects
+                    .iter()
+                    .map(|object| (object.z, object.order, object.texture_handle))
+                    .collect::<Vec<_>>()
+            };
+            assert_eq!(fingerprint(&optimized), fingerprint(&legacy));
+        }
+
+        let mut scratch = ComposeScratch::default();
+        assert_matches_legacy(
+            render_objects(&[-30_000, -1_000, 0, 30_000], 256),
+            &mut scratch,
+        );
+        assert_matches_legacy(
+            render_objects(&[-29_999, -999, 1, 29_999], 256),
+            &mut scratch,
+        );
+
+        let sixty_five_layers: Vec<_> = (0..65)
+            .map(|index| (-30_000 + index * 900) as i16)
+            .collect();
+        assert_matches_legacy(render_objects(&sixty_five_layers, 130), &mut scratch);
+
+        let descending_within_layers = vec![
+            test_render_object(-30_000, 4),
+            test_render_object(30_000, 3),
+            test_render_object(-30_000, 2),
+            test_render_object(30_000, 1),
+        ];
+        assert_matches_legacy(descending_within_layers, &mut scratch);
     }
 
     #[test]

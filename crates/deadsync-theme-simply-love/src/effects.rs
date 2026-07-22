@@ -51,6 +51,14 @@ pub enum SimplyLoveContentRequest {
     DeleteSong {
         simfile_path: PathBuf,
     },
+    /// Ask the shell to cut short the in-progress startup ReplayGain analysis
+    /// so the loading screen can advance without waiting for every song.
+    SkipReplayGain,
+    /// Analyze EBU R128 loudness for the whole song library and populate the
+    /// ReplayGain cache. Progress is reported via
+    /// [`crate::views::SimplyLoveApplyReplayGainEvent`]. Cancel an in-flight
+    /// run with [`SimplyLoveContentRequest::SkipReplayGain`].
+    ApplyReplayGain,
 }
 
 #[derive(Clone, Debug)]
@@ -73,7 +81,7 @@ pub enum SimplyLoveProfileRequest {
     SetMachineDefaultNoteskin(deadsync_profile::NoteSkin),
     UpdatePlayerOptions {
         side: PlayerSide,
-        options: deadsync_profile::PlayerOptionsData,
+        options: Box<deadsync_profile::PlayerOptionsData>,
         heart_rate_device_id: Option<String>,
     },
     UpdateInitials([Option<String>; 2]),
@@ -494,6 +502,7 @@ pub enum SimplyLoveSelectMusicConfigRequest {
     TranslatedTitles(bool),
     WheelSwitchSpeed(u8),
     WheelStyle(SelectMusicWheelStyle),
+    HideInactiveSeries(bool),
     SortBySeries(bool),
     SongSelectBackground(SelectMusicSongSelectBgMode),
     AllowProfileSwitch(bool),

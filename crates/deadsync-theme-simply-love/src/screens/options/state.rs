@@ -181,6 +181,7 @@ pub struct State {
     pub(super) stepmaniaonline_snapshot: Arc<deadsync_online::stepmaniaonline::Snapshot>,
     pub(super) pending_pack_reload_dirs: Vec<PathBuf>,
     pub(super) score_import_ui: Option<ScoreImportUiState>,
+    pub(super) apply_replaygain_ui: Option<ApplyReplayGainUiState>,
     pub(super) pack_sync_overlay: shared_pack_sync::OverlayState,
     pub(super) score_import_confirm: Option<ScoreImportConfirmState>,
     pub(super) sync_pack_confirm: Option<SyncPackConfirmState>,
@@ -331,6 +332,7 @@ pub fn init(view: OptionsInitView) -> State {
         stepmaniaonline_snapshot: Arc::new(deadsync_online::stepmaniaonline::Snapshot::default()),
         pending_pack_reload_dirs: Vec::new(),
         score_import_ui: None,
+        apply_replaygain_ui: None,
         pack_sync_overlay: shared_pack_sync::OverlayState::Hidden,
         score_import_confirm: None,
         sync_pack_confirm: None,
@@ -1090,6 +1092,12 @@ pub fn init(view: OptionsInitView) -> State {
         SELECT_MUSIC_OPTIONS_ROWS,
         SubRowId::MusicWheelStyle,
         select_music_wheel_style_choice_index(cfg.select_music_wheel_style),
+    );
+    set_choice_by_id(
+        &mut state.sub[SubmenuKind::SelectMusic].choice_indices,
+        SELECT_MUSIC_OPTIONS_ROWS,
+        SubRowId::HideInactiveSeries,
+        yes_no_choice_index(cfg.hide_inactive_series),
     );
     set_choice_by_id(
         &mut state.sub[SubmenuKind::SelectMusic].choice_indices,

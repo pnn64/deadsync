@@ -317,7 +317,7 @@ fn build_player_stats(
         let text = tr_fmt(
             "EvaluationSummary",
             "DifficultyFormat",
-            &[("style", &style), ("difficulty", &diff)],
+            &[("style", &style), ("difficulty", diff)],
         );
         let mut a = act!(text:
             font("miso"):

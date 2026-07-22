@@ -602,6 +602,15 @@ pub fn push_actors(
         actors.extend(ui_actors);
         return;
     }
+    if let Some(apply_rg) = &state.apply_replaygain_ui {
+        let mut ui_actors =
+            build_apply_replaygain_overlay_actors(apply_rg, state.active_color_index);
+        for actor in &mut ui_actors {
+            actor.mul_alpha(alpha_multiplier);
+        }
+        actors.extend(ui_actors);
+        return;
+    }
     if let Some(mut ui_actors) = shared_pack_sync::build_overlay(
         &state.pack_sync_overlay,
         state.active_color_index,

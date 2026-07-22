@@ -227,15 +227,25 @@ pub fn tick_global(dt: f32) {
         return;
     }
     let dt = f64::from(dt);
-    let _ = GLOBAL_ELAPSED_BITS.fetch_update(Ordering::Relaxed, Ordering::Relaxed, |bits| {
+    let mut bits = GLOBAL_ELAPSED_BITS.load(Ordering::Relaxed);
+    loop {
         let elapsed = f64::from_bits(bits);
         let next = elapsed + dt;
-        Some(if next.is_finite() {
+        let next_bits = if next.is_finite() {
             next.max(0.0).to_bits()
         } else {
             bits
-        })
-    });
+        };
+        match GLOBAL_ELAPSED_BITS.compare_exchange_weak(
+            bits,
+            next_bits,
+            Ordering::Relaxed,
+            Ordering::Relaxed,
+        ) {
+            Ok(_) => break,
+            Err(observed) => bits = observed,
+        }
+    }
 }
 
 #[inline]

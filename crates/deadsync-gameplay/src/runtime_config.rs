@@ -1,14 +1,11 @@
 ﻿#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Default)]
 pub enum GameplayFailType {
     Immediate,
+    #[default]
     ImmediateContinue,
 }
 
-impl Default for GameplayFailType {
-    fn default() -> Self {
-        Self::ImmediateContinue
-    }
-}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum HoldToExitKey {

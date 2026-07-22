@@ -1,5 +1,6 @@
 use deadsync_config::prelude::SimpleIni;
 use deadsync_profile::compat as profile;
+use deadsync_profile::favorites_view::ascii_case_insensitive_cmp;
 use deadsync_theme_simply_love::SimplyLoveScoreImportProfile;
 
 pub(crate) fn score_import_profiles() -> Vec<SimplyLoveScoreImportProfile> {
@@ -41,9 +42,7 @@ pub(crate) fn score_import_profiles() -> Vec<SimplyLoveScoreImportProfile> {
         });
     }
     profiles.sort_by(|left, right| {
-        left.display_name
-            .to_ascii_lowercase()
-            .cmp(&right.display_name.to_ascii_lowercase())
+        ascii_case_insensitive_cmp(&left.display_name, &right.display_name)
             .then_with(|| left.id.cmp(&right.id))
     });
     profiles

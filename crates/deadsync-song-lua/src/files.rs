@@ -575,9 +575,9 @@ pub fn wildcard_matches(pattern: &str, text: &str) -> bool {
 }
 
 pub fn path_basename(text: &str) -> &str {
-    let trimmed = text.trim_end_matches(|c| c == '/' || c == '\\');
+    let trimmed = text.trim_end_matches(['/', '\\']);
     trimmed
-        .rsplit(|c| c == '/' || c == '\\')
+        .rsplit(['/', '\\'])
         .next()
         .unwrap_or_default()
 }

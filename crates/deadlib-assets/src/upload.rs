@@ -184,7 +184,7 @@ mod tests {
         assert!(queue.contains("shared"));
         assert!(queue.contains("other"));
         assert!(!queue.contains("missing"));
-        assert_eq!(queue.queued_bytes(), (2 * 2 * 4 + 1 * 1 * 4) as usize);
+        assert_eq!(queue.queued_bytes(), (2 * 2 * 4 + 4) as usize);
 
         let budget = TextureUploadBudget {
             max_uploads: 4,

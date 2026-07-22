@@ -2199,6 +2199,82 @@ pub fn parse(ini_path_str: &str) -> Result<FontLoadData, FontParseError> {
     parse_with_texture_context(ini_path_str, &DefaultFontTextureContext)
 }
 
+#[inline]
+fn font_import_candidate_matches(target_stem: &str, path: &Path) -> bool {
+    if !path
+        .extension()
+        .and_then(|extension| extension.to_str())
+        .is_some_and(|extension| extension.eq_ignore_ascii_case("ini"))
+    {
+        return false;
+    }
+    let Some(stem) = path.file_stem().and_then(|stem| stem.to_str()) else {
+        return false;
+    };
+    let Some(prefix) = stem.get(..target_stem.len()) else {
+        return false;
+    };
+    if !prefix.eq_ignore_ascii_case(target_stem) {
+        return false;
+    }
+    let rest = &stem[target_stem.len()..];
+    rest.is_empty()
+        || rest
+            .strip_prefix(' ')
+            .is_some_and(|rest| rest.starts_with(|ch: char| ch.is_ascii_digit() || ch == '('))
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn font_import_candidate_indices_legacy(target_stem: &str, paths: &[PathBuf]) -> Vec<usize> {
+    let target_stem_lower = target_stem.to_ascii_lowercase();
+    paths
+        .iter()
+        .enumerate()
+        .filter_map(|(index, path)| {
+            if path
+                .extension()
+                .and_then(|extension| extension.to_str())
+                .map(str::to_ascii_lowercase)
+                != Some("ini".to_string())
+            {
+                return None;
+            }
+            let stem = path.file_stem().and_then(|stem| stem.to_str())?;
+            let stem_lower = stem.to_ascii_lowercase();
+            if !stem_lower.starts_with(&target_stem_lower) {
+                return None;
+            }
+            let rest = &stem_lower[target_stem_lower.len()..];
+            (rest.is_empty()
+                || rest.strip_prefix(' ').is_some_and(|rest| {
+                    rest.starts_with(|ch: char| ch.is_ascii_digit() || ch == '(')
+                }))
+            .then_some(index)
+        })
+        .collect()
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn font_import_candidate_indices_for_bench(target_stem: &str, paths: &[PathBuf]) -> Vec<usize> {
+    paths
+        .iter()
+        .enumerate()
+        .filter_map(|(index, path)| {
+            font_import_candidate_matches(target_stem, path).then_some(index)
+        })
+        .collect()
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn font_import_candidate_indices_legacy_for_bench(
+    target_stem: &str,
+    paths: &[PathBuf],
+) -> Vec<usize> {
+    font_import_candidate_indices_legacy(target_stem, paths)
+}
+
 pub fn parse_with_texture_context(
     ini_path_str: &str,
     texture_ctx: &impl FontTextureContext,
@@ -2229,35 +2305,14 @@ pub fn parse_with_texture_context(
         // lines often omit them. Scan the candidate directories for a `.ini`
         // whose stem begins with the requested stem followed by a separator
         // we recognise (end-of-stem, a space + digit/`(`).
-        let target_stem = rel.file_stem()?.to_string_lossy().to_string();
-        let target_stem_lower = target_stem.to_ascii_lowercase();
+        let target_stem = rel.file_stem()?.to_string_lossy();
         for dir in candidates.iter().flatten().filter_map(|p| p.parent()) {
             let Ok(entries) = std::fs::read_dir(dir) else {
                 continue;
             };
             for entry in entries.flatten() {
                 let path = entry.path();
-                if path
-                    .extension()
-                    .and_then(|e| e.to_str())
-                    .map(str::to_ascii_lowercase)
-                    != Some("ini".to_string())
-                {
-                    continue;
-                }
-                let Some(stem) = path.file_stem().and_then(|s| s.to_str()) else {
-                    continue;
-                };
-                let stem_lower = stem.to_ascii_lowercase();
-                if !stem_lower.starts_with(&target_stem_lower) {
-                    continue;
-                }
-                let rest = &stem_lower[target_stem_lower.len()..];
-                let accept = rest.is_empty()
-                    || rest
-                        .strip_prefix(' ')
-                        .is_some_and(|r| r.starts_with(|c: char| c.is_ascii_digit() || c == '('));
-                if accept {
+                if font_import_candidate_matches(&target_stem, &path) {
                     return Some(path);
                 }
             }
@@ -2900,6 +2955,32 @@ fn synthesize_space_from_nbsp(all_glyphs: &mut std::collections::HashMap<char, G
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn font_import_candidate_matching_preserves_legacy_rules() {
+        let paths = [
+            "_game chars 36px.ini",
+            "_GAME CHARS 36PX 4x1 (doubleres).INI",
+            "_game chars 36px (hint).ini",
+            "_game chars 36px-other.ini",
+            "_game chars 36px.png",
+            "Äfont 2x1.ini",
+        ]
+        .map(PathBuf::from);
+        let current = paths
+            .iter()
+            .enumerate()
+            .filter_map(|(index, path)| {
+                font_import_candidate_matches("_game chars 36px", path).then_some(index)
+            })
+            .collect::<Vec<_>>();
+
+        assert_eq!(
+            current,
+            font_import_candidate_indices_legacy("_game chars 36px", &paths)
+        );
+        assert_eq!(current, vec![0, 1, 2]);
+    }
 
     #[test]
     fn replace_markers_keeps_plain_text_borrowed() {

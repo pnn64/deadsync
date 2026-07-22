@@ -214,8 +214,7 @@ pub fn install_theme_color_helpers(lua: &Lua, globals: &Table) -> mlua::Result<(
     globals.set(
         "GetHexColor",
         lua.create_function(|lua, args: MultiValue| {
-            let Some(index) = args
-                .get(0)
+            let Some(index) = args.front()
                 .cloned()
                 .and_then(read_f32)
                 .map(|value| value.trunc() as i64)
@@ -241,7 +240,7 @@ pub fn install_theme_color_helpers(lua: &Lua, globals: &Table) -> mlua::Result<(
     globals.set(
         "GetCurrentColor",
         lua.create_function(|lua, args: MultiValue| {
-            let decorative = args.get(0).cloned().and_then(read_boolish).unwrap_or(false);
+            let decorative = args.front().cloned().and_then(read_boolish).unwrap_or(false);
             make_color_table(
                 lua,
                 palette_color(
@@ -254,7 +253,7 @@ pub fn install_theme_color_helpers(lua: &Lua, globals: &Table) -> mlua::Result<(
     globals.set(
         "PlayerColor",
         lua.create_function(|lua, args: MultiValue| {
-            let Some(player) = args.get(0).and_then(player_index_from_value) else {
+            let Some(player) = args.front().and_then(player_index_from_value) else {
                 return make_color_table(lua, [1.0, 1.0, 1.0, 1.0]);
             };
             let decorative = args.get(1).cloned().and_then(read_boolish).unwrap_or(false);
@@ -264,7 +263,7 @@ pub fn install_theme_color_helpers(lua: &Lua, globals: &Table) -> mlua::Result<(
     globals.set(
         "PlayerScoreColor",
         lua.create_function(|lua, args: MultiValue| {
-            let Some(player) = args.get(0).and_then(player_index_from_value) else {
+            let Some(player) = args.front().and_then(player_index_from_value) else {
                 return make_color_table(lua, [1.0, 1.0, 1.0, 1.0]);
             };
             make_color_table(lua, song_lua_player_score_color(player))
@@ -273,7 +272,7 @@ pub fn install_theme_color_helpers(lua: &Lua, globals: &Table) -> mlua::Result<(
     globals.set(
         "PlayerDarkColor",
         lua.create_function(|lua, args: MultiValue| {
-            let Some(player) = args.get(0).and_then(player_index_from_value) else {
+            let Some(player) = args.front().and_then(player_index_from_value) else {
                 return make_color_table(lua, [1.0, 1.0, 1.0, 1.0]);
             };
             make_color_table(lua, song_lua_player_dark_color(player))
@@ -282,7 +281,7 @@ pub fn install_theme_color_helpers(lua: &Lua, globals: &Table) -> mlua::Result<(
     globals.set(
         "DifficultyColor",
         lua.create_function(|lua, args: MultiValue| {
-            let Some(difficulty) = args.get(0).cloned().and_then(difficulty_index_from_value)
+            let Some(difficulty) = args.front().cloned().and_then(difficulty_index_from_value)
             else {
                 return make_color_table(lua, parse_color_text("#B4B7BA").unwrap_or([1.0; 4]));
             };
@@ -295,7 +294,7 @@ pub fn install_theme_color_helpers(lua: &Lua, globals: &Table) -> mlua::Result<(
         lua.create_function(|lua, args: MultiValue| {
             make_color_table(
                 lua,
-                args.get(0)
+                args.front()
                     .cloned()
                     .and_then(custom_difficulty_color_value)
                     .unwrap_or([1.0, 1.0, 1.0, 1.0]),
@@ -307,7 +306,7 @@ pub fn install_theme_color_helpers(lua: &Lua, globals: &Table) -> mlua::Result<(
         lua.create_function(|lua, args: MultiValue| {
             make_color_table(
                 lua,
-                args.get(0)
+                args.front()
                     .cloned()
                     .and_then(custom_difficulty_color_value)
                     .map(|color| tone_color(color, 0.5))
@@ -320,7 +319,7 @@ pub fn install_theme_color_helpers(lua: &Lua, globals: &Table) -> mlua::Result<(
         lua.create_function(|lua, args: MultiValue| {
             make_color_table(
                 lua,
-                args.get(0)
+                args.front()
                     .cloned()
                     .and_then(custom_difficulty_color_value)
                     .map(light_color)
@@ -333,7 +332,7 @@ pub fn install_theme_color_helpers(lua: &Lua, globals: &Table) -> mlua::Result<(
         lua.create_function(|lua, args: MultiValue| {
             make_color_table(
                 lua,
-                args.get(0)
+                args.front()
                     .cloned()
                     .and_then(steps_or_trail_color)
                     .unwrap_or([1.0, 1.0, 1.0, 1.0]),
@@ -345,7 +344,7 @@ pub fn install_theme_color_helpers(lua: &Lua, globals: &Table) -> mlua::Result<(
         lua.create_function(|lua, args: MultiValue| {
             make_color_table(
                 lua,
-                args.get(0)
+                args.front()
                     .cloned()
                     .and_then(stage_color_value)
                     .unwrap_or([0.0, 0.0, 0.0, 1.0]),
@@ -357,7 +356,7 @@ pub fn install_theme_color_helpers(lua: &Lua, globals: &Table) -> mlua::Result<(
         lua.create_function(|lua, args: MultiValue| {
             make_color_table(
                 lua,
-                args.get(0)
+                args.front()
                     .cloned()
                     .and_then(stage_color_value)
                     .map(|color| tone_color(color, 0.5))
@@ -370,7 +369,7 @@ pub fn install_theme_color_helpers(lua: &Lua, globals: &Table) -> mlua::Result<(
         lua.create_function(|lua, args: MultiValue| {
             make_color_table(
                 lua,
-                args.get(0)
+                args.front()
                     .cloned()
                     .and_then(judgment_line_color_value)
                     .map(|color| tone_color(color, 0.5))
@@ -383,7 +382,7 @@ pub fn install_theme_color_helpers(lua: &Lua, globals: &Table) -> mlua::Result<(
         lua.create_function(|lua, args: MultiValue| {
             make_color_table(
                 lua,
-                args.get(0)
+                args.front()
                     .cloned()
                     .and_then(judgment_line_color_value)
                     .unwrap_or([0.0, 0.0, 0.0, 1.0]),
@@ -399,8 +398,7 @@ pub fn install_theme_color_helpers(lua: &Lua, globals: &Table) -> mlua::Result<(
         globals.set(
             name,
             lua.create_function(move |lua, args: MultiValue| {
-                let color = args
-                    .get(0)
+                let color = args.front()
                     .cloned()
                     .and_then(read_color_value)
                     .unwrap_or([1.0, 1.0, 1.0, 1.0]);
@@ -411,8 +409,7 @@ pub fn install_theme_color_helpers(lua: &Lua, globals: &Table) -> mlua::Result<(
     globals.set(
         "HasAlpha",
         lua.create_function(|_, args: MultiValue| {
-            Ok(args
-                .get(0)
+            Ok(args.front()
                 .cloned()
                 .and_then(read_color_value)
                 .map(|color| color[3])
@@ -423,7 +420,7 @@ pub fn install_theme_color_helpers(lua: &Lua, globals: &Table) -> mlua::Result<(
         "ColorToHex",
         lua.create_function(|_, args: MultiValue| {
             Ok(color_to_hex(
-                args.get(0)
+                args.front()
                     .cloned()
                     .and_then(read_color_value)
                     .unwrap_or([1.0, 1.0, 1.0, 1.0]),
@@ -433,8 +430,7 @@ pub fn install_theme_color_helpers(lua: &Lua, globals: &Table) -> mlua::Result<(
     globals.set(
         "BoostColor",
         lua.create_function(|lua, args: MultiValue| {
-            let color = args
-                .get(0)
+            let color = args.front()
                 .cloned()
                 .and_then(read_color_value)
                 .unwrap_or([1.0, 1.0, 1.0, 1.0]);
@@ -445,8 +441,7 @@ pub fn install_theme_color_helpers(lua: &Lua, globals: &Table) -> mlua::Result<(
     globals.set(
         "BlendColors",
         lua.create_function(|lua, args: MultiValue| {
-            let first = args
-                .get(0)
+            let first = args.front()
                 .cloned()
                 .and_then(read_color_value)
                 .unwrap_or([1.0, 1.0, 1.0, 1.0]);

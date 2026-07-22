@@ -590,14 +590,16 @@ where
             }
         }
     }
+    let note_itg_rows = notes
+        .iter()
+        .map(|note| beat_to_note_row(note.beat))
+        .collect::<Vec<_>>();
     let mut lane_note_row_indices = lane_note_indices.clone();
     for indices in lane_note_row_indices
         .iter_mut()
         .take(num_cols.min(MAX_COLS))
     {
-        indices.sort_unstable_by_key(|&note_index| {
-            (beat_to_note_row(notes[note_index].beat), note_index)
-        });
+        indices.sort_unstable_by_key(|&note_index| (note_itg_rows[note_index], note_index));
     }
     let pending_edges_capacity = input_queue_cap(num_cols);
     let replay_seconds = (song_time_ns_to_seconds(music_end_time_ns) + start_delay)
@@ -921,6 +923,7 @@ where
                 lane_note_indices,
                 lane_note_row_indices,
                 lane_hold_indices,
+                note_itg_rows,
                 tap_row_hold_roll_flags,
             ),
             row_indices: GameplayRowIndexState::new(

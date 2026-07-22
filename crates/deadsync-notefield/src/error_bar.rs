@@ -618,12 +618,11 @@ pub fn error_bar_boundaries_s(
 ) -> ([f32; 6], usize) {
     let mut out = [0.0; 6];
     let mut len = 0;
-    if show_fa_plus {
-        if let Some(v) = fa_plus_s.filter(|v| v.is_finite() && *v > 0.0) {
+    if show_fa_plus
+        && let Some(v) = fa_plus_s.filter(|v| v.is_finite() && *v > 0.0) {
             out[len] = v;
             len += 1;
         }
-    }
     let max = max_window_ix.min(4);
     for w in windows.iter().take(max + 1).copied() {
         out[len] = w;
@@ -695,6 +694,9 @@ pub(crate) fn error_bar_text_scalable_zoom(abs_ms: f32, scale_start_ms: f32, w2_
 
 #[cfg(test)]
 mod tests {
+    // Decimal components in these visual fixtures are authored RGB values.
+    #![allow(clippy::approx_constant)]
+
     use super::*;
     use deadlib_present::actors::{SizeSpec, SpriteSource};
 

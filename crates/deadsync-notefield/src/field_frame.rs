@@ -616,6 +616,7 @@ fn compose_field_contents<S, F>(
         for_each_visible_hold_index(
             request.chart.lane_hold_indices[col],
             request.chart.notes,
+            request.chart.note_itg_rows,
             visible_row_range,
             &mut render_hold,
         );
@@ -700,7 +701,7 @@ fn compose_visible_notes<S, F>(
         let lane_offset = travel.lane_offset(local_col);
         for_each_visible_note_index(
             request.chart.lane_note_row_indices[col],
-            request.chart.notes,
+            request.chart.note_itg_rows,
             visible_row_range,
             |note_index| {
                 let note = &request.chart.notes[note_index];

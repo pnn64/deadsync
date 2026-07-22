@@ -852,7 +852,7 @@ impl<'a> ItlWheelSideCache<'a> {
     }
 
     pub fn leaderboard_snapshot(&self) -> &deadsync_score::GameplayScoreboxProfileSnapshot {
-        &self.leaderboard_snapshot
+        self.leaderboard_snapshot
     }
 
     pub fn cached_local_itl_score(
@@ -876,7 +876,7 @@ impl<'a> ItlWheelSideCache<'a> {
     pub fn cached_srpg_self_score(&self, chart_hash: &str) -> Option<u32> {
         deadsync_score::runtime_cached_player_leaderboard_srpg_self_score(
             chart_hash,
-            &self.leaderboard_snapshot,
+            self.leaderboard_snapshot,
         )
         .or_else(|| {
             cached_online_srpg_self_score_for_key_assume_loaded(
@@ -890,7 +890,7 @@ impl<'a> ItlWheelSideCache<'a> {
     pub fn cached_tournament_rank(&self, chart_hash: &str) -> Option<u32> {
         deadsync_score::runtime_cached_player_leaderboard_itl_self_rank(
             chart_hash,
-            &self.leaderboard_snapshot,
+            self.leaderboard_snapshot,
         )
         .or_else(|| {
             cached_online_itl_self_rank_for_key_assume_loaded(

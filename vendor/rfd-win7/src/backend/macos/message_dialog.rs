@@ -29,7 +29,7 @@ impl Alert {
     pub fn new(opt: MessageDialog, mtm: MainThreadMarker) -> Self {
         let _policy_manager = PolicyManager::new(mtm);
 
-        let alert = unsafe { NSAlert::new(mtm) };
+        let alert = NSAlert::new(mtm);
 
         let level = match opt.level {
             MessageLevel::Info => NSAlertStyle::Informational,
@@ -37,7 +37,7 @@ impl Alert {
             MessageLevel::Error => NSAlertStyle::Critical,
         };
 
-        unsafe { alert.setAlertStyle(level) };
+        alert.setAlertStyle(level);
 
         let buttons = match &opt.buttons {
             MessageButtons::Ok => vec!["OK".to_owned()],
@@ -61,15 +61,13 @@ impl Alert {
 
         for button in buttons {
             let label = NSString::from_str(&button);
-            unsafe { alert.addButtonWithTitle(&label) };
+            alert.addButtonWithTitle(&label);
         }
 
-        unsafe {
-            let text = NSString::from_str(&opt.title);
-            alert.setMessageText(&text);
-            let text = NSString::from_str(&opt.description);
-            alert.setInformativeText(&text);
-        }
+        let text = NSString::from_str(&opt.title);
+        alert.setMessageText(&text);
+        let text = NSString::from_str(&opt.description);
+        alert.setInformativeText(&text);
 
         let _focus_manager = FocusManager::new(mtm);
 
@@ -87,18 +85,16 @@ impl Alert {
 
         if let Some(parent) = self.parent.take() {
             let completion = {
-                block2::StackBlock::new(move |result| unsafe {
+                block2::StackBlock::new(move |result| {
                     NSApplication::sharedApplication(mtm).stopModalWithCode(result);
                 })
             };
 
-            unsafe {
-                self.alert
-                    .beginSheetModalForWindow_completionHandler(&parent, Some(&completion))
-            }
+            self.alert
+                .beginSheetModalForWindow_completionHandler(&parent, Some(&completion))
         }
 
-        dialog_result(&self.buttons, unsafe { self.alert.runModal() })
+        dialog_result(&self.buttons, self.alert.runModal())
     }
 }
 
@@ -144,11 +140,11 @@ impl AsModal for Alert {
 
 impl InnerModal for NSAlert {
     fn begin_modal(&self, window: &NSWindow, handler: &Block<dyn Fn(NSModalResponse)>) {
-        unsafe { self.beginSheetModalForWindow_completionHandler(window, Some(handler)) }
+        self.beginSheetModalForWindow_completionHandler(window, Some(handler))
     }
 
     fn run_modal(&self) -> NSModalResponse {
-        unsafe { self.runModal() }
+        self.runModal()
     }
 }
 

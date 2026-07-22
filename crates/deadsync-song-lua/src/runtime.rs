@@ -49,7 +49,7 @@ pub fn create_song_position_table(lua: &Lua, song_runtime: &Table) -> mlua::Resu
         "GetCurBPS",
         lua.create_function({
             let song_runtime = song_runtime.clone();
-            move |_, _args: MultiValue| Ok(song_runtime.get::<f32>(SONG_LUA_RUNTIME_BPS_KEY)?)
+            move |_, _args: MultiValue| song_runtime.get::<f32>(SONG_LUA_RUNTIME_BPS_KEY)
         })?,
     )?;
     Ok(table)

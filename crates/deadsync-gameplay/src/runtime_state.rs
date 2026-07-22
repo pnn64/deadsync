@@ -69,6 +69,12 @@ pub struct GameplayLaneIndexState {
     pub note_indices: [Vec<usize>; MAX_COLS],
     pub note_row_indices: [Vec<usize>; MAX_COLS],
     pub hold_indices: [Vec<usize>; MAX_COLS],
+    /// Song-lifetime `beat_to_note_row` values indexed by note index.
+    ///
+    /// Visible-window searches read this compact immutable cache instead of
+    /// chasing into the much wider `Note` array and repeating float-to-row
+    /// conversion for every binary-search comparison on every frame.
+    pub note_itg_rows: Vec<i32>,
     pub tap_row_hold_roll_flags: Vec<u8>,
 }
 
@@ -78,6 +84,7 @@ impl Default for GameplayLaneIndexState {
             note_indices: std::array::from_fn(|_| Vec::new()),
             note_row_indices: std::array::from_fn(|_| Vec::new()),
             hold_indices: std::array::from_fn(|_| Vec::new()),
+            note_itg_rows: Vec::new(),
             tap_row_hold_roll_flags: Vec::new(),
         }
     }
@@ -88,12 +95,14 @@ impl GameplayLaneIndexState {
         note_indices: [Vec<usize>; MAX_COLS],
         note_row_indices: [Vec<usize>; MAX_COLS],
         hold_indices: [Vec<usize>; MAX_COLS],
+        note_itg_rows: Vec<i32>,
         tap_row_hold_roll_flags: Vec<u8>,
     ) -> Self {
         Self {
             note_indices,
             note_row_indices,
             hold_indices,
+            note_itg_rows,
             tap_row_hold_roll_flags,
         }
     }
@@ -111,6 +120,11 @@ impl GameplayLaneIndexState {
     #[inline(always)]
     pub fn hold_indices(&self, col: usize) -> &[usize] {
         self.hold_indices.get(col).map_or(&[], Vec::as_slice)
+    }
+
+    #[inline(always)]
+    pub fn note_itg_rows(&self) -> &[i32] {
+        &self.note_itg_rows
     }
 
     #[inline(always)]
@@ -132,6 +146,7 @@ impl GameplayLaneIndexState {
         for indices in &mut self.hold_indices {
             indices.clear();
         }
+        self.note_itg_rows.clear();
         self.tap_row_hold_roll_flags.clear();
     }
 }

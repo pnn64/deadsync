@@ -113,14 +113,13 @@ pub(super) fn dispatch_behavior_delta(
         RowBehavior::Exit => Outcome::NONE,
     };
 
-    if outcome.persisted && mirror_across_players {
-        if let Some(row) = state.pane_mut().row_map.get_mut(id) {
+    if outcome.persisted && mirror_across_players
+        && let Some(row) = state.pane_mut().row_map.get_mut(id) {
             let v = row.selected_choice_index[player_idx];
             for slot in 0..PLAYER_SLOTS {
                 row.selected_choice_index[slot] = v;
             }
         }
-    }
 
     if outcome.persisted {
         if (

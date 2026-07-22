@@ -1,5 +1,5 @@
 use crate::act;
-use crate::assets::i18n::tr;
+use crate::assets::i18n::{tr, tr_fmt};
 use crate::assets::{FontRole, machine_font_key_for_text};
 use crate::screens::components::shared::{loading_bar, visual_style_bg};
 use crate::screens::{Screen, ThemeEffect};
@@ -60,8 +60,10 @@ struct LoadingState {
     noteskins_total: usize,
     replaygain_done: usize,
     replaygain_total: usize,
+    replaygain_skip_requested: bool,
     done: bool,
     started_at: Instant,
+    phase_started_at: Instant,
     speed_text_cache: RefCell<Option<SpeedTextCache>>,
 }
 
@@ -82,9 +84,21 @@ impl LoadingState {
             noteskins_total: 0,
             replaygain_done: 0,
             replaygain_total: 0,
+            replaygain_skip_requested: false,
             done: false,
             started_at: Instant::now(),
+            phase_started_at: Instant::now(),
             speed_text_cache: RefCell::new(None),
+        }
+    }
+
+    /// Switch the active phase, resetting the per-phase timer (used for the ETA
+    /// estimate) whenever the phase actually changes so each phase's rate is
+    /// measured from its own start rather than from boot.
+    fn set_phase(&mut self, phase: crate::views::SimplyLoveContentReloadPhase) {
+        if self.phase != phase {
+            self.phase = phase;
+            self.phase_started_at = Instant::now();
         }
     }
 }
@@ -227,6 +241,37 @@ fn speed_text(loading: &LoadingState, done: usize, elapsed_s: f32) -> Arc<str> {
     text
 }
 
+/// Estimated seconds remaining for the current phase, derived from how many
+/// items have completed since the phase started. Returns `None` until there's
+/// enough signal to project (nothing done yet, or already finished).
+fn eta_seconds(done: usize, total: usize, phase_elapsed_s: f32) -> Option<u64> {
+    if done == 0 || total <= done || phase_elapsed_s <= 0.0 {
+        return None;
+    }
+    let per_item_s = phase_elapsed_s / done as f32;
+    Some((per_item_s * (total - done) as f32).round() as u64)
+}
+
+/// Format a remaining-seconds estimate as a compact human string (e.g. `45s`,
+/// `2m 13s`, `1h 04m`), matching the ETA readout used by the score-import and
+/// profile-save modals. Returns `--` for absurdly large values.
+fn format_eta(secs: u64) -> String {
+    if secs >= 24 * 60 * 60 {
+        return "--".to_owned();
+    }
+    if secs < 60 {
+        return format!("{secs}s");
+    }
+    let mins = secs / 60;
+    let rem_s = secs % 60;
+    if mins < 60 {
+        return format!("{mins}m {rem_s:02}s");
+    }
+    let hours = mins / 60;
+    let rem_m = mins % 60;
+    format!("{hours}h {rem_m:02}m")
+}
+
 fn start_loading(state: &mut State) -> ThemeEffect {
     state.loading = Some(LoadingState::new());
     ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Content(
@@ -247,7 +292,7 @@ pub fn sync_loading_events(
     for event in events {
         match event {
             crate::views::SimplyLoveContentReloadEvent::Phase(phase) => {
-                loading.phase = phase;
+                loading.set_phase(phase);
                 loading.line2 = EMPTY_TEXT.clone();
                 loading.line3 = EMPTY_TEXT.clone();
                 refresh_loading_count_text(loading);
@@ -258,7 +303,7 @@ pub fn sync_loading_events(
                 pack,
                 song,
             } => {
-                loading.phase = crate::views::SimplyLoveContentReloadPhase::Songs;
+                loading.set_phase(crate::views::SimplyLoveContentReloadPhase::Songs);
                 loading.songs_done = done;
                 loading.songs_total = total;
                 loading.line2 = Arc::<str>::from(pack);
@@ -271,7 +316,7 @@ pub fn sync_loading_events(
                 group,
                 course,
             } => {
-                loading.phase = crate::views::SimplyLoveContentReloadPhase::Courses;
+                loading.set_phase(crate::views::SimplyLoveContentReloadPhase::Courses);
                 loading.courses_done = done;
                 loading.courses_total = total;
                 loading.line2 = Arc::<str>::from(group);
@@ -284,7 +329,7 @@ pub fn sync_loading_events(
                 line2,
                 line3,
             } => {
-                loading.phase = crate::views::SimplyLoveContentReloadPhase::Artwork;
+                loading.set_phase(crate::views::SimplyLoveContentReloadPhase::Artwork);
                 loading.artwork_done = done;
                 loading.artwork_total = total;
                 loading.line2 = Arc::<str>::from(line2);
@@ -297,7 +342,7 @@ pub fn sync_loading_events(
                 skin,
                 status,
             } => {
-                loading.phase = crate::views::SimplyLoveContentReloadPhase::Noteskins;
+                loading.set_phase(crate::views::SimplyLoveContentReloadPhase::Noteskins);
                 loading.noteskins_done = done;
                 loading.noteskins_total = total;
                 loading.line2 = Arc::<str>::from(skin);
@@ -310,7 +355,7 @@ pub fn sync_loading_events(
                 line2,
                 line3,
             } => {
-                loading.phase = crate::views::SimplyLoveContentReloadPhase::ReplayGain;
+                loading.set_phase(crate::views::SimplyLoveContentReloadPhase::ReplayGain);
                 loading.replaygain_done = done;
                 loading.replaygain_total = total;
                 loading.line2 = Arc::<str>::from(line2);
@@ -329,20 +374,36 @@ pub fn sync_loading_events(
 
 pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
     if state.phase == InitPhase::Loading {
+        // While loading, Start/Back skips only the ReplayGain (loudness) pass,
+        // which is the last and longest phase; the rest of the library is
+        // already usable and the skipped songs get analyzed lazily on preview.
+        if ev.pressed && is_start_or_back(ev.action)
+            && let Some(loading) = state.loading.as_mut()
+                && loading.phase == crate::views::SimplyLoveContentReloadPhase::ReplayGain
+                && !loading.replaygain_skip_requested
+            {
+                loading.replaygain_skip_requested = true;
+                return ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Content(
+                    crate::SimplyLoveContentRequest::SkipReplayGain,
+                ));
+            }
         return ThemeEffect::None;
     }
-    if ev.pressed {
-        match ev.action {
-            VirtualAction::p1_start
-            | VirtualAction::p1_back
-            | VirtualAction::p2_start
-            | VirtualAction::p2_back => {
-                return ThemeEffect::Navigate(Screen::Menu);
-            }
-            _ => {}
-        }
+    if ev.pressed && is_start_or_back(ev.action) {
+        return ThemeEffect::Navigate(Screen::Menu);
     }
     ThemeEffect::None
+}
+
+#[inline(always)]
+fn is_start_or_back(action: VirtualAction) -> bool {
+    matches!(
+        action,
+        VirtualAction::p1_start
+            | VirtualAction::p1_back
+            | VirtualAction::p2_start
+            | VirtualAction::p2_back
+    )
 }
 
 /* ---------------------------- update --------------------------- */
@@ -455,9 +516,26 @@ fn push_loading_overlay(
         .unwrap_or(crate::views::SimplyLoveContentReloadPhase::Songs);
     let (done, total, progress) = loading_progress(loading);
     let show_speed_row = total > 0;
-    let speed_text = loading
-        .filter(|_| show_speed_row)
-        .map(|loading| speed_text(loading, done, loading_elapsed_s.max(0.0)));
+    let speed_text = loading.filter(|_| show_speed_row).map(|loading| {
+        let speed = speed_text(loading, done, loading_elapsed_s.max(0.0));
+        let phase_elapsed_s = loading.phase_started_at.elapsed().as_secs_f32().max(0.0);
+        match eta_seconds(done, total, phase_elapsed_s) {
+            Some(eta_secs) => Arc::<str>::from(format!(
+                "{speed}  \u{2022}  {}",
+                tr_fmt(
+                    "OptionsScoreImport",
+                    "ImportEta",
+                    &[("eta", &format_eta(eta_secs))]
+                ),
+            )),
+            None => speed,
+        }
+    });
+    let show_skip_hint = matches!(
+        phase,
+        crate::views::SimplyLoveContentReloadPhase::ReplayGain
+    ) && loading
+        .is_some_and(|loading| !loading.done && !loading.replaygain_skip_requested);
     let fill = color::decorative_rgba(state.active_color_index);
 
     let bar_w = widescale(360.0, 520.0);
@@ -548,6 +626,19 @@ fn push_loading_overlay(
             align(0.5, 0.5):
             xy(screen_center_x(), bar_cy + 36.0):
             zoom(0.9):
+            horizalign(center):
+            z(110.0)
+        ));
+    }
+
+    if show_skip_hint {
+        actors.push(act!(text:
+            font("miso"):
+            settext("Press &START; to skip".to_owned()):
+            align(0.5, 0.5):
+            xy(screen_center_x(), bar_cy + 58.0):
+            zoom(0.8):
+            diffuse(0.7, 0.7, 0.7, 1.0):
             horizalign(center):
             z(110.0)
         ));
@@ -677,8 +768,8 @@ mod tests {
                     songs_root,
                     courses_root,
                 }
-            )) if songs_root == PathBuf::from("Songs")
-                && courses_root == PathBuf::from("Courses")
+            )) if songs_root == std::path::Path::new("Songs")
+                && courses_root == std::path::Path::new("Courses")
         ));
         assert!(state.loading.is_some());
     }
@@ -724,5 +815,82 @@ mod tests {
         assert!(matches!(update(&mut state, 0.0), ThemeEffect::None));
         assert!(state.loading.is_none());
         assert!(matches!(state.phase, InitPhase::Playing));
+    }
+
+    fn press(action: VirtualAction) -> InputEvent {
+        let now = std::time::Instant::now();
+        InputEvent {
+            action,
+            input_slot: 0,
+            pressed: true,
+            source: deadsync_core::input::InputSource::Gamepad,
+            timestamp: now,
+            timestamp_host_nanos: 0,
+            stored_at: now,
+            emitted_at: now,
+        }
+    }
+
+    #[test]
+    fn start_skips_only_during_replaygain_phase() {
+        let mut state = init(PathBuf::from("Songs"), PathBuf::from("Courses"));
+        let _ = update(&mut state, 0.0);
+
+        // Earlier phases ignore Start; nothing is skipped.
+        sync_loading_events(
+            &mut state,
+            vec![crate::views::SimplyLoveContentReloadEvent::Artwork {
+                done: 1,
+                total: 10,
+                line2: "Pack".to_owned(),
+                line3: "Song".to_owned(),
+            }],
+        );
+        assert!(matches!(
+            handle_input(&mut state, &press(VirtualAction::p1_start)),
+            ThemeEffect::None
+        ));
+
+        // Once in the ReplayGain phase, Start requests a skip exactly once.
+        sync_loading_events(
+            &mut state,
+            vec![crate::views::SimplyLoveContentReloadEvent::ReplayGain {
+                done: 2,
+                total: 100,
+                line2: "Pack".to_owned(),
+                line3: "Song".to_owned(),
+            }],
+        );
+        assert!(matches!(
+            handle_input(&mut state, &press(VirtualAction::p1_start)),
+            ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Content(
+                crate::SimplyLoveContentRequest::SkipReplayGain,
+            ))
+        ));
+        // A second press is a no-op (skip already requested).
+        assert!(matches!(
+            handle_input(&mut state, &press(VirtualAction::p1_back)),
+            ThemeEffect::None
+        ));
+    }
+
+    #[test]
+    fn eta_seconds_projects_remaining_time() {
+        // 2 done in 4s => 2s/item; 3 remaining => 6s.
+        assert_eq!(eta_seconds(2, 5, 4.0), Some(6));
+        // 10 done in 300s => 30s/item; 2 remaining => 60s.
+        assert_eq!(eta_seconds(10, 12, 300.0), Some(60));
+        // No projection before any progress or once complete.
+        assert!(eta_seconds(0, 5, 4.0).is_none());
+        assert!(eta_seconds(5, 5, 4.0).is_none());
+    }
+
+    #[test]
+    fn format_eta_matches_modal_style() {
+        assert_eq!(format_eta(6), "6s");
+        assert_eq!(format_eta(60), "1m 00s");
+        assert_eq!(format_eta(133), "2m 13s");
+        assert_eq!(format_eta(3840), "1h 04m");
+        assert_eq!(format_eta(24 * 60 * 60), "--");
     }
 }

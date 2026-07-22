@@ -133,11 +133,10 @@ fn apply_player_options_string(options: &mut PlayerOptionsData, raw: &str) {
             "cross" => scroll = scroll.union(ScrollOption::Cross),
             "centered" => scroll = scroll.union(ScrollOption::Centered),
             other => {
-                if let Ok(parsed) = other.parse::<TurnOption>() {
-                    if parsed != TurnOption::None {
+                if let Ok(parsed) = other.parse::<TurnOption>()
+                    && parsed != TurnOption::None {
                         turn = Some(parsed);
                     }
-                }
             }
         }
     }

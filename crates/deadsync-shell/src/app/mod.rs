@@ -1062,6 +1062,7 @@ pub struct App {
     profile_import: crate::profile_import::Service,
     profile_load: crate::profile_load::Service,
     content_reload: crate::content_reload::Service,
+    apply_replaygain: crate::apply_replaygain::Service,
     heart_rate: crate::heart_rate::Runtime,
     qr_login: crate::qr_login::Service,
     score_import: crate::score_import::Service,
@@ -1080,14 +1081,13 @@ fn execute_platform_request(request: PlatformRequest) {
     match request {
         PlatformRequest::RevealPath { path, kind } => {
             dirs::ensure_dirs_exist();
-            if matches!(kind, RevealPathKind::Directory) && !path.exists() {
-                if let Err(e) = std::fs::create_dir_all(&path) {
+            if matches!(kind, RevealPathKind::Directory) && !path.exists()
+                && let Err(e) = std::fs::create_dir_all(&path) {
                     warn!(
                         "Failed to create folder before opening '{}': {e}",
                         path.display()
                     );
                 }
-            }
             if let Err(e) = deadlib_platform::open_path::reveal(&path) {
                 warn!("Failed to open '{}' in file explorer: {e}", path.display());
             }
@@ -1182,12 +1182,12 @@ impl App {
                     profile::get_session_play_style(),
                 );
                 apply_music_preferences(&mut state, preferred, p2_preferred);
-                self.state.screens.select_music_state = state;
+                self.state.screens.select_music_state = *state;
             }
             crate::profile_load::PreparedState::Course(mut state) => {
                 state.active_color_index = self.state.screens.profile_load_state.active_color_index;
                 select_course::trigger_immediate_refresh(&mut state);
-                self.state.screens.select_course_state = state;
+                self.state.screens.select_course_state = *state;
             }
         }
         profile_load::sync_ready(&mut self.state.screens.profile_load_state, true);
@@ -1216,6 +1216,19 @@ impl App {
         let events = self.score_import.poll();
         if !events.is_empty() {
             options::apply_score_import_events(&mut self.state.screens.options_state, events);
+        }
+    }
+
+    fn poll_apply_replaygain(&mut self) {
+        let events = self.apply_replaygain.poll();
+        if events.is_empty() {
+            return;
+        }
+        if self.state.screens.current_screen == CurrentScreen::Options {
+            options::apply_apply_replaygain_events(
+                &mut self.state.screens.options_state,
+                events,
+            );
         }
     }
 
@@ -2432,6 +2445,7 @@ impl App {
         self.poll_qr_login();
         self.poll_score_import();
         self.poll_sync_analysis();
+        self.poll_apply_replaygain();
         self.sync_active_online_runtime_view();
         self.heart_rate.sync(
             frame_config.machine_enable_heart_rate_monitors,
@@ -2990,6 +3004,7 @@ impl App {
             profile_import: crate::profile_import::Service::default(),
             profile_load: crate::profile_load::Service::default(),
             content_reload: crate::content_reload::Service::default(),
+            apply_replaygain: crate::apply_replaygain::Service::default(),
             heart_rate: crate::heart_rate::Runtime::default(),
             qr_login: crate::qr_login::Service::default(),
             score_import: crate::score_import::Service::default(),
@@ -3245,7 +3260,7 @@ impl App {
                         heart_rate_device_id,
                     },
                 ) => {
-                    profile::update_player_options_for_side(side, options, heart_rate_device_id);
+                    profile::update_player_options_for_side(side, *options, heart_rate_device_id);
                     Vec::new()
                 }
                 SimplyLoveRuntimeRequest::Profile(SimplyLoveProfileRequest::UpdateInitials(
@@ -3446,6 +3461,12 @@ impl App {
                                 &mut self.state.screens.select_music_state,
                                 result,
                             );
+                        }
+                        SimplyLoveContentRequest::SkipReplayGain => {
+                            deadsync_audio_replaygain::request_skip_blocking_analysis();
+                        }
+                        SimplyLoveContentRequest::ApplyReplayGain => {
+                            self.apply_replaygain.start();
                         }
                     }
                     Vec::new()
@@ -6133,8 +6154,8 @@ impl App {
         if plan.stop_screen_sfx {
             deadsync_audio_stream::stop_screen_sfx();
         }
-        if plan.clear_play_background {
-            if let Some(backend) = self.backend.as_mut() {
+        if plan.clear_play_background
+            && let Some(backend) = self.backend.as_mut() {
                 self.dynamic_media.set_background(
                     &mut self.asset_manager,
                     backend,
@@ -6143,7 +6164,6 @@ impl App {
                     false,
                 );
             }
-        }
         if prev == CurrentScreen::PlayerOptions {
             for command in &plan.commands {
                 if let Command::UpdateScrollSpeed { side, setting } = command {
@@ -6764,11 +6784,10 @@ impl App {
                 .course_run
                 .as_ref()
                 .map(course_display_timing_for_run);
-            if prev == CurrentScreen::Gameplay && self.state.session.course_run.is_some() {
-                if let Some(gs) = self.state.screens.gameplay_state.as_mut() {
+            if prev == CurrentScreen::Gameplay && self.state.session.course_run.is_some()
+                && let Some(gs) = self.state.screens.gameplay_state.as_mut() {
                     crate::gameplay_runtime::exit(gs);
                 }
-            }
             if prev == CurrentScreen::Gameplay
                 && self.state.session.course_run.is_some()
                 && let Some(gameplay_results) = self.state.screens.gameplay_state.take()
@@ -7905,6 +7924,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     launch_input_backends(
         proxy,
         InputBackendConfig {
+            #[cfg(target_os = "windows")]
             windows_pad_backend: config.windows_gamepad_backend,
             smx_input: config.smx_input,
             smx_p1_serial,

@@ -713,21 +713,11 @@ fn handle_input_inner(
     ev: &InputEvent,
 ) -> ThemeEffect {
     let active = state.active;
-    let dedicated_three_key = state.policy.dedicated_three_key_nav;
     let arcade_style = state.policy.arcade_navigation;
-    if state.policy.arcade_navigation || dedicated_three_key {
+    if arcade_style {
         screen_input::track_menu_lr_chord(&mut state.menu_lr_chord, ev);
     }
-    let three_key_action = dedicated_three_key
-        .then(|| screen_input::three_key_menu_action(&mut state.menu_lr_chord, ev, true))
-        .flatten();
     if state.pane_transition.is_active() {
-        if let Some((side, screen_input::ThreeKeyMenuAction::Cancel)) = three_key_action {
-            let player_idx = profile_data::player_side_index(side);
-            if active[player_idx] {
-                return ThemeEffect::Navigate(state.return_screen);
-            }
-        }
         return match ev.action {
             VirtualAction::p1_back if ev.pressed && active[P1] => {
                 ThemeEffect::Navigate(state.return_screen)
@@ -736,47 +726,6 @@ fn handle_input_inner(
                 ThemeEffect::Navigate(state.return_screen)
             }
             _ => ThemeEffect::None,
-        };
-    }
-    if let Some((side, nav)) = three_key_action {
-        let player_idx = profile_data::player_side_index(side);
-        if !active[player_idx] {
-            return ThemeEffect::None;
-        }
-        return match nav {
-            screen_input::ThreeKeyMenuAction::Prev => {
-                handle_nav_event(
-                    state,
-                    asset_manager,
-                    active,
-                    player_idx,
-                    NavDirection::Up,
-                    true,
-                );
-                ThemeEffect::None
-            }
-            screen_input::ThreeKeyMenuAction::Next => {
-                handle_nav_event(
-                    state,
-                    asset_manager,
-                    active,
-                    player_idx,
-                    NavDirection::Down,
-                    true,
-                );
-                ThemeEffect::None
-            }
-            screen_input::ThreeKeyMenuAction::Confirm => {
-                clear_nav_hold(state, player_idx);
-                if let Some(action) = handle_start_event(state, asset_manager, active, player_idx) {
-                    return action;
-                }
-                ThemeEffect::None
-            }
-            screen_input::ThreeKeyMenuAction::Cancel => {
-                clear_nav_hold(state, player_idx);
-                ThemeEffect::Navigate(state.return_screen)
-            }
         };
     }
     match ev.action {

@@ -344,6 +344,7 @@ fn apply_select_music_opts(loaded: SelectMusicOptions, cfg: &mut Config) {
     cfg.show_music_wheel_grades = loaded.show_wheel_grades;
     cfg.show_music_wheel_lamps = loaded.show_wheel_lamps;
     cfg.sort_music_wheel_by_series = loaded.sort_wheel_by_series;
+    cfg.hide_inactive_series = loaded.hide_inactive_series;
     cfg.select_music_itl_rank_mode = loaded.itl_rank_mode;
     cfg.select_music_itl_wheel_mode = loaded.itl_wheel_mode;
     cfg.select_music_wheel_style = loaded.wheel_style;

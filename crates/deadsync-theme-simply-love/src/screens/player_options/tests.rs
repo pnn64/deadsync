@@ -1790,7 +1790,7 @@ pub(super) mod tests {
             panic!("changed player options should be persisted before feedback");
         };
         assert_eq!(*request_side, side);
-        assert_eq!(options, options_data);
+        assert_eq!(options.as_ref(), options_data);
         assert_eq!(heart_rate_device_id, selected_hrm);
         assert_sfx(&effects[1], "assets/sounds/change_value.ogg");
     }
@@ -2084,12 +2084,11 @@ pub(super) mod tests {
     }
 
     #[test]
-    fn keyboard_left_right_edit_values_without_dedicated_menu_buttons() {
-        // Regression: on a standard keyboard/pad without dedicated three-key
-        // menu buttons (dedicated_three_key_nav = false), Left/Right must edit
-        // the current row's value, not navigate between rows. Only real
-        // three-key cabinets (dedicated_three_key_nav = true) hijack Left/Right
-        // for Prev/Next row navigation.
+    fn dedicated_menu_right_edits_value_in_arcade_player_options() {
+        // ITG ScreenOptions uses ArcadeOptionsNavigation, not
+        // ThreeKeyNavigation, to select the Player Options navigation mode.
+        // NAV_THREE_KEY keeps Left/Right on the current row and uses Start to
+        // move between rows.
         ensure_i18n();
         use deadsync_core::input::InputSource;
         use deadsync_input::{InputEvent, VirtualAction};
@@ -2101,7 +2100,7 @@ pub(super) mod tests {
         };
 
         let (mut state, asset_manager) = setup_state();
-        state.policy.dedicated_three_key_nav = false;
+        state.policy.arcade_navigation = true;
         let speed_row = state
             .pane()
             .row_map
@@ -2113,16 +2112,20 @@ pub(super) mod tests {
         state.pane_mut().prev_selected_row[P1] = speed_row;
 
         let before_val = state.speed_mod[P1].value;
-        super::super::input::handle_input(&mut state, &asset_manager, &press(VirtualAction::p1_right));
+        super::super::input::handle_input(
+            &mut state,
+            &asset_manager,
+            &press(VirtualAction::p1_menu_right),
+        );
 
         assert_eq!(
             state.pane().selected_row[P1],
             speed_row,
-            "Right must not move the row cursor without dedicated menu buttons"
+            "MenuRight must not move the row cursor in NAV_THREE_KEY"
         );
         assert!(
             state.speed_mod[P1].value > before_val,
-            "Right must change the selected row's value (was {before_val}, now {})",
+            "MenuRight must change the selected row's value (was {before_val}, now {})",
             state.speed_mod[P1].value
         );
     }

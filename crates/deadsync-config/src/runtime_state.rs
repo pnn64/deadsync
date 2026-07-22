@@ -116,10 +116,7 @@ impl InputRoutingConfig {
     }
 
     const fn bits(self) -> u8 {
-        (self.only_dedicated_menu_buttons as u8) * Self::ONLY_DEDICATED_MENU_BUTTONS
-            | (self.keyboard_features as u8) * Self::KEYBOARD_FEATURES
-            | (self.smx_input as u8) * Self::SMX_INPUT
-            | (self.smx_panel_lights as u8) * Self::SMX_PANEL_LIGHTS
+        ((self.only_dedicated_menu_buttons as u8) * Self::ONLY_DEDICATED_MENU_BUTTONS) | ((self.keyboard_features as u8) * Self::KEYBOARD_FEATURES) | ((self.smx_input as u8) * Self::SMX_INPUT) | ((self.smx_panel_lights as u8) * Self::SMX_PANEL_LIGHTS)
     }
 }
 

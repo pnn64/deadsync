@@ -1,6 +1,8 @@
 use std::time::Instant;
 
+#[cfg(any(target_os = "windows", test))]
 use deadlib_platform::display::FullscreenType;
+#[cfg(any(target_os = "windows", test))]
 use deadsync_config::app_config::DisplayMode;
 
 use crate::ShellState;
@@ -14,6 +16,7 @@ pub struct ShellWindowEventPlan {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg(any(target_os = "windows", test))]
 pub enum WindowMinimizePlan {
     None,
     Minimize,
@@ -77,6 +80,7 @@ pub fn apply_shell_window_occlusion(
     }
 }
 
+#[cfg(any(target_os = "windows", test))]
 pub const fn exclusive_fullscreen_focus_plan(
     display_mode: DisplayMode,
     focused: bool,

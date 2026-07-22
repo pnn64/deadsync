@@ -308,9 +308,7 @@ fn compose_column_cue(
                 None => return,
             }
         }
-        ColumnCueKind::Crossover => {
-            active_column_cue_range(cues, request.current_music_time)
-        }
+        ColumnCueKind::Crossover => active_column_cue_range(cues, request.current_music_time),
     };
     if active_range.is_empty() {
         return;
@@ -619,6 +617,9 @@ pub(crate) fn held_miss_zoom(elapsed: f32, mini: f32) -> (f32, f32) {
 
 #[cfg(test)]
 mod tests {
+    // Decimal components in these visual fixtures are authored RGB values.
+    #![allow(clippy::approx_constant)]
+
     use super::*;
     use deadlib_present::actors::{Actor, SizeSpec, SpriteSource};
     use deadsync_gameplay::ColumnCueColumn;

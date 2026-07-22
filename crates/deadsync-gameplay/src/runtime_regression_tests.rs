@@ -299,6 +299,18 @@ mod runtime_regression_tests {
         );
         debug_assert_eq!(
             state.chart_runtime.notes.len(),
+            state.chart_runtime.lane_indices.note_itg_rows.len()
+        );
+        debug_assert!(
+            state
+                .chart_runtime
+                .notes
+                .iter()
+                .zip(&state.chart_runtime.lane_indices.note_itg_rows)
+                .all(|(note, &row)| row == beat_to_note_row(note.beat))
+        );
+        debug_assert_eq!(
+            state.chart_runtime.notes.len(),
             state.hold_runtime.hold_decay_active.len()
         );
         debug_assert_eq!(
@@ -3256,6 +3268,8 @@ mod runtime_regression_tests {
     }
 
     #[test]
+    // The expected decimal comes from the `314` percentage-form mod fixture.
+    #[allow(clippy::approx_constant)]
     fn song_lua_constant_mods_persist_after_attack_window() {
         let mut state = regression_state();
         let timing = song_lua_test_timing();

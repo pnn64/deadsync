@@ -12,6 +12,11 @@ name = "no_cmod_title"
 harness = false
 required-features = ["bench-support"]
 
+[[bench]]
+name = "background_video_extension"
+harness = false
+required-features = ["bench-support"]
+
 [dependencies]
 deadsync-core = { path = "../deadsync-core" }
 deadsync-rules = { path = "../deadsync-rules" }

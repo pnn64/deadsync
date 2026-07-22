@@ -442,7 +442,7 @@ fn apply_player_option_token(lua: &Lua, owner: &Table, raw: &str) -> mlua::Resul
 
     let state = player_option_state(lua, owner)?;
     let value = if player_option_uses_bool(key.as_str()) {
-        Value::Boolean(amount.map_or(true, |amount| amount != 0.0))
+        Value::Boolean(amount != Some(0.0))
     } else {
         Value::Number(amount.unwrap_or(1.0) as f64)
     };
@@ -682,7 +682,7 @@ pub fn create_song_table(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Re
                 .cloned()
                 .is_some_and(song_lua_steps_type_is_dance_single)
             {
-                return Ok(lua.create_table()?);
+                return lua.create_table();
             }
             Ok(steps_by_type_for_get.clone())
         })?,

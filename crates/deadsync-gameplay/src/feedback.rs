@@ -271,7 +271,7 @@ pub fn song_lua_column_y_offset(
         .iter()
         .filter(|window| window.column == local_col)
         .filter_map(|window| song_lua_column_offset_window_value(window, now))
-        .last()
+        .next_back()
         .unwrap_or(0.0)
 }
 
@@ -889,17 +889,11 @@ impl Default for GameplayNoteskinEffects {
     }
 }
 
+#[derive(Default)]
 pub struct GameplayNoteskinData {
     pub effects: GameplayNoteskinEffects,
 }
 
-impl Default for GameplayNoteskinData {
-    fn default() -> Self {
-        Self {
-            effects: GameplayNoteskinEffects::default(),
-        }
-    }
-}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ComboMilestoneKind {

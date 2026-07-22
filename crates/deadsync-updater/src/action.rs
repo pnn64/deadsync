@@ -321,12 +321,11 @@ fn set_phase(next: ActionPhase) {
 /// that bumps the generation between our check and the store can't
 /// slip in undetected.
 fn set_phase_if_current(generation: u64, next: ActionPhase) -> bool {
-    if let Ok(mut guard) = PHASE.write() {
-        if OP_GENERATION.load(Ordering::SeqCst) == generation {
+    if let Ok(mut guard) = PHASE.write()
+        && OP_GENERATION.load(Ordering::SeqCst) == generation {
             *guard = next;
             return true;
         }
-    }
     false
 }
 

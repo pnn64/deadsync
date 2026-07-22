@@ -722,7 +722,7 @@ mod tests {
         assert!(matches!(
             command,
             Some(DeferredCommand::SetDynamicBackground(Some(path)))
-                if path == PathBuf::from("background.png")
+                if path == std::path::Path::new("background.png")
         ));
     }
 

@@ -582,6 +582,23 @@ pub(crate) fn note_itg_row(note: &Note) -> i32 {
 }
 
 pub(crate) fn lane_window_bounds_by_note_row(
+    note_itg_rows: &[i32],
+    indices: &[usize],
+    range: Option<(i32, i32)>,
+) -> Option<(usize, usize)> {
+    let (low, high) = range?;
+    if high < 0 {
+        return Some((0, 0));
+    }
+    let low = low.max(0);
+    Some((
+        indices.partition_point(|&note_index| note_itg_rows[note_index] < low),
+        indices.partition_point(|&note_index| note_itg_rows[note_index] <= high),
+    ))
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+pub(crate) fn lane_window_bounds_by_note_row_legacy(
     notes: &[Note],
     indices: &[usize],
     range: Option<(i32, i32)>,
@@ -599,11 +616,12 @@ pub(crate) fn lane_window_bounds_by_note_row(
 
 pub(crate) fn lane_hold_window_bounds_by_note_row(
     notes: &[Note],
+    note_itg_rows: &[i32],
     indices: &[usize],
     range: Option<(i32, i32)>,
 ) -> Option<(usize, usize)> {
     let (low, _) = range?;
-    let (mut start, end) = lane_window_bounds_by_note_row(notes, indices, range)?;
+    let (mut start, end) = lane_window_bounds_by_note_row(note_itg_rows, indices, range)?;
     let low = low.max(0);
     while start > 0 {
         let prev_note_index = indices[start - 1];
@@ -623,7 +641,7 @@ pub(crate) fn lane_hold_window_bounds_by_note_row(
 
 pub(crate) fn for_each_visible_note_index<F: FnMut(usize)>(
     indices: &[usize],
-    notes: &[Note],
+    note_itg_rows: &[i32],
     range: Option<(i32, i32)>,
     mut f: F,
 ) {
@@ -633,7 +651,8 @@ pub(crate) fn for_each_visible_note_index<F: FnMut(usize)>(
         }
         return;
     };
-    let Some((start, end)) = lane_window_bounds_by_note_row(notes, indices, Some((low, high)))
+    let Some((start, end)) =
+        lane_window_bounds_by_note_row(note_itg_rows, indices, Some((low, high)))
     else {
         return;
     };
@@ -642,7 +661,8 @@ pub(crate) fn for_each_visible_note_index<F: FnMut(usize)>(
     }
 }
 
-pub(crate) fn for_each_visible_hold_index<F: FnMut(usize)>(
+#[cfg(any(test, feature = "bench-support"))]
+pub(crate) fn for_each_visible_note_index_legacy<F: FnMut(usize)>(
     indices: &[usize],
     notes: &[Note],
     range: Option<(i32, i32)>,
@@ -654,7 +674,31 @@ pub(crate) fn for_each_visible_hold_index<F: FnMut(usize)>(
         }
         return;
     };
-    let Some((start, end)) = lane_hold_window_bounds_by_note_row(notes, indices, Some((low, high)))
+    let Some((start, end)) =
+        lane_window_bounds_by_note_row_legacy(notes, indices, Some((low, high)))
+    else {
+        return;
+    };
+    for &i in &indices[start..end] {
+        f(i);
+    }
+}
+
+pub(crate) fn for_each_visible_hold_index<F: FnMut(usize)>(
+    indices: &[usize],
+    notes: &[Note],
+    note_itg_rows: &[i32],
+    range: Option<(i32, i32)>,
+    mut f: F,
+) {
+    let Some((low, high)) = range else {
+        for &i in indices {
+            f(i);
+        }
+        return;
+    };
+    let Some((start, end)) =
+        lane_hold_window_bounds_by_note_row(notes, note_itg_rows, indices, Some((low, high)))
     else {
         return;
     };
@@ -1537,13 +1581,17 @@ mod tests {
         let travel = scroll_travel(request(&timing, ScrollSpeedSetting::XMod(1.0), 4.0));
         let range = travel.visible_row_range().expect("finite row range");
         let notes = vec![hold(2.0, 4.0), note(4.0), note(10.0)];
+        let note_itg_rows = notes
+            .iter()
+            .map(|note| beat_to_note_row(note.beat))
+            .collect::<Vec<_>>();
 
         let mut taps = Vec::new();
-        for_each_visible_note_index(&[0, 1, 2], &notes, Some(range), |i| taps.push(i));
+        for_each_visible_note_index(&[0, 1, 2], &note_itg_rows, Some(range), |i| taps.push(i));
         assert_eq!(taps, vec![1]);
 
         let mut holds = Vec::new();
-        for_each_visible_hold_index(&[0], &notes, Some(range), |i| holds.push(i));
+        for_each_visible_hold_index(&[0], &notes, &note_itg_rows, Some(range), |i| holds.push(i));
         assert_eq!(holds, vec![0]);
         assert!(hold_overlaps_visible_window(0, &notes, Some(range)));
         assert_near(travel.raw_note(&notes[0], true), 0.0);

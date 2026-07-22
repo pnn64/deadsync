@@ -721,344 +721,6 @@ macro_rules! __act_from_builder {
     }};
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::actors::SpriteSource;
-    use crate::texture::{TextureContext, TextureMeta};
-    use std::cell::Cell;
-    use std::mem::size_of;
-    use std::sync::atomic::{AtomicU64, Ordering};
-
-    struct TestTextureContext;
-
-    #[cfg(target_pointer_width = "64")]
-    #[test]
-    fn source_steps_keep_tween_builders_compact() {
-        assert_eq!(size_of::<anim::Step>(), 464);
-        assert_eq!(size_of::<SpriteBuilder>(), 328);
-        assert_eq!(size_of::<TextBuilder>(), 280);
-    }
-
-    impl TextureContext for TestTextureContext {
-        fn texture_registry_generation(&self) -> u64 {
-            7
-        }
-
-        fn texture_dims(&self, key: &str) -> Option<TextureMeta> {
-            match key {
-                "banner" => Some(TextureMeta { w: 320, h: 120 }),
-                "sheet" => Some(TextureMeta { w: 400, h: 200 }),
-                "grid" => Some(TextureMeta { w: 500, h: 300 }),
-                _ => None,
-            }
-        }
-
-        fn sprite_sheet_dims(&self, key: &str) -> (u32, u32) {
-            match key {
-                "sheet" => (4, 2),
-                _ => (1, 1),
-            }
-        }
-
-        fn texture_handle(&self, _key: &str) -> deadlib_render::TextureHandle {
-            99
-        }
-    }
-
-    #[test]
-    fn dsl_alignment_ident_macros_resolve_values() {
-        assert_eq!(crate::__ui_halign_from_ident!(left), 0.0);
-        assert_eq!(crate::__ui_halign_from_ident!(center), 0.5);
-        assert_eq!(crate::__ui_halign_from_ident!(right), 1.0);
-        assert_eq!(crate::__ui_valign_from_ident!(top), 0.0);
-        assert_eq!(crate::__ui_valign_from_ident!(middle), 0.5);
-        assert_eq!(crate::__ui_valign_from_ident!(center), 0.5);
-        assert_eq!(crate::__ui_valign_from_ident!(bottom), 1.0);
-        assert!(matches!(
-            crate::__ui_textalign_from_ident!(left),
-            TextAlign::Left
-        ));
-        assert!(matches!(
-            crate::__ui_textalign_from_ident!(center),
-            TextAlign::Center
-        ));
-        assert!(matches!(
-            crate::__ui_textalign_from_ident!(right),
-            TextAlign::Right
-        ));
-    }
-
-    #[test]
-    fn dsl_apply_macro_updates_sprite_builder() {
-        crate::space::set_current_metrics(crate::space::Metrics {
-            left: -100.0,
-            right: 100.0,
-            bottom: -50.0,
-            top: 50.0,
-        });
-
-        let mut sprite = SpriteBuilder::solid();
-        let steps = SmallVec::<[anim::Step; 4]>::new();
-        let mut current: Option<anim::SegmentBuilder> = None;
-        crate::__dsl_apply!(
-            (Center(): diffuse(0.1, 0.2, 0.3, 0.4): halign(left): valign(bottom): blend(add))
-            sprite
-            steps
-            current
-            _site
-        );
-
-        assert!(current.is_none());
-        assert!(steps.is_empty());
-        let actor = sprite.build(0);
-        let Actor::Sprite {
-            align,
-            offset,
-            tint,
-            blend,
-            ..
-        } = actor
-        else {
-            panic!("DSL should build a sprite");
-        };
-        assert_eq!(align, [0.0, 1.0]);
-        assert_eq!(offset, [100.0, 50.0]);
-        assert_eq!(tint, [0.1, 0.2, 0.3, 0.4]);
-        assert_eq!(blend, deadlib_render::BlendMode::Add);
-
-        crate::space::set_current_metrics(crate::space::metrics_for_window(854, 480));
-    }
-
-    #[test]
-    fn dsl_apply_macro_updates_text_builder() {
-        let mut text = TextBuilder::new();
-        let steps = SmallVec::<[anim::Step; 4]>::new();
-        let current: Option<anim::SegmentBuilder> = None;
-        crate::__dsl_apply!(
-            (font("common"): settext("Ready"): horizalign(center): blend(multiply))
-            text
-            steps
-            current
-            _site
-        );
-
-        assert!(current.is_none());
-        assert!(steps.is_empty());
-        let actor = text.build(0);
-        let Actor::Text {
-            font,
-            content,
-            align_text,
-            blend,
-            ..
-        } = actor
-        else {
-            panic!("DSL should build text");
-        };
-        assert_eq!(font, "common");
-        assert_eq!(content.as_str(), "Ready");
-        assert_eq!(align_text, TextAlign::Center);
-        assert_eq!(blend, deadlib_render::BlendMode::Multiply);
-    }
-
-    #[test]
-    fn act_from_builder_macro_builds_actor() {
-        let actor = crate::__act_from_builder!(
-            (xy(12.0, 34.0): setsize(56.0, 78.0): diffuse(0.2, 0.3, 0.4, 0.5))
-            SpriteBuilder::solid()
-        );
-
-        let Actor::Sprite {
-            offset, size, tint, ..
-        } = actor
-        else {
-            panic!("act builder macro should build a sprite");
-        };
-        assert_eq!(offset, [12.0, 34.0]);
-        assert!(matches!(size[0], crate::actors::SizeSpec::Px(56.0)));
-        assert!(matches!(size[1], crate::actors::SizeSpec::Px(78.0)));
-        assert_eq!(tint, [0.2, 0.3, 0.4, 0.5]);
-    }
-
-    #[test]
-    fn act_macro_builds_tween_program_only_on_cache_miss() {
-        fn counted(calls: &Cell<u32>, value: f32) -> f32 {
-            calls.set(calls.get() + 1);
-            value
-        }
-
-        fn build(
-            initial_calls: &Cell<u32>,
-            tween_calls: &Cell<u32>,
-            static_calls: &Cell<u32>,
-        ) -> Actor {
-            crate::__act_from_builder!(
-                (x(counted(initial_calls, 4.0)):
-                linear(counted(tween_calls, 1.0)):
-                x(counted(tween_calls, 10.0)):
-                z(counted(static_calls, 7.0)))
-                SpriteBuilder::solid()
-            )
-        }
-
-        runtime::clear_all();
-        let initial_calls = Cell::new(0);
-        let tween_calls = Cell::new(0);
-        let static_calls = Cell::new(0);
-
-        let _ = build(&initial_calls, &tween_calls, &static_calls);
-        let _ = build(&initial_calls, &tween_calls, &static_calls);
-        assert_eq!(initial_calls.get(), 2);
-        assert_eq!(tween_calls.get(), 2);
-        assert_eq!(static_calls.get(), 2);
-
-        runtime::tick(0.5);
-        let actor = build(&initial_calls, &tween_calls, &static_calls);
-        let Actor::Sprite { offset, z, .. } = actor else {
-            panic!("DSL should build a tweened sprite");
-        };
-        assert!((offset[0] - 7.0).abs() < 0.0001);
-        assert_eq!(z, 7);
-        assert_eq!(initial_calls.get(), 3);
-        assert_eq!(tween_calls.get(), 2);
-        assert_eq!(static_calls.get(), 3);
-        runtime::clear_all();
-    }
-
-    #[test]
-    fn sprite_native_dims_resolves_texture_dims() {
-        let dims = sprite_native_dims(
-            &SpriteSource::TextureStatic("banner"),
-            None,
-            None,
-            None,
-            &TestTextureContext,
-        );
-
-        assert_eq!(dims, [320.0, 120.0]);
-    }
-
-    #[test]
-    fn sprite_native_dims_applies_uv_rect() {
-        let dims = sprite_native_dims(
-            &SpriteSource::TextureStatic("banner"),
-            Some([0.25, 0.0, 0.75, 0.5]),
-            None,
-            None,
-            &TestTextureContext,
-        );
-
-        assert_eq!(dims, [160.0, 60.0]);
-    }
-
-    #[test]
-    fn sprite_native_dims_uses_sheet_hints() {
-        let dims = sprite_native_dims(
-            &SpriteSource::TextureStatic("sheet"),
-            None,
-            None,
-            None,
-            &TestTextureContext,
-        );
-
-        assert_eq!(dims, [100.0, 100.0]);
-    }
-
-    #[test]
-    fn sprite_native_dims_uses_explicit_grid_for_cell() {
-        let dims = sprite_native_dims(
-            &SpriteSource::TextureStatic("grid"),
-            None,
-            Some((2, u32::MAX)),
-            Some((5, 3)),
-            &TestTextureContext,
-        );
-
-        assert_eq!(dims, [100.0, 100.0]);
-    }
-
-    #[test]
-    fn sprite_native_dims_returns_unit_for_solid() {
-        let dims = sprite_native_dims(&SpriteSource::Solid, None, None, None, &TestTextureContext);
-
-        assert_eq!(dims, [1.0, 1.0]);
-    }
-
-    #[test]
-    fn zoomto_with_native_dims_preserves_native_scale() {
-        let mut sprite = SpriteBuilder::static_texture("banner");
-        sprite.zoomto_with_native_dims(160.0, 30.0, [320.0, 120.0]);
-
-        let actor = sprite.build(0);
-        let Actor::Sprite { scale, .. } = actor else {
-            panic!("sprite builder should produce a sprite actor");
-        };
-
-        assert_eq!(scale, [0.5, 0.25]);
-    }
-
-    #[test]
-    fn zoomto_with_texture_context_uses_native_texture_dims() {
-        let mut sprite = SpriteBuilder::static_texture("banner");
-        sprite.zoomto_with_texture_context(160.0, 30.0, &TestTextureContext);
-
-        let actor = sprite.build(0);
-        let Actor::Sprite { scale, .. } = actor else {
-            panic!("sprite builder should produce a sprite actor");
-        };
-
-        assert_eq!(scale, [0.5, 0.25]);
-    }
-
-    #[test]
-    fn static_texture_cached_with_texture_context_builds_cached_source() {
-        let cached_handle = AtomicU64::new(0);
-        let cached_generation = AtomicU64::new(u64::MAX);
-        let sprite = SpriteBuilder::static_texture_cached_with_texture_context(
-            "banner",
-            &cached_handle,
-            &cached_generation,
-            &TestTextureContext,
-        );
-
-        let actor = sprite.build(0);
-        let Actor::Sprite { source, .. } = actor else {
-            panic!("sprite builder should produce a sprite actor");
-        };
-
-        assert!(matches!(
-            source,
-            SpriteSource::TextureStaticHandle {
-                key: "banner",
-                handle: 99,
-                generation: 7
-            }
-        ));
-        assert_eq!(cached_handle.load(Ordering::Relaxed), 99);
-        assert_eq!(cached_generation.load(Ordering::Relaxed), 7);
-    }
-
-    #[test]
-    fn build_with_texture_context_seeds_tween_size_from_texture() {
-        runtime::clear_all();
-        let sprite = SpriteBuilder::static_texture("banner");
-        let actor = sprite.build_tweened_with_texture_context(0, &TestTextureContext, || {
-            let mut steps = TweenSteps::new();
-            steps.push(anim::sleep(0.0));
-            steps
-        });
-        let Actor::Sprite { size, scale, .. } = actor else {
-            panic!("sprite builder should produce a sprite actor");
-        };
-
-        assert!(matches!(size[0], crate::actors::SizeSpec::Px(320.0)));
-        assert!(matches!(size[1], crate::actors::SizeSpec::Px(120.0)));
-        assert_eq!(scale, [1.0, 1.0]);
-        runtime::clear_all();
-    }
-}
-
 #[inline(always)]
 pub fn sprite_native_dims<T: TextureContext + ?Sized>(
     source: &SpriteSource,
@@ -1642,12 +1304,11 @@ impl SpriteBuilder {
         native_dims: Option<[f32; 2]>,
         build_steps: impl FnOnce() -> TweenSteps,
     ) -> Actor {
-        if self.w == 0.0 && self.h == 0.0 {
-            if let Some([nw, nh]) = native_dims {
+        if self.w == 0.0 && self.h == 0.0
+            && let Some([nw, nh]) = native_dims {
                 self.w = nw;
                 self.h = nh;
             }
-        }
         let mut init = anim::TweenState::default();
         init.x = self.x;
         init.y = self.y;
@@ -1832,6 +1493,12 @@ pub struct TextBuilder {
     shy: f32,
     shc: [f32; 4],
     tween_salt: u64,
+}
+
+impl Default for TextBuilder {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl TextBuilder {
@@ -2252,5 +1919,343 @@ impl TextBuilder {
             shadow_color: self.shc,
             effect: self.effect,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::actors::SpriteSource;
+    use crate::texture::{TextureContext, TextureMeta};
+    use std::cell::Cell;
+    use std::mem::size_of;
+    use std::sync::atomic::{AtomicU64, Ordering};
+
+    struct TestTextureContext;
+
+    #[cfg(target_pointer_width = "64")]
+    #[test]
+    fn source_steps_keep_tween_builders_compact() {
+        assert!(size_of::<anim::Step>() <= 464);
+        assert!(size_of::<SpriteBuilder>() <= 328);
+        assert!(size_of::<TextBuilder>() <= 280);
+    }
+
+    impl TextureContext for TestTextureContext {
+        fn texture_registry_generation(&self) -> u64 {
+            7
+        }
+
+        fn texture_dims(&self, key: &str) -> Option<TextureMeta> {
+            match key {
+                "banner" => Some(TextureMeta { w: 320, h: 120 }),
+                "sheet" => Some(TextureMeta { w: 400, h: 200 }),
+                "grid" => Some(TextureMeta { w: 500, h: 300 }),
+                _ => None,
+            }
+        }
+
+        fn sprite_sheet_dims(&self, key: &str) -> (u32, u32) {
+            match key {
+                "sheet" => (4, 2),
+                _ => (1, 1),
+            }
+        }
+
+        fn texture_handle(&self, _key: &str) -> deadlib_render::TextureHandle {
+            99
+        }
+    }
+
+    #[test]
+    fn dsl_alignment_ident_macros_resolve_values() {
+        assert_eq!(crate::__ui_halign_from_ident!(left), 0.0);
+        assert_eq!(crate::__ui_halign_from_ident!(center), 0.5);
+        assert_eq!(crate::__ui_halign_from_ident!(right), 1.0);
+        assert_eq!(crate::__ui_valign_from_ident!(top), 0.0);
+        assert_eq!(crate::__ui_valign_from_ident!(middle), 0.5);
+        assert_eq!(crate::__ui_valign_from_ident!(center), 0.5);
+        assert_eq!(crate::__ui_valign_from_ident!(bottom), 1.0);
+        assert!(matches!(
+            crate::__ui_textalign_from_ident!(left),
+            TextAlign::Left
+        ));
+        assert!(matches!(
+            crate::__ui_textalign_from_ident!(center),
+            TextAlign::Center
+        ));
+        assert!(matches!(
+            crate::__ui_textalign_from_ident!(right),
+            TextAlign::Right
+        ));
+    }
+
+    #[test]
+    fn dsl_apply_macro_updates_sprite_builder() {
+        crate::space::set_current_metrics(crate::space::Metrics {
+            left: -100.0,
+            right: 100.0,
+            bottom: -50.0,
+            top: 50.0,
+        });
+
+        let mut sprite = SpriteBuilder::solid();
+        let steps = SmallVec::<[anim::Step; 4]>::new();
+        let mut current: Option<anim::SegmentBuilder> = None;
+        crate::__dsl_apply!(
+            (Center(): diffuse(0.1, 0.2, 0.3, 0.4): halign(left): valign(bottom): blend(add))
+            sprite
+            steps
+            current
+            _site
+        );
+
+        assert!(current.is_none());
+        assert!(steps.is_empty());
+        let actor = sprite.build(0);
+        let Actor::Sprite {
+            align,
+            offset,
+            tint,
+            blend,
+            ..
+        } = actor
+        else {
+            panic!("DSL should build a sprite");
+        };
+        assert_eq!(align, [0.0, 1.0]);
+        assert_eq!(offset, [100.0, 50.0]);
+        assert_eq!(tint, [0.1, 0.2, 0.3, 0.4]);
+        assert_eq!(blend, deadlib_render::BlendMode::Add);
+
+        crate::space::set_current_metrics(crate::space::metrics_for_window(854, 480));
+    }
+
+    #[test]
+    fn dsl_apply_macro_updates_text_builder() {
+        let mut text = TextBuilder::new();
+        let steps = SmallVec::<[anim::Step; 4]>::new();
+        let current: Option<anim::SegmentBuilder> = None;
+        crate::__dsl_apply!(
+            (font("common"): settext("Ready"): horizalign(center): blend(multiply))
+            text
+            steps
+            current
+            _site
+        );
+
+        assert!(current.is_none());
+        assert!(steps.is_empty());
+        let actor = text.build(0);
+        let Actor::Text {
+            font,
+            content,
+            align_text,
+            blend,
+            ..
+        } = actor
+        else {
+            panic!("DSL should build text");
+        };
+        assert_eq!(font, "common");
+        assert_eq!(content.as_str(), "Ready");
+        assert_eq!(align_text, TextAlign::Center);
+        assert_eq!(blend, deadlib_render::BlendMode::Multiply);
+    }
+
+    #[test]
+    fn act_from_builder_macro_builds_actor() {
+        let actor = crate::__act_from_builder!(
+            (xy(12.0, 34.0): setsize(56.0, 78.0): diffuse(0.2, 0.3, 0.4, 0.5))
+            SpriteBuilder::solid()
+        );
+
+        let Actor::Sprite {
+            offset, size, tint, ..
+        } = actor
+        else {
+            panic!("act builder macro should build a sprite");
+        };
+        assert_eq!(offset, [12.0, 34.0]);
+        assert!(matches!(size[0], crate::actors::SizeSpec::Px(56.0)));
+        assert!(matches!(size[1], crate::actors::SizeSpec::Px(78.0)));
+        assert_eq!(tint, [0.2, 0.3, 0.4, 0.5]);
+    }
+
+    #[test]
+    fn act_macro_builds_tween_program_only_on_cache_miss() {
+        fn counted(calls: &Cell<u32>, value: f32) -> f32 {
+            calls.set(calls.get() + 1);
+            value
+        }
+
+        fn build(
+            initial_calls: &Cell<u32>,
+            tween_calls: &Cell<u32>,
+            static_calls: &Cell<u32>,
+        ) -> Actor {
+            crate::__act_from_builder!(
+                (x(counted(initial_calls, 4.0)):
+                linear(counted(tween_calls, 1.0)):
+                x(counted(tween_calls, 10.0)):
+                z(counted(static_calls, 7.0)))
+                SpriteBuilder::solid()
+            )
+        }
+
+        runtime::clear_all();
+        let initial_calls = Cell::new(0);
+        let tween_calls = Cell::new(0);
+        let static_calls = Cell::new(0);
+
+        let _ = build(&initial_calls, &tween_calls, &static_calls);
+        let _ = build(&initial_calls, &tween_calls, &static_calls);
+        assert_eq!(initial_calls.get(), 2);
+        assert_eq!(tween_calls.get(), 2);
+        assert_eq!(static_calls.get(), 2);
+
+        runtime::tick(0.5);
+        let actor = build(&initial_calls, &tween_calls, &static_calls);
+        let Actor::Sprite { offset, z, .. } = actor else {
+            panic!("DSL should build a tweened sprite");
+        };
+        assert!((offset[0] - 7.0).abs() < 0.0001);
+        assert_eq!(z, 7);
+        assert_eq!(initial_calls.get(), 3);
+        assert_eq!(tween_calls.get(), 2);
+        assert_eq!(static_calls.get(), 3);
+        runtime::clear_all();
+    }
+
+    #[test]
+    fn sprite_native_dims_resolves_texture_dims() {
+        let dims = sprite_native_dims(
+            &SpriteSource::TextureStatic("banner"),
+            None,
+            None,
+            None,
+            &TestTextureContext,
+        );
+
+        assert_eq!(dims, [320.0, 120.0]);
+    }
+
+    #[test]
+    fn sprite_native_dims_applies_uv_rect() {
+        let dims = sprite_native_dims(
+            &SpriteSource::TextureStatic("banner"),
+            Some([0.25, 0.0, 0.75, 0.5]),
+            None,
+            None,
+            &TestTextureContext,
+        );
+
+        assert_eq!(dims, [160.0, 60.0]);
+    }
+
+    #[test]
+    fn sprite_native_dims_uses_sheet_hints() {
+        let dims = sprite_native_dims(
+            &SpriteSource::TextureStatic("sheet"),
+            None,
+            None,
+            None,
+            &TestTextureContext,
+        );
+
+        assert_eq!(dims, [100.0, 100.0]);
+    }
+
+    #[test]
+    fn sprite_native_dims_uses_explicit_grid_for_cell() {
+        let dims = sprite_native_dims(
+            &SpriteSource::TextureStatic("grid"),
+            None,
+            Some((2, u32::MAX)),
+            Some((5, 3)),
+            &TestTextureContext,
+        );
+
+        assert_eq!(dims, [100.0, 100.0]);
+    }
+
+    #[test]
+    fn sprite_native_dims_returns_unit_for_solid() {
+        let dims = sprite_native_dims(&SpriteSource::Solid, None, None, None, &TestTextureContext);
+
+        assert_eq!(dims, [1.0, 1.0]);
+    }
+
+    #[test]
+    fn zoomto_with_native_dims_preserves_native_scale() {
+        let mut sprite = SpriteBuilder::static_texture("banner");
+        sprite.zoomto_with_native_dims(160.0, 30.0, [320.0, 120.0]);
+
+        let actor = sprite.build(0);
+        let Actor::Sprite { scale, .. } = actor else {
+            panic!("sprite builder should produce a sprite actor");
+        };
+
+        assert_eq!(scale, [0.5, 0.25]);
+    }
+
+    #[test]
+    fn zoomto_with_texture_context_uses_native_texture_dims() {
+        let mut sprite = SpriteBuilder::static_texture("banner");
+        sprite.zoomto_with_texture_context(160.0, 30.0, &TestTextureContext);
+
+        let actor = sprite.build(0);
+        let Actor::Sprite { scale, .. } = actor else {
+            panic!("sprite builder should produce a sprite actor");
+        };
+
+        assert_eq!(scale, [0.5, 0.25]);
+    }
+
+    #[test]
+    fn static_texture_cached_with_texture_context_builds_cached_source() {
+        let cached_handle = AtomicU64::new(0);
+        let cached_generation = AtomicU64::new(u64::MAX);
+        let sprite = SpriteBuilder::static_texture_cached_with_texture_context(
+            "banner",
+            &cached_handle,
+            &cached_generation,
+            &TestTextureContext,
+        );
+
+        let actor = sprite.build(0);
+        let Actor::Sprite { source, .. } = actor else {
+            panic!("sprite builder should produce a sprite actor");
+        };
+
+        assert!(matches!(
+            source,
+            SpriteSource::TextureStaticHandle {
+                key: "banner",
+                handle: 99,
+                generation: 7
+            }
+        ));
+        assert_eq!(cached_handle.load(Ordering::Relaxed), 99);
+        assert_eq!(cached_generation.load(Ordering::Relaxed), 7);
+    }
+
+    #[test]
+    fn build_with_texture_context_seeds_tween_size_from_texture() {
+        runtime::clear_all();
+        let sprite = SpriteBuilder::static_texture("banner");
+        let actor = sprite.build_tweened_with_texture_context(0, &TestTextureContext, || {
+            let mut steps = TweenSteps::new();
+            steps.push(anim::sleep(0.0));
+            steps
+        });
+        let Actor::Sprite { size, scale, .. } = actor else {
+            panic!("sprite builder should produce a sprite actor");
+        };
+
+        assert!(matches!(size[0], crate::actors::SizeSpec::Px(320.0)));
+        assert!(matches!(size[1], crate::actors::SizeSpec::Px(120.0)));
+        assert_eq!(scale, [1.0, 1.0]);
+        runtime::clear_all();
     }
 }

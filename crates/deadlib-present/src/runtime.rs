@@ -15,21 +15,13 @@ struct Entry {
     last_seen_frame: u64,
 }
 
+#[derive(Default)]
 struct Registry {
     map: TweenMap,
     frame: u64,
     active_ids: Vec<u64>,
 }
 
-impl Default for Registry {
-    fn default() -> Self {
-        Self {
-            map: TweenMap::default(),
-            frame: 0,
-            active_ids: Vec::new(),
-        }
-    }
-}
 
 thread_local! {
     static REG: RefCell<Registry> = RefCell::new(Registry::default());

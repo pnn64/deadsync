@@ -10,6 +10,7 @@ use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
 use super::itg;
+use deadsync_profile::favorites_view::unicode_case_insensitive_cmp;
 
 /// One ITGmania local profile found on disk.
 #[derive(Debug, Clone)]
@@ -77,11 +78,7 @@ fn collect_sorted(roots: Vec<PathBuf>) -> Vec<ItgProfileCandidate> {
     for root in roots {
         collect_from_root(&root, &mut out, &mut seen);
     }
-    out.sort_by(|a, b| {
-        a.display_name
-            .to_lowercase()
-            .cmp(&b.display_name.to_lowercase())
-    });
+    out.sort_by(|a, b| unicode_case_insensitive_cmp(&a.display_name, &b.display_name));
     out
 }
 

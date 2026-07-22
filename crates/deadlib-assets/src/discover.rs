@@ -279,6 +279,31 @@ pub fn discover_graphic_textures_in_roots(
             });
         }
     }
+    sort_discovered_textures(&mut discovered, love_first);
+    discovered
+}
+
+#[inline]
+fn ascii_case_insensitive_cmp(left: &str, right: &str) -> std::cmp::Ordering {
+    left.bytes()
+        .map(|byte| byte.to_ascii_lowercase())
+        .cmp(right.bytes().map(|byte| byte.to_ascii_lowercase()))
+}
+
+fn sort_discovered_textures(discovered: &mut [DiscoveredTexture], love_first: bool) {
+    discovered.sort_by(|a, b| {
+        let a_love = love_first && a.label.eq_ignore_ascii_case("Love");
+        let b_love = love_first && b.label.eq_ignore_ascii_case("Love");
+        match (a_love, b_love) {
+            (true, false) => std::cmp::Ordering::Less,
+            (false, true) => std::cmp::Ordering::Greater,
+            _ => ascii_case_insensitive_cmp(&a.label, &b.label),
+        }
+    });
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn sort_discovered_textures_legacy(discovered: &mut [DiscoveredTexture], love_first: bool) {
     discovered.sort_by(|a, b| {
         let a_love = love_first && a.label.eq_ignore_ascii_case("Love");
         let b_love = love_first && b.label.eq_ignore_ascii_case("Love");
@@ -291,7 +316,21 @@ pub fn discover_graphic_textures_in_roots(
                 .cmp(&b.label.to_ascii_lowercase()),
         }
     });
-    discovered
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn sort_discovered_textures_for_bench(discovered: &mut [DiscoveredTexture], love_first: bool) {
+    sort_discovered_textures(discovered, love_first);
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn sort_discovered_textures_legacy_for_bench(
+    discovered: &mut [DiscoveredTexture],
+    love_first: bool,
+) {
+    sort_discovered_textures_legacy(discovered, love_first);
 }
 
 pub fn texture_choices_from_discovered(
@@ -489,6 +528,32 @@ mod tests {
                 ),
             ]
         );
+    }
+
+    #[test]
+    fn graphic_texture_order_matches_legacy_case_folding_and_love_priority() {
+        let fixture = || {
+            ["zeta", "ALPHA", "Love", "alpha", "Äther", "love"]
+                .into_iter()
+                .enumerate()
+                .map(|(index, label)| DiscoveredTexture {
+                    key: format!("key-{index}"),
+                    label: label.to_string(),
+                    source_path: format!("source-{index}"),
+                })
+                .collect::<Vec<_>>()
+        };
+
+        for love_first in [false, true] {
+            let mut expected = fixture();
+            sort_discovered_textures_legacy(&mut expected, love_first);
+            let mut actual = fixture();
+            sort_discovered_textures(&mut actual, love_first);
+            assert_eq!(
+                actual.iter().map(|item| &item.key).collect::<Vec<_>>(),
+                expected.iter().map(|item| &item.key).collect::<Vec<_>>()
+            );
+        }
     }
 
     #[test]

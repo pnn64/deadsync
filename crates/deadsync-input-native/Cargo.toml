@@ -11,7 +11,7 @@ log = "0.4.33"
 winit = "0.30.13"
 
 [target.'cfg(unix)'.dependencies]
-libc = "0.2.186"
+libc = "0.2.189"
 
 [target.'cfg(target_os = "freebsd")'.dependencies]
 hidparser = "1.0.3"

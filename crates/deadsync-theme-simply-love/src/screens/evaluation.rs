@@ -826,7 +826,7 @@ fn course_graph_stripe_actors(
     let stripe_alpha = eval_panes::eval_style_alpha(transparent, STRIPE_RGBA[3], 0.6);
 
     let spans = course_graph_stage_spans(stages, graph_width);
-    let mut actors = Vec::with_capacity((spans.len() + 1) / 2);
+    let mut actors = Vec::with_capacity(spans.len().div_ceil(2));
     for (idx, (x, w)) in spans.into_iter().enumerate() {
         if idx % 2 != 0 || w <= 0.0 {
             continue;
@@ -3868,7 +3868,7 @@ mod input_audio_effect_tests {
 pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
     // Feed virtual input through the test_input state so the highlight feedback on the
     // EvalPane::TestInput pad reflects MENU buttons / Start / Select while the pane is active.
-    let _ = test_input::apply_virtual_input(&mut state.test_input_state, ev);
+    test_input::apply_virtual_input(&mut state.test_input_state, ev);
 
     // When the TestInput pane is active and OnlyDedicatedMenuButtons is on, gameplay
     // arrow presses are routed here purely to drive the pad's highlight feedback —
@@ -3893,8 +3893,8 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
     }
     // Track favorite pad code on arrow presses (not menu buttons)
     let mut favorite_effect = ThemeEffect::None;
-    if ev.pressed {
-        if let Some(side) = state.favorite_code.check(ev.action, ev.timestamp)
+    if ev.pressed
+        && let Some(side) = state.favorite_code.check(ev.action, ev.timestamp)
             && !state.context.players[profile_data::player_side_index(side)].guest
         {
             // Toggle favorite for the chart that was just played
@@ -3918,7 +3918,6 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
                 }
             }
         }
-    }
     if evaluation_lobby_lock_text(state).is_some() {
         match ev.action {
             VirtualAction::p1_start => {

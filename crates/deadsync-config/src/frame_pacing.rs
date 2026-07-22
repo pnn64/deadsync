@@ -420,6 +420,12 @@ pub struct StutterSampleRing {
     cursor: usize,
 }
 
+impl Default for StutterSampleRing {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl StutterSampleRing {
     #[inline(always)]
     pub const fn new() -> Self {

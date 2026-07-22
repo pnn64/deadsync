@@ -287,15 +287,14 @@ fn plan_ops(
 fn execute_with_rollback(journal: &Journal) -> Result<(), apply_journal::ExecuteFailure> {
     let mut executed: Vec<&Op> = Vec::with_capacity(journal.ops.len());
     for op in &journal.ops {
-        if let Some(parent) = op.target.parent() {
-            if let Err(e) = fs::create_dir_all(parent) {
+        if let Some(parent) = op.target.parent()
+            && let Err(e) = fs::create_dir_all(parent) {
                 let rollback_clean = rollback(&executed);
                 return Err(apply_journal::ExecuteFailure {
                     cause: super::io_err_at("create_dir_all", parent, e),
                     rollback_clean,
                 });
             }
-        }
         if op.target_existed {
             // A stale backup from a previous half-completed attempt
             // could only exist if the per-apply token collided, which
@@ -892,7 +891,7 @@ mod tests {
         fs::write(&target, b"NEW").unwrap();
         let staged = exe_dir.join("ghost").join("a.txt");
         let backup = journal.backup_path_for(&target);
-        let ops = vec![Op {
+        let ops = [Op {
             staged,
             target: target.clone(),
             backup,
@@ -931,7 +930,7 @@ mod tests {
         fs::write(&backup, b"OLD").unwrap();
         fs::write(&target, b"STALE").unwrap();
 
-        let ops = vec![Op {
+        let ops = [Op {
             staged: staged.clone(),
             target: target.clone(),
             backup: backup.clone(),
