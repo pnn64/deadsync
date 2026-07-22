@@ -5,6 +5,7 @@ use deadsync_online::stepmaniaonline::{
 };
 
 const Z: i16 = 1490;
+const SUBSTYLE_STACK_CAPACITY: usize = 128;
 const PANEL_W: f32 = 620.0;
 const PANEL_H: f32 = 452.0;
 const HEADER_H: f32 = 48.0;
@@ -742,20 +743,52 @@ fn active_substyle(data: &DownloadPacksOverlayData) -> Option<&SubstyleKey> {
         .map(|button| &button.key)
 }
 
-fn rebuild_substyles(
-    data: &mut DownloadPacksOverlayData,
-    snapshot: &Snapshot,
-    preserve: Option<&SubstyleKey>,
-) {
+fn aggregate_substyles<'a>(
+    substyles: impl Iterator<Item = Option<&'a str>>,
+) -> (Vec<(String, usize)>, usize) {
+    let mut named = Vec::<(String, usize)>::new();
+    let mut uncategorized = 0usize;
+    for substyle in substyles {
+        let Some(value) = substyle.map(str::trim).filter(|value| !value.is_empty()) else {
+            uncategorized += 1;
+            continue;
+        };
+        increment_substyle_count(&mut named, value);
+    }
+    (named, uncategorized)
+}
+
+#[inline(always)]
+fn increment_substyle_count(named: &mut Vec<(String, usize)>, value: &str) {
+    if value.is_ascii() && value.len() <= SUBSTYLE_STACK_CAPACITY {
+        let mut lowered = [0u8; SUBSTYLE_STACK_CAPACITY];
+        lowered[..value.len()].copy_from_slice(value.as_bytes());
+        lowered[..value.len()].make_ascii_lowercase();
+        let lowered = std::str::from_utf8(&lowered[..value.len()])
+            .expect("ASCII case folding preserves valid UTF-8");
+        increment_normalized_substyle_count(named, lowered);
+        return;
+    }
+    let lowered = value.to_lowercase();
+    increment_normalized_substyle_count(named, &lowered);
+}
+
+#[inline(always)]
+fn increment_normalized_substyle_count(named: &mut Vec<(String, usize)>, value: &str) {
+    match named.binary_search_by(|(candidate, _)| candidate.as_str().cmp(value)) {
+        Ok(index) => named[index].1 += 1,
+        Err(index) => named.insert(index, (value.to_owned(), 1)),
+    }
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn aggregate_substyles_legacy<'a>(
+    substyles: impl Iterator<Item = Option<&'a str>>,
+) -> (Vec<(String, usize)>, usize) {
     let mut named: Vec<(String, usize)> = Vec::new();
     let mut uncategorized = 0usize;
-    for pack in snapshot.catalog.iter() {
-        let Some(value) = pack
-            .substyle
-            .as_deref()
-            .map(str::trim)
-            .filter(|value| !value.is_empty())
-        else {
+    for substyle in substyles {
+        let Some(value) = substyle.map(str::trim).filter(|value| !value.is_empty()) else {
             uncategorized += 1;
             continue;
         };
@@ -767,6 +800,28 @@ fn rebuild_substyles(
         }
     }
     named.sort_unstable_by(|(left, _), (right, _)| left.cmp(right));
+    (named, uncategorized)
+}
+
+#[cfg(feature = "bench-support")]
+pub fn aggregate_substyles_for_bench(substyles: &[Option<&str>]) -> (Vec<(String, usize)>, usize) {
+    aggregate_substyles(substyles.iter().copied())
+}
+
+#[cfg(feature = "bench-support")]
+pub fn aggregate_substyles_legacy_for_bench(
+    substyles: &[Option<&str>],
+) -> (Vec<(String, usize)>, usize) {
+    aggregate_substyles_legacy(substyles.iter().copied())
+}
+
+fn rebuild_substyles(
+    data: &mut DownloadPacksOverlayData,
+    snapshot: &Snapshot,
+    preserve: Option<&SubstyleKey>,
+) {
+    let (named, uncategorized) =
+        aggregate_substyles(snapshot.catalog.iter().map(|pack| pack.substyle.as_deref()));
 
     let mut substyles = Vec::with_capacity(named.len() + 2);
     substyles.push(SubstyleButton {
@@ -1515,6 +1570,25 @@ fn format_bytes(bytes: u64) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn indexed_substyle_aggregation_matches_legacy_order_and_counts() {
+        let substyles = [
+            Some(" technical "),
+            Some("Stamina"),
+            None,
+            Some(""),
+            Some("TECHNICAL"),
+            Some("stamina"),
+            Some("İstanbul"),
+            Some("i\u{307}stanbul"),
+            Some("  "),
+        ];
+        assert_eq!(
+            aggregate_substyles(substyles.iter().copied()),
+            aggregate_substyles_legacy(substyles.iter().copied())
+        );
+    }
 
     fn test_pack(id: u64, name: &str, substyle: Option<&str>) -> PackInfo {
         PackInfo::new(

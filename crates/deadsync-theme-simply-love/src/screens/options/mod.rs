@@ -84,6 +84,10 @@ pub use reload::sync_reload_events;
 use reload::*;
 mod score_import;
 use score_import::*;
+#[cfg(feature = "bench-support")]
+pub use score_import::{
+    selected_pack_group_contains_for_bench, selected_pack_group_contains_legacy_for_bench,
+};
 mod apply_replaygain;
 use apply_replaygain::*;
 mod pack_sync;
@@ -91,6 +95,8 @@ pub(crate) mod qr_login;
 use pack_sync::*;
 mod download_packs;
 use download_packs::*;
+#[cfg(feature = "bench-support")]
+pub use download_packs::{aggregate_substyles_for_bench, aggregate_substyles_legacy_for_bench};
 mod layout;
 mod transitions;
 use layout::*;
