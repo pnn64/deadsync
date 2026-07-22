@@ -294,8 +294,6 @@ const GAME_RULE_FACADE_SCAN_DIRS: &[&str] = &[
     "tests",
 ];
 
-const GAME_PROFILE_RULE_SYMBOLS: &[&str] = &["GUEST_SCROLL_SPEED", "ScrollSpeedSetting"];
-
 const GAME_PROFILE_DATA_SYMBOLS: &[&str] = &[
     "AccelEffectsMask",
     "ActiveProfile",
