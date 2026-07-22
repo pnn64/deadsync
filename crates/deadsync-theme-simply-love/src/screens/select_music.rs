@@ -1755,6 +1755,7 @@ fn rebuild_displayed_entries(state: &mut State) {
         state.expanded_series_name.as_deref(),
         state.expanded_pack_name.as_deref(),
         state.policy.interaction.wheel_style,
+        state.policy.interaction.hide_inactive_series,
     );
     if state.entries.is_empty() {
         state.wheel_offset_from_selection = 0.0;
@@ -1766,6 +1767,7 @@ fn build_displayed_entries(
     expanded_series_name: Option<&str>,
     expanded_pack_name: Option<&str>,
     wheel_style: crate::config::SelectMusicWheelStyle,
+    hide_inactive_series: bool,
 ) -> Vec<MusicWheelEntry> {
     let has_pack_headers = all_entries
         .iter()
@@ -1779,6 +1781,8 @@ fn build_displayed_entries(
     // but `HideActiveSectionTitle=false` keeps the active header visible.
     let hide_non_active_packs = expanded_pack_name.is_some()
         && matches!(wheel_style, crate::config::SelectMusicWheelStyle::Iidx);
+    let hide_non_active_series =
+        hide_inactive_series && (expanded_series_name.is_some() || expanded_pack_name.is_some());
 
     let mut new_entries = Vec::with_capacity(all_entries.len());
     let mut current_pack_name: Option<&str> = None;
@@ -1786,13 +1790,16 @@ fn build_displayed_entries(
     for entry in all_entries {
         match entry {
             MusicWheelEntry::PackHeader {
+                name,
                 pack_key,
                 parent_series,
                 ..
             } if pack_key.is_none() && parent_series.is_some() => {
                 current_pack_name = None;
                 current_pack_visible = false;
-                new_entries.push(entry.clone());
+                if !hide_non_active_series || expanded_series_name == Some(name.as_str()) {
+                    new_entries.push(entry.clone());
+                }
             }
             MusicWheelEntry::PackHeader {
                 name,
@@ -15850,6 +15857,7 @@ mod tests {
             None,
             Some("Pack A"),
             SelectMusicWheelStyle::Itg,
+            false,
         );
         state.expanded_pack_name = Some("Pack A".to_string());
         state.selected_index = 0;
@@ -16595,6 +16603,7 @@ mod tests {
             None,
             Some("Pack A"),
             SelectMusicWheelStyle::Itg,
+            false,
         );
 
         assert_eq!(entries.len(), 4);
@@ -16719,7 +16728,8 @@ mod tests {
         ];
         let entries = super::build_series_grouped_entries(&test_entries(), &packs);
 
-        let collapsed = build_displayed_entries(&entries, None, None, SelectMusicWheelStyle::Itg);
+        let collapsed =
+            build_displayed_entries(&entries, None, None, SelectMusicWheelStyle::Itg, false);
         assert_eq!(collapsed.len(), 1);
         assert!(collapsed[0].is_series_header());
 
@@ -16728,6 +16738,7 @@ mod tests {
             Some("ITG Series"),
             None,
             SelectMusicWheelStyle::Itg,
+            false,
         );
         assert_eq!(series_open.len(), 3);
 
@@ -16736,6 +16747,7 @@ mod tests {
             Some("ITG Series"),
             Some("Pack A"),
             SelectMusicWheelStyle::Iidx,
+            false,
         );
         assert_eq!(pack_open.len(), 4);
         assert!(matches!(pack_open[3], super::MusicWheelEntry::Song(_)));
@@ -16773,6 +16785,7 @@ mod tests {
             None,
             Some("Pack A"),
             SelectMusicWheelStyle::Iidx,
+            false,
         );
 
         assert_eq!(entries.len(), 3);
@@ -16789,12 +16802,81 @@ mod tests {
     }
 
     #[test]
+    fn hide_inactive_series_removes_parent_series_above_loose_pack() {
+        let packs = [
+            test_pack("Pack A", "ITG Series"),
+            test_pack("Pack B", "ITG Series"),
+        ];
+        let mut entries = super::build_series_grouped_entries(&test_entries(), &packs);
+        entries.push(header(
+            "ITGAlex's Compilation",
+            2,
+            1,
+            Some("ITGAlex's Compilation"),
+        ));
+        entries.push(super::MusicWheelEntry::Song(test_song("ITGAlex Song")));
+
+        let shown = build_displayed_entries(
+            &entries,
+            None,
+            Some("ITGAlex's Compilation"),
+            SelectMusicWheelStyle::Iidx,
+            false,
+        );
+        assert!(shown.iter().any(super::MusicWheelEntry::is_series_header));
+
+        for wheel_style in [SelectMusicWheelStyle::Itg, SelectMusicWheelStyle::Iidx] {
+            let hidden = build_displayed_entries(
+                &entries,
+                None,
+                Some("ITGAlex's Compilation"),
+                wheel_style,
+                true,
+            );
+            assert_eq!(hidden.len(), 2);
+            assert!(!hidden.iter().any(super::MusicWheelEntry::is_series_header));
+            assert!(matches!(
+                hidden[0],
+                super::MusicWheelEntry::PackHeader { ref name, .. }
+                    if name == "ITGAlex's Compilation"
+            ));
+        }
+    }
+
+    #[test]
+    fn hide_inactive_series_keeps_active_parent_series() {
+        let packs = [
+            test_pack("Pack A", "ITG Series"),
+            test_pack("Pack B", "ITG Series"),
+        ];
+        let entries = super::build_series_grouped_entries(&test_entries(), &packs);
+
+        let shown = build_displayed_entries(
+            &entries,
+            Some("ITG Series"),
+            Some("Pack A"),
+            SelectMusicWheelStyle::Iidx,
+            true,
+        );
+
+        assert_eq!(shown.len(), 4);
+        assert!(shown[0].is_series_header());
+        assert!(matches!(
+            shown[1],
+            super::MusicWheelEntry::PackHeader { ref name, .. } if name == "Pack A"
+        ));
+        assert!(matches!(shown[2], super::MusicWheelEntry::Song(_)));
+        assert!(matches!(shown[3], super::MusicWheelEntry::Song(_)));
+    }
+
+    #[test]
     fn fallback_selection_uses_first_song_not_pack_header() {
         let entries = build_displayed_entries(
             &test_entries(),
             None,
             Some("Pack A"),
             SelectMusicWheelStyle::Iidx,
+            false,
         );
 
         assert_eq!(first_song_entry_index(&entries), Some(1));

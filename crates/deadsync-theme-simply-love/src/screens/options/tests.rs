@@ -269,6 +269,52 @@ fn select_music_choice_emits_shell_config_request() {
 }
 
 #[test]
+fn hide_inactive_series_is_visible_for_both_wheel_styles() {
+    let mut state = init();
+    let rows = submenu_rows(SubmenuKind::SelectMusic);
+    let hide_row = rows
+        .iter()
+        .position(|row| row.id == SubRowId::HideInactiveSeries)
+        .expect("Select Music options should contain Hide Inactive Series");
+
+    for wheel_style in [0, 1] {
+        set_choice_by_id(
+            &mut state.sub[SubmenuKind::SelectMusic].choice_indices,
+            rows,
+            SubRowId::MusicWheelStyle,
+            wheel_style,
+        );
+        assert!(submenu_visible_row_indices(&state, SubmenuKind::SelectMusic, rows)
+            .contains(&hide_row));
+    }
+}
+
+#[test]
+fn hide_inactive_series_choice_emits_shell_config_request() {
+    let asset_manager = AssetManager::new();
+    let mut state = init();
+    state.view = OptionsView::Submenu(SubmenuKind::SelectMusic);
+    let row = select_visible_row(
+        &mut state,
+        SubmenuKind::SelectMusic,
+        SubRowId::HideInactiveSeries,
+    );
+
+    let effect = apply_submenu_choice_delta(&mut state, &asset_manager, 1, NavWrap::Wrap)
+        .expect("Hide Inactive Series should emit shell config work");
+    let enabled = state.sub[SubmenuKind::SelectMusic].cursor_indices[row] == 1;
+
+    assert!(matches!(
+        effect,
+        ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Config(
+            crate::SimplyLoveConfigRequest::SelectMusic(
+                crate::SimplyLoveSelectMusicConfigRequest::HideInactiveSeries(value)
+            )
+        )) if value == enabled
+    ));
+}
+
+#[test]
 fn machine_choice_emits_shell_config_request() {
     let asset_manager = AssetManager::new();
     let mut state = init();

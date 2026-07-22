@@ -503,6 +503,7 @@ pub enum SimplyLoveSelectMusicConfigRequest {
     TranslatedTitles(bool),
     WheelSwitchSpeed(u8),
     WheelStyle(SelectMusicWheelStyle),
+    HideInactiveSeries(bool),
     SortBySeries(bool),
     SongSelectBackground(SelectMusicSongSelectBgMode),
     AllowProfileSwitch(bool),

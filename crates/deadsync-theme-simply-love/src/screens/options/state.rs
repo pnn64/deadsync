@@ -1096,6 +1096,12 @@ pub fn init(view: OptionsInitView) -> State {
     set_choice_by_id(
         &mut state.sub[SubmenuKind::SelectMusic].choice_indices,
         SELECT_MUSIC_OPTIONS_ROWS,
+        SubRowId::HideInactiveSeries,
+        yes_no_choice_index(cfg.hide_inactive_series),
+    );
+    set_choice_by_id(
+        &mut state.sub[SubmenuKind::SelectMusic].choice_indices,
+        SELECT_MUSIC_OPTIONS_ROWS,
         SubRowId::SeriesSort,
         yes_no_choice_index(cfg.sort_music_wheel_by_series),
     );

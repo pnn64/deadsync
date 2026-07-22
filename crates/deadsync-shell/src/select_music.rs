@@ -240,6 +240,7 @@ pub(crate) fn policy_view(config: &config::Config) -> SelectMusicPolicyView {
         interaction: SelectMusicInteractionPolicyView {
             wheel_switch_speed: config.music_wheel_switch_speed,
             wheel_style: config.select_music_wheel_style,
+            hide_inactive_series: config.hide_inactive_series,
             sort_by_series: config.sort_music_wheel_by_series,
             new_pack_mode: config.select_music_new_pack_mode,
             show_srpg_shop: config.show_srpg_shop,
@@ -336,6 +337,7 @@ mod tests {
             select_music_itl_wheel_mode: config::SelectMusicItlWheelMode::PointsAndScore,
             music_wheel_switch_speed: 22,
             select_music_wheel_style: config::SelectMusicWheelStyle::Iidx,
+            hide_inactive_series: true,
             sort_music_wheel_by_series: true,
             select_music_new_pack_mode: config::NewPackMode::OpenPack,
             show_srpg_shop: false,
@@ -386,6 +388,7 @@ mod tests {
             view.interaction.wheel_style,
             config::SelectMusicWheelStyle::Iidx
         );
+        assert!(view.interaction.hide_inactive_series);
         assert!(view.interaction.sort_by_series);
         assert_eq!(
             view.interaction.new_pack_mode,

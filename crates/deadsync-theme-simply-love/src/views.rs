@@ -1110,6 +1110,7 @@ impl Default for SelectMusicWheelPolicyView {
 pub struct SelectMusicInteractionPolicyView {
     pub wheel_switch_speed: u8,
     pub wheel_style: deadsync_config::prelude::SelectMusicWheelStyle,
+    pub hide_inactive_series: bool,
     pub sort_by_series: bool,
     pub new_pack_mode: deadsync_config::prelude::NewPackMode,
     pub show_srpg_shop: bool,
@@ -1125,6 +1126,7 @@ impl Default for SelectMusicInteractionPolicyView {
         Self {
             wheel_switch_speed: deadsync_config::prelude::DEFAULT_MUSIC_WHEEL_SWITCH_SPEED,
             wheel_style: deadsync_config::prelude::SelectMusicWheelStyle::Itg,
+            hide_inactive_series: false,
             sort_by_series: false,
             new_pack_mode: deadsync_config::prelude::NewPackMode::Disabled,
             show_srpg_shop: deadsync_config::prelude::DEFAULT_SHOW_SRPG_SHOP,

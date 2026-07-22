@@ -7,8 +7,9 @@ use crate::defaults::{
     DEFAULT_CENTER_IMAGE_ADD_HEIGHT, DEFAULT_CENTER_IMAGE_ADD_WIDTH,
     DEFAULT_CENTER_IMAGE_TRANSLATE_X, DEFAULT_CENTER_IMAGE_TRANSLATE_Y, DEFAULT_DELAYED_BACK,
     DEFAULT_ENABLE_ARROWCLOUD, DEFAULT_ENABLE_BOOGIESTATS, DEFAULT_ENABLE_GROOVESTATS,
-    DEFAULT_FASTLOAD, DEFAULT_GFX_DEBUG, DEFAULT_GLOBAL_OFFSET_SECONDS, DEFAULT_HIDE_MOUSE_CURSOR,
-    DEFAULT_HIGH_DPI, DEFAULT_LIGHTS_SIMPLIFY_BASS, DEFAULT_LOG_TO_FILE, DEFAULT_MINE_HIT_SOUND,
+    DEFAULT_FASTLOAD, DEFAULT_GFX_DEBUG, DEFAULT_GLOBAL_OFFSET_SECONDS,
+    DEFAULT_HIDE_INACTIVE_SERIES, DEFAULT_HIDE_MOUSE_CURSOR, DEFAULT_HIGH_DPI,
+    DEFAULT_LIGHTS_SIMPLIFY_BASS, DEFAULT_LOG_TO_FILE, DEFAULT_MINE_HIT_SOUND,
     DEFAULT_ONLY_DEDICATED_MENU_BUTTONS, DEFAULT_SELECT_MUSIC_CHART_INFO_EFFECTIVE_BPM,
     DEFAULT_SELECT_MUSIC_CHART_INFO_MATRIX_RATING, DEFAULT_SELECT_MUSIC_CHART_INFO_PEAK_NPS,
     DEFAULT_SELECT_MUSIC_PREVIEW_LOOP, DEFAULT_SELECT_MUSIC_PREVIEW_STARTS_IMMEDIATELY,
@@ -1025,6 +1026,7 @@ pub struct SelectMusicOptions {
     pub show_wheel_grades: bool,
     pub show_wheel_lamps: bool,
     pub sort_wheel_by_series: bool,
+    pub hide_inactive_series: bool,
     pub itl_rank_mode: SelectMusicItlRankMode,
     pub itl_wheel_mode: SelectMusicItlWheelMode,
     pub wheel_style: SelectMusicWheelStyle,
@@ -1063,6 +1065,7 @@ impl Default for SelectMusicOptions {
             show_wheel_grades: DEFAULT_SHOW_MUSIC_WHEEL_GRADES,
             show_wheel_lamps: DEFAULT_SHOW_MUSIC_WHEEL_LAMPS,
             sort_wheel_by_series: DEFAULT_SORT_MUSIC_WHEEL_BY_SERIES,
+            hide_inactive_series: DEFAULT_HIDE_INACTIVE_SERIES,
             itl_rank_mode: SelectMusicItlRankMode::None,
             itl_wheel_mode: SelectMusicItlWheelMode::Score,
             wheel_style: SelectMusicWheelStyle::Itg,
@@ -1143,6 +1146,11 @@ pub fn load_select_music_options(
         sort_wheel_by_series: parse_u8_bool_or_default(
             conf.get("Options", "SelectMusicSortBySeries").as_deref(),
             default.sort_wheel_by_series,
+        ),
+        hide_inactive_series: parse_u8_bool_or_default(
+            conf.get("Options", "SelectMusicHideInactiveSeries")
+                .as_deref(),
+            default.hide_inactive_series,
         ),
         itl_rank_mode: parse_select_music_itl_rank_mode(
             itl_rank_mode.as_deref(),
@@ -1282,6 +1290,11 @@ pub fn push_select_music_option_lines(content: &mut String, options: SelectMusic
         content,
         "SelectMusicSortBySeries",
         select.sort_wheel_by_series,
+    );
+    push_bool(
+        content,
+        "SelectMusicHideInactiveSeries",
+        select.hide_inactive_series,
     );
     push_line(
         content,
@@ -2266,6 +2279,7 @@ mod tests {
             show_wheel_grades: true,
             show_wheel_lamps: false,
             sort_wheel_by_series: true,
+            hide_inactive_series: false,
             itl_rank_mode: SelectMusicItlRankMode::None,
             itl_wheel_mode: SelectMusicItlWheelMode::Off,
             wheel_style: SelectMusicWheelStyle::Itg,
@@ -3099,6 +3113,7 @@ mod tests {
             SelectMusicWheelGrades=0
             SelectMusicWheelLamps=1
             SelectMusicSortBySeries=0
+            SelectMusicHideInactiveSeries=1
             SelectMusicWheelITLRank=Overall
             SelectMusicWheelITL=Points
             SelectMusicWheelStyle=IIDX
@@ -3137,6 +3152,7 @@ mod tests {
         assert!(!loaded.show_wheel_grades);
         assert!(loaded.show_wheel_lamps);
         assert!(!loaded.sort_wheel_by_series);
+        assert!(loaded.hide_inactive_series);
         assert_eq!(loaded.itl_rank_mode, SelectMusicItlRankMode::Overall);
         assert_eq!(
             loaded.itl_wheel_mode,
@@ -3200,6 +3216,7 @@ mod tests {
                 "SelectMusicWheelGrades=1\n",
                 "SelectMusicWheelLamps=0\n",
                 "SelectMusicSortBySeries=1\n",
+                "SelectMusicHideInactiveSeries=0\n",
                 "SelectMusicWheelITLRank=None\n",
                 "SelectMusicWheelITL=Off\n",
                 "SelectMusicWheelStyle=ITG\n",
