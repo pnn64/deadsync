@@ -5,7 +5,7 @@ edition = "2024"
 license = "GPL-3.0"
 
 [dependencies]
-bytemuck = { version = "1.25.1", features = ["derive"] }
+bytemuck = { version = "1.25.2", features = ["derive"] }
 deadlib-render = { path = "../deadlib-render" }
 glam = "0.33.2"
 glow = "0.18.0"

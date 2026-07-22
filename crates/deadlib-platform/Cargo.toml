@@ -25,7 +25,7 @@ windows = { version = "0.62.2", features = [
 ] }
 
 [target.'cfg(all(unix, not(target_os = "macos")))'.dependencies]
-smithay-client-toolkit = { version = "0.20.0", default-features = false }
+smithay-client-toolkit = { version = "0.21.0", default-features = false }
 xcb = { version = "1.7.0", features = ["dpms", "randr", "screensaver"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]

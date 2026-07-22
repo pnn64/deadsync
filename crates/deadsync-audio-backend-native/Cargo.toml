@@ -30,11 +30,11 @@ windows = { version = "0.62.2", features = [
 ] }
 
 [target.'cfg(target_os = "freebsd")'.dependencies]
-libc = "0.2.186"
+libc = "0.2.189"
 
 [target.'cfg(target_os = "linux")'.dependencies]
 alsa = "0.11.0"
-libc = "0.2.186"
+libc = "0.2.189"
 libloading = "0.9.0"
 pipewire = { version = "0.9.2", optional = true }
 

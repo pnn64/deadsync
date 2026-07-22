@@ -103,7 +103,7 @@ qrcodegen = "1.8.0"
 rand = "0.10.2"
 rustc-hash = "2.1.3"
 smallvec = "1.15.2"
-twox-hash = "2.1.2"
+twox-hash = "2.1.3"
 [lints.clippy]
 perf = { level = "warn", priority = -1 }
 
