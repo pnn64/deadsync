@@ -103,16 +103,16 @@ impl software::TextureLookup for SoftwareTextureLookup<'_> {
 // An internal enum to hold the state for the active rendering backend.
 enum BackendImpl {
     #[cfg(all(not(target_pointer_width = "32"), not(target_vendor = "win7")))]
-    Vulkan(vulkan::State),
+    Vulkan(Box<vulkan::State>),
     #[cfg(all(not(target_pointer_width = "32"), not(target_vendor = "win7")))]
-    VulkanWgpu(wgpu_core::State),
+    VulkanWgpu(Box<wgpu_core::State>),
     #[cfg(target_os = "macos")]
-    Metal(wgpu_core::State),
-    OpenGL(opengl::State),
-    OpenGLWgpu(wgpu_core::State),
-    Software(software::State),
+    Metal(Box<wgpu_core::State>),
+    OpenGL(Box<opengl::State>),
+    OpenGLWgpu(Box<wgpu_core::State>),
+    Software(Box<software::State>),
     #[cfg(target_os = "windows")]
-    DirectX(wgpu_core::State),
+    DirectX(Box<wgpu_core::State>),
 }
 
 /// A public, opaque wrapper around the active rendering backend.
@@ -450,46 +450,48 @@ pub fn create_backend(
 ) -> Result<Backend, Box<dyn Error>> {
     let backend_impl = match backend_type {
         #[cfg(all(not(target_pointer_width = "32"), not(target_vendor = "win7")))]
-        BackendType::Vulkan => BackendImpl::Vulkan(vulkan::init(
+        BackendType::Vulkan => BackendImpl::Vulkan(Box::new(vulkan::init(
             &window,
             vsync_enabled,
             present_mode_policy,
             gfx_debug_enabled,
-        )?),
+        )?)),
         #[cfg(all(not(target_pointer_width = "32"), not(target_vendor = "win7")))]
-        BackendType::VulkanWgpu => BackendImpl::VulkanWgpu(wgpu_core::init_vulkan(
+        BackendType::VulkanWgpu => BackendImpl::VulkanWgpu(Box::new(wgpu_core::init_vulkan(
             window,
             vsync_enabled,
             present_mode_policy,
             gfx_debug_enabled,
-        )?),
+        )?)),
         #[cfg(target_os = "macos")]
-        BackendType::Metal => BackendImpl::Metal(wgpu_core::init_metal(
+        BackendType::Metal => BackendImpl::Metal(Box::new(wgpu_core::init_metal(
             window,
             vsync_enabled,
             present_mode_policy,
             gfx_debug_enabled,
-        )?),
-        BackendType::OpenGL => BackendImpl::OpenGL(opengl::init(
+        )?)),
+        BackendType::OpenGL => BackendImpl::OpenGL(Box::new(opengl::init(
             window,
             vsync_enabled,
             gfx_debug_enabled,
             high_dpi_enabled,
-        )?),
-        BackendType::OpenGLWgpu => BackendImpl::OpenGLWgpu(wgpu_core::init_opengl(
+        )?)),
+        BackendType::OpenGLWgpu => BackendImpl::OpenGLWgpu(Box::new(wgpu_core::init_opengl(
             window,
             vsync_enabled,
             present_mode_policy,
             gfx_debug_enabled,
-        )?),
-        BackendType::Software => BackendImpl::Software(software::init(window, vsync_enabled)?),
+        )?)),
+        BackendType::Software => {
+            BackendImpl::Software(Box::new(software::init(window, vsync_enabled)?))
+        }
         #[cfg(target_os = "windows")]
-        BackendType::DirectX => BackendImpl::DirectX(wgpu_core::init_dx12(
+        BackendType::DirectX => BackendImpl::DirectX(Box::new(wgpu_core::init_dx12(
             window,
             vsync_enabled,
             present_mode_policy,
             gfx_debug_enabled,
-        )?),
+        )?)),
     };
     Ok(Backend(backend_impl))
 }

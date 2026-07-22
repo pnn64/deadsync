@@ -13,13 +13,13 @@ use std::sync::mpsc;
 
 #[derive(Clone)]
 enum PrepareRequest {
-    Music(SelectMusicInitView),
+    Music(Box<SelectMusicInitView>),
     Course,
 }
 
 pub(crate) enum PreparedState {
-    Music(select_music::State),
-    Course(select_course::State),
+    Music(Box<select_music::State>),
+    Course(Box<select_course::State>),
 }
 
 /// Shell-owned worker for the expensive screen preparation behind Profile Load.
@@ -32,7 +32,7 @@ pub(crate) struct Service {
 impl Service {
     pub(crate) fn start(&mut self, play_mode: PlayMode, select_music: SelectMusicInitView) {
         let request = match play_mode {
-            PlayMode::Regular => PrepareRequest::Music(select_music),
+            PlayMode::Regular => PrepareRequest::Music(Box::new(select_music)),
             PlayMode::Marathon => PrepareRequest::Course,
         };
         let (tx, rx) = mpsc::sync_channel(1);
@@ -106,11 +106,11 @@ fn prepare(request: PrepareRequest) -> PreparedState {
     match request {
         PrepareRequest::Music(init) => {
             scores::prewarm_select_music_score_caches();
-            let init = crate::select_music::prepare_init_view(init);
-            PreparedState::Music(select_music::init(init))
+            let init = crate::select_music::prepare_init_view(*init);
+            PreparedState::Music(Box::new(select_music::init(init)))
         }
         PrepareRequest::Course => {
-            PreparedState::Course(select_course::init(select_course_init_view()))
+            PreparedState::Course(Box::new(select_course::init(select_course_init_view())))
         }
     }
 }

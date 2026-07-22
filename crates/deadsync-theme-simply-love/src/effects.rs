@@ -81,7 +81,7 @@ pub enum SimplyLoveProfileRequest {
     SetMachineDefaultNoteskin(deadsync_profile::NoteSkin),
     UpdatePlayerOptions {
         side: PlayerSide,
-        options: deadsync_profile::PlayerOptionsData,
+        options: Box<deadsync_profile::PlayerOptionsData>,
         heart_rate_device_id: Option<String>,
     },
     UpdateInitials([Option<String>; 2]),

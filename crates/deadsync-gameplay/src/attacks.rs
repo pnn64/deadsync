@@ -374,9 +374,9 @@ pub fn begin_outro_attack_visual_clear(
         return;
     }
     *attacks_cleared_for_outro = true;
-    for player in 0..num_players.min(MAX_PLAYERS) {
-        outro_attack_visual[player] = active_attack_visual[player];
-    }
+    let player_count = num_players.min(MAX_PLAYERS);
+    outro_attack_visual[..player_count]
+        .copy_from_slice(&active_attack_visual[..player_count]);
 }
 
 #[derive(Clone, Copy, Debug)]

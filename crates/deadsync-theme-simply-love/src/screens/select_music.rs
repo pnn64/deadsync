@@ -961,7 +961,7 @@ struct ManualSyncOverlayData {
 
 enum SyncOverlayState {
     Hidden,
-    NullOrDie(NullOrDieOverlayData),
+    NullOrDie(Box<NullOrDieOverlayData>),
     Manual(ManualSyncOverlayData),
 }
 
@@ -6757,10 +6757,8 @@ fn apply_lobby_input_outcome(
 fn hide_sync_overlay(state: &mut State) {
     if matches!(
         &state.sync_overlay,
-        SyncOverlayState::NullOrDie(NullOrDieOverlayData {
-            phase: NullOrDieOverlayPhase::Running,
-            ..
-        })
+        SyncOverlayState::NullOrDie(overlay)
+            if overlay.phase == NullOrDieOverlayPhase::Running
     ) {
         queue_sync(
             state,
@@ -8201,7 +8199,7 @@ fn show_sync_song_overlay(state: &mut State) {
         NullOrDieOverlayPhase::AnalysisUnavailable
     };
 
-    state.sync_overlay = SyncOverlayState::NullOrDie(NullOrDieOverlayData {
+    state.sync_overlay = SyncOverlayState::NullOrDie(Box::new(NullOrDieOverlayData {
         simfile_path,
         song_title,
         chart_label,
@@ -8236,7 +8234,7 @@ fn show_sync_song_overlay(state: &mut State) {
         nav_last_tick_at: None,
         nav_last_sfx_at: None,
         confirm_selection: None,
-    });
+    }));
 }
 
 fn show_sync_pack_overlay(state: &mut State) {
@@ -15738,7 +15736,7 @@ mod tests {
                     songs_root,
                     pack_dirs: requested_dirs,
                 }
-            )) if songs_root == PathBuf::from("Songs") && requested_dirs == pack_dirs
+            )) if songs_root == std::path::Path::new("Songs") && requested_dirs == pack_dirs
         ));
     }
 

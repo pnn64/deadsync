@@ -1707,7 +1707,7 @@ pub enum SongLuaOverlayKind<NoteskinSlot, ModelVertex, TextAttribute> {
         size: [f32; 2],
         body_values: Arc<[f32]>,
         body_state: SongLuaOverlayState,
-        line_state: SongLuaOverlayState,
+        line_state: Box<SongLuaOverlayState>,
     },
     Quad,
 }

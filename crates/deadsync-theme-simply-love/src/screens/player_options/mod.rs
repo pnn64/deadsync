@@ -155,7 +155,7 @@ fn queue_profile_update(state: &mut State, player_idx: usize) {
         crate::SimplyLoveRuntimeRequest::Profile(
             crate::SimplyLoveProfileRequest::UpdatePlayerOptions {
                 side,
-                options: state.player_options[idx].clone(),
+                options: Box::new(state.player_options[idx].clone()),
                 heart_rate_device_id: state.heart_rate_device_ids[idx].clone(),
             },
         ),

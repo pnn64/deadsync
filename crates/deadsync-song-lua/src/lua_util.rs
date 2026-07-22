@@ -10515,7 +10515,7 @@ where
             size: read_graph_display_size(initial_state, context),
             body_values: read_graph_display_values(actor)?,
             body_state: read_graph_display_body_state(lua, actor)?,
-            line_state: read_graph_display_line_state(lua, actor)?,
+            line_state: Box::new(read_graph_display_line_state(lua, actor)?),
         }
     } else if actor_type.eq_ignore_ascii_case("Quad") {
         SongLuaOverlayKind::Quad

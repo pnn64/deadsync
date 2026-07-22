@@ -57,7 +57,7 @@ pub struct LeaderboardOverlayStateData {
 #[derive(Debug)]
 pub enum LeaderboardOverlayState {
     Hidden,
-    Visible(LeaderboardOverlayStateData),
+    Visible(Box<LeaderboardOverlayStateData>),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -233,13 +233,13 @@ pub fn show_leaderboard_overlay(
         p2.panes.push(machine);
     }
 
-    Some(LeaderboardOverlayState::Visible(
+    Some(LeaderboardOverlayState::Visible(Box::new(
         LeaderboardOverlayStateData {
             elapsed: 0.0,
             p1,
             p2,
         },
-    ))
+    )))
 }
 
 pub fn leaderboard_runtime_request(

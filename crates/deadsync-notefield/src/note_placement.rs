@@ -17,9 +17,9 @@ mod bench {
     use crate::{
         AccelYParams, ScrollTravel, ScrollTravelRequest, appearance_note_actor_alpha,
         appearance_note_actor_alpha_from_alpha, appearance_note_alpha, appearance_note_glow,
-        appearance_note_glow_from_alpha, for_each_visible_note_index,
-        for_each_visible_note_index_legacy, scroll_travel,
+        appearance_note_glow_from_alpha, for_each_visible_note_index, scroll_travel,
     };
+    use crate::notes::for_each_visible_note_index_legacy;
     use deadsync_core::note::NoteType;
     use deadsync_core::song_time::song_time_ns_add_seconds;
     use deadsync_core::timing::beat_to_note_row;

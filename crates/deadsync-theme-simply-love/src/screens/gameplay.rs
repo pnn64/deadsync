@@ -8634,7 +8634,7 @@ fn build_song_lua_overlay_actor(
                 state,
                 body_values,
                 *body_state,
-                *line_state,
+                **line_state,
                 *size,
                 x_scale,
                 y_scale,
@@ -9577,6 +9577,7 @@ fn clear_player_actor_bundle(
 
 #[inline(always)]
 #[cfg(any(test, feature = "bench-support"))]
+#[allow(clippy::extend_with_drain)] // Preserve the slower baseline used by the transfer benchmark.
 fn append_player_actors_legacy(out: &mut Vec<Actor>, player_scratch: &mut Vec<Actor>) {
     out.extend(player_scratch.drain(..));
 }
@@ -14275,11 +14276,11 @@ mod tests {
                     visible: false,
                     ..SongLuaOverlayState::default()
                 },
-                line_state: SongLuaOverlayState {
+                line_state: Box::new(SongLuaOverlayState {
                     y: 1.0,
                     diffuse: [0.8, 0.7, 0.6, 0.5],
                     ..SongLuaOverlayState::default()
-                },
+                }),
             },
             name: None,
             parent_index: None,
@@ -14335,11 +14336,11 @@ mod tests {
                     diffuse: [0.2, 0.5, 1.0, 0.75],
                     ..SongLuaOverlayState::default()
                 },
-                line_state: SongLuaOverlayState {
+                line_state: Box::new(SongLuaOverlayState {
                     y: 1.0,
                     diffuse: [0.8, 0.7, 0.6, 0.5],
                     ..SongLuaOverlayState::default()
-                },
+                }),
             },
             name: None,
             parent_index: None,

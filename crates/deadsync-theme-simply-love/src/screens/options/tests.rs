@@ -2031,8 +2031,8 @@ fn content_reload_requests_use_prepared_paths() {
                 songs_root,
                 courses_root,
             }
-        )) if songs_root == PathBuf::from("/data/songs")
-            && courses_root == PathBuf::from("/data/courses")
+        )) if songs_root == std::path::Path::new("/data/songs")
+            && courses_root == std::path::Path::new("/data/courses")
     ));
     assert!(state.reload_ui.is_some());
 }

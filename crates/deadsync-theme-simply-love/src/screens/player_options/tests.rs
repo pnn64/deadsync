@@ -1790,7 +1790,7 @@ pub(super) mod tests {
             panic!("changed player options should be persisted before feedback");
         };
         assert_eq!(*request_side, side);
-        assert_eq!(options, options_data);
+        assert_eq!(options.as_ref(), options_data);
         assert_eq!(heart_rate_device_id, selected_hrm);
         assert_sfx(&effects[1], "assets/sounds/change_value.ogg");
     }

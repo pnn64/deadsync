@@ -1182,12 +1182,12 @@ impl App {
                     profile::get_session_play_style(),
                 );
                 apply_music_preferences(&mut state, preferred, p2_preferred);
-                self.state.screens.select_music_state = state;
+                self.state.screens.select_music_state = *state;
             }
             crate::profile_load::PreparedState::Course(mut state) => {
                 state.active_color_index = self.state.screens.profile_load_state.active_color_index;
                 select_course::trigger_immediate_refresh(&mut state);
-                self.state.screens.select_course_state = state;
+                self.state.screens.select_course_state = *state;
             }
         }
         profile_load::sync_ready(&mut self.state.screens.profile_load_state, true);
@@ -3260,7 +3260,7 @@ impl App {
                         heart_rate_device_id,
                     },
                 ) => {
-                    profile::update_player_options_for_side(side, options, heart_rate_device_id);
+                    profile::update_player_options_for_side(side, *options, heart_rate_device_id);
                     Vec::new()
                 }
                 SimplyLoveRuntimeRequest::Profile(SimplyLoveProfileRequest::UpdateInitials(

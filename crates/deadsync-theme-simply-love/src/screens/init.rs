@@ -768,8 +768,8 @@ mod tests {
                     songs_root,
                     courses_root,
                 }
-            )) if songs_root == PathBuf::from("Songs")
-                && courses_root == PathBuf::from("Courses")
+            )) if songs_root == std::path::Path::new("Songs")
+                && courses_root == std::path::Path::new("Courses")
         ));
         assert!(state.loading.is_some());
     }
