@@ -61,11 +61,10 @@ pub fn music_rate_from_modifiers(modifiers: &str) -> f32 {
         if !suffix.eq_ignore_ascii_case("xmusic") {
             continue;
         }
-        if let Ok(rate) = num.parse::<f32>() {
-            if rate.is_finite() && rate > 0.0 {
+        if let Ok(rate) = num.parse::<f32>()
+            && rate.is_finite() && rate > 0.0 {
                 return rate;
             }
-        }
     }
     1.0
 }

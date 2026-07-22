@@ -924,7 +924,7 @@ pub fn runtime_plan_player_leaderboard_request(
     let decision = runtime_request_player_leaderboard(&key, max_entries, refresh_cached, now);
     let fetch = decision
         .should_spawn
-        .then(|| PlayerLeaderboardFetchRequest {
+        .then_some(PlayerLeaderboardFetchRequest {
             key,
             gs_username,
             persistent_profile_id,
