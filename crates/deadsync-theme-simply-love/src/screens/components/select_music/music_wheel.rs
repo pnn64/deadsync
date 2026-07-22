@@ -828,8 +828,11 @@ pub fn push(actors: &mut Vec<Actor>, p: MusicWheelParams) {
                     };
                     let show_new_badge = pack_key.is_some()
                         && p.color_pack_headers
-                        && p.new_pack_names
-                            .is_some_and(|new_packs| new_packs.contains(name.as_str()));
+                        && p.new_pack_names.is_some_and(|new_packs| {
+                            pack_key
+                                .as_deref()
+                                .is_some_and(|key| new_packs.contains(key))
+                        });
                     actors.push(act!(quad:
                         align(0.0, 0.5):
                         xy(highlight_left_world, y_center_item):
@@ -851,8 +854,9 @@ pub fn push(actors: &mut Vec<Actor>, p: MusicWheelParams) {
                             p.expanded_series_name
                                 .is_some_and(|expanded| expanded == name.as_str())
                         } else {
-                            p.expanded_pack_name
-                                .is_some_and(|expanded| expanded == name.as_str())
+                            p.expanded_pack_name.is_some_and(|expanded| {
+                                expanded == pack_key.as_deref().unwrap_or(name.as_str())
+                            })
                         };
                         let alpha = if active { 0.5 } else { 0.1 };
                         actors.push(song_select_bg_sprite(
