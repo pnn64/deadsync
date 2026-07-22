@@ -94,6 +94,16 @@ const ITL_SCORE_ZOOM: f32 = 0.2;
 const ITL_POINTS_SCORE_ZOOM: f32 = 0.13;
 const SONG_NULL_SYNC_RIGHT_EDGE: [f32; 4] = [80.0 / 255.0, 20.0 / 255.0, 27.0 / 255.0, 1.0];
 
+fn pack_header_text_x(is_series_header: bool, is_child_pack: bool) -> f32 {
+    if is_series_header {
+        widescale(70.0, 74.0)
+    } else if is_child_pack {
+        widescale(75.0, 84.0)
+    } else {
+        widescale(65.0, 74.0)
+    }
+}
+
 #[inline(always)]
 fn song_select_bg_path(song: &SongData, mode: SelectMusicSongSelectBgMode) -> Option<&PathBuf> {
     match mode {
@@ -736,12 +746,9 @@ pub fn push(actors: &mut Vec<Actor>, p: MusicWheelParams) {
     let title_x_local: f32 = widescale(75.0, 111.0) - sl_shift;
     let title_max_w_local: f32 = widescale(245.0, 350.0);
 
-    // Simply Love [MusicWheelItem] section metrics. Child pack sections are
-    // indented 10px from their parent Series sections.
-    let section_x_local: f32 = widescale(35.0, 74.0) - sl_shift;
-    let child_section_x_local: f32 = widescale(45.0, 84.0) - sl_shift;
+    // Simply Love [MusicWheelItem] section metrics.
     let empty_center_x_local: f32 = half_highlight - sl_shift + widescale(9.0, 10.0);
-    let pack_name_max_w: f32 = widescale(240.0, 310.0);
+    let pack_name_max_w: f32 = widescale(220.0, 310.0);
 
     // Pack count
     let pack_count_x_local: f32 = screen_width() / 2.0 - widescale(9.0, 10.0) - sl_shift;
@@ -819,6 +826,8 @@ pub fn push(actors: &mut Vec<Actor>, p: MusicWheelParams) {
                 } => {
                     let is_series_header = pack_key.is_none() && parent_series.is_some();
                     let is_child_pack = pack_key.is_some() && parent_series.is_some();
+                    let section_x_local =
+                        pack_header_text_x(is_series_header, is_child_pack) - sl_shift;
                     let mut bg_col = col_pack_header_box();
                     bg_col[3] *= section_bg_alpha;
                     let header_color = if p.color_pack_headers {
@@ -913,11 +922,7 @@ pub fn push(actors: &mut Vec<Actor>, p: MusicWheelParams) {
                         font("miso"):
                         settext(cached_str_ref(name.as_str())):
                         align(0.0, 0.5):
-                        xy(
-                            highlight_left_world
-                                + if is_child_pack { child_section_x_local } else { section_x_local },
-                            y_center_item
-                        ):
+                        xy(highlight_left_world + section_x_local, y_center_item):
                         maxwidth(pack_name_max_w):
                         zoom(1.0):
                         diffuse(header_color[0], header_color[1], header_color[2], 1.0):
@@ -1540,7 +1545,7 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
 mod tests {
     use super::{
         chart_for_preferred_or_nearest_standard, choose_itl_wheel_score, itl_fetch_flags,
-        itl_rank_color, itl_wheel_mode_for_sides, lua_badge_submit_allowed,
+        itl_rank_color, itl_wheel_mode_for_sides, lua_badge_submit_allowed, pack_header_text_x,
         preferred_chart_indices, runtime_slot_requests, song_select_bg_path, srpg_rate_color,
         visible_song_select_bg_paths, visible_song_select_bg_paths_match,
     };
@@ -1550,6 +1555,7 @@ mod tests {
     use crate::screens::select_music::MusicWheelEntry;
     use crate::views::{MUSIC_WHEEL_SLOT_COUNT, MusicWheelSlotRuntimeRequest};
     use deadlib_present::color;
+    use deadlib_present::space::{metrics_for_window, set_current_metrics};
     use deadsync_chart::{ChartData, SongData};
     use deadsync_profile as profile_data;
     use deadsync_score::CachedItlScore;
@@ -1632,6 +1638,19 @@ mod tests {
             min_bpm: 120.0,
             max_bpm: 120.0,
         }
+    }
+
+    #[test]
+    fn pack_header_text_clears_series_icons_in_4_3() {
+        set_current_metrics(metrics_for_window(640, 480));
+        assert_eq!(pack_header_text_x(false, false), 65.0);
+        assert_eq!(pack_header_text_x(true, false), 70.0);
+        assert_eq!(pack_header_text_x(false, true), 75.0);
+
+        set_current_metrics(metrics_for_window(854, 480));
+        assert_eq!(pack_header_text_x(false, false), 74.0);
+        assert_eq!(pack_header_text_x(true, false), 74.0);
+        assert_eq!(pack_header_text_x(false, true), 84.0);
     }
 
     #[test]
