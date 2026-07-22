@@ -1,9 +1,11 @@
 use crate::UserEvent;
+#[cfg(windows)]
 use deadsync_input_native::WindowsPadBackend;
 use winit::event_loop::EventLoopProxy;
 
 /// Startup settings for the platform and StepManiaX input backends.
 pub struct InputBackendConfig {
+    #[cfg(windows)]
     pub windows_pad_backend: WindowsPadBackend,
     pub smx_input: bool,
     pub smx_p1_serial: Option<String>,

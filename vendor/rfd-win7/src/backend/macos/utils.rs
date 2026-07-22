@@ -14,7 +14,7 @@ use raw_window_handle::RawWindowHandle;
 
 pub fn activate_cocoa_multithreading() {
     let thread = NSThread::new();
-    unsafe { thread.start() };
+    thread.start();
 }
 
 pub fn run_on_main<R: Send, F: FnOnce(MainThreadMarker) -> R + Send>(run: F) -> R {
@@ -23,7 +23,7 @@ pub fn run_on_main<R: Send, F: FnOnce(MainThreadMarker) -> R + Send>(run: F) -> 
     } else {
         let mtm = unsafe { MainThreadMarker::new_unchecked() };
         let app = NSApplication::sharedApplication(mtm);
-        if unsafe { app.isRunning() } {
+        if app.isRunning() {
             dispatch2::run_on_main(run)
         } else {
             panic!("You are running RFD in NonWindowed environment, it is impossible to spawn dialog from thread different than main in this env.");

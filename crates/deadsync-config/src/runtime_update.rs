@@ -15,6 +15,7 @@ use deadlib_render::{BackendType, PresentModePolicy};
 use deadsync_audio::AudioOutputMode;
 #[cfg(target_os = "linux")]
 use deadsync_audio::LinuxAudioBackend;
+#[cfg(target_os = "windows")]
 use deadsync_input_native::WindowsPadBackend;
 use deadsync_lights::{DriverKind as LightsDriverKind, GameplayPadLightMode};
 use log::warn;

@@ -71,12 +71,12 @@ impl<R: 'static + Default, D: AsModal + 'static> ModalFuture<R, D> {
         let win = if let Some(win) = win {
             Some(win)
         } else {
-            unsafe { app.mainWindow() }.or_else(|| app.windows().firstObject())
+            app.mainWindow().or_else(|| app.windows().firstObject())
         };
 
         // if async exec is possible start sheet modal
         // otherwise fallback to sync
-        if unsafe { app.isRunning() } && win.is_some() {
+        if app.isRunning() && win.is_some() {
             let state = state.clone();
 
             // Hack to work around us getting the window above

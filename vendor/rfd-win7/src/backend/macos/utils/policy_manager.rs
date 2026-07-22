@@ -10,7 +10,7 @@ pub struct PolicyManager {
 impl PolicyManager {
     pub fn new(mtm: MainThreadMarker) -> Self {
         let app = NSApplication::sharedApplication(mtm);
-        let initial_policy = unsafe { app.activationPolicy() };
+        let initial_policy = app.activationPolicy();
 
         if initial_policy == NSApplicationActivationPolicy::Prohibited {
             let new_pol = NSApplicationActivationPolicy::Accessory;

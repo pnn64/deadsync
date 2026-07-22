@@ -36,11 +36,11 @@ impl AsModal for Panel {
 
 impl InnerModal for NSSavePanel {
     fn begin_modal(&self, window: &NSWindow, handler: &Block<dyn Fn(NSModalResponse)>) {
-        unsafe { self.beginSheetModalForWindow_completionHandler(window, handler) }
+        self.beginSheetModalForWindow_completionHandler(window, handler)
     }
 
     fn run_modal(&self) -> NSModalResponse {
-        unsafe { self.runModal() }
+        self.runModal()
     }
 }
 
@@ -67,33 +67,27 @@ impl Panel {
         if let Some(parent) = self.parent.clone() {
             let completion = block2::StackBlock::new(|_: isize| {});
 
-            unsafe {
-                self.panel
-                    .beginSheetModalForWindow_completionHandler(&parent, &completion)
-            }
+            self.panel
+                .beginSheetModalForWindow_completionHandler(&parent, &completion)
         }
 
-        unsafe { self.panel.runModal() }
+        self.panel.runModal()
     }
 
     pub fn get_result(&self) -> PathBuf {
-        unsafe {
-            let url = self.panel.URL().unwrap();
-            url.path().unwrap().to_string().into()
-        }
+        let url = self.panel.URL().unwrap();
+        url.path().unwrap().to_string().into()
     }
 
     pub fn get_results(&self) -> Vec<PathBuf> {
-        unsafe {
-            let urls = self.as_open_panel().unwrap().URLs();
+        let urls = self.as_open_panel().unwrap().URLs();
 
-            let mut res = Vec::new();
-            for url in urls {
-                res.push(url.path().unwrap().to_string().into());
-            }
-
-            res
+        let mut res = Vec::new();
+        for url in urls {
+            res.push(url.path().unwrap().to_string().into());
         }
+
+        res
     }
 }
 
@@ -101,7 +95,7 @@ trait PanelExt {
     fn panel(&self) -> &NSSavePanel;
 
     fn set_can_create_directories(&self, can: bool) {
-        unsafe { self.panel().setCanCreateDirectories(can) }
+        self.panel().setCanCreateDirectories(can)
     }
 
     fn add_filters(&self, opt: &FileDialog) {
@@ -114,10 +108,8 @@ trait PanelExt {
         let f_raw: Vec<_> = exts.iter().map(|ext| NSString::from_str(ext)).collect();
         let array = NSArray::from_retained_slice(&f_raw);
 
-        unsafe {
-            #[allow(deprecated)]
-            self.panel().setAllowedFileTypes(Some(&array));
-        }
+        #[allow(deprecated)]
+        self.panel().setAllowedFileTypes(Some(&array));
     }
 
     fn set_path(&self, path: &Path, file_name: Option<&str>) {
@@ -132,22 +124,18 @@ trait PanelExt {
         };
 
         if let Some(path) = path.to_str() {
-            unsafe {
-                let url = NSURL::fileURLWithPath_isDirectory(&NSString::from_str(path), true);
-                self.panel().setDirectoryURL(Some(&url));
-            }
+            let url = NSURL::fileURLWithPath_isDirectory(&NSString::from_str(path), true);
+            self.panel().setDirectoryURL(Some(&url));
         }
     }
 
     fn set_file_name(&self, file_name: &str) {
-        unsafe {
-            self.panel()
-                .setNameFieldStringValue(&NSString::from_str(file_name))
-        }
+        self.panel()
+            .setNameFieldStringValue(&NSString::from_str(file_name))
     }
 
     fn set_title(&self, title: &str) {
-        unsafe { self.panel().setMessage(Some(&NSString::from_str(title))) }
+        self.panel().setMessage(Some(&NSString::from_str(title)))
     }
 }
 
@@ -165,7 +153,7 @@ impl PanelExt for Retained<NSOpenPanel> {
 
 impl Panel {
     pub fn build_pick_file(opt: &FileDialog, mtm: MainThreadMarker) -> Self {
-        let panel = unsafe { NSOpenPanel::openPanel(mtm) };
+        let panel = NSOpenPanel::openPanel(mtm);
 
         if !opt.filters.is_empty() {
             panel.add_filters(opt);
@@ -187,14 +175,14 @@ impl Panel {
             panel.set_can_create_directories(can);
         }
 
-        unsafe { panel.setCanChooseDirectories(false) };
-        unsafe { panel.setCanChooseFiles(true) };
+        panel.setCanChooseDirectories(false);
+        panel.setCanChooseFiles(true);
 
         Self::new(Retained::into_super(panel), opt.parent.as_ref())
     }
 
     pub fn build_save_file(opt: &FileDialog, mtm: MainThreadMarker) -> Self {
-        let panel = unsafe { NSSavePanel::savePanel(mtm) };
+        let panel = NSSavePanel::savePanel(mtm);
 
         if !opt.filters.is_empty() {
             panel.add_filters(opt);
@@ -220,7 +208,7 @@ impl Panel {
     }
 
     pub fn build_pick_folder(opt: &FileDialog, mtm: MainThreadMarker) -> Self {
-        let panel = unsafe { NSOpenPanel::openPanel(mtm) };
+        let panel = NSOpenPanel::openPanel(mtm);
 
         if let Some(path) = &opt.starting_directory {
             panel.set_path(path, opt.file_name.as_deref());
@@ -233,14 +221,14 @@ impl Panel {
         let can = opt.can_create_directories.unwrap_or(true);
         panel.set_can_create_directories(can);
 
-        unsafe { panel.setCanChooseDirectories(true) };
-        unsafe { panel.setCanChooseFiles(false) };
+        panel.setCanChooseDirectories(true);
+        panel.setCanChooseFiles(false);
 
         Self::new(Retained::into_super(panel), opt.parent.as_ref())
     }
 
     pub fn build_pick_folders(opt: &FileDialog, mtm: MainThreadMarker) -> Self {
-        let panel = unsafe { NSOpenPanel::openPanel(mtm) };
+        let panel = NSOpenPanel::openPanel(mtm);
 
         if let Some(path) = &opt.starting_directory {
             panel.set_path(path, opt.file_name.as_deref());
@@ -253,15 +241,15 @@ impl Panel {
         let can = opt.can_create_directories.unwrap_or(true);
         panel.set_can_create_directories(can);
 
-        unsafe { panel.setCanChooseDirectories(true) };
-        unsafe { panel.setCanChooseFiles(false) };
-        unsafe { panel.setAllowsMultipleSelection(true) };
+        panel.setCanChooseDirectories(true);
+        panel.setCanChooseFiles(false);
+        panel.setAllowsMultipleSelection(true);
 
         Self::new(Retained::into_super(panel), opt.parent.as_ref())
     }
 
     pub fn build_pick_files(opt: &FileDialog, mtm: MainThreadMarker) -> Self {
-        let panel = unsafe { NSOpenPanel::openPanel(mtm) };
+        let panel = NSOpenPanel::openPanel(mtm);
 
         if !opt.filters.is_empty() {
             panel.add_filters(opt);
@@ -279,15 +267,15 @@ impl Panel {
             panel.set_can_create_directories(can);
         }
 
-        unsafe { panel.setCanChooseDirectories(false) };
-        unsafe { panel.setCanChooseFiles(true) };
-        unsafe { panel.setAllowsMultipleSelection(true) };
+        panel.setCanChooseDirectories(false);
+        panel.setCanChooseFiles(true);
+        panel.setAllowsMultipleSelection(true);
 
         Self::new(Retained::into_super(panel), opt.parent.as_ref())
     }
 
     pub fn build_pick_file_or_folder(opt: &FileDialog, mtm: MainThreadMarker) -> Self {
-        let panel = unsafe { NSOpenPanel::openPanel(mtm) };
+        let panel = NSOpenPanel::openPanel(mtm);
 
         if !opt.filters.is_empty() {
             panel.add_filters(opt);
@@ -304,15 +292,15 @@ impl Panel {
         let can = opt.can_create_directories.unwrap_or(true);
         panel.set_can_create_directories(can);
 
-        unsafe { panel.setCanChooseDirectories(true) };
-        unsafe { panel.setCanChooseFiles(true) };
-        unsafe { panel.setAllowsMultipleSelection(false) };
+        panel.setCanChooseDirectories(true);
+        panel.setCanChooseFiles(true);
+        panel.setAllowsMultipleSelection(false);
 
         Self::new(Retained::into_super(panel), opt.parent.as_ref())
     }
 
     pub fn build_pick_files_or_folders(opt: &FileDialog, mtm: MainThreadMarker) -> Self {
-        let panel = unsafe { NSOpenPanel::openPanel(mtm) };
+        let panel = NSOpenPanel::openPanel(mtm);
 
         if !opt.filters.is_empty() {
             panel.add_filters(opt);
@@ -329,9 +317,9 @@ impl Panel {
         let can = opt.can_create_directories.unwrap_or(true);
         panel.set_can_create_directories(can);
 
-        unsafe { panel.setCanChooseDirectories(true) };
-        unsafe { panel.setCanChooseFiles(true) };
-        unsafe { panel.setAllowsMultipleSelection(true) };
+        panel.setCanChooseDirectories(true);
+        panel.setCanChooseFiles(true);
+        panel.setAllowsMultipleSelection(true);
 
         Self::new(Retained::into_super(panel), opt.parent.as_ref())
     }

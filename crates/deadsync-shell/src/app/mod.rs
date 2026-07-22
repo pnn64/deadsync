@@ -1226,7 +1226,10 @@ impl App {
             return;
         }
         if self.state.screens.current_screen == CurrentScreen::Options {
-            options::apply_apply_replaygain_events(&mut self.state.screens.options_state, events);
+            options::apply_apply_replaygain_events(
+                &mut self.state.screens.options_state,
+                events,
+            );
         }
     }
 
@@ -7924,6 +7927,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     launch_input_backends(
         proxy,
         InputBackendConfig {
+            #[cfg(target_os = "windows")]
             windows_pad_backend: config.windows_gamepad_backend,
             smx_input: config.smx_input,
             smx_p1_serial,
