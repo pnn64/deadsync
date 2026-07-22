@@ -523,7 +523,11 @@ fn push_loading_overlay(
         match eta_seconds(done, total, phase_elapsed_s) {
             Some(eta_secs) => Arc::<str>::from(format!(
                 "{speed}  \u{2022}  {}",
-                tr_fmt("OptionsScoreImport", "ImportEta", &[("eta", &format_eta(eta_secs))]),
+                tr_fmt(
+                    "OptionsScoreImport",
+                    "ImportEta",
+                    &[("eta", &format_eta(eta_secs))]
+                ),
             )),
             None => speed,
         }
@@ -531,7 +535,8 @@ fn push_loading_overlay(
     let show_skip_hint = matches!(
         phase,
         crate::views::SimplyLoveContentReloadPhase::ReplayGain
-    ) && loading.is_some_and(|loading| !loading.done && !loading.replaygain_skip_requested);
+    ) && loading
+        .is_some_and(|loading| !loading.done && !loading.replaygain_skip_requested);
     let fill = color::decorative_rgba(state.active_color_index);
 
     let bar_w = widescale(360.0, 520.0);

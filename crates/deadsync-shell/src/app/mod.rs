@@ -1226,10 +1226,7 @@ impl App {
             return;
         }
         if self.state.screens.current_screen == CurrentScreen::Options {
-            options::apply_apply_replaygain_events(
-                &mut self.state.screens.options_state,
-                events,
-            );
+            options::apply_apply_replaygain_events(&mut self.state.screens.options_state, events);
         }
     }
 

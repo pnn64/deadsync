@@ -114,10 +114,10 @@ fn take_frame(player: &mut deadlib_video::Player, frame: usize, mode: FrameMode)
 }
 
 fn main() {
-    let path = env::args_os()
-        .nth(1)
-        .map(PathBuf::from)
-        .expect("usage: frame_recycling <60-fps video path> [discard]");
+    let Some(path) = env::args_os().nth(1).map(PathBuf::from) else {
+        eprintln!("frame_recycling skipped: pass a 60-fps video path to run the benchmark");
+        return;
+    };
     let mode = if env::args().nth(2).as_deref() == Some("discard") {
         FrameMode::Discard
     } else {

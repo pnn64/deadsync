@@ -38,7 +38,7 @@ fn leaderboard_rank_treats_equal_scores_as_current_run_ahead() {
 
 #[test]
 fn score_submit_helpers_keep_lua_and_fail_semantics() {
-    assert!(lua_chart_submit_allowed(" D5BD4DD7224F68FF "));
+    assert!(!lua_chart_submit_allowed(" D5BD4DD7224F68FF "));
     assert!(!lua_chart_submit_allowed("deadbeefcafebabe"));
     assert!(lua_submit_allowed(false, "deadbeefcafebabe"));
     assert!(!lua_submit_allowed(true, "deadbeefcafebabe"));

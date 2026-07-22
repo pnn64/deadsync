@@ -794,7 +794,7 @@ pub fn itg_hold_explosion_slot<L, T: Clone>(
     if let Some(slot) = direct_slot() {
         return Some(slot);
     }
-    for slot in wrapped_slots() {
+    if let Some(slot) = wrapped_slots().into_iter().next() {
         return Some(match wrapper {
             Some(layer) => apply_commands(slot, layer, active_key),
             None => slot,

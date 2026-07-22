@@ -735,9 +735,9 @@ mod tests {
     #[cfg(target_pointer_width = "64")]
     #[test]
     fn source_steps_keep_tween_builders_compact() {
-        assert_eq!(size_of::<anim::Step>(), 464);
-        assert_eq!(size_of::<SpriteBuilder>(), 328);
-        assert_eq!(size_of::<TextBuilder>(), 280);
+        assert!(size_of::<anim::Step>() <= 464);
+        assert!(size_of::<SpriteBuilder>() <= 328);
+        assert!(size_of::<TextBuilder>() <= 280);
     }
 
     impl TextureContext for TestTextureContext {

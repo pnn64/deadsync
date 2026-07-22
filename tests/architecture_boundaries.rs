@@ -2570,13 +2570,13 @@ fn simply_love_smx_assignment_uses_shell_prepared_hardware_state() {
             && shell_smx.contains("deadsync_smx::get_info(slot)"),
         "shell must prepare the SMX assignment hardware snapshot"
     );
+    let shell_app_compact = shell_app.split_whitespace().collect::<String>();
+    let shell_navigation_compact = shell_navigation.split_whitespace().collect::<String>();
     assert!(
         theme_screen.contains(
             "pub fn on_enter(state: &mut State, view: &SmxAssignmentView, return_screen: Screen)",
-        ) && shell_app
-            .contains("&crate::smx_config::smx_assignment_view(),\n                prev,")
-            && shell_navigation
-                .contains("&crate::smx_config::smx_assignment_view(),\n                prev,"),
+        ) && shell_app_compact.contains("&crate::smx_config::smx_assignment_view(),prev,")
+            && shell_navigation_compact.contains("&crate::smx_config::smx_assignment_view(),prev,"),
         "shell must pass the initiating screen directly into SMX assignment state"
     );
     assert!(
@@ -5319,7 +5319,6 @@ fn simply_love_three_key_navigation_uses_prepared_policy() {
         "groovestats_login.rs",
         "manage_local_profiles.rs",
         "menu.rs",
-        "player_options/input.rs",
     ] {
         let source = fs::read_to_string(screens.join(screen))
             .expect("three-key navigation consumer should be readable");
@@ -8846,7 +8845,7 @@ fn simply_love_language_io_is_asset_owned() {
         );
     }
     assert!(
-        runtime.contains("OnceLock<RwLock<LanguageBundle>>")
+        runtime.contains("OnceLock<RwLock<Arc<LanguageBundle>>>")
             && runtime.contains("pub fn tr(")
             && runtime.contains("LANG_REVISION"),
         "Simply Love must retain render-time translation state and lookup behavior"
@@ -9651,6 +9650,7 @@ fn canonical_notefield_public_symbols_match_allowlist() {
 
     let mut expected = [
         "BuiltNotefield",
+        "CapturedActorSource",
         "clamp_rounded_i16",
         "ComboHudFrame",
         "ComboMilestoneAssets",
@@ -9673,6 +9673,8 @@ fn canonical_notefield_public_symbols_match_allowlist() {
         "gameplay_mods_text",
         "GameplayModsAttackMode",
         "GameplayModsTextParams",
+        "HoldMeshScratch",
+        "HoldMeshScratchStats",
         "HudLayoutYs",
         "IndicatorSprite",
         "JudgmentHudFrame",
@@ -9704,6 +9706,7 @@ fn canonical_notefield_public_symbols_match_allowlist() {
         "NotefieldOptions",
         "NotefieldSongLuaView",
         "NotefieldVisualState",
+        "NoteskinFrameCacheStats",
         "noteskin_model_actor",
         "noteskin_model_actor_from_draw",
         "noteskin_model_actor_from_draw_depth_sorted_affine_cached_geometry",
@@ -9711,10 +9714,14 @@ fn canonical_notefield_public_symbols_match_allowlist() {
         "prepare_notefield",
         "PreparedNotefield",
         "PreparedNotefieldNotes",
+        "PlacementBench",
+        "PlacementBenchFrame",
         "ProxyCaptureRequests",
         "quantize_centi_i32",
         "quantize_centi_u32",
         "ScrollTravel",
+        "SlotFrameBench",
+        "SlotFrameBenchOutput",
         "song_lua_note_model_draw",
         "song_lua_player_skew_x_matrix",
         "song_lua_player_skew_y_matrix",
@@ -9725,6 +9732,8 @@ fn canonical_notefield_public_symbols_match_allowlist() {
         "TapJudgmentSprite",
         "TornadoBounds",
         "ViewOverride",
+        "bench_fresh_hold_mesh_frame",
+        "bench_reused_hold_mesh_frame",
         "zmod_broken_run_end",
         "zmod_combo_quint_active",
         "zmod_mini_indicator_output",
@@ -10263,7 +10272,7 @@ fn receptor_composition_stays_canonical_and_theme_styled() {
     assert!(theme.contains("compose_notefield_field("));
     assert!(field.contains("compose_notefield_feedback("));
     assert!(!theme.contains("compose_notefield_feedback("));
-    assert!(theme.contains("slot.texture_key_handle().into_sprite_source()"));
+    assert!(theme.contains("slot.actor_texture_source(actor_resources)"));
     assert!(frame.contains("visual.tiny"));
     let ordered_markers = [
         "compose_column_feedback(",

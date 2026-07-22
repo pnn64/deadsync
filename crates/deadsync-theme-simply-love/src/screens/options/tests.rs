@@ -284,8 +284,9 @@ fn hide_inactive_series_is_visible_for_both_wheel_styles() {
             SubRowId::MusicWheelStyle,
             wheel_style,
         );
-        assert!(submenu_visible_row_indices(&state, SubmenuKind::SelectMusic, rows)
-            .contains(&hide_row));
+        assert!(
+            submenu_visible_row_indices(&state, SubmenuKind::SelectMusic, rows).contains(&hide_row)
+        );
     }
 }
 
@@ -956,10 +957,7 @@ fn apply_replaygain_finish_then_dismiss_closes_overlay() {
 
 /// Returns true when `effect` is, or contains within a batch, a runtime content
 /// request equal to `want`.
-fn effect_contains_content(
-    effect: &ThemeEffect,
-    want: crate::SimplyLoveContentRequest,
-) -> bool {
+fn effect_contains_content(effect: &ThemeEffect, want: crate::SimplyLoveContentRequest) -> bool {
     fn is_match(effect: &ThemeEffect, want: &crate::SimplyLoveContentRequest) -> bool {
         match effect {
             ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Content(req)) => {
@@ -973,7 +971,8 @@ fn effect_contains_content(
 }
 
 fn age_start_hold(state: &mut State, side: profile_data::PlayerSide) {
-    let idx = profile_data::player_side_index(side);    state.start_input[idx].held = true;
+    let idx = profile_data::player_side_index(side);
+    state.start_input[idx].held = true;
     state.start_input[idx].held_for = NAV_INITIAL_HOLD_DELAY;
     state.start_input[idx].next_repeat_at = NAV_INITIAL_HOLD_DELAY;
 }

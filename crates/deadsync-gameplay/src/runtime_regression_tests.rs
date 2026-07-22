@@ -3268,6 +3268,8 @@ mod runtime_regression_tests {
     }
 
     #[test]
+    // The expected decimal comes from the `314` percentage-form mod fixture.
+    #[allow(clippy::approx_constant)]
     fn song_lua_constant_mods_persist_after_attack_window() {
         let mut state = regression_state();
         let timing = song_lua_test_timing();

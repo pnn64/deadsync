@@ -310,6 +310,8 @@ mod tests {
     };
 
     #[test]
+    // Decimal components here are authored RGB values, not mathematical constants.
+    #[allow(clippy::approx_constant)]
     fn notefield_style_is_a_plain_metric_contract() {
         let style = NotefieldStyle {
             layout_width_min: 640.0,

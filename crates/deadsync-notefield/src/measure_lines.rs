@@ -524,6 +524,9 @@ pub(crate) fn compose_measure_lines(
 
 #[cfg(test)]
 mod tests {
+    // Decimal components in these visual fixtures are authored RGB values.
+    #![allow(clippy::approx_constant)]
+
     use super::*;
     use crate::{AccelYParams, ScrollTravelRequest, scroll_travel};
     use deadlib_present::actors::{Actor, SizeSpec};

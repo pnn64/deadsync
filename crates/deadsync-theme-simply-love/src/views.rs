@@ -909,7 +909,11 @@ pub enum SimplyLoveApplyReplayGainEvent {
     },
     /// Emitted once when the worker stops, either because it finished the whole
     /// library or because it was cancelled.
-    Finished { done: usize, total: usize, cancelled: bool },
+    Finished {
+        done: usize,
+        total: usize,
+        cancelled: bool,
+    },
 }
 
 /// One shell-prepared unlock download row rendered by Select Music.

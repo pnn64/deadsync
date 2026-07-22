@@ -1745,6 +1745,7 @@ pub fn capture_actor_message_commands(
     actor: &Table,
 ) -> Result<SongLuaCapturedMessageCommands, String> {
     let mut out = SongLuaCapturedMessageCommands::default();
+    let mut command_names = Vec::new();
     for pair in actor.clone().pairs::<Value, Value>() {
         let (key, value) = pair.map_err(|err| err.to_string())?;
         let Some(name) = read_string(key) else {
@@ -1753,6 +1754,14 @@ pub fn capture_actor_message_commands(
         if !name.ends_with("MessageCommand") || !matches!(value, Value::Function(_)) {
             continue;
         }
+        command_names.push(name);
+    }
+    command_names.sort_unstable();
+
+    // Capturing a command resets and restores fields on the actor table. Do not
+    // mutate that table while a Lua `pairs` iterator is still traversing it:
+    // Lua's next-key order is unspecified and can otherwise skip commands.
+    for name in command_names {
         let message = name.trim_end_matches("MessageCommand").to_string();
         let blocks = match capture_actor_command_preserving_state(lua, actor, name.as_str()) {
             Ok(blocks) => blocks,

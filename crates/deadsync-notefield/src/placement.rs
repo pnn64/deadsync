@@ -546,6 +546,9 @@ pub(crate) fn fill_lane_col_offsets<T: Copy + LaneColumnX>(
 
 #[cfg(test)]
 mod tests {
+    // Decimal components in these visual fixtures are authored RGB values.
+    #![allow(clippy::approx_constant)]
+
     use super::{
         FieldLayoutRequest, FieldPlacement, HudLayoutOffsets, HudLayoutParams,
         LayoutMiniIndicatorPosition, ZmodLayoutParams, field_layout,

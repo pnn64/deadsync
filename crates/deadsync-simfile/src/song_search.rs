@@ -38,7 +38,7 @@ impl SongSearchFilter {
 
 #[inline(always)]
 fn song_search_bpm_tier(bpm: f64) -> i32 {
-    (((bpm + 0.5) / 10.0).floor() as i32) * 10
+    (((bpm + 0.5) / 10.0).floor() * 10.0) as i32
 }
 
 pub fn song_search_difficulties_text(song: &SongData, chart_type: &str) -> String {
@@ -596,6 +596,9 @@ mod tests {
         assert_eq!(malformed.song_term(), Some("[x]Äbc"));
         assert_eq!(malformed.difficulty, None);
         assert_eq!(malformed.bpm_tier, None);
+
+        let saturated = parse_song_search_filter("[999999999999999999999999]Overflow");
+        assert_eq!(saturated.bpm_tier, Some(i32::MAX));
     }
 
     #[test]

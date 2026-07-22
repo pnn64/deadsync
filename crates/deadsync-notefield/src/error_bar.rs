@@ -695,6 +695,9 @@ pub(crate) fn error_bar_text_scalable_zoom(abs_ms: f32, scale_start_ms: f32, w2_
 
 #[cfg(test)]
 mod tests {
+    // Decimal components in these visual fixtures are authored RGB values.
+    #![allow(clippy::approx_constant)]
+
     use super::*;
     use deadlib_present::actors::{SizeSpec, SpriteSource};
 

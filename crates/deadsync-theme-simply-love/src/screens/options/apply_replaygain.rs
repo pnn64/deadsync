@@ -54,7 +54,10 @@ pub(super) fn begin_apply_replaygain(state: &mut State) -> ThemeEffect {
     ))
 }
 
-pub(super) fn apply_apply_replaygain_event(state: &mut State, event: SimplyLoveApplyReplayGainEvent) {
+pub(super) fn apply_apply_replaygain_event(
+    state: &mut State,
+    event: SimplyLoveApplyReplayGainEvent,
+) {
     let Some(ui) = state.apply_replaygain_ui.as_mut() else {
         return;
     };

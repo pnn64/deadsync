@@ -2753,6 +2753,8 @@ mod tests {
     }
 
     #[test]
+    // These expected decimals come from percentage-form mod strings, not constants.
+    #[allow(clippy::approx_constant)]
     fn song_lua_runtime_mod_parser_scales_column_moves() {
         let mods = parse_song_lua_runtime_mods(
             "*10000 -80 movey1,*10000 40 movex2,*10000 -314 confusionoffset3,\
