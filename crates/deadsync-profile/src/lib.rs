@@ -2,7 +2,7 @@ use bincode::{Decode, Encode};
 use bitflags::bitflags;
 use chrono::{Datelike, Local};
 use deadsync_rules::judgment::JudgeGrade;
-use deadsync_rules::scroll::{GUEST_SCROLL_SPEED, ScrollSpeedSetting};
+use deadsync_rules::scroll::{ScrollSpeedSetting};
 use deadsync_score::ScoreImportEndpoint;
 use std::collections::{HashMap, HashSet};
 use std::fmt::Write as _;
@@ -445,7 +445,7 @@ pub fn runtime_resolve_active_profile_load_for_side(
 pub fn guest_profile(noteskin: NoteSkin, pad_light_brightness: u8) -> Profile {
     let mut guest = Profile::default();
     guest.display_name = "[ GUEST ]".to_string();
-    guest.scroll_speed = GUEST_SCROLL_SPEED;
+    
     guest.noteskin = noteskin;
     guest.pad_light_brightness = clamp_pad_light_brightness(pad_light_brightness);
     guest.avatar_path = None;
@@ -11461,7 +11461,7 @@ mod tests {
         let noteskin = NoteSkin::new("cel");
         let guest = guest_profile(noteskin.clone(), 88);
         assert_eq!(guest.display_name, "[ GUEST ]");
-        assert_eq!(guest.scroll_speed, GUEST_SCROLL_SPEED);
+        assert_eq!(guest.scroll_speed, default_profile.scroll_speed.as_str());
         assert_eq!(guest.noteskin, noteskin);
         assert_eq!(guest.pad_light_brightness, 88);
         assert!(guest.avatar_path.is_none());

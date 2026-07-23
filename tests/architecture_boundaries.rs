@@ -294,6 +294,8 @@ const GAME_RULE_FACADE_SCAN_DIRS: &[&str] = &[
     "tests",
 ];
 
+const GAME_PROFILE_RULE_SYMBOLS: &[&str] = &["GUEST_SCROLL_SPEED", "ScrollSpeedSetting"];
+
 const GAME_PROFILE_DATA_SYMBOLS: &[&str] = &[
     "AccelEffectsMask",
     "ActiveProfile",
@@ -10047,7 +10049,7 @@ fn noteskin_model_cache_and_actors_use_canonical_notefield_owner() {
     assert!(!shared_mod.contains("noteskin_model"));
     assert!(notefield_lib.contains("mod noteskin_model;"));
     assert!(notefield_lib.contains("pub use noteskin_model::{"));
-    assert!(notefield_manifest.contains("twox-hash = \"2.1.2\""));
+    assert!(notefield_manifest.contains("twox-hash = \"2.1.3\""));
     assert!(!notefield_manifest.contains("deadsync-assets"));
 
     for definition in [

@@ -282,7 +282,7 @@ fn format_recent_mods(
 fn build_choices(view: &ProfilePickerView) -> Vec<Choice> {
     let mut out = Vec::with_capacity(view.profiles.len() + 1);
     let default_profile = profile_data::Profile::default();
-    let guest_speed_mod = format!("{}", default_profile.scroll_speed);
+    let guest_speed_mod = format!("{}",default_profile.scroll_speed);
     let default_scroll_option = default_profile.scroll_option;
     out.push(Choice {
         kind: profile_data::ActiveProfile::Guest,
@@ -1968,4 +1968,3 @@ mod tests {
         );
     }
 }
-

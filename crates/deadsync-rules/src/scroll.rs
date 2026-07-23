@@ -1,6 +1,7 @@
 use std::fmt;
 use std::str::FromStr;
 
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum ScrollSpeedSetting {
     CMod(f32),
@@ -8,7 +9,7 @@ pub enum ScrollSpeedSetting {
     MMod(f32),
 }
 
-pub const GUEST_SCROLL_SPEED: ScrollSpeedSetting = ScrollSpeedSetting::MMod(250.0);
+
 
 impl Default for ScrollSpeedSetting {
     fn default() -> Self {
@@ -170,7 +171,7 @@ impl ScrollSpeedSetting {
 
 #[cfg(test)]
 mod tests {
-    use super::{GUEST_SCROLL_SPEED, ScrollSpeedSetting};
+    use super::{ScrollSpeedSetting};
     use std::str::FromStr;
 
     #[test]
@@ -196,11 +197,7 @@ mod tests {
         assert_eq!(ScrollSpeedSetting::MMod(777.5).to_string(), "M777.5");
     }
 
-    #[test]
-    fn guest_scroll_speed_uses_legacy_mmod() {
-        assert_eq!(GUEST_SCROLL_SPEED, ScrollSpeedSetting::MMod(250.0));
-        assert_eq!(GUEST_SCROLL_SPEED.to_string(), "M250");
-    }
+    
 
     #[test]
     fn scales_effective_bpm_by_mod_type() {
