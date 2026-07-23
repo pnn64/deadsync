@@ -12,7 +12,7 @@ use deadsync_score::{decode_local_score_entry, encode_local_score_entry, local_s
 
 use super::itg::parse_song_scores;
 use super::pipeline::{prepare_import, run_import};
-use super::resolver::{ChartResolver, Resolution};
+use super::resolver::{ChartResolver, Resolution, chart_resolver_matches_legacy_for_test};
 use super::xml;
 
 const STATS_XML: &str = r#"<Stats>
@@ -220,6 +220,51 @@ fn resolves_favorite_song_to_chart_hashes() {
     assert!(
         resolver.resolve_song("Ghost Pack/Ghost Song").is_none(),
         "unknown favorite song does not resolve"
+    );
+}
+
+#[test]
+fn chart_resolver_matches_legacy_lookup_and_edit_behavior() {
+    let mut packs = library();
+    let fixture_song =
+        Arc::get_mut(&mut packs[0].songs[0]).expect("fixture song is uniquely owned");
+    let mut edit_alpha = chart("Edit", "edit-alpha");
+    edit_alpha.description = "Edit Alpha".into();
+    let mut edit_beta = chart("Edit", "edit-beta");
+    edit_beta.chart_name = "Edit Beta".into();
+    fixture_song.charts.extend([edit_alpha, edit_beta]);
+
+    let mut solo_edit = chart("Edit", "solo-edit");
+    solo_edit.description = "Only Edit".into();
+    packs[0].songs.push(Arc::new(song(
+        "Songs/My Pack/Solo Song/solo.ssc",
+        vec![solo_edit],
+    )));
+
+    let queries = [
+        ("Songs/My Pack/Cool Song/", "dance-single", "Hard", ""),
+        ("songs/MY PACK/COOL SONG", "DANCE-SINGLE", "hard", ""),
+        ("My Pack/Cool Song", "dance-single", "Edit", "edit alpha"),
+        ("My Pack/Cool Song", "dance-single", "Edit", "EDIT BETA"),
+        ("My Pack/Cool Song", "dance-single", "Edit", "unknown"),
+        ("My Pack/Solo Song", "dance-single", "Edit", "unknown"),
+        ("My Pack/Cool Song", "dance-double", "Hard", ""),
+        ("Ghost Pack/Ghost Song", "dance-single", "Hard", ""),
+    ];
+    assert!(chart_resolver_matches_legacy_for_test(&packs, &queries));
+
+    let resolver = ChartResolver::build(&packs);
+    assert_eq!(
+        resolver.resolve("My Pack/Cool Song", "dance-single", "Edit", "edit alpha"),
+        Resolution::Found("edit-alpha")
+    );
+    assert_eq!(
+        resolver.resolve("My Pack/Cool Song", "dance-single", "Edit", "unknown"),
+        Resolution::ChartNotFound
+    );
+    assert_eq!(
+        resolver.resolve("My Pack/Solo Song", "dance-single", "Edit", "unknown"),
+        Resolution::Found("solo-edit")
     );
 }
 

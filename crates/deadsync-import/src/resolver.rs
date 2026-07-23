@@ -8,15 +8,58 @@
 //! that aren't present in the library can't be resolved (we have no hash for
 //! them) and are reported as skipped.
 
-use std::collections::HashMap;
+use hashbrown::{Equivalent, HashMap};
+use rustc_hash::FxBuildHasher;
+use std::hash::{Hash, Hasher};
 
 use deadsync_chart::{SongData, SongPack};
+
+#[cfg(any(test, feature = "bench-support"))]
+use std::collections::HashMap as StdHashMap;
+
+#[derive(PartialEq, Eq)]
+struct SongKey {
+    pack: String,
+    folder: String,
+}
+
+impl Hash for SongKey {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        hash_ascii_case_insensitive(&self.pack, state);
+        hash_ascii_case_insensitive(&self.folder, state);
+    }
+}
+
+struct SongKeyRef<'a> {
+    pack: &'a str,
+    folder: &'a str,
+}
+
+impl Hash for SongKeyRef<'_> {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        hash_ascii_case_insensitive(self.pack, state);
+        hash_ascii_case_insensitive(self.folder, state);
+    }
+}
+
+impl Equivalent<SongKey> for SongKeyRef<'_> {
+    fn equivalent(&self, key: &SongKey) -> bool {
+        self.pack.eq_ignore_ascii_case(&key.pack) && self.folder.eq_ignore_ascii_case(&key.folder)
+    }
+}
+
+fn hash_ascii_case_insensitive<H: Hasher>(value: &str, state: &mut H) {
+    value.len().hash(state);
+    for byte in value.bytes() {
+        byte.to_ascii_lowercase().hash(state);
+    }
+}
 
 /// Builds a fast lookup over the scanned song library and resolves ITGmania
 /// score keys to DeadSync chart hashes.
 pub struct ChartResolver<'a> {
     /// `(pack_lower, song_folder_lower)` → song.
-    by_song: HashMap<(String, String), &'a SongData>,
+    by_song: HashMap<SongKey, &'a SongData, FxBuildHasher>,
 }
 
 /// Outcome of resolving a single `<Steps>` entry.
@@ -33,7 +76,7 @@ pub enum Resolution<'a> {
 impl<'a> ChartResolver<'a> {
     /// Builds the resolver from the scanned packs.
     pub fn build(packs: &'a [SongPack]) -> Self {
-        let mut by_song: HashMap<(String, String), &'a SongData> = HashMap::new();
+        let mut by_song = HashMap::with_hasher(FxBuildHasher);
         for pack in packs {
             let pack_keys = pack_keys(pack);
             for song in &pack.songs {
@@ -41,7 +84,10 @@ impl<'a> ChartResolver<'a> {
                     let folder_lc = folder.to_ascii_lowercase();
                     for pk in &pack_keys {
                         by_song
-                            .entry((pk.clone(), folder_lc.clone()))
+                            .entry(SongKey {
+                                pack: pk.clone(),
+                                folder: folder_lc.clone(),
+                            })
                             .or_insert(song.as_ref());
                     }
                 }
@@ -54,8 +100,8 @@ impl<'a> ChartResolver<'a> {
     /// `favorites.txt`, or a `Stats.xml` `Dir`) to the matching library song.
     /// Returns `None` when the song isn't in DeadSync's scanned library.
     pub fn resolve_song(&self, song_dir: &str) -> Option<&'a SongData> {
-        let (pack, folder) = normalize_song_dir(song_dir)?;
-        self.by_song.get(&(pack, folder)).copied()
+        let (pack, folder) = song_dir_parts(song_dir)?;
+        self.by_song.get(&SongKeyRef { pack, folder }).copied()
     }
 
     /// Resolves a score key to a chart `short_hash`.
@@ -66,16 +112,17 @@ impl<'a> ChartResolver<'a> {
         difficulty: &str,
         description: &str,
     ) -> Resolution<'a> {
-        let Some((pack, folder)) = normalize_song_dir(song_dir) else {
+        let Some((pack, folder)) = song_dir_parts(song_dir) else {
             return Resolution::SongNotFound;
         };
-        let Some(song) = self.by_song.get(&(pack, folder)).copied() else {
+        let Some(song) = self.by_song.get(&SongKeyRef { pack, folder }).copied() else {
             return Resolution::SongNotFound;
         };
 
-        let mut found: Option<&'a str> = None;
-        let mut edit_candidates: Vec<&'a deadsync_chart::ChartData> = Vec::new();
-
+        let is_edit = difficulty.eq_ignore_ascii_case("Edit");
+        let description = description.trim();
+        let mut edit_count = 0;
+        let mut sole_edit = None;
         for chart in &song.charts {
             if !chart.chart_type.eq_ignore_ascii_case(steps_type) {
                 continue;
@@ -83,30 +130,29 @@ impl<'a> ChartResolver<'a> {
             if !chart.difficulty.eq_ignore_ascii_case(difficulty) {
                 continue;
             }
-            if difficulty.eq_ignore_ascii_case("Edit") {
-                edit_candidates.push(chart);
-            } else {
-                found = Some(chart.short_hash.as_str());
-                break;
+            if !is_edit {
+                return Resolution::Found(chart.short_hash.as_str());
+            }
+            edit_count += 1;
+            sole_edit = Some(chart.short_hash.as_str());
+            if !description.is_empty()
+                && (chart.description.trim().eq_ignore_ascii_case(description)
+                    || chart.chart_name.trim().eq_ignore_ascii_case(description))
+            {
+                return Resolution::Found(chart.short_hash.as_str());
             }
         }
 
-        if !difficulty.eq_ignore_ascii_case("Edit") {
-            return match found {
-                Some(h) => Resolution::Found(h),
-                None => Resolution::ChartNotFound,
-            };
-        }
-
-        // Edit charts: disambiguate by description / chart name.
-        match pick_edit(&edit_candidates, description) {
-            Some(h) => Resolution::Found(h),
-            None => Resolution::ChartNotFound,
+        if is_edit && edit_count == 1 {
+            Resolution::Found(sole_edit.expect("one Edit chart was recorded"))
+        } else {
+            Resolution::ChartNotFound
         }
     }
 }
 
 /// Chooses the matching Edit chart by its description, with sensible fallbacks.
+#[cfg(any(test, feature = "bench-support"))]
 fn pick_edit<'a>(
     candidates: &[&'a deadsync_chart::ChartData],
     description: &str,
@@ -119,9 +165,10 @@ fn pick_edit<'a>(
         && let Some(c) = candidates.iter().find(|c| {
             c.description.trim().eq_ignore_ascii_case(desc)
                 || c.chart_name.trim().eq_ignore_ascii_case(desc)
-        }) {
-            return Some(c.short_hash.as_str());
-        }
+        })
+    {
+        return Some(c.short_hash.as_str());
+    }
     // No description match: only safe to assume when there's exactly one edit.
     if candidates.len() == 1 {
         return Some(candidates[0].short_hash.as_str());
@@ -157,6 +204,11 @@ fn song_folder_name(song: &SongData) -> Option<&str> {
 /// roots and surrounding slashes are stripped. Returns `None` if the path
 /// doesn't have at least a pack and a song component.
 pub fn normalize_song_dir(dir: &str) -> Option<(String, String)> {
+    let (pack, song) = song_dir_parts(dir)?;
+    Some((pack.to_ascii_lowercase(), song.to_ascii_lowercase()))
+}
+
+fn song_dir_parts(dir: &str) -> Option<(&str, &str)> {
     let mut parts = dir
         .trim()
         .split(['/', '\\'])
@@ -177,7 +229,7 @@ pub fn normalize_song_dir(dir: &str) -> Option<(String, String)> {
     }
     // The song folder is the last component; anything between pack and song is
     // unusual but we key on the final folder which is what holds the simfile.
-    Some((pack.to_ascii_lowercase(), song.to_ascii_lowercase()))
+    Some((pack, song))
 }
 
 #[cfg(any(test, feature = "bench-support"))]
@@ -202,6 +254,140 @@ pub fn normalize_song_dir_legacy_for_bench(dir: &str) -> Option<(String, String)
         parts[0].to_ascii_lowercase(),
         parts[parts.len() - 1].to_ascii_lowercase(),
     ))
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+struct LegacyChartResolver<'a> {
+    by_song: StdHashMap<(String, String), &'a SongData>,
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+impl<'a> LegacyChartResolver<'a> {
+    fn build(packs: &'a [SongPack]) -> Self {
+        let mut by_song = StdHashMap::new();
+        for pack in packs {
+            let pack_keys = pack_keys(pack);
+            for song in &pack.songs {
+                if let Some(folder) = song_folder_name(song) {
+                    let folder_lc = folder.to_ascii_lowercase();
+                    for pk in &pack_keys {
+                        by_song
+                            .entry((pk.clone(), folder_lc.clone()))
+                            .or_insert(song.as_ref());
+                    }
+                }
+            }
+        }
+        Self { by_song }
+    }
+
+    fn resolve(
+        &self,
+        song_dir: &str,
+        steps_type: &str,
+        difficulty: &str,
+        description: &str,
+    ) -> Resolution<'a> {
+        let Some((pack, folder)) = normalize_song_dir(song_dir) else {
+            return Resolution::SongNotFound;
+        };
+        let Some(song) = self.by_song.get(&(pack, folder)).copied() else {
+            return Resolution::SongNotFound;
+        };
+
+        let mut found = None;
+        let mut edit_candidates = Vec::new();
+        for chart in &song.charts {
+            if !chart.chart_type.eq_ignore_ascii_case(steps_type)
+                || !chart.difficulty.eq_ignore_ascii_case(difficulty)
+            {
+                continue;
+            }
+            if difficulty.eq_ignore_ascii_case("Edit") {
+                edit_candidates.push(chart);
+            } else {
+                found = Some(chart.short_hash.as_str());
+                break;
+            }
+        }
+        if !difficulty.eq_ignore_ascii_case("Edit") {
+            return found.map_or(Resolution::ChartNotFound, Resolution::Found);
+        }
+        pick_edit(&edit_candidates, description)
+            .map_or(Resolution::ChartNotFound, Resolution::Found)
+    }
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn resolution_checksum(resolution: Resolution<'_>) -> u64 {
+    match resolution {
+        Resolution::Found(hash) => hash.bytes().fold(3_u64, |checksum, byte| {
+            checksum.rotate_left(5) ^ u64::from(byte)
+        }),
+        Resolution::SongNotFound => 1,
+        Resolution::ChartNotFound => 2,
+    }
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+#[doc(hidden)]
+pub fn chart_resolver_workload_for_bench(
+    packs: &[SongPack],
+    queries: &[(&str, &str, &str, &str)],
+    passes: usize,
+) -> u64 {
+    let resolver = ChartResolver::build(packs);
+    let mut checksum = 0_u64;
+    for _ in 0..passes {
+        for &(song_dir, steps_type, difficulty, description) in queries {
+            checksum = checksum.rotate_left(7)
+                ^ resolution_checksum(resolver.resolve(
+                    song_dir,
+                    steps_type,
+                    difficulty,
+                    description,
+                ));
+        }
+    }
+    checksum
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+#[doc(hidden)]
+pub fn chart_resolver_workload_legacy_for_bench(
+    packs: &[SongPack],
+    queries: &[(&str, &str, &str, &str)],
+    passes: usize,
+) -> u64 {
+    let resolver = LegacyChartResolver::build(packs);
+    let mut checksum = 0_u64;
+    for _ in 0..passes {
+        for &(song_dir, steps_type, difficulty, description) in queries {
+            checksum = checksum.rotate_left(7)
+                ^ resolution_checksum(resolver.resolve(
+                    song_dir,
+                    steps_type,
+                    difficulty,
+                    description,
+                ));
+        }
+    }
+    checksum
+}
+
+#[cfg(test)]
+pub(crate) fn chart_resolver_matches_legacy_for_test(
+    packs: &[SongPack],
+    queries: &[(&str, &str, &str, &str)],
+) -> bool {
+    let resolver = ChartResolver::build(packs);
+    let legacy = LegacyChartResolver::build(packs);
+    queries
+        .iter()
+        .all(|&(song_dir, steps_type, difficulty, description)| {
+            resolver.resolve(song_dir, steps_type, difficulty, description)
+                == legacy.resolve(song_dir, steps_type, difficulty, description)
+        })
 }
 
 #[cfg(test)]
@@ -306,8 +492,10 @@ mod tests {
 
     #[test]
     fn picks_standard_difficulty() {
-        let charts = [chart("Medium", "", "", "hashmed"),
-            chart("Hard", "", "", "hashhard")];
+        let charts = [
+            chart("Medium", "", "", "hashmed"),
+            chart("Hard", "", "", "hashhard"),
+        ];
         assert_eq!(pick_edit(&[], ""), None);
         // Non-edit resolution is exercised via resolve(); here verify edit pick.
         let hard: Vec<&deadsync_chart::ChartData> = charts.iter().collect();
