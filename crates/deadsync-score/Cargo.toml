@@ -23,6 +23,11 @@ harness = false
 required-features = ["bench-support"]
 
 [[bench]]
+name = "itl_index_lookup"
+harness = false
+required-features = ["bench-support"]
+
+[[bench]]
 name = "recent_song_ranking"
 harness = false
 required-features = ["bench-support"]
@@ -33,7 +38,7 @@ chrono = "0.4.45"
 deadsync-chart = { path = "../deadsync-chart" }
 deadsync-core = { path = "../deadsync-core" }
 deadsync-rules = { path = "../deadsync-rules" }
-hashbrown = "0.17.1"
+hashbrown = { version = "0.17.1", features = ["serde"] }
 log = "0.4.33"
 rustc-hash = "2.1.3"
 serde = { version = "1.0.229", features = ["derive"] }

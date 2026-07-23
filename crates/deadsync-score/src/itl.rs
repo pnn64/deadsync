@@ -1,5 +1,6 @@
 use crate::CachedItlScore;
 use bincode::{Decode, Encode};
+use hashbrown::HashMap as FastHashMap;
 use log::warn;
 use serde::de::Deserializer;
 use serde::{Deserialize, Serialize};
@@ -13,9 +14,9 @@ use std::sync::{Arc, LazyLock, Mutex};
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
 pub struct ItlFileData {
     #[serde(rename = "pathMap", default)]
-    pub path_map: HashMap<String, String>,
+    pub path_map: FastHashMap<String, String>,
     #[serde(rename = "hashMap", default)]
-    pub hash_map: HashMap<String, ItlHashEntry>,
+    pub hash_map: FastHashMap<String, ItlHashEntry>,
     #[serde(default)]
     pub points: Vec<u32>,
     #[serde(rename = "pointsSingle", default)]
@@ -23,7 +24,7 @@ pub struct ItlFileData {
     #[serde(rename = "pointsDouble", default)]
     pub points_double: Vec<u32>,
     #[serde(rename = "unlockFolders", default)]
-    pub unlock_folders: HashMap<String, bool>,
+    pub unlock_folders: FastHashMap<String, bool>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Encode, Decode)]
@@ -1901,6 +1902,141 @@ pub fn itl_point_totals(data: &ItlFileData) -> ItlPointTotals {
     }
 }
 
+#[cfg(any(test, feature = "bench-support"))]
+#[doc(hidden)]
+pub type ItlIndexBenchEntry<'a> = (&'a str, &'a str, u32, u32, bool);
+
+#[cfg(any(test, feature = "bench-support"))]
+struct LegacyItlIndex {
+    path_map: HashMap<String, String>,
+    hash_map: HashMap<String, ItlHashEntry>,
+    unlock_folders: HashMap<String, bool>,
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn build_itl_index_for_bench(entries: &[ItlIndexBenchEntry<'_>]) -> ItlFileData {
+    let mut path_map = FastHashMap::with_capacity(entries.len());
+    let mut hash_map = FastHashMap::with_capacity(entries.len());
+    let mut unlock_folders = FastHashMap::with_capacity(entries.len());
+    for &(path, hash, ex, points, unlocked) in entries {
+        path_map.insert(path.to_owned(), hash.to_owned());
+        hash_map.insert(
+            hash.to_owned(),
+            ItlHashEntry {
+                ex,
+                points,
+                ..Default::default()
+            },
+        );
+        unlock_folders.insert(path.to_owned(), unlocked);
+    }
+    ItlFileData {
+        path_map,
+        hash_map,
+        unlock_folders,
+        ..Default::default()
+    }
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn build_itl_index_legacy_for_bench(entries: &[ItlIndexBenchEntry<'_>]) -> LegacyItlIndex {
+    let mut path_map = HashMap::with_capacity(entries.len());
+    let mut hash_map = HashMap::with_capacity(entries.len());
+    let mut unlock_folders = HashMap::with_capacity(entries.len());
+    for &(path, hash, ex, points, unlocked) in entries {
+        path_map.insert(path.to_owned(), hash.to_owned());
+        hash_map.insert(
+            hash.to_owned(),
+            ItlHashEntry {
+                ex,
+                points,
+                ..Default::default()
+            },
+        );
+        unlock_folders.insert(path.to_owned(), unlocked);
+    }
+    LegacyItlIndex {
+        path_map,
+        hash_map,
+        unlock_folders,
+    }
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn itl_index_lookup(data: &ItlFileData, path: &str) -> (Option<(u32, u32)>, bool) {
+    let score = data
+        .path_map
+        .get(path)
+        .and_then(|hash| data.hash_map.get(hash))
+        .map(|entry| (entry.ex, entry.points));
+    let unlocked = data.unlock_folders.get(path).copied().unwrap_or(false);
+    (score, unlocked)
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn itl_index_lookup_legacy(data: &LegacyItlIndex, path: &str) -> (Option<(u32, u32)>, bool) {
+    let score = data
+        .path_map
+        .get(path)
+        .and_then(|hash| data.hash_map.get(hash))
+        .map(|entry| (entry.ex, entry.points));
+    let unlocked = data.unlock_folders.get(path).copied().unwrap_or(false);
+    (score, unlocked)
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn itl_index_lookup_checksum(score: Option<(u32, u32)>, unlocked: bool) -> u64 {
+    let value = score.map_or(1, |(ex, points)| {
+        2 ^ u64::from(ex) ^ u64::from(points).rotate_left(23)
+    });
+    value ^ (u64::from(unlocked) << 63)
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+#[doc(hidden)]
+pub fn itl_index_lookup_workload_for_bench(
+    entries: &[ItlIndexBenchEntry<'_>],
+    queries: &[&str],
+    passes: usize,
+) -> u64 {
+    let data = build_itl_index_for_bench(entries);
+    let mut checksum = 0_u64;
+    for _ in 0..passes {
+        for &path in queries {
+            let (score, unlocked) = itl_index_lookup(&data, path);
+            checksum = checksum.rotate_left(7) ^ itl_index_lookup_checksum(score, unlocked);
+        }
+    }
+    checksum
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+#[doc(hidden)]
+pub fn itl_index_lookup_workload_legacy_for_bench(
+    entries: &[ItlIndexBenchEntry<'_>],
+    queries: &[&str],
+    passes: usize,
+) -> u64 {
+    let data = build_itl_index_legacy_for_bench(entries);
+    let mut checksum = 0_u64;
+    for _ in 0..passes {
+        for &path in queries {
+            let (score, unlocked) = itl_index_lookup_legacy(&data, path);
+            checksum = checksum.rotate_left(7) ^ itl_index_lookup_checksum(score, unlocked);
+        }
+    }
+    checksum
+}
+
+#[cfg(test)]
+fn itl_index_matches_legacy_for_test(entries: &[ItlIndexBenchEntry<'_>], queries: &[&str]) -> bool {
+    let data = build_itl_index_for_bench(entries);
+    let legacy = build_itl_index_legacy_for_bench(entries);
+    queries
+        .iter()
+        .all(|path| itl_index_lookup(&data, path) == itl_index_lookup_legacy(&legacy, path))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1910,6 +2046,51 @@ mod tests {
     use std::sync::atomic::{AtomicU64, Ordering};
 
     static NEXT_TMP_ID: AtomicU64 = AtomicU64::new(1);
+
+    #[test]
+    fn itl_indexes_match_legacy_hits_misses_and_false_unlocks() {
+        let entries = [
+            (
+                "/Songs/ITL Online 2026/Alpha",
+                "alpha-hash",
+                9_437,
+                12_500,
+                true,
+            ),
+            (
+                "/Songs/ITL Online 2026/Beta",
+                "beta-hash",
+                10_000,
+                18_750,
+                false,
+            ),
+            (
+                "/AdditionalSongs/ITL Online 2026/Gamma",
+                "gamma-hash",
+                8_821,
+                9_250,
+                true,
+            ),
+        ];
+        let queries = [
+            "/Songs/ITL Online 2026/Alpha",
+            "/Songs/ITL Online 2026/Beta",
+            "/AdditionalSongs/ITL Online 2026/Gamma",
+            "/Songs/ITL Online 2026/Missing",
+        ];
+        assert!(itl_index_matches_legacy_for_test(&entries, &queries));
+
+        let data = build_itl_index_for_bench(&entries);
+        assert_eq!(
+            itl_index_lookup(&data, queries[0]),
+            (Some((9_437, 12_500)), true)
+        );
+        assert_eq!(
+            itl_index_lookup(&data, queries[1]),
+            (Some((10_000, 18_750)), false)
+        );
+        assert_eq!(itl_index_lookup(&data, queries[3]), (None, false));
+    }
 
     fn temp_test_dir(name: &str) -> PathBuf {
         let id = NEXT_TMP_ID.fetch_add(1, Ordering::Relaxed);
