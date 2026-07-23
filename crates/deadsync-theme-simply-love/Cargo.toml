@@ -73,6 +73,16 @@ name = "sync_heat_range"
 harness = false
 required-features = ["bench-support"]
 
+[[bench]]
+name = "download_pack_substyles"
+harness = false
+required-features = ["bench-support"]
+
+[[bench]]
+name = "score_import_pack_membership"
+harness = false
+required-features = ["bench-support"]
+
 [dependencies]
 deadlib-assets = { path = "../deadlib-assets" }
 deadlib-present = { path = "../deadlib-present" }

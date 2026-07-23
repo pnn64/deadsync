@@ -439,7 +439,7 @@ pub(super) fn refresh_score_import_pack_options(state: &mut State) {
         .collect();
     state
         .score_import_pack_selected
-        .retain(|group| valid_groups.contains(&group.to_ascii_lowercase()));
+        .retain(|group| selected_pack_group_contains(&valid_groups, group));
     if score_import_selected_pack_count(state) >= state.score_import_pack_options.len() {
         state.score_import_pack_selected.clear();
     }
@@ -497,6 +497,43 @@ fn selected_pack_group_keys(state: &State) -> HashSet<String> {
         .collect()
 }
 
+const GROUP_KEY_STACK_CAPACITY: usize = 128;
+
+#[inline(always)]
+fn selected_pack_group_contains(selected: &HashSet<String>, group: &str) -> bool {
+    if !group.bytes().any(|byte| byte.is_ascii_uppercase()) {
+        return selected.contains(group);
+    }
+    if group.len() <= GROUP_KEY_STACK_CAPACITY {
+        let mut lowered = [0u8; GROUP_KEY_STACK_CAPACITY];
+        lowered[..group.len()].copy_from_slice(group.as_bytes());
+        lowered[..group.len()].make_ascii_lowercase();
+        let lowered = std::str::from_utf8(&lowered[..group.len()])
+            .expect("ASCII case folding preserves valid UTF-8");
+        return selected.contains(lowered);
+    }
+    selected.contains(group.to_ascii_lowercase().as_str())
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+#[inline(always)]
+fn selected_pack_group_contains_legacy(selected: &HashSet<String>, group: &str) -> bool {
+    selected.contains(&group.to_ascii_lowercase())
+}
+
+#[cfg(feature = "bench-support")]
+pub fn selected_pack_group_contains_for_bench(selected: &HashSet<String>, group: &str) -> bool {
+    selected_pack_group_contains(selected, group)
+}
+
+#[cfg(feature = "bench-support")]
+pub fn selected_pack_group_contains_legacy_for_bench(
+    selected: &HashSet<String>,
+    group: &str,
+) -> bool {
+    selected_pack_group_contains_legacy(selected, group)
+}
+
 fn score_import_selected_pack_count(state: &State) -> usize {
     if state.score_import_pack_selected.is_empty() {
         return state.score_import_pack_options.len();
@@ -505,7 +542,7 @@ fn score_import_selected_pack_count(state: &State) -> usize {
     state
         .score_import_pack_options
         .iter()
-        .filter(|opt| selected.contains(&opt.group.to_ascii_lowercase()))
+        .filter(|opt| selected_pack_group_contains(&selected, &opt.group))
         .count()
 }
 
@@ -523,7 +560,7 @@ pub(super) fn selected_score_import_pack_groups(state: &State) -> Vec<String> {
     state
         .score_import_pack_options
         .iter()
-        .filter(|opt| selected.contains(&opt.group.to_ascii_lowercase()))
+        .filter(|opt| selected_pack_group_contains(&selected, &opt.group))
         .map(|opt| opt.group.clone())
         .collect()
 }
@@ -536,7 +573,7 @@ pub(super) fn score_import_pack_summary(state: &State) -> String {
     let mut labels = state
         .score_import_pack_options
         .iter()
-        .filter(|opt| selected.contains(&opt.group.to_ascii_lowercase()))
+        .filter(|opt| selected_pack_group_contains(&selected, &opt.group))
         .map(|opt| opt.label.as_str());
     let Some(first) = labels.next() else {
         return tr("OptionsScoreImport", "AllPacks").to_string();
@@ -713,7 +750,7 @@ pub(super) fn build_score_import_pack_picker_actors(
                 z(692)
             ));
         }
-        let checked = all_selected || selected.contains(&option.group.to_ascii_lowercase());
+        let checked = all_selected || selected_pack_group_contains(&selected, &option.group);
         let mark = if checked { "[x]" } else { "[ ]" };
         out.push(act!(text:
             align(0.0, 0.5):
@@ -886,5 +923,38 @@ pub(super) fn update_score_import_ui(score_import: &mut ScoreImportUiState, dt: 
     }
     if score_import.displayed_done > target {
         score_import.displayed_done = target;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn stack_case_folded_pack_membership_matches_legacy() {
+        let selected: HashSet<String> = [
+            "technical".to_string(),
+            "stamina".to_string(),
+            "İstanbul".to_string(),
+            "a".repeat(GROUP_KEY_STACK_CAPACITY + 1),
+        ]
+        .into_iter()
+        .collect();
+        let long_upper = "A".repeat(GROUP_KEY_STACK_CAPACITY + 1);
+        for group in [
+            "technical",
+            "Technical",
+            "STAMINA",
+            "missing",
+            "İstanbul",
+            "istanbul",
+            long_upper.as_str(),
+        ] {
+            assert_eq!(
+                selected_pack_group_contains(&selected, group),
+                selected_pack_group_contains_legacy(&selected, group),
+                "group {group:?}"
+            );
+        }
     }
 }

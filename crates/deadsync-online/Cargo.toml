@@ -12,6 +12,11 @@ name = "pack_search_index"
 harness = false
 required-features = ["bench-support"]
 
+[[bench]]
+name = "catalog_cell_cleaning"
+harness = false
+required-features = ["bench-support"]
+
 [dependencies]
 deadlib-platform = { path = "../deadlib-platform" }
 deadsync-config = { path = "../deadsync-config" }

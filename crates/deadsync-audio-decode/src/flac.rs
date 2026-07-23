@@ -263,7 +263,8 @@ impl Reader {
             }
             let skip = target_ts.duration_from(ts).map_or(0, Duration::get) as usize;
             let drop_samples = skip * self.channels;
-            self.pending = Some(scratch[drop_samples..].to_vec());
+            crate::resample::drop_front_samples(&mut scratch, drop_samples);
+            self.pending = Some(scratch);
             self.cursor_frames = target_frame;
             return Ok(SeekOutcome::Landed);
         }
