@@ -17,6 +17,7 @@ const USER_AGENT: &str = "DeadSync StepManiaOnline Pack Browser/1.0";
 const MAX_CATALOG_BYTES: usize = 8 * 1024 * 1024;
 const MAX_CATALOG_ROWS: usize = 20_000;
 const MAX_CATALOG_LINE_BYTES: usize = 2 * 1024;
+const INLINE_QUERY_TOKENS: usize = 8;
 const MAX_INSTALLS: usize = 64;
 const DOWNLOAD_QUEUE_CAPACITY: usize = 8;
 const PROGRESS_STEP_BYTES: u64 = 512 * 1024;
@@ -213,6 +214,86 @@ impl From<network::NetworkError> for StepManiaOnlineError {
 /// the server's natural catalog order. Search work is bounded by the catalog
 /// cap and uses strings normalized once when the catalog is parsed.
 pub fn search_catalog(catalog: &[PackInfo], query: &str) -> Vec<usize> {
+    let query = query.trim();
+    if query.is_empty() {
+        return (0..catalog.len()).collect();
+    }
+    let normalized;
+    let query = if is_lowercase(query) {
+        query
+    } else {
+        normalized = query.to_lowercase();
+        normalized.as_str()
+    };
+    let mut inline_tokens = [""; INLINE_QUERY_TOKENS];
+    let mut token_count = 0;
+    let mut overflow_tokens = Vec::new();
+    for token in query.split_whitespace() {
+        if token_count < inline_tokens.len() {
+            inline_tokens[token_count] = token;
+        } else {
+            if overflow_tokens.is_empty() {
+                overflow_tokens.extend_from_slice(&inline_tokens);
+            }
+            overflow_tokens.push(token);
+        }
+        token_count += 1;
+    }
+    let tokens = if overflow_tokens.is_empty() {
+        &inline_tokens[..token_count]
+    } else {
+        overflow_tokens.as_slice()
+    };
+    let multiple_tokens = tokens.len() > 1;
+    let mut buckets: [Vec<usize>; 5] = std::array::from_fn(|_| Vec::new());
+    for (idx, pack) in catalog.iter().enumerate() {
+        let rank = if pack.normalized_name == query {
+            Some(0)
+        } else if pack.normalized_name.starts_with(query) {
+            Some(1)
+        } else if pack.normalized_name.contains(query) {
+            Some(2)
+        } else if multiple_tokens
+            && tokens
+                .iter()
+                .all(|token| pack.normalized_name.contains(token))
+        {
+            Some(3)
+        } else if if multiple_tokens {
+            tokens.iter().all(|token| pack.search_text.contains(token))
+        } else {
+            pack.search_text.contains(query)
+        } {
+            Some(4)
+        } else {
+            None
+        };
+        if let Some(rank) = rank {
+            buckets[rank].push(idx);
+        }
+    }
+    let result_len = buckets.iter().map(Vec::len).sum::<usize>();
+    let mut ranked = buckets.into_iter().filter(|bucket| !bucket.is_empty());
+    let Some(mut results) = ranked.next() else {
+        return Vec::new();
+    };
+    results.reserve(result_len - results.len());
+    for bucket in ranked {
+        results.extend(bucket);
+    }
+    results
+}
+
+fn is_lowercase(text: &str) -> bool {
+    if text.is_ascii() {
+        return !text.bytes().any(|byte| byte.is_ascii_uppercase());
+    }
+    text.chars()
+        .all(|ch| ch.to_lowercase().eq(std::iter::once(ch)))
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+pub fn search_catalog_legacy_for_bench(catalog: &[PackInfo], query: &str) -> Vec<usize> {
     let query = query.trim().to_lowercase();
     if query.is_empty() {
         return (0..catalog.len()).collect();
@@ -1218,6 +1299,36 @@ mod tests {
         assert_eq!(search_catalog(&catalog, "spectrum"), vec![1, 0, 2]);
         assert_eq!(search_catalog(&catalog, "other technical"), vec![2]);
         assert_eq!(search_catalog(&catalog, "   "), vec![0, 1, 2]);
+    }
+
+    #[test]
+    fn catalog_search_matches_legacy_ranking() {
+        let catalog = [
+            pack(1, "Technical Spectrum", Some("pad"), Some("technical")),
+            pack(2, "Spectrum", Some("keyboard"), Some("stamina")),
+            pack(3, "Other Technical Pack", Some("spectrum"), Some("speed")),
+            pack(4, "Ä°stanbul Mix", Some("pad"), Some("crossover")),
+            pack(5, "lowercase collection", None, None),
+        ];
+        for query in [
+            "",
+            "   ",
+            "spectrum",
+            "SPECTRUM",
+            "technical spectrum",
+            "spectrum technical",
+            "stamina keyboard",
+            "lowercase",
+            "Ä°STANBUL",
+            "not present",
+            "one two three four five six seven eight nine",
+        ] {
+            assert_eq!(
+                search_catalog(&catalog, query),
+                search_catalog_legacy_for_bench(&catalog, query),
+                "query {query:?}"
+            );
+        }
     }
 
     #[test]
