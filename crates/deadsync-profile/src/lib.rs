@@ -2,7 +2,7 @@ use bincode::{Decode, Encode};
 use bitflags::bitflags;
 use chrono::{Datelike, Local};
 use deadsync_rules::judgment::JudgeGrade;
-use deadsync_rules::scroll::{GUEST_SCROLL_SPEED, ScrollSpeedSetting};
+use deadsync_rules::scroll::{ScrollSpeedSetting};
 use deadsync_score::ScoreImportEndpoint;
 use std::collections::{HashMap, HashSet};
 use std::fmt::Write as _;
@@ -445,7 +445,7 @@ pub fn runtime_resolve_active_profile_load_for_side(
 pub fn guest_profile(noteskin: NoteSkin, pad_light_brightness: u8) -> Profile {
     let mut guest = Profile::default();
     guest.display_name = "[ GUEST ]".to_string();
-    guest.scroll_speed = GUEST_SCROLL_SPEED;
+    
     guest.noteskin = noteskin;
     guest.pad_light_brightness = clamp_pad_light_brightness(pad_light_brightness);
     guest.avatar_path = None;
@@ -6648,7 +6648,11 @@ pub struct PlayerOptionsData {
     pub global_offset_shift_ms: i32,
 }
 
-fn default_player_options() -> PlayerOptionsData {
+/// The built-in default gameplay options, unaffected by `default_options.ini`.
+/// This is the baseline `load_or_create_default_options_file` starts from when
+/// filling in unset/missing keys, and what gets written out the first time
+/// `default_options.ini` doesn't exist yet.
+fn hardcoded_player_options() -> PlayerOptionsData {
     PlayerOptionsData {
         background_filter: BackgroundFilter::default(),
         hold_judgment_graphic: HoldJudgmentGraphic::default(),
@@ -6787,7 +6791,55 @@ fn default_player_options() -> PlayerOptionsData {
 
 impl Default for PlayerOptionsData {
     fn default() -> Self {
-        default_player_options()
+        default_player_options().clone()
+    }
+}
+
+/// Machine-wide default gameplay options, editable via `default_options.ini`
+/// Red from disk once per process and cached,
+/// file is auto-created with the built-in defaults spelled out the first
+/// time it's missing, so there's something to edit right away. Any field left
+/// out of the file (or the file itself) falls back to `hardcoded_player_options`.
+fn default_player_options() -> &'static PlayerOptionsData {
+    static DEFAULT_OPTIONS: LazyLock<PlayerOptionsData> =
+        LazyLock::new(load_or_create_default_options_file);
+    &DEFAULT_OPTIONS
+}
+
+fn load_or_create_default_options_file() -> PlayerOptionsData {
+    let hardcoded = hardcoded_player_options();
+    let path = deadlib_platform::dirs::app_dirs().default_options_path();
+    match fs::read_to_string(&path) {
+        Ok(content) => {
+            let ini = ProfileIni::parse(&content);
+            load_player_options_section(
+                ini.section_has_any("DefaultOptions"),
+                |key| ini.get("DefaultOptions", key),
+                &hardcoded,
+            )
+            .unwrap_or(hardcoded)
+        }
+        Err(e) => {
+            if e.kind() != std::io::ErrorKind::NotFound {
+                log::warn!(
+                    "Failed to read {}, using built-in defaults: {e}",
+                    path.display()
+                );
+                return hardcoded;
+            }
+            let mut content = String::new();
+            append_player_options_section(&mut content, "DefaultOptions", &hardcoded);
+            if let Some(parent) = path.parent()
+                && let Err(e) = fs::create_dir_all(parent)
+            {
+                log::warn!("Failed to create {} parent dir: {e}", path.display());
+                return hardcoded;
+            }
+            if let Err(e) = fs::write(&path, content) {
+                log::warn!("Failed to create {}: {e}", path.display());
+            }
+            hardcoded
+        }
     }
 }
 
@@ -11409,7 +11461,7 @@ mod tests {
         let noteskin = NoteSkin::new("cel");
         let guest = guest_profile(noteskin.clone(), 88);
         assert_eq!(guest.display_name, "[ GUEST ]");
-        assert_eq!(guest.scroll_speed, GUEST_SCROLL_SPEED);
+        assert_eq!(guest.scroll_speed, default_profile.scroll_speed.as_str());
         assert_eq!(guest.noteskin, noteskin);
         assert_eq!(guest.pad_light_brightness, 88);
         assert!(guest.avatar_path.is_none());

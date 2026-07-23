@@ -36,6 +36,10 @@ impl AppDirs {
     pub fn current_screen_path(&self) -> PathBuf {
         self.data_dir.join("save").join("current_screen.txt")
     }
+    
+    pub fn default_options_path(&self) -> PathBuf {
+        self.data_dir.join("save").join("default_options.ini")
+    }
 
     pub fn songs_dir(&self) -> PathBuf {
         self.data_dir.join("songs")
