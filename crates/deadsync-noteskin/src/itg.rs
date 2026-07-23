@@ -1,6 +1,8 @@
+use hashbrown::{Equivalent, HashMap as BorrowMap};
 use log::warn;
 use std::collections::{HashMap, HashSet};
 use std::fs;
+use std::hash::{Hash, Hasher};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, OnceLock, Weak};
 
@@ -17,10 +19,10 @@ const MAX_REDIR_DEPTH: usize = 100;
 const DEFAULT_SKIN_NAME: &str = "default";
 const DEFAULT_SKIN_CANDIDATES: &[&str] = &[DEFAULT_SKIN_NAME, "cel"];
 
-static CHILD_DIR_CACHE: OnceLock<Mutex<HashMap<(String, String), Option<PathBuf>>>> =
-    OnceLock::new();
-static FILE_PREFIX_CACHE: OnceLock<Mutex<HashMap<(String, String), Option<PathBuf>>>> =
-    OnceLock::new();
+type PathLookupCache = BorrowMap<IniKey, BorrowMap<IniKey, Option<PathBuf>>>;
+
+static CHILD_DIR_CACHE: OnceLock<Mutex<PathLookupCache>> = OnceLock::new();
+static FILE_PREFIX_CACHE: OnceLock<Mutex<PathLookupCache>> = OnceLock::new();
 static NOTESKIN_DATA_CACHE: OnceLock<Mutex<HashMap<NoteskinDataCacheKey, Arc<NoteskinData>>>> =
     OnceLock::new();
 
@@ -187,9 +189,45 @@ fn noteskin_data_cache_key(root: &Path, game: &str, skin: &str) -> NoteskinDataC
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct IniKey(String);
+
+impl IniKey {
+    fn new(value: &str) -> Self {
+        Self(value.to_ascii_lowercase())
+    }
+}
+
+fn hash_ini_key(value: &str, state: &mut impl Hasher) {
+    for byte in value.bytes() {
+        state.write_u8(byte.to_ascii_lowercase());
+    }
+    state.write_u8(0xff);
+}
+
+impl Hash for IniKey {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        hash_ini_key(&self.0, state);
+    }
+}
+
+struct IniKeyRef<'a>(&'a str);
+
+impl Hash for IniKeyRef<'_> {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        hash_ini_key(self.0, state);
+    }
+}
+
+impl Equivalent<IniKey> for IniKeyRef<'_> {
+    fn equivalent(&self, key: &IniKey) -> bool {
+        self.0.eq_ignore_ascii_case(&key.0)
+    }
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct IniData {
-    sections: HashMap<String, HashMap<String, String>>,
+    sections: BorrowMap<IniKey, BorrowMap<IniKey, String>>,
 }
 
 impl IniData {
@@ -201,7 +239,7 @@ impl IniData {
         let content = fs::read_to_string(path)
             .map_err(|e| format!("failed to read ini '{}': {e}", path.display()))?;
         let mut out = Self::default();
-        let mut section = String::new();
+        let mut section = IniKey::new("");
 
         for raw_line in content.lines() {
             let line = raw_line.trim();
@@ -209,7 +247,7 @@ impl IniData {
                 continue;
             }
             if line.starts_with('[') && line.ends_with(']') && line.len() > 2 {
-                section = line[1..line.len() - 1].trim().to_ascii_lowercase();
+                section = IniKey::new(line[1..line.len() - 1].trim());
                 out.sections.entry(section.clone()).or_default();
                 continue;
             }
@@ -224,7 +262,7 @@ impl IniData {
             out.sections
                 .entry(section.clone())
                 .or_default()
-                .insert(key.to_ascii_lowercase(), value);
+                .insert(IniKey::new(key), value);
         }
 
         Ok(out)
@@ -232,8 +270,8 @@ impl IniData {
 
     pub fn get(&self, section: &str, key: &str) -> Option<&str> {
         self.sections
-            .get(&section.to_ascii_lowercase())
-            .and_then(|s| s.get(&key.to_ascii_lowercase()))
+            .get(&IniKeyRef(section))
+            .and_then(|values| values.get(&IniKeyRef(key)))
             .map(String::as_str)
     }
 
@@ -845,16 +883,38 @@ fn resolve_skin_dir(root: &Path, game: &str, skin: &str) -> Option<PathBuf> {
         .or_else(|| find_child_dir_case_insensitive(&root.join("common"), skin))
 }
 
-fn find_child_dir_case_insensitive(parent: &Path, name: &str) -> Option<PathBuf> {
-    let want = name.to_ascii_lowercase();
-    let key = (parent.to_string_lossy().to_ascii_lowercase(), want.clone());
-    let cache = CHILD_DIR_CACHE.get_or_init(|| Mutex::new(HashMap::new()));
-    if let Some(cached) = cache
+fn cached_path_lookup(
+    cache: &Mutex<PathLookupCache>,
+    parent: &Path,
+    name: &str,
+) -> Option<Option<PathBuf>> {
+    let parent = parent.to_string_lossy();
+    cache
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner)
-        .get(&key)
+        .get(&IniKeyRef(parent.as_ref()))
+        .and_then(|entries| entries.get(&IniKeyRef(name)))
         .cloned()
-    {
+}
+
+fn cache_path_lookup(
+    cache: &Mutex<PathLookupCache>,
+    parent: &Path,
+    name: &str,
+    value: Option<PathBuf>,
+) {
+    let parent = parent.to_string_lossy();
+    cache
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .entry(IniKey::new(parent.as_ref()))
+        .or_default()
+        .insert(IniKey::new(name), value);
+}
+
+fn find_child_dir_case_insensitive(parent: &Path, name: &str) -> Option<PathBuf> {
+    let cache = CHILD_DIR_CACHE.get_or_init(|| Mutex::new(BorrowMap::new()));
+    if let Some(cached) = cached_path_lookup(cache, parent, name) {
         return cached;
     }
     let entries = fs::read_dir(parent).ok()?;
@@ -867,29 +927,19 @@ fn find_child_dir_case_insensitive(parent: &Path, name: &str) -> Option<PathBuf>
         let matches = entry
             .file_name()
             .to_str()
-            .is_some_and(|n| n.eq_ignore_ascii_case(&want));
+            .is_some_and(|entry_name| entry_name.eq_ignore_ascii_case(name));
         if matches {
             found = Some(path);
             break;
         }
     }
-    cache
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner)
-        .insert(key, found.clone());
+    cache_path_lookup(cache, parent, name, found.clone());
     found
 }
 
 fn find_file_with_prefix(dir: &Path, prefix: &str) -> Option<PathBuf> {
-    let want = prefix.to_ascii_lowercase();
-    let key = (dir.to_string_lossy().to_ascii_lowercase(), want);
-    let cache = FILE_PREFIX_CACHE.get_or_init(|| Mutex::new(HashMap::new()));
-    if let Some(cached) = cache
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner)
-        .get(&key)
-        .cloned()
-    {
+    let cache = FILE_PREFIX_CACHE.get_or_init(|| Mutex::new(BorrowMap::new()));
+    if let Some(cached) = cached_path_lookup(cache, dir, prefix) {
         return cached;
     }
     let entries = fs::read_dir(dir).ok()?;
@@ -934,10 +984,7 @@ fn find_file_with_prefix(dir: &Path, prefix: &str) -> Option<PathBuf> {
             match_count - 1
         );
     }
-    cache
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner)
-        .insert(key, chosen.clone());
+    cache_path_lookup(cache, dir, prefix, chosen.clone());
     chosen
 }
 
@@ -947,21 +994,171 @@ fn is_redir(path: &Path) -> bool {
         .is_some_and(|ext| ext.eq_ignore_ascii_case("redir"))
 }
 
+#[cfg(feature = "bench-support")]
+pub struct ItgLookupBench {
+    ini: IniData,
+    legacy_ini: HashMap<String, HashMap<String, String>>,
+    paths: PathLookupCache,
+    legacy_paths: HashMap<(String, String), Option<PathBuf>>,
+    path_queries: Vec<(PathBuf, String)>,
+}
+
+#[cfg(feature = "bench-support")]
+impl ItgLookupBench {
+    pub fn new() -> Self {
+        let mut ini = IniData::default();
+        let mut legacy_ini = HashMap::new();
+        for section_index in 0..16 {
+            let section = format!("Section-{section_index:02}");
+            let mut current_values = BorrowMap::new();
+            let mut legacy_values = HashMap::new();
+            for key_index in 0..32 {
+                let key = format!("Metric-{key_index:02}");
+                let value = format!("{section_index}:{key_index}");
+                current_values.insert(IniKey::new(&key), value.clone());
+                legacy_values.insert(key.to_ascii_lowercase(), value);
+            }
+            ini.sections.insert(IniKey::new(&section), current_values);
+            legacy_ini.insert(section.to_ascii_lowercase(), legacy_values);
+        }
+
+        let mut paths = PathLookupCache::new();
+        let mut legacy_paths = HashMap::new();
+        let mut path_queries = Vec::new();
+        for index in 0..8 {
+            let parent = PathBuf::from(format!("Assets/NoteSkins/dance/skin-{index:02}"));
+            let name = format!("Tap Note {index:02}");
+            let value = (index % 3 != 0).then(|| parent.join(format!("{name}.png")));
+            paths
+                .entry(IniKey::new(parent.to_string_lossy().as_ref()))
+                .or_default()
+                .insert(IniKey::new(&name), value.clone());
+            legacy_paths.insert(
+                (
+                    parent.to_string_lossy().to_ascii_lowercase(),
+                    name.to_ascii_lowercase(),
+                ),
+                value,
+            );
+            path_queries.push((parent, name));
+        }
+
+        Self {
+            ini,
+            legacy_ini,
+            paths,
+            legacy_paths,
+            path_queries,
+        }
+    }
+
+    #[inline(never)]
+    pub fn current_ini_checksum(&self) -> u64 {
+        ini_lookup_queries()
+            .iter()
+            .fold(0_u64, |checksum, &(section, key)| {
+                checksum.rotate_left(5)
+                    ^ self.ini.get(section, key).map_or(u64::MAX, string_checksum)
+            })
+    }
+
+    #[inline(never)]
+    pub fn legacy_ini_checksum(&self) -> u64 {
+        ini_lookup_queries()
+            .iter()
+            .fold(0_u64, |checksum, &(section, key)| {
+                let section = section.to_ascii_lowercase();
+                let key = key.to_ascii_lowercase();
+                checksum.rotate_left(5)
+                    ^ self
+                        .legacy_ini
+                        .get(&section)
+                        .and_then(|values| values.get(&key))
+                        .map_or(u64::MAX, |value| string_checksum(value))
+            })
+    }
+
+    #[inline(never)]
+    pub fn current_path_checksum(&self) -> u64 {
+        self.path_queries
+            .iter()
+            .fold(0_u64, |checksum, (parent, name)| {
+                let value = self
+                    .paths
+                    .get(&IniKeyRef(parent.to_string_lossy().as_ref()))
+                    .and_then(|entries| entries.get(&IniKeyRef(name)))
+                    .cloned();
+                checksum.rotate_left(5) ^ path_lookup_checksum(value)
+            })
+    }
+
+    #[inline(never)]
+    pub fn legacy_path_checksum(&self) -> u64 {
+        self.path_queries
+            .iter()
+            .fold(0_u64, |checksum, (parent, name)| {
+                let key = (
+                    parent.to_string_lossy().to_ascii_lowercase(),
+                    name.to_ascii_lowercase(),
+                );
+                let value = self.legacy_paths.get(&key).cloned();
+                checksum.rotate_left(5) ^ path_lookup_checksum(value)
+            })
+    }
+}
+
+#[cfg(feature = "bench-support")]
+impl Default for ItgLookupBench {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[cfg(feature = "bench-support")]
+fn ini_lookup_queries() -> &'static [(&'static str, &'static str)] {
+    &[
+        ("SECTION-00", "METRIC-00"),
+        ("section-03", "metric-17"),
+        ("Section-07", "Metric-31"),
+        ("SECTION-12", "metric-08"),
+        ("section-15", "METRIC-31"),
+        ("missing", "Metric-00"),
+        ("Section-09", "missing"),
+        ("Section-04", "Metric-20"),
+    ]
+}
+
+#[cfg(feature = "bench-support")]
+fn string_checksum(value: &str) -> u64 {
+    value.bytes().fold(0_u64, |checksum, byte| {
+        checksum.rotate_left(3) ^ u64::from(byte)
+    })
+}
+
+#[cfg(feature = "bench-support")]
+fn path_lookup_checksum(value: Option<Option<PathBuf>>) -> u64 {
+    match value {
+        Some(Some(path)) => string_checksum(path.to_string_lossy().as_ref()),
+        Some(None) => 1,
+        None => u64::MAX,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
-        IniData, ItgSkinRuntimeCache, NoteskinData, animation_is_beat_based, button_for_col,
-        clear_data_cache, clear_lookup_caches, default_skin_candidates, default_skin_name,
-        down_col, find_file_with_prefix, find_texture_with_prefix, load_itg_skin_from_roots,
-        load_noteskin_data_cached, load_noteskin_data_cached_from_roots, normalized_game_name,
-        normalized_skin_name, note_display_metrics, parse_ini_float, resolve_skin_dir,
-        resolve_texture_expr, skin_name_is_default, song_lua_noteskin_exists_from_roots,
-        song_lua_noteskin_metric_b_from_roots, song_lua_noteskin_metric_f_from_roots,
-        song_lua_noteskin_metric_from_roots, song_lua_noteskin_names_from_roots,
-        song_lua_noteskin_resolve_path_from_roots, texture_key_for_path,
+        BorrowMap, IniData, IniKey, ItgSkinRuntimeCache, NoteskinData, animation_is_beat_based,
+        button_for_col, clear_data_cache, clear_lookup_caches, default_skin_candidates,
+        default_skin_name, down_col, find_file_with_prefix, find_texture_with_prefix,
+        load_itg_skin_from_roots, load_noteskin_data_cached, load_noteskin_data_cached_from_roots,
+        normalized_game_name, normalized_skin_name, note_display_metrics, parse_ini_float,
+        resolve_skin_dir, resolve_texture_expr, skin_name_is_default,
+        song_lua_noteskin_exists_from_roots, song_lua_noteskin_metric_b_from_roots,
+        song_lua_noteskin_metric_f_from_roots, song_lua_noteskin_metric_from_roots,
+        song_lua_noteskin_names_from_roots, song_lua_noteskin_resolve_path_from_roots,
+        texture_key_for_path,
     };
     use crate::{NoteAnimPart, NoteColorType, Style};
-    use std::collections::HashMap;
     use std::fs;
     use std::path::{Path, PathBuf};
     use std::sync::{Arc, Mutex};
@@ -1293,10 +1490,10 @@ mod tests {
     fn ini_section(section: &str, values: &[(&str, &str)]) -> IniData {
         let section_values = values
             .iter()
-            .map(|(key, value)| (key.to_ascii_lowercase(), value.to_string()))
-            .collect::<HashMap<_, _>>();
+            .map(|(key, value)| (IniKey::new(key), value.to_string()))
+            .collect::<BorrowMap<_, _>>();
         IniData {
-            sections: HashMap::from([(section.to_ascii_lowercase(), section_values)]),
+            sections: BorrowMap::from([(IniKey::new(section), section_values)]),
         }
     }
 
@@ -1362,6 +1559,19 @@ mod tests {
     }
 
     #[test]
+    fn ini_metric_lookup_remains_ascii_case_insensitive() {
+        let metrics = ini_section("NoteDisplay", &[("TapNoteAnimationLength", "2")]);
+        assert_eq!(
+            metrics.get("notedisplay", "tapnoteanimationlength"),
+            Some("2")
+        );
+        assert_eq!(
+            metrics.get("NOTEDISPLAY", "TAPNOTEANIMATIONLENGTH"),
+            Some("2")
+        );
+    }
+
+    #[test]
     fn animation_is_beat_based_reads_notedisplay_then_global() {
         let global = NoteskinData {
             name: "global".to_string(),
@@ -1397,7 +1607,7 @@ mod tests {
         assert!(resolve_skin_dir(&root, "dance", "fresh").is_none());
         fs::create_dir_all(root.join("dance/Fresh")).unwrap();
         assert!(
-            resolve_skin_dir(&root, "dance", "fresh").is_none(),
+            resolve_skin_dir(&root, "dance", "FRESH").is_none(),
             "missing directory result should remain cached until refresh"
         );
 
@@ -1425,12 +1635,40 @@ mod tests {
         fs::write(&path, []).unwrap();
         fs::write(dir.join("Tap Note Zulu.png"), []).unwrap();
         assert!(
-            find_file_with_prefix(&dir, "Tap Note").is_none(),
+            find_file_with_prefix(&dir, "TAP NOTE").is_none(),
             "missing file prefix result should remain cached until refresh"
         );
 
         clear_lookup_caches();
         assert_eq!(find_file_with_prefix(&dir, "TAP NOTE"), Some(path));
+        let _ = fs::remove_dir_all(&root);
+        clear_lookup_caches();
+    }
+
+    #[test]
+    fn lookup_cache_keeps_case_insensitive_filesystem_behavior() {
+        let _guard = LOOKUP_CACHE_TEST_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        clear_lookup_caches();
+        let root = temp_root("lookup-case");
+        let dir = root.join("dance");
+        let skin = dir.join("MiXeD");
+        fs::create_dir_all(&skin).unwrap();
+        let path = skin.join("TaP NoTe.png");
+        fs::write(&path, []).unwrap();
+
+        assert_eq!(
+            super::find_child_dir_case_insensitive(&dir, "mixed"),
+            Some(skin.clone())
+        );
+        assert_eq!(
+            super::find_child_dir_case_insensitive(&dir, "MIXED"),
+            Some(skin.clone())
+        );
+        assert_eq!(find_file_with_prefix(&skin, "tap note"), Some(path.clone()));
+        assert_eq!(find_file_with_prefix(&skin, "TAP NOTE"), Some(path));
+
         let _ = fs::remove_dir_all(&root);
         clear_lookup_caches();
     }
