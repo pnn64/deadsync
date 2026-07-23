@@ -1,8 +1,11 @@
 use crate::{CachedScore, Grade};
 use deadsync_chart::SongData;
+use rustc_hash::FxHashMap;
 use std::cmp::Reverse;
-use std::collections::HashMap;
 use std::sync::Arc;
+
+#[cfg(any(test, feature = "bench-support"))]
+use std::collections::HashMap;
 
 pub const FOLDER_STATS_STAR_BUCKETS: usize = 5;
 
@@ -141,28 +144,34 @@ pub fn ranked_recent_songs(
     recent_chart_hashes: impl IntoIterator<Item = String>,
     limit: usize,
 ) -> Vec<Arc<SongData>> {
-    let hash_to_song_ix = chart_hash_song_indices(&songs);
-    let mut recent_song_ixs: Vec<usize> = Vec::with_capacity(limit);
-    let mut seen_song_ix = vec![false; songs.len()];
+    let recent_song_ixs = ranked_recent_song_indices(&songs, recent_chart_hashes, limit);
+    recent_song_ixs
+        .into_iter()
+        .map(|song_ix| songs[song_ix].clone())
+        .collect()
+}
+
+fn ranked_recent_song_indices<H: AsRef<str>>(
+    songs: &[Arc<SongData>],
+    recent_chart_hashes: impl IntoIterator<Item = H>,
+    limit: usize,
+) -> Vec<usize> {
+    let hash_to_song_ix = chart_hash_song_indices(songs);
+    let mut recent_song_ixs = Vec::with_capacity(limit);
 
     for chart_hash in recent_chart_hashes {
-        let Some(&song_ix) = hash_to_song_ix.get(chart_hash.as_str()) else {
+        let Some(&song_ix) = hash_to_song_ix.get(chart_hash.as_ref()) else {
             continue;
         };
-        if seen_song_ix[song_ix] {
+        if recent_song_ixs.contains(&song_ix) {
             continue;
         }
-        seen_song_ix[song_ix] = true;
         recent_song_ixs.push(song_ix);
         if recent_song_ixs.len() >= limit {
             break;
         }
     }
-
     recent_song_ixs
-        .into_iter()
-        .map(|song_ix| songs[song_ix].clone())
-        .collect()
 }
 
 pub fn ranked_top_grade_songs<K: Ord>(
@@ -203,7 +212,31 @@ pub fn ranked_top_grade_songs<K: Ord>(
     graded_songs
 }
 
-fn chart_hash_song_indices(songs: &[Arc<SongData>]) -> HashMap<&str, usize> {
+fn chart_hash_song_indices(songs: &[Arc<SongData>]) -> FxHashMap<&str, usize> {
+    let chart_count = songs
+        .iter()
+        .map(|song| {
+            song.charts
+                .iter()
+                .filter(|chart| chart.has_note_data)
+                .count()
+        })
+        .sum();
+    let mut hash_to_song_ix = FxHashMap::with_capacity_and_hasher(chart_count, Default::default());
+    for (song_ix, song) in songs.iter().enumerate() {
+        for chart in &song.charts {
+            if chart.has_note_data {
+                hash_to_song_ix
+                    .entry(chart.short_hash.as_str())
+                    .or_insert(song_ix);
+            }
+        }
+    }
+    hash_to_song_ix
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn chart_hash_song_indices_legacy(songs: &[Arc<SongData>]) -> HashMap<&str, usize> {
     let mut hash_to_song_ix = HashMap::with_capacity(songs.len().saturating_mul(8));
     for (song_ix, song) in songs.iter().enumerate() {
         for chart in &song.charts {
@@ -215,6 +248,43 @@ fn chart_hash_song_indices(songs: &[Arc<SongData>]) -> HashMap<&str, usize> {
         }
     }
     hash_to_song_ix
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+#[doc(hidden)]
+pub fn ranked_recent_song_indices_for_bench(
+    songs: &[Arc<SongData>],
+    recent_chart_hashes: &[&str],
+    limit: usize,
+) -> Vec<usize> {
+    ranked_recent_song_indices(songs, recent_chart_hashes.iter().copied(), limit)
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+#[doc(hidden)]
+pub fn ranked_recent_song_indices_legacy_for_bench(
+    songs: &[Arc<SongData>],
+    recent_chart_hashes: &[&str],
+    limit: usize,
+) -> Vec<usize> {
+    let hash_to_song_ix = chart_hash_song_indices_legacy(songs);
+    let mut recent_song_ixs = Vec::with_capacity(limit);
+    let mut seen_song_ix = vec![false; songs.len()];
+
+    for chart_hash in recent_chart_hashes {
+        let Some(&song_ix) = hash_to_song_ix.get(chart_hash) else {
+            continue;
+        };
+        if seen_song_ix[song_ix] {
+            continue;
+        }
+        seen_song_ix[song_ix] = true;
+        recent_song_ixs.push(song_ix);
+        if recent_song_ixs.len() >= limit {
+            break;
+        }
+    }
+    recent_song_ixs
 }
 
 #[cfg(test)]
@@ -403,6 +473,23 @@ mod tests {
         assert_eq!(ranked.len(), 2);
         assert!(Arc::ptr_eq(&ranked[0], &songs[0]));
         assert!(Arc::ptr_eq(&ranked[1], &songs[1]));
+    }
+
+    #[test]
+    fn recent_song_index_ranking_matches_legacy_limits_and_duplicates() {
+        let songs = vec![
+            Arc::new(song(vec![chart("Hard", "a"), chart("Challenge", "b")])),
+            Arc::new(song(vec![chart("Hard", "c")])),
+            Arc::new(song(vec![chart("Hard", "d"), chart("Edit", "e")])),
+        ];
+        let hashes = ["missing", "b", "a", "e", "d", "c", "b"];
+        for limit in [0, 1, 2, 3, 10] {
+            assert_eq!(
+                ranked_recent_song_indices_for_bench(&songs, &hashes, limit),
+                ranked_recent_song_indices_legacy_for_bench(&songs, &hashes, limit),
+                "limit {limit}"
+            );
+        }
     }
 
     #[test]
