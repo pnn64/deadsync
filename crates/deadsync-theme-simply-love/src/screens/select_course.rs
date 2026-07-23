@@ -34,6 +34,7 @@ use deadsync_simfile::course::{
     nearest_filled_slot, push_song_bpm_range, resolve_course_chart, resolve_entry_song,
     song_unique_key,
 };
+use rustc_hash::FxHashMap;
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::hash::Hasher;
@@ -266,11 +267,103 @@ fn build_song_lookup(
     Vec<Arc<SongData>>,
     HashMap<String, u32>,
 ) {
-    let mut by_group_song: HashMap<(String, String), Arc<SongData>> = HashMap::new();
-    let mut by_song: HashMap<String, Arc<SongData>> = HashMap::new();
+    let total_songs = song_packs.iter().map(|pack| pack.songs.len()).sum();
+    let mut by_group_song = HashMap::with_capacity(total_songs);
+    let mut by_song = HashMap::with_capacity(total_songs);
+    let mut songs_by_group: HashMap<String, Vec<Arc<SongData>>> =
+        HashMap::with_capacity(song_packs.len());
+    let mut all_songs = Vec::with_capacity(total_songs);
+
+    for pack in song_packs {
+        if pack.songs.is_empty() {
+            continue;
+        }
+        let group_key = pack.group_name.trim().to_ascii_lowercase();
+        let group_songs = songs_by_group.entry(group_key.clone()).or_default();
+        group_songs.reserve(pack.songs.len());
+        for song in &pack.songs {
+            all_songs.push(song.clone());
+            group_songs.push(song.clone());
+            let Some(song_key) = song_dir_key(song) else {
+                continue;
+            };
+            by_group_song.insert((group_key.clone(), song_key.clone()), song.clone());
+            by_song.entry(song_key).or_insert_with(|| song.clone());
+        }
+    }
+
+    let song_play_counts = build_song_play_counts(song_packs, played_chart_counts, total_songs);
+
+    (
+        by_group_song,
+        by_song,
+        songs_by_group,
+        all_songs,
+        song_play_counts,
+    )
+}
+
+fn build_song_play_counts(
+    song_packs: &[SongPack],
+    played_chart_counts: &[(String, u32)],
+    total_songs: usize,
+) -> HashMap<String, u32> {
+    if played_chart_counts.is_empty() {
+        return HashMap::new();
+    }
+
+    let mut plays_by_chart: FxHashMap<&str, u32> =
+        FxHashMap::with_capacity_and_hasher(played_chart_counts.len(), Default::default());
+    for (chart_hash, plays) in played_chart_counts {
+        plays_by_chart
+            .entry(chart_hash.as_str())
+            .and_modify(|count| *count = count.saturating_add(*plays))
+            .or_insert(*plays);
+    }
+
+    let mut song_play_counts: HashMap<String, u32> =
+        HashMap::with_capacity(plays_by_chart.len().min(total_songs));
+    for pack in song_packs {
+        for song in &pack.songs {
+            let mut matched = false;
+            let mut song_plays = 0_u32;
+            for chart in &song.charts {
+                if let Some(plays) = plays_by_chart.remove(chart.short_hash.as_str()) {
+                    matched = true;
+                    song_plays = song_plays.saturating_add(plays);
+                }
+            }
+            if matched {
+                song_play_counts
+                    .entry(song_unique_key(song))
+                    .and_modify(|count| *count = count.saturating_add(song_plays))
+                    .or_insert(song_plays);
+            }
+            if plays_by_chart.is_empty() {
+                return song_play_counts;
+            }
+        }
+    }
+
+    song_play_counts
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn build_song_lookup_legacy(
+    song_packs: &[SongPack],
+    played_chart_counts: &[(String, u32)],
+) -> (
+    HashMap<(String, String), Arc<SongData>>,
+    HashMap<String, Arc<SongData>>,
+    HashMap<String, Vec<Arc<SongData>>>,
+    Vec<Arc<SongData>>,
+    HashMap<String, u32>,
+) {
+    let mut by_group_song = HashMap::new();
+    let mut by_song = HashMap::new();
     let mut songs_by_group: HashMap<String, Vec<Arc<SongData>>> = HashMap::new();
     let mut all_songs = Vec::new();
-    let mut chart_to_song_key: HashMap<String, String> = HashMap::new();
+    let mut chart_to_song_key = HashMap::new();
 
     for pack in song_packs {
         let group_key = pack.group_name.trim().to_ascii_lowercase();
@@ -311,6 +404,102 @@ fn build_song_lookup(
         all_songs,
         song_play_counts,
     )
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn song_lookup_checksum(
+    by_group_song: &HashMap<(String, String), Arc<SongData>>,
+    by_song: &HashMap<String, Arc<SongData>>,
+    songs_by_group: &HashMap<String, Vec<Arc<SongData>>>,
+    all_songs: &[Arc<SongData>],
+    song_play_counts: &HashMap<String, u32>,
+) -> u64 {
+    let mut checksum = by_group_song.len() as u64
+        ^ (by_song.len() as u64).rotate_left(7)
+        ^ (songs_by_group.len() as u64).rotate_left(13)
+        ^ (all_songs.len() as u64).rotate_left(19)
+        ^ (song_play_counts.len() as u64).rotate_left(29);
+    for song in all_songs {
+        checksum = checksum.rotate_left(5)
+            ^ song.simfile_path.as_os_str().len() as u64
+            ^ (song.charts.len() as u64).rotate_left(31);
+    }
+    for songs in songs_by_group.values() {
+        checksum = checksum.wrapping_add((songs.len() as u64).rotate_left(37));
+    }
+    for (key, &plays) in song_play_counts {
+        checksum = checksum
+            .wrapping_add(u64::from(plays))
+            .wrapping_add((key.len() as u64).rotate_left(43));
+    }
+    checksum
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+#[doc(hidden)]
+pub fn select_course_song_lookup_workload_for_bench(
+    song_packs: &[SongPack],
+    played_chart_counts: &[(String, u32)],
+) -> u64 {
+    let (by_group_song, by_song, songs_by_group, all_songs, song_play_counts) =
+        build_song_lookup(song_packs, played_chart_counts);
+    song_lookup_checksum(
+        &by_group_song,
+        &by_song,
+        &songs_by_group,
+        &all_songs,
+        &song_play_counts,
+    )
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+#[doc(hidden)]
+pub fn select_course_song_lookup_workload_legacy_for_bench(
+    song_packs: &[SongPack],
+    played_chart_counts: &[(String, u32)],
+) -> u64 {
+    let (by_group_song, by_song, songs_by_group, all_songs, song_play_counts) =
+        build_song_lookup_legacy(song_packs, played_chart_counts);
+    song_lookup_checksum(
+        &by_group_song,
+        &by_song,
+        &songs_by_group,
+        &all_songs,
+        &song_play_counts,
+    )
+}
+
+#[cfg(test)]
+fn song_lookups_match_legacy_for_test(
+    song_packs: &[SongPack],
+    played_chart_counts: &[(String, u32)],
+) -> bool {
+    let (new_group, new_song, new_groups, new_all, new_counts) =
+        build_song_lookup(song_packs, played_chart_counts);
+    let (old_group, old_song, old_groups, old_all, old_counts) =
+        build_song_lookup_legacy(song_packs, played_chart_counts);
+
+    old_group.len() == new_group.len()
+        && old_group
+            .iter()
+            .all(|(key, old)| new_group.get(key).is_some_and(|new| Arc::ptr_eq(old, new)))
+        && old_song.len() == new_song.len()
+        && old_song
+            .iter()
+            .all(|(key, old)| new_song.get(key).is_some_and(|new| Arc::ptr_eq(old, new)))
+        && old_groups.len() == new_groups.len()
+        && old_groups.iter().all(|(key, old)| {
+            new_groups.get(key).is_some_and(|new| {
+                old.len() == new.len()
+                    && old.iter().zip(new).all(|(old, new)| Arc::ptr_eq(old, new))
+            })
+        })
+        && old_all.len() == new_all.len()
+        && old_all
+            .iter()
+            .zip(&new_all)
+            .all(|(old, new)| Arc::ptr_eq(old, new))
+        && old_counts == new_counts
 }
 
 #[inline(always)]
@@ -2524,5 +2713,127 @@ fn handle_exit_prompt_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
         }
 
         _ => ThemeEffect::None,
+    }
+}
+
+#[cfg(test)]
+mod song_lookup_tests {
+    use super::*;
+    use deadsync_chart::SyncPref;
+
+    fn chart(hash: &str) -> ChartData {
+        ChartData {
+            chart_type: "dance-single".to_owned(),
+            difficulty: "Hard".to_owned(),
+            description: String::new(),
+            chart_name: String::new(),
+            meter: 10,
+            step_artist: String::new(),
+            music_path: None,
+            short_hash: hash.to_owned(),
+            stats: Default::default(),
+            tech_counts: Default::default(),
+            mines_nonfake: 0,
+            stamina_counts: Default::default(),
+            total_streams: 0,
+            matrix_rating: 0.0,
+            max_nps: 0.0,
+            sn_detailed_breakdown: String::new(),
+            sn_partial_breakdown: String::new(),
+            sn_simple_breakdown: String::new(),
+            detailed_breakdown: String::new(),
+            partial_breakdown: String::new(),
+            simple_breakdown: String::new(),
+            total_measures: 0,
+            measure_nps_vec: Vec::new(),
+            measure_seconds_vec: Vec::new(),
+            first_second: 0.0,
+            has_note_data: true,
+            has_chart_attacks: false,
+            possible_grade_points: 0,
+            holds_total: 0,
+            rolls_total: 0,
+            mines_total: 0,
+            display_bpm: None,
+            min_bpm: 120.0,
+            max_bpm: 120.0,
+        }
+    }
+
+    fn song(path: &str, chart_hashes: &[&str]) -> Arc<SongData> {
+        Arc::new(SongData {
+            simfile_path: PathBuf::from(path),
+            title: String::new(),
+            subtitle: String::new(),
+            translit_title: String::new(),
+            translit_subtitle: String::new(),
+            artist: String::new(),
+            genre: String::new(),
+            banner_path: None,
+            background_path: None,
+            background_changes: Vec::new(),
+            background_layer2_changes: Vec::new(),
+            foreground_changes: Vec::new(),
+            background_lua_changes: Vec::new(),
+            foreground_lua_changes: Vec::new(),
+            has_lua: false,
+            cdtitle_path: None,
+            music_path: None,
+            display_bpm: String::new(),
+            offset: 0.0,
+            sample_start: None,
+            sample_length: None,
+            min_bpm: 0.0,
+            max_bpm: 0.0,
+            normalized_bpms: String::new(),
+            music_length_seconds: 0.0,
+            first_second: 0.0,
+            total_length_seconds: 0,
+            precise_last_second_seconds: 0.0,
+            charts: chart_hashes.iter().map(|hash| chart(hash)).collect(),
+        })
+    }
+
+    fn pack(name: &str, songs: Vec<Arc<SongData>>) -> SongPack {
+        SongPack {
+            group_name: name.to_owned(),
+            name: name.to_owned(),
+            sort_title: String::new(),
+            translit_title: String::new(),
+            series: String::new(),
+            year: 0,
+            sync_pref: SyncPref::Default,
+            directory: PathBuf::from("Songs").join(name),
+            banner_path: None,
+            songs,
+        }
+    }
+
+    #[test]
+    fn song_lookup_matches_legacy_sparse_duplicate_play_counts() {
+        let alpha = song("Songs/Pack A/Alpha/alpha.ssc", &["duplicate", "alpha"]);
+        let beta = song("Songs/Pack A/Beta/beta.ssc", &["beta"]);
+        let gamma = song("Songs/Pack B/Gamma/gamma.ssc", &["duplicate"]);
+        let packs = [
+            pack("Pack A", vec![alpha.clone(), beta.clone()]),
+            pack("Pack B", vec![gamma.clone()]),
+            pack("Empty Pack", Vec::new()),
+        ];
+        let played = vec![
+            ("duplicate".to_owned(), 5),
+            ("duplicate".to_owned(), 7),
+            ("alpha".to_owned(), u32::MAX),
+            ("beta".to_owned(), 3),
+            ("missing".to_owned(), 99),
+        ];
+
+        assert!(song_lookups_match_legacy_for_test(&packs, &played));
+
+        let (_, _, groups, all, counts) = build_song_lookup(&packs, &played);
+        assert_eq!(groups.len(), 2, "empty packs must not create lookup groups");
+        assert_eq!(all.len(), 3);
+        assert_eq!(counts.get(&song_unique_key(&alpha)), Some(&u32::MAX));
+        assert_eq!(counts.get(&song_unique_key(&beta)), Some(&3));
+        assert!(!counts.contains_key(&song_unique_key(&gamma)));
     }
 }

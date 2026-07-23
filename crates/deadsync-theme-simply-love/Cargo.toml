@@ -44,6 +44,11 @@ harness = false
 required-features = ["bench-support"]
 
 [[bench]]
+name = "select_course_song_lookup"
+harness = false
+required-features = ["bench-support"]
+
+[[bench]]
 name = "leaderboard_rows"
 harness = false
 required-features = ["bench-support"]
