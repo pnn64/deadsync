@@ -1,6 +1,7 @@
 use chrono::{Local, TimeZone};
 use deadsync_core::input::InputSource;
 use deadsync_core::song_time::{SongTimeNs, song_time_ns_invalid};
+use smallvec::SmallVec;
 use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, LazyLock, Mutex, MutexGuard};
@@ -159,7 +160,8 @@ fn selected_contains(selected: &[&LeaderboardEntry], entry: &LeaderboardEntry) -
         .any(|chosen| same_leaderboard_entry(chosen, entry))
 }
 
-fn next_prioritized_entry<'a>(
+#[cfg(any(test, feature = "bench-support"))]
+fn next_prioritized_entry_legacy<'a>(
     entries: &'a [LeaderboardEntry],
     selected: &[&'a LeaderboardEntry],
     include: impl Fn(&LeaderboardEntry) -> bool,
@@ -170,7 +172,86 @@ fn next_prioritized_entry<'a>(
         .min_by_key(|entry| entry.rank)
 }
 
+pub type PrioritizedLeaderboardEntryRefs<'a> = SmallVec<[&'a LeaderboardEntry; 10]>;
+
+fn fill_prioritized_entries<'a>(
+    entries: &'a [LeaderboardEntry],
+    selected: &mut PrioritizedLeaderboardEntryRefs<'a>,
+    max_rows: usize,
+    include: impl Fn(&LeaderboardEntry) -> bool,
+) {
+    if selected.len() >= max_rows {
+        return;
+    }
+
+    let phase_start = selected.len();
+    let phase_capacity = max_rows - phase_start;
+    for entry in entries {
+        if !include(entry) || selected_contains(selected.as_slice(), entry) {
+            continue;
+        }
+        let phase_entries = &selected[phase_start..];
+        let insert_offset = phase_entries.partition_point(|chosen| chosen.rank <= entry.rank);
+        if phase_entries.len() < phase_capacity {
+            selected.insert(phase_start + insert_offset, entry);
+        } else if insert_offset < phase_capacity {
+            selected.pop();
+            selected.insert(phase_start + insert_offset, entry);
+        }
+    }
+}
+
 pub fn prioritized_leaderboard_entry_refs(
+    entries: &[LeaderboardEntry],
+    max_rows: usize,
+) -> PrioritizedLeaderboardEntryRefs<'_> {
+    if max_rows == 0 {
+        return SmallVec::new();
+    }
+    if entries.len() <= max_rows {
+        return entries.iter().collect();
+    }
+
+    let mut top = None;
+    let mut best_self = None;
+    let mut next_self = None;
+    for entry in entries {
+        if top.is_none_or(|current: &LeaderboardEntry| entry.rank < current.rank) {
+            top = Some(entry);
+        }
+        if !entry.is_self
+            || best_self.is_some_and(|current| same_leaderboard_entry(current, entry))
+            || next_self.is_some_and(|current| same_leaderboard_entry(current, entry))
+        {
+            continue;
+        }
+        if best_self.is_none_or(|current: &LeaderboardEntry| entry.rank < current.rank) {
+            next_self = best_self;
+            best_self = Some(entry);
+        } else if next_self.is_none_or(|current: &LeaderboardEntry| entry.rank < current.rank) {
+            next_self = Some(entry);
+        }
+    }
+
+    let mut selected = SmallVec::with_capacity(max_rows);
+    let top = top.expect("non-empty leaderboard");
+    selected.push(top);
+    let self_entry = if best_self.is_some_and(|entry| same_leaderboard_entry(top, entry)) {
+        next_self
+    } else {
+        best_self
+    };
+    if let Some(self_entry) = self_entry {
+        selected.push(self_entry);
+    }
+    fill_prioritized_entries(entries, &mut selected, max_rows, |entry| entry.is_rival);
+    fill_prioritized_entries(entries, &mut selected, max_rows, |_| true);
+    selected.sort_unstable_by_key(|entry| entry.rank);
+    selected
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn prioritized_leaderboard_entry_refs_legacy(
     entries: &[LeaderboardEntry],
     max_rows: usize,
 ) -> Vec<&LeaderboardEntry> {
@@ -182,24 +263,25 @@ pub fn prioritized_leaderboard_entry_refs(
     }
 
     let mut selected = Vec::with_capacity(max_rows);
-    if let Some(top) = next_prioritized_entry(entries, selected.as_slice(), |_| true) {
+    if let Some(top) = next_prioritized_entry_legacy(entries, selected.as_slice(), |_| true) {
         selected.push(top);
     }
     if let Some(self_entry) =
-        next_prioritized_entry(entries, selected.as_slice(), |entry| entry.is_self)
+        next_prioritized_entry_legacy(entries, selected.as_slice(), |entry| entry.is_self)
     {
         selected.push(self_entry);
     }
     while selected.len() < max_rows {
         let Some(rival) =
-            next_prioritized_entry(entries, selected.as_slice(), |entry| entry.is_rival)
+            next_prioritized_entry_legacy(entries, selected.as_slice(), |entry| entry.is_rival)
         else {
             break;
         };
         selected.push(rival);
     }
     while selected.len() < max_rows {
-        let Some(entry) = next_prioritized_entry(entries, selected.as_slice(), |_| true) else {
+        let Some(entry) = next_prioritized_entry_legacy(entries, selected.as_slice(), |_| true)
+        else {
             break;
         };
         selected.push(entry);
@@ -216,6 +298,37 @@ pub fn prioritized_leaderboard_entries(
         .into_iter()
         .cloned()
         .collect()
+}
+
+#[cfg(feature = "bench-support")]
+fn prioritized_leaderboard_checksum<'a>(
+    entries: impl IntoIterator<Item = &'a LeaderboardEntry>,
+) -> u64 {
+    entries.into_iter().fold(0_u64, |checksum, entry| {
+        checksum.rotate_left(7)
+            ^ u64::from(entry.rank)
+            ^ (entry.name.len() as u64).rotate_left(17)
+            ^ ((entry.is_self as u64) << 62)
+            ^ ((entry.is_rival as u64) << 61)
+    })
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn prioritized_leaderboard_workload_for_bench(
+    entries: &[LeaderboardEntry],
+    max_rows: usize,
+) -> u64 {
+    prioritized_leaderboard_checksum(prioritized_leaderboard_entry_refs(entries, max_rows))
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn prioritized_leaderboard_workload_legacy_for_bench(
+    entries: &[LeaderboardEntry],
+    max_rows: usize,
+) -> u64 {
+    prioritized_leaderboard_checksum(prioritized_leaderboard_entry_refs_legacy(entries, max_rows))
 }
 
 pub fn machine_leaderboard_entries(
@@ -1514,6 +1627,45 @@ mod tests {
             assert_eq!(borrowed.is_self, owned.is_self);
             assert_eq!(borrowed.is_rival, owned.is_rival);
         }
+    }
+
+    #[test]
+    fn prioritized_leaderboard_refs_match_legacy_for_caps_duplicates_and_ties() {
+        let mut entries = vec![
+            entry(1, "WORLD", false, false),
+            entry(1, "world", true, true),
+            entry(1, "other-self", true, false),
+            entry(7, "RIVAL", false, true),
+            entry(7, "rival", false, true),
+            entry(7, "other-rival", false, true),
+        ];
+        entries.extend((0..96).map(|index| {
+            entry(
+                (index * 37 % 41 + 2) as u32,
+                &format!("player-{index:03}"),
+                index % 29 == 0,
+                index % 7 == 0,
+            )
+        }));
+
+        for max_rows in 0..=entries.len() + 2 {
+            let modern = prioritized_leaderboard_entry_refs(&entries, max_rows);
+            let legacy = prioritized_leaderboard_entry_refs_legacy(&entries, max_rows);
+            assert_eq!(modern.len(), legacy.len(), "cap {max_rows}");
+            assert!(
+                modern
+                    .iter()
+                    .zip(&legacy)
+                    .all(|(modern, legacy)| std::ptr::eq(*modern, *legacy)),
+                "cap {max_rows}"
+            );
+        }
+
+        assert_eq!(
+            prioritized_leaderboard_entry_refs(&entries, 1).len(),
+            2,
+            "preserve the existing top-plus-self single-row behavior"
+        );
     }
 
     fn pane(
