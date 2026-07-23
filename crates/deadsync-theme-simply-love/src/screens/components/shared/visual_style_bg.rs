@@ -198,6 +198,64 @@ pub fn set_srpg_background_key(key: Option<String>) {
     }
 }
 
+#[cfg(feature = "bench-support")]
+pub struct TechniqueBackgroundBench {
+    inner: technique_bg::BenchState,
+}
+
+#[cfg(feature = "bench-support")]
+impl TechniqueBackgroundBench {
+    pub fn new() -> Self {
+        Self {
+            inner: technique_bg::BenchState::new(),
+        }
+    }
+
+    pub fn build(&self, elapsed_s: f64) -> Vec<Actor> {
+        self.inner.build(elapsed_s)
+    }
+
+    pub fn build_legacy(&self, elapsed_s: f64) -> Vec<Actor> {
+        self.inner.build_legacy(elapsed_s)
+    }
+
+    pub fn projection(&self, width: f32, height: f32) -> [f32; 16] {
+        self.inner.projection(width, height)
+    }
+}
+
+#[cfg(feature = "bench-support")]
+impl Default for TechniqueBackgroundBench {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[cfg(feature = "bench-support")]
+pub fn technique_projection_legacy_for_bench(width: f32, height: f32) -> [f32; 16] {
+    technique_bg::projection_legacy_for_bench(width, height)
+}
+
+#[cfg(feature = "bench-support")]
+pub fn technique_layout_checksum_for_bench(elapsed_s: f64) -> u64 {
+    technique_bg::layout_checksum_for_bench(elapsed_s)
+}
+
+#[cfg(feature = "bench-support")]
+pub fn technique_layout_legacy_checksum_for_bench(elapsed_s: f64) -> u64 {
+    technique_bg::layout_legacy_checksum_for_bench(elapsed_s)
+}
+
+#[cfg(feature = "bench-support")]
+pub fn technique_layer_checksum_for_bench(elapsed_s: f64) -> u64 {
+    technique_bg::layer_checksum_for_bench(elapsed_s)
+}
+
+#[cfg(feature = "bench-support")]
+pub fn technique_layer_legacy_checksum_for_bench(elapsed_s: f64) -> u64 {
+    technique_bg::layer_legacy_checksum_for_bench(elapsed_s)
+}
+
 fn srpg_background_key(fallback_key: &'static str) -> Arc<str> {
     let fallback = || Arc::<str>::from(fallback_key);
     match SRPG_BACKGROUND_KEY.get_or_init(|| Mutex::new(None)).lock() {
