@@ -58,6 +58,7 @@ use std::io::Cursor;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
+use hashbrown::{Equivalent, HashMap as RegistryMap};
 use image::codecs::gif::GifDecoder;
 use image::{AnimationDecoder, RgbaImage};
 
@@ -515,6 +516,19 @@ struct Key {
     size: PadSize,
 }
 
+#[derive(Hash)]
+struct KeyRef<'a> {
+    pack: &'a str,
+    name: &'a str,
+    size: PadSize,
+}
+
+impl Equivalent<Key> for KeyRef<'_> {
+    fn equivalent(&self, key: &Key) -> bool {
+        self.pack == key.pack && self.name == key.name && self.size == key.size
+    }
+}
+
 /// A pack's declared `fallback` behaviour from its `gifpack.ini`.
 #[derive(Default, Clone, PartialEq, Debug)]
 enum PackFallback {
@@ -563,8 +577,8 @@ struct PackMeta {
 pub struct GifRegistry {
     /// A role can hold several BPM variants (see `BackgroundVariant`), so the
     /// value is a list resolved per song; most roles have just one.
-    backgrounds: HashMap<Key, Vec<BackgroundVariant>>,
-    judgements: HashMap<Key, Arc<PanelAnim>>,
+    backgrounds: RegistryMap<Key, Vec<BackgroundVariant>>,
+    judgements: RegistryMap<Key, Arc<PanelAnim>>,
     /// Per-pack metadata declared in `smx-pad-lights/<pack>/gifpack.ini`. Packs
     /// with no `gifpack.ini` have no entry here (equivalent to `PackMeta::default()`:
     /// no extra fallback pack, every name still eligible for the automatic
@@ -599,7 +613,7 @@ impl GifRegistry {
         for group in GROUPS {
             // Stage each group's backgrounds separately so a later group
             // replaces (not appends to) an earlier group's variant list.
-            let mut staged: HashMap<Key, Vec<BackgroundVariant>> = HashMap::new();
+            let mut staged: RegistryMap<Key, Vec<BackgroundVariant>> = RegistryMap::new();
             for_each_gif(&root.join("smx-pad-lights"), group, |pack, path| {
                 load_background_into(&mut staged, pack, path);
             });
@@ -675,8 +689,8 @@ impl GifRegistry {
     ) -> Option<Arc<FullPadAnim>> {
         let variants_for = |p: &str| -> Option<&Vec<BackgroundVariant>> {
             self.backgrounds
-                .get(&key(p, role, size))
-                .or_else(|| self.backgrounds.get(&key(p, role, size.other())))
+                .get(&key_ref(p, role, size))
+                .or_else(|| self.backgrounds.get(&key_ref(p, role, size.other())))
         };
         let mut merged: Vec<BackgroundVariant> = Vec::new();
         if let Some(v) = variants_for(pack) {
@@ -766,8 +780,10 @@ impl GifRegistry {
         self.background_pack_meta
             .get(p)
             .is_some_and(|m| m.can_be_empty.contains(name))
-            && !self.backgrounds.contains_key(&key(p, name, size))
-            && !self.backgrounds.contains_key(&key(p, name, size.other()))
+            && !self.backgrounds.contains_key(&key_ref(p, name, size))
+            && !self
+                .backgrounds
+                .contains_key(&key_ref(p, name, size.other()))
     }
 
     pub fn is_empty(&self) -> bool {
@@ -806,10 +822,14 @@ fn key(pack: &str, name: &str, size: PadSize) -> Key {
     }
 }
 
+fn key_ref<'a>(pack: &'a str, name: &'a str, size: PadSize) -> KeyRef<'a> {
+    KeyRef { pack, name, size }
+}
+
 /// Decode one background gif into `backgrounds`, appending it to the variant
 /// list for its (pack, name, size) key. Malformed files are logged and skipped.
 fn load_background_into(
-    backgrounds: &mut HashMap<Key, Vec<BackgroundVariant>>,
+    backgrounds: &mut RegistryMap<Key, Vec<BackgroundVariant>>,
     pack: &str,
     path: &Path,
 ) {
@@ -852,13 +872,13 @@ enum Lookup<'a, V> {
 /// `gifpack.ini` metadata (`fallback` and `CanBeEmpty`). Does not itself reach
 /// for the automatic default-pack fallback; see `resolve`.
 fn lookup<'a, V>(
-    map: &'a HashMap<Key, V>,
+    map: &'a RegistryMap<Key, V>,
     meta: &HashMap<String, PackMeta>,
     pack: Option<&str>,
     name: &str,
     size: PadSize,
 ) -> Lookup<'a, V> {
-    let get = |p: &str, s: PadSize| map.get(&key(p, name, s));
+    let get = |p: &str, s: PadSize| map.get(&key_ref(p, name, s));
     let Some(p) = pack.filter(|p| *p != DEFAULT_PACK) else {
         // No pack selected (or selected pack is the default): use the default pack.
         return match get(DEFAULT_PACK, size).or_else(|| get(DEFAULT_PACK, size.other())) {
@@ -889,7 +909,7 @@ fn lookup<'a, V>(
 /// when `lookup` came back `Missing` (not found, and not explicitly opted out
 /// via `CanBeEmpty` or `Fallback = "none"`).
 fn resolve<'a, V>(
-    map: &'a HashMap<Key, V>,
+    map: &'a RegistryMap<Key, V>,
     meta: &HashMap<String, PackMeta>,
     pack: Option<&str>,
     name: &str,
@@ -900,6 +920,142 @@ fn resolve<'a, V>(
         Lookup::Empty => None,
         Lookup::Missing => match lookup(map, meta, None, name, size) {
             Lookup::Found(v) => Some(v),
+            Lookup::Empty | Lookup::Missing => None,
+        },
+    }
+}
+
+#[cfg(feature = "bench-support")]
+pub struct GifRegistryLookupBench {
+    current: RegistryMap<Key, u64>,
+    legacy: HashMap<Key, u64>,
+    meta: HashMap<String, PackMeta>,
+}
+
+#[cfg(feature = "bench-support")]
+impl GifRegistryLookupBench {
+    pub fn new() -> Self {
+        let entries = [
+            (key("direct", "gameplay", PadSize::Leds25), 11),
+            (key("other-size", "gameplay", PadSize::Leds16), 13),
+            (key("fallback", "gameplay", PadSize::Leds25), 17),
+            (key(DEFAULT_PACK, "gameplay", PadSize::Leds25), 19),
+        ];
+        let mut current = RegistryMap::with_capacity(entries.len());
+        let mut legacy = HashMap::with_capacity(entries.len());
+        for (key, value) in entries {
+            current.insert(key.clone(), value);
+            legacy.insert(key, value);
+        }
+        let mut meta = HashMap::new();
+        meta.insert(
+            "uses-fallback".to_owned(),
+            PackMeta {
+                fallback: PackFallback::Pack("fallback".to_owned()),
+                ..PackMeta::default()
+            },
+        );
+        meta.insert(
+            "empty".to_owned(),
+            PackMeta {
+                can_be_empty: ["gameplay".to_owned()].into_iter().collect(),
+                ..PackMeta::default()
+            },
+        );
+        Self {
+            current,
+            legacy,
+            meta,
+        }
+    }
+
+    #[inline(never)]
+    pub fn current_checksum(&self) -> u64 {
+        self.checksum_with(|pack, name, size| {
+            resolve(&self.current, &self.meta, pack, name, size).copied()
+        })
+    }
+
+    #[inline(never)]
+    pub fn legacy_checksum(&self) -> u64 {
+        self.checksum_with(|pack, name, size| {
+            resolve_legacy(&self.legacy, &self.meta, pack, name, size).copied()
+        })
+    }
+
+    fn checksum_with(
+        &self,
+        mut resolve_case: impl FnMut(Option<&str>, &str, PadSize) -> Option<u64>,
+    ) -> u64 {
+        [
+            resolve_case(Some("direct"), "gameplay", PadSize::Leds25),
+            resolve_case(Some("other-size"), "gameplay", PadSize::Leds25),
+            resolve_case(Some("uses-fallback"), "gameplay", PadSize::Leds25),
+            resolve_case(Some("unknown"), "gameplay", PadSize::Leds25),
+            resolve_case(Some("empty"), "gameplay", PadSize::Leds25),
+            resolve_case(Some("unknown"), "missing", PadSize::Leds25),
+        ]
+        .into_iter()
+        .fold(0_u64, |checksum, value| {
+            checksum.rotate_left(7) ^ value.unwrap_or(23)
+        })
+    }
+}
+
+#[cfg(feature = "bench-support")]
+impl Default for GifRegistryLookupBench {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[cfg(feature = "bench-support")]
+fn lookup_legacy<'a, V>(
+    map: &'a HashMap<Key, V>,
+    meta: &HashMap<String, PackMeta>,
+    pack: Option<&str>,
+    name: &str,
+    size: PadSize,
+) -> Lookup<'a, V> {
+    let get = |pack: &str, size: PadSize| map.get(&key(pack, name, size));
+    let Some(pack) = pack.filter(|pack| *pack != DEFAULT_PACK) else {
+        return match get(DEFAULT_PACK, size).or_else(|| get(DEFAULT_PACK, size.other())) {
+            Some(value) => Lookup::Found(value),
+            None => Lookup::Missing,
+        };
+    };
+    if let Some(value) = get(pack, size).or_else(|| get(pack, size.other())) {
+        return Lookup::Found(value);
+    }
+    let pack_meta = meta.get(pack);
+    if pack_meta.is_some_and(|meta| meta.can_be_empty.contains(name)) {
+        return Lookup::Empty;
+    }
+    match pack_meta.map(|meta| &meta.fallback) {
+        Some(PackFallback::Pack(fallback)) => {
+            if let Some(value) = get(fallback, size).or_else(|| get(fallback, size.other())) {
+                return Lookup::Found(value);
+            }
+            Lookup::Missing
+        }
+        Some(PackFallback::None) => Lookup::Empty,
+        Some(PackFallback::Auto) | None => Lookup::Missing,
+    }
+}
+
+#[cfg(feature = "bench-support")]
+fn resolve_legacy<'a, V>(
+    map: &'a HashMap<Key, V>,
+    meta: &HashMap<String, PackMeta>,
+    pack: Option<&str>,
+    name: &str,
+    size: PadSize,
+) -> Option<&'a V> {
+    match lookup_legacy(map, meta, pack, name, size) {
+        Lookup::Found(value) => Some(value),
+        Lookup::Empty => None,
+        Lookup::Missing => match lookup_legacy(map, meta, None, name, size) {
+            Lookup::Found(value) => Some(value),
             Lookup::Empty | Lookup::Missing => None,
         },
     }

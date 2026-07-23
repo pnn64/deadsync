@@ -17,6 +17,11 @@ name = "media_path_classification"
 harness = false
 required-features = ["bench-support"]
 
+[[bench]]
+name = "runtime_mod_state"
+harness = false
+required-features = ["bench-support"]
+
 [dependencies]
 deadlib-assets = { path = "../deadlib-assets" }
 deadlib-present = { path = "../deadlib-present" }

@@ -4,6 +4,14 @@ version = "0.1.0"
 edition = "2024"
 license = "GPL-3.0"
 
+[features]
+bench-support = []
+
+[[bench]]
+name = "gif_registry_lookup"
+harness = false
+required-features = ["bench-support"]
+
 [dependencies]
 deadsync-core = { path = "../deadsync-core" }
 deadsync-gameplay = { path = "../deadsync-gameplay" }
@@ -12,6 +20,7 @@ deadsync-input-native = { path = "../deadsync-input-native" }
 deadsync-rules = { path = "../deadsync-rules" }
 deadsync-score = { path = "../deadsync-score" }
 deadlib-platform = { path = "../deadlib-platform" }
+hashbrown = "0.17.1"
 image = { version = "0.25.10", default-features = false, features = ["gif"] }
 log = "0.4.33"
 rustmaniax-sdk = "2.1.1"

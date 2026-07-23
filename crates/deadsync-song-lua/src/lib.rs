@@ -236,6 +236,11 @@ pub use runtime_mod::{
     runtime_mod_entry_players, runtime_mod_key, runtime_mod_start_value,
     runtime_overlay_capture_key, runtime_player_option_ease_target,
 };
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub use runtime_mod::{
+    runtime_mod_state_updates_for_bench, runtime_mod_state_updates_legacy_for_bench,
+};
 pub use sl::{create_sl_streams, create_sl_table, init_sl_streams, parse_chart_info};
 pub use song_tables::{
     PlayerLuaTables, create_course_table, create_enabled_players_table, create_player_tables,

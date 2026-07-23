@@ -90,13 +90,23 @@ pub fn read_runtime_mod_eases(
 
     for entry in entries {
         let key = runtime_mod_key(&entry.target);
-        let players = runtime_mod_entry_players(entry.player);
         if key == "static" {
             let mut static_window = None;
-            for player in players {
-                let from = runtime_mod_start_value(&mut current[player], &key, &entry);
+            let mut players = runtime_mod_player_indices(entry.player).peekable();
+            let mut map_key = Some(key);
+            while let Some(player) = players.next() {
+                let from = runtime_mod_current_value(
+                    &current[player],
+                    map_key.as_deref().unwrap(),
+                    &entry,
+                );
                 let to = runtime_mod_end_value(from, &entry);
-                current[player].insert(key.clone(), to);
+                runtime_mod_store_current(
+                    &mut current[player],
+                    &mut map_key,
+                    to,
+                    players.peek().is_some(),
+                );
                 if player == static_player {
                     static_window = Some((from, to));
                 }
@@ -110,10 +120,18 @@ pub fn read_runtime_mod_eases(
         let Some(target) = runtime_mod_ease_target(&key, &entry.target) else {
             continue;
         };
-        for player in players {
-            let from = runtime_mod_start_value(&mut current[player], &key, &entry);
+        let mut players = runtime_mod_player_indices(entry.player).peekable();
+        let mut map_key = Some(key);
+        while let Some(player) = players.next() {
+            let from =
+                runtime_mod_current_value(&current[player], map_key.as_deref().unwrap(), &entry);
             let to = runtime_mod_end_value(from, &entry);
-            current[player].insert(key.clone(), to);
+            runtime_mod_store_current(
+                &mut current[player],
+                &mut map_key,
+                to,
+                players.peek().is_some(),
+            );
             eases.push(SongLuaEaseWindow {
                 unit: entry.unit,
                 start: entry.start,
@@ -271,10 +289,21 @@ where
                 let Some(target) = runtime_player_option_ease_target(&key, &entry.target) else {
                     continue;
                 };
-                for player in runtime_mod_entry_players(entry.player) {
-                    let from = runtime_mod_start_value(&mut current[player], &key, &entry);
+                let mut players = runtime_mod_player_indices(entry.player).peekable();
+                let mut map_key = Some(key);
+                while let Some(player) = players.next() {
+                    let from = runtime_mod_current_value(
+                        &current[player],
+                        map_key.as_deref().unwrap(),
+                        &entry,
+                    );
                     let to = runtime_mod_end_value(from, &entry);
-                    current[player].insert(key.clone(), to);
+                    runtime_mod_store_current(
+                        &mut current[player],
+                        &mut map_key,
+                        to,
+                        players.peek().is_some(),
+                    );
                     out.push(SongLuaEaseWindow {
                         unit: entry.unit,
                         start: entry.start,
@@ -293,10 +322,21 @@ where
             }
             XeroRuntimeModEaseEntry::Overlay(entry) => {
                 let key = runtime_mod_key(&entry.entry.target);
-                for player in runtime_mod_entry_players(entry.entry.player) {
-                    let from = runtime_mod_start_value(&mut current[player], &key, &entry.entry);
+                let mut players = runtime_mod_player_indices(entry.entry.player).peekable();
+                let mut map_key = Some(key);
+                while let Some(player) = players.next() {
+                    let from = runtime_mod_current_value(
+                        &current[player],
+                        map_key.as_deref().unwrap(),
+                        &entry.entry,
+                    );
                     let to = runtime_mod_end_value(from, &entry.entry);
-                    current[player].insert(key.clone(), to);
+                    runtime_mod_store_current(
+                        &mut current[player],
+                        &mut map_key,
+                        to,
+                        players.peek().is_some(),
+                    );
                     let capture_key =
                         runtime_overlay_capture_key(&entry.entry, &entry.function, from, to);
                     if overlay_capture_keys.contains(&capture_key) {
@@ -538,9 +578,16 @@ fn runtime_mod_entries_equal(left: &RuntimeModEaseEntry, right: &RuntimeModEaseE
 }
 
 pub fn runtime_mod_entry_players(player: Option<u8>) -> Vec<usize> {
+    runtime_mod_player_indices(player).collect()
+}
+
+fn runtime_mod_player_indices(player: Option<u8>) -> std::ops::Range<usize> {
     match player {
-        Some(player) if (1..=LUA_PLAYERS as u8).contains(&player) => vec![(player - 1) as usize],
-        _ => (0..LUA_PLAYERS).collect(),
+        Some(player) if (1..=LUA_PLAYERS as u8).contains(&player) => {
+            let player = (player - 1) as usize;
+            player..player + 1
+        }
+        _ => 0..LUA_PLAYERS,
     }
 }
 
@@ -554,6 +601,76 @@ fn runtime_mod_initial_value(key: &str) -> f32 {
     } else {
         0.0
     }
+}
+
+fn runtime_mod_current_value(
+    current: &HashMap<String, f32>,
+    key: &str,
+    entry: &RuntimeModEaseEntry,
+) -> f32 {
+    entry.start_val.unwrap_or_else(|| {
+        current
+            .get(key)
+            .copied()
+            .unwrap_or_else(|| runtime_mod_initial_value(key))
+    })
+}
+
+fn runtime_mod_store_current(
+    current: &mut HashMap<String, f32>,
+    key: &mut Option<String>,
+    value: f32,
+    has_more_players: bool,
+) {
+    if let Some(current_value) = current.get_mut(key.as_deref().unwrap()) {
+        *current_value = value;
+        return;
+    }
+    let key = if has_more_players {
+        key.as_ref().unwrap().clone()
+    } else {
+        key.take().unwrap()
+    };
+    current.insert(key, value);
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+pub fn runtime_mod_state_updates_for_bench(entries: &[RuntimeModEaseEntry]) -> u64 {
+    let mut current: [HashMap<String, f32>; LUA_PLAYERS] = std::array::from_fn(|_| HashMap::new());
+    let mut checksum = 0_u64;
+    for entry in entries {
+        let mut key = Some(runtime_mod_key(&entry.target));
+        let mut players = runtime_mod_player_indices(entry.player).peekable();
+        while let Some(player) = players.next() {
+            let from = runtime_mod_current_value(&current[player], key.as_deref().unwrap(), entry);
+            let to = runtime_mod_end_value(from, entry);
+            runtime_mod_store_current(&mut current[player], &mut key, to, players.peek().is_some());
+            checksum = checksum.rotate_left(7)
+                ^ from.to_bits() as u64
+                ^ (to.to_bits() as u64).rotate_left(17)
+                ^ player as u64;
+        }
+    }
+    checksum
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+pub fn runtime_mod_state_updates_legacy_for_bench(entries: &[RuntimeModEaseEntry]) -> u64 {
+    let mut current: [HashMap<String, f32>; LUA_PLAYERS] = std::array::from_fn(|_| HashMap::new());
+    let mut checksum = 0_u64;
+    for entry in entries {
+        let key = runtime_mod_key(&entry.target);
+        for player in runtime_mod_entry_players(entry.player) {
+            let from = runtime_mod_start_value(&mut current[player], &key, entry);
+            let to = runtime_mod_end_value(from, entry);
+            current[player].insert(key.clone(), to);
+            checksum = checksum.rotate_left(7)
+                ^ from.to_bits() as u64
+                ^ (to.to_bits() as u64).rotate_left(17)
+                ^ player as u64;
+        }
+    }
+    checksum
 }
 
 pub fn runtime_mod_start_value(
@@ -716,4 +833,50 @@ pub fn record_unsupported_xero_overlay_function_ease(
     );
     push_unique_compile_detail(&mut info.unsupported_function_ease_captures, detail.clone());
     detail
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn entry(target: &str, player: Option<u8>, to: f32, add: bool) -> RuntimeModEaseEntry {
+        RuntimeModEaseEntry {
+            unit: SongLuaTimeUnit::Beat,
+            start: 0.0,
+            limit: 1.0,
+            easing: "linear".to_owned(),
+            to,
+            target: target.to_owned(),
+            start_val: None,
+            opt1: None,
+            opt2: None,
+            player,
+            add,
+        }
+    }
+
+    #[test]
+    fn allocation_free_state_updates_match_legacy_player_and_value_behavior() {
+        let entries = [
+            entry("Zoom", None, 2.0, false),
+            entry("zoom", None, 0.5, true),
+            entry("Dark", Some(1), 0.75, false),
+            entry("Dark", Some(1), 0.25, true),
+            entry("Reverse", Some(2), 1.0, false),
+            entry("Reverse", Some(9), 0.5, true),
+        ];
+        assert_eq!(
+            runtime_mod_state_updates_for_bench(&entries),
+            runtime_mod_state_updates_legacy_for_bench(&entries)
+        );
+    }
+
+    #[test]
+    fn exported_player_list_keeps_invalid_player_fallback_behavior() {
+        assert_eq!(runtime_mod_entry_players(Some(1)), vec![0]);
+        assert_eq!(runtime_mod_entry_players(Some(2)), vec![1]);
+        assert_eq!(runtime_mod_entry_players(None), vec![0, 1]);
+        assert_eq!(runtime_mod_entry_players(Some(0)), vec![0, 1]);
+        assert_eq!(runtime_mod_entry_players(Some(3)), vec![0, 1]);
+    }
 }
