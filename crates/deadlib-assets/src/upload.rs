@@ -1,10 +1,13 @@
 use deadlib_render::SamplerDesc;
 use image::RgbaImage;
+use rustc_hash::FxHashMap;
 use std::{
-    collections::HashMap,
-    collections::VecDeque,
+    collections::{VecDeque, hash_map::Entry},
     sync::{Arc, mpsc::SyncSender},
 };
+
+#[cfg(any(test, feature = "bench-support"))]
+use std::collections::HashMap;
 
 #[derive(Clone, Copy)]
 pub struct TextureUploadBudget {
@@ -57,7 +60,7 @@ impl Drop for PendingTextureUpload {
 #[derive(Default)]
 pub struct TextureUploadQueue {
     order: VecDeque<String>,
-    entries: HashMap<String, PendingTextureUpload>,
+    entries: FxHashMap<String, PendingTextureUpload>,
     queued_bytes: usize,
 }
 
@@ -93,18 +96,21 @@ impl TextureUploadQueue {
         recycle_tx: Option<SyncSender<Vec<u8>>>,
     ) {
         let bytes = image.as_image().as_raw().len();
-        if let Some(old) = self.entries.insert(
-            key.clone(),
-            PendingTextureUpload {
-                image: Some(image),
-                recycle_tx,
-                sampler,
-                bytes,
-            },
-        ) {
-            self.queued_bytes = self.queued_bytes.saturating_sub(old.bytes);
-        } else {
-            self.order.push_back(key);
+        let upload = PendingTextureUpload {
+            image: Some(image),
+            recycle_tx,
+            sampler,
+            bytes,
+        };
+        match self.entries.entry(key) {
+            Entry::Occupied(mut entry) => {
+                let old = entry.insert(upload);
+                self.queued_bytes = self.queued_bytes.saturating_sub(old.bytes);
+            }
+            Entry::Vacant(entry) => {
+                self.order.push_back(entry.key().clone());
+                entry.insert(upload);
+            }
         }
         self.queued_bytes = self.queued_bytes.saturating_add(bytes);
     }
@@ -116,6 +122,71 @@ impl TextureUploadQueue {
     }
 
     pub fn pop_next(
+        &mut self,
+        budget: TextureUploadBudget,
+        drained_uploads: usize,
+        drained_bytes: usize,
+    ) -> Option<(String, PendingTextureUpload)> {
+        while let Some(key) = self.order.pop_front() {
+            let Some((entry_key, upload)) = self.entries.remove_entry(&key) else {
+                continue;
+            };
+            let next_bytes = drained_bytes.saturating_add(upload.bytes);
+            let fits_budget =
+                drained_uploads < budget.max_uploads && next_bytes <= budget.max_bytes;
+            let allow_first =
+                drained_uploads == 0 && budget.max_uploads > 0 && budget.max_bytes > 0;
+            if fits_budget || allow_first {
+                self.queued_bytes = self.queued_bytes.saturating_sub(upload.bytes);
+                return Some((entry_key, upload));
+            }
+            self.entries.insert(entry_key, upload);
+            self.order.push_front(key);
+            return None;
+        }
+        None
+    }
+
+    #[cfg(test)]
+    fn len(&self) -> usize {
+        self.entries.len()
+    }
+
+    #[cfg(test)]
+    fn queued_bytes(&self) -> usize {
+        self.queued_bytes
+    }
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+#[derive(Default)]
+struct LegacyTextureUploadQueue {
+    order: VecDeque<String>,
+    entries: HashMap<String, PendingTextureUpload>,
+    queued_bytes: usize,
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+impl LegacyTextureUploadQueue {
+    fn push(&mut self, key: String, image: Arc<RgbaImage>, sampler: SamplerDesc) {
+        let bytes = image.as_raw().len();
+        if let Some(old) = self.entries.insert(
+            key.clone(),
+            PendingTextureUpload {
+                image: Some(UploadImage::Shared(image)),
+                recycle_tx: None,
+                sampler,
+                bytes,
+            },
+        ) {
+            self.queued_bytes = self.queued_bytes.saturating_sub(old.bytes);
+        } else {
+            self.order.push_back(key);
+        }
+        self.queued_bytes = self.queued_bytes.saturating_add(bytes);
+    }
+
+    fn pop_next(
         &mut self,
         budget: TextureUploadBudget,
         drained_uploads: usize,
@@ -140,16 +211,114 @@ impl TextureUploadQueue {
         }
         None
     }
+}
 
-    #[cfg(test)]
-    fn len(&self) -> usize {
-        self.entries.len()
+#[cfg(any(test, feature = "bench-support"))]
+fn upload_key_checksum(key: &str) -> u64 {
+    key.bytes().fold(0_u64, |checksum, byte| {
+        checksum.rotate_left(5) ^ u64::from(byte)
+    })
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+trait UploadQueueBench {
+    fn bench_push(&mut self, key: String, image: Arc<RgbaImage>);
+    fn bench_pop(
+        &mut self,
+        budget: TextureUploadBudget,
+        drained_uploads: usize,
+        drained_bytes: usize,
+    ) -> Option<(String, usize)>;
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+impl UploadQueueBench for TextureUploadQueue {
+    fn bench_push(&mut self, key: String, image: Arc<RgbaImage>) {
+        self.push(key, image, SamplerDesc::default());
     }
 
-    #[cfg(test)]
-    fn queued_bytes(&self) -> usize {
-        self.queued_bytes
+    fn bench_pop(
+        &mut self,
+        budget: TextureUploadBudget,
+        drained_uploads: usize,
+        drained_bytes: usize,
+    ) -> Option<(String, usize)> {
+        self.pop_next(budget, drained_uploads, drained_bytes)
+            .map(|(key, upload)| (key, upload.bytes))
     }
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+impl UploadQueueBench for LegacyTextureUploadQueue {
+    fn bench_push(&mut self, key: String, image: Arc<RgbaImage>) {
+        self.push(key, image, SamplerDesc::default());
+    }
+
+    fn bench_pop(
+        &mut self,
+        budget: TextureUploadBudget,
+        drained_uploads: usize,
+        drained_bytes: usize,
+    ) -> Option<(String, usize)> {
+        self.pop_next(budget, drained_uploads, drained_bytes)
+            .map(|(key, upload)| (key, upload.bytes))
+    }
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn run_upload_queue_workload(
+    queue: &mut impl UploadQueueBench,
+    keys: &[&str],
+    replacements: usize,
+    image: &Arc<RgbaImage>,
+) -> u64 {
+    for &key in keys {
+        queue.bench_push(key.to_owned(), Arc::clone(image));
+    }
+    for _ in 0..replacements {
+        for &key in keys {
+            queue.bench_push(key.to_owned(), Arc::clone(image));
+        }
+    }
+
+    let budget = TextureUploadBudget {
+        max_uploads: 1,
+        max_bytes: image.as_raw().len(),
+    };
+    let mut checksum = 0_u64;
+    for _ in keys {
+        assert!(
+            queue.bench_pop(budget, 1, 0).is_none(),
+            "exhausted upload budget must defer the next item"
+        );
+        let (key, bytes) = queue
+            .bench_pop(budget, 0, 0)
+            .expect("queued upload must remain after deferral");
+        checksum = checksum.rotate_left(7) ^ upload_key_checksum(&key) ^ bytes as u64;
+    }
+    checksum
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+#[doc(hidden)]
+pub fn texture_upload_queue_workload_for_bench(
+    keys: &[&str],
+    replacements: usize,
+    image: &Arc<RgbaImage>,
+) -> u64 {
+    let mut queue = TextureUploadQueue::default();
+    run_upload_queue_workload(&mut queue, keys, replacements, image)
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+#[doc(hidden)]
+pub fn texture_upload_queue_workload_legacy_for_bench(
+    keys: &[&str],
+    replacements: usize,
+    image: &Arc<RgbaImage>,
+) -> u64 {
+    let mut queue = LegacyTextureUploadQueue::default();
+    run_upload_queue_workload(&mut queue, keys, replacements, image)
 }
 
 #[cfg(test)]
@@ -250,5 +419,15 @@ mod tests {
         assert_eq!(first.bytes, 12);
         assert!(queue.pop_next(budget, 1, first.bytes).is_none());
         assert!(queue.contains("small"));
+    }
+
+    #[test]
+    fn optimized_upload_queue_matches_legacy_replacement_and_deferral() {
+        let image = Arc::new(blank_rgba(4, 4));
+        let keys = ["video/banner", "video/background", "generated/note"];
+        assert_eq!(
+            texture_upload_queue_workload_for_bench(&keys, 4, &image),
+            texture_upload_queue_workload_legacy_for_bench(&keys, 4, &image)
+        );
     }
 }

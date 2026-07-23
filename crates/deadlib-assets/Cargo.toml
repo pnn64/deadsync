@@ -22,12 +22,18 @@ name = "graphic_discovery_sort"
 harness = false
 required-features = ["bench-support"]
 
+[[bench]]
+name = "texture_upload_queue"
+harness = false
+required-features = ["bench-support"]
+
 [dependencies]
 deadlib-present = { path = "../deadlib-present" }
 deadlib-render = { path = "../deadlib-render" }
 deadlib-video = { path = "../deadlib-video" }
 image = "0.25.10"
 log = "0.4.33"
+rustc-hash = "2.1.3"
 twox-hash = "2.1.3"
 
 [lints.clippy]
