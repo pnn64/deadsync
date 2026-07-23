@@ -88,6 +88,11 @@ name = "technique_background"
 harness = false
 required-features = ["bench-support"]
 
+[[bench]]
+name = "visual_style_backgrounds"
+harness = false
+required-features = ["bench-support"]
+
 [dependencies]
 deadlib-assets = { path = "../deadlib-assets" }
 deadlib-present = { path = "../deadlib-present" }
