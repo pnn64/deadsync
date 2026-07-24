@@ -4,9 +4,18 @@ version = "0.1.0"
 edition = "2024"
 license = "GPL-3.0"
 
+[features]
+bench-support = []
+
+[[bench]]
+name = "cache_lookup"
+harness = false
+required-features = ["bench-support"]
+
 [dependencies]
 deadsync-audio-analysis = { path = "../deadsync-audio-analysis" }
 log = "0.4.33"
+rustc-hash = "2.1.3"
 
 [lints.clippy]
 perf = { level = "warn", priority = -1 }

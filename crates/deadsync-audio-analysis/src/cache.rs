@@ -1,6 +1,6 @@
 use crate::ReplayGainInfo;
 use bincode::{Decode, Encode};
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 use std::fs;
 use std::hash::Hasher;
 use std::io::{Read, Write};
@@ -104,6 +104,8 @@ pub struct ReplayGainCacheFile {
     pub entries: Vec<ReplayGainCacheEntry>,
 }
 
+pub type ReplayGainEntryMap = FxHashMap<u64, ReplayGainCacheEntry>;
+
 impl ReplayGainCacheFile {
     pub fn from_entries<I>(entries: I) -> Self
     where
@@ -114,8 +116,9 @@ impl ReplayGainCacheFile {
         Self { entries }
     }
 
-    pub fn into_entry_map(self) -> HashMap<u64, ReplayGainCacheEntry> {
-        let mut map = HashMap::with_capacity(self.entries.len());
+    pub fn into_entry_map(self) -> ReplayGainEntryMap {
+        let mut map = ReplayGainEntryMap::default();
+        map.reserve(self.entries.len());
         for entry in self.entries {
             map.insert(entry.path_hash, entry);
         }
@@ -123,7 +126,7 @@ impl ReplayGainCacheFile {
     }
 }
 
-pub fn read_replaygain_cache_file(path: &Path) -> Option<HashMap<u64, ReplayGainCacheEntry>> {
+pub fn read_replaygain_cache_file(path: &Path) -> Option<ReplayGainEntryMap> {
     let bytes = fs::read(path).ok()?;
     Some(decode_replaygain_cache(&bytes)?.into_entry_map())
 }
