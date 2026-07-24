@@ -5,15 +5,13 @@ use crate::{
 };
 use deadlib_render::{SamplerDesc, TextureHandle, TextureHandleMap};
 use image::RgbaImage;
-use std::{
-    collections::HashMap,
-    sync::{Arc, mpsc::SyncSender},
-};
+use rustc_hash::FxHashMap;
+use std::sync::{Arc, mpsc::SyncSender};
 
 pub struct TextureStore<T> {
     textures: TextureHandleMap<T>,
     uploaded_texture_dims: TextureHandleMap<TexMeta>,
-    texture_handles: HashMap<String, TextureHandle>,
+    texture_handles: FxHashMap<String, TextureHandle>,
     next_texture_handle: TextureHandle,
     pending_texture_uploads: TextureUploadQueue,
 }
@@ -23,7 +21,7 @@ impl<T> TextureStore<T> {
         Self {
             textures: TextureHandleMap::default(),
             uploaded_texture_dims: TextureHandleMap::default(),
-            texture_handles: HashMap::new(),
+            texture_handles: FxHashMap::default(),
             next_texture_handle: 1,
             pending_texture_uploads: TextureUploadQueue::default(),
         }
@@ -63,20 +61,14 @@ impl<T> TextureStore<T> {
         std::mem::take(&mut self.textures)
     }
 
-    #[inline(always)]
-    fn alloc_texture_handle(&mut self) -> TextureHandle {
-        let handle = self.next_texture_handle;
-        self.next_texture_handle = self.next_texture_handle.wrapping_add(1).max(1);
-        handle
-    }
-
     pub fn reserve_texture_handle(&mut self, key: String) -> TextureHandle {
-        match self.texture_handles.get(&key).copied() {
-            Some(handle) => handle,
-            None => {
-                let handle = self.alloc_texture_handle();
-                self.texture_handles.insert(key.clone(), handle);
-                register_texture_handle(&key, handle);
+        match self.texture_handles.entry(key) {
+            std::collections::hash_map::Entry::Occupied(entry) => *entry.get(),
+            std::collections::hash_map::Entry::Vacant(entry) => {
+                let handle = self.next_texture_handle;
+                self.next_texture_handle = self.next_texture_handle.wrapping_add(1).max(1);
+                register_texture_handle(entry.key(), handle);
+                entry.insert(handle);
                 handle
             }
         }
@@ -206,6 +198,77 @@ impl<T> Default for TextureStore<T> {
     }
 }
 
+#[cfg(any(test, feature = "bench-support"))]
+pub fn texture_handle_reservation_workload_for_bench(
+    keys: &[&str],
+    replacements: usize,
+    lookup_rounds: usize,
+) -> u64 {
+    let mut handles = FxHashMap::<String, TextureHandle>::default();
+    let mut next_handle: TextureHandle = 1;
+
+    for _ in 0..=replacements {
+        for &key in keys {
+            match handles.entry(key.to_string()) {
+                std::collections::hash_map::Entry::Occupied(_) => {}
+                std::collections::hash_map::Entry::Vacant(entry) => {
+                    let handle = next_handle;
+                    next_handle = next_handle.wrapping_add(1).max(1);
+                    entry.insert(handle);
+                }
+            }
+        }
+    }
+
+    texture_handle_workload_checksum(&handles, keys, lookup_rounds, next_handle)
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+pub fn texture_handle_reservation_workload_legacy_for_bench(
+    keys: &[&str],
+    replacements: usize,
+    lookup_rounds: usize,
+) -> u64 {
+    let mut handles = std::collections::HashMap::<String, TextureHandle>::new();
+    let mut next_handle: TextureHandle = 1;
+
+    for _ in 0..=replacements {
+        for &key in keys {
+            let key = key.to_string();
+            if !handles.contains_key(&key) {
+                let handle = next_handle;
+                next_handle = next_handle.wrapping_add(1).max(1);
+                handles.insert(key.clone(), handle);
+            }
+        }
+    }
+
+    texture_handle_workload_checksum(&handles, keys, lookup_rounds, next_handle)
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn texture_handle_workload_checksum<S>(
+    handles: &std::collections::HashMap<String, TextureHandle, S>,
+    keys: &[&str],
+    lookup_rounds: usize,
+    next_handle: TextureHandle,
+) -> u64
+where
+    S: std::hash::BuildHasher,
+{
+    let mut checksum = handles.len() as u64 ^ next_handle;
+    for round in 0..lookup_rounds {
+        for (index, &key) in keys.iter().enumerate() {
+            checksum = checksum.wrapping_add(
+                handles.get(key).copied().unwrap_or_default()
+                    ^ (index as u64).rotate_left((round & 31) as u32),
+            );
+        }
+        checksum ^= u64::from(handles.contains_key("__missing_texture_key__"));
+    }
+    checksum
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -225,5 +288,39 @@ mod tests {
         assert!(textures.remove_texture("queued").is_none());
         assert!(!textures.has_texture_key("queued"));
         assert!(!textures.has_pending_texture_upload("queued"));
+    }
+
+    #[test]
+    fn handle_reservation_preserves_handles_and_matches_legacy_workload() {
+        let mut textures = TextureStore::<()>::new();
+        let first = textures.reserve_texture_handle("__texture_store_parity_first__".to_string());
+        let second = textures.reserve_texture_handle("__texture_store_parity_second__".to_string());
+
+        assert_eq!(
+            textures.reserve_texture_handle("__texture_store_parity_first__".to_string()),
+            first
+        );
+        assert_ne!(first, second);
+
+        let keys = [
+            "graphics/banner 1x1.png",
+            "noteskins/dance/tap note 4x1.png",
+            "generated/player-1/lifebar",
+        ];
+        assert_eq!(
+            texture_handle_reservation_workload_for_bench(&keys, 4, 7),
+            texture_handle_reservation_workload_legacy_for_bench(&keys, 4, 7)
+        );
+
+        assert!(
+            textures
+                .remove_texture("__texture_store_parity_first__")
+                .is_none()
+        );
+        assert!(
+            textures
+                .remove_texture("__texture_store_parity_second__")
+                .is_none()
+        );
     }
 }
