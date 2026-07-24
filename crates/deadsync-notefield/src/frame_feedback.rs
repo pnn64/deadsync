@@ -317,6 +317,7 @@ mod tests {
     use deadsync_noteskin::{
         ExplosionAnimation, HoldVisuals, ModelDrawState, ModelMesh, NoteDisplayMetrics,
         NoteskinRuntime, ReceptorGlowBehavior, ReceptorPulse, SpriteDefinition, TapExplosion,
+        TapExplosionMap,
     };
     use deadsync_rules::judgment::JudgeGrade;
     use deadsync_rules::note::Note;
@@ -327,7 +328,6 @@ mod tests {
         CounterHudStyle, ErrorBarLayers, ErrorBarPalette, ErrorBarStyle, JudgmentFeedbackStyle,
         MiniIndicatorStyle, NotefieldActorStyle, NotefieldStyle, ReceptorStyle,
     };
-    use std::collections::HashMap;
 
     #[derive(Clone, Debug)]
     struct TestSlot {
@@ -405,7 +405,7 @@ mod tests {
 
     fn noteskin() -> NoteskinRuntime<TestSlot> {
         let tap_explosions_by_col = (0..2)
-            .map(|lane| HashMap::from([("W1".to_string(), explosion(&format!("tap{lane}")))]))
+            .map(|lane| TapExplosionMap::from([("W1", explosion(&format!("tap{lane}")))]))
             .collect();
         NoteskinRuntime {
             notes: Vec::new(),
@@ -420,7 +420,7 @@ mod tests {
             mine_fill_slots: Vec::new(),
             mine_frames: Vec::new(),
             column_xs: vec![-32, 32],
-            tap_explosions: HashMap::new(),
+            tap_explosions: TapExplosionMap::new(),
             tap_explosions_by_col,
             mine_hit_explosion: Some(explosion("mine")),
             receptor_glow_behavior: ReceptorGlowBehavior::default(),

@@ -32,6 +32,11 @@ name = "itg_lookup_caches"
 harness = false
 required-features = ["bench-support"]
 
+[[bench]]
+name = "tap_explosion_registry"
+harness = false
+required-features = ["bench-support"]
+
 [dependencies]
 bincode = "2.0.1"
 hashbrown = "0.17.1"

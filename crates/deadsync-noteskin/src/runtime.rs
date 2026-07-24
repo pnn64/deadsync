@@ -13,6 +13,7 @@ use crate::{
 };
 use crate::{actor, compiled, itg, model, receptor};
 use std::collections::{HashMap, HashSet};
+use std::ops::Index;
 use std::path::Path;
 use std::sync::Arc;
 
@@ -49,6 +50,182 @@ impl<T: Clone> TapExplosion<T> {
             .iter()
             .map(|layer| layer.animation.duration())
             .fold(0.0, f32::max)
+    }
+}
+
+const TAP_EXPLOSION_KEYS: [&str; 13] = [
+    "W1",
+    "W1Bright",
+    "W2",
+    "W2Bright",
+    "W3",
+    "W3Bright",
+    "W4",
+    "W4Bright",
+    "W5",
+    "W5Bright",
+    "Miss",
+    "Held",
+    "HeldBright",
+];
+const MISSING_TAP_EXPLOSION: u8 = u8::MAX;
+
+#[inline(always)]
+fn tap_explosion_key_index(key: &str) -> Option<usize> {
+    match key {
+        "W1" => Some(0),
+        "W1Bright" => Some(1),
+        "W2" => Some(2),
+        "W2Bright" => Some(3),
+        "W3" => Some(4),
+        "W3Bright" => Some(5),
+        "W4" => Some(6),
+        "W4Bright" => Some(7),
+        "W5" => Some(8),
+        "W5Bright" => Some(9),
+        "Miss" => Some(10),
+        "Held" => Some(11),
+        "HeldBright" => Some(12),
+        _ => None,
+    }
+}
+
+#[inline(always)]
+fn tap_explosion_window_indices(window: &str) -> Option<(usize, Option<usize>)> {
+    match window {
+        "W1" => Some((0, Some(1))),
+        "W2" => Some((2, Some(3))),
+        "W3" => Some((4, Some(5))),
+        "W4" => Some((6, Some(7))),
+        "W5" => Some((8, Some(9))),
+        "Miss" => Some((10, None)),
+        "Held" => Some((11, Some(12))),
+        _ => None,
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct TapExplosionMap<T> {
+    known: Vec<TapExplosion<T>>,
+    known_indices: [u8; TAP_EXPLOSION_KEYS.len()],
+    custom: HashMap<String, TapExplosion<T>>,
+}
+
+impl<T> TapExplosionMap<T> {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn len(&self) -> usize {
+        self.known.len() + self.custom.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.known.is_empty() && self.custom.is_empty()
+    }
+
+    #[inline(always)]
+    pub fn get(&self, key: &str) -> Option<&TapExplosion<T>> {
+        if let Some(index) = tap_explosion_key_index(key) {
+            return self.get_known(index);
+        }
+        self.custom.get(key)
+    }
+
+    pub fn contains_key(&self, key: &str) -> bool {
+        self.get(key).is_some()
+    }
+
+    pub fn insert(&mut self, key: String, explosion: TapExplosion<T>) -> Option<TapExplosion<T>> {
+        if let Some(index) = tap_explosion_key_index(&key) {
+            return self.replace_known(index, explosion);
+        }
+        self.custom.insert(key, explosion)
+    }
+
+    pub fn insert_window(
+        &mut self,
+        key: &str,
+        explosion: TapExplosion<T>,
+    ) -> Option<TapExplosion<T>> {
+        if let Some(index) = tap_explosion_key_index(key) {
+            return self.replace_known(index, explosion);
+        }
+        self.custom.insert(key.to_owned(), explosion)
+    }
+
+    pub fn keys(&self) -> impl Iterator<Item = &str> {
+        self.known_indices
+            .iter()
+            .enumerate()
+            .filter_map(|(index, &value_index)| {
+                (value_index != MISSING_TAP_EXPLOSION).then_some(TAP_EXPLOSION_KEYS[index])
+            })
+            .chain(self.custom.keys().map(String::as_str))
+    }
+
+    pub fn values(&self) -> impl Iterator<Item = &TapExplosion<T>> {
+        self.known.iter().chain(self.custom.values())
+    }
+
+    #[inline(always)]
+    fn get_known(&self, index: usize) -> Option<&TapExplosion<T>> {
+        let value_index = self.known_indices[index];
+        (value_index != MISSING_TAP_EXPLOSION).then(|| &self.known[usize::from(value_index)])
+    }
+
+    fn replace_known(
+        &mut self,
+        index: usize,
+        explosion: TapExplosion<T>,
+    ) -> Option<TapExplosion<T>> {
+        let value_index = self.known_indices[index];
+        if value_index != MISSING_TAP_EXPLOSION {
+            return Some(std::mem::replace(
+                &mut self.known[usize::from(value_index)],
+                explosion,
+            ));
+        }
+        if self.known.is_empty() {
+            self.known.reserve_exact(TAP_EXPLOSION_KEYS.len());
+        }
+        let value_index =
+            u8::try_from(self.known.len()).expect("tap explosion registry index must fit in u8");
+        self.known_indices[index] = value_index;
+        self.known.push(explosion);
+        None
+    }
+}
+
+impl<T> Default for TapExplosionMap<T> {
+    fn default() -> Self {
+        Self {
+            known: Vec::new(),
+            known_indices: [MISSING_TAP_EXPLOSION; TAP_EXPLOSION_KEYS.len()],
+            custom: HashMap::new(),
+        }
+    }
+}
+
+impl<T, K, const N: usize> From<[(K, TapExplosion<T>); N]> for TapExplosionMap<T>
+where
+    K: AsRef<str>,
+{
+    fn from(entries: [(K, TapExplosion<T>); N]) -> Self {
+        let mut map = Self::new();
+        for (key, explosion) in entries {
+            map.insert_window(key.as_ref(), explosion);
+        }
+        map
+    }
+}
+
+impl<T> Index<&str> for TapExplosionMap<T> {
+    type Output = TapExplosion<T>;
+
+    fn index(&self, key: &str) -> &Self::Output {
+        self.get(key)
+            .unwrap_or_else(|| panic!("no tap explosion found for key {key:?}"))
     }
 }
 
@@ -405,9 +582,9 @@ pub fn default_hold_visuals<T: Clone>(
 }
 
 pub fn default_tap_explosions<T: Clone>(
-    tap_explosions_by_col: &[HashMap<String, TapExplosion<T>>],
+    tap_explosions_by_col: &[TapExplosionMap<T>],
     down_col: usize,
-) -> HashMap<String, TapExplosion<T>> {
+) -> TapExplosionMap<T> {
     tap_explosions_by_col
         .get(down_col)
         .filter(|by_window| !by_window.is_empty())
@@ -569,13 +746,13 @@ pub fn itg_hit_mine_explosion_from_slot<T: Clone>(
 pub fn itg_tap_explosion_map_from_sources<T: Clone>(
     sources: impl IntoIterator<Item = ItgTapExplosionSource<T>>,
     mut metric_command: impl FnMut(ItgTapExplosionMode, &str) -> Option<String>,
-) -> HashMap<String, TapExplosion<T>> {
+) -> TapExplosionMap<T> {
     let (dim_sprites, bright_sprites) = itg_partition_tap_explosion_sources(sources);
     if dim_sprites.is_empty() && bright_sprites.is_empty() {
-        return HashMap::new();
+        return TapExplosionMap::new();
     }
 
-    let mut tap_explosions = HashMap::new();
+    let mut tap_explosions = TapExplosionMap::new();
     for (window, key, metric_key) in [
         ("W1", "w1command", "W1Command"),
         ("W2", "w2command", "W2Command"),
@@ -646,7 +823,7 @@ pub fn itg_tap_explosion_map_from_sources<T: Clone>(
                 }
             }
             if let Some(explosion) = TapExplosion::from_layers(layers) {
-                tap_explosions.insert(itg_tap_explosion_key(window, mode).to_string(), explosion);
+                tap_explosions.insert_window(itg_tap_explosion_key(window, mode), explosion);
             }
         }
     }
@@ -659,7 +836,7 @@ pub fn itg_tap_explosion_map_from_layers<L, T: Clone>(
     mut direct_layers: impl FnMut(ItgTapExplosionMode) -> Vec<L>,
     mut source_from_layer: impl FnMut(&L) -> ItgTapExplosionSource<T>,
     metric_command: impl FnMut(ItgTapExplosionMode, &str) -> Option<String>,
-) -> HashMap<String, TapExplosion<T>> {
+) -> TapExplosionMap<T> {
     let actor_sources = explosion_layers
         .iter()
         .filter(|layer| layer_has_tap_command(layer))
@@ -694,7 +871,7 @@ pub fn itg_tap_explosion_map_from_resolved_layers<T: Clone>(
     explosion_layers: &[ItgResolvedSprite<T>],
     mut direct_layers: impl FnMut(&str) -> Vec<ItgResolvedSprite<T>>,
     metric_command: impl FnMut(ItgTapExplosionMode, &str) -> Option<String>,
-) -> HashMap<String, TapExplosion<T>> {
+) -> TapExplosionMap<T> {
     itg_tap_explosion_map_from_layers(
         explosion_layers,
         |sprite| itg_has_tap_explosion_command(&sprite.commands),
@@ -1731,7 +1908,7 @@ pub fn itg_tap_explosions_by_col_compiled<T: Clone>(
     compiled: &compiled::CompiledLoader,
     down_explosion_sprites: &[ItgResolvedSprite<T>],
     mut resolve_sprites: impl FnMut(&str, &str) -> Vec<ItgResolvedSprite<T>>,
-) -> Vec<HashMap<String, TapExplosion<T>>> {
+) -> Vec<TapExplosionMap<T>> {
     let mut out = Vec::with_capacity(style.num_cols);
     for col in 0..style.num_cols {
         let button = itg::button_for_col(col);
@@ -2063,8 +2240,8 @@ pub struct NoteskinRuntime<T> {
     pub mine_fill_slots: Vec<Option<T>>,
     pub mine_frames: Vec<Option<T>>,
     pub column_xs: Vec<i32>,
-    pub tap_explosions: HashMap<String, TapExplosion<T>>,
-    pub tap_explosions_by_col: Vec<HashMap<String, TapExplosion<T>>>,
+    pub tap_explosions: TapExplosionMap<T>,
+    pub tap_explosions_by_col: Vec<TapExplosionMap<T>>,
     pub mine_hit_explosion: Option<TapExplosion<T>>,
     pub receptor_glow_behavior: ReceptorGlowBehavior,
     pub receptor_pulse: ReceptorPulse,
@@ -2075,6 +2252,67 @@ pub struct NoteskinRuntime<T> {
     pub roll: HoldVisuals<T>,
     pub animation_is_beat_based: bool,
     pub note_display_metrics: NoteDisplayMetrics,
+}
+
+#[inline(always)]
+fn tap_explosion_for_col_in_maps<'a, T>(
+    tap_explosions: &'a TapExplosionMap<T>,
+    tap_explosions_by_col: &'a [TapExplosionMap<T>],
+    col: usize,
+    window: &str,
+    bright: bool,
+) -> Option<&'a TapExplosion<T>> {
+    let by_col = tap_explosions_by_col.get(col);
+    if let Some((dim_index, bright_index)) = tap_explosion_window_indices(window) {
+        if bright
+            && let Some(bright_index) = bright_index
+            && let Some(explosion) = by_col
+                .and_then(|map| map.get_known(bright_index))
+                .or_else(|| tap_explosions.get_known(bright_index))
+        {
+            return Some(explosion);
+        }
+        return by_col
+            .and_then(|map| map.get_known(dim_index))
+            .or_else(|| tap_explosions.get_known(dim_index));
+    }
+    by_col
+        .and_then(|map| map.get(window))
+        .or_else(|| tap_explosions.get(window))
+}
+
+#[cfg(feature = "bench-support")]
+pub fn tap_explosion_for_col_for_bench<'a, T>(
+    tap_explosions: &'a TapExplosionMap<T>,
+    tap_explosions_by_col: &'a [TapExplosionMap<T>],
+    col: usize,
+    window: &str,
+    bright: bool,
+) -> Option<&'a TapExplosion<T>> {
+    tap_explosion_for_col_in_maps(tap_explosions, tap_explosions_by_col, col, window, bright)
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+pub fn tap_explosion_for_col_legacy_for_bench<'a, T>(
+    tap_explosions: &'a HashMap<String, TapExplosion<T>>,
+    tap_explosions_by_col: &'a [HashMap<String, TapExplosion<T>>],
+    col: usize,
+    window: &str,
+    bright: bool,
+) -> Option<&'a TapExplosion<T>> {
+    let lookup = |key: &str| {
+        tap_explosions_by_col
+            .get(col)
+            .and_then(|by_window| by_window.get(key))
+            .or_else(|| tap_explosions.get(key))
+    };
+    if bright
+        && let Some(key) = bright_tap_explosion_key(window)
+        && let Some(explosion) = lookup(key)
+    {
+        return Some(explosion);
+    }
+    lookup(window)
 }
 
 impl<T> NoteskinRuntime<T> {
@@ -2090,21 +2328,13 @@ impl<T> NoteskinRuntime<T> {
         window: &str,
         bright: bool,
     ) -> Option<&TapExplosion<T>> {
-        if bright
-            && let Some(key) = bright_tap_explosion_key(window)
-            && let Some(explosion) = self.tap_explosion_for_col_key(col, key)
-        {
-            return Some(explosion);
-        }
-        self.tap_explosion_for_col_key(col, window)
-    }
-
-    #[inline(always)]
-    fn tap_explosion_for_col_key(&self, col: usize, key: &str) -> Option<&TapExplosion<T>> {
-        self.tap_explosions_by_col
-            .get(col)
-            .and_then(|by_window| by_window.get(key))
-            .or_else(|| self.tap_explosions.get(key))
+        tap_explosion_for_col_in_maps(
+            &self.tap_explosions,
+            &self.tap_explosions_by_col,
+            col,
+            window,
+            bright,
+        )
     }
 
     #[inline(always)]
@@ -2380,7 +2610,7 @@ fn beat_to_note_type_index(beat: f32) -> i32 {
 mod tests {
     use super::{
         HoldVisualParts, HoldVisuals, ItgCompiledSpriteOps, ItgHoldKind, ItgResolvedSprite,
-        ItgRuntimeColumns, NoteskinRuntime, TapExplosion, TapExplosionLayer,
+        ItgRuntimeColumns, NoteskinRuntime, TapExplosion, TapExplosionLayer, TapExplosionMap,
         bright_tap_explosion_key, default_hold_visuals, default_tap_explosions,
         itg_apply_child_actor_commands, itg_apply_hold_explosions_by_col, itg_apply_loader_command,
         itg_direct_tap_explosion_resolved_layers, itg_first_actor_sprite_slot,
@@ -2400,7 +2630,7 @@ mod tests {
         itg_runtime_columns_compiled, itg_slot_with_active_model_draw,
         itg_tap_explosion_map_from_layers, itg_tap_explosion_map_from_resolved_layers,
         itg_tap_explosion_map_from_sources, itg_tap_explosions_by_col_compiled,
-        itg_tap_note_column, itg_tap_note_layers,
+        itg_tap_note_column, itg_tap_note_layers, tap_explosion_for_col_legacy_for_bench,
     };
     use crate::explosion::{
         ItgTapExplosionMode, ItgTapExplosionSource, itg_has_tap_explosion_command,
@@ -2474,10 +2704,10 @@ mod tests {
     fn noteskin_runtime_prefers_column_bright_tap_explosions() {
         let dim = TapExplosion::from_single(Slot(1), ExplosionAnimation::default());
         let bright = TapExplosion::from_single(Slot(2), ExplosionAnimation::default());
-        let mut by_col = HashMap::new();
+        let mut by_col = TapExplosionMap::new();
         by_col.insert("W1Bright".to_string(), bright);
         let runtime = NoteskinRuntime {
-            tap_explosions: HashMap::from([("W1".to_string(), dim)]),
+            tap_explosions: TapExplosionMap::from([("W1", dim)]),
             tap_explosions_by_col: vec![by_col],
             ..empty_runtime()
         };
@@ -2489,6 +2719,92 @@ mod tests {
         assert_eq!(explosion.slot, Slot(2));
         assert_eq!(bright_tap_explosion_key("Held"), Some("HeldBright"));
         assert_eq!(bright_tap_explosion_key("Miss"), None);
+    }
+
+    #[test]
+    fn tap_explosion_registry_matches_hashmap_lookup_precedence() {
+        let make = |slot| TapExplosion::from_single(Slot(slot), ExplosionAnimation::default());
+        let legacy_default = HashMap::from([
+            ("W1".to_owned(), make(1)),
+            ("W1Bright".to_owned(), make(2)),
+            ("Miss".to_owned(), make(3)),
+            ("Custom".to_owned(), make(4)),
+        ]);
+        let legacy_by_col = vec![
+            HashMap::from([("W1".to_owned(), make(10)), ("Custom".to_owned(), make(40))]),
+            HashMap::from([
+                ("W1".to_owned(), make(11)),
+                ("W1Bright".to_owned(), make(20)),
+            ]),
+        ];
+        let current_default = TapExplosionMap::from([
+            ("W1", make(1)),
+            ("W1Bright", make(2)),
+            ("Miss", make(3)),
+            ("Custom", make(4)),
+        ]);
+        let current_by_col = vec![
+            TapExplosionMap::from([("W1", make(10)), ("Custom", make(40))]),
+            TapExplosionMap::from([("W1", make(11)), ("W1Bright", make(20))]),
+        ];
+        let current = NoteskinRuntime {
+            tap_explosions: current_default,
+            tap_explosions_by_col: current_by_col,
+            ..empty_runtime()
+        };
+
+        for (col, window, bright) in [
+            (0, "W1", false),
+            (0, "W1", true),
+            (1, "W1", true),
+            (2, "W1", false),
+            (2, "W1", true),
+            (0, "Miss", true),
+            (0, "Custom", true),
+            (1, "Missing", false),
+        ] {
+            let legacy = tap_explosion_for_col_legacy_for_bench(
+                &legacy_default,
+                &legacy_by_col,
+                col,
+                window,
+                bright,
+            )
+            .map(|explosion| explosion.slot.clone());
+            let selected = current
+                .tap_explosion_for_col_with_bright(col, window, bright)
+                .map(|explosion| explosion.slot.clone());
+            assert_eq!(
+                selected, legacy,
+                "lookup differed for col={col}, window={window}, bright={bright}"
+            );
+        }
+    }
+
+    #[test]
+    fn tap_explosion_registry_preserves_map_operations_for_custom_keys() {
+        let make = |slot| TapExplosion::from_single(Slot(slot), ExplosionAnimation::default());
+        let mut map = TapExplosionMap::new();
+        assert!(map.insert_window("W1", make(1)).is_none());
+        assert_eq!(
+            map.insert("W1".to_owned(), make(2))
+                .map(|explosion| explosion.slot),
+            Some(Slot(1))
+        );
+        assert!(map.insert_window("Custom", make(3)).is_none());
+
+        assert_eq!(map.len(), 2);
+        assert_eq!(
+            map.get("W1").map(|explosion| &explosion.slot),
+            Some(&Slot(2))
+        );
+        assert_eq!(
+            map.get("Custom").map(|explosion| &explosion.slot),
+            Some(&Slot(3))
+        );
+        let mut keys = map.keys().collect::<Vec<_>>();
+        keys.sort_unstable();
+        assert_eq!(keys, ["Custom", "W1"]);
     }
 
     #[test]
@@ -2683,8 +2999,8 @@ mod tests {
 
         let selected = default_tap_explosions(
             &[
-                HashMap::from([("W1".to_string(), first.clone())]),
-                HashMap::from([("W1".to_string(), down.clone())]),
+                TapExplosionMap::from([("W1", first.clone())]),
+                TapExplosionMap::from([("W1", down.clone())]),
             ],
             1,
         );
@@ -2694,7 +3010,10 @@ mod tests {
         );
 
         let selected = default_tap_explosions(
-            &[HashMap::from([("W1".to_string(), first)]), HashMap::new()],
+            &[
+                TapExplosionMap::from([("W1", first)]),
+                TapExplosionMap::new(),
+            ],
             1,
         );
         assert_eq!(
@@ -4570,7 +4889,7 @@ mod tests {
             mine_fill_slots: Vec::new(),
             mine_frames: Vec::new(),
             column_xs: Vec::new(),
-            tap_explosions: HashMap::new(),
+            tap_explosions: TapExplosionMap::new(),
             tap_explosions_by_col: Vec::new(),
             mine_hit_explosion: None,
             receptor_glow_behavior: Default::default(),
