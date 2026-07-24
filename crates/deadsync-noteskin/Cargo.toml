@@ -37,6 +37,11 @@ name = "tap_explosion_registry"
 harness = false
 required-features = ["bench-support"]
 
+[[bench]]
+name = "actor_command_keys"
+harness = false
+required-features = ["bench-support"]
+
 [dependencies]
 bincode = "2.0.1"
 hashbrown = "0.17.1"

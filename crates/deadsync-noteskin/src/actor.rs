@@ -9,6 +9,8 @@ use crate::script::parse_linear_frames_expr;
 
 pub const ITG_ARG0_TOKEN: &str = "__ITG_ARG0__";
 
+const STACK_LOWERCASE_KEY_CAPACITY: usize = 128;
+
 #[derive(Debug, Default)]
 struct CommandContext {
     colors: HashMap<String, String>,
@@ -584,11 +586,8 @@ fn parse_sprite_block(
             frame_delays = linear_delays.into_iter().enumerate().collect();
             continue;
         }
-        let key_lower = key.to_ascii_lowercase();
-        if key_lower.starts_with("frame") && key_lower[5..].chars().all(|ch| ch.is_ascii_digit()) {
-            if let Ok(idx) = key_lower[5..].parse::<usize>()
-                && let Ok(parsed) = value.parse::<usize>()
-            {
+        if let Some(idx) = parse_numbered_actor_key(key, b"frame") {
+            if let Ok(parsed) = value.parse::<usize>() {
                 frame_seen = true;
                 frame_state_max = frame_state_max.max(idx);
                 if idx == 0 {
@@ -598,18 +597,16 @@ fn parse_sprite_block(
             }
             continue;
         }
-        if key_lower.starts_with("delay") && key_lower[5..].chars().all(|ch| ch.is_ascii_digit()) {
-            if let Ok(idx) = key_lower[5..].parse::<usize>()
-                && let Some(delay) = parse_lua_float_token(value)
-            {
+        if let Some(idx) = parse_numbered_actor_key(key, b"delay") {
+            if let Some(delay) = parse_lua_float_token(value) {
                 frame_delays.insert(idx, delay.max(0.0));
             }
             continue;
         }
-        if key_lower.ends_with("command")
+        if has_command_suffix(key)
             && let Some(cmd) = resolve_command_expr(value, metrics, command_context)
         {
-            commands.insert(key_lower, cmd);
+            commands.insert(key.to_ascii_lowercase(), cmd);
         }
     }
     for (k, v) in parse_function_commands(block, command_context) {
@@ -734,19 +731,16 @@ fn parse_model_block(
             texture_expr = Some(value.to_string());
             continue;
         }
-        let key_lower = key.to_ascii_lowercase();
-        if key_lower.starts_with("frame")
-            && key_lower[5..].chars().all(|ch| ch.is_ascii_digit())
-            && let Ok(parsed) = value.parse::<usize>()
-            && key_lower == "frame0000"
-        {
-            frame0 = parsed;
+        if key.eq_ignore_ascii_case("frame0000") {
+            if let Ok(parsed) = value.parse::<usize>() {
+                frame0 = parsed;
+            }
             continue;
         }
-        if key_lower.ends_with("command")
+        if has_command_suffix(key)
             && let Some(cmd) = resolve_command_expr(value, metrics, command_context)
         {
-            commands.insert(key_lower, cmd);
+            commands.insert(key.to_ascii_lowercase(), cmd);
         }
     }
     for (k, v) in parse_function_commands(block, command_context) {
@@ -798,12 +792,12 @@ fn parse_commands_block(
         let Some((k, v)) = line.split_once('=') else {
             continue;
         };
-        let key = k.trim().to_ascii_lowercase();
-        if !key.ends_with("command") {
+        let key = k.trim();
+        if !has_command_suffix(key) {
             continue;
         }
         if let Some(cmd) = resolve_command_expr(v.trim(), metrics, command_context) {
-            commands.insert(key, cmd);
+            commands.insert(key.to_ascii_lowercase(), cmd);
         }
     }
     for (k, v) in parse_function_commands(block, command_context) {
@@ -825,8 +819,8 @@ fn parse_function_commands(
         let key_start = block[..eq]
             .rfind(['\n', '\r', '{', ';', ','])
             .map_or(0, |idx| idx + 1);
-        let key_lower = block[key_start..eq].trim().to_ascii_lowercase();
-        if !key_lower.ends_with("command") {
+        let key = block[key_start..eq].trim();
+        if !has_command_suffix(key) {
             cursor = eq + 1;
             continue;
         }
@@ -853,7 +847,7 @@ fn parse_function_commands(
         if let Some(cmd) =
             parse_self_chain_commands_scoped(&block[body_start..end_idx], command_context, &scope)
         {
-            commands.insert(key_lower, cmd);
+            commands.insert(key.to_ascii_lowercase(), cmd);
         }
         cursor = end_idx + 3;
         while cursor < bytes.len() && bytes[cursor].is_ascii_whitespace() {
@@ -964,7 +958,7 @@ fn resolve_lua_function_command(value: &str, context: &CommandContext) -> Option
 
 fn resolve_helper_command(value: &str, context: &CommandContext) -> Option<String> {
     let (name, args) = split_lua_call(value)?;
-    let function = context.functions.get(&name.to_ascii_lowercase())?;
+    let function = get_ascii_lowercase(&context.functions, name)?;
     let scope = function
         .params
         .iter()
@@ -985,18 +979,166 @@ fn resolve_helper_command(value: &str, context: &CommandContext) -> Option<Strin
 
 impl CommandContext {
     fn resolve_command_arg(&self, raw: &str, scope: &HashMap<String, String>) -> String {
-        let key = raw
-            .trim()
-            .trim_matches('"')
-            .trim_matches('\'')
-            .to_ascii_lowercase();
-        scope
-            .get(&key)
+        let key = raw.trim().trim_matches('"').trim_matches('\'');
+        get_ascii_lowercase_from_two(scope, &self.colors, key)
             .cloned()
-            .or_else(|| self.colors.get(&key).cloned())
             .or_else(|| parse_lua_color_expr(raw))
             .unwrap_or_else(|| raw.trim().to_string())
     }
+}
+
+fn get_ascii_lowercase<'a, V>(map: &'a HashMap<String, V>, key: &str) -> Option<&'a V> {
+    with_ascii_lowercase_key(key, |normalized| map.get(normalized))
+}
+
+fn get_ascii_lowercase_from_two<'a, V>(
+    first: &'a HashMap<String, V>,
+    second: &'a HashMap<String, V>,
+    key: &str,
+) -> Option<&'a V> {
+    with_ascii_lowercase_key(key, |normalized| {
+        first.get(normalized).or_else(|| second.get(normalized))
+    })
+}
+
+fn with_ascii_lowercase_key<T>(key: &str, use_key: impl FnOnce(&str) -> T) -> T {
+    if !key.bytes().any(|byte| byte.is_ascii_uppercase()) {
+        return use_key(key);
+    }
+    if key.len() <= STACK_LOWERCASE_KEY_CAPACITY {
+        let mut normalized = [0_u8; STACK_LOWERCASE_KEY_CAPACITY];
+        normalized[..key.len()].copy_from_slice(key.as_bytes());
+        normalized[..key.len()].make_ascii_lowercase();
+        // SAFETY: `normalized` starts as valid UTF-8 copied from `key`, and
+        // ASCII case conversion cannot change UTF-8 byte structure.
+        let normalized = unsafe { std::str::from_utf8_unchecked(&normalized[..key.len()]) };
+        return use_key(normalized);
+    }
+    let normalized = key.to_ascii_lowercase();
+    use_key(&normalized)
+}
+
+fn parse_numbered_actor_key(key: &str, prefix: &[u8]) -> Option<usize> {
+    let (key_prefix, digits) = key.as_bytes().split_at_checked(prefix.len())?;
+    if !key_prefix.eq_ignore_ascii_case(prefix)
+        || digits.is_empty()
+        || !digits.iter().all(u8::is_ascii_digit)
+    {
+        return None;
+    }
+    std::str::from_utf8(digits).ok()?.parse().ok()
+}
+
+fn has_command_suffix(key: &str) -> bool {
+    key.as_bytes()
+        .get(key.len().saturating_sub("command".len())..)
+        .is_some_and(|suffix| suffix.eq_ignore_ascii_case(b"command"))
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn get_ascii_lowercase_legacy<'a, V>(map: &'a HashMap<String, V>, key: &str) -> Option<&'a V> {
+    map.get(&key.to_ascii_lowercase())
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn actor_helper_lookup_for_bench(functions: &HashMap<String, u64>, name: &str) -> Option<u64> {
+    get_ascii_lowercase(functions, name).copied()
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn actor_helper_lookup_legacy_for_bench(
+    functions: &HashMap<String, u64>,
+    name: &str,
+) -> Option<u64> {
+    get_ascii_lowercase_legacy(functions, name).copied()
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn actor_argument_lookup_for_bench(
+    scope: &HashMap<String, u64>,
+    colors: &HashMap<String, u64>,
+    raw: &str,
+) -> Option<u64> {
+    let key = raw.trim().trim_matches('"').trim_matches('\'');
+    get_ascii_lowercase_from_two(scope, colors, key).copied()
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn actor_argument_lookup_legacy_for_bench(
+    scope: &HashMap<String, u64>,
+    colors: &HashMap<String, u64>,
+    raw: &str,
+) -> Option<u64> {
+    let key = raw
+        .trim()
+        .trim_matches('"')
+        .trim_matches('\'')
+        .to_ascii_lowercase();
+    scope.get(&key).or_else(|| colors.get(&key)).copied()
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn actor_key_checksum(key: &str) -> u64 {
+    if let Some(index) = parse_numbered_actor_key(key, b"frame") {
+        return (index as u64).wrapping_mul(4).wrapping_add(1);
+    }
+    if let Some(index) = parse_numbered_actor_key(key, b"delay") {
+        return (index as u64).wrapping_mul(4).wrapping_add(2);
+    }
+    if has_command_suffix(key) {
+        return retained_command_key_checksum(&key.to_ascii_lowercase())
+            .wrapping_mul(4)
+            .wrapping_add(3);
+    }
+    0
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn actor_key_checksum_legacy(key: &str) -> u64 {
+    let key = key.to_ascii_lowercase();
+    if let Some(index) = key
+        .strip_prefix("frame")
+        .filter(|digits| digits.bytes().all(|byte| byte.is_ascii_digit()))
+        .and_then(|digits| digits.parse::<usize>().ok())
+    {
+        return (index as u64).wrapping_mul(4).wrapping_add(1);
+    }
+    if let Some(index) = key
+        .strip_prefix("delay")
+        .filter(|digits| digits.bytes().all(|byte| byte.is_ascii_digit()))
+        .and_then(|digits| digits.parse::<usize>().ok())
+    {
+        return (index as u64).wrapping_mul(4).wrapping_add(2);
+    }
+    if key.ends_with("command") {
+        return retained_command_key_checksum(&key)
+            .wrapping_mul(4)
+            .wrapping_add(3);
+    }
+    0
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn retained_command_key_checksum(key: &str) -> u64 {
+    key.bytes().fold(0_u64, |checksum, byte| {
+        checksum.rotate_left(5) ^ u64::from(byte)
+    })
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn actor_key_checksum_for_bench(key: &str) -> u64 {
+    actor_key_checksum(key)
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn actor_key_checksum_legacy_for_bench(key: &str) -> u64 {
+    actor_key_checksum_legacy(key)
 }
 
 fn return_function_body(body: &str) -> Option<&str> {
@@ -1181,12 +1323,8 @@ fn eval_lua_condition(condition: &str, scope: &HashMap<String, String>) -> bool 
     if let Some(rest) = condition.strip_prefix("not ") {
         return !eval_lua_condition(rest, scope);
     }
-    let key = condition
-        .trim_matches('"')
-        .trim_matches('\'')
-        .to_ascii_lowercase();
-    scope
-        .get(&key)
+    let key = condition.trim_matches('"').trim_matches('\'');
+    get_ascii_lowercase(scope, key)
         .map_or_else(|| parse_lua_bool(condition), |value| parse_lua_bool(value))
 }
 
@@ -1306,6 +1444,116 @@ mod tests {
             Some([0.75, 0.5, 0.25, 1.0])
         );
         assert_eq!(parse_color_list("1, bad, 0.5, 0.25"), None);
+    }
+
+    #[test]
+    fn lowercase_map_lookup_matches_owned_normalization() {
+        let mut values = HashMap::new();
+        for (index, key) in [
+            "pulse",
+            "accent",
+            "already_lowercase",
+            "dÃ¶wn",
+            "a_very_long_function_name_that_exceeds_the_stack_normalization_capacity_because_actor_helpers_can_technically_have_unbounded_identifier_lengths",
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            values.insert(key.to_string(), index);
+        }
+        for key in [
+            "PuLsE",
+            "\"ACCENT\"",
+            "already_lowercase",
+            "DÃ¶WN",
+            "missing",
+            "A_VERY_LONG_FUNCTION_NAME_THAT_EXCEEDS_THE_STACK_NORMALIZATION_CAPACITY_BECAUSE_ACTOR_HELPERS_CAN_TECHNICALLY_HAVE_UNBOUNDED_IDENTIFIER_LENGTHS",
+        ] {
+            let key = key.trim_matches('"');
+            assert_eq!(
+                get_ascii_lowercase(&values, key),
+                get_ascii_lowercase_legacy(&values, key)
+            );
+        }
+    }
+
+    #[test]
+    fn actor_key_classification_matches_legacy_normalization() {
+        for key in [
+            "Frame0",
+            "fRaMe0012",
+            "frame",
+            "FrameNope",
+            "Delay3",
+            "dElAy0009",
+            "InitCommand",
+            "PRESSCOMMAND",
+            "NotACommandValue",
+            "DÃ¶wnCommand",
+            "",
+        ] {
+            assert_eq!(actor_key_checksum(key), actor_key_checksum_legacy(key));
+        }
+    }
+
+    #[test]
+    fn mixed_case_actor_keys_helpers_and_arguments_retain_behavior() {
+        let content = r##"
+local Accent = color("#ff0000")
+local function Pulse(Tint, Scale)
+    return function(self)
+        self:diffuse(Tint):zoom(Scale)
+    end
+end
+
+return Def.Sprite {
+    Texture = "arrow.png",
+    FrAmE0 = 3,
+    fRaMe1 = 5,
+    DeLaY0 = 0.25,
+    dElAy1 = 0.75,
+    InItCoMmAnD = PuLsE(ACCENT, 1.25),
+    PrEsScOmMaNd = function(self)
+        self:diffuse(Accent):zoom(0.9)
+    end,
+    UnrelatedValue = "ignored",
+}
+
+Def.Model {
+    Meshes = "arrow.txt",
+    FrAmE0000 = 7,
+    OnCommand = PuLsE("ACCENT", 1.5),
+}
+"##;
+
+        let decl = parse_actor_decl(content, &noteskin_itg::IniData::default());
+
+        assert_eq!(decl.sprites.len(), 1);
+        let sprite = &decl.sprites[0];
+        assert_eq!(sprite.texture_expr, "\"arrow.png\"");
+        assert_eq!(sprite.frame0, 3);
+        assert_eq!(sprite.frame_count, 2);
+        assert_eq!(sprite.frame_indices.as_deref(), Some([3, 5].as_slice()));
+        assert_eq!(
+            sprite.frame_delays.as_deref(),
+            Some([0.25, 0.75].as_slice())
+        );
+        assert_eq!(
+            sprite.commands.get("initcommand").map(String::as_str),
+            Some("diffuse,1,0,0,1;zoom,1.25")
+        );
+        assert_eq!(
+            sprite.commands.get("presscommand").map(String::as_str),
+            Some("diffuse,1,0,0,1;zoom,0.9")
+        );
+
+        assert_eq!(decl.models.len(), 1);
+        let model = &decl.models[0];
+        assert_eq!(model.frame0, 7);
+        assert_eq!(
+            model.commands.get("oncommand").map(String::as_str),
+            Some("diffuse,1,0,0,1;zoom,1.5")
+        );
     }
 
     #[test]
