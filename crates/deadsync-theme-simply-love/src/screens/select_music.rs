@@ -4479,7 +4479,7 @@ fn build_select_music_menu(state: &State) -> select_music_menu::MenuLists {
     if downloads_enabled {
         advanced.push(select_music_menu::ITEM_VIEW_DOWNLOADS);
     }
-    if state.policy.interaction.srpg10_visuals && state.policy.interaction.show_srpg_shop {
+    if state.policy.interaction.show_srpg_shop {
         advanced.push(select_music_menu::ITEM_SRPG_SHOP);
     }
     advanced.push(select_music_menu::ITEM_SET_SUMMARY);
@@ -14162,6 +14162,36 @@ mod tests {
             }
             _ => None,
         }
+    }
+
+    #[test]
+    fn enabled_srpg_shop_is_available_without_srpg10_visuals() {
+        let mut state = init_placeholder();
+        state.policy.interaction.show_srpg_shop = true;
+        state.policy.interaction.srpg10_visuals = false;
+
+        let menu = super::build_select_music_menu(&state);
+
+        assert!(
+            menu.advanced
+                .iter()
+                .any(|item| item.action == super::select_music_menu::Action::SrpgShop)
+        );
+    }
+
+    #[test]
+    fn disabled_srpg_shop_stays_hidden_with_srpg10_visuals() {
+        let mut state = init_placeholder();
+        state.policy.interaction.show_srpg_shop = false;
+        state.policy.interaction.srpg10_visuals = true;
+
+        let menu = super::build_select_music_menu(&state);
+
+        assert!(
+            menu.advanced
+                .iter()
+                .all(|item| item.action != super::select_music_menu::Action::SrpgShop)
+        );
     }
 
     #[test]
