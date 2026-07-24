@@ -1174,7 +1174,7 @@ dependencies = [
 
 [[package]]
 name = "deadsync"
-version = "0.5.42"
+version = "0.5.43"
 dependencies = [
  "deadlib-platform",
  "deadlib-present",
@@ -1630,7 +1630,7 @@ dependencies = [
 
 [[package]]
 name = "deadsync-theme-simply-love"
-version = "0.5.42"
+version = "0.5.43"
 dependencies = [
  "bitflags 2.13.1",
  "chrono",
@@ -1680,12 +1680,13 @@ dependencies = [
  "sha2",
  "tar",
  "ureq",
+ "windows-sys 0.61.2",
  "zip",
 ]
 
 [[package]]
 name = "deadsync-version"
-version = "0.5.42"
+version = "0.5.43"
 dependencies = [
  "log",
  "semver",

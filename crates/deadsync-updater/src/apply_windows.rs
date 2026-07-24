@@ -35,11 +35,20 @@
 use std::fs::{self, File};
 use std::io::{self, Read, Seek, Write};
 use std::path::{Component, Path, PathBuf};
+use std::time::{Duration, Instant};
 
 use zip::ZipArchive;
 
 use super::UpdaterError;
 use super::apply_journal::{self, Journal, JournalState, Op};
+
+/// Windows can keep a just-closed media input or scanned executable
+/// non-renamable for a short period after the owning process exits.
+/// Give those transient sharing locks time to drain before treating an
+/// apply as failed and entering rollback.
+const RENAME_RETRY_TIMEOUT: Duration = Duration::from_secs(5);
+const RENAME_RETRY_INITIAL_DELAY: Duration = Duration::from_millis(25);
+const RENAME_RETRY_MAX_DELAY: Duration = Duration::from_millis(250);
 
 /// Result of a successful apply.  Returned for diagnostics + tests;
 /// the caller doesn't need to thread anything back into the relaunch
@@ -288,13 +297,14 @@ fn execute_with_rollback(journal: &Journal) -> Result<(), apply_journal::Execute
     let mut executed: Vec<&Op> = Vec::with_capacity(journal.ops.len());
     for op in &journal.ops {
         if let Some(parent) = op.target.parent()
-            && let Err(e) = fs::create_dir_all(parent) {
-                let rollback_clean = rollback(&executed);
-                return Err(apply_journal::ExecuteFailure {
-                    cause: super::io_err_at("create_dir_all", parent, e),
-                    rollback_clean,
-                });
-            }
+            && let Err(e) = fs::create_dir_all(parent)
+        {
+            let rollback_clean = rollback(&executed);
+            return Err(apply_journal::ExecuteFailure {
+                cause: super::io_err_at("create_dir_all", parent, e),
+                rollback_clean,
+            });
+        }
         if op.target_existed {
             // A stale backup from a previous half-completed attempt
             // could only exist if the per-apply token collided, which
@@ -311,7 +321,7 @@ fn execute_with_rollback(journal: &Journal) -> Result<(), apply_journal::Execute
                     rollback_clean,
                 });
             }
-            if let Err(e) = fs::rename(&op.target, &op.backup) {
+            if let Err(e) = rename_with_retry(&op.target, &op.backup) {
                 let rollback_clean = rollback(&executed);
                 return Err(apply_journal::ExecuteFailure {
                     cause: UpdaterError::Io(format!(
@@ -323,11 +333,11 @@ fn execute_with_rollback(journal: &Journal) -> Result<(), apply_journal::Execute
                 });
             }
         }
-        if let Err(e) = fs::rename(&op.staged, &op.target) {
+        if let Err(e) = rename_with_retry(&op.staged, &op.target) {
             // Roll back this op's own backup before recursing.
             if op.target_existed {
                 clear_target_for_restore(&op.target);
-                let _ = fs::rename(&op.backup, &op.target);
+                let _ = rename_with_retry(&op.backup, &op.target);
             }
             let rollback_clean = rollback(&executed);
             return Err(apply_journal::ExecuteFailure {
@@ -354,7 +364,7 @@ fn execute_with_rollback(journal: &Journal) -> Result<(), apply_journal::Execute
 fn rollback(executed: &[&Op]) -> bool {
     let mut clean = true;
     for op in executed.iter().rev() {
-        if let Err(e) = fs::rename(&op.target, &op.staged) {
+        if let Err(e) = rename_with_retry(&op.target, &op.staged) {
             log::warn!(
                 "updater rollback: failed to restore '{}' -> '{}': {e}",
                 op.target.display(),
@@ -371,7 +381,7 @@ fn rollback(executed: &[&Op]) -> bool {
             // already cleared it and the remove returns NotFound,
             // which we tolerate.
             clear_target_for_restore(&op.target);
-            if let Err(e) = fs::rename(&op.backup, &op.target) {
+            if let Err(e) = rename_with_retry(&op.backup, &op.target) {
                 log::warn!(
                     "updater rollback: failed to restore backup '{}' -> '{}': {e}",
                     op.backup.display(),
@@ -382,6 +392,58 @@ fn rollback(executed: &[&Op]) -> bool {
         }
     }
     clean
+}
+
+/// Rename with bounded exponential backoff for errors that Windows uses
+/// for active mappings, open media inputs, and short-lived scanner locks.
+/// Permanent failures (missing source, existing destination, invalid path)
+/// return immediately so rollback and diagnostics remain prompt.
+fn rename_with_retry(from: &Path, to: &Path) -> io::Result<()> {
+    let deadline = Instant::now() + RENAME_RETRY_TIMEOUT;
+    let mut delay = RENAME_RETRY_INITIAL_DELAY;
+    let mut retries = 0u32;
+    loop {
+        match fs::rename(from, to) {
+            Ok(()) => {
+                if retries > 0 {
+                    log::info!(
+                        "updater rename succeeded after {retries} retries: '{}' -> '{}'",
+                        from.display(),
+                        to.display(),
+                    );
+                }
+                return Ok(());
+            }
+            Err(error)
+                if is_transient_rename_error(&error)
+                    && Instant::now()
+                        .checked_add(delay)
+                        .is_some_and(|next| next <= deadline) =>
+            {
+                retries = retries.saturating_add(1);
+                if retries == 1 {
+                    log::warn!(
+                        "updater rename is temporarily blocked; retrying for up to {}s: '{}' -> '{}': {error}",
+                        RENAME_RETRY_TIMEOUT.as_secs(),
+                        from.display(),
+                        to.display(),
+                    );
+                }
+                std::thread::sleep(delay);
+                delay = delay.saturating_mul(2).min(RENAME_RETRY_MAX_DELAY);
+            }
+            Err(error) => return Err(error),
+        }
+    }
+}
+
+fn is_transient_rename_error(error: &io::Error) -> bool {
+    // ERROR_ACCESS_DENIED: common while an executable/image section is
+    // finishing teardown or an antivirus scanner has the file open.
+    // ERROR_SHARING_VIOLATION / ERROR_LOCK_VIOLATION: an open handle did
+    // not grant delete sharing (the SRPG background-video failure).
+    // ERROR_USER_MAPPED_FILE: the file still has a mapped view.
+    matches!(error.raw_os_error(), Some(5 | 32 | 33 | 1224))
 }
 
 /// Remove `target` if it exists so a subsequent
@@ -516,6 +578,50 @@ mod tests {
             w.finish().unwrap();
         }
         buf
+    }
+
+    #[test]
+    fn transient_rename_errors_match_windows_lock_codes() {
+        for code in [5, 32, 33, 1224] {
+            assert!(
+                is_transient_rename_error(&io::Error::from_raw_os_error(code)),
+                "expected Win32 error {code} to be retried",
+            );
+        }
+        for code in [2, 3, 80, 183] {
+            assert!(
+                !is_transient_rename_error(&io::Error::from_raw_os_error(code)),
+                "expected Win32 error {code} to fail immediately",
+            );
+        }
+    }
+
+    #[test]
+    fn rename_retries_until_non_delete_shared_handle_closes() {
+        use std::os::windows::fs::OpenOptionsExt;
+
+        const FILE_SHARE_READ: u32 = 1;
+
+        let dir = tempdir("rename-retry-sharing");
+        let from = dir.join("background_video.mp4");
+        let to = dir.join("background_video.mp4.backup");
+        fs::write(&from, b"video").unwrap();
+        let locked = fs::OpenOptions::new()
+            .read(true)
+            .share_mode(FILE_SHARE_READ)
+            .open(&from)
+            .unwrap();
+        let releaser = std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(100));
+            drop(locked);
+        });
+
+        rename_with_retry(&from, &to).unwrap();
+        releaser.join().unwrap();
+        assert!(!from.exists());
+        assert_eq!(fs::read(&to).unwrap(), b"video");
+
+        let _ = fs::remove_dir_all(&dir);
     }
 
     #[test]

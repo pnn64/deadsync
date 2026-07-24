@@ -21,6 +21,12 @@ zip = { version = "8.6.0", default-features = false, features = ["deflate-flate2
 [target.'cfg(any(target_os = "linux", target_os = "freebsd", target_os = "macos"))'.dependencies]
 libc = "0.2.189"
 
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61.2", features = [
+    "Win32_Foundation",
+    "Win32_System_Threading",
+] }
+
 [lints.clippy]
 perf = { level = "warn", priority = -1 }
 

@@ -14,7 +14,7 @@
 //! * `--no-update-check` — skips the startup network check.
 //!
 //! * `--apply-update <archive> --apply-sha256 <hex>
-//!   [--apply-parent-pid <pid>]` - helper mode used on Unix self-updates.
+//!   [--apply-parent-pid <pid>]` - helper mode used by self-updates.
 //!
 //! Unknown flags are passed through unchanged; we don't want to
 //! conflict with any future windowing-system or test runner argv.
@@ -149,8 +149,11 @@ pub fn run_cleanup(exe_dir: &std::path::Path, staging_dir: &std::path::Path) -> 
 
 /// Runs the helper mode launched by [`spawn_apply_helper`].  The
 /// helper waits for the GUI parent to exit before mutating the install
-/// tree, so tar extraction and relaunch do not run inside the live
-/// graphics/audio process.
+/// tree, so archive extraction and relaunch do not run inside the live
+/// graphics/audio process. This is required on Windows because active
+/// media decoders open their input without delete sharing, preventing
+/// the transactional apply from renaming those files while the game is
+/// running.
 pub fn run_apply_helper(request: ApplyRequest) -> i32 {
     let fallback_exe = std::env::current_exe().ok();
     if !wait_for_parent_exit(request.parent_pid) {
@@ -186,7 +189,12 @@ pub fn run_apply_helper(request: ApplyRequest) -> i32 {
     }
 }
 
-#[cfg(any(target_os = "linux", target_os = "freebsd", target_os = "macos"))]
+#[cfg(any(
+    windows,
+    target_os = "linux",
+    target_os = "freebsd",
+    target_os = "macos"
+))]
 pub fn spawn_apply_helper(
     archive_path: &std::path::Path,
     sha256: &[u8; 32],
@@ -206,13 +214,18 @@ pub fn spawn_apply_helper(
     )
 }
 
-#[cfg(not(any(target_os = "linux", target_os = "freebsd", target_os = "macos")))]
+#[cfg(not(any(
+    windows,
+    target_os = "linux",
+    target_os = "freebsd",
+    target_os = "macos"
+)))]
 pub fn spawn_apply_helper(
     _archive_path: &std::path::Path,
     _sha256: &[u8; 32],
 ) -> Result<(), super::UpdaterError> {
     Err(super::UpdaterError::Io(
-        "updater helper mode is only used on Unix apply targets".to_string(),
+        "updater helper mode is not supported on this platform".to_string(),
     ))
 }
 
@@ -220,20 +233,60 @@ fn wait_for_parent_exit(parent_pid: Option<u32>) -> bool {
     let Some(pid) = parent_pid else {
         return true;
     };
-    #[cfg(any(target_os = "linux", target_os = "freebsd", target_os = "macos"))]
-    {
-        use std::time::{Duration, Instant};
-        let deadline = Instant::now() + Duration::from_secs(30);
-        while process_exists(pid) {
-            if Instant::now() >= deadline {
-                return false;
-            }
-            std::thread::sleep(Duration::from_millis(50));
-        }
+    wait_for_process_exit(pid)
+}
+
+#[cfg(windows)]
+fn wait_for_process_exit(pid: u32) -> bool {
+    use windows_sys::Win32::Foundation::{CloseHandle, ERROR_INVALID_PARAMETER, WAIT_OBJECT_0};
+    use windows_sys::Win32::System::Threading::{
+        OpenProcess, PROCESS_SYNCHRONIZE, WaitForSingleObject,
+    };
+
+    const PARENT_EXIT_TIMEOUT_MS: u32 = 30_000;
+
+    // SAFETY: `pid` came from the parent itself, the requested access
+    // grants only synchronization, and every non-null handle is closed
+    // before returning.
+    let process = unsafe { OpenProcess(PROCESS_SYNCHRONIZE, 0, pid) };
+    if process.is_null() {
+        // The parent can exit between spawning this helper and this call.
+        // OpenProcess reports that race as ERROR_INVALID_PARAMETER, which
+        // is exactly the state we were waiting for.
+        return std::io::Error::last_os_error().raw_os_error()
+            == Some(ERROR_INVALID_PARAMETER as i32);
     }
-    #[cfg(not(any(target_os = "linux", target_os = "freebsd", target_os = "macos")))]
-    let _ = pid;
+    // SAFETY: `process` is a valid synchronization handle returned by
+    // OpenProcess. Waiting does not mutate memory owned by Rust.
+    let result = unsafe { WaitForSingleObject(process, PARENT_EXIT_TIMEOUT_MS) };
+    // SAFETY: this is the non-null owned handle returned above.
+    unsafe {
+        CloseHandle(process);
+    }
+    result == WAIT_OBJECT_0
+}
+
+#[cfg(any(target_os = "linux", target_os = "freebsd", target_os = "macos"))]
+fn wait_for_process_exit(pid: u32) -> bool {
+    use std::time::{Duration, Instant};
+    let deadline = Instant::now() + Duration::from_secs(30);
+    while process_exists(pid) {
+        if Instant::now() >= deadline {
+            return false;
+        }
+        std::thread::sleep(Duration::from_millis(50));
+    }
     true
+}
+
+#[cfg(not(any(
+    windows,
+    target_os = "linux",
+    target_os = "freebsd",
+    target_os = "macos"
+)))]
+fn wait_for_process_exit(_pid: u32) -> bool {
+    false
 }
 
 #[cfg(any(target_os = "linux", target_os = "freebsd", target_os = "macos"))]
@@ -539,6 +592,11 @@ mod tests {
         ]);
         assert!(cli.apply_update.is_some());
         assert_eq!(cli.apply_update.unwrap().parent_pid, Some(1234));
+    }
+
+    #[test]
+    fn helper_without_parent_pid_can_apply_immediately() {
+        assert!(wait_for_parent_exit(None));
     }
 
     #[test]

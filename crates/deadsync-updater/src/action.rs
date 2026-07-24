@@ -105,11 +105,11 @@ pub enum ActionPhase {
         path: PathBuf,
         sha256: [u8; 32],
     },
-    /// The user confirmed apply; the worker is extracting + swapping
-    /// files in place.  The overlay shows a spinner.  On success the
-    /// worker spawns the new process and `std::process::exit`s, so this
-    /// phase is normally terminal-on-success; on failure the worker
-    /// transitions to [`ActionPhase::Error`].
+    /// The user confirmed apply. The overlay shows a spinner while the
+    /// worker hands the verified archive to a helper process. The helper
+    /// waits for this process to exit before extracting and swapping files,
+    /// then relaunches the application. On failure the worker transitions
+    /// to [`ActionPhase::Error`].
     Applying { info: ReleaseInfo },
     /// The on-disk install was successfully replaced with the new
     /// version, but the relaunch of the new binary failed (sandbox
@@ -322,10 +322,11 @@ fn set_phase(next: ActionPhase) {
 /// slip in undetected.
 fn set_phase_if_current(generation: u64, next: ActionPhase) -> bool {
     if let Ok(mut guard) = PHASE.write()
-        && OP_GENERATION.load(Ordering::SeqCst) == generation {
-            *guard = next;
-            return true;
-        }
+        && OP_GENERATION.load(Ordering::SeqCst) == generation
+    {
+        *guard = next;
+        return true;
+    }
     false
 }
 
@@ -829,29 +830,43 @@ pub fn request_apply() {
 }
 
 fn run_apply(info: ReleaseInfo, archive_path: PathBuf, expected_sha256: [u8; 32]) {
-    #[cfg(any(target_os = "linux", target_os = "freebsd", target_os = "macos"))]
+    #[cfg(any(
+        windows,
+        target_os = "linux",
+        target_os = "freebsd",
+        target_os = "macos"
+    ))]
     {
         let _ = &info;
         match crate::cli::spawn_apply_helper(&archive_path, &expected_sha256) {
             Ok(()) => {
                 log::info!("Spawned self-update helper; exiting current process");
                 log::logger().flush();
-                // SAFETY: the updater helper has been spawned with all
-                // state needed to finish the install. We want immediate
-                // process termination here, not GUI/audio destructor
-                // shutdown from a worker thread, which has hung on
-                // FreeBSD in practice.
-                unsafe { libc::_exit(0) };
+                #[cfg(windows)]
+                std::process::exit(0);
+                #[cfg(any(target_os = "linux", target_os = "freebsd", target_os = "macos"))]
+                {
+                    // SAFETY: the updater helper has been spawned with all
+                    // state needed to finish the install. We want immediate
+                    // process termination here, not GUI/audio destructor
+                    // shutdown from a worker thread, which has hung on
+                    // FreeBSD in practice.
+                    unsafe { libc::_exit(0) };
+                }
             }
             Err(err) => {
                 log::error!("Self-update helper spawn failed: {err}");
                 set_phase(classify_error(&err));
             }
         }
-        return;
     }
 
-    #[cfg(not(any(target_os = "linux", target_os = "freebsd", target_os = "macos")))]
+    #[cfg(not(any(
+        windows,
+        target_os = "linux",
+        target_os = "freebsd",
+        target_os = "macos"
+    )))]
     match crate::cli::apply_archive_and_relaunch(&archive_path, &expected_sha256) {
         Ok(crate::cli::ApplyOutcome::Relaunched) => {
             log::info!("Self-update applied; exiting to let new process take over");
