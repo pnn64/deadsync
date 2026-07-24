@@ -34,16 +34,18 @@ fn load_ini_to_map(path: &Path) -> LanguageMap {
         return FxHashMap::default();
     }
     let mut sections = LanguageMap::default();
-    for (section, props) in ini.sections() {
-        let entries = sections.entry(section.as_str().into()).or_default();
+    for (section, props) in ini.into_sections() {
+        let entries = sections.entry(section.into_boxed_str()).or_default();
         for (key, value) in props {
             if value.trim() == "@skip" {
                 continue;
             }
-            entries.insert(
-                key.as_str().into(),
-                Arc::from(unescape_ini_value(value.as_str()).as_str()),
-            );
+            let value = if value.contains('\\') {
+                Arc::from(unescape_ini_value(&value))
+            } else {
+                Arc::from(value)
+            };
+            entries.insert(key.into_boxed_str(), value);
         }
     }
     sections
@@ -54,7 +56,8 @@ fn native_name(path: &Path, locale_code: &str) -> String {
     match ini.load(path) {
         Ok(()) => ini
             .get("Meta", "NativeName")
-            .unwrap_or_else(|| locale_code.to_string()),
+            .unwrap_or(locale_code)
+            .to_string(),
         Err(e) => {
             log::warn!("Failed to load language file {}: {e}", path.display());
             locale_code.to_string()

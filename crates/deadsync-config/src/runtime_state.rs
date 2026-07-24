@@ -116,7 +116,10 @@ impl InputRoutingConfig {
     }
 
     const fn bits(self) -> u8 {
-        ((self.only_dedicated_menu_buttons as u8) * Self::ONLY_DEDICATED_MENU_BUTTONS) | ((self.keyboard_features as u8) * Self::KEYBOARD_FEATURES) | ((self.smx_input as u8) * Self::SMX_INPUT) | ((self.smx_panel_lights as u8) * Self::SMX_PANEL_LIGHTS)
+        ((self.only_dedicated_menu_buttons as u8) * Self::ONLY_DEDICATED_MENU_BUTTONS)
+            | ((self.keyboard_features as u8) * Self::KEYBOARD_FEATURES)
+            | ((self.smx_input as u8) * Self::SMX_INPUT)
+            | ((self.smx_panel_lights as u8) * Self::SMX_PANEL_LIGHTS)
     }
 }
 
@@ -623,7 +626,7 @@ pub fn load_runtime_state_options_with_default_noteskin(
     RuntimeStateOptions {
         machine_default_noteskin: conf
             .get("Options", "DefaultNoteSkin")
-            .map(|v| normalize_machine_default_noteskin(&v))
+            .map(normalize_machine_default_noteskin)
             .unwrap_or_else(|| default_noteskin.to_string()),
         additional_song_folders: load_additional_song_folders(conf),
         never_cache_list: load_never_cache_list(conf),

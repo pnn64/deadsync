@@ -65,10 +65,10 @@ pub fn picker_view() -> ProfilePickerView {
                     .and_then(|value| value.parse().ok())
                     .unwrap_or_else(|| {
                         let subtractive = get_player_option("SubtractiveScoring")
-                            .and_then(|value| parse_ini_bool(&value))
+                            .and_then(parse_ini_bool)
                             .unwrap_or(false);
                         let pacemaker = get_player_option("Pacemaker")
-                            .and_then(|value| parse_ini_bool(&value))
+                            .and_then(parse_ini_bool)
                             .unwrap_or(false);
                         if subtractive {
                             deadsync_profile::MiniIndicator::SubtractiveScoring

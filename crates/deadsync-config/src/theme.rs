@@ -1421,48 +1421,44 @@ pub fn load_theme_presentation_options(
             .unwrap_or(default.simply_love_color),
         show_select_music_gameplay_timer: conf
             .get("Theme", "ShowSelectMusicGameplayTimer")
-            .and_then(|value| parse_loose_bool_str(&value))
+            .and_then(parse_loose_bool_str)
             .unwrap_or(default.show_select_music_gameplay_timer),
         keyboard_features: conf
             .get("Theme", "KeyboardFeatures")
-            .and_then(|value| parse_bool_str(&value))
+            .and_then(parse_bool_str)
             .unwrap_or(default.keyboard_features),
-        visual_style: parse_visual_style(
-            visual_style.as_deref(),
-            legacy_visual_style.as_deref(),
-            default.visual_style,
-        ),
+        visual_style: parse_visual_style(visual_style, legacy_visual_style, default.visual_style),
         srpg_variant: parse_srpg_variant(
-            srpg_variant.as_deref(),
-            legacy_srpg_variant.as_deref(),
-            visual_style.or(legacy_visual_style).as_deref(),
+            srpg_variant,
+            legacy_srpg_variant,
+            visual_style.or(legacy_visual_style),
             default.srpg_variant,
         ),
         show_video_backgrounds: conf
             .get("Theme", "VideoBackgrounds")
-            .and_then(|value| parse_bool_str(&value))
+            .and_then(parse_bool_str)
             .unwrap_or(default.show_video_backgrounds),
         random_background_mode: conf
             .get("Theme", "RandomBackgroundMode")
-            .and_then(|value| RandomBackgroundMode::from_str(&value).ok())
+            .and_then(|value| RandomBackgroundMode::from_str(value).ok())
             .unwrap_or(default.random_background_mode),
         zmod_rating_box_text: conf
             .get("Theme", "ZmodRatingBoxText")
-            .and_then(|value| parse_loose_bool_str(&value))
+            .and_then(parse_loose_bool_str)
             .unwrap_or(default.zmod_rating_box_text),
         show_bpm_decimal: conf
             .get("Theme", "ShowBpmDecimal")
-            .and_then(|value| parse_loose_bool_str(&value))
+            .and_then(parse_loose_bool_str)
             .unwrap_or(default.show_bpm_decimal),
         gameplay_bpm_position: conf
             .get("Theme", "GameplayBpmPosition")
             .or_else(|| conf.get("Theme", "BpmPosition"))
-            .and_then(|value| GameplayBpmPosition::from_str(&value).ok())
+            .and_then(|value| GameplayBpmPosition::from_str(value).ok())
             .unwrap_or(default.gameplay_bpm_position),
         gameplay_banner_mode: conf
             .get("Theme", "GameplayBannerMode")
             .or_else(|| conf.get("Theme", "AnimateBanners"))
-            .and_then(|value| GameplayBannerMode::from_str(&value).ok())
+            .and_then(|value| GameplayBannerMode::from_str(value).ok())
             .unwrap_or(default.gameplay_banner_mode),
     }
 }
@@ -1529,81 +1525,77 @@ pub fn load_machine_flow_options(
     MachineFlowOptions {
         machine_show_eval_summary: conf
             .get("Theme", "MachineShowEvalSummary")
-            .and_then(|value| parse_bool_str(&value))
+            .and_then(parse_bool_str)
             .unwrap_or(default.machine_show_eval_summary),
         machine_nice_sound: conf
             .get("Theme", "MachineNiceSound")
-            .and_then(|value| parse_loose_bool_str(&value))
+            .and_then(parse_loose_bool_str)
             .unwrap_or(default.machine_nice_sound),
         machine_show_name_entry: conf
             .get("Theme", "MachineShowNameEntry")
-            .and_then(|value| parse_loose_bool_str(&value))
+            .and_then(parse_loose_bool_str)
             .unwrap_or(default.machine_show_name_entry),
         machine_show_gameover: conf
             .get("Theme", "MachineShowGameOver")
-            .and_then(|value| parse_loose_bool_str(&value))
+            .and_then(parse_loose_bool_str)
             .unwrap_or(default.machine_show_gameover),
         machine_show_select_profile: conf
             .get("Theme", "MachineShowSelectProfile")
-            .and_then(|value| parse_loose_bool_str(&value))
+            .and_then(parse_loose_bool_str)
             .unwrap_or(default.machine_show_select_profile),
         allow_switch_profile_in_menu: conf
             .get("Theme", "AllowSwitchProfileInMenu")
-            .and_then(|value| parse_loose_bool_str(&value))
+            .and_then(parse_loose_bool_str)
             .unwrap_or(default.allow_switch_profile_in_menu),
         machine_show_select_color: conf
             .get("Theme", "MachineShowSelectColor")
-            .and_then(|value| parse_loose_bool_str(&value))
+            .and_then(parse_loose_bool_str)
             .unwrap_or(default.machine_show_select_color),
         machine_show_select_style: conf
             .get("Theme", "MachineShowSelectStyle")
-            .and_then(|value| parse_loose_bool_str(&value))
+            .and_then(parse_loose_bool_str)
             .unwrap_or(default.machine_show_select_style),
         machine_show_select_play_mode: conf
             .get("Theme", "MachineShowSelectPlayMode")
-            .and_then(|value| parse_loose_bool_str(&value))
+            .and_then(parse_loose_bool_str)
             .unwrap_or(default.machine_show_select_play_mode),
         machine_enable_replays: conf
             .get("Theme", "MachineEnableReplays")
-            .and_then(|value| parse_loose_bool_str(&value))
+            .and_then(parse_loose_bool_str)
             .unwrap_or(default.machine_enable_replays),
         machine_enable_heart_rate_monitors: conf
             .get("Theme", "MachineEnableHeartRateMonitors")
-            .and_then(|value| parse_loose_bool_str(&value))
+            .and_then(parse_loose_bool_str)
             .unwrap_or(default.machine_enable_heart_rate_monitors),
         machine_allow_per_player_global_offsets: conf
             .get("Theme", "MachineAllowPerPlayerGlobalOffsets")
-            .and_then(|value| parse_loose_bool_str(&value))
+            .and_then(parse_loose_bool_str)
             .unwrap_or(default.machine_allow_per_player_global_offsets),
         machine_pack_ini_offsets: conf
             .get("Theme", "MachinePackIniOffsets")
-            .and_then(|value| parse_loose_bool_str(&value))
+            .and_then(parse_loose_bool_str)
             .unwrap_or(default.machine_pack_ini_offsets),
         machine_default_sync_offset: parse_machine_default_sync_offset(
-            machine_default_sync_offset.as_deref(),
-            legacy_default_sync_offset.as_deref(),
+            machine_default_sync_offset,
+            legacy_default_sync_offset,
             default.machine_default_sync_offset,
         ),
         machine_preferred_style: conf
             .get("Theme", "MachinePreferredStyle")
-            .and_then(|value| MachinePreferredPlayStyle::from_str(&value).ok())
+            .and_then(|value| MachinePreferredPlayStyle::from_str(value).ok())
             .unwrap_or(default.machine_preferred_style),
         machine_preferred_play_mode: conf
             .get("Theme", "MachinePreferredPlayMode")
-            .and_then(|value| MachinePreferredPlayMode::from_str(&value).ok())
+            .and_then(|value| MachinePreferredPlayMode::from_str(value).ok())
             .unwrap_or(default.machine_preferred_play_mode),
-        machine_font: parse_machine_font(
-            machine_font.as_deref(),
-            legacy_machine_font.as_deref(),
-            default.machine_font,
-        ),
+        machine_font: parse_machine_font(machine_font, legacy_machine_font, default.machine_font),
         machine_bar_color: conf
             .get("Theme", "MachineBarColor")
-            .and_then(|value| MachineBarColor::from_str(&value).ok())
+            .and_then(|value| MachineBarColor::from_str(value).ok())
             .unwrap_or(default.machine_bar_color),
         machine_evaluation_style: conf
             .get("Theme", "MachineEvaluationStyle")
-            .and_then(|value| MachineEvaluationStyle::from_str(&value).ok())
+            .and_then(|value| MachineEvaluationStyle::from_str(value).ok())
             .unwrap_or(default.machine_evaluation_style),
     }
 }
@@ -1627,19 +1619,19 @@ where
     ThemeShortcutOptions {
         practice: conf
             .get("Theme", "SelectMusicShortcutPractice")
-            .and_then(|value| parse_key(&value))
+            .and_then(&parse_key)
             .unwrap_or(default.practice),
         song_search: conf
             .get("Theme", "SelectMusicShortcutSongSearch")
-            .and_then(|value| parse_key(&value))
+            .and_then(&parse_key)
             .unwrap_or(default.song_search),
         load_songs: conf
             .get("Theme", "SelectMusicShortcutLoadSongs")
-            .and_then(|value| parse_key(&value))
+            .and_then(&parse_key)
             .unwrap_or(default.load_songs),
         test_input: conf
             .get("Theme", "SelectMusicShortcutTestInput")
-            .and_then(|value| parse_key(&value))
+            .and_then(parse_key)
             .unwrap_or(default.test_input),
     }
 }

@@ -409,31 +409,24 @@ where
     V: Copy,
 {
     DisplayLoadOptions {
-        vsync: parse_u8_bool_or_default(conf.get("Options", "Vsync").as_deref(), default.vsync),
+        vsync: parse_u8_bool_or_default(conf.get("Options", "Vsync"), default.vsync),
         max_fps: conf
             .get("Options", "MaxFps")
             .and_then(|value| value.parse::<u16>().ok())
             .unwrap_or(default.max_fps),
         present_mode_policy: conf
             .get("Options", "PresentModePolicy")
-            .and_then(|value| parse_present_mode_policy(&value))
+            .and_then(parse_present_mode_policy)
             .or_else(|| {
                 conf.get("Options", "UncappedMode").and_then(|value| {
-                    parse_legacy_present_mode(
-                        &value,
-                        legacy_balanced_policy,
-                        legacy_unhinged_policy,
-                    )
+                    parse_legacy_present_mode(value, legacy_balanced_policy, legacy_unhinged_policy)
                 })
             })
             .unwrap_or(default.present_mode_policy),
-        windowed: parse_u8_bool_or_default(
-            conf.get("Options", "Windowed").as_deref(),
-            default.windowed,
-        ),
+        windowed: parse_u8_bool_or_default(conf.get("Options", "Windowed"), default.windowed),
         fullscreen_type: conf
             .get("Options", "FullscreenType")
-            .and_then(|value| parse_fullscreen_type(&value))
+            .and_then(parse_fullscreen_type)
             .unwrap_or(default.fullscreen_type),
         monitor: conf
             .get("Options", "DisplayMonitor")
@@ -449,7 +442,7 @@ where
             .unwrap_or(default.height),
         video_renderer: conf
             .get("Options", "VideoRenderer")
-            .and_then(|value| parse_video_renderer(&value))
+            .and_then(parse_video_renderer)
             .unwrap_or(default.video_renderer),
     }
 }
@@ -478,11 +471,11 @@ where
     SystemInputHardwareLoadOptions {
         gamepad_backend: conf
             .get("Options", "GamepadBackend")
-            .and_then(|value| parse_gamepad_backend(&value))
+            .and_then(parse_gamepad_backend)
             .unwrap_or(default.gamepad_backend),
         smx_default_pad_config: conf
             .get("Options", "SmxDefaultPadConfig")
-            .and_then(|value| parse_smx_pad_config(&value))
+            .and_then(parse_smx_pad_config)
             .unwrap_or(default.smx_default_pad_config),
         smx_default_light_brightness: conf
             .get("Options", "SmxDefaultLightBrightness")
@@ -510,19 +503,19 @@ where
     RuntimeIoLoadOptions {
         input_debounce_seconds: conf
             .get("Options", "InputDebounceTime")
-            .and_then(|value| parse_input_debounce_seconds(&value))
+            .and_then(parse_input_debounce_seconds)
             .unwrap_or(default.input_debounce_seconds),
         lights_driver: conf
             .get("Options", "LightsDriver")
-            .map(|value| parse_lights_driver(&value, default.lights_driver))
+            .map(|value| parse_lights_driver(value, default.lights_driver))
             .unwrap_or(default.lights_driver),
         gameplay_pad_lights: conf
             .get("Options", "GameplayPadLights")
-            .map(|value| parse_gameplay_pad_lights(&value, default.gameplay_pad_lights))
+            .map(|value| parse_gameplay_pad_lights(value, default.gameplay_pad_lights))
             .unwrap_or(default.gameplay_pad_lights),
         lights_com_port: conf
             .get("Options", "LightsComPort")
-            .map(|value| parse_lights_com_port(&value, default.lights_com_port))
+            .map(|value| parse_lights_com_port(value, default.lights_com_port))
             .unwrap_or(default.lights_com_port),
     }
 }
@@ -536,13 +529,13 @@ where
     C: Copy,
 {
     conf.get("Options", "GameplayBgColor")
-        .and_then(|value| parse_color(&value))
+        .and_then(parse_color)
         .unwrap_or(default)
 }
 
 pub fn load_bool_option(conf: &SimpleIni, section: &str, key: &str, default: bool) -> bool {
     conf.get(section, key)
-        .and_then(|value| parse_bool_str(&value))
+        .and_then(parse_bool_str)
         .unwrap_or(default)
 }
 
@@ -553,78 +546,77 @@ pub fn load_system_options(conf: &SimpleIni, default: SystemOptions) -> SystemOp
     SystemOptions {
         game_flag: conf
             .get("Options", "Game")
-            .and_then(|value| GameFlag::from_str(&value).ok())
+            .and_then(|value| GameFlag::from_str(value).ok())
             .unwrap_or(default.game_flag),
         auto_download_unlocks: parse_u8_bool_or_default(
-            conf.get("Options", "AutoDownloadUnlocks").as_deref(),
+            conf.get("Options", "AutoDownloadUnlocks"),
             default.auto_download_unlocks,
         ),
         auto_populate_gs_scores: parse_u8_bool_or_default(
-            conf.get("Options", "AutoPopulateGrooveStatsScores")
-                .as_deref(),
+            conf.get("Options", "AutoPopulateGrooveStatsScores"),
             default.auto_populate_gs_scores,
         ),
         updater_install_enabled: parse_u8_bool_or_default(
-            conf.get("Options", "UpdaterInstallEnabled").as_deref(),
+            conf.get("Options", "UpdaterInstallEnabled"),
             default.updater_install_enabled,
         ),
         enable_groovestats: parse_u8_bool_or_default(
-            conf.get("Options", "EnableGrooveStats").as_deref(),
+            conf.get("Options", "EnableGrooveStats"),
             default.enable_groovestats,
         ),
         show_srpg_shop: parse_u8_bool_or_default(
-            conf.get("Options", "ShowSrpgShop").as_deref(),
+            conf.get("Options", "ShowSrpgShop"),
             default.show_srpg_shop,
         ),
         srpg_shop_folder: conf
             .get("Options", "SrpgShopFolder")
-            .and_then(|value| SrpgShopFolder::from_str(&value).ok())
+            .and_then(|value| SrpgShopFolder::from_str(value).ok())
             .unwrap_or(default.srpg_shop_folder),
         enable_arrowcloud: parse_u8_bool_or_default(
-            conf.get("Options", "EnableArrowCloud").as_deref(),
+            conf.get("Options", "EnableArrowCloud"),
             default.enable_arrowcloud,
         ),
         enable_boogiestats: parse_u8_bool_or_default(
-            conf.get("Options", "EnableBoogieStats").as_deref(),
+            conf.get("Options", "EnableBoogieStats"),
             default.enable_boogiestats,
         ),
         submit_arrowcloud_fails: parse_u8_bool_or_default(
-            conf.get("Options", "SubmitArrowCloudFails").as_deref(),
+            conf.get("Options", "SubmitArrowCloudFails"),
             default.submit_arrowcloud_fails,
         ),
         arrowcloud_qr_login_when: conf
             .get("Options", "ArrowCloudQrLoginWhen")
-            .and_then(|value| ArrowCloudQrLoginWhen::from_str(&value).ok())
+            .and_then(|value| ArrowCloudQrLoginWhen::from_str(value).ok())
             .unwrap_or(default.arrowcloud_qr_login_when),
         groovestats_qr_login_when: conf
             .get("Options", "GrooveStatsQrLoginWhen")
-            .and_then(|value| GrooveStatsQrLoginWhen::from_str(&value).ok())
+            .and_then(|value| GrooveStatsQrLoginWhen::from_str(value).ok())
             .unwrap_or(default.groovestats_qr_login_when),
         separate_unlocks_by_player: parse_u8_bool_or_default(
-            conf.get("Options", "SeparateUnlocksByPlayer").as_deref(),
+            conf.get("Options", "SeparateUnlocksByPlayer"),
             default.separate_unlocks_by_player,
         ),
         mine_hit_sound: parse_u8_bool_or_default(
-            conf.get("Options", "MineHitSound").as_deref(),
+            conf.get("Options", "MineHitSound"),
             default.mine_hit_sound,
         ),
         show_stats_mode: parse_show_stats_mode(
-            show_stats_mode.as_deref(),
-            show_stats_legacy.as_deref(),
+            show_stats_mode,
+            show_stats_legacy,
             default.show_stats_mode,
         ),
         frame_stats_overlay_anchor: conf
             .get("Options", "FrameStatsOverlayAnchor")
-            .map(|value| canonical_frame_stats_overlay_anchor(&value))
+            .map(canonical_frame_stats_overlay_anchor)
             .unwrap_or(default.frame_stats_overlay_anchor),
         frame_stats_overlay_style: conf
             .get("Options", "FrameStatsOverlayStyle")
-            .map(|value| canonical_frame_stats_overlay_style(&value))
+            .map(canonical_frame_stats_overlay_style)
             .unwrap_or(default.frame_stats_overlay_style),
         translated_titles: conf
             .get("Options", "TranslatedTitles")
             .or_else(|| conf.get("Options", "translatedtitles"))
-            .and_then(|value| parse_loose_bool_str(&value))
+            .and_then(parse_loose_bool_str)
             .unwrap_or(default.translated_titles),
         bg_brightness: conf
             .get("Options", "BGBrightness")
@@ -633,7 +625,7 @@ pub fn load_system_options(conf: &SimpleIni, default: SystemOptions) -> SystemOp
         center_1player_notefield: conf
             .get("Options", "Center1Player")
             .or_else(|| conf.get("Options", "CenteredP1Notefield"))
-            .and_then(|value| parse_loose_bool_str(&value))
+            .and_then(parse_loose_bool_str)
             .unwrap_or(default.center_1player_notefield),
         center_image_translate_x: conf
             .get("Options", "CenterImageTranslateX")
@@ -652,101 +644,94 @@ pub fn load_system_options(conf: &SimpleIni, default: SystemOptions) -> SystemOp
             .and_then(|value| value.trim().parse::<i32>().ok())
             .unwrap_or(default.center_image_add_height),
         autosubmit_course_scores_individually: parse_u8_bool_or_default(
-            conf.get("Options", "CourseAutosubmitScoresIndividually")
-                .as_deref(),
+            conf.get("Options", "CourseAutosubmitScoresIndividually"),
             default.autosubmit_course_scores_individually,
         ),
         show_course_individual_scores: parse_u8_bool_or_default(
-            conf.get("Options", "CourseShowIndividualScores").as_deref(),
+            conf.get("Options", "CourseShowIndividualScores"),
             default.show_course_individual_scores,
         ),
         show_most_played_courses: parse_u8_bool_or_default(
-            conf.get("Options", "CourseShowMostPlayed").as_deref(),
+            conf.get("Options", "CourseShowMostPlayed"),
             default.show_most_played_courses,
         ),
         show_random_courses: parse_u8_bool_or_default(
-            conf.get("Options", "CourseShowRandom").as_deref(),
+            conf.get("Options", "CourseShowRandom"),
             default.show_random_courses,
         ),
         default_fail_type: conf
             .get("Options", "DefaultFailType")
-            .and_then(|value| DefaultFailType::from_str(&value).ok())
+            .and_then(|value| DefaultFailType::from_str(value).ok())
             .unwrap_or(default.default_fail_type),
         banner_cache: parse_u8_bool_or_default(
-            conf.get("Options", "BannerCache").as_deref(),
+            conf.get("Options", "BannerCache"),
             default.banner_cache,
         ),
         cdtitle_cache: parse_u8_bool_or_default(
-            conf.get("Options", "CDTitleCache").as_deref(),
+            conf.get("Options", "CDTitleCache"),
             default.cdtitle_cache,
         ),
         high_dpi: conf
             .get("Options", "HighDPI")
-            .and_then(|value| parse_loose_bool_str(&value))
+            .and_then(parse_loose_bool_str)
             .unwrap_or(default.high_dpi),
         hide_mouse_cursor: conf
             .get("Options", "HideMouseCursor")
-            .and_then(|value| parse_loose_bool_str(&value))
+            .and_then(parse_loose_bool_str)
             .unwrap_or(default.hide_mouse_cursor),
         allow_shutdown_host: conf
             .get("Options", "AllowShutdown")
-            .and_then(|value| parse_loose_bool_str(&value))
+            .and_then(parse_loose_bool_str)
             .unwrap_or(default.allow_shutdown_host),
-        smx_input: parse_u8_bool_or_default(
-            conf.get("Options", "SmxInput").as_deref(),
-            default.smx_input,
-        ),
+        smx_input: parse_u8_bool_or_default(conf.get("Options", "SmxInput"), default.smx_input),
         smx_manages_pad_config: parse_u8_bool_or_default(
-            conf.get("Options", "SmxManagesPadConfig").as_deref(),
+            conf.get("Options", "SmxManagesPadConfig"),
             default.smx_manages_pad_config,
         ),
         smx_panel_lights: conf
             .get("Options", "SmxPanelLights")
-            .and_then(|value| parse_loose_bool_str(&value))
+            .and_then(parse_loose_bool_str)
             .unwrap_or(default.smx_panel_lights),
         smx_idle_lights_black: conf
             .get("Options", "SmxIdleLightsBlack")
-            .and_then(|value| parse_loose_bool_str(&value))
+            .and_then(parse_loose_bool_str)
             .unwrap_or(default.smx_idle_lights_black),
         smx_underglow_theme: conf
             .get("Options", "SmxUnderglowTheme")
-            .and_then(|value| parse_loose_bool_str(&value))
+            .and_then(parse_loose_bool_str)
             .unwrap_or(default.smx_underglow_theme),
         smx_underglow_grb: conf
             .get("Options", "SmxUnderglowGrb")
-            .and_then(|value| parse_loose_bool_str(&value))
+            .and_then(parse_loose_bool_str)
             .unwrap_or(default.smx_underglow_grb),
         smx_pad_gifs_pack: conf
             .get("Options", "SmxPadGifsPack")
-            .map(|value| SmxPackName::parse(&value))
+            .map(SmxPackName::parse)
             .unwrap_or(default.smx_pad_gifs_pack),
         smx_judge_gifs_pack: conf
             .get("Options", "SmxJudgeGifsPack")
-            .map(|value| SmxPackName::parse(&value))
+            .map(SmxPackName::parse)
             .unwrap_or(default.smx_judge_gifs_pack),
-        gfx_debug: parse_u8_bool_or_default(
-            conf.get("Options", "GfxDebug").as_deref(),
-            default.gfx_debug,
-        ),
+        gfx_debug: parse_u8_bool_or_default(conf.get("Options", "GfxDebug"), default.gfx_debug),
         global_offset_seconds: conf
             .get("Options", "GlobalOffsetSeconds")
             .and_then(|value| value.parse::<f32>().ok())
             .unwrap_or(default.global_offset_seconds),
         language_flag: conf
             .get("Options", "Language")
-            .and_then(|value| LanguageFlag::from_str(&value).ok())
+            .and_then(|value| LanguageFlag::from_str(value).ok())
             .unwrap_or(default.language_flag),
         log_level: conf
             .get("Options", "LogLevel")
-            .and_then(|value| LogLevel::from_str(&value).ok())
+            .and_then(|value| LogLevel::from_str(value).ok())
             .unwrap_or(default.log_level),
         log_to_file: conf
             .get("Options", "LogToFile")
-            .and_then(|value| parse_bool_str(&value))
+            .and_then(parse_bool_str)
             .unwrap_or(default.log_to_file),
         show_console: conf
             .get("Options", "ShowConsole")
-            .and_then(|value| parse_bool_str(&value))
+            .and_then(parse_bool_str)
             .unwrap_or(default.show_console),
     }
 }
@@ -1104,150 +1089,141 @@ pub fn load_select_music_options(
     SelectMusicOptions {
         breakdown_style: conf
             .get("Options", "SelectMusicBreakdown")
-            .and_then(|value| BreakdownStyle::from_str(&value).ok())
+            .and_then(|value| BreakdownStyle::from_str(value).ok())
             .unwrap_or(default.breakdown_style),
         show_banners: parse_u8_bool_or_default(
-            conf.get("Options", "SelectMusicShowBanners").as_deref(),
+            conf.get("Options", "SelectMusicShowBanners"),
             default.show_banners,
         ),
         show_version_overlay: parse_u8_bool_or_default(
-            conf.get("Options", "ShowVersionOverlay").as_deref(),
+            conf.get("Options", "ShowVersionOverlay"),
             default.show_version_overlay,
         ),
         version_overlay_side: conf
             .get("Options", "VersionOverlaySide")
-            .and_then(|value| VersionOverlaySide::from_str(&value).ok())
+            .and_then(|value| VersionOverlaySide::from_str(value).ok())
             .unwrap_or(default.version_overlay_side),
         show_video_banners: conf
             .get("Options", "SelectMusicShowVideoBanners")
-            .and_then(|value| parse_bool_str(&value))
+            .and_then(parse_bool_str)
             .unwrap_or(default.show_video_banners),
         show_breakdown: parse_u8_bool_or_default(
-            conf.get("Options", "SelectMusicShowBreakdown").as_deref(),
+            conf.get("Options", "SelectMusicShowBreakdown"),
             default.show_breakdown,
         ),
         show_stage_display: parse_u8_bool_or_default(
-            conf.get("Options", "SelectMusicShowStageDisplay")
-                .as_deref(),
+            conf.get("Options", "SelectMusicShowStageDisplay"),
             default.show_stage_display,
         ),
         show_cdtitles: parse_u8_bool_or_default(
-            conf.get("Options", "SelectMusicShowCDTitles").as_deref(),
+            conf.get("Options", "SelectMusicShowCDTitles"),
             default.show_cdtitles,
         ),
         show_wheel_grades: parse_u8_bool_or_default(
-            conf.get("Options", "SelectMusicWheelGrades").as_deref(),
+            conf.get("Options", "SelectMusicWheelGrades"),
             default.show_wheel_grades,
         ),
         show_wheel_lamps: parse_u8_bool_or_default(
-            conf.get("Options", "SelectMusicWheelLamps").as_deref(),
+            conf.get("Options", "SelectMusicWheelLamps"),
             default.show_wheel_lamps,
         ),
         sort_wheel_by_series: parse_u8_bool_or_default(
-            conf.get("Options", "SelectMusicSortBySeries").as_deref(),
+            conf.get("Options", "SelectMusicSortBySeries"),
             default.sort_wheel_by_series,
         ),
         hide_inactive_series: parse_u8_bool_or_default(
-            conf.get("Options", "SelectMusicHideInactiveSeries")
-                .as_deref(),
+            conf.get("Options", "SelectMusicHideInactiveSeries"),
             default.hide_inactive_series,
         ),
         itl_rank_mode: parse_select_music_itl_rank_mode(
-            itl_rank_mode.as_deref(),
-            legacy_itl_chart_rank.as_deref(),
+            itl_rank_mode,
+            legacy_itl_chart_rank,
             default.itl_rank_mode,
         ),
         itl_wheel_mode: conf
             .get("Options", "SelectMusicWheelITL")
-            .and_then(|value| SelectMusicItlWheelMode::from_str(&value).ok())
+            .and_then(|value| SelectMusicItlWheelMode::from_str(value).ok())
             .unwrap_or(default.itl_wheel_mode),
         wheel_style: conf
             .get("Options", "SelectMusicWheelStyle")
-            .and_then(|value| SelectMusicWheelStyle::from_str(&value).ok())
+            .and_then(|value| SelectMusicWheelStyle::from_str(value).ok())
             .unwrap_or(default.wheel_style),
         song_select_bg_mode: parse_select_music_song_select_bg_mode(
-            song_select_bg.as_deref(),
-            legacy_song_select_bg.as_deref(),
+            song_select_bg,
+            legacy_song_select_bg,
             default.song_select_bg_mode,
         ),
         new_pack_mode: conf
             .get("Options", "SelectMusicNewPackMode")
-            .and_then(|value| NewPackMode::from_str(&value).ok())
+            .and_then(|value| NewPackMode::from_str(value).ok())
             .unwrap_or(default.new_pack_mode),
         show_folder_stats: parse_u8_bool_or_default(
-            conf.get("Options", "SelectMusicFolderStats").as_deref(),
+            conf.get("Options", "SelectMusicFolderStats"),
             default.show_folder_stats,
         ),
         show_previews: parse_u8_bool_or_default(
-            conf.get("Options", "SelectMusicPreviews").as_deref(),
+            conf.get("Options", "SelectMusicPreviews"),
             default.show_previews,
         ),
         show_preview_marker: parse_u8_bool_or_default(
-            conf.get("Options", "SelectMusicPreviewMarker").as_deref(),
+            conf.get("Options", "SelectMusicPreviewMarker"),
             default.show_preview_marker,
         ),
         preview_loop: parse_u8_bool_or_default(
-            conf.get("Options", "SelectMusicPreviewLoop").as_deref(),
+            conf.get("Options", "SelectMusicPreviewLoop"),
             default.preview_loop,
         ),
         preview_starts_immediately: parse_u8_bool_or_default(
-            conf.get("Options", "SelectMusicPreviewStartsImmediately")
-                .as_deref(),
+            conf.get("Options", "SelectMusicPreviewStartsImmediately"),
             default.preview_starts_immediately,
         ),
         pattern_info_mode: conf
             .get("Options", "SelectMusicPatternInfo")
-            .and_then(|value| SelectMusicPatternInfoMode::from_str(&value).ok())
+            .and_then(|value| SelectMusicPatternInfoMode::from_str(value).ok())
             .unwrap_or(default.pattern_info_mode),
         step_artist_box_mode: conf
             .get("Options", "SelectMusicStepArtistBox")
-            .and_then(|value| SelectMusicStepArtistBoxMode::from_str(&value).ok())
+            .and_then(|value| SelectMusicStepArtistBoxMode::from_str(value).ok())
             .unwrap_or(default.step_artist_box_mode),
         show_scorebox: parse_u8_bool_or_default(
-            conf.get("Options", "SelectMusicScorebox").as_deref(),
+            conf.get("Options", "SelectMusicScorebox"),
             default.show_scorebox,
         ),
         scorebox_placement: conf
             .get("Options", "SelectMusicScoreboxPlacement")
-            .and_then(|value| SelectMusicScoreboxPlacement::from_str(&value).ok())
+            .and_then(|value| SelectMusicScoreboxPlacement::from_str(value).ok())
             .unwrap_or(default.scorebox_placement),
         scorebox_cycle_itg: parse_u8_bool_or_default(
-            conf.get("Options", "SelectMusicScoreboxCycleItg")
-                .as_deref(),
+            conf.get("Options", "SelectMusicScoreboxCycleItg"),
             default.scorebox_cycle_itg,
         ),
         scorebox_cycle_ex: parse_u8_bool_or_default(
-            conf.get("Options", "SelectMusicScoreboxCycleEx").as_deref(),
+            conf.get("Options", "SelectMusicScoreboxCycleEx"),
             default.scorebox_cycle_ex,
         ),
         scorebox_cycle_hard_ex: parse_u8_bool_or_default(
-            conf.get("Options", "SelectMusicScoreboxCycleHardEx")
-                .as_deref(),
+            conf.get("Options", "SelectMusicScoreboxCycleHardEx"),
             default.scorebox_cycle_hard_ex,
         ),
         scorebox_cycle_tournaments: parse_u8_bool_or_default(
-            conf.get("Options", "SelectMusicScoreboxCycleTournaments")
-                .as_deref(),
+            conf.get("Options", "SelectMusicScoreboxCycleTournaments"),
             default.scorebox_cycle_tournaments,
         ),
         chart_info_peak_nps: parse_u8_bool_or_default(
-            conf.get("Options", "SelectMusicChartInfoPeakNps")
-                .as_deref(),
+            conf.get("Options", "SelectMusicChartInfoPeakNps"),
             default.chart_info_peak_nps,
         ),
         chart_info_effective_bpm: parse_u8_bool_or_default(
-            conf.get("Options", "SelectMusicChartInfoEffectiveBpm")
-                .as_deref(),
+            conf.get("Options", "SelectMusicChartInfoEffectiveBpm"),
             default.chart_info_effective_bpm,
         ),
         chart_info_matrix_rating: parse_u8_bool_or_default(
-            conf.get("Options", "SelectMusicChartInfoMatrixRating")
-                .as_deref(),
+            conf.get("Options", "SelectMusicChartInfoMatrixRating"),
             default.chart_info_matrix_rating,
         ),
         auto_screenshot_eval: conf
             .get("Options", "AutoScreenshotEval")
-            .map(|value| auto_screenshot_mask_from_str(&value))
+            .map(auto_screenshot_mask_from_str)
             .unwrap_or(default.auto_screenshot_eval),
     }
 }
@@ -1434,61 +1410,55 @@ impl Default for RuntimeOptions {
 
 pub fn load_runtime_options(conf: &SimpleIni, default: RuntimeOptions) -> RuntimeOptions {
     RuntimeOptions {
-        fastload: parse_u8_bool_or_default(
-            conf.get("Options", "FastLoad").as_deref(),
-            default.fastload,
-        ),
-        cachesongs: parse_u8_bool_or_default(
-            conf.get("Options", "CacheSongs").as_deref(),
-            default.cachesongs,
-        ),
+        fastload: parse_u8_bool_or_default(conf.get("Options", "FastLoad"), default.fastload),
+        cachesongs: parse_u8_bool_or_default(conf.get("Options", "CacheSongs"), default.cachesongs),
         allow_song_deletion: parse_u8_bool_or_default(
-            conf.get("Options", "AllowSongDeletion").as_deref(),
+            conf.get("Options", "AllowSongDeletion"),
             default.allow_song_deletion,
         ),
         song_parsing_threads: conf
             .get("Options", "SongParsingThreads")
-            .and_then(|value| parse_auto_threads_u8(&value))
+            .and_then(parse_auto_threads_u8)
             .unwrap_or(default.song_parsing_threads),
         smooth_histogram: parse_u8_bool_or_default(
-            conf.get("Options", "SmoothHistogram").as_deref(),
+            conf.get("Options", "SmoothHistogram"),
             default.smooth_histogram,
         ),
         shade_scatterplot_judgments: parse_u8_bool_or_default(
-            conf.get("Options", "ShadeScatterplotJudgments").as_deref(),
+            conf.get("Options", "ShadeScatterplotJudgments"),
             default.shade_scatterplot_judgments,
         ),
         arcade_options_navigation: conf
             .get("Options", "ArcadeOptionsNavigation")
-            .and_then(|value| parse_loose_bool_str(&value))
+            .and_then(parse_loose_bool_str)
             .unwrap_or(default.arcade_options_navigation),
         delayed_back: conf
             .get("Options", "DelayedBack")
-            .and_then(|value| parse_loose_bool_str(&value))
+            .and_then(parse_loose_bool_str)
             .unwrap_or(default.delayed_back),
         three_key_navigation: conf
             .get("Options", "ThreeKeyNavigation")
-            .and_then(|value| parse_loose_bool_str(&value))
+            .and_then(parse_loose_bool_str)
             .unwrap_or(default.three_key_navigation),
         use_fsrs: conf
             .get("Options", "UseFSRs")
-            .and_then(|value| parse_loose_bool_str(&value))
+            .and_then(parse_loose_bool_str)
             .unwrap_or(default.use_fsrs),
         lights_simplify_bass: conf
             .get("Options", "LightsSimplifyBass")
-            .and_then(|value| parse_loose_bool_str(&value))
+            .and_then(parse_loose_bool_str)
             .unwrap_or(default.lights_simplify_bass),
         only_dedicated_menu_buttons: parse_u8_bool_or_default(
-            conf.get("Options", "OnlyDedicatedMenuButtons").as_deref(),
+            conf.get("Options", "OnlyDedicatedMenuButtons"),
             default.only_dedicated_menu_buttons,
         ),
         theme_flag: conf
             .get("Options", "Theme")
-            .and_then(|value| ThemeFlag::from_str(&value).ok())
+            .and_then(|value| ThemeFlag::from_str(value).ok())
             .unwrap_or(default.theme_flag),
         software_renderer_threads: conf
             .get("Options", "SoftwareRendererThreads")
-            .and_then(|value| parse_auto_threads_u8(&value))
+            .and_then(parse_auto_threads_u8)
             .unwrap_or(default.software_renderer_threads),
     }
 }

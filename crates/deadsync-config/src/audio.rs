@@ -76,11 +76,11 @@ where
     AudioRuntimeOptions {
         linux_audio_backend: conf
             .get("Options", "LinuxAudioBackend")
-            .and_then(|value| parse_linux_backend(&value))
+            .and_then(parse_linux_backend)
             .unwrap_or(default.linux_audio_backend),
         output_mode: conf
             .get("Options", "AudioOutputMode")
-            .and_then(|value| parse_output_mode(&value))
+            .and_then(parse_output_mode)
             .unwrap_or(default.output_mode),
     }
 }
@@ -95,12 +95,9 @@ pub fn load_audio_options(conf: &SimpleIni, default: AudioOptions) -> AudioOptio
             .get("Options", "MasterVolume")
             .and_then(|value| value.parse().ok())
             .map_or(default.master_volume, clamp_audio_volume_percent),
-        menu_music: parse_u8_bool_or_default(
-            conf.get("Options", "MenuMusic").as_deref(),
-            default.menu_music,
-        ),
+        menu_music: parse_u8_bool_or_default(conf.get("Options", "MenuMusic"), default.menu_music),
         custom_sounds_enabled: parse_u8_bool_or_default(
-            conf.get("Options", "CustomSoundsEnabled").as_deref(),
+            conf.get("Options", "CustomSoundsEnabled"),
             default.custom_sounds_enabled,
         ),
         music_volume: conf
@@ -124,27 +121,27 @@ pub fn load_audio_options(conf: &SimpleIni, default: AudioOptions) -> AudioOptio
             .map_or(default.assist_tick_volume, clamp_audio_volume_percent),
         output_device_index: conf
             .get("Options", "AudioOutputDevice")
-            .and_then(|value| parse_auto_audio_output_device(&value))
+            .and_then(parse_auto_audio_output_device)
             .unwrap_or(default.output_device_index),
         sample_rate_hz: conf
             .get("Options", "AudioSampleRateHz")
-            .and_then(|value| parse_auto_audio_sample_rate_hz(&value))
+            .and_then(parse_auto_audio_sample_rate_hz)
             .unwrap_or(default.sample_rate_hz),
         rate_mod_preserves_pitch: parse_u8_bool_or_default(
-            conf.get("Options", "RateModPreservesPitch").as_deref(),
+            conf.get("Options", "RateModPreservesPitch"),
             default.rate_mod_preserves_pitch,
         ),
         enable_replaygain: parse_u8_bool_or_default(
-            conf.get("Options", "ReplayGain").as_deref(),
+            conf.get("Options", "ReplayGain"),
             default.enable_replaygain,
         ),
         write_current_screen: conf
             .get("Options", "WriteCurrentScreen")
-            .and_then(|value| parse_bool_str(&value))
+            .and_then(parse_bool_str)
             .unwrap_or(default.write_current_screen),
         tab_acceleration: conf
             .get("Options", "TabAcceleration")
-            .and_then(|value| parse_bool_str(&value))
+            .and_then(parse_bool_str)
             .unwrap_or(default.tab_acceleration),
     }
 }

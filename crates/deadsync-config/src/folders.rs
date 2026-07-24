@@ -25,8 +25,8 @@ pub fn load_additional_song_folders(conf: &SimpleIni) -> Vec<AdditionalSongFolde
     };
 
     let mut folders = Vec::new();
-    push_additional_song_folders(&read_only, false, &mut folders);
-    push_additional_song_folders(&writable, true, &mut folders);
+    push_additional_song_folders(read_only, false, &mut folders);
+    push_additional_song_folders(writable, true, &mut folders);
     folders
 }
 

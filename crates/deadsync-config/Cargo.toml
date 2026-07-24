@@ -4,6 +4,14 @@ version = "0.1.0"
 edition = "2024"
 license = "GPL-3.0"
 
+[features]
+bench-support = []
+
+[[bench]]
+name = "simple_ini"
+harness = false
+required-features = ["bench-support"]
+
 [dependencies]
 deadlib-platform = { path = "../deadlib-platform" }
 deadlib-present = { path = "../deadlib-present" }
@@ -17,6 +25,7 @@ deadsync-lights = { path = "../deadsync-lights" }
 deadsync-smx = { path = "../deadsync-smx" }
 log = "0.4.33"
 null-or-die = { git = "https://github.com/pnn64/null-or-die", branch = "main" }
+rustc-hash = "2.1.3"
 winit = "0.30.13"
 
 [lints.clippy]

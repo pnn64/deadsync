@@ -50,11 +50,11 @@ pub fn load_null_or_die_options(conf: &SimpleIni, default: NullOrDieOptions) -> 
     NullOrDieOptions {
         sync_graph: conf
             .get("Options", "NullOrDieSyncGraph")
-            .and_then(|value| SyncGraphMode::from_str(&value).ok())
+            .and_then(|value| SyncGraphMode::from_str(value).ok())
             .unwrap_or(default.sync_graph),
         graph_orientation: conf
             .get("Options", "NullOrDieGraphOrientation")
-            .and_then(|value| parse_null_or_die_graph_orientation(&value))
+            .and_then(parse_null_or_die_graph_orientation)
             .unwrap_or(default.graph_orientation),
         confidence_percent: conf
             .get("Options", "NullOrDieConfidencePercent")
@@ -63,7 +63,7 @@ pub fn load_null_or_die_options(conf: &SimpleIni, default: NullOrDieOptions) -> 
             .unwrap_or(default.confidence_percent),
         pack_sync_threads: conf
             .get("Options", "PackSyncThreads")
-            .and_then(|value| parse_auto_threads_u8(&value))
+            .and_then(parse_auto_threads_u8)
             .unwrap_or(default.pack_sync_threads),
         fingerprint_ms: conf
             .get("Options", "NullOrDieFingerprintMs")
@@ -87,14 +87,14 @@ pub fn load_null_or_die_options(conf: &SimpleIni, default: NullOrDieOptions) -> 
             .unwrap_or(default.magic_offset_ms),
         kernel_target: conf
             .get("Options", "NullOrDieKernelTarget")
-            .and_then(|value| parse_null_or_die_kernel_target(&value))
+            .and_then(parse_null_or_die_kernel_target)
             .unwrap_or(default.kernel_target),
         kernel_type: conf
             .get("Options", "NullOrDieKernelType")
-            .and_then(|value| parse_null_or_die_kernel_type(&value))
+            .and_then(parse_null_or_die_kernel_type)
             .unwrap_or(default.kernel_type),
         full_spectrogram: parse_u8_bool_or_default(
-            conf.get("Options", "NullOrDieFullSpectrogram").as_deref(),
+            conf.get("Options", "NullOrDieFullSpectrogram"),
             default.full_spectrogram,
         ),
     }
