@@ -17,14 +17,20 @@ use deadsync_audio::{
 use log::{info, warn};
 use mach2::mach_time::{mach_absolute_time, mach_timebase_info, mach_timebase_info_data_t};
 use objc2_core_audio::{
-    AudioDeviceID, AudioObjectGetPropertyData, AudioObjectPropertyAddress,
+    AudioDeviceID, AudioObjectAddPropertyListener, AudioObjectGetPropertyData,
+    AudioObjectPropertyAddress, AudioObjectRemovePropertyListener, AudioStreamID,
     kAudioDevicePropertyBufferFrameSize, kAudioDevicePropertyDeviceUID,
-    kAudioDevicePropertyNominalSampleRate, kAudioHardwareNoError, kAudioObjectPropertyElementMain,
-    kAudioObjectPropertyScopeGlobal,
+    kAudioDevicePropertyLatency, kAudioDevicePropertyNominalSampleRate,
+    kAudioDevicePropertySafetyOffset, kAudioDevicePropertyStreams, kAudioHardwareNoError,
+    kAudioHardwarePropertyDefaultOutputDevice, kAudioObjectPropertyElementMain,
+    kAudioObjectPropertyScopeGlobal, kAudioObjectPropertyScopeOutput, kAudioObjectSystemObject,
+    kAudioStreamPropertyLatency,
 };
 use objc2_core_foundation::{CFRetained, CFString};
 use std::mem::size_of;
 use std::ptr::{NonNull, null};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
 use std::sync::mpsc::Receiver;
 
 pub struct CoreAudioOutputPrep {
@@ -33,6 +39,8 @@ pub struct CoreAudioOutputPrep {
     sample_rate_hz: u32,
     channels: usize,
     buffer_frames: u32,
+    latency: OutputLatency,
+    device_id: AudioDeviceID,
 }
 
 impl CoreAudioOutputPrep {
@@ -52,10 +60,28 @@ impl CoreAudioOutputPrep {
 
 pub struct CoreAudioOutputStream {
     audio_unit: Option<AudioUnit>,
+    listener: Option<Box<OutputChangeListener>>,
+}
+
+struct OutputChangeListener {
+    device_id: AtomicU32,
+    latency_frames: AtomicU32,
+    latency_rate_hz: AtomicU32,
+    latency_ns: Arc<AtomicU64>,
+}
+
+#[derive(Clone, Copy)]
+struct OutputLatency {
+    frames: u32,
+    rate_hz: u32,
+    nanos: u64,
 }
 
 impl Drop for CoreAudioOutputStream {
     fn drop(&mut self) {
+        if let Some(listener) = self.listener.take() {
+            listener.unregister();
+        }
         if let Some(audio_unit) = self.audio_unit.as_mut() {
             let _ = audio_unit.stop();
         }
@@ -183,12 +209,22 @@ pub fn prepare(
     let mut audio_unit = audio_unit_from_device_id(device_id, false)
         .map_err(|e| format!("failed to create CoreAudio HAL output unit: {e}"))?;
     let actual = configure_output_unit(&mut audio_unit, sample_rate_hz, channels)?;
+    let latency = try_output_latency(device_id).unwrap_or_else(|| {
+        warn!("failed to query CoreAudio output latency; assuming zero");
+        OutputLatency {
+            frames: 0,
+            rate_hz: actual.sample_rate_hz,
+            nanos: 0,
+        }
+    });
     Ok(CoreAudioOutputPrep {
         audio_unit,
         device_name: resolved_name,
         sample_rate_hz: actual.sample_rate_hz,
         channels: actual.channels,
         buffer_frames: actual.buffer_frames,
+        latency,
+        device_id,
     })
 }
 
@@ -201,12 +237,16 @@ pub fn start(
     let mut render = RenderState::new(render_handle, prep.channels);
     let sample_rate_hz = prep.sample_rate_hz;
     let buffer_frames = prep.buffer_frames.max(1);
+    let downstream_latency_ns = Arc::new(AtomicU64::new(prep.latency.nanos));
     let device_name = prep.device_name.clone();
 
     type Args = render_callback::Args<data::Interleaved<f32>>;
+    let callback_downstream_latency_ns = Arc::clone(&downstream_latency_ns);
     prep.audio_unit
         .set_render_callback(move |args: Args| {
-            let (anchor_nanos, quality) = host_clock.callback_nanos(args.time_stamp.mHostTime);
+            let downstream_latency_ns = callback_downstream_latency_ns.load(Ordering::Acquire);
+            let (callback_nanos, quality) = host_clock.callback_nanos(args.time_stamp.mHostTime);
+            let anchor_nanos = callback_nanos.saturating_add(downstream_latency_ns);
             let result = render.render_f32_host_nanos(
                 args.data.buffer,
                 anchor_nanos,
@@ -214,9 +254,12 @@ pub fn start(
             );
             report_audio_render_callback(result);
             let period_frames = args.num_frames.max(1) as u32;
-            let latency_frames = buffer_frames.max(period_frames);
+            let buffered_frames = buffer_frames.max(period_frames);
+            let latency_frames = buffered_frames
+                .saturating_add(nanos_to_frames(sample_rate_hz, downstream_latency_ns));
             let period_ns = frames_to_nanos(sample_rate_hz, period_frames);
-            let latency_ns = frames_to_nanos(sample_rate_hz, latency_frames);
+            let latency_ns = frames_to_nanos(sample_rate_hz, buffered_frames)
+                .saturating_add(downstream_latency_ns);
             publish_output_timing(
                 sample_rate_hz,
                 period_ns,
@@ -234,24 +277,227 @@ pub fn start(
     prep.audio_unit
         .start()
         .map_err(|e| format!("failed to start CoreAudio output unit: {e}"))?;
+    let follows_default_output = get_default_device_id(false) == Some(prep.device_id);
+    let listener = follows_default_output.then(|| {
+        let mut listener = Box::new(OutputChangeListener {
+            device_id: AtomicU32::new(prep.device_id),
+            latency_frames: AtomicU32::new(prep.latency.frames),
+            latency_rate_hz: AtomicU32::new(prep.latency.rate_hz),
+            latency_ns: Arc::clone(&downstream_latency_ns),
+        });
+        if listener.register() {
+            // A default-device change between the latency query in `prepare`
+            // and registration would otherwise go unnoticed.
+            listener.refresh();
+            Some(listener)
+        } else {
+            warn!("failed to register CoreAudio default-output listener");
+            None
+        }
+    });
+    let initial_downstream_latency_ns = downstream_latency_ns.load(Ordering::Acquire);
+    let presentation_latency_frames = buffer_frames.saturating_add(nanos_to_frames(
+        sample_rate_hz,
+        initial_downstream_latency_ns,
+    ));
     let buffer_ns = frames_to_nanos(sample_rate_hz, buffer_frames);
+    let output_latency_ns = buffer_ns.saturating_add(initial_downstream_latency_ns);
     publish_output_timing(
         sample_rate_hz,
         buffer_ns,
-        buffer_ns,
+        output_latency_ns,
         buffer_frames,
         0,
-        buffer_frames,
-        buffer_ns,
+        presentation_latency_frames,
+        output_latency_ns,
     );
     publish_output_timing_quality(OutputTimingQuality::Trusted);
     info!(
-        "CoreAudio '{}' using native shared output at {} Hz, {} ch.",
-        device_name, sample_rate_hz, prep.channels
+        "CoreAudio '{}' using native shared output at {} Hz, {} ch (buffer={} frames, downstream latency={} frames at {} Hz, total={:.1} ms).",
+        device_name,
+        sample_rate_hz,
+        prep.channels,
+        buffer_frames,
+        prep.latency.frames,
+        prep.latency.rate_hz,
+        output_latency_ns as f64 / 1_000_000.0,
     );
     Ok(CoreAudioOutputStream {
         audio_unit: Some(prep.audio_unit),
+        listener: listener.flatten(),
     })
+}
+
+impl OutputChangeListener {
+    fn property_address() -> AudioObjectPropertyAddress {
+        AudioObjectPropertyAddress {
+            mSelector: kAudioHardwarePropertyDefaultOutputDevice,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain,
+        }
+    }
+
+    fn register(&mut self) -> bool {
+        let address = Self::property_address();
+        // SAFETY: `self` is boxed before registration and remains at that
+        // address until `unregister` confirms removal (or leaks it).
+        unsafe {
+            AudioObjectAddPropertyListener(
+                kAudioObjectSystemObject as u32,
+                NonNull::from(&address),
+                Some(output_change_listener),
+                std::ptr::from_mut(self).cast(),
+            ) == kAudioHardwareNoError
+        }
+    }
+
+    fn unregister(self: Box<Self>) {
+        let address = Self::property_address();
+        let listener = Box::into_raw(self);
+        // SAFETY: this uses the same object, callback, and stable client-data
+        // pointer passed during registration.
+        let status = unsafe {
+            AudioObjectRemovePropertyListener(
+                kAudioObjectSystemObject as u32,
+                NonNull::from(&address),
+                Some(output_change_listener),
+                listener.cast(),
+            )
+        };
+        if status == kAudioHardwareNoError {
+            // SAFETY: CoreAudio confirmed removal, so it no longer holds the
+            // pointer and the box can be reclaimed exactly once.
+            drop(unsafe { Box::from_raw(listener) });
+        } else {
+            // CoreAudio may still invoke the listener, so the state must
+            // outlive this stream; leaking it is the only safe option.
+            warn!(
+                "failed to remove CoreAudio default-output listener (status={status}); leaking listener state"
+            );
+        }
+    }
+
+    fn refresh(&self) {
+        let previous_device_id = self.device_id.load(Ordering::Acquire);
+        let device_id = get_default_device_id(false).unwrap_or(previous_device_id);
+        let Some(current) = try_output_latency(device_id) else {
+            return;
+        };
+        self.device_id.store(device_id, Ordering::Release);
+        let previous_frames = self.latency_frames.swap(current.frames, Ordering::AcqRel);
+        let previous_rate_hz = self.latency_rate_hz.swap(current.rate_hz, Ordering::AcqRel);
+        let previous_ns = self.latency_ns.swap(current.nanos, Ordering::AcqRel);
+        if device_id == previous_device_id && current.nanos == previous_ns {
+            return;
+        }
+        let event = (device_id != previous_device_id)
+            .then(|| get_device_name(device_id).ok())
+            .flatten()
+            .map_or_else(
+                || "CoreAudio latency compensation".to_owned(),
+                |name| format!("CoreAudio output changed to '{name}'; latency compensation"),
+            );
+        warn!(
+            "{event} changed: {:.1} ms ({previous_frames} frames at {previous_rate_hz} Hz) -> {:.1} ms ({} frames at {} Hz).",
+            nanos_to_ms(previous_ns),
+            nanos_to_ms(current.nanos),
+            current.frames,
+            current.rate_hz,
+        );
+    }
+}
+
+unsafe extern "C-unwind" fn output_change_listener(
+    _object_id: u32,
+    _address_count: u32,
+    _addresses: NonNull<AudioObjectPropertyAddress>,
+    context: *mut std::ffi::c_void,
+) -> i32 {
+    // SAFETY: CoreAudio returns the stable boxed pointer supplied by
+    // `OutputChangeListener::register` and only calls it while registered.
+    let listener = unsafe { &*context.cast::<OutputChangeListener>() };
+    listener.refresh();
+    kAudioHardwareNoError
+}
+
+fn try_output_latency(device_id: AudioDeviceID) -> Option<OutputLatency> {
+    let frames = u32_property(
+        device_id,
+        kAudioDevicePropertyLatency,
+        kAudioObjectPropertyScopeOutput,
+    )?
+    .saturating_add(u32_property(
+        device_id,
+        kAudioDevicePropertySafetyOffset,
+        kAudioObjectPropertyScopeOutput,
+    )?)
+    .saturating_add(output_stream_latency_frames(device_id).unwrap_or(0));
+    let rate_hz = device_nominal_sample_rate_hz(device_id).ok()?;
+    Some(OutputLatency {
+        frames,
+        rate_hz,
+        nanos: frames_to_nanos(rate_hz, frames),
+    })
+}
+
+fn output_stream_latency_frames(device_id: AudioDeviceID) -> Option<u32> {
+    let property_address = AudioObjectPropertyAddress {
+        mSelector: kAudioDevicePropertyStreams,
+        mScope: kAudioObjectPropertyScopeOutput,
+        mElement: kAudioObjectPropertyElementMain,
+    };
+    let mut stream_id: AudioStreamID = 0;
+    let mut data_size = size_of::<AudioStreamID>() as u32;
+    // SAFETY: the property address is fully initialized and `data_size` caps
+    // the write to one `AudioStreamID`; CoreAudio truncates the stream list to
+    // the caller's buffer, so only the first stream is copied out.
+    let status = unsafe {
+        AudioObjectGetPropertyData(
+            device_id,
+            NonNull::from(&property_address),
+            0,
+            null(),
+            NonNull::from(&mut data_size),
+            NonNull::from(&mut stream_id).cast(),
+        )
+    };
+    if status != kAudioHardwareNoError || (data_size as usize) < size_of::<AudioStreamID>() {
+        return None;
+    }
+    // Streams are scopeless objects; their properties use the global scope.
+    u32_property(
+        stream_id,
+        kAudioStreamPropertyLatency,
+        kAudioObjectPropertyScopeGlobal,
+    )
+}
+
+fn u32_property(object_id: u32, selector: u32, scope: u32) -> Option<u32> {
+    let property_address = AudioObjectPropertyAddress {
+        mSelector: selector,
+        mScope: scope,
+        mElement: kAudioObjectPropertyElementMain,
+    };
+    let mut value = 0u32;
+    let mut data_size = size_of::<u32>() as u32;
+    let status = unsafe {
+        AudioObjectGetPropertyData(
+            object_id,
+            NonNull::from(&property_address),
+            0,
+            null(),
+            NonNull::from(&mut data_size),
+            NonNull::from(&mut value).cast(),
+        )
+    };
+    if status != kAudioHardwareNoError {
+        return None;
+    }
+    Some(value)
+}
+
+fn nanos_to_ms(nanos: u64) -> f64 {
+    nanos as f64 / 1_000_000.0
 }
 
 fn select_device_id(device_uid: Option<&str>, device_name: &str) -> Result<AudioDeviceID, String> {
@@ -448,4 +694,22 @@ fn frames_to_nanos(sample_rate_hz: u32, frames: u32) -> u64 {
         return 0;
     }
     (u64::from(frames) * 1_000_000_000) / u64::from(sample_rate_hz)
+}
+
+#[inline(always)]
+fn nanos_to_frames(sample_rate_hz: u32, nanos: u64) -> u32 {
+    ((u128::from(nanos) * u128::from(sample_rate_hz)) / 1_000_000_000).min(u128::from(u32::MAX))
+        as u32
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{frames_to_nanos, nanos_to_frames};
+
+    #[test]
+    fn device_latency_keeps_its_own_sample_rate() {
+        let airpods_latency_ns = frames_to_nanos(48_000, 7_680);
+        assert_eq!(airpods_latency_ns, 160_000_000);
+        assert_eq!(nanos_to_frames(44_100, airpods_latency_ns), 7_056);
+    }
 }
