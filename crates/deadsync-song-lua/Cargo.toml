@@ -22,12 +22,18 @@ name = "runtime_mod_state"
 harness = false
 required-features = ["bench-support"]
 
+[[bench]]
+name = "noteskin_template_scan"
+harness = false
+required-features = ["bench-support"]
+
 [dependencies]
 deadlib-assets = { path = "../deadlib-assets" }
 deadlib-present = { path = "../deadlib-present" }
 chrono = "0.4.45"
 image = "0.25.10"
 log = "0.4.33"
+memchr = "2.8.2"
 mlua = { version = "0.12.0", features = ["lua54", "vendored"] }
 serde_json = "1.0.151"
 

@@ -1,4 +1,5 @@
 use mlua::{Function, Lua, MultiValue, Table, Value};
+use std::borrow::Cow;
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -256,7 +257,55 @@ fn song_lua_noteskin_model_template_path(
     resolve_noteskin_template_relative_path(template_path, &raw)
 }
 
+#[inline]
+fn find_ascii_case_insensitive(haystack: &str, needle: &str) -> Option<usize> {
+    let haystack = haystack.as_bytes();
+    let needle = needle.as_bytes();
+    if needle.is_empty() {
+        return Some(0);
+    }
+    if needle.len() > haystack.len() {
+        return None;
+    }
+
+    let anchor_index = needle
+        .iter()
+        .position(|byte| !byte.is_ascii_alphanumeric())
+        .unwrap_or(0);
+    let anchor_lower = needle[anchor_index].to_ascii_lowercase();
+    let anchor_upper = needle[anchor_index].to_ascii_uppercase();
+    let suffix_len = needle.len() - anchor_index - 1;
+    let candidate_bytes = &haystack[anchor_index..haystack.len() - suffix_len];
+    if anchor_lower == anchor_upper {
+        memchr::memchr_iter(anchor_lower, candidate_bytes)
+            .find(|&index| haystack[index..index + needle.len()].eq_ignore_ascii_case(needle))
+    } else {
+        memchr::memchr2_iter(anchor_lower, anchor_upper, candidate_bytes)
+            .find(|&index| haystack[index..index + needle.len()].eq_ignore_ascii_case(needle))
+    }
+}
+
 fn first_noteskin_get_path_args(script: &str) -> Option<(String, String)> {
+    if let Some(start) = find_ascii_case_insensitive(script, "noteskin:getpath") {
+        let open = script[start..].find('(').map(|idx| start + idx + 1)?;
+        let (button, next) = parse_lua_string(script, open)?;
+        let comma = script[next..].find(',').map(|idx| next + idx + 1)?;
+        let (element, _) = parse_lua_string(script, comma)?;
+        return Some((button, element));
+    }
+    None
+}
+
+fn first_lua_field_string(script: &str, field: &str) -> Option<String> {
+    let start = find_ascii_case_insensitive(script, field)?;
+    let eq = script[start + field.len()..]
+        .find('=')
+        .map(|idx| start + field.len() + idx + 1)?;
+    parse_lua_string(script, eq).map(|(value, _)| value)
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn first_noteskin_get_path_args_legacy(script: &str) -> Option<(String, String)> {
     let lower = script.to_ascii_lowercase();
     if let Some(start) = lower.find("noteskin:getpath") {
         let open = script[start..].find('(').map(|idx| start + idx + 1)?;
@@ -268,7 +317,8 @@ fn first_noteskin_get_path_args(script: &str) -> Option<(String, String)> {
     None
 }
 
-fn first_lua_field_string(script: &str, field: &str) -> Option<String> {
+#[cfg(any(test, feature = "bench-support"))]
+fn first_lua_field_string_legacy(script: &str, field: &str) -> Option<String> {
     let lower = script.to_ascii_lowercase();
     let needle = field.to_ascii_lowercase();
     let start = lower.find(&needle)?;
@@ -276,6 +326,73 @@ fn first_lua_field_string(script: &str, field: &str) -> Option<String> {
         .find('=')
         .map(|idx| start + field.len() + idx + 1)?;
     parse_lua_string(script, eq).map(|(value, _)| value)
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn noteskin_get_path_args_for_bench(script: &str) -> Option<(String, String)> {
+    first_noteskin_get_path_args(script)
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn noteskin_get_path_args_legacy_for_bench(script: &str) -> Option<(String, String)> {
+    first_noteskin_get_path_args_legacy(script)
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn noteskin_model_field_for_bench(script: &str) -> Option<String> {
+    first_lua_field_string(script, "Meshes")
+        .or_else(|| first_lua_field_string(script, "Materials"))
+        .or_else(|| first_lua_field_string(script, "Bones"))
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn noteskin_model_field_legacy_for_bench(script: &str) -> Option<String> {
+    first_lua_field_string_legacy(script, "Meshes")
+        .or_else(|| first_lua_field_string_legacy(script, "Materials"))
+        .or_else(|| first_lua_field_string_legacy(script, "Bones"))
+}
+
+#[inline(always)]
+fn normalize_noteskin_template_path(raw: &str) -> Cow<'_, str> {
+    let bytes = raw.as_bytes();
+    let Some(first_separator) = memchr::memchr(b'\\', bytes) else {
+        return Cow::Borrowed(raw);
+    };
+
+    let mut normalized = String::with_capacity(raw.len());
+    normalized.push_str(&raw[..first_separator]);
+    normalized.push('/');
+    let mut copied_through = first_separator + 1;
+    let search_start = copied_through;
+    for relative_index in memchr::memchr_iter(b'\\', &bytes[search_start..]) {
+        let separator = search_start + relative_index;
+        normalized.push_str(&raw[copied_through..separator]);
+        normalized.push('/');
+        copied_through = separator + 1;
+    }
+    normalized.push_str(&raw[copied_through..]);
+    Cow::Owned(normalized)
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn normalize_noteskin_template_path_legacy(raw: &str) -> Cow<'_, str> {
+    Cow::Owned(raw.replace('\\', "/"))
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn normalize_noteskin_template_path_for_bench(raw: &str) -> Cow<'_, str> {
+    normalize_noteskin_template_path(raw)
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn normalize_noteskin_template_path_legacy_for_bench(raw: &str) -> Cow<'_, str> {
+    normalize_noteskin_template_path_legacy(raw)
 }
 
 fn parse_lua_string(script: &str, mut cursor: usize) -> Option<(String, usize)> {
@@ -308,7 +425,7 @@ fn parse_lua_string(script: &str, mut cursor: usize) -> Option<(String, usize)> 
 }
 
 fn resolve_noteskin_template_relative_path(template_path: &Path, raw: &str) -> Option<PathBuf> {
-    let normalized = raw.replace('\\', "/");
+    let normalized = normalize_noteskin_template_path(raw);
     let raw_path = Path::new(normalized.trim());
     if raw_path.is_absolute() && raw_path.is_file() {
         return Some(raw_path.to_path_buf());
@@ -326,4 +443,100 @@ fn tag_song_lua_noteskin_actor(
     actor.set("__songlua_noteskin_name", skin.trim().to_ascii_lowercase())?;
     actor.set("__songlua_noteskin_button", button)?;
     actor.set("__songlua_noteskin_element", element)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn ascii_case_insensitive_find_matches_lowercase_search() {
+        let haystacks = [
+            "",
+            "Def.Model",
+            "prefix NOTESKIN:GetPath suffix",
+            "M\u{e9}shes = 'unicode remains byte-exact'",
+            "no matching model constructor here",
+            "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxDEF.MODEL",
+        ];
+        let needles = [
+            "",
+            "def.model",
+            "noteskin:getpath",
+            "M\u{e9}shes",
+            "MODEL",
+            "missing",
+        ];
+
+        for haystack in haystacks {
+            for needle in needles {
+                assert_eq!(
+                    find_ascii_case_insensitive(haystack, needle),
+                    haystack
+                        .to_ascii_lowercase()
+                        .find(&needle.to_ascii_lowercase()),
+                    "haystack={haystack:?}, needle={needle:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn noteskin_get_path_extraction_matches_legacy() {
+        for script in [
+            "",
+            "return NOTESKIN:GetPath('Down', 'Tap Note')",
+            "local path = noteskin:getpath ( \"Left\", \"Hold Head Active\" )",
+            "local path = NoTeSkIn:GeTpAtH('Up\\\\Arrow', 'Mine')",
+            "return NOTESKIN:GetPath(unquoted, 'Mine')",
+            "-- noteskin:getpath without arguments",
+        ] {
+            assert_eq!(
+                first_noteskin_get_path_args(script),
+                first_noteskin_get_path_args_legacy(script),
+                "script={script:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn noteskin_model_field_extraction_matches_legacy() {
+        for script in [
+            "",
+            "return Def.Model { Meshes = 'arrow.txt' }",
+            "return Def.Model { MATERIALS = \"arrow material.txt\" }",
+            "return Def.Model { bones = 'arrow\\\\bones.txt' }",
+            "return Def.Model { NotMeshes = 'legacy substring behavior' }",
+            "return Def.Model { Meshes = unquoted }",
+        ] {
+            for field in ["Meshes", "Materials", "Bones", "M\u{e9}shes"] {
+                assert_eq!(
+                    first_lua_field_string(script, field),
+                    first_lua_field_string_legacy(script, field),
+                    "script={script:?}, field={field:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn noteskin_template_path_normalization_matches_legacy() {
+        for raw in [
+            "",
+            "arrow.txt",
+            "models/arrow model.txt",
+            r"models\arrow model.txt",
+            r"mixed\path/arrow.txt",
+            r"nested\models\materials\arrow model.txt",
+            " M\u{e9}shes/arrow.txt ",
+        ] {
+            let current = normalize_noteskin_template_path(raw);
+            let legacy = normalize_noteskin_template_path_legacy(raw);
+            assert_eq!(current, legacy, "raw={raw:?}");
+            assert_eq!(
+                matches!(current, Cow::Borrowed(_)),
+                !raw.as_bytes().contains(&b'\\')
+            );
+        }
+    }
 }

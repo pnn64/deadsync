@@ -194,6 +194,13 @@ pub use multitap::{
 };
 pub use net::{create_network_table, encode_query_params, query_value_text, url_encode_component};
 pub use noteskin::{SongLuaActorFactory, create_noteskin_table};
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub use noteskin::{
+    normalize_noteskin_template_path_for_bench, normalize_noteskin_template_path_legacy_for_bench,
+    noteskin_get_path_args_for_bench, noteskin_get_path_args_legacy_for_bench,
+    noteskin_model_field_for_bench, noteskin_model_field_legacy_for_bench,
+};
 pub use option_rows::{
     SongLuaNamedOptionRowSpec, SongLuaOperatorOptionRowSpec, SongLuaOptionRowSpec,
     SongLuaOptionValues, THEME_PREF_ROW_NAMES, conf_option_row_spec, create_conf_option_row,
