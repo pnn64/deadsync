@@ -37,6 +37,11 @@ name = "leaderboard_prioritization"
 harness = false
 required-features = ["bench-support"]
 
+[[bench]]
+name = "score_cache_snapshots"
+harness = false
+required-features = ["bench-support"]
+
 [dependencies]
 bincode = "2.0.1"
 chrono = "0.4.45"
