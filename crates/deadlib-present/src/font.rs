@@ -21,6 +21,7 @@ use std::sync::{Arc, OnceLock};
 
 use image;
 use log::{debug, trace, warn};
+use smallvec::SmallVec;
 
 const FONT_DEFAULT_CHAR: char = '\u{F8FF}'; // SM default glyph (private use)
 const DEFAULT_FONT_IMPORT: &str = "Common default";
@@ -927,10 +928,78 @@ fn is_sprite_sheet_right_boundary(bytes: &[u8], right: usize) -> bool {
         )
 }
 
-/// [section]->{key->val} (both section/key lowercased, value trimmed). Only std.
-/// Allocation-free per line (borrows &str).
-#[inline(always)]
-fn parse_ini_trimmed_map(text: &str) -> HashMap<String, HashMap<String, String>> {
+#[derive(Debug, Default)]
+struct ParsedFontIniSection {
+    values: HashMap<String, String>,
+    raw_lines: HashMap<u32, String>,
+}
+
+#[derive(Debug, Default)]
+struct ParsedFontIni {
+    sections: HashMap<String, ParsedFontIniSection>,
+}
+
+impl ParsedFontIni {
+    #[inline(always)]
+    fn get(&self, section: &str) -> Option<&ParsedFontIniSection> {
+        self.sections.get(section)
+    }
+}
+
+/// Parses normalized key/value settings and raw `Line N` values together.
+fn parse_font_ini(text: &str) -> ParsedFontIni {
+    let mut sections: Vec<(String, ParsedFontIniSection)> = Vec::new();
+    let mut pending_section = String::from("common");
+    let mut current_section = None;
+    for raw in text.lines() {
+        let line = raw.strip_suffix('\r').unwrap_or(raw);
+        if is_full_line_comment(line) {
+            continue;
+        }
+        if let Some(section) = parse_section_header(line) {
+            pending_section = as_lower(section.trim());
+            current_section = sections
+                .iter()
+                .position(|(existing, _)| existing == &pending_section);
+            continue;
+        }
+
+        let trimmed = line.trim();
+        let value = (!trimmed.is_empty())
+            .then(|| parse_kv_trimmed(trimmed))
+            .flatten();
+        let raw_line = parse_line_entry_raw(line);
+        if value.is_none() && raw_line.is_none() {
+            continue;
+        }
+
+        let section_index = current_section.unwrap_or_else(|| {
+            let index = sections.len();
+            sections.push((
+                std::mem::take(&mut pending_section),
+                ParsedFontIniSection::default(),
+            ));
+            current_section = Some(index);
+            index
+        });
+        let section = &mut sections[section_index].1;
+        if let Some((key, value)) = value {
+            section.values.insert(key, value);
+        }
+        if let Some((row, rhs)) = raw_line {
+            section.raw_lines.insert(row, rhs.to_string());
+        }
+    }
+
+    let mut parsed = ParsedFontIni {
+        sections: HashMap::with_capacity(sections.len()),
+    };
+    parsed.sections.extend(sections);
+    parsed
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn parse_ini_trimmed_map_legacy(text: &str) -> HashMap<String, HashMap<String, String>> {
     let mut out: HashMap<String, HashMap<String, String>> = HashMap::new();
     let mut section = String::from("common");
     for raw in text.lines() {
@@ -956,10 +1025,8 @@ fn parse_ini_trimmed_map(text: &str) -> HashMap<String, HashMap<String, String>>
     out
 }
 
-/// Harvest raw line N=... entries, keeping RHS verbatim (no trim).
-/// Allocation-free per line (borrows &str).
-#[inline(always)]
-fn harvest_raw_line_entries_from_text(text: &str) -> HashMap<(String, u32), String> {
+#[cfg(any(test, feature = "bench-support"))]
+fn harvest_raw_line_entries_from_text_legacy(text: &str) -> HashMap<(String, u32), String> {
     let mut out: HashMap<(String, u32), String> = HashMap::new();
     let mut section = String::from("common");
     for raw in text.lines() {
@@ -979,6 +1046,59 @@ fn harvest_raw_line_entries_from_text(text: &str) -> HashMap<(String, u32), Stri
         }
     }
     out
+}
+
+#[cfg(feature = "bench-support")]
+fn parsed_font_ini_checksum(parsed: &ParsedFontIni) -> u64 {
+    let mut checksum = parsed.sections.len() as u64;
+    for (section_name, section) in &parsed.sections {
+        checksum = checksum
+            .wrapping_add((section_name.len() as u64).rotate_left(7))
+            .wrapping_add((section.values.len() as u64).rotate_left(13))
+            .wrapping_add((section.raw_lines.len() as u64).rotate_left(19));
+        for (key, value) in &section.values {
+            checksum = checksum
+                .wrapping_add((key.len() as u64).rotate_left(23))
+                .wrapping_add((value.len() as u64).rotate_left(29));
+        }
+        for (&row, value) in &section.raw_lines {
+            checksum = checksum
+                .wrapping_add(u64::from(row).rotate_left(31))
+                .wrapping_add((value.len() as u64).rotate_left(37));
+        }
+    }
+    checksum
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn parse_font_ini_workload_for_bench(text: &str) -> u64 {
+    parsed_font_ini_checksum(&parse_font_ini(text))
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn parse_font_ini_workload_legacy_for_bench(text: &str) -> u64 {
+    let values = parse_ini_trimmed_map_legacy(text);
+    let raw_lines = harvest_raw_line_entries_from_text_legacy(text);
+    let mut checksum = values.len() as u64;
+    for (section_name, section) in values {
+        checksum = checksum
+            .wrapping_add((section_name.len() as u64).rotate_left(7))
+            .wrapping_add((section.len() as u64).rotate_left(13));
+        for (key, value) in section {
+            checksum = checksum
+                .wrapping_add((key.len() as u64).rotate_left(23))
+                .wrapping_add((value.len() as u64).rotate_left(29));
+        }
+    }
+    for ((_, row), value) in raw_lines {
+        checksum = checksum
+            .wrapping_add(1_u64.rotate_left(19))
+            .wrapping_add(u64::from(row).rotate_left(31))
+            .wrapping_add((value.len() as u64).rotate_left(37));
+    }
+    checksum
 }
 
 /// Page name from filename stem: takes text inside first pair of [...], else "main".
@@ -2320,12 +2440,10 @@ pub fn parse_with_texture_context(
         None
     }
 
-    fn gather_import_specs(
-        ini_map_lower: &HashMap<String, HashMap<String, String>>,
-    ) -> Vec<String> {
+    fn gather_import_specs(ini: &ParsedFontIni) -> Vec<String> {
         let mut specs: Vec<String> = Vec::new();
-        if let Some(map) = ini_map_lower.get("main")
-            && let Some(v) = map.get("import")
+        if let Some(section) = ini.get("main")
+            && let Some(v) = section.values.get("import")
         {
             for s in v.split(',').map(str::trim).filter(|s| !s.is_empty()) {
                 specs.push(s.to_string());
@@ -2385,16 +2503,15 @@ pub fn parse_with_texture_context(
     let mut ini_text = fs::read_to_string(ini_path_str)?;
     ini_text = strip_bom(ini_text);
 
-    let ini_map_lower = parse_ini_trimmed_map(&ini_text);
-    let raw_line_map = harvest_raw_line_entries_from_text(&ini_text);
-    let default_stroke_color = ini_map_lower
+    let ini = parse_font_ini(&ini_text);
+    let default_stroke_color = ini
         .get("common")
-        .and_then(|m| m.get("defaultstrokecolor"))
+        .and_then(|section| section.values.get("defaultstrokecolor"))
         .and_then(|s| parse_rgba_string(s))
         .unwrap_or_else(|| {
-            if let Some(v) = ini_map_lower
+            if let Some(v) = ini
                 .get("common")
-                .and_then(|m| m.get("defaultstrokecolor"))
+                .and_then(|section| section.values.get("defaultstrokecolor"))
             {
                 warn!(
                     "Font '{ini_path_str}' has invalid DefaultStrokeColor '{v}'; using transparent."
@@ -2422,7 +2539,7 @@ pub fn parse_with_texture_context(
         import_specs.push((DEFAULT_FONT_IMPORT.to_string(), true));
     }
     import_specs.extend(
-        gather_import_specs(&ini_map_lower)
+        gather_import_specs(&ini)
             .into_iter()
             .map(|spec| (spec, false)),
     );
@@ -2474,12 +2591,13 @@ pub fn parse_with_texture_context(
 
         // settings: common → page → legacy
         let mut settings = FontPageSettings::default();
-        let mut sections_to_check = vec!["common".to_string(), page_name.clone()];
+        let mut sections_to_check = SmallVec::<[&str; 3]>::from_slice(&["common", &page_name]);
         if page_name == "main" {
-            sections_to_check.push("char widths".to_string());
+            sections_to_check.push("char widths");
         }
-        for section in &sections_to_check {
-            if let Some(map) = ini_map_lower.get(section) {
+        for section_name in &sections_to_check {
+            if let Some(section) = ini.get(section_name) {
+                let map = &section.values;
                 let get_int = |k: &str| -> Option<i32> { map.get(k).and_then(|s| s.parse().ok()) };
                 let get_f32 = |k: &str| -> Option<f32> { map.get(k).and_then(|s| s.parse().ok()) };
 
@@ -2627,8 +2745,8 @@ pub fn parse_with_texture_context(
         // mapping char → frame (SM spill across row up to total_frames)
         let mut char_to_frame: HashMap<char, usize> = HashMap::new();
         for section_name in &sections_to_check {
-            let sec_lc = section_name.clone();
-            if let Some(map) = ini_map_lower.get(&sec_lc) {
+            if let Some(section) = ini.get(section_name) {
+                let map = &section.values;
                 for (key_lc, val_str) in map {
                     if let Some(row_str) = key_lc.strip_prefix("line ") {
                         if let Ok(row) = row_str.trim().parse::<u32>() {
@@ -2637,8 +2755,9 @@ pub fn parse_with_texture_context(
                             }
                             let first_frame = (row * num_frames_wide) as usize;
 
-                            let line_val = raw_line_map
-                                .get(&(sec_lc.clone(), row))
+                            let line_val = section
+                                .raw_lines
+                                .get(&row)
                                 .map_or(val_str.as_str(), |s| s.as_str());
 
                             for (i, ch) in line_val.chars().enumerate() {
@@ -2980,6 +3099,54 @@ mod tests {
             font_import_candidate_indices_legacy("_game chars 36px", &paths)
         );
         assert_eq!(current, vec![0, 1, 2]);
+    }
+
+    #[test]
+    fn combined_font_ini_parser_matches_legacy_maps_exactly() {
+        let text = concat!(
+            "DefaultWidth = 8\r\n",
+            "LINE 0 =  common raw  \r\n",
+            "; ignored\r\n",
+            "[Main]\r\n",
+            "Import = Common normal, Common numbers\r\n",
+            "Line 0= ABC \r\n",
+            "Map U+2605 = 7\r\n",
+            "[empty]\r\n",
+            "// ignored\r\n",
+            "[MAIN]\r\n",
+            "line 0=XYZ  \r\n",
+            "DefaultWidth=11\r\n",
+            "[Char Widths]\r\n",
+            "0=5\r\n",
+            "1 = 6\r\n",
+        );
+
+        let parsed = parse_font_ini(text);
+        let legacy_values = parse_ini_trimmed_map_legacy(text);
+        let legacy_raw_lines = harvest_raw_line_entries_from_text_legacy(text);
+
+        assert_eq!(parsed.sections.len(), legacy_values.len());
+        for (section_name, legacy) in &legacy_values {
+            assert_eq!(
+                parsed.get(section_name).map(|section| &section.values),
+                Some(legacy)
+            );
+        }
+
+        let parsed_raw_count = parsed
+            .sections
+            .values()
+            .map(|section| section.raw_lines.len())
+            .sum::<usize>();
+        assert_eq!(parsed_raw_count, legacy_raw_lines.len());
+        for ((section_name, row), legacy) in &legacy_raw_lines {
+            assert_eq!(
+                parsed
+                    .get(section_name)
+                    .and_then(|section| section.raw_lines.get(row)),
+                Some(legacy)
+            );
+        }
     }
 
     #[test]
