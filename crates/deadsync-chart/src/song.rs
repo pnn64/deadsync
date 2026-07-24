@@ -1,4 +1,5 @@
 use crate::chart::{ChartData, ChartDisplayBpm};
+use std::cmp::Ordering;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
@@ -78,6 +79,32 @@ pub fn chart_ix_for_steps_index(
 
     let edit_index = steps_index - STANDARD_DIFFICULTY_COUNT;
     edits_sorted.get(edit_index).copied()
+}
+
+#[inline]
+fn lowercase_cmp(left: &str, right: &str) -> Ordering {
+    if left.is_ascii() && right.is_ascii() {
+        return left
+            .bytes()
+            .map(|byte| byte.to_ascii_lowercase())
+            .cmp(right.bytes().map(|byte| byte.to_ascii_lowercase()));
+    }
+    left.chars()
+        .flat_map(char::to_lowercase)
+        .cmp(right.chars().flat_map(char::to_lowercase))
+}
+
+#[inline]
+fn edit_chart_cmp(left: &ChartData, right: &ChartData) -> Ordering {
+    lowercase_cmp(&left.description, &right.description)
+        .then_with(|| left.meter.cmp(&right.meter))
+        .then_with(|| left.short_hash.cmp(&right.short_hash))
+}
+
+#[inline(always)]
+fn is_edit_chart(chart: &ChartData, chart_type: &str) -> bool {
+    chart.chart_type.eq_ignore_ascii_case(chart_type)
+        && chart.difficulty.eq_ignore_ascii_case("edit")
 }
 
 #[derive(Clone, Debug)]
@@ -307,10 +334,7 @@ impl SongData {
         let mut edits: Vec<&ChartData> = self
             .charts
             .iter()
-            .filter(|chart| {
-                chart.chart_type.eq_ignore_ascii_case(chart_type)
-                    && chart.difficulty.eq_ignore_ascii_case("edit")
-            })
+            .filter(|chart| is_edit_chart(chart, chart_type))
             .collect();
         edits.sort_by_cached_key(|chart| {
             (
@@ -327,15 +351,7 @@ impl SongData {
             .charts
             .iter()
             .enumerate()
-            .filter_map(|(index, chart)| {
-                if chart.chart_type.eq_ignore_ascii_case(chart_type)
-                    && chart.difficulty.eq_ignore_ascii_case("edit")
-                {
-                    Some(index)
-                } else {
-                    None
-                }
-            })
+            .filter_map(|(index, chart)| is_edit_chart(chart, chart_type).then_some(index))
             .collect();
         indices.sort_by_cached_key(|&index| {
             let chart = &self.charts[index];
@@ -346,6 +362,11 @@ impl SongData {
             )
         });
         indices
+    }
+
+    #[inline]
+    fn edit_chart_index_cmp(&self, left: usize, right: usize) -> Ordering {
+        edit_chart_cmp(&self.charts[left], &self.charts[right]).then_with(|| left.cmp(&right))
     }
 
     #[inline]
@@ -399,17 +420,34 @@ impl SongData {
             return Some(index);
         }
         if chart.difficulty.eq_ignore_ascii_case("edit") {
-            let edits = self.edit_charts_sorted(chart_type);
-            let pos = edits
+            let target_index = self
+                .charts
                 .iter()
-                .position(|chart| chart.short_hash == chart_hash)?;
-            return Some(STANDARD_DIFFICULTY_COUNT + pos);
+                .enumerate()
+                .filter(|(_, candidate)| {
+                    is_edit_chart(candidate, chart_type) && candidate.short_hash == chart_hash
+                })
+                .map(|(index, _)| index)
+                .min_by(|&left, &right| self.edit_chart_index_cmp(left, right))?;
+            let rank = self
+                .charts
+                .iter()
+                .enumerate()
+                .filter(|(_, candidate)| is_edit_chart(candidate, chart_type))
+                .filter(|(index, _)| self.edit_chart_index_cmp(*index, target_index).is_lt())
+                .count();
+            return Some(STANDARD_DIFFICULTY_COUNT + rank);
         }
         None
     }
 
     pub fn steps_len(&self, chart_type: &str) -> usize {
-        STANDARD_DIFFICULTY_COUNT + self.edit_charts_sorted(chart_type).len()
+        STANDARD_DIFFICULTY_COUNT
+            + self
+                .charts
+                .iter()
+                .filter(|chart| is_edit_chart(chart, chart_type))
+                .count()
     }
 
     pub fn best_steps_index(
@@ -434,10 +472,14 @@ impl SongData {
             return best_standard;
         }
 
-        if self.edit_charts_sorted(chart_type).is_empty() {
-            None
-        } else {
+        if self
+            .charts
+            .iter()
+            .any(|chart| is_edit_chart(chart, chart_type))
+        {
             Some(STANDARD_DIFFICULTY_COUNT)
+        } else {
+            None
         }
     }
 
@@ -585,6 +627,197 @@ impl SongData {
             None => self.fallback_background_path(allow_video),
         }
     }
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn edit_charts_sorted_legacy<'a>(song: &'a SongData, chart_type: &str) -> Vec<&'a ChartData> {
+    let mut edits: Vec<&ChartData> = song
+        .charts
+        .iter()
+        .filter(|chart| is_edit_chart(chart, chart_type))
+        .collect();
+    edits.sort_by_cached_key(|chart| {
+        (
+            chart.description.to_lowercase(),
+            chart.meter,
+            chart.short_hash.as_str(),
+        )
+    });
+    edits
+}
+
+#[cfg(test)]
+fn edit_chart_indices_sorted_legacy(song: &SongData, chart_type: &str) -> Vec<usize> {
+    let mut indices: Vec<usize> = song
+        .charts
+        .iter()
+        .enumerate()
+        .filter_map(|(index, chart)| is_edit_chart(chart, chart_type).then_some(index))
+        .collect();
+    indices.sort_by_cached_key(|&index| {
+        let chart = &song.charts[index];
+        (
+            chart.description.to_lowercase(),
+            chart.meter,
+            chart.short_hash.as_str(),
+        )
+    });
+    indices
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn chart_for_steps_index_legacy<'a>(
+    song: &'a SongData,
+    chart_type: &str,
+    steps_index: usize,
+) -> Option<&'a ChartData> {
+    if let Some(diff_name) = STANDARD_DIFFICULTY_NAMES.get(steps_index) {
+        return song.charts.iter().find(|chart| {
+            chart.chart_type.eq_ignore_ascii_case(chart_type)
+                && chart.difficulty.eq_ignore_ascii_case(diff_name)
+        });
+    }
+
+    let edit_index = steps_index.checked_sub(STANDARD_DIFFICULTY_COUNT)?;
+    edit_charts_sorted_legacy(song, chart_type)
+        .get(edit_index)
+        .copied()
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn steps_index_for_chart_hash_legacy(
+    song: &SongData,
+    chart_type: &str,
+    chart_hash: &str,
+) -> Option<usize> {
+    let chart = song.charts.iter().find(|chart| {
+        chart.chart_type.eq_ignore_ascii_case(chart_type) && chart.short_hash == chart_hash
+    })?;
+
+    if let Some(index) = standard_difficulty_index(&chart.difficulty) {
+        return Some(index);
+    }
+    if chart.difficulty.eq_ignore_ascii_case("edit") {
+        let edits = edit_charts_sorted_legacy(song, chart_type);
+        let position = edits
+            .iter()
+            .position(|chart| chart.short_hash == chart_hash)?;
+        return Some(STANDARD_DIFFICULTY_COUNT + position);
+    }
+    None
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn steps_len_legacy(song: &SongData, chart_type: &str) -> usize {
+    STANDARD_DIFFICULTY_COUNT + edit_charts_sorted_legacy(song, chart_type).len()
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn best_steps_index_legacy(
+    song: &SongData,
+    chart_type: &str,
+    preferred_difficulty_index: usize,
+) -> Option<usize> {
+    let preferred = preferred_difficulty_index.min(STANDARD_DIFFICULTY_COUNT - 1);
+    let mut best_standard = None;
+    let mut best_distance = usize::MAX;
+    for index in 0..STANDARD_DIFFICULTY_COUNT {
+        if chart_for_steps_index_legacy(song, chart_type, index).is_none() {
+            continue;
+        }
+        let distance = index.abs_diff(preferred);
+        if distance < best_distance {
+            best_distance = distance;
+            best_standard = Some(index);
+        }
+    }
+    if best_standard.is_some() {
+        return best_standard;
+    }
+
+    if edit_charts_sorted_legacy(song, chart_type).is_empty() {
+        None
+    } else {
+        Some(STANDARD_DIFFICULTY_COUNT)
+    }
+}
+
+#[cfg(feature = "bench-support")]
+fn edit_chart_hash_lookup_checksum(song: &SongData, chart_type: &str, legacy: bool) -> u64 {
+    let mut checksum = 0_u64;
+    for chart in &song.charts {
+        let index = if legacy {
+            steps_index_for_chart_hash_legacy(song, chart_type, &chart.short_hash)
+        } else {
+            song.steps_index_for_chart_hash(chart_type, &chart.short_hash)
+        };
+        checksum = checksum.rotate_left(7) ^ index.unwrap_or(usize::MAX) as u64;
+    }
+    checksum
+}
+
+#[cfg(feature = "bench-support")]
+fn edit_chart_steps_len_checksum(song: &SongData, chart_type: &str, legacy: bool) -> u64 {
+    [chart_type, "dance-double", "missing"]
+        .into_iter()
+        .fold(0_u64, |checksum, candidate| {
+            let len = if legacy {
+                steps_len_legacy(song, candidate)
+            } else {
+                song.steps_len(candidate)
+            };
+            checksum.rotate_left(7) ^ len as u64
+        })
+}
+
+#[cfg(feature = "bench-support")]
+fn edit_chart_best_steps_checksum(song: &SongData, chart_type: &str, legacy: bool) -> u64 {
+    let mut checksum = 0_u64;
+    for preferred in 0..STANDARD_DIFFICULTY_COUNT + 2 {
+        let index = if legacy {
+            best_steps_index_legacy(song, chart_type, preferred)
+        } else {
+            song.best_steps_index(chart_type, preferred)
+        };
+        checksum = checksum.rotate_left(7) ^ index.unwrap_or(usize::MAX) as u64;
+    }
+    checksum
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn edit_chart_hash_lookup_for_bench(song: &SongData, chart_type: &str) -> u64 {
+    edit_chart_hash_lookup_checksum(song, chart_type, false)
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn edit_chart_hash_lookup_legacy_for_bench(song: &SongData, chart_type: &str) -> u64 {
+    edit_chart_hash_lookup_checksum(song, chart_type, true)
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn edit_chart_steps_len_for_bench(song: &SongData, chart_type: &str) -> u64 {
+    edit_chart_steps_len_checksum(song, chart_type, false)
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn edit_chart_steps_len_legacy_for_bench(song: &SongData, chart_type: &str) -> u64 {
+    edit_chart_steps_len_checksum(song, chart_type, true)
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn edit_chart_best_steps_for_bench(song: &SongData, chart_type: &str) -> u64 {
+    edit_chart_best_steps_checksum(song, chart_type, false)
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn edit_chart_best_steps_legacy_for_bench(song: &SongData, chart_type: &str) -> u64 {
+    edit_chart_best_steps_checksum(song, chart_type, true)
 }
 
 #[inline(always)]
@@ -945,6 +1178,78 @@ mod tests {
             song.steps_index_for_chart_hash("dance-single", "later-edit"),
             Some(STANDARD_DIFFICULTY_COUNT + 1)
         );
+    }
+
+    #[test]
+    fn edit_chart_navigation_matches_legacy_order_and_lookups_exactly() {
+        let mut song = song_with_charts(&["Easy", "Challenge"]);
+        for (index, (description, meter, hash)) in [
+            ("Zeta", 9, "zeta"),
+            ("alpha", 12, "alpha-high"),
+            ("ALPHA", 7, "alpha-low"),
+            ("Äpfel", 11, "umlaut-upper"),
+            ("äPFEL", 10, "umlaut-lower"),
+            ("İstanbul", 13, "dotted-i"),
+            ("Straße", 14, "eszett"),
+            ("same", 8, "duplicate"),
+            ("same", 8, "duplicate"),
+            ("same", 8, "duplicate"),
+            ("aardvark", 5, "alpha-high"),
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            let mut chart = chart_with_difficulty("Edit");
+            chart.description = description.to_string();
+            chart.meter = meter;
+            chart.short_hash = hash.to_string();
+            if index == 7 {
+                chart.chart_type = "dance-double".to_string();
+            }
+            song.charts.push(chart);
+        }
+        song.charts.push(chart_with_difficulty("Couple"));
+
+        let optimized_hashes = song
+            .edit_charts_sorted("dance-single")
+            .into_iter()
+            .map(|chart| chart.short_hash.as_str())
+            .collect::<Vec<_>>();
+        let legacy_hashes = edit_charts_sorted_legacy(&song, "dance-single")
+            .into_iter()
+            .map(|chart| chart.short_hash.as_str())
+            .collect::<Vec<_>>();
+        assert_eq!(optimized_hashes, legacy_hashes);
+        assert_eq!(
+            song.edit_chart_indices_sorted("dance-single"),
+            edit_chart_indices_sorted_legacy(&song, "dance-single")
+        );
+        assert_eq!(
+            song.steps_len("dance-single"),
+            steps_len_legacy(&song, "dance-single")
+        );
+        assert_eq!(
+            song.best_steps_index("dance-single", 4),
+            best_steps_index_legacy(&song, "dance-single", 4)
+        );
+
+        for steps_index in 0..song.steps_len("dance-single") + 2 {
+            assert_eq!(
+                song.chart_for_steps_index("dance-single", steps_index)
+                    .map(|chart| chart.short_hash.as_str()),
+                chart_for_steps_index_legacy(&song, "dance-single", steps_index)
+                    .map(|chart| chart.short_hash.as_str()),
+                "steps index {steps_index}"
+            );
+        }
+        for chart in &song.charts {
+            assert_eq!(
+                song.steps_index_for_chart_hash("dance-single", &chart.short_hash),
+                steps_index_for_chart_hash_legacy(&song, "dance-single", &chart.short_hash),
+                "chart hash {:?}",
+                chart.short_hash
+            );
+        }
     }
 
     #[test]
