@@ -18,12 +18,13 @@ use log::{info, warn};
 use mach2::mach_time::{mach_absolute_time, mach_timebase_info, mach_timebase_info_data_t};
 use objc2_core_audio::{
     AudioDeviceID, AudioObjectAddPropertyListener, AudioObjectGetPropertyData,
-    AudioObjectPropertyAddress, AudioObjectRemovePropertyListener,
+    AudioObjectPropertyAddress, AudioObjectRemovePropertyListener, AudioStreamID,
     kAudioDevicePropertyBufferFrameSize, kAudioDevicePropertyDeviceUID,
     kAudioDevicePropertyLatency, kAudioDevicePropertyNominalSampleRate,
-    kAudioDevicePropertySafetyOffset, kAudioHardwareNoError,
+    kAudioDevicePropertySafetyOffset, kAudioDevicePropertyStreams, kAudioHardwareNoError,
     kAudioHardwarePropertyDefaultOutputDevice, kAudioObjectPropertyElementMain,
     kAudioObjectPropertyScopeGlobal, kAudioObjectPropertyScopeOutput, kAudioObjectSystemObject,
+    kAudioStreamPropertyLatency,
 };
 use objc2_core_foundation::{CFRetained, CFString};
 use std::mem::size_of;
@@ -78,7 +79,7 @@ struct OutputLatency {
 
 impl Drop for CoreAudioOutputStream {
     fn drop(&mut self) {
-        if let Some(listener) = self.listener.as_mut() {
+        if let Some(listener) = self.listener.take() {
             listener.unregister();
         }
         if let Some(audio_unit) = self.audio_unit.as_mut() {
@@ -285,6 +286,9 @@ pub fn start(
             latency_ns: Arc::clone(&downstream_latency_ns),
         });
         if listener.register() {
+            // A default-device change between the latency query in `prepare`
+            // and registration would otherwise go unnoticed.
+            listener.refresh();
             Some(listener)
         } else {
             warn!("failed to register CoreAudio default-output listener");
@@ -336,7 +340,7 @@ impl OutputChangeListener {
     fn register(&mut self) -> bool {
         let address = Self::property_address();
         // SAFETY: `self` is boxed before registration and remains at that
-        // address until the listener is unregistered in `Drop`.
+        // address until `unregister` confirms removal (or leaks it).
         unsafe {
             AudioObjectAddPropertyListener(
                 kAudioObjectSystemObject as u32,
@@ -347,16 +351,28 @@ impl OutputChangeListener {
         }
     }
 
-    fn unregister(&mut self) {
+    fn unregister(self: Box<Self>) {
         let address = Self::property_address();
+        let listener = Box::into_raw(self);
         // SAFETY: this uses the same object, callback, and stable client-data
         // pointer passed during registration.
-        unsafe {
+        let status = unsafe {
             AudioObjectRemovePropertyListener(
                 kAudioObjectSystemObject as u32,
                 NonNull::from(&address),
                 Some(output_change_listener),
-                std::ptr::from_mut(self).cast(),
+                listener.cast(),
+            )
+        };
+        if status == kAudioHardwareNoError {
+            // SAFETY: CoreAudio confirmed removal, so it no longer holds the
+            // pointer and the box can be reclaimed exactly once.
+            drop(unsafe { Box::from_raw(listener) });
+        } else {
+            // CoreAudio may still invoke the listener, so the state must
+            // outlive this stream; leaking it is the only safe option.
+            warn!(
+                "failed to remove CoreAudio default-output listener (status={status}); leaking listener state"
             );
         }
     }
@@ -405,9 +421,17 @@ unsafe extern "C-unwind" fn output_change_listener(
 }
 
 fn try_output_latency(device_id: AudioDeviceID) -> Option<OutputLatency> {
-    let frames = output_u32_property(device_id, kAudioDevicePropertyLatency)?.saturating_add(
-        output_u32_property(device_id, kAudioDevicePropertySafetyOffset)?,
-    );
+    let frames = u32_property(
+        device_id,
+        kAudioDevicePropertyLatency,
+        kAudioObjectPropertyScopeOutput,
+    )?
+    .saturating_add(u32_property(
+        device_id,
+        kAudioDevicePropertySafetyOffset,
+        kAudioObjectPropertyScopeOutput,
+    )?)
+    .saturating_add(output_stream_latency_frames(device_id).unwrap_or(0));
     let rate_hz = device_nominal_sample_rate_hz(device_id).ok()?;
     Some(OutputLatency {
         frames,
@@ -416,17 +440,49 @@ fn try_output_latency(device_id: AudioDeviceID) -> Option<OutputLatency> {
     })
 }
 
-fn output_u32_property(device_id: AudioDeviceID, selector: u32) -> Option<u32> {
+fn output_stream_latency_frames(device_id: AudioDeviceID) -> Option<u32> {
+    let property_address = AudioObjectPropertyAddress {
+        mSelector: kAudioDevicePropertyStreams,
+        mScope: kAudioObjectPropertyScopeOutput,
+        mElement: kAudioObjectPropertyElementMain,
+    };
+    let mut stream_id: AudioStreamID = 0;
+    let mut data_size = size_of::<AudioStreamID>() as u32;
+    // SAFETY: the property address is fully initialized and `data_size` caps
+    // the write to one `AudioStreamID`; CoreAudio truncates the stream list to
+    // the caller's buffer, so only the first stream is copied out.
+    let status = unsafe {
+        AudioObjectGetPropertyData(
+            device_id,
+            NonNull::from(&property_address),
+            0,
+            null(),
+            NonNull::from(&mut data_size),
+            NonNull::from(&mut stream_id).cast(),
+        )
+    };
+    if status != kAudioHardwareNoError || (data_size as usize) < size_of::<AudioStreamID>() {
+        return None;
+    }
+    // Streams are scopeless objects; their properties use the global scope.
+    u32_property(
+        stream_id,
+        kAudioStreamPropertyLatency,
+        kAudioObjectPropertyScopeGlobal,
+    )
+}
+
+fn u32_property(object_id: u32, selector: u32, scope: u32) -> Option<u32> {
     let property_address = AudioObjectPropertyAddress {
         mSelector: selector,
-        mScope: kAudioObjectPropertyScopeOutput,
+        mScope: scope,
         mElement: kAudioObjectPropertyElementMain,
     };
     let mut value = 0u32;
     let mut data_size = size_of::<u32>() as u32;
     let status = unsafe {
         AudioObjectGetPropertyData(
-            device_id,
+            object_id,
             NonNull::from(&property_address),
             0,
             null(),
