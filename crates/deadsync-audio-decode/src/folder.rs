@@ -1,14 +1,16 @@
 use std::{
     collections::HashMap,
     path::{Path, PathBuf},
-    sync::{Mutex, OnceLock},
+    sync::{Arc, Mutex, OnceLock},
     time::SystemTime,
 };
 
-static OGG_LISTINGS: OnceLock<Mutex<HashMap<PathBuf, Vec<PathBuf>>>> = OnceLock::new();
+type SharedOggListing = Arc<Vec<PathBuf>>;
+
+static OGG_LISTINGS: OnceLock<Mutex<HashMap<PathBuf, SharedOggListing>>> = OnceLock::new();
 
 #[inline(always)]
-fn listings() -> &'static Mutex<HashMap<PathBuf, Vec<PathBuf>>> {
+fn listings() -> &'static Mutex<HashMap<PathBuf, SharedOggListing>> {
     OGG_LISTINGS.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
@@ -45,17 +47,20 @@ fn list_ogg_files_or_empty(dir: &Path) -> Vec<PathBuf> {
     list_ogg_files(dir).unwrap_or_default()
 }
 
-pub fn cached_ogg_listing(dir: &Path) -> Vec<PathBuf> {
-    let key = dir.to_path_buf();
+fn cached_ogg_listing_shared(dir: &Path) -> SharedOggListing {
     {
         let map = listings().lock().unwrap();
-        if let Some(files) = map.get(&key) {
-            return files.clone();
+        if let Some(files) = map.get(dir) {
+            return Arc::clone(files);
         }
     }
-    let files = list_ogg_files_or_empty(dir);
+    let files = Arc::new(list_ogg_files_or_empty(dir));
     let mut map = listings().lock().unwrap();
-    map.entry(key).or_insert(files).clone()
+    Arc::clone(map.entry(dir.to_path_buf()).or_insert(files))
+}
+
+pub fn cached_ogg_listing(dir: &Path) -> Vec<PathBuf> {
+    cached_ogg_listing_shared(dir).as_ref().clone()
 }
 
 /// Invalidates a cached listing. This is test-only because sound-folder
@@ -82,11 +87,81 @@ fn time_based_index(len: usize) -> usize {
 }
 
 pub fn pick_random_ogg(dir: &Path) -> Option<PathBuf> {
-    let listing = cached_ogg_listing(dir);
+    let listing = cached_ogg_listing_shared(dir);
     if listing.is_empty() {
         return None;
     }
     listing.get(time_based_index(listing.len())).cloned()
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+#[doc(hidden)]
+pub struct OggListingBenchFixture {
+    dir: PathBuf,
+    legacy: HashMap<PathBuf, Vec<PathBuf>>,
+    shared: HashMap<PathBuf, SharedOggListing>,
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+impl OggListingBenchFixture {
+    pub fn new(file_count: usize) -> Self {
+        let dir = PathBuf::from("assets/sounds/announcers/benchmark");
+        let files = (0..file_count)
+            .map(|index| dir.join(format!("voice-line-{index:03}.ogg")))
+            .collect::<Vec<_>>();
+        let legacy = HashMap::from([(dir.clone(), files.clone())]);
+        let shared = HashMap::from([(dir.clone(), Arc::new(files))]);
+        Self {
+            dir,
+            legacy,
+            shared,
+        }
+    }
+
+    #[inline(always)]
+    pub fn legacy_key_probe(&self) -> usize {
+        let key = self.dir.to_path_buf();
+        self.legacy.get(&key).map_or(0, Vec::len)
+    }
+
+    #[inline(always)]
+    pub fn shared_key_probe(&self) -> usize {
+        self.shared
+            .get(self.dir.as_path())
+            .map_or(0, |files| files.len())
+    }
+
+    #[inline(always)]
+    pub fn legacy_listing_snapshot(&self) -> Vec<PathBuf> {
+        let key = self.dir.to_path_buf();
+        self.legacy.get(&key).cloned().unwrap_or_default()
+    }
+
+    #[inline(always)]
+    pub fn shared_listing_snapshot(&self) -> SharedOggListing {
+        self.shared
+            .get(self.dir.as_path())
+            .map(Arc::clone)
+            .unwrap_or_default()
+    }
+
+    #[inline(always)]
+    pub fn legacy_random_pick(&self, index: usize) -> Option<PathBuf> {
+        let listing = self.legacy_listing_snapshot();
+        if listing.is_empty() {
+            return None;
+        }
+        listing.get(index % listing.len()).cloned()
+    }
+
+    #[inline(always)]
+    pub fn shared_random_pick(&self, index: usize) -> Option<PathBuf> {
+        let listing = self.shared_listing_snapshot();
+        if listing.is_empty() {
+            return None;
+        }
+        listing.get(index % listing.len()).cloned()
+    }
 }
 
 pub fn pick_indexed_ogg(dir: &Path, index: u32, fallback_name: &str) -> Option<PathBuf> {
@@ -342,6 +417,44 @@ mod tests {
         let second = cached_ogg_listing(dir.path());
 
         assert_eq!(first, second);
+    }
+
+    #[test]
+    fn shared_cached_ogg_listing_reuses_first_allocation() {
+        let dir = TmpDir::new("shared-cache");
+        write(dir.path(), "a.ogg");
+        invalidate_ogg_listing_cache(dir.path());
+
+        let first = cached_ogg_listing_shared(dir.path());
+        write(dir.path(), "b.ogg");
+        let second = cached_ogg_listing_shared(dir.path());
+
+        assert!(Arc::ptr_eq(&first, &second));
+        assert_eq!(first.as_slice(), [dir.path().join("a.ogg")]);
+    }
+
+    #[test]
+    fn optimized_listing_operations_match_legacy_behavior() {
+        for file_count in [0, 1, 2, 64] {
+            let fixture = OggListingBenchFixture::new(file_count);
+
+            assert_eq!(fixture.legacy_key_probe(), fixture.shared_key_probe());
+            assert_eq!(
+                fixture.legacy_listing_snapshot(),
+                *fixture.shared_listing_snapshot()
+            );
+            if file_count == 0 {
+                assert_eq!(fixture.legacy_random_pick(0), None);
+                assert_eq!(fixture.shared_random_pick(0), None);
+                continue;
+            }
+            for index in [0, file_count / 2, file_count - 1, file_count + 1] {
+                assert_eq!(
+                    fixture.legacy_random_pick(index),
+                    fixture.shared_random_pick(index)
+                );
+            }
+        }
     }
 
     #[test]

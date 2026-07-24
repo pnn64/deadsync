@@ -17,6 +17,11 @@ name = "planar_accum_push"
 harness = false
 required-features = ["bench-support"]
 
+[[bench]]
+name = "folder_listing_cache"
+harness = false
+required-features = ["bench-support"]
+
 [dependencies]
 ogg = "0.9.2"
 opusic-c = "1.6.1"
