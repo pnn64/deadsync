@@ -4,6 +4,10 @@ use std::sync::RwLock;
 use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 
+#[cfg(any(test, feature = "bench-support"))]
+use std::hash::BuildHasher;
+
+use rustc_hash::FxHashMap;
 use winit::keyboard::KeyCode;
 
 use crate::debounce::{
@@ -85,7 +89,47 @@ struct CompiledPadCodeRev {
 #[derive(Clone, Debug)]
 struct CompiledPadCodeMap {
     slot: u32,
+    wildcard_mask: u32,
     entries: Vec<CompiledPadCodeRev>,
+}
+
+#[inline]
+fn compile_pad_code_map(entries: &[PadCodeRev], slot: u32) -> CompiledPadCodeMap {
+    let mut wildcard_mask = 0;
+    let specific_capacity = entries
+        .iter()
+        .filter(|entry| !entry.act.is_system() && (entry.device.is_some() || entry.uuid.is_some()))
+        .count();
+    let mut compiled_entries = Vec::with_capacity(specific_capacity);
+    for entry in entries {
+        if entry.act.is_system() {
+            continue;
+        }
+        if entry.device.is_none() && entry.uuid.is_none() {
+            wildcard_mask |= entry.act.bit();
+            continue;
+        }
+        if let Some(existing) =
+            compiled_entries
+                .iter_mut()
+                .find(|item: &&mut CompiledPadCodeRev| {
+                    item.device == entry.device && item.uuid == entry.uuid
+                })
+        {
+            existing.mask |= entry.act.bit();
+            continue;
+        }
+        compiled_entries.push(CompiledPadCodeRev {
+            mask: entry.act.bit(),
+            device: entry.device,
+            uuid: entry.uuid,
+        });
+    }
+    CompiledPadCodeMap {
+        slot,
+        wildcard_mask,
+        entries: compiled_entries,
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -93,8 +137,8 @@ struct CompiledKeymap {
     key_rev: Box<[CompiledBindingRev]>,
     key_rev_extra: HashMap<KeyCode, CompiledBindingRev>,
     pad_dir_rev: [u32; 4],
-    pad_dir_on_rev: HashMap<(usize, PadDir), u32>,
-    pad_code_rev: HashMap<u32, CompiledPadCodeMap>,
+    pad_dir_on_rev: FxHashMap<(usize, PadDir), u32>,
+    pad_code_rev: FxHashMap<u32, CompiledPadCodeMap>,
     key_slot_count: usize,
     pad_stride: usize,
     pad_slot_count: usize,
@@ -106,8 +150,8 @@ impl Default for CompiledKeymap {
             key_rev: new_compiled_key_rev(),
             key_rev_extra: HashMap::new(),
             pad_dir_rev: [0; 4],
-            pad_dir_on_rev: HashMap::new(),
-            pad_code_rev: HashMap::new(),
+            pad_dir_on_rev: FxHashMap::default(),
+            pad_code_rev: FxHashMap::default(),
             key_slot_count: 0,
             pad_stride: 4,
             pad_slot_count: 0,
@@ -165,7 +209,8 @@ impl CompiledKeymap {
             }
             pad_dir_rev[ix] = mask & !SYSTEM_ACTION_MASK;
         }
-        let mut pad_dir_on_rev = HashMap::with_capacity(km.pad_dir_on_rev.len());
+        let mut pad_dir_on_rev =
+            FxHashMap::with_capacity_and_hasher(km.pad_dir_on_rev.len(), Default::default());
         let mut max_pad_device: Option<usize> = None;
         for (&key, actions) in &km.pad_dir_on_rev {
             let mut mask = 0;
@@ -179,40 +224,17 @@ impl CompiledKeymap {
             max_pad_device = Some(max_pad_device.map_or(key.0, |max| max.max(key.0)));
             pad_dir_on_rev.insert(key, mask);
         }
-        let mut pad_code_rev = HashMap::with_capacity(km.pad_code_rev.len());
+        let mut pad_code_rev =
+            FxHashMap::with_capacity_and_hasher(km.pad_code_rev.len(), Default::default());
         let mut next_pad_button_slot = 0u32;
         for (&code, entries) in &km.pad_code_rev {
-            let mut compiled_entries = Vec::with_capacity(entries.len());
-            for entry in entries {
-                if entry.act.is_system() {
-                    continue;
-                }
-                if let Some(existing) =
-                    compiled_entries
-                        .iter_mut()
-                        .find(|item: &&mut CompiledPadCodeRev| {
-                            item.device == entry.device && item.uuid == entry.uuid
-                        })
-                {
-                    existing.mask |= entry.act.bit();
-                    continue;
-                }
-                compiled_entries.push(CompiledPadCodeRev {
-                    mask: entry.act.bit(),
-                    device: entry.device,
-                    uuid: entry.uuid,
-                });
+            let compiled = compile_pad_code_map(entries, next_pad_button_slot);
+            for entry in &compiled.entries {
                 if let Some(device) = entry.device {
                     max_pad_device = Some(max_pad_device.map_or(device, |max| max.max(device)));
                 }
             }
-            pad_code_rev.insert(
-                code,
-                CompiledPadCodeMap {
-                    slot: next_pad_button_slot,
-                    entries: compiled_entries,
-                },
-            );
+            pad_code_rev.insert(code, compiled);
             next_pad_button_slot = next_pad_button_slot.saturating_add(1);
         }
         let pad_stride = 4 + next_pad_button_slot as usize;
@@ -610,7 +632,7 @@ fn collect_pad_button_binding_from_compiled(
         return None;
     };
     let dev = usize::from(id);
-    let mut mask = 0;
+    let mut mask = code_map.wildcard_mask;
     for entry in &code_map.entries {
         if let Some(d_expected) = entry.device
             && d_expected != dev
@@ -631,6 +653,278 @@ fn collect_pad_button_binding_from_compiled(
         mask,
         slot: code_map.slot,
     })
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+const BENCH_PAD_DEVICES: usize = 8;
+#[cfg(any(test, feature = "bench-support"))]
+const BENCH_PAD_CODES: usize = 32;
+#[cfg(any(test, feature = "bench-support"))]
+const BENCH_LOOKUP_ROUNDS: usize = 64;
+#[cfg(any(test, feature = "bench-support"))]
+const BENCH_PAD_DIRS: [PadDir; 4] = [PadDir::Up, PadDir::Down, PadDir::Left, PadDir::Right];
+
+#[cfg(any(test, feature = "bench-support"))]
+#[derive(Clone, Debug)]
+struct LegacyCompiledPadCodeMap {
+    slot: u32,
+    entries: Vec<CompiledPadCodeRev>,
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn compile_pad_code_map_legacy(entries: &[PadCodeRev], slot: u32) -> LegacyCompiledPadCodeMap {
+    let mut compiled_entries = Vec::with_capacity(entries.len());
+    for entry in entries {
+        if entry.act.is_system() {
+            continue;
+        }
+        if let Some(existing) =
+            compiled_entries
+                .iter_mut()
+                .find(|item: &&mut CompiledPadCodeRev| {
+                    item.device == entry.device && item.uuid == entry.uuid
+                })
+        {
+            existing.mask |= entry.act.bit();
+            continue;
+        }
+        compiled_entries.push(CompiledPadCodeRev {
+            mask: entry.act.bit(),
+            device: entry.device,
+            uuid: entry.uuid,
+        });
+    }
+    LegacyCompiledPadCodeMap {
+        slot,
+        entries: compiled_entries,
+    }
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+#[inline]
+fn bench_pad_code(index: usize) -> u32 {
+    0x0009_0000_u32.wrapping_add((index as u32).wrapping_mul(257))
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn bench_pad_code_entries(index: usize) -> ([PadCodeRev; 4], usize) {
+    let device = index % BENCH_PAD_DEVICES;
+    let uuid = [index as u8; 16];
+    let entries = [
+        PadCodeRev {
+            act: VirtualAction::p1_left,
+            device: None,
+            uuid: None,
+        },
+        PadCodeRev {
+            act: VirtualAction::p1_down,
+            device: Some(device),
+            uuid: None,
+        },
+        PadCodeRev {
+            act: VirtualAction::p1_up,
+            device: None,
+            uuid: Some(uuid),
+        },
+        PadCodeRev {
+            act: VirtualAction::p1_right,
+            device: Some(device),
+            uuid: Some(uuid),
+        },
+    ];
+    let len = match index % 4 {
+        0 => 1,
+        1 => 2,
+        2 => 3,
+        _ => 4,
+    };
+    (entries, len)
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn pad_direction_lookup_checksum<S>() -> u64
+where
+    S: BuildHasher + Default,
+{
+    let mut device_masks =
+        HashMap::with_capacity_and_hasher(BENCH_PAD_DEVICES * BENCH_PAD_DIRS.len(), S::default());
+    for device in 0..BENCH_PAD_DEVICES {
+        for dir in BENCH_PAD_DIRS {
+            let mask = 1_u32 << ((device + dir.ix()) % 24);
+            device_masks.insert((device, dir), mask);
+        }
+    }
+
+    let global_masks = [0x11_u32, 0x22, 0x44, 0x88];
+    let mut checksum = 0_u64;
+    for round in 0..BENCH_LOOKUP_ROUNDS {
+        for device in 0..BENCH_PAD_DEVICES + 3 {
+            for dir in BENCH_PAD_DIRS {
+                let mask =
+                    global_masks[dir.ix()] | device_masks.get(&(device, dir)).copied().unwrap_or(0);
+                checksum = checksum.rotate_left(5)
+                    ^ u64::from(mask)
+                    ^ (round as u64).rotate_left(dir.ix() as u32);
+            }
+        }
+    }
+    checksum
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn build_legacy_pad_codes<S>() -> HashMap<u32, LegacyCompiledPadCodeMap, S>
+where
+    S: BuildHasher + Default,
+{
+    let mut maps = HashMap::with_capacity_and_hasher(BENCH_PAD_CODES, S::default());
+    for index in 0..BENCH_PAD_CODES {
+        let (entries, len) = bench_pad_code_entries(index);
+        maps.insert(
+            bench_pad_code(index),
+            compile_pad_code_map_legacy(&entries[..len], index as u32),
+        );
+    }
+    maps
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn build_optimized_pad_codes() -> FxHashMap<u32, CompiledPadCodeMap> {
+    let mut maps = FxHashMap::with_capacity_and_hasher(BENCH_PAD_CODES, Default::default());
+    for index in 0..BENCH_PAD_CODES {
+        let (entries, len) = bench_pad_code_entries(index);
+        maps.insert(
+            bench_pad_code(index),
+            compile_pad_code_map(&entries[..len], index as u32),
+        );
+    }
+    maps
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn legacy_pad_code_mask(map: &LegacyCompiledPadCodeMap, device: usize, uuid: [u8; 16]) -> u32 {
+    map.entries
+        .iter()
+        .filter(|entry| entry.device.is_none_or(|expected| expected == device))
+        .filter(|entry| entry.uuid.is_none_or(|expected| expected == uuid))
+        .fold(0, |mask, entry| mask | entry.mask)
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn optimized_pad_code_mask(map: &CompiledPadCodeMap, device: usize, uuid: [u8; 16]) -> u32 {
+    map.entries
+        .iter()
+        .filter(|entry| entry.device.is_none_or(|expected| expected == device))
+        .filter(|entry| entry.uuid.is_none_or(|expected| expected == uuid))
+        .fold(map.wildcard_mask, |mask, entry| mask | entry.mask)
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn raw_pad_button_lookup_checksum_legacy() -> u64 {
+    let maps = build_legacy_pad_codes::<std::collections::hash_map::RandomState>();
+    let mut checksum = 0_u64;
+    for round in 0..BENCH_LOOKUP_ROUNDS {
+        for index in 0..BENCH_PAD_CODES + 8 {
+            let code = bench_pad_code(index);
+            let device = if round % 3 == 0 {
+                index % BENCH_PAD_DEVICES
+            } else {
+                BENCH_PAD_DEVICES + 1
+            };
+            let uuid = if round % 2 == 0 {
+                [index as u8; 16]
+            } else {
+                [0xff; 16]
+            };
+            let (slot, mask) = maps
+                .get(&code)
+                .map(|map| (map.slot, legacy_pad_code_mask(map, device, uuid)))
+                .unwrap_or((u32::MAX, 0));
+            checksum = checksum.rotate_left(5) ^ u64::from(slot) ^ u64::from(mask).rotate_left(13);
+        }
+    }
+    checksum
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn raw_pad_button_lookup_checksum() -> u64 {
+    let maps = build_optimized_pad_codes();
+    let mut checksum = 0_u64;
+    for round in 0..BENCH_LOOKUP_ROUNDS {
+        for index in 0..BENCH_PAD_CODES + 8 {
+            let code = bench_pad_code(index);
+            let device = if round % 3 == 0 {
+                index % BENCH_PAD_DEVICES
+            } else {
+                BENCH_PAD_DEVICES + 1
+            };
+            let uuid = if round % 2 == 0 {
+                [index as u8; 16]
+            } else {
+                [0xff; 16]
+            };
+            let (slot, mask) = maps
+                .get(&code)
+                .map(|map| (map.slot, optimized_pad_code_mask(map, device, uuid)))
+                .unwrap_or((u32::MAX, 0));
+            checksum = checksum.rotate_left(5) ^ u64::from(slot) ^ u64::from(mask).rotate_left(13);
+        }
+    }
+    checksum
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn pad_code_build_checksum_legacy() -> u64 {
+    let maps = build_legacy_pad_codes::<std::collections::hash_map::RandomState>();
+    (0..BENCH_PAD_CODES).fold(0_u64, |checksum, index| {
+        let map = &maps[&bench_pad_code(index)];
+        checksum.rotate_left(5) ^ u64::from(map.slot) ^ map.entries.len() as u64
+    })
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn pad_code_build_checksum() -> u64 {
+    let maps = build_optimized_pad_codes();
+    (0..BENCH_PAD_CODES).fold(0_u64, |checksum, index| {
+        let map = &maps[&bench_pad_code(index)];
+        let stored_bindings = map.entries.len() + usize::from(map.wildcard_mask.count_ones() != 0);
+        checksum.rotate_left(5) ^ u64::from(map.slot) ^ stored_bindings as u64
+    })
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn pad_direction_lookup_for_bench() -> u64 {
+    pad_direction_lookup_checksum::<rustc_hash::FxBuildHasher>()
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn pad_direction_lookup_legacy_for_bench() -> u64 {
+    pad_direction_lookup_checksum::<std::collections::hash_map::RandomState>()
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn raw_pad_button_lookup_for_bench() -> u64 {
+    raw_pad_button_lookup_checksum()
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn raw_pad_button_lookup_legacy_for_bench() -> u64 {
+    raw_pad_button_lookup_checksum_legacy()
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn pad_code_build_for_bench() -> u64 {
+    pad_code_build_checksum()
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn pad_code_build_legacy_for_bench() -> u64 {
+    pad_code_build_checksum_legacy()
 }
 
 #[inline(always)]
@@ -857,6 +1151,69 @@ mod tests {
             assert_eq!(actual.timestamp_host_nanos, expected.timestamp_host_nanos);
             assert_eq!(actual.stored_at, expected.stored_at);
             assert_eq!(actual.emitted_at, expected.emitted_at);
+        }
+    }
+
+    #[test]
+    fn optimized_pad_tables_match_legacy_lookup_and_compilation_exactly() {
+        assert_eq!(
+            pad_direction_lookup_checksum::<std::collections::hash_map::RandomState>(),
+            pad_direction_lookup_checksum::<rustc_hash::FxBuildHasher>()
+        );
+        assert_eq!(
+            raw_pad_button_lookup_checksum_legacy(),
+            raw_pad_button_lookup_checksum()
+        );
+        assert_eq!(pad_code_build_checksum_legacy(), pad_code_build_checksum());
+
+        let entries = [
+            PadCodeRev {
+                act: VirtualAction::p1_left,
+                device: None,
+                uuid: None,
+            },
+            PadCodeRev {
+                act: VirtualAction::p1_menu_left,
+                device: None,
+                uuid: None,
+            },
+            PadCodeRev {
+                act: VirtualAction::p1_down,
+                device: Some(2),
+                uuid: None,
+            },
+            PadCodeRev {
+                act: VirtualAction::p1_up,
+                device: None,
+                uuid: Some([7; 16]),
+            },
+            PadCodeRev {
+                act: VirtualAction::p1_right,
+                device: Some(2),
+                uuid: Some([7; 16]),
+            },
+            PadCodeRev {
+                act: VirtualAction::p2_right,
+                device: Some(2),
+                uuid: Some([7; 16]),
+            },
+        ];
+        let legacy = compile_pad_code_map_legacy(&entries, 17);
+        let optimized = compile_pad_code_map(&entries, 17);
+        assert_eq!(optimized.slot, legacy.slot);
+        assert_eq!(optimized.entries.len(), 3);
+        for (device, uuid) in [
+            (0, [0; 16]),
+            (2, [0; 16]),
+            (0, [7; 16]),
+            (2, [7; 16]),
+            (9, [9; 16]),
+        ] {
+            assert_eq!(
+                optimized_pad_code_mask(&optimized, device, uuid),
+                legacy_pad_code_mask(&legacy, device, uuid),
+                "device {device}, uuid {uuid:?}"
+            );
         }
     }
 
