@@ -6594,6 +6594,92 @@ mod tests {
     }
 
     #[test]
+    fn song_lua_ease_tail_index_matches_legacy_for_unsorted_windows() {
+        let mut windows = (0..320)
+            .map(|index| {
+                let slot: usize = (index * 73) % 320;
+                let start =
+                    (slot / 2) as f32 * 0.25 + if slot.is_multiple_of(2) { 0.0 } else { 0.0005 };
+                let end = start + 0.125 + (index % 3) as f32 * 0.05;
+                let target = match index % 8 {
+                    0 => SongLuaEaseMaskTarget::AppearanceStealth,
+                    1 => SongLuaEaseMaskTarget::VisualDrunk,
+                    2 => SongLuaEaseMaskTarget::VisualBumpyColumn(index % MAX_COLS),
+                    3 => SongLuaEaseMaskTarget::VisualMoveXColumn(index % MAX_COLS),
+                    4 => SongLuaEaseMaskTarget::ScrollReverse,
+                    5 => SongLuaEaseMaskTarget::MiniPercent,
+                    6 => SongLuaEaseMaskTarget::PlayerX,
+                    _ => SongLuaEaseMaskTarget::PlayerRotationZ,
+                };
+                song_lua_ease_mask_window(
+                    target,
+                    start,
+                    end,
+                    if index.is_multiple_of(5) {
+                        end + 3.0
+                    } else {
+                        end
+                    },
+                    index as f32,
+                    index as f32 + 1.0,
+                )
+            })
+            .collect::<Vec<_>>();
+        let mut mods = ParsedAttackMods::default();
+        mods.appearance.stealth = Some(1.0);
+        mods.visual.drunk = Some(1.0);
+        let constants = [
+            attack_mask_window(4.0, 12.0, mods),
+            attack_mask_window(
+                18.0,
+                24.0,
+                ParsedAttackMods {
+                    clear_all: true,
+                    ..ParsedAttackMods::default()
+                },
+            ),
+        ];
+        let mut legacy = windows.clone();
+
+        song_lua_extend_ease_tails_legacy_for_bench(&mut legacy, &constants);
+        song_lua_extend_ease_tails(&mut windows, &constants);
+
+        for (current, expected) in windows.iter().zip(&legacy) {
+            assert_eq!(current.target, expected.target);
+            assert_eq!(
+                current.sustain_end_second.to_bits(),
+                expected.sustain_end_second.to_bits()
+            );
+        }
+    }
+
+    #[test]
+    fn song_lua_ease_tail_index_preserves_nonfinite_legacy_behavior() {
+        let mut windows = vec![
+            song_lua_ease_mask_window(SongLuaEaseMaskTarget::VisualDrunk, 1.0, 2.0, 2.0, 0.0, 1.0),
+            song_lua_ease_mask_window(
+                SongLuaEaseMaskTarget::VisualDrunk,
+                f32::NAN,
+                3.0,
+                3.0,
+                1.0,
+                0.0,
+            ),
+        ];
+        let mut legacy = windows.clone();
+
+        song_lua_extend_ease_tails_legacy_for_bench(&mut legacy, &[]);
+        song_lua_extend_ease_tails(&mut windows, &[]);
+
+        for (current, expected) in windows.iter().zip(&legacy) {
+            assert_eq!(
+                current.sustain_end_second.to_bits(),
+                expected.sustain_end_second.to_bits()
+            );
+        }
+    }
+
+    #[test]
     fn song_lua_column_offset_tails_stop_at_next_same_column() {
         let mut windows = [
             song_lua_column_offset_window(2, 1.0, 2.0, 2.0),
@@ -6636,6 +6722,40 @@ mod tests {
 
         assert_near(windows[0].sustain_end_second, 3.0);
         assert_near(windows[2].sustain_end_second, 5.0);
+    }
+
+    #[test]
+    fn song_lua_column_tail_index_matches_legacy_for_unsorted_windows() {
+        let mut windows = (0..256)
+            .map(|index| {
+                let slot: usize = (index * 61) % 256;
+                let start =
+                    (slot / 2) as f32 * 0.125 + if slot.is_multiple_of(2) { 0.0 } else { 0.0005 };
+                let end = start + 0.25;
+                song_lua_column_offset_window(
+                    index % MAX_COLS,
+                    start,
+                    end,
+                    if index.is_multiple_of(7) {
+                        end + 2.0
+                    } else {
+                        end
+                    },
+                )
+            })
+            .collect::<Vec<_>>();
+        let mut legacy = windows.clone();
+
+        song_lua_extend_column_offset_tails_legacy_for_bench(&mut legacy);
+        song_lua_extend_column_offset_tails(&mut windows);
+
+        for (current, expected) in windows.iter().zip(&legacy) {
+            assert_eq!(current.column, expected.column);
+            assert_eq!(
+                current.sustain_end_second.to_bits(),
+                expected.sustain_end_second.to_bits()
+            );
+        }
     }
 
     #[test]
@@ -6823,6 +6943,28 @@ mod tests {
         assert_near(flat[2].start_second, 1.0);
         assert_near(flat[2].end_second, 3.0);
         assert_near(flat[3].start_second, 4.0);
+    }
+
+    #[test]
+    fn song_lua_overlay_ease_in_place_grouping_matches_legacy() {
+        let windows = (0..256)
+            .map(|index| {
+                let slot = (index * 43) % 256;
+                let start = (slot / 3) as f32 * 0.25;
+                song_lua_overlay_ease_window(
+                    index % 19,
+                    start,
+                    start + (index % 5 + 1) as f32 * 0.1,
+                    start + (index % 7 + 1) as f32 * 0.2,
+                    index.is_multiple_of(3).then_some(start + 1.0),
+                )
+            })
+            .collect::<Vec<_>>();
+
+        let legacy = group_song_lua_overlay_eases_legacy_for_bench(16, windows.clone());
+        let current = group_song_lua_overlay_eases(16, windows);
+
+        assert_eq!(current, legacy);
     }
 
     #[test]

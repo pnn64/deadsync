@@ -437,7 +437,7 @@ pub fn build_song_lua_constant_attack_mask_window(
     })
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum SongLuaEaseMaskTarget {
     AccelBoost,
     AccelBrake,
@@ -2029,7 +2029,25 @@ fn song_lua_constant_cutoff_second(
     }
 }
 
-pub fn song_lua_extend_ease_tails(
+const SONG_LUA_TAIL_STACK_CAPACITY: usize = 256;
+
+fn with_song_lua_tail_indices<Output>(
+    len: usize,
+    use_indices: impl FnOnce(&mut [usize]) -> Output,
+) -> Output {
+    if len <= SONG_LUA_TAIL_STACK_CAPACITY {
+        let mut values = [0; SONG_LUA_TAIL_STACK_CAPACITY];
+        for (index, value) in values.iter_mut().take(len).enumerate() {
+            *value = index;
+        }
+        use_indices(&mut values[..len])
+    } else {
+        let mut values = (0..len).collect::<Vec<_>>();
+        use_indices(&mut values)
+    }
+}
+
+fn song_lua_extend_ease_tails_legacy(
     out: &mut [SongLuaEaseMaskWindow],
     constants: &[AttackMaskWindow],
 ) {
@@ -2078,7 +2096,75 @@ pub fn song_lua_extend_ease_tails(
     }
 }
 
-pub fn song_lua_extend_column_offset_tails(out: &mut [SongLuaColumnOffsetWindowRuntime]) {
+#[cfg(any(test, feature = "bench-support"))]
+pub fn song_lua_extend_ease_tails_legacy_for_bench(
+    out: &mut [SongLuaEaseMaskWindow],
+    constants: &[AttackMaskWindow],
+) {
+    song_lua_extend_ease_tails_legacy(out, constants);
+}
+
+pub fn song_lua_extend_ease_tails(
+    out: &mut [SongLuaEaseMaskWindow],
+    constants: &[AttackMaskWindow],
+) {
+    const SAME_TICK_EPSILON: f32 = 0.001;
+
+    if out.iter().any(|window| !window.start_second.is_finite()) {
+        song_lua_extend_ease_tails_legacy(out, constants);
+        return;
+    }
+
+    with_song_lua_tail_indices(out.len(), |indices| {
+        indices.sort_unstable_by(|&left, &right| {
+            out[left]
+                .target
+                .cmp(&out[right].target)
+                .then_with(|| out[left].start_second.total_cmp(&out[right].start_second))
+                .then_with(|| left.cmp(&right))
+        });
+        let mut group_start = 0;
+        while group_start < indices.len() {
+            let target = out[indices[group_start]].target;
+            let group_end = indices[group_start..]
+                .partition_point(|&index| out[index].target == target)
+                + group_start;
+            let mut next = group_start + 1;
+            for position in group_start..group_end {
+                next = next.max(position + 1);
+                let index = indices[position];
+                let start_second = out[index].start_second;
+                while next < group_end
+                    && out[indices[next]].start_second <= start_second + SAME_TICK_EPSILON
+                {
+                    next += 1;
+                }
+
+                let window = &out[index];
+                let default_end =
+                    if window.sustain_end_second > window.end_second + SAME_TICK_EPSILON {
+                        window.sustain_end_second
+                    } else {
+                        f32::MAX
+                    };
+                let next_start = (next < group_end).then(|| out[indices[next]].start_second);
+                let cutoff_second = constants
+                    .iter()
+                    .filter_map(|constant| {
+                        song_lua_constant_cutoff_second(constant, window, SAME_TICK_EPSILON)
+                    })
+                    .fold(next_start, |acc, start| {
+                        Some(acc.map_or(start, |current| current.min(start)))
+                    });
+                out[index].sustain_end_second =
+                    cutoff_second.map_or(default_end, |cutoff| default_end.min(cutoff));
+            }
+            group_start = group_end;
+        }
+    });
+}
+
+fn song_lua_extend_column_offset_tails_legacy(out: &mut [SongLuaColumnOffsetWindowRuntime]) {
     const SAME_TICK_EPSILON: f32 = 0.001;
 
     for i in 0..out.len() {
@@ -2111,6 +2197,63 @@ pub fn song_lua_extend_column_offset_tails(out: &mut [SongLuaColumnOffsetWindowR
         out[i].sustain_end_second =
             cutoff_second.map_or(default_end, |cutoff| default_end.min(cutoff));
     }
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+pub fn song_lua_extend_column_offset_tails_legacy_for_bench(
+    out: &mut [SongLuaColumnOffsetWindowRuntime],
+) {
+    song_lua_extend_column_offset_tails_legacy(out);
+}
+
+pub fn song_lua_extend_column_offset_tails(out: &mut [SongLuaColumnOffsetWindowRuntime]) {
+    const SAME_TICK_EPSILON: f32 = 0.001;
+
+    if out.iter().any(|window| !window.start_second.is_finite()) {
+        song_lua_extend_column_offset_tails_legacy(out);
+        return;
+    }
+
+    with_song_lua_tail_indices(out.len(), |indices| {
+        indices.sort_unstable_by(|&left, &right| {
+            out[left]
+                .column
+                .cmp(&out[right].column)
+                .then_with(|| out[left].start_second.total_cmp(&out[right].start_second))
+                .then_with(|| left.cmp(&right))
+        });
+        let mut group_start = 0;
+        while group_start < indices.len() {
+            let column = out[indices[group_start]].column;
+            let group_end = indices[group_start..]
+                .partition_point(|&index| out[index].column == column)
+                + group_start;
+            let mut next = group_start + 1;
+            for position in group_start..group_end {
+                next = next.max(position + 1);
+                let index = indices[position];
+                let start_second = out[index].start_second;
+                while next < group_end
+                    && out[indices[next]].start_second <= start_second + SAME_TICK_EPSILON
+                {
+                    next += 1;
+                }
+                let window = &out[index];
+                let default_end =
+                    if window.sustain_end_second > window.end_second + SAME_TICK_EPSILON {
+                        window.sustain_end_second
+                    } else {
+                        f32::MAX
+                    };
+                out[index].sustain_end_second = if next < group_end {
+                    default_end.min(out[indices[next]].start_second)
+                } else {
+                    default_end
+                };
+            }
+            group_start = group_end;
+        }
+    });
 }
 
 #[inline(always)]
@@ -2149,6 +2292,34 @@ pub fn offset_song_lua_message_events(events: &mut [SongLuaOverlayMessageRuntime
 }
 
 pub fn group_song_lua_overlay_eases<StateDelta>(
+    overlay_count: usize,
+    mut overlay_eases: Vec<SongLuaOverlayEaseWindowRuntime<StateDelta>>,
+) -> (
+    Vec<SongLuaOverlayEaseWindowRuntime<StateDelta>>,
+    Vec<std::ops::Range<usize>>,
+) {
+    overlay_eases.retain(|ease| ease.overlay_index < overlay_count);
+    overlay_eases.sort_by(|left, right| {
+        left.overlay_index
+            .cmp(&right.overlay_index)
+            .then_with(|| left.start_second.total_cmp(&right.start_second))
+            .then_with(|| left.end_second.total_cmp(&right.end_second))
+            .then_with(|| left.sustain_end_second.total_cmp(&right.sustain_end_second))
+    });
+    let mut ranges = Vec::with_capacity(overlay_count);
+    let mut end = 0;
+    for overlay_index in 0..overlay_count {
+        let start = end;
+        while end < overlay_eases.len() && overlay_eases[end].overlay_index == overlay_index {
+            end += 1;
+        }
+        ranges.push(start..end);
+    }
+    (overlay_eases, ranges)
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+pub fn group_song_lua_overlay_eases_legacy_for_bench<StateDelta>(
     overlay_count: usize,
     overlay_eases: Vec<SongLuaOverlayEaseWindowRuntime<StateDelta>>,
 ) -> (
@@ -4126,4 +4297,3 @@ pub fn approach_f32(current: &mut f32, target: f32, step: f32) {
         *current += step;
     }
 }
-

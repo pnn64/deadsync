@@ -27,6 +27,11 @@ name = "mines_insert"
 harness = false
 required-features = ["bench-support"]
 
+[[bench]]
+name = "song_lua_window_preprocess"
+harness = false
+required-features = ["bench-support"]
+
 [dependencies]
 deadsync-chart = { path = "../deadsync-chart" }
 deadsync-core = { path = "../deadsync-core" }
