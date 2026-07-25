@@ -436,6 +436,47 @@ struct SongLuaOverlayOrderCache {
     child_lists: Vec<Vec<usize>>,
     dynamic_draw_order: Vec<bool>,
     sort_modes: Vec<u8>,
+    // Dynamic-capable lists usually keep the same keys for many frames. Remember
+    // those keys so we only pay O(n log n) when their effective order changes.
+    last_draw_orders: Vec<i32>,
+    last_z_keys: Vec<u32>,
+}
+
+// Amortizes message-history replay across monotonic gameplay frames. A seek
+// before the last consumed event resets the cursor and replays from the start.
+#[derive(Clone, Copy, Debug)]
+struct SongLuaMessageStateCache {
+    initialized: bool,
+    next_event: usize,
+    processed_until: f32,
+    base_state: SongLuaOverlayState,
+    active_command_index: Option<usize>,
+    active_start_second: f32,
+}
+
+impl Default for SongLuaMessageStateCache {
+    fn default() -> Self {
+        Self {
+            initialized: false,
+            next_event: 0,
+            processed_until: f32::NEG_INFINITY,
+            base_state: SongLuaOverlayState::default(),
+            active_command_index: None,
+            active_start_second: 0.0,
+        }
+    }
+}
+
+impl SongLuaMessageStateCache {
+    #[inline(always)]
+    fn reset(&mut self, initial_state: SongLuaOverlayState) {
+        self.initialized = true;
+        self.next_event = 0;
+        self.processed_until = f32::NEG_INFINITY;
+        self.base_state = initial_state;
+        self.active_command_index = None;
+        self.active_start_second = 0.0;
+    }
 }
 
 fn song_lua_overlay_child_list_index(parent_index: Option<usize>) -> usize {
@@ -493,6 +534,8 @@ fn song_lua_overlay_order_cache_from(
         child_lists,
         dynamic_draw_order,
         sort_modes,
+        last_draw_orders: vec![0; overlays.len()],
+        last_z_keys: vec![0; overlays.len()],
     }
 }
 
@@ -587,6 +630,13 @@ pub struct State {
     song_lua_overlay_order: SongLuaOverlayOrderCache,
     song_lua_background_visual_layer_orders: Vec<SongLuaOverlayOrderCache>,
     song_lua_foreground_visual_layer_orders: Vec<SongLuaOverlayOrderCache>,
+    song_lua_message_state_cache: Vec<SongLuaMessageStateCache>,
+    song_lua_background_layer_message_state_cache: Vec<Vec<SongLuaMessageStateCache>>,
+    song_lua_foreground_layer_message_state_cache: Vec<Vec<SongLuaMessageStateCache>>,
+    song_lua_player_message_state_cache: [SongLuaMessageStateCache; MAX_PLAYERS],
+    song_lua_song_foreground_message_state_cache: SongLuaMessageStateCache,
+    song_lua_background_song_foreground_message_state_cache: Vec<SongLuaMessageStateCache>,
+    song_lua_foreground_song_foreground_message_state_cache: Vec<SongLuaMessageStateCache>,
     song_lua_local_state_scratch: Vec<SongLuaOverlayState>,
     song_lua_overlay_state_scratch: Vec<SongLuaOverlayState>,
     song_lua_background_layer_local_state_scratch: Vec<Vec<SongLuaOverlayState>>,
@@ -775,6 +825,26 @@ impl State {
             .iter()
             .map(|layer| song_lua_overlay_order_cache_from(&layer.overlays, &layer.overlay_eases))
             .collect();
+        let song_lua_message_state_cache =
+            vec![SongLuaMessageStateCache::default(); song_lua_visuals.overlays.len()];
+        let song_lua_background_layer_message_state_cache = song_lua_visuals
+            .background_visual_layers
+            .iter()
+            .map(|layer| vec![SongLuaMessageStateCache::default(); layer.overlays.len()])
+            .collect();
+        let song_lua_foreground_layer_message_state_cache = song_lua_visuals
+            .foreground_visual_layers
+            .iter()
+            .map(|layer| vec![SongLuaMessageStateCache::default(); layer.overlays.len()])
+            .collect();
+        let song_lua_background_song_foreground_message_state_cache = vec![
+            SongLuaMessageStateCache::default();
+            song_lua_visuals.background_visual_layers.len()
+        ];
+        let song_lua_foreground_song_foreground_message_state_cache = vec![
+            SongLuaMessageStateCache::default();
+            song_lua_visuals.foreground_visual_layers.len()
+        ];
         let song_lua_sound_events = song_lua_sound_events(song_lua_visuals);
         let active_song_lua_video_paths = song_lua_video_paths(song_lua_visuals);
         let static_song_lua_video_path_count = active_song_lua_video_paths.len();
@@ -831,6 +901,13 @@ impl State {
             song_lua_overlay_order,
             song_lua_background_visual_layer_orders,
             song_lua_foreground_visual_layer_orders,
+            song_lua_message_state_cache,
+            song_lua_background_layer_message_state_cache,
+            song_lua_foreground_layer_message_state_cache,
+            song_lua_player_message_state_cache: [SongLuaMessageStateCache::default(); MAX_PLAYERS],
+            song_lua_song_foreground_message_state_cache: SongLuaMessageStateCache::default(),
+            song_lua_background_song_foreground_message_state_cache,
+            song_lua_foreground_song_foreground_message_state_cache,
             song_lua_local_state_scratch: Vec::new(),
             song_lua_overlay_state_scratch: Vec::new(),
             song_lua_background_layer_local_state_scratch: Vec::new(),
@@ -4551,10 +4628,12 @@ fn song_lua_overlay_local_states_into(
     overlay_events: &[Vec<SongLuaOverlayMessageRuntime>],
     overlay_eases: &[SongLuaOverlayEaseWindowRuntime],
     overlay_ease_ranges: &[std::ops::Range<usize>],
+    message_caches: &mut Vec<SongLuaMessageStateCache>,
     out: &mut Vec<SongLuaOverlayState>,
 ) {
     out.clear();
     out.reserve(overlays.len());
+    message_caches.resize(overlays.len(), SongLuaMessageStateCache::default());
     for (idx, overlay) in overlays.iter().enumerate() {
         out.push(song_lua_overlay_render_state_from(
             now,
@@ -4563,6 +4642,7 @@ fn song_lua_overlay_local_states_into(
             overlay_events,
             overlay_eases,
             overlay_ease_ranges,
+            &mut message_caches[idx],
         ));
     }
 }
@@ -4625,6 +4705,7 @@ fn song_lua_overlay_state_sets_from_into(
     overlay_ease_ranges: &[std::ops::Range<usize>],
     screen_width: f32,
     screen_height: f32,
+    message_caches: &mut Vec<SongLuaMessageStateCache>,
     local_out: &mut Vec<SongLuaOverlayState>,
     overlay_out: &mut Vec<SongLuaOverlayState>,
 ) {
@@ -4634,6 +4715,7 @@ fn song_lua_overlay_state_sets_from_into(
         overlay_events,
         overlay_eases,
         overlay_ease_ranges,
+        message_caches,
         local_out,
     );
     song_lua_overlay_states_from_local_into(
@@ -4641,25 +4723,6 @@ fn song_lua_overlay_state_sets_from_into(
         local_out,
         screen_width,
         screen_height,
-        overlay_out,
-    );
-}
-
-fn song_lua_overlay_state_sets_into(
-    state: &State,
-    local_out: &mut Vec<SongLuaOverlayState>,
-    overlay_out: &mut Vec<SongLuaOverlayState>,
-) {
-    let song_lua_visuals = state.song_lua_visuals();
-    song_lua_overlay_state_sets_from_into(
-        state.current_music_time_display(),
-        &song_lua_visuals.overlays,
-        &song_lua_visuals.overlay_events,
-        &song_lua_visuals.overlay_eases,
-        &song_lua_visuals.overlay_ease_ranges,
-        song_lua_visuals.screen_width,
-        song_lua_visuals.screen_height,
-        local_out,
         overlay_out,
     );
 }
@@ -5685,6 +5748,94 @@ fn song_lua_push_order(
     out: &mut Vec<usize>,
 ) {
     let list_idx = song_lua_overlay_child_list_index(parent_index);
+    if list_idx >= order_cache.child_lists.len() || order_cache.child_lists[list_idx].is_empty() {
+        return;
+    }
+    let draw_by_z_position = parent_index.is_some_and(|idx| {
+        overlay_states
+            .get(idx)
+            .map_or(overlays[idx].initial_state.draw_by_z_position, |state| {
+                state.draw_by_z_position
+            })
+    });
+    if draw_by_z_position {
+        let mut changed = order_cache.sort_modes[list_idx] != SONG_LUA_CHILD_ORDER_Z;
+        for &idx in &order_cache.child_lists[list_idx] {
+            let z = overlay_states
+                .get(idx)
+                .map_or(overlays[idx].initial_state.z, |state| state.z);
+            let key = z.to_bits();
+            if order_cache.last_z_keys[idx] != key {
+                order_cache.last_z_keys[idx] = key;
+                changed = true;
+            }
+        }
+        if changed {
+            order_cache.child_lists[list_idx].sort_by(|&left, &right| {
+                let left_z = f32::from_bits(order_cache.last_z_keys[left]);
+                let right_z = f32::from_bits(order_cache.last_z_keys[right]);
+                left_z.total_cmp(&right_z).then_with(|| left.cmp(&right))
+            });
+        }
+        order_cache.sort_modes[list_idx] = SONG_LUA_CHILD_ORDER_Z;
+    } else if order_cache
+        .dynamic_draw_order
+        .get(list_idx)
+        .copied()
+        .unwrap_or(false)
+    {
+        let mut changed = order_cache.sort_modes[list_idx] != SONG_LUA_CHILD_ORDER_DRAW;
+        for &idx in &order_cache.child_lists[list_idx] {
+            let draw_order = overlay_states
+                .get(idx)
+                .map_or(overlays[idx].initial_state.draw_order, |state| {
+                    state.draw_order
+                });
+            if order_cache.last_draw_orders[idx] != draw_order {
+                order_cache.last_draw_orders[idx] = draw_order;
+                changed = true;
+            }
+        }
+        if changed {
+            order_cache.child_lists[list_idx].sort_by_key(|&idx| {
+                (order_cache.last_draw_orders[idx], idx)
+            });
+        }
+        order_cache.sort_modes[list_idx] = SONG_LUA_CHILD_ORDER_DRAW;
+    } else if order_cache
+        .sort_modes
+        .get(list_idx)
+        .copied()
+        .unwrap_or(SONG_LUA_CHILD_ORDER_STATIC)
+        != SONG_LUA_CHILD_ORDER_STATIC
+    {
+        song_lua_sort_static_children(overlays, &mut order_cache.child_lists[list_idx]);
+        order_cache.sort_modes[list_idx] = SONG_LUA_CHILD_ORDER_STATIC;
+    }
+    let child_count = order_cache.child_lists[list_idx].len();
+    for child_pos in 0..child_count {
+        let idx = order_cache.child_lists[list_idx][child_pos];
+        out.push(idx);
+        let child_list_idx = song_lua_overlay_child_list_index(Some(idx));
+        if order_cache
+            .child_lists
+            .get(child_list_idx)
+            .is_some_and(|children| !children.is_empty())
+        {
+            song_lua_push_order(overlays, overlay_states, order_cache, Some(idx), out);
+        }
+    }
+}
+
+#[cfg(feature = "bench-support")]
+fn song_lua_push_order_legacy(
+    overlays: &[SongLuaOverlayActor],
+    overlay_states: &[SongLuaOverlayState],
+    order_cache: &mut SongLuaOverlayOrderCache,
+    parent_index: Option<usize>,
+    out: &mut Vec<usize>,
+) {
+    let list_idx = song_lua_overlay_child_list_index(parent_index);
     if list_idx >= order_cache.child_lists.len() {
         return;
     }
@@ -5737,7 +5888,7 @@ fn song_lua_push_order(
     for child_pos in 0..child_count {
         let idx = order_cache.child_lists[list_idx][child_pos];
         out.push(idx);
-        song_lua_push_order(overlays, overlay_states, order_cache, Some(idx), out);
+        song_lua_push_order_legacy(overlays, overlay_states, order_cache, Some(idx), out);
     }
 }
 
@@ -5985,12 +6136,14 @@ fn song_lua_overlay_render_state_from(
     overlay_events: &[Vec<SongLuaOverlayMessageRuntime>],
     overlay_eases: &[SongLuaOverlayEaseWindowRuntime],
     overlay_ease_ranges: &[std::ops::Range<usize>],
+    message_cache: &mut SongLuaMessageStateCache,
 ) -> SongLuaOverlayState {
-    let current = song_lua_message_state(
+    let current = song_lua_message_state_cached(
         now,
         overlay.initial_state,
         &overlay.message_commands,
         overlay_events.get(overlay_index).map(Vec::as_slice),
+        message_cache,
     );
     apply_song_lua_overlay_runtime_eases_for(
         now,
@@ -6001,7 +6154,7 @@ fn song_lua_overlay_render_state_from(
     )
 }
 
-fn song_lua_message_state(
+fn song_lua_message_state_legacy(
     now: f32,
     initial_state: SongLuaOverlayState,
     message_commands: &[SongLuaOverlayMessageCommand],
@@ -6033,12 +6186,68 @@ fn song_lua_message_state(
     current
 }
 
-fn song_lua_player_render_state(state: &State, player_index: usize) -> SongLuaOverlayState {
+fn song_lua_message_state_cached(
+    now: f32,
+    initial_state: SongLuaOverlayState,
+    message_commands: &[SongLuaOverlayMessageCommand],
+    events: Option<&[SongLuaOverlayMessageRuntime]>,
+    cache: &mut SongLuaMessageStateCache,
+) -> SongLuaOverlayState {
+    let Some(events) = events else {
+        cache.reset(initial_state);
+        return initial_state;
+    };
+    if !now.is_finite() {
+        return song_lua_message_state_legacy(now, initial_state, message_commands, Some(events));
+    }
+    if !cache.initialized || now < cache.processed_until {
+        cache.reset(initial_state);
+    }
+
+    while let Some(event) = events.get(cache.next_event) {
+        if event.event_second > now {
+            break;
+        }
+        cache.next_event += 1;
+        cache.processed_until = event.event_second;
+        if message_commands.get(event.command_index).is_none() {
+            continue;
+        }
+        if let Some(active_command_index) = cache.active_command_index
+            && let Some(active_command) = message_commands.get(active_command_index)
+        {
+            cache.base_state = song_lua_overlay_apply_blocks(
+                cache.base_state,
+                &active_command.blocks,
+                event.event_second - cache.active_start_second,
+            );
+        }
+        cache.active_command_index = Some(event.command_index);
+        cache.active_start_second = event.event_second;
+    }
+
+    cache
+        .active_command_index
+        .and_then(|command_index| message_commands.get(command_index))
+        .map_or(cache.base_state, |command| {
+            song_lua_overlay_apply_blocks(
+                cache.base_state,
+                &command.blocks,
+                now - cache.active_start_second,
+            )
+        })
+}
+
+fn song_lua_player_render_state(
+    state: &State,
+    player_index: usize,
+    message_cache: &mut SongLuaMessageStateCache,
+) -> SongLuaOverlayState {
     let song_lua_visuals = state.song_lua_visuals();
     let Some(actor) = song_lua_visuals.player_actors.get(player_index) else {
         return SongLuaOverlayState::default();
     };
-    song_lua_message_state(
+    song_lua_message_state_cached(
         state.current_music_time_display(),
         actor.initial_state,
         &actor.message_commands,
@@ -6046,6 +6255,7 @@ fn song_lua_player_render_state(state: &State, player_index: usize) -> SongLuaOv
             .player_events
             .get(player_index)
             .map(Vec::as_slice),
+        message_cache,
     )
 }
 
@@ -6053,21 +6263,27 @@ fn song_lua_song_foreground_state_from(
     now: f32,
     song_foreground: &SongLuaCapturedActor,
     events: &[SongLuaOverlayMessageRuntime],
+    message_cache: &mut SongLuaMessageStateCache,
 ) -> SongLuaOverlayState {
-    song_lua_message_state(
+    song_lua_message_state_cached(
         now,
         song_foreground.initial_state,
         &song_foreground.message_commands,
         Some(events),
+        message_cache,
     )
 }
 
-fn song_lua_song_foreground_state(state: &State) -> SongLuaOverlayState {
+fn song_lua_song_foreground_state(
+    state: &State,
+    message_cache: &mut SongLuaMessageStateCache,
+) -> SongLuaOverlayState {
     let song_lua_visuals = state.song_lua_visuals();
     song_lua_song_foreground_state_from(
         state.current_music_time_display(),
         &song_lua_visuals.song_foreground,
         song_lua_visuals.song_foreground_events.as_slice(),
+        message_cache,
     )
 }
 
@@ -7842,8 +8058,9 @@ fn song_lua_projected_overlay_edge_fade(
     [fl_eff, fr_eff, ft_eff, fb_eff]
 }
 
-fn song_lua_projected_overlay_axis_slices(start_fade: f32, end_fade: f32) -> Vec<f32> {
-    let mut out = vec![0.0];
+fn song_lua_projected_overlay_axis_slices(start_fade: f32, end_fade: f32) -> SmallVec<[f32; 4]> {
+    let mut out: SmallVec<[f32; 4]> = SmallVec::new();
+    out.push(0.0);
     for value in [start_fade, 1.0 - end_fade, 1.0] {
         let value = value.clamp(0.0, 1.0);
         if out
@@ -7866,6 +8083,255 @@ fn song_lua_projected_overlay_uv_point(uv: [[f32; 2]; 4], x: f32, y: f32) -> [f3
         song_lua_effect_lerp(top_u, bottom_u, y),
         song_lua_effect_lerp(top_v, bottom_v, y),
     ]
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub struct SongLuaMessageStateBenchmark {
+    initial_state: SongLuaOverlayState,
+    commands: Vec<SongLuaOverlayMessageCommand>,
+    events: Vec<SongLuaOverlayMessageRuntime>,
+    cache: SongLuaMessageStateCache,
+}
+
+#[cfg(feature = "bench-support")]
+impl SongLuaMessageStateBenchmark {
+    pub fn new(event_count: usize) -> Self {
+        let command = SongLuaOverlayMessageCommand {
+            message: "Tick".to_string(),
+            blocks: vec![
+                SongLuaOverlayCommandBlock {
+                    start: 0.0,
+                    duration: 0.05,
+                    easing: Some("inOutQuad".to_string()),
+                    opt1: None,
+                    opt2: None,
+                    delta: SongLuaOverlayStateDelta {
+                        x: Some(100.0),
+                        y: Some(-25.0),
+                        ..SongLuaOverlayStateDelta::default()
+                    },
+                },
+                SongLuaOverlayCommandBlock {
+                    start: 0.05,
+                    duration: 0.0,
+                    easing: None,
+                    opt1: None,
+                    opt2: None,
+                    delta: SongLuaOverlayStateDelta {
+                        draw_order: Some(7),
+                        ..SongLuaOverlayStateDelta::default()
+                    },
+                },
+            ],
+        };
+        Self {
+            initial_state: SongLuaOverlayState::default(),
+            commands: vec![command],
+            events: (0..event_count)
+                .map(|index| SongLuaOverlayMessageRuntime {
+                    event_second: index as f32 * 0.125,
+                    command_index: 0,
+                })
+                .collect(),
+            cache: SongLuaMessageStateCache::default(),
+        }
+    }
+
+    pub fn legacy_frame(&self, now: f32) -> f32 {
+        let state = song_lua_message_state_legacy(
+            now,
+            self.initial_state,
+            &self.commands,
+            Some(&self.events),
+        );
+        state.x + state.y + state.z + state.draw_order as f32
+    }
+
+    pub fn cached_frame(&mut self, now: f32) -> f32 {
+        let state = song_lua_message_state_cached(
+            now,
+            self.initial_state,
+            &self.commands,
+            Some(&self.events),
+            &mut self.cache,
+        );
+        state.x + state.y + state.z + state.draw_order as f32
+    }
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub struct SongLuaOrderBenchmark {
+    overlays: Vec<SongLuaOverlayActor>,
+    states: Vec<SongLuaOverlayState>,
+    cache: SongLuaOverlayOrderCache,
+    out: Vec<usize>,
+}
+
+#[cfg(feature = "bench-support")]
+impl SongLuaOrderBenchmark {
+    pub fn new(actor_count: usize) -> Self {
+        let overlays = (0..actor_count)
+            .map(|index| SongLuaOverlayActor {
+                kind: SongLuaOverlayKind::Quad,
+                name: None,
+                parent_index: None,
+                initial_state: SongLuaOverlayState {
+                    draw_order: ((index * 37) % actor_count.max(1)) as i32,
+                    ..SongLuaOverlayState::default()
+                },
+                message_commands: Vec::new(),
+            })
+            .collect::<Vec<_>>();
+        let states = overlays
+            .iter()
+            .map(|overlay| overlay.initial_state)
+            .collect::<Vec<_>>();
+        let mut cache = song_lua_overlay_order_cache_from(&overlays, &[]);
+        if let Some(dynamic) = cache.dynamic_draw_order.first_mut() {
+            *dynamic = true;
+        }
+        Self {
+            out: Vec::with_capacity(actor_count),
+            overlays,
+            states,
+            cache,
+        }
+    }
+
+    pub fn legacy_frame(&mut self) -> usize {
+        self.out.clear();
+        self.out.reserve(self.overlays.len());
+        song_lua_push_order_legacy(
+            &self.overlays,
+            &self.states,
+            &mut self.cache,
+            None,
+            &mut self.out,
+        );
+        self.checksum()
+    }
+
+    pub fn cached_frame(&mut self) -> usize {
+        song_lua_overlay_order_into(
+            &self.overlays,
+            &self.states,
+            &mut self.cache,
+            None,
+            &mut self.out,
+        );
+        self.checksum()
+    }
+
+    pub fn legacy_changing_frame(&mut self, tick: usize) -> usize {
+        self.change_draw_order(tick);
+        self.legacy_frame()
+    }
+
+    pub fn cached_changing_frame(&mut self, tick: usize) -> usize {
+        self.change_draw_order(tick);
+        self.cached_frame()
+    }
+
+    fn change_draw_order(&mut self, tick: usize) {
+        if self.states.is_empty() {
+            return;
+        }
+        let index = tick % self.states.len();
+        self.states[index].draw_order = ((tick.wrapping_mul(17)) % 4_096) as i32;
+    }
+
+    fn checksum(&self) -> usize {
+        self.out
+            .iter()
+            .enumerate()
+            .fold(0usize, |sum, (position, index)| {
+                sum.wrapping_add((position + 1).wrapping_mul(*index + 1))
+            })
+    }
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn benchmark_projected_mesh_scratch(
+    start_fade: f32,
+    end_fade: f32,
+) -> Arc<[TexturedMeshVertex]> {
+    let xs = song_lua_projected_overlay_axis_slices(start_fade, end_fade);
+    let ys = song_lua_projected_overlay_axis_slices(end_fade, start_fade);
+    let mut grid = SmallVec::<[TexturedMeshVertex; 16]>::new();
+    for &y in &ys {
+        for &x in &xs {
+            grid.push(TexturedMeshVertex {
+                pos: [x * 640.0, y * 480.0, 0.0],
+                uv: [x, y],
+                tex_matrix_scale: [1.0, 1.0],
+                color: [1.0, 1.0, 1.0, x.min(y)],
+            });
+        }
+    }
+    benchmark_projected_mesh_vertices(&grid, xs.len(), ys.len())
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn benchmark_projected_mesh_scratch_legacy(
+    start_fade: f32,
+    end_fade: f32,
+) -> Arc<[TexturedMeshVertex]> {
+    fn axis(start_fade: f32, end_fade: f32) -> Vec<f32> {
+        let mut out: Vec<f32> = vec![0.0];
+        for value in [start_fade, 1.0 - end_fade, 1.0] {
+            let value = value.clamp(0.0, 1.0);
+            if out
+                .last()
+                .is_none_or(|last| (value - *last).abs() > f32::EPSILON)
+            {
+                out.push(value);
+            }
+        }
+        out
+    }
+
+    let xs = axis(start_fade, end_fade);
+    let ys = axis(end_fade, start_fade);
+    let mut grid = Vec::with_capacity(xs.len() * ys.len());
+    for &y in &ys {
+        for &x in &xs {
+            grid.push(TexturedMeshVertex {
+                pos: [x * 640.0, y * 480.0, 0.0],
+                uv: [x, y],
+                tex_matrix_scale: [1.0, 1.0],
+                color: [1.0, 1.0, 1.0, x.min(y)],
+            });
+        }
+    }
+    benchmark_projected_mesh_vertices(&grid, xs.len(), ys.len())
+}
+
+#[cfg(feature = "bench-support")]
+fn benchmark_projected_mesh_vertices(
+    grid: &[TexturedMeshVertex],
+    width: usize,
+    height: usize,
+) -> Arc<[TexturedMeshVertex]> {
+    let mut vertices = Vec::with_capacity(width.saturating_sub(1) * height.saturating_sub(1) * 6);
+    for y in 0..height.saturating_sub(1) {
+        for x in 0..width.saturating_sub(1) {
+            let tl = y * width + x;
+            let tr = tl + 1;
+            let bl = (y + 1) * width + x;
+            let br = bl + 1;
+            vertices.push(grid[tl]);
+            vertices.push(grid[tr]);
+            vertices.push(grid[br]);
+            vertices.push(grid[tl]);
+            vertices.push(grid[br]);
+            vertices.push(grid[bl]);
+        }
+    }
+    Arc::from(vertices.into_boxed_slice())
 }
 
 fn song_lua_overlay_vertex_color(
@@ -7950,7 +8416,7 @@ fn song_lua_flat_skewed_overlay_actor(
     let ys = song_lua_projected_overlay_axis_slices(edge_fade[2], edge_fade[3]);
     let transform = Matrix4::from_translation(Vector3::new(center[0], center[1], 0.0))
         * song_lua_overlay_local_transform(rot_deg, state.skew_x, state.skew_y);
-    let mut grid = Vec::with_capacity(xs.len() * ys.len());
+    let mut grid = SmallVec::<[TexturedMeshVertex; 16]>::new();
     for &y in &ys {
         for &x in &xs {
             let local_x = song_lua_effect_lerp(-half_w, half_w, x);
@@ -8034,7 +8500,7 @@ fn song_lua_projected_overlay_actor(
     let ys = song_lua_projected_overlay_axis_slices(edge_fade[2], edge_fade[3]);
     let model = Matrix4::from_translation(Vector3::new(center[0], center[1], center[2]))
         * song_lua_overlay_local_transform(rot_deg, state.skew_x, state.skew_y);
-    let mut grid = Vec::with_capacity(xs.len() * ys.len());
+    let mut grid = SmallVec::<[TexturedMeshVertex; 16]>::new();
     for &y in &ys {
         for &x in &xs {
             let local_x = song_lua_effect_lerp(-half_w, half_w, x);
@@ -9758,6 +10224,19 @@ pub fn push_actors(
         std::mem::take(&mut state.song_lua_background_visual_layer_orders);
     let mut song_lua_foreground_visual_layer_orders =
         std::mem::take(&mut state.song_lua_foreground_visual_layer_orders);
+    let mut song_lua_message_state_cache = std::mem::take(&mut state.song_lua_message_state_cache);
+    let mut song_lua_background_layer_message_state_cache =
+        std::mem::take(&mut state.song_lua_background_layer_message_state_cache);
+    let mut song_lua_foreground_layer_message_state_cache =
+        std::mem::take(&mut state.song_lua_foreground_layer_message_state_cache);
+    let mut song_lua_player_message_state_cache =
+        std::mem::take(&mut state.song_lua_player_message_state_cache);
+    let mut song_lua_song_foreground_message_state_cache =
+        std::mem::take(&mut state.song_lua_song_foreground_message_state_cache);
+    let mut song_lua_background_song_foreground_message_state_cache =
+        std::mem::take(&mut state.song_lua_background_song_foreground_message_state_cache);
+    let mut song_lua_foreground_song_foreground_message_state_cache =
+        std::mem::take(&mut state.song_lua_foreground_song_foreground_message_state_cache);
     let mut song_lua_local_state_scratch = std::mem::take(&mut state.song_lua_local_state_scratch);
     let mut song_lua_overlay_state_scratch =
         std::mem::take(&mut state.song_lua_overlay_state_scratch);
@@ -9801,8 +10280,15 @@ pub fn push_actors(
     let song_lua_space_width = song_lua_overlay_space_width(state);
     let song_lua_space_height = song_lua_overlay_space_height(state);
     let player_color = color::decorative_rgba(state.player_color_index());
-    song_lua_overlay_state_sets_into(
-        state,
+    song_lua_overlay_state_sets_from_into(
+        state.current_music_time_display(),
+        &song_lua_visuals.overlays,
+        &song_lua_visuals.overlay_events,
+        &song_lua_visuals.overlay_eases,
+        &song_lua_visuals.overlay_ease_ranges,
+        song_lua_visuals.screen_width,
+        song_lua_visuals.screen_height,
+        &mut song_lua_message_state_cache,
         &mut song_lua_local_state_scratch,
         &mut song_lua_overlay_state_scratch,
     );
@@ -9811,12 +10297,12 @@ pub fn push_actors(
         .resize_with(song_lua_visuals.background_visual_layers.len(), Vec::new);
     song_lua_background_layer_state_scratch
         .resize_with(song_lua_visuals.background_visual_layers.len(), Vec::new);
-    for ((layer, local_states), layer_states) in song_lua_visuals
-        .background_visual_layers
-        .iter()
-        .zip(&mut song_lua_background_layer_local_state_scratch)
-        .zip(&mut song_lua_background_layer_state_scratch)
-    {
+    song_lua_background_layer_message_state_cache
+        .resize_with(song_lua_visuals.background_visual_layers.len(), Vec::new);
+    for (layer_idx, layer) in song_lua_visuals.background_visual_layers.iter().enumerate() {
+        let local_states = &mut song_lua_background_layer_local_state_scratch[layer_idx];
+        let layer_states = &mut song_lua_background_layer_state_scratch[layer_idx];
+        let message_caches = &mut song_lua_background_layer_message_state_cache[layer_idx];
         if song_lua_now < layer.start_second {
             local_states.clear();
             layer_states.clear();
@@ -9830,6 +10316,7 @@ pub fn push_actors(
             &layer.overlay_ease_ranges,
             layer.screen_width,
             layer.screen_height,
+            message_caches,
             local_states,
             layer_states,
         );
@@ -9838,12 +10325,12 @@ pub fn push_actors(
         .resize_with(song_lua_visuals.foreground_visual_layers.len(), Vec::new);
     song_lua_foreground_layer_state_scratch
         .resize_with(song_lua_visuals.foreground_visual_layers.len(), Vec::new);
-    for ((layer, local_states), layer_states) in song_lua_visuals
-        .foreground_visual_layers
-        .iter()
-        .zip(&mut song_lua_foreground_layer_local_state_scratch)
-        .zip(&mut song_lua_foreground_layer_state_scratch)
-    {
+    song_lua_foreground_layer_message_state_cache
+        .resize_with(song_lua_visuals.foreground_visual_layers.len(), Vec::new);
+    for (layer_idx, layer) in song_lua_visuals.foreground_visual_layers.iter().enumerate() {
+        let local_states = &mut song_lua_foreground_layer_local_state_scratch[layer_idx];
+        let layer_states = &mut song_lua_foreground_layer_state_scratch[layer_idx];
+        let message_caches = &mut song_lua_foreground_layer_message_state_cache[layer_idx];
         if song_lua_now < layer.start_second {
             local_states.clear();
             layer_states.clear();
@@ -9857,6 +10344,7 @@ pub fn push_actors(
             &layer.overlay_ease_ranges,
             layer.screen_width,
             layer.screen_height,
+            message_caches,
             local_states,
             layer_states,
         );
@@ -9904,6 +10392,7 @@ pub fn push_actors(
             song_lua_now,
             &layer.song_foreground,
             layer.song_foreground_events.as_slice(),
+            &mut song_lua_background_song_foreground_message_state_cache[layer_idx],
         );
         push_song_lua_layer_actors(
             actors,
@@ -10205,7 +10694,11 @@ pub fn push_actors(
                 hud_scratch,
             );
             let player_actor = &song_lua_visuals.player_actors[player_idx];
-            let player_state = song_lua_player_render_state(state, player_idx);
+            let player_state = song_lua_player_render_state(
+                state,
+                player_idx,
+                &mut song_lua_player_message_state_cache[player_idx],
+            );
             let player_transform = state.song_lua_player_transform(player_idx);
             let song_lua_active = !state.song().foreground_lua_changes.is_empty();
             let rotation_x = player_state.rot_x_deg + player_transform.rotation_x;
@@ -11499,7 +11992,8 @@ pub fn push_actors(
         gameplay_stats::push_heart_rates(actors, state, playfield_center_x);
         song_lua_capture_new_actors(&mut underlay_proxy_source, actors, underlay_tail_start);
     }
-    let song_foreground_state = song_lua_song_foreground_state(state);
+    let song_foreground_state =
+        song_lua_song_foreground_state(state, &mut song_lua_song_foreground_message_state_cache);
     let p1_proxy_slices = [
         p1_proxy_sources[0].as_ref().map(|source| source.as_slice()),
         p1_proxy_sources[1].as_ref().map(|source| source.as_slice()),
@@ -11579,6 +12073,7 @@ pub fn push_actors(
             song_lua_now,
             &layer.song_foreground,
             layer.song_foreground_events.as_slice(),
+            &mut song_lua_foreground_song_foreground_message_state_cache[layer_idx],
         );
         push_song_lua_layer_actors(
             actors,
@@ -11602,6 +12097,18 @@ pub fn push_actors(
     state.song_lua_overlay_order = song_lua_overlay_order;
     state.song_lua_background_visual_layer_orders = song_lua_background_visual_layer_orders;
     state.song_lua_foreground_visual_layer_orders = song_lua_foreground_visual_layer_orders;
+    state.song_lua_message_state_cache = song_lua_message_state_cache;
+    state.song_lua_background_layer_message_state_cache =
+        song_lua_background_layer_message_state_cache;
+    state.song_lua_foreground_layer_message_state_cache =
+        song_lua_foreground_layer_message_state_cache;
+    state.song_lua_player_message_state_cache = song_lua_player_message_state_cache;
+    state.song_lua_song_foreground_message_state_cache =
+        song_lua_song_foreground_message_state_cache;
+    state.song_lua_background_song_foreground_message_state_cache =
+        song_lua_background_song_foreground_message_state_cache;
+    state.song_lua_foreground_song_foreground_message_state_cache =
+        song_lua_foreground_song_foreground_message_state_cache;
     state.song_lua_local_state_scratch = song_lua_local_state_scratch;
     state.song_lua_overlay_state_scratch = song_lua_overlay_state_scratch;
     state.song_lua_background_layer_local_state_scratch =
@@ -12204,6 +12711,118 @@ mod tests {
         SongLuaOverlayKind::Sprite {
             texture_path: path,
             texture_key,
+        }
+    }
+
+    fn test_message_command(delta: SongLuaOverlayStateDelta) -> SongLuaOverlayMessageCommand {
+        SongLuaOverlayMessageCommand {
+            message: String::new(),
+            blocks: vec![SongLuaOverlayCommandBlock {
+                start: 0.0,
+                duration: 0.75,
+                easing: Some("inOutQuad".to_string()),
+                opt1: None,
+                opt2: None,
+                delta,
+            }],
+        }
+    }
+
+    #[test]
+    fn song_lua_message_state_cache_matches_replay_across_advances_and_seeks() {
+        let commands = vec![
+            test_message_command(SongLuaOverlayStateDelta {
+                x: Some(100.0),
+                draw_order: Some(5),
+                ..SongLuaOverlayStateDelta::default()
+            }),
+            test_message_command(SongLuaOverlayStateDelta {
+                y: Some(-40.0),
+                z: Some(12.0),
+                ..SongLuaOverlayStateDelta::default()
+            }),
+        ];
+        let events = (0..128)
+            .map(|index| SongLuaOverlayMessageRuntime {
+                event_second: index as f32 * 0.5,
+                command_index: index % commands.len(),
+            })
+            .collect::<Vec<_>>();
+        let initial = SongLuaOverlayState {
+            x: 7.0,
+            y: 11.0,
+            ..SongLuaOverlayState::default()
+        };
+        let mut cache = SongLuaMessageStateCache::default();
+
+        for now in [-1.0, 0.0, 0.125, 1.0, 7.25, 31.75, 63.75, 24.25, 24.5, 63.9] {
+            let expected = song_lua_message_state_legacy(now, initial, &commands, Some(&events));
+            let actual =
+                song_lua_message_state_cached(now, initial, &commands, Some(&events), &mut cache);
+            assert_eq!(actual, expected, "now={now}");
+        }
+    }
+
+    #[test]
+    fn song_lua_dynamic_order_cache_tracks_draw_and_z_key_changes() {
+        let mut overlays = (0..8)
+            .map(|index| SongLuaOverlayActor {
+                kind: SongLuaOverlayKind::Quad,
+                name: None,
+                parent_index: None,
+                initial_state: SongLuaOverlayState {
+                    draw_order: index,
+                    ..SongLuaOverlayState::default()
+                },
+                message_commands: Vec::new(),
+            })
+            .collect::<Vec<_>>();
+        let mut states = overlays
+            .iter()
+            .map(|overlay| overlay.initial_state)
+            .collect::<Vec<_>>();
+        let mut cache = song_lua_overlay_order_cache_from(&overlays, &[]);
+        cache.dynamic_draw_order[0] = true;
+        let mut actual = Vec::new();
+
+        for changed_index in [0usize, 5, 2, 7] {
+            states[changed_index].draw_order = 20 - changed_index as i32;
+            song_lua_overlay_order_into(&overlays, &states, &mut cache, None, &mut actual);
+            let mut expected = (0..overlays.len()).collect::<Vec<_>>();
+            expected.sort_by_key(|&index| (states[index].draw_order, index));
+            assert_eq!(actual, expected);
+        }
+
+        overlays[0].initial_state.draw_by_z_position = true;
+        states[0].draw_by_z_position = true;
+        for overlay in overlays.iter_mut().skip(1) {
+            overlay.parent_index = Some(0);
+        }
+        let mut cache = song_lua_overlay_order_cache_from(&overlays, &[]);
+        for (index, state) in states.iter_mut().enumerate().skip(1) {
+            state.z = (index % 3) as f32;
+        }
+        song_lua_overlay_order_into(&overlays, &states, &mut cache, None, &mut actual);
+        let mut expected_children = (1..overlays.len()).collect::<Vec<_>>();
+        expected_children.sort_by(|&left, &right| {
+            states[left]
+                .z
+                .total_cmp(&states[right].z)
+                .then_with(|| left.cmp(&right))
+        });
+        let mut expected = vec![0];
+        expected.extend(expected_children);
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn projected_overlay_bounded_scratch_stays_inline() {
+        for (left, right) in [(0.0, 0.0), (0.25, 0.0), (0.25, 0.5), (1.0, 1.0)] {
+            let slices = song_lua_projected_overlay_axis_slices(left, right);
+            assert!(!slices.spilled(), "fade=({left}, {right})");
+            assert!((2..=4).contains(&slices.len()));
+            assert_eq!(slices.first(), Some(&0.0));
+            assert_eq!(slices.last(), Some(&1.0));
         }
     }
 

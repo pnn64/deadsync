@@ -74,6 +74,11 @@ harness = false
 required-features = ["bench-support"]
 
 [[bench]]
+name = "song_lua_frame_hotpaths"
+harness = false
+required-features = ["bench-support"]
+
+[[bench]]
 name = "sync_heat_range"
 harness = false
 required-features = ["bench-support"]
