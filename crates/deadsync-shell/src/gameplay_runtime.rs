@@ -490,9 +490,12 @@ pub(crate) fn update(state: &mut gameplay::State, delta_time: f32, smx_input: bo
     // stream mapping on the same frame, matching the pre-boundary behavior.
     drain(state);
     let previous_song_lua_time = state.current_music_time_display();
-    let effect = gameplay::update(state, delta_time, snapshot(), || {
-        deadlib_platform::host_time::instant_nanos(Instant::now())
-    });
+    let effect = gameplay::update(
+        state,
+        delta_time,
+        snapshot(),
+        deadlib_platform::host_time::now_nanos,
+    );
     sync_scores(state);
     drain(state);
     let current_song_lua_time = state.current_music_time_display();
@@ -516,7 +519,7 @@ pub(crate) fn update_practice(state: &mut practice::State, delta_time: f32) -> T
         state,
         delta_time,
         snapshot(),
-        || deadlib_platform::host_time::instant_nanos(Instant::now()),
+        deadlib_platform::host_time::now_nanos,
         deadsync_audio_stream::snap_music_start_sec,
     );
     sync_scores(&mut state.gameplay);

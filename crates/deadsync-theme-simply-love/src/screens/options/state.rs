@@ -971,6 +971,12 @@ pub fn init(view: OptionsInitView) -> State {
     set_choice_by_id(
         &mut state.sub[SubmenuKind::Gameplay].choice_indices,
         GAMEPLAY_OPTIONS_ROWS,
+        SubRowId::NoteScrollClock,
+        cfg.note_scroll_clock.choice_index(),
+    );
+    set_choice_by_id(
+        &mut state.sub[SubmenuKind::Gameplay].choice_indices,
+        GAMEPLAY_OPTIONS_ROWS,
         SubRowId::AnimatedBanners,
         match cfg.gameplay_banner_mode {
             config::GameplayBannerMode::Static => 0,

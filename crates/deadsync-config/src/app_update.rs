@@ -1,5 +1,5 @@
 use crate::app_config::{Config, DisplayMode};
-use crate::audio::{clamp_audio_volume_percent, clamp_music_wheel_switch_speed};
+use crate::audio::{NoteScrollClock, clamp_audio_volume_percent, clamp_music_wheel_switch_speed};
 use crate::machine::clamp_smx_light_brightness_percent;
 use crate::null_or_die::{
     clamp_null_or_die_confidence_percent, clamp_null_or_die_magic_offset_ms,
@@ -64,6 +64,10 @@ pub fn set_overscan(
 
 pub fn set_visual_delay_seconds(cfg: &mut Config, delay: f32) -> bool {
     set_f32_if_changed(&mut cfg.visual_delay_seconds, delay.clamp(-1.0, 1.0))
+}
+
+pub fn set_note_scroll_clock(cfg: &mut Config, clock: NoteScrollClock) -> bool {
+    set_if_changed(&mut cfg.note_scroll_clock, clock)
 }
 
 pub fn set_bg_brightness(cfg: &mut Config, brightness: f32) -> bool {

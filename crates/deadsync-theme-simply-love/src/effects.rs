@@ -5,10 +5,10 @@ use deadsync_config::prelude::WindowsPadBackend;
 use deadsync_config::prelude::{
     BreakdownStyle, DefaultFailType, DefaultSyncOffset, GameplayBannerMode, LanguageFlag, LogLevel,
     MachineBarColor, MachineEvaluationStyle, MachineFont, MachinePreferredPlayMode,
-    MachinePreferredPlayStyle, NewPackMode, RandomBackgroundMode, SelectMusicItlRankMode,
-    SelectMusicItlWheelMode, SelectMusicPatternInfoMode, SelectMusicScoreboxPlacement,
-    SelectMusicSongSelectBgMode, SelectMusicStepArtistBoxMode, SelectMusicWheelStyle, SmxPackName,
-    SmxPadPreset, SrpgVariant, VersionOverlaySide, VisualStyle,
+    MachinePreferredPlayStyle, NewPackMode, NoteScrollClock, RandomBackgroundMode,
+    SelectMusicItlRankMode, SelectMusicItlWheelMode, SelectMusicPatternInfoMode,
+    SelectMusicScoreboxPlacement, SelectMusicSongSelectBgMode, SelectMusicStepArtistBoxMode,
+    SelectMusicWheelStyle, SmxPackName, SmxPadPreset, SrpgVariant, VersionOverlaySide, VisualStyle,
 };
 use deadsync_input::{InputBinding, KeyCode, VirtualAction};
 use deadsync_profile::{ActiveProfile, PlayMode, PlayStyle, PlayerSide};
@@ -604,6 +604,7 @@ pub enum SimplyLoveCourseConfigRequest {
 pub enum SimplyLoveGameplayConfigRequest {
     BackgroundBrightnessTenths(u8),
     CenterPlayerOneNotefield(bool),
+    NoteScrollClock(NoteScrollClock),
     BannerMode(GameplayBannerMode),
     ZmodRatingBoxText(bool),
     ShowBpmDecimal(bool),

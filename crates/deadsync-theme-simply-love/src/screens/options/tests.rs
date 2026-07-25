@@ -408,6 +408,59 @@ fn gameplay_choice_emits_shell_config_request() {
 }
 
 #[test]
+fn note_scroll_clock_initializes_from_config_and_emits_typed_request() {
+    let asset_manager = AssetManager::new();
+    let mut view = OptionsInitView {
+        config: config::Config {
+            note_scroll_clock: config::NoteScrollClock::ItgDeStepped,
+            ..config::Config::default()
+        },
+        updater_capabilities: SimplyLoveUpdaterCapabilities::default(),
+        app_paths: test_app_paths(),
+        audio: AudioOptionsView::default(),
+        graphics: GraphicsOptionsView::default(),
+        song_packs: Vec::new(),
+        pack_sync: OptionsPackSyncView::default(),
+        noteskins: NoteskinCatalogView::default(),
+        machine_noteskin: profile_data::NoteSkin::default(),
+        smx_assignment: SmxAssignmentView::default(),
+        smx_gifs: SmxGifCatalogView::default(),
+        score_import_profiles: Vec::new(),
+    };
+    let mut state = super::init(view.clone());
+    state.view = OptionsView::Submenu(SubmenuKind::Gameplay);
+    let row = select_visible_row(&mut state, SubmenuKind::Gameplay, SubRowId::NoteScrollClock);
+
+    assert_eq!(
+        state.sub[SubmenuKind::Gameplay].cursor_indices[row],
+        config::NoteScrollClock::ItgDeStepped.choice_index()
+    );
+
+    let effect = apply_submenu_choice_delta(&mut state, &asset_manager, 1, NavWrap::Wrap)
+        .expect("note scroll clock should emit shell config work");
+
+    assert!(matches!(
+        effect,
+        ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Config(
+            crate::SimplyLoveConfigRequest::Gameplay(
+                crate::SimplyLoveGameplayConfigRequest::NoteScrollClock(
+                    config::NoteScrollClock::RawAudio
+                )
+            )
+        ))
+    ));
+
+    view.config.note_scroll_clock = config::NoteScrollClock::RawAudio;
+    let raw_state = super::init(view);
+    let raw_row = row_position(GAMEPLAY_OPTIONS_ROWS, SubRowId::NoteScrollClock)
+        .expect("note scroll clock row");
+    assert_eq!(
+        raw_state.sub[SubmenuKind::Gameplay].cursor_indices[raw_row],
+        config::NoteScrollClock::RawAudio.choice_index()
+    );
+}
+
+#[test]
 fn gameplay_banner_choice_emits_playback_mode_request() {
     let asset_manager = AssetManager::new();
     let mut state = init();

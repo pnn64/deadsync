@@ -952,6 +952,9 @@ where
             display_clock: GameplayDisplayClockState::new(song_time_ns_from_seconds(
                 init_music_time,
             )),
+            note_scroll_clock: GameplayNoteScrollClockState::new(song_time_ns_from_seconds(
+                init_music_time,
+            )),
             end_timing: GameplayEndTimingState::new(
                 notes_end_time_ns,
                 music_end_time_ns,

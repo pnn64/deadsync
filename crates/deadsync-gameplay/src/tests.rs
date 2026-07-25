@@ -12693,6 +12693,169 @@ mod tests {
     }
 
     #[test]
+    fn raw_note_scroll_clock_preserves_audio_time() {
+        let raw_time_ns = song_time_ns_from_seconds(10.0);
+        let mut clock = GameplayNoteScrollClockState::new(raw_time_ns);
+
+        assert_eq!(
+            clock.step(
+                GameplayNoteScrollClock::RawAudio,
+                raw_time_ns,
+                1_000_000_000,
+                1.0,
+            ),
+            raw_time_ns
+        );
+        assert_eq!(
+            clock.step(
+                GameplayNoteScrollClock::RawAudio,
+                raw_time_ns,
+                1_016_000_000,
+                1.0,
+            ),
+            raw_time_ns
+        );
+    }
+
+    #[test]
+    fn itg_note_scroll_clock_fills_repeated_audio_positions() {
+        let raw_time_ns = song_time_ns_from_seconds(10.0);
+        let mut clock = GameplayNoteScrollClockState::new(raw_time_ns);
+
+        assert_eq!(
+            clock.step(
+                GameplayNoteScrollClock::ItgDeStepped,
+                raw_time_ns,
+                1_000_000_000,
+                1.0,
+            ),
+            raw_time_ns
+        );
+        assert_eq!(
+            clock.step(
+                GameplayNoteScrollClock::ItgDeStepped,
+                raw_time_ns,
+                1_016_000_000,
+                1.0,
+            ),
+            raw_time_ns.saturating_add(16_000_000)
+        );
+        assert_eq!(
+            clock.step(
+                GameplayNoteScrollClock::ItgDeStepped,
+                raw_time_ns,
+                1_025_000_000,
+                1.0,
+            ),
+            raw_time_ns.saturating_add(25_000_000)
+        );
+    }
+
+    #[test]
+    fn itg_note_scroll_clock_scales_plateau_fill_with_music_rate() {
+        let raw_time_ns = song_time_ns_from_seconds(4.0);
+        let mut clock = GameplayNoteScrollClockState::new(raw_time_ns);
+        let _ = clock.step(
+            GameplayNoteScrollClock::ItgDeStepped,
+            raw_time_ns,
+            2_000_000_000,
+            1.5,
+        );
+
+        assert_eq!(
+            clock.step(
+                GameplayNoteScrollClock::ItgDeStepped,
+                raw_time_ns,
+                2_020_000_000,
+                1.5,
+            ),
+            raw_time_ns.saturating_add(30_000_000)
+        );
+    }
+
+    #[test]
+    fn itg_note_scroll_clock_reanchors_on_raw_change_reset_and_host_regression() {
+        let start_ns = song_time_ns_from_seconds(7.0);
+        let changed_ns = song_time_ns_from_seconds(7.012);
+        let reset_ns = song_time_ns_from_seconds(2.0);
+        let mut clock = GameplayNoteScrollClockState::new(start_ns);
+        let _ = clock.step(
+            GameplayNoteScrollClock::ItgDeStepped,
+            start_ns,
+            3_000_000_000,
+            1.0,
+        );
+        let _ = clock.step(
+            GameplayNoteScrollClock::ItgDeStepped,
+            start_ns,
+            3_010_000_000,
+            1.0,
+        );
+
+        assert_eq!(
+            clock.step(
+                GameplayNoteScrollClock::ItgDeStepped,
+                changed_ns,
+                3_012_000_000,
+                1.0,
+            ),
+            changed_ns
+        );
+        assert_eq!(
+            clock.step(
+                GameplayNoteScrollClock::ItgDeStepped,
+                changed_ns,
+                3_011_000_000,
+                1.0,
+            ),
+            changed_ns
+        );
+        assert_eq!(clock.reset(reset_ns), reset_ns);
+        assert_eq!(
+            clock.step(
+                GameplayNoteScrollClock::ItgDeStepped,
+                reset_ns,
+                4_000_000_000,
+                1.0,
+            ),
+            reset_ns
+        );
+    }
+
+    #[test]
+    fn itg_note_scroll_clock_matches_raw_time_when_audio_resumes_behind_visual_fill() {
+        let start_ns = song_time_ns_from_seconds(5.0);
+        let resumed_raw_ns = start_ns.saturating_add(8_000_000);
+        let mut clock = GameplayNoteScrollClockState::new(start_ns);
+        let _ = clock.step(
+            GameplayNoteScrollClock::ItgDeStepped,
+            start_ns,
+            5_000_000_000,
+            1.0,
+        );
+        let filled_ns = clock.step(
+            GameplayNoteScrollClock::ItgDeStepped,
+            start_ns,
+            5_016_000_000,
+            1.0,
+        );
+        assert_eq!(filled_ns, start_ns.saturating_add(16_000_000));
+
+        // This intentionally matches ITGmania's narrow duplicate-position
+        // correction: a fresh raw sample immediately becomes authoritative.
+        assert_eq!(
+            clock.step(
+                GameplayNoteScrollClock::ItgDeStepped,
+                resumed_raw_ns,
+                5_017_000_000,
+                1.0,
+            ),
+            resumed_raw_ns
+        );
+        assert!(resumed_raw_ns < filled_ns);
+    }
+
+    #[test]
     fn song_position_state_tracks_music_and_display_positions() {
         let mut state = GameplaySongPositionState::new(12.0, 1_250_000_000, 11.5, 1.2);
 

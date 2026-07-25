@@ -380,6 +380,7 @@ fn runtime_state_ids<'a>(
 fn audio_options(cfg: &Config) -> AudioOptions {
     AudioOptions {
         visual_delay_seconds: cfg.visual_delay_seconds,
+        note_scroll_clock: cfg.note_scroll_clock,
         master_volume: cfg.master_volume,
         menu_music: cfg.menu_music,
         custom_sounds_enabled: cfg.custom_sounds_enabled,
@@ -682,5 +683,22 @@ mod tests {
         assert!(loaded.smx_underglow_grb);
         assert_eq!(loaded.smx_pad_gifs_pack.as_str(), "senpi-basic");
         assert_eq!(loaded.smx_judge_gifs_pack.as_str(), "none");
+    }
+
+    #[test]
+    fn saved_content_round_trips_note_scroll_clock() {
+        let mut cfg = Config::default();
+        cfg.note_scroll_clock = crate::audio::NoteScrollClock::ItgDeStepped;
+        let content =
+            build_saved_app_config_file(&cfg, &Keymap::default(), "", &[], &[], "", "", "", "");
+        assert!(content.contains("NoteScrollClock=ITGDeStepped"));
+
+        let mut conf = SimpleIni::new();
+        conf.load_str(&content);
+        let loaded = crate::audio::load_audio_options(&conf, crate::audio::AudioOptions::default());
+        assert_eq!(
+            loaded.note_scroll_clock,
+            crate::audio::NoteScrollClock::ItgDeStepped
+        );
     }
 }

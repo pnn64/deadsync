@@ -7,13 +7,66 @@ use crate::defaults::{
 };
 use crate::ini::SimpleIni;
 use crate::writer::{push_bool, push_line};
+use std::str::FromStr;
 
 pub const AUDIO_VOLUME_MAX: u8 = 100;
 pub const MUSIC_WHEEL_SWITCH_SPEED_MIN: u8 = 1;
 
+/// Clock source used to position scrolling notes.
+///
+/// This only affects visual note travel. Gameplay judgments continue to use
+/// the raw audio-derived song clock.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum NoteScrollClock {
+    #[default]
+    RawAudio,
+    ItgDeStepped,
+}
+
+impl NoteScrollClock {
+    #[inline(always)]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::RawAudio => "RawAudio",
+            Self::ItgDeStepped => "ITGDeStepped",
+        }
+    }
+
+    #[inline(always)]
+    pub const fn choice_index(self) -> usize {
+        match self {
+            Self::RawAudio => 0,
+            Self::ItgDeStepped => 1,
+        }
+    }
+
+    #[inline(always)]
+    pub const fn from_choice(index: usize) -> Self {
+        if index == 1 {
+            Self::ItgDeStepped
+        } else {
+            Self::RawAudio
+        }
+    }
+}
+
+impl FromStr for NoteScrollClock {
+    type Err = ();
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        match value.trim().to_ascii_lowercase().as_str() {
+            "rawaudio" | "raw" | "off" | "0" | "false" => Ok(Self::RawAudio),
+            "itgdestep" | "itg-destep" | "itgdestepped" | "itg-de-stepped" | "itg_de_stepped"
+            | "itg" | "on" | "1" | "true" => Ok(Self::ItgDeStepped),
+            _ => Err(()),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct AudioOptions {
     pub visual_delay_seconds: f32,
+    pub note_scroll_clock: NoteScrollClock,
     pub master_volume: u8,
     pub menu_music: bool,
     pub custom_sounds_enabled: bool,
@@ -33,6 +86,7 @@ impl Default for AudioOptions {
     fn default() -> Self {
         Self {
             visual_delay_seconds: DEFAULT_VISUAL_DELAY_SECONDS,
+            note_scroll_clock: NoteScrollClock::RawAudio,
             master_volume: DEFAULT_MASTER_VOLUME,
             menu_music: DEFAULT_MENU_MUSIC,
             custom_sounds_enabled: DEFAULT_CUSTOM_SOUNDS_ENABLED,
@@ -91,6 +145,10 @@ pub fn load_audio_options(conf: &SimpleIni, default: AudioOptions) -> AudioOptio
             .get("Options", "VisualDelaySeconds")
             .and_then(|value| value.parse().ok())
             .unwrap_or(default.visual_delay_seconds),
+        note_scroll_clock: conf
+            .get("Options", "NoteScrollClock")
+            .and_then(|value| NoteScrollClock::from_str(value).ok())
+            .unwrap_or(default.note_scroll_clock),
         master_volume: conf
             .get("Options", "MasterVolume")
             .and_then(|value| value.parse().ok())
@@ -162,6 +220,11 @@ pub fn push_audio_device_option_lines(content: &mut String, options: AudioDevice
 
 pub fn push_audio_playback_prefix_lines(content: &mut String, options: AudioOptions) {
     push_line(content, "VisualDelaySeconds", options.visual_delay_seconds);
+    push_line(
+        content,
+        "NoteScrollClock",
+        options.note_scroll_clock.as_str(),
+    );
     push_line(content, "MasterVolume", options.master_volume);
     push_bool(content, "MenuMusic", options.menu_music);
     push_bool(
@@ -253,6 +316,7 @@ mod tests {
     fn default_options() -> AudioOptions {
         AudioOptions {
             visual_delay_seconds: 0.0,
+            note_scroll_clock: NoteScrollClock::RawAudio,
             master_volume: 80,
             menu_music: true,
             custom_sounds_enabled: true,
@@ -385,6 +449,7 @@ mod tests {
             content,
             concat!(
                 "VisualDelaySeconds=0\n",
+                "NoteScrollClock=RawAudio\n",
                 "MasterVolume=80\n",
                 "MenuMusic=1\n",
                 "CustomSoundsEnabled=1\n",
@@ -426,6 +491,7 @@ mod tests {
             r#"
             [Options]
             VisualDelaySeconds=0.125
+            NoteScrollClock=ITGDeStepped
             MasterVolume=250
             MenuMusic=0
             CustomSoundsEnabled=0
@@ -445,6 +511,7 @@ mod tests {
         let loaded = load_audio_options(&conf, default_options());
 
         assert_eq!(loaded.visual_delay_seconds, 0.125);
+        assert_eq!(loaded.note_scroll_clock, NoteScrollClock::ItgDeStepped);
         assert_eq!(loaded.master_volume, 100);
         assert!(!loaded.menu_music);
         assert!(!loaded.custom_sounds_enabled);
@@ -468,6 +535,7 @@ mod tests {
             r#"
             [Options]
             VisualDelaySeconds=bad
+            NoteScrollClock=bad
             MasterVolume=bad
             MusicWheelSwitchSpeed=bad
             AudioOutputDevice=bad
@@ -478,5 +546,26 @@ mod tests {
         );
 
         assert_eq!(load_audio_options(&conf, default), default);
+    }
+
+    #[test]
+    fn note_scroll_clock_parses_canonical_and_legacy_toggle_values() {
+        assert_eq!(
+            NoteScrollClock::from_str("RawAudio"),
+            Ok(NoteScrollClock::RawAudio)
+        );
+        assert_eq!(
+            NoteScrollClock::from_str("ITGDeStepped"),
+            Ok(NoteScrollClock::ItgDeStepped)
+        );
+        assert_eq!(
+            NoteScrollClock::from_str("true"),
+            Ok(NoteScrollClock::ItgDeStepped)
+        );
+        assert_eq!(
+            NoteScrollClock::from_str("off"),
+            Ok(NoteScrollClock::RawAudio)
+        );
+        assert!(NoteScrollClock::from_str("unknown").is_err());
     }
 }

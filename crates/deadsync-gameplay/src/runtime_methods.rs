@@ -1358,12 +1358,17 @@ where
         &mut self,
         music_time_ns: SongTimeNs,
         display_music_time_ns: SongTimeNs,
+        visual_scroll_music_time_ns: SongTimeNs,
         delta_time: f32,
         seconds_per_second: f32,
         assist_sfx_generation: u64,
         assist_tick_sfx_path: &'static str,
     ) {
-        self.update_song_position_from_time(music_time_ns, display_music_time_ns);
+        self.update_song_position_from_time(
+            music_time_ns,
+            display_music_time_ns,
+            visual_scroll_music_time_ns,
+        );
         let song_row = self.assist_row_no_offset_ns(music_time_ns);
         self.run_assist_clap(
             song_row,

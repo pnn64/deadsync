@@ -757,6 +757,9 @@ pub(super) fn apply_submenu_choice_delta(
             SubRowId::CenteredP1Notefield => {
                 crate::SimplyLoveGameplayConfigRequest::CenterPlayerOneNotefield(new_index == 1)
             }
+            SubRowId::NoteScrollClock => crate::SimplyLoveGameplayConfigRequest::NoteScrollClock(
+                config::NoteScrollClock::from_choice(new_index),
+            ),
             SubRowId::AnimatedBanners => {
                 let mode = match new_index {
                     0 => config::GameplayBannerMode::Static,

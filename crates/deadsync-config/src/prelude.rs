@@ -8,6 +8,7 @@ pub use deadsync_lights::{DriverKind as LightsDriverKind, GameplayPadLightMode};
 pub use deadsync_smx::SmxPadPreset;
 
 pub use crate::app_config::{Config, DisplayMode};
+pub use crate::audio::NoteScrollClock;
 pub use crate::defaults::*;
 pub use crate::folders::AdditionalSongFolder;
 pub use crate::frame_pacing::{

@@ -33,6 +33,15 @@ pub(in crate::screens::options) const GAMEPLAY_OPTIONS_ROWS: &[SubRow] = &[
         inline: true,
     },
     SubRow {
+        id: SubRowId::NoteScrollClock,
+        label: lookup_key("OptionsGameplay", "NoteScrollClock"),
+        choices: &[
+            localized_choice("OptionsGameplay", "NoteScrollClockRawAudio"),
+            localized_choice("OptionsGameplay", "NoteScrollClockItgDeStepped"),
+        ],
+        inline: true,
+    },
+    SubRow {
         id: SubRowId::AnimatedBanners,
         label: lookup_key("OptionsGameplay", "AnimatedBanners"),
         choices: &[
@@ -107,6 +116,14 @@ pub(in crate::screens::options) const GAMEPLAY_OPTIONS_ITEMS: &[Item] = &[
         help: &[HelpEntry::Paragraph(lookup_key(
             "OptionsGameplayHelp",
             "CenteredP1NotefieldHelp",
+        ))],
+    },
+    Item {
+        id: ItemId::GpNoteScrollClock,
+        name: lookup_key("OptionsGameplay", "NoteScrollClock"),
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsGameplayHelp",
+            "NoteScrollClockHelp",
         ))],
     },
     Item {

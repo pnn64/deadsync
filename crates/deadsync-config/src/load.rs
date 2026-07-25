@@ -317,6 +317,7 @@ fn apply_audio_opts(
     cfg.linux_audio_backend = runtime.linux_audio_backend;
     cfg.audio_output_mode = runtime.output_mode;
     cfg.visual_delay_seconds = loaded.visual_delay_seconds;
+    cfg.note_scroll_clock = loaded.note_scroll_clock;
     cfg.master_volume = loaded.master_volume;
     cfg.menu_music = loaded.menu_music;
     cfg.custom_sounds_enabled = loaded.custom_sounds_enabled;

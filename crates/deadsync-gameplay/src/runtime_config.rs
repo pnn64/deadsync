@@ -220,6 +220,7 @@ pub struct GameplayConfig {
     pub default_fail_type: GameplayFailType,
     pub global_offset_seconds: f32,
     pub visual_delay_seconds: f32,
+    pub note_scroll_clock: GameplayNoteScrollClock,
     pub machine_pack_ini_offsets: bool,
     pub machine_default_sync_pref: SyncPref,
     pub machine_allow_per_player_global_offsets: bool,
@@ -345,6 +346,7 @@ impl Default for GameplayConfig {
             default_fail_type: GameplayFailType::ImmediateContinue,
             global_offset_seconds: -0.008,
             visual_delay_seconds: 0.0,
+            note_scroll_clock: GameplayNoteScrollClock::RawAudio,
             machine_pack_ini_offsets: false,
             machine_default_sync_pref: SyncPref::Null,
             machine_allow_per_player_global_offsets: false,
@@ -619,6 +621,7 @@ pub struct GameplayClockRuntimeState {
     pub audio_clock: GameplayAudioClockState,
     pub song_position: GameplaySongPositionState,
     pub display_clock: GameplayDisplayClockState,
+    pub note_scroll_clock: GameplayNoteScrollClockState,
     pub end_timing: GameplayEndTimingState,
     pub music_rate: GameplayMusicRateState,
     pub offsets: GameplayOffsetState,
@@ -725,6 +728,7 @@ pub struct GameplayFrameClockUpdate {
     pub music_time_ns: SongTimeNs,
     pub music_time_sec: f32,
     pub display_music_time_ns: SongTimeNs,
+    pub visual_scroll_music_time_ns: SongTimeNs,
 }
 
 #[derive(Clone, Copy, Debug)]

@@ -122,6 +122,7 @@ pub enum ItemId {
     // Gameplay Options submenu
     GpBgBrightness,
     GpCenteredP1,
+    GpNoteScrollClock,
     GpAnimatedBanners,
     GpZmodRatingBox,
     GpBpmDecimal,
@@ -412,6 +413,7 @@ pub const ITEMS: &[Item] = &[
             HelpEntry::Paragraph(lookup_key("OptionsHelp", "GameplayOptionsHelp")),
             HelpEntry::Bullet(lookup_key("OptionsGameplay", "BGBrightness")),
             HelpEntry::Bullet(lookup_key("OptionsGameplay", "CenteredP1Notefield")),
+            HelpEntry::Bullet(lookup_key("OptionsGameplay", "NoteScrollClock")),
             HelpEntry::Bullet(lookup_key("OptionsGameplay", "AnimatedBanners")),
             HelpEntry::Bullet(lookup_key("OptionsGameplay", "ZmodRatingBox")),
             HelpEntry::Bullet(lookup_key("OptionsGameplay", "BpmDecimal")),

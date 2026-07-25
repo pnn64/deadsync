@@ -1,4 +1,4 @@
-use crate::audio::AudioOptions;
+use crate::audio::{AudioOptions, NoteScrollClock};
 use crate::defaults::*;
 use crate::null_or_die::NullOrDieOptions;
 use crate::options::{RuntimeOptions, SelectMusicOptions, SmxPackName, SystemOptions};
@@ -275,6 +275,8 @@ pub struct Config {
     pub autosubmit_course_scores_individually: bool,
     pub global_offset_seconds: f32,
     pub visual_delay_seconds: f32,
+    /// Visual-only clock used for scrolling note placement.
+    pub note_scroll_clock: NoteScrollClock,
     pub master_volume: u8,
     pub menu_music: bool,
     pub custom_sounds_enabled: bool,
@@ -493,6 +495,7 @@ impl Default for Config {
             autosubmit_course_scores_individually: system.autosubmit_course_scores_individually,
             global_offset_seconds: system.global_offset_seconds,
             visual_delay_seconds: audio.visual_delay_seconds,
+            note_scroll_clock: audio.note_scroll_clock,
             master_volume: audio.master_volume,
             menu_music: audio.menu_music,
             custom_sounds_enabled: audio.custom_sounds_enabled,
@@ -576,6 +579,10 @@ mod tests {
         assert_eq!(
             Config::default().frame_stats_overlay_style,
             DEFAULT_FRAME_STATS_OVERLAY_STYLE
+        );
+        assert_eq!(
+            Config::default().note_scroll_clock,
+            NoteScrollClock::RawAudio
         );
         assert!(!Config::default().allow_song_deletion);
         assert_eq!(DEFAULT_MACHINE_NOTESKIN, "cel");

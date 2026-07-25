@@ -164,6 +164,19 @@ pub fn gameplay_fail_type_from_config(
     }
 }
 
+pub fn gameplay_note_scroll_clock_from_config(
+    clock: deadsync_config::audio::NoteScrollClock,
+) -> deadsync_gameplay::GameplayNoteScrollClock {
+    match clock {
+        deadsync_config::audio::NoteScrollClock::RawAudio => {
+            deadsync_gameplay::GameplayNoteScrollClock::RawAudio
+        }
+        deadsync_config::audio::NoteScrollClock::ItgDeStepped => {
+            deadsync_gameplay::GameplayNoteScrollClock::ItgDeStepped
+        }
+    }
+}
+
 pub fn gameplay_config_from_config(
     cfg: &deadsync_config::app_config::Config,
 ) -> deadsync_gameplay::GameplayConfig {
@@ -172,6 +185,7 @@ pub fn gameplay_config_from_config(
         default_fail_type: gameplay_fail_type_from_config(cfg.default_fail_type),
         global_offset_seconds: cfg.global_offset_seconds,
         visual_delay_seconds: cfg.visual_delay_seconds,
+        note_scroll_clock: gameplay_note_scroll_clock_from_config(cfg.note_scroll_clock),
         machine_pack_ini_offsets: cfg.machine_pack_ini_offsets,
         machine_default_sync_pref: cfg.machine_default_sync_offset.sync_pref(),
         machine_allow_per_player_global_offsets: cfg.machine_allow_per_player_global_offsets,

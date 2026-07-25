@@ -121,6 +121,7 @@ include!("profile_session.rs");
 include!("input_slots.rs");
 include!("autosync.rs");
 include!("display_clock.rs");
+include!("scroll_clock.rs");
 include!("controls.rs");
 include!("life.rs");
 include!("viewport.rs");

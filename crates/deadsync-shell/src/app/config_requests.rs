@@ -117,6 +117,7 @@ pub(super) fn execute_gameplay(request: SimplyLoveGameplayConfigRequest) {
         Request::CenterPlayerOneNotefield(enabled) => {
             config::update_center_1player_notefield(enabled)
         }
+        Request::NoteScrollClock(clock) => config::update_note_scroll_clock(clock),
         Request::BannerMode(mode) => config::update_gameplay_banner_mode(mode),
         Request::ZmodRatingBoxText(enabled) => config::update_zmod_rating_box_text(enabled),
         Request::ShowBpmDecimal(enabled) => config::update_show_bpm_decimal(enabled),
