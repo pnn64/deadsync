@@ -171,8 +171,8 @@ pub fn gameplay_note_scroll_clock_from_config(
         deadsync_config::audio::NoteScrollClock::RawAudio => {
             deadsync_gameplay::GameplayNoteScrollClock::RawAudio
         }
-        deadsync_config::audio::NoteScrollClock::ItgDeStepped => {
-            deadsync_gameplay::GameplayNoteScrollClock::ItgDeStepped
+        deadsync_config::audio::NoteScrollClock::FrameStable => {
+            deadsync_gameplay::GameplayNoteScrollClock::FrameStable
         }
     }
 }

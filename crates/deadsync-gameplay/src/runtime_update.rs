@@ -64,12 +64,6 @@ where
         } else {
             fallback_host_nanos()
         };
-        let visual_scroll_music_time_ns = self.clock.note_scroll_clock.step(
-            self.setup.config.note_scroll_clock,
-            music_time_ns,
-            frame_host_nanos,
-            song_clock.seconds_per_second,
-        );
         let display_music_time_ns = frame_stable_display_music_time_ns(
             &mut self.clock.display_clock,
             frame_host_nanos,
@@ -77,6 +71,11 @@ where
             delta_time,
             song_clock.seconds_per_second,
             first_update,
+        );
+        let visual_scroll_music_time_ns = note_scroll_music_time_ns(
+            self.setup.config.note_scroll_clock,
+            music_time_ns,
+            display_music_time_ns,
         );
         self.clock.song_position.current_music_time_display =
             song_time_ns_to_seconds(display_music_time_ns);
@@ -788,9 +787,6 @@ where
         if !self.clock.music_rate.set_rate(rate) {
             return false;
         }
-        self.clock
-            .note_scroll_clock
-            .reset(self.clock.song_position.current_music_time_ns);
         self.timing_runtime.player_judgment_timing = player_judgment_timing;
         let normalized = self.music_rate();
         let (notes_end_time_ns, music_end_time_ns) = compute_end_times_ns(
@@ -2894,7 +2890,11 @@ where
         self.reset_time_to_beat_caches();
         self.clock.song_position.current_music_time_ns = music_time_ns;
         let display_time_ns = self.clock.display_clock.reset(music_time_ns);
-        let visual_scroll_time_ns = self.clock.note_scroll_clock.reset(music_time_ns);
+        let visual_scroll_time_ns = note_scroll_music_time_ns(
+            self.setup.config.note_scroll_clock,
+            music_time_ns,
+            display_time_ns,
+        );
         self.clock.song_position.current_music_time_display =
             song_time_ns_to_seconds(display_time_ns);
         self.update_song_position_from_time(

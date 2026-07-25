@@ -688,17 +688,36 @@ mod tests {
     #[test]
     fn saved_content_round_trips_note_scroll_clock() {
         let mut cfg = Config::default();
-        cfg.note_scroll_clock = crate::audio::NoteScrollClock::ItgDeStepped;
+        cfg.note_scroll_clock = crate::audio::NoteScrollClock::FrameStable;
         let content =
             build_saved_app_config_file(&cfg, &Keymap::default(), "", &[], &[], "", "", "", "");
-        assert!(content.contains("NoteScrollClock=ITGDeStepped"));
+        assert!(content.contains("NoteScrollClock=FrameStable"));
 
         let mut conf = SimpleIni::new();
         conf.load_str(&content);
         let loaded = crate::audio::load_audio_options(&conf, crate::audio::AudioOptions::default());
         assert_eq!(
             loaded.note_scroll_clock,
-            crate::audio::NoteScrollClock::ItgDeStepped
+            crate::audio::NoteScrollClock::FrameStable
         );
+    }
+
+    #[test]
+    fn legacy_note_scroll_clock_value_migrates_to_frame_stable_on_save() {
+        let mut legacy = SimpleIni::new();
+        legacy.load_str("[Options]\nNoteScrollClock=ITGDeStepped\n");
+        let loaded =
+            crate::audio::load_audio_options(&legacy, crate::audio::AudioOptions::default());
+        assert_eq!(
+            loaded.note_scroll_clock,
+            crate::audio::NoteScrollClock::FrameStable
+        );
+
+        let mut cfg = Config::default();
+        cfg.note_scroll_clock = loaded.note_scroll_clock;
+        let content =
+            build_saved_app_config_file(&cfg, &Keymap::default(), "", &[], &[], "", "", "", "");
+        assert!(content.contains("NoteScrollClock=FrameStable"));
+        assert!(!content.contains("NoteScrollClock=ITGDeStepped"));
     }
 }

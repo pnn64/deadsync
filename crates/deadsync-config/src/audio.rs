@@ -20,7 +20,7 @@ pub const MUSIC_WHEEL_SWITCH_SPEED_MIN: u8 = 1;
 pub enum NoteScrollClock {
     #[default]
     RawAudio,
-    ItgDeStepped,
+    FrameStable,
 }
 
 impl NoteScrollClock {
@@ -28,7 +28,7 @@ impl NoteScrollClock {
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::RawAudio => "RawAudio",
-            Self::ItgDeStepped => "ITGDeStepped",
+            Self::FrameStable => "FrameStable",
         }
     }
 
@@ -36,14 +36,14 @@ impl NoteScrollClock {
     pub const fn choice_index(self) -> usize {
         match self {
             Self::RawAudio => 0,
-            Self::ItgDeStepped => 1,
+            Self::FrameStable => 1,
         }
     }
 
     #[inline(always)]
     pub const fn from_choice(index: usize) -> Self {
         if index == 1 {
-            Self::ItgDeStepped
+            Self::FrameStable
         } else {
             Self::RawAudio
         }
@@ -56,8 +56,9 @@ impl FromStr for NoteScrollClock {
     fn from_str(value: &str) -> Result<Self, Self::Err> {
         match value.trim().to_ascii_lowercase().as_str() {
             "rawaudio" | "raw" | "off" | "0" | "false" => Ok(Self::RawAudio),
-            "itgdestep" | "itg-destep" | "itgdestepped" | "itg-de-stepped" | "itg_de_stepped"
-            | "itg" | "on" | "1" | "true" => Ok(Self::ItgDeStepped),
+            "framestable" | "frame-stable" | "frame_stable" | "frame stable" | "smooth"
+            | "smoothed" | "itgdestep" | "itg-destep" | "itgdestepped" | "itg-de-stepped"
+            | "itg_de_stepped" | "itg" | "on" | "1" | "true" => Ok(Self::FrameStable),
             _ => Err(()),
         }
     }
@@ -491,7 +492,7 @@ mod tests {
             r#"
             [Options]
             VisualDelaySeconds=0.125
-            NoteScrollClock=ITGDeStepped
+            NoteScrollClock=FrameStable
             MasterVolume=250
             MenuMusic=0
             CustomSoundsEnabled=0
@@ -511,7 +512,7 @@ mod tests {
         let loaded = load_audio_options(&conf, default_options());
 
         assert_eq!(loaded.visual_delay_seconds, 0.125);
-        assert_eq!(loaded.note_scroll_clock, NoteScrollClock::ItgDeStepped);
+        assert_eq!(loaded.note_scroll_clock, NoteScrollClock::FrameStable);
         assert_eq!(loaded.master_volume, 100);
         assert!(!loaded.menu_music);
         assert!(!loaded.custom_sounds_enabled);
@@ -549,19 +550,42 @@ mod tests {
     }
 
     #[test]
-    fn note_scroll_clock_parses_canonical_and_legacy_toggle_values() {
+    fn note_scroll_clock_parses_canonical_and_alias_values() {
         assert_eq!(
             NoteScrollClock::from_str("RawAudio"),
             Ok(NoteScrollClock::RawAudio)
         );
-        assert_eq!(
-            NoteScrollClock::from_str("ITGDeStepped"),
-            Ok(NoteScrollClock::ItgDeStepped)
-        );
-        assert_eq!(
-            NoteScrollClock::from_str("true"),
-            Ok(NoteScrollClock::ItgDeStepped)
-        );
+        for value in [
+            "FrameStable",
+            "frame-stable",
+            "frame_stable",
+            "frame stable",
+            "smooth",
+            "smoothed",
+        ] {
+            assert_eq!(
+                NoteScrollClock::from_str(value),
+                Ok(NoteScrollClock::FrameStable),
+                "new alias {value:?}"
+            );
+        }
+        for value in [
+            "ITGDeStep",
+            "itg-destep",
+            "ITGDeStepped",
+            "itg-de-stepped",
+            "itg_de_stepped",
+            "itg",
+            "on",
+            "1",
+            "true",
+        ] {
+            assert_eq!(
+                NoteScrollClock::from_str(value),
+                Ok(NoteScrollClock::FrameStable),
+                "legacy alias {value:?}"
+            );
+        }
         assert_eq!(
             NoteScrollClock::from_str("off"),
             Ok(NoteScrollClock::RawAudio)

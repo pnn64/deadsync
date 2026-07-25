@@ -412,7 +412,7 @@ fn note_scroll_clock_initializes_from_config_and_emits_typed_request() {
     let asset_manager = AssetManager::new();
     let mut view = OptionsInitView {
         config: config::Config {
-            note_scroll_clock: config::NoteScrollClock::ItgDeStepped,
+            note_scroll_clock: config::NoteScrollClock::FrameStable,
             ..config::Config::default()
         },
         updater_capabilities: SimplyLoveUpdaterCapabilities::default(),
@@ -433,7 +433,7 @@ fn note_scroll_clock_initializes_from_config_and_emits_typed_request() {
 
     assert_eq!(
         state.sub[SubmenuKind::Gameplay].cursor_indices[row],
-        config::NoteScrollClock::ItgDeStepped.choice_index()
+        config::NoteScrollClock::FrameStable.choice_index()
     );
 
     let effect = apply_submenu_choice_delta(&mut state, &asset_manager, 1, NavWrap::Wrap)

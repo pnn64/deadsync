@@ -621,7 +621,6 @@ pub struct GameplayClockRuntimeState {
     pub audio_clock: GameplayAudioClockState,
     pub song_position: GameplaySongPositionState,
     pub display_clock: GameplayDisplayClockState,
-    pub note_scroll_clock: GameplayNoteScrollClockState,
     pub end_timing: GameplayEndTimingState,
     pub music_rate: GameplayMusicRateState,
     pub offsets: GameplayOffsetState,

@@ -37,7 +37,7 @@ pub(in crate::screens::options) const GAMEPLAY_OPTIONS_ROWS: &[SubRow] = &[
         label: lookup_key("OptionsGameplay", "NoteScrollClock"),
         choices: &[
             localized_choice("OptionsGameplay", "NoteScrollClockRawAudio"),
-            localized_choice("OptionsGameplay", "NoteScrollClockItgDeStepped"),
+            localized_choice("OptionsGameplay", "NoteScrollClockFrameStable"),
         ],
         inline: true,
     },
