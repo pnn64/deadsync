@@ -1,5 +1,6 @@
 use deadsync_theme_simply_love::screens::gameplay::{
-    SongLuaMessageStateBenchmark, SongLuaOrderBenchmark, benchmark_projected_mesh_scratch,
+    SongLuaEaseBenchmark, SongLuaMessageStateBenchmark, SongLuaOrderBenchmark,
+    SongLuaProxyRequestBenchmark, benchmark_projected_mesh_scratch,
     benchmark_projected_mesh_scratch_legacy,
 };
 use std::alloc::{GlobalAlloc, Layout, System};
@@ -11,6 +12,8 @@ use std::time::Instant;
 static ALLOC: CountingAlloc = CountingAlloc::new();
 
 const MESSAGE_EVENTS: usize = 2_048;
+const MESSAGE_BLOCKS: usize = 512;
+const FUTURE_EASES: usize = 2_048;
 const ORDER_ACTORS: usize = 256;
 const WARMUP_FRAMES: usize = 1_000;
 
@@ -173,6 +176,9 @@ fn print_result(label: &str, iterations: usize, result: &BenchResult) {
 
 fn main() {
     const MESSAGE_FRAMES: usize = 20_000;
+    const BLOCK_FRAMES: usize = 50_000;
+    const EASE_FRAMES: usize = 100_000;
+    const PROXY_FRAMES: usize = 20_000;
     const ORDER_FRAMES: usize = 100_000;
     const MESH_FRAMES: usize = 50_000;
 
@@ -189,6 +195,41 @@ fn main() {
     let cached_message_result = measure(MESSAGE_FRAMES, || {
         cached_messages.cached_frame(black_box(now)).to_bits() as u64
     });
+
+    let block_now = MESSAGE_BLOCKS as f32 * 0.01 + 1.0;
+    let legacy_blocks = SongLuaMessageStateBenchmark::long_command(MESSAGE_BLOCKS);
+    let mut cached_blocks = SongLuaMessageStateBenchmark::long_command(MESSAGE_BLOCKS);
+    assert_eq!(
+        legacy_blocks.legacy_frame(block_now),
+        cached_blocks.cached_frame(block_now)
+    );
+    let legacy_block_result = measure(BLOCK_FRAMES, || {
+        legacy_blocks.legacy_frame(black_box(block_now)).to_bits() as u64
+    });
+    let cached_block_result = measure(BLOCK_FRAMES, || {
+        cached_blocks.cached_frame(black_box(block_now)).to_bits() as u64
+    });
+
+    let ease_benchmark = SongLuaEaseBenchmark::new(FUTURE_EASES);
+    let ease_now = 0.0;
+    assert_eq!(
+        ease_benchmark.legacy_frame(ease_now),
+        ease_benchmark.bounded_frame(ease_now)
+    );
+    let legacy_ease_result = measure(EASE_FRAMES, || {
+        ease_benchmark.legacy_frame(black_box(ease_now)).to_bits() as u64
+    });
+    let bounded_ease_result = measure(EASE_FRAMES, || {
+        ease_benchmark.bounded_frame(black_box(ease_now)).to_bits() as u64
+    });
+
+    let proxy_benchmark = SongLuaProxyRequestBenchmark::new(8, 16, 128);
+    assert_eq!(
+        proxy_benchmark.legacy_frame(),
+        proxy_benchmark.indexed_frame()
+    );
+    let legacy_proxy_result = measure(PROXY_FRAMES, || proxy_benchmark.legacy_frame());
+    let indexed_proxy_result = measure(PROXY_FRAMES, || proxy_benchmark.indexed_frame());
 
     let mut legacy_order = SongLuaOrderBenchmark::new(ORDER_ACTORS);
     let mut cached_order = SongLuaOrderBenchmark::new(ORDER_ACTORS);
@@ -231,6 +272,9 @@ fn main() {
         legacy_message_result.checksum,
         cached_message_result.checksum
     );
+    assert_eq!(legacy_block_result.checksum, cached_block_result.checksum);
+    assert_eq!(legacy_ease_result.checksum, bounded_ease_result.checksum);
+    assert_eq!(legacy_proxy_result.checksum, indexed_proxy_result.checksum);
     assert_eq!(legacy_order_result.checksum, cached_order_result.checksum);
     assert_eq!(
         legacy_changing_order_result.checksum,
@@ -242,6 +286,15 @@ fn main() {
     println!("message state ({MESSAGE_EVENTS} prior events)");
     print_result("replay history", MESSAGE_FRAMES, &legacy_message_result);
     print_result("incremental cache", MESSAGE_FRAMES, &cached_message_result);
+    println!("message command ({MESSAGE_BLOCKS} completed blocks)");
+    print_result("scan blocks", BLOCK_FRAMES, &legacy_block_result);
+    print_result("block cursor", BLOCK_FRAMES, &cached_block_result);
+    println!("runtime ease ({FUTURE_EASES} future windows)");
+    print_result("scan full range", EASE_FRAMES, &legacy_ease_result);
+    print_result("stop at future", EASE_FRAMES, &bounded_ease_result);
+    println!("proxy requests (8 captures, 16 children, 128 references)");
+    print_result("scan topology", PROXY_FRAMES, &legacy_proxy_result);
+    print_result("topology index", PROXY_FRAMES, &indexed_proxy_result);
     println!("dynamic order ({ORDER_ACTORS} actors, unchanged keys)");
     print_result("sort every frame", ORDER_FRAMES, &legacy_order_result);
     print_result("key cache", ORDER_FRAMES, &cached_order_result);

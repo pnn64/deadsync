@@ -442,6 +442,57 @@ struct SongLuaOverlayOrderCache {
     last_z_keys: Vec<u32>,
 }
 
+// Built once per song or visual layer so frame rendering does not repeatedly
+// walk actor parents or resolve ActorFrameTexture names.
+#[derive(Default)]
+struct SongLuaProxyRequestIndex {
+    root_indices: Vec<usize>,
+    capture_children: Vec<Vec<usize>>,
+    proxy_indices: Vec<usize>,
+    aft_sprite_targets: Vec<Option<usize>>,
+}
+
+impl SongLuaProxyRequestIndex {
+    fn new(overlays: &[SongLuaOverlayActor]) -> Self {
+        let aft_ancestors = (0..overlays.len())
+            .map(|index| song_lua_overlay_aft_ancestor(overlays, index))
+            .collect::<Vec<_>>();
+        let mut root_indices = Vec::with_capacity(overlays.len());
+        let mut capture_children = vec![Vec::new(); overlays.len()];
+        for (index, ancestor) in aft_ancestors.iter().copied().enumerate() {
+            if let Some(ancestor) = ancestor {
+                if let Some(children) = capture_children.get_mut(ancestor) {
+                    children.push(index);
+                }
+            } else {
+                root_indices.push(index);
+            }
+        }
+        let proxy_indices = overlays
+            .iter()
+            .enumerate()
+            .filter_map(|(index, overlay)| {
+                matches!(overlay.kind, SongLuaOverlayKind::ActorProxy { .. }).then_some(index)
+            })
+            .collect();
+        let aft_sprite_targets = overlays
+            .iter()
+            .map(|overlay| match &overlay.kind {
+                SongLuaOverlayKind::AftSprite { capture_name } => {
+                    song_lua_overlay_capture_index_by_name(overlays, capture_name)
+                }
+                _ => None,
+            })
+            .collect();
+        Self {
+            root_indices,
+            capture_children,
+            proxy_indices,
+            aft_sprite_targets,
+        }
+    }
+}
+
 // Amortizes message-history replay across monotonic gameplay frames. A seek
 // before the last consumed event resets the cursor and replays from the start.
 #[derive(Clone, Copy, Debug)]
@@ -452,6 +503,9 @@ struct SongLuaMessageStateCache {
     base_state: SongLuaOverlayState,
     active_command_index: Option<usize>,
     active_start_second: f32,
+    active_next_block: usize,
+    active_block_state: SongLuaOverlayState,
+    active_last_elapsed: f32,
 }
 
 impl Default for SongLuaMessageStateCache {
@@ -463,6 +517,9 @@ impl Default for SongLuaMessageStateCache {
             base_state: SongLuaOverlayState::default(),
             active_command_index: None,
             active_start_second: 0.0,
+            active_next_block: 0,
+            active_block_state: SongLuaOverlayState::default(),
+            active_last_elapsed: f32::NEG_INFINITY,
         }
     }
 }
@@ -476,6 +533,14 @@ impl SongLuaMessageStateCache {
         self.base_state = initial_state;
         self.active_command_index = None;
         self.active_start_second = 0.0;
+        self.reset_active_blocks(initial_state);
+    }
+
+    #[inline(always)]
+    fn reset_active_blocks(&mut self, state: SongLuaOverlayState) {
+        self.active_next_block = 0;
+        self.active_block_state = state;
+        self.active_last_elapsed = f32::NEG_INFINITY;
     }
 }
 
@@ -630,6 +695,8 @@ pub struct State {
     song_lua_overlay_order: SongLuaOverlayOrderCache,
     song_lua_background_visual_layer_orders: Vec<SongLuaOverlayOrderCache>,
     song_lua_foreground_visual_layer_orders: Vec<SongLuaOverlayOrderCache>,
+    song_lua_proxy_request_index: SongLuaProxyRequestIndex,
+    song_lua_foreground_proxy_request_indices: Vec<SongLuaProxyRequestIndex>,
     song_lua_message_state_cache: Vec<SongLuaMessageStateCache>,
     song_lua_background_layer_message_state_cache: Vec<Vec<SongLuaMessageStateCache>>,
     song_lua_foreground_layer_message_state_cache: Vec<Vec<SongLuaMessageStateCache>>,
@@ -825,6 +892,13 @@ impl State {
             .iter()
             .map(|layer| song_lua_overlay_order_cache_from(&layer.overlays, &layer.overlay_eases))
             .collect();
+        let song_lua_proxy_request_index =
+            SongLuaProxyRequestIndex::new(&song_lua_visuals.overlays);
+        let song_lua_foreground_proxy_request_indices = song_lua_visuals
+            .foreground_visual_layers
+            .iter()
+            .map(|layer| SongLuaProxyRequestIndex::new(&layer.overlays))
+            .collect();
         let song_lua_message_state_cache =
             vec![SongLuaMessageStateCache::default(); song_lua_visuals.overlays.len()];
         let song_lua_background_layer_message_state_cache = song_lua_visuals
@@ -901,6 +975,8 @@ impl State {
             song_lua_overlay_order,
             song_lua_background_visual_layer_orders,
             song_lua_foreground_visual_layer_orders,
+            song_lua_proxy_request_index,
+            song_lua_foreground_proxy_request_indices,
             song_lua_message_state_cache,
             song_lua_background_layer_message_state_cache,
             song_lua_foreground_layer_message_state_cache,
@@ -4727,6 +4803,7 @@ fn song_lua_overlay_state_sets_from_into(
     );
 }
 
+#[cfg(test)]
 fn song_lua_proxy_active_players(
     overlays: &[SongLuaOverlayActor],
     overlay_states: &[SongLuaOverlayState],
@@ -4793,6 +4870,7 @@ fn song_lua_proxy_target_has_source(
     }
 }
 
+#[cfg(test)]
 fn song_lua_capture_replaces_player(
     overlays: &[SongLuaOverlayActor],
     capture_index: usize,
@@ -4829,6 +4907,7 @@ fn song_lua_capture_replaces_player(
     })
 }
 
+#[cfg(test)]
 fn song_lua_replacement_active_players(
     overlays: &[SongLuaOverlayActor],
     overlay_states: &[SongLuaOverlayState],
@@ -4855,6 +4934,118 @@ fn song_lua_replacement_active_players(
                 capture_index,
                 player_index,
                 proxy_sources,
+            ) {
+                out[player_index] = true;
+            }
+        }
+    }
+    out
+}
+
+fn song_lua_proxy_active_players_indexed(
+    overlays: &[SongLuaOverlayActor],
+    overlay_states: &[SongLuaOverlayState],
+    proxy_sources: &[SongLuaPlayerProxySources<'_>; 2],
+    index: &SongLuaProxyRequestIndex,
+) -> [bool; 2] {
+    let mut out = [false; 2];
+    for &overlay_index in &index.proxy_indices {
+        let SongLuaOverlayKind::ActorProxy { target } = &overlays[overlay_index].kind else {
+            continue;
+        };
+        let player_index = match target {
+            SongLuaProxyTarget::Player { player_index }
+            | SongLuaProxyTarget::NoteField { player_index } => *player_index,
+            _ => continue,
+        };
+        if player_index >= out.len() || !song_lua_proxy_target_has_source(target, proxy_sources) {
+            continue;
+        }
+        if overlay_states
+            .get(overlay_index)
+            .copied()
+            .is_some_and(song_lua_overlay_is_visible)
+        {
+            out[player_index] = true;
+        }
+    }
+    out
+}
+
+fn song_lua_capture_replaces_player_indexed(
+    overlays: &[SongLuaOverlayActor],
+    capture_index: usize,
+    player_index: usize,
+    proxy_sources: &[SongLuaPlayerProxySources<'_>; 2],
+    index: &SongLuaProxyRequestIndex,
+    capture_stack: &mut SmallVec<[usize; 8]>,
+) -> bool {
+    if capture_stack.contains(&capture_index) {
+        return false;
+    }
+    capture_stack.push(capture_index);
+    let replaced = index
+        .capture_children
+        .get(capture_index)
+        .into_iter()
+        .flatten()
+        .any(|&overlay_index| match &overlays[overlay_index].kind {
+            SongLuaOverlayKind::ActorProxy { target } => {
+                matches!(
+                    target,
+                    SongLuaProxyTarget::Player { player_index: target_player }
+                        | SongLuaProxyTarget::NoteField { player_index: target_player }
+                        if *target_player == player_index
+                ) && song_lua_proxy_target_has_source(target, proxy_sources)
+            }
+            SongLuaOverlayKind::AftSprite { .. } => index
+                .aft_sprite_targets
+                .get(overlay_index)
+                .copied()
+                .flatten()
+                .is_some_and(|nested_capture| {
+                    song_lua_capture_replaces_player_indexed(
+                        overlays,
+                        nested_capture,
+                        player_index,
+                        proxy_sources,
+                        index,
+                        capture_stack,
+                    )
+                }),
+            _ => false,
+        });
+    capture_stack.pop();
+    replaced
+}
+
+fn song_lua_replacement_active_players_indexed(
+    overlays: &[SongLuaOverlayActor],
+    overlay_states: &[SongLuaOverlayState],
+    proxy_sources: &[SongLuaPlayerProxySources<'_>; 2],
+    index: &SongLuaProxyRequestIndex,
+) -> [bool; 2] {
+    let mut out =
+        song_lua_proxy_active_players_indexed(overlays, overlay_states, proxy_sources, index);
+    for (overlay_index, capture_index) in index.aft_sprite_targets.iter().copied().enumerate() {
+        let Some(capture_index) = capture_index else {
+            continue;
+        };
+        let Some(overlay_state) = overlay_states.get(overlay_index) else {
+            continue;
+        };
+        if !overlay_state.visible || overlay_state.diffuse[3] <= f32::EPSILON {
+            continue;
+        }
+        for player_index in 0..out.len() {
+            let mut capture_stack = SmallVec::<[usize; 8]>::new();
+            if song_lua_capture_replaces_player_indexed(
+                overlays,
+                capture_index,
+                player_index,
+                proxy_sources,
+                index,
+                &mut capture_stack,
             ) {
                 out[player_index] = true;
             }
@@ -4898,7 +5089,7 @@ struct SongLuaPlayerProxySources<'a> {
     combo: Option<&'a [Arc<[Actor]>]>,
 }
 
-#[derive(Clone, Copy, Default)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 struct SongLuaPlayerProxyRequests {
     player: bool,
     note_field: bool,
@@ -4913,7 +5104,7 @@ struct SongLuaScreenProxySources<'a> {
     overlay: Option<&'a [Arc<[Actor]>]>,
 }
 
-#[derive(Clone, Copy, Default)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 struct SongLuaScreenProxyRequests {
     players: [SongLuaPlayerProxyRequests; 2],
     underlay: bool,
@@ -5281,6 +5472,97 @@ fn song_lua_proxy_requests(
                         overlays,
                         overlay_states,
                         capture_index,
+                        &mut requests,
+                        &mut capture_stack,
+                    );
+                }
+            }
+            _ => {}
+        }
+    }
+    requests
+}
+
+fn song_lua_collect_capture_requests_indexed(
+    overlays: &[SongLuaOverlayActor],
+    overlay_states: &[SongLuaOverlayState],
+    capture_index: usize,
+    index: &SongLuaProxyRequestIndex,
+    requests: &mut SongLuaScreenProxyRequests,
+    capture_stack: &mut SmallVec<[usize; 8]>,
+) {
+    if capture_stack.contains(&capture_index) {
+        return;
+    }
+    capture_stack.push(capture_index);
+    let Some(children) = index.capture_children.get(capture_index) else {
+        capture_stack.pop();
+        return;
+    };
+    for &overlay_index in children {
+        let Some(overlay_state) = overlay_states.get(overlay_index).copied() else {
+            continue;
+        };
+        if !song_lua_overlay_is_visible(overlay_state) {
+            continue;
+        }
+        match &overlays[overlay_index].kind {
+            SongLuaOverlayKind::ActorProxy { target } => {
+                song_lua_mark_proxy_target(requests, target);
+            }
+            SongLuaOverlayKind::AftSprite { .. } => {
+                if let Some(nested_capture) = index
+                    .aft_sprite_targets
+                    .get(overlay_index)
+                    .copied()
+                    .flatten()
+                {
+                    song_lua_collect_capture_requests_indexed(
+                        overlays,
+                        overlay_states,
+                        nested_capture,
+                        index,
+                        requests,
+                        capture_stack,
+                    );
+                }
+            }
+            _ => {}
+        }
+    }
+    capture_stack.pop();
+}
+
+fn song_lua_proxy_requests_indexed(
+    overlays: &[SongLuaOverlayActor],
+    overlay_states: &[SongLuaOverlayState],
+    index: &SongLuaProxyRequestIndex,
+) -> SongLuaScreenProxyRequests {
+    let mut requests = SongLuaScreenProxyRequests::default();
+    let mut capture_stack = SmallVec::<[usize; 8]>::new();
+    for &overlay_index in &index.root_indices {
+        let Some(overlay_state) = overlay_states.get(overlay_index).copied() else {
+            continue;
+        };
+        if !song_lua_overlay_is_visible(overlay_state) {
+            continue;
+        }
+        match &overlays[overlay_index].kind {
+            SongLuaOverlayKind::ActorProxy { target } => {
+                song_lua_mark_proxy_target(&mut requests, target);
+            }
+            SongLuaOverlayKind::AftSprite { .. } => {
+                if let Some(capture_index) = index
+                    .aft_sprite_targets
+                    .get(overlay_index)
+                    .copied()
+                    .flatten()
+                {
+                    song_lua_collect_capture_requests_indexed(
+                        overlays,
+                        overlay_states,
+                        capture_index,
+                        index,
                         &mut requests,
                         &mut capture_stack,
                     );
@@ -6089,7 +6371,88 @@ fn song_lua_overlay_apply_blocks(
     current
 }
 
+fn song_lua_overlay_apply_blocks_cached(
+    state: SongLuaOverlayState,
+    blocks: &[SongLuaOverlayCommandBlock],
+    elapsed: f32,
+    next_block: &mut usize,
+    block_state: &mut SongLuaOverlayState,
+    last_elapsed: &mut f32,
+) -> SongLuaOverlayState {
+    if !elapsed.is_finite() {
+        return state;
+    }
+    if elapsed < *last_elapsed {
+        *next_block = 0;
+        *block_state = state;
+    }
+    *last_elapsed = elapsed;
+
+    while let Some(block) = blocks.get(*next_block) {
+        if elapsed < block.start {
+            break;
+        }
+        if block.duration <= f32::EPSILON || elapsed >= block.start + block.duration {
+            apply_song_lua_overlay_delta(block_state, &block.delta);
+            *next_block += 1;
+            continue;
+        }
+        let target = song_lua_overlay_state_with_delta(*block_state, &block.delta);
+        let t = song_lua_ease_factor(
+            block.easing.as_deref(),
+            ((elapsed - block.start) / block.duration).clamp(0.0, 1.0),
+            block.opt1,
+            block.opt2,
+        );
+        return song_lua_overlay_state_lerp(*block_state, target, t, &block.delta);
+    }
+    *block_state
+}
+
 fn apply_song_lua_overlay_runtime_eases_for(
+    now: f32,
+    overlay_index: usize,
+    overlay_eases: &[SongLuaOverlayEaseWindowRuntime],
+    overlay_ease_ranges: &[std::ops::Range<usize>],
+    mut current: SongLuaOverlayState,
+) -> SongLuaOverlayState {
+    let Some(ease_range) = overlay_ease_ranges.get(overlay_index) else {
+        return current;
+    };
+    for ease in &overlay_eases[ease_range.clone()] {
+        debug_assert_eq!(ease.overlay_index, overlay_index);
+        // Grouped ease ranges are sorted by start time.
+        if now < ease.start_second {
+            break;
+        }
+        if let Some(cutoff_second) = ease.cutoff_second
+            && now >= cutoff_second
+        {
+            continue;
+        }
+        if now >= ease.sustain_end_second {
+            apply_song_lua_overlay_delta(&mut current, &ease.to.delta);
+            continue;
+        }
+        if ease.end_second <= ease.start_second || now >= ease.end_second {
+            apply_song_lua_overlay_delta(&mut current, &ease.to.delta);
+            continue;
+        }
+        let t = song_lua_ease_factor(
+            ease.easing.as_deref(),
+            ((now - ease.start_second) / (ease.end_second - ease.start_second)).clamp(0.0, 1.0),
+            ease.opt1,
+            ease.opt2,
+        );
+        let from_state = song_lua_overlay_state_with_delta(current, &ease.from.delta);
+        let to_state = song_lua_overlay_state_with_delta(current, &ease.to.delta);
+        current = song_lua_overlay_state_lerp(from_state, to_state, t, &ease.to.delta);
+    }
+    current
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn apply_song_lua_overlay_runtime_eases_legacy(
     now: f32,
     overlay_index: usize,
     overlay_eases: &[SongLuaOverlayEaseWindowRuntime],
@@ -6216,26 +6579,35 @@ fn song_lua_message_state_cached(
         if let Some(active_command_index) = cache.active_command_index
             && let Some(active_command) = message_commands.get(active_command_index)
         {
-            cache.base_state = song_lua_overlay_apply_blocks(
-                cache.base_state,
+            let command_base = cache.base_state;
+            cache.base_state = song_lua_overlay_apply_blocks_cached(
+                command_base,
                 &active_command.blocks,
                 event.event_second - cache.active_start_second,
+                &mut cache.active_next_block,
+                &mut cache.active_block_state,
+                &mut cache.active_last_elapsed,
             );
         }
         cache.active_command_index = Some(event.command_index);
         cache.active_start_second = event.event_second;
+        cache.reset_active_blocks(cache.base_state);
     }
 
-    cache
+    let Some(command) = cache
         .active_command_index
         .and_then(|command_index| message_commands.get(command_index))
-        .map_or(cache.base_state, |command| {
-            song_lua_overlay_apply_blocks(
-                cache.base_state,
-                &command.blocks,
-                now - cache.active_start_second,
-            )
-        })
+    else {
+        return cache.base_state;
+    };
+    song_lua_overlay_apply_blocks_cached(
+        cache.base_state,
+        &command.blocks,
+        now - cache.active_start_second,
+        &mut cache.active_next_block,
+        &mut cache.active_block_state,
+        &mut cache.active_last_elapsed,
+    )
 }
 
 fn song_lua_player_render_state(
@@ -8138,6 +8510,35 @@ impl SongLuaMessageStateBenchmark {
         }
     }
 
+    pub fn long_command(block_count: usize) -> Self {
+        let command = SongLuaOverlayMessageCommand {
+            message: "LongCommand".to_string(),
+            blocks: (0..block_count)
+                .map(|index| SongLuaOverlayCommandBlock {
+                    start: index as f32 * 0.01,
+                    duration: 0.005,
+                    easing: Some("inOutQuad".to_string()),
+                    opt1: None,
+                    opt2: None,
+                    delta: SongLuaOverlayStateDelta {
+                        x: Some(index as f32),
+                        y: (index % 8 == 0).then_some(-(index as f32)),
+                        ..SongLuaOverlayStateDelta::default()
+                    },
+                })
+                .collect(),
+        };
+        Self {
+            initial_state: SongLuaOverlayState::default(),
+            commands: vec![command],
+            events: vec![SongLuaOverlayMessageRuntime {
+                event_second: 0.0,
+                command_index: 0,
+            }],
+            cache: SongLuaMessageStateCache::default(),
+        }
+    }
+
     pub fn legacy_frame(&self, now: f32) -> f32 {
         let state = song_lua_message_state_legacy(
             now,
@@ -8157,6 +8558,158 @@ impl SongLuaMessageStateBenchmark {
             &mut self.cache,
         );
         state.x + state.y + state.z + state.draw_order as f32
+    }
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub struct SongLuaEaseBenchmark {
+    eases: Vec<SongLuaOverlayEaseWindowRuntime>,
+    ranges: Vec<std::ops::Range<usize>>,
+}
+
+#[cfg(feature = "bench-support")]
+impl SongLuaEaseBenchmark {
+    pub fn new(future_ease_count: usize) -> Self {
+        let eases = (0..future_ease_count)
+            .map(|index| {
+                let start_second = 10.0 + index as f32 * 0.25;
+                let delta = |x| SongLuaRuntimeOverlayStateDelta {
+                    overlap_mask: 1,
+                    delta: SongLuaOverlayStateDelta {
+                        x: Some(x),
+                        ..SongLuaOverlayStateDelta::default()
+                    },
+                };
+                SongLuaOverlayEaseWindowRuntime {
+                    overlay_index: 0,
+                    start_second,
+                    end_second: start_second + 0.1,
+                    sustain_end_second: f32::MAX,
+                    cutoff_second: None,
+                    from: delta(index as f32),
+                    to: delta(index as f32 + 1.0),
+                    easing: Some("inOutQuad".to_string()),
+                    opt1: None,
+                    opt2: None,
+                }
+            })
+            .collect::<Vec<_>>();
+        Self {
+            ranges: vec![0..eases.len()],
+            eases,
+        }
+    }
+
+    pub fn legacy_frame(&self, now: f32) -> f32 {
+        apply_song_lua_overlay_runtime_eases_legacy(
+            now,
+            0,
+            &self.eases,
+            &self.ranges,
+            SongLuaOverlayState::default(),
+        )
+        .x
+    }
+
+    pub fn bounded_frame(&self, now: f32) -> f32 {
+        apply_song_lua_overlay_runtime_eases_for(
+            now,
+            0,
+            &self.eases,
+            &self.ranges,
+            SongLuaOverlayState::default(),
+        )
+        .x
+    }
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub struct SongLuaProxyRequestBenchmark {
+    overlays: Vec<SongLuaOverlayActor>,
+    states: Vec<SongLuaOverlayState>,
+    index: SongLuaProxyRequestIndex,
+}
+
+#[cfg(feature = "bench-support")]
+impl SongLuaProxyRequestBenchmark {
+    pub fn new(capture_count: usize, children_per_capture: usize, reference_count: usize) -> Self {
+        let capture_count = capture_count.max(1);
+        let mut overlays =
+            Vec::with_capacity(capture_count * (children_per_capture + 1) + reference_count);
+        let mut capture_names = Vec::with_capacity(capture_count);
+        for capture in 0..capture_count {
+            let capture_index = overlays.len();
+            let name = format!("Capture{capture}");
+            capture_names.push(name.clone());
+            overlays.push(SongLuaOverlayActor {
+                kind: SongLuaOverlayKind::ActorFrameTexture,
+                name: Some(name),
+                parent_index: None,
+                initial_state: SongLuaOverlayState::default(),
+                message_commands: Vec::new(),
+            });
+            for child in 0..children_per_capture {
+                overlays.push(SongLuaOverlayActor {
+                    kind: SongLuaOverlayKind::ActorProxy {
+                        target: SongLuaProxyTarget::Judgment {
+                            player_index: child % 2,
+                        },
+                    },
+                    name: None,
+                    parent_index: Some(capture_index),
+                    initial_state: SongLuaOverlayState::default(),
+                    message_commands: Vec::new(),
+                });
+            }
+        }
+        for reference in 0..reference_count {
+            overlays.push(SongLuaOverlayActor {
+                kind: SongLuaOverlayKind::AftSprite {
+                    capture_name: capture_names[reference % capture_names.len()].clone(),
+                },
+                name: None,
+                parent_index: None,
+                initial_state: SongLuaOverlayState::default(),
+                message_commands: Vec::new(),
+            });
+        }
+        let states = overlays
+            .iter()
+            .map(|overlay| overlay.initial_state)
+            .collect::<Vec<_>>();
+        let index = SongLuaProxyRequestIndex::new(&overlays);
+        Self {
+            overlays,
+            states,
+            index,
+        }
+    }
+
+    pub fn legacy_frame(&self) -> u64 {
+        Self::checksum(song_lua_proxy_requests(&self.overlays, &self.states))
+    }
+
+    pub fn indexed_frame(&self) -> u64 {
+        Self::checksum(song_lua_proxy_requests_indexed(
+            &self.overlays,
+            &self.states,
+            &self.index,
+        ))
+    }
+
+    fn checksum(requests: SongLuaScreenProxyRequests) -> u64 {
+        let mut bits = 0u64;
+        for (player_index, player) in requests.players.iter().enumerate() {
+            let offset = player_index * 4;
+            bits |= u64::from(player.player) << offset;
+            bits |= u64::from(player.note_field) << (offset + 1);
+            bits |= u64::from(player.judgment) << (offset + 2);
+            bits |= u64::from(player.combo) << (offset + 3);
+        }
+        bits |= u64::from(requests.underlay) << 8;
+        bits | (u64::from(requests.overlay) << 9)
     }
 }
 
@@ -10224,6 +10777,9 @@ pub fn push_actors(
         std::mem::take(&mut state.song_lua_background_visual_layer_orders);
     let mut song_lua_foreground_visual_layer_orders =
         std::mem::take(&mut state.song_lua_foreground_visual_layer_orders);
+    let song_lua_proxy_request_index = std::mem::take(&mut state.song_lua_proxy_request_index);
+    let song_lua_foreground_proxy_request_indices =
+        std::mem::take(&mut state.song_lua_foreground_proxy_request_indices);
     let mut song_lua_message_state_cache = std::mem::take(&mut state.song_lua_message_state_cache);
     let mut song_lua_background_layer_message_state_cache =
         std::mem::take(&mut state.song_lua_background_layer_message_state_cache);
@@ -10349,16 +10905,20 @@ pub fn push_actors(
             layer_states,
         );
     }
-    let mut proxy_requests =
-        song_lua_proxy_requests(&song_lua_visuals.overlays, &song_lua_overlay_state_scratch);
-    for (layer, layer_states) in song_lua_visuals
+    let mut proxy_requests = song_lua_proxy_requests_indexed(
+        &song_lua_visuals.overlays,
+        &song_lua_overlay_state_scratch,
+        &song_lua_proxy_request_index,
+    );
+    for ((layer, layer_states), request_index) in song_lua_visuals
         .foreground_visual_layers
         .iter()
         .zip(&song_lua_foreground_layer_state_scratch)
+        .zip(&song_lua_foreground_proxy_request_indices)
     {
         song_lua_merge_proxy_requests(
             &mut proxy_requests,
-            song_lua_proxy_requests(&layer.overlays, layer_states),
+            song_lua_proxy_requests_indexed(&layer.overlays, layer_states, request_index),
         );
     }
     let mut underlay_proxy_source = proxy_requests
@@ -10892,10 +11452,11 @@ pub fn push_actors(
             combo: p2_proxy_sources[2].as_ref().map(|source| source.as_slice()),
         },
     ];
-    let replacement_active_players = song_lua_replacement_active_players(
+    let replacement_active_players = song_lua_replacement_active_players_indexed(
         &song_lua_visuals.overlays,
         &song_lua_overlay_state_scratch,
         &replacement_proxy_sources,
+        &song_lua_proxy_request_index,
     );
 
     // Danger overlay (Simply Love parity): red flashing in danger + green recovery, optional HideDanger.
@@ -12097,6 +12658,8 @@ pub fn push_actors(
     state.song_lua_overlay_order = song_lua_overlay_order;
     state.song_lua_background_visual_layer_orders = song_lua_background_visual_layer_orders;
     state.song_lua_foreground_visual_layer_orders = song_lua_foreground_visual_layer_orders;
+    state.song_lua_proxy_request_index = song_lua_proxy_request_index;
+    state.song_lua_foreground_proxy_request_indices = song_lua_foreground_proxy_request_indices;
     state.song_lua_message_state_cache = song_lua_message_state_cache;
     state.song_lua_background_layer_message_state_cache =
         song_lua_background_layer_message_state_cache;
@@ -12760,6 +13323,91 @@ mod tests {
             let actual =
                 song_lua_message_state_cached(now, initial, &commands, Some(&events), &mut cache);
             assert_eq!(actual, expected, "now={now}");
+        }
+    }
+
+    #[test]
+    fn song_lua_message_block_cursor_matches_replay_across_block_rewinds() {
+        let command = SongLuaOverlayMessageCommand {
+            message: "LongCommand".to_string(),
+            blocks: (0..128)
+                .map(|index| SongLuaOverlayCommandBlock {
+                    start: index as f32 * 0.25,
+                    duration: 0.2,
+                    easing: Some("inOutQuad".to_string()),
+                    opt1: None,
+                    opt2: None,
+                    delta: SongLuaOverlayStateDelta {
+                        x: Some(index as f32 * 3.0),
+                        y: (index % 5 == 0).then_some(-(index as f32)),
+                        ..SongLuaOverlayStateDelta::default()
+                    },
+                })
+                .collect(),
+        };
+        let commands = vec![command];
+        let events = vec![SongLuaOverlayMessageRuntime {
+            event_second: 1.0,
+            command_index: 0,
+        }];
+        let initial = SongLuaOverlayState {
+            x: 11.0,
+            y: 7.0,
+            ..SongLuaOverlayState::default()
+        };
+        let mut cache = SongLuaMessageStateCache::default();
+
+        for now in [0.0, 1.0, 1.1, 8.75, 24.4, 32.8, 9.25, 9.3, 31.0] {
+            let expected = song_lua_message_state_legacy(now, initial, &commands, Some(&events));
+            let actual =
+                song_lua_message_state_cached(now, initial, &commands, Some(&events), &mut cache);
+            assert_eq!(actual, expected, "now={now}");
+        }
+    }
+
+    #[test]
+    fn song_lua_ease_future_cutoff_matches_full_range_scan() {
+        let overlay_eases = (0..128)
+            .map(|index| {
+                let start_second = 2.0 + index as f32 * 0.5;
+                let runtime_delta = |x| SongLuaRuntimeOverlayStateDelta {
+                    overlap_mask: 1,
+                    delta: SongLuaOverlayStateDelta {
+                        x: Some(x),
+                        ..SongLuaOverlayStateDelta::default()
+                    },
+                };
+                SongLuaOverlayEaseWindowRuntime {
+                    overlay_index: 0,
+                    start_second,
+                    end_second: start_second + 0.25,
+                    sustain_end_second: f32::MAX,
+                    cutoff_second: (index % 7 == 0).then_some(start_second + 1.0),
+                    from: runtime_delta(index as f32),
+                    to: runtime_delta(index as f32 + 10.0),
+                    easing: Some("inOutQuad".to_string()),
+                    opt1: None,
+                    opt2: None,
+                }
+            })
+            .collect::<Vec<_>>();
+        let ranges = vec![0..overlay_eases.len()];
+        let initial = SongLuaOverlayState {
+            x: -5.0,
+            ..SongLuaOverlayState::default()
+        };
+
+        for now in [-1.0, 2.0, 2.125, 7.0, 17.25, 66.0, 100.0] {
+            let current =
+                apply_song_lua_overlay_runtime_eases_for(now, 0, &overlay_eases, &ranges, initial);
+            let expected = apply_song_lua_overlay_runtime_eases_legacy(
+                now,
+                0,
+                &overlay_eases,
+                &ranges,
+                initial,
+            );
+            assert_eq!(current, expected, "now={now}",);
         }
     }
 
@@ -13715,6 +14363,11 @@ mod tests {
         ];
         let overlay_states = vec![SongLuaOverlayState::default(); overlays.len()];
         let requests = song_lua_proxy_requests(&overlays, &overlay_states);
+        let index = SongLuaProxyRequestIndex::new(&overlays);
+        assert_eq!(
+            song_lua_proxy_requests_indexed(&overlays, &overlay_states, &index),
+            requests
+        );
 
         assert!(!requests.players[0].player);
         assert!(!requests.players[0].note_field);
@@ -13736,6 +14389,11 @@ mod tests {
             .map(|overlay| overlay.initial_state)
             .collect::<Vec<_>>();
         let requests = song_lua_proxy_requests(&overlays, &overlay_states);
+        let index = SongLuaProxyRequestIndex::new(&overlays);
+        assert_eq!(
+            song_lua_proxy_requests_indexed(&overlays, &overlay_states, &index),
+            requests
+        );
 
         assert!(!requests.players[0].player);
         assert!(!requests.players[0].note_field);
@@ -13755,8 +14413,47 @@ mod tests {
             .map(|overlay| overlay.initial_state)
             .collect::<Vec<_>>();
         let requests = song_lua_proxy_requests(&overlays, &overlay_states);
+        let index = SongLuaProxyRequestIndex::new(&overlays);
+        assert_eq!(
+            song_lua_proxy_requests_indexed(&overlays, &overlay_states, &index),
+            requests
+        );
 
         assert!(!requests.players[0].combo);
+    }
+
+    #[test]
+    fn song_lua_proxy_index_matches_nested_player_replacement() {
+        let overlays = vec![
+            test_capture_overlay("PlayerCapture"),
+            test_capture_proxy_child(0, SongLuaProxyTarget::Player { player_index: 0 }),
+            test_aft_overlay("playercapture", true),
+        ];
+        let overlay_states = overlays
+            .iter()
+            .map(|overlay| overlay.initial_state)
+            .collect::<Vec<_>>();
+        let source = vec![Arc::<[Actor]>::from(vec![test_source_actor()])];
+        let sources = [
+            SongLuaPlayerProxySources {
+                player: Some(source.as_slice()),
+                ..SongLuaPlayerProxySources::default()
+            },
+            SongLuaPlayerProxySources::default(),
+        ];
+        let expected = song_lua_replacement_active_players(&overlays, &overlay_states, &sources);
+        let index = SongLuaProxyRequestIndex::new(&overlays);
+
+        assert_eq!(
+            song_lua_replacement_active_players_indexed(
+                &overlays,
+                &overlay_states,
+                &sources,
+                &index,
+            ),
+            expected
+        );
+        assert_eq!(expected, [true, false]);
     }
 
     #[test]
