@@ -5946,7 +5946,11 @@ impl App {
     #[inline(always)]
     fn handle_live_key_event(&mut self, event_loop: &ActiveEventLoop, raw_key: RawKeyboardEvent) {
         let gameplay_screen = self.state.screens.current_screen == CurrentScreen::Gameplay;
-        let handled_started = Instant::now();
+        let handled_started = self
+            .state
+            .shell
+            .gameplay_input_trace
+            .handler_started(gameplay_screen);
 
         if !self.handle_raw_key_event(event_loop, raw_key) {
             if gameplay_screen {
@@ -6004,11 +6008,13 @@ impl App {
             }
         }
 
-        self.state.shell.gameplay_input_trace.note_key_handler(
-            gameplay_screen,
-            raw_key.repeat,
-            elapsed_us_since(handled_started),
-        );
+        if let Some(handled_started) = handled_started {
+            self.state.shell.gameplay_input_trace.note_key_handler(
+                gameplay_screen,
+                raw_key.repeat,
+                elapsed_us_since(handled_started),
+            );
+        }
     }
 
     #[cfg(any(target_os = "linux", target_os = "freebsd"))]
@@ -7644,7 +7650,7 @@ impl ApplicationHandler<UserEvent> for App {
         self.state
             .shell
             .gameplay_input_trace
-            .note_new_events(Instant::now());
+            .note_new_events_if_enabled();
     }
 
     fn user_event(&mut self, event_loop: &ActiveEventLoop, event: UserEvent) {
@@ -7676,7 +7682,11 @@ impl ApplicationHandler<UserEvent> for App {
                     return;
                 }
                 let gameplay_screen = self.state.screens.current_screen == CurrentScreen::Gameplay;
-                let handled_started = Instant::now();
+                let handled_started = self
+                    .state
+                    .shell
+                    .gameplay_input_trace
+                    .handler_started(gameplay_screen);
                 let mut raw_pad_consumed = false;
                 match raw_pad_screen_route(self.state.screens.current_screen) {
                     RawPadScreenRoute::Sandbox => {
@@ -7720,10 +7730,12 @@ impl ApplicationHandler<UserEvent> for App {
                 if !raw_pad_consumed {
                     self.handle_pad_event(event_loop, ev);
                 }
-                self.state
-                    .shell
-                    .gameplay_input_trace
-                    .note_pad_handler(gameplay_screen, elapsed_us_since(handled_started));
+                if let Some(handled_started) = handled_started {
+                    self.state
+                        .shell
+                        .gameplay_input_trace
+                        .note_pad_handler(gameplay_screen, elapsed_us_since(handled_started));
+                }
             }
             UserEvent::Key(ev) => {
                 if !self.accepts_live_input() {
@@ -7856,7 +7868,7 @@ impl ApplicationHandler<UserEvent> for App {
         self.state
             .shell
             .gameplay_input_trace
-            .finish_batch(Instant::now(), self.state.screens.current_screen);
+            .finish_batch_if_enabled(self.state.screens.current_screen);
         self.sync_gameplay_input_capture();
         match self.flush_due_input_events(event_loop) {
             Ok(true) => self.request_redraw(&window, "input_debounce"),

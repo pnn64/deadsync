@@ -6,6 +6,11 @@ const TRACE_INTERVAL: Duration = Duration::from_secs(1);
 const SLOW_BATCH_US: u32 = 1_000;
 const BURST_KEYS: u32 = 8;
 
+#[inline(always)]
+const fn should_time_handler(gameplay_screen: bool, trace_enabled: bool) -> bool {
+    gameplay_screen && trace_enabled
+}
+
 #[derive(Clone, Copy)]
 struct EventBatchTrace {
     started_at: Instant,
@@ -102,7 +107,24 @@ impl GameplayInputTrace {
     }
 
     #[inline(always)]
-    pub fn note_new_events(&mut self, now: Instant) {
+    fn enabled(&self) -> bool {
+        log::log_enabled!(log::Level::Trace)
+    }
+
+    #[inline(always)]
+    pub fn handler_started(&self, gameplay_screen: bool) -> Option<Instant> {
+        should_time_handler(gameplay_screen, self.enabled()).then(Instant::now)
+    }
+
+    #[inline(always)]
+    pub fn note_new_events_if_enabled(&mut self) {
+        if self.enabled() {
+            self.note_new_events(Instant::now());
+        }
+    }
+
+    #[inline(always)]
+    fn note_new_events(&mut self, now: Instant) {
         self.batch.reset(now);
     }
 
@@ -128,7 +150,14 @@ impl GameplayInputTrace {
     }
 
     #[inline(always)]
-    pub fn note_queued_input(&mut self) {
+    pub fn note_queued_input_if_enabled(&mut self) {
+        if self.enabled() {
+            self.note_queued_input();
+        }
+    }
+
+    #[inline(always)]
+    fn note_queued_input(&mut self) {
         self.batch.gameplay_seen = true;
         self.batch.queued_events = self.batch.queued_events.saturating_add(1);
     }
@@ -142,7 +171,14 @@ impl GameplayInputTrace {
         self.batch.app_handler_max_us = self.batch.app_handler_max_us.max(handler_us);
     }
 
-    pub fn finish_batch(&mut self, now: Instant, screen: Screen) {
+    #[inline(always)]
+    pub fn finish_batch_if_enabled(&mut self, screen: Screen) {
+        if self.enabled() {
+            self.finish_batch(Instant::now(), screen);
+        }
+    }
+
+    fn finish_batch(&mut self, now: Instant, screen: Screen) {
         let batch = &mut self.batch;
         if !batch.gameplay_seen
             || (batch.key_events == 0 && batch.pad_events == 0 && batch.queued_events == 0)
@@ -239,5 +275,13 @@ mod tests {
         assert_eq!(trace.summary.queued_events, 1);
         assert_eq!(trace.summary.app_handler_sum_us, 300);
         assert_eq!(trace.summary.dispatch_overhead_sum_us, 500);
+    }
+
+    #[test]
+    fn handler_timing_requires_gameplay_and_trace_logging() {
+        assert!(should_time_handler(true, true));
+        assert!(!should_time_handler(true, false));
+        assert!(!should_time_handler(false, true));
+        assert!(!should_time_handler(false, false));
     }
 }

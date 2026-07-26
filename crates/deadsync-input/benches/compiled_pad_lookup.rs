@@ -1,5 +1,6 @@
 use deadsync_input::keymap::{
-    idle_debounce_drain_for_bench, idle_debounce_drain_legacy_for_bench, pad_code_build_for_bench,
+    idle_debounce_drain_for_bench, idle_debounce_drain_legacy_for_bench,
+    ignored_raw_axis_for_bench, ignored_raw_axis_legacy_for_bench, pad_code_build_for_bench,
     pad_code_build_legacy_for_bench, pad_direction_lookup_for_bench,
     pad_direction_lookup_legacy_for_bench, raw_pad_button_lookup_for_bench,
     raw_pad_button_lookup_legacy_for_bench,
@@ -16,6 +17,28 @@ static ALLOC: CountingAlloc = CountingAlloc::new();
 const RUNS: usize = 10_000;
 
 type Workload = fn() -> u64;
+
+fn disabled_input_trace_timing_legacy() -> u64 {
+    let mut checksum = 0_u64;
+    for round in 0..256_u64 {
+        let started = black_box(Instant::now());
+        black_box(started.elapsed());
+        checksum = checksum.rotate_left(5) ^ round;
+    }
+    checksum
+}
+
+fn disabled_input_trace_timing() -> u64 {
+    let mut checksum = 0_u64;
+    for round in 0..256_u64 {
+        if black_box(log::log_enabled!(log::Level::Trace)) {
+            let started = black_box(Instant::now());
+            black_box(started.elapsed());
+        }
+        checksum = checksum.rotate_left(5) ^ round;
+    }
+    checksum
+}
 
 struct CountingAlloc {
     allocs: AtomicU64,
@@ -105,6 +128,16 @@ fn main() {
         "normalized input action emission",
         normalized_actions_legacy_for_bench,
         normalized_actions_for_bench,
+    );
+    benchmark_pair(
+        "ignored raw-axis routing",
+        ignored_raw_axis_legacy_for_bench,
+        ignored_raw_axis_for_bench,
+    );
+    benchmark_pair(
+        "disabled input-trace timing",
+        disabled_input_trace_timing_legacy,
+        disabled_input_trace_timing,
     );
     benchmark_pair(
         "device-specific pad-direction lookup",

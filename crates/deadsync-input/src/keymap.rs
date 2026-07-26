@@ -1044,6 +1044,9 @@ pub fn map_keycode_event_with_host(
 
 #[inline(always)]
 pub fn map_pad_event_with(ev: &PadEvent, mut emit: impl FnMut(InputEvent)) {
+    if matches!(ev, PadEvent::RawAxis { .. }) {
+        return;
+    }
     let Some((slot, mask, pressed, timestamp, host_nanos)) = with_compiled_keymap(|km| match *ev {
         PadEvent::Dir {
             id,
@@ -1101,6 +1104,47 @@ pub fn map_pad_event_with(ev: &PadEvent, mut emit: impl FnMut(InputEvent)) {
         )
     });
     emit_debounced_edges(edges, &mut emit);
+}
+
+#[cfg(feature = "bench-support")]
+fn ignored_raw_axis_checksum(optimized: bool) -> u64 {
+    let event = PadEvent::RawAxis {
+        id: PadId(3),
+        timestamp: Instant::now(),
+        host_nanos: 17,
+        code: PadCode(9),
+        uuid: [0x5a; 16],
+        value: 0.25,
+    };
+    let mut checksum = 0_u64;
+    for round in 0..1_024_u64 {
+        let event = std::hint::black_box(&event);
+        let mut emitted = 0_u64;
+        if optimized {
+            map_pad_event_with(event, |_| emitted += 1);
+        } else if with_compiled_keymap(|_| match *event {
+            PadEvent::RawAxis { .. } => None,
+            _ => Some(()),
+        })
+        .is_some()
+        {
+            emitted += 1;
+        }
+        checksum = checksum.rotate_left(5) ^ round ^ emitted;
+    }
+    checksum
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn ignored_raw_axis_for_bench() -> u64 {
+    ignored_raw_axis_checksum(true)
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn ignored_raw_axis_legacy_for_bench() -> u64 {
+    ignored_raw_axis_checksum(false)
 }
 
 pub fn drain_debounced_input_events_with(mut emit: impl FnMut(InputEvent)) -> bool {
@@ -1533,6 +1577,23 @@ mod tests {
         let mut actual = Vec::new();
         map_pad_event_with(&pad, |event| actual.push(event));
 
+        assert!(actual.is_empty());
+    }
+
+    #[test]
+    fn map_pad_event_with_ignores_raw_axis_events() {
+        let _guard = lock_test_guard();
+        let _reset = TestReset::capture();
+        let event = PadEvent::RawAxis {
+            id: PadId(2),
+            timestamp: Instant::now(),
+            host_nanos: 17,
+            code: PadCode(9),
+            uuid: [0x5a; 16],
+            value: 0.25,
+        };
+        let mut actual = Vec::new();
+        map_pad_event_with(&event, |input| actual.push(input));
         assert!(actual.is_empty());
     }
 

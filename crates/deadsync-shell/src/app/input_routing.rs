@@ -64,7 +64,10 @@ impl App {
         event_loop: &ActiveEventLoop,
         ev: GameplayQueuedEvent,
     ) -> Result<(), Box<dyn Error>> {
-        self.state.shell.gameplay_input_trace.note_queued_input();
+        self.state
+            .shell
+            .gameplay_input_trace
+            .note_queued_input_if_enabled();
         match ev {
             GameplayQueuedEvent::Input(ev) => self.route_input_event(event_loop, ev),
             GameplayQueuedEvent::RawKey(ev) => {
