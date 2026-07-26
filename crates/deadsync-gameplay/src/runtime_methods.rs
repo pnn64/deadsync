@@ -29,8 +29,6 @@ where
                     scroll.reverse_scale_for_column(local_col, self.setup.cols_per_player),
                 );
             }
-        }
-        for player in 0..self.setup.num_players {
             let scroll_speed = self.effective_scroll_speed_for_player(player);
             let reference_bpm = self.display.notefield_motion.scroll_reference_bpm();
             let mut dynamic_speed =
@@ -42,7 +40,6 @@ where
                     self.music_rate(),
                 );
             }
-            let scroll = effective_scroll_effects_for_player(self, player);
             let visual_mask = effective_visual_mask_for_player(self, player);
             let mini_percent = effective_mini_percent_for_player(self, player);
             let mini = self.profiles_runtime.profiles[player]
@@ -1405,15 +1402,13 @@ where
         };
         let current_inputs = self.current_lane_inputs();
         if !self.live_autoplay_enabled() {
-            for (col, crossed_from_ns) in self
-                .held_mine_crossing_start_times(
+            for col in 0..self.setup.num_cols.min(MAX_COLS) {
+                let crossed_from_ns = self.held_mine_crossing_start_time(
                     &current_inputs,
+                    col,
                     previous_music_time_ns,
                     music_time_ns,
-                )
-                .into_iter()
-                .enumerate()
-            {
+                );
                 if let Some(crossed_from_ns) = crossed_from_ns {
                     let _ =
                         self.try_hit_crossed_mines_while_held(col, crossed_from_ns, music_time_ns);

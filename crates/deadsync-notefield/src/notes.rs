@@ -797,10 +797,9 @@ fn note_count_at(stats: &[NoteCountStat], beat: f32) -> NoteCountStat {
     })
 }
 
-fn note_count_range(stats: &[NoteCountStat], low: f32, high: f32) -> usize {
+fn note_count_range_to(stats: &[NoteCountStat], low: f32, high_count: NoteCountStat) -> usize {
     let low = note_count_at(stats, low);
-    let high = note_count_at(stats, high);
-    high.notes_upper.saturating_sub(low.notes_lower)
+    high_count.notes_upper.saturating_sub(low.notes_lower)
 }
 
 pub(crate) fn find_first_displayed_beat<F: FnMut(f32) -> f32>(
@@ -813,13 +812,18 @@ pub(crate) fn find_first_displayed_beat<F: FnMut(f32) -> f32>(
         return None;
     }
     let mut high = current_beat.max(0.0);
-    let has_cache = !stats.is_empty();
-    let mut low = if has_cache { 0.0 } else { high - 4.0 };
+    let current_note_count = (!stats.is_empty()).then(|| note_count_at(stats, current_beat));
+    let mut low = if current_note_count.is_some() {
+        0.0
+    } else {
+        high - 4.0
+    };
     let mut first = low;
     for _ in 0..24 {
         let mid = (low + high) * 0.5;
         if y_for_beat(mid) < -draw_distance
-            || (has_cache && note_count_range(stats, mid, current_beat) > MAX_NOTES_AFTER)
+            || current_note_count
+                .is_some_and(|count| note_count_range_to(stats, mid, count) > MAX_NOTES_AFTER)
         {
             first = mid;
             low = mid;
@@ -867,11 +871,14 @@ use crate::style::MAX_NOTES_AFTER;
 
 #[cfg(feature = "bench-support")]
 mod timing_bench {
-    use super::{ScrollTravelRequest, scroll_travel};
+    use super::{
+        MAX_NOTES_AFTER, ScrollTravelRequest, find_first_displayed_beat, note_count_at,
+        scroll_travel,
+    };
     use crate::AccelYParams;
     use deadsync_core::note::NoteType;
     use deadsync_core::timing::{beat_to_note_row, note_row_to_beat};
-    use deadsync_rules::note::{HoldData, Note};
+    use deadsync_rules::note::{HoldData, Note, NoteCountStat};
     use deadsync_rules::scroll::ScrollSpeedSetting;
     use deadsync_rules::timing::{
         DelaySegment, ScrollSegment, StopSegment, TimingData, TimingSegments, WarpSegment,
@@ -884,6 +891,88 @@ mod timing_bench {
     pub struct CmodTimingBenchFrame {
         pub checksum: u64,
         pub samples: usize,
+    }
+
+    pub struct VisibleRangeBench {
+        stats: Vec<NoteCountStat>,
+    }
+
+    impl Default for VisibleRangeBench {
+        fn default() -> Self {
+            let stats = (0..8_192)
+                .map(|index| NoteCountStat {
+                    beat: index as f32 * 0.125,
+                    notes_lower: index * 2,
+                    notes_upper: index * 2 + 2,
+                })
+                .collect();
+            Self { stats }
+        }
+    }
+
+    impl VisibleRangeBench {
+        pub fn old_frame(&self, frame: usize) -> CmodTimingBenchFrame {
+            self.frame(frame, false)
+        }
+
+        pub fn new_frame(&self, frame: usize) -> CmodTimingBenchFrame {
+            self.frame(frame, true)
+        }
+
+        fn frame(&self, frame: usize, cache_current_count: bool) -> CmodTimingBenchFrame {
+            let current_beat = 32.0 + (frame % 7_500) as f32 * 0.125;
+            let mut output = CmodTimingBenchFrame::default();
+            for draw_distance in [320.0, 512.0] {
+                let first = if cache_current_count {
+                    find_first_displayed_beat(current_beat, draw_distance, &self.stats, |beat| {
+                        (beat - current_beat) * 48.0
+                    })
+                } else {
+                    legacy_find_first_displayed_beat(
+                        current_beat,
+                        draw_distance,
+                        &self.stats,
+                        |beat| (beat - current_beat) * 48.0,
+                    )
+                }
+                .expect("finite benchmark range");
+                output.checksum = output.checksum.rotate_left(7) ^ u64::from(first.to_bits());
+                output.samples += 1;
+            }
+            output
+        }
+    }
+
+    fn legacy_find_first_displayed_beat<F: FnMut(f32) -> f32>(
+        current_beat: f32,
+        draw_distance: f32,
+        stats: &[NoteCountStat],
+        mut y_for_beat: F,
+    ) -> Option<f32> {
+        if !current_beat.is_finite() || !draw_distance.is_finite() {
+            return None;
+        }
+        let mut high = current_beat.max(0.0);
+        let has_cache = !stats.is_empty();
+        let mut low = if has_cache { 0.0 } else { high - 4.0 };
+        let mut first = low;
+        for _ in 0..24 {
+            let mid = (low + high) * 0.5;
+            let note_limit_hit = if has_cache {
+                let low_count = note_count_at(stats, mid);
+                let high_count = note_count_at(stats, current_beat);
+                high_count.notes_upper.saturating_sub(low_count.notes_lower) > MAX_NOTES_AFTER
+            } else {
+                false
+            };
+            if y_for_beat(mid) < -draw_distance || note_limit_hit {
+                first = mid;
+                low = mid;
+            } else {
+                high = mid;
+            }
+        }
+        Some(first)
     }
 
     pub struct CmodTimingBench {
@@ -1141,7 +1230,7 @@ mod timing_bench {
 }
 
 #[cfg(feature = "bench-support")]
-pub use timing_bench::{CmodTimingBench, CmodTimingBenchFrame, XmodTimingBench};
+pub use timing_bench::{CmodTimingBench, CmodTimingBenchFrame, VisibleRangeBench, XmodTimingBench};
 
 #[cfg(test)]
 mod tests {

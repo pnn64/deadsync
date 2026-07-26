@@ -37,6 +37,11 @@ name = "song_lua_window_preprocess"
 harness = false
 required-features = ["bench-support"]
 
+[[bench]]
+name = "gameplay_frame_hot_paths"
+harness = false
+required-features = ["bench-support"]
+
 [dependencies]
 deadsync-chart = { path = "../deadsync-chart" }
 deadsync-core = { path = "../deadsync-core" }

@@ -2751,7 +2751,34 @@ where
     }
 
     pub fn current_lane_inputs(&self) -> [bool; MAX_COLS] {
-        std::array::from_fn(|col| col < self.setup.num_cols && self.lane_is_pressed(col))
+        let mut inputs = [false; MAX_COLS];
+        for (col, input) in inputs
+            .iter_mut()
+            .enumerate()
+            .take(self.setup.num_cols.min(MAX_COLS))
+        {
+            *input = self.lane_is_pressed(col);
+        }
+        inputs
+    }
+
+    pub fn held_mine_crossing_start_time(
+        &self,
+        current_inputs: &[bool; MAX_COLS],
+        col: usize,
+        previous_music_time_ns: SongTimeNs,
+        current_music_time_ns: SongTimeNs,
+    ) -> Option<SongTimeNs> {
+        if col >= self.setup.num_cols.min(MAX_COLS) {
+            return None;
+        }
+        crossed_mine_held_start_time(
+            current_inputs[col],
+            self.control.input_state.prev_inputs[col],
+            self.control.input_state.lane_pressed_since_ns[col],
+            previous_music_time_ns,
+            current_music_time_ns,
+        )
     }
 
     pub fn held_mine_crossing_start_times(
@@ -2761,13 +2788,9 @@ where
         current_music_time_ns: SongTimeNs,
     ) -> [Option<SongTimeNs>; MAX_COLS] {
         std::array::from_fn(|col| {
-            if col >= self.setup.num_cols {
-                return None;
-            }
-            crossed_mine_held_start_time(
-                current_inputs[col],
-                self.control.input_state.prev_inputs[col],
-                self.control.input_state.lane_pressed_since_ns[col],
+            self.held_mine_crossing_start_time(
+                current_inputs,
+                col,
                 previous_music_time_ns,
                 current_music_time_ns,
             )

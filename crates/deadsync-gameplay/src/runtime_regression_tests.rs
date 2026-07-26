@@ -983,6 +983,66 @@ mod runtime_regression_tests {
         );
     }
 
+    #[test]
+    fn live_notefield_refresh_updates_direction_and_motion_together() {
+        let mut state = regression_state();
+        state.mods.attacks.scroll[0] = ScrollOverrides {
+            reverse: Some(1.0),
+            alternate: Some(1.0),
+            ..ScrollOverrides::default()
+        };
+        state.mods.attacks.mini_percent[0] = Some(50.0);
+
+        state.refresh_live_notefield_options(180.0);
+
+        assert!(state.notefield_reverse_scroll(0));
+        assert_eq!(
+            (0..4)
+                .map(|col| state.notefield_column_scroll_dir(col))
+                .collect::<Vec<_>>(),
+            vec![-1.0, 1.0, -1.0, 1.0]
+        );
+        assert!((state.field_zoom_for_player(0) - 0.75).abs() <= f32::EPSILON);
+        assert!(state.display.notefield_motion.scroll_pixels_per_second(0) > 0.0);
+        assert!(state.notefield_draw_distance_before_targets(0) > 0.0);
+        assert!(state.notefield_draw_distance_after_targets(0) > 0.0);
+    }
+
+    #[test]
+    fn live_input_snapshots_leave_inactive_column_capacity_empty() {
+        let mut state = regression_state();
+        assert_eq!(state.setup.num_cols, 4);
+        state.control.input_state.lane_counts[0] = 1;
+        state.control.input_state.lane_counts[3] = 2;
+        state.control.input_state.lane_counts[4] = 1;
+
+        let inputs = state.current_lane_inputs();
+
+        assert_eq!(&inputs[..5], &[true, false, false, true, false]);
+        assert!(inputs[5..].iter().all(|pressed| !pressed));
+
+        let previous_time = song_time_ns_from_seconds(1.0);
+        let pressed_time = song_time_ns_from_seconds(1.25);
+        let current_time = song_time_ns_from_seconds(1.5);
+        state.control.input_state.prev_inputs[0] = true;
+        state.control.input_state.lane_pressed_since_ns[3] = Some(pressed_time);
+        state.control.input_state.prev_inputs[4] = true;
+        state.control.input_state.lane_pressed_since_ns[4] = Some(previous_time);
+
+        assert_eq!(
+            state.held_mine_crossing_start_time(&inputs, 0, previous_time, current_time),
+            Some(previous_time)
+        );
+        assert_eq!(
+            state.held_mine_crossing_start_time(&inputs, 3, previous_time, current_time),
+            Some(pressed_time)
+        );
+        assert_eq!(
+            state.held_mine_crossing_start_time(&inputs, 4, previous_time, current_time),
+            None
+        );
+    }
+
     fn set_state_timing(state: &mut State, timing: Arc<TimingData>) {
         state.timing_runtime.timing = Arc::clone(&timing);
         state.timing_runtime.timing_players[0] = Arc::clone(&timing);

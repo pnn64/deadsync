@@ -1,4 +1,6 @@
-use deadsync_notefield::{CameraWrapBench, CueScanBench, VisibleRangeBench, XmodTimingBench};
+use deadsync_gameplay::{
+    ActiveColumnScanBench, GameplayFrameHotPathBenchOutput, LiveNotefieldOptionsBench,
+};
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::hint::black_box;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -7,8 +9,8 @@ use std::time::{Duration, Instant};
 #[global_allocator]
 static ALLOC: CountingAlloc = CountingAlloc::new();
 
-const WARMUP_FRAMES: usize = 128;
-const MEASURE_FRAMES: usize = 2_000;
+const WARMUP_FRAMES: usize = 2_048;
+const MEASURE_FRAMES: usize = 50_000;
 
 struct CountingAlloc {
     allocs: AtomicU64,
@@ -84,109 +86,40 @@ impl AllocSnapshot {
     }
 }
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-struct Output {
-    checksum: u64,
-    samples: usize,
-}
-
 struct BenchResult {
     elapsed: Duration,
     cycles: u64,
     alloc: AllocSnapshot,
     frame_ns: Vec<u64>,
-    output: Output,
+    output: GameplayFrameHotPathBenchOutput,
 }
 
 fn main() {
-    println!("gameplay notefield hot-path microbenchmarks");
+    println!("gameplay frame hot-path microbenchmarks");
 
-    let xmod = XmodTimingBench::default();
+    let columns = ActiveColumnScanBench::default();
     run_pair(
-        "X/M displayed-beat cache",
-        "96 visible notes, 1024 scroll segments",
-        |frame| {
-            let output = xmod.old_frame(frame);
-            Output {
-                checksum: output.checksum,
-                samples: output.samples,
-            }
-        },
-        |frame| {
-            let output = xmod.new_frame(frame);
-            Output {
-                checksum: output.checksum,
-                samples: output.samples,
-            }
-        },
+        "active-column input/mine scans",
+        "4 active columns in 64-column fixed-capacity state",
+        |frame| columns.old_frame(frame),
+        |frame| columns.new_frame(frame),
     );
 
-    let cues = CueScanBench::default();
+    let mut old_options = LiveNotefieldOptionsBench::default();
+    let mut new_options = old_options.clone();
     run_pair(
-        "visible timing-cue index",
-        "8192 BPM + 8192 scroll segments, stops and delays",
-        |frame| {
-            let output = cues.old_frame(frame);
-            Output {
-                checksum: output.checksum,
-                samples: output.samples,
-            }
-        },
-        |frame| {
-            let output = cues.new_frame(frame);
-            Output {
-                checksum: output.checksum,
-                samples: output.samples,
-            }
-        },
-    );
-
-    let camera_wrap = CameraWrapBench::default();
-    run_pair(
-        "notefield camera wrapping",
-        "384 field actors in a reusable allocation-free buffer",
-        |frame| {
-            let output = camera_wrap.old_frame(frame);
-            Output {
-                checksum: output.checksum,
-                samples: output.samples,
-            }
-        },
-        |frame| {
-            let output = camera_wrap.new_frame(frame);
-            Output {
-                checksum: output.checksum,
-                samples: output.samples,
-            }
-        },
-    );
-
-    let visible_range = VisibleRangeBench::default();
-    run_pair(
-        "visible-range note-count bound",
-        "8192 chart-density entries, regular and cue ranges",
-        |frame| {
-            let output = visible_range.old_frame(frame);
-            Output {
-                checksum: output.checksum,
-                samples: output.samples,
-            }
-        },
-        |frame| {
-            let output = visible_range.new_frame(frame);
-            Output {
-                checksum: output.checksum,
-                samples: output.samples,
-            }
-        },
+        "live notefield option refresh",
+        "2 players, 8 columns, animated attack scroll overrides",
+        move |frame| old_options.old_frame(frame),
+        move |frame| new_options.new_frame(frame),
     );
 }
 
 fn run_pair(
     name: &str,
     fixture: &str,
-    mut old_frame: impl FnMut(usize) -> Output,
-    mut new_frame: impl FnMut(usize) -> Output,
+    mut old_frame: impl FnMut(usize) -> GameplayFrameHotPathBenchOutput,
+    mut new_frame: impl FnMut(usize) -> GameplayFrameHotPathBenchOutput,
 ) {
     let old = run(&mut old_frame);
     let new = run(&mut new_frame);
@@ -201,7 +134,7 @@ fn run_pair(
     );
 }
 
-fn run(frame: &mut impl FnMut(usize) -> Output) -> BenchResult {
+fn run(frame: &mut impl FnMut(usize) -> GameplayFrameHotPathBenchOutput) -> BenchResult {
     for index in 0..WARMUP_FRAMES {
         black_box(frame(index));
     }
@@ -209,7 +142,7 @@ fn run(frame: &mut impl FnMut(usize) -> Output) -> BenchResult {
     let before_alloc = ALLOC.snapshot();
     let before_cycles = read_cycles();
     let started = Instant::now();
-    let mut output = Output::default();
+    let mut output = GameplayFrameHotPathBenchOutput::default();
     for index in WARMUP_FRAMES..WARMUP_FRAMES + MEASURE_FRAMES {
         let frame_started = Instant::now();
         let current = black_box(frame(index));

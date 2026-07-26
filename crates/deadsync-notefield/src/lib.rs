@@ -71,7 +71,7 @@ pub use note_placement::{PlacementBench, PlacementBenchFrame};
 pub use notes::ScrollTravel;
 #[cfg(feature = "bench-support")]
 #[doc(hidden)]
-pub use notes::{CmodTimingBench, CmodTimingBenchFrame, XmodTimingBench};
+pub use notes::{CmodTimingBench, CmodTimingBenchFrame, VisibleRangeBench, XmodTimingBench};
 pub use noteskin_model::{
     ModelMeshCache, ModelMeshCacheStats, NoteskinFrameCacheStats, noteskin_model_actor,
     noteskin_model_actor_from_draw,
@@ -3991,6 +3991,68 @@ mod tests {
             find_first_displayed_beat(20.0, 120.0, &stats, |_| 0.0).expect("finite beat range");
 
         assert!((3.9..=4.1).contains(&first), "first beat was {first}");
+    }
+
+    #[test]
+    fn find_first_displayed_beat_matches_uncached_high_lookup() {
+        fn legacy(current_beat: f32, draw_distance: f32, stats: &[NoteCountStat]) -> Option<f32> {
+            if !current_beat.is_finite() || !draw_distance.is_finite() {
+                return None;
+            }
+            let note_count_at = |beat: f32| {
+                let index = stats
+                    .partition_point(|stat| stat.beat <= beat)
+                    .saturating_sub(1);
+                stats.get(index).copied().unwrap_or(NoteCountStat {
+                    beat: 0.0,
+                    notes_lower: 0,
+                    notes_upper: 0,
+                })
+            };
+            let mut high = current_beat.max(0.0);
+            let has_cache = !stats.is_empty();
+            let mut low = if has_cache { 0.0 } else { high - 4.0 };
+            let mut first = low;
+            for _ in 0..24 {
+                let mid = (low + high) * 0.5;
+                let note_limit_hit = if has_cache {
+                    let low_count = note_count_at(mid);
+                    let high_count = note_count_at(current_beat);
+                    high_count.notes_upper.saturating_sub(low_count.notes_lower)
+                        > crate::style::MAX_NOTES_AFTER
+                } else {
+                    false
+                };
+                if (mid - current_beat) * 48.0 < -draw_distance || note_limit_hit {
+                    first = mid;
+                    low = mid;
+                } else {
+                    high = mid;
+                }
+            }
+            Some(first)
+        }
+
+        let stats = (0..2_048)
+            .map(|i| NoteCountStat {
+                beat: i as f32 * 0.125,
+                notes_lower: i * 2,
+                notes_upper: i * 2 + 2,
+            })
+            .collect::<Vec<_>>();
+        for current_beat in [-2.0, 0.0, 4.25, 63.5, 255.0] {
+            for draw_distance in [64.0, 320.0, 1_024.0] {
+                let old = legacy(current_beat, draw_distance, &stats);
+                let new = find_first_displayed_beat(current_beat, draw_distance, &stats, |beat| {
+                    (beat - current_beat) * 48.0
+                });
+                assert_eq!(
+                    old.map(f32::to_bits),
+                    new.map(f32::to_bits),
+                    "current_beat={current_beat}, draw_distance={draw_distance}"
+                );
+            }
+        }
     }
 
     #[test]
