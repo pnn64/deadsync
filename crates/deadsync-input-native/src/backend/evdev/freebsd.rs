@@ -814,8 +814,6 @@ fn run_inner(
                 // `read`, so the first `count` entries of `buf` were initialized by
                 // the kernel in this iteration.
                 let ev = unsafe { buf[j].assume_init() };
-                let (event_timestamp, event_host_nanos) =
-                    event_time(receipt, ev.tv_sec, ev.tv_usec);
                 if ev.type_ == EV_SYN {
                     continue;
                 }
@@ -824,6 +822,8 @@ fn run_inner(
                     if ev.value == 2 {
                         continue;
                     }
+                    let (event_timestamp, event_host_nanos) =
+                        event_time(receipt, ev.tv_sec, ev.tv_usec);
                     let pressed = ev.value != 0;
                     emit_pad(PadEvent::RawButton {
                         id: dev.id,
@@ -840,6 +840,8 @@ fn run_inner(
                 if ev.type_ != EV_ABS {
                     continue;
                 }
+                let (event_timestamp, event_host_nanos) =
+                    event_time(receipt, ev.tv_sec, ev.tv_usec);
 
                 emit_pad(PadEvent::RawAxis {
                     id: dev.id,
@@ -896,25 +898,26 @@ fn run_inner(
                 // `read`, so the first `count` entries of `buf` were initialized by
                 // the kernel in this iteration.
                 let ev = unsafe { buf[j].assume_init() };
-                let (event_timestamp, event_host_nanos) =
-                    event_time(receipt, ev.tv_sec, ev.tv_usec);
                 if ev.type_ != EV_KEY {
                     continue;
                 }
                 let Some(code) = freebsd_key_code(ev.code) else {
                     continue;
                 };
+                if !keyboard_capture_active() {
+                    continue;
+                }
                 let repeat = ev.value == 2;
                 let pressed = ev.value != 0;
-                if keyboard_capture_active() {
-                    emit_key(RawKeyboardEvent {
-                        code,
-                        pressed,
-                        repeat,
-                        timestamp: event_timestamp,
-                        host_nanos: event_host_nanos,
-                    });
-                }
+                let (event_timestamp, event_host_nanos) =
+                    event_time(receipt, ev.tv_sec, ev.tv_usec);
+                emit_key(RawKeyboardEvent {
+                    code,
+                    pressed,
+                    repeat,
+                    timestamp: event_timestamp,
+                    host_nanos: event_host_nanos,
+                });
             }
         }
 

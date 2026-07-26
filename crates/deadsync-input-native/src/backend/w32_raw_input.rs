@@ -904,7 +904,16 @@ fn process_hid_report<F>(
 }
 
 #[inline(always)]
-fn handle_keyboard_input(ctx: &mut Ctx, timestamp: Instant, host_nanos: u64) {
+fn update_held_state(held: &mut [bool; RAW_KEY_HELD_SLOTS], slot: usize, pressed: bool) -> bool {
+    if held[slot] == pressed {
+        return false;
+    }
+    held[slot] = pressed;
+    true
+}
+
+#[inline(always)]
+fn handle_keyboard_input(ctx: &mut Ctx) {
     if !WINDOW_FOCUSED.load(Ordering::Relaxed) {
         return;
     }
@@ -931,10 +940,11 @@ fn handle_keyboard_input(ctx: &mut Ctx, timestamp: Instant, host_nanos: u64) {
         let Some((code, slot)) = raw_keyboard_code(keyboard) else {
             return;
         };
-        if ctx.held[slot] == pressed {
+        if !update_held_state(&mut ctx.held, slot, pressed) {
             return;
         }
-        ctx.held[slot] = pressed;
+        let timestamp = Instant::now();
+        let host_nanos = ctx.host.now_nanos();
         (ctx.emit_key)(RawKeyboardEvent {
             code,
             pressed,
@@ -980,15 +990,15 @@ fn handle_wm_input(ctx: &mut Ctx, hraw: HRAWINPUT) {
         }
 
         let header: RAWINPUTHEADER = ptr::read_unaligned(ctx.buf.as_ptr().cast::<RAWINPUTHEADER>());
-        let timestamp = Instant::now();
-        let host_nanos = ctx.host.now_nanos();
         if header.dwType == RIM_TYPEKEYBOARD_U32 {
-            handle_keyboard_input(ctx, timestamp, host_nanos);
+            handle_keyboard_input(ctx);
             return;
         }
         if header.dwType != RIM_TYPEHID_U32 || !ctx.enable_pad {
             return;
         }
+        let timestamp = Instant::now();
+        let host_nanos = ctx.host.now_nanos();
 
         let dev_handle = header.hDevice;
         let dev_key = hkey(dev_handle);
@@ -1188,7 +1198,9 @@ pub fn run_keyboard_only(
 
 #[cfg(test)]
 mod tests {
-    use super::{RAWINPUTHEADER, hid_report_payload, rawinput_uuid};
+    use super::{
+        RAW_KEY_HELD_SLOTS, RAWINPUTHEADER, hid_report_payload, rawinput_uuid, update_held_state,
+    };
     use std::mem::size_of;
 
     fn hid_message(report_size: u32, report_count: u32, payload: &[u8]) -> Vec<u8> {
@@ -1207,6 +1219,16 @@ mod tests {
         let (payload, report_size) = hid_report_payload(&mut message, message_len).unwrap();
         assert_eq!(payload, [1, 2, 3, 4, 5, 6]);
         assert_eq!(payload.chunks_exact(report_size).len(), 2);
+    }
+
+    #[test]
+    fn held_state_gate_accepts_only_keyboard_edges() {
+        let mut held = [false; RAW_KEY_HELD_SLOTS];
+
+        assert!(update_held_state(&mut held, 7, true));
+        assert!(!update_held_state(&mut held, 7, true));
+        assert!(update_held_state(&mut held, 7, false));
+        assert!(!update_held_state(&mut held, 7, false));
     }
 
     #[test]

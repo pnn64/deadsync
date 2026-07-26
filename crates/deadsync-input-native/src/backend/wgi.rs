@@ -287,6 +287,15 @@ impl ReadingClock {
         poll_host_nanos: u64,
         host: BackendHost,
     ) -> (Instant, u64) {
+        let host_nanos = self.sample_host_nanos(raw, poll_host_nanos, host);
+        (
+            instant_from_host_sample(host_nanos, poll_host_nanos, polled_at),
+            host_nanos,
+        )
+    }
+
+    #[inline(always)]
+    fn sample_host_nanos(&mut self, raw: u64, poll_host_nanos: u64, host: BackendHost) -> u64 {
         let host_nanos = self
             .host_nanos(raw, poll_host_nanos, host)
             .unwrap_or(poll_host_nanos);
@@ -294,13 +303,16 @@ impl ReadingClock {
             self.last_raw = raw;
             self.last_poll_host_nanos = poll_host_nanos;
         }
-        if host_nanos == 0 {
-            return (polled_at, 0);
+        host_nanos
+    }
+
+    #[inline(always)]
+    fn observe_if_advanced(&mut self, raw: u64, host: BackendHost) {
+        if raw == self.last_raw {
+            return;
         }
-        (
-            instant_from_host_sample(host_nanos, poll_host_nanos, polled_at),
-            host_nanos,
-        )
+        let poll_host_nanos = host.now_nanos();
+        self.sample_host_nanos(raw, poll_host_nanos, host);
     }
 }
 
@@ -323,6 +335,35 @@ fn scale_trigger(v: f64) -> i16 {
     let v = v.clamp(0.0, 1.0);
     let x = (v * 32767.0) as i32;
     x.clamp(0, i16::MAX as i32) as i16
+}
+
+#[inline(always)]
+fn gamepad_reading_changed(
+    buttons_prev: GamepadButtons,
+    buttons_now: GamepadButtons,
+    axes_prev: [i16; 6],
+    axes_now: [i16; 6],
+    dir_prev: [bool; 4],
+    dir_now: [bool; 4],
+) -> bool {
+    buttons_now != buttons_prev || axes_now != axes_prev || dir_now != dir_prev
+}
+
+#[inline(always)]
+fn raw_reading_changed(
+    buttons_prev: &[bool],
+    buttons_now: &[bool],
+    axes_prev: &[i16],
+    axes_now: &[f64],
+    dir_prev: [bool; 4],
+    dir_now: [bool; 4],
+) -> bool {
+    buttons_now != buttons_prev
+        || dir_now != dir_prev
+        || axes_now
+            .iter()
+            .zip(axes_prev)
+            .any(|(&axis, &previous)| scale_axis(axis) != previous)
 }
 
 #[inline(always)]
@@ -591,11 +632,6 @@ fn pump_gamepad<F>(
     let Ok(reading) = st.pad.GetCurrentReading() else {
         return;
     };
-    let polled_at = Instant::now();
-    let poll_host_nanos = host.now_nanos();
-    let (timestamp, host_nanos) =
-        st.clock
-            .sample_time(reading.Timestamp, polled_at, poll_host_nanos, host);
 
     let old_lt = st.axes_prev[0];
     let old_rt = st.axes_prev[1];
@@ -625,6 +661,29 @@ fn pump_gamepad<F>(
         dpad[2] || stick[2],
         dpad[3] || stick[3],
     ];
+
+    let axis_values = [lt, rt, lx, ly, rx, ry];
+    if !gamepad_reading_changed(
+        st.buttons_prev,
+        reading.Buttons,
+        st.axes_prev,
+        axis_values,
+        st.dir,
+        want,
+    ) {
+        // Frozen WGI readings cannot improve clock calibration. If only the
+        // hardware timestamp advanced, retain that sample without constructing
+        // the `Instant` needed solely by emitted events.
+        st.clock.observe_if_advanced(reading.Timestamp, host);
+        return;
+    }
+
+    let polled_at = Instant::now();
+    let poll_host_nanos = host.now_nanos();
+    let (timestamp, host_nanos) =
+        st.clock
+            .sample_time(reading.Timestamp, polled_at, poll_host_nanos, host);
+
     emit_dir_edges(emit_pad, id, &mut st.dir, timestamp, host_nanos, want);
 
     for (mask, code_u32) in BTN_MAP {
@@ -645,26 +704,26 @@ fn pump_gamepad<F>(
     }
     st.buttons_prev = reading.Buttons;
 
-    let axes = [
-        (CODE_AXIS_LT, lt),
-        (CODE_AXIS_RT, rt),
-        (CODE_AXIS_LX, lx),
-        (CODE_AXIS_LY, ly),
-        (CODE_AXIS_RX, rx),
-        (CODE_AXIS_RY, ry),
+    let axis_codes = [
+        CODE_AXIS_LT,
+        CODE_AXIS_RT,
+        CODE_AXIS_LX,
+        CODE_AXIS_LY,
+        CODE_AXIS_RX,
+        CODE_AXIS_RY,
     ];
-    for (i, (code_u32, v)) in axes.iter().enumerate() {
-        if st.axes_prev[i] == *v {
+    for (i, (&code_u32, &v)) in axis_codes.iter().zip(&axis_values).enumerate() {
+        if st.axes_prev[i] == v {
             continue;
         }
-        st.axes_prev[i] = *v;
+        st.axes_prev[i] = v;
         (emit_pad)(PadEvent::RawAxis {
             id,
             timestamp,
             host_nanos,
-            code: PadCode(*code_u32),
+            code: PadCode(code_u32),
             uuid,
-            value: f32::from(*v),
+            value: f32::from(v),
         });
     }
 
@@ -713,11 +772,33 @@ fn pump_raw<F>(
     else {
         return;
     };
+
+    let n = st.buttons_now.len().min(st.buttons_prev.len());
+    let mut want = [false; 4];
+    for s in &st.switches {
+        let (x, y) = dir_xy_from_switch(*s);
+        want[0] |= y > 0;
+        want[1] |= y < 0;
+        want[2] |= x < 0;
+        want[3] |= x > 0;
+    }
+    let n_axes = st.axes.len().min(st.axes_prev.len());
+    if !raw_reading_changed(
+        &st.buttons_prev[..n],
+        &st.buttons_now[..n],
+        &st.axes_prev[..n_axes],
+        &st.axes[..n_axes],
+        st.dir,
+        want,
+    ) {
+        st.clock.observe_if_advanced(time, host);
+        return;
+    }
+
     let polled_at = Instant::now();
     let poll_host_nanos = host.now_nanos();
     let (timestamp, host_nanos) = st.clock.sample_time(time, polled_at, poll_host_nanos, host);
 
-    let n = st.buttons_now.len().min(st.buttons_prev.len());
     for i in 0..n {
         if st.buttons_now[i] == st.buttons_prev[i] {
             continue;
@@ -737,18 +818,9 @@ fn pump_raw<F>(
     }
     std::mem::swap(&mut st.buttons_prev, &mut st.buttons_now);
 
-    let mut want = [false; 4];
-    for s in &st.switches {
-        let (x, y) = dir_xy_from_switch(*s);
-        want[0] |= y > 0;
-        want[1] |= y < 0;
-        want[2] |= x < 0;
-        want[3] |= x > 0;
-    }
     emit_dir_edges(emit_pad, id, &mut st.dir, timestamp, host_nanos, want);
 
-    let n = st.axes.len().min(st.axes_prev.len());
-    for i in 0..n {
+    for i in 0..n_axes {
         let v = scale_axis(st.axes[i]);
         if st.axes_prev[i] == v {
             continue;
@@ -1006,5 +1078,108 @@ mod reading_clock_tests {
             max_early < 3.0 && max_late < 3.0,
             "press offset out of band: max_early={max_early:.3}ms max_late={max_late:.3}ms all={press_off_ms:?}"
         );
+    }
+
+    #[test]
+    fn idle_clock_gating_preserves_next_edge_mapping() {
+        let host = test_host();
+        let base_raw_us = 50_000_000_u64;
+        let base_host_ns = base_raw_us * 1000 + 1_200_000;
+        let mut eager = ReadingClock::default();
+        let mut gated = ReadingClock::default();
+        eager.seed(base_raw_us, base_host_ns);
+        gated.seed(base_raw_us, base_host_ns);
+
+        for poll in 1..=250_u64 {
+            let raw_us = base_raw_us + (poll / 8) * 8_000;
+            let poll_host_ns = base_host_ns + poll * 1_000_000;
+            let _ = eager.sample_time(raw_us, Instant::now(), poll_host_ns, host);
+            if raw_us != gated.last_raw {
+                gated.sample_host_nanos(raw_us, poll_host_ns, host);
+            }
+        }
+
+        let edge_raw_us = base_raw_us + 251_000;
+        let edge_host_ns = base_host_ns + 251_000_000;
+        let sample = Instant::now();
+        let eager_edge = eager.sample_time(edge_raw_us, sample, edge_host_ns, host);
+        let gated_edge = gated.sample_time(edge_raw_us, sample, edge_host_ns, host);
+
+        assert_eq!(gated.kind, eager.kind);
+        assert_eq!(gated.offset_ns, eager.offset_ns);
+        assert_eq!(gated.last_raw, eager.last_raw);
+        assert_eq!(gated.last_poll_host_nanos, eager.last_poll_host_nanos);
+        assert_eq!(gated_edge, eager_edge);
+    }
+
+    #[test]
+    fn reading_change_gate_covers_every_emitted_state_class() {
+        let axes = [0; 6];
+        let dirs = [false; 4];
+        assert!(!gamepad_reading_changed(
+            GamepadButtons::None,
+            GamepadButtons::None,
+            axes,
+            axes,
+            dirs,
+            dirs,
+        ));
+        assert!(gamepad_reading_changed(
+            GamepadButtons::None,
+            GamepadButtons::A,
+            axes,
+            axes,
+            dirs,
+            dirs,
+        ));
+        assert!(gamepad_reading_changed(
+            GamepadButtons::None,
+            GamepadButtons::None,
+            axes,
+            [0, 0, 1, 0, 0, 0],
+            dirs,
+            dirs,
+        ));
+        assert!(gamepad_reading_changed(
+            GamepadButtons::None,
+            GamepadButtons::None,
+            axes,
+            axes,
+            dirs,
+            [true, false, false, false],
+        ));
+
+        assert!(!raw_reading_changed(
+            &[false, true],
+            &[false, true],
+            &[0, 0],
+            &[0.0, 0.0],
+            dirs,
+            dirs,
+        ));
+        assert!(raw_reading_changed(
+            &[false, true],
+            &[true, true],
+            &[0, 0],
+            &[0.0, 0.0],
+            dirs,
+            dirs,
+        ));
+        assert!(raw_reading_changed(
+            &[false, true],
+            &[false, true],
+            &[0, 0],
+            &[0.5, 0.0],
+            dirs,
+            dirs,
+        ));
+        assert!(raw_reading_changed(
+            &[false, true],
+            &[false, true],
+            &[0, 0],
+            &[0.0, 0.0],
+            dirs,
+            [false, true, false, false],
+        ));
     }
 }
