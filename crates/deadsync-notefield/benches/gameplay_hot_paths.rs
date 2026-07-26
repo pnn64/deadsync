@@ -1,4 +1,6 @@
-use deadsync_notefield::{CameraWrapBench, CueScanBench, VisibleRangeBench, XmodTimingBench};
+use deadsync_notefield::{
+    CameraWrapBench, CueScanBench, LaneVisualCacheBench, VisibleRangeBench, XmodTimingBench,
+};
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::hint::black_box;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -174,6 +176,26 @@ fn main() {
         },
         |frame| {
             let output = visible_range.new_frame(frame);
+            Output {
+                checksum: output.checksum,
+                samples: output.samples,
+            }
+        },
+    );
+
+    let lane_visuals = LaneVisualCacheBench::default();
+    run_pair(
+        "per-lane visual preparation",
+        "96 visible note/hold entries across 4 lanes with column effects",
+        |frame| {
+            let output = lane_visuals.old_frame(frame);
+            Output {
+                checksum: output.checksum,
+                samples: output.samples,
+            }
+        },
+        |frame| {
+            let output = lane_visuals.new_frame(frame);
             Output {
                 checksum: output.checksum,
                 samples: output.samples,

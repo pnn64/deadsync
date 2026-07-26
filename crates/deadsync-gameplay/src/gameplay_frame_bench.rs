@@ -238,3 +238,157 @@ fn live_options_output(bench: &LiveNotefieldOptionsBench) -> GameplayFrameHotPat
     }
     output
 }
+
+#[derive(Clone, Copy, Debug, Default)]
+pub struct OptionalFrameWorkBench;
+
+impl OptionalFrameWorkBench {
+    pub fn old_frame(&self, frame: usize) -> GameplayFrameHotPathBenchOutput {
+        let replay_mode = frame % 1_009 == 0;
+        let offset_adjust_active = frame % 257 == 0;
+        let mut replay_events = [None; MAX_COLS];
+        let replay_count = bench_collect_replay_edges(replay_mode, frame, &mut replay_events);
+        let offset_tick = bench_tick_offset_adjust(offset_adjust_active, std::time::Instant::now());
+        optional_work_output(replay_count, offset_tick)
+    }
+
+    pub fn new_frame(&self, frame: usize) -> GameplayFrameHotPathBenchOutput {
+        let replay_mode = frame % 1_009 == 0;
+        let offset_adjust_active = frame % 257 == 0;
+        let replay_count = if replay_mode {
+            let mut replay_events = [None; MAX_COLS];
+            bench_collect_replay_edges(true, frame, &mut replay_events)
+        } else {
+            0
+        };
+        let offset_tick =
+            offset_adjust_active && bench_tick_offset_adjust(true, std::time::Instant::now());
+        optional_work_output(replay_count, offset_tick)
+    }
+}
+
+#[inline(never)]
+fn bench_collect_replay_edges(
+    replay_mode: bool,
+    frame: usize,
+    events: &mut [Option<RecordedLaneEdge>; MAX_COLS],
+) -> usize {
+    if !replay_mode {
+        return 0;
+    }
+    events[0] = Some(RecordedLaneEdge {
+        lane_index: 0,
+        pressed: frame % 2 == 0,
+        source: InputSource::Keyboard,
+        event_music_time_ns: frame as SongTimeNs,
+    });
+    usize::from(events[0].is_some())
+}
+
+#[inline(never)]
+fn bench_tick_offset_adjust(active: bool, now: std::time::Instant) -> bool {
+    if !active {
+        return false;
+    }
+    std::hint::black_box(now);
+    true
+}
+
+#[inline(always)]
+fn optional_work_output(replay_count: usize, offset_tick: bool) -> GameplayFrameHotPathBenchOutput {
+    GameplayFrameHotPathBenchOutput {
+        checksum: (replay_count as u64) << 1 | u64::from(offset_tick),
+        samples: replay_count + usize::from(offset_tick),
+    }
+}
+
+#[derive(Clone)]
+pub struct IdleHoldPhaseBench {
+    active_holds: [Option<usize>; MAX_COLS],
+    decaying_hold_indices: Vec<usize>,
+    pending_missed_hold_indices: Vec<usize>,
+    num_cols: usize,
+}
+
+impl Default for IdleHoldPhaseBench {
+    fn default() -> Self {
+        Self {
+            active_holds: [None; MAX_COLS],
+            decaying_hold_indices: Vec::with_capacity(4),
+            pending_missed_hold_indices: Vec::with_capacity(4),
+            num_cols: 4,
+        }
+    }
+}
+
+impl IdleHoldPhaseBench {
+    pub fn old_frame(&mut self, frame: usize) -> GameplayFrameHotPathBenchOutput {
+        self.prepare_frame(frame);
+        self.run_frame(false)
+    }
+
+    pub fn new_frame(&mut self, frame: usize) -> GameplayFrameHotPathBenchOutput {
+        self.prepare_frame(frame);
+        self.run_frame(true)
+    }
+
+    fn prepare_frame(&mut self, frame: usize) {
+        self.active_holds.fill(None);
+        self.decaying_hold_indices.clear();
+        self.pending_missed_hold_indices.clear();
+        if frame % 67 == 0 {
+            self.active_holds[frame / 67 % self.num_cols] = Some(frame);
+        }
+        if frame % 131 == 0 {
+            self.decaying_hold_indices.push(frame % 4_096);
+        }
+        if frame % 193 == 0 {
+            self.pending_missed_hold_indices.push(frame % 4_096);
+        }
+    }
+
+    fn run_frame(&self, guarded: bool) -> GameplayFrameHotPathBenchOutput {
+        let mut output = GameplayFrameHotPathBenchOutput::default();
+        let active_idle = self.active_holds[..self.num_cols]
+            .iter()
+            .all(Option::is_none);
+        if !guarded || !active_idle {
+            let timing_players = [11_u64, 29_u64];
+            let mut events = [None; MAX_COLS];
+            for (column, active) in self.active_holds[..self.num_cols].iter().enumerate() {
+                if let Some(note_index) = active {
+                    events[output.samples] = Some((column, *note_index));
+                    output.checksum = output.checksum.rotate_left(5)
+                        ^ timing_players[column / self.num_cols]
+                        ^ *note_index as u64;
+                    output.samples += 1;
+                }
+            }
+            std::hint::black_box(events);
+        }
+
+        if !guarded || !self.decaying_hold_indices.is_empty() {
+            for &note_index in &self.decaying_hold_indices {
+                output.checksum = output.checksum.rotate_left(7) ^ note_index as u64 ^ 0xD3CA_u64;
+                output.samples += 1;
+            }
+        }
+
+        if !guarded || !self.pending_missed_hold_indices.is_empty() {
+            let mut score_missed_by_column = [false; MAX_COLS];
+            for score in score_missed_by_column.iter_mut().take(self.num_cols) {
+                *score = true;
+            }
+            let mut events = [None; MAX_COLS];
+            for (event, &note_index) in events.iter_mut().zip(&self.pending_missed_hold_indices) {
+                *event = Some(note_index);
+                output.checksum = output.checksum.rotate_left(11)
+                    ^ note_index as u64
+                    ^ u64::from(score_missed_by_column[note_index % self.num_cols]);
+                output.samples += 1;
+            }
+            std::hint::black_box(events);
+        }
+        output
+    }
+}

@@ -226,8 +226,7 @@ where
         } else {
             None
         };
-        let mut replay_events = [None; MAX_COLS];
-        self.run_autoplay_or_replay_phase(music_time_ns, &mut replay_events);
+        self.run_autoplay_or_replay_frame(music_time_ns);
         if let Some(started) = autoplay_started {
             phase_timings.autoplay_us = elapsed_us_since(started);
         }
@@ -237,7 +236,9 @@ where
         } else {
             None
         };
-        self.update_offset_adjust_hold(Instant::now());
+        if self.offset_adjust_hold_active() {
+            self.update_offset_adjust_hold(Instant::now());
+        }
         process_input_edges(self, trace_enabled, &mut phase_timings, song_clock);
         if let Some(started) = input_started {
             phase_timings.input_edges_us = elapsed_us_since(started);
@@ -477,6 +478,9 @@ where
 
     #[inline(always)]
     pub fn decay_let_go_hold_life(&mut self) {
+        if self.hold_runtime.decaying_hold_indices.is_empty() {
+            return;
+        }
         let rate = self.music_rate();
         decay_let_go_hold_life_for_indices(
             &mut self.chart_runtime.notes,
@@ -2425,6 +2429,11 @@ where
     #[inline(always)]
     pub fn clear_offset_adjust_hold_key(&mut self, key: GameplayOffsetAdjustKey) {
         self.control.offset_adjust_hold.clear(key);
+    }
+
+    #[inline(always)]
+    pub fn offset_adjust_hold_active(&self) -> bool {
+        self.control.offset_adjust_hold.is_active()
     }
 
     #[inline(always)]

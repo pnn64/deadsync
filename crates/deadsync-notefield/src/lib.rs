@@ -91,6 +91,9 @@ pub use song_lua::{
 pub use transforms::{
     TornadoBounds, clamp_rounded_i16, mod_percent_key, quantize_centi_i32, quantize_centi_u32,
 };
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub use transforms::{LaneVisualCacheBench, LaneVisualCacheBenchFrame};
 
 pub(crate) use actor_builder::{
     NotefieldFramePlanRequest, actor_with_world_z, notefield_frame_plan, share_actor_range,
@@ -130,10 +133,10 @@ pub(crate) use transforms::{
     AccelYParams, NoteAlphaParams, NoteXParams, VisualEffectParams, appearance_note_actor_alpha,
     appearance_note_actor_alpha_from_alpha, appearance_note_alpha, appearance_note_glow,
     appearance_note_glow_from_alpha, beat_factor, compute_invert_distances, compute_tornado_bounds,
-    gameplay_visual_effect_params, move_col_extra, note_world_z_for_bumpy, note_x_offset,
-    smoothstep01, tipsy_y_extra, visual_arrow_effect_zoom, visual_confusion_rotation_deg,
-    visual_hold_body_needs_z_buffer, visual_note_rotation_z, visual_pulse_zoom_for_y,
-    visual_tiny_zoom, visual_use_legacy_hold_sprites,
+    fill_gameplay_lane_effects, gameplay_visual_effect_params, move_col_extra,
+    note_world_z_for_bumpy, note_x_offset, smoothstep01, tipsy_y_extra, visual_arrow_effect_zoom,
+    visual_confusion_rotation_deg, visual_hold_body_needs_z_buffer, visual_note_rotation_z,
+    visual_pulse_zoom_for_y, visual_tiny_zoom, visual_use_legacy_hold_sprites,
 };
 
 #[cfg(test)]
@@ -219,9 +222,10 @@ mod tests {
         edit_beat_bar_info_for_row, edit_beat_scroll_travel, effective_mini_value,
         error_bar_boundaries_s, error_bar_color_for_window, error_bar_flash_alpha,
         error_bar_text_scalable_zoom, error_bar_tick_alpha, field_effect_height,
-        fill_lane_col_offsets, find_first_displayed_beat, find_last_displayed_beat,
-        for_each_visible_hold_index, for_each_visible_note_index, gameplay_mods_text,
-        gameplay_visual_effect_params, held_miss_zoom, hold_body_bottom_for_tail_cap,
+        fill_gameplay_lane_effects, fill_lane_col_offsets, find_first_displayed_beat,
+        find_last_displayed_beat, for_each_visible_hold_index, for_each_visible_note_index,
+        gameplay_mods_text, gameplay_visual_effect_params, held_miss_zoom,
+        hold_body_bottom_for_tail_cap,
         hold_body_segment_budget, hold_draw_span, hold_glow_color, hold_head_part_for_roll,
         hold_indicator_column_x, hold_overlaps_visible_window, hold_parts_for_note_type,
         hold_segment_pose, hold_strip_actor, hold_strip_glow_actor, hold_strip_quad,
@@ -1407,7 +1411,10 @@ mod tests {
 
     #[test]
     fn gameplay_visual_effect_params_apply_column_mods() {
-        let mut visual = VisualEffects::default();
+        let mut visual = VisualEffects {
+            tipsy: 0.75,
+            ..VisualEffects::default()
+        };
         visual.move_x_cols[1] = 0.5;
         visual.move_y_cols[1] = -0.25;
         visual.confusion_offset_cols[1] = std::f32::consts::FRAC_PI_2;
@@ -1419,6 +1426,28 @@ mod tests {
                 .abs()
                 <= 1e-6
         );
+
+        let mut params = [VisualEffectParams::default(); 4];
+        let mut lane_offsets = [0.0; 4];
+        fill_gameplay_lane_effects(&visual, 1.25, 4, &mut params, &mut lane_offsets);
+        for local_col in 0..4 {
+            let expected_params = gameplay_visual_effect_params(&visual, local_col);
+            assert_eq!(
+                params[local_col].confusion_offset.to_bits(),
+                expected_params.confusion_offset.to_bits()
+            );
+            assert_eq!(
+                params[local_col].bumpy.to_bits(),
+                expected_params.bumpy.to_bits()
+            );
+            assert_eq!(
+                params[local_col].tiny.to_bits(),
+                expected_params.tiny.to_bits()
+            );
+            let expected_offset = tipsy_y_extra(local_col, 1.25, visual.tipsy)
+                + move_col_extra(&visual.move_y_cols, local_col);
+            assert_eq!(lane_offsets[local_col].to_bits(), expected_offset.to_bits());
+        }
     }
 
     #[test]

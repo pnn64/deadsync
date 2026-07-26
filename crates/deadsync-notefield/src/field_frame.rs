@@ -6,15 +6,14 @@ use crate::{
     VisualEffectParams, appearance_note_actor_alpha, appearance_note_actor_alpha_from_alpha,
     appearance_note_alpha, appearance_note_glow, appearance_note_glow_from_alpha,
     compose_hold_body_caps, compose_measure_lines, compose_mine_layers, compose_note_layer,
-    compose_notefield_feedback, for_each_visible_hold_index, for_each_visible_note_index,
-    gameplay_visual_effect_params, hold_entry_head_beat, hold_entry_plan,
+    compose_notefield_feedback, fill_gameplay_lane_effects, for_each_visible_hold_index,
+    for_each_visible_note_index, hold_entry_head_beat, hold_entry_plan,
     hold_overlaps_visible_window, hold_parts_for_note_type, mine_hides_after_resolution, mine_part,
     note_world_z_for_bumpy, note_x_offset as canonical_note_x_offset, notefield_view_proj,
-    offset_center, receptor_row_center as canonical_receptor_row_center, scale_sprite_to_arrow,
-    share_actor_range, song_lua_note_model_draw, tap_part_for_note_type, tap_replacement_head,
-    translated_uv_rect, visual_arrow_effect_zoom, visual_hold_body_needs_z_buffer,
-    visual_note_rotation_z, visual_pulse_zoom_for_y, visual_tiny_zoom,
-    visual_use_legacy_hold_sprites,
+    offset_center, scale_sprite_to_arrow, share_actor_range, song_lua_note_model_draw,
+    tap_part_for_note_type, tap_replacement_head, translated_uv_rect, visual_arrow_effect_zoom,
+    visual_hold_body_needs_z_buffer, visual_note_rotation_z, visual_pulse_zoom_for_y,
+    visual_tiny_zoom, visual_use_legacy_hold_sprites,
 };
 use deadlib_present::actors::{Actor, SpriteSource};
 use deadlib_render::BlendMode;
@@ -148,6 +147,16 @@ fn compose_field_contents<S, F>(
     let invert_distances = note_inputs.invert_distances;
     let tornado_bounds = note_inputs.tornado_bounds;
     let travel = &note_inputs.travel;
+    let mut lane_effect_params = [VisualEffectParams::default(); deadsync_core::input::MAX_COLS];
+    let mut lane_offsets = [0.0; deadsync_core::input::MAX_COLS];
+    fill_gameplay_lane_effects(
+        &visual,
+        travel.arrow_effect_time_s(),
+        num_cols,
+        &mut lane_effect_params,
+        &mut lane_offsets,
+    );
+    let pulse_effect_params = lane_effect_params[0];
     let (note_start, note_end) = request.chart.note_range;
     let lane_center_x_from_travel = |local_col: usize, travel_offset: f32| -> f32 {
         playfield_center_x
@@ -180,7 +189,7 @@ fn compose_field_contents<S, F>(
     let actor_alpha_for_travel = |local_col: usize, travel_offset: f32| -> f32 {
         let adjusted = travel.adjusted(travel_offset);
         note_actor_alpha(
-            adjusted + travel.lane_offset(local_col),
+            adjusted + lane_offsets[local_col],
             elapsed_screen,
             mini,
             appearance,
@@ -189,7 +198,7 @@ fn compose_field_contents<S, F>(
     let glow_for_travel = |local_col: usize, travel_offset: f32| -> f32 {
         let adjusted = travel.adjusted(travel_offset);
         note_glow(
-            adjusted + travel.lane_offset(local_col),
+            adjusted + lane_offsets[local_col],
             elapsed_screen,
             mini,
             appearance,
@@ -198,7 +207,7 @@ fn compose_field_contents<S, F>(
     let world_z_for_raw_travel = |local_col: usize, travel_offset: f32| -> f32 {
         note_world_z_for_bumpy(
             travel.adjusted(travel_offset),
-            gameplay_visual_effect_params(&visual, local_col).bumpy,
+            lane_effect_params[local_col].bumpy,
             visual.bumpy_offset,
             visual.bumpy_period,
         )
@@ -206,7 +215,7 @@ fn compose_field_contents<S, F>(
     let world_z_for_adjusted_travel = |local_col: usize, travel_offset: f32| -> f32 {
         note_world_z_for_bumpy(
             travel_offset,
-            gameplay_visual_effect_params(&visual, local_col).bumpy,
+            lane_effect_params[local_col].bumpy,
             visual.bumpy_offset,
             visual.bumpy_period,
         )
@@ -296,20 +305,11 @@ fn compose_field_contents<S, F>(
         let col_dir = column_dirs[local_col];
         let dir = col_dir;
         let lane_receptor_y = column_receptor_ys[local_col];
-        let receptor_center = receptor_row_center(
-            request.geometry.screen_height,
-            playfield_center_x,
-            local_col,
-            lane_receptor_y,
-            request.arrow_effect_time_s,
-            beat_push,
-            visual,
-            &col_offsets[..num_cols],
-            &invert_distances[..num_cols],
-            &tornado_bounds[..num_cols],
-        );
-        let receptor_draw_y = receptor_center[1];
-        let receptor_center_x = receptor_center[0];
+        let lane_offset = lane_offsets[local_col];
+        let receptor_draw_y = lane_receptor_y
+            + crate::move_col_extra(&visual.move_y_cols, local_col)
+            + crate::tipsy_y_extra(local_col, travel.arrow_effect_time_s(), visual.tipsy);
+        let receptor_center_x = lane_center_x_from_adjusted_travel(local_col, 0.0);
         let head_travel_offset = if is_head_dynamic {
             travel.raw_beat(head_beat)
         } else {
@@ -326,8 +326,8 @@ fn compose_field_contents<S, F>(
             request.chart.cached_note_time_ns(note_index, true),
             request.chart.cached_displayed_beat(note_index, true),
         );
-        let head_y = travel.lane_y(local_col, lane_receptor_y, dir, head_travel_offset);
-        let tail_y = travel.lane_y(local_col, lane_receptor_y, dir, tail_travel_offset);
+        let head_y = lane_receptor_y + dir * travel.adjusted(head_travel_offset) + lane_offset;
+        let tail_y = lane_receptor_y + dir * travel.adjusted(tail_travel_offset) + lane_offset;
         let note_display = ns.note_display_metrics;
         let lane_reverse = col_dir < 0.0;
         let active_state = frame.feedback.lanes[local_col]
@@ -382,17 +382,17 @@ fn compose_field_contents<S, F>(
         let head_layers = hold_plan.head_layers;
         let head_slot = hold_plan.head_slot;
 
-        let hold_tiny_zoom = tiny_zoom_for_col(&visual, local_col);
+        let hold_tiny_zoom = visual_tiny_zoom(lane_effect_params[local_col]);
         let hold_base_target_arrow_px = target_arrow_px * hold_tiny_zoom;
         let hold_arrow_px_for_adjusted_travel = |travel_offset: f32| -> f32 {
-            hold_base_target_arrow_px * pulse_zoom_for_y(travel_offset, &visual)
+            hold_base_target_arrow_px * visual_pulse_zoom_for_y(travel_offset, pulse_effect_params)
         };
         let hold_target_arrow_px = hold_arrow_px_for_adjusted_travel(0.0);
-        let hold_head_zoom =
-            hold_tiny_zoom * pulse_zoom_for_y(travel.adjusted(head_anchor_travel), &visual);
+        let hold_head_zoom = hold_tiny_zoom
+            * visual_pulse_zoom_for_y(travel.adjusted(head_anchor_travel), pulse_effect_params);
         let hold_head_target_arrow_px = target_arrow_px * hold_head_zoom;
         let hold_note_scale = field_zoom * hold_head_zoom;
-        let col_bumpy = gameplay_visual_effect_params(&visual, local_col).bumpy;
+        let col_bumpy = lane_effect_params[local_col].bumpy;
         let hold_depth_test = hold_body_needs_z_buffer(&visual);
         let use_legacy_hold_sprites = visual_use_legacy_hold_sprites(
             col_bumpy,
@@ -402,8 +402,12 @@ fn compose_field_contents<S, F>(
             visual.pulse_outer,
         );
         let sample_hold_path = |screen_y: f32| {
-            let adjusted_travel =
-                travel.adjusted_from_screen_y(local_col, lane_receptor_y, dir, screen_y);
+            let adjusted_travel = travel.adjusted_from_screen_y_with_lane_offset(
+                lane_receptor_y,
+                dir,
+                screen_y,
+                lane_offset,
+            );
             HoldPathSample {
                 adjusted_travel,
                 center_x: lane_center_x_from_adjusted_travel(local_col, adjusted_travel),
@@ -438,7 +442,7 @@ fn compose_field_contents<S, F>(
                 diffuse: hold_diffuse,
                 elapsed_s: elapsed_screen,
                 mini,
-                lane_offset: travel.lane_offset(local_col),
+                lane_offset,
                 appearance: note_alpha_params(appearance),
                 use_legacy_sprites: use_legacy_hold_sprites,
                 rotation_y_deg: note_rotation_y,
@@ -467,7 +471,8 @@ fn compose_field_contents<S, F>(
         if head_alpha <= f32::EPSILON && head_glow <= f32::EPSILON {
             return;
         }
-        let hold_head_rot = calc_note_rotation_z(visual, note.beat, current_beat, true, local_col);
+        let hold_head_rot =
+            calc_note_rotation_z(note.beat, current_beat, true, lane_effect_params[local_col]);
         let note_idx = local_col * NUM_QUANTIZATIONS + note.quantization_idx as usize;
         let head_center_x = if (head_draw_y - receptor_draw_y).abs() <= 0.5 {
             receptor_center_x
@@ -667,6 +672,8 @@ fn compose_field_contents<S, F>(
         note_inputs,
         frame.completed_rows,
         visible_row_range,
+        &lane_effect_params[..num_cols],
+        &lane_offsets[..num_cols],
         &scale_mine_slot,
         sprite_source,
     );
@@ -681,6 +688,8 @@ fn compose_visible_notes<S, F>(
     notes: &PreparedNotefieldNotes<'_, S>,
     completed_rows: CompletedRowVisibility<'_>,
     visible_row_range: Option<(i32, i32)>,
+    lane_effect_params: &[VisualEffectParams],
+    lane_offsets: &[f32],
     scale_mine_slot: &impl Fn(&S) -> [f32; 2],
     sprite_source: &F,
 ) where
@@ -721,7 +730,8 @@ fn compose_visible_notes<S, F>(
         let col = col_start + local_col;
         let direction = prepared.field.column_dirs[local_col];
         let receptor_y = prepared.field.column_receptor_ys[local_col];
-        let lane_offset = travel.lane_offset(local_col);
+        let lane_offset = lane_offsets[local_col];
+        let effect_params = lane_effect_params[local_col];
         for_each_visible_note_index(
             request.chart.lane_note_row_indices[col],
             request.chart.note_itg_rows,
@@ -779,14 +789,11 @@ fn compose_visible_notes<S, F>(
                 let y_pos = receptor_y + direction * adjusted_travel + lane_offset;
                 let world_z = note_world_z_for_bumpy(
                     adjusted_travel,
-                    gameplay_visual_effect_params(&visual, local_col).bumpy,
+                    effect_params.bumpy,
                     visual.bumpy_offset,
                     visual.bumpy_period,
                 );
-                let effect_zoom = visual_arrow_effect_zoom(
-                    adjusted_travel,
-                    gameplay_visual_effect_params(&visual, local_col),
-                );
+                let effect_zoom = visual_arrow_effect_zoom(adjusted_travel, effect_params);
                 let note_scale = field_zoom * effect_zoom;
                 let target_arrow_px = notes.target_arrow_px * effect_zoom;
                 let scale_mine_for_note = |slot: &S| -> [f32; 2] {
@@ -794,7 +801,7 @@ fn compose_visible_notes<S, F>(
                     [size[0] * effect_zoom, size[1] * effect_zoom]
                 };
                 let note_rotation_z =
-                    calc_note_rotation_z(visual, note.beat, current_beat, false, local_col);
+                    calc_note_rotation_z(note.beat, current_beat, false, effect_params);
 
                 if matches!(note.note_type, NoteType::Mine) {
                     if fill_slot.is_none() && frame_slot.is_none() {
@@ -1223,44 +1230,6 @@ fn note_x_offset(
     )
 }
 
-#[allow(clippy::too_many_arguments)]
-#[inline(always)]
-fn receptor_row_center(
-    screen_height: f32,
-    playfield_center_x: f32,
-    local_col: usize,
-    receptor_y: f32,
-    arrow_effect_time_s: f32,
-    beat_factor: f32,
-    visual: VisualEffects,
-    col_offsets: &[f32],
-    invert_distances: &[f32],
-    tornado_bounds: &[TornadoBounds],
-) -> [f32; 2] {
-    canonical_receptor_row_center(
-        playfield_center_x,
-        local_col,
-        receptor_y,
-        beat_factor,
-        arrow_effect_time_s,
-        col_offsets,
-        invert_distances,
-        tornado_bounds,
-        &visual.move_x_cols,
-        &visual.move_y_cols,
-        NoteXParams {
-            screen_height,
-            tornado: visual.tornado,
-            drunk: visual.drunk,
-            flip: visual.flip,
-            invert: visual.invert,
-            beat: visual.beat,
-        },
-        visual.tiny,
-        visual.tipsy,
-    )
-}
-
 #[inline(always)]
 fn hold_body_needs_z_buffer(visual: &VisualEffects) -> bool {
     visual_hold_body_needs_z_buffer(VisualEffectParams {
@@ -1270,31 +1239,13 @@ fn hold_body_needs_z_buffer(visual: &VisualEffects) -> bool {
 }
 
 #[inline(always)]
-fn tiny_zoom_for_col(visual: &VisualEffects, local_col: usize) -> f32 {
-    visual_tiny_zoom(gameplay_visual_effect_params(visual, local_col))
-}
-
-#[inline(always)]
-fn pulse_zoom_for_y(y: f32, visual: &VisualEffects) -> f32 {
-    // Preserve the current global Pulse behavior: per-column Pulse values are
-    // intentionally sampled from lane zero while Tiny remains lane-specific.
-    visual_pulse_zoom_for_y(y, gameplay_visual_effect_params(visual, 0))
-}
-
-#[inline(always)]
 fn calc_note_rotation_z(
-    visual: VisualEffects,
     note_beat: f32,
     song_beat: f32,
     is_hold_head: bool,
-    local_col: usize,
+    effect_params: VisualEffectParams,
 ) -> f32 {
-    visual_note_rotation_z(
-        note_beat,
-        song_beat,
-        is_hold_head,
-        gameplay_visual_effect_params(&visual, local_col),
-    )
+    visual_note_rotation_z(note_beat, song_beat, is_hold_head, effect_params)
 }
 
 fn push_field_camera<S>(

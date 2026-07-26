@@ -133,6 +133,11 @@ pub struct GameplayOffsetAdjustHoldState {
 
 impl GameplayOffsetAdjustHoldState {
     #[inline(always)]
+    pub fn is_active(&self) -> bool {
+        self.held_since.iter().any(Option::is_some)
+    }
+
+    #[inline(always)]
     pub fn start(&mut self, key: GameplayOffsetAdjustKey, at: Instant) -> f32 {
         start_offset_adjust_hold_state(&mut self.held_since, &mut self.last_at, key, at)
     }

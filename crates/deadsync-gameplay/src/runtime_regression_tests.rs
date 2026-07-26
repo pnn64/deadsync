@@ -1043,6 +1043,82 @@ mod runtime_regression_tests {
         );
     }
 
+    #[test]
+    fn idle_hold_housekeeping_preserves_chart_and_runtime_state() {
+        let mut state = regression_state();
+        assert!(state.hold_runtime.active_holds.iter().all(Option::is_none));
+        assert!(state.hold_runtime.decaying_hold_indices.is_empty());
+        assert!(state.hold_runtime.pending_missed_hold_indices.is_empty());
+        let before = state
+            .notes()
+            .iter()
+            .map(|note| {
+                (
+                    note.result
+                        .as_ref()
+                        .map(|result| (result.grade, result.time_error_ms.to_bits())),
+                    note.hold.as_ref().map(|hold| {
+                        (
+                            hold.result,
+                            hold.life.to_bits(),
+                            hold.let_go_started_at,
+                            hold.last_held_row_index,
+                            hold.last_held_beat.to_bits(),
+                        )
+                    }),
+                )
+            })
+            .collect::<Vec<_>>();
+
+        state.update_active_holds(&[false; MAX_COLS], 1_000_000_000);
+        state.decay_let_go_hold_life();
+        state.resolve_pending_missed_holds(1_000_000_000);
+
+        let after = state
+            .notes()
+            .iter()
+            .map(|note| {
+                (
+                    note.result
+                        .as_ref()
+                        .map(|result| (result.grade, result.time_error_ms.to_bits())),
+                    note.hold.as_ref().map(|hold| {
+                        (
+                            hold.result,
+                            hold.life.to_bits(),
+                            hold.let_go_started_at,
+                            hold.last_held_row_index,
+                            hold.last_held_beat.to_bits(),
+                        )
+                    }),
+                )
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(after, before);
+    }
+
+    #[test]
+    fn deferred_replay_scratch_still_applies_ready_edges() {
+        let mut state = regression_state();
+        state.progress.stage.autoplay_enabled = true;
+        state.progress.replay = GameplayReplayRuntimeState::new(
+            GameplayReplayInputState::new(vec![RecordedLaneEdge {
+                lane_index: 0,
+                pressed: true,
+                source: InputSource::Keyboard,
+                event_music_time_ns: 1_000_000_000,
+            }]),
+            false,
+            0,
+        );
+        state.set_song_position_for_benchmark(0.0, 1_000_000_000, 0.0, 1.0);
+
+        state.run_autoplay_or_replay_frame(1_000_000_000);
+
+        assert_eq!(state.pending_input_len(), 1);
+        assert!(state.progress.stage.autoplay_used);
+    }
+
     fn set_state_timing(state: &mut State, timing: Arc<TimingData>) {
         state.timing_runtime.timing = Arc::clone(&timing);
         state.timing_runtime.timing_players[0] = Arc::clone(&timing);

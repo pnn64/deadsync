@@ -692,6 +692,17 @@ where
     }
 
     pub fn update_active_holds(&mut self, inputs: &[bool; MAX_COLS], current_time_ns: SongTimeNs) {
+        let columns = self
+            .setup
+            .num_cols
+            .min(MAX_COLS)
+            .min(self.hold_runtime.active_holds.len());
+        if self.hold_runtime.active_holds[..columns]
+            .iter()
+            .all(Option::is_none)
+        {
+            return;
+        }
         let timing_players: [&_; MAX_PLAYERS] =
             std::array::from_fn(|player| self.timing_runtime.timing_players[player].as_ref());
         let live_autoplay = self.live_autoplay_enabled();
@@ -717,6 +728,9 @@ where
 
     #[inline(always)]
     pub fn resolve_pending_missed_holds(&mut self, current_time_ns: SongTimeNs) {
+        if self.hold_runtime.pending_missed_hold_indices.is_empty() {
+            return;
+        }
         let mut score_missed_holds_rolls_by_column = [false; MAX_COLS];
         for col in 0..self.setup.num_cols.min(MAX_COLS) {
             score_missed_holds_rolls_by_column[col] =
@@ -1350,6 +1364,16 @@ where
                 handle_replay_edge(self, edge);
                 self.mark_autoplay_used();
             }
+        } else {
+            self.run_autoplay(now_music_time_ns);
+        }
+    }
+
+    #[inline(always)]
+    pub fn run_autoplay_or_replay_frame(&mut self, now_music_time_ns: SongTimeNs) {
+        if self.progress.replay.mode {
+            let mut replay_events = [None; MAX_COLS];
+            self.run_autoplay_or_replay_phase(now_music_time_ns, &mut replay_events);
         } else {
             self.run_autoplay(now_music_time_ns);
         }

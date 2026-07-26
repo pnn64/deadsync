@@ -5493,9 +5493,11 @@ mod tests {
     fn gameplay_offset_adjust_hold_state_wraps_repeat_state() {
         let start = Instant::now();
         let mut state = GameplayOffsetAdjustHoldState::default();
+        assert!(!state.is_active());
 
         let delta = state.start(GameplayOffsetAdjustKey::Decrease, start);
 
+        assert!(state.is_active());
         assert_near(delta, -OFFSET_ADJUST_STEP_SECONDS);
         assert_eq!(
             state.held_since_for_key(GameplayOffsetAdjustKey::Decrease),
@@ -5513,6 +5515,7 @@ mod tests {
             Some(-OFFSET_ADJUST_STEP_SECONDS)
         );
         state.clear(GameplayOffsetAdjustKey::Decrease);
+        assert!(!state.is_active());
         assert_eq!(
             state.held_since_for_key(GameplayOffsetAdjustKey::Decrease),
             None

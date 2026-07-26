@@ -359,6 +359,120 @@ pub(crate) fn gameplay_visual_effect_params(
     )
 }
 
+pub(crate) fn fill_gameplay_lane_effects(
+    visual: &VisualEffects,
+    arrow_effect_time_s: f32,
+    num_cols: usize,
+    effect_params: &mut [VisualEffectParams],
+    lane_offsets: &mut [f32],
+) {
+    let columns = num_cols.min(effect_params.len()).min(lane_offsets.len());
+    for local_col in 0..columns {
+        effect_params[local_col] = gameplay_visual_effect_params(visual, local_col);
+        lane_offsets[local_col] = tipsy_y_extra(local_col, arrow_effect_time_s, visual.tipsy)
+            + move_col_extra(&visual.move_y_cols, local_col);
+    }
+}
+
+#[cfg(feature = "bench-support")]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct LaneVisualCacheBenchFrame {
+    pub checksum: u64,
+    pub samples: usize,
+}
+
+#[cfg(feature = "bench-support")]
+#[derive(Clone)]
+pub struct LaneVisualCacheBench {
+    visual: VisualEffects,
+}
+
+#[cfg(feature = "bench-support")]
+impl Default for LaneVisualCacheBench {
+    fn default() -> Self {
+        let mut visual = VisualEffects {
+            tipsy: 0.8,
+            tiny: 0.15,
+            bumpy: 0.4,
+            confusion_offset: 0.25,
+            ..VisualEffects::default()
+        };
+        for local_col in 0..4 {
+            visual.tiny_cols[local_col] = local_col as f32 * 0.03;
+            visual.bumpy_cols[local_col] = local_col as f32 * -0.04;
+            visual.confusion_offset_cols[local_col] = local_col as f32 * 0.1;
+            visual.move_y_cols[local_col] = (local_col as f32 - 1.5) * 0.2;
+        }
+        Self { visual }
+    }
+}
+
+#[cfg(feature = "bench-support")]
+impl LaneVisualCacheBench {
+    const LANES: usize = 4;
+    const VISIBLE_ENTRIES: usize = 96;
+
+    pub fn old_frame(&self, frame: usize) -> LaneVisualCacheBenchFrame {
+        let arrow_effect_time_s = frame as f32 / 120.0;
+        let mut output = LaneVisualCacheBenchFrame::default();
+        for entry in 0..Self::VISIBLE_ENTRIES {
+            let local_col = (entry + frame) % Self::LANES;
+            for pass in 0..3 {
+                let params = gameplay_visual_effect_params(&self.visual, local_col);
+                let lane_offset = tipsy_y_extra(local_col, arrow_effect_time_s, self.visual.tipsy)
+                    + move_col_extra(&self.visual.move_y_cols, local_col);
+                record_lane_visual_sample(&mut output, params, lane_offset, pass);
+            }
+        }
+        output
+    }
+
+    pub fn new_frame(&self, frame: usize) -> LaneVisualCacheBenchFrame {
+        let arrow_effect_time_s = frame as f32 / 120.0;
+        let mut effect_params = [VisualEffectParams::default(); Self::LANES];
+        let mut lane_offsets = [0.0; Self::LANES];
+        fill_gameplay_lane_effects(
+            &self.visual,
+            arrow_effect_time_s,
+            Self::LANES,
+            &mut effect_params,
+            &mut lane_offsets,
+        );
+        let mut output = LaneVisualCacheBenchFrame::default();
+        for entry in 0..Self::VISIBLE_ENTRIES {
+            let local_col = (entry + frame) % Self::LANES;
+            for pass in 0..3 {
+                record_lane_visual_sample(
+                    &mut output,
+                    effect_params[local_col],
+                    lane_offsets[local_col],
+                    pass,
+                );
+            }
+        }
+        output
+    }
+}
+
+#[cfg(feature = "bench-support")]
+#[inline(always)]
+fn record_lane_visual_sample(
+    output: &mut LaneVisualCacheBenchFrame,
+    params: VisualEffectParams,
+    lane_offset: f32,
+    pass: usize,
+) {
+    for value in [
+        params.tiny,
+        params.bumpy,
+        params.confusion_offset,
+        lane_offset,
+    ] {
+        output.checksum = output.checksum.rotate_left(7) ^ u64::from(value.to_bits()) ^ pass as u64;
+        output.samples += 1;
+    }
+}
+
 pub(crate) fn smoothstep01(t: f32) -> f32 {
     let t = t.clamp(0.0, 1.0);
     t * t * (3.0 - 2.0 * t)

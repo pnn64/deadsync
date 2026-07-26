@@ -579,12 +579,27 @@ impl ScrollTravel<'_> {
         direction: f32,
         screen_y: f32,
     ) -> f32 {
+        self.adjusted_from_screen_y_with_lane_offset(
+            receptor_y,
+            direction,
+            screen_y,
+            self.lane_offset(local_col),
+        )
+    }
+
+    pub(crate) fn adjusted_from_screen_y_with_lane_offset(
+        &self,
+        receptor_y: f32,
+        direction: f32,
+        screen_y: f32,
+        lane_offset: f32,
+    ) -> f32 {
         let direction = if direction.abs() <= 0.000_1 {
             if direction < 0.0 { -0.000_1 } else { 0.000_1 }
         } else {
             direction
         };
-        (screen_y - receptor_y - self.lane_offset(local_col)) / direction
+        (screen_y - receptor_y - lane_offset) / direction
     }
 
     pub fn visible_row_range(&self) -> Option<(i32, i32)> {

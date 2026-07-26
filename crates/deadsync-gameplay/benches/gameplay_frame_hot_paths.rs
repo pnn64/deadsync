@@ -1,5 +1,6 @@
 use deadsync_gameplay::{
-    ActiveColumnScanBench, GameplayFrameHotPathBenchOutput, LiveNotefieldOptionsBench,
+    ActiveColumnScanBench, GameplayFrameHotPathBenchOutput, IdleHoldPhaseBench,
+    LiveNotefieldOptionsBench, OptionalFrameWorkBench,
 };
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::hint::black_box;
@@ -100,7 +101,7 @@ fn main() {
     let columns = ActiveColumnScanBench::default();
     run_pair(
         "active-column input/mine scans",
-        "4 active columns in 64-column fixed-capacity state",
+        "4 active columns in fixed-capacity lane state",
         |frame| columns.old_frame(frame),
         |frame| columns.new_frame(frame),
     );
@@ -112,6 +113,23 @@ fn main() {
         "2 players, 8 columns, animated attack scroll overrides",
         move |frame| old_options.old_frame(frame),
         move |frame| new_options.new_frame(frame),
+    );
+
+    let optional_work = OptionalFrameWorkBench;
+    run_pair(
+        "inactive replay/offset setup",
+        "live play, replay every 1009 frames and offset repeat every 257 frames",
+        |frame| optional_work.old_frame(frame),
+        |frame| optional_work.new_frame(frame),
+    );
+
+    let mut old_holds = IdleHoldPhaseBench::default();
+    let mut new_holds = old_holds.clone();
+    run_pair(
+        "idle hold-phase scaffolding",
+        "4 lanes, sparse active, decaying, and pending holds",
+        move |frame| old_holds.old_frame(frame),
+        move |frame| new_holds.new_frame(frame),
     );
 }
 
