@@ -1,6 +1,6 @@
 use deadsync_theme_simply_love::screens::gameplay::{
     SongLuaEaseBenchmark, SongLuaMessageStateBenchmark, SongLuaOrderBenchmark,
-    SongLuaProxyRequestBenchmark, benchmark_projected_mesh_scratch,
+    SongLuaProxyRequestBenchmark, SongLuaTopologyBenchmark, benchmark_projected_mesh_scratch,
     benchmark_projected_mesh_scratch_legacy,
 };
 use std::alloc::{GlobalAlloc, Layout, System};
@@ -15,6 +15,9 @@ const MESSAGE_EVENTS: usize = 2_048;
 const MESSAGE_BLOCKS: usize = 512;
 const FUTURE_EASES: usize = 2_048;
 const ORDER_ACTORS: usize = 256;
+const TOPOLOGY_GROUPS: usize = 16;
+const TOPOLOGY_CHAIN_DEPTH: usize = 32;
+const TOPOLOGY_REFERENCES: usize = 128;
 const WARMUP_FRAMES: usize = 1_000;
 
 struct CountingAlloc {
@@ -179,6 +182,9 @@ fn main() {
     const BLOCK_FRAMES: usize = 50_000;
     const EASE_FRAMES: usize = 100_000;
     const PROXY_FRAMES: usize = 20_000;
+    const AFT_TARGET_FRAMES: usize = 2_000;
+    const ANCESTRY_FRAMES: usize = 20_000;
+    const CAMERA_FRAMES: usize = 20_000;
     const ORDER_FRAMES: usize = 100_000;
     const MESH_FRAMES: usize = 50_000;
 
@@ -231,6 +237,36 @@ fn main() {
     let legacy_proxy_result = measure(PROXY_FRAMES, || proxy_benchmark.legacy_frame());
     let indexed_proxy_result = measure(PROXY_FRAMES, || proxy_benchmark.indexed_frame());
 
+    let topology_benchmark =
+        SongLuaTopologyBenchmark::new(TOPOLOGY_GROUPS, TOPOLOGY_CHAIN_DEPTH, TOPOLOGY_REFERENCES);
+    assert_eq!(
+        topology_benchmark.legacy_aft_targets(),
+        topology_benchmark.indexed_aft_targets()
+    );
+    assert_eq!(
+        topology_benchmark.legacy_aft_ancestors(),
+        topology_benchmark.indexed_aft_ancestors()
+    );
+    assert_eq!(
+        topology_benchmark.legacy_camera_states(),
+        topology_benchmark.indexed_camera_states()
+    );
+    let legacy_aft_target_result = measure(AFT_TARGET_FRAMES, || {
+        topology_benchmark.legacy_aft_targets()
+    });
+    let indexed_aft_target_result = measure(AFT_TARGET_FRAMES, || {
+        topology_benchmark.indexed_aft_targets()
+    });
+    let legacy_aft_ancestor_result = measure(ANCESTRY_FRAMES, || {
+        topology_benchmark.legacy_aft_ancestors()
+    });
+    let indexed_aft_ancestor_result = measure(ANCESTRY_FRAMES, || {
+        topology_benchmark.indexed_aft_ancestors()
+    });
+    let legacy_camera_result = measure(CAMERA_FRAMES, || topology_benchmark.legacy_camera_states());
+    let indexed_camera_result =
+        measure(CAMERA_FRAMES, || topology_benchmark.indexed_camera_states());
+
     let mut legacy_order = SongLuaOrderBenchmark::new(ORDER_ACTORS);
     let mut cached_order = SongLuaOrderBenchmark::new(ORDER_ACTORS);
     assert_eq!(legacy_order.legacy_frame(), cached_order.cached_frame());
@@ -275,6 +311,18 @@ fn main() {
     assert_eq!(legacy_block_result.checksum, cached_block_result.checksum);
     assert_eq!(legacy_ease_result.checksum, bounded_ease_result.checksum);
     assert_eq!(legacy_proxy_result.checksum, indexed_proxy_result.checksum);
+    assert_eq!(
+        legacy_aft_target_result.checksum,
+        indexed_aft_target_result.checksum
+    );
+    assert_eq!(
+        legacy_aft_ancestor_result.checksum,
+        indexed_aft_ancestor_result.checksum
+    );
+    assert_eq!(
+        legacy_camera_result.checksum,
+        indexed_camera_result.checksum
+    );
     assert_eq!(legacy_order_result.checksum, cached_order_result.checksum);
     assert_eq!(
         legacy_changing_order_result.checksum,
@@ -295,6 +343,41 @@ fn main() {
     println!("proxy requests (8 captures, 16 children, 128 references)");
     print_result("scan topology", PROXY_FRAMES, &legacy_proxy_result);
     print_result("topology index", PROXY_FRAMES, &indexed_proxy_result);
+    println!(
+        "AFT target lookup ({TOPOLOGY_REFERENCES} references, {} overlays)",
+        TOPOLOGY_GROUPS * TOPOLOGY_CHAIN_DEPTH
+    );
+    print_result(
+        "scan capture names",
+        AFT_TARGET_FRAMES,
+        &legacy_aft_target_result,
+    );
+    print_result(
+        "target index",
+        AFT_TARGET_FRAMES,
+        &indexed_aft_target_result,
+    );
+    println!(
+        "AFT ancestry ({} overlays, depth {TOPOLOGY_CHAIN_DEPTH})",
+        TOPOLOGY_GROUPS * TOPOLOGY_CHAIN_DEPTH + TOPOLOGY_REFERENCES
+    );
+    print_result("walk parents", ANCESTRY_FRAMES, &legacy_aft_ancestor_result);
+    print_result(
+        "ancestor index",
+        ANCESTRY_FRAMES,
+        &indexed_aft_ancestor_result,
+    );
+    println!(
+        "camera ancestry ({} overlays, depth {TOPOLOGY_CHAIN_DEPTH})",
+        TOPOLOGY_GROUPS * TOPOLOGY_CHAIN_DEPTH + TOPOLOGY_REFERENCES
+    );
+    print_result("walk parents", CAMERA_FRAMES, &legacy_camera_result);
+    print_result("camera index", CAMERA_FRAMES, &indexed_camera_result);
+    println!(
+        "topology storage: {} bytes/overlay; existing proxy-index delta: {} bytes/overlay",
+        SongLuaTopologyBenchmark::topology_bytes_per_overlay(),
+        SongLuaTopologyBenchmark::added_index_bytes_per_overlay()
+    );
     println!("dynamic order ({ORDER_ACTORS} actors, unchanged keys)");
     print_result("sort every frame", ORDER_FRAMES, &legacy_order_result);
     print_result("key cache", ORDER_FRAMES, &cached_order_result);
