@@ -300,9 +300,17 @@ fn compose_field_contents<S, F>(
         let head_travel_offset = if is_head_dynamic {
             travel.raw_beat(head_beat)
         } else {
-            travel.raw_note(note, false)
+            travel.raw_note_cached(
+                note,
+                false,
+                request.chart.cached_note_time_ns(note_index, false),
+            )
         };
-        let tail_travel_offset = travel.raw_note(note, true);
+        let tail_travel_offset = travel.raw_note_cached(
+            note,
+            true,
+            request.chart.cached_note_time_ns(note_index, true),
+        );
         let head_y = travel.lane_y(local_col, lane_receptor_y, dir, head_travel_offset);
         let tail_y = travel.lane_y(local_col, lane_receptor_y, dir, tail_travel_offset);
         let note_display = ns.note_display_metrics;
@@ -719,7 +727,11 @@ fn compose_visible_notes<S, F>(
                         return;
                     }
                 }
-                let adjusted_travel = travel.adjusted(travel.raw_note(note, false));
+                let adjusted_travel = travel.adjusted(travel.raw_note_cached(
+                    note,
+                    false,
+                    request.chart.cached_note_time_ns(note_index, false),
+                ));
                 if adjusted_travel < -request.geometry.draw_distance_after_targets
                     || adjusted_travel > request.geometry.draw_distance_before_targets
                 {

@@ -380,6 +380,10 @@ where
                 break;
             }
         }
+        recycle_pending_mine_hit_batch(
+            &mut self.chart_runtime.mine_scan.pending_mine_hit_indices,
+            pending,
+        );
     }
 
     #[inline(always)]

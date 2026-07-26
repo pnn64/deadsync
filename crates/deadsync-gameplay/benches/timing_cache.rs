@@ -135,6 +135,7 @@ fn run_suite(label: &str, bpm_segments: usize, include_assist: bool) {
     if include_assist {
         run_frame_pair(&timing, &players, &times, 1, true);
     }
+    run_notefield_search_pair(&timing, &players, &times);
     run_input_pair(&timing, &players, &times[..CHORDS]);
 }
 
@@ -194,6 +195,7 @@ fn run_old_frames(
                     &mut checksum,
                     timing_player.get_beat_for_time_ns(visible_time_ns),
                 );
+                mix_f32(&mut checksum, timing_player.get_beat_for_time_ns(time_ns));
             }
             for _ in 0..2 {
                 let rows = missed_note_cutoff_rows_for_players(
@@ -247,6 +249,10 @@ fn run_cached_frames(
                     &mut checksum,
                     cache.visible_beat(player, timing_player, visible_time_ns),
                 );
+                mix_f32(
+                    &mut checksum,
+                    cache.notefield_search_beat(player, timing_player, time_ns),
+                );
             }
             for _ in 0..2 {
                 let rows =
@@ -294,6 +300,42 @@ fn run_input_pair(timing: &TimingData, players: &[&TimingData; MAX_PLAYERS], tim
     });
     assert_eq!(old.checksum, new.checksum);
     print_pair("4-panel chord press/release", times.len(), &old, &new);
+}
+
+fn run_notefield_search_pair(
+    timing: &TimingData,
+    players: &[&TimingData; MAX_PLAYERS],
+    times: &[SongTimeNs],
+) {
+    let old = measure(|| {
+        let mut checksum = 0_u64;
+        for &time_ns in times {
+            for timing_player in players {
+                mix_f32(&mut checksum, timing_player.get_beat_for_time_ns(time_ns));
+            }
+        }
+        checksum
+    });
+    let mut cache = GameplayTimeToBeatCaches::new(timing, players);
+    let new = measure(|| {
+        let mut checksum = 0_u64;
+        for &time_ns in times {
+            for (player, timing_player) in players.iter().enumerate() {
+                mix_f32(
+                    &mut checksum,
+                    cache.notefield_search_beat(player, timing_player, time_ns),
+                );
+            }
+        }
+        checksum
+    });
+    assert_eq!(old.checksum, new.checksum);
+    print_pair(
+        "2P renderer search beat",
+        times.len() * MAX_PLAYERS,
+        &old,
+        &new,
+    );
 }
 
 fn measure(work: impl FnOnce() -> u64) -> BenchResult {

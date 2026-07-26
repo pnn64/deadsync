@@ -1,4 +1,18 @@
 ﻿#[inline(always)]
+/// Return a processed frame batch to its song-lifetime slot so mine-hit bursts
+/// pay for vector growth once instead of once per hit frame.
+pub(crate) fn recycle_pending_mine_hit_batch(pending: &mut Vec<usize>, mut processed: Vec<usize>) {
+    processed.clear();
+    *pending = processed;
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn bench_recycle_pending_mine_hit_batch(pending: &mut Vec<usize>, processed: Vec<usize>) {
+    recycle_pending_mine_hit_batch(pending, processed);
+}
+
+#[inline(always)]
 pub fn mine_window_bounds_ns(
     mine_times_ns: &[SongTimeNs],
     start_t_ns: SongTimeNs,

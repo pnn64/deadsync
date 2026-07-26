@@ -828,6 +828,17 @@ where
             &mut self.chart_runtime.mine_scan.mine_note_time_ns,
         );
         self.reset_time_to_beat_caches();
+        let music_time_ns = self.clock.song_position.current_music_time_ns;
+        for player in 0..self.setup.num_players {
+            self.clock.visible_timing.notefield_search_beat[player] = self
+                .timing_runtime
+                .time_to_beat_caches
+                .notefield_search_beat(
+                    player,
+                    &self.timing_runtime.timing_players[player],
+                    music_time_ns,
+                );
+        }
 
         let (notes_end_time_ns, music_end_time_ns) = compute_end_times_ns(
             &self.chart_runtime.notes,
@@ -2035,6 +2046,16 @@ where
     }
 
     #[inline(always)]
+    pub fn notefield_search_beat(&self, player: usize) -> f32 {
+        self.clock
+            .visible_timing
+            .notefield_search_beat
+            .get(player)
+            .copied()
+            .unwrap_or(0.0)
+    }
+
+    #[inline(always)]
     pub fn set_visible_time(
         &mut self,
         player: usize,
@@ -2928,6 +2949,14 @@ where
             let delay = self.clock.visible_timing.visual_delay_seconds(player);
             let visible_time_ns = visible_notefield_time_ns(visual_scroll_time_ns, delay);
             let visible_time_seconds = song_time_ns_to_seconds(visible_time_ns);
+            self.clock.visible_timing.notefield_search_beat[player] = self
+                .timing_runtime
+                .time_to_beat_caches
+                .notefield_search_beat(
+                    player,
+                    &self.timing_runtime.timing_players[player],
+                    music_time_ns,
+                );
             self.clock.visible_timing.set_player_time(
                 player,
                 visible_time_ns,

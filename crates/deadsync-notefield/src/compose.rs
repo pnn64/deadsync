@@ -67,11 +67,15 @@ pub struct NotefieldChartView<'a> {
     pub lane_note_row_indices: [&'a [usize]; MAX_COLS],
     pub lane_hold_indices: [&'a [usize]; MAX_COLS],
     pub note_itg_rows: &'a [i32],
+    /// Song-load timing caches aligned one-to-one with `notes`. Empty or short
+    /// slices are valid and fall back to canonical timing queries.
+    pub note_time_cache_ns: &'a [i64],
+    pub hold_end_time_cache_ns: &'a [Option<i64>],
     pub decaying_hold_indices: &'a [usize],
     pub tap_row_hold_roll_flags: &'a [u8],
-    pub current_music_time_ns: i64,
     pub visible_music_time_ns: i64,
     pub visible_beat: f32,
+    pub search_beat: f32,
     pub scroll_reference_bpm: f32,
     pub music_rate: f32,
     pub note_count_stats: &'a [NoteCountStat],
@@ -89,6 +93,22 @@ impl NotefieldChartView<'_> {
             .get(note_index)
             .copied()
             .unwrap_or_default()
+    }
+
+    #[inline(always)]
+    pub(crate) fn cached_note_time_ns(
+        &self,
+        note_index: usize,
+        use_hold_end: bool,
+    ) -> Option<i64> {
+        if use_hold_end {
+            self.hold_end_time_cache_ns
+                .get(note_index)
+                .copied()
+                .flatten()
+        } else {
+            self.note_time_cache_ns.get(note_index).copied()
+        }
     }
 }
 
@@ -333,7 +353,6 @@ fn prepare_notes<'a, S>(
     compute_invert_distances(&col_offsets[..num_cols], &mut invert_distances[..num_cols]);
     let mut tornado_bounds = [TornadoBounds::default(); MAX_COLS];
     compute_tornado_bounds(&col_offsets[..num_cols], &mut tornado_bounds[..num_cols]);
-    let current_search_beat = timing.get_beat_for_time_ns(request.chart.current_music_time_ns);
     let travel = scroll_travel(ScrollTravelRequest {
         timing,
         accel: crate::AccelYParams {
@@ -346,7 +365,7 @@ fn prepare_notes<'a, S>(
         scroll_speed,
         current_time_ns: request.chart.visible_music_time_ns,
         visible_beat: request.chart.visible_beat,
-        search_beat: current_search_beat,
+        search_beat: request.chart.search_beat,
         scroll_reference_bpm: request.chart.scroll_reference_bpm,
         music_rate: request.chart.music_rate,
         edit_beat_spacing: request.view.edit_beat_bars,

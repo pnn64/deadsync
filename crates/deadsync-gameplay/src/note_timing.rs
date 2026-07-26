@@ -375,7 +375,8 @@ struct CutoffRowsMemo {
 ///
 /// The cache has fixed capacity, allocates nothing, and is warmed when gameplay
 /// state is built. Rewinds and timing-offset edits reset every stream together;
-/// normal monotonic queries only walk timing events crossed since the last query.
+/// normal monotonic queries, including each player's notefield search beat, only
+/// walk timing events crossed since the last query.
 /// There is no eviction or deferred destruction. Exact-timestamp cutoff and input
 /// memos stop inserting by replacement and make repeated same-frame work O(1).
 /// The `timing_cache` benchmark is the instrumentation point; runtime counters are
@@ -386,6 +387,7 @@ pub struct GameplayTimeToBeatCaches {
     song: BeatInfoCache,
     display: BeatInfoCache,
     visible: [BeatInfoCache; MAX_PLAYERS],
+    notefield_search: [BeatInfoCache; MAX_PLAYERS],
     cutoff: [BeatInfoCache; MAX_PLAYERS],
     assist: BeatInfoCache,
     assist_future: BeatInfoCache,
@@ -402,6 +404,9 @@ impl GameplayTimeToBeatCaches {
             song: BeatInfoCache::new(timing),
             display: BeatInfoCache::new(timing),
             visible: std::array::from_fn(|player| BeatInfoCache::new(timing_players[player])),
+            notefield_search: std::array::from_fn(|player| {
+                BeatInfoCache::new(timing_players[player])
+            }),
             cutoff: std::array::from_fn(|player| BeatInfoCache::new(timing_players[player])),
             assist: BeatInfoCache::new(timing),
             assist_future: BeatInfoCache::new(timing),
@@ -419,14 +424,16 @@ impl GameplayTimeToBeatCaches {
         self.display.reset(timing);
         self.assist.reset(timing);
         self.assist_future.reset(timing);
-        for (((visible, cutoff), input), timing_player) in self
+        for ((((visible, notefield_search), cutoff), input), timing_player) in self
             .visible
             .iter_mut()
+            .zip(&mut self.notefield_search)
             .zip(&mut self.cutoff)
             .zip(&mut self.input)
             .zip(timing_players)
         {
             visible.reset(timing_player);
+            notefield_search.reset(timing_player);
             cutoff.reset(timing_player);
             input.reset(timing_player);
         }
@@ -454,6 +461,18 @@ impl GameplayTimeToBeatCaches {
     ) -> f32 {
         timing
             .get_beat_info_from_time_ns_cached(time_ns, &mut self.visible[player])
+            .beat
+    }
+
+    #[inline(always)]
+    pub fn notefield_search_beat(
+        &mut self,
+        player: usize,
+        timing: &TimingData,
+        time_ns: SongTimeNs,
+    ) -> f32 {
+        timing
+            .get_beat_info_from_time_ns_cached(time_ns, &mut self.notefield_search[player])
             .beat
     }
 

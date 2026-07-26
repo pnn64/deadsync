@@ -13469,6 +13469,12 @@ mod tests {
                     cache.visible_beat(player, timing_player, visible_time_ns).to_bits(),
                     timing_player.get_beat_for_time_ns(visible_time_ns).to_bits(),
                 );
+                assert_eq!(
+                    cache
+                        .notefield_search_beat(player, timing_player, time_ns)
+                        .to_bits(),
+                    timing_player.get_beat_for_time_ns(time_ns).to_bits(),
+                );
                 let expected_rows = lane_search_rows_for_timing(timing_player, time_ns);
                 assert_eq!(cache.lane_search_rows(player, timing_player, time_ns), expected_rows);
                 assert_eq!(cache.lane_search_rows(player, timing_player, time_ns), expected_rows);

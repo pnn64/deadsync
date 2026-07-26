@@ -63,6 +63,9 @@ pub use mini_indicator::{
 #[doc(hidden)]
 pub use note_placement::{PlacementBench, PlacementBenchFrame};
 pub use notes::ScrollTravel;
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub use notes::{CmodTimingBench, CmodTimingBenchFrame};
 pub use noteskin_model::{
     ModelMeshCache, ModelMeshCacheStats, NoteskinFrameCacheStats, noteskin_model_actor,
     noteskin_model_actor_from_draw,

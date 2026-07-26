@@ -1241,10 +1241,30 @@ mod runtime_regression_tests {
         assert_eq!(state.players_runtime.players[0].mines_hit, 0);
         assert_eq!(state.players_runtime.players[0].mines_hit_for_score, 0);
 
+        let pending_capacity = state
+            .chart_runtime
+            .mine_scan
+            .pending_mine_hit_indices
+            .capacity();
         state.apply_pending_mine_hits();
 
         assert_eq!(state.players_runtime.players[0].mines_hit, 1);
         assert_eq!(state.players_runtime.players[0].mines_hit_for_score, 1);
+        assert!(
+            state
+                .chart_runtime
+                .mine_scan
+                .pending_mine_hit_indices
+                .is_empty()
+        );
+        assert_eq!(
+            state
+                .chart_runtime
+                .mine_scan
+                .pending_mine_hit_indices
+                .capacity(),
+            pending_capacity
+        );
     }
 
     #[test]
@@ -2511,6 +2531,12 @@ mod runtime_regression_tests {
         assert!((state.global_offset_seconds() - (machine_before + 0.010)).abs() <= 1e-6);
         assert!((effective_after - (state.global_offset_seconds() + shift)).abs() <= 1e-6);
         assert_eq!(note_before - note_after, song_time_ns_from_seconds(0.010));
+        assert_eq!(
+            state.notefield_search_beat(0).to_bits(),
+            state.timing_runtime.timing_players[0]
+                .get_beat_for_time_ns(state.current_music_time_ns())
+                .to_bits(),
+        );
     }
 
     #[test]

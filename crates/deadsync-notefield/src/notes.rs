@@ -487,6 +487,27 @@ impl ScrollTravel<'_> {
         self.raw_beat(beat)
     }
 
+    pub(crate) fn raw_note_cached(
+        &self,
+        note: &Note,
+        use_hold_end: bool,
+        cached_time_ns: Option<SongTimeNs>,
+    ) -> f32 {
+        if let (
+            RawTravel::Constant {
+                current_time_ns,
+                rate,
+                beats_per_second,
+            },
+            Some(note_time_ns),
+        ) = (self.raw, cached_time_ns)
+        {
+            let real_seconds = song_time_ns_delta_seconds(note_time_ns, current_time_ns) / rate;
+            return real_seconds * beats_per_second * ScrollSpeedSetting::ARROW_SPACING;
+        }
+        self.raw_note(note, use_hold_end)
+    }
+
     pub fn adjusted_with_peak(&self, raw_travel: f32) -> (f32, bool) {
         let (travel, before_peak) = apply_accel_y_with_peak(
             raw_travel,
@@ -806,6 +827,189 @@ pub(crate) const fn mine_hides_after_resolution(mine_result: Option<MineResult>)
 
 use crate::style::MAX_NOTES_AFTER;
 
+#[cfg(feature = "bench-support")]
+mod timing_bench {
+    use super::{ScrollTravelRequest, scroll_travel};
+    use crate::AccelYParams;
+    use deadsync_core::note::NoteType;
+    use deadsync_core::timing::{beat_to_note_row, note_row_to_beat};
+    use deadsync_rules::note::{HoldData, Note};
+    use deadsync_rules::scroll::ScrollSpeedSetting;
+    use deadsync_rules::timing::{
+        DelaySegment, StopSegment, TimingData, TimingSegments, WarpSegment,
+    };
+
+    const NOTES: usize = 4_096;
+    const VISIBLE_NOTES: usize = 96;
+
+    #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+    pub struct CmodTimingBenchFrame {
+        pub checksum: u64,
+        pub samples: usize,
+    }
+
+    pub struct CmodTimingBench {
+        timing: TimingData,
+        notes: Vec<Note>,
+        note_times_ns: Vec<i64>,
+        hold_end_times_ns: Vec<Option<i64>>,
+    }
+
+    impl Default for CmodTimingBench {
+        fn default() -> Self {
+            let bpms = (0..512)
+                .map(|index| (index as f32 * 4.0, 90.0 + ((index * 37) % 151) as f32))
+                .collect();
+            let stops = (1..64)
+                .map(|index| StopSegment {
+                    beat: index as f32 * 32.0 + 1.0,
+                    duration: 0.01 + (index % 4) as f32 * 0.005,
+                })
+                .collect();
+            let delays = (1..48)
+                .map(|index| DelaySegment {
+                    beat: index as f32 * 40.0 + 2.0,
+                    duration: 0.008 + (index % 3) as f32 * 0.004,
+                })
+                .collect();
+            let warps = (1..32)
+                .map(|index| WarpSegment {
+                    beat: index as f32 * 64.0 + 3.0,
+                    length: 0.25,
+                })
+                .collect();
+            let row_count = beat_to_note_row(NOTES as f32 * 0.5 + 8.0).max(0) as usize + 1;
+            let row_to_beat = (0..row_count)
+                .map(|row| note_row_to_beat(row as i32))
+                .collect::<Vec<_>>();
+            let timing = TimingData::from_segments(
+                0.017,
+                -0.009,
+                &TimingSegments {
+                    bpms,
+                    stops,
+                    delays,
+                    warps,
+                    ..TimingSegments::default()
+                },
+                &row_to_beat,
+            );
+            let notes = (0..NOTES)
+                .map(|index| {
+                    let beat = index as f32 * 0.5;
+                    let mut note = Note {
+                        beat,
+                        quantization_idx: 0,
+                        column: index % 4,
+                        note_type: NoteType::Tap,
+                        row_index: beat_to_note_row(beat).max(0) as usize,
+                        result: None,
+                        early_result: None,
+                        hold: None,
+                        mine_result: None,
+                        is_fake: false,
+                        can_be_judged: true,
+                    };
+                    if index % 16 == 0 {
+                        let end_beat = beat + 3.0;
+                        note.note_type = NoteType::Hold;
+                        note.hold = Some(HoldData {
+                            end_row_index: beat_to_note_row(end_beat).max(0) as usize,
+                            end_beat,
+                            result: None,
+                            life: 1.0,
+                            let_go_started_at: None,
+                            let_go_starting_life: 1.0,
+                            last_held_row_index: note.row_index,
+                            last_held_beat: beat,
+                        });
+                    }
+                    note
+                })
+                .collect::<Vec<_>>();
+            let note_times_ns = notes
+                .iter()
+                .map(|note| timing.get_time_for_beat_ns(note.beat))
+                .collect();
+            let hold_end_times_ns = notes
+                .iter()
+                .map(|note| {
+                    note.hold
+                        .as_ref()
+                        .map(|hold| timing.get_time_for_beat_ns(hold.end_beat))
+                })
+                .collect();
+            Self {
+                timing,
+                notes,
+                note_times_ns,
+                hold_end_times_ns,
+            }
+        }
+    }
+
+    impl CmodTimingBench {
+        pub fn old_frame(&self, frame: usize) -> CmodTimingBenchFrame {
+            self.frame(frame, false)
+        }
+
+        pub fn new_frame(&self, frame: usize) -> CmodTimingBenchFrame {
+            self.frame(frame, true)
+        }
+
+        fn frame(&self, frame: usize, cached: bool) -> CmodTimingBenchFrame {
+            let start = (frame * 3) % (self.notes.len() - VISIBLE_NOTES);
+            let current_time_ns = self.note_times_ns[start].saturating_sub(125_000_000);
+            let visible_beat = self.notes[start].beat - 0.25;
+            let travel = scroll_travel(ScrollTravelRequest {
+                timing: &self.timing,
+                accel: AccelYParams::default(),
+                scroll_speed: ScrollSpeedSetting::CMod(725.0),
+                current_time_ns,
+                visible_beat,
+                search_beat: visible_beat,
+                scroll_reference_bpm: 120.0,
+                music_rate: 1.15,
+                edit_beat_spacing: false,
+                draw_distance_after_targets: 720.0,
+                draw_distance_before_targets: 720.0,
+                field_zoom: 1.0,
+                elapsed_screen_s: frame as f32 / 120.0,
+                effect_height: 640.0,
+                screen_height: 720.0,
+                note_count_stats: &[],
+                arrow_effect_time_s: 0.0,
+                lane_tipsy: 0.0,
+                lane_move_y: &[],
+            });
+            let mut output = CmodTimingBenchFrame::default();
+            for index in start..start + VISIBLE_NOTES {
+                let note = &self.notes[index];
+                let head = if cached {
+                    travel.raw_note_cached(note, false, Some(self.note_times_ns[index]))
+                } else {
+                    travel.raw_note(note, false)
+                };
+                output.checksum = output.checksum.rotate_left(7) ^ u64::from(head.to_bits());
+                output.samples += 1;
+                if note.hold.is_some() {
+                    let tail = if cached {
+                        travel.raw_note_cached(note, true, self.hold_end_times_ns[index])
+                    } else {
+                        travel.raw_note(note, true)
+                    };
+                    output.checksum = output.checksum.rotate_left(7) ^ u64::from(tail.to_bits());
+                    output.samples += 1;
+                }
+            }
+            output
+        }
+    }
+}
+
+#[cfg(feature = "bench-support")]
+pub use timing_bench::{CmodTimingBench, CmodTimingBenchFrame};
+
 #[cfg(test)]
 mod tests {
     use super::{
@@ -827,7 +1031,8 @@ mod tests {
     use deadsync_rules::note::{HoldData, Note};
     use deadsync_rules::scroll::ScrollSpeedSetting;
     use deadsync_rules::timing::{
-        ScrollSegment, SpeedSegment, SpeedUnit, TimingData, TimingSegments,
+        DelaySegment, ScrollSegment, SpeedSegment, SpeedUnit, StopSegment, TimingData,
+        TimingSegments, WarpSegment,
     };
     use std::cell::Cell;
     use std::sync::Arc;
@@ -1480,6 +1685,59 @@ mod tests {
         assert_near(displayed.raw_beat(5.0), 16.0);
         assert_near(edit.raw_beat(5.0), 64.0);
         assert_near(edit.adjusted(edit.raw_beat(5.0)), 128.0);
+    }
+
+    #[test]
+    fn cached_cmod_note_times_match_timing_queries_for_taps_and_hold_tails() {
+        let timing = TimingData::from_segments(
+            0.037,
+            -0.011,
+            &TimingSegments {
+                bpms: vec![(0.0, 120.0), (4.0, 173.0), (9.0, 91.0)],
+                stops: vec![StopSegment {
+                    beat: 5.0,
+                    duration: 0.125,
+                }],
+                delays: vec![DelaySegment {
+                    beat: 7.0,
+                    duration: 0.075,
+                }],
+                warps: vec![WarpSegment {
+                    beat: 10.0,
+                    length: 1.0,
+                }],
+                ..TimingSegments::default()
+            },
+            &[],
+        );
+        let travel = scroll_travel(request(&timing, ScrollSpeedSetting::CMod(725.0), 3.0));
+        let tap = note(8.0);
+        let held = hold(6.0, 13.0);
+
+        for (note, use_hold_end) in [(&tap, false), (&held, false), (&held, true)] {
+            let beat = if use_hold_end {
+                note.hold.as_ref().expect("hold fixture").end_beat
+            } else {
+                note.beat
+            };
+            let cached_time_ns = timing.get_time_for_beat_ns(beat);
+            assert_eq!(
+                travel
+                    .raw_note_cached(note, use_hold_end, Some(cached_time_ns))
+                    .to_bits(),
+                travel.raw_note(note, use_hold_end).to_bits(),
+            );
+            assert_eq!(
+                travel.raw_note_cached(note, use_hold_end, None).to_bits(),
+                travel.raw_note(note, use_hold_end).to_bits(),
+            );
+        }
+
+        let xmod = scroll_travel(request(&timing, ScrollSpeedSetting::XMod(2.0), 3.0));
+        assert_eq!(
+            xmod.raw_note_cached(&tap, false, Some(i64::MAX)).to_bits(),
+            xmod.raw_note(&tap, false).to_bits(),
+        );
     }
 
     #[test]

@@ -28,6 +28,11 @@ harness = false
 required-features = ["bench-support"]
 
 [[bench]]
+name = "pending_mine_batch"
+harness = false
+required-features = ["bench-support"]
+
+[[bench]]
 name = "song_lua_window_preprocess"
 harness = false
 required-features = ["bench-support"]

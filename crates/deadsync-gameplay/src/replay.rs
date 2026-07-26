@@ -325,6 +325,7 @@ pub struct GameplayVisibleTimingState {
     pub current_music_time_ns: [SongTimeNs; MAX_PLAYERS],
     pub current_music_time: [f32; MAX_PLAYERS],
     pub current_beat: [f32; MAX_PLAYERS],
+    pub notefield_search_beat: [f32; MAX_PLAYERS],
 }
 
 impl Default for GameplayVisibleTimingState {
@@ -335,6 +336,7 @@ impl Default for GameplayVisibleTimingState {
             current_music_time_ns: [0; MAX_PLAYERS],
             current_music_time: [0.0; MAX_PLAYERS],
             current_beat: [0.0; MAX_PLAYERS],
+            notefield_search_beat: [0.0; MAX_PLAYERS],
         }
     }
 }

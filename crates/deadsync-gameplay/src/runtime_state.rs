@@ -203,6 +203,7 @@ pub struct GameplayMineScanState {
     pub mine_note_ix: [Vec<usize>; MAX_PLAYERS],
     pub mine_note_time_ns: [Vec<SongTimeNs>; MAX_PLAYERS],
     pub next_mine_ix_cursor: [usize; MAX_PLAYERS],
+    /// Frame batch whose peak capacity is retained until gameplay teardown.
     pub pending_mine_hit_indices: Vec<usize>,
 }
 
