@@ -968,6 +968,7 @@ where
                 init_beat_info.bpm,
                 song_time_ns_from_seconds(init_music_time),
                 init_beat,
+                init_beat_info.bpm,
                 init_music_time,
             ),
             display_clock: GameplayDisplayClockState::new(song_time_ns_from_seconds(

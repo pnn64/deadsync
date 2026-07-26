@@ -628,6 +628,10 @@ pub(crate) fn compose_frame(
             .frame_features
             .column_cues
             .then(|| state.column_cues(player_idx)),
+        column_cue_cursor: options
+            .frame_features
+            .column_cues
+            .then(|| state.column_cue_cursor(player_idx)),
         crossover_cues: options
             .frame_features
             .crossover_cues
@@ -739,10 +743,9 @@ pub(crate) fn compose_frame(
         text_label: cached_error_bar_text_label,
     };
 
-    let display_beat = request.visual.current_display_beat;
     let counter_frame = options.measure_counter.map(|_| CounterHudFrame {
         segments: state.measure_counter_segments(player_idx),
-        current_bpm: state.timing().get_bpm_for_beat(display_beat),
+        current_bpm: state.current_bpm_display(),
         font: mc_font_name,
         counter_text: cached_zmod_measure_counter_text,
         timer_text: zmod_run_timer_fmt,

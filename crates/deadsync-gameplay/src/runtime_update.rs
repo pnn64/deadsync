@@ -591,6 +591,11 @@ where
     }
 
     #[inline(always)]
+    pub const fn current_bpm_display(&self) -> f32 {
+        self.clock.song_position.current_bpm_display
+    }
+
+    #[inline(always)]
     pub const fn current_music_time_display(&self) -> f32 {
         self.clock.song_position.current_music_time_display
     }
@@ -937,14 +942,20 @@ where
         current_music_time_display: f32,
     ) {
         let current_bpm = self.timing_runtime.timing.get_bpm_for_beat(current_beat);
+        let current_bpm_display = self
+            .timing_runtime
+            .timing
+            .get_bpm_for_beat(current_beat_display);
         self.clock.song_position.set_music_position(
             current_beat,
             current_bpm,
             current_music_time_ns,
         );
-        self.clock
-            .song_position
-            .set_display_position(current_beat_display, current_music_time_display);
+        self.clock.song_position.set_display_position(
+            current_beat_display,
+            current_bpm_display,
+            current_music_time_display,
+        );
     }
 
     pub fn stream_segments_for_results(&self, player: usize) -> Vec<StreamSegment> {
@@ -1315,6 +1326,11 @@ where
     #[inline(always)]
     pub fn crossover_cues(&self, player: usize) -> &[ColumnCue] {
         self.display.cue_runtime.crossover_cues(player)
+    }
+
+    #[inline(always)]
+    pub fn column_cue_cursor(&self, player: usize) -> usize {
+        self.display.cue_runtime.column_cue_cursor(player)
     }
 
     #[inline(always)]
@@ -2992,10 +3008,12 @@ where
             .song_info(&self.timing_runtime.timing, music_time_ns);
         self.clock.song_position.current_beat = beat_info.beat;
         self.clock.song_position.current_bpm = beat_info.bpm;
-        self.clock.song_position.current_beat_display = self
+        let display_info = self
             .timing_runtime
             .time_to_beat_caches
-            .display_beat(&self.timing_runtime.timing, display_time_ns);
+            .display_info(&self.timing_runtime.timing, display_time_ns);
+        self.clock.song_position.current_beat_display = display_info.beat;
+        self.clock.song_position.current_bpm_display = display_info.bpm;
         self.display
             .beat_phase
             .set(beat_info.is_in_freeze, beat_info.is_in_delay);
@@ -3022,6 +3040,9 @@ where
                     visible_time_ns,
                 ),
             );
+            self.display
+                .cue_runtime
+                .update_column_cue_cursor(player, visible_time_seconds);
             self.display
                 .cue_runtime
                 .update_crossover_cue_anchors(player, visible_time_seconds);

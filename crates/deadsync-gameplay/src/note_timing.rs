@@ -446,10 +446,13 @@ impl GameplayTimeToBeatCaches {
     }
 
     #[inline(always)]
+    pub fn display_info(&mut self, timing: &TimingData, time_ns: SongTimeNs) -> BeatInfo {
+        timing.get_beat_info_from_time_ns_cached(time_ns, &mut self.display)
+    }
+
+    #[inline(always)]
     pub fn display_beat(&mut self, timing: &TimingData, time_ns: SongTimeNs) -> f32 {
-        timing
-            .get_beat_info_from_time_ns_cached(time_ns, &mut self.display)
-            .beat
+        self.display_info(timing, time_ns).beat
     }
 
     #[inline(always)]

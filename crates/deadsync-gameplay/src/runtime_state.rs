@@ -330,6 +330,9 @@ impl GameplayHoldRuntimeState {
 pub struct GameplayCueRuntimeState {
     measure_counter_segments: [Vec<StreamSegment>; MAX_PLAYERS],
     column_cues: [Vec<ColumnCue>; MAX_PLAYERS],
+    // Number of leading regular cues whose start has been crossed. Rendering
+    // reuses this cursor instead of repeating a binary search every frame.
+    column_cue_cursor: [usize; MAX_PLAYERS],
     crossover_cues: [Vec<ColumnCue>; MAX_PLAYERS],
     // Per crossover cue: None = not yet reached (or rewound before its start),
     // Some(t) = the fade-in anchor time. During normal play this is the cue's own
@@ -347,6 +350,7 @@ impl Default for GameplayCueRuntimeState {
         Self {
             measure_counter_segments: std::array::from_fn(|_| Vec::new()),
             column_cues: std::array::from_fn(|_| Vec::new()),
+            column_cue_cursor: [0; MAX_PLAYERS],
             crossover_cues: std::array::from_fn(|_| Vec::new()),
             crossover_cue_entry: std::array::from_fn(|_| Vec::new()),
             crossover_cue_cursor: [0; MAX_PLAYERS],
@@ -363,6 +367,7 @@ impl GameplayCueRuntimeState {
         Self {
             measure_counter_segments,
             column_cues,
+            column_cue_cursor: [0; MAX_PLAYERS],
             crossover_cues,
             crossover_cue_entry: std::array::from_fn(|_| Vec::new()),
             crossover_cue_cursor: [0; MAX_PLAYERS],
@@ -379,6 +384,14 @@ impl GameplayCueRuntimeState {
     #[inline(always)]
     pub fn column_cues(&self, player: usize) -> &[ColumnCue] {
         self.column_cues.get(player).map_or(&[], Vec::as_slice)
+    }
+
+    #[inline(always)]
+    pub fn column_cue_cursor(&self, player: usize) -> usize {
+        self.column_cue_cursor
+            .get(player)
+            .copied()
+            .unwrap_or_default()
     }
 
     #[inline(always)]
@@ -412,6 +425,15 @@ impl GameplayCueRuntimeState {
         self.crossover_cue_entry
             .get(player)
             .and_then(|entry| entry.get(index).copied().flatten())
+    }
+
+    #[inline(always)]
+    pub fn update_column_cue_cursor(&mut self, player: usize, current_time: f32) {
+        let Some(cues) = self.column_cues.get(player) else {
+            return;
+        };
+        self.column_cue_cursor[player] =
+            column_cue_cursor_from_hint(cues, current_time, self.column_cue_cursor[player]);
     }
 
     // Advances the per-player crossover cue fade-in anchors to `current_time`
@@ -460,6 +482,7 @@ impl GameplayCueRuntimeState {
     pub fn set_column_cues_for_benchmark(&mut self, player: usize, cues: Vec<ColumnCue>) {
         if let Some(slot) = self.column_cues.get_mut(player) {
             *slot = cues;
+            self.column_cue_cursor[player] = 0;
         }
     }
 
@@ -471,6 +494,7 @@ impl GameplayCueRuntimeState {
         for cues in &mut self.column_cues {
             cues.clear();
         }
+        self.column_cue_cursor = [0; MAX_PLAYERS];
         for cues in &mut self.crossover_cues {
             cues.clear();
         }

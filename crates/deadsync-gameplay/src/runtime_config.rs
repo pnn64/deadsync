@@ -642,6 +642,7 @@ pub struct GameplaySongPositionState {
     pub current_bpm: f32,
     pub current_music_time_ns: SongTimeNs,
     pub current_beat_display: f32,
+    pub current_bpm_display: f32,
     pub current_music_time_display: f32,
 }
 
@@ -652,6 +653,7 @@ impl GameplaySongPositionState {
         current_bpm: f32,
         current_music_time_ns: SongTimeNs,
         current_beat_display: f32,
+        current_bpm_display: f32,
         current_music_time_display: f32,
     ) -> Self {
         Self {
@@ -659,6 +661,7 @@ impl GameplaySongPositionState {
             current_bpm,
             current_music_time_ns,
             current_beat_display,
+            current_bpm_display,
             current_music_time_display,
         }
     }
@@ -679,9 +682,11 @@ impl GameplaySongPositionState {
     pub fn set_display_position(
         &mut self,
         current_beat_display: f32,
+        current_bpm_display: f32,
         current_music_time_display: f32,
     ) {
         self.current_beat_display = current_beat_display;
+        self.current_bpm_display = current_bpm_display;
         self.current_music_time_display = current_music_time_display;
     }
 }

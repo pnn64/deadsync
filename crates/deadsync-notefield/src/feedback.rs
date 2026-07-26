@@ -224,6 +224,9 @@ pub(crate) fn column_cue_alpha_anchored(
 pub(crate) struct ColumnFeedbackRequest<'a> {
     pub style: NotefieldStyle,
     pub column_cues: Option<&'a [ColumnCue]>,
+    // The runtime advances this cursor with the visible playhead so rendering
+    // can select the latest regular cue without another binary search.
+    pub column_cue_cursor: Option<usize>,
     pub crossover_cues: Option<&'a [ColumnCue]>,
     // Per-cue fade-in anchor times parallel to `crossover_cues`; None entries (or
     // a missing slice) fall back to each cue's own start (natural fade-in).
@@ -306,7 +309,12 @@ fn compose_column_cue(
     // actors.
     let active_range = match kind {
         ColumnCueKind::Regular => {
-            let end = cues.partition_point(|cue| cue.start_time <= request.current_music_time);
+            let end = request
+                .column_cue_cursor
+                .unwrap_or_else(|| {
+                    cues.partition_point(|cue| cue.start_time <= request.current_music_time)
+                })
+                .min(cues.len());
             match end.checked_sub(1) {
                 Some(begin) => begin..end,
                 None => return,
@@ -873,6 +881,7 @@ mod tests {
         ColumnFeedbackRequest {
             style: style(),
             column_cues,
+            column_cue_cursor: None,
             crossover_cues,
             crossover_cue_entries: None,
             crossover_cue_cursor: None,
@@ -954,8 +963,10 @@ mod tests {
         }];
         let mut actors = Vec::new();
         let mut hud = Vec::new();
+        let mut request = request(Some(&cues), None, None);
+        request.column_cue_cursor = Some(1);
 
-        compose_column_feedback(&mut actors, &mut hud, request(Some(&cues), None, None));
+        compose_column_feedback(&mut actors, &mut hud, request);
 
         assert_eq!(actors.len(), 2);
         assert_quad(

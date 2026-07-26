@@ -31,6 +31,8 @@ pub struct NotefieldLaneFeedback<'a> {
 pub struct NotefieldFeedbackFrameView<'a> {
     /// Cue columns use chart-global column indices.
     pub column_cues: Option<&'a [ColumnCue]>,
+    /// First regular column cue after the current music time.
+    pub column_cue_cursor: Option<usize>,
     /// Crossover cue columns use chart-global column indices.
     pub crossover_cues: Option<&'a [ColumnCue]>,
     /// Per-cue fade-in anchor times parallel to `crossover_cues`.
@@ -84,6 +86,7 @@ pub(crate) fn compose_notefield_feedback<S, F>(
         ColumnFeedbackRequest {
             style: request.style,
             column_cues: frame.column_cues,
+            column_cue_cursor: frame.column_cue_cursor,
             crossover_cues: frame.crossover_cues,
             crossover_cue_entries: frame.crossover_cue_entries,
             crossover_cue_cursor: frame.crossover_cue_cursor,
@@ -1057,6 +1060,7 @@ mod tests {
         let mines = [mine(), mine()];
         let frame = NotefieldFeedbackFrameView {
             column_cues: None,
+            column_cue_cursor: None,
             crossover_cues: None,
             crossover_cue_entries: None,
             crossover_cue_cursor: None,
@@ -1162,6 +1166,7 @@ mod tests {
         }];
         let frame = NotefieldFeedbackFrameView {
             column_cues: Some(&cues),
+            column_cue_cursor: None,
             crossover_cues: None,
             crossover_cue_entries: None,
             crossover_cue_cursor: None,

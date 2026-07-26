@@ -6,18 +6,18 @@ use crate::{
     PreparedNotefieldNotes, TornadoBounds, VisualEffectParams, appearance_note_alpha_glow_cached,
     compose_hold_body_caps, compose_measure_lines, compose_mine_layers, compose_note_layer,
     compose_notefield_feedback, fill_gameplay_lane_effects, fill_static_note_x_offsets,
-    for_each_visible_hold_index, for_each_visible_note_index, hold_entry_head_beat,
-    hold_entry_plan, hold_overlaps_visible_window, hold_parts_for_note_type,
-    lane_note_transform_cache, mine_hides_after_resolution, mine_part, note_appearance_cache,
-    note_world_z_for_bumpy, note_x_offset as canonical_note_x_offset, notefield_view_proj,
-    offset_center, scale_sprite_to_arrow, share_actor_range, song_lua_note_model_draw,
-    tap_part_for_note_type, tap_replacement_head, translated_uv_rect,
-    visual_arrow_effect_zoom_cached, visual_hold_body_needs_z_buffer,
-    visual_note_rotation_z_cached, visual_use_legacy_hold_sprites,
+    for_each_lane_index, hold_entry_head_beat, hold_entry_plan, hold_overlaps_visible_window,
+    hold_parts_for_note_type, lane_hold_window_bounds_by_note_row_from_cursor,
+    lane_note_transform_cache, lane_window_bounds_by_note_row_from_cursor,
+    mine_hides_after_resolution, mine_part, note_appearance_cache, note_world_z_for_bumpy,
+    note_x_offset as canonical_note_x_offset, notefield_view_proj, offset_center,
+    scale_sprite_to_arrow, share_actor_range, song_lua_note_model_draw, tap_part_for_note_type,
+    tap_replacement_head, translated_uv_rect, visual_arrow_effect_zoom_cached,
+    visual_hold_body_needs_z_buffer, visual_note_rotation_z_cached, visual_use_legacy_hold_sprites,
 };
 use deadlib_present::actors::{Actor, SpriteSource};
 use deadlib_render::BlendMode;
-use deadsync_core::note::NoteType;
+use deadsync_core::{input::MAX_COLS, note::NoteType};
 use deadsync_gameplay::{
     AppearanceEffects, CompletedRowVisibility, VisualEffects, hold_head_render_flags,
     song_lua_note_hidden,
@@ -272,6 +272,35 @@ fn compose_field_contents<S, F>(
         &frame.feedback,
         sprite_source,
     );
+
+    let mut visible_note_bounds = [(0, 0); MAX_COLS];
+    let mut visible_hold_bounds = [(0, 0); MAX_COLS];
+    for local_col in 0..num_cols {
+        let col = col_start + local_col;
+        let note_indices = request.chart.lane_note_row_indices[col];
+        let hold_indices = request.chart.lane_hold_indices[col];
+        visible_note_bounds[local_col] = match visible_row_range {
+            Some(range) => lane_window_bounds_by_note_row_from_cursor(
+                request.chart.note_itg_rows,
+                note_indices,
+                Some(range),
+                model_cache.note_window_cursor(local_col),
+            )
+            .unwrap_or_default(),
+            None => (0, note_indices.len()),
+        };
+        visible_hold_bounds[local_col] = match visible_row_range {
+            Some(range) => lane_hold_window_bounds_by_note_row_from_cursor(
+                request.chart.notes,
+                request.chart.note_itg_rows,
+                hold_indices,
+                Some(range),
+                model_cache.hold_window_cursor(local_col),
+            )
+            .unwrap_or_default(),
+            None => (0, hold_indices.len()),
+        };
+    }
 
     let mut render_hold = |note_index: usize| {
         let note = &request.chart.notes[note_index];
@@ -662,11 +691,9 @@ fn compose_field_contents<S, F>(
 
     for local_col in 0..num_cols {
         let col = col_start + local_col;
-        for_each_visible_hold_index(
+        for_each_lane_index(
             request.chart.lane_hold_indices[col],
-            request.chart.notes,
-            request.chart.note_itg_rows,
-            visible_row_range,
+            visible_hold_bounds[local_col],
             &mut render_hold,
         );
     }
@@ -692,7 +719,7 @@ fn compose_field_contents<S, F>(
         prepared,
         note_inputs,
         frame.completed_rows,
-        visible_row_range,
+        &visible_note_bounds[..num_cols],
         &lane_effect_params[..num_cols],
         &lane_transform_caches[..num_cols],
         &lane_offsets[..num_cols],
@@ -713,7 +740,7 @@ fn compose_visible_notes<S, F>(
     prepared: &PreparedNotefield<'_, S>,
     notes: &PreparedNotefieldNotes<'_, S>,
     completed_rows: CompletedRowVisibility<'_>,
-    visible_row_range: Option<(i32, i32)>,
+    visible_note_bounds: &[(usize, usize)],
     lane_effect_params: &[VisualEffectParams],
     lane_transform_caches: &[LaneNoteTransformCache],
     lane_offsets: &[f32],
@@ -762,10 +789,9 @@ fn compose_visible_notes<S, F>(
         let receptor_y = prepared.field.column_receptor_ys[local_col];
         let lane_offset = lane_offsets[local_col];
         let effect_params = lane_effect_params[local_col];
-        for_each_visible_note_index(
+        for_each_lane_index(
             request.chart.lane_note_row_indices[col],
-            request.chart.note_itg_rows,
-            visible_row_range,
+            visible_note_bounds[local_col],
             |note_index| {
                 let note = &request.chart.notes[note_index];
                 if matches!(note.note_type, NoteType::Hold | NoteType::Roll)

@@ -1,5 +1,7 @@
+use crate::notes::LaneWindowCursor;
 use deadlib_present::actors::{Actor, SizeSpec};
 use deadlib_render::{BlendMode, TMeshCacheKey, TexturedMeshVertex};
+use deadsync_core::input::MAX_COLS;
 use deadsync_noteskin::{
     ModelDrawState, ModelMesh, ModelTweenCursor, NoteskinSlot, model_vertex_for_sprite,
 };
@@ -70,6 +72,8 @@ pub struct ModelMeshCache {
     collect_hit_stats: bool,
     stats: ModelMeshCacheStats,
     frame_stats: NoteskinFrameCacheStats,
+    note_window_cursors: [LaneWindowCursor; MAX_COLS],
+    hold_window_cursors: [LaneWindowCursor; MAX_COLS],
 }
 
 impl Default for ModelMeshCache {
@@ -89,6 +93,8 @@ impl ModelMeshCache {
             collect_hit_stats: false,
             stats: ModelMeshCacheStats::default(),
             frame_stats: NoteskinFrameCacheStats::default(),
+            note_window_cursors: [LaneWindowCursor::default(); MAX_COLS],
+            hold_window_cursors: [LaneWindowCursor::default(); MAX_COLS],
         }
     }
 
@@ -120,6 +126,16 @@ impl ModelMeshCache {
     #[inline(always)]
     pub fn begin_frame(&mut self) {
         self.frame = self.frame.wrapping_add(1).max(1);
+    }
+
+    #[inline(always)]
+    pub(crate) fn note_window_cursor(&mut self, lane: usize) -> &mut LaneWindowCursor {
+        &mut self.note_window_cursors[lane]
+    }
+
+    #[inline(always)]
+    pub(crate) fn hold_window_cursor(&mut self, lane: usize) -> &mut LaneWindowCursor {
+        &mut self.hold_window_cursors[lane]
     }
 
     #[inline(always)]

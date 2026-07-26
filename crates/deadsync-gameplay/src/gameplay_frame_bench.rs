@@ -27,6 +27,44 @@ pub struct CrossoverCueCursorBench {
     cursor: usize,
 }
 
+#[derive(Clone)]
+pub struct RegularCueCursorBench {
+    cues: Vec<ColumnCue>,
+    cursor: usize,
+}
+
+impl Default for RegularCueCursorBench {
+    fn default() -> Self {
+        Self {
+            cues: (0..8_192)
+                .map(|index| ColumnCue {
+                    start_time: index as f32 * 0.125,
+                    duration: 0.2,
+                    columns: Vec::new(),
+                })
+                .collect(),
+            cursor: 0,
+        }
+    }
+}
+
+impl RegularCueCursorBench {
+    pub fn old_frame(&mut self, frame: usize) -> GameplayFrameHotPathBenchOutput {
+        let current_time = frame as f32 / 120.0;
+        let end = self
+            .cues
+            .partition_point(|cue| cue.start_time <= current_time);
+        self.cursor = end;
+        record_crossover_cues(self.cursor, end.saturating_sub(1)..end)
+    }
+
+    pub fn new_frame(&mut self, frame: usize) -> GameplayFrameHotPathBenchOutput {
+        let current_time = frame as f32 / 120.0;
+        self.cursor = column_cue_cursor_from_hint(&self.cues, current_time, self.cursor);
+        record_crossover_cues(self.cursor, self.cursor.saturating_sub(1)..self.cursor)
+    }
+}
+
 impl Default for CrossoverCueCursorBench {
     fn default() -> Self {
         Self {

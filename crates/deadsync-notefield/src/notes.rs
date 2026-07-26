@@ -682,6 +682,7 @@ pub(crate) fn note_itg_row(note: &Note) -> i32 {
     beat_to_note_row(note.beat)
 }
 
+#[cfg(any(test, feature = "bench-support"))]
 pub(crate) fn lane_window_bounds_by_note_row(
     note_itg_rows: &[i32],
     indices: &[usize],
@@ -696,6 +697,56 @@ pub(crate) fn lane_window_bounds_by_note_row(
         indices.partition_point(|&note_index| note_itg_rows[note_index] < low),
         indices.partition_point(|&note_index| note_itg_rows[note_index] <= high),
     ))
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) struct LaneWindowCursor {
+    pub start: usize,
+    pub end: usize,
+}
+
+#[inline(always)]
+fn partition_point_from_hint<T>(
+    values: &[T],
+    hint: usize,
+    mut predicate: impl FnMut(&T) -> bool,
+) -> usize {
+    let cursor = hint.min(values.len());
+    if cursor < values.len() && predicate(&values[cursor]) {
+        let next = cursor + 1;
+        if next == values.len() || !predicate(&values[next]) {
+            return next;
+        }
+    } else if cursor > 0 && !predicate(&values[cursor - 1]) {
+        let previous = cursor - 1;
+        if previous == 0 || predicate(&values[previous - 1]) {
+            return previous;
+        }
+    } else {
+        return cursor;
+    }
+    values.partition_point(predicate)
+}
+
+pub(crate) fn lane_window_bounds_by_note_row_from_cursor(
+    note_itg_rows: &[i32],
+    indices: &[usize],
+    range: Option<(i32, i32)>,
+    cursor: &mut LaneWindowCursor,
+) -> Option<(usize, usize)> {
+    let (low, high) = range?;
+    if high < 0 {
+        *cursor = LaneWindowCursor::default();
+        return Some((0, 0));
+    }
+    let low = low.max(0);
+    cursor.start = partition_point_from_hint(indices, cursor.start, |&note_index| {
+        note_itg_rows[note_index] < low
+    });
+    cursor.end = partition_point_from_hint(indices, cursor.end, |&note_index| {
+        note_itg_rows[note_index] <= high
+    });
+    Some((cursor.start, cursor.end))
 }
 
 #[cfg(any(test, feature = "bench-support"))]
@@ -715,6 +766,7 @@ pub(crate) fn lane_window_bounds_by_note_row_legacy(
     ))
 }
 
+#[cfg(any(test, feature = "bench-support"))]
 pub(crate) fn lane_hold_window_bounds_by_note_row(
     notes: &[Note],
     note_itg_rows: &[i32],
@@ -740,6 +792,47 @@ pub(crate) fn lane_hold_window_bounds_by_note_row(
     Some((start, end))
 }
 
+pub(crate) fn lane_hold_window_bounds_by_note_row_from_cursor(
+    notes: &[Note],
+    note_itg_rows: &[i32],
+    indices: &[usize],
+    range: Option<(i32, i32)>,
+    cursor: &mut LaneWindowCursor,
+) -> Option<(usize, usize)> {
+    let (low, _) = range?;
+    let (mut start, end) =
+        lane_window_bounds_by_note_row_from_cursor(note_itg_rows, indices, range, cursor)?;
+    let low = low.max(0);
+    while start > 0 {
+        let prev_note_index = indices[start - 1];
+        let prev_end_row = notes[prev_note_index]
+            .hold
+            .as_ref()
+            .map_or(note_itg_row(&notes[prev_note_index]), |hold| {
+                beat_to_note_row(hold.end_beat)
+            });
+        if prev_end_row < low {
+            break;
+        }
+        start -= 1;
+    }
+    Some((start, end))
+}
+
+#[inline(always)]
+pub(crate) fn for_each_lane_index<F: FnMut(usize)>(
+    indices: &[usize],
+    bounds: (usize, usize),
+    mut f: F,
+) {
+    let start = bounds.0.min(indices.len());
+    let end = bounds.1.min(indices.len()).max(start);
+    for &index in &indices[start..end] {
+        f(index);
+    }
+}
+
+#[cfg(any(test, feature = "bench-support"))]
 pub(crate) fn for_each_visible_note_index<F: FnMut(usize)>(
     indices: &[usize],
     note_itg_rows: &[i32],
@@ -785,6 +878,7 @@ pub(crate) fn for_each_visible_note_index_legacy<F: FnMut(usize)>(
     }
 }
 
+#[cfg(test)]
 pub(crate) fn for_each_visible_hold_index<F: FnMut(usize)>(
     indices: &[usize],
     notes: &[Note],
@@ -914,7 +1008,9 @@ use crate::style::MAX_NOTES_AFTER;
 #[cfg(feature = "bench-support")]
 mod timing_bench {
     use super::{
-        MAX_NOTES_AFTER, ScrollTravelRequest, find_first_displayed_beat, note_count_at,
+        LaneWindowCursor, MAX_NOTES_AFTER, ScrollTravelRequest, find_first_displayed_beat,
+        lane_hold_window_bounds_by_note_row, lane_hold_window_bounds_by_note_row_from_cursor,
+        lane_window_bounds_by_note_row, lane_window_bounds_by_note_row_from_cursor, note_count_at,
         scroll_travel,
     };
     use crate::AccelYParams;
@@ -934,6 +1030,126 @@ mod timing_bench {
     pub struct CmodTimingBenchFrame {
         pub checksum: u64,
         pub samples: usize,
+    }
+
+    #[derive(Clone)]
+    pub struct VisibleLaneCursorBench {
+        notes: Vec<Note>,
+        note_itg_rows: Vec<i32>,
+        lanes: [Vec<usize>; 4],
+        note_cursors: [LaneWindowCursor; 4],
+        hold_cursors: [LaneWindowCursor; 4],
+    }
+
+    impl Default for VisibleLaneCursorBench {
+        fn default() -> Self {
+            let mut notes = Vec::with_capacity(8_192 * 4);
+            let mut note_itg_rows = Vec::with_capacity(8_192 * 4);
+            let mut lanes: [Vec<usize>; 4] = std::array::from_fn(|_| Vec::with_capacity(8_192));
+            for row in 0..8_192 {
+                for (lane, indices) in lanes.iter_mut().enumerate() {
+                    let note_index = notes.len();
+                    let note_row = row as i32 * 3 + lane as i32;
+                    let beat = note_row_to_beat(note_row);
+                    let end_beat = beat + 1.0 + ((row + lane) % 8) as f32 * 0.25;
+                    indices.push(note_index);
+                    note_itg_rows.push(note_row);
+                    notes.push(Note {
+                        beat,
+                        quantization_idx: 0,
+                        column: lane,
+                        note_type: NoteType::Hold,
+                        row_index: note_row.max(0) as usize,
+                        result: None,
+                        early_result: None,
+                        hold: Some(HoldData {
+                            end_row_index: beat_to_note_row(end_beat).max(0) as usize,
+                            end_beat,
+                            result: None,
+                            life: 1.0,
+                            let_go_started_at: None,
+                            let_go_starting_life: 1.0,
+                            last_held_row_index: note_row.max(0) as usize,
+                            last_held_beat: beat,
+                        }),
+                        mine_result: None,
+                        is_fake: false,
+                        can_be_judged: true,
+                    });
+                }
+            }
+            Self {
+                notes,
+                note_itg_rows,
+                lanes,
+                note_cursors: [LaneWindowCursor::default(); 4],
+                hold_cursors: [LaneWindowCursor::default(); 4],
+            }
+        }
+    }
+
+    impl VisibleLaneCursorBench {
+        pub fn old_frame(&self, frame: usize) -> CmodTimingBenchFrame {
+            let range = self.range(frame);
+            let mut output = CmodTimingBenchFrame::default();
+            for indices in &self.lanes {
+                let note_bounds =
+                    lane_window_bounds_by_note_row(&self.note_itg_rows, indices, Some(range))
+                        .expect("benchmark range");
+                record_lane_bounds(&mut output, note_bounds);
+                let hold_bounds = lane_hold_window_bounds_by_note_row(
+                    &self.notes,
+                    &self.note_itg_rows,
+                    indices,
+                    Some(range),
+                )
+                .expect("benchmark range");
+                record_lane_bounds(&mut output, hold_bounds);
+            }
+            output
+        }
+
+        pub fn new_frame(&mut self, frame: usize) -> CmodTimingBenchFrame {
+            let range = self.range(frame);
+            let mut output = CmodTimingBenchFrame::default();
+            for lane in 0..self.lanes.len() {
+                let indices = &self.lanes[lane];
+                let note_bounds = lane_window_bounds_by_note_row_from_cursor(
+                    &self.note_itg_rows,
+                    indices,
+                    Some(range),
+                    &mut self.note_cursors[lane],
+                )
+                .expect("benchmark range");
+                record_lane_bounds(&mut output, note_bounds);
+                let hold_bounds = lane_hold_window_bounds_by_note_row_from_cursor(
+                    &self.notes,
+                    &self.note_itg_rows,
+                    indices,
+                    Some(range),
+                    &mut self.hold_cursors[lane],
+                )
+                .expect("benchmark range");
+                record_lane_bounds(&mut output, hold_bounds);
+            }
+            output
+        }
+
+        fn range(&self, frame: usize) -> (i32, i32) {
+            let low = if frame.is_multiple_of(509) {
+                ((frame * 97) % 16_000) as i32
+            } else {
+                (frame * 2) as i32
+            };
+            (low, low + 768)
+        }
+    }
+
+    #[inline(always)]
+    fn record_lane_bounds(output: &mut CmodTimingBenchFrame, (start, end): (usize, usize)) {
+        output.checksum =
+            output.checksum.rotate_left(7) ^ (start as u64).rotate_left(17) ^ end as u64;
+        output.samples += end.saturating_sub(start);
     }
 
     pub struct VisibleRangeBench {
@@ -1445,7 +1661,7 @@ mod timing_bench {
 #[cfg(feature = "bench-support")]
 pub use timing_bench::{
     CmodTimingBench, CmodTimingBenchFrame, HoldTravelReuseBench, IdentityAccelBench,
-    VisibleRangeBench, XmodTimingBench,
+    VisibleLaneCursorBench, VisibleRangeBench, XmodTimingBench,
 };
 
 #[cfg(test)]

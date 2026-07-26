@@ -1,7 +1,7 @@
 use deadsync_notefield::{
     CameraWrapBench, CommonNoteTransformBench, CueScanBench, FeedbackLaneCacheBench,
-    HoldTravelReuseBench, IdentityAccelBench, LaneVisualCacheBench, VisibleRangeBench,
-    XmodTimingBench,
+    HoldTravelReuseBench, IdentityAccelBench, LaneVisualCacheBench, VisibleLaneCursorBench,
+    VisibleRangeBench, XmodTimingBench,
 };
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::hint::black_box;
@@ -178,6 +178,27 @@ fn main() {
         },
         |frame| {
             let output = visible_range.new_frame(frame);
+            Output {
+                checksum: output.checksum,
+                samples: output.samples,
+            }
+        },
+    );
+
+    let old_lane_windows = VisibleLaneCursorBench::default();
+    let mut new_lane_windows = old_lane_windows.clone();
+    run_pair(
+        "visible lane-window cursors",
+        "8192 notes per lane, 4 tap and hold lanes during 120 Hz playback with seeks",
+        |frame| {
+            let output = old_lane_windows.old_frame(frame);
+            Output {
+                checksum: output.checksum,
+                samples: output.samples,
+            }
+        },
+        move |frame| {
+            let output = new_lane_windows.new_frame(frame);
             Output {
                 checksum: output.checksum,
                 samples: output.samples,

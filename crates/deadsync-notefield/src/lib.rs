@@ -76,7 +76,7 @@ pub use notes::ScrollTravel;
 #[doc(hidden)]
 pub use notes::{
     CmodTimingBench, CmodTimingBenchFrame, HoldTravelReuseBench, IdentityAccelBench,
-    VisibleRangeBench, XmodTimingBench,
+    VisibleLaneCursorBench, VisibleRangeBench, XmodTimingBench,
 };
 pub use noteskin_model::{
     ModelMeshCache, ModelMeshCacheStats, NoteskinFrameCacheStats, noteskin_model_actor,
@@ -123,10 +123,15 @@ pub(crate) use mini_indicator::{
     stream_segment_index_exclusive_end, zmod_broken_run_counter_text, zmod_broken_run_segment,
     zmod_measure_counter_text, zmod_run_timer_index,
 };
+#[cfg(test)]
+pub(crate) use notes::for_each_visible_hold_index;
+#[cfg(any(test, feature = "bench-support"))]
+pub(crate) use notes::for_each_visible_note_index;
 pub(crate) use notes::{
     MineLayerRequest, NoteLayerRequest, ScrollTravelRequest, compose_mine_layers,
-    compose_note_layer, for_each_visible_hold_index, for_each_visible_note_index,
-    hold_overlaps_visible_window, mine_hides_after_resolution, scroll_travel,
+    compose_note_layer, for_each_lane_index, hold_overlaps_visible_window,
+    lane_hold_window_bounds_by_note_row_from_cursor, lane_window_bounds_by_note_row_from_cursor,
+    mine_hides_after_resolution, scroll_travel,
 };
 pub(crate) use noteskin_model::noteskin_model_actor_from_draw_cached;
 pub(crate) use placement::{
@@ -3976,6 +3981,81 @@ mod tests {
                 });
                 assert_eq!(cached, legacy, "range={range:?}");
             }
+        }
+    }
+
+    #[test]
+    fn hinted_visible_note_windows_match_binary_search_across_playback_and_seeks() {
+        let note_itg_rows = (0..8_192).map(|row| row * 3).collect::<Vec<_>>();
+        let note_indices = (0..note_itg_rows.len()).collect::<Vec<_>>();
+        let mut cursor = crate::notes::LaneWindowCursor::default();
+        let ranges = (0..4_096)
+            .map(|frame| {
+                let low = frame * 2;
+                Some((low, low + 768))
+            })
+            .chain([
+                Some((18_000, 19_000)),
+                Some((300, 900)),
+                Some((-1_000, -10)),
+                Some((0, 0)),
+                None,
+                Some((2_000, 2_500)),
+            ]);
+
+        for range in ranges {
+            let expected =
+                crate::notes::lane_window_bounds_by_note_row(&note_itg_rows, &note_indices, range);
+            let actual = crate::notes::lane_window_bounds_by_note_row_from_cursor(
+                &note_itg_rows,
+                &note_indices,
+                range,
+                &mut cursor,
+            );
+            assert_eq!(actual, expected, "range={range:?}");
+        }
+    }
+
+    #[test]
+    fn hinted_visible_hold_windows_match_binary_search_across_playback_and_seeks() {
+        let notes = (0..512)
+            .map(|index| {
+                let beat = index as f32 * 0.5;
+                test_hold_at_beat(beat, beat + 1.0 + (index % 16) as f32 * 0.25)
+            })
+            .collect::<Vec<_>>();
+        let note_itg_rows = notes.iter().map(note_itg_row).collect::<Vec<_>>();
+        let hold_indices = (0..notes.len()).collect::<Vec<_>>();
+        let mut cursor = crate::notes::LaneWindowCursor::default();
+        let ranges = (0..2_048)
+            .map(|frame| {
+                let low = frame * 6;
+                Some((low, low + 768))
+            })
+            .chain([
+                Some((10_000, 11_000)),
+                Some((300, 900)),
+                Some((-1_000, -10)),
+                Some((0, 0)),
+                None,
+                Some((2_000, 2_500)),
+            ]);
+
+        for range in ranges {
+            let expected = crate::notes::lane_hold_window_bounds_by_note_row(
+                &notes,
+                &note_itg_rows,
+                &hold_indices,
+                range,
+            );
+            let actual = crate::notes::lane_hold_window_bounds_by_note_row_from_cursor(
+                &notes,
+                &note_itg_rows,
+                &hold_indices,
+                range,
+                &mut cursor,
+            );
+            assert_eq!(actual, expected, "range={range:?}");
         }
     }
 

@@ -12908,21 +12908,24 @@ mod tests {
 
     #[test]
     fn song_position_state_tracks_music_and_display_positions() {
-        let mut state = GameplaySongPositionState::new(12.0, 150.0, 1_250_000_000, 11.5, 1.2);
+        let mut state =
+            GameplaySongPositionState::new(12.0, 150.0, 1_250_000_000, 11.5, 140.0, 1.2);
 
         assert_eq!(state.current_beat, 12.0);
         assert_eq!(state.current_bpm, 150.0);
         assert_eq!(state.current_music_time_ns, 1_250_000_000);
         assert_eq!(state.current_beat_display, 11.5);
+        assert_eq!(state.current_bpm_display, 140.0);
         assert_eq!(state.current_music_time_display, 1.2);
 
         state.set_music_position(13.0, 175.0, 1_300_000_000);
-        state.set_display_position(12.75, 1.275);
+        state.set_display_position(12.75, 162.5, 1.275);
 
         assert_eq!(state.current_beat, 13.0);
         assert_eq!(state.current_bpm, 175.0);
         assert_eq!(state.current_music_time_ns, 1_300_000_000);
         assert_eq!(state.current_beat_display, 12.75);
+        assert_eq!(state.current_bpm_display, 162.5);
         assert_near(state.current_music_time_display, 1.275);
     }
 
@@ -13579,6 +13582,7 @@ mod tests {
 
     fn assert_beat_info_same(actual: BeatInfo, expected: BeatInfo) {
         assert_eq!(actual.beat.to_bits(), expected.beat.to_bits());
+        assert_eq!(actual.bpm.to_bits(), expected.bpm.to_bits());
         assert_eq!(actual.is_in_freeze, expected.is_in_freeze);
         assert_eq!(actual.is_in_delay, expected.is_in_delay);
     }
@@ -13600,9 +13604,9 @@ mod tests {
                 timing.get_beat_info_from_time_ns(time_ns),
             );
             let display_time_ns = time_ns.saturating_sub(7_000_000);
-            assert_eq!(
-                cache.display_beat(timing, display_time_ns).to_bits(),
-                timing.get_beat_for_time_ns(display_time_ns).to_bits(),
+            assert_beat_info_same(
+                cache.display_info(timing, display_time_ns),
+                timing.get_beat_info_from_time_ns(display_time_ns),
             );
             let assist_row =
                 assist_row_no_offset_for_timing(timing, global_offset_seconds, time_ns);
@@ -13885,6 +13889,7 @@ mod tests {
 
         assert_eq!(state.measure_counter_segments(0)[0].start, 1);
         assert_eq!(state.column_cues(0)[0].columns[0].column, 1);
+        assert_eq!(state.column_cue_cursor(0), 0);
         assert!(state.column_cues(MAX_PLAYERS).is_empty());
         assert!(state.crossover_cues(0).is_empty());
         assert_eq!(state.crossover_cues(1)[0].columns[0].column, 5);
@@ -13907,7 +13912,33 @@ mod tests {
         assert!(state.measure_counter_segments(0).is_empty());
         assert!(state.column_cues(0).is_empty());
         assert!(state.column_cues(1).is_empty());
+        assert_eq!(state.column_cue_cursor(0), 0);
         assert!(state.crossover_cues(1).is_empty());
+    }
+
+    #[test]
+    fn regular_cue_cursor_tracks_playback_seeks_and_rewinds() {
+        let measure_counter_segments: [Vec<StreamSegment>; MAX_PLAYERS] =
+            std::array::from_fn(|_| Vec::new());
+        let mut column_cues: [Vec<ColumnCue>; MAX_PLAYERS] = std::array::from_fn(|_| Vec::new());
+        let crossover_cues: [Vec<ColumnCue>; MAX_PLAYERS] = std::array::from_fn(|_| Vec::new());
+        column_cues[0] = [1.0, 3.0, 7.0]
+            .into_iter()
+            .map(|start_time| ColumnCue {
+                start_time,
+                duration: 1.0,
+                columns: Vec::new(),
+            })
+            .collect();
+        let mut state =
+            GameplayCueRuntimeState::new(measure_counter_segments, column_cues, crossover_cues);
+
+        for (time, expected) in [(0.5, 0), (1.0, 1), (2.0, 1), (7.5, 3), (2.5, 1), (3.0, 2)] {
+            state.update_column_cue_cursor(0, time);
+            assert_eq!(state.column_cue_cursor(0), expected);
+        }
+        state.update_column_cue_cursor(MAX_PLAYERS, 9.0);
+        assert_eq!(state.column_cue_cursor(MAX_PLAYERS), 0);
     }
 
     #[test]
