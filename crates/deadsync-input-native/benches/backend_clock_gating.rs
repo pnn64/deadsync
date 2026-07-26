@@ -303,6 +303,58 @@ fn duplicate_hidraw_report_gated() -> u64 {
     checksum
 }
 
+fn hidraw_untracked_churn_legacy() -> u64 {
+    let mut report = [0x55; HIDRAW_REPORT_BYTES];
+    let mut last_report = [0; HIDRAW_REPORT_BYTES];
+    let mut last_report_valid = false;
+    let mut last_fields = u64::MAX;
+    let mut checksum = 0_u64;
+    for message in 0..POLLS {
+        if message % 64 == 0 {
+            report[1] ^= 1;
+        }
+        report[HIDRAW_REPORT_BYTES - 1] = message as u8;
+        if last_report_valid && report == last_report {
+            continue;
+        }
+        sample_event_time();
+        let fields = decode_hidraw_fields(&report);
+        last_report.copy_from_slice(&report);
+        last_report_valid = true;
+        if fields != last_fields {
+            last_fields = fields;
+            checksum = checksum.rotate_left(5) ^ message as u64 ^ fields;
+        }
+    }
+    checksum
+}
+
+fn hidraw_untracked_churn_gated() -> u64 {
+    let mut report = [0x55; HIDRAW_REPORT_BYTES];
+    let mut last_report = [0; HIDRAW_REPORT_BYTES];
+    let mut last_report_valid = false;
+    let mut last_fields = u64::MAX;
+    let mut checksum = 0_u64;
+    for message in 0..POLLS {
+        if message % 64 == 0 {
+            report[1] ^= 1;
+        }
+        report[HIDRAW_REPORT_BYTES - 1] = message as u8;
+        if last_report_valid && report == last_report {
+            continue;
+        }
+        let fields = decode_hidraw_fields(&report);
+        last_report.copy_from_slice(&report);
+        last_report_valid = true;
+        if fields != last_fields {
+            sample_event_time();
+            last_fields = fields;
+            checksum = checksum.rotate_left(5) ^ message as u64 ^ fields;
+        }
+    }
+    checksum
+}
+
 fn main() {
     benchmark_pair(
         "WGI mostly-stale 1 kHz polling",
@@ -333,6 +385,12 @@ fn main() {
         "256 single 32-byte reports with 16 parsed fields, 4 byte changes",
         duplicate_hidraw_report_legacy,
         duplicate_hidraw_report_gated,
+    );
+    benchmark_pair(
+        "FreeBSD hidraw untracked-byte churn",
+        "256 distinct reports with 16 parsed fields, 4 observable changes",
+        hidraw_untracked_churn_legacy,
+        hidraw_untracked_churn_gated,
     );
 }
 

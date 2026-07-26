@@ -1,5 +1,5 @@
 use super::devd::{DevdEvent, DevdWatch};
-use super::hid_report_cache::HidReportCache;
+use super::hid_report_cache::{HidReportCache, HidReportTime};
 use super::{BackendHost, GpSystemEvent, PadBackend, PadOrderBackend, uuid_from_bytes};
 use deadsync_input::{PadCode, PadDir, PadEvent, PadId};
 use hidparser::{Report, ReportField, VariableField, parse_report_descriptor};
@@ -8,7 +8,6 @@ use std::collections::HashMap;
 use std::ffi::c_void;
 use std::fs;
 use std::os::fd::AsRawFd;
-use std::time::Instant;
 
 const POLLIN: i16 = 0x0001;
 const POLLERR: i16 = 0x0008;
@@ -597,11 +596,11 @@ fn process_report(
     id: PadId,
     uuid: [u8; 16],
     payload: &[u8],
-    timestamp: Instant,
-    host_nanos: u64,
+    host: BackendHost,
     emit_pad: &mut impl FnMut(PadEvent),
     fields: &mut [FieldSpec],
 ) {
+    let mut event_time = HidReportTime::new();
     for field in fields {
         match field {
             FieldSpec::Button(field) => {
@@ -613,6 +612,7 @@ fn process_report(
                 }
                 field.last_value = Some(value);
                 let pressed = button_pressed(&field.field, value);
+                let (timestamp, host_nanos) = event_time.sample(host);
                 emit_pad(PadEvent::RawButton {
                     id,
                     timestamp,
@@ -631,6 +631,7 @@ fn process_report(
                     continue;
                 }
                 field.last_value = Some(value);
+                let (timestamp, host_nanos) = event_time.sample(host);
                 emit_pad(PadEvent::RawAxis {
                     id,
                     timestamp,
@@ -648,6 +649,7 @@ fn process_report(
                     continue;
                 }
                 field.last_value = Some(value);
+                let (timestamp, host_nanos) = event_time.sample(host);
                 emit_pad(PadEvent::RawAxis {
                     id,
                     timestamp,
@@ -683,6 +685,7 @@ fn process_report(
                     continue;
                 }
                 field.last_pressed = Some(pressed);
+                let (timestamp, host_nanos) = event_time.sample(host);
                 emit_pad(PadEvent::RawButton {
                     id,
                     timestamp,
@@ -810,17 +813,7 @@ pub fn run(
                 if report.cache.is_duplicate(payload) {
                     break;
                 }
-                let timestamp = Instant::now();
-                let host_nanos = host.now_nanos();
-                process_report(
-                    id,
-                    uuid,
-                    payload,
-                    timestamp,
-                    host_nanos,
-                    emit_pad,
-                    &mut report.fields,
-                );
+                process_report(id, uuid, payload, host, emit_pad, &mut report.fields);
                 report.cache.remember(payload);
                 break;
             }
