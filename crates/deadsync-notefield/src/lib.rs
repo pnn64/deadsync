@@ -139,14 +139,21 @@ pub(crate) use receptors::{
     receptor_row_center,
 };
 pub(crate) use transforms::{
-    AccelYParams, LaneNoteTransformCache, NoteAlphaParams, NoteXParams, VisualEffectParams,
-    appearance_note_actor_alpha, appearance_note_actor_alpha_from_alpha, appearance_note_alpha,
-    appearance_note_alpha_is_identity, appearance_note_glow, appearance_note_glow_from_alpha,
-    beat_factor, compute_invert_distances, compute_tornado_bounds, fill_gameplay_lane_effects,
-    fill_static_note_x_offsets, gameplay_visual_effect_params, lane_note_transform_cache,
-    move_col_extra, note_world_z_for_bumpy, note_x_offset, smoothstep01, tipsy_y_extra,
+    AccelYParams, LaneNoteTransformCache, NoteAlphaParams, NoteAppearanceCache, NoteXParams,
+    VisualEffectParams, appearance_note_alpha_glow_cached, beat_factor, compute_invert_distances,
+    compute_tornado_bounds, fill_gameplay_lane_effects, fill_static_note_x_offsets,
+    gameplay_visual_effect_params, lane_note_transform_cache, move_col_extra,
+    note_appearance_cache, note_world_z_for_bumpy, note_x_offset, smoothstep01, tipsy_y_extra,
     visual_arrow_effect_zoom, visual_arrow_effect_zoom_cached, visual_confusion_rotation_deg,
     visual_hold_body_needs_z_buffer, visual_note_rotation_z_cached, visual_use_legacy_hold_sprites,
+};
+#[cfg(any(test, feature = "bench-support"))]
+pub(crate) use transforms::{
+    appearance_note_actor_alpha, appearance_note_alpha, appearance_note_glow,
+};
+#[cfg(feature = "bench-support")]
+pub(crate) use transforms::{
+    appearance_note_actor_alpha_from_alpha, appearance_note_glow_from_alpha,
 };
 
 #[cfg(test)]

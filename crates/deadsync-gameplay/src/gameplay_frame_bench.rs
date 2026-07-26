@@ -21,6 +21,58 @@ pub struct DisabledAssistClapBench {
     state: GameplayAssistClapState,
 }
 
+#[derive(Clone)]
+pub struct CrossoverCueCursorBench {
+    cues: Vec<ColumnCue>,
+    cursor: usize,
+}
+
+impl Default for CrossoverCueCursorBench {
+    fn default() -> Self {
+        Self {
+            cues: (0..8_192)
+                .map(|index| ColumnCue {
+                    start_time: index as f32 * 0.125,
+                    duration: 0.2,
+                    columns: Vec::new(),
+                })
+                .collect(),
+            cursor: 0,
+        }
+    }
+}
+
+impl CrossoverCueCursorBench {
+    pub fn old_frame(&mut self, frame: usize) -> GameplayFrameHotPathBenchOutput {
+        let current_time = frame as f32 / 120.0;
+        self.cursor = self
+            .cues
+            .partition_point(|cue| cue.start_time <= current_time);
+        let active = active_column_cue_range(&self.cues, current_time);
+        record_crossover_cues(self.cursor, active)
+    }
+
+    pub fn new_frame(&mut self, frame: usize) -> GameplayFrameHotPathBenchOutput {
+        let current_time = frame as f32 / 120.0;
+        self.cursor = column_cue_cursor_from_hint(&self.cues, current_time, self.cursor);
+        let active = active_column_cue_range_from_cursor(&self.cues, current_time, self.cursor);
+        record_crossover_cues(self.cursor, active)
+    }
+}
+
+#[inline(always)]
+fn record_crossover_cues(
+    cursor: usize,
+    active: core::ops::Range<usize>,
+) -> GameplayFrameHotPathBenchOutput {
+    GameplayFrameHotPathBenchOutput {
+        checksum: (cursor as u64).rotate_left(17)
+            ^ (active.start as u64).rotate_left(7)
+            ^ active.end as u64,
+        samples: active.len(),
+    }
+}
+
 impl Default for DisabledAssistClapBench {
     fn default() -> Self {
         Self {

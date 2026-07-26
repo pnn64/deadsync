@@ -396,6 +396,14 @@ impl GameplayCueRuntimeState {
             .map_or(&[], Vec::as_slice)
     }
 
+    #[inline(always)]
+    pub fn crossover_cue_cursor(&self, player: usize) -> usize {
+        self.crossover_cue_cursor
+            .get(player)
+            .copied()
+            .unwrap_or_default()
+    }
+
     // The fade-in anchor time for the crossover cue at `index`, or None when the
     // cue has not been reached yet (callers fall back to the cue's own start,
     // i.e. the natural fade-in).
@@ -430,7 +438,7 @@ impl GameplayCueRuntimeState {
             return;
         }
         let cursor = self.crossover_cue_cursor[player];
-        let target = cues.partition_point(|cue| cue.start_time <= current_time);
+        let target = column_cue_cursor_from_hint(cues, current_time, cursor);
         if target > cursor {
             for i in cursor..target {
                 let start = cues[i].start_time;

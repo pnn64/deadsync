@@ -12401,6 +12401,63 @@ mod tests {
         assert!(active_column_cues(&[], 2.0).is_empty());
     }
 
+    #[test]
+    fn hinted_column_cue_cursor_matches_binary_search_across_playback_and_seeks() {
+        let cues = [
+            ColumnCue {
+                start_time: 1.0,
+                duration: 1.5,
+                columns: Vec::new(),
+            },
+            ColumnCue {
+                start_time: 2.0,
+                duration: 1.5,
+                columns: Vec::new(),
+            },
+            ColumnCue {
+                start_time: 3.0,
+                duration: 1.5,
+                columns: Vec::new(),
+            },
+            ColumnCue {
+                start_time: 4.0,
+                duration: 1.5,
+                columns: Vec::new(),
+            },
+        ];
+        let times = [
+            f32::NEG_INFINITY,
+            0.5,
+            1.0,
+            1.5,
+            2.0,
+            2.75,
+            4.0,
+            9.0,
+            f32::INFINITY,
+            f32::NAN,
+        ];
+
+        for time in times {
+            let expected = cues.partition_point(|cue| cue.start_time <= time);
+            for hint in 0..=cues.len() + 2 {
+                assert_eq!(
+                    column_cue_cursor_from_hint(&cues, time, hint),
+                    expected,
+                    "time={time:?}, hint={hint}",
+                );
+            }
+            assert_eq!(
+                active_column_cue_range_from_cursor(&cues, time, expected),
+                active_column_cue_range(&cues, time),
+                "time={time:?}",
+            );
+        }
+
+        assert_eq!(column_cue_cursor_from_hint(&[], 2.0, 0), 0);
+        assert_eq!(active_column_cue_range_from_cursor(&[], 2.0, 0), 0..0);
+    }
+
     fn xover_anno(beat: f32, note_count: u8, column_mask: u8, is_crossover: bool) -> CrossoverRow {
         debug_assert_eq!(
             u32::from(note_count),
@@ -13879,13 +13936,16 @@ mod tests {
         // to its own start (natural fade-in).
         let mut state = new_state();
         state.update_crossover_cue_anchors(0, 0.5);
+        assert_eq!(state.crossover_cue_cursor(0), 0);
         state.update_crossover_cue_anchors(0, 1.0 + 0.01);
         assert_eq!(state.crossover_cue_entry_time(0, 0), Some(1.0));
+        assert_eq!(state.crossover_cue_cursor(0), 1);
 
         // Seek straight into the middle of cue 1: it anchors to the landing time,
         // so the renderer fades it in from there instead of popping it in.
         state.update_crossover_cue_anchors(0, 5.5);
         assert_eq!(state.crossover_cue_entry_time(0, 1), Some(5.5));
+        assert_eq!(state.crossover_cue_cursor(0), 2);
         // Cue 0 keeps its earlier natural anchor.
         assert_eq!(state.crossover_cue_entry_time(0, 0), Some(1.0));
 
@@ -13893,6 +13953,7 @@ mod tests {
         // re-anchors to its own start.
         state.update_crossover_cue_anchors(0, 4.0);
         assert_eq!(state.crossover_cue_entry_time(0, 1), None);
+        assert_eq!(state.crossover_cue_cursor(0), 1);
         state.update_crossover_cue_anchors(0, 5.0 + 0.01);
         assert_eq!(state.crossover_cue_entry_time(0, 1), Some(5.0));
 
@@ -13900,6 +13961,7 @@ mod tests {
         // the cue's own start).
         assert_eq!(state.crossover_cue_entry_time(0, 99), None);
         assert_eq!(state.crossover_cue_entry_time(1, 0), None);
+        assert_eq!(state.crossover_cue_cursor(MAX_PLAYERS), 0);
     }
 
     #[test]

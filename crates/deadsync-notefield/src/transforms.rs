@@ -40,6 +40,11 @@ pub(crate) struct LaneNoteTransformCache {
     static_rotation_z: Option<f32>,
 }
 
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct NoteAppearanceCache {
+    identity: bool,
+}
+
 #[derive(Clone, Copy, Debug, Default)]
 pub(crate) struct AccelYParams {
     pub boost: f32,
@@ -568,6 +573,7 @@ pub struct CommonNoteTransformBenchFrame {
 #[derive(Clone)]
 pub struct CommonNoteTransformBench {
     appearance: NoteAlphaParams,
+    active_appearance: NoteAlphaParams,
     rotation: VisualEffectParams,
     lane_transforms: [VisualEffectParams; 4],
     x_params: NoteXParams,
@@ -587,6 +593,15 @@ impl Default for CommonNoteTransformBench {
         });
         Self {
             appearance: NoteAlphaParams::default(),
+            active_appearance: NoteAlphaParams {
+                hidden: 0.7,
+                hidden_offset: 0.2,
+                sudden: 0.4,
+                sudden_offset: -0.1,
+                stealth: 0.15,
+                blink: 0.1,
+                random_vanish: 0.3,
+            },
             rotation: VisualEffectParams::default(),
             lane_transforms,
             x_params: NoteXParams {
@@ -671,6 +686,74 @@ impl CommonNoteTransformBench {
             };
             record_common_transform(&mut output, note_alpha);
             record_common_transform(&mut output, glow_alpha);
+        }
+        output
+    }
+
+    pub fn old_identity_hold_appearance_frame(
+        &self,
+        frame: usize,
+    ) -> CommonNoteTransformBenchFrame {
+        let params = std::hint::black_box(self.appearance);
+        let mut output = CommonNoteTransformBenchFrame::default();
+        for sample in 0..Self::VISIBLE_NOTES {
+            let y = 8.0 + ((sample * 37 + frame) % 640) as f32;
+            record_common_transform(
+                &mut output,
+                appearance_note_actor_alpha(y, frame as f32 / 120.0, 0.0, params),
+            );
+            record_common_transform(
+                &mut output,
+                appearance_note_glow(y, frame as f32 / 120.0, 0.0, params),
+            );
+        }
+        output
+    }
+
+    pub fn new_identity_hold_appearance_frame(
+        &self,
+        frame: usize,
+    ) -> CommonNoteTransformBenchFrame {
+        let params = std::hint::black_box(self.appearance);
+        let cache = std::hint::black_box(note_appearance_cache(params));
+        let mut output = CommonNoteTransformBenchFrame::default();
+        for sample in 0..Self::VISIBLE_NOTES {
+            let y = 8.0 + ((sample * 37 + frame) % 640) as f32;
+            let (alpha, glow) =
+                appearance_note_alpha_glow_cached(y, frame as f32 / 120.0, 0.0, params, cache);
+            record_common_transform(&mut output, alpha);
+            record_common_transform(&mut output, glow);
+        }
+        output
+    }
+
+    pub fn old_hold_appearance_frame(&self, frame: usize) -> CommonNoteTransformBenchFrame {
+        let params = std::hint::black_box(self.active_appearance);
+        let mut output = CommonNoteTransformBenchFrame::default();
+        for sample in 0..Self::VISIBLE_NOTES {
+            let y = 8.0 + ((sample * 37 + frame) % 640) as f32;
+            record_common_transform(
+                &mut output,
+                appearance_note_actor_alpha(y, frame as f32 / 120.0, 0.0, params),
+            );
+            record_common_transform(
+                &mut output,
+                appearance_note_glow(y, frame as f32 / 120.0, 0.0, params),
+            );
+        }
+        output
+    }
+
+    pub fn new_hold_appearance_frame(&self, frame: usize) -> CommonNoteTransformBenchFrame {
+        let params = std::hint::black_box(self.active_appearance);
+        let cache = std::hint::black_box(note_appearance_cache(params));
+        let mut output = CommonNoteTransformBenchFrame::default();
+        for sample in 0..Self::VISIBLE_NOTES {
+            let y = 8.0 + ((sample * 37 + frame) % 640) as f32;
+            let (alpha, glow) =
+                appearance_note_alpha_glow_cached(y, frame as f32 / 120.0, 0.0, params, cache);
+            record_common_transform(&mut output, alpha);
+            record_common_transform(&mut output, glow);
         }
         output
     }
@@ -957,6 +1040,41 @@ mod common_note_transform_tests {
             },
         ] {
             assert!(!appearance_note_alpha_is_identity(params));
+        }
+    }
+
+    #[test]
+    fn cached_appearance_pair_matches_separate_alpha_and_glow_evaluation() {
+        let cases = [
+            NoteAlphaParams::default(),
+            NoteAlphaParams {
+                hidden: 0.7,
+                hidden_offset: 0.2,
+                sudden: 0.4,
+                sudden_offset: -0.1,
+                stealth: 0.15,
+                blink: 0.1,
+                random_vanish: 0.3,
+            },
+            NoteAlphaParams {
+                hidden: f32::NAN,
+                sudden: -0.25,
+                ..NoteAlphaParams::default()
+            },
+        ];
+        for params in cases {
+            let cache = note_appearance_cache(params);
+            for y in [-1.0, 0.0, 64.0, 160.0, 320.0, f32::NAN] {
+                let cached = appearance_note_alpha_glow_cached(y, 3.25, 0.2, params, cache);
+                assert_eq!(
+                    cached.0.to_bits(),
+                    appearance_note_actor_alpha(y, 3.25, 0.2, params).to_bits(),
+                );
+                assert_eq!(
+                    cached.1.to_bits(),
+                    appearance_note_glow(y, 3.25, 0.2, params).to_bits(),
+                );
+            }
         }
     }
 
@@ -1297,6 +1415,7 @@ pub(crate) fn fill_static_note_x_offsets(
     true
 }
 
+#[cfg(any(test, feature = "bench-support"))]
 pub(crate) fn appearance_note_alpha(
     y: f32,
     elapsed: f32,
@@ -1319,6 +1438,31 @@ pub(crate) fn appearance_note_alpha_is_identity(params: NoteAlphaParams) -> bool
         && params.stealth == 0.0
         && params.blink == 0.0
         && params.random_vanish == 0.0
+}
+
+#[inline(always)]
+pub(crate) fn note_appearance_cache(params: NoteAlphaParams) -> NoteAppearanceCache {
+    NoteAppearanceCache {
+        identity: appearance_note_alpha_is_identity(params),
+    }
+}
+
+#[inline(always)]
+pub(crate) fn appearance_note_alpha_glow_cached(
+    y: f32,
+    elapsed: f32,
+    mini: f32,
+    params: NoteAlphaParams,
+    cache: NoteAppearanceCache,
+) -> (f32, f32) {
+    if cache.identity || y < 0.0 {
+        return (1.0, 0.0);
+    }
+    let percent_visible = appearance_note_alpha_full(y, elapsed, mini, params);
+    (
+        appearance_note_actor_alpha_from_alpha(percent_visible),
+        appearance_note_glow_from_alpha(percent_visible),
+    )
 }
 
 #[inline(always)]
@@ -1367,6 +1511,7 @@ fn appearance_note_alpha_full(
     (1.0 + visible_adjust).clamp(0.0, 1.0)
 }
 
+#[cfg(any(test, feature = "bench-support"))]
 pub(crate) fn appearance_note_glow(
     y: f32,
     elapsed: f32,
@@ -1377,6 +1522,7 @@ pub(crate) fn appearance_note_glow(
     appearance_note_glow_from_alpha(percent_visible)
 }
 
+#[cfg(any(test, feature = "bench-support"))]
 pub(crate) fn appearance_note_actor_alpha(
     y: f32,
     elapsed: f32,

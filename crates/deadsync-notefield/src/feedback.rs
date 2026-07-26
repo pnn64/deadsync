@@ -2,7 +2,8 @@ use crate::*;
 use deadlib_present::actors::Actor;
 use deadlib_present::dsl::{SpriteBuilder, TextBuilder};
 use deadsync_gameplay::{
-    ActiveColumnFlash, ColumnCue, active_column_cue_range, column_flash_duration,
+    ActiveColumnFlash, ColumnCue, active_column_cue_range, active_column_cue_range_from_cursor,
+    column_flash_duration,
 };
 use deadsync_rules::judgment::{JudgeGrade, TimingWindow};
 use deadsync_rules::scroll::ScrollSpeedSetting;
@@ -227,6 +228,9 @@ pub(crate) struct ColumnFeedbackRequest<'a> {
     // Per-cue fade-in anchor times parallel to `crossover_cues`; None entries (or
     // a missing slice) fall back to each cue's own start (natural fade-in).
     pub crossover_cue_entries: Option<&'a [Option<f32>]>,
+    // The runtime already advances this cursor while updating crossover cue
+    // entry anchors, so rendering can reuse it instead of searching again.
+    pub crossover_cue_cursor: Option<usize>,
     pub column_flashes: Option<&'a [Option<ActiveColumnFlash>]>,
     pub regular_countdown: bool,
     pub crossover_countdown: bool,
@@ -308,7 +312,12 @@ fn compose_column_cue(
                 None => return,
             }
         }
-        ColumnCueKind::Crossover => active_column_cue_range(cues, request.current_music_time),
+        ColumnCueKind::Crossover => match request.crossover_cue_cursor {
+            Some(cursor) => {
+                active_column_cue_range_from_cursor(cues, request.current_music_time, cursor)
+            }
+            None => active_column_cue_range(cues, request.current_music_time),
+        },
     };
     if active_range.is_empty() {
         return;
@@ -866,6 +875,7 @@ mod tests {
             column_cues,
             crossover_cues,
             crossover_cue_entries: None,
+            crossover_cue_cursor: None,
             column_flashes,
             regular_countdown: true,
             crossover_countdown: false,

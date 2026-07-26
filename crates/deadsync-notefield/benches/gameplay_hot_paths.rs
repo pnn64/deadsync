@@ -263,6 +263,42 @@ fn main() {
         },
     );
     run_pair(
+        "cached ordinary hold visibility",
+        "96 hold body/head samples without appearance modifiers",
+        |frame| {
+            let output = common_transforms.old_identity_hold_appearance_frame(frame);
+            Output {
+                checksum: output.checksum,
+                samples: output.samples,
+            }
+        },
+        |frame| {
+            let output = common_transforms.new_identity_hold_appearance_frame(frame);
+            Output {
+                checksum: output.checksum,
+                samples: output.samples,
+            }
+        },
+    );
+    run_pair(
+        "shared hold visibility evaluation",
+        "96 hold body/head samples with active appearance modifiers",
+        |frame| {
+            let output = common_transforms.old_hold_appearance_frame(frame);
+            Output {
+                checksum: output.checksum,
+                samples: output.samples,
+            }
+        },
+        |frame| {
+            let output = common_transforms.new_hold_appearance_frame(frame);
+            Output {
+                checksum: output.checksum,
+                samples: output.samples,
+            }
+        },
+    );
+    run_pair(
         "identity note-rotation fast path",
         "96 visible notes without confusion or dizzy effects",
         |frame| {

@@ -61,6 +61,16 @@ pub fn active_column_cue(cues: &[ColumnCue], current_time: f32) -> Option<&Colum
 #[inline]
 pub fn active_column_cue_range(cues: &[ColumnCue], current_time: f32) -> core::ops::Range<usize> {
     let end = cues.partition_point(|cue| cue.start_time <= current_time);
+    active_column_cue_range_from_cursor(cues, current_time, end)
+}
+
+#[inline]
+pub fn active_column_cue_range_from_cursor(
+    cues: &[ColumnCue],
+    current_time: f32,
+    cursor: usize,
+) -> core::ops::Range<usize> {
+    let end = cursor.min(cues.len());
     let mut begin = end;
     while begin > 0 {
         let cue = &cues[begin - 1];
@@ -71,6 +81,31 @@ pub fn active_column_cue_range(cues: &[ColumnCue], current_time: f32) -> core::o
         }
     }
     begin..end
+}
+
+#[inline(always)]
+pub fn column_cue_cursor_from_hint(cues: &[ColumnCue], current_time: f32, cursor: usize) -> usize {
+    if cursor > cues.len() {
+        return cues.partition_point(|cue| cue.start_time <= current_time);
+    }
+    if cursor < cues.len() && cues[cursor].start_time <= current_time {
+        let next = cursor + 1;
+        if next == cues.len() || cues[next].start_time > current_time {
+            return next;
+        }
+        return cues.partition_point(|cue| cue.start_time <= current_time);
+    }
+    if cursor > 0 && cues[cursor - 1].start_time > current_time {
+        let previous = cursor - 1;
+        if previous == 0 || cues[previous - 1].start_time <= current_time {
+            return previous;
+        }
+        return cues.partition_point(|cue| cue.start_time <= current_time);
+    }
+    if !current_time.is_finite() {
+        return cues.partition_point(|cue| cue.start_time <= current_time);
+    }
+    cursor
 }
 
 // Returns every cue whose `[start_time, start_time + duration]` window contains

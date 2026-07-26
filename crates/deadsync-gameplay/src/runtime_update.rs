@@ -1323,6 +1323,11 @@ where
     }
 
     #[inline(always)]
+    pub fn crossover_cue_cursor(&self, player: usize) -> usize {
+        self.display.cue_runtime.crossover_cue_cursor(player)
+    }
+
+    #[inline(always)]
     pub fn set_column_cues(&mut self, player: usize, cues: Vec<ColumnCue>) {
         self.display
             .cue_runtime

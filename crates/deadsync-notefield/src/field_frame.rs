@@ -3,18 +3,17 @@ use crate::{
     HoldMeshScratch, HoldPathSample, LaneNoteTransformCache, MeasureComposeRequest,
     MeasureLineMode, MineLayerRequest, ModelMeshCache, NoteAlphaParams, NoteLayerRequest,
     NoteXParams, NotefieldComposeRequest, NotefieldFeedbackFrameView, PreparedNotefield,
-    PreparedNotefieldNotes, TornadoBounds, VisualEffectParams, appearance_note_actor_alpha,
-    appearance_note_actor_alpha_from_alpha, appearance_note_alpha,
-    appearance_note_alpha_is_identity, appearance_note_glow, appearance_note_glow_from_alpha,
+    PreparedNotefieldNotes, TornadoBounds, VisualEffectParams, appearance_note_alpha_glow_cached,
     compose_hold_body_caps, compose_measure_lines, compose_mine_layers, compose_note_layer,
     compose_notefield_feedback, fill_gameplay_lane_effects, fill_static_note_x_offsets,
     for_each_visible_hold_index, for_each_visible_note_index, hold_entry_head_beat,
     hold_entry_plan, hold_overlaps_visible_window, hold_parts_for_note_type,
-    lane_note_transform_cache, mine_hides_after_resolution, mine_part, note_world_z_for_bumpy,
-    note_x_offset as canonical_note_x_offset, notefield_view_proj, offset_center,
-    scale_sprite_to_arrow, share_actor_range, song_lua_note_model_draw, tap_part_for_note_type,
-    tap_replacement_head, translated_uv_rect, visual_arrow_effect_zoom_cached,
-    visual_hold_body_needs_z_buffer, visual_note_rotation_z_cached, visual_use_legacy_hold_sprites,
+    lane_note_transform_cache, mine_hides_after_resolution, mine_part, note_appearance_cache,
+    note_world_z_for_bumpy, note_x_offset as canonical_note_x_offset, notefield_view_proj,
+    offset_center, scale_sprite_to_arrow, share_actor_range, song_lua_note_model_draw,
+    tap_part_for_note_type, tap_replacement_head, translated_uv_rect,
+    visual_arrow_effect_zoom_cached, visual_hold_body_needs_z_buffer,
+    visual_note_rotation_z_cached, visual_use_legacy_hold_sprites,
 };
 use deadlib_present::actors::{Actor, SpriteSource};
 use deadlib_render::BlendMode;
@@ -125,6 +124,8 @@ fn compose_field_contents<S, F>(
     let column_dirs = field.column_dirs;
     let column_receptor_ys = field.column_receptor_ys;
     let mini = prepared.mini;
+    let alpha_params = note_alpha_params(appearance);
+    let appearance_cache = note_appearance_cache(alpha_params);
     let ns = note_inputs.base;
     let target_arrow_px = note_inputs.target_arrow_px;
     let scale_sprite =
@@ -201,20 +202,13 @@ fn compose_field_contents<S, F>(
                 )
             }
     };
-    let actor_alpha_for_adjusted_travel = |local_col: usize, adjusted: f32| -> f32 {
-        note_actor_alpha(
+    let alpha_glow_for_adjusted_travel = |local_col: usize, adjusted: f32| -> (f32, f32) {
+        appearance_note_alpha_glow_cached(
             adjusted + lane_offsets[local_col],
             elapsed_screen,
             mini,
-            appearance,
-        )
-    };
-    let glow_for_adjusted_travel = |local_col: usize, adjusted: f32| -> f32 {
-        note_glow(
-            adjusted + lane_offsets[local_col],
-            elapsed_screen,
-            mini,
-            appearance,
+            alpha_params,
+            appearance_cache,
         )
     };
     let world_z_for_adjusted_travel = |local_col: usize, travel_offset: f32| -> f32 {
@@ -464,7 +458,8 @@ fn compose_field_contents<S, F>(
                 elapsed_s: elapsed_screen,
                 mini,
                 lane_offset,
-                appearance: note_alpha_params(appearance),
+                appearance: alpha_params,
+                appearance_cache,
                 use_legacy_sprites: use_legacy_hold_sprites,
                 rotation_y_deg: note_rotation_y,
                 depth_test: hold_depth_test,
@@ -487,8 +482,8 @@ fn compose_field_contents<S, F>(
         {
             return;
         }
-        let head_alpha = actor_alpha_for_adjusted_travel(local_col, head_anchor_adjusted_travel);
-        let head_glow = glow_for_adjusted_travel(local_col, head_anchor_adjusted_travel);
+        let (head_alpha, head_glow) =
+            alpha_glow_for_adjusted_travel(local_col, head_anchor_adjusted_travel);
         if head_alpha <= f32::EPSILON && head_glow <= f32::EPSILON {
             return;
         }
@@ -703,6 +698,8 @@ fn compose_field_contents<S, F>(
         &lane_offsets[..num_cols],
         note_x_is_static,
         &static_note_x_offsets[..num_cols],
+        alpha_params,
+        appearance_cache,
         &scale_mine_slot,
         sprite_source,
     );
@@ -722,6 +719,8 @@ fn compose_visible_notes<S, F>(
     lane_offsets: &[f32],
     note_x_is_static: bool,
     static_note_x_offsets: &[f32],
+    alpha_params: NoteAlphaParams,
+    appearance_cache: crate::NoteAppearanceCache,
     scale_mine_slot: &impl Fn(&S) -> [f32; 2],
     sprite_source: &F,
 ) where
@@ -735,8 +734,6 @@ fn compose_visible_notes<S, F>(
     let current_beat = prepared.current_beat;
     let col_start = prepared.frame_plan.col_start;
     let num_cols = prepared.frame_plan.num_cols;
-    let alpha_params = note_alpha_params(request.visual.appearance);
-    let identity_appearance = appearance_note_alpha_is_identity(alpha_params);
     let mini = prepared.mini;
     let travel = &notes.travel;
     let ns = notes.base;
@@ -796,20 +793,13 @@ fn compose_visible_notes<S, F>(
                 {
                     return;
                 }
-                let (note_alpha, glow_alpha) = if identity_appearance {
-                    (1.0, 0.0)
-                } else {
-                    let percent_visible = appearance_note_alpha(
-                        adjusted_travel + lane_offset,
-                        elapsed,
-                        mini,
-                        alpha_params,
-                    );
-                    (
-                        appearance_note_actor_alpha_from_alpha(percent_visible),
-                        appearance_note_glow_from_alpha(percent_visible),
-                    )
-                };
+                let (note_alpha, glow_alpha) = appearance_note_alpha_glow_cached(
+                    adjusted_travel + lane_offset,
+                    elapsed,
+                    mini,
+                    alpha_params,
+                    appearance_cache,
+                );
                 if note_alpha <= f32::EPSILON && glow_alpha <= f32::EPSILON {
                     return;
                 }
@@ -1224,16 +1214,6 @@ fn model_center<S: NoteskinSlot>(
         local_offset[0] * sin_r + local_offset[1] * cos_r,
     ];
     [center[0] + offset[0], center[1] + offset[1]]
-}
-
-#[inline(always)]
-fn note_glow(y: f32, elapsed: f32, mini: f32, appearance: AppearanceEffects) -> f32 {
-    appearance_note_glow(y, elapsed, mini, note_alpha_params(appearance))
-}
-
-#[inline(always)]
-fn note_actor_alpha(y: f32, elapsed: f32, mini: f32, appearance: AppearanceEffects) -> f32 {
-    appearance_note_actor_alpha(y, elapsed, mini, note_alpha_params(appearance))
 }
 
 #[inline(always)]

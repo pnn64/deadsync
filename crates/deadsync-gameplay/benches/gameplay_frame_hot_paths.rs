@@ -1,7 +1,7 @@
 use deadsync_gameplay::{
-    ActiveColumnScanBench, DisabledAssistClapBench, GameplayFrameHotPathBenchOutput,
-    IdleAttackRefreshBench, IdleHoldPhaseBench, IdleLaneScanBench, LiveNotefieldOptionsBench,
-    OptionalFrameWorkBench, SharedMissCutoffBench,
+    ActiveColumnScanBench, CrossoverCueCursorBench, DisabledAssistClapBench,
+    GameplayFrameHotPathBenchOutput, IdleAttackRefreshBench, IdleHoldPhaseBench, IdleLaneScanBench,
+    LiveNotefieldOptionsBench, OptionalFrameWorkBench, SharedMissCutoffBench,
 };
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::hint::black_box;
@@ -167,6 +167,15 @@ fn main() {
         "2 players sharing one per-frame timing cutoff",
         move |frame| old_cutoff.old_frame(frame),
         move |frame| new_cutoff.new_frame(frame),
+    );
+
+    let mut old_cues = CrossoverCueCursorBench::default();
+    let mut new_cues = old_cues.clone();
+    run_pair(
+        "crossover cue cursor reuse",
+        "8192 crossover cues during normal 120 Hz playback and rendering",
+        move |frame| old_cues.old_frame(frame),
+        move |frame| new_cues.new_frame(frame),
     );
 }
 

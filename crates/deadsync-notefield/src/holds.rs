@@ -2,7 +2,7 @@ use crate::actor_builder::actor_with_world_z;
 use crate::feedback::{hold_glow_color, itg_actor_glow_alpha};
 use crate::style::*;
 use crate::transforms::{
-    NoteAlphaParams, appearance_needs_rows, appearance_note_actor_alpha, appearance_note_glow,
+    NoteAlphaParams, NoteAppearanceCache, appearance_needs_rows, appearance_note_alpha_glow_cached,
 };
 use deadlib_present::actors::{Actor, SizeSpec, SpriteSource};
 use deadlib_present::dsl::SpriteBuilder;
@@ -107,6 +107,7 @@ pub(crate) struct HoldBodyCapRequest<'a, S> {
     pub mini: f32,
     pub lane_offset: f32,
     pub appearance: NoteAlphaParams,
+    pub appearance_cache: NoteAppearanceCache,
     pub use_legacy_sprites: bool,
     pub rotation_y_deg: f32,
     pub depth_test: bool,
@@ -457,22 +458,15 @@ where
     )
 }
 
-fn hold_alpha<S>(request: &HoldBodyCapRequest<'_, S>, sample: HoldPathSample) -> f32 {
-    appearance_note_actor_alpha(
+fn hold_alpha_glow<S>(request: &HoldBodyCapRequest<'_, S>, sample: HoldPathSample) -> (f32, f32) {
+    let (alpha, glow) = appearance_note_alpha_glow_cached(
         sample.adjusted_travel + request.lane_offset,
         request.elapsed_s,
         request.mini,
         request.appearance,
-    )
-}
-
-fn hold_glow<S>(request: &HoldBodyCapRequest<'_, S>, sample: HoldPathSample) -> f32 {
-    itg_actor_glow_alpha(appearance_note_glow(
-        sample.adjusted_travel + request.lane_offset,
-        request.elapsed_s,
-        request.mini,
-        request.appearance,
-    ))
+        request.appearance_cache,
+    );
+    (alpha, itg_actor_glow_alpha(glow))
 }
 
 struct HoldSpritePass<'a, S> {
@@ -751,8 +745,7 @@ where
         );
         let center_y = (segment_top + segment_bottom) * 0.5;
         let sample = sample_path(center_y);
-        let alpha = hold_alpha(request, sample);
-        let glow = hold_glow(request, sample);
+        let (alpha, glow) = hold_alpha_glow(request, sample);
         if alpha > f32::EPSILON || glow > f32::EPSILON {
             rendered.top = Some(rendered.top.map_or(segment_top, |v| v.min(segment_top)));
             rendered.bottom = Some(
@@ -962,8 +955,7 @@ where
             let slice_v1 = (v1 - v0).mul_add(t1, v0);
             let center_y = (slice_top + slice_bottom) * 0.5;
             let center = sample_path(center_y);
-            let alpha = hold_alpha(request, center);
-            let glow = hold_glow(request, center);
+            let (alpha, glow) = hold_alpha_glow(request, center);
             if alpha <= f32::EPSILON && glow <= f32::EPSILON {
                 prev_row = None;
                 slice_top = slice_bottom;
@@ -1046,10 +1038,8 @@ fn append_hold_body_mesh_slice<S>(
     diffuse_vertices: &mut Vec<TexturedMeshVertex>,
     glow_vertices: &mut Vec<TexturedMeshVertex>,
 ) {
-    let top_alpha = hold_alpha(request, top);
-    let bottom_alpha = hold_alpha(request, bottom);
-    let top_glow = hold_glow(request, top);
-    let bottom_glow = hold_glow(request, bottom);
+    let (top_alpha, top_glow) = hold_alpha_glow(request, top);
+    let (bottom_alpha, bottom_glow) = hold_alpha_glow(request, bottom);
     let forward = [bottom.center_x - top.center_x, bottom_y - top_y];
     let top_row_positions = prev_row.unwrap_or_else(|| {
         let row = hold_strip_row_3d(
@@ -1186,8 +1176,7 @@ where
 
     let center_y = (cap_top + cap_bottom) * 0.5;
     let center = sample_path(center_y);
-    let alpha = hold_alpha(request, center);
-    let glow = hold_glow(request, center);
+    let (alpha, glow) = hold_alpha_glow(request, center);
     if alpha <= f32::EPSILON && glow <= f32::EPSILON {
         return HoldComposeControl::AbortHold;
     }
@@ -1203,10 +1192,8 @@ where
         && slot.model().is_none()
         && request.rotation_y_deg.abs() <= f32::EPSILON;
     if use_mesh {
-        let top_alpha = hold_alpha(request, top);
-        let bottom_alpha = hold_alpha(request, bottom);
-        let top_glow = hold_glow(request, top);
-        let bottom_glow = hold_glow(request, bottom);
+        let (top_alpha, top_glow) = hold_alpha_glow(request, top);
+        let (bottom_alpha, bottom_glow) = hold_alpha_glow(request, bottom);
         let forward = [bottom.center_x - top.center_x, cap_bottom - cap_top];
         let top_row = hold_strip_row_3d(
             [top.center_x, cap_top, top.world_z],
@@ -1459,8 +1446,7 @@ where
 
     let center_y = (draw_top + draw_bottom) * 0.5;
     let center = sample_path(center_y);
-    let alpha = hold_alpha(request, center);
-    let glow = hold_glow(request, center);
+    let (alpha, glow) = hold_alpha_glow(request, center);
     if alpha <= f32::EPSILON && glow <= f32::EPSILON {
         return HoldComposeControl::AbortHold;
     }
@@ -1477,10 +1463,8 @@ where
         && !request.lane_reverse
         && request.rotation_y_deg.abs() <= f32::EPSILON;
     if use_mesh {
-        let top_alpha = hold_alpha(request, top);
-        let bottom_alpha = hold_alpha(request, bottom);
-        let top_glow = hold_glow(request, top);
-        let bottom_glow = hold_glow(request, bottom);
+        let (top_alpha, top_glow) = hold_alpha_glow(request, top);
+        let (bottom_alpha, bottom_glow) = hold_alpha_glow(request, bottom);
         let forward = [bottom.center_x - top.center_x, draw_bottom - draw_top];
         let top_row = if let Some(body_tail_row) = rendered.tail_row {
             hold_strip_row_from_positions(
@@ -2212,6 +2196,10 @@ mod tests {
         top: Option<&'a TestSlot>,
         bottom: Option<&'a TestSlot>,
     ) -> HoldBodyCapRequest<'a, TestSlot> {
+        let appearance = NoteAlphaParams {
+            stealth: 0.25,
+            ..NoteAlphaParams::default()
+        };
         HoldBodyCapRequest {
             body_slot: body,
             top_cap_slot: top,
@@ -2233,10 +2221,8 @@ mod tests {
             elapsed_s: 9.0,
             mini: 0.0,
             lane_offset: 0.0,
-            appearance: NoteAlphaParams {
-                stealth: 0.25,
-                ..NoteAlphaParams::default()
-            },
+            appearance,
+            appearance_cache: crate::transforms::note_appearance_cache(appearance),
             use_legacy_sprites: true,
             rotation_y_deg: 0.0,
             depth_test: false,
