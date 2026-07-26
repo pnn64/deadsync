@@ -4,13 +4,13 @@ use crate::{
     MeasureLineMode, MineLayerRequest, ModelMeshCache, NoteAlphaParams, NoteLayerRequest,
     NoteXParams, NotefieldComposeRequest, NotefieldFeedbackFrameView, PreparedNotefield,
     PreparedNotefieldNotes, TornadoBounds, VisualEffectParams, appearance_note_actor_alpha,
-    appearance_note_actor_alpha_from_alpha, appearance_note_alpha, appearance_note_glow,
-    appearance_note_glow_from_alpha, compose_hold_body_caps, compose_measure_lines,
-    compose_mine_layers, compose_note_layer, compose_notefield_feedback,
-    fill_gameplay_lane_effects, fill_static_note_x_offsets, for_each_visible_hold_index,
-    for_each_visible_note_index, hold_entry_head_beat, hold_entry_plan,
-    hold_overlaps_visible_window, hold_parts_for_note_type, lane_note_transform_cache,
-    mine_hides_after_resolution, mine_part, note_world_z_for_bumpy,
+    appearance_note_actor_alpha_from_alpha, appearance_note_alpha,
+    appearance_note_alpha_is_identity, appearance_note_glow, appearance_note_glow_from_alpha,
+    compose_hold_body_caps, compose_measure_lines, compose_mine_layers, compose_note_layer,
+    compose_notefield_feedback, fill_gameplay_lane_effects, fill_static_note_x_offsets,
+    for_each_visible_hold_index, for_each_visible_note_index, hold_entry_head_beat,
+    hold_entry_plan, hold_overlaps_visible_window, hold_parts_for_note_type,
+    lane_note_transform_cache, mine_hides_after_resolution, mine_part, note_world_z_for_bumpy,
     note_x_offset as canonical_note_x_offset, notefield_view_proj, offset_center,
     scale_sprite_to_arrow, share_actor_range, song_lua_note_model_draw, tap_part_for_note_type,
     tap_replacement_head, translated_uv_rect, visual_arrow_effect_zoom_cached,
@@ -701,6 +701,8 @@ fn compose_field_contents<S, F>(
         &lane_effect_params[..num_cols],
         &lane_transform_caches[..num_cols],
         &lane_offsets[..num_cols],
+        note_x_is_static,
+        &static_note_x_offsets[..num_cols],
         &scale_mine_slot,
         sprite_source,
     );
@@ -718,6 +720,8 @@ fn compose_visible_notes<S, F>(
     lane_effect_params: &[VisualEffectParams],
     lane_transform_caches: &[LaneNoteTransformCache],
     lane_offsets: &[f32],
+    note_x_is_static: bool,
+    static_note_x_offsets: &[f32],
     scale_mine_slot: &impl Fn(&S) -> [f32; 2],
     sprite_source: &F,
 ) where
@@ -732,6 +736,7 @@ fn compose_visible_notes<S, F>(
     let col_start = prepared.frame_plan.col_start;
     let num_cols = prepared.frame_plan.num_cols;
     let alpha_params = note_alpha_params(request.visual.appearance);
+    let identity_appearance = appearance_note_alpha_is_identity(alpha_params);
     let mini = prepared.mini;
     let travel = &notes.travel;
     let ns = notes.base;
@@ -791,29 +796,39 @@ fn compose_visible_notes<S, F>(
                 {
                     return;
                 }
-                let percent_visible = appearance_note_alpha(
-                    adjusted_travel + lane_offset,
-                    elapsed,
-                    mini,
-                    alpha_params,
-                );
-                let note_alpha = appearance_note_actor_alpha_from_alpha(percent_visible);
-                let glow_alpha = appearance_note_glow_from_alpha(percent_visible);
+                let (note_alpha, glow_alpha) = if identity_appearance {
+                    (1.0, 0.0)
+                } else {
+                    let percent_visible = appearance_note_alpha(
+                        adjusted_travel + lane_offset,
+                        elapsed,
+                        mini,
+                        alpha_params,
+                    );
+                    (
+                        appearance_note_actor_alpha_from_alpha(percent_visible),
+                        appearance_note_glow_from_alpha(percent_visible),
+                    )
+                };
                 if note_alpha <= f32::EPSILON && glow_alpha <= f32::EPSILON {
                     return;
                 }
                 let column_center_x = prepared.field.playfield_center_x
-                    + note_x_offset(
-                        request.geometry.screen_height,
-                        local_col,
-                        adjusted_travel,
-                        travel.arrow_effect_time_s(),
-                        notes.beat_factor,
-                        visual,
-                        &notes.col_offsets[..num_cols],
-                        &notes.invert_distances[..num_cols],
-                        &notes.tornado_bounds[..num_cols],
-                    );
+                    + if note_x_is_static {
+                        static_note_x_offsets[local_col]
+                    } else {
+                        note_x_offset(
+                            request.geometry.screen_height,
+                            local_col,
+                            adjusted_travel,
+                            travel.arrow_effect_time_s(),
+                            notes.beat_factor,
+                            visual,
+                            &notes.col_offsets[..num_cols],
+                            &notes.invert_distances[..num_cols],
+                            &notes.tornado_bounds[..num_cols],
+                        )
+                    };
                 let y_pos = receptor_y + direction * adjusted_travel + lane_offset;
                 let world_z = note_world_z_for_bumpy(
                     adjusted_travel,

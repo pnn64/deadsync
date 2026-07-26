@@ -12851,17 +12851,19 @@ mod tests {
 
     #[test]
     fn song_position_state_tracks_music_and_display_positions() {
-        let mut state = GameplaySongPositionState::new(12.0, 1_250_000_000, 11.5, 1.2);
+        let mut state = GameplaySongPositionState::new(12.0, 150.0, 1_250_000_000, 11.5, 1.2);
 
         assert_eq!(state.current_beat, 12.0);
+        assert_eq!(state.current_bpm, 150.0);
         assert_eq!(state.current_music_time_ns, 1_250_000_000);
         assert_eq!(state.current_beat_display, 11.5);
         assert_eq!(state.current_music_time_display, 1.2);
 
-        state.set_music_position(13.0, 1_300_000_000);
+        state.set_music_position(13.0, 175.0, 1_300_000_000);
         state.set_display_position(12.75, 1.275);
 
         assert_eq!(state.current_beat, 13.0);
+        assert_eq!(state.current_bpm, 175.0);
         assert_eq!(state.current_music_time_ns, 1_300_000_000);
         assert_eq!(state.current_beat_display, 12.75);
         assert_near(state.current_music_time_display, 1.275);

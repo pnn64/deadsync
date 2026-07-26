@@ -135,8 +135,52 @@ fn run_suite(label: &str, bpm_segments: usize, include_assist: bool) {
     if include_assist {
         run_frame_pair(&timing, &players, &times, 1, true);
     }
+    run_bpm_reuse_pair(&timing, &times);
     run_notefield_search_pair(&timing, &players, &times);
     run_input_pair(&timing, &players, &times[..CHORDS]);
+}
+
+fn run_bpm_reuse_pair(timing: &TimingData, times: &[SongTimeNs]) {
+    let mut old_cache = BeatInfoCache::new(timing);
+    let old = measure(|| {
+        let mut checksum = 0_u64;
+        for &time_ns in times {
+            let info = timing.get_beat_info_from_time_ns_cached(time_ns, &mut old_cache);
+            mix_beat_info(
+                &mut checksum,
+                info.beat,
+                info.is_in_freeze,
+                info.is_in_delay,
+            );
+            mix_f32(&mut checksum, black_box(timing.get_bpm_for_beat(info.beat)));
+        }
+        checksum
+    });
+    let mut new_cache = BeatInfoCache::new(timing);
+    let new = measure(|| {
+        let mut checksum = 0_u64;
+        for &time_ns in times {
+            let info = timing.get_beat_info_from_time_ns_cached(time_ns, &mut new_cache);
+            mix_beat_info(
+                &mut checksum,
+                info.beat,
+                info.is_in_freeze,
+                info.is_in_delay,
+            );
+            mix_f32(&mut checksum, black_box(info.bpm));
+        }
+        checksum
+    });
+    assert_eq!(old.checksum, new.checksum);
+
+    println!("\nframe BPM resolution ({} operations)", times.len());
+    print_result("second BPM search", times.len(), &old);
+    print_result("reuse timing walk", times.len(), &new);
+    println!(
+        "  speedup {:>7.2}x, elapsed reduction {:>6.2}%",
+        old.elapsed.as_secs_f64() / new.elapsed.as_secs_f64(),
+        100.0 * (1.0 - new.elapsed.as_secs_f64() / old.elapsed.as_secs_f64()),
+    );
 }
 
 fn run_frame_pair(

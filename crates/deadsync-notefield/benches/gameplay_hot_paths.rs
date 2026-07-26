@@ -245,6 +245,24 @@ fn main() {
         },
     );
     run_pair(
+        "frame-cached identity appearance",
+        "96 visible notes with ordinary actor-alpha and glow output",
+        |frame| {
+            let output = common_transforms.old_frame_identity_appearance(frame);
+            Output {
+                checksum: output.checksum,
+                samples: output.samples,
+            }
+        },
+        |frame| {
+            let output = common_transforms.new_frame_identity_appearance(frame);
+            Output {
+                checksum: output.checksum,
+                samples: output.samples,
+            }
+        },
+    );
+    run_pair(
         "identity note-rotation fast path",
         "96 visible notes without confusion or dizzy effects",
         |frame| {

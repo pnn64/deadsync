@@ -82,11 +82,7 @@ where
 
     pub fn refresh_seek_dependent_state(&mut self) {
         refresh_active_attack_masks(self, 0.0);
-        let current_bpm = self
-            .timing_runtime
-            .timing
-            .get_bpm_for_beat(self.clock.song_position.current_beat);
-        self.refresh_live_notefield_options(current_bpm);
+        self.refresh_live_notefield_options(self.clock.song_position.current_bpm);
     }
 
     pub fn set_music_rate(&mut self, rate: f32) -> bool {
@@ -1427,11 +1423,7 @@ where
                 .note_disabled(assist_sfx_generation);
         }
         refresh_active_attack_masks(self, delta_time);
-        let current_bpm = self
-            .timing_runtime
-            .timing
-            .get_bpm_for_beat(self.clock.song_position.current_beat);
-        self.refresh_live_notefield_options(current_bpm);
+        self.refresh_live_notefield_options(self.clock.song_position.current_bpm);
     }
 
     pub fn run_post_input_gameplay_phases(

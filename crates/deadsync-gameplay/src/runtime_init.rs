@@ -639,7 +639,8 @@ where
     });
     let init_music_time = -start_delay;
     let init_music_time_ns = song_time_ns_from_seconds(init_music_time);
-    let init_beat = timing.get_beat_for_time_ns(init_music_time_ns);
+    let init_beat_info = timing.get_beat_info_from_time_ns(init_music_time_ns);
+    let init_beat = init_beat_info.beat;
     let current_music_time_visible_ns: [SongTimeNs; MAX_PLAYERS] = std::array::from_fn(|player| {
         let delay = global_visual_delay_seconds + player_visual_delay_seconds[player];
         visible_notefield_time_ns(init_music_time_ns, delay)
@@ -964,6 +965,7 @@ where
             audio_clock: GameplayAudioClockState::new(start_delay, 0.0, 0.0),
             song_position: GameplaySongPositionState::new(
                 init_beat,
+                init_beat_info.bpm,
                 song_time_ns_from_seconds(init_music_time),
                 init_beat,
                 init_music_time,

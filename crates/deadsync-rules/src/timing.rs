@@ -398,7 +398,7 @@ impl BeatInfoCache {
 struct GetBeatArgs {
     elapsed_time_ns: TimingNs,
     beat: f32,
-    bps_out: f32,
+    bpm_out: f32,
     warp_dest_out: f32,
     warp_begin_out: i32,
     freeze_out: bool,
@@ -410,7 +410,7 @@ impl Default for GetBeatArgs {
         Self {
             elapsed_time_ns: INVALID_TIMING_NS,
             beat: 0.0,
-            bps_out: 0.0,
+            bpm_out: 0.0,
             warp_dest_out: 0.0,
             warp_begin_out: 0,
             freeze_out: false,
@@ -422,6 +422,7 @@ impl Default for GetBeatArgs {
 #[derive(Debug, Clone, Copy, Default)]
 pub struct BeatInfo {
     pub beat: f32,
+    pub bpm: f32,
     pub is_in_freeze: bool,
     pub is_in_delay: bool,
 }
@@ -669,6 +670,7 @@ impl TimingData {
 
         BeatInfo {
             beat: args.beat,
+            bpm: args.bpm_out,
             is_in_freeze: args.freeze_out,
             is_in_delay: args.delay_out,
         }
@@ -702,6 +704,7 @@ impl TimingData {
 
         BeatInfo {
             beat: args.beat,
+            bpm: args.bpm_out,
             is_in_freeze: args.freeze_out,
             is_in_delay: args.delay_out,
         }
@@ -884,7 +887,8 @@ impl TimingData {
         let delays = &self.delays;
 
         let mut curr_segment = start.bpm_idx + start.warp_idx + start.stop_idx + start.delay_idx;
-        let mut bps = self.get_bpm_for_beat(note_row_to_beat(start.last_row)) / 60.0;
+        let mut bpm = self.get_bpm_for_beat(note_row_to_beat(start.last_row));
+        let mut bps = bpm / 60.0;
         while curr_segment < max_segment {
             let mut event_row = i32::MAX;
             let mut event_type = TimingEvent::NotFound;
@@ -916,7 +920,8 @@ impl TimingData {
             match event_type {
                 TimingEvent::WarpDest => start.is_warping = false,
                 TimingEvent::Bpm => {
-                    bps = bpms[start.bpm_idx].bpm / 60.0;
+                    bpm = bpms[start.bpm_idx].bpm;
+                    bps = bpm / 60.0;
                     start.bpm_idx += 1;
                     curr_segment += 1;
                 }
@@ -928,7 +933,7 @@ impl TimingData {
                     if args.elapsed_time_ns < delay_end_ns {
                         args.delay_out = true;
                         args.beat = delay.beat;
-                        args.bps_out = bps;
+                        args.bpm_out = bpm;
                         start.last_row = event_row;
                         return;
                     }
@@ -948,7 +953,7 @@ impl TimingData {
                     if args.elapsed_time_ns < stop_end_ns {
                         args.freeze_out = true;
                         args.beat = stop.beat;
-                        args.bps_out = bps;
+                        args.bpm_out = bpm;
                         start.last_row = event_row;
                         return;
                     }
@@ -977,7 +982,7 @@ impl TimingData {
         }
         let delta_seconds = timing_ns_delta_seconds(args.elapsed_time_ns, start.last_time_ns);
         args.beat = delta_seconds.mul_add(bps, note_row_to_beat(start.last_row));
-        args.bps_out = bps;
+        args.bpm_out = bpm;
     }
 
     fn get_elapsed_time_internal_mut(
@@ -2377,6 +2382,61 @@ mod tests {
         assert!(!delay_info.is_in_freeze);
         assert!(delay_info.is_in_delay);
         assert!((delay_info.beat - 6.0).abs() < 0.0001);
+    }
+
+    #[test]
+    fn beat_info_carries_the_exact_active_bpm_through_timing_events() {
+        let timing = TimingData::from_segments(
+            0.0,
+            0.0,
+            &TimingSegments {
+                bpms: vec![(0.0, 123.45), (4.0, 177.7), (8.0, 91.3), (10.5, 205.25)],
+                stops: vec![StopSegment {
+                    beat: 6.0,
+                    duration: 0.250,
+                }],
+                delays: vec![DelaySegment {
+                    beat: 4.0,
+                    duration: 0.125,
+                }],
+                warps: vec![WarpSegment {
+                    beat: 10.0,
+                    length: 1.0,
+                }],
+                ..TimingSegments::default()
+            },
+            &[],
+        );
+        let start = timing
+            .get_time_for_beat_ns(-1.0)
+            .saturating_sub(timing_ns_from_seconds(0.050));
+        let end = timing
+            .get_time_for_beat_ns(14.0)
+            .saturating_add(timing_ns_from_seconds(0.050));
+        let mut cache = BeatInfoCache::new(&timing);
+        let mut time_ns = start;
+
+        while time_ns <= end {
+            let uncached = timing.get_beat_info_from_time_ns(time_ns);
+            let cached = timing.get_beat_info_from_time_ns_cached(time_ns, &mut cache);
+            let expected_bpm = timing.get_bpm_for_beat(uncached.beat);
+
+            assert_eq!(uncached.bpm.to_bits(), expected_bpm.to_bits());
+            assert_eq!(cached.beat.to_bits(), uncached.beat.to_bits());
+            assert_eq!(cached.bpm.to_bits(), uncached.bpm.to_bits());
+            assert_eq!(cached.is_in_freeze, uncached.is_in_freeze);
+            assert_eq!(cached.is_in_delay, uncached.is_in_delay);
+
+            time_ns = time_ns.saturating_add(7_000_000);
+        }
+
+        for beat in [0.0, 4.0, 6.0, 8.0, 10.0, 11.0, 14.0] {
+            let info = timing.get_beat_info_from_time_ns(timing.get_time_for_beat_ns(beat));
+            assert_eq!(
+                info.bpm.to_bits(),
+                timing.get_bpm_for_beat(info.beat).to_bits(),
+            );
+        }
     }
 
     #[test]

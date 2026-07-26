@@ -636,6 +636,45 @@ impl CommonNoteTransformBench {
         output
     }
 
+    pub fn old_frame_identity_appearance(&self, frame: usize) -> CommonNoteTransformBenchFrame {
+        let params = std::hint::black_box(self.appearance);
+        let mut output = CommonNoteTransformBenchFrame::default();
+        for note in 0..Self::VISIBLE_NOTES {
+            let y = 8.0 + ((note * 37 + frame) % 640) as f32;
+            let percent_visible = appearance_note_alpha(y, frame as f32 / 120.0, 0.0, params);
+            record_common_transform(
+                &mut output,
+                appearance_note_actor_alpha_from_alpha(percent_visible),
+            );
+            record_common_transform(
+                &mut output,
+                appearance_note_glow_from_alpha(percent_visible),
+            );
+        }
+        output
+    }
+
+    pub fn new_frame_identity_appearance(&self, frame: usize) -> CommonNoteTransformBenchFrame {
+        let params = std::hint::black_box(self.appearance);
+        let identity = std::hint::black_box(appearance_note_alpha_is_identity(params));
+        let mut output = CommonNoteTransformBenchFrame::default();
+        for note in 0..Self::VISIBLE_NOTES {
+            let y = 8.0 + ((note * 37 + frame) % 640) as f32;
+            let (note_alpha, glow_alpha) = if identity {
+                (1.0, 0.0)
+            } else {
+                let percent_visible = appearance_note_alpha(y, frame as f32 / 120.0, 0.0, params);
+                (
+                    appearance_note_actor_alpha_from_alpha(percent_visible),
+                    appearance_note_glow_from_alpha(percent_visible),
+                )
+            };
+            record_common_transform(&mut output, note_alpha);
+            record_common_transform(&mut output, glow_alpha);
+        }
+        output
+    }
+
     pub fn old_rotation_frame(&self, frame: usize) -> CommonNoteTransformBenchFrame {
         let params = std::hint::black_box(self.rotation);
         let song_beat = frame as f32 / 30.0;
@@ -870,6 +909,54 @@ mod common_note_transform_tests {
                 appearance_note_alpha(y, 3.25, 0.2, active).to_bits(),
                 appearance_note_alpha_full(y, 3.25, 0.2, active).to_bits()
             );
+        }
+    }
+
+    #[test]
+    fn identity_appearance_detection_preserves_alpha_and_glow_output() {
+        let identities = [
+            NoteAlphaParams::default(),
+            NoteAlphaParams {
+                hidden: -0.0,
+                sudden: -0.0,
+                stealth: -0.0,
+                blink: -0.0,
+                random_vanish: -0.0,
+                hidden_offset: f32::NAN,
+                sudden_offset: f32::INFINITY,
+            },
+        ];
+        for params in identities {
+            assert!(appearance_note_alpha_is_identity(params));
+            for y in [-1.0, 0.0, 160.0, f32::NAN] {
+                let percent = appearance_note_alpha(y, 3.25, 0.2, params);
+                assert_eq!(percent.to_bits(), 1.0_f32.to_bits());
+                assert_eq!(
+                    appearance_note_actor_alpha_from_alpha(percent).to_bits(),
+                    1.0_f32.to_bits(),
+                );
+                assert_eq!(
+                    appearance_note_glow_from_alpha(percent).to_bits(),
+                    0.0_f32.to_bits(),
+                );
+            }
+        }
+
+        for params in [
+            NoteAlphaParams {
+                hidden: f32::EPSILON,
+                ..NoteAlphaParams::default()
+            },
+            NoteAlphaParams {
+                blink: f32::NAN,
+                ..NoteAlphaParams::default()
+            },
+            NoteAlphaParams {
+                random_vanish: -0.25,
+                ..NoteAlphaParams::default()
+            },
+        ] {
+            assert!(!appearance_note_alpha_is_identity(params));
         }
     }
 
@@ -1219,15 +1306,19 @@ pub(crate) fn appearance_note_alpha(
     if y < 0.0 {
         return 1.0;
     }
-    if params.hidden == 0.0
+    if appearance_note_alpha_is_identity(params) {
+        return 1.0;
+    }
+    appearance_note_alpha_full(y, elapsed, mini, params)
+}
+
+#[inline(always)]
+pub(crate) fn appearance_note_alpha_is_identity(params: NoteAlphaParams) -> bool {
+    params.hidden == 0.0
         && params.sudden == 0.0
         && params.stealth == 0.0
         && params.blink == 0.0
         && params.random_vanish == 0.0
-    {
-        return 1.0;
-    }
-    appearance_note_alpha_full(y, elapsed, mini, params)
 }
 
 #[inline(always)]

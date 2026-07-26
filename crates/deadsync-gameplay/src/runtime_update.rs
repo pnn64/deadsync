@@ -936,9 +936,12 @@ where
         current_beat_display: f32,
         current_music_time_display: f32,
     ) {
-        self.clock
-            .song_position
-            .set_music_position(current_beat, current_music_time_ns);
+        let current_bpm = self.timing_runtime.timing.get_bpm_for_beat(current_beat);
+        self.clock.song_position.set_music_position(
+            current_beat,
+            current_bpm,
+            current_music_time_ns,
+        );
         self.clock
             .song_position
             .set_display_position(current_beat_display, current_music_time_display);
@@ -2983,6 +2986,7 @@ where
             .time_to_beat_caches
             .song_info(&self.timing_runtime.timing, music_time_ns);
         self.clock.song_position.current_beat = beat_info.beat;
+        self.clock.song_position.current_bpm = beat_info.bpm;
         self.clock.song_position.current_beat_display = self
             .timing_runtime
             .time_to_beat_caches

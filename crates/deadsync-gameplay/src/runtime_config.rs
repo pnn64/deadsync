@@ -639,6 +639,7 @@ pub struct GameplayTimingRuntimeState {
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct GameplaySongPositionState {
     pub current_beat: f32,
+    pub current_bpm: f32,
     pub current_music_time_ns: SongTimeNs,
     pub current_beat_display: f32,
     pub current_music_time_display: f32,
@@ -648,12 +649,14 @@ impl GameplaySongPositionState {
     #[inline(always)]
     pub const fn new(
         current_beat: f32,
+        current_bpm: f32,
         current_music_time_ns: SongTimeNs,
         current_beat_display: f32,
         current_music_time_display: f32,
     ) -> Self {
         Self {
             current_beat,
+            current_bpm,
             current_music_time_ns,
             current_beat_display,
             current_music_time_display,
@@ -661,8 +664,14 @@ impl GameplaySongPositionState {
     }
 
     #[inline(always)]
-    pub fn set_music_position(&mut self, current_beat: f32, current_music_time_ns: SongTimeNs) {
+    pub fn set_music_position(
+        &mut self,
+        current_beat: f32,
+        current_bpm: f32,
+        current_music_time_ns: SongTimeNs,
+    ) {
         self.current_beat = current_beat;
+        self.current_bpm = current_bpm;
         self.current_music_time_ns = current_music_time_ns;
     }
 
