@@ -1,5 +1,6 @@
 use deadsync_input::keymap::{
-    pad_code_build_for_bench, pad_code_build_legacy_for_bench, pad_direction_lookup_for_bench,
+    idle_debounce_drain_for_bench, idle_debounce_drain_legacy_for_bench, pad_code_build_for_bench,
+    pad_code_build_legacy_for_bench, pad_direction_lookup_for_bench,
     pad_direction_lookup_legacy_for_bench, raw_pad_button_lookup_for_bench,
     raw_pad_button_lookup_legacy_for_bench,
 };
@@ -94,6 +95,11 @@ struct BenchResult {
 }
 
 fn main() {
+    benchmark_pair(
+        "idle per-frame debounce draining",
+        idle_debounce_drain_legacy_for_bench,
+        idle_debounce_drain_for_bench,
+    );
     benchmark_pair(
         "device-specific pad-direction lookup",
         pad_direction_lookup_legacy_for_bench,

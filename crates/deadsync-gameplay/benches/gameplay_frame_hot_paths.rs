@@ -1,8 +1,8 @@
 use deadsync_gameplay::{
     ActiveColumnScanBench, CrossoverCueCursorBench, DisabledAssistClapBench,
     GameplayFrameHotPathBenchOutput, IdleAttackRefreshBench, IdleHoldPhaseBench, IdleLaneScanBench,
-    LiveNotefieldOptionsBench, OptionalFrameWorkBench, RegularCueCursorBench,
-    SharedMissCutoffBench,
+    InputLaneSearchCursorBench, InputQueueDrainBench, LiveNotefieldOptionsBench,
+    OptionalFrameWorkBench, RegularCueCursorBench, SharedMissCutoffBench,
 };
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::hint::black_box;
@@ -99,6 +99,24 @@ struct BenchResult {
 
 fn main() {
     println!("gameplay frame hot-path microbenchmarks");
+
+    let old_lane_search = InputLaneSearchCursorBench::default();
+    let mut new_lane_search = old_lane_search.clone();
+    run_pair(
+        "input judgment lane-window cursor",
+        "8192 notes in one lane during 120 Hz playback with periodic seeks",
+        move |frame| old_lane_search.old_frame(frame),
+        move |frame| new_lane_search.new_frame(frame),
+    );
+
+    let mut old_input_queue = InputQueueDrainBench::default();
+    let mut new_input_queue = old_input_queue.clone();
+    run_pair(
+        "input queue batch draining",
+        "eight timestamped physical edges accepted and drained in order",
+        move |frame| old_input_queue.old_frame(frame),
+        move |frame| new_input_queue.new_frame(frame),
+    );
 
     let mut old_attacks = IdleAttackRefreshBench::default();
     let mut new_attacks = old_attacks.clone();

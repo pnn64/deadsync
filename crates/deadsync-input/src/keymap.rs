@@ -289,21 +289,34 @@ static COMPILED_KEYMAP: std::sync::LazyLock<RwLock<CompiledKeymap>> =
 static COMPILED_KEYMAP_GEN: AtomicU64 = AtomicU64::new(1);
 static INPUT_DEBOUNCE_SECONDS_BITS: AtomicU32 = AtomicU32::new((0.02f32).to_bits());
 
+#[derive(Debug, Default)]
+struct ThreadDebounceState {
+    keyboard: DebounceStore,
+    pad: DebounceStore,
+}
+
 thread_local! {
     static THREAD_COMPILED_KEYMAP: RefCell<(u64, CompiledKeymap)> =
         RefCell::new((0, CompiledKeymap::default()));
     // Input mapping/draining is app-thread work; keep debounce state local to
     // that thread instead of paying a mutex on every raw input event.
-    static THREAD_KEYBOARD_DEBOUNCE_STATE: RefCell<DebounceStore> =
+    static THREAD_DEBOUNCE_STATE: RefCell<ThreadDebounceState> =
+        RefCell::new(ThreadDebounceState::default());
+    #[cfg(feature = "bench-support")]
+    static BENCH_LEGACY_KEYBOARD_DEBOUNCE_STATE: RefCell<DebounceStore> =
         RefCell::new(DebounceStore::new());
-    static THREAD_PAD_DEBOUNCE_STATE: RefCell<DebounceStore> =
+    #[cfg(feature = "bench-support")]
+    static BENCH_LEGACY_PAD_DEBOUNCE_STATE: RefCell<DebounceStore> =
         RefCell::new(DebounceStore::new());
 }
 
 #[inline(always)]
 fn reset_debounce_state(key_slot_count: usize, pad_slot_count: usize) {
-    THREAD_KEYBOARD_DEBOUNCE_STATE.with(|states| states.borrow_mut().prepare_slots(key_slot_count));
-    THREAD_PAD_DEBOUNCE_STATE.with(|states| states.borrow_mut().clear_and_reserve(pad_slot_count));
+    THREAD_DEBOUNCE_STATE.with(|states| {
+        let mut states = states.borrow_mut();
+        states.keyboard.prepare_slots(key_slot_count);
+        states.pad.clear_and_reserve(pad_slot_count);
+    });
 }
 
 #[inline(always)]
@@ -978,9 +991,9 @@ pub fn map_raw_key_event_with(ev: &RawKeyboardEvent, emit: impl FnMut(InputEvent
     else {
         return;
     };
-    let edges = THREAD_KEYBOARD_DEBOUNCE_STATE.with(|states| {
+    let edges = THREAD_DEBOUNCE_STATE.with(|states| {
         debounce_input_edge_in_store_mut(
-            &mut states.borrow_mut(),
+            &mut states.borrow_mut().keyboard,
             binding.slot as usize,
             binding.mask,
             InputSource::Keyboard,
@@ -1075,9 +1088,9 @@ pub fn map_pad_event_with(ev: &PadEvent, mut emit: impl FnMut(InputEvent)) {
     }) else {
         return;
     };
-    let edges = THREAD_PAD_DEBOUNCE_STATE.with(|states| {
+    let edges = THREAD_DEBOUNCE_STATE.with(|states| {
         debounce_input_edge_in_store_mut(
-            &mut states.borrow_mut(),
+            &mut states.borrow_mut().pad,
             slot,
             mask,
             InputSource::Gamepad,
@@ -1091,24 +1104,56 @@ pub fn map_pad_event_with(ev: &PadEvent, mut emit: impl FnMut(InputEvent)) {
 }
 
 pub fn drain_debounced_input_events_with(mut emit: impl FnMut(InputEvent)) -> bool {
+    THREAD_DEBOUNCE_STATE.with(|states| {
+        let mut states = states.borrow_mut();
+        if !states.keyboard.has_scheduled_work() && !states.pad.has_scheduled_work() {
+            return false;
+        }
+        let now = Instant::now();
+        let windows = debounce_windows();
+        let mut flushed = emit_due_debounce_edges_from_mut(
+            &mut states.keyboard,
+            now,
+            windows,
+            |edge| emit_input_events_from_edge(edge, &mut emit),
+        );
+        flushed |= emit_due_debounce_edges_from_mut(
+            &mut states.pad,
+            now,
+            windows,
+            |edge| emit_input_events_from_edge(edge, &mut emit),
+        );
+        flushed
+    })
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn idle_debounce_drain_legacy_for_bench() -> u64 {
     let now = Instant::now();
-    let mut flushed = THREAD_KEYBOARD_DEBOUNCE_STATE.with(|states| {
+    let mut flushed = BENCH_LEGACY_KEYBOARD_DEBOUNCE_STATE.with(|states| {
         emit_due_debounce_edges_from_mut(
             &mut states.borrow_mut(),
             now,
             debounce_windows(),
-            |edge| emit_input_events_from_edge(edge, &mut emit),
+            |_| {},
         )
     });
-    flushed |= THREAD_PAD_DEBOUNCE_STATE.with(|states| {
+    flushed |= BENCH_LEGACY_PAD_DEBOUNCE_STATE.with(|states| {
         emit_due_debounce_edges_from_mut(
             &mut states.borrow_mut(),
             now,
             debounce_windows(),
-            |edge| emit_input_events_from_edge(edge, &mut emit),
+            |_| {},
         )
     });
-    flushed
+    u64::from(flushed)
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn idle_debounce_drain_for_bench() -> u64 {
+    u64::from(drain_debounced_input_events_with(|_| {}))
 }
 
 #[cfg(test)]
@@ -1594,6 +1639,74 @@ mod tests {
             actual.is_empty(),
             "quick release/repress chatter should not escape the shared debounce path"
         );
+    }
+
+    #[test]
+    fn combined_debounce_drain_flushes_due_keyboard_and_pad_releases() {
+        struct DebounceWindowReset(u32);
+
+        impl Drop for DebounceWindowReset {
+            fn drop(&mut self) {
+                INPUT_DEBOUNCE_SECONDS_BITS.store(self.0, Ordering::Relaxed);
+            }
+        }
+
+        let _guard = lock_test_guard();
+        let _reset = TestReset::capture();
+        let old_window =
+            INPUT_DEBOUNCE_SECONDS_BITS.swap((0.001f32).to_bits(), Ordering::Relaxed);
+        let _window_reset = DebounceWindowReset(old_window);
+        let mut km = Keymap::default();
+        km.bind(
+            VirtualAction::p1_left,
+            &[
+                InputBinding::Key(KeyCode::ArrowLeft),
+                InputBinding::PadDir(PadDir::Left),
+            ],
+        );
+        set_keymap(km);
+
+        let timestamp = Instant::now();
+        let keyboard = |pressed| RawKeyboardEvent {
+            code: KeyCode::ArrowLeft,
+            pressed,
+            repeat: false,
+            timestamp,
+            host_nanos: 100,
+        };
+        let pad = |pressed| PadEvent::Dir {
+            id: PadId(0),
+            timestamp,
+            host_nanos: 200,
+            dir: PadDir::Left,
+            pressed,
+        };
+        let mut immediate = Vec::new();
+        map_raw_key_event_with(&keyboard(true), |event| immediate.push(event));
+        map_pad_event_with(&pad(true), |event| immediate.push(event));
+        assert_eq!(immediate.len(), 2, "both presses should emit immediately");
+
+        immediate.clear();
+        map_raw_key_event_with(&keyboard(false), |event| immediate.push(event));
+        map_pad_event_with(&pad(false), |event| immediate.push(event));
+        assert!(immediate.is_empty(), "both releases should be delayed");
+
+        std::thread::sleep(Duration::from_millis(3));
+        let mut delayed = Vec::new();
+        assert!(drain_debounced_input_events_with(|event| delayed.push(event)));
+        assert_eq!(
+            delayed
+                .iter()
+                .map(|event| (event.source, event.action, event.pressed))
+                .collect::<Vec<_>>(),
+            [
+                (InputSource::Keyboard, VirtualAction::p1_left, false),
+                (InputSource::Keyboard, VirtualAction::p1_menu_left, false),
+                (InputSource::Gamepad, VirtualAction::p1_left, false),
+                (InputSource::Gamepad, VirtualAction::p1_menu_left, false),
+            ]
+        );
+        assert!(!drain_debounced_input_events_with(|_| {}));
     }
 
     #[test]

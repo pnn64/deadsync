@@ -83,6 +83,11 @@ impl DebounceStore {
     }
 
     #[inline(always)]
+    pub(crate) fn has_scheduled_work(&self) -> bool {
+        !self.due_slots.is_empty()
+    }
+
+    #[inline(always)]
     fn ensure_slot(&mut self, slot: usize) {
         if slot >= self.slots.len() {
             self.slots.resize(slot + 1, SlotState::default());

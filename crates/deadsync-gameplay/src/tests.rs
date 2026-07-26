@@ -16652,6 +16652,60 @@ mod tests {
     }
 
     #[test]
+    fn closest_lane_note_cursor_matches_binary_search_across_playback_and_seeks() {
+        let timing = test_timing(20_000);
+        let notes = (0..512)
+            .map(|index| {
+                let row = index * 24;
+                test_note_at(
+                    NoteType::Tap,
+                    None,
+                    false,
+                    row,
+                    row as f32 / ROWS_PER_BEAT as f32,
+                )
+            })
+            .collect::<Vec<_>>();
+        let note_indices = (0..notes.len()).collect::<Vec<_>>();
+        let note_times_ns = notes
+            .iter()
+            .map(|note| timing.get_time_for_beat_ns(note.beat))
+            .collect::<Vec<_>>();
+        let mut cursor = LaneNoteWindowCursor::default();
+        let rows = (0..4_096)
+            .map(|frame| frame * 2)
+            .chain([11_000, 300, 0, 7_000, 1_000]);
+
+        for current in rows {
+            let search_rows = LaneSearchRows {
+                current,
+                start: current.saturating_sub(96),
+                end: current.saturating_add(97),
+            };
+            let current_time_ns =
+                timing.get_time_for_beat_ns(current as f32 / ROWS_PER_BEAT as f32);
+            let expected = closest_lane_note_search_with_rows(
+                &note_indices,
+                &notes,
+                &note_times_ns,
+                &timing,
+                current_time_ns,
+                search_rows,
+            );
+            let actual = closest_lane_note_search_with_rows_from_cursor(
+                &note_indices,
+                &notes,
+                &note_times_ns,
+                &timing,
+                current_time_ns,
+                search_rows,
+                &mut cursor,
+            );
+            assert_eq!(actual, expected, "current_row={current}");
+        }
+    }
+
+    #[test]
     fn closest_note_skips_fake_segment_taps_and_judged_mines() {
         let timing = TimingData::from_segments(
             0.0,

@@ -19,14 +19,14 @@ impl GameplayBoundaryRuntimeState {
 
 #[derive(Clone, Debug)]
 pub struct GameplayPendingInputState<T> {
-    pub edges: VecDeque<T>,
+    pub edges: Vec<T>,
 }
 
 impl<T> GameplayPendingInputState<T> {
     #[inline(always)]
     pub fn with_capacity(capacity: usize) -> Self {
         Self {
-            edges: VecDeque::with_capacity(capacity),
+            edges: Vec::with_capacity(capacity),
         }
     }
 }
@@ -419,4 +419,3 @@ fn build_crossover_cues_core(
     }
     cues
 }
-

@@ -1796,7 +1796,7 @@ mod runtime_regression_tests {
         state
             .pending_input
             .edges
-            .push_back(test_input_edge_at(Lane::Left, true, event_time_ns));
+            .push(test_input_edge_at(Lane::Left, true, event_time_ns));
 
         let now = std::time::Instant::now();
         let clock = SongClockSnapshot {
@@ -1830,7 +1830,7 @@ mod runtime_regression_tests {
         let event_time_ns = song_time_ns_from_seconds(12.345);
         let edge = test_input_edge_at(Lane::Left, true, INVALID_SONG_TIME_NS);
         let captured_at = edge.captured_at;
-        state.pending_input.edges.push_back(edge);
+        state.pending_input.edges.push(edge);
 
         let clock = SongClockSnapshot {
             song_time_ns: event_time_ns,
@@ -1851,13 +1851,48 @@ mod runtime_regression_tests {
     }
 
     #[test]
+    fn queued_input_batch_preserves_edge_order_and_drains_fully() {
+        let mut state = regression_state();
+        let press_time_ns = song_time_ns_from_seconds(12.0);
+        let release_time_ns = song_time_ns_from_seconds(12.1);
+        let mut press = test_input_edge_at(Lane::Left, true, press_time_ns);
+        press.record_replay = true;
+        let mut release = test_input_edge_at(Lane::Left, false, release_time_ns);
+        release.record_replay = true;
+        state.pending_input.edges.extend([press, release]);
+
+        let clock = SongClockSnapshot {
+            song_time_ns: release_time_ns,
+            seconds_per_second: 1.0,
+            mapped_audio: true,
+            valid_at: std::time::Instant::now(),
+            valid_at_host_nanos: 0,
+            timing_diag_enabled: false,
+            timing_diag_callback_gap_ns: 0,
+        };
+        let mut phase_timings = GameplayUpdatePhaseTimings::default();
+        process_input_edges(&mut state, false, &mut phase_timings, clock);
+
+        assert!(state.pending_input_is_empty());
+        assert!(!state.lane_is_pressed(0));
+        assert_eq!(
+            state
+                .recorded_replay_edges()
+                .iter()
+                .map(|edge| (edge.pressed, edge.event_music_time_ns))
+                .collect::<Vec<_>>(),
+            [(true, press_time_ns), (false, release_time_ns)]
+        );
+    }
+
+    #[test]
     fn empty_live_press_steps_receptor() {
         let mut state = regression_state();
         let event_time_ns = song_time_ns_from_seconds(12.345);
         state
             .pending_input
             .edges
-            .push_back(test_input_edge_at(Lane::Left, true, event_time_ns));
+            .push(test_input_edge_at(Lane::Left, true, event_time_ns));
 
         let now = std::time::Instant::now();
         let clock = SongClockSnapshot {

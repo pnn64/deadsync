@@ -2372,12 +2372,7 @@ where
 
     #[inline(always)]
     pub fn push_pending_input_edge(&mut self, edge: GameplayInputEdge) {
-        self.pending_input.edges.push_back(edge);
-    }
-
-    #[inline(always)]
-    pub fn pop_pending_input_edge(&mut self) -> Option<GameplayInputEdge> {
-        self.pending_input.edges.pop_front()
+        self.pending_input.edges.push(edge);
     }
 
     #[inline(always)]

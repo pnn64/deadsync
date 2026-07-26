@@ -50,6 +50,52 @@ pub fn lane_note_window_bounds_rows(
     )
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct LaneNoteWindowCursor {
+    pub start: usize,
+    pub end: usize,
+}
+
+#[inline(always)]
+fn partition_point_from_hint<T>(
+    values: &[T],
+    hint: usize,
+    mut predicate: impl FnMut(&T) -> bool,
+) -> usize {
+    let cursor = hint.min(values.len());
+    if cursor < values.len() && predicate(&values[cursor]) {
+        let next = cursor + 1;
+        if next == values.len() || !predicate(&values[next]) {
+            return next;
+        }
+    } else if cursor > 0 && !predicate(&values[cursor - 1]) {
+        let previous = cursor - 1;
+        if previous == 0 || predicate(&values[previous - 1]) {
+            return previous;
+        }
+    } else {
+        return cursor;
+    }
+    values.partition_point(predicate)
+}
+
+#[inline(always)]
+pub fn lane_note_window_bounds_rows_from_cursor(
+    note_indices: &[usize],
+    notes: &[Note],
+    start_row: usize,
+    end_row: usize,
+    cursor: &mut LaneNoteWindowCursor,
+) -> (usize, usize) {
+    cursor.start = partition_point_from_hint(note_indices, cursor.start, |&note_index| {
+        notes[note_index].row_index < start_row
+    });
+    cursor.end = partition_point_from_hint(note_indices, cursor.end, |&note_index| {
+        notes[note_index].row_index < end_row
+    });
+    (cursor.start, cursor.end)
+}
+
 #[inline(always)]
 pub fn timing_row_nearest(timing: &TimingData, beat: f32) -> usize {
     timing.get_row_for_beat(beat).unwrap_or(0)
@@ -116,6 +162,46 @@ fn closest_lane_note_search_with_rows(
     let search_end_row = rows.end;
     let (search_start_idx, search_end_idx) =
         lane_note_window_bounds_rows(note_indices, notes, search_start_row, search_end_row);
+    let candidate = closest_lane_note_ns(
+        note_indices,
+        notes,
+        note_times_ns,
+        timing,
+        current_time_ns,
+        current_row_index,
+        search_start_idx,
+        search_end_idx,
+    );
+
+    LaneNoteSearch {
+        current_row_index,
+        search_start_row,
+        search_end_row,
+        search_start_idx,
+        search_end_idx,
+        candidate,
+    }
+}
+
+fn closest_lane_note_search_with_rows_from_cursor(
+    note_indices: &[usize],
+    notes: &[Note],
+    note_times_ns: &[SongTimeNs],
+    timing: &TimingData,
+    current_time_ns: SongTimeNs,
+    rows: LaneSearchRows,
+    cursor: &mut LaneNoteWindowCursor,
+) -> LaneNoteSearch {
+    let current_row_index = rows.current;
+    let search_start_row = rows.start;
+    let search_end_row = rows.end;
+    let (search_start_idx, search_end_idx) = lane_note_window_bounds_rows_from_cursor(
+        note_indices,
+        notes,
+        search_start_row,
+        search_end_row,
+        cursor,
+    );
     let candidate = closest_lane_note_ns(
         note_indices,
         notes,

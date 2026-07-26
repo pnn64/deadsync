@@ -67,6 +67,7 @@ impl GameplayNoteRangeState {
 #[derive(Clone, Debug)]
 pub struct GameplayLaneIndexState {
     pub note_indices: [Vec<usize>; MAX_COLS],
+    pub note_search_cursors: [LaneNoteWindowCursor; MAX_COLS],
     pub note_row_indices: [Vec<usize>; MAX_COLS],
     pub hold_indices: [Vec<usize>; MAX_COLS],
     /// Song-lifetime `beat_to_note_row` values indexed by note index.
@@ -82,6 +83,7 @@ impl Default for GameplayLaneIndexState {
     fn default() -> Self {
         Self {
             note_indices: std::array::from_fn(|_| Vec::new()),
+            note_search_cursors: [LaneNoteWindowCursor::default(); MAX_COLS],
             note_row_indices: std::array::from_fn(|_| Vec::new()),
             hold_indices: std::array::from_fn(|_| Vec::new()),
             note_itg_rows: Vec::new(),
@@ -100,6 +102,7 @@ impl GameplayLaneIndexState {
     ) -> Self {
         Self {
             note_indices,
+            note_search_cursors: [LaneNoteWindowCursor::default(); MAX_COLS],
             note_row_indices,
             hold_indices,
             note_itg_rows,
@@ -140,6 +143,7 @@ impl GameplayLaneIndexState {
         for indices in &mut self.note_indices {
             indices.clear();
         }
+        self.note_search_cursors = [LaneNoteWindowCursor::default(); MAX_COLS];
         for indices in &mut self.note_row_indices {
             indices.clear();
         }

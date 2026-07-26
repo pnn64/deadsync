@@ -4,6 +4,186 @@ pub struct GameplayFrameHotPathBenchOutput {
     pub samples: usize,
 }
 
+#[derive(Clone)]
+pub struct InputLaneSearchCursorBench {
+    notes: Vec<Note>,
+    note_indices: Vec<usize>,
+    note_times_ns: Vec<SongTimeNs>,
+    timing: TimingData,
+    cursor: LaneNoteWindowCursor,
+}
+
+impl Default for InputLaneSearchCursorBench {
+    fn default() -> Self {
+        let timing = TimingData::from_segments(
+            0.0,
+            0.0,
+            &TimingSegments {
+                bpms: vec![(0.0, 120.0)],
+                ..TimingSegments::default()
+            },
+            &[],
+        );
+        let notes = (0..8_192)
+            .map(|index| {
+                let beat = index as f32 * 0.5;
+                Note {
+                    beat,
+                    quantization_idx: 0,
+                    column: 0,
+                    note_type: NoteType::Tap,
+                    row_index: index * 24,
+                    result: None,
+                    early_result: None,
+                    hold: None,
+                    mine_result: None,
+                    is_fake: false,
+                    can_be_judged: true,
+                }
+            })
+            .collect::<Vec<_>>();
+        let note_times_ns = notes
+            .iter()
+            .map(|note| timing.get_time_for_beat_ns(note.beat))
+            .collect();
+        Self {
+            note_indices: (0..notes.len()).collect(),
+            notes,
+            note_times_ns,
+            timing,
+            cursor: LaneNoteWindowCursor::default(),
+        }
+    }
+}
+
+impl InputLaneSearchCursorBench {
+    pub fn old_frame(&self, frame: usize) -> GameplayFrameHotPathBenchOutput {
+        let (current_time_ns, rows) = input_search_frame(frame);
+        record_lane_search(closest_lane_note_search_with_rows(
+            &self.note_indices,
+            &self.notes,
+            &self.note_times_ns,
+            &self.timing,
+            current_time_ns,
+            rows,
+        ))
+    }
+
+    pub fn new_frame(&mut self, frame: usize) -> GameplayFrameHotPathBenchOutput {
+        let (current_time_ns, rows) = input_search_frame(frame);
+        record_lane_search(closest_lane_note_search_with_rows_from_cursor(
+            &self.note_indices,
+            &self.notes,
+            &self.note_times_ns,
+            &self.timing,
+            current_time_ns,
+            rows,
+            &mut self.cursor,
+        ))
+    }
+}
+
+#[inline(always)]
+fn input_search_frame(frame: usize) -> (SongTimeNs, LaneSearchRows) {
+    let current = if frame.is_multiple_of(1_009) {
+        (frame * 97) % 180_000
+    } else {
+        frame * 2
+    };
+    let rows = LaneSearchRows {
+        current,
+        start: current.saturating_sub(96),
+        end: current.saturating_add(97),
+    };
+    let current_time_ns =
+        (current as SongTimeNs).saturating_mul(1_000_000_000) / (ROWS_PER_BEAT as SongTimeNs * 2);
+    (current_time_ns, rows)
+}
+
+#[inline(always)]
+fn record_lane_search(search: LaneNoteSearch) -> GameplayFrameHotPathBenchOutput {
+    let mut output = GameplayFrameHotPathBenchOutput {
+        checksum: (search.search_start_idx as u64).rotate_left(11)
+            ^ (search.search_end_idx as u64).rotate_left(23),
+        samples: search
+            .search_end_idx
+            .saturating_sub(search.search_start_idx),
+    };
+    if let Some((note_index, error_ns)) = search.candidate {
+        output.checksum ^= (note_index as u64).rotate_left(37) ^ error_ns as u64;
+        output.samples += 1;
+    }
+    output
+}
+
+#[derive(Clone)]
+pub struct InputQueueDrainBench {
+    deque: VecDeque<GameplayInputEdge>,
+    vector: Vec<GameplayInputEdge>,
+    edges: [GameplayInputEdge; 8],
+}
+
+impl Default for InputQueueDrainBench {
+    fn default() -> Self {
+        let now = Instant::now();
+        Self {
+            deque: VecDeque::with_capacity(8),
+            vector: Vec::with_capacity(8),
+            edges: std::array::from_fn(|index| GameplayInputEdge {
+                lane: lane_from_column(index).expect("benchmark lane"),
+                input_slot: index as u32,
+                pressed: index % 2 == 0,
+                source: InputSource::Keyboard,
+                record_replay: false,
+                captured_at: now,
+                captured_host_nanos: index as u64,
+                stored_at: now,
+                emitted_at: now,
+                queued_at: now,
+                event_music_time_ns: index as SongTimeNs * 8_333_333,
+            }),
+        }
+    }
+}
+
+impl InputQueueDrainBench {
+    pub fn old_frame(&mut self, frame: usize) -> GameplayFrameHotPathBenchOutput {
+        self.deque.extend(self.edges.iter().copied());
+        let mut output = GameplayFrameHotPathBenchOutput {
+            checksum: frame as u64,
+            samples: 0,
+        };
+        while let Some(edge) = self.deque.pop_front() {
+            record_queued_input_edge(&mut output, edge);
+        }
+        output
+    }
+
+    pub fn new_frame(&mut self, frame: usize) -> GameplayFrameHotPathBenchOutput {
+        self.vector.extend_from_slice(&self.edges);
+        let mut output = GameplayFrameHotPathBenchOutput {
+            checksum: frame as u64,
+            samples: 0,
+        };
+        for edge in self.vector.drain(..) {
+            record_queued_input_edge(&mut output, edge);
+        }
+        output
+    }
+
+}
+
+#[inline(always)]
+fn record_queued_input_edge(output: &mut GameplayFrameHotPathBenchOutput, edge: GameplayInputEdge) {
+    output.checksum = output.checksum.rotate_left(7)
+        ^ (edge.lane.index() as u64).rotate_left(11)
+        ^ u64::from(edge.input_slot).rotate_left(19)
+        ^ u64::from(edge.pressed).rotate_left(31)
+        ^ edge.captured_host_nanos.rotate_left(43)
+        ^ edge.event_music_time_ns as u64;
+    output.samples += 1;
+}
+
 pub struct ActiveColumnScanBench {
     num_cols: usize,
     lane_counts: [u16; MAX_COLS],

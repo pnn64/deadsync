@@ -434,7 +434,10 @@ pub fn process_input_edges<Profile, OverlayActor, CapturedActor, StateDelta>(
     }
 
     let input_log = gameplay_input_log_enabled();
-    while let Some(mut edge) = state.pop_pending_input_edge() {
+    let mut pending_edges = std::mem::take(&mut state.pending_input.edges);
+    let batch_len = pending_edges.len();
+    for (edge_index, mut edge) in pending_edges.drain(..).enumerate() {
+        let pending_edges_after = batch_len.saturating_sub(edge_index + 1);
         let lane_idx = edge.lane.index();
         if lane_idx >= state.setup.num_cols {
             if input_log {
@@ -469,7 +472,7 @@ pub fn process_input_edges<Profile, OverlayActor, CapturedActor, StateDelta>(
                     edge.input_slot,
                     edge.pressed,
                     edge.captured_host_nanos,
-                    state.pending_input_len(),
+                    pending_edges_after,
                 );
             }
             continue;
@@ -543,7 +546,7 @@ pub fn process_input_edges<Profile, OverlayActor, CapturedActor, StateDelta>(
                 latency.capture_to_queue_us,
                 latency.queue_to_process_us,
                 latency.capture_to_process_us,
-                state.pending_input_len(),
+                pending_edges_after,
             );
         }
         if edge_judges_tap {
@@ -584,7 +587,7 @@ pub fn process_input_edges<Profile, OverlayActor, CapturedActor, StateDelta>(
                     latency.queue_to_process_us,
                     latency.capture_to_queue_us,
                     latency.capture_to_process_us,
-                    state.pending_input_len() + 1,
+                    pending_edges_after + 1,
                     state.current_music_time_seconds(),
                     song_time_ns_to_seconds(edge.event_music_time_ns),
                 );
@@ -670,6 +673,7 @@ pub fn process_input_edges<Profile, OverlayActor, CapturedActor, StateDelta>(
             }
         }
     }
+    state.pending_input.edges = pending_edges;
 }
 
 #[inline(always)]
@@ -897,4 +901,3 @@ pub fn tap_judgment_uses_bright_explosion_for_options(
     }
     judgment.window == Some(TimingWindow::W1)
 }
-

@@ -1576,13 +1576,15 @@ where
             &self.timing_runtime.timing_players[player],
             current_time_ns,
         );
-        closest_lane_note_search_with_rows(
-            &self.chart_runtime.lane_indices.note_indices[column],
+        let lane_indices = &mut self.chart_runtime.lane_indices;
+        closest_lane_note_search_with_rows_from_cursor(
+            &lane_indices.note_indices[column],
             &self.chart_runtime.notes,
             &self.chart_runtime.note_time_cache_ns,
             &self.timing_runtime.timing_players[player],
             current_time_ns,
             rows,
+            &mut lane_indices.note_search_cursors[column],
         )
     }
 
