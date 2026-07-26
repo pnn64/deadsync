@@ -10,9 +10,9 @@ use std::sync::atomic::{AtomicBool, AtomicIsize, AtomicU8, Ordering};
 use std::time::Instant;
 
 use windows::Win32::Devices::HumanInterfaceDevice::{
-    HIDP_CAPS, HIDP_STATUS_SUCCESS, HIDP_VALUE_CAPS, HidP_GetCaps, HidP_GetSpecificValueCaps,
-    HidP_GetUsageValue, HidP_GetUsages, HidP_GetValueCaps, HidP_Input, HidP_MaxUsageListLength,
-    PHIDP_PREPARSED_DATA,
+    HIDP_CAPS, HIDP_STATUS_SUCCESS, HIDP_STATUS_USAGE_NOT_FOUND, HIDP_VALUE_CAPS, HidP_GetCaps,
+    HidP_GetSpecificValueCaps, HidP_GetUsageValue, HidP_GetUsages, HidP_GetValueCaps, HidP_Input,
+    HidP_MaxUsageListLength, PHIDP_PREPARSED_DATA,
 };
 use windows::Win32::Foundation::{HANDLE, HINSTANCE, HWND, LPARAM, LRESULT, WPARAM};
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
@@ -77,6 +77,7 @@ struct Dev {
     hat_min: i32,
     hat_max: i32,
     dir: [bool; 4],
+    last_single_report: Vec<u8>,
 }
 
 struct Ctx {
@@ -542,6 +543,26 @@ fn hat_logical_range(preparsed: &[u8]) -> Option<(i32, i32)> {
     }
 }
 
+fn input_report_capacity(preparsed: &[u8]) -> usize {
+    if preparsed.is_empty() {
+        return 0;
+    }
+    // SAFETY: `preparsed` is the read-only preparsed-data blob returned for this
+    // device, and `HidP_GetCaps` writes only to the stack-local capabilities.
+    unsafe {
+        let mut caps = HIDP_CAPS::default();
+        let status = HidP_GetCaps(
+            PHIDP_PREPARSED_DATA(preparsed.as_ptr() as isize),
+            &raw mut caps,
+        );
+        if status == HIDP_STATUS_SUCCESS {
+            usize::from(caps.InputReportByteLength)
+        } else {
+            0
+        }
+    }
+}
+
 fn add_device(ctx: &mut Ctx, h: HANDLE, initial: bool) {
     let device_key = hkey(h);
     if ctx.devices.contains_key(&device_key) {
@@ -603,6 +624,7 @@ fn add_device(ctx: &mut Ctx, h: HANDLE, initial: bool) {
 
     let preparsed = get_preparsed(h).unwrap_or_default();
     let (hat_min, hat_max) = hat_logical_range(&preparsed).unwrap_or((0, 7));
+    let report_capacity = input_report_capacity(&preparsed);
     let max_buttons = if preparsed.is_empty() {
         0
     } else {
@@ -632,6 +654,7 @@ fn add_device(ctx: &mut Ctx, h: HANDLE, initial: bool) {
         hat_min,
         hat_max,
         dir: [false; 4],
+        last_single_report: Vec::with_capacity(report_capacity),
     };
 
     if refs == 0 {
@@ -661,21 +684,61 @@ fn remove_device(ctx: &mut Ctx, h: HANDLE) {
     }
 }
 
+#[inline(always)]
+fn skip_duplicate_single_report(
+    last_report: &mut Vec<u8>,
+    reports: &[u8],
+    report_size: usize,
+) -> bool {
+    if reports.len() != report_size {
+        // A batch can move through multiple states before ending on one whose
+        // bytes happen to match the old cache. Re-establish the cache only from
+        // a subsequently parsed single report.
+        last_report.clear();
+        return false;
+    }
+    last_report == reports
+}
+
+#[inline(always)]
+fn remember_single_report(last_report: &mut Vec<u8>, report: &[u8]) {
+    last_report.clear();
+    last_report.extend_from_slice(report);
+}
+
 fn process_hid_reports<F>(
     emit_pad: &mut F,
     dev: &mut Dev,
-    timestamp: Instant,
-    host_nanos: u64,
     buf: &mut [u8],
     size_bytes: usize,
+    host: BackendHost,
+    sampled_time: Option<(Instant, u64)>,
 ) where
     F: FnMut(PadEvent),
 {
     let Some((reports, report_size)) = hid_report_payload(buf, size_bytes) else {
         return;
     };
+    let single_report = reports.len() == report_size;
+    if skip_duplicate_single_report(&mut dev.last_single_report, reports, report_size) {
+        return;
+    }
+
+    let (timestamp, host_nanos) = sampled_time.unwrap_or_else(|| {
+        let timestamp = Instant::now();
+        (timestamp, host.now_nanos())
+    });
+    if single_report {
+        let parsed = process_hid_report(emit_pad, dev, timestamp, host_nanos, reports);
+        if parsed {
+            remember_single_report(&mut dev.last_single_report, reports);
+        } else {
+            dev.last_single_report.clear();
+        }
+        return;
+    }
     for report in reports.chunks_exact_mut(report_size) {
-        process_hid_report(emit_pad, dev, timestamp, host_nanos, report);
+        let _ = process_hid_report(emit_pad, dev, timestamp, host_nanos, report);
     }
 }
 
@@ -813,11 +876,12 @@ fn process_hid_report<F>(
     timestamp: Instant,
     host_nanos: u64,
     report: &mut [u8],
-) where
+) -> bool
+where
     F: FnMut(PadEvent),
 {
     if dev.max_buttons == 0 || dev.preparsed.is_empty() {
-        return;
+        return false;
     }
 
     let mut len = dev.max_buttons;
@@ -836,12 +900,12 @@ fn process_hid_report<F>(
         )
     };
     if status != HIDP_STATUS_SUCCESS {
-        return;
+        return false;
     }
 
     let now_len = len as usize;
     if now_len > dev.buttons_now.len() {
-        return;
+        return false;
     }
     dev.buttons_now[..now_len].sort_unstable();
 
@@ -869,8 +933,11 @@ fn process_hid_report<F>(
             report,
         )
     };
+    if status == HIDP_STATUS_USAGE_NOT_FOUND {
+        return true;
+    }
     if status != HIDP_STATUS_SUCCESS {
-        return;
+        return false;
     }
 
     let hat = hat as i32;
@@ -901,6 +968,7 @@ fn process_hid_report<F>(
         host_nanos,
         [want_up, want_down, want_left, want_right],
     );
+    true
 }
 
 #[inline(always)]
@@ -997,25 +1065,37 @@ fn handle_wm_input(ctx: &mut Ctx, hraw: HRAWINPUT) {
         if header.dwType != RIM_TYPEHID_U32 || !ctx.enable_pad {
             return;
         }
-        let timestamp = Instant::now();
-        let host_nanos = ctx.host.now_nanos();
 
         let dev_handle = header.hDevice;
         let dev_key = hkey(dev_handle);
         {
+            let host = ctx.host;
             let (emit_pad, buf, devices) = (&mut ctx.emit_pad, &mut ctx.buf, &mut ctx.devices);
             if let Some(dev) = devices.get_mut(&dev_key) {
-                process_hid_reports(emit_pad, dev, timestamp, host_nanos, buf, size2 as usize);
+                process_hid_reports(emit_pad, dev, buf, size2 as usize, host, None);
                 return;
             }
         }
 
+        // Preserve the original first-report timestamp across device discovery,
+        // which may query several Win32/HID properties before the device exists
+        // in `ctx.devices`.
+        let timestamp = Instant::now();
+        let host_nanos = ctx.host.now_nanos();
         add_device(ctx, dev_handle, false);
+        let host = ctx.host;
         let (emit_pad, buf, devices) = (&mut ctx.emit_pad, &mut ctx.buf, &mut ctx.devices);
         let Some(dev) = devices.get_mut(&dev_key) else {
             return;
         };
-        process_hid_reports(emit_pad, dev, timestamp, host_nanos, buf, size2 as usize);
+        process_hid_reports(
+            emit_pad,
+            dev,
+            buf,
+            size2 as usize,
+            host,
+            Some((timestamp, host_nanos)),
+        );
     }
 }
 
@@ -1199,7 +1279,8 @@ pub fn run_keyboard_only(
 #[cfg(test)]
 mod tests {
     use super::{
-        RAW_KEY_HELD_SLOTS, RAWINPUTHEADER, hid_report_payload, rawinput_uuid, update_held_state,
+        RAW_KEY_HELD_SLOTS, RAWINPUTHEADER, hid_report_payload, rawinput_uuid,
+        remember_single_report, skip_duplicate_single_report, update_held_state,
     };
     use std::mem::size_of;
 
@@ -1229,6 +1310,31 @@ mod tests {
         assert!(!update_held_state(&mut held, 7, true));
         assert!(update_held_state(&mut held, 7, false));
         assert!(!update_held_state(&mut held, 7, false));
+    }
+
+    #[test]
+    fn duplicate_cache_skips_only_a_remembered_single_report() {
+        let mut last_report = Vec::with_capacity(3);
+        let report = [1, 2, 3];
+
+        assert!(!skip_duplicate_single_report(&mut last_report, &report, 3));
+        remember_single_report(&mut last_report, &report);
+        assert!(skip_duplicate_single_report(&mut last_report, &report, 3));
+        assert!(!skip_duplicate_single_report(
+            &mut last_report,
+            &[1, 2, 4],
+            3,
+        ));
+
+        // Identical bytes can represent a second edge sequence when multiple
+        // reports arrived together, so batches must always be parsed.
+        assert!(!skip_duplicate_single_report(
+            &mut last_report,
+            &[1, 2, 3, 1, 2, 3],
+            3,
+        ));
+        assert!(last_report.is_empty());
+        assert!(!skip_duplicate_single_report(&mut last_report, &report, 3));
     }
 
     #[test]

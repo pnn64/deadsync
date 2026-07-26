@@ -8,6 +8,7 @@ static ALLOC: CountingAlloc = CountingAlloc::new();
 
 const POLLS: usize = 256;
 const RUNS: usize = 5_000;
+const HID_REPORT_BYTES: usize = 64;
 
 type Workload = fn() -> u64;
 
@@ -157,6 +158,59 @@ fn raw_keyboard_gated() -> u64 {
     checksum
 }
 
+#[inline(always)]
+fn decode_hid_report(report: &[u8; HID_REPORT_BYTES]) -> bool {
+    let mut parser_work = 0_u64;
+    for &byte in black_box(report) {
+        parser_work = parser_work.rotate_left(5) ^ u64::from(byte);
+    }
+    black_box(parser_work);
+    report[0] & 1 != 0
+}
+
+fn duplicate_hid_report_legacy() -> u64 {
+    let mut report = [0x54; HID_REPORT_BYTES];
+    let mut pressed = false;
+    let mut checksum = 0_u64;
+    for message in 0..POLLS {
+        if message % 64 == 0 {
+            report[0] ^= 1;
+        }
+        sample_event_time();
+        let next_pressed = decode_hid_report(&report);
+        if next_pressed != pressed {
+            pressed = next_pressed;
+            checksum = checksum.rotate_left(5) ^ message as u64 ^ u64::from(pressed);
+        }
+    }
+    checksum
+}
+
+fn duplicate_hid_report_gated() -> u64 {
+    let mut report = [0x54; HID_REPORT_BYTES];
+    let mut last_report = [0; HID_REPORT_BYTES];
+    let mut last_report_valid = false;
+    let mut pressed = false;
+    let mut checksum = 0_u64;
+    for message in 0..POLLS {
+        if message % 64 == 0 {
+            report[0] ^= 1;
+        }
+        if last_report_valid && report == last_report {
+            continue;
+        }
+        last_report.copy_from_slice(&report);
+        last_report_valid = true;
+        sample_event_time();
+        let next_pressed = decode_hid_report(&report);
+        if next_pressed != pressed {
+            pressed = next_pressed;
+            checksum = checksum.rotate_left(5) ^ message as u64 ^ u64::from(pressed);
+        }
+    }
+    checksum
+}
+
 fn main() {
     benchmark_pair(
         "WGI mostly-stale 1 kHz polling",
@@ -169,6 +223,12 @@ fn main() {
         "256 messages, 4 accepted transitions",
         raw_keyboard_legacy,
         raw_keyboard_gated,
+    );
+    benchmark_pair(
+        "Raw Input duplicate HID reports",
+        "256 single 64-byte reports, 4 byte-for-byte state changes",
+        duplicate_hid_report_legacy,
+        duplicate_hid_report_gated,
     );
 }
 
