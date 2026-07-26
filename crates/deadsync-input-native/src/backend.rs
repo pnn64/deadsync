@@ -6,6 +6,8 @@ use deadsync_input::{PadDir, PadEvent, PadId};
 pub mod devd;
 #[cfg(any(target_os = "linux", target_os = "freebsd"))]
 pub mod evdev;
+#[cfg(any(target_os = "freebsd", test))]
+mod hid_report_cache;
 #[cfg(target_os = "freebsd")]
 pub mod hidraw;
 #[cfg(target_os = "macos")]

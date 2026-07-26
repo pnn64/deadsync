@@ -1,4 +1,5 @@
 use super::devd::{DevdEvent, DevdWatch};
+use super::hid_report_cache::HidReportCache;
 use super::{BackendHost, GpSystemEvent, PadBackend, PadOrderBackend, uuid_from_bytes};
 use deadsync_input::{PadCode, PadDir, PadEvent, PadId};
 use hidparser::{Report, ReportField, VariableField, parse_report_descriptor};
@@ -128,6 +129,7 @@ struct ReportSpec {
     report_id: Option<u8>,
     payload_bytes: usize,
     fields: Vec<FieldSpec>,
+    cache: HidReportCache,
 }
 
 enum FieldSpec {
@@ -294,10 +296,12 @@ fn build_report_spec(report: &Report) -> Option<ReportSpec> {
     if fields.is_empty() {
         return None;
     }
+    let payload_bytes = report.size_in_bits.div_ceil(8);
     Some(ReportSpec {
         report_id: report.report_id.map(|id| u32::from(id) as u8),
-        payload_bytes: report.size_in_bits.div_ceil(8),
+        payload_bytes,
         fields,
+        cache: HidReportCache::new(payload_bytes),
     })
 }
 
@@ -794,8 +798,6 @@ pub fn run(
                 remove.push(idx);
                 continue;
             }
-            let timestamp = Instant::now();
-            let host_nanos = host.now_nanos();
             let len = n as usize;
             let mut handled = false;
             let id = dev.id;
@@ -805,6 +807,11 @@ pub fn run(
                     continue;
                 };
                 handled = true;
+                if report.cache.is_duplicate(payload) {
+                    break;
+                }
+                let timestamp = Instant::now();
+                let host_nanos = host.now_nanos();
                 process_report(
                     id,
                     uuid,
@@ -814,6 +821,7 @@ pub fn run(
                     emit_pad,
                     &mut report.fields,
                 );
+                report.cache.remember(payload);
                 break;
             }
             if !handled {

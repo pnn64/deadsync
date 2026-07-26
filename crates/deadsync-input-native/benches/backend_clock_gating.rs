@@ -9,6 +9,7 @@ static ALLOC: CountingAlloc = CountingAlloc::new();
 const POLLS: usize = 256;
 const RUNS: usize = 5_000;
 const HID_REPORT_BYTES: usize = 64;
+const HIDRAW_REPORT_BYTES: usize = 32;
 
 type Workload = fn() -> u64;
 
@@ -248,6 +249,60 @@ fn iohid_unchanged_axes_gated() -> u64 {
     checksum
 }
 
+#[inline(always)]
+fn decode_hidraw_fields(report: &[u8; HIDRAW_REPORT_BYTES]) -> u64 {
+    let mut fields = 0_u64;
+    for field in 0..16 {
+        let byte = black_box(report)[field / 2];
+        let value = (byte >> ((field & 1) * 4)) & 0x0f;
+        fields = fields.rotate_left(3) ^ u64::from(value);
+    }
+    black_box(fields)
+}
+
+fn duplicate_hidraw_report_legacy() -> u64 {
+    let mut report = [0x55; HIDRAW_REPORT_BYTES];
+    let mut last_fields = u64::MAX;
+    let mut checksum = 0_u64;
+    for message in 0..POLLS {
+        if message % 64 == 0 {
+            report[1] ^= 1;
+        }
+        sample_event_time();
+        let fields = decode_hidraw_fields(&report);
+        if fields != last_fields {
+            last_fields = fields;
+            checksum = checksum.rotate_left(5) ^ message as u64 ^ fields;
+        }
+    }
+    checksum
+}
+
+fn duplicate_hidraw_report_gated() -> u64 {
+    let mut report = [0x55; HIDRAW_REPORT_BYTES];
+    let mut last_report = [0; HIDRAW_REPORT_BYTES];
+    let mut last_report_valid = false;
+    let mut last_fields = u64::MAX;
+    let mut checksum = 0_u64;
+    for message in 0..POLLS {
+        if message % 64 == 0 {
+            report[1] ^= 1;
+        }
+        if last_report_valid && report == last_report {
+            continue;
+        }
+        sample_event_time();
+        let fields = decode_hidraw_fields(&report);
+        last_report.copy_from_slice(&report);
+        last_report_valid = true;
+        if fields != last_fields {
+            last_fields = fields;
+            checksum = checksum.rotate_left(5) ^ message as u64 ^ fields;
+        }
+    }
+    checksum
+}
+
 fn main() {
     benchmark_pair(
         "WGI mostly-stale 1 kHz polling",
@@ -272,6 +327,12 @@ fn main() {
         "256 callbacks across 6 axes, 24 accepted changes",
         iohid_unchanged_axes_legacy,
         iohid_unchanged_axes_gated,
+    );
+    benchmark_pair(
+        "FreeBSD hidraw duplicate reports",
+        "256 single 32-byte reports with 16 parsed fields, 4 byte changes",
+        duplicate_hidraw_report_legacy,
+        duplicate_hidraw_report_gated,
     );
 }
 
