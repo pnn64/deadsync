@@ -74,7 +74,9 @@ pub use note_placement::{PlacementBench, PlacementBenchFrame};
 pub use notes::ScrollTravel;
 #[cfg(feature = "bench-support")]
 #[doc(hidden)]
-pub use notes::{CmodTimingBench, CmodTimingBenchFrame, VisibleRangeBench, XmodTimingBench};
+pub use notes::{
+    CmodTimingBench, CmodTimingBenchFrame, IdentityAccelBench, VisibleRangeBench, XmodTimingBench,
+};
 pub use noteskin_model::{
     ModelMeshCache, ModelMeshCacheStats, NoteskinFrameCacheStats, noteskin_model_actor,
     noteskin_model_actor_from_draw,
@@ -136,14 +138,14 @@ pub(crate) use receptors::{
     receptor_row_center,
 };
 pub(crate) use transforms::{
-    AccelYParams, NoteAlphaParams, NoteXParams, VisualEffectParams, appearance_note_actor_alpha,
-    appearance_note_actor_alpha_from_alpha, appearance_note_alpha, appearance_note_glow,
-    appearance_note_glow_from_alpha, beat_factor, compute_invert_distances, compute_tornado_bounds,
-    fill_gameplay_lane_effects, fill_static_note_x_offsets, gameplay_visual_effect_params,
-    move_col_extra, note_world_z_for_bumpy, note_x_offset, smoothstep01, tipsy_y_extra,
-    visual_arrow_effect_zoom, visual_confusion_rotation_deg, visual_hold_body_needs_z_buffer,
-    visual_note_rotation_z, visual_pulse_zoom_for_y, visual_tiny_zoom,
-    visual_use_legacy_hold_sprites,
+    AccelYParams, LaneNoteTransformCache, NoteAlphaParams, NoteXParams, VisualEffectParams,
+    appearance_note_actor_alpha, appearance_note_actor_alpha_from_alpha, appearance_note_alpha,
+    appearance_note_glow, appearance_note_glow_from_alpha, beat_factor, compute_invert_distances,
+    compute_tornado_bounds, fill_gameplay_lane_effects, fill_static_note_x_offsets,
+    gameplay_visual_effect_params, lane_note_transform_cache, move_col_extra,
+    note_world_z_for_bumpy, note_x_offset, smoothstep01, tipsy_y_extra,
+    visual_arrow_effect_zoom, visual_arrow_effect_zoom_cached, visual_confusion_rotation_deg,
+    visual_hold_body_needs_z_buffer, visual_note_rotation_z_cached, visual_use_legacy_hold_sprites,
 };
 
 #[cfg(test)]
@@ -196,7 +198,8 @@ use transforms::{
     appearance_needs_rows, apply_accel_y, apply_accel_y_with_peak, beat_x_extra, bumpy_angle,
     drunk_x_extra, itg_actor_rotation_z, mod_divisor, note_x_extra, quantize_step,
     signed_effect_active, sm_scale, tiny_spacing_scale, tornado_x_extra,
-    visual_effect_params_for_col, visual_pulse_inner_zoom,
+    visual_effect_params_for_col, visual_note_rotation_z, visual_pulse_inner_zoom,
+    visual_pulse_zoom_for_y, visual_tiny_zoom,
 };
 #[cfg(test)]
 mod tests {

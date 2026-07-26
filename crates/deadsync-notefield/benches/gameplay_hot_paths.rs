@@ -1,6 +1,6 @@
 use deadsync_notefield::{
     CameraWrapBench, CommonNoteTransformBench, CueScanBench, FeedbackLaneCacheBench,
-    LaneVisualCacheBench, VisibleRangeBench, XmodTimingBench,
+    IdentityAccelBench, LaneVisualCacheBench, VisibleRangeBench, XmodTimingBench,
 };
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::hint::black_box;
@@ -273,6 +273,80 @@ fn main() {
         },
         |frame| {
             let output = common_transforms.new_static_x_frame(frame);
+            Output {
+                checksum: output.checksum,
+                samples: output.samples,
+            }
+        },
+    );
+
+    let identity_accel = IdentityAccelBench::default();
+    run_pair(
+        "identity scroll acceleration",
+        "96 visible note and hold travel samples without acceleration modifiers",
+        |frame| {
+            let output = identity_accel.old_frame(frame);
+            Output {
+                checksum: output.checksum,
+                samples: output.samples,
+            }
+        },
+        |frame| {
+            let output = identity_accel.new_frame(frame);
+            Output {
+                checksum: output.checksum,
+                samples: output.samples,
+            }
+        },
+    );
+    run_pair(
+        "cached lane zoom",
+        "96 visible notes across 4 lanes with Tiny and no Pulse",
+        |frame| {
+            let output = common_transforms.old_lane_zoom_frame(frame);
+            Output {
+                checksum: output.checksum,
+                samples: output.samples,
+            }
+        },
+        |frame| {
+            let output = common_transforms.new_lane_zoom_frame(frame);
+            Output {
+                checksum: output.checksum,
+                samples: output.samples,
+            }
+        },
+    );
+    run_pair(
+        "cached static lane rotation",
+        "96 visible notes across 4 lanes with static Confusion offsets",
+        |frame| {
+            let output = common_transforms.old_lane_rotation_frame(frame);
+            Output {
+                checksum: output.checksum,
+                samples: output.samples,
+            }
+        },
+        |frame| {
+            let output = common_transforms.new_lane_rotation_frame(frame);
+            Output {
+                checksum: output.checksum,
+                samples: output.samples,
+            }
+        },
+    );
+    run_pair(
+        "common lane transform cache",
+        "96 visible notes across 4 lanes without visual transform modifiers",
+        |frame| {
+            let output = common_transforms.old_identity_lane_cache_frame(frame);
+            Output {
+                checksum: output.checksum,
+                samples: output.samples,
+            }
+        },
+        |frame| {
+            let output = common_transforms.new_identity_lane_cache_frame(frame);
             Output {
                 checksum: output.checksum,
                 samples: output.samples,

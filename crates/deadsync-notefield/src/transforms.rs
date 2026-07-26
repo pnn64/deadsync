@@ -32,6 +32,14 @@ pub(crate) struct VisualEffectParams {
     pub rotate_z: f32,
 }
 
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct LaneNoteTransformCache {
+    tiny_zoom: f32,
+    pulse_active: bool,
+    identity_rotation: bool,
+    static_rotation_z: Option<f32>,
+}
+
 #[derive(Clone, Copy, Debug, Default)]
 pub(crate) struct AccelYParams {
     pub boost: f32,
@@ -136,6 +144,14 @@ pub(crate) fn mod_divisor(value: f32) -> f32 {
 
 pub(crate) fn signed_effect_active(value: f32) -> bool {
     value.is_finite() && value.abs() > f32::EPSILON
+}
+
+pub(crate) fn accel_y_is_identity(accel: AccelYParams) -> bool {
+    !(accel.boost > f32::EPSILON
+        || accel.brake > f32::EPSILON
+        || accel.wave > f32::EPSILON
+        || accel.expand > f32::EPSILON
+        || accel.boomerang > f32::EPSILON)
 }
 
 pub(crate) fn bumpy_angle(y: f32, offset: f32, period: f32) -> f32 {
@@ -292,6 +308,40 @@ pub(crate) fn visual_arrow_effect_zoom(y: f32, params: VisualEffectParams) -> f3
     visual_tiny_zoom(params) * visual_pulse_zoom_for_y(y, params)
 }
 
+pub(crate) fn lane_note_transform_cache(
+    song_beat: f32,
+    params: VisualEffectParams,
+) -> LaneNoteTransformCache {
+    let identity_rotation = params.rotate_z == 0.0
+        && params.confusion == 0.0
+        && params.confusion_offset == 0.0
+        && params.dizzy == 0.0;
+    let static_rotation_z = if !identity_rotation && params.dizzy == 0.0 && song_beat.is_finite() {
+        let rotation = visual_note_rotation_z_full(song_beat, song_beat, params);
+        (rotation.is_finite() && rotation != 0.0).then_some(rotation)
+    } else {
+        None
+    };
+    LaneNoteTransformCache {
+        tiny_zoom: visual_tiny_zoom(params),
+        pulse_active: visual_pulse_active(params),
+        identity_rotation,
+        static_rotation_z,
+    }
+}
+
+pub(crate) fn visual_arrow_effect_zoom_cached(
+    y: f32,
+    params: VisualEffectParams,
+    cache: LaneNoteTransformCache,
+) -> f32 {
+    if cache.pulse_active {
+        cache.tiny_zoom * visual_pulse_zoom_for_y(y, params)
+    } else {
+        cache.tiny_zoom
+    }
+}
+
 pub(crate) fn visual_confusion_rotation_deg(song_beat: f32, params: VisualEffectParams) -> f32 {
     (params.confusion_offset + song_beat * params.confusion).rem_euclid(std::f32::consts::TAU)
         * (-180.0 / std::f32::consts::PI)
@@ -320,6 +370,24 @@ pub(crate) fn visual_note_rotation_z(
         return 0.0;
     }
     visual_note_rotation_z_full(note_beat, song_beat, params)
+}
+
+pub(crate) fn visual_note_rotation_z_cached(
+    note_beat: f32,
+    song_beat: f32,
+    is_hold_head: bool,
+    params: VisualEffectParams,
+    cache: LaneNoteTransformCache,
+) -> f32 {
+    if cache.identity_rotation {
+        return 0.0;
+    }
+    if note_beat.is_finite()
+        && let Some(rotation) = cache.static_rotation_z
+    {
+        return rotation;
+    }
+    visual_note_rotation_z(note_beat, song_beat, is_hold_head, params)
 }
 
 #[inline(always)]
@@ -501,6 +569,7 @@ pub struct CommonNoteTransformBenchFrame {
 pub struct CommonNoteTransformBench {
     appearance: NoteAlphaParams,
     rotation: VisualEffectParams,
+    lane_transforms: [VisualEffectParams; 4],
     x_params: NoteXParams,
     col_offsets: [f32; 4],
     invert: [f32; 4],
@@ -511,9 +580,15 @@ pub struct CommonNoteTransformBench {
 #[cfg(feature = "bench-support")]
 impl Default for CommonNoteTransformBench {
     fn default() -> Self {
+        let lane_transforms = std::array::from_fn(|local_col| VisualEffectParams {
+            tiny: 0.12 + local_col as f32 * 0.03,
+            confusion_offset: 0.2 + local_col as f32 * 0.1,
+            ..VisualEffectParams::default()
+        });
         Self {
             appearance: NoteAlphaParams::default(),
             rotation: VisualEffectParams::default(),
+            lane_transforms,
             x_params: NoteXParams {
                 screen_height: 480.0,
                 flip: 0.4,
@@ -582,6 +657,110 @@ impl CommonNoteTransformBench {
             record_common_transform(
                 &mut output,
                 visual_note_rotation_z(note as f32 * 0.25, song_beat, false, params),
+            );
+        }
+        output
+    }
+
+    pub fn old_lane_zoom_frame(&self, frame: usize) -> CommonNoteTransformBenchFrame {
+        let params = std::hint::black_box(self.lane_transforms);
+        let mut output = CommonNoteTransformBenchFrame::default();
+        for note in 0..Self::VISIBLE_NOTES {
+            let local_col = (note + frame) % 4;
+            let y = 8.0 + ((note * 37 + frame) % 640) as f32;
+            record_common_transform(&mut output, visual_arrow_effect_zoom(y, params[local_col]));
+        }
+        output
+    }
+
+    pub fn new_lane_zoom_frame(&self, frame: usize) -> CommonNoteTransformBenchFrame {
+        let params = std::hint::black_box(self.lane_transforms);
+        let song_beat = frame as f32 / 30.0;
+        let caches = params.map(|params| lane_note_transform_cache(song_beat, params));
+        let mut output = CommonNoteTransformBenchFrame::default();
+        for note in 0..Self::VISIBLE_NOTES {
+            let local_col = (note + frame) % 4;
+            let y = 8.0 + ((note * 37 + frame) % 640) as f32;
+            record_common_transform(
+                &mut output,
+                visual_arrow_effect_zoom_cached(y, params[local_col], caches[local_col]),
+            );
+        }
+        output
+    }
+
+    pub fn old_lane_rotation_frame(&self, frame: usize) -> CommonNoteTransformBenchFrame {
+        let params = std::hint::black_box(self.lane_transforms);
+        let song_beat = frame as f32 / 30.0;
+        let mut output = CommonNoteTransformBenchFrame::default();
+        for note in 0..Self::VISIBLE_NOTES {
+            let local_col = (note + frame) % 4;
+            record_common_transform(
+                &mut output,
+                visual_note_rotation_z(note as f32 * 0.25, song_beat, false, params[local_col]),
+            );
+        }
+        output
+    }
+
+    pub fn new_lane_rotation_frame(&self, frame: usize) -> CommonNoteTransformBenchFrame {
+        let params = std::hint::black_box(self.lane_transforms);
+        let song_beat = frame as f32 / 30.0;
+        let caches = params.map(|params| lane_note_transform_cache(song_beat, params));
+        let mut output = CommonNoteTransformBenchFrame::default();
+        for note in 0..Self::VISIBLE_NOTES {
+            let local_col = (note + frame) % 4;
+            record_common_transform(
+                &mut output,
+                visual_note_rotation_z_cached(
+                    note as f32 * 0.25,
+                    song_beat,
+                    false,
+                    params[local_col],
+                    caches[local_col],
+                ),
+            );
+        }
+        output
+    }
+
+    pub fn old_identity_lane_cache_frame(&self, frame: usize) -> CommonNoteTransformBenchFrame {
+        let params = std::hint::black_box([self.rotation; 4]);
+        let song_beat = frame as f32 / 30.0;
+        let mut output = CommonNoteTransformBenchFrame::default();
+        for note in 0..Self::VISIBLE_NOTES {
+            let local_col = (note + frame) % 4;
+            let y = 8.0 + ((note * 37 + frame) % 640) as f32;
+            record_common_transform(&mut output, visual_arrow_effect_zoom(y, params[local_col]));
+            record_common_transform(
+                &mut output,
+                visual_note_rotation_z(note as f32 * 0.25, song_beat, false, params[local_col]),
+            );
+        }
+        output
+    }
+
+    pub fn new_identity_lane_cache_frame(&self, frame: usize) -> CommonNoteTransformBenchFrame {
+        let params = std::hint::black_box([self.rotation; 4]);
+        let song_beat = frame as f32 / 30.0;
+        let caches = params.map(|params| lane_note_transform_cache(song_beat, params));
+        let mut output = CommonNoteTransformBenchFrame::default();
+        for note in 0..Self::VISIBLE_NOTES {
+            let local_col = (note + frame) % 4;
+            let y = 8.0 + ((note * 37 + frame) % 640) as f32;
+            record_common_transform(
+                &mut output,
+                visual_arrow_effect_zoom_cached(y, params[local_col], caches[local_col]),
+            );
+            record_common_transform(
+                &mut output,
+                visual_note_rotation_z_cached(
+                    note as f32 * 0.25,
+                    song_beat,
+                    false,
+                    params[local_col],
+                    caches[local_col],
+                ),
             );
         }
         output
@@ -715,6 +894,46 @@ mod common_note_transform_tests {
             visual_note_rotation_z(8.5, 6.25, false, active).to_bits(),
             visual_note_rotation_z_full(8.5, 6.25, active).to_bits()
         );
+    }
+
+    #[test]
+    fn lane_transform_cache_matches_zoom_and_rotation_formulas() {
+        let song_beat = 6.25;
+        let cases = [
+            VisualEffectParams::default(),
+            VisualEffectParams {
+                tiny: 0.25,
+                confusion_offset: 0.4,
+                ..VisualEffectParams::default()
+            },
+            VisualEffectParams {
+                tiny: -0.15,
+                pulse_inner: 0.2,
+                pulse_outer: 0.35,
+                pulse_offset: -0.1,
+                pulse_period: 0.4,
+                confusion: 0.2,
+                dizzy: 0.5,
+                rotate_z: 15.0,
+                ..VisualEffectParams::default()
+            },
+        ];
+        for params in cases {
+            let cache = lane_note_transform_cache(song_beat, params);
+            for y in [-128.0, 0.0, 256.0, 640.0] {
+                assert_eq!(
+                    visual_arrow_effect_zoom_cached(y, params, cache).to_bits(),
+                    visual_arrow_effect_zoom(y, params).to_bits(),
+                );
+            }
+            for note_beat in [-1.0, 0.0, 6.25, 12.5, f32::INFINITY, f32::NAN] {
+                assert_eq!(
+                    visual_note_rotation_z_cached(note_beat, song_beat, false, params, cache)
+                        .to_bits(),
+                    visual_note_rotation_z(note_beat, song_beat, false, params).to_bits(),
+                );
+            }
+        }
     }
 
     #[test]

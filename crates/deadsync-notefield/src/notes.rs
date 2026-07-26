@@ -1,7 +1,8 @@
 use crate::holds::{song_time_ns_delta_seconds, translated_uv_rect};
 use crate::measure_lines::{beat_scroll_travel, edit_beat_scroll_travel};
 use crate::transforms::{
-    AccelYParams, apply_accel_y, apply_accel_y_with_peak, move_col_extra, tipsy_y_extra,
+    AccelYParams, accel_y_is_identity, apply_accel_y, apply_accel_y_with_peak, move_col_extra,
+    tipsy_y_extra,
 };
 use crate::{
     ModelMeshCache, actor_with_world_z, itg_actor_glow_alpha,
@@ -397,6 +398,7 @@ pub struct ScrollTravel<'a> {
     raw: RawTravel,
     displayed_speed_percent: f32,
     post_accel_scale: f32,
+    accel_is_identity: bool,
 }
 
 pub(crate) fn scroll_travel<'a>(request: ScrollTravelRequest<'a>) -> ScrollTravel<'a> {
@@ -451,6 +453,7 @@ pub(crate) fn scroll_travel<'a>(request: ScrollTravelRequest<'a>) -> ScrollTrave
         raw,
         displayed_speed_percent,
         post_accel_scale,
+        accel_is_identity: accel_y_is_identity(request.accel),
     }
 }
 
@@ -524,6 +527,9 @@ impl ScrollTravel<'_> {
     }
 
     pub fn adjusted_with_peak(&self, raw_travel: f32) -> (f32, bool) {
+        if self.accel_is_identity {
+            return (raw_travel * self.post_accel_scale, true);
+        }
         let (travel, before_peak) = apply_accel_y_with_peak(
             raw_travel,
             self.request.elapsed_screen_s,
@@ -535,6 +541,9 @@ impl ScrollTravel<'_> {
     }
 
     pub fn adjusted(&self, raw_travel: f32) -> f32 {
+        if self.accel_is_identity {
+            return raw_travel * self.post_accel_scale;
+        }
         apply_accel_y(
             raw_travel,
             self.request.elapsed_screen_s,
@@ -891,6 +900,7 @@ mod timing_bench {
         scroll_travel,
     };
     use crate::AccelYParams;
+    use crate::transforms::apply_accel_y;
     use deadsync_core::note::NoteType;
     use deadsync_core::timing::{beat_to_note_row, note_row_to_beat};
     use deadsync_rules::note::{HoldData, Note, NoteCountStat};
@@ -1223,6 +1233,49 @@ mod timing_bench {
             }
             output
         }
+
+        fn identity_accel_frame(&self, frame: usize, cached: bool) -> CmodTimingBenchFrame {
+            let index = frame % self.notes.len();
+            let visible_beat = self.notes[index].beat;
+            let accel = std::hint::black_box(AccelYParams::default());
+            let elapsed_screen_s = frame as f32 / 120.0;
+            let effect_height = 640.0;
+            let screen_height = 720.0;
+            let travel = scroll_travel(ScrollTravelRequest {
+                timing: &self.timing,
+                accel,
+                scroll_speed: ScrollSpeedSetting::XMod(2.25),
+                current_time_ns: self.note_times_ns[index],
+                visible_beat,
+                search_beat: visible_beat,
+                scroll_reference_bpm: 120.0,
+                music_rate: 1.0,
+                edit_beat_spacing: false,
+                draw_distance_after_targets: 720.0,
+                draw_distance_before_targets: 720.0,
+                field_zoom: 0.9,
+                elapsed_screen_s,
+                effect_height,
+                screen_height,
+                note_count_stats: &[],
+                arrow_effect_time_s: 0.0,
+                lane_tipsy: 0.0,
+                lane_move_y: &[],
+            });
+            let mut output = CmodTimingBenchFrame::default();
+            for sample in 0..VISIBLE_NOTES {
+                let raw = ((sample * 37 + frame * 3) % 900) as f32 - 96.0;
+                let adjusted = if cached {
+                    travel.adjusted(raw)
+                } else {
+                    apply_accel_y(raw, elapsed_screen_s, effect_height, screen_height, accel)
+                        * travel.post_accel_scale
+                };
+                output.checksum = output.checksum.rotate_left(7) ^ u64::from(adjusted.to_bits());
+                output.samples += 1;
+            }
+            output
+        }
     }
 
     pub struct XmodTimingBench(CmodTimingBench);
@@ -1242,10 +1295,25 @@ mod timing_bench {
             self.0.xmod_frame(frame, true)
         }
     }
+
+    #[derive(Default)]
+    pub struct IdentityAccelBench(CmodTimingBench);
+
+    impl IdentityAccelBench {
+        pub fn old_frame(&self, frame: usize) -> CmodTimingBenchFrame {
+            self.0.identity_accel_frame(frame, false)
+        }
+
+        pub fn new_frame(&self, frame: usize) -> CmodTimingBenchFrame {
+            self.0.identity_accel_frame(frame, true)
+        }
+    }
 }
 
 #[cfg(feature = "bench-support")]
-pub use timing_bench::{CmodTimingBench, CmodTimingBenchFrame, VisibleRangeBench, XmodTimingBench};
+pub use timing_bench::{
+    CmodTimingBench, CmodTimingBenchFrame, IdentityAccelBench, VisibleRangeBench, XmodTimingBench,
+};
 
 #[cfg(test)]
 mod tests {
@@ -2074,6 +2142,49 @@ mod tests {
         assert_eq!(before_peak, expected_before_peak);
         assert!(!before_peak);
         assert_near(adjusted, expected * 2.0);
+    }
+
+    #[test]
+    fn inactive_acceleration_cache_matches_the_canonical_formula() {
+        let timing = timing();
+        let mut travel_request = request(&timing, ScrollSpeedSetting::XMod(2.0), 4.0);
+        travel_request.field_zoom = 0.75;
+        travel_request.accel = AccelYParams {
+            boost: f32::NAN,
+            brake: -1.0,
+            wave: f32::EPSILON,
+            expand: f32::NEG_INFINITY,
+            boomerang: -0.0,
+        };
+        let travel = scroll_travel(travel_request);
+        assert!(travel.accel_is_identity);
+        for raw in [-128.0, -0.0, 0.0, 160.0, 640.0, f32::NAN] {
+            let expected = apply_accel_y(
+                raw,
+                travel_request.elapsed_screen_s,
+                travel_request.effect_height,
+                travel_request.screen_height,
+                travel_request.accel,
+            ) * travel.post_accel_scale;
+            assert_eq!(travel.adjusted(raw).to_bits(), expected.to_bits());
+
+            let (expected, expected_before_peak) = crate::apply_accel_y_with_peak(
+                raw,
+                travel_request.elapsed_screen_s,
+                travel_request.effect_height,
+                travel_request.screen_height,
+                travel_request.accel,
+            );
+            let (actual, actual_before_peak) = travel.adjusted_with_peak(raw);
+            assert_eq!(
+                actual.to_bits(),
+                (expected * travel.post_accel_scale).to_bits()
+            );
+            assert_eq!(actual_before_peak, expected_before_peak);
+        }
+
+        travel_request.accel.wave = f32::EPSILON * 2.0;
+        assert!(!scroll_travel(travel_request).accel_is_identity);
     }
 
     #[test]

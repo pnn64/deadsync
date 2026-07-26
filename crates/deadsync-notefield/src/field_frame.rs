@@ -1,19 +1,20 @@
 use crate::{
     CapturedActorSource, HoldBodyCapRequest, HoldComposeControl, HoldEntryPlanRequest,
-    HoldMeshScratch, HoldPathSample, MeasureComposeRequest, MeasureLineMode, MineLayerRequest,
-    ModelMeshCache, NoteAlphaParams, NoteLayerRequest, NoteXParams, NotefieldComposeRequest,
-    NotefieldFeedbackFrameView, PreparedNotefield, PreparedNotefieldNotes, TornadoBounds,
-    VisualEffectParams, appearance_note_actor_alpha, appearance_note_actor_alpha_from_alpha,
-    appearance_note_alpha, appearance_note_glow, appearance_note_glow_from_alpha,
-    compose_hold_body_caps, compose_measure_lines, compose_mine_layers, compose_note_layer,
-    compose_notefield_feedback, fill_gameplay_lane_effects, fill_static_note_x_offsets,
-    for_each_visible_hold_index, for_each_visible_note_index, hold_entry_head_beat, hold_entry_plan,
-    hold_overlaps_visible_window, hold_parts_for_note_type, mine_hides_after_resolution, mine_part,
-    note_world_z_for_bumpy, note_x_offset as canonical_note_x_offset, notefield_view_proj,
-    offset_center, scale_sprite_to_arrow, share_actor_range, song_lua_note_model_draw,
-    tap_part_for_note_type, tap_replacement_head, translated_uv_rect, visual_arrow_effect_zoom,
-    visual_hold_body_needs_z_buffer, visual_note_rotation_z, visual_pulse_zoom_for_y,
-    visual_tiny_zoom, visual_use_legacy_hold_sprites,
+    HoldMeshScratch, HoldPathSample, LaneNoteTransformCache, MeasureComposeRequest,
+    MeasureLineMode, MineLayerRequest, ModelMeshCache, NoteAlphaParams, NoteLayerRequest,
+    NoteXParams, NotefieldComposeRequest, NotefieldFeedbackFrameView, PreparedNotefield,
+    PreparedNotefieldNotes, TornadoBounds, VisualEffectParams, appearance_note_actor_alpha,
+    appearance_note_actor_alpha_from_alpha, appearance_note_alpha, appearance_note_glow,
+    appearance_note_glow_from_alpha, compose_hold_body_caps, compose_measure_lines,
+    compose_mine_layers, compose_note_layer, compose_notefield_feedback,
+    fill_gameplay_lane_effects, fill_static_note_x_offsets, for_each_visible_hold_index,
+    for_each_visible_note_index, hold_entry_head_beat, hold_entry_plan,
+    hold_overlaps_visible_window, hold_parts_for_note_type, lane_note_transform_cache,
+    mine_hides_after_resolution, mine_part, note_world_z_for_bumpy,
+    note_x_offset as canonical_note_x_offset, notefield_view_proj, offset_center,
+    scale_sprite_to_arrow, share_actor_range, song_lua_note_model_draw, tap_part_for_note_type,
+    tap_replacement_head, translated_uv_rect, visual_arrow_effect_zoom_cached,
+    visual_hold_body_needs_z_buffer, visual_note_rotation_z_cached, visual_use_legacy_hold_sprites,
 };
 use deadlib_present::actors::{Actor, SpriteSource};
 use deadlib_render::BlendMode;
@@ -156,6 +157,13 @@ fn compose_field_contents<S, F>(
         &mut lane_effect_params,
         &mut lane_offsets,
     );
+    let mut lane_transform_caches =
+        [lane_note_transform_cache(current_beat, VisualEffectParams::default());
+            deadsync_core::input::MAX_COLS];
+    for local_col in 0..num_cols {
+        lane_transform_caches[local_col] =
+            lane_note_transform_cache(current_beat, lane_effect_params[local_col]);
+    }
     let mut static_note_x_offsets = [0.0; deadsync_core::input::MAX_COLS];
     let note_x_is_static = fill_static_note_x_offsets(
         num_cols,
@@ -174,7 +182,6 @@ fn compose_field_contents<S, F>(
         visual.tiny,
         &mut static_note_x_offsets,
     );
-    let pulse_effect_params = lane_effect_params[0];
     let (note_start, note_end) = request.chart.note_range;
     let lane_center_x_from_travel = |local_col: usize, travel_offset: f32| -> f32 {
         playfield_center_x
@@ -408,14 +415,21 @@ fn compose_field_contents<S, F>(
         let head_layers = hold_plan.head_layers;
         let head_slot = hold_plan.head_slot;
 
-        let hold_tiny_zoom = visual_tiny_zoom(lane_effect_params[local_col]);
-        let hold_base_target_arrow_px = target_arrow_px * hold_tiny_zoom;
+        let transform_cache = lane_transform_caches[local_col];
         let hold_arrow_px_for_adjusted_travel = |travel_offset: f32| -> f32 {
-            hold_base_target_arrow_px * visual_pulse_zoom_for_y(travel_offset, pulse_effect_params)
+            target_arrow_px
+                * visual_arrow_effect_zoom_cached(
+                    travel_offset,
+                    lane_effect_params[local_col],
+                    transform_cache,
+                )
         };
         let hold_target_arrow_px = hold_arrow_px_for_adjusted_travel(0.0);
-        let hold_head_zoom = hold_tiny_zoom
-            * visual_pulse_zoom_for_y(travel.adjusted(head_anchor_travel), pulse_effect_params);
+        let hold_head_zoom = visual_arrow_effect_zoom_cached(
+            travel.adjusted(head_anchor_travel),
+            lane_effect_params[local_col],
+            transform_cache,
+        );
         let hold_head_target_arrow_px = target_arrow_px * hold_head_zoom;
         let hold_note_scale = field_zoom * hold_head_zoom;
         let col_bumpy = lane_effect_params[local_col].bumpy;
@@ -497,8 +511,13 @@ fn compose_field_contents<S, F>(
         if head_alpha <= f32::EPSILON && head_glow <= f32::EPSILON {
             return;
         }
-        let hold_head_rot =
-            calc_note_rotation_z(note.beat, current_beat, true, lane_effect_params[local_col]);
+        let hold_head_rot = calc_note_rotation_z(
+            note.beat,
+            current_beat,
+            true,
+            lane_effect_params[local_col],
+            transform_cache,
+        );
         let note_idx = local_col * NUM_QUANTIZATIONS + note.quantization_idx as usize;
         let head_center_x = if (head_draw_y - receptor_draw_y).abs() <= 0.5 {
             receptor_center_x
@@ -699,6 +718,7 @@ fn compose_field_contents<S, F>(
         frame.completed_rows,
         visible_row_range,
         &lane_effect_params[..num_cols],
+        &lane_transform_caches[..num_cols],
         &lane_offsets[..num_cols],
         &scale_mine_slot,
         sprite_source,
@@ -715,6 +735,7 @@ fn compose_visible_notes<S, F>(
     completed_rows: CompletedRowVisibility<'_>,
     visible_row_range: Option<(i32, i32)>,
     lane_effect_params: &[VisualEffectParams],
+    lane_transform_caches: &[LaneNoteTransformCache],
     lane_offsets: &[f32],
     scale_mine_slot: &impl Fn(&S) -> [f32; 2],
     sprite_source: &F,
@@ -819,15 +840,25 @@ fn compose_visible_notes<S, F>(
                     visual.bumpy_offset,
                     visual.bumpy_period,
                 );
-                let effect_zoom = visual_arrow_effect_zoom(adjusted_travel, effect_params);
+                let transform_cache = lane_transform_caches[local_col];
+                let effect_zoom = visual_arrow_effect_zoom_cached(
+                    adjusted_travel,
+                    effect_params,
+                    transform_cache,
+                );
                 let note_scale = field_zoom * effect_zoom;
                 let target_arrow_px = notes.target_arrow_px * effect_zoom;
                 let scale_mine_for_note = |slot: &S| -> [f32; 2] {
                     let size = scale_mine_slot(slot);
                     [size[0] * effect_zoom, size[1] * effect_zoom]
                 };
-                let note_rotation_z =
-                    calc_note_rotation_z(note.beat, current_beat, false, effect_params);
+                let note_rotation_z = calc_note_rotation_z(
+                    note.beat,
+                    current_beat,
+                    false,
+                    effect_params,
+                    transform_cache,
+                );
 
                 if matches!(note.note_type, NoteType::Mine) {
                     if fill_slot.is_none() && frame_slot.is_none() {
@@ -1270,8 +1301,15 @@ fn calc_note_rotation_z(
     song_beat: f32,
     is_hold_head: bool,
     effect_params: VisualEffectParams,
+    transform_cache: LaneNoteTransformCache,
 ) -> f32 {
-    visual_note_rotation_z(note_beat, song_beat, is_hold_head, effect_params)
+    visual_note_rotation_z_cached(
+        note_beat,
+        song_beat,
+        is_hold_head,
+        effect_params,
+        transform_cache,
+    )
 }
 
 fn push_field_camera<S>(
