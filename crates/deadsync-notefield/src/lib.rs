@@ -96,7 +96,10 @@ pub use transforms::{
 };
 #[cfg(feature = "bench-support")]
 #[doc(hidden)]
-pub use transforms::{LaneVisualCacheBench, LaneVisualCacheBenchFrame};
+pub use transforms::{
+    CommonNoteTransformBench, CommonNoteTransformBenchFrame, LaneVisualCacheBench,
+    LaneVisualCacheBenchFrame,
+};
 
 pub(crate) use actor_builder::{
     NotefieldFramePlanRequest, actor_with_world_z, notefield_frame_plan, share_actor_range,
@@ -136,10 +139,11 @@ pub(crate) use transforms::{
     AccelYParams, NoteAlphaParams, NoteXParams, VisualEffectParams, appearance_note_actor_alpha,
     appearance_note_actor_alpha_from_alpha, appearance_note_alpha, appearance_note_glow,
     appearance_note_glow_from_alpha, beat_factor, compute_invert_distances, compute_tornado_bounds,
-    fill_gameplay_lane_effects, gameplay_visual_effect_params, move_col_extra,
-    note_world_z_for_bumpy, note_x_offset, smoothstep01, tipsy_y_extra, visual_arrow_effect_zoom,
-    visual_confusion_rotation_deg, visual_hold_body_needs_z_buffer, visual_note_rotation_z,
-    visual_pulse_zoom_for_y, visual_tiny_zoom, visual_use_legacy_hold_sprites,
+    fill_gameplay_lane_effects, fill_static_note_x_offsets, gameplay_visual_effect_params,
+    move_col_extra, note_world_z_for_bumpy, note_x_offset, smoothstep01, tipsy_y_extra,
+    visual_arrow_effect_zoom, visual_confusion_rotation_deg, visual_hold_body_needs_z_buffer,
+    visual_note_rotation_z, visual_pulse_zoom_for_y, visual_tiny_zoom,
+    visual_use_legacy_hold_sprites,
 };
 
 #[cfg(test)]

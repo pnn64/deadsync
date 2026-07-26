@@ -1,6 +1,6 @@
 use deadsync_notefield::{
-    CameraWrapBench, CueScanBench, FeedbackLaneCacheBench, LaneVisualCacheBench,
-    VisibleRangeBench, XmodTimingBench,
+    CameraWrapBench, CommonNoteTransformBench, CueScanBench, FeedbackLaneCacheBench,
+    LaneVisualCacheBench, VisibleRangeBench, XmodTimingBench,
 };
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::hint::black_box;
@@ -217,6 +217,62 @@ fn main() {
         },
         |frame| {
             let output = feedback_lanes.new_frame(frame);
+            Output {
+                checksum: output.checksum,
+                samples: output.samples,
+            }
+        },
+    );
+
+    let common_transforms = CommonNoteTransformBench::default();
+    run_pair(
+        "identity appearance fast path",
+        "96 visible notes with ordinary appearance settings",
+        |frame| {
+            let output = common_transforms.old_appearance_frame(frame);
+            Output {
+                checksum: output.checksum,
+                samples: output.samples,
+            }
+        },
+        |frame| {
+            let output = common_transforms.new_appearance_frame(frame);
+            Output {
+                checksum: output.checksum,
+                samples: output.samples,
+            }
+        },
+    );
+    run_pair(
+        "identity note-rotation fast path",
+        "96 visible notes without confusion or dizzy effects",
+        |frame| {
+            let output = common_transforms.old_rotation_frame(frame);
+            Output {
+                checksum: output.checksum,
+                samples: output.samples,
+            }
+        },
+        |frame| {
+            let output = common_transforms.new_rotation_frame(frame);
+            Output {
+                checksum: output.checksum,
+                samples: output.samples,
+            }
+        },
+    );
+    run_pair(
+        "static horizontal lane placement",
+        "96 visible notes across 4 lanes with static flip/invert/move",
+        |frame| {
+            let output = common_transforms.old_static_x_frame(frame);
+            Output {
+                checksum: output.checksum,
+                samples: output.samples,
+            }
+        },
+        |frame| {
+            let output = common_transforms.new_static_x_frame(frame);
             Output {
                 checksum: output.checksum,
                 samples: output.samples,

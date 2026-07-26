@@ -6,8 +6,8 @@ use crate::{
     VisualEffectParams, appearance_note_actor_alpha, appearance_note_actor_alpha_from_alpha,
     appearance_note_alpha, appearance_note_glow, appearance_note_glow_from_alpha,
     compose_hold_body_caps, compose_measure_lines, compose_mine_layers, compose_note_layer,
-    compose_notefield_feedback, fill_gameplay_lane_effects, for_each_visible_hold_index,
-    for_each_visible_note_index, hold_entry_head_beat, hold_entry_plan,
+    compose_notefield_feedback, fill_gameplay_lane_effects, fill_static_note_x_offsets,
+    for_each_visible_hold_index, for_each_visible_note_index, hold_entry_head_beat, hold_entry_plan,
     hold_overlaps_visible_window, hold_parts_for_note_type, mine_hides_after_resolution, mine_part,
     note_world_z_for_bumpy, note_x_offset as canonical_note_x_offset, notefield_view_proj,
     offset_center, scale_sprite_to_arrow, share_actor_range, song_lua_note_model_draw,
@@ -156,35 +156,61 @@ fn compose_field_contents<S, F>(
         &mut lane_effect_params,
         &mut lane_offsets,
     );
+    let mut static_note_x_offsets = [0.0; deadsync_core::input::MAX_COLS];
+    let note_x_is_static = fill_static_note_x_offsets(
+        num_cols,
+        &col_offsets[..num_cols],
+        &invert_distances[..num_cols],
+        &tornado_bounds[..num_cols],
+        &visual.move_x_cols,
+        NoteXParams {
+            screen_height: request.geometry.screen_height,
+            tornado: visual.tornado,
+            drunk: visual.drunk,
+            flip: visual.flip,
+            invert: visual.invert,
+            beat: visual.beat,
+        },
+        visual.tiny,
+        &mut static_note_x_offsets,
+    );
     let pulse_effect_params = lane_effect_params[0];
     let (note_start, note_end) = request.chart.note_range;
     let lane_center_x_from_travel = |local_col: usize, travel_offset: f32| -> f32 {
         playfield_center_x
-            + note_x_offset(
-                request.geometry.screen_height,
-                local_col,
-                travel.adjusted(travel_offset),
-                travel.arrow_effect_time_s(),
-                beat_push,
-                visual,
-                &col_offsets[..num_cols],
-                &invert_distances[..num_cols],
-                &tornado_bounds[..num_cols],
-            )
+            + if note_x_is_static {
+                static_note_x_offsets[local_col]
+            } else {
+                note_x_offset(
+                    request.geometry.screen_height,
+                    local_col,
+                    travel.adjusted(travel_offset),
+                    travel.arrow_effect_time_s(),
+                    beat_push,
+                    visual,
+                    &col_offsets[..num_cols],
+                    &invert_distances[..num_cols],
+                    &tornado_bounds[..num_cols],
+                )
+            }
     };
     let lane_center_x_from_adjusted_travel = |local_col: usize, adjusted_travel: f32| -> f32 {
         playfield_center_x
-            + note_x_offset(
-                request.geometry.screen_height,
-                local_col,
-                adjusted_travel,
-                travel.arrow_effect_time_s(),
-                beat_push,
-                visual,
-                &col_offsets[..num_cols],
-                &invert_distances[..num_cols],
-                &tornado_bounds[..num_cols],
-            )
+            + if note_x_is_static {
+                static_note_x_offsets[local_col]
+            } else {
+                note_x_offset(
+                    request.geometry.screen_height,
+                    local_col,
+                    adjusted_travel,
+                    travel.arrow_effect_time_s(),
+                    beat_push,
+                    visual,
+                    &col_offsets[..num_cols],
+                    &invert_distances[..num_cols],
+                    &tornado_bounds[..num_cols],
+                )
+            }
     };
     let actor_alpha_for_travel = |local_col: usize, travel_offset: f32| -> f32 {
         let adjusted = travel.adjusted(travel_offset);

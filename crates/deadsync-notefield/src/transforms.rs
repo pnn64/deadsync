@@ -312,6 +312,22 @@ pub(crate) fn visual_note_rotation_z(
     _is_hold_head: bool,
     params: VisualEffectParams,
 ) -> f32 {
+    if params.rotate_z == 0.0
+        && params.confusion == 0.0
+        && params.confusion_offset == 0.0
+        && params.dizzy == 0.0
+    {
+        return 0.0;
+    }
+    visual_note_rotation_z_full(note_beat, song_beat, params)
+}
+
+#[inline(always)]
+fn visual_note_rotation_z_full(
+    note_beat: f32,
+    song_beat: f32,
+    params: VisualEffectParams,
+) -> f32 {
     itg_actor_rotation_z(params.rotate_z) - visual_confusion_rotation_deg(song_beat, params)
         + visual_dizzy_rotation_deg(note_beat, song_beat, params)
 }
@@ -470,6 +486,297 @@ fn record_lane_visual_sample(
     ] {
         output.checksum = output.checksum.rotate_left(7) ^ u64::from(value.to_bits()) ^ pass as u64;
         output.samples += 1;
+    }
+}
+
+#[cfg(feature = "bench-support")]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct CommonNoteTransformBenchFrame {
+    pub checksum: u64,
+    pub samples: usize,
+}
+
+#[cfg(feature = "bench-support")]
+#[derive(Clone)]
+pub struct CommonNoteTransformBench {
+    appearance: NoteAlphaParams,
+    rotation: VisualEffectParams,
+    x_params: NoteXParams,
+    col_offsets: [f32; 4],
+    invert: [f32; 4],
+    tornado: [TornadoBounds; 4],
+    move_x: [f32; 4],
+}
+
+#[cfg(feature = "bench-support")]
+impl Default for CommonNoteTransformBench {
+    fn default() -> Self {
+        Self {
+            appearance: NoteAlphaParams::default(),
+            rotation: VisualEffectParams::default(),
+            x_params: NoteXParams {
+                screen_height: 480.0,
+                flip: 0.4,
+                invert: 0.25,
+                ..NoteXParams::default()
+            },
+            col_offsets: [-96.0, -32.0, 32.0, 96.0],
+            invert: [192.0, 64.0, -64.0, -192.0],
+            tornado: [TornadoBounds {
+                min_x: -96.0,
+                max_x: 96.0,
+            }; 4],
+            move_x: [4.0, -2.0, 3.0, -5.0],
+        }
+    }
+}
+
+#[cfg(feature = "bench-support")]
+impl CommonNoteTransformBench {
+    const VISIBLE_NOTES: usize = 96;
+
+    pub fn old_appearance_frame(&self, frame: usize) -> CommonNoteTransformBenchFrame {
+        let params = std::hint::black_box(self.appearance);
+        let mut output = CommonNoteTransformBenchFrame::default();
+        for note in 0..Self::VISIBLE_NOTES {
+            let y = 8.0 + ((note * 37 + frame) % 640) as f32;
+            record_common_transform(
+                &mut output,
+                appearance_note_alpha_full(y, frame as f32 / 120.0, 0.0, params),
+            );
+        }
+        output
+    }
+
+    pub fn new_appearance_frame(&self, frame: usize) -> CommonNoteTransformBenchFrame {
+        let params = std::hint::black_box(self.appearance);
+        let mut output = CommonNoteTransformBenchFrame::default();
+        for note in 0..Self::VISIBLE_NOTES {
+            let y = 8.0 + ((note * 37 + frame) % 640) as f32;
+            record_common_transform(
+                &mut output,
+                appearance_note_alpha(y, frame as f32 / 120.0, 0.0, params),
+            );
+        }
+        output
+    }
+
+    pub fn old_rotation_frame(&self, frame: usize) -> CommonNoteTransformBenchFrame {
+        let params = std::hint::black_box(self.rotation);
+        let song_beat = frame as f32 / 30.0;
+        let mut output = CommonNoteTransformBenchFrame::default();
+        for note in 0..Self::VISIBLE_NOTES {
+            record_common_transform(
+                &mut output,
+                visual_note_rotation_z_full(note as f32 * 0.25, song_beat, params),
+            );
+        }
+        output
+    }
+
+    pub fn new_rotation_frame(&self, frame: usize) -> CommonNoteTransformBenchFrame {
+        let params = std::hint::black_box(self.rotation);
+        let song_beat = frame as f32 / 30.0;
+        let mut output = CommonNoteTransformBenchFrame::default();
+        for note in 0..Self::VISIBLE_NOTES {
+            record_common_transform(
+                &mut output,
+                visual_note_rotation_z(note as f32 * 0.25, song_beat, false, params),
+            );
+        }
+        output
+    }
+
+    pub fn old_static_x_frame(&self, frame: usize) -> CommonNoteTransformBenchFrame {
+        let params = std::hint::black_box(self.x_params);
+        let mut output = CommonNoteTransformBenchFrame::default();
+        for note in 0..Self::VISIBLE_NOTES {
+            let local_col = (note + frame) % 4;
+            record_common_transform(
+                &mut output,
+                note_x_offset(
+                    local_col,
+                    note as f32 * 6.0,
+                    0.0,
+                    frame as f32 / 120.0,
+                    &self.col_offsets,
+                    &self.invert,
+                    &self.tornado,
+                    &self.move_x,
+                    params,
+                    0.15,
+                ),
+            );
+        }
+        output
+    }
+
+    pub fn new_static_x_frame(&self, frame: usize) -> CommonNoteTransformBenchFrame {
+        let params = std::hint::black_box(self.x_params);
+        let mut offsets = [0.0; 4];
+        let is_static = std::hint::black_box(fill_static_note_x_offsets(
+            4,
+            &self.col_offsets,
+            &self.invert,
+            &self.tornado,
+            &self.move_x,
+            params,
+            0.15,
+            &mut offsets,
+        ));
+        let mut output = CommonNoteTransformBenchFrame::default();
+        for note in 0..Self::VISIBLE_NOTES {
+            let local_col = (note + frame) % 4;
+            let offset = if is_static {
+                offsets[local_col]
+            } else {
+                note_x_offset(
+                    local_col,
+                    note as f32 * 6.0,
+                    0.0,
+                    frame as f32 / 120.0,
+                    &self.col_offsets,
+                    &self.invert,
+                    &self.tornado,
+                    &self.move_x,
+                    params,
+                    0.15,
+                )
+            };
+            record_common_transform(&mut output, offset);
+        }
+        output
+    }
+}
+
+#[cfg(feature = "bench-support")]
+#[inline(always)]
+fn record_common_transform(output: &mut CommonNoteTransformBenchFrame, value: f32) {
+    output.checksum = output.checksum.rotate_left(7) ^ u64::from(value.to_bits());
+    output.samples += 1;
+}
+
+#[cfg(test)]
+mod common_note_transform_tests {
+    use super::*;
+
+    #[test]
+    fn identity_appearance_fast_path_matches_the_full_formula() {
+        let identity = NoteAlphaParams {
+            hidden_offset: f32::NAN,
+            sudden_offset: f32::NAN,
+            ..NoteAlphaParams::default()
+        };
+        for y in [0.0, 32.0, 160.0, 640.0] {
+            let full = appearance_note_alpha_full(y, 12.5, 0.35, identity);
+            let fast = appearance_note_alpha(y, 12.5, 0.35, identity);
+            assert_eq!(fast.to_bits(), full.to_bits());
+        }
+        assert_eq!(
+            appearance_note_alpha(-1.0, 12.5, 0.35, identity).to_bits(),
+            1.0_f32.to_bits()
+        );
+
+        let active = NoteAlphaParams {
+            hidden: 0.7,
+            hidden_offset: 0.2,
+            sudden: 0.4,
+            sudden_offset: -0.1,
+            stealth: 0.15,
+            blink: 0.1,
+            random_vanish: 0.3,
+        };
+        for y in [0.0, 64.0, 160.0, 320.0] {
+            assert_eq!(
+                appearance_note_alpha(y, 3.25, 0.2, active).to_bits(),
+                appearance_note_alpha_full(y, 3.25, 0.2, active).to_bits()
+            );
+        }
+    }
+
+    #[test]
+    fn identity_rotation_fast_path_matches_the_full_formula() {
+        let identity = VisualEffectParams::default();
+        for (note_beat, song_beat) in [(0.0, 0.0), (4.25, 3.5), (-1.0, 128.75)] {
+            assert_eq!(
+                visual_note_rotation_z(note_beat, song_beat, false, identity).to_bits(),
+                visual_note_rotation_z_full(note_beat, song_beat, identity).to_bits()
+            );
+        }
+
+        let active = VisualEffectParams {
+            confusion: 0.4,
+            confusion_offset: -0.2,
+            dizzy: 0.7,
+            rotate_z: 15.0,
+            ..VisualEffectParams::default()
+        };
+        assert_eq!(
+            visual_note_rotation_z(8.5, 6.25, false, active).to_bits(),
+            visual_note_rotation_z_full(8.5, 6.25, active).to_bits()
+        );
+    }
+
+    #[test]
+    fn static_lane_x_cache_matches_canonical_placement_and_rejects_motion() {
+        let col_offsets = [-96.0, -32.0, 32.0, 96.0];
+        let invert = [192.0, 64.0, -64.0, -192.0];
+        let tornado = [TornadoBounds {
+            min_x: -96.0,
+            max_x: 96.0,
+        }; 4];
+        let move_x = [4.0, -2.0, 3.0, -5.0];
+        let params = NoteXParams {
+            screen_height: 480.0,
+            flip: 0.4,
+            invert: 0.25,
+            ..NoteXParams::default()
+        };
+        let mut cached = [f32::NAN; 4];
+        assert!(fill_static_note_x_offsets(
+            4,
+            &col_offsets,
+            &invert,
+            &tornado,
+            &move_x,
+            params,
+            0.15,
+            &mut cached,
+        ));
+        for local_col in 0..4 {
+            for y in [-128.0, 0.0, 256.0, 640.0] {
+                let canonical = note_x_offset(
+                    local_col,
+                    y,
+                    12.0,
+                    3.5,
+                    &col_offsets,
+                    &invert,
+                    &tornado,
+                    &move_x,
+                    params,
+                    0.15,
+                );
+                assert_eq!(cached[local_col].to_bits(), canonical.to_bits());
+            }
+        }
+
+        let dynamic = NoteXParams {
+            drunk: 0.5,
+            ..params
+        };
+        let before = cached;
+        assert!(!fill_static_note_x_offsets(
+            4,
+            &col_offsets,
+            &invert,
+            &tornado,
+            &move_x,
+            dynamic,
+            0.15,
+            &mut cached,
+        ));
+        assert_eq!(cached.map(f32::to_bits), before.map(f32::to_bits));
     }
 }
 
@@ -650,6 +957,40 @@ pub(crate) fn note_x_offset(
     base * tiny_spacing_scale(tiny_zoom) + move_col_extra(move_x, local_col)
 }
 
+pub(crate) fn fill_static_note_x_offsets(
+    num_cols: usize,
+    col_offsets: &[f32],
+    invert: &[f32],
+    tornado: &[TornadoBounds],
+    move_x: &[f32],
+    params: NoteXParams,
+    tiny_zoom: f32,
+    out: &mut [f32],
+) -> bool {
+    if signed_effect_active(params.tornado)
+        || signed_effect_active(params.drunk)
+        || signed_effect_active(params.beat)
+    {
+        return false;
+    }
+    let columns = num_cols.min(out.len());
+    for (local_col, offset) in out.iter_mut().take(columns).enumerate() {
+        *offset = note_x_offset(
+            local_col,
+            0.0,
+            0.0,
+            0.0,
+            col_offsets,
+            invert,
+            tornado,
+            move_x,
+            params,
+            tiny_zoom,
+        );
+    }
+    true
+}
+
 pub(crate) fn appearance_note_alpha(
     y: f32,
     elapsed: f32,
@@ -659,7 +1000,24 @@ pub(crate) fn appearance_note_alpha(
     if y < 0.0 {
         return 1.0;
     }
+    if params.hidden == 0.0
+        && params.sudden == 0.0
+        && params.stealth == 0.0
+        && params.blink == 0.0
+        && params.random_vanish == 0.0
+    {
+        return 1.0;
+    }
+    appearance_note_alpha_full(y, elapsed, mini, params)
+}
 
+#[inline(always)]
+fn appearance_note_alpha_full(
+    y: f32,
+    elapsed: f32,
+    mini: f32,
+    params: NoteAlphaParams,
+) -> f32 {
     let zoom = (1.0 - mini * 0.5).abs().max(0.01);
     let center_line = CENTER_LINE_Y / zoom;
     let hidden_sudden = params.hidden * params.sudden;
