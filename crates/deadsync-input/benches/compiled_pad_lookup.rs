@@ -4,6 +4,7 @@ use deadsync_input::keymap::{
     pad_direction_lookup_legacy_for_bench, raw_pad_button_lookup_for_bench,
     raw_pad_button_lookup_legacy_for_bench,
 };
+use deadsync_input::{normalized_actions_for_bench, normalized_actions_legacy_for_bench};
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::hint::black_box;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -99,6 +100,11 @@ fn main() {
         "idle per-frame debounce draining",
         idle_debounce_drain_legacy_for_bench,
         idle_debounce_drain_for_bench,
+    );
+    benchmark_pair(
+        "normalized input action emission",
+        normalized_actions_legacy_for_bench,
+        normalized_actions_for_bench,
     );
     benchmark_pair(
         "device-specific pad-direction lookup",

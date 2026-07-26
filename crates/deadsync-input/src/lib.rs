@@ -540,8 +540,23 @@ pub fn for_each_action(mut mask: u32, mut f: impl FnMut(VirtualAction)) {
     }
 }
 
+const SECONDARY_MENU_SOURCE_MASK: u32 = VirtualAction::p1_up.bit()
+    | VirtualAction::p1_down.bit()
+    | VirtualAction::p1_left.bit()
+    | VirtualAction::p1_right.bit()
+    | VirtualAction::p2_up.bit()
+    | VirtualAction::p2_down.bit()
+    | VirtualAction::p2_left.bit()
+    | VirtualAction::p2_right.bit();
+
 #[inline(always)]
-pub fn secondary_menu_mask(mask: u32) -> u32 {
+pub const fn secondary_menu_mask(mask: u32) -> u32 {
+    (mask & SECONDARY_MENU_SOURCE_MASK) << 6
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+#[inline(always)]
+fn secondary_menu_mask_legacy(mask: u32) -> u32 {
     let mut out = 0;
     for_each_action(mask, |action| {
         if let Some(menu_action) = action.secondary_menu() {
@@ -551,6 +566,7 @@ pub fn secondary_menu_mask(mask: u32) -> u32 {
     out
 }
 
+#[cfg(any(test, feature = "bench-support"))]
 #[inline(always)]
 fn emit_normalized_action(
     action: VirtualAction,
@@ -582,13 +598,82 @@ pub fn emit_normalized_actions(
     if direct_mask == 0 {
         return;
     }
+    let secondary_mask = secondary_menu_mask(direct_mask);
+    if pressed {
+        for_each_action(direct_mask & !secondary_mask, |action| emit(action, true));
+        return;
+    }
+    for_each_action(direct_mask, |action| emit(action, false));
+    for_each_action(secondary_mask & !direct_mask, |action| emit(action, false));
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn emit_normalized_actions_legacy(
+    direct_mask: u32,
+    pressed: bool,
+    mut emit: impl FnMut(VirtualAction, bool),
+) {
+    if direct_mask == 0 {
+        return;
+    }
     let mut emitted = 0;
     for_each_action(direct_mask, |action| {
         emit_normalized_action(action, pressed, direct_mask, &mut emitted, &mut emit)
     });
-    for_each_action(secondary_menu_mask(direct_mask), |action| {
+    for_each_action(secondary_menu_mask_legacy(direct_mask), |action| {
         emit_normalized_action(action, pressed, direct_mask, &mut emitted, &mut emit)
     });
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+#[inline(always)]
+fn normalized_actions_bench_mask(round: usize) -> u32 {
+    const MASKS: [u32; 6] = [
+        VirtualAction::p1_left.bit(),
+        VirtualAction::p1_down.bit() | VirtualAction::p1_menu_down.bit(),
+        VirtualAction::p1_left.bit() | VirtualAction::p1_right.bit(),
+        VirtualAction::p1_up.bit() | VirtualAction::p2_down.bit(),
+        VirtualAction::p2_left.bit()
+            | VirtualAction::p2_down.bit()
+            | VirtualAction::p2_up.bit()
+            | VirtualAction::p2_right.bit(),
+        VirtualAction::p1_start.bit() | VirtualAction::p1_select.bit(),
+    ];
+    MASKS[round % MASKS.len()]
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn normalized_actions_for_bench() -> u64 {
+    let mut checksum = 0_u64;
+    for round in 0..256 {
+        emit_normalized_actions(
+            normalized_actions_bench_mask(round),
+            round.is_multiple_of(3),
+            |action, pressed| {
+                checksum =
+                    checksum.rotate_left(5) ^ (action as u64).rotate_left(17) ^ u64::from(pressed);
+            },
+        );
+    }
+    checksum
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn normalized_actions_legacy_for_bench() -> u64 {
+    let mut checksum = 0_u64;
+    for round in 0..256 {
+        emit_normalized_actions_legacy(
+            normalized_actions_bench_mask(round),
+            round.is_multiple_of(3),
+            |action, pressed| {
+                checksum =
+                    checksum.rotate_left(5) ^ (action as u64).rotate_left(17) ^ u64::from(pressed);
+            },
+        );
+    }
+    checksum
 }
 
 #[inline(always)]
@@ -679,15 +764,24 @@ mod tests {
     use super::{
         ALL_VIRTUAL_ACTIONS, GamepadCodeBinding, Lane, PadCode, PadDir, PadEvent, PadId,
         VirtualAction, action_from_ini_key_lower, action_to_ini_key, clamp_input_debounce_seconds,
-        emit_normalized_actions, gamepad_code_binding_to_token, lane_from_action, lane_from_column,
-        pad_dir_from_action, parse_gamepad_code_binding, parse_input_debounce_seconds,
-        parse_pad_dir, raw_button_label, secondary_menu_mask, set_button_labeler,
+        emit_normalized_actions, emit_normalized_actions_legacy, gamepad_code_binding_to_token,
+        lane_from_action, lane_from_column, pad_dir_from_action, parse_gamepad_code_binding,
+        parse_input_debounce_seconds, parse_pad_dir, raw_button_label, secondary_menu_mask,
+        set_button_labeler,
     };
     use std::time::Instant;
 
     fn normalized(mask: u32, pressed: bool) -> Vec<(VirtualAction, bool)> {
         let mut out = Vec::new();
         emit_normalized_actions(mask, pressed, |action, pressed| {
+            out.push((action, pressed));
+        });
+        out
+    }
+
+    fn normalized_legacy(mask: u32, pressed: bool) -> Vec<(VirtualAction, bool)> {
+        let mut out = Vec::new();
+        emit_normalized_actions_legacy(mask, pressed, |action, pressed| {
             out.push((action, pressed));
         });
         out
@@ -987,5 +1081,21 @@ mod tests {
                 (VirtualAction::p1_menu_left, false),
             ]
         );
+    }
+
+    #[test]
+    fn normalized_action_emission_matches_legacy_for_action_pairs() {
+        for first in ALL_VIRTUAL_ACTIONS {
+            for second in ALL_VIRTUAL_ACTIONS {
+                let mask = first.bit() | second.bit();
+                for pressed in [false, true] {
+                    assert_eq!(
+                        normalized(mask, pressed),
+                        normalized_legacy(mask, pressed),
+                        "first={first:?}, second={second:?}, pressed={pressed}"
+                    );
+                }
+            }
+        }
     }
 }
