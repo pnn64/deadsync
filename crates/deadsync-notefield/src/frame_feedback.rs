@@ -114,11 +114,14 @@ pub(crate) fn compose_notefield_feedback<S, F>(
     let invert_distances = notes.invert_distances;
     let tornado_bounds = notes.tornado_bounds;
     let beat_factor = notes.beat_factor;
+    let mut lane_effects = [crate::VisualEffectParams::default(); MAX_COLS];
+    let mut lane_centers = [[0.0; 2]; MAX_COLS];
 
     for (local_col, &receptor_y) in field.column_receptor_ys.iter().take(num_cols).enumerate() {
         let lane = frame.lanes[local_col];
         let hidden = song_lua_note_hidden(request.song_lua.note_hides, local_col, current_beat);
         let effect = gameplay_visual_effect_params(&visual, local_col);
+        lane_effects[local_col] = effect;
         let confusion_rotation_deg = visual_confusion_rotation_deg(current_beat, effect);
         let center = receptor_row_center(
             field.playfield_center_x,
@@ -142,6 +145,7 @@ pub(crate) fn compose_notefield_feedback<S, F>(
             visual.tiny,
             visual.tipsy,
         );
+        lane_centers[local_col] = center;
         let effect_zoom = visual_arrow_effect_zoom(0.0, effect);
         let hold_slot = if hidden || !options.hold_explosion_enabled {
             None
@@ -217,8 +221,8 @@ pub(crate) fn compose_notefield_feedback<S, F>(
         }) else {
             continue;
         };
-        let effect = gameplay_visual_effect_params(&visual, local_col);
-        let center = feedback_center(request, prepared, local_col, notes);
+        let effect = lane_effects[local_col];
+        let center = lane_centers[local_col];
         compose_explosion_layers(
             actors,
             ExplosionComposeRequest {
@@ -249,7 +253,7 @@ pub(crate) fn compose_notefield_feedback<S, F>(
         let Some(explosion) = notes.mine.mine_hit_explosion.as_ref() else {
             continue;
         };
-        let effect = gameplay_visual_effect_params(&visual, local_col);
+        let effect = lane_effects[local_col];
         compose_explosion_layers(
             actors,
             ExplosionComposeRequest {
@@ -258,7 +262,7 @@ pub(crate) fn compose_notefield_feedback<S, F>(
                 current_frame_beat: current_beat,
                 relative_frame_beat: None,
                 uv_elapsed_s: elapsed_screen,
-                center: feedback_center(request, prepared, local_col, notes),
+                center: lane_centers[local_col],
                 field_zoom,
                 effect_zoom: visual_arrow_effect_zoom(0.0, effect),
                 rotation: ExplosionRotation::Mine,
@@ -269,35 +273,147 @@ pub(crate) fn compose_notefield_feedback<S, F>(
     }
 }
 
-fn feedback_center<S>(
-    request: &NotefieldComposeRequest<'_, S>,
-    prepared: &PreparedNotefield<'_, S>,
-    local_col: usize,
-    notes: &crate::PreparedNotefieldNotes<'_, S>,
-) -> [f32; 2] {
-    let visual = request.visual.visual;
-    receptor_row_center(
-        prepared.field.playfield_center_x,
-        local_col,
-        prepared.field.column_receptor_ys[local_col],
-        notes.beat_factor,
-        request.arrow_effect_time_s,
-        &notes.col_offsets[..prepared.frame_plan.num_cols],
-        &notes.invert_distances[..prepared.frame_plan.num_cols],
-        &notes.tornado_bounds[..prepared.frame_plan.num_cols],
-        &visual.move_x_cols,
-        &visual.move_y_cols,
-        NoteXParams {
-            screen_height: request.geometry.screen_height,
-            tornado: visual.tornado,
-            drunk: visual.drunk,
-            flip: visual.flip,
-            invert: visual.invert,
-            beat: visual.beat,
-        },
-        visual.tiny,
-        visual.tipsy,
-    )
+#[cfg(feature = "bench-support")]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct FeedbackLaneCacheBenchFrame {
+    pub checksum: u64,
+    pub samples: usize,
+}
+
+#[cfg(feature = "bench-support")]
+#[derive(Clone)]
+pub struct FeedbackLaneCacheBench {
+    visual: deadsync_gameplay::VisualEffects,
+    col_offsets: [f32; MAX_COLS],
+    invert_distances: [f32; MAX_COLS],
+    tornado_bounds: [crate::TornadoBounds; MAX_COLS],
+}
+
+#[cfg(feature = "bench-support")]
+impl Default for FeedbackLaneCacheBench {
+    fn default() -> Self {
+        let mut visual = deadsync_gameplay::VisualEffects {
+            tipsy: 0.7,
+            drunk: 0.5,
+            tornado: 0.35,
+            tiny: 0.2,
+            pulse_inner: 0.15,
+            confusion: 0.4,
+            ..deadsync_gameplay::VisualEffects::default()
+        };
+        for local_col in 0..4 {
+            visual.move_x_cols[local_col] = (local_col as f32 - 1.5) * 0.1;
+            visual.move_y_cols[local_col] = (1.5 - local_col as f32) * 0.08;
+            visual.tiny_cols[local_col] = local_col as f32 * 0.02;
+            visual.confusion_offset_cols[local_col] = local_col as f32 * 0.12;
+        }
+        let mut col_offsets = [0.0; MAX_COLS];
+        col_offsets[..4].copy_from_slice(&[-96.0, -32.0, 32.0, 96.0]);
+        let mut invert_distances = [0.0; MAX_COLS];
+        invert_distances[..4].copy_from_slice(&[192.0, 64.0, -64.0, -192.0]);
+        Self {
+            visual,
+            col_offsets,
+            invert_distances,
+            tornado_bounds: [crate::TornadoBounds {
+                min_x: -96.0,
+                max_x: 96.0,
+            }; MAX_COLS],
+        }
+    }
+}
+
+#[cfg(feature = "bench-support")]
+impl FeedbackLaneCacheBench {
+    const LANES: usize = 4;
+    const PASSES: usize = 3;
+
+    pub fn old_frame(&self, frame: usize) -> FeedbackLaneCacheBenchFrame {
+        let arrow_effect_time_s = frame as f32 / 120.0;
+        let mut output = FeedbackLaneCacheBenchFrame::default();
+        for pass in 0..Self::PASSES {
+            for local_col in 0..Self::LANES {
+                let (effect, center) = self.lane_values(local_col, arrow_effect_time_s);
+                record_feedback_lane_sample(&mut output, effect, center, pass);
+            }
+        }
+        output
+    }
+
+    pub fn new_frame(&self, frame: usize) -> FeedbackLaneCacheBenchFrame {
+        let arrow_effect_time_s = frame as f32 / 120.0;
+        let mut effects = [crate::VisualEffectParams::default(); Self::LANES];
+        let mut centers = [[0.0; 2]; Self::LANES];
+        for local_col in 0..Self::LANES {
+            (effects[local_col], centers[local_col]) =
+                self.lane_values(local_col, arrow_effect_time_s);
+        }
+        let mut output = FeedbackLaneCacheBenchFrame::default();
+        for pass in 0..Self::PASSES {
+            for local_col in 0..Self::LANES {
+                record_feedback_lane_sample(
+                    &mut output,
+                    effects[local_col],
+                    centers[local_col],
+                    pass,
+                );
+            }
+        }
+        output
+    }
+
+    fn lane_values(
+        &self,
+        local_col: usize,
+        arrow_effect_time_s: f32,
+    ) -> (crate::VisualEffectParams, [f32; 2]) {
+        let effect = gameplay_visual_effect_params(&self.visual, local_col);
+        let center = receptor_row_center(
+            320.0,
+            local_col,
+            -125.0,
+            0.45,
+            arrow_effect_time_s,
+            &self.col_offsets[..Self::LANES],
+            &self.invert_distances[..Self::LANES],
+            &self.tornado_bounds[..Self::LANES],
+            &self.visual.move_x_cols,
+            &self.visual.move_y_cols,
+            NoteXParams {
+                screen_height: 480.0,
+                tornado: self.visual.tornado,
+                drunk: self.visual.drunk,
+                flip: self.visual.flip,
+                invert: self.visual.invert,
+                beat: self.visual.beat,
+            },
+            self.visual.tiny,
+            self.visual.tipsy,
+        );
+        (effect, center)
+    }
+}
+
+#[cfg(feature = "bench-support")]
+#[inline(always)]
+fn record_feedback_lane_sample(
+    output: &mut FeedbackLaneCacheBenchFrame,
+    effect: crate::VisualEffectParams,
+    center: [f32; 2],
+    pass: usize,
+) {
+    for value in [
+        effect.tiny,
+        effect.pulse_inner,
+        effect.confusion,
+        effect.confusion_offset,
+        center[0],
+        center[1],
+    ] {
+        output.checksum =
+            output.checksum.rotate_left(7) ^ u64::from(value.to_bits()) ^ pass as u64;
+        output.samples += 1;
+    }
 }
 
 #[cfg(test)]
@@ -889,12 +1005,26 @@ mod tests {
             .collect()
     }
 
+    fn sprite_positions(actors: &[Actor]) -> Vec<(&str, [f32; 2])> {
+        actors
+            .iter()
+            .filter_map(|actor| match actor {
+                Actor::Sprite {
+                    source: SpriteSource::TextureHandle { key, .. },
+                    offset,
+                    ..
+                } => Some((key.as_ref(), *offset)),
+                _ => None,
+            })
+            .collect()
+    }
+
     #[test]
     fn feedback_frame_preserves_phase_and_lane_order() {
         let noteskin = noteskin();
         let timing = TimingData::default();
         let notes = [note(0)];
-        let request = request(
+        let mut request = request(
             &noteskin,
             &timing,
             &notes,
@@ -905,6 +1035,11 @@ mod tests {
             2,
             2,
         );
+        request.visual.visual.tipsy = 0.7;
+        request.visual.visual.drunk = 0.4;
+        request.visual.visual.move_x_cols[0] = 0.25;
+        request.visual.visual.move_y_cols[0] = -0.2;
+        request.visual.visual.confusion_offset_cols[0] = 0.3;
         let prepared = prepare_notefield(&request).expect("test notefield should prepare");
         let hold = active_hold(0);
         let flashes = [
@@ -966,6 +1101,24 @@ mod tests {
                 "target0", "hold0", "press0", "target1", "press1", "tap0", "tap1", "mine", "mine",
             ]
         );
+        let positions = sprite_positions(&actors);
+        let target = positions
+            .iter()
+            .find(|(key, _)| *key == "target0")
+            .map(|(_, position)| *position)
+            .expect("target0 position");
+        let tap = positions
+            .iter()
+            .find(|(key, _)| *key == "tap0")
+            .map(|(_, position)| *position)
+            .expect("tap0 position");
+        let mine = positions
+            .iter()
+            .find(|(key, _)| *key == "mine")
+            .map(|(_, position)| *position)
+            .expect("lane-zero mine position");
+        assert_eq!(tap.map(f32::to_bits), target.map(f32::to_bits));
+        assert_eq!(mine.map(f32::to_bits), target.map(f32::to_bits));
         assert!(hud.is_empty());
     }
 

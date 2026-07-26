@@ -1,5 +1,6 @@
 use deadsync_notefield::{
-    CameraWrapBench, CueScanBench, LaneVisualCacheBench, VisibleRangeBench, XmodTimingBench,
+    CameraWrapBench, CueScanBench, FeedbackLaneCacheBench, LaneVisualCacheBench,
+    VisibleRangeBench, XmodTimingBench,
 };
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::hint::black_box;
@@ -196,6 +197,26 @@ fn main() {
         },
         |frame| {
             let output = lane_visuals.new_frame(frame);
+            Output {
+                checksum: output.checksum,
+                samples: output.samples,
+            }
+        },
+    );
+
+    let feedback_lanes = FeedbackLaneCacheBench::default();
+    run_pair(
+        "notefield feedback lane reuse",
+        "4 receptors with active tap and mine feedback passes",
+        |frame| {
+            let output = feedback_lanes.old_frame(frame);
+            Output {
+                checksum: output.checksum,
+                samples: output.samples,
+            }
+        },
+        |frame| {
+            let output = feedback_lanes.new_frame(frame);
             Output {
                 checksum: output.checksum,
                 samples: output.samples,

@@ -1,6 +1,6 @@
 use deadsync_gameplay::{
-    ActiveColumnScanBench, GameplayFrameHotPathBenchOutput, IdleHoldPhaseBench,
-    LiveNotefieldOptionsBench, OptionalFrameWorkBench,
+    ActiveColumnScanBench, GameplayFrameHotPathBenchOutput, IdleHoldPhaseBench, IdleLaneScanBench,
+    LiveNotefieldOptionsBench, OptionalFrameWorkBench, SharedMissCutoffBench,
 };
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::hint::black_box;
@@ -130,6 +130,24 @@ fn main() {
         "4 lanes, sparse active, decaying, and pending holds",
         move |frame| old_holds.old_frame(frame),
         move |frame| new_holds.new_frame(frame),
+    );
+
+    let mut old_lane_scan = IdleLaneScanBench::default();
+    let mut new_lane_scan = old_lane_scan.clone();
+    run_pair(
+        "idle held-lane scanning",
+        "4 lanes and 24 nearby notes, with input active every 257 frames",
+        move |frame| old_lane_scan.old_frame(frame),
+        move |frame| new_lane_scan.new_frame(frame),
+    );
+
+    let mut old_cutoff = SharedMissCutoffBench::default();
+    let mut new_cutoff = old_cutoff.clone();
+    run_pair(
+        "shared mine/tap miss cutoff",
+        "2 players sharing one per-frame timing cutoff",
+        move |frame| old_cutoff.old_frame(frame),
+        move |frame| new_cutoff.new_frame(frame),
     );
 }
 

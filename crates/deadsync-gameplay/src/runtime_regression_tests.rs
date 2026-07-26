@@ -1041,6 +1041,40 @@ mod runtime_regression_tests {
             state.held_mine_crossing_start_time(&inputs, 4, previous_time, current_time),
             None
         );
+
+        let scanned = state.scan_held_lane_activity(previous_time, current_time);
+        assert_eq!(scanned, inputs);
+        assert_eq!(state.control.input_state.prev_inputs, inputs);
+    }
+
+    #[test]
+    fn idle_held_lane_scan_only_latches_the_current_snapshot() {
+        let mut state = regression_state();
+        state.control.input_state.prev_inputs[0] = true;
+        state.control.input_state.lane_pressed_since_ns[0] =
+            Some(song_time_ns_from_seconds(0.9));
+        let held_window_before = state.hold_runtime.tap_miss_held_window.clone();
+        let pending_mines_before = state
+            .chart_runtime
+            .mine_scan
+            .pending_mine_hit_indices
+            .clone();
+
+        let inputs = state.scan_held_lane_activity(
+            song_time_ns_from_seconds(1.0),
+            song_time_ns_from_seconds(1.1),
+        );
+
+        assert!(inputs.iter().all(|pressed| !pressed));
+        assert_eq!(state.control.input_state.prev_inputs, inputs);
+        assert_eq!(
+            state.hold_runtime.tap_miss_held_window,
+            held_window_before
+        );
+        assert_eq!(
+            state.chart_runtime.mine_scan.pending_mine_hit_indices,
+            pending_mines_before
+        );
     }
 
     #[test]

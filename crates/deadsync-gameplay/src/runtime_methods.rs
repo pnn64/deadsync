@@ -1007,14 +1007,23 @@ where
 
     #[inline(always)]
     pub fn apply_time_based_mine_avoidance(&mut self, music_time_ns: SongTimeNs) {
+        let cutoff_rows = self.missed_note_cutoff_rows(music_time_ns);
+        self.apply_time_based_mine_avoidance_with_cutoff(music_time_ns, &cutoff_rows);
+    }
+
+    #[inline(always)]
+    fn apply_time_based_mine_avoidance_with_cutoff(
+        &mut self,
+        music_time_ns: SongTimeNs,
+        cutoff_rows: &[usize; MAX_PLAYERS],
+    ) {
         let music_time_sec = song_time_ns_to_seconds(music_time_ns);
         let log_mine_avoid = log::log_enabled!(log::Level::Trace);
-        let cutoff_rows = self.missed_note_cutoff_rows(music_time_ns);
         let player_updates = apply_time_based_mine_avoidance_for_players(
             &mut self.chart_runtime.notes,
             &self.chart_runtime.mine_scan.mine_note_ix,
             &self.chart_runtime.mine_scan.next_mine_ix_cursor,
-            &cutoff_rows,
+            cutoff_rows,
             self.chart_runtime.note_ranges.ranges(),
             self.setup.num_players,
         );
@@ -1044,9 +1053,18 @@ where
 
     #[inline(always)]
     pub fn apply_time_based_tap_misses(&mut self, music_time_ns: SongTimeNs) {
+        let cutoff_rows = self.missed_note_cutoff_rows(music_time_ns);
+        self.apply_time_based_tap_misses_with_cutoff(music_time_ns, &cutoff_rows);
+    }
+
+    #[inline(always)]
+    fn apply_time_based_tap_misses_with_cutoff(
+        &mut self,
+        music_time_ns: SongTimeNs,
+        cutoff_rows: &[usize; MAX_PLAYERS],
+    ) {
         let rate = normalized_song_rate(self.music_rate());
         let music_time_sec = song_time_ns_to_seconds(music_time_ns);
-        let cutoff_rows = self.missed_note_cutoff_rows(music_time_ns);
         let mut miss_events = [None; 16];
         loop {
             let update = collect_time_based_tap_misses_for_players(
@@ -1057,7 +1075,7 @@ where
                 &mut self.hold_runtime.decaying_hold_indices,
                 &mut self.chart_runtime.mine_scan.next_tap_miss_cursor,
                 self.chart_runtime.note_ranges.ranges(),
-                &cutoff_rows,
+                cutoff_rows,
                 music_time_ns,
                 rate,
                 &self.progress.stage.score_missed_holds_rolls,
@@ -1424,23 +1442,8 @@ where
         } else {
             None
         };
-        let current_inputs = self.current_lane_inputs();
-        if !self.live_autoplay_enabled() {
-            for col in 0..self.setup.num_cols.min(MAX_COLS) {
-                let crossed_from_ns = self.held_mine_crossing_start_time(
-                    &current_inputs,
-                    col,
-                    previous_music_time_ns,
-                    music_time_ns,
-                );
-                if let Some(crossed_from_ns) = crossed_from_ns {
-                    let _ =
-                        self.try_hit_crossed_mines_while_held(col, crossed_from_ns, music_time_ns);
-                }
-            }
-        }
-        self.track_held_miss_windows(&current_inputs, music_time_ns);
-        self.set_previous_lane_inputs(current_inputs);
+        let current_inputs =
+            self.scan_held_lane_activity(previous_music_time_ns, music_time_ns);
         if let Some(started) = held_mines_started {
             phase_timings.held_mines_us = elapsed_us_since(started);
         }
@@ -1494,7 +1497,8 @@ where
         } else {
             None
         };
-        self.apply_time_based_mine_avoidance(music_time_ns);
+        let cutoff_rows = self.missed_note_cutoff_rows(music_time_ns);
+        self.apply_time_based_mine_avoidance_with_cutoff(music_time_ns, &cutoff_rows);
         if let Some(started) = mine_avoid_started {
             phase_timings.mine_avoid_us = elapsed_us_since(started);
         }
@@ -1504,7 +1508,7 @@ where
         } else {
             None
         };
-        self.apply_time_based_tap_misses(music_time_ns);
+        self.apply_time_based_tap_misses_with_cutoff(music_time_ns, &cutoff_rows);
         if let Some(started) = tap_miss_started {
             phase_timings.tap_miss_us = elapsed_us_since(started);
         }
@@ -1528,6 +1532,38 @@ where
         if let Some(started) = danger_started {
             phase_timings.danger_us = elapsed_us_since(started);
         }
+    }
+
+    #[inline(always)]
+    fn scan_held_lane_activity(
+        &mut self,
+        previous_music_time_ns: SongTimeNs,
+        music_time_ns: SongTimeNs,
+    ) -> [bool; MAX_COLS] {
+        let current_inputs = self.current_lane_inputs();
+        let columns = self.setup.num_cols.min(MAX_COLS);
+        if current_inputs[..columns].contains(&true) {
+            if !self.live_autoplay_enabled() {
+                for col in 0..columns {
+                    let crossed_from_ns = self.held_mine_crossing_start_time(
+                        &current_inputs,
+                        col,
+                        previous_music_time_ns,
+                        music_time_ns,
+                    );
+                    if let Some(crossed_from_ns) = crossed_from_ns {
+                        let _ = self.try_hit_crossed_mines_while_held(
+                            col,
+                            crossed_from_ns,
+                            music_time_ns,
+                        );
+                    }
+                }
+            }
+            self.track_held_miss_windows(&current_inputs, music_time_ns);
+        }
+        self.set_previous_lane_inputs(current_inputs);
+        current_inputs
     }
 
     #[inline(always)]

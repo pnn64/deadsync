@@ -392,3 +392,175 @@ impl IdleHoldPhaseBench {
         output
     }
 }
+
+#[derive(Clone)]
+pub struct IdleLaneScanBench {
+    notes: Vec<Note>,
+    note_times_ns: Vec<SongTimeNs>,
+    held_window: Vec<bool>,
+}
+
+impl Default for IdleLaneScanBench {
+    fn default() -> Self {
+        let notes = (0..24)
+            .map(|index| Note {
+                beat: index as f32 * 0.25,
+                quantization_idx: 0,
+                column: index % 4,
+                note_type: NoteType::Tap,
+                row_index: index * 12,
+                result: None,
+                early_result: None,
+                hold: None,
+                mine_result: None,
+                is_fake: false,
+                can_be_judged: true,
+            })
+            .collect::<Vec<_>>();
+        let note_times_ns = (0..notes.len())
+            .map(|index| 900_000_000 + index as SongTimeNs * 10_000_000)
+            .collect();
+        Self {
+            held_window: vec![false; notes.len()],
+            notes,
+            note_times_ns,
+        }
+    }
+}
+
+impl IdleLaneScanBench {
+    pub fn old_frame(&mut self, frame: usize) -> GameplayFrameHotPathBenchOutput {
+        self.run_frame(frame, false)
+    }
+
+    pub fn new_frame(&mut self, frame: usize) -> GameplayFrameHotPathBenchOutput {
+        self.run_frame(frame, true)
+    }
+
+    fn run_frame(
+        &mut self,
+        frame: usize,
+        guard_idle: bool,
+    ) -> GameplayFrameHotPathBenchOutput {
+        let mut current_inputs = [false; MAX_COLS];
+        current_inputs[0] = frame % 257 == 0;
+        let current_inputs = std::hint::black_box(current_inputs);
+        let mut output = GameplayFrameHotPathBenchOutput::default();
+
+        if !guard_idle || current_inputs[..4].contains(&true) {
+            let mut previous_inputs = [false; MAX_COLS];
+            previous_inputs[0] = true;
+            let pressed_since_ns = [None; MAX_COLS];
+            for column in 0..4 {
+                if crossed_mine_held_start_time(
+                    current_inputs[column],
+                    previous_inputs[column],
+                    pressed_since_ns[column],
+                    1_000_000_000,
+                    1_008_333_333,
+                )
+                .is_some()
+                {
+                    output.checksum ^= 1_u64 << column;
+                }
+            }
+            let _ = track_held_miss_windows_for_players(
+                &self.notes,
+                &self.note_times_ns,
+                &mut self.held_window,
+                &[(0, self.notes.len()), (0, 0)],
+                &[0; MAX_PLAYERS],
+                &[180_000_000, 0],
+                1,
+                4,
+                &current_inputs,
+                1_008_333_333,
+            );
+        }
+
+        std::hint::black_box(&self.held_window);
+        output.checksum = output.checksum.rotate_left(5)
+            ^ u64::from(self.held_window.first().copied().unwrap_or(false))
+            ^ u64::from(self.held_window.last().copied().unwrap_or(false)).rotate_left(1);
+        output.samples += usize::from(self.held_window.iter().any(|held| *held));
+        output
+    }
+}
+
+#[derive(Clone)]
+pub struct SharedMissCutoffBench {
+    timing: TimingData,
+    timing_players: [TimingData; MAX_PLAYERS],
+    profile: TimingProfile,
+    caches: GameplayTimeToBeatCaches,
+}
+
+impl Default for SharedMissCutoffBench {
+    fn default() -> Self {
+        let row_to_beat = (0..=2_048)
+            .map(|row| row as f32 / ROWS_PER_BEAT as f32)
+            .collect::<Vec<_>>();
+        let timing = TimingData::from_segments(
+            0.0,
+            0.0,
+            &TimingSegments {
+                bpms: vec![(0.0, 120.0), (16.0, 180.0), (32.0, 90.0)],
+                ..TimingSegments::default()
+            },
+            &row_to_beat,
+        );
+        let timing_players = [timing.clone(), timing.clone()];
+        let player_refs = [&timing_players[0], &timing_players[1]];
+        let caches = GameplayTimeToBeatCaches::new(&timing, &player_refs);
+        Self {
+            timing,
+            timing_players,
+            profile: TimingProfile::default_itg_with_fa_plus(),
+            caches,
+        }
+    }
+}
+
+impl SharedMissCutoffBench {
+    pub fn old_frame(&mut self, frame: usize) -> GameplayFrameHotPathBenchOutput {
+        self.run_frame(frame, false)
+    }
+
+    pub fn new_frame(&mut self, frame: usize) -> GameplayFrameHotPathBenchOutput {
+        self.run_frame(frame, true)
+    }
+
+    fn run_frame(
+        &mut self,
+        frame: usize,
+        share_cutoff: bool,
+    ) -> GameplayFrameHotPathBenchOutput {
+        let music_time_ns = 500_000_000_i64.saturating_add(frame as i64 * 8_333_333);
+        let player_refs = [&self.timing_players[0], &self.timing_players[1]];
+        let rows = self.caches.missed_note_cutoff_rows(
+            &self.profile,
+            &player_refs,
+            1.0,
+            music_time_ns,
+            2,
+        );
+        let second_rows = if share_cutoff {
+            rows
+        } else {
+            self.caches.missed_note_cutoff_rows(
+                &self.profile,
+                &player_refs,
+                1.0,
+                music_time_ns,
+                2,
+            )
+        };
+        let mut output = GameplayFrameHotPathBenchOutput::default();
+        for cutoff in rows.into_iter().chain(second_rows) {
+            output.checksum = output.checksum.rotate_left(7) ^ cutoff as u64;
+            output.samples += usize::from(cutoff != 0);
+        }
+        std::hint::black_box(&self.timing);
+        output
+    }
+}
