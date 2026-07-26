@@ -785,6 +785,7 @@ mod tests {
                 note_itg_rows: &[],
                 note_time_cache_ns: &[],
                 hold_end_time_cache_ns: &[],
+                note_displayed_beat_cache: &[],
                 decaying_hold_indices: &[],
                 tap_row_hold_roll_flags: &[],
                 visible_music_time_ns: 100_000_000,
@@ -798,6 +799,7 @@ mod tests {
                 stops: &[],
                 delays: &[],
                 scrolls: &[],
+                displayed_beat_monotonic: true,
             },
             noteskin: NotefieldNoteskinView {
                 base: Some(noteskin),

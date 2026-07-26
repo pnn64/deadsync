@@ -71,6 +71,7 @@ pub struct NotefieldChartView<'a> {
     /// slices are valid and fall back to canonical timing queries.
     pub note_time_cache_ns: &'a [i64],
     pub hold_end_time_cache_ns: &'a [Option<i64>],
+    pub note_displayed_beat_cache: &'a [[f32; 2]],
     pub decaying_hold_indices: &'a [usize],
     pub tap_row_hold_roll_flags: &'a [u8],
     pub visible_music_time_ns: i64,
@@ -84,6 +85,9 @@ pub struct NotefieldChartView<'a> {
     pub stops: &'a [StopSegment],
     pub delays: &'a [DelaySegment],
     pub scrolls: &'a [ScrollSegment],
+    /// Song-load proof that displayed beat is safe to invert as one monotonic
+    /// visible range. False keeps timing cues on the legacy full scan.
+    pub displayed_beat_monotonic: bool,
 }
 
 impl NotefieldChartView<'_> {
@@ -109,6 +113,18 @@ impl NotefieldChartView<'_> {
         } else {
             self.note_time_cache_ns.get(note_index).copied()
         }
+    }
+
+    #[inline(always)]
+    pub(crate) fn cached_displayed_beat(
+        &self,
+        note_index: usize,
+        use_hold_end: bool,
+    ) -> Option<f32> {
+        self.note_displayed_beat_cache
+            .get(note_index)
+            .map(|pair| pair[usize::from(use_hold_end)])
+            .filter(|beat| beat.is_finite())
     }
 }
 

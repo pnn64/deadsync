@@ -7,6 +7,7 @@ use deadsync_rules::timing::{
     DelaySegment, ScrollSegment, StopSegment, TimeSignatureSegment, default_time_signature,
 };
 use deadsync_theme::NotefieldStyle;
+use std::ops::Range;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum MeasureLineMode {
@@ -39,6 +40,8 @@ pub(crate) struct MeasureComposeRequest<'a, 'travel> {
     pub stops: &'a [StopSegment],
     pub delays: &'a [DelaySegment],
     pub scrolls: &'a [ScrollSegment],
+    pub displayed_beat_monotonic: bool,
+    pub cue_visible_row_range: Option<(i32, i32)>,
     pub travel: &'a ScrollTravel<'travel>,
 }
 
@@ -483,22 +486,69 @@ fn append_group_cues(
         }
     };
 
-    for window in request.scrolls.windows(2) {
+    let beat_range = visible_cue_beat_range(request);
+    let scroll_range =
+        transition_segment_range(request.scrolls, beat_range, |segment| segment.beat);
+    for window in request.scrolls[scroll_range].windows(2) {
         if window[1].ratio != window[0].ratio {
             append_cue(window[1].beat, request.style.measure_cue_scroll_color);
         }
     }
-    for window in request.bpms.windows(2) {
+    let bpm_range = transition_segment_range(request.bpms, beat_range, |segment| segment.0);
+    for window in request.bpms[bpm_range].windows(2) {
         if window[1].1 != window[0].1 {
             append_cue(window[1].0, request.style.measure_cue_bpm_color);
         }
     }
-    for delay in request.delays {
+    let delay_range = point_segment_range(request.delays, beat_range, |segment| segment.beat);
+    for delay in &request.delays[delay_range] {
         append_cue(delay.beat, request.style.measure_cue_delay_color);
     }
-    for stop in request.stops {
+    let stop_range = point_segment_range(request.stops, beat_range, |segment| segment.beat);
+    for stop in &request.stops[stop_range] {
         append_cue(stop.beat, request.style.measure_cue_stop_color);
     }
+}
+
+fn visible_cue_beat_range(request: &MeasureComposeRequest<'_, '_>) -> Option<(f32, f32)> {
+    if !matches!(
+        request.scroll_speed,
+        ScrollSpeedSetting::XMod(_) | ScrollSpeedSetting::MMod(_)
+    ) || !request.displayed_beat_monotonic
+    {
+        return None;
+    }
+    request.cue_visible_row_range.map(|(low, high)| {
+        (
+            note_row_to_beat(low.min(high)),
+            note_row_to_beat(low.max(high)),
+        )
+    })
+}
+
+fn transition_segment_range<T>(
+    segments: &[T],
+    beat_range: Option<(f32, f32)>,
+    beat: impl Fn(&T) -> f32,
+) -> Range<usize> {
+    let Some((low, high)) = beat_range else {
+        return 0..segments.len();
+    };
+    let first = segments.partition_point(|segment| beat(segment) < low);
+    let end = segments.partition_point(|segment| beat(segment) <= high);
+    first.saturating_sub(1).min(end)..end
+}
+
+fn point_segment_range<T>(
+    segments: &[T],
+    beat_range: Option<(f32, f32)>,
+    beat: impl Fn(&T) -> f32,
+) -> Range<usize> {
+    let Some((low, high)) = beat_range else {
+        return 0..segments.len();
+    };
+    segments.partition_point(|segment| beat(segment) < low)
+        ..segments.partition_point(|segment| beat(segment) <= high)
 }
 
 pub(crate) fn compose_measure_lines(
@@ -521,6 +571,108 @@ pub(crate) fn compose_measure_lines(
         }
     }
 }
+
+#[cfg(feature = "bench-support")]
+mod bench {
+    use super::{point_segment_range, transition_segment_range};
+    use deadsync_rules::timing::{DelaySegment, ScrollSegment, StopSegment};
+
+    const SEGMENTS: usize = 8_192;
+
+    #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+    pub struct CueScanBenchFrame {
+        pub checksum: u64,
+        pub samples: usize,
+    }
+
+    pub struct CueScanBench {
+        scrolls: Vec<ScrollSegment>,
+        bpms: Vec<(f32, f32)>,
+        delays: Vec<DelaySegment>,
+        stops: Vec<StopSegment>,
+    }
+
+    impl Default for CueScanBench {
+        fn default() -> Self {
+            Self {
+                scrolls: (0..SEGMENTS)
+                    .map(|index| ScrollSegment {
+                        beat: index as f32 * 0.25,
+                        ratio: 0.5 + (index % 9) as f32 * 0.125,
+                    })
+                    .collect(),
+                bpms: (0..SEGMENTS)
+                    .map(|index| (index as f32 * 0.25, 90.0 + (index % 17) as f32 * 7.0))
+                    .collect(),
+                delays: (0..SEGMENTS)
+                    .step_by(3)
+                    .map(|index| DelaySegment {
+                        beat: index as f32 * 0.25,
+                        duration: 0.01,
+                    })
+                    .collect(),
+                stops: (0..SEGMENTS)
+                    .step_by(4)
+                    .map(|index| StopSegment {
+                        beat: index as f32 * 0.25,
+                        duration: 0.01,
+                    })
+                    .collect(),
+            }
+        }
+    }
+
+    impl CueScanBench {
+        pub fn old_frame(&self, frame: usize) -> CueScanBenchFrame {
+            self.frame(frame, false)
+        }
+
+        pub fn new_frame(&self, frame: usize) -> CueScanBenchFrame {
+            self.frame(frame, true)
+        }
+
+        fn frame(&self, frame: usize, indexed: bool) -> CueScanBenchFrame {
+            let center = 16.0 + (frame % (SEGMENTS / 2)) as f32 * 0.25;
+            let beat_range = (center - 8.0, center + 16.0);
+            let selected = indexed.then_some(beat_range);
+            let mut output = CueScanBenchFrame::default();
+
+            let scroll_range =
+                transition_segment_range(&self.scrolls, selected, |segment| segment.beat);
+            for window in self.scrolls[scroll_range].windows(2) {
+                if window[1].ratio != window[0].ratio {
+                    sample(&mut output, window[1].beat, beat_range, 1);
+                }
+            }
+            let bpm_range = transition_segment_range(&self.bpms, selected, |segment| segment.0);
+            for window in self.bpms[bpm_range].windows(2) {
+                if window[1].1 != window[0].1 {
+                    sample(&mut output, window[1].0, beat_range, 2);
+                }
+            }
+            let delay_range = point_segment_range(&self.delays, selected, |segment| segment.beat);
+            for segment in &self.delays[delay_range] {
+                sample(&mut output, segment.beat, beat_range, 3);
+            }
+            let stop_range = point_segment_range(&self.stops, selected, |segment| segment.beat);
+            for segment in &self.stops[stop_range] {
+                sample(&mut output, segment.beat, beat_range, 4);
+            }
+            output
+        }
+    }
+
+    fn sample(output: &mut CueScanBenchFrame, beat: f32, beat_range: (f32, f32), kind: u64) {
+        if beat < beat_range.0 || beat > beat_range.1 {
+            return;
+        }
+        output.checksum = output.checksum.rotate_left(7) ^ u64::from(beat.to_bits()) ^ (kind << 60);
+        output.samples += 1;
+    }
+}
+
+#[cfg(feature = "bench-support")]
+pub use bench::{CueScanBench, CueScanBenchFrame};
 
 #[cfg(test)]
 mod tests {
@@ -824,6 +976,8 @@ mod tests {
             stops: &[],
             delays: &[],
             scrolls: &[],
+            displayed_beat_monotonic: true,
+            cue_visible_row_range: None,
             travel,
         }
     }
@@ -924,6 +1078,115 @@ mod tests {
                     && *tint == [1.0, 1.0, 1.0, 0.75]
                     && *z == 80)
         );
+    }
+
+    #[test]
+    fn visible_cue_segment_slices_preserve_full_scan_output() {
+        let timing = timing();
+        let travel = travel(&timing, ScrollSpeedSetting::XMod(1.0));
+        let dirs = [1.0; 4];
+        let receptors = [100.0; 4];
+        let scrolls = [
+            ScrollSegment {
+                beat: -32.0,
+                ratio: 1.0,
+            },
+            ScrollSegment {
+                beat: -4.0,
+                ratio: 0.75,
+            },
+            ScrollSegment {
+                beat: 2.0,
+                ratio: 1.25,
+            },
+            ScrollSegment {
+                beat: 12.0,
+                ratio: 0.5,
+            },
+            ScrollSegment {
+                beat: 48.0,
+                ratio: 1.0,
+            },
+        ];
+        let bpms = [
+            (-32.0, 90.0),
+            (-4.0, 120.0),
+            (3.0, 180.0),
+            (13.0, 150.0),
+            (48.0, 200.0),
+        ];
+        let delays = [
+            DelaySegment {
+                beat: -24.0,
+                duration: 0.1,
+            },
+            DelaySegment {
+                beat: 5.0,
+                duration: 0.1,
+            },
+            DelaySegment {
+                beat: 40.0,
+                duration: 0.1,
+            },
+        ];
+        let stops = [
+            StopSegment {
+                beat: -20.0,
+                duration: 0.1,
+            },
+            StopSegment {
+                beat: 7.0,
+                duration: 0.1,
+            },
+            StopSegment {
+                beat: 44.0,
+                duration: 0.1,
+            },
+        ];
+        let mut optimized = request(MeasureLineMode::Off, &travel, &dirs, &receptors);
+        optimized.show_cues = true;
+        optimized.scrolls = &scrolls;
+        optimized.bpms = &bpms;
+        optimized.delays = &delays;
+        optimized.stops = &stops;
+        optimized.cue_visible_row_range = crate::note_placement::expand_range(
+            travel.visible_row_range_with_extra(optimized.style.measure_line_overscan_y),
+        );
+        let mut baseline = optimized;
+        baseline.cue_visible_row_range = None;
+        let group = measure_groups(&optimized)
+            .into_iter()
+            .flatten()
+            .next()
+            .expect("forward field group");
+        let mut old_actors = Vec::new();
+        let mut new_actors = Vec::new();
+        append_group_cues(&mut old_actors, &baseline, group);
+        append_group_cues(&mut new_actors, &optimized, group);
+        assert_eq!(
+            old_actors
+                .iter()
+                .filter_map(sprite_parts)
+                .collect::<Vec<_>>(),
+            new_actors
+                .iter()
+                .filter_map(sprite_parts)
+                .collect::<Vec<_>>(),
+        );
+
+        let zero_scrolls = [
+            ScrollSegment {
+                beat: 0.0,
+                ratio: 1.0,
+            },
+            ScrollSegment {
+                beat: 4.0,
+                ratio: 0.0,
+            },
+        ];
+        optimized.scrolls = &zero_scrolls;
+        optimized.displayed_beat_monotonic = false;
+        assert_eq!(visible_cue_beat_range(&optimized), None);
     }
 
     #[test]

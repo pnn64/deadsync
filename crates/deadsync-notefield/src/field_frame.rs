@@ -61,11 +61,13 @@ where
     model_cache.begin_frame();
     hold_mesh_scratch.begin_frame();
     let field_start = actors.len();
-    actors.reserve(prepared.frame_plan.field_actor_reserve);
+    actors.reserve(prepared.frame_plan.field_actor_reserve.saturating_add(2));
     cue_hud_actors.reserve(prepared.frame_plan.hud_actor_reserve);
     let Some(notes) = prepared.notes.as_ref() else {
         return NotefieldFieldResult::default();
     };
+    let camera_pushed = push_field_camera(actors, request, prepared);
+    let field_content_start = actors.len();
 
     compose_field_contents(
         actors,
@@ -78,7 +80,7 @@ where
         frame,
         sprite_source,
     );
-    wrap_field_camera(actors, field_start, request, prepared);
+    finish_field_camera(actors, field_start, field_content_start, camera_pushed);
 
     let captured_actors = request
         .capture_requests
@@ -210,6 +212,15 @@ fn compose_field_contents<S, F>(
         )
     };
     let visible_row_range = crate::note_placement::expand_range(travel.visible_row_range());
+    let cue_visible_row_range = options
+        .frame_features
+        .measure_cues
+        .then(|| {
+            crate::note_placement::expand_range(
+                travel.visible_row_range_with_extra(style.measure_line_overscan_y),
+            )
+        })
+        .flatten();
 
     let measure_line_mode = if request.view.edit_beat_bars {
         MeasureLineMode::Edit
@@ -239,6 +250,8 @@ fn compose_field_contents<S, F>(
             stops: request.chart.stops,
             delays: request.chart.delays,
             scrolls: request.chart.scrolls,
+            displayed_beat_monotonic: request.chart.displayed_beat_monotonic,
+            cue_visible_row_range,
             travel,
         },
     );
@@ -304,12 +317,14 @@ fn compose_field_contents<S, F>(
                 note,
                 false,
                 request.chart.cached_note_time_ns(note_index, false),
+                request.chart.cached_displayed_beat(note_index, false),
             )
         };
         let tail_travel_offset = travel.raw_note_cached(
             note,
             true,
             request.chart.cached_note_time_ns(note_index, true),
+            request.chart.cached_displayed_beat(note_index, true),
         );
         let head_y = travel.lane_y(local_col, lane_receptor_y, dir, head_travel_offset);
         let tail_y = travel.lane_y(local_col, lane_receptor_y, dir, tail_travel_offset);
@@ -731,6 +746,7 @@ fn compose_visible_notes<S, F>(
                     note,
                     false,
                     request.chart.cached_note_time_ns(note_index, false),
+                    request.chart.cached_displayed_beat(note_index, false),
                 ));
                 if adjusted_travel < -request.geometry.draw_distance_after_targets
                     || adjusted_travel > request.geometry.draw_distance_before_targets
@@ -1281,15 +1297,11 @@ fn calc_note_rotation_z(
     )
 }
 
-fn wrap_field_camera<S>(
+fn push_field_camera<S>(
     actors: &mut Vec<Actor>,
-    field_start: usize,
     request: &NotefieldComposeRequest<'_, S>,
     prepared: &PreparedNotefield<'_, S>,
-) {
-    if actors.len() <= field_start {
-        return;
-    }
+) -> bool {
     let field = prepared.field;
     let center_y = 0.5 * (field.receptor_y_normal + field.receptor_y_reverse);
     let perspective = request.visual.perspective;
@@ -1302,9 +1314,134 @@ fn wrap_field_camera<S>(
         perspective.skew,
         request.geometry.reverse_scroll,
     ) else {
-        return;
+        return false;
     };
-    actors.reserve(2);
-    actors.insert(field_start, Actor::CameraPush { view_proj });
-    actors.push(Actor::CameraPop);
+    actors.push(Actor::CameraPush { view_proj });
+    true
+}
+
+fn finish_field_camera(
+    actors: &mut Vec<Actor>,
+    field_start: usize,
+    field_content_start: usize,
+    camera_pushed: bool,
+) {
+    if actors.len() == field_content_start {
+        actors.truncate(field_start);
+    } else if camera_pushed {
+        actors.push(Actor::CameraPop);
+    }
+}
+
+#[cfg(feature = "bench-support")]
+mod camera_wrap_bench {
+    use std::cell::RefCell;
+
+    use deadlib_present::actors::Actor;
+    use glam::{Mat4, Vec3};
+
+    const FIELD_ACTORS: usize = 384;
+
+    #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+    pub struct CameraWrapBenchFrame {
+        pub checksum: u64,
+        pub samples: usize,
+    }
+
+    pub struct CameraWrapBench {
+        template: Vec<Actor>,
+        old_scratch: RefCell<Vec<Actor>>,
+        new_scratch: RefCell<Vec<Actor>>,
+        camera: Mat4,
+    }
+
+    impl Default for CameraWrapBench {
+        fn default() -> Self {
+            Self {
+                template: (0..FIELD_ACTORS)
+                    .map(|index| Actor::CameraPush {
+                        view_proj: Mat4::from_translation(Vec3::new(index as f32, 0.0, 0.0)),
+                    })
+                    .collect(),
+                old_scratch: RefCell::new(Vec::with_capacity(FIELD_ACTORS + 2)),
+                new_scratch: RefCell::new(Vec::with_capacity(FIELD_ACTORS + 2)),
+                camera: Mat4::from_translation(Vec3::new(-1.0, 2.0, 0.0)),
+            }
+        }
+    }
+
+    impl CameraWrapBench {
+        pub fn old_frame(&self, frame: usize) -> CameraWrapBenchFrame {
+            let mut actors = self.old_scratch.borrow_mut();
+            actors.clear();
+            actors.extend(self.template.iter().cloned());
+            actors.insert(
+                0,
+                Actor::CameraPush {
+                    view_proj: self.camera,
+                },
+            );
+            actors.push(Actor::CameraPop);
+            output(&actors, frame)
+        }
+
+        pub fn new_frame(&self, frame: usize) -> CameraWrapBenchFrame {
+            let mut actors = self.new_scratch.borrow_mut();
+            actors.clear();
+            actors.push(Actor::CameraPush {
+                view_proj: self.camera,
+            });
+            actors.extend(self.template.iter().cloned());
+            actors.push(Actor::CameraPop);
+            output(&actors, frame)
+        }
+    }
+
+    fn output(actors: &[Actor], frame: usize) -> CameraWrapBenchFrame {
+        let checksum = actors.iter().fold(0_u64, |checksum, actor| match actor {
+            Actor::CameraPush { view_proj } => {
+                checksum.rotate_left(7)
+                    ^ u64::from(view_proj.w_axis.x.to_bits())
+                    ^ (frame as u64).rotate_left(17)
+            }
+            Actor::CameraPop => checksum ^ u64::MAX,
+            _ => checksum.rotate_left(1),
+        });
+        CameraWrapBenchFrame {
+            checksum,
+            samples: actors.len(),
+        }
+    }
+}
+
+#[cfg(feature = "bench-support")]
+pub use camera_wrap_bench::{CameraWrapBench, CameraWrapBenchFrame};
+
+#[cfg(test)]
+mod camera_wrap_tests {
+    use super::finish_field_camera;
+    use deadlib_present::actors::Actor;
+    use glam::Mat4;
+
+    #[test]
+    fn camera_finish_preserves_wrapped_order_and_removes_empty_wrapper() {
+        let mut populated = vec![
+            Actor::CameraPush {
+                view_proj: Mat4::IDENTITY,
+            },
+            Actor::CameraPush {
+                view_proj: Mat4::from_scale(glam::Vec3::splat(2.0)),
+            },
+        ];
+        finish_field_camera(&mut populated, 0, 1, true);
+        assert!(matches!(populated.first(), Some(Actor::CameraPush { .. })));
+        assert!(matches!(populated.get(1), Some(Actor::CameraPush { .. })));
+        assert!(matches!(populated.last(), Some(Actor::CameraPop)));
+
+        let mut empty = vec![Actor::CameraPush {
+            view_proj: Mat4::IDENTITY,
+        }];
+        finish_field_camera(&mut empty, 0, 1, true);
+        assert!(empty.is_empty());
+    }
 }

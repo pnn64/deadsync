@@ -355,17 +355,31 @@ where
     let cache_build_started = Instant::now();
     let mut note_time_cache_ns = Vec::with_capacity(notes.len());
     let mut hold_end_time_cache_ns = Vec::with_capacity(notes.len());
+    let mut note_displayed_beat_cache = Vec::with_capacity(notes.len());
     for note in &notes {
         let timing_player = &timing_players[note_player_for_col(note.column)];
         let note_time_ns = timing_player.get_time_for_beat_ns(note.beat);
         note_time_cache_ns.push(note_time_ns);
+        let displayed_head = timing_player.get_displayed_beat(note.beat);
         if let Some(hold) = note.hold.as_ref() {
             let end_time_ns = timing_player.get_time_for_beat_ns(hold.end_beat);
             hold_end_time_cache_ns.push(Some(end_time_ns));
+            note_displayed_beat_cache.push([
+                displayed_head,
+                timing_player.get_displayed_beat(hold.end_beat),
+            ]);
         } else {
             hold_end_time_cache_ns.push(None);
+            note_displayed_beat_cache.push([displayed_head; 2]);
         }
     }
+    let displayed_beat_monotonic = std::array::from_fn(|player| {
+        gameplay_charts[player]
+            .timing_segments
+            .scrolls
+            .iter()
+            .all(|segment| segment.ratio.is_finite() && segment.ratio > f32::EPSILON)
+    });
 
     log::debug!("Parsed {} notes from chart data.", notes.len());
 
@@ -937,6 +951,8 @@ where
             ),
             note_time_cache_ns,
             hold_end_time_cache_ns,
+            note_displayed_beat_cache,
+            displayed_beat_monotonic,
             mine_scan: GameplayMineScanState::new(
                 note_range_start,
                 mine_note_ix,

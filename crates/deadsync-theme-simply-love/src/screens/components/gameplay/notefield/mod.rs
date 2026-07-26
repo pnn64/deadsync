@@ -505,6 +505,7 @@ pub(crate) fn compose_frame(
             note_itg_rows: state.note_itg_rows(),
             note_time_cache_ns: state.note_time_cache_ns(),
             hold_end_time_cache_ns: state.hold_end_time_cache_ns(),
+            note_displayed_beat_cache: state.note_displayed_beat_cache(),
             decaying_hold_indices: state.decaying_hold_indices(),
             tap_row_hold_roll_flags: &state.chart_runtime.lane_indices.tap_row_hold_roll_flags,
             visible_music_time_ns: state.visible_music_time_ns(player_idx),
@@ -518,6 +519,7 @@ pub(crate) fn compose_frame(
             stops,
             delays,
             scrolls,
+            displayed_beat_monotonic: state.displayed_beat_monotonic(player_idx),
         },
         noteskin: NotefieldNoteskinView {
             base: base_noteskin,

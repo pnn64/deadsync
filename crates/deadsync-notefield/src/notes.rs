@@ -492,6 +492,7 @@ impl ScrollTravel<'_> {
         note: &Note,
         use_hold_end: bool,
         cached_time_ns: Option<SongTimeNs>,
+        cached_displayed_beat: Option<f32>,
     ) -> f32 {
         if let (
             RawTravel::Constant {
@@ -504,6 +505,20 @@ impl ScrollTravel<'_> {
         {
             let real_seconds = song_time_ns_delta_seconds(note_time_ns, current_time_ns) / rate;
             return real_seconds * beats_per_second * ScrollSpeedSetting::ARROW_SPACING;
+        }
+        if let (
+            RawTravel::Beat {
+                current_displayed_beat,
+                displayed_speed_percent,
+            },
+            Some(displayed_beat),
+        ) = (self.raw, cached_displayed_beat)
+        {
+            return beat_scroll_travel(
+                displayed_beat,
+                current_displayed_beat,
+                displayed_speed_percent,
+            );
         }
         self.raw_note(note, use_hold_end)
     }
@@ -573,15 +588,38 @@ impl ScrollTravel<'_> {
     }
 
     pub fn visible_row_range(&self) -> Option<(i32, i32)> {
+        self.visible_row_range_for_distances(
+            self.request.draw_distance_after_targets,
+            self.request.draw_distance_before_targets,
+        )
+    }
+
+    pub(crate) fn visible_row_range_with_extra(&self, extra_distance: f32) -> Option<(i32, i32)> {
+        let extra_distance = if extra_distance.is_finite() {
+            extra_distance.max(0.0)
+        } else {
+            0.0
+        };
+        self.visible_row_range_for_distances(
+            self.request.draw_distance_after_targets + extra_distance,
+            self.request.draw_distance_before_targets + extra_distance,
+        )
+    }
+
+    fn visible_row_range_for_distances(
+        &self,
+        draw_distance_after_targets: f32,
+        draw_distance_before_targets: f32,
+    ) -> Option<(i32, i32)> {
         let first = find_first_displayed_beat(
             self.request.search_beat,
-            self.request.draw_distance_after_targets,
+            draw_distance_after_targets,
             self.request.note_count_stats,
             |beat| self.adjusted(self.raw_beat(beat)),
         );
         let last = find_last_displayed_beat(
             self.request.search_beat,
-            self.request.draw_distance_before_targets,
+            draw_distance_before_targets,
             self.displayed_speed_percent,
             self.request.accel.boomerang > f32::EPSILON,
             |beat| self.adjusted_with_peak(self.raw_beat(beat)),
@@ -836,7 +874,7 @@ mod timing_bench {
     use deadsync_rules::note::{HoldData, Note};
     use deadsync_rules::scroll::ScrollSpeedSetting;
     use deadsync_rules::timing::{
-        DelaySegment, StopSegment, TimingData, TimingSegments, WarpSegment,
+        DelaySegment, ScrollSegment, StopSegment, TimingData, TimingSegments, WarpSegment,
     };
 
     const NOTES: usize = 4_096;
@@ -853,6 +891,7 @@ mod timing_bench {
         notes: Vec<Note>,
         note_times_ns: Vec<i64>,
         hold_end_times_ns: Vec<Option<i64>>,
+        note_displayed_beats: Vec<[f32; 2]>,
     }
 
     impl Default for CmodTimingBench {
@@ -878,6 +917,12 @@ mod timing_bench {
                     length: 0.25,
                 })
                 .collect();
+            let scrolls = (0..1_024)
+                .map(|index| ScrollSegment {
+                    beat: index as f32 * 2.0,
+                    ratio: 0.25 + (index % 13) as f32 * 0.125,
+                })
+                .collect();
             let row_count = beat_to_note_row(NOTES as f32 * 0.5 + 8.0).max(0) as usize + 1;
             let row_to_beat = (0..row_count)
                 .map(|row| note_row_to_beat(row as i32))
@@ -890,6 +935,7 @@ mod timing_bench {
                     stops,
                     delays,
                     warps,
+                    scrolls,
                     ..TimingSegments::default()
                 },
                 &row_to_beat,
@@ -939,11 +985,23 @@ mod timing_bench {
                         .map(|hold| timing.get_time_for_beat_ns(hold.end_beat))
                 })
                 .collect();
+            let note_displayed_beats = notes
+                .iter()
+                .map(|note| {
+                    [
+                        timing.get_displayed_beat(note.beat),
+                        timing.get_displayed_beat(
+                            note.hold.as_ref().map_or(note.beat, |hold| hold.end_beat),
+                        ),
+                    ]
+                })
+                .collect();
             Self {
                 timing,
                 notes,
                 note_times_ns,
                 hold_end_times_ns,
+                note_displayed_beats,
             }
         }
     }
@@ -986,7 +1044,7 @@ mod timing_bench {
             for index in start..start + VISIBLE_NOTES {
                 let note = &self.notes[index];
                 let head = if cached {
-                    travel.raw_note_cached(note, false, Some(self.note_times_ns[index]))
+                    travel.raw_note_cached(note, false, Some(self.note_times_ns[index]), None)
                 } else {
                     travel.raw_note(note, false)
                 };
@@ -994,7 +1052,64 @@ mod timing_bench {
                 output.samples += 1;
                 if note.hold.is_some() {
                     let tail = if cached {
-                        travel.raw_note_cached(note, true, self.hold_end_times_ns[index])
+                        travel.raw_note_cached(note, true, self.hold_end_times_ns[index], None)
+                    } else {
+                        travel.raw_note(note, true)
+                    };
+                    output.checksum = output.checksum.rotate_left(7) ^ u64::from(tail.to_bits());
+                    output.samples += 1;
+                }
+            }
+            output
+        }
+
+        fn xmod_frame(&self, frame: usize, cached: bool) -> CmodTimingBenchFrame {
+            let start = (frame * 3) % (self.notes.len() - VISIBLE_NOTES);
+            let visible_beat = self.notes[start].beat - 0.25;
+            let travel = scroll_travel(ScrollTravelRequest {
+                timing: &self.timing,
+                accel: AccelYParams::default(),
+                scroll_speed: ScrollSpeedSetting::XMod(2.25),
+                current_time_ns: self.note_times_ns[start],
+                visible_beat,
+                search_beat: visible_beat,
+                scroll_reference_bpm: 120.0,
+                music_rate: 1.0,
+                edit_beat_spacing: false,
+                draw_distance_after_targets: 720.0,
+                draw_distance_before_targets: 720.0,
+                field_zoom: 1.0,
+                elapsed_screen_s: frame as f32 / 120.0,
+                effect_height: 640.0,
+                screen_height: 720.0,
+                note_count_stats: &[],
+                arrow_effect_time_s: 0.0,
+                lane_tipsy: 0.0,
+                lane_move_y: &[],
+            });
+            let mut output = CmodTimingBenchFrame::default();
+            for index in start..start + VISIBLE_NOTES {
+                let note = &self.notes[index];
+                let head = if cached {
+                    travel.raw_note_cached(
+                        note,
+                        false,
+                        None,
+                        Some(self.note_displayed_beats[index][0]),
+                    )
+                } else {
+                    travel.raw_note(note, false)
+                };
+                output.checksum = output.checksum.rotate_left(7) ^ u64::from(head.to_bits());
+                output.samples += 1;
+                if note.hold.is_some() {
+                    let tail = if cached {
+                        travel.raw_note_cached(
+                            note,
+                            true,
+                            None,
+                            Some(self.note_displayed_beats[index][1]),
+                        )
                     } else {
                         travel.raw_note(note, true)
                     };
@@ -1005,10 +1120,28 @@ mod timing_bench {
             output
         }
     }
+
+    pub struct XmodTimingBench(CmodTimingBench);
+
+    impl Default for XmodTimingBench {
+        fn default() -> Self {
+            Self(CmodTimingBench::default())
+        }
+    }
+
+    impl XmodTimingBench {
+        pub fn old_frame(&self, frame: usize) -> CmodTimingBenchFrame {
+            self.0.xmod_frame(frame, false)
+        }
+
+        pub fn new_frame(&self, frame: usize) -> CmodTimingBenchFrame {
+            self.0.xmod_frame(frame, true)
+        }
+    }
 }
 
 #[cfg(feature = "bench-support")]
-pub use timing_bench::{CmodTimingBench, CmodTimingBenchFrame};
+pub use timing_bench::{CmodTimingBench, CmodTimingBenchFrame, XmodTimingBench};
 
 #[cfg(test)]
 mod tests {
@@ -1688,7 +1821,7 @@ mod tests {
     }
 
     #[test]
-    fn cached_cmod_note_times_match_timing_queries_for_taps_and_hold_tails() {
+    fn cached_note_timing_values_match_queries_for_taps_and_hold_tails() {
         let timing = TimingData::from_segments(
             0.037,
             -0.011,
@@ -1706,6 +1839,20 @@ mod tests {
                     beat: 10.0,
                     length: 1.0,
                 }],
+                scrolls: vec![
+                    ScrollSegment {
+                        beat: 0.0,
+                        ratio: 1.0,
+                    },
+                    ScrollSegment {
+                        beat: 4.0,
+                        ratio: 0.5,
+                    },
+                    ScrollSegment {
+                        beat: 9.0,
+                        ratio: 1.75,
+                    },
+                ],
                 ..TimingSegments::default()
             },
             &[],
@@ -1723,21 +1870,48 @@ mod tests {
             let cached_time_ns = timing.get_time_for_beat_ns(beat);
             assert_eq!(
                 travel
-                    .raw_note_cached(note, use_hold_end, Some(cached_time_ns))
+                    .raw_note_cached(note, use_hold_end, Some(cached_time_ns), None)
                     .to_bits(),
                 travel.raw_note(note, use_hold_end).to_bits(),
             );
             assert_eq!(
-                travel.raw_note_cached(note, use_hold_end, None).to_bits(),
+                travel
+                    .raw_note_cached(note, use_hold_end, None, None)
+                    .to_bits(),
                 travel.raw_note(note, use_hold_end).to_bits(),
             );
         }
 
-        let xmod = scroll_travel(request(&timing, ScrollSpeedSetting::XMod(2.0), 3.0));
-        assert_eq!(
-            xmod.raw_note_cached(&tap, false, Some(i64::MAX)).to_bits(),
-            xmod.raw_note(&tap, false).to_bits(),
-        );
+        for speed in [
+            ScrollSpeedSetting::XMod(2.0),
+            ScrollSpeedSetting::MMod(600.0),
+        ] {
+            let beat_travel = scroll_travel(request(&timing, speed, 3.0));
+            for (note, use_hold_end) in [(&tap, false), (&held, false), (&held, true)] {
+                let beat = if use_hold_end {
+                    note.hold.as_ref().expect("hold fixture").end_beat
+                } else {
+                    note.beat
+                };
+                assert_eq!(
+                    beat_travel
+                        .raw_note_cached(
+                            note,
+                            use_hold_end,
+                            Some(i64::MAX),
+                            Some(timing.get_displayed_beat(beat)),
+                        )
+                        .to_bits(),
+                    beat_travel.raw_note(note, use_hold_end).to_bits(),
+                );
+                assert_eq!(
+                    beat_travel
+                        .raw_note_cached(note, use_hold_end, Some(i64::MAX), None)
+                        .to_bits(),
+                    beat_travel.raw_note(note, use_hold_end).to_bits(),
+                );
+            }
+        }
     }
 
     #[test]

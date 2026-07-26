@@ -39,6 +39,9 @@ pub use display_mods::{
 };
 pub use error_bar::{ErrorBarModes, error_bar_boundaries_s};
 pub use field_frame::{NotefieldFieldFrameView, NotefieldFieldResult, compose_notefield_field};
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub use field_frame::{CameraWrapBench, CameraWrapBenchFrame};
 pub use frame_feedback::{NotefieldFeedbackFrameView, NotefieldLaneFeedback};
 pub use frame_hud::{
     ComboHudFrame, CounterHudFrame, ErrorBarHudFrame, JudgmentHudFrame, MiniHudFrame,
@@ -50,6 +53,9 @@ pub use holds::{HoldMeshScratch, HoldMeshScratchStats, offset_center};
 pub use holds::{bench_fresh_hold_mesh_frame, bench_reused_hold_mesh_frame};
 pub use judgment_feedback::{IndicatorSprite, TapJudgmentSprite};
 pub use measure_lines::MeasureLineMode;
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub use measure_lines::{CueScanBench, CueScanBenchFrame};
 pub use mini_indicator::{
     MiniIndicatorColorStyle, MiniIndicatorMode, MiniIndicatorProgress, MiniIndicatorScoreType,
     MiniIndicatorSize, MiniIndicatorSubtractiveDisplay, ZmodComboColorParams, ZmodComboColorStyle,
@@ -65,7 +71,7 @@ pub use note_placement::{PlacementBench, PlacementBenchFrame};
 pub use notes::ScrollTravel;
 #[cfg(feature = "bench-support")]
 #[doc(hidden)]
-pub use notes::{CmodTimingBench, CmodTimingBenchFrame};
+pub use notes::{CmodTimingBench, CmodTimingBenchFrame, XmodTimingBench};
 pub use noteskin_model::{
     ModelMeshCache, ModelMeshCacheStats, NoteskinFrameCacheStats, noteskin_model_actor,
     noteskin_model_actor_from_draw,

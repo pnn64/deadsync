@@ -271,6 +271,14 @@ pub struct GameplayChartRuntimeState {
     pub row_indices: GameplayRowIndexState,
     pub note_time_cache_ns: Vec<SongTimeNs>,
     pub hold_end_time_cache_ns: Vec<Option<SongTimeNs>>,
+    /// Song-lifetime displayed-beat values for note heads and hold tails.
+    ///
+    /// XMod/MMod rendering reads these compact pairs instead of binary
+    /// searching immutable scroll segments for every visible arrow each frame.
+    pub note_displayed_beat_cache: Vec<[f32; 2]>,
+    /// Whether each player's displayed-beat mapping is strictly increasing
+    /// enough for visible timing cues to use binary-sliced segment ranges.
+    pub displayed_beat_monotonic: [bool; MAX_PLAYERS],
     pub mine_scan: GameplayMineScanState,
     pub row_entries: Vec<RowEntry>,
 }

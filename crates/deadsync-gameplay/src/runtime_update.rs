@@ -2106,6 +2106,20 @@ where
     }
 
     #[inline(always)]
+    pub fn note_displayed_beat_cache(&self) -> &[[f32; 2]] {
+        &self.chart_runtime.note_displayed_beat_cache
+    }
+
+    #[inline(always)]
+    pub fn displayed_beat_monotonic(&self, player: usize) -> bool {
+        self.chart_runtime
+            .displayed_beat_monotonic
+            .get(player)
+            .copied()
+            .unwrap_or(false)
+    }
+
+    #[inline(always)]
     pub fn note_time_cache_ns_at(&self, index: usize) -> Option<SongTimeNs> {
         self.chart_runtime.note_time_cache_ns.get(index).copied()
     }
@@ -2122,6 +2136,7 @@ where
     pub fn clear_note_timing_caches(&mut self) {
         self.chart_runtime.note_time_cache_ns.clear();
         self.chart_runtime.hold_end_time_cache_ns.clear();
+        self.chart_runtime.note_displayed_beat_cache.clear();
     }
 
     #[inline(always)]

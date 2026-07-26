@@ -27,6 +27,11 @@ name = "cmod_timing"
 harness = false
 required-features = ["bench-support"]
 
+[[bench]]
+name = "gameplay_hot_paths"
+harness = false
+required-features = ["bench-support"]
+
 [dependencies]
 deadlib-present = { path = "../deadlib-present" }
 deadlib-render = { path = "../deadlib-render" }

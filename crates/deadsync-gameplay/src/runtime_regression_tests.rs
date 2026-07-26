@@ -295,6 +295,10 @@ mod runtime_regression_tests {
         );
         debug_assert_eq!(
             state.chart_runtime.notes.len(),
+            state.chart_runtime.note_displayed_beat_cache.len()
+        );
+        debug_assert_eq!(
+            state.chart_runtime.notes.len(),
             state.chart_runtime.column_judgment_eligible.len()
         );
         debug_assert_eq!(
@@ -308,6 +312,38 @@ mod runtime_regression_tests {
                 .iter()
                 .zip(&state.chart_runtime.lane_indices.note_itg_rows)
                 .all(|(note, &row)| row == beat_to_note_row(note.beat))
+        );
+        debug_assert!(
+            state
+                .chart_runtime
+                .notes
+                .iter()
+                .enumerate()
+                .all(|(note_index, note)| {
+                    let timing =
+                        &state.timing_runtime.timing_players[state.player_for_col(note.column)];
+                    let cached = state.chart_runtime.note_displayed_beat_cache[note_index];
+                    cached[0].to_bits() == timing.get_displayed_beat(note.beat).to_bits()
+                        && cached[1].to_bits()
+                            == timing
+                                .get_displayed_beat(
+                                    note.hold.as_ref().map_or(note.beat, |hold| hold.end_beat),
+                                )
+                                .to_bits()
+                })
+        );
+        debug_assert!(
+            state
+                .chart_runtime
+                .displayed_beat_monotonic
+                .iter()
+                .enumerate()
+                .all(|(player, &cached)| cached
+                    == state.source.gameplay_charts[player]
+                        .timing_segments
+                        .scrolls
+                        .iter()
+                        .all(|segment| segment.ratio.is_finite() && segment.ratio > f32::EPSILON))
         );
         debug_assert_eq!(
             state.chart_runtime.notes.len(),
