@@ -10,6 +10,8 @@ pub mod evdev;
 pub mod hidraw;
 #[cfg(target_os = "macos")]
 pub mod iohid;
+#[cfg(any(target_os = "macos", test))]
+mod iohid_filter;
 #[cfg(unix)]
 pub mod unix_time;
 #[cfg(windows)]

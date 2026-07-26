@@ -211,6 +211,43 @@ fn duplicate_hid_report_gated() -> u64 {
     checksum
 }
 
+#[inline(always)]
+fn update_axis(last: &mut [i64; 6], axis: usize, value: i64) -> bool {
+    if last[axis] == value {
+        return false;
+    }
+    last[axis] = value;
+    true
+}
+
+fn iohid_unchanged_axes_legacy() -> u64 {
+    let mut last = [i64::MIN; 6];
+    let mut checksum = 0_u64;
+    for callback in 0..POLLS {
+        let axis = callback % last.len();
+        let value = (callback / 64) as i64;
+        sample_event_time();
+        if update_axis(&mut last, axis, value) {
+            checksum = checksum.rotate_left(5) ^ callback as u64 ^ value as u64;
+        }
+    }
+    checksum
+}
+
+fn iohid_unchanged_axes_gated() -> u64 {
+    let mut last = [i64::MIN; 6];
+    let mut checksum = 0_u64;
+    for callback in 0..POLLS {
+        let axis = callback % last.len();
+        let value = (callback / 64) as i64;
+        if update_axis(&mut last, axis, value) {
+            sample_event_time();
+            checksum = checksum.rotate_left(5) ^ callback as u64 ^ value as u64;
+        }
+    }
+    checksum
+}
+
 fn main() {
     benchmark_pair(
         "WGI mostly-stale 1 kHz polling",
@@ -229,6 +266,12 @@ fn main() {
         "256 single 64-byte reports, 4 byte-for-byte state changes",
         duplicate_hid_report_legacy,
         duplicate_hid_report_gated,
+    );
+    benchmark_pair(
+        "IOHID unchanged axis callbacks",
+        "256 callbacks across 6 axes, 24 accepted changes",
+        iohid_unchanged_axes_legacy,
+        iohid_unchanged_axes_gated,
     );
 }
 

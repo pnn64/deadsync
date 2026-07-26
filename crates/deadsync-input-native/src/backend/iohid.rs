@@ -1,3 +1,4 @@
+use super::iohid_filter::{AxisState, PadValueKind, classify_pad_value};
 use super::{
     BackendHost, GpSystemEvent, PadBackend, PadOrderBackend, emit_dir_edges, uuid_from_bytes,
 };
@@ -145,12 +146,6 @@ fn cfstring_value(v: CFTypeRef) -> Option<String> {
     (!s.is_empty()).then_some(s)
 }
 
-#[derive(Clone, Copy)]
-struct AxisState {
-    code: u32,
-    value: i64,
-}
-
 struct PadDev {
     id: PadId,
     name: String,
@@ -226,22 +221,6 @@ struct Ctx {
     key_product_id: CFStringRef,
     key_location_id: CFStringRef,
     key_serial_number: CFStringRef,
-}
-
-#[inline(always)]
-fn axis_changed(last_axis: &mut Vec<AxisState>, code: u32, value: i64) -> bool {
-    for axis in last_axis.iter_mut() {
-        if axis.code != code {
-            continue;
-        }
-        if axis.value == value {
-            return false;
-        }
-        axis.value = value;
-        return true;
-    }
-    last_axis.push(AxisState { code, value });
-    true
 }
 
 static KEYBOARD_WINDOW_FOCUSED: AtomicBool = AtomicBool::new(false);
@@ -624,7 +603,6 @@ extern "C" fn on_input(
     // element/device handles are only used during this callback.
     unsafe {
         let ctx = &mut *(_ctx as *mut Ctx);
-        let (timestamp, host_nanos) = event_time(ctx.host, ctx.host_clock, value);
         let elem = IOHIDValueGetElement(value);
         if elem.is_null() {
             return;
@@ -640,53 +618,49 @@ extern "C" fn on_input(
         let v = IOHIDValueGetIntegerValue(value) as i64;
 
         if let Some(dev) = ctx.pad_devs.get_mut(&key) {
-            // Hat switch → PadDir edges (match common HID D-pads/pads).
-            // `emit_dir_edges` already filters unchanged logical directions, so
-            // coalescing raw hat values here is redundant and risks hiding
-            // distinct edges on devices that reuse HID usages across elements.
-            if usage_page == 0x01 && usage == 0x39 {
-                let hat = v as u32;
-                let want_up = matches!(hat, 0 | 1 | 7);
-                let want_right = matches!(hat, 1 | 2 | 3);
-                let want_down = matches!(hat, 3 | 4 | 5);
-                let want_left = matches!(hat, 5 | 6 | 7);
-                emit_dir_edges(
-                    &mut ctx.emit_pad,
-                    dev.id,
-                    &mut dev.dir,
-                    timestamp,
-                    host_nanos,
-                    [want_up, want_down, want_left, want_right],
-                );
+            let Some(kind) = classify_pad_value(&mut dev.last_axis, usage_page, usage, code, v)
+            else {
                 return;
-            }
-
-            if usage_page == 0x09 {
-                let pressed = v != 0;
-                // The shared debounce path already tracks repeated button
-                // states by binding. Coalescing button values in the backend can
-                // mask real press/release transitions on some IOHID devices.
-                (ctx.emit_pad)(PadEvent::RawButton {
-                    id: dev.id,
-                    timestamp,
-                    host_nanos,
-                    code: PadCode(code),
-                    uuid: dev.uuid,
-                    value: if pressed { 1.0 } else { 0.0 },
-                    pressed,
-                });
-            } else {
-                if !axis_changed(&mut dev.last_axis, code, v) {
-                    return;
+            };
+            let (timestamp, host_nanos) = event_time(ctx.host, ctx.host_clock, value);
+            match kind {
+                PadValueKind::Directions(want) => {
+                    // `emit_dir_edges` filters unchanged logical directions. Raw
+                    // hat values remain uncoalesced because devices can reuse HID
+                    // usages across elements.
+                    emit_dir_edges(
+                        &mut ctx.emit_pad,
+                        dev.id,
+                        &mut dev.dir,
+                        timestamp,
+                        host_nanos,
+                        want,
+                    );
                 }
-                (ctx.emit_pad)(PadEvent::RawAxis {
-                    id: dev.id,
-                    timestamp,
-                    host_nanos,
-                    code: PadCode(code),
-                    uuid: dev.uuid,
-                    value: v as f32,
-                });
+                PadValueKind::Button => {
+                    // Repeated button values remain visible to the shared debounce
+                    // path so devices with reused usages retain their edge semantics.
+                    let pressed = v != 0;
+                    (ctx.emit_pad)(PadEvent::RawButton {
+                        id: dev.id,
+                        timestamp,
+                        host_nanos,
+                        code: PadCode(code),
+                        uuid: dev.uuid,
+                        value: if pressed { 1.0 } else { 0.0 },
+                        pressed,
+                    });
+                }
+                PadValueKind::Axis => {
+                    (ctx.emit_pad)(PadEvent::RawAxis {
+                        id: dev.id,
+                        timestamp,
+                        host_nanos,
+                        code: PadCode(code),
+                        uuid: dev.uuid,
+                        value: v as f32,
+                    });
+                }
             }
             return;
         }
@@ -695,16 +669,20 @@ extern "C" fn on_input(
             return;
         };
         let capture_active = keyboard_capture_active();
-        debug_log_keyboard_value(key, usage_page, usage, v, host_nanos, capture_active);
-        if usage_page != 0x07 {
-            return;
-        }
-        if !capture_active {
-            return;
-        }
-        let Some(code) = hid_key_code(usage) else {
-            return;
+        let key_code = if usage_page == 0x07 && capture_active {
+            hid_key_code(usage)
+        } else {
+            None
         };
+        let debug_enabled = log::log_enabled!(log::Level::Debug);
+        if key_code.is_none() && !debug_enabled {
+            return;
+        }
+        let (timestamp, host_nanos) = event_time(ctx.host, ctx.host_clock, value);
+        if debug_enabled {
+            debug_log_keyboard_value(key, usage_page, usage, v, host_nanos, capture_active);
+        }
+        let Some(code) = key_code else { return };
         // Like pad buttons, repeated raw keyboard values are filtered later by
         // the shared debounce store, which preserves the true edge semantics.
         (ctx.emit_key)(RawKeyboardEvent {
