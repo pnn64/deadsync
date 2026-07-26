@@ -336,31 +336,30 @@ where
         assist_sfx_generation: u64,
         assist_tick_sfx_path: &'static str,
     ) {
+        if self.control.tick_mode != GameplayTimingTickMode::Assist {
+            self.control
+                .assist_clap
+                .note_disabled(assist_sfx_generation);
+            return;
+        }
         let song_row = current_row.max(0);
         let timeline_reset = self
             .control
             .assist_clap
-            .note_sfx_generation(assist_sfx_generation);
+            .begin_enabled_update(assist_sfx_generation);
 
-        let assist_enabled = self.control.tick_mode == GameplayTimingTickMode::Assist;
-        let future_row = if assist_enabled {
-            self.timing_runtime.time_to_beat_caches.assist_future_row(
-                &self.timing_runtime.timing,
-                self.clock.offsets.global_offset_seconds(),
-                self.clock.audio_clock.output_delay_seconds(),
-                music_time_ns,
-                slope,
-                song_row,
-            )
-        } else {
-            song_row
-        };
-        let update = self.control.assist_clap.schedule_update(
+        let future_row = self.timing_runtime.time_to_beat_caches.assist_future_row(
+            &self.timing_runtime.timing,
+            self.clock.offsets.global_offset_seconds(),
+            self.clock.audio_clock.output_delay_seconds(),
+            music_time_ns,
+            slope,
             song_row,
-            future_row,
-            assist_enabled,
-            timeline_reset,
         );
+        let update =
+            self.control
+                .assist_clap
+                .schedule_update(song_row, future_row, true, timeline_reset);
         for ix in update.schedule_start..update.schedule_end {
             let clap_row = self.control.assist_clap.rows[ix];
             self.schedule_assist_clap_row(clap_row, assist_tick_sfx_path);

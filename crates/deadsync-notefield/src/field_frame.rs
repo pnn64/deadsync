@@ -183,24 +183,6 @@ fn compose_field_contents<S, F>(
         &mut static_note_x_offsets,
     );
     let (note_start, note_end) = request.chart.note_range;
-    let lane_center_x_from_travel = |local_col: usize, travel_offset: f32| -> f32 {
-        playfield_center_x
-            + if note_x_is_static {
-                static_note_x_offsets[local_col]
-            } else {
-                note_x_offset(
-                    request.geometry.screen_height,
-                    local_col,
-                    travel.adjusted(travel_offset),
-                    travel.arrow_effect_time_s(),
-                    beat_push,
-                    visual,
-                    &col_offsets[..num_cols],
-                    &invert_distances[..num_cols],
-                    &tornado_bounds[..num_cols],
-                )
-            }
-    };
     let lane_center_x_from_adjusted_travel = |local_col: usize, adjusted_travel: f32| -> f32 {
         playfield_center_x
             + if note_x_is_static {
@@ -219,8 +201,7 @@ fn compose_field_contents<S, F>(
                 )
             }
     };
-    let actor_alpha_for_travel = |local_col: usize, travel_offset: f32| -> f32 {
-        let adjusted = travel.adjusted(travel_offset);
+    let actor_alpha_for_adjusted_travel = |local_col: usize, adjusted: f32| -> f32 {
         note_actor_alpha(
             adjusted + lane_offsets[local_col],
             elapsed_screen,
@@ -228,21 +209,12 @@ fn compose_field_contents<S, F>(
             appearance,
         )
     };
-    let glow_for_travel = |local_col: usize, travel_offset: f32| -> f32 {
-        let adjusted = travel.adjusted(travel_offset);
+    let glow_for_adjusted_travel = |local_col: usize, adjusted: f32| -> f32 {
         note_glow(
             adjusted + lane_offsets[local_col],
             elapsed_screen,
             mini,
             appearance,
-        )
-    };
-    let world_z_for_raw_travel = |local_col: usize, travel_offset: f32| -> f32 {
-        note_world_z_for_bumpy(
-            travel.adjusted(travel_offset),
-            lane_effect_params[local_col].bumpy,
-            visual.bumpy_offset,
-            visual.bumpy_period,
         )
     };
     let world_z_for_adjusted_travel = |local_col: usize, travel_offset: f32| -> f32 {
@@ -359,8 +331,10 @@ fn compose_field_contents<S, F>(
             request.chart.cached_note_time_ns(note_index, true),
             request.chart.cached_displayed_beat(note_index, true),
         );
-        let head_y = lane_receptor_y + dir * travel.adjusted(head_travel_offset) + lane_offset;
-        let tail_y = lane_receptor_y + dir * travel.adjusted(tail_travel_offset) + lane_offset;
+        let head_adjusted_travel = travel.adjusted(head_travel_offset);
+        let tail_adjusted_travel = travel.adjusted(tail_travel_offset);
+        let head_y = lane_receptor_y + dir * head_adjusted_travel + lane_offset;
+        let tail_y = lane_receptor_y + dir * tail_adjusted_travel + lane_offset;
         let note_display = ns.note_display_metrics;
         let lane_reverse = col_dir < 0.0;
         let active_state = frame.feedback.lanes[local_col]
@@ -410,6 +384,13 @@ fn compose_field_contents<S, F>(
         let hold_diffuse = hold_plan.diffuse;
         let head_anchor_y = hold_plan.head_anchor_y;
         let head_anchor_travel = hold_plan.head_anchor_travel;
+        let head_anchor_adjusted_travel = travel.adjusted_hold_anchor(
+            head_anchor_travel,
+            head_travel_offset,
+            head_adjusted_travel,
+            tail_travel_offset,
+            tail_adjusted_travel,
+        );
         let hold_parts = hold_plan.parts;
         let hold_part_phase = hold_plan.head_phase;
         let head_layers = hold_plan.head_layers;
@@ -426,7 +407,7 @@ fn compose_field_contents<S, F>(
         };
         let hold_target_arrow_px = hold_arrow_px_for_adjusted_travel(0.0);
         let hold_head_zoom = visual_arrow_effect_zoom_cached(
-            travel.adjusted(head_anchor_travel),
+            head_anchor_adjusted_travel,
             lane_effect_params[local_col],
             transform_cache,
         );
@@ -506,8 +487,8 @@ fn compose_field_contents<S, F>(
         {
             return;
         }
-        let head_alpha = actor_alpha_for_travel(local_col, head_anchor_travel);
-        let head_glow = glow_for_travel(local_col, head_anchor_travel);
+        let head_alpha = actor_alpha_for_adjusted_travel(local_col, head_anchor_adjusted_travel);
+        let head_glow = glow_for_adjusted_travel(local_col, head_anchor_adjusted_travel);
         if head_alpha <= f32::EPSILON && head_glow <= f32::EPSILON {
             return;
         }
@@ -522,10 +503,10 @@ fn compose_field_contents<S, F>(
         let head_center_x = if (head_draw_y - receptor_draw_y).abs() <= 0.5 {
             receptor_center_x
         } else {
-            lane_center_x_from_travel(local_col, head_anchor_travel)
+            lane_center_x_from_adjusted_travel(local_col, head_anchor_adjusted_travel)
         };
         let head_center = [head_center_x, head_draw_y];
-        let head_world_z = world_z_for_raw_travel(local_col, head_anchor_travel);
+        let head_world_z = world_z_for_adjusted_travel(local_col, head_anchor_adjusted_travel);
         let elapsed = elapsed_screen;
         let hold_head_translation = ns.part_uv_translation(hold_parts.head, note.beat, false);
         let head_slot = head_slot.and_then(|slot| {

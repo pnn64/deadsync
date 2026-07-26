@@ -782,6 +782,7 @@ pub struct GameplayAssistClapState {
     cursor: usize,
     last_crossed_row: i32,
     sfx_generation_seen: u64,
+    reanchor_when_enabled: bool,
 }
 
 impl GameplayAssistClapState {
@@ -792,6 +793,7 @@ impl GameplayAssistClapState {
             cursor: 0,
             last_crossed_row: -1,
             sfx_generation_seen: 0,
+            reanchor_when_enabled: false,
         }
     }
 
@@ -799,6 +801,7 @@ impl GameplayAssistClapState {
     pub fn reset_for_row(&mut self, row: i32) {
         self.cursor = assist_clap_cursor_for_row(&self.rows, row);
         self.last_crossed_row = row;
+        self.reanchor_when_enabled = false;
     }
 
     #[inline(always)]
@@ -808,6 +811,20 @@ impl GameplayAssistClapState {
             self.sfx_generation_seen = sfx_generation;
         }
         timeline_reset
+    }
+
+    #[inline(always)]
+    pub fn note_disabled(&mut self, sfx_generation: u64) {
+        self.note_sfx_generation(sfx_generation);
+        self.reanchor_when_enabled = true;
+    }
+
+    #[inline(always)]
+    pub fn begin_enabled_update(&mut self, sfx_generation: u64) -> bool {
+        let generation_changed = self.note_sfx_generation(sfx_generation);
+        let reanchor = self.reanchor_when_enabled;
+        self.reanchor_when_enabled = false;
+        generation_changed || reanchor
     }
 
     #[inline(always)]

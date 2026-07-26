@@ -11,6 +11,141 @@ pub struct ActiveColumnScanBench {
     lane_pressed_since_ns: [Option<SongTimeNs>; MAX_COLS],
 }
 
+#[derive(Clone)]
+pub struct IdleAttackRefreshBench {
+    state: ActiveAttackRefreshState,
+}
+
+#[derive(Clone)]
+pub struct DisabledAssistClapBench {
+    state: GameplayAssistClapState,
+}
+
+impl Default for DisabledAssistClapBench {
+    fn default() -> Self {
+        Self {
+            state: GameplayAssistClapState::new((0..8_192).map(|index| index * 12).collect()),
+        }
+    }
+}
+
+impl DisabledAssistClapBench {
+    pub fn old_frame(&mut self, frame: usize) -> GameplayFrameHotPathBenchOutput {
+        let song_row = ((frame * 7) % (8_192 * 12)) as i32;
+        let timeline_reset = self.state.note_sfx_generation(1);
+        let update = self
+            .state
+            .schedule_update(song_row, song_row, false, timeline_reset);
+        GameplayFrameHotPathBenchOutput {
+            checksum: update.cursor as u64,
+            samples: 1,
+        }
+    }
+
+    pub fn new_frame(&mut self, frame: usize) -> GameplayFrameHotPathBenchOutput {
+        let song_row = ((frame * 7) % (8_192 * 12)) as i32;
+        self.state.note_disabled(1);
+        GameplayFrameHotPathBenchOutput {
+            checksum: (song_row as usize / 12 + 1) as u64,
+            samples: 1,
+        }
+    }
+}
+
+impl Default for IdleAttackRefreshBench {
+    fn default() -> Self {
+        let mut visual = VisualOverrides {
+            drunk: Some(0.75),
+            ..VisualOverrides::default()
+        };
+        visual.confusion_offset_cols[2] = Some(0.4);
+        Self {
+            state: ActiveAttackRefreshState {
+                attack_current_appearance: AppearanceEffects {
+                    hidden: 0.8,
+                    sudden: 0.35,
+                    stealth: 0.5,
+                    ..AppearanceEffects::default()
+                },
+                active_attack_visual: visual,
+                active_attack_visibility: VisibilityOverrides {
+                    dark: Some(1.0),
+                    ..VisibilityOverrides::default()
+                },
+                active_attack_scroll: ScrollOverrides {
+                    reverse: Some(0.6),
+                    ..ScrollOverrides::default()
+                },
+                active_attack_mini_percent: Some(40.0),
+                outro_attack_visual: VisualOverrides::default(),
+            },
+        }
+    }
+}
+
+impl IdleAttackRefreshBench {
+    pub fn old_frame(&mut self, frame: usize) -> GameplayFrameHotPathBenchOutput {
+        let output = refresh_active_attack_player_full(self.input(frame), self.state);
+        self.record(output)
+    }
+
+    pub fn new_frame(&mut self, frame: usize) -> GameplayFrameHotPathBenchOutput {
+        let output = refresh_active_attack_player(self.input(frame), self.state);
+        self.record(output)
+    }
+
+    fn input(&self, frame: usize) -> ActiveAttackRefreshInput<'static> {
+        ActiveAttackRefreshInput {
+            now: frame as f32 / 120.0,
+            delta_time: 1.0 / 120.0,
+            attacks_cleared_for_outro: false,
+            base_appearance: AppearanceEffects {
+                hidden: 0.1,
+                sudden: 0.2,
+                stealth: 0.05,
+                ..AppearanceEffects::default()
+            },
+            base_visual: VisualEffects {
+                drunk: 0.25,
+                ..VisualEffects::default()
+            },
+            base_scroll: ScrollEffects {
+                reverse: 0.2,
+                ..ScrollEffects::default()
+            },
+            base_mini_percent: 15.0,
+            attack_windows: &[],
+            song_lua_ease_windows: &[],
+        }
+    }
+
+    fn record(&mut self, output: ActiveAttackRefreshOutput) -> GameplayFrameHotPathBenchOutput {
+        self.state.attack_current_appearance = output.attack_current_appearance;
+        self.state.active_attack_visual = output.active_attack_visual;
+        self.state.active_attack_visibility = output.active_attack_visibility;
+        self.state.active_attack_scroll = output.active_attack_scroll;
+        self.state.active_attack_mini_percent = output.active_attack_mini_percent;
+        self.state.outro_attack_visual = output.outro_attack_visual;
+        let values = [
+            output.attack_target_appearance.hidden,
+            output.attack_speed_appearance.stealth,
+            output.attack_current_appearance.hidden,
+            output.attack_current_appearance.sudden,
+            output.attack_current_appearance.stealth,
+            output.active_attack_visual.drunk.unwrap_or_default(),
+            output.active_attack_scroll.reverse.unwrap_or_default(),
+            output.active_attack_mini_percent.unwrap_or_default(),
+        ];
+        let checksum = values.into_iter().fold(0_u64, |checksum, value| {
+            checksum.rotate_left(7) ^ u64::from(value.to_bits())
+        });
+        GameplayFrameHotPathBenchOutput {
+            checksum,
+            samples: values.len(),
+        }
+    }
+}
+
 impl Default for ActiveColumnScanBench {
     fn default() -> Self {
         let mut lane_counts = [0; MAX_COLS];

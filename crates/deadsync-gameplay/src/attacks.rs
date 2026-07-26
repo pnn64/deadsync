@@ -2831,7 +2831,7 @@ pub struct ActiveAttackRefreshState {
     pub outro_attack_visual: VisualOverrides,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ActiveAttackRefreshOutput {
     pub attack_target_appearance: AppearanceEffects,
     pub attack_speed_appearance: AppearanceEffects,
@@ -3021,6 +3021,43 @@ pub fn apply_active_attack_mask_window(
 }
 
 pub fn refresh_active_attack_player(
+    input: ActiveAttackRefreshInput<'_>,
+    mut state: ActiveAttackRefreshState,
+) -> ActiveAttackRefreshOutput {
+    if input.attack_windows.is_empty()
+        && input.song_lua_ease_windows.is_empty()
+        && !input.attacks_cleared_for_outro
+    {
+        let appearance_speed = AppearanceEffects::approach_speeds();
+        approach_appearance_effects(
+            &mut state.attack_current_appearance,
+            input.base_appearance,
+            appearance_speed,
+            input.delta_time,
+        );
+        let appearance = state.attack_current_appearance;
+        return ActiveAttackRefreshOutput {
+            attack_target_appearance: input.base_appearance,
+            attack_speed_appearance: appearance_speed,
+            attack_current_appearance: appearance,
+            active_attack_clear_all: false,
+            active_attack_chart: ChartAttackEffects::default(),
+            active_attack_accel: AccelOverrides::default(),
+            active_attack_visual: VisualOverrides::default(),
+            active_attack_appearance: appearance,
+            active_attack_visibility: VisibilityOverrides::default(),
+            active_attack_scroll: ScrollOverrides::default(),
+            active_attack_perspective: PerspectiveOverrides::default(),
+            active_attack_scroll_speed: None,
+            active_attack_mini_percent: None,
+            outro_attack_visual: state.outro_attack_visual,
+            player_transform: SongLuaPlayerTransformValues::default(),
+        };
+    }
+    refresh_active_attack_player_full(input, state)
+}
+
+fn refresh_active_attack_player_full(
     input: ActiveAttackRefreshInput<'_>,
     mut state: ActiveAttackRefreshState,
 ) -> ActiveAttackRefreshOutput {

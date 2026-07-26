@@ -1,6 +1,7 @@
 use deadsync_gameplay::{
-    ActiveColumnScanBench, GameplayFrameHotPathBenchOutput, IdleHoldPhaseBench, IdleLaneScanBench,
-    LiveNotefieldOptionsBench, OptionalFrameWorkBench, SharedMissCutoffBench,
+    ActiveColumnScanBench, DisabledAssistClapBench, GameplayFrameHotPathBenchOutput,
+    IdleAttackRefreshBench, IdleHoldPhaseBench, IdleLaneScanBench, LiveNotefieldOptionsBench,
+    OptionalFrameWorkBench, SharedMissCutoffBench,
 };
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::hint::black_box;
@@ -97,6 +98,24 @@ struct BenchResult {
 
 fn main() {
     println!("gameplay frame hot-path microbenchmarks");
+
+    let mut old_attacks = IdleAttackRefreshBench::default();
+    let mut new_attacks = old_attacks.clone();
+    run_pair(
+        "idle attack refresh",
+        "ordinary gameplay with no attack or easing windows",
+        move |frame| old_attacks.old_frame(frame),
+        move |frame| new_attacks.new_frame(frame),
+    );
+
+    let mut old_assist = DisabledAssistClapBench::default();
+    let mut new_assist = old_assist.clone();
+    run_pair(
+        "disabled assist-clap bookkeeping",
+        "8192 clap rows while timing ticks are disabled",
+        move |frame| old_assist.old_frame(frame),
+        move |frame| new_assist.new_frame(frame),
+    );
 
     let columns = ActiveColumnScanBench::default();
     run_pair(

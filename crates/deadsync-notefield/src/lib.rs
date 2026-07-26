@@ -75,7 +75,8 @@ pub use notes::ScrollTravel;
 #[cfg(feature = "bench-support")]
 #[doc(hidden)]
 pub use notes::{
-    CmodTimingBench, CmodTimingBenchFrame, IdentityAccelBench, VisibleRangeBench, XmodTimingBench,
+    CmodTimingBench, CmodTimingBenchFrame, HoldTravelReuseBench, IdentityAccelBench,
+    VisibleRangeBench, XmodTimingBench,
 };
 pub use noteskin_model::{
     ModelMeshCache, ModelMeshCacheStats, NoteskinFrameCacheStats, noteskin_model_actor,

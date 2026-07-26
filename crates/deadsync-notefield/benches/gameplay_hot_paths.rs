@@ -1,6 +1,7 @@
 use deadsync_notefield::{
     CameraWrapBench, CommonNoteTransformBench, CueScanBench, FeedbackLaneCacheBench,
-    IdentityAccelBench, LaneVisualCacheBench, VisibleRangeBench, XmodTimingBench,
+    HoldTravelReuseBench, IdentityAccelBench, LaneVisualCacheBench, VisibleRangeBench,
+    XmodTimingBench,
 };
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::hint::black_box;
@@ -293,6 +294,43 @@ fn main() {
         },
         |frame| {
             let output = identity_accel.new_frame(frame);
+            Output {
+                checksum: output.checksum,
+                samples: output.samples,
+            }
+        },
+    );
+    let hold_travel = HoldTravelReuseBench::default();
+    run_pair(
+        "hold-head travel reuse",
+        "24 visible holds with active acceleration effects",
+        |frame| {
+            let output = hold_travel.old_frame(frame);
+            Output {
+                checksum: output.checksum,
+                samples: output.samples,
+            }
+        },
+        |frame| {
+            let output = hold_travel.new_frame(frame);
+            Output {
+                checksum: output.checksum,
+                samples: output.samples,
+            }
+        },
+    );
+    run_pair(
+        "hold-head travel reuse without acceleration",
+        "24 visible holds with ordinary scroll travel",
+        |frame| {
+            let output = hold_travel.old_identity_frame(frame);
+            Output {
+                checksum: output.checksum,
+                samples: output.samples,
+            }
+        },
+        |frame| {
+            let output = hold_travel.new_identity_frame(frame);
             Output {
                 checksum: output.checksum,
                 samples: output.samples,

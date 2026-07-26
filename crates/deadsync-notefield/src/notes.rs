@@ -553,6 +553,24 @@ impl ScrollTravel<'_> {
         ) * self.post_accel_scale
     }
 
+    #[inline(always)]
+    pub(crate) fn adjusted_hold_anchor(
+        &self,
+        raw_travel: f32,
+        head_raw_travel: f32,
+        head_adjusted_travel: f32,
+        tail_raw_travel: f32,
+        tail_adjusted_travel: f32,
+    ) -> f32 {
+        if raw_travel.to_bits() == head_raw_travel.to_bits() {
+            head_adjusted_travel
+        } else if raw_travel.to_bits() == tail_raw_travel.to_bits() {
+            tail_adjusted_travel
+        } else {
+            self.adjusted(raw_travel)
+        }
+    }
+
     pub fn lane_offset(&self, local_col: usize) -> f32 {
         tipsy_y_extra(
             local_col,
@@ -1276,6 +1294,99 @@ mod timing_bench {
             }
             output
         }
+
+        fn hold_travel_reuse_frame(
+            &self,
+            frame: usize,
+            cached: bool,
+            accelerated: bool,
+        ) -> CmodTimingBenchFrame {
+            const HOLDS: usize = 24;
+            let index = frame % self.notes.len();
+            let visible_beat = self.notes[index].beat;
+            let travel = scroll_travel(ScrollTravelRequest {
+                timing: &self.timing,
+                accel: if accelerated {
+                    AccelYParams {
+                        boost: 0.35,
+                        brake: 0.45,
+                        wave: 0.8,
+                        expand: 0.6,
+                        boomerang: 0.2,
+                    }
+                } else {
+                    AccelYParams::default()
+                },
+                scroll_speed: ScrollSpeedSetting::XMod(2.25),
+                current_time_ns: self.note_times_ns[index],
+                visible_beat,
+                search_beat: visible_beat,
+                scroll_reference_bpm: 120.0,
+                music_rate: 1.0,
+                edit_beat_spacing: false,
+                draw_distance_after_targets: 720.0,
+                draw_distance_before_targets: 720.0,
+                field_zoom: 0.9,
+                elapsed_screen_s: frame as f32 / 120.0,
+                effect_height: 640.0,
+                screen_height: 720.0,
+                note_count_stats: &[],
+                arrow_effect_time_s: 0.0,
+                lane_tipsy: 0.0,
+                lane_move_y: &[],
+            });
+            let mut output = CmodTimingBenchFrame::default();
+            for hold in 0..HOLDS {
+                let head_raw = ((hold * 41 + frame * 3) % 760) as f32 - 80.0;
+                let tail_raw = head_raw + 192.0 + (hold % 5) as f32 * 24.0;
+                let anchor_raw = if hold % 11 == 0 {
+                    0.0
+                } else if hold % 2 == 0 {
+                    head_raw
+                } else {
+                    tail_raw
+                };
+                let head_adjusted = travel.adjusted(head_raw);
+                let tail_adjusted = travel.adjusted(tail_raw);
+                let anchor_adjusted = if cached {
+                    travel.adjusted_hold_anchor(
+                        anchor_raw,
+                        head_raw,
+                        head_adjusted,
+                        tail_raw,
+                        tail_adjusted,
+                    )
+                } else {
+                    travel.adjusted(std::hint::black_box(anchor_raw))
+                };
+                let values = if cached {
+                    [
+                        head_adjusted,
+                        tail_adjusted,
+                        anchor_adjusted,
+                        anchor_adjusted,
+                        anchor_adjusted,
+                        anchor_adjusted,
+                        anchor_adjusted,
+                    ]
+                } else {
+                    [
+                        head_adjusted,
+                        tail_adjusted,
+                        anchor_adjusted,
+                        travel.adjusted(std::hint::black_box(anchor_raw)),
+                        travel.adjusted(std::hint::black_box(anchor_raw)),
+                        travel.adjusted(std::hint::black_box(anchor_raw)),
+                        travel.adjusted(std::hint::black_box(anchor_raw)),
+                    ]
+                };
+                for value in values {
+                    output.checksum = output.checksum.rotate_left(7) ^ u64::from(value.to_bits());
+                    output.samples += 1;
+                }
+            }
+            output
+        }
     }
 
     pub struct XmodTimingBench(CmodTimingBench);
@@ -1308,11 +1419,33 @@ mod timing_bench {
             self.0.identity_accel_frame(frame, true)
         }
     }
+
+    #[derive(Default)]
+    pub struct HoldTravelReuseBench(CmodTimingBench);
+
+    impl HoldTravelReuseBench {
+        pub fn old_frame(&self, frame: usize) -> CmodTimingBenchFrame {
+            self.0.hold_travel_reuse_frame(frame, false, true)
+        }
+
+        pub fn new_frame(&self, frame: usize) -> CmodTimingBenchFrame {
+            self.0.hold_travel_reuse_frame(frame, true, true)
+        }
+
+        pub fn old_identity_frame(&self, frame: usize) -> CmodTimingBenchFrame {
+            self.0.hold_travel_reuse_frame(frame, false, false)
+        }
+
+        pub fn new_identity_frame(&self, frame: usize) -> CmodTimingBenchFrame {
+            self.0.hold_travel_reuse_frame(frame, true, false)
+        }
+    }
 }
 
 #[cfg(feature = "bench-support")]
 pub use timing_bench::{
-    CmodTimingBench, CmodTimingBenchFrame, IdentityAccelBench, VisibleRangeBench, XmodTimingBench,
+    CmodTimingBench, CmodTimingBenchFrame, HoldTravelReuseBench, IdentityAccelBench,
+    VisibleRangeBench, XmodTimingBench,
 };
 
 #[cfg(test)]
@@ -2142,6 +2275,54 @@ mod tests {
         assert_eq!(before_peak, expected_before_peak);
         assert!(!before_peak);
         assert_near(adjusted, expected * 2.0);
+    }
+
+    #[test]
+    fn hold_anchor_reuses_only_bit_identical_adjusted_endpoints() {
+        let timing = timing();
+        let mut travel_request = request(&timing, ScrollSpeedSetting::XMod(2.0), 4.0);
+        travel_request.accel = AccelYParams {
+            boost: 0.35,
+            brake: 0.45,
+            wave: 0.8,
+            expand: 0.6,
+            boomerang: 0.2,
+        };
+        let travel = scroll_travel(travel_request);
+        let head_raw = 96.0;
+        let tail_raw = 384.0;
+        let head_adjusted = travel.adjusted(head_raw);
+        let tail_adjusted = travel.adjusted(tail_raw);
+        for anchor_raw in [head_raw, tail_raw, 0.0, 240.0] {
+            assert_eq!(
+                travel
+                    .adjusted_hold_anchor(
+                        anchor_raw,
+                        head_raw,
+                        head_adjusted,
+                        tail_raw,
+                        tail_adjusted,
+                    )
+                    .to_bits(),
+                travel.adjusted(anchor_raw).to_bits(),
+            );
+        }
+
+        let identity = scroll_travel(request(&timing, ScrollSpeedSetting::XMod(2.0), 4.0));
+        let negative_zero = -0.0_f32;
+        let positive_zero = 0.0_f32;
+        assert_eq!(
+            identity
+                .adjusted_hold_anchor(
+                    positive_zero,
+                    negative_zero,
+                    identity.adjusted(negative_zero),
+                    tail_raw,
+                    identity.adjusted(tail_raw),
+                )
+                .to_bits(),
+            identity.adjusted(positive_zero).to_bits(),
+        );
     }
 
     #[test]

@@ -2136,6 +2136,85 @@ mod tests {
     }
 
     #[test]
+    fn idle_attack_refresh_fast_path_matches_full_refresh() {
+        let base_appearance = AppearanceEffects {
+            hidden: 0.2,
+            hidden_offset: -0.1,
+            sudden: 0.35,
+            sudden_offset: 0.15,
+            stealth: 0.1,
+            blink: 0.05,
+            random_vanish: 0.4,
+        };
+        let mut active_visual = VisualOverrides {
+            drunk: Some(0.75),
+            ..VisualOverrides::default()
+        };
+        active_visual.confusion_offset_cols[3] = Some(-0.5);
+        active_visual.move_y_cols[7] = Some(0.25);
+        let states = [
+            ActiveAttackRefreshState {
+                attack_current_appearance: AppearanceEffects::default(),
+                active_attack_visual: VisualOverrides::default(),
+                active_attack_visibility: VisibilityOverrides::default(),
+                active_attack_scroll: ScrollOverrides::default(),
+                active_attack_mini_percent: None,
+                outro_attack_visual: VisualOverrides::default(),
+            },
+            ActiveAttackRefreshState {
+                attack_current_appearance: AppearanceEffects {
+                    hidden: 0.9,
+                    sudden: 0.8,
+                    stealth: 0.7,
+                    blink: 0.6,
+                    ..AppearanceEffects::default()
+                },
+                active_attack_visual: active_visual,
+                active_attack_visibility: VisibilityOverrides {
+                    dark: Some(1.0),
+                    blind: Some(0.5),
+                    cover: Some(0.25),
+                },
+                active_attack_scroll: ScrollOverrides {
+                    reverse: Some(1.0),
+                    split: Some(0.5),
+                    ..ScrollOverrides::default()
+                },
+                active_attack_mini_percent: Some(65.0),
+                outro_attack_visual: active_visual,
+            },
+        ];
+
+        for state in states {
+            for delta_time in [0.0, 1.0 / 120.0, 0.25, 2.0] {
+                let input = ActiveAttackRefreshInput {
+                    now: 42.0,
+                    delta_time,
+                    attacks_cleared_for_outro: false,
+                    base_appearance,
+                    base_visual: VisualEffects {
+                        drunk: 0.3,
+                        tiny: 0.2,
+                        ..VisualEffects::default()
+                    },
+                    base_scroll: ScrollEffects {
+                        reverse: 0.4,
+                        centered: 0.3,
+                        ..ScrollEffects::default()
+                    },
+                    base_mini_percent: 20.0,
+                    attack_windows: &[],
+                    song_lua_ease_windows: &[],
+                };
+                assert_eq!(
+                    refresh_active_attack_player(input, state),
+                    refresh_active_attack_player_full(input, state),
+                );
+            }
+        }
+    }
+
+    #[test]
     fn attack_mask_windows_filter_noops_and_invalid_durations() {
         let attacks = [
             ChartAttackWindow {
@@ -13074,6 +13153,30 @@ mod tests {
                 schedule_end: 4,
             }
         );
+    }
+
+    #[test]
+    fn gameplay_assist_clap_reanchors_after_disabled_frames() {
+        let mut state = GameplayAssistClapState::new(vec![48, 96, 144, 192]);
+        state.note_disabled(7);
+        state.note_disabled(7);
+
+        assert!(state.begin_enabled_update(7));
+        assert_eq!(
+            state.schedule_update(96, 144, true, true),
+            AssistClapScheduleUpdate {
+                cursor: 3,
+                last_crossed_row: 96,
+                schedule_start: 2,
+                schedule_end: 3,
+            }
+        );
+        assert!(!state.begin_enabled_update(7));
+
+        state.note_disabled(8);
+        assert!(state.begin_enabled_update(8));
+        state.reset_for_row(144);
+        assert!(!state.begin_enabled_update(8));
     }
 
     #[test]

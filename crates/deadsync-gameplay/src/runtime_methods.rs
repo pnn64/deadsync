@@ -1412,14 +1412,20 @@ where
             display_music_time_ns,
             visual_scroll_music_time_ns,
         );
-        let song_row = self.assist_row_no_offset_ns(music_time_ns);
-        self.run_assist_clap(
-            song_row,
-            music_time_ns,
-            seconds_per_second,
-            assist_sfx_generation,
-            assist_tick_sfx_path,
-        );
+        if self.control.tick_mode == GameplayTimingTickMode::Assist {
+            let song_row = self.assist_row_no_offset_ns(music_time_ns);
+            self.run_assist_clap(
+                song_row,
+                music_time_ns,
+                seconds_per_second,
+                assist_sfx_generation,
+                assist_tick_sfx_path,
+            );
+        } else {
+            self.control
+                .assist_clap
+                .note_disabled(assist_sfx_generation);
+        }
         refresh_active_attack_masks(self, delta_time);
         let current_bpm = self
             .timing_runtime

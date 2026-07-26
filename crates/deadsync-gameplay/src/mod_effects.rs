@@ -143,7 +143,7 @@ const APPEARANCE_MASK_BIT_STEALTH: u8 = 1u8 << 2;
 const APPEARANCE_MASK_BIT_BLINK: u8 = 1u8 << 3;
 const APPEARANCE_MASK_BIT_RANDOM_VANISH: u8 = 1u8 << 4;
 
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct AccelOverrides {
     pub boost: Option<f32>,
     pub brake: Option<f32>,
@@ -163,7 +163,7 @@ impl AccelOverrides {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct VisualOverrides {
     pub drunk: Option<f32>,
     pub dizzy: Option<f32>,
@@ -270,7 +270,7 @@ impl AppearanceOverrides {
     }
 }
 
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct VisibilityOverrides {
     pub dark: Option<f32>,
     pub blind: Option<f32>,
@@ -284,7 +284,7 @@ impl VisibilityOverrides {
     }
 }
 
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct ScrollOverrides {
     pub reverse: Option<f32>,
     pub split: Option<f32>,
@@ -304,7 +304,7 @@ impl ScrollOverrides {
     }
 }
 
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct PerspectiveOverrides {
     pub tilt: Option<f32>,
     pub skew: Option<f32>,
@@ -690,7 +690,7 @@ pub fn approach_visual_overrides_to_target(
     );
 }
 
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct AppearanceEffects {
     pub hidden: f32,
     pub hidden_offset: f32,
