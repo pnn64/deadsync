@@ -1,6 +1,6 @@
 use super::{
-    BackendHost, GpSystemEvent, PadBackend, PadCode, PadEvent, PadId, PadOrderBackend,
-    emit_dir_edges, event_time, receipt_time, uuid_from_bytes,
+    BackendHost, GpSystemEvent, PadBackend, PadCode, PadEvent, PadId, PadOrderBackend, ReceiptTime,
+    emit_dir_edges, uuid_from_bytes,
 };
 use deadsync_input::RawKeyboardEvent;
 use log::{debug, warn};
@@ -1148,7 +1148,7 @@ fn run_inner(
         if rc < 0 {
             continue;
         }
-        let receipt = receipt_time(host);
+        let mut receipt = ReceiptTime::new();
 
         let mut fallback_refresh = false;
         if dev_offset == 1 {
@@ -1208,7 +1208,7 @@ fn run_inner(
                         continue;
                     }
                     let (event_timestamp, event_host_nanos) =
-                        event_time(receipt, ev.tv_sec, ev.tv_usec);
+                        receipt.event_time(host, ev.tv_sec, ev.tv_usec);
                     let pressed = ev.value != 0;
                     emit_pad(PadEvent::RawButton {
                         id: dev.id,
@@ -1225,7 +1225,7 @@ fn run_inner(
                     continue;
                 }
                 let (event_timestamp, event_host_nanos) =
-                    event_time(receipt, ev.tv_sec, ev.tv_usec);
+                    receipt.event_time(host, ev.tv_sec, ev.tv_usec);
 
                 emit_pad(PadEvent::RawAxis {
                     id: dev.id,
@@ -1299,7 +1299,7 @@ fn run_inner(
                 let repeat = ev.value == 2;
                 let pressed = ev.value != 0;
                 let (event_timestamp, event_host_nanos) =
-                    event_time(receipt, ev.tv_sec, ev.tv_usec);
+                    receipt.event_time(host, ev.tv_sec, ev.tv_usec);
                 emit_key(RawKeyboardEvent {
                     code,
                     pressed,

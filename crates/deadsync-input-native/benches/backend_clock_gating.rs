@@ -355,6 +355,30 @@ fn hidraw_untracked_churn_gated() -> u64 {
     checksum
 }
 
+fn evdev_filtered_wakeups_legacy() -> u64 {
+    let mut checksum = 0_u64;
+    for wakeup in 0..POLLS {
+        sample_event_time();
+        let accepted = black_box(wakeup % 64 == 0);
+        if accepted {
+            checksum = checksum.rotate_left(5) ^ wakeup as u64;
+        }
+    }
+    checksum
+}
+
+fn evdev_filtered_wakeups_gated() -> u64 {
+    let mut checksum = 0_u64;
+    for wakeup in 0..POLLS {
+        let accepted = black_box(wakeup % 64 == 0);
+        if accepted {
+            sample_event_time();
+            checksum = checksum.rotate_left(5) ^ wakeup as u64;
+        }
+    }
+    checksum
+}
+
 fn main() {
     benchmark_pair(
         "WGI mostly-stale 1 kHz polling",
@@ -391,6 +415,12 @@ fn main() {
         "256 distinct reports with 16 parsed fields, 4 observable changes",
         hidraw_untracked_churn_legacy,
         hidraw_untracked_churn_gated,
+    );
+    benchmark_pair(
+        "evdev filtered poll wakeups",
+        "256 poll wakeups, 4 batches with accepted input",
+        evdev_filtered_wakeups_legacy,
+        evdev_filtered_wakeups_gated,
     );
 }
 
