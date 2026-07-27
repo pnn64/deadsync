@@ -58,7 +58,9 @@ pub use judgment_feedback::{IndicatorSprite, TapJudgmentSprite};
 pub use measure_lines::MeasureLineMode;
 #[cfg(feature = "bench-support")]
 #[doc(hidden)]
-pub use measure_lines::{CueScanBench, CueScanBenchFrame};
+pub use measure_lines::{
+    CueScanBench, CueScanBenchFrame, MeasureLinePlanBench, MeasureLinePlanBenchFrame,
+};
 pub use mini_indicator::{
     MiniIndicatorColorStyle, MiniIndicatorMode, MiniIndicatorProgress, MiniIndicatorScoreType,
     MiniIndicatorSize, MiniIndicatorSubtractiveDisplay, ZmodComboColorParams, ZmodComboColorStyle,

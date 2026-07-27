@@ -223,8 +223,8 @@ pub(crate) fn scaled_edit_bar_alpha(scroll_speed: f32, visible_at: f32, full_at:
 }
 
 fn measure_line_plan(request: &MeasureComposeRequest<'_, '_>) -> MeasureLinePlan {
-    let edit_candidate_step_rows = edit_bar_candidate_step_rows(request.time_signatures);
     if request.mode == MeasureLineMode::Edit {
+        let edit_candidate_step_rows = edit_bar_candidate_step_rows(request.time_signatures);
         let speed = edit_bar_scroll_speed(
             request.scroll_speed,
             request.scroll_reference_bpm,
@@ -255,7 +255,7 @@ fn measure_line_plan(request: &MeasureComposeRequest<'_, '_>) -> MeasureLinePlan
         alpha_eighth,
         alpha_sixteenth: 0.0,
         line_step: 0.5,
-        edit_candidate_step_rows,
+        edit_candidate_step_rows: 1,
     }
 }
 
@@ -574,8 +574,12 @@ pub(crate) fn compose_measure_lines(
 
 #[cfg(feature = "bench-support")]
 mod bench {
-    use super::{point_segment_range, transition_segment_range};
-    use deadsync_rules::timing::{DelaySegment, ScrollSegment, StopSegment};
+    use super::{
+        MeasureLineMode, edit_bar_candidate_step_rows, point_segment_range,
+        transition_segment_range,
+    };
+    use deadsync_rules::timing::{DelaySegment, ScrollSegment, StopSegment, TimeSignatureSegment};
+    use std::hint::black_box;
 
     const SEGMENTS: usize = 8_192;
 
@@ -590,6 +594,68 @@ mod bench {
         bpms: Vec<(f32, f32)>,
         delays: Vec<DelaySegment>,
         stops: Vec<StopSegment>,
+    }
+
+    #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+    pub struct MeasureLinePlanBenchFrame {
+        pub checksum: u64,
+        pub samples: usize,
+    }
+
+    pub struct MeasureLinePlanBench {
+        time_signatures: Vec<TimeSignatureSegment>,
+    }
+
+    impl MeasureLinePlanBench {
+        pub fn with_segment_count(segment_count: usize) -> Self {
+            let segment_count = segment_count.max(1);
+            Self {
+                time_signatures: (0..segment_count)
+                    .map(|index| TimeSignatureSegment {
+                        beat: index as f32 * 4.0,
+                        numerator: 3 + (index % 5) as i32,
+                        denominator: [4, 8, 16][index % 3],
+                    })
+                    .collect(),
+            }
+        }
+
+        pub fn old_frame(&self, frame: usize) -> MeasureLinePlanBenchFrame {
+            self.frame(frame, true)
+        }
+
+        pub fn new_frame(&self, frame: usize) -> MeasureLinePlanBenchFrame {
+            self.frame(frame, false)
+        }
+
+        fn frame(&self, frame: usize, compute_edit_stride: bool) -> MeasureLinePlanBenchFrame {
+            let mode = [
+                MeasureLineMode::Off,
+                MeasureLineMode::Measure,
+                MeasureLineMode::Quarter,
+                MeasureLineMode::Eighth,
+            ][frame % 4];
+            let edit_candidate_step_rows = if compute_edit_stride {
+                edit_bar_candidate_step_rows(black_box(&self.time_signatures))
+            } else {
+                1
+            };
+            black_box(edit_candidate_step_rows);
+
+            let (measure, quarter, eighth) = match black_box(mode) {
+                MeasureLineMode::Off => (0.0_f32, 0.0_f32, 0.0_f32),
+                MeasureLineMode::Measure => (0.75_f32, 0.0_f32, 0.0_f32),
+                MeasureLineMode::Quarter => (0.75_f32, 0.5_f32, 0.0_f32),
+                MeasureLineMode::Eighth => (0.75_f32, 0.5_f32, 0.125_f32),
+                MeasureLineMode::Edit => unreachable!("benchmark uses normal gameplay modes"),
+            };
+            MeasureLinePlanBenchFrame {
+                checksum: u64::from(measure.to_bits())
+                    ^ u64::from(quarter.to_bits()).rotate_left(17)
+                    ^ u64::from(eighth.to_bits()).rotate_left(34),
+                samples: 1,
+            }
+        }
     }
 
     impl Default for CueScanBench {
@@ -672,7 +738,7 @@ mod bench {
 }
 
 #[cfg(feature = "bench-support")]
-pub use bench::{CueScanBench, CueScanBenchFrame};
+pub use bench::{CueScanBench, CueScanBenchFrame, MeasureLinePlanBench, MeasureLinePlanBenchFrame};
 
 #[cfg(test)]
 mod tests {
@@ -1025,6 +1091,52 @@ mod tests {
 
         assert!(counts[0] < counts[1], "counts={counts:?}");
         assert!(counts[1] < counts[2], "counts={counts:?}");
+    }
+
+    #[test]
+    fn only_edit_measure_line_plans_compute_the_time_signature_stride() {
+        let timing = timing();
+        let travel = travel(&timing, ScrollSpeedSetting::XMod(1.0));
+        let dirs = [1.0; 4];
+        let receptors = [100.0; 4];
+        let time_signatures = [
+            TimeSignatureSegment {
+                beat: 0.0,
+                numerator: 4,
+                denominator: 4,
+            },
+            TimeSignatureSegment {
+                beat: 4.0,
+                numerator: 7,
+                denominator: 8,
+            },
+        ];
+
+        for mode in [
+            MeasureLineMode::Off,
+            MeasureLineMode::Measure,
+            MeasureLineMode::Quarter,
+            MeasureLineMode::Eighth,
+        ] {
+            let mut request = request(mode, &travel, &dirs, &receptors);
+            request.time_signatures = &time_signatures;
+            let plan = measure_line_plan(&request);
+            assert!(!plan.edit);
+            assert_eq!(plan.edit_candidate_step_rows, 1);
+            assert_eq!(
+                candidate_for_unit(5, plan, &time_signatures),
+                Some((2.5, None))
+            );
+        }
+
+        let mut request = request(MeasureLineMode::Edit, &travel, &dirs, &receptors);
+        request.time_signatures = &time_signatures;
+        let plan = measure_line_plan(&request);
+        assert!(plan.edit);
+        assert_eq!(
+            plan.edit_candidate_step_rows,
+            edit_bar_candidate_step_rows(&time_signatures)
+        );
     }
 
     #[test]

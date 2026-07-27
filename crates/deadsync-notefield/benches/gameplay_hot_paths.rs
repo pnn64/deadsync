@@ -1,7 +1,7 @@
 use deadsync_notefield::{
     CameraWrapBench, CommonNoteTransformBench, CueScanBench, FeedbackLaneCacheBench,
-    HoldTravelReuseBench, IdentityAccelBench, LaneVisualCacheBench, VisibleLaneCursorBench,
-    VisibleRangeBench, XmodTimingBench,
+    HoldTravelReuseBench, IdentityAccelBench, LaneVisualCacheBench, MeasureLinePlanBench,
+    VisibleLaneCursorBench, VisibleRangeBench, XmodTimingBench,
 };
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::hint::black_box;
@@ -144,6 +144,32 @@ fn main() {
             }
         },
     );
+
+    for (segments, fixture) in [
+        (1, "one time-signature segment"),
+        (256, "256 time-signature segments"),
+        (8_192, "8192 time-signature segments"),
+    ] {
+        let measure_plan = MeasureLinePlanBench::with_segment_count(segments);
+        run_pair(
+            "normal-play measure-line planning",
+            fixture,
+            |frame| {
+                let output = measure_plan.old_frame(frame);
+                Output {
+                    checksum: output.checksum,
+                    samples: output.samples,
+                }
+            },
+            |frame| {
+                let output = measure_plan.new_frame(frame);
+                Output {
+                    checksum: output.checksum,
+                    samples: output.samples,
+                }
+            },
+        );
+    }
 
     let camera_wrap = CameraWrapBench::default();
     run_pair(
