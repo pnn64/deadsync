@@ -1,10 +1,11 @@
 use deadlib_render::{
-    BlendMode, INVALID_TMESH_CACHE_KEY, ObjectType, RenderList, RenderObject, SpriteInstanceRaw,
-    TexturedMeshInstanceRaw, TexturedMeshVertex, TexturedMeshVertices,
-    build_ordered_render_batches, build_render_batches, build_sorted_render_batches,
-    draw_prep::{DrawScratch, prepare},
+    BlendMode, INVALID_TMESH_CACHE_KEY, MeshVertex, MeshVertices, ObjectType, RenderBatchKind,
+    RenderList, RenderObject, SpriteInstanceRaw, TexturedMeshInstanceRaw, TexturedMeshVertex,
+    TexturedMeshVertices, build_ordered_render_batches, build_render_batches,
+    build_sorted_render_batches,
+    draw_prep::{DrawOp, DrawScratch, MeshRun, prepare},
 };
-use glam::Mat4 as Matrix4;
+use glam::{Mat4 as Matrix4, Vec3, Vec4 as Vector4};
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::hint::black_box;
 use std::sync::Arc;
@@ -22,6 +23,11 @@ const TEXT_VERTICES: usize = 72;
 const WARMUP_FRAMES: usize = 256;
 const MEASURE_FRAMES: usize = 10_000;
 const BENCH_RUNS: usize = 5;
+const DENSITY_PLAYERS: usize = 2;
+const DENSITY_POINTS: usize = 961;
+const DENSITY_VERTICES_PER_PLAYER: usize = (DENSITY_POINTS - 1) * 6 + DENSITY_POINTS * 12;
+const DENSITY_WARMUP_FRAMES: usize = 128;
+const DENSITY_MEASURE_FRAMES: usize = 2_000;
 
 struct CountingAlloc {
     allocs: AtomicU64,
@@ -168,6 +174,39 @@ fn main() {
         "{:>9.2} us/frame unordered fast-path abort before dense-sort fallback",
         abort_elapsed.as_secs_f64() * 1_000_000.0 / frames,
     );
+
+    let density_frame = density_mesh_frame();
+    assert_density_prepare_parity(&density_frame);
+    let mut density_legacy_runs = Vec::with_capacity(BENCH_RUNS);
+    let mut density_fast_runs = Vec::with_capacity(BENCH_RUNS);
+    for _ in 0..BENCH_RUNS {
+        density_legacy_runs.push(run_density_mesh(
+            &density_frame,
+            prepare_density_mesh_legacy,
+        ));
+        density_fast_runs.push(run_density_mesh(
+            &density_frame,
+            prepare_density_mesh_current,
+        ));
+    }
+    density_legacy_runs.sort_unstable_by_key(|result| result.elapsed);
+    density_fast_runs.sort_unstable_by_key(|result| result.elapsed);
+    let density_legacy = density_legacy_runs.swap_remove(BENCH_RUNS / 2);
+    let density_fast = density_fast_runs.swap_remove(BENCH_RUNS / 2);
+    assert_eq!(density_legacy.checksum, density_fast.checksum);
+    println!(
+        "\ngameplay density mesh draw preparation \
+         ({DENSITY_PLAYERS} players, {DENSITY_POINTS} points, \
+         {} vertices/frame, median of {BENCH_RUNS} runs)",
+        DENSITY_PLAYERS * DENSITY_VERTICES_PER_PLAYER,
+    );
+    print_density_result("full matrix", &density_legacy);
+    print_density_result("translate+flip", &density_fast);
+    println!(
+        "  speedup {:.2}x | cycles reduction {:.1}%",
+        density_legacy.elapsed.as_secs_f64() / density_fast.elapsed.as_secs_f64(),
+        100.0 * (1.0 - density_fast.cycles as f64 / density_legacy.cycles as f64),
+    );
 }
 
 fn run_ordered_abort(objects: &[RenderObject]) -> Duration {
@@ -263,6 +302,179 @@ fn run(frame: &RenderList) -> BenchResult {
         ops: scratch.ops.len(),
         staged_vertices: scratch.tmesh_vertices.len(),
     }
+}
+
+struct DensityBenchResult {
+    elapsed: Duration,
+    cycles: u64,
+    allocated: AllocSnapshot,
+    checksum: u64,
+}
+
+fn run_density_mesh(
+    frame: &RenderList,
+    prepare_frame: fn(&RenderList, &mut DrawScratch),
+) -> DensityBenchResult {
+    let mut scratch =
+        DrawScratch::with_capacity(DENSITY_PLAYERS * DENSITY_VERTICES_PER_PLAYER, 0, 0, 1);
+    for _ in 0..DENSITY_WARMUP_FRAMES {
+        prepare_frame(black_box(frame), &mut scratch);
+        black_box(&scratch);
+    }
+
+    let before = ALLOC.snapshot();
+    let before_cycles = read_cycles();
+    let started = Instant::now();
+    let mut checksum = 0u64;
+    for frame_index in 0..DENSITY_MEASURE_FRAMES {
+        prepare_frame(black_box(frame), &mut scratch);
+        checksum ^= mesh_checksum(&scratch.mesh_vertices, frame_index);
+        black_box(&scratch);
+    }
+    DensityBenchResult {
+        elapsed: started.elapsed(),
+        cycles: read_cycles().saturating_sub(before_cycles),
+        allocated: ALLOC.snapshot().delta(before),
+        checksum,
+    }
+}
+
+fn print_density_result(label: &str, result: &DensityBenchResult) {
+    let frames = DENSITY_MEASURE_FRAMES as f64;
+    let vertices = (DENSITY_PLAYERS * DENSITY_VERTICES_PER_PLAYER) as f64;
+    println!(
+        "  {label:<14} {:>9.2} us/frame  {:>9.0} cycles/frame  \
+         {:>8.1} Mvertices/s  {:>5.2} allocs/frame  {:>7.1} bytes/frame",
+        result.elapsed.as_secs_f64() * 1_000_000.0 / frames,
+        result.cycles as f64 / frames,
+        vertices * frames / result.elapsed.as_secs_f64() / 1_000_000.0,
+        result.allocated.allocs as f64 / frames,
+        result.allocated.bytes as f64 / frames,
+    );
+}
+
+fn prepare_density_mesh_current(frame: &RenderList, scratch: &mut DrawScratch) {
+    prepare(frame, scratch, |_, _| true);
+}
+
+fn prepare_density_mesh_legacy(frame: &RenderList, scratch: &mut DrawScratch) {
+    scratch.mesh_vertices.clear();
+    scratch.tmesh_vertices.clear();
+    scratch.tmesh_instances.clear();
+    scratch.ops.clear();
+
+    for batch in &frame.batches {
+        let RenderBatchKind::Mesh {
+            object_start,
+            object_count,
+            blend,
+            camera,
+        } = batch.kind
+        else {
+            continue;
+        };
+        let vertex_start = scratch.mesh_vertices.len() as u32;
+        for object in &frame.objects[object_start as usize..(object_start + object_count) as usize]
+        {
+            let ObjectType::Mesh {
+                transform,
+                tint,
+                vertices,
+            } = &object.object_type
+            else {
+                continue;
+            };
+            scratch.mesh_vertices.reserve(vertices.len());
+            for vertex in vertices.iter() {
+                let pos = *transform * Vector4::new(vertex.pos[0], vertex.pos[1], 0.0, 1.0);
+                scratch.mesh_vertices.push(MeshVertex {
+                    pos: [pos.x, pos.y],
+                    color: [
+                        vertex.color[0] * tint[0],
+                        vertex.color[1] * tint[1],
+                        vertex.color[2] * tint[2],
+                        vertex.color[3] * tint[3],
+                    ],
+                });
+            }
+        }
+        let vertex_count = scratch.mesh_vertices.len() as u32 - vertex_start;
+        if vertex_count != 0 {
+            scratch.ops.push(DrawOp::Mesh(MeshRun {
+                vertex_start,
+                vertex_count,
+                blend,
+                camera,
+            }));
+        }
+    }
+}
+
+fn assert_density_prepare_parity(frame: &RenderList) {
+    let mut legacy = DrawScratch::default();
+    let mut current = DrawScratch::default();
+    prepare_density_mesh_legacy(frame, &mut legacy);
+    prepare_density_mesh_current(frame, &mut current);
+    assert_eq!(legacy.ops, current.ops);
+    assert_eq!(legacy.mesh_vertices.len(), current.mesh_vertices.len());
+    for (legacy, current) in legacy.mesh_vertices.iter().zip(&current.mesh_vertices) {
+        assert_eq!(legacy.pos, current.pos);
+        assert_eq!(legacy.color, current.color);
+    }
+}
+
+fn mesh_checksum(vertices: &[MeshVertex], frame: usize) -> u64 {
+    let mut checksum = vertices.len() as u64 ^ frame as u64;
+    for vertex in vertices.iter().step_by(257) {
+        checksum = checksum.rotate_left(7) ^ u64::from(vertex.pos[0].to_bits());
+        checksum = checksum.rotate_left(11) ^ u64::from(vertex.pos[1].to_bits());
+        checksum = checksum.rotate_left(13) ^ u64::from(vertex.color[3].to_bits());
+    }
+    black_box(checksum)
+}
+
+fn density_mesh_frame() -> RenderList {
+    let vertices = Arc::new(
+        (0..DENSITY_VERTICES_PER_PLAYER)
+            .map(|index| {
+                let point = index / 18;
+                MeshVertex {
+                    pos: [
+                        point as f32 * 512.0 / (DENSITY_POINTS - 1) as f32,
+                        (point % 101) as f32,
+                    ],
+                    color: [0.25, 0.5, 0.75, 1.0],
+                }
+            })
+            .collect::<Vec<_>>(),
+    );
+    let objects = (0..DENSITY_PLAYERS)
+        .map(|player| RenderObject {
+            object_type: ObjectType::Mesh {
+                transform: Matrix4::from_translation(Vec3::new(
+                    64.0 + player as f32 * 640.0,
+                    700.0,
+                    0.0,
+                )) * Matrix4::from_scale(Vec3::new(1.0, -1.0, 1.0)),
+                tint: [1.0; 4],
+                vertices: MeshVertices::Reusable(Arc::clone(&vertices)),
+            },
+            texture_handle: 0,
+            blend: BlendMode::Alpha,
+            z: 61,
+            order: player as u32,
+            camera: 0,
+        })
+        .collect();
+    let mut frame = RenderList {
+        clear_color: [0.0, 0.0, 0.0, 1.0],
+        cameras: vec![Matrix4::IDENTITY],
+        sprite_instances: Vec::new(),
+        objects,
+        batches: Vec::new(),
+    };
+    build_render_batches(&frame.objects, &mut frame.batches);
+    frame
 }
 
 fn gameplay_frame() -> RenderList {
@@ -365,4 +577,21 @@ fn mesh_vertices(len: usize, seed: f32) -> Vec<TexturedMeshVertex> {
             tex_matrix_scale: [1.0; 2],
         })
         .collect()
+}
+
+#[cfg(target_arch = "x86_64")]
+fn read_cycles() -> u64 {
+    // SAFETY: LFENCE/RDTSC only serialize and read this thread's timestamp
+    // counter; they do not dereference memory.
+    unsafe {
+        core::arch::x86_64::_mm_lfence();
+        let cycles = core::arch::x86_64::_rdtsc();
+        core::arch::x86_64::_mm_lfence();
+        cycles
+    }
+}
+
+#[cfg(not(target_arch = "x86_64"))]
+fn read_cycles() -> u64 {
+    0
 }

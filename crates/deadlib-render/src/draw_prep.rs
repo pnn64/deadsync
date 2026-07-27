@@ -232,19 +232,7 @@ fn prepare_mesh_batch(
             debug_assert!(false, "mesh batch contains a non-mesh object");
             continue;
         };
-        scratch.mesh_vertices.reserve(vertices.len());
-        for vertex in vertices.iter() {
-            let pos = *transform * Vector4::new(vertex.pos[0], vertex.pos[1], 0.0, 1.0);
-            scratch.mesh_vertices.push(MeshVertex {
-                pos: [pos.x, pos.y],
-                color: [
-                    vertex.color[0] * tint[0],
-                    vertex.color[1] * tint[1],
-                    vertex.color[2] * tint[2],
-                    vertex.color[3] * tint[3],
-                ],
-            });
-        }
+        append_mesh_vertices(&mut scratch.mesh_vertices, transform, *tint, vertices);
     }
     let vertex_count = scratch.mesh_vertices.len() as u32 - vertex_start;
     if vertex_count != 0 {
@@ -254,6 +242,48 @@ fn prepare_mesh_batch(
             blend,
             camera,
         }));
+    }
+}
+
+#[inline(always)]
+fn append_mesh_vertices(
+    out: &mut Vec<MeshVertex>,
+    transform: &glam::Mat4,
+    tint: [f32; 4],
+    vertices: &[MeshVertex],
+) {
+    out.reserve(vertices.len());
+
+    // Presentation composes ordinary 2D meshes with this exact transform.
+    // Avoid a full Mat4 × Vec4 and four color multiplies per vertex for the
+    // common gameplay density-graph path.
+    if transform.x_axis == Vector4::X
+        && transform.y_axis == -Vector4::Y
+        && transform.z_axis == Vector4::Z
+        && transform.w_axis.z == 0.0
+        && transform.w_axis.w == 1.0
+        && tint == [1.0; 4]
+    {
+        let translate_x = transform.w_axis.x;
+        let translate_y = transform.w_axis.y;
+        out.extend(vertices.iter().map(|vertex| MeshVertex {
+            pos: [vertex.pos[0] + translate_x, translate_y - vertex.pos[1]],
+            color: vertex.color,
+        }));
+        return;
+    }
+
+    for vertex in vertices {
+        let pos = *transform * Vector4::new(vertex.pos[0], vertex.pos[1], 0.0, 1.0);
+        out.push(MeshVertex {
+            pos: [pos.x, pos.y],
+            color: [
+                vertex.color[0] * tint[0],
+                vertex.color[1] * tint[1],
+                vertex.color[2] * tint[2],
+                vertex.color[3] * tint[3],
+            ],
+        });
     }
 }
 
@@ -348,12 +378,13 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::{DrawScratch, prepare};
+    use super::{DrawOp, DrawScratch, append_mesh_vertices, prepare};
     use crate::{
-        BlendMode, INVALID_TMESH_CACHE_KEY, ObjectType, RenderList, RenderObject,
-        SpriteInstanceRaw, TexturedMeshInstanceRaw, TexturedMeshVertex, TexturedMeshVertices,
+        BlendMode, INVALID_TMESH_CACHE_KEY, MeshVertex, MeshVertices, ObjectType, RenderList,
+        RenderObject, SpriteInstanceRaw, TexturedMeshInstanceRaw, TexturedMeshVertex,
+        TexturedMeshVertices,
     };
-    use glam::Mat4 as Matrix4;
+    use glam::{Mat4 as Matrix4, Vec3, Vec4 as Vector4};
     use std::sync::Arc;
 
     fn sprite_object(order: u32) -> RenderObject {
@@ -439,6 +470,88 @@ mod tests {
         assert_eq!(scratch.tmesh_vertices.len(), vertices.len());
         assert_eq!(scratch.tmesh_instances.len(), 2);
         assert_eq!(scratch.ops.len(), 1);
+    }
+
+    #[test]
+    fn prepare_gameplay_mesh_preserves_flipped_positions_and_colors() {
+        let vertices = Arc::new(vec![
+            MeshVertex {
+                pos: [3.0, 7.0],
+                color: [0.25, 0.5, 0.75, 1.0],
+            },
+            MeshVertex {
+                pos: [-2.0, 11.0],
+                color: [1.0, 0.75, 0.5, 0.25],
+            },
+        ]);
+        let transform = Matrix4::from_translation(Vec3::new(40.0, 90.0, 0.0))
+            * Matrix4::from_scale(Vec3::new(1.0, -1.0, 1.0));
+        let mut render_list = RenderList {
+            clear_color: [0.0, 0.0, 0.0, 1.0],
+            cameras: vec![Matrix4::IDENTITY],
+            sprite_instances: Vec::new(),
+            objects: vec![RenderObject {
+                object_type: ObjectType::Mesh {
+                    transform,
+                    tint: [1.0; 4],
+                    vertices: MeshVertices::Reusable(Arc::clone(&vertices)),
+                },
+                texture_handle: 0,
+                blend: BlendMode::Alpha,
+                z: 5,
+                order: 0,
+                camera: 0,
+            }],
+            batches: Vec::new(),
+        };
+        crate::build_render_batches(&render_list.objects, &mut render_list.batches);
+        let mut scratch = DrawScratch::default();
+
+        prepare(&render_list, &mut scratch, |_, _| false);
+
+        assert_eq!(scratch.mesh_vertices.len(), 2);
+        assert_eq!(scratch.mesh_vertices[0].pos, [43.0, 83.0]);
+        assert_eq!(scratch.mesh_vertices[0].color, vertices[0].color);
+        assert_eq!(scratch.mesh_vertices[1].pos, [38.0, 79.0]);
+        assert_eq!(scratch.mesh_vertices[1].color, vertices[1].color);
+        assert!(matches!(
+            scratch.ops.as_slice(),
+            [DrawOp::Mesh(run)] if run.vertex_start == 0 && run.vertex_count == 2
+        ));
+    }
+
+    #[test]
+    fn mesh_fast_path_falls_back_for_general_transform_and_tint() {
+        let vertices = [
+            MeshVertex {
+                pos: [3.0, 7.0],
+                color: [0.25, 0.5, 0.75, 1.0],
+            },
+            MeshVertex {
+                pos: [-2.0, 11.0],
+                color: [1.0, 0.75, 0.5, 0.25],
+            },
+        ];
+        let transform =
+            Matrix4::from_rotation_z(0.35) * Matrix4::from_translation(Vec3::new(40.0, 90.0, 0.0));
+        let tint = [0.5, 0.25, 0.75, 0.8];
+        let mut actual = Vec::new();
+
+        append_mesh_vertices(&mut actual, &transform, tint, &vertices);
+
+        for (actual, source) in actual.iter().zip(vertices) {
+            let expected_pos = transform * Vector4::new(source.pos[0], source.pos[1], 0.0, 1.0);
+            assert_eq!(actual.pos, [expected_pos.x, expected_pos.y]);
+            assert_eq!(
+                actual.color,
+                [
+                    source.color[0] * tint[0],
+                    source.color[1] * tint[1],
+                    source.color[2] * tint[2],
+                    source.color[3] * tint[3],
+                ]
+            );
+        }
     }
 
     #[test]
