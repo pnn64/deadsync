@@ -9,6 +9,7 @@ static ALLOC: CountingAlloc = CountingAlloc::new();
 const POLLS: usize = 256;
 const RUNS: usize = 5_000;
 const HID_REPORT_BYTES: usize = 64;
+const HID_REPORTS_PER_BATCH: usize = 8;
 const HIDRAW_REPORT_BYTES: usize = 32;
 const HIDRAW_LARGE_REPORT_BYTES: usize = 256;
 const EVDEV_POLL_REGISTRATIONS: usize = 17;
@@ -163,7 +164,7 @@ fn raw_keyboard_gated() -> u64 {
 }
 
 #[inline(always)]
-fn decode_hid_report(report: &[u8; HID_REPORT_BYTES]) -> bool {
+fn decode_hid_report(report: &[u8]) -> bool {
     let mut parser_work = 0_u64;
     for &byte in black_box(report) {
         parser_work = parser_work.rotate_left(5) ^ u64::from(byte);
@@ -210,6 +211,63 @@ fn duplicate_hid_report_gated() -> u64 {
         if next_pressed != pressed {
             pressed = next_pressed;
             checksum = checksum.rotate_left(5) ^ message as u64 ^ u64::from(pressed);
+        }
+    }
+    checksum
+}
+
+fn batched_hid_reports_legacy() -> u64 {
+    let mut reports = [[0x54; HID_REPORT_BYTES]; HID_REPORTS_PER_BATCH];
+    let mut pressed = false;
+    let mut checksum = 0_u64;
+    for message in 0..POLLS {
+        if message % 64 == 0 {
+            for report in &mut reports {
+                report[0] ^= 1;
+            }
+        }
+        sample_event_time();
+        for (index, report) in reports.iter().enumerate() {
+            let next_pressed = decode_hid_report(report);
+            if next_pressed != pressed {
+                pressed = next_pressed;
+                checksum =
+                    checksum.rotate_left(5) ^ message as u64 ^ index as u64 ^ u64::from(pressed);
+            }
+        }
+    }
+    checksum
+}
+
+fn batched_hid_reports_gated() -> u64 {
+    let mut reports = [[0x54; HID_REPORT_BYTES]; HID_REPORTS_PER_BATCH];
+    let mut last_report = [0; HID_REPORT_BYTES];
+    let mut last_report_valid = false;
+    let mut pressed = false;
+    let mut checksum = 0_u64;
+    for message in 0..POLLS {
+        if message % 64 == 0 {
+            for report in &mut reports {
+                report[0] ^= 1;
+            }
+        }
+        let mut sampled_time = false;
+        for (index, report) in reports.iter().enumerate() {
+            if last_report_valid && report == &last_report {
+                continue;
+            }
+            if !sampled_time {
+                sample_event_time();
+                sampled_time = true;
+            }
+            let next_pressed = decode_hid_report(report);
+            last_report.copy_from_slice(report);
+            last_report_valid = true;
+            if next_pressed != pressed {
+                pressed = next_pressed;
+                checksum =
+                    checksum.rotate_left(5) ^ message as u64 ^ index as u64 ^ u64::from(pressed);
+            }
         }
     }
     checksum
@@ -507,6 +565,12 @@ fn main() {
         "256 single 64-byte reports, 4 byte-for-byte state changes",
         duplicate_hid_report_legacy,
         duplicate_hid_report_gated,
+    );
+    benchmark_pair(
+        "Raw Input batched duplicate HID reports",
+        "256 messages, 8 identical 64-byte reports each, 4 state changes",
+        batched_hid_reports_legacy,
+        batched_hid_reports_gated,
     );
     benchmark_pair(
         "IOHID unchanged axis callbacks",

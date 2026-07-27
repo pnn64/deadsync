@@ -77,7 +77,7 @@ struct Dev {
     hat_min: i32,
     hat_max: i32,
     dir: [bool; 4],
-    last_single_report: Vec<u8>,
+    last_report: Vec<u8>,
 }
 
 struct Ctx {
@@ -654,7 +654,7 @@ fn add_device(ctx: &mut Ctx, h: HANDLE, initial: bool) {
         hat_min,
         hat_max,
         dir: [false; 4],
-        last_single_report: Vec::with_capacity(report_capacity),
+        last_report: Vec::with_capacity(report_capacity),
     };
 
     if refs == 0 {
@@ -685,23 +685,12 @@ fn remove_device(ctx: &mut Ctx, h: HANDLE) {
 }
 
 #[inline(always)]
-fn skip_duplicate_single_report(
-    last_report: &mut Vec<u8>,
-    reports: &[u8],
-    report_size: usize,
-) -> bool {
-    if reports.len() != report_size {
-        // A batch can move through multiple states before ending on one whose
-        // bytes happen to match the old cache. Re-establish the cache only from
-        // a subsequently parsed single report.
-        last_report.clear();
-        return false;
-    }
-    last_report == reports
+fn report_is_duplicate(last_report: &[u8], report: &[u8]) -> bool {
+    last_report == report
 }
 
 #[inline(always)]
-fn remember_single_report(last_report: &mut Vec<u8>, report: &[u8]) {
+fn remember_report(last_report: &mut Vec<u8>, report: &[u8]) {
     last_report.clear();
     last_report.extend_from_slice(report);
 }
@@ -719,26 +708,21 @@ fn process_hid_reports<F>(
     let Some((reports, report_size)) = hid_report_payload(buf, size_bytes) else {
         return;
     };
-    let single_report = reports.len() == report_size;
-    if skip_duplicate_single_report(&mut dev.last_single_report, reports, report_size) {
-        return;
-    }
-
-    let (timestamp, host_nanos) = sampled_time.unwrap_or_else(|| {
-        let timestamp = Instant::now();
-        (timestamp, host.now_nanos())
-    });
-    if single_report {
-        let parsed = process_hid_report(emit_pad, dev, timestamp, host_nanos, reports);
-        if parsed {
-            remember_single_report(&mut dev.last_single_report, reports);
-        } else {
-            dev.last_single_report.clear();
-        }
-        return;
-    }
+    let mut event_time = sampled_time;
     for report in reports.chunks_exact_mut(report_size) {
-        let _ = process_hid_report(emit_pad, dev, timestamp, host_nanos, report);
+        if report_is_duplicate(&dev.last_report, report) {
+            continue;
+        }
+        let (timestamp, host_nanos) = *event_time.get_or_insert_with(|| {
+            let timestamp = Instant::now();
+            (timestamp, host.now_nanos())
+        });
+        let parsed = process_hid_report(emit_pad, dev, timestamp, host_nanos, report);
+        if parsed {
+            remember_report(&mut dev.last_report, report);
+        } else {
+            dev.last_report.clear();
+        }
     }
 }
 
@@ -1279,8 +1263,8 @@ pub fn run_keyboard_only(
 #[cfg(test)]
 mod tests {
     use super::{
-        RAW_KEY_HELD_SLOTS, RAWINPUTHEADER, hid_report_payload, rawinput_uuid,
-        remember_single_report, skip_duplicate_single_report, update_held_state,
+        RAW_KEY_HELD_SLOTS, RAWINPUTHEADER, hid_report_payload, rawinput_uuid, remember_report,
+        report_is_duplicate, update_held_state,
     };
     use std::mem::size_of;
 
@@ -1313,28 +1297,24 @@ mod tests {
     }
 
     #[test]
-    fn duplicate_cache_skips_only_a_remembered_single_report() {
+    fn duplicate_cache_skips_only_consecutive_reports() {
         let mut last_report = Vec::with_capacity(3);
-        let report = [1, 2, 3];
+        let a = [1, 2, 3];
+        let b = [4, 5, 6];
 
-        assert!(!skip_duplicate_single_report(&mut last_report, &report, 3));
-        remember_single_report(&mut last_report, &report);
-        assert!(skip_duplicate_single_report(&mut last_report, &report, 3));
-        assert!(!skip_duplicate_single_report(
-            &mut last_report,
-            &[1, 2, 4],
-            3,
-        ));
+        let mut accepted = Vec::new();
+        for report in [a, a, b, b, a] {
+            if report_is_duplicate(&last_report, &report) {
+                continue;
+            }
+            accepted.push(report);
+            remember_report(&mut last_report, &report);
+        }
 
-        // Identical bytes can represent a second edge sequence when multiple
-        // reports arrived together, so batches must always be parsed.
-        assert!(!skip_duplicate_single_report(
-            &mut last_report,
-            &[1, 2, 3, 1, 2, 3],
-            3,
-        ));
-        assert!(last_report.is_empty());
-        assert!(!skip_duplicate_single_report(&mut last_report, &report, 3));
+        assert_eq!(accepted, vec![a, b, a]);
+        assert!(report_is_duplicate(&last_report, &a));
+        last_report.clear();
+        assert!(!report_is_duplicate(&last_report, &a));
     }
 
     #[test]
