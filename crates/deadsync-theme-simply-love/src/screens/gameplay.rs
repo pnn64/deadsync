@@ -13152,6 +13152,21 @@ const SMX_SENSOR_FILL_IDLE: [f32; 4] = [0.25, 0.75, 0.25, 0.8];
 const SMX_SENSOR_FILL_ACTIVE: [f32; 4] = [1.0, 1.0, 1.0, 0.9];
 const SMX_SENSOR_THRESHOLD: [f32; 4] = [1.0, 0.45, 0.0, 1.0];
 const SMX_SENSOR_BG: [f32; 4] = [0.0, 0.0, 0.0, 0.35];
+
+#[inline(always)]
+fn smx_sensor_value_content(value: Option<u16>) -> (TextContent, [f32; 4]) {
+    match value {
+        Some(value) => (
+            TextContent::inline_u16(value),
+            SMX_SENSOR_VALUE_COLOR,
+        ),
+        None => (
+            TextContent::Static("--"),
+            SMX_SENSOR_VALUE_IDLE_COLOR,
+        ),
+    }
+}
+
 // Gaps between a player's notefield edge and an SMX overlay placed beside it.
 // Outer = FSR sensor display (away from center); inner = input mini-pad (toward
 // center). The doubles branches reuse the outer gap.
@@ -13397,10 +13412,7 @@ fn draw_smx_fsr_group(
 
         // Live pressure value centered above the bar (replaces the old letter
         // row); "--" when no sample has arrived for this panel yet.
-        let (value_text, value_color) = match raw_value {
-            Some(v) => (v.to_string(), SMX_SENSOR_VALUE_COLOR),
-            None => ("--".to_string(), SMX_SENSOR_VALUE_IDLE_COLOR),
-        };
+        let (value_text, value_color) = smx_sensor_value_content(raw_value);
         actors.push(act!(text:
             font(machine_font_key(state.machine_font(), FontRole::Normal)): settext(value_text):
             align(0.5, 0.0): xy(x + bar_w * 0.5, group_top):
@@ -13603,6 +13615,17 @@ mod tests {
         assert!(scratch.iter().all(Vec::is_empty));
         assert!(scratch[0].capacity() >= 384);
         assert_eq!(scratch[1].capacity(), 0);
+    }
+
+    #[test]
+    fn smx_sensor_value_content_preserves_value_and_idle_display() {
+        let (value, value_color) = smx_sensor_value_content(Some(500));
+        let (idle, idle_color) = smx_sensor_value_content(None);
+
+        assert_eq!(value.as_str(), "500");
+        assert_eq!(value_color, SMX_SENSOR_VALUE_COLOR);
+        assert_eq!(idle.as_str(), "--");
+        assert_eq!(idle_color, SMX_SENSOR_VALUE_IDLE_COLOR);
     }
 
     fn test_sprite_kind(key: &str) -> SongLuaOverlayKind {

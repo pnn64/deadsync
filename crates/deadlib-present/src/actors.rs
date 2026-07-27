@@ -729,6 +729,40 @@ pub enum TextContent {
     Static(&'static str),
     Owned(String),
     Shared(Arc<str>),
+    InlineU16(InlineU16Text),
+}
+
+/// Heap-free decimal text for the full `u16` range.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct InlineU16Text {
+    bytes: [u8; 5],
+    start: u8,
+}
+
+impl InlineU16Text {
+    #[inline(always)]
+    pub fn new(mut value: u16) -> Self {
+        let mut bytes = [0; 5];
+        let mut start = bytes.len();
+        loop {
+            start -= 1;
+            bytes[start] = b'0' + (value % 10) as u8;
+            value /= 10;
+            if value == 0 {
+                break;
+            }
+        }
+        Self {
+            bytes,
+            start: start as u8,
+        }
+    }
+
+    #[inline(always)]
+    pub fn as_str(&self) -> &str {
+        let digits = &self.bytes[self.start as usize..];
+        std::str::from_utf8(digits).expect("inline u16 text contains only ASCII decimal digits")
+    }
 }
 
 impl TextContent {
@@ -738,11 +772,17 @@ impl TextContent {
     }
 
     #[inline(always)]
+    pub fn inline_u16(value: u16) -> Self {
+        Self::InlineU16(InlineU16Text::new(value))
+    }
+
+    #[inline(always)]
     pub fn as_str(&self) -> &str {
         match self {
             Self::Static(s) => s,
             Self::Owned(s) => s.as_str(),
             Self::Shared(s) => s.as_ref(),
+            Self::InlineU16(s) => s.as_str(),
         }
     }
 
@@ -822,6 +862,14 @@ mod tests {
             shadow_len: [0.0, 0.0],
             shadow_color: [0.0, 0.0, 0.0, 0.5],
             effect: anim::EffectState::default(),
+        }
+    }
+
+    #[test]
+    fn inline_u16_text_preserves_decimal_display() {
+        for value in [0, 7, 42, 250, 500, 8_191, u16::MAX] {
+            let text = TextContent::inline_u16(value);
+            assert_eq!(text.as_str(), value.to_string());
         }
     }
 

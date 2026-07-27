@@ -1,3 +1,4 @@
+use deadlib_present::actors::TextContent;
 use deadsync_theme_simply_love::screens::gameplay::{
     GameplayHudTextBenchmarkCache, GameplayHudTextBenchmarkSnapshot,
     benchmark_gameplay_hud_text_legacy,
@@ -12,6 +13,7 @@ static ALLOC: CountingAlloc = CountingAlloc::new();
 
 const WARMUP_FRAMES: usize = 20_000;
 const MEASURE_FRAMES: usize = 2_000_000;
+const SMX_SENSOR_VALUES_PER_FRAME: usize = 8;
 
 struct CountingAlloc {
     allocs: AtomicU64,
@@ -99,6 +101,7 @@ fn inputs(frame: usize) -> (f64, f32) {
 
 struct BenchResult {
     elapsed: Duration,
+    cycles: u64,
     allocated: AllocSnapshot,
     checksum: usize,
 }
@@ -118,6 +121,7 @@ fn measure(mut frame: impl FnMut(usize) -> GameplayHudTextBenchmarkSnapshot) -> 
         assert_eq!(snapshot.overlay.as_ref(), "AutoPlay");
     }
     let before = ALLOC.snapshot();
+    let before_cycles = read_cycles();
     let started = Instant::now();
     let mut output_checksum = 0usize;
     for index in 0..MEASURE_FRAMES {
@@ -125,6 +129,43 @@ fn measure(mut frame: impl FnMut(usize) -> GameplayHudTextBenchmarkSnapshot) -> 
     }
     BenchResult {
         elapsed: started.elapsed(),
+        cycles: read_cycles().saturating_sub(before_cycles),
+        allocated: ALLOC.snapshot().delta(before),
+        checksum: output_checksum,
+    }
+}
+
+fn smx_sensor_value(frame: usize, slot: usize) -> u16 {
+    ((frame * 17 + slot * 61) % 501) as u16
+}
+
+fn text_checksum(text: &TextContent) -> usize {
+    text.as_str().bytes().fold(0usize, |checksum, byte| {
+        checksum.rotate_left(5) ^ byte as usize
+    })
+}
+
+fn measure_smx_sensor_text(mut text: impl FnMut(u16) -> TextContent) -> BenchResult {
+    for frame in 0..WARMUP_FRAMES {
+        for slot in 0..SMX_SENSOR_VALUES_PER_FRAME {
+            let value = smx_sensor_value(frame, slot);
+            assert_eq!(text(value).as_str(), value.to_string());
+        }
+    }
+    let before = ALLOC.snapshot();
+    let before_cycles = read_cycles();
+    let started = Instant::now();
+    let mut output_checksum = 0usize;
+    for frame in 0..MEASURE_FRAMES {
+        for slot in 0..SMX_SENSOR_VALUES_PER_FRAME {
+            let value = black_box(smx_sensor_value(frame, slot));
+            output_checksum =
+                output_checksum.rotate_left(7) ^ text_checksum(&black_box(text(value)));
+        }
+    }
+    BenchResult {
+        elapsed: started.elapsed(),
+        cycles: read_cycles().saturating_sub(before_cycles),
         allocated: ALLOC.snapshot().delta(before),
         checksum: output_checksum,
     }
@@ -133,9 +174,10 @@ fn measure(mut frame: impl FnMut(usize) -> GameplayHudTextBenchmarkSnapshot) -> 
 fn print_result(label: &str, result: &BenchResult) {
     let frames = MEASURE_FRAMES as f64;
     println!(
-        "{label:<13} {:>9.2} ns/frame  {:>5.2} allocs/frame  {:>7.1} bytes/frame  \
-         {:>5.2} reallocs/frame",
+        "{label:<13} {:>9.2} ns/frame  {:>8.0} cycles/frame  \
+         {:>5.2} allocs/frame  {:>7.1} bytes/frame  {:>5.2} reallocs/frame",
         result.elapsed.as_secs_f64() * 1_000_000_000.0 / frames,
+        result.cycles as f64 / frames,
         result.allocated.allocs as f64 / frames,
         result.allocated.bytes as f64 / frames,
         result.allocated.reallocs as f64 / frames,
@@ -168,4 +210,33 @@ fn main() {
     println!("gameplay HUD text benchmark");
     print_result("legacy frame", &legacy);
     print_result("cached frame", &optimized);
+
+    let owned_sensor_text = measure_smx_sensor_text(|value| TextContent::from(value.to_string()));
+    let inline_sensor_text = measure_smx_sensor_text(TextContent::inline_u16);
+    assert_eq!(owned_sensor_text.checksum, inline_sensor_text.checksum);
+    black_box((owned_sensor_text.checksum, inline_sensor_text.checksum));
+
+    println!(
+        "\nSMX gameplay sensor text benchmark \
+         ({SMX_SENSOR_VALUES_PER_FRAME} live values/frame)"
+    );
+    print_result("owned values", &owned_sensor_text);
+    print_result("inline values", &inline_sensor_text);
+}
+
+#[cfg(target_arch = "x86_64")]
+fn read_cycles() -> u64 {
+    // SAFETY: LFENCE/RDTSC only serialize and read this thread's timestamp
+    // counter; they do not dereference memory.
+    unsafe {
+        core::arch::x86_64::_mm_lfence();
+        let cycles = core::arch::x86_64::_rdtsc();
+        core::arch::x86_64::_mm_lfence();
+        cycles
+    }
+}
+
+#[cfg(not(target_arch = "x86_64"))]
+fn read_cycles() -> u64 {
+    0
 }
