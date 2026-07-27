@@ -687,6 +687,31 @@ pub struct HeartRateView {
     pub players: [HeartRatePlayerView; MAX_PLAYERS],
 }
 
+// One dense notefield frame's reusable actor envelope. Reserving this at
+// gameplay setup keeps later density spikes from geometrically growing and
+// copying the large `Actor` enum on the render thread.
+const NOTEFIELD_ACTOR_SCRATCH_CAPACITY: usize = 384;
+const NOTEFIELD_HUD_ACTOR_SCRATCH_CAPACITY: usize = 32;
+const PLAYER_ACTOR_SCRATCH_CAPACITY: usize =
+    NOTEFIELD_ACTOR_SCRATCH_CAPACITY + NOTEFIELD_HUD_ACTOR_SCRATCH_CAPACITY;
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub const BENCH_NOTEFIELD_ACTOR_SCRATCH_CAPACITY: usize = NOTEFIELD_ACTOR_SCRATCH_CAPACITY;
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub const BENCH_NOTEFIELD_HUD_ACTOR_SCRATCH_CAPACITY: usize = NOTEFIELD_HUD_ACTOR_SCRATCH_CAPACITY;
+
+fn gameplay_actor_scratch(active_players: usize, capacity: usize) -> [Vec<Actor>; MAX_PLAYERS] {
+    std::array::from_fn(|player| {
+        if player < active_players {
+            Vec::with_capacity(capacity)
+        } else {
+            Vec::new()
+        }
+    })
+}
+
 pub struct State {
     pub gameplay: GameplayCoreState,
     /// Game-thread, song-lifetime identity for the fixed two HUD slots. Built
@@ -980,6 +1005,13 @@ impl State {
         let song_lua_sound_events = song_lua_sound_events(song_lua_visuals);
         let active_song_lua_video_paths = song_lua_video_paths(song_lua_visuals);
         let static_song_lua_video_path_count = active_song_lua_video_paths.len();
+        let active_players = gameplay.num_players();
+        let notefield_actor_scratch =
+            gameplay_actor_scratch(active_players, NOTEFIELD_ACTOR_SCRATCH_CAPACITY);
+        let notefield_hud_actor_scratch =
+            gameplay_actor_scratch(active_players, NOTEFIELD_HUD_ACTOR_SCRATCH_CAPACITY);
+        let player_actor_scratch =
+            gameplay_actor_scratch(active_players, PLAYER_ACTOR_SCRATCH_CAPACITY);
         let mut state = Self {
             gameplay,
             hud_snapshot,
@@ -1053,9 +1085,9 @@ impl State {
             song_lua_order_scratch: Vec::new(),
             song_lua_capture_order_scratch: Vec::new(),
             actor_resources,
-            notefield_actor_scratch: std::array::from_fn(|_| Vec::new()),
-            notefield_hud_actor_scratch: std::array::from_fn(|_| Vec::new()),
-            player_actor_scratch: std::array::from_fn(|_| Vec::new()),
+            notefield_actor_scratch,
+            notefield_hud_actor_scratch,
+            player_actor_scratch,
             presentation_skeleton: GameplayPresentationSkeleton::default(),
         };
         refresh_foreground_media(&mut state);
@@ -13563,6 +13595,15 @@ mod tests {
         Arc::from([])
     }
     use deadlib_present::actors::{SizeSpec, TextAlign};
+
+    #[test]
+    fn gameplay_actor_scratch_presizes_only_active_players() {
+        let scratch = gameplay_actor_scratch(1, 384);
+
+        assert!(scratch.iter().all(Vec::is_empty));
+        assert!(scratch[0].capacity() >= 384);
+        assert_eq!(scratch[1].capacity(), 0);
+    }
 
     fn test_sprite_kind(key: &str) -> SongLuaOverlayKind {
         SongLuaOverlayKind::Sprite {

@@ -1,5 +1,6 @@
 use deadlib_present::actors::Actor;
 use deadsync_theme_simply_love::screens::gameplay::{
+    BENCH_NOTEFIELD_ACTOR_SCRATCH_CAPACITY, BENCH_NOTEFIELD_HUD_ACTOR_SCRATCH_CAPACITY,
     benchmark_append_direct_identity_player_actors, benchmark_append_player_actors,
     benchmark_present_identity_notefield, benchmark_present_identity_notefield_legacy,
 };
@@ -16,6 +17,11 @@ const FIELD_ACTORS: usize = 224;
 const HUD_ACTORS: usize = 32;
 const WARMUP_FRAMES: usize = 2_000;
 const MEASURE_FRAMES: usize = 50_000;
+const PEAK_FIELD_ACTORS: usize = BENCH_NOTEFIELD_ACTOR_SCRATCH_CAPACITY;
+const PEAK_HUD_ACTORS: usize = BENCH_NOTEFIELD_HUD_ACTOR_SCRATCH_CAPACITY;
+const PEAK_PLAYER_ACTORS: usize = PEAK_FIELD_ACTORS + PEAK_HUD_ACTORS;
+const WARMUP_PEAK_FRAMES: usize = 512;
+const MEASURE_PEAK_FRAMES: usize = 10_000;
 
 struct CountingAlloc {
     allocs: AtomicU64,
@@ -98,6 +104,15 @@ fn fill(actors: &mut Vec<Actor>, count: usize, base: f32) {
     }));
 }
 
+fn fill_incrementally(actors: &mut Vec<Actor>, count: usize, base: f32) {
+    actors.clear();
+    for index in 0..count {
+        actors.push(Actor::CameraPush {
+            view_proj: Mat4::from_translation(Vec3::new(base + index as f32, 0.0, 0.0)),
+        });
+    }
+}
+
 fn frame(
     field: &mut Vec<Actor>,
     hud: &mut Vec<Actor>,
@@ -161,6 +176,7 @@ fn assemble_direct(
 
 struct BenchResult {
     elapsed: std::time::Duration,
+    cycles: u64,
     allocated: AllocSnapshot,
     checksum: f32,
 }
@@ -174,12 +190,14 @@ fn measure(present: fn(&mut Vec<Actor>, &mut Vec<Actor>, &mut Vec<Actor>)) -> Be
     }
 
     let before = ALLOC.snapshot();
+    let before_cycles = read_cycles();
     let started = Instant::now();
     let mut checksum = 0.0f32;
     for _ in 0..MEASURE_FRAMES {
         checksum += black_box(frame(&mut field, &mut hud, &mut out, present));
     }
     let elapsed = started.elapsed();
+    let cycles = read_cycles().saturating_sub(before_cycles);
     let allocated = ALLOC.snapshot().delta(before);
     assert!(field.is_empty());
     assert!(hud.is_empty());
@@ -187,6 +205,7 @@ fn measure(present: fn(&mut Vec<Actor>, &mut Vec<Actor>, &mut Vec<Actor>)) -> Be
 
     BenchResult {
         elapsed,
+        cycles,
         allocated,
         checksum,
     }
@@ -210,6 +229,7 @@ fn measure_assembled(
     }
 
     let before = ALLOC.snapshot();
+    let before_cycles = read_cycles();
     let started = Instant::now();
     let mut checksum = 0.0f32;
     for _ in 0..MEASURE_FRAMES {
@@ -222,6 +242,7 @@ fn measure_assembled(
         ));
     }
     let elapsed = started.elapsed();
+    let cycles = read_cycles().saturating_sub(before_cycles);
     let allocated = ALLOC.snapshot().delta(before);
     assert!(field.is_empty());
     assert!(hud.is_empty());
@@ -230,6 +251,7 @@ fn measure_assembled(
 
     BenchResult {
         elapsed,
+        cycles,
         allocated,
         checksum,
     }
@@ -238,11 +260,82 @@ fn measure_assembled(
 fn print_result(label: &str, result: &BenchResult) {
     let frames = MEASURE_FRAMES as f64;
     println!(
-        "{label:<17} {:>9.2} ns/frame  {:>5.2} allocs/frame  \
-         {:>7.1} bytes/frame  {:>5.2} reallocs/frame",
+        "{label:<17} {:>9.2} ns/frame  {:>8.0} cycles/frame  \
+         {:>5.2} allocs/frame  {:>7.1} bytes/frame  {:>5.2} reallocs/frame",
         result.elapsed.as_secs_f64() * 1_000_000_000.0 / frames,
+        result.cycles as f64 / frames,
         result.allocated.allocs as f64 / frames,
         result.allocated.bytes as f64 / frames,
+        result.allocated.reallocs as f64 / frames,
+    );
+}
+
+fn peak_scratch_frame(presized: bool) -> f32 {
+    let mut checksum = 0.0;
+    for player in 0..2 {
+        let mut field = if presized {
+            Vec::with_capacity(PEAK_FIELD_ACTORS)
+        } else {
+            Vec::new()
+        };
+        let mut hud = if presized {
+            Vec::with_capacity(PEAK_HUD_ACTORS)
+        } else {
+            Vec::new()
+        };
+        let mut assembled = if presized {
+            Vec::with_capacity(PEAK_PLAYER_ACTORS)
+        } else {
+            Vec::new()
+        };
+        fill_incrementally(&mut field, PEAK_FIELD_ACTORS, player as f32 * 20_000.0);
+        fill_incrementally(
+            &mut hud,
+            PEAK_HUD_ACTORS,
+            player as f32 * 20_000.0 + 10_000.0,
+        );
+        benchmark_present_identity_notefield(&mut field, &mut hud, &mut assembled);
+        let first = match assembled.first() {
+            Some(Actor::CameraPush { view_proj }) => view_proj.w_axis.x,
+            _ => -1.0,
+        };
+        let last = match assembled.last() {
+            Some(Actor::CameraPush { view_proj }) => view_proj.w_axis.x,
+            _ => -1.0,
+        };
+        checksum += first + last + assembled.len() as f32;
+    }
+    checksum
+}
+
+fn measure_peak_scratch(presized: bool) -> BenchResult {
+    for _ in 0..WARMUP_PEAK_FRAMES {
+        black_box(peak_scratch_frame(presized));
+    }
+    let before = ALLOC.snapshot();
+    let before_cycles = read_cycles();
+    let started = Instant::now();
+    let mut checksum = 0.0;
+    for _ in 0..MEASURE_PEAK_FRAMES {
+        checksum += black_box(peak_scratch_frame(presized));
+    }
+    BenchResult {
+        elapsed: started.elapsed(),
+        cycles: read_cycles().saturating_sub(before_cycles),
+        allocated: ALLOC.snapshot().delta(before),
+        checksum,
+    }
+}
+
+fn print_peak_result(label: &str, result: &BenchResult) {
+    let frames = MEASURE_PEAK_FRAMES as f64;
+    println!(
+        "{label:<17} {:>9.2} us/frame  {:>8.0} cycles/frame  \
+         {:>5.2} allocs/frame  {:>8.1} KiB/frame  {:>5.2} reallocs/frame",
+        result.elapsed.as_secs_f64() * 1_000_000.0 / frames,
+        result.cycles as f64 / frames,
+        result.allocated.allocs as f64 / frames,
+        result.allocated.bytes as f64 / frames / 1024.0,
         result.allocated.reallocs as f64 / frames,
     );
 }
@@ -262,4 +355,32 @@ fn main() {
     print_result("direct append", &direct);
     print_result("buffered final", &buffered);
     print_result("direct final", &assembled);
+
+    let growing_scratch = measure_peak_scratch(false);
+    let presized_scratch = measure_peak_scratch(true);
+    assert_eq!(growing_scratch.checksum, presized_scratch.checksum);
+    black_box((growing_scratch.checksum, presized_scratch.checksum));
+    println!(
+        "\ngameplay actor scratch density-spike benchmark \
+         (2 players, {PEAK_FIELD_ACTORS} field + {PEAK_HUD_ACTORS} HUD actors)"
+    );
+    print_peak_result("zero capacity", &growing_scratch);
+    print_peak_result("presized", &presized_scratch);
+}
+
+#[cfg(target_arch = "x86_64")]
+fn read_cycles() -> u64 {
+    // SAFETY: LFENCE/RDTSC only serialize and read this thread's timestamp
+    // counter; they do not dereference memory.
+    unsafe {
+        core::arch::x86_64::_mm_lfence();
+        let cycles = core::arch::x86_64::_rdtsc();
+        core::arch::x86_64::_mm_lfence();
+        cycles
+    }
+}
+
+#[cfg(not(target_arch = "x86_64"))]
+fn read_cycles() -> u64 {
+    0
 }
