@@ -255,7 +255,7 @@ fn build_screen_cached_with_scratch_and_texture_context_impl<T: TextureContext +
 
     let mut batches = std::mem::take(&mut scratch.batches);
     if !renderer::build_ordered_render_batches(&objects, &mut batches) {
-        sort_render_objects(&mut objects, scratch);
+        sort_composed_render_objects(&mut objects, scratch);
         renderer::build_sorted_render_batches(&objects, &mut batches);
     }
     scratch.masks = masks;
@@ -403,6 +403,19 @@ fn sort_render_objects(objects: &mut [RenderObject], scratch: &mut ComposeScratc
     sort_render_objects_impl(objects, scratch, true);
 }
 
+// Actor composition preserves draw order within each z layer. Discover, count,
+// and validate the usual small layer set in one pass.
+fn sort_composed_render_objects(objects: &mut [RenderObject], scratch: &mut ComposeScratch) {
+    if objects.len() < 2 {
+        return;
+    }
+    if collect_ordered_sparse_z_buckets(objects, scratch) {
+        sort_render_objects_from_sparse_counts(objects, scratch);
+    } else {
+        sort_render_objects(objects, scratch);
+    }
+}
+
 #[cfg(any(test, feature = "bench-support"))]
 fn sort_render_objects_legacy(objects: &mut [RenderObject], scratch: &mut ComposeScratch) {
     sort_render_objects_impl(objects, scratch, false);
@@ -506,25 +519,36 @@ fn sort_render_objects_impl(
 /// stable bucket permutation so the comparatively large render objects move
 /// only during the final ordering pass.
 fn sort_render_objects_sparse_buckets(objects: &mut [RenderObject], scratch: &mut ComposeScratch) {
-    const MAX_SPARSE_BUCKETS: usize = 64;
-    const Z_KEY_COUNT: usize = u16::MAX as usize + 1;
-    const MISSING_BUCKET: u8 = u8::MAX;
+    if collect_sparse_z_buckets(objects, scratch) {
+        sort_render_objects_in_sparse_buckets(objects, scratch);
+    } else {
+        objects.sort_unstable_by_key(|object| (object.z, object.order));
+    }
+}
 
+const MAX_SPARSE_Z_BUCKETS: usize = 64;
+const Z_KEY_COUNT: usize = u16::MAX as usize + 1;
+const MISSING_Z_BUCKET: u8 = u8::MAX;
+
+fn begin_sparse_z_collection(scratch: &mut ComposeScratch) {
     if scratch.sparse_z_bucket_by_key.len() != Z_KEY_COUNT {
         scratch
             .sparse_z_bucket_by_key
-            .resize(Z_KEY_COUNT, MISSING_BUCKET);
+            .resize(Z_KEY_COUNT, MISSING_Z_BUCKET);
     }
     for &encoded_z in &scratch.sparse_z_keys {
-        scratch.sparse_z_bucket_by_key[encoded_z] = MISSING_BUCKET;
+        scratch.sparse_z_bucket_by_key[encoded_z] = MISSING_Z_BUCKET;
     }
     scratch.sparse_z_keys.clear();
+}
+
+fn collect_sparse_z_buckets(objects: &[RenderObject], scratch: &mut ComposeScratch) -> bool {
+    begin_sparse_z_collection(scratch);
     for object in objects.iter() {
         let encoded_z = (i32::from(object.z) - i32::from(i16::MIN)) as usize;
-        if scratch.sparse_z_bucket_by_key[encoded_z] == MISSING_BUCKET {
-            if scratch.sparse_z_keys.len() == MAX_SPARSE_BUCKETS {
-                objects.sort_unstable_by_key(|object| (object.z, object.order));
-                return;
+        if scratch.sparse_z_bucket_by_key[encoded_z] == MISSING_Z_BUCKET {
+            if scratch.sparse_z_keys.len() == MAX_SPARSE_Z_BUCKETS {
+                return false;
             }
             scratch.sparse_z_bucket_by_key[encoded_z] = 0;
             scratch.sparse_z_keys.push(encoded_z);
@@ -534,7 +558,52 @@ fn sort_render_objects_sparse_buckets(objects: &mut [RenderObject], scratch: &mu
     for (bucket, &encoded_z) in scratch.sparse_z_keys.iter().enumerate() {
         scratch.sparse_z_bucket_by_key[encoded_z] = bucket as u8;
     }
+    true
+}
 
+fn collect_ordered_sparse_z_buckets(
+    objects: &[RenderObject],
+    scratch: &mut ComposeScratch,
+) -> bool {
+    begin_sparse_z_collection(scratch);
+    scratch.z_counts.clear();
+    scratch.z_perm.clear();
+    for object in objects {
+        let encoded_z = (i32::from(object.z) - i32::from(i16::MIN)) as usize;
+        let bucket = scratch.sparse_z_bucket_by_key[encoded_z];
+        if bucket == MISSING_Z_BUCKET {
+            if scratch.sparse_z_keys.len() == MAX_SPARSE_Z_BUCKETS {
+                return false;
+            }
+            let bucket = scratch.sparse_z_keys.len();
+            scratch.sparse_z_bucket_by_key[encoded_z] = bucket as u8;
+            scratch.sparse_z_keys.push(encoded_z);
+            scratch.z_counts.push(1);
+            scratch.z_perm.push(object.order as usize);
+        } else {
+            let bucket = bucket as usize;
+            if scratch.z_perm[bucket] > object.order as usize {
+                return false;
+            }
+            scratch.z_perm[bucket] = object.order as usize;
+            scratch.z_counts[bucket] += 1;
+        }
+    }
+
+    scratch.sparse_z_keys.sort_unstable();
+    for (sorted_bucket, &encoded_z) in scratch.sparse_z_keys.iter().enumerate() {
+        let insertion_bucket = scratch.sparse_z_bucket_by_key[encoded_z] as usize;
+        scratch.z_perm[sorted_bucket] = scratch.z_counts[insertion_bucket];
+        scratch.sparse_z_bucket_by_key[encoded_z] = sorted_bucket as u8;
+    }
+    std::mem::swap(&mut scratch.z_counts, &mut scratch.z_perm);
+    true
+}
+
+fn sort_render_objects_in_sparse_buckets(
+    objects: &mut [RenderObject],
+    scratch: &mut ComposeScratch,
+) {
     let bucket_count = scratch.sparse_z_keys.len();
     scratch.z_counts.clear();
     scratch.z_counts.resize(bucket_count, 0);
@@ -556,6 +625,13 @@ fn sort_render_objects_sparse_buckets(objects: &mut [RenderObject], scratch: &mu
         return;
     }
 
+    sort_render_objects_from_sparse_counts(objects, scratch);
+}
+
+fn sort_render_objects_from_sparse_counts(
+    objects: &mut [RenderObject],
+    scratch: &mut ComposeScratch,
+) {
     let mut next = 0usize;
     for count in &mut scratch.z_counts {
         let bucket_len = *count;
@@ -623,11 +699,38 @@ impl RenderSortBenchmark {
         self.sort_frame_with(frame, true)
     }
 
+    pub fn sort_composed_frame(&mut self, frame: usize) -> u64 {
+        self.prepare_sparse_frame(frame);
+        sort_composed_render_objects(&mut self.objects, &mut self.scratch);
+        self.frame_checksum()
+    }
+
+    pub fn sort_dense_frame(&mut self, frame: usize) -> u64 {
+        self.prepare_dense_frame(frame);
+        sort_render_objects(&mut self.objects, &mut self.scratch);
+        self.frame_checksum()
+    }
+
+    pub fn sort_composed_dense_frame(&mut self, frame: usize) -> u64 {
+        self.prepare_dense_frame(frame);
+        sort_composed_render_objects(&mut self.objects, &mut self.scratch);
+        self.frame_checksum()
+    }
+
     fn sort_frame_with(&mut self, frame: usize, legacy: bool) -> u64 {
+        self.prepare_sparse_frame(frame);
+        if legacy {
+            sort_render_objects_legacy(&mut self.objects, &mut self.scratch);
+        } else {
+            sort_render_objects(&mut self.objects, &mut self.scratch);
+        }
+        self.frame_checksum()
+    }
+
+    fn prepare_sparse_frame(&mut self, frame: usize) {
         const Z_VALUES: [i16; 12] = [
             -30_000, -99, 90, 2_101, 0, 1_500, -12_000, 50, 32_000, 91, -1, 8_000,
         ];
-        let len = self.objects.len();
         for (position, object) in self.objects.iter_mut().enumerate() {
             let mixed = position
                 .wrapping_mul(17)
@@ -636,11 +739,21 @@ impl RenderSortBenchmark {
             object.z = Z_VALUES[mixed];
             object.order = position as u32;
         }
-        if legacy {
-            sort_render_objects_legacy(&mut self.objects, &mut self.scratch);
-        } else {
-            sort_render_objects(&mut self.objects, &mut self.scratch);
+    }
+
+    fn prepare_dense_frame(&mut self, frame: usize) {
+        for (position, object) in self.objects.iter_mut().enumerate() {
+            let mixed = position
+                .wrapping_mul(17)
+                .wrapping_add(frame.wrapping_mul(5))
+                % 32;
+            object.z = mixed as i16 - 16;
+            object.order = position as u32;
         }
+    }
+
+    fn frame_checksum(&self) -> u64 {
+        let len = self.objects.len();
         debug_assert!(
             self.objects
                 .windows(2)
@@ -5383,8 +5496,8 @@ mod tests {
         build_screen_cached_with_scratch_and_texture_context_and_actor_resources,
         build_transient_text_mesh_builders, clip_object_to_world_masks,
         clip_sprite_object_to_world_rect, fold_sprite_xy_rot, font_chain_key,
-        push_shadow_objects_for_range, resolve_sprite_size_like_sm, sort_render_objects,
-        sort_render_objects_legacy, str_ptr, wrap_text_lines_by_words,
+        push_shadow_objects_for_range, resolve_sprite_size_like_sm, sort_composed_render_objects,
+        sort_render_objects, sort_render_objects_legacy, str_ptr, wrap_text_lines_by_words,
     };
     use crate::actors::{
         Actor, ActorResourceArena, RetainedActorFrame, SizeSpec, SpriteSource, TextAlign,
@@ -5585,13 +5698,7 @@ mod tests {
             bottom: 0.0,
         };
 
-        let render = build_screen(
-            &actors,
-            [0.0; 4],
-            &metrics,
-            &font::FontMap::default(),
-            0.0,
-        );
+        let render = build_screen(&actors, [0.0; 4], &metrics, &font::FontMap::default(), 0.0);
         let ObjectType::Mesh {
             tint,
             vertices: composed,
@@ -6953,6 +7060,104 @@ mod tests {
                 .map(|object| (object.z, object.order))
                 .collect::<Vec<_>>(),
             vec![(4, 0), (5, 1), (5, 2), (5, 3)]
+        );
+    }
+
+    #[test]
+    fn composed_render_sort_preserves_monotonic_draw_order_within_layers() {
+        const Z_VALUES: [i16; 7] = [-30_000, -8, 0, 1, 90, 2_101, 32_000];
+        let mut objects = (0usize..512)
+            .map(|index| RenderObject {
+                object_type: ObjectType::Sprite(index as u32),
+                texture_handle: index as u64,
+                blend: BlendMode::Alpha,
+                z: Z_VALUES[index.wrapping_mul(11).wrapping_add(3) % Z_VALUES.len()],
+                order: index as u32,
+                camera: 0,
+            })
+            .collect::<Vec<_>>();
+        let mut expected = objects.clone();
+        expected.sort_unstable_by_key(|object| (object.z, object.order));
+
+        sort_composed_render_objects(&mut objects, &mut ComposeScratch::default());
+
+        assert_eq!(
+            objects
+                .iter()
+                .map(|object| (object.z, object.order, object.texture_handle))
+                .collect::<Vec<_>>(),
+            expected
+                .iter()
+                .map(|object| (object.z, object.order, object.texture_handle))
+                .collect::<Vec<_>>()
+        );
+
+        let mut shadow_interleaved = [(5, 0), (5, 1), (4, 0), (4, 1), (5, 2), (4, 2)]
+            .into_iter()
+            .enumerate()
+            .map(|(index, (z, order))| RenderObject {
+                object_type: ObjectType::Sprite(index as u32),
+                texture_handle: index as u64,
+                blend: BlendMode::Alpha,
+                z,
+                order,
+                camera: 0,
+            })
+            .collect::<Vec<_>>();
+
+        sort_composed_render_objects(&mut shadow_interleaved, &mut ComposeScratch::default());
+
+        assert_eq!(
+            shadow_interleaved
+                .iter()
+                .map(|object| (object.z, object.order))
+                .collect::<Vec<_>>(),
+            vec![(4, 0), (4, 1), (4, 2), (5, 0), (5, 1), (5, 2)]
+        );
+    }
+
+    #[test]
+    fn composed_render_sort_falls_back_for_wide_or_unordered_layers() {
+        fn assert_matches_key_sort(mut objects: Vec<RenderObject>) {
+            let mut expected = objects.clone();
+            expected.sort_unstable_by_key(|object| (object.z, object.order));
+
+            sort_composed_render_objects(&mut objects, &mut ComposeScratch::default());
+
+            let fingerprint = |objects: &[RenderObject]| {
+                objects
+                    .iter()
+                    .map(|object| (object.z, object.order, object.texture_handle))
+                    .collect::<Vec<_>>()
+            };
+            assert_eq!(fingerprint(&objects), fingerprint(&expected));
+        }
+
+        assert_matches_key_sort(
+            (0usize..130)
+                .map(|index| RenderObject {
+                    object_type: ObjectType::Sprite(index as u32),
+                    texture_handle: index as u64,
+                    blend: BlendMode::Alpha,
+                    z: (index.wrapping_mul(17) % 65) as i16,
+                    order: index as u32,
+                    camera: 0,
+                })
+                .collect(),
+        );
+        assert_matches_key_sort(
+            [(2, 4), (1, 3), (2, 2), (1, 1)]
+                .into_iter()
+                .enumerate()
+                .map(|(index, (z, order))| RenderObject {
+                    object_type: ObjectType::Sprite(index as u32),
+                    texture_handle: index as u64,
+                    blend: BlendMode::Alpha,
+                    z,
+                    order,
+                    camera: 0,
+                })
+                .collect(),
         );
     }
 
