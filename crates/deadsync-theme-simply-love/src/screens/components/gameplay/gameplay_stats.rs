@@ -294,14 +294,23 @@ fn step_stats_hmr_categories(state: &State, player_idx: usize) -> [(usize, u32, 
     ]
 }
 
-fn clip_density_life_points(points: &mut Vec<[f32; 2]>, offset: f32) {
+// A 240-second graph sampled no faster than every 0.25 seconds retains at most
+// 961 visible points. Compact before the 63-point stale prefix can overflow the
+// 1,024-point gameplay reservation.
+const DENSITY_LIFE_COMPACT_THRESHOLD: usize = 63;
+
+fn clip_density_life_points_impl(
+    points: &mut Vec<[f32; 2]>,
+    offset: f32,
+    compact_threshold: usize,
+) -> usize {
     let first_visible = points.partition_point(|p| p[0] < offset);
     if first_visible == 0 {
-        return;
+        return 0;
     }
     if first_visible >= points.len() {
         points.clear();
-        return;
+        return 0;
     }
 
     let a = points[first_visible - 1];
@@ -309,7 +318,95 @@ fn clip_density_life_points(points: &mut Vec<[f32; 2]>, offset: f32) {
     let dx = (b[0] - a[0]).max(0.000_001_f32);
     let t = ((offset - a[0]) / dx).clamp(0.0_f32, 1.0_f32);
     points[first_visible - 1] = [offset, a[1] + (b[1] - a[1]) * t];
-    points.drain(0..(first_visible - 1));
+    let stale = first_visible - 1;
+    if stale < compact_threshold.max(1) {
+        return 0;
+    }
+
+    points.drain(0..stale);
+    points.len()
+}
+
+fn clip_density_life_points(points: &mut Vec<[f32; 2]>, offset: f32) {
+    clip_density_life_points_impl(points, offset, DENSITY_LIFE_COMPACT_THRESHOLD);
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn benchmark_clip_density_life_points_legacy(
+    points: &mut Vec<[f32; 2]>,
+    offset: f32,
+) -> usize {
+    clip_density_life_points_impl(points, offset, 1)
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn benchmark_clip_density_life_points(points: &mut Vec<[f32; 2]>, offset: f32) -> usize {
+    clip_density_life_points_impl(points, offset, DENSITY_LIFE_COMPACT_THRESHOLD)
+}
+
+#[cfg(test)]
+mod density_life_clip_tests {
+    use super::{
+        DENSITY_LIFE_COMPACT_THRESHOLD, clip_density_life_points_impl,
+    };
+
+    fn visible_points(points: &[[f32; 2]], offset: f32) -> &[[f32; 2]] {
+        let start = points.partition_point(|point| point[0] < offset);
+        &points[start..]
+    }
+
+    #[test]
+    fn batched_compaction_preserves_the_interpolated_visible_history() {
+        const VISIBLE_POINTS: usize = 961;
+        let initial = (0..VISIBLE_POINTS)
+            .map(|index| [index as f32, (index % 7) as f32])
+            .collect::<Vec<_>>();
+        let mut legacy = initial.clone();
+        let mut batched = initial;
+        batched.reserve_exact(DENSITY_LIFE_COMPACT_THRESHOLD);
+        let capacity = batched.capacity();
+        let mut legacy_moves = 0usize;
+        let mut batched_moves = 0usize;
+
+        for step in 1..=DENSITY_LIFE_COMPACT_THRESHOLD * 3 {
+            let x = (VISIBLE_POINTS + step - 1) as f32;
+            let point = [x, (step % 11) as f32];
+            legacy.push(point);
+            batched.push(point);
+            let offset = step as f32 + 0.25;
+
+            legacy_moves += clip_density_life_points_impl(&mut legacy, offset, 1);
+            batched_moves += clip_density_life_points_impl(
+                &mut batched,
+                offset,
+                DENSITY_LIFE_COMPACT_THRESHOLD,
+            );
+
+            assert_eq!(
+                visible_points(&batched, offset),
+                visible_points(&legacy, offset)
+            );
+            assert!(batched.len() < legacy.len() + DENSITY_LIFE_COMPACT_THRESHOLD);
+            assert_eq!(batched.capacity(), capacity);
+        }
+
+        assert!(batched_moves * 20 < legacy_moves);
+    }
+
+    #[test]
+    fn batched_compaction_clears_a_fully_expired_history() {
+        let mut points = vec![[1.0, 0.25], [2.0, 0.75]];
+
+        clip_density_life_points_impl(
+            &mut points,
+            3.0,
+            DENSITY_LIFE_COMPACT_THRESHOLD,
+        );
+
+        assert!(points.is_empty());
+    }
 }
 
 fn refresh_density_graph_meshes_for_player(state: &mut State, player_idx: usize) {

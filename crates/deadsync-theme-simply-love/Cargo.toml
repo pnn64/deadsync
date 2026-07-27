@@ -108,6 +108,11 @@ name = "qr_mesh_cache"
 harness = false
 required-features = ["bench-support"]
 
+[[bench]]
+name = "density_life_compaction"
+harness = false
+required-features = ["bench-support"]
+
 [dependencies]
 deadlib-assets = { path = "../deadlib-assets" }
 deadlib-present = { path = "../deadlib-present" }
