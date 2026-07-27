@@ -2582,7 +2582,7 @@ fn push_shadow_objects_for_range(
                 renderer::ObjectType::Mesh {
                     transform: t_world * *transform,
                     tint,
-                    vertices: Arc::clone(vertices),
+                    vertices: vertices.clone(),
                 }
             }
             renderer::ObjectType::TexturedMesh {
@@ -3282,7 +3282,52 @@ fn build_actor_recursive<'a, T: TextureContext + ?Sized>(
                 object_type: renderer::ObjectType::Mesh {
                     transform,
                     tint: style.tint,
-                    vertices: Arc::clone(vertices),
+                    vertices: renderer::MeshVertices::Shared(Arc::clone(vertices)),
+                },
+                texture_handle: renderer::INVALID_TEXTURE_HANDLE,
+                blend: style.blend.unwrap_or(*blend),
+                z: 0,
+                order: 0,
+                camera,
+            });
+
+            let layer = base_z.saturating_add(*z);
+            for obj in out.iter_mut().skip(before) {
+                obj.z = layer;
+                obj.order = {
+                    let o = *order_counter;
+                    *order_counter += 1;
+                    o
+                };
+            }
+        }
+
+        actors::Actor::ReusableMesh {
+            align,
+            offset,
+            size,
+            tint,
+            vertices,
+            visible,
+            blend,
+            z,
+        } => {
+            if !*visible || vertices.is_empty() {
+                return;
+            }
+
+            let rect = place_rect(parent, *align, *offset, *size);
+            let base_x = m.left + rect.x;
+            let base_y = m.top - rect.y;
+            let transform = Matrix4::from_translation(Vector3::new(base_x, base_y, 0.0))
+                * Matrix4::from_scale(Vector3::new(1.0, -1.0, 1.0));
+
+            let before = out.len();
+            out.push(renderer::RenderObject {
+                object_type: renderer::ObjectType::Mesh {
+                    transform,
+                    tint: mul_rgba(style.tint, *tint),
+                    vertices: renderer::MeshVertices::Reusable(Arc::clone(vertices)),
                 },
                 texture_handle: renderer::INVALID_TEXTURE_HANDLE,
                 blend: style.blend.unwrap_or(*blend),
@@ -5515,6 +5560,57 @@ mod tests {
 
         assert!(render.objects.capacity() >= actors.len().saturating_mul(4));
         assert!(render.cameras.capacity() >= 4);
+    }
+
+    #[test]
+    fn reusable_mesh_composes_shared_vertices_and_tint() {
+        let vertices = Arc::new(vec![MeshVertex {
+            pos: [3.0, 7.0],
+            color: [0.8, 0.6, 0.4, 0.5],
+        }]);
+        let actors = [Actor::ReusableMesh {
+            align: [0.0, 0.0],
+            offset: [0.0, 0.0],
+            size: [SizeSpec::Px(1.0), SizeSpec::Px(1.0)],
+            tint: [0.5, 0.25, 1.0, 0.75],
+            vertices: Arc::clone(&vertices),
+            visible: true,
+            blend: BlendMode::Alpha,
+            z: 4,
+        }];
+        let metrics = Metrics {
+            left: 0.0,
+            right: 100.0,
+            top: 100.0,
+            bottom: 0.0,
+        };
+
+        let render = build_screen(
+            &actors,
+            [0.0; 4],
+            &metrics,
+            &font::FontMap::default(),
+            0.0,
+        );
+        let ObjectType::Mesh {
+            tint,
+            vertices: composed,
+            ..
+        } = &render.objects[0].object_type
+        else {
+            panic!("reusable mesh must compose to a mesh render object");
+        };
+
+        assert_eq!(*tint, [0.5, 0.25, 1.0, 0.75]);
+        assert_eq!(composed.len(), vertices.len());
+        for (actual, expected) in composed.iter().zip(vertices.iter()) {
+            assert_eq!(actual.pos, expected.pos);
+            assert_eq!(actual.color, expected.color);
+        }
+        assert!(matches!(
+            composed,
+            deadlib_render::MeshVertices::Reusable(shared) if Arc::ptr_eq(shared, &vertices)
+        ));
     }
 
     #[test]

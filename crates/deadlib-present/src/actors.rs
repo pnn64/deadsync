@@ -390,6 +390,19 @@ pub enum Actor {
         z: i16,
     },
 
+    /// Dynamic untextured mesh backed by storage retained by its owner across frames.
+    /// The owner must not mutate the buffer while any cloned actor is live.
+    ReusableMesh {
+        align: [f32; 2],
+        offset: [f32; 2],
+        size: [SizeSpec; 2],
+        tint: [f32; 4],
+        vertices: Arc<Vec<MeshVertex>>,
+        visible: bool,
+        blend: BlendMode,
+        z: i16,
+    },
+
     /// Textured mesh actor (model-style triangles with UVs)
     TexturedMesh {
         align: [f32; 2],
@@ -507,6 +520,7 @@ impl Actor {
             Self::SharedFrame { children, .. } => children.iter().all(Self::retained_static),
             Self::Shadow { child, .. } => child.retained_static(),
             Self::Mesh { .. }
+            | Self::ReusableMesh { .. }
             | Self::TexturedMesh { .. }
             | Self::ReusableTexturedMesh { .. }
             | Self::RetainedFrame { .. }
@@ -547,6 +561,7 @@ impl Actor {
                 }
                 *vertices = Arc::from(out);
             }
+            Self::ReusableMesh { tint, .. } => tint[3] *= alpha,
             Self::TexturedMesh { tint, glow, .. }
             | Self::ReusableTexturedMesh { tint, glow, .. } => {
                 tint[3] *= alpha;
@@ -622,7 +637,7 @@ pub fn actor_tree_stats(actors: &[Actor]) -> ActorTreeStats {
                     .text_chars
                     .saturating_add(saturating_u32(content.len()));
             }
-            Actor::Mesh { .. } => {
+            Actor::Mesh { .. } | Actor::ReusableMesh { .. } => {
                 stats.meshes = stats.meshes.saturating_add(1);
             }
             Actor::TexturedMesh { .. } | Actor::ReusableTexturedMesh { .. } => {

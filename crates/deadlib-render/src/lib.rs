@@ -316,6 +316,31 @@ pub struct MeshVertex {
     pub color: [f32; 4],
 }
 
+#[derive(Clone)]
+pub enum MeshVertices {
+    Shared(Arc<[MeshVertex]>),
+    Reusable(Arc<Vec<MeshVertex>>),
+}
+
+impl AsRef<[MeshVertex]> for MeshVertices {
+    #[inline(always)]
+    fn as_ref(&self) -> &[MeshVertex] {
+        match self {
+            Self::Shared(vertices) => vertices.as_ref(),
+            Self::Reusable(vertices) => vertices.as_slice(),
+        }
+    }
+}
+
+impl Deref for MeshVertices {
+    type Target = [MeshVertex];
+
+    #[inline(always)]
+    fn deref(&self) -> &Self::Target {
+        self.as_ref()
+    }
+}
+
 #[repr(C)]
 #[derive(
     Clone,
@@ -520,7 +545,7 @@ pub enum ObjectType {
     Mesh {
         transform: Matrix4,
         tint: [f32; 4],
-        vertices: Arc<[MeshVertex]>,
+        vertices: MeshVertices,
     },
     TexturedMesh {
         instance: TexturedMeshInstanceRaw,

@@ -552,6 +552,28 @@ fn fill_density_life_vertices(
     written
 }
 
+#[inline(always)]
+fn density_life_mesh_window(
+    points: &[[f32; 2]],
+    offset: f32,
+    width: f32,
+    thickness: f32,
+) -> Option<(usize, usize, usize, f32)> {
+    if points.len() < 2 || width <= 0.0_f32 || thickness <= 0.0_f32 {
+        return None;
+    }
+
+    let right = offset + width;
+    let start = points.partition_point(|p| p[0] < offset);
+    let end = points.partition_point(|p| p[0] <= right);
+    if end.saturating_sub(start) < 2 {
+        return None;
+    }
+
+    let len = density_life_vertex_count(points, start, end);
+    (len != 0).then_some((start, end, len, thickness * 0.5_f32))
+}
+
 pub fn update_density_life_mesh(
     mesh: &mut Option<Arc<[MeshVertex]>>,
     points: &[[f32; 2]],
@@ -560,26 +582,12 @@ pub fn update_density_life_mesh(
     thickness: f32,
     color: [f32; 4],
 ) {
-    if points.len() < 2 || width <= 0.0_f32 || thickness <= 0.0_f32 {
+    let Some((start, end, len, half)) =
+        density_life_mesh_window(points, offset, width, thickness)
+    else {
         *mesh = None;
         return;
-    }
-
-    let right = offset + width;
-    let start = points.partition_point(|p| p[0] < offset);
-    let end = points.partition_point(|p| p[0] <= right);
-    if end.saturating_sub(start) < 2 {
-        *mesh = None;
-        return;
-    }
-
-    let len = density_life_vertex_count(points, start, end);
-    if len == 0 {
-        *mesh = None;
-        return;
-    }
-
-    let half = thickness * 0.5_f32;
+    };
     if let Some(existing) = mesh.as_mut().and_then(Arc::get_mut)
         && existing.len() == len
     {
@@ -592,6 +600,38 @@ pub fn update_density_life_mesh(
     let written = fill_density_life_vertices(&mut verts, points, start, end, offset, half, color);
     debug_assert_eq!(written, len);
     *mesh = Some(Arc::from(verts.into_boxed_slice()));
+}
+
+/// Update a dynamic life graph while retaining its growable vertex allocation.
+///
+/// The buffer is mutated only while uniquely owned. If a renderer still holds
+/// the preceding frame, a replacement is allocated and that frame remains
+/// immutable.
+pub fn update_density_life_mesh_reusable(
+    mesh: &mut Option<Arc<Vec<MeshVertex>>>,
+    points: &[[f32; 2]],
+    offset: f32,
+    width: f32,
+    thickness: f32,
+    color: [f32; 4],
+) {
+    let Some((start, end, len, half)) =
+        density_life_mesh_window(points, offset, width, thickness)
+    else {
+        *mesh = None;
+        return;
+    };
+
+    if mesh.as_mut().and_then(Arc::get_mut).is_none() {
+        *mesh = Some(Arc::new(Vec::with_capacity(len)));
+    }
+    let vertices = mesh
+        .as_mut()
+        .and_then(Arc::get_mut)
+        .expect("replacement density life mesh must be uniquely owned");
+    vertices.resize(len, MeshVertex::default());
+    let written = fill_density_life_vertices(vertices, points, start, end, offset, half, color);
+    debug_assert_eq!(written, len);
 }
 
 pub fn build_density_histogram_mesh(
@@ -740,5 +780,93 @@ mod tests {
 
         assert_eq!(first_ptr, second_ptr);
         assert_mesh_matches(mesh.as_ref().expect("life mesh"), &expected);
+    }
+
+    #[test]
+    fn reusable_density_life_mesh_matches_shared_mesh_and_reuses_changed_lengths() {
+        let points = [
+            [0.0, 8.0],
+            [8.0, 12.0],
+            [16.0, 6.0],
+            [24.0, 20.0],
+        ];
+        let mut shared = None;
+        let mut reusable = None;
+
+        update_density_life_mesh(
+            &mut shared,
+            &points,
+            0.0,
+            32.0,
+            2.0,
+            [0.5, 0.75, 1.0, 1.0],
+        );
+        update_density_life_mesh_reusable(
+            &mut reusable,
+            &points,
+            0.0,
+            32.0,
+            2.0,
+            [0.5, 0.75, 1.0, 1.0],
+        );
+        assert_mesh_matches(
+            reusable.as_ref().expect("reusable life mesh"),
+            shared.as_ref().expect("shared life mesh"),
+        );
+        let allocation = reusable.as_ref().expect("reusable life mesh").as_ptr();
+
+        update_density_life_mesh(
+            &mut shared,
+            &points[..3],
+            0.0,
+            32.0,
+            2.0,
+            [0.5, 0.75, 1.0, 1.0],
+        );
+        update_density_life_mesh_reusable(
+            &mut reusable,
+            &points[..3],
+            0.0,
+            32.0,
+            2.0,
+            [0.5, 0.75, 1.0, 1.0],
+        );
+
+        assert_eq!(
+            reusable.as_ref().expect("reusable life mesh").as_ptr(),
+            allocation
+        );
+        assert_mesh_matches(
+            reusable.as_ref().expect("reusable life mesh"),
+            shared.as_ref().expect("shared life mesh"),
+        );
+    }
+
+    #[test]
+    fn reusable_density_life_mesh_keeps_a_busy_previous_frame_immutable() {
+        let points = [[0.0, 8.0], [12.0, 8.0], [24.0, 20.0]];
+        let mut mesh = None;
+        update_density_life_mesh_reusable(
+            &mut mesh,
+            &points,
+            0.0,
+            32.0,
+            2.0,
+            [1.0; 4],
+        );
+        let previous = Arc::clone(mesh.as_ref().expect("life mesh"));
+        let previous_vertices = previous.as_slice().to_vec();
+
+        update_density_life_mesh_reusable(
+            &mut mesh,
+            &points[..2],
+            0.0,
+            32.0,
+            2.0,
+            [0.5; 4],
+        );
+
+        assert!(!Arc::ptr_eq(mesh.as_ref().expect("replacement mesh"), &previous));
+        assert_mesh_matches(previous.as_slice(), &previous_vertices);
     }
 }

@@ -207,7 +207,7 @@ pub struct DensityGraphRenderState {
     pub cache: [Option<DensityHistCache>; MAX_PLAYERS],
     pub mesh: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS],
     pub mesh_offset_px: [i32; MAX_PLAYERS],
-    pub life_mesh: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS],
+    pub life_mesh: [Option<Arc<Vec<MeshVertex>>>; MAX_PLAYERS],
     pub life_mesh_offset_px: [i32; MAX_PLAYERS],
     pub top_mesh: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS],
 }
@@ -5757,6 +5757,7 @@ fn song_lua_proxy_actor_has_z(actor: &Actor) -> bool {
         Actor::Sprite { z, .. }
         | Actor::Text { z, .. }
         | Actor::Mesh { z, .. }
+        | Actor::ReusableMesh { z, .. }
         | Actor::TexturedMesh { z, .. }
         | Actor::ReusableTexturedMesh { z, .. } => *z != 0,
         Actor::Frame { z, children, .. } => {
@@ -5779,6 +5780,7 @@ fn song_lua_proxy_actor_z(actor: &Actor) -> i16 {
         Actor::Sprite { z, .. }
         | Actor::Text { z, .. }
         | Actor::Mesh { z, .. }
+        | Actor::ReusableMesh { z, .. }
         | Actor::TexturedMesh { z, .. }
         | Actor::ReusableTexturedMesh { z, .. }
         | Actor::Frame { z, .. }
@@ -5969,6 +5971,25 @@ fn song_lua_proxy_local_actor(actor: Actor) -> Actor {
             align,
             offset,
             size,
+            vertices,
+            visible,
+            blend,
+            z: 0,
+        },
+        Actor::ReusableMesh {
+            align,
+            offset,
+            size,
+            tint,
+            vertices,
+            visible,
+            blend,
+            ..
+        } => Actor::ReusableMesh {
+            align,
+            offset,
+            size,
+            tint,
             vertices,
             visible,
             blend,
@@ -7008,6 +7029,25 @@ fn song_lua_style_capture_actor(
                 z: song_lua_add_z(z, z_shift),
             }
         }
+        Actor::ReusableMesh {
+            align,
+            offset,
+            size,
+            tint,
+            vertices,
+            visible,
+            blend: actor_blend,
+            z,
+        } => Actor::ReusableMesh {
+            align,
+            offset,
+            size,
+            tint: song_lua_capture_tint(tint, capture_tint),
+            vertices,
+            visible,
+            blend: blend.unwrap_or(actor_blend),
+            z: song_lua_add_z(z, z_shift),
+        },
         Actor::TexturedMesh {
             align,
             offset,

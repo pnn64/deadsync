@@ -371,7 +371,7 @@ fn refresh_density_graph_meshes_for_player(state: &mut State, player_idx: usize)
         return;
     }
 
-    density::update_density_life_mesh(
+    density::update_density_life_mesh_reusable(
         &mut render.life_mesh[player_idx],
         points,
         offset_px_f,
@@ -441,11 +441,12 @@ fn push_density_graph_at(
     if let Some(mesh) = &state.density_graph.life_mesh[player_idx]
         && !mesh.is_empty()
     {
-        actors.push(Actor::Mesh {
+        actors.push(Actor::ReusableMesh {
             align: [0.0, 0.0],
             offset: [x0, y0],
             size: [SizeSpec::Px(graph_w), SizeSpec::Px(graph_h)],
-            vertices: mesh.clone(),
+            tint: [1.0; 4],
+            vertices: Arc::clone(mesh),
             visible: true,
             blend: BlendMode::Alpha,
             z: 61,

@@ -911,6 +911,28 @@ fn apply_zoom_to_actor(actor: &mut Actor, pivot: [f32; 2], zoom: f32) {
             }
             *vertices = std::sync::Arc::from(out);
         }
+        Actor::ReusableMesh {
+            offset,
+            size,
+            vertices,
+            ..
+        } => {
+            offset[0] = scale_about(offset[0], pivot[0], zoom);
+            offset[1] = scale_about(offset[1], pivot[1], zoom);
+            for s in size.iter_mut() {
+                if let actors::SizeSpec::Px(v) = s {
+                    *v *= zoom;
+                }
+            }
+            let mut out = Vec::with_capacity(vertices.len());
+            for v in vertices.iter() {
+                out.push(deadlib_render::MeshVertex {
+                    pos: [v.pos[0] * zoom, v.pos[1] * zoom],
+                    color: v.color,
+                });
+            }
+            *vertices = std::sync::Arc::new(out);
+        }
         Actor::TexturedMesh {
             offset,
             size,
@@ -1045,7 +1067,7 @@ fn apply_offset_to_actor(actor: &mut Actor, dx: f32, dy: f32) {
             offset[0] += dx;
             offset[1] += dy;
         }
-        Actor::Mesh { offset, .. } => {
+        Actor::Mesh { offset, .. } | Actor::ReusableMesh { offset, .. } => {
             offset[0] += dx;
             offset[1] += dy;
         }
@@ -1086,6 +1108,7 @@ fn apply_z_offset(actor: &mut Actor, dz: i16) {
         Actor::Sprite { z, .. }
         | Actor::Text { z, .. }
         | Actor::Mesh { z, .. }
+        | Actor::ReusableMesh { z, .. }
         | Actor::TexturedMesh { z, .. }
         | Actor::ReusableTexturedMesh { z, .. }
         | Actor::Frame { z, .. }
@@ -1138,6 +1161,7 @@ fn apply_clip_rect_to_actor(actor: &mut Actor, rect: [f32; 4]) {
         Actor::Shadow { child, .. } => apply_clip_rect_to_actor(child, rect),
         Actor::Sprite { .. }
         | Actor::Mesh { .. }
+        | Actor::ReusableMesh { .. }
         | Actor::TexturedMesh { .. }
         | Actor::ReusableTexturedMesh { .. }
         | Actor::RetainedFrame { .. }

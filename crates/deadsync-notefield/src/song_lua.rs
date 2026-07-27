@@ -219,6 +219,28 @@ pub fn song_lua_player_y_fold_actor(actor: Actor, pivot_x: f32, rotation_y_deg: 
                 z,
             }
         }
+        Actor::ReusableMesh {
+            align,
+            mut offset,
+            size,
+            tint,
+            vertices,
+            visible,
+            blend,
+            z,
+        } => {
+            offset[0] = song_lua_fold_x_around_pivot(offset[0], pivot_x, cos_y);
+            Actor::ReusableMesh {
+                align,
+                offset,
+                size,
+                tint,
+                vertices,
+                visible,
+                blend,
+                z,
+            }
+        }
         Actor::TexturedMesh {
             align,
             mut offset,

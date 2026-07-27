@@ -47,6 +47,11 @@ name = "font_ini_parse"
 harness = false
 required-features = ["bench-support"]
 
+[[bench]]
+name = "density_life_mesh_reuse"
+harness = false
+required-features = ["bench-support"]
+
 [dependencies]
 deadlib-render = { path = "../deadlib-render" }
 glam = "0.33.2"
