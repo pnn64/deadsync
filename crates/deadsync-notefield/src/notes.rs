@@ -458,6 +458,18 @@ pub(crate) fn scroll_travel<'a>(request: ScrollTravelRequest<'a>) -> ScrollTrave
 }
 
 impl ScrollTravel<'_> {
+    #[inline(always)]
+    pub(crate) fn supports_sparse_measure_line_candidates(
+        &self,
+        displayed_beat_monotonic: bool,
+    ) -> bool {
+        self.accel_is_identity
+            && match self.raw {
+                RawTravel::Beat { .. } => displayed_beat_monotonic,
+                RawTravel::Edit { .. } | RawTravel::Constant { .. } => true,
+            }
+    }
+
     pub fn raw_beat(&self, beat: f32) -> f32 {
         match self.raw {
             RawTravel::Edit { current_beat } => edit_beat_scroll_travel(beat, current_beat),

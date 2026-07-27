@@ -1,7 +1,8 @@
 use deadsync_notefield::{
     CameraWrapBench, CommonNoteTransformBench, CueScanBench, FeedbackLaneCacheBench,
-    HoldTravelReuseBench, IdentityAccelBench, LaneVisualCacheBench, MeasureLinePlanBench,
-    VisibleLaneCursorBench, VisibleRangeBench, XmodTimingBench,
+    HoldTravelReuseBench, IdentityAccelBench, LaneVisualCacheBench, MeasureLineMode,
+    MeasureLinePlanBench, MeasureLineTraversalBench, VisibleLaneCursorBench, VisibleRangeBench,
+    XmodTimingBench,
 };
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::hint::black_box;
@@ -163,6 +164,37 @@ fn main() {
             },
             |frame| {
                 let output = measure_plan.new_frame(frame);
+                Output {
+                    checksum: output.checksum,
+                    samples: output.samples,
+                }
+            },
+        );
+    }
+
+    for (mode, fixture) in [
+        (
+            MeasureLineMode::Measure,
+            "measure-only bars over a normal XMod visibility window",
+        ),
+        (
+            MeasureLineMode::Quarter,
+            "quarter-note bars over a normal XMod visibility window",
+        ),
+    ] {
+        let traversal = MeasureLineTraversalBench::new(mode);
+        run_pair(
+            "visible measure-line subdivision",
+            fixture,
+            |frame| {
+                let output = traversal.old_frame(frame);
+                Output {
+                    checksum: output.checksum,
+                    samples: output.samples,
+                }
+            },
+            |frame| {
+                let output = traversal.new_frame(frame);
                 Output {
                     checksum: output.checksum,
                     samples: output.samples,

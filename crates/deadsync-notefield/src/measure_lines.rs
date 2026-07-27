@@ -61,6 +61,7 @@ struct MeasureLinePlan {
     alpha_eighth: f32,
     alpha_sixteenth: f32,
     line_step: f32,
+    normal_unit_scale: i64,
     edit_candidate_step_rows: i32,
 }
 
@@ -237,16 +238,24 @@ fn measure_line_plan(request: &MeasureComposeRequest<'_, '_>) -> MeasureLinePlan
             alpha_eighth: scaled_edit_bar_alpha(speed, 1.0, 2.0),
             alpha_sixteenth: scaled_edit_bar_alpha(speed, 2.0, 4.0),
             line_step: note_row_to_beat(edit_candidate_step_rows),
+            normal_unit_scale: 1,
             edit_candidate_step_rows,
         };
     }
+    normal_measure_line_plan_for_travel(
+        request.mode,
+        request.travel,
+        request.displayed_beat_monotonic,
+    )
+}
 
-    let (alpha_measure, alpha_quarter, alpha_eighth) = match request.mode {
-        MeasureLineMode::Off => (0.0, 0.0, 0.0),
-        MeasureLineMode::Measure => (0.75, 0.0, 0.0),
-        MeasureLineMode::Quarter => (0.75, 0.5, 0.0),
-        MeasureLineMode::Eighth => (0.75, 0.5, 0.125),
-        MeasureLineMode::Edit => unreachable!("edit mode returned above"),
+fn normal_measure_line_plan(mode: MeasureLineMode) -> MeasureLinePlan {
+    let (alpha_measure, alpha_quarter, alpha_eighth, line_step, normal_unit_scale) = match mode {
+        MeasureLineMode::Off => (0.0, 0.0, 0.0, 0.5, 1),
+        MeasureLineMode::Measure => (0.75, 0.0, 0.0, 4.0, 8),
+        MeasureLineMode::Quarter => (0.75, 0.5, 0.0, 1.0, 2),
+        MeasureLineMode::Eighth => (0.75, 0.5, 0.125, 0.5, 1),
+        MeasureLineMode::Edit => unreachable!("edit mode has a timing-derived plan"),
     };
     MeasureLinePlan {
         edit: false,
@@ -254,9 +263,23 @@ fn measure_line_plan(request: &MeasureComposeRequest<'_, '_>) -> MeasureLinePlan
         alpha_quarter,
         alpha_eighth,
         alpha_sixteenth: 0.0,
-        line_step: 0.5,
+        line_step,
+        normal_unit_scale,
         edit_candidate_step_rows: 1,
     }
+}
+
+fn normal_measure_line_plan_for_travel(
+    mode: MeasureLineMode,
+    travel: &ScrollTravel<'_>,
+    displayed_beat_monotonic: bool,
+) -> MeasureLinePlan {
+    let mut plan = normal_measure_line_plan(mode);
+    if !travel.supports_sparse_measure_line_candidates(displayed_beat_monotonic) {
+        plan.line_step = 0.5;
+        plan.normal_unit_scale = 1;
+    }
+    plan
 }
 
 fn measure_groups(request: &MeasureComposeRequest<'_, '_>) -> [Option<MeasureGroup>; 2] {
@@ -325,7 +348,8 @@ fn line_alpha(unit: i64, info: Option<EditBeatBarInfo>, plan: MeasureLinePlan) -
             _ => plan.alpha_sixteenth,
         });
     }
-    match unit.rem_euclid(8) {
+    let eighth_unit = unit.rem_euclid(8) * plan.normal_unit_scale;
+    match eighth_unit.rem_euclid(8) {
         0 => plan.alpha_measure,
         2 | 4 | 6 => plan.alpha_quarter,
         _ => plan.alpha_eighth,
@@ -575,10 +599,15 @@ pub(crate) fn compose_measure_lines(
 #[cfg(feature = "bench-support")]
 mod bench {
     use super::{
-        MeasureLineMode, edit_bar_candidate_step_rows, point_segment_range,
-        transition_segment_range,
+        MeasureLineMode, candidate_for_unit, edit_bar_candidate_step_rows, line_alpha,
+        normal_measure_line_plan_for_travel, point_segment_range, transition_segment_range,
     };
-    use deadsync_rules::timing::{DelaySegment, ScrollSegment, StopSegment, TimeSignatureSegment};
+    use crate::notes::{ScrollTravelRequest, scroll_travel};
+    use crate::transforms::AccelYParams;
+    use deadsync_rules::scroll::ScrollSpeedSetting;
+    use deadsync_rules::timing::{
+        DelaySegment, ScrollSegment, StopSegment, TimeSignatureSegment, TimingData, TimingSegments,
+    };
     use std::hint::black_box;
 
     const SEGMENTS: usize = 8_192;
@@ -604,6 +633,127 @@ mod bench {
 
     pub struct MeasureLinePlanBench {
         time_signatures: Vec<TimeSignatureSegment>,
+    }
+
+    #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+    pub struct MeasureLineTraversalBenchFrame {
+        pub checksum: u64,
+        pub samples: usize,
+    }
+
+    pub struct MeasureLineTraversalBench {
+        timing: TimingData,
+        mode: MeasureLineMode,
+    }
+
+    impl MeasureLineTraversalBench {
+        pub fn new(mode: MeasureLineMode) -> Self {
+            assert!(
+                matches!(
+                    mode,
+                    MeasureLineMode::Measure | MeasureLineMode::Quarter | MeasureLineMode::Eighth
+                ),
+                "measure-line traversal benchmark requires a normal visible mode",
+            );
+            Self {
+                timing: TimingData::from_segments(
+                    0.0,
+                    0.0,
+                    &TimingSegments {
+                        bpms: vec![(0.0, 150.0)],
+                        ..TimingSegments::default()
+                    },
+                    &[],
+                ),
+                mode,
+            }
+        }
+
+        pub fn old_frame(&self, frame: usize) -> MeasureLineTraversalBenchFrame {
+            self.frame(frame, true)
+        }
+
+        pub fn new_frame(&self, frame: usize) -> MeasureLineTraversalBenchFrame {
+            self.frame(frame, false)
+        }
+
+        fn frame(&self, frame: usize, legacy: bool) -> MeasureLineTraversalBenchFrame {
+            let current_beat = 64.0 + (frame % 4_096) as f32 / 120.0;
+            let travel = scroll_travel(ScrollTravelRequest {
+                timing: &self.timing,
+                accel: AccelYParams::default(),
+                scroll_speed: ScrollSpeedSetting::XMod(1.5),
+                current_time_ns: self.timing.get_time_for_beat_ns(current_beat),
+                visible_beat: current_beat,
+                search_beat: current_beat,
+                scroll_reference_bpm: 150.0,
+                music_rate: 1.0,
+                edit_beat_spacing: false,
+                draw_distance_after_targets: 400.0,
+                draw_distance_before_targets: 400.0,
+                field_zoom: 1.0,
+                elapsed_screen_s: frame as f32 / 120.0,
+                effect_height: 640.0,
+                screen_height: 480.0,
+                note_count_stats: &[],
+                arrow_effect_time_s: frame as f32 / 120.0,
+                lane_tipsy: 0.0,
+                lane_move_y: &[],
+            });
+            let mut plan = normal_measure_line_plan_for_travel(self.mode, &travel, true);
+            if legacy {
+                plan.line_step = 0.5;
+                plan.normal_unit_scale = 1;
+            }
+            traverse_measure_lines(current_beat, plan, &travel)
+        }
+    }
+
+    fn traverse_measure_lines(
+        current_beat: f32,
+        plan: super::MeasureLinePlan,
+        travel: &crate::ScrollTravel<'_>,
+    ) -> MeasureLineTraversalBenchFrame {
+        const Y_MIN: f32 = -400.0;
+        const Y_MAX: f32 = 880.0;
+
+        let start = (current_beat / plan.line_step).floor() as i64;
+        let mut output = MeasureLineTraversalBenchFrame::default();
+        let mut sample = |unit: i64, y: f32| {
+            let alpha = line_alpha(unit, None, plan);
+            if alpha <= 0.0 {
+                return;
+            }
+            output.checksum = output.checksum.rotate_left(9)
+                ^ u64::from(y.to_bits())
+                ^ u64::from(alpha.to_bits()).rotate_left(32);
+            output.samples += 1;
+        };
+
+        for unit in std::iter::successors(Some(start), |unit| unit.checked_sub(1)).take(2_000) {
+            let Some((beat, _)) = candidate_for_unit(unit, plan, &[]) else {
+                break;
+            };
+            let y = travel.lane_y_for_beat(0, beat, 100.0, 1.0);
+            if !y.is_finite() || y < Y_MIN {
+                break;
+            }
+            sample(unit, y);
+        }
+
+        for unit in
+            std::iter::successors(start.checked_add(1), |unit| unit.checked_add(1)).take(2_000)
+        {
+            let Some((beat, _)) = candidate_for_unit(unit, plan, &[]) else {
+                break;
+            };
+            let y = travel.lane_y_for_beat(0, beat, 100.0, 1.0);
+            if !y.is_finite() || y > Y_MAX {
+                break;
+            }
+            sample(unit, y);
+        }
+        output
     }
 
     impl MeasureLinePlanBench {
@@ -738,7 +888,10 @@ mod bench {
 }
 
 #[cfg(feature = "bench-support")]
-pub use bench::{CueScanBench, CueScanBenchFrame, MeasureLinePlanBench, MeasureLinePlanBenchFrame};
+pub use bench::{
+    CueScanBench, CueScanBenchFrame, MeasureLinePlanBench, MeasureLinePlanBenchFrame,
+    MeasureLineTraversalBench, MeasureLineTraversalBenchFrame,
+};
 
 #[cfg(test)]
 mod tests {
@@ -1094,6 +1247,97 @@ mod tests {
     }
 
     #[test]
+    fn visible_subdivision_steps_preserve_normal_measure_line_output() {
+        let timing = timing();
+        let travel = travel(&timing, ScrollSpeedSetting::XMod(1.0));
+
+        for mode in [
+            MeasureLineMode::Measure,
+            MeasureLineMode::Quarter,
+            MeasureLineMode::Eighth,
+        ] {
+            for (current_beat, direction, receptor_y) in
+                [(-3.75, 1.0, 100.0), (0.3, -1.0, 380.0), (17.9, 1.0, 100.0)]
+            {
+                let directions = [direction; 4];
+                let receptors = [receptor_y; 4];
+                let mut request = request(mode, &travel, &directions, &receptors);
+                request.current_beat = current_beat;
+                let group = measure_groups(&request)
+                    .into_iter()
+                    .flatten()
+                    .next()
+                    .expect("measure-line group");
+                let optimized_plan = measure_line_plan(&request);
+                let mut legacy_plan = optimized_plan;
+                legacy_plan.line_step = 0.5;
+                legacy_plan.normal_unit_scale = 1;
+
+                let mut legacy = Vec::new();
+                let mut optimized = Vec::new();
+                append_group_lines(&mut legacy, &request, legacy_plan, group);
+                append_group_lines(&mut optimized, &request, optimized_plan, group);
+                assert_eq!(
+                    legacy.iter().filter_map(sprite_parts).collect::<Vec<_>>(),
+                    optimized
+                        .iter()
+                        .filter_map(sprite_parts)
+                        .collect::<Vec<_>>(),
+                    "mode={mode:?}, beat={current_beat}, direction={direction}",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn sparse_measure_line_candidates_fall_back_for_nonmonotonic_travel() {
+        let timing = timing();
+        let directions = [1.0; 4];
+        let receptors = [100.0; 4];
+        let boomerang = scroll_travel(ScrollTravelRequest {
+            timing: &timing,
+            accel: AccelYParams {
+                boomerang: 1.0,
+                ..AccelYParams::default()
+            },
+            scroll_speed: ScrollSpeedSetting::XMod(1.0),
+            current_time_ns: timing.get_time_for_beat_ns(0.0),
+            visible_beat: 0.0,
+            search_beat: 0.0,
+            scroll_reference_bpm: 120.0,
+            music_rate: 1.0,
+            edit_beat_spacing: false,
+            draw_distance_after_targets: 400.0,
+            draw_distance_before_targets: 400.0,
+            field_zoom: 1.0,
+            elapsed_screen_s: 0.0,
+            effect_height: 640.0,
+            screen_height: 480.0,
+            note_count_stats: &[],
+            arrow_effect_time_s: 0.0,
+            lane_tipsy: 0.0,
+            lane_move_y: &[],
+        });
+        let boomerang_request = request(
+            MeasureLineMode::Measure,
+            &boomerang,
+            &directions,
+            &receptors,
+        );
+        let boomerang_plan = measure_line_plan(&boomerang_request);
+        assert_eq!(boomerang_plan.line_step, 0.5);
+        assert_eq!(boomerang_plan.normal_unit_scale, 1);
+
+        let xmod = travel(&timing, ScrollSpeedSetting::XMod(1.0));
+        let mut nonmonotonic_scroll_request =
+            request(MeasureLineMode::Measure, &xmod, &directions, &receptors);
+        nonmonotonic_scroll_request.displayed_beat_monotonic = false;
+        let nonmonotonic_scroll_plan = measure_line_plan(&nonmonotonic_scroll_request);
+        assert_eq!(nonmonotonic_scroll_plan.line_step, 0.5);
+        assert_eq!(nonmonotonic_scroll_plan.normal_unit_scale, 1);
+    }
+
+    #[test]
     fn only_edit_measure_line_plans_compute_the_time_signature_stride() {
         let timing = timing();
         let travel = travel(&timing, ScrollSpeedSetting::XMod(1.0));
@@ -1123,10 +1367,6 @@ mod tests {
             let plan = measure_line_plan(&request);
             assert!(!plan.edit);
             assert_eq!(plan.edit_candidate_step_rows, 1);
-            assert_eq!(
-                candidate_for_unit(5, plan, &time_signatures),
-                Some((2.5, None))
-            );
         }
 
         let mut request = request(MeasureLineMode::Edit, &travel, &dirs, &receptors);

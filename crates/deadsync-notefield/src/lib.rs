@@ -60,6 +60,7 @@ pub use measure_lines::MeasureLineMode;
 #[doc(hidden)]
 pub use measure_lines::{
     CueScanBench, CueScanBenchFrame, MeasureLinePlanBench, MeasureLinePlanBenchFrame,
+    MeasureLineTraversalBench, MeasureLineTraversalBenchFrame,
 };
 pub use mini_indicator::{
     MiniIndicatorColorStyle, MiniIndicatorMode, MiniIndicatorProgress, MiniIndicatorScoreType,
