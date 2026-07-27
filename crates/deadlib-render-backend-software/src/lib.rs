@@ -32,11 +32,30 @@ pub struct State {
     thread_hint: Option<usize>,
     available_threads: usize,
     worker_pool: Option<WorkerPool>,
+    prepared_objects: Vec<PreparedObject>,
 }
 
 struct WorkerPool {
     threads: usize,
     pool: rayon::ThreadPool,
+}
+
+enum PreparedObject {
+    Sprite {
+        vertices: [ScreenVertex; 4],
+        tint: [f32; 4],
+        texture_mask: bool,
+        blend: BlendMode,
+        texture_handle: TextureHandle,
+    },
+    Mesh {
+        object_index: usize,
+        mvp: Matrix4,
+    },
+    TexturedMesh {
+        object_index: usize,
+        mvp: Matrix4,
+    },
 }
 
 pub fn init(window: Arc<Window>, _vsync_enabled: bool) -> Result<State, Box<dyn Error>> {
@@ -61,6 +80,7 @@ pub fn init(window: Arc<Window>, _vsync_enabled: bool) -> Result<State, Box<dyn 
         thread_hint: None,
         available_threads,
         worker_pool: None,
+        prepared_objects: Vec::with_capacity(1024),
     })
 }
 
@@ -133,12 +153,24 @@ pub fn draw(
     }
 
     let objects = render_list.objects.as_slice();
+    let cameras = render_list.cameras.as_slice();
+    let sprite_instances = render_list.sprite_instances.as_slice();
+    let default_proj = state.projection;
     let threads = match state.thread_hint {
         Some(threads) if threads >= 1 => threads.min(state.available_threads),
         _ => state.available_threads,
     };
     let use_parallel = threads > 1 && h >= SOFTWARE_ROW_CHUNK * 2 && !objects.is_empty();
     ensure_worker_pool(state, threads)?;
+    prepare_objects(
+        objects,
+        sprite_instances,
+        cameras,
+        default_proj,
+        w,
+        h,
+        &mut state.prepared_objects,
+    );
 
     if state.surface_resize_pending {
         let resize_w = NonZeroU32::new(width).unwrap();
@@ -158,9 +190,7 @@ pub fn draw(
         *pixel = clear;
     }
 
-    let default_proj = state.projection;
-    let cameras = render_list.cameras.as_slice();
-    let sprite_instances = render_list.sprite_instances.as_slice();
+    let prepared_objects = state.prepared_objects.as_slice();
     let vertices = if let Some(worker_pool) = worker_pool {
         let pixels: &mut [u32] = &mut buffer;
         worker_pool.install(|| {
@@ -171,10 +201,8 @@ pub fn draw(
                     let y_start = chunk_index * SOFTWARE_ROW_CHUNK;
                     let y_end = y_start + stripe.len() / w;
                     draw_rows(
+                        prepared_objects,
                         objects,
-                        sprite_instances,
-                        cameras,
-                        default_proj,
                         textures,
                         w,
                         h,
@@ -186,18 +214,7 @@ pub fn draw(
                 .reduce(|| 0, u32::saturating_add)
         })
     } else {
-        draw_rows(
-            objects,
-            sprite_instances,
-            cameras,
-            default_proj,
-            textures,
-            w,
-            h,
-            0,
-            h,
-            &mut buffer,
-        )
+        draw_rows(prepared_objects, objects, textures, w, h, 0, h, &mut buffer)
     };
 
     let present_started = Instant::now();
@@ -210,11 +227,71 @@ pub fn draw(
     })
 }
 
-fn draw_rows(
+#[allow(clippy::too_many_arguments)]
+fn prepare_objects(
     objects: &[RenderObject],
     sprite_instances: &[SpriteInstanceRaw],
     cameras: &[Matrix4],
     default_proj: Matrix4,
+    width: usize,
+    height: usize,
+    prepared: &mut Vec<PreparedObject>,
+) {
+    prepared.clear();
+    prepared.reserve(objects.len());
+
+    for (object_index, object) in objects.iter().enumerate() {
+        let projection = cameras
+            .get(object.camera as usize)
+            .copied()
+            .unwrap_or(default_proj);
+        match &object.object_type {
+            ObjectType::Sprite(sprite_index) => {
+                let Some(sprite) = sprite_instances.get(*sprite_index as usize) else {
+                    continue;
+                };
+                if sprite.tint[3] <= 0.0 {
+                    continue;
+                }
+                let Some(vertices) = prepare_sprite_vertices(
+                    &projection,
+                    sprite.center,
+                    sprite.size,
+                    sprite.rot_sin_cos,
+                    sprite.uv_scale,
+                    sprite.uv_offset,
+                    sprite.local_offset,
+                    sprite.local_offset_rot_sin_cos,
+                    width,
+                    height,
+                ) else {
+                    continue;
+                };
+                prepared.push(PreparedObject::Sprite {
+                    vertices,
+                    tint: sprite.tint,
+                    texture_mask: sprite.texture_mask != 0.0,
+                    blend: object.blend,
+                    texture_handle: object.texture_handle,
+                });
+            }
+            ObjectType::Mesh { transform, .. } => prepared.push(PreparedObject::Mesh {
+                object_index,
+                mvp: projection * *transform,
+            }),
+            ObjectType::TexturedMesh { instance, .. } => {
+                prepared.push(PreparedObject::TexturedMesh {
+                    object_index,
+                    mvp: projection * instance.transform(),
+                });
+            }
+        }
+    }
+}
+
+fn draw_rows(
+    prepared_objects: &[PreparedObject],
+    objects: &[RenderObject],
     textures: &(impl TextureLookup + Sync),
     width: usize,
     height: usize,
@@ -224,31 +301,23 @@ fn draw_rows(
 ) -> u32 {
     let mut vertices_drawn = 0u32;
 
-    for obj in objects {
-        let proj = cameras
-            .get(obj.camera as usize)
-            .copied()
-            .unwrap_or(default_proj);
-        let drawn = match &obj.object_type {
-            ObjectType::Sprite(sprite_index) => {
-                let Some(sprite) = sprite_instances.get(*sprite_index as usize) else {
+    for prepared in prepared_objects {
+        let drawn = match prepared {
+            PreparedObject::Sprite {
+                vertices,
+                tint,
+                texture_mask,
+                blend,
+                texture_handle,
+            } => {
+                let Some(tex) = textures.software_texture(*texture_handle) else {
                     continue;
                 };
-                let Some(tex) = textures.software_texture(obj.texture_handle) else {
-                    continue;
-                };
-                rasterize_sprite(
-                    &proj,
-                    sprite.center,
-                    sprite.size,
-                    sprite.rot_sin_cos,
-                    sprite.tint,
-                    sprite.uv_scale,
-                    sprite.uv_offset,
-                    sprite.local_offset,
-                    sprite.local_offset_rot_sin_cos,
-                    sprite.texture_mask != 0.0,
-                    obj.blend,
+                rasterize_prepared_sprite(
+                    vertices,
+                    *tint,
+                    *texture_mask,
+                    *blend,
                     &tex.image,
                     tex.sampler,
                     width,
@@ -258,39 +327,45 @@ fn draw_rows(
                     buffer,
                 )
             }
-            ObjectType::Mesh {
-                transform,
-                tint,
-                vertices,
-            } => rasterize_mesh_triangles(
-                &proj,
-                transform,
-                *tint,
-                vertices.as_ref(),
-                obj.blend,
-                width,
-                height,
-                stripe_y_start,
-                stripe_y_end,
-                buffer,
-            ),
-            ObjectType::TexturedMesh {
-                instance, vertices, ..
-            } => {
-                let Some(tex) = textures.software_texture(obj.texture_handle) else {
+            PreparedObject::Mesh { object_index, mvp } => {
+                let ObjectType::Mesh { tint, vertices, .. } = &objects[*object_index].object_type
+                else {
+                    debug_assert!(false, "prepared mesh changed object type");
                     continue;
                 };
-                let transform = instance.transform();
+                rasterize_mesh_triangles(
+                    mvp,
+                    *tint,
+                    vertices.as_ref(),
+                    objects[*object_index].blend,
+                    width,
+                    height,
+                    stripe_y_start,
+                    stripe_y_end,
+                    buffer,
+                )
+            }
+            PreparedObject::TexturedMesh { object_index, mvp } => {
+                let object = &objects[*object_index];
+                let ObjectType::TexturedMesh {
+                    instance, vertices, ..
+                } = &object.object_type
+                else {
+                    debug_assert!(false, "prepared textured mesh changed object type");
+                    continue;
+                };
+                let Some(tex) = textures.software_texture(object.texture_handle) else {
+                    continue;
+                };
                 rasterize_textured_mesh_triangles(
-                    &proj,
-                    &transform,
+                    mvp,
                     vertices.as_ref(),
                     instance.tint,
                     instance.uv_scale,
                     instance.uv_offset,
                     instance.uv_tex_shift,
                     instance.texture_mask != 0.0,
-                    obj.blend,
+                    object.blend,
                     &tex.image,
                     tex.sampler,
                     width,
@@ -362,6 +437,13 @@ struct ScreenVertex {
     v: f32,
 }
 
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+#[derive(Default)]
+pub struct SpriteProjectionBenchScratch {
+    vertices: Vec<[ScreenVertex; 4]>,
+}
+
 #[derive(Clone, Copy)]
 struct ScreenVertexColor {
     x: f32,
@@ -378,29 +460,22 @@ struct ScreenVertexTexColor {
     color: [f32; 4],
 }
 
+#[allow(clippy::too_many_arguments)]
 #[inline(always)]
-fn rasterize_sprite(
+fn prepare_sprite_vertices(
     proj: &Matrix4,
     center: [f32; 4],
     size: [f32; 2],
     rot_sin_cos: [f32; 2],
-    tint: [f32; 4],
     uv_scale: [f32; 2],
     uv_offset: [f32; 2],
     local_offset: [f32; 2],
     local_offset_rot_sin_cos: [f32; 2],
-    texture_mask: bool,
-    blend: BlendMode,
-    image: &RgbaImage,
-    sampler: SamplerDesc,
     width: usize,
     height: usize,
-    stripe_y_start: usize,
-    stripe_y_end: usize,
-    buffer: &mut [u32],
-) -> u32 {
-    if tint[3] <= 0.0 || width == 0 || height == 0 || stripe_y_start >= stripe_y_end {
-        return 0;
+) -> Option<[ScreenVertex; 4]> {
+    if width == 0 || height == 0 {
+        return None;
     }
 
     let mut adjusted_center = center;
@@ -435,7 +510,7 @@ fn rasterize_sprite(
         );
         let clip = *proj * world;
         if clip.w == 0.0 {
-            return 0;
+            return None;
         }
         let ndc_x = clip.x / clip.w;
         let ndc_y = clip.y / clip.w;
@@ -455,10 +530,124 @@ fn rasterize_sprite(
         };
     }
 
+    Some(v)
+}
+
+#[cfg(feature = "bench-support")]
+#[inline(always)]
+fn benchmark_vertex_checksum(checksum: u64, vertices: &[ScreenVertex; 4], stripe: usize) -> u64 {
+    let vertex = &vertices[stripe & 3];
+    checksum.rotate_left(7)
+        ^ u64::from(vertex.x.to_bits())
+        ^ (u64::from(vertex.y.to_bits()) << 1)
+        ^ (u64::from(vertex.u.to_bits()) << 2)
+        ^ (u64::from(vertex.v.to_bits()) << 3)
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+#[allow(clippy::too_many_arguments)]
+pub fn __benchmark_project_sprites_per_stripe(
+    sprites: &[SpriteInstanceRaw],
+    projection: Matrix4,
+    width: usize,
+    height: usize,
+    stripes: usize,
+) -> u64 {
+    let mut checksum = 0_u64;
+    for stripe in 0..stripes {
+        for sprite in sprites {
+            let sprite = std::hint::black_box(sprite);
+            if sprite.tint[3] <= 0.0 {
+                continue;
+            }
+            let Some(vertices) = prepare_sprite_vertices(
+                &projection,
+                sprite.center,
+                sprite.size,
+                sprite.rot_sin_cos,
+                sprite.uv_scale,
+                sprite.uv_offset,
+                sprite.local_offset,
+                sprite.local_offset_rot_sin_cos,
+                width,
+                height,
+            ) else {
+                continue;
+            };
+            let vertices = std::hint::black_box(vertices);
+            checksum = benchmark_vertex_checksum(checksum, &vertices, stripe);
+        }
+    }
+    std::hint::black_box(checksum)
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+#[allow(clippy::too_many_arguments)]
+pub fn __benchmark_prepare_sprite_projections(
+    scratch: &mut SpriteProjectionBenchScratch,
+    sprites: &[SpriteInstanceRaw],
+    projection: Matrix4,
+    width: usize,
+    height: usize,
+    stripes: usize,
+) -> u64 {
+    scratch.vertices.clear();
+    scratch.vertices.reserve(sprites.len());
+    for sprite in sprites {
+        let sprite = std::hint::black_box(sprite);
+        if sprite.tint[3] <= 0.0 {
+            continue;
+        }
+        if let Some(vertices) = prepare_sprite_vertices(
+            &projection,
+            sprite.center,
+            sprite.size,
+            sprite.rot_sin_cos,
+            sprite.uv_scale,
+            sprite.uv_offset,
+            sprite.local_offset,
+            sprite.local_offset_rot_sin_cos,
+            width,
+            height,
+        ) {
+            scratch.vertices.push(vertices);
+        }
+    }
+
+    let mut checksum = 0_u64;
+    for stripe in 0..stripes {
+        for vertices in &scratch.vertices {
+            checksum = benchmark_vertex_checksum(checksum, vertices, stripe);
+        }
+    }
+    std::hint::black_box(checksum)
+}
+
+#[allow(clippy::too_many_arguments)]
+#[inline(always)]
+fn rasterize_prepared_sprite(
+    vertices: &[ScreenVertex; 4],
+    tint: [f32; 4],
+    texture_mask: bool,
+    blend: BlendMode,
+    image: &RgbaImage,
+    sampler: SamplerDesc,
+    width: usize,
+    height: usize,
+    stripe_y_start: usize,
+    stripe_y_end: usize,
+    buffer: &mut [u32],
+) -> u32 {
+    if tint[3] <= 0.0 || width == 0 || height == 0 || stripe_y_start >= stripe_y_end {
+        return 0;
+    }
+
     rasterize_triangle(
-        &v[0],
-        &v[1],
-        &v[2],
+        &vertices[0],
+        &vertices[1],
+        &vertices[2],
         tint,
         texture_mask,
         blend,
@@ -471,9 +660,9 @@ fn rasterize_sprite(
         buffer,
     );
     rasterize_triangle(
-        &v[0],
-        &v[2],
-        &v[3],
+        &vertices[0],
+        &vertices[2],
+        &vertices[3],
         tint,
         texture_mask,
         blend,
@@ -490,8 +679,7 @@ fn rasterize_sprite(
 }
 
 fn rasterize_mesh_triangles(
-    proj: &Matrix4,
-    transform: &Matrix4,
+    mvp: &Matrix4,
     tint: [f32; 4],
     vertices: &[deadlib_render::MeshVertex],
     blend: BlendMode,
@@ -505,7 +693,6 @@ fn rasterize_mesh_triangles(
         return 0;
     }
 
-    let mvp = *proj * *transform;
     let mut tri: [ScreenVertexColor; 3] = [ScreenVertexColor {
         x: 0.0,
         y: 0.0,
@@ -516,7 +703,7 @@ fn rasterize_mesh_triangles(
     'tri: for chunk in vertices.chunks_exact(3) {
         for i in 0..3 {
             let p = chunk[i].pos;
-            let clip = mvp * Vector4::new(p[0], p[1], 0.0, 1.0);
+            let clip = *mvp * Vector4::new(p[0], p[1], 0.0, 1.0);
             if clip.w == 0.0 {
                 continue 'tri;
             }
@@ -558,8 +745,7 @@ fn rasterize_mesh_triangles(
 }
 
 fn rasterize_textured_mesh_triangles(
-    proj: &Matrix4,
-    transform: &Matrix4,
+    mvp: &Matrix4,
     vertices: &[deadlib_render::TexturedMeshVertex],
     tint: [f32; 4],
     uv_scale: [f32; 2],
@@ -579,7 +765,6 @@ fn rasterize_textured_mesh_triangles(
         return 0;
     }
 
-    let mvp = *proj * *transform;
     let mut tri: [ScreenVertexTexColor; 3] = [ScreenVertexTexColor {
         x: 0.0,
         y: 0.0,
@@ -596,7 +781,7 @@ fn rasterize_textured_mesh_triangles(
     'tri: for chunk in vertices.chunks_exact(3) {
         for i in 0..3 {
             let p = chunk[i].pos;
-            let clip = mvp * Vector4::new(p[0], p[1], p[2], 1.0);
+            let clip = *mvp * Vector4::new(p[0], p[1], p[2], 1.0);
             if clip.w == 0.0 {
                 continue 'tri;
             }
@@ -1262,4 +1447,387 @@ fn rasterize_triangle_color_impl<const ADD: bool>(
 #[inline(always)]
 fn edge_function(x0: f32, y0: f32, x1: f32, y1: f32, px: f32, py: f32) -> f32 {
     (px - x0).mul_add(y1 - y0, -((py - y0) * (x1 - x0)))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use deadlib_render::{
+        INVALID_TMESH_CACHE_KEY, MeshVertex, MeshVertices, TexturedMeshInstanceRaw,
+        TexturedMeshVertex, TexturedMeshVertices,
+    };
+    use glam::Vec3;
+    use image::Rgba;
+
+    const WIDTH: usize = 96;
+    const HEIGHT: usize = 80;
+    const TEXTURE_HANDLE: TextureHandle = 7;
+    const MISSING_TEXTURE_HANDLE: TextureHandle = 99;
+
+    struct TestTextures {
+        texture: Texture,
+    }
+
+    impl TextureLookup for TestTextures {
+        fn software_texture(&self, handle: TextureHandle) -> Option<&Texture> {
+            (handle == TEXTURE_HANDLE).then_some(&self.texture)
+        }
+    }
+
+    #[test]
+    fn prepared_objects_preserve_striped_mixed_rendering() {
+        let textures = test_textures();
+        let sprites = vec![
+            sprite([-90.0, 15.0], 0.17, 0.92),
+            sprite([0.0, 0.0], -0.31, 0.0),
+            sprite([65.0, -35.0], 0.43, 0.75),
+            sprite([95.0, 40.0], -0.12, 0.68),
+        ];
+        let cameras = vec![ortho_for_window(WIDTH as u32, HEIGHT as u32)];
+        let fallback = Matrix4::from_scale_rotation_translation(
+            Vec3::splat(0.93),
+            glam::Quat::from_rotation_z(0.04),
+            Vec3::new(0.03, -0.02, 0.0),
+        ) * cameras[0];
+        let objects = mixed_objects();
+        let clear = pack_rgba([0.025, 0.05, 0.075, 1.0]);
+        let mut legacy_pixels = vec![clear; WIDTH * HEIGHT];
+        let mut current_pixels = vec![clear; WIDTH * HEIGHT];
+
+        let legacy_vertices = render_legacy_stripes(
+            &objects,
+            &sprites,
+            &cameras,
+            fallback,
+            &textures,
+            &mut legacy_pixels,
+        );
+
+        let mut prepared = Vec::new();
+        prepare_objects(
+            &objects,
+            &sprites,
+            &cameras,
+            fallback,
+            WIDTH,
+            HEIGHT,
+            &mut prepared,
+        );
+        let current_vertices =
+            render_prepared_stripes(&prepared, &objects, &textures, &mut current_pixels);
+
+        assert_eq!(current_vertices, legacy_vertices);
+        assert_eq!(current_vertices, 42);
+        assert_eq!(current_pixels, legacy_pixels);
+        assert!(current_pixels.iter().any(|pixel| *pixel != clear));
+    }
+
+    fn render_prepared_stripes(
+        prepared: &[PreparedObject],
+        objects: &[RenderObject],
+        textures: &TestTextures,
+        pixels: &mut [u32],
+    ) -> u32 {
+        pixels
+            .chunks_mut(WIDTH * SOFTWARE_ROW_CHUNK)
+            .enumerate()
+            .map(|(chunk_index, stripe)| {
+                let y_start = chunk_index * SOFTWARE_ROW_CHUNK;
+                let y_end = y_start + stripe.len() / WIDTH;
+                draw_rows(
+                    prepared, objects, textures, WIDTH, HEIGHT, y_start, y_end, stripe,
+                )
+            })
+            .sum()
+    }
+
+    fn render_legacy_stripes(
+        objects: &[RenderObject],
+        sprites: &[SpriteInstanceRaw],
+        cameras: &[Matrix4],
+        fallback: Matrix4,
+        textures: &TestTextures,
+        pixels: &mut [u32],
+    ) -> u32 {
+        pixels
+            .chunks_mut(WIDTH * SOFTWARE_ROW_CHUNK)
+            .enumerate()
+            .map(|(chunk_index, stripe)| {
+                let y_start = chunk_index * SOFTWARE_ROW_CHUNK;
+                let y_end = y_start + stripe.len() / WIDTH;
+                draw_rows_legacy(
+                    objects, sprites, cameras, fallback, textures, y_start, y_end, stripe,
+                )
+            })
+            .sum()
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn draw_rows_legacy(
+        objects: &[RenderObject],
+        sprites: &[SpriteInstanceRaw],
+        cameras: &[Matrix4],
+        fallback: Matrix4,
+        textures: &TestTextures,
+        stripe_y_start: usize,
+        stripe_y_end: usize,
+        buffer: &mut [u32],
+    ) -> u32 {
+        let mut vertices_drawn = 0_u32;
+        for object in objects {
+            let projection = cameras
+                .get(object.camera as usize)
+                .copied()
+                .unwrap_or(fallback);
+            let drawn = match &object.object_type {
+                ObjectType::Sprite(sprite_index) => {
+                    let Some(sprite) = sprites.get(*sprite_index as usize) else {
+                        continue;
+                    };
+                    if sprite.tint[3] <= 0.0 {
+                        continue;
+                    }
+                    let Some(texture) = textures.software_texture(object.texture_handle) else {
+                        continue;
+                    };
+                    let Some(vertices) =
+                        project_sprite_like_legacy(&projection, sprite, WIDTH, HEIGHT)
+                    else {
+                        continue;
+                    };
+                    rasterize_prepared_sprite(
+                        &vertices,
+                        sprite.tint,
+                        sprite.texture_mask != 0.0,
+                        object.blend,
+                        &texture.image,
+                        texture.sampler,
+                        WIDTH,
+                        HEIGHT,
+                        stripe_y_start,
+                        stripe_y_end,
+                        buffer,
+                    )
+                }
+                ObjectType::Mesh {
+                    transform,
+                    tint,
+                    vertices,
+                } => {
+                    let mvp = projection * *transform;
+                    rasterize_mesh_triangles(
+                        &mvp,
+                        *tint,
+                        vertices.as_ref(),
+                        object.blend,
+                        WIDTH,
+                        HEIGHT,
+                        stripe_y_start,
+                        stripe_y_end,
+                        buffer,
+                    )
+                }
+                ObjectType::TexturedMesh {
+                    instance, vertices, ..
+                } => {
+                    let Some(texture) = textures.software_texture(object.texture_handle) else {
+                        continue;
+                    };
+                    let mvp = projection * instance.transform();
+                    rasterize_textured_mesh_triangles(
+                        &mvp,
+                        vertices.as_ref(),
+                        instance.tint,
+                        instance.uv_scale,
+                        instance.uv_offset,
+                        instance.uv_tex_shift,
+                        instance.texture_mask != 0.0,
+                        object.blend,
+                        &texture.image,
+                        texture.sampler,
+                        WIDTH,
+                        HEIGHT,
+                        stripe_y_start,
+                        stripe_y_end,
+                        buffer,
+                    )
+                }
+            };
+            vertices_drawn = vertices_drawn.saturating_add(drawn);
+        }
+        vertices_drawn
+    }
+
+    fn project_sprite_like_legacy(
+        projection: &Matrix4,
+        sprite: &SpriteInstanceRaw,
+        width: usize,
+        height: usize,
+    ) -> Option<[ScreenVertex; 4]> {
+        let mut center = sprite.center;
+        if sprite.local_offset[0] != 0.0 || sprite.local_offset[1] != 0.0 {
+            let sine = sprite.local_offset_rot_sin_cos[0];
+            let cosine = sprite.local_offset_rot_sin_cos[1];
+            center[0] += cosine.mul_add(sprite.local_offset[0], -(sine * sprite.local_offset[1]));
+            center[1] += sine.mul_add(sprite.local_offset[0], cosine * sprite.local_offset[1]);
+        }
+
+        let positions: [(f32, f32); 4] = [(-0.5, -0.5), (0.5, -0.5), (0.5, 0.5), (-0.5, 0.5)];
+        let base_uvs: [(f32, f32); 4] = [(0.0, 1.0), (1.0, 1.0), (1.0, 0.0), (0.0, 0.0)];
+        let mut vertices = [ScreenVertex {
+            x: 0.0,
+            y: 0.0,
+            u: 0.0,
+            v: 0.0,
+        }; 4];
+
+        for index in 0..4 {
+            let local_x = positions[index].0 * sprite.size[0];
+            let local_y = positions[index].1 * sprite.size[1];
+            let world = Vector4::new(
+                sprite.rot_sin_cos[1]
+                    .mul_add(local_x, -(sprite.rot_sin_cos[0] * local_y) + center[0]),
+                sprite.rot_sin_cos[0].mul_add(local_x, sprite.rot_sin_cos[1] * local_y + center[1]),
+                center[2],
+                1.0,
+            );
+            let clip = *projection * world;
+            if clip.w == 0.0 {
+                return None;
+            }
+            let base_uv = base_uvs[index];
+            vertices[index] = ScreenVertex {
+                x: ((clip.x / clip.w + 1.0) * 0.5) * width as f32,
+                y: ((1.0 - clip.y / clip.w) * 0.5) * height as f32,
+                u: base_uv.0.mul_add(sprite.uv_scale[0], sprite.uv_offset[0]),
+                v: base_uv.1.mul_add(sprite.uv_scale[1], sprite.uv_offset[1]),
+            };
+        }
+        Some(vertices)
+    }
+
+    fn mixed_objects() -> Vec<RenderObject> {
+        let mesh_vertices: Arc<[MeshVertex]> = vec![
+            MeshVertex {
+                pos: [-120.0, -80.0],
+                color: [1.0, 0.2, 0.1, 0.7],
+            },
+            MeshVertex {
+                pos: [20.0, -70.0],
+                color: [0.1, 1.0, 0.2, 0.8],
+            },
+            MeshVertex {
+                pos: [-35.0, 90.0],
+                color: [0.2, 0.3, 1.0, 0.9],
+            },
+        ]
+        .into();
+        let textured_vertices: Arc<[TexturedMeshVertex]> = vec![
+            textured_vertex([-80.0, -60.0, 0.0], [0.0, 1.0]),
+            textured_vertex([75.0, -55.0, 0.0], [1.0, 1.0]),
+            textured_vertex([5.0, 85.0, 0.0], [0.5, 0.0]),
+        ]
+        .into();
+        vec![
+            render_object(
+                ObjectType::Mesh {
+                    transform: Matrix4::from_translation(Vec3::new(35.0, 0.0, 0.0)),
+                    tint: [0.8, 0.9, 1.0, 0.85],
+                    vertices: MeshVertices::Shared(mesh_vertices),
+                },
+                TEXTURE_HANDLE,
+                BlendMode::Alpha,
+                0,
+            ),
+            render_object(ObjectType::Sprite(0), TEXTURE_HANDLE, BlendMode::Alpha, 0),
+            render_object(ObjectType::Sprite(1), TEXTURE_HANDLE, BlendMode::Alpha, 0),
+            render_object(
+                ObjectType::Sprite(2),
+                MISSING_TEXTURE_HANDLE,
+                BlendMode::Alpha,
+                0,
+            ),
+            render_object(
+                ObjectType::TexturedMesh {
+                    instance: TexturedMeshInstanceRaw::new(
+                        Matrix4::from_translation(Vec3::new(50.0, 5.0, 0.0)),
+                        [0.7, 0.8, 1.0, 0.72],
+                        [0.85, 0.9],
+                        [0.07, 0.11],
+                        [0.2, 0.3],
+                        false,
+                    ),
+                    vertices: TexturedMeshVertices::Shared(textured_vertices),
+                    geom_cache_key: INVALID_TMESH_CACHE_KEY,
+                    depth_test: false,
+                },
+                TEXTURE_HANDLE,
+                BlendMode::Alpha,
+                0,
+            ),
+            render_object(ObjectType::Sprite(3), TEXTURE_HANDLE, BlendMode::Add, 99),
+            render_object(ObjectType::Sprite(100), TEXTURE_HANDLE, BlendMode::Alpha, 0),
+        ]
+    }
+
+    fn render_object(
+        object_type: ObjectType,
+        texture_handle: TextureHandle,
+        blend: BlendMode,
+        camera: u8,
+    ) -> RenderObject {
+        RenderObject {
+            object_type,
+            texture_handle,
+            blend,
+            z: 0,
+            order: 0,
+            camera,
+        }
+    }
+
+    fn textured_vertex(pos: [f32; 3], uv: [f32; 2]) -> TexturedMeshVertex {
+        TexturedMeshVertex {
+            pos,
+            uv,
+            color: [0.9, 0.8, 0.7, 0.85],
+            tex_matrix_scale: [1.2, 0.8],
+        }
+    }
+
+    fn sprite(center: [f32; 2], angle: f32, alpha: f32) -> SpriteInstanceRaw {
+        let local_angle = angle * -0.7;
+        SpriteInstanceRaw {
+            center: [center[0], center[1], 0.0, 1.0],
+            size: [185.0, 145.0],
+            rot_sin_cos: [angle.sin(), angle.cos()],
+            tint: [0.75, 0.85, 0.95, alpha],
+            uv_scale: [0.72, 0.81],
+            uv_offset: [0.13, 0.09],
+            local_offset: [9.0, -6.0],
+            local_offset_rot_sin_cos: [local_angle.sin(), local_angle.cos()],
+            edge_fade: [0.0; 4],
+            texture_mask: 0.0,
+        }
+    }
+
+    fn test_textures() -> TestTextures {
+        TestTextures {
+            texture: Texture {
+                image: RgbaImage::from_fn(8, 8, |x, y| {
+                    Rgba([
+                        (x * 27 + y * 5) as u8,
+                        (x * 9 + y * 23) as u8,
+                        (x * 17 + y * 13) as u8,
+                        160 + ((x + y) % 4) as u8 * 25,
+                    ])
+                }),
+                sampler: SamplerDesc {
+                    filter: SamplerFilter::Nearest,
+                    wrap: SamplerWrap::Clamp,
+                    mipmaps: false,
+                },
+            },
+        }
+    }
 }
