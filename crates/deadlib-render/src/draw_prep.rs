@@ -52,6 +52,22 @@ impl TexturedMeshSource {
             }
         }
     }
+
+    #[inline(always)]
+    pub const fn shares_vertex_buffer(self, other: Self) -> bool {
+        match (self, other) {
+            (Self::Transient { .. }, Self::Transient { .. }) => true,
+            (
+                Self::Cached {
+                    cache_key: left, ..
+                },
+                Self::Cached {
+                    cache_key: right, ..
+                },
+            ) => left == right,
+            _ => false,
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -378,7 +394,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::{DrawOp, DrawScratch, append_mesh_vertices, prepare};
+    use super::{DrawOp, DrawScratch, TexturedMeshSource, append_mesh_vertices, prepare};
     use crate::{
         BlendMode, INVALID_TMESH_CACHE_KEY, MeshVertex, MeshVertices, ObjectType, RenderList,
         RenderObject, SpriteInstanceRaw, TexturedMeshInstanceRaw, TexturedMeshVertex,
@@ -427,6 +443,37 @@ mod tests {
         prepare(&render_list, &mut scratch, |_, _| false);
 
         assert!(scratch.ops.capacity() >= render_list.batches.len());
+    }
+
+    #[test]
+    fn textured_mesh_sources_compare_gpu_buffer_identity() {
+        let transient_a = TexturedMeshSource::Transient {
+            vertex_start: 0,
+            vertex_count: 48,
+            geom_key: 48,
+        };
+        let transient_b = TexturedMeshSource::Transient {
+            vertex_start: 96,
+            vertex_count: 72,
+            geom_key: (96_u64 << 32) | 72,
+        };
+        let cached_a = TexturedMeshSource::Cached {
+            cache_key: 41,
+            vertex_count: 48,
+        };
+        let cached_a_other_range = TexturedMeshSource::Cached {
+            cache_key: 41,
+            vertex_count: 96,
+        };
+        let cached_b = TexturedMeshSource::Cached {
+            cache_key: 42,
+            vertex_count: 48,
+        };
+
+        assert!(transient_a.shares_vertex_buffer(transient_b));
+        assert!(cached_a.shares_vertex_buffer(cached_a_other_range));
+        assert!(!transient_a.shares_vertex_buffer(cached_a));
+        assert!(!cached_a.shares_vertex_buffer(cached_b));
     }
 
     #[test]

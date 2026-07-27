@@ -1796,7 +1796,9 @@ pub fn draw(
                         last_tmesh_source = None;
                     }
 
-                    if last_tmesh_source != Some(draw.source) {
+                    if last_tmesh_source
+                        .is_none_or(|source| !source.shares_vertex_buffer(draw.source))
+                    {
                         let vb = match draw.source {
                             TexturedMeshSource::Transient { .. } => {
                                 let Some(vb) = state.tmesh_ring.as_ref().map(|ring| ring.buffer)

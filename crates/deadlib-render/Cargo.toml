@@ -8,6 +8,10 @@ license = "GPL-3.0"
 name = "draw_prep"
 harness = false
 
+[[bench]]
+name = "backend_bindings"
+harness = false
+
 [dependencies]
 bytemuck = { version = "1.25.2", features = ["derive"] }
 glam = "0.33.2"

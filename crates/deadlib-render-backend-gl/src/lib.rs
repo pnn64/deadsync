@@ -1258,7 +1258,9 @@ pub fn draw(
                             last_tmesh_source = None;
                         }
 
-                        if last_tmesh_source != Some(run.source) {
+                        if last_tmesh_source
+                            .is_none_or(|source| !source.shares_vertex_buffer(run.source))
+                        {
                             let stride = std::mem::size_of::<TexturedMeshVertex>() as i32;
                             let Some(vertex_buffer) = (match run.source {
                                 TexturedMeshSource::Transient { .. } => Some(state.tmesh_vbo),
@@ -1612,7 +1614,9 @@ pub fn draw(
                             last_tmesh_source = None;
                         }
 
-                        if last_tmesh_source != Some(run.source) {
+                        if last_tmesh_source
+                            .is_none_or(|source| !source.shares_vertex_buffer(run.source))
+                        {
                             let stride = std::mem::size_of::<TexturedMeshVertex>() as i32;
                             let Some(vertex_buffer) = (match run.source {
                                 TexturedMeshSource::Transient { .. } => Some(state.tmesh_vbo),
