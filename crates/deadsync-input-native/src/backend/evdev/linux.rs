@@ -2,6 +2,7 @@ use super::{
     BackendHost, GpSystemEvent, PadBackend, PadCode, PadEvent, PadId, PadOrderBackend, ReceiptTime,
     emit_dir_edges, uuid_from_bytes,
 };
+use crate::backend::poll_registration;
 use deadsync_input::RawKeyboardEvent;
 use log::{debug, warn};
 use std::collections::HashMap;
@@ -1107,34 +1108,29 @@ fn run_inner(
     let mut hotplug = Vec::with_capacity(16);
     let mut remove = Vec::with_capacity(16);
     let mut key_remove = Vec::with_capacity(16);
+    // `poll` refreshes `revents`; the registered descriptors and offsets stay
+    // valid until device discovery changes the watched topology.
+    let discovery_pollfd = match &discovery {
+        Discovery::Udev(state) => Some(state.monitor.pollfd()),
+        Discovery::Inotify(watch) => Some(watch.pollfd()),
+        Discovery::None => None,
+    };
+    let (mut dev_offset, mut key_offset) = poll_registration::rebuild(
+        discovery_pollfd,
+        devs.iter().map(|dev| dev.file.as_raw_fd()),
+        key_devs.iter().map(|dev| dev.file.as_raw_fd()),
+        &mut pollfds,
+        |fd| PollFd {
+            fd,
+            events: POLLIN,
+            revents: 0,
+        },
+    );
 
     loop {
         hotplug.clear();
         remove.clear();
         key_remove.clear();
-        pollfds.clear();
-        let dev_offset = match &discovery {
-            Discovery::Udev(state) => {
-                pollfds.push(state.monitor.pollfd());
-                1usize
-            }
-            Discovery::Inotify(watch) => {
-                pollfds.push(watch.pollfd());
-                1usize
-            }
-            Discovery::None => 0usize,
-        };
-        pollfds.extend(devs.iter().map(|dev| PollFd {
-            fd: dev.file.as_raw_fd(),
-            events: POLLIN,
-            revents: 0,
-        }));
-        let key_offset = dev_offset + devs.len();
-        pollfds.extend(key_devs.iter().map(|dev| PollFd {
-            fd: dev.file.as_raw_fd(),
-            events: POLLIN,
-            revents: 0,
-        }));
 
         let poll_ptr = if pollfds.is_empty() {
             std::ptr::null_mut()
@@ -1310,6 +1306,8 @@ fn run_inner(
             }
         }
 
+        let topology_changed =
+            fallback_refresh || !hotplug.is_empty() || !remove.is_empty() || !key_remove.is_empty();
         remove.sort_unstable();
         remove.dedup();
         for &idx in remove.iter().rev() {
@@ -1357,6 +1355,19 @@ fn run_inner(
             );
         }
         publish_keyboard_backend_state(&key_devs);
+        if topology_changed {
+            (dev_offset, key_offset) = poll_registration::rebuild(
+                discovery_pollfd,
+                devs.iter().map(|dev| dev.file.as_raw_fd()),
+                key_devs.iter().map(|dev| dev.file.as_raw_fd()),
+                &mut pollfds,
+                |fd| PollFd {
+                    fd,
+                    events: POLLIN,
+                    revents: 0,
+                },
+            );
+        }
     }
 }
 

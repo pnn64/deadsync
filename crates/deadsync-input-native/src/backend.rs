@@ -16,6 +16,8 @@ pub mod hidraw;
 pub mod iohid;
 #[cfg(any(target_os = "macos", test))]
 mod iohid_filter;
+#[cfg(any(target_os = "linux", target_os = "freebsd", test))]
+mod poll_registration;
 #[cfg(unix)]
 pub mod unix_time;
 #[cfg(windows)]
