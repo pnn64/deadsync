@@ -70,6 +70,23 @@ impl TexturedMeshSource {
     }
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct CameraUploadCache {
+    last_camera: Option<u8>,
+}
+
+impl CameraUploadCache {
+    #[inline(always)]
+    pub fn update_required(&mut self, camera: u8) -> bool {
+        if self.last_camera == Some(camera) {
+            false
+        } else {
+            self.last_camera = Some(camera);
+            true
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct TexturedMeshRun {
     pub source: TexturedMeshSource,
@@ -394,7 +411,9 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::{DrawOp, DrawScratch, TexturedMeshSource, append_mesh_vertices, prepare};
+    use super::{
+        CameraUploadCache, DrawOp, DrawScratch, TexturedMeshSource, append_mesh_vertices, prepare,
+    };
     use crate::{
         BlendMode, INVALID_TMESH_CACHE_KEY, MeshVertex, MeshVertices, ObjectType, RenderList,
         RenderObject, SpriteInstanceRaw, TexturedMeshInstanceRaw, TexturedMeshVertex,
@@ -474,6 +493,29 @@ mod tests {
         assert!(cached_a.shares_vertex_buffer(cached_a_other_range));
         assert!(!transient_a.shares_vertex_buffer(cached_a));
         assert!(!cached_a.shares_vertex_buffer(cached_b));
+    }
+
+    #[test]
+    fn camera_upload_cache_only_updates_when_camera_changes() {
+        let mut cache = CameraUploadCache::default();
+
+        assert!(cache.update_required(0));
+        assert!(!cache.update_required(0));
+        assert!(cache.update_required(1));
+        assert!(!cache.update_required(1));
+        assert!(cache.update_required(0));
+    }
+
+    #[test]
+    fn camera_upload_caches_preserve_each_programs_state() {
+        let mut programs = [CameraUploadCache::default(); 3];
+
+        assert!(programs[0].update_required(0));
+        assert!(programs[1].update_required(0));
+        assert!(programs[2].update_required(0));
+        assert!(!programs[0].update_required(0));
+        assert!(!programs[1].update_required(0));
+        assert!(!programs[2].update_required(0));
     }
 
     #[test]

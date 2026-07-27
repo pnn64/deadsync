@@ -1,7 +1,7 @@
 use deadlib_render::{
     BlendMode, DrawStats, FastU64Map, RenderList, SamplerDesc, SamplerFilter, SamplerWrap,
     SpriteInstanceRaw, TMeshCacheKey, TextureHandle, TexturedMeshInstanceRaw, TexturedMeshVertex,
-    draw_prep::{self, DrawOp, DrawScratch, TexturedMeshSource},
+    draw_prep::{self, CameraUploadCache, DrawOp, DrawScratch, TexturedMeshSource},
 };
 use glam::Mat4 as Matrix4;
 use glow::{HasContext, PixelPackData, PixelUnpackData, UniformLocation};
@@ -1011,6 +1011,7 @@ pub fn draw(
         let mut last_bound_tex: Option<glow::Texture> = None;
         let mut last_blend = Some(BlendMode::Alpha);
         let mut last_prog: Option<u8> = None; // 0=sprite, 1=mesh, 2=textured mesh
+        let mut last_cameras = [CameraUploadCache::default(); 3];
         let mut last_sprite_instance_start: Option<u32> = None;
         let mut last_tmesh_instance_start: Option<u32> = None;
         let mut last_tmesh_source: Option<TexturedMeshSource> = None;
@@ -1077,12 +1078,6 @@ pub fn draw(
                     DrawOp::Sprite(run) => {
                         apply_blend(gl, run.blend, &mut last_blend);
                         apply_depth_test(gl, false, &mut last_depth_test);
-
-                        let cam = render_list
-                            .cameras
-                            .get(run.camera as usize)
-                            .copied()
-                            .unwrap_or(state.projection);
 
                         if last_prog != Some(0) {
                             gl.use_program(Some(state.program));
@@ -1182,12 +1177,19 @@ pub fn draw(
                             last_sprite_instance_start = Some(run.instance_start);
                         }
 
-                        let mvp_array = cam.to_cols_array_2d();
-                        gl.uniform_matrix_4_f32_slice(
-                            Some(&state.mvp_location),
-                            false,
-                            bytemuck::cast_slice(&mvp_array),
-                        );
+                        if last_cameras[0].update_required(run.camera) {
+                            let cam = render_list
+                                .cameras
+                                .get(run.camera as usize)
+                                .copied()
+                                .unwrap_or(state.projection);
+                            let mvp_array = cam.to_cols_array_2d();
+                            gl.uniform_matrix_4_f32_slice(
+                                Some(&state.mvp_location),
+                                false,
+                                bytemuck::cast_slice(&mvp_array),
+                            );
+                        }
 
                         let Some(texture) = textures
                             .opengl_texture(run.texture_handle)
@@ -1218,12 +1220,6 @@ pub fn draw(
                         apply_blend(gl, run.blend, &mut last_blend);
                         apply_depth_test(gl, false, &mut last_depth_test);
 
-                        let cam = render_list
-                            .cameras
-                            .get(run.camera as usize)
-                            .copied()
-                            .unwrap_or(state.projection);
-
                         if last_prog != Some(1) {
                             gl.use_program(Some(state.mesh_program));
                             gl.bind_vertex_array(Some(mesh_vao));
@@ -1231,12 +1227,19 @@ pub fn draw(
                             last_tmesh_source = None;
                         }
 
-                        let mvp_array = cam.to_cols_array_2d();
-                        gl.uniform_matrix_4_f32_slice(
-                            Some(&state.mesh_mvp_location),
-                            false,
-                            bytemuck::cast_slice(&mvp_array),
-                        );
+                        if last_cameras[1].update_required(run.camera) {
+                            let cam = render_list
+                                .cameras
+                                .get(run.camera as usize)
+                                .copied()
+                                .unwrap_or(state.projection);
+                            let mvp_array = cam.to_cols_array_2d();
+                            gl.uniform_matrix_4_f32_slice(
+                                Some(&state.mesh_mvp_location),
+                                false,
+                                bytemuck::cast_slice(&mvp_array),
+                            );
+                        }
 
                         gl.draw_arrays(
                             glow::TRIANGLES,
@@ -1380,17 +1383,19 @@ pub fn draw(
                             last_tmesh_instance_start = Some(run.instance_start);
                         }
 
-                        let cam = render_list
-                            .cameras
-                            .get(run.camera as usize)
-                            .copied()
-                            .unwrap_or(state.projection);
-                        let mvp_array = cam.to_cols_array_2d();
-                        gl.uniform_matrix_4_f32_slice(
-                            Some(&state.tmesh_mvp_location),
-                            false,
-                            bytemuck::cast_slice(&mvp_array),
-                        );
+                        if last_cameras[2].update_required(run.camera) {
+                            let cam = render_list
+                                .cameras
+                                .get(run.camera as usize)
+                                .copied()
+                                .unwrap_or(state.projection);
+                            let mvp_array = cam.to_cols_array_2d();
+                            gl.uniform_matrix_4_f32_slice(
+                                Some(&state.tmesh_mvp_location),
+                                false,
+                                bytemuck::cast_slice(&mvp_array),
+                            );
+                        }
 
                         let Some(texture) = textures
                             .opengl_texture(run.texture_handle)
@@ -1432,12 +1437,6 @@ pub fn draw(
                         apply_blend(gl, run.blend, &mut last_blend);
                         apply_depth_test(gl, false, &mut last_depth_test);
 
-                        let cam = render_list
-                            .cameras
-                            .get(run.camera as usize)
-                            .copied()
-                            .unwrap_or(state.projection);
-
                         if last_prog != Some(0) {
                             gl.use_program(Some(state.program));
                             gl.uniform_1_i32(Some(&state.texture_location), 0);
@@ -1461,12 +1460,19 @@ pub fn draw(
                             last_tmesh_source = None;
                         }
 
-                        let mvp_array = cam.to_cols_array_2d();
-                        gl.uniform_matrix_4_f32_slice(
-                            Some(&state.mvp_location),
-                            false,
-                            bytemuck::cast_slice(&mvp_array),
-                        );
+                        if last_cameras[0].update_required(run.camera) {
+                            let cam = render_list
+                                .cameras
+                                .get(run.camera as usize)
+                                .copied()
+                                .unwrap_or(state.projection);
+                            let mvp_array = cam.to_cols_array_2d();
+                            gl.uniform_matrix_4_f32_slice(
+                                Some(&state.mvp_location),
+                                false,
+                                bytemuck::cast_slice(&mvp_array),
+                            );
+                        }
 
                         let Some(texture) = textures
                             .opengl_texture(run.texture_handle)
@@ -1558,12 +1564,6 @@ pub fn draw(
                         apply_blend(gl, run.blend, &mut last_blend);
                         apply_depth_test(gl, false, &mut last_depth_test);
 
-                        let cam = render_list
-                            .cameras
-                            .get(run.camera as usize)
-                            .copied()
-                            .unwrap_or(state.projection);
-
                         if last_prog != Some(1) {
                             gl.use_program(Some(state.mesh_program));
                             gl.bind_buffer(glow::ARRAY_BUFFER, Some(state.mesh_vbo));
@@ -1585,12 +1585,19 @@ pub fn draw(
                             last_tmesh_source = None;
                         }
 
-                        let mvp_array = cam.to_cols_array_2d();
-                        gl.uniform_matrix_4_f32_slice(
-                            Some(&state.mesh_mvp_location),
-                            false,
-                            bytemuck::cast_slice(&mvp_array),
-                        );
+                        if last_cameras[1].update_required(run.camera) {
+                            let cam = render_list
+                                .cameras
+                                .get(run.camera as usize)
+                                .copied()
+                                .unwrap_or(state.projection);
+                            let mvp_array = cam.to_cols_array_2d();
+                            gl.uniform_matrix_4_f32_slice(
+                                Some(&state.mesh_mvp_location),
+                                false,
+                                bytemuck::cast_slice(&mvp_array),
+                            );
+                        }
 
                         gl.draw_arrays(
                             glow::TRIANGLES,
@@ -1655,17 +1662,19 @@ pub fn draw(
                             last_tmesh_source = Some(run.source);
                         }
 
-                        let cam = render_list
-                            .cameras
-                            .get(run.camera as usize)
-                            .copied()
-                            .unwrap_or(state.projection);
-                        let mvp_array = cam.to_cols_array_2d();
-                        gl.uniform_matrix_4_f32_slice(
-                            Some(&state.tmesh_mvp_location),
-                            false,
-                            bytemuck::cast_slice(&mvp_array),
-                        );
+                        if last_cameras[2].update_required(run.camera) {
+                            let cam = render_list
+                                .cameras
+                                .get(run.camera as usize)
+                                .copied()
+                                .unwrap_or(state.projection);
+                            let mvp_array = cam.to_cols_array_2d();
+                            gl.uniform_matrix_4_f32_slice(
+                                Some(&state.tmesh_mvp_location),
+                                false,
+                                bytemuck::cast_slice(&mvp_array),
+                            );
+                        }
 
                         let Some(texture) = textures
                             .opengl_texture(run.texture_handle)

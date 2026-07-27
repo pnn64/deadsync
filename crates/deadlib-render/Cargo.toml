@@ -12,6 +12,10 @@ harness = false
 name = "backend_bindings"
 harness = false
 
+[[bench]]
+name = "camera_updates"
+harness = false
+
 [dependencies]
 bytemuck = { version = "1.25.2", features = ["derive"] }
 glam = "0.33.2"

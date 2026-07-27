@@ -9,7 +9,7 @@ use deadlib_render::{
     PresentModeTrace, PresentStats, RenderList, SamplerDesc, SamplerFilter, SamplerWrap,
     SpriteInstanceRaw as InstanceData, TMeshCacheKey, TextureHandle,
     TexturedMeshInstanceRaw as TexturedMeshInstanceGpu, TexturedMeshVertex,
-    draw_prep::{self, DrawOp, DrawScratch, TexturedMeshSource},
+    draw_prep::{self, CameraUploadCache, DrawOp, DrawScratch, TexturedMeshSource},
 };
 use glam::Mat4 as Matrix4;
 use image::RgbaImage;
@@ -43,6 +43,13 @@ static QPC_FREQ_HZ: std::sync::LazyLock<Option<u64>> = std::sync::LazyLock::new(
 #[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
 struct ProjPush {
     proj: [[f32; 4]; 4],
+}
+
+fn projection_push_constant_range() -> vk::PushConstantRange {
+    vk::PushConstantRange::default()
+        .stage_flags(vk::ShaderStageFlags::VERTEX)
+        .offset(0)
+        .size(std::mem::size_of::<ProjPush>() as u32)
 }
 
 struct PipelinePair {
@@ -554,10 +561,7 @@ fn create_sprite_pipeline(
     let dynamic_state =
         vk::PipelineDynamicStateCreateInfo::default().dynamic_states(&dynamic_states);
 
-    let push_constant_range = vk::PushConstantRange::default()
-        .stage_flags(vk::ShaderStageFlags::VERTEX)
-        .offset(0)
-        .size(std::mem::size_of::<ProjPush>() as u32);
+    let push_constant_range = projection_push_constant_range();
 
     let pipeline_layout_info = vk::PipelineLayoutCreateInfo::default()
         .set_layouts(std::slice::from_ref(&set_layout))
@@ -650,10 +654,7 @@ fn create_mesh_pipeline(
     let dynamic_state =
         vk::PipelineDynamicStateCreateInfo::default().dynamic_states(&dynamic_states);
 
-    let push_constant_range = vk::PushConstantRange::default()
-        .stage_flags(vk::ShaderStageFlags::VERTEX)
-        .offset(0)
-        .size(std::mem::size_of::<ProjPush>() as u32);
+    let push_constant_range = projection_push_constant_range();
 
     let pipeline_layout_info = vk::PipelineLayoutCreateInfo::default()
         .push_constant_ranges(std::slice::from_ref(&push_constant_range));
@@ -745,10 +746,7 @@ fn create_textured_mesh_pipeline(
     let dynamic_state =
         vk::PipelineDynamicStateCreateInfo::default().dynamic_states(&dynamic_states);
 
-    let push_constant_range = vk::PushConstantRange::default()
-        .stage_flags(vk::ShaderStageFlags::VERTEX)
-        .offset(0)
-        .size(std::mem::size_of::<ProjPush>() as u32);
+    let push_constant_range = projection_push_constant_range();
 
     let pipeline_layout_info = vk::PipelineLayoutCreateInfo::default()
         .set_layouts(std::slice::from_ref(&set_layout))
@@ -1674,7 +1672,9 @@ pub fn draw(
         }
         let mut bound = Bound::None;
         let mut last_set = vk::DescriptorSet::null();
-        let mut last_camera: Option<u8> = None;
+        // These pipelines declare the same vertex push-constant range, so the
+        // projection remains compatible when only the pipeline kind changes.
+        let mut last_camera = CameraUploadCache::default();
         let mut last_tmesh_source: Option<TexturedMeshSource> = None;
         let mut vertices_drawn: u32 = 0;
         for op in &state.prep.ops {
@@ -1699,11 +1699,10 @@ pub fn draw(
                         device.cmd_bind_index_buffer(cmd, ib, 0, vk::IndexType::UINT16);
                         bound = Bound::Sprite;
                         last_set = vk::DescriptorSet::null();
-                        last_camera = None;
                         last_tmesh_source = None;
                     }
 
-                    if last_camera != Some(run.camera) {
+                    if last_camera.update_required(run.camera) {
                         let vp = render_list
                             .cameras
                             .get(run.camera as usize)
@@ -1719,7 +1718,6 @@ pub fn draw(
                             0,
                             bytemuck::bytes_of(&pc),
                         );
-                        last_camera = Some(run.camera);
                     }
 
                     if last_set != set {
@@ -1748,11 +1746,10 @@ pub fn draw(
                         let vb = state.mesh_ring.as_ref().unwrap().buffer;
                         device.cmd_bind_vertex_buffers(cmd, 0, &[vb], &[0]);
                         bound = Bound::Mesh;
-                        last_camera = None;
                         last_tmesh_source = None;
                     }
 
-                    if last_camera != Some(draw.camera) {
+                    if last_camera.update_required(draw.camera) {
                         let vp = render_list
                             .cameras
                             .get(draw.camera as usize)
@@ -1768,7 +1765,6 @@ pub fn draw(
                             0,
                             bytemuck::bytes_of(&pc),
                         );
-                        last_camera = Some(draw.camera);
                     }
 
                     let first_vertex = base_first_vertex.unwrap_or(0) + draw.vertex_start;
@@ -1792,7 +1788,6 @@ pub fn draw(
                         device.cmd_bind_vertex_buffers(cmd, 1, &[inst], &[0]);
                         bound = Bound::TexturedMesh;
                         last_set = vk::DescriptorSet::null();
-                        last_camera = None;
                         last_tmesh_source = None;
                     }
 
@@ -1818,7 +1813,7 @@ pub fn draw(
                         last_tmesh_source = Some(draw.source);
                     }
 
-                    if last_camera != Some(draw.camera) {
+                    if last_camera.update_required(draw.camera) {
                         let vp = render_list
                             .cameras
                             .get(draw.camera as usize)
@@ -1834,7 +1829,6 @@ pub fn draw(
                             0,
                             bytemuck::bytes_of(&pc),
                         );
-                        last_camera = Some(draw.camera);
                     }
 
                     if last_set != set {
