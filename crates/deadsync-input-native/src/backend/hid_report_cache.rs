@@ -1,6 +1,16 @@
 use super::BackendHost;
 use std::time::Instant;
 
+const MIN_REPORT_BUFFER_LEN: usize = 64;
+
+pub(super) fn required_report_buffer_len(report_lens: impl IntoIterator<Item = usize>) -> usize {
+    report_lens
+        .into_iter()
+        .max()
+        .unwrap_or(0)
+        .max(MIN_REPORT_BUFFER_LEN)
+}
+
 pub(super) struct HidReportCache {
     bytes: Box<[u8]>,
     valid: bool,
@@ -83,6 +93,13 @@ mod tests {
         cache.remember(&[7, 8, 9]);
         assert_eq!(cache.bytes.as_ptr(), storage);
         assert!(cache.is_duplicate(&[7, 8, 9]));
+    }
+
+    #[test]
+    fn report_buffer_covers_the_largest_validated_report() {
+        assert_eq!(required_report_buffer_len(std::iter::empty()), 64);
+        assert_eq!(required_report_buffer_len([8, 32, 16]), 64);
+        assert_eq!(required_report_buffer_len([32, 256, 128]), 256);
     }
 
     #[test]

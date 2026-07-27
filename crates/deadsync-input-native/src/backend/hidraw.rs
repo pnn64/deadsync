@@ -1,5 +1,5 @@
 use super::devd::{DevdEvent, DevdWatch};
-use super::hid_report_cache::{HidReportCache, HidReportTime};
+use super::hid_report_cache::{HidReportCache, HidReportTime, required_report_buffer_len};
 use super::poll_registration;
 use super::{BackendHost, GpSystemEvent, PadBackend, PadOrderBackend, uuid_from_bytes};
 use deadsync_input::{PadCode, PadDir, PadEvent, PadId};
@@ -727,7 +727,7 @@ pub fn run(
     }
     emit_sys(GpSystemEvent::StartupComplete);
     let mut pollfds = Vec::with_capacity(9);
-    let mut buf = vec![0u8; 64];
+    let mut buf = vec![0u8; required_report_buffer_len(devs.iter().map(|dev| dev.max_report_len))];
     let mut hotplug = Vec::with_capacity(16);
     let mut remove = Vec::with_capacity(16);
     // `poll` refreshes `revents`; the registered descriptors and offset stay
@@ -788,12 +788,10 @@ pub fn run(
                 continue;
             }
             let dev = &mut devs[idx];
-            if dev.max_report_len > buf.len() {
-                buf.resize(dev.max_report_len, 0);
-            }
+            debug_assert!(dev.max_report_len <= buf.len());
             // SAFETY: `buf` is a writable byte buffer with at least
-            // `dev.max_report_len` bytes, and the fd came from the matching open
-            // hidraw device stored in `dev`.
+            // `dev.max_report_len` bytes because it is sized after every topology
+            // change, and the fd came from the matching open hidraw device.
             let n = unsafe {
                 read(
                     pollfds[idx + watch_offset].fd,
@@ -850,6 +848,11 @@ pub fn run(
             }
         }
         if topology_changed {
+            let required_len =
+                required_report_buffer_len(devs.iter().map(|dev| dev.max_report_len));
+            if required_len > buf.len() {
+                buf.resize(required_len, 0);
+            }
             watch_offset = poll_registration::rebuild(
                 watch_pollfd,
                 devs.iter().map(|dev| dev.file.as_raw_fd()),

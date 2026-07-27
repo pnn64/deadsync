@@ -10,6 +10,7 @@ const POLLS: usize = 256;
 const RUNS: usize = 5_000;
 const HID_REPORT_BYTES: usize = 64;
 const HIDRAW_REPORT_BYTES: usize = 32;
+const HIDRAW_LARGE_REPORT_BYTES: usize = 256;
 const EVDEV_POLL_REGISTRATIONS: usize = 17;
 const HIDRAW_POLL_REGISTRATIONS: usize = 9;
 
@@ -357,6 +358,33 @@ fn hidraw_untracked_churn_gated() -> u64 {
     checksum
 }
 
+fn hidraw_report_buffer_legacy() -> u64 {
+    let mut buf = vec![0_u8; HID_REPORT_BYTES];
+    let mut checksum = 0_u64;
+    for report in 0..POLLS {
+        let report_len = black_box(HIDRAW_LARGE_REPORT_BYTES);
+        if report_len > buf.len() {
+            buf.resize(report_len, 0);
+        }
+        buf[report % report_len] = report as u8;
+        checksum = checksum.rotate_left(5) ^ u64::from(buf[report % report_len]);
+    }
+    black_box(buf);
+    checksum
+}
+
+fn hidraw_report_buffer_presized() -> u64 {
+    let mut buf = vec![0_u8; HIDRAW_LARGE_REPORT_BYTES];
+    let mut checksum = 0_u64;
+    for report in 0..POLLS {
+        let report_len = black_box(HIDRAW_LARGE_REPORT_BYTES);
+        buf[report % report_len] = report as u8;
+        checksum = checksum.rotate_left(5) ^ u64::from(buf[report % report_len]);
+    }
+    black_box(buf);
+    checksum
+}
+
 fn evdev_filtered_wakeups_legacy() -> u64 {
     let mut checksum = 0_u64;
     for wakeup in 0..POLLS {
@@ -497,6 +525,12 @@ fn main() {
         "256 distinct reports with 16 parsed fields, 4 observable changes",
         hidraw_untracked_churn_legacy,
         hidraw_untracked_churn_gated,
+    );
+    benchmark_pair(
+        "FreeBSD hidraw first-report buffer growth",
+        "256 reads of a validated 256-byte report, 64-byte initial buffer",
+        hidraw_report_buffer_legacy,
+        hidraw_report_buffer_presized,
     );
     benchmark_pair(
         "evdev filtered poll wakeups",
