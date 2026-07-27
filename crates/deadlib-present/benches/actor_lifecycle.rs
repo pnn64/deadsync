@@ -1,5 +1,5 @@
 use deadlib_present::actors::{Actor, ActorResourceArena, SizeSpec, SpriteSource};
-use deadlib_present::anim::Step;
+use deadlib_present::anim::{self, Step, TweenState};
 use deadlib_present::dsl::{SpriteBuilder, TextBuilder};
 use deadlib_present::runtime;
 use deadlib_render::BlendMode;
@@ -17,6 +17,7 @@ const SOURCES: usize = 16;
 const SPRITES: usize = 512;
 const WARMUP_FRAMES: usize = 64;
 const MEASURE_FRAMES: usize = 20_000;
+const RUNTIME_SAMPLES: usize = 7;
 
 struct CountingAlloc {
     allocs: AtomicU64,
@@ -130,6 +131,41 @@ fn main() {
     let tweened = run_tweened_builder();
     println!("tweened actor builder microbenchmark");
     print_result("tweened builder", &tweened);
+
+    let mut legacy_samples = Vec::with_capacity(RUNTIME_SAMPLES);
+    let mut current_samples = Vec::with_capacity(RUNTIME_SAMPLES);
+    for sample in 0..RUNTIME_SAMPLES {
+        let (legacy, current) = if sample % 2 == 0 {
+            let current = run_current_tween_runtime();
+            let legacy = run_legacy_tween_runtime();
+            (legacy, current)
+        } else {
+            let legacy = run_legacy_tween_runtime();
+            let current = run_current_tween_runtime();
+            (legacy, current)
+        };
+        assert_eq!(legacy.checksum, current.checksum);
+        assert_eq!(legacy.alloc.allocs, 0);
+        assert_eq!(legacy.alloc.reallocs, 0);
+        assert_eq!(legacy.alloc.bytes, 0);
+        assert_eq!(current.alloc.allocs, 0);
+        assert_eq!(current.alloc.reallocs, 0);
+        assert_eq!(current.alloc.bytes, 0);
+        legacy_samples.push(legacy);
+        current_samples.push(current);
+    }
+    legacy_samples.sort_unstable_by_key(|sample| sample.elapsed);
+    current_samples.sort_unstable_by_key(|sample| sample.elapsed);
+    let legacy_runtime = &legacy_samples[RUNTIME_SAMPLES / 2];
+    let current_runtime = &current_samples[RUNTIME_SAMPLES / 2];
+    println!("stable-order tween registry microbenchmark");
+    print_runtime_result("hash each access", legacy_runtime);
+    print_runtime_result("order cursor", current_runtime);
+    println!(
+        "order cursor: {:.2}x throughput, {:.1}% fewer cycles (median of {RUNTIME_SAMPLES})",
+        legacy_runtime.elapsed.as_secs_f64() / current_runtime.elapsed.as_secs_f64(),
+        (1.0 - current_runtime.cycles as f64 / legacy_runtime.cycles as f64) * 100.0,
+    );
 }
 
 fn run_tweened_builder() -> BenchResult {
@@ -180,6 +216,105 @@ fn tweened_frame(actors: &mut Vec<Actor>) -> usize {
     }
     black_box(&*actors);
     actors.len()
+}
+
+struct RuntimeBenchResult {
+    elapsed: Duration,
+    cycles: u64,
+    alloc: AllocSnapshot,
+    checksum: u64,
+}
+
+fn benchmark_tween_steps(id: u64) -> [Step; 1] {
+    [anim::linear(1_000_000.0)
+        .x((id % 64) as f32)
+        .y((id % 37) as f32)
+        .build()]
+}
+
+fn run_legacy_tween_runtime() -> RuntimeBenchResult {
+    runtime::__benchmark_legacy_clear_all();
+    for _ in 0..WARMUP_FRAMES {
+        black_box(legacy_tween_runtime_frame());
+    }
+
+    let before = ALLOC.snapshot();
+    let cycles_before = read_cycles();
+    let started = Instant::now();
+    let mut checksum = 0_u64;
+    for _ in 0..MEASURE_FRAMES {
+        checksum = checksum.rotate_left(5) ^ black_box(legacy_tween_runtime_frame());
+    }
+    let result = RuntimeBenchResult {
+        elapsed: started.elapsed(),
+        cycles: read_cycles().saturating_sub(cycles_before),
+        alloc: ALLOC.snapshot().delta(before),
+        checksum,
+    };
+    runtime::__benchmark_legacy_clear_all();
+    result
+}
+
+fn legacy_tween_runtime_frame() -> u64 {
+    runtime::__benchmark_legacy_tick(1.0 / 60.0);
+    let mut checksum = 0_u64;
+    for id in 1..=SPRITES as u64 {
+        let state = runtime::__benchmark_legacy_materialize_lazy(id, TweenState::default(), || {
+            benchmark_tween_steps(id)
+        });
+        checksum = checksum.rotate_left(7) ^ u64::from(state.x.to_bits());
+        checksum = checksum.rotate_left(11) ^ u64::from(state.y.to_bits());
+    }
+    black_box(checksum)
+}
+
+fn run_current_tween_runtime() -> RuntimeBenchResult {
+    runtime::clear_all();
+    for _ in 0..WARMUP_FRAMES {
+        black_box(current_tween_runtime_frame());
+    }
+
+    let before = ALLOC.snapshot();
+    let cycles_before = read_cycles();
+    let started = Instant::now();
+    let mut checksum = 0_u64;
+    for _ in 0..MEASURE_FRAMES {
+        checksum = checksum.rotate_left(5) ^ black_box(current_tween_runtime_frame());
+    }
+    let result = RuntimeBenchResult {
+        elapsed: started.elapsed(),
+        cycles: read_cycles().saturating_sub(cycles_before),
+        alloc: ALLOC.snapshot().delta(before),
+        checksum,
+    };
+    runtime::clear_all();
+    result
+}
+
+fn current_tween_runtime_frame() -> u64 {
+    runtime::tick(1.0 / 60.0);
+    let mut checksum = 0_u64;
+    for id in 1..=SPRITES as u64 {
+        let state =
+            runtime::materialize_lazy(id, TweenState::default(), || benchmark_tween_steps(id));
+        checksum = checksum.rotate_left(7) ^ u64::from(state.x.to_bits());
+        checksum = checksum.rotate_left(11) ^ u64::from(state.y.to_bits());
+    }
+    black_box(checksum)
+}
+
+fn print_runtime_result(label: &str, result: &RuntimeBenchResult) {
+    let frames = MEASURE_FRAMES as f64;
+    println!(
+        "{label:<18} {:>8.2} us/frame  {:>8.0} cycles/frame  {:>7.2} ns/tween  \
+         {:>5.1} allocs/frame  {:>7.1} B/frame  {:>5.1} reallocs/frame",
+        result.elapsed.as_secs_f64() * 1_000_000.0 / frames,
+        result.cycles as f64 / frames,
+        result.elapsed.as_secs_f64() * 1_000_000_000.0 / frames / SPRITES as f64,
+        result.alloc.allocs as f64 / frames,
+        result.alloc.bytes as f64 / frames,
+        result.alloc.reallocs as f64 / frames,
+    );
 }
 
 fn run_owned(sources: &[Arc<str>]) -> BenchResult {
@@ -327,4 +462,21 @@ fn print_result(name: &str, result: &BenchResult) {
         result.alloc.bytes as f64 / frames,
         result.alloc.reallocs as f64 / frames,
     );
+}
+
+#[cfg(target_arch = "x86_64")]
+fn read_cycles() -> u64 {
+    // SAFETY: LFENCE/RDTSC only serialize and read this thread's timestamp
+    // counter; they do not dereference memory.
+    unsafe {
+        core::arch::x86_64::_mm_lfence();
+        let cycles = core::arch::x86_64::_rdtsc();
+        core::arch::x86_64::_mm_lfence();
+        cycles
+    }
+}
+
+#[cfg(not(target_arch = "x86_64"))]
+fn read_cycles() -> u64 {
+    0
 }
