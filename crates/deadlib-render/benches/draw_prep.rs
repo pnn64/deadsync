@@ -23,6 +23,7 @@ const TEXT_VERTICES: usize = 72;
 const WARMUP_FRAMES: usize = 256;
 const MEASURE_FRAMES: usize = 10_000;
 const BENCH_RUNS: usize = 5;
+const GAP_ORDER_STRIDE: u32 = 4;
 const DENSITY_PLAYERS: usize = 2;
 const DENSITY_POINTS: usize = 961;
 const DENSITY_VERTICES_PER_PLAYER: usize = (DENSITY_POINTS - 1) * 6 + DENSITY_POINTS * 12;
@@ -175,6 +176,33 @@ fn main() {
         abort_elapsed.as_secs_f64() * 1_000_000.0 / frames,
     );
 
+    let (gap_legacy_frame, gap_current_frame) = order_gap_frames(&frame);
+    assert_order_gap_prepare_parity(&gap_legacy_frame, &gap_current_frame);
+    let mut gap_legacy_runs = Vec::with_capacity(BENCH_RUNS);
+    let mut gap_current_runs = Vec::with_capacity(BENCH_RUNS);
+    for _ in 0..BENCH_RUNS {
+        gap_legacy_runs.push(run_order_gap_prepare(&gap_legacy_frame));
+        gap_current_runs.push(run_order_gap_prepare(&gap_current_frame));
+    }
+    gap_legacy_runs.sort_unstable_by_key(|result| result.elapsed);
+    gap_current_runs.sort_unstable_by_key(|result| result.elapsed);
+    let gap_legacy = gap_legacy_runs.swap_remove(BENCH_RUNS / 2);
+    let gap_current = gap_current_runs.swap_remove(BENCH_RUNS / 2);
+    assert_eq!(gap_legacy.checksum, gap_current.checksum);
+    println!(
+        "\nlayer-interleaved gameplay draw preparation \
+         (global order stride {GAP_ORDER_STRIDE}, median of {BENCH_RUNS} runs)"
+    );
+    print_order_gap_result("consecutive-only", &gap_legacy);
+    print_order_gap_result("sorted-adjacent", &gap_current);
+    println!(
+        "  speedup {:.2}x | cycles reduction {:.1}% | draw runs {} -> {}",
+        gap_legacy.elapsed.as_secs_f64() / gap_current.elapsed.as_secs_f64(),
+        100.0 * (1.0 - gap_current.cycles as f64 / gap_legacy.cycles as f64),
+        gap_legacy.ops,
+        gap_current.ops,
+    );
+
     let density_frame = density_mesh_frame();
     assert_density_prepare_parity(&density_frame);
     let mut density_legacy_runs = Vec::with_capacity(BENCH_RUNS);
@@ -302,6 +330,177 @@ fn run(frame: &RenderList) -> BenchResult {
         ops: scratch.ops.len(),
         staged_vertices: scratch.tmesh_vertices.len(),
     }
+}
+
+struct OrderGapBenchResult {
+    elapsed: Duration,
+    cycles: u64,
+    allocated: AllocSnapshot,
+    ops: usize,
+    checksum: u64,
+}
+
+fn order_gap_frames(source: &RenderList) -> (RenderList, RenderList) {
+    let mut legacy = source.clone();
+    for object in &mut legacy.objects {
+        object.order = object.order.saturating_mul(GAP_ORDER_STRIDE);
+    }
+    build_render_batches(&legacy.objects, &mut legacy.batches);
+
+    let mut current = legacy.clone();
+    build_sorted_render_batches(&current.objects, &mut current.batches);
+    (legacy, current)
+}
+
+fn run_order_gap_prepare(frame: &RenderList) -> OrderGapBenchResult {
+    let mut scratch = DrawScratch::with_capacity(0, 0, 0, frame.objects.len());
+    for _ in 0..WARMUP_FRAMES {
+        prepare(black_box(frame), &mut scratch, |_, _| true);
+        black_box(&scratch);
+    }
+
+    let before = ALLOC.snapshot();
+    let before_cycles = read_cycles();
+    let started = Instant::now();
+    for _ in 0..MEASURE_FRAMES {
+        prepare(black_box(frame), &mut scratch, |_, _| true);
+        black_box(&scratch);
+    }
+    let checksum = prepared_checksum(&scratch);
+    OrderGapBenchResult {
+        elapsed: started.elapsed(),
+        cycles: read_cycles().saturating_sub(before_cycles),
+        allocated: ALLOC.snapshot().delta(before),
+        ops: scratch.ops.len(),
+        checksum,
+    }
+}
+
+fn print_order_gap_result(label: &str, result: &OrderGapBenchResult) {
+    let frames = MEASURE_FRAMES as f64;
+    println!(
+        "  {label:<16} {:>9.2} us/frame  {:>9.0} cycles/frame  \
+         {:>8.0} frames/s  {:>5.2} allocs/frame  {:>5.2} reallocs/frame  \
+         {:>7.1} bytes/frame",
+        result.elapsed.as_secs_f64() * 1_000_000.0 / frames,
+        result.cycles as f64 / frames,
+        frames / result.elapsed.as_secs_f64(),
+        result.allocated.allocs as f64 / frames,
+        result.allocated.reallocs as f64 / frames,
+        result.allocated.bytes as f64 / frames,
+    );
+}
+
+fn assert_order_gap_prepare_parity(legacy_frame: &RenderList, current_frame: &RenderList) {
+    assert_eq!(legacy_frame.objects.len(), current_frame.objects.len());
+    assert_eq!(
+        legacy_frame.sprite_instances,
+        current_frame.sprite_instances
+    );
+
+    let mut legacy = DrawScratch::default();
+    let mut current = DrawScratch::default();
+    prepare(legacy_frame, &mut legacy, |_, _| true);
+    prepare(current_frame, &mut current, |_, _| true);
+
+    assert_eq!(legacy.tmesh_vertices, current.tmesh_vertices);
+    assert_eq!(legacy.tmesh_instances, current.tmesh_instances);
+    assert_eq!(legacy.mesh_vertices.len(), current.mesh_vertices.len());
+    for (legacy, current) in legacy.mesh_vertices.iter().zip(&current.mesh_vertices) {
+        assert_eq!(legacy.pos, current.pos);
+        assert_eq!(legacy.color, current.color);
+    }
+    assert_eq!(
+        canonical_draw_sequence(&legacy.ops),
+        canonical_draw_sequence(&current.ops)
+    );
+    assert!(
+        current.ops.len() < legacy.ops.len(),
+        "order-gap batching should reduce draw runs"
+    );
+}
+
+#[derive(Debug, PartialEq, Eq)]
+enum CanonicalDraw {
+    Sprite {
+        instance: u32,
+        blend: BlendMode,
+        texture: u64,
+        camera: u8,
+    },
+    Mesh {
+        vertex: u32,
+        blend: BlendMode,
+        camera: u8,
+    },
+    TexturedMesh {
+        source: deadlib_render::draw_prep::TexturedMeshSource,
+        instance: u32,
+        blend: BlendMode,
+        texture: u64,
+        camera: u8,
+        depth_test: bool,
+    },
+}
+
+fn canonical_draw_sequence(ops: &[DrawOp]) -> Vec<CanonicalDraw> {
+    let mut sequence = Vec::new();
+    for op in ops {
+        match *op {
+            DrawOp::Sprite(run) => {
+                for instance in run.instance_start..run.instance_start + run.instance_count {
+                    sequence.push(CanonicalDraw::Sprite {
+                        instance,
+                        blend: run.blend,
+                        texture: run.texture_handle,
+                        camera: run.camera,
+                    });
+                }
+            }
+            DrawOp::Mesh(run) => {
+                for vertex in run.vertex_start..run.vertex_start + run.vertex_count {
+                    sequence.push(CanonicalDraw::Mesh {
+                        vertex,
+                        blend: run.blend,
+                        camera: run.camera,
+                    });
+                }
+            }
+            DrawOp::TexturedMesh(run) => {
+                for instance in run.instance_start..run.instance_start + run.instance_count {
+                    sequence.push(CanonicalDraw::TexturedMesh {
+                        source: run.source,
+                        instance,
+                        blend: run.blend,
+                        texture: run.texture_handle,
+                        camera: run.camera,
+                        depth_test: run.depth_test,
+                    });
+                }
+            }
+        }
+    }
+    sequence
+}
+
+fn prepared_checksum(scratch: &DrawScratch) -> u64 {
+    let draw_units = scratch
+        .ops
+        .iter()
+        .map(|op| match op {
+            DrawOp::Sprite(run) => u64::from(run.instance_count),
+            DrawOp::Mesh(run) => u64::from(run.vertex_count),
+            DrawOp::TexturedMesh(run) => u64::from(run.instance_count),
+        })
+        .sum::<u64>();
+    let mut checksum = draw_units
+        ^ ((scratch.tmesh_vertices.len() as u64) << 16)
+        ^ ((scratch.tmesh_instances.len() as u64) << 32);
+    for instance in scratch.tmesh_instances.iter().step_by(17) {
+        checksum = checksum.rotate_left(7) ^ u64::from(instance.model_col3[0].to_bits());
+        checksum = checksum.rotate_left(11) ^ u64::from(instance.tint[3].to_bits());
+    }
+    black_box(checksum)
 }
 
 struct DensityBenchResult {
