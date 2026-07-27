@@ -1,10 +1,14 @@
 use deadlib_present::actors::TextContent;
+use deadsync_theme_simply_love::screens::components::gameplay::notefield::{
+    benchmark_combo_text, benchmark_combo_text_legacy, prepare_combo_text_benchmark,
+};
 use deadsync_theme_simply_love::screens::gameplay::{
     GameplayHudTextBenchmarkCache, GameplayHudTextBenchmarkSnapshot,
     benchmark_gameplay_hud_text_legacy,
 };
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::hint::black_box;
+use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 
@@ -14,6 +18,7 @@ static ALLOC: CountingAlloc = CountingAlloc::new();
 const WARMUP_FRAMES: usize = 20_000;
 const MEASURE_FRAMES: usize = 2_000_000;
 const SMX_SENSOR_VALUES_PER_FRAME: usize = 8;
+const COMBO_VALUES_PER_FRAME: usize = 2;
 
 struct CountingAlloc {
     allocs: AtomicU64,
@@ -171,13 +176,50 @@ fn measure_smx_sensor_text(mut text: impl FnMut(u16) -> TextContent) -> BenchRes
     }
 }
 
+fn combo_value(frame: usize, player: usize) -> u32 {
+    8_193 + (((frame / 12) % 4_096) * COMBO_VALUES_PER_FRAME + player) as u32
+}
+
+fn measure_combo_text(mut text: impl FnMut(u32) -> Arc<str>) -> BenchResult {
+    for frame in 0..WARMUP_FRAMES {
+        for player in 0..COMBO_VALUES_PER_FRAME {
+            let value = combo_value(frame, player);
+            assert_eq!(text(value).as_ref(), value.to_string());
+        }
+    }
+    let before = ALLOC.snapshot();
+    let before_cycles = read_cycles();
+    let started = Instant::now();
+    let mut output_checksum = 0usize;
+    for frame in 0..MEASURE_FRAMES {
+        for player in 0..COMBO_VALUES_PER_FRAME {
+            let value = black_box(combo_value(frame, player));
+            output_checksum =
+                output_checksum.rotate_left(7) ^ shared_text_checksum(&black_box(text(value)));
+        }
+    }
+    BenchResult {
+        elapsed: started.elapsed(),
+        cycles: read_cycles().saturating_sub(before_cycles),
+        allocated: ALLOC.snapshot().delta(before),
+        checksum: output_checksum,
+    }
+}
+
+fn shared_text_checksum(text: &Arc<str>) -> usize {
+    text.bytes().fold(0usize, |checksum, byte| {
+        checksum.rotate_left(5) ^ byte as usize
+    })
+}
+
 fn print_result(label: &str, result: &BenchResult) {
     let frames = MEASURE_FRAMES as f64;
     println!(
-        "{label:<13} {:>9.2} ns/frame  {:>8.0} cycles/frame  \
+        "{label:<13} {:>9.2} ns/frame  {:>8.0} cycles/frame  {:>10.0} frames/s  \
          {:>5.2} allocs/frame  {:>7.1} bytes/frame  {:>5.2} reallocs/frame",
         result.elapsed.as_secs_f64() * 1_000_000_000.0 / frames,
         result.cycles as f64 / frames,
+        frames / result.elapsed.as_secs_f64(),
         result.allocated.allocs as f64 / frames,
         result.allocated.bytes as f64 / frames,
         result.allocated.reallocs as f64 / frames,
@@ -222,6 +264,20 @@ fn main() {
     );
     print_result("owned values", &owned_sensor_text);
     print_result("inline values", &inline_sensor_text);
+
+    prepare_combo_text_benchmark();
+    let saturated_combo_cache = measure_combo_text(benchmark_combo_text_legacy);
+    prepare_combo_text_benchmark();
+    let recent_combo_cache = measure_combo_text(benchmark_combo_text);
+    assert_eq!(saturated_combo_cache.checksum, recent_combo_cache.checksum);
+    black_box((saturated_combo_cache.checksum, recent_combo_cache.checksum));
+
+    println!(
+        "\nsaturated combo text benchmark \
+         ({COMBO_VALUES_PER_FRAME} players, combo changes every 12 frames)"
+    );
+    print_result("bounded cache", &saturated_combo_cache);
+    print_result("recent values", &recent_combo_cache);
 }
 
 #[cfg(target_arch = "x86_64")]

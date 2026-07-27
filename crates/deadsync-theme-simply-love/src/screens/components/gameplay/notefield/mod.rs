@@ -33,6 +33,21 @@ mod text;
 mod zmod;
 pub use prewarm::prewarm_text_layout;
 pub(crate) use text::gameplay_mods_text;
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn benchmark_combo_text_legacy(value: u32) -> std::sync::Arc<str> {
+    text::benchmark_combo_text_legacy(value)
+}
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn benchmark_combo_text(value: u32) -> std::sync::Arc<str> {
+    text::benchmark_combo_text(value)
+}
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn prepare_combo_text_benchmark() {
+    text::prepare_combo_text_benchmark();
+}
 use text::{
     cached_error_bar_text_label, cached_int_i32, cached_int_u32, cached_offset_ms,
     cached_zmod_measure_counter_text, effective_accel_effects_for_player,
