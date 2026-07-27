@@ -129,7 +129,7 @@ fn main() {
     let current = current.swap_remove(BENCH_RUNS / 2);
 
     println!(
-        "OpenGL/Vulkan textured-mesh binding plan ({} runs, median of {BENCH_RUNS})",
+        "OpenGL/Vulkan/WGPU textured-mesh binding plan ({} runs, median of {BENCH_RUNS})",
         sources.len()
     );
     print_result("draw-range key", &legacy);

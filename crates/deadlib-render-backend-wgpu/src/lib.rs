@@ -1226,7 +1226,9 @@ pub fn draw(
                         );
                         last_bind = Some(bind_key);
                     }
-                    if last_tmesh_source != Some(run.source) {
+                    if last_tmesh_source
+                        .is_none_or(|source| !source.shares_vertex_buffer(run.source))
+                    {
                         match run.source {
                             TexturedMeshSource::Transient { .. } => {
                                 pass.set_vertex_buffer(0, state.tmesh_vertex_buffer.slice(..));
