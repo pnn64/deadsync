@@ -421,6 +421,36 @@ pub fn update_density_hist_mesh(
     *mesh = Some(Arc::from(verts.into_boxed_slice()));
 }
 
+pub fn update_density_hist_mesh_reusable(
+    mesh: &mut Option<Arc<Vec<MeshVertex>>>,
+    cache: Option<&DensityHistCache>,
+    offset: f32,
+    visible_width: f32,
+) {
+    let Some(cache) = cache else {
+        *mesh = None;
+        return;
+    };
+    let Some(window) = cache.visible_window(offset, visible_width) else {
+        *mesh = None;
+        return;
+    };
+
+    let len = (window.point_count - 1) * 6;
+    let can_reuse = mesh
+        .as_mut()
+        .is_some_and(|vertices| Arc::get_mut(vertices).is_some());
+    if !can_reuse {
+        *mesh = Some(Arc::new(Vec::with_capacity(len)));
+    }
+
+    let vertices = Arc::get_mut(mesh.as_mut().expect("mesh initialized above"))
+        .expect("mesh has no other owners");
+    vertices.resize(len, MeshVertex::default());
+    let written = cache.fill_mesh_vertices(vertices, window);
+    debug_assert_eq!(written, len);
+}
+
 const DENSITY_LIFE_MIN_LEN_SQ: f32 = 0.000_000_01_f32;
 const DENSITY_LIFE_SEGMENT_VERTS: usize = 6;
 const DENSITY_LIFE_CAP_SUBDIVISIONS: usize = 4;
@@ -724,6 +754,53 @@ mod tests {
 
         update_density_hist_mesh(&mut mesh, None, 0.0, 120.0);
         assert!(mesh.is_none());
+    }
+
+    #[test]
+    fn reusable_density_hist_mesh_matches_shared_mesh_and_reuses_changed_lengths() {
+        let cache = sample_cache();
+        let mut shared = None;
+        let mut reusable = None;
+
+        update_density_hist_mesh(&mut shared, Some(&cache), 0.0, 240.0);
+        update_density_hist_mesh_reusable(&mut reusable, Some(&cache), 0.0, 240.0);
+        assert_mesh_matches(
+            reusable.as_deref().expect("reusable mesh"),
+            shared.as_deref().expect("shared mesh"),
+        );
+        let first_ptr = reusable.as_ref().expect("reusable mesh").as_ptr();
+        let first_len = reusable.as_ref().expect("reusable mesh").len();
+
+        update_density_hist_mesh(&mut shared, Some(&cache), 48.0, 120.0);
+        update_density_hist_mesh_reusable(&mut reusable, Some(&cache), 48.0, 120.0);
+        assert_mesh_matches(
+            reusable.as_deref().expect("reusable mesh"),
+            shared.as_deref().expect("shared mesh"),
+        );
+
+        assert_ne!(reusable.as_ref().expect("reusable mesh").len(), first_len);
+        assert_eq!(
+            reusable.as_ref().expect("reusable mesh").as_ptr(),
+            first_ptr
+        );
+    }
+
+    #[test]
+    fn reusable_density_hist_mesh_preserves_a_shared_previous_frame() {
+        let cache = sample_cache();
+        let mut mesh = None;
+
+        update_density_hist_mesh_reusable(&mut mesh, Some(&cache), 0.0, 240.0);
+        let previous = Arc::clone(mesh.as_ref().expect("reusable mesh"));
+        let previous_vertices = previous.to_vec();
+
+        update_density_hist_mesh_reusable(&mut mesh, Some(&cache), 48.0, 120.0);
+
+        assert_mesh_matches(previous.as_slice(), &previous_vertices);
+        assert!(!Arc::ptr_eq(
+            &previous,
+            mesh.as_ref().expect("replacement mesh")
+        ));
     }
 
     #[test]
