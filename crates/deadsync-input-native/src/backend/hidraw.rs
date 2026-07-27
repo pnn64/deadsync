@@ -1,5 +1,6 @@
 use super::devd::{DevdEvent, DevdWatch};
 use super::hid_report_cache::{HidReportCache, HidReportTime};
+use super::poll_registration;
 use super::{BackendHost, GpSystemEvent, PadBackend, PadOrderBackend, uuid_from_bytes};
 use deadsync_input::{PadCode, PadDir, PadEvent, PadId};
 use hidparser::{Report, ReportField, VariableField, parse_report_descriptor};
@@ -729,26 +730,29 @@ pub fn run(
     let mut buf = vec![0u8; 64];
     let mut hotplug = Vec::with_capacity(16);
     let mut remove = Vec::with_capacity(16);
+    // `poll` refreshes `revents`; the registered descriptors and offset stay
+    // valid until devd changes the watched topology.
+    let watch_pollfd = watch.as_ref().map(|watch| PollFd {
+        fd: watch.fd(),
+        events: POLLIN,
+        revents: 0,
+    });
+    let mut watch_offset = poll_registration::rebuild(
+        watch_pollfd,
+        devs.iter().map(|dev| dev.file.as_raw_fd()),
+        std::iter::empty(),
+        &mut pollfds,
+        |fd| PollFd {
+            fd,
+            events: POLLIN,
+            revents: 0,
+        },
+    )
+    .0;
 
     loop {
         hotplug.clear();
         remove.clear();
-        pollfds.clear();
-        let watch_offset = if let Some(watch) = &watch {
-            pollfds.push(PollFd {
-                fd: watch.fd(),
-                events: POLLIN,
-                revents: 0,
-            });
-            1usize
-        } else {
-            0usize
-        };
-        pollfds.extend(devs.iter().map(|dev| PollFd {
-            fd: dev.file.as_raw_fd(),
-            events: POLLIN,
-            revents: 0,
-        }));
         let poll_ptr = if pollfds.is_empty() {
             std::ptr::null_mut()
         } else {
@@ -825,6 +829,7 @@ pub fn run(
             }
         }
 
+        let topology_changed = !hotplug.is_empty() || !remove.is_empty();
         remove.sort_unstable();
         remove.dedup();
         for &idx in remove.iter().rev() {
@@ -843,6 +848,20 @@ pub fn run(
                 }
                 DevdEvent::Destroy(path) => remove_dev_by_path(&path, &mut devs, emit_sys),
             }
+        }
+        if topology_changed {
+            watch_offset = poll_registration::rebuild(
+                watch_pollfd,
+                devs.iter().map(|dev| dev.file.as_raw_fd()),
+                std::iter::empty(),
+                &mut pollfds,
+                |fd| PollFd {
+                    fd,
+                    events: POLLIN,
+                    revents: 0,
+                },
+            )
+            .0;
         }
     }
 }

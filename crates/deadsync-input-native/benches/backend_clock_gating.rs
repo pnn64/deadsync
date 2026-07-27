@@ -11,6 +11,7 @@ const RUNS: usize = 5_000;
 const HID_REPORT_BYTES: usize = 64;
 const HIDRAW_REPORT_BYTES: usize = 32;
 const EVDEV_POLL_REGISTRATIONS: usize = 17;
+const HIDRAW_POLL_REGISTRATIONS: usize = 9;
 
 type Workload = fn() -> u64;
 
@@ -388,10 +389,7 @@ struct BenchPollFd {
 }
 
 #[inline(always)]
-fn rebuild_poll_registrations(
-    pollfds: &mut [BenchPollFd; EVDEV_POLL_REGISTRATIONS],
-    generation: i32,
-) {
+fn rebuild_poll_registrations<const N: usize>(pollfds: &mut [BenchPollFd; N], generation: i32) {
     for (index, pollfd) in pollfds.iter_mut().enumerate() {
         *pollfd = BenchPollFd {
             fd: generation * 100 + index as i32,
@@ -403,19 +401,19 @@ fn rebuild_poll_registrations(
 }
 
 #[inline(always)]
-fn poll_registration_checksum(pollfds: &[BenchPollFd; EVDEV_POLL_REGISTRATIONS]) -> u64 {
+fn poll_registration_checksum<const N: usize>(pollfds: &[BenchPollFd; N]) -> u64 {
     pollfds.iter().fold(0_u64, |checksum, pollfd| {
         checksum.rotate_left(5) ^ pollfd.fd as u64 ^ pollfd.events as u64 ^ pollfd.revents as u64
     })
 }
 
-fn evdev_poll_registrations_legacy() -> u64 {
+fn poll_registrations_legacy<const N: usize>() -> u64 {
     let empty = BenchPollFd {
         fd: 0,
         events: 0,
         revents: 0,
     };
-    let mut pollfds = [empty; EVDEV_POLL_REGISTRATIONS];
+    let mut pollfds = [empty; N];
     let mut checksum = 0_u64;
     for wakeup in 0..POLLS {
         let generation = (wakeup / 64) as i32;
@@ -428,13 +426,13 @@ fn evdev_poll_registrations_legacy() -> u64 {
     checksum
 }
 
-fn evdev_poll_registrations_gated() -> u64 {
+fn poll_registrations_gated<const N: usize>() -> u64 {
     let empty = BenchPollFd {
         fd: 0,
         events: 0,
         revents: 0,
     };
-    let mut pollfds = [empty; EVDEV_POLL_REGISTRATIONS];
+    let mut pollfds = [empty; N];
     let mut checksum = 0_u64;
     for wakeup in 0..POLLS {
         if wakeup % 64 == 0 {
@@ -445,6 +443,22 @@ fn evdev_poll_registrations_gated() -> u64 {
         }
     }
     checksum
+}
+
+fn evdev_poll_registrations_legacy() -> u64 {
+    poll_registrations_legacy::<EVDEV_POLL_REGISTRATIONS>()
+}
+
+fn evdev_poll_registrations_gated() -> u64 {
+    poll_registrations_gated::<EVDEV_POLL_REGISTRATIONS>()
+}
+
+fn hidraw_poll_registrations_legacy() -> u64 {
+    poll_registrations_legacy::<HIDRAW_POLL_REGISTRATIONS>()
+}
+
+fn hidraw_poll_registrations_gated() -> u64 {
+    poll_registrations_gated::<HIDRAW_POLL_REGISTRATIONS>()
 }
 
 fn main() {
@@ -495,6 +509,12 @@ fn main() {
         "256 poll wakeups, 17 registrations, 4 topology changes",
         evdev_poll_registrations_legacy,
         evdev_poll_registrations_gated,
+    );
+    benchmark_pair(
+        "FreeBSD hidraw stable poll registrations",
+        "256 poll wakeups, 9 registrations, 4 topology changes",
+        hidraw_poll_registrations_legacy,
+        hidraw_poll_registrations_gated,
     );
 }
 

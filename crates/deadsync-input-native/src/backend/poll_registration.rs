@@ -73,4 +73,28 @@ mod tests {
         assert_eq!(offsets, (0, 1));
         assert_eq!(registrations, vec![registration(40)]);
     }
+
+    #[test]
+    fn rebuild_supports_watcher_and_device_only_layouts() {
+        let watch = Registration {
+            fd: 10,
+            events: 1,
+            revents: 0,
+        };
+        let mut registrations = Vec::new();
+
+        let offsets = rebuild(
+            Some(watch),
+            [20, 21],
+            std::iter::empty(),
+            &mut registrations,
+            registration,
+        );
+
+        assert_eq!(offsets, (1, 3));
+        assert_eq!(
+            registrations,
+            vec![registration(10), registration(20), registration(21)]
+        );
+    }
 }
