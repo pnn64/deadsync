@@ -1,5 +1,7 @@
 use deadlib_present::actors::{Actor, SizeSpec, TextAlign, TextContent};
-use deadlib_present::compose::{ComposeScratch, TextLayoutCache, build_screen_cached_with_scratch};
+use deadlib_present::compose::{
+    ComposeScratch, TextLayoutCache, TexturedMeshClipBenchmark, build_screen_cached_with_scratch,
+};
 use deadlib_present::font::{Font, FontMap, Glyph};
 use deadlib_present::space::Metrics;
 use deadlib_render::{BlendMode, INVALID_TMESH_CACHE_KEY, ObjectType, TexturedMeshVertex};
@@ -23,6 +25,8 @@ const CLIPPED_TEXTS: usize = 8;
 const CLIPPED_GLYPHS: usize = 96;
 const CLIP_WARMUP_FRAMES: usize = 256;
 const CLIP_MEASURE_FRAMES: usize = 5_000;
+const CLIP_KERNEL_WARMUP_FRAMES: usize = 512;
+const CLIP_KERNEL_MEASURE_FRAMES: usize = 20_000;
 
 struct CountingAlloc {
     allocs: AtomicU64,
@@ -332,6 +336,94 @@ fn run_clipped_text_benchmark() {
         median.alloc.reallocs as f64 / frames,
     );
     black_box(checksum);
+
+    run_clip_transform_comparison();
+}
+
+fn run_clip_transform_comparison() {
+    let mut legacy_runs = Vec::with_capacity(BENCH_RUNS);
+    let mut affine_runs = Vec::with_capacity(BENCH_RUNS);
+    for sample in 0..BENCH_RUNS {
+        let (legacy, affine) = if sample % 2 == 0 {
+            (
+                run_clip_transform_case(TexturedMeshClipBenchmark::clip_legacy_frame),
+                run_clip_transform_case(TexturedMeshClipBenchmark::clip_affine_frame),
+            )
+        } else {
+            let affine = run_clip_transform_case(TexturedMeshClipBenchmark::clip_affine_frame);
+            let legacy = run_clip_transform_case(TexturedMeshClipBenchmark::clip_legacy_frame);
+            (legacy, affine)
+        };
+        assert_eq!(legacy.checksum, affine.checksum);
+        legacy_runs.push(legacy);
+        affine_runs.push(affine);
+    }
+    legacy_runs.sort_unstable_by_key(|result| result.elapsed);
+    affine_runs.sort_unstable_by_key(|result| result.elapsed);
+    let legacy = &legacy_runs[BENCH_RUNS / 2];
+    let affine = &affine_runs[BENCH_RUNS / 2];
+
+    println!("\npartially clipped text transform kernel");
+    print_clip_transform_result("general Mat4", legacy);
+    print_clip_transform_result("affine 2D", affine);
+    println!(
+        "affine transform: {:.2}x throughput, {:.1}% fewer cycles",
+        legacy.elapsed.as_secs_f64() / affine.elapsed.as_secs_f64(),
+        percent_reduction(legacy.cycles, affine.cycles),
+    );
+}
+
+fn run_clip_transform_case(
+    frame: fn(&mut TexturedMeshClipBenchmark) -> u64,
+) -> ClippedTextBenchResult {
+    let mut benchmark = TexturedMeshClipBenchmark::new(CLIPPED_GLYPHS);
+    for _ in 0..CLIP_KERNEL_WARMUP_FRAMES {
+        black_box(frame(&mut benchmark));
+    }
+    let alloc_before = ALLOC.snapshot();
+    let cycles_before = thread_cycles();
+    let started = Instant::now();
+    let mut checksum = 0_u64;
+    for _ in 0..CLIP_KERNEL_MEASURE_FRAMES {
+        checksum = checksum.rotate_left(7) ^ black_box(frame(&mut benchmark));
+    }
+    let elapsed = started.elapsed();
+    let cycles = cycles_before
+        .zip(thread_cycles())
+        .map(|(before, after)| after.saturating_sub(before));
+    let alloc = ALLOC.snapshot().delta(alloc_before);
+    assert_eq!(alloc.allocs, 0, "warmed clipping kernel allocated");
+    assert_eq!(alloc.reallocs, 0, "warmed clipping kernel reallocated");
+    ClippedTextBenchResult {
+        elapsed,
+        cycles,
+        alloc,
+        checksum,
+    }
+}
+
+fn print_clip_transform_result(label: &str, result: &ClippedTextBenchResult) {
+    let frames = CLIP_KERNEL_MEASURE_FRAMES as f64;
+    let elapsed_us = result.elapsed.as_secs_f64() * 1_000_000.0 / frames;
+    let cycles = result
+        .cycles
+        .map(|cycles| format!("{:.0}", cycles as f64 / frames))
+        .unwrap_or_else(|| String::from("n/a"));
+    println!(
+        "{label:<10} {:>9.2} us/frame  {:>8} cycles/frame  {:.2} allocs/frame  \
+         {:.2} reallocs/frame",
+        elapsed_us,
+        cycles,
+        result.alloc.allocs as f64 / frames,
+        result.alloc.reallocs as f64 / frames,
+    );
+}
+
+fn percent_reduction(before: Option<u64>, after: Option<u64>) -> f64 {
+    match (before, after) {
+        (Some(before), Some(after)) if before != 0 => (1.0 - after as f64 / before as f64) * 100.0,
+        _ => 0.0,
+    }
 }
 
 fn run_clipped_text_case(actors: &[Actor], fonts: &FontMap) -> ClippedTextBenchResult {

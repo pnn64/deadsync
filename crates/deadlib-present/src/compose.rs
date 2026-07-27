@@ -5176,12 +5176,45 @@ fn world_xy_3d(t: &Matrix4, p: [f32; 3]) -> [f32; 2] {
     [clip.x * inv_w, clip.y * inv_w]
 }
 
+#[inline(always)]
+fn is_affine_world_transform(t: &Matrix4) -> bool {
+    t.x_axis.w == 0.0 && t.y_axis.w == 0.0 && t.z_axis.w == 0.0 && t.w_axis.w == 1.0
+}
+
+#[inline(always)]
+fn affine_world_xy_3d(t: &Matrix4, p: [f32; 3]) -> [f32; 2] {
+    [
+        t.x_axis.x * p[0] + t.y_axis.x * p[1] + t.z_axis.x * p[2] + t.w_axis.x,
+        t.x_axis.y * p[0] + t.y_axis.y * p[1] + t.z_axis.y * p[2] + t.w_axis.y,
+    ]
+}
+
 fn textured_mesh_world_bounds(
     vertices: &[renderer::TexturedMeshVertex],
     transform: Matrix4,
 ) -> Option<WorldRect> {
+    if is_affine_world_transform(&transform) {
+        textured_mesh_world_bounds_with(vertices, |pos| affine_world_xy_3d(&transform, pos))
+    } else {
+        textured_mesh_world_bounds_with(vertices, |pos| world_xy_3d(&transform, pos))
+    }
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn textured_mesh_world_bounds_legacy(
+    vertices: &[renderer::TexturedMeshVertex],
+    transform: Matrix4,
+) -> Option<WorldRect> {
+    textured_mesh_world_bounds_with(vertices, |pos| world_xy_3d(&transform, pos))
+}
+
+#[inline(always)]
+fn textured_mesh_world_bounds_with(
+    vertices: &[renderer::TexturedMeshVertex],
+    mut world_xy: impl FnMut([f32; 3]) -> [f32; 2],
+) -> Option<WorldRect> {
     let first = vertices.first()?;
-    let first = world_xy_3d(&transform, first.pos);
+    let first = world_xy(first.pos);
     let mut bounds = WorldRect {
         left: first[0],
         right: first[0],
@@ -5189,7 +5222,7 @@ fn textured_mesh_world_bounds(
         top: first[1],
     };
     for vertex in &vertices[1..] {
-        let p = world_xy_3d(&transform, vertex.pos);
+        let p = world_xy(vertex.pos);
         bounds.left = bounds.left.min(p[0]);
         bounds.right = bounds.right.max(p[0]);
         bounds.bottom = bounds.bottom.min(p[1]);
@@ -5311,7 +5344,73 @@ fn clip_textured_mesh_to_world_rect(
     uv_tex_shift: [f32; 2],
     clip: WorldRect,
     texture_mask: bool,
+    recycled_vertices: Option<&mut Vec<Vec<renderer::TexturedMeshVertex>>>,
+) -> Option<ClippedSpriteObject> {
+    if is_affine_world_transform(&transform) {
+        clip_textured_mesh_to_world_rect_with(
+            tint,
+            vertices,
+            uv_scale,
+            uv_offset,
+            uv_tex_shift,
+            clip,
+            texture_mask,
+            recycled_vertices,
+            |pos| affine_world_xy_3d(&transform, pos),
+        )
+    } else {
+        clip_textured_mesh_to_world_rect_with(
+            tint,
+            vertices,
+            uv_scale,
+            uv_offset,
+            uv_tex_shift,
+            clip,
+            texture_mask,
+            recycled_vertices,
+            |pos| world_xy_3d(&transform, pos),
+        )
+    }
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+#[allow(clippy::too_many_arguments)]
+fn clip_textured_mesh_to_world_rect_legacy(
+    tint: [f32; 4],
+    vertices: &[renderer::TexturedMeshVertex],
+    transform: Matrix4,
+    uv_scale: [f32; 2],
+    uv_offset: [f32; 2],
+    uv_tex_shift: [f32; 2],
+    clip: WorldRect,
+    texture_mask: bool,
+    recycled_vertices: Option<&mut Vec<Vec<renderer::TexturedMeshVertex>>>,
+) -> Option<ClippedSpriteObject> {
+    clip_textured_mesh_to_world_rect_with(
+        tint,
+        vertices,
+        uv_scale,
+        uv_offset,
+        uv_tex_shift,
+        clip,
+        texture_mask,
+        recycled_vertices,
+        |pos| world_xy_3d(&transform, pos),
+    )
+}
+
+#[inline(always)]
+#[allow(clippy::too_many_arguments)]
+fn clip_textured_mesh_to_world_rect_with(
+    tint: [f32; 4],
+    vertices: &[renderer::TexturedMeshVertex],
+    uv_scale: [f32; 2],
+    uv_offset: [f32; 2],
+    uv_tex_shift: [f32; 2],
+    clip: WorldRect,
+    texture_mask: bool,
     mut recycled_vertices: Option<&mut Vec<Vec<renderer::TexturedMeshVertex>>>,
+    mut world_xy: impl FnMut([f32; 3]) -> [f32; 2],
 ) -> Option<ClippedSpriteObject> {
     if vertices.len() < 3 {
         return None;
@@ -5319,9 +5418,9 @@ fn clip_textured_mesh_to_world_rect(
 
     let mut out: Option<Vec<renderer::TexturedMeshVertex>> = None;
     for tri in vertices.chunks_exact(3) {
-        let p0 = world_xy_3d(&transform, tri[0].pos);
-        let p1 = world_xy_3d(&transform, tri[1].pos);
-        let p2 = world_xy_3d(&transform, tri[2].pos);
+        let p0 = world_xy(tri[0].pos);
+        let p1 = world_xy(tri[1].pos);
+        let p2 = world_xy(tri[2].pos);
         let left = p0[0].min(p1[0]).min(p2[0]);
         let right = p0[0].max(p1[0]).max(p2[0]);
         let bottom = p0[1].min(p1[1]).min(p2[1]);
@@ -5417,6 +5516,111 @@ fn clip_textured_mesh_to_world_rect(
     })
 }
 
+/// Gameplay-shaped partially clipped text-mesh transform benchmark support.
+#[cfg(feature = "bench-support")]
+pub struct TexturedMeshClipBenchmark {
+    vertices: Vec<renderer::TexturedMeshVertex>,
+    transform: Matrix4,
+    clip: WorldRect,
+    recycled_vertices: Vec<Vec<renderer::TexturedMeshVertex>>,
+}
+
+#[cfg(feature = "bench-support")]
+impl TexturedMeshClipBenchmark {
+    pub fn new(glyphs: usize) -> Self {
+        let mut vertices = Vec::with_capacity(glyphs.saturating_mul(6));
+        for glyph in 0..glyphs {
+            let left = glyph as f32 * 12.0;
+            let right = left + 12.0;
+            let bottom = 0.0;
+            let top = 32.0;
+            for (pos, uv) in [
+                ([left, bottom, 0.0], [0.0, 1.0]),
+                ([right, bottom, 0.0], [1.0, 1.0]),
+                ([right, top, 0.0], [1.0, 0.0]),
+                ([left, bottom, 0.0], [0.0, 1.0]),
+                ([right, top, 0.0], [1.0, 0.0]),
+                ([left, top, 0.0], [0.0, 0.0]),
+            ] {
+                vertices.push(renderer::TexturedMeshVertex {
+                    pos,
+                    uv,
+                    color: [1.0; 4],
+                    tex_matrix_scale: [1.0; 2],
+                });
+            }
+        }
+        Self {
+            vertices,
+            transform: Matrix4::from_translation(Vector3::new(8.0, 36.0, 0.0))
+                * Matrix4::from_scale(Vector3::new(1.0, -1.0, 1.0)),
+            clip: WorldRect {
+                left: 8.0,
+                right: 328.0,
+                bottom: 12.0,
+                top: 36.0,
+            },
+            recycled_vertices: Vec::with_capacity(1),
+        }
+    }
+
+    pub fn clip_legacy_frame(&mut self) -> u64 {
+        self.clip_frame(true)
+    }
+
+    pub fn clip_affine_frame(&mut self) -> u64 {
+        self.clip_frame(false)
+    }
+
+    fn clip_frame(&mut self, legacy: bool) -> u64 {
+        let bounds = if legacy {
+            textured_mesh_world_bounds_legacy(&self.vertices, self.transform)
+        } else {
+            textured_mesh_world_bounds(&self.vertices, self.transform)
+        }
+        .expect("benchmark mesh is not empty");
+        let clipped = if legacy {
+            clip_textured_mesh_to_world_rect_legacy(
+                [1.0; 4],
+                &self.vertices,
+                self.transform,
+                [1.0; 2],
+                [0.0; 2],
+                [0.0; 2],
+                self.clip,
+                false,
+                Some(&mut self.recycled_vertices),
+            )
+        } else {
+            clip_textured_mesh_to_world_rect(
+                [1.0; 4],
+                &self.vertices,
+                self.transform,
+                [1.0; 2],
+                [0.0; 2],
+                [0.0; 2],
+                self.clip,
+                false,
+                Some(&mut self.recycled_vertices),
+            )
+        }
+        .expect("benchmark mesh intersects the clip");
+        let renderer::ObjectType::TexturedMesh {
+            vertices: renderer::TexturedMeshVertices::Transient(mut vertices),
+            ..
+        } = clipped.object_type
+        else {
+            unreachable!("textured mesh clipping returns transient mesh geometry");
+        };
+        let checksum = (vertices.len() as u64)
+            ^ (u64::from(bounds.left.to_bits()) << 32)
+            ^ u64::from(bounds.right.to_bits());
+        vertices.clear();
+        self.recycled_vertices.push(vertices);
+        checksum
+    }
+}
+
 fn clip_rotated_sprite_to_world_rect(
     tint: [f32; 4],
     center: [f32; 4],
@@ -5504,10 +5708,12 @@ mod tests {
         build_screen_cached_with_scratch_and_texture_context,
         build_screen_cached_with_scratch_and_texture_context_and_actor_resources,
         build_transient_text_mesh_builders, clip_object_to_world_masks,
-        clip_sprite_object_to_world_rect, clipped_sprite_object_to_world_rect, fold_sprite_xy_rot,
-        font_chain_key, push_shadow_objects_for_range, resolve_sprite_size_like_sm,
-        sort_composed_render_objects, sort_render_objects, sort_render_objects_legacy, str_ptr,
-        wrap_text_lines_by_words,
+        clip_sprite_object_to_world_rect, clip_textured_mesh_to_world_rect,
+        clip_textured_mesh_to_world_rect_legacy, clipped_sprite_object_to_world_rect,
+        fold_sprite_xy_rot, font_chain_key, is_affine_world_transform,
+        push_shadow_objects_for_range, resolve_sprite_size_like_sm, sort_composed_render_objects,
+        sort_render_objects, sort_render_objects_legacy, str_ptr, textured_mesh_world_bounds,
+        textured_mesh_world_bounds_legacy, wrap_text_lines_by_words,
     };
     use crate::actors::{
         Actor, ActorResourceArena, RetainedActorFrame, SizeSpec, SpriteSource, TextAlign,
@@ -5520,7 +5726,7 @@ mod tests {
         BlendMode, INVALID_TMESH_CACHE_KEY, MeshVertex, ObjectType, RenderObject,
         SpriteInstanceRaw, TMeshCacheKey, TexturedMeshInstanceRaw, TexturedMeshVertex,
     };
-    use glam::Mat4 as Matrix4;
+    use glam::{Mat4 as Matrix4, Vec3 as Vector3};
     use std::cell::Cell;
     use std::collections::HashMap;
     use std::sync::Arc;
@@ -6569,6 +6775,123 @@ mod tests {
         assert_eq!(actual_vertices.as_ref(), expected_vertices.as_ref());
         assert_eq!(actual_key, expected_key);
         assert_eq!(actual_depth, expected_depth);
+    }
+
+    #[test]
+    fn affine_textured_mesh_clipping_matches_projective_math() {
+        let vertex = |pos, uv| TexturedMeshVertex {
+            pos,
+            uv,
+            color: [0.25, 0.5, 0.75, 1.0],
+            tex_matrix_scale: [1.0; 2],
+        };
+        let vertices = [
+            vertex([-4.0, -4.0, 0.0], [0.0, 1.0]),
+            vertex([4.0, -4.0, 0.0], [1.0, 1.0]),
+            vertex([4.0, 4.0, 0.0], [1.0, 0.0]),
+            vertex([-4.0, -4.0, 0.0], [0.0, 1.0]),
+            vertex([4.0, 4.0, 0.0], [1.0, 0.0]),
+            vertex([-4.0, 4.0, 0.0], [0.0, 0.0]),
+        ];
+        let transform = Matrix4::from_translation(Vector3::new(7.0, 11.0, 0.0))
+            * Matrix4::from_rotation_z(0.37)
+            * Matrix4::from_scale(Vector3::new(1.5, -0.75, 1.0));
+        assert!(is_affine_world_transform(&transform));
+        let clip = WorldRect {
+            left: 4.0,
+            right: 11.0,
+            bottom: 8.0,
+            top: 14.0,
+        };
+
+        let current_bounds = textured_mesh_world_bounds(&vertices, transform).unwrap();
+        let legacy_bounds = textured_mesh_world_bounds_legacy(&vertices, transform).unwrap();
+        for (current, legacy) in [
+            (current_bounds.left, legacy_bounds.left),
+            (current_bounds.right, legacy_bounds.right),
+            (current_bounds.bottom, legacy_bounds.bottom),
+            (current_bounds.top, legacy_bounds.top),
+        ] {
+            assert!((current - legacy).abs() <= 1e-6);
+        }
+
+        let current = clip_textured_mesh_to_world_rect(
+            [0.8, 0.6, 0.4, 1.0],
+            &vertices,
+            transform,
+            [0.75, 0.5],
+            [0.125, 0.25],
+            [0.0; 2],
+            clip,
+            false,
+            None,
+        )
+        .unwrap();
+        let legacy = clip_textured_mesh_to_world_rect_legacy(
+            [0.8, 0.6, 0.4, 1.0],
+            &vertices,
+            transform,
+            [0.75, 0.5],
+            [0.125, 0.25],
+            [0.0; 2],
+            clip,
+            false,
+            None,
+        )
+        .unwrap();
+        let (
+            ObjectType::TexturedMesh {
+                vertices: current_vertices,
+                ..
+            },
+            ObjectType::TexturedMesh {
+                vertices: legacy_vertices,
+                ..
+            },
+        ) = (&current.object_type, &legacy.object_type)
+        else {
+            panic!("clipping should produce textured meshes");
+        };
+        assert_eq!(current_vertices.len(), legacy_vertices.len());
+        for (current, legacy) in current_vertices.iter().zip(legacy_vertices.iter()) {
+            for (current, legacy) in current.pos.iter().zip(legacy.pos) {
+                assert!((*current - legacy).abs() <= 1e-5);
+            }
+            for (current, legacy) in current.uv.iter().zip(legacy.uv) {
+                assert!((*current - legacy).abs() <= 1e-6);
+            }
+            assert_eq!(current.color, legacy.color);
+            assert_eq!(current.tex_matrix_scale, legacy.tex_matrix_scale);
+        }
+    }
+
+    #[test]
+    fn projective_textured_mesh_bounds_keep_perspective_divide() {
+        let mut transform = Matrix4::IDENTITY;
+        transform.x_axis.w = 0.25;
+        assert!(!is_affine_world_transform(&transform));
+        let vertices = [
+            TexturedMeshVertex {
+                pos: [-2.0, 3.0, 0.0],
+                ..TexturedMeshVertex::default()
+            },
+            TexturedMeshVertex {
+                pos: [2.0, 3.0, 0.0],
+                ..TexturedMeshVertex::default()
+            },
+        ];
+
+        let bounds = textured_mesh_world_bounds(&vertices, transform).unwrap();
+        let legacy = textured_mesh_world_bounds_legacy(&vertices, transform).unwrap();
+
+        assert_eq!(bounds.left, -4.0);
+        assert_eq!(bounds.right, 4.0 / 3.0);
+        assert_eq!(bounds.bottom, 2.0);
+        assert_eq!(bounds.top, 6.0);
+        assert_eq!(bounds.left, legacy.left);
+        assert_eq!(bounds.right, legacy.right);
+        assert_eq!(bounds.bottom, legacy.bottom);
+        assert_eq!(bounds.top, legacy.top);
     }
 
     #[test]
