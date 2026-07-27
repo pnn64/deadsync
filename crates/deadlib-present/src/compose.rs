@@ -4788,6 +4788,7 @@ fn clip_object_to_world_masks(
             sprite_instances,
             mask,
             Some(&mut *recycled_vertices),
+            None,
         ) else {
             continue;
         };
@@ -4913,6 +4914,7 @@ fn clip_sprite_object_to_world_rect_with_recycled(
     if clip.left >= clip.right || clip.bottom >= clip.top {
         return false;
     }
+    let mut textured_mesh_bounds = None;
     match &obj.object_type {
         renderer::ObjectType::Mesh { .. } => return true,
         renderer::ObjectType::TexturedMesh {
@@ -4936,13 +4938,18 @@ fn clip_sprite_object_to_world_rect_with_recycled(
             {
                 return true;
             }
+            textured_mesh_bounds = Some(bounds);
         }
         renderer::ObjectType::Sprite(_) => {}
     }
 
-    let Some(clipped) =
-        clipped_sprite_object_to_world_rect(obj, sprite_instances, clip, recycled_vertices)
-    else {
+    let Some(clipped) = clipped_sprite_object_to_world_rect(
+        obj,
+        sprite_instances,
+        clip,
+        recycled_vertices,
+        textured_mesh_bounds,
+    ) else {
         return false;
     };
     if let Some(sprite) = clipped.sprite
@@ -4959,6 +4966,7 @@ fn clipped_sprite_object_to_world_rect(
     sprite_instances: &[renderer::SpriteInstanceRaw],
     clip: WorldRect,
     mut recycled_vertices: Option<&mut Vec<Vec<renderer::TexturedMeshVertex>>>,
+    textured_mesh_bounds: Option<WorldRect>,
 ) -> Option<ClippedSpriteObject> {
     if clip.left >= clip.right || clip.bottom >= clip.top {
         return None;
@@ -5066,8 +5074,9 @@ fn clipped_sprite_object_to_world_rect(
         } => {
             let vertices = mesh_vertices.as_ref();
             let transform = instance.transform();
-            let Some(bounds) = textured_mesh_world_bounds(vertices, transform) else {
-                return None;
+            let bounds = match textured_mesh_bounds {
+                Some(bounds) => bounds,
+                None => textured_mesh_world_bounds(vertices, transform)?,
             };
             if bounds.right < clip.left
                 || bounds.left > clip.right
@@ -5495,9 +5504,10 @@ mod tests {
         build_screen_cached_with_scratch_and_texture_context,
         build_screen_cached_with_scratch_and_texture_context_and_actor_resources,
         build_transient_text_mesh_builders, clip_object_to_world_masks,
-        clip_sprite_object_to_world_rect, fold_sprite_xy_rot, font_chain_key,
-        push_shadow_objects_for_range, resolve_sprite_size_like_sm, sort_composed_render_objects,
-        sort_render_objects, sort_render_objects_legacy, str_ptr, wrap_text_lines_by_words,
+        clip_sprite_object_to_world_rect, clipped_sprite_object_to_world_rect, fold_sprite_xy_rot,
+        font_chain_key, push_shadow_objects_for_range, resolve_sprite_size_like_sm,
+        sort_composed_render_objects, sort_render_objects, sort_render_objects_legacy, str_ptr,
+        wrap_text_lines_by_words,
     };
     use crate::actors::{
         Actor, ActorResourceArena, RetainedActorFrame, SizeSpec, SpriteSource, TextAlign,
@@ -6484,6 +6494,81 @@ mod tests {
         };
         assert_eq!(vertices.as_ptr(), chosen_ptr);
         assert_eq!(recycled_vertices.len(), 2);
+    }
+
+    #[test]
+    fn single_mask_textured_mesh_matches_independent_bounds_clipping() {
+        let textured_mesh_vertex = |pos| TexturedMeshVertex {
+            pos,
+            ..TexturedMeshVertex::default()
+        };
+        let vertices: Arc<[TexturedMeshVertex]> = Arc::from([
+            textured_mesh_vertex([-4.0, -4.0, 0.0]),
+            textured_mesh_vertex([4.0, -4.0, 0.0]),
+            textured_mesh_vertex([4.0, 4.0, 0.0]),
+            textured_mesh_vertex([-4.0, -4.0, 0.0]),
+            textured_mesh_vertex([4.0, 4.0, 0.0]),
+            textured_mesh_vertex([-4.0, 4.0, 0.0]),
+        ]);
+        let source = RenderObject {
+            object_type: ObjectType::TexturedMesh {
+                instance: TexturedMeshInstanceRaw::new(
+                    Matrix4::IDENTITY,
+                    [0.25, 0.5, 0.75, 1.0],
+                    [0.75, 0.5],
+                    [0.125, 0.25],
+                    [0.0, 0.0],
+                    false,
+                ),
+                vertices: deadlib_render::TexturedMeshVertices::Shared(vertices),
+                geom_cache_key: 41,
+                depth_test: true,
+            },
+            texture_handle: 17,
+            blend: BlendMode::Add,
+            z: 3,
+            order: 9,
+            camera: 0,
+        };
+        let clip = WorldRect {
+            left: -1.0,
+            right: 3.0,
+            bottom: -3.0,
+            top: 2.0,
+        };
+        let expected = clipped_sprite_object_to_world_rect(&source, &[], clip, None, None).unwrap();
+        let mut actual = source.clone();
+
+        assert!(clip_sprite_object_to_world_rect(
+            &mut actual,
+            &mut Vec::new(),
+            clip,
+        ));
+        assert_eq!(actual.texture_handle, source.texture_handle);
+        assert_eq!(actual.blend, source.blend);
+        assert_eq!(actual.z, source.z);
+        assert_eq!(actual.order, source.order);
+        let (
+            ObjectType::TexturedMesh {
+                instance: actual_instance,
+                vertices: actual_vertices,
+                geom_cache_key: actual_key,
+                depth_test: actual_depth,
+            },
+            ObjectType::TexturedMesh {
+                instance: expected_instance,
+                vertices: expected_vertices,
+                geom_cache_key: expected_key,
+                depth_test: expected_depth,
+            },
+        ) = (&actual.object_type, &expected.object_type)
+        else {
+            panic!("partial clipping should produce textured meshes");
+        };
+        assert_eq!(actual_instance, expected_instance);
+        assert_eq!(actual_vertices.as_ref(), expected_vertices.as_ref());
+        assert_eq!(actual_key, expected_key);
+        assert_eq!(actual_depth, expected_depth);
     }
 
     #[test]

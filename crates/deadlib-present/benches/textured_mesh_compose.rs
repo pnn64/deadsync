@@ -1,10 +1,11 @@
-use deadlib_present::actors::{Actor, SizeSpec};
+use deadlib_present::actors::{Actor, SizeSpec, TextAlign, TextContent};
 use deadlib_present::compose::{ComposeScratch, TextLayoutCache, build_screen_cached_with_scratch};
-use deadlib_present::font::FontMap;
+use deadlib_present::font::{Font, FontMap, Glyph};
 use deadlib_present::space::Metrics;
-use deadlib_render::{BlendMode, TexturedMeshVertex};
+use deadlib_render::{BlendMode, INVALID_TMESH_CACHE_KEY, ObjectType, TexturedMeshVertex};
 use glam::Mat4;
 use std::alloc::{GlobalAlloc, Layout, System};
+use std::collections::HashMap;
 use std::hint::black_box;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -18,6 +19,10 @@ const GLOW_MESHES: usize = MESHES / 4;
 const WARMUP_FRAMES: usize = 1_024;
 const MEASURE_FRAMES: usize = 20_000;
 const BENCH_RUNS: usize = 5;
+const CLIPPED_TEXTS: usize = 8;
+const CLIPPED_GLYPHS: usize = 96;
+const CLIP_WARMUP_FRAMES: usize = 256;
+const CLIP_MEASURE_FRAMES: usize = 5_000;
 
 struct CountingAlloc {
     allocs: AtomicU64,
@@ -141,6 +146,8 @@ fn main() {
         median.alloc.reallocs as f64 / frames,
     );
     black_box(checksum);
+
+    run_clipped_text_benchmark();
 }
 
 fn run_case(
@@ -285,6 +292,203 @@ fn benchmark_actors(
             }
         })
         .collect()
+}
+
+struct ClippedTextBenchResult {
+    elapsed: Duration,
+    cycles: Option<u64>,
+    alloc: AllocSnapshot,
+    checksum: u64,
+}
+
+fn run_clipped_text_benchmark() {
+    let fonts = clipped_text_fonts();
+    let content: Arc<str> = Arc::from("A".repeat(CLIPPED_GLYPHS));
+    let actors = clipped_text_actors(&content);
+    let mut runs = Vec::with_capacity(BENCH_RUNS);
+    for _ in 0..BENCH_RUNS {
+        runs.push(run_clipped_text_case(&actors, &fonts));
+    }
+    let checksum = runs[0].checksum;
+    assert!(runs.iter().all(|run| run.checksum == checksum));
+    runs.sort_unstable_by_key(|run| run.elapsed);
+    let median = &runs[BENCH_RUNS / 2];
+    let frames = CLIP_MEASURE_FRAMES as f64;
+    let elapsed_us = median.elapsed.as_secs_f64() * 1_000_000.0 / frames;
+    let cycles = median
+        .cycles
+        .map(|cycles| format!("{:.0}", cycles as f64 / frames))
+        .unwrap_or_else(|| String::from("n/a"));
+
+    println!("\npartially clipped gameplay text");
+    println!("{CLIPPED_TEXTS} text runs x {CLIPPED_GLYPHS} glyphs, median of {BENCH_RUNS} runs");
+    println!(
+        "compose  {:>9.2} us/frame  {:>8} cycles/frame  {:.2} allocs/frame  \
+         {:.1} bytes/frame  {:.2} reallocs/frame",
+        elapsed_us,
+        cycles,
+        median.alloc.allocs as f64 / frames,
+        median.alloc.bytes as f64 / frames,
+        median.alloc.reallocs as f64 / frames,
+    );
+    black_box(checksum);
+}
+
+fn run_clipped_text_case(actors: &[Actor], fonts: &FontMap) -> ClippedTextBenchResult {
+    let metrics = Metrics {
+        left: 0.0,
+        right: 640.0,
+        top: 480.0,
+        bottom: 0.0,
+    };
+    let mut cache = TextLayoutCache::new(4);
+    let mut scratch = ComposeScratch::default();
+    for _ in 0..CLIP_WARMUP_FRAMES {
+        black_box(compose_clipped_text_frame(
+            actors,
+            &metrics,
+            fonts,
+            &mut cache,
+            &mut scratch,
+        ));
+    }
+    cache.lock_growth();
+
+    let alloc_before = ALLOC.snapshot();
+    let cycles_before = thread_cycles();
+    let started = Instant::now();
+    let mut checksum = 0_u64;
+    for _ in 0..CLIP_MEASURE_FRAMES {
+        checksum = checksum.rotate_left(7)
+            ^ black_box(compose_clipped_text_frame(
+                actors,
+                &metrics,
+                fonts,
+                &mut cache,
+                &mut scratch,
+            ));
+    }
+    let elapsed = started.elapsed();
+    let cycles = cycles_before
+        .zip(thread_cycles())
+        .map(|(before, after)| after.saturating_sub(before));
+    let alloc = ALLOC.snapshot().delta(alloc_before);
+    assert_eq!(alloc.allocs, 0, "warmed clipped text allocated");
+    assert_eq!(alloc.reallocs, 0, "warmed clipped text reallocated");
+    ClippedTextBenchResult {
+        elapsed,
+        cycles,
+        alloc,
+        checksum,
+    }
+}
+
+fn compose_clipped_text_frame(
+    actors: &[Actor],
+    metrics: &Metrics,
+    fonts: &FontMap,
+    cache: &mut TextLayoutCache,
+    scratch: &mut ComposeScratch,
+) -> u64 {
+    let mut render = build_screen_cached_with_scratch(
+        black_box(actors),
+        [0.0, 0.0, 0.0, 1.0],
+        metrics,
+        fonts,
+        0.0,
+        cache,
+        scratch,
+    );
+    assert_eq!(render.objects.len(), CLIPPED_TEXTS);
+    let mut checksum = render.objects.len() as u64;
+    for object in &render.objects {
+        let ObjectType::TexturedMesh {
+            vertices,
+            geom_cache_key,
+            ..
+        } = &object.object_type
+        else {
+            panic!("clipped text should remain a textured mesh");
+        };
+        assert_eq!(*geom_cache_key, INVALID_TMESH_CACHE_KEY);
+        checksum = checksum
+            .wrapping_mul(31)
+            .wrapping_add(vertices.len() as u64);
+    }
+    black_box(&render);
+    scratch.recycle_render_list(&mut render);
+    checksum
+}
+
+fn clipped_text_actors(content: &Arc<str>) -> Vec<Actor> {
+    (0..CLIPPED_TEXTS)
+        .map(|index| {
+            let top = 36.0 + index as f32 * 48.0;
+            Actor::Text {
+                align: [0.0, 0.0],
+                offset: [8.0, top],
+                local_transform: Mat4::IDENTITY,
+                color: [1.0; 4],
+                stroke_color: None,
+                glow: [0.0; 4],
+                font: "clip-bench",
+                content: TextContent::Shared(Arc::clone(content)),
+                attributes: Vec::new(),
+                align_text: TextAlign::Left,
+                z: 0,
+                scale: [1.0, 1.0],
+                fit_width: None,
+                fit_height: None,
+                line_spacing: None,
+                wrap_width_pixels: None,
+                max_width: None,
+                max_height: None,
+                max_w_pre_zoom: false,
+                max_h_pre_zoom: false,
+                jitter: false,
+                distortion: 0.0,
+                clip: Some([8.0, top, 320.0, 24.0]),
+                mask_dest: false,
+                blend: BlendMode::Alpha,
+                shadow_len: [0.0; 2],
+                shadow_color: [0.0; 4],
+                effect: Default::default(),
+            }
+        })
+        .collect()
+}
+
+fn clipped_text_fonts() -> FontMap {
+    let texture: Arc<str> = Arc::from("clip-bench-texture");
+    let glyph = Glyph {
+        texture_key: Arc::clone(&texture),
+        stroke_texture_key: None,
+        tex_rect: [0.0, 0.0, 1.0, 1.0],
+        uv_scale: [1.0, 1.0],
+        uv_offset: [0.0, 0.0],
+        size: [12.0, 32.0],
+        offset: [0.0, -28.0],
+        advance: 12.0,
+        advance_i32: 12,
+    };
+    let glyph_map = HashMap::from([('A', glyph.clone())]);
+    let ascii_glyphs = Box::new(std::array::from_fn(|index| {
+        (index == 'A' as usize).then(|| glyph.clone())
+    }));
+    let font = Font {
+        glyph_map,
+        ascii_glyphs,
+        default_glyph: None,
+        line_spacing: 32,
+        height: 32,
+        fallback_font_name: None,
+        cache_tag: 1,
+        chain_key: 1,
+        default_stroke_color: [0.0; 4],
+        stroke_texture_map: HashMap::new(),
+        texture_hints_map: HashMap::new(),
+    };
+    FontMap::from_iter([("clip-bench", font)])
 }
 
 #[cfg(windows)]
