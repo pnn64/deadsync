@@ -208,6 +208,7 @@ pub struct State {
     config: wgpu::SurfaceConfiguration,
     projection: Matrix4,
     projection_upload: Vec<u8>,
+    projection_keys: Vec<[u32; 16]>,
     bind_layout: wgpu::BindGroupLayout,
     samplers: HashMap<SamplerDesc, wgpu::Sampler>,
     shader: wgpu::ShaderModule,
@@ -412,6 +413,12 @@ fn init(
     } else {
         init_uniform_proj(&device, &queue, projection)
     };
+    let (projection_upload_capacity, projection_key_capacity) = match &proj {
+        ProjState::Immediates => (0, 0),
+        ProjState::Uniform {
+            stride, capacity, ..
+        } => ((*stride as usize) * *capacity, *capacity),
+    };
 
     let bind_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
         label: Some("wgpu texture layout"),
@@ -516,7 +523,8 @@ fn init(
         queue,
         config,
         projection,
-        projection_upload: Vec::new(),
+        projection_upload: Vec::with_capacity(projection_upload_capacity),
+        projection_keys: Vec::with_capacity(projection_key_capacity),
         bind_layout,
         samplers: HashMap::new(),
         shader,
@@ -1441,28 +1449,113 @@ fn upload_projections(state: &mut State, cameras: &[Matrix4]) {
         return;
     };
     let needed = cameras.len().saturating_add(1).max(1);
-    ensure_projection_capacity(state, needed);
+    let buffer_recreated = ensure_projection_capacity(state, needed);
 
-    let ProjState::Uniform { buffer, stride, .. } = &state.proj else {
+    let ProjState::Uniform { stride, .. } = &state.proj else {
         return;
     };
     let stride = *stride as usize;
     debug_assert!(stride >= PROJ_BYTES as usize);
-    state.projection_upload.resize(needed * stride, 0);
-    for (i, vp) in cameras
-        .iter()
-        .copied()
-        .chain(std::iter::once(state.projection))
-        .enumerate()
-    {
-        let arr = vp.to_cols_array_2d();
-        let bytes = cast_slice(&arr);
-        let offset = i * stride;
-        state.projection_upload[offset..offset + bytes.len()].copy_from_slice(bytes);
+    let changed = stage_projection_upload(
+        &mut state.projection_upload,
+        &mut state.projection_keys,
+        cameras,
+        state.projection,
+        stride,
+    );
+    if !changed && !buffer_recreated {
+        return;
     }
+
+    let ProjState::Uniform { buffer, .. } = &state.proj else {
+        return;
+    };
     state
         .queue
         .write_buffer(buffer, 0, &state.projection_upload);
+}
+
+#[inline(always)]
+fn projection_key(matrix: Matrix4) -> [u32; 16] {
+    matrix.to_cols_array().map(f32::to_bits)
+}
+
+fn stage_projection_upload(
+    upload: &mut Vec<u8>,
+    keys: &mut Vec<[u32; 16]>,
+    cameras: &[Matrix4],
+    fallback: Matrix4,
+    stride: usize,
+) -> bool {
+    let needed = cameras.len().saturating_add(1).max(1);
+    let mut changed = keys.len() != needed;
+    keys.resize(needed, [0; 16]);
+    for (slot, matrix) in keys
+        .iter_mut()
+        .zip(cameras.iter().copied().chain(std::iter::once(fallback)))
+    {
+        let key = projection_key(matrix);
+        if *slot != key {
+            *slot = key;
+            changed = true;
+        }
+    }
+    if !changed {
+        return false;
+    }
+
+    upload.resize(needed * stride, 0);
+    for (index, key) in keys.iter().enumerate() {
+        let bytes = cast_slice(std::slice::from_ref(key));
+        let offset = index * stride;
+        upload[offset..offset + bytes.len()].copy_from_slice(bytes);
+    }
+    true
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn stage_projection_upload_legacy(
+    upload: &mut Vec<u8>,
+    cameras: &[Matrix4],
+    fallback: Matrix4,
+    stride: usize,
+) {
+    let needed = cameras.len().saturating_add(1).max(1);
+    upload.resize(needed * stride, 0);
+    for (index, matrix) in cameras
+        .iter()
+        .copied()
+        .chain(std::iter::once(fallback))
+        .enumerate()
+    {
+        let array = matrix.to_cols_array_2d();
+        let bytes = cast_slice(&array);
+        let offset = index * stride;
+        upload[offset..offset + bytes.len()].copy_from_slice(bytes);
+    }
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn __benchmark_stage_projection_upload(
+    upload: &mut Vec<u8>,
+    keys: &mut Vec<[u32; 16]>,
+    cameras: &[Matrix4],
+    fallback: Matrix4,
+    stride: usize,
+) -> bool {
+    stage_projection_upload(upload, keys, cameras, fallback, stride)
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn __benchmark_stage_projection_upload_legacy(
+    upload: &mut Vec<u8>,
+    cameras: &[Matrix4],
+    fallback: Matrix4,
+    stride: usize,
+) {
+    stage_projection_upload_legacy(upload, cameras, fallback, stride);
 }
 
 fn set_camera(
@@ -1567,7 +1660,7 @@ fn ensure_tmesh_instance_capacity(state: &mut State, needed: usize) {
     state.tmesh_instance_capacity = new_cap;
 }
 
-fn ensure_projection_capacity(state: &mut State, needed: usize) {
+fn ensure_projection_capacity(state: &mut State, needed: usize) -> bool {
     let ProjState::Uniform {
         stride,
         capacity,
@@ -1576,10 +1669,10 @@ fn ensure_projection_capacity(state: &mut State, needed: usize) {
         layout,
     } = &mut state.proj
     else {
-        return;
+        return false;
     };
     if needed <= *capacity {
-        return;
+        return false;
     }
     let new_cap = needed.next_power_of_two().max(4);
     *buffer = state.device.create_buffer(&wgpu::BufferDescriptor {
@@ -1597,6 +1690,7 @@ fn ensure_projection_capacity(state: &mut State, needed: usize) {
         }],
     });
     *capacity = new_cap;
+    true
 }
 
 fn reconfigure_surface(state: &mut State) {
@@ -2348,3 +2442,97 @@ const TMESH_SHADER_IMM: &str = include_str!("shaders/wgpu_tmesh.wgsl");
 const SHADER_UBO: &str = include_str!("shaders/wgpu_sprite_ubo.wgsl");
 const MESH_SHADER_UBO: &str = include_str!("shaders/wgpu_mesh_ubo.wgsl");
 const TMESH_SHADER_UBO: &str = include_str!("shaders/wgpu_tmesh_ubo.wgsl");
+
+#[cfg(test)]
+mod tests {
+    use super::{Matrix4, stage_projection_upload, stage_projection_upload_legacy};
+    use glam::Vec3;
+
+    const STRIDE: usize = 256;
+
+    #[test]
+    fn projection_cache_matches_legacy_bytes_and_skips_stable_frames() {
+        let mut cameras = vec![
+            Matrix4::IDENTITY,
+            Matrix4::from_translation(Vec3::new(12.0, -7.0, 0.0)),
+        ];
+        let mut fallback = Matrix4::from_scale(Vec3::new(2.0, -2.0, 1.0));
+        let mut upload = Vec::new();
+        let mut keys = Vec::new();
+        let mut legacy = Vec::new();
+
+        assert!(stage_projection_upload(
+            &mut upload,
+            &mut keys,
+            &cameras,
+            fallback,
+            STRIDE,
+        ));
+        stage_projection_upload_legacy(&mut legacy, &cameras, fallback, STRIDE);
+        assert_eq!(upload, legacy);
+        assert!(!stage_projection_upload(
+            &mut upload,
+            &mut keys,
+            &cameras,
+            fallback,
+            STRIDE,
+        ));
+
+        cameras[1] = Matrix4::from_translation(Vec3::new(13.0, -7.0, 0.0));
+        assert!(stage_projection_upload(
+            &mut upload,
+            &mut keys,
+            &cameras,
+            fallback,
+            STRIDE,
+        ));
+        stage_projection_upload_legacy(&mut legacy, &cameras, fallback, STRIDE);
+        assert_eq!(upload, legacy);
+
+        cameras.truncate(1);
+        fallback = Matrix4::from_scale(Vec3::new(3.0, -2.0, 1.0));
+        assert!(stage_projection_upload(
+            &mut upload,
+            &mut keys,
+            &cameras,
+            fallback,
+            STRIDE,
+        ));
+        stage_projection_upload_legacy(&mut legacy, &cameras, fallback, STRIDE);
+        assert_eq!(upload, legacy);
+        assert_eq!(upload.len(), 2 * STRIDE);
+        assert!(upload[64..STRIDE].iter().all(|byte| *byte == 0));
+    }
+
+    #[test]
+    fn projection_cache_compares_float_bits() {
+        let mut upload = Vec::new();
+        let mut keys = Vec::new();
+        let positive_zero = Matrix4::from_cols_array(&[0.0; 16]);
+        let mut negative_zero_bits = [0.0; 16];
+        negative_zero_bits[12] = -0.0;
+        let negative_zero = Matrix4::from_cols_array(&negative_zero_bits);
+
+        assert!(stage_projection_upload(
+            &mut upload,
+            &mut keys,
+            &[],
+            positive_zero,
+            STRIDE,
+        ));
+        assert!(stage_projection_upload(
+            &mut upload,
+            &mut keys,
+            &[],
+            negative_zero,
+            STRIDE,
+        ));
+        assert!(!stage_projection_upload(
+            &mut upload,
+            &mut keys,
+            &[],
+            negative_zero,
+            STRIDE,
+        ));
+    }
+}
