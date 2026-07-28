@@ -639,6 +639,7 @@ fn handle_raw_key_event_inner(
             state.shift_held = raw_key.pressed;
             if !raw_key.pressed {
                 state.shift_anchor = None;
+                clear_music_rate_hold_inputs(state);
             }
             return (true, ThemeEffect::None);
         }
@@ -658,7 +659,9 @@ fn handle_raw_key_event_inner(
             release_page_hold_input(state, dir);
             return (true, ThemeEffect::None);
         }
-        if let Some(dir) = music_rate_hold_dir_for_key(raw_key.code) {
+        if let Some(dir) =
+            music_rate_hold_dir_for_event(raw_key.code, raw_key.pressed, state.shift_held)
+        {
             release_music_rate_hold_input(state, dir);
             return (true, ThemeEffect::None);
         }
@@ -682,9 +685,11 @@ fn handle_raw_key_event_inner(
         return (true, ThemeEffect::None);
     }
 
-    // Music rate hotkeys are global within practice mode: they work whether
-    // the user is editing, mid-loop playback, or has the menu open.
-    if let Some(dir) = music_rate_hold_dir_for_key(raw_key.code) {
+    // Music rate hotkeys are global within practice mode: Shift+[ / Shift+]
+    // work whether the user is editing, mid-loop playback, or has the menu open.
+    if let Some(dir) =
+        music_rate_hold_dir_for_event(raw_key.code, raw_key.pressed, state.shift_held)
+    {
         if !raw_key.repeat {
             press_music_rate_hold_input(state, dir);
         }
@@ -1408,7 +1413,14 @@ const fn music_rate_delta_for_dir(dir: MusicRateHoldDir) -> f32 {
     }
 }
 
-const fn music_rate_hold_dir_for_key(code: KeyCode) -> Option<MusicRateHoldDir> {
+const fn music_rate_hold_dir_for_event(
+    code: KeyCode,
+    pressed: bool,
+    shift_held: bool,
+) -> Option<MusicRateHoldDir> {
+    if pressed && !shift_held {
+        return None;
+    }
     match code {
         KeyCode::BracketLeft => Some(MusicRateHoldDir::Lower),
         KeyCode::BracketRight => Some(MusicRateHoldDir::Raise),
@@ -2660,10 +2672,11 @@ mod tests {
         PracticeNavMode, SPEED_LABEL_STYLE, TAB_FAST_MULTIPLIER, clamp_selection,
         edit_cursor_hold_dir_for_action_in_mode, edit_scroll_hold_rate,
         edit_snap_delta_for_action_in_mode, fmt_itg_float, fmt_music_rate, gameplay_hotkey_input,
-        menu_step_delta_for_action_in_mode, music_rate_delta_for_dir, music_rate_hold_dir_for_key,
-        next_display_beat, page_hold_dir_for_key, practice_edit_beat_travel,
-        practice_nav_mode_from_config, prepend_pending_effects, prepend_pending_sfx,
-        quantized_music_rate, timing_label_glow_alpha, timing_label_x, timing_speed_label,
+        menu_step_delta_for_action_in_mode, music_rate_delta_for_dir,
+        music_rate_hold_dir_for_event, next_display_beat, page_hold_dir_for_key,
+        practice_edit_beat_travel, practice_nav_mode_from_config, prepend_pending_effects,
+        prepend_pending_sfx, quantized_music_rate, timing_label_glow_alpha, timing_label_x,
+        timing_speed_label,
     };
     use crate::SimplyLoveRuntimeRequest;
     use crate::assets::i18n;
@@ -2944,16 +2957,32 @@ mod tests {
     }
 
     #[test]
-    fn music_rate_brackets_map_to_hold_deltas() {
+    fn music_rate_brackets_require_shift_on_press() {
         assert_eq!(
-            music_rate_hold_dir_for_key(KeyCode::BracketLeft),
+            music_rate_hold_dir_for_event(KeyCode::BracketLeft, true, true),
             Some(MusicRateHoldDir::Lower)
         );
         assert_eq!(
-            music_rate_hold_dir_for_key(KeyCode::BracketRight),
+            music_rate_hold_dir_for_event(KeyCode::BracketRight, true, true),
             Some(MusicRateHoldDir::Raise)
         );
-        assert_eq!(music_rate_hold_dir_for_key(KeyCode::KeyP), None);
+        assert_eq!(
+            music_rate_hold_dir_for_event(KeyCode::BracketLeft, true, false),
+            None
+        );
+        assert_eq!(
+            music_rate_hold_dir_for_event(KeyCode::BracketRight, true, false),
+            None
+        );
+        assert_eq!(
+            music_rate_hold_dir_for_event(KeyCode::KeyP, true, true),
+            None
+        );
+        assert_eq!(
+            music_rate_hold_dir_for_event(KeyCode::BracketLeft, false, false),
+            Some(MusicRateHoldDir::Lower),
+            "release must clear a held shortcut after Shift is released"
+        );
         assert_eq!(
             music_rate_delta_for_dir(MusicRateHoldDir::Lower),
             -MUSIC_RATE_HOTKEY_STEP
