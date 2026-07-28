@@ -265,12 +265,11 @@ impl App {
         self.gameplay_text_layout_cache.clear();
 
         window.set_visible(true);
-        // Seed window focus from the OS now that the window is visible. If the
-        // game launched into the background, `has_focus()` returns false and the
-        // raw input backends keep dropping global keystrokes. If it launched
-        // focused, this propagates true through `apply_window_focus_change` and
-        // wakes the rest of the input pipeline.
-        let focused_now = window.has_focus();
+        // Seed focus from the OS after mapping. Bare X11 has no window manager
+        // to assign focus, so use the platform fallback there; managed desktops
+        // still decide whether a background launch should remain unfocused.
+        let focused_now = window.has_focus()
+            || deadlib_platform::window_focus::focus_unmanaged_startup_window(&window);
         self.apply_window_focus_change(focused_now, Instant::now(), Some(&window));
         self.request_redraw(&window, "init_graphics");
 

@@ -9,5 +9,6 @@ pub mod logging;
 pub mod open_path;
 pub mod power;
 pub mod runtime_dir;
+pub mod window_focus;
 #[cfg(windows)]
 pub mod windows_rt;

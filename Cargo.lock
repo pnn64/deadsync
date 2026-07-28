@@ -1058,6 +1058,7 @@ dependencies = [
  "objc2-core-foundation",
  "objc2-core-graphics",
  "objc2-foundation 0.3.2",
+ "raw-window-handle",
  "smithay-client-toolkit 0.21.0",
  "windows",
  "winit",
@@ -1174,7 +1175,7 @@ dependencies = [
 
 [[package]]
 name = "deadsync"
-version = "0.5.115"
+version = "0.5.116"
 dependencies = [
  "deadlib-platform",
  "deadlib-present",
@@ -1634,7 +1635,7 @@ dependencies = [
 
 [[package]]
 name = "deadsync-theme-simply-love"
-version = "0.5.115"
+version = "0.5.116"
 dependencies = [
  "bitflags 2.13.1",
  "chrono",
@@ -1690,7 +1691,7 @@ dependencies = [
 
 [[package]]
 name = "deadsync-version"
-version = "0.5.115"
+version = "0.5.116"
 dependencies = [
  "log",
  "semver",
