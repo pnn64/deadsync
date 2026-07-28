@@ -338,49 +338,53 @@ fn activate_item(
     let Some(item) = shop.items.get(selected - 1) else {
         return SrpgShopInputOutcome::None;
     };
-    if item.downloaded {
-        overlay.local_message = Some("This song is already downloaded here.".to_string());
-        return SrpgShopInputOutcome::ChangedSelection;
-    }
-    if let Some(url) = item.download_url.as_ref() {
-        if !overlay.queued.insert(queue_key(shop.id, item)) {
-            overlay.local_message = Some("This unlock is already queued.".to_string());
+    if !item.owned {
+        let Some(cost) = item.cost else {
+            overlay.local_message = Some("This item is not currently available.".to_string());
+            return SrpgShopInputOutcome::ChangedSelection;
+        };
+        if cost > shop.balance {
+            overlay.local_message = Some(format!(
+                "Need {} more {}.",
+                format_number(cost - shop.balance),
+                SHOPS[overlay.shop_index].currency
+            ));
             return SrpgShopInputOutcome::ChangedSelection;
         }
-        overlay.local_message = Some(format!("Queued {} for download.", item.name));
-        return SrpgShopInputOutcome::Download {
+        overlay.confirm = Some(PurchaseConfirm {
             shop_id: shop.id,
+            item_id: item.item_id.clone(),
+            type_id: item.type_id,
             name: item.name.clone(),
-            url: url.clone(),
-        };
+            cost,
+        });
+        return SrpgShopInputOutcome::ChangedSelection;
     }
-    let Some(cost) = item.cost else {
+    if item.downloaded {
+        overlay.local_message = Some("This owned song is already downloaded here.".to_string());
+        return SrpgShopInputOutcome::ChangedSelection;
+    }
+    let Some(url) = item.download_url.as_ref() else {
         overlay.local_message = Some("This item is not currently available.".to_string());
         return SrpgShopInputOutcome::ChangedSelection;
     };
-    if cost > shop.balance {
-        overlay.local_message = Some(format!(
-            "Need {} more {}.",
-            format_number(cost - shop.balance),
-            SHOPS[overlay.shop_index].currency
-        ));
+    if !overlay.queued.insert(queue_key(shop.id, item)) {
+        overlay.local_message = Some("This unlock is already queued.".to_string());
         return SrpgShopInputOutcome::ChangedSelection;
     }
-    overlay.confirm = Some(PurchaseConfirm {
+    overlay.local_message = Some(format!("Queued {} for download.", item.name));
+    SrpgShopInputOutcome::Download {
         shop_id: shop.id,
-        item_id: item.item_id.clone(),
-        type_id: item.type_id,
         name: item.name.clone(),
-        cost,
-    });
-    SrpgShopInputOutcome::ChangedSelection
+        url: url.clone(),
+    }
 }
 
 fn download_all(overlay: &mut SrpgShopOverlayStateData, shop: &SrpgShop) -> SrpgShopInputOutcome {
     let downloads = shop
         .items
         .iter()
-        .filter(|item| !item.downloaded)
+        .filter(|item| item.owned && !item.downloaded)
         .filter_map(|item| {
             let url = item.download_url.as_ref()?;
             overlay
@@ -648,7 +652,11 @@ fn push_bulk_detail(
 ) {
     let x = cx - PANEL_W * 0.5 + 15.0;
     let ready = ready_count(overlay, shop);
-    let downloaded = shop.items.iter().filter(|item| item.downloaded).count();
+    let downloaded = shop
+        .items
+        .iter()
+        .filter(|item| item.owned && item.downloaded)
+        .count();
     let message = overlay.local_message.clone().unwrap_or_else(|| {
         if ready == 0 {
             "All owned songs are downloaded or queued.".to_string()
@@ -806,7 +814,11 @@ fn push_confirmation(
 
 fn bulk_row_detail(overlay: &SrpgShopOverlayStateData, shop: &SrpgShop) -> String {
     let ready = ready_count(overlay, shop);
-    let downloaded = shop.items.iter().filter(|item| item.downloaded).count();
+    let downloaded = shop
+        .items
+        .iter()
+        .filter(|item| item.owned && item.downloaded)
+        .count();
     format!("{ready} READY  •  {downloaded} DOWNLOADED")
 }
 
@@ -814,7 +826,8 @@ fn ready_count(overlay: &SrpgShopOverlayStateData, shop: &SrpgShop) -> usize {
     shop.items
         .iter()
         .filter(|item| {
-            item.download_url.is_some()
+            item.owned
+                && item.download_url.is_some()
                 && !item.downloaded
                 && !overlay.queued.contains(&queue_key(shop.id, item))
         })
@@ -822,30 +835,30 @@ fn ready_count(overlay: &SrpgShopOverlayStateData, shop: &SrpgShop) -> usize {
 }
 
 fn item_row_detail(item: &SrpgShopItem, currency: &str, queued: bool) -> String {
+    if !item.owned {
+        let kind = match item.kind {
+            SrpgShopItemKind::Song => match (item.difficulty, item.bpm) {
+                (Some(level), Some(bpm)) => format!("LV {level}  •  {bpm} BPM"),
+                _ => "SONG UNLOCK".to_string(),
+            },
+            SrpgShopItemKind::Relic => "RELIC".to_string(),
+        };
+        return item.cost.map_or(kind.clone(), |cost| {
+            format!("{kind}  •  {} {currency}", format_number(cost))
+        });
+    }
     if item.downloaded {
-        return "DOWNLOADED".to_string();
+        return "OWNED  •  DOWNLOADED".to_string();
     }
     if queued {
         return "DOWNLOAD QUEUED".to_string();
     }
-    if item.owned {
-        let new = if item.site_downloaded {
-            ""
-        } else {
-            "  •  NEW"
-        };
-        return format!("OWNED  •  READY TO DOWNLOAD{new}");
-    }
-    let kind = match item.kind {
-        SrpgShopItemKind::Song => match (item.difficulty, item.bpm) {
-            (Some(level), Some(bpm)) => format!("LV {level}  •  {bpm} BPM"),
-            _ => "SONG UNLOCK".to_string(),
-        },
-        SrpgShopItemKind::Relic => "RELIC".to_string(),
+    let new = if item.site_downloaded {
+        ""
+    } else {
+        "  •  NEW"
     };
-    item.cost.map_or(kind.clone(), |cost| {
-        format!("{kind}  •  {} {currency}", format_number(cost))
-    })
+    format!("OWNED  •  READY TO DOWNLOAD{new}")
 }
 
 fn active_message(
@@ -854,8 +867,17 @@ fn active_message(
     currency: &str,
     queued: bool,
 ) -> Option<String> {
+    if !item.owned {
+        return item.cost.map(|cost| {
+            if cost <= balance {
+                format!("Press START to buy for {} {currency}.", format_number(cost))
+            } else {
+                format!("Insufficient {currency}.")
+            }
+        });
+    }
     if item.downloaded {
-        return Some("This song is already downloaded here.".to_string());
+        return Some("This owned song is already downloaded here.".to_string());
     }
     if queued {
         return Some("This song is queued for download.".to_string());
@@ -863,13 +885,7 @@ fn active_message(
     if item.download_url.is_some() {
         return Some("Press START to download this owned unlock.".to_string());
     }
-    item.cost.map(|cost| {
-        if cost <= balance {
-            format!("Press START to buy for {} {currency}.", format_number(cost))
-        } else {
-            format!("Insufficient {currency}.")
-        }
-    })
+    None
 }
 
 fn format_number(value: u64) -> String {
@@ -986,6 +1002,48 @@ mod tests {
     }
 
     #[test]
+    fn downloaded_but_unowned_song_still_requires_purchase() {
+        let mut state = show_srpg_shop_overlay(PlayerSide::P1);
+        handle_srpg_shop_input(
+            &mut state,
+            &input(VirtualAction::p1_down),
+            &snapshot(false, true),
+        );
+        assert_eq!(
+            handle_srpg_shop_input(
+                &mut state,
+                &input(VirtualAction::p1_start),
+                &snapshot(false, true)
+            ),
+            SrpgShopInputOutcome::ChangedSelection
+        );
+        assert_eq!(
+            handle_srpg_shop_input(
+                &mut state,
+                &input(VirtualAction::p1_start),
+                &snapshot(false, true)
+            ),
+            SrpgShopInputOutcome::Purchase {
+                shop_id: 3,
+                item_id: "7".to_string(),
+                type_id: 1,
+            }
+        );
+    }
+
+    #[test]
+    fn downloaded_but_unowned_song_keeps_the_normal_buy_prompt() {
+        let snapshot = snapshot(false, true);
+        let item = &snapshot.shops[0].items[0];
+
+        assert_eq!(
+            active_message(item, snapshot.shops[0].balance, "Bistro Bucks", false),
+            Some("Press START to buy for 1,234 Bistro Bucks.".to_string())
+        );
+        assert!(!item_row_detail(item, "Bistro Bucks", false).contains("DOWNLOADED"));
+    }
+
+    #[test]
     fn download_all_queues_every_ready_song() {
         let mut state = show_srpg_shop_overlay(PlayerSide::P1);
         assert_eq!(
@@ -1007,6 +1065,11 @@ mod tests {
     #[test]
     fn downloaded_song_is_not_queued_again() {
         let mut state = show_srpg_shop_overlay(PlayerSide::P1);
+        handle_srpg_shop_input(
+            &mut state,
+            &input(VirtualAction::p1_down),
+            &snapshot(true, true),
+        );
         assert_eq!(
             handle_srpg_shop_input(
                 &mut state,

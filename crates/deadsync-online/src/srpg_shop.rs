@@ -234,12 +234,11 @@ pub fn runtime_purchase(shop_id: u32, item_id: String, type_id: u8) {
         let purchase = purchase(&session, shop_id, &item_id, type_id);
         let result = match purchase {
             Ok(result) if result.errors.is_empty() => {
-                let notice = result.download.map_or_else(
-                    || "Purchase complete.".to_string(),
-                    |download| format!("Unlocked {}. Press START to download it.", download.name),
-                );
+                let unlocked_name = result.download.map(|download| download.name);
                 fetch_snapshot(&session, None).map(|mut snapshot| {
                     preserve_snapshot_order(&mut snapshot, &previous);
+                    let notice =
+                        purchase_notice(&snapshot, shop_id, &item_id, unlocked_name.as_deref());
                     snapshot.message = Some(notice);
                     snapshot
                 })
@@ -262,6 +261,30 @@ pub fn runtime_purchase(shop_id: u32, item_id: String, type_id: u8) {
             }
         }
     });
+}
+
+fn purchase_notice(
+    snapshot: &SrpgShopSnapshot,
+    shop_id: u32,
+    item_id: &str,
+    unlocked_name: Option<&str>,
+) -> String {
+    let purchased_item = snapshot
+        .shops
+        .iter()
+        .find(|shop| shop.id == shop_id)
+        .and_then(|shop| shop.items.iter().find(|item| item.item_id == item_id));
+    let name = unlocked_name.or_else(|| purchased_item.map(|item| item.name.as_str()));
+    if purchased_item.is_some_and(|item| item.downloaded) {
+        return name.map_or_else(
+            || "Purchase complete. Already downloaded here.".to_string(),
+            |name| format!("Unlocked {name}. Already downloaded here."),
+        );
+    }
+    name.map_or_else(
+        || "Purchase complete.".to_string(),
+        |name| format!("Unlocked {name}. Press START to download it."),
+    )
 }
 
 fn login(username: &str, password: &str) -> Result<(ShopSession, String), SrpgShopError> {
@@ -1133,6 +1156,44 @@ mod tests {
                 .map(|item| (item.name.as_str(), item.owned))
                 .collect::<Vec<_>>(),
             [("First", true), ("Second", false)]
+        );
+    }
+
+    #[test]
+    fn purchase_notice_skips_download_prompt_for_an_installed_song() {
+        let mut item = test_item("7", "Fast Song", 14, 180, true);
+        item.downloaded = true;
+        let snapshot = SrpgShopSnapshot {
+            phase: SrpgShopPhase::Ready,
+            shops: vec![SrpgShop {
+                id: 3,
+                balance: 0,
+                items: vec![item],
+            }],
+            message: None,
+        };
+
+        assert_eq!(
+            purchase_notice(&snapshot, 3, "7", Some("Fast Song")),
+            "Unlocked Fast Song. Already downloaded here."
+        );
+    }
+
+    #[test]
+    fn purchase_notice_offers_download_when_song_is_not_installed() {
+        let snapshot = SrpgShopSnapshot {
+            phase: SrpgShopPhase::Ready,
+            shops: vec![SrpgShop {
+                id: 3,
+                balance: 0,
+                items: vec![test_item("7", "Fast Song", 14, 180, true)],
+            }],
+            message: None,
+        };
+
+        assert_eq!(
+            purchase_notice(&snapshot, 3, "7", Some("Fast Song")),
+            "Unlocked Fast Song. Press START to download it."
         );
     }
 
