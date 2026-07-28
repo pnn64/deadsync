@@ -3,7 +3,8 @@ use crate::assets::i18n::{tr, tr_fmt};
 use crate::assets::{self, AssetManager};
 use crate::assets::{FontRole, machine_font_key};
 use crate::config::{
-    BreakdownStyle, GraphOrientation, NewPackMode, SelectMusicPatternInfoMode, SyncGraphMode,
+    BreakdownStyle, GraphOrientation, GraphOrigin, NewPackMode, SelectMusicPatternInfoMode,
+    SyncGraphMode,
 };
 
 use crate::rgba_const;
@@ -589,6 +590,7 @@ pub fn sync_runtime_view(state: &mut State, view: SelectMusicRuntimeView) {
         .extend(view.ready_song_reload_dirs);
     state.sync_graph_mode = view.sync_graph_mode;
     state.sync_graph_orientation = view.sync_graph_orientation;
+    state.sync_graph_origin = view.sync_graph_origin;
     state.sync_confidence_percent = view.sync_confidence_percent.min(100);
 }
 
@@ -918,6 +920,7 @@ struct NullOrDieOverlayData {
     kernel_type: crate::SimplyLoveSyncKernel,
     graph_mode: SyncGraphMode,
     graph_orientation: GraphOrientation,
+    graph_origin: GraphOrigin,
     confidence_threshold: f64,
     cols: usize,
     freq_rows: usize,
@@ -1432,6 +1435,7 @@ pub struct State {
     ready_song_reload_dirs: Vec<PathBuf>,
     sync_graph_mode: SyncGraphMode,
     sync_graph_orientation: GraphOrientation,
+    sync_graph_origin: GraphOrigin,
     sync_confidence_percent: u8,
     songs_root: PathBuf,
     song_scan_roots: Vec<PathBuf>,
@@ -3386,6 +3390,7 @@ pub fn init(init_view: SelectMusicInitView) -> State {
         ready_song_reload_dirs: Vec::new(),
         sync_graph_mode: SyncGraphMode::PostKernelFingerprint,
         sync_graph_orientation: GraphOrientation::Vertical,
+        sync_graph_origin: GraphOrigin::Bottom,
         sync_confidence_percent: 80,
         songs_root: init_view.songs_root,
         song_scan_roots: init_view.song_scan_roots,
@@ -3623,6 +3628,7 @@ pub fn init_placeholder() -> State {
         ready_song_reload_dirs: Vec::new(),
         sync_graph_mode: SyncGraphMode::PostKernelFingerprint,
         sync_graph_orientation: GraphOrientation::Vertical,
+        sync_graph_origin: GraphOrigin::Bottom,
         sync_confidence_percent: 80,
         songs_root: PathBuf::new(),
         song_scan_roots: Vec::new(),
@@ -5434,6 +5440,7 @@ fn build_sync_heat_image(
     cols: SyncGraphCols,
     graph_size: [f32; 2],
     orientation: GraphOrientation,
+    origin: GraphOrigin,
     clim_pct: Option<(f64, f64)>,
 ) -> Option<RgbaImage> {
     let [graph_w, graph_h] = graph_size;
@@ -5455,13 +5462,19 @@ fn build_sync_heat_image(
     for py in 0..image_h as usize {
         for px in 0..image_w as usize {
             let (row, col) = match orientation {
-                // Screen y=0 is data row 0 so streamed rows fill downward.
-                GraphOrientation::Vertical => (
-                    ((py * total_rows) / image_h as usize).min(total_rows.saturating_sub(1)),
-                    cols.first
-                        + (px * visible_cols / image_w as usize)
-                            .min(visible_cols.saturating_sub(1)),
-                ),
+                GraphOrientation::Vertical => {
+                    let row_px = match origin {
+                        GraphOrigin::Bottom => image_h as usize - 1 - py,
+                        GraphOrigin::Top => py,
+                    };
+                    (
+                        ((row_px * total_rows) / image_h as usize)
+                            .min(total_rows.saturating_sub(1)),
+                        cols.first
+                            + (px * visible_cols / image_w as usize)
+                                .min(visible_cols.saturating_sub(1)),
+                    )
+                }
                 // Transpose the row axis so streamed rows fill left-to-right;
                 // the fingerprint-time axis grows upward to match null-or-die.
                 GraphOrientation::Horizontal => (
@@ -5601,6 +5614,7 @@ fn refresh_sync_overlay_heat_texture(overlay: &mut NullOrDieOverlayData) {
         cols,
         [graph_w, graph_h],
         overlay.graph_orientation,
+        overlay.graph_origin,
         clim_pct,
     ) else {
         return;
@@ -8206,6 +8220,7 @@ fn show_sync_song_overlay(state: &mut State) {
 
     let graph_mode = state.sync_graph_mode;
     let graph_orientation = state.sync_graph_orientation;
+    let graph_origin = state.sync_graph_origin;
     let confidence_threshold = f64::from(state.sync_confidence_percent) / 100.0;
 
     let simfile_path = song.simfile_path.clone();
@@ -8236,6 +8251,7 @@ fn show_sync_song_overlay(state: &mut State) {
         kernel_type: crate::SimplyLoveSyncKernel::Rising,
         graph_mode,
         graph_orientation,
+        graph_origin,
         confidence_threshold,
         cols: 0,
         freq_rows: 0,
@@ -14153,7 +14169,7 @@ mod tests {
         select_music_lobby_lock_text_for, solo_runtime_side, steps_index_for_side,
         sync_bias_axis_pos, sync_graph_cols, sync_low_confidence_warning, sync_overlay_graph_size,
     };
-    use crate::config::{GraphOrientation, SelectMusicWheelStyle};
+    use crate::config::{GraphOrientation, GraphOrigin, SelectMusicWheelStyle};
     use crate::screens::ThemeEffect;
     use crate::views::ProfilePickerView;
     use deadsync_chart::{SongData, SongPack, SyncPref};
@@ -14777,6 +14793,7 @@ mod tests {
             kernel_type: crate::SimplyLoveSyncKernel::Rising,
             graph_mode: crate::config::SyncGraphMode::PostKernelFingerprint,
             graph_orientation: crate::config::GraphOrientation::Vertical,
+            graph_origin: crate::config::GraphOrigin::Bottom,
             confidence_threshold: 0.8,
             cols,
             freq_rows: 0,
@@ -15272,6 +15289,7 @@ mod tests {
                 ready_song_reload_dirs: vec![std::path::PathBuf::from("Songs/Unlocks")],
                 sync_graph_mode: crate::config::SyncGraphMode::Frequency,
                 sync_graph_orientation: crate::config::GraphOrientation::Horizontal,
+                sync_graph_origin: crate::config::GraphOrigin::Top,
                 sync_confidence_percent: 75,
             },
         );
@@ -15288,6 +15306,7 @@ mod tests {
             state.sync_graph_orientation,
             crate::config::GraphOrientation::Horizontal
         );
+        assert_eq!(state.sync_graph_origin, crate::config::GraphOrigin::Top);
         assert_eq!(state.sync_confidence_percent, 75);
         assert_eq!(state.session.play_style, profile_data::PlayStyle::Versus);
         assert_eq!(state.session.player_side, profile_data::PlayerSide::P2);
@@ -16613,6 +16632,7 @@ mod tests {
             },
             [2.0, 2.0],
             GraphOrientation::Vertical,
+            GraphOrigin::Top,
             None,
         )
         .unwrap();
@@ -16627,14 +16647,67 @@ mod tests {
             },
             [2.0, 2.0],
             GraphOrientation::Horizontal,
+            GraphOrigin::Bottom,
+            None,
+        )
+        .unwrap();
+        let horizontal_top = build_sync_heat_image(
+            &matrix,
+            2,
+            2,
+            SyncGraphCols {
+                total: 2,
+                first: 0,
+                end: 2,
+            },
+            [2.0, 2.0],
+            GraphOrientation::Horizontal,
+            GraphOrigin::Top,
             None,
         )
         .unwrap();
 
+        assert_eq!(horizontal.as_raw(), horizontal_top.as_raw());
         assert_eq!(horizontal.get_pixel(0, 0), vertical.get_pixel(1, 0));
         assert_eq!(horizontal.get_pixel(1, 0), vertical.get_pixel(1, 1));
         assert_eq!(horizontal.get_pixel(0, 1), vertical.get_pixel(0, 0));
         assert_eq!(horizontal.get_pixel(1, 1), vertical.get_pixel(0, 1));
+    }
+
+    #[test]
+    fn vertical_sync_heat_supports_bottom_and_top_origins() {
+        let matrix = [0.0, 1.0];
+        let cols = SyncGraphCols {
+            total: 1,
+            first: 0,
+            end: 1,
+        };
+        let bottom = build_sync_heat_image(
+            &matrix,
+            2,
+            2,
+            cols,
+            [1.0, 2.0],
+            GraphOrientation::Vertical,
+            GraphOrigin::Bottom,
+            None,
+        )
+        .unwrap();
+        let top = build_sync_heat_image(
+            &matrix,
+            2,
+            2,
+            cols,
+            [1.0, 2.0],
+            GraphOrientation::Vertical,
+            GraphOrigin::Top,
+            None,
+        )
+        .unwrap();
+
+        assert_eq!(bottom.get_pixel(0, 1), top.get_pixel(0, 0));
+        assert_eq!(bottom.get_pixel(0, 0), top.get_pixel(0, 1));
+        assert_ne!(bottom.get_pixel(0, 0), bottom.get_pixel(0, 1));
     }
 
     #[test]
@@ -16675,6 +16748,7 @@ mod tests {
             },
             [10.0, 1.0],
             GraphOrientation::Vertical,
+            GraphOrigin::Bottom,
             None,
         )
         .unwrap();
@@ -16689,6 +16763,7 @@ mod tests {
             },
             [1.0, 2.0],
             GraphOrientation::Horizontal,
+            GraphOrigin::Bottom,
             None,
         )
         .unwrap();

@@ -902,6 +902,12 @@ pub fn init(view: OptionsInitView) -> State {
     set_choice_by_id(
         &mut state.sub[SubmenuKind::NullOrDieOptions].choice_indices,
         NULL_OR_DIE_OPTIONS_ROWS,
+        SubRowId::GraphOrigin,
+        null_or_die_graph_origin_choice_index(cfg.null_or_die_graph_origin),
+    );
+    set_choice_by_id(
+        &mut state.sub[SubmenuKind::NullOrDieOptions].choice_indices,
+        NULL_OR_DIE_OPTIONS_ROWS,
         SubRowId::SyncConfidence,
         sync_confidence_choice_index(cfg.null_or_die_confidence_percent),
     );

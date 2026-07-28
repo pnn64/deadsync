@@ -182,6 +182,7 @@ pub enum SubRowId {
     // Null-or-Die Settings
     SyncGraph,
     GraphOrientation,
+    GraphOrigin,
     SyncConfidence,
     PackSyncThreads,
     Fingerprint,

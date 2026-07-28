@@ -13,10 +13,23 @@ use crate::writer::{push_bool, push_line};
 use null_or_die::{BiasCfg, BiasKernel, GraphOrientation, KernelTarget};
 use std::str::FromStr;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GraphOrigin {
+    Bottom,
+    Top,
+}
+
+impl Default for GraphOrigin {
+    fn default() -> Self {
+        Self::Bottom
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct NullOrDieOptions {
     pub sync_graph: SyncGraphMode,
     pub graph_orientation: GraphOrientation,
+    pub graph_origin: GraphOrigin,
     pub confidence_percent: u8,
     pub pack_sync_threads: u8,
     pub fingerprint_ms: f64,
@@ -33,6 +46,7 @@ impl Default for NullOrDieOptions {
         Self {
             sync_graph: SyncGraphMode::PostKernelFingerprint,
             graph_orientation: GraphOrientation::Vertical,
+            graph_origin: GraphOrigin::Bottom,
             confidence_percent: DEFAULT_NULL_OR_DIE_CONFIDENCE_PERCENT,
             pack_sync_threads: DEFAULT_NULL_OR_DIE_PACK_SYNC_THREADS,
             fingerprint_ms: DEFAULT_NULL_OR_DIE_FINGERPRINT_MS,
@@ -56,6 +70,10 @@ pub fn load_null_or_die_options(conf: &SimpleIni, default: NullOrDieOptions) -> 
             .get("Options", "NullOrDieGraphOrientation")
             .and_then(parse_null_or_die_graph_orientation)
             .unwrap_or(default.graph_orientation),
+        graph_origin: conf
+            .get("Options", "NullOrDieGraphOrigin")
+            .and_then(parse_null_or_die_graph_origin)
+            .unwrap_or(default.graph_origin),
         confidence_percent: conf
             .get("Options", "NullOrDieConfidencePercent")
             .and_then(|value| value.parse::<u8>().ok())
@@ -162,6 +180,30 @@ pub const fn null_or_die_graph_orientation_choice_index(orientation: GraphOrient
 }
 
 #[inline(always)]
+pub const fn null_or_die_graph_origin_str(origin: GraphOrigin) -> &'static str {
+    match origin {
+        GraphOrigin::Bottom => "Bottom",
+        GraphOrigin::Top => "Top",
+    }
+}
+
+pub fn parse_null_or_die_graph_origin(raw: &str) -> Option<GraphOrigin> {
+    match raw.trim().to_ascii_lowercase().as_str() {
+        "bottom" => Some(GraphOrigin::Bottom),
+        "top" => Some(GraphOrigin::Top),
+        _ => None,
+    }
+}
+
+#[inline(always)]
+pub const fn null_or_die_graph_origin_choice_index(origin: GraphOrigin) -> usize {
+    match origin {
+        GraphOrigin::Bottom => 0,
+        GraphOrigin::Top => 1,
+    }
+}
+
+#[inline(always)]
 pub const fn null_or_die_kernel_target_str(target: KernelTarget) -> &'static str {
     match target {
         KernelTarget::Digest => "Digest",
@@ -246,6 +288,11 @@ pub fn push_null_or_die_option_lines(content: &mut String, options: NullOrDieOpt
     );
     push_line(
         content,
+        "NullOrDieGraphOrigin",
+        null_or_die_graph_origin_str(options.graph_origin),
+    );
+    push_line(
+        content,
         "NullOrDieConfidencePercent",
         clamp_null_or_die_confidence_percent(options.confidence_percent),
     );
@@ -309,6 +356,7 @@ pub fn null_or_die_options_from_config(cfg: Config) -> NullOrDieOptions {
     NullOrDieOptions {
         sync_graph: cfg.null_or_die_sync_graph,
         graph_orientation: cfg.null_or_die_graph_orientation,
+        graph_origin: cfg.null_or_die_graph_origin,
         confidence_percent: cfg.null_or_die_confidence_percent,
         pack_sync_threads: cfg.null_or_die_pack_sync_threads,
         fingerprint_ms: cfg.null_or_die_fingerprint_ms,
@@ -329,6 +377,7 @@ mod tests {
         NullOrDieOptions {
             sync_graph: SyncGraphMode::Frequency,
             graph_orientation: GraphOrientation::Vertical,
+            graph_origin: GraphOrigin::Bottom,
             confidence_percent: 80,
             pack_sync_threads: 0,
             fingerprint_ms: 12.0,
@@ -343,6 +392,14 @@ mod tests {
 
     fn assert_tenths_eq(value: f64, tenths: i32) {
         assert_eq!((value * 10.0).round() as i32, tenths);
+    }
+
+    #[test]
+    fn vertical_graph_origin_defaults_to_bottom() {
+        assert_eq!(
+            NullOrDieOptions::default().graph_origin,
+            GraphOrigin::Bottom
+        );
     }
 
     #[test]
@@ -382,6 +439,15 @@ mod tests {
             parse_null_or_die_graph_orientation(" HORIZONTAL "),
             Some(GraphOrientation::Horizontal)
         );
+        assert_eq!(
+            null_or_die_graph_origin_choice_index(GraphOrigin::Bottom),
+            0
+        );
+        assert_eq!(null_or_die_graph_origin_choice_index(GraphOrigin::Top), 1);
+        assert_eq!(
+            parse_null_or_die_graph_origin(" TOP "),
+            Some(GraphOrigin::Top)
+        );
 
         assert_eq!(
             null_or_die_kernel_target_choice_index(KernelTarget::Digest),
@@ -419,6 +485,7 @@ mod tests {
             [Options]
             NullOrDieSyncGraph=PostKernel
             NullOrDieGraphOrientation=Horizontal
+            NullOrDieGraphOrigin=Top
             NullOrDieConfidencePercent=200
             PackSyncThreads=4
             NullOrDieFingerprintMs=10.05
@@ -435,6 +502,7 @@ mod tests {
 
         assert_eq!(loaded.sync_graph, SyncGraphMode::PostKernelFingerprint);
         assert_eq!(loaded.graph_orientation, GraphOrientation::Horizontal);
+        assert_eq!(loaded.graph_origin, GraphOrigin::Top);
         assert_eq!(loaded.confidence_percent, 100);
         assert_eq!(loaded.pack_sync_threads, 4);
         assert_tenths_eq(loaded.fingerprint_ms, 101);
@@ -455,6 +523,7 @@ mod tests {
             [Options]
             NullOrDieSyncGraph=bad
             NullOrDieGraphOrientation=bad
+            NullOrDieGraphOrigin=bad
             NullOrDieConfidencePercent=bad
             PackSyncThreads=bad
             NullOrDieFingerprintMs=bad
@@ -479,6 +548,7 @@ mod tests {
             NullOrDieOptions {
                 sync_graph: SyncGraphMode::PostKernelFingerprint,
                 graph_orientation: GraphOrientation::Horizontal,
+                graph_origin: GraphOrigin::Top,
                 confidence_percent: 250,
                 pack_sync_threads: 4,
                 fingerprint_ms: 10.05,
@@ -495,6 +565,7 @@ mod tests {
             content,
             "NullOrDieSyncGraph=PostKernelFingerprint\n\
 NullOrDieGraphOrientation=Horizontal\n\
+NullOrDieGraphOrigin=Top\n\
 NullOrDieConfidencePercent=100\n\
 PackSyncThreads=4\n\
 NullOrDieFingerprintMs=10.1\n\
@@ -512,6 +583,7 @@ NullOrDieFullSpectrogram=1\n"
         let cfg = null_or_die_bias_cfg(NullOrDieOptions {
             sync_graph: SyncGraphMode::Frequency,
             graph_orientation: GraphOrientation::Horizontal,
+            graph_origin: GraphOrigin::Top,
             confidence_percent: 80,
             pack_sync_threads: 0,
             fingerprint_ms: 0.0,

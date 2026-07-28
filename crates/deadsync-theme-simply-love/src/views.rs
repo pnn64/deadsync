@@ -814,6 +814,7 @@ pub struct SelectMusicRuntimeView {
     pub ready_song_reload_dirs: Vec<PathBuf>,
     pub sync_graph_mode: deadsync_config::prelude::SyncGraphMode,
     pub sync_graph_orientation: deadsync_config::prelude::GraphOrientation,
+    pub sync_graph_origin: deadsync_config::prelude::GraphOrigin,
     pub sync_confidence_percent: u8,
 }
 
@@ -837,6 +838,7 @@ impl Default for SelectMusicRuntimeView {
             ready_song_reload_dirs: Vec::new(),
             sync_graph_mode: deadsync_config::prelude::SyncGraphMode::PostKernelFingerprint,
             sync_graph_orientation: deadsync_config::prelude::GraphOrientation::Vertical,
+            sync_graph_origin: deadsync_config::prelude::GraphOrigin::Bottom,
             sync_confidence_percent: 80,
         }
     }

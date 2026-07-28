@@ -701,6 +701,13 @@ pub(super) fn apply_submenu_choice_delta(
                     crate::SimplyLoveGraphOrientation::Vertical
                 })
             }
+            SubRowId::GraphOrigin => {
+                crate::SimplyLoveNullOrDieConfigRequest::GraphOrigin(if new_index == 1 {
+                    crate::SimplyLoveGraphOrigin::Top
+                } else {
+                    crate::SimplyLoveGraphOrigin::Bottom
+                })
+            }
             SubRowId::SyncConfidence => crate::SimplyLoveNullOrDieConfigRequest::ConfidencePercent(
                 sync_confidence_from_choice(new_index),
             ),

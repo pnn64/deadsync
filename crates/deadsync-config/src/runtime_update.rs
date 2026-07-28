@@ -1,6 +1,7 @@
 use crate::app_config::{Config, DisplayMode};
 use crate::app_update as config_update;
 use crate::audio::NoteScrollClock;
+use crate::null_or_die::GraphOrigin;
 use crate::runtime::{RUNTIME_CONFIG, get, save_without_keymaps};
 use crate::theme::{
     ArrowCloudQrLoginWhen, BreakdownStyle, DefaultFailType, DefaultSyncOffset, GameFlag,
@@ -206,6 +207,7 @@ update_config_fn!(pub fn update_default_fail_type(fail_type: DefaultFailType) =>
 
 update_config_fn!(pub fn update_null_or_die_sync_graph(mode: SyncGraphMode) => set_null_or_die_sync_graph);
 update_config_fn!(pub fn update_null_or_die_graph_orientation(orientation: GraphOrientation) => set_null_or_die_graph_orientation);
+update_config_fn!(pub fn update_null_or_die_graph_origin(origin: GraphOrigin) => set_null_or_die_graph_origin);
 update_config_fn!(pub fn update_null_or_die_confidence_percent(value: u8) => set_null_or_die_confidence_percent);
 update_config_fn!(pub fn update_null_or_die_pack_sync_threads(threads: u8) => set_null_or_die_pack_sync_threads);
 update_config_fn!(pub fn update_null_or_die_fingerprint_ms(value: f64) => set_null_or_die_fingerprint_ms);

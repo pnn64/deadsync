@@ -653,11 +653,18 @@ pub enum SimplyLoveGraphOrientation {
     Horizontal,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SimplyLoveGraphOrigin {
+    Bottom,
+    Top,
+}
+
 /// Null-or-Die preferences chosen by Simply Love and persisted by shell.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SimplyLoveNullOrDieConfigRequest {
     SyncGraph(SimplyLoveNullOrDieGraph),
     GraphOrientation(SimplyLoveGraphOrientation),
+    GraphOrigin(SimplyLoveGraphOrigin),
     ConfidencePercent(u8),
     PackSyncThreads(u8),
     FingerprintTenths(i32),

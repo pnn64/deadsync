@@ -32,13 +32,14 @@ pub use crate::machine::{
     DEFAULT_FRAME_STATS_OVERLAY_ANCHOR, DEFAULT_FRAME_STATS_OVERLAY_STYLE, DEFAULT_MACHINE_NOTESKIN,
 };
 pub use crate::null_or_die::{
-    clamp_null_or_die_confidence_percent, clamp_null_or_die_magic_offset_ms,
+    GraphOrigin, clamp_null_or_die_confidence_percent, clamp_null_or_die_magic_offset_ms,
     clamp_null_or_die_positive_ms, null_or_die_graph_orientation_choice_index,
-    null_or_die_graph_orientation_str, null_or_die_kernel_target_choice_index,
+    null_or_die_graph_orientation_str, null_or_die_graph_origin_choice_index,
+    null_or_die_graph_origin_str, null_or_die_kernel_target_choice_index,
     null_or_die_kernel_target_from_choice, null_or_die_kernel_target_str,
     null_or_die_kernel_type_choice_index, null_or_die_kernel_type_from_choice,
     null_or_die_kernel_type_str, parse_null_or_die_graph_orientation,
-    parse_null_or_die_kernel_target, parse_null_or_die_kernel_type,
+    parse_null_or_die_graph_origin, parse_null_or_die_kernel_target, parse_null_or_die_kernel_type,
 };
 pub use crate::options::{
     MAX_FPS_DEFAULT, MAX_FPS_HOLD_FAST_AFTER, MAX_FPS_HOLD_FASTER_AFTER,

@@ -1,6 +1,6 @@
 use crate::audio::{AudioOptions, NoteScrollClock};
 use crate::defaults::*;
-use crate::null_or_die::NullOrDieOptions;
+use crate::null_or_die::{GraphOrigin, NullOrDieOptions};
 use crate::options::{RuntimeOptions, SelectMusicOptions, SmxPackName, SystemOptions};
 use crate::theme::{
     ArrowCloudQrLoginWhen, BreakdownStyle, DefaultFailType, DefaultSyncOffset, GameFlag,
@@ -246,6 +246,8 @@ pub struct Config {
     pub null_or_die_sync_graph: SyncGraphMode,
     /// Choose which axis the null-or-die graph rows occupy.
     pub null_or_die_graph_orientation: GraphOrientation,
+    /// Choose where row zero appears in vertical null-or-die graphs.
+    pub null_or_die_graph_origin: GraphOrigin,
     /// Minimum confidence percent required for pack sync saves.
     pub null_or_die_confidence_percent: u8,
     /// Worker threads for null-or-die pack/all sync analysis.
@@ -468,6 +470,7 @@ impl Default for Config {
             default_fail_type: system.default_fail_type,
             null_or_die_sync_graph: null_or_die.sync_graph,
             null_or_die_graph_orientation: null_or_die.graph_orientation,
+            null_or_die_graph_origin: null_or_die.graph_origin,
             null_or_die_confidence_percent: null_or_die.confidence_percent,
             null_or_die_pack_sync_threads: null_or_die.pack_sync_threads,
             null_or_die_fingerprint_ms: null_or_die.fingerprint_ms,

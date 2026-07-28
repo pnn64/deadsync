@@ -36,6 +36,15 @@ pub(in crate::screens::options) const NULL_OR_DIE_OPTIONS_ROWS: &[SubRow] = &[
         inline: false,
     },
     SubRow {
+        id: SubRowId::GraphOrigin,
+        label: lookup_key("OptionsNullOrDie", "GraphOrigin"),
+        choices: &[
+            localized_choice("OptionsNullOrDie", "GraphOriginBottom"),
+            localized_choice("OptionsNullOrDie", "GraphOriginTop"),
+        ],
+        inline: false,
+    },
+    SubRow {
         id: SubRowId::SyncConfidence,
         label: lookup_key("OptionsNullOrDie", "SyncConfidence"),
         choices: &[
@@ -164,6 +173,14 @@ pub(in crate::screens::options) const NULL_OR_DIE_OPTIONS_ITEMS: &[Item] = &[
         help: &[HelpEntry::Paragraph(lookup_key(
             "OptionsNullOrDieHelp",
             "GraphOrientationHelp",
+        ))],
+    },
+    Item {
+        id: ItemId::NodGraphOrigin,
+        name: lookup_key("OptionsNullOrDie", "GraphOrigin"),
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsNullOrDieHelp",
+            "GraphOriginHelp",
         ))],
     },
     Item {

@@ -583,6 +583,7 @@ fn null_or_die_options(cfg: &Config) -> NullOrDieOptions {
     NullOrDieOptions {
         sync_graph: cfg.null_or_die_sync_graph,
         graph_orientation: cfg.null_or_die_graph_orientation,
+        graph_origin: cfg.null_or_die_graph_origin,
         confidence_percent: cfg.null_or_die_confidence_percent,
         pack_sync_threads: cfg.null_or_die_pack_sync_threads,
         fingerprint_ms: cfg.null_or_die_fingerprint_ms,

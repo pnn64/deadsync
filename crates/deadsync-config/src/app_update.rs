@@ -2,7 +2,7 @@ use crate::app_config::{Config, DisplayMode};
 use crate::audio::{NoteScrollClock, clamp_audio_volume_percent, clamp_music_wheel_switch_speed};
 use crate::machine::clamp_smx_light_brightness_percent;
 use crate::null_or_die::{
-    clamp_null_or_die_confidence_percent, clamp_null_or_die_magic_offset_ms,
+    GraphOrigin, clamp_null_or_die_confidence_percent, clamp_null_or_die_magic_offset_ms,
     clamp_null_or_die_positive_ms,
 };
 use crate::options::{clamp_bg_brightness, clamp_show_stats_mode, clamped_max_fps};
@@ -656,6 +656,10 @@ pub fn set_null_or_die_sync_graph(cfg: &mut Config, mode: SyncGraphMode) -> bool
 
 pub fn set_null_or_die_graph_orientation(cfg: &mut Config, orientation: GraphOrientation) -> bool {
     set_if_changed(&mut cfg.null_or_die_graph_orientation, orientation)
+}
+
+pub fn set_null_or_die_graph_origin(cfg: &mut Config, origin: GraphOrigin) -> bool {
+    set_if_changed(&mut cfg.null_or_die_graph_origin, origin)
 }
 
 pub fn set_null_or_die_confidence_percent(cfg: &mut Config, value: u8) -> bool {
