@@ -220,6 +220,16 @@ impl DynamicMedia {
                 self.release_texture_key(assets, backend, old_key);
             }
 
+            // Gameplay prewarms visible pack banners before this command runs. Reuse that upload
+            // instead of replacing the texture again in the same frame.
+            if assets.has_texture_key(&key) {
+                if banner_cache_opts.enabled {
+                    self.dynamic_pack_banner_keys.insert(key.clone());
+                }
+                self.current_dynamic_pack_banner = Some((key, path));
+                return;
+            }
+
             match create_inserted_banner_texture(assets, backend, &path) {
                 Ok(key) => {
                     if banner_cache_opts.enabled {

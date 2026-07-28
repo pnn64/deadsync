@@ -224,7 +224,7 @@ pub fn create_cdtitle_texture(
         .create_texture(&rgba, SamplerDesc::default())
         .map_err(|e| DynamicImageTextureError::Create(e.to_string()))?;
     let key = cdtitle_texture_key(path);
-    assets.insert_texture(key.clone(), texture, rgba.width(), rgba.height());
+    assets.set_texture_for_key(backend, key.clone(), texture, rgba.width(), rgba.height());
     register_texture_dims(&key, rgba.width(), rgba.height());
     Ok(key)
 }
@@ -240,7 +240,7 @@ pub fn create_inserted_banner_texture(
         .create_texture(&rgba, SamplerDesc::default())
         .map_err(|e| DynamicImageTextureError::Create(e.to_string()))?;
     let key = path_texture_key(path);
-    assets.insert_texture(key.clone(), texture, rgba.width(), rgba.height());
+    assets.set_texture_for_key(backend, key.clone(), texture, rgba.width(), rgba.height());
     register_texture_dims(&key, rgba.width(), rgba.height());
     Ok(key)
 }

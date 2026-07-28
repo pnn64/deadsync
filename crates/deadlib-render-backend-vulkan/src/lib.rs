@@ -97,6 +97,7 @@ struct SubmittedTextureUpload {
     frame: usize,
     cmd: vk::CommandBuffer,
     staging: Vec<BufferResource>,
+    retired_textures: Vec<RetiredTexture>,
 }
 
 struct RetiredTexture {
@@ -231,6 +232,7 @@ pub struct State {
     cached_tmesh_bytes: usize,
     pending_tex_upload_cmd: Option<vk::CommandBuffer>, // batched texture upload cmd
     pending_tex_staging: Vec<BufferResource>, // keep staging alive until upload batch flush
+    pending_tex_retired: Vec<RetiredTexture>, // keep replaced images alive through upload completion
     submitted_tex_uploads: Vec<SubmittedTextureUpload>, // retired when the tagged frame slot completes
     retired_textures: Vec<RetiredTexture>,
     last_submitted_present_id: u32,
@@ -379,6 +381,7 @@ pub fn init(
         cached_tmesh_bytes: 0,
         pending_tex_upload_cmd: None,
         pending_tex_staging: Vec::new(),
+        pending_tex_retired: Vec::new(),
         submitted_tex_uploads: Vec::new(),
         retired_textures: Vec::new(),
         last_submitted_present_id: 0,
@@ -1133,9 +1136,12 @@ fn begin_pending_texture_upload_cmd(
 fn retire_submitted_texture_uploads(state: &mut State, frame: usize) {
     let device = state.device.as_ref().unwrap();
     let command_pool = state.command_pool;
-    state.submitted_tex_uploads.retain_mut(|batch| {
+    let mut pending = Vec::with_capacity(state.submitted_tex_uploads.len());
+    let mut upload_completed_textures = Vec::new();
+    for mut batch in mem::take(&mut state.submitted_tex_uploads) {
         if batch.frame != frame {
-            return true;
+            pending.push(batch);
+            continue;
         }
         unsafe {
             device.free_command_buffers(command_pool, &[batch.cmd]);
@@ -1143,8 +1149,10 @@ fn retire_submitted_texture_uploads(state: &mut State, frame: usize) {
         for staging in batch.staging.drain(..) {
             destroy_buffer(device, &staging);
         }
-        false
-    });
+        upload_completed_textures.append(&mut batch.retired_textures);
+    }
+    state.submitted_tex_uploads = pending;
+    queue_present_retirement(state, upload_completed_textures);
 }
 
 fn retire_all_submitted_texture_uploads(state: &mut State) {
@@ -1174,10 +1182,12 @@ fn submit_pending_texture_uploads(state: &mut State, frame: usize) -> Result<(),
         let submit = vk::SubmitInfo::default().command_buffers(std::slice::from_ref(&cmd));
         device.queue_submit(state.queue, &[submit], vk::Fence::null())?;
     }
+    let retired_textures = mem::take(&mut state.pending_tex_retired);
     state.submitted_tex_uploads.push(SubmittedTextureUpload {
         frame,
         cmd,
         staging,
+        retired_textures,
     });
 
     Ok(())
@@ -1210,24 +1220,41 @@ fn retire_completed_textures(state: &mut State) {
     });
 }
 
+fn queue_present_retirement(state: &mut State, textures: Vec<RetiredTexture>) {
+    if textures.is_empty() {
+        return;
+    }
+    let completed = completed_present_id(state);
+    state
+        .retired_textures
+        .extend(textures.into_iter().filter(|retired| {
+            retired.retire_after_present_id != 0 && retired.retire_after_present_id > completed
+        }));
+}
+
 pub fn retire_textures(state: &mut State, textures: Vec<Texture>) {
     if textures.is_empty() {
         return;
     }
 
     let retire_after_present_id = state.last_submitted_present_id;
-    let completed = completed_present_id(state);
-    if retire_after_present_id == 0 || retire_after_present_id <= completed {
-        drop(textures);
+    let retired = textures
+        .into_iter()
+        .map(|texture| RetiredTexture {
+            retire_after_present_id,
+            _texture: texture,
+        })
+        .collect::<Vec<_>>();
+
+    // A newly replaced texture can still be referenced by the upload command currently being
+    // recorded. Keep it with that upload batch; destroying it before vkEndCommandBuffer is invalid,
+    // and destroying it after submission but before the frame fence completes is equally unsafe.
+    if state.pending_tex_upload_cmd.is_some() {
+        state.pending_tex_retired.extend(retired);
         return;
     }
 
-    state
-        .retired_textures
-        .extend(textures.into_iter().map(|texture| RetiredTexture {
-            retire_after_present_id,
-            _texture: texture,
-        }));
+    queue_present_retirement(state, retired);
 }
 
 pub fn retire_all_textures(state: &mut State) {
