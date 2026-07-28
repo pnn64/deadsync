@@ -349,6 +349,7 @@ pub struct DynamicBackgroundState {
     pub key: String,
     pub path: PathBuf,
     pub video: Option<video::Player>,
+    video_start_sec: f32,
     video_timing: dynamic::DynamicVideoTiming,
 }
 
@@ -357,14 +358,15 @@ impl DynamicBackgroundState {
         key: String,
         path: PathBuf,
         video: Option<video::Player>,
-        gameplay_time_sec: f32,
+        video_start_sec: f32,
         video_rate: f32,
     ) -> Self {
         Self {
             key,
             path,
             video,
-            video_timing: dynamic::DynamicVideoTiming::new(gameplay_time_sec, video_rate),
+            video_start_sec,
+            video_timing: dynamic::DynamicVideoTiming::new(video_start_sec, video_rate),
         }
     }
 
@@ -376,15 +378,24 @@ impl DynamicBackgroundState {
         self.video_timing.set_rate(video_rate, gameplay_time_sec);
     }
 
-    pub fn restart_video(&mut self, player: video::Player, gameplay_time_sec: f32) {
+    pub fn attach_video(&mut self, player: video::Player) {
         if let Some(old) = self.video.replace(player) {
             retire_video_player(old);
         }
-        self.video_timing.restart(gameplay_time_sec);
+    }
+
+    pub fn reset_video(&mut self, video_start_sec: f32, video_rate: f32) {
+        retire_video_player_opt(self.video.take());
+        self.video_start_sec = video_start_sec;
+        self.video_timing = dynamic::DynamicVideoTiming::new(video_start_sec, video_rate);
     }
 
     pub fn video_rate(&self) -> f32 {
         self.video_timing.rate()
+    }
+
+    pub fn video_start_sec(&self) -> f32 {
+        self.video_start_sec
     }
 }
 
@@ -510,6 +521,29 @@ mod tests {
                 "fg.png",
             ]
         );
+    }
+
+    #[test]
+    fn bg_timing_uses_neg_start() {
+        let mut state = DynamicBackgroundState::new(
+            "movie".to_owned(),
+            PathBuf::from("movie.mp4"),
+            None,
+            -3.0,
+            1.0,
+        );
+
+        assert_eq!(state.video_start_sec(), -3.0);
+        assert_eq!(state.video_play_time(-2.0), 1.0);
+        assert_eq!(state.video_play_time(0.0), 3.0);
+
+        state.set_video_rate(2.0, 0.0);
+        assert_eq!(state.video_start_sec(), -3.0);
+        assert_eq!(state.video_play_time(1.0), 5.0);
+
+        state.reset_video(-1.0, 0.5);
+        assert_eq!(state.video_start_sec(), -1.0);
+        assert_eq!(state.video_play_time(1.0), 1.0);
     }
 
     #[test]

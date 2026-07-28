@@ -31,6 +31,23 @@ struct DynamicBannerState {
     path: PathBuf,
 }
 
+#[derive(Clone, Copy)]
+pub(crate) struct BgVideoTiming {
+    pub current_sec: f32,
+    pub start_sec: Option<f32>,
+    pub rate: f32,
+}
+
+fn sync_bg_video_timing(state: &mut DynamicBackgroundState, timing: BgVideoTiming) {
+    if let Some(start) = timing.start_sec
+        && (state.video_start_sec() - start).abs() > f32::EPSILON
+    {
+        state.reset_video(start, timing.rate);
+    } else if (state.video_rate() - timing.rate).abs() > f32::EPSILON {
+        state.set_video_rate(timing.rate, timing.current_sec);
+    }
+}
+
 pub struct DynamicMedia {
     current_dynamic_banner: Option<DynamicBannerState>,
     active_banner_videos: HashMap<String, DynamicVideoState>,
@@ -544,8 +561,7 @@ impl DynamicMedia {
         desired_path: Option<&Path>,
         desired_key: Option<&str>,
         animate_video: bool,
-        gameplay_time_sec: f32,
-        video_rate: f32,
+        timing: BgVideoTiming,
     ) -> Option<String> {
         const FALLBACK_KEY: &str = "__black";
 
@@ -564,16 +580,13 @@ impl DynamicMedia {
             self.failed_gameplay_background_key = None;
         }
         let wants_video = animate_video && dynamic::is_dynamic_video_path(path);
-        let video_rate = dynamic::normalize_video_rate(video_rate);
+        let timing = BgVideoTiming {
+            rate: dynamic::normalize_video_rate(timing.rate),
+            ..timing
+        };
 
         if wants_video {
-            self.drain_gameplay_background_preps(
-                assets,
-                backend,
-                desired_key,
-                gameplay_time_sec,
-                video_rate,
-            );
+            self.drain_gameplay_background_preps(assets, backend, desired_key, timing);
         } else {
             self.reset_pending_gameplay_background();
         }
@@ -598,7 +611,11 @@ impl DynamicMedia {
                 state.path == path
                     && state.key == desired_key
                     && (state.video.is_some() == wants_video)
-                    && (!wants_video || (state.video_rate() - video_rate).abs() <= f32::EPSILON)
+                    && (!wants_video || (state.video_rate() - timing.rate).abs() <= f32::EPSILON)
+                    && (!wants_video
+                        || timing.start_sec.is_none_or(|start| {
+                            (state.video_start_sec() - start).abs() <= f32::EPSILON
+                        }))
             });
         if current_matches {
             return None;
@@ -615,10 +632,8 @@ impl DynamicMedia {
             return None;
         }
         if current_path_matches && wants_video {
-            if let Some(state) = self.current_dynamic_background.as_mut()
-                && (state.video_rate() - video_rate).abs() > f32::EPSILON
-            {
-                state.set_video_rate(video_rate, gameplay_time_sec);
+            if let Some(state) = self.current_dynamic_background.as_mut() {
+                sync_bg_video_timing(state, timing);
             }
             let needs_video = self
                 .current_dynamic_background
@@ -638,8 +653,8 @@ impl DynamicMedia {
                 desired_key.to_owned(),
                 path.to_path_buf(),
                 None,
-                gameplay_time_sec,
-                video_rate,
+                timing.start_sec.unwrap_or(timing.current_sec),
+                timing.rate,
             ));
             if wants_video
                 && !self.pending_gameplay_background_preps.contains(desired_key)
@@ -822,7 +837,7 @@ impl DynamicMedia {
         if let Some(state) = self.current_dynamic_background.as_mut()
             && !assets.has_pending_texture_upload(&state.key)
         {
-            let play_time = gameplay_time_sec.unwrap_or(ui_time_sec).max(0.0);
+            let play_time = gameplay_time_sec.unwrap_or(ui_time_sec);
             let play_time = state.video_play_time(play_time);
             if let Some(video) = state.video.as_mut()
                 && let Some(frame) = video.take_due_frame(play_time)
@@ -1057,8 +1072,7 @@ impl DynamicMedia {
         assets: &mut AssetManager,
         backend: &mut Backend,
         desired_key: &str,
-        gameplay_time_sec: f32,
-        video_rate: f32,
+        timing: BgVideoTiming,
     ) {
         while let Ok(result) = self.gameplay_background_prep_rx.try_recv() {
             match result {
@@ -1073,7 +1087,8 @@ impl DynamicMedia {
                         && state.key == prepared.key
                         && state.path == prepared.path
                     {
-                        state.restart_video(prepared.player, gameplay_time_sec);
+                        sync_bg_video_timing(state, timing);
+                        state.attach_video(prepared.player);
                     } else {
                         if let Some(state) = self.current_dynamic_background.take() {
                             let key = retire_dynamic_background_state(state);
@@ -1083,8 +1098,8 @@ impl DynamicMedia {
                             prepared.key,
                             prepared.path,
                             Some(prepared.player),
-                            gameplay_time_sec,
-                            video_rate,
+                            timing.start_sec.unwrap_or(timing.current_sec),
+                            timing.rate,
                         ));
                     }
                 }
@@ -1134,6 +1149,38 @@ impl Default for DynamicMedia {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn bg_timing_resets_segment() {
+        let mut state = DynamicBackgroundState::new(
+            "movie".to_owned(),
+            PathBuf::from("movie.mp4"),
+            None,
+            -3.0,
+            1.0,
+        );
+
+        sync_bg_video_timing(
+            &mut state,
+            BgVideoTiming {
+                current_sec: 0.0,
+                start_sec: Some(-3.0),
+                rate: 1.0,
+            },
+        );
+        assert_eq!(state.video_play_time(0.0), 3.0);
+
+        sync_bg_video_timing(
+            &mut state,
+            BgVideoTiming {
+                current_sec: 0.0,
+                start_sec: Some(-1.0),
+                rate: 0.5,
+            },
+        );
+        assert_eq!(state.video_start_sec(), -1.0);
+        assert_eq!(state.video_play_time(1.0), 1.0);
+    }
 
     #[test]
     fn shared_dynamic_key_stays_until_last_owner_releases_it() {

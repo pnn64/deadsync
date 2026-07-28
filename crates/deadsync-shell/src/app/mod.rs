@@ -22,7 +22,7 @@ use crate::course::{
     build_course_summary_stage, course_display_timing_for_run, merge_course_score_columns,
 };
 use crate::diagnostics::timing_health;
-use crate::dynamic_media::DynamicMedia;
+use crate::dynamic_media::{BgVideoTiming, DynamicMedia};
 use crate::frame_loop::{FrameScreenStepContext, FrameWaitControl, frame_screen_step_plan};
 use crate::frame_stats::{
     FrameStatsSummaryContext, frame_stats_summary, frame_stats_target_us, frame_stats_two_player,
@@ -4763,7 +4763,7 @@ impl App {
         ) {
             return;
         }
-        let (gameplay_time_sec, background_rate, foreground_videos_changed) = {
+        let (bg_video_timing, foreground_videos_changed) = {
             let gs = match self.state.screens.current_screen {
                 CurrentScreen::Gameplay => self.state.screens.gameplay_state.as_mut(),
                 CurrentScreen::Practice => self
@@ -4818,11 +4818,23 @@ impl App {
                         );
                 }
             }
+            let active_change = Self::active_gameplay_background_change(gs);
+            let bg_start_change = active_change.filter(|change| {
+                matches!(
+                    &change.target,
+                    deadsync_chart::SongBackgroundChangeTarget::File(path)
+                        if gs.current_background_path.as_ref() == Some(path)
+                )
+            });
             (
-                deadsync_core::song_time::song_time_ns_to_seconds(gs.current_music_time_ns()),
-                Self::active_gameplay_background_change(gs)
-                    .map(|change| change.rate)
-                    .unwrap_or(1.0),
+                BgVideoTiming {
+                    current_sec: deadsync_core::song_time::song_time_ns_to_seconds(
+                        gs.current_music_time_ns(),
+                    ),
+                    start_sec: bg_start_change
+                        .map(|change| gs.music_time_for_beat(change.start_beat)),
+                    rate: active_change.map_or(1.0, |change| change.rate),
+                },
                 foreground_videos_changed,
             )
         };
@@ -4844,8 +4856,7 @@ impl App {
                 gs.current_background_path.as_deref(),
                 gs.current_background_key.as_deref(),
                 show_video_backgrounds,
-                gameplay_time_sec,
-                background_rate,
+                bg_video_timing,
             ),
             _ => None,
         };
