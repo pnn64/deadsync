@@ -5561,13 +5561,10 @@ impl App {
     #[inline(always)]
     fn handle_key_text(&mut self, event_loop: &ActiveEventLoop, text: &str) {
         let action = match raw_key_text_route(self.state.screens.current_screen) {
-            RawKeyTextRoute::ManageLocalProfiles => {
-                screens::manage_local_profiles::handle_raw_key_event(
-                    &mut self.state.screens.manage_local_profiles_state,
-                    None,
-                    Some(text),
-                )
-            }
+            RawKeyTextRoute::ManageLocalProfiles => screens::manage_local_profiles::handle_text(
+                &mut self.state.screens.manage_local_profiles_state,
+                text,
+            ),
             RawKeyTextRoute::Options => screens::options::handle_raw_key_event(
                 &mut self.state.screens.options_state,
                 None,
@@ -5676,15 +5673,17 @@ impl App {
                 return true;
             }
             RawKeyScreenRoute::ManageLocalProfiles => {
-                let action = screens::manage_local_profiles::handle_raw_key_event(
+                let (consumed, action) = screens::manage_local_profiles::handle_raw_key_event(
                     &mut self.state.screens.manage_local_profiles_state,
-                    Some(&raw_key),
-                    None,
+                    &raw_key,
                 );
                 if !matches!(action, ThemeEffect::None) {
                     if let Err(e) = self.handle_action(action, event_loop) {
                         log::error!("Failed to handle ManageLocalProfiles raw key action: {e}");
                     }
+                    return true;
+                }
+                if consumed {
                     return true;
                 }
             }
