@@ -4965,6 +4965,40 @@ fn clipped_sprite_object_to_world_rect(
     obj: &RenderObject,
     sprite_instances: &[renderer::SpriteInstanceRaw],
     clip: WorldRect,
+    recycled_vertices: Option<&mut Vec<Vec<renderer::TexturedMeshVertex>>>,
+    textured_mesh_bounds: Option<WorldRect>,
+) -> Option<ClippedSpriteObject> {
+    clipped_sprite_object_to_world_rect_impl::<true>(
+        obj,
+        sprite_instances,
+        clip,
+        recycled_vertices,
+        textured_mesh_bounds,
+    )
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn clipped_sprite_object_to_world_rect_legacy(
+    obj: &RenderObject,
+    sprite_instances: &[renderer::SpriteInstanceRaw],
+    clip: WorldRect,
+    recycled_vertices: Option<&mut Vec<Vec<renderer::TexturedMeshVertex>>>,
+    textured_mesh_bounds: Option<WorldRect>,
+) -> Option<ClippedSpriteObject> {
+    clipped_sprite_object_to_world_rect_impl::<false>(
+        obj,
+        sprite_instances,
+        clip,
+        recycled_vertices,
+        textured_mesh_bounds,
+    )
+}
+
+#[inline(always)]
+fn clipped_sprite_object_to_world_rect_impl<const ACCEPT_CONTAINED_SPRITE: bool>(
+    obj: &RenderObject,
+    sprite_instances: &[renderer::SpriteInstanceRaw],
+    clip: WorldRect,
     mut recycled_vertices: Option<&mut Vec<Vec<renderer::TexturedMeshVertex>>>,
     textured_mesh_bounds: Option<WorldRect>,
 ) -> Option<ClippedSpriteObject> {
@@ -5016,6 +5050,18 @@ fn clipped_sprite_object_to_world_rect(
             let right = world_center[0] + half_w;
             let bottom = world_center[1] - half_h;
             let top = world_center[1] + half_h;
+
+            if ACCEPT_CONTAINED_SPRITE
+                && left >= clip.left
+                && right <= clip.right
+                && bottom >= clip.bottom
+                && top <= clip.top
+            {
+                return Some(ClippedSpriteObject {
+                    object_type: renderer::ObjectType::Sprite(*index),
+                    sprite: None,
+                });
+            }
 
             let inter_left = left.max(clip.left);
             let inter_right = right.min(clip.right);
@@ -5133,6 +5179,106 @@ fn clipped_sprite_object_to_world_rect(
             object_type: obj.object_type.clone(),
             sprite: None,
         }),
+    }
+}
+
+/// Gameplay-shaped fully contained sprite-clipping benchmark support.
+#[cfg(feature = "bench-support")]
+pub struct SpriteClipBenchmark {
+    objects: Vec<RenderObject>,
+    sprite_instances: Vec<renderer::SpriteInstanceRaw>,
+    clip: WorldRect,
+}
+
+#[cfg(feature = "bench-support")]
+impl SpriteClipBenchmark {
+    pub fn new(sprite_count: usize) -> Self {
+        let mut objects = Vec::with_capacity(sprite_count);
+        let mut sprite_instances = Vec::with_capacity(sprite_count);
+        for index in 0..sprite_count {
+            let column = index % 32;
+            let row = index / 32;
+            sprite_instances.push(renderer::SpriteInstanceRaw {
+                center: [
+                    32.0 + column as f32 * 18.0,
+                    32.0 + row as f32 * 24.0,
+                    0.0,
+                    1.0,
+                ],
+                size: [12.0, 16.0],
+                rot_sin_cos: [0.0, 1.0],
+                tint: [1.0; 4],
+                uv_scale: [1.0; 2],
+                uv_offset: [0.0; 2],
+                local_offset: [(index % 3) as f32 - 1.0, (index % 5) as f32 - 2.0],
+                local_offset_rot_sin_cos: [0.0, 1.0],
+                edge_fade: [0.0; 4],
+                texture_mask: 0.0,
+            });
+            objects.push(RenderObject {
+                object_type: renderer::ObjectType::Sprite(index as u32),
+                texture_handle: 1,
+                blend: BlendMode::Alpha,
+                z: 0,
+                order: index as u32,
+                camera: 0,
+            });
+        }
+        Self {
+            objects,
+            sprite_instances,
+            clip: WorldRect {
+                left: 0.0,
+                right: 640.0,
+                bottom: 0.0,
+                top: 480.0,
+            },
+        }
+    }
+
+    pub fn clip_legacy_frame(&mut self) -> u64 {
+        self.clip_frame::<false>()
+    }
+
+    pub fn clip_contained_frame(&mut self) -> u64 {
+        self.clip_frame::<true>()
+    }
+
+    fn clip_frame<const ACCEPT_CONTAINED: bool>(&mut self) -> u64 {
+        let mut checksum = self.objects.len() as u64;
+        for object in &self.objects {
+            let clipped = if ACCEPT_CONTAINED {
+                clipped_sprite_object_to_world_rect(
+                    object,
+                    &self.sprite_instances,
+                    self.clip,
+                    None,
+                    None,
+                )
+            } else {
+                clipped_sprite_object_to_world_rect_legacy(
+                    object,
+                    &self.sprite_instances,
+                    self.clip,
+                    None,
+                    None,
+                )
+            }
+            .expect("benchmark sprites are contained by the clip");
+            let renderer::ObjectType::Sprite(index) = clipped.object_type else {
+                unreachable!("axis-aligned sprite clipping keeps sprite geometry");
+            };
+            if let Some(sprite) = clipped.sprite {
+                self.sprite_instances[index as usize] = sprite;
+            }
+            let sprite = self.sprite_instances[index as usize];
+            checksum = checksum.rotate_left(5)
+                ^ u64::from(sprite.center[0].to_bits())
+                ^ (u64::from(sprite.center[1].to_bits()) << 32)
+                ^ u64::from(sprite.size[0].to_bits())
+                ^ u64::from(sprite.uv_scale[1].to_bits());
+        }
+        checksum
     }
 }
 
@@ -5710,10 +5856,10 @@ mod tests {
         build_transient_text_mesh_builders, clip_object_to_world_masks,
         clip_sprite_object_to_world_rect, clip_textured_mesh_to_world_rect,
         clip_textured_mesh_to_world_rect_legacy, clipped_sprite_object_to_world_rect,
-        fold_sprite_xy_rot, font_chain_key, is_affine_world_transform,
-        push_shadow_objects_for_range, resolve_sprite_size_like_sm, sort_composed_render_objects,
-        sort_render_objects, sort_render_objects_legacy, str_ptr, textured_mesh_world_bounds,
-        textured_mesh_world_bounds_legacy, wrap_text_lines_by_words,
+        clipped_sprite_object_to_world_rect_legacy, fold_sprite_xy_rot, font_chain_key,
+        is_affine_world_transform, push_shadow_objects_for_range, resolve_sprite_size_like_sm,
+        sort_composed_render_objects, sort_render_objects, sort_render_objects_legacy, str_ptr,
+        textured_mesh_world_bounds, textured_mesh_world_bounds_legacy, wrap_text_lines_by_words,
     };
     use crate::actors::{
         Actor, ActorResourceArena, RetainedActorFrame, SizeSpec, SpriteSource, TextAlign,
@@ -6642,6 +6788,101 @@ mod tests {
         } else {
             panic!("expected sprite to remain in fast clip path");
         }
+    }
+
+    #[test]
+    fn contained_sprite_clip_preserves_raw_instance_without_rebuild() {
+        let original = SpriteInstanceRaw {
+            center: [17.0, 23.0, 0.25, 1.0],
+            size: [10.0, 14.0],
+            rot_sin_cos: [0.0, 1.0],
+            tint: [0.25, 0.5, 0.75, 0.8],
+            uv_scale: [0.5, 0.75],
+            uv_offset: [0.125, 0.25],
+            local_offset: [2.0, -3.0],
+            local_offset_rot_sin_cos: [0.0, 1.0],
+            edge_fade: [0.1, 0.2, 0.3, 0.4],
+            texture_mask: 1.0,
+        };
+        let mut sprite_instances = vec![original];
+        let mut object = RenderObject {
+            object_type: ObjectType::Sprite(0),
+            texture_handle: 17,
+            blend: BlendMode::Alpha,
+            z: 3,
+            order: 9,
+            camera: 0,
+        };
+        let clip = WorldRect {
+            left: 0.0,
+            right: 64.0,
+            bottom: 0.0,
+            top: 64.0,
+        };
+
+        let current =
+            clipped_sprite_object_to_world_rect(&object, &sprite_instances, clip, None, None)
+                .unwrap();
+        let legacy = clipped_sprite_object_to_world_rect_legacy(
+            &object,
+            &sprite_instances,
+            clip,
+            None,
+            None,
+        )
+        .unwrap();
+        assert!(current.sprite.is_none());
+        assert_eq!(legacy.sprite, Some(original));
+
+        assert!(clip_sprite_object_to_world_rect(
+            &mut object,
+            &mut sprite_instances,
+            clip,
+        ));
+        assert!(matches!(object.object_type, ObjectType::Sprite(0)));
+        assert_eq!(sprite_instances, [original]);
+    }
+
+    #[test]
+    fn partial_sprite_clip_still_matches_crop_rebuild() {
+        let original = SpriteInstanceRaw {
+            center: [0.0, 0.0, 0.0, 1.0],
+            size: [10.0, 10.0],
+            rot_sin_cos: [0.0, 1.0],
+            tint: [1.0; 4],
+            uv_scale: [1.0; 2],
+            uv_offset: [0.0; 2],
+            local_offset: [0.0; 2],
+            local_offset_rot_sin_cos: [0.0, 1.0],
+            edge_fade: [0.0; 4],
+            texture_mask: 0.0,
+        };
+        let object = RenderObject {
+            object_type: ObjectType::Sprite(0),
+            texture_handle: 1,
+            blend: BlendMode::Alpha,
+            z: 0,
+            order: 0,
+            camera: 0,
+        };
+        let clip = WorldRect {
+            left: -2.0,
+            right: 5.0,
+            bottom: -5.0,
+            top: 5.0,
+        };
+
+        let current =
+            clipped_sprite_object_to_world_rect(&object, &[original], clip, None, None).unwrap();
+        let legacy =
+            clipped_sprite_object_to_world_rect_legacy(&object, &[original], clip, None, None)
+                .unwrap();
+        assert_eq!(current.sprite, legacy.sprite);
+        let clipped = current.sprite.unwrap();
+        assert_eq!(clipped.center, [1.5, 0.0, 0.0, 1.0]);
+        assert_eq!(clipped.size, [7.0, 10.0]);
+        assert_eq!(clipped.uv_scale, [0.7, 1.0]);
+        assert_eq!(clipped.uv_offset, [0.3, 0.0]);
     }
 
     #[test]
