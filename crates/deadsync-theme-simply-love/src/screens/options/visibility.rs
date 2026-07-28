@@ -154,6 +154,21 @@ pub(super) fn submenu_visible_row_indices(
                 })
                 .collect()
         }
+        SubmenuKind::NullOrDieOptions => {
+            let show_graph_origin = get_choice_by_id(
+                &state.sub[SubmenuKind::NullOrDieOptions].choice_indices,
+                NULL_OR_DIE_OPTIONS_ROWS,
+                SubRowId::GraphOrientation,
+            )
+            .unwrap_or(0)
+                == 0;
+            rows.iter()
+                .enumerate()
+                .filter_map(|(idx, row)| {
+                    (row.id != SubRowId::GraphOrigin || show_graph_origin).then_some(idx)
+                })
+                .collect()
+        }
         SubmenuKind::Advanced => rows.iter().enumerate().map(|(idx, _)| idx).collect(),
         SubmenuKind::SelectMusic => {
             let show_banners = get_choice_by_id(

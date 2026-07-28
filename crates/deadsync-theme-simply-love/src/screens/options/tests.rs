@@ -565,6 +565,38 @@ fn null_or_die_orientation_emits_shell_config_request() {
 }
 
 #[test]
+fn null_or_die_origin_is_visible_only_for_vertical_graphs() {
+    let mut state = init();
+    let origin_row = row_position(NULL_OR_DIE_OPTIONS_ROWS, SubRowId::GraphOrigin)
+        .expect("Null-or-Die options should contain graph origin");
+    let visible = |state: &State| {
+        submenu_visible_row_indices(
+            state,
+            SubmenuKind::NullOrDieOptions,
+            NULL_OR_DIE_OPTIONS_ROWS,
+        )
+    };
+
+    assert!(visible(&state).contains(&origin_row));
+
+    set_choice_by_id(
+        &mut state.sub[SubmenuKind::NullOrDieOptions].choice_indices,
+        NULL_OR_DIE_OPTIONS_ROWS,
+        SubRowId::GraphOrientation,
+        1,
+    );
+    assert!(!visible(&state).contains(&origin_row));
+
+    set_choice_by_id(
+        &mut state.sub[SubmenuKind::NullOrDieOptions].choice_indices,
+        NULL_OR_DIE_OPTIONS_ROWS,
+        SubRowId::GraphOrientation,
+        0,
+    );
+    assert!(visible(&state).contains(&origin_row));
+}
+
+#[test]
 fn null_or_die_origin_defaults_to_bottom_and_emits_shell_config_request() {
     let asset_manager = AssetManager::new();
     let mut state = init();
