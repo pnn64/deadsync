@@ -2330,7 +2330,7 @@ pub fn init(gameplay_results: Option<gameplay::State>, init_view: EvaluationInit
                 possible_grade_points: totals.possible_grade_points,
                 grade,
                 speed_mod: gs.scroll_speed_for_player(player_idx),
-                mods_text: crate::screens::components::gameplay::notefield::gameplay_mods_text(
+                mods_text: crate::screens::components::gameplay::notefield::preferred_mods_text(
                     &gs, player_idx,
                 ),
                 hands_achieved: p.hands_achieved,

@@ -2,7 +2,7 @@ use crate::screens::gameplay::GameplayCoreState as State;
 use deadlib_present::cache::{TextCache, cached_text};
 use deadsync_core::input::MAX_PLAYERS;
 use deadsync_gameplay::{
-    AccelEffects, PerspectiveEffects, ScrollEffects, VisualEffects,
+    AccelEffects, AppearanceEffects, PerspectiveEffects, ScrollEffects, VisualEffects,
     perspective_effects_from_profile, scroll_effects_from_flags, spacing_multiplier_for_percent,
 };
 use deadsync_notefield::{
@@ -440,33 +440,39 @@ pub(super) fn effective_spacing_multiplier_for_player(state: &State, player_idx:
 }
 
 #[inline(always)]
-fn gameplay_mods_text_key(state: &State, player_idx: usize) -> GameplayModsTextKey {
-    let profile = &state.profiles()[player_idx];
-    let chart_attack = state.active_chart_attack_effects_for_player(player_idx);
-    let scroll_speed = state.effective_scroll_speed_for_player(player_idx);
-    let accel = effective_accel_effects_for_player(state, player_idx);
-    let visual = effective_visual_effects_for_player(state, player_idx);
-    let appearance = state.effective_appearance_effects_for_player(player_idx);
-    let visibility = state.effective_visibility_effects_for_player(player_idx);
-    let scroll = effective_scroll_effects_for_player(state, player_idx);
-    let perspective = effective_perspective_effects_for_player(state, player_idx);
-    let display_mini = (effective_mini_percent_for_player(state, player_idx)
+fn preferred_mods_text_key(
+    profile: &profile_data::Profile,
+    scroll_speed: ScrollSpeedSetting,
+) -> GameplayModsTextKey {
+    let accel = AccelEffects::from_mask_bits(profile.accel_effects_active_mask.bits());
+    let visual = VisualEffects::from_mask_bits(profile.visual_effects_active_mask.bits());
+    let appearance =
+        AppearanceEffects::from_mask_bits(profile.appearance_effects_active_mask.bits());
+    let scroll = scroll_effects_from_flags(
+        profile
+            .scroll_option
+            .contains(profile_data::ScrollOption::Reverse),
+        profile
+            .scroll_option
+            .contains(profile_data::ScrollOption::Split),
+        profile
+            .scroll_option
+            .contains(profile_data::ScrollOption::Alternate),
+        profile
+            .scroll_option
+            .contains(profile_data::ScrollOption::Cross),
+        profile
+            .scroll_option
+            .contains(profile_data::ScrollOption::Centered),
+    );
+    let (perspective_tilt, perspective_skew) = profile.perspective.tilt_skew();
+    let display_mini = (profile.mini_percent as f32
         - if visual.big > f32::EPSILON {
             100.0 * visual.big
         } else {
             0.0
         })
     .clamp(-100.0, 150.0);
-    let dark = if profile.hide_targets {
-        1.0
-    } else {
-        visibility.dark
-    };
-    let cover = if profile.hide_song_bg {
-        1.0
-    } else {
-        visibility.cover
-    };
     let error_bar_mask = profile_error_bar_mask(profile);
     let average_error_bar_intensity =
         profile_data::clamp_average_error_bar_intensity(profile.average_error_bar_intensity);
@@ -483,10 +489,10 @@ fn gameplay_mods_text_key(state: &State, player_idx: usize) -> GameplayModsTextK
         speed_tag,
         speed_bits,
         noteskin_hash: noteskin_hasher.finish(),
-        insert_mask: profile.insert_active_mask.bits() | chart_attack.insert_mask,
-        remove_mask: profile.remove_active_mask.bits() | chart_attack.remove_mask,
-        holds_mask: profile.holds_active_mask.bits() | chart_attack.holds_mask,
-        turn_bits: turn_option_bits(profile.turn_option) | chart_attack.turn_bits,
+        insert_mask: profile.insert_active_mask.bits(),
+        remove_mask: profile.remove_active_mask.bits(),
+        holds_mask: profile.holds_active_mask.bits(),
+        turn_bits: turn_option_bits(profile.turn_option),
         attack_mode: profile.attack_mode as u8,
         mini_percent: clamp_rounded_i16(display_mini),
         spacing_percent: profile
@@ -530,22 +536,24 @@ fn gameplay_mods_text_key(state: &State, player_idx: usize) -> GameplayModsTextK
             mod_percent_key(scroll.cross),
             mod_percent_key(scroll.centered),
         ],
-        perspective_tilt: mod_percent_key(perspective.tilt),
-        perspective_skew: mod_percent_key(perspective.skew),
-        dark: mod_percent_key(dark),
-        blind: mod_percent_key(visibility.blind),
-        cover: mod_percent_key(cover),
+        perspective_tilt: mod_percent_key(perspective_tilt),
+        perspective_skew: mod_percent_key(perspective_skew),
+        dark: mod_percent_key(if profile.hide_targets { 1.0 } else { 0.0 }),
+        blind: 0,
+        cover: mod_percent_key(if profile.hide_song_bg { 1.0 } else { 0.0 }),
         disabled_timing_windows: disabled_timing_window_bits(profile.timing_windows),
     }
 }
 
 #[inline(always)]
-pub(crate) fn gameplay_mods_text(state: &State, player_idx: usize) -> Arc<str> {
-    let key = gameplay_mods_text_key(state, player_idx);
+pub(crate) fn preferred_mods_text(state: &State, player_idx: usize) -> Arc<str> {
+    // Simply Love's DisplayMods reads ModsLevel_Preferred. Runtime chart
+    // attacks belong to the current/song levels and must not alter this text.
+    let profile = &state.profiles()[player_idx];
+    let key = preferred_mods_text_key(profile, state.scroll_speed_for_player(player_idx));
     cached_text(&GAMEPLAY_MODS_CACHE, key, TEXT_CACHE_LIMIT, || {
-        let profile = &state.profiles()[player_idx];
         crate_gameplay_mods_text(GameplayModsTextParams {
-            speed: state.effective_scroll_speed_for_player(player_idx),
+            speed: state.scroll_speed_for_player(player_idx),
             noteskin: profile.noteskin.as_str(),
             insert_mask: key.insert_mask,
             remove_mask: key.remove_mask,
@@ -575,8 +583,36 @@ pub(crate) fn gameplay_mods_text(state: &State, player_idx: usize) -> Arc<str> {
 }
 
 #[cfg(test)]
-mod combo_text_cache_tests {
+mod tests {
     use super::*;
+
+    #[test]
+    fn preferred_mods_key_uses_selected_profile_values() {
+        let profile = profile_data::Profile {
+            accel_effects_active_mask: profile_data::AccelEffectsMask::BOOST,
+            visual_effects_active_mask: profile_data::VisualEffectsMask::DRUNK
+                | profile_data::VisualEffectsMask::BIG,
+            appearance_effects_active_mask: profile_data::AppearanceEffectsMask::HIDDEN,
+            scroll_option: profile_data::ScrollOption::Reverse
+                .union(profile_data::ScrollOption::Centered),
+            mini_percent: 25,
+            hide_targets: true,
+            hide_song_bg: true,
+            ..profile_data::Profile::default()
+        };
+
+        let key = preferred_mods_text_key(&profile, ScrollSpeedSetting::XMod(2.0));
+
+        assert_eq!(key.accel[0], 100);
+        assert_eq!(key.visual[0], 100);
+        assert_eq!(key.appearance[0], 100);
+        assert_eq!(key.scroll[0], 100);
+        assert_eq!(key.scroll[4], 100);
+        assert_eq!(key.mini_percent, -75);
+        assert_eq!(key.dark, 100);
+        assert_eq!(key.blind, 0);
+        assert_eq!(key.cover, 100);
+    }
 
     #[test]
     fn recent_combo_text_reuses_two_uncached_player_values() {

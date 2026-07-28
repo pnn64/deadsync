@@ -32,7 +32,7 @@ mod prewarm;
 mod text;
 mod zmod;
 pub use prewarm::prewarm_text_layout;
-pub(crate) use text::gameplay_mods_text;
+pub(crate) use text::preferred_mods_text;
 #[cfg(feature = "bench-support")]
 #[doc(hidden)]
 pub fn benchmark_combo_text_legacy(value: u32) -> std::sync::Arc<str> {

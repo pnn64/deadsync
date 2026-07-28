@@ -3,7 +3,7 @@ use crate::screens::gameplay::GameplayCoreState;
 use deadlib_present::actors::Actor;
 use deadlib_present::space::screen_height;
 
-use super::notefield::gameplay_mods_text;
+use super::notefield::preferred_mods_text;
 
 // Simply Love ScreenGameplay in/default.lua keeps intro cover actors alive for 2.0s.
 const TRANSITION_IN_DURATION: f32 = 2.0;
@@ -41,7 +41,7 @@ pub(super) fn compose(
         return;
     }
 
-    let mods_text = gameplay_mods_text(state, player_idx);
+    let mods_text = preferred_mods_text(state, player_idx);
     let mods_line_y = screen_height() * 0.25 * 1.3 + frame.notefield_offset_y;
     let mods_line_count = mods_text
         .split(", ")

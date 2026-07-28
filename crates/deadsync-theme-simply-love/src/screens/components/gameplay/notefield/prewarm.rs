@@ -7,7 +7,7 @@ use deadsync_profile as profile_data;
 use super::super::display_mods::DISPLAY_MODS_WRAP_WIDTH_PX;
 use super::text::{
     cached_int_i32, cached_int_u32, cached_neg_int_u32, cached_offset_ms, cached_paren_i32,
-    cached_percent2_f64, cached_ratio_i32, cached_signed_percent2_f64, gameplay_mods_text,
+    cached_percent2_f64, cached_ratio_i32, cached_signed_percent2_f64, preferred_mods_text,
     zmod_run_timer_fmt,
 };
 use super::{
@@ -79,7 +79,7 @@ pub fn prewarm_text_layout(cache: &mut TextLayoutCache, fonts: &font::FontMap, s
             prewarm_u32(cache, font_name, max_combo);
         }
 
-        let mods_text = gameplay_mods_text(state, player);
+        let mods_text = preferred_mods_text(state, player);
         cache.prewarm_text(
             fonts,
             "miso",
