@@ -91,6 +91,7 @@ const SYNC_HEAT_TEXTURE_KEY: &str = "__generated/sync-overlay-heat";
 const SYNC_HEAT_ALPHA: f32 = 1.0;
 const SYNC_READY_TEXT_ZOOM: f32 = 0.95;
 const SYNC_READY_LINE_STEP: f32 = 24.0 * SYNC_READY_TEXT_ZOOM;
+const SYNC_BEAT_MARKER_INSET: f32 = 7.0;
 const SYNC_ADJUST_STEP_SECONDS: f32 = 0.001;
 // Sync Song overlay only: per-tap step is 1 ms. Holding LEFT/RIGHT keeps
 // stepping by exactly 1 ms (unit-aligned with the displayed value) and ramps
@@ -3200,14 +3201,26 @@ pub fn init(init_view: SelectMusicInitView) -> State {
         &init_view.history.sides[profile_data::player_side_index(profile_data::PlayerSide::P1)];
     let p2_history =
         &init_view.history.sides[profile_data::player_side_index(profile_data::PlayerSide::P2)];
-    let popularity_p1_entries = if p1_history
-        .available { build_popularity_grouped_entries_for_profile(&all_entries, p1_history) } else { Default::default() };
-    let popularity_p2_entries = if p2_history
-        .available { build_popularity_grouped_entries_for_profile(&all_entries, p2_history) } else { Default::default() };
-    let recent_p1_entries = if p1_history
-        .available { build_recent_grouped_entries_for_profile(&all_entries, p1_history) } else { Default::default() };
-    let recent_p2_entries = if p2_history
-        .available { build_recent_grouped_entries_for_profile(&all_entries, p2_history) } else { Default::default() };
+    let popularity_p1_entries = if p1_history.available {
+        build_popularity_grouped_entries_for_profile(&all_entries, p1_history)
+    } else {
+        Default::default()
+    };
+    let popularity_p2_entries = if p2_history.available {
+        build_popularity_grouped_entries_for_profile(&all_entries, p2_history)
+    } else {
+        Default::default()
+    };
+    let recent_p1_entries = if p1_history.available {
+        build_recent_grouped_entries_for_profile(&all_entries, p1_history)
+    } else {
+        Default::default()
+    };
+    let recent_p2_entries = if p2_history.available {
+        build_recent_grouped_entries_for_profile(&all_entries, p2_history)
+    } else {
+        Default::default()
+    };
     let top_grades_p1_entries =
         build_top_grades_grouped_entries_for_side(&all_entries, target_chart_type, p1_history);
     let top_grades_p2_entries =
@@ -5551,6 +5564,48 @@ fn sync_heat_source(overlay: &NullOrDieOverlayData) -> Option<(&[f64], usize, us
     }
 }
 
+fn sync_beat_axis_rows(overlay: &NullOrDieOverlayData) -> Option<usize> {
+    if overlay.graph_orientation != GraphOrientation::Vertical
+        || !matches!(
+            overlay.graph_mode,
+            SyncGraphMode::BeatIndex | SyncGraphMode::PostKernelFingerprint
+        )
+        || (overlay.graph_mode == SyncGraphMode::PostKernelFingerprint
+            && overlay.kernel_target != crate::SimplyLoveSyncKernelTarget::Digest)
+    {
+        return None;
+    }
+    let (_, total_rows, _) = sync_heat_source(overlay)?;
+    (total_rows > 0).then_some(total_rows)
+}
+
+fn sync_beat_marker_rows(total_rows: usize) -> [Option<usize>; 3] {
+    if total_rows == 0 {
+        return [None; 3];
+    }
+    let last = total_rows - 1;
+    [
+        Some(0),
+        (last > 1).then_some(last / 2),
+        (last > 0).then_some(last),
+    ]
+}
+
+fn sync_beat_row_y(
+    row: usize,
+    total_rows: usize,
+    graph_y: f32,
+    graph_h: f32,
+    origin: GraphOrigin,
+) -> f32 {
+    let total_rows = total_rows.max(1);
+    let row_center = (row.min(total_rows - 1) as f32 + 0.5) / total_rows as f32;
+    match origin {
+        GraphOrigin::Bottom => graph_y + graph_h * (1.0 - row_center),
+        GraphOrigin::Top => graph_y + graph_h * row_center,
+    }
+}
+
 #[inline(always)]
 fn sync_heat_clim_pct(overlay: &NullOrDieOverlayData) -> Option<(f64, f64)> {
     match overlay.graph_mode {
@@ -5676,7 +5731,7 @@ fn build_null_or_die_overlay(
     active_color_index: i32,
     machine_font: crate::config::MachineFont,
 ) -> Option<Vec<Actor>> {
-    let mut actors = Vec::with_capacity(20);
+    let mut actors = Vec::with_capacity(36);
     let pane_w = widescale(520.0, 640.0);
     let pane_h = 430.0;
     let pane_cx = screen_center_x();
@@ -5890,6 +5945,45 @@ fn build_null_or_die_overlay(
                     z(SYNC_OVERLAY_Z + 7)
                 ));
             }
+        }
+    }
+
+    if let Some(total_rows) = sync_beat_axis_rows(overlay) {
+        for row in sync_beat_marker_rows(total_rows).into_iter().flatten() {
+            let marker_y = sync_beat_row_y(row, total_rows, graph_y, graph_h, overlay.graph_origin);
+            let label_y = marker_y.clamp(
+                graph_y + SYNC_BEAT_MARKER_INSET,
+                graph_bottom - SYNC_BEAT_MARKER_INSET,
+            );
+            let label_key = if row == 0 {
+                "SyncGraphBeatStart"
+            } else if row + 1 == total_rows {
+                "SyncGraphBeatEnd"
+            } else {
+                "SyncGraphBeatMarker"
+            };
+            let beat = row.to_string();
+            let label = tr_fmt("SelectMusic", label_key, &[("beat", &beat)]);
+
+            actors.push(act!(quad:
+                align(0.0, 0.5):
+                xy(graph_x + 1.0, marker_y):
+                zoomto(6.0, 1.0):
+                diffuse(1.0, 1.0, 1.0, 0.9):
+                z(SYNC_OVERLAY_Z + 8)
+            ));
+            actors.push(act!(text:
+                font("miso"):
+                settext(label):
+                align(0.0, 0.5):
+                xy(graph_x + 9.0, label_y):
+                zoom(0.58):
+                diffuse(1.0, 1.0, 1.0, 0.95):
+                strokecolor(0.0, 0.0, 0.0, 1.0):
+                shadowlength(0.5):
+                z(SYNC_OVERLAY_Z + 8):
+                horizalign(left)
+            ));
         }
     }
 
@@ -10996,10 +11090,11 @@ fn update_impl(state: &mut State, dt: f32, smx: &SmxAssignmentView) -> ThemeEffe
         }
         state.cdtitle_anim_elapsed += dt;
         if let select_music_menu::State::Visible(ref mut menu_state) = state.select_music_menu
-            && menu_state.focus_anim_elapsed < select_music_menu::FOCUS_TWEEN_SECONDS {
-                menu_state.focus_anim_elapsed = (menu_state.focus_anim_elapsed + dt)
-                    .min(select_music_menu::FOCUS_TWEEN_SECONDS);
-            }
+            && menu_state.focus_anim_elapsed < select_music_menu::FOCUS_TWEEN_SECONDS
+        {
+            menu_state.focus_anim_elapsed =
+                (menu_state.focus_anim_elapsed + dt).min(select_music_menu::FOCUS_TWEEN_SECONDS);
+        }
     }
     if state.select_music_menu.is_visible() || srpg_shop_overlay_visible(state) {
         update_overlay_nav_hold(state);
@@ -14167,7 +14262,8 @@ mod tests {
         maybe_refresh_select_music_leaderboard, prepend_pending_effect, profile_boxes,
         reset_preview_after_gameplay, route_profile_box_effect, select_music_lobby_lock_text,
         select_music_lobby_lock_text_for, solo_runtime_side, steps_index_for_side,
-        sync_bias_axis_pos, sync_graph_cols, sync_low_confidence_warning, sync_overlay_graph_size,
+        sync_beat_axis_rows, sync_beat_marker_rows, sync_beat_row_y, sync_bias_axis_pos,
+        sync_graph_cols, sync_low_confidence_warning, sync_overlay_graph_size,
     };
     use crate::config::{GraphOrientation, GraphOrigin, SelectMusicWheelStyle};
     use crate::screens::ThemeEffect;
@@ -16616,6 +16712,69 @@ mod tests {
         });
 
         assert_eq!(heat_alpha, Some(super::SYNC_HEAT_ALPHA));
+    }
+
+    #[test]
+    fn sync_beat_markers_follow_vertical_origin() {
+        assert_eq!(sync_beat_marker_rows(10), [Some(0), Some(4), Some(9)]);
+
+        let bottom_start = sync_beat_row_y(0, 10, 20.0, 100.0, GraphOrigin::Bottom);
+        let bottom_middle = sync_beat_row_y(4, 10, 20.0, 100.0, GraphOrigin::Bottom);
+        let bottom_end = sync_beat_row_y(9, 10, 20.0, 100.0, GraphOrigin::Bottom);
+        assert!(bottom_start > bottom_middle);
+        assert!(bottom_middle > bottom_end);
+
+        let top_start = sync_beat_row_y(0, 10, 20.0, 100.0, GraphOrigin::Top);
+        let top_middle = sync_beat_row_y(4, 10, 20.0, 100.0, GraphOrigin::Top);
+        let top_end = sync_beat_row_y(9, 10, 20.0, 100.0, GraphOrigin::Top);
+        assert!(top_start < top_middle);
+        assert!(top_middle < top_end);
+    }
+
+    #[test]
+    fn sync_beat_markers_only_appear_on_vertical_beat_axes() {
+        let mut overlay = test_running_sync_overlay();
+        assert_eq!(sync_beat_axis_rows(&overlay), Some(2));
+
+        overlay.graph_orientation = GraphOrientation::Horizontal;
+        assert_eq!(sync_beat_axis_rows(&overlay), None);
+
+        overlay.graph_orientation = GraphOrientation::Vertical;
+        overlay.graph_mode = crate::config::SyncGraphMode::Frequency;
+        assert_eq!(sync_beat_axis_rows(&overlay), None);
+
+        overlay.graph_mode = crate::config::SyncGraphMode::PostKernelFingerprint;
+        overlay.kernel_target = crate::SimplyLoveSyncKernelTarget::Accumulator;
+        assert_eq!(sync_beat_axis_rows(&overlay), None);
+    }
+
+    #[test]
+    fn sync_overlay_renders_beat_markers_in_origin_order() {
+        let mut overlay = test_running_sync_overlay();
+        overlay.total_beats = 10;
+        let marker_ys = |overlay: &super::NullOrDieOverlayData| {
+            super::build_null_or_die_overlay(overlay, 0, crate::config::MachineFont::Wendy)
+                .unwrap()
+                .into_iter()
+                .filter_map(|actor| match actor {
+                    deadlib_present::actors::Actor::Text { offset, z, .. }
+                        if z == super::SYNC_OVERLAY_Z + 8 =>
+                    {
+                        Some(offset[1])
+                    }
+                    _ => None,
+                })
+                .collect::<Vec<_>>()
+        };
+
+        let bottom = marker_ys(&overlay);
+        assert_eq!(bottom.len(), 3);
+        assert!(bottom[0] > bottom[1] && bottom[1] > bottom[2]);
+
+        overlay.graph_origin = GraphOrigin::Top;
+        let top = marker_ys(&overlay);
+        assert_eq!(top.len(), 3);
+        assert!(top[0] < top[1] && top[1] < top[2]);
     }
 
     #[test]
