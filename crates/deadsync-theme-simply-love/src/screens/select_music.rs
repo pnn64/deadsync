@@ -562,10 +562,11 @@ pub fn sync_runtime_view(state: &mut State, view: SelectMusicRuntimeView) {
     state.profiles = view.profiles;
     if let Some(favorites) = view.favorites {
         state.favorites = favorites;
-        state.favorites_entries =
+        state.joined_favorites_entries =
             build_favorites_view_entries(&state.group_entries, state.session, &state.favorites);
-        if state.sort_mode == WheelSortMode::Favorites {
-            apply_wheel_sort(state, WheelSortMode::Favorites);
+        if matches!(state.sort_mode, WheelSortMode::Favorites(_)) {
+            let sort_mode = state.sort_mode;
+            apply_wheel_sort(state, sort_mode);
         }
     }
     if let Some(pad_profiles) = view.pad_profiles {
@@ -984,7 +985,7 @@ enum WheelSortMode {
     RecentP2,
     TopGradesP1,
     TopGradesP2,
-    Favorites,
+    Favorites(profile_data::PlayerSide),
     Playlist,
 }
 
@@ -1351,7 +1352,9 @@ pub struct State {
     recent_p2_entries: Vec<MusicWheelEntry>,
     top_grades_p1_entries: Vec<MusicWheelEntry>,
     top_grades_p2_entries: Vec<MusicWheelEntry>,
-    favorites_entries: Vec<MusicWheelEntry>,
+    /// Union of the joined players' favorites, used only to decide whether the
+    /// Favorites menu item is available. The active wheel is built per-player.
+    joined_favorites_entries: Vec<MusicWheelEntry>,
     playlist_entries: Vec<MusicWheelEntry>,
     playlist_library: Vec<PlaylistCacheEntry>,
     playlist_views: Vec<SelectMusicPlaylistView>,
@@ -2622,6 +2625,28 @@ fn build_favorites_view_entries(
     )
 }
 
+fn build_favorites_view_entries_for_side(
+    grouped_entries: &[MusicWheelEntry],
+    side: profile_data::PlayerSide,
+    favorites: &profile_data::FavoriteSnapshot,
+) -> Vec<MusicWheelEntry> {
+    let side_index = profile_data::player_side_index(side);
+    let pack_is_favorited = |pack_key: &str| favorites.pack_names[side_index].contains(pack_key);
+    let song_is_favorited = |song: &SongData| {
+        song.charts
+            .iter()
+            .any(|chart| favorites.chart_hashes[side_index].contains(&chart.short_hash))
+    };
+
+    let favorites_label = tr("SelectMusic", "Favorites");
+    build_favorites_view_entries_with_label(
+        grouped_entries,
+        favorites_label.as_ref(),
+        pack_is_favorited,
+        song_is_favorited,
+    )
+}
+
 #[cfg(test)]
 fn build_favorites_view_entries_with(
     grouped_entries: &[MusicWheelEntry],
@@ -2830,7 +2855,9 @@ fn refresh_popularity_cache(state: &mut State) {
 }
 
 fn apply_wheel_sort(state: &mut State, sort_mode: WheelSortMode) {
-    if state.sort_mode == sort_mode {
+    // Favorites are mutable while this sort is active, so selecting the same
+    // player's Favorites again must still rebuild the wheel.
+    if state.sort_mode == sort_mode && !matches!(sort_mode, WheelSortMode::Favorites(_)) {
         return;
     }
 
@@ -2957,15 +2984,15 @@ fn apply_wheel_sort(state: &mut State, sort_mode: WheelSortMode) {
                 .and_then(|song| group_name_for_song(&state.top_grades_p2_entries, song))
                 .or_else(|| first_header_name(&state.top_grades_p2_entries));
         }
-        WheelSortMode::Favorites => {
-            // Rebuild favorites on the fly so toggling is immediately reflected
-            state.favorites_entries =
-                build_favorites_view_entries(&state.group_entries, state.session, &state.favorites);
-            state.all_entries = state.favorites_entries.clone();
+        WheelSortMode::Favorites(side) => {
+            // Simply Love's Preferred sort is per-player: the side whose Start
+            // activated Favorites determines which profile's list is shown.
+            state.all_entries =
+                build_favorites_view_entries_for_side(&state.group_entries, side, &state.favorites);
             state.expanded_pack_name = selected_song
                 .as_ref()
-                .and_then(|song| group_name_for_song(&state.favorites_entries, song))
-                .or_else(|| first_header_name(&state.favorites_entries));
+                .and_then(|song| group_name_for_song(&state.all_entries, song))
+                .or_else(|| first_header_name(&state.all_entries));
         }
         WheelSortMode::Playlist => {
             if let Some(playlist_entries) = state
@@ -3181,7 +3208,7 @@ pub fn init(init_view: SelectMusicInitView) -> State {
         build_top_grades_grouped_entries_for_side(&all_entries, target_chart_type, p1_history);
     let top_grades_p2_entries =
         build_top_grades_grouped_entries_for_side(&all_entries, target_chart_type, p2_history);
-    let favorites_entries =
+    let joined_favorites_entries =
         build_favorites_view_entries(&all_entries, init_view.session, &init_view.favorites);
     let playlist_library = build_playlist_library(
         &all_entries,
@@ -3235,7 +3262,7 @@ pub fn init(init_view: SelectMusicInitView) -> State {
         recent_p2_entries,
         top_grades_p1_entries,
         top_grades_p2_entries,
-        favorites_entries,
+        joined_favorites_entries,
         playlist_entries: Vec::new(),
         playlist_library,
         playlist_views: init_view.playlists,
@@ -3476,7 +3503,7 @@ pub fn init_placeholder() -> State {
         recent_p2_entries: Vec::new(),
         top_grades_p1_entries: Vec::new(),
         top_grades_p2_entries: Vec::new(),
-        favorites_entries: Vec::new(),
+        joined_favorites_entries: Vec::new(),
         playlist_entries: Vec::new(),
         playlist_library: Vec::new(),
         playlist_views: Vec::new(),
@@ -4039,13 +4066,14 @@ fn toggle_favorite_for_selected_entry(state: &mut State, side: profile_data::Pla
                         chart_hash: chart.short_hash.clone(),
                     },
                 );
-                state.favorites_entries = build_favorites_view_entries(
+                state.joined_favorites_entries = build_favorites_view_entries(
                     &state.group_entries,
                     state.session,
                     &state.favorites,
                 );
-                if state.sort_mode == WheelSortMode::Favorites {
-                    apply_wheel_sort(state, WheelSortMode::Favorites);
+                if matches!(state.sort_mode, WheelSortMode::Favorites(_)) {
+                    let sort_mode = state.sort_mode;
+                    apply_wheel_sort(state, sort_mode);
                 }
                 queue_sfx(
                     state,
@@ -4068,10 +4096,11 @@ fn toggle_favorite_for_selected_entry(state: &mut State, side: profile_data::Pla
                     pack_name: pack_key.to_owned(),
                 },
             );
-            state.favorites_entries =
+            state.joined_favorites_entries =
                 build_favorites_view_entries(&state.group_entries, state.session, &state.favorites);
-            if state.sort_mode == WheelSortMode::Favorites {
-                apply_wheel_sort(state, WheelSortMode::Favorites);
+            if matches!(state.sort_mode, WheelSortMode::Favorites(_)) {
+                let sort_mode = state.sort_mode;
+                apply_wheel_sort(state, sort_mode);
             }
             queue_sfx(
                 state,
@@ -4430,7 +4459,7 @@ fn build_select_music_menu(state: &State) -> select_music_menu::MenuLists {
         standalone.push(select_music_menu::ITEM_TOGGLE_FAVORITE);
     }
     // Favorites shortcut (only when favorites exist)
-    let any_has_favorites = state.favorites_entries.len() > 1;
+    let any_has_favorites = state.joined_favorites_entries.len() > 1;
     if any_has_favorites {
         standalone.push(select_music_menu::ITEM_SORT_BY_FAVORITES);
     }
@@ -4460,7 +4489,7 @@ fn build_select_music_menu(state: &State) -> select_music_menu::MenuLists {
             items.push(select_music_menu::ITEM_SORT_BY_TOP_GRADES_P2);
         }
         // Favorites sort (if any player has favorites)
-        let any_has_favorites = state.favorites_entries.len() > 1;
+        let any_has_favorites = state.joined_favorites_entries.len() > 1;
         if any_has_favorites {
             items.push(select_music_menu::ITEM_SORT_BY_FAVORITES);
         }
@@ -9339,7 +9368,7 @@ fn dispatch_menu_action(
             ThemeEffect::None
         }
         select_music_menu::Action::SortByFavorites => {
-            apply_wheel_sort(state, WheelSortMode::Favorites);
+            apply_wheel_sort(state, WheelSortMode::Favorites(side));
             hide_select_music_menu(state);
             ThemeEffect::None
         }
@@ -15516,6 +15545,65 @@ mod tests {
                 super::MusicWheelEntry::PackHeader { .. } => None,
             })
             .collect()
+    }
+
+    fn select_favorites_menu_item(state: &mut super::State) {
+        super::show_select_music_menu(state);
+        let super::select_music_menu::State::Visible(menu) = &mut state.select_music_menu else {
+            panic!("select music menu should be visible");
+        };
+        menu.selected_index = menu
+            .cached_entries
+            .iter()
+            .position(|entry| {
+                matches!(
+                    entry,
+                    super::select_music_menu::Entry::StandaloneItem(item)
+                        | super::select_music_menu::Entry::CategoryItem(item)
+                        if item.action == super::select_music_menu::Action::SortByFavorites
+                )
+            })
+            .expect("Favorites should be available");
+    }
+
+    #[test]
+    fn favorites_sort_uses_the_side_that_pressed_start() {
+        let mut state = init_placeholder();
+        state.session.play_style = profile_data::PlayStyle::Versus;
+        state.session.joined = [true, true];
+        state.group_entries = test_entries();
+        state.all_entries = state.group_entries.clone();
+        state.favorites.pack_names[0].insert("Pack A".to_string());
+        state.favorites.pack_names[1].insert("Pack B".to_string());
+        state.joined_favorites_entries = super::build_favorites_view_entries(
+            &state.group_entries,
+            state.session,
+            &state.favorites,
+        );
+
+        select_favorites_menu_item(&mut state);
+        let _ = super::handle_input(
+            &mut state,
+            &input_event(VirtualAction::p1_start, InputSource::Gamepad, true),
+            false,
+        );
+        assert_eq!(
+            state.sort_mode,
+            WheelSortMode::Favorites(profile_data::PlayerSide::P1)
+        );
+        assert_eq!(song_titles(&state.all_entries), ["Song A1", "Song A2"]);
+
+        select_favorites_menu_item(&mut state);
+        let _ = super::handle_input(
+            &mut state,
+            &input_event(VirtualAction::p2_start, InputSource::Gamepad, true),
+            false,
+        );
+        assert_eq!(
+            state.sort_mode,
+            WheelSortMode::Favorites(profile_data::PlayerSide::P2)
+        );
+        assert_eq!(song_titles(&state.all_entries), ["Song B1"]);
     }
 
     #[test]
