@@ -1799,10 +1799,11 @@ fn build_displayed_entries(
     // Simply Love parity:
     // `OnlyShowActiveSection=true` hides every other section when a pack is open,
     // but `HideActiveSectionTitle=false` keeps the active header visible.
-    let hide_non_active_packs = expanded_pack_name.is_some()
+    let show_only_active_pack = expanded_pack_name.is_some()
         && matches!(wheel_style, crate::config::SelectMusicWheelStyle::Iidx);
-    let hide_non_active_series =
+    let hide_series_headers =
         hide_inactive_series && (expanded_series_name.is_some() || expanded_pack_name.is_some());
+    let show_only_active_series = hide_inactive_series && expanded_series_name.is_some();
 
     let mut new_entries = Vec::with_capacity(all_entries.len());
     let mut current_pack_key: Option<&str> = None;
@@ -1817,7 +1818,9 @@ fn build_displayed_entries(
             } if pack_key.is_none() && parent_series.is_some() => {
                 current_pack_key = None;
                 current_pack_visible = false;
-                if !hide_non_active_series || expanded_series_name == Some(name.as_str()) {
+                if !show_only_active_pack
+                    && (!hide_series_headers || expanded_series_name == Some(name.as_str()))
+                {
                     new_entries.push(entry.clone());
                 }
             }
@@ -1833,7 +1836,9 @@ fn build_displayed_entries(
                     .as_deref()
                     .is_none_or(|parent| expanded_series_name == Some(parent));
                 current_pack_visible = parent_is_open
-                    && (!hide_non_active_packs || expanded_pack_name == Some(section_key));
+                    && (!show_only_active_series
+                        || parent_series.as_deref() == expanded_series_name)
+                    && (!show_only_active_pack || expanded_pack_name == Some(section_key));
                 if current_pack_visible {
                     new_entries.push(entry.clone());
                 }
@@ -17121,8 +17126,42 @@ mod tests {
             SelectMusicWheelStyle::Iidx,
             false,
         );
-        assert_eq!(pack_open.len(), 4);
-        assert!(matches!(pack_open[3], super::MusicWheelEntry::Song(_)));
+        assert_eq!(pack_open.len(), 3);
+        assert!(matches!(
+            pack_open[0],
+            super::MusicWheelEntry::PackHeader { ref name, .. } if name == "Pack A"
+        ));
+        assert!(
+            !pack_open
+                .iter()
+                .any(super::MusicWheelEntry::is_series_header)
+        );
+        assert!(matches!(pack_open[2], super::MusicWheelEntry::Song(_)));
+    }
+
+    #[test]
+    fn hide_inactive_series_focuses_open_series() {
+        let packs = [
+            test_pack("Pack A", "ITG Series"),
+            test_pack("Pack B", "ITG Series"),
+        ];
+        let mut entries = super::build_series_grouped_entries(&test_entries(), &packs);
+        entries.push(header("Loose Pack", 2, 1, Some("Loose Pack")));
+        entries.push(super::MusicWheelEntry::Song(test_song("Loose Song")));
+
+        for wheel_style in [SelectMusicWheelStyle::Itg, SelectMusicWheelStyle::Iidx] {
+            let shown =
+                build_displayed_entries(&entries, Some("ITG Series"), None, wheel_style, true);
+
+            assert_eq!(shown.len(), 3);
+            assert!(shown[0].is_series_header());
+            assert!(shown.iter().all(|entry| {
+                !matches!(
+                    entry,
+                    super::MusicWheelEntry::PackHeader { name, .. } if name == "Loose Pack"
+                )
+            }));
+        }
     }
 
     #[test]
@@ -17236,7 +17275,7 @@ mod tests {
             &entries,
             None,
             Some("ITGAlex's Compilation"),
-            SelectMusicWheelStyle::Iidx,
+            SelectMusicWheelStyle::Itg,
             false,
         );
         assert!(shown.iter().any(super::MusicWheelEntry::is_series_header));
@@ -17260,7 +17299,7 @@ mod tests {
     }
 
     #[test]
-    fn hide_inactive_series_keeps_active_parent_series() {
+    fn iidx_pack_focus_hides_active_parent_series() {
         let packs = [
             test_pack("Pack A", "ITG Series"),
             test_pack("Pack B", "ITG Series"),
@@ -17275,14 +17314,14 @@ mod tests {
             true,
         );
 
-        assert_eq!(shown.len(), 4);
-        assert!(shown[0].is_series_header());
+        assert_eq!(shown.len(), 3);
+        assert!(!shown.iter().any(super::MusicWheelEntry::is_series_header));
         assert!(matches!(
-            shown[1],
+            shown[0],
             super::MusicWheelEntry::PackHeader { ref name, .. } if name == "Pack A"
         ));
+        assert!(matches!(shown[1], super::MusicWheelEntry::Song(_)));
         assert!(matches!(shown[2], super::MusicWheelEntry::Song(_)));
-        assert!(matches!(shown[3], super::MusicWheelEntry::Song(_)));
     }
 
     #[test]
