@@ -1,5 +1,5 @@
 use deadsync_profile::compat as profile;
-use deadsync_profile::{ActiveProfile, PlayerSide, Profile};
+use deadsync_profile::{ActiveProfile, PlayerSide};
 use deadsync_rules::scroll::ScrollSpeedSetting;
 use deadsync_theme_simply_love::SimplyLoveLocalProfileEvent;
 use deadsync_theme_simply_love::views::{
@@ -26,9 +26,10 @@ pub fn view() -> ManageLocalProfilesView {
 }
 
 pub fn picker_view() -> ProfilePickerView {
-    let default_profile = Profile::default();
-    let default_speed_mod = format!("{}", default_profile.scroll_speed);
-    let default_scroll_option = default_profile.scroll_option;
+    let default_options = profile::new_profile_player_options();
+    let guest_options = profile::guest_player_options();
+    let default_speed_mod = default_options.scroll_speed.to_string();
+    let default_scroll_option = default_options.scroll_option;
     let player_options_section =
         deadsync_profile::player_options_section(profile::get_session_play_style());
     let profiles = profile::scan_local_profiles()
@@ -36,9 +37,9 @@ pub fn picker_view() -> ProfilePickerView {
         .map(|summary| {
             let mut speed_mod = default_speed_mod.clone();
             let mut scroll_option = default_scroll_option;
-            let mut mini_indicator = deadsync_profile::MiniIndicator::None;
-            let mut noteskin = deadsync_profile::NoteSkin::default();
-            let mut judgment = deadsync_profile::JudgmentGraphic::default();
+            let mut mini_indicator = default_options.mini_indicator;
+            let mut noteskin = default_options.noteskin.clone();
+            let mut judgment = default_options.judgment_graphic.clone();
             let ini_path = profile::local_profile_dir_for_id(&summary.id).join("profile.ini");
             let mut ini = deadsync_config::prelude::SimpleIni::new();
             if ini.load(&ini_path).is_ok() {
@@ -75,15 +76,15 @@ pub fn picker_view() -> ProfilePickerView {
                         } else if pacemaker {
                             deadsync_profile::MiniIndicator::Pacemaker
                         } else {
-                            deadsync_profile::MiniIndicator::None
+                            default_options.mini_indicator
                         }
                     });
                 noteskin = get_player_option("NoteSkin")
                     .and_then(|value| value.parse().ok())
-                    .unwrap_or_default();
+                    .unwrap_or_else(|| default_options.noteskin.clone());
                 judgment = get_player_option("JudgmentGraphic")
                     .and_then(|value| value.parse().ok())
-                    .unwrap_or_default();
+                    .unwrap_or_else(|| default_options.judgment_graphic.clone());
             }
             ProfilePickerEntryView {
                 id: summary.id.clone(),
@@ -103,6 +104,17 @@ pub fn picker_view() -> ProfilePickerView {
         })
         .collect();
     ProfilePickerView {
+        guest: ProfilePickerEntryView {
+            id: String::new(),
+            display_name: String::new(),
+            speed_mod: guest_options.scroll_speed.to_string(),
+            avatar_key: None,
+            total_songs_played: 0,
+            scroll_option: guest_options.scroll_option,
+            mini_indicator: guest_options.mini_indicator,
+            noteskin: guest_options.noteskin,
+            judgment: guest_options.judgment_graphic,
+        },
         profiles,
         default_profiles: [
             profile::get_default_profile_for_side(PlayerSide::P1),

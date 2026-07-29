@@ -78,6 +78,9 @@ pub enum SimplyLoveProfileRequest {
     },
     SetMusicRate(f32),
     SetPlayMode(PlayMode),
+    SetMachineDefaultScrollSpeed(deadsync_rules::scroll::ScrollSpeedSetting),
+    SetMachineDefaultScroll(deadsync_profile::ScrollOption),
+    SetMachineDefaultBackgroundFilter(deadsync_profile::BackgroundFilter),
     SetMachineDefaultNoteskin(deadsync_profile::NoteSkin),
     UpdatePlayerOptions {
         side: PlayerSide,

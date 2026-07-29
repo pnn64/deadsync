@@ -197,6 +197,9 @@ pub struct State {
     pub(super) sub_prev_selected: usize,
     pub(super) sub_inline_x: f32,
     pub(super) sub: SubmenuStates,
+    pub(super) system_scroll_speed_values: Vec<deadsync_rules::scroll::ScrollSpeedSetting>,
+    pub(super) system_scroll_direction_values: Vec<deadsync_profile::ScrollOption>,
+    pub(super) system_background_filter_values: Vec<deadsync_profile::BackgroundFilter>,
     pub(super) system_noteskin_choices: Vec<String>,
     pub(super) smx_bg_pack_choices: Vec<String>,
     pub(super) smx_judge_pack_choices: Vec<String>,
@@ -275,7 +278,7 @@ pub fn init(view: OptionsInitView) -> State {
         song_packs,
         pack_sync,
         noteskins: noteskin_catalog,
-        machine_noteskin,
+        machine_player_options,
         smx_assignment,
         smx_gifs: smx_gif_catalog,
         score_import_profiles,
@@ -283,6 +286,12 @@ pub fn init(view: OptionsInitView) -> State {
     let mut system_noteskin_choices = noteskin_catalog.names;
     if system_noteskin_choices.is_empty() {
         system_noteskin_choices.push(deadsync_profile::NoteSkin::DEFAULT_NAME.to_string());
+    }
+    if !system_noteskin_choices
+        .iter()
+        .any(|name| name.eq_ignore_ascii_case(machine_player_options.noteskin.as_str()))
+    {
+        system_noteskin_choices.push(machine_player_options.noteskin.as_str().to_owned());
     }
     let smx_bg_pack_choices = smx_gif_catalog.background_packs;
     let smx_judge_pack_choices = smx_gif_catalog.judgment_packs;
@@ -297,9 +306,27 @@ pub fn init(view: OptionsInitView) -> State {
     #[cfg(target_os = "linux")]
     let linux_backend_choices = build_linux_backend_choices(&audio_options);
     let smx_assignment_status = smx_assignment_status(&smx_assignment);
+    let system_scroll_speed_values =
+        system_scroll_speed_values(machine_player_options.scroll_speed);
+    let machine_scroll_speed_idx = system_scroll_speed_values
+        .iter()
+        .position(|value| *value == machine_player_options.scroll_speed)
+        .unwrap_or(0);
+    let system_scroll_direction_values =
+        system_scroll_direction_values(machine_player_options.scroll_option);
+    let machine_scroll_direction_idx = system_scroll_direction_values
+        .iter()
+        .position(|value| *value == machine_player_options.scroll_option)
+        .unwrap_or(0);
+    let system_background_filter_values =
+        system_background_filter_values(machine_player_options.background_filter);
+    let machine_background_filter_idx = system_background_filter_values
+        .iter()
+        .position(|value| *value == machine_player_options.background_filter)
+        .unwrap_or(0);
     let machine_noteskin_idx = system_noteskin_choices
         .iter()
-        .position(|name| name.eq_ignore_ascii_case(machine_noteskin.as_str()))
+        .position(|name| name.eq_ignore_ascii_case(machine_player_options.noteskin.as_str()))
         .unwrap_or(0);
     let mut state = State {
         updater_capabilities,
@@ -354,6 +381,9 @@ pub fn init(view: OptionsInitView) -> State {
                 cursor_indices: vec![0; len],
             }
         }),
+        system_scroll_speed_values,
+        system_scroll_direction_values,
+        system_background_filter_values,
         system_noteskin_choices,
         smx_bg_pack_choices,
         smx_judge_pack_choices,
@@ -481,6 +511,24 @@ pub fn init(view: OptionsInitView) -> State {
         SYSTEM_OPTIONS_ROWS,
         SubRowId::LogFile,
         usize::from(cfg.log_to_file),
+    );
+    set_choice_by_id(
+        &mut state.sub[SubmenuKind::System].choice_indices,
+        SYSTEM_OPTIONS_ROWS,
+        SubRowId::DefaultScrollSpeed,
+        machine_scroll_speed_idx,
+    );
+    set_choice_by_id(
+        &mut state.sub[SubmenuKind::System].choice_indices,
+        SYSTEM_OPTIONS_ROWS,
+        SubRowId::DefaultScrollDirection,
+        machine_scroll_direction_idx,
+    );
+    set_choice_by_id(
+        &mut state.sub[SubmenuKind::System].choice_indices,
+        SYSTEM_OPTIONS_ROWS,
+        SubRowId::DefaultBackgroundFilter,
+        machine_background_filter_idx,
     );
     if let Some(noteskin_row_idx) = SYSTEM_OPTIONS_ROWS
         .iter()

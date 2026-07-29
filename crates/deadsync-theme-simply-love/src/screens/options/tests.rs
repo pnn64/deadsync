@@ -50,7 +50,7 @@ fn init_with_audio(audio_options: AudioOptionsView) -> State {
         noteskins: NoteskinCatalogView {
             names: vec![profile_data::NoteSkin::DEFAULT_NAME.to_owned()],
         },
-        machine_noteskin: profile_data::NoteSkin::default(),
+        machine_player_options: profile_data::PlayerOptionsData::default(),
         smx_assignment: deadsync_theme::views::SmxAssignmentView::default(),
         smx_gifs: deadsync_theme::views::SmxGifCatalogView::default(),
         score_import_profiles: Vec::new(),
@@ -137,7 +137,7 @@ fn smx_gif_choices_come_from_shell_catalog() {
         song_packs: Vec::new(),
         pack_sync: OptionsPackSyncView::default(),
         noteskins: NoteskinCatalogView::default(),
-        machine_noteskin: profile_data::NoteSkin::default(),
+        machine_player_options: profile_data::PlayerOptionsData::default(),
         smx_assignment: SmxAssignmentView::default(),
         smx_gifs: SmxGifCatalogView {
             background_packs: vec!["Background Pack".to_owned()],
@@ -422,7 +422,7 @@ fn note_scroll_clock_initializes_from_config_and_emits_typed_request() {
         song_packs: Vec::new(),
         pack_sync: OptionsPackSyncView::default(),
         noteskins: NoteskinCatalogView::default(),
-        machine_noteskin: profile_data::NoteSkin::default(),
+        machine_player_options: profile_data::PlayerOptionsData::default(),
         smx_assignment: SmxAssignmentView::default(),
         smx_gifs: SmxGifCatalogView::default(),
         score_import_profiles: Vec::new(),
@@ -561,6 +561,78 @@ fn null_or_die_orientation_emits_shell_config_request() {
                 crate::SimplyLoveNullOrDieConfigRequest::GraphOrientation(value)
             )
         )) if value == expected
+    ));
+}
+
+#[test]
+fn machine_scroll_speed_choice_emits_shell_profile_request() {
+    let asset_manager = AssetManager::new();
+    let mut state = init();
+    state.view = OptionsView::Submenu(SubmenuKind::System);
+    let row = select_visible_row(
+        &mut state,
+        SubmenuKind::System,
+        SubRowId::DefaultScrollSpeed,
+    );
+
+    let effect = apply_submenu_choice_delta(&mut state, &asset_manager, 1, NavWrap::Wrap)
+        .expect("machine scroll speed should emit shell profile work");
+    let expected =
+        state.system_scroll_speed_values[state.sub[SubmenuKind::System].cursor_indices[row]];
+
+    assert!(matches!(
+        effect,
+        ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Profile(
+            crate::SimplyLoveProfileRequest::SetMachineDefaultScrollSpeed(setting)
+        )) if setting == expected
+    ));
+}
+
+#[test]
+fn machine_scroll_direction_choice_emits_shell_profile_request() {
+    let asset_manager = AssetManager::new();
+    let mut state = init();
+    state.view = OptionsView::Submenu(SubmenuKind::System);
+    let row = select_visible_row(
+        &mut state,
+        SubmenuKind::System,
+        SubRowId::DefaultScrollDirection,
+    );
+
+    let effect = apply_submenu_choice_delta(&mut state, &asset_manager, 1, NavWrap::Wrap)
+        .expect("machine scroll direction should emit shell profile work");
+    let expected =
+        state.system_scroll_direction_values[state.sub[SubmenuKind::System].cursor_indices[row]];
+
+    assert!(matches!(
+        effect,
+        ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Profile(
+            crate::SimplyLoveProfileRequest::SetMachineDefaultScroll(setting)
+        )) if setting == expected
+    ));
+}
+
+#[test]
+fn machine_background_filter_choice_emits_shell_profile_request() {
+    let asset_manager = AssetManager::new();
+    let mut state = init();
+    state.view = OptionsView::Submenu(SubmenuKind::System);
+    let row = select_visible_row(
+        &mut state,
+        SubmenuKind::System,
+        SubRowId::DefaultBackgroundFilter,
+    );
+
+    let effect = apply_submenu_choice_delta(&mut state, &asset_manager, 1, NavWrap::Wrap)
+        .expect("machine background filter should emit shell profile work");
+    let expected =
+        state.system_background_filter_values[state.sub[SubmenuKind::System].cursor_indices[row]];
+
+    assert!(matches!(
+        effect,
+        ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Profile(
+            crate::SimplyLoveProfileRequest::SetMachineDefaultBackgroundFilter(setting)
+        )) if setting == expected
     ));
 }
 
@@ -1189,6 +1261,45 @@ fn input_backend_items_match_rows() {
         assert_eq!(INPUT_BACKEND_OPTIONS_ITEMS[idx].id, item_id);
     }
     assert_eq!(INPUT_BACKEND_OPTIONS_ITEMS.last().unwrap().id, ItemId::Exit);
+}
+
+#[test]
+fn system_items_match_rows() {
+    let expected = [
+        (SubRowId::Game, ItemId::SysGame),
+        (SubRowId::Theme, ItemId::SysTheme),
+        (SubRowId::Language, ItemId::SysLanguage),
+        (SubRowId::LogLevel, ItemId::SysLogLevel),
+        (SubRowId::LogFile, ItemId::SysLogFile),
+        (SubRowId::DefaultScrollSpeed, ItemId::SysDefaultScrollSpeed),
+        (
+            SubRowId::DefaultScrollDirection,
+            ItemId::SysDefaultScrollDirection,
+        ),
+        (
+            SubRowId::DefaultBackgroundFilter,
+            ItemId::SysDefaultBackgroundFilter,
+        ),
+        (SubRowId::DefaultNoteSkin, ItemId::SysDefaultNoteSkin),
+    ];
+
+    assert_eq!(SYSTEM_OPTIONS_ROWS.len() + 1, SYSTEM_OPTIONS_ITEMS.len());
+    for (idx, (row_id, item_id)) in expected.into_iter().enumerate() {
+        assert_eq!(SYSTEM_OPTIONS_ROWS[idx].id, row_id);
+        assert_eq!(SYSTEM_OPTIONS_ITEMS[idx].id, item_id);
+    }
+    assert_eq!(SYSTEM_OPTIONS_ITEMS.last().unwrap().id, ItemId::Exit);
+}
+
+#[test]
+fn system_default_choices_keep_advanced_ini_values_visible() {
+    let speed = deadsync_rules::scroll::ScrollSpeedSetting::MMod(433.0);
+    let direction = profile_data::ScrollOption::Reverse.union(profile_data::ScrollOption::Centered);
+    let filter = profile_data::BackgroundFilter::from_percent(93);
+
+    assert!(system_scroll_speed_values(speed).contains(&speed));
+    assert!(system_scroll_direction_values(direction).contains(&direction));
+    assert!(system_background_filter_values(filter).contains(&filter));
 }
 
 #[test]

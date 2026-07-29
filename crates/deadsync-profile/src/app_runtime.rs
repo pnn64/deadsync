@@ -1,20 +1,22 @@
 //! App-facing profile path and sidecar-file runtime helpers.
 
 use std::collections::{HashMap, HashSet};
+use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
 use deadlib_platform::dirs;
 use deadsync_config::prelude as config;
+use deadsync_rules::scroll::ScrollSpeedSetting;
 use log::{debug, info, warn};
 
 use crate::pad_config::{self, PadConfigProfile};
 use crate::{
-    ActiveProfile, ImportProfileData, LocalProfileSummary, NoteSkin, PLAYER_SLOTS,
-    PlayerOptionsData, PlayerSide, Profile, ProfileStatsDecodeError, ProfileStatsLoadError,
-    ProfileStatsWriteError, RuntimeProfileStatsWriteError, default_profile_ids_after_side_update,
-    is_local_profile_id, player_side_index,
+    ActiveProfile, BackgroundFilter, ImportProfileData, LocalProfileSummary, NoteSkin,
+    PLAYER_SLOTS, PlayerOptionsData, PlayerSide, Profile, ProfileStatsDecodeError,
+    ProfileStatsLoadError, ProfileStatsWriteError, RuntimeProfileStatsWriteError, ScrollOption,
+    default_profile_ids_after_side_update, is_local_profile_id, player_side_index,
 };
 
 #[inline(always)]
@@ -1003,18 +1005,6 @@ pub fn restore_default_profiles(default_profiles: [Option<String>; PLAYER_SLOTS]
     crate::runtime_restore_default_profiles(&default_profiles, |id| local_profile_dir(id).is_dir());
 }
 
-pub fn update_machine_default_noteskin(
-    current_noteskin: &str,
-    setting: NoteSkin,
-    update_noteskin: impl FnOnce(&str),
-) {
-    if current_noteskin.eq_ignore_ascii_case(setting.as_str()) {
-        return;
-    }
-    update_noteskin(setting.as_str());
-    crate::runtime_update_guest_profile_noteskin(setting);
-}
-
 #[inline(always)]
 pub fn machine_default_noteskin_value() -> NoteSkin {
     NoteSkin::new(&config::machine_default_noteskin())
@@ -1027,36 +1017,156 @@ pub fn machine_default_light_brightness() -> u8 {
     config::get().smx_default_light_brightness
 }
 
-pub fn machine_default_noteskin() -> NoteSkin {
-    machine_default_noteskin_value()
+fn legacy_common_player_options() -> PlayerOptionsData {
+    PlayerOptionsData {
+        noteskin: machine_default_noteskin_value(),
+        pad_light_brightness: machine_default_light_brightness().min(100),
+        ..PlayerOptionsData::default()
+    }
+}
+
+fn default_player_options_path() -> PathBuf {
+    dirs::app_dirs().default_player_options_path()
+}
+
+fn read_machine_player_defaults(
+    path: &Path,
+    base_common: &PlayerOptionsData,
+) -> crate::MachinePlayerDefaults {
+    match fs::read_to_string(path) {
+        Ok(content) => crate::machine_player_defaults_from_ini(&content, base_common),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            let content = crate::render_machine_player_defaults_template(base_common);
+            if let Some(parent) = path.parent()
+                && let Err(error) = fs::create_dir_all(parent)
+            {
+                warn!(
+                    "Failed to create default player options directory '{}': {error}",
+                    parent.display()
+                );
+            } else if let Err(error) = fs::write(path, content) {
+                warn!(
+                    "Failed to create default player options file '{}': {error}",
+                    path.display()
+                );
+            }
+            crate::MachinePlayerDefaults {
+                common: base_common.clone(),
+                guest: base_common.clone(),
+                new_profile: base_common.clone(),
+            }
+        }
+        Err(error) => {
+            warn!(
+                "Failed to read default player options file '{}': {error}",
+                path.display()
+            );
+            crate::MachinePlayerDefaults {
+                common: base_common.clone(),
+                guest: base_common.clone(),
+                new_profile: base_common.clone(),
+            }
+        }
+    }
+}
+
+pub fn initialize_machine_player_defaults_from_config() {
+    let defaults = read_machine_player_defaults(
+        &default_player_options_path(),
+        &legacy_common_player_options(),
+    );
+    crate::runtime_set_machine_player_defaults(defaults);
+}
+
+fn update_common_machine_player_default(key: &str, value: &str) {
+    let path = default_player_options_path();
+    let base_common = legacy_common_player_options();
+    let content = match fs::read_to_string(&path) {
+        Ok(content) => content,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            crate::render_machine_player_defaults_template(&base_common)
+        }
+        Err(error) => {
+            warn!(
+                "Failed to read default player options file '{}': {error}",
+                path.display()
+            );
+            return;
+        }
+    };
+    let content =
+        crate::upsert_ini_section_value(&content, crate::COMMON_PLAYER_OPTIONS_SECTION, key, value);
+    if let Some(parent) = path.parent()
+        && let Err(error) = fs::create_dir_all(parent)
+    {
+        warn!(
+            "Failed to create default player options directory '{}': {error}",
+            parent.display()
+        );
+        return;
+    }
+    if let Err(error) = fs::write(&path, &content) {
+        warn!(
+            "Failed to update default player options file '{}': {error}",
+            path.display()
+        );
+        return;
+    }
+
+    let defaults = crate::machine_player_defaults_from_ini(&content, &base_common);
+    crate::runtime_update_guest_profile_player_options(&defaults.guest);
+    crate::runtime_set_machine_player_defaults(defaults);
+}
+
+#[inline(always)]
+pub fn machine_common_player_options() -> PlayerOptionsData {
+    crate::runtime_machine_player_defaults().common
+}
+
+#[inline(always)]
+pub fn guest_player_options() -> PlayerOptionsData {
+    crate::runtime_machine_player_defaults().guest
+}
+
+#[inline(always)]
+pub fn new_profile_player_options() -> PlayerOptionsData {
+    crate::runtime_machine_player_defaults().new_profile
+}
+
+pub fn update_machine_default_scroll_speed(setting: ScrollSpeedSetting) {
+    update_common_machine_player_default("ScrollSpeed", &setting.to_string());
+}
+
+pub fn update_machine_default_scroll(setting: ScrollOption) {
+    update_common_machine_player_default("Scroll", &setting.to_string());
+}
+
+pub fn update_machine_default_background_filter(setting: BackgroundFilter) {
+    update_common_machine_player_default("BackgroundFilter", &setting.to_string());
 }
 
 pub fn update_machine_default_noteskin_from_config(setting: NoteSkin) {
-    update_machine_default_noteskin(
-        &config::machine_default_noteskin(),
-        setting,
-        config::update_machine_default_noteskin,
-    );
+    config::update_machine_default_noteskin(setting.as_str());
+    update_common_machine_player_default("NoteSkin", setting.as_str());
 }
 
-pub fn load_profile_for_side(
-    side: PlayerSide,
-    machine_default_noteskin: NoteSkin,
-    machine_default_light_brightness: u8,
-) {
+pub fn update_machine_default_light_brightness_from_config(percent: u8) {
+    let percent = percent.min(100);
+    config::update_smx_default_light_brightness(percent);
+    update_common_machine_player_default("PadLightBrightness", &percent.to_string());
+}
+
+pub fn load_profile_for_side(side: PlayerSide) {
+    let defaults = crate::runtime_machine_player_defaults();
     let today = chrono::Local::now().date_naive().to_string();
-    let mut default_profile = crate::default_profile_with_machine_settings(
-        machine_default_noteskin.clone(),
-        machine_default_light_brightness,
-    );
+    let mut default_profile = crate::default_profile_with_player_options(&defaults.new_profile);
     default_profile.calories_burned_day = today.clone();
     let load = crate::runtime_load_profile_for_side(
         &profiles_root(),
         side,
         &default_profile,
         today.as_str(),
-        machine_default_noteskin,
-        machine_default_light_brightness,
+        &defaults.guest,
         |id| local_profile_dir(id).is_dir(),
         || scan_local_profiles().into_iter().next().map(|p| p.id),
         warn_duplicate_profile_guid,
@@ -1132,49 +1242,26 @@ pub fn load_profile_for_side(
 pub fn load_profiles(
     default_profiles: [Option<String>; PLAYER_SLOTS],
     update_default_profiles: impl FnOnce(Option<String>, Option<String>),
-    machine_default_noteskin: NoteSkin,
-    machine_default_light_brightness: u8,
 ) {
     migrate_local_profiles(default_profiles.clone(), update_default_profiles);
     restore_default_profiles(default_profiles);
-    load_profile_for_side(
-        PlayerSide::P1,
-        machine_default_noteskin.clone(),
-        machine_default_light_brightness,
-    );
-    load_profile_for_side(
-        PlayerSide::P2,
-        machine_default_noteskin,
-        machine_default_light_brightness,
-    );
+    load_profile_for_side(PlayerSide::P1);
+    load_profile_for_side(PlayerSide::P2);
 }
 
 pub fn load_profiles_from_config() {
+    initialize_machine_player_defaults_from_config();
     let (p1, p2) = config::default_profiles();
-    load_profiles(
-        [p1, p2],
-        config::update_default_profiles,
-        machine_default_noteskin_value(),
-        machine_default_light_brightness(),
-    );
+    load_profiles([p1, p2], config::update_default_profiles);
 }
 
 pub fn scan_local_profiles() -> Vec<LocalProfileSummary> {
     crate::scan_local_profile_summaries(&profiles_root())
 }
 
-pub fn default_local_profile_options(
-    noteskin: NoteSkin,
-    pad_light_brightness: u8,
-) -> (PlayerOptionsData, PlayerOptionsData) {
-    crate::default_player_options_with_machine_settings(noteskin, pad_light_brightness)
-}
-
 pub fn default_local_profile_options_from_config() -> (PlayerOptionsData, PlayerOptionsData) {
-    default_local_profile_options(
-        machine_default_noteskin_value(),
-        machine_default_light_brightness(),
-    )
+    let options = new_profile_player_options();
+    (options.clone(), options)
 }
 
 pub fn default_profile_for_side(
@@ -1309,17 +1396,11 @@ pub fn toggle_pack_favorite(side: PlayerSide, pack_name: &str) -> bool {
 pub fn set_active_profile_for_side_with_defaults(
     side: PlayerSide,
     profile: ActiveProfile,
-    machine_default_noteskin: NoteSkin,
-    machine_default_light_brightness: u8,
 ) -> Profile {
     if !crate::runtime_set_active_profile_for_side(side, profile) {
         return crate::runtime_profile_for_side(side);
     }
-    load_profile_for_side(
-        side,
-        machine_default_noteskin,
-        machine_default_light_brightness,
-    );
+    load_profile_for_side(side);
     crate::runtime_profile_for_side(side)
 }
 
@@ -1327,29 +1408,18 @@ pub fn set_active_profile_for_side_from_config(
     side: PlayerSide,
     profile: ActiveProfile,
 ) -> Profile {
-    set_active_profile_for_side_with_defaults(
-        side,
-        profile,
-        machine_default_noteskin_value(),
-        machine_default_light_brightness(),
-    )
+    set_active_profile_for_side_with_defaults(side, profile)
 }
 
 pub fn set_active_profiles_with_defaults(
     profiles: [ActiveProfile; PLAYER_SLOTS],
     default_profiles: [Option<String>; PLAYER_SLOTS],
     update_default_profiles: impl FnOnce(Option<String>, Option<String>),
-    machine_default_noteskin: NoteSkin,
-    machine_default_light_brightness: u8,
 ) -> [Profile; PLAYER_SLOTS] {
     let changed = crate::runtime_set_active_profiles(profiles);
     for side in [PlayerSide::P1, PlayerSide::P2] {
         if changed[player_side_index(side)] {
-            load_profile_for_side(
-                side,
-                machine_default_noteskin.clone(),
-                machine_default_light_brightness,
-            );
+            load_profile_for_side(side);
         }
     }
     update_default_profiles_from_selection(default_profiles, update_default_profiles);
@@ -1368,26 +1438,18 @@ pub fn set_active_profiles_from_config(
         [p1, p2],
         [p1_default, p2_default],
         config::update_default_profiles,
-        machine_default_noteskin_value(),
-        machine_default_light_brightness(),
     )
 }
 
 pub fn load_default_profiles_for_joined_sides_with_defaults(
     default_profiles: [Option<String>; PLAYER_SLOTS],
-    machine_default_noteskin: NoteSkin,
-    machine_default_light_brightness: u8,
 ) -> [Profile; PLAYER_SLOTS] {
     let changed = crate::runtime_restore_joined_default_profiles(&default_profiles, |id| {
         local_profile_dir(id).is_dir()
     });
     for side in [PlayerSide::P1, PlayerSide::P2] {
         if changed[player_side_index(side)] {
-            load_profile_for_side(
-                side,
-                machine_default_noteskin.clone(),
-                machine_default_light_brightness,
-            );
+            load_profile_for_side(side);
         }
     }
     [
@@ -1398,25 +1460,19 @@ pub fn load_default_profiles_for_joined_sides_with_defaults(
 
 pub fn load_default_profiles_for_joined_sides_from_config() -> [Profile; PLAYER_SLOTS] {
     let (p1, p2) = config::default_profiles();
-    load_default_profiles_for_joined_sides_with_defaults(
-        [p1, p2],
-        machine_default_noteskin_value(),
-        machine_default_light_brightness(),
-    )
+    load_default_profiles_for_joined_sides_with_defaults([p1, p2])
 }
 
 pub fn create_local_profile(
     display_name: &str,
-    noteskin: NoteSkin,
-    pad_light_brightness: u8,
+    player_options: &PlayerOptionsData,
     default_profiles: [Option<String>; PLAYER_SLOTS],
     update_default_profiles: impl FnOnce(Option<String>, Option<String>),
 ) -> Result<String, std::io::Error> {
     let result = crate::runtime_create_local_profile(
         &profiles_root(),
         display_name,
-        noteskin,
-        pad_light_brightness,
+        player_options,
         default_profiles,
     )?;
     update_default_profiles(
@@ -1428,10 +1484,10 @@ pub fn create_local_profile(
 
 pub fn create_local_profile_from_config(display_name: &str) -> Result<String, std::io::Error> {
     let (p1_default, p2_default) = config::default_profiles();
+    let player_options = new_profile_player_options();
     create_local_profile(
         display_name,
-        machine_default_noteskin_value(),
-        machine_default_light_brightness(),
+        &player_options,
         [p1_default, p2_default],
         config::update_default_profiles,
     )
@@ -1477,8 +1533,6 @@ pub fn delete_local_profile_with_defaults(
     id: &str,
     default_profiles: [Option<String>; PLAYER_SLOTS],
     update_default_profiles: impl FnOnce(Option<String>, Option<String>),
-    machine_default_noteskin: NoteSkin,
-    machine_default_light_brightness: u8,
 ) -> Result<(), std::io::Error> {
     let result = crate::runtime_delete_local_profile(&local_profile_dir(id), id, default_profiles)?;
     update_default_profiles(
@@ -1487,11 +1541,7 @@ pub fn delete_local_profile_with_defaults(
     );
     for side in [PlayerSide::P1, PlayerSide::P2] {
         if result.changed_sides[player_side_index(side)] {
-            load_profile_for_side(
-                side,
-                machine_default_noteskin.clone(),
-                machine_default_light_brightness,
-            );
+            load_profile_for_side(side);
         }
     }
 
@@ -1504,8 +1554,6 @@ pub fn delete_local_profile_from_config(id: &str) -> Result<(), std::io::Error> 
         id,
         [p1_default, p2_default],
         config::update_default_profiles,
-        machine_default_noteskin_value(),
-        machine_default_light_brightness(),
     )
 }
 
@@ -1770,6 +1818,37 @@ mod tests {
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::mpsc;
     use std::time::Instant;
+
+    #[test]
+    fn missing_machine_player_defaults_file_is_created_from_legacy_values() {
+        let root = std::env::temp_dir().join(format!(
+            "deadsync-machine-defaults-{}-{}",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .expect("system time should follow unix epoch")
+                .as_nanos()
+        ));
+        let path = root.join("save").join("default_player_options.ini");
+        let base = PlayerOptionsData {
+            scroll_speed: ScrollSpeedSetting::MMod(425.0),
+            noteskin: NoteSkin::new("cel"),
+            ..PlayerOptionsData::default()
+        };
+
+        let defaults = read_machine_player_defaults(&path, &base);
+
+        assert_eq!(defaults.common, base);
+        assert_eq!(defaults.guest, base);
+        assert_eq!(defaults.new_profile, base);
+        let content = fs::read_to_string(&path).expect("defaults file should be created");
+        assert!(content.contains("[CommonPlayerOptions]\n"));
+        assert!(content.contains("ScrollSpeed=M425\n"));
+        assert!(content.contains("[GuestPlayerOptions]\n\n"));
+        assert!(content.contains("[NewProfilePlayerOptions]\n"));
+
+        fs::remove_dir_all(root).expect("temporary defaults directory should clean up");
+    }
 
     #[test]
     fn player_leaderboard_cache_exposes_srpg_self_score() {

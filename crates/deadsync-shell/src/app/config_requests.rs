@@ -1,4 +1,5 @@
 use deadsync_config::prelude as config;
+use deadsync_profile::compat as profile;
 use deadsync_theme_simply_love::{
     SimplyLoveAdvancedConfigRequest, SimplyLoveCourseConfigRequest,
     SimplyLoveGameplayConfigRequest, SimplyLoveGameplayPadLights, SimplyLoveGraphOrientation,
@@ -39,7 +40,7 @@ pub(super) fn execute_options(request: SimplyLoveOptionsConfigRequest) {
         Request::SmxManagesPadConfig(enabled) => config::update_smx_manages_pad_config(enabled),
         Request::SmxDefaultPadConfig(preset) => config::update_smx_default_pad_config(preset),
         Request::SmxDefaultLightBrightness(percent) => {
-            config::update_smx_default_light_brightness(percent)
+            profile::update_machine_default_light_brightness_from_config(percent)
         }
         Request::SmxPadGifsPack(pack) => config::update_smx_pad_gifs_pack(pack),
         Request::SmxJudgeGifsPack(pack) => config::update_smx_judge_gifs_pack(pack),

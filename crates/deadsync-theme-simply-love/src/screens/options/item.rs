@@ -33,6 +33,9 @@ pub enum ItemId {
     SysLanguage,
     SysLogLevel,
     SysLogFile,
+    SysDefaultScrollSpeed,
+    SysDefaultScrollDirection,
+    SysDefaultBackgroundFilter,
     SysDefaultNoteSkin,
 
     // Graphics Options submenu

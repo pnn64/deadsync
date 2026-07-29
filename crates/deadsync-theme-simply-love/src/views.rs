@@ -676,6 +676,7 @@ pub struct LocalProfileView {
 /// Select Music profile overlay.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ProfilePickerView {
+    pub guest: ProfilePickerEntryView,
     pub profiles: Vec<ProfilePickerEntryView>,
     pub default_profiles: [deadsync_profile::ActiveProfile; 2],
     pub three_key_navigation: bool,
@@ -683,7 +684,19 @@ pub struct ProfilePickerView {
 
 impl Default for ProfilePickerView {
     fn default() -> Self {
+        let options = deadsync_profile::PlayerOptionsData::default();
         Self {
+            guest: ProfilePickerEntryView {
+                id: String::new(),
+                display_name: String::new(),
+                speed_mod: options.scroll_speed.to_string(),
+                avatar_key: None,
+                total_songs_played: 0,
+                scroll_option: options.scroll_option,
+                mini_indicator: options.mini_indicator,
+                noteskin: options.noteskin,
+                judgment: options.judgment_graphic,
+            },
             profiles: Vec::new(),
             default_profiles: std::array::from_fn(|_| deadsync_profile::ActiveProfile::Guest),
             three_key_navigation: false,
@@ -1051,7 +1064,7 @@ pub struct OptionsInitView {
     pub song_packs: Vec<OptionsSongPackView>,
     pub pack_sync: OptionsPackSyncView,
     pub noteskins: deadsync_theme::views::NoteskinCatalogView,
-    pub machine_noteskin: deadsync_profile::NoteSkin,
+    pub machine_player_options: deadsync_profile::PlayerOptionsData,
     pub smx_assignment: deadsync_theme::views::SmxAssignmentView,
     pub smx_gifs: deadsync_theme::views::SmxGifCatalogView,
     pub score_import_profiles: Vec<crate::SimplyLoveScoreImportProfile>,

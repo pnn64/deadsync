@@ -73,14 +73,42 @@ pub(super) fn row_choices(
 ) -> Vec<Cow<'static, str>> {
     if let Some(row) = rows.get(row_idx)
         && matches!(kind, SubmenuKind::System)
-        && row.id == SubRowId::DefaultNoteSkin
     {
-        return state
-            .system_noteskin_choices
-            .iter()
-            .cloned()
-            .map(Cow::Owned)
-            .collect();
+        match row.id {
+            SubRowId::DefaultScrollSpeed => {
+                return state
+                    .system_scroll_speed_values
+                    .iter()
+                    .map(ToString::to_string)
+                    .map(Cow::Owned)
+                    .collect();
+            }
+            SubRowId::DefaultScrollDirection => {
+                return state
+                    .system_scroll_direction_values
+                    .iter()
+                    .map(ToString::to_string)
+                    .map(Cow::Owned)
+                    .collect();
+            }
+            SubRowId::DefaultBackgroundFilter => {
+                return state
+                    .system_background_filter_values
+                    .iter()
+                    .map(|value| format!("{}%", value.percent()))
+                    .map(Cow::Owned)
+                    .collect();
+            }
+            SubRowId::DefaultNoteSkin => {
+                return state
+                    .system_noteskin_choices
+                    .iter()
+                    .cloned()
+                    .map(Cow::Owned)
+                    .collect();
+            }
+            _ => {}
+        }
     }
     if let Some(row) = rows.get(row_idx)
         && matches!(kind, SubmenuKind::SmxConfig)

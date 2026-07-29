@@ -2,7 +2,7 @@ use bincode::{Decode, Encode};
 use bitflags::bitflags;
 use chrono::{Datelike, Local};
 use deadsync_rules::judgment::JudgeGrade;
-use deadsync_rules::scroll::{GUEST_SCROLL_SPEED, ScrollSpeedSetting};
+use deadsync_rules::scroll::ScrollSpeedSetting;
 use deadsync_score::ScoreImportEndpoint;
 use std::collections::{HashMap, HashSet};
 use std::fmt::Write as _;
@@ -86,6 +86,9 @@ pub const CUSTOM_FANTASTIC_WINDOW_DEFAULT_MS: u8 = 10;
 static RUNTIME_PROFILES: LazyLock<Mutex<[Profile; PLAYER_SLOTS]>> =
     LazyLock::new(|| Mutex::new(std::array::from_fn(|_| Profile::default())));
 
+static RUNTIME_MACHINE_PLAYER_DEFAULTS: LazyLock<Mutex<MachinePlayerDefaults>> =
+    LazyLock::new(|| Mutex::new(MachinePlayerDefaults::default()));
+
 static RUNTIME_SESSION: LazyLock<Mutex<SessionState>> = LazyLock::new(|| {
     // Both sides start as Guest; root profile loading seeds configured defaults.
     Mutex::new(SessionState::default())
@@ -129,6 +132,14 @@ pub fn runtime_lock_profiles() -> MutexGuard<'static, [Profile; PLAYER_SLOTS]> {
         &RUNTIME_PROFILES_LOCK_WAIT_STATS,
         &RUNTIME_PROFILES,
     )
+}
+
+pub fn runtime_machine_player_defaults() -> MachinePlayerDefaults {
+    RUNTIME_MACHINE_PLAYER_DEFAULTS.lock().unwrap().clone()
+}
+
+pub fn runtime_set_machine_player_defaults(defaults: MachinePlayerDefaults) {
+    *RUNTIME_MACHINE_PLAYER_DEFAULTS.lock().unwrap() = defaults;
 }
 
 pub fn runtime_update_profile_for_side(
@@ -313,10 +324,15 @@ pub fn runtime_set_avatar_texture_key_for_side(side: PlayerSide, key: Option<Str
     set_avatar_texture_key_for_side(&mut profiles, side, key);
 }
 
-pub fn runtime_update_guest_profile_noteskin(noteskin: NoteSkin) {
+pub fn runtime_update_guest_profile_player_options(player_options: &PlayerOptionsData) {
     let active_profiles = runtime_lock_session().active_profiles.clone();
     let mut profiles = runtime_lock_profiles();
-    update_guest_profile_noteskins(&active_profiles, &mut profiles, noteskin);
+    let changed =
+        update_guest_profile_player_options(&active_profiles, &mut profiles, player_options);
+    drop(profiles);
+    if changed.into_iter().any(|changed| changed) {
+        runtime_mark_heart_rate_devices_changed();
+    }
 }
 
 pub fn runtime_active_profile_for_side(side: PlayerSide) -> ActiveProfile {
@@ -369,11 +385,10 @@ pub struct RuntimeLocalProfileCreateResult {
 pub fn runtime_create_local_profile(
     root: &Path,
     display_name: &str,
-    noteskin: NoteSkin,
-    pad_light_brightness: u8,
+    player_options: &PlayerOptionsData,
     default_profiles: [Option<String>; PLAYER_SLOTS],
 ) -> Result<RuntimeLocalProfileCreateResult, std::io::Error> {
-    let id = create_local_profile_dir(root, display_name, noteskin, pad_light_brightness)?;
+    let id = create_local_profile_dir(root, display_name, player_options)?;
     runtime_invalidate_profile_dir_cache();
     let default_profiles = default_profile_ids_after_profile_create(default_profiles, id.clone());
     Ok(RuntimeLocalProfileCreateResult {
@@ -442,36 +457,27 @@ pub fn runtime_resolve_active_profile_load_for_side(
     selection
 }
 
-pub fn guest_profile(noteskin: NoteSkin, pad_light_brightness: u8) -> Profile {
-    let mut guest = Profile::default();
-    guest.display_name = "[ GUEST ]".to_string();
-    guest.scroll_speed = GUEST_SCROLL_SPEED;
-    guest.noteskin = noteskin;
-    guest.pad_light_brightness = clamp_pad_light_brightness(pad_light_brightness);
-    guest.avatar_path = None;
-    guest.avatar_texture_key = None;
-    guest.store_current_player_options_for_all_styles();
-    guest
-}
-
-pub fn default_profile_with_machine_settings(
-    noteskin: NoteSkin,
-    pad_light_brightness: u8,
-) -> Profile {
+pub fn profile_with_player_options(player_options: &PlayerOptionsData) -> Profile {
     let mut profile = Profile::default();
-    profile.noteskin = noteskin;
-    profile.pad_light_brightness = clamp_pad_light_brightness(pad_light_brightness);
+    profile.set_current_player_options(player_options.clone());
     profile.store_current_player_options_for_all_styles();
     profile
 }
 
-pub fn runtime_set_guest_profile_for_side(
-    side: PlayerSide,
-    noteskin: NoteSkin,
-    pad_light_brightness: u8,
-) {
-    runtime_lock_profiles()[player_side_index(side)] =
-        guest_profile(noteskin, pad_light_brightness);
+pub fn guest_profile(player_options: &PlayerOptionsData) -> Profile {
+    let mut guest = profile_with_player_options(player_options);
+    guest.display_name = "[ GUEST ]".to_string();
+    guest.avatar_path = None;
+    guest.avatar_texture_key = None;
+    guest
+}
+
+pub fn default_profile_with_player_options(player_options: &PlayerOptionsData) -> Profile {
+    profile_with_player_options(player_options)
+}
+
+pub fn runtime_set_guest_profile_for_side(side: PlayerSide, player_options: &PlayerOptionsData) {
+    runtime_lock_profiles()[player_side_index(side)] = guest_profile(player_options);
     runtime_mark_heart_rate_devices_changed();
 }
 
@@ -625,8 +631,7 @@ pub fn runtime_load_profile_for_side(
     side: PlayerSide,
     default_profile: &Profile,
     today: &str,
-    guest_noteskin: NoteSkin,
-    guest_pad_light_brightness: u8,
+    guest_player_options: &PlayerOptionsData,
     local_profile_exists: impl FnOnce(&str) -> bool,
     fallback_local_profile_id: impl FnOnce() -> Option<String>,
     mut duplicate: impl FnMut(&str, &Path, &Path, &Path),
@@ -637,7 +642,7 @@ pub fn runtime_load_profile_for_side(
         fallback_local_profile_id,
     );
     let Some(profile_id) = selection.local_id().map(str::to_owned) else {
-        runtime_set_guest_profile_for_side(side, guest_noteskin, guest_pad_light_brightness);
+        runtime_set_guest_profile_for_side(side, guest_player_options);
         return RuntimeProfileSideLoadReport::guest(selection);
     };
 
@@ -698,17 +703,6 @@ pub fn runtime_default_profile_ids_after_current_selection(
         session.joined_mask,
         &session.active_profiles[player_side_index(PlayerSide::P1)],
         &session.active_profiles[player_side_index(PlayerSide::P2)],
-    )
-}
-
-pub fn default_player_options_with_machine_settings(
-    noteskin: NoteSkin,
-    pad_light_brightness: u8,
-) -> (PlayerOptionsData, PlayerOptionsData) {
-    let profile = default_profile_with_machine_settings(noteskin, pad_light_brightness);
-    (
-        profile.player_options_singles,
-        profile.player_options_doubles,
     )
 }
 
@@ -2374,10 +2368,10 @@ pub fn set_avatar_texture_key_for_side(
     profiles[player_side_index(side)].avatar_texture_key = key;
 }
 
-pub fn update_guest_profile_noteskins(
+pub fn update_guest_profile_player_options(
     active_profiles: &[ActiveProfile; PLAYER_SLOTS],
     profiles: &mut [Profile; PLAYER_SLOTS],
-    noteskin: NoteSkin,
+    player_options: &PlayerOptionsData,
 ) -> [bool; PLAYER_SLOTS] {
     let mut changed = [false; PLAYER_SLOTS];
     for side in [PlayerSide::P1, PlayerSide::P2] {
@@ -2386,16 +2380,15 @@ pub fn update_guest_profile_noteskins(
             continue;
         }
         let profile = &mut profiles[side_idx];
-        let mut side_changed = set_value_if_changed(&mut profile.noteskin, noteskin.clone());
-        side_changed |= set_value_if_changed(
-            &mut profile.player_options_singles.noteskin,
-            noteskin.clone(),
-        );
-        side_changed |= set_value_if_changed(
-            &mut profile.player_options_doubles.noteskin,
-            noteskin.clone(),
-        );
-        changed[side_idx] = side_changed;
+        if profile.current_player_options() == *player_options
+            && profile.player_options_singles == *player_options
+            && profile.player_options_doubles == *player_options
+        {
+            continue;
+        }
+        profile.set_current_player_options(player_options.clone());
+        profile.store_current_player_options_for_all_styles();
+        changed[side_idx] = true;
     }
     changed
 }
@@ -2952,8 +2945,7 @@ pub fn scan_local_profile_summaries(root: &Path) -> Vec<LocalProfileSummary> {
 pub fn create_local_profile_dir(
     root: &Path,
     display_name: &str,
-    noteskin: NoteSkin,
-    pad_light_brightness: u8,
+    player_options: &PlayerOptionsData,
 ) -> Result<String, std::io::Error> {
     let name = display_name.trim();
     if name.is_empty() {
@@ -2968,10 +2960,7 @@ pub fn create_local_profile_dir(
     let dir = root.join(folder);
     fs::create_dir_all(&dir)?;
 
-    let mut profile = Profile::default();
-    profile.noteskin = noteskin;
-    profile.pad_light_brightness = pad_light_brightness;
-    profile.store_current_player_options_for_all_styles();
+    let mut profile = profile_with_player_options(player_options);
     profile.display_name = name.to_string();
     profile.player_initials = initials_from_name(name);
     profile.weight_pounds = 0;
@@ -6791,6 +6780,140 @@ impl Default for PlayerOptionsData {
     }
 }
 
+pub const COMMON_PLAYER_OPTIONS_SECTION: &str = "CommonPlayerOptions";
+pub const GUEST_PLAYER_OPTIONS_SECTION: &str = "GuestPlayerOptions";
+pub const NEW_PROFILE_PLAYER_OPTIONS_SECTION: &str = "NewProfilePlayerOptions";
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct MachinePlayerDefaults {
+    pub common: PlayerOptionsData,
+    pub guest: PlayerOptionsData,
+    pub new_profile: PlayerOptionsData,
+}
+
+impl Default for MachinePlayerDefaults {
+    fn default() -> Self {
+        let common = PlayerOptionsData::default();
+        Self {
+            guest: common.clone(),
+            new_profile: common.clone(),
+            common,
+        }
+    }
+}
+
+pub fn machine_player_defaults_from_ini(
+    content: &str,
+    base_common: &PlayerOptionsData,
+) -> MachinePlayerDefaults {
+    let ini = ProfileIni::parse(content);
+    let common = load_player_options_section(
+        ini.section_has_any(COMMON_PLAYER_OPTIONS_SECTION),
+        |key| ini.get(COMMON_PLAYER_OPTIONS_SECTION, key),
+        base_common,
+    )
+    .unwrap_or_else(|| base_common.clone());
+    let guest = load_player_options_section(
+        ini.section_has_any(GUEST_PLAYER_OPTIONS_SECTION),
+        |key| ini.get(GUEST_PLAYER_OPTIONS_SECTION, key),
+        &common,
+    )
+    .unwrap_or_else(|| common.clone());
+    let new_profile = load_player_options_section(
+        ini.section_has_any(NEW_PROFILE_PLAYER_OPTIONS_SECTION),
+        |key| ini.get(NEW_PROFILE_PLAYER_OPTIONS_SECTION, key),
+        &common,
+    )
+    .unwrap_or_else(|| common.clone());
+    MachinePlayerDefaults {
+        common,
+        guest,
+        new_profile,
+    }
+}
+
+pub fn render_machine_player_defaults_template(common: &PlayerOptionsData) -> String {
+    let mut content = String::from(
+        "; Machine-wide player defaults.\n\
+         ; System Options updates common ScrollSpeed, Scroll, BackgroundFilter, and NoteSkin.\n\
+         ; Add only values that should differ under GuestPlayerOptions or\n\
+         ; NewProfilePlayerOptions. Missing override values inherit CommonPlayerOptions.\n\n",
+    );
+    append_player_options_section(&mut content, COMMON_PLAYER_OPTIONS_SECTION, common);
+    content.push_str(&format!(
+        "[{GUEST_PLAYER_OPTIONS_SECTION}]\n\n[{NEW_PROFILE_PLAYER_OPTIONS_SECTION}]\n"
+    ));
+    content
+}
+
+pub fn upsert_ini_section_value(
+    content: &str,
+    section_name: &str,
+    key_name: &str,
+    value: &str,
+) -> String {
+    let mut out = String::with_capacity(
+        content.len() + section_name.len() + key_name.len() + value.len() + 8,
+    );
+    let mut in_target_section = false;
+    let mut saw_target_section = false;
+    let mut wrote_value = false;
+
+    for raw_line in content.lines() {
+        let trimmed = raw_line.trim();
+        if trimmed.starts_with('[') && trimmed.ends_with(']') {
+            if in_target_section && !wrote_value {
+                out.push_str(key_name);
+                out.push('=');
+                out.push_str(value);
+                out.push('\n');
+                wrote_value = true;
+            }
+            let section = trimmed[1..trimmed.len() - 1].trim();
+            in_target_section = section.eq_ignore_ascii_case(section_name);
+            saw_target_section |= in_target_section;
+            out.push_str(raw_line);
+            out.push('\n');
+            continue;
+        }
+
+        if in_target_section
+            && let Some(eq) = trimmed.find('=')
+            && trimmed[..eq].trim().eq_ignore_ascii_case(key_name)
+        {
+            out.push_str(key_name);
+            out.push('=');
+            out.push_str(value);
+            out.push('\n');
+            wrote_value = true;
+            continue;
+        }
+
+        out.push_str(raw_line);
+        out.push('\n');
+    }
+
+    if !saw_target_section {
+        if !out.is_empty() && !out.ends_with("\n\n") {
+            out.push('\n');
+        }
+        out.push('[');
+        out.push_str(section_name);
+        out.push_str("]\n");
+        out.push_str(key_name);
+        out.push('=');
+        out.push_str(value);
+        out.push('\n');
+    } else if in_target_section && !wrote_value {
+        out.push_str(key_name);
+        out.push('=');
+        out.push_str(value);
+        out.push('\n');
+    }
+
+    out
+}
+
 #[inline(always)]
 fn load_u8_bool<F>(get: &mut F, key: &str, default: bool) -> bool
 where
@@ -9479,6 +9602,14 @@ impl Profile {
 mod tests {
     use super::*;
 
+    fn test_player_options(noteskin: NoteSkin, pad_light_brightness: u8) -> PlayerOptionsData {
+        PlayerOptionsData {
+            noteskin,
+            pad_light_brightness: clamp_pad_light_brightness(pad_light_brightness),
+            ..PlayerOptionsData::default()
+        }
+    }
+
     #[test]
     fn play_style_reports_chart_type() {
         assert_eq!(PlayStyle::Single.chart_type(), "dance-single");
@@ -10739,8 +10870,12 @@ mod tests {
     fn runtime_local_score_profile_sources_resolve_guid_dirs() {
         let root = temp_profile_dir("runtime-score-profile-sources");
         runtime_invalidate_profile_dir_cache();
-        let id = create_local_profile_dir(&root, "Alice", NoteSkin::default(), 100)
-            .expect("profile should be created");
+        let id = create_local_profile_dir(
+            &root,
+            "Alice",
+            &test_player_options(NoteSkin::default(), 100),
+        )
+        .expect("profile should be created");
         let score_root = root.join("Alice").join("scores").join("local");
         runtime_set_profile_dir_cache(&root, build_profile_dir_map(&root, |_, _, _, _| {}));
 
@@ -10830,8 +10965,12 @@ mod tests {
     fn create_local_profile_dir_writes_default_profile_files() {
         let root = temp_profile_dir("create-profile-root");
 
-        let id = create_local_profile_dir(&root, "Alice", NoteSkin::new("cel"), 88)
-            .expect("profile should be created");
+        let id = create_local_profile_dir(
+            &root,
+            "Alice",
+            &test_player_options(NoteSkin::new("cel"), 88),
+        )
+        .expect("profile should be created");
 
         assert!(is_valid_profile_guid(&id));
         let summaries = scan_local_profile_summaries(&root);
@@ -10874,8 +11013,7 @@ mod tests {
         let created = runtime_create_local_profile(
             &root,
             "Alice",
-            NoteSkin::new("cel"),
-            88,
+            &test_player_options(NoteSkin::new("cel"), 88),
             [None, Some("p2".to_string())],
         )
         .expect("profile should be created");
@@ -10924,8 +11062,12 @@ mod tests {
     #[test]
     fn runtime_profile_dir_cache_seeds_and_invalidates() {
         let root = temp_profile_dir("runtime-profile-dir-cache");
-        let id = create_local_profile_dir(&root, "Alice", NoteSkin::default(), 100)
-            .expect("profile should be created");
+        let id = create_local_profile_dir(
+            &root,
+            "Alice",
+            &test_player_options(NoteSkin::default(), 100),
+        )
+        .expect("profile should be created");
         let real_dir = build_profile_dir_map(&root, |_, _, _, _| {})
             .remove(&id)
             .expect("created profile should map by guid");
@@ -11014,9 +11156,13 @@ mod tests {
     #[test]
     fn rename_local_profile_dir_rewrites_display_and_cosmetic_folder() {
         let root = temp_profile_dir("rename-profile-root");
-        let alice_id = create_local_profile_dir(&root, "Alice", NoteSkin::default(), 100)
-            .expect("Alice profile should be created");
-        create_local_profile_dir(&root, "Bob", NoteSkin::default(), 100)
+        let alice_id = create_local_profile_dir(
+            &root,
+            "Alice",
+            &test_player_options(NoteSkin::default(), 100),
+        )
+        .expect("Alice profile should be created");
+        create_local_profile_dir(&root, "Bob", &test_player_options(NoteSkin::default(), 100))
             .expect("Bob profile should be created");
         let alice_dir = root.join("Alice");
 
@@ -11043,8 +11189,12 @@ mod tests {
     #[test]
     fn delete_local_profile_dir_removes_profile_and_validates_inputs() {
         let root = temp_profile_dir("delete-profile-root");
-        let id = create_local_profile_dir(&root, "Delete Me", NoteSkin::default(), 100)
-            .expect("profile should be created");
+        let id = create_local_profile_dir(
+            &root,
+            "Delete Me",
+            &test_player_options(NoteSkin::default(), 100),
+        )
+        .expect("profile should be created");
         let dir = root.join("Delete Me");
 
         delete_local_profile_dir(&dir, "../bad").expect_err("invalid id should fail");
@@ -11406,16 +11556,22 @@ mod tests {
 
     #[test]
     fn machine_seeded_profiles_apply_guest_and_default_settings() {
-        let noteskin = NoteSkin::new("cel");
-        let guest = guest_profile(noteskin.clone(), 88);
+        let guest_options = PlayerOptionsData {
+            scroll_speed: ScrollSpeedSetting::MMod(333.0),
+            noteskin: NoteSkin::new("cel"),
+            pad_light_brightness: 88,
+            ..PlayerOptionsData::default()
+        };
+        let guest = guest_profile(&guest_options);
         assert_eq!(guest.display_name, "[ GUEST ]");
-        assert_eq!(guest.scroll_speed, GUEST_SCROLL_SPEED);
-        assert_eq!(guest.noteskin, noteskin);
+        assert_eq!(guest.scroll_speed, ScrollSpeedSetting::MMod(333.0));
+        assert_eq!(guest.noteskin.as_str(), "cel");
         assert_eq!(guest.pad_light_brightness, 88);
         assert!(guest.avatar_path.is_none());
         assert!(guest.avatar_texture_key.is_none());
 
-        let default_profile = default_profile_with_machine_settings(NoteSkin::new("metal"), 250);
+        let default_options = test_player_options(NoteSkin::new("metal"), 250);
+        let default_profile = default_profile_with_player_options(&default_options);
         assert_eq!(default_profile.noteskin.as_str(), "metal");
         assert_eq!(default_profile.pad_light_brightness, 100);
         assert_eq!(
@@ -12329,12 +12485,83 @@ ApiKey = gs-key
     }
 
     #[test]
-    fn default_player_options_use_machine_noteskin() {
-        let (singles, doubles) =
-            default_player_options_with_machine_settings(NoteSkin::new("cel"), 60);
+    fn profile_with_player_options_seeds_both_styles() {
+        let options = test_player_options(NoteSkin::new("cel"), 60);
+        let profile = profile_with_player_options(&options);
 
-        assert_eq!(singles.noteskin.as_str(), "cel");
-        assert_eq!(doubles.noteskin.as_str(), "cel");
+        assert_eq!(profile.noteskin.as_str(), "cel");
+        assert_eq!(profile.player_options_singles, options);
+        assert_eq!(profile.player_options_doubles, options);
+    }
+
+    #[test]
+    fn machine_player_defaults_inherit_common_and_apply_partial_overrides() {
+        let base = PlayerOptionsData {
+            scroll_speed: ScrollSpeedSetting::CMod(550.0),
+            noteskin: NoteSkin::new("legacy"),
+            ..PlayerOptionsData::default()
+        };
+        let defaults = machine_player_defaults_from_ini(
+            "[CommonPlayerOptions]\n\
+             ScrollSpeed=M400\n\
+             BackgroundFilter=90\n\
+             NoteSkin=cel\n\
+             \n\
+             [GuestPlayerOptions]\n\
+             Scroll=Reverse\n\
+             \n\
+             [NewProfilePlayerOptions]\n\
+             BackgroundFilter=75\n",
+            &base,
+        );
+
+        assert_eq!(
+            defaults.common.scroll_speed,
+            ScrollSpeedSetting::MMod(400.0)
+        );
+        assert_eq!(defaults.common.background_filter.percent(), 90);
+        assert_eq!(defaults.common.noteskin.as_str(), "cel");
+        assert_eq!(defaults.guest.scroll_speed, defaults.common.scroll_speed);
+        assert_eq!(defaults.guest.scroll_option, ScrollOption::Reverse);
+        assert_eq!(defaults.guest.background_filter.percent(), 90);
+        assert_eq!(defaults.new_profile.scroll_option, ScrollOption::Normal);
+        assert_eq!(defaults.new_profile.background_filter.percent(), 75);
+        assert_eq!(defaults.new_profile.noteskin.as_str(), "cel");
+    }
+
+    #[test]
+    fn machine_player_defaults_empty_overrides_stay_aligned() {
+        let base = PlayerOptionsData::default();
+        let defaults = machine_player_defaults_from_ini(
+            "[CommonPlayerOptions]\nScrollSpeed=X2.5\n\n\
+             [GuestPlayerOptions]\n\n\
+             [NewProfilePlayerOptions]\n",
+            &base,
+        );
+
+        assert_eq!(defaults.guest, defaults.common);
+        assert_eq!(defaults.new_profile, defaults.common);
+    }
+
+    #[test]
+    fn machine_player_defaults_template_and_upsert_preserve_overrides() {
+        let common = test_player_options(NoteSkin::new("cel"), 80);
+        let content = render_machine_player_defaults_template(&common);
+        assert!(content.contains("[CommonPlayerOptions]\n"));
+        assert!(content.contains("NoteSkin=cel\n"));
+        assert!(content.contains("[GuestPlayerOptions]\n\n"));
+        assert!(content.contains("[NewProfilePlayerOptions]\n"));
+
+        let content = format!("{content}Scroll=Reverse\n; keep this comment\n");
+        let updated = upsert_ini_section_value(
+            &content,
+            COMMON_PLAYER_OPTIONS_SECTION,
+            "ScrollSpeed",
+            "M425",
+        );
+        assert!(updated.contains("ScrollSpeed=M425\n"));
+        assert!(updated.contains("[NewProfilePlayerOptions]\nScroll=Reverse\n"));
+        assert!(updated.contains("; keep this comment\n"));
     }
 
     #[test]
@@ -12360,7 +12587,7 @@ ApiKey = gs-key
     }
 
     #[test]
-    fn guest_noteskin_update_skips_loaded_local_profiles() {
+    fn guest_player_options_update_skips_loaded_local_profiles() {
         let active_profiles = [
             ActiveProfile::Guest,
             ActiveProfile::Local {
@@ -12375,13 +12602,19 @@ ApiKey = gs-key
         profiles[1].player_options_singles.noteskin = NoteSkin::new("local-skin");
         profiles[1].player_options_doubles.noteskin = NoteSkin::new("local-skin");
 
+        let guest_options = PlayerOptionsData {
+            scroll_speed: ScrollSpeedSetting::MMod(425.0),
+            noteskin: NoteSkin::new("cel"),
+            ..PlayerOptionsData::default()
+        };
         let changed =
-            update_guest_profile_noteskins(&active_profiles, &mut profiles, NoteSkin::new("cel"));
+            update_guest_profile_player_options(&active_profiles, &mut profiles, &guest_options);
 
         assert_eq!(changed, [true, false]);
         assert_eq!(profiles[0].noteskin.as_str(), "cel");
         assert_eq!(profiles[0].player_options_singles.noteskin.as_str(), "cel");
         assert_eq!(profiles[0].player_options_doubles.noteskin.as_str(), "cel");
+        assert_eq!(profiles[0].scroll_speed, ScrollSpeedSetting::MMod(425.0));
         assert_eq!(profiles[1].noteskin.as_str(), "local-skin");
         assert_eq!(
             profiles[1].player_options_singles.noteskin.as_str(),

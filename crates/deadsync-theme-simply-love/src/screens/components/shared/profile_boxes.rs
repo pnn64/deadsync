@@ -18,7 +18,6 @@ use deadsync_input::{InputEvent, VirtualAction};
 use deadsync_notefield::noteskin_model_actor;
 use deadsync_noteskin::{NUM_QUANTIZATIONS, Quantization, Style};
 use deadsync_profile as profile_data;
-use deadsync_rules::scroll::GUEST_SCROLL_SPEED;
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -282,19 +281,16 @@ fn format_recent_mods(
 
 fn build_choices(view: &ProfilePickerView) -> Vec<Choice> {
     let mut out = Vec::with_capacity(view.profiles.len() + 1);
-    let default_profile = profile_data::Profile::default();
-    let guest_speed_mod = format!("{GUEST_SCROLL_SPEED}");
-    let default_scroll_option = default_profile.scroll_option;
     out.push(Choice {
         kind: profile_data::ActiveProfile::Guest,
         display_name: tr("SelectProfile", "GuestLabel").to_string(),
-        speed_mod: guest_speed_mod,
+        speed_mod: view.guest.speed_mod.clone(),
         avatar_key: None,
         total_songs: String::new(),
-        scroll_option: default_scroll_option,
-        mini_indicator: profile_data::MiniIndicator::None,
-        noteskin: profile_data::NoteSkin::default(),
-        judgment: profile_data::JudgmentGraphic::default(),
+        scroll_option: view.guest.scroll_option,
+        mini_indicator: view.guest.mini_indicator,
+        noteskin: view.guest.noteskin.clone(),
+        judgment: view.guest.judgment.clone(),
     });
     for profile in &view.profiles {
         out.push(Choice {
@@ -1956,6 +1952,17 @@ mod tests {
     #[test]
     fn picker_uses_shell_prepared_choices_and_default_selection() {
         let state = init(ProfilePickerView {
+            guest: ProfilePickerEntryView {
+                id: String::new(),
+                display_name: String::new(),
+                speed_mod: "M325".to_owned(),
+                avatar_key: None,
+                total_songs_played: 0,
+                scroll_option: profile_data::ScrollOption::Reverse,
+                mini_indicator: profile_data::MiniIndicator::None,
+                noteskin: profile_data::NoteSkin::new("metal"),
+                judgment: profile_data::JudgmentGraphic::new("Love"),
+            },
             profiles: vec![ProfilePickerEntryView {
                 id: "alice".to_owned(),
                 display_name: "Alice".to_owned(),
@@ -1980,6 +1987,8 @@ mod tests {
         assert_eq!(state.p1_selected_index, 1);
         assert_eq!(state.p2_selected_index, 0);
         assert!(state.three_key_navigation);
+        assert_eq!(state.choices[0].speed_mod, "M325");
+        assert_eq!(state.choices[0].noteskin.as_str(), "metal");
         assert_eq!(state.choices[1].display_name, "Alice");
         assert_eq!(state.choices[1].speed_mod, "C650");
         assert_eq!(state.choices[1].avatar_key.as_deref(), Some("alice.png"));

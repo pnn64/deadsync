@@ -8,6 +8,9 @@ pub enum SubRowId {
     Language,
     LogLevel,
     LogFile,
+    DefaultScrollSpeed,
+    DefaultScrollDirection,
+    DefaultBackgroundFilter,
     DefaultNoteSkin,
     // Graphics Options
     VideoRenderer,

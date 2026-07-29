@@ -673,7 +673,7 @@ fn options_init_view() -> OptionsInitView {
         song_packs: options_song_pack_view(),
         pack_sync: options_pack_sync_view(),
         noteskins: noteskin_catalog_view(),
-        machine_noteskin: profile::machine_default_noteskin(),
+        machine_player_options: profile::machine_common_player_options(),
         smx_assignment: crate::smx_config::smx_assignment_view(),
         smx_gifs: crate::smx_config::smx_gif_catalog_view(),
         score_import_profiles: crate::options_runtime::score_import_profiles(),
@@ -3245,6 +3245,24 @@ impl App {
                     play_mode,
                 )) => {
                     profile::set_session_play_mode(play_mode);
+                    Vec::new()
+                }
+                SimplyLoveRuntimeRequest::Profile(
+                    SimplyLoveProfileRequest::SetMachineDefaultScrollSpeed(setting),
+                ) => {
+                    profile::update_machine_default_scroll_speed(setting);
+                    Vec::new()
+                }
+                SimplyLoveRuntimeRequest::Profile(
+                    SimplyLoveProfileRequest::SetMachineDefaultScroll(setting),
+                ) => {
+                    profile::update_machine_default_scroll(setting);
+                    Vec::new()
+                }
+                SimplyLoveRuntimeRequest::Profile(
+                    SimplyLoveProfileRequest::SetMachineDefaultBackgroundFilter(setting),
+                ) => {
+                    profile::update_machine_default_background_filter(setting);
                     Vec::new()
                 }
                 SimplyLoveRuntimeRequest::Profile(

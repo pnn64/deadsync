@@ -36,7 +36,7 @@ pub use crate::app_runtime::{
     itl_song_folder_unlocked_with_profile,
     load_default_profiles_for_joined_sides_from_config as load_default_profiles_for_joined_sides,
     load_pad_configs, load_profiles_from_config as load, local_profile_dir_for_id,
-    local_score_profile_source_for_id, local_score_profile_sources, machine_default_noteskin,
+    local_score_profile_source_for_id, local_score_profile_sources, machine_common_player_options,
     machine_leaderboard_local, machine_leaderboard_local_with_names,
     machine_leaderboard_local_without_names, machine_record_local, machine_replays_local,
     mark_known_pack_names_for_local_profile, mark_pack_known, mark_packs_known,
@@ -56,10 +56,12 @@ pub use crate::app_runtime::{
     smx_gif_packs_from_config as smx_gif_packs, sync_known_packs, toggle_favorite,
     toggle_pack_favorite, total_songs_played_for_id, total_songs_played_for_side,
     update_default_profile_for_side_from_config as set_default_profile_for_side,
+    update_machine_default_background_filter, update_machine_default_light_brightness_from_config,
     update_machine_default_noteskin_from_config as update_machine_default_noteskin,
-    upsert_pad_config, write_imported_favorites, write_imported_profile_stats,
-    write_itl_file_for_id,
+    update_machine_default_scroll, update_machine_default_scroll_speed, upsert_pad_config,
+    write_imported_favorites, write_imported_profile_stats, write_itl_file_for_id,
 };
+pub use crate::app_runtime::{guest_player_options, new_profile_player_options};
 pub use crate::update::*;
 pub use crate::{
     preferred_difficulty_index as preferred_difficulty_for_profile,

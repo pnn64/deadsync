@@ -37,6 +37,12 @@ impl AppDirs {
         self.data_dir.join("save").join("current_screen.txt")
     }
 
+    pub fn default_player_options_path(&self) -> PathBuf {
+        self.data_dir
+            .join("save")
+            .join("default_player_options.ini")
+    }
+
     pub fn songs_dir(&self) -> PathBuf {
         self.data_dir.join("songs")
     }
@@ -385,6 +391,10 @@ mod tests {
     fn portable_layout_keeps_song_cache_under_cache_dir() {
         let dirs = AppDirs::portable_layout(PathBuf::from("/tmp/deadsync-portable"));
         assert_eq!(dirs.songs_dir(), Path::new("/tmp/deadsync-portable/songs"));
+        assert_eq!(
+            dirs.default_player_options_path(),
+            Path::new("/tmp/deadsync-portable/save/default_player_options.ini")
+        );
         assert_eq!(
             dirs.song_cache_dir(),
             Path::new("/tmp/deadsync-portable/cache/songs")

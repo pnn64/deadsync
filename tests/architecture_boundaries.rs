@@ -294,7 +294,7 @@ const GAME_RULE_FACADE_SCAN_DIRS: &[&str] = &[
     "tests",
 ];
 
-const GAME_PROFILE_RULE_SYMBOLS: &[&str] = &["GUEST_SCROLL_SPEED", "ScrollSpeedSetting"];
+const GAME_PROFILE_RULE_SYMBOLS: &[&str] = &["ScrollSpeedSetting"];
 
 const GAME_PROFILE_DATA_SYMBOLS: &[&str] = &[
     "AccelEffectsMask",
@@ -1796,11 +1796,18 @@ fn options_runtime_state_and_persistence_are_shell_owned() {
             && runtime.contains("arrowcloud.ini")
             && effects.contains("pub enum SimplyLoveOptionsConfigRequest")
             && effects.contains("Options(SimplyLoveOptionsConfigRequest)")
+            && effects.contains("SetMachineDefaultScrollSpeed")
+            && effects.contains("SetMachineDefaultScroll")
+            && effects.contains("SetMachineDefaultBackgroundFilter")
             && effects.contains("SetMachineDefaultNoteskin")
             && shell.contains("config_requests::execute_options(request)")
+            && shell.contains("profile::update_machine_default_scroll_speed(setting)")
+            && shell.contains("profile::update_machine_default_scroll(setting)")
+            && shell.contains("profile::update_machine_default_background_filter(setting)")
             && shell.contains("profile::update_machine_default_noteskin(noteskin)")
             && executor.contains("pub(super) fn execute_options")
-            && executor.contains("config::update_smx_default_light_brightness(percent)")
+            && executor
+                .contains("profile::update_machine_default_light_brightness_from_config(percent)")
             && executor.contains("config::update_only_dedicated_menu_buttons(enabled)"),
         "shell must prepare Options runtime state and execute its typed persistence requests"
     );

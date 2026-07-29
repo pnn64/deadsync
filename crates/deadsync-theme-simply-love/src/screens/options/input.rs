@@ -355,6 +355,40 @@ pub(super) fn apply_submenu_choice_delta(
                     crate::SimplyLoveOptionsConfigRequest::LogToFile(new_index == 1),
                 ));
             }
+            SubRowId::DefaultScrollSpeed => {
+                if let Some(setting) = state.system_scroll_speed_values.get(new_index).copied() {
+                    action = Some(ThemeEffect::Runtime(
+                        crate::SimplyLoveRuntimeRequest::Profile(
+                            crate::SimplyLoveProfileRequest::SetMachineDefaultScrollSpeed(setting),
+                        ),
+                    ));
+                }
+            }
+            SubRowId::DefaultScrollDirection => {
+                if let Some(setting) = state.system_scroll_direction_values.get(new_index).copied()
+                {
+                    action = Some(ThemeEffect::Runtime(
+                        crate::SimplyLoveRuntimeRequest::Profile(
+                            crate::SimplyLoveProfileRequest::SetMachineDefaultScroll(setting),
+                        ),
+                    ));
+                }
+            }
+            SubRowId::DefaultBackgroundFilter => {
+                if let Some(setting) = state
+                    .system_background_filter_values
+                    .get(new_index)
+                    .copied()
+                {
+                    action = Some(ThemeEffect::Runtime(
+                        crate::SimplyLoveRuntimeRequest::Profile(
+                            crate::SimplyLoveProfileRequest::SetMachineDefaultBackgroundFilter(
+                                setting,
+                            ),
+                        ),
+                    ));
+                }
+            }
             SubRowId::DefaultNoteSkin => {
                 if let Some(skin_name) = selected_choice {
                     action = Some(ThemeEffect::Runtime(

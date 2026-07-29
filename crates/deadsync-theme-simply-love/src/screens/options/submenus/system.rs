@@ -4,7 +4,8 @@ pub(in crate::screens::options) use crate::config::{
     language_choice_index, language_flag_from_choice, translated_titles_choice_index,
     translated_titles_from_choice,
 };
-use deadsync_profile::NoteSkin;
+use deadsync_profile::{BackgroundFilter, NoteSkin, ScrollOption};
+use deadsync_rules::scroll::ScrollSpeedSetting;
 
 pub(in crate::screens::options) const SYSTEM_OPTIONS_ROWS: &[SubRow] = &[
     SubRow {
@@ -44,6 +45,24 @@ pub(in crate::screens::options) const SYSTEM_OPTIONS_ROWS: &[SubRow] = &[
             localized_choice("Common", "Off"),
             localized_choice("Common", "On"),
         ],
+        inline: false,
+    },
+    SubRow {
+        id: SubRowId::DefaultScrollSpeed,
+        label: lookup_key("OptionsSystem", "DefaultScrollSpeed"),
+        choices: &[literal_choice("C600")],
+        inline: false,
+    },
+    SubRow {
+        id: SubRowId::DefaultScrollDirection,
+        label: lookup_key("OptionsSystem", "DefaultScrollDirection"),
+        choices: &[literal_choice("Normal")],
+        inline: false,
+    },
+    SubRow {
+        id: SubRowId::DefaultBackgroundFilter,
+        label: lookup_key("OptionsSystem", "DefaultBackgroundFilter"),
+        choices: &[literal_choice("95%")],
         inline: false,
     },
     SubRow {
@@ -96,6 +115,30 @@ pub(in crate::screens::options) const SYSTEM_OPTIONS_ITEMS: &[Item] = &[
         ))],
     },
     Item {
+        id: ItemId::SysDefaultScrollSpeed,
+        name: lookup_key("OptionsSystem", "DefaultScrollSpeed"),
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsSystemHelp",
+            "DefaultScrollSpeedHelp",
+        ))],
+    },
+    Item {
+        id: ItemId::SysDefaultScrollDirection,
+        name: lookup_key("OptionsSystem", "DefaultScrollDirection"),
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsSystemHelp",
+            "DefaultScrollDirectionHelp",
+        ))],
+    },
+    Item {
+        id: ItemId::SysDefaultBackgroundFilter,
+        name: lookup_key("OptionsSystem", "DefaultBackgroundFilter"),
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsSystemHelp",
+            "DefaultBackgroundFilterHelp",
+        ))],
+    },
+    Item {
         id: ItemId::SysDefaultNoteSkin,
         name: lookup_key("OptionsSystem", "DefaultNoteSkin"),
         help: &[HelpEntry::Paragraph(lookup_key(
@@ -112,3 +155,45 @@ pub(in crate::screens::options) const SYSTEM_OPTIONS_ITEMS: &[Item] = &[
         ))],
     },
 ];
+
+pub(in crate::screens::options) fn system_scroll_speed_values(
+    current: ScrollSpeedSetting,
+) -> Vec<ScrollSpeedSetting> {
+    let mut values = Vec::with_capacity(108);
+    for value in 2..=32 {
+        values.push(ScrollSpeedSetting::XMod(value as f32 * 0.25));
+    }
+    for value in (100..=1000).step_by(25) {
+        values.push(ScrollSpeedSetting::CMod(value as f32));
+    }
+    for value in (100..=1000).step_by(25) {
+        values.push(ScrollSpeedSetting::MMod(value as f32));
+    }
+    if !values.contains(&current) {
+        values.push(current);
+    }
+    values
+}
+
+pub(in crate::screens::options) fn system_scroll_direction_values(
+    current: ScrollOption,
+) -> Vec<ScrollOption> {
+    let mut values = vec![ScrollOption::Normal, ScrollOption::Reverse];
+    if !values.contains(&current) {
+        values.push(current);
+    }
+    values
+}
+
+pub(in crate::screens::options) fn system_background_filter_values(
+    current: BackgroundFilter,
+) -> Vec<BackgroundFilter> {
+    let mut values = (0..=100)
+        .step_by(5)
+        .map(BackgroundFilter::from_percent)
+        .collect::<Vec<_>>();
+    if !values.contains(&current) {
+        values.push(current);
+    }
+    values
+}
