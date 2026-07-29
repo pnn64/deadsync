@@ -1797,8 +1797,9 @@ fn build_displayed_entries(
     }
 
     // Simply Love parity:
-    // `OnlyShowActiveSection=true` hides every other section when a pack is open,
-    // but `HideActiveSectionTitle=false` keeps the active header visible.
+    // `OnlyShowActiveSection=true` hides every other pack when one is open,
+    // while `OnlyShowActiveParentSection` independently controls Series
+    // headers. The active pack and its active parent both remain visible.
     let show_only_active_pack = expanded_pack_name.is_some()
         && matches!(wheel_style, crate::config::SelectMusicWheelStyle::Iidx);
     let hide_series_headers =
@@ -1818,9 +1819,7 @@ fn build_displayed_entries(
             } if pack_key.is_none() && parent_series.is_some() => {
                 current_pack_key = None;
                 current_pack_visible = false;
-                if !show_only_active_pack
-                    && (!hide_series_headers || expanded_series_name == Some(name.as_str()))
-                {
+                if !hide_series_headers || expanded_series_name == Some(name.as_str()) {
                     new_entries.push(entry.clone());
                 }
             }
@@ -17126,17 +17125,46 @@ mod tests {
             SelectMusicWheelStyle::Iidx,
             false,
         );
-        assert_eq!(pack_open.len(), 3);
+        assert_eq!(pack_open.len(), 4);
+        assert!(pack_open[0].is_series_header());
         assert!(matches!(
-            pack_open[0],
+            pack_open[1],
             super::MusicWheelEntry::PackHeader { ref name, .. } if name == "Pack A"
         ));
-        assert!(
-            !pack_open
-                .iter()
-                .any(super::MusicWheelEntry::is_series_header)
-        );
         assert!(matches!(pack_open[2], super::MusicWheelEntry::Song(_)));
+        assert!(matches!(pack_open[3], super::MusicWheelEntry::Song(_)));
+    }
+
+    #[test]
+    fn iidx_confirm_child_keeps_parent_series_above_open_pack() {
+        let packs = [
+            test_pack("Pack A", "ITG Series"),
+            test_pack("Pack B", "ITG Series"),
+        ];
+        let mut state = init_placeholder();
+        state.policy.interaction.wheel_style = SelectMusicWheelStyle::Iidx;
+        state.policy.interaction.hide_inactive_series = true;
+        state.all_entries = super::build_series_grouped_entries(&test_entries(), &packs);
+        super::rebuild_displayed_entries(&mut state);
+
+        assert_eq!(state.entries.len(), 1);
+        assert!(state.entries[0].is_series_header());
+        super::handle_confirm(&mut state);
+
+        state.selected_index = state
+            .entries
+            .iter()
+            .position(|entry| entry.pack_key() == Some("Pack A"))
+            .expect("open series should list its child pack");
+        super::handle_confirm(&mut state);
+
+        assert_eq!(state.expanded_series_name.as_deref(), Some("ITG Series"));
+        assert_eq!(state.expanded_pack_name.as_deref(), Some("Pack A"));
+        assert_eq!(state.entries.len(), 4);
+        assert!(state.entries[0].is_series_header());
+        assert_eq!(state.entries[1].pack_key(), Some("Pack A"));
+        assert!(matches!(state.entries[2], super::MusicWheelEntry::Song(_)));
+        assert!(matches!(state.entries[3], super::MusicWheelEntry::Song(_)));
     }
 
     #[test]
@@ -17275,7 +17303,7 @@ mod tests {
             &entries,
             None,
             Some("ITGAlex's Compilation"),
-            SelectMusicWheelStyle::Itg,
+            SelectMusicWheelStyle::Iidx,
             false,
         );
         assert!(shown.iter().any(super::MusicWheelEntry::is_series_header));
@@ -17299,7 +17327,7 @@ mod tests {
     }
 
     #[test]
-    fn iidx_pack_focus_hides_active_parent_series() {
+    fn hide_inactive_series_keeps_active_parent_series() {
         let packs = [
             test_pack("Pack A", "ITG Series"),
             test_pack("Pack B", "ITG Series"),
@@ -17314,14 +17342,14 @@ mod tests {
             true,
         );
 
-        assert_eq!(shown.len(), 3);
-        assert!(!shown.iter().any(super::MusicWheelEntry::is_series_header));
+        assert_eq!(shown.len(), 4);
+        assert!(shown[0].is_series_header());
         assert!(matches!(
-            shown[0],
+            shown[1],
             super::MusicWheelEntry::PackHeader { ref name, .. } if name == "Pack A"
         ));
-        assert!(matches!(shown[1], super::MusicWheelEntry::Song(_)));
         assert!(matches!(shown[2], super::MusicWheelEntry::Song(_)));
+        assert!(matches!(shown[3], super::MusicWheelEntry::Song(_)));
     }
 
     #[test]
