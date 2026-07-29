@@ -513,7 +513,7 @@ fn scorebox_rows_for_kind(
         return rows;
     }
 
-    let selected = score_data::prioritized_leaderboard_entry_refs(entries, SCOREBOX_NUM_ENTRIES);
+    let selected = score_data::neighboring_leaderboard_entry_refs(entries, SCOREBOX_NUM_ENTRIES);
     for (slot, entry) in rows.iter_mut().zip(selected) {
         *slot = gameplay_row_from_entry(entry, kind);
     }
@@ -1279,6 +1279,29 @@ mod tests {
 
         assert_eq!(ranks, vec![1, 2, 3, 4, 473]);
         assert!(names.iter().any(|name| name == "self"));
+    }
+
+    #[test]
+    fn scorebox_keeps_rows_nearest_self() {
+        let entries = vec![
+            entry(1, "world", false, false),
+            entry(66, "far-6", false, false),
+            entry(67, "far-5", false, false),
+            entry(68, "far-4", false, false),
+            entry(69, "near-3", false, false),
+            entry(70, "near-2", false, false),
+            entry(71, "near-1", false, false),
+            entry(72, "self", true, false),
+        ];
+
+        let rows = scorebox_rows_for_kind(entries.as_slice(), PaneKind::Itl);
+        let ranks = rows
+            .iter()
+            .filter_map(|row| row.rank.strip_suffix('.'))
+            .map(|rank| rank.parse::<u32>().unwrap())
+            .collect::<Vec<_>>();
+
+        assert_eq!(ranks, vec![1, 69, 70, 71, 72]);
     }
 
     #[test]

@@ -160,6 +160,13 @@ fn selected_contains(selected: &[&LeaderboardEntry], entry: &LeaderboardEntry) -
         .any(|chosen| same_leaderboard_entry(chosen, entry))
 }
 
+#[inline(always)]
+fn leaderboard_neighbor_key(entry: &LeaderboardEntry, self_rank: Option<u32>) -> (u32, u32) {
+    self_rank.map_or((0, entry.rank), |rank| {
+        (entry.rank.abs_diff(rank), entry.rank)
+    })
+}
+
 #[cfg(any(test, feature = "bench-support"))]
 fn next_prioritized_entry_legacy<'a>(
     entries: &'a [LeaderboardEntry],
@@ -178,6 +185,7 @@ fn fill_prioritized_entries<'a>(
     entries: &'a [LeaderboardEntry],
     selected: &mut PrioritizedLeaderboardEntryRefs<'a>,
     max_rows: usize,
+    self_rank: Option<u32>,
     include: impl Fn(&LeaderboardEntry) -> bool,
 ) {
     if selected.len() >= max_rows {
@@ -190,8 +198,10 @@ fn fill_prioritized_entries<'a>(
         if !include(entry) || selected_contains(selected.as_slice(), entry) {
             continue;
         }
+        let key = leaderboard_neighbor_key(entry, self_rank);
         let phase_entries = &selected[phase_start..];
-        let insert_offset = phase_entries.partition_point(|chosen| chosen.rank <= entry.rank);
+        let insert_offset = phase_entries
+            .partition_point(|chosen| leaderboard_neighbor_key(chosen, self_rank) <= key);
         if phase_entries.len() < phase_capacity {
             selected.insert(phase_start + insert_offset, entry);
         } else if insert_offset < phase_capacity {
@@ -201,9 +211,10 @@ fn fill_prioritized_entries<'a>(
     }
 }
 
-pub fn prioritized_leaderboard_entry_refs(
+fn prioritized_leaderboard_entry_refs_with_neighbors(
     entries: &[LeaderboardEntry],
     max_rows: usize,
+    nearest_self: bool,
 ) -> PrioritizedLeaderboardEntryRefs<'_> {
     if max_rows == 0 {
         return SmallVec::new();
@@ -241,13 +252,36 @@ pub fn prioritized_leaderboard_entry_refs(
     } else {
         best_self
     };
+    let self_rank = if nearest_self {
+        self_entry.or(best_self).map(|entry| entry.rank)
+    } else {
+        None
+    };
     if let Some(self_entry) = self_entry {
         selected.push(self_entry);
     }
-    fill_prioritized_entries(entries, &mut selected, max_rows, |entry| entry.is_rival);
-    fill_prioritized_entries(entries, &mut selected, max_rows, |_| true);
+    fill_prioritized_entries(entries, &mut selected, max_rows, None, |entry| {
+        entry.is_rival
+    });
+    fill_prioritized_entries(entries, &mut selected, max_rows, self_rank, |_| true);
     selected.sort_unstable_by_key(|entry| entry.rank);
     selected
+}
+
+pub fn prioritized_leaderboard_entry_refs(
+    entries: &[LeaderboardEntry],
+    max_rows: usize,
+) -> PrioritizedLeaderboardEntryRefs<'_> {
+    prioritized_leaderboard_entry_refs_with_neighbors(entries, max_rows, false)
+}
+
+/// Keeps the world record, self, and rivals visible, then fills the remaining
+/// rows with the entries nearest to self.
+pub fn neighboring_leaderboard_entry_refs(
+    entries: &[LeaderboardEntry],
+    max_rows: usize,
+) -> PrioritizedLeaderboardEntryRefs<'_> {
+    prioritized_leaderboard_entry_refs_with_neighbors(entries, max_rows, true)
 }
 
 #[cfg(any(test, feature = "bench-support"))]
@@ -1592,6 +1626,25 @@ mod tests {
         let ranks = selected.iter().map(|entry| entry.rank).collect::<Vec<_>>();
 
         assert_eq!(ranks, vec![1, 2, 3, 4, 5, 6, 7, 20, 30, 40]);
+    }
+
+    #[test]
+    fn neighboring_leaderboard_entries_keep_nearest_neighbors() {
+        let entries = [
+            entry(1, "world", false, false),
+            entry(66, "far-6", false, false),
+            entry(67, "far-5", false, false),
+            entry(68, "far-4", false, false),
+            entry(69, "near-3", false, false),
+            entry(70, "near-2", false, false),
+            entry(71, "near-1", false, false),
+            entry(72, "self", true, false),
+        ];
+
+        let selected = neighboring_leaderboard_entry_refs(&entries, 5);
+        let ranks = selected.iter().map(|entry| entry.rank).collect::<Vec<_>>();
+
+        assert_eq!(ranks, vec![1, 69, 70, 71, 72]);
     }
 
     #[test]
