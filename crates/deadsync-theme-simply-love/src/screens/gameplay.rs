@@ -2355,6 +2355,19 @@ fn gameplay_bpm_x(
     screen_center_x()
 }
 
+fn offset_gameplay_hud_x(
+    base_x: f32,
+    player_side: profile_data::PlayerSide,
+    note_field_offset_x: i32,
+) -> f32 {
+    let side_sign = if player_side == profile_data::PlayerSide::P1 {
+        -1.0
+    } else {
+        1.0
+    };
+    base_x + side_sign * note_field_offset_x.clamp(0, 50) as f32
+}
+
 fn upper_nps_graph_x(
     player_side: profile_data::PlayerSide,
     notefield_x: f32,
@@ -2368,12 +2381,7 @@ fn upper_nps_graph_x(
     } else {
         screen_center_x() + widescale(45.0, 95.0)
     };
-    let side_sign = if player_side == profile_data::PlayerSide::P1 {
-        -1.0
-    } else {
-        1.0
-    };
-    base_x + side_sign * note_field_offset_x.clamp(0, 50) as f32
+    offset_gameplay_hud_x(base_x, player_side, note_field_offset_x)
 }
 
 #[inline(always)]
@@ -2463,18 +2471,19 @@ fn difficulty_meter_x(
     field_w: f32,
     normal_x: f32,
 ) -> f32 {
+    let resting_x = offset_gameplay_hud_x(normal_x, player_side, profile.note_field_offset_x);
     if difficulty_meter_hits_targets(
         state,
         profile,
         player_idx,
         field_x,
         field_w,
-        normal_x,
+        resting_x,
         DIFFICULTY_METER_Y,
     ) {
         side_difficulty_meter_x(player_side)
     } else {
-        normal_x
+        resting_x
     }
 }
 
@@ -14457,6 +14466,34 @@ mod tests {
         assert_eq!(
             side_difficulty_meter_x(profile_data::PlayerSide::P2),
             screen_width() - DIFFICULTY_METER_SIZE * 0.5
+        );
+    }
+
+    #[test]
+    fn gameplay_hud_offset_tracks_player_side() {
+        assert_eq!(
+            offset_gameplay_hud_x(200.0, profile_data::PlayerSide::P1, 20),
+            180.0
+        );
+        assert_eq!(
+            offset_gameplay_hud_x(200.0, profile_data::PlayerSide::P2, 20),
+            220.0
+        );
+        assert_eq!(
+            offset_gameplay_hud_x(200.0, profile_data::PlayerSide::P1, 0),
+            200.0
+        );
+    }
+
+    #[test]
+    fn gameplay_hud_offset_clamps_to_profile_range() {
+        assert_eq!(
+            offset_gameplay_hud_x(200.0, profile_data::PlayerSide::P1, -10),
+            200.0
+        );
+        assert_eq!(
+            offset_gameplay_hud_x(200.0, profile_data::PlayerSide::P2, 75),
+            250.0
         );
     }
 
