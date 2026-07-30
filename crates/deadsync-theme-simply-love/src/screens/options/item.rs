@@ -299,12 +299,20 @@ pub(super) fn submenu_inline_widths_fit(widths: &[f32], spacing: f32) -> bool {
     total_w <= inline_w
 }
 
-/// Returns the top-level rows that should be shown for this host/config.
-pub(super) fn visible_items(state: &State) -> Vec<&'static Item> {
+/// Builds the top-level rows shown for this host/config.
+pub(super) fn build_visible_items(
+    capabilities: SimplyLoveUpdaterCapabilities,
+) -> Vec<&'static Item> {
     ITEMS
         .iter()
-        .filter(|item| item_visible(item.id, state.updater_capabilities))
+        .filter(|item| item_visible(item.id, capabilities))
         .collect()
+}
+
+/// Returns the initialization-time list of top-level rows for this host/config.
+#[inline(always)]
+pub(super) fn visible_items(state: &State) -> &[&'static Item] {
+    &state.main_visible_items
 }
 
 fn item_visible(id: ItemId, capabilities: SimplyLoveUpdaterCapabilities) -> bool {

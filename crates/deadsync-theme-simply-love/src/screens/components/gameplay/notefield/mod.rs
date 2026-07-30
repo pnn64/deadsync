@@ -725,10 +725,19 @@ pub(crate) fn compose_frame(
             thousand_zoom_scale: assets::visual_styles::effect_zoom_scale(combo_swoosh_tex),
         }
     });
-    let player_color = if milestone_assets
-        .is_some() { color::decorative_rgba(state.player_color_index()) } else { [1.0; 4] };
+    let player_color = if milestone_assets.is_some() {
+        color::decorative_rgba(state.player_color_index())
+    } else {
+        [1.0; 4]
+    };
     let combo_color = if show_combo
-        && p.miss_combo < style.combo_feedback.threshold && p.combo >= style.combo_feedback.threshold { zmod_resolved_combo_color(state, p, profile, player_idx) } else { [1.0; 4] };
+        && p.miss_combo < style.combo_feedback.threshold
+        && p.combo >= style.combo_feedback.threshold
+    {
+        zmod_resolved_combo_color(state, p, profile, player_idx)
+    } else {
+        [1.0; 4]
+    };
     let combo_frame = ComboHudFrame {
         milestones: &p.combo_milestones,
         milestone_assets,

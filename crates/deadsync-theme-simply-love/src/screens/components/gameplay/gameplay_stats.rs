@@ -333,10 +333,7 @@ fn clip_density_life_points(points: &mut Vec<[f32; 2]>, offset: f32) {
 
 #[cfg(feature = "bench-support")]
 #[doc(hidden)]
-pub fn benchmark_clip_density_life_points_legacy(
-    points: &mut Vec<[f32; 2]>,
-    offset: f32,
-) -> usize {
+pub fn benchmark_clip_density_life_points_legacy(points: &mut Vec<[f32; 2]>, offset: f32) -> usize {
     clip_density_life_points_impl(points, offset, 1)
 }
 
@@ -348,9 +345,7 @@ pub fn benchmark_clip_density_life_points(points: &mut Vec<[f32; 2]>, offset: f3
 
 #[cfg(test)]
 mod density_life_clip_tests {
-    use super::{
-        DENSITY_LIFE_COMPACT_THRESHOLD, clip_density_life_points_impl,
-    };
+    use super::{DENSITY_LIFE_COMPACT_THRESHOLD, clip_density_life_points_impl};
 
     fn visible_points(points: &[[f32; 2]], offset: f32) -> &[[f32; 2]] {
         let start = points.partition_point(|point| point[0] < offset);
@@ -378,11 +373,8 @@ mod density_life_clip_tests {
             let offset = step as f32 + 0.25;
 
             legacy_moves += clip_density_life_points_impl(&mut legacy, offset, 1);
-            batched_moves += clip_density_life_points_impl(
-                &mut batched,
-                offset,
-                DENSITY_LIFE_COMPACT_THRESHOLD,
-            );
+            batched_moves +=
+                clip_density_life_points_impl(&mut batched, offset, DENSITY_LIFE_COMPACT_THRESHOLD);
 
             assert_eq!(
                 visible_points(&batched, offset),
@@ -399,11 +391,7 @@ mod density_life_clip_tests {
     fn batched_compaction_clears_a_fully_expired_history() {
         let mut points = vec![[1.0, 0.25], [2.0, 0.75]];
 
-        clip_density_life_points_impl(
-            &mut points,
-            3.0,
-            DENSITY_LIFE_COMPACT_THRESHOLD,
-        );
+        clip_density_life_points_impl(&mut points, 3.0, DENSITY_LIFE_COMPACT_THRESHOLD);
 
         assert!(points.is_empty());
     }
@@ -456,9 +444,10 @@ fn refresh_density_graph_meshes_for_player(state: &mut State, player_idx: usize)
         .gameplay
         .set_density_graph_life_dirty(player_idx, false);
     if offset_px > prev_offset_px
-        && let Some(points) = state.gameplay.density_graph_life_points_mut(player_idx) {
-            clip_density_life_points(points, offset_px_f);
-        }
+        && let Some(points) = state.gameplay.density_graph_life_points_mut(player_idx)
+    {
+        clip_density_life_points(points, offset_px_f);
+    }
     let Some(points) = state.gameplay.density_graph_life_points(player_idx) else {
         render.life_mesh[player_idx] = None;
         return;

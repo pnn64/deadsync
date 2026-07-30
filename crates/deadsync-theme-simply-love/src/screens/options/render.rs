@@ -790,7 +790,7 @@ pub fn push_actors(
                         col_white
                     };
                     heart_tint[3] *= row_alpha;
-                    actors.push(act!(sprite(select_color_texture):
+                    actors.push(act!(sprite_static(select_color_texture):
                         align(0.0, 0.5):
                         xy(heart_x, row_mid_y):
                         zoom(select_color_zoom):
@@ -874,7 +874,7 @@ pub fn push_actors(
                             col_white
                         };
                         heart_tint[3] *= row_alpha;
-                        actors.push(act!(sprite(select_color_texture):
+                        actors.push(act!(sprite_static(select_color_texture):
                             align(0.0, 0.5):
                             xy(heart_x, row_mid_y):
                             zoom(select_color_zoom):
@@ -886,7 +886,7 @@ pub fn push_actors(
                     let label = if row_idx < rows.len() {
                         rows[row_idx].label.get()
                     } else {
-                        Arc::from("Exit")
+                        tr("Common", "Exit")
                     };
                     let mut text_color = if is_exit {
                         if is_active { col_black } else { col_white }
@@ -1175,7 +1175,7 @@ pub fn push_actors(
                                             );
                                         let mut tint = color::decorative_rgba(idx as i32);
                                         tint[3] *= row_alpha;
-                                        actors.push(act!(sprite(select_color_texture):
+                                        actors.push(act!(sprite_static(select_color_texture):
                                             align(0.5, 0.5):
                                             xy(x + icon_w * 0.5, row_mid_y):
                                             setsize(icon_w, COLOR_CHOICE_ICON_H):
@@ -1203,7 +1203,7 @@ pub fn push_actors(
                                 if is_color_choice_row {
                                     let mut tint = color::decorative_rgba(selected_choice as i32);
                                     tint[3] *= row_alpha;
-                                    actors.push(act!(sprite(select_color_texture):
+                                    actors.push(act!(sprite_static(select_color_texture):
                                         align(0.5, 0.5):
                                         xy(choice_center_x, row_mid_y):
                                         setsize(draw_w, COLOR_CHOICE_ICON_H):

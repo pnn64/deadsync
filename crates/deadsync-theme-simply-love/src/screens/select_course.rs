@@ -1416,70 +1416,69 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
         return ThemeEffect::None;
     }
 
-    if dedicated_three_key_nav
-        && let Some((_, nav)) = three_key_action {
-            return match nav {
-                screen_input::ThreeKeyMenuAction::Prev => {
-                    if matches!(state.three_key_focus, ThreeKeyFocus::Rating) {
-                        let sound = shift_selected_course_rating(state, -1);
-                        state.menu_lr_undo = if sound.is_some() { 1 } else { 0 };
-                        sound.map(sfx).unwrap_or(ThemeEffect::None)
-                    } else {
-                        state.menu_lr_undo = 1;
-                        handle_wheel_dir(state, PadDir::Left, true, ev.timestamp)
-                    }
+    if dedicated_three_key_nav && let Some((_, nav)) = three_key_action {
+        return match nav {
+            screen_input::ThreeKeyMenuAction::Prev => {
+                if matches!(state.three_key_focus, ThreeKeyFocus::Rating) {
+                    let sound = shift_selected_course_rating(state, -1);
+                    state.menu_lr_undo = if sound.is_some() { 1 } else { 0 };
+                    sound.map(sfx).unwrap_or(ThemeEffect::None)
+                } else {
+                    state.menu_lr_undo = 1;
+                    handle_wheel_dir(state, PadDir::Left, true, ev.timestamp)
                 }
-                screen_input::ThreeKeyMenuAction::Next => {
-                    if matches!(state.three_key_focus, ThreeKeyFocus::Rating) {
-                        let sound = shift_selected_course_rating(state, 1);
-                        state.menu_lr_undo = if sound.is_some() { -1 } else { 0 };
-                        sound.map(sfx).unwrap_or(ThemeEffect::None)
-                    } else {
-                        state.menu_lr_undo = -1;
-                        handle_wheel_dir(state, PadDir::Right, true, ev.timestamp)
-                    }
+            }
+            screen_input::ThreeKeyMenuAction::Next => {
+                if matches!(state.three_key_focus, ThreeKeyFocus::Rating) {
+                    let sound = shift_selected_course_rating(state, 1);
+                    state.menu_lr_undo = if sound.is_some() { -1 } else { 0 };
+                    sound.map(sfx).unwrap_or(ThemeEffect::None)
+                } else {
+                    state.menu_lr_undo = -1;
+                    handle_wheel_dir(state, PadDir::Right, true, ev.timestamp)
                 }
-                screen_input::ThreeKeyMenuAction::Confirm => {
-                    state.menu_lr_undo = 0;
-                    if matches!(state.three_key_focus, ThreeKeyFocus::Wheel)
-                        && selected_course_has_multiple_ratings(state)
-                    {
-                        clear_wheel_hold(state);
-                        state.three_key_focus = ThreeKeyFocus::Rating;
-                        sfx("assets/sounds/start.ogg")
-                    } else {
-                        state.three_key_focus = ThreeKeyFocus::Wheel;
-                        handle_confirm(state)
-                    }
+            }
+            screen_input::ThreeKeyMenuAction::Confirm => {
+                state.menu_lr_undo = 0;
+                if matches!(state.three_key_focus, ThreeKeyFocus::Wheel)
+                    && selected_course_has_multiple_ratings(state)
+                {
+                    clear_wheel_hold(state);
+                    state.three_key_focus = ThreeKeyFocus::Rating;
+                    sfx("assets/sounds/start.ogg")
+                } else {
+                    state.three_key_focus = ThreeKeyFocus::Wheel;
+                    handle_confirm(state)
                 }
-                screen_input::ThreeKeyMenuAction::Cancel => {
-                    if matches!(state.three_key_focus, ThreeKeyFocus::Rating) {
-                        let undo_sound = if state.menu_lr_undo != 0 {
-                            shift_selected_course_rating(state, -(state.menu_lr_undo as isize))
-                        } else {
-                            None
-                        };
-                        if state.menu_lr_undo != 0 {
-                            state.menu_lr_undo = 0;
-                        }
-                        state.three_key_focus = ThreeKeyFocus::Wheel;
-                        if let Some(path) = undo_sound {
-                            ThemeEffect::Batch(vec![sfx(path), sfx("assets/sounds/change.ogg")])
-                        } else {
-                            sfx("assets/sounds/change.ogg")
-                        }
+            }
+            screen_input::ThreeKeyMenuAction::Cancel => {
+                if matches!(state.three_key_focus, ThreeKeyFocus::Rating) {
+                    let undo_sound = if state.menu_lr_undo != 0 {
+                        shift_selected_course_rating(state, -(state.menu_lr_undo as isize))
                     } else {
-                        if state.menu_lr_undo != 0 {
-                            music_wheel_change(state, state.menu_lr_undo as isize);
-                            state.menu_lr_undo = 0;
-                        }
-                        clear_wheel_hold(state);
-                        begin_exit_prompt(state);
-                        ThemeEffect::None
+                        None
+                    };
+                    if state.menu_lr_undo != 0 {
+                        state.menu_lr_undo = 0;
                     }
+                    state.three_key_focus = ThreeKeyFocus::Wheel;
+                    if let Some(path) = undo_sound {
+                        ThemeEffect::Batch(vec![sfx(path), sfx("assets/sounds/change.ogg")])
+                    } else {
+                        sfx("assets/sounds/change.ogg")
+                    }
+                } else {
+                    if state.menu_lr_undo != 0 {
+                        music_wheel_change(state, state.menu_lr_undo as isize);
+                        state.menu_lr_undo = 0;
+                    }
+                    clear_wheel_hold(state);
+                    begin_exit_prompt(state);
+                    ThemeEffect::None
                 }
-            };
-        }
+            }
+        };
+    }
 
     let play_style = state.context.play_style;
     if play_style == profile_data::PlayStyle::Versus {

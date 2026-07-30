@@ -8,7 +8,7 @@ use deadsync_theme::views::{
     SmxAssignmentView, SmxGifCatalogView,
 };
 use deadsync_theme_simply_love::screens::options::{
-    State, benchmark_select_submenu, init, push_actors, update,
+    State, benchmark_select_submenu, benchmark_submenu_count, init, push_actors, update,
 };
 use deadsync_theme_simply_love::views::{
     OptionsInitView, OptionsPackSyncView, SimplyLoveUpdaterCapabilities, SimplyLoveUpdaterView,
@@ -124,24 +124,53 @@ struct PhaseResult {
 fn main() {
     deadsync_theme_simply_love::i18n::init(deadsync_assets::language::load_for_tests("en"));
     let asset_manager = asset_manager();
-    let submenus = [
-        ("Machine", 90, 0x7ce5_6492_831a_9b6d),
-        ("System", 66, 0xa53a_e904_5ac5_16fb),
-        ("Graphics", 81, 0x568c_e43f_568c_e43f),
-        ("SelectMusic", 85, 0x4069_0e7c_bf96_f183),
+    let views = [
+        ("Main", None, 50, 0x86c3_62ff_793c_9d00),
+        ("System", Some(0), 66, 0xa53a_e904_5ac5_16fb),
+        ("Graphics", Some(1), 81, 0x568c_e43f_568c_e43f),
+        ("Input", Some(2), 29, 0x7e41_f3d0_81be_0c2f),
+        ("InputBackend", Some(3), 56, 0x924e_447a_6db1_bb85),
+        ("SmxConfig", Some(4), 57, 0x45b8_3567_45b8_3567),
+        ("Lights", Some(5), 43, 0xceac_6b54_ceac_6b54),
+        ("OnlineScoring", Some(6), 26, 0x6ecd_073e_6ecd_073e),
+        ("NullOrDie", Some(7), 23, 0x2e5c_206d_2e5c_206d),
+        ("NullOrDieOptions", Some(8), 69, 0x6bef_a473_6bef_a473),
+        ("SyncPacks", Some(9), 31, 0x90e1_c604_6f1e_39fb),
+        ("Machine", Some(10), 90, 0x7ce5_6492_831a_9b6d),
+        ("Advanced", Some(11), 62, 0x5e44_cef9_a1bb_3106),
+        ("Course", Some(12), 45, 0xde36_d069_21c9_2f96),
+        ("Gameplay", Some(13), 77, 0x8a25_99bd_8a25_99bd),
+        ("Sound", Some(14), 71, 0x04c9_5392_04c9_5392),
+        ("SelectMusic", Some(15), 85, 0x4069_0e7c_bf96_f183),
+        ("GrooveStats", Some(16), 71, 0xe2f0_7e92_e2f0_7e92),
+        ("ArrowCloud", Some(17), 40, 0xb63e_4522_49c1_badd),
+        ("ScoreImport", Some(18), 49, 0x76cc_8468_76cc_8468),
+        ("Folders", Some(19), 62, 0x2254_e09e_ddab_1f61),
     ];
-    for (submenu_index, (label, expected_actors, expected_checksum)) in
-        submenus.into_iter().enumerate()
-    {
+    assert_eq!(views.len(), benchmark_submenu_count() + 1);
+    for (label, submenu_index, expected_actors, expected_checksum) in views {
         let mut state = state();
-        benchmark_select_submenu(&mut state, submenu_index);
+        if let Some(submenu_index) = submenu_index {
+            benchmark_select_submenu(&mut state, submenu_index);
+        }
         let result = measure(&mut state, &asset_manager);
-        assert_eq!(
-            (result.actors, result.checksum),
-            (expected_actors, expected_checksum),
-            "{label} actor output changed from the pre-optimization baseline"
-        );
+        assert_eq!(result.actors, expected_actors, "{label} actor count");
+        assert_eq!(result.checksum, expected_checksum, "{label} actor checksum");
+        assert_zero_alloc(label, &result);
         print_result(label, &result);
+    }
+}
+
+fn assert_zero_alloc(label: &str, result: &BenchResult) {
+    for (phase, alloc) in [
+        ("update", result.update.alloc),
+        ("render", result.render.alloc),
+        ("frame", result.frame.alloc),
+    ] {
+        assert_eq!(alloc.allocs, 0, "{label} {phase} allocations");
+        assert_eq!(alloc.deallocs, 0, "{label} {phase} deallocations");
+        assert_eq!(alloc.reallocs, 0, "{label} {phase} reallocations");
+        assert_eq!(alloc.bytes, 0, "{label} {phase} allocated bytes");
     }
 }
 

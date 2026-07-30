@@ -57,6 +57,51 @@ fn init_with_audio(audio_options: AudioOptionsView) -> State {
     })
 }
 
+#[test]
+fn main_visible_items_match_updater_capabilities_and_are_stable() {
+    let state = init();
+    let first = visible_items(&state);
+    let second = visible_items(&state);
+    assert!(std::ptr::eq(first, second));
+    assert!(first.iter().any(|item| item.id == ItemId::CheckForUpdates));
+    assert!(first.iter().any(|item| item.id == ItemId::RollBackVersion));
+    assert!(
+        first
+            .iter()
+            .any(|item| item.id == ItemId::DownloadVideoSupport)
+    );
+
+    let unavailable = build_visible_items(SimplyLoveUpdaterCapabilities::default());
+    assert!(unavailable.iter().all(|item| !matches!(
+        item.id,
+        ItemId::CheckForUpdates | ItemId::RollBackVersion | ItemId::DownloadVideoSupport
+    )));
+}
+
+#[test]
+fn options_select_color_actors_keep_static_texture_sources() {
+    let state = init();
+    let asset_manager = AssetManager::new();
+    let texture = selected_visual_assets(&state).select_color;
+    let actors = get_actors(&state, &asset_manager, &updater_view(), 1.0);
+    let sources: Vec<_> = actors
+        .iter()
+        .filter_map(|actor| match actor {
+            actors::Actor::Sprite { source, .. } if source.texture_key() == Some(texture) => {
+                Some(source)
+            }
+            _ => None,
+        })
+        .collect();
+
+    assert!(!sources.is_empty());
+    assert!(
+        sources
+            .iter()
+            .all(|source| matches!(source, actors::SpriteSource::TextureStatic(_)))
+    );
+}
+
 fn updater_view() -> SimplyLoveUpdaterView {
     SimplyLoveUpdaterView::default()
 }

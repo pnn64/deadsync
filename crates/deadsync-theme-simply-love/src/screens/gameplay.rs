@@ -3949,7 +3949,9 @@ fn push_layer2_bganimations(actors: &mut Vec<Actor>, state: &State) {
         .filter_map(|change| {
             let start = state.timing().get_time_for_beat(change.start_beat);
             let elapsed = state.current_music_time_display() - start;
-            (0.0..=FLASH_SECONDS).contains(&elapsed).then_some((change, elapsed))
+            (0.0..=FLASH_SECONDS)
+                .contains(&elapsed)
+                .then_some((change, elapsed))
         })
         .next()
     else {
@@ -6229,9 +6231,8 @@ fn song_lua_push_order(
             }
         }
         if changed {
-            order_cache.child_lists[list_idx].sort_by_key(|&idx| {
-                (order_cache.last_draw_orders[idx], idx)
-            });
+            order_cache.child_lists[list_idx]
+                .sort_by_key(|&idx| (order_cache.last_draw_orders[idx], idx));
         }
         order_cache.sort_modes[list_idx] = SONG_LUA_CHILD_ORDER_DRAW;
     } else if order_cache
@@ -13205,14 +13206,8 @@ const SMX_SENSOR_BG: [f32; 4] = [0.0, 0.0, 0.0, 0.35];
 #[inline(always)]
 fn smx_sensor_value_content(value: Option<u16>) -> (TextContent, [f32; 4]) {
     match value {
-        Some(value) => (
-            TextContent::inline_u16(value),
-            SMX_SENSOR_VALUE_COLOR,
-        ),
-        None => (
-            TextContent::Static("--"),
-            SMX_SENSOR_VALUE_IDLE_COLOR,
-        ),
+        Some(value) => (TextContent::inline_u16(value), SMX_SENSOR_VALUE_COLOR),
+        None => (TextContent::Static("--"), SMX_SENSOR_VALUE_IDLE_COLOR),
     }
 }
 

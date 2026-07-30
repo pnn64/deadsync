@@ -212,13 +212,13 @@ pub fn open_graphics_submenu(state: &mut State) {
 #[cfg(feature = "bench-support")]
 #[doc(hidden)]
 pub fn benchmark_select_submenu(state: &mut State, index: usize) {
-    const KINDS: [SubmenuKind; 4] = [
-        SubmenuKind::Machine,
-        SubmenuKind::System,
-        SubmenuKind::Graphics,
-        SubmenuKind::SelectMusic,
-    ];
-    open_submenu_now(state, KINDS[index]);
+    open_submenu_now(state, SubmenuKind::ALL[index]);
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub const fn benchmark_submenu_count() -> usize {
+    SubmenuKind::ALL.len()
 }
 
 fn open_submenu_now(state: &mut State, kind: SubmenuKind) {

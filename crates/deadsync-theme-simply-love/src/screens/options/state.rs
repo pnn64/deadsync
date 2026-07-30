@@ -166,7 +166,7 @@ pub(super) enum SubmenuTransition {
 }
 
 pub struct State {
-    pub(super) updater_capabilities: SimplyLoveUpdaterCapabilities,
+    pub(super) main_visible_items: Vec<&'static Item>,
     pub(super) app_paths: AppPathsView,
     pub(super) audio_options: AudioOptionsView,
     pub(super) song_packs: Vec<OptionsSongPackView>,
@@ -347,8 +347,9 @@ pub fn init(view: OptionsInitView) -> State {
         .iter()
         .position(|name| name.eq_ignore_ascii_case(machine_player_options.noteskin.as_str()))
         .unwrap_or(0);
+    let main_visible_items = build_visible_items(updater_capabilities);
     let mut state = State {
-        updater_capabilities,
+        main_visible_items,
         app_paths,
         audio_options,
         song_packs,

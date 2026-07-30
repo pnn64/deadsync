@@ -3895,29 +3895,26 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
     let mut favorite_effect = ThemeEffect::None;
     if ev.pressed
         && let Some(side) = state.favorite_code.check(ev.action, ev.timestamp)
-            && !state.context.players[profile_data::player_side_index(side)].guest
+        && !state.context.players[profile_data::player_side_index(side)].guest
+    {
+        // Toggle favorite for the chart that was just played
+        for (player_idx, si) in state
+            .score_info
+            .iter()
+            .enumerate()
+            .filter_map(|(player_idx, score_info)| score_info.as_ref().map(|si| (player_idx, si)))
         {
-            // Toggle favorite for the chart that was just played
-            for (player_idx, si) in
-                state
-                    .score_info
-                    .iter()
-                    .enumerate()
-                    .filter_map(|(player_idx, score_info)| {
-                        score_info.as_ref().map(|si| (player_idx, si))
-                    })
-            {
-                if si.side == side {
-                    state.favorites[player_idx] = !state.favorites[player_idx];
-                    favorite_effect = favorite_toggle_effect(
-                        side,
-                        si.chart.short_hash.clone(),
-                        state.favorites[player_idx],
-                    );
-                    break;
-                }
+            if si.side == side {
+                state.favorites[player_idx] = !state.favorites[player_idx];
+                favorite_effect = favorite_toggle_effect(
+                    side,
+                    si.chart.short_hash.clone(),
+                    state.favorites[player_idx],
+                );
+                break;
             }
         }
+    }
     if evaluation_lobby_lock_text(state).is_some() {
         match ev.action {
             VirtualAction::p1_start => {

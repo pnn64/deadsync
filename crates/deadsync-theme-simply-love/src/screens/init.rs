@@ -377,16 +377,17 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
         // While loading, Start/Back skips only the ReplayGain (loudness) pass,
         // which is the last and longest phase; the rest of the library is
         // already usable and the skipped songs get analyzed lazily on preview.
-        if ev.pressed && is_start_or_back(ev.action)
+        if ev.pressed
+            && is_start_or_back(ev.action)
             && let Some(loading) = state.loading.as_mut()
-                && loading.phase == crate::views::SimplyLoveContentReloadPhase::ReplayGain
-                && !loading.replaygain_skip_requested
-            {
-                loading.replaygain_skip_requested = true;
-                return ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Content(
-                    crate::SimplyLoveContentRequest::SkipReplayGain,
-                ));
-            }
+            && loading.phase == crate::views::SimplyLoveContentReloadPhase::ReplayGain
+            && !loading.replaygain_skip_requested
+        {
+            loading.replaygain_skip_requested = true;
+            return ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Content(
+                crate::SimplyLoveContentRequest::SkipReplayGain,
+            ));
+        }
         return ThemeEffect::None;
     }
     if ev.pressed && is_start_or_back(ev.action) {

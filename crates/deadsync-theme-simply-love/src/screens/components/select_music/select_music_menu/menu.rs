@@ -57,12 +57,10 @@ pub enum Entry {
 }
 
 /// Tracks which categories are currently expanded.
-#[derive(Clone, Debug)]
-#[derive(Default)]
+#[derive(Clone, Debug, Default)]
 pub struct CategoryState {
     pub expanded: HashSet<Category>,
 }
-
 
 impl CategoryState {
     pub fn toggle(&mut self, category: Category) {
@@ -161,16 +159,17 @@ fn build_entries_from_slices(
         return entries;
     }
     if categories.is_expanded(Category::Profile)
-        && let Some(profile_items) = items_profile {
-            let mut entries = vec![Entry::CategoryHeader {
-                category: Category::Profile,
-                label: "Profile...",
-            }];
-            for item in profile_items {
-                entries.push(Entry::CategoryItem(item.clone()));
-            }
-            return entries;
+        && let Some(profile_items) = items_profile
+    {
+        let mut entries = vec![Entry::CategoryHeader {
+            category: Category::Profile,
+            label: "Profile...",
+        }];
+        for item in profile_items {
+            entries.push(Entry::CategoryItem(item.clone()));
         }
+        return entries;
+    }
     if categories.is_expanded(Category::Advanced) {
         let mut entries = vec![Entry::CategoryHeader {
             category: Category::Advanced,
@@ -182,38 +181,41 @@ fn build_entries_from_slices(
         return entries;
     }
     if categories.is_expanded(Category::PadProfile)
-        && let Some(pad_profile_items) = items_pad_profile {
-            let mut entries = vec![Entry::CategoryHeader {
-                category: Category::PadProfile,
-                label: "Pad Profile...",
-            }];
-            for item in pad_profile_items {
-                entries.push(Entry::CategoryItem(item.clone()));
-            }
-            return entries;
+        && let Some(pad_profile_items) = items_pad_profile
+    {
+        let mut entries = vec![Entry::CategoryHeader {
+            category: Category::PadProfile,
+            label: "Pad Profile...",
+        }];
+        for item in pad_profile_items {
+            entries.push(Entry::CategoryItem(item.clone()));
         }
+        return entries;
+    }
     if categories.is_expanded(Category::Styles)
-        && let Some(style_items) = items_styles {
-            let mut entries = vec![Entry::CategoryHeader {
-                category: Category::Styles,
-                label: "Styles...",
-            }];
-            for item in style_items {
-                entries.push(Entry::CategoryItem(item.clone()));
-            }
-            return entries;
+        && let Some(style_items) = items_styles
+    {
+        let mut entries = vec![Entry::CategoryHeader {
+            category: Category::Styles,
+            label: "Styles...",
+        }];
+        for item in style_items {
+            entries.push(Entry::CategoryItem(item.clone()));
         }
+        return entries;
+    }
     if categories.is_expanded(Category::Playlists)
-        && let Some(playlist_items) = items_playlists {
-            let mut entries = vec![Entry::CategoryHeader {
-                category: Category::Playlists,
-                label: "Playlists...",
-            }];
-            for item in playlist_items {
-                entries.push(Entry::CategoryItem(item.clone()));
-            }
-            return entries;
+        && let Some(playlist_items) = items_playlists
+    {
+        let mut entries = vec![Entry::CategoryHeader {
+            category: Category::Playlists,
+            label: "Playlists...",
+        }];
+        for item in playlist_items {
+            entries.push(Entry::CategoryItem(item.clone()));
         }
+        return entries;
+    }
 
     // No category expanded — show all standalone items + collapsed category headers
     let mut entries = Vec::new();
