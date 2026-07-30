@@ -366,6 +366,24 @@ pub(super) fn cached_submenu_visible_rows(
     std::cell::Ref::map(state.submenu_visible_rows_cache.borrow(), Vec::as_slice)
 }
 
+pub(super) fn take_cached_submenu_visible_rows(state: &mut State, kind: SubmenuKind) -> Vec<usize> {
+    if state.submenu_visible_cache_kind.get() != Some(kind) {
+        let visible_rows = submenu_visible_row_indices(state, kind, submenu_rows(kind));
+        *state.submenu_visible_rows_cache.get_mut() = visible_rows;
+        state.submenu_visible_cache_kind.set(Some(kind));
+    }
+    std::mem::take(state.submenu_visible_rows_cache.get_mut())
+}
+
+pub(super) fn restore_cached_submenu_visible_rows(
+    state: &mut State,
+    kind: SubmenuKind,
+    visible_rows: Vec<usize>,
+) {
+    debug_assert_eq!(state.submenu_visible_cache_kind.get(), Some(kind));
+    *state.submenu_visible_rows_cache.get_mut() = visible_rows;
+}
+
 pub(super) fn clear_submenu_visible_rows_cache(state: &State) {
     state.submenu_visible_cache_kind.set(None);
     state.submenu_visible_rows_cache.borrow_mut().clear();

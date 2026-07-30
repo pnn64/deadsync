@@ -171,6 +171,10 @@ pub fn build(params: ScreenBarParams) -> Actor {
     build_with_context(params, ScreenBarContext::Normal)
 }
 
+pub fn build_shared(params: ScreenBarParams) -> Actor {
+    shared_frame(build_with_context(params, ScreenBarContext::Normal))
+}
+
 pub fn build_select_music(params: ScreenBarParams) -> Actor {
     let slot = match params.position {
         ScreenBarPosition::Top => 0,
@@ -409,6 +413,37 @@ mod tests {
             background,
             Some(Background::Color([0.1, 0.2, 0.3, 1.0]))
         ));
+    }
+
+    #[test]
+    fn shared_bar_preserves_frame_content() {
+        let params = empty_bar_params();
+        let Actor::Frame {
+            children: frame_children,
+            background: frame_background,
+            ..
+        } = build(params)
+        else {
+            panic!("screen bar should build a frame");
+        };
+        let Actor::SharedFrame {
+            children,
+            background,
+            tint,
+            blend,
+            ..
+        } = build_shared(params)
+        else {
+            panic!("shared screen bar should build a shared frame");
+        };
+
+        assert_eq!(
+            format!("{frame_children:?}"),
+            format!("{:?}", children.as_ref())
+        );
+        assert_eq!(format!("{frame_background:?}"), format!("{background:?}"));
+        assert_eq!(tint, [1.0; 4]);
+        assert_eq!(blend, None);
     }
 
     #[test]

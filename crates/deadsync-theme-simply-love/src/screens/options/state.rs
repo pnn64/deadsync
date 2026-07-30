@@ -149,6 +149,13 @@ pub(super) struct RowTweenLayoutKey {
     pub(super) list_y_bits: u32,
 }
 
+pub(super) struct OptionsTopBarCache {
+    pub(super) title: &'static str,
+    pub(super) visual_policy: crate::views::SimplyLoveVisualPolicyView,
+    pub(super) screen_size_bits: [u32; 2],
+    pub(super) actor: Actor,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum SubmenuTransition {
     None,
@@ -273,6 +280,7 @@ pub struct State {
     pub(super) submenu_visible_cache_kind: Cell<Option<SubmenuKind>>,
     pub(super) submenu_visible_rows_cache: RefCell<Vec<usize>>,
     pub(super) description_layout_cache: RefCell<Option<DescriptionLayout>>,
+    pub(super) top_bar_cache: RefCell<Option<OptionsTopBarCache>>,
     pub(super) graphics_prev_visible_rows: Vec<usize>,
     pub(super) advanced_prev_visible_rows: Vec<usize>,
     pub(super) select_music_prev_visible_rows: Vec<usize>,
@@ -480,6 +488,7 @@ pub fn init(view: OptionsInitView) -> State {
         submenu_visible_cache_kind: Cell::new(None),
         submenu_visible_rows_cache: RefCell::new(Vec::new()),
         description_layout_cache: RefCell::new(None),
+        top_bar_cache: RefCell::new(None),
         graphics_prev_visible_rows: Vec::new(),
         advanced_prev_visible_rows: Vec::new(),
         select_music_prev_visible_rows: Vec::new(),

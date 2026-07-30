@@ -435,6 +435,44 @@ pub fn clear_render_cache(state: &State) {
     clear_description_layout_cache(state);
 }
 
+fn top_bar_actor(
+    state: &State,
+    title: &'static str,
+    visual_policy: crate::views::SimplyLoveVisualPolicyView,
+) -> Actor {
+    let screen_size_bits = [screen_width().to_bits(), screen_height().to_bits()];
+    {
+        let cache = state.top_bar_cache.borrow();
+        if let Some(cached) = cache.as_ref()
+            && cached.title == title
+            && cached.visual_policy == visual_policy
+            && cached.screen_size_bits == screen_size_bits
+        {
+            return cached.actor.clone();
+        }
+    }
+    let actor = screen_bar::build_shared(screen_bar::ScreenBarParams {
+        visual_policy,
+        title,
+        title_placement: ScreenBarTitlePlacement::Left,
+        position: ScreenBarPosition::Top,
+        transparent: false,
+        left_text: None,
+        center_text: None,
+        right_text: None,
+        left_avatar: None,
+        right_avatar: None,
+        fg_color: [1.0; 4],
+    });
+    *state.top_bar_cache.borrow_mut() = Some(OptionsTopBarCache {
+        title,
+        visual_policy,
+        screen_size_bits,
+        actor: actor.clone(),
+    });
+    actor
+}
+
 pub(super) fn submenu_cursor_dest(
     state: &State,
     asset_manager: &AssetManager,
@@ -469,7 +507,7 @@ pub(super) fn submenu_cursor_dest(
     }
     let row_idx = submenu_visible_row_to_actual(state, kind, selected_row)?;
     let row = &rows[row_idx];
-    let layout = submenu_row_layout(state, asset_manager, kind, row_idx)?;
+    let layout = borrow_submenu_row_layout(state, asset_manager, kind, row_idx)?;
     if layout.texts.is_empty() {
         return None;
     }
@@ -633,24 +671,11 @@ pub fn push_actors(
     let ui_start = actors.len();
 
     /* ------------------------------ TOP BAR ------------------------------- */
-    const FG: [f32; 4] = [1.0, 1.0, 1.0, 1.0];
     let title_text = match state.view {
         OptionsView::Main => "OPTIONS",
         OptionsView::Submenu(kind) => submenu_title(kind),
     };
-    actors.push(screen_bar::build(screen_bar::ScreenBarParams {
-        visual_policy,
-        title: title_text,
-        title_placement: ScreenBarTitlePlacement::Left,
-        position: ScreenBarPosition::Top,
-        transparent: false,
-        left_text: None,
-        center_text: None,
-        right_text: None,
-        left_avatar: None,
-        right_avatar: None,
-        fg_color: FG,
-    }));
+    actors.push(top_bar_actor(state, title_text, visual_policy));
 
     /* --------------------------- MAIN CONTENT UI -------------------------- */
 
@@ -961,7 +986,7 @@ pub fn push_actors(
                         return single_center_x;
                     }
                     let Some(layout) =
-                        submenu_row_layout(state, asset_manager, kind, actual_row_idx)
+                        borrow_submenu_row_layout(state, asset_manager, kind, actual_row_idx)
                     else {
                         return list_w.mul_add(0.5, list_x);
                     };
@@ -1067,7 +1092,7 @@ pub fn push_actors(
 
                         // Inline Off/On options in the items column (or a single centered value if inline == false).
                         if let Some(layout) =
-                            submenu_row_layout(state, asset_manager, kind, actual_row_idx)
+                            borrow_submenu_row_layout(state, asset_manager, kind, actual_row_idx)
                             && !layout.texts.is_empty()
                         {
                             let value_zoom = layout.value_zoom;

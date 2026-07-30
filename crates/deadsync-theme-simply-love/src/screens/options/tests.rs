@@ -2049,6 +2049,23 @@ fn row_tween_destinations_retarget_only_when_layout_changes() {
 }
 
 #[test]
+fn borrowed_row_layout_does_not_clone_shared_geometry() {
+    let state = init();
+    let asset_manager = AssetManager::new();
+    let row_idx = row_position(MACHINE_OPTIONS_ROWS, SubRowId::VisualStyle)
+        .expect("machine options should contain visual style");
+    let owned = submenu_row_layout(&state, &asset_manager, SubmenuKind::Machine, row_idx)
+        .expect("visual style should have a row layout");
+    let strong_count = Arc::strong_count(&owned.texts);
+
+    let borrowed = borrow_submenu_row_layout(&state, &asset_manager, SubmenuKind::Machine, row_idx)
+        .expect("cached visual style layout should be borrowable");
+
+    assert_eq!(Arc::strong_count(&borrowed.texts), strong_count);
+    assert_eq!(borrowed.texts.as_ref(), owned.texts.as_ref());
+}
+
+#[test]
 fn folders_submenu_is_registered() {
     assert!(SubmenuKind::ALL.contains(&SubmenuKind::Folders));
     assert_eq!(submenu_rows(SubmenuKind::Folders).len(), 8);

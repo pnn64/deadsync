@@ -389,27 +389,54 @@ pub(super) fn build_submenu_row_layout(
     })
 }
 
+pub(super) fn borrow_submenu_row_layout<'a>(
+    state: &'a State,
+    asset_manager: &AssetManager,
+    kind: SubmenuKind,
+    row_idx: usize,
+) -> Option<std::cell::Ref<'a, SubmenuRowLayout>> {
+    let rows = submenu_rows(kind);
+    if state.submenu_layout_cache_kind.get() == Some(kind) {
+        let cache = state.submenu_row_layout_cache.borrow();
+        if cache.len() == rows.len() && cache.get(row_idx).is_some_and(Option::is_some) {
+            return Some(std::cell::Ref::map(cache, |cache| {
+                cache[row_idx]
+                    .as_ref()
+                    .expect("row layout presence was checked above")
+            }));
+        }
+    }
+    {
+        let mut cache = state.submenu_row_layout_cache.borrow_mut();
+        if state.submenu_layout_cache_kind.get() != Some(kind) || cache.len() != rows.len() {
+            state.submenu_layout_cache_kind.set(Some(kind));
+            cache.clear();
+            cache.resize(rows.len(), None);
+        }
+        let slot = cache.get_mut(row_idx)?;
+        *slot = Some(build_submenu_row_layout(
+            state,
+            asset_manager,
+            kind,
+            row_idx,
+        )?);
+    }
+    let cache = state.submenu_row_layout_cache.borrow();
+    cache.get(row_idx).and_then(Option::as_ref)?;
+    Some(std::cell::Ref::map(cache, |cache| {
+        cache[row_idx]
+            .as_ref()
+            .expect("row layout was populated above")
+    }))
+}
+
 pub(super) fn submenu_row_layout(
     state: &State,
     asset_manager: &AssetManager,
     kind: SubmenuKind,
     row_idx: usize,
 ) -> Option<SubmenuRowLayout> {
-    let rows = submenu_rows(kind);
-    let mut cache = state.submenu_row_layout_cache.borrow_mut();
-    if state.submenu_layout_cache_kind.get() != Some(kind) || cache.len() != rows.len() {
-        state.submenu_layout_cache_kind.set(Some(kind));
-        cache.clear();
-        cache.resize(rows.len(), None);
-    }
-    if let Some(layout) = cache.get(row_idx).cloned().flatten() {
-        return Some(layout);
-    }
-    let layout = build_submenu_row_layout(state, asset_manager, kind, row_idx)?;
-    if row_idx < cache.len() {
-        cache[row_idx] = Some(layout.clone());
-    }
-    Some(layout)
+    borrow_submenu_row_layout(state, asset_manager, kind, row_idx).map(|layout| layout.clone())
 }
 
 pub fn clear_submenu_row_layout_cache(state: &State) {
@@ -663,11 +690,12 @@ pub(super) fn update_row_tweens(
 
 pub(super) fn update_graphics_row_tweens(state: &mut State, s: f32, list_y: f32, dt: f32) {
     let rows = submenu_rows(SubmenuKind::Graphics);
-    let visible_rows = submenu_visible_row_indices(state, SubmenuKind::Graphics, rows);
+    let visible_rows = take_cached_submenu_visible_rows(state, SubmenuKind::Graphics);
     let total_rows = visible_rows.len() + 1;
     if total_rows == 0 {
         state.row_tweens.clear();
         state.graphics_prev_visible_rows.clear();
+        restore_cached_submenu_visible_rows(state, SubmenuKind::Graphics, visible_rows);
         return;
     }
 
@@ -752,7 +780,10 @@ pub(super) fn update_graphics_row_tweens(state: &mut State, s: f32, list_y: f32,
         state.row_tweens = mapped;
     }
 
-    state.graphics_prev_visible_rows = visible_rows;
+    if visibility_changed {
+        state.graphics_prev_visible_rows.clone_from(&visible_rows);
+    }
+    restore_cached_submenu_visible_rows(state, SubmenuKind::Graphics, visible_rows);
     update_row_tweens(
         &mut state.row_tweens,
         &mut state.row_tween_layout_key,
@@ -770,12 +801,12 @@ const fn advanced_parent_row(actual_idx: usize) -> Option<usize> {
 }
 
 pub(super) fn update_advanced_row_tweens(state: &mut State, s: f32, list_y: f32, dt: f32) {
-    let rows = submenu_rows(SubmenuKind::Advanced);
-    let visible_rows = submenu_visible_row_indices(state, SubmenuKind::Advanced, rows);
+    let visible_rows = take_cached_submenu_visible_rows(state, SubmenuKind::Advanced);
     let total_rows = visible_rows.len() + 1;
     if total_rows == 0 {
         state.row_tweens.clear();
         state.advanced_prev_visible_rows.clear();
+        restore_cached_submenu_visible_rows(state, SubmenuKind::Advanced, visible_rows);
         return;
     }
 
@@ -839,7 +870,10 @@ pub(super) fn update_advanced_row_tweens(state: &mut State, s: f32, list_y: f32,
         state.row_tweens = mapped;
     }
 
-    state.advanced_prev_visible_rows = visible_rows;
+    if visibility_changed {
+        state.advanced_prev_visible_rows.clone_from(&visible_rows);
+    }
+    restore_cached_submenu_visible_rows(state, SubmenuKind::Advanced, visible_rows);
     update_row_tweens(
         &mut state.row_tweens,
         &mut state.row_tween_layout_key,
@@ -866,11 +900,12 @@ fn select_music_parent_row(rows: &[SubRow], actual_idx: usize) -> Option<usize> 
 
 pub(super) fn update_select_music_row_tweens(state: &mut State, s: f32, list_y: f32, dt: f32) {
     let rows = submenu_rows(SubmenuKind::SelectMusic);
-    let visible_rows = submenu_visible_row_indices(state, SubmenuKind::SelectMusic, rows);
+    let visible_rows = take_cached_submenu_visible_rows(state, SubmenuKind::SelectMusic);
     let total_rows = visible_rows.len() + 1;
     if total_rows == 0 {
         state.row_tweens.clear();
         state.select_music_prev_visible_rows.clear();
+        restore_cached_submenu_visible_rows(state, SubmenuKind::SelectMusic, visible_rows);
         return;
     }
 
@@ -935,7 +970,12 @@ pub(super) fn update_select_music_row_tweens(state: &mut State, s: f32, list_y: 
         state.row_tweens = mapped;
     }
 
-    state.select_music_prev_visible_rows = visible_rows;
+    if visibility_changed {
+        state
+            .select_music_prev_visible_rows
+            .clone_from(&visible_rows);
+    }
+    restore_cached_submenu_visible_rows(state, SubmenuKind::SelectMusic, visible_rows);
     update_row_tweens(
         &mut state.row_tweens,
         &mut state.row_tween_layout_key,
