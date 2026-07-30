@@ -1802,6 +1802,82 @@ pub(super) mod tests {
     }
 
     #[test]
+    fn render_text_caches_reuse_and_refresh_derived_text() {
+        ensure_i18n();
+        let (mut state, _) = setup_state();
+
+        let first_speed = super::super::cached_speed_text(&state, P1);
+        let first_main = first_speed.main.clone();
+        let first_value = first_speed.value.clone();
+        drop(first_speed);
+        let second_speed = super::super::cached_speed_text(&state, P1);
+        assert!(Arc::ptr_eq(&first_main, &second_speed.main));
+        assert!(Arc::ptr_eq(&first_value, &second_speed.value));
+        drop(second_speed);
+
+        state.speed_mod[P1].value += 50.0;
+        let changed_speed = super::super::cached_speed_text(&state, P1);
+        assert!(!Arc::ptr_eq(&first_main, &changed_speed.main));
+        assert!(!Arc::ptr_eq(&first_value, &changed_speed.value));
+        drop(changed_speed);
+
+        let first_rate = super::super::cached_music_rate_text(&state);
+        let first_line = first_rate.first.clone();
+        drop(first_rate);
+        let second_rate = super::super::cached_music_rate_text(&state);
+        assert!(Arc::ptr_eq(&first_line, &second_rate.first));
+        drop(second_rate);
+
+        state.music_rate = 1.5;
+        let changed_rate = super::super::cached_music_rate_text(&state);
+        assert!(!Arc::ptr_eq(&first_line, &changed_rate.first));
+    }
+
+    #[test]
+    fn preview_texture_selection_borrows_catalog_key() {
+        ensure_i18n();
+        let (mut state, _) = setup_state();
+        let choices = [crate::assets::TextureChoice::new(
+            "test/judgment.png".to_owned(),
+            "Test Judgment".to_owned(),
+        )];
+        let row = state
+            .pane_mut()
+            .row_map
+            .get_mut(RowId::JudgmentFont)
+            .expect("Judgment Font row present");
+        row.selected_choice_index[P1] = 0;
+
+        let selected = super::super::select_preview_texture(row, P1, &choices)
+            .expect("selected judgment texture");
+
+        assert!(Arc::ptr_eq(selected, &choices[0].key));
+    }
+
+    #[test]
+    fn player_options_top_bar_reuses_shared_children() {
+        ensure_i18n();
+        let (state, _) = setup_state();
+        let first = super::super::top_bar_actor(&state, Default::default());
+        let second = super::super::top_bar_actor(&state, Default::default());
+        let (
+            deadlib_present::actors::Actor::SharedFrame {
+                children: first_children,
+                ..
+            },
+            deadlib_present::actors::Actor::SharedFrame {
+                children: second_children,
+                ..
+            },
+        ) = (first, second)
+        else {
+            panic!("cached Player Options bars should use shared frames");
+        };
+
+        assert!(Arc::ptr_eq(&first_children, &second_children));
+    }
+
+    #[test]
     fn dirty_row_layout_retargets_once_without_changing_destinations() {
         ensure_i18n();
         let (mut state, asset_manager) = setup_state();
@@ -2090,15 +2166,22 @@ pub(super) mod tests {
         let actors = super::get_actors(&state, &asset_manager);
 
         let is_screen_bar = |actor: &deadlib_present::actors::Actor, bottom: bool| {
-            let deadlib_present::actors::Actor::Frame {
-                align,
-                offset,
-                size,
-                z,
-                ..
-            } = actor
-            else {
-                return false;
+            let (align, offset, size, z) = match actor {
+                deadlib_present::actors::Actor::Frame {
+                    align,
+                    offset,
+                    size,
+                    z,
+                    ..
+                }
+                | deadlib_present::actors::Actor::SharedFrame {
+                    align,
+                    offset,
+                    size,
+                    z,
+                    ..
+                } => (align, offset, size, z),
+                _ => return false,
             };
             let deadlib_present::actors::SizeSpec::Px(h) = size[1] else {
                 return false;

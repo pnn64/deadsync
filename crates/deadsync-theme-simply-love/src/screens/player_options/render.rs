@@ -3,6 +3,125 @@ use crate::assets::{FontRole, machine_font_key};
 use deadlib_present::actors::TextContent;
 use deadsync_profile::TapExplosionMask;
 
+pub(super) fn top_bar_actor(
+    state: &State,
+    visual_policy: crate::views::SimplyLoveVisualPolicyView,
+) -> Actor {
+    let title = tr("ScreenTitles", "SelectModifiers");
+    let screen_size_bits = [screen_width().to_bits(), screen_height().to_bits()];
+    {
+        let cache = state.top_bar_cache.borrow();
+        if let Some(cached) = cache.as_ref()
+            && cached.title == title
+            && cached.visual_policy == visual_policy
+            && cached.screen_size_bits == screen_size_bits
+        {
+            return cached.actor.clone();
+        }
+    }
+    let actor = screen_bar::build_shared(ScreenBarParams {
+        visual_policy,
+        title: &title,
+        title_placement: ScreenBarTitlePlacement::Left,
+        position: ScreenBarPosition::Top,
+        transparent: false,
+        fg_color: [1.0; 4],
+        left_text: None,
+        center_text: None,
+        right_text: None,
+        left_avatar: None,
+        right_avatar: None,
+    });
+    *state.top_bar_cache.borrow_mut() = Some(PlayerOptionsTopBarCache {
+        title,
+        visual_policy,
+        screen_size_bits,
+        actor: actor.clone(),
+    });
+    actor
+}
+
+fn speed_text_key(state: &State, player_idx: usize) -> SpeedTextKey {
+    let speed_mod = &state.speed_mod[player_idx];
+    let profile = &state.player_options[player_idx];
+    SpeedTextKey {
+        mod_type: speed_mod.mod_type,
+        value_bits: speed_mod.value.to_bits(),
+        music_rate_bits: state.music_rate.to_bits(),
+        chart_steps_index: state.chart_steps_index,
+        mini_percent: profile.mini_percent,
+        perspective: profile.perspective,
+    }
+}
+
+pub(super) fn cached_speed_text(
+    state: &State,
+    player_idx: usize,
+) -> std::cell::Ref<'_, SpeedTextCache> {
+    let key = speed_text_key(state, player_idx);
+    let cache_hit = state.speed_text_cache.borrow()[player_idx]
+        .as_ref()
+        .is_some_and(|cached| cached.key == key);
+    if !cache_hit {
+        let speed_mod = &state.speed_mod[player_idx];
+        let chart = resolve_p1_chart(&state.song, &state.chart_steps_index, state.play_style);
+        let main_scroll =
+            speed_mod_helper_scroll_text(&state.song, chart, speed_mod, state.music_rate);
+        let scaled_scroll = speed_mod_helper_scaled_text(
+            &state.song,
+            chart,
+            speed_mod,
+            state.music_rate,
+            &state.player_options[player_idx],
+        );
+        let prefix = speed_mod.mod_type.prefix();
+        let main = Arc::from(format!("{prefix}{main_scroll}"));
+        let scaled =
+            (scaled_scroll != main_scroll).then(|| Arc::from(format!("{prefix}{scaled_scroll}")));
+        state.speed_text_cache.borrow_mut()[player_idx] = Some(SpeedTextCache {
+            key,
+            main,
+            scaled,
+            value: Arc::from(speed_mod.display()),
+        });
+    }
+    std::cell::Ref::map(state.speed_text_cache.borrow(), |cache| {
+        cache[player_idx]
+            .as_ref()
+            .expect("speed text cache was populated above")
+    })
+}
+
+pub(super) fn cached_music_rate_text(state: &State) -> std::cell::Ref<'_, MusicRateTextCache> {
+    let key = MusicRateTextKey {
+        music_rate_bits: state.music_rate.to_bits(),
+        chart_steps_index: state.chart_steps_index,
+    };
+    let cache_hit = state
+        .music_rate_text_cache
+        .borrow()
+        .as_ref()
+        .is_some_and(|cached| cached.key == key);
+    if !cache_hit {
+        let display = music_rate_display_name(state);
+        let mut lines = display.split('\n');
+        let first_line = lines.next().unwrap_or_default();
+        let second_line = lines.next();
+        let third_line = lines.next();
+        let (first, second) = if let (Some(second), None) = (second_line, third_line) {
+            (Arc::from(first_line), Some(Arc::from(second)))
+        } else {
+            (Arc::from(display), None)
+        };
+        *state.music_rate_text_cache.borrow_mut() = Some(MusicRateTextCache { key, first, second });
+    }
+    std::cell::Ref::map(state.music_rate_text_cache.borrow(), |cache| {
+        cache
+            .as_ref()
+            .expect("music-rate text cache was populated above")
+    })
+}
+
 pub fn push_actors(
     actors: &mut Vec<Actor>,
     state: &State,
@@ -22,20 +141,7 @@ pub fn push_actors(
             visual_policy,
         },
     );
-    let select_modifiers = tr("ScreenTitles", "SelectModifiers");
-    actors.push(screen_bar::build(ScreenBarParams {
-        visual_policy,
-        title: &select_modifiers,
-        title_placement: ScreenBarTitlePlacement::Left,
-        position: ScreenBarPosition::Top,
-        transparent: false,
-        fg_color: [1.0; 4],
-        left_text: None,
-        center_text: None,
-        right_text: None,
-        left_avatar: None,
-        right_avatar: None,
-    }));
+    actors.push(top_bar_actor(state, visual_policy));
 
     // zmod ScreenPlayerOptions overlay/default.lua speed helper parity.
     let speed_mod_y = 48.0;
@@ -64,37 +170,27 @@ pub fn push_actors(
 
     if state.current_pane == OptionsPane::Main {
         for player_idx in active_player_indices(active) {
-            let speed_mod = &state.speed_mod[player_idx];
             let speed_color = color::simply_love_rgba(player_color_index(state, player_idx));
-            let p_chart = resolve_p1_chart(&state.song, &state.chart_steps_index, state.play_style);
-            let main_scroll =
-                speed_mod_helper_scroll_text(&state.song, p_chart, speed_mod, state.music_rate);
-            let speed_prefix = speed_mod.mod_type.prefix();
-            let speed_text = format!("{speed_prefix}{main_scroll}");
+            let speed_text = cached_speed_text(state, player_idx);
             // zmod uses GetWidth() from the main helper actor (unzoomed width), then +w*0.4.
-            let main_draw_w =
-                measure_header_text_width(asset_manager, &speed_text, visual_policy.machine_font);
+            let main_draw_w = measure_header_text_width(
+                asset_manager,
+                &speed_text.main,
+                visual_policy.machine_font,
+            );
             let speed_x = speed_x_for(player_idx);
 
             actors.push(
-                act!(text: font(machine_font_key(visual_policy.machine_font, FontRole::Header)): settext(speed_text):
+                act!(text: font(machine_font_key(visual_policy.machine_font, FontRole::Header)): settext(speed_text.main.clone()):
                     align(0.5, 0.5): xy(speed_x, speed_mod_y): zoom(speed_mod_zoom):
                     diffuse(speed_color[0], speed_color[1], speed_color[2], pane_alpha):
                     z(Z_SPEED_MOD_TEXT)
                 ),
             );
 
-            let scaled_scroll = speed_mod_helper_scaled_text(
-                &state.song,
-                p_chart,
-                speed_mod,
-                state.music_rate,
-                &state.player_options[player_idx],
-            );
-            if scaled_scroll != main_scroll {
-                let scaled_text = format!("{speed_prefix}{scaled_scroll}");
+            if let Some(scaled_text) = speed_text.scaled.as_ref() {
                 let scaled_x = speed_x + main_draw_w * 0.4;
-                actors.push(act!(text: font(machine_font_key(visual_policy.machine_font, FontRole::Header)): settext(scaled_text):
+                actors.push(act!(text: font(machine_font_key(visual_policy.machine_font, FontRole::Header)): settext(scaled_text.clone()):
                     align(0.5, 0.5): xy(scaled_x, speed_mod_scaled_y): zoom(speed_mod_scaled_zoom):
                     diffuse(speed_color[0], speed_color[1], speed_color[2], 0.8 * pane_alpha):
                     z(Z_SPEED_MOD_TEXT)
@@ -197,23 +293,22 @@ pub fn push_actors(
             title_color[3] *= a;
             // Handle multi-line row titles (e.g., "Music Rate\nbpm: 120")
             if row.id == RowId::MusicRate {
-                let display = music_rate_display_name(state);
-                let lines: Vec<&str> = display.split('\n').collect();
-                if lines.len() == 2 {
-                    actors.push(act!(text: font("miso"): settext(lines[0].to_string()):
+                let display = cached_music_rate_text(state);
+                if let Some(second) = display.second.as_ref() {
+                    actors.push(act!(text: font("miso"): settext(display.first.clone()):
                         align(0.0, 0.5): xy(title_x, current_row_y - 7.0): zoom(title_zoom):
                         diffuse(title_color[0], title_color[1], title_color[2], title_color[3]):
                         horizalign(left): maxwidth(title_max_w):
                         z(Z_ROW_FOREGROUND)
                     ));
-                    actors.push(act!(text: font("miso"): settext(lines[1].to_string()):
+                    actors.push(act!(text: font("miso"): settext(second.clone()):
                         align(0.0, 0.5): xy(title_x, current_row_y + 7.0): zoom(title_zoom):
                         diffuse(title_color[0], title_color[1], title_color[2], title_color[3]):
                         horizalign(left): maxwidth(title_max_w):
                         z(Z_ROW_FOREGROUND)
                     ));
                 } else {
-                    actors.push(act!(text: font("miso"): settext(display):
+                    actors.push(act!(text: font("miso"): settext(display.first.clone()):
                         align(0.0, 0.5): xy(title_x, current_row_y): zoom(title_zoom):
                         diffuse(title_color[0], title_color[1], title_color[2], title_color[3]):
                         horizalign(left): maxwidth(title_max_w):
@@ -501,14 +596,15 @@ pub(super) fn select_preview_texture<'a>(
     row: &Row,
     player_idx: usize,
     choices: &'a [crate::assets::TextureChoice],
-) -> Option<&'a str> {
+) -> Option<&'a Arc<str>> {
     choices
         .get(row.selected_choice_index[player_idx])
         .and_then(|choice| {
             if choice.key.eq_ignore_ascii_case("None") {
                 None
             } else {
-                crate::assets::resolve_texture_choice(Some(choice.key.as_ref()), choices)
+                crate::assets::resolve_texture_choice_entry(Some(choice.key.as_ref()), choices)
+                    .map(|choice| &choice.key)
             }
         })
 }
@@ -984,9 +1080,9 @@ fn draw_cached_value_text(actors: &mut Vec<Actor>, rc: &RowCtx, primary_player_i
                 return (TextContent::Static(ARCADE_NEXT_ROW_TEXT), width);
             }
             if rc.row.id == RowId::SpeedMod {
-                let text = rc.fc.state.speed_mod[player_idx].display();
-                let (width, _) = measure_option_text(rc.fc.asset_manager, &text, value_zoom);
-                return (TextContent::Owned(text), width);
+                let text = cached_speed_text(rc.fc.state, player_idx);
+                let (width, _) = measure_option_text(rc.fc.asset_manager, &text.value, value_zoom);
+                return (TextContent::Shared(text.value.clone()), width);
             }
             let idx = if rc.row.id == RowId::TypeOfSpeedMod {
                 rc.fc.state.speed_mod[player_idx].mod_type.choice_index()
@@ -1050,7 +1146,7 @@ fn draw_cached_value_text(actors: &mut Vec<Actor>, rc: &RowCtx, primary_player_i
 
 fn draw_judgment_preview(actors: &mut Vec<Actor>, rc: &RowCtx, primary_player_idx: usize) {
     if rc.row.id == RowId::JudgmentFont {
-        let texture_for = |player_idx: usize| -> Option<&str> {
+        let texture_for = |player_idx: usize| -> Option<&Arc<str>> {
             select_preview_texture(rc.row, player_idx, assets::judgment_texture_choices())
         };
         if let Some(texture) = texture_for(primary_player_idx) {
@@ -1081,13 +1177,13 @@ fn draw_judgment_preview(actors: &mut Vec<Actor>, rc: &RowCtx, primary_player_id
 
 fn draw_hold_preview(actors: &mut Vec<Actor>, rc: &RowCtx, primary_player_idx: usize) {
     if rc.row.id == RowId::HoldJudgment {
-        let texture_for = |player_idx: usize| -> Option<&str> {
+        let texture_for = |player_idx: usize| -> Option<&Arc<str>> {
             select_preview_texture(rc.row, player_idx, assets::hold_judgment_texture_choices())
         };
-        let draw_hold_preview = |texture: &str, center_x: f32, actors: &mut Vec<Actor>| {
+        let draw_hold_preview = |texture: &Arc<str>, center_x: f32, actors: &mut Vec<Actor>| {
             let zoom = JUDGMENT_PREVIEW_ZOOM;
-            let tex_w =
-                crate::assets::texture_dims(texture).map_or(128.0, |meta| meta.w.max(1) as f32);
+            let tex_w = crate::assets::texture_dims(texture.as_ref())
+                .map_or(128.0, |meta| meta.w.max(1) as f32);
             let center_offset = tex_w * zoom * 0.4;
 
             actors.push(act!(sprite(texture):
@@ -1121,7 +1217,7 @@ fn draw_hold_preview(actors: &mut Vec<Actor>, rc: &RowCtx, primary_player_idx: u
 
 fn draw_held_graphic_preview(actors: &mut Vec<Actor>, rc: &RowCtx, primary_player_idx: usize) {
     if rc.row.id == RowId::HeldGraphic {
-        let texture_for = |player_idx: usize| -> Option<&str> {
+        let texture_for = |player_idx: usize| -> Option<&Arc<str>> {
             select_preview_texture(rc.row, player_idx, assets::held_miss_texture_choices())
         };
         if let Some(texture) = texture_for(primary_player_idx) {
@@ -1163,7 +1259,7 @@ fn draw_noteskin_family_preview(actors: &mut Vec<Actor>, rc: &RowCtx, primary_pl
 
 fn draw_combo_preview(actors: &mut Vec<Actor>, rc: &RowCtx, primary_player_idx: usize) {
     if rc.row.id == RowId::ComboFont {
-        let combo_text = rc.fc.state.combo_preview_count.to_string();
+        let combo_text = TextContent::inline_u32(rc.fc.state.combo_preview_count);
         let combo_zoom = COMBO_PREVIEW_ZOOM;
         // Choice indices are fixed by construction order:
         // 0=Wendy, 1=ArialRounded, 2=Asap, 3=BebasNeue, 4=SourceCode,

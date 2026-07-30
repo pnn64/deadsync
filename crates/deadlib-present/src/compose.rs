@@ -1408,6 +1408,9 @@ impl TextLayoutCache {
             actors::TextContent::InlineU16(text) => {
                 self.get_or_build_owned(key, font, fonts, text.as_str())
             }
+            actors::TextContent::InlineU32(text) => {
+                self.get_or_build_owned(key, font, fonts, text.as_str())
+            }
         }
     }
 

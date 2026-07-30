@@ -302,6 +302,42 @@ impl CursorRect {
     }
 }
 
+pub(super) struct PlayerOptionsTopBarCache {
+    pub(super) title: Arc<str>,
+    pub(super) visual_policy: crate::views::SimplyLoveVisualPolicyView,
+    pub(super) screen_size_bits: [u32; 2],
+    pub(super) actor: Actor,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) struct SpeedTextKey {
+    pub(super) mod_type: SpeedModType,
+    pub(super) value_bits: u32,
+    pub(super) music_rate_bits: u32,
+    pub(super) chart_steps_index: [usize; PLAYER_SLOTS],
+    pub(super) mini_percent: i32,
+    pub(super) perspective: deadsync_profile::Perspective,
+}
+
+pub(super) struct SpeedTextCache {
+    pub(super) key: SpeedTextKey,
+    pub(super) main: Arc<str>,
+    pub(super) scaled: Option<Arc<str>>,
+    pub(super) value: Arc<str>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) struct MusicRateTextKey {
+    pub(super) music_rate_bits: u32,
+    pub(super) chart_steps_index: [usize; PLAYER_SLOTS],
+}
+
+pub(super) struct MusicRateTextCache {
+    pub(super) key: MusicRateTextKey,
+    pub(super) first: Arc<str>,
+    pub(super) second: Option<Arc<str>>,
+}
+
 pub struct State {
     pub song: Arc<SongData>,
     pub return_screen: Screen,
@@ -334,6 +370,9 @@ pub struct State {
     // Combo preview state (for Combo Font row)
     pub(super) combo_preview_count: u32,
     pub(super) combo_preview_elapsed: f32,
+    pub(super) top_bar_cache: RefCell<Option<PlayerOptionsTopBarCache>>,
+    pub(super) speed_text_cache: RefCell<[Option<SpeedTextCache>; PLAYER_SLOTS]>,
+    pub(super) music_rate_text_cache: RefCell<Option<MusicRateTextCache>>,
     pub(super) pane_transition: PaneTransition,
     pub(super) menu_lr_chord: screen_input::MenuLrChordTracker,
     /// Ordered runtime work awaiting emission at the input/update boundary.

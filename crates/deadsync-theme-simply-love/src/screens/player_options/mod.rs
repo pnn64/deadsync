@@ -10,7 +10,9 @@ use crate::screens::{Screen, ThemeEffect};
 use crate::views::{PlayerOptionsInitView, PlayerOptionsPolicyView};
 use deadlib_present::actors::Actor;
 use deadlib_present::color;
-use deadlib_present::space::{screen_center_x, screen_center_y, screen_height, widescale};
+use deadlib_present::space::{
+    screen_center_x, screen_center_y, screen_height, screen_width, widescale,
+};
 use deadlib_render::BlendMode;
 use deadsync_assets::noteskin::{
     self, NUM_QUANTIZATIONS, NoteAnimPart, Noteskin, Quantization, SpriteSlot,
@@ -21,6 +23,7 @@ use deadsync_notefield::noteskin_model_actor;
 use deadsync_profile as profile_data;
 use deadsync_theme::AudioRequest;
 use deadsync_theme::views::{NoteskinCatalogView, SmxGifCatalogView};
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
@@ -460,6 +463,9 @@ fn init_with_noteskin_prewarm(
         help_anim_time: [0.0; PLAYER_SLOTS],
         combo_preview_count: 0,
         combo_preview_elapsed: 0.0,
+        top_bar_cache: RefCell::new(None),
+        speed_text_cache: RefCell::new([None, None]),
+        music_rate_text_cache: RefCell::new(None),
         pane_transition: PaneTransition::None,
         menu_lr_chord: screen_input::MenuLrChordTracker::default(),
         pending_effects: Vec::with_capacity(4),

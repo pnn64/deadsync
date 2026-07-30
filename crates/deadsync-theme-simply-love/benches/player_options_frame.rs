@@ -105,11 +105,17 @@ impl AllocSnapshot {
 }
 
 struct BenchResult {
+    update: PhaseResult,
+    render: PhaseResult,
+    frame: PhaseResult,
+    actors: usize,
+    checksum: u64,
+}
+
+struct PhaseResult {
     elapsed: Duration,
     cycles: u64,
     alloc: AllocSnapshot,
-    actors: usize,
-    checksum: u64,
 }
 
 fn main() {
@@ -125,6 +131,9 @@ fn main() {
         let mut state = state();
         benchmark_select_pane(&mut state, pane_index);
         let result = measure(&mut state, &asset_manager);
+        assert_zero_alloc(label, "update", &result.update);
+        assert_zero_alloc(label, "render", &result.render);
+        assert_zero_alloc(label, "frame", &result.frame);
         assert_eq!(
             (result.actors, result.checksum),
             (expected_actors, expected_checksum),
@@ -134,11 +143,26 @@ fn main() {
     }
 }
 
+fn assert_zero_alloc(label: &str, phase: &str, result: &PhaseResult) {
+    assert_eq!(
+        (
+            result.alloc.allocs,
+            result.alloc.deallocs,
+            result.alloc.reallocs,
+            result.alloc.bytes,
+        ),
+        (0, 0, 0, 0),
+        "{label} {phase} must not allocate in steady state"
+    );
+}
+
 fn measure(
     state: &mut deadsync_theme_simply_love::screens::player_options::State,
     assets: &AssetManager,
 ) -> BenchResult {
     let mut actors = Vec::<Actor>::new();
+    let update = measure_update(state, assets);
+    let (render, _, _) = measure_render(state, assets, &mut actors);
     run_frames(state, assets, &mut actors, WARMUP_FRAMES);
 
     let before = ALLOC.snapshot();
@@ -146,12 +170,65 @@ fn measure(
     let started = Instant::now();
     let checksum = run_frames(state, assets, &mut actors, MEASURE_FRAMES);
     BenchResult {
-        elapsed: started.elapsed(),
-        cycles: read_cycles().saturating_sub(cycles_before),
-        alloc: ALLOC.snapshot().delta(before),
+        update,
+        render,
+        frame: PhaseResult {
+            elapsed: started.elapsed(),
+            cycles: read_cycles().saturating_sub(cycles_before),
+            alloc: ALLOC.snapshot().delta(before),
+        },
         actors: actors.len(),
         checksum,
     }
+}
+
+fn measure_update(
+    state: &mut deadsync_theme_simply_love::screens::player_options::State,
+    assets: &AssetManager,
+) -> PhaseResult {
+    for _ in 0..WARMUP_FRAMES {
+        black_box(update(state, FRAME_SECONDS, assets));
+    }
+    let before = ALLOC.snapshot();
+    let cycles_before = read_cycles();
+    let started = Instant::now();
+    for _ in 0..MEASURE_FRAMES {
+        black_box(update(state, FRAME_SECONDS, assets));
+    }
+    PhaseResult {
+        elapsed: started.elapsed(),
+        cycles: read_cycles().saturating_sub(cycles_before),
+        alloc: ALLOC.snapshot().delta(before),
+    }
+}
+
+fn measure_render(
+    state: &deadsync_theme_simply_love::screens::player_options::State,
+    assets: &AssetManager,
+    actors: &mut Vec<Actor>,
+) -> (PhaseResult, usize, u64) {
+    for _ in 0..WARMUP_FRAMES {
+        actors.clear();
+        push_actors(actors, state, assets, Default::default());
+    }
+    let before = ALLOC.snapshot();
+    let cycles_before = read_cycles();
+    let started = Instant::now();
+    let mut checksum = 0u64;
+    for _ in 0..MEASURE_FRAMES {
+        actors.clear();
+        push_actors(actors, state, assets, Default::default());
+        checksum = checksum.rotate_left(7) ^ actor_checksum(black_box(actors));
+    }
+    (
+        PhaseResult {
+            elapsed: started.elapsed(),
+            cycles: read_cycles().saturating_sub(cycles_before),
+            alloc: ALLOC.snapshot().delta(before),
+        },
+        actors.len(),
+        checksum,
+    )
 }
 
 fn run_frames(
@@ -181,12 +258,21 @@ fn actor_checksum(actors: &[Actor]) -> u64 {
 }
 
 fn print_result(label: &str, result: &BenchResult) {
+    print_phase(label, "update", &result.update);
+    print_phase(label, "render", &result.render);
+    print_phase(label, "frame ", &result.frame);
+    println!(
+        "{label:<10} output actors={} checksum={:016x}",
+        result.actors, result.checksum
+    );
+}
+
+fn print_phase(label: &str, phase: &str, result: &PhaseResult) {
     let frames = MEASURE_FRAMES as f64;
     let seconds = result.elapsed.as_secs_f64();
     println!(
-        "{label:<10} {:>8.1} ns/frame  {:>8.0} cycles/frame  {:>8.0} frames/s  \
-         {:>5.1} allocs  {:>5.1} frees  {:>4.1} reallocs  {:>7.2} KiB/frame  \
-         actors={} checksum={:016x}",
+        "{label:<10} {phase} {:>8.1} ns/frame  {:>8.0} cycles/frame  {:>8.0} frames/s  \
+         {:>5.1} allocs  {:>5.1} frees  {:>4.1} reallocs  {:>7.2} KiB/frame",
         seconds * 1.0e9 / frames,
         result.cycles as f64 / frames,
         frames / seconds,
@@ -194,8 +280,6 @@ fn print_result(label: &str, result: &BenchResult) {
         result.alloc.deallocs as f64 / frames,
         result.alloc.reallocs as f64 / frames,
         result.alloc.bytes as f64 / frames / 1024.0,
-        result.actors,
-        result.checksum,
     );
 }
 

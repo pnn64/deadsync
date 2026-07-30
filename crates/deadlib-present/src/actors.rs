@@ -745,6 +745,7 @@ pub enum TextContent {
     Owned(String),
     Shared(Arc<str>),
     InlineU16(InlineU16Text),
+    InlineU32(InlineU32Text),
 }
 
 /// Heap-free decimal text for the full `u16` range.
@@ -780,6 +781,39 @@ impl InlineU16Text {
     }
 }
 
+/// Heap-free decimal text for the full `u32` range.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct InlineU32Text {
+    bytes: [u8; 10],
+    start: u8,
+}
+
+impl InlineU32Text {
+    #[inline(always)]
+    pub fn new(mut value: u32) -> Self {
+        let mut bytes = [0; 10];
+        let mut start = bytes.len();
+        loop {
+            start -= 1;
+            bytes[start] = b'0' + (value % 10) as u8;
+            value /= 10;
+            if value == 0 {
+                break;
+            }
+        }
+        Self {
+            bytes,
+            start: start as u8,
+        }
+    }
+
+    #[inline(always)]
+    pub fn as_str(&self) -> &str {
+        let digits = &self.bytes[self.start as usize..];
+        std::str::from_utf8(digits).expect("inline u32 text contains only ASCII decimal digits")
+    }
+}
+
 impl TextContent {
     #[inline(always)]
     pub const fn static_str(value: &'static str) -> Self {
@@ -792,12 +826,18 @@ impl TextContent {
     }
 
     #[inline(always)]
+    pub fn inline_u32(value: u32) -> Self {
+        Self::InlineU32(InlineU32Text::new(value))
+    }
+
+    #[inline(always)]
     pub fn as_str(&self) -> &str {
         match self {
             Self::Static(s) => s,
             Self::Owned(s) => s.as_str(),
             Self::Shared(s) => s.as_ref(),
             Self::InlineU16(s) => s.as_str(),
+            Self::InlineU32(s) => s.as_str(),
         }
     }
 
@@ -884,6 +924,14 @@ mod tests {
     fn inline_u16_text_preserves_decimal_display() {
         for value in [0, 7, 42, 250, 500, 8_191, u16::MAX] {
             let text = TextContent::inline_u16(value);
+            assert_eq!(text.as_str(), value.to_string());
+        }
+    }
+
+    #[test]
+    fn inline_u32_text_preserves_decimal_display() {
+        for value in [0, 7, 42, 250, 500, 8_191, u16::MAX as u32, u32::MAX] {
+            let text = TextContent::inline_u32(value);
             assert_eq!(text.as_str(), value.to_string());
         }
     }
