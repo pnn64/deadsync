@@ -142,6 +142,14 @@ pub(super) struct DescriptionLayout {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) struct RowTweenLayoutKey {
+    pub(super) total_rows: usize,
+    pub(super) selected: usize,
+    pub(super) scale_bits: u32,
+    pub(super) list_y_bits: u32,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum SubmenuTransition {
     None,
     FadeOutToSubmenu,
@@ -259,8 +267,11 @@ pub struct State {
     pub(super) cursor_t: f32,
     // Shared row tween state for the active view (main list or submenu list).
     pub(super) row_tweens: Vec<RowTween>,
+    pub(super) row_tween_layout_key: Option<RowTweenLayoutKey>,
     pub(super) submenu_layout_cache_kind: Cell<Option<SubmenuKind>>,
     pub(super) submenu_row_layout_cache: RefCell<Vec<Option<SubmenuRowLayout>>>,
+    pub(super) submenu_visible_cache_kind: Cell<Option<SubmenuKind>>,
+    pub(super) submenu_visible_rows_cache: RefCell<Vec<usize>>,
     pub(super) description_layout_cache: RefCell<Option<DescriptionLayout>>,
     pub(super) graphics_prev_visible_rows: Vec<usize>,
     pub(super) advanced_prev_visible_rows: Vec<usize>,
@@ -463,8 +474,11 @@ pub fn init(view: OptionsInitView) -> State {
         cursor_to_h: 0.0,
         cursor_t: 1.0,
         row_tweens: Vec::new(),
+        row_tween_layout_key: None,
         submenu_layout_cache_kind: Cell::new(None),
         submenu_row_layout_cache: RefCell::new(Vec::new()),
+        submenu_visible_cache_kind: Cell::new(None),
+        submenu_visible_rows_cache: RefCell::new(Vec::new()),
         description_layout_cache: RefCell::new(None),
         graphics_prev_visible_rows: Vec::new(),
         advanced_prev_visible_rows: Vec::new(),

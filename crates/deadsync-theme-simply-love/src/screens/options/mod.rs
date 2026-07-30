@@ -116,6 +116,8 @@ pub use render::{clear_description_layout_cache, clear_render_cache, get_actors,
 pub use state::{State, init};
 pub use submenus::update_monitor_specs;
 pub use transitions::{in_transition, out_transition};
+#[cfg(feature = "bench-support")]
+pub use update::benchmark_select_submenu;
 pub use update::{
     is_smx_config_view, open_graphics_submenu, open_input_submenu, open_lights_submenu,
     open_smx_config_submenu, sync_display_mode, sync_display_resolution, sync_hide_mouse_cursor,

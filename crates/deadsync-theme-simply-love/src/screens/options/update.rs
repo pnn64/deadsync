@@ -209,6 +209,18 @@ pub fn open_graphics_submenu(state: &mut State) {
     open_submenu_now(state, SubmenuKind::Graphics);
 }
 
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn benchmark_select_submenu(state: &mut State, index: usize) {
+    const KINDS: [SubmenuKind; 4] = [
+        SubmenuKind::Machine,
+        SubmenuKind::System,
+        SubmenuKind::Graphics,
+        SubmenuKind::SelectMusic,
+    ];
+    open_submenu_now(state, KINDS[index]);
+}
+
 fn open_submenu_now(state: &mut State, kind: SubmenuKind) {
     state.view = OptionsView::Submenu(kind);
     state.pending_submenu_kind = None;
@@ -637,6 +649,7 @@ fn update_impl(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Opti
             let visible_len = visible_items(state).len();
             update_row_tweens(
                 &mut state.row_tweens,
+                &mut state.row_tween_layout_key,
                 visible_len,
                 state.selected,
                 s,
@@ -665,6 +678,7 @@ fn update_impl(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Opti
                 let total_rows = submenu_total_rows(state, kind);
                 update_row_tweens(
                     &mut state.row_tweens,
+                    &mut state.row_tween_layout_key,
                     total_rows,
                     state.sub_selected,
                     s,

@@ -118,6 +118,11 @@ name = "player_options_frame"
 harness = false
 required-features = ["bench-support"]
 
+[[bench]]
+name = "machine_options_frame"
+harness = false
+required-features = ["bench-support"]
+
 [dependencies]
 deadlib-assets = { path = "../deadlib-assets" }
 deadlib-present = { path = "../deadlib-present" }

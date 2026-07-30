@@ -612,6 +612,7 @@ pub(super) fn init_row_tweens(
 
 pub(super) fn update_row_tweens(
     row_tweens: &mut Vec<RowTween>,
+    layout_key: &mut Option<RowTweenLayoutKey>,
     total_rows: usize,
     selected: usize,
     s: f32,
@@ -620,23 +621,36 @@ pub(super) fn update_row_tweens(
 ) {
     if total_rows == 0 {
         row_tweens.clear();
+        *layout_key = None;
         return;
     }
+    let selected = selected.min(total_rows - 1);
+    let next_key = RowTweenLayoutKey {
+        total_rows,
+        selected,
+        scale_bits: s.to_bits(),
+        list_y_bits: list_y.to_bits(),
+    };
     if row_tweens.len() != total_rows {
         *row_tweens = init_row_tweens(total_rows, selected, s, list_y);
+        *layout_key = Some(next_key);
         return;
     }
-    for (row_idx, tw) in row_tweens.iter_mut().enumerate().take(total_rows) {
-        let (to_y, to_a) = row_dest_for_index(total_rows, selected, row_idx, s, list_y);
-        let cur_y = tw.y();
-        let cur_a = tw.a();
-        if (to_y - tw.to_y).abs() > 0.01 || (to_a - tw.to_a).abs() > 0.001 {
-            tw.from_y = cur_y;
-            tw.to_y = to_y;
-            tw.from_a = cur_a;
-            tw.to_a = to_a;
-            tw.t = 0.0;
+    if layout_key.replace(next_key) != Some(next_key) {
+        for (row_idx, tw) in row_tweens.iter_mut().enumerate().take(total_rows) {
+            let (to_y, to_a) = row_dest_for_index(total_rows, selected, row_idx, s, list_y);
+            let cur_y = tw.y();
+            let cur_a = tw.a();
+            if (to_y - tw.to_y).abs() > 0.01 || (to_a - tw.to_a).abs() > 0.001 {
+                tw.from_y = cur_y;
+                tw.to_y = to_y;
+                tw.from_a = cur_a;
+                tw.to_a = to_a;
+                tw.t = 0.0;
+            }
         }
+    }
+    for tw in row_tweens {
         if tw.t < 1.0 {
             if ROW_TWEEN_SECONDS > 0.0 {
                 tw.t = (tw.t + dt / ROW_TWEEN_SECONDS).min(1.0);
@@ -739,7 +753,15 @@ pub(super) fn update_graphics_row_tweens(state: &mut State, s: f32, list_y: f32,
     }
 
     state.graphics_prev_visible_rows = visible_rows;
-    update_row_tweens(&mut state.row_tweens, total_rows, selected, s, list_y, dt);
+    update_row_tweens(
+        &mut state.row_tweens,
+        &mut state.row_tween_layout_key,
+        total_rows,
+        selected,
+        s,
+        list_y,
+        dt,
+    );
 }
 
 const fn advanced_parent_row(actual_idx: usize) -> Option<usize> {
@@ -818,7 +840,15 @@ pub(super) fn update_advanced_row_tweens(state: &mut State, s: f32, list_y: f32,
     }
 
     state.advanced_prev_visible_rows = visible_rows;
-    update_row_tweens(&mut state.row_tweens, total_rows, selected, s, list_y, dt);
+    update_row_tweens(
+        &mut state.row_tweens,
+        &mut state.row_tween_layout_key,
+        total_rows,
+        selected,
+        s,
+        list_y,
+        dt,
+    );
 }
 
 fn select_music_parent_row(rows: &[SubRow], actual_idx: usize) -> Option<usize> {
@@ -906,5 +936,13 @@ pub(super) fn update_select_music_row_tweens(state: &mut State, s: f32, list_y: 
     }
 
     state.select_music_prev_visible_rows = visible_rows;
-    update_row_tweens(&mut state.row_tweens, total_rows, selected, s, list_y, dt);
+    update_row_tweens(
+        &mut state.row_tweens,
+        &mut state.row_tween_layout_key,
+        total_rows,
+        selected,
+        s,
+        list_y,
+        dt,
+    );
 }

@@ -395,28 +395,34 @@ pub(super) fn build_description_layout(
     }
 }
 
-pub(super) fn description_layout(
-    state: &State,
+pub(super) fn description_layout<'a>(
+    state: &'a State,
     asset_manager: &AssetManager,
     key: DescriptionCacheKey,
     item: &Item,
     s: f32,
-) -> DescriptionLayout {
-    if let Some(layout) = state.description_layout_cache.borrow().as_ref()
-        && layout.key == key
-    {
-        return layout.clone();
+) -> std::cell::Ref<'a, DescriptionLayout> {
+    let cache_hit = state
+        .description_layout_cache
+        .borrow()
+        .as_ref()
+        .is_some_and(|layout| layout.key == key);
+    if !cache_hit {
+        let layout = build_description_layout(
+            asset_manager,
+            key,
+            item,
+            s,
+            &state.app_paths,
+            state.smx_assignment_status.as_str(),
+        );
+        *state.description_layout_cache.borrow_mut() = Some(layout);
     }
-    let layout = build_description_layout(
-        asset_manager,
-        key,
-        item,
-        s,
-        &state.app_paths,
-        state.smx_assignment_status.as_str(),
-    );
-    *state.description_layout_cache.borrow_mut() = Some(layout.clone());
-    layout
+    std::cell::Ref::map(state.description_layout_cache.borrow(), |cache| {
+        cache
+            .as_ref()
+            .expect("description layout was populated above")
+    })
 }
 
 pub fn clear_description_layout_cache(state: &State) {
@@ -425,6 +431,7 @@ pub fn clear_description_layout_cache(state: &State) {
 
 pub fn clear_render_cache(state: &State) {
     clear_submenu_row_layout_cache(state);
+    clear_submenu_visible_rows_cache(state);
     clear_description_layout_cache(state);
 }
 
@@ -794,7 +801,7 @@ pub fn push_actors(
             let rows = submenu_rows(kind);
             let choice_indices = submenu_choice_indices(state, kind);
             let items = submenu_items(kind);
-            let visible_rows = submenu_visible_row_indices(state, kind, rows);
+            let visible_rows = cached_submenu_visible_rows(state, kind);
             if is_launcher_submenu(kind) {
                 let col_active_text =
                     color::simply_love_rgba(state.active_color_index + state.sub_selected as i32);

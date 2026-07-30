@@ -354,9 +354,25 @@ pub(super) fn submenu_visible_row_indices(
     }
 }
 
+pub(super) fn cached_submenu_visible_rows(
+    state: &State,
+    kind: SubmenuKind,
+) -> std::cell::Ref<'_, [usize]> {
+    if state.submenu_visible_cache_kind.get() != Some(kind) {
+        let visible_rows = submenu_visible_row_indices(state, kind, submenu_rows(kind));
+        *state.submenu_visible_rows_cache.borrow_mut() = visible_rows;
+        state.submenu_visible_cache_kind.set(Some(kind));
+    }
+    std::cell::Ref::map(state.submenu_visible_rows_cache.borrow(), Vec::as_slice)
+}
+
+pub(super) fn clear_submenu_visible_rows_cache(state: &State) {
+    state.submenu_visible_cache_kind.set(None);
+    state.submenu_visible_rows_cache.borrow_mut().clear();
+}
+
 pub(super) fn submenu_total_rows(state: &State, kind: SubmenuKind) -> usize {
-    let rows = submenu_rows(kind);
-    submenu_visible_row_indices(state, kind, rows).len() + 1
+    cached_submenu_visible_rows(state, kind).len() + 1
 }
 
 pub(super) fn submenu_visible_row_to_actual(
@@ -364,9 +380,9 @@ pub(super) fn submenu_visible_row_to_actual(
     kind: SubmenuKind,
     visible_row_idx: usize,
 ) -> Option<usize> {
-    let rows = submenu_rows(kind);
-    let visible_rows = submenu_visible_row_indices(state, kind, rows);
-    visible_rows.get(visible_row_idx).copied()
+    cached_submenu_visible_rows(state, kind)
+        .get(visible_row_idx)
+        .copied()
 }
 
 pub(super) fn submenu_choice_indices(state: &State, kind: SubmenuKind) -> &[usize] {

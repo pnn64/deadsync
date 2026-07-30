@@ -1999,6 +1999,56 @@ fn default_sync_offset_only_shows_when_pack_offsets_are_on() {
 }
 
 #[test]
+fn machine_visibility_cache_refreshes_after_choice_change() {
+    let asset_manager = AssetManager::new();
+    let mut state = init();
+    state.view = OptionsView::Submenu(SubmenuKind::Machine);
+    let row_idx = select_visible_row(&mut state, SubmenuKind::Machine, SubRowId::SelectColor);
+    state.sub[SubmenuKind::Machine].choice_indices[row_idx] = yes_no_choice_index(true);
+    state.sub[SubmenuKind::Machine].cursor_indices[row_idx] = yes_no_choice_index(true);
+    clear_render_cache(&state);
+
+    let before = submenu_total_rows(&state, SubmenuKind::Machine);
+    apply_submenu_choice_delta(&mut state, &asset_manager, 1, NavWrap::Wrap);
+    let after = submenu_total_rows(&state, SubmenuKind::Machine);
+
+    assert_eq!(after, before + 1);
+    let preferred_color = row_position(MACHINE_OPTIONS_ROWS, SubRowId::PreferredColor)
+        .expect("machine options should contain preferred color");
+    assert!(cached_submenu_visible_rows(&state, SubmenuKind::Machine).contains(&preferred_color));
+}
+
+#[test]
+fn row_tween_destinations_retarget_only_when_layout_changes() {
+    let mut row_tweens = Vec::new();
+    let mut key = None;
+    update_row_tweens(&mut row_tweens, &mut key, 12, 0, 1.0, 20.0, 0.016);
+    let initial_targets: Vec<_> = row_tweens
+        .iter()
+        .map(|tween| (tween.to_y, tween.to_a))
+        .collect();
+
+    update_row_tweens(&mut row_tweens, &mut key, 12, 0, 1.0, 20.0, 0.016);
+    assert_eq!(
+        row_tweens
+            .iter()
+            .map(|tween| (tween.to_y, tween.to_a))
+            .collect::<Vec<_>>(),
+        initial_targets
+    );
+
+    update_row_tweens(&mut row_tweens, &mut key, 12, 8, 1.0, 20.0, 0.016);
+    assert_ne!(
+        row_tweens
+            .iter()
+            .map(|tween| (tween.to_y, tween.to_a))
+            .collect::<Vec<_>>(),
+        initial_targets
+    );
+    assert!(row_tweens.iter().any(|tween| tween.t < 1.0));
+}
+
+#[test]
 fn folders_submenu_is_registered() {
     assert!(SubmenuKind::ALL.contains(&SubmenuKind::Folders));
     assert_eq!(submenu_rows(SubmenuKind::Folders).len(), 8);
@@ -2361,6 +2411,7 @@ fn input_backend_back_returns_to_input_after_visiting_smx_config() {
         SubRowId::UseFsrs,
         yes_no_choice_index(true),
     );
+    clear_render_cache(&state);
 
     // InputBackend -> SmxConfig, then back to InputBackend.
     select_visible_row(&mut state, SubmenuKind::InputBackend, SubRowId::SmxConfig);
