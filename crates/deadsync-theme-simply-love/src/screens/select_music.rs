@@ -13489,11 +13489,26 @@ pub fn push_actors(
     // GrooveStats scorebox placement.
     // Auto keeps the current layout, including pane placement for both-GS versus.
     // StepPane forces the scorebox into the pane area whenever it is shown.
-    if is_wide() {
+    if presentation.show_scorebox && scorebox_cycle_enabled {
         let scorebox_zoom = widescale(0.95, 1.0);
         let scorebox_side_inset = 320.0;
-        let scorebox_center_p1 = screen_width() * 0.25 - 5.0 + scorebox_side_inset;
-        let scorebox_center_p2 = screen_width() * 0.75 + 5.0 - scorebox_side_inset;
+        let fit_scorebox_x = |center_x: f32, zoom: f32| {
+            let screen_w = screen_width();
+            let half_w = crate::scorebox::SCOREBOX_W * zoom * 0.5;
+            if screen_w <= half_w * 2.0 {
+                screen_w * 0.5
+            } else {
+                center_x.clamp(half_w, screen_w - half_w)
+            }
+        };
+        let scorebox_center_p1 = fit_scorebox_x(
+            screen_width() * 0.25 - 5.0 + scorebox_side_inset,
+            scorebox_zoom,
+        );
+        let scorebox_center_p2 = fit_scorebox_x(
+            screen_width() * 0.75 + 5.0 - scorebox_side_inset,
+            scorebox_zoom,
+        );
         let footer_top = screen_height() - 32.0;
         let scorebox_center_y_p1_single = footer_top - 44.0;
         let tech_box_bottom_y = screen_center_y() + 111.0 + 32.0;
@@ -13506,6 +13521,7 @@ pub fn push_actors(
             .groovestats_active;
         let both_gs_versus = is_versus && p1_gs && p2_gs;
         let force_step_pane = presentation.scorebox_in_step_pane;
+        let use_pane_scorebox = both_gs_versus || force_step_pane || (is_versus && !is_wide());
         let mut push_scorebox = |side: profile_data::PlayerSide,
                                  center_x: f32,
                                  center_y: f32,
@@ -13546,10 +13562,15 @@ pub fn push_actors(
         let pane_scorebox_center_y = pane_layout.pane_top + pane_layout.pane_height * 0.5;
         let pane_right_inset = 4.0;
         let pane_box_center_x = |pane_cx: f32| {
-            pane_cx + pane_layout.pane_width * 0.5 - pane_scorebox_width * 0.5 - pane_right_inset
+            fit_scorebox_x(
+                pane_cx + pane_layout.pane_width * 0.5
+                    - pane_scorebox_width * 0.5
+                    - pane_right_inset,
+                pane_scorebox_zoom,
+            )
         };
 
-        if both_gs_versus || force_step_pane {
+        if use_pane_scorebox {
             if is_versus {
                 push_scorebox(
                     profile_data::PlayerSide::P1,
@@ -15083,6 +15104,67 @@ mod tests {
                 true,
             )
             .is_none()
+        );
+    }
+
+    #[test]
+    fn gs_scorebox_remains_visible_at_cabinet_aspect_ratio() {
+        use deadlib_present::actors::Actor;
+        use deadlib_present::space::{
+            metrics_for_window, screen_width, set_current_metrics, set_current_window_px,
+        };
+
+        fn texture_offset(actor: &Actor, key: &str) -> Option<[f32; 2]> {
+            match actor {
+                Actor::Sprite { source, offset, .. } if source.texture_key() == Some(key) => {
+                    Some(*offset)
+                }
+                Actor::Frame { children, .. } => {
+                    children.iter().find_map(|actor| texture_offset(actor, key))
+                }
+                _ => None,
+            }
+        }
+
+        let mut state = init_placeholder();
+        state.session.play_style = profile_data::PlayStyle::Single;
+        state.session.player_side = profile_data::PlayerSide::P1;
+        state.session.joined = [true, false];
+        state.selected_steps_index = 0;
+        state.time_since_selection_change = PREVIEW_DELAY_SECONDS;
+        state.policy.presentation.show_scorebox = true;
+        state.policy.presentation.scorebox_cycle_enabled = true;
+
+        let song = super::bench_folder_stats_song(0);
+        state.entries = vec![super::MusicWheelEntry::Song(song.clone())];
+        super::ensure_chart_cache_for_song(&mut state, &song, "dance-single", false);
+        let chart_hash = super::immediate_selected_charts(&state, profile_data::PlayStyle::Single)
+            [0]
+        .expect("test song should have a selected chart")
+        .short_hash
+        .clone();
+        state.scoreboxes[0] = crate::views::ScoreboxSideView {
+            joined: true,
+            chart_hash: Some(chart_hash),
+            groovestats_active: true,
+            leaderboards: Some(deadsync_score::CachedPlayerLeaderboardData::loading()),
+            ..Default::default()
+        };
+
+        set_current_window_px(3_686, 2_560);
+        set_current_metrics(metrics_for_window(3_686, 2_560));
+        let logical_width = screen_width();
+        let actors = super::get_actors(&state, &crate::assets::AssetManager::new(), 1);
+        let gs_logo = actors
+            .iter()
+            .find_map(|actor| texture_offset(actor, "GrooveStats.png"));
+        set_current_window_px(854, 480);
+        set_current_metrics(metrics_for_window(854, 480));
+
+        let [x, _] = gs_logo.expect("narrow Select Music should still construct the GS box");
+        assert!(
+            (0.0..=logical_width).contains(&x),
+            "GS box center {x} should fit within logical width {logical_width}"
         );
     }
 
