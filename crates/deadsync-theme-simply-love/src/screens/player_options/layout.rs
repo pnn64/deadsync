@@ -186,6 +186,62 @@ pub(super) fn init_row_tweens(
     out
 }
 
+pub(super) fn retarget_row_tweens(
+    row_map: &RowMap,
+    row_tweens: &mut [RowTween],
+    selected_row: [usize; PLAYER_SLOTS],
+    active: [bool; PLAYER_SLOTS],
+    visibility: RowVisibility,
+) {
+    let total_rows = row_map.len();
+    let (first_row_center_y, row_step) = row_layout_params();
+    let visible_rows = count_visible_rows(row_map, visibility);
+    if visible_rows == 0 {
+        let y = first_row_center_y - row_step * 0.5;
+        for tween in row_tweens {
+            retarget_row_tween(tween, y, 0.0);
+        }
+        return;
+    }
+
+    let selected_visible = std::array::from_fn(|player_idx| {
+        let row_idx = selected_row[player_idx].min(total_rows.saturating_sub(1));
+        row_to_visible_index(row_map, row_idx, visibility).unwrap_or(0)
+    });
+    let window = compute_row_window(visible_rows, selected_visible, active);
+    let mid_pos = (VISIBLE_ROWS as f32) * 0.5 - 0.5;
+    let bottom_pos = (VISIBLE_ROWS as f32) - 0.5;
+    let mut visible_idx = 0i32;
+    for (row_idx, tween) in row_tweens.iter_mut().enumerate() {
+        let (f_pos, hidden) = row_f_pos_for_index(
+            row_map,
+            row_idx,
+            visibility,
+            &mut visible_idx,
+            window,
+            mid_pos,
+            bottom_pos,
+        );
+        retarget_row_tween(
+            tween,
+            first_row_center_y + row_step * f_pos,
+            if hidden { 0.0 } else { 1.0 },
+        );
+    }
+}
+
+#[inline(always)]
+fn retarget_row_tween(tween: &mut RowTween, y: f32, alpha: f32) {
+    if (y - tween.to_y).abs() <= 0.01 && alpha == tween.to_a {
+        return;
+    }
+    tween.from_y = tween.y();
+    tween.from_a = tween.a();
+    tween.to_y = y;
+    tween.to_a = alpha;
+    tween.t = 0.0;
+}
+
 #[inline(always)]
 pub(super) fn f_pos_for_visible_idx(
     visible_idx: i32,
@@ -242,17 +298,26 @@ pub(super) fn cursor_dest_for_player(
     asset_manager: &AssetManager,
     player_idx: usize,
 ) -> Option<(f32, f32, f32, f32)> {
+    let visibility = row_visibility(
+        &state.pane().row_map,
+        state.active,
+        state.option_masks,
+        state.policy,
+    );
+    cursor_dest_for_player_with_visibility(state, asset_manager, player_idx, visibility)
+}
+
+pub(super) fn cursor_dest_for_player_with_visibility(
+    state: &State,
+    asset_manager: &AssetManager,
+    player_idx: usize,
+    visibility: RowVisibility,
+) -> Option<(f32, f32, f32, f32)> {
     if state.pane().row_map.is_empty() {
         return None;
     }
     let player_idx = player_idx.min(PLAYER_SLOTS - 1);
     let active = state.active;
-    let visibility = row_visibility(
-        &state.pane().row_map,
-        active,
-        state.option_masks,
-        state.policy,
-    );
     let mut row_idx =
         state.pane().selected_row[player_idx].min(state.pane().row_map.len().saturating_sub(1));
     if !is_row_visible(&state.pane().row_map, row_idx, visibility) {
@@ -298,7 +363,17 @@ pub(super) fn cursor_dest_for_player(
             .choices
             .get(row.selected_choice_index[P1])
             .or_else(|| row.choices.first())?;
-        let (draw_w, draw_h) = measure_option_text(asset_manager, choice_text, value_zoom);
+        let choice_idx = row.selected_choice_index[P1].min(row.choices.len().saturating_sub(1));
+        let draw_w = row
+            .choice_widths
+            .get(choice_idx)
+            .copied()
+            .unwrap_or_else(|| measure_option_text(asset_manager, choice_text, value_zoom).0);
+        let draw_h = if row.choice_height > 0.0 {
+            row.choice_height
+        } else {
+            measure_option_text(asset_manager, choice_text, value_zoom).1
+        };
         let mut size_t = draw_w / width_ref;
         if !size_t.is_finite() {
             size_t = 0.0;
@@ -325,24 +400,21 @@ pub(super) fn cursor_dest_for_player(
         }
         let spacing = INLINE_SPACING;
         let choice_inner_left = inline_choice_left_x_for_row(state, row_idx);
-        let mut widths: Vec<f32> = Vec::with_capacity(row.choices.len());
-        let mut text_h: f32 = 16.0;
-        asset_manager.with_fonts(|all_fonts| {
-            asset_manager.with_font("miso", |metrics_font| {
-                text_h = (metrics_font.height as f32).max(1.0) * value_zoom;
-                for text in &row.choices {
-                    let mut w = deadlib_present::font::measure_line_width_logical(
-                        metrics_font,
-                        text,
-                        all_fonts,
-                    ) as f32;
-                    if !w.is_finite() || w <= 0.0 {
-                        w = 1.0;
-                    }
-                    widths.push(w * value_zoom);
-                }
-            });
-        });
+        let mut fallback_widths = Vec::new();
+        let widths: &[f32] = if row.choice_widths.len() == row.choices.len() {
+            &row.choice_widths
+        } else {
+            fallback_widths.reserve(row.choices.len());
+            for text in &row.choices {
+                fallback_widths.push(measure_option_text(asset_manager, text, value_zoom).0);
+            }
+            &fallback_widths
+        };
+        let text_h = if row.choice_height > 0.0 {
+            row.choice_height
+        } else {
+            measure_option_text(asset_manager, "", value_zoom).1
+        };
         if widths.is_empty() {
             return None;
         }
@@ -395,19 +467,33 @@ pub(super) fn cursor_dest_for_player(
         center_x = music_rate_center_x;
     }
 
-    let display_text = if arcade_row_focuses_next_row(state, player_idx, row_idx) {
-        ARCADE_NEXT_ROW_TEXT.to_string()
+    let selected_idx =
+        row.selected_choice_index[player_idx].min(row.choices.len().saturating_sub(1));
+    let (draw_w, draw_h) = if arcade_row_focuses_next_row(state, player_idx, row_idx) {
+        measure_option_text(asset_manager, ARCADE_NEXT_ROW_TEXT, value_zoom)
     } else if row.id == RowId::SpeedMod {
-        state.speed_mod[player_idx].display()
-    } else if row.id == RowId::TypeOfSpeedMod {
-        let idx = state.speed_mod[player_idx].mod_type.choice_index();
-        row.choices.get(idx).cloned().unwrap_or_default()
+        let text = state.speed_mod[player_idx].display();
+        measure_option_text(asset_manager, &text, value_zoom)
     } else {
-        let idx = row.selected_choice_index[player_idx].min(row.choices.len().saturating_sub(1));
-        row.choices.get(idx).cloned().unwrap_or_default()
+        let idx = if row.id == RowId::TypeOfSpeedMod {
+            state.speed_mod[player_idx].mod_type.choice_index()
+        } else {
+            selected_idx
+        }
+        .min(row.choices.len().saturating_sub(1));
+        let text = row.choices.get(idx).cloned().unwrap_or_default();
+        let width = row
+            .choice_widths
+            .get(idx)
+            .copied()
+            .unwrap_or_else(|| measure_option_text(asset_manager, &text, value_zoom).0);
+        let height = if row.choice_height > 0.0 {
+            row.choice_height
+        } else {
+            measure_option_text(asset_manager, &text, value_zoom).1
+        };
+        (width, height)
     };
-
-    let (draw_w, draw_h) = measure_option_text(asset_manager, &display_text, value_zoom);
     let mut size_t = draw_w / width_ref;
     if !size_t.is_finite() {
         size_t = 0.0;

@@ -1,7 +1,7 @@
 use super::*;
 
 pub(super) fn inline_choice_centers(
-    choices: &[String],
+    choices: &[Arc<str>],
     asset_manager: &AssetManager,
     left_x: f32,
 ) -> Vec<f32> {
@@ -19,6 +19,52 @@ pub(super) fn inline_choice_centers(
     centers
 }
 
+pub(super) fn prepare_choice_layouts(state: &mut State, asset_manager: &AssetManager) {
+    asset_manager.with_fonts(|all_fonts| {
+        asset_manager.with_font("miso", |metrics_font| {
+            let text_h = (metrics_font.height as f32).max(1.0) * INLINE_CHOICE_VALUE_ZOOM;
+            for row in state.pane_mut().row_map.rows.iter_mut().flatten() {
+                if row.choice_widths.len() == row.choices.len() && row.choice_height > 0.0 {
+                    continue;
+                }
+                let mut widths = Vec::with_capacity(row.choices.len());
+                for text in &row.choices {
+                    let mut width = deadlib_present::font::measure_line_width_logical(
+                        metrics_font,
+                        text,
+                        all_fonts,
+                    ) as f32;
+                    if !width.is_finite() || width <= 0.0 {
+                        width = 1.0;
+                    }
+                    widths.push(width * INLINE_CHOICE_VALUE_ZOOM);
+                }
+                row.choice_offsets = if row_shows_all_choices_inline(row.id) {
+                    let mut x = 0.0;
+                    widths
+                        .iter()
+                        .map(|width| {
+                            let offset = x;
+                            x += *width + INLINE_CHOICE_SPACING;
+                            offset
+                        })
+                        .collect::<Vec<_>>()
+                        .into_boxed_slice()
+                } else {
+                    Box::new([])
+                };
+                row.choice_widths = widths.into_boxed_slice();
+                row.choice_height = text_h;
+            }
+        });
+    });
+}
+
+fn inline_row(state: &State, row_idx: usize) -> Option<&Row> {
+    let row = state.pane().row_map.get_at(row_idx)?;
+    row_supports_inline_nav(row).then_some(row)
+}
+
 /// Common lookup used by every inline-nav function: resolve `row_idx` to a
 /// `Row` that supports inline navigation, plus its computed choice centers.
 /// Returns `None` if the row index is out of bounds, the row doesn't support
@@ -28,20 +74,19 @@ fn inline_row_and_centers<'a>(
     asset_manager: &AssetManager,
     row_idx: usize,
 ) -> Option<(&'a Row, Vec<f32>)> {
-    let row = state
-        .pane()
-        .row_map
-        .display_order()
-        .get(row_idx)
-        .and_then(|&id| state.pane().row_map.get(id))?;
-    if !row_supports_inline_nav(row) {
-        return None;
-    }
-    let centers = inline_choice_centers(
-        &row.choices,
-        asset_manager,
-        inline_choice_left_x_for_row(state, row_idx),
-    );
+    let row = inline_row(state, row_idx)?;
+    let left_x = inline_choice_left_x_for_row(state, row_idx);
+    let centers = if row.choice_offsets.len() == row.choices.len()
+        && row.choice_widths.len() == row.choices.len()
+    {
+        row.choice_offsets
+            .iter()
+            .zip(row.choice_widths.iter())
+            .map(|(offset, width)| width.mul_add(0.5, left_x + offset))
+            .collect()
+    } else {
+        inline_choice_centers(&row.choices, asset_manager, left_x)
+    };
     if centers.is_empty() {
         return None;
     }
@@ -55,16 +100,39 @@ pub(super) fn focused_inline_choice_index(
     row_idx: usize,
 ) -> Option<usize> {
     let idx = player_idx.min(PLAYER_SLOTS - 1);
-    let (row, centers) = inline_row_and_centers(state, asset_manager, row_idx)?;
-    let mut focus_idx = row.selected_choice_index[idx].min(centers.len().saturating_sub(1));
+    let row = inline_row(state, row_idx)?;
+    let mut focus_idx = row.selected_choice_index[idx].min(row.choices.len().saturating_sub(1));
     let anchor_x = state.pane().inline_choice_x[idx];
     if anchor_x.is_finite() {
         let mut best_dist = f32::INFINITY;
-        for (i, &center_x) in centers.iter().enumerate() {
-            let dist = (center_x - anchor_x).abs();
-            if dist < best_dist {
-                best_dist = dist;
-                focus_idx = i;
+        if row.choice_offsets.len() == row.choices.len()
+            && row.choice_widths.len() == row.choices.len()
+        {
+            let left_x = inline_choice_left_x_for_row(state, row_idx);
+            for (i, (&offset, &width)) in row
+                .choice_offsets
+                .iter()
+                .zip(row.choice_widths.iter())
+                .enumerate()
+            {
+                let dist = (width.mul_add(0.5, left_x + offset) - anchor_x).abs();
+                if dist < best_dist {
+                    best_dist = dist;
+                    focus_idx = i;
+                }
+            }
+        } else {
+            let centers = inline_choice_centers(
+                &row.choices,
+                asset_manager,
+                inline_choice_left_x_for_row(state, row_idx),
+            );
+            for (i, &center_x) in centers.iter().enumerate() {
+                let dist = (center_x - anchor_x).abs();
+                if dist < best_dist {
+                    best_dist = dist;
+                    focus_idx = i;
+                }
             }
         }
     }

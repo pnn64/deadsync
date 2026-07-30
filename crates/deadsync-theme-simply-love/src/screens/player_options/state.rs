@@ -350,6 +350,7 @@ pub struct PaneState {
     pub(super) inline_choice_x: [f32; PLAYER_SLOTS],
     pub(super) arcade_row_focus: [bool; PLAYER_SLOTS],
     pub(super) row_tweens: Vec<RowTween>,
+    pub(super) layout_key: Option<RowLayoutKey>,
     // Cursor ring tween (StopTweening/BeginTweening parity with ITGmania ScreenOptions::TweenCursor).
     pub(super) cursor_initialized: [bool; PLAYER_SLOTS],
     pub(super) cursor_from: [CursorRect; PLAYER_SLOTS],
@@ -366,6 +367,7 @@ impl PaneState {
             inline_choice_x: [f32::NAN; PLAYER_SLOTS],
             arcade_row_focus: [false; PLAYER_SLOTS],
             row_tweens: Vec::new(),
+            layout_key: None,
             cursor_initialized: [false; PLAYER_SLOTS],
             cursor_from: [CursorRect::default(); PLAYER_SLOTS],
             cursor_to: [CursorRect::default(); PLAYER_SLOTS],
@@ -381,11 +383,21 @@ impl PaneState {
         self.prev_selected_row = [0; PLAYER_SLOTS];
         self.inline_choice_x = [f32::NAN; PLAYER_SLOTS];
         self.arcade_row_focus = [false; PLAYER_SLOTS];
+        self.layout_key = None;
         self.cursor_initialized = [false; PLAYER_SLOTS];
         self.cursor_from = [CursorRect::default(); PLAYER_SLOTS];
         self.cursor_to = [CursorRect::default(); PLAYER_SLOTS];
         self.cursor_t = [1.0; PLAYER_SLOTS];
     }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) struct RowLayoutKey {
+    pub(super) selected_row: [usize; PLAYER_SLOTS],
+    pub(super) active: [bool; PLAYER_SLOTS],
+    pub(super) visibility: RowVisibility,
+    pub(super) first_y_bits: u32,
+    pub(super) row_step_bits: u32,
 }
 
 impl State {

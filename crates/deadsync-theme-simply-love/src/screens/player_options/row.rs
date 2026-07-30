@@ -486,7 +486,7 @@ pub fn init_numeric_row_from_binding(
         return false;
     };
     let needle = (init.format)((init.from_profile)(profile));
-    if let Some(idx) = row.choices.iter().position(|c| c == &needle) {
+    if let Some(idx) = row.choices.iter().position(|c| c.as_ref() == needle) {
         row.selected_choice_index[player_idx] = idx;
     }
     true
@@ -808,22 +808,33 @@ pub struct Row {
     pub id: RowId,
     pub behavior: RowBehavior,
     pub name: LookupKey,
-    pub choices: Vec<String>,
+    pub choices: Box<[Arc<str>]>,
     pub selected_choice_index: [usize; PLAYER_SLOTS],
-    pub help: Vec<String>,
+    pub help: Box<[Arc<str>]>,
     pub choice_difficulty_indices: Option<Vec<usize>>,
     /// When `true`, after a delta apply that persisted the row, the
     /// dispatcher copies `selected_choice_index[player_idx]` to every other
     /// slot. Also consulted by inline-nav focus commit. Use for rows whose
     /// state is conceptually shared across players (e.g. `WhatComesNext`).
     pub mirror_across_players: bool,
+    /// Immutable Miso-font geometry prepared once for update/render hot paths.
+    pub(super) choice_widths: Box<[f32]>,
+    pub(super) choice_offsets: Box<[f32]>,
+    pub(super) choice_height: f32,
 }
 
-/// Expand a help `LookupKey` into the pre-split `Vec<String>` shape that
+/// Expand a help `LookupKey` into the pre-split shared-text shape that
 /// `Row::help` expects.
 #[inline]
-pub(super) fn expand_help(help: LookupKey) -> Vec<String> {
-    help.get().split("\\n").map(|s| s.to_string()).collect()
+pub(super) fn expand_help(help: LookupKey) -> Box<[Arc<str>]> {
+    let text = help.get();
+    if !text.contains("\\n") {
+        return vec![text].into_boxed_slice();
+    }
+    text.split("\\n")
+        .map(Arc::<str>::from)
+        .collect::<Vec<_>>()
+        .into_boxed_slice()
 }
 
 impl Row {
@@ -944,8 +955,15 @@ impl Row {
     /// (currently only the Exit row's empty placeholder line). Prefer the
     /// `help: LookupKey` parameter on the public constructors.
     fn with_help_lines(mut self, lines: Vec<String>) -> Self {
-        self.help = lines;
+        self.help = shared_texts(lines);
         self
+    }
+
+    pub(super) fn replace_choices(&mut self, choices: Vec<String>) {
+        self.choices = shared_texts(choices);
+        self.choice_widths = Box::new([]);
+        self.choice_offsets = Box::new([]);
+        self.choice_height = 0.0;
     }
 
     fn base(
@@ -959,13 +977,24 @@ impl Row {
             id,
             behavior,
             name,
-            choices,
+            choices: shared_texts(choices),
             selected_choice_index: [0; PLAYER_SLOTS],
             help: expand_help(help),
             choice_difficulty_indices: None,
             mirror_across_players: false,
+            choice_widths: Box::new([]),
+            choice_offsets: Box::new([]),
+            choice_height: 0.0,
         }
     }
+}
+
+fn shared_texts(texts: Vec<String>) -> Box<[Arc<str>]> {
+    texts
+        .into_iter()
+        .map(Arc::<str>::from)
+        .collect::<Vec<_>>()
+        .into_boxed_slice()
 }
 
 #[derive(Clone, Debug)]

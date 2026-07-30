@@ -1,5 +1,6 @@
 use super::*;
 use crate::assets::{FontRole, machine_font_key};
+use deadlib_present::actors::TextContent;
 use deadsync_profile::TapExplosionMask;
 
 pub fn push_actors(
@@ -220,14 +221,12 @@ pub fn push_actors(
                     ));
                 }
             } else {
-                actors.push(
-                    act!(text: font("miso"): settext(row.name.get().to_string()):
-                        align(0.0, 0.5): xy(title_x, current_row_y): zoom(title_zoom):
-                        diffuse(title_color[0], title_color[1], title_color[2], title_color[3]):
-                        horizalign(left): maxwidth(title_max_w):
-                        z(Z_ROW_FOREGROUND)
-                    ),
-                );
+                actors.push(act!(text: font("miso"): settext(row.name.get()):
+                    align(0.0, 0.5): xy(title_x, current_row_y): zoom(title_zoom):
+                    diffuse(title_color[0], title_color[1], title_color[2], title_color[3]):
+                    horizalign(left): maxwidth(title_max_w):
+                    z(Z_ROW_FOREGROUND)
+                ));
             }
         }
         // Inactive option text color should be #808080 (alpha 1.0)
@@ -348,7 +347,7 @@ pub fn push_actors(
                     let char_count = help_line.chars().count();
                     ((char_count as f32 * line_fraction).round() as usize).min(char_count)
                 };
-                let visible_text: String = help_line.chars().take(visible_chars).collect();
+                let visible_text = revealed_text(help_line, visible_chars);
 
                 let line_y = (i as f32).mul_add(line_spacing, start_y);
                 actors.push(act!(text:
@@ -362,11 +361,11 @@ pub fn push_actors(
                 ));
             }
         } else {
-            let help_text = row.help.join(" | ");
+            let help_text = row.help.first().cloned().unwrap_or_default();
             let char_count = help_text.chars().count();
             let fraction = (state.help_anim_time[player_idx] / REVEAL_DURATION).clamp(0.0, 1.0);
             let visible_chars = ((char_count as f32 * fraction).round() as usize).min(char_count);
-            let visible_text: String = help_text.chars().take(visible_chars).collect();
+            let visible_text = revealed_text(&help_text, visible_chars);
 
             actors.push(act!(text:
                 font("miso"): settext(visible_text):
@@ -378,6 +377,14 @@ pub fn push_actors(
                 z(Z_ROW_FOREGROUND)
             ));
         }
+    }
+}
+
+fn revealed_text(text: &Arc<str>, visible_chars: usize) -> TextContent {
+    if visible_chars >= text.chars().count() {
+        TextContent::Shared(text.clone())
+    } else {
+        TextContent::Owned(text.chars().take(visible_chars).collect())
     }
 }
 
@@ -600,7 +607,8 @@ pub(super) fn draw_multi_select_underlines(
     state: &State,
     row: &Row,
     active: [bool; PLAYER_SLOTS],
-    x_positions: &[f32],
+    choice_left_x: f32,
+    x_offsets: &[f32],
     widths: &[f32],
     current_row_y: f32,
     text_h: f32,
@@ -631,7 +639,7 @@ pub(super) fn draw_multi_select_underlines(
             if (mask & bit) == 0 {
                 continue;
             }
-            if let Some(sel_x) = x_positions.get(idx).copied() {
+            if let Some(sel_x) = x_offsets.get(idx).map(|offset| choice_left_x + offset) {
                 let draw_w = widths.get(idx).copied().unwrap_or(40.0);
                 let underline_w = draw_w.ceil();
                 actors.push(act!(quad:
@@ -654,7 +662,8 @@ pub(super) fn draw_single_select_underline(
     state: &State,
     row: &Row,
     active: [bool; PLAYER_SLOTS],
-    x_positions: &[f32],
+    choice_left_x: f32,
+    x_offsets: &[f32],
     widths: &[f32],
     current_row_y: f32,
     text_h: f32,
@@ -672,7 +681,7 @@ pub(super) fn draw_single_select_underline(
     };
     for player_idx in active_player_indices(active) {
         let idx = row.selected_choice_index[player_idx].min(widths.len().saturating_sub(1));
-        if let Some(sel_x) = x_positions.get(idx).copied() {
+        if let Some(sel_x) = x_offsets.get(idx).map(|offset| choice_left_x + offset) {
             let draw_w = widths.get(idx).copied().unwrap_or(40.0);
             let underline_w = draw_w.ceil();
             let underline_y = underline_y(player_idx);
@@ -780,32 +789,47 @@ pub(super) fn draw_inline_choices(
     let spacing = INLINE_CHOICE_SPACING;
     let next_row_item = show_arcade_next_row
         .then(|| arcade_next_row_layout(rc.fc.state, rc.item_idx, rc.fc.asset_manager, value_zoom));
-    let mut widths: Vec<f32> = Vec::with_capacity(rc.row.choices.len());
-    let mut text_h: f32 = 16.0;
-    rc.fc.asset_manager.with_fonts(|all_fonts| {
-        rc.fc.asset_manager.with_font("miso", |metrics_font| {
-            text_h = (metrics_font.height as f32).max(1.0) * value_zoom;
-            for text in &rc.row.choices {
-                let mut w = deadlib_present::font::measure_line_width_logical(
-                    metrics_font,
-                    text,
-                    all_fonts,
-                ) as f32;
-                if !w.is_finite() || w <= 0.0 {
-                    w = 1.0;
-                }
-                widths.push(w * value_zoom);
-            }
-        });
-    });
-    let mut x_positions: Vec<f32> = Vec::with_capacity(widths.len());
+    let mut fallback_widths = Vec::new();
+    let mut fallback_offsets = Vec::new();
+    let (widths, x_offsets, text_h): (&[f32], &[f32], f32) = if rc.row.choice_widths.len()
+        == rc.row.choices.len()
+        && rc.row.choice_offsets.len() == rc.row.choices.len()
+        && rc.row.choice_height > 0.0
     {
-        let mut x = choice_inner_left;
-        for w in &widths {
-            x_positions.push(x);
-            x += *w + spacing;
+        (
+            &rc.row.choice_widths,
+            &rc.row.choice_offsets,
+            rc.row.choice_height,
+        )
+    } else {
+        fallback_widths.reserve(rc.row.choices.len());
+        rc.fc.asset_manager.with_fonts(|all_fonts| {
+            rc.fc.asset_manager.with_font("miso", |metrics_font| {
+                for text in &rc.row.choices {
+                    let mut width = deadlib_present::font::measure_line_width_logical(
+                        metrics_font,
+                        text,
+                        all_fonts,
+                    ) as f32;
+                    if !width.is_finite() || width <= 0.0 {
+                        width = 1.0;
+                    }
+                    fallback_widths.push(width * value_zoom);
+                }
+            });
+        });
+        fallback_offsets.reserve(fallback_widths.len());
+        let mut x = 0.0;
+        for width in &fallback_widths {
+            fallback_offsets.push(x);
+            x += *width + spacing;
         }
-    }
+        (
+            &fallback_widths,
+            &fallback_offsets,
+            measure_option_text(rc.fc.asset_manager, "", value_zoom).1,
+        )
+    };
     // Draw underline under rc.fc.active options:
     // - For normal rows: underline the currently selected choice.
     // - For Scroll rc.row: underline each enabled scroll mode (multi-select).
@@ -816,8 +840,9 @@ pub(super) fn draw_inline_choices(
             rc.fc.state,
             rc.row,
             rc.fc.active,
-            &x_positions,
-            &widths,
+            choice_inner_left,
+            x_offsets,
+            widths,
             rc.current_row_y,
             text_h,
             rc.a,
@@ -828,8 +853,9 @@ pub(super) fn draw_inline_choices(
             rc.fc.state,
             rc.row,
             rc.fc.active,
-            &x_positions,
-            &widths,
+            choice_inner_left,
+            x_offsets,
+            widths,
             rc.current_row_y,
             text_h,
             rc.a,
@@ -858,7 +884,9 @@ pub(super) fn draw_inline_choices(
         ));
     }
     for (idx, text) in rc.row.choices.iter().enumerate() {
-        let x = x_positions.get(idx).copied().unwrap_or(choice_inner_left);
+        let x = x_offsets
+            .get(idx)
+            .map_or(choice_inner_left, |offset| choice_inner_left + offset);
         let color_rgba = if rc.is_active {
             [1.0, 1.0, 1.0, rc.a]
         } else {
@@ -878,7 +906,7 @@ pub(super) fn draw_inline_choices(
 /// noteskin, mineskin, receptor, explosion, combo).
 pub(super) fn draw_single_value_with_preview(actors: &mut Vec<Actor>, rc: &RowCtx) {
     let primary_player_idx = if rc.fc.active[P1] { P1 } else { P2 };
-    draw_value_text(actors, rc, primary_player_idx);
+    draw_cached_value_text(actors, rc, primary_player_idx);
     match rc.row.id {
         RowId::JudgmentFont => draw_judgment_preview(actors, rc, primary_player_idx),
         RowId::HoldJudgment => draw_hold_preview(actors, rc, primary_player_idx),
@@ -929,126 +957,95 @@ fn draw_player_heart_rate_preview(actors: &mut Vec<Actor>, rc: &RowCtx, player_i
     ));
 }
 
-fn draw_value_text(actors: &mut Vec<Actor>, rc: &RowCtx, primary_player_idx: usize) {
-    // Single value display (default behavior)
-    // By default, align single-value choices to each player's Speed Mod column.
-    // For Music Rate, center within the item column (to match SL parity).
+fn draw_cached_value_text(actors: &mut Vec<Actor>, rc: &RowCtx, primary_player_idx: usize) {
     let mut choice_center_x = rc.fc.option_column_x[primary_player_idx];
     if rc.row.id == RowId::MusicRate {
         let item_col_left = rc.fc.row_left + TITLE_BG_WIDTH;
-        let item_col_w = rc.fc.row_width - TITLE_BG_WIDTH;
-        choice_center_x = item_col_left + item_col_w * 0.5;
+        choice_center_x = item_col_left + (rc.fc.row_width - TITLE_BG_WIDTH) * 0.5;
     }
-    let choice_text_idx = rc.row.selected_choice_index[primary_player_idx]
+    let choice_idx = rc.row.selected_choice_index[primary_player_idx]
         .min(rc.row.choices.len().saturating_sub(1));
     let choice_text = rc
         .row
         .choices
-        .get(choice_text_idx)
+        .get(choice_idx)
         .unwrap_or_else(|| rc.row.choices.first().expect("OptionRow must have choices"));
     let choice_color = if rc.is_active {
         [1.0, 1.0, 1.0, rc.a]
     } else {
         rc.sl_gray
     };
-    rc.fc.asset_manager.with_fonts(|all_fonts| {
-        rc.fc.asset_manager.with_font("miso", |metrics_font| {
-            let choice_display_text =
-                if arcade_row_focuses_next_row(rc.fc.state, primary_player_idx, rc.item_idx) {
-                    ARCADE_NEXT_ROW_TEXT.to_string()
-                } else if rc.row.id == RowId::SpeedMod {
-                    rc.fc.state.speed_mod[primary_player_idx].display()
-                } else if rc.row.id == RowId::TypeOfSpeedMod {
-                    let idx = rc.fc.state.speed_mod[primary_player_idx]
-                        .mod_type
-                        .choice_index();
-                    rc.row.choices.get(idx).cloned().unwrap_or_default()
-                } else {
-                    choice_text.clone()
-                };
-            let mut text_w = deadlib_present::font::measure_line_width_logical(
-                metrics_font,
-                &choice_display_text,
-                all_fonts,
-            ) as f32;
-            if !text_w.is_finite() || text_w <= 0.0 {
-                text_w = 1.0;
+    let value_zoom = INLINE_CHOICE_VALUE_ZOOM;
+    let display =
+        |player_idx: usize, selected_idx: usize| {
+            if arcade_row_focuses_next_row(rc.fc.state, player_idx, rc.item_idx) {
+                let (width, _) =
+                    measure_option_text(rc.fc.asset_manager, ARCADE_NEXT_ROW_TEXT, value_zoom);
+                return (TextContent::Static(ARCADE_NEXT_ROW_TEXT), width);
             }
-            let text_h = (metrics_font.height as f32).max(1.0);
-            let value_zoom = INLINE_CHOICE_VALUE_ZOOM;
-            let draw_w = text_w * value_zoom;
-            let draw_h = text_h * value_zoom;
-            actors.push(act!(text: font("miso"): settext(choice_display_text):
-                align(0.5, 0.5): xy(choice_center_x, rc.current_row_y): zoom(value_zoom):
-                diffuse(choice_color[0], choice_color[1], choice_color[2], choice_color[3]):
-                z(Z_ROW_FOREGROUND)
-            ));
-            // Underline (always visible) — fixed pixel thickness for consistency
-            let line_thickness = underline_thickness();
-            let underline_w = draw_w.ceil(); // pixel-align for crispness
-            let offset = underline_offset(); // place just under the baseline
-            let underline_y = rc.current_row_y + draw_h * 0.5 + offset;
-            let underline_left_x = choice_center_x - draw_w * 0.5;
-            let mut line_color =
-                color::decorative_rgba(player_color_index(rc.fc.state, primary_player_idx));
-            line_color[3] *= rc.a;
-            actors.push(act!(quad:
-                align(0.0, 0.5): // start at text's left edge
-                xy(underline_left_x, underline_y):
-                zoomto(underline_w, line_thickness):
-                diffuse(line_color[0], line_color[1], line_color[2], line_color[3]):
-                z(Z_ROW_FOREGROUND)
-            ));
-            let p2_text = if rc.fc.show_p2 && rc.row.id != RowId::MusicRate {
-                if arcade_row_focuses_next_row(rc.fc.state, P2, rc.item_idx) {
-                    ARCADE_NEXT_ROW_TEXT.to_string()
-                } else if rc.row.id == RowId::SpeedMod {
-                    rc.fc.state.speed_mod[P2].display()
-                } else if rc.row.id == RowId::TypeOfSpeedMod {
-                    let idx = rc.fc.state.speed_mod[P2].mod_type.choice_index();
-                    rc.row.choices.get(idx).cloned().unwrap_or_default()
-                } else {
-                    let idx = rc.row.selected_choice_index[P2]
-                        .min(rc.row.choices.len().saturating_sub(1));
-                    rc.row.choices.get(idx).cloned().unwrap_or_default()
-                }
+            if rc.row.id == RowId::SpeedMod {
+                let text = rc.fc.state.speed_mod[player_idx].display();
+                let (width, _) = measure_option_text(rc.fc.asset_manager, &text, value_zoom);
+                return (TextContent::Owned(text), width);
+            }
+            let idx = if rc.row.id == RowId::TypeOfSpeedMod {
+                rc.fc.state.speed_mod[player_idx].mod_type.choice_index()
             } else {
-                String::new()
-            };
-            if rc.fc.show_p2 && rc.row.id != RowId::MusicRate {
-                let p2_choice_center_x = rc.fc.option_column_x[P2];
-                let mut p2_w = deadlib_present::font::measure_line_width_logical(
-                    metrics_font,
-                    &p2_text,
-                    all_fonts,
-                ) as f32;
-                if !p2_w.is_finite() || p2_w <= 0.0 {
-                    p2_w = 1.0;
-                }
-                let p2_draw_w = p2_w * value_zoom;
-                actors.push(act!(text: font("miso"): settext(p2_text.clone()):
-                    align(0.5, 0.5): xy(p2_choice_center_x, rc.current_row_y): zoom(value_zoom):
-                    diffuse(choice_color[0], choice_color[1], choice_color[2], choice_color[3]):
-                    z(Z_ROW_FOREGROUND)
-                ));
-                let line_thickness = underline_thickness();
-                let underline_w = p2_draw_w.ceil();
-                let offset = underline_offset();
-                let underline_y = rc.current_row_y + draw_h * 0.5 + offset;
-                let underline_left_x = p2_choice_center_x - p2_draw_w * 0.5;
-                let mut line_color = color::decorative_rgba(player_color_index(rc.fc.state, P2));
-                line_color[3] *= rc.a;
-                actors.push(act!(quad:
-                    align(0.0, 0.5):
-                    xy(underline_left_x, underline_y):
-                    zoomto(underline_w, line_thickness):
-                    diffuse(line_color[0], line_color[1], line_color[2], line_color[3]):
-                    z(Z_ROW_FOREGROUND)
-                ));
+                selected_idx
             }
-            draw_cursor_ring(actors, rc.fc.state, rc.fc.active, rc.item_idx, rc.a);
-        });
-    });
+            .min(rc.row.choices.len().saturating_sub(1));
+            let text = rc.row.choices.get(idx).cloned().unwrap_or_default();
+            let width =
+                rc.row.choice_widths.get(idx).copied().unwrap_or_else(|| {
+                    measure_option_text(rc.fc.asset_manager, &text, value_zoom).0
+                });
+            (TextContent::Shared(text), width)
+        };
+
+    let (content, draw_w) = display(primary_player_idx, choice_idx);
+    let draw_h = if rc.row.choice_height > 0.0 {
+        rc.row.choice_height
+    } else {
+        measure_option_text(rc.fc.asset_manager, choice_text, value_zoom).1
+    };
+    actors.push(act!(text: font("miso"): settext(content):
+        align(0.5, 0.5): xy(choice_center_x, rc.current_row_y): zoom(value_zoom):
+        diffuse(choice_color[0], choice_color[1], choice_color[2], choice_color[3]):
+        z(Z_ROW_FOREGROUND)
+    ));
+    let line_thickness = underline_thickness();
+    let underline_y = rc.current_row_y + draw_h * 0.5 + underline_offset();
+    let mut line_color =
+        color::decorative_rgba(player_color_index(rc.fc.state, primary_player_idx));
+    line_color[3] *= rc.a;
+    actors.push(act!(quad:
+        align(0.0, 0.5):
+        xy(choice_center_x - draw_w * 0.5, underline_y):
+        zoomto(draw_w.ceil(), line_thickness):
+        diffuse(line_color[0], line_color[1], line_color[2], line_color[3]):
+        z(Z_ROW_FOREGROUND)
+    ));
+
+    if rc.fc.show_p2 && rc.row.id != RowId::MusicRate {
+        let p2_idx = rc.row.selected_choice_index[P2].min(rc.row.choices.len().saturating_sub(1));
+        let (content, draw_w) = display(P2, p2_idx);
+        let center_x = rc.fc.option_column_x[P2];
+        actors.push(act!(text: font("miso"): settext(content):
+            align(0.5, 0.5): xy(center_x, rc.current_row_y): zoom(value_zoom):
+            diffuse(choice_color[0], choice_color[1], choice_color[2], choice_color[3]):
+            z(Z_ROW_FOREGROUND)
+        ));
+        let mut line_color = color::decorative_rgba(player_color_index(rc.fc.state, P2));
+        line_color[3] *= rc.a;
+        actors.push(act!(quad:
+            align(0.0, 0.5):
+            xy(center_x - draw_w * 0.5, underline_y):
+            zoomto(draw_w.ceil(), line_thickness):
+            diffuse(line_color[0], line_color[1], line_color[2], line_color[3]):
+            z(Z_ROW_FOREGROUND)
+        ));
+    }
+    draw_cursor_ring(actors, rc.fc.state, rc.fc.active, rc.item_idx, rc.a);
 }
 
 fn draw_judgment_preview(actors: &mut Vec<Actor>, rc: &RowCtx, primary_player_idx: usize) {

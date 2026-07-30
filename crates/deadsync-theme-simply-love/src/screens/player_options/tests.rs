@@ -121,12 +121,19 @@ pub(super) mod tests {
             id,
             behavior: super::RowBehavior::Exit,
             name,
-            choices: choices.iter().map(ToString::to_string).collect(),
+            choices: boxed_texts(choices),
             selected_choice_index,
-            help: Vec::new(),
+            help: Box::new([]),
             choice_difficulty_indices: None,
             mirror_across_players: false,
+            choice_widths: Box::new([]),
+            choice_offsets: Box::new([]),
+            choice_height: 0.0,
         }
+    }
+
+    fn boxed_texts(values: &[&str]) -> Box<[Arc<str>]> {
+        values.iter().copied().map(Arc::<str>::from).collect()
     }
 
     fn test_bitmask_row(
@@ -139,11 +146,14 @@ pub(super) mod tests {
             id,
             behavior: RowBehavior::Bitmask(binding),
             name,
-            choices: choices.iter().map(ToString::to_string).collect(),
+            choices: boxed_texts(choices),
             selected_choice_index: [0, 0],
-            help: Vec::new(),
+            help: Box::new([]),
             choice_difficulty_indices: None,
             mirror_across_players: false,
+            choice_widths: Box::new([]),
+            choice_offsets: Box::new([]),
+            choice_height: 0.0,
         }
     }
 
@@ -1731,6 +1741,109 @@ pub(super) mod tests {
     }
 
     #[test]
+    fn cached_choice_layout_preserves_inline_cursor_geometry() {
+        ensure_i18n();
+        let (mut state, asset_manager) = setup_state();
+        let row_idx = state
+            .pane()
+            .row_map
+            .display_order()
+            .iter()
+            .position(|&id| id == RowId::Perspective)
+            .expect("Perspective row present");
+        state.pane_mut().selected_row[P1] = row_idx;
+        state
+            .pane_mut()
+            .row_map
+            .get_mut(RowId::Perspective)
+            .expect("Perspective row present")
+            .selected_choice_index[P1] = 2;
+
+        let uncached =
+            super::super::cursor_dest_for_player(&state, &asset_manager, P1).expect("cursor");
+        super::super::prepare_choice_layouts(&mut state, &asset_manager);
+        let cached =
+            super::super::cursor_dest_for_player(&state, &asset_manager, P1).expect("cursor");
+
+        for (actual, expected) in [cached.0, cached.1, cached.2, cached.3]
+            .into_iter()
+            .zip([uncached.0, uncached.1, uncached.2, uncached.3])
+        {
+            assert!(
+                (actual - expected).abs() < 0.001,
+                "cached cursor geometry changed: expected {expected}, got {actual}"
+            );
+        }
+    }
+
+    #[test]
+    fn settled_choice_text_reuses_row_storage() {
+        ensure_i18n();
+        let (mut state, asset_manager) = setup_state();
+        super::super::prepare_choice_layouts(&mut state, &asset_manager);
+        let actors = super::get_actors(&state, &asset_manager);
+        let row = state
+            .pane()
+            .row_map
+            .get(RowId::Perspective)
+            .expect("Perspective row present");
+
+        for choice in &row.choices {
+            assert!(actors.iter().any(|actor| {
+                matches!(
+                    actor,
+                    deadlib_present::actors::Actor::Text {
+                        content: deadlib_present::actors::TextContent::Shared(rendered),
+                        ..
+                    } if Arc::ptr_eq(rendered, choice)
+                )
+            }));
+        }
+    }
+
+    #[test]
+    fn dirty_row_layout_retargets_once_without_changing_destinations() {
+        ensure_i18n();
+        let (mut state, asset_manager) = setup_state();
+        update(&mut state, 0.0, &asset_manager);
+        let next_row =
+            (state.pane().selected_row[P1] + 12).min(state.pane().row_map.len().saturating_sub(1));
+        state.pane_mut().selected_row[P1] = next_row;
+
+        update(&mut state, 0.0, &asset_manager);
+        let expected = super::super::init_row_tweens(
+            &state.pane().row_map,
+            state.pane().selected_row,
+            state.active,
+            state.option_masks,
+            state.policy,
+        );
+        for (actual, expected) in state.pane().row_tweens.iter().zip(expected) {
+            assert!((actual.to_y - expected.to_y).abs() < 0.001);
+            assert_eq!(actual.to_a, expected.to_a);
+        }
+
+        let key = state.pane().layout_key;
+        let destinations = state
+            .pane()
+            .row_tweens
+            .iter()
+            .map(|tween| (tween.to_y, tween.to_a))
+            .collect::<Vec<_>>();
+        update(&mut state, 1.0 / 120.0, &asset_manager);
+        assert_eq!(state.pane().layout_key, key);
+        assert_eq!(
+            state
+                .pane()
+                .row_tweens
+                .iter()
+                .map(|tween| (tween.to_y, tween.to_a))
+                .collect::<Vec<_>>(),
+            destinations
+        );
+    }
+
+    #[test]
     fn heart_rate_choices_keep_saved_devices_that_are_not_broadcasting() {
         ensure_i18n();
         let selected_ids = [Some("saved-id".to_owned()), None];
@@ -2193,14 +2306,14 @@ pub(super) mod tests {
             id: RowId::Scroll,
             behavior: super::RowBehavior::Bitmask(scroll_binding),
             name: lookup_key("PlayerOptions", "Scroll"),
-            choices: ["Reverse", "Split", "Alternate", "Cross", "Centered"]
-                .iter()
-                .map(ToString::to_string)
-                .collect(),
+            choices: boxed_texts(&["Reverse", "Split", "Alternate", "Cross", "Centered"]),
             selected_choice_index: [0, 0],
-            help: Vec::new(),
+            help: Box::new([]),
             choice_difficulty_indices: None,
             mirror_across_players: false,
+            choice_widths: Box::new([]),
+            choice_offsets: Box::new([]),
+            choice_height: 0.0,
         };
         state.pane_mut().row_map.display_order.push(RowId::Scroll);
         state.pane_mut().row_map.insert(scroll_row);
@@ -2235,11 +2348,14 @@ pub(super) mod tests {
             id: RowId::JudgmentTilt,
             behavior: super::RowBehavior::Cycle(super::CycleBinding::Bool(tilt_binding)),
             name: lookup_key("PlayerOptions", "JudgmentTilt"),
-            choices: ["No", "Yes"].iter().map(ToString::to_string).collect(),
+            choices: boxed_texts(&["No", "Yes"]),
             selected_choice_index: [0, 0],
-            help: Vec::new(),
+            help: Box::new([]),
             choice_difficulty_indices: None,
             mirror_across_players: false,
+            choice_widths: Box::new([]),
+            choice_offsets: Box::new([]),
+            choice_height: 0.0,
         };
         let tilt_intensity_row = test_row(
             RowId::JudgmentTiltIntensity,
@@ -2575,14 +2691,14 @@ pub(super) mod tests {
             id: RowId::Scroll,
             behavior: super::RowBehavior::Bitmask(scroll_binding),
             name: lookup_key("PlayerOptions", "Scroll"),
-            choices: ["Reverse", "Split", "Alternate", "Cross", "Centered"]
-                .iter()
-                .map(ToString::to_string)
-                .collect(),
+            choices: boxed_texts(&["Reverse", "Split", "Alternate", "Cross", "Centered"]),
             selected_choice_index: [2, 0],
-            help: Vec::new(),
+            help: Box::new([]),
             choice_difficulty_indices: None,
             mirror_across_players: false,
+            choice_widths: Box::new([]),
+            choice_offsets: Box::new([]),
+            choice_height: 0.0,
         };
         state.pane_mut().row_map.display_order.push(RowId::Scroll);
         state.pane_mut().row_map.insert(scroll_row);
@@ -2673,7 +2789,9 @@ pub(super) mod tests {
             .get(RowId::DataVisualizations)
             .expect("Step Statistics row present")
             .choices
-            .clone()
+            .iter()
+            .map(ToString::to_string)
+            .collect()
     }
 
     #[test]
@@ -2710,7 +2828,7 @@ pub(super) mod tests {
 
         assert_eq!(choices.len(), 3);
         assert_eq!(
-            choices[2],
+            choices[2].as_ref(),
             crate::assets::i18n::tr("PlayerOptions", "ResultsExtrasDimPostFailScatter").as_ref()
         );
     }
@@ -2829,7 +2947,7 @@ pub(super) mod tests {
             for player_idx in [P1, P2] {
                 assert_eq!(row.selected_choice_index[player_idx], 0);
                 assert_eq!(
-                    row.choices[row.selected_choice_index[player_idx]],
+                    row.choices[row.selected_choice_index[player_idx]].as_ref(),
                     gameplay.as_ref()
                 );
             }
@@ -2939,11 +3057,14 @@ pub(super) mod tests {
             id: RowId::Hide,
             behavior: super::RowBehavior::Custom(custom),
             name: lookup_key("PlayerOptions", "Hide"),
-            choices: vec!["A".into(), "B".into(), "C".into()],
+            choices: boxed_texts(&["A", "B", "C"]),
             selected_choice_index: [0, 0],
-            help: Vec::new(),
+            help: Box::new([]),
             choice_difficulty_indices: None,
             mirror_across_players: true,
+            choice_widths: Box::new([]),
+            choice_offsets: Box::new([]),
+            choice_height: 0.0,
         };
         state.pane_mut().row_map.display_order.push(RowId::Hide);
         state.pane_mut().row_map.insert(mirror_row);
@@ -3029,11 +3150,14 @@ pub(super) mod tests {
             id: RowId::Perspective,
             behavior: RowBehavior::Exit,
             name: lookup_key("PlayerOptions", "Perspective"),
-            choices: choices.iter().map(ToString::to_string).collect(),
+            choices: boxed_texts(choices),
             selected_choice_index: initial,
-            help: Vec::new(),
+            help: Box::new([]),
             choice_difficulty_indices: None,
             mirror_across_players: false,
+            choice_widths: Box::new([]),
+            choice_offsets: Box::new([]),
+            choice_height: 0.0,
         }
     }
 
@@ -3042,11 +3166,14 @@ pub(super) mod tests {
             id: RowId::Spacing,
             behavior: RowBehavior::Exit,
             name: lookup_key("PlayerOptions", "Spacing"),
-            choices: choices.iter().map(ToString::to_string).collect(),
+            choices: boxed_texts(choices),
             selected_choice_index: initial,
-            help: Vec::new(),
+            help: Box::new([]),
             choice_difficulty_indices: None,
             mirror_across_players: false,
+            choice_widths: Box::new([]),
+            choice_offsets: Box::new([]),
+            choice_height: 0.0,
         }
     }
 
@@ -3567,7 +3694,7 @@ pub(super) mod tests {
             .get(id)
             .unwrap_or_else(|| panic!("Row {id:?} missing from Main pane row map"));
         let idx = row.selected_choice_index[P1];
-        let actual = row.choices.get(idx).map(String::as_str).unwrap_or("<oob>");
+        let actual = row.choices.get(idx).map(AsRef::as_ref).unwrap_or("<oob>");
         assert_eq!(
             actual, expected,
             "Row {id:?}: cursor at {idx} points to {actual:?}, expected {expected:?}"

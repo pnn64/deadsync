@@ -1,7 +1,7 @@
 use super::*;
 use deadsync_profile::{ErrorBarMask, MiniIndicator, StepStatisticsMask};
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) struct RowVisibility {
     pub(super) show_measure_counter_children: bool,
     pub(super) show_judgment_offsets: bool,
@@ -690,7 +690,7 @@ pub(super) fn tap_explosion_options_visible(
         if row
             .choices
             .get(choice_idx)
-            .is_some_and(|choice| choice.as_str() != no_tap_label.as_ref())
+            .is_some_and(|choice| choice.as_ref() != no_tap_label.as_ref())
         {
             return true;
         }

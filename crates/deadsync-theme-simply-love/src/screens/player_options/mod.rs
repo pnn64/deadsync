@@ -81,6 +81,18 @@ pub use render::{get_actors, push_actors};
 pub use row::{FixedStepchart, RowId};
 pub use state::State;
 
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn benchmark_select_pane(state: &mut State, pane_index: usize) {
+    let pane = [
+        OptionsPane::Main,
+        OptionsPane::Display,
+        OptionsPane::Advanced,
+        OptionsPane::Uncommon,
+    ][pane_index.min(OptionsPane::COUNT - 1)];
+    apply_pane(state, pane);
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct HeartRateDeviceView {
     pub id: String,
@@ -227,7 +239,12 @@ pub fn prewarm_noteskin_previews(state: &mut State) {
     let noteskin_names = state.panes[OptionsPane::Main.index()]
         .row_map
         .get(RowId::NoteSkin)
-        .map(|row| row.choices.clone())
+        .map(|row| {
+            row.choices
+                .iter()
+                .map(ToString::to_string)
+                .collect::<Vec<_>>()
+        })
         .unwrap_or_default();
     state.noteskin = init_noteskin_state(
         state.cols_per_player,
@@ -506,10 +523,16 @@ pub fn set_heart_rate_devices(state: &mut State, devices: &HeartRateDevicesView)
     else {
         return;
     };
-    if row.choices == choices && state.heart_rate_choice_ids == ids {
+    if row
+        .choices
+        .iter()
+        .map(AsRef::as_ref)
+        .eq(choices.iter().map(String::as_str))
+        && state.heart_rate_choice_ids == ids
+    {
         return;
     }
-    row.choices = choices;
+    row.replace_choices(choices);
     state.heart_rate_choice_ids = ids;
     sync_heart_rate_selections(state);
 }

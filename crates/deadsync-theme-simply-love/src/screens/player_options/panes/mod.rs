@@ -115,11 +115,11 @@ pub(super) fn build_rows(
 
 fn find_noteskin_choice_index(
     profile_value: Option<&NoteSkin>,
-    choices: &[String],
+    choices: &[Arc<str>],
     match_label: &str,
     none_label: Option<&str>,
 ) -> usize {
-    let position_eq = |label: &str| choices.iter().position(|c| c.as_str() == label);
+    let position_eq = |label: &str| choices.iter().position(|c| c.as_ref() == label);
     match profile_value {
         None => position_eq(match_label).unwrap_or(0),
         Some(skin) => {
@@ -228,7 +228,11 @@ pub(super) fn apply_profile_defaults(
     if let Some(row) = row_map.get_mut(RowId::Mini) {
         let val = profile.mini_percent.clamp(-100, 150);
         let needle = format!("{val}%");
-        if let Some(idx) = row.choices.iter().position(|c| c == &needle) {
+        if let Some(idx) = row
+            .choices
+            .iter()
+            .position(|c| c.as_ref() == needle.as_str())
+        {
             row.selected_choice_index[player_idx] = idx;
         }
     }
@@ -245,7 +249,7 @@ pub(super) fn apply_profile_defaults(
         row.selected_choice_index[player_idx] = row
             .choices
             .iter()
-            .position(|c| c == &needle)
+            .position(|c| c.as_ref() == needle.as_str())
             .unwrap_or(0)
             .min(row.choices.len().saturating_sub(1));
     }
@@ -256,7 +260,7 @@ pub(super) fn apply_profile_defaults(
         row.selected_choice_index[player_idx] = row
             .choices
             .iter()
-            .position(|c| c == &needle)
+            .position(|c| c.as_ref() == needle.as_str())
             .unwrap_or(0)
             .min(row.choices.len().saturating_sub(1));
     }
@@ -268,7 +272,7 @@ pub(super) fn apply_profile_defaults(
         row.selected_choice_index[player_idx] = row
             .choices
             .iter()
-            .position(|c| c == &needle)
+            .position(|c| c.as_ref() == needle.as_str())
             .unwrap_or(0)
             .min(row.choices.len().saturating_sub(1));
     }
@@ -280,7 +284,7 @@ pub(super) fn apply_profile_defaults(
         row.selected_choice_index[player_idx] = row
             .choices
             .iter()
-            .position(|c| c == &needle)
+            .position(|c| c.as_ref() == needle.as_str())
             .unwrap_or(0)
             .min(row.choices.len().saturating_sub(1));
     }
@@ -292,7 +296,7 @@ pub(super) fn apply_profile_defaults(
         row.selected_choice_index[player_idx] = row
             .choices
             .iter()
-            .position(|c| c == &needle)
+            .position(|c| c.as_ref() == needle.as_str())
             .unwrap_or(0)
             .min(row.choices.len().saturating_sub(1));
     }
@@ -304,7 +308,7 @@ pub(super) fn apply_profile_defaults(
         row.selected_choice_index[player_idx] = row
             .choices
             .iter()
-            .position(|c| c == &needle)
+            .position(|c| c.as_ref() == needle.as_str())
             .unwrap_or(0)
             .min(row.choices.len().saturating_sub(1));
     }
@@ -315,7 +319,7 @@ pub(super) fn apply_profile_defaults(
         row.selected_choice_index[player_idx] = row
             .choices
             .iter()
-            .position(|c| c == &needle)
+            .position(|c| c.as_ref() == needle.as_str())
             .unwrap_or(0)
             .min(row.choices.len().saturating_sub(1));
     }
@@ -325,7 +329,7 @@ pub(super) fn apply_profile_defaults(
         row.selected_choice_index[player_idx] = row
             .choices
             .iter()
-            .position(|c| c == &needle)
+            .position(|c| c.as_ref() == needle.as_str())
             .unwrap_or(0)
             .min(row.choices.len().saturating_sub(1));
     }
@@ -338,7 +342,7 @@ pub(super) fn apply_profile_defaults(
         row.selected_choice_index[player_idx] = row
             .choices
             .iter()
-            .position(|c| c == &needle)
+            .position(|c| c.as_ref() == needle.as_str())
             .unwrap_or(0)
             .min(row.choices.len().saturating_sub(1));
     }
@@ -357,7 +361,7 @@ pub(super) fn apply_profile_defaults(
         let ms =
             deadsync_profile::clamp_custom_fantastic_window_ms(profile.custom_fantastic_window_ms);
         let target = format!("{ms}ms");
-        if let Some(idx) = row.choices.iter().position(|c| c == &target) {
+        if let Some(idx) = row.choices.iter().position(|c| c.as_ref() == target) {
             row.selected_choice_index[player_idx] = idx;
         }
     }
@@ -365,7 +369,7 @@ pub(super) fn apply_profile_defaults(
         let ms =
             deadsync_profile::clamp_crossover_cue_duration_ms(profile.crossover_cue_duration_ms);
         let target = format!("{ms}ms");
-        if let Some(idx) = row.choices.iter().position(|c| c == &target) {
+        if let Some(idx) = row.choices.iter().position(|c| c.as_ref() == target) {
             row.selected_choice_index[player_idx] = idx;
         }
     }
@@ -373,7 +377,7 @@ pub(super) fn apply_profile_defaults(
         let q =
             deadsync_profile::clamp_crossover_cue_quantization(profile.crossover_cue_quantization);
         let target = q.to_string();
-        if let Some(idx) = row.choices.iter().position(|c| c == &target) {
+        if let Some(idx) = row.choices.iter().position(|c| c.as_ref() == target) {
             row.selected_choice_index[player_idx] = idx;
         }
     }
@@ -395,13 +399,21 @@ pub(super) fn apply_profile_defaults(
     if let Some(row) = row_map.get_mut(RowId::SmxBgPack) {
         row.selected_choice_index[player_idx] = match &profile.smx_bg_pack {
             None => 0,
-            Some(pack) => row.choices.iter().position(|c| c == pack).unwrap_or(0),
+            Some(pack) => row
+                .choices
+                .iter()
+                .position(|c| c.as_ref() == pack)
+                .unwrap_or(0),
         };
     }
     if let Some(row) = row_map.get_mut(RowId::SmxJudgePack) {
         row.selected_choice_index[player_idx] = match &profile.smx_judge_pack {
             None => 0,
-            Some(pack) => row.choices.iter().position(|c| c == pack).unwrap_or(0),
+            Some(pack) => row
+                .choices
+                .iter()
+                .position(|c| c.as_ref() == pack)
+                .unwrap_or(0),
         };
     }
 }

@@ -175,9 +175,10 @@ pub(super) fn build_uncommon_rows(return_screen: Screen) -> RowMap {
     // struct-update literal.
     b.push(Row {
         help: vec![
-            tr("PlayerOptionsHelp", "WhatComesNextHelp1").to_string(),
-            tr("PlayerOptionsHelp", "WhatComesNextHelp2").to_string(),
-        ],
+            tr("PlayerOptionsHelp", "WhatComesNextHelp1"),
+            tr("PlayerOptionsHelp", "WhatComesNextHelp2"),
+        ]
+        .into_boxed_slice(),
         ..Row::custom(
             RowId::WhatComesNext,
             lookup_key("PlayerOptions", "WhatComesNext"),

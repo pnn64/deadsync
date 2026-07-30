@@ -6,6 +6,8 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Optio
     // ITG/SL preview actors are not driven by selected chart BPM, so tying this to song BPM
     // makes beat-based skins (e.g. cel) appear too fast/slow depending on the selected chart.
     const PREVIEW_BPM: f32 = 120.0;
+    let prepared_pane = state.current_pane;
+    prepare_choice_layouts(state, asset_manager);
     state.preview_time += dt;
     state.preview_beat += dt * (PREVIEW_BPM / 60.0);
     let active = state.active;
@@ -103,6 +105,9 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Optio
             }
         }
     }
+    if state.current_pane != prepared_pane {
+        prepare_choice_layouts(state, asset_manager);
+    }
 
     // Advance help reveal timers.
     for player_idx in active_player_indices(active) {
@@ -134,88 +139,52 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Optio
         state.combo_preview_elapsed = 0.0;
     }
 
-    // Row frame tweening: mimic ScreenOptions::PositionRows() + OptionRow::SetDestination()
-    // so rows slide smoothly as the visible window scrolls.
+    let visibility = row_visibility(
+        &state.pane().row_map,
+        active,
+        state.option_masks,
+        state.policy,
+    );
     let total_rows = state.pane().row_map.len();
     let (first_row_center_y, row_step) = row_layout_params();
     if total_rows == 0 {
         state.pane_mut().row_tweens.clear();
-    } else if state.pane().row_tweens.len() != total_rows {
-        state.pane_mut().row_tweens = init_row_tweens(
-            &state.pane().row_map,
-            state.pane().selected_row,
-            active,
-            state.option_masks,
-            state.policy,
-        );
+        state.pane_mut().layout_key = None;
     } else {
-        let visibility = row_visibility(
-            &state.pane().row_map,
+        let layout_key = RowLayoutKey {
+            selected_row: state.pane().selected_row,
             active,
-            state.option_masks,
-            state.policy,
-        );
-        let visible_rows = count_visible_rows(&state.pane().row_map, visibility);
-        if visible_rows == 0 {
-            let y = first_row_center_y - row_step * 0.5;
-            for tw in &mut state.pane_mut().row_tweens {
-                let cur_y = tw.y();
-                let cur_a = tw.a();
-                if (y - tw.to_y).abs() > 0.01 || tw.to_a != 0.0 {
-                    tw.from_y = cur_y;
-                    tw.from_a = cur_a;
-                    tw.to_y = y;
-                    tw.to_a = 0.0;
-                    tw.t = 0.0;
-                }
-                if tw.t < 1.0 {
-                    if ROW_TWEEN_SECONDS > 0.0 {
-                        tw.t = (tw.t + dt / ROW_TWEEN_SECONDS).min(1.0);
-                    } else {
-                        tw.t = 1.0;
-                    }
-                }
-            }
-        } else {
-            let selected_visible = std::array::from_fn(|player_idx| {
-                let row_idx =
-                    state.pane().selected_row[player_idx].min(total_rows.saturating_sub(1));
-                row_to_visible_index(&state.pane().row_map, row_idx, visibility).unwrap_or(0)
-            });
-            let w = compute_row_window(visible_rows, selected_visible, active);
-            let mid_pos = (VISIBLE_ROWS as f32) * 0.5 - 0.5;
-            let bottom_pos = (VISIBLE_ROWS as f32) - 0.5;
-            let mut visible_idx = 0i32;
-            for i in 0..total_rows {
-                let (f_pos, hidden) = row_f_pos_for_index(
-                    &state.pane().row_map,
-                    i,
-                    visibility,
-                    &mut visible_idx,
-                    w,
-                    mid_pos,
-                    bottom_pos,
-                );
-
-                let dest_y = first_row_center_y + row_step * f_pos;
-                let dest_a = if hidden { 0.0 } else { 1.0 };
-
-                let tw = &mut state.pane_mut().row_tweens[i];
-                let cur_y = tw.y();
-                let cur_a = tw.a();
-                if (dest_y - tw.to_y).abs() > 0.01 || dest_a != tw.to_a {
-                    tw.from_y = cur_y;
-                    tw.from_a = cur_a;
-                    tw.to_y = dest_y;
-                    tw.to_a = dest_a;
-                    tw.t = 0.0;
-                }
-                if tw.t < 1.0 {
-                    if ROW_TWEEN_SECONDS > 0.0 {
-                        tw.t = (tw.t + dt / ROW_TWEEN_SECONDS).min(1.0);
-                    } else {
-                        tw.t = 1.0;
-                    }
+            visibility,
+            first_y_bits: first_row_center_y.to_bits(),
+            row_step_bits: row_step.to_bits(),
+        };
+        if state.pane().row_tweens.len() != total_rows {
+            state.pane_mut().row_tweens = init_row_tweens(
+                &state.pane().row_map,
+                state.pane().selected_row,
+                active,
+                state.option_masks,
+                state.policy,
+            );
+            state.pane_mut().layout_key = Some(layout_key);
+        } else if state.pane().layout_key != Some(layout_key) {
+            let selected_row = state.pane().selected_row;
+            let pane = state.pane_mut();
+            retarget_row_tweens(
+                &pane.row_map,
+                &mut pane.row_tweens,
+                selected_row,
+                active,
+                visibility,
+            );
+            pane.layout_key = Some(layout_key);
+        }
+        for tween in &mut state.pane_mut().row_tweens {
+            if tween.t < 1.0 {
+                if ROW_TWEEN_SECONDS > 0.0 {
+                    tween.t = (tween.t + dt / ROW_TWEEN_SECONDS).min(1.0);
+                } else {
+                    tween.t = 1.0;
                 }
             }
         }
@@ -239,7 +208,7 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Optio
     // Retarget cursor tween destinations to match current selection and row destinations.
     for player_idx in active_player_indices(active) {
         let Some((to_x, to_y, to_w, to_h)) =
-            cursor_dest_for_player(state, asset_manager, player_idx)
+            cursor_dest_for_player_with_visibility(state, asset_manager, player_idx, visibility)
         else {
             continue;
         };

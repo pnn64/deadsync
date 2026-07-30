@@ -370,7 +370,7 @@ const MUSIC_RATE: CustomBinding = CustomBinding {
         state.music_rate = state.music_rate.clamp(0.05, 3.00);
         let formatted = fmt_music_rate(state.music_rate);
         if let Some(row) = state.pane_mut().row_map.get_mut(row_id) {
-            row.choices[0] = formatted;
+            row.replace_choices(vec![formatted]);
             for slot in 0..PLAYER_SLOTS {
                 row.selected_choice_index[slot] = 0;
             }
@@ -823,7 +823,7 @@ const SMX_BG_PACK: CustomBinding = CustomBinding {
                 .row_map
                 .get(row_id)
                 .and_then(|r| r.choices.get(new_index))
-                .cloned()
+                .map(ToString::to_string)
                 .unwrap_or_default()
         };
         state.player_options[player_idx].smx_bg_pack = if pack.is_empty() {
@@ -849,7 +849,7 @@ const SMX_JUDGE_PACK: CustomBinding = CustomBinding {
                 .row_map
                 .get(row_id)
                 .and_then(|r| r.choices.get(new_index))
-                .cloned()
+                .map(ToString::to_string)
                 .unwrap_or_default()
         };
         state.player_options[player_idx].smx_judge_pack = if pack.is_empty() {

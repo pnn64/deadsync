@@ -1090,7 +1090,10 @@ fn chosen_tilt_threshold_ms(
 fn set_tilt_threshold_row(state: &mut State, player_idx: usize, row_id: RowId, ms: u32) {
     let needle = fmt_tilt_threshold_ms(ms);
     if let Some(row) = state.pane_mut().row_map.get_mut(row_id)
-        && let Some(idx) = row.choices.iter().position(|choice| choice == &needle)
+        && let Some(idx) = row
+            .choices
+            .iter()
+            .position(|choice| choice.as_ref() == needle)
     {
         row.selected_choice_index[player_idx] = idx;
     }
@@ -2018,11 +2021,19 @@ mod bitmask_binding_init_tests {
             id,
             behavior: RowBehavior::Bitmask(stub),
             name,
-            choices: choices.iter().map(ToString::to_string).collect(),
+            choices: choices
+                .iter()
+                .copied()
+                .map(Arc::<str>::from)
+                .collect::<Vec<_>>()
+                .into_boxed_slice(),
             selected_choice_index: [0, 0],
-            help: Vec::new(),
+            help: Box::new([]),
             choice_difficulty_indices: None,
             mirror_across_players: false,
+            choice_widths: Box::new([]),
+            choice_offsets: Box::new([]),
+            choice_height: 0.0,
         }
     }
 
