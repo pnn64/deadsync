@@ -588,10 +588,9 @@ mod tests {
 
     fn set_fixture_time(state: &mut screen_gameplay::State, music_time: f32) {
         state.boundary.total_elapsed_in_screen = 10.0;
-        state.clock.song_position.current_music_time_display = music_time;
-        state.clock.visible_timing.current_music_time = [music_time; MAX_PLAYERS];
-        state.clock.song_position.current_beat =
-            state.timing_runtime.timing.get_beat_for_time(music_time);
+        state.set_current_music_time_ns(deadsync_core::song_time::song_time_ns_from_seconds(
+            music_time,
+        ));
         refresh_active_attack_masks(&mut state.gameplay, 0.0);
     }
 
@@ -792,7 +791,31 @@ L000
 0100
 00F0
 0001
+1100
+0011
+1001
+0110
+1111
+1000
+0100
+0010
+0001
+1010
+0101
+1111
 ,
+1100
+0011
+1001
+0110
+1111
+1000
+0100
+0010
+0001
+1010
+0101
+1111
 1100
 0011
 1001
@@ -886,6 +909,9 @@ L000
                     &mut text_cache,
                     &mut compose_scratch,
                 );
+                assert!(expected.objects.len() >= 250);
+                assert!(expected.sprite_instances.len() >= 240);
+                assert!(expected.batches.len() >= 120);
                 let player = &mut state.players_runtime.players[0];
                 player.combo = 0;
                 player.last_judgment = None;
@@ -1610,7 +1636,7 @@ L000
                     && noteskin_handles.contains(&object.texture_handle)
             })
             .count();
-        if noteskin_sprites < 4 {
+        if noteskin_sprites < 200 {
             compose_scratch.recycle_render_list(&mut render);
             return Err(format!(
                 "{name} frame has only {noteskin_sprites} resident noteskin sprites"
