@@ -50,6 +50,7 @@ mod tests {
     use std::{
         fs,
         path::{Path, PathBuf},
+        time::Instant,
     };
 
     static SESSION_TEST_LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
@@ -924,6 +925,7 @@ L000
         normal_path: PathBuf,
         reverse_path: PathBuf,
         manifest_path: PathBuf,
+        timing_path: Option<PathBuf>,
     }
 
     #[cfg(target_os = "windows")]
@@ -969,6 +971,82 @@ L000
         instances: usize,
         batches: usize,
         noteskin_sprites: usize,
+    }
+
+    #[cfg(target_os = "windows")]
+    const GPU_TIMING_PHASES: [&str; 10] = [
+        "frame_pipeline",
+        "actor_build",
+        "build_screen",
+        "compose",
+        "sort",
+        "draw",
+        "backend_setup",
+        "draw_prepare",
+        "backend_upload",
+        "backend_record",
+    ];
+
+    #[cfg(target_os = "windows")]
+    #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+    struct GpuTimingTail {
+        p50: u32,
+        p95: u32,
+        p99: u32,
+        worst: u32,
+    }
+
+    #[cfg(target_os = "windows")]
+    impl std::fmt::Display for GpuTimingTail {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            write!(f, "{}/{}/{}/{}", self.p50, self.p95, self.p99, self.worst)
+        }
+    }
+
+    #[cfg(target_os = "windows")]
+    struct GpuTimingSamples {
+        phases: [Vec<u32>; GPU_TIMING_PHASES.len()],
+    }
+
+    #[cfg(target_os = "windows")]
+    impl GpuTimingSamples {
+        fn new(frames: usize) -> Self {
+            Self {
+                phases: std::array::from_fn(|_| Vec::with_capacity(frames)),
+            }
+        }
+
+        fn push(&mut self, phases: [u32; GPU_TIMING_PHASES.len()]) {
+            for (samples, value) in self.phases.iter_mut().zip(phases) {
+                samples.push(value);
+            }
+        }
+
+        fn tails(&mut self) -> [GpuTimingTail; GPU_TIMING_PHASES.len()] {
+            std::array::from_fn(|index| gpu_timing_tail(&mut self.phases[index]))
+        }
+    }
+
+    #[cfg(target_os = "windows")]
+    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+    struct GpuTimingStorage {
+        actor_capacity: usize,
+        compose: compose::ComposeStorageStats,
+        draw: deadlib_render::draw_prep::DrawStorageStats,
+    }
+
+    #[cfg(target_os = "windows")]
+    struct GpuFrameTiming {
+        phases: [u32; GPU_TIMING_PHASES.len()],
+        storage: GpuTimingStorage,
+        sort_fallback: bool,
+    }
+
+    #[cfg(target_os = "windows")]
+    #[derive(Clone, Copy)]
+    struct GpuTimingConfig {
+        warmup_frames: usize,
+        measured_frames: usize,
     }
 
     #[cfg(target_os = "windows")]
@@ -1175,6 +1253,245 @@ L000
             .fold(0xcbf2_9ce4_8422_2325, |hash, byte| {
                 (hash ^ u64::from(*byte)).wrapping_mul(0x0000_0100_0000_01b3)
             })
+    }
+
+    #[cfg(target_os = "windows")]
+    fn gpu_elapsed_us(started: Instant) -> u32 {
+        started.elapsed().as_micros().min(u128::from(u32::MAX)) as u32
+    }
+
+    #[cfg(target_os = "windows")]
+    fn gpu_timing_tail(samples: &mut [u32]) -> GpuTimingTail {
+        if samples.is_empty() {
+            return GpuTimingTail::default();
+        }
+        samples.sort_unstable();
+        let percentile = |pct: usize| {
+            let rank = samples.len().saturating_mul(pct).saturating_add(99) / 100;
+            samples[rank.saturating_sub(1).min(samples.len() - 1)]
+        };
+        GpuTimingTail {
+            p50: percentile(50),
+            p95: percentile(95),
+            p99: percentile(99),
+            worst: samples[samples.len() - 1],
+        }
+    }
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn gpu_timing_tail_uses_ceiling_percentile_rank() {
+        let mut samples = (1..=100).collect::<Vec<_>>();
+
+        assert_eq!(
+            gpu_timing_tail(&mut samples),
+            GpuTimingTail {
+                p50: 50,
+                p95: 95,
+                p99: 99,
+                worst: 100,
+            }
+        );
+    }
+
+    #[cfg(target_os = "windows")]
+    fn gpu_timing_config() -> Result<Option<GpuTimingConfig>, String> {
+        let Some(measured) = std::env::var_os("DEADSYNC_F0_TIMING_FRAMES") else {
+            return Ok(None);
+        };
+        let measured = measured
+            .to_str()
+            .ok_or("DEADSYNC_F0_TIMING_FRAMES must be valid Unicode")?
+            .parse::<usize>()
+            .map_err(|error| format!("invalid DEADSYNC_F0_TIMING_FRAMES: {error}"))?;
+        if !(100..=100_000).contains(&measured) {
+            return Err("DEADSYNC_F0_TIMING_FRAMES must be between 100 and 100000".to_owned());
+        }
+        let warmup = match std::env::var("DEADSYNC_F0_WARMUP_FRAMES") {
+            Ok(value) => value
+                .parse::<usize>()
+                .map_err(|error| format!("invalid DEADSYNC_F0_WARMUP_FRAMES: {error}"))?,
+            Err(std::env::VarError::NotPresent) => 512,
+            Err(error) => {
+                return Err(format!("invalid DEADSYNC_F0_WARMUP_FRAMES: {error}"));
+            }
+        };
+        if !(64..=100_000).contains(&warmup) {
+            return Err("DEADSYNC_F0_WARMUP_FRAMES must be between 64 and 100000".to_owned());
+        }
+        Ok(Some(GpuTimingConfig {
+            warmup_frames: warmup,
+            measured_frames: measured,
+        }))
+    }
+
+    #[cfg(target_os = "windows")]
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "the timing frame makes every warmed presentation resource explicit"
+    )]
+    fn run_gpu_timing_frame(
+        state: &mut screen_gameplay::State,
+        assets: &crate::assets::AssetManager,
+        backend: &mut deadlib_renderer::Backend,
+        metrics: &space::Metrics,
+        actors: &mut Vec<deadlib_present::actors::Actor>,
+        text_cache: &mut compose::TextLayoutCache,
+        compose_scratch: &mut compose::ComposeScratch,
+        collect_sort_timing: bool,
+    ) -> Result<GpuFrameTiming, String> {
+        let frame_started = Instant::now();
+        actors.clear();
+        let actor_started = Instant::now();
+        screen_gameplay::push_actors(
+            actors,
+            state,
+            assets,
+            screen_gameplay::ActorViewOverride::default(),
+            123.0,
+            crate::views::SimplyLoveVisualPolicyView::default(),
+        );
+        let actor_us = gpu_elapsed_us(actor_started);
+
+        compose_scratch.begin_frame_stats(collect_sort_timing);
+        let build_started = Instant::now();
+        let mut render =
+            compose::build_screen_cached_with_scratch_and_texture_context_and_actor_resources(
+                actors,
+                [0.0, 0.0, 0.0, 1.0],
+                metrics,
+                assets.fonts(),
+                10.0,
+                text_cache,
+                compose_scratch,
+                &deadsync_assets::PRESENT_TEXTURE_CONTEXT,
+                state.actor_resources(),
+            );
+        let build_us = gpu_elapsed_us(build_started);
+        let compose_frame = compose_scratch.frame_stats();
+
+        let draw_started = Instant::now();
+        let draw = backend
+            .draw(&render, assets.textures(), false)
+            .map_err(|error| format!("timing draw failed: {error}"))?;
+        let draw_us = gpu_elapsed_us(draw_started);
+        compose_scratch.recycle_render_list(&mut render);
+        let frame_us = gpu_elapsed_us(frame_started);
+
+        Ok(GpuFrameTiming {
+            phases: [
+                frame_us,
+                actor_us,
+                build_us,
+                actor_us.saturating_add(build_us),
+                compose_frame.sort_us,
+                draw_us,
+                draw.backend_setup_us,
+                draw.backend_prepare_us,
+                draw.backend_upload_us,
+                draw.backend_record_us,
+            ],
+            storage: GpuTimingStorage {
+                actor_capacity: actors.capacity(),
+                compose: compose_scratch.storage_stats(),
+                draw: draw.storage,
+            },
+            sort_fallback: compose_frame.sort_fallback,
+        })
+    }
+
+    #[cfg(target_os = "windows")]
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "the timing capture owns one explicit value for each warmed presentation resource"
+    )]
+    fn capture_gpu_timing(
+        state: &mut screen_gameplay::State,
+        assets: &crate::assets::AssetManager,
+        backend: &mut deadlib_renderer::Backend,
+        backend_type: deadlib_render::BackendType,
+        metrics: &space::Metrics,
+        actors: &mut Vec<deadlib_present::actors::Actor>,
+        text_cache: &mut compose::TextLayoutCache,
+        compose_scratch: &mut compose::ComposeScratch,
+        output_dir: &Path,
+        config: GpuTimingConfig,
+    ) -> Result<PathBuf, String> {
+        let mut last_storage = None;
+        for _ in 0..config.warmup_frames {
+            last_storage = Some(
+                run_gpu_timing_frame(
+                    state,
+                    assets,
+                    backend,
+                    metrics,
+                    actors,
+                    text_cache,
+                    compose_scratch,
+                    false,
+                )?
+                .storage,
+            );
+        }
+        let mut last_storage = last_storage.expect("warmup count is validated as nonzero");
+        let mut storage_change_frames = 0usize;
+        let mut sort_fallbacks = 0usize;
+        let mut samples = GpuTimingSamples::new(config.measured_frames);
+        let measured_started = Instant::now();
+        for _ in 0..config.measured_frames {
+            let sample = run_gpu_timing_frame(
+                state,
+                assets,
+                backend,
+                metrics,
+                actors,
+                text_cache,
+                compose_scratch,
+                true,
+            )?;
+            samples.push(sample.phases);
+            sort_fallbacks += usize::from(sample.sort_fallback);
+            if sample.storage != last_storage {
+                storage_change_frames += 1;
+                last_storage = sample.storage;
+            }
+        }
+        let measured_ms = measured_started.elapsed().as_secs_f64() * 1000.0;
+        if storage_change_frames != 0 {
+            return Err(format!(
+                "timing capture changed retained capacity on {storage_change_frames} measured frames"
+            ));
+        }
+
+        let tails = samples.tails();
+        let profile = if cfg!(debug_assertions) {
+            "debug"
+        } else {
+            "optimized"
+        };
+        let mut manifest = format!(
+            "fixture=F0-sprite-core\nbackend={backend_type}\nprofile={profile}\n\
+             scope=actor-compose-draw\nresolution=640x480\nmusic_time_seconds=2.5\n\
+             present_mode=immediate\nvsync=false\npresent_back_pressure=false\n\
+             warmup_frames={}\nmeasured_frames={}\nmeasured_duration_ms={measured_ms:.3}\n\
+             tail_order=p50/p95/p99/worst_us\nsort_fallbacks={sort_fallbacks}\n\
+             storage_change_frames={storage_change_frames}\n",
+            config.warmup_frames, config.measured_frames,
+        );
+        use std::fmt::Write as _;
+        for ((name, tail), samples) in GPU_TIMING_PHASES
+            .iter()
+            .zip(tails)
+            .zip(samples.phases.iter())
+        {
+            writeln!(manifest, "{name}={tail} samples={}", samples.len())
+                .expect("writing to a String cannot fail");
+        }
+
+        let path = output_dir.join("timing.txt");
+        std::fs::write(&path, manifest)
+            .map_err(|error| format!("failed to write '{}': {error}", path.display()))?;
+        Ok(path)
     }
 
     #[cfg(target_os = "windows")]
@@ -1396,6 +1713,22 @@ L000
                 &mut compose_scratch,
                 output_dir,
             )?;
+            let timing_path = gpu_timing_config()?
+                .map(|config| {
+                    capture_gpu_timing(
+                        &mut state,
+                        &assets,
+                        &mut backend,
+                        backend_type,
+                        &metrics,
+                        &mut actors,
+                        &mut text_cache,
+                        &mut compose_scratch,
+                        output_dir,
+                        config,
+                    )
+                })
+                .transpose()?;
 
             state.profiles_runtime.profiles[0]
                 .set_scroll_option(profile_data::ScrollOption::Reverse);
@@ -1447,6 +1780,7 @@ L000
                 normal_path,
                 reverse_path,
                 manifest_path,
+                timing_path,
             })
         })();
 
@@ -1509,6 +1843,9 @@ L000
                     artifacts.reverse_path.display(),
                     artifacts.manifest_path.display()
                 );
+                if let Some(timing_path) = artifacts.timing_path {
+                    println!("F0 GPU timing: '{}'", timing_path.display());
+                }
             },
         );
     }
