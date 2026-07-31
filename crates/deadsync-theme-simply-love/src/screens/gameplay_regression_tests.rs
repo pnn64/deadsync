@@ -623,6 +623,7 @@ mod tests {
         actors: &mut Vec<deadlib_present::actors::Actor>,
         text_cache: &mut compose::TextLayoutCache,
         scratch: &mut compose::ComposeScratch,
+        view: screen_gameplay::ActorViewOverride,
         texture_ctx: &T,
     ) -> deadlib_render::RenderList {
         actors.clear();
@@ -630,7 +631,7 @@ mod tests {
             actors,
             state,
             assets,
-            screen_gameplay::ActorViewOverride::default(),
+            view,
             123.0,
             crate::views::SimplyLoveVisualPolicyView::default(),
         );
@@ -662,6 +663,7 @@ mod tests {
             actors,
             text_cache,
             scratch,
+            screen_gameplay::ActorViewOverride::default(),
             &FIXTURE_TEXTURES,
         )
     }
@@ -914,6 +916,31 @@ L000
                     actor_stats.resolved_sprites >= 100,
                     "dense sprite fixture did not select the resolved gameplay path: {actor_stats:?}"
                 );
+                let mut legacy = compose_fixture_frame_with_textures(
+                    &mut state,
+                    &assets,
+                    &metrics,
+                    &mut actors,
+                    &mut text_cache,
+                    &mut compose_scratch,
+                    screen_gameplay::ActorViewOverride {
+                        notefield: screen_gameplay::NotefieldViewOverride {
+                            force_legacy_sprites: true,
+                            ..Default::default()
+                        },
+                        ..Default::default()
+                    },
+                    &FIXTURE_TEXTURES,
+                );
+                let legacy_actor_stats = deadlib_present::actors::actor_tree_stats(&actors);
+                assert_eq!(legacy_actor_stats.resolved_sprites, 0);
+                assert_eq!(compare_render_lists(&expected, &legacy), Ok(()));
+                let mut expected_draw = DrawScratch::default();
+                let mut legacy_draw = DrawScratch::default();
+                draw_prep::prepare(&expected, &mut expected_draw, |_, _| false);
+                draw_prep::prepare(&legacy, &mut legacy_draw, |_, _| false);
+                assert_eq!(compare_draw_scratch(&expected_draw, &legacy_draw), Ok(()));
+                compose_scratch.recycle_render_list(&mut legacy);
                 assert!(expected.objects.len() >= 250);
                 assert!(expected.sprite_instances.len() >= 240);
                 assert!(expected.batches.len() >= 120);
@@ -1587,6 +1614,7 @@ L000
             actors,
             text_cache,
             compose_scratch,
+            screen_gameplay::ActorViewOverride::default(),
             &texture_ctx,
         );
         let missing_keys = missing_capture_texture_keys(&texture_ctx, assets);
@@ -1603,6 +1631,7 @@ L000
                 actors,
                 text_cache,
                 compose_scratch,
+                screen_gameplay::ActorViewOverride::default(),
                 &texture_ctx,
             );
             let mut missing_keys = missing_capture_texture_keys(&texture_ctx, assets);

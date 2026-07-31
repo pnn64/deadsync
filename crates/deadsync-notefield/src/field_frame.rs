@@ -960,7 +960,7 @@ fn compose_visible_notes<S, F>(
                                 style.actors.note_z,
                                 world_z,
                                 prefer_sprite_note_path,
-                                true,
+                                request.view.resolved_sprite_leaves(),
                                 sprite_source,
                             );
                         }
@@ -989,7 +989,7 @@ fn compose_visible_notes<S, F>(
                             style.actors.note_z,
                             world_z,
                             prefer_sprite_note_path,
-                            true,
+                            request.view.resolved_sprite_leaves(),
                             sprite_source,
                         );
                         return;
@@ -1023,7 +1023,7 @@ fn compose_visible_notes<S, F>(
                             style.actors.note_z,
                             world_z,
                             prefer_sprite_note_path,
-                            true,
+                            request.view.resolved_sprite_leaves(),
                             sprite_source,
                         );
                     }
@@ -1065,7 +1065,7 @@ fn compose_visible_notes<S, F>(
                             z: style.actors.note_z,
                             world_z,
                             prefer_sprite: prefer_sprite_note_path,
-                            resolved_sprite: true,
+                            resolved_sprite: request.view.resolved_sprite_leaves(),
                         },
                         sprite_source,
                     );

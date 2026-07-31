@@ -158,6 +158,7 @@ twox-hash = "2.1.3"
 [dev-dependencies]
 deadlib-render = { path = "../deadlib-render", features = ["test-util"] }
 deadlib-renderer = { path = "../deadlib-renderer" }
+deadsync-notefield = { path = "../deadsync-notefield", features = ["test-support"] }
 winit = "0.30.13"
 
 [lints.clippy]

@@ -89,38 +89,54 @@ fn legacy_sprite(index: usize, glow: bool) -> Actor {
 
 fn legacy_actors() -> Vec<Actor> {
     let mut actors = Vec::with_capacity(OUTPUT_PASSES);
+    fill_legacy_actors(&mut actors);
+    actors
+}
+
+fn fill_legacy_actors(actors: &mut Vec<Actor>) {
+    actors.clear();
     for index in 0..LOGICAL_SPRITES {
         actors.push(legacy_sprite(index, false));
         actors.push(legacy_sprite(index, true));
     }
-    actors
+}
+
+fn resolved_sprite(index: usize) -> Actor {
+    Actor::ResolvedSprite {
+        align: [0.5, 0.5],
+        offset: [(index % 32) as f32 * 20.0, (index / 32) as f32 * 20.0],
+        world_z: index as f32 * 0.001,
+        size: [64.0, 64.0],
+        source: SpriteSource::TextureStaticHandle {
+            key: "noteskin/tap",
+            handle: 1,
+            generation: 1,
+        },
+        tint: [0.8, 0.6, 0.4, 0.75],
+        glow: [1.0, 1.0, 1.0, 0.35],
+        z: 140,
+        uv_rect: [0.125, 0.25, 0.625, 0.75],
+        flip_x: false,
+        flip_y: false,
+        blend: BlendMode::Alpha,
+        glow_blend: BlendMode::Add,
+        rot_x_deg: 0.0,
+        rot_y_deg: 0.0,
+        rot_z_deg: (index % 8) as f32 * 5.0,
+    }
 }
 
 fn resolved_actors() -> Vec<Actor> {
-    (0..LOGICAL_SPRITES)
-        .map(|index| Actor::ResolvedSprite {
-            align: [0.5, 0.5],
-            offset: [(index % 32) as f32 * 20.0, (index / 32) as f32 * 20.0],
-            world_z: index as f32 * 0.001,
-            size: [64.0, 64.0],
-            source: SpriteSource::TextureStaticHandle {
-                key: "noteskin/tap",
-                handle: 1,
-                generation: 1,
-            },
-            tint: [0.8, 0.6, 0.4, 0.75],
-            glow: [1.0, 1.0, 1.0, 0.35],
-            z: 140,
-            uv_rect: [0.125, 0.25, 0.625, 0.75],
-            flip_x: false,
-            flip_y: false,
-            blend: BlendMode::Alpha,
-            glow_blend: BlendMode::Add,
-            rot_x_deg: 0.0,
-            rot_y_deg: 0.0,
-            rot_z_deg: (index % 8) as f32 * 5.0,
-        })
-        .collect()
+    let mut actors = Vec::with_capacity(LOGICAL_SPRITES);
+    fill_resolved_actors(&mut actors);
+    actors
+}
+
+fn fill_resolved_actors(actors: &mut Vec<Actor>) {
+    actors.clear();
+    for index in 0..LOGICAL_SPRITES {
+        actors.push(resolved_sprite(index));
+    }
 }
 
 struct Bench {
@@ -128,6 +144,7 @@ struct Bench {
     scratch: ComposeScratch,
     metrics: Metrics,
     fonts: FontMap,
+    actors: Vec<Actor>,
 }
 
 impl Bench {
@@ -142,12 +159,37 @@ impl Bench {
                 bottom: -240.0,
             },
             fonts: FontMap::default(),
+            actors: Vec::with_capacity(OUTPUT_PASSES),
         }
     }
 
     fn frame(&mut self, actors: &[Actor]) -> u64 {
         let mut render = build_screen_cached_with_scratch_and_texture_context(
             actors,
+            [0.0, 0.0, 0.0, 1.0],
+            &self.metrics,
+            &self.fonts,
+            2.5,
+            &mut self.text_cache,
+            &mut self.scratch,
+            &Textures,
+        );
+        assert_eq!(render.sprite_instances.len(), OUTPUT_PASSES);
+        let checksum = (render.objects.len() as u64).rotate_left(7)
+            ^ (render.batches.len() as u64).rotate_left(13)
+            ^ u64::from(render.sprite_instances[0].center[0].to_bits());
+        self.scratch.recycle_render_list(&mut render);
+        checksum
+    }
+
+    fn built_frame(&mut self, resolved: bool) -> u64 {
+        if resolved {
+            fill_resolved_actors(&mut self.actors);
+        } else {
+            fill_legacy_actors(&mut self.actors);
+        }
+        let mut render = build_screen_cached_with_scratch_and_texture_context(
+            &self.actors,
             [0.0, 0.0, 0.0, 1.0],
             &self.metrics,
             &self.fonts,
@@ -189,6 +231,35 @@ fn measure(actors: &[Actor]) -> Result {
     }
 }
 
+fn measure_built(resolved: bool) -> Result {
+    let mut bench = Bench::new();
+    for _ in 0..WARMUP_FRAMES {
+        black_box(bench.built_frame(resolved));
+    }
+    let cycles_before = read_cycles();
+    let started = Instant::now();
+    let mut checksum = 0_u64;
+    for _ in 0..MEASURE_FRAMES {
+        checksum = checksum.rotate_left(3) ^ black_box(bench.built_frame(resolved));
+    }
+    Result {
+        elapsed: started.elapsed(),
+        cycles: read_cycles().saturating_sub(cycles_before),
+        checksum,
+    }
+}
+
+fn print_comparison(label: &str, legacy: &Result, resolved: &Result) {
+    println!("{label}");
+    print_result("legacy actors", legacy);
+    print_result("resolved actors", resolved);
+    println!(
+        "resolved path: {:.2}x throughput, {:.1}% fewer cycles",
+        legacy.elapsed.as_secs_f64() / resolved.elapsed.as_secs_f64(),
+        100.0 * (1.0 - resolved.cycles as f64 / legacy.cycles as f64),
+    );
+}
+
 fn print_result(label: &str, result: &Result) {
     let frames = MEASURE_FRAMES as f64;
     println!(
@@ -205,18 +276,25 @@ fn main() {
     let legacy_result = measure(&legacy);
     let resolved_result = measure(&resolved);
     assert_eq!(legacy_result.checksum, resolved_result.checksum);
-    black_box((legacy_result.checksum, resolved_result.checksum));
+    let legacy_built_result = measure_built(false);
+    let resolved_built_result = measure_built(true);
+    assert_eq!(legacy_built_result.checksum, resolved_built_result.checksum);
+    black_box((
+        legacy_result.checksum,
+        resolved_result.checksum,
+        legacy_built_result.checksum,
+        resolved_built_result.checksum,
+    ));
 
     println!(
         "resolved sprite composition benchmark\n{LOGICAL_SPRITES} logical sprites, \
          {OUTPUT_PASSES} equal diffuse/glow passes per frame"
     );
-    print_result("legacy actors", &legacy_result);
-    print_result("resolved actors", &resolved_result);
-    println!(
-        "resolved path: {:.2}x throughput, {:.1}% fewer cycles",
-        legacy_result.elapsed.as_secs_f64() / resolved_result.elapsed.as_secs_f64(),
-        100.0 * (1.0 - resolved_result.cycles as f64 / legacy_result.cycles as f64),
+    print_comparison("composition only", &legacy_result, &resolved_result);
+    print_comparison(
+        "build + composition",
+        &legacy_built_result,
+        &resolved_built_result,
     );
 }
 

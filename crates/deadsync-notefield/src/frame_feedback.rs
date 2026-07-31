@@ -207,6 +207,7 @@ pub(crate) fn compose_notefield_feedback<S, F>(
                 pulse: &receptor.receptor_pulse,
                 press_behavior: receptor.receptor_glow_behavior,
                 style: request.style.receptor,
+                resolved_target: request.view.resolved_sprite_leaves(),
             },
             resolve_press,
             sprite_source,
