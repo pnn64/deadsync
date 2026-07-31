@@ -927,6 +927,156 @@ M000
         );
     }
 
+    fn generated_model_effects_simfile() -> &'static str {
+        r#"#VERSION:0.83;
+#TITLE:F0 Model Effects;
+#MUSIC:;
+#OFFSET:0.000;
+#BPMS:0.000=120.000;
+
+#NOTEDATA:;
+#STEPSTYPE:dance-single;
+#DESCRIPTION:F0-model-effects;
+#DIFFICULTY:Challenge;
+#METER:12;
+#RADARVALUES:0,0,0,0,0;
+#NOTES:
+1000
+0100
+0010
+0001
+1100
+0011
+1001
+0110
+,
+1000
+0100
+0010
+0001
+1000
+0100
+0010
+0001
+,
+M000
+0100
+00L0
+000F
+1001
+0110
+0010
+0001
+,
+1000
+0100
+0010
+0001
+1100
+0011
+1001
+0110
+;
+"#
+    }
+
+    #[test]
+    fn model_effects_frame_is_structurally_repeatable() {
+        let simfile = write_fixture("f0-model-effects", generated_model_effects_simfile());
+        with_session(
+            profile_data::PlayStyle::Single,
+            profile_data::PlayerSide::P1,
+            true,
+            false,
+            || {
+                let metrics = space::metrics_for_window(1280, 720);
+                space::set_current_metrics(metrics);
+                space::set_current_window_px(1280, 720);
+                space::set_overscan(0, 0, 0, 0);
+
+                let mut profiles = [
+                    profile_data::Profile::default(),
+                    profile_data::Profile::default(),
+                ];
+                profiles[0].noteskin = profile_data::NoteSkin::new("vivid");
+                profiles[0].scroll_speed = ScrollSpeedSetting::XMod(2.0);
+                profiles[0].scroll_option = profile_data::ScrollOption::Split;
+                profiles[0].mini_percent = 35;
+                profiles[0].perspective = profile_data::Perspective::Incoming;
+                profiles[0].visual_effects_active_mask = profile_data::VisualEffectsMask::DRUNK
+                    | profile_data::VisualEffectsMask::TORNADO
+                    | profile_data::VisualEffectsMask::BUMPY;
+                profiles[0].appearance_effects_active_mask =
+                    profile_data::AppearanceEffectsMask::HIDDEN
+                        | profile_data::AppearanceEffectsMask::SUDDEN;
+                let mut state =
+                    build_test_state(&simfile, GameplayViewport::new(1280.0, 720.0), profiles);
+                set_fixture_time(&mut state, 2.625);
+
+                let visual =
+                    deadsync_gameplay::effective_visual_effects_for_player(&state.gameplay, 0);
+                assert_eq!(visual.drunk, 1.0);
+                assert_eq!(visual.tornado, 1.0);
+                assert_eq!(visual.bumpy, 1.0);
+                let appearance = state.gameplay.effective_appearance_effects_for_player(0);
+                assert_eq!(appearance.hidden, 1.0);
+                assert_eq!(appearance.sudden, 1.0);
+                let perspective =
+                    deadsync_gameplay::effective_perspective_effects_for_player(&state.gameplay, 0);
+                assert_eq!(perspective.tilt, -1.0);
+                assert_eq!(perspective.skew, 1.0);
+                assert_eq!(
+                    deadsync_gameplay::effective_mini_percent_for_player(&state.gameplay, 0),
+                    35.0
+                );
+
+                let assets = fixture_assets();
+                let mut actors = Vec::with_capacity(512);
+                let mut text_cache = compose::TextLayoutCache::default();
+                let mut compose_scratch = compose::ComposeScratch::default();
+                let mut render_variant =
+                    |scroll_option: profile_data::ScrollOption, reverse: [f32; 4]| {
+                        state.profiles_runtime.profiles[0].set_scroll_option(scroll_option);
+                        state.refresh_live_notefield_options(120.0);
+                        let scroll = deadsync_gameplay::effective_scroll_effects_for_player(
+                            &state.gameplay,
+                            0,
+                        );
+                        assert_eq!(
+                            std::array::from_fn::<_, 4, _>(|column| {
+                                scroll.reverse_percent_for_column(column, 4)
+                            }),
+                            reverse
+                        );
+                        let frame = assert_repeatable_frame(
+                            &mut state,
+                            &assets,
+                            &metrics,
+                            &mut actors,
+                            &mut text_cache,
+                            &mut compose_scratch,
+                        );
+                        assert!(frame.objects.iter().any(|object| {
+                            matches!(
+                                object.object_type,
+                                ObjectType::TexturedMesh { geom_cache_key, .. }
+                                    if geom_cache_key != deadlib_render::INVALID_TMESH_CACHE_KEY
+                            )
+                        }));
+                        frame
+                    };
+
+                let split = render_variant(profile_data::ScrollOption::Split, [0.0, 0.0, 1.0, 1.0]);
+                let alternate =
+                    render_variant(profile_data::ScrollOption::Alternate, [0.0, 1.0, 0.0, 1.0]);
+                let cross = render_variant(profile_data::ScrollOption::Cross, [0.0, 1.0, 1.0, 0.0]);
+                assert_ne!(compare_render_lists(&split, &alternate), Ok(()));
+                assert_ne!(compare_render_lists(&split, &cross), Ok(()));
+                assert_ne!(compare_render_lists(&alternate, &cross), Ok(()));
+            },
+        );
+    }
+
     fn generated_runtime_mod_lua() -> &'static str {
         r#"
 mods = {
