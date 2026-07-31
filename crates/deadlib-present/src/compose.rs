@@ -10,6 +10,7 @@ use std::collections::HashMap;
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::num::NonZeroU32;
 use std::sync::Arc;
+use std::time::Instant;
 
 /* ======================= RENDERER SCREEN BUILDER ======================= */
 
@@ -255,7 +256,12 @@ fn build_screen_cached_with_scratch_and_texture_context_impl<T: TextureContext +
 
     let mut batches = std::mem::take(&mut scratch.batches);
     if !renderer::build_ordered_render_batches(&objects, &mut batches) {
+        let sort_started = scratch.collect_frame_stats.then(Instant::now);
         sort_composed_render_objects(&mut objects, scratch);
+        if let Some(started) = sort_started {
+            scratch.frame_stats.sort_us = elapsed_us_since(started);
+            scratch.frame_stats.sort_fallback = true;
+        }
         renderer::build_sorted_render_batches(&objects, &mut batches);
     }
     scratch.masks = masks;
@@ -297,6 +303,8 @@ pub struct ComposeScratch {
     transient_text_mesh_builders: Vec<TextMeshBatchBuilder>,
     recycled_text_mesh_vertices: Vec<Vec<renderer::TexturedMeshVertex>>,
     retained_frames: RetainedFrameCache,
+    collect_frame_stats: bool,
+    frame_stats: ComposeFrameStats,
 }
 
 pub const COMPOSE_STORAGE_SLOTS: usize = 16;
@@ -324,7 +332,25 @@ pub struct ComposeStorageStats {
     pub capacities: [u32; COMPOSE_STORAGE_SLOTS],
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct ComposeFrameStats {
+    pub sort_us: u32,
+    pub sort_fallback: bool,
+}
+
 impl ComposeScratch {
+    /// Enables or disables low-overhead timing for the next composition pass.
+    #[inline(always)]
+    pub fn begin_frame_stats(&mut self, enabled: bool) {
+        self.collect_frame_stats = enabled;
+        self.frame_stats = ComposeFrameStats::default();
+    }
+
+    #[inline(always)]
+    pub const fn frame_stats(&self) -> ComposeFrameStats {
+        self.frame_stats
+    }
+
     pub fn recycle_render_list(&mut self, render: &mut RenderList) {
         let mut objects = std::mem::take(&mut render.objects);
         for obj in objects.drain(..) {
@@ -1571,6 +1597,11 @@ const fn saturating_u32(value: usize) -> u32 {
     } else {
         value as u32
     }
+}
+
+#[inline(always)]
+fn elapsed_us_since(started: Instant) -> u32 {
+    started.elapsed().as_micros().min(u128::from(u32::MAX)) as u32
 }
 
 fn font_chain_key(font: &font::Font, fonts: &font::FontMap) -> u64 {
@@ -7774,6 +7805,63 @@ mod tests {
                 .collect::<Vec<_>>(),
             vec![(4, 0), (5, 1), (5, 2), (5, 3)]
         );
+    }
+
+    #[test]
+    fn compose_frame_stats_report_only_opted_in_sort_fallbacks() {
+        let mut high = test_sprite(SpriteSource::Solid);
+        let mut low = test_sprite(SpriteSource::Solid);
+        let Actor::Sprite { z: high_z, .. } = &mut high else {
+            unreachable!();
+        };
+        let Actor::Sprite { z: low_z, .. } = &mut low else {
+            unreachable!();
+        };
+        *high_z = 2;
+        *low_z = 1;
+        let actors = [high, low];
+        let metrics = Metrics {
+            left: 0.0,
+            right: 100.0,
+            top: 100.0,
+            bottom: 0.0,
+        };
+        let fonts = font::FontMap::default();
+        let mut text_cache = TextLayoutCache::default();
+        let mut scratch = ComposeScratch::default();
+
+        scratch.begin_frame_stats(true);
+        let mut render = build_screen_cached_with_scratch(
+            &actors,
+            [0.0; 4],
+            &metrics,
+            &fonts,
+            0.0,
+            &mut text_cache,
+            &mut scratch,
+        );
+        assert!(scratch.frame_stats().sort_fallback);
+        assert_eq!(
+            render
+                .objects
+                .iter()
+                .map(|object| object.z)
+                .collect::<Vec<_>>(),
+            vec![1, 2]
+        );
+
+        scratch.recycle_render_list(&mut render);
+        scratch.begin_frame_stats(false);
+        let _ = build_screen_cached_with_scratch(
+            &actors,
+            [0.0; 4],
+            &metrics,
+            &fonts,
+            0.0,
+            &mut text_cache,
+            &mut scratch,
+        );
+        assert_eq!(scratch.frame_stats(), super::ComposeFrameStats::default());
     }
 
     #[test]

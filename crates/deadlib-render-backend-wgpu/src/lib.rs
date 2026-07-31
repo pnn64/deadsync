@@ -973,6 +973,7 @@ pub fn draw(
         return Ok(stats);
     }
 
+    let backend_prepare_started = Instant::now();
     {
         let prep = &mut state.prep;
         let device = &state.device;
@@ -989,7 +990,9 @@ pub fn draw(
         });
         stats.storage = prep.storage_stats();
     }
+    stats.backend_prepare_us = elapsed_us_since(backend_prepare_started);
 
+    let backend_upload_started = Instant::now();
     let instance_len = render_list.sprite_instances.len();
     ensure_instance_capacity(state, instance_len);
     if instance_len > 0 {
@@ -1027,6 +1030,7 @@ pub fn draw(
         );
     }
     upload_projections(state, &render_list.cameras);
+    stats.backend_upload_us = elapsed_us_since(backend_upload_started);
 
     let acquire_started = Instant::now();
     let (frame, suboptimal) = match state.surface.get_current_texture() {
@@ -1046,6 +1050,7 @@ pub fn draw(
     };
     stats.acquire_us = elapsed_us_since(acquire_started);
     let waited_for_image = stats.acquire_us >= WGPU_IMAGE_WAIT_THRESHOLD_US;
+    let backend_setup_started = Instant::now();
     let view = frame
         .texture
         .create_view(&wgpu::TextureViewDescriptor::default());
@@ -1054,7 +1059,9 @@ pub fn draw(
         .create_command_encoder(&wgpu::CommandEncoderDescriptor {
             label: Some("wgpu encoder"),
         });
+    stats.backend_setup_us = elapsed_us_since(backend_setup_started);
 
+    let backend_record_started = Instant::now();
     let mut vertices_drawn = 0u32;
     {
         let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -1317,6 +1324,7 @@ pub fn draw(
     } else {
         None
     };
+    stats.backend_record_us = elapsed_us_since(backend_record_started);
 
     let submitted_present_id = next_present_id(state);
     let submit_started = Instant::now();

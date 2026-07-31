@@ -2729,11 +2729,16 @@ impl App {
         }
         let fonts = self.asset_manager.fonts();
         let build_screen_started = Instant::now();
-        let collect_text_layout_stats = stutter_diag_enabled();
         let uses_gameplay_present = matches!(
             self.state.screens.current_screen,
             CurrentScreen::Gameplay | CurrentScreen::Practice
         );
+        let collect_text_layout_stats = stutter_diag_enabled();
+        let collect_pacing_stats = uses_gameplay_present
+            && log::log_enabled!(
+                target: "deadsync_shell::frame_pacing_trace",
+                log::Level::Trace
+            );
         let actor_resources = match self.state.screens.current_screen {
             CurrentScreen::Gameplay => self
                 .state
@@ -2749,10 +2754,11 @@ impl App {
                 .map(|state| state.gameplay.actor_resources()),
             _ => None,
         };
-        let (mut screen, text_layout) = if uses_gameplay_present {
+        let (mut screen, text_layout, compose_frame) = if uses_gameplay_present {
             let text_layout_cache = &mut self.gameplay_text_layout_cache;
             let compose_scratch = &mut self.gameplay_compose_scratch;
             text_layout_cache.begin_frame_stats(collect_text_layout_stats);
+            compose_scratch.begin_frame_stats(collect_pacing_stats);
             let screen = if let Some(actor_resources) = actor_resources {
                 compose::build_screen_cached_with_scratch_and_texture_context_and_actor_resources(
                     &actors,
@@ -2777,11 +2783,16 @@ impl App {
                     &PRESENT_TEXTURE_CONTEXT,
                 )
             };
-            (screen, text_layout_cache.frame_stats())
+            (
+                screen,
+                text_layout_cache.frame_stats(),
+                compose_scratch.frame_stats(),
+            )
         } else {
             let text_layout_cache = &mut self.ui_text_layout_cache;
             let compose_scratch = &mut self.ui_compose_scratch;
             text_layout_cache.begin_frame_stats(collect_text_layout_stats);
+            compose_scratch.begin_frame_stats(false);
             let screen = if let Some(actor_resources) = actor_resources {
                 compose::build_screen_cached_with_scratch_and_texture_context_and_actor_resources(
                     &actors,
@@ -2806,7 +2817,11 @@ impl App {
                     &PRESENT_TEXTURE_CONTEXT,
                 )
             };
-            (screen, text_layout_cache.frame_stats())
+            (
+                screen,
+                text_layout_cache.frame_stats(),
+                compose_scratch.frame_stats(),
+            )
         };
         let build_screen_us = elapsed_us_since(build_screen_started);
         let resolve_textures_us = 0;
@@ -2960,6 +2975,8 @@ impl App {
                 actor_build_us,
                 build_screen_us,
                 compose_us,
+                sort_us: compose_frame.sort_us,
+                sort_fallback: compose_frame.sort_fallback,
                 upload_us,
                 storage: gameplay_storage,
             },

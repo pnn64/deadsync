@@ -1491,6 +1491,7 @@ pub fn draw(
     stats.present_stats.mode = vk_present_mode_trace(state.swapchain_resources.present_mode);
     stats.present_stats.refresh_ns = state.present_telemetry.refresh_ns;
 
+    let backend_prepare_started = Instant::now();
     {
         let prep = &mut state.prep;
         let instance = &state.instance;
@@ -1519,12 +1520,14 @@ pub fn draw(
         );
         stats.storage = prep.storage_stats();
     }
+    stats.backend_prepare_us = elapsed_us_since(backend_prepare_started);
 
     let needed_instances = render_list.sprite_instances.len();
     let needed_mesh_vertices = state.prep.mesh_vertices.len();
     let needed_tmesh_vertices = state.prep.tmesh_vertices.len();
     let needed_tmesh_instances = state.prep.tmesh_instances.len();
 
+    let backend_upload_started = Instant::now();
     let base_first_instance = if needed_instances > 0 {
         Some(ensure_instance_ring_capacity(state, needed_instances)?)
     } else {
@@ -1548,6 +1551,7 @@ pub fn draw(
     } else {
         None
     };
+    stats.backend_upload_us = elapsed_us_since(backend_upload_started);
 
     // SAFETY: We wait on the current frame fence before reusing its command buffer or writing into
     // this frame's ring-buffer slice, so the GPU is done reading prior submissions. All Vulkan
@@ -1610,7 +1614,7 @@ pub fn draw(
         )?;
         stats.backend_setup_us = elapsed_us_since(backend_setup_started);
 
-        let backend_prepare_started = Instant::now();
+        let backend_upload_started = Instant::now();
         let inst_base_ptr = base_first_instance.map_or(std::ptr::null_mut(), |b| {
             state.instance_ring_ptr.add(b as usize)
         });
@@ -1658,7 +1662,9 @@ pub fn draw(
                 needed_tmesh_instances,
             );
         }
-        stats.backend_prepare_us = elapsed_us_since(backend_prepare_started);
+        stats.backend_upload_us = stats
+            .backend_upload_us
+            .saturating_add(elapsed_us_since(backend_upload_started));
 
         let backend_record_started = Instant::now();
         let c = render_list.clear_color;

@@ -977,9 +977,11 @@ pub fn draw(
             ensure_cached_tmesh(gl, cached_tmesh, cached_tmesh_bytes, cache_key, vertices)
         });
     }
-    let mut stats = DrawStats::default();
-    stats.backend_prepare_us = elapsed_us_since(backend_prepare_started);
-    stats.storage = state.prep.storage_stats();
+    let mut stats = DrawStats {
+        backend_prepare_us: elapsed_us_since(backend_prepare_started),
+        storage: state.prep.storage_stats(),
+        ..DrawStats::default()
+    };
 
     let mut vertices: u32 = 0;
 
@@ -1018,6 +1020,7 @@ pub fn draw(
         let mut last_tmesh_source: Option<TexturedMeshSource> = None;
         let mut last_depth_test = Some(false);
 
+        let backend_upload_started = Instant::now();
         if state.path == GlPath::Modern && !render_list.sprite_instances.is_empty() {
             let shared_instance_vbo = state
                 .shared_instance_vbo
@@ -1056,6 +1059,7 @@ pub fn draw(
                 glow::DYNAMIC_DRAW,
             );
         }
+        stats.backend_upload_us = elapsed_us_since(backend_upload_started);
 
         if state.path == GlPath::Modern {
             let shared_vao = state
@@ -1760,7 +1764,8 @@ pub fn draw(
         }
         gl.use_program(None);
     }
-    stats.backend_record_us = elapsed_us_since(backend_record_started);
+    stats.backend_record_us =
+        elapsed_us_since(backend_record_started).saturating_sub(stats.backend_upload_us);
 
     if state.screenshot_requested {
         state.screenshot_requested = false;

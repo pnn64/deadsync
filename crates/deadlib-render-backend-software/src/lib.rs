@@ -161,6 +161,7 @@ pub fn draw(
         _ => state.available_threads,
     };
     let use_parallel = threads > 1 && h >= SOFTWARE_ROW_CHUNK * 2 && !objects.is_empty();
+    let backend_prepare_started = Instant::now();
     ensure_worker_pool(state, threads)?;
     prepare_objects(
         objects,
@@ -171,7 +172,9 @@ pub fn draw(
         h,
         &mut state.prepared_objects,
     );
+    let backend_prepare_us = elapsed_us_since(backend_prepare_started);
 
+    let backend_setup_started = Instant::now();
     if state.surface_resize_pending {
         let resize_w = NonZeroU32::new(width).unwrap();
         let resize_h = NonZeroU32::new(height).unwrap();
@@ -185,6 +188,8 @@ pub fn draw(
         None
     };
     let mut buffer = state.surface.buffer_mut()?;
+    let backend_setup_us = elapsed_us_since(backend_setup_started);
+    let backend_record_started = Instant::now();
     let clear = pack_rgba(render_list.clear_color);
     for pixel in buffer.iter_mut() {
         *pixel = clear;
@@ -216,6 +221,7 @@ pub fn draw(
     } else {
         draw_rows(prepared_objects, objects, textures, w, h, 0, h, &mut buffer)
     };
+    let backend_record_us = elapsed_us_since(backend_record_started);
 
     let present_started = Instant::now();
     buffer.present()?;
@@ -227,6 +233,9 @@ pub fn draw(
     Ok(DrawStats {
         vertices,
         present_us: elapsed_us_since(present_started),
+        backend_setup_us,
+        backend_prepare_us,
+        backend_record_us,
         storage,
         ..DrawStats::default()
     })

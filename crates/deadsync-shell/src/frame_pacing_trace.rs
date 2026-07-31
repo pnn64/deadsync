@@ -21,6 +21,8 @@ pub struct GameplayPacingPhases {
     pub actor_build_us: u32,
     pub build_screen_us: u32,
     pub compose_us: u32,
+    pub sort_us: u32,
+    pub sort_fallback: bool,
     pub upload_us: u32,
     pub storage: GameplayStorageSample,
 }
@@ -113,10 +115,12 @@ enum Phase {
     ActorBuild,
     BuildScreen,
     Compose,
-    Upload,
+    Sort,
+    AssetUpload,
     Draw,
     BackendSetup,
     BackendPrepare,
+    BackendUpload,
     BackendRecord,
 }
 
@@ -221,7 +225,9 @@ pub struct GameplayPacingTrace {
     present_over_3ms: u32,
     draw_setup_sum_us: u64,
     draw_prepare_sum_us: u64,
+    draw_upload_sum_us: u64,
     draw_record_sum_us: u64,
+    sort_fallback_frames: u32,
     display_error_abs_sum_us: u64,
     display_error_abs_max_us: u32,
     display_error_last_us: i32,
@@ -278,7 +284,9 @@ impl GameplayPacingTrace {
             present_over_3ms: 0,
             draw_setup_sum_us: 0,
             draw_prepare_sum_us: 0,
+            draw_upload_sum_us: 0,
             draw_record_sum_us: 0,
+            sort_fallback_frames: 0,
             display_error_abs_sum_us: 0,
             display_error_abs_max_us: 0,
             display_error_last_us: 0,
@@ -421,17 +429,25 @@ impl GameplayPacingTrace {
         self.draw_prepare_sum_us = self
             .draw_prepare_sum_us
             .saturating_add(u64::from(draw_stats.backend_prepare_us));
+        self.draw_upload_sum_us = self
+            .draw_upload_sum_us
+            .saturating_add(u64::from(draw_stats.backend_upload_us));
         self.draw_record_sum_us = self
             .draw_record_sum_us
             .saturating_add(u64::from(draw_stats.backend_record_us));
+        self.sort_fallback_frames = self
+            .sort_fallback_frames
+            .saturating_add(u32::from(phases.sort_fallback));
         self.record_phase(Phase::Frame, dt_us);
         self.record_phase(Phase::ActorBuild, phases.actor_build_us);
         self.record_phase(Phase::BuildScreen, phases.build_screen_us);
         self.record_phase(Phase::Compose, phases.compose_us);
-        self.record_phase(Phase::Upload, phases.upload_us);
+        self.record_phase(Phase::Sort, phases.sort_us);
+        self.record_phase(Phase::AssetUpload, phases.upload_us);
         self.record_phase(Phase::Draw, draw_us);
         self.record_phase(Phase::BackendSetup, draw_stats.backend_setup_us);
         self.record_phase(Phase::BackendPrepare, draw_stats.backend_prepare_us);
+        self.record_phase(Phase::BackendUpload, draw_stats.backend_upload_us);
         self.record_phase(Phase::BackendRecord, draw_stats.backend_record_us);
         self.storage.record(phases.storage);
 
@@ -495,10 +511,12 @@ impl GameplayPacingTrace {
         let actor_tail = self.phase_tail(Phase::ActorBuild);
         let build_tail = self.phase_tail(Phase::BuildScreen);
         let compose_tail = self.phase_tail(Phase::Compose);
-        let upload_tail = self.phase_tail(Phase::Upload);
+        let sort_tail = self.phase_tail(Phase::Sort);
+        let asset_upload_tail = self.phase_tail(Phase::AssetUpload);
         let draw_tail = self.phase_tail(Phase::Draw);
         let setup_tail = self.phase_tail(Phase::BackendSetup);
         let prepare_tail = self.phase_tail(Phase::BackendPrepare);
+        let backend_upload_tail = self.phase_tail(Phase::BackendUpload);
         let record_tail = self.phase_tail(Phase::BackendRecord);
         let tail_samples = self.phase_hist(Phase::Frame).samples;
         let tail_capped = self
@@ -506,7 +524,7 @@ impl GameplayPacingTrace {
             .iter()
             .fold(0u32, |sum, hist| sum.saturating_add(hist.capped));
         log::trace!(
-            "Gameplay frame pacing: frames={} req=[chain:{} other:{}] dt_ms=[avg:{:.3} max:{:.3}] redraw_ms=[late_avg:{:.3} late_max:{:.3} deliver_avg:{:.3} deliver_max:{:.3} >=1ms:{} >=2ms:{}] draw_ms=[avg:{:.3} max:{:.3}] present_ms=[avg:{:.3} max:{:.3} >=1ms:{} >=3ms:{}] draw_cpu_ms=[setup_avg:{:.3} prep_avg:{:.3} record_avg:{:.3}] tails_us=[order:p50/p95/p99/worst samples:{} capped:{} frame:{} actor:{} build:{} compose:{} upload:{} draw:{} setup:{} prep:{} record:{}] cpu_storage=[order:capacity/growth_events total_growth_events:{} {}] display_dbg=[err_last_ms:{:+.3} abs_avg_ms:{:.3} abs_max_ms:{:.3} catch:{} catch_last:{}] present_dbg=[mode:{} display:{} host:{} mapped:{} inflight_avg:{:.2} inflight_max:{} image_wait:{} back_pressure:{} queue_idle:{} subopt:{} interval_ms_avg:{:.3} interval_ms_max:{:.3} margin_ms_avg:{:.3} margin_ms_max:{:.3} cal_ms_avg:{:.3} cal_ms_max:{:.3}] audio_dbg=[path:{} req:{} fallback:{} clock:{} qual:{} sf:{} cf:{} rate:{} buf:{} pad:{} q:{} tick_ms:{:.3} span_ms:{:.3} out_ms:{:.3} underruns:{}]",
+            "Gameplay frame pacing: frames={} req=[chain:{} other:{}] dt_ms=[avg:{:.3} max:{:.3}] redraw_ms=[late_avg:{:.3} late_max:{:.3} deliver_avg:{:.3} deliver_max:{:.3} >=1ms:{} >=2ms:{}] draw_ms=[avg:{:.3} max:{:.3}] present_ms=[avg:{:.3} max:{:.3} >=1ms:{} >=3ms:{}] draw_cpu_ms=[setup_avg:{:.3} prep_avg:{:.3} upload_avg:{:.3} record_avg:{:.3}] sort_fallbacks={} tails_us=[order:p50/p95/p99/worst samples:{} capped:{} frame:{} actor:{} build:{} compose:{} sort:{} asset_upload:{} draw:{} setup:{} prep:{} backend_upload:{} record:{}] cpu_storage=[order:capacity/growth_events total_growth_events:{} {}] display_dbg=[err_last_ms:{:+.3} abs_avg_ms:{:.3} abs_max_ms:{:.3} catch:{} catch_last:{}] present_dbg=[mode:{} display:{} host:{} mapped:{} inflight_avg:{:.2} inflight_max:{} image_wait:{} back_pressure:{} queue_idle:{} subopt:{} interval_ms_avg:{:.3} interval_ms_max:{:.3} margin_ms_avg:{:.3} margin_ms_max:{:.3} cal_ms_avg:{:.3} cal_ms_max:{:.3}] audio_dbg=[path:{} req:{} fallback:{} clock:{} qual:{} sf:{} cf:{} rate:{} buf:{} pad:{} q:{} tick_ms:{:.3} span_ms:{:.3} out_ms:{:.3} underruns:{}]",
             frames,
             self.chain_frames,
             self.other_frames,
@@ -526,17 +544,21 @@ impl GameplayPacingTrace {
             self.present_over_3ms,
             ms(self.draw_setup_sum_us),
             ms(self.draw_prepare_sum_us),
+            ms(self.draw_upload_sum_us),
             ms(self.draw_record_sum_us),
+            self.sort_fallback_frames,
             tail_samples,
             tail_capped,
             frame_tail,
             actor_tail,
             build_tail,
             compose_tail,
-            upload_tail,
+            sort_tail,
+            asset_upload_tail,
             draw_tail,
             setup_tail,
             prepare_tail,
+            backend_upload_tail,
             record_tail,
             self.storage.total_growths(),
             self.storage,
@@ -636,6 +658,7 @@ mod tests {
             present_us: 1_500,
             backend_setup_us: 100,
             backend_prepare_us: 200,
+            backend_upload_us: 250,
             backend_record_us: 300,
             ..DrawStats::default()
         };
@@ -653,6 +676,8 @@ mod tests {
                 actor_build_us: 400,
                 build_screen_us: 600,
                 compose_us: 1_000,
+                sort_us: 75,
+                sort_fallback: true,
                 upload_us: 50,
                 storage: GameplayStorageSample::new(
                     256,
@@ -672,6 +697,8 @@ mod tests {
         assert_eq!(trace.dt_sum_us, 16_000);
         assert_eq!(trace.redraw_late_sum_us, 1_500);
         assert_eq!(trace.present_over_1ms, 1);
+        assert_eq!(trace.draw_upload_sum_us, 250);
+        assert_eq!(trace.sort_fallback_frames, 1);
         assert_eq!(trace.display_error_last_us, -2_000);
         assert_eq!(trace.display_catching_up_frames, 1);
         assert_eq!(trace.storage.high[0], 256);
@@ -687,6 +714,8 @@ mod tests {
                 worst: 1_000,
             }
         );
+        assert_eq!(trace.phase_tail(Phase::Sort).worst, 75);
+        assert_eq!(trace.phase_tail(Phase::BackendUpload).worst, 250);
     }
 
     #[test]
