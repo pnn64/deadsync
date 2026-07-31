@@ -618,16 +618,16 @@ L000
 "#
     }
 
-    fn write_sprite_core_fixture() -> PathBuf {
-        let song_dir = test_dir("f0-sprite-core");
-        let simfile = song_dir.join("f0_sprite_core.ssc");
-        fs::write(&simfile, generated_sprite_core_simfile()).unwrap();
+    fn write_fixture(name: &str, contents: &str) -> PathBuf {
+        let song_dir = test_dir(name);
+        let simfile = song_dir.join(format!("{name}.ssc"));
+        fs::write(&simfile, contents).unwrap();
         simfile
     }
 
     #[test]
     fn sprite_core_frame_is_structurally_repeatable() {
-        let simfile = write_sprite_core_fixture();
+        let simfile = write_fixture("f0-sprite-core", generated_sprite_core_simfile());
         with_session(
             profile_data::PlayStyle::Single,
             profile_data::PlayerSide::P1,
@@ -713,6 +713,216 @@ L000
                     &mut compose_scratch,
                 );
                 assert_ne!(compare_render_lists(&expected, &reverse), Ok(()));
+            },
+        );
+    }
+
+    fn generated_hold_mine_simfile() -> &'static str {
+        r#"#VERSION:0.83;
+#TITLE:F0 Hold Mine;
+#MUSIC:;
+#OFFSET:0.000;
+#BPMS:0.000=120.000;
+
+#NOTEDATA:;
+#STEPSTYPE:dance-single;
+#DESCRIPTION:F0-hold-mine;
+#DIFFICULTY:Challenge;
+#METER:10;
+#RADARVALUES:0,0,0,0,0;
+#NOTES:
+2000
+0400
+0020
+000M
+,
+0000
+000M
+0000
+0030
+,
+3000
+0300
+M000
+0000
+;
+"#
+    }
+
+    fn add_hold_mine_state(state: &mut screen_gameplay::State) -> [usize; 3] {
+        let note_index = |column, note_type| {
+            state
+                .chart_runtime
+                .notes
+                .iter()
+                .position(|note| note.column == column && note.note_type == note_type)
+                .expect("hold/mine fixture note should exist")
+        };
+        let hold_index = note_index(0, NoteType::Hold);
+        let roll_index = note_index(1, NoteType::Roll);
+        let dropped_index = note_index(2, NoteType::Hold);
+        let current_time_ns = deadsync_core::song_time::song_time_ns_from_seconds(2.5);
+        let active_hold = |note_index, life, is_pressed| {
+            let note = &state.chart_runtime.notes[note_index];
+            deadsync_gameplay::ActiveHold {
+                note_index,
+                start_time_ns: state.chart_runtime.note_time_cache_ns[note_index],
+                end_time_ns: state.chart_runtime.hold_end_time_cache_ns[note_index]
+                    .expect("fixture hold should have a cached tail time"),
+                note_type: note.note_type,
+                let_go: false,
+                is_pressed,
+                life,
+                last_update_time_ns: current_time_ns,
+            }
+        };
+        let live_hold = active_hold(hold_index, 1.0, true);
+        let live_roll = active_hold(roll_index, 0.65, false);
+        state.hold_runtime.active_holds[0] = Some(live_hold);
+        state.hold_runtime.active_holds[1] = Some(live_roll);
+
+        let let_go_time_ns = deadsync_core::song_time::song_time_ns_from_seconds(2.35);
+        state.handle_hold_let_go(2, dropped_index, let_go_time_ns);
+        let last_held_beat = 4.5;
+        let last_held_row = state
+            .timing_runtime
+            .timing
+            .get_row_for_beat(last_held_beat)
+            .expect("fixture beat should map to a chart row");
+        let dropped = state.chart_runtime.notes[dropped_index]
+            .hold
+            .as_mut()
+            .expect("fixture dropped hold should have hold data");
+        dropped.life = 0.35;
+        dropped.last_held_beat = last_held_beat;
+        dropped.last_held_row_index = last_held_row;
+
+        state.trigger_receptor_step_pulse(0);
+        state.trigger_mine_explosion(3);
+        let judgment = Judgment {
+            time_error_ms: 23.0,
+            time_error_music_ns: 23_000_000,
+            grade: JudgeGrade::Excellent,
+            window: Some(TimingWindow::W2),
+            miss_because_held: false,
+        };
+        state.error_bar_register_tap(0, &judgment, 2.5);
+        [hold_index, roll_index, dropped_index]
+    }
+
+    #[test]
+    fn hold_mine_frame_is_structurally_repeatable() {
+        let simfile = write_fixture("f0-hold-mine", generated_hold_mine_simfile());
+        with_session(
+            profile_data::PlayStyle::Single,
+            profile_data::PlayerSide::P1,
+            true,
+            false,
+            || {
+                let metrics = space::metrics_for_window(640, 480);
+                space::set_current_metrics(metrics);
+                space::set_current_window_px(640, 480);
+                space::set_overscan(0, 0, 0, 0);
+
+                let mut profiles = [
+                    profile_data::Profile::default(),
+                    profile_data::Profile::default(),
+                ];
+                profiles[0].noteskin = profile_data::NoteSkin::new("lambda");
+                profiles[0].scroll_speed = ScrollSpeedSetting::XMod(2.0);
+                profiles[0].error_bar_active_mask = profile_data::ErrorBarMask::COLORFUL
+                    | profile_data::ErrorBarMask::MONOCHROME
+                    | profile_data::ErrorBarMask::TEXT;
+                profiles[0].text_error_bar_scalable = true;
+                profiles[0].text_error_bar_threshold_ms = 10;
+                let mut state =
+                    build_test_state(&simfile, GameplayViewport::new(640.0, 480.0), profiles);
+                set_fixture_time(&mut state, 2.5);
+                let [hold_index, roll_index, dropped_index] = add_hold_mine_state(&mut state);
+
+                assert_eq!(
+                    state.chart_runtime.notes[hold_index].note_type,
+                    NoteType::Hold
+                );
+                assert_eq!(
+                    state.chart_runtime.notes[roll_index].note_type,
+                    NoteType::Roll
+                );
+                assert!(
+                    state
+                        .chart_runtime
+                        .notes
+                        .iter()
+                        .any(|note| note.note_type == NoteType::Mine)
+                );
+                assert_eq!(
+                    state.active_hold(0).map(|hold| hold.note_index),
+                    Some(hold_index)
+                );
+                assert_eq!(
+                    state.active_hold(1).map(|hold| hold.note_index),
+                    Some(roll_index)
+                );
+                let dropped = state.chart_runtime.notes[dropped_index]
+                    .hold
+                    .as_ref()
+                    .expect("fixture dropped hold should have hold data");
+                assert_eq!(
+                    dropped.result,
+                    Some(deadsync_rules::note::HoldResult::LetGo)
+                );
+                assert_eq!(dropped.life, 0.35);
+                assert!(state.receptor_glow_visual_for_col(0).is_some());
+                assert!(state.display.visual_feedback.mine_explosions[3].is_some());
+                assert!(state.display.hold_feedback.hold_judgments[2].is_some());
+                let player = &state.players_runtime.players[0];
+                assert!(player.error_bar_color_ticks.iter().any(Option::is_some));
+                assert!(player.error_bar_mono_ticks.iter().any(Option::is_some));
+                assert!(player.error_bar_text.is_some());
+
+                let assets = fixture_assets();
+                let mut actors = Vec::with_capacity(512);
+                let mut text_cache = compose::TextLayoutCache::default();
+                let mut compose_scratch = compose::ComposeScratch::default();
+                let normal = assert_repeatable_frame(
+                    &mut state,
+                    &assets,
+                    &metrics,
+                    &mut actors,
+                    &mut text_cache,
+                    &mut compose_scratch,
+                );
+
+                state.profiles_runtime.profiles[0]
+                    .set_scroll_option(profile_data::ScrollOption::Reverse);
+                state.refresh_live_notefield_options(120.0);
+                let reverse = assert_repeatable_frame(
+                    &mut state,
+                    &assets,
+                    &metrics,
+                    &mut actors,
+                    &mut text_cache,
+                    &mut compose_scratch,
+                );
+                assert_ne!(compare_render_lists(&normal, &reverse), Ok(()));
+
+                state.hold_runtime.active_holds.fill(None);
+                state.display.hold_feedback.clear();
+                state.display.visual_feedback.mine_explosions.fill(None);
+                state.display.receptor_feedback.reset_for_practice();
+                let mut without_live_feedback = compose_fixture_frame(
+                    &mut state,
+                    &assets,
+                    &metrics,
+                    &mut actors,
+                    &mut text_cache,
+                    &mut compose_scratch,
+                );
+                assert_ne!(
+                    compare_render_lists(&reverse, &without_live_feedback),
+                    Ok(())
+                );
+                compose_scratch.recycle_render_list(&mut without_live_feedback);
             },
         );
     }
