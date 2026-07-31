@@ -616,13 +616,14 @@ mod tests {
         state.trigger_tap_judgment_explosion(player_idx, column, &judgment);
     }
 
-    fn compose_fixture_frame(
+    fn compose_fixture_frame_with_textures<T: TextureContext + ?Sized>(
         state: &mut screen_gameplay::State,
         assets: &crate::assets::AssetManager,
         metrics: &space::Metrics,
         actors: &mut Vec<deadlib_present::actors::Actor>,
         text_cache: &mut compose::TextLayoutCache,
         scratch: &mut compose::ComposeScratch,
+        texture_ctx: &T,
     ) -> deadlib_render::RenderList {
         actors.clear();
         screen_gameplay::push_actors(
@@ -641,8 +642,27 @@ mod tests {
             10.0,
             text_cache,
             scratch,
-            &FIXTURE_TEXTURES,
+            texture_ctx,
             state.actor_resources(),
+        )
+    }
+
+    fn compose_fixture_frame(
+        state: &mut screen_gameplay::State,
+        assets: &crate::assets::AssetManager,
+        metrics: &space::Metrics,
+        actors: &mut Vec<deadlib_present::actors::Actor>,
+        text_cache: &mut compose::TextLayoutCache,
+        scratch: &mut compose::ComposeScratch,
+    ) -> deadlib_render::RenderList {
+        compose_fixture_frame_with_textures(
+            state,
+            assets,
+            metrics,
+            actors,
+            text_cache,
+            scratch,
+            &FIXTURE_TEXTURES,
         )
     }
 
@@ -894,6 +914,601 @@ L000
                     &mut compose_scratch,
                 );
                 assert_ne!(compare_render_lists(&expected, &reverse), Ok(()));
+            },
+        );
+    }
+
+    #[cfg(target_os = "windows")]
+    #[derive(Debug)]
+    struct GpuCaptureArtifacts {
+        normal_path: PathBuf,
+        reverse_path: PathBuf,
+        manifest_path: PathBuf,
+    }
+
+    #[cfg(target_os = "windows")]
+    struct GpuCaptureApp {
+        backend_type: deadlib_render::BackendType,
+        simfile: PathBuf,
+        output_dir: PathBuf,
+        result: Option<Result<GpuCaptureArtifacts, String>>,
+    }
+
+    #[cfg(target_os = "windows")]
+    impl winit::application::ApplicationHandler for GpuCaptureApp {
+        fn resumed(&mut self, event_loop: &winit::event_loop::ActiveEventLoop) {
+            if self.result.is_some() {
+                return;
+            }
+            self.result = Some(capture_sprite_core_gpu(
+                event_loop,
+                self.backend_type,
+                &self.simfile,
+                &self.output_dir,
+            ));
+            event_loop.exit();
+        }
+
+        fn window_event(
+            &mut self,
+            event_loop: &winit::event_loop::ActiveEventLoop,
+            _window_id: winit::window::WindowId,
+            event: winit::event::WindowEvent,
+        ) {
+            if matches!(event, winit::event::WindowEvent::CloseRequested) {
+                event_loop.exit();
+            }
+        }
+    }
+
+    #[cfg(target_os = "windows")]
+    #[derive(Clone, Copy)]
+    struct GpuFrameStats {
+        hash: u64,
+        objects: usize,
+        instances: usize,
+        batches: usize,
+        noteskin_sprites: usize,
+    }
+
+    #[cfg(target_os = "windows")]
+    #[derive(Default)]
+    struct CaptureTextureContext {
+        keys: std::cell::RefCell<std::collections::HashSet<String>>,
+    }
+
+    #[cfg(target_os = "windows")]
+    impl TextureContext for CaptureTextureContext {
+        fn texture_registry_generation(&self) -> u64 {
+            deadsync_assets::texture_registry_generation()
+        }
+
+        fn texture_dims(&self, key: &str) -> Option<TextureMeta> {
+            deadsync_assets::texture_dims(key).map(|meta| TextureMeta {
+                w: meta.w,
+                h: meta.h,
+            })
+        }
+
+        fn sprite_sheet_dims(&self, key: &str) -> (u32, u32) {
+            deadsync_assets::sprite_sheet_dims(key)
+        }
+
+        fn texture_handle(&self, key: &str) -> deadlib_render::TextureHandle {
+            self.keys.borrow_mut().insert(key.to_owned());
+            deadsync_assets::texture_handle(key)
+        }
+    }
+
+    #[cfg(target_os = "windows")]
+    fn load_gpu_capture_assets(
+        assets: &mut deadsync_assets::AssetManager,
+        backend: &mut deadlib_renderer::Backend,
+    ) -> Result<(), String> {
+        let texture_assets = crate::resources::initial_texture_assets().collect::<Vec<_>>();
+        assets
+            .load_initial_assets(
+                backend,
+                deadsync_theme::ThemeAssetManifest {
+                    fonts: &[],
+                    textures: texture_assets.iter().copied(),
+                    texture_needs_repeat_sampler: crate::resources::texture_needs_repeat_sampler,
+                },
+            )
+            .map_err(|error| format!("failed to load capture textures: {error}"))?;
+
+        let project_root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let asset_root = project_root.join("assets");
+        let asset_roots = [asset_root.clone()];
+        for spec in crate::resources::FONT_ASSETS {
+            let ini_path = project_root.join(spec.ini_path);
+            let deadlib_present::font::FontLoadData {
+                mut font,
+                required_textures,
+            } = deadlib_assets::parse_font_with_asset_context(&ini_path, vec![asset_root.clone()])
+                .map_err(|error| {
+                    format!(
+                        "failed to parse capture font '{}' at '{}': {error}",
+                        spec.name,
+                        ini_path.display()
+                    )
+                })?;
+            deadlib_assets::set_font_fallback(&mut font, spec.fallback_font_name);
+            let textures = deadlib_assets::prepare_required_font_textures(
+                &font,
+                &required_textures,
+                &asset_roots,
+                |key| assets.has_texture_key(key),
+            )
+            .map_err(|error| format!("failed to decode capture font '{}': {error}", spec.name))?;
+            for deadlib_assets::PreparedFontTexture { key, image, hints } in textures {
+                let texture = backend
+                    .create_texture(&image, hints.sampler_desc())
+                    .map_err(|error| {
+                        format!("failed to upload capture font texture '{key}': {error}")
+                    })?;
+                deadlib_assets::register_texture_dims(&key, image.width(), image.height());
+                if assets
+                    .insert_texture(key.clone(), texture, image.width(), image.height())
+                    .is_some()
+                {
+                    return Err(format!(
+                        "capture font texture '{key}' replaced live storage"
+                    ));
+                }
+            }
+            assets.register_font(spec.name, font);
+        }
+        Ok(())
+    }
+
+    #[cfg(target_os = "windows")]
+    fn ensure_gpu_capture_texture(
+        assets: &mut deadsync_assets::AssetManager,
+        backend: &mut deadlib_renderer::Backend,
+        key: &str,
+        sampler: Option<deadlib_render::SamplerDesc>,
+    ) -> Result<(), String> {
+        if let Some(sampler) = sampler {
+            assets.ensure_texture_for_key_with_sampler(backend, key, sampler);
+        } else {
+            assets.ensure_texture_for_key(backend, key);
+        }
+        if assets.has_uploaded_texture_key(key) {
+            return Ok(());
+        }
+
+        let project_root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let path =
+            deadlib_assets::texture_key_source_path(key, key, |path| project_root.join(path));
+        if !path.is_file() {
+            return Err(format!(
+                "capture texture '{key}' was not found at '{}'",
+                path.display()
+            ));
+        }
+        let hints = deadlib_assets::parse_texture_hints(key);
+        let image = deadlib_assets::decode_texture_image(&path, &hints).map_err(|error| {
+            format!(
+                "failed to decode capture texture '{key}' at '{}': {error}",
+                path.display()
+            )
+        })?;
+        let sampler = sampler.unwrap_or_else(|| {
+            deadlib_assets::texture_key_sampler(
+                &hints,
+                crate::resources::texture_needs_repeat_sampler(key),
+            )
+        });
+        let texture = backend
+            .create_texture(&image, sampler)
+            .map_err(|error| format!("failed to upload capture texture '{key}': {error}"))?;
+        assets.set_texture_for_key(
+            backend,
+            key.to_owned(),
+            texture,
+            image.width(),
+            image.height(),
+        );
+        deadlib_assets::register_texture_dims(key, image.width(), image.height());
+        Ok(())
+    }
+
+    #[cfg(target_os = "windows")]
+    fn prewarm_gpu_noteskins(
+        state: &screen_gameplay::State,
+        assets: &mut deadsync_assets::AssetManager,
+        backend: &mut deadlib_renderer::Backend,
+    ) -> Result<(), String> {
+        let mut seen = std::collections::HashSet::<String>::with_capacity(128);
+        let mut seen_models = std::collections::HashSet::<String>::with_capacity(32);
+        let sets = [
+            &state.noteskin_assets.noteskin,
+            &state.noteskin_assets.mine_noteskin,
+            &state.noteskin_assets.receptor_noteskin,
+            &state.noteskin_assets.tap_explosion_noteskin,
+        ];
+        for noteskin in sets.into_iter().flat_map(|set| set.iter().flatten()) {
+            let mut error = None;
+            noteskin.for_each_slot(|slot| {
+                if error.is_none()
+                    && seen.insert(slot.texture_key().to_owned())
+                    && let Err(cause) =
+                        ensure_gpu_capture_texture(assets, backend, slot.texture_key(), None)
+                {
+                    error = Some(cause);
+                }
+            });
+            if let Some(error) = error {
+                return Err(error);
+            }
+
+            let mut error = None;
+            noteskin.for_each_slot(|slot| {
+                if error.is_none()
+                    && slot.model.is_some()
+                    && seen_models.insert(slot.texture_key().to_owned())
+                    && let Err(cause) = ensure_gpu_capture_texture(
+                        assets,
+                        backend,
+                        slot.texture_key(),
+                        Some(deadsync_assets::textures::model_texture_sampler(
+                            slot.texture_key(),
+                        )),
+                    )
+                {
+                    error = Some(cause);
+                }
+            });
+            if let Some(error) = error {
+                return Err(error);
+            }
+        }
+        Ok(())
+    }
+
+    #[cfg(target_os = "windows")]
+    fn gpu_frame_hash(image: &image::RgbaImage) -> u64 {
+        image
+            .as_raw()
+            .iter()
+            .fold(0xcbf2_9ce4_8422_2325, |hash, byte| {
+                (hash ^ u64::from(*byte)).wrapping_mul(0x0000_0100_0000_01b3)
+            })
+    }
+
+    #[cfg(target_os = "windows")]
+    fn missing_capture_texture_keys(
+        texture_ctx: &CaptureTextureContext,
+        assets: &crate::assets::AssetManager,
+    ) -> Vec<String> {
+        texture_ctx
+            .keys
+            .borrow()
+            .iter()
+            .filter(|key| {
+                let handle = deadsync_assets::texture_handle(key);
+                !assets.textures().contains_key(&handle)
+            })
+            .cloned()
+            .collect()
+    }
+
+    #[cfg(target_os = "windows")]
+    fn missing_capture_texture_report(
+        missing_keys: &[String],
+        assets: &crate::assets::AssetManager,
+    ) -> String {
+        missing_keys
+            .iter()
+            .map(|key| {
+                let canonical = deadsync_assets::canonical_texture_key(key);
+                let handle = deadsync_assets::texture_handle(key);
+                let canonical_handle = deadsync_assets::texture_handle(&canonical);
+                format!(
+                    "{key} [canonical={canonical}, local={}, uploaded={}, handle={handle}, canonical_handle={canonical_handle}]",
+                    assets.has_texture_key(key),
+                    assets.has_uploaded_texture_key(key),
+                )
+            })
+            .collect::<Vec<_>>()
+            .join(", ")
+    }
+
+    #[cfg(target_os = "windows")]
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "the capture owns one explicit value for each warmed presentation resource"
+    )]
+    fn capture_gpu_frame(
+        name: &str,
+        state: &mut screen_gameplay::State,
+        assets: &mut crate::assets::AssetManager,
+        backend: &mut deadlib_renderer::Backend,
+        metrics: &space::Metrics,
+        actors: &mut Vec<deadlib_present::actors::Actor>,
+        text_cache: &mut compose::TextLayoutCache,
+        compose_scratch: &mut compose::ComposeScratch,
+        output_dir: &Path,
+    ) -> Result<(PathBuf, GpuFrameStats), String> {
+        let texture_ctx = CaptureTextureContext::default();
+        let mut render = compose_fixture_frame_with_textures(
+            state,
+            assets,
+            metrics,
+            actors,
+            text_cache,
+            compose_scratch,
+            &texture_ctx,
+        );
+        let missing_keys = missing_capture_texture_keys(&texture_ctx, assets);
+        if !missing_keys.is_empty() {
+            compose_scratch.recycle_render_list(&mut render);
+            for key in &missing_keys {
+                ensure_gpu_capture_texture(assets, backend, key, None)?;
+            }
+            texture_ctx.keys.borrow_mut().clear();
+            render = compose_fixture_frame_with_textures(
+                state,
+                assets,
+                metrics,
+                actors,
+                text_cache,
+                compose_scratch,
+                &texture_ctx,
+            );
+            let mut missing_keys = missing_capture_texture_keys(&texture_ctx, assets);
+            if !missing_keys.is_empty() {
+                missing_keys.sort_unstable();
+                return Err(format!(
+                    "{name} frame has nonresident textures: {}",
+                    missing_capture_texture_report(&missing_keys, assets)
+                ));
+            }
+        }
+        let mut noteskin_handles = std::collections::HashSet::with_capacity(128);
+        for noteskin in [
+            &state.noteskin_assets.noteskin,
+            &state.noteskin_assets.mine_noteskin,
+            &state.noteskin_assets.receptor_noteskin,
+            &state.noteskin_assets.tap_explosion_noteskin,
+        ]
+        .into_iter()
+        .flat_map(|set| set.iter().flatten())
+        {
+            noteskin.for_each_slot(|slot| {
+                let handle = deadsync_assets::texture_handle(slot.texture_key());
+                if handle != deadlib_render::INVALID_TEXTURE_HANDLE
+                    && assets.textures().contains_key(&handle)
+                {
+                    noteskin_handles.insert(handle);
+                }
+            });
+        }
+        let noteskin_sprites = render
+            .objects
+            .iter()
+            .filter(|object| {
+                matches!(object.object_type, ObjectType::Sprite(_))
+                    && noteskin_handles.contains(&object.texture_handle)
+            })
+            .count();
+        if noteskin_sprites < 4 {
+            compose_scratch.recycle_render_list(&mut render);
+            return Err(format!(
+                "{name} frame has only {noteskin_sprites} resident noteskin sprites"
+            ));
+        }
+
+        backend.request_screenshot();
+        backend
+            .draw(&render, assets.textures(), false)
+            .map_err(|error| format!("{name} draw failed: {error}"))?;
+        let mut image = backend
+            .capture_frame()
+            .map_err(|error| format!("{name} readback failed: {error}"))?;
+        deadsync_assets::screenshot::set_opaque_alpha(&mut image);
+        if image.dimensions() != (640, 480) {
+            return Err(format!(
+                "{name} readback was {}x{}, expected 640x480",
+                image.width(),
+                image.height()
+            ));
+        }
+        if !image
+            .pixels()
+            .any(|pixel| pixel[0] != 0 || pixel[1] != 0 || pixel[2] != 0)
+        {
+            return Err(format!("{name} readback is entirely black"));
+        }
+
+        let path = output_dir.join(format!("sprite-core-{name}.png"));
+        image
+            .save(&path)
+            .map_err(|error| format!("failed to save '{}': {error}", path.display()))?;
+        let stats = GpuFrameStats {
+            hash: gpu_frame_hash(&image),
+            objects: render.objects.len(),
+            instances: render.sprite_instances.len(),
+            batches: render.batches.len(),
+            noteskin_sprites,
+        };
+        compose_scratch.recycle_render_list(&mut render);
+        Ok((path, stats))
+    }
+
+    #[cfg(target_os = "windows")]
+    fn capture_sprite_core_gpu(
+        event_loop: &winit::event_loop::ActiveEventLoop,
+        backend_type: deadlib_render::BackendType,
+        simfile: &Path,
+        output_dir: &Path,
+    ) -> Result<GpuCaptureArtifacts, String> {
+        let attributes = winit::window::Window::default_attributes()
+            .with_title("DeadSync F0 GPU capture")
+            .with_visible(false)
+            .with_resizable(false)
+            .with_inner_size(winit::dpi::PhysicalSize::new(640, 480));
+        let window = Arc::new(
+            event_loop
+                .create_window(attributes)
+                .map_err(|error| format!("failed to create capture window: {error}"))?,
+        );
+        let size = window.inner_size();
+        if size.width != 640 || size.height != 480 {
+            return Err(format!(
+                "capture window was {}x{}, expected 640x480",
+                size.width, size.height
+            ));
+        }
+        let mut backend = deadlib_renderer::create_backend(
+            backend_type,
+            Arc::clone(&window),
+            false,
+            deadlib_render::PresentModePolicy::Immediate,
+            false,
+            true,
+        )
+        .map_err(|error| format!("failed to create {backend_type} backend: {error}"))?;
+        let mut assets = deadsync_assets::AssetManager::new();
+        let result = (|| {
+            load_gpu_capture_assets(&mut assets, &mut backend)?;
+            let (mut state, _, metrics) = sprite_core_fixture(simfile);
+            prewarm_gpu_noteskins(&state, &mut assets, &mut backend)?;
+            std::fs::create_dir_all(output_dir).map_err(|error| {
+                format!(
+                    "failed to create capture directory '{}': {error}",
+                    output_dir.display()
+                )
+            })?;
+
+            let mut actors = Vec::with_capacity(512);
+            let mut text_cache = compose::TextLayoutCache::default();
+            let mut compose_scratch = compose::ComposeScratch::default();
+            let (normal_path, normal) = capture_gpu_frame(
+                "normal",
+                &mut state,
+                &mut assets,
+                &mut backend,
+                &metrics,
+                &mut actors,
+                &mut text_cache,
+                &mut compose_scratch,
+                output_dir,
+            )?;
+
+            state.profiles_runtime.profiles[0]
+                .set_scroll_option(profile_data::ScrollOption::Reverse);
+            state.refresh_live_notefield_options(120.0);
+            add_sprite_core_feedback(&mut state, 0, 0, 42);
+            let (reverse_path, reverse) = capture_gpu_frame(
+                "reverse",
+                &mut state,
+                &mut assets,
+                &mut backend,
+                &metrics,
+                &mut actors,
+                &mut text_cache,
+                &mut compose_scratch,
+                output_dir,
+            )?;
+            if normal.hash == reverse.hash {
+                return Err("normal and reverse GPU captures have the same pixel hash".to_owned());
+            }
+
+            let manifest_path = output_dir.join("manifest.txt");
+            let profile = if cfg!(debug_assertions) {
+                "debug"
+            } else {
+                "optimized"
+            };
+            let manifest = format!(
+                "fixture=F0-sprite-core\nbackend={backend_type}\nprofile={profile}\n\
+                 resolution=640x480\nmusic_time_seconds=2.5\n\
+                 normal_hash={:016x}\nnormal_objects={}\nnormal_instances={}\nnormal_batches={}\n\
+                 normal_noteskin_sprites={}\n\
+                 reverse_hash={:016x}\nreverse_objects={}\nreverse_instances={}\nreverse_batches={}\n\
+                 reverse_noteskin_sprites={}\n",
+                normal.hash,
+                normal.objects,
+                normal.instances,
+                normal.batches,
+                normal.noteskin_sprites,
+                reverse.hash,
+                reverse.objects,
+                reverse.instances,
+                reverse.batches,
+                reverse.noteskin_sprites,
+            );
+            std::fs::write(&manifest_path, manifest).map_err(|error| {
+                format!("failed to write '{}': {error}", manifest_path.display())
+            })?;
+            Ok(GpuCaptureArtifacts {
+                normal_path,
+                reverse_path,
+                manifest_path,
+            })
+        })();
+
+        let mut textures = assets.take_textures();
+        backend.dispose_textures(&mut textures);
+        backend.cleanup();
+        result
+    }
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    #[ignore = "requires an explicitly selected real GPU backend and writes PNG artifacts"]
+    fn sprite_core_gpu_capture_writes_baseline() {
+        use winit::platform::windows::EventLoopBuilderExtWindows;
+
+        let backend_name = std::env::var("DEADSYNC_F0_BACKEND")
+            .expect("set DEADSYNC_F0_BACKEND to opengl, vulkan, or vulkan-wgpu");
+        let backend_type = backend_name
+            .parse::<deadlib_render::BackendType>()
+            .unwrap_or_else(|error| panic!("invalid DEADSYNC_F0_BACKEND: {error}"));
+        assert_ne!(backend_type, deadlib_render::BackendType::Software);
+        let slug = backend_name
+            .trim()
+            .to_ascii_lowercase()
+            .replace(|ch: char| !ch.is_ascii_alphanumeric(), "-");
+        let output_root = std::env::var_os("DEADSYNC_F0_CAPTURE_DIR")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| {
+                PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../target/f0-gpu-captures")
+            });
+        let simfile = write_fixture("f0-sprite-core-gpu", generated_sprite_core_simfile());
+
+        with_session(
+            profile_data::PlayStyle::Single,
+            profile_data::PlayerSide::P1,
+            true,
+            false,
+            || {
+                let mut builder = winit::event_loop::EventLoop::builder();
+                builder.with_any_thread(true);
+                let event_loop = builder
+                    .build()
+                    .expect("capture event loop should initialize");
+                let mut app = GpuCaptureApp {
+                    backend_type,
+                    simfile,
+                    output_dir: output_root.join(slug),
+                    result: None,
+                };
+                event_loop
+                    .run_app(&mut app)
+                    .expect("capture event loop should run");
+                let artifacts = app
+                    .result
+                    .expect("capture app should run once")
+                    .unwrap_or_else(|error| panic!("F0 GPU capture failed: {error}"));
+                println!(
+                    "F0 GPU captures: normal='{}' reverse='{}' manifest='{}'",
+                    artifacts.normal_path.display(),
+                    artifacts.reverse_path.display(),
+                    artifacts.manifest_path.display()
+                );
             },
         );
     }
