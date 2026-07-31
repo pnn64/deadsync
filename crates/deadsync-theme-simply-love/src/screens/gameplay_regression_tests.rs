@@ -24,17 +24,31 @@ mod tests {
 
     use super::{MAX_COLS, MAX_PLAYERS, ScrollSpeedSetting, refresh_active_attack_masks};
     use crate::screens::gameplay as screen_gameplay;
+    use deadlib_present::{
+        compose::{self, TextureContext, TextureMeta},
+        space,
+    };
+    use deadlib_render::{
+        ObjectType,
+        draw_prep::{self, DrawScratch},
+        frame_compare::{compare_draw_scratch, compare_render_lists},
+    };
     use deadsync_assets::noteskin::{self, Noteskin};
     use deadsync_assets::song_lua::compile_song_lua;
     use deadsync_chart::SongData;
     use deadsync_chart::{ChartData, GameplayChartData};
+    use deadsync_core::note::NoteType;
     use deadsync_noteskin::{
         NoteskinSlot, ReceptorGlowBehavior, ReceptorStepBehavior, Style, TweenType,
     };
     use deadsync_profile as profile_data;
     use deadsync_profile::compat as profile;
+    use deadsync_rules::judgment::{JudgeGrade, Judgment, TimingWindow};
     use std::sync::{Arc, LazyLock, Mutex};
-    use std::{fs, path::PathBuf};
+    use std::{
+        fs,
+        path::{Path, PathBuf},
+    };
 
     static SESSION_TEST_LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
 
@@ -343,6 +357,364 @@ mod tests {
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(&dir).unwrap();
         dir
+    }
+
+    struct FixtureTextureContext;
+
+    impl TextureContext for FixtureTextureContext {
+        fn texture_registry_generation(&self) -> u64 {
+            0xf0f0_f0f0_f0f0_f0f0
+        }
+
+        fn texture_dims(&self, key: &str) -> Option<TextureMeta> {
+            Some(
+                crate::assets::texture_dims(key)
+                    .map(|meta| TextureMeta {
+                        w: meta.w,
+                        h: meta.h,
+                    })
+                    .unwrap_or(TextureMeta { w: 64, h: 64 }),
+            )
+        }
+
+        fn sprite_sheet_dims(&self, key: &str) -> (u32, u32) {
+            crate::assets::sprite_sheet_dims(key)
+        }
+
+        fn texture_handle(&self, key: &str) -> deadlib_render::TextureHandle {
+            let hash = key.as_bytes().iter().fold(0x811c_9dc5u32, |hash, byte| {
+                (hash ^ u32::from(*byte)).wrapping_mul(0x0100_0193)
+            });
+            u64::from(hash.max(1))
+        }
+    }
+
+    const FIXTURE_TEXTURES: FixtureTextureContext = FixtureTextureContext;
+
+    fn fixture_assets() -> crate::assets::AssetManager {
+        let mut assets = crate::assets::AssetManager::new();
+        let project_root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let asset_root = project_root.join("assets");
+        for spec in crate::resources::FONT_ASSETS {
+            let ini_path = project_root.join(spec.ini_path);
+            let mut font =
+                deadlib_assets::parse_font_with_asset_context(&ini_path, vec![asset_root.clone()])
+                    .unwrap_or_else(|error| {
+                        panic!(
+                            "fixture font '{}' at '{}' should parse: {error}",
+                            spec.name,
+                            ini_path.display()
+                        )
+                    })
+                    .font;
+            deadlib_assets::set_font_fallback(&mut font, spec.fallback_font_name);
+            assets.register_font(spec.name, font);
+        }
+        assets
+    }
+
+    fn build_test_state(
+        simfile: &Path,
+        viewport: GameplayViewport,
+        player_profiles: [profile_data::Profile; MAX_PLAYERS],
+    ) -> screen_gameplay::State {
+        let song = Arc::new(
+            deadsync_simfile::app_runtime::parse_song_for_test(simfile, 0.0)
+                .expect("generated gameplay fixture should parse"),
+        );
+        let chart_ix = song
+            .charts
+            .iter()
+            .position(|chart| chart.difficulty.eq_ignore_ascii_case("challenge"))
+            .unwrap_or(0);
+        let gameplay_chart = Arc::new(
+            deadsync_simfile::app_runtime::load_gameplay_charts(&song, &[chart_ix], 0.0)
+                .expect("generated gameplay fixture chart should load")
+                .remove(0),
+        );
+        let chart = Arc::new(song.charts[chart_ix].clone());
+        let session = GameplaySession::default();
+        let charts = [chart.clone(), chart];
+        let gameplay_charts = [gameplay_chart.clone(), gameplay_chart];
+        let scroll_speed = [
+            player_profiles[0].scroll_speed,
+            player_profiles[1].scroll_speed,
+        ];
+        let noteskin_data = test_noteskin_data(
+            session.play_style.cols_per_player(),
+            session.play_style.player_count(),
+            &player_profiles,
+            &session,
+        );
+        let runtime_profiles =
+            deadsync_profile_gameplay::gameplay_runtime_profile_data(&player_profiles, &session);
+        let noteskin_assets = screen_gameplay::gameplay_noteskin_assets(
+            session.play_style.cols_per_player(),
+            session.play_style.player_count(),
+            &runtime_profiles,
+        );
+        screen_gameplay::State::from_gameplay(
+            init(
+                song,
+                charts,
+                gameplay_charts,
+                viewport,
+                session,
+                GameplayConfig::default(),
+                deadsync_chart::SyncPref::Default,
+                GameplayMiniIndicatorData::default(),
+                noteskin_data,
+                screen_gameplay::GameplaySongLuaData::default(),
+                5,
+                1.0,
+                scroll_speed,
+                player_profiles,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                [0; MAX_PLAYERS],
+            ),
+            noteskin_assets,
+        )
+    }
+
+    fn set_fixture_time(state: &mut screen_gameplay::State, music_time: f32) {
+        state.boundary.total_elapsed_in_screen = 10.0;
+        state.clock.song_position.current_music_time_display = music_time;
+        state.clock.visible_timing.current_music_time = [music_time; MAX_PLAYERS];
+        state.clock.song_position.current_beat =
+            state.timing_runtime.timing.get_beat_for_time(music_time);
+        refresh_active_attack_masks(&mut state.gameplay, 0.0);
+    }
+
+    fn add_sprite_core_feedback(state: &mut screen_gameplay::State) {
+        let judgment = Judgment {
+            time_error_ms: -7.0,
+            time_error_music_ns: -7_000_000,
+            grade: JudgeGrade::Fantastic,
+            window: Some(TimingWindow::W1),
+            miss_because_held: false,
+        };
+        state.players_runtime.players[0].combo = 42;
+        state.players_runtime.players[0].full_combo_grade = Some(JudgeGrade::Fantastic);
+        state.players_runtime.players[0].current_combo_grade = Some(JudgeGrade::Fantastic);
+        state.players_runtime.players[0].judgment_counts[0] = 42;
+        state.set_last_judgment(0, judgment);
+        state.error_bar_register_tap(0, &judgment, 2.5);
+        state.trigger_tap_judgment_explosion(0, 0, &judgment);
+    }
+
+    fn compose_fixture_frame(
+        state: &mut screen_gameplay::State,
+        assets: &crate::assets::AssetManager,
+        metrics: &space::Metrics,
+        actors: &mut Vec<deadlib_present::actors::Actor>,
+        text_cache: &mut compose::TextLayoutCache,
+        scratch: &mut compose::ComposeScratch,
+    ) -> deadlib_render::RenderList {
+        actors.clear();
+        screen_gameplay::push_actors(
+            actors,
+            state,
+            assets,
+            screen_gameplay::ActorViewOverride::default(),
+            123.0,
+            crate::views::SimplyLoveVisualPolicyView::default(),
+        );
+        compose::build_screen_cached_with_scratch_and_texture_context_and_actor_resources(
+            actors,
+            [0.0, 0.0, 0.0, 1.0],
+            metrics,
+            assets.fonts(),
+            10.0,
+            text_cache,
+            scratch,
+            &FIXTURE_TEXTURES,
+            state.actor_resources(),
+        )
+    }
+
+    fn assert_repeatable_frame(
+        state: &mut screen_gameplay::State,
+        assets: &crate::assets::AssetManager,
+        metrics: &space::Metrics,
+        actors: &mut Vec<deadlib_present::actors::Actor>,
+        text_cache: &mut compose::TextLayoutCache,
+        compose_scratch: &mut compose::ComposeScratch,
+    ) -> deadlib_render::RenderList {
+        let mut warm =
+            compose_fixture_frame(state, assets, metrics, actors, text_cache, compose_scratch);
+        compose_scratch.recycle_render_list(&mut warm);
+
+        let mut expected_frame =
+            compose_fixture_frame(state, assets, metrics, actors, text_cache, compose_scratch);
+        let expected = expected_frame.clone();
+        compose_scratch.recycle_render_list(&mut expected_frame);
+        let mut actual =
+            compose_fixture_frame(state, assets, metrics, actors, text_cache, compose_scratch);
+
+        assert!(
+            expected
+                .objects
+                .iter()
+                .any(|object| matches!(object.object_type, ObjectType::Sprite(_)))
+        );
+        assert!(
+            expected
+                .objects
+                .iter()
+                .any(|object| matches!(object.object_type, ObjectType::TexturedMesh { .. }))
+        );
+        assert!(!expected.batches.is_empty());
+        assert_eq!(compare_render_lists(&expected, &actual), Ok(()));
+
+        let mut expected_draw = DrawScratch::default();
+        let mut actual_draw = DrawScratch::default();
+        draw_prep::prepare(&expected, &mut expected_draw, |_, _| false);
+        draw_prep::prepare(&actual, &mut actual_draw, |_, _| false);
+        assert!(!expected_draw.ops.is_empty());
+        assert_eq!(compare_draw_scratch(&expected_draw, &actual_draw), Ok(()));
+        compose_scratch.recycle_render_list(&mut actual);
+        expected
+    }
+
+    fn generated_sprite_core_simfile() -> &'static str {
+        r#"#VERSION:0.83;
+#TITLE:F0 Sprite Core;
+#MUSIC:;
+#OFFSET:0.000;
+#BPMS:0.000=120.000;
+
+#NOTEDATA:;
+#STEPSTYPE:dance-single;
+#DESCRIPTION:F0-sprite-core;
+#DIFFICULTY:Challenge;
+#METER:9;
+#RADARVALUES:0,0,0,0,0;
+#NOTES:
+1000
+0100
+0010
+0001
+,
+L000
+0100
+00F0
+0001
+,
+1100
+0011
+1001
+0110
+,
+1000
+0100
+0010
+0001
+;
+"#
+    }
+
+    fn write_sprite_core_fixture() -> PathBuf {
+        let song_dir = test_dir("f0-sprite-core");
+        let simfile = song_dir.join("f0_sprite_core.ssc");
+        fs::write(&simfile, generated_sprite_core_simfile()).unwrap();
+        simfile
+    }
+
+    #[test]
+    fn sprite_core_frame_is_structurally_repeatable() {
+        let simfile = write_sprite_core_fixture();
+        with_session(
+            profile_data::PlayStyle::Single,
+            profile_data::PlayerSide::P1,
+            true,
+            false,
+            || {
+                let metrics = space::metrics_for_window(640, 480);
+                space::set_current_metrics(metrics);
+                space::set_current_window_px(640, 480);
+                space::set_overscan(0, 0, 0, 0);
+
+                let mut profiles = [
+                    profile_data::Profile::default(),
+                    profile_data::Profile::default(),
+                ];
+                profiles[0].noteskin = profile_data::NoteSkin::new("lambda");
+                profiles[0].scroll_speed = ScrollSpeedSetting::XMod(2.0);
+                let mut state =
+                    build_test_state(&simfile, GameplayViewport::new(640.0, 480.0), profiles);
+                set_fixture_time(&mut state, 2.5);
+                add_sprite_core_feedback(&mut state);
+
+                assert!(
+                    state
+                        .chart_runtime
+                        .notes
+                        .iter()
+                        .any(|note| note.note_type == NoteType::Tap)
+                );
+                assert!(
+                    state
+                        .chart_runtime
+                        .notes
+                        .iter()
+                        .any(|note| note.note_type == NoteType::Lift)
+                );
+                assert!(
+                    state
+                        .chart_runtime
+                        .notes
+                        .iter()
+                        .any(|note| note.note_type == NoteType::Fake || note.is_fake)
+                );
+
+                let assets = fixture_assets();
+                let mut actors = Vec::with_capacity(512);
+                let mut text_cache = compose::TextLayoutCache::default();
+                let mut compose_scratch = compose::ComposeScratch::default();
+                let expected = assert_repeatable_frame(
+                    &mut state,
+                    &assets,
+                    &metrics,
+                    &mut actors,
+                    &mut text_cache,
+                    &mut compose_scratch,
+                );
+                let player = &mut state.players_runtime.players[0];
+                player.combo = 0;
+                player.last_judgment = None;
+                state.display.visual_feedback.clear();
+                state.display.visual_feedback.last_tap_judgments.fill(None);
+                let mut without_feedback = compose_fixture_frame(
+                    &mut state,
+                    &assets,
+                    &metrics,
+                    &mut actors,
+                    &mut text_cache,
+                    &mut compose_scratch,
+                );
+                assert!(expected.objects.len() > without_feedback.objects.len());
+                compose_scratch.recycle_render_list(&mut without_feedback);
+
+                state.profiles_runtime.profiles[0]
+                    .set_scroll_option(profile_data::ScrollOption::Reverse);
+                state.refresh_live_notefield_options(120.0);
+                add_sprite_core_feedback(&mut state);
+                let reverse = assert_repeatable_frame(
+                    &mut state,
+                    &assets,
+                    &metrics,
+                    &mut actors,
+                    &mut text_cache,
+                    &mut compose_scratch,
+                );
+                assert_ne!(compare_render_lists(&expected, &reverse), Ok(()));
+            },
+        );
     }
 
     fn generated_runtime_mod_lua() -> &'static str {
