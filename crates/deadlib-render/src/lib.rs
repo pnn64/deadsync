@@ -1,4 +1,6 @@
 pub mod draw_prep;
+#[cfg(any(test, feature = "test-util"))]
+pub mod frame_compare;
 
 use glam::Mat4 as Matrix4;
 use std::ops::Deref;
