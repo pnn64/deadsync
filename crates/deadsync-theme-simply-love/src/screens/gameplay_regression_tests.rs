@@ -416,8 +416,8 @@ mod tests {
     fn build_test_state(
         simfile: &Path,
         viewport: GameplayViewport,
+        session: GameplaySession,
         player_profiles: [profile_data::Profile; MAX_PLAYERS],
-        song_lua_entry: Option<&Path>,
     ) -> screen_gameplay::State {
         let song = Arc::new(
             deadsync_simfile::app_runtime::parse_song_for_test(simfile, 0.0)
@@ -434,75 +434,39 @@ mod tests {
                 .remove(0),
         );
         let chart = Arc::new(song.charts[chart_ix].clone());
-        let session = GameplaySession::default();
         let charts = [chart.clone(), chart];
         let gameplay_charts = [gameplay_chart.clone(), gameplay_chart];
         let scroll_speed = [
             player_profiles[0].scroll_speed,
             player_profiles[1].scroll_speed,
         ];
-        let noteskin_data = test_noteskin_data(
-            session.play_style.cols_per_player(),
-            session.play_style.player_count(),
-            &player_profiles,
-            &session,
-        );
-        let runtime_profiles =
-            deadsync_profile_gameplay::gameplay_runtime_profile_data(&player_profiles, &session);
-        let noteskin_assets = screen_gameplay::gameplay_noteskin_assets(
-            session.play_style.cols_per_player(),
-            session.play_style.player_count(),
-            &runtime_profiles,
-        );
-        let song_lua_data =
-            song_lua_entry.map_or_else(screen_gameplay::GameplaySongLuaData::default, |entry| {
-                let context = deadsync_profile_gameplay::song_lua_compile_context(
-                    song.as_ref(),
-                    &charts,
-                    session.play_style.player_count(),
-                    &player_profiles,
-                    &scroll_speed,
-                    1.0,
-                    0.0,
-                    viewport,
-                    &session,
-                    false,
-                );
-                let compiled = compile_song_lua(entry, &context)
-                    .expect("generated gameplay SongLua fixture should compile");
-                screen_gameplay::GameplaySongLuaData {
-                    primary: Some(screen_gameplay::GameplayCompiledSongLua {
-                        compiled,
-                        compile_ms: 0.0,
-                    }),
-                    ..Default::default()
-                }
-            });
-        screen_gameplay::State::from_gameplay(
-            init(
-                song,
-                charts,
-                gameplay_charts,
-                viewport,
-                session,
-                GameplayConfig::default(),
-                deadsync_chart::SyncPref::Default,
-                GameplayMiniIndicatorData::default(),
-                noteskin_data,
-                song_lua_data,
-                5,
-                1.0,
-                scroll_speed,
-                player_profiles,
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-                [0; MAX_PLAYERS],
-            ),
-            noteskin_assets,
+        let init_view = crate::views::GameplayInitView {
+            hud: profile::gameplay_hud_snapshot(),
+            ..Default::default()
+        };
+        screen_gameplay::init(
+            song,
+            charts,
+            gameplay_charts,
+            viewport,
+            session,
+            GameplayConfig::default(),
+            5,
+            1.0,
+            scroll_speed,
+            player_profiles,
+            None,
+            None,
+            None,
+            Arc::from("EVENT"),
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            [0; MAX_PLAYERS],
+            init_view,
         )
     }
 
@@ -515,7 +479,12 @@ mod tests {
         refresh_active_attack_masks(&mut state.gameplay, 0.0);
     }
 
-    fn add_sprite_core_feedback(state: &mut screen_gameplay::State) {
+    fn add_sprite_core_feedback(
+        state: &mut screen_gameplay::State,
+        player_idx: usize,
+        column: usize,
+        combo: u32,
+    ) {
         let judgment = Judgment {
             time_error_ms: -7.0,
             time_error_music_ns: -7_000_000,
@@ -523,13 +492,13 @@ mod tests {
             window: Some(TimingWindow::W1),
             miss_because_held: false,
         };
-        state.players_runtime.players[0].combo = 42;
-        state.players_runtime.players[0].full_combo_grade = Some(JudgeGrade::Fantastic);
-        state.players_runtime.players[0].current_combo_grade = Some(JudgeGrade::Fantastic);
-        state.players_runtime.players[0].judgment_counts[0] = 42;
-        state.set_last_judgment(0, judgment);
-        state.error_bar_register_tap(0, &judgment, 2.5);
-        state.trigger_tap_judgment_explosion(0, 0, &judgment);
+        state.players_runtime.players[player_idx].combo = combo;
+        state.players_runtime.players[player_idx].full_combo_grade = Some(JudgeGrade::Fantastic);
+        state.players_runtime.players[player_idx].current_combo_grade = Some(JudgeGrade::Fantastic);
+        state.players_runtime.players[player_idx].judgment_counts[0] = combo;
+        state.set_last_judgment(player_idx, judgment);
+        state.error_bar_register_tap(player_idx, &judgment, 2.5);
+        state.trigger_tap_judgment_explosion(player_idx, column, &judgment);
     }
 
     fn compose_fixture_frame(
@@ -562,6 +531,35 @@ mod tests {
         )
     }
 
+    fn compose_practice_fixture_frame(
+        state: &mut crate::screens::practice::State,
+        assets: &crate::assets::AssetManager,
+        metrics: &space::Metrics,
+        actors: &mut Vec<deadlib_present::actors::Actor>,
+        text_cache: &mut compose::TextLayoutCache,
+        scratch: &mut compose::ComposeScratch,
+    ) -> deadlib_render::RenderList {
+        actors.clear();
+        crate::screens::practice::push_actors(
+            actors,
+            state,
+            assets,
+            123.0,
+            crate::views::SimplyLoveVisualPolicyView::default(),
+        );
+        compose::build_screen_cached_with_scratch_and_texture_context_and_actor_resources(
+            actors,
+            [0.0, 0.0, 0.0, 1.0],
+            metrics,
+            assets.fonts(),
+            10.0,
+            text_cache,
+            scratch,
+            &FIXTURE_TEXTURES,
+            state.gameplay.actor_resources(),
+        )
+    }
+
     fn assert_repeatable_frame(
         state: &mut screen_gameplay::State,
         assets: &crate::assets::AssetManager,
@@ -570,16 +568,22 @@ mod tests {
         text_cache: &mut compose::TextLayoutCache,
         compose_scratch: &mut compose::ComposeScratch,
     ) -> deadlib_render::RenderList {
-        let mut warm =
-            compose_fixture_frame(state, assets, metrics, actors, text_cache, compose_scratch);
+        assert_repeatable_composition(compose_scratch, |scratch| {
+            compose_fixture_frame(state, assets, metrics, actors, text_cache, scratch)
+        })
+    }
+
+    fn assert_repeatable_composition(
+        compose_scratch: &mut compose::ComposeScratch,
+        mut compose_frame: impl FnMut(&mut compose::ComposeScratch) -> deadlib_render::RenderList,
+    ) -> deadlib_render::RenderList {
+        let mut warm = compose_frame(compose_scratch);
         compose_scratch.recycle_render_list(&mut warm);
 
-        let mut expected_frame =
-            compose_fixture_frame(state, assets, metrics, actors, text_cache, compose_scratch);
+        let mut expected_frame = compose_frame(compose_scratch);
         let expected = expected_frame.clone();
         compose_scratch.recycle_render_list(&mut expected_frame);
-        let mut actual =
-            compose_fixture_frame(state, assets, metrics, actors, text_cache, compose_scratch);
+        let mut actual = compose_frame(compose_scratch);
 
         assert!(
             expected
@@ -673,11 +677,11 @@ L000
                 let mut state = build_test_state(
                     &simfile,
                     GameplayViewport::new(640.0, 480.0),
+                    GameplaySession::default(),
                     profiles,
-                    None,
                 );
                 set_fixture_time(&mut state, 2.5);
-                add_sprite_core_feedback(&mut state);
+                add_sprite_core_feedback(&mut state, 0, 0, 42);
 
                 assert!(
                     state
@@ -732,7 +736,7 @@ L000
                 state.profiles_runtime.profiles[0]
                     .set_scroll_option(profile_data::ScrollOption::Reverse);
                 state.refresh_live_notefield_options(120.0);
-                add_sprite_core_feedback(&mut state);
+                add_sprite_core_feedback(&mut state, 0, 0, 42);
                 let reverse = assert_repeatable_frame(
                     &mut state,
                     &assets,
@@ -867,8 +871,8 @@ M000
                 let mut state = build_test_state(
                     &simfile,
                     GameplayViewport::new(640.0, 480.0),
+                    GameplaySession::default(),
                     profiles,
-                    None,
                 );
                 set_fixture_time(&mut state, 2.5);
                 let [hold_index, roll_index, dropped_index] = add_hold_mine_state(&mut state);
@@ -1045,8 +1049,8 @@ M000
                 let mut state = build_test_state(
                     &simfile,
                     GameplayViewport::new(1280.0, 720.0),
+                    GameplaySession::default(),
                     profiles,
-                    None,
                 );
                 set_fixture_time(&mut state, 2.625);
 
@@ -1250,7 +1254,7 @@ return Def.ActorFrame{
 "#
     }
 
-    fn write_pipeline_song_lua_fixture() -> (PathBuf, PathBuf) {
+    fn write_pipeline_song_lua_fixture() -> PathBuf {
         let simfile = write_fixture("f0-song-lua", generated_pipeline_song_lua_simfile());
         let lua_dir = simfile
             .parent()
@@ -1259,12 +1263,12 @@ return Def.ActorFrame{
         fs::create_dir_all(&lua_dir).unwrap();
         let lua_entry = lua_dir.join("default.lua");
         fs::write(&lua_entry, generated_pipeline_song_lua()).unwrap();
-        (simfile, lua_entry)
+        simfile
     }
 
     #[test]
     fn song_lua_frame_is_structurally_repeatable() {
-        let (simfile, lua_entry) = write_pipeline_song_lua_fixture();
+        let simfile = write_pipeline_song_lua_fixture();
         const SONG_LUA_TEST_STACK: usize = 16 * 1024 * 1024;
         std::thread::Builder::new()
             .name("song-lua-frame-regression".to_string())
@@ -1290,8 +1294,8 @@ return Def.ActorFrame{
                         let mut state = build_test_state(
                             &simfile,
                             GameplayViewport::new(1280.0, 720.0),
+                            GameplaySession::default(),
                             profiles,
-                            Some(&lua_entry),
                         );
 
                         let visuals = state.gameplay.song_lua_visuals();
@@ -1371,6 +1375,182 @@ return Def.ActorFrame{
             .expect("SongLua frame regression thread should spawn")
             .join()
             .expect("SongLua frame regression thread should finish");
+    }
+
+    #[test]
+    fn versus_modes_frame_is_structurally_repeatable() {
+        let simfile = write_fixture("f0-versus-modes", generated_sprite_core_simfile());
+        let metrics = space::metrics_for_window(1280, 720);
+        space::set_current_metrics(metrics);
+        space::set_current_window_px(1280, 720);
+        space::set_overscan(0, 0, 0, 0);
+        let assets = fixture_assets();
+
+        let versus = with_session(
+            profile_data::PlayStyle::Versus,
+            profile_data::PlayerSide::P1,
+            true,
+            true,
+            || {
+                let mut profiles = [
+                    profile_data::Profile::default(),
+                    profile_data::Profile::default(),
+                ];
+                profiles[0].noteskin = profile_data::NoteSkin::new("lambda");
+                profiles[0].scroll_speed = ScrollSpeedSetting::XMod(2.0);
+                profiles[1].noteskin = profile_data::NoteSkin::new("lambda");
+                profiles[1].scroll_speed = ScrollSpeedSetting::XMod(2.25);
+                profiles[1].scroll_option = profile_data::ScrollOption::Reverse;
+                let session = GameplaySession {
+                    play_style: deadsync_gameplay::GameplayInputPlayStyle::Versus,
+                    player_side: deadsync_gameplay::GameplayInputPlayerSide::P1,
+                    joined_sides: [true, true],
+                    ..GameplaySession::default()
+                };
+                let mut state = build_test_state(
+                    &simfile,
+                    GameplayViewport::new(1280.0, 720.0),
+                    session,
+                    profiles,
+                );
+                set_fixture_time(&mut state, 2.5);
+                add_sprite_core_feedback(&mut state, 0, 0, 42);
+                add_sprite_core_feedback(&mut state, 1, 4, 37);
+
+                assert_eq!(state.num_players(), 2);
+                assert_eq!(state.cols_per_player(), 4);
+                assert_eq!(state.num_cols(), 8);
+                let p1_range = state.note_range_for_player(0);
+                let p2_range = state.note_range_for_player(1);
+                assert!(p1_range.0 < p1_range.1);
+                assert!(p1_range.1 <= p2_range.0);
+                assert!(p2_range.0 < p2_range.1);
+                assert!(
+                    state.chart_runtime.notes[p2_range.0..p2_range.1]
+                        .iter()
+                        .all(|note| note.column >= 4)
+                );
+                assert!(state.display.visual_feedback.tap_explosions[0].is_some());
+                assert!(state.display.visual_feedback.tap_explosions[4].is_some());
+
+                let mut actors = Vec::with_capacity(1024);
+                let mut text_cache = compose::TextLayoutCache::default();
+                let mut compose_scratch = compose::ComposeScratch::default();
+                assert_repeatable_frame(
+                    &mut state,
+                    &assets,
+                    &metrics,
+                    &mut actors,
+                    &mut text_cache,
+                    &mut compose_scratch,
+                )
+            },
+        );
+
+        let (autoplay, autoplay_disabled) = with_session(
+            profile_data::PlayStyle::Single,
+            profile_data::PlayerSide::P1,
+            true,
+            false,
+            || {
+                let mut profiles = [
+                    profile_data::Profile::default(),
+                    profile_data::Profile::default(),
+                ];
+                profiles[0].noteskin = profile_data::NoteSkin::new("lambda");
+                profiles[0].scroll_speed = ScrollSpeedSetting::XMod(2.0);
+                let mut state = build_test_state(
+                    &simfile,
+                    GameplayViewport::new(1280.0, 720.0),
+                    GameplaySession::default(),
+                    profiles,
+                );
+                set_fixture_time(&mut state, 2.5);
+                state.set_live_autoplay_enabled(true);
+                assert!(state.autoplay_enabled());
+                assert!(state.live_autoplay_enabled());
+                assert!(state.autoplay_blocks_scoring());
+
+                let mut actors = Vec::with_capacity(512);
+                let mut text_cache = compose::TextLayoutCache::default();
+                let mut compose_scratch = compose::ComposeScratch::default();
+                let autoplay = assert_repeatable_frame(
+                    &mut state,
+                    &assets,
+                    &metrics,
+                    &mut actors,
+                    &mut text_cache,
+                    &mut compose_scratch,
+                );
+                state.set_live_autoplay_enabled(false);
+                assert!(!state.autoplay_enabled());
+                let disabled = assert_repeatable_frame(
+                    &mut state,
+                    &assets,
+                    &metrics,
+                    &mut actors,
+                    &mut text_cache,
+                    &mut compose_scratch,
+                );
+                (autoplay, disabled)
+            },
+        );
+        assert_ne!(compare_render_lists(&autoplay, &autoplay_disabled), Ok(()));
+
+        let (practice_base, practice) = with_session(
+            profile_data::PlayStyle::Single,
+            profile_data::PlayerSide::P1,
+            true,
+            false,
+            || {
+                let mut profiles = [
+                    profile_data::Profile::default(),
+                    profile_data::Profile::default(),
+                ];
+                profiles[0].noteskin = profile_data::NoteSkin::new("lambda");
+                profiles[0].scroll_speed = ScrollSpeedSetting::XMod(2.0);
+                let mut gameplay = build_test_state(
+                    &simfile,
+                    GameplayViewport::new(1280.0, 720.0),
+                    GameplaySession::default(),
+                    profiles,
+                );
+                set_fixture_time(&mut gameplay, 2.5);
+
+                let mut actors = Vec::with_capacity(1024);
+                let mut text_cache = compose::TextLayoutCache::default();
+                let mut compose_scratch = compose::ComposeScratch::default();
+                let base = assert_repeatable_frame(
+                    &mut gameplay,
+                    &assets,
+                    &metrics,
+                    &mut actors,
+                    &mut text_cache,
+                    &mut compose_scratch,
+                );
+                let mut practice = crate::screens::practice::init(
+                    gameplay,
+                    crate::views::PracticeRuntimeView::default(),
+                );
+                set_fixture_time(&mut practice.gameplay, 2.5);
+                assert!(!practice.gameplay.score_valid_for_player(0));
+                let practice_frame =
+                    assert_repeatable_composition(&mut compose_scratch, |scratch| {
+                        compose_practice_fixture_frame(
+                            &mut practice,
+                            &assets,
+                            &metrics,
+                            &mut actors,
+                            &mut text_cache,
+                            scratch,
+                        )
+                    });
+                (base, practice_frame)
+            },
+        );
+        assert_ne!(compare_render_lists(&practice_base, &practice), Ok(()));
+        assert_ne!(compare_render_lists(&versus, &autoplay), Ok(()));
+        assert_ne!(compare_render_lists(&versus, &practice), Ok(()));
     }
 
     fn generated_runtime_mod_lua() -> &'static str {
