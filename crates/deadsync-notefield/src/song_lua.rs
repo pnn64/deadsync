@@ -56,6 +56,44 @@ pub fn song_lua_player_y_fold_actor(actor: Actor, pivot_x: f32, rotation_y_deg: 
     }
     let cos_y = rotation_y_deg.to_radians().cos();
     match actor {
+        Actor::ResolvedSprite {
+            align,
+            mut offset,
+            world_z,
+            size,
+            source,
+            tint,
+            glow,
+            z,
+            uv_rect,
+            flip_x,
+            flip_y,
+            blend,
+            glow_blend,
+            rot_x_deg,
+            rot_y_deg,
+            rot_z_deg,
+        } => {
+            offset[0] = song_lua_fold_x_around_pivot(offset[0], pivot_x, cos_y);
+            Actor::ResolvedSprite {
+                align,
+                offset,
+                world_z,
+                size,
+                source,
+                tint,
+                glow,
+                z,
+                uv_rect,
+                flip_x,
+                flip_y,
+                blend,
+                glow_blend,
+                rot_x_deg,
+                rot_y_deg,
+                rot_z_deg,
+            }
+        }
         Actor::Sprite {
             align,
             mut offset,

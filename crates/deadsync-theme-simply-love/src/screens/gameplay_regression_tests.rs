@@ -909,6 +909,11 @@ L000
                     &mut text_cache,
                     &mut compose_scratch,
                 );
+                let actor_stats = deadlib_present::actors::actor_tree_stats(&actors);
+                assert!(
+                    actor_stats.resolved_sprites >= 100,
+                    "dense sprite fixture did not select the resolved gameplay path: {actor_stats:?}"
+                );
                 assert!(expected.objects.len() >= 250);
                 assert!(expected.sprite_instances.len() >= 240);
                 assert!(expected.batches.len() >= 120);

@@ -416,8 +416,7 @@ fn record_feedback_lane_sample(
         center[0],
         center[1],
     ] {
-        output.checksum =
-            output.checksum.rotate_left(7) ^ u64::from(value.to_bits()) ^ pass as u64;
+        output.checksum = output.checksum.rotate_left(7) ^ u64::from(value.to_bits()) ^ pass as u64;
         output.samples += 1;
     }
 }
@@ -1002,7 +1001,11 @@ mod tests {
         actors
             .iter()
             .filter_map(|actor| match actor {
-                Actor::Sprite {
+                Actor::ResolvedSprite {
+                    source: SpriteSource::TextureHandle { key, .. },
+                    ..
+                }
+                | Actor::Sprite {
                     source: SpriteSource::TextureHandle { key, .. },
                     ..
                 } => Some(key.as_ref()),
@@ -1015,7 +1018,12 @@ mod tests {
         actors
             .iter()
             .filter_map(|actor| match actor {
-                Actor::Sprite {
+                Actor::ResolvedSprite {
+                    source: SpriteSource::TextureHandle { key, .. },
+                    offset,
+                    ..
+                }
+                | Actor::Sprite {
                     source: SpriteSource::TextureHandle { key, .. },
                     offset,
                     ..

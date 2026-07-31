@@ -303,6 +303,31 @@ impl IntoTextureKey for &str {
 
 #[derive(Clone, Debug)]
 pub enum Actor {
+    /// Sprite whose producer has already resolved size, UVs, and animation.
+    ///
+    /// The compositor still applies parent placement, camera, tint/blend, z,
+    /// and global ordering. This is intentionally narrower than `Sprite`: it
+    /// cannot request native sizing, cropping, edge fades, masks, shadows, or
+    /// actor effects.
+    ResolvedSprite {
+        align: [f32; 2],
+        offset: [f32; 2],
+        world_z: f32,
+        size: [f32; 2],
+        source: SpriteSource,
+        tint: [f32; 4],
+        glow: [f32; 4],
+        z: i16,
+        uv_rect: [f32; 4],
+        flip_x: bool,
+        flip_y: bool,
+        blend: BlendMode,
+        glow_blend: BlendMode,
+        rot_x_deg: f32,
+        rot_y_deg: f32,
+        rot_z_deg: f32,
+    },
+
     /// Unified Sprite
     Sprite {
         align: [f32; 2],
@@ -507,6 +532,7 @@ pub enum Actor {
 impl Actor {
     fn retained_static(&self) -> bool {
         match self {
+            Self::ResolvedSprite { .. } => true,
             Self::Sprite {
                 texcoordvelocity,
                 animate,
@@ -531,6 +557,10 @@ impl Actor {
 
     pub fn mul_alpha(&mut self, alpha: f32) {
         match self {
+            Self::ResolvedSprite { tint, glow, .. } => {
+                tint[3] *= alpha;
+                glow[3] *= alpha;
+            }
             Self::Sprite {
                 tint,
                 glow,
@@ -606,6 +636,7 @@ impl Actor {
 pub struct ActorTreeStats {
     pub total: u32,
     pub sprites: u32,
+    pub resolved_sprites: u32,
     pub texts: u32,
     pub meshes: u32,
     pub textured_meshes: u32,
@@ -628,6 +659,10 @@ pub fn actor_tree_stats(actors: &[Actor]) -> ActorTreeStats {
     fn visit(stats: &mut ActorTreeStats, actor: &Actor) {
         stats.total = stats.total.saturating_add(1);
         match actor {
+            Actor::ResolvedSprite { .. } => {
+                stats.sprites = stats.sprites.saturating_add(1);
+                stats.resolved_sprites = stats.resolved_sprites.saturating_add(1);
+            }
             Actor::Sprite { .. } => {
                 stats.sprites = stats.sprites.saturating_add(1);
             }

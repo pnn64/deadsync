@@ -608,6 +608,7 @@ fn compose_field_contents<S, F>(
                     z: style.actors.note_z,
                     world_z: head_world_z,
                     prefer_sprite: prefer_sprite_note_path,
+                    resolved_sprite: false,
                 },
                 sprite_source,
             );
@@ -639,6 +640,7 @@ fn compose_field_contents<S, F>(
                     style.actors.note_z,
                     head_world_z,
                     prefer_sprite_note_path,
+                    false,
                     sprite_source,
                 );
             }
@@ -683,6 +685,7 @@ fn compose_field_contents<S, F>(
                     z: style.actors.note_z,
                     world_z: head_world_z,
                     prefer_sprite: prefer_sprite_note_path,
+                    resolved_sprite: false,
                 },
                 sprite_source,
             );
@@ -957,6 +960,7 @@ fn compose_visible_notes<S, F>(
                                 style.actors.note_z,
                                 world_z,
                                 prefer_sprite_note_path,
+                                true,
                                 sprite_source,
                             );
                         }
@@ -985,6 +989,7 @@ fn compose_visible_notes<S, F>(
                             style.actors.note_z,
                             world_z,
                             prefer_sprite_note_path,
+                            true,
                             sprite_source,
                         );
                         return;
@@ -1018,6 +1023,7 @@ fn compose_visible_notes<S, F>(
                             style.actors.note_z,
                             world_z,
                             prefer_sprite_note_path,
+                            true,
                             sprite_source,
                         );
                     }
@@ -1059,6 +1065,7 @@ fn compose_visible_notes<S, F>(
                             z: style.actors.note_z,
                             world_z,
                             prefer_sprite: prefer_sprite_note_path,
+                            resolved_sprite: true,
                         },
                         sprite_source,
                     );
@@ -1087,6 +1094,7 @@ fn compose_noteskin_layer<S, F>(
     z: i16,
     world_z: f32,
     prefer_sprite: bool,
+    resolved_sprite: bool,
     sprite_source: &F,
 ) where
     S: NoteskinSlot,
@@ -1147,6 +1155,7 @@ fn compose_noteskin_layer<S, F>(
             z,
             world_z,
             prefer_sprite,
+            resolved_sprite,
         },
         sprite_source,
     );
@@ -1171,6 +1180,7 @@ fn compose_single_slot<S, F>(
     z: i16,
     world_z: f32,
     prefer_sprite: bool,
+    resolved_sprite: bool,
     sprite_source: &F,
 ) where
     S: NoteskinSlot,
@@ -1208,6 +1218,7 @@ fn compose_single_slot<S, F>(
             z,
             world_z,
             prefer_sprite,
+            resolved_sprite,
         },
         sprite_source,
     );

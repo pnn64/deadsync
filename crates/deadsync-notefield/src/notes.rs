@@ -5,8 +5,8 @@ use crate::transforms::{
     tipsy_y_extra,
 };
 use crate::{
-    ModelMeshCache, actor_with_world_z, itg_actor_glow_alpha,
-    noteskin_model_actor_from_draw_cached, song_lua_note_model_draw,
+    ModelMeshCache, ResolvedSpriteDraw, actor_with_world_z, itg_actor_glow_alpha,
+    noteskin_model_actor_from_draw_cached, resolved_sprite_actor, song_lua_note_model_draw,
 };
 use deadlib_present::actors::{Actor, SpriteSource};
 use deadlib_present::dsl::SpriteBuilder;
@@ -54,6 +54,7 @@ pub(crate) struct NoteLayerRequest<'a, S> {
     pub z: i16,
     pub world_z: f32,
     pub prefer_sprite: bool,
+    pub resolved_sprite: bool,
 }
 
 /// Renderer-neutral inputs for one mine's fill-gradient/core/frame sequence.
@@ -176,6 +177,7 @@ fn compose_mine_gradient<S, F>(
             z: request.note_z.saturating_sub(2),
             world_z: request.world_z,
             prefer_sprite: true,
+            resolved_sprite: false,
         },
         sprite_source,
     );
@@ -231,6 +233,7 @@ fn compose_mine_slot<S, F, Z>(
             z: pass.z,
             world_z: request.world_z,
             prefer_sprite: request.prefer_sprite,
+            resolved_sprite: false,
         },
         sprite_source,
     );
@@ -263,19 +266,69 @@ pub(crate) fn compose_note_layer<S, F>(
         )
     {
         actors.push(actor_with_world_z(actor, request.world_z));
-    } else {
-        let mut actor = SpriteBuilder::with_source(sprite_source(request.slot));
-        actor.align(0.5, 0.5);
-        actor.xy(request.sprite_center[0], request.sprite_center[1]);
-        actor.size(request.size[0], request.size[1]);
-        actor.rotationy(request.rotation_y_deg);
-        actor.rotationz(request.sprite_rotation_z_deg);
-        actor.customtexturerect(request.uv);
-        actor.diffuse(request.tint);
-        actor.blend(request.blend);
-        actor.z(request.z);
-        actors.push(actor_with_world_z(actor.build(0), request.world_z));
+        compose_note_glow(
+            actors,
+            model_cache,
+            NoteGlowRequest {
+                slot: request.slot,
+                draw: request.draw,
+                model_center: request.model_center,
+                sprite_center: request.sprite_center,
+                size: request.size,
+                uv: request.uv,
+                rotation_y_deg: request.rotation_y_deg,
+                model_rotation_z_deg: request.model_rotation_z_deg,
+                sprite_rotation_z_deg: request.sprite_rotation_z_deg,
+                alpha: request.glow_alpha,
+                blend: request.blend,
+                z: request.z,
+                world_z: request.world_z,
+                prefer_sprite: request.prefer_sprite,
+            },
+            sprite_source,
+        );
+        return;
     }
+
+    if request.resolved_sprite {
+        let glow_alpha = itg_actor_glow_alpha(request.glow_alpha);
+        let glow_blend = if request.draw.blend_add {
+            BlendMode::Add
+        } else {
+            BlendMode::Alpha
+        };
+        actors.push(resolved_sprite_actor(ResolvedSpriteDraw {
+            align: [0.5, 0.5],
+            center: request.sprite_center,
+            world_z: request.world_z,
+            size: request.size,
+            source: sprite_source(request.slot),
+            tint: request.tint,
+            glow: [1.0, 1.0, 1.0, glow_alpha],
+            z: request.z,
+            uv: request.uv,
+            flip_x: false,
+            flip_y: false,
+            blend: request.blend,
+            glow_blend,
+            rotation_x_deg: 0.0,
+            rotation_y_deg: request.rotation_y_deg,
+            rotation_z_deg: request.sprite_rotation_z_deg,
+        }));
+        return;
+    }
+
+    let mut actor = SpriteBuilder::with_source(sprite_source(request.slot));
+    actor.align(0.5, 0.5);
+    actor.xy(request.sprite_center[0], request.sprite_center[1]);
+    actor.size(request.size[0], request.size[1]);
+    actor.rotationy(request.rotation_y_deg);
+    actor.rotationz(request.sprite_rotation_z_deg);
+    actor.customtexturerect(request.uv);
+    actor.diffuse(request.tint);
+    actor.blend(request.blend);
+    actor.z(request.z);
+    actors.push(actor_with_world_z(actor.build(0), request.world_z));
 
     compose_note_glow(
         actors,
@@ -1826,6 +1879,7 @@ mod tests {
             z: 140,
             world_z: 9.0,
             prefer_sprite: false,
+            resolved_sprite: false,
         }
     }
 

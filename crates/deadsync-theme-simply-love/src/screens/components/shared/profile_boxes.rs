@@ -869,6 +869,12 @@ fn scale_about(v: f32, pivot: f32, zoom: f32) -> f32 {
 
 fn apply_zoom_to_actor(actor: &mut Actor, pivot: [f32; 2], zoom: f32) {
     match actor {
+        Actor::ResolvedSprite { offset, size, .. } => {
+            offset[0] = scale_about(offset[0], pivot[0], zoom);
+            offset[1] = scale_about(offset[1], pivot[1], zoom);
+            size[0] *= zoom;
+            size[1] *= zoom;
+        }
         Actor::Sprite {
             offset,
             size,
@@ -1059,7 +1065,7 @@ fn apply_zoom_to_actor(actor: &mut Actor, pivot: [f32; 2], zoom: f32) {
 
 fn apply_offset_to_actor(actor: &mut Actor, dx: f32, dy: f32) {
     match actor {
-        Actor::Sprite { offset, .. } => {
+        Actor::ResolvedSprite { offset, .. } | Actor::Sprite { offset, .. } => {
             offset[0] += dx;
             offset[1] += dy;
         }
@@ -1101,7 +1107,8 @@ fn apply_offset_to_actor(actor: &mut Actor, dx: f32, dy: f32) {
 
 fn apply_z_offset(actor: &mut Actor, dz: i16) {
     match actor {
-        Actor::Sprite { z, .. }
+        Actor::ResolvedSprite { z, .. }
+        | Actor::Sprite { z, .. }
         | Actor::Text { z, .. }
         | Actor::Mesh { z, .. }
         | Actor::ReusableMesh { z, .. }
@@ -1155,7 +1162,8 @@ fn apply_clip_rect_to_actor(actor: &mut Actor, rect: [f32; 4]) {
             }
         }
         Actor::Shadow { child, .. } => apply_clip_rect_to_actor(child, rect),
-        Actor::Sprite { .. }
+        Actor::ResolvedSprite { .. }
+        | Actor::Sprite { .. }
         | Actor::Mesh { .. }
         | Actor::ReusableMesh { .. }
         | Actor::TexturedMesh { .. }

@@ -3185,6 +3185,133 @@ fn build_actor_recursive<'a, T: TextureContext + ?Sized>(
         return;
     }
     match actor {
+        actors::Actor::ResolvedSprite {
+            align,
+            offset,
+            world_z,
+            size,
+            source,
+            tint,
+            glow,
+            z,
+            uv_rect,
+            flip_x,
+            flip_y,
+            blend,
+            glow_blend,
+            rot_x_deg,
+            rot_y_deg,
+            rot_z_deg,
+        } => {
+            let arena_texture_key =
+                if let actors::SpriteSource::ArenaTextureHandle { id, .. } = source {
+                    let Some(textures) = actor_textures else {
+                        debug_assert!(false, "arena texture actor composed without its arena");
+                        return;
+                    };
+                    let Some(key) = textures.get(id.0 as usize) else {
+                        debug_assert!(false, "arena texture actor has an invalid texture ID");
+                        return;
+                    };
+                    Some(key.as_ref())
+                } else {
+                    None
+                };
+            let (is_solid, texture_name, texture_key_ptr) = match source {
+                actors::SpriteSource::TextureStatic(name) => (false, *name, str_ptr(name)),
+                actors::SpriteSource::TextureStaticHandle { key, .. } => {
+                    (false, *key, str_ptr(key))
+                }
+                actors::SpriteSource::Texture(name) => {
+                    let name = name.as_ref();
+                    (false, name, str_ptr(name))
+                }
+                actors::SpriteSource::TextureHandle { key, .. } => {
+                    let name = key.as_ref();
+                    (false, name, str_ptr(name))
+                }
+                actors::SpriteSource::ArenaTextureHandle { .. } => {
+                    let name = arena_texture_key.expect("arena texture key resolved above");
+                    (false, name, str_ptr(name))
+                }
+                actors::SpriteSource::Solid => (true, "__white", str_ptr("__white")),
+            };
+            let rect = place_rect(
+                parent,
+                *align,
+                *offset,
+                [SizeSpec::Px(size[0]), SizeSpec::Px(size[1])],
+            );
+            let texture_handle = sprite_source_handle(source, texture_cache.generation);
+            let layer = base_z.saturating_add(*z);
+            let mut base_tint = *tint;
+            for channel in &mut base_tint {
+                *channel = channel.clamp(0.0, 1.0);
+            }
+            let passes = [
+                (
+                    mul_rgba(base_tint, style.tint),
+                    style.blend.unwrap_or(*blend),
+                    false,
+                ),
+                (
+                    mul_rgba(*glow, style.tint),
+                    style.blend.unwrap_or(*glow_blend),
+                    true,
+                ),
+            ];
+            for (pass_tint, pass_blend, texture_mask) in passes {
+                if texture_mask && glow[3] <= 0.0001 {
+                    continue;
+                }
+                let before = out.len();
+                push_sprite(
+                    out,
+                    sprite_instances,
+                    camera,
+                    rect,
+                    m,
+                    is_solid,
+                    texture_name,
+                    texture_key_ptr,
+                    pass_tint,
+                    Some(*uv_rect),
+                    None,
+                    None,
+                    *flip_x,
+                    *flip_y,
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0,
+                    pass_blend,
+                    *rot_x_deg,
+                    *rot_y_deg,
+                    *rot_z_deg,
+                    *world_z,
+                    [0.0, 0.0],
+                    [0.0, 1.0],
+                    None,
+                    texture_handle,
+                    texture_cache,
+                    texture_ctx,
+                    total_elapsed,
+                    texture_mask,
+                );
+                for obj in out.iter_mut().skip(before) {
+                    obj.z = layer;
+                    obj.order = {
+                        let order = *order_counter;
+                        *order_counter += 1;
+                        order
+                    };
+                }
+            }
+        }
         actors::Actor::Sprite {
             align,
             offset,
@@ -6087,6 +6214,124 @@ mod tests {
             shadow_len: [0.0, 0.0],
             shadow_color: [0.0; 4],
             effect: Default::default(),
+        }
+    }
+
+    #[test]
+    fn resolved_sprite_matches_legacy_diffuse_and_glow_actors() {
+        let source = Arc::<str>::from("noteskin/tap");
+        let source_actor = || SpriteSource::TextureHandle {
+            key: Arc::clone(&source),
+            handle: 77,
+            generation: 9,
+        };
+        let legacy_sprite = |tint, glow, blend| Actor::Sprite {
+            align: [0.5, 0.5],
+            offset: [123.25, 234.5],
+            world_z: 7.5,
+            size: [SizeSpec::Px(58.0), SizeSpec::Px(62.0)],
+            source: source_actor(),
+            tint,
+            glow,
+            z: 140,
+            cell: None,
+            grid: None,
+            uv_rect: Some([0.125, 0.25, 0.625, 0.75]),
+            visible: true,
+            flip_x: false,
+            flip_y: false,
+            cropleft: 0.0,
+            cropright: 0.0,
+            croptop: 0.0,
+            cropbottom: 0.0,
+            fadeleft: 0.0,
+            faderight: 0.0,
+            fadetop: 0.0,
+            fadebottom: 0.0,
+            blend,
+            mask_source: false,
+            mask_dest: false,
+            rot_x_deg: 0.0,
+            rot_y_deg: 12.0,
+            rot_z_deg: -37.0,
+            local_offset: [0.0, 0.0],
+            local_offset_rot_sin_cos: [0.0, 1.0],
+            texcoordvelocity: None,
+            animate: false,
+            state_delay: 0.1,
+            scale: [1.0, 1.0],
+            shadow_len: [0.0, 0.0],
+            shadow_color: [0.0, 0.0, 0.0, 0.5],
+            effect: Default::default(),
+        };
+        let base_tint = [0.8, 0.6, 0.4, 0.75];
+        let glow = [1.0, 1.0, 1.0, 0.35];
+        let legacy = [
+            legacy_sprite(base_tint, [1.0, 1.0, 1.0, 0.0], BlendMode::Alpha),
+            legacy_sprite([1.0, 1.0, 1.0, 0.0], glow, BlendMode::Add),
+        ];
+        let resolved = [Actor::ResolvedSprite {
+            align: [0.5, 0.5],
+            offset: [123.25, 234.5],
+            world_z: 7.5,
+            size: [58.0, 62.0],
+            source: source_actor(),
+            tint: base_tint,
+            glow,
+            z: 140,
+            uv_rect: [0.125, 0.25, 0.625, 0.75],
+            flip_x: false,
+            flip_y: false,
+            blend: BlendMode::Alpha,
+            glow_blend: BlendMode::Add,
+            rot_x_deg: 0.0,
+            rot_y_deg: 12.0,
+            rot_z_deg: -37.0,
+        }];
+        let metrics = Metrics {
+            left: -320.0,
+            right: 320.0,
+            top: 240.0,
+            bottom: -240.0,
+        };
+        let texture_ctx = TestTextureContext {
+            generation: 9,
+            ..TestTextureContext::default()
+        };
+        let compose = |actors: &[Actor]| {
+            let mut text_cache = TextLayoutCache::default();
+            let mut scratch = ComposeScratch::default();
+            build_screen_cached_with_scratch_and_texture_context(
+                actors,
+                [0.1, 0.2, 0.3, 1.0],
+                &metrics,
+                &font::FontMap::default(),
+                2.5,
+                &mut text_cache,
+                &mut scratch,
+                &texture_ctx,
+            )
+        };
+        let expected = compose(&legacy);
+        let actual = compose(&resolved);
+
+        assert_eq!(expected.clear_color, actual.clear_color);
+        assert_eq!(expected.cameras, actual.cameras);
+        assert_eq!(expected.sprite_instances, actual.sprite_instances);
+        assert_eq!(expected.batches, actual.batches);
+        assert_eq!(expected.objects.len(), actual.objects.len());
+        for (expected, actual) in expected.objects.iter().zip(actual.objects.iter()) {
+            let (ObjectType::Sprite(expected_index), ObjectType::Sprite(actual_index)) =
+                (&expected.object_type, &actual.object_type)
+            else {
+                panic!("resolved sprite comparison emitted a non-sprite object");
+            };
+            assert_eq!(expected_index, actual_index);
+            assert_eq!(expected.texture_handle, actual.texture_handle);
+            assert_eq!(expected.blend, actual.blend);
+            assert_eq!(expected.z, actual.z);
+            assert_eq!(expected.order, actual.order);
+            assert_eq!(expected.camera, actual.camera);
         }
     }
 

@@ -13,6 +13,11 @@ harness = false
 required-features = ["bench-support"]
 
 [[bench]]
+name = "resolved_sprite"
+harness = false
+required-features = ["bench-support"]
+
+[[bench]]
 name = "text_layout_saturation"
 harness = false
 required-features = ["bench-support"]

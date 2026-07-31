@@ -1,6 +1,5 @@
 use crate::*;
 use deadlib_present::actors::{Actor, SpriteSource};
-use deadlib_present::dsl::SpriteBuilder;
 use deadlib_render::BlendMode;
 use deadsync_noteskin::{
     NoteskinSlot, ReceptorGlowBehavior, ReceptorPulse, ReceptorReverseBehavior,
@@ -366,25 +365,32 @@ fn append_receptor_sprite<S, F>(
     S: NoteskinSlot,
     F: Fn(&S) -> SpriteSource,
 {
-    let mut actor = SpriteBuilder::with_source(sprite_source(slot));
-    actor.align(draw.align[0], draw.align[1]);
-    actor.xy(draw.center[0], draw.center[1]);
-    actor.size(draw.size[0], draw.size[1]);
-    actor.zoomx(draw.zoom[0]);
-    actor.zoomy(draw.zoom[1]);
-    actor.diffuse(draw.tint);
-    actor.rotationy(draw.rotation_y_deg);
-    actor.rotationz(draw.rotation_z_deg);
-    actor.customtexturerect(draw.uv);
-    actor.blend(draw.blend);
-    actor.z(draw.z);
-    actors.push(actor.build(0));
+    actors.push(resolved_sprite_actor(ResolvedSpriteDraw {
+        align: draw.align,
+        center: draw.center,
+        world_z: 0.0,
+        size: [
+            draw.size[0] * draw.zoom[0].abs(),
+            draw.size[1] * draw.zoom[1].abs(),
+        ],
+        source: sprite_source(slot),
+        tint: draw.tint,
+        glow: [1.0, 1.0, 1.0, 0.0],
+        z: draw.z,
+        uv: draw.uv,
+        flip_x: draw.zoom[0] < 0.0,
+        flip_y: draw.zoom[1] < 0.0,
+        blend: draw.blend,
+        glow_blend: draw.blend,
+        rotation_x_deg: 0.0,
+        rotation_y_deg: draw.rotation_y_deg,
+        rotation_z_deg: draw.rotation_z_deg,
+    }));
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use deadlib_present::actors::SizeSpec;
     use deadsync_noteskin::{
         ModelDrawState, ModelMesh, ModelVertex, ReceptorReverseState, SpriteDefinition,
     };
@@ -543,7 +549,7 @@ mod tests {
     }
 
     fn assert_sprite(actor: &Actor, key: &str, z: i16, blend: BlendMode) {
-        let Actor::Sprite {
+        let Actor::ResolvedSprite {
             source,
             z: actual_z,
             blend: actual_blend,
@@ -630,7 +636,7 @@ mod tests {
             &texture_source,
         );
 
-        let Actor::Sprite {
+        let Actor::ResolvedSprite {
             align,
             offset,
             size,
@@ -638,7 +644,6 @@ mod tests {
             flip_y,
             rot_y_deg,
             rot_z_deg,
-            scale,
             ..
         } = &actors[0]
         else {
@@ -646,9 +651,8 @@ mod tests {
         };
         assert_eq!(*align, [0.5, 1.0]);
         assert_eq!(*offset, [12.0, 23.0]);
-        assert!(matches!(size, [SizeSpec::Px(w), SizeSpec::Px(h)] if *w == 120.0 && *h == 20.0));
+        assert_eq!(*size, [120.0, 20.0]);
         assert!(*flip_x && *flip_y);
-        assert_eq!(*scale, [1.0, 1.0]);
         assert_eq!(*rot_y_deg, 12.0);
         assert_eq!(*rot_z_deg, -199.0);
     }
@@ -696,7 +700,7 @@ mod tests {
             &texture_source,
         );
 
-        let Actor::Sprite {
+        let Actor::ResolvedSprite {
             align,
             offset,
             size,
@@ -715,7 +719,7 @@ mod tests {
         };
         assert_eq!(*align, [0.5, 0.25]);
         assert_eq!(*offset, [22.0, 14.0]);
-        assert!(matches!(size, [SizeSpec::Px(w), SizeSpec::Px(h)] if *w == 15.0 && *h == 120.0));
+        assert_eq!(*size, [15.0, 120.0]);
         assert!(matches!(
             source,
             SpriteSource::TextureHandle {
@@ -725,7 +729,7 @@ mod tests {
             } if key.as_ref() == "press"
         ));
         assert_eq!(*tint, [0.2, 0.4, 0.6, 0.24000001]);
-        assert_eq!(*uv_rect, Some([0.1, 0.2, 0.8, 0.9]));
+        assert_eq!(*uv_rect, [0.1, 0.2, 0.8, 0.9]);
         assert!(*flip_x);
         assert!(!*flip_y);
         assert_eq!(*blend, BlendMode::Alpha);

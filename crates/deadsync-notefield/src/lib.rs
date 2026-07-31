@@ -108,7 +108,8 @@ pub use transforms::{
 };
 
 pub(crate) use actor_builder::{
-    NotefieldFramePlanRequest, actor_with_world_z, notefield_frame_plan, share_actor_range,
+    NotefieldFramePlanRequest, ResolvedSpriteDraw, actor_with_world_z, notefield_frame_plan,
+    resolved_sprite_actor, share_actor_range,
 };
 pub(crate) use feedback::{
     ColumnFeedbackRequest, compose_column_feedback, field_effect_height, held_miss_zoom,

@@ -1,5 +1,6 @@
 use crate::{FieldPlacement, MeasureLineMode};
-use deadlib_present::actors::{Actor, SizeSpec};
+use deadlib_present::actors::{Actor, SizeSpec, SpriteSource};
+use deadlib_render::BlendMode;
 use deadsync_core::input::MAX_COLS;
 use std::sync::Arc;
 
@@ -101,6 +102,25 @@ pub struct BuiltNotefield {
 
 pub type CapturedActorSource = [Arc<[Actor]>; 1];
 
+pub(crate) struct ResolvedSpriteDraw {
+    pub align: [f32; 2],
+    pub center: [f32; 2],
+    pub world_z: f32,
+    pub size: [f32; 2],
+    pub source: SpriteSource,
+    pub tint: [f32; 4],
+    pub glow: [f32; 4],
+    pub z: i16,
+    pub uv: [f32; 4],
+    pub flip_x: bool,
+    pub flip_y: bool,
+    pub blend: BlendMode,
+    pub glow_blend: BlendMode,
+    pub rotation_x_deg: f32,
+    pub rotation_y_deg: f32,
+    pub rotation_z_deg: f32,
+}
+
 impl BuiltNotefield {
     pub fn empty(layout_center_x: f32) -> Self {
         Self {
@@ -114,12 +134,35 @@ impl BuiltNotefield {
 
 pub(crate) fn actor_with_world_z(mut actor: Actor, world_z: f32) -> Actor {
     match &mut actor {
-        Actor::Sprite { world_z: z, .. }
+        Actor::ResolvedSprite { world_z: z, .. }
+        | Actor::Sprite { world_z: z, .. }
         | Actor::TexturedMesh { world_z: z, .. }
         | Actor::ReusableTexturedMesh { world_z: z, .. } => *z = world_z,
         _ => {}
     }
     actor
+}
+
+#[inline(always)]
+pub(crate) fn resolved_sprite_actor(draw: ResolvedSpriteDraw) -> Actor {
+    Actor::ResolvedSprite {
+        align: draw.align,
+        offset: draw.center,
+        world_z: draw.world_z,
+        size: draw.size,
+        source: draw.source,
+        tint: draw.tint,
+        glow: draw.glow,
+        z: draw.z,
+        uv_rect: draw.uv,
+        flip_x: draw.flip_x,
+        flip_y: draw.flip_y,
+        blend: draw.blend,
+        glow_blend: draw.glow_blend,
+        rot_x_deg: draw.rotation_x_deg,
+        rot_y_deg: draw.rotation_y_deg,
+        rot_z_deg: draw.rotation_z_deg,
+    }
 }
 
 pub(crate) fn share_actor_range(
