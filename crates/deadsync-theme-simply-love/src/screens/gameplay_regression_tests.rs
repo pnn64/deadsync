@@ -417,6 +417,7 @@ mod tests {
         simfile: &Path,
         viewport: GameplayViewport,
         player_profiles: [profile_data::Profile; MAX_PLAYERS],
+        song_lua_entry: Option<&Path>,
     ) -> screen_gameplay::State {
         let song = Arc::new(
             deadsync_simfile::app_runtime::parse_song_for_test(simfile, 0.0)
@@ -453,6 +454,30 @@ mod tests {
             session.play_style.player_count(),
             &runtime_profiles,
         );
+        let song_lua_data =
+            song_lua_entry.map_or_else(screen_gameplay::GameplaySongLuaData::default, |entry| {
+                let context = deadsync_profile_gameplay::song_lua_compile_context(
+                    song.as_ref(),
+                    &charts,
+                    session.play_style.player_count(),
+                    &player_profiles,
+                    &scroll_speed,
+                    1.0,
+                    0.0,
+                    viewport,
+                    &session,
+                    false,
+                );
+                let compiled = compile_song_lua(entry, &context)
+                    .expect("generated gameplay SongLua fixture should compile");
+                screen_gameplay::GameplaySongLuaData {
+                    primary: Some(screen_gameplay::GameplayCompiledSongLua {
+                        compiled,
+                        compile_ms: 0.0,
+                    }),
+                    ..Default::default()
+                }
+            });
         screen_gameplay::State::from_gameplay(
             init(
                 song,
@@ -464,7 +489,7 @@ mod tests {
                 deadsync_chart::SyncPref::Default,
                 GameplayMiniIndicatorData::default(),
                 noteskin_data,
-                screen_gameplay::GameplaySongLuaData::default(),
+                song_lua_data,
                 5,
                 1.0,
                 scroll_speed,
@@ -645,8 +670,12 @@ L000
                 ];
                 profiles[0].noteskin = profile_data::NoteSkin::new("lambda");
                 profiles[0].scroll_speed = ScrollSpeedSetting::XMod(2.0);
-                let mut state =
-                    build_test_state(&simfile, GameplayViewport::new(640.0, 480.0), profiles);
+                let mut state = build_test_state(
+                    &simfile,
+                    GameplayViewport::new(640.0, 480.0),
+                    profiles,
+                    None,
+                );
                 set_fixture_time(&mut state, 2.5);
                 add_sprite_core_feedback(&mut state);
 
@@ -835,8 +864,12 @@ M000
                     | profile_data::ErrorBarMask::TEXT;
                 profiles[0].text_error_bar_scalable = true;
                 profiles[0].text_error_bar_threshold_ms = 10;
-                let mut state =
-                    build_test_state(&simfile, GameplayViewport::new(640.0, 480.0), profiles);
+                let mut state = build_test_state(
+                    &simfile,
+                    GameplayViewport::new(640.0, 480.0),
+                    profiles,
+                    None,
+                );
                 set_fixture_time(&mut state, 2.5);
                 let [hold_index, roll_index, dropped_index] = add_hold_mine_state(&mut state);
 
@@ -1009,8 +1042,12 @@ M000
                 profiles[0].appearance_effects_active_mask =
                     profile_data::AppearanceEffectsMask::HIDDEN
                         | profile_data::AppearanceEffectsMask::SUDDEN;
-                let mut state =
-                    build_test_state(&simfile, GameplayViewport::new(1280.0, 720.0), profiles);
+                let mut state = build_test_state(
+                    &simfile,
+                    GameplayViewport::new(1280.0, 720.0),
+                    profiles,
+                    None,
+                );
                 set_fixture_time(&mut state, 2.625);
 
                 let visual =
@@ -1075,6 +1112,265 @@ M000
                 assert_ne!(compare_render_lists(&alternate, &cross), Ok(()));
             },
         );
+    }
+
+    fn generated_pipeline_song_lua() -> &'static str {
+        r#"
+local player = nil
+local capture = nil
+prefix_globals = {}
+
+local function offset_col(value)
+    local nf = SCREENMAN:GetTopScreen():GetChild("PlayerP1"):GetChild("NoteField")
+    local handler = nf:GetColumnActors()[2]:GetPosHandler()
+    handler:SetSplineMode("NoteColumnSplineMode_Offset")
+    handler:SetBeatsPerT(10)
+    local spline = handler:GetSpline()
+    spline:SetSize(2)
+    spline:SetPoint(1, {0, value, 0})
+    spline:SetPoint(2, {0, value, 0.001})
+    spline:Solve()
+end
+
+mods_ease = {
+    {4, 4, 36, -12, offset_col, "len", ease.outSine},
+}
+
+return Def.ActorFrame{
+    InitCommand=function(self)
+        prefix_globals.ease = {
+            {4, 4, 0, 18, function(value) if player then player:rotationz(value) end end, "len", ease.inOutQuad},
+            {4, 4, 1, 0.85, function(value) if player then player:zoom(value) end end, "len", ease.outQuad},
+        }
+        self:SetUpdateFunction(function(actor)
+            local nf = SCREENMAN:GetTopScreen():GetChild("PlayerP1"):GetChild("NoteField")
+            local handler = nf:GetColumnActors()[1]:GetZoomHandler()
+            handler:SetSplineMode("NoteColumnSplineMode_Offset")
+                :SetSubtractSongBeat(false)
+                :SetReceptorT(0)
+                :SetBeatsPerT(4)
+            local spline = handler:GetSpline()
+            spline:SetSize(3)
+            spline:SetPoint(1, {0, 0, 0})
+            spline:SetPoint(2, {-1, -1, -1})
+            spline:SetPoint(3, {-1, -1, -1})
+            spline:Solve()
+        end)
+    end,
+    Def.ActorFrame{
+        OnCommand=function(self)
+            self:queuecommand("BindPlayer")
+        end,
+        BindPlayerCommand=function(self)
+            player = SCREENMAN:GetTopScreen():GetChild("PlayerP1")
+        end,
+    },
+    Def.Quad{
+        Name="ForegroundMarker",
+        InitCommand=function(self)
+            self:x(SCREEN_CENTER_X)
+            self:y(80)
+            self:zoomto(180, 36)
+            self:diffuse(0.15, 0.55, 0.95, 0.8)
+        end,
+    },
+    Def.ActorFrameTexture{
+        Name="FixtureCapture",
+        InitCommand=function(self)
+            capture = self
+            self:SetTextureName("FixtureCaptureTexture")
+            self:SetWidth(320)
+            self:SetHeight(180)
+            self:Create()
+        end,
+        Def.ActorProxy{
+            Name="FixtureNoteFieldProxy",
+            OnCommand=function(self)
+                local nf = SCREENMAN:GetTopScreen():GetChild("PlayerP1"):GetChild("NoteField")
+                if nf:GetNumWrapperStates() == 0 then
+                    nf:AddWrapperState()
+                end
+                self:SetTarget(nf:GetWrapperState(1))
+                self:visible(true)
+            end,
+        },
+    },
+    Def.Sprite{
+        Name="FixtureCaptureSprite",
+        OnCommand=function(self)
+            if capture then
+                self:SetTexture(capture:GetTexture())
+            end
+            self:x(SCREEN_CENTER_X + 180)
+            self:y(SCREEN_CENTER_Y)
+            self:zoom(0.35)
+            self:diffuse(1, 0.2, 0.2, 0.75)
+            self:blend("add")
+        end,
+    },
+}
+"#
+    }
+
+    fn generated_pipeline_song_lua_simfile() -> &'static str {
+        r#"#VERSION:0.83;
+#TITLE:F0 SongLua;
+#MUSIC:;
+#OFFSET:0.000;
+#BPMS:0.000=120.000;
+#FGCHANGES:0.000=lua/default.lua=1.000=0=0=0=StretchNoLoop====;
+
+#NOTEDATA:;
+#STEPSTYPE:dance-single;
+#DESCRIPTION:F0-song-lua;
+#DIFFICULTY:Challenge;
+#METER:12;
+#RADARVALUES:0,0,0,0,0;
+#NOTES:
+1000
+0100
+0010
+0001
+,
+1100
+0011
+1001
+0110
+,
+1000
+0100
+0010
+0001
+,
+0100
+0010
+0001
+1000
+;
+"#
+    }
+
+    fn write_pipeline_song_lua_fixture() -> (PathBuf, PathBuf) {
+        let simfile = write_fixture("f0-song-lua", generated_pipeline_song_lua_simfile());
+        let lua_dir = simfile
+            .parent()
+            .expect("fixture simfile should have a song directory")
+            .join("lua");
+        fs::create_dir_all(&lua_dir).unwrap();
+        let lua_entry = lua_dir.join("default.lua");
+        fs::write(&lua_entry, generated_pipeline_song_lua()).unwrap();
+        (simfile, lua_entry)
+    }
+
+    #[test]
+    fn song_lua_frame_is_structurally_repeatable() {
+        let (simfile, lua_entry) = write_pipeline_song_lua_fixture();
+        const SONG_LUA_TEST_STACK: usize = 16 * 1024 * 1024;
+        std::thread::Builder::new()
+            .name("song-lua-frame-regression".to_string())
+            .stack_size(SONG_LUA_TEST_STACK)
+            .spawn(move || {
+                with_session(
+                    profile_data::PlayStyle::Single,
+                    profile_data::PlayerSide::P1,
+                    true,
+                    false,
+                    || {
+                        let metrics = space::metrics_for_window(1280, 720);
+                        space::set_current_metrics(metrics);
+                        space::set_current_window_px(1280, 720);
+                        space::set_overscan(0, 0, 0, 0);
+
+                        let mut profiles = [
+                            profile_data::Profile::default(),
+                            profile_data::Profile::default(),
+                        ];
+                        profiles[0].noteskin = profile_data::NoteSkin::new("lambda");
+                        profiles[0].scroll_speed = ScrollSpeedSetting::XMod(2.0);
+                        let mut state = build_test_state(
+                            &simfile,
+                            GameplayViewport::new(1280.0, 720.0),
+                            profiles,
+                            Some(&lua_entry),
+                        );
+
+                        let visuals = state.gameplay.song_lua_visuals();
+                        assert!(visuals.note_hides[0].iter().any(|window| {
+                            window.column == 0 && window.start_beat <= 5.0 && window.end_beat >= 5.0
+                        }));
+                        assert!(
+                            visuals.column_offsets[0]
+                                .iter()
+                                .any(|window| window.column == 1)
+                        );
+                        assert!(visuals.overlays.iter().any(|overlay| {
+                            matches!(
+                                &overlay.kind,
+                                deadsync_assets::song_lua::SongLuaOverlayKind::Quad
+                            )
+                        }));
+                        assert!(visuals.overlays.iter().any(|overlay| {
+                            matches!(
+                                &overlay.kind,
+                                deadsync_assets::song_lua::SongLuaOverlayKind::ActorFrameTexture
+                            )
+                        }));
+                        assert!(visuals.overlays.iter().any(|overlay| {
+                            matches!(
+                                &overlay.kind,
+                                deadsync_assets::song_lua::SongLuaOverlayKind::ActorProxy {
+                                    target:
+                                        deadsync_assets::song_lua::SongLuaProxyTarget::NoteField {
+                                            player_index: 0
+                                        }
+                                }
+                            )
+                        }));
+                        assert!(visuals.overlays.iter().any(|overlay| {
+                            matches!(
+                                &overlay.kind,
+                                deadsync_assets::song_lua::SongLuaOverlayKind::AftSprite {
+                                    capture_name
+                                } if capture_name == "FixtureCaptureTexture"
+                            )
+                        }));
+
+                        let assets = fixture_assets();
+                        let mut actors = Vec::with_capacity(512);
+                        let mut text_cache = compose::TextLayoutCache::default();
+                        let mut compose_scratch = compose::ComposeScratch::default();
+                        set_fixture_time(&mut state, 2.5);
+                        let first_transform = state.gameplay.song_lua_player_transform(0);
+                        assert!(first_transform.rotation_z > 0.0);
+                        assert!(first_transform.zoom_x < 1.0);
+                        let first = assert_repeatable_frame(
+                            &mut state,
+                            &assets,
+                            &metrics,
+                            &mut actors,
+                            &mut text_cache,
+                            &mut compose_scratch,
+                        );
+
+                        set_fixture_time(&mut state, 3.5);
+                        let second_transform = state.gameplay.song_lua_player_transform(0);
+                        assert!(second_transform.rotation_z > first_transform.rotation_z);
+                        assert!(second_transform.zoom_x < first_transform.zoom_x);
+                        let second = assert_repeatable_frame(
+                            &mut state,
+                            &assets,
+                            &metrics,
+                            &mut actors,
+                            &mut text_cache,
+                            &mut compose_scratch,
+                        );
+                        assert_ne!(compare_render_lists(&first, &second), Ok(()));
+                    },
+                );
+            })
+            .expect("SongLua frame regression thread should spawn")
+            .join()
+            .expect("SongLua frame regression thread should finish");
     }
 
     fn generated_runtime_mod_lua() -> &'static str {

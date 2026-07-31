@@ -1082,13 +1082,15 @@ fn execute_platform_request(request: PlatformRequest) {
     match request {
         PlatformRequest::RevealPath { path, kind } => {
             dirs::ensure_dirs_exist();
-            if matches!(kind, RevealPathKind::Directory) && !path.exists()
-                && let Err(e) = std::fs::create_dir_all(&path) {
-                    warn!(
-                        "Failed to create folder before opening '{}': {e}",
-                        path.display()
-                    );
-                }
+            if matches!(kind, RevealPathKind::Directory)
+                && !path.exists()
+                && let Err(e) = std::fs::create_dir_all(&path)
+            {
+                warn!(
+                    "Failed to create folder before opening '{}': {e}",
+                    path.display()
+                );
+            }
             if let Err(e) = deadlib_platform::open_path::reveal(&path) {
                 warn!("Failed to open '{}' in file explorer: {e}", path.display());
             }
@@ -1226,10 +1228,7 @@ impl App {
             return;
         }
         if self.state.screens.current_screen == CurrentScreen::Options {
-            options::apply_apply_replaygain_events(
-                &mut self.state.screens.options_state,
-                events,
-            );
+            options::apply_apply_replaygain_events(&mut self.state.screens.options_state, events);
         }
     }
 
@@ -6196,15 +6195,11 @@ impl App {
             deadsync_audio_stream::stop_screen_sfx();
         }
         if plan.clear_play_background
-            && let Some(backend) = self.backend.as_mut() {
-                self.dynamic_media.set_background(
-                    &mut self.asset_manager,
-                    backend,
-                    None,
-                    0.0,
-                    false,
-                );
-            }
+            && let Some(backend) = self.backend.as_mut()
+        {
+            self.dynamic_media
+                .set_background(&mut self.asset_manager, backend, None, 0.0, false);
+        }
         if prev == CurrentScreen::PlayerOptions {
             for command in &plan.commands {
                 if let Command::UpdateScrollSpeed { side, setting } = command {
@@ -6825,10 +6820,12 @@ impl App {
                 .course_run
                 .as_ref()
                 .map(course_display_timing_for_run);
-            if prev == CurrentScreen::Gameplay && self.state.session.course_run.is_some()
-                && let Some(gs) = self.state.screens.gameplay_state.as_mut() {
-                    crate::gameplay_runtime::exit(gs);
-                }
+            if prev == CurrentScreen::Gameplay
+                && self.state.session.course_run.is_some()
+                && let Some(gs) = self.state.screens.gameplay_state.as_mut()
+            {
+                crate::gameplay_runtime::exit(gs);
+            }
             if prev == CurrentScreen::Gameplay
                 && self.state.session.course_run.is_some()
                 && let Some(gameplay_results) = self.state.screens.gameplay_state.take()
