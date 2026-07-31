@@ -6,6 +6,111 @@ const REDRAW_DELIVERY_SLOW_US: u32 = 1_000;
 const REDRAW_DELIVERY_BAD_US: u32 = 2_000;
 const PRESENT_SLOW_US: u32 = 1_000;
 const PRESENT_SPIKE_US: u32 = 3_000;
+const PHASE_COUNT: usize = Phase::BackendRecord as usize + 1;
+const PHASE_FINE_BINS: usize = 1_024;
+const PHASE_HIST_BINS: usize = 2_048;
+const PHASE_COARSE_BUCKET_US: u32 = 16;
+
+#[derive(Clone, Copy, Debug, Default)]
+pub struct GameplayPacingPhases {
+    pub actor_build_us: u32,
+    pub build_screen_us: u32,
+    pub compose_us: u32,
+    pub upload_us: u32,
+}
+
+#[derive(Clone, Copy)]
+enum Phase {
+    Frame,
+    ActorBuild,
+    BuildScreen,
+    Compose,
+    Upload,
+    Draw,
+    BackendSetup,
+    BackendPrepare,
+    BackendRecord,
+}
+
+impl Phase {
+    const fn index(self) -> usize {
+        self as usize
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+struct PhaseTail {
+    p50: u32,
+    p95: u32,
+    p99: u32,
+    worst: u32,
+}
+
+impl std::fmt::Display for PhaseTail {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}/{}/{}/{}", self.p50, self.p95, self.p99, self.worst)
+    }
+}
+
+struct PhaseHist {
+    bins: [u32; PHASE_HIST_BINS],
+    samples: u32,
+    capped: u32,
+    worst: u32,
+}
+
+impl PhaseHist {
+    const fn new() -> Self {
+        Self {
+            bins: [0; PHASE_HIST_BINS],
+            samples: 0,
+            capped: 0,
+            worst: 0,
+        }
+    }
+
+    fn reset(&mut self) {
+        self.bins.fill(0);
+        self.samples = 0;
+        self.capped = 0;
+        self.worst = 0;
+    }
+
+    fn record(&mut self, value_us: u32) {
+        let (bucket, capped) = phase_bucket(value_us);
+        self.bins[bucket] = self.bins[bucket].saturating_add(1);
+        self.samples = self.samples.saturating_add(1);
+        self.capped = self.capped.saturating_add(u32::from(capped));
+        self.worst = self.worst.max(value_us);
+    }
+
+    fn tail(&self) -> PhaseTail {
+        if self.samples == 0 {
+            return PhaseTail::default();
+        }
+        let targets =
+            [50, 95, 99].map(|pct| self.samples.saturating_mul(pct).saturating_add(99) / 100);
+        let mut values = [0; 3];
+        let mut next = 0usize;
+        let mut count = 0u32;
+        for (index, bin) in self.bins.iter().copied().enumerate() {
+            count = count.saturating_add(bin);
+            while next < targets.len() && count >= targets[next] {
+                values[next] = phase_bucket_upper(index);
+                next += 1;
+            }
+            if next == targets.len() {
+                break;
+            }
+        }
+        PhaseTail {
+            p50: values[0],
+            p95: values[1],
+            p99: values[2],
+            worst: self.worst,
+        }
+    }
+}
 
 pub struct GameplayPacingTrace {
     started_at: Instant,
@@ -52,10 +157,17 @@ pub struct GameplayPacingTrace {
     present_margin_sum_ns: u64,
     present_margin_max_ns: u64,
     present_margin_samples: u32,
+    phase_hists: Box<[PhaseHist]>,
 }
 
 impl GameplayPacingTrace {
     pub fn new(now: Instant) -> Self {
+        let mut phase_hists = Vec::with_capacity(PHASE_COUNT);
+        phase_hists.resize_with(PHASE_COUNT, PhaseHist::new);
+        Self::with_phase_storage(now, phase_hists.into_boxed_slice())
+    }
+
+    fn with_phase_storage(now: Instant, phase_hists: Box<[PhaseHist]>) -> Self {
         Self {
             started_at: now,
             frames: 0,
@@ -101,15 +213,23 @@ impl GameplayPacingTrace {
             present_margin_sum_ns: 0,
             present_margin_max_ns: 0,
             present_margin_samples: 0,
+            phase_hists,
         }
     }
 
     #[inline(always)]
     pub fn reset(&mut self, now: Instant) {
-        *self = Self::new(now);
+        let mut phase_hists = std::mem::take(&mut self.phase_hists);
+        for hist in &mut phase_hists {
+            hist.reset();
+        }
+        *self = Self::with_phase_storage(now, phase_hists);
     }
 
-    #[allow(clippy::too_many_arguments)]
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "the trace records one value for each measured frame phase"
+    )]
     pub fn record_frame(
         &mut self,
         now: Instant,
@@ -120,6 +240,7 @@ impl GameplayPacingTrace {
         redraw_request_reason: &'static str,
         draw_us: u32,
         draw_stats: DrawStats,
+        phases: GameplayPacingPhases,
         display_error_seconds: f32,
         display_catching_up: bool,
     ) {
@@ -133,12 +254,16 @@ impl GameplayPacingTrace {
             redraw_request_reason,
             draw_us,
             draw_stats,
+            phases,
             display_error_seconds,
             display_catching_up,
         );
     }
 
-    #[allow(clippy::too_many_arguments)]
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "the trace records one value for each measured frame phase"
+    )]
     fn record_frame_if_enabled(
         &mut self,
         enabled: bool,
@@ -150,6 +275,7 @@ impl GameplayPacingTrace {
         redraw_request_reason: &'static str,
         draw_us: u32,
         draw_stats: DrawStats,
+        phases: GameplayPacingPhases,
         display_error_seconds: f32,
         display_catching_up: bool,
     ) {
@@ -208,6 +334,15 @@ impl GameplayPacingTrace {
         self.draw_record_sum_us = self
             .draw_record_sum_us
             .saturating_add(u64::from(draw_stats.backend_record_us));
+        self.record_phase(Phase::Frame, dt_us);
+        self.record_phase(Phase::ActorBuild, phases.actor_build_us);
+        self.record_phase(Phase::BuildScreen, phases.build_screen_us);
+        self.record_phase(Phase::Compose, phases.compose_us);
+        self.record_phase(Phase::Upload, phases.upload_us);
+        self.record_phase(Phase::Draw, draw_us);
+        self.record_phase(Phase::BackendSetup, draw_stats.backend_setup_us);
+        self.record_phase(Phase::BackendPrepare, draw_stats.backend_prepare_us);
+        self.record_phase(Phase::BackendRecord, draw_stats.backend_record_us);
 
         let error_us = (f64::from(display_error_seconds) * 1_000_000.0).round() as i64;
         let error_abs_us = error_us.unsigned_abs().min(u64::from(u32::MAX)) as u32;
@@ -265,8 +400,22 @@ impl GameplayPacingTrace {
         let interval_samples = self.present_interval_samples.max(1);
         let margin_samples = self.present_margin_samples.max(1);
         let audio = deadsync_audio_stream::get_output_timing_snapshot();
+        let frame_tail = self.phase_tail(Phase::Frame);
+        let actor_tail = self.phase_tail(Phase::ActorBuild);
+        let build_tail = self.phase_tail(Phase::BuildScreen);
+        let compose_tail = self.phase_tail(Phase::Compose);
+        let upload_tail = self.phase_tail(Phase::Upload);
+        let draw_tail = self.phase_tail(Phase::Draw);
+        let setup_tail = self.phase_tail(Phase::BackendSetup);
+        let prepare_tail = self.phase_tail(Phase::BackendPrepare);
+        let record_tail = self.phase_tail(Phase::BackendRecord);
+        let tail_samples = self.phase_hist(Phase::Frame).samples;
+        let tail_capped = self
+            .phase_hists
+            .iter()
+            .fold(0u32, |sum, hist| sum.saturating_add(hist.capped));
         log::trace!(
-            "Gameplay frame pacing: frames={} req=[chain:{} other:{}] dt_ms=[avg:{:.3} max:{:.3}] redraw_ms=[late_avg:{:.3} late_max:{:.3} deliver_avg:{:.3} deliver_max:{:.3} >=1ms:{} >=2ms:{}] draw_ms=[avg:{:.3} max:{:.3}] present_ms=[avg:{:.3} max:{:.3} >=1ms:{} >=3ms:{}] draw_cpu_ms=[setup_avg:{:.3} prep_avg:{:.3} record_avg:{:.3}] display_dbg=[err_last_ms:{:+.3} abs_avg_ms:{:.3} abs_max_ms:{:.3} catch:{} catch_last:{}] present_dbg=[mode:{} display:{} host:{} mapped:{} inflight_avg:{:.2} inflight_max:{} image_wait:{} back_pressure:{} queue_idle:{} subopt:{} interval_ms_avg:{:.3} interval_ms_max:{:.3} margin_ms_avg:{:.3} margin_ms_max:{:.3} cal_ms_avg:{:.3} cal_ms_max:{:.3}] audio_dbg=[path:{} req:{} fallback:{} clock:{} qual:{} sf:{} cf:{} rate:{} buf:{} pad:{} q:{} tick_ms:{:.3} span_ms:{:.3} out_ms:{:.3} underruns:{}]",
+            "Gameplay frame pacing: frames={} req=[chain:{} other:{}] dt_ms=[avg:{:.3} max:{:.3}] redraw_ms=[late_avg:{:.3} late_max:{:.3} deliver_avg:{:.3} deliver_max:{:.3} >=1ms:{} >=2ms:{}] draw_ms=[avg:{:.3} max:{:.3}] present_ms=[avg:{:.3} max:{:.3} >=1ms:{} >=3ms:{}] draw_cpu_ms=[setup_avg:{:.3} prep_avg:{:.3} record_avg:{:.3}] tails_us=[order:p50/p95/p99/worst samples:{} capped:{} frame:{} actor:{} build:{} compose:{} upload:{} draw:{} setup:{} prep:{} record:{}] display_dbg=[err_last_ms:{:+.3} abs_avg_ms:{:.3} abs_max_ms:{:.3} catch:{} catch_last:{}] present_dbg=[mode:{} display:{} host:{} mapped:{} inflight_avg:{:.2} inflight_max:{} image_wait:{} back_pressure:{} queue_idle:{} subopt:{} interval_ms_avg:{:.3} interval_ms_max:{:.3} margin_ms_avg:{:.3} margin_ms_max:{:.3} cal_ms_avg:{:.3} cal_ms_max:{:.3}] audio_dbg=[path:{} req:{} fallback:{} clock:{} qual:{} sf:{} cf:{} rate:{} buf:{} pad:{} q:{} tick_ms:{:.3} span_ms:{:.3} out_ms:{:.3} underruns:{}]",
             frames,
             self.chain_frames,
             self.other_frames,
@@ -287,6 +436,17 @@ impl GameplayPacingTrace {
             ms(self.draw_setup_sum_us),
             ms(self.draw_prepare_sum_us),
             ms(self.draw_record_sum_us),
+            tail_samples,
+            tail_capped,
+            frame_tail,
+            actor_tail,
+            build_tail,
+            compose_tail,
+            upload_tail,
+            draw_tail,
+            setup_tail,
+            prepare_tail,
+            record_tail,
             self.display_error_last_us as f64 / 1000.0,
             self.display_error_abs_sum_us as f64 / frames as f64 / 1000.0,
             self.display_error_abs_max_us as f64 / 1000.0,
@@ -326,6 +486,38 @@ impl GameplayPacingTrace {
         );
         self.reset(now);
     }
+
+    fn record_phase(&mut self, phase: Phase, value_us: u32) {
+        self.phase_hists[phase.index()].record(value_us);
+    }
+
+    fn phase_hist(&self, phase: Phase) -> &PhaseHist {
+        &self.phase_hists[phase.index()]
+    }
+
+    fn phase_tail(&self, phase: Phase) -> PhaseTail {
+        self.phase_hist(phase).tail()
+    }
+}
+
+fn phase_bucket(value_us: u32) -> (usize, bool) {
+    if value_us < PHASE_FINE_BINS as u32 {
+        return (value_us as usize, false);
+    }
+    let coarse = (value_us - PHASE_FINE_BINS as u32) / PHASE_COARSE_BUCKET_US;
+    let max_coarse = (PHASE_HIST_BINS - PHASE_FINE_BINS - 1) as u32;
+    (
+        PHASE_FINE_BINS + coarse.min(max_coarse) as usize,
+        coarse > max_coarse,
+    )
+}
+
+const fn phase_bucket_upper(index: usize) -> u32 {
+    if index < PHASE_FINE_BINS {
+        index as u32
+    } else {
+        PHASE_FINE_BINS as u32 + (index - PHASE_FINE_BINS + 1) as u32 * PHASE_COARSE_BUCKET_US - 1
+    }
 }
 
 #[cfg(test)]
@@ -344,7 +536,23 @@ mod tests {
             ..DrawStats::default()
         };
         trace.record_frame_if_enabled(
-            true, now, true, 0.016, 2_000, 500, "chain", 2_500, draw, -0.002, true,
+            true,
+            now,
+            true,
+            0.016,
+            2_000,
+            500,
+            "chain",
+            2_500,
+            draw,
+            GameplayPacingPhases {
+                actor_build_us: 400,
+                build_screen_us: 600,
+                compose_us: 1_000,
+                upload_us: 50,
+            },
+            -0.002,
+            true,
         );
         assert_eq!(trace.frames, 1);
         assert_eq!(trace.chain_frames, 1);
@@ -353,6 +561,15 @@ mod tests {
         assert_eq!(trace.present_over_1ms, 1);
         assert_eq!(trace.display_error_last_us, -2_000);
         assert_eq!(trace.display_catching_up_frames, 1);
+        assert_eq!(
+            trace.phase_tail(Phase::Compose),
+            PhaseTail {
+                p50: 1_000,
+                p95: 1_000,
+                p99: 1_000,
+                worst: 1_000,
+            }
+        );
     }
 
     #[test]
@@ -370,10 +587,50 @@ mod tests {
             "chain",
             2_500,
             DrawStats::default(),
+            GameplayPacingPhases::default(),
             -0.002,
             true,
         );
 
         assert_eq!(trace.frames, 0);
+        assert_eq!(trace.phase_hist(Phase::Frame).samples, 0);
+    }
+
+    #[test]
+    fn phase_hist_uses_nearest_rank_percentiles_and_reset_reuses_storage() {
+        let now = Instant::now();
+        let mut trace = GameplayPacingTrace::new(now);
+        for value in 1..=100 {
+            trace.record_phase(Phase::Compose, value);
+        }
+
+        assert_eq!(
+            trace.phase_tail(Phase::Compose),
+            PhaseTail {
+                p50: 50,
+                p95: 95,
+                p99: 99,
+                worst: 100,
+            }
+        );
+
+        let hist_ptr = trace.phase_hists.as_ptr();
+        trace.reset(now);
+        assert_eq!(trace.phase_hists.as_ptr(), hist_ptr);
+        assert_eq!(trace.phase_hist(Phase::Compose).samples, 0);
+    }
+
+    #[test]
+    fn phase_hist_quantizes_slow_values_and_keeps_exact_worst() {
+        let mut hist = PhaseHist::new();
+        hist.record(PHASE_FINE_BINS as u32);
+        hist.record(20_000);
+
+        assert_eq!(
+            hist.tail().p50,
+            PHASE_FINE_BINS as u32 + PHASE_COARSE_BUCKET_US - 1
+        );
+        assert_eq!(hist.capped, 1);
+        assert_eq!(hist.tail().worst, 20_000);
     }
 }

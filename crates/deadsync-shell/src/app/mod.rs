@@ -24,6 +24,7 @@ use crate::course::{
 use crate::diagnostics::timing_health;
 use crate::dynamic_media::{BgVideoTiming, DynamicMedia};
 use crate::frame_loop::{FrameScreenStepContext, FrameWaitControl, frame_screen_step_plan};
+use crate::frame_pacing_trace::GameplayPacingPhases;
 use crate::frame_stats::{
     FrameStatsSummaryContext, frame_stats_summary, frame_stats_target_us, frame_stats_two_player,
 };
@@ -2945,6 +2946,12 @@ impl App {
             redraw_request_reason,
             draw_us,
             draw_stats,
+            GameplayPacingPhases {
+                actor_build_us,
+                build_screen_us,
+                compose_us,
+                upload_us,
+            },
             display_clock.error_seconds,
             display_clock.catching_up,
         );
