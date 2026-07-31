@@ -81,15 +81,33 @@ struct PollFd {
     revents: i16,
 }
 
+// The kernel's `struct input_event` embeds a `struct timeval` whose fields are
+// plain `long`, so their width tracks the userspace ABI's pointer width (4
+// bytes on i686, 8 bytes on x86_64/aarch64) rather than being fixed at 64
+// bits. Mismatching this silently misaligns every field after the first
+// event in a read buffer.
+#[cfg(target_pointer_width = "64")]
+type EvTime = i64;
+#[cfg(target_pointer_width = "32")]
+type EvTime = i32;
+
 #[repr(C)]
 #[derive(Clone, Copy)]
 struct InputEventRaw {
-    tv_sec: i64,
-    tv_usec: i64,
+    tv_sec: EvTime,
+    tv_usec: EvTime,
     type_: u16,
     code: u16,
     value: i32,
 }
+
+// The kernel writes fixed-size records, so a width mismatch here desynchronises
+// the whole read buffer rather than failing loudly. Pin the layout at compile
+// time: 16 bytes on 32-bit ABIs, 24 on 64-bit.
+#[cfg(target_pointer_width = "64")]
+const _: () = assert!(std::mem::size_of::<InputEventRaw>() == 24);
+#[cfg(target_pointer_width = "32")]
+const _: () = assert!(std::mem::size_of::<InputEventRaw>() == 16);
 
 #[link(name = "udev")]
 // SAFETY: These are direct libudev FFI declarations. Callers must pass live libudev handles,
@@ -1214,7 +1232,7 @@ fn run_inner(
                         continue;
                     }
                     let (event_timestamp, event_host_nanos) =
-                        receipt.event_time(host, ev.tv_sec, ev.tv_usec);
+                        receipt.event_time(host, i64::from(ev.tv_sec), i64::from(ev.tv_usec));
                     let pressed = ev.value != 0;
                     emit_pad(PadEvent::RawButton {
                         id: dev.id,
@@ -1231,7 +1249,7 @@ fn run_inner(
                     continue;
                 }
                 let (event_timestamp, event_host_nanos) =
-                    receipt.event_time(host, ev.tv_sec, ev.tv_usec);
+                    receipt.event_time(host, i64::from(ev.tv_sec), i64::from(ev.tv_usec));
 
                 emit_pad(PadEvent::RawAxis {
                     id: dev.id,
@@ -1307,7 +1325,7 @@ fn run_inner(
                 let repeat = ev.value == 2;
                 let pressed = ev.value != 0;
                 let (event_timestamp, event_host_nanos) =
-                    receipt.event_time(host, ev.tv_sec, ev.tv_usec);
+                    receipt.event_time(host, i64::from(ev.tv_sec), i64::from(ev.tv_usec));
                 emit_key(RawKeyboardEvent {
                     code,
                     pressed,
