@@ -979,6 +979,7 @@ pub fn draw(
     }
     let mut stats = DrawStats::default();
     stats.backend_prepare_us = elapsed_us_since(backend_prepare_started);
+    stats.storage = state.prep.storage_stats();
 
     let mut vertices: u32 = 0;
 

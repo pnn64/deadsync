@@ -1,4 +1,8 @@
-use deadlib_render::{ClockDomainTrace, DrawStats, PresentModeTrace};
+use deadlib_present::compose::{COMPOSE_STORAGE_NAMES, COMPOSE_STORAGE_SLOTS, ComposeStorageStats};
+use deadlib_render::{
+    ClockDomainTrace, DrawStats, PresentModeTrace,
+    draw_prep::{DRAW_STORAGE_NAMES, DRAW_STORAGE_SLOTS, DrawStorageStats},
+};
 use std::time::{Duration, Instant};
 
 const LOG_INTERVAL: Duration = Duration::from_secs(5);
@@ -10,6 +14,7 @@ const PHASE_COUNT: usize = Phase::BackendRecord as usize + 1;
 const PHASE_FINE_BINS: usize = 1_024;
 const PHASE_HIST_BINS: usize = 2_048;
 const PHASE_COARSE_BUCKET_US: u32 = 16;
+const STORAGE_SLOTS: usize = 1 + COMPOSE_STORAGE_SLOTS + DRAW_STORAGE_SLOTS;
 
 #[derive(Clone, Copy, Debug, Default)]
 pub struct GameplayPacingPhases {
@@ -17,6 +22,89 @@ pub struct GameplayPacingPhases {
     pub build_screen_us: u32,
     pub compose_us: u32,
     pub upload_us: u32,
+    pub storage: GameplayStorageSample,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct GameplayStorageSample {
+    capacities: [u32; STORAGE_SLOTS],
+}
+
+impl GameplayStorageSample {
+    pub fn new(
+        actor_capacity: usize,
+        compose: ComposeStorageStats,
+        draw: DrawStorageStats,
+    ) -> Self {
+        let mut capacities = [0; STORAGE_SLOTS];
+        capacities[0] = saturating_u32(actor_capacity);
+        capacities[1..1 + COMPOSE_STORAGE_SLOTS].copy_from_slice(&compose.capacities);
+        capacities[1 + COMPOSE_STORAGE_SLOTS..].copy_from_slice(&draw.capacities);
+        Self { capacities }
+    }
+}
+
+#[derive(Clone, Copy)]
+struct StorageTrace {
+    last: [u32; STORAGE_SLOTS],
+    high: [u32; STORAGE_SLOTS],
+    growths: [u32; STORAGE_SLOTS],
+    initialized: bool,
+}
+
+impl StorageTrace {
+    const fn new() -> Self {
+        Self {
+            last: [0; STORAGE_SLOTS],
+            high: [0; STORAGE_SLOTS],
+            growths: [0; STORAGE_SLOTS],
+            initialized: false,
+        }
+    }
+
+    fn record(&mut self, sample: GameplayStorageSample) {
+        if !self.initialized {
+            // The first traced frame is the warmed baseline, not a growth event.
+            self.last = sample.capacities;
+            self.high = sample.capacities;
+            self.initialized = true;
+            return;
+        }
+        for (index, capacity) in sample.capacities.into_iter().enumerate() {
+            self.growths[index] =
+                self.growths[index].saturating_add(u32::from(capacity > self.last[index]));
+            self.last[index] = capacity;
+            self.high[index] = self.high[index].max(capacity);
+        }
+    }
+
+    fn reset_window(&mut self) {
+        self.high = self.last;
+        self.growths.fill(0);
+    }
+
+    fn total_growths(&self) -> u32 {
+        self.growths.iter().copied().fold(0u32, u32::saturating_add)
+    }
+}
+
+impl std::fmt::Display for StorageTrace {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "actor:{}/{}", self.high[0], self.growths[0])?;
+        for (offset, name) in COMPOSE_STORAGE_NAMES.iter().enumerate() {
+            let index = 1 + offset;
+            write!(f, " {name}:{}/{}", self.high[index], self.growths[index])?;
+        }
+        for (offset, name) in DRAW_STORAGE_NAMES.iter().enumerate() {
+            let index = 1 + COMPOSE_STORAGE_SLOTS + offset;
+            write!(
+                f,
+                " draw_{name}:{}/{}",
+                self.high[index], self.growths[index]
+            )?;
+        }
+        Ok(())
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -157,6 +245,7 @@ pub struct GameplayPacingTrace {
     present_margin_sum_ns: u64,
     present_margin_max_ns: u64,
     present_margin_samples: u32,
+    storage: StorageTrace,
     phase_hists: Box<[PhaseHist]>,
 }
 
@@ -213,6 +302,7 @@ impl GameplayPacingTrace {
             present_margin_sum_ns: 0,
             present_margin_max_ns: 0,
             present_margin_samples: 0,
+            storage: StorageTrace::new(),
             phase_hists,
         }
     }
@@ -280,7 +370,7 @@ impl GameplayPacingTrace {
         display_catching_up: bool,
     ) {
         if !enabled {
-            if self.frames != 0 {
+            if self.frames != 0 || self.storage.initialized {
                 self.reset(now);
             }
             return;
@@ -343,6 +433,7 @@ impl GameplayPacingTrace {
         self.record_phase(Phase::BackendSetup, draw_stats.backend_setup_us);
         self.record_phase(Phase::BackendPrepare, draw_stats.backend_prepare_us);
         self.record_phase(Phase::BackendRecord, draw_stats.backend_record_us);
+        self.storage.record(phases.storage);
 
         let error_us = (f64::from(display_error_seconds) * 1_000_000.0).round() as i64;
         let error_abs_us = error_us.unsigned_abs().min(u64::from(u32::MAX)) as u32;
@@ -415,7 +506,7 @@ impl GameplayPacingTrace {
             .iter()
             .fold(0u32, |sum, hist| sum.saturating_add(hist.capped));
         log::trace!(
-            "Gameplay frame pacing: frames={} req=[chain:{} other:{}] dt_ms=[avg:{:.3} max:{:.3}] redraw_ms=[late_avg:{:.3} late_max:{:.3} deliver_avg:{:.3} deliver_max:{:.3} >=1ms:{} >=2ms:{}] draw_ms=[avg:{:.3} max:{:.3}] present_ms=[avg:{:.3} max:{:.3} >=1ms:{} >=3ms:{}] draw_cpu_ms=[setup_avg:{:.3} prep_avg:{:.3} record_avg:{:.3}] tails_us=[order:p50/p95/p99/worst samples:{} capped:{} frame:{} actor:{} build:{} compose:{} upload:{} draw:{} setup:{} prep:{} record:{}] display_dbg=[err_last_ms:{:+.3} abs_avg_ms:{:.3} abs_max_ms:{:.3} catch:{} catch_last:{}] present_dbg=[mode:{} display:{} host:{} mapped:{} inflight_avg:{:.2} inflight_max:{} image_wait:{} back_pressure:{} queue_idle:{} subopt:{} interval_ms_avg:{:.3} interval_ms_max:{:.3} margin_ms_avg:{:.3} margin_ms_max:{:.3} cal_ms_avg:{:.3} cal_ms_max:{:.3}] audio_dbg=[path:{} req:{} fallback:{} clock:{} qual:{} sf:{} cf:{} rate:{} buf:{} pad:{} q:{} tick_ms:{:.3} span_ms:{:.3} out_ms:{:.3} underruns:{}]",
+            "Gameplay frame pacing: frames={} req=[chain:{} other:{}] dt_ms=[avg:{:.3} max:{:.3}] redraw_ms=[late_avg:{:.3} late_max:{:.3} deliver_avg:{:.3} deliver_max:{:.3} >=1ms:{} >=2ms:{}] draw_ms=[avg:{:.3} max:{:.3}] present_ms=[avg:{:.3} max:{:.3} >=1ms:{} >=3ms:{}] draw_cpu_ms=[setup_avg:{:.3} prep_avg:{:.3} record_avg:{:.3}] tails_us=[order:p50/p95/p99/worst samples:{} capped:{} frame:{} actor:{} build:{} compose:{} upload:{} draw:{} setup:{} prep:{} record:{}] cpu_storage=[order:capacity/growth_events total_growth_events:{} {}] display_dbg=[err_last_ms:{:+.3} abs_avg_ms:{:.3} abs_max_ms:{:.3} catch:{} catch_last:{}] present_dbg=[mode:{} display:{} host:{} mapped:{} inflight_avg:{:.2} inflight_max:{} image_wait:{} back_pressure:{} queue_idle:{} subopt:{} interval_ms_avg:{:.3} interval_ms_max:{:.3} margin_ms_avg:{:.3} margin_ms_max:{:.3} cal_ms_avg:{:.3} cal_ms_max:{:.3}] audio_dbg=[path:{} req:{} fallback:{} clock:{} qual:{} sf:{} cf:{} rate:{} buf:{} pad:{} q:{} tick_ms:{:.3} span_ms:{:.3} out_ms:{:.3} underruns:{}]",
             frames,
             self.chain_frames,
             self.other_frames,
@@ -447,6 +538,8 @@ impl GameplayPacingTrace {
             setup_tail,
             prepare_tail,
             record_tail,
+            self.storage.total_growths(),
+            self.storage,
             self.display_error_last_us as f64 / 1000.0,
             self.display_error_abs_sum_us as f64 / frames as f64 / 1000.0,
             self.display_error_abs_max_us as f64 / 1000.0,
@@ -484,7 +577,10 @@ impl GameplayPacingTrace {
             audio.estimated_output_delay_ns as f64 / 1_000_000.0,
             audio.underrun_count
         );
+        let mut storage = self.storage;
         self.reset(now);
+        storage.reset_window();
+        self.storage = storage;
     }
 
     fn record_phase(&mut self, phase: Phase, value_us: u32) {
@@ -520,6 +616,14 @@ const fn phase_bucket_upper(index: usize) -> u32 {
     }
 }
 
+const fn saturating_u32(value: usize) -> u32 {
+    if value > u32::MAX as usize {
+        u32::MAX
+    } else {
+        value as u32
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -550,6 +654,15 @@ mod tests {
                 build_screen_us: 600,
                 compose_us: 1_000,
                 upload_us: 50,
+                storage: GameplayStorageSample::new(
+                    256,
+                    ComposeStorageStats {
+                        capacities: [32; COMPOSE_STORAGE_SLOTS],
+                    },
+                    DrawStorageStats {
+                        capacities: [64; DRAW_STORAGE_SLOTS],
+                    },
+                ),
             },
             -0.002,
             true,
@@ -561,6 +674,10 @@ mod tests {
         assert_eq!(trace.present_over_1ms, 1);
         assert_eq!(trace.display_error_last_us, -2_000);
         assert_eq!(trace.display_catching_up_frames, 1);
+        assert_eq!(trace.storage.high[0], 256);
+        assert_eq!(trace.storage.high[1], 32);
+        assert_eq!(trace.storage.high[1 + COMPOSE_STORAGE_SLOTS], 64);
+        assert_eq!(trace.storage.total_growths(), 0);
         assert_eq!(
             trace.phase_tail(Phase::Compose),
             PhaseTail {
@@ -576,6 +693,9 @@ mod tests {
     fn disabled_trace_stays_idle() {
         let now = Instant::now();
         let mut trace = GameplayPacingTrace::new(now);
+        let mut storage = GameplayStorageSample::default();
+        storage.capacities.fill(8);
+        trace.storage.record(storage);
 
         trace.record_frame_if_enabled(
             false,
@@ -593,6 +713,7 @@ mod tests {
         );
 
         assert_eq!(trace.frames, 0);
+        assert!(!trace.storage.initialized);
         assert_eq!(trace.phase_hist(Phase::Frame).samples, 0);
     }
 
@@ -632,5 +753,26 @@ mod tests {
         );
         assert_eq!(hist.capped, 1);
         assert_eq!(hist.tail().worst, 20_000);
+    }
+
+    #[test]
+    fn storage_trace_counts_capacity_growth_and_preserves_window_baseline() {
+        let mut trace = StorageTrace::new();
+        let mut first = GameplayStorageSample::default();
+        first.capacities.fill(8);
+        trace.record(first);
+
+        let mut grown = first;
+        grown.capacities[0] = 16;
+        grown.capacities[1 + COMPOSE_STORAGE_SLOTS] = 32;
+        trace.record(grown);
+
+        assert_eq!(trace.total_growths(), 2);
+        assert_eq!(trace.high[0], 16);
+        assert_eq!(trace.high[1 + COMPOSE_STORAGE_SLOTS], 32);
+
+        trace.reset_window();
+        assert_eq!(trace.total_growths(), 0);
+        assert_eq!(trace.high, grown.capacities);
     }
 }

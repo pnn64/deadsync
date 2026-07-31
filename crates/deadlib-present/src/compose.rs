@@ -299,6 +299,31 @@ pub struct ComposeScratch {
     retained_frames: RetainedFrameCache,
 }
 
+pub const COMPOSE_STORAGE_SLOTS: usize = 16;
+pub const COMPOSE_STORAGE_NAMES: [&str; COMPOSE_STORAGE_SLOTS] = [
+    "objects",
+    "batches",
+    "sprite_inst",
+    "cameras",
+    "masks",
+    "z_counts",
+    "z_perm",
+    "sparse_z_keys",
+    "sparse_z_buckets",
+    "texture_dims",
+    "texture_sheets",
+    "texture_handles",
+    "text_builders",
+    "text_recycle",
+    "text_vertices",
+    "retained_frames",
+];
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct ComposeStorageStats {
+    pub capacities: [u32; COMPOSE_STORAGE_SLOTS],
+}
+
 impl ComposeScratch {
     pub fn recycle_render_list(&mut self, render: &mut RenderList) {
         let mut objects = std::mem::take(&mut render.objects);
@@ -342,6 +367,39 @@ impl ComposeScratch {
 
     pub fn reset_retained_frame_stats(&mut self) {
         self.retained_frames.stats = RetainedFrameCacheStats::default();
+    }
+
+    /// Returns retained CPU buffer capacities for opt-in frame diagnostics.
+    ///
+    /// The nested text-vertex total is linear in a hard-capped set of 512
+    /// buffers, so callers should sample this only when diagnostics are active.
+    pub fn storage_stats(&self) -> ComposeStorageStats {
+        let text_vertex_capacity = self
+            .recycled_text_mesh_vertices
+            .iter()
+            .fold(0usize, |sum, vertices| {
+                sum.saturating_add(vertices.capacity())
+            });
+        ComposeStorageStats {
+            capacities: [
+                saturating_u32(self.objects.capacity()),
+                saturating_u32(self.batches.capacity()),
+                saturating_u32(self.sprite_instances.capacity()),
+                saturating_u32(self.cameras.capacity()),
+                saturating_u32(self.masks.capacity()),
+                saturating_u32(self.z_counts.capacity()),
+                saturating_u32(self.z_perm.capacity()),
+                saturating_u32(self.sparse_z_keys.capacity()),
+                saturating_u32(self.sparse_z_bucket_by_key.capacity()),
+                saturating_u32(self.texture_cache.dims.capacity()),
+                saturating_u32(self.texture_cache.sheets.capacity()),
+                saturating_u32(self.texture_cache.handles.capacity()),
+                saturating_u32(self.transient_text_mesh_builders.capacity()),
+                saturating_u32(self.recycled_text_mesh_vertices.capacity()),
+                saturating_u32(text_vertex_capacity),
+                saturating_u32(self.retained_frames.entries.capacity()),
+            ],
+        }
     }
 
     #[inline(always)]
@@ -7637,6 +7695,9 @@ mod tests {
         assert_eq!(scratch.recycled_text_mesh_vertices.len(), 1);
         assert!(scratch.recycled_text_mesh_vertices[0].is_empty());
         assert!(scratch.recycled_text_mesh_vertices[0].capacity() >= 6);
+        let storage = scratch.storage_stats();
+        assert!(storage.capacities[13] >= 1);
+        assert!(storage.capacities[14] >= 6);
     }
 
     #[test]

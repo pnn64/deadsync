@@ -836,6 +836,7 @@ pub struct DrawStats {
     pub backend_setup_us: u32,
     pub backend_prepare_us: u32,
     pub backend_record_us: u32,
+    pub storage: draw_prep::DrawStorageStats,
 }
 impl PresentModePolicy {
     #[inline(always)]

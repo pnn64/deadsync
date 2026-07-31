@@ -24,7 +24,7 @@ use crate::course::{
 use crate::diagnostics::timing_health;
 use crate::dynamic_media::{BgVideoTiming, DynamicMedia};
 use crate::frame_loop::{FrameScreenStepContext, FrameWaitControl, frame_screen_step_plan};
-use crate::frame_pacing_trace::GameplayPacingPhases;
+use crate::frame_pacing_trace::{GameplayPacingPhases, GameplayStorageSample};
 use crate::frame_stats::{
     FrameStatsSummaryContext, frame_stats_summary, frame_stats_target_us, frame_stats_two_player,
 };
@@ -2854,6 +2854,17 @@ impl App {
         } else {
             self.ui_compose_scratch.recycle_render_list(&mut screen);
         }
+        let gameplay_storage = if uses_gameplay_present
+            && log::log_enabled!(target: "deadsync_shell::frame_pacing_trace", log::Level::Trace)
+        {
+            GameplayStorageSample::new(
+                actors.capacity(),
+                self.gameplay_compose_scratch.storage_stats(),
+                draw_stats.storage,
+            )
+        } else {
+            GameplayStorageSample::default()
+        };
         if capture_screenshot {
             self.capture_pending_screenshot(redraw_started);
         }
@@ -2938,7 +2949,7 @@ impl App {
         );
         self.state.shell.gameplay_pacing_trace.record_frame(
             frame_finished,
-            self.state.screens.current_screen == CurrentScreen::Gameplay,
+            uses_gameplay_present,
             frame_seconds,
             pre_redraw_gap_us,
             request_to_redraw_us,
@@ -2950,6 +2961,7 @@ impl App {
                 build_screen_us,
                 compose_us,
                 upload_us,
+                storage: gameplay_storage,
             },
             display_clock.error_seconds,
             display_clock.catching_up,

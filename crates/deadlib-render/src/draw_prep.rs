@@ -113,6 +113,16 @@ pub struct DrawScratch {
     pub ops: Vec<DrawOp>,
 }
 
+pub const DRAW_STORAGE_SLOTS: usize = 5;
+pub const SOFTWARE_OBJECTS_STORAGE_SLOT: usize = 4;
+pub const DRAW_STORAGE_NAMES: [&str; DRAW_STORAGE_SLOTS] =
+    ["mesh", "tmesh", "tmesh_inst", "ops", "software_objects"];
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct DrawStorageStats {
+    pub capacities: [u32; DRAW_STORAGE_SLOTS],
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 enum TMeshGeomKey {
     Cached(TMeshCacheKey),
@@ -146,6 +156,29 @@ impl DrawScratch {
             tmesh_instances: Vec::with_capacity(tmesh_instances),
             ops: Vec::with_capacity(ops),
         }
+    }
+
+    #[inline(always)]
+    pub fn storage_stats(&self) -> DrawStorageStats {
+        // Capacities persist across frames and therefore expose any warmed growth.
+        DrawStorageStats {
+            capacities: [
+                saturating_u32(self.mesh_vertices.capacity()),
+                saturating_u32(self.tmesh_vertices.capacity()),
+                saturating_u32(self.tmesh_instances.capacity()),
+                saturating_u32(self.ops.capacity()),
+                0,
+            ],
+        }
+    }
+}
+
+#[inline(always)]
+const fn saturating_u32(value: usize) -> u32 {
+    if value > u32::MAX as usize {
+        u32::MAX
+    } else {
+        value as u32
     }
 }
 
@@ -412,7 +445,8 @@ where
 #[cfg(test)]
 mod tests {
     use super::{
-        CameraUploadCache, DrawOp, DrawScratch, TexturedMeshSource, append_mesh_vertices, prepare,
+        CameraUploadCache, DrawOp, DrawScratch, SOFTWARE_OBJECTS_STORAGE_SLOT, TexturedMeshSource,
+        append_mesh_vertices, prepare,
     };
     use crate::{
         BlendMode, INVALID_TMESH_CACHE_KEY, MeshVertex, MeshVertices, ObjectType, RenderList,
@@ -679,5 +713,20 @@ mod tests {
             })
             .collect::<Vec<_>>();
         assert_eq!(textures, vec![10, 20, 30]);
+    }
+
+    #[test]
+    fn storage_stats_report_retained_capacities() {
+        let mut scratch = DrawScratch::with_capacity(8, 16, 4, 2);
+        scratch.mesh_vertices.push(MeshVertex::default());
+        scratch.tmesh_vertices.push(TexturedMeshVertex::default());
+
+        let stats = scratch.storage_stats();
+
+        assert!(stats.capacities[0] >= 8);
+        assert!(stats.capacities[1] >= 16);
+        assert!(stats.capacities[2] >= 4);
+        assert!(stats.capacities[3] >= 2);
+        assert_eq!(stats.capacities[SOFTWARE_OBJECTS_STORAGE_SLOT], 0);
     }
 }

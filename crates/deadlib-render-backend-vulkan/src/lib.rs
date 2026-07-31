@@ -1517,6 +1517,7 @@ pub fn draw(
                 }
             },
         );
+        stats.storage = prep.storage_stats();
     }
 
     let needed_instances = render_list.sprite_instances.len();

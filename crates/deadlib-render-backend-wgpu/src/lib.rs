@@ -987,6 +987,7 @@ pub fn draw(
                 vertices,
             )
         });
+        stats.storage = prep.storage_stats();
     }
 
     let instance_len = render_list.sprite_instances.len();

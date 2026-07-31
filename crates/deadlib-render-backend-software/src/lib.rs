@@ -220,9 +220,14 @@ pub fn draw(
     let present_started = Instant::now();
     buffer.present()?;
 
+    // The software path retains its own prepared-object staging vector.
+    let mut storage = deadlib_render::draw_prep::DrawStorageStats::default();
+    let slot = deadlib_render::draw_prep::SOFTWARE_OBJECTS_STORAGE_SLOT;
+    storage.capacities[slot] = state.prepared_objects.capacity().min(u32::MAX as usize) as u32;
     Ok(DrawStats {
         vertices,
         present_us: elapsed_us_since(present_started),
+        storage,
         ..DrawStats::default()
     })
 }
