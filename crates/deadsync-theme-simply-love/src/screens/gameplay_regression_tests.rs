@@ -44,6 +44,8 @@ mod tests {
     use deadsync_profile as profile_data;
     use deadsync_profile::compat as profile;
     use deadsync_rules::judgment::{JudgeGrade, Judgment, TimingWindow};
+    use std::alloc::{GlobalAlloc, Layout, System};
+    use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
     use std::sync::{Arc, LazyLock, Mutex};
     use std::{
         fs,
@@ -51,6 +53,119 @@ mod tests {
     };
 
     static SESSION_TEST_LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
+
+    #[global_allocator]
+    static ALLOC: CountingAlloc = CountingAlloc::new();
+
+    struct CountingAlloc {
+        enabled: AtomicBool,
+        allocs: AtomicU64,
+        reallocs: AtomicU64,
+        deallocs: AtomicU64,
+        alloc_bytes: AtomicU64,
+        realloc_bytes: AtomicU64,
+        dealloc_bytes: AtomicU64,
+    }
+
+    impl CountingAlloc {
+        const fn new() -> Self {
+            Self {
+                enabled: AtomicBool::new(false),
+                allocs: AtomicU64::new(0),
+                reallocs: AtomicU64::new(0),
+                deallocs: AtomicU64::new(0),
+                alloc_bytes: AtomicU64::new(0),
+                realloc_bytes: AtomicU64::new(0),
+                dealloc_bytes: AtomicU64::new(0),
+            }
+        }
+
+        fn begin(&self) {
+            assert!(!self.enabled.load(Ordering::Relaxed));
+            self.allocs.store(0, Ordering::Relaxed);
+            self.reallocs.store(0, Ordering::Relaxed);
+            self.deallocs.store(0, Ordering::Relaxed);
+            self.alloc_bytes.store(0, Ordering::Relaxed);
+            self.realloc_bytes.store(0, Ordering::Relaxed);
+            self.dealloc_bytes.store(0, Ordering::Relaxed);
+            self.enabled.store(true, Ordering::Relaxed);
+        }
+
+        fn end(&self) -> AllocCounts {
+            self.enabled.store(false, Ordering::Relaxed);
+            AllocCounts {
+                allocs: self.allocs.load(Ordering::Relaxed),
+                reallocs: self.reallocs.load(Ordering::Relaxed),
+                deallocs: self.deallocs.load(Ordering::Relaxed),
+                alloc_bytes: self.alloc_bytes.load(Ordering::Relaxed),
+                realloc_bytes: self.realloc_bytes.load(Ordering::Relaxed),
+                dealloc_bytes: self.dealloc_bytes.load(Ordering::Relaxed),
+            }
+        }
+
+        #[inline(always)]
+        fn counting(&self) -> bool {
+            self.enabled.load(Ordering::Relaxed)
+        }
+    }
+
+    // SAFETY: every operation delegates to `System` with the caller-provided
+    // pointer and layout. The atomics only observe calls while the isolated
+    // fixture explicitly enables counting and do not affect ownership.
+    unsafe impl GlobalAlloc for CountingAlloc {
+        unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
+            // SAFETY: `layout` is forwarded unchanged to the system allocator.
+            let ptr = unsafe { System.alloc(layout) };
+            if !ptr.is_null() && self.counting() {
+                self.allocs.fetch_add(1, Ordering::Relaxed);
+                self.alloc_bytes
+                    .fetch_add(layout.size() as u64, Ordering::Relaxed);
+            }
+            ptr
+        }
+
+        unsafe fn alloc_zeroed(&self, layout: Layout) -> *mut u8 {
+            // SAFETY: `layout` is forwarded unchanged to the system allocator.
+            let ptr = unsafe { System.alloc_zeroed(layout) };
+            if !ptr.is_null() && self.counting() {
+                self.allocs.fetch_add(1, Ordering::Relaxed);
+                self.alloc_bytes
+                    .fetch_add(layout.size() as u64, Ordering::Relaxed);
+            }
+            ptr
+        }
+
+        unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
+            if self.counting() {
+                self.deallocs.fetch_add(1, Ordering::Relaxed);
+                self.dealloc_bytes
+                    .fetch_add(layout.size() as u64, Ordering::Relaxed);
+            }
+            // SAFETY: the allocator caller supplies the original pointer/layout.
+            unsafe { System.dealloc(ptr, layout) };
+        }
+
+        unsafe fn realloc(&self, ptr: *mut u8, old: Layout, new_size: usize) -> *mut u8 {
+            // SAFETY: all arguments are forwarded unchanged to `System`.
+            let out = unsafe { System.realloc(ptr, old, new_size) };
+            if !out.is_null() && self.counting() {
+                self.reallocs.fetch_add(1, Ordering::Relaxed);
+                self.realloc_bytes
+                    .fetch_add(new_size as u64, Ordering::Relaxed);
+            }
+            out
+        }
+    }
+
+    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+    struct AllocCounts {
+        allocs: u64,
+        reallocs: u64,
+        deallocs: u64,
+        alloc_bytes: u64,
+        realloc_bytes: u64,
+        dealloc_bytes: u64,
+    }
 
     #[test]
     fn model_cache_prewarms_more_than_legacy_slot_limit() {
@@ -560,6 +675,29 @@ mod tests {
         )
     }
 
+    fn prepare_fixture_frame(
+        state: &mut screen_gameplay::State,
+        assets: &crate::assets::AssetManager,
+        metrics: &space::Metrics,
+        actors: &mut Vec<deadlib_present::actors::Actor>,
+        text_cache: &mut compose::TextLayoutCache,
+        compose_scratch: &mut compose::ComposeScratch,
+        draw_scratch: &mut DrawScratch,
+    ) -> usize {
+        let mut render =
+            compose_fixture_frame(state, assets, metrics, actors, text_cache, compose_scratch);
+        draw_prep::prepare(&render, draw_scratch, |_, _| false);
+        let checksum = render
+            .objects
+            .len()
+            .wrapping_add(render.sprite_instances.len())
+            .wrapping_add(render.batches.len())
+            .wrapping_add(draw_scratch.ops.len());
+        compose_scratch.recycle_render_list(&mut render);
+        actors.clear();
+        checksum
+    }
+
     fn assert_repeatable_frame(
         state: &mut screen_gameplay::State,
         assets: &crate::assets::AssetManager,
@@ -654,6 +792,35 @@ L000
         simfile
     }
 
+    fn sprite_core_fixture(
+        simfile: &Path,
+    ) -> (
+        screen_gameplay::State,
+        crate::assets::AssetManager,
+        space::Metrics,
+    ) {
+        let metrics = space::metrics_for_window(640, 480);
+        space::set_current_metrics(metrics);
+        space::set_current_window_px(640, 480);
+        space::set_overscan(0, 0, 0, 0);
+
+        let mut profiles = [
+            profile_data::Profile::default(),
+            profile_data::Profile::default(),
+        ];
+        profiles[0].noteskin = profile_data::NoteSkin::new("lambda");
+        profiles[0].scroll_speed = ScrollSpeedSetting::XMod(2.0);
+        let mut state = build_test_state(
+            simfile,
+            GameplayViewport::new(640.0, 480.0),
+            GameplaySession::default(),
+            profiles,
+        );
+        set_fixture_time(&mut state, 2.5);
+        add_sprite_core_feedback(&mut state, 0, 0, 42);
+        (state, fixture_assets(), metrics)
+    }
+
     #[test]
     fn sprite_core_frame_is_structurally_repeatable() {
         let simfile = write_fixture("f0-sprite-core", generated_sprite_core_simfile());
@@ -663,25 +830,7 @@ L000
             true,
             false,
             || {
-                let metrics = space::metrics_for_window(640, 480);
-                space::set_current_metrics(metrics);
-                space::set_current_window_px(640, 480);
-                space::set_overscan(0, 0, 0, 0);
-
-                let mut profiles = [
-                    profile_data::Profile::default(),
-                    profile_data::Profile::default(),
-                ];
-                profiles[0].noteskin = profile_data::NoteSkin::new("lambda");
-                profiles[0].scroll_speed = ScrollSpeedSetting::XMod(2.0);
-                let mut state = build_test_state(
-                    &simfile,
-                    GameplayViewport::new(640.0, 480.0),
-                    GameplaySession::default(),
-                    profiles,
-                );
-                set_fixture_time(&mut state, 2.5);
-                add_sprite_core_feedback(&mut state, 0, 0, 42);
+                let (mut state, assets, metrics) = sprite_core_fixture(&simfile);
 
                 assert!(
                     state
@@ -705,7 +854,6 @@ L000
                         .any(|note| note.note_type == NoteType::Fake || note.is_fake)
                 );
 
-                let assets = fixture_assets();
                 let mut actors = Vec::with_capacity(512);
                 let mut text_cache = compose::TextLayoutCache::default();
                 let mut compose_scratch = compose::ComposeScratch::default();
@@ -746,6 +894,94 @@ L000
                     &mut compose_scratch,
                 );
                 assert_ne!(compare_render_lists(&expected, &reverse), Ok(()));
+            },
+        );
+    }
+
+    #[test]
+    fn sprite_core_warmed_pipeline_reports_exact_allocations() {
+        const WARMUP_FRAMES: usize = 64;
+        const MEASURE_FRAMES: usize = 256;
+
+        let simfile = write_fixture("f0-sprite-core-alloc", generated_sprite_core_simfile());
+        with_session(
+            profile_data::PlayStyle::Single,
+            profile_data::PlayerSide::P1,
+            true,
+            false,
+            || {
+                ALLOC.begin();
+                let probe = std::hint::black_box(vec![0u8; std::hint::black_box(1_024)]);
+                std::hint::black_box(probe.as_slice());
+                drop(probe);
+                let probe_counts = ALLOC.end();
+                assert!(probe_counts.allocs >= 1);
+                assert!(probe_counts.deallocs >= 1);
+                assert!(probe_counts.alloc_bytes >= 1_024);
+
+                let (mut state, assets, metrics) = sprite_core_fixture(&simfile);
+                let mut actors = Vec::with_capacity(512);
+                let mut text_cache = compose::TextLayoutCache::default();
+                let mut compose_scratch = compose::ComposeScratch::default();
+                let mut draw_scratch = DrawScratch::default();
+                let mut checksum = 0usize;
+
+                for _ in 0..WARMUP_FRAMES {
+                    checksum = checksum.wrapping_add(prepare_fixture_frame(
+                        &mut state,
+                        &assets,
+                        &metrics,
+                        &mut actors,
+                        &mut text_cache,
+                        &mut compose_scratch,
+                        &mut draw_scratch,
+                    ));
+                }
+                let capacity_before = (
+                    actors.capacity(),
+                    compose_scratch.storage_stats(),
+                    draw_scratch.storage_stats(),
+                );
+
+                ALLOC.begin();
+                for _ in 0..MEASURE_FRAMES {
+                    checksum = checksum.wrapping_add(prepare_fixture_frame(
+                        &mut state,
+                        &assets,
+                        &metrics,
+                        &mut actors,
+                        &mut text_cache,
+                        &mut compose_scratch,
+                        &mut draw_scratch,
+                    ));
+                }
+                let counts = ALLOC.end();
+                let capacity_after = (
+                    actors.capacity(),
+                    compose_scratch.storage_stats(),
+                    draw_scratch.storage_stats(),
+                );
+
+                assert_ne!(std::hint::black_box(checksum), 0);
+                assert_eq!(capacity_after, capacity_before);
+                println!(
+                    "F0-sprite-core warmed pipeline: frames={MEASURE_FRAMES} \
+                     allocs={} ({:.3}/frame) reallocs={} ({:.3}/frame) \
+                     deallocs={} ({:.3}/frame) alloc_bytes={} ({:.1}/frame) \
+                     realloc_bytes={} ({:.1}/frame) dealloc_bytes={} ({:.1}/frame)",
+                    counts.allocs,
+                    counts.allocs as f64 / MEASURE_FRAMES as f64,
+                    counts.reallocs,
+                    counts.reallocs as f64 / MEASURE_FRAMES as f64,
+                    counts.deallocs,
+                    counts.deallocs as f64 / MEASURE_FRAMES as f64,
+                    counts.alloc_bytes,
+                    counts.alloc_bytes as f64 / MEASURE_FRAMES as f64,
+                    counts.realloc_bytes,
+                    counts.realloc_bytes as f64 / MEASURE_FRAMES as f64,
+                    counts.dealloc_bytes,
+                    counts.dealloc_bytes as f64 / MEASURE_FRAMES as f64,
+                );
             },
         );
     }
