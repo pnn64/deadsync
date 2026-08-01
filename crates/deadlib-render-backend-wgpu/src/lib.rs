@@ -1237,16 +1237,13 @@ pub fn draw(
                     if last_tmesh_source
                         .is_none_or(|source| !source.shares_vertex_buffer(run.source))
                     {
-                        match run.source {
-                            TexturedMeshSource::Transient { .. } => {
-                                pass.set_vertex_buffer(0, state.tmesh_vertex_buffer.slice(..));
-                            }
-                            TexturedMeshSource::Cached { cache_key, .. } => {
-                                let Some(entry) = state.cached_tmesh.get(&cache_key) else {
-                                    continue;
-                                };
-                                pass.set_vertex_buffer(0, entry.buffer.slice(..));
-                            }
+                        if let Some(cache_key) = run.source.cache_key() {
+                            let Some(entry) = state.cached_tmesh.get(&cache_key) else {
+                                continue;
+                            };
+                            pass.set_vertex_buffer(0, entry.buffer.slice(..));
+                        } else {
+                            pass.set_vertex_buffer(0, state.tmesh_vertex_buffer.slice(..));
                         }
                         last_tmesh_source = Some(run.source);
                     }

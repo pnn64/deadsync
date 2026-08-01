@@ -24,50 +24,54 @@ pub struct MeshRun {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum TexturedMeshSource {
-    Transient {
-        vertex_start: u32,
-        vertex_count: u32,
-        geom_key: u64,
-    },
-    Cached {
-        cache_key: TMeshCacheKey,
-        vertex_count: u32,
-    },
+pub struct TexturedMeshSource {
+    cache_key: TMeshCacheKey,
+    vertex_start: u32,
+    vertex_count: u32,
 }
 
 impl TexturedMeshSource {
     #[inline(always)]
-    pub const fn vertex_start(self) -> u32 {
-        match self {
-            Self::Transient { vertex_start, .. } => vertex_start,
-            Self::Cached { .. } => 0,
+    pub const fn transient(vertex_start: u32, vertex_count: u32) -> Self {
+        Self {
+            cache_key: INVALID_TMESH_CACHE_KEY,
+            vertex_start,
+            vertex_count,
         }
     }
 
     #[inline(always)]
+    pub const fn cached(cache_key: TMeshCacheKey, vertex_count: u32) -> Self {
+        debug_assert!(cache_key != INVALID_TMESH_CACHE_KEY);
+        Self {
+            cache_key,
+            vertex_start: 0,
+            vertex_count,
+        }
+    }
+
+    #[inline(always)]
+    pub const fn vertex_start(self) -> u32 {
+        self.vertex_start
+    }
+
+    #[inline(always)]
     pub const fn vertex_count(self) -> u32 {
-        match self {
-            Self::Transient { vertex_count, .. } | Self::Cached { vertex_count, .. } => {
-                vertex_count
-            }
+        self.vertex_count
+    }
+
+    #[inline(always)]
+    pub const fn cache_key(self) -> Option<TMeshCacheKey> {
+        if self.cache_key == INVALID_TMESH_CACHE_KEY {
+            None
+        } else {
+            Some(self.cache_key)
         }
     }
 
     #[inline(always)]
     pub const fn shares_vertex_buffer(self, other: Self) -> bool {
-        match (self, other) {
-            (Self::Transient { .. }, Self::Transient { .. }) => true,
-            (
-                Self::Cached {
-                    cache_key: left, ..
-                },
-                Self::Cached {
-                    cache_key: right, ..
-                },
-            ) => left == right,
-            _ => false,
-        }
+        self.cache_key == other.cache_key
     }
 }
 
@@ -138,7 +142,7 @@ pub struct DrawStorageStats {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 enum TMeshGeomKey {
     Cached(TMeshCacheKey),
-    Shared { ptr: usize, len: usize },
+    Shared(usize),
 }
 
 // A gameplay frame normally uses far fewer distinct shared meshes. Saturating
@@ -218,11 +222,7 @@ fn transient_tmesh_source(
     let vertex_start = scratch.tmesh_vertices.len() as u32;
     scratch.tmesh_vertices.extend_from_slice(vertices);
     let vertex_count = vertices.len() as u32;
-    TexturedMeshSource::Transient {
-        vertex_start,
-        vertex_count,
-        geom_key: ((vertex_start as u64) << 32) | u64::from(vertex_count),
-    }
+    TexturedMeshSource::transient(vertex_start, vertex_count)
 }
 
 #[inline(always)]
@@ -231,10 +231,11 @@ fn shared_tmesh_source<const REUSE_FRAME_GEOMS: bool>(
     vertices: &[TexturedMeshVertex],
     last_geom: &mut Option<FrameTMeshGeom>,
 ) -> TexturedMeshSource {
-    let key = TMeshGeomKey::Shared {
-        ptr: vertices.as_ptr() as usize,
-        len: vertices.len(),
-    };
+    debug_assert!(!vertices.is_empty());
+    // These non-empty slices stay owned by live Arc-backed render objects for
+    // the whole preparation call. Clones share an address; distinct live
+    // allocations cannot, so length adds no identity information.
+    let key = TMeshGeomKey::Shared(vertices.as_ptr() as usize);
     if let Some(geom) = *last_geom
         && geom.key == key
     {
@@ -482,10 +483,7 @@ where
             return source;
         }
         if ensure_cached_tmesh(geom_cache_key, vertices.as_ref()) {
-            let source = TexturedMeshSource::Cached {
-                cache_key: geom_cache_key,
-                vertex_count: vertices.len() as u32,
-            };
+            let source = TexturedMeshSource::cached(geom_cache_key, vertices.len() as u32);
             if REUSE_FRAME_GEOMS && scratch.frame_tmesh_geoms.len() < FRAME_TMESH_GEOMS_MAX {
                 scratch.frame_tmesh_geoms.insert(key, source);
             }
@@ -510,8 +508,8 @@ where
 #[cfg(test)]
 mod tests {
     use super::{
-        CameraUploadCache, DrawOp, DrawScratch, SOFTWARE_OBJECTS_STORAGE_SLOT, TexturedMeshSource,
-        append_mesh_vertices, prepare,
+        CameraUploadCache, DrawOp, DrawScratch, SOFTWARE_OBJECTS_STORAGE_SLOT, TMeshGeomKey,
+        TexturedMeshSource, append_mesh_vertices, prepare,
     };
     use crate::{
         BlendMode, INVALID_TMESH_CACHE_KEY, MeshVertex, MeshVertices, ObjectType, RenderList,
@@ -520,6 +518,14 @@ mod tests {
     };
     use glam::{Mat4 as Matrix4, Vec3, Vec4 as Vector4};
     use std::sync::Arc;
+
+    #[cfg(target_pointer_width = "64")]
+    #[test]
+    fn draw_metadata_stays_compact() {
+        assert_eq!(std::mem::size_of::<TexturedMeshSource>(), 16);
+        assert_eq!(std::mem::size_of::<TMeshGeomKey>(), 16);
+        assert_eq!(std::mem::size_of::<DrawOp>(), 40);
+    }
 
     fn sprite_object(order: u32) -> RenderObject {
         RenderObject {
@@ -565,28 +571,11 @@ mod tests {
 
     #[test]
     fn textured_mesh_sources_compare_gpu_buffer_identity() {
-        let transient_a = TexturedMeshSource::Transient {
-            vertex_start: 0,
-            vertex_count: 48,
-            geom_key: 48,
-        };
-        let transient_b = TexturedMeshSource::Transient {
-            vertex_start: 96,
-            vertex_count: 72,
-            geom_key: (96_u64 << 32) | 72,
-        };
-        let cached_a = TexturedMeshSource::Cached {
-            cache_key: 41,
-            vertex_count: 48,
-        };
-        let cached_a_other_range = TexturedMeshSource::Cached {
-            cache_key: 41,
-            vertex_count: 96,
-        };
-        let cached_b = TexturedMeshSource::Cached {
-            cache_key: 42,
-            vertex_count: 48,
-        };
+        let transient_a = TexturedMeshSource::transient(0, 48);
+        let transient_b = TexturedMeshSource::transient(96, 72);
+        let cached_a = TexturedMeshSource::cached(41, 48);
+        let cached_a_other_range = TexturedMeshSource::cached(41, 96);
+        let cached_b = TexturedMeshSource::cached(42, 48);
 
         assert!(transient_a.shares_vertex_buffer(transient_b));
         assert!(cached_a.shares_vertex_buffer(cached_a_other_range));

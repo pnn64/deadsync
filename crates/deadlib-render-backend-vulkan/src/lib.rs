@@ -1828,20 +1828,16 @@ pub fn draw(
                     if last_tmesh_source
                         .is_none_or(|source| !source.shares_vertex_buffer(draw.source))
                     {
-                        let vb = match draw.source {
-                            TexturedMeshSource::Transient { .. } => {
-                                let Some(vb) = state.tmesh_ring.as_ref().map(|ring| ring.buffer)
-                                else {
-                                    continue;
-                                };
-                                vb
-                            }
-                            TexturedMeshSource::Cached { cache_key, .. } => {
-                                let Some(entry) = state.cached_tmesh.get(&cache_key) else {
-                                    continue;
-                                };
-                                entry.buffer.buffer
-                            }
+                        let vb = if let Some(cache_key) = draw.source.cache_key() {
+                            let Some(entry) = state.cached_tmesh.get(&cache_key) else {
+                                continue;
+                            };
+                            entry.buffer.buffer
+                        } else {
+                            let Some(vb) = state.tmesh_ring.as_ref().map(|ring| ring.buffer) else {
+                                continue;
+                            };
+                            vb
                         };
                         device.cmd_bind_vertex_buffers(cmd, 0, &[vb], &[0]);
                         last_tmesh_source = Some(draw.source);
@@ -1877,11 +1873,10 @@ pub fn draw(
                         last_set = set;
                     }
 
-                    let first_vertex = match draw.source {
-                        TexturedMeshSource::Transient { vertex_start, .. } => {
-                            base_first_tmesh_vertex.unwrap_or(0) + vertex_start
-                        }
-                        TexturedMeshSource::Cached { .. } => 0,
+                    let first_vertex = if draw.source.cache_key().is_some() {
+                        0
+                    } else {
+                        base_first_tmesh_vertex.unwrap_or(0) + draw.source.vertex_start()
                     };
                     let first_instance =
                         base_first_tmesh_instance.unwrap_or(0) + draw.instance_start;

@@ -115,6 +115,13 @@ struct BenchResult {
 }
 
 fn main() {
+    println!(
+        "render layout: object={} bytes, object type={} bytes, batch={} bytes, draw op={} bytes",
+        std::mem::size_of::<RenderObject>(),
+        std::mem::size_of::<ObjectType>(),
+        std::mem::size_of::<deadlib_render::RenderBatch>(),
+        std::mem::size_of::<DrawOp>(),
+    );
     let frame = gameplay_frame();
     let mut unordered_objects = frame.objects.clone();
     for (index, object) in unordered_objects.iter_mut().enumerate() {
