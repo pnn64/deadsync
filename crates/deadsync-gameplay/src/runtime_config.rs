@@ -550,6 +550,11 @@ impl GameplayAudioClockState {
     }
 
     #[inline(always)]
+    pub fn stream_lead_in_seconds(&self, music_rate: f32) -> f32 {
+        self.positive_lead_in_seconds() / normalized_song_rate(music_rate)
+    }
+
+    #[inline(always)]
     pub fn stream_position_seconds(&self) -> f32 {
         self.stream_position_seconds
     }

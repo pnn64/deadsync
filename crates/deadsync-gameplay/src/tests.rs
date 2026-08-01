@@ -12801,6 +12801,7 @@ mod tests {
         state.set_stream_position_seconds(3.25);
         state.set_output_delay_seconds(-0.5);
         assert_eq!(state.positive_lead_in_seconds(), 1.5);
+        assert_eq!(state.stream_lead_in_seconds(1.5), 1.0);
         assert_eq!(state.stream_position_seconds(), 3.25);
         assert_eq!(state.output_delay_seconds(), 0.0);
 

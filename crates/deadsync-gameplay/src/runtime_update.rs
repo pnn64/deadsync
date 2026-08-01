@@ -33,10 +33,15 @@ where
 
         // Music time driven directly by the audio device clock, interpolated
         // between callbacks for smooth, continuous motion.
+        let music_rate = self.music_rate();
+        let stream_lead_in = self
+            .clock
+            .audio_clock
+            .stream_lead_in_seconds(music_rate);
         let song_clock = current_song_clock_snapshot(
             audio_snapshot,
-            self.music_rate(),
-            self.clock.audio_clock.lead_in_seconds(),
+            music_rate,
+            stream_lead_in,
             self.clock.offsets.global_offset_seconds(),
         );
         let lead_in = self.clock.audio_clock.positive_lead_in_seconds();
@@ -625,11 +630,14 @@ where
 
     #[inline(always)]
     pub fn music_time_from_audio_snapshot(&self, audio_snapshot: GameplayAudioSnapshot) -> f32 {
+        let music_rate = self.music_rate();
         song_time_ns_to_seconds(
             current_song_clock_snapshot(
                 audio_snapshot,
-                self.music_rate(),
-                self.clock.audio_clock.lead_in_seconds(),
+                music_rate,
+                self.clock
+                    .audio_clock
+                    .stream_lead_in_seconds(music_rate),
                 self.clock.offsets.global_offset_seconds(),
             )
             .song_time_ns,
@@ -3046,7 +3054,13 @@ where
 
     pub fn start_stage_music(&mut self) {
         let lead_in = self.clock.audio_clock.positive_lead_in_seconds();
-        log::debug!("Starting music with a preroll delay of {lead_in:.2}s");
+        let stream_lead_in = self
+            .clock
+            .audio_clock
+            .stream_lead_in_seconds(self.music_rate());
+        log::debug!(
+            "Starting music with {stream_lead_in:.2}s of real preroll ({lead_in:.2}s song time)"
+        );
         let start_time = -self.clock.audio_clock.positive_lead_in_seconds();
         self.set_current_music_time_ns(song_time_ns_from_seconds(start_time));
         self.boundary.total_elapsed_in_screen = 0.0;

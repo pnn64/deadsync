@@ -12,7 +12,7 @@ use deadlib_platform::windows_rt::{ThreadRole, boost_current_thread};
 pub use deadsync_audio::{
     Cut, InitConfig, MusicStreamClockSnapshot, OutputDeviceInfo, OutputTimingSnapshot,
 };
-use deadsync_audio::{MusicBlockTiming, MusicBlockWriter};
+use deadsync_audio::{MusicBlockTiming, MusicBlockWriter, normalized_music_rate};
 use deadsync_audio_decode as decode;
 use deadsync_audio_decode::resample::{
     OUT_FRAMES_PER_CALL, PLANAR_INPUT_CAP_FRAMES, PlanarAccum, apply_fade_envelope,
@@ -174,6 +174,17 @@ fn push_silence(
     Ok(next_music_sec)
 }
 
+#[inline(always)]
+fn lead_in_silence_timing(cut_start_sec: f64, rate: f32, sample_rate_hz: u32) -> (usize, f64) {
+    let rate = normalized_music_rate(rate).clamp(MIN_MUSIC_RATE, MAX_MUSIC_RATE);
+    let sample_rate = f64::from(sample_rate_hz.max(1));
+    let real_seconds = (-cut_start_sec).max(0.0) / f64::from(rate);
+    (
+        (real_seconds * sample_rate).round() as usize,
+        f64::from(rate) / sample_rate,
+    )
+}
+
 pub fn spawn_music_decoder_thread(
     path: PathBuf,
     cut: Cut,
@@ -278,8 +289,9 @@ fn music_decoder_thread_loop(
     );
 
     if cut.start_sec < 0.0 {
-        let silence_duration_sec = -cut.start_sec;
-        let silence_frames = (silence_duration_sec * f64::from(out_hz)).round() as usize;
+        let rate = f32::from_bits(rate_bits.load(Ordering::Relaxed));
+        let (silence_frames, music_sec_per_frame) =
+            lead_in_silence_timing(cut.start_sec, rate, out_hz);
         if silence_frames > 0 {
             let _ = push_silence(
                 writer,
@@ -287,7 +299,7 @@ fn music_decoder_thread_loop(
                 out_ch,
                 generation,
                 cut.start_sec,
-                1.0 / f64::from(out_hz.max(1)),
+                music_sec_per_frame,
                 stop,
             )?;
         }
@@ -951,7 +963,9 @@ pub fn load_and_resample_sfx(
 
 #[cfg(test)]
 mod tests {
-    use super::{music_output_start_sec, push_music_block, seek_preroll_in_frames};
+    use super::{
+        lead_in_silence_timing, music_output_start_sec, push_music_block, seek_preroll_in_frames,
+    };
     use deadsync_audio::{MusicBlockTiming, music_transport};
     use std::sync::Arc;
     use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
@@ -969,6 +983,16 @@ mod tests {
         assert_eq!(seek_preroll_in_frames(true, 44_100, 44_092), 8);
         assert_eq!(seek_preroll_in_frames(true, 44_100, 44_120), 0);
         assert_eq!(seek_preroll_in_frames(false, 44_100, 0), 0);
+    }
+
+    #[test]
+    fn negative_lead_in_silence_scales_with_music_rate() {
+        const SAMPLE_RATE: u32 = 48_000;
+        let (frames, music_sec_per_frame) = lead_in_silence_timing(-9.0, 1.5, SAMPLE_RATE);
+
+        assert_eq!(frames, 6 * SAMPLE_RATE as usize);
+        assert!((music_sec_per_frame - 1.5 / f64::from(SAMPLE_RATE)).abs() <= f64::EPSILON);
+        assert!((-9.0 + frames as f64 * music_sec_per_frame).abs() <= 1e-12);
     }
 
     #[test]

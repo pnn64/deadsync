@@ -1090,7 +1090,7 @@ where
                     let note_time = song_time_ns_to_seconds(event.note_time_ns);
                     let song_offset_s = self.clock.offsets.song_offset_seconds();
                     let global_offset_s = self.effective_player_global_offset_seconds(player);
-                    let lead_in_s = self.clock.audio_clock.positive_lead_in_seconds();
+                    let lead_in_s = self.clock.audio_clock.stream_lead_in_seconds(rate);
                     let stream_pos_s = self.clock.audio_clock.stream_position_seconds();
                     let expected_stream_for_note_s =
                         note_time / rate + lead_in_s + global_offset_s * (1.0 - rate) / rate;
@@ -1684,7 +1684,7 @@ where
                 (
                     self.clock.offsets.song_offset_seconds(),
                     self.effective_player_global_offset_seconds(player),
-                    self.clock.audio_clock.positive_lead_in_seconds(),
+                    self.clock.audio_clock.stream_lead_in_seconds(rate),
                     self.clock.audio_clock.stream_position_seconds(),
                 )
             } else {
@@ -2006,7 +2006,7 @@ where
             (
                 self.clock.offsets.song_offset_seconds(),
                 self.effective_player_global_offset_seconds(player),
-                self.clock.audio_clock.positive_lead_in_seconds(),
+                self.clock.audio_clock.stream_lead_in_seconds(rate),
                 self.clock.audio_clock.stream_position_seconds(),
             )
         } else {

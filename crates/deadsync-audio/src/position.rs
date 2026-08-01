@@ -37,13 +37,6 @@ pub fn fallback_music_position(stream_seconds: f32, cut_start_sec: f64, rate: f3
     } else {
         0.0
     };
-    if cut_start_sec < 0.0 {
-        let lead_in = (-cut_start_sec) as f32;
-        if stream_seconds < lead_in {
-            return ((cut_start_sec + f64::from(stream_seconds)) as f32, 1.0);
-        }
-        return ((stream_seconds - lead_in) * rate, rate);
-    }
     (
         (cut_start_sec + f64::from(stream_seconds * rate)) as f32,
         rate,
@@ -52,7 +45,7 @@ pub fn fallback_music_position(stream_seconds: f32, cut_start_sec: f64, rate: f3
 
 #[inline(always)]
 pub fn music_clock_seed_enabled(cut_start_sec: f64) -> bool {
-    cut_start_sec.is_finite() && cut_start_sec > 0.0
+    cut_start_sec.is_finite() && cut_start_sec != 0.0
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -626,12 +619,15 @@ mod tests {
     }
 
     #[test]
-    fn fallback_music_position_keeps_negative_lead_in_unscaled() {
-        let (lead_music_sec, lead_slope) = fallback_music_position(0.75, -1.0, 2.0);
-        let (song_music_sec, song_slope) = fallback_music_position(1.25, -1.0, 2.0);
+    fn fallback_music_position_rate_scales_negative_lead_in() {
+        let (lead_music_sec, lead_slope) = fallback_music_position(0.25, -1.0, 2.0);
+        let (zero_music_sec, zero_slope) = fallback_music_position(0.5, -1.0, 2.0);
+        let (song_music_sec, song_slope) = fallback_music_position(0.75, -1.0, 2.0);
 
-        assert!((lead_music_sec - -0.25).abs() <= 0.000_01);
-        assert!((lead_slope - 1.0).abs() <= 0.000_01);
+        assert!((lead_music_sec - -0.5).abs() <= 0.000_01);
+        assert!((lead_slope - 2.0).abs() <= 0.000_01);
+        assert!(zero_music_sec.abs() <= 0.000_01);
+        assert!((zero_slope - 2.0).abs() <= 0.000_01);
         assert!((song_music_sec - 0.5).abs() <= 0.000_01);
         assert!((song_slope - 2.0).abs() <= 0.000_01);
     }
@@ -645,10 +641,10 @@ mod tests {
     }
 
     #[test]
-    fn music_clock_seed_is_only_for_positive_cuts() {
+    fn music_clock_seed_is_enabled_for_nonzero_cuts() {
         assert!(music_clock_seed_enabled(0.001));
         assert!(!music_clock_seed_enabled(0.0));
-        assert!(!music_clock_seed_enabled(-1.0));
+        assert!(music_clock_seed_enabled(-1.0));
         assert!(!music_clock_seed_enabled(f64::NAN));
     }
 
