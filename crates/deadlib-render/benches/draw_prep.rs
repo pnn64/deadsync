@@ -3,7 +3,10 @@ use deadlib_render::{
     RenderList, RenderObject, SpriteInstanceRaw, TexturedMeshInstanceRaw, TexturedMeshVertex,
     TexturedMeshVertices, build_ordered_render_batches, build_render_batches,
     build_sorted_render_batches,
-    draw_prep::{__benchmark_prepare_adjacent_tmesh_reuse, DrawOp, DrawScratch, MeshRun, prepare},
+    draw_prep::{
+        __benchmark_prepare_adjacent_tmesh_reuse, __benchmark_prepare_unreserved_tmesh_instances,
+        DrawOp, DrawScratch, MeshRun, prepare,
+    },
 };
 use glam::{Mat4 as Matrix4, Vec3, Vec4 as Vector4};
 use std::alloc::{GlobalAlloc, Layout, System};
@@ -32,6 +35,8 @@ const DENSITY_MEASURE_FRAMES: usize = 2_000;
 const REUSED_TMESH_GEOMS: usize = 32;
 const REUSED_TMESH_PASSES: usize = 8;
 const REUSED_TMESH_VERTICES: usize = 96;
+const COLD_TMESH_INSTANCES: usize = 4_096;
+const COLD_BENCH_RUNS: usize = 1_000;
 
 struct CountingAlloc {
     allocs: AtomicU64,
@@ -247,6 +252,7 @@ fn main() {
     );
 
     benchmark_non_adjacent_tmesh_reuse();
+    benchmark_tmesh_instance_reserve();
 }
 
 struct TMeshReuseResult {
@@ -353,12 +359,106 @@ fn print_tmesh_reuse(label: &str, result: &TMeshReuseResult) {
     );
 }
 
+struct ColdTMeshResult {
+    elapsed: Duration,
+    cycles: u64,
+    allocated: AllocSnapshot,
+    checksum: u64,
+}
+
+fn benchmark_tmesh_instance_reserve() {
+    let frame = cold_tmesh_frame();
+    assert_cold_tmesh_parity(&frame);
+    let mut legacy = Vec::with_capacity(BENCH_RUNS);
+    let mut current = Vec::with_capacity(BENCH_RUNS);
+    for run in 0..BENCH_RUNS {
+        let (old, new) = if run % 2 == 0 {
+            let new = measure_cold_tmesh(&frame, prepare_tmesh_frame_current);
+            let old = measure_cold_tmesh(&frame, prepare_tmesh_frame_unreserved);
+            (old, new)
+        } else {
+            let old = measure_cold_tmesh(&frame, prepare_tmesh_frame_unreserved);
+            let new = measure_cold_tmesh(&frame, prepare_tmesh_frame_current);
+            (old, new)
+        };
+        assert_eq!(old.checksum, new.checksum);
+        legacy.push(old);
+        current.push(new);
+    }
+    legacy.sort_unstable_by_key(|result| result.elapsed);
+    current.sort_unstable_by_key(|result| result.elapsed);
+    let legacy = legacy.swap_remove(BENCH_RUNS / 2);
+    let current = current.swap_remove(BENCH_RUNS / 2);
+
+    println!(
+        "\ncold textured-mesh instance staging \
+         ({COLD_TMESH_INSTANCES} instances, median of {BENCH_RUNS} x {COLD_BENCH_RUNS} frames)"
+    );
+    print_cold_tmesh("push growth", &legacy);
+    print_cold_tmesh("batch reserve", &current);
+    println!(
+        "  speedup {:.2}x | cycles reduction {:.1}% | reallocations/frame {:.1} -> {:.1}",
+        legacy.elapsed.as_secs_f64() / current.elapsed.as_secs_f64(),
+        100.0 * (1.0 - current.cycles as f64 / legacy.cycles as f64),
+        legacy.allocated.reallocs as f64 / COLD_BENCH_RUNS as f64,
+        current.allocated.reallocs as f64 / COLD_BENCH_RUNS as f64,
+    );
+}
+
+fn measure_cold_tmesh(
+    frame: &RenderList,
+    prepare_frame: fn(&RenderList, &mut DrawScratch),
+) -> ColdTMeshResult {
+    let mut scratches = (0..COLD_BENCH_RUNS)
+        .map(|_| DrawScratch::with_capacity(0, REUSED_TMESH_VERTICES, 0, 1))
+        .collect::<Vec<_>>();
+    let before = ALLOC.snapshot();
+    let cycles_before = read_cycles();
+    let started = Instant::now();
+    let mut checksum = 0u64;
+    for scratch in &mut scratches {
+        prepare_frame(black_box(frame), scratch);
+        let instance = scratch
+            .tmesh_instances
+            .last()
+            .expect("the cold fixture has textured-mesh instances");
+        checksum = checksum.rotate_left(7)
+            ^ scratch.tmesh_instances.len() as u64
+            ^ u64::from(instance.tint[3].to_bits());
+        black_box(&*scratch);
+    }
+    ColdTMeshResult {
+        elapsed: started.elapsed(),
+        cycles: read_cycles().saturating_sub(cycles_before),
+        allocated: ALLOC.snapshot().delta(before),
+        checksum: black_box(checksum),
+    }
+}
+
+fn print_cold_tmesh(label: &str, result: &ColdTMeshResult) {
+    let frames = COLD_BENCH_RUNS as f64;
+    println!(
+        "  {label:<14} {:>8.2} us/frame  {:>10.0} cycles/frame  \
+         {:>8.1} M instances/s  {:>4.1} allocs/frame  {:>4.1} reallocs/frame  {:>7.1} KiB/frame",
+        result.elapsed.as_secs_f64() * 1_000_000.0 / frames,
+        result.cycles as f64 / frames,
+        frames * COLD_TMESH_INSTANCES as f64 / result.elapsed.as_secs_f64() / 1_000_000.0,
+        result.allocated.allocs as f64 / frames,
+        result.allocated.reallocs as f64 / frames,
+        result.allocated.bytes as f64 / frames / 1024.0,
+    );
+}
+
 fn prepare_tmesh_frame_legacy(frame: &RenderList, scratch: &mut DrawScratch) {
     __benchmark_prepare_adjacent_tmesh_reuse(frame, scratch, |_, _| false);
 }
 
 fn prepare_tmesh_frame_current(frame: &RenderList, scratch: &mut DrawScratch) {
     prepare(frame, scratch, |_, _| false);
+}
+
+fn prepare_tmesh_frame_unreserved(frame: &RenderList, scratch: &mut DrawScratch) {
+    __benchmark_prepare_unreserved_tmesh_instances(frame, scratch, |_, _| false);
 }
 
 fn run_ordered_abort(objects: &[RenderObject]) -> Duration {
@@ -829,6 +929,42 @@ fn non_adjacent_tmesh_frame() -> RenderList {
         REUSED_TMESH_GEOMS * REUSED_TMESH_PASSES
     );
     frame
+}
+
+fn cold_tmesh_frame() -> RenderList {
+    let vertices = Arc::new(mesh_vertices(REUSED_TMESH_VERTICES, 1.0));
+    let objects = (0..COLD_TMESH_INSTANCES)
+        .map(|order| {
+            tmesh_object(
+                Arc::clone(&vertices),
+                INVALID_TMESH_CACHE_KEY,
+                100,
+                order % 2 != 0,
+                order as u32,
+            )
+        })
+        .collect::<Vec<_>>();
+    let mut frame = RenderList {
+        clear_color: [0.0, 0.0, 0.0, 1.0],
+        cameras: vec![Matrix4::IDENTITY],
+        sprite_instances: Vec::new(),
+        objects,
+        batches: Vec::new(),
+    };
+    build_render_batches(&frame.objects, &mut frame.batches);
+    assert_eq!(frame.batches.len(), 1);
+    frame
+}
+
+fn assert_cold_tmesh_parity(frame: &RenderList) {
+    let mut legacy = DrawScratch::default();
+    let mut current = DrawScratch::default();
+    prepare_tmesh_frame_unreserved(frame, &mut legacy);
+    prepare_tmesh_frame_current(frame, &mut current);
+    assert_eq!(legacy.ops, current.ops);
+    assert_eq!(legacy.tmesh_vertices, current.tmesh_vertices);
+    assert_eq!(legacy.tmesh_instances, current.tmesh_instances);
+    assert_eq!(current.tmesh_instances.len(), COLD_TMESH_INSTANCES);
 }
 
 fn assert_non_adjacent_tmesh_parity(frame: &RenderList) {

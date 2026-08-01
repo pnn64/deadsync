@@ -260,7 +260,7 @@ pub fn prepare<EnsureCached>(
 ) where
     EnsureCached: FnMut(TMeshCacheKey, &[TexturedMeshVertex]) -> bool,
 {
-    prepare_impl::<true, _>(render_list, scratch, ensure_cached_tmesh);
+    prepare_impl::<true, true, _>(render_list, scratch, ensure_cached_tmesh);
 }
 
 #[cfg(feature = "bench-support")]
@@ -272,10 +272,22 @@ pub fn __benchmark_prepare_adjacent_tmesh_reuse<EnsureCached>(
 ) where
     EnsureCached: FnMut(TMeshCacheKey, &[TexturedMeshVertex]) -> bool,
 {
-    prepare_impl::<false, _>(render_list, scratch, ensure_cached_tmesh);
+    prepare_impl::<false, true, _>(render_list, scratch, ensure_cached_tmesh);
 }
 
-fn prepare_impl<const REUSE_FRAME_GEOMS: bool, EnsureCached>(
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn __benchmark_prepare_unreserved_tmesh_instances<EnsureCached>(
+    render_list: &RenderList,
+    scratch: &mut DrawScratch,
+    ensure_cached_tmesh: EnsureCached,
+) where
+    EnsureCached: FnMut(TMeshCacheKey, &[TexturedMeshVertex]) -> bool,
+{
+    prepare_impl::<true, false, _>(render_list, scratch, ensure_cached_tmesh);
+}
+
+fn prepare_impl<const REUSE_FRAME_GEOMS: bool, const RESERVE_TMESH_INSTANCES: bool, EnsureCached>(
     render_list: &RenderList,
     scratch: &mut DrawScratch,
     mut ensure_cached_tmesh: EnsureCached,
@@ -326,7 +338,7 @@ fn prepare_impl<const REUSE_FRAME_GEOMS: bool, EnsureCached>(
             RenderBatchKind::TexturedMesh {
                 object_start,
                 object_count,
-            } => prepare_tmesh_batch::<REUSE_FRAME_GEOMS, _>(
+            } => prepare_tmesh_batch::<REUSE_FRAME_GEOMS, RESERVE_TMESH_INSTANCES, _>(
                 &render_list.objects,
                 scratch,
                 object_start,
@@ -413,7 +425,11 @@ fn append_mesh_vertices(
 }
 
 #[allow(clippy::too_many_arguments)]
-fn prepare_tmesh_batch<const REUSE_FRAME_GEOMS: bool, EnsureCached>(
+fn prepare_tmesh_batch<
+    const REUSE_FRAME_GEOMS: bool,
+    const RESERVE_TMESH_INSTANCES: bool,
+    EnsureCached,
+>(
     objects: &[RenderObject],
     scratch: &mut DrawScratch,
     object_start: u32,
@@ -443,6 +459,9 @@ fn prepare_tmesh_batch<const REUSE_FRAME_GEOMS: bool, EnsureCached>(
         last_tmesh_geom,
     );
     let instance_start = scratch.tmesh_instances.len() as u32;
+    if RESERVE_TMESH_INSTANCES {
+        scratch.tmesh_instances.reserve(object_count as usize);
+    }
     for object in &objects[object_start as usize..object_end] {
         let ObjectType::TexturedMesh { instance, .. } = &object.object_type else {
             debug_assert!(false, "textured-mesh batch contains another object type");
@@ -607,9 +626,9 @@ mod tests {
     }
 
     #[test]
-    fn prepare_copies_reusable_geometry_once_for_multiple_passes() {
+    fn prepare_copies_reusable_geometry_once_for_batched_instances() {
         let vertices = Arc::new(vec![TexturedMeshVertex::default(); 6]);
-        let objects = (0..2)
+        let objects = (0..33)
             .map(|order| RenderObject {
                 object_type: ObjectType::TexturedMesh {
                     instance: TexturedMeshInstanceRaw::new(
@@ -630,7 +649,16 @@ mod tests {
                 order,
                 camera: 0,
             })
-            .collect();
+            .collect::<Vec<_>>();
+        let expected_instances = objects
+            .iter()
+            .map(|object| {
+                let ObjectType::TexturedMesh { instance, .. } = &object.object_type else {
+                    unreachable!("the fixture contains only textured meshes")
+                };
+                *instance
+            })
+            .collect::<Vec<_>>();
         let render_list = RenderList {
             clear_color: [0.0, 0.0, 0.0, 1.0],
             cameras: vec![Matrix4::IDENTITY],
@@ -640,12 +668,13 @@ mod tests {
         };
         let mut render_list = render_list;
         crate::build_render_batches(&render_list.objects, &mut render_list.batches);
-        let mut scratch = DrawScratch::with_capacity(0, 0, 0, 2);
+        let mut scratch = DrawScratch::with_capacity(0, 0, 1, 1);
 
         prepare(&render_list, &mut scratch, |_, _| false);
 
         assert_eq!(scratch.tmesh_vertices.len(), vertices.len());
-        assert_eq!(scratch.tmesh_instances.len(), 2);
+        assert_eq!(scratch.tmesh_instances, expected_instances);
+        assert!(scratch.tmesh_instances.capacity() >= expected_instances.len());
         assert_eq!(scratch.ops.len(), 1);
     }
 

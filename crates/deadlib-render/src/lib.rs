@@ -27,9 +27,7 @@ impl<V> Default for TextureHandleMap<V> {
 impl<V> TextureHandleMap<V> {
     #[inline(always)]
     fn slot(handle: TextureHandle) -> Option<usize> {
-        handle
-            .checked_sub(1)
-            .and_then(|index| usize::try_from(index).ok())
+        usize::try_from(handle).ok()
     }
 
     #[inline(always)]
@@ -48,6 +46,9 @@ impl<V> TextureHandleMap<V> {
     }
 
     pub fn insert(&mut self, handle: TextureHandle, value: V) -> Option<V> {
+        if handle == INVALID_TEXTURE_HANDLE {
+            return None;
+        }
         let slot = Self::slot(handle)?;
         if slot >= self.slots.len() {
             self.slots.resize_with(slot + 1, || None);
@@ -87,14 +88,17 @@ pub struct RenderList {
     pub batches: Vec<RenderBatch>,
 }
 
+#[repr(C)]
 #[derive(Clone)]
 pub struct RenderObject {
-    pub object_type: ObjectType,
     pub texture_handle: TextureHandle,
-    pub blend: BlendMode,
-    pub z: i16,
     pub order: u32,
+    pub z: i16,
+    pub blend: BlendMode,
     pub camera: u8,
+    // Keep the frequently scanned draw header and ObjectType discriminant in
+    // the first cache line. The payload is 144 bytes even for a sprite.
+    pub object_type: ObjectType,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -884,6 +888,34 @@ impl core::str::FromStr for PresentModePolicy {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn texture_handles_are_direct_slots_with_invalid_zero_reserved() {
+        let mut textures = TextureHandleMap::default();
+
+        assert_eq!(textures.insert(INVALID_TEXTURE_HANDLE, 99), None);
+        assert_eq!(textures.get(&INVALID_TEXTURE_HANDLE), None);
+        assert_eq!(textures.insert(1, 10), None);
+        assert_eq!(textures.insert(3, 30), None);
+        assert_eq!(textures.get(&1), Some(&10));
+        assert_eq!(textures.get(&2), None);
+        assert_eq!(textures.get(&3), Some(&30));
+        assert_eq!(textures.insert(1, 11), Some(10));
+        assert_eq!(textures.remove(&1), Some(11));
+        assert_eq!(textures.get(&1), None);
+        assert_eq!(textures.values().copied().collect::<Vec<_>>(), vec![30]);
+    }
+
+    #[test]
+    fn render_object_keeps_batch_header_next_to_payload_tag() {
+        assert_eq!(std::mem::offset_of!(RenderObject, texture_handle), 0);
+        assert_eq!(std::mem::offset_of!(RenderObject, order), 8);
+        assert_eq!(std::mem::offset_of!(RenderObject, z), 12);
+        assert_eq!(std::mem::offset_of!(RenderObject, blend), 14);
+        assert_eq!(std::mem::offset_of!(RenderObject, camera), 15);
+        assert_eq!(std::mem::offset_of!(RenderObject, object_type), 16);
+        assert_eq!(std::mem::size_of::<RenderObject>(), 160);
+    }
 
     fn batch_sprite(z: i16, order: u32) -> RenderObject {
         RenderObject {
