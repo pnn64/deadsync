@@ -10,6 +10,12 @@ use std::{error::Error, num::NonZeroU32, sync::Arc, time::Instant};
 use winit::{dpi::PhysicalSize, window::Window};
 
 const SOFTWARE_ROW_CHUNK: usize = 32;
+// Staging wins once enough row workers would otherwise repeat every transform.
+// The paired projection benchmark puts the crossover between 8 and 15 stripes.
+const MIN_STAGE_MESH_STRIPES: usize = 12;
+// Covers the current two-player density graph while bounding retained memory.
+// Frames that exceed either buffer render through the direct path instead.
+const MESH_STAGE_VERTEX_CAP: usize = 36 * 1024;
 const U8_TO_F32: f32 = 1.0 / 255.0;
 const LOGICAL_HEIGHT: f32 = 480.0;
 const DESIGN_WIDTH_16_9: f32 = 854.0;
@@ -95,8 +101,8 @@ pub fn init(window: Arc<Window>, _vsync_enabled: bool) -> Result<State, Box<dyn 
         available_threads,
         worker_pool: None,
         prepared_objects: Vec::with_capacity(1024),
-        prepared_mesh_vertices: Vec::with_capacity(1024),
-        prepared_tmesh_vertices: Vec::with_capacity(1024),
+        prepared_mesh_vertices: Vec::with_capacity(MESH_STAGE_VERTEX_CAP),
+        prepared_tmesh_vertices: Vec::with_capacity(MESH_STAGE_VERTEX_CAP),
     })
 }
 
@@ -177,6 +183,7 @@ pub fn draw(
         _ => state.available_threads,
     };
     let use_parallel = threads > 1 && h >= SOFTWARE_ROW_CHUNK * 2 && !objects.is_empty();
+    let stage_meshes = use_parallel && h.div_ceil(SOFTWARE_ROW_CHUNK) >= MIN_STAGE_MESH_STRIPES;
     let backend_prepare_started = Instant::now();
     ensure_worker_pool(state, threads)?;
     prepare_objects(
@@ -190,7 +197,7 @@ pub fn draw(
         &mut state.prepared_objects,
         &mut state.prepared_mesh_vertices,
         &mut state.prepared_tmesh_vertices,
-        use_parallel,
+        stage_meshes,
     );
     let backend_prepare_us = elapsed_us_since(backend_prepare_started);
 
@@ -346,7 +353,9 @@ fn prepare_objects(
                 vertices,
             } => {
                 let mvp = projection * *transform;
-                if !stage_meshes {
+                if !stage_meshes
+                    || vertices.len() > mesh_vertices.capacity().saturating_sub(mesh_vertices.len())
+                {
                     prepared.push(PreparedObject::DirectMesh {
                         object_index: object_index as u32,
                         mvp,
@@ -373,7 +382,12 @@ fn prepare_objects(
                 instance, vertices, ..
             } => {
                 let mvp = projection * instance.transform();
-                if !stage_meshes {
+                if !stage_meshes
+                    || vertices.len()
+                        > tmesh_vertices
+                            .capacity()
+                            .saturating_sub(tmesh_vertices.len())
+                {
                     prepared.push(PreparedObject::DirectTexturedMesh {
                         object_index: object_index as u32,
                         mvp,
@@ -2187,8 +2201,8 @@ mod tests {
         );
 
         let mut prepared = Vec::new();
-        let mut prepared_mesh = Vec::new();
-        let mut prepared_tmesh = Vec::new();
+        let mut prepared_mesh = Vec::with_capacity(MESH_STAGE_VERTEX_CAP);
+        let mut prepared_tmesh = Vec::with_capacity(MESH_STAGE_VERTEX_CAP);
         prepare_objects(
             &objects,
             &sprites,
@@ -2252,6 +2266,46 @@ mod tests {
         assert_eq!(current_pixels, legacy_pixels);
         assert_eq!(direct_pixels, legacy_pixels);
         assert!(current_pixels.iter().any(|pixel| *pixel != clear));
+    }
+
+    #[test]
+    fn mesh_staging_saturates_without_growing_buffers() {
+        let textures = test_textures();
+        let objects = mixed_objects();
+        let mut prepared = Vec::new();
+        let mut prepared_mesh = Vec::with_capacity(2);
+        let mut prepared_tmesh = Vec::with_capacity(2);
+        let mesh_capacity = prepared_mesh.capacity();
+        let tmesh_capacity = prepared_tmesh.capacity();
+
+        prepare_objects(
+            &objects,
+            &[],
+            &[],
+            Matrix4::IDENTITY,
+            &textures,
+            WIDTH,
+            HEIGHT,
+            &mut prepared,
+            &mut prepared_mesh,
+            &mut prepared_tmesh,
+            true,
+        );
+
+        assert!(prepared_mesh.is_empty());
+        assert!(prepared_tmesh.is_empty());
+        assert_eq!(prepared_mesh.capacity(), mesh_capacity);
+        assert_eq!(prepared_tmesh.capacity(), tmesh_capacity);
+        assert!(
+            prepared
+                .iter()
+                .any(|object| matches!(object, PreparedObject::DirectMesh { .. }))
+        );
+        assert!(
+            prepared
+                .iter()
+                .any(|object| matches!(object, PreparedObject::DirectTexturedMesh { .. }))
+        );
     }
 
     fn render_prepared_stripes(

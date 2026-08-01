@@ -4,6 +4,7 @@ use crate::{
     TexturedMeshVertices,
 };
 use glam::Vec4 as Vector4;
+use std::collections::HashMap;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct SpriteRun {
@@ -105,23 +106,25 @@ pub enum DrawOp {
     TexturedMesh(TexturedMeshRun),
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct DrawScratch {
     pub mesh_vertices: Vec<MeshVertex>,
     pub tmesh_vertices: Vec<TexturedMeshVertex>,
     pub tmesh_instances: Vec<TexturedMeshInstanceRaw>,
     pub ops: Vec<DrawOp>,
+    frame_tmesh_geoms: HashMap<TMeshGeomKey, TexturedMeshSource, rustc_hash::FxBuildHasher>,
 }
 
-pub const DRAW_STORAGE_SLOTS: usize = 7;
-pub const SOFTWARE_OBJECTS_STORAGE_SLOT: usize = 4;
-pub const SOFTWARE_MESH_STORAGE_SLOT: usize = 5;
-pub const SOFTWARE_TMESH_STORAGE_SLOT: usize = 6;
+pub const DRAW_STORAGE_SLOTS: usize = 8;
+pub const SOFTWARE_OBJECTS_STORAGE_SLOT: usize = 5;
+pub const SOFTWARE_MESH_STORAGE_SLOT: usize = 6;
+pub const SOFTWARE_TMESH_STORAGE_SLOT: usize = 7;
 pub const DRAW_STORAGE_NAMES: [&str; DRAW_STORAGE_SLOTS] = [
     "mesh",
     "tmesh",
     "tmesh_inst",
     "ops",
+    "tmesh_geoms",
     "software_objects",
     "software_mesh",
     "software_tmesh",
@@ -138,17 +141,26 @@ enum TMeshGeomKey {
     Shared { ptr: usize, len: usize },
 }
 
+// A gameplay frame normally uses far fewer distinct shared meshes. Saturating
+// here keeps a pathological frame from growing backend scratch during play;
+// misses beyond the cap retain the old copy-per-batch behavior.
+const FRAME_TMESH_GEOMS_MAX: usize = 128;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-/// One-entry geometry reuse owned by a single draw-prep call.
+/// Most-recent geometry reuse owned by a single draw-prep call.
 ///
 /// Thread model: stack-local and single-threaded. Lifetime/capacity: one frame,
-/// one geometry. Warmup: none. A miss replaces the entry in O(1) and copies the
-/// source into the already retained staging vector; there is no scan, allocation,
-/// or deferred destruction. The draw-prep benchmark reports staged vertex count,
-/// which exposes misses. Worst case is one bounded source copy per logical batch.
+/// one geometry. Warmup: none. The entry avoids hashing for consecutive hits;
+/// non-consecutive shared geometry uses `DrawScratch`'s bounded frame table.
 struct FrameTMeshGeom {
     key: TMeshGeomKey,
     source: TexturedMeshSource,
+}
+
+impl Default for DrawScratch {
+    fn default() -> Self {
+        Self::with_capacity(0, 0, 0, 0)
+    }
 }
 
 impl DrawScratch {
@@ -164,6 +176,10 @@ impl DrawScratch {
             tmesh_vertices: Vec::with_capacity(tmesh_vertices),
             tmesh_instances: Vec::with_capacity(tmesh_instances),
             ops: Vec::with_capacity(ops),
+            frame_tmesh_geoms: HashMap::with_capacity_and_hasher(
+                FRAME_TMESH_GEOMS_MAX,
+                rustc_hash::FxBuildHasher,
+            ),
         }
     }
 
@@ -176,6 +192,7 @@ impl DrawScratch {
                 saturating_u32(self.tmesh_vertices.capacity()),
                 saturating_u32(self.tmesh_instances.capacity()),
                 saturating_u32(self.ops.capacity()),
+                saturating_u32(self.frame_tmesh_geoms.capacity()),
                 0,
                 0,
                 0,
@@ -209,7 +226,7 @@ fn transient_tmesh_source(
 }
 
 #[inline(always)]
-fn shared_tmesh_source(
+fn shared_tmesh_source<const REUSE_FRAME_GEOMS: bool>(
     scratch: &mut DrawScratch,
     vertices: &[TexturedMeshVertex],
     last_geom: &mut Option<FrameTMeshGeom>,
@@ -223,12 +240,41 @@ fn shared_tmesh_source(
     {
         return geom.source;
     }
+    if REUSE_FRAME_GEOMS && let Some(&source) = scratch.frame_tmesh_geoms.get(&key) {
+        *last_geom = Some(FrameTMeshGeom { key, source });
+        return source;
+    }
     let source = transient_tmesh_source(scratch, vertices);
+    if REUSE_FRAME_GEOMS && scratch.frame_tmesh_geoms.len() < FRAME_TMESH_GEOMS_MAX {
+        scratch.frame_tmesh_geoms.insert(key, source);
+    }
     *last_geom = Some(FrameTMeshGeom { key, source });
     source
 }
 
 pub fn prepare<EnsureCached>(
+    render_list: &RenderList,
+    scratch: &mut DrawScratch,
+    ensure_cached_tmesh: EnsureCached,
+) where
+    EnsureCached: FnMut(TMeshCacheKey, &[TexturedMeshVertex]) -> bool,
+{
+    prepare_impl::<true, _>(render_list, scratch, ensure_cached_tmesh);
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn __benchmark_prepare_adjacent_tmesh_reuse<EnsureCached>(
+    render_list: &RenderList,
+    scratch: &mut DrawScratch,
+    ensure_cached_tmesh: EnsureCached,
+) where
+    EnsureCached: FnMut(TMeshCacheKey, &[TexturedMeshVertex]) -> bool,
+{
+    prepare_impl::<false, _>(render_list, scratch, ensure_cached_tmesh);
+}
+
+fn prepare_impl<const REUSE_FRAME_GEOMS: bool, EnsureCached>(
     render_list: &RenderList,
     scratch: &mut DrawScratch,
     mut ensure_cached_tmesh: EnsureCached,
@@ -238,6 +284,7 @@ pub fn prepare<EnsureCached>(
     scratch.mesh_vertices.clear();
     scratch.tmesh_vertices.clear();
     scratch.tmesh_instances.clear();
+    scratch.frame_tmesh_geoms.clear();
 
     scratch.ops.clear();
     let batch_count = render_list.batches.len();
@@ -278,7 +325,7 @@ pub fn prepare<EnsureCached>(
             RenderBatchKind::TexturedMesh {
                 object_start,
                 object_count,
-            } => prepare_tmesh_batch(
+            } => prepare_tmesh_batch::<REUSE_FRAME_GEOMS, _>(
                 &render_list.objects,
                 scratch,
                 object_start,
@@ -365,7 +412,7 @@ fn append_mesh_vertices(
 }
 
 #[allow(clippy::too_many_arguments)]
-fn prepare_tmesh_batch<EnsureCached>(
+fn prepare_tmesh_batch<const REUSE_FRAME_GEOMS: bool, EnsureCached>(
     objects: &[RenderObject],
     scratch: &mut DrawScratch,
     object_start: u32,
@@ -387,7 +434,7 @@ fn prepare_tmesh_batch<EnsureCached>(
         debug_assert!(false, "textured-mesh batch starts with another object type");
         return;
     };
-    let source = tmesh_source(
+    let source = tmesh_source::<REUSE_FRAME_GEOMS, _>(
         scratch,
         vertices,
         *geom_cache_key,
@@ -413,7 +460,7 @@ fn prepare_tmesh_batch<EnsureCached>(
     }));
 }
 
-fn tmesh_source<EnsureCached>(
+fn tmesh_source<const REUSE_FRAME_GEOMS: bool, EnsureCached>(
     scratch: &mut DrawScratch,
     vertices: &TexturedMeshVertices,
     geom_cache_key: TMeshCacheKey,
@@ -430,11 +477,18 @@ where
         {
             return geom.source;
         }
+        if REUSE_FRAME_GEOMS && let Some(&source) = scratch.frame_tmesh_geoms.get(&key) {
+            *last_tmesh_geom = Some(FrameTMeshGeom { key, source });
+            return source;
+        }
         if ensure_cached_tmesh(geom_cache_key, vertices.as_ref()) {
             let source = TexturedMeshSource::Cached {
                 cache_key: geom_cache_key,
                 vertex_count: vertices.len() as u32,
             };
+            if REUSE_FRAME_GEOMS && scratch.frame_tmesh_geoms.len() < FRAME_TMESH_GEOMS_MAX {
+                scratch.frame_tmesh_geoms.insert(key, source);
+            }
             *last_tmesh_geom = Some(FrameTMeshGeom { key, source });
             return source;
         }
@@ -445,10 +499,10 @@ where
             transient_tmesh_source(scratch, vertices.as_slice())
         }
         TexturedMeshVertices::Shared(vertices) => {
-            shared_tmesh_source(scratch, vertices.as_ref(), last_tmesh_geom)
+            shared_tmesh_source::<REUSE_FRAME_GEOMS>(scratch, vertices.as_ref(), last_tmesh_geom)
         }
         TexturedMeshVertices::Reusable(vertices) => {
-            shared_tmesh_source(scratch, vertices.as_slice(), last_tmesh_geom)
+            shared_tmesh_source::<REUSE_FRAME_GEOMS>(scratch, vertices.as_slice(), last_tmesh_geom)
         }
     }
 }
@@ -604,6 +658,74 @@ mod tests {
         assert_eq!(scratch.tmesh_vertices.len(), vertices.len());
         assert_eq!(scratch.tmesh_instances.len(), 2);
         assert_eq!(scratch.ops.len(), 1);
+    }
+
+    #[test]
+    fn prepare_reuses_non_adjacent_shared_geometry_without_changing_draws() {
+        let mut first_vertices = vec![TexturedMeshVertex::default(); 3];
+        first_vertices[0].pos[0] = 10.0;
+        let first: Arc<[TexturedMeshVertex]> = first_vertices.into();
+        let mut second_vertices = vec![TexturedMeshVertex::default(); 3];
+        second_vertices[0].pos[0] = 20.0;
+        let second: Arc<[TexturedMeshVertex]> = second_vertices.into();
+        let geometries = [
+            Arc::clone(&first),
+            Arc::clone(&second),
+            Arc::clone(&first),
+            Arc::clone(&second),
+        ];
+        let objects = geometries
+            .into_iter()
+            .enumerate()
+            .map(|(order, vertices)| RenderObject {
+                object_type: ObjectType::TexturedMesh {
+                    instance: TexturedMeshInstanceRaw::new(
+                        Matrix4::IDENTITY,
+                        [1.0; 4],
+                        [1.0; 2],
+                        [0.0; 2],
+                        [0.0; 2],
+                        false,
+                    ),
+                    vertices: TexturedMeshVertices::Shared(vertices),
+                    geom_cache_key: INVALID_TMESH_CACHE_KEY,
+                    depth_test: false,
+                },
+                texture_handle: order as u64 + 1,
+                blend: BlendMode::Alpha,
+                z: 0,
+                order: order as u32,
+                camera: 0,
+            })
+            .collect::<Vec<_>>();
+        let mut render_list = RenderList {
+            clear_color: [0.0, 0.0, 0.0, 1.0],
+            cameras: vec![Matrix4::IDENTITY],
+            sprite_instances: Vec::new(),
+            objects,
+            batches: Vec::new(),
+        };
+        crate::build_render_batches(&render_list.objects, &mut render_list.batches);
+        let mut scratch = DrawScratch::default();
+
+        prepare(&render_list, &mut scratch, |_, _| false);
+
+        assert_eq!(
+            scratch.tmesh_vertices.as_slice(),
+            [&*first, &*second].concat()
+        );
+        let sources = scratch
+            .ops
+            .iter()
+            .map(|op| match op {
+                DrawOp::TexturedMesh(run) => run.source,
+                _ => panic!("fixture should contain only textured meshes"),
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(sources.len(), 4);
+        assert_eq!(sources[0], sources[2]);
+        assert_eq!(sources[1], sources[3]);
+        assert_ne!(sources[0], sources[1]);
     }
 
     #[test]

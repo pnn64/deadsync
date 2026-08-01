@@ -3,7 +3,7 @@ use deadlib_render::{
     RenderList, RenderObject, SpriteInstanceRaw, TexturedMeshInstanceRaw, TexturedMeshVertex,
     TexturedMeshVertices, build_ordered_render_batches, build_render_batches,
     build_sorted_render_batches,
-    draw_prep::{DrawOp, DrawScratch, MeshRun, prepare},
+    draw_prep::{__benchmark_prepare_adjacent_tmesh_reuse, DrawOp, DrawScratch, MeshRun, prepare},
 };
 use glam::{Mat4 as Matrix4, Vec3, Vec4 as Vector4};
 use std::alloc::{GlobalAlloc, Layout, System};
@@ -29,6 +29,9 @@ const DENSITY_POINTS: usize = 961;
 const DENSITY_VERTICES_PER_PLAYER: usize = (DENSITY_POINTS - 1) * 6 + DENSITY_POINTS * 12;
 const DENSITY_WARMUP_FRAMES: usize = 128;
 const DENSITY_MEASURE_FRAMES: usize = 2_000;
+const REUSED_TMESH_GEOMS: usize = 32;
+const REUSED_TMESH_PASSES: usize = 8;
+const REUSED_TMESH_VERTICES: usize = 96;
 
 struct CountingAlloc {
     allocs: AtomicU64,
@@ -235,6 +238,120 @@ fn main() {
         density_legacy.elapsed.as_secs_f64() / density_fast.elapsed.as_secs_f64(),
         100.0 * (1.0 - density_fast.cycles as f64 / density_legacy.cycles as f64),
     );
+
+    benchmark_non_adjacent_tmesh_reuse();
+}
+
+struct TMeshReuseResult {
+    elapsed: Duration,
+    cycles: u64,
+    allocated: AllocSnapshot,
+    staged_vertices: usize,
+    staged_bytes: usize,
+    checksum: u64,
+}
+
+fn benchmark_non_adjacent_tmesh_reuse() {
+    let frame = non_adjacent_tmesh_frame();
+    assert_non_adjacent_tmesh_parity(&frame);
+    let mut legacy = Vec::with_capacity(BENCH_RUNS);
+    let mut current = Vec::with_capacity(BENCH_RUNS);
+    for run in 0..BENCH_RUNS {
+        let (old, new) = if run % 2 == 0 {
+            let new = run_tmesh_reuse(&frame, prepare_tmesh_frame_current);
+            let old = run_tmesh_reuse(&frame, prepare_tmesh_frame_legacy);
+            (old, new)
+        } else {
+            let old = run_tmesh_reuse(&frame, prepare_tmesh_frame_legacy);
+            let new = run_tmesh_reuse(&frame, prepare_tmesh_frame_current);
+            (old, new)
+        };
+        assert_eq!(old.checksum, new.checksum);
+        for result in [&old, &new] {
+            assert_eq!(result.allocated.allocs, 0);
+            assert_eq!(result.allocated.reallocs, 0);
+            assert_eq!(result.allocated.bytes, 0);
+        }
+        legacy.push(old);
+        current.push(new);
+    }
+    legacy.sort_unstable_by_key(|result| result.elapsed);
+    current.sort_unstable_by_key(|result| result.elapsed);
+    let legacy = legacy.swap_remove(BENCH_RUNS / 2);
+    let current = current.swap_remove(BENCH_RUNS / 2);
+    println!(
+        "\nnon-adjacent shared textured-mesh staging \
+         ({REUSED_TMESH_GEOMS} geometries x {REUSED_TMESH_PASSES} passes, \
+         {REUSED_TMESH_VERTICES} vertices each, median of {BENCH_RUNS} runs)"
+    );
+    print_tmesh_reuse("adjacent only", &legacy);
+    print_tmesh_reuse("frame table", &current);
+    println!(
+        "  speedup {:.2}x | cycles reduction {:.1}% | staged vertices {} -> {} ({:.1}% fewer)",
+        legacy.elapsed.as_secs_f64() / current.elapsed.as_secs_f64(),
+        100.0 * (1.0 - current.cycles as f64 / legacy.cycles as f64),
+        legacy.staged_vertices,
+        current.staged_vertices,
+        100.0 * (1.0 - current.staged_vertices as f64 / legacy.staged_vertices as f64),
+    );
+}
+
+fn run_tmesh_reuse(
+    frame: &RenderList,
+    prepare_frame: fn(&RenderList, &mut DrawScratch),
+) -> TMeshReuseResult {
+    let mut scratch = DrawScratch::with_capacity(
+        0,
+        0,
+        REUSED_TMESH_GEOMS * REUSED_TMESH_PASSES,
+        REUSED_TMESH_GEOMS * REUSED_TMESH_PASSES,
+    );
+    for _ in 0..WARMUP_FRAMES {
+        prepare_frame(black_box(frame), &mut scratch);
+        black_box(&scratch);
+    }
+    let before = ALLOC.snapshot();
+    let cycles_before = read_cycles();
+    let started = Instant::now();
+    for _ in 0..MEASURE_FRAMES {
+        prepare_frame(black_box(frame), &mut scratch);
+        black_box(&scratch);
+    }
+    let elapsed = started.elapsed();
+    TMeshReuseResult {
+        elapsed,
+        cycles: read_cycles().saturating_sub(cycles_before),
+        allocated: ALLOC.snapshot().delta(before),
+        staged_vertices: scratch.tmesh_vertices.len(),
+        staged_bytes: scratch
+            .tmesh_vertices
+            .capacity()
+            .saturating_mul(std::mem::size_of::<TexturedMeshVertex>()),
+        checksum: canonical_tmesh_checksum(&scratch),
+    }
+}
+
+fn print_tmesh_reuse(label: &str, result: &TMeshReuseResult) {
+    let frames = MEASURE_FRAMES as f64;
+    println!(
+        "  {label:<14} {:>8.2} us/frame  {:>9.0} cycles/frame  \
+         {:>8.1} M source-vertices/s  {:>5.2} allocs/frame  {:>7.1} KiB staged",
+        result.elapsed.as_secs_f64() * 1_000_000.0 / frames,
+        result.cycles as f64 / frames,
+        frames * (REUSED_TMESH_GEOMS * REUSED_TMESH_PASSES * REUSED_TMESH_VERTICES) as f64
+            / result.elapsed.as_secs_f64()
+            / 1_000_000.0,
+        result.allocated.allocs as f64 / frames,
+        result.staged_bytes as f64 / 1024.0,
+    );
+}
+
+fn prepare_tmesh_frame_legacy(frame: &RenderList, scratch: &mut DrawScratch) {
+    __benchmark_prepare_adjacent_tmesh_reuse(frame, scratch, |_, _| false);
+}
+
+fn prepare_tmesh_frame_current(frame: &RenderList, scratch: &mut DrawScratch) {
+    prepare(frame, scratch, |_, _| false);
 }
 
 fn run_ordered_abort(objects: &[RenderObject]) -> Duration {
@@ -674,6 +791,90 @@ fn density_mesh_frame() -> RenderList {
     };
     build_render_batches(&frame.objects, &mut frame.batches);
     frame
+}
+
+fn non_adjacent_tmesh_frame() -> RenderList {
+    let geometries = (0..REUSED_TMESH_GEOMS)
+        .map(|geometry| Arc::new(mesh_vertices(REUSED_TMESH_VERTICES, geometry as f32)))
+        .collect::<Vec<_>>();
+    let mut objects = Vec::with_capacity(REUSED_TMESH_GEOMS * REUSED_TMESH_PASSES);
+    for pass in 0..REUSED_TMESH_PASSES {
+        for (geometry, vertices) in geometries.iter().enumerate() {
+            objects.push(tmesh_object(
+                Arc::clone(vertices),
+                INVALID_TMESH_CACHE_KEY,
+                100 + geometry as u64,
+                pass % 2 != 0,
+                objects.len() as u32,
+            ));
+        }
+    }
+    let mut frame = RenderList {
+        clear_color: [0.0, 0.0, 0.0, 1.0],
+        cameras: vec![Matrix4::IDENTITY],
+        sprite_instances: Vec::new(),
+        objects,
+        batches: Vec::new(),
+    };
+    build_render_batches(&frame.objects, &mut frame.batches);
+    assert_eq!(
+        frame.batches.len(),
+        REUSED_TMESH_GEOMS * REUSED_TMESH_PASSES
+    );
+    frame
+}
+
+fn assert_non_adjacent_tmesh_parity(frame: &RenderList) {
+    let mut legacy = DrawScratch::default();
+    let mut current = DrawScratch::default();
+    prepare_tmesh_frame_legacy(frame, &mut legacy);
+    prepare_tmesh_frame_current(frame, &mut current);
+    assert_eq!(legacy.ops.len(), current.ops.len());
+    assert_eq!(legacy.tmesh_instances, current.tmesh_instances);
+    assert_eq!(
+        canonical_tmesh_checksum(&legacy),
+        canonical_tmesh_checksum(&current)
+    );
+    assert_eq!(
+        legacy.tmesh_vertices.len(),
+        REUSED_TMESH_GEOMS * REUSED_TMESH_PASSES * REUSED_TMESH_VERTICES,
+    );
+    assert_eq!(
+        current.tmesh_vertices.len(),
+        REUSED_TMESH_GEOMS * REUSED_TMESH_VERTICES,
+    );
+}
+
+fn canonical_tmesh_checksum(scratch: &DrawScratch) -> u64 {
+    let mut checksum = 0xcbf2_9ce4_8422_2325_u64;
+    for op in &scratch.ops {
+        let DrawOp::TexturedMesh(run) = op else {
+            continue;
+        };
+        checksum = checksum.rotate_left(7) ^ run.texture_handle;
+        checksum = checksum.rotate_left(7) ^ u64::from(run.camera);
+        checksum = checksum.rotate_left(7) ^ u64::from(run.depth_test);
+        let start = run.source.vertex_start() as usize;
+        let end = start + run.source.vertex_count() as usize;
+        for vertex in &scratch.tmesh_vertices[start..end] {
+            for value in vertex
+                .pos
+                .into_iter()
+                .chain(vertex.uv)
+                .chain(vertex.color)
+                .chain(vertex.tex_matrix_scale)
+            {
+                checksum = checksum.rotate_left(5) ^ u64::from(value.to_bits());
+            }
+        }
+        let start = run.instance_start as usize;
+        let end = start + run.instance_count as usize;
+        for instance in &scratch.tmesh_instances[start..end] {
+            checksum = checksum.rotate_left(11) ^ u64::from(instance.tint[3].to_bits());
+            checksum = checksum.rotate_left(11) ^ u64::from(instance.texture_mask.to_bits());
+        }
+    }
+    black_box(checksum)
 }
 
 fn gameplay_frame() -> RenderList {

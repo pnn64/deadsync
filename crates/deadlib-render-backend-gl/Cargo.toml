@@ -4,9 +4,6 @@ version = "0.1.0"
 edition = "2024"
 license = "GPL-3.0"
 
-[features]
-bench-support = []
-
 [dependencies]
 bytemuck = { version = "1.25.2", features = ["derive"] }
 deadlib-render = { path = "../deadlib-render" }
