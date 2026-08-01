@@ -113,10 +113,19 @@ pub struct DrawScratch {
     pub ops: Vec<DrawOp>,
 }
 
-pub const DRAW_STORAGE_SLOTS: usize = 5;
+pub const DRAW_STORAGE_SLOTS: usize = 7;
 pub const SOFTWARE_OBJECTS_STORAGE_SLOT: usize = 4;
-pub const DRAW_STORAGE_NAMES: [&str; DRAW_STORAGE_SLOTS] =
-    ["mesh", "tmesh", "tmesh_inst", "ops", "software_objects"];
+pub const SOFTWARE_MESH_STORAGE_SLOT: usize = 5;
+pub const SOFTWARE_TMESH_STORAGE_SLOT: usize = 6;
+pub const DRAW_STORAGE_NAMES: [&str; DRAW_STORAGE_SLOTS] = [
+    "mesh",
+    "tmesh",
+    "tmesh_inst",
+    "ops",
+    "software_objects",
+    "software_mesh",
+    "software_tmesh",
+];
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct DrawStorageStats {
@@ -167,6 +176,8 @@ impl DrawScratch {
                 saturating_u32(self.tmesh_vertices.capacity()),
                 saturating_u32(self.tmesh_instances.capacity()),
                 saturating_u32(self.ops.capacity()),
+                0,
+                0,
                 0,
             ],
         }

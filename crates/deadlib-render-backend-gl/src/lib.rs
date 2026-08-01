@@ -76,6 +76,7 @@ const OPENGL_TMESH_CACHE_MAX_BYTES: usize = 16 * 1024 * 1024;
 const LOGICAL_HEIGHT: f32 = 480.0;
 const DESIGN_WIDTH_16_9: f32 = 854.0;
 const MODERN_DESKTOP_GL: GlVersion = GlVersion { major: 3, minor: 3 };
+const BASE_INSTANCE_DESKTOP_GL: GlVersion = GlVersion { major: 4, minor: 2 };
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 struct GlVersion {
@@ -253,6 +254,7 @@ pub struct State {
     tmesh_vao: Option<glow::VertexArray>,
     tmesh_vbo: glow::Buffer,
     tmesh_instance_vbo: Option<glow::Buffer>,
+    base_instance: bool,
     prep: DrawScratch,
     cached_tmesh: FastU64Map<CachedTMeshGeom>,
     cached_tmesh_bytes: usize,
@@ -280,6 +282,8 @@ pub fn init(
     log_opengl_driver_info(&gl);
     let path = select_gl_path(&gl, api);
     info!("OpenGL render path: {}", path.label());
+    let base_instance = supports_base_instance(&gl, api, path);
+    info!("OpenGL base-instance draws: {base_instance}");
     let shaders = api.shaders(path);
     let (program, mvp_location, texture_location) =
         create_graphics_program(&gl, shaders.sprite_vert, shaders.sprite_frag)?;
@@ -658,6 +662,7 @@ pub fn init(
         tmesh_vao,
         tmesh_vbo,
         tmesh_instance_vbo,
+        base_instance,
         prep: DrawScratch::with_capacity(1024, 1024, 256, 64),
         cached_tmesh: FastU64Map::default(),
         cached_tmesh_bytes: 0,
@@ -725,6 +730,34 @@ fn select_gl_path(gl: &glow::Context, api: GlApi) -> GlPath {
         return GlPath::Legacy;
     }
     GlPath::Modern
+}
+
+fn supports_base_instance(gl: &glow::Context, api: GlApi, path: GlPath) -> bool {
+    if path != GlPath::Modern || api != GlApi::Desktop {
+        return false;
+    }
+    // SAFETY: the version query only reads state from the current context.
+    let version = unsafe { gl.get_parameter_string(glow::VERSION) };
+    base_instance_capability(
+        api,
+        path,
+        parse_gl_version(&version),
+        gl.supported_extensions().contains("GL_ARB_base_instance"),
+    )
+}
+
+fn base_instance_capability(
+    api: GlApi,
+    path: GlPath,
+    version: Option<GlVersion>,
+    has_arb_extension: bool,
+) -> bool {
+    path == GlPath::Modern
+        && matches!(api, GlApi::Desktop)
+        && (matches!(version, Some(version) if version.major > BASE_INSTANCE_DESKTOP_GL.major
+            || (version.major == BASE_INSTANCE_DESKTOP_GL.major
+                && version.minor >= BASE_INSTANCE_DESKTOP_GL.minor))
+            || has_arb_extension)
 }
 
 fn parse_gl_version(version: &str) -> Option<GlVersion> {
@@ -1093,7 +1126,9 @@ pub fn draw(
                             last_tmesh_source = None;
                         }
 
-                        if last_sprite_instance_start != Some(run.instance_start) {
+                        if !state.base_instance
+                            && last_sprite_instance_start != Some(run.instance_start)
+                        {
                             let inst_stride = std::mem::size_of::<SpriteInstanceRaw>() as i32;
                             let vec2_size = (2 * std::mem::size_of::<f32>()) as i32;
                             let vec4_size = (4 * std::mem::size_of::<f32>()) as i32;
@@ -1208,13 +1243,25 @@ pub fn draw(
                             last_bound_tex = Some(texture);
                         }
 
-                        gl.draw_elements_instanced(
-                            glow::TRIANGLES,
-                            state.index_count,
-                            glow::UNSIGNED_SHORT,
-                            0,
-                            run.instance_count as i32,
-                        );
+                        if state.base_instance {
+                            gl.draw_elements_instanced_base_vertex_base_instance(
+                                glow::TRIANGLES,
+                                state.index_count,
+                                glow::UNSIGNED_SHORT,
+                                0,
+                                run.instance_count as i32,
+                                0,
+                                run.instance_start,
+                            );
+                        } else {
+                            gl.draw_elements_instanced(
+                                glow::TRIANGLES,
+                                state.index_count,
+                                glow::UNSIGNED_SHORT,
+                                0,
+                                run.instance_count as i32,
+                            );
+                        }
                         vertices = vertices.saturating_add(4 * run.instance_count);
                     }
                     DrawOp::Mesh(run) => {
@@ -1307,7 +1354,9 @@ pub fn draw(
                             last_tmesh_source = Some(run.source);
                         }
 
-                        if last_tmesh_instance_start != Some(run.instance_start) {
+                        if !state.base_instance
+                            && last_tmesh_instance_start != Some(run.instance_start)
+                        {
                             let inst_stride = std::mem::size_of::<TexturedMeshInstanceRaw>() as i32;
                             let col_size = (4 * std::mem::size_of::<f32>()) as i32;
                             let uv_size = (2 * std::mem::size_of::<f32>()) as i32;
@@ -1416,12 +1465,22 @@ pub fn draw(
 
                         let draw_start = run.source.vertex_start() as i32;
                         let draw_count = run.source.vertex_count() as i32;
-                        gl.draw_arrays_instanced(
-                            glow::TRIANGLES,
-                            draw_start,
-                            draw_count,
-                            run.instance_count as i32,
-                        );
+                        if state.base_instance {
+                            gl.draw_arrays_instanced_base_instance(
+                                glow::TRIANGLES,
+                                draw_start,
+                                draw_count,
+                                run.instance_count as i32,
+                                run.instance_start,
+                            );
+                        } else {
+                            gl.draw_arrays_instanced(
+                                glow::TRIANGLES,
+                                draw_start,
+                                draw_count,
+                                run.instance_count as i32,
+                            );
+                        }
                         let tri_count = run.source.vertex_count() / 3;
                         vertices =
                             vertices.saturating_add(tri_count.saturating_mul(run.instance_count));
@@ -2395,7 +2454,9 @@ fn surface_extent(width: u32, height: u32) -> (NonZeroU32, NonZeroU32) {
 
 #[cfg(test)]
 mod tests {
-    use super::{GlVersion, parse_gl_version, surface_extent};
+    use super::{
+        GlApi, GlPath, GlVersion, base_instance_capability, parse_gl_version, surface_extent,
+    };
 
     #[test]
     fn surface_extent_clamps_zero_dims() {
@@ -2420,5 +2481,33 @@ mod tests {
             Some(GlVersion { major: 3, minor: 0 })
         );
         assert_eq!(parse_gl_version("unknown"), None);
+    }
+
+    #[test]
+    fn base_instance_requires_modern_desktop_support() {
+        assert!(base_instance_capability(
+            GlApi::Desktop,
+            GlPath::Modern,
+            Some(GlVersion { major: 4, minor: 2 }),
+            false,
+        ));
+        assert!(base_instance_capability(
+            GlApi::Desktop,
+            GlPath::Modern,
+            Some(GlVersion { major: 3, minor: 3 }),
+            true,
+        ));
+        assert!(!base_instance_capability(
+            GlApi::Desktop,
+            GlPath::Modern,
+            Some(GlVersion { major: 4, minor: 1 }),
+            false,
+        ));
+        assert!(!base_instance_capability(
+            GlApi::Desktop,
+            GlPath::Legacy,
+            Some(GlVersion { major: 4, minor: 6 }),
+            true,
+        ));
     }
 }
