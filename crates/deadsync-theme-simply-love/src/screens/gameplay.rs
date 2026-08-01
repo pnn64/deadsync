@@ -5765,8 +5765,7 @@ fn song_lua_proxy_source_segment(segment: &Arc<[Actor]>) -> Arc<[Actor]> {
 
 fn song_lua_proxy_actor_has_z(actor: &Actor) -> bool {
     match actor {
-        Actor::ResolvedSprite { z, .. }
-        | Actor::Sprite { z, .. }
+        Actor::Sprite { z, .. }
         | Actor::Text { z, .. }
         | Actor::Mesh { z, .. }
         | Actor::ReusableMesh { z, .. }
@@ -5789,8 +5788,7 @@ fn song_lua_proxy_actor_has_z(actor: &Actor) -> bool {
 
 fn song_lua_proxy_actor_z(actor: &Actor) -> i16 {
     match actor {
-        Actor::ResolvedSprite { z, .. }
-        | Actor::Sprite { z, .. }
+        Actor::Sprite { z, .. }
         | Actor::Text { z, .. }
         | Actor::Mesh { z, .. }
         | Actor::ReusableMesh { z, .. }
@@ -5836,41 +5834,6 @@ fn song_lua_proxy_local_children_with_camera_scopes(children: Vec<Actor>) -> Vec
 
 fn song_lua_proxy_local_actor(actor: Actor) -> Actor {
     match actor {
-        Actor::ResolvedSprite {
-            align,
-            offset,
-            world_z,
-            size,
-            source,
-            tint,
-            glow,
-            uv_rect,
-            flip_x,
-            flip_y,
-            blend,
-            glow_blend,
-            rot_x_deg,
-            rot_y_deg,
-            rot_z_deg,
-            ..
-        } => Actor::ResolvedSprite {
-            align,
-            offset,
-            world_z,
-            size,
-            source,
-            tint,
-            glow,
-            z: 0,
-            uv_rect,
-            flip_x,
-            flip_y,
-            blend,
-            glow_blend,
-            rot_x_deg,
-            rot_y_deg,
-            rot_z_deg,
-        },
         Actor::Sprite {
             align,
             offset,
@@ -6906,41 +6869,6 @@ fn song_lua_style_capture_actor(
     z_shift: i16,
 ) -> Actor {
     match actor {
-        Actor::ResolvedSprite {
-            align,
-            offset,
-            world_z,
-            size,
-            source,
-            tint,
-            glow,
-            z,
-            uv_rect,
-            flip_x,
-            flip_y,
-            blend: actor_blend,
-            glow_blend,
-            rot_x_deg,
-            rot_y_deg,
-            rot_z_deg,
-        } => Actor::ResolvedSprite {
-            align,
-            offset,
-            world_z,
-            size,
-            source,
-            tint: song_lua_capture_tint(tint, capture_tint),
-            glow: song_lua_capture_tint(glow, capture_tint),
-            z: song_lua_add_z(z, z_shift),
-            uv_rect,
-            flip_x,
-            flip_y,
-            blend: blend.unwrap_or(actor_blend),
-            glow_blend: blend.unwrap_or(glow_blend),
-            rot_x_deg,
-            rot_y_deg,
-            rot_z_deg,
-        },
         Actor::Sprite {
             align,
             offset,

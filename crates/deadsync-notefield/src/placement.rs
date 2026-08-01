@@ -119,23 +119,6 @@ pub struct ViewOverride {
     pub edit_beat_bars: bool,
     pub hide_combo: bool,
     pub hide_display_mods: bool,
-    /// Test-only switch for exact candidate/legacy presentation comparisons.
-    #[cfg(feature = "test-support")]
-    pub force_legacy_sprites: bool,
-}
-
-impl ViewOverride {
-    #[inline(always)]
-    pub(crate) const fn resolved_sprite_leaves(self) -> bool {
-        #[cfg(feature = "test-support")]
-        {
-            !self.force_legacy_sprites
-        }
-        #[cfg(not(feature = "test-support"))]
-        {
-            true
-        }
-    }
 }
 
 #[derive(Clone, Copy, Debug, Default)]

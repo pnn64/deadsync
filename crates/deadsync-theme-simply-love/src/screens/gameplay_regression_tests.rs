@@ -623,7 +623,6 @@ mod tests {
         actors: &mut Vec<deadlib_present::actors::Actor>,
         text_cache: &mut compose::TextLayoutCache,
         scratch: &mut compose::ComposeScratch,
-        view: screen_gameplay::ActorViewOverride,
         texture_ctx: &T,
     ) -> deadlib_render::RenderList {
         actors.clear();
@@ -631,7 +630,7 @@ mod tests {
             actors,
             state,
             assets,
-            view,
+            screen_gameplay::ActorViewOverride::default(),
             123.0,
             crate::views::SimplyLoveVisualPolicyView::default(),
         );
@@ -663,7 +662,6 @@ mod tests {
             actors,
             text_cache,
             scratch,
-            screen_gameplay::ActorViewOverride::default(),
             &FIXTURE_TEXTURES,
         )
     }
@@ -706,28 +704,6 @@ mod tests {
         compose_scratch: &mut compose::ComposeScratch,
         draw_scratch: &mut DrawScratch,
     ) -> usize {
-        prepare_fixture_frame_with_view(
-            state,
-            assets,
-            metrics,
-            actors,
-            text_cache,
-            compose_scratch,
-            draw_scratch,
-            screen_gameplay::ActorViewOverride::default(),
-        )
-    }
-
-    fn prepare_fixture_frame_with_view(
-        state: &mut screen_gameplay::State,
-        assets: &crate::assets::AssetManager,
-        metrics: &space::Metrics,
-        actors: &mut Vec<deadlib_present::actors::Actor>,
-        text_cache: &mut compose::TextLayoutCache,
-        compose_scratch: &mut compose::ComposeScratch,
-        draw_scratch: &mut DrawScratch,
-        view: screen_gameplay::ActorViewOverride,
-    ) -> usize {
         let mut render = compose_fixture_frame_with_textures(
             state,
             assets,
@@ -735,7 +711,6 @@ mod tests {
             actors,
             text_cache,
             compose_scratch,
-            view,
             &FIXTURE_TEXTURES,
         );
         draw_prep::prepare(&render, draw_scratch, |_, _| false);
@@ -748,104 +723,6 @@ mod tests {
         compose_scratch.recycle_render_list(&mut render);
         actors.clear();
         checksum
-    }
-
-    struct FixturePathTiming {
-        elapsed: std::time::Duration,
-        cycles: u64,
-        checksum: usize,
-    }
-
-    fn measure_fixture_path(
-        state: &mut screen_gameplay::State,
-        assets: &crate::assets::AssetManager,
-        metrics: &space::Metrics,
-        view: screen_gameplay::ActorViewOverride,
-    ) -> FixturePathTiming {
-        const WARMUP_FRAMES: usize = 256;
-        const MEASURE_FRAMES: usize = 4_096;
-
-        let mut actors = Vec::with_capacity(512);
-        let mut text_cache = compose::TextLayoutCache::default();
-        let mut compose_scratch = compose::ComposeScratch::default();
-        let mut draw_scratch = DrawScratch::default();
-        let mut checksum = 0usize;
-        for _ in 0..WARMUP_FRAMES {
-            checksum = checksum.wrapping_add(prepare_fixture_frame_with_view(
-                state,
-                assets,
-                metrics,
-                &mut actors,
-                &mut text_cache,
-                &mut compose_scratch,
-                &mut draw_scratch,
-                view,
-            ));
-        }
-        let capacity_before = (
-            actors.capacity(),
-            compose_scratch.storage_stats(),
-            draw_scratch.storage_stats(),
-        );
-
-        ALLOC.begin();
-        let cycles_before = read_cycles();
-        let started = Instant::now();
-        for _ in 0..MEASURE_FRAMES {
-            checksum = checksum.wrapping_add(prepare_fixture_frame_with_view(
-                state,
-                assets,
-                metrics,
-                &mut actors,
-                &mut text_cache,
-                &mut compose_scratch,
-                &mut draw_scratch,
-                view,
-            ));
-        }
-        let elapsed = started.elapsed();
-        let cycles = read_cycles().saturating_sub(cycles_before);
-        let counts = ALLOC.end();
-        let capacity_after = (
-            actors.capacity(),
-            compose_scratch.storage_stats(),
-            draw_scratch.storage_stats(),
-        );
-        assert_eq!(capacity_after, capacity_before);
-        assert_eq!(
-            counts,
-            AllocCounts {
-                allocs: 0,
-                reallocs: 0,
-                deallocs: 0,
-                alloc_bytes: 0,
-                realloc_bytes: 0,
-                dealloc_bytes: 0,
-            }
-        );
-
-        FixturePathTiming {
-            elapsed,
-            cycles,
-            checksum: std::hint::black_box(checksum),
-        }
-    }
-
-    #[cfg(target_arch = "x86_64")]
-    fn read_cycles() -> u64 {
-        // SAFETY: LFENCE/RDTSC only serialize and read this thread's timestamp
-        // counter; they do not dereference memory.
-        unsafe {
-            core::arch::x86_64::_mm_lfence();
-            let cycles = core::arch::x86_64::_rdtsc();
-            core::arch::x86_64::_mm_lfence();
-            cycles
-        }
-    }
-
-    #[cfg(not(target_arch = "x86_64"))]
-    fn read_cycles() -> u64 {
-        0
     }
 
     fn assert_repeatable_frame(
@@ -1039,36 +916,6 @@ L000
                     &mut text_cache,
                     &mut compose_scratch,
                 );
-                let actor_stats = deadlib_present::actors::actor_tree_stats(&actors);
-                assert!(
-                    actor_stats.resolved_sprites >= 100,
-                    "dense sprite fixture did not select the resolved gameplay path: {actor_stats:?}"
-                );
-                let mut legacy = compose_fixture_frame_with_textures(
-                    &mut state,
-                    &assets,
-                    &metrics,
-                    &mut actors,
-                    &mut text_cache,
-                    &mut compose_scratch,
-                    screen_gameplay::ActorViewOverride {
-                        notefield: screen_gameplay::NotefieldViewOverride {
-                            force_legacy_sprites: true,
-                            ..Default::default()
-                        },
-                        ..Default::default()
-                    },
-                    &FIXTURE_TEXTURES,
-                );
-                let legacy_actor_stats = deadlib_present::actors::actor_tree_stats(&actors);
-                assert_eq!(legacy_actor_stats.resolved_sprites, 0);
-                assert_eq!(compare_render_lists(&expected, &legacy), Ok(()));
-                let mut expected_draw = DrawScratch::default();
-                let mut legacy_draw = DrawScratch::default();
-                draw_prep::prepare(&expected, &mut expected_draw, |_, _| false);
-                draw_prep::prepare(&legacy, &mut legacy_draw, |_, _| false);
-                assert_eq!(compare_draw_scratch(&expected_draw, &legacy_draw), Ok(()));
-                compose_scratch.recycle_render_list(&mut legacy);
                 assert!(expected.objects.len() >= 250);
                 assert!(expected.sprite_instances.len() >= 240);
                 assert!(expected.batches.len() >= 120);
@@ -1742,7 +1589,6 @@ L000
             actors,
             text_cache,
             compose_scratch,
-            screen_gameplay::ActorViewOverride::default(),
             &texture_ctx,
         );
         let missing_keys = missing_capture_texture_keys(&texture_ctx, assets);
@@ -1759,7 +1605,6 @@ L000
                 actors,
                 text_cache,
                 compose_scratch,
-                screen_gameplay::ActorViewOverride::default(),
                 &texture_ctx,
             );
             let mut missing_keys = missing_capture_texture_keys(&texture_ctx, assets);
@@ -2122,64 +1967,6 @@ L000
                     counts.dealloc_bytes,
                     counts.dealloc_bytes as f64 / MEASURE_FRAMES as f64,
                 );
-            },
-        );
-    }
-
-    #[test]
-    #[ignore = "optimized presentation benchmark; run explicitly with one test thread"]
-    fn sprite_core_resolved_leaf_timing() {
-        const MEASURE_FRAMES: f64 = 4_096.0;
-
-        let simfile = write_fixture("f1-sprite-core-timing", generated_sprite_core_simfile());
-        with_session(
-            profile_data::PlayStyle::Single,
-            profile_data::PlayerSide::P1,
-            true,
-            false,
-            || {
-                let (mut resolved_state, resolved_assets, metrics) = sprite_core_fixture(&simfile);
-                let (mut legacy_state, legacy_assets, _) = sprite_core_fixture(&simfile);
-                let legacy_view = screen_gameplay::ActorViewOverride {
-                    notefield: screen_gameplay::NotefieldViewOverride {
-                        force_legacy_sprites: true,
-                        ..Default::default()
-                    },
-                    ..Default::default()
-                };
-
-                let legacy_a =
-                    measure_fixture_path(&mut legacy_state, &legacy_assets, &metrics, legacy_view);
-                let resolved_a = measure_fixture_path(
-                    &mut resolved_state,
-                    &resolved_assets,
-                    &metrics,
-                    screen_gameplay::ActorViewOverride::default(),
-                );
-                let resolved_b = measure_fixture_path(
-                    &mut resolved_state,
-                    &resolved_assets,
-                    &metrics,
-                    screen_gameplay::ActorViewOverride::default(),
-                );
-                let legacy_b =
-                    measure_fixture_path(&mut legacy_state, &legacy_assets, &metrics, legacy_view);
-                assert_eq!(legacy_a.checksum, resolved_a.checksum);
-                assert_eq!(legacy_a.checksum, resolved_b.checksum);
-                assert_eq!(legacy_a.checksum, legacy_b.checksum);
-
-                let print = |label: &str, timing: &FixturePathTiming| {
-                    println!(
-                        "{label:<10} {:>8.2} us/frame {:>10.0} cycles/frame",
-                        timing.elapsed.as_secs_f64() * 1_000_000.0 / MEASURE_FRAMES,
-                        timing.cycles as f64 / MEASURE_FRAMES,
-                    );
-                };
-                println!("F1 sprite-core actor build + composition + draw preparation timing");
-                print("legacy A", &legacy_a);
-                print("resolved A", &resolved_a);
-                print("resolved B", &resolved_b);
-                print("legacy B", &legacy_b);
             },
         );
     }

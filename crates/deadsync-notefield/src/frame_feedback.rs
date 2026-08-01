@@ -207,7 +207,6 @@ pub(crate) fn compose_notefield_feedback<S, F>(
                 pulse: &receptor.receptor_pulse,
                 press_behavior: receptor.receptor_glow_behavior,
                 style: request.style.receptor,
-                resolved_target: request.view.resolved_sprite_leaves(),
             },
             resolve_press,
             sprite_source,
@@ -417,7 +416,8 @@ fn record_feedback_lane_sample(
         center[0],
         center[1],
     ] {
-        output.checksum = output.checksum.rotate_left(7) ^ u64::from(value.to_bits()) ^ pass as u64;
+        output.checksum =
+            output.checksum.rotate_left(7) ^ u64::from(value.to_bits()) ^ pass as u64;
         output.samples += 1;
     }
 }
@@ -1002,11 +1002,7 @@ mod tests {
         actors
             .iter()
             .filter_map(|actor| match actor {
-                Actor::ResolvedSprite {
-                    source: SpriteSource::TextureHandle { key, .. },
-                    ..
-                }
-                | Actor::Sprite {
+                Actor::Sprite {
                     source: SpriteSource::TextureHandle { key, .. },
                     ..
                 } => Some(key.as_ref()),
@@ -1019,12 +1015,7 @@ mod tests {
         actors
             .iter()
             .filter_map(|actor| match actor {
-                Actor::ResolvedSprite {
-                    source: SpriteSource::TextureHandle { key, .. },
-                    offset,
-                    ..
-                }
-                | Actor::Sprite {
+                Actor::Sprite {
                     source: SpriteSource::TextureHandle { key, .. },
                     offset,
                     ..

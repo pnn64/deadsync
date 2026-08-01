@@ -6,7 +6,6 @@ license = "GPL-3.0"
 
 [features]
 bench-support = []
-test-support = []
 
 [[bench]]
 name = "hold_mesh"
