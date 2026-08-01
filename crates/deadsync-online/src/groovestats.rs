@@ -22,12 +22,12 @@ use deadsync_score::{
     EventProgress, GrooveStatsAutosubmitLog, GrooveStatsAutosubmitLogLevel,
     GrooveStatsAutosubmitPlayerAction, GrooveStatsAutosubmitPlayerInput,
     GrooveStatsAutosubmitSessionDecision, GrooveStatsAutosubmitSessionInput, GrooveStatsEvalState,
-    GrooveStatsGameplayEvalInput, GrooveStatsSubmitRecordBanner, GrooveStatsSubmitUiStatus,
-    GsExEvidence, GsLampChartStats, ImportedPlayerScore, ItlEventProgress, LeaderboardEntry,
-    LeaderboardPane, PlayerLeaderboardData, PlayerScoreImportResult, RejectReason,
-    SUBMIT_RETRY_MAX_ATTEMPTS, ScoreImportEndpoint, SubmitAchievement, SubmitAchievementReward,
-    SubmitEventProgressData, SubmitEventProgressInput, SubmitProgress, SubmitQuest,
-    SubmitQuestReward, SubmitRetryState, SubmitStatImprovement,
+    GrooveStatsGameplayEvalInput, GrooveStatsGameplayEvalResult, GrooveStatsSubmitRecordBanner,
+    GrooveStatsSubmitUiStatus, GsExEvidence, GsLampChartStats, ImportedPlayerScore,
+    ItlEventProgress, LeaderboardEntry, LeaderboardPane, PlayerLeaderboardData,
+    PlayerScoreImportResult, RejectReason, SUBMIT_RETRY_MAX_ATTEMPTS, ScoreImportEndpoint,
+    SubmitAchievement, SubmitAchievementReward, SubmitEventProgressData, SubmitEventProgressInput,
+    SubmitProgress, SubmitQuest, SubmitQuestReward, SubmitRetryState, SubmitStatImprovement,
     cached_score_from_imported_player_score, event_name_or_unknown, event_progress_from_submit,
     groovestats_autosubmit_player_decision, groovestats_autosubmit_session_decision,
     groovestats_eval_state_from_gameplay_parts, groovestats_submit_record_banner,
@@ -1472,6 +1472,16 @@ where
     )
 }
 
+fn finish_eval_state(
+    mut result: GrooveStatsGameplayEvalResult,
+    manual_qr_url: impl FnOnce() -> Option<String>,
+) -> GrooveStatsEvalState {
+    if result.should_set_manual_qr_url {
+        result.state.manual_qr_url = manual_qr_url();
+    }
+    result.state
+}
+
 pub fn eval_state_from_runtime<RuntimeProfile, OverlayActor, CapturedActor, StateDelta>(
     gs: &deadsync_gameplay::GameplayRuntimeState<
         RuntimeProfile,
@@ -1492,7 +1502,7 @@ where
     }
     let chart = gs.charts()[player_idx].as_ref();
     let profile = gs.profiles()[player_idx].deref();
-    let mut result = groovestats_eval_state_from_gameplay_parts(
+    let result = groovestats_eval_state_from_gameplay_parts(
         groovestats_eval_state_from_profile(
             chart,
             profile,
@@ -1512,10 +1522,33 @@ where
             course_stage_life_submit_eligible: gs.course_stage_life_submit_eligible(player_idx),
         },
     );
-    if result.should_set_manual_qr_url {
-        result.state.manual_qr_url = manual_qr_url_from_runtime(gs, player_idx);
-    }
-    result.state
+    finish_eval_state(result, || manual_qr_url_from_runtime(gs, player_idx))
+}
+
+pub fn eval_state_from_app_runtime<RuntimeProfile, OverlayActor, CapturedActor, StateDelta>(
+    gs: &deadsync_gameplay::GameplayRuntimeState<
+        RuntimeProfile,
+        OverlayActor,
+        CapturedActor,
+        StateDelta,
+    >,
+    player_idx: usize,
+) -> GrooveStatsEvalState
+where
+    RuntimeProfile: Deref<Target = profile_data::Profile> + GameplayProfileData,
+{
+    let cfg = deadsync_config::runtime::get();
+    eval_state_from_runtime(
+        gs,
+        player_idx,
+        deadsync_score::lua_chart_submit_allowed,
+        cfg.autosubmit_course_scores_individually,
+        matches!(
+            cfg.default_fail_type,
+            deadsync_config::theme::DefaultFailType::Immediate
+                | deadsync_config::theme::DefaultFailType::ImmediateContinue
+        ),
+    )
 }
 
 pub fn gameplay_submit_player_from_runtime<
@@ -5411,6 +5444,37 @@ mod tests {
             )
             .is_none()
         );
+    }
+
+    #[test]
+    fn eligible_eval_state_keeps_locally_generated_manual_qr_url() {
+        let result = GrooveStatsGameplayEvalResult {
+            state: GrooveStatsEvalState {
+                valid: true,
+                reason_lines: Vec::new(),
+                manual_qr_url: None,
+            },
+            should_set_manual_qr_url: true,
+        };
+
+        let state = finish_eval_state(result, || Some("https://example.invalid/QR/score".into()));
+
+        assert_eq!(
+            state.manual_qr_url.as_deref(),
+            Some("https://example.invalid/QR/score")
+        );
+    }
+
+    #[test]
+    fn ineligible_eval_state_skips_manual_qr_generation() {
+        let result = GrooveStatsGameplayEvalResult {
+            state: GrooveStatsEvalState::default(),
+            should_set_manual_qr_url: false,
+        };
+
+        let state = finish_eval_state(result, || panic!("ineligible score generated a QR URL"));
+
+        assert!(state.manual_qr_url.is_none());
     }
 
     #[test]

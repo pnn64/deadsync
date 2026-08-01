@@ -9,6 +9,7 @@ pub use crate::arrowcloud::{
     tick_auto_submit_retries_from_app_runtime as tick_arrowcloud_auto_retries,
 };
 pub use crate::groovestats::{
+    eval_state_from_app_runtime as groovestats_eval_state_from_gameplay,
     next_retry_is_auto as groovestats_next_retry_is_auto,
     next_retry_remaining_secs as groovestats_next_retry_remaining_secs,
     retry_manual_submit_from_app_runtime as retry_groovestats_submit,
@@ -31,7 +32,6 @@ pub use crate::score_import::{
     import_scores_for_profile_from_app_runtime as import_scores_for_profile,
 };
 pub use deadsync_profile_gameplay::{
-    groovestats_eval_state_from_app_runtime as groovestats_eval_state_from_gameplay,
     itl_eval_state_from_app_runtime as itl_eval_state_from_gameplay,
     save_itl_data_from_app_runtime as save_itl_data_from_gameplay,
     save_local_scores_from_app_runtime as save_local_scores_from_gameplay,

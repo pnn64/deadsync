@@ -15,6 +15,46 @@ const GS_QR_TITLE: &str = "GrooveStats QR";
 const GS_QR_HELP_TEXT_VALID: &str =
     "Scan with your phone\nto upload this score\nto your GrooveStats\naccount.";
 const GS_QR_FALLBACK_TEXT: &str = "QR Unavailable";
+const GS_QR_PANE_Z: i16 = 101;
+
+fn qr_fallback(center_x: f32, center_y: f32) -> Actor {
+    act!(text:
+        font("miso"):
+        settext(GS_QR_FALLBACK_TEXT):
+        align(0.5, 0.5):
+        xy(center_x, center_y):
+        zoom(0.8):
+        z(GS_QR_PANE_Z):
+        diffuse(1.0, 0.3, 0.3, 1.0):
+        horizalign(center)
+    )
+}
+
+fn push_qr(
+    children: &mut Vec<Actor>,
+    content: Option<&str>,
+    center_x: f32,
+    center_y: f32,
+    size: f32,
+) {
+    let Some(content) = content else {
+        children.push(qr_fallback(center_x, center_y));
+        return;
+    };
+    let qr_actors = qr_code::build(qr_code::QrCodeParams {
+        content,
+        center_x,
+        center_y,
+        size,
+        border_modules: 1,
+        z: GS_QR_PANE_Z,
+    });
+    if qr_actors.is_empty() {
+        children.push(qr_fallback(center_x, center_y));
+    } else {
+        children.extend(qr_actors);
+    }
+}
 
 pub fn build_gs_qr_pane(
     score_info: &ScoreInfo,
@@ -103,30 +143,7 @@ pub fn build_gs_qr_pane(
     } else {
         Some(GS_QR_INVALID_URL)
     };
-    if let Some(content) = qr_content {
-        let qr_actors = qr_code::build(qr_code::QrCodeParams {
-            content,
-            center_x: qr_center_x,
-            center_y: qr_center_y,
-            size: qr_size,
-            border_modules: 1,
-            z: 0,
-        });
-        if qr_actors.is_empty() {
-            children.push(act!(text:
-                font("miso"):
-                settext(GS_QR_FALLBACK_TEXT):
-                align(0.5, 0.5):
-                xy(qr_center_x, qr_center_y):
-                zoom(0.8):
-                z(101):
-                diffuse(1.0, 0.3, 0.3, 1.0):
-                horizalign(center)
-            ));
-        } else {
-            children.extend(qr_actors);
-        }
-    }
+    push_qr(&mut children, qr_content, qr_center_x, qr_center_y, qr_size);
 
     if !gs_valid {
         for rotation in [45.0_f32, -45.0_f32] {
@@ -149,4 +166,42 @@ pub fn build_gs_qr_pane(
         z: 101,
         children,
     }]
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn qr_uses_the_pane_content_layer() {
+        let mut actors = Vec::new();
+        push_qr(
+            &mut actors,
+            Some("https://example.com/QR/score"),
+            0.0,
+            0.0,
+            168.0,
+        );
+
+        let [Actor::Frame { z, children, .. }] = actors.as_slice() else {
+            panic!("expected QR frame");
+        };
+        assert_eq!(*z, GS_QR_PANE_Z);
+        assert!(matches!(
+            children.as_slice(),
+            [Actor::Sprite { z: 0, .. }, Actor::Mesh { z: 1, .. }]
+        ));
+    }
+
+    #[test]
+    fn missing_qr_payload_is_visible_instead_of_blank() {
+        let mut actors = Vec::new();
+        push_qr(&mut actors, None, 0.0, 0.0, 168.0);
+
+        let [Actor::Text { content, z, .. }] = actors.as_slice() else {
+            panic!("expected QR fallback text");
+        };
+        assert_eq!(content.as_str(), GS_QR_FALLBACK_TEXT);
+        assert_eq!(*z, GS_QR_PANE_Z);
+    }
 }
