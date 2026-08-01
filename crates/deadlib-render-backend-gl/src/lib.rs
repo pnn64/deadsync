@@ -283,6 +283,9 @@ pub fn init(
     let path = select_gl_path(&gl, api);
     info!("OpenGL render path: {}", path.label());
     let base_instance = supports_base_instance(&gl, api, path);
+    #[cfg(feature = "bench-support")]
+    let base_instance =
+        base_instance && std::env::var_os("DEADSYNC_GL_BENCH_INSTANCE_OFFSETS").is_none();
     info!("OpenGL base-instance draws: {base_instance}");
     let shaders = api.shaders(path);
     let (program, mvp_location, texture_location) =

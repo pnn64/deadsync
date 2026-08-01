@@ -99,6 +99,7 @@ struct BenchResult {
     elapsed: Duration,
     cycles: u64,
     alloc: AllocSnapshot,
+    retained_bytes: usize,
     checksum: u64,
 }
 
@@ -150,30 +151,12 @@ fn main() {
 
     benchmark_mesh_projection(projection);
     benchmark_tmesh_projection(projection);
+    benchmark_serial_projection(projection);
 }
 
 fn benchmark_mesh_projection(projection: Matrix4) {
     let vertices = gameplay_mesh();
-    let mut legacy = Vec::with_capacity(BENCH_RUNS);
-    let mut current = Vec::with_capacity(BENCH_RUNS);
-    for run in 0..BENCH_RUNS {
-        let (old, new) = if run % 2 == 0 {
-            let new = measure_mesh_current(&vertices, projection);
-            let old = measure_mesh_legacy(&vertices, projection);
-            (old, new)
-        } else {
-            let old = measure_mesh_legacy(&vertices, projection);
-            let new = measure_mesh_current(&vertices, projection);
-            (old, new)
-        };
-        assert_eq!(old.checksum, new.checksum);
-        assert_no_alloc(&old);
-        assert_no_alloc(&new);
-        legacy.push(old);
-        current.push(new);
-    }
-    let legacy = median(legacy);
-    let current = median(current);
+    let (legacy, current) = compare_mesh_projection(&vertices, projection, STRIPES);
     println!(
         "\nsoftware mesh projection ({MESH_VERTICES} vertices, {STRIPES} stripes, median of {BENCH_RUNS})"
     );
@@ -189,27 +172,24 @@ fn benchmark_mesh_projection(projection: Matrix4) {
         MESH_MEASURE_FRAMES,
         MESH_VERTICES * STRIPES,
     );
-    println!(
-        "  speedup {:.2}x | cycles reduction {:.1}% | transforms/frame {} -> {}",
-        legacy.elapsed.as_secs_f64() / current.elapsed.as_secs_f64(),
-        100.0 * (1.0 - current.cycles as f64 / legacy.cycles as f64),
-        MESH_VERTICES * STRIPES,
-        MESH_VERTICES,
-    );
+    print_projection_gain(&legacy, &current, STRIPES);
 }
 
-fn benchmark_tmesh_projection(projection: Matrix4) {
-    let vertices = gameplay_tmesh();
+fn compare_mesh_projection(
+    vertices: &[MeshVertex],
+    projection: Matrix4,
+    stripes: usize,
+) -> (BenchResult, BenchResult) {
     let mut legacy = Vec::with_capacity(BENCH_RUNS);
     let mut current = Vec::with_capacity(BENCH_RUNS);
     for run in 0..BENCH_RUNS {
         let (old, new) = if run % 2 == 0 {
-            let new = measure_tmesh_current(&vertices, projection);
-            let old = measure_tmesh_legacy(&vertices, projection);
+            let new = measure_mesh_current(vertices, projection, stripes);
+            let old = measure_mesh_legacy(vertices, projection, stripes);
             (old, new)
         } else {
-            let old = measure_tmesh_legacy(&vertices, projection);
-            let new = measure_tmesh_current(&vertices, projection);
+            let old = measure_mesh_legacy(vertices, projection, stripes);
+            let new = measure_mesh_current(vertices, projection, stripes);
             (old, new)
         };
         assert_eq!(old.checksum, new.checksum);
@@ -218,8 +198,12 @@ fn benchmark_tmesh_projection(projection: Matrix4) {
         legacy.push(old);
         current.push(new);
     }
-    let legacy = median(legacy);
-    let current = median(current);
+    (median(legacy), median(current))
+}
+
+fn benchmark_tmesh_projection(projection: Matrix4) {
+    let vertices = gameplay_tmesh();
+    let (legacy, current) = compare_tmesh_projection(&vertices, projection, STRIPES);
     println!(
         "\nsoftware textured-mesh projection ({MESH_VERTICES} vertices, {STRIPES} stripes, median of {BENCH_RUNS})"
     );
@@ -235,11 +219,71 @@ fn benchmark_tmesh_projection(projection: Matrix4) {
         MESH_MEASURE_FRAMES,
         MESH_VERTICES * STRIPES,
     );
+    print_projection_gain(&legacy, &current, STRIPES);
+}
+
+fn compare_tmesh_projection(
+    vertices: &[TexturedMeshVertex],
+    projection: Matrix4,
+    stripes: usize,
+) -> (BenchResult, BenchResult) {
+    let mut legacy = Vec::with_capacity(BENCH_RUNS);
+    let mut current = Vec::with_capacity(BENCH_RUNS);
+    for run in 0..BENCH_RUNS {
+        let (old, new) = if run % 2 == 0 {
+            let new = measure_tmesh_current(vertices, projection, stripes);
+            let old = measure_tmesh_legacy(vertices, projection, stripes);
+            (old, new)
+        } else {
+            let old = measure_tmesh_legacy(vertices, projection, stripes);
+            let new = measure_tmesh_current(vertices, projection, stripes);
+            (old, new)
+        };
+        assert_eq!(old.checksum, new.checksum);
+        assert_no_alloc(&old);
+        assert_no_alloc(&new);
+        legacy.push(old);
+        current.push(new);
+    }
+    (median(legacy), median(current))
+}
+
+fn benchmark_serial_projection(projection: Matrix4) {
+    let (mesh_legacy, mesh_current) = compare_mesh_projection(&gameplay_mesh(), projection, 1);
+    let (tmesh_legacy, tmesh_current) = compare_tmesh_projection(&gameplay_tmesh(), projection, 1);
+    println!("\nsoftware single-stripe guard ({MESH_VERTICES} vertices, median of {BENCH_RUNS})");
+    print_custom_result(
+        "mesh direct",
+        &mesh_legacy,
+        MESH_MEASURE_FRAMES,
+        MESH_VERTICES,
+    );
+    print_custom_result(
+        "mesh staged",
+        &mesh_current,
+        MESH_MEASURE_FRAMES,
+        MESH_VERTICES,
+    );
+    print_custom_result(
+        "tmesh direct",
+        &tmesh_legacy,
+        MESH_MEASURE_FRAMES,
+        MESH_VERTICES,
+    );
+    print_custom_result(
+        "tmesh staged",
+        &tmesh_current,
+        MESH_MEASURE_FRAMES,
+        MESH_VERTICES,
+    );
+}
+
+fn print_projection_gain(legacy: &BenchResult, current: &BenchResult, stripes: usize) {
     println!(
         "  speedup {:.2}x | cycles reduction {:.1}% | transforms/frame {} -> {}",
         legacy.elapsed.as_secs_f64() / current.elapsed.as_secs_f64(),
         100.0 * (1.0 - current.cycles as f64 / legacy.cycles as f64),
-        MESH_VERTICES * STRIPES,
+        MESH_VERTICES * stripes,
         MESH_VERTICES,
     );
 }
@@ -275,6 +319,7 @@ fn measure_legacy(sprites: &[SpriteInstanceRaw], projection: Matrix4) -> BenchRe
         elapsed: started.elapsed(),
         cycles: read_cycles().saturating_sub(cycles_before),
         alloc: ALLOC.snapshot().delta(before),
+        retained_bytes: 0,
         checksum: black_box(checksum),
     }
 }
@@ -313,11 +358,16 @@ fn measure_current(sprites: &[SpriteInstanceRaw], projection: Matrix4) -> BenchR
         elapsed: started.elapsed(),
         cycles: read_cycles().saturating_sub(cycles_before),
         alloc: ALLOC.snapshot().delta(before),
+        retained_bytes: scratch.retained_bytes(),
         checksum: black_box(checksum),
     }
 }
 
-fn measure_mesh_legacy(vertices: &[MeshVertex], projection: Matrix4) -> BenchResult {
+fn measure_mesh_legacy(
+    vertices: &[MeshVertex],
+    projection: Matrix4,
+    stripes: usize,
+) -> BenchResult {
     for _ in 0..WARMUP_FRAMES {
         black_box(
             deadlib_render_backend_software::__benchmark_project_mesh_per_stripe(
@@ -325,7 +375,7 @@ fn measure_mesh_legacy(vertices: &[MeshVertex], projection: Matrix4) -> BenchRes
                 projection,
                 WIDTH,
                 HEIGHT,
-                STRIPES,
+                stripes,
             ),
         );
     }
@@ -340,18 +390,23 @@ fn measure_mesh_legacy(vertices: &[MeshVertex], projection: Matrix4) -> BenchRes
                 projection,
                 WIDTH,
                 HEIGHT,
-                STRIPES,
+                stripes,
             );
     }
     BenchResult {
         elapsed: started.elapsed(),
         cycles: read_cycles().saturating_sub(cycles_before),
         alloc: ALLOC.snapshot().delta(before),
+        retained_bytes: 0,
         checksum: black_box(checksum),
     }
 }
 
-fn measure_mesh_current(vertices: &[MeshVertex], projection: Matrix4) -> BenchResult {
+fn measure_mesh_current(
+    vertices: &[MeshVertex],
+    projection: Matrix4,
+    stripes: usize,
+) -> BenchResult {
     let mut scratch = MeshProjectionBenchScratch::default();
     for _ in 0..WARMUP_FRAMES {
         black_box(
@@ -361,7 +416,7 @@ fn measure_mesh_current(vertices: &[MeshVertex], projection: Matrix4) -> BenchRe
                 projection,
                 WIDTH,
                 HEIGHT,
-                STRIPES,
+                stripes,
             ),
         );
     }
@@ -377,18 +432,23 @@ fn measure_mesh_current(vertices: &[MeshVertex], projection: Matrix4) -> BenchRe
                 projection,
                 WIDTH,
                 HEIGHT,
-                STRIPES,
+                stripes,
             );
     }
     BenchResult {
         elapsed: started.elapsed(),
         cycles: read_cycles().saturating_sub(cycles_before),
         alloc: ALLOC.snapshot().delta(before),
+        retained_bytes: scratch.retained_bytes(),
         checksum: black_box(checksum),
     }
 }
 
-fn measure_tmesh_legacy(vertices: &[TexturedMeshVertex], projection: Matrix4) -> BenchResult {
+fn measure_tmesh_legacy(
+    vertices: &[TexturedMeshVertex],
+    projection: Matrix4,
+    stripes: usize,
+) -> BenchResult {
     for _ in 0..WARMUP_FRAMES {
         black_box(
             deadlib_render_backend_software::__benchmark_project_tmesh_per_stripe(
@@ -396,7 +456,7 @@ fn measure_tmesh_legacy(vertices: &[TexturedMeshVertex], projection: Matrix4) ->
                 projection,
                 WIDTH,
                 HEIGHT,
-                STRIPES,
+                stripes,
             ),
         );
     }
@@ -411,18 +471,23 @@ fn measure_tmesh_legacy(vertices: &[TexturedMeshVertex], projection: Matrix4) ->
                 projection,
                 WIDTH,
                 HEIGHT,
-                STRIPES,
+                stripes,
             );
     }
     BenchResult {
         elapsed: started.elapsed(),
         cycles: read_cycles().saturating_sub(cycles_before),
         alloc: ALLOC.snapshot().delta(before),
+        retained_bytes: 0,
         checksum: black_box(checksum),
     }
 }
 
-fn measure_tmesh_current(vertices: &[TexturedMeshVertex], projection: Matrix4) -> BenchResult {
+fn measure_tmesh_current(
+    vertices: &[TexturedMeshVertex],
+    projection: Matrix4,
+    stripes: usize,
+) -> BenchResult {
     let mut scratch = TMeshProjectionBenchScratch::default();
     for _ in 0..WARMUP_FRAMES {
         black_box(
@@ -432,7 +497,7 @@ fn measure_tmesh_current(vertices: &[TexturedMeshVertex], projection: Matrix4) -
                 projection,
                 WIDTH,
                 HEIGHT,
-                STRIPES,
+                stripes,
             ),
         );
     }
@@ -448,13 +513,14 @@ fn measure_tmesh_current(vertices: &[TexturedMeshVertex], projection: Matrix4) -
                 projection,
                 WIDTH,
                 HEIGHT,
-                STRIPES,
+                stripes,
             );
     }
     BenchResult {
         elapsed: started.elapsed(),
         cycles: read_cycles().saturating_sub(cycles_before),
         alloc: ALLOC.snapshot().delta(before),
+        retained_bytes: scratch.retained_bytes(),
         checksum: black_box(checksum),
     }
 }
@@ -538,13 +604,14 @@ fn print_result(label: &str, result: &BenchResult) {
     let visits = (SPRITES * STRIPES * MEASURE_FRAMES) as f64;
     println!(
         "  {label:<14} {:>8.2} us/frame  {:>10.0} cycles/frame  \
-         {:>7.1} M sprite-stripes/s  {:>4.1} allocs  {:>4.1} reallocs  {:>5.1} bytes",
+         {:>7.1} M sprite-stripes/s  {:>4.1} allocs  {:>4.1} reallocs  {:>5.1} bytes  {:>7.1} KiB retained",
         result.elapsed.as_secs_f64() * 1_000_000.0 / frames,
         result.cycles as f64 / frames,
         visits / result.elapsed.as_secs_f64() / 1_000_000.0,
         result.alloc.allocs as f64,
         result.alloc.reallocs as f64,
         result.alloc.bytes as f64,
+        result.retained_bytes as f64 / 1024.0,
     );
 }
 
@@ -552,13 +619,14 @@ fn print_custom_result(label: &str, result: &BenchResult, frames: usize, items_p
     let frames = frames as f64;
     println!(
         "  {label:<14} {:>8.2} us/frame  {:>10.0} cycles/frame  \
-         {:>7.1} M items/s  {:>4.1} allocs  {:>4.1} reallocs  {:>5.1} bytes",
+         {:>7.1} M items/s  {:>4.1} allocs  {:>4.1} reallocs  {:>5.1} bytes  {:>7.1} KiB retained",
         result.elapsed.as_secs_f64() * 1_000_000.0 / frames,
         result.cycles as f64 / frames,
         frames * items_per_frame as f64 / result.elapsed.as_secs_f64() / 1_000_000.0,
         result.alloc.allocs as f64,
         result.alloc.reallocs as f64,
         result.alloc.bytes as f64,
+        result.retained_bytes as f64 / 1024.0,
     );
 }
 

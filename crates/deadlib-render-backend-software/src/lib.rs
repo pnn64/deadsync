@@ -55,12 +55,20 @@ enum PreparedObject {
         projected_count: u32,
         blend: BlendMode,
     },
+    DirectMesh {
+        object_index: u32,
+        mvp: Matrix4,
+    },
     TexturedMesh {
         vertex_start: u32,
         projected_count: u32,
         texture_mask: bool,
         blend: BlendMode,
         texture_handle: TextureHandle,
+    },
+    DirectTexturedMesh {
+        object_index: u32,
+        mvp: Matrix4,
     },
 }
 
@@ -181,6 +189,7 @@ pub fn draw(
         &mut state.prepared_objects,
         &mut state.prepared_mesh_vertices,
         &mut state.prepared_tmesh_vertices,
+        use_parallel,
     );
     let backend_prepare_us = elapsed_us_since(backend_prepare_started);
 
@@ -218,6 +227,7 @@ pub fn draw(
                     let y_start = chunk_index * SOFTWARE_ROW_CHUNK;
                     let y_end = y_start + stripe.len() / w;
                     draw_rows(
+                        objects,
                         prepared_objects,
                         prepared_mesh_vertices,
                         prepared_tmesh_vertices,
@@ -233,6 +243,7 @@ pub fn draw(
         })
     } else {
         draw_rows(
+            objects,
             prepared_objects,
             prepared_mesh_vertices,
             prepared_tmesh_vertices,
@@ -285,13 +296,14 @@ fn prepare_objects(
     prepared: &mut Vec<PreparedObject>,
     mesh_vertices: &mut Vec<ScreenVertexColor>,
     tmesh_vertices: &mut Vec<ScreenVertexTexColor>,
+    stage_meshes: bool,
 ) {
     prepared.clear();
     prepared.reserve(objects.len());
     mesh_vertices.clear();
     tmesh_vertices.clear();
 
-    for object in objects {
+    for (object_index, object) in objects.iter().enumerate() {
         let projection = cameras
             .get(object.camera as usize)
             .copied()
@@ -331,9 +343,17 @@ fn prepare_objects(
                 tint,
                 vertices,
             } => {
+                let mvp = projection * *transform;
+                if !stage_meshes {
+                    prepared.push(PreparedObject::DirectMesh {
+                        object_index: object_index as u32,
+                        mvp,
+                    });
+                    continue;
+                }
                 let Some((vertex_start, projected_count)) = prepare_mesh_vertices(
                     mesh_vertices,
-                    &(projection * *transform),
+                    &mvp,
                     *tint,
                     vertices.as_ref(),
                     width,
@@ -350,9 +370,17 @@ fn prepare_objects(
             ObjectType::TexturedMesh {
                 instance, vertices, ..
             } => {
+                let mvp = projection * instance.transform();
+                if !stage_meshes {
+                    prepared.push(PreparedObject::DirectTexturedMesh {
+                        object_index: object_index as u32,
+                        mvp,
+                    });
+                    continue;
+                }
                 let Some((vertex_start, projected_count)) = prepare_tmesh_vertices(
                     tmesh_vertices,
-                    &(projection * instance.transform()),
+                    &mvp,
                     instance.tint,
                     instance.uv_scale,
                     instance.uv_offset,
@@ -376,6 +404,7 @@ fn prepare_objects(
 }
 
 fn draw_rows(
+    objects: &[RenderObject],
     prepared_objects: &[PreparedObject],
     mesh_vertices: &[ScreenVertexColor],
     tmesh_vertices: &[ScreenVertexTexColor],
@@ -433,6 +462,27 @@ fn draw_rows(
                 );
                 *projected_count
             }
+            PreparedObject::DirectMesh { object_index, mvp } => {
+                let Some(RenderObject {
+                    object_type: ObjectType::Mesh { tint, vertices, .. },
+                    blend,
+                    ..
+                }) = objects.get(*object_index as usize)
+                else {
+                    continue;
+                };
+                rasterize_mesh_triangles(
+                    mvp,
+                    *tint,
+                    vertices.as_ref(),
+                    *blend,
+                    width,
+                    height,
+                    stripe_y_start,
+                    stripe_y_end,
+                    buffer,
+                )
+            }
             PreparedObject::TexturedMesh {
                 vertex_start,
                 projected_count,
@@ -458,6 +508,40 @@ fn draw_rows(
                     buffer,
                 );
                 *projected_count
+            }
+            PreparedObject::DirectTexturedMesh { object_index, mvp } => {
+                let Some(RenderObject {
+                    object_type:
+                        ObjectType::TexturedMesh {
+                            instance, vertices, ..
+                        },
+                    texture_handle,
+                    blend,
+                    ..
+                }) = objects.get(*object_index as usize)
+                else {
+                    continue;
+                };
+                let Some(tex) = textures.software_texture(*texture_handle) else {
+                    continue;
+                };
+                rasterize_textured_mesh_triangles(
+                    mvp,
+                    vertices.as_ref(),
+                    instance.tint,
+                    instance.uv_scale,
+                    instance.uv_offset,
+                    instance.uv_tex_shift,
+                    instance.texture_mask != 0.0,
+                    *blend,
+                    &tex.image,
+                    tex.sampler,
+                    width,
+                    height,
+                    stripe_y_start,
+                    stripe_y_end,
+                    buffer,
+                )
             }
         };
         vertices_drawn = vertices_drawn.saturating_add(drawn);
@@ -529,6 +613,15 @@ pub struct SpriteProjectionBenchScratch {
 }
 
 #[cfg(feature = "bench-support")]
+impl SpriteProjectionBenchScratch {
+    pub fn retained_bytes(&self) -> usize {
+        self.vertices
+            .capacity()
+            .saturating_mul(std::mem::size_of::<[ScreenVertex; 4]>())
+    }
+}
+
+#[cfg(feature = "bench-support")]
 #[doc(hidden)]
 #[derive(Default)]
 pub struct MeshProjectionBenchScratch {
@@ -536,10 +629,28 @@ pub struct MeshProjectionBenchScratch {
 }
 
 #[cfg(feature = "bench-support")]
+impl MeshProjectionBenchScratch {
+    pub fn retained_bytes(&self) -> usize {
+        self.vertices
+            .capacity()
+            .saturating_mul(std::mem::size_of::<ScreenVertexColor>())
+    }
+}
+
+#[cfg(feature = "bench-support")]
 #[doc(hidden)]
 #[derive(Default)]
 pub struct TMeshProjectionBenchScratch {
     vertices: Vec<ScreenVertexTexColor>,
+}
+
+#[cfg(feature = "bench-support")]
+impl TMeshProjectionBenchScratch {
+    pub fn retained_bytes(&self) -> usize {
+        self.vertices
+            .capacity()
+            .saturating_mul(std::mem::size_of::<ScreenVertexTexColor>())
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -1128,7 +1239,6 @@ fn rasterize_prepared_tmesh(
     }
 }
 
-#[cfg(test)]
 fn rasterize_mesh_triangles(
     mvp: &Matrix4,
     tint: [f32; 4],
@@ -1195,7 +1305,6 @@ fn rasterize_mesh_triangles(
     verts_drawn
 }
 
-#[cfg(test)]
 fn rasterize_textured_mesh_triangles(
     mvp: &Matrix4,
     vertices: &[deadlib_render::TexturedMeshVertex],
@@ -1945,6 +2054,7 @@ mod tests {
         let clear = pack_rgba([0.025, 0.05, 0.075, 1.0]);
         let mut legacy_pixels = vec![clear; WIDTH * HEIGHT];
         let mut current_pixels = vec![clear; WIDTH * HEIGHT];
+        let mut direct_pixels = vec![clear; WIDTH * HEIGHT];
 
         let legacy_vertices = render_legacy_stripes(
             &objects,
@@ -1968,22 +2078,61 @@ mod tests {
             &mut prepared,
             &mut prepared_mesh,
             &mut prepared_tmesh,
+            true,
         );
+        assert!(!prepared_mesh.is_empty());
+        assert!(!prepared_tmesh.is_empty());
         let current_vertices = render_prepared_stripes(
+            &objects,
             &prepared,
             &prepared_mesh,
             &prepared_tmesh,
             &textures,
             &mut current_pixels,
         );
+        prepare_objects(
+            &objects,
+            &sprites,
+            &cameras,
+            fallback,
+            WIDTH,
+            HEIGHT,
+            &mut prepared,
+            &mut prepared_mesh,
+            &mut prepared_tmesh,
+            false,
+        );
+        assert!(prepared_mesh.is_empty());
+        assert!(prepared_tmesh.is_empty());
+        assert!(
+            prepared
+                .iter()
+                .any(|object| matches!(object, PreparedObject::DirectMesh { .. }))
+        );
+        assert!(
+            prepared
+                .iter()
+                .any(|object| matches!(object, PreparedObject::DirectTexturedMesh { .. }))
+        );
+        let direct_vertices = render_prepared_stripes(
+            &objects,
+            &prepared,
+            &prepared_mesh,
+            &prepared_tmesh,
+            &textures,
+            &mut direct_pixels,
+        );
 
         assert_eq!(current_vertices, legacy_vertices);
+        assert_eq!(direct_vertices, legacy_vertices);
         assert_eq!(current_vertices, 42);
         assert_eq!(current_pixels, legacy_pixels);
+        assert_eq!(direct_pixels, legacy_pixels);
         assert!(current_pixels.iter().any(|pixel| *pixel != clear));
     }
 
     fn render_prepared_stripes(
+        objects: &[RenderObject],
         prepared: &[PreparedObject],
         mesh_vertices: &[ScreenVertexColor],
         tmesh_vertices: &[ScreenVertexTexColor],
@@ -1997,6 +2146,7 @@ mod tests {
                 let y_start = chunk_index * SOFTWARE_ROW_CHUNK;
                 let y_end = y_start + stripe.len() / WIDTH;
                 draw_rows(
+                    objects,
                     prepared,
                     mesh_vertices,
                     tmesh_vertices,
