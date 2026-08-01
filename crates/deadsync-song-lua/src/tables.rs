@@ -2255,9 +2255,11 @@ pub fn create_author_table(lua: &Lua, steps: Option<&Value>) -> mlua::Result<Tab
     let mut values = Vec::new();
     for method in ["GetDescription", "GetAuthorCredit", "GetChartName"] {
         if let Some(text) = call_string_method(steps, method)?
-            && !text.is_empty() && !values.iter().any(|value| value == &text) {
-                values.push(text);
-            }
+            && !text.is_empty()
+            && !values.iter().any(|value| value == &text)
+        {
+            values.push(text);
+        }
     }
     for (index, value) in values.into_iter().enumerate() {
         out.raw_set(index + 1, value)?;
@@ -2664,9 +2666,11 @@ fn display_bpms_from_table(table: &Table) -> mlua::Result<[f32; 2]> {
         .map(|function| call_table_function(table, &function))
         .transpose()?
         .and_then(read_bpms_table)
-        && bpms[0] > 0.0 && bpms[1] > 0.0 {
-            return Ok(bpms);
-        }
+        && bpms[0] > 0.0
+        && bpms[1] > 0.0
+    {
+        return Ok(bpms);
+    }
     let Some(timing) = table
         .get::<Option<Function>>("GetTimingData")?
         .map(|function| call_table_function(table, &function))

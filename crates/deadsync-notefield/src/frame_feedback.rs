@@ -416,8 +416,7 @@ fn record_feedback_lane_sample(
         center[0],
         center[1],
     ] {
-        output.checksum =
-            output.checksum.rotate_left(7) ^ u64::from(value.to_bits()) ^ pass as u64;
+        output.checksum = output.checksum.rotate_left(7) ^ u64::from(value.to_bits()) ^ pass as u64;
         output.samples += 1;
     }
 }

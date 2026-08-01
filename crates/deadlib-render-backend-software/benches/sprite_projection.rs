@@ -3,6 +3,7 @@ use deadlib_render_backend_software::{
     MeshProjectionBenchScratch, SpriteProjectionBenchScratch, TMeshProjectionBenchScratch,
 };
 use glam::Mat4 as Matrix4;
+use rayon::{ThreadPool, ThreadPoolBuilder, prelude::*};
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::hint::black_box;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -152,6 +153,7 @@ fn main() {
     benchmark_mesh_projection(projection);
     benchmark_tmesh_projection(projection);
     benchmark_serial_projection(projection);
+    benchmark_parallel_projection(projection);
 }
 
 fn benchmark_mesh_projection(projection: Matrix4) {
@@ -286,6 +288,121 @@ fn print_projection_gain(legacy: &BenchResult, current: &BenchResult, stripes: u
         MESH_VERTICES * stripes,
         MESH_VERTICES,
     );
+}
+
+fn benchmark_parallel_projection(projection: Matrix4) {
+    let threads = std::thread::available_parallelism()
+        .map(std::num::NonZero::get)
+        .unwrap_or(1)
+        .min(8);
+    if threads < 2 {
+        println!("\nsoftware parallel projection guard skipped: only one thread available");
+        return;
+    }
+    let pool = ThreadPoolBuilder::new()
+        .num_threads(threads)
+        .build()
+        .expect("parallel projection benchmark should create its worker pool");
+    let mesh = gameplay_mesh();
+    let tmesh = gameplay_tmesh();
+    println!("\nsoftware parallel projection guard ({threads} threads, median of {BENCH_RUNS})");
+    for stripes in [2, 4, threads, 15, STRIPES] {
+        let (mesh_legacy, mesh_current) = compare_parallel_mesh(&pool, &mesh, projection, stripes);
+        let (tmesh_legacy, tmesh_current) =
+            compare_parallel_tmesh(&pool, &tmesh, projection, stripes);
+        println!("  {stripes} stripes");
+        print_custom_result(
+            "mesh repeated",
+            &mesh_legacy,
+            MESH_MEASURE_FRAMES,
+            MESH_VERTICES * stripes,
+        );
+        print_custom_result(
+            "mesh staged",
+            &mesh_current,
+            MESH_MEASURE_FRAMES,
+            MESH_VERTICES * stripes,
+        );
+        print_custom_result(
+            "tmesh repeated",
+            &tmesh_legacy,
+            MESH_MEASURE_FRAMES,
+            MESH_VERTICES * stripes,
+        );
+        print_custom_result(
+            "tmesh staged",
+            &tmesh_current,
+            MESH_MEASURE_FRAMES,
+            MESH_VERTICES * stripes,
+        );
+    }
+}
+
+fn compare_parallel_mesh(
+    pool: &ThreadPool,
+    vertices: &[MeshVertex],
+    projection: Matrix4,
+    stripes: usize,
+) -> (BenchResult, BenchResult) {
+    let mut legacy = Vec::with_capacity(BENCH_RUNS);
+    let mut current = Vec::with_capacity(BENCH_RUNS);
+    for run in 0..BENCH_RUNS {
+        let (old, new) = if run % 2 == 0 {
+            let new = measure_parallel_mesh_current(pool, vertices, projection, stripes);
+            let old = measure_parallel_mesh_legacy(pool, vertices, projection, stripes);
+            (old, new)
+        } else {
+            let old = measure_parallel_mesh_legacy(pool, vertices, projection, stripes);
+            let new = measure_parallel_mesh_current(pool, vertices, projection, stripes);
+            (old, new)
+        };
+        assert_eq!(old.checksum, new.checksum);
+        assert_eq!(old.alloc.reallocs, 0);
+        assert_eq!(new.alloc.reallocs, 0);
+        legacy.push(old);
+        current.push(new);
+    }
+    (median(legacy), median(current))
+}
+
+fn compare_parallel_tmesh(
+    pool: &ThreadPool,
+    vertices: &[TexturedMeshVertex],
+    projection: Matrix4,
+    stripes: usize,
+) -> (BenchResult, BenchResult) {
+    let mut legacy = Vec::with_capacity(BENCH_RUNS);
+    let mut current = Vec::with_capacity(BENCH_RUNS);
+    for run in 0..BENCH_RUNS {
+        let (old, new) = if run % 2 == 0 {
+            let new = measure_parallel_tmesh_current(pool, vertices, projection, stripes);
+            let old = measure_parallel_tmesh_legacy(pool, vertices, projection, stripes);
+            (old, new)
+        } else {
+            let old = measure_parallel_tmesh_legacy(pool, vertices, projection, stripes);
+            let new = measure_parallel_tmesh_current(pool, vertices, projection, stripes);
+            (old, new)
+        };
+        assert_eq!(old.checksum, new.checksum);
+        assert_eq!(old.alloc.reallocs, 0);
+        assert_eq!(new.alloc.reallocs, 0);
+        legacy.push(old);
+        current.push(new);
+    }
+    (median(legacy), median(current))
+}
+
+fn parallel_checksum(
+    pool: &ThreadPool,
+    stripes: usize,
+    visit: impl Fn(usize) -> u64 + Sync + Send,
+) -> u64 {
+    pool.install(|| {
+        (0..stripes)
+            .into_par_iter()
+            .map(visit)
+            .reduce(|| 0, |left, right| left ^ right)
+    })
 }
 
 fn measure_legacy(sprites: &[SpriteInstanceRaw], projection: Matrix4) -> BenchResult {
@@ -515,6 +632,180 @@ fn measure_tmesh_current(
                 HEIGHT,
                 stripes,
             );
+    }
+    BenchResult {
+        elapsed: started.elapsed(),
+        cycles: read_cycles().saturating_sub(cycles_before),
+        alloc: ALLOC.snapshot().delta(before),
+        retained_bytes: scratch.retained_bytes(),
+        checksum: black_box(checksum),
+    }
+}
+
+fn measure_parallel_mesh_legacy(
+    pool: &ThreadPool,
+    vertices: &[MeshVertex],
+    projection: Matrix4,
+    stripes: usize,
+) -> BenchResult {
+    for _ in 0..WARMUP_FRAMES {
+        black_box(parallel_checksum(pool, stripes, |stripe| {
+            deadlib_render_backend_software::__benchmark_project_mesh_stripe(
+                black_box(vertices),
+                projection,
+                WIDTH,
+                HEIGHT,
+                stripe,
+            )
+        }));
+    }
+    let before = ALLOC.snapshot();
+    let cycles_before = read_cycles();
+    let started = Instant::now();
+    let mut checksum = 0_u64;
+    for _ in 0..MESH_MEASURE_FRAMES {
+        checksum = checksum.rotate_left(9)
+            ^ parallel_checksum(pool, stripes, |stripe| {
+                deadlib_render_backend_software::__benchmark_project_mesh_stripe(
+                    black_box(vertices),
+                    projection,
+                    WIDTH,
+                    HEIGHT,
+                    stripe,
+                )
+            });
+    }
+    BenchResult {
+        elapsed: started.elapsed(),
+        cycles: read_cycles().saturating_sub(cycles_before),
+        alloc: ALLOC.snapshot().delta(before),
+        retained_bytes: 0,
+        checksum: black_box(checksum),
+    }
+}
+
+fn measure_parallel_mesh_current(
+    pool: &ThreadPool,
+    vertices: &[MeshVertex],
+    projection: Matrix4,
+    stripes: usize,
+) -> BenchResult {
+    let mut scratch = MeshProjectionBenchScratch::default();
+    for _ in 0..WARMUP_FRAMES {
+        deadlib_render_backend_software::__benchmark_prepare_mesh_frame(
+            &mut scratch,
+            black_box(vertices),
+            projection,
+            WIDTH,
+            HEIGHT,
+        );
+        black_box(parallel_checksum(pool, stripes, |stripe| {
+            deadlib_render_backend_software::__benchmark_visit_mesh_stripe(&scratch, stripe)
+        }));
+    }
+    let before = ALLOC.snapshot();
+    let cycles_before = read_cycles();
+    let started = Instant::now();
+    let mut checksum = 0_u64;
+    for _ in 0..MESH_MEASURE_FRAMES {
+        deadlib_render_backend_software::__benchmark_prepare_mesh_frame(
+            &mut scratch,
+            black_box(vertices),
+            projection,
+            WIDTH,
+            HEIGHT,
+        );
+        checksum = checksum.rotate_left(9)
+            ^ parallel_checksum(pool, stripes, |stripe| {
+                deadlib_render_backend_software::__benchmark_visit_mesh_stripe(&scratch, stripe)
+            });
+    }
+    BenchResult {
+        elapsed: started.elapsed(),
+        cycles: read_cycles().saturating_sub(cycles_before),
+        alloc: ALLOC.snapshot().delta(before),
+        retained_bytes: scratch.retained_bytes(),
+        checksum: black_box(checksum),
+    }
+}
+
+fn measure_parallel_tmesh_legacy(
+    pool: &ThreadPool,
+    vertices: &[TexturedMeshVertex],
+    projection: Matrix4,
+    stripes: usize,
+) -> BenchResult {
+    for _ in 0..WARMUP_FRAMES {
+        black_box(parallel_checksum(pool, stripes, |stripe| {
+            deadlib_render_backend_software::__benchmark_project_tmesh_stripe(
+                black_box(vertices),
+                projection,
+                WIDTH,
+                HEIGHT,
+                stripe,
+            )
+        }));
+    }
+    let before = ALLOC.snapshot();
+    let cycles_before = read_cycles();
+    let started = Instant::now();
+    let mut checksum = 0_u64;
+    for _ in 0..MESH_MEASURE_FRAMES {
+        checksum = checksum.rotate_left(9)
+            ^ parallel_checksum(pool, stripes, |stripe| {
+                deadlib_render_backend_software::__benchmark_project_tmesh_stripe(
+                    black_box(vertices),
+                    projection,
+                    WIDTH,
+                    HEIGHT,
+                    stripe,
+                )
+            });
+    }
+    BenchResult {
+        elapsed: started.elapsed(),
+        cycles: read_cycles().saturating_sub(cycles_before),
+        alloc: ALLOC.snapshot().delta(before),
+        retained_bytes: 0,
+        checksum: black_box(checksum),
+    }
+}
+
+fn measure_parallel_tmesh_current(
+    pool: &ThreadPool,
+    vertices: &[TexturedMeshVertex],
+    projection: Matrix4,
+    stripes: usize,
+) -> BenchResult {
+    let mut scratch = TMeshProjectionBenchScratch::default();
+    for _ in 0..WARMUP_FRAMES {
+        deadlib_render_backend_software::__benchmark_prepare_tmesh_frame(
+            &mut scratch,
+            black_box(vertices),
+            projection,
+            WIDTH,
+            HEIGHT,
+        );
+        black_box(parallel_checksum(pool, stripes, |stripe| {
+            deadlib_render_backend_software::__benchmark_visit_tmesh_stripe(&scratch, stripe)
+        }));
+    }
+    let before = ALLOC.snapshot();
+    let cycles_before = read_cycles();
+    let started = Instant::now();
+    let mut checksum = 0_u64;
+    for _ in 0..MESH_MEASURE_FRAMES {
+        deadlib_render_backend_software::__benchmark_prepare_tmesh_frame(
+            &mut scratch,
+            black_box(vertices),
+            projection,
+            WIDTH,
+            HEIGHT,
+        );
+        checksum = checksum.rotate_left(9)
+            ^ parallel_checksum(pool, stripes, |stripe| {
+                deadlib_render_backend_software::__benchmark_visit_tmesh_stripe(&scratch, stripe)
+            });
     }
     BenchResult {
         elapsed: started.elapsed(),

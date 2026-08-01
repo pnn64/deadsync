@@ -396,11 +396,7 @@ pub(crate) fn visual_note_rotation_z_cached(
 }
 
 #[inline(always)]
-fn visual_note_rotation_z_full(
-    note_beat: f32,
-    song_beat: f32,
-    params: VisualEffectParams,
-) -> f32 {
+fn visual_note_rotation_z_full(note_beat: f32, song_beat: f32, params: VisualEffectParams) -> f32 {
     itg_actor_rotation_z(params.rotate_z) - visual_confusion_rotation_deg(song_beat, params)
         + visual_dizzy_rotation_deg(note_beat, song_beat, params)
 }
@@ -1466,12 +1462,7 @@ pub(crate) fn appearance_note_alpha_glow_cached(
 }
 
 #[inline(always)]
-fn appearance_note_alpha_full(
-    y: f32,
-    elapsed: f32,
-    mini: f32,
-    params: NoteAlphaParams,
-) -> f32 {
+fn appearance_note_alpha_full(y: f32, elapsed: f32, mini: f32, params: NoteAlphaParams) -> f32 {
     let zoom = (1.0 - mini * 0.5).abs().max(0.01);
     let center_line = CENTER_LINE_Y / zoom;
     let hidden_sudden = params.hidden * params.sudden;

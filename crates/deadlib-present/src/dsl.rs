@@ -1304,11 +1304,13 @@ impl SpriteBuilder {
         native_dims: Option<[f32; 2]>,
         build_steps: impl FnOnce() -> TweenSteps,
     ) -> Actor {
-        if self.w == 0.0 && self.h == 0.0
-            && let Some([nw, nh]) = native_dims {
-                self.w = nw;
-                self.h = nh;
-            }
+        if self.w == 0.0
+            && self.h == 0.0
+            && let Some([nw, nh]) = native_dims
+        {
+            self.w = nw;
+            self.h = nh;
+        }
         let mut init = anim::TweenState::default();
         init.x = self.x;
         init.y = self.y;

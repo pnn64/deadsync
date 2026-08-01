@@ -552,9 +552,10 @@ fn workspace_asset_relative_path(path: &Path) -> Option<PathBuf> {
     }
     if let Ok(exe) = std::env::current_exe()
         && let Some(exe_dir) = exe.parent()
-        && let Some(relative) = workspace_asset_relative_path_from_base(path, exe_dir) {
-            return Some(relative);
-        }
+        && let Some(relative) = workspace_asset_relative_path_from_base(path, exe_dir)
+    {
+        return Some(relative);
+    }
     workspace_asset_relative_path_from_base(path, Path::new(env!("CARGO_MANIFEST_DIR")))
 }
 

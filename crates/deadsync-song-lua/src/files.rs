@@ -576,10 +576,7 @@ pub fn wildcard_matches(pattern: &str, text: &str) -> bool {
 
 pub fn path_basename(text: &str) -> &str {
     let trimmed = text.trim_end_matches(['/', '\\']);
-    trimmed
-        .rsplit(['/', '\\'])
-        .next()
-        .unwrap_or_default()
+    trimmed.rsplit(['/', '\\']).next().unwrap_or_default()
 }
 
 pub fn actor_util_class_registered(name: &str) -> bool {

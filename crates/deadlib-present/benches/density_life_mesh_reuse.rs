@@ -1,6 +1,4 @@
-use deadlib_present::density::{
-    update_density_life_mesh, update_density_life_mesh_reusable,
-};
+use deadlib_present::density::{update_density_life_mesh, update_density_life_mesh_reusable};
 use deadlib_render::MeshVertex;
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::hint::black_box;

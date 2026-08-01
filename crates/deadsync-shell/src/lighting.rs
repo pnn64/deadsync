@@ -383,7 +383,6 @@ pub struct SmxPanelDriver {
     inner: smx_driver::SmxPanelDriver,
 }
 
-
 impl SmxPanelDriver {
     pub fn update<Profile, OverlayActor, CapturedActor, StateDelta>(
         &mut self,

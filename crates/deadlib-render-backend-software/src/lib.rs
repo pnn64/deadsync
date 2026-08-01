@@ -184,6 +184,7 @@ pub fn draw(
         sprite_instances,
         cameras,
         default_proj,
+        textures,
         w,
         h,
         &mut state.prepared_objects,
@@ -291,6 +292,7 @@ fn prepare_objects(
     sprite_instances: &[SpriteInstanceRaw],
     cameras: &[Matrix4],
     default_proj: Matrix4,
+    textures: &(impl TextureLookup + Sync),
     width: usize,
     height: usize,
     prepared: &mut Vec<PreparedObject>,
@@ -376,6 +378,9 @@ fn prepare_objects(
                         object_index: object_index as u32,
                         mvp,
                     });
+                    continue;
+                }
+                if textures.software_texture(object.texture_handle).is_none() {
                     continue;
                 }
                 let Some((vertex_start, projected_count)) = prepare_tmesh_vertices(
@@ -971,43 +976,109 @@ pub fn __benchmark_project_mesh_per_stripe(
     height: usize,
     stripes: usize,
 ) -> u64 {
-    let tint = [0.8, 0.9, 1.0, 0.75];
     let mut checksum = 0_u64;
     for stripe in 0..stripes {
-        'tri: for chunk in vertices.chunks_exact(3) {
-            let mut projected = [ScreenVertexColor {
-                x: 0.0,
-                y: 0.0,
-                color: [0.0; 4],
-            }; 3];
-            for i in 0..3 {
-                let p = chunk[i].pos;
-                let clip = mvp * Vector4::new(p[0], p[1], 0.0, 1.0);
-                if clip.w == 0.0 {
-                    continue 'tri;
-                }
-                let ndc_x = clip.x / clip.w;
-                let ndc_y = clip.y / clip.w;
-                if !ndc_x.is_finite() || !ndc_y.is_finite() {
-                    continue 'tri;
-                }
-                projected[i] = ScreenVertexColor {
-                    x: ((ndc_x + 1.0) * 0.5) * width as f32,
-                    y: ((1.0 - ndc_y) * 0.5) * height as f32,
-                    color: [
-                        chunk[i].color[0] * tint[0],
-                        chunk[i].color[1] * tint[1],
-                        chunk[i].color[2] * tint[2],
-                        chunk[i].color[3] * tint[3],
-                    ],
-                };
-            }
-            for vertex in &projected {
-                checksum = benchmark_color_checksum(checksum, vertex, stripe);
-            }
-        }
+        checksum = benchmark_project_mesh_stripe(vertices, mvp, width, height, stripe, checksum);
     }
     std::hint::black_box(checksum)
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn __benchmark_project_mesh_stripe(
+    vertices: &[deadlib_render::MeshVertex],
+    mvp: Matrix4,
+    width: usize,
+    height: usize,
+    stripe: usize,
+) -> u64 {
+    std::hint::black_box(benchmark_project_mesh_stripe(
+        vertices,
+        mvp,
+        width,
+        height,
+        stripe,
+        stripe as u64,
+    ))
+}
+
+#[cfg(feature = "bench-support")]
+fn benchmark_project_mesh_stripe(
+    vertices: &[deadlib_render::MeshVertex],
+    mvp: Matrix4,
+    width: usize,
+    height: usize,
+    stripe: usize,
+    mut checksum: u64,
+) -> u64 {
+    let tint = [0.8, 0.9, 1.0, 0.75];
+    'tri: for chunk in vertices.chunks_exact(3) {
+        let mut projected = [ScreenVertexColor {
+            x: 0.0,
+            y: 0.0,
+            color: [0.0; 4],
+        }; 3];
+        for i in 0..3 {
+            let p = chunk[i].pos;
+            let clip = mvp * Vector4::new(p[0], p[1], 0.0, 1.0);
+            if clip.w == 0.0 {
+                continue 'tri;
+            }
+            let ndc_x = clip.x / clip.w;
+            let ndc_y = clip.y / clip.w;
+            if !ndc_x.is_finite() || !ndc_y.is_finite() {
+                continue 'tri;
+            }
+            projected[i] = ScreenVertexColor {
+                x: ((ndc_x + 1.0) * 0.5) * width as f32,
+                y: ((1.0 - ndc_y) * 0.5) * height as f32,
+                color: [
+                    chunk[i].color[0] * tint[0],
+                    chunk[i].color[1] * tint[1],
+                    chunk[i].color[2] * tint[2],
+                    chunk[i].color[3] * tint[3],
+                ],
+            };
+        }
+        for vertex in &projected {
+            checksum = benchmark_color_checksum(checksum, vertex, stripe);
+        }
+    }
+    checksum
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn __benchmark_prepare_mesh_frame(
+    scratch: &mut MeshProjectionBenchScratch,
+    vertices: &[deadlib_render::MeshVertex],
+    mvp: Matrix4,
+    width: usize,
+    height: usize,
+) {
+    scratch.vertices.clear();
+    let _ = prepare_mesh_vertices(
+        &mut scratch.vertices,
+        &mvp,
+        [0.8, 0.9, 1.0, 0.75],
+        vertices,
+        width,
+        height,
+    );
+    std::hint::black_box(scratch.vertices.len());
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn __benchmark_visit_mesh_stripe(scratch: &MeshProjectionBenchScratch, stripe: usize) -> u64 {
+    std::hint::black_box(
+        scratch
+            .vertices
+            .iter()
+            .fold(stripe as u64, |checksum, vertex| {
+                benchmark_color_checksum(checksum, vertex, stripe)
+            }),
+    )
 }
 
 #[cfg(feature = "bench-support")]
@@ -1020,15 +1091,7 @@ pub fn __benchmark_prepare_mesh_projections(
     height: usize,
     stripes: usize,
 ) -> u64 {
-    scratch.vertices.clear();
-    let _ = prepare_mesh_vertices(
-        &mut scratch.vertices,
-        &mvp,
-        [0.8, 0.9, 1.0, 0.75],
-        vertices,
-        width,
-        height,
-    );
+    __benchmark_prepare_mesh_frame(scratch, vertices, mvp, width, height);
     let mut checksum = 0_u64;
     for stripe in 0..stripes {
         for vertex in &scratch.vertices {
@@ -1048,64 +1111,95 @@ pub fn __benchmark_project_tmesh_per_stripe(
     height: usize,
     stripes: usize,
 ) -> u64 {
-    let tint = [0.8, 0.9, 1.0, 0.75];
-    let uv_scale = [0.75, 1.25];
-    let uv_offset = [0.125, -0.25];
-    let uv_tex_shift = [0.5, -0.5];
     let mut checksum = 0_u64;
     for stripe in 0..stripes {
-        'tri: for chunk in vertices.chunks_exact(3) {
-            let mut projected = [ScreenVertexTexColor {
-                x: 0.0,
-                y: 0.0,
-                u: 0.0,
-                v: 0.0,
-                color: [0.0; 4],
-            }; 3];
-            for i in 0..3 {
-                let p = chunk[i].pos;
-                let clip = mvp * Vector4::new(p[0], p[1], p[2], 1.0);
-                if clip.w == 0.0 {
-                    continue 'tri;
-                }
-                let ndc_x = clip.x / clip.w;
-                let ndc_y = clip.y / clip.w;
-                if !ndc_x.is_finite() || !ndc_y.is_finite() {
-                    continue 'tri;
-                }
-                projected[i] = ScreenVertexTexColor {
-                    x: ((ndc_x + 1.0) * 0.5) * width as f32,
-                    y: ((1.0 - ndc_y) * 0.5) * height as f32,
-                    u: chunk[i].uv[0].mul_add(uv_scale[0], uv_offset[0])
-                        + uv_tex_shift[0] * (chunk[i].tex_matrix_scale[0] - 1.0),
-                    v: chunk[i].uv[1].mul_add(uv_scale[1], uv_offset[1])
-                        + uv_tex_shift[1] * (chunk[i].tex_matrix_scale[1] - 1.0),
-                    color: [
-                        chunk[i].color[0] * tint[0],
-                        chunk[i].color[1] * tint[1],
-                        chunk[i].color[2] * tint[2],
-                        chunk[i].color[3] * tint[3],
-                    ],
-                };
-            }
-            for vertex in &projected {
-                checksum = benchmark_tex_color_checksum(checksum, vertex, stripe);
-            }
-        }
+        checksum = benchmark_project_tmesh_stripe(vertices, mvp, width, height, stripe, checksum);
     }
     std::hint::black_box(checksum)
 }
 
 #[cfg(feature = "bench-support")]
 #[doc(hidden)]
-pub fn __benchmark_prepare_tmesh_projections(
+pub fn __benchmark_project_tmesh_stripe(
+    vertices: &[deadlib_render::TexturedMeshVertex],
+    mvp: Matrix4,
+    width: usize,
+    height: usize,
+    stripe: usize,
+) -> u64 {
+    std::hint::black_box(benchmark_project_tmesh_stripe(
+        vertices,
+        mvp,
+        width,
+        height,
+        stripe,
+        stripe as u64,
+    ))
+}
+
+#[cfg(feature = "bench-support")]
+fn benchmark_project_tmesh_stripe(
+    vertices: &[deadlib_render::TexturedMeshVertex],
+    mvp: Matrix4,
+    width: usize,
+    height: usize,
+    stripe: usize,
+    mut checksum: u64,
+) -> u64 {
+    let tint = [0.8, 0.9, 1.0, 0.75];
+    let uv_scale = [0.75, 1.25];
+    let uv_offset = [0.125, -0.25];
+    let uv_tex_shift = [0.5, -0.5];
+    'tri: for chunk in vertices.chunks_exact(3) {
+        let mut projected = [ScreenVertexTexColor {
+            x: 0.0,
+            y: 0.0,
+            u: 0.0,
+            v: 0.0,
+            color: [0.0; 4],
+        }; 3];
+        for i in 0..3 {
+            let p = chunk[i].pos;
+            let clip = mvp * Vector4::new(p[0], p[1], p[2], 1.0);
+            if clip.w == 0.0 {
+                continue 'tri;
+            }
+            let ndc_x = clip.x / clip.w;
+            let ndc_y = clip.y / clip.w;
+            if !ndc_x.is_finite() || !ndc_y.is_finite() {
+                continue 'tri;
+            }
+            projected[i] = ScreenVertexTexColor {
+                x: ((ndc_x + 1.0) * 0.5) * width as f32,
+                y: ((1.0 - ndc_y) * 0.5) * height as f32,
+                u: chunk[i].uv[0].mul_add(uv_scale[0], uv_offset[0])
+                    + uv_tex_shift[0] * (chunk[i].tex_matrix_scale[0] - 1.0),
+                v: chunk[i].uv[1].mul_add(uv_scale[1], uv_offset[1])
+                    + uv_tex_shift[1] * (chunk[i].tex_matrix_scale[1] - 1.0),
+                color: [
+                    chunk[i].color[0] * tint[0],
+                    chunk[i].color[1] * tint[1],
+                    chunk[i].color[2] * tint[2],
+                    chunk[i].color[3] * tint[3],
+                ],
+            };
+        }
+        for vertex in &projected {
+            checksum = benchmark_tex_color_checksum(checksum, vertex, stripe);
+        }
+    }
+    checksum
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn __benchmark_prepare_tmesh_frame(
     scratch: &mut TMeshProjectionBenchScratch,
     vertices: &[deadlib_render::TexturedMeshVertex],
     mvp: Matrix4,
     width: usize,
     height: usize,
-    stripes: usize,
-) -> u64 {
+) {
     scratch.vertices.clear();
     let _ = prepare_tmesh_vertices(
         &mut scratch.vertices,
@@ -1118,6 +1212,33 @@ pub fn __benchmark_prepare_tmesh_projections(
         width,
         height,
     );
+    std::hint::black_box(scratch.vertices.len());
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn __benchmark_visit_tmesh_stripe(scratch: &TMeshProjectionBenchScratch, stripe: usize) -> u64 {
+    std::hint::black_box(
+        scratch
+            .vertices
+            .iter()
+            .fold(stripe as u64, |checksum, vertex| {
+                benchmark_tex_color_checksum(checksum, vertex, stripe)
+            }),
+    )
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn __benchmark_prepare_tmesh_projections(
+    scratch: &mut TMeshProjectionBenchScratch,
+    vertices: &[deadlib_render::TexturedMeshVertex],
+    mvp: Matrix4,
+    width: usize,
+    height: usize,
+    stripes: usize,
+) -> u64 {
+    __benchmark_prepare_tmesh_frame(scratch, vertices, mvp, width, height);
     let mut checksum = 0_u64;
     for stripe in 0..stripes {
         for vertex in &scratch.vertices {
@@ -2073,6 +2194,7 @@ mod tests {
             &sprites,
             &cameras,
             fallback,
+            &textures,
             WIDTH,
             HEIGHT,
             &mut prepared,
@@ -2081,7 +2203,7 @@ mod tests {
             true,
         );
         assert!(!prepared_mesh.is_empty());
-        assert!(!prepared_tmesh.is_empty());
+        assert_eq!(prepared_tmesh.len(), 3);
         let current_vertices = render_prepared_stripes(
             &objects,
             &prepared,
@@ -2095,6 +2217,7 @@ mod tests {
             &sprites,
             &cameras,
             fallback,
+            &textures,
             WIDTH,
             HEIGHT,
             &mut prepared,
@@ -2392,11 +2515,29 @@ mod tests {
                         [0.2, 0.3],
                         false,
                     ),
-                    vertices: TexturedMeshVertices::Shared(textured_vertices),
+                    vertices: TexturedMeshVertices::Shared(textured_vertices.clone()),
                     geom_cache_key: INVALID_TMESH_CACHE_KEY,
                     depth_test: false,
                 },
                 TEXTURE_HANDLE,
+                BlendMode::Alpha,
+                0,
+            ),
+            render_object(
+                ObjectType::TexturedMesh {
+                    instance: TexturedMeshInstanceRaw::new(
+                        Matrix4::from_translation(Vec3::new(-45.0, 20.0, 0.0)),
+                        [0.8, 0.7, 0.9, 0.65],
+                        [0.9, 0.85],
+                        [0.03, 0.08],
+                        [0.1, 0.2],
+                        false,
+                    ),
+                    vertices: TexturedMeshVertices::Shared(textured_vertices),
+                    geom_cache_key: INVALID_TMESH_CACHE_KEY,
+                    depth_test: false,
+                },
+                MISSING_TEXTURE_HANDLE,
                 BlendMode::Alpha,
                 0,
             ),

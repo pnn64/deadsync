@@ -100,11 +100,7 @@ impl NotefieldChartView<'_> {
     }
 
     #[inline(always)]
-    pub(crate) fn cached_note_time_ns(
-        &self,
-        note_index: usize,
-        use_hold_end: bool,
-    ) -> Option<i64> {
+    pub(crate) fn cached_note_time_ns(&self, note_index: usize, use_hold_end: bool) -> Option<i64> {
         if use_hold_end {
             self.hold_end_time_cache_ns
                 .get(note_index)
@@ -298,15 +294,23 @@ fn prepare_field<S>(
 ) -> FieldLayout {
     let num_cols = frame_plan.num_cols;
     let column_reverse_percent = std::array::from_fn(|i| {
-        if i < num_cols { {
+        if i < num_cols {
+            {
                 request
                     .visual
                     .scroll
                     .reverse_percent_for_column(i, num_cols)
-            } } else { Default::default() }
+            }
+        } else {
+            Default::default()
+        }
     });
     let song_lua_column_y_offsets = std::array::from_fn(|i| {
-        if i < num_cols { song_lua_column_y_offset(request.song_lua.column_offsets, i, current_time_s) } else { Default::default() }
+        if i < num_cols {
+            song_lua_column_y_offset(request.song_lua.column_offsets, i, current_time_s)
+        } else {
+            Default::default()
+        }
     });
     field_layout(FieldLayoutRequest {
         style: request.style,

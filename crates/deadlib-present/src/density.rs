@@ -612,8 +612,7 @@ pub fn update_density_life_mesh(
     thickness: f32,
     color: [f32; 4],
 ) {
-    let Some((start, end, len, half)) =
-        density_life_mesh_window(points, offset, width, thickness)
+    let Some((start, end, len, half)) = density_life_mesh_window(points, offset, width, thickness)
     else {
         *mesh = None;
         return;
@@ -645,8 +644,7 @@ pub fn update_density_life_mesh_reusable(
     thickness: f32,
     color: [f32; 4],
 ) {
-    let Some((start, end, len, half)) =
-        density_life_mesh_window(points, offset, width, thickness)
+    let Some((start, end, len, half)) = density_life_mesh_window(points, offset, width, thickness)
     else {
         *mesh = None;
         return;
@@ -861,23 +859,11 @@ mod tests {
 
     #[test]
     fn reusable_density_life_mesh_matches_shared_mesh_and_reuses_changed_lengths() {
-        let points = [
-            [0.0, 8.0],
-            [8.0, 12.0],
-            [16.0, 6.0],
-            [24.0, 20.0],
-        ];
+        let points = [[0.0, 8.0], [8.0, 12.0], [16.0, 6.0], [24.0, 20.0]];
         let mut shared = None;
         let mut reusable = None;
 
-        update_density_life_mesh(
-            &mut shared,
-            &points,
-            0.0,
-            32.0,
-            2.0,
-            [0.5, 0.75, 1.0, 1.0],
-        );
+        update_density_life_mesh(&mut shared, &points, 0.0, 32.0, 2.0, [0.5, 0.75, 1.0, 1.0]);
         update_density_life_mesh_reusable(
             &mut reusable,
             &points,
@@ -923,27 +909,16 @@ mod tests {
     fn reusable_density_life_mesh_keeps_a_busy_previous_frame_immutable() {
         let points = [[0.0, 8.0], [12.0, 8.0], [24.0, 20.0]];
         let mut mesh = None;
-        update_density_life_mesh_reusable(
-            &mut mesh,
-            &points,
-            0.0,
-            32.0,
-            2.0,
-            [1.0; 4],
-        );
+        update_density_life_mesh_reusable(&mut mesh, &points, 0.0, 32.0, 2.0, [1.0; 4]);
         let previous = Arc::clone(mesh.as_ref().expect("life mesh"));
         let previous_vertices = previous.as_slice().to_vec();
 
-        update_density_life_mesh_reusable(
-            &mut mesh,
-            &points[..2],
-            0.0,
-            32.0,
-            2.0,
-            [0.5; 4],
-        );
+        update_density_life_mesh_reusable(&mut mesh, &points[..2], 0.0, 32.0, 2.0, [0.5; 4]);
 
-        assert!(!Arc::ptr_eq(mesh.as_ref().expect("replacement mesh"), &previous));
+        assert!(!Arc::ptr_eq(
+            mesh.as_ref().expect("replacement mesh"),
+            &previous
+        ));
         assert_mesh_matches(previous.as_slice(), &previous_vertices);
     }
 }

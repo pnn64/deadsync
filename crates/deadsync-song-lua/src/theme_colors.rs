@@ -214,7 +214,8 @@ pub fn install_theme_color_helpers(lua: &Lua, globals: &Table) -> mlua::Result<(
     globals.set(
         "GetHexColor",
         lua.create_function(|lua, args: MultiValue| {
-            let Some(index) = args.front()
+            let Some(index) = args
+                .front()
                 .cloned()
                 .and_then(read_f32)
                 .map(|value| value.trunc() as i64)
@@ -240,7 +241,11 @@ pub fn install_theme_color_helpers(lua: &Lua, globals: &Table) -> mlua::Result<(
     globals.set(
         "GetCurrentColor",
         lua.create_function(|lua, args: MultiValue| {
-            let decorative = args.front().cloned().and_then(read_boolish).unwrap_or(false);
+            let decorative = args
+                .front()
+                .cloned()
+                .and_then(read_boolish)
+                .unwrap_or(false);
             make_color_table(
                 lua,
                 palette_color(
@@ -398,7 +403,8 @@ pub fn install_theme_color_helpers(lua: &Lua, globals: &Table) -> mlua::Result<(
         globals.set(
             name,
             lua.create_function(move |lua, args: MultiValue| {
-                let color = args.front()
+                let color = args
+                    .front()
                     .cloned()
                     .and_then(read_color_value)
                     .unwrap_or([1.0, 1.0, 1.0, 1.0]);
@@ -409,7 +415,8 @@ pub fn install_theme_color_helpers(lua: &Lua, globals: &Table) -> mlua::Result<(
     globals.set(
         "HasAlpha",
         lua.create_function(|_, args: MultiValue| {
-            Ok(args.front()
+            Ok(args
+                .front()
                 .cloned()
                 .and_then(read_color_value)
                 .map(|color| color[3])
@@ -430,7 +437,8 @@ pub fn install_theme_color_helpers(lua: &Lua, globals: &Table) -> mlua::Result<(
     globals.set(
         "BoostColor",
         lua.create_function(|lua, args: MultiValue| {
-            let color = args.front()
+            let color = args
+                .front()
                 .cloned()
                 .and_then(read_color_value)
                 .unwrap_or([1.0, 1.0, 1.0, 1.0]);
@@ -441,7 +449,8 @@ pub fn install_theme_color_helpers(lua: &Lua, globals: &Table) -> mlua::Result<(
     globals.set(
         "BlendColors",
         lua.create_function(|lua, args: MultiValue| {
-            let first = args.front()
+            let first = args
+                .front()
                 .cloned()
                 .and_then(read_color_value)
                 .unwrap_or([1.0, 1.0, 1.0, 1.0]);

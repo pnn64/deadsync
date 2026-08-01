@@ -200,10 +200,19 @@ fn compose_combo<S>(
         (show && !request.options.hide_combo_explosions && !frame.milestones.is_empty())
             .then_some(frame.milestone_assets.as_ref())
             .flatten();
-    let player_color = if milestone_assets
-        .is_some() { frame.player_color } else { [1.0; 4] };
+    let player_color = if milestone_assets.is_some() {
+        frame.player_color
+    } else {
+        [1.0; 4]
+    };
     let combo_color = if show
-        && frame.miss_combo < request.style.combo_feedback.threshold && frame.combo >= request.style.combo_feedback.threshold { frame.combo_color } else { [1.0; 4] };
+        && frame.miss_combo < request.style.combo_feedback.threshold
+        && frame.combo >= request.style.combo_feedback.threshold
+    {
+        frame.combo_color
+    } else {
+        [1.0; 4]
+    };
     let field = prepared.field;
     compose_combo_feedback(
         actors,

@@ -1155,18 +1155,13 @@ pub fn drain_debounced_input_events_with(mut emit: impl FnMut(InputEvent)) -> bo
         }
         let now = Instant::now();
         let windows = debounce_windows();
-        let mut flushed = emit_due_debounce_edges_from_mut(
-            &mut states.keyboard,
-            now,
-            windows,
-            |edge| emit_input_events_from_edge(edge, &mut emit),
-        );
-        flushed |= emit_due_debounce_edges_from_mut(
-            &mut states.pad,
-            now,
-            windows,
-            |edge| emit_input_events_from_edge(edge, &mut emit),
-        );
+        let mut flushed =
+            emit_due_debounce_edges_from_mut(&mut states.keyboard, now, windows, |edge| {
+                emit_input_events_from_edge(edge, &mut emit)
+            });
+        flushed |= emit_due_debounce_edges_from_mut(&mut states.pad, now, windows, |edge| {
+            emit_input_events_from_edge(edge, &mut emit)
+        });
         flushed
     })
 }
@@ -1176,20 +1171,10 @@ pub fn drain_debounced_input_events_with(mut emit: impl FnMut(InputEvent)) -> bo
 pub fn idle_debounce_drain_legacy_for_bench() -> u64 {
     let now = Instant::now();
     let mut flushed = BENCH_LEGACY_KEYBOARD_DEBOUNCE_STATE.with(|states| {
-        emit_due_debounce_edges_from_mut(
-            &mut states.borrow_mut(),
-            now,
-            debounce_windows(),
-            |_| {},
-        )
+        emit_due_debounce_edges_from_mut(&mut states.borrow_mut(), now, debounce_windows(), |_| {})
     });
     flushed |= BENCH_LEGACY_PAD_DEBOUNCE_STATE.with(|states| {
-        emit_due_debounce_edges_from_mut(
-            &mut states.borrow_mut(),
-            now,
-            debounce_windows(),
-            |_| {},
-        )
+        emit_due_debounce_edges_from_mut(&mut states.borrow_mut(), now, debounce_windows(), |_| {})
     });
     u64::from(flushed)
 }
@@ -1714,8 +1699,7 @@ mod tests {
 
         let _guard = lock_test_guard();
         let _reset = TestReset::capture();
-        let old_window =
-            INPUT_DEBOUNCE_SECONDS_BITS.swap((0.001f32).to_bits(), Ordering::Relaxed);
+        let old_window = INPUT_DEBOUNCE_SECONDS_BITS.swap((0.001f32).to_bits(), Ordering::Relaxed);
         let _window_reset = DebounceWindowReset(old_window);
         let mut km = Keymap::default();
         km.bind(
@@ -1754,7 +1738,9 @@ mod tests {
 
         std::thread::sleep(Duration::from_millis(3));
         let mut delayed = Vec::new();
-        assert!(drain_debounced_input_events_with(|event| delayed.push(event)));
+        assert!(drain_debounced_input_events_with(
+            |event| delayed.push(event)
+        ));
         assert_eq!(
             delayed
                 .iter()

@@ -281,22 +281,23 @@ fn decode_entities(s: &str) -> String {
     let mut i = 0;
     while i < bytes.len() {
         if bytes[i] == b'&'
-            && let Some(semi) = s[i + 1..].find(';') {
-                let entity = &s[i + 1..i + 1 + semi];
-                let decoded = match entity {
-                    "amp" => Some('&'),
-                    "lt" => Some('<'),
-                    "gt" => Some('>'),
-                    "quot" => Some('"'),
-                    "apos" => Some('\''),
-                    _ => decode_numeric_entity(entity),
-                };
-                if let Some(ch) = decoded {
-                    out.push(ch);
-                    i += semi + 2;
-                    continue;
-                }
+            && let Some(semi) = s[i + 1..].find(';')
+        {
+            let entity = &s[i + 1..i + 1 + semi];
+            let decoded = match entity {
+                "amp" => Some('&'),
+                "lt" => Some('<'),
+                "gt" => Some('>'),
+                "quot" => Some('"'),
+                "apos" => Some('\''),
+                _ => decode_numeric_entity(entity),
+            };
+            if let Some(ch) = decoded {
+                out.push(ch);
+                i += semi + 2;
+                continue;
             }
+        }
         // Not an entity we recognize: copy the byte as a char.
         let ch_len = utf8_char_len(bytes[i]);
         let end = (i + ch_len).min(s.len());

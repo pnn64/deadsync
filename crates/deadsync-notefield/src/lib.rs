@@ -38,14 +38,14 @@ pub use display_mods::{
     GameplayModsAttackMode, GameplayModsTextParams, gameplay_mods_text,
 };
 pub use error_bar::{ErrorBarModes, error_bar_boundaries_s};
-pub use field_frame::{NotefieldFieldFrameView, NotefieldFieldResult, compose_notefield_field};
 #[cfg(feature = "bench-support")]
 #[doc(hidden)]
 pub use field_frame::{CameraWrapBench, CameraWrapBenchFrame};
-pub use frame_feedback::{NotefieldFeedbackFrameView, NotefieldLaneFeedback};
+pub use field_frame::{NotefieldFieldFrameView, NotefieldFieldResult, compose_notefield_field};
 #[cfg(feature = "bench-support")]
 #[doc(hidden)]
 pub use frame_feedback::{FeedbackLaneCacheBench, FeedbackLaneCacheBenchFrame};
+pub use frame_feedback::{NotefieldFeedbackFrameView, NotefieldLaneFeedback};
 pub use frame_hud::{
     ComboHudFrame, CounterHudFrame, ErrorBarHudFrame, JudgmentHudFrame, MiniHudFrame,
     NotefieldHudComposeResult, NotefieldHudFrameView, TapJudgmentHudFrame, compose_notefield_hud,
@@ -97,14 +97,14 @@ pub use song_lua::{
     SongLuaPlayerTransformRequest, song_lua_note_model_draw, song_lua_player_skew_x_matrix,
     song_lua_player_skew_y_matrix, song_lua_player_transform_matrix, song_lua_player_y_fold_actor,
 };
-pub use transforms::{
-    TornadoBounds, clamp_rounded_i16, mod_percent_key, quantize_centi_i32, quantize_centi_u32,
-};
 #[cfg(feature = "bench-support")]
 #[doc(hidden)]
 pub use transforms::{
     CommonNoteTransformBench, CommonNoteTransformBenchFrame, LaneVisualCacheBench,
     LaneVisualCacheBenchFrame,
+};
+pub use transforms::{
+    TornadoBounds, clamp_rounded_i16, mod_percent_key, quantize_centi_i32, quantize_centi_u32,
 };
 
 pub(crate) use actor_builder::{
@@ -251,23 +251,22 @@ mod tests {
         fill_gameplay_lane_effects, fill_lane_col_offsets, find_first_displayed_beat,
         find_last_displayed_beat, for_each_visible_hold_index, for_each_visible_note_index,
         gameplay_mods_text, gameplay_visual_effect_params, held_miss_zoom,
-        hold_body_bottom_for_tail_cap,
-        hold_body_segment_budget, hold_draw_span, hold_glow_color, hold_head_part_for_roll,
-        hold_indicator_column_x, hold_overlaps_visible_window, hold_parts_for_note_type,
-        hold_segment_pose, hold_strip_actor, hold_strip_glow_actor, hold_strip_quad,
-        hold_strip_row_3d, hold_tail_cap_bounds, hud_layout_ys, hud_y, itg_actor_glow_alpha,
-        itg_actor_rotation_z, judgment_actor_zoom, judgment_tilt_rotation_deg,
-        maybe_mirror_uv_horiz_for_reverse_flipped, mine_hides_after_resolution, mine_part,
-        mod_divisor, mod_percent_key, move_col_extra, note_itg_row, note_world_z_for_bumpy,
-        note_x_extra, note_x_offset, notefield_view_proj, offset_center, player_metric_y,
-        push_transform_parts, quantize_centi_i32, quantize_centi_u32, quantize_step,
-        receptor_row_center, rgba8, scale_cap_to_arrow, scale_effect_size, scale_sprite_to_arrow,
-        share_actor_range, signed_effect_active, sm_scale, smoothstep01,
-        song_time_ns_delta_seconds, song_time_ns_to_seconds, stream_segment_index_exclusive_end,
-        stream_segment_index_inclusive_end, tap_judgment_rows, tap_part_for_note_type,
-        tap_replacement_head, timing_window_from_num, tiny_spacing_scale, tipsy_y_extra,
-        top_cap_rotation_deg, tornado_x_extra, translated_uv_rect, visual_arrow_effect_zoom,
-        visual_confusion_rotation_deg, visual_effect_params_for_col,
+        hold_body_bottom_for_tail_cap, hold_body_segment_budget, hold_draw_span, hold_glow_color,
+        hold_head_part_for_roll, hold_indicator_column_x, hold_overlaps_visible_window,
+        hold_parts_for_note_type, hold_segment_pose, hold_strip_actor, hold_strip_glow_actor,
+        hold_strip_quad, hold_strip_row_3d, hold_tail_cap_bounds, hud_layout_ys, hud_y,
+        itg_actor_glow_alpha, itg_actor_rotation_z, judgment_actor_zoom,
+        judgment_tilt_rotation_deg, maybe_mirror_uv_horiz_for_reverse_flipped,
+        mine_hides_after_resolution, mine_part, mod_divisor, mod_percent_key, move_col_extra,
+        note_itg_row, note_world_z_for_bumpy, note_x_extra, note_x_offset, notefield_view_proj,
+        offset_center, player_metric_y, push_transform_parts, quantize_centi_i32,
+        quantize_centi_u32, quantize_step, receptor_row_center, rgba8, scale_cap_to_arrow,
+        scale_effect_size, scale_sprite_to_arrow, share_actor_range, signed_effect_active,
+        sm_scale, smoothstep01, song_time_ns_delta_seconds, song_time_ns_to_seconds,
+        stream_segment_index_exclusive_end, stream_segment_index_inclusive_end, tap_judgment_rows,
+        tap_part_for_note_type, tap_replacement_head, timing_window_from_num, tiny_spacing_scale,
+        tipsy_y_extra, top_cap_rotation_deg, tornado_x_extra, translated_uv_rect,
+        visual_arrow_effect_zoom, visual_confusion_rotation_deg, visual_effect_params_for_col,
         visual_hold_body_needs_z_buffer, visual_note_rotation_z, visual_pulse_inner_zoom,
         visual_pulse_zoom_for_y, visual_tiny_zoom, visual_use_legacy_hold_sprites,
         zmod_broken_run_counter_text, zmod_broken_run_end, zmod_broken_run_segment,
@@ -3895,8 +3894,10 @@ mod tests {
 
     #[test]
     fn visible_note_window_uses_itg_rows_not_dense_rows() {
-        let notes = [test_note_at_dense_row(0.0, 0),
-            test_note_at_dense_row(4.0, 1)];
+        let notes = [
+            test_note_at_dense_row(0.0, 0),
+            test_note_at_dense_row(4.0, 1),
+        ];
         let note_indices = vec![0usize, 1usize];
         let note_itg_rows = notes.iter().map(note_itg_row).collect::<Vec<_>>();
         let mut visited = Vec::new();
@@ -3914,8 +3915,10 @@ mod tests {
 
     #[test]
     fn visible_note_window_clamps_negative_track_rows() {
-        let notes = [test_note_at_dense_row(-1.0, 0),
-            test_note_at_dense_row(0.0, 1)];
+        let notes = [
+            test_note_at_dense_row(-1.0, 0),
+            test_note_at_dense_row(0.0, 1),
+        ];
         let note_indices = vec![0usize, 1usize];
         let note_itg_rows = notes.iter().map(note_itg_row).collect::<Vec<_>>();
         let mut visited = Vec::new();

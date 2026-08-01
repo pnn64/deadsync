@@ -2170,9 +2170,10 @@ pub fn set_actor_texture_from_path_methods(
     };
     for method_name in method_names {
         if let Value::String(path) = call_table_method(source, method_name)?
-            && set_actor_texture_from_path(actor, &path.to_str()?)? {
-                return Ok(true);
-            }
+            && set_actor_texture_from_path(actor, &path.to_str()?)?
+        {
+            return Ok(true);
+        }
     }
     Ok(false)
 }
@@ -3568,9 +3569,11 @@ pub fn install_actor_transform_methods(lua: &Lua, actor: &Table) -> mlua::Result
             let actor = actor.clone();
             move |_, args: MultiValue| {
                 if let Some(value) = method_arg(&args, 0).cloned().and_then(read_f32)
-                    && value.is_finite() && value > 0.0 {
-                        actor.set("__songlua_update_rate", value)?;
-                    }
+                    && value.is_finite()
+                    && value > 0.0
+                {
+                    actor.set("__songlua_update_rate", value)?;
+                }
                 Ok(actor.clone())
             }
         })?,

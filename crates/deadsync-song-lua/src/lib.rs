@@ -1899,10 +1899,11 @@ pub fn sprite_image_frame_size(
 ) -> Option<(f32, f32)> {
     let (mut width, mut height) = texture_size?;
     if (animate || song_lua_valid_sprite_state_index(state_index).is_some())
-        && let Some((cols, rows)) = sheet_dims {
-            width /= cols.max(1) as f32;
-            height /= rows.max(1) as f32;
-        }
+        && let Some((cols, rows)) = sheet_dims
+    {
+        width /= cols.max(1) as f32;
+        height /= rows.max(1) as f32;
+    }
     Some((width, height))
 }
 

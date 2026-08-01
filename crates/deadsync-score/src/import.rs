@@ -62,9 +62,11 @@ pub fn music_rate_from_modifiers(modifiers: &str) -> f32 {
             continue;
         }
         if let Ok(rate) = num.parse::<f32>()
-            && rate.is_finite() && rate > 0.0 {
-                return rate;
-            }
+            && rate.is_finite()
+            && rate > 0.0
+        {
+            return rate;
+        }
     }
     1.0
 }

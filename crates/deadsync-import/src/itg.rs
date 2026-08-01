@@ -281,9 +281,10 @@ fn read_simply_love(dir: &Path) -> HashMap<String, String> {
     let mut ini = SimpleIni::new();
     if let Some(path) = find_case_insensitive(dir, "Simply Love UserPrefs.ini")
         && ini.load(&path).is_ok()
-            && let Some(section) = ini.get_section("Simply Love") {
-                return section.clone();
-            }
+        && let Some(section) = ini.get_section("Simply Love")
+    {
+        return section.clone();
+    }
     HashMap::new()
 }
 
