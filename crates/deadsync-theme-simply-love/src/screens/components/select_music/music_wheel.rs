@@ -104,6 +104,23 @@ fn pack_header_text_x(is_series_header: bool, is_child_pack: bool) -> f32 {
     }
 }
 
+fn pack_header_color(
+    original_index: usize,
+    is_series_header: bool,
+    color_pack_headers: bool,
+    pack_color_indices: Option<&[usize]>,
+) -> [f32; 4] {
+    if is_series_header || !color_pack_headers {
+        [1.0, 1.0, 1.0, 1.0]
+    } else {
+        let color_index = pack_color_indices
+            .and_then(|indices| indices.get(original_index))
+            .copied()
+            .unwrap_or(original_index);
+        color::simply_love_rgba(color_index as i32)
+    }
+}
+
 #[inline(always)]
 fn song_select_bg_path(song: &SongData, mode: SelectMusicSongSelectBgMode) -> Option<&PathBuf> {
     match mode {
@@ -676,6 +693,7 @@ pub struct MusicWheelParams<'a> {
     pub selection_animation_timer: f32,
     pub selection_animation_beat: f32,
     pub color_pack_headers: bool,
+    pub pack_color_indices: Option<&'a [usize]>,
     pub song_box_color: Option<[f32; 4]>,
     pub song_text_color: Option<[f32; 4]>,
     pub song_text_color_overrides: Option<&'a HashMap<usize, [f32; 4]>>,
@@ -830,11 +848,12 @@ pub fn push(actors: &mut Vec<Actor>, p: MusicWheelParams) {
                         pack_header_text_x(is_series_header, is_child_pack) - sl_shift;
                     let mut bg_col = col_pack_header_box();
                     bg_col[3] *= section_bg_alpha;
-                    let header_color = if p.color_pack_headers {
-                        color::simply_love_rgba(*original_index as i32)
-                    } else {
-                        [1.0, 1.0, 1.0, 1.0]
-                    };
+                    let header_color = pack_header_color(
+                        *original_index,
+                        is_series_header,
+                        p.color_pack_headers,
+                        p.pack_color_indices,
+                    );
                     let show_new_badge = pack_key.is_some()
                         && p.color_pack_headers
                         && p.new_pack_names.is_some_and(|new_packs| {
@@ -1545,9 +1564,9 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
 mod tests {
     use super::{
         chart_for_preferred_or_nearest_standard, choose_itl_wheel_score, itl_fetch_flags,
-        itl_rank_color, itl_wheel_mode_for_sides, lua_badge_submit_allowed, pack_header_text_x,
-        preferred_chart_indices, runtime_slot_requests, song_select_bg_path, srpg_rate_color,
-        visible_song_select_bg_paths, visible_song_select_bg_paths_match,
+        itl_rank_color, itl_wheel_mode_for_sides, lua_badge_submit_allowed, pack_header_color,
+        pack_header_text_x, preferred_chart_indices, runtime_slot_requests, song_select_bg_path,
+        srpg_rate_color, visible_song_select_bg_paths, visible_song_select_bg_paths_match,
     };
     use crate::config::{
         SelectMusicItlRankMode, SelectMusicItlWheelMode, SelectMusicSongSelectBgMode,
@@ -1652,6 +1671,25 @@ mod tests {
         assert_eq!(pack_header_text_x(false, false), 74.0);
         assert_eq!(pack_header_text_x(true, false), 74.0);
         assert_eq!(pack_header_text_x(false, true), 84.0);
+    }
+
+    #[test]
+    fn series_header_text_stays_white_without_shifting_pack_colors() {
+        let color_indices = [8, 1, 6, 3, 10, 5, 2, 11, 0, 7, 4, 9];
+        for index in 0..12 {
+            assert_eq!(
+                pack_header_color(index, true, true, Some(&color_indices)),
+                [1.0, 1.0, 1.0, 1.0]
+            );
+            assert_eq!(
+                pack_header_color(index, false, true, Some(&color_indices)),
+                color::simply_love_rgba(color_indices[index] as i32)
+            );
+        }
+        assert_eq!(
+            pack_header_color(3, false, false, Some(&color_indices)),
+            [1.0, 1.0, 1.0, 1.0]
+        );
     }
 
     #[test]

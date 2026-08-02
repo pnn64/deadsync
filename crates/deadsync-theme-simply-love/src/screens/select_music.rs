@@ -1564,6 +1564,7 @@ pub struct State {
     cached_standard_chart_ixs: [Option<usize>; NUM_STANDARD_DIFFICULTIES],
     wheel_preferred_chart_ixs: FxHashMap<usize, music_wheel::WheelPreferredChartIndices>,
     pack_total_seconds_by_index: Vec<f64>,
+    pack_color_indices: Vec<usize>,
     song_has_edit_ptrs: HashSet<usize>,
     pack_sync_prefs: HashMap<String, SyncPref>,
     new_pack_names: HashSet<String>,
@@ -2347,7 +2348,6 @@ fn build_series_grouped_entries(
     });
 
     let mut entries = Vec::with_capacity(group_entries.len().saturating_add(top_level.len()));
-    let mut series_color_index = 0;
     for entry in top_level {
         match entry {
             SeriesTopLevel::Pack(pack) => push_series_pack(&mut entries, pack, None),
@@ -2363,15 +2363,14 @@ fn build_series_grouped_entries(
                     .count();
                 entries.push(MusicWheelEntry::PackHeader {
                     name: name.clone(),
-                    // ITGmania assigns parent sections their own rotating
-                    // section color, independent of their child pack colors.
-                    original_index: series_color_index,
+                    // Simply Love inherits one white parent-section color;
+                    // child packs keep their original song-group indices.
+                    original_index: 0,
                     banner_path,
                     song_count,
                     pack_key: None,
                     parent_series: Some(name.clone()),
                 });
-                series_color_index += 1;
                 for pack in packs {
                     push_series_pack(&mut entries, pack, Some(&name));
                 }
@@ -2379,6 +2378,18 @@ fn build_series_grouped_entries(
         }
     }
     entries
+}
+
+fn song_group_color_indices(packs: &[SongPack]) -> Vec<usize> {
+    // ITGmania assigns SongGroupColor from the case-sensitive std::map that
+    // holds physical group folders, before applying pack.ini SortTitle.
+    let mut group_order = (0..packs.len()).collect::<Vec<_>>();
+    group_order.sort_by(|&left, &right| packs[left].group_name.cmp(&packs[right].group_name));
+    let mut color_indices = vec![0; packs.len()];
+    for (color_index, pack_index) in group_order.into_iter().enumerate() {
+        color_indices[pack_index] = color_index;
+    }
+    color_indices
 }
 
 fn single_header_song_entries(
@@ -3169,6 +3180,7 @@ pub fn init(init_view: SelectMusicInitView) -> State {
     let mut scanned_pack_names = Vec::with_capacity(total_packs);
     let mut pack_sync_prefs = HashMap::with_capacity(total_packs);
     let mut pack_total_seconds_by_index = vec![0.0_f64; total_packs];
+    let pack_color_indices = song_group_color_indices(song_cache);
     let mut song_has_edit_ptrs = HashSet::with_capacity(total_songs);
     let mut wheel_preferred_chart_ixs =
         FxHashMap::with_capacity_and_hasher(total_songs, Default::default());
@@ -3532,6 +3544,7 @@ pub fn init(init_view: SelectMusicInitView) -> State {
         cached_standard_chart_ixs: [None; NUM_STANDARD_DIFFICULTIES],
         wheel_preferred_chart_ixs,
         pack_total_seconds_by_index,
+        pack_color_indices,
         song_has_edit_ptrs,
         pack_sync_prefs,
         new_pack_names,
@@ -3772,6 +3785,7 @@ pub fn init_placeholder() -> State {
         cached_standard_chart_ixs: [None; NUM_STANDARD_DIFFICULTIES],
         wheel_preferred_chart_ixs: FxHashMap::default(),
         pack_total_seconds_by_index: Vec::new(),
+        pack_color_indices: Vec::new(),
         song_has_edit_ptrs: HashSet::new(),
         pack_sync_prefs: HashMap::new(),
         new_pack_names: HashSet::new(),
@@ -13705,6 +13719,7 @@ pub fn push_actors(
                 state.sort_mode,
                 WheelSortMode::Series | WheelSortMode::Group
             ),
+            pack_color_indices: Some(&state.pack_color_indices),
             song_box_color: None,
             song_text_color: None,
             song_text_color_overrides: None,
@@ -17420,19 +17435,22 @@ mod tests {
     }
 
     #[test]
-    fn series_parent_uses_its_own_palette_index() {
+    fn series_parent_preserves_child_pack_palette_indices() {
         let packs = [
             test_pack("Pack A", "ITG Series"),
             test_pack("Pack B", "ITG Series"),
         ];
         let entries = super::build_series_grouped_entries(&test_entries(), &packs);
-        let series = entries.iter().find(|entry| entry.is_series_header());
-
         assert!(matches!(
-            series,
+            entries.iter().find(|entry| entry.is_series_header()),
+            Some(super::MusicWheelEntry::PackHeader { song_count: 3, .. })
+        ));
+        assert!(matches!(
+            entries.iter().find(|entry| {
+                matches!(entry, super::MusicWheelEntry::PackHeader { name, .. } if name == "Pack A")
+            }),
             Some(super::MusicWheelEntry::PackHeader {
                 original_index: 0,
-                song_count: 3,
                 ..
             })
         ));
@@ -17445,6 +17463,32 @@ mod tests {
                 ..
             })
         ));
+    }
+
+    #[test]
+    fn song_group_colors_follow_itgmania_case_sensitive_group_map_order() {
+        let packs = [
+            test_pack_with_group(
+                "East Coast Stamina 10.5 - Lower Raw Output",
+                "A Raw Output",
+                "East Coast Stamina",
+            ),
+            test_pack_with_group(
+                "East Coast Stamina 10 - Lower",
+                "B Lower",
+                "East Coast Stamina",
+            ),
+            test_pack_with_group("East Coast Stamina 10 - Mid", "C Mid", "East Coast Stamina"),
+            test_pack_with_group(
+                "East Coast Stamina 6.5 - Upper",
+                "D Upper",
+                "East Coast Stamina",
+            ),
+            test_pack_with_group("East Coast Stamina 7", "E Seven", "East Coast Stamina"),
+            test_pack_with_group("ECS13 - Lower Marathon", "F ECS13", "East Coast Stamina"),
+        ];
+
+        assert_eq!(super::song_group_color_indices(&packs), [3, 1, 2, 4, 5, 0]);
     }
 
     #[test]

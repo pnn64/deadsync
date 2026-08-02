@@ -2418,6 +2418,7 @@ pub fn push_actors(
             selection_animation_timer: state.selection_animation_timer,
             selection_animation_beat,
             color_pack_headers: true,
+            pack_color_indices: None,
             song_box_color: None,
             song_text_color: Some(COURSE_WHEEL_SONG_TEXT_COLOR),
             song_text_color_overrides: Some(&state.course_text_color_overrides),
