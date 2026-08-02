@@ -8,6 +8,7 @@ use crate::screens::components::gameplay::score_counter::{
 };
 use crate::screens::components::gameplay::{gameplay_stats, notefield, step_stats_gifs};
 use crate::screens::components::shared::banner as shared_banner;
+pub use crate::screens::components::shared::heart_rate::{HeartRatePlayerView, HeartRateView};
 use crate::screens::components::shared::lobby_hud;
 use crate::screens::components::shared::screen_bar::{self, AvatarParams, ScreenBarParams};
 use crate::screens::{Screen, ThemeEffect};
@@ -673,18 +674,6 @@ pub struct SmxSensorPanelView {
 pub struct SmxSensorPadView {
     pub fsr: bool,
     pub panels: [SmxSensorPanelView; SMX_SENSOR_PANEL_COUNT],
-}
-
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct HeartRatePlayerView {
-    pub configured: bool,
-    pub connected: bool,
-    pub bpm: Option<u16>,
-}
-
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct HeartRateView {
-    pub players: [HeartRatePlayerView; MAX_PLAYERS],
 }
 
 // One dense notefield frame's reusable actor envelope. Reserving this at

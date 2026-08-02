@@ -2451,6 +2451,12 @@ impl App {
             frame_config.machine_enable_heart_rate_monitors,
             self.state.screens.current_screen == CurrentScreen::PlayerOptions,
         );
+        if self.state.screens.current_screen == CurrentScreen::SelectMusic {
+            crate::heart_rate::refresh_select_music(
+                &mut self.state.screens.select_music_state,
+                frame_config.machine_enable_heart_rate_monitors,
+            );
+        }
 
         let mut upload_us: u32 = 0;
         let mut draw_us: u32 = 0;

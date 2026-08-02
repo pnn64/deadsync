@@ -13,8 +13,8 @@ use crate::screens::components::{
         lobby_overlay, music_wheel, screen_bars, select_music_menu, select_pane, step_artist_bar,
     },
     shared::{
-        banner as shared_banner, gs_scorebox, lobby_hud, mode_pads, profile_boxes, test_input,
-        timers, transitions, visual_style_bg,
+        banner as shared_banner, gs_scorebox, heart_rate, lobby_hud, mode_pads, profile_boxes,
+        test_input, timers, transitions, visual_style_bg,
     },
 };
 use crate::screens::pad_config;
@@ -1391,6 +1391,7 @@ pub struct State {
     pub current_graph_mesh_p2: Option<Arc<[MeshVertex]>>,
     pub session_elapsed: f32,
     pub gameplay_elapsed: f32,
+    heart_rate_view: heart_rate::HeartRateView,
     displayed_chart_p1: Option<DisplayedChart>,
     displayed_chart_p2: Option<DisplayedChart>,
     step_artist_cycle_base: f32,
@@ -3513,6 +3514,7 @@ pub fn init(init_view: SelectMusicInitView) -> State {
         music_wheel_moved: false,
         session_elapsed: 0.0,
         gameplay_elapsed: 0.0,
+        heart_rate_view: heart_rate::HeartRateView::default(),
         prev_selected_index: 0,
         time_since_selection_change: 0.0,
         lobby_last_joined_code: None,
@@ -3752,6 +3754,7 @@ pub fn init_placeholder() -> State {
         music_wheel_moved: false,
         session_elapsed: 0.0,
         gameplay_elapsed: 0.0,
+        heart_rate_view: heart_rate::HeartRateView::default(),
         prev_selected_index: 0,
         time_since_selection_change: 0.0,
         lobby_last_joined_code: None,
@@ -3779,6 +3782,10 @@ pub fn init_placeholder() -> State {
         pack_sync_prefs: HashMap::new(),
         new_pack_names: HashSet::new(),
     }
+}
+
+pub fn set_heart_rate_view(state: &mut State, view: heart_rate::HeartRateView) {
+    state.heart_rate_view = view;
 }
 
 #[inline(always)]
@@ -12474,6 +12481,129 @@ fn push_flat_breakdown_child(
     out.push(actor);
 }
 
+fn push_heart_rates(
+    actors: &mut Vec<Actor>,
+    view: heart_rate::HeartRateView,
+    elapsed: f32,
+    solo_side: profile_data::PlayerSide,
+    is_versus: bool,
+    chart_info_cx: f32,
+    panel_w: f32,
+    single_pattern_y: f32,
+) {
+    if !is_wide() {
+        return;
+    }
+    let slots = [
+        Some((
+            if is_versus {
+                profile_data::PlayerSide::P1
+            } else {
+                solo_side
+            },
+            if is_versus {
+                screen_center_y() + 23.0
+            } else {
+                single_pattern_y
+            },
+        )),
+        is_versus.then_some((profile_data::PlayerSide::P2, screen_center_y() + 111.0)),
+    ];
+    let panel_left = chart_info_cx - panel_w * 0.5;
+    // The BPM text extends to the right of the heart, so offset the anchor to
+    // center the complete three-digit readout within the left gutter.
+    let x = (panel_left * 0.5 - 11.0).max(12.0);
+    for (side, y) in slots.into_iter().flatten() {
+        let reading = view.players[profile_data::player_side_index(side)];
+        if reading.configured && reading.connected {
+            heart_rate::push(actors, reading, elapsed, x, y, 0.8, 121);
+        }
+    }
+}
+
+#[cfg(test)]
+mod select_heart_rate_tests {
+    use super::push_heart_rates;
+    use crate::screens::components::shared::heart_rate::{HeartRatePlayerView, HeartRateView};
+    use deadlib_present::actors::Actor;
+    use deadlib_present::space::{ortho_for_window, screen_center_x};
+    use deadsync_profile::PlayerSide;
+
+    const CONNECTED: HeartRatePlayerView = HeartRatePlayerView {
+        configured: true,
+        connected: true,
+        bpm: Some(108),
+    };
+
+    #[test]
+    fn connected_monitor_renders_left_of_wide_pattern_panel() {
+        let _ = ortho_for_window(768, 480);
+        let mut actors = Vec::new();
+        let chart_info_cx = screen_center_x() - 187.0;
+        push_heart_rates(
+            &mut actors,
+            HeartRateView {
+                players: [CONNECTED, HeartRatePlayerView::default()],
+            },
+            1.0,
+            PlayerSide::P1,
+            false,
+            chart_info_cx,
+            286.0,
+            351.0,
+        );
+
+        assert_eq!(actors.len(), 2);
+        let Actor::Sprite { offset, .. } = &actors[0] else {
+            panic!("heart-rate readout should start with its heart sprite");
+        };
+        assert!((offset[0] - 16.0).abs() < 0.001);
+        assert!(offset[0] < chart_info_cx - 286.0 * 0.5);
+    }
+
+    #[test]
+    fn monitor_stays_hidden_on_four_three_and_when_disconnected() {
+        let mut actors = Vec::new();
+        let view = HeartRateView {
+            players: [CONNECTED, HeartRatePlayerView::default()],
+        };
+        let _ = ortho_for_window(640, 480);
+        push_heart_rates(
+            &mut actors,
+            view,
+            1.0,
+            PlayerSide::P1,
+            false,
+            138.0,
+            276.0,
+            351.0,
+        );
+        assert!(actors.is_empty());
+
+        let _ = ortho_for_window(854, 480);
+        let disconnected = HeartRateView {
+            players: [
+                HeartRatePlayerView {
+                    connected: false,
+                    ..CONNECTED
+                },
+                HeartRatePlayerView::default(),
+            ],
+        };
+        push_heart_rates(
+            &mut actors,
+            disconnected,
+            1.0,
+            PlayerSide::P1,
+            false,
+            240.0,
+            286.0,
+            351.0,
+        );
+        assert!(actors.is_empty());
+    }
+}
+
 pub fn push_actors(
     actors: &mut Vec<Actor>,
     state: &State,
@@ -13462,6 +13592,16 @@ pub fn push_actors(
             }
         }
     }
+    push_heart_rates(
+        actors,
+        state.heart_rate_view,
+        state.session_elapsed,
+        solo_side,
+        is_versus,
+        chart_info_cx,
+        panel_w,
+        single_pattern_y,
+    );
 
     // Steps Display List
     let lst_cx = screen_center_x() - 26.0;

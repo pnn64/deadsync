@@ -1031,10 +1031,8 @@ fn draw_player_heart_rate_preview(actors: &mut Vec<Actor>, rc: &RowCtx, player_i
     let mut rgba = color::decorative_rgba(player_color_index(rc.fc.state, player_idx));
     rgba[3] = if reading.connected { rc.a } else { rc.a * 0.45 };
     let bpm = reading.bpm.unwrap_or(0);
-    let pulse = crate::screens::components::gameplay::gameplay_stats::heart_pulse_scale(
-        rc.fc.state.preview_time,
-        bpm,
-    );
+    let pulse =
+        crate::screens::components::shared::heart_rate::pulse_scale(rc.fc.state.preview_time, bpm);
     let center_x = rc.fc.preview_x[player_idx];
     let heart_width = 22.0 * pulse;
     let heart_height = 18.7 * pulse;
@@ -1044,7 +1042,7 @@ fn draw_player_heart_rate_preview(actors: &mut Vec<Actor>, rc: &RowCtx, player_i
         diffuse(rgba[0], rgba[1], rgba[2], rgba[3]):
         z(Z_ROW_FOREGROUND + 1)
     ));
-    let text = crate::screens::components::gameplay::gameplay_stats::heart_rate_text(reading.bpm);
+    let text = crate::screens::components::shared::heart_rate::text(reading.bpm);
     actors.push(act!(text:
         font("miso"): settext(text): align(0.0, 0.5): horizalign(left):
         xy(center_x + 9.0, rc.current_row_y): zoom(1.0):

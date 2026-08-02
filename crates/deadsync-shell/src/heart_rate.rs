@@ -1,4 +1,4 @@
-use deadsync_theme_simply_love::screens::{gameplay, player_options};
+use deadsync_theme_simply_love::screens::{gameplay, player_options, select_music};
 
 /// Game-thread owner for heart-rate configuration invalidation.
 ///
@@ -76,14 +76,27 @@ pub(crate) fn refresh_player_options(state: &mut player_options::State) {
     player_options::set_heart_rate_devices(state, &devices_view());
 }
 
-pub(crate) fn refresh_gameplay(state: &mut gameplay::State) {
+fn readings_view() -> gameplay::HeartRateView {
     let players =
         deadsync_heart_rate::player_readings().map(|reading| gameplay::HeartRatePlayerView {
             configured: reading.configured,
             connected: reading.connected,
             bpm: reading.bpm,
         });
-    gameplay::set_heart_rate_view(state, gameplay::HeartRateView { players });
+    gameplay::HeartRateView { players }
+}
+
+pub(crate) fn refresh_gameplay(state: &mut gameplay::State) {
+    gameplay::set_heart_rate_view(state, readings_view());
+}
+
+pub(crate) fn refresh_select_music(state: &mut select_music::State, enabled: bool) {
+    let view = if enabled {
+        readings_view()
+    } else {
+        gameplay::HeartRateView::default()
+    };
+    select_music::set_heart_rate_view(state, view);
 }
 
 #[cfg(test)]

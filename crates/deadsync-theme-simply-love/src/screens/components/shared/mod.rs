@@ -3,6 +3,7 @@ pub mod ffmpeg_overlay;
 pub mod frame_stats_overlay;
 pub mod gamepad_overlay;
 pub mod gs_scorebox;
+pub mod heart_rate;
 pub mod loading_bar;
 pub mod lobby_hud;
 pub mod mode_pads;

@@ -6,7 +6,7 @@ use crate::screens::components::gameplay::score_counter::{
     ScoreCounterParams, prewarm_score_counter_layout, push_score_counter,
 };
 use crate::screens::components::gameplay::step_stats_gifs;
-use crate::screens::components::shared::gs_scorebox;
+use crate::screens::components::shared::{gs_scorebox, heart_rate};
 use crate::screens::gameplay::{self as gameplay_screen, State};
 use crate::step_stats as step_stats_theme;
 use crate::step_stats::{
@@ -40,14 +40,6 @@ const TIME_PREWARM_CAP_S: u32 = 600;
 const PEAK_NPS_GRAPH_PAD: f32 = 4.0;
 const PEAK_NPS_ALPHA: f32 = 0.75;
 const DISABLED_WINDOW_RGBA: [f32; 4] = color::JUDGMENT_FA_PLUS_WHITE_EVAL_DIM_RGBA;
-const HEART_RATE_ZONE_RGBA: [[f32; 4]; 5] = [
-    color::rgba_hex("#5CE087"),
-    color::rgba_hex("#FFFF00"),
-    color::rgba_hex("#FF9F1C"),
-    color::rgba_hex("#FF6B6B"),
-    color::rgba_hex("#FF3030"),
-];
-
 thread_local! {
     static PADDED_NUM_CACHE: RefCell<TextCache<(u32, u8)>> = RefCell::new(text_cache_with_capacity(2048));
     static PADDED_DIM_CACHE: RefCell<TextCache<(u32, u8)>> = RefCell::new(text_cache_with_capacity(2048));
@@ -58,14 +50,12 @@ thread_local! {
     static GAME_TIME_WIDTH_CACHE: RefCell<HashMap<(u32, u8), f32, FxBuildHasher>> =
         RefCell::new(HashMap::with_capacity_and_hasher(1024, FxBuildHasher));
     static LIVE_TIMING_PAIR_CACHE: RefCell<TextCache<(i32, i32)>> = RefCell::new(text_cache_with_capacity(4096));
-    static HEART_RATE_TEXT_CACHE: RefCell<TextCache<u16>> = RefCell::new(text_cache_with_capacity(256));
     static STR_REF_CACHE: RefCell<SharedStrCache> = RefCell::new(HashMap::with_capacity(512));
 }
 
 static DIGIT_TEXT: LazyLock<[Arc<str>; 10]> =
     LazyLock::new(|| ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"].map(Arc::<str>::from));
 static SLASH_TEXT: LazyLock<Arc<str>> = LazyLock::new(|| Arc::<str>::from("/"));
-static HEART_RATE_UNKNOWN_TEXT: LazyLock<Arc<str>> = LazyLock::new(|| Arc::<str>::from("--"));
 static LIVE_TIMING_LABELS: LazyLock<[Arc<str>; 3]> = LazyLock::new(|| {
     [
         Arc::<str>::from("Mean (64n/All [ms])"),
@@ -1057,71 +1047,6 @@ fn step_stats_pane_layout(
     })
 }
 
-fn cached_heart_rate_text(bpm: u16) -> Arc<str> {
-    // Owner: render thread. Lifetime: session. Capacity: 512 readings. Misses
-    // only format one tiny integer; the cache saturates without pruning or
-    // destructor work on gameplay frames.
-    cached_text(&HEART_RATE_TEXT_CACHE, bpm, 512, || bpm.to_string())
-}
-
-pub(crate) fn heart_rate_text(bpm: Option<u16>) -> Arc<str> {
-    bpm.map(cached_heart_rate_text)
-        .unwrap_or_else(|| Arc::clone(&HEART_RATE_UNKNOWN_TEXT))
-}
-
-pub(crate) fn heart_pulse_scale(elapsed: f32, bpm: u16) -> f32 {
-    if bpm == 0 || !elapsed.is_finite() {
-        return 1.0;
-    }
-    let period = 60.0 / f32::from(bpm);
-    let phase = elapsed.rem_euclid(period) / period;
-    if phase < 0.12 {
-        1.0 + 0.20 * (1.0 - phase / 0.12)
-    } else if (0.18..0.30).contains(&phase) {
-        1.0 + 0.09 * (1.0 - (phase - 0.18) / 0.12)
-    } else {
-        1.0
-    }
-}
-
-fn heart_rate_zone_color(bpm: u16) -> [f32; 4] {
-    HEART_RATE_ZONE_RGBA[match bpm {
-        ..=119 => 0,
-        120..=139 => 1,
-        140..=159 => 2,
-        160..=179 => 3,
-        180.. => 4,
-    }]
-}
-
-#[cfg(test)]
-mod heart_rate_tests {
-    use super::{HEART_RATE_ZONE_RGBA, heart_pulse_scale, heart_rate_zone_color};
-
-    #[test]
-    fn heart_pulse_repeats_at_the_reported_rate() {
-        let period = 60.0 / 120.0;
-        assert!((heart_pulse_scale(0.0, 120) - heart_pulse_scale(period, 120)).abs() < 0.0001);
-        assert!(heart_pulse_scale(0.0, 120) > heart_pulse_scale(0.10, 120));
-    }
-
-    #[test]
-    fn missing_rate_keeps_the_heart_still() {
-        assert_eq!(heart_pulse_scale(10.0, 0), 1.0);
-        assert_eq!(heart_pulse_scale(f32::NAN, 120), 1.0);
-    }
-
-    #[test]
-    fn heart_rate_colors_cover_twenty_bpm_zones() {
-        assert_eq!(heart_rate_zone_color(100), HEART_RATE_ZONE_RGBA[0]);
-        assert_eq!(heart_rate_zone_color(120), HEART_RATE_ZONE_RGBA[1]);
-        assert_eq!(heart_rate_zone_color(140), HEART_RATE_ZONE_RGBA[2]);
-        assert_eq!(heart_rate_zone_color(160), HEART_RATE_ZONE_RGBA[3]);
-        assert_eq!(heart_rate_zone_color(180), HEART_RATE_ZONE_RGBA[4]);
-        assert_eq!(heart_rate_zone_color(200), HEART_RATE_ZONE_RGBA[4]);
-    }
-}
-
 pub fn push_heart_rates(actors: &mut Vec<Actor>, state: &State, playfield_center_x: f32) {
     let elapsed = state.gameplay.total_elapsed_in_screen();
     for player_idx in 0..state.num_players() {
@@ -1139,27 +1064,7 @@ pub fn push_heart_rates(actors: &mut Vec<Actor>, state: &State, playfield_center
         };
         let x = layout.sidepane_center_x + x_sign * 94.0 * layout.banner_data_zoom;
         let y = layout.sidepane_center_y - 37.0 * layout.banner_data_zoom;
-        let alpha = if reading.connected { 1.0 } else { 0.45 };
-        let bpm = reading.bpm.unwrap_or(0);
-        let pulse = heart_pulse_scale(elapsed, bpm);
-        let heart_width = 24.0 * layout.banner_data_zoom * pulse;
-        let heart_height = 20.4 * layout.banner_data_zoom * pulse;
-        let heart_rgba = HEART_RATE_ZONE_RGBA[4];
-        let text_rgba = reading
-            .bpm
-            .map(heart_rate_zone_color)
-            .unwrap_or(color::JUDGMENT_FA_PLUS_WHITE_RGBA);
-        let text = heart_rate_text(reading.bpm);
-        actors.push(act!(sprite("heart.png"):
-            align(0.5, 0.5): xy(x, y): zoomto(heart_width, heart_height):
-            diffuse(heart_rgba[0], heart_rgba[1], heart_rgba[2], alpha): z(72)
-        ));
-        actors.push(act!(text:
-            font("miso"): settext(text): align(0.0, 0.5): horizalign(left):
-            xy(x + 16.0 * layout.banner_data_zoom, y):
-            zoom(2.0 * layout.banner_data_zoom):
-            diffuse(text_rgba[0], text_rgba[1], text_rgba[2], alpha): z(72)
-        ));
+        heart_rate::push(actors, reading, elapsed, x, y, layout.banner_data_zoom, 72);
     }
 }
 
