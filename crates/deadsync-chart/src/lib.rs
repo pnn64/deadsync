@@ -4,7 +4,8 @@ pub mod notes;
 pub mod song;
 
 pub use chart::{
-    ArrowStats, ChartData, ChartDisplayBpm, GameplayChartData, StaminaCounts, TechCounts,
+    ArrowStats, ChartData, ChartDisplayBpm, GameplayChartData, MatrixRatingInput, StaminaCounts,
+    TechCounts,
 };
 pub use song::{
     STANDARD_DIFFICULTY_COUNT, STANDARD_DIFFICULTY_NAMES, SongBackgroundChange,

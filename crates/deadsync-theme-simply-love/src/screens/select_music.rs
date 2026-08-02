@@ -12006,6 +12006,7 @@ fn bench_folder_stats_song(index: usize) -> Arc<SongData> {
             stamina_counts: deadsync_chart::StaminaCounts::default(),
             total_streams: 0,
             matrix_rating: 0.0,
+            matrix_profile: Vec::new(),
             max_nps: 0.0,
             sn_detailed_breakdown: String::new(),
             sn_partial_breakdown: String::new(),
@@ -12772,13 +12773,18 @@ pub fn push_actors(
             } else {
                 c.max_nps
             };
+            let scaled_matrix_rating = deadsync_simfile::matrix::matrix_rating_at_rate(
+                c.matrix_rating,
+                &c.matrix_profile,
+                music_rate,
+            );
             let peak = cached_chart_info_text(
                 presentation.chart_info_peak_nps,
                 presentation.chart_info_effective_bpm,
                 presentation.chart_info_matrix_rating,
                 c.meter,
                 scaled_peak_nps,
-                c.matrix_rating,
+                scaled_matrix_rating,
             );
             // Match Simply Love's minimization loop (0 -> 3) based on rendered width.
             let bd_text = asset_manager
@@ -14312,6 +14318,29 @@ mod tests {
             timestamp: Instant::now(),
             host_nanos: 0,
         }
+    }
+
+    #[test]
+    fn chart_info_formats_rate_scaled_peak_nps_and_matrix_rating() {
+        let profile = [deadsync_chart::MatrixRatingInput {
+            effective_bpm: 180.0,
+            measures: 32,
+        }];
+        let rate = 1.25f32;
+        let matrix_rating = deadsync_simfile::matrix::matrix_rating_at_rate(10.0, &profile, rate);
+        let text = super::cached_chart_info_text(
+            true,
+            false,
+            true,
+            11,
+            10.0 * f64::from(rate),
+            matrix_rating,
+        );
+
+        assert_eq!(
+            text.as_ref(),
+            format!("PNPS: 12.5 | MR: {matrix_rating:.2}")
+        );
     }
 
     fn song_search_query(state: &super::State) -> Option<&str> {

@@ -66,6 +66,7 @@ fn chart(difficulty: &str, hash: &str) -> ChartData {
         stamina_counts: Default::default(),
         total_streams: 0,
         matrix_rating: 0.0,
+        matrix_profile: Vec::new(),
         max_nps: 0.0,
         sn_detailed_breakdown: String::new(),
         sn_partial_breakdown: String::new(),

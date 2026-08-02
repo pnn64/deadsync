@@ -538,6 +538,7 @@ mod tests {
             stamina_counts: StaminaCounts::default(),
             total_streams: 0,
             matrix_rating: 0.0,
+            matrix_profile: Vec::new(),
             max_nps: 0.0,
             sn_detailed_breakdown: String::new(),
             sn_partial_breakdown: String::new(),

@@ -6,6 +6,7 @@ pub mod cache;
 pub mod changes;
 pub mod course;
 pub mod event_intro;
+pub mod matrix;
 pub mod media;
 pub mod notes;
 pub mod playlist;

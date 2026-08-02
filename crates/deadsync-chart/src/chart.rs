@@ -61,6 +61,12 @@ pub struct TechCounts {
     pub doublesteps: u32,
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct MatrixRatingInput {
+    pub effective_bpm: f64,
+    pub measures: usize,
+}
+
 #[derive(Clone, Debug)]
 pub struct ChartData {
     pub chart_type: String,
@@ -80,6 +86,7 @@ pub struct ChartData {
     pub stamina_counts: StaminaCounts,
     pub total_streams: u32,
     pub matrix_rating: f64,
+    pub matrix_profile: Vec<MatrixRatingInput>,
     pub max_nps: f64,
     pub sn_detailed_breakdown: String,
     pub sn_partial_breakdown: String,

@@ -1,9 +1,9 @@
 use crate::song::SONG_ANALYSIS_MONO_THRESHOLD;
 use bincode::{Decode, Encode};
 use deadsync_chart::{
-    ArrowStats, ChartData, ChartDisplayBpm, GameplayChartData, SongBackgroundChange,
-    SongBackgroundChangeTarget, SongBackgroundLuaChange, SongData, SongForegroundChange,
-    SongForegroundLuaChange, StaminaCounts, TechCounts, notes::ParsedNote,
+    ArrowStats, ChartData, ChartDisplayBpm, GameplayChartData, MatrixRatingInput,
+    SongBackgroundChange, SongBackgroundChangeTarget, SongBackgroundLuaChange, SongData,
+    SongForegroundChange, SongForegroundLuaChange, StaminaCounts, TechCounts, notes::ParsedNote,
 };
 use deadsync_core::note::NoteType;
 use deadsync_rules::judgment::HOLD_SCORE_HELD;
@@ -23,8 +23,9 @@ use twox_hash::XxHash64;
 
 use crate::song::{ParseSongOptions, parse_song_data_file};
 
-pub const SONG_CACHE_VERSION: u8 = 12;
+pub const SONG_CACHE_VERSION: u8 = 13;
 pub const SONG_CACHE_MAGIC: [u8; 8] = *b"DSCACHE1";
+const MAX_SONG_CACHE_HEADER_BYTES: usize = 64 * 1024 * 1024;
 
 #[derive(Debug)]
 pub enum SongCacheWriteError {
@@ -158,6 +159,30 @@ impl From<CachedTechCounts> for TechCounts {
             jacks: counts.jacks,
             brackets: counts.brackets,
             doublesteps: counts.doublesteps,
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Copy, Encode, Decode, PartialEq)]
+pub struct CachedMatrixInput {
+    pub effective_bpm: f64,
+    pub measures: usize,
+}
+
+impl From<rssp::matrix::MatrixRatingInput> for CachedMatrixInput {
+    fn from(input: rssp::matrix::MatrixRatingInput) -> Self {
+        Self {
+            effective_bpm: input.effective_bpm,
+            measures: input.measures,
+        }
+    }
+}
+
+impl From<CachedMatrixInput> for MatrixRatingInput {
+    fn from(input: CachedMatrixInput) -> Self {
+        Self {
+            effective_bpm: input.effective_bpm,
+            measures: input.measures,
         }
     }
 }
@@ -663,6 +688,7 @@ pub struct SerializableChartData {
     pub stamina_counts: CachedStaminaCounts,
     pub total_streams: u32,
     pub matrix_rating: f64,
+    pub matrix_profile: Vec<CachedMatrixInput>,
     pub max_nps: f64,
     pub sn_detailed_breakdown: String,
     pub sn_partial_breakdown: String,
@@ -798,6 +824,7 @@ pub struct CachedChartMeta {
     pub stamina_counts: CachedStaminaCounts,
     pub total_streams: u32,
     pub matrix_rating: f64,
+    pub matrix_profile: Vec<CachedMatrixInput>,
     pub max_nps: f64,
     pub sn_detailed_breakdown: String,
     pub sn_partial_breakdown: String,
@@ -1035,6 +1062,7 @@ pub fn build_chart_meta(
         stamina_counts: chart.stamina_counts.into(),
         total_streams: chart.total_streams,
         matrix_rating: chart.matrix_rating,
+        matrix_profile: chart.matrix_profile.into_iter().map(Into::into).collect(),
         max_nps: chart.max_nps,
         sn_detailed_breakdown: chart.sn_detailed_breakdown,
         sn_partial_breakdown: chart.sn_partial_breakdown,
@@ -1089,6 +1117,7 @@ pub fn build_cached_chart_meta(
         stamina_counts: chart.stamina_counts,
         total_streams: chart.total_streams,
         matrix_rating: chart.matrix_rating,
+        matrix_profile: chart.matrix_profile.clone(),
         max_nps: chart.max_nps,
         sn_detailed_breakdown: chart.sn_detailed_breakdown.clone(),
         sn_partial_breakdown: chart.sn_partial_breakdown.clone(),
@@ -1128,6 +1157,7 @@ pub fn build_chart_meta_from_cache(chart: CachedChartMeta) -> ChartData {
         stamina_counts: chart.stamina_counts.into(),
         total_streams: chart.total_streams,
         matrix_rating: chart.matrix_rating,
+        matrix_profile: chart.matrix_profile.into_iter().map(Into::into).collect(),
         max_nps: chart.max_nps,
         sn_detailed_breakdown: chart.sn_detailed_breakdown,
         sn_partial_breakdown: chart.sn_partial_breakdown,
@@ -2129,14 +2159,27 @@ fn load_cached_song_base(cache_path: &Path) -> Option<(CachedSong, u64)> {
         return None;
     }
     let header_len = u64::from_le_bytes(prefix[8..16].try_into().ok()?);
+    let file_len = file.metadata().ok()?.len();
+    if header_len == 0
+        || header_len > MAX_SONG_CACHE_HEADER_BYTES as u64
+        || header_len > file_len.saturating_sub(16)
+    {
+        return None;
+    }
     let header_len_usize = usize::try_from(header_len).ok()?;
     let mut buffer = vec![0u8; header_len_usize];
     if file.read_exact(&mut buffer).is_err() {
         return None;
     }
-    let Ok((cached_song, _)) =
-        bincode::decode_from_slice::<CachedSong, _>(&buffer, bincode::config::standard())
-    else {
+    // `cache_version` is the first encoded field. Reject incompatible layouts
+    // before bincode can interpret their variable-length fields.
+    if buffer.first().copied() != Some(SONG_CACHE_VERSION) {
+        return None;
+    }
+    let Ok((cached_song, _)) = bincode::decode_from_slice::<CachedSong, _>(
+        &buffer,
+        bincode::config::standard().with_limit::<MAX_SONG_CACHE_HEADER_BYTES>(),
+    ) else {
         return None;
     };
 
@@ -2510,6 +2553,61 @@ mod tests {
     }
 
     #[test]
+    fn matrix_profile_survives_song_cache_round_trip() {
+        let root = test_dir("matrix-profile-round-trip");
+        let simfile = root.join("song.ssc");
+        let cache_path = root.join("cache.bin");
+        fs::write(&simfile, b"#TITLE:Matrix;").unwrap();
+        let mut data = cached_song(&simfile);
+        let mut chart = test_serializable_chart("dance-single", "Challenge", 0, None);
+        chart.matrix_rating = 12.34;
+        chart.matrix_profile = vec![CachedMatrixInput {
+            effective_bpm: 225.0,
+            measures: 48,
+        }];
+        data.charts = vec![chart];
+
+        write_song_cache_file(&cache_path, &data, 0.0).unwrap();
+        let cached = load_cached_song(&simfile, &cache_path, false).unwrap();
+        let song = build_song_meta_from_cache(cached.data);
+
+        assert_eq!(song.charts[0].matrix_rating, 12.34);
+        assert_eq!(
+            song.charts[0].matrix_profile,
+            vec![MatrixRatingInput {
+                effective_bpm: 225.0,
+                measures: 48,
+            }]
+        );
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn old_cache_version_is_rejected_before_header_decode() {
+        let root = test_dir("old-version-header");
+        let cache_path = root.join("cache.bin");
+        let encoded_header = [
+            SONG_CACHE_VERSION - 1,
+            253,
+            0xff,
+            0xff,
+            0xff,
+            0xff,
+            0xff,
+            0xff,
+        ];
+        let mut file = fs::File::create(&cache_path).unwrap();
+        file.write_all(&SONG_CACHE_MAGIC).unwrap();
+        file.write_all(&(encoded_header.len() as u64).to_le_bytes())
+            .unwrap();
+        file.write_all(&encoded_header).unwrap();
+        drop(file);
+
+        assert!(load_cached_song_base(&cache_path).is_none());
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
     fn gameplay_cache_rejects_stale_directory_when_verifying() {
         let root = test_dir("gameplay-stale-directory-verified");
         let simfile = root.join("song.ssc");
@@ -2703,6 +2801,7 @@ mod tests {
             },
             total_streams: 0,
             matrix_rating: 0.0,
+            matrix_profile: Vec::new(),
             max_nps: 0.0,
             sn_detailed_breakdown: String::new(),
             sn_partial_breakdown: String::new(),
