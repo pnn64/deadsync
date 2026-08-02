@@ -5080,6 +5080,7 @@ impl App {
     ) -> (Vec<Actor>, [f32; 4]) {
         const CLEAR: [f32; 4] = [0.03, 0.03, 0.03, 1.0];
         let mut screen_alpha_multiplier = 1.0;
+        let mut menu_exit_elapsed = None;
 
         let is_actor_fade_screen = is_actor_fade_screen(self.state.screens.current_screen);
 
@@ -5091,7 +5092,16 @@ impl App {
                 TransitionState::ActorsFadeOut {
                     elapsed, duration, ..
                 } => {
-                    screen_alpha_multiplier = 1.0 - (elapsed / duration).clamp(0.0, 1.0);
+                    if self.state.screens.current_screen == CurrentScreen::Menu {
+                        menu_exit_elapsed = Some(elapsed);
+                    } else {
+                        screen_alpha_multiplier = 1.0 - (elapsed / duration).clamp(0.0, 1.0);
+                    }
+                }
+                TransitionState::FadingOut { elapsed, .. }
+                    if self.state.screens.current_screen == CurrentScreen::Menu =>
+                {
+                    menu_exit_elapsed = Some(elapsed);
                 }
                 _ => {}
             }
@@ -5110,6 +5120,7 @@ impl App {
                     &self.state.screens.menu_state,
                     update_tag.as_deref(),
                     screen_alpha_multiplier,
+                    menu_exit_elapsed,
                     visual_policy,
                 );
             }
@@ -5383,31 +5394,21 @@ impl App {
         }
         self.append_gameplay_offset_prompt_actors(&mut actors);
 
+        let menu_splash_elapsed = if self.state.screens.current_screen == CurrentScreen::Menu {
+            match &self.state.shell.transition {
+                TransitionState::FadingOut { elapsed, .. }
+                | TransitionState::ActorsFadeOut { elapsed, .. } => Some(*elapsed),
+                _ => None,
+            }
+        } else {
+            None
+        };
+
         match &self.state.shell.transition {
             TransitionState::FadingOut { .. } => {
                 let (out_actors, _) =
                     self.get_out_transition_for_screen(self.state.screens.current_screen);
                 actors.extend(out_actors);
-            }
-            TransitionState::ActorsFadeOut { target, .. } => {
-                // Special case: Menu -> SelectColor / Menu -> Options should keep the
-                // visual-style background bright and only fade UI, but still play the splash.
-                if self.state.screens.current_screen == CurrentScreen::Menu
-                    && (*target == CurrentScreen::SelectProfile
-                        || *target == CurrentScreen::SelectColor
-                        || *target == CurrentScreen::Options)
-                {
-                    let config = config::get();
-                    let splash = screens::components::menu::menu_splash::build(
-                        self.state.screens.menu_state.active_color_index,
-                        &visual_styles::for_style_and_variant(
-                            config.visual_style,
-                            config.srpg_variant,
-                        )
-                        .effects,
-                    );
-                    actors.extend(splash);
-                }
             }
             TransitionState::FadingIn { .. } => {
                 let (in_actors, _) =
@@ -5415,6 +5416,14 @@ impl App {
                 actors.extend(in_actors);
             }
             _ => {}
+        }
+
+        if let Some(elapsed) = menu_splash_elapsed {
+            actors.extend(screens::components::menu::menu_splash::build(
+                self.state.screens.menu_state.active_color_index,
+                &visual_policy.assets.effects,
+                elapsed,
+            ));
         }
 
         self.append_screenshot_overlay_actors(&mut actors, Instant::now());

@@ -6,7 +6,7 @@ use deadsync_theme_simply_love::screens::SimplyLoveScreen as Screen;
 use std::path::PathBuf;
 
 const FADE_OUT_DURATION: f32 = 0.4;
-const MENU_TO_SELECT_COLOR_OUT_DURATION: f32 = 1.0;
+const MENU_OUT_DURATION: f32 = 1.0;
 
 pub struct TransitionMusicPaths {
     pub menu: PathBuf,
@@ -341,12 +341,8 @@ pub fn actor_fade_out_transition(
     select_color_duration: f32,
     select_profile_duration: f32,
 ) -> TransitionState {
-    let duration = if from == Screen::Menu
-        && matches!(
-            target,
-            Screen::SelectProfile | Screen::SelectColor | Screen::Options
-        ) {
-        MENU_TO_SELECT_COLOR_OUT_DURATION
+    let duration = if from == Screen::Menu {
+        MENU_OUT_DURATION
     } else if from == Screen::SelectColor {
         select_color_duration
     } else if from == Screen::SelectProfile {
@@ -676,9 +672,13 @@ mod tests {
     }
 
     #[test]
-    fn transition_constructors_keep_existing_fade_policy() {
+    fn transition_constructors_keep_theme_fade_policy() {
         assert!(matches!(
             actor_fade_out_transition(Screen::Menu, Screen::Options, 0.2, 0.3),
+            TransitionState::ActorsFadeOut { duration: 1.0, .. }
+        ));
+        assert!(matches!(
+            actor_fade_out_transition(Screen::Menu, Screen::ProfileLoad, 0.2, 0.3),
             TransitionState::ActorsFadeOut { duration: 1.0, .. }
         ));
         assert!(matches!(
@@ -815,7 +815,7 @@ mod tests {
 
         let actor = navigation_transition_effect_plan(
             Screen::Menu,
-            Screen::Options,
+            Screen::ProfileLoad,
             &TransitionState::Idle,
         );
         assert_eq!(
@@ -823,7 +823,7 @@ mod tests {
             NavigationTransitionEffectPlan {
                 start: NavigationTransitionStart::ActorFade {
                     from: Screen::Menu,
-                    target: Screen::Options,
+                    target: Screen::ProfileLoad,
                 },
                 clear_exit_intent: true,
             }

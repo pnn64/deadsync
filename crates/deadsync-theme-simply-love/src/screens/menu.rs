@@ -4,7 +4,6 @@ use crate::assets::{FontRole, machine_font_key};
 // Screen navigation is handled in app
 use crate::screens::components::menu::logo::{self, LogoParams};
 use crate::screens::components::menu::menu_list::{self};
-use crate::screens::components::menu::menu_splash;
 use crate::screens::components::shared::{screen_bar, transitions, visual_style_bg};
 use crate::screens::input as screen_input;
 use crate::screens::{Screen, ThemeEffect};
@@ -25,6 +24,9 @@ use deadlib_present::space::screen_center_x;
 /* ---------------------------- transitions ---------------------------- */
 const TRANSITION_IN_DURATION: f32 = 0.5;
 const TRANSITION_OUT_DURATION: f32 = 1.0;
+const BRAND_EXIT_DURATION: f32 = 0.65;
+const ROW_EXIT_DELAY: f32 = 0.075;
+const ROW_EXIT_DURATION: f32 = 0.18;
 
 const NORMAL_COLOR_HEX: &str = "#888888";
 
@@ -155,23 +157,30 @@ pub fn in_transition() -> (Vec<Actor>, f32) {
     transitions::fade_in_black(TRANSITION_IN_DURATION, 1100)
 }
 
-pub fn out_transition(
-    active_color_index: i32,
-    visual_policy: crate::views::SimplyLoveVisualPolicyView,
-) -> (Vec<Actor>, f32) {
-    let mut actors: Vec<Actor> = Vec::new();
+pub fn out_transition() -> (Vec<Actor>, f32) {
+    // Simply Love's ScreenTitleMenu out actor only holds the screen for one
+    // second. The menu owns its actor fades and the shell adds the fly burst.
+    (Vec::new(), TRANSITION_OUT_DURATION)
+}
 
-    // Visual-style splash, matching Simply Love's ScreenTitleMenu out.lua look.
-    actors.extend(menu_splash::build(
-        active_color_index,
-        &visual_policy.assets.effects,
-    ));
+fn smooth_p(t: f32) -> f32 {
+    let t = t.clamp(0.0, 1.0);
+    if t <= 0.5 {
+        2.0 * t * t
+    } else {
+        1.0 - 2.0 * (1.0 - t) * (1.0 - t)
+    }
+}
 
-    // Full-screen fade to black behind the hearts.
-    let fade = transitions::fade_out_black_actor(TRANSITION_OUT_DURATION, 1200);
-    actors.push(fade);
+fn brand_exit_alpha(elapsed: Option<f32>) -> f32 {
+    elapsed.map_or(1.0, |t| 1.0 - smooth_p(t / BRAND_EXIT_DURATION))
+}
 
-    (actors, TRANSITION_OUT_DURATION)
+fn row_exit_alpha(index: usize, elapsed: Option<f32>) -> f32 {
+    elapsed.map_or(1.0, |t| {
+        let fade_t = (t - ROW_EXIT_DELAY * index as f32) / ROW_EXIT_DURATION;
+        1.0 - fade_t.clamp(0.0, 1.0)
+    })
 }
 
 pub fn clear_render_cache(state: &State) {
@@ -379,6 +388,7 @@ pub fn push_actors(
     state: &State,
     update_banner_tag: Option<&str>,
     alpha_multiplier: f32,
+    exit_elapsed: Option<f32>,
     visual_policy: crate::views::SimplyLoveVisualPolicyView,
 ) {
     sync_i18n_cache(state);
@@ -412,16 +422,17 @@ pub fn push_actors(
     let info2_y_tl = lp.top_margin - INFO_MARGIN_ABOVE - INFO_PX;
     let info1_y_tl = info2_y_tl - INFO_PX - INFO_GAP;
 
+    let brand_alpha = alpha_multiplier * brand_exit_alpha(exit_elapsed);
     let logo_actors = logo::build_logo_default(visual_policy.title_logo_texture_key);
     for mut actor in logo_actors {
         if let Actor::Sprite { tint, .. } = &mut actor {
-            tint[3] *= alpha_multiplier;
+            tint[3] *= brand_alpha;
         }
         actors.push(actor);
     }
 
     let mut info_color = [1.0, 1.0, 1.0, 1.0];
-    info_color[3] *= alpha_multiplier;
+    info_color[3] *= brand_alpha;
 
     actors.push(act!(text:
         align(0.5, 0.0): xy(screen_center_x(), info1_y_tl): zoom(0.8):
@@ -454,7 +465,13 @@ pub fn push_actors(
         normal_color: normal,
         font: machine_font_key(visual_policy.machine_font, FontRole::Bold),
     };
-    actors.extend(menu_list::build_vertical_menu(params));
+    for (index, mut actor) in menu_list::build_vertical_menu(params)
+        .into_iter()
+        .enumerate()
+    {
+        actor.mul_alpha(row_exit_alpha(index, exit_elapsed));
+        actors.push(actor);
+    }
 
     // --- footer bar ---
     let mut footer_fg = [1.0, 1.0, 1.0, 1.0];
@@ -570,6 +587,7 @@ pub fn get_actors(
         state,
         update_banner_tag,
         alpha_multiplier,
+        None,
         Default::default(),
     );
     actors
@@ -695,6 +713,38 @@ mod tests {
             stored_at: now,
             emitted_at: now,
         }
+    }
+
+    fn approx(actual: f32, expected: f32) {
+        assert!(
+            (actual - expected).abs() < 1.0e-5,
+            "expected {expected}, got {actual}"
+        );
+    }
+
+    #[test]
+    fn title_brand_uses_simply_love_smooth_fade() {
+        approx(brand_exit_alpha(None), 1.0);
+        approx(brand_exit_alpha(Some(0.0)), 1.0);
+        approx(brand_exit_alpha(Some(BRAND_EXIT_DURATION * 0.5)), 0.5);
+        approx(brand_exit_alpha(Some(BRAND_EXIT_DURATION)), 0.0);
+    }
+
+    #[test]
+    fn title_rows_use_simply_love_stagger() {
+        approx(row_exit_alpha(0, Some(0.0)), 1.0);
+        approx(row_exit_alpha(0, Some(ROW_EXIT_DURATION * 0.5)), 0.5);
+        approx(row_exit_alpha(0, Some(ROW_EXIT_DURATION)), 0.0);
+
+        approx(row_exit_alpha(3, Some(ROW_EXIT_DELAY * 3.0)), 1.0);
+        approx(
+            row_exit_alpha(3, Some(ROW_EXIT_DELAY * 3.0 + ROW_EXIT_DURATION * 0.5)),
+            0.5,
+        );
+        approx(
+            row_exit_alpha(3, Some(ROW_EXIT_DELAY * 3.0 + ROW_EXIT_DURATION)),
+            0.0,
+        );
     }
 
     #[test]

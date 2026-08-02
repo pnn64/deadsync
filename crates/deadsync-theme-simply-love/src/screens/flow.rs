@@ -422,21 +422,18 @@ pub const fn uses_actor_fade(screen: SimplyLoveScreen) -> bool {
             | SimplyLoveScreen::TestLights
             | SimplyLoveScreen::OverscanAdjustment
             | SimplyLoveScreen::SmxAssignPads
-            | SimplyLoveScreen::SelectProfile
             | SimplyLoveScreen::SelectColor
     )
 }
 
 /// Simply Love's exact actor-only transition pairs.
 pub const fn uses_actor_only_transition(from: SimplyLoveScreen, to: SimplyLoveScreen) -> bool {
+    if matches!(from, SimplyLoveScreen::Menu) {
+        return !matches!(to, SimplyLoveScreen::Menu);
+    }
     matches!(
         (from, to),
         (
-            SimplyLoveScreen::Menu,
-            SimplyLoveScreen::Options
-                | SimplyLoveScreen::SelectProfile
-                | SimplyLoveScreen::SelectColor
-        ) | (
             SimplyLoveScreen::Options
                 | SimplyLoveScreen::SelectProfile
                 | SimplyLoveScreen::SelectColor,
@@ -561,10 +558,16 @@ mod tests {
     #[test]
     fn actor_transition_policy_is_theme_owned() {
         assert!(uses_actor_fade(SimplyLoveScreen::Menu));
-        assert!(uses_actor_only_transition(
-            SimplyLoveScreen::Menu,
+        assert!(!uses_actor_fade(SimplyLoveScreen::SelectProfile));
+        for target in [
             SimplyLoveScreen::SelectProfile,
-        ));
+            SimplyLoveScreen::SelectColor,
+            SimplyLoveScreen::SelectStyle,
+            SimplyLoveScreen::ProfileLoad,
+            SimplyLoveScreen::SelectMusic,
+        ] {
+            assert!(uses_actor_only_transition(SimplyLoveScreen::Menu, target));
+        }
         assert!(!uses_actor_only_transition(
             SimplyLoveScreen::Gameplay,
             SimplyLoveScreen::Evaluation,

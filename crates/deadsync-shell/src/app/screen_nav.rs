@@ -420,10 +420,7 @@ impl App {
 
     pub(super) fn get_out_transition_for_screen(&self, screen: CurrentScreen) -> (Vec<Actor>, f32) {
         match screen {
-            CurrentScreen::Menu => menu::out_transition(
-                self.state.screens.menu_state.active_color_index,
-                super::simply_love_visual_policy(&config::get()),
-            ),
+            CurrentScreen::Menu => menu::out_transition(),
             CurrentScreen::Gameplay => gameplay::out_transition(),
             CurrentScreen::Practice => gameplay::out_transition(),
             CurrentScreen::Options => options::out_transition(),
