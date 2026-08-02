@@ -2126,7 +2126,7 @@ fn benchmark_chart(index: usize, chart_index: usize) -> ChartData {
         stamina_counts: StaminaCounts::default(),
         total_streams: 0,
         matrix_rating: 0.0,
-        matrix_profile: Vec::new(),
+        matrix_profile: Box::default(),
         max_nps: 0.0,
         sn_detailed_breakdown: String::new(),
         sn_partial_breakdown: String::new(),

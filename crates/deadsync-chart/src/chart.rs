@@ -86,7 +86,7 @@ pub struct ChartData {
     pub stamina_counts: StaminaCounts,
     pub total_streams: u32,
     pub matrix_rating: f64,
-    pub matrix_profile: Vec<MatrixRatingInput>,
+    pub matrix_profile: Box<[MatrixRatingInput]>,
     pub max_nps: f64,
     pub sn_detailed_breakdown: String,
     pub sn_partial_breakdown: String,

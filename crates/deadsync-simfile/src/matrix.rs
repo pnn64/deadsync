@@ -19,15 +19,18 @@ pub fn matrix_rating_at_rate(
         return base;
     }
 
-    let rating = profile.iter().fold(0.0f64, |best, input| {
+    let input_rating = |input: &MatrixRatingInput| {
         if !input.effective_bpm.is_finite() || input.effective_bpm <= 0.0 || input.measures == 0 {
-            return best;
+            return 0.0;
         }
-        best.max(rssp::matrix::get_difficulty(
-            input.effective_bpm * rate,
-            input.measures as f64,
-        ))
-    });
+        rssp::matrix::get_difficulty(input.effective_bpm * rate, input.measures as f64)
+    };
+    let rating = match profile {
+        [input] => input_rating(input),
+        inputs => inputs
+            .iter()
+            .fold(0.0f64, |best, input| best.max(input_rating(input))),
+    };
     if rating > 0.0 { rating } else { base }
 }
 

@@ -2736,7 +2736,7 @@ mod song_lookup_tests {
             stamina_counts: Default::default(),
             total_streams: 0,
             matrix_rating: 0.0,
-            matrix_profile: Vec::new(),
+            matrix_profile: Box::default(),
             max_nps: 0.0,
             sn_detailed_breakdown: String::new(),
             sn_partial_breakdown: String::new(),

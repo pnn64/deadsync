@@ -230,7 +230,12 @@ fn build_charts(
                 total_streams: chart.total_streams,
                 total_measures: chart.total_measures,
                 matrix_rating: chart.matrix_rating,
-                matrix_profile: chart.matrix_profile.into_iter().map(Into::into).collect(),
+                matrix_profile: chart
+                    .matrix_profile
+                    .iter()
+                    .copied()
+                    .map(Into::into)
+                    .collect(),
                 max_nps: chart.max_nps,
                 sn_detailed_breakdown: chart.sn_detailed_breakdown,
                 sn_partial_breakdown: chart.sn_partial_breakdown,

@@ -1213,6 +1213,100 @@ struct InfoBoxActorCache {
     children: Option<Arc<[Actor]>>,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+struct MatrixRatingCacheKey {
+    song: usize,
+    chart_ix: usize,
+    music_rate_bits: u32,
+}
+
+#[derive(Clone, Copy)]
+struct MatrixRatingCacheEntry {
+    key: MatrixRatingCacheKey,
+    rating: f64,
+}
+
+#[derive(Default)]
+struct MatrixRatingCache {
+    entries: [Option<MatrixRatingCacheEntry>; 2],
+    next: usize,
+}
+
+impl MatrixRatingCache {
+    fn resolve(&mut self, displayed: &DisplayedChart, chart: &ChartData, music_rate: f32) -> f64 {
+        let key = MatrixRatingCacheKey {
+            song: Arc::as_ptr(&displayed.song) as usize,
+            chart_ix: displayed.chart_ix,
+            music_rate_bits: music_rate.to_bits(),
+        };
+        self.resolve_key(key, chart.matrix_rating, &chart.matrix_profile, music_rate)
+    }
+
+    fn resolve_key(
+        &mut self,
+        key: MatrixRatingCacheKey,
+        base_rating: f64,
+        profile: &[deadsync_chart::MatrixRatingInput],
+        music_rate: f32,
+    ) -> f64 {
+        if let Some(entry) = self.entries.iter().flatten().find(|entry| entry.key == key) {
+            return entry.rating;
+        }
+
+        let rating =
+            deadsync_simfile::matrix::matrix_rating_at_rate(base_rating, profile, music_rate);
+        self.entries[self.next] = Some(MatrixRatingCacheEntry { key, rating });
+        self.next = (self.next + 1) % self.entries.len();
+        rating
+    }
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub struct SelectMusicMatrixRatingBench {
+    cache: RefCell<MatrixRatingCache>,
+    profile: [deadsync_chart::MatrixRatingInput; 2],
+}
+
+#[cfg(feature = "bench-support")]
+impl Default for SelectMusicMatrixRatingBench {
+    fn default() -> Self {
+        Self {
+            cache: RefCell::new(MatrixRatingCache::default()),
+            profile: [
+                deadsync_chart::MatrixRatingInput {
+                    effective_bpm: 180.0,
+                    measures: 32,
+                },
+                deadsync_chart::MatrixRatingInput {
+                    effective_bpm: 300.0,
+                    measures: 12,
+                },
+            ],
+        }
+    }
+}
+
+#[cfg(feature = "bench-support")]
+impl SelectMusicMatrixRatingBench {
+    pub fn uncached(&self, music_rate: f32) -> f64 {
+        deadsync_simfile::matrix::matrix_rating_at_rate(10.0, &self.profile, music_rate)
+    }
+
+    pub fn cached(&self, music_rate: f32) -> f64 {
+        self.cache.borrow_mut().resolve_key(
+            MatrixRatingCacheKey {
+                song: 1,
+                chart_ix: 0,
+                music_rate_bits: music_rate.to_bits(),
+            },
+            10.0,
+            &self.profile,
+            music_rate,
+        )
+    }
+}
+
 impl InfoBoxActorCache {
     fn resolve(
         &mut self,
@@ -1376,6 +1470,7 @@ pub struct State {
     pending_online: Vec<crate::SimplyLoveOnlineRequest>,
     bg: visual_style_bg::State,
     info_box_actor_cache: RefCell<InfoBoxActorCache>,
+    matrix_rating_cache: RefCell<MatrixRatingCache>,
     last_requested_banner_path: Option<PathBuf>,
     last_requested_cdtitle_path: Option<PathBuf>,
     last_requested_folder_stats_banner_path: Option<PathBuf>,
@@ -3341,6 +3436,7 @@ pub fn init(init_view: SelectMusicInitView) -> State {
         pending_online: Vec::new(),
         bg: visual_style_bg::State::new(),
         info_box_actor_cache: RefCell::new(InfoBoxActorCache::default()),
+        matrix_rating_cache: RefCell::new(MatrixRatingCache::default()),
         last_requested_banner_path: None,
         last_requested_cdtitle_path: None,
         last_requested_folder_stats_banner_path: None,
@@ -3579,6 +3675,7 @@ pub fn init_placeholder() -> State {
         pending_online: Vec::new(),
         bg: visual_style_bg::State::new(),
         info_box_actor_cache: RefCell::new(InfoBoxActorCache::default()),
+        matrix_rating_cache: RefCell::new(MatrixRatingCache::default()),
         last_requested_banner_path: None,
         last_requested_cdtitle_path: None,
         last_requested_folder_stats_banner_path: None,
@@ -12006,7 +12103,7 @@ fn bench_folder_stats_song(index: usize) -> Arc<SongData> {
             stamina_counts: deadsync_chart::StaminaCounts::default(),
             total_streams: 0,
             matrix_rating: 0.0,
-            matrix_profile: Vec::new(),
+            matrix_profile: Box::default(),
             max_nps: 0.0,
             sn_detailed_breakdown: String::new(),
             sn_partial_breakdown: String::new(),
@@ -12759,7 +12856,7 @@ pub fn push_actors(
                                 graph_key: &str,
                                 graph_mesh: Option<Arc<[MeshVertex]>>,
                                 preview_marker: Option<PreviewMarker>,
-                                chart: Option<&ChartData>| {
+                                displayed: Option<&DisplayedChart>| {
         let graph_top = graph_cy - 32.0;
         let mut push_child =
             |actor: Actor| push_flat_breakdown_child(out, actor, graph_left, graph_top, 51);
@@ -12767,17 +12864,18 @@ pub fn push_actors(
             act!(quad: align(0.0, 0.0): xy(0.0, 0.0): setsize(panel_w, graph_h): diffuse(UI_BOX_BG_COLOR[0], UI_BOX_BG_COLOR[1], UI_BOX_BG_COLOR[2], UI_BOX_BG_COLOR[3])),
         );
 
-        if let Some(c) = chart {
+        if let Some(displayed) = displayed
+            && let Some(c) = displayed.song.charts.get(displayed.chart_ix)
+        {
             let scaled_peak_nps = if music_rate.is_finite() {
                 c.max_nps * music_rate as f64
             } else {
                 c.max_nps
             };
-            let scaled_matrix_rating = deadsync_simfile::matrix::matrix_rating_at_rate(
-                c.matrix_rating,
-                &c.matrix_profile,
-                music_rate,
-            );
+            let scaled_matrix_rating = state
+                .matrix_rating_cache
+                .borrow_mut()
+                .resolve(displayed, c, music_rate);
             let peak = cached_chart_info_text(
                 presentation.chart_info_peak_nps,
                 presentation.chart_info_effective_bpm,
@@ -12879,7 +12977,7 @@ pub fn push_actors(
                     &state.current_graph_key,
                     state.current_graph_mesh.clone(),
                     preview_marker_p1,
-                    disp_chart_p1,
+                    state.displayed_chart_p1.as_ref(),
                 );
             }
             if !state.pattern_info.visible[1] {
@@ -12890,7 +12988,7 @@ pub fn push_actors(
                     &state.current_graph_key_p2,
                     state.current_graph_mesh_p2.clone(),
                     preview_marker_p2,
-                    disp_chart_p2,
+                    state.displayed_chart_p2.as_ref(),
                 );
             }
         } else {
@@ -12909,7 +13007,7 @@ pub fn push_actors(
                 &state.current_graph_key,
                 state.current_graph_mesh.clone(),
                 preview_marker_p1,
-                disp_chart_p1,
+                state.displayed_chart_p1.as_ref(),
             );
         }
     }
@@ -14341,6 +14439,43 @@ mod tests {
             text.as_ref(),
             format!("PNPS: 12.5 | MR: {matrix_rating:.2}")
         );
+    }
+
+    #[test]
+    fn matrix_rating_cache_reuses_chart_and_rate_result() {
+        let mut song = (*super::bench_folder_stats_song(0)).clone();
+        song.charts[0].matrix_rating = 10.0;
+        song.charts[0].matrix_profile = Box::new([
+            deadsync_chart::MatrixRatingInput {
+                effective_bpm: 180.0,
+                measures: 32,
+            },
+            deadsync_chart::MatrixRatingInput {
+                effective_bpm: 300.0,
+                measures: 12,
+            },
+        ]);
+        let displayed = super::DisplayedChart {
+            song: Arc::new(song),
+            chart_ix: 0,
+        };
+        let chart = &displayed.song.charts[0];
+        let mut cache = super::MatrixRatingCache::default();
+
+        let first = cache.resolve(&displayed, chart, 1.25);
+        assert_eq!(cache.next, 1);
+        assert_eq!(cache.resolve(&displayed, chart, 1.25), first);
+        assert_eq!(cache.next, 1, "cache hit should not replace an entry");
+        assert_eq!(
+            first,
+            deadsync_simfile::matrix::matrix_rating_at_rate(
+                chart.matrix_rating,
+                &chart.matrix_profile,
+                1.25,
+            )
+        );
+        assert_ne!(cache.resolve(&displayed, chart, 1.5), first);
+        assert_eq!(cache.next, 0);
     }
 
     fn song_search_query(state: &super::State) -> Option<&str> {

@@ -39,6 +39,11 @@ harness = false
 required-features = ["bench-support"]
 
 [[bench]]
+name = "select_music_matrix_rating"
+harness = false
+required-features = ["bench-support"]
+
+[[bench]]
 name = "select_music_wheel_charts"
 harness = false
 required-features = ["bench-support"]

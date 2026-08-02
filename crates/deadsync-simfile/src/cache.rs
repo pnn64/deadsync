@@ -688,7 +688,7 @@ pub struct SerializableChartData {
     pub stamina_counts: CachedStaminaCounts,
     pub total_streams: u32,
     pub matrix_rating: f64,
-    pub matrix_profile: Vec<CachedMatrixInput>,
+    pub matrix_profile: Box<[CachedMatrixInput]>,
     pub max_nps: f64,
     pub sn_detailed_breakdown: String,
     pub sn_partial_breakdown: String,
@@ -824,7 +824,7 @@ pub struct CachedChartMeta {
     pub stamina_counts: CachedStaminaCounts,
     pub total_streams: u32,
     pub matrix_rating: f64,
-    pub matrix_profile: Vec<CachedMatrixInput>,
+    pub matrix_profile: Box<[CachedMatrixInput]>,
     pub max_nps: f64,
     pub sn_detailed_breakdown: String,
     pub sn_partial_breakdown: String,
@@ -2561,10 +2561,10 @@ mod tests {
         let mut data = cached_song(&simfile);
         let mut chart = test_serializable_chart("dance-single", "Challenge", 0, None);
         chart.matrix_rating = 12.34;
-        chart.matrix_profile = vec![CachedMatrixInput {
+        chart.matrix_profile = Box::new([CachedMatrixInput {
             effective_bpm: 225.0,
             measures: 48,
-        }];
+        }]);
         data.charts = vec![chart];
 
         write_song_cache_file(&cache_path, &data, 0.0).unwrap();
@@ -2573,8 +2573,8 @@ mod tests {
 
         assert_eq!(song.charts[0].matrix_rating, 12.34);
         assert_eq!(
-            song.charts[0].matrix_profile,
-            vec![MatrixRatingInput {
+            song.charts[0].matrix_profile.as_ref(),
+            &[MatrixRatingInput {
                 effective_bpm: 225.0,
                 measures: 48,
             }]
@@ -2801,7 +2801,7 @@ mod tests {
             },
             total_streams: 0,
             matrix_rating: 0.0,
-            matrix_profile: Vec::new(),
+            matrix_profile: Box::default(),
             max_nps: 0.0,
             sn_detailed_breakdown: String::new(),
             sn_partial_breakdown: String::new(),
