@@ -1892,15 +1892,15 @@ fn build_displayed_entries(
         return all_entries.to_vec();
     }
 
-    // Simply Love parity:
-    // `OnlyShowActiveSection=true` hides every other pack when one is open,
-    // while `OnlyShowActiveParentSection` independently controls Series
-    // headers. The active pack and its active parent both remain visible.
+    // Simply Love parity: IIDX pack focus hides every inactive pack and Series
+    // header, while retaining the active pack's parent. `Hide Inactive Series`
+    // applies that parent focus one level earlier, while the Series is open.
     let show_only_active_pack = expanded_pack_name.is_some()
         && matches!(wheel_style, crate::config::SelectMusicWheelStyle::Iidx);
-    let hide_series_headers =
-        hide_inactive_series && (expanded_series_name.is_some() || expanded_pack_name.is_some());
-    let show_only_active_series = hide_inactive_series && expanded_series_name.is_some();
+    let show_only_active_series_header = show_only_active_pack
+        || (hide_inactive_series
+            && (expanded_series_name.is_some() || expanded_pack_name.is_some()));
+    let show_only_active_series_packs = hide_inactive_series && expanded_series_name.is_some();
 
     let mut new_entries = Vec::with_capacity(all_entries.len());
     let mut current_pack_key: Option<&str> = None;
@@ -1915,7 +1915,7 @@ fn build_displayed_entries(
             } if pack_key.is_none() && parent_series.is_some() => {
                 current_pack_key = None;
                 current_pack_visible = false;
-                if !hide_series_headers || expanded_series_name == Some(name.as_str()) {
+                if !show_only_active_series_header || expanded_series_name == Some(name.as_str()) {
                     new_entries.push(entry.clone());
                 }
             }
@@ -1931,7 +1931,7 @@ fn build_displayed_entries(
                     .as_deref()
                     .is_none_or(|parent| expanded_series_name == Some(parent));
                 current_pack_visible = parent_is_open
-                    && (!show_only_active_series
+                    && (!show_only_active_series_packs
                         || parent_series.as_deref() == expanded_series_name)
                     && (!show_only_active_pack || expanded_pack_name == Some(section_key));
                 if current_pack_visible {
@@ -17671,7 +17671,7 @@ mod tests {
     }
 
     #[test]
-    fn hide_inactive_series_removes_parent_series_above_loose_pack() {
+    fn iidx_pack_focus_hides_series_above_loose_pack() {
         let packs = [
             test_pack("Pack A", "ITG Series"),
             test_pack("Pack B", "ITG Series"),
@@ -17685,14 +17685,32 @@ mod tests {
         ));
         entries.push(super::MusicWheelEntry::Song(test_song("ITGAlex Song")));
 
-        let shown = build_displayed_entries(
+        let iidx_shown = build_displayed_entries(
             &entries,
             None,
             Some("ITGAlex's Compilation"),
             SelectMusicWheelStyle::Iidx,
             false,
         );
-        assert!(shown.iter().any(super::MusicWheelEntry::is_series_header));
+        assert_eq!(iidx_shown.len(), 2);
+        assert!(
+            !iidx_shown
+                .iter()
+                .any(super::MusicWheelEntry::is_series_header)
+        );
+
+        let itg_shown = build_displayed_entries(
+            &entries,
+            None,
+            Some("ITGAlex's Compilation"),
+            SelectMusicWheelStyle::Itg,
+            false,
+        );
+        assert!(
+            itg_shown
+                .iter()
+                .any(super::MusicWheelEntry::is_series_header)
+        );
 
         for wheel_style in [SelectMusicWheelStyle::Itg, SelectMusicWheelStyle::Iidx] {
             let hidden = build_displayed_entries(
@@ -17710,6 +17728,45 @@ mod tests {
                     if name == "ITGAlex's Compilation"
             ));
         }
+    }
+
+    #[test]
+    fn iidx_pack_focus_keeps_only_active_parent_when_option_off() {
+        let grouped_entries = vec![
+            header("Pack A", 0, 1, Some("Pack A")),
+            super::MusicWheelEntry::Song(test_song("Song A")),
+            header("Pack B", 1, 1, Some("Pack B")),
+            super::MusicWheelEntry::Song(test_song("Song B")),
+            header("Pack C", 2, 1, Some("Pack C")),
+            super::MusicWheelEntry::Song(test_song("Song C")),
+            header("Pack D", 3, 1, Some("Pack D")),
+            super::MusicWheelEntry::Song(test_song("Song D")),
+        ];
+        let packs = [
+            test_pack("Pack A", "Series A"),
+            test_pack("Pack B", "Series A"),
+            test_pack("Pack C", "Series B"),
+            test_pack("Pack D", "Series B"),
+        ];
+        let entries = super::build_series_grouped_entries(&grouped_entries, &packs);
+
+        let shown = build_displayed_entries(
+            &entries,
+            Some("Series A"),
+            Some("Pack A"),
+            SelectMusicWheelStyle::Iidx,
+            false,
+        );
+        let headers: Vec<_> = shown
+            .iter()
+            .filter_map(|entry| match entry {
+                super::MusicWheelEntry::PackHeader { name, .. } => Some(name.as_str()),
+                super::MusicWheelEntry::Song(_) => None,
+            })
+            .collect();
+
+        assert_eq!(headers, ["Series A", "Pack A"]);
+        assert_eq!(song_titles(&shown), ["Song A"]);
     }
 
     #[test]
