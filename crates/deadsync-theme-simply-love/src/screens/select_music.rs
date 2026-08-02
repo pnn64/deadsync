@@ -2338,10 +2338,6 @@ fn build_series_grouped_entries(
         }
     }
     for (name, mut packs) in series {
-        if packs.len() < 2 {
-            top_level.extend(packs.into_iter().map(SeriesTopLevel::Pack));
-            continue;
-        }
         packs.sort_by(|a, b| a.sort_key.cmp(&b.sort_key));
         top_level.push(SeriesTopLevel::Series { name, packs });
     }
@@ -17452,21 +17448,30 @@ mod tests {
     }
 
     #[test]
-    fn series_sort_treats_single_entry_series_as_normal_pack() {
+    fn series_sort_nests_single_entry_series() {
         let packs = [test_pack("Pack A", ""), test_pack("Pack B", "ITG Series")];
         let entries = super::build_series_grouped_entries(&test_entries(), &packs);
 
-        assert_eq!(entries.len(), test_entries().len());
-        assert!(!entries.iter().any(super::MusicWheelEntry::is_series_header));
+        assert_eq!(entries.len(), test_entries().len() + 1);
+        assert!(matches!(
+            entries.iter().find(|entry| entry.is_series_header()),
+            Some(super::MusicWheelEntry::PackHeader {
+                name,
+                song_count: 1,
+                pack_key: None,
+                parent_series: Some(parent),
+                ..
+            }) if name == "ITG Series" && parent == "ITG Series"
+        ));
         assert!(matches!(
             entries.iter().find(|entry| {
                 matches!(entry, super::MusicWheelEntry::PackHeader { name, .. } if name == "Pack B")
             }),
             Some(super::MusicWheelEntry::PackHeader {
                 pack_key: Some(_),
-                parent_series: None,
+                parent_series: Some(parent),
                 ..
-            })
+            }) if parent == "ITG Series"
         ));
     }
 
