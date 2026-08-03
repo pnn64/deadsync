@@ -841,6 +841,7 @@ pub struct ActiveHoldColumnResolution {
     pub resolution: ActiveHoldResolution,
 }
 
+#[cfg(test)]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct ActiveHoldColumnsUpdate {
     pub columns_scanned: usize,
@@ -848,6 +849,109 @@ pub struct ActiveHoldColumnsUpdate {
     pub stopped: bool,
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct MaskedActiveHoldUpdate {
+    pub remaining_mask: u8,
+    pub event_count: usize,
+    pub stopped: bool,
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn update_active_hold_columns_masked(
+    active_holds: &mut [Option<ActiveHold>],
+    active_mask: u8,
+    notes: &mut [Note],
+    inputs: &[bool; MAX_COLS],
+    num_cols: usize,
+    cols_per_player: usize,
+    num_players: usize,
+    timing_players: &[&TimingData; MAX_PLAYERS],
+    target_time_ns: SongTimeNs,
+    music_rate: f32,
+    live_autoplay: bool,
+    events: &mut [Option<ActiveHoldColumnResolution>],
+) -> MaskedActiveHoldUpdate {
+    let columns = num_cols.min(MAX_COLS).min(active_holds.len());
+    let mut pending = active_mask & input_lane_mask(columns);
+    let mut remaining_mask = pending;
+    let mut event_count = 0usize;
+    while pending != 0 {
+        let column = pending.trailing_zeros() as usize;
+        let bit = 1 << column;
+        pending &= pending - 1;
+        if event_count >= events.len() {
+            return MaskedActiveHoldUpdate {
+                remaining_mask,
+                event_count,
+                stopped: true,
+            };
+        }
+        sync_active_hold_pressed_column(active_holds, column, live_autoplay, inputs[column]);
+        let player = player_index_for_column(num_players, cols_per_player, column);
+        let resolution = integrate_active_hold_column(
+            active_holds,
+            notes,
+            column,
+            timing_players[player],
+            target_time_ns,
+            music_rate,
+        );
+        if active_holds[column].is_none() {
+            remaining_mask &= !bit;
+        }
+        if let Some(resolution) = resolution {
+            events[event_count] = Some(ActiveHoldColumnResolution { column, resolution });
+            event_count += 1;
+        }
+    }
+    MaskedActiveHoldUpdate {
+        remaining_mask,
+        event_count,
+        stopped: false,
+    }
+}
+
+pub fn collect_due_autoplay_active_hold_resolutions_masked(
+    active_holds: &mut [Option<ActiveHold>],
+    active_mask: u8,
+    num_cols: usize,
+    cutoff_time_ns: SongTimeNs,
+    events: &mut [Option<ActiveHoldColumnResolution>],
+) -> MaskedActiveHoldUpdate {
+    let columns = num_cols.min(MAX_COLS).min(active_holds.len());
+    let mut pending = active_mask & input_lane_mask(columns);
+    let mut remaining_mask = pending;
+    let mut event_count = 0usize;
+    while pending != 0 {
+        let column = pending.trailing_zeros() as usize;
+        let bit = 1 << column;
+        pending &= pending - 1;
+        if event_count >= events.len() {
+            return MaskedActiveHoldUpdate {
+                remaining_mask,
+                event_count,
+                stopped: true,
+            };
+        }
+        let Some(resolution) = active_holds[column]
+            .as_ref()
+            .and_then(|active| autoplay_due_active_hold_resolution(active, cutoff_time_ns))
+        else {
+            continue;
+        };
+        active_holds[column] = None;
+        remaining_mask &= !bit;
+        events[event_count] = Some(ActiveHoldColumnResolution { column, resolution });
+        event_count += 1;
+    }
+    MaskedActiveHoldUpdate {
+        remaining_mask,
+        event_count,
+        stopped: false,
+    }
+}
+
+#[cfg(test)]
 pub fn update_active_hold_columns(
     active_holds: &mut [Option<ActiveHold>],
     notes: &mut [Note],
@@ -893,6 +997,7 @@ pub fn update_active_hold_columns(
     }
 }
 
+#[cfg(test)]
 pub fn collect_due_autoplay_active_hold_resolutions(
     active_holds: &mut [Option<ActiveHold>],
     num_cols: usize,
@@ -1351,4 +1456,3 @@ pub fn let_go_head_beat(
         .clamp(note_beat, end_beat)
         .min(visible_beat.max(note_beat))
 }
-

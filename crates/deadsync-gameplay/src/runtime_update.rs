@@ -712,6 +712,7 @@ where
     #[inline(always)]
     pub fn set_num_players(&mut self, num_players: usize) {
         self.setup.num_players = num_players;
+        self.display.notefield_motion.mark_refresh_dirty();
     }
 
     #[inline(always)]
@@ -722,6 +723,7 @@ where
     #[inline(always)]
     pub fn set_num_cols(&mut self, num_cols: usize) {
         self.setup.num_cols = num_cols;
+        self.display.notefield_motion.mark_refresh_dirty();
     }
 
     #[inline(always)]
@@ -732,6 +734,7 @@ where
     #[inline(always)]
     pub fn set_cols_per_player(&mut self, cols_per_player: usize) {
         self.setup.cols_per_player = cols_per_player;
+        self.display.notefield_motion.mark_refresh_dirty();
     }
 
     #[inline(always)]
@@ -756,6 +759,7 @@ where
     pub fn update_profile(&mut self, player_idx: usize, update: impl FnOnce(&mut Profile)) {
         if let Some(profile) = self.profiles_runtime.profiles.get_mut(player_idx) {
             update(profile);
+            self.display.notefield_motion.mark_refresh_dirty();
         }
     }
 
@@ -803,6 +807,7 @@ where
         if !self.clock.music_rate.set_rate(rate) {
             return false;
         }
+        self.display.notefield_motion.mark_refresh_dirty();
         self.timing_runtime.player_judgment_timing = player_judgment_timing;
         let normalized = self.music_rate();
         self.timing_runtime.step_resolution_distance_ns =
@@ -1313,14 +1318,12 @@ where
 
     #[inline(always)]
     pub fn clear_active_holds(&mut self) {
-        self.hold_runtime.active_holds.fill(None);
+        self.hold_runtime.clear_active_holds();
     }
 
     #[inline(always)]
     pub fn set_active_hold(&mut self, col: usize, active_hold: Option<ActiveHold>) {
-        if let Some(slot) = self.hold_runtime.active_holds.get_mut(col) {
-            *slot = active_hold;
-        }
+        self.hold_runtime.set_active_hold(col, active_hold);
     }
 
     #[inline(always)]
@@ -1831,7 +1834,6 @@ where
         self.progress.stage.reset_for_practice();
         self.display.hold_feedback.clear();
         self.display.visual_feedback.clear();
-        self.hold_runtime.active_holds.fill(None);
         self.display.receptor_feedback.reset_for_practice();
         self.hold_runtime.reset_live_state();
         self.reset_live_input_state();

@@ -13516,9 +13516,7 @@ pub fn push_actors(
         }
         // Current BPM Display (1:1 with Simply Love)
         {
-            let base_bpm = state
-                .timing()
-                .get_bpm_for_beat(state.current_beat_display());
+            let base_bpm = state.current_bpm_display();
             let music_rate = state.music_rate();
             let rate = if music_rate.is_finite() {
                 music_rate as f64
@@ -13739,10 +13737,7 @@ pub fn push_actors(
                             // Logic Parity:
                             // velocity = -(songposition:GetCurBPS() * 0.5)
                             // if songposition:GetFreeze() or songposition:GetDelay() then velocity = 0 end
-                            let bps = state
-                                .timing()
-                                .get_bpm_for_beat(state.current_beat_display())
-                                / 60.0;
+                            let bps = state.current_bpm_display() / 60.0;
                             let velocity_x = if state.beat_phase_paused() {
                                 0.0
                             } else {
@@ -13926,10 +13921,7 @@ pub fn push_actors(
 
                         // MeterSwoosh
                         if filled_h > 0.0 && !dead {
-                            let bps = state
-                                .timing()
-                                .get_bpm_for_beat(state.current_beat_display())
-                                / 60.0;
+                            let bps = state.current_bpm_display() / 60.0;
                             let velocity_x = if state.beat_phase_paused() {
                                 0.0
                             } else {

@@ -9572,6 +9572,14 @@ mod tests {
     fn notefield_motion_state_sets_samples_and_bounds() {
         let mut state = GameplayNotefieldMotionState::default();
 
+        assert!(state.refresh_needed(120.0, false));
+        state.mark_refreshed(120.0);
+        assert!(!state.refresh_needed(120.0, false));
+        assert!(state.refresh_needed(121.0, false));
+        assert!(state.refresh_needed(120.0, true));
+        state.mark_refresh_dirty();
+        assert!(state.refresh_needed(120.0, false));
+
         assert_near(state.field_zoom(0), 1.0);
         assert_near(state.column_scroll_dir(0), 1.0);
         assert_eq!(state.scroll_speed(0), ScrollSpeedSetting::default());
@@ -12042,6 +12050,78 @@ mod tests {
         );
         assert!(active_holds[0].is_none());
         assert!(active_holds[1].is_some());
+    }
+
+    #[test]
+    fn masked_active_hold_update_visits_only_active_lanes_in_column_order() {
+        let timing = test_timing(192);
+        let timing_players = [&timing; MAX_PLAYERS];
+        let mut first = test_active_hold(NoteType::Hold, true, false, MAX_HOLD_LIFE);
+        first.note_index = 0;
+        first.end_time_ns = 100;
+        let mut second = test_active_hold(NoteType::Hold, true, false, MAX_HOLD_LIFE);
+        second.note_index = 1;
+        second.end_time_ns = 100;
+        let mut active_holds: [Option<ActiveHold>; MAX_COLS] = std::array::from_fn(|_| None);
+        active_holds[1] = Some(first);
+        active_holds[6] = Some(second);
+        let mut notes = [
+            test_note_at(NoteType::Hold, Some(test_hold()), false, 0, 0.0),
+            test_note_at(NoteType::Hold, Some(test_hold()), false, 0, 0.0),
+        ];
+        let inputs = [true; MAX_COLS];
+        let mut events = [None; MAX_COLS];
+
+        let update = update_active_hold_columns_masked(
+            &mut active_holds,
+            (1 << 1) | (1 << 6),
+            &mut notes,
+            &inputs,
+            MAX_COLS,
+            4,
+            2,
+            &timing_players,
+            100,
+            1.0,
+            false,
+            &mut events,
+        );
+
+        assert_eq!(update.remaining_mask, 0);
+        assert_eq!(update.event_count, 2);
+        assert!(!update.stopped);
+        assert_eq!(events[0].map(|event| event.column), Some(1));
+        assert_eq!(events[1].map(|event| event.column), Some(6));
+        assert!(active_holds.iter().all(Option::is_none));
+    }
+
+    #[test]
+    fn masked_autoplay_hold_update_retains_not_yet_due_lane() {
+        let mut due = test_active_hold(NoteType::Hold, true, false, MAX_HOLD_LIFE);
+        due.note_index = 3;
+        due.end_time_ns = 100;
+        let mut future = test_active_hold(NoteType::Hold, true, false, MAX_HOLD_LIFE);
+        future.note_index = 7;
+        future.end_time_ns = 200;
+        let mut active_holds: [Option<ActiveHold>; MAX_COLS] = std::array::from_fn(|_| None);
+        active_holds[2] = Some(due);
+        active_holds[5] = Some(future);
+        let mut events = [None; MAX_COLS];
+
+        let update = collect_due_autoplay_active_hold_resolutions_masked(
+            &mut active_holds,
+            (1 << 2) | (1 << 5),
+            MAX_COLS,
+            100,
+            &mut events,
+        );
+
+        assert_eq!(update.remaining_mask, 1 << 5);
+        assert_eq!(update.event_count, 1);
+        assert!(!update.stopped);
+        assert_eq!(events[0].map(|event| event.column), Some(2));
+        assert!(active_holds[2].is_none());
+        assert!(active_holds[5].is_some());
     }
 
     #[test]

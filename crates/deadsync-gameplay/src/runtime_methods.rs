@@ -88,6 +88,19 @@ where
                 travel_time,
             );
         }
+        self.display.notefield_motion.mark_refreshed(current_bpm);
+    }
+
+    #[inline(always)]
+    fn live_notefield_refresh_needed(&self, current_bpm: f32) -> bool {
+        let dynamic_motion = self.mods.attacks.cleared_for_outro
+            || (0..self.setup.num_players).any(|player| {
+                !self.mods.attacks.mask_windows[player].is_empty()
+                    || !self.mods.attacks.song_lua_ease_windows[player].is_empty()
+            });
+        self.display
+            .notefield_motion
+            .refresh_needed(current_bpm, dynamic_motion)
     }
 
     pub fn refresh_seek_dependent_state(&mut self) {
@@ -635,13 +648,20 @@ where
 
     #[inline(always)]
     pub fn settle_due_autoplay_active_holds(&mut self, cutoff_time_ns: SongTimeNs) {
+        let active_mask = self.hold_runtime.active_hold_mask();
+        if active_mask == 0 {
+            return;
+        }
         let mut events = [None; MAX_COLS];
-        let update = collect_due_autoplay_active_hold_resolutions(
+        let update = collect_due_autoplay_active_hold_resolutions_masked(
             &mut self.hold_runtime.active_holds,
+            active_mask,
             self.setup.num_cols,
             cutoff_time_ns,
             &mut events,
         );
+        self.hold_runtime
+            .set_active_hold_mask(update.remaining_mask);
         for event in events.iter().take(update.event_count).flatten() {
             self.resolve_active_hold(event.column, event.resolution);
         }
@@ -675,7 +695,7 @@ where
         ) {
             self.resolve_active_hold(event.column, event.resolution);
         }
-        start_active_hold_column(
+        let _ = start_active_hold_column(
             &mut self.hold_runtime.active_holds,
             &mut self.chart_runtime.notes,
             column,
@@ -684,6 +704,7 @@ where
             end_time_ns,
             current_time_ns,
         );
+        self.hold_runtime.sync_active_hold_col(column);
     }
 
     #[inline(always)]
@@ -694,28 +715,23 @@ where
 
         let player = self.player_for_col(column);
         let rate = self.music_rate();
-        if let Some(resolution) = integrate_active_hold_column(
+        let resolution = integrate_active_hold_column(
             &mut self.hold_runtime.active_holds,
             &mut self.chart_runtime.notes,
             column,
             &self.timing_runtime.timing_players[player],
             target_time_ns,
             rate,
-        ) {
+        );
+        self.hold_runtime.sync_active_hold_col(column);
+        if let Some(resolution) = resolution {
             self.resolve_active_hold(column, resolution);
         }
     }
 
     pub fn update_active_holds(&mut self, inputs: &[bool; MAX_COLS], current_time_ns: SongTimeNs) {
-        let columns = self
-            .setup
-            .num_cols
-            .min(MAX_COLS)
-            .min(self.hold_runtime.active_holds.len());
-        if self.hold_runtime.active_holds[..columns]
-            .iter()
-            .all(Option::is_none)
-        {
+        let active_mask = self.hold_runtime.active_hold_mask();
+        if active_mask == 0 {
             return;
         }
         let timing_players: [&_; MAX_PLAYERS] =
@@ -723,8 +739,9 @@ where
         let live_autoplay = self.live_autoplay_enabled();
         let rate = self.music_rate();
         let mut events = [None; MAX_COLS];
-        let update = update_active_hold_columns(
+        let update = update_active_hold_columns_masked(
             &mut self.hold_runtime.active_holds,
+            active_mask,
             &mut self.chart_runtime.notes,
             inputs,
             self.setup.num_cols,
@@ -736,6 +753,8 @@ where
             live_autoplay,
             &mut events,
         );
+        self.hold_runtime
+            .set_active_hold_mask(update.remaining_mask);
         for event in events.iter().take(update.event_count).flatten() {
             self.resolve_active_hold(event.column, event.resolution);
         }
@@ -1418,7 +1437,10 @@ where
                 .note_disabled(assist_sfx_generation);
         }
         refresh_active_attack_masks(self, delta_time);
-        self.refresh_live_notefield_options(self.clock.song_position.current_bpm);
+        let current_bpm = self.clock.song_position.current_bpm;
+        if self.live_notefield_refresh_needed(current_bpm) {
+            self.refresh_live_notefield_options(current_bpm);
+        }
     }
 
     pub fn run_post_input_gameplay_phases(

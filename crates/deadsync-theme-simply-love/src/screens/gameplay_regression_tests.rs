@@ -2032,8 +2032,8 @@ M000
         };
         let live_hold = active_hold(hold_index, 1.0, true);
         let live_roll = active_hold(roll_index, 0.65, false);
-        state.hold_runtime.active_holds[0] = Some(live_hold);
-        state.hold_runtime.active_holds[1] = Some(live_roll);
+        state.set_active_hold(0, Some(live_hold));
+        state.set_active_hold(1, Some(live_roll));
 
         let let_go_time_ns = deadsync_core::song_time::song_time_ns_from_seconds(2.35);
         state.handle_hold_let_go(2, dropped_index, let_go_time_ns);
@@ -2164,7 +2164,7 @@ M000
                 );
                 assert_ne!(compare_render_lists(&normal, &reverse), Ok(()));
 
-                state.hold_runtime.active_holds.fill(None);
+                state.clear_active_holds();
                 state.display.hold_feedback.clear();
                 state.clear_visual_feedback();
                 state.display.receptor_feedback.reset_for_practice();

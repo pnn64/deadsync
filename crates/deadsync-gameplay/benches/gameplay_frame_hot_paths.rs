@@ -1,9 +1,10 @@
 use deadsync_gameplay::{
-    ActiveColumnScanBench, CrossoverCueCursorBench, DisabledAssistClapBench,
-    GameplayFrameHotPathBenchOutput, IdleAttackRefreshBench, IdleHoldPhaseBench, IdleLaneScanBench,
-    IdleReceptorGlowBench, InputLaneSearchCursorBench, InputQueueDrainBench, JudgedRowCursorBench,
-    LiveNotefieldOptionsBench, OptionalFrameWorkBench, PressedLaneMaskBench, RegularCueCursorBench,
-    ResolutionDistanceCacheBench, SharedMissCutoffBench, SparseFeedbackTickBench,
+    ActiveColumnScanBench, ActiveHoldMaskBench, CrossoverCueCursorBench, DisabledAssistClapBench,
+    DisplayBpmCacheBench, GameplayFrameHotPathBenchOutput, IdleAttackRefreshBench,
+    IdleHoldPhaseBench, IdleLaneScanBench, IdleReceptorGlowBench, InputLaneSearchCursorBench,
+    InputQueueDrainBench, JudgedRowCursorBench, LiveNotefieldOptionsBench, OptionalFrameWorkBench,
+    PressedLaneMaskBench, RegularCueCursorBench, ResolutionDistanceCacheBench,
+    SharedMissCutoffBench, SparseFeedbackTickBench, StableNotefieldRefreshBench,
 };
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::hint::black_box;
@@ -248,6 +249,32 @@ fn main() {
         "8 lanes, five feedback types triggered every 257-733 frames",
         move |frame| old_feedback.old_frame(frame),
         move |frame| new_feedback.new_frame(frame),
+    );
+
+    let mut old_motion = StableNotefieldRefreshBench::default();
+    let mut new_motion = old_motion.clone();
+    run_pair(
+        "stable notefield-motion refresh",
+        "2 players and 8 lanes, with motion inputs changing every 4096 frames",
+        move |frame| old_motion.old_frame(frame),
+        move |frame| new_motion.new_frame(frame),
+    );
+
+    let mut old_active_holds = ActiveHoldMaskBench::default();
+    let mut new_active_holds = old_active_holds.clone();
+    run_pair(
+        "active-hold lane bitmask",
+        "8 lanes, with one active hold changing lane every 4096 frames",
+        move |frame| old_active_holds.old_frame(frame),
+        move |frame| new_active_holds.new_frame(frame),
+    );
+
+    let display_bpm = DisplayBpmCacheBench::default();
+    run_pair(
+        "cached gameplay display BPM",
+        "3 HUD consumers over 8192 BPM segments",
+        |frame| display_bpm.old_frame(frame),
+        |frame| display_bpm.new_frame(frame),
     );
 }
 

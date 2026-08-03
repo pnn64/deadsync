@@ -289,7 +289,8 @@ pub struct GameplayChartRuntimeState {
 
 #[derive(Clone, Debug, Default)]
 pub struct GameplayHoldRuntimeState {
-    pub active_holds: [Option<ActiveHold>; MAX_COLS],
+    active_holds: [Option<ActiveHold>; MAX_COLS],
+    active_hold_mask: u8,
     pub decaying_hold_indices: Vec<usize>,
     pub hold_decay_active: Vec<bool>,
     pub tap_miss_held_window: Vec<bool>,
@@ -301,6 +302,7 @@ impl GameplayHoldRuntimeState {
     pub fn new(notes_len: usize, decaying_hold_capacity: usize) -> Self {
         Self {
             active_holds: std::array::from_fn(|_| None),
+            active_hold_mask: 0,
             decaying_hold_indices: Vec::with_capacity(decaying_hold_capacity),
             hold_decay_active: vec![false; notes_len],
             tap_miss_held_window: vec![false; notes_len],
@@ -312,6 +314,7 @@ impl GameplayHoldRuntimeState {
     #[inline(always)]
     pub fn reset_live_state(&mut self) {
         self.active_holds.fill(None);
+        self.active_hold_mask = 0;
         self.decaying_hold_indices.clear();
         self.hold_decay_active.fill(false);
         self.tap_miss_held_window.fill(false);
@@ -322,11 +325,44 @@ impl GameplayHoldRuntimeState {
     #[inline(always)]
     pub fn clear_for_benchmark(&mut self) {
         self.active_holds.fill(None);
+        self.active_hold_mask = 0;
         self.decaying_hold_indices.clear();
         self.hold_decay_active.clear();
         self.tap_miss_held_window.clear();
         self.pending_missed_hold_resolution.clear();
         self.pending_missed_hold_indices.clear();
+    }
+
+    #[inline(always)]
+    pub fn active_hold_mask(&self) -> u8 {
+        self.active_hold_mask
+    }
+
+    #[inline(always)]
+    pub fn set_active_hold_mask(&mut self, mask: u8) {
+        self.active_hold_mask = mask;
+    }
+
+    #[inline(always)]
+    pub fn set_active_hold(&mut self, col: usize, active: Option<ActiveHold>) {
+        let Some(slot) = self.active_holds.get_mut(col) else {
+            return;
+        };
+        let present = active.is_some();
+        *slot = active;
+        set_feedback_bit(&mut self.active_hold_mask, col, present);
+    }
+
+    #[inline(always)]
+    pub fn sync_active_hold_col(&mut self, col: usize) {
+        let present = self.active_holds.get(col).is_some_and(Option::is_some);
+        set_feedback_bit(&mut self.active_hold_mask, col, present);
+    }
+
+    #[inline(always)]
+    pub fn clear_active_holds(&mut self) {
+        self.active_holds.fill(None);
+        self.active_hold_mask = 0;
     }
 }
 

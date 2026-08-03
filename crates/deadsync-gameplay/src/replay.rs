@@ -380,6 +380,8 @@ pub struct GameplayNotefieldMotionState {
     draw_distance_after_targets: [f32; MAX_PLAYERS],
     reverse_scroll: [bool; MAX_PLAYERS],
     column_scroll_dirs: [f32; MAX_COLS],
+    refresh_bpm_bits: u32,
+    refresh_dirty: bool,
 }
 
 impl Default for GameplayNotefieldMotionState {
@@ -394,6 +396,8 @@ impl Default for GameplayNotefieldMotionState {
             draw_distance_after_targets: [0.0; MAX_PLAYERS],
             reverse_scroll: [false; MAX_PLAYERS],
             column_scroll_dirs: [1.0; MAX_COLS],
+            refresh_bpm_bits: 0,
+            refresh_dirty: true,
         }
     }
 }
@@ -422,7 +426,25 @@ impl GameplayNotefieldMotionState {
             draw_distance_after_targets,
             reverse_scroll,
             column_scroll_dirs,
+            refresh_bpm_bits: 0,
+            refresh_dirty: true,
         }
+    }
+
+    #[inline(always)]
+    pub fn refresh_needed(&self, current_bpm: f32, dynamic_motion: bool) -> bool {
+        self.refresh_dirty || dynamic_motion || self.refresh_bpm_bits != current_bpm.to_bits()
+    }
+
+    #[inline(always)]
+    pub fn mark_refreshed(&mut self, current_bpm: f32) {
+        self.refresh_bpm_bits = current_bpm.to_bits();
+        self.refresh_dirty = false;
+    }
+
+    #[inline(always)]
+    pub fn mark_refresh_dirty(&mut self) {
+        self.refresh_dirty = true;
     }
 
     #[inline(always)]

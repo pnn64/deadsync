@@ -1386,3 +1386,157 @@ fn feedback_tick_output(bench: &SparseFeedbackTickBench) -> GameplayFrameHotPath
     }
     output
 }
+
+#[derive(Clone, Default)]
+pub struct StableNotefieldRefreshBench {
+    options: LiveNotefieldOptionsBench,
+    cached_phase: Option<usize>,
+}
+
+impl StableNotefieldRefreshBench {
+    pub fn old_frame(&mut self, frame: usize) -> GameplayFrameHotPathBenchOutput {
+        self.options.new_frame(frame / 4_096)
+    }
+
+    pub fn new_frame(&mut self, frame: usize) -> GameplayFrameHotPathBenchOutput {
+        let phase = frame / 4_096;
+        if self.cached_phase != Some(phase) {
+            self.cached_phase = Some(phase);
+            self.options.new_frame(phase)
+        } else {
+            live_options_output(&self.options)
+        }
+    }
+}
+
+#[derive(Clone, Default)]
+pub struct ActiveHoldMaskBench {
+    active_holds: [Option<usize>; MAX_COLS],
+    active_mask: u8,
+}
+
+impl ActiveHoldMaskBench {
+    pub fn old_frame(&mut self, frame: usize) -> GameplayFrameHotPathBenchOutput {
+        self.prepare_frame(frame);
+        let mut output = GameplayFrameHotPathBenchOutput::default();
+        let active_holds = std::hint::black_box(&self.active_holds);
+        if active_holds.iter().any(Option::is_some) {
+            for (col, active) in active_holds.iter().enumerate() {
+                if let Some(note_index) = active {
+                    record_active_hold(&mut output, col, *note_index);
+                }
+            }
+        }
+        output
+    }
+
+    pub fn new_frame(&mut self, frame: usize) -> GameplayFrameHotPathBenchOutput {
+        self.prepare_frame(frame);
+        let mut output = GameplayFrameHotPathBenchOutput::default();
+        let mut active = std::hint::black_box(self.active_mask);
+        while active != 0 {
+            let col = active.trailing_zeros() as usize;
+            active &= active - 1;
+            if let Some(note_index) = self.active_holds[col] {
+                record_active_hold(&mut output, col, note_index);
+            }
+        }
+        output
+    }
+
+    fn prepare_frame(&mut self, frame: usize) {
+        if frame.is_multiple_of(4_096) {
+            let col = frame / 4_096 % MAX_COLS;
+            if frame != 0 {
+                let previous_col = (frame / 4_096 - 1) % MAX_COLS;
+                self.active_holds[previous_col] = None;
+            }
+            self.active_holds[col] = Some(frame);
+            self.active_mask = input_lane_bit(col);
+        }
+    }
+}
+
+#[inline(always)]
+fn record_active_hold(
+    output: &mut GameplayFrameHotPathBenchOutput,
+    col: usize,
+    note_index: usize,
+) {
+    output.checksum = output.checksum.rotate_left(7)
+        ^ (col as u64).rotate_left(17)
+        ^ note_index as u64;
+    output.samples += 1;
+}
+
+#[derive(Clone)]
+pub struct DisplayBpmCacheBench {
+    timing: TimingData,
+    cached_bpms: Vec<f32>,
+}
+
+impl Default for DisplayBpmCacheBench {
+    fn default() -> Self {
+        // The standalone runner measures the range after its warmup frames.
+        const FRAMES: usize = 52_048;
+        let timing = TimingData::from_segments(
+            0.0,
+            0.0,
+            &TimingSegments {
+                bpms: (0..8_192)
+                    .map(|index| (index as f32 * 4.0, 90.0 + (index % 181) as f32))
+                    .collect(),
+                ..TimingSegments::default()
+            },
+            &[],
+        );
+        let cached_bpms = (0..FRAMES)
+            .map(|frame| timing.get_bpm_for_beat(display_bpm_bench_beat(frame)))
+            .collect();
+        Self {
+            timing,
+            cached_bpms,
+        }
+    }
+}
+
+impl DisplayBpmCacheBench {
+    pub fn old_frame(&self, frame: usize) -> GameplayFrameHotPathBenchOutput {
+        let beat = display_bpm_bench_beat(frame);
+        let mut output = GameplayFrameHotPathBenchOutput::default();
+        for pass in 0..3 {
+            record_display_bpm(
+                &mut output,
+                std::hint::black_box(self.timing.get_bpm_for_beat(beat)),
+                pass,
+            );
+        }
+        output
+    }
+
+    pub fn new_frame(&self, frame: usize) -> GameplayFrameHotPathBenchOutput {
+        let bpm = self.cached_bpms[frame % self.cached_bpms.len()];
+        let mut output = GameplayFrameHotPathBenchOutput::default();
+        for pass in 0..3 {
+            record_display_bpm(&mut output, bpm, pass);
+        }
+        output
+    }
+}
+
+#[inline(always)]
+fn display_bpm_bench_beat(frame: usize) -> f32 {
+    (frame % 32_768) as f32 + 0.25
+}
+
+#[inline(always)]
+fn record_display_bpm(
+    output: &mut GameplayFrameHotPathBenchOutput,
+    bpm: f32,
+    pass: usize,
+) {
+    output.checksum = output.checksum.rotate_left(9)
+        ^ u64::from(bpm.to_bits())
+        ^ (pass as u64).rotate_left(23);
+    output.samples += 1;
+}

@@ -1011,6 +1011,24 @@ mod runtime_regression_tests {
     }
 
     #[test]
+    fn stable_notefield_refresh_rearms_for_profile_rate_and_bpm_changes() {
+        let mut state = regression_state();
+        let bpm = state.clock.song_position.current_bpm;
+        assert!(!state.live_notefield_refresh_needed(bpm));
+
+        state.update_profile(0, |profile| profile.mini_percent = 50.0);
+        assert!(state.live_notefield_refresh_needed(bpm));
+        state.refresh_live_notefield_options(bpm);
+        assert!((state.field_zoom_for_player(0) - 0.75).abs() <= f32::EPSILON);
+        assert!(!state.live_notefield_refresh_needed(bpm));
+
+        assert!(state.set_music_rate(1.25));
+        assert!(state.live_notefield_refresh_needed(bpm));
+        state.refresh_live_notefield_options(bpm);
+        assert!(state.live_notefield_refresh_needed(bpm + 1.0));
+    }
+
+    #[test]
     fn live_input_snapshots_leave_inactive_column_capacity_empty() {
         let mut state = regression_state();
         assert_eq!(state.setup.num_cols, 4);
@@ -1488,7 +1506,7 @@ mod runtime_regression_tests {
         state.chart_runtime.hold_end_time_cache_ns[0] = Some(hold_end_ns);
         set_regression_mine(&mut state, 1, 1, ROWS_PER_BEAT as usize, hold_end_ns);
         state.players_runtime.players[0].life = 0.04;
-        state.hold_runtime.active_holds[0] = Some(ActiveHold {
+        state.set_active_hold(0, Some(ActiveHold {
             note_index: 0,
             start_time_ns: 0,
             end_time_ns: hold_end_ns,
@@ -1497,7 +1515,7 @@ mod runtime_regression_tests {
             is_pressed: true,
             life: MAX_HOLD_LIFE,
             last_update_time_ns: 0,
-        });
+        }));
 
         assert!(state.hit_mine(1, 1, 0));
         assert_eq!(
@@ -1710,7 +1728,7 @@ mod runtime_regression_tests {
             .as_mut()
             .expect("test hold")
             .life = 0.25;
-        state.hold_runtime.active_holds[0] = Some(ActiveHold {
+        state.set_active_hold(0, Some(ActiveHold {
             note_index: 0,
             start_time_ns: 0,
             end_time_ns: hold_end_ns,
@@ -1719,7 +1737,7 @@ mod runtime_regression_tests {
             is_pressed: false,
             life: 0.25,
             last_update_time_ns: 0,
-        });
+        }));
 
         let target_ns = song_time_ns_from_seconds(0.2);
         state.integrate_active_hold_to_time(0, target_ns);
@@ -1746,7 +1764,7 @@ mod runtime_regression_tests {
             test_hold(0, ROWS_PER_BEAT as usize + 12, ROWS_PER_BEAT as usize * 2);
         state.chart_runtime.hold_end_time_cache_ns[0] = Some(previous_end_ns);
         state.chart_runtime.hold_end_time_cache_ns[1] = Some(next_end_ns);
-        state.hold_runtime.active_holds[0] = Some(ActiveHold {
+        state.set_active_hold(0, Some(ActiveHold {
             note_index: 0,
             start_time_ns: 0,
             end_time_ns: previous_end_ns,
@@ -1755,7 +1773,7 @@ mod runtime_regression_tests {
             is_pressed: true,
             life: MAX_HOLD_LIFE,
             last_update_time_ns: song_time_ns_from_seconds(0.95),
-        });
+        }));
 
         state.start_active_hold(
             0,
@@ -1794,7 +1812,7 @@ mod runtime_regression_tests {
         state.chart_runtime.notes[0] = roll;
 
         let event_time_ns = song_time_ns_from_seconds(TIMING_WINDOW_SECONDS_ROLL + 0.01);
-        state.hold_runtime.active_holds[0] = Some(ActiveHold {
+        state.set_active_hold(0, Some(ActiveHold {
             note_index: 0,
             start_time_ns: 0,
             end_time_ns: song_time_ns_from_seconds(2.0),
@@ -1803,7 +1821,7 @@ mod runtime_regression_tests {
             is_pressed: false,
             life: MAX_HOLD_LIFE,
             last_update_time_ns: 0,
-        });
+        }));
         state
             .pending_input
             .edges
