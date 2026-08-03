@@ -85,7 +85,7 @@ const SRPG10_EVAL_FAILED_SECONDS: f32 = 3.0;
 const SRPG10_EVAL_PASSED_SECONDS: f32 = 1.0;
 const SRPG10_EVAL_Z: i16 = 1250;
 const SRPG10_EVAL_ZOOM: f32 = 480.0 / 1080.0;
-const GRAPH_BARELY_SAMPLE_COUNT: usize = 100;
+const GRAPH_LIFE_SAMPLE_COUNT: usize = 100;
 const GRAPH_BARELY_LIFE_MAX: f32 = 0.1;
 const GRAPH_BARELY_ANIM_DELAY_SECONDS: f32 = 2.0;
 const GRAPH_BARELY_ANIM_SEG_SECONDS: f32 = 0.2;
@@ -847,13 +847,15 @@ fn course_graph_stripe_actors(
 #[cfg(test)]
 mod tests {
     use super::{
-        CellIcon, CourseGraphStage, EvalPane, Nice69Buf, SUBMIT_FOOTER_F5_LABEL,
-        SimplyLoveGrooveStatsService, SubmitFooterCell, active_groovestats_service_name,
-        build_course_density_graph_mesh, build_fail_label_text, cached_fail_label_text,
-        course_graph_stage_spans, course_graph_stripe_actors, eval_grade_for_result, eval_graph_x,
-        eval_pane_cycle, eval_pane_shift, eval_pane_skip_duplicate, fail_seconds_remaining,
-        leaderboard_requests, stage_in_stinger_texture_key, submission_retry_available,
-        submit_footer_gs_label, submit_footer_gs_label_for, submit_footer_lines,
+        CellIcon, CourseGraphStage, EvalPane, GRAPH_LIFE_SAMPLE_COUNT, Nice69Buf,
+        SUBMIT_FOOTER_F5_LABEL, SimplyLoveGrooveStatsService, SubmitFooterCell,
+        active_groovestats_service_name, build_course_density_graph_mesh, build_fail_label_text,
+        cached_fail_label_text, course_graph_stage_spans, course_graph_stripe_actors,
+        eval_grade_for_result, eval_graph_x, eval_pane_cycle, eval_pane_shift,
+        eval_pane_skip_duplicate, fail_seconds_remaining, graph_display_life_points,
+        leaderboard_requests, life_record_lerp_at, stage_in_stinger_texture_key,
+        submission_retry_available, submit_footer_gs_label, submit_footer_gs_label_for,
+        submit_footer_lines,
     };
     use crate::assets::i18n;
     use deadlib_present::actors::{Actor, TextAlign};
@@ -1041,6 +1043,28 @@ mod tests {
     fn life_and_fail_positions_do_not_use_scatter_padding() {
         assert!((eval_graph_x(100.0, 0.0, 100.0, 300.0) - 300.0).abs() < 0.001);
         assert!((eval_graph_x(50.0, 0.0, 100.0, 300.0) - 150.0).abs() < 0.001);
+    }
+
+    #[test]
+    fn evaluation_life_line_matches_graph_display_sampling_and_offset() {
+        let points =
+            graph_display_life_points(&[(-2.0, 0.5), (12.0, 1.0)], 2.0, 0.0, 12.0, 120.0, 64.0);
+
+        assert_eq!(points.len(), GRAPH_LIFE_SAMPLE_COUNT);
+        assert!((points[0][0] - 20.0).abs() < 0.001);
+        assert!((points[GRAPH_LIFE_SAMPLE_COUNT - 1][0] - 120.0).abs() < 0.001);
+        // GraphDisplay samples at i/100, so its final i=99 value is just shy
+        // of the record endpoint even though it is drawn at the right edge.
+        let final_life = 1.0 - (points[GRAPH_LIFE_SAMPLE_COUNT - 1][1] - 1.0) / 64.0;
+        assert!((final_life - 0.995).abs() < 0.001);
+    }
+
+    #[test]
+    fn evaluation_life_sampling_anchors_at_chart_start() {
+        let history = [(-2.0, 0.5), (1.0, 0.2), (6.0, 1.0)];
+
+        assert!((life_record_lerp_at(&history, 2.0, 2.0) - 0.5).abs() < 0.001);
+        assert!((life_record_lerp_at(&history, 2.0, 4.0) - 0.75).abs() < 0.001);
     }
 
     #[test]
@@ -3667,25 +3691,28 @@ fn build_fail_label_text(label: Arc<str>, x: f32, y: f32) -> Actor {
 }
 
 #[inline(always)]
-fn life_record_lerp_at(life_history: &[(f32, f32)], sample_time: f32) -> f32 {
-    let Some(&(_, first_life)) = life_history.first() else {
+fn life_record_lerp_at(life_history: &[(f32, f32)], record_start: f32, sample_time: f32) -> f32 {
+    let Some(&(_, start_life)) = life_history.first() else {
         return 0.0;
     };
-    if life_history.len() == 1 {
-        return first_life.clamp(0.0, 1.0);
+    let start_life = start_life.clamp(0.0, 1.0);
+    if sample_time <= record_start {
+        return start_life;
     }
 
     // Match ITGmania's PlayerStageStats::GetLifeRecordLerpAt() upper_bound behavior:
-    // choose the first key > sample_time, then lerp from the previous sample.
-    let later_ix = life_history.partition_point(|&(t, _)| t <= sample_time);
-    let earlier_ix = later_ix.saturating_sub(1).min(life_history.len() - 1);
-    let (earlier_t, earlier_life) = life_history[earlier_ix];
-
-    if later_ix >= life_history.len() {
+    // discard pre-chart records, choose the first key > sample_time, then lerp
+    // from the previous sample (or the chart-start life anchor).
+    let records = &life_history[life_history.partition_point(|&(t, _)| t < record_start)..];
+    let later_ix = records.partition_point(|&(t, _)| t <= sample_time);
+    let (earlier_t, earlier_life) = if later_ix == 0 {
+        (record_start, start_life)
+    } else {
+        records[later_ix - 1]
+    };
+    let Some(&(later_t, later_life)) = records.get(later_ix) else {
         return earlier_life.clamp(0.0, 1.0);
-    }
-
-    let (later_t, later_life) = life_history[later_ix];
+    };
     let dt = later_t - earlier_t;
     if dt.abs() <= f32::EPSILON {
         return earlier_life.clamp(0.0, 1.0);
@@ -3695,25 +3722,68 @@ fn life_record_lerp_at(life_history: &[(f32, f32)], sample_time: f32) -> f32 {
     (earlier_life + (later_life - earlier_life) * alpha).clamp(0.0, 1.0)
 }
 
+fn graph_display_life_points(
+    life_history: &[(f32, f32)],
+    record_start: f32,
+    graph_first: f32,
+    graph_last: f32,
+    graph_width: f32,
+    graph_height: f32,
+) -> Vec<[f32; 2]> {
+    if life_history.is_empty()
+        || !record_start.is_finite()
+        || !graph_first.is_finite()
+        || !graph_last.is_finite()
+        || graph_width <= 0.0
+        || graph_height <= 0.0
+    {
+        return Vec::new();
+    }
+
+    let graph_last = graph_last.max(graph_first + 0.001);
+    let record_duration = graph_last - record_start;
+    if record_duration <= 0.0 {
+        return Vec::new();
+    }
+    let line_left = ((record_start - graph_first) / (graph_last - graph_first)) * graph_width;
+    let line_width = graph_width - line_left;
+    let sample_time_step = record_duration / GRAPH_LIFE_SAMPLE_COUNT as f32;
+    let sample_x_step = line_width / (GRAPH_LIFE_SAMPLE_COUNT - 1) as f32;
+
+    let mut points = Vec::with_capacity(GRAPH_LIFE_SAMPLE_COUNT);
+    for i in 0..GRAPH_LIFE_SAMPLE_COUNT {
+        // GraphDisplay samples life with a denominator of 100 but lays those
+        // samples across its width with a denominator of 99.
+        let sample_time = record_start + i as f32 * sample_time_step;
+        let life = life_record_lerp_at(life_history, record_start, sample_time);
+        points.push([
+            line_left + i as f32 * sample_x_step,
+            (1.0 - life) * graph_height + 1.0,
+        ]);
+    }
+    points
+}
+
 #[inline(always)]
-fn barely_marker_sample(si: &ScoreInfo) -> Option<(f32, f32)> {
+fn barely_marker_sample(si: &ScoreInfo, record_start: f32) -> Option<(usize, f32)> {
     // ITGmania GraphDisplay only shows "Barely" if the chart was cleared.
     if si.grade == score_data::Grade::Failed || si.fail_time.is_some() || si.life_history.is_empty()
     {
         return None;
     }
 
-    let sample_end = si.graph_last_second.max(0.0);
-    if !sample_end.is_finite() || sample_end <= 0.0 {
+    let sample_end = si.graph_last_second.max(record_start);
+    let sample_duration = sample_end - record_start;
+    if !sample_duration.is_finite() || sample_duration <= 0.0 {
         return None;
     }
 
     let mut min_life = 1.0_f32;
     let mut min_ix = 0usize;
-    let inv_samples = 1.0_f32 / GRAPH_BARELY_SAMPLE_COUNT as f32;
-    for i in 0..GRAPH_BARELY_SAMPLE_COUNT {
-        let t = (i as f32) * inv_samples * sample_end;
-        let life = life_record_lerp_at(&si.life_history, t);
+    let sample_step = sample_duration / GRAPH_LIFE_SAMPLE_COUNT as f32;
+    for i in 0..GRAPH_LIFE_SAMPLE_COUNT {
+        let t = record_start + i as f32 * sample_step;
+        let life = life_record_lerp_at(&si.life_history, record_start, t);
         if life < min_life {
             min_life = life;
             min_ix = i;
@@ -3724,8 +3794,7 @@ fn barely_marker_sample(si: &ScoreInfo) -> Option<(f32, f32)> {
         return None;
     }
 
-    let t = (min_ix as f32) * inv_samples * sample_end;
-    Some((t, min_life))
+    Some((min_ix, min_life))
 }
 
 pub fn handle_raw_pad_event(state: &mut State, pad_event: &PadEvent) {
@@ -5309,80 +5378,44 @@ pub fn push_actors(
                         }
                     },
                     {
-                        // Reserve the worst-case child count (≤2 quads per life-history
-                        // change point) so the segment quads never trigger reallocations.
-                        let mut life_children: Vec<Actor> =
-                            Vec::with_capacity(si.life_history.len() * 2 + 16);
+                        let mut life_children: Vec<Actor> = Vec::with_capacity(16);
                         let first = si.graph_first_second;
                         let last = si.graph_last_second.max(first + 0.001_f32);
 
-                        let mut last_x = -999.0_f32;
-                        let mut last_y = -999.0_f32;
-
-                        for &(t, life) in &si.life_history {
-                            let x = eval_graph_x(t, first, last, graph_width);
-                            // Simply Love nudges GraphDisplay's white life line down by 1px
-                            // (`self:GetChild("Line"):addy(1)`), so keep a matching inset.
-                            let y = ((1.0 - life).clamp(0.0, 1.0) * graph_height + 1.0)
-                                .clamp(1.0, (graph_height - 1.0).max(1.0));
-
-                            if (x - last_x).abs() < 0.5 && (y - last_y).abs() < 0.5 {
-                                continue;
-                            }
-
-                            if last_x > -900.0 {
-                                let w = (x - last_x).max(0.0);
-                                if w > 0.5 {
-                                    life_children.push(act!(quad:
-                                        align(0.0, 0.5): xy(last_x, last_y):
-                                        setsize(w, 2.0):
-                                        diffuse(1.0, 1.0, 1.0, 0.8):
-                                        z(4)
-                                    ));
-                                }
-
-                                let h = (y - last_y).abs();
-                                if h > 0.5 {
-                                    let min_y = last_y.min(y);
-                                    life_children.push(act!(quad:
-                                        align(0.5, 0.0): xy(x, min_y):
-                                        setsize(2.0, h):
-                                        diffuse(1.0, 1.0, 1.0, 0.8):
-                                        z(4)
-                                    ));
-                                }
-                            } else {
-                                life_children.push(act!(quad:
-                                    align(0.5, 0.5): xy(x, y):
-                                    setsize(2.0, 2.0):
-                                    diffuse(1.0, 1.0, 1.0, 0.8):
-                                    z(4)
-                                ));
-                            }
-
-                            last_x = x;
-                            last_y = y;
+                        let record_start = if si.is_course_summary() {
+                            0.0
+                        } else {
+                            si.song.precise_first_second()
+                        };
+                        let life_graph_first = if si.is_course_summary() { 0.0 } else { first };
+                        let life_points = graph_display_life_points(
+                            &si.life_history,
+                            record_start,
+                            life_graph_first,
+                            last,
+                            graph_width,
+                            graph_height,
+                        );
+                        let life_mesh = deadlib_present::density::build_graph_line_mesh(
+                            &life_points,
+                            2.0,
+                            [1.0, 1.0, 1.0, 1.0],
+                        );
+                        if !life_mesh.is_empty() {
+                            life_children.push(Actor::Mesh {
+                                align: [0.0, 0.0],
+                                offset: [0.0, 0.0],
+                                size: [SizeSpec::Px(graph_width), SizeSpec::Px(graph_height)],
+                                vertices: Arc::from(life_mesh.into_boxed_slice()),
+                                visible: true,
+                                blend: BlendMode::Alpha,
+                                z: 4,
+                            });
                         }
 
-                        // Life history only stores change points; once life stops changing
-                        // (e.g. capped at full), continue the final segment to graph end.
-                        let end_x = eval_graph_x(last, first, last, graph_width);
-                        if last_x > -900.0 {
-                            let w = (end_x - last_x).max(0.0);
-                            if w > 0.5 {
-                                life_children.push(act!(quad:
-                                    align(0.0, 0.5): xy(last_x, last_y):
-                                    setsize(w, 2.0):
-                                    diffuse(1.0, 1.0, 1.0, 0.8):
-                                    z(4)
-                                ));
-                            }
-                        }
-
-                        if let Some((barely_time, barely_life)) = barely_marker_sample(si) {
-                            let x = eval_graph_x(barely_time, first, last, graph_width);
-                            let y = ((1.0 - barely_life).clamp(0.0, 1.0) * graph_height + 1.0)
-                                .clamp(1.0, (graph_height - 1.0).max(1.0));
+                        if let Some((barely_ix, _)) = barely_marker_sample(si, record_start)
+                            && let Some(&[x, y]) = life_points.get(barely_ix)
+                        {
                             // Keep a tiny marker on the life line, then animate the label/arrow
                             // in the same timing pattern as Simply Love GraphDisplay Barely.
                             life_children.push(act!(quad:

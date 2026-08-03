@@ -288,6 +288,7 @@ fn step_stats_hmr_categories(state: &State, player_idx: usize) -> [(usize, u32, 
 // 961 visible points. Compact before the 63-point stale prefix can overflow the
 // 1,024-point gameplay reservation.
 const DENSITY_LIFE_COMPACT_THRESHOLD: usize = 63;
+const DENSITY_LIFE_LINE_WIDTH: f32 = 2.0;
 
 fn clip_density_life_points_impl(
     points: &mut Vec<[f32; 2]>,
@@ -401,8 +402,8 @@ fn refresh_density_graph_meshes_for_player(state: &mut State, player_idx: usize)
     {
         render.mesh[player_idx] = None;
         render.life_mesh[player_idx] = None;
-        render.mesh_offset_px[player_idx] = 0;
-        render.life_mesh_offset_px[player_idx] = 0;
+        render.mesh_offset[player_idx] = 0.0;
+        render.life_mesh_offset[player_idx] = 0.0;
         state
             .gameplay
             .set_density_graph_life_dirty(player_idx, false);
@@ -410,33 +411,30 @@ fn refresh_density_graph_meshes_for_player(state: &mut State, player_idx: usize)
     }
 
     let offset = (graph.u0 * scaled_width).clamp(0.0_f32, scaled_width);
-    let offset_px = offset.floor() as i32;
-    let offset_px_f = offset_px as f32;
-
-    if offset_px != render.mesh_offset_px[player_idx] {
-        render.mesh_offset_px[player_idx] = offset_px;
+    if offset != render.mesh_offset[player_idx] {
+        render.mesh_offset[player_idx] = offset;
         density::update_density_hist_mesh_reusable(
             &mut render.mesh[player_idx],
             render.cache[player_idx].as_ref(),
-            offset_px_f,
+            offset,
             graph_w,
         );
     }
 
-    let prev_offset_px = render.life_mesh_offset_px[player_idx];
-    let offset_changed = offset_px != prev_offset_px;
+    let prev_offset = render.life_mesh_offset[player_idx];
+    let offset_changed = offset != prev_offset;
     if !offset_changed && !state.gameplay.density_graph_life_dirty(player_idx) {
         return;
     }
 
-    render.life_mesh_offset_px[player_idx] = offset_px;
+    render.life_mesh_offset[player_idx] = offset;
     state
         .gameplay
         .set_density_graph_life_dirty(player_idx, false);
-    if offset_px > prev_offset_px
+    if offset > prev_offset
         && let Some(points) = state.gameplay.density_graph_life_points_mut(player_idx)
     {
-        clip_density_life_points(points, offset_px_f);
+        clip_density_life_points(points, offset);
     }
     let Some(points) = state.gameplay.density_graph_life_points(player_idx) else {
         render.life_mesh[player_idx] = None;
@@ -450,9 +448,9 @@ fn refresh_density_graph_meshes_for_player(state: &mut State, player_idx: usize)
     density::update_density_life_mesh_reusable(
         &mut render.life_mesh[player_idx],
         points,
-        offset_px_f,
+        offset,
         graph_w,
-        2.0_f32,
+        DENSITY_LIFE_LINE_WIDTH,
         [1.0_f32, 1.0_f32, 1.0_f32, 1.0_f32],
     );
 }
@@ -505,7 +503,7 @@ fn push_density_graph_at(
     {
         actors.push(Actor::ReusableMesh {
             align: [0.0, 0.0],
-            offset: [x0, y0],
+            offset: [x0 + DENSITY_LIFE_LINE_WIDTH * 0.5, y0],
             size: [SizeSpec::Px(graph_w), SizeSpec::Px(graph_h)],
             tint: [1.0; 4],
             vertices: Arc::clone(mesh),

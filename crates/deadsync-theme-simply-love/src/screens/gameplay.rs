@@ -207,9 +207,9 @@ const TRANSITION_OUT_DURATION: f32 = TRANSITION_OUT_DELAY + TRANSITION_OUT_FADE_
 pub struct DensityGraphRenderState {
     pub cache: [Option<DensityHistCache>; MAX_PLAYERS],
     pub mesh: [Option<Arc<Vec<MeshVertex>>>; MAX_PLAYERS],
-    pub mesh_offset_px: [i32; MAX_PLAYERS],
+    pub mesh_offset: [f32; MAX_PLAYERS],
     pub life_mesh: [Option<Arc<Vec<MeshVertex>>>; MAX_PLAYERS],
-    pub life_mesh_offset_px: [i32; MAX_PLAYERS],
+    pub life_mesh_offset: [f32; MAX_PLAYERS],
     pub top_mesh: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS],
 }
 
@@ -280,9 +280,9 @@ impl DensityGraphRenderState {
         Self {
             cache,
             mesh,
-            mesh_offset_px: [0; MAX_PLAYERS],
+            mesh_offset: [0.0; MAX_PLAYERS],
             life_mesh: std::array::from_fn(|_| None),
-            life_mesh_offset_px: [0; MAX_PLAYERS],
+            life_mesh_offset: [0.0; MAX_PLAYERS],
             top_mesh,
         }
     }

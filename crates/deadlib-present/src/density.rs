@@ -453,42 +453,92 @@ pub fn update_density_hist_mesh_reusable(
 
 const DENSITY_LIFE_MIN_LEN_SQ: f32 = 0.000_000_01_f32;
 const DENSITY_LIFE_SEGMENT_VERTS: usize = 6;
-const DENSITY_LIFE_CAP_SUBDIVISIONS: usize = 4;
-const DENSITY_LIFE_CAP_VERTS: usize = DENSITY_LIFE_CAP_SUBDIVISIONS * 3;
-// Match StepMania's low-cost fallback polyline joins/caps: a quad per segment plus
-// a tiny fan at each vertex so sharp turns do not sprout stretched miters.
-const DENSITY_LIFE_CAP_DIRS: [[f32; 2]; DENSITY_LIFE_CAP_SUBDIVISIONS + 1] =
-    [[1.0, 0.0], [0.0, -1.0], [-1.0, 0.0], [0.0, 1.0], [1.0, 0.0]];
 
-#[inline(always)]
-fn density_life_segment_count(points: &[[f32; 2]], start: usize, end: usize) -> usize {
-    let mut prev: Option<[f32; 2]> = None;
-    let mut count = 0usize;
-    for &point in &points[start..end] {
-        if let Some(a) = prev {
-            let dx = point[0] - a[0];
-            let dy = point[1] - a[1];
-            let len_sq = dx.mul_add(dx, dy * dy);
-            if len_sq > DENSITY_LIFE_MIN_LEN_SQ {
-                count += 1;
-            }
-        }
-        prev = Some(point);
-    }
-    count
+#[derive(Clone, Copy, Debug)]
+struct LifeWindow {
+    left: f32,
+    right: f32,
+    start: usize,
+    end: usize,
+    point_count: usize,
+    clip_left: bool,
 }
 
 #[inline(always)]
-fn density_life_vertex_count(points: &[[f32; 2]], start: usize, end: usize) -> usize {
-    let point_count = end.saturating_sub(start);
-    if point_count < 2 {
-        return 0;
+fn interp_life_point(a: [f32; 2], b: [f32; 2], x: f32) -> [f32; 2] {
+    let dx = (b[0] - a[0]).max(0.000_001_f32);
+    let t = ((x - a[0]) / dx).clamp(0.0, 1.0);
+    [x, lerp(a[1], b[1], t)]
+}
+
+#[inline(always)]
+fn density_life_window_point(points: &[[f32; 2]], window: LifeWindow, index: usize) -> [f32; 2] {
+    if window.clip_left && index == 0 {
+        return interp_life_point(points[window.start - 1], points[window.start], window.left);
     }
-    let segment_count = density_life_segment_count(points, start, end);
-    if segment_count == 0 {
-        return 0;
+    let source_index = index - usize::from(window.clip_left) + window.start;
+    if source_index < window.end {
+        return points[source_index];
     }
-    segment_count * DENSITY_LIFE_SEGMENT_VERTS + point_count * DENSITY_LIFE_CAP_VERTS
+    interp_life_point(points[window.end - 1], points[window.end], window.right)
+}
+
+#[inline(always)]
+fn density_life_normal(a: [f32; 2], b: [f32; 2], half: f32) -> [f32; 2] {
+    let dx = b[0] - a[0];
+    let dy = b[1] - a[1];
+    let len = dx.hypot(dy);
+    if len <= f32::EPSILON {
+        return [0.0, 0.0];
+    }
+    [-dy / len * half, dx / len * half]
+}
+
+#[inline(always)]
+fn density_life_join(prev: [f32; 2], current: [f32; 2], next: [f32; 2], half: f32) -> [f32; 2] {
+    let prev_normal = density_life_normal(prev, current, 1.0);
+    let next_normal = density_life_normal(current, next, 1.0);
+    let miter = [
+        prev_normal[0] + next_normal[0],
+        prev_normal[1] + next_normal[1],
+    ];
+    let miter_len = miter[0].hypot(miter[1]);
+    if miter_len <= f32::EPSILON {
+        return [prev_normal[0] * half, prev_normal[1] * half];
+    }
+    let miter = [miter[0] / miter_len, miter[1] / miter_len];
+    let denom = miter[0] * prev_normal[0] + miter[1] * prev_normal[1];
+    if denom.abs() <= 0.1 {
+        return [next_normal[0] * half, next_normal[1] * half];
+    }
+    let scale = (half / denom).clamp(-half * 4.0, half * 4.0);
+    [miter[0] * scale, miter[1] * scale]
+}
+
+#[inline(always)]
+fn density_life_offset(
+    points: &[[f32; 2]],
+    window: LifeWindow,
+    index: usize,
+    half: f32,
+) -> [f32; 2] {
+    let current = density_life_window_point(points, window, index);
+    if index == 0 {
+        return density_life_normal(current, density_life_window_point(points, window, 1), half);
+    }
+    if index + 1 == window.point_count {
+        return density_life_normal(
+            density_life_window_point(points, window, index - 1),
+            current,
+            half,
+        );
+    }
+    density_life_join(
+        density_life_window_point(points, window, index - 1),
+        current,
+        density_life_window_point(points, window, index + 1),
+        half,
+    )
 }
 
 #[inline(always)]
@@ -497,18 +547,14 @@ fn write_density_life_segment(
     written: usize,
     a: [f32; 2],
     b: [f32; 2],
-    half: f32,
+    a_offset: [f32; 2],
+    b_offset: [f32; 2],
     color: [f32; 4],
 ) -> usize {
-    let dx = b[0] - a[0];
-    let dy = b[1] - a[1];
-    let inv_len = dx.mul_add(dx, dy * dy).sqrt().recip();
-    let nx = -dy * inv_len * half;
-    let ny = dx * inv_len * half;
-    let l0 = [a[0] + nx, a[1] + ny];
-    let r0 = [a[0] - nx, a[1] - ny];
-    let l1 = [b[0] + nx, b[1] + ny];
-    let r1 = [b[0] - nx, b[1] - ny];
+    let l0 = [a[0] + a_offset[0], a[1] + a_offset[1]];
+    let r0 = [a[0] - a_offset[0], a[1] - a_offset[1]];
+    let l1 = [b[0] + b_offset[0], b[1] + b_offset[1]];
+    let r1 = [b[0] - b_offset[0], b[1] - b_offset[1]];
 
     let verts = [
         MeshVertex { pos: l0, color },
@@ -523,61 +569,33 @@ fn write_density_life_segment(
 }
 
 #[inline(always)]
-fn write_density_life_cap(
-    dst: &mut [MeshVertex],
-    written: usize,
-    center: [f32; 2],
-    radius: f32,
-    color: [f32; 4],
-) -> usize {
-    let mut written = written;
-    for dirs in DENSITY_LIFE_CAP_DIRS.windows(2) {
-        let p0 = [
-            center[0] + dirs[0][0] * radius,
-            center[1] + dirs[0][1] * radius,
-        ];
-        let p1 = [
-            center[0] + dirs[1][0] * radius,
-            center[1] + dirs[1][1] * radius,
-        ];
-        let verts = [
-            MeshVertex { pos: center, color },
-            MeshVertex { pos: p0, color },
-            MeshVertex { pos: p1, color },
-        ];
-        dst[written..written + verts.len()].copy_from_slice(&verts);
-        written += verts.len();
-    }
-    written
-}
-
-#[inline(always)]
 fn fill_density_life_vertices(
     dst: &mut [MeshVertex],
     points: &[[f32; 2]],
-    start: usize,
-    end: usize,
-    offset: f32,
+    window: LifeWindow,
     half: f32,
     color: [f32; 4],
 ) -> usize {
-    let mut prev: Option<[f32; 2]> = None;
     let mut written = 0usize;
-    for &point in &points[start..end] {
-        let p = [point[0] - offset, point[1]];
-        if let Some(a) = prev {
-            let dx = p[0] - a[0];
-            let dy = p[1] - a[1];
-            let len_sq = dx.mul_add(dx, dy * dy);
-            if len_sq > DENSITY_LIFE_MIN_LEN_SQ {
-                written = write_density_life_segment(dst, written, a, p, half, color);
-            }
+    for index in 0..window.point_count - 1 {
+        let mut a = density_life_window_point(points, window, index);
+        let mut b = density_life_window_point(points, window, index + 1);
+        let dx = b[0] - a[0];
+        let dy = b[1] - a[1];
+        if dx.mul_add(dx, dy * dy) <= DENSITY_LIFE_MIN_LEN_SQ {
+            continue;
         }
-        prev = Some(p);
-    }
-    for &point in &points[start..end] {
-        let p = [point[0] - offset, point[1]];
-        written = write_density_life_cap(dst, written, p, half, color);
+        a[0] -= window.left;
+        b[0] -= window.left;
+        written = write_density_life_segment(
+            dst,
+            written,
+            a,
+            b,
+            density_life_offset(points, window, index, half),
+            density_life_offset(points, window, index + 1, half),
+            color,
+        );
     }
     written
 }
@@ -588,20 +606,44 @@ fn density_life_mesh_window(
     offset: f32,
     width: f32,
     thickness: f32,
-) -> Option<(usize, usize, usize, f32)> {
+) -> Option<(LifeWindow, usize, f32)> {
     if points.len() < 2 || width <= 0.0_f32 || thickness <= 0.0_f32 {
         return None;
     }
 
-    let right = offset + width;
-    let start = points.partition_point(|p| p[0] < offset);
+    let left = offset.max(0.0);
+    let right = left + width;
+    let start = points.partition_point(|p| p[0] < left);
     let end = points.partition_point(|p| p[0] <= right);
-    if end.saturating_sub(start) < 2 {
+    let clip_left = start > 0 && start < points.len() && points[start][0] > left;
+    let clip_right = end > 0 && end < points.len() && points[end - 1][0] < right;
+    let point_count = end.saturating_sub(start) + usize::from(clip_left) + usize::from(clip_right);
+    if point_count < 2 {
         return None;
     }
 
-    let len = density_life_vertex_count(points, start, end);
-    (len != 0).then_some((start, end, len, thickness * 0.5_f32))
+    let window = LifeWindow {
+        left,
+        right,
+        start,
+        end,
+        point_count,
+        clip_left,
+    };
+    let segment_count = (0..point_count - 1)
+        .filter(|&index| {
+            let a = density_life_window_point(points, window, index);
+            let b = density_life_window_point(points, window, index + 1);
+            let dx = b[0] - a[0];
+            let dy = b[1] - a[1];
+            dx.mul_add(dx, dy * dy) > DENSITY_LIFE_MIN_LEN_SQ
+        })
+        .count();
+    (segment_count != 0).then_some((
+        window,
+        segment_count * DENSITY_LIFE_SEGMENT_VERTS,
+        thickness * 0.5_f32,
+    ))
 }
 
 pub fn update_density_life_mesh(
@@ -612,7 +654,7 @@ pub fn update_density_life_mesh(
     thickness: f32,
     color: [f32; 4],
 ) {
-    let Some((start, end, len, half)) = density_life_mesh_window(points, offset, width, thickness)
+    let Some((window, len, half)) = density_life_mesh_window(points, offset, width, thickness)
     else {
         *mesh = None;
         return;
@@ -620,13 +662,13 @@ pub fn update_density_life_mesh(
     if let Some(existing) = mesh.as_mut().and_then(Arc::get_mut)
         && existing.len() == len
     {
-        let written = fill_density_life_vertices(existing, points, start, end, offset, half, color);
+        let written = fill_density_life_vertices(existing, points, window, half, color);
         debug_assert_eq!(written, len);
         return;
     }
 
     let mut verts = vec![MeshVertex::default(); len];
-    let written = fill_density_life_vertices(&mut verts, points, start, end, offset, half, color);
+    let written = fill_density_life_vertices(&mut verts, points, window, half, color);
     debug_assert_eq!(written, len);
     *mesh = Some(Arc::from(verts.into_boxed_slice()));
 }
@@ -644,7 +686,7 @@ pub fn update_density_life_mesh_reusable(
     thickness: f32,
     color: [f32; 4],
 ) {
-    let Some((start, end, len, half)) = density_life_mesh_window(points, offset, width, thickness)
+    let Some((window, len, half)) = density_life_mesh_window(points, offset, width, thickness)
     else {
         *mesh = None;
         return;
@@ -658,8 +700,89 @@ pub fn update_density_life_mesh_reusable(
         .and_then(Arc::get_mut)
         .expect("replacement density life mesh must be uniquely owned");
     vertices.resize(len, MeshVertex::default());
-    let written = fill_density_life_vertices(vertices, points, start, end, offset, half, color);
+    let written = fill_density_life_vertices(vertices, points, window, half, color);
     debug_assert_eq!(written, len);
+}
+
+/// Build the 2px-style connected graph used by ITGmania's `GraphLine` actor.
+///
+/// Each pair of points is an independent quad and every sample gets a
+/// four-sided radius cap. This intentionally differs from a native line strip:
+/// evaluation lifelines rely on GraphDisplay's capped joins and endpoints.
+pub fn build_graph_line_mesh(
+    points: &[[f32; 2]],
+    thickness: f32,
+    color: [f32; 4],
+) -> Vec<MeshVertex> {
+    const CAP_SIDES: usize = 4;
+    const SEGMENT_VERTS: usize = 6;
+    const CAP_VERTS: usize = CAP_SIDES * 3;
+
+    if points.len() < 2 || !thickness.is_finite() || thickness <= 0.0 {
+        return Vec::new();
+    }
+
+    let half = thickness * 0.5;
+    let segment_count = points
+        .windows(2)
+        .filter(|pair| {
+            let dx = pair[1][0] - pair[0][0];
+            let dy = pair[1][1] - pair[0][1];
+            dx.mul_add(dx, dy * dy) > DENSITY_LIFE_MIN_LEN_SQ
+        })
+        .count();
+    let mut out = Vec::with_capacity(segment_count * SEGMENT_VERTS + points.len() * CAP_VERTS);
+
+    for pair in points.windows(2) {
+        let a = pair[0];
+        let b = pair[1];
+        let dx = b[0] - a[0];
+        let dy = b[1] - a[1];
+        let len = dx.hypot(dy);
+        if len * len <= DENSITY_LIFE_MIN_LEN_SQ {
+            continue;
+        }
+
+        // GraphLine uses (dy, -dx) as its segment normal.
+        let offset = [dy / len * half, -dx / len * half];
+        let v0 = [a[0] + offset[0], a[1] + offset[1]];
+        let v1 = [a[0] - offset[0], a[1] - offset[1]];
+        let v2 = [b[0] - offset[0], b[1] - offset[1]];
+        let v3 = [b[0] + offset[0], b[1] + offset[1]];
+        out.extend_from_slice(&[
+            MeshVertex { pos: v0, color },
+            MeshVertex { pos: v1, color },
+            MeshVertex { pos: v2, color },
+            MeshVertex { pos: v0, color },
+            MeshVertex { pos: v2, color },
+            MeshVertex { pos: v3, color },
+        ]);
+    }
+
+    // Four subdivisions are exactly what ITGmania uses. At a one-pixel radius
+    // this diamond-shaped fan reads as a round cap while keeping the reference
+    // geometry and coverage.
+    const CAP_DIRS: [[f32; 2]; CAP_SIDES + 1] =
+        [[1.0, 0.0], [0.0, -1.0], [-1.0, 0.0], [0.0, 1.0], [1.0, 0.0]];
+    for &point in points {
+        for side in 0..CAP_SIDES {
+            let a = CAP_DIRS[side];
+            let b = CAP_DIRS[side + 1];
+            out.extend_from_slice(&[
+                MeshVertex { pos: point, color },
+                MeshVertex {
+                    pos: [point[0] + a[0] * half, point[1] + a[1] * half],
+                    color,
+                },
+                MeshVertex {
+                    pos: [point[0] + b[0] * half, point[1] + b[1] * half],
+                    color,
+                },
+            ]);
+        }
+    }
+
+    out
 }
 
 pub fn build_density_histogram_mesh(
@@ -822,23 +945,56 @@ mod tests {
     }
 
     #[test]
-    fn update_density_life_mesh_adds_caps_for_polyline_joins() {
+    fn update_density_life_mesh_matches_line_strip_joins() {
         let mut mesh = None;
-        let points = [[0.0, 8.0], [12.0, 8.0], [24.0, 20.0]];
+        let points = [[0.0, 0.0], [10.0, 0.0], [10.0, 10.0]];
 
-        update_density_life_mesh(&mut mesh, &points, 0.0, 32.0, 2.0, [1.0, 1.0, 1.0, 1.0]);
+        update_density_life_mesh(&mut mesh, &points, 0.0, 32.0, 4.0, [1.0; 4]);
 
         let mesh = mesh.expect("life mesh");
-        assert_eq!(
-            mesh.len(),
-            2 * DENSITY_LIFE_SEGMENT_VERTS + 3 * DENSITY_LIFE_CAP_VERTS
+        assert_eq!(mesh.len(), 2 * DENSITY_LIFE_SEGMENT_VERTS);
+        let has_pos = |expected: [f32; 2]| {
+            mesh.iter().any(|vertex| {
+                (vertex.pos[0] - expected[0]).abs() < 0.000_1
+                    && (vertex.pos[1] - expected[1]).abs() < 0.000_1
+            })
+        };
+        assert!(has_pos([8.0, 2.0]));
+        assert!(has_pos([12.0, -2.0]));
+        assert!(!mesh.iter().any(|vertex| points.contains(&vertex.pos)));
+    }
+
+    #[test]
+    fn graph_line_mesh_matches_graph_display_quads_and_caps() {
+        let points = [[4.0, 8.0], [14.0, 8.0], [14.0, 18.0]];
+        let color = [1.0, 1.0, 1.0, 1.0];
+
+        let mesh = build_graph_line_mesh(&points, 2.0, color);
+
+        assert_eq!(mesh.len(), 2 * 6 + 3 * 12);
+        assert!(mesh.iter().all(|vertex| vertex.color == color));
+        assert!(mesh.iter().any(|vertex| vertex.pos == [3.0, 8.0]));
+        assert!(mesh.iter().any(|vertex| vertex.pos == [15.0, 18.0]));
+        assert!(mesh.iter().any(|vertex| vertex.pos == [4.0, 7.0]));
+    }
+
+    #[test]
+    fn update_density_life_mesh_clips_fractional_window_edges() {
+        let mut mesh = None;
+        let points = [[0.0, 8.0], [12.0, 8.0], [24.0, 8.0]];
+
+        update_density_life_mesh(&mut mesh, &points, 0.25, 10.0, 2.0, [1.0; 4]);
+
+        let mesh = mesh.expect("life mesh");
+        assert_eq!(mesh.len(), DENSITY_LIFE_SEGMENT_VERTS);
+        assert!(
+            mesh.iter()
+                .all(|vertex| vertex.pos[0] == 0.0 || vertex.pos[0] == 10.0)
         );
-        let first_center_count = mesh.iter().filter(|v| v.pos == [0.0, 8.0]).count();
-        let mid_center_count = mesh.iter().filter(|v| v.pos == [12.0, 8.0]).count();
-        let last_center_count = mesh.iter().filter(|v| v.pos == [24.0, 20.0]).count();
-        assert_eq!(first_center_count, DENSITY_LIFE_CAP_SUBDIVISIONS);
-        assert_eq!(mid_center_count, DENSITY_LIFE_CAP_SUBDIVISIONS);
-        assert_eq!(last_center_count, DENSITY_LIFE_CAP_SUBDIVISIONS);
+        assert!(
+            mesh.iter()
+                .all(|vertex| vertex.pos[1] == 7.0 || vertex.pos[1] == 9.0)
+        );
     }
 
     #[test]
