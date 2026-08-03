@@ -1,6 +1,6 @@
 use crate::{
-    NoteXParams, TornadoBounds, beat_factor, compute_invert_distances, compute_tornado_bounds,
-    fill_lane_col_offsets, held_miss_zoom, hold_indicator_column_x, player_metric_y,
+    NoteXParams, TornadoBounds, beat_factor, compute_active_note_geometry, fill_lane_col_offsets,
+    held_miss_zoom, hold_indicator_column_x, player_metric_y,
 };
 use deadlib_present::actors::{Actor, SpriteSource};
 use deadlib_present::dsl::SpriteBuilder;
@@ -171,9 +171,13 @@ fn append_hold_indicators(actors: &mut Vec<Actor>, request: &JudgmentFeedbackReq
         request.field_zoom,
     );
     let mut invert = [0.0_f32; MAX_COLS];
-    compute_invert_distances(&col_offsets[..num_cols], &mut invert[..num_cols]);
     let mut tornado = [TornadoBounds::default(); MAX_COLS];
-    compute_tornado_bounds(&col_offsets[..num_cols], &mut tornado[..num_cols]);
+    compute_active_note_geometry(
+        &request.visual,
+        &col_offsets[..num_cols],
+        &mut invert[..num_cols],
+        &mut tornado[..num_cols],
+    );
     let beat_push = beat_factor(request.current_beat);
 
     if let Some(sprite) = request.held_miss_sprite.as_ref() {

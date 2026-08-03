@@ -1,8 +1,8 @@
 use deadsync_notefield::{
     CameraWrapBench, CommonNoteTransformBench, CueScanBench, FeedbackLaneCacheBench,
     HoldTravelReuseBench, IdentityAccelBench, LaneVisualCacheBench, MeasureLineMode,
-    MeasureLinePlanBench, MeasureLineTraversalBench, VisibleLaneCursorBench, VisibleRangeBench,
-    XmodTimingBench,
+    MeasureLinePlanBench, MeasureLineTraversalBench, NotefieldPrepBench, VisibleLaneCursorBench,
+    VisibleRangeBench, XmodTimingBench,
 };
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::hint::black_box;
@@ -105,6 +105,62 @@ struct BenchResult {
 
 fn main() {
     println!("gameplay notefield hot-path microbenchmarks");
+
+    let preparation = NotefieldPrepBench::default();
+    run_pair(
+        "uniform reverse preparation",
+        "256 x 8-lane preparations with Reverse only and no lane-varying modifiers",
+        |frame| {
+            let output = preparation.old_reverse_frame(frame);
+            Output {
+                checksum: output.checksum,
+                samples: output.samples,
+            }
+        },
+        |frame| {
+            let output = preparation.new_reverse_frame(frame);
+            Output {
+                checksum: output.checksum,
+                samples: output.samples,
+            }
+        },
+    );
+    run_pair(
+        "empty song-Lua column offsets",
+        "256 x 8-lane preparations without song-defined column offset windows",
+        |frame| {
+            let output = preparation.old_song_lua_frame(frame);
+            Output {
+                checksum: output.checksum,
+                samples: output.samples,
+            }
+        },
+        |frame| {
+            let output = preparation.new_song_lua_frame(frame);
+            Output {
+                checksum: output.checksum,
+                samples: output.samples,
+            }
+        },
+    );
+    run_pair(
+        "inactive invert/tornado preparation",
+        "256 x 8-lane preparations with ordinary horizontal effects",
+        |frame| {
+            let output = preparation.old_geometry_frame(frame);
+            Output {
+                checksum: output.checksum,
+                samples: output.samples,
+            }
+        },
+        |frame| {
+            let output = preparation.new_geometry_frame(frame);
+            Output {
+                checksum: output.checksum,
+                samples: output.samples,
+            }
+        },
+    );
 
     let xmod = XmodTimingBench::default();
     run_pair(

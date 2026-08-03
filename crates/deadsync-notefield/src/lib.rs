@@ -33,6 +33,9 @@ pub use compose::{
     NotefieldNoteskinView, NotefieldOptions, NotefieldSongLuaView, NotefieldVisualState,
     PreparedNotefield, PreparedNotefieldNotes, prepare_notefield,
 };
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub use compose::{NotefieldPrepBench, NotefieldPrepBenchFrame};
 pub use display_mods::{
     DISPLAY_TURN_BLENDER, DISPLAY_TURN_LEFT, DISPLAY_TURN_LR_MIRROR, DISPLAY_TURN_MIRROR,
     DISPLAY_TURN_RANDOM, DISPLAY_TURN_RIGHT, DISPLAY_TURN_SHUFFLE, DISPLAY_TURN_UD_MIRROR,
@@ -157,8 +160,8 @@ pub(crate) use receptors::{
 };
 pub(crate) use transforms::{
     AccelYParams, LaneNoteTransformCache, NoteAlphaParams, NoteAppearanceCache, NoteXParams,
-    VisualEffectParams, appearance_note_alpha_glow_cached, beat_factor, compute_invert_distances,
-    compute_tornado_bounds, fill_gameplay_lane_effects, fill_static_note_x_offsets,
+    VisualEffectParams, appearance_note_alpha_glow_cached, beat_factor,
+    compute_active_note_geometry, fill_gameplay_lane_effects, fill_static_note_x_offsets,
     gameplay_visual_effect_params, lane_note_transform_cache, move_col_extra,
     note_appearance_cache, note_world_z_for_bumpy, note_x_offset, smoothstep01, tipsy_y_extra,
     visual_arrow_effect_zoom, visual_arrow_effect_zoom_cached, visual_confusion_rotation_deg,
@@ -167,6 +170,7 @@ pub(crate) use transforms::{
 #[cfg(any(test, feature = "bench-support"))]
 pub(crate) use transforms::{
     appearance_note_actor_alpha, appearance_note_alpha, appearance_note_glow,
+    compute_invert_distances, compute_tornado_bounds,
 };
 #[cfg(feature = "bench-support")]
 pub(crate) use transforms::{

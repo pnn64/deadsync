@@ -1257,6 +1257,21 @@ pub(crate) fn compute_tornado_bounds(col_offsets: &[f32], out: &mut [TornadoBoun
     }
 }
 
+#[inline(always)]
+pub(crate) fn compute_active_note_geometry(
+    visual: &VisualEffects,
+    col_offsets: &[f32],
+    invert: &mut [f32],
+    tornado: &mut [TornadoBounds],
+) {
+    if signed_effect_active(visual.invert) {
+        compute_invert_distances(col_offsets, invert);
+    }
+    if signed_effect_active(visual.tornado) {
+        compute_tornado_bounds(col_offsets, tornado);
+    }
+}
+
 pub(crate) fn tipsy_y_extra(local_col: usize, elapsed: f32, tipsy: f32) -> f32 {
     if !signed_effect_active(tipsy) {
         return 0.0;

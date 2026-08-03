@@ -2,9 +2,9 @@ use crate::{
     ErrorBarModes, FieldLayout, FieldLayoutRequest, FieldPlacement, HudLayoutOffsets,
     HudLayoutParams, LayoutMiniIndicatorPosition, NotefieldFrameFeatures, NotefieldFramePlan,
     NotefieldFramePlanRequest, ProxyCaptureRequests, ScrollTravel, ScrollTravelRequest,
-    TornadoBounds, ViewOverride, ZmodLayoutParams, beat_factor, compute_invert_distances,
-    compute_tornado_bounds, effective_mini_value, field_effect_height, field_layout,
-    fill_lane_col_offsets, notefield_frame_plan, scroll_travel, song_time_ns_to_seconds,
+    TornadoBounds, ViewOverride, ZmodLayoutParams, beat_factor, compute_active_note_geometry,
+    effective_mini_value, field_effect_height, field_layout, fill_lane_col_offsets,
+    notefield_frame_plan, scroll_travel, song_time_ns_to_seconds,
 };
 use deadsync_core::input::MAX_COLS;
 use deadsync_gameplay::{
@@ -293,25 +293,9 @@ fn prepare_field<S>(
     current_time_s: f32,
 ) -> FieldLayout {
     let num_cols = frame_plan.num_cols;
-    let column_reverse_percent = std::array::from_fn(|i| {
-        if i < num_cols {
-            {
-                request
-                    .visual
-                    .scroll
-                    .reverse_percent_for_column(i, num_cols)
-            }
-        } else {
-            Default::default()
-        }
-    });
-    let song_lua_column_y_offsets = std::array::from_fn(|i| {
-        if i < num_cols {
-            song_lua_column_y_offset(request.song_lua.column_offsets, i, current_time_s)
-        } else {
-            Default::default()
-        }
-    });
+    let column_reverse_percent = column_reverse_percents(request.visual.scroll, num_cols);
+    let song_lua_column_y_offsets =
+        song_lua_column_y_offsets(request.song_lua.column_offsets, num_cols, current_time_s);
     field_layout(FieldLayoutRequest {
         style: request.style,
         placement: request.placement,
@@ -370,9 +354,13 @@ fn prepare_notes<'a, S>(
         field_zoom,
     );
     let mut invert_distances = [0.0; MAX_COLS];
-    compute_invert_distances(&col_offsets[..num_cols], &mut invert_distances[..num_cols]);
     let mut tornado_bounds = [TornadoBounds::default(); MAX_COLS];
-    compute_tornado_bounds(&col_offsets[..num_cols], &mut tornado_bounds[..num_cols]);
+    compute_active_note_geometry(
+        &request.visual.visual,
+        &col_offsets[..num_cols],
+        &mut invert_distances[..num_cols],
+        &mut tornado_bounds[..num_cols],
+    );
     let travel = scroll_travel(ScrollTravelRequest {
         timing,
         accel: crate::AccelYParams {
@@ -416,6 +404,211 @@ fn prepare_notes<'a, S>(
         note_display_time_scale: request.geometry.num_players as f32 + 1.0,
         travel,
     }))
+}
+
+#[inline(always)]
+fn column_reverse_percents(scroll: ScrollEffects, num_cols: usize) -> [f32; MAX_COLS] {
+    let active_cols = num_cols.min(MAX_COLS);
+    let mut out = [0.0; MAX_COLS];
+    if active_cols == 0 {
+        return out;
+    }
+    if scroll.split == 0.0 && scroll.alternate == 0.0 && scroll.cross == 0.0 {
+        out[..active_cols].fill(scroll.reverse_percent_for_column(0, num_cols));
+        return out;
+    }
+    for (local_col, percent) in out.iter_mut().take(active_cols).enumerate() {
+        *percent = scroll.reverse_percent_for_column(local_col, num_cols);
+    }
+    out
+}
+
+#[inline(always)]
+fn song_lua_column_y_offsets(
+    windows: &[SongLuaColumnOffsetWindowRuntime],
+    num_cols: usize,
+    current_time_s: f32,
+) -> [f32; MAX_COLS] {
+    let active_cols = num_cols.min(MAX_COLS);
+    if windows.is_empty() {
+        return [0.0; MAX_COLS];
+    }
+    let mut out = [0.0; MAX_COLS];
+    for (local_col, offset) in out.iter_mut().take(active_cols).enumerate() {
+        *offset = song_lua_column_y_offset(windows, local_col, current_time_s);
+    }
+    out
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn column_reverse_percents_legacy(scroll: ScrollEffects, num_cols: usize) -> [f32; MAX_COLS] {
+    std::array::from_fn(|local_col| {
+        if local_col < num_cols {
+            scroll.reverse_percent_for_column(local_col, num_cols)
+        } else {
+            Default::default()
+        }
+    })
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn song_lua_column_y_offsets_legacy(
+    windows: &[SongLuaColumnOffsetWindowRuntime],
+    num_cols: usize,
+    current_time_s: f32,
+) -> [f32; MAX_COLS] {
+    std::array::from_fn(|local_col| {
+        if local_col < num_cols {
+            song_lua_column_y_offset(windows, local_col, current_time_s)
+        } else {
+            Default::default()
+        }
+    })
+}
+
+#[cfg(feature = "bench-support")]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct NotefieldPrepBenchFrame {
+    pub checksum: u64,
+    pub samples: usize,
+}
+
+#[cfg(feature = "bench-support")]
+pub struct NotefieldPrepBench {
+    empty_windows: Vec<SongLuaColumnOffsetWindowRuntime>,
+    col_offsets: [f32; MAX_COLS],
+}
+
+#[cfg(feature = "bench-support")]
+impl Default for NotefieldPrepBench {
+    fn default() -> Self {
+        Self {
+            empty_windows: Vec::new(),
+            col_offsets: [-224.0, -160.0, -96.0, -32.0, 32.0, 96.0, 160.0, 224.0],
+        }
+    }
+}
+
+#[cfg(feature = "bench-support")]
+impl NotefieldPrepBench {
+    const BATCH: usize = 256;
+
+    pub fn old_reverse_frame(&self, frame: usize) -> NotefieldPrepBenchFrame {
+        let mut output = NotefieldPrepBenchFrame::default();
+        for iteration in 0..Self::BATCH {
+            let scroll = std::hint::black_box(frame_scroll(frame + iteration));
+            record_prep_array(
+                &mut output,
+                column_reverse_percents_legacy(scroll, MAX_COLS),
+            );
+        }
+        output
+    }
+
+    pub fn new_reverse_frame(&self, frame: usize) -> NotefieldPrepBenchFrame {
+        let mut output = NotefieldPrepBenchFrame::default();
+        for iteration in 0..Self::BATCH {
+            let scroll = std::hint::black_box(frame_scroll(frame + iteration));
+            record_prep_array(&mut output, column_reverse_percents(scroll, MAX_COLS));
+        }
+        output
+    }
+
+    pub fn old_song_lua_frame(&self, frame: usize) -> NotefieldPrepBenchFrame {
+        let mut output = NotefieldPrepBenchFrame::default();
+        for iteration in 0..Self::BATCH {
+            record_prep_array(
+                &mut output,
+                song_lua_column_y_offsets_legacy(
+                    std::hint::black_box(&self.empty_windows),
+                    MAX_COLS,
+                    (frame + iteration) as f32 / 120.0,
+                ),
+            );
+        }
+        output
+    }
+
+    pub fn new_song_lua_frame(&self, frame: usize) -> NotefieldPrepBenchFrame {
+        let mut output = NotefieldPrepBenchFrame::default();
+        for iteration in 0..Self::BATCH {
+            record_prep_array(
+                &mut output,
+                song_lua_column_y_offsets(
+                    std::hint::black_box(&self.empty_windows),
+                    MAX_COLS,
+                    (frame + iteration) as f32 / 120.0,
+                ),
+            );
+        }
+        output
+    }
+
+    pub fn old_geometry_frame(&self, frame: usize) -> NotefieldPrepBenchFrame {
+        let mut output = NotefieldPrepBenchFrame::default();
+        for iteration in 0..Self::BATCH {
+            let col_offsets = std::hint::black_box(&self.col_offsets);
+            let mut invert = [0.0; MAX_COLS];
+            crate::compute_invert_distances(col_offsets, &mut invert);
+            let mut tornado = [TornadoBounds::default(); MAX_COLS];
+            crate::compute_tornado_bounds(col_offsets, &mut tornado);
+            std::hint::black_box(&invert);
+            std::hint::black_box(&tornado);
+            record_geometry_behavior(&mut output, frame + iteration, col_offsets);
+        }
+        output
+    }
+
+    pub fn new_geometry_frame(&self, frame: usize) -> NotefieldPrepBenchFrame {
+        let mut output = NotefieldPrepBenchFrame::default();
+        for iteration in 0..Self::BATCH {
+            let col_offsets = std::hint::black_box(&self.col_offsets);
+            let mut invert = [0.0; MAX_COLS];
+            let mut tornado = [TornadoBounds::default(); MAX_COLS];
+            compute_active_note_geometry(
+                std::hint::black_box(&VisualEffects::default()),
+                col_offsets,
+                &mut invert,
+                &mut tornado,
+            );
+            std::hint::black_box(&invert);
+            std::hint::black_box(&tornado);
+            record_geometry_behavior(&mut output, frame + iteration, col_offsets);
+        }
+        output
+    }
+}
+
+#[cfg(feature = "bench-support")]
+#[inline(always)]
+fn frame_scroll(frame: usize) -> ScrollEffects {
+    ScrollEffects {
+        reverse: (frame % 9) as f32 * 0.25,
+        ..ScrollEffects::default()
+    }
+}
+
+#[cfg(feature = "bench-support")]
+#[inline(always)]
+fn record_prep_array(output: &mut NotefieldPrepBenchFrame, values: [f32; MAX_COLS]) {
+    for value in values {
+        output.checksum = output.checksum.rotate_left(7) ^ u64::from(value.to_bits());
+        output.samples += 1;
+    }
+}
+
+#[cfg(feature = "bench-support")]
+#[inline(always)]
+fn record_geometry_behavior(
+    output: &mut NotefieldPrepBenchFrame,
+    frame: usize,
+    col_offsets: &[f32],
+) {
+    output.checksum = output.checksum.rotate_left(7) ^ frame as u64;
+    for value in col_offsets {
+        output.checksum = output.checksum.rotate_left(7) ^ u64::from(value.to_bits());
+        output.samples += 1;
+    }
 }
 
 fn resolved_frame_features(
@@ -472,5 +665,129 @@ mod tests {
             resolved_frame_features(features(), ViewOverride::default()),
             features()
         );
+    }
+
+    #[test]
+    fn uniform_reverse_fast_path_matches_per_column_resolution() {
+        let scrolls = [
+            ScrollEffects::default(),
+            ScrollEffects {
+                reverse: 0.75,
+                ..ScrollEffects::default()
+            },
+            ScrollEffects {
+                reverse: 2.25,
+                ..ScrollEffects::default()
+            },
+            ScrollEffects {
+                reverse: f32::NAN,
+                ..ScrollEffects::default()
+            },
+            ScrollEffects {
+                reverse: 0.4,
+                split: 0.7,
+                alternate: -0.2,
+                cross: 0.5,
+                centered: 0.3,
+            },
+        ];
+        for scroll in scrolls {
+            for num_cols in [0, 1, 4, MAX_COLS, MAX_COLS + 4] {
+                let old = column_reverse_percents_legacy(scroll, num_cols).map(f32::to_bits);
+                let new = column_reverse_percents(scroll, num_cols).map(f32::to_bits);
+                assert_eq!(new, old, "scroll={scroll:?}, num_cols={num_cols}");
+            }
+        }
+    }
+
+    #[test]
+    fn song_lua_empty_fast_path_matches_lane_scan() {
+        for num_cols in [0, 1, 4, MAX_COLS, MAX_COLS + 4] {
+            let old = song_lua_column_y_offsets_legacy(&[], num_cols, 12.5).map(f32::to_bits);
+            let new = song_lua_column_y_offsets(&[], num_cols, 12.5).map(f32::to_bits);
+            assert_eq!(new, old);
+        }
+    }
+
+    #[test]
+    fn song_lua_populated_offsets_keep_legacy_values() {
+        let windows = [SongLuaColumnOffsetWindowRuntime {
+            column: 2,
+            start_second: 1.0,
+            end_second: 3.0,
+            sustain_end_second: 4.0,
+            from_y: -8.0,
+            to_y: 24.0,
+            easing: None,
+            opt1: None,
+            opt2: None,
+        }];
+        for now in [0.0, 1.0, 2.0, 3.5, 5.0] {
+            let old = song_lua_column_y_offsets_legacy(&windows, 4, now).map(f32::to_bits);
+            let new = song_lua_column_y_offsets(&windows, 4, now).map(f32::to_bits);
+            assert_eq!(new, old, "now={now}");
+        }
+    }
+
+    #[test]
+    fn active_note_geometry_matches_unconditional_calculation() {
+        let cols = [-224.0, -160.0, -96.0, -32.0, 32.0, 96.0, 160.0, 224.0];
+        let mut old_invert = [0.0; MAX_COLS];
+        crate::compute_invert_distances(&cols, &mut old_invert);
+        let mut old_tornado = [TornadoBounds::default(); MAX_COLS];
+        crate::compute_tornado_bounds(&cols, &mut old_tornado);
+        let mut new_invert = [0.0; MAX_COLS];
+        let mut new_tornado = [TornadoBounds::default(); MAX_COLS];
+        compute_active_note_geometry(
+            &VisualEffects {
+                invert: -0.5,
+                tornado: 0.75,
+                ..VisualEffects::default()
+            },
+            &cols,
+            &mut new_invert,
+            &mut new_tornado,
+        );
+        assert_eq!(new_invert, old_invert);
+        assert_eq!(new_tornado, old_tornado);
+    }
+
+    #[test]
+    fn inactive_note_geometry_does_not_change_note_positions() {
+        let cols = [-224.0, -160.0, -96.0, -32.0, 32.0, 96.0, 160.0, 224.0];
+        let mut old_invert = [0.0; MAX_COLS];
+        crate::compute_invert_distances(&cols, &mut old_invert);
+        let mut old_tornado = [TornadoBounds::default(); MAX_COLS];
+        crate::compute_tornado_bounds(&cols, &mut old_tornado);
+        let new_invert = [0.0; MAX_COLS];
+        let new_tornado = [TornadoBounds::default(); MAX_COLS];
+        let move_x = [0.0; MAX_COLS];
+        for local_col in 0..MAX_COLS {
+            let old = crate::note_x_offset(
+                local_col,
+                180.0,
+                0.25,
+                4.0,
+                &cols,
+                &old_invert,
+                &old_tornado,
+                &move_x,
+                crate::NoteXParams::default(),
+                0.0,
+            );
+            let new = crate::note_x_offset(
+                local_col,
+                180.0,
+                0.25,
+                4.0,
+                &cols,
+                &new_invert,
+                &new_tornado,
+                &move_x,
+                crate::NoteXParams::default(),
+                0.0,
+            );
+            assert_eq!(new.to_bits(), old.to_bits());
+        }
     }
 }
