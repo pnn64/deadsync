@@ -511,8 +511,10 @@ impl GameplayCueRuntimeState {
 
 #[derive(Clone, Debug, Default)]
 pub struct GameplayHoldFeedbackState {
-    pub hold_judgments: [Option<HoldJudgmentRenderInfo>; MAX_COLS],
-    pub held_miss_judgments: [Option<HeldMissRenderInfo>; MAX_COLS],
+    hold_judgments: [Option<HoldJudgmentRenderInfo>; MAX_COLS],
+    held_miss_judgments: [Option<HeldMissRenderInfo>; MAX_COLS],
+    hold_mask: u8,
+    held_miss_mask: u8,
 }
 
 impl GameplayHoldFeedbackState {
@@ -542,18 +544,77 @@ impl GameplayHoldFeedbackState {
     }
 
     #[inline(always)]
+    pub(crate) fn set_hold_judgment(
+        &mut self,
+        col: usize,
+        judgment: Option<HoldJudgmentRenderInfo>,
+    ) {
+        let Some(slot) = self.hold_judgments.get_mut(col) else {
+            return;
+        };
+        *slot = judgment;
+        set_feedback_bit(&mut self.hold_mask, col, judgment.is_some());
+    }
+
+    #[inline(always)]
+    pub(crate) fn set_held_miss(
+        &mut self,
+        col: usize,
+        judgment: Option<HeldMissRenderInfo>,
+    ) {
+        let Some(slot) = self.held_miss_judgments.get_mut(col) else {
+            return;
+        };
+        *slot = judgment;
+        set_feedback_bit(&mut self.held_miss_mask, col, judgment.is_some());
+    }
+
+    #[inline(always)]
+    pub(crate) fn tick(&mut self, now: f32) {
+        let mut active = self.hold_mask;
+        while active != 0 {
+            let col = active.trailing_zeros() as usize;
+            let bit = 1 << col;
+            if self.hold_judgments[col]
+                .is_some_and(|info| hold_judgment_expired_at(info, now))
+            {
+                self.hold_judgments[col] = None;
+                self.hold_mask &= !bit;
+            }
+            active &= active - 1;
+        }
+        let mut active = self.held_miss_mask;
+        while active != 0 {
+            let col = active.trailing_zeros() as usize;
+            let bit = 1 << col;
+            if self.held_miss_judgments[col]
+                .is_some_and(|info| held_miss_judgment_expired_at(info, now))
+            {
+                self.held_miss_judgments[col] = None;
+                self.held_miss_mask &= !bit;
+            }
+            active &= active - 1;
+        }
+    }
+
+    #[inline(always)]
     pub fn clear(&mut self) {
         self.hold_judgments.fill(None);
         self.held_miss_judgments.fill(None);
+        self.hold_mask = 0;
+        self.held_miss_mask = 0;
     }
 }
 
 #[derive(Clone, Debug, Default)]
 pub struct GameplayVisualFeedbackState {
-    pub tap_explosions: [Option<ActiveTapExplosion>; MAX_COLS],
-    pub column_flashes: [Option<ActiveColumnFlash>; MAX_COLS],
+    tap_explosions: [Option<ActiveTapExplosion>; MAX_COLS],
+    column_flashes: [Option<ActiveColumnFlash>; MAX_COLS],
     pub last_tap_judgments: [Option<ColumnTapJudgment>; MAX_COLS],
-    pub mine_explosions: [Option<ActiveMineExplosion>; MAX_COLS],
+    mine_explosions: [Option<ActiveMineExplosion>; MAX_COLS],
+    tap_mask: u8,
+    flash_mask: u8,
+    mine_mask: u8,
 }
 
 impl GameplayVisualFeedbackState {
@@ -601,14 +662,88 @@ impl GameplayVisualFeedbackState {
     }
 
     #[inline(always)]
+    pub(crate) fn set_tap_explosion(
+        &mut self,
+        col: usize,
+        explosion: Option<ActiveTapExplosion>,
+    ) {
+        let Some(slot) = self.tap_explosions.get_mut(col) else {
+            return;
+        };
+        *slot = explosion;
+        set_feedback_bit(&mut self.tap_mask, col, explosion.is_some());
+    }
+
+    #[inline(always)]
+    pub(crate) fn set_column_flash(
+        &mut self,
+        col: usize,
+        flash: Option<ActiveColumnFlash>,
+    ) {
+        let Some(slot) = self.column_flashes.get_mut(col) else {
+            return;
+        };
+        *slot = flash;
+        set_feedback_bit(&mut self.flash_mask, col, flash.is_some());
+    }
+
+    #[inline(always)]
+    pub(crate) fn set_mine_explosion(
+        &mut self,
+        col: usize,
+        explosion: Option<ActiveMineExplosion>,
+    ) {
+        let Some(slot) = self.mine_explosions.get_mut(col) else {
+            return;
+        };
+        let active = explosion.is_some();
+        *slot = explosion;
+        set_feedback_bit(&mut self.mine_mask, col, active);
+    }
+
+    #[inline(always)]
+    pub(crate) fn tick(&mut self, delta_time: f32, now: f32) {
+        let mut active = self.tap_mask;
+        while active != 0 {
+            let col = active.trailing_zeros() as usize;
+            let bit = 1 << col;
+            tick_tap_explosion_slot(&mut self.tap_explosions[col], delta_time);
+            if self.tap_explosions[col].is_none() {
+                self.tap_mask &= !bit;
+            }
+            active &= active - 1;
+        }
+        let mut active = self.mine_mask;
+        while active != 0 {
+            let col = active.trailing_zeros() as usize;
+            let bit = 1 << col;
+            tick_mine_explosion_slot(&mut self.mine_explosions[col], delta_time);
+            if self.mine_explosions[col].is_none() {
+                self.mine_mask &= !bit;
+            }
+            active &= active - 1;
+        }
+        let mut active = self.flash_mask;
+        while active != 0 {
+            let col = active.trailing_zeros() as usize;
+            let bit = 1 << col;
+            if self.column_flashes[col]
+                .is_some_and(|flash| column_flash_expired_at(flash, now))
+            {
+                self.column_flashes[col] = None;
+                self.flash_mask &= !bit;
+            }
+            active &= active - 1;
+        }
+    }
+
+    #[inline(always)]
     pub fn set_tap_explosion_for_benchmark(
         &mut self,
         col: usize,
         explosion: Option<ActiveTapExplosion>,
     ) {
-        if let Some(slot) = self.tap_explosions.get_mut(col) {
-            *slot = explosion;
-        }
+        self.set_tap_explosion(col, explosion);
     }
 
     #[inline(always)]
@@ -616,6 +751,22 @@ impl GameplayVisualFeedbackState {
         self.tap_explosions.fill(None);
         self.column_flashes.fill(None);
         self.mine_explosions.fill(None);
+        self.tap_mask = 0;
+        self.flash_mask = 0;
+        self.mine_mask = 0;
+    }
+}
+
+#[inline(always)]
+fn set_feedback_bit(mask: &mut u8, col: usize, active: bool) {
+    if col >= u8::BITS as usize {
+        return;
+    }
+    let bit = 1 << col;
+    if active {
+        *mask |= bit;
+    } else {
+        *mask &= !bit;
     }
 }
 

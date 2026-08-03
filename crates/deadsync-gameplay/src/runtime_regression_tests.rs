@@ -2395,17 +2395,23 @@ mod runtime_regression_tests {
     fn hold_judgment_cleanup_uses_screen_time_boundary() {
         let mut state = regression_state();
         state.boundary.total_elapsed_in_screen = 5.0;
-        state.display.hold_feedback.hold_judgments[0] = Some(HoldJudgmentRenderInfo {
-            result: HoldResult::Held,
-            started_at_screen_s: 4.201,
-        });
+        state.display.hold_feedback.set_hold_judgment(
+            0,
+            Some(HoldJudgmentRenderInfo {
+                result: HoldResult::Held,
+                started_at_screen_s: 4.201,
+            }),
+        );
         state.tick_visual_effects(0.0);
         assert!(state.display.hold_feedback.hold_judgments[0].is_some());
 
-        state.display.hold_feedback.hold_judgments[0] = Some(HoldJudgmentRenderInfo {
-            result: HoldResult::Held,
-            started_at_screen_s: 4.2,
-        });
+        state.display.hold_feedback.set_hold_judgment(
+            0,
+            Some(HoldJudgmentRenderInfo {
+                result: HoldResult::Held,
+                started_at_screen_s: 4.2,
+            }),
+        );
         state.tick_visual_effects(0.0);
         assert!(state.display.hold_feedback.hold_judgments[0].is_none());
     }
@@ -2444,9 +2450,12 @@ mod runtime_regression_tests {
             Some(5.0)
         );
 
-        state.display.hold_feedback.held_miss_judgments[2] = Some(HeldMissRenderInfo {
-            started_at_screen_s: 5.0 - HELD_MISS_TOTAL_DURATION,
-        });
+        state.display.hold_feedback.set_held_miss(
+            2,
+            Some(HeldMissRenderInfo {
+                started_at_screen_s: 5.0 - HELD_MISS_TOTAL_DURATION,
+            }),
+        );
         state.tick_visual_effects(0.0);
         assert!(state.display.hold_feedback.held_miss_judgments[2].is_none());
     }

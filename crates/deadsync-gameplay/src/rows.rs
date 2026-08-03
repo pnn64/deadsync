@@ -708,6 +708,9 @@ pub struct ReadyJudgedRowEvent {
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct ReadyJudgedRowsUpdate {
     pub next_scan_start: usize,
+    /// Minimum this across every batch to obtain the cursor after all emitted
+    /// ready-row events are finalized.
+    pub next_cursor: usize,
     pub event_count: usize,
     pub stopped: bool,
 }
@@ -721,30 +724,45 @@ pub fn collect_ready_judged_row_events(
 ) -> ReadyJudgedRowsUpdate {
     let row_start = row_range.0.min(row_entries.len());
     let row_count = row_range.1.min(row_entries.len()).max(row_start);
-    let mut scan_start = cursor.max(row_start).min(row_count);
+    let scan_start = cursor.max(row_start).min(row_count);
+    let mut next_scan_start = scan_start;
+    let mut next_cursor = row_count;
     let mut event_count = 0usize;
-    while let Some((row_entry_index, row_index, skip_life_change)) =
-        next_ready_row_in_lookahead(scan_start, row_count, |idx| {
-            player_row_scan_state(row_entries, idx, lookahead_time_ns)
-        })
-    {
-        if event_count >= events.len() {
-            return ReadyJudgedRowsUpdate {
-                next_scan_start: row_entry_index,
-                event_count,
-                stopped: true,
-            };
+    for row_entry_index in scan_start..row_count {
+        match player_row_scan_state(row_entries, row_entry_index, lookahead_time_ns) {
+            PlayerRowScanState::Finalized => {}
+            PlayerRowScanState::BeyondLookahead => {
+                next_cursor = next_cursor.min(row_entry_index);
+                break;
+            }
+            PlayerRowScanState::Pending => {
+                next_cursor = next_cursor.min(row_entry_index);
+            }
+            PlayerRowScanState::Ready {
+                row_index,
+                skip_life_change,
+            } => {
+                if event_count >= events.len() {
+                    return ReadyJudgedRowsUpdate {
+                        next_scan_start: row_entry_index,
+                        next_cursor,
+                        event_count,
+                        stopped: true,
+                    };
+                }
+                events[event_count] = Some(ReadyJudgedRowEvent {
+                    row_entry_index,
+                    row_index,
+                    skip_life_change,
+                });
+                event_count += 1;
+                next_scan_start = row_entry_index + 1;
+            }
         }
-        events[event_count] = Some(ReadyJudgedRowEvent {
-            row_entry_index,
-            row_index,
-            skip_life_change,
-        });
-        event_count += 1;
-        scan_start = row_entry_index + 1;
     }
     ReadyJudgedRowsUpdate {
-        next_scan_start: scan_start,
+        next_scan_start,
+        next_cursor,
         event_count,
         stopped: false,
     }

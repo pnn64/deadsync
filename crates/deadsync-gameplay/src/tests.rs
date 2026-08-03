@@ -14059,13 +14059,19 @@ mod tests {
     #[test]
     fn hold_feedback_state_returns_slices_and_clears() {
         let mut state = GameplayHoldFeedbackState::default();
-        state.hold_judgments[1] = Some(HoldJudgmentRenderInfo {
-            result: HoldResult::Held,
-            started_at_screen_s: 2.0,
-        });
-        state.held_miss_judgments[2] = Some(HeldMissRenderInfo {
-            started_at_screen_s: 3.0,
-        });
+        state.set_hold_judgment(
+            1,
+            Some(HoldJudgmentRenderInfo {
+                result: HoldResult::Held,
+                started_at_screen_s: 2.0,
+            }),
+        );
+        state.set_held_miss(
+            2,
+            Some(HeldMissRenderInfo {
+                started_at_screen_s: 3.0,
+            }),
+        );
 
         assert_eq!(
             state.hold_judgment(1).map(|judgment| judgment.result),
@@ -14085,28 +14091,37 @@ mod tests {
     #[test]
     fn visual_feedback_state_returns_values_sets_taps_and_clears() {
         let mut state = GameplayVisualFeedbackState::default();
-        state.tap_explosions[1] = Some(ActiveTapExplosion {
-            window: "W1",
-            bright: true,
-            elapsed: 0.1,
-            duration: 0.5,
-            start_beat: 4.0,
-        });
-        state.column_flashes[2] = Some(ActiveColumnFlash {
-            grade: JudgeGrade::Great,
-            blue_fantastic: false,
-            started_at_screen_s: 3.0,
-        });
+        state.set_tap_explosion(
+            1,
+            Some(ActiveTapExplosion {
+                window: "W1",
+                bright: true,
+                elapsed: 0.1,
+                duration: 0.5,
+                start_beat: 4.0,
+            }),
+        );
+        state.set_column_flash(
+            2,
+            Some(ActiveColumnFlash {
+                grade: JudgeGrade::Great,
+                blue_fantastic: false,
+                started_at_screen_s: 3.0,
+            }),
+        );
         state.last_tap_judgments[3] = Some(ColumnTapJudgment {
             grade: JudgeGrade::Excellent,
             blue_fantastic: false,
             at_screen_s: 7.0,
         });
-        state.mine_explosions[4] = Some(ActiveMineExplosion {
-            elapsed: 0.0,
-            duration: 1.0,
-            started_at_screen_s: 8.0,
-        });
+        state.set_mine_explosion(
+            4,
+            Some(ActiveMineExplosion {
+                elapsed: 0.0,
+                duration: 1.0,
+                started_at_screen_s: 8.0,
+            }),
+        );
 
         assert_eq!(
             state.tap_explosions(1, 1)[0].map(|explosion| explosion.window),
@@ -14887,6 +14902,7 @@ mod tests {
             update,
             ReadyJudgedRowsUpdate {
                 next_scan_start: 3,
+                next_cursor: 1,
                 event_count: 1,
                 stopped: false,
             }
@@ -14934,6 +14950,7 @@ mod tests {
             first,
             ReadyJudgedRowsUpdate {
                 next_scan_start: 1,
+                next_cursor: 2,
                 event_count: 1,
                 stopped: true,
             }
@@ -14958,6 +14975,7 @@ mod tests {
             second,
             ReadyJudgedRowsUpdate {
                 next_scan_start: 2,
+                next_cursor: 2,
                 event_count: 1,
                 stopped: false,
             }
@@ -14970,6 +14988,72 @@ mod tests {
                 skip_life_change: false,
             })
         );
+    }
+
+    #[test]
+    fn collected_row_cursor_matches_legacy_rescan_across_chunks() {
+        let mut notes = (0..4)
+            .map(|index| {
+                test_note_at(
+                    NoteType::Tap,
+                    None,
+                    false,
+                    (index + 1) * 48,
+                    (index + 1) as f32,
+                )
+            })
+            .collect::<Vec<_>>();
+        for note in &mut notes[..3] {
+            note.result = Some(test_judgment(JudgeGrade::Great));
+        }
+        let note_times = (1..=4)
+            .map(|second| song_time_ns_from_seconds(second as f32))
+            .collect::<Vec<_>>();
+        let mut row_entries = (0..4)
+            .map(|index| {
+                let mut indices = [usize::MAX; MAX_COLS];
+                indices[0] = index;
+                build_row_entry(
+                    (index + 1) * 48,
+                    indices,
+                    1,
+                    &notes,
+                    &note_times,
+                )
+            })
+            .collect::<Vec<_>>();
+        let mut scan_start = 0;
+        let mut collected_cursor = row_entries.len();
+        let mut events = [None; 1];
+
+        loop {
+            let update = collect_ready_judged_row_events(
+                &row_entries,
+                (0, row_entries.len()),
+                scan_start,
+                song_time_ns_from_seconds(5.0),
+                &mut events,
+            );
+            scan_start = update.next_scan_start;
+            collected_cursor = collected_cursor.min(update.next_cursor);
+            for event in events.iter().take(update.event_count).flatten() {
+                row_entries[event.row_entry_index].final_outcome = Some(FinalizedRowOutcome {
+                    final_grade: JudgeGrade::Great,
+                });
+            }
+            if !update.stopped {
+                break;
+            }
+        }
+
+        let rescanned_cursor = advance_judged_row_cursor_for_entries(
+            &row_entries,
+            (0, row_entries.len()),
+            0,
+            song_time_ns_from_seconds(5.0),
+        );
+        assert_eq!(collected_cursor, rescanned_cursor);
+        assert_eq!(collected_cursor, 3);
     }
 
     #[test]

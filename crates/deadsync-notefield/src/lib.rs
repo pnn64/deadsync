@@ -48,7 +48,10 @@ pub use field_frame::{CameraWrapBench, CameraWrapBenchFrame};
 pub use field_frame::{NotefieldFieldFrameView, NotefieldFieldResult, compose_notefield_field};
 #[cfg(feature = "bench-support")]
 #[doc(hidden)]
-pub use frame_feedback::{FeedbackLaneCacheBench, FeedbackLaneCacheBenchFrame};
+pub use frame_feedback::{
+    FeedbackLaneCacheBench, FeedbackLaneCacheBenchFrame, TapExplosionCullBench,
+    TapExplosionCullBenchFrame,
+};
 pub use frame_feedback::{NotefieldFeedbackFrameView, NotefieldLaneFeedback};
 pub use frame_hud::{
     ComboHudFrame, CounterHudFrame, ErrorBarHudFrame, JudgmentHudFrame, MiniHudFrame,

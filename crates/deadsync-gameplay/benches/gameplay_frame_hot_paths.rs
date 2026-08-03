@@ -1,9 +1,9 @@
 use deadsync_gameplay::{
     ActiveColumnScanBench, CrossoverCueCursorBench, DisabledAssistClapBench,
     GameplayFrameHotPathBenchOutput, IdleAttackRefreshBench, IdleHoldPhaseBench, IdleLaneScanBench,
-    IdleReceptorGlowBench, InputLaneSearchCursorBench, InputQueueDrainBench,
+    IdleReceptorGlowBench, InputLaneSearchCursorBench, InputQueueDrainBench, JudgedRowCursorBench,
     LiveNotefieldOptionsBench, OptionalFrameWorkBench, PressedLaneMaskBench, RegularCueCursorBench,
-    ResolutionDistanceCacheBench, SharedMissCutoffBench,
+    ResolutionDistanceCacheBench, SharedMissCutoffBench, SparseFeedbackTickBench,
 };
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::hint::black_box;
@@ -231,6 +231,23 @@ fn main() {
         "8 lanes at 120 Hz, one press every 257 frames",
         move |frame| old_receptor_glow.old_frame(frame),
         move |frame| new_receptor_glow.new_frame(frame),
+    );
+
+    let judged_rows = JudgedRowCursorBench::default();
+    run_pair(
+        "judged-row cursor reuse",
+        "8192 pending rows with one row entering lookahead per 120 Hz frame",
+        |frame| judged_rows.old_frame(frame),
+        |frame| judged_rows.new_frame(frame),
+    );
+
+    let mut old_feedback = SparseFeedbackTickBench::default();
+    let mut new_feedback = old_feedback.clone();
+    run_pair(
+        "sparse visual-feedback ticking",
+        "8 lanes, five feedback types triggered every 257-733 frames",
+        move |frame| old_feedback.old_frame(frame),
+        move |frame| new_feedback.new_frame(frame),
     );
 }
 

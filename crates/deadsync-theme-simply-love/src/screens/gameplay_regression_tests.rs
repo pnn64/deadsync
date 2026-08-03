@@ -2131,8 +2131,8 @@ M000
                 );
                 assert_eq!(dropped.life, 0.35);
                 assert!(state.receptor_glow_visual_for_col(0).is_some());
-                assert!(state.display.visual_feedback.mine_explosions[3].is_some());
-                assert!(state.display.hold_feedback.hold_judgments[2].is_some());
+                assert!(state.mine_explosions_for_columns(3, 1)[0].is_some());
+                assert!(state.hold_judgment(2).is_some());
                 let player = &state.players_runtime.players[0];
                 assert!(player.error_bar_color_ticks.iter().any(Option::is_some));
                 assert!(player.error_bar_mono_ticks.iter().any(Option::is_some));
@@ -2166,7 +2166,7 @@ M000
 
                 state.hold_runtime.active_holds.fill(None);
                 state.display.hold_feedback.clear();
-                state.display.visual_feedback.mine_explosions.fill(None);
+                state.clear_visual_feedback();
                 state.display.receptor_feedback.reset_for_practice();
                 let mut without_live_feedback = compose_fixture_frame(
                     &mut state,
@@ -2651,8 +2651,8 @@ return Def.ActorFrame{
                         .iter()
                         .all(|note| note.column >= 4)
                 );
-                assert!(state.display.visual_feedback.tap_explosions[0].is_some());
-                assert!(state.display.visual_feedback.tap_explosions[4].is_some());
+                assert!(state.tap_explosions_for_columns(0, 1)[0].is_some());
+                assert!(state.tap_explosions_for_columns(4, 1)[0].is_some());
 
                 let mut actors = Vec::with_capacity(1024);
                 let mut text_cache = compose::TextLayoutCache::default();

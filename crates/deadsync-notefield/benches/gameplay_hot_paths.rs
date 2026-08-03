@@ -1,8 +1,8 @@
 use deadsync_notefield::{
     CameraWrapBench, CommonNoteTransformBench, CueScanBench, FeedbackLaneCacheBench,
     HoldTravelReuseBench, IdentityAccelBench, LaneVisualCacheBench, MeasureLineMode,
-    MeasureLinePlanBench, MeasureLineTraversalBench, NotefieldPrepBench, VisibleLaneCursorBench,
-    VisibleRangeBench, XmodTimingBench,
+    MeasureLinePlanBench, MeasureLineTraversalBench, NotefieldPrepBench, TapExplosionCullBench,
+    VisibleLaneCursorBench, VisibleRangeBench, XmodTimingBench,
 };
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::hint::black_box;
@@ -155,6 +155,26 @@ fn main() {
         },
         |frame| {
             let output = preparation.new_geometry_frame(frame);
+            Output {
+                checksum: output.checksum,
+                samples: output.samples,
+            }
+        },
+    );
+
+    let tap_explosions = TapExplosionCullBench::default();
+    run_pair(
+        "idle tap-explosion Lua culling",
+        "8 lanes, 256 note-hide windows, one explosion every 257 frames",
+        |frame| {
+            let output = tap_explosions.old_frame(frame);
+            Output {
+                checksum: output.checksum,
+                samples: output.samples,
+            }
+        },
+        |frame| {
+            let output = tap_explosions.new_frame(frame);
             Output {
                 checksum: output.checksum,
                 samples: output.samples,

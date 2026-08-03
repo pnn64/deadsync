@@ -10,7 +10,7 @@ use deadsync_core::input::MAX_COLS;
 use deadsync_core::note::NoteType;
 use deadsync_gameplay::{
     ActiveColumnFlash, ActiveHold, ActiveMineExplosion, ActiveTapExplosion, ColumnCue,
-    hold_explosion_active, song_lua_note_hidden,
+    SongLuaNoteHideWindowRuntime, hold_explosion_active, song_lua_note_hidden,
 };
 use deadsync_noteskin::NoteskinSlot;
 use std::sync::Arc;
@@ -216,10 +216,9 @@ pub(crate) fn compose_notefield_feedback<S, F>(
     // Tap explosions are independent of the concrete "Hide Combo
     // Explosions" option, which applies only to combo milestone art.
     for (local_col, active) in frame.tap_explosions.iter().take(num_cols).enumerate() {
-        if song_lua_note_hidden(request.song_lua.note_hides, local_col, current_beat) {
-            continue;
-        }
-        let Some(active) = active.as_ref() else {
+        let Some(active) =
+            visible_tap_explosion(active, request.song_lua.note_hides, local_col, current_beat)
+        else {
             continue;
         };
         let Some(explosion) = tap_explosion.and_then(|noteskin| {
@@ -279,6 +278,31 @@ pub(crate) fn compose_notefield_feedback<S, F>(
     }
 }
 
+#[inline(always)]
+fn visible_tap_explosion<'a>(
+    active: &'a Option<ActiveTapExplosion>,
+    note_hides: &[SongLuaNoteHideWindowRuntime],
+    local_col: usize,
+    current_beat: f32,
+) -> Option<&'a ActiveTapExplosion> {
+    let active = active.as_ref()?;
+    (!song_lua_note_hidden(note_hides, local_col, current_beat)).then_some(active)
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn visible_tap_explosion_legacy<'a>(
+    active: &'a Option<ActiveTapExplosion>,
+    note_hides: &[SongLuaNoteHideWindowRuntime],
+    local_col: usize,
+    current_beat: f32,
+) -> Option<&'a ActiveTapExplosion> {
+    if song_lua_note_hidden(note_hides, local_col, current_beat) {
+        None
+    } else {
+        active.as_ref()
+    }
+}
+
 #[cfg(feature = "bench-support")]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct FeedbackLaneCacheBenchFrame {
@@ -293,6 +317,81 @@ pub struct FeedbackLaneCacheBench {
     col_offsets: [f32; MAX_COLS],
     invert_distances: [f32; MAX_COLS],
     tornado_bounds: [crate::TornadoBounds; MAX_COLS],
+}
+
+#[cfg(feature = "bench-support")]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct TapExplosionCullBenchFrame {
+    pub checksum: u64,
+    pub samples: usize,
+}
+
+#[cfg(feature = "bench-support")]
+#[derive(Clone)]
+pub struct TapExplosionCullBench {
+    note_hides: Vec<SongLuaNoteHideWindowRuntime>,
+}
+
+#[cfg(feature = "bench-support")]
+impl Default for TapExplosionCullBench {
+    fn default() -> Self {
+        Self {
+            note_hides: (0..256)
+                .map(|index| SongLuaNoteHideWindowRuntime {
+                    column: index % MAX_COLS,
+                    start_beat: index as f32 * 4.0,
+                    end_beat: index as f32 * 4.0 + 2.0,
+                })
+                .collect(),
+        }
+    }
+}
+
+#[cfg(feature = "bench-support")]
+impl TapExplosionCullBench {
+    pub fn old_frame(&self, frame: usize) -> TapExplosionCullBenchFrame {
+        self.frame(frame, visible_tap_explosion_legacy)
+    }
+
+    pub fn new_frame(&self, frame: usize) -> TapExplosionCullBenchFrame {
+        self.frame(frame, visible_tap_explosion)
+    }
+
+    fn frame(
+        &self,
+        frame: usize,
+        select: for<'a> fn(
+            &'a Option<ActiveTapExplosion>,
+            &[SongLuaNoteHideWindowRuntime],
+            usize,
+            f32,
+        ) -> Option<&'a ActiveTapExplosion>,
+    ) -> TapExplosionCullBenchFrame {
+        let mut explosions = [None; MAX_COLS];
+        if frame % 257 == 0 {
+            explosions[frame % MAX_COLS] = Some(ActiveTapExplosion {
+                window: "W1",
+                bright: false,
+                elapsed: 0.1,
+                duration: 0.5,
+                start_beat: frame as f32 / 16.0,
+            });
+        }
+        let beat = frame as f32 / 16.0;
+        let mut output = TapExplosionCullBenchFrame {
+            checksum: frame as u64,
+            samples: 0,
+        };
+        for (local_col, active) in explosions.iter().enumerate() {
+            if let Some(active) = select(active, &self.note_hides, local_col, beat) {
+                output.checksum = output.checksum.rotate_left(7)
+                    ^ u64::from(active.elapsed.to_bits())
+                    ^ local_col as u64;
+                output.samples += 1;
+            }
+        }
+        output
+    }
 }
 
 #[cfg(feature = "bench-support")]
@@ -517,6 +616,36 @@ mod tests {
 
         fn model_uv_params(&self, uv: [f32; 4]) -> ([f32; 2], [f32; 2], [f32; 2]) {
             ([uv[2] - uv[0], uv[3] - uv[1]], [uv[0], uv[1]], [0.0; 2])
+        }
+    }
+
+    #[test]
+    fn tap_explosion_cull_preserves_inactive_visible_and_hidden_cases() {
+        let active = Some(ActiveTapExplosion {
+            window: "W1",
+            bright: true,
+            elapsed: 0.125,
+            duration: 0.5,
+            start_beat: 4.0,
+        });
+        let inactive = None;
+        let note_hides = [SongLuaNoteHideWindowRuntime {
+            column: 2,
+            start_beat: 4.0,
+            end_beat: 8.0,
+        }];
+
+        for (explosion, col, beat) in [
+            (&inactive, 2, 6.0),
+            (&active, 1, 6.0),
+            (&active, 2, 6.0),
+            (&active, 2, 9.0),
+        ] {
+            let old = visible_tap_explosion_legacy(explosion, &note_hides, col, beat)
+                .map(|value| (value.window, value.elapsed.to_bits()));
+            let new = visible_tap_explosion(explosion, &note_hides, col, beat)
+                .map(|value| (value.window, value.elapsed.to_bits()));
+            assert_eq!(new, old);
         }
     }
 

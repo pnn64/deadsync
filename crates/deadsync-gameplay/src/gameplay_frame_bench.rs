@@ -1169,3 +1169,220 @@ fn receptor_glow_output(bench: &IdleReceptorGlowBench) -> GameplayFrameHotPathBe
     }
     output
 }
+
+#[derive(Clone)]
+pub struct JudgedRowCursorBench {
+    row_entries: Vec<RowEntry>,
+}
+
+impl Default for JudgedRowCursorBench {
+    fn default() -> Self {
+        Self {
+            row_entries: (0..8_192)
+                .map(|index| RowEntry {
+                    row_index: index * ROWS_PER_BEAT as usize,
+                    time_ns: index as SongTimeNs * 500_000_000,
+                    nonmine_note_indices: [usize::MAX; MAX_COLS],
+                    nonmine_note_count: 0,
+                    rescore_track_count: 0,
+                    unresolved_count: 1,
+                    unresolved_nonlift_count: 1,
+                    had_provisional_early_hit: false,
+                    final_outcome: None,
+                })
+                .collect(),
+        }
+    }
+}
+
+impl JudgedRowCursorBench {
+    pub fn old_frame(&self, frame: usize) -> GameplayFrameHotPathBenchOutput {
+        self.frame(frame, true)
+    }
+
+    pub fn new_frame(&self, frame: usize) -> GameplayFrameHotPathBenchOutput {
+        self.frame(frame, false)
+    }
+
+    fn frame(&self, frame: usize, rescan_cursor: bool) -> GameplayFrameHotPathBenchOutput {
+        let cursor = frame % (self.row_entries.len() - 1);
+        let lookahead_time_ns = self.row_entries[cursor].time_ns;
+        let mut events = [None; 8];
+        let update = collect_ready_judged_row_events(
+            &self.row_entries,
+            (0, self.row_entries.len()),
+            cursor,
+            lookahead_time_ns,
+            &mut events,
+        );
+        let next_cursor = if rescan_cursor {
+            advance_judged_row_cursor_for_entries(
+                &self.row_entries,
+                (0, self.row_entries.len()),
+                cursor,
+                lookahead_time_ns,
+            )
+        } else {
+            update.next_cursor
+        };
+        GameplayFrameHotPathBenchOutput {
+            checksum: (next_cursor as u64).rotate_left(7)
+                ^ (update.next_scan_start as u64).rotate_left(19)
+                ^ (update.event_count as u64).rotate_left(31)
+                ^ u64::from(update.stopped),
+            samples: update.event_count + 1,
+        }
+    }
+}
+
+#[derive(Clone, Default)]
+pub struct SparseFeedbackTickBench {
+    visual: GameplayVisualFeedbackState,
+    hold: GameplayHoldFeedbackState,
+}
+
+impl SparseFeedbackTickBench {
+    pub fn old_frame(&mut self, frame: usize) -> GameplayFrameHotPathBenchOutput {
+        self.prepare_frame(frame, false);
+        let now = frame as f32 / 120.0;
+        for slot in &mut self.visual.tap_explosions {
+            tick_tap_explosion_slot(slot, 1.0 / 120.0);
+        }
+        for slot in &mut self.visual.mine_explosions {
+            tick_mine_explosion_slot(slot, 1.0 / 120.0);
+        }
+        for slot in &mut self.visual.column_flashes {
+            if slot.is_some_and(|flash| column_flash_expired_at(flash, now)) {
+                *slot = None;
+            }
+        }
+        for slot in &mut self.hold.hold_judgments {
+            if slot.is_some_and(|info| hold_judgment_expired_at(info, now)) {
+                *slot = None;
+            }
+        }
+        for slot in &mut self.hold.held_miss_judgments {
+            if slot.is_some_and(|info| held_miss_judgment_expired_at(info, now)) {
+                *slot = None;
+            }
+        }
+        feedback_tick_output(self)
+    }
+
+    pub fn new_frame(&mut self, frame: usize) -> GameplayFrameHotPathBenchOutput {
+        self.prepare_frame(frame, true);
+        let now = frame as f32 / 120.0;
+        self.visual.tick(1.0 / 120.0, now);
+        self.hold.tick(now);
+        feedback_tick_output(self)
+    }
+
+    fn prepare_frame(&mut self, frame: usize, sparse: bool) {
+        let now = frame as f32 / 120.0;
+        if frame.is_multiple_of(257) {
+            let col = frame / 257 % MAX_COLS;
+            let value = Some(ActiveTapExplosion {
+                window: "W1",
+                bright: frame.is_multiple_of(2),
+                elapsed: 0.0,
+                duration: 0.5,
+                start_beat: now * 2.0,
+            });
+            if sparse {
+                self.visual.set_tap_explosion(col, value);
+            } else {
+                self.visual.tap_explosions[col] = value;
+            }
+        }
+        if frame.is_multiple_of(389) {
+            let col = frame / 389 % MAX_COLS;
+            let value = Some(ActiveColumnFlash {
+                grade: JudgeGrade::Great,
+                blue_fantastic: false,
+                started_at_screen_s: now,
+            });
+            if sparse {
+                self.visual.set_column_flash(col, value);
+            } else {
+                self.visual.column_flashes[col] = value;
+            }
+        }
+        if frame.is_multiple_of(509) {
+            let col = frame / 509 % MAX_COLS;
+            let value = Some(ActiveMineExplosion {
+                elapsed: 0.0,
+                duration: MINE_EXPLOSION_DURATION,
+                started_at_screen_s: now,
+            });
+            if sparse {
+                self.visual.set_mine_explosion(col, value);
+            } else {
+                self.visual.mine_explosions[col] = value;
+            }
+        }
+        if frame.is_multiple_of(601) {
+            let col = frame / 601 % MAX_COLS;
+            let value = Some(HoldJudgmentRenderInfo {
+                result: HoldResult::Held,
+                started_at_screen_s: now,
+            });
+            if sparse {
+                self.hold.set_hold_judgment(col, value);
+            } else {
+                self.hold.hold_judgments[col] = value;
+            }
+        }
+        if frame.is_multiple_of(733) {
+            let col = frame / 733 % MAX_COLS;
+            let value = Some(HeldMissRenderInfo {
+                started_at_screen_s: now,
+            });
+            if sparse {
+                self.hold.set_held_miss(col, value);
+            } else {
+                self.hold.held_miss_judgments[col] = value;
+            }
+        }
+    }
+}
+
+fn feedback_tick_output(bench: &SparseFeedbackTickBench) -> GameplayFrameHotPathBenchOutput {
+    let mut output = GameplayFrameHotPathBenchOutput::default();
+    for col in 0..MAX_COLS {
+        if let Some(active) = bench.visual.tap_explosions[col] {
+            output.checksum = output.checksum.rotate_left(5)
+                ^ u64::from(active.elapsed.to_bits())
+                ^ u64::from(active.start_beat.to_bits()).rotate_left(11)
+                ^ u64::from(active.bright);
+            output.samples += 1;
+        }
+        if let Some(active) = &bench.visual.mine_explosions[col] {
+            output.checksum = output.checksum.rotate_left(7)
+                ^ u64::from(active.elapsed.to_bits())
+                ^ u64::from(active.started_at_screen_s.to_bits()).rotate_left(13);
+            output.samples += 1;
+        }
+        if let Some(active) = bench.visual.column_flashes[col] {
+            output.checksum = output.checksum.rotate_left(9)
+                ^ u64::from(active.started_at_screen_s.to_bits())
+                ^ u64::from(active.blue_fantastic);
+            output.samples += 1;
+        }
+        if let Some(active) = bench.hold.hold_judgments[col] {
+            output.checksum = output.checksum.rotate_left(11)
+                ^ u64::from(active.started_at_screen_s.to_bits())
+                ^ match active.result {
+                    HoldResult::Held => 1,
+                    HoldResult::LetGo => 2,
+                    HoldResult::Missed => 3,
+                };
+            output.samples += 1;
+        }
+        if let Some(active) = bench.hold.held_miss_judgments[col] {
+            output.checksum = output.checksum.rotate_left(13)
+                ^ u64::from(active.started_at_screen_s.to_bits());
+            output.samples += 1;
+        }
+    }
+    output
+}

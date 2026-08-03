@@ -453,11 +453,14 @@ where
         if !self.column_flash_enabled_for_player(player, grade, blue_fantastic) {
             return;
         }
-        self.display.visual_feedback.column_flashes[column] = Some(ActiveColumnFlash {
-            grade,
-            blue_fantastic,
-            started_at_screen_s: self.boundary.total_elapsed_in_screen,
-        });
+        self.display.visual_feedback.set_column_flash(
+            column,
+            Some(ActiveColumnFlash {
+                grade,
+                blue_fantastic,
+                started_at_screen_s: self.boundary.total_elapsed_in_screen,
+            }),
+        );
     }
 
     #[inline(always)]
@@ -524,10 +527,13 @@ where
             apply_hold_let_go_player_state(&mut player_state, update.stats_update, scoring_blocked);
         apply_hold_resolution_player_state(&mut self.players_runtime.players[player], player_state);
         if update.effects.show_judgment {
-            self.display.hold_feedback.hold_judgments[column] = Some(hold_judgment_render_info(
-                update.result,
-                self.boundary.total_elapsed_in_screen,
-            ));
+            self.display.hold_feedback.set_hold_judgment(
+                column,
+                Some(hold_judgment_render_info(
+                    update.result,
+                    self.boundary.total_elapsed_in_screen,
+                )),
+            );
         }
         if player_update.apply_life_change {
             let current_music_time = self.current_music_time_seconds();
@@ -604,10 +610,13 @@ where
             self.trigger_hold_explosion(column);
         }
         if update.effects.show_judgment {
-            self.display.hold_feedback.hold_judgments[column] = Some(hold_judgment_render_info(
-                update.result,
-                self.boundary.total_elapsed_in_screen,
-            ));
+            self.display.hold_feedback.set_hold_judgment(
+                column,
+                Some(hold_judgment_render_info(
+                    update.result,
+                    self.boundary.total_elapsed_in_screen,
+                )),
+            );
         }
     }
 
@@ -759,11 +768,13 @@ where
                     PendingMissedHoldResolution::None => {}
                     PendingMissedHoldResolution::ShowMissedFeedback => {
                         let column = event.column;
-                        self.display.hold_feedback.hold_judgments[column] =
+                        self.display.hold_feedback.set_hold_judgment(
+                            column,
                             Some(HoldJudgmentRenderInfo {
                                 result: HoldResult::Missed,
                                 started_at_screen_s: self.boundary.total_elapsed_in_screen,
-                            });
+                            }),
+                        );
                     }
                     PendingMissedHoldResolution::ScoreLetGo => {
                         self.handle_hold_let_go(event.column, event.note_index, event.end_time_ns);
@@ -788,13 +799,16 @@ where
             .noteskin_effects
             .tap_explosion_duration(player, local_col, window_key, bright);
         if let Some(duration) = spawn_duration {
-            self.display.visual_feedback.tap_explosions[column] = Some(ActiveTapExplosion {
-                window: window_key,
-                bright,
-                elapsed: 0.0,
-                duration,
-                start_beat: self.clock.song_position.current_beat,
-            });
+            self.display.visual_feedback.set_tap_explosion(
+                column,
+                Some(ActiveTapExplosion {
+                    window: window_key,
+                    bright,
+                    elapsed: 0.0,
+                    duration,
+                    start_beat: self.clock.song_position.current_beat,
+                }),
+            );
         }
     }
 
@@ -805,11 +819,14 @@ where
             .display
             .noteskin_effects
             .mine_explosion_duration(player);
-        self.display.visual_feedback.mine_explosions[column] = Some(ActiveMineExplosion {
-            elapsed: 0.0,
-            duration,
-            started_at_screen_s: self.boundary.total_elapsed_in_screen,
-        });
+        self.display.visual_feedback.set_mine_explosion(
+            column,
+            Some(ActiveMineExplosion {
+                elapsed: 0.0,
+                duration,
+                started_at_screen_s: self.boundary.total_elapsed_in_screen,
+            }),
+        );
         if self.setup.config.mine_hit_sound {
             self.push_audio_command(GameplayAudioCommand::PlayPreloadedSfx(
                 "assets/sounds/boom.ogg",
@@ -887,8 +904,12 @@ where
             self.trigger_column_flash_for_grade(column, judgment.grade);
         }
         if let Some(column) = effects.held_miss_column {
-            self.display.hold_feedback.held_miss_judgments[column] =
-                Some(held_miss_render_info(self.boundary.total_elapsed_in_screen));
+            self.display.hold_feedback.set_held_miss(
+                column,
+                Some(held_miss_render_info(
+                    self.boundary.total_elapsed_in_screen,
+                )),
+            );
         }
     }
 
@@ -924,36 +945,9 @@ where
         for player in 0..self.setup.num_players {
             tick_player_combo_milestones(&mut self.players_runtime.players[player], delta_time);
         }
-        for slot in &mut self.display.visual_feedback.tap_explosions {
-            tick_tap_explosion_slot(slot, delta_time);
-        }
-        for slot in &mut self.display.visual_feedback.mine_explosions {
-            tick_mine_explosion_slot(slot, delta_time);
-        }
-        for slot in &mut self.display.visual_feedback.column_flashes {
-            if let Some(active) = slot
-                && column_flash_expired_at(*active, self.boundary.total_elapsed_in_screen)
-            {
-                *slot = None;
-            }
-        }
-        for slot in &mut self.display.hold_feedback.hold_judgments {
-            if let Some(render_info) = slot
-                && hold_judgment_expired_at(*render_info, self.boundary.total_elapsed_in_screen)
-            {
-                *slot = None;
-            }
-        }
-        for slot in &mut self.display.hold_feedback.held_miss_judgments {
-            if let Some(render_info) = slot
-                && held_miss_judgment_expired_at(
-                    *render_info,
-                    self.boundary.total_elapsed_in_screen,
-                )
-            {
-                *slot = None;
-            }
-        }
+        let now = self.boundary.total_elapsed_in_screen;
+        self.display.visual_feedback.tick(delta_time, now);
+        self.display.hold_feedback.tick(now);
     }
 
     pub fn finalize_completed_mines(&mut self) {
@@ -1236,6 +1230,7 @@ where
             let row_count = row_end;
             let mut scan_start =
                 self.chart_runtime.row_indices.judged_row_cursor[player].max(row_start);
+            let mut next_cursor = row_count;
             let mut events = [None; 8];
             loop {
                 let update = collect_ready_judged_row_events(
@@ -1246,6 +1241,7 @@ where
                     &mut events,
                 );
                 scan_start = update.next_scan_start;
+                next_cursor = next_cursor.min(update.next_cursor);
                 for event in events.iter().take(update.event_count).flatten() {
                     self.finalize_row_judgment(
                         player,
@@ -1258,13 +1254,7 @@ where
                     break;
                 }
             }
-            self.chart_runtime.row_indices.judged_row_cursor[player] =
-                advance_judged_row_cursor_for_entries(
-                    &self.chart_runtime.row_entries,
-                    (row_start, row_count),
-                    self.chart_runtime.row_indices.judged_row_cursor[player],
-                    lookahead_time_ns,
-                );
+            self.chart_runtime.row_indices.judged_row_cursor[player] = next_cursor;
         }
     }
 
