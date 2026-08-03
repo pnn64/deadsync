@@ -1,6 +1,6 @@
 use crate::OnlineRequestError;
 use deadsync_core::input::MAX_PLAYERS;
-use deadsync_core::song_time::{song_time_ns_invalid, song_time_ns_to_seconds};
+use deadsync_core::song_time::song_time_ns_to_seconds;
 use deadsync_gameplay::GameplayProfileData;
 use deadsync_net::{self as network, NetworkError};
 use deadsync_profile as profile_data;
@@ -1728,23 +1728,25 @@ pub struct ArrowCloudNpsInfo {
     pub points: Vec<ArrowCloudNpsPoint>,
 }
 
-#[inline(always)]
-pub fn life_lerp_at(life_history: &[(f32, f32)], sample_time: f32) -> f32 {
-    let Some(&(_, first_life)) = life_history.first() else {
+fn life_lerp_at(life_history: &[(f32, f32)], start_time: f32, sample_time: f32) -> f32 {
+    let Some(&(_, start_life)) = life_history.first() else {
         return 0.0;
     };
-    if life_history.len() == 1 {
-        return first_life.clamp(0.0, 1.0);
+    let start_life = start_life.clamp(0.0, 1.0);
+    if sample_time <= start_time {
+        return start_life;
     }
 
-    let later_ix = life_history.partition_point(|&(time, _)| time <= sample_time);
-    let earlier_ix = later_ix.saturating_sub(1).min(life_history.len() - 1);
-    let (earlier_time, earlier_life) = life_history[earlier_ix];
-    if later_ix >= life_history.len() {
+    let records = &life_history[life_history.partition_point(|&(time, _)| time < start_time)..];
+    let later_ix = records.partition_point(|&(time, _)| time <= sample_time);
+    let (earlier_time, earlier_life) = if later_ix == 0 {
+        (start_time, start_life)
+    } else {
+        records[later_ix - 1]
+    };
+    let Some(&(later_time, later_life)) = records.get(later_ix) else {
         return earlier_life.clamp(0.0, 1.0);
-    }
-
-    let (later_time, later_life) = life_history[later_ix];
+    };
     let dt = later_time - earlier_time;
     if dt.abs() <= f32::EPSILON {
         return earlier_life.clamp(0.0, 1.0);
@@ -1758,6 +1760,7 @@ pub fn lifebar_points(
     chart_start_second: f32,
     first_second: f32,
     last_second: f32,
+    music_rate: f32,
     point_count: usize,
 ) -> Vec<ArrowCloudLifePoint> {
     if life_history.is_empty() || point_count == 0 {
@@ -1765,13 +1768,23 @@ pub fn lifebar_points(
     }
     let last_second = last_second.max(first_second);
     let duration = (last_second - first_second).max(0.0);
-    let step = duration / point_count as f32;
+    let x_step = duration / point_count as f32;
+    // Arrow Cloud's Simply Love module samples ITGmania's unscaled
+    // m_fStepsSeconds record, then projects those values onto song seconds.
+    let life_step = last_second.max(0.0) / point_count as f32;
+    let music_rate = if music_rate.is_finite() && music_rate > 0.0 {
+        music_rate
+    } else {
+        1.0
+    };
     let mut out = Vec::with_capacity(point_count);
     for i in 0..point_count {
-        let x = chart_start_second + (i as f32 * step);
+        let sample = i as f32;
+        let x = chart_start_second + sample * x_step;
+        let sample_music_time = chart_start_second + sample * life_step * music_rate;
         out.push(ArrowCloudLifePoint {
             x: x as f64,
-            y: life_lerp_at(life_history, x) as f64,
+            y: life_lerp_at(life_history, chart_start_second, sample_music_time) as f64,
         });
     }
     out
@@ -2020,6 +2033,7 @@ pub struct ArrowCloudGameplayPayloadInput<'a> {
     pub measure_seconds: &'a [f32],
     pub density_first_second: f32,
     pub density_last_second: f32,
+    pub song_first_second: f32,
     pub life_history: &'a [(f32, f32)],
     pub profile: &'a Profile,
     pub music_rate: f32,
@@ -2089,13 +2103,7 @@ pub fn payload_from_parts(input: ArrowCloudPayloadParts) -> ArrowCloudPayload {
 pub fn payload_from_gameplay_input(input: ArrowCloudGameplayPayloadInput<'_>) -> ArrowCloudPayload {
     let first_second = input.density_first_second.min(0.0);
     let last_second = input.density_last_second.max(first_second);
-    let chart_start_second = input
-        .note_times
-        .iter()
-        .find(|&&time| !song_time_ns_invalid(time))
-        .copied()
-        .map(song_time_ns_to_seconds)
-        .unwrap_or(first_second);
+    let chart_start_second = input.song_first_second;
     let scatter = deadsync_rules::timing::build_scatter_points(
         input.notes,
         input.note_times,
@@ -2130,6 +2138,7 @@ pub fn payload_from_gameplay_input(input: ArrowCloudGameplayPayloadInput<'_>) ->
             chart_start_second,
             first_second,
             last_second,
+            input.music_rate,
             ARROWCLOUD_LIFEBAR_POINTS,
         ),
         modifiers: modifiers_from_profile(input.profile),
@@ -2259,6 +2268,7 @@ where
             measure_seconds: chart.measure_seconds_vec.as_slice(),
             density_first_second: graph.first_second,
             density_last_second: graph.last_second,
+            song_first_second: song.precise_first_second(),
             life_history: player.life_history.as_slice(),
             profile,
             music_rate: gs.music_rate(),
@@ -2833,7 +2843,7 @@ mod tests {
     #[test]
     fn lifebar_points_interpolate_life_history() {
         let life_history = [(0.0, 0.0), (10.0, 1.0)];
-        let points = lifebar_points(&life_history, 0.0, 0.0, 10.0, 5);
+        let points = lifebar_points(&life_history, 0.0, 0.0, 10.0, 1.0, 5);
 
         assert_eq!(points.len(), 5);
         assert!((points[0].x - 0.0).abs() < 1e-6);
@@ -2842,6 +2852,20 @@ mod tests {
         assert!((points[1].y - 0.2).abs() < 1e-6);
         assert!((points[4].x - 8.0).abs() < 1e-6);
         assert!((points[4].y - 0.8).abs() < 1e-6);
+    }
+
+    #[test]
+    fn lifebar_points_match_itg_steps_clock() {
+        let life_history = [(-1.0, 0.5), (4.0, 1.0)];
+        let points = lifebar_points(&life_history, 2.0, 0.0, 8.0, 0.5, 4);
+
+        assert_eq!(points.len(), 4);
+        assert!((points[0].x - 2.0).abs() < 1e-6);
+        assert!((points[0].y - 0.5).abs() < 1e-6);
+        assert!((points[1].x - 4.0).abs() < 1e-6);
+        assert!((points[1].y - 0.75).abs() < 1e-6);
+        assert!((points[2].x - 6.0).abs() < 1e-6);
+        assert!((points[2].y - 1.0).abs() < 1e-6);
     }
 
     #[test]
@@ -3473,6 +3497,7 @@ mod tests {
             measure_seconds: &[0.0, 5.0, 10.0],
             density_first_second: 0.0,
             density_last_second: 10.0,
+            song_first_second: 2.0,
             life_history: &life_history,
             profile: &profile,
             music_rate: 1.0,
@@ -3487,6 +3512,7 @@ mod tests {
         assert_eq!(payload.nps_info.peak_nps, 20.0);
         assert_eq!(payload.nps_info.points.len(), 2);
         assert_eq!(payload.lifebar_info.len(), ARROWCLOUD_LIFEBAR_POINTS);
+        assert_eq!(payload.lifebar_info[0].x, 2.0);
         assert_eq!(payload.lifebar_info[0].y, 0.5);
         assert!(!payload.passed);
         assert_eq!(payload.judgment_counts.fantastic_plus, 4);
