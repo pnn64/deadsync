@@ -1,5 +1,5 @@
 use crate::{FieldPlacement, MeasureLineMode};
-use deadlib_present::actors::{Actor, SizeSpec};
+use deadlib_present::actors::{Actor, SharedActorFrameScratch, SizeSpec};
 use deadsync_core::input::MAX_COLS;
 use std::sync::Arc;
 
@@ -101,6 +101,34 @@ pub struct BuiltNotefield {
 
 pub type CapturedActorSource = [Arc<[Actor]>; 1];
 
+/// Reusable backing for the three optional Song Lua proxy captures produced by
+/// one player's notefield.
+///
+/// Owner/thread model: the gameplay screen owns one instance per player and
+/// mutates it only while composing on the game/render frame thread. Lifetime:
+/// one song. Capacity/warmup: field and HUD capacities are reserved at screen
+/// entry. Miss/overflow behavior: child vectors grow only if the caller's
+/// explicit reserve estimate is exceeded; no lookup, pruning, or eviction is
+/// performed. Destruction happens with the gameplay screen. The scratch tracks
+/// replacements and growths, and its worst per-frame work is linear in the
+/// actors already being captured.
+#[derive(Debug)]
+pub struct CapturedActorScratch {
+    pub(crate) note_field: SharedActorFrameScratch,
+    pub(crate) combo: SharedActorFrameScratch,
+    pub(crate) judgment: SharedActorFrameScratch,
+}
+
+impl CapturedActorScratch {
+    pub fn with_capacities(field_capacity: usize, hud_capacity: usize) -> Self {
+        Self {
+            note_field: SharedActorFrameScratch::with_capacity(field_capacity),
+            combo: SharedActorFrameScratch::with_capacity(hud_capacity),
+            judgment: SharedActorFrameScratch::with_capacity(hud_capacity),
+        }
+    }
+}
+
 impl BuiltNotefield {
     pub fn empty(layout_center_x: f32) -> Self {
         Self {
@@ -125,11 +153,9 @@ pub(crate) fn actor_with_world_z(mut actor: Actor, world_z: f32) -> Actor {
 pub(crate) fn share_actor_range(
     actors: &mut Vec<Actor>,
     start: usize,
+    scratch: &mut SharedActorFrameScratch,
 ) -> Option<CapturedActorSource> {
-    if start >= actors.len() {
-        return None;
-    }
-    let shared: Arc<[Actor]> = Arc::from_iter(actors.drain(start..));
+    let shared = scratch.capture_range(actors, start)?;
     actors.push(Actor::SharedFrame {
         align: [0.0, 0.0],
         offset: [0.0, 0.0],

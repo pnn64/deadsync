@@ -24,7 +24,8 @@ mod style;
 mod transforms;
 
 pub use actor_builder::{
-    BuiltNotefield, CapturedActorSource, NotefieldFrameFeatures, NotefieldFramePlan,
+    BuiltNotefield, CapturedActorScratch, CapturedActorSource, NotefieldFrameFeatures,
+    NotefieldFramePlan,
 };
 pub use combo_feedback::ComboMilestoneAssets;
 pub use compose::{
@@ -55,6 +56,9 @@ pub use holds::{HoldMeshScratch, HoldMeshScratchStats, offset_center};
 #[doc(hidden)]
 pub use holds::{bench_fresh_hold_mesh_frame, bench_reused_hold_mesh_frame};
 pub use judgment_feedback::{IndicatorSprite, TapJudgmentSprite};
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub use measure_actors::{benchmark_edit_measure_text, benchmark_edit_measure_text_legacy};
 pub use measure_lines::MeasureLineMode;
 #[cfg(feature = "bench-support")]
 #[doc(hidden)]
@@ -580,8 +584,18 @@ mod tests {
         );
         append_edit_measure_number(&mut actors, true, None, 12.0, 34.0, 1.0, 80, "edit-font");
         append_edit_measure_number(&mut actors, true, Some(4), 12.0, 34.0, 0.5, 80, "edit-font");
+        append_edit_measure_number(
+            &mut actors,
+            true,
+            Some(i64::MAX),
+            12.0,
+            34.0,
+            0.5,
+            80,
+            "edit-font",
+        );
 
-        assert_eq!(actors.len(), 1);
+        assert_eq!(actors.len(), 2);
         match &actors[0] {
             Actor::Text {
                 align,
@@ -605,6 +619,10 @@ mod tests {
             }
             actor => panic!("expected measure number text, got {actor:?}"),
         }
+        let Actor::Text { content, .. } = &actors[1] else {
+            panic!("expected large measure number text")
+        };
+        assert_eq!(content.as_str(), i64::MAX.to_string());
     }
 
     #[test]
@@ -3723,10 +3741,16 @@ mod tests {
                 2,
             ),
         ];
-        let shared = share_actor_range(&mut actors, 1).expect("range should be shared");
+        let mut scratch = deadlib_present::actors::SharedActorFrameScratch::with_capacity(1);
+        let shared =
+            share_actor_range(&mut actors, 1, &mut scratch).expect("range should be shared");
         assert_eq!(actors.len(), 2);
         assert_eq!(shared.len(), 1);
         assert_eq!(shared[0].len(), 1);
+        assert!(matches!(
+            &shared[0][0],
+            Actor::Frame { children, .. } if children.len() == 1
+        ));
         match &actors[1] {
             Actor::SharedFrame {
                 size,

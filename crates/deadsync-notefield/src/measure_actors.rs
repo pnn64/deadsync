@@ -1,4 +1,4 @@
-use deadlib_present::actors::{Actor, TextAlign};
+use deadlib_present::actors::{Actor, TextAlign, TextContent};
 use deadlib_present::dsl::{SpriteBuilder, TextBuilder};
 
 pub(crate) fn append_edit_measure_number(
@@ -20,7 +20,7 @@ pub(crate) fn append_edit_measure_number(
 
     let mut text = TextBuilder::new();
     text.font(font);
-    text.settext(measure.to_string().into());
+    text.settext(edit_measure_text(measure as u64));
     text.align(1.0, 0.5);
     text.horizalign(TextAlign::Right);
     text.xy(x, y);
@@ -29,6 +29,22 @@ pub(crate) fn append_edit_measure_number(
     text.diffuse([1.0, 1.0, 1.0, 1.0]);
     text.z(z_measure_lines.saturating_add(1));
     actors.push(text.build(0));
+}
+
+#[cfg(feature = "bench-support")]
+pub fn benchmark_edit_measure_text_legacy(measure: u64) -> TextContent {
+    measure.to_string().into()
+}
+
+#[cfg(feature = "bench-support")]
+pub fn benchmark_edit_measure_text(measure: u64) -> TextContent {
+    edit_measure_text(measure)
+}
+
+fn edit_measure_text(measure: u64) -> TextContent {
+    u32::try_from(measure)
+        .map(TextContent::inline_u32)
+        .unwrap_or_else(|_| measure.to_string().into())
 }
 
 pub(crate) fn append_beat_bar(

@@ -504,6 +504,121 @@ pub enum Actor {
     },
 }
 
+/// Scene- or screen-owned reusable backing for an identity `SharedFrame`.
+///
+/// The game/render thread is the sole writer. `refill` reuses the child `Vec`
+/// whenever the previous frame has released its cloned `Arc`; renderer overlap
+/// replaces the slot instead of mutating shared actors. Capacity grows only
+/// when a caller exceeds its prewarmed high-water mark. There is no eviction or
+/// pruning, and storage is released with the owning screen.
+#[derive(Debug)]
+pub struct SharedActorFrameScratch {
+    source: Arc<[Actor]>,
+    initial_capacity: usize,
+    replacements: u64,
+    growths: u64,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct SharedActorFrameScratchStats {
+    pub capacity: usize,
+    pub replacements: u64,
+    pub growths: u64,
+}
+
+impl SharedActorFrameScratch {
+    pub fn with_capacity(capacity: usize) -> Self {
+        Self {
+            source: Self::new_source(capacity),
+            initial_capacity: capacity,
+            replacements: 0,
+            growths: 0,
+        }
+    }
+
+    fn new_source(capacity: usize) -> Arc<[Actor]> {
+        Arc::from([Actor::Frame {
+            align: [0.0, 0.0],
+            offset: [0.0, 0.0],
+            size: [SizeSpec::Fill, SizeSpec::Fill],
+            children: Vec::with_capacity(capacity),
+            background: None,
+            z: 0,
+        }])
+    }
+
+    pub fn refill(
+        &mut self,
+        offset: [f32; 2],
+        fill: impl FnOnce(&mut Vec<Actor>),
+    ) -> Option<Arc<[Actor]>> {
+        if Arc::strong_count(&self.source) != 1 {
+            let capacity = self.capacity().max(self.initial_capacity);
+            self.source = Self::new_source(capacity);
+            self.replacements = self.replacements.saturating_add(1);
+        }
+        let source = Arc::get_mut(&mut self.source)
+            .expect("shared actor scratch is uniquely owned after replacement");
+        let [
+            Actor::Frame {
+                offset: frame_offset,
+                children,
+                ..
+            },
+        ] = source
+        else {
+            panic!("shared actor scratch source must remain one identity frame");
+        };
+        *frame_offset = offset;
+        children.clear();
+        let old_capacity = children.capacity();
+        fill(children);
+        if children.capacity() > old_capacity {
+            self.growths = self.growths.saturating_add(1);
+        }
+        (!children.is_empty()).then(|| Arc::clone(&self.source))
+    }
+
+    pub fn capture_range(&mut self, actors: &mut Vec<Actor>, start: usize) -> Option<Arc<[Actor]>> {
+        if start >= actors.len() {
+            return None;
+        }
+        self.refill([0.0, 0.0], |children| {
+            children.extend(actors.drain(start..));
+        })
+    }
+
+    /// Release retained child references while preserving the child buffer.
+    pub fn clear(&mut self) {
+        if Arc::strong_count(&self.source) != 1 {
+            let capacity = self.capacity().max(self.initial_capacity);
+            self.source = Self::new_source(capacity);
+            self.replacements = self.replacements.saturating_add(1);
+        }
+        let [Actor::Frame { children, .. }] = Arc::get_mut(&mut self.source)
+            .expect("shared actor scratch is uniquely owned after replacement")
+        else {
+            panic!("shared actor scratch source must remain one identity frame");
+        };
+        children.clear();
+    }
+
+    pub fn capacity(&self) -> usize {
+        let [Actor::Frame { children, .. }] = self.source.as_ref() else {
+            return 0;
+        };
+        children.capacity()
+    }
+
+    pub fn stats(&self) -> SharedActorFrameScratchStats {
+        SharedActorFrameScratchStats {
+            capacity: self.capacity(),
+            replacements: self.replacements,
+            growths: self.growths,
+        }
+    }
+}
+
 impl Actor {
     fn retained_static(&self) -> bool {
         match self {
@@ -934,6 +1049,38 @@ mod tests {
             let text = TextContent::inline_u32(value);
             assert_eq!(text.as_str(), value.to_string());
         }
+    }
+
+    #[test]
+    fn shared_actor_frame_scratch_reuses_storage_and_preserves_children() {
+        let mut scratch = SharedActorFrameScratch::with_capacity(4);
+        let first = scratch
+            .refill([2.0, 3.0], |children| {
+                children.extend([
+                    Actor::CameraPush {
+                        view_proj: Matrix4::IDENTITY,
+                    },
+                    Actor::CameraPop,
+                ]);
+            })
+            .expect("non-empty source");
+        drop(first);
+        let second = scratch
+            .refill([4.0, 5.0], |children| children.push(Actor::CameraPop))
+            .expect("non-empty source");
+
+        let [
+            Actor::Frame {
+                offset, children, ..
+            },
+        ] = second.as_ref()
+        else {
+            panic!("scratch should expose one identity frame");
+        };
+        assert_eq!(*offset, [4.0, 5.0]);
+        assert!(matches!(children.as_slice(), [Actor::CameraPop]));
+        assert_eq!(scratch.stats().replacements, 0);
+        assert_eq!(scratch.stats().growths, 0);
     }
 
     #[test]

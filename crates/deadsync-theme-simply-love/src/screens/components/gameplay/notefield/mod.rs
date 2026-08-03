@@ -11,14 +11,15 @@ use deadsync_gameplay::{
     gameplay_error_bar_trim_max_window_ix, hold_explosion_enabled_for_options,
 };
 use deadsync_notefield::{
-    BrokenRunLookup, BuiltNotefield, ComboHudFrame, ComboMilestoneAssets, CounterHudFrame,
-    ErrorBarHudFrame, ErrorBarModes, HoldMeshScratch, IndicatorSprite, JudgmentHudFrame,
-    LayoutMiniIndicatorPosition, MeasureCounterOptions, MeasureLineMode, MiniHudFrame,
-    ModelMeshCache, NotefieldChartView, NotefieldComposeRequest, NotefieldFeedbackFrameView,
-    NotefieldFieldFrameView, NotefieldFrameFeatures, NotefieldGeometry, NotefieldHudFrameView,
-    NotefieldLaneFeedback, NotefieldNoteskinView, NotefieldOptions, NotefieldSongLuaView,
-    NotefieldVisualState, StreamProgressLookup, TapJudgmentHudFrame, TapJudgmentSprite,
-    ZmodLayoutParams, compose_notefield_field, compose_notefield_hud, prepare_notefield,
+    BrokenRunLookup, BuiltNotefield, CapturedActorScratch, ComboHudFrame, ComboMilestoneAssets,
+    CounterHudFrame, ErrorBarHudFrame, ErrorBarModes, HoldMeshScratch, IndicatorSprite,
+    JudgmentHudFrame, LayoutMiniIndicatorPosition, MeasureCounterOptions, MeasureLineMode,
+    MiniHudFrame, ModelMeshCache, NotefieldChartView, NotefieldComposeRequest,
+    NotefieldFeedbackFrameView, NotefieldFieldFrameView, NotefieldFrameFeatures, NotefieldGeometry,
+    NotefieldHudFrameView, NotefieldLaneFeedback, NotefieldNoteskinView, NotefieldOptions,
+    NotefieldSongLuaView, NotefieldVisualState, StreamProgressLookup, TapJudgmentHudFrame,
+    TapJudgmentSprite, ZmodLayoutParams, compose_notefield_field, compose_notefield_hud,
+    prepare_notefield,
 };
 use deadsync_notefield::{FieldPlacement, ProxyCaptureRequests, ViewOverride};
 use deadsync_profile as profile_data;
@@ -373,6 +374,7 @@ pub(crate) fn compose_frame(
     actor_resources: &ActorResourceArena,
     model_caches: &[RefCell<ModelMeshCache>; MAX_PLAYERS],
     hold_mesh_scratch: &[RefCell<HoldMeshScratch>; MAX_PLAYERS],
+    capture_scratch: &[RefCell<CapturedActorScratch>; MAX_PLAYERS],
     broken_run_lookup: &BrokenRunLookup,
     stream_progress_lookup: &StreamProgressLookup,
     profile: &profile_data::Profile,
@@ -685,16 +687,21 @@ pub(crate) fn compose_frame(
         feedback: feedback_frame,
         completed_rows: state.completed_row_visibility(player_idx),
     };
-    let field_result = compose_notefield_field(
-        actors,
-        hud_actors,
-        &mut model_cache,
-        &mut hold_mesh_scratch[player_idx].borrow_mut(),
-        &request,
-        &prepared,
-        &field_frame,
-        &noteskin_sprite_source,
-    );
+    let field_result = {
+        let mut hold_scratch = hold_mesh_scratch[player_idx].borrow_mut();
+        let mut proxy_scratch = capture_scratch[player_idx].borrow_mut();
+        compose_notefield_field(
+            actors,
+            hud_actors,
+            &mut model_cache,
+            &mut hold_scratch,
+            &mut proxy_scratch,
+            &request,
+            &prepared,
+            &field_frame,
+            &noteskin_sprite_source,
+        )
+    };
     display_mods::compose(
         hud_actors,
         state,
@@ -830,7 +837,13 @@ pub(crate) fn compose_frame(
             hold_sprite,
         },
     };
-    let hud_result = compose_notefield_hud(hud_actors, &request, &prepared, &hud_frame);
+    let hud_result = compose_notefield_hud(
+        hud_actors,
+        &request,
+        &prepared,
+        &hud_frame,
+        &mut capture_scratch[player_idx].borrow_mut(),
+    );
 
     BuiltNotefield {
         layout_center_x,

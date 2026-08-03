@@ -33,6 +33,11 @@ harness = false
 required-features = ["bench-support"]
 
 [[bench]]
+name = "edit_measure_text"
+harness = false
+required-features = ["bench-support"]
+
+[[bench]]
 name = "stream_lookups"
 harness = false
 required-features = ["bench-support"]

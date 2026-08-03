@@ -1,4 +1,4 @@
-use crate::actor_builder::{CapturedActorSource, share_actor_range};
+use crate::actor_builder::{CapturedActorScratch, CapturedActorSource, share_actor_range};
 use crate::combo_feedback::{ComboFeedbackRequest, ComboMilestoneAssets, compose_combo_feedback};
 use crate::compose::{NotefieldComposeRequest, PreparedNotefield};
 use crate::error_bar::{ErrorBarComposeRequest, ErrorBarState, compose_error_bar};
@@ -115,13 +115,14 @@ pub fn compose_notefield_hud<S>(
     request: &NotefieldComposeRequest<'_, S>,
     prepared: &PreparedNotefield<'_, S>,
     frame: &NotefieldHudFrameView<'_>,
+    capture_scratch: &mut CapturedActorScratch,
 ) -> NotefieldHudComposeResult {
     let combo_capture_start = actors.len();
     compose_combo(actors, request, prepared, &frame.combo);
     let combo_actors = request
         .capture_requests
         .combo
-        .then(|| share_actor_range(actors, combo_capture_start))
+        .then(|| share_actor_range(actors, combo_capture_start, &mut capture_scratch.combo))
         .flatten();
 
     compose_error(actors, request, prepared, &frame.error_bar);
@@ -180,7 +181,13 @@ pub fn compose_notefield_hud<S>(
     let judgment_actors = request
         .capture_requests
         .judgment
-        .then(|| share_actor_range(actors, judgment_capture_start))
+        .then(|| {
+            share_actor_range(
+                actors,
+                judgment_capture_start,
+                &mut capture_scratch.judgment,
+            )
+        })
         .flatten();
 
     NotefieldHudComposeResult {
