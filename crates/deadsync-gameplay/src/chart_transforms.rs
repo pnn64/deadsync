@@ -113,6 +113,9 @@ pub const fn player_index_for_column(
     if num_players <= 1 || cols_per_player == 0 {
         return 0;
     }
+    if num_players == 2 {
+        return (column >= cols_per_player) as usize;
+    }
     let player = column / cols_per_player;
     let last_player = num_players.saturating_sub(1);
     if player > last_player {

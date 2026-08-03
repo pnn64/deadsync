@@ -92,7 +92,7 @@ pub use notes::ScrollTravel;
 #[doc(hidden)]
 pub use notes::{
     CmodTimingBench, CmodTimingBenchFrame, HoldTravelReuseBench, IdentityAccelBench,
-    VisibleLaneCursorBench, VisibleRangeBench, XmodTimingBench,
+    OneRateCmodBench, VisibleLaneCursorBench, VisibleRangeBench, XmodTimingBench,
 };
 pub use noteskin_model::{
     ModelMeshCache, ModelMeshCacheStats, NoteskinFrameCacheStats, noteskin_model_actor,

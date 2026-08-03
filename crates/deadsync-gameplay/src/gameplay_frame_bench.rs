@@ -1540,3 +1540,102 @@ fn record_display_bpm(
         ^ (pass as u64).rotate_left(23);
     output.samples += 1;
 }
+
+#[derive(Clone)]
+pub struct SharedClockBeatBench {
+    timing: TimingData,
+    caches: GameplayTimeToBeatCaches,
+}
+
+impl Default for SharedClockBeatBench {
+    fn default() -> Self {
+        let timing = TimingData::from_segments(
+            0.0,
+            0.0,
+            &TimingSegments {
+                bpms: (0..8_192)
+                    .map(|index| (index as f32 * 0.5, 90.0 + (index % 181) as f32))
+                    .collect(),
+                ..TimingSegments::default()
+            },
+            &[],
+        );
+        let timing_players = [&timing; MAX_PLAYERS];
+        let caches = GameplayTimeToBeatCaches::new(&timing, &timing_players);
+        Self { timing, caches }
+    }
+}
+
+impl SharedClockBeatBench {
+    pub fn old_frame(&mut self, frame: usize) -> GameplayFrameHotPathBenchOutput {
+        let time_ns = clock_bench_time_ns(frame);
+        let song = self.caches.song_info(&self.timing, time_ns);
+        let display = self.caches.display_info(&self.timing, time_ns);
+        let search = self
+            .caches
+            .notefield_search_beat(0, &self.timing, time_ns);
+        let visible = self.caches.visible_beat(0, &self.timing, time_ns);
+        record_clock_beats(song, display, search, visible)
+    }
+
+    pub fn new_frame(&mut self, frame: usize) -> GameplayFrameHotPathBenchOutput {
+        let time_ns = clock_bench_time_ns(frame);
+        let song = self.caches.song_info(&self.timing, time_ns);
+        record_clock_beats(song, song, song.beat, song.beat)
+    }
+}
+
+#[inline(always)]
+fn clock_bench_time_ns(frame: usize) -> SongTimeNs {
+    (frame as SongTimeNs).saturating_mul(8_333_333)
+}
+
+#[inline(always)]
+fn record_clock_beats(
+    song: BeatInfo,
+    display: BeatInfo,
+    search: f32,
+    visible: f32,
+) -> GameplayFrameHotPathBenchOutput {
+    let values = [song.beat, song.bpm, display.beat, display.bpm, search, visible];
+    let mut output = GameplayFrameHotPathBenchOutput::default();
+    for value in values {
+        output.checksum = output.checksum.rotate_left(9) ^ u64::from(value.to_bits());
+        output.samples += 1;
+    }
+    output.checksum ^= (song.is_in_freeze as u64) << 1
+        | (song.is_in_delay as u64) << 2
+        | (display.is_in_freeze as u64) << 3
+        | (display.is_in_delay as u64) << 4;
+    output
+}
+
+#[derive(Clone, Copy, Default)]
+pub struct TwoPlayerColumnMapBench;
+
+impl TwoPlayerColumnMapBench {
+    pub fn old_frame(&self, frame: usize) -> GameplayFrameHotPathBenchOutput {
+        self.frame(frame, false)
+    }
+
+    pub fn new_frame(&self, frame: usize) -> GameplayFrameHotPathBenchOutput {
+        self.frame(frame, true)
+    }
+
+    fn frame(&self, frame: usize, optimized: bool) -> GameplayFrameHotPathBenchOutput {
+        let cols_per_player = std::hint::black_box(MAX_COLS / MAX_PLAYERS);
+        let num_players = std::hint::black_box(MAX_PLAYERS);
+        let mut output = GameplayFrameHotPathBenchOutput::default();
+        for sample in 0..96 {
+            let column = std::hint::black_box((frame + sample * 5) % MAX_COLS);
+            let player = if optimized {
+                player_index_for_column(num_players, cols_per_player, column)
+            } else {
+                (column / cols_per_player).min(num_players - 1)
+            };
+            output.checksum = output.checksum.rotate_left(5) ^ player as u64;
+            output.samples += 1;
+        }
+        output
+    }
+}

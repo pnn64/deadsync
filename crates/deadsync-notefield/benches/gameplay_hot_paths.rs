@@ -1,8 +1,8 @@
 use deadsync_notefield::{
     CameraWrapBench, CommonNoteTransformBench, CueScanBench, FeedbackLaneCacheBench,
     HoldTravelReuseBench, IdentityAccelBench, LaneVisualCacheBench, MeasureLineMode,
-    MeasureLinePlanBench, MeasureLineTraversalBench, NotefieldPrepBench, TapExplosionCullBench,
-    VisibleLaneCursorBench, VisibleRangeBench, XmodTimingBench,
+    MeasureLinePlanBench, MeasureLineTraversalBench, NotefieldPrepBench, OneRateCmodBench,
+    TapExplosionCullBench, VisibleLaneCursorBench, VisibleRangeBench, XmodTimingBench,
 };
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::hint::black_box;
@@ -594,6 +594,26 @@ fn main() {
         },
         |frame| {
             let output = common_transforms.new_identity_lane_cache_frame(frame);
+            Output {
+                checksum: output.checksum,
+                samples: output.samples,
+            }
+        },
+    );
+
+    let one_rate_cmod = OneRateCmodBench;
+    run_pair(
+        "1.0x constant-scroll travel",
+        "96 visible CMod note/hold travel samples at the default music rate",
+        |frame| {
+            let output = one_rate_cmod.old_frame(frame);
+            Output {
+                checksum: output.checksum,
+                samples: output.samples,
+            }
+        },
+        |frame| {
+            let output = one_rate_cmod.new_frame(frame);
             Output {
                 checksum: output.checksum,
                 samples: output.samples,

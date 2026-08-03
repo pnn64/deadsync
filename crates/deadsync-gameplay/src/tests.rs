@@ -15450,6 +15450,21 @@ mod tests {
         assert_eq!(player_index_for_column(2, 4, 3), 0);
         assert_eq!(player_index_for_column(2, 4, 4), 1);
         assert_eq!(player_index_for_column(2, 4, 9), 1);
+        for num_players in 1..=4 {
+            for cols_per_player in 0..=8 {
+                for column in 0..=32 {
+                    let expected = if num_players <= 1 || cols_per_player == 0 {
+                        0
+                    } else {
+                        (column / cols_per_player).min(num_players - 1)
+                    };
+                    assert_eq!(
+                        player_index_for_column(num_players, cols_per_player, column),
+                        expected,
+                    );
+                }
+            }
+        }
 
         assert_eq!(local_column_for_field(0, 6), 6);
         assert_eq!(local_column_for_field(4, 6), 2);

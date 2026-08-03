@@ -1029,6 +1029,97 @@ mod runtime_regression_tests {
     }
 
     #[test]
+    fn shared_gameplay_clock_matches_authoritative_timing_queries() {
+        let mut state = regression_state();
+        assert!(Arc::ptr_eq(
+            &state.timing_runtime.timing,
+            &state.timing_runtime.timing_players[0],
+        ));
+        state.clock.visible_timing.global_visual_delay_seconds = 0.0;
+        state.clock.visible_timing.player_visual_delay_seconds[0] = 0.0;
+
+        let music_time_ns = song_time_ns_from_seconds(3.125);
+        let expected = state
+            .timing_runtime
+            .timing
+            .get_beat_info_from_time_ns(music_time_ns);
+        state.update_song_position_from_time(music_time_ns, music_time_ns, music_time_ns);
+
+        assert_eq!(state.clock.song_position.current_beat.to_bits(), expected.beat.to_bits());
+        assert_eq!(state.clock.song_position.current_bpm.to_bits(), expected.bpm.to_bits());
+        assert_eq!(
+            state.clock.song_position.current_beat_display.to_bits(),
+            expected.beat.to_bits(),
+        );
+        assert_eq!(state.visible_beat(0).to_bits(), expected.beat.to_bits());
+        assert_eq!(
+            state.notefield_search_beat(0).to_bits(),
+            expected.beat.to_bits(),
+        );
+
+        let display_time_ns = song_time_ns_from_seconds(3.375);
+        let expected_display = state
+            .timing_runtime
+            .timing
+            .get_beat_info_from_time_ns(display_time_ns);
+        state.update_song_position_from_time(music_time_ns, display_time_ns, display_time_ns);
+
+        assert_eq!(
+            state.clock.song_position.current_beat_display.to_bits(),
+            expected_display.beat.to_bits(),
+        );
+        assert_eq!(
+            state.clock.song_position.current_bpm_display.to_bits(),
+            expected_display.bpm.to_bits(),
+        );
+        assert_eq!(
+            state.visible_beat(0).to_bits(),
+            expected_display.beat.to_bits(),
+        );
+        assert_eq!(
+            state.notefield_search_beat(0).to_bits(),
+            expected.beat.to_bits(),
+        );
+    }
+
+    #[test]
+    fn detached_player_timing_keeps_independent_clock_queries() {
+        let mut state = regression_state();
+        Arc::make_mut(&mut state.timing_runtime.timing_players[0])
+            .shift_song_offset_seconds(0.125);
+        state.clock.visible_timing.global_visual_delay_seconds = 0.0;
+        state.clock.visible_timing.player_visual_delay_seconds[0] = 0.0;
+        state.reset_time_to_beat_caches();
+        assert!(!Arc::ptr_eq(
+            &state.timing_runtime.timing,
+            &state.timing_runtime.timing_players[0],
+        ));
+
+        let music_time_ns = song_time_ns_from_seconds(3.125);
+        let expected_song = state
+            .timing_runtime
+            .timing
+            .get_beat_info_from_time_ns(music_time_ns);
+        let expected_player = state.timing_runtime.timing_players[0]
+            .get_beat_info_from_time_ns(music_time_ns);
+        state.update_song_position_from_time(music_time_ns, music_time_ns, music_time_ns);
+
+        assert_ne!(expected_song.beat.to_bits(), expected_player.beat.to_bits());
+        assert_eq!(
+            state.clock.song_position.current_beat.to_bits(),
+            expected_song.beat.to_bits(),
+        );
+        assert_eq!(
+            state.notefield_search_beat(0).to_bits(),
+            expected_player.beat.to_bits(),
+        );
+        assert_eq!(
+            state.visible_beat(0).to_bits(),
+            expected_player.beat.to_bits(),
+        );
+    }
+
+    #[test]
     fn live_input_snapshots_leave_inactive_column_capacity_empty() {
         let mut state = regression_state();
         assert_eq!(state.setup.num_cols, 4);

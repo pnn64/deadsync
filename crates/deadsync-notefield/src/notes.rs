@@ -381,6 +381,10 @@ enum RawTravel {
     Edit {
         current_beat: f32,
     },
+    ConstantOneRate {
+        current_time_ns: SongTimeNs,
+        beats_per_second: f32,
+    },
     Constant {
         current_time_ns: SongTimeNs,
         rate: f32,
@@ -423,14 +427,19 @@ pub(crate) fn scroll_travel<'a>(request: ScrollTravelRequest<'a>) -> ScrollTrave
                 } else {
                     1.0
                 };
-                (
+                let raw = if rate == 1.0 {
+                    RawTravel::ConstantOneRate {
+                        current_time_ns: request.current_time_ns,
+                        beats_per_second: c_bpm / 60.0,
+                    }
+                } else {
                     RawTravel::Constant {
                         current_time_ns: request.current_time_ns,
                         rate,
                         beats_per_second: c_bpm / 60.0,
-                    },
-                    request.field_zoom,
-                )
+                    }
+                };
+                (raw, request.field_zoom)
             }
             ScrollSpeedSetting::XMod(_) | ScrollSpeedSetting::MMod(_) => {
                 let player_multiplier = request
@@ -466,13 +475,24 @@ impl ScrollTravel<'_> {
         self.accel_is_identity
             && match self.raw {
                 RawTravel::Beat { .. } => displayed_beat_monotonic,
-                RawTravel::Edit { .. } | RawTravel::Constant { .. } => true,
+                RawTravel::Edit { .. }
+                | RawTravel::ConstantOneRate { .. }
+                | RawTravel::Constant { .. } => true,
             }
     }
 
     pub fn raw_beat(&self, beat: f32) -> f32 {
         match self.raw {
             RawTravel::Edit { current_beat } => edit_beat_scroll_travel(beat, current_beat),
+            RawTravel::ConstantOneRate {
+                current_time_ns,
+                beats_per_second,
+            } => {
+                let note_time_ns = self.request.timing.get_time_for_beat_ns(beat);
+                song_time_ns_delta_seconds(note_time_ns, current_time_ns)
+                    * beats_per_second
+                    * ScrollSpeedSetting::ARROW_SPACING
+            }
             RawTravel::Constant {
                 current_time_ns,
                 rate,
@@ -509,6 +529,18 @@ impl ScrollTravel<'_> {
         cached_time_ns: Option<SongTimeNs>,
         cached_displayed_beat: Option<f32>,
     ) -> f32 {
+        if let (
+            RawTravel::ConstantOneRate {
+                current_time_ns,
+                beats_per_second,
+            },
+            Some(note_time_ns),
+        ) = (self.raw, cached_time_ns)
+        {
+            return song_time_ns_delta_seconds(note_time_ns, current_time_ns)
+                * beats_per_second
+                * ScrollSpeedSetting::ARROW_SPACING;
+        }
         if let (
             RawTravel::Constant {
                 current_time_ns,
@@ -1670,12 +1702,44 @@ mod timing_bench {
             self.0.hold_travel_reuse_frame(frame, true, false)
         }
     }
+
+    #[derive(Default)]
+    pub struct OneRateCmodBench;
+
+    impl OneRateCmodBench {
+        pub fn old_frame(&self, frame: usize) -> CmodTimingBenchFrame {
+            one_rate_cmod_frame(frame, false)
+        }
+
+        pub fn new_frame(&self, frame: usize) -> CmodTimingBenchFrame {
+            one_rate_cmod_frame(frame, true)
+        }
+    }
+
+    fn one_rate_cmod_frame(frame: usize, optimized: bool) -> CmodTimingBenchFrame {
+        let rate = std::hint::black_box(1.0_f32);
+        let beats_per_second = std::hint::black_box(725.0_f32 / 60.0_f32);
+        let mut output = CmodTimingBenchFrame::default();
+        for sample in 0..VISIBLE_NOTES {
+            let delta_seconds =
+                std::hint::black_box(((sample * 37 + frame * 3) % 1_440) as f32 / 120.0 - 2.0);
+            let real_seconds = if optimized {
+                delta_seconds
+            } else {
+                delta_seconds / rate
+            };
+            let raw = real_seconds * beats_per_second * ScrollSpeedSetting::ARROW_SPACING;
+            output.checksum = output.checksum.rotate_left(7) ^ u64::from(raw.to_bits());
+            output.samples += 1;
+        }
+        output
+    }
 }
 
 #[cfg(feature = "bench-support")]
 pub use timing_bench::{
     CmodTimingBench, CmodTimingBenchFrame, HoldTravelReuseBench, IdentityAccelBench,
-    VisibleLaneCursorBench, VisibleRangeBench, XmodTimingBench,
+    OneRateCmodBench, VisibleLaneCursorBench, VisibleRangeBench, XmodTimingBench,
 };
 
 #[cfg(test)]
@@ -1684,6 +1748,7 @@ mod tests {
         MineLayerRequest, NoteGlowRequest, NoteLayerRequest, ScrollTravelRequest,
         compose_mine_layers, compose_note_glow, compose_note_layer, for_each_visible_hold_index,
         for_each_visible_note_index, hold_overlaps_visible_window, scroll_travel,
+        song_time_ns_delta_seconds,
     };
     use crate::{
         AccelYParams, ModelMeshCache, ModelMeshCacheStats, apply_accel_y, move_col_extra,
@@ -2353,6 +2418,27 @@ mod tests {
         assert_near(displayed.raw_beat(5.0), 16.0);
         assert_near(edit.raw_beat(5.0), 64.0);
         assert_near(edit.adjusted(edit.raw_beat(5.0)), 128.0);
+    }
+
+    #[test]
+    fn constant_scroll_rate_variants_are_bit_exact() {
+        let timing = timing();
+        for rate in [0.5_f32, 0.75, 1.0, 1.25, 2.0] {
+            let mut request = request(&timing, ScrollSpeedSetting::CMod(725.0), 4.0);
+            request.music_rate = rate;
+            let travel = scroll_travel(request);
+            let note_beat = 7.375_f32;
+            let note_time_ns = timing.get_time_for_beat_ns(note_beat);
+            let expected = (song_time_ns_delta_seconds(note_time_ns, request.current_time_ns)
+                / rate)
+                * (725.0 / 60.0)
+                * ScrollSpeedSetting::ARROW_SPACING;
+            assert_eq!(
+                travel.raw_beat(note_beat).to_bits(),
+                expected.to_bits(),
+                "rate {rate}",
+            );
+        }
     }
 
     #[test]

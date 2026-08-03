@@ -4,7 +4,8 @@ use deadsync_gameplay::{
     IdleHoldPhaseBench, IdleLaneScanBench, IdleReceptorGlowBench, InputLaneSearchCursorBench,
     InputQueueDrainBench, JudgedRowCursorBench, LiveNotefieldOptionsBench, OptionalFrameWorkBench,
     PressedLaneMaskBench, RegularCueCursorBench, ResolutionDistanceCacheBench,
-    SharedMissCutoffBench, SparseFeedbackTickBench, StableNotefieldRefreshBench,
+    SharedClockBeatBench, SharedMissCutoffBench, SparseFeedbackTickBench,
+    StableNotefieldRefreshBench, TwoPlayerColumnMapBench,
 };
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::hint::black_box;
@@ -275,6 +276,23 @@ fn main() {
         "3 HUD consumers over 8192 BPM segments",
         |frame| display_bpm.old_frame(frame),
         |frame| display_bpm.new_frame(frame),
+    );
+
+    let mut old_clock_beats = SharedClockBeatBench::default();
+    let mut new_clock_beats = old_clock_beats.clone();
+    run_pair(
+        "shared gameplay clock beat info",
+        "one player with identical song/display/visible timestamps over 8192 BPM segments",
+        move |frame| old_clock_beats.old_frame(frame),
+        move |frame| new_clock_beats.new_frame(frame),
+    );
+
+    let column_map = TwoPlayerColumnMapBench;
+    run_pair(
+        "two-player lane ownership",
+        "96 hot lane-owner queries across 8 versus lanes",
+        |frame| column_map.old_frame(frame),
+        |frame| column_map.new_frame(frame),
     );
 }
 

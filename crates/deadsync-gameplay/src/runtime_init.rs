@@ -97,6 +97,9 @@ where
     timing_base.set_global_offset_seconds(config.global_offset_seconds);
     let timing = Arc::new(timing_base);
     let mut timing_players: [Arc<TimingData>; MAX_PLAYERS] = std::array::from_fn(|player| {
+        if player == 0 && player_global_offset_shift_seconds[player] == 0.0 {
+            return Arc::clone(&timing);
+        }
         let mut t = gameplay_charts[player].timing.clone();
         t.shift_song_offset_seconds(pack_sync_offset_seconds);
         t.set_global_offset_seconds(

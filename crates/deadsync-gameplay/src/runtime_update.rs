@@ -3010,10 +3010,13 @@ where
             .song_info(&self.timing_runtime.timing, music_time_ns);
         self.clock.song_position.current_beat = beat_info.beat;
         self.clock.song_position.current_bpm = beat_info.bpm;
-        let display_info = self
-            .timing_runtime
-            .time_to_beat_caches
-            .display_info(&self.timing_runtime.timing, display_time_ns);
+        let display_info = if display_time_ns == music_time_ns {
+            beat_info
+        } else {
+            self.timing_runtime
+                .time_to_beat_caches
+                .display_info(&self.timing_runtime.timing, display_time_ns)
+        };
         self.clock.song_position.current_beat_display = display_info.beat;
         self.clock.song_position.current_bpm_display = display_info.bpm;
         self.display
@@ -3021,26 +3024,34 @@ where
             .set(beat_info.is_in_freeze, beat_info.is_in_delay);
 
         for player in 0..self.setup.num_players {
+            let timing_player = &self.timing_runtime.timing_players[player];
+            let shares_song_timing = Arc::ptr_eq(&self.timing_runtime.timing, timing_player);
             let delay = self.clock.visible_timing.visual_delay_seconds(player);
             let visible_time_ns = visible_notefield_time_ns(visual_scroll_time_ns, delay);
             let visible_time_seconds = song_time_ns_to_seconds(visible_time_ns);
-            self.clock.visible_timing.notefield_search_beat[player] = self
-                .timing_runtime
-                .time_to_beat_caches
-                .notefield_search_beat(
+            self.clock.visible_timing.notefield_search_beat[player] = if shares_song_timing {
+                beat_info.beat
+            } else {
+                self.timing_runtime
+                    .time_to_beat_caches
+                    .notefield_search_beat(player, timing_player, music_time_ns)
+            };
+            let visible_beat = if shares_song_timing && visible_time_ns == music_time_ns {
+                beat_info.beat
+            } else if shares_song_timing && visible_time_ns == display_time_ns {
+                display_info.beat
+            } else {
+                self.timing_runtime.time_to_beat_caches.visible_beat(
                     player,
-                    &self.timing_runtime.timing_players[player],
-                    music_time_ns,
-                );
+                    timing_player,
+                    visible_time_ns,
+                )
+            };
             self.clock.visible_timing.set_player_time(
                 player,
                 visible_time_ns,
                 visible_time_seconds,
-                self.timing_runtime.time_to_beat_caches.visible_beat(
-                    player,
-                    &self.timing_runtime.timing_players[player],
-                    visible_time_ns,
-                ),
+                visible_beat,
             );
             self.display
                 .cue_runtime
