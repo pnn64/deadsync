@@ -1048,7 +1048,8 @@ mod tests {
     #[test]
     fn evaluation_life_line_matches_graph_display_sampling_and_offset() {
         let points =
-            graph_display_life_points(&[(-2.0, 0.5), (12.0, 1.0)], 2.0, 0.0, 12.0, 120.0, 64.0);
+            graph_display_life_points(&[(-2.0, 0.5), (12.0, 1.0)], 2.0, 0.0, 12.0, 120.0, 64.0)
+                .expect("valid GraphDisplay samples");
 
         assert_eq!(points.len(), GRAPH_LIFE_SAMPLE_COUNT);
         assert!((points[0][0] - 20.0).abs() < 0.001);
@@ -1971,6 +1972,9 @@ pub struct State {
     fail_stream_progress: [Option<(u32, u32)>; MAX_PLAYERS],
     pub event_progress: [Vec<score_data::EventProgress>; MAX_PLAYERS],
     pub density_graph_mesh: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS],
+    /// Screen-owned immutable mesh, warmed during evaluation initialization so
+    /// graph-pane changes only share its vertex payload.
+    pub life_graph_mesh: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS],
     pub timing_hist_mesh: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS],
     pub timing_hist_mesh_ex: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS],
     pub timing_hist_mesh_hard_ex: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS],
@@ -2033,6 +2037,7 @@ impl Clone for State {
             fail_stream_progress: self.fail_stream_progress,
             event_progress: self.event_progress.clone(),
             density_graph_mesh: self.density_graph_mesh.clone(),
+            life_graph_mesh: self.life_graph_mesh.clone(),
             timing_hist_mesh: self.timing_hist_mesh.clone(),
             timing_hist_mesh_ex: self.timing_hist_mesh_ex.clone(),
             timing_hist_mesh_hard_ex: self.timing_hist_mesh_hard_ex.clone(),
@@ -2085,6 +2090,8 @@ pub fn init(gameplay_results: Option<gameplay::State>, init_view: EvaluationInit
     let mut score_info: [Option<ScoreInfo>; MAX_PLAYERS] = std::array::from_fn(|_| None);
     let mut fail_stream_progress = [None; MAX_PLAYERS];
     let mut density_graph_mesh: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS] =
+        std::array::from_fn(|_| None);
+    let mut life_graph_mesh: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS] =
         std::array::from_fn(|_| None);
     let mut timing_hist_mesh: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS] =
         std::array::from_fn(|_| None);
@@ -2417,6 +2424,7 @@ pub fn init(gameplay_results: Option<gameplay::State>, init_view: EvaluationInit
                 const GRAPH_H: f32 = 64.0;
                 build_eval_density_graph_mesh(si, graph_width, GRAPH_H)
             };
+            life_graph_mesh[player_idx] = build_eval_life_graph_mesh(si, graph_width, 64.0);
 
             let scoring_scatter =
                 eval_graph_default_for(si.show_fa_plus_pane, si.show_hard_ex_score);
@@ -2623,6 +2631,7 @@ pub fn init(gameplay_results: Option<gameplay::State>, init_view: EvaluationInit
         fail_stream_progress,
         event_progress: std::array::from_fn(|_| Vec::new()),
         density_graph_mesh,
+        life_graph_mesh,
         timing_hist_mesh,
         timing_hist_mesh_ex,
         timing_hist_mesh_hard_ex,
@@ -2718,6 +2727,11 @@ pub fn init_from_score_info(
             let si = score_info.get(player_idx).and_then(|s| s.as_ref())?;
             build_eval_density_graph_mesh(si, graph_width, 64.0)
         });
+    let life_graph_mesh: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS] =
+        std::array::from_fn(|player_idx| {
+            let si = score_info.get(player_idx).and_then(|s| s.as_ref())?;
+            build_eval_life_graph_mesh(si, graph_width, 64.0)
+        });
     let scatter_mesh_itg: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS] =
         std::array::from_fn(|player_idx| {
             let si = score_info.get(player_idx).and_then(|s| s.as_ref())?;
@@ -2799,6 +2813,7 @@ pub fn init_from_score_info(
         fail_stream_progress: [None; MAX_PLAYERS],
         event_progress: std::array::from_fn(|_| Vec::new()),
         density_graph_mesh,
+        life_graph_mesh,
         timing_hist_mesh,
         timing_hist_mesh_ex,
         timing_hist_mesh_hard_ex,
@@ -3729,39 +3744,169 @@ fn graph_display_life_points(
     graph_last: f32,
     graph_width: f32,
     graph_height: f32,
-) -> Vec<[f32; 2]> {
-    if life_history.is_empty()
-        || !record_start.is_finite()
-        || !graph_first.is_finite()
-        || !graph_last.is_finite()
-        || graph_width <= 0.0
-        || graph_height <= 0.0
-    {
-        return Vec::new();
+) -> Option<[[f32; 2]; GRAPH_LIFE_SAMPLE_COUNT]> {
+    if life_history.is_empty() || graph_height <= 0.0 {
+        return None;
     }
 
-    let graph_last = graph_last.max(graph_first + 0.001);
+    let (graph_last, line_left, sample_x_step) =
+        graph_display_life_layout(record_start, graph_first, graph_last, graph_width)?;
     let record_duration = graph_last - record_start;
-    if record_duration <= 0.0 {
-        return Vec::new();
-    }
-    let line_left = ((record_start - graph_first) / (graph_last - graph_first)) * graph_width;
-    let line_width = graph_width - line_left;
     let sample_time_step = record_duration / GRAPH_LIFE_SAMPLE_COUNT as f32;
-    let sample_x_step = line_width / (GRAPH_LIFE_SAMPLE_COUNT - 1) as f32;
 
-    let mut points = Vec::with_capacity(GRAPH_LIFE_SAMPLE_COUNT);
+    let mut points = [[0.0_f32; 2]; GRAPH_LIFE_SAMPLE_COUNT];
     for i in 0..GRAPH_LIFE_SAMPLE_COUNT {
         // GraphDisplay samples life with a denominator of 100 but lays those
         // samples across its width with a denominator of 99.
         let sample_time = record_start + i as f32 * sample_time_step;
         let life = life_record_lerp_at(life_history, record_start, sample_time);
-        points.push([
+        points[i] = [
             line_left + i as f32 * sample_x_step,
             (1.0 - life) * graph_height + 1.0,
-        ]);
+        ];
     }
-    points
+    Some(points)
+}
+
+fn graph_display_life_layout(
+    record_start: f32,
+    graph_first: f32,
+    graph_last: f32,
+    graph_width: f32,
+) -> Option<(f32, f32, f32)> {
+    if !record_start.is_finite()
+        || !graph_first.is_finite()
+        || !graph_last.is_finite()
+        || graph_width <= 0.0
+    {
+        return None;
+    }
+    let graph_last = graph_last.max(graph_first + 0.001);
+    if graph_last <= record_start {
+        return None;
+    }
+    let line_left = ((record_start - graph_first) / (graph_last - graph_first)) * graph_width;
+    let sample_x_step = (graph_width - line_left) / (GRAPH_LIFE_SAMPLE_COUNT - 1) as f32;
+    Some((graph_last, line_left, sample_x_step))
+}
+
+fn eval_life_record_start(si: &ScoreInfo) -> f32 {
+    if si.is_course_summary() {
+        0.0
+    } else {
+        si.song.precise_first_second()
+    }
+}
+
+fn eval_life_graph_first(si: &ScoreInfo) -> f32 {
+    if si.is_course_summary() {
+        0.0
+    } else {
+        si.graph_first_second
+    }
+}
+
+fn build_eval_life_graph_mesh(
+    si: &ScoreInfo,
+    graph_width: f32,
+    graph_height: f32,
+) -> Option<Arc<[MeshVertex]>> {
+    let points = graph_display_life_points(
+        &si.life_history,
+        eval_life_record_start(si),
+        eval_life_graph_first(si),
+        si.graph_last_second,
+        graph_width,
+        graph_height,
+    )?;
+    let mesh = deadlib_present::density::build_graph_line_mesh(&points, 2.0, [1.0, 1.0, 1.0, 1.0]);
+    (!mesh.is_empty()).then_some(mesh)
+}
+
+#[cfg(feature = "bench-support")]
+pub fn benchmark_eval_life_line(
+    life_history: &[(f32, f32)],
+    record_start: f32,
+    graph_first: f32,
+    graph_last: f32,
+    graph_width: f32,
+    graph_height: f32,
+) -> Arc<[MeshVertex]> {
+    let Some(points) = graph_display_life_points(
+        life_history,
+        record_start,
+        graph_first,
+        graph_last,
+        graph_width,
+        graph_height,
+    ) else {
+        return Arc::from([]);
+    };
+    deadlib_present::density::build_graph_line_mesh(&points, 2.0, [1.0, 1.0, 1.0, 1.0])
+}
+
+#[cfg(feature = "bench-support")]
+pub fn benchmark_eval_life_line_legacy(
+    life_history: &[(f32, f32)],
+    graph_first: f32,
+    graph_last: f32,
+    graph_width: f32,
+    graph_height: f32,
+) -> Vec<Actor> {
+    let graph_last = graph_last.max(graph_first + 0.001);
+    let mut out = Vec::with_capacity(life_history.len() * 2 + 16);
+    let mut last_x = -999.0_f32;
+    let mut last_y = -999.0_f32;
+
+    for &(time, life) in life_history {
+        let x = eval_graph_x(time, graph_first, graph_last, graph_width);
+        let y = ((1.0 - life).clamp(0.0, 1.0) * graph_height + 1.0)
+            .clamp(1.0, (graph_height - 1.0).max(1.0));
+        if (x - last_x).abs() < 0.5 && (y - last_y).abs() < 0.5 {
+            continue;
+        }
+
+        if last_x > -900.0 {
+            let width = (x - last_x).max(0.0);
+            if width > 0.5 {
+                out.push(act!(quad:
+                    align(0.0, 0.5): xy(last_x, last_y):
+                    setsize(width, 2.0):
+                    diffuse(1.0, 1.0, 1.0, 0.8):
+                    z(4)
+                ));
+            }
+            let height = (y - last_y).abs();
+            if height > 0.5 {
+                out.push(act!(quad:
+                    align(0.5, 0.0): xy(x, last_y.min(y)):
+                    setsize(2.0, height):
+                    diffuse(1.0, 1.0, 1.0, 0.8):
+                    z(4)
+                ));
+            }
+        } else {
+            out.push(act!(quad:
+                align(0.5, 0.5): xy(x, y):
+                setsize(2.0, 2.0):
+                diffuse(1.0, 1.0, 1.0, 0.8):
+                z(4)
+            ));
+        }
+        last_x = x;
+        last_y = y;
+    }
+
+    let width = graph_width - last_x;
+    if last_x > -900.0 && width > 0.5 {
+        out.push(act!(quad:
+            align(0.0, 0.5): xy(last_x, last_y):
+            setsize(width, 2.0):
+            diffuse(1.0, 1.0, 1.0, 0.8):
+            z(4)
+        ));
+    }
+    out
 }
 
 #[inline(always)]
@@ -5378,44 +5523,40 @@ pub fn push_actors(
                         }
                     },
                     {
-                        let mut life_children: Vec<Actor> = Vec::with_capacity(16);
                         let first = si.graph_first_second;
                         let last = si.graph_last_second.max(first + 0.001_f32);
 
-                        let record_start = if si.is_course_summary() {
-                            0.0
-                        } else {
-                            si.song.precise_first_second()
-                        };
-                        let life_graph_first = if si.is_course_summary() { 0.0 } else { first };
-                        let life_points = graph_display_life_points(
-                            &si.life_history,
-                            record_start,
-                            life_graph_first,
-                            last,
-                            graph_width,
-                            graph_height,
-                        );
-                        let life_mesh = deadlib_present::density::build_graph_line_mesh(
-                            &life_points,
-                            2.0,
-                            [1.0, 1.0, 1.0, 1.0],
-                        );
-                        if !life_mesh.is_empty() {
+                        let record_start = eval_life_record_start(si);
+                        let life_graph_first = eval_life_graph_first(si);
+                        let life_mesh = state.life_graph_mesh[player_idx].as_ref();
+                        let barely = barely_marker_sample(si, record_start);
+                        let child_capacity = usize::from(life_mesh.is_some())
+                            + usize::from(barely.is_some()) * 3
+                            + usize::from(si.fail_time.is_some()) * 4;
+                        let mut life_children: Vec<Actor> = Vec::with_capacity(child_capacity);
+
+                        if let Some(life_mesh) = life_mesh {
                             life_children.push(Actor::Mesh {
                                 align: [0.0, 0.0],
                                 offset: [0.0, 0.0],
                                 size: [SizeSpec::Px(graph_width), SizeSpec::Px(graph_height)],
-                                vertices: Arc::from(life_mesh.into_boxed_slice()),
+                                vertices: Arc::clone(life_mesh),
                                 visible: true,
                                 blend: BlendMode::Alpha,
                                 z: 4,
                             });
                         }
 
-                        if let Some((barely_ix, _)) = barely_marker_sample(si, record_start)
-                            && let Some(&[x, y]) = life_points.get(barely_ix)
+                        if let Some((barely_ix, barely_life)) = barely
+                            && let Some((_, line_left, sample_x_step)) = graph_display_life_layout(
+                                record_start,
+                                life_graph_first,
+                                last,
+                                graph_width,
+                            )
                         {
+                            let x = line_left + barely_ix as f32 * sample_x_step;
+                            let y = (1.0 - barely_life) * graph_height + 1.0;
                             // Keep a tiny marker on the life line, then animate the label/arrow
                             // in the same timing pattern as Simply Love GraphDisplay Barely.
                             life_children.push(act!(quad:

@@ -577,36 +577,32 @@ fn fill_density_life_vertices(
     color: [f32; 4],
 ) -> usize {
     let mut written = 0usize;
+    let mut a_offset = density_life_offset(points, window, 0, half);
     for index in 0..window.point_count - 1 {
         let mut a = density_life_window_point(points, window, index);
         let mut b = density_life_window_point(points, window, index + 1);
+        let b_offset = density_life_offset(points, window, index + 1, half);
         let dx = b[0] - a[0];
         let dy = b[1] - a[1];
         if dx.mul_add(dx, dy * dy) <= DENSITY_LIFE_MIN_LEN_SQ {
+            a_offset = b_offset;
             continue;
         }
         a[0] -= window.left;
         b[0] -= window.left;
-        written = write_density_life_segment(
-            dst,
-            written,
-            a,
-            b,
-            density_life_offset(points, window, index, half),
-            density_life_offset(points, window, index + 1, half),
-            color,
-        );
+        written = write_density_life_segment(dst, written, a, b, a_offset, b_offset, color);
+        a_offset = b_offset;
     }
     written
 }
 
 #[inline(always)]
-fn density_life_mesh_window(
+fn density_life_window(
     points: &[[f32; 2]],
     offset: f32,
     width: f32,
     thickness: f32,
-) -> Option<(LifeWindow, usize, f32)> {
+) -> Option<(LifeWindow, f32)> {
     if points.len() < 2 || width <= 0.0_f32 || thickness <= 0.0_f32 {
         return None;
     }
@@ -630,7 +626,18 @@ fn density_life_mesh_window(
         point_count,
         clip_left,
     };
-    let segment_count = (0..point_count - 1)
+    Some((window, thickness * 0.5_f32))
+}
+
+#[inline(always)]
+fn density_life_mesh_window(
+    points: &[[f32; 2]],
+    offset: f32,
+    width: f32,
+    thickness: f32,
+) -> Option<(LifeWindow, usize, f32)> {
+    let (window, half) = density_life_window(points, offset, width, thickness)?;
+    let segment_count = (0..window.point_count - 1)
         .filter(|&index| {
             let a = density_life_window_point(points, window, index);
             let b = density_life_window_point(points, window, index + 1);
@@ -639,11 +646,7 @@ fn density_life_mesh_window(
             dx.mul_add(dx, dy * dy) > DENSITY_LIFE_MIN_LEN_SQ
         })
         .count();
-    (segment_count != 0).then_some((
-        window,
-        segment_count * DENSITY_LIFE_SEGMENT_VERTS,
-        thickness * 0.5_f32,
-    ))
+    (segment_count != 0).then_some((window, segment_count * DENSITY_LIFE_SEGMENT_VERTS, half))
 }
 
 pub fn update_density_life_mesh(
@@ -686,22 +689,25 @@ pub fn update_density_life_mesh_reusable(
     thickness: f32,
     color: [f32; 4],
 ) {
-    let Some((window, len, half)) = density_life_mesh_window(points, offset, width, thickness)
-    else {
+    let Some((window, half)) = density_life_window(points, offset, width, thickness) else {
         *mesh = None;
         return;
     };
+    let max_len = (window.point_count - 1) * DENSITY_LIFE_SEGMENT_VERTS;
 
     if mesh.as_mut().and_then(Arc::get_mut).is_none() {
-        *mesh = Some(Arc::new(Vec::with_capacity(len)));
+        *mesh = Some(Arc::new(Vec::with_capacity(max_len)));
     }
     let vertices = mesh
         .as_mut()
         .and_then(Arc::get_mut)
         .expect("replacement density life mesh must be uniquely owned");
-    vertices.resize(len, MeshVertex::default());
+    vertices.resize(max_len, MeshVertex::default());
     let written = fill_density_life_vertices(vertices, points, window, half, color);
-    debug_assert_eq!(written, len);
+    vertices.truncate(written);
+    if written == 0 {
+        *mesh = None;
+    }
 }
 
 /// Build the 2px-style connected graph used by ITGmania's `GraphLine` actor.
@@ -713,35 +719,20 @@ pub fn build_graph_line_mesh(
     points: &[[f32; 2]],
     thickness: f32,
     color: [f32; 4],
-) -> Vec<MeshVertex> {
+) -> Arc<[MeshVertex]> {
     const CAP_SIDES: usize = 4;
-    const SEGMENT_VERTS: usize = 6;
-    const CAP_VERTS: usize = CAP_SIDES * 3;
 
     if points.len() < 2 || !thickness.is_finite() || thickness <= 0.0 {
-        return Vec::new();
+        return Arc::from([]);
     }
 
     let half = thickness * 0.5;
-    let segment_count = points
-        .windows(2)
-        .filter(|pair| {
-            let dx = pair[1][0] - pair[0][0];
-            let dy = pair[1][1] - pair[0][1];
-            dx.mul_add(dx, dy * dy) > DENSITY_LIFE_MIN_LEN_SQ
-        })
-        .count();
-    let mut out = Vec::with_capacity(segment_count * SEGMENT_VERTS + points.len() * CAP_VERTS);
-
-    for pair in points.windows(2) {
+    let segment = |pair: &[[f32; 2]]| {
         let a = pair[0];
         let b = pair[1];
         let dx = b[0] - a[0];
         let dy = b[1] - a[1];
         let len = dx.hypot(dy);
-        if len * len <= DENSITY_LIFE_MIN_LEN_SQ {
-            continue;
-        }
 
         // GraphLine uses (dy, -dx) as its segment normal.
         let offset = [dy / len * half, -dx / len * half];
@@ -749,40 +740,58 @@ pub fn build_graph_line_mesh(
         let v1 = [a[0] - offset[0], a[1] - offset[1]];
         let v2 = [b[0] - offset[0], b[1] - offset[1]];
         let v3 = [b[0] + offset[0], b[1] + offset[1]];
-        out.extend_from_slice(&[
+        [
             MeshVertex { pos: v0, color },
             MeshVertex { pos: v1, color },
             MeshVertex { pos: v2, color },
             MeshVertex { pos: v0, color },
             MeshVertex { pos: v2, color },
             MeshVertex { pos: v3, color },
-        ]);
-    }
+        ]
+    };
 
     // Four subdivisions are exactly what ITGmania uses. At a one-pixel radius
     // this diamond-shaped fan reads as a round cap while keeping the reference
     // geometry and coverage.
     const CAP_DIRS: [[f32; 2]; CAP_SIDES + 1] =
         [[1.0, 0.0], [0.0, -1.0], [-1.0, 0.0], [0.0, 1.0], [1.0, 0.0]];
-    for &point in points {
+    let cap = |point: [f32; 2]| {
+        let mut vertices = [MeshVertex::default(); CAP_SIDES * 3];
         for side in 0..CAP_SIDES {
             let a = CAP_DIRS[side];
             let b = CAP_DIRS[side + 1];
-            out.extend_from_slice(&[
-                MeshVertex { pos: point, color },
-                MeshVertex {
-                    pos: [point[0] + a[0] * half, point[1] + a[1] * half],
-                    color,
-                },
-                MeshVertex {
-                    pos: [point[0] + b[0] * half, point[1] + b[1] * half],
-                    color,
-                },
-            ]);
+            let base = side * 3;
+            vertices[base] = MeshVertex { pos: point, color };
+            vertices[base + 1] = MeshVertex {
+                pos: [point[0] + a[0] * half, point[1] + a[1] * half],
+                color,
+            };
+            vertices[base + 2] = MeshVertex {
+                pos: [point[0] + b[0] * half, point[1] + b[1] * half],
+                color,
+            };
         }
+        vertices
+    };
+
+    // Evaluation points have strictly increasing x coordinates. Keep malformed
+    // generic input safe instead of normalizing a zero-length segment.
+    if points.windows(2).any(|pair| {
+        let dx = pair[1][0] - pair[0][0];
+        let dy = pair[1][1] - pair[0][1];
+        dx.mul_add(dx, dy * dy) <= DENSITY_LIFE_MIN_LEN_SQ
+    }) {
+        return Arc::from([]);
     }
 
-    out
+    // Flattened fixed arrays retain an exact trusted length, so Arc collection
+    // allocates the immutable vertex payload exactly once.
+    points
+        .windows(2)
+        .map(segment)
+        .flatten()
+        .chain(points.iter().copied().map(cap).flatten())
+        .collect()
 }
 
 pub fn build_density_histogram_mesh(

@@ -124,6 +124,11 @@ harness = false
 required-features = ["bench-support"]
 
 [[bench]]
+name = "evaluation_life_line"
+harness = false
+required-features = ["bench-support"]
+
+[[bench]]
 name = "player_options_frame"
 harness = false
 required-features = ["bench-support"]
