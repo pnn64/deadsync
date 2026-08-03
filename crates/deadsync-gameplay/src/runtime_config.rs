@@ -638,6 +638,8 @@ pub struct GameplayTimingRuntimeState {
     pub timing_players: [Arc<TimingData>; MAX_PLAYERS],
     pub time_to_beat_caches: GameplayTimeToBeatCaches,
     pub timing_profile: TimingProfile,
+    // Rate-scaled once at song load and whenever the music rate changes.
+    pub step_resolution_distance_ns: SongTimeNs,
     pub player_judgment_timing: [PlayerJudgmentTiming; MAX_PLAYERS],
 }
 

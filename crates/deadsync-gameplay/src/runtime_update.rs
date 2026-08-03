@@ -805,6 +805,8 @@ where
         }
         self.timing_runtime.player_judgment_timing = player_judgment_timing;
         let normalized = self.music_rate();
+        self.timing_runtime.step_resolution_distance_ns =
+            max_step_distance_ns(&self.timing_runtime.timing_profile, normalized);
         let (notes_end_time_ns, music_end_time_ns) = compute_end_times_ns(
             &self.chart_runtime.notes,
             &self.chart_runtime.note_time_cache_ns,
@@ -2786,15 +2788,10 @@ where
     }
 
     pub fn current_lane_inputs(&self) -> [bool; MAX_COLS] {
-        let mut inputs = [false; MAX_COLS];
-        for (col, input) in inputs
-            .iter_mut()
-            .enumerate()
-            .take(self.setup.num_cols.min(MAX_COLS))
-        {
-            *input = self.lane_is_pressed(col);
-        }
-        inputs
+        lane_inputs_from_mask(
+            self.control.input_state.pressed_lane_mask(),
+            self.setup.num_cols,
+        )
     }
 
     pub fn held_mine_crossing_start_time(

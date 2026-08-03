@@ -4992,6 +4992,7 @@ mod tests {
             }
         );
         assert!(state.lane_is_pressed(0));
+        assert_eq!(state.pressed_lane_mask(), input_lane_bit(0));
         assert_eq!(state.lane_counts()[0], 2);
         assert_eq!(state.lane_pressed_since_ns[0], Some(123));
         assert!(state.slot_lane_is_down(0, InputSource::Keyboard, 10));
@@ -5007,14 +5008,31 @@ mod tests {
             }
         );
         assert!(state.lane_is_pressed(0));
+        assert_eq!(state.pressed_lane_mask(), input_lane_bit(0));
         state.release_lane(0);
         assert_eq!(state.lane_pressed_since_ns[0], None);
+        let last_release = state.update_slot(0, InputSource::Keyboard, 11, false);
+        assert!(last_release.was_down);
+        assert!(!last_release.is_down);
+        assert_eq!(state.pressed_lane_mask(), 0);
 
         state.reset_live_state();
         assert!(!state.lane_is_pressed(0));
+        assert_eq!(state.pressed_lane_mask(), 0);
         assert_eq!(state.lane_counts()[0], 0);
         assert_eq!(state.lane_pressed_since_ns[0], None);
         assert!(!state.slot_lane_is_down(0, InputSource::Keyboard, 11));
+    }
+
+    #[test]
+    fn lane_input_mask_expands_only_active_gameplay_columns() {
+        assert_eq!(input_lane_mask(0), 0);
+        assert_eq!(input_lane_mask(4), 0b0000_1111);
+        assert_eq!(input_lane_mask(MAX_COLS), u8::MAX);
+        assert_eq!(input_lane_mask(MAX_COLS + 1), u8::MAX);
+
+        let inputs = lane_inputs_from_mask(0b1010_0101, 4);
+        assert_eq!(inputs, [true, false, true, false, false, false, false, false]);
     }
 
     #[test]
@@ -8201,6 +8219,38 @@ mod tests {
         assert_near(lift_timers[4], 0.75);
         assert_near(press_timers[5], 9.0);
         assert_near(lift_timers[5], 9.0);
+    }
+
+    #[test]
+    fn receptor_glow_column_tick_leaves_exactly_idle_lanes_unchanged() {
+        let effects = GameplayNoteskinEffects::default();
+        let input_lane_counts = [0; MAX_COLS];
+        let mut press_timers = [0.0; MAX_COLS];
+        let mut lift_timers = [0.0; MAX_COLS];
+        let mut lift_start_alpha: [f32; MAX_COLS] =
+            std::array::from_fn(|col| col as f32 / 10.0);
+        let mut lift_start_zoom: [f32; MAX_COLS] =
+            std::array::from_fn(|col| 1.0 + col as f32 / 10.0);
+        let expected_alpha = lift_start_alpha;
+        let expected_zoom = lift_start_zoom;
+
+        tick_receptor_glow_columns(
+            &effects,
+            MAX_COLS,
+            MAX_PLAYERS,
+            MAX_COLS / MAX_PLAYERS,
+            &input_lane_counts,
+            &mut press_timers,
+            &mut lift_timers,
+            &mut lift_start_alpha,
+            &mut lift_start_zoom,
+            1.0 / 120.0,
+        );
+
+        assert_eq!(press_timers, [0.0; MAX_COLS]);
+        assert_eq!(lift_timers, [0.0; MAX_COLS]);
+        assert_eq!(lift_start_alpha, expected_alpha);
+        assert_eq!(lift_start_zoom, expected_zoom);
     }
 
     #[test]
@@ -13658,6 +13708,15 @@ mod tests {
             );
             assert_eq!(
                 cache.missed_note_cutoff_rows(&profile, &players, 1.35, time_ns, 2),
+                expected_cutoffs,
+            );
+            assert_eq!(
+                cache.missed_note_cutoff_rows_with_distance(
+                    &players,
+                    max_step_distance_ns(&profile, 1.35),
+                    time_ns,
+                    2,
+                ),
                 expected_cutoffs,
             );
         }

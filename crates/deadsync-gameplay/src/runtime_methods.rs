@@ -990,19 +990,17 @@ where
 
     #[inline(always)]
     fn missed_note_cutoff_rows(&mut self, music_time_ns: SongTimeNs) -> [usize; MAX_PLAYERS] {
-        let music_rate = self.music_rate();
         let num_players = self.setup.num_players;
         let GameplayTimingRuntimeState {
             timing_players,
             time_to_beat_caches,
-            timing_profile,
+            step_resolution_distance_ns,
             ..
         } = &mut self.timing_runtime;
         let player_refs = std::array::from_fn(|player| timing_players[player].as_ref());
-        time_to_beat_caches.missed_note_cutoff_rows(
-            timing_profile,
+        time_to_beat_caches.missed_note_cutoff_rows_with_distance(
             &player_refs,
-            music_rate,
+            *step_resolution_distance_ns,
             music_time_ns,
             num_players,
         )
@@ -1228,11 +1226,11 @@ where
     }
 
     pub fn update_judged_rows(&mut self) {
-        let lookahead_time_ns = judged_row_lookahead_time_ns(
-            self.clock.song_position.current_music_time_ns,
-            &self.timing_runtime.timing_profile,
-            self.music_rate(),
-        );
+        let lookahead_time_ns = self
+            .clock
+            .song_position
+            .current_music_time_ns
+            .saturating_add(self.timing_runtime.step_resolution_distance_ns);
         for player in 0..self.setup.num_players {
             let (row_start, row_end) = self.chart_runtime.row_indices.row_entry_ranges[player];
             let row_count = row_end;
@@ -1544,11 +1542,16 @@ where
         previous_music_time_ns: SongTimeNs,
         music_time_ns: SongTimeNs,
     ) -> [bool; MAX_COLS] {
-        let current_inputs = self.current_lane_inputs();
         let columns = self.setup.num_cols.min(MAX_COLS);
-        if current_inputs[..columns].contains(&true) {
+        let pressed_lane_mask =
+            self.control.input_state.pressed_lane_mask() & input_lane_mask(columns);
+        let current_inputs = lane_inputs_from_mask(pressed_lane_mask, columns);
+        if pressed_lane_mask != 0 {
             if !self.live_autoplay_enabled() {
-                for col in 0..columns {
+                let mut held_lanes = pressed_lane_mask;
+                while held_lanes != 0 {
+                    let col = held_lanes.trailing_zeros() as usize;
+                    held_lanes &= held_lanes - 1;
                     let crossed_from_ns = self.held_mine_crossing_start_time(
                         &current_inputs,
                         col,

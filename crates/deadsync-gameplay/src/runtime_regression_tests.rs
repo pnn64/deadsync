@@ -1014,9 +1014,14 @@ mod runtime_regression_tests {
     fn live_input_snapshots_leave_inactive_column_capacity_empty() {
         let mut state = regression_state();
         assert_eq!(state.setup.num_cols, 4);
-        state.control.input_state.lane_counts[0] = 1;
-        state.control.input_state.lane_counts[3] = 2;
-        state.control.input_state.lane_counts[4] = 1;
+        for (col, slot) in [(0, 10), (3, 11), (3, 12), (4, 13)] {
+            state.control.input_state.update_slot(
+                col,
+                InputSource::Keyboard,
+                slot,
+                true,
+            );
+        }
 
         let inputs = state.current_lane_inputs();
 
@@ -1655,6 +1660,10 @@ mod runtime_regression_tests {
 
         assert!(state.set_music_rate(1.5));
         assert!((state.music_rate() - 1.5).abs() < 1e-6);
+        assert_eq!(
+            state.timing_runtime.step_resolution_distance_ns,
+            max_step_distance_ns(&state.timing_runtime.timing_profile, state.music_rate()),
+        );
 
         let scaled_great_ns = state.timing_runtime.player_judgment_timing[0]
             .profile_music_ns

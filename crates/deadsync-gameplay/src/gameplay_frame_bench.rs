@@ -961,3 +961,211 @@ impl SharedMissCutoffBench {
         output
     }
 }
+
+#[derive(Clone)]
+pub struct ResolutionDistanceCacheBench {
+    profile: TimingProfile,
+    cached_distance_ns: SongTimeNs,
+}
+
+impl Default for ResolutionDistanceCacheBench {
+    fn default() -> Self {
+        let profile = TimingProfile::default_itg_with_fa_plus();
+        let cached_distance_ns = max_step_distance_ns(&profile, 1.0);
+        Self {
+            profile,
+            cached_distance_ns,
+        }
+    }
+}
+
+impl ResolutionDistanceCacheBench {
+    pub fn old_frame(&self, frame: usize) -> GameplayFrameHotPathBenchOutput {
+        let music_time_ns = 500_000_000_i64.saturating_add(frame as i64 * 8_333_333);
+        let profile = std::hint::black_box(&self.profile);
+        resolution_distance_output(
+            music_time_ns.saturating_add(max_step_distance_ns(profile, 1.0)),
+            music_time_ns.saturating_sub(max_step_distance_ns(profile, 1.0)),
+        )
+    }
+
+    pub fn new_frame(&self, frame: usize) -> GameplayFrameHotPathBenchOutput {
+        let music_time_ns = 500_000_000_i64.saturating_add(frame as i64 * 8_333_333);
+        resolution_distance_output(
+            music_time_ns.saturating_add(self.cached_distance_ns),
+            music_time_ns.saturating_sub(self.cached_distance_ns),
+        )
+    }
+}
+
+#[inline(always)]
+fn resolution_distance_output(
+    lookahead_time_ns: SongTimeNs,
+    cutoff_time_ns: SongTimeNs,
+) -> GameplayFrameHotPathBenchOutput {
+    GameplayFrameHotPathBenchOutput {
+        checksum: (lookahead_time_ns as u64).rotate_left(19) ^ cutoff_time_ns as u64,
+        samples: 2,
+    }
+}
+
+#[derive(Clone, Default)]
+pub struct PressedLaneMaskBench {
+    lane_counts: [u16; MAX_COLS],
+    pressed_lane_mask: u8,
+}
+
+impl PressedLaneMaskBench {
+    pub fn old_frame(&mut self, frame: usize) -> GameplayFrameHotPathBenchOutput {
+        self.prepare_frame(frame);
+        let mut inputs = [false; MAX_COLS];
+        for (col, input) in inputs.iter_mut().enumerate() {
+            *input = self.lane_counts[col] != 0;
+        }
+        pressed_lane_output(&inputs, None)
+    }
+
+    pub fn new_frame(&mut self, frame: usize) -> GameplayFrameHotPathBenchOutput {
+        self.prepare_frame(frame);
+        let inputs = lane_inputs_from_mask(self.pressed_lane_mask, MAX_COLS);
+        pressed_lane_output(&inputs, Some(self.pressed_lane_mask))
+    }
+
+    fn prepare_frame(&mut self, frame: usize) {
+        self.lane_counts.fill(0);
+        let col = frame / 120 % MAX_COLS;
+        self.lane_counts[col] = 1;
+        self.pressed_lane_mask = input_lane_bit(col);
+    }
+}
+
+#[inline(always)]
+fn pressed_lane_output(
+    inputs: &[bool; MAX_COLS],
+    pressed_lane_mask: Option<u8>,
+) -> GameplayFrameHotPathBenchOutput {
+    let mut output = GameplayFrameHotPathBenchOutput::default();
+    if let Some(mut lanes) = pressed_lane_mask {
+        while lanes != 0 {
+            let col = lanes.trailing_zeros() as usize;
+            lanes &= lanes - 1;
+            record_pressed_input(&mut output, col, inputs[col]);
+        }
+    } else {
+        for (col, &pressed) in inputs.iter().enumerate() {
+            record_pressed_input(&mut output, col, pressed);
+        }
+    }
+    output
+}
+
+#[derive(Clone)]
+pub struct IdleReceptorGlowBench {
+    noteskin_effects: GameplayNoteskinEffects,
+    press_timers: [f32; MAX_COLS],
+    lift_timers: [f32; MAX_COLS],
+    lift_start_alpha: [f32; MAX_COLS],
+    lift_start_zoom: [f32; MAX_COLS],
+    lane_counts: [u16; MAX_COLS],
+}
+
+impl Default for IdleReceptorGlowBench {
+    fn default() -> Self {
+        Self {
+            noteskin_effects: GameplayNoteskinEffects::default(),
+            press_timers: [0.0; MAX_COLS],
+            lift_timers: [0.0; MAX_COLS],
+            lift_start_alpha: [0.0; MAX_COLS],
+            lift_start_zoom: [1.0; MAX_COLS],
+            lane_counts: [0; MAX_COLS],
+        }
+    }
+}
+
+impl IdleReceptorGlowBench {
+    pub fn old_frame(&mut self, frame: usize) -> GameplayFrameHotPathBenchOutput {
+        self.prepare_frame(frame);
+        tick_receptor_glow_columns_legacy(
+            &self.noteskin_effects,
+            &self.lane_counts,
+            &mut self.press_timers,
+            &mut self.lift_timers,
+            &mut self.lift_start_alpha,
+            &mut self.lift_start_zoom,
+        );
+        receptor_glow_output(self)
+    }
+
+    pub fn new_frame(&mut self, frame: usize) -> GameplayFrameHotPathBenchOutput {
+        self.prepare_frame(frame);
+        tick_receptor_glow_columns(
+            &self.noteskin_effects,
+            MAX_COLS,
+            MAX_PLAYERS,
+            MAX_COLS / MAX_PLAYERS,
+            &self.lane_counts,
+            &mut self.press_timers,
+            &mut self.lift_timers,
+            &mut self.lift_start_alpha,
+            &mut self.lift_start_zoom,
+            1.0 / 120.0,
+        );
+        receptor_glow_output(self)
+    }
+
+    fn prepare_frame(&mut self, frame: usize) {
+        self.lane_counts.fill(0);
+        if frame.is_multiple_of(257) {
+            let col = frame / 257 % MAX_COLS;
+            self.press_timers[col] = 0.12;
+            self.lift_start_alpha[col] = 0.8;
+            self.lift_start_zoom[col] = 1.15;
+            self.lane_counts[col] = 1;
+        }
+    }
+}
+
+#[inline(never)]
+fn tick_receptor_glow_columns_legacy(
+    noteskin_effects: &GameplayNoteskinEffects,
+    lane_counts: &[u16; MAX_COLS],
+    press_timers: &mut [f32; MAX_COLS],
+    lift_timers: &mut [f32; MAX_COLS],
+    lift_start_alpha: &mut [f32; MAX_COLS],
+    lift_start_zoom: &mut [f32; MAX_COLS],
+) {
+    for col in 0..MAX_COLS {
+        let player = player_index_for_column(MAX_PLAYERS, MAX_COLS / MAX_PLAYERS, col);
+        let timers = tick_receptor_glow_timers(
+            noteskin_effects.receptor_glow_behavior_for_player(player),
+            GameplayReceptorGlowTimers {
+                press_timer: press_timers[col],
+                lift_timer: lift_timers[col],
+                lift_start_alpha: lift_start_alpha[col],
+                lift_start_zoom: lift_start_zoom[col],
+            },
+            lane_counts[col] != 0,
+            1.0 / 120.0,
+        );
+        press_timers[col] = timers.press_timer;
+        lift_timers[col] = timers.lift_timer;
+        lift_start_alpha[col] = timers.lift_start_alpha;
+        lift_start_zoom[col] = timers.lift_start_zoom;
+    }
+}
+
+fn receptor_glow_output(bench: &IdleReceptorGlowBench) -> GameplayFrameHotPathBenchOutput {
+    let mut output = GameplayFrameHotPathBenchOutput::default();
+    for values in [
+        &bench.press_timers,
+        &bench.lift_timers,
+        &bench.lift_start_alpha,
+        &bench.lift_start_zoom,
+    ] {
+        for &value in values {
+            output.checksum = output.checksum.rotate_left(7) ^ u64::from(value.to_bits());
+            output.samples += usize::from(value != 0.0);
+        }
+    }
+    output
+}

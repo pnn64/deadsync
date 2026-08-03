@@ -527,6 +527,7 @@ where
     });
 
     let timing_profile = TimingProfile::default_itg_with_fa_plus();
+    let step_resolution_distance_ns = max_step_distance_ns(&timing_profile, rate);
     let player_judgment_timing = std::array::from_fn(|player| {
         build_player_judgment_timing(timing_profile, &player_profiles[player], rate)
     });
@@ -930,6 +931,7 @@ where
             timing_players,
             time_to_beat_caches,
             timing_profile,
+            step_resolution_distance_ns,
             player_judgment_timing,
         },
         chart_runtime: GameplayChartRuntimeState {

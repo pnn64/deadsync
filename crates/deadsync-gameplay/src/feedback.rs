@@ -629,6 +629,9 @@ pub fn tick_receptor_glow_columns(
         .min(lift_start_alpha.len())
         .min(lift_start_zoom.len());
     for col in 0..col_count {
+        if press_timers[col].to_bits() == 0 && lift_timers[col].to_bits() == 0 {
+            continue;
+        }
         let player = player_index_for_column(num_players, cols_per_player, col);
         let timers = tick_receptor_glow_timers(
             noteskin_effects.receptor_glow_behavior_for_player(player),

@@ -64,6 +64,27 @@ pub const fn input_lane_bit(lane_idx: usize) -> u8 {
 }
 
 #[inline(always)]
+pub const fn input_lane_mask(num_cols: usize) -> u8 {
+    if num_cols >= MAX_COLS {
+        u8::MAX
+    } else {
+        ((1u16 << num_cols) - 1) as u8
+    }
+}
+
+#[inline(always)]
+pub fn lane_inputs_from_mask(mask: u8, num_cols: usize) -> [bool; MAX_COLS] {
+    let mut inputs = [false; MAX_COLS];
+    let mut lanes = mask & input_lane_mask(num_cols);
+    while lanes != 0 {
+        let col = lanes.trailing_zeros() as usize;
+        inputs[col] = true;
+        lanes &= lanes - 1;
+    }
+    inputs
+}
+
+#[inline(always)]
 pub const fn normalized_input_slot(input_slot: u32, fallback_slot: u32, invalid_slot: u32) -> u32 {
     if input_slot == invalid_slot {
         fallback_slot
@@ -202,4 +223,3 @@ pub fn update_active_input_slot(
         slot_table_full,
     }
 }
-

@@ -487,8 +487,22 @@ impl GameplayTimeToBeatCaches {
         music_time_ns: SongTimeNs,
         num_players: usize,
     ) -> [usize; MAX_PLAYERS] {
-        let cutoff_time_ns =
-            music_time_ns.saturating_sub(max_step_distance_ns(timing_profile, music_rate));
+        self.missed_note_cutoff_rows_with_distance(
+            timing_players,
+            max_step_distance_ns(timing_profile, music_rate),
+            music_time_ns,
+            num_players,
+        )
+    }
+
+    pub fn missed_note_cutoff_rows_with_distance(
+        &mut self,
+        timing_players: &[&TimingData; MAX_PLAYERS],
+        step_resolution_distance_ns: SongTimeNs,
+        music_time_ns: SongTimeNs,
+        num_players: usize,
+    ) -> [usize; MAX_PLAYERS] {
+        let cutoff_time_ns = music_time_ns.saturating_sub(step_resolution_distance_ns);
         let active_players = num_players.min(MAX_PLAYERS);
         if let Some(memo) = self.cutoff_memo
             && memo.cutoff_time_ns == cutoff_time_ns

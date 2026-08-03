@@ -1,8 +1,9 @@
 use deadsync_gameplay::{
     ActiveColumnScanBench, CrossoverCueCursorBench, DisabledAssistClapBench,
     GameplayFrameHotPathBenchOutput, IdleAttackRefreshBench, IdleHoldPhaseBench, IdleLaneScanBench,
-    InputLaneSearchCursorBench, InputQueueDrainBench, LiveNotefieldOptionsBench,
-    OptionalFrameWorkBench, RegularCueCursorBench, SharedMissCutoffBench,
+    IdleReceptorGlowBench, InputLaneSearchCursorBench, InputQueueDrainBench,
+    LiveNotefieldOptionsBench, OptionalFrameWorkBench, PressedLaneMaskBench, RegularCueCursorBench,
+    ResolutionDistanceCacheBench, SharedMissCutoffBench,
 };
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::hint::black_box;
@@ -204,6 +205,32 @@ fn main() {
         "8192 crossover cues during normal 120 Hz playback and rendering",
         move |frame| old_cues.old_frame(frame),
         move |frame| new_cues.new_frame(frame),
+    );
+
+    let resolution_distance = ResolutionDistanceCacheBench::default();
+    run_pair(
+        "cached late-resolution distance",
+        "shared row-finalization and miss cutoff distance at stable 1.0x rate",
+        |frame| resolution_distance.old_frame(frame),
+        |frame| resolution_distance.new_frame(frame),
+    );
+
+    let mut old_pressed_lanes = PressedLaneMaskBench::default();
+    let mut new_pressed_lanes = old_pressed_lanes.clone();
+    run_pair(
+        "pressed-lane bitmask traversal",
+        "8 lanes, one continuously held lane changing once per second",
+        move |frame| old_pressed_lanes.old_frame(frame),
+        move |frame| new_pressed_lanes.new_frame(frame),
+    );
+
+    let mut old_receptor_glow = IdleReceptorGlowBench::default();
+    let mut new_receptor_glow = old_receptor_glow.clone();
+    run_pair(
+        "idle receptor-glow lanes",
+        "8 lanes at 120 Hz, one press every 257 frames",
+        move |frame| old_receptor_glow.old_frame(frame),
+        move |frame| new_receptor_glow.new_frame(frame),
     );
 }
 

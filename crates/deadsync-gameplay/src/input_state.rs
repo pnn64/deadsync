@@ -20,6 +20,8 @@ pub struct GameplayInputState {
     slots: [ActiveInputSlot; MAX_ACTIVE_INPUT_SLOTS],
     slot_count: usize,
     lane_counts: [u16; MAX_COLS],
+    // Bit `i` is set exactly when `lane_counts[i] != 0`; `update_slot` owns both.
+    pressed_lane_mask: u8,
 }
 
 impl Default for GameplayInputState {
@@ -30,6 +32,7 @@ impl Default for GameplayInputState {
             slots: [EMPTY_ACTIVE_INPUT_SLOT; MAX_ACTIVE_INPUT_SLOTS],
             slot_count: 0,
             lane_counts: [0; MAX_COLS],
+            pressed_lane_mask: 0,
         }
     }
 }
@@ -46,6 +49,11 @@ impl GameplayInputState {
     }
 
     #[inline(always)]
+    pub const fn pressed_lane_mask(&self) -> u8 {
+        self.pressed_lane_mask
+    }
+
+    #[inline(always)]
     pub fn slot_lane_is_down(&self, lane_idx: usize, source: InputSource, input_slot: u32) -> bool {
         active_input_slot_lane_is_down(&self.slots, self.slot_count, lane_idx, source, input_slot)
     }
@@ -58,7 +66,7 @@ impl GameplayInputState {
         input_slot: u32,
         pressed: bool,
     ) -> LaneInputUpdate {
-        update_active_input_slot(
+        let update = update_active_input_slot(
             &mut self.slots,
             &mut self.slot_count,
             &mut self.lane_counts,
@@ -66,7 +74,16 @@ impl GameplayInputState {
             source,
             input_slot,
             pressed,
-        )
+        );
+        if lane_idx < MAX_COLS {
+            let bit = input_lane_bit(lane_idx);
+            if update.is_down {
+                self.pressed_lane_mask |= bit;
+            } else {
+                self.pressed_lane_mask &= !bit;
+            }
+        }
+        update
     }
 
     #[inline(always)]
@@ -89,7 +106,7 @@ impl GameplayInputState {
         self.lane_pressed_since_ns.fill(None);
         self.slot_count = 0;
         self.lane_counts.fill(0);
+        self.pressed_lane_mask = 0;
         self.slots = [EMPTY_ACTIVE_INPUT_SLOT; MAX_ACTIVE_INPUT_SLOTS];
     }
 }
-
