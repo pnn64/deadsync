@@ -1,6 +1,7 @@
 use deadsync_theme_simply_love::screens::gameplay::{
-    SongLuaEaseBenchmark, SongLuaMessageStateBenchmark, SongLuaOrderBenchmark,
-    SongLuaProjectedMeshBenchmark, SongLuaProxyRequestBenchmark, SongLuaTopologyBenchmark,
+    SongLuaActorBuildBenchmark, SongLuaEaseBenchmark, SongLuaMessageStateBenchmark,
+    SongLuaOrderBenchmark, SongLuaProjectedMeshBenchmark, SongLuaProxyRequestBenchmark,
+    SongLuaTopologyBenchmark,
 };
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::hint::black_box;
@@ -188,6 +189,7 @@ fn main() {
     const CAMERA_FRAMES: usize = 20_000;
     const ORDER_FRAMES: usize = 100_000;
     const MESH_FRAMES: usize = 50_000;
+    const ACTOR_BUILD_FRAMES: usize = 100_000;
 
     let now = MESSAGE_EVENTS as f32 * 0.125 + 1.0;
     let mut cached_messages = SongLuaMessageStateBenchmark::new(MESSAGE_EVENTS);
@@ -319,6 +321,28 @@ fn main() {
         vertices.len() as u64
     });
 
+    let mut actor_build = SongLuaActorBuildBenchmark::new(96);
+    assert_eq!(
+        actor_build.legacy_proxy_frame(),
+        actor_build.compact_proxy_frame()
+    );
+    assert_eq!(
+        actor_build.legacy_group_frame(),
+        actor_build.inline_group_frame()
+    );
+    assert_eq!(
+        actor_build.legacy_mesh_frame(),
+        actor_build.reused_mesh_frame()
+    );
+    let legacy_proxy_build_result =
+        measure(ACTOR_BUILD_FRAMES, || actor_build.legacy_proxy_frame());
+    let compact_proxy_build_result =
+        measure(ACTOR_BUILD_FRAMES, || actor_build.compact_proxy_frame());
+    let legacy_group_result = measure(ACTOR_BUILD_FRAMES, || actor_build.legacy_group_frame());
+    let inline_group_result = measure(ACTOR_BUILD_FRAMES, || actor_build.inline_group_frame());
+    let legacy_actor_mesh_result = measure(ACTOR_BUILD_FRAMES, || actor_build.legacy_mesh_frame());
+    let reused_actor_mesh_result = measure(ACTOR_BUILD_FRAMES, || actor_build.reused_mesh_frame());
+
     assert_eq!(
         legacy_message_result.checksum,
         cached_message_result.checksum
@@ -348,6 +372,15 @@ fn main() {
         cached_changing_order_result.checksum
     );
     assert_eq!(legacy_mesh_result.checksum, reused_mesh_result.checksum);
+    assert_eq!(
+        legacy_proxy_build_result.checksum,
+        compact_proxy_build_result.checksum
+    );
+    assert_eq!(legacy_group_result.checksum, inline_group_result.checksum);
+    assert_eq!(
+        legacy_actor_mesh_result.checksum,
+        reused_actor_mesh_result.checksum
+    );
 
     println!("Song Lua gameplay frame hot paths");
     println!("message state ({MESSAGE_EVENTS} prior events)");
@@ -423,5 +456,34 @@ fn main() {
         "mesh storage: {} bytes, {} buffer replacements",
         reused_mesh.storage_bytes(),
         reused_mesh.replacements(),
+    );
+    println!("single-segment ActorProxy");
+    print_result(
+        "wrapper Vec",
+        ACTOR_BUILD_FRAMES,
+        &legacy_proxy_build_result,
+    );
+    print_result(
+        "direct shared",
+        ACTOR_BUILD_FRAMES,
+        &compact_proxy_build_result,
+    );
+    println!("single-draw Model/Noteskin group");
+    print_result("frame Vec", ACTOR_BUILD_FRAMES, &legacy_group_result);
+    print_result("inline actor", ACTOR_BUILD_FRAMES, &inline_group_result);
+    println!("ActorMultiVertex (96 vertices)");
+    print_result(
+        "fresh immutable",
+        ACTOR_BUILD_FRAMES,
+        &legacy_actor_mesh_result,
+    );
+    print_result(
+        "reused buffer",
+        ACTOR_BUILD_FRAMES,
+        &reused_actor_mesh_result,
+    );
+    println!(
+        "ActorMultiVertex storage: {} bytes",
+        actor_build.mesh_storage_bytes(),
     );
 }
