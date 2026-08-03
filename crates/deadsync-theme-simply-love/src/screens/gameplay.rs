@@ -464,11 +464,25 @@ impl SongLuaOverlayIndex {
     }
 }
 
+/// Song-lifetime topology lookup for Song Lua overlay rendering.
+///
+/// The gameplay screen owns one immutable index for the root overlays and one
+/// per visual layer. Construction runs during screen entry, groups AFT sprites
+/// by capture name, stores each peer index once, and pre-sizes an inverse draw
+/// position buffer. The game/render thread updates that buffer linearly before
+/// rendering a layer; there is no synchronization, allocation, miss, eviction,
+/// or pruning path. Storage is bounded by the compiled overlay count and is
+/// released with the gameplay screen. `storage_bytes` exposes the retained
+/// index footprint for benchmarks; RGB grouping work is one linear preparation
+/// plus a bounded scan of the sprites referencing each capture.
 #[derive(Default)]
 struct SongLuaOverlayTopologyIndex {
     aft_ancestors: Vec<SongLuaOverlayIndex>,
     aft_sprite_targets: Vec<SongLuaOverlayIndex>,
     camera_ancestors: Vec<SongLuaOverlayIndex>,
+    aft_sprite_groups: Vec<SongLuaOverlayIndex>,
+    aft_peer_groups: Box<[Box<[usize]>]>,
+    draw_positions: Vec<usize>,
 }
 
 impl SongLuaOverlayTopologyIndex {
@@ -494,12 +508,169 @@ impl SongLuaOverlayTopologyIndex {
                 ))
             })
             .collect();
+        let mut aft_sprite_groups = vec![SongLuaOverlayIndex::default(); overlays.len()];
+        let mut aft_peer_groups: Vec<Vec<usize>> = Vec::new();
+        for (index, overlay) in overlays.iter().enumerate() {
+            let SongLuaOverlayKind::AftSprite { capture_name } = &overlay.kind else {
+                continue;
+            };
+            let group = overlays[..index]
+                .iter()
+                .enumerate()
+                .find_map(|(candidate_index, candidate)| {
+                    let SongLuaOverlayKind::AftSprite {
+                        capture_name: candidate_capture,
+                    } = &candidate.kind
+                    else {
+                        return None;
+                    };
+                    candidate_capture
+                        .eq_ignore_ascii_case(capture_name)
+                        .then(|| aft_sprite_groups[candidate_index].get())
+                        .flatten()
+                })
+                .unwrap_or_else(|| {
+                    aft_peer_groups.push(Vec::new());
+                    aft_peer_groups.len() - 1
+                });
+            aft_sprite_groups[index] = SongLuaOverlayIndex::new(Some(group));
+            aft_peer_groups[group].push(index);
+        }
         Self {
             aft_ancestors,
             aft_sprite_targets,
             camera_ancestors,
+            aft_sprite_groups,
+            aft_peer_groups: aft_peer_groups
+                .into_iter()
+                .map(Vec::into_boxed_slice)
+                .collect(),
+            draw_positions: vec![usize::MAX; overlays.len()],
         }
     }
+
+    fn prepare_rgb_draw_positions(&mut self, draw_order: &[usize]) {
+        if self.aft_peer_groups.iter().all(|group| group.len() < 3) {
+            return;
+        }
+        self.draw_positions.fill(usize::MAX);
+        for (position, index) in draw_order.iter().copied().enumerate() {
+            if let Some(slot) = self.draw_positions.get_mut(index) {
+                *slot = position;
+            }
+        }
+    }
+
+    fn aft_sprite_peers(&self, index: usize) -> &[usize] {
+        self.aft_sprite_groups
+            .get(index)
+            .copied()
+            .and_then(SongLuaOverlayIndex::get)
+            .and_then(|group| self.aft_peer_groups.get(group))
+            .map_or(&[], Box::as_ref)
+    }
+
+    #[cfg(feature = "bench-support")]
+    fn storage_bytes(&self) -> usize {
+        let fixed = self
+            .aft_ancestors
+            .len()
+            .saturating_add(self.aft_sprite_targets.len())
+            .saturating_add(self.camera_ancestors.len())
+            .saturating_add(self.aft_sprite_groups.len())
+            .saturating_mul(std::mem::size_of::<SongLuaOverlayIndex>());
+        let positions = self
+            .draw_positions
+            .len()
+            .saturating_mul(std::mem::size_of::<usize>());
+        let groups = self
+            .aft_peer_groups
+            .len()
+            .saturating_mul(std::mem::size_of::<Box<[usize]>>());
+        let peers = self
+            .aft_peer_groups
+            .iter()
+            .map(|group| group.len())
+            .sum::<usize>()
+            .saturating_mul(std::mem::size_of::<usize>());
+        fixed
+            .saturating_add(positions)
+            .saturating_add(groups)
+            .saturating_add(peers)
+    }
+}
+
+const PROJECTED_MESH_VERTEX_CAPACITY: usize = 54;
+
+/// Screen-owned reusable storage for one projected Song Lua Sprite or Quad.
+///
+/// One scratch slot is prewarmed for every compiled Sprite/Quad during gameplay
+/// entry. The game/render thread is the sole writer and clones the `Arc<Vec<_>>`
+/// into one actor per frame. A normal next frame recovers the uniquely owned
+/// buffer, clears it, and performs no allocation; if an older actor still owns
+/// the buffer, the slot replaces it rather than mutating shared data. Capacity
+/// is fixed to the 4x4 fade grid's 54 triangle vertices, with no eviction or
+/// pruning. Buffers and any replaced generations are freed outside their live
+/// actor use, ultimately with the screen. Replacement and capacity counters are
+/// exposed to the benchmark, and worst-case frame work is 54 vertex copies.
+#[derive(Default)]
+struct SongLuaProjectedMeshScratch {
+    vertices: Option<Arc<Vec<TexturedMeshVertex>>>,
+    replacements: u64,
+}
+
+impl SongLuaProjectedMeshScratch {
+    fn prewarmed() -> Self {
+        Self {
+            vertices: Some(Arc::new(Vec::with_capacity(PROJECTED_MESH_VERTEX_CAPACITY))),
+            replacements: 0,
+        }
+    }
+
+    fn update(
+        &mut self,
+        grid: &[TexturedMeshVertex],
+        width: usize,
+        height: usize,
+    ) -> Arc<Vec<TexturedMeshVertex>> {
+        let shared = self
+            .vertices
+            .get_or_insert_with(|| Arc::new(Vec::with_capacity(PROJECTED_MESH_VERTEX_CAPACITY)));
+        if Arc::get_mut(shared).is_none() {
+            self.replacements = self.replacements.saturating_add(1);
+            *shared = Arc::new(Vec::with_capacity(PROJECTED_MESH_VERTEX_CAPACITY));
+        }
+        let vertices = Arc::get_mut(shared).expect("projected mesh buffer was just made unique");
+        vertices.clear();
+        append_projected_mesh_vertices(grid, width, height, vertices);
+        Arc::clone(shared)
+    }
+
+    #[cfg(feature = "bench-support")]
+    fn storage_bytes(&self) -> usize {
+        self.vertices
+            .as_ref()
+            .map_or(0, |vertices| vertices.capacity())
+            .saturating_mul(std::mem::size_of::<TexturedMeshVertex>())
+    }
+}
+
+fn song_lua_projected_mesh_scratch_for(
+    overlays: &[SongLuaOverlayActor],
+) -> Vec<SongLuaProjectedMeshScratch> {
+    overlays
+        .iter()
+        .map(|overlay| {
+            if matches!(
+                overlay.kind,
+                SongLuaOverlayKind::Sprite { .. } | SongLuaOverlayKind::Quad
+            ) {
+                SongLuaProjectedMeshScratch::prewarmed()
+            } else {
+                SongLuaProjectedMeshScratch::default()
+            }
+        })
+        .collect()
 }
 
 #[derive(Default)]
@@ -768,6 +939,9 @@ pub struct State {
     song_lua_proxy_request_index: SongLuaProxyRequestIndex,
     song_lua_background_overlay_topology_indices: Vec<SongLuaOverlayTopologyIndex>,
     song_lua_foreground_proxy_request_indices: Vec<SongLuaProxyRequestIndex>,
+    song_lua_projected_mesh_scratch: Vec<SongLuaProjectedMeshScratch>,
+    song_lua_background_projected_mesh_scratch: Vec<Vec<SongLuaProjectedMeshScratch>>,
+    song_lua_foreground_projected_mesh_scratch: Vec<Vec<SongLuaProjectedMeshScratch>>,
     song_lua_message_state_cache: Vec<SongLuaMessageStateCache>,
     song_lua_background_layer_message_state_cache: Vec<Vec<SongLuaMessageStateCache>>,
     song_lua_foreground_layer_message_state_cache: Vec<Vec<SongLuaMessageStateCache>>,
@@ -981,6 +1155,18 @@ impl State {
             .iter()
             .map(|layer| SongLuaProxyRequestIndex::new(&layer.overlays))
             .collect();
+        let song_lua_projected_mesh_scratch =
+            song_lua_projected_mesh_scratch_for(&song_lua_visuals.overlays);
+        let song_lua_background_projected_mesh_scratch = song_lua_visuals
+            .background_visual_layers
+            .iter()
+            .map(|layer| song_lua_projected_mesh_scratch_for(&layer.overlays))
+            .collect();
+        let song_lua_foreground_projected_mesh_scratch = song_lua_visuals
+            .foreground_visual_layers
+            .iter()
+            .map(|layer| song_lua_projected_mesh_scratch_for(&layer.overlays))
+            .collect();
         let song_lua_message_state_cache =
             vec![SongLuaMessageStateCache::default(); song_lua_visuals.overlays.len()];
         let song_lua_background_layer_message_state_cache = song_lua_visuals
@@ -1071,6 +1257,9 @@ impl State {
             song_lua_proxy_request_index,
             song_lua_background_overlay_topology_indices,
             song_lua_foreground_proxy_request_indices,
+            song_lua_projected_mesh_scratch,
+            song_lua_background_projected_mesh_scratch,
+            song_lua_foreground_projected_mesh_scratch,
             song_lua_message_state_cache,
             song_lua_background_layer_message_state_cache,
             song_lua_foreground_layer_message_state_cache,
@@ -6438,6 +6627,7 @@ fn song_lua_capture_children(
     overlay_space_height: f32,
     capture_states: &mut Vec<SongLuaOverlayState>,
     order_scratch: &mut Vec<usize>,
+    projected_mesh_scratch: &mut [SongLuaProjectedMeshScratch],
 ) -> Vec<Actor> {
     song_lua_capture_overlay_states_into_scratch(
         overlays,
@@ -6493,7 +6683,7 @@ fn song_lua_capture_children(
                     .map(one_song_lua_actor)
                 })
             }
-            _ => build_song_lua_overlay_actor(
+            _ => build_song_lua_overlay_actor_with_scratch(
                 overlay,
                 overlay_state,
                 song_lua_overlay_camera_state_indexed(capture_states, topology_index, idx),
@@ -6504,6 +6694,7 @@ fn song_lua_capture_children(
                 0.0,
                 0.0,
                 0.0,
+                projected_mesh_scratch.get_mut(idx),
             ),
         };
         if let Some(actors) = actor {
@@ -7299,6 +7490,7 @@ fn song_lua_rgb_aft_norm_state(mut state: SongLuaOverlayState) -> SongLuaOverlay
     state
 }
 
+#[cfg(any(test, feature = "bench-support"))]
 fn song_lua_rgb_aft_group_for(
     overlays: &[SongLuaOverlayActor],
     overlay_states: &[SongLuaOverlayState],
@@ -7309,22 +7501,65 @@ fn song_lua_rgb_aft_group_for(
     let SongLuaOverlayKind::AftSprite { capture_name } = &overlay.kind else {
         return None;
     };
+    let peers = overlays
+        .iter()
+        .enumerate()
+        .filter_map(|(candidate_index, candidate)| {
+            let SongLuaOverlayKind::AftSprite {
+                capture_name: candidate_capture,
+            } = &candidate.kind
+            else {
+                return None;
+            };
+            candidate_capture
+                .eq_ignore_ascii_case(capture_name)
+                .then_some(candidate_index)
+        });
+    let group = song_lua_rgb_aft_channels_from_peers(overlay_states, index, peers)?;
+    let leader = draw_order
+        .iter()
+        .copied()
+        .find(|idx| group.contains(idx))
+        .unwrap_or(index);
+    Some((leader, group))
+}
+
+fn song_lua_rgb_aft_group_for_indexed(
+    overlay_states: &[SongLuaOverlayState],
+    topology_index: &SongLuaOverlayTopologyIndex,
+    index: usize,
+) -> Option<(usize, [usize; 3])> {
+    let group = song_lua_rgb_aft_channels_from_peers(
+        overlay_states,
+        index,
+        topology_index.aft_sprite_peers(index).iter().copied(),
+    )?;
+    let leader = group
+        .iter()
+        .copied()
+        .min_by_key(|index| {
+            topology_index
+                .draw_positions
+                .get(*index)
+                .copied()
+                .unwrap_or(usize::MAX)
+        })
+        .unwrap_or(index);
+    Some((leader, group))
+}
+
+fn song_lua_rgb_aft_channels_from_peers(
+    overlay_states: &[SongLuaOverlayState],
+    index: usize,
+    peers: impl IntoIterator<Item = usize>,
+) -> Option<[usize; 3]> {
     let state = overlay_states.get(index).copied().unwrap_or_default();
     let channel = song_lua_rgb_aft_channel(state)?;
     let norm = song_lua_rgb_aft_norm_state(state);
     let mut group = [usize::MAX; 3];
     group[channel] = index;
-    for (idx, candidate) in overlays.iter().enumerate() {
+    for idx in peers {
         if idx == index {
-            continue;
-        }
-        let SongLuaOverlayKind::AftSprite {
-            capture_name: candidate_capture,
-        } = &candidate.kind
-        else {
-            continue;
-        };
-        if !candidate_capture.eq_ignore_ascii_case(capture_name) {
             continue;
         }
         let candidate_state = overlay_states.get(idx).copied().unwrap_or_default();
@@ -7342,12 +7577,7 @@ fn song_lua_rgb_aft_group_for(
     if group.contains(&usize::MAX) {
         return None;
     }
-    let leader = draw_order
-        .iter()
-        .copied()
-        .find(|idx| group.contains(idx))
-        .unwrap_or(index);
-    Some((leader, group))
+    Some(group)
 }
 
 fn song_lua_combined_rgb_aft_state(mut state: SongLuaOverlayState) -> SongLuaOverlayState {
@@ -8933,6 +9163,7 @@ impl SongLuaProxyRequestBenchmark {
 pub struct SongLuaTopologyBenchmark {
     overlays: Vec<SongLuaOverlayActor>,
     states: Vec<SongLuaOverlayState>,
+    draw_order: Vec<usize>,
     index: SongLuaOverlayTopologyIndex,
 }
 
@@ -8985,6 +9216,8 @@ impl SongLuaTopologyBenchmark {
         }
         for reference in 0..reference_count {
             let capture_name = &capture_names[capture_names.len() - 1 - reference % group_count];
+            let mut diffuse = [0.0, 0.0, 0.0, 1.0];
+            diffuse[reference % 3] = 1.0;
             overlays.push(SongLuaOverlayActor {
                 kind: SongLuaOverlayKind::AftSprite {
                     capture_name: if reference.is_multiple_of(2) {
@@ -8995,7 +9228,11 @@ impl SongLuaTopologyBenchmark {
                 },
                 name: None,
                 parent_index: None,
-                initial_state: SongLuaOverlayState::default(),
+                initial_state: SongLuaOverlayState {
+                    diffuse,
+                    blend: SongLuaOverlayBlendMode::Add,
+                    ..SongLuaOverlayState::default()
+                },
                 message_commands: Vec::new(),
             });
         }
@@ -9005,6 +9242,7 @@ impl SongLuaTopologyBenchmark {
             .collect::<Vec<_>>();
         let index = SongLuaOverlayTopologyIndex::new(&overlays);
         Self {
+            draw_order: (0..overlays.len()).collect(),
             overlays,
             states,
             index,
@@ -9064,12 +9302,29 @@ impl SongLuaTopologyBenchmark {
             .fold(0, Self::camera_checksum)
     }
 
-    pub fn added_index_bytes_per_overlay() -> usize {
-        Self::topology_bytes_per_overlay() - std::mem::size_of::<Option<usize>>()
+    pub fn legacy_rgb_aft_groups(&self) -> u64 {
+        self.overlays
+            .iter()
+            .enumerate()
+            .filter(|(_, overlay)| matches!(overlay.kind, SongLuaOverlayKind::AftSprite { .. }))
+            .map(|(index, _)| {
+                song_lua_rgb_aft_group_for(&self.overlays, &self.states, &self.draw_order, index)
+            })
+            .fold(0, Self::rgb_group_checksum)
     }
 
-    pub fn topology_bytes_per_overlay() -> usize {
-        std::mem::size_of::<SongLuaOverlayIndex>() * 3
+    pub fn indexed_rgb_aft_groups(&mut self) -> u64 {
+        self.index.prepare_rgb_draw_positions(&self.draw_order);
+        self.overlays
+            .iter()
+            .enumerate()
+            .filter(|(_, overlay)| matches!(overlay.kind, SongLuaOverlayKind::AftSprite { .. }))
+            .map(|(index, _)| song_lua_rgb_aft_group_for_indexed(&self.states, &self.index, index))
+            .fold(0, Self::rgb_group_checksum)
+    }
+
+    pub fn topology_bytes_per_overlay(&self) -> usize {
+        self.index.storage_bytes() / self.overlays.len().max(1)
     }
 
     fn index_checksum(checksum: u64, index: Option<usize>) -> u64 {
@@ -9082,6 +9337,15 @@ impl SongLuaTopologyBenchmark {
                 ^ u64::from(state.x.to_bits()).rotate_left(17)
         });
         checksum.rotate_left(5) ^ bits
+    }
+
+    fn rgb_group_checksum(checksum: u64, group: Option<(usize, [usize; 3])>) -> u64 {
+        let Some((leader, group)) = group else {
+            return checksum.rotate_left(5);
+        };
+        group.into_iter().fold(leader as u64 + 1, |bits, index| {
+            bits.rotate_left(11) ^ index as u64 + 1
+        }) ^ checksum.rotate_left(5)
     }
 }
 
@@ -9179,84 +9443,79 @@ impl SongLuaOrderBenchmark {
 
 #[cfg(feature = "bench-support")]
 #[doc(hidden)]
-pub fn benchmark_projected_mesh_scratch(
-    start_fade: f32,
-    end_fade: f32,
-) -> Arc<[TexturedMeshVertex]> {
-    let xs = song_lua_projected_overlay_axis_slices(start_fade, end_fade);
-    let ys = song_lua_projected_overlay_axis_slices(end_fade, start_fade);
-    let mut grid = SmallVec::<[TexturedMeshVertex; 16]>::new();
-    for &y in &ys {
-        for &x in &xs {
-            grid.push(TexturedMeshVertex {
-                pos: [x * 640.0, y * 480.0, 0.0],
-                uv: [x, y],
-                tex_matrix_scale: [1.0, 1.0],
-                color: [1.0, 1.0, 1.0, x.min(y)],
-            });
-        }
-    }
-    benchmark_projected_mesh_vertices(&grid, xs.len(), ys.len())
+pub struct SongLuaProjectedMeshBenchmark {
+    scratch: SongLuaProjectedMeshScratch,
 }
 
 #[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub fn benchmark_projected_mesh_scratch_legacy(
-    start_fade: f32,
-    end_fade: f32,
-) -> Arc<[TexturedMeshVertex]> {
-    fn axis(start_fade: f32, end_fade: f32) -> Vec<f32> {
-        let mut out: Vec<f32> = vec![0.0];
-        for value in [start_fade, 1.0 - end_fade, 1.0] {
-            let value = value.clamp(0.0, 1.0);
-            if out
-                .last()
-                .is_none_or(|last| (value - *last).abs() > f32::EPSILON)
-            {
-                out.push(value);
+impl Default for SongLuaProjectedMeshBenchmark {
+    fn default() -> Self {
+        Self {
+            scratch: SongLuaProjectedMeshScratch::prewarmed(),
+        }
+    }
+}
+
+#[cfg(feature = "bench-support")]
+impl SongLuaProjectedMeshBenchmark {
+    pub fn legacy_frame(&self, start_fade: f32, end_fade: f32) -> Arc<[TexturedMeshVertex]> {
+        fn axis(start_fade: f32, end_fade: f32) -> Vec<f32> {
+            let mut out: Vec<f32> = vec![0.0];
+            for value in [start_fade, 1.0 - end_fade, 1.0] {
+                let value = value.clamp(0.0, 1.0);
+                if out
+                    .last()
+                    .is_none_or(|last| (value - *last).abs() > f32::EPSILON)
+                {
+                    out.push(value);
+                }
             }
+            out
         }
-        out
+
+        let xs = axis(start_fade, end_fade);
+        let ys = axis(end_fade, start_fade);
+        let mut grid = Vec::with_capacity(xs.len() * ys.len());
+        append_benchmark_projected_grid(&xs, &ys, &mut grid);
+        let mut vertices =
+            Vec::with_capacity(xs.len().saturating_sub(1) * ys.len().saturating_sub(1) * 6);
+        append_projected_mesh_vertices(&grid, xs.len(), ys.len(), &mut vertices);
+        Arc::from(vertices.into_boxed_slice())
     }
 
-    let xs = axis(start_fade, end_fade);
-    let ys = axis(end_fade, start_fade);
-    let mut grid = Vec::with_capacity(xs.len() * ys.len());
-    for &y in &ys {
-        for &x in &xs {
-            grid.push(TexturedMeshVertex {
+    pub fn reused_frame(&mut self, start_fade: f32, end_fade: f32) -> Arc<Vec<TexturedMeshVertex>> {
+        let xs = song_lua_projected_overlay_axis_slices(start_fade, end_fade);
+        let ys = song_lua_projected_overlay_axis_slices(end_fade, start_fade);
+        let mut grid = SmallVec::<[TexturedMeshVertex; 16]>::new();
+        append_benchmark_projected_grid(&xs, &ys, &mut grid);
+        self.scratch.update(&grid, xs.len(), ys.len())
+    }
+
+    pub fn storage_bytes(&self) -> usize {
+        self.scratch.storage_bytes()
+    }
+
+    pub fn replacements(&self) -> u64 {
+        self.scratch.replacements
+    }
+}
+
+#[cfg(feature = "bench-support")]
+fn append_benchmark_projected_grid(
+    xs: &[f32],
+    ys: &[f32],
+    grid: &mut impl Extend<TexturedMeshVertex>,
+) {
+    for &y in ys {
+        for &x in xs {
+            grid.extend([TexturedMeshVertex {
                 pos: [x * 640.0, y * 480.0, 0.0],
                 uv: [x, y],
                 tex_matrix_scale: [1.0, 1.0],
                 color: [1.0, 1.0, 1.0, x.min(y)],
-            });
+            }]);
         }
     }
-    benchmark_projected_mesh_vertices(&grid, xs.len(), ys.len())
-}
-
-#[cfg(feature = "bench-support")]
-fn benchmark_projected_mesh_vertices(
-    grid: &[TexturedMeshVertex],
-    width: usize,
-    height: usize,
-) -> Arc<[TexturedMeshVertex]> {
-    let mut vertices = Vec::with_capacity(width.saturating_sub(1) * height.saturating_sub(1) * 6);
-    for y in 0..height.saturating_sub(1) {
-        for x in 0..width.saturating_sub(1) {
-            let tl = y * width + x;
-            let tr = tl + 1;
-            let bl = (y + 1) * width + x;
-            let br = bl + 1;
-            vertices.push(grid[tl]);
-            vertices.push(grid[tr]);
-            vertices.push(grid[br]);
-            vertices.push(grid[tl]);
-            vertices.push(grid[br]);
-            vertices.push(grid[bl]);
-        }
-    }
-    Arc::from(vertices.into_boxed_slice())
 }
 
 fn song_lua_overlay_vertex_color(
@@ -9315,6 +9574,92 @@ fn song_lua_overlay_local_transform(rot_deg: [f32; 3], skew_x: f32, skew_y: f32)
         * song_lua_player_skew_y_matrix(skew_y)
 }
 
+fn append_projected_mesh_vertices(
+    grid: &[TexturedMeshVertex],
+    width: usize,
+    height: usize,
+    vertices: &mut Vec<TexturedMeshVertex>,
+) {
+    vertices.reserve(width.saturating_sub(1) * height.saturating_sub(1) * 6);
+    for y in 0..height.saturating_sub(1) {
+        for x in 0..width.saturating_sub(1) {
+            let tl = y * width + x;
+            let tr = tl + 1;
+            let bl = (y + 1) * width + x;
+            let br = bl + 1;
+            vertices
+                .extend_from_slice(&[grid[tl], grid[tr], grid[br], grid[tl], grid[br], grid[bl]]);
+        }
+    }
+}
+
+struct SongLuaProjectedMeshParams {
+    texture: Arc<str>,
+    tint: [f32; 4],
+    glow: [f32; 4],
+    world_z: f32,
+    depth_test: bool,
+    visible: bool,
+    blend: BlendMode,
+    z: i16,
+}
+
+fn song_lua_projected_mesh_actor_from_grid(
+    params: SongLuaProjectedMeshParams,
+    grid: &[TexturedMeshVertex],
+    width: usize,
+    height: usize,
+    scratch: Option<&mut SongLuaProjectedMeshScratch>,
+) -> Actor {
+    if let Some(scratch) = scratch {
+        return Actor::ReusableTexturedMesh {
+            align: [0.0, 0.0],
+            offset: [0.0, 0.0],
+            world_z: params.world_z,
+            size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
+            local_transform: Matrix4::IDENTITY,
+            texture: params.texture,
+            tint: params.tint,
+            glow: params.glow,
+            vertices: scratch.update(grid, width, height),
+            geom_cache_key: INVALID_TMESH_CACHE_KEY,
+            uv_scale: [1.0, 1.0],
+            uv_offset: [0.0, 0.0],
+            uv_tex_shift: [0.0, 0.0],
+            depth_test: params.depth_test,
+            visible: params.visible,
+            blend: params.blend,
+            z: params.z,
+        };
+    }
+    let mut vertices = Vec::with_capacity(
+        width
+            .saturating_sub(1)
+            .saturating_mul(height.saturating_sub(1))
+            .saturating_mul(6),
+    );
+    append_projected_mesh_vertices(grid, width, height, &mut vertices);
+    Actor::TexturedMesh {
+        align: [0.0, 0.0],
+        offset: [0.0, 0.0],
+        world_z: params.world_z,
+        size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
+        local_transform: Matrix4::IDENTITY,
+        texture: params.texture,
+        tint: params.tint,
+        glow: params.glow,
+        vertices: Arc::from(vertices.into_boxed_slice()),
+        geom_cache_key: INVALID_TMESH_CACHE_KEY,
+        uv_scale: [1.0, 1.0],
+        uv_offset: [0.0, 0.0],
+        uv_tex_shift: [0.0, 0.0],
+        depth_test: params.depth_test,
+        visible: params.visible,
+        blend: params.blend,
+        z: params.z,
+    }
+}
+
 fn song_lua_flat_skewed_overlay_actor(
     texture: Arc<str>,
     tint: [f32; 4],
@@ -9328,6 +9673,7 @@ fn song_lua_flat_skewed_overlay_actor(
     flip_x: bool,
     flip_y: bool,
     world_z: f32,
+    scratch: Option<&mut SongLuaProjectedMeshScratch>,
 ) -> Option<Actor> {
     let (flip_x, flip_y, size_x, size_y) =
         song_lua_overlay_fold_xy_rot(flip_x, flip_y, size[0], size[1], rot_deg[0], rot_deg[1]);
@@ -9364,41 +9710,22 @@ fn song_lua_flat_skewed_overlay_actor(
             });
         }
     }
-    let width = xs.len();
-    let mut vertices = Vec::with_capacity((xs.len() - 1) * (ys.len() - 1) * 6);
-    for y in 0..ys.len().saturating_sub(1) {
-        for x in 0..xs.len().saturating_sub(1) {
-            let tl = y * width + x;
-            let tr = tl + 1;
-            let bl = (y + 1) * width + x;
-            let br = bl + 1;
-            vertices.push(grid[tl]);
-            vertices.push(grid[tr]);
-            vertices.push(grid[br]);
-            vertices.push(grid[tl]);
-            vertices.push(grid[br]);
-            vertices.push(grid[bl]);
-        }
-    }
-    Some(Actor::TexturedMesh {
-        align: [0.0, 0.0],
-        offset: [0.0, 0.0],
-        world_z,
-        size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
-        local_transform: Matrix4::IDENTITY,
-        texture,
-        tint,
-        glow: [1.0, 1.0, 1.0, 0.0],
-        vertices: Arc::from(vertices.into_boxed_slice()),
-        geom_cache_key: INVALID_TMESH_CACHE_KEY,
-        uv_scale: [1.0, 1.0],
-        uv_offset: [0.0, 0.0],
-        uv_tex_shift: [0.0, 0.0],
-        depth_test: state.depth_test,
-        visible: state.visible,
-        blend,
-        z,
-    })
+    Some(song_lua_projected_mesh_actor_from_grid(
+        SongLuaProjectedMeshParams {
+            world_z,
+            depth_test: state.depth_test,
+            visible: state.visible,
+            glow: [1.0, 1.0, 1.0, 0.0],
+            texture,
+            tint,
+            blend,
+            z,
+        },
+        &grid,
+        xs.len(),
+        ys.len(),
+        scratch,
+    ))
 }
 
 fn song_lua_projected_overlay_actor(
@@ -9414,6 +9741,7 @@ fn song_lua_projected_overlay_actor(
     flip_x: bool,
     flip_y: bool,
     view_proj: Matrix4,
+    scratch: Option<&mut SongLuaProjectedMeshScratch>,
 ) -> Option<Actor> {
     let half_w = 0.5 * size[0];
     let half_h = 0.5 * size[1];
@@ -9449,41 +9777,22 @@ fn song_lua_projected_overlay_actor(
             });
         }
     }
-    let width = xs.len();
-    let mut vertices = Vec::with_capacity((xs.len() - 1) * (ys.len() - 1) * 6);
-    for y in 0..ys.len().saturating_sub(1) {
-        for x in 0..xs.len().saturating_sub(1) {
-            let tl = y * width + x;
-            let tr = tl + 1;
-            let bl = (y + 1) * width + x;
-            let br = bl + 1;
-            vertices.push(grid[tl]);
-            vertices.push(grid[tr]);
-            vertices.push(grid[br]);
-            vertices.push(grid[tl]);
-            vertices.push(grid[br]);
-            vertices.push(grid[bl]);
-        }
-    }
-    Some(Actor::TexturedMesh {
-        align: [0.0, 0.0],
-        offset: [0.0, 0.0],
-        world_z: state.z_bias,
-        size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
-        local_transform: Matrix4::IDENTITY,
-        texture,
-        tint,
-        glow: [1.0, 1.0, 1.0, 0.0],
-        vertices: Arc::from(vertices.into_boxed_slice()),
-        geom_cache_key: INVALID_TMESH_CACHE_KEY,
-        uv_scale: [1.0, 1.0],
-        uv_offset: [0.0, 0.0],
-        uv_tex_shift: [0.0, 0.0],
-        depth_test: state.depth_test,
-        visible: true,
-        blend,
-        z,
-    })
+    Some(song_lua_projected_mesh_actor_from_grid(
+        SongLuaProjectedMeshParams {
+            world_z: state.z_bias,
+            depth_test: state.depth_test,
+            visible: true,
+            glow: [1.0, 1.0, 1.0, 0.0],
+            texture,
+            tint,
+            blend,
+            z,
+        },
+        &grid,
+        xs.len(),
+        ys.len(),
+        scratch,
+    ))
 }
 
 type SongLuaActorList = SmallVec<[Actor; 2]>;
@@ -9495,7 +9804,7 @@ fn one_song_lua_actor(actor: Actor) -> SongLuaActorList {
     out
 }
 
-fn build_song_lua_overlay_actor(
+fn build_song_lua_overlay_actor_with_scratch(
     overlay: &SongLuaOverlayActor,
     state: SongLuaOverlayState,
     camera_state: Option<SongLuaOverlayState>,
@@ -9506,6 +9815,7 @@ fn build_song_lua_overlay_actor(
     effect_time: f32,
     effect_beat: f32,
     total_elapsed: f32,
+    mut projected_mesh_scratch: Option<&mut SongLuaProjectedMeshScratch>,
 ) -> Option<SongLuaActorList> {
     if !state.visible || !song_lua_overlay_has_visible_output(state) {
         return None;
@@ -9585,6 +9895,7 @@ fn build_song_lua_overlay_actor(
                     flip_x,
                     flip_y,
                     view_proj,
+                    projected_mesh_scratch.as_deref_mut(),
                 )?;
                 return Some(finalize_actor(actor, glow));
             }
@@ -9635,6 +9946,7 @@ fn build_song_lua_overlay_actor(
                     flip_x,
                     flip_y,
                     effect_offset[2],
+                    projected_mesh_scratch.as_deref_mut(),
                 )?;
                 return Some(finalize_actor(actor, glow));
             }
@@ -10082,6 +10394,7 @@ fn build_song_lua_overlay_actor(
                     flip_x,
                     flip_y,
                     view_proj,
+                    projected_mesh_scratch.as_deref_mut(),
                 )?;
                 return Some(finalize_actor(actor, glow));
             }
@@ -10131,6 +10444,7 @@ fn build_song_lua_overlay_actor(
                     flip_x,
                     flip_y,
                     effect_offset[2],
+                    projected_mesh_scratch.as_deref_mut(),
                 )?;
                 return Some(finalize_actor(actor, glow));
             }
@@ -10235,6 +10549,34 @@ fn build_song_lua_overlay_actor(
             Some(finalize_actor(actor, glow))
         }
     }
+}
+
+#[cfg(test)]
+fn build_song_lua_overlay_actor(
+    overlay: &SongLuaOverlayActor,
+    state: SongLuaOverlayState,
+    camera_state: Option<SongLuaOverlayState>,
+    asset_manager: &AssetManager,
+    z: i16,
+    overlay_space_width: f32,
+    overlay_space_height: f32,
+    effect_time: f32,
+    effect_beat: f32,
+    total_elapsed: f32,
+) -> Option<SongLuaActorList> {
+    build_song_lua_overlay_actor_with_scratch(
+        overlay,
+        state,
+        camera_state,
+        asset_manager,
+        z,
+        overlay_space_width,
+        overlay_space_height,
+        effect_time,
+        effect_beat,
+        total_elapsed,
+        None,
+    )
 }
 
 fn song_lua_wrap_overlay_shadow(
@@ -11023,7 +11365,7 @@ fn push_song_lua_layer_actors(
     out: &mut Vec<Actor>,
     overlays: &[SongLuaOverlayActor],
     order_cache: &mut SongLuaOverlayOrderCache,
-    topology_index: &SongLuaOverlayTopologyIndex,
+    topology_index: &mut SongLuaOverlayTopologyIndex,
     local_overlay_states: &[SongLuaOverlayState],
     overlay_states: &[SongLuaOverlayState],
     song_foreground_state: SongLuaOverlayState,
@@ -11037,6 +11379,7 @@ fn push_song_lua_layer_actors(
     order_scratch: &mut Vec<usize>,
     capture_states: &mut Vec<SongLuaOverlayState>,
     capture_order_scratch: &mut Vec<usize>,
+    projected_mesh_scratch: &mut [SongLuaProjectedMeshScratch],
 ) {
     let song_lua_overlay_base_z = song_lua_add_z(
         SONG_LUA_OVERLAY_LAYER_Z_BASE,
@@ -11044,6 +11387,7 @@ fn push_song_lua_layer_actors(
     );
     out.reserve(overlays.len());
     song_lua_overlay_order_into(overlays, overlay_states, order_cache, None, order_scratch);
+    topology_index.prepare_rgb_draw_positions(order_scratch);
     for (draw_idx, idx) in order_scratch.iter().copied().enumerate() {
         let Some(overlay) = overlays.get(idx) else {
             continue;
@@ -11080,7 +11424,7 @@ fn push_song_lua_layer_actors(
             }
             SongLuaOverlayKind::AftSprite { .. } => {
                 let overlay_state = if let Some((leader, _)) =
-                    song_lua_rgb_aft_group_for(overlays, overlay_states, order_scratch, idx)
+                    song_lua_rgb_aft_group_for_indexed(overlay_states, topology_index, idx)
                 {
                     if leader != idx {
                         continue;
@@ -11108,6 +11452,7 @@ fn push_song_lua_layer_actors(
                         space_height,
                         capture_states,
                         capture_order_scratch,
+                        projected_mesh_scratch,
                     );
                     song_lua_build_capture_actor(
                         overlay,
@@ -11125,7 +11470,7 @@ fn push_song_lua_layer_actors(
                     None
                 }
             }
-            _ => build_song_lua_overlay_actor(
+            _ => build_song_lua_overlay_actor_with_scratch(
                 overlay,
                 overlay_state,
                 song_lua_overlay_camera_state_indexed(overlay_states, topology_index, idx),
@@ -11139,6 +11484,7 @@ fn push_song_lua_layer_actors(
                 effect_time,
                 effect_beat,
                 total_elapsed,
+                projected_mesh_scratch.get_mut(idx),
             ),
         };
         if let Some(actors) = actor {
@@ -11160,11 +11506,17 @@ pub fn push_actors(
         std::mem::take(&mut state.song_lua_background_visual_layer_orders);
     let mut song_lua_foreground_visual_layer_orders =
         std::mem::take(&mut state.song_lua_foreground_visual_layer_orders);
-    let song_lua_proxy_request_index = std::mem::take(&mut state.song_lua_proxy_request_index);
-    let song_lua_background_overlay_topology_indices =
+    let mut song_lua_proxy_request_index = std::mem::take(&mut state.song_lua_proxy_request_index);
+    let mut song_lua_background_overlay_topology_indices =
         std::mem::take(&mut state.song_lua_background_overlay_topology_indices);
-    let song_lua_foreground_proxy_request_indices =
+    let mut song_lua_foreground_proxy_request_indices =
         std::mem::take(&mut state.song_lua_foreground_proxy_request_indices);
+    let mut song_lua_projected_mesh_scratch =
+        std::mem::take(&mut state.song_lua_projected_mesh_scratch);
+    let mut song_lua_background_projected_mesh_scratch =
+        std::mem::take(&mut state.song_lua_background_projected_mesh_scratch);
+    let mut song_lua_foreground_projected_mesh_scratch =
+        std::mem::take(&mut state.song_lua_foreground_projected_mesh_scratch);
     let mut song_lua_message_state_cache = std::mem::take(&mut state.song_lua_message_state_cache);
     let mut song_lua_background_layer_message_state_cache =
         std::mem::take(&mut state.song_lua_background_layer_message_state_cache);
@@ -11335,7 +11687,12 @@ pub fn push_actors(
         let Some(order_cache) = song_lua_background_visual_layer_orders.get_mut(layer_idx) else {
             continue;
         };
-        let Some(topology_index) = song_lua_background_overlay_topology_indices.get(layer_idx)
+        let Some(topology_index) = song_lua_background_overlay_topology_indices.get_mut(layer_idx)
+        else {
+            continue;
+        };
+        let Some(projected_mesh_scratch) =
+            song_lua_background_projected_mesh_scratch.get_mut(layer_idx)
         else {
             continue;
         };
@@ -11363,6 +11720,7 @@ pub fn push_actors(
             &mut song_lua_order_scratch,
             &mut song_lua_capture_state_scratch,
             &mut song_lua_capture_order_scratch,
+            projected_mesh_scratch,
         );
     }
     song_lua_capture_new_actors(&mut underlay_proxy_source, actors, underlay_start);
@@ -13001,7 +13359,7 @@ pub fn push_actors(
         actors,
         &song_lua_visuals.overlays,
         &mut song_lua_overlay_order,
-        &song_lua_proxy_request_index.topology,
+        &mut song_lua_proxy_request_index.topology,
         &song_lua_local_state_scratch,
         &song_lua_overlay_state_scratch,
         song_foreground_state,
@@ -13015,6 +13373,7 @@ pub fn push_actors(
         &mut song_lua_order_scratch,
         &mut song_lua_capture_state_scratch,
         &mut song_lua_capture_order_scratch,
+        &mut song_lua_projected_mesh_scratch,
     );
     if let Some(actor) = build_foreground_media(
         state,
@@ -13037,7 +13396,13 @@ pub fn push_actors(
         let Some(order_cache) = song_lua_foreground_visual_layer_orders.get_mut(layer_idx) else {
             continue;
         };
-        let Some(topology_index) = song_lua_foreground_proxy_request_indices.get(layer_idx) else {
+        let Some(topology_index) = song_lua_foreground_proxy_request_indices.get_mut(layer_idx)
+        else {
+            continue;
+        };
+        let Some(projected_mesh_scratch) =
+            song_lua_foreground_projected_mesh_scratch.get_mut(layer_idx)
+        else {
             continue;
         };
         let song_foreground_state = song_lua_song_foreground_state_from(
@@ -13050,7 +13415,7 @@ pub fn push_actors(
             actors,
             &layer.overlays,
             order_cache,
-            &topology_index.topology,
+            &mut topology_index.topology,
             local_states,
             layer_states,
             song_foreground_state,
@@ -13064,6 +13429,7 @@ pub fn push_actors(
             &mut song_lua_order_scratch,
             &mut song_lua_capture_state_scratch,
             &mut song_lua_capture_order_scratch,
+            projected_mesh_scratch,
         );
     }
     state.song_lua_overlay_order = song_lua_overlay_order;
@@ -13073,6 +13439,9 @@ pub fn push_actors(
     state.song_lua_background_overlay_topology_indices =
         song_lua_background_overlay_topology_indices;
     state.song_lua_foreground_proxy_request_indices = song_lua_foreground_proxy_request_indices;
+    state.song_lua_projected_mesh_scratch = song_lua_projected_mesh_scratch;
+    state.song_lua_background_projected_mesh_scratch = song_lua_background_projected_mesh_scratch;
+    state.song_lua_foreground_projected_mesh_scratch = song_lua_foreground_projected_mesh_scratch;
     state.song_lua_message_state_cache = song_lua_message_state_cache;
     state.song_lua_background_layer_message_state_cache =
         song_lua_background_layer_message_state_cache;
@@ -15119,6 +15488,7 @@ mod tests {
         let topology_index = SongLuaOverlayTopologyIndex::new(&overlays);
         let mut capture_states = Vec::new();
         let mut order_scratch = Vec::new();
+        let mut projected_mesh_scratch = song_lua_projected_mesh_scratch_for(&overlays);
         let actors = song_lua_capture_children(
             &overlays,
             &overlay_states,
@@ -15132,6 +15502,7 @@ mod tests {
             480.0,
             &mut capture_states,
             &mut order_scratch,
+            &mut projected_mesh_scratch,
         );
 
         match actors.as_slice() {
@@ -15472,17 +15843,18 @@ mod tests {
             ..SongLuaScreenProxySources::default()
         };
         let mut order_cache = song_lua_overlay_order_cache_from(&overlays, &[]);
-        let topology_index = SongLuaOverlayTopologyIndex::new(&overlays);
+        let mut topology_index = SongLuaOverlayTopologyIndex::new(&overlays);
         let mut out = Vec::new();
         let mut order_scratch = Vec::new();
         let mut capture_states = Vec::new();
         let mut capture_order_scratch = Vec::new();
+        let mut projected_mesh_scratch = song_lua_projected_mesh_scratch_for(&overlays);
 
         push_song_lua_layer_actors(
             &mut out,
             &overlays,
             &mut order_cache,
-            &topology_index,
+            &mut topology_index,
             &overlay_states,
             &overlay_states,
             SongLuaOverlayState::default(),
@@ -15496,6 +15868,7 @@ mod tests {
             &mut order_scratch,
             &mut capture_states,
             &mut capture_order_scratch,
+            &mut projected_mesh_scratch,
         );
 
         assert_eq!(out.len(), 1);
@@ -15540,17 +15913,18 @@ mod tests {
             ..SongLuaScreenProxySources::default()
         };
         let mut order_cache = song_lua_overlay_order_cache_from(&overlays, &[]);
-        let topology_index = SongLuaOverlayTopologyIndex::new(&overlays);
+        let mut topology_index = SongLuaOverlayTopologyIndex::new(&overlays);
         let mut out = Vec::new();
         let mut order_scratch = Vec::new();
         let mut capture_states = Vec::new();
         let mut capture_order_scratch = Vec::new();
+        let mut projected_mesh_scratch = song_lua_projected_mesh_scratch_for(&overlays);
 
         push_song_lua_layer_actors(
             &mut out,
             &overlays,
             &mut order_cache,
-            &topology_index,
+            &mut topology_index,
             &overlay_states,
             &overlay_states,
             SongLuaOverlayState::default(),
@@ -15564,6 +15938,7 @@ mod tests {
             &mut order_scratch,
             &mut capture_states,
             &mut capture_order_scratch,
+            &mut projected_mesh_scratch,
         );
 
         assert_eq!(out.len(), 3);
@@ -15600,17 +15975,18 @@ mod tests {
             ..SongLuaScreenProxySources::default()
         };
         let mut order_cache = song_lua_overlay_order_cache_from(&overlays, &[]);
-        let topology_index = SongLuaOverlayTopologyIndex::new(&overlays);
+        let mut topology_index = SongLuaOverlayTopologyIndex::new(&overlays);
         let mut out = Vec::new();
         let mut order_scratch = Vec::new();
         let mut capture_states = Vec::new();
         let mut capture_order_scratch = Vec::new();
+        let mut projected_mesh_scratch = song_lua_projected_mesh_scratch_for(&overlays);
 
         push_song_lua_layer_actors(
             &mut out,
             &overlays,
             &mut order_cache,
-            &topology_index,
+            &mut topology_index,
             &overlay_states,
             &overlay_states,
             SongLuaOverlayState::default(),
@@ -15624,6 +16000,7 @@ mod tests {
             &mut order_scratch,
             &mut capture_states,
             &mut capture_order_scratch,
+            &mut projected_mesh_scratch,
         );
 
         assert_eq!(out.len(), 1);
@@ -15659,9 +16036,12 @@ mod tests {
             .position(|overlay| overlay.name.as_deref() == Some("AFTSpriteR"))
             .expect("fixture should compile AFTSpriteR");
 
-        let Some((leader, group)) =
-            song_lua_rgb_aft_group_for(&compiled.overlays, &states, &order, red_index)
-        else {
+        let legacy = song_lua_rgb_aft_group_for(&compiled.overlays, &states, &order, red_index);
+        let mut topology = SongLuaOverlayTopologyIndex::new(&compiled.overlays);
+        topology.prepare_rgb_draw_positions(&order);
+        let indexed = song_lua_rgb_aft_group_for_indexed(&states, &topology, red_index);
+        assert_eq!(indexed, legacy);
+        let Some((leader, group)) = legacy else {
             panic!("fixture RGB AFT state should combine before rgbsplit");
         };
 
@@ -17327,20 +17707,22 @@ mod tests {
             initial_state: SongLuaOverlayState::default(),
             message_commands: Vec::new(),
         };
+        let state = SongLuaOverlayState {
+            x: 320.0,
+            y: 240.0,
+            diffuse: [0.8, 0.7, 0.6, 0.5],
+            fadeleft: 0.25,
+            faderight: 0.25,
+            ..SongLuaOverlayState::default()
+        };
+        let camera = Some(SongLuaOverlayState {
+            fov: Some(45.0),
+            ..SongLuaOverlayState::default()
+        });
         let actor = build_song_lua_overlay_actor(
             &sprite,
-            SongLuaOverlayState {
-                x: 320.0,
-                y: 240.0,
-                diffuse: [0.8, 0.7, 0.6, 0.5],
-                fadeleft: 0.25,
-                faderight: 0.25,
-                ..SongLuaOverlayState::default()
-            },
-            Some(SongLuaOverlayState {
-                fov: Some(45.0),
-                ..SongLuaOverlayState::default()
-            }),
+            state,
+            camera,
             &asset_manager,
             792,
             640.0,
@@ -17351,7 +17733,7 @@ mod tests {
         )
         .expect_actor("projected fading sprite should render");
 
-        match actor {
+        let legacy_vertices = match actor {
             Actor::TexturedMesh {
                 tint, vertices, z, ..
             } => {
@@ -17369,9 +17751,47 @@ mod tests {
                         .iter()
                         .any(|vertex| (vertex.color[3] - 1.0).abs() <= 0.000_1)
                 );
+                vertices
             }
             other => panic!("expected projected textured mesh, got {other:?}"),
-        }
+        };
+
+        let mut scratch = SongLuaProjectedMeshScratch::prewarmed();
+        let build_reused = |scratch: &mut SongLuaProjectedMeshScratch| {
+            build_song_lua_overlay_actor_with_scratch(
+                &sprite,
+                state,
+                camera,
+                &asset_manager,
+                792,
+                640.0,
+                480.0,
+                0.0,
+                0.0,
+                0.0,
+                Some(scratch),
+            )
+            .expect_actor("projected fading sprite should reuse its mesh")
+        };
+        let Actor::ReusableTexturedMesh {
+            vertices: reused_vertices,
+            ..
+        } = build_reused(&mut scratch)
+        else {
+            panic!("expected reusable projected textured mesh");
+        };
+        assert_eq!(legacy_vertices.as_ref(), reused_vertices.as_slice());
+        let buffer_ptr = Arc::as_ptr(&reused_vertices);
+        drop(reused_vertices);
+        let Actor::ReusableTexturedMesh {
+            vertices: next_vertices,
+            ..
+        } = build_reused(&mut scratch)
+        else {
+            panic!("expected reusable projected textured mesh");
+        };
+        assert_eq!(Arc::as_ptr(&next_vertices), buffer_ptr);
+        assert_eq!(scratch.replacements, 0);
     }
 
     #[test]

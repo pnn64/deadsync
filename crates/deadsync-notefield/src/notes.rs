@@ -538,6 +538,7 @@ impl ScrollTravel<'_> {
         self.raw_note(note, use_hold_end)
     }
 
+    #[inline(always)]
     pub fn adjusted_with_peak(&self, raw_travel: f32) -> (f32, bool) {
         if self.accel_is_identity {
             return (raw_travel * self.post_accel_scale, true);
@@ -552,6 +553,7 @@ impl ScrollTravel<'_> {
         (travel * self.post_accel_scale, before_peak)
     }
 
+    #[inline(always)]
     pub fn adjusted(&self, raw_travel: f32) -> f32 {
         if self.accel_is_identity {
             return raw_travel * self.post_accel_scale;

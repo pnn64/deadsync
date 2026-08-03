@@ -1,7 +1,6 @@
 use deadsync_theme_simply_love::screens::gameplay::{
     SongLuaEaseBenchmark, SongLuaMessageStateBenchmark, SongLuaOrderBenchmark,
-    SongLuaProxyRequestBenchmark, SongLuaTopologyBenchmark, benchmark_projected_mesh_scratch,
-    benchmark_projected_mesh_scratch_legacy,
+    SongLuaProjectedMeshBenchmark, SongLuaProxyRequestBenchmark, SongLuaTopologyBenchmark,
 };
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::hint::black_box;
@@ -18,6 +17,7 @@ const ORDER_ACTORS: usize = 256;
 const TOPOLOGY_GROUPS: usize = 16;
 const TOPOLOGY_CHAIN_DEPTH: usize = 32;
 const TOPOLOGY_REFERENCES: usize = 128;
+const RGB_AFT_REFERENCES: usize = TOPOLOGY_GROUPS * 3;
 const WARMUP_FRAMES: usize = 1_000;
 
 struct CountingAlloc {
@@ -183,6 +183,7 @@ fn main() {
     const EASE_FRAMES: usize = 100_000;
     const PROXY_FRAMES: usize = 20_000;
     const AFT_TARGET_FRAMES: usize = 2_000;
+    const RGB_AFT_FRAMES: usize = 2_000;
     const ANCESTRY_FRAMES: usize = 20_000;
     const CAMERA_FRAMES: usize = 20_000;
     const ORDER_FRAMES: usize = 100_000;
@@ -266,6 +267,17 @@ fn main() {
     let legacy_camera_result = measure(CAMERA_FRAMES, || topology_benchmark.legacy_camera_states());
     let indexed_camera_result =
         measure(CAMERA_FRAMES, || topology_benchmark.indexed_camera_states());
+    let mut rgb_aft_benchmark =
+        SongLuaTopologyBenchmark::new(TOPOLOGY_GROUPS, TOPOLOGY_CHAIN_DEPTH, RGB_AFT_REFERENCES);
+    assert_eq!(
+        rgb_aft_benchmark.legacy_rgb_aft_groups(),
+        rgb_aft_benchmark.indexed_rgb_aft_groups()
+    );
+    let legacy_rgb_aft_result =
+        measure(RGB_AFT_FRAMES, || rgb_aft_benchmark.legacy_rgb_aft_groups());
+    let indexed_rgb_aft_result = measure(RGB_AFT_FRAMES, || {
+        rgb_aft_benchmark.indexed_rgb_aft_groups()
+    });
 
     let mut legacy_order = SongLuaOrderBenchmark::new(ORDER_ACTORS);
     let mut cached_order = SongLuaOrderBenchmark::new(ORDER_ACTORS);
@@ -292,15 +304,18 @@ fn main() {
         checksum.min(u64::MAX as usize) as u64
     });
 
-    let legacy_vertices = benchmark_projected_mesh_scratch_legacy(0.25, 0.25);
-    let inline_vertices = benchmark_projected_mesh_scratch(0.25, 0.25);
-    assert_eq!(legacy_vertices.as_ref(), inline_vertices.as_ref());
+    let legacy_mesh = SongLuaProjectedMeshBenchmark::default();
+    let mut reused_mesh = SongLuaProjectedMeshBenchmark::default();
+    let legacy_vertices = legacy_mesh.legacy_frame(0.25, 0.25);
+    let reused_vertices = reused_mesh.reused_frame(0.25, 0.25);
+    assert_eq!(legacy_vertices.as_ref(), reused_vertices.as_slice());
+    drop(reused_vertices);
     let legacy_mesh_result = measure(MESH_FRAMES, || {
-        let vertices = benchmark_projected_mesh_scratch_legacy(black_box(0.25), black_box(0.25));
+        let vertices = legacy_mesh.legacy_frame(black_box(0.25), black_box(0.25));
         vertices.len() as u64
     });
-    let inline_mesh_result = measure(MESH_FRAMES, || {
-        let vertices = benchmark_projected_mesh_scratch(black_box(0.25), black_box(0.25));
+    let reused_mesh_result = measure(MESH_FRAMES, || {
+        let vertices = reused_mesh.reused_frame(black_box(0.25), black_box(0.25));
         vertices.len() as u64
     });
 
@@ -323,12 +338,16 @@ fn main() {
         legacy_camera_result.checksum,
         indexed_camera_result.checksum
     );
+    assert_eq!(
+        legacy_rgb_aft_result.checksum,
+        indexed_rgb_aft_result.checksum
+    );
     assert_eq!(legacy_order_result.checksum, cached_order_result.checksum);
     assert_eq!(
         legacy_changing_order_result.checksum,
         cached_changing_order_result.checksum
     );
-    assert_eq!(legacy_mesh_result.checksum, inline_mesh_result.checksum);
+    assert_eq!(legacy_mesh_result.checksum, reused_mesh_result.checksum);
 
     println!("Song Lua gameplay frame hot paths");
     println!("message state ({MESSAGE_EVENTS} prior events)");
@@ -374,9 +393,14 @@ fn main() {
     print_result("walk parents", CAMERA_FRAMES, &legacy_camera_result);
     print_result("camera index", CAMERA_FRAMES, &indexed_camera_result);
     println!(
-        "topology storage: {} bytes/overlay; existing proxy-index delta: {} bytes/overlay",
-        SongLuaTopologyBenchmark::topology_bytes_per_overlay(),
-        SongLuaTopologyBenchmark::added_index_bytes_per_overlay()
+        "RGB AFT grouping ({RGB_AFT_REFERENCES} sprites, {} overlays)",
+        TOPOLOGY_GROUPS * TOPOLOGY_CHAIN_DEPTH + RGB_AFT_REFERENCES
+    );
+    print_result("scan all overlays", RGB_AFT_FRAMES, &legacy_rgb_aft_result);
+    print_result("capture peers", RGB_AFT_FRAMES, &indexed_rgb_aft_result);
+    println!(
+        "topology storage: {} bytes/overlay",
+        rgb_aft_benchmark.topology_bytes_per_overlay(),
     );
     println!("dynamic order ({ORDER_ACTORS} actors, unchanged keys)");
     print_result("sort every frame", ORDER_FRAMES, &legacy_order_result);
@@ -393,6 +417,11 @@ fn main() {
         &cached_changing_order_result,
     );
     println!("projected mesh (4x4 scratch grid)");
-    print_result("heap scratch", MESH_FRAMES, &legacy_mesh_result);
-    print_result("inline scratch", MESH_FRAMES, &inline_mesh_result);
+    print_result("fresh immutable", MESH_FRAMES, &legacy_mesh_result);
+    print_result("reused buffer", MESH_FRAMES, &reused_mesh_result);
+    println!(
+        "mesh storage: {} bytes, {} buffer replacements",
+        reused_mesh.storage_bytes(),
+        reused_mesh.replacements(),
+    );
 }
