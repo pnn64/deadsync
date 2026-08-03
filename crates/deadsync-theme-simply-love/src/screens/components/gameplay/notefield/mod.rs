@@ -1,7 +1,7 @@
 use crate::assets;
 use crate::notefield_style::notefield_style;
 use crate::screens::gameplay::{GameplayCoreState as State, GameplayNoteskinAssets};
-use deadlib_present::actors::{Actor, ActorResourceArena, IntoTextureKey};
+use deadlib_present::actors::{Actor, ActorResourceArena, IntoTextureKey, TextContent};
 use deadlib_present::color;
 use deadlib_present::space::*;
 use deadsync_assets::noteskin::SpriteSlot;
@@ -35,12 +35,12 @@ pub use prewarm::prewarm_text_layout;
 pub(crate) use text::preferred_mods_text;
 #[cfg(feature = "bench-support")]
 #[doc(hidden)]
-pub fn benchmark_combo_text_legacy(value: u32) -> std::sync::Arc<str> {
+pub fn benchmark_combo_text_legacy(value: u32) -> TextContent {
     text::benchmark_combo_text_legacy(value)
 }
 #[cfg(feature = "bench-support")]
 #[doc(hidden)]
-pub fn benchmark_combo_text(value: u32) -> std::sync::Arc<str> {
+pub fn benchmark_combo_text(value: u32) -> TextContent {
     text::benchmark_combo_text(value)
 }
 #[cfg(feature = "bench-support")]
@@ -49,7 +49,7 @@ pub fn prepare_combo_text_benchmark() {
     text::prepare_combo_text_benchmark();
 }
 use text::{
-    cached_error_bar_text_label, cached_int_i32, cached_int_u32, cached_offset_ms,
+    cached_error_bar_text_label, cached_int_i32, cached_offset_ms,
     cached_zmod_measure_counter_text, effective_accel_effects_for_player,
     effective_mini_percent_for_player, effective_perspective_effects_for_player,
     effective_scroll_effects_for_player, effective_spacing_multiplier_for_player,
@@ -748,7 +748,7 @@ pub(crate) fn compose_frame(
         player_color,
         combo_color,
         font: zmod_combo_font_name(profile.combo_font),
-        number_text: cached_int_u32,
+        number_text: TextContent::inline_u32,
     };
 
     let timing_windows_s = state.timing_profile_windows_s();

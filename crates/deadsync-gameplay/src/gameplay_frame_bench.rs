@@ -170,7 +170,6 @@ impl InputQueueDrainBench {
         }
         output
     }
-
 }
 
 #[inline(always)]
@@ -587,19 +586,29 @@ impl LiveNotefieldOptionsBench {
 
     pub fn new_frame(&mut self, frame: usize) -> GameplayFrameHotPathBenchOutput {
         const COLS_PER_PLAYER: usize = 4;
-        for player in 0..MAX_PLAYERS {
-            let scroll = resolve_bench_scroll(
+        let scrolls: [ScrollEffects; MAX_PLAYERS] = std::array::from_fn(|player| {
+            resolve_bench_scroll(
                 self.base_scroll[player],
                 self.attack_scroll[player],
                 player,
                 frame,
-            );
-            self.reverse[player] = scroll.reverse_percent_for_column(0, COLS_PER_PLAYER) > 0.5;
+            )
+        });
+        for player in 0..MAX_PLAYERS {
+            let scroll = scrolls[player];
+            let first_reverse = scroll.reverse_percent_for_column(0, COLS_PER_PLAYER);
+            self.reverse[player] = first_reverse > 0.5;
             let start = player * COLS_PER_PLAYER;
             for local_col in 0..COLS_PER_PLAYER {
-                self.column_dirs[start + local_col] =
-                    scroll.reverse_scale_for_column(local_col, COLS_PER_PLAYER);
+                let reverse = if local_col == 0 {
+                    first_reverse
+                } else {
+                    scroll.reverse_percent_for_column(local_col, COLS_PER_PLAYER)
+                };
+                self.column_dirs[start + local_col] = 1.0 - 2.0 * reverse;
             }
+        }
+        for (player, scroll) in scrolls.into_iter().enumerate() {
             self.motion[player] = bench_motion(frame, player, scroll);
         }
         live_options_output(self)
@@ -842,11 +851,7 @@ impl IdleLaneScanBench {
         self.run_frame(frame, true)
     }
 
-    fn run_frame(
-        &mut self,
-        frame: usize,
-        guard_idle: bool,
-    ) -> GameplayFrameHotPathBenchOutput {
+    fn run_frame(&mut self, frame: usize, guard_idle: bool) -> GameplayFrameHotPathBenchOutput {
         let mut current_inputs = [false; MAX_COLS];
         current_inputs[0] = frame % 257 == 0;
         let current_inputs = std::hint::black_box(current_inputs);
@@ -935,30 +940,17 @@ impl SharedMissCutoffBench {
         self.run_frame(frame, true)
     }
 
-    fn run_frame(
-        &mut self,
-        frame: usize,
-        share_cutoff: bool,
-    ) -> GameplayFrameHotPathBenchOutput {
+    fn run_frame(&mut self, frame: usize, share_cutoff: bool) -> GameplayFrameHotPathBenchOutput {
         let music_time_ns = 500_000_000_i64.saturating_add(frame as i64 * 8_333_333);
         let player_refs = [&self.timing_players[0], &self.timing_players[1]];
-        let rows = self.caches.missed_note_cutoff_rows(
-            &self.profile,
-            &player_refs,
-            1.0,
-            music_time_ns,
-            2,
-        );
+        let rows =
+            self.caches
+                .missed_note_cutoff_rows(&self.profile, &player_refs, 1.0, music_time_ns, 2);
         let second_rows = if share_cutoff {
             rows
         } else {
-            self.caches.missed_note_cutoff_rows(
-                &self.profile,
-                &player_refs,
-                1.0,
-                music_time_ns,
-                2,
-            )
+            self.caches
+                .missed_note_cutoff_rows(&self.profile, &player_refs, 1.0, music_time_ns, 2)
         };
         let mut output = GameplayFrameHotPathBenchOutput::default();
         for cutoff in rows.into_iter().chain(second_rows) {

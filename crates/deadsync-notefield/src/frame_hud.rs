@@ -14,7 +14,7 @@ use crate::judgment_feedback::{
     compose_judgment_feedback,
 };
 use crate::mini_indicator::ZmodMeasureCounterText;
-use deadlib_present::actors::{Actor, SpriteSource};
+use deadlib_present::actors::{Actor, SpriteSource, TextContent};
 use deadsync_gameplay::{
     ActiveComboMilestone, ErrorBarText, ErrorBarTick, HeldMissRenderInfo, HoldJudgmentRenderInfo,
     JudgmentRenderInfo, OffsetIndicatorText,
@@ -31,7 +31,7 @@ pub struct ComboHudFrame<'a> {
     pub player_color: [f32; 4],
     pub combo_color: [f32; 4],
     pub font: Option<&'static str>,
-    pub number_text: fn(u32) -> Arc<str>,
+    pub number_text: fn(u32) -> TextContent,
 }
 
 /// Borrowed gameplay error-bar state plus prepared theme text adapters.

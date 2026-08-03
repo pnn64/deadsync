@@ -1,5 +1,5 @@
 use crate::combo_actor_zoom;
-use deadlib_present::actors::{Actor, SpriteSource, TextAlign};
+use deadlib_present::actors::{Actor, SpriteSource, TextAlign, TextContent};
 use deadlib_present::dsl::{SpriteBuilder, TextBuilder};
 use deadlib_render::BlendMode;
 use deadsync_gameplay::{
@@ -7,6 +7,7 @@ use deadsync_gameplay::{
     ComboMilestoneKind,
 };
 use deadsync_theme::ComboFeedbackStyle;
+#[cfg(test)]
 use std::sync::Arc;
 
 #[derive(Clone, Debug)]
@@ -33,7 +34,7 @@ pub(crate) struct ComboFeedbackRequest<'a> {
     pub player_color: [f32; 4],
     pub combo_color: [f32; 4],
     pub font: Option<&'static str>,
-    pub number_text: fn(u32) -> Arc<str>,
+    pub number_text: fn(u32) -> TextContent,
 }
 
 /// Compose canonical combo numbers and hundred/thousand milestone feedback.
@@ -171,7 +172,7 @@ fn append_combo_number(actors: &mut Vec<Actor>, request: &ComboFeedbackRequest<'
 
     let mut text = TextBuilder::new();
     text.font(font);
-    text.settext((request.number_text)(value).into());
+    text.settext((request.number_text)(value));
     text.align(0.5, 0.5);
     text.xy(request.number_xy[0], request.number_xy[1]);
     text.zoom(request.style.number_zoom * zoom_mod);
@@ -265,8 +266,8 @@ mod tests {
         }
     }
 
-    fn number_text(value: u32) -> Arc<str> {
-        Arc::from(value.to_string())
+    fn number_text(value: u32) -> TextContent {
+        TextContent::inline_u32(value)
     }
 
     fn request<'a>(

@@ -180,11 +180,11 @@ fn combo_value(frame: usize, player: usize) -> u32 {
     8_193 + (((frame / 12) % 4_096) * COMBO_VALUES_PER_FRAME + player) as u32
 }
 
-fn measure_combo_text(mut text: impl FnMut(u32) -> Arc<str>) -> BenchResult {
+fn measure_combo_text(mut text: impl FnMut(u32) -> TextContent) -> BenchResult {
     for frame in 0..WARMUP_FRAMES {
         for player in 0..COMBO_VALUES_PER_FRAME {
             let value = combo_value(frame, player);
-            assert_eq!(text(value).as_ref(), value.to_string());
+            assert_eq!(text(value).as_str(), value.to_string());
         }
     }
     let before = ALLOC.snapshot();
@@ -195,7 +195,7 @@ fn measure_combo_text(mut text: impl FnMut(u32) -> Arc<str>) -> BenchResult {
         for player in 0..COMBO_VALUES_PER_FRAME {
             let value = black_box(combo_value(frame, player));
             output_checksum =
-                output_checksum.rotate_left(7) ^ shared_text_checksum(&black_box(text(value)));
+                output_checksum.rotate_left(7) ^ text_checksum(&black_box(text(value)));
         }
     }
     BenchResult {
@@ -206,10 +206,30 @@ fn measure_combo_text(mut text: impl FnMut(u32) -> Arc<str>) -> BenchResult {
     }
 }
 
-fn shared_text_checksum(text: &Arc<str>) -> usize {
-    text.bytes().fold(0usize, |checksum, byte| {
-        checksum.rotate_left(5) ^ byte as usize
-    })
+fn measure_prompt_text(mut text: impl FnMut(&Arc<str>) -> TextContent) -> BenchResult {
+    let prompts: [Arc<str>; 3] = [
+        Arc::from("Continue holding START to give up"),
+        Arc::from("Continue holding BACK to give up"),
+        Arc::from("Don't go back"),
+    ];
+    for frame in 0..WARMUP_FRAMES {
+        let source = &prompts[frame % prompts.len()];
+        assert_eq!(text(source).as_str(), source.as_ref());
+    }
+    let before = ALLOC.snapshot();
+    let before_cycles = read_cycles();
+    let started = Instant::now();
+    let mut output_checksum = 0usize;
+    for frame in 0..MEASURE_FRAMES {
+        let source = black_box(&prompts[frame % prompts.len()]);
+        output_checksum = output_checksum.rotate_left(7) ^ text_checksum(&black_box(text(source)));
+    }
+    BenchResult {
+        elapsed: started.elapsed(),
+        cycles: read_cycles().saturating_sub(before_cycles),
+        allocated: ALLOC.snapshot().delta(before),
+        checksum: output_checksum,
+    }
 }
 
 fn print_result(label: &str, result: &BenchResult) {
@@ -268,16 +288,25 @@ fn main() {
     prepare_combo_text_benchmark();
     let saturated_combo_cache = measure_combo_text(benchmark_combo_text_legacy);
     prepare_combo_text_benchmark();
-    let recent_combo_cache = measure_combo_text(benchmark_combo_text);
-    assert_eq!(saturated_combo_cache.checksum, recent_combo_cache.checksum);
-    black_box((saturated_combo_cache.checksum, recent_combo_cache.checksum));
+    let inline_combo_text = measure_combo_text(benchmark_combo_text);
+    assert_eq!(saturated_combo_cache.checksum, inline_combo_text.checksum);
+    black_box((saturated_combo_cache.checksum, inline_combo_text.checksum));
 
     println!(
         "\nsaturated combo text benchmark \
          ({COMBO_VALUES_PER_FRAME} players, combo changes every 12 frames)"
     );
     print_result("bounded cache", &saturated_combo_cache);
-    print_result("recent values", &recent_combo_cache);
+    print_result("inline values", &inline_combo_text);
+
+    let owned_prompt = measure_prompt_text(|text| TextContent::Owned(text.to_string()));
+    let shared_prompt = measure_prompt_text(|text| TextContent::Shared(Arc::clone(text)));
+    assert_eq!(owned_prompt.checksum, shared_prompt.checksum);
+    black_box((owned_prompt.checksum, shared_prompt.checksum));
+
+    println!("\nactive gameplay exit-prompt text benchmark");
+    print_result("owned prompt", &owned_prompt);
+    print_result("shared prompt", &shared_prompt);
 }
 
 #[cfg(target_arch = "x86_64")]

@@ -1,4 +1,4 @@
-﻿impl<Profile, OverlayActor, CapturedActor, StateDelta>
+impl<Profile, OverlayActor, CapturedActor, StateDelta>
     GameplayRuntimeState<Profile, OverlayActor, CapturedActor, StateDelta>
 where
     Profile: GameplayProfileData,
@@ -13,22 +13,32 @@ where
     }
 
     pub fn refresh_live_notefield_options(&mut self, current_bpm: f32) {
+        let mut scrolls = [ScrollEffects::default(); MAX_PLAYERS];
+        for (player, scroll) in scrolls.iter_mut().enumerate().take(self.setup.num_players) {
+            *scroll = effective_scroll_effects_for_player(self, player);
+        }
         for player in 0..self.setup.num_players {
-            let scroll = effective_scroll_effects_for_player(self, player);
-            self.display.notefield_motion.set_reverse_scroll(
-                player,
-                scroll.reverse_percent_for_column(0, self.setup.cols_per_player) > 0.5,
-            );
+            let scroll = scrolls[player];
+            let first_reverse = scroll.reverse_percent_for_column(0, self.setup.cols_per_player);
+            self.display
+                .notefield_motion
+                .set_reverse_scroll(player, first_reverse > 0.5);
             let start = player.saturating_mul(self.setup.cols_per_player);
             let end = (start + self.setup.cols_per_player)
                 .min(self.setup.num_cols)
                 .min(MAX_COLS);
             for (local_col, col) in (start..end).enumerate() {
-                self.display.notefield_motion.set_column_scroll_dir(
-                    col,
-                    scroll.reverse_scale_for_column(local_col, self.setup.cols_per_player),
-                );
+                let reverse = if local_col == 0 {
+                    first_reverse
+                } else {
+                    scroll.reverse_percent_for_column(local_col, self.setup.cols_per_player)
+                };
+                self.display
+                    .notefield_motion
+                    .set_column_scroll_dir(col, 1.0 - 2.0 * reverse);
             }
+        }
+        for (player, scroll) in scrolls.into_iter().enumerate().take(self.setup.num_players) {
             let scroll_speed = self.effective_scroll_speed_for_player(player);
             let reference_bpm = self.display.notefield_motion.scroll_reference_bpm();
             let mut dynamic_speed =
@@ -979,10 +989,7 @@ where
     }
 
     #[inline(always)]
-    fn missed_note_cutoff_rows(
-        &mut self,
-        music_time_ns: SongTimeNs,
-    ) -> [usize; MAX_PLAYERS] {
+    fn missed_note_cutoff_rows(&mut self, music_time_ns: SongTimeNs) -> [usize; MAX_PLAYERS] {
         let music_rate = self.music_rate();
         let num_players = self.setup.num_players;
         let GameplayTimingRuntimeState {
@@ -1440,8 +1447,7 @@ where
         } else {
             None
         };
-        let current_inputs =
-            self.scan_held_lane_activity(previous_music_time_ns, music_time_ns);
+        let current_inputs = self.scan_held_lane_activity(previous_music_time_ns, music_time_ns);
         if let Some(started) = held_mines_started {
             phase_timings.held_mines_us = elapsed_us_since(started);
         }

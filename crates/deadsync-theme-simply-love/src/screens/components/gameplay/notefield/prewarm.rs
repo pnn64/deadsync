@@ -1,4 +1,5 @@
 use crate::screens::gameplay::GameplayCoreState as State;
+use deadlib_present::actors::TextContent;
 use deadlib_present::compose::TextLayoutCache;
 use deadlib_present::font;
 use deadsync_notefield::{MiniIndicatorMode, zmod_broken_run_end};
@@ -6,9 +7,8 @@ use deadsync_profile as profile_data;
 
 use super::super::display_mods::DISPLAY_MODS_WRAP_WIDTH_PX;
 use super::text::{
-    cached_int_i32, cached_int_u32, cached_neg_int_u32, cached_offset_ms, cached_paren_i32,
-    cached_percent2_f64, cached_ratio_i32, cached_signed_percent2_f64, preferred_mods_text,
-    zmod_run_timer_fmt,
+    cached_int_i32, cached_neg_int_u32, cached_offset_ms, cached_paren_i32, cached_percent2_f64,
+    cached_ratio_i32, cached_signed_percent2_f64, preferred_mods_text, zmod_run_timer_fmt,
 };
 use super::{
     COLUMN_COUNTDOWN_PREWARM_CAP, COMBO_PREWARM_CAP, MEASURE_PREWARM_CAP, RUN_TIMER_PREWARM_CAP_S,
@@ -17,8 +17,8 @@ use super::{
 
 pub fn prewarm_text_layout(cache: &mut TextLayoutCache, fonts: &font::FontMap, state: &State) {
     let prewarm_u32 = |cache: &mut TextLayoutCache, font_name: &'static str, value: u32| {
-        let text = cached_int_u32(value);
-        cache.prewarm_text(fonts, font_name, text.as_ref(), None);
+        let text = TextContent::inline_u32(value);
+        cache.prewarm_text(fonts, font_name, text.as_str(), None);
     };
     let prewarm_i32 = |cache: &mut TextLayoutCache, font_name: &'static str, value: i32| {
         let text = cached_int_i32(value);

@@ -11844,34 +11844,31 @@ pub fn push_actors(
 
         let y = screen_height() - 116.0;
         let exit_prompt = state.exit_prompt_state();
-        let msg: Option<(String, f32)> = if gameplay_lobby_wait_active(state) {
+        let msg: Option<(Arc<str>, f32)> = if gameplay_lobby_wait_active(state) {
             None
         } else if let (Some(key), Some(start)) =
             (exit_prompt.hold_to_exit_key, exit_prompt.hold_to_exit_start)
         {
-            let s = match key {
-                HoldToExitKey::Start => Some(tr("Gameplay", "ContinueHoldingStartGiveUp")),
-                HoldToExitKey::Back => Some(tr("Gameplay", "ContinueHoldingBackGiveUp")),
+            let text = match key {
+                HoldToExitKey::Start => tr("Gameplay", "ContinueHoldingStartGiveUp"),
+                HoldToExitKey::Back => tr("Gameplay", "ContinueHoldingBackGiveUp"),
             };
             let alpha = (start.elapsed().as_secs_f32() / HOLD_FADE_IN_S).clamp(0.0, 1.0);
-            s.map(|text| (text.to_string(), alpha))
+            Some((text, alpha))
         } else if let Some(exit) = &exit_prompt.exit_transition {
             let t = exit.started_at.elapsed().as_secs_f32();
             match exit.kind {
                 ExitTransitionKind::Out => {
                     let alpha = (1.0 - t / ABORT_FADE_OUT_S).clamp(0.0, 1.0);
-                    Some((
-                        tr("Gameplay", "ContinueHoldingStartGiveUp").to_string(),
-                        alpha,
-                    ))
+                    Some((tr("Gameplay", "ContinueHoldingStartGiveUp"), alpha))
                 }
                 ExitTransitionKind::Cancel => {
-                    Some((tr("Gameplay", "ContinueHoldingBackGiveUp").to_string(), 1.0))
+                    Some((tr("Gameplay", "ContinueHoldingBackGiveUp"), 1.0))
                 }
             }
         } else if let Some(at) = exit_prompt.hold_to_exit_aborted_at {
             let alpha = (1.0 - at.elapsed().as_secs_f32() / ABORT_FADE_OUT_S).clamp(0.0, 1.0);
-            Some((tr("Gameplay", "DontGoBack").to_string(), alpha))
+            Some((tr("Gameplay", "DontGoBack"), alpha))
         } else {
             None
         };

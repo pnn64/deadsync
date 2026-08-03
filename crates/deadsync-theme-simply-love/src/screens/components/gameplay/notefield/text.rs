@@ -1,4 +1,6 @@
 use crate::screens::gameplay::GameplayCoreState as State;
+#[cfg(any(test, feature = "bench-support"))]
+use deadlib_present::actors::TextContent;
 use deadlib_present::cache::{TextCache, cached_text};
 use deadsync_core::input::MAX_PLAYERS;
 use deadsync_gameplay::{
@@ -24,38 +26,6 @@ use super::TEXT_CACHE_LIMIT;
 
 type FastTextCache<K> = TextCache<K, BuildHasherDefault<XxHash64>>;
 
-struct RecentTextCache<K> {
-    entries: [Option<(K, Arc<str>)>; 2],
-    next: usize,
-}
-
-impl<K> Default for RecentTextCache<K> {
-    fn default() -> Self {
-        Self {
-            entries: [None, None],
-            next: 0,
-        }
-    }
-}
-
-impl<K: Copy + Eq> RecentTextCache<K> {
-    #[inline(always)]
-    fn get_or_insert_with(&mut self, key: K, build: impl FnOnce() -> Arc<str>) -> Arc<str> {
-        if let Some((_, text)) = self
-            .entries
-            .iter()
-            .flatten()
-            .find(|(cached_key, _)| *cached_key == key)
-        {
-            return Arc::clone(text);
-        }
-        let text = build();
-        self.entries[self.next] = Some((key, Arc::clone(&text)));
-        self.next = (self.next + 1) % self.entries.len();
-        text
-    }
-}
-
 thread_local! {
     static PERCENT2_CACHE_F64: RefCell<FastTextCache<u32>> = RefCell::new(HashMap::with_capacity_and_hasher(
         512,
@@ -76,12 +46,11 @@ thread_local! {
         512,
         BuildHasherDefault::default(),
     ));
+    #[cfg(feature = "bench-support")]
     static INT_CACHE_U32: RefCell<FastTextCache<u32>> = RefCell::new(HashMap::with_capacity_and_hasher(
         512,
         BuildHasherDefault::default(),
     ));
-    static RECENT_INT_CACHE_U32: RefCell<RecentTextCache<u32>> =
-        RefCell::new(RecentTextCache::default());
     static RATIO_CACHE_I32: RefCell<FastTextCache<(i32, i32)>> = RefCell::new(
         HashMap::with_capacity_and_hasher(1024, BuildHasherDefault::default()),
     );
@@ -174,6 +143,7 @@ pub(super) fn cached_int_i32(value: i32) -> Arc<str> {
     })
 }
 
+#[cfg(feature = "bench-support")]
 #[inline(always)]
 fn shared_cached_int_u32(value: u32) -> Arc<str> {
     cached_text(&INT_CACHE_U32, value, TEXT_CACHE_LIMIT, || {
@@ -181,16 +151,7 @@ fn shared_cached_int_u32(value: u32) -> Arc<str> {
     })
 }
 
-#[inline(always)]
-pub(super) fn cached_int_u32(value: u32) -> Arc<str> {
-    RECENT_INT_CACHE_U32.with(|cache| {
-        cache
-            .borrow_mut()
-            .get_or_insert_with(value, || shared_cached_int_u32(value))
-    })
-}
-
-#[cfg(any(test, feature = "bench-support"))]
+#[cfg(feature = "bench-support")]
 fn saturate_combo_text_cache() {
     INT_CACHE_U32.with(|cache| {
         let mut cache = cache.borrow_mut();
@@ -199,7 +160,6 @@ fn saturate_combo_text_cache() {
             cache.insert(value, Arc::<str>::from(value.to_string()));
         }
     });
-    RECENT_INT_CACHE_U32.with(|cache| *cache.borrow_mut() = RecentTextCache::default());
 }
 
 #[cfg(feature = "bench-support")]
@@ -208,13 +168,13 @@ pub(super) fn prepare_combo_text_benchmark() {
 }
 
 #[cfg(feature = "bench-support")]
-pub(super) fn benchmark_combo_text_legacy(value: u32) -> Arc<str> {
-    shared_cached_int_u32(value)
+pub(super) fn benchmark_combo_text_legacy(value: u32) -> TextContent {
+    TextContent::Shared(shared_cached_int_u32(value))
 }
 
 #[cfg(feature = "bench-support")]
-pub(super) fn benchmark_combo_text(value: u32) -> Arc<str> {
-    cached_int_u32(value)
+pub(super) fn benchmark_combo_text(value: u32) -> TextContent {
+    TextContent::inline_u32(value)
 }
 
 #[inline(always)]
@@ -615,22 +575,9 @@ mod tests {
     }
 
     #[test]
-    fn recent_combo_text_reuses_two_uncached_player_values() {
-        saturate_combo_text_cache();
-        let first_p1 = cached_int_u32(TEXT_CACHE_LIMIT as u32);
-        let first_p2 = cached_int_u32(TEXT_CACHE_LIMIT as u32 + 1);
-        let second_p1 = cached_int_u32(TEXT_CACHE_LIMIT as u32);
-        let second_p2 = cached_int_u32(TEXT_CACHE_LIMIT as u32 + 1);
-
-        assert_eq!(first_p1.as_ref(), TEXT_CACHE_LIMIT.to_string());
-        assert_eq!(first_p2.as_ref(), (TEXT_CACHE_LIMIT + 1).to_string());
-        assert!(Arc::ptr_eq(&first_p1, &second_p1));
-        assert!(Arc::ptr_eq(&first_p2, &second_p2));
-        INT_CACHE_U32.with(|cache| {
-            let cache = cache.borrow();
-            assert_eq!(cache.len(), TEXT_CACHE_LIMIT);
-            assert!(!cache.contains_key(&(TEXT_CACHE_LIMIT as u32)));
-            assert!(!cache.contains_key(&(TEXT_CACHE_LIMIT as u32 + 1)));
-        });
+    fn inline_combo_text_preserves_all_decimal_boundaries() {
+        for value in [0, 9, 10, 99, 100, u16::MAX as u32, u32::MAX] {
+            assert_eq!(TextContent::inline_u32(value).as_str(), value.to_string());
+        }
     }
 }
