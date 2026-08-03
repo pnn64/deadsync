@@ -2,12 +2,12 @@ use crate::screens::gameplay::GameplayCoreState as State;
 use deadsync_gameplay::PlayerRuntime;
 use deadsync_notefield::{
     MiniIndicatorColorStyle, MiniIndicatorMode, MiniIndicatorProgress, MiniIndicatorScoreType,
-    MiniIndicatorSize, MiniIndicatorSubtractiveDisplay, ZmodComboColorParams, ZmodComboColorStyle,
-    ZmodMiniIndicatorParams, zmod_combo_quint_active as crate_zmod_combo_quint_active,
-    zmod_mini_indicator_output, zmod_mini_indicator_zoom as crate_zmod_mini_indicator_zoom,
-    zmod_percent_from_points, zmod_resolved_combo_color as crate_zmod_resolved_combo_color,
+    MiniIndicatorSize, MiniIndicatorSubtractiveDisplay, StreamProgressLookup, ZmodComboColorParams,
+    ZmodComboColorStyle, ZmodMiniIndicatorParams,
+    zmod_combo_quint_active as crate_zmod_combo_quint_active, zmod_mini_indicator_output,
+    zmod_mini_indicator_zoom as crate_zmod_mini_indicator_zoom, zmod_percent_from_points,
+    zmod_resolved_combo_color as crate_zmod_resolved_combo_color,
     zmod_resolved_mini_indicator_mode, zmod_static_combo_color as crate_zmod_static_combo_color,
-    zmod_stream_prog_completion_for_beat,
 };
 use deadsync_profile as profile_data;
 use deadsync_rules::judgment::{self, HOLD_SCORE_HELD, JudgeGrade};
@@ -297,11 +297,14 @@ pub(super) fn zmod_mini_indicator_zoom(size: profile_data::MiniIndicatorSize) ->
     crate_zmod_mini_indicator_zoom(size)
 }
 
-fn zmod_stream_prog_completion(state: &State, player_idx: usize) -> Option<f64> {
+fn zmod_stream_prog_completion(
+    state: &State,
+    player_idx: usize,
+    lookup: &StreamProgressLookup,
+) -> Option<f64> {
     let total_stream = state.mini_indicator_total_stream_measures(player_idx) as f64;
-    let segs = state.mini_indicator_stream_segments(player_idx);
     let beat_floor = state.visible_beat(player_idx).floor();
-    zmod_stream_prog_completion_for_beat(total_stream, segs, beat_floor)
+    lookup.completion_for_beat(total_stream, beat_floor)
 }
 
 pub(super) fn zmod_mini_indicator_text(
@@ -309,6 +312,7 @@ pub(super) fn zmod_mini_indicator_text(
     p: &PlayerRuntime,
     profile: &profile_data::Profile,
     player_idx: usize,
+    stream_progress_lookup: &StreamProgressLookup,
 ) -> Option<(Arc<str>, [f32; 4])> {
     let mode = zmod_indicator_mode(profile);
     let progress =
@@ -327,7 +331,11 @@ pub(super) fn zmod_mini_indicator_text(
             life: p.life,
             rival_score_percent: state.mini_indicator_rival_score_percent(player_idx),
             target_score_percent: state.mini_indicator_target_score_percent(player_idx),
-            stream_completion: zmod_stream_prog_completion(state, player_idx),
+            stream_completion: zmod_stream_prog_completion(
+                state,
+                player_idx,
+                stream_progress_lookup,
+            ),
         },
     )?;
     Some((cached_zmod_mini_indicator_text(output.text), output.color))

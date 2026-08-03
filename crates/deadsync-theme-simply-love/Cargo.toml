@@ -74,6 +74,11 @@ harness = false
 required-features = ["bench-support"]
 
 [[bench]]
+name = "gameplay_lobby_hud"
+harness = false
+required-features = ["bench-support"]
+
+[[bench]]
 name = "direct_notefield_presentation"
 harness = false
 required-features = ["bench-support"]

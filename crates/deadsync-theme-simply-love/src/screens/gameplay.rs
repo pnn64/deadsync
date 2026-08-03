@@ -56,10 +56,10 @@ use deadsync_gameplay::{
 };
 use deadsync_input::{InputEvent, VirtualAction};
 use deadsync_notefield::{
-    CapturedActorSource, FieldPlacement, HoldMeshScratch, ModelMeshCache, ModelMeshCacheStats,
-    ProxyCaptureRequests, SongLuaPlayerTransformRequest, ViewOverride,
-    noteskin_model_actor_from_draw, song_lua_player_skew_x_matrix, song_lua_player_skew_y_matrix,
-    song_lua_player_transform_matrix, song_lua_player_y_fold_actor,
+    BrokenRunLookup, CapturedActorSource, FieldPlacement, HoldMeshScratch, ModelMeshCache,
+    ModelMeshCacheStats, ProxyCaptureRequests, SongLuaPlayerTransformRequest, StreamProgressLookup,
+    ViewOverride, noteskin_model_actor_from_draw, song_lua_player_skew_x_matrix,
+    song_lua_player_skew_y_matrix, song_lua_player_transform_matrix, song_lua_player_y_fold_actor,
 };
 use deadsync_noteskin::{
     ModelDrawState, NoteskinSlot, ReceptorGlowBehavior, ReceptorStepBehavior, Style, TweenType,
@@ -728,10 +728,14 @@ pub struct State {
     pub lobby_ready_p2: bool,
     pub lobby_disconnect_hold_p1: Option<Instant>,
     pub lobby_disconnect_hold_p2: Option<Instant>,
+    lobby_hud_cache: lobby_hud::LobbyHudCache,
+    lobby_hud_status_scratch: String,
     pub(crate) song_banner_key: Option<Arc<str>>,
     pub(crate) pack_banner_key: Option<Arc<str>>,
     pub(crate) notefield_model_cache: [RefCell<ModelMeshCache>; MAX_PLAYERS],
     pub(crate) notefield_hold_mesh_scratch: [RefCell<HoldMeshScratch>; MAX_PLAYERS],
+    notefield_broken_run_lookup: [BrokenRunLookup; MAX_PLAYERS],
+    notefield_stream_progress_lookup: [StreamProgressLookup; MAX_PLAYERS],
     notefield_judgment_assets: [notefield::ResolvedJudgmentAssets; MAX_PLAYERS],
     sync_overlay_text_cache: RefCell<SyncOverlayTextCache>,
     pub background_path_dirty: bool,
@@ -926,6 +930,12 @@ impl State {
             let columns = usize::from(player < gameplay.num_players()) * gameplay.cols_per_player();
             RefCell::new(HoldMeshScratch::with_columns(columns))
         });
+        let notefield_broken_run_lookup = std::array::from_fn(|player| {
+            BrokenRunLookup::new(gameplay.measure_counter_segments(player))
+        });
+        let notefield_stream_progress_lookup = std::array::from_fn(|player| {
+            StreamProgressLookup::new(gameplay.mini_indicator_stream_segments(player))
+        });
         let actor_resources = ActorResourceArena::default();
         notefield::prewarm_actor_resources(
             &actor_resources,
@@ -1023,10 +1033,14 @@ impl State {
             lobby_ready_p2: false,
             lobby_disconnect_hold_p1: None,
             lobby_disconnect_hold_p2: None,
+            lobby_hud_cache: lobby_hud::LobbyHudCache::default(),
+            lobby_hud_status_scratch: String::with_capacity(128),
             song_banner_key,
             pack_banner_key,
             notefield_model_cache,
             notefield_hold_mesh_scratch,
+            notefield_broken_run_lookup,
+            notefield_stream_progress_lookup,
             notefield_judgment_assets,
             sync_overlay_text_cache: RefCell::new(SyncOverlayTextCache::default()),
             background_path_dirty: true,
@@ -2606,71 +2620,81 @@ fn gameplay_requires_lobby_wait(state: &State) -> bool {
     )
 }
 
-fn gameplay_lobby_wait_text_for(
+fn write_gameplay_lobby_wait_text(
     joined: &lobby_data::JoinedLobby,
     local_players_ready: bool,
     reconnect_status_text: Option<&str>,
-) -> Option<String> {
-    if let Some(text) = reconnect_status_text {
-        return Some(text.to_string());
+    text: &mut String,
+) -> bool {
+    text.clear();
+    if let Some(reconnect) = reconnect_status_text {
+        text.push_str(reconnect);
+        return true;
     }
 
-    let mut message = match lobby_data::gameplay_lobby_wait_status(joined, "ScreenGameplay") {
-        lobby_data::GameplayLobbyWaitStatus::Ready => return None,
-        lobby_data::GameplayLobbyWaitStatus::WaitingForReadyUp => {
-            tr("Lobby", "WaitingForReadyUp").to_string()
-        }
-        lobby_data::GameplayLobbyWaitStatus::WaitingForSync => {
-            tr("Lobby", "WaitingForSync").to_string()
-        }
+    let key = match lobby_data::gameplay_lobby_wait_status(joined, "ScreenGameplay") {
+        lobby_data::GameplayLobbyWaitStatus::Ready => return false,
+        lobby_data::GameplayLobbyWaitStatus::WaitingForReadyUp => "WaitingForReadyUp",
+        lobby_data::GameplayLobbyWaitStatus::WaitingForSync => "WaitingForSync",
     };
+    text.push_str(&tr("Lobby", key));
     if !local_players_ready {
-        message.push('\n');
-        message.push_str(&tr("Gameplay", "PressStartToReadyUp"));
+        text.push('\n');
+        text.push_str(&tr("Gameplay", "PressStartToReadyUp"));
     }
-    Some(message)
+    true
 }
 
-fn gameplay_lobby_wait_text(state: &State) -> Option<String> {
+fn gameplay_lobby_wait_active(state: &State) -> bool {
     if state.lobby_music_started {
-        return None;
+        return false;
     }
+    let Some(joined) = state.runtime_view.lobby.snapshot.joined_lobby.as_ref() else {
+        return false;
+    };
+    state.runtime_view.lobby.reconnect_status_text.is_some()
+        || lobby_data::gameplay_lobby_wait_status(joined, "ScreenGameplay")
+            != lobby_data::GameplayLobbyWaitStatus::Ready
+}
 
-    let joined = state.runtime_view.lobby.snapshot.joined_lobby.as_ref()?;
-    gameplay_lobby_wait_text_for(
+fn write_gameplay_lobby_hud_status(state: &State, text: &mut String) -> bool {
+    text.clear();
+    if !gameplay_lobby_wait_active(state) {
+        return false;
+    }
+    let joined = state
+        .runtime_view
+        .lobby
+        .snapshot
+        .joined_lobby
+        .as_ref()
+        .expect("active lobby wait has a joined lobby");
+    if !write_gameplay_lobby_wait_text(
         joined,
         local_lobby_players_ready(state),
         state.runtime_view.lobby.reconnect_status_text.as_deref(),
-    )
-}
-
-fn gameplay_lobby_disconnect_prompt(state: &State) -> Option<String> {
-    gameplay_lobby_wait_text(state)?;
-    let Some(elapsed) = lobby_disconnect_hold_elapsed(state) else {
-        return Some(tr("Lobby", "DisconnectBasicPrompt").to_string());
-    };
-    let remaining = (state.runtime_view.lobby.disconnect_hold_seconds - elapsed).ceil() as i32;
-    let remaining = remaining.max(0);
-    Some(
-        tr_fmt(
+        text,
+    ) {
+        return false;
+    }
+    text.push('\n');
+    if let Some(elapsed) = lobby_disconnect_hold_elapsed(state) {
+        let remaining = (state.runtime_view.lobby.disconnect_hold_seconds - elapsed)
+            .ceil()
+            .max(0.0) as i32;
+        let remaining_text = remaining.to_string();
+        text.push_str(&tr_fmt(
             "Lobby",
             "DisconnectHoldingFormat",
             &[
-                ("remaining", &remaining.to_string()),
+                ("remaining", remaining_text.as_str()),
                 ("s", if remaining == 1 { "" } else { "s" }),
             ],
-        )
-        .to_string(),
-    )
-}
-
-fn gameplay_lobby_hud_status_text(state: &State) -> Option<String> {
-    let mut text = gameplay_lobby_wait_text(state)?;
-    if let Some(prompt) = gameplay_lobby_disconnect_prompt(state) {
-        text.push('\n');
-        text.push_str(prompt.as_str());
+        ));
+    } else {
+        text.push_str(&tr("Lobby", "DisconnectBasicPrompt"));
     }
-    Some(text)
+    true
 }
 
 #[inline(always)]
@@ -2835,7 +2859,7 @@ pub fn prepare_update(state: &mut State) -> (bool, ThemeEffect) {
 
         effect = crate::effects::sequence(effect, update_lobby_machine_state(state));
 
-        if gameplay_lobby_wait_text(state).is_some() {
+        if gameplay_lobby_wait_active(state) {
             return (false, effect);
         }
 
@@ -3010,7 +3034,7 @@ pub fn report_smx_sensor_profile(state: &State) {
 }
 
 pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
-    if gameplay_lobby_wait_text(state).is_some() {
+    if gameplay_lobby_wait_active(state) {
         match ev.action {
             VirtualAction::p1_start => {
                 if ev.pressed {
@@ -11174,6 +11198,8 @@ pub fn push_actors(
     let mut notefield_hud_actor_scratch = std::mem::take(&mut state.notefield_hud_actor_scratch);
     let mut player_actor_scratch = std::mem::take(&mut state.player_actor_scratch);
     let mut presentation_skeleton = std::mem::take(&mut state.presentation_skeleton);
+    let mut lobby_hud_cache = std::mem::take(&mut state.lobby_hud_cache);
+    let mut lobby_hud_status_scratch = std::mem::take(&mut state.lobby_hud_status_scratch);
     presentation_skeleton.prepare();
     for actors in &mut player_actor_scratch {
         actors.clear();
@@ -11460,7 +11486,7 @@ pub fn push_actors(
 
         let y = screen_height() - 116.0;
         let exit_prompt = state.exit_prompt_state();
-        let msg: Option<(String, f32)> = if gameplay_lobby_wait_text(state).is_some() {
+        let msg: Option<(String, f32)> = if gameplay_lobby_wait_active(state) {
             None
         } else if let (Some(key), Some(start)) =
             (exit_prompt.hold_to_exit_key, exit_prompt.hold_to_exit_start)
@@ -11511,16 +11537,28 @@ pub fn push_actors(
 
     if !hide_gameplay_hud {
         let overlay_start = actors.len();
-        if let Some(joined) = state.runtime_view.lobby.snapshot.joined_lobby.as_ref() {
-            actors.extend(lobby_hud::build_panel(lobby_hud::RenderParams {
-                screen_name: "ScreenGameplay",
-                joined,
-                z: 995,
-                show_song_info: false,
-                status_text: gameplay_lobby_hud_status_text(state),
-                joined_sides: state.runtime_view.joined,
-                player_side: state.runtime_view.player_side,
-            }));
+        if state.runtime_view.lobby.snapshot.joined_lobby.is_some() {
+            let has_status = write_gameplay_lobby_hud_status(state, &mut lobby_hud_status_scratch);
+            let joined = state
+                .runtime_view
+                .lobby
+                .snapshot
+                .joined_lobby
+                .as_ref()
+                .expect("checked joined lobby");
+            lobby_hud::push_cached_panel(
+                actors,
+                &mut lobby_hud_cache,
+                lobby_hud::CachedRenderParams {
+                    screen_name: "ScreenGameplay",
+                    joined,
+                    z: 995,
+                    show_song_info: false,
+                    status_text: has_status.then_some(lobby_hud_status_scratch.as_str()),
+                    joined_sides: state.runtime_view.joined,
+                    player_side: state.runtime_view.player_side,
+                },
+            );
         }
         song_lua_capture_new_actors(&mut overlay_proxy_source, actors, overlay_start);
     }
@@ -11605,6 +11643,8 @@ pub fn push_actors(
                 state.actor_resources(),
                 &state.notefield_model_cache,
                 &state.notefield_hold_mesh_scratch,
+                &state.notefield_broken_run_lookup[player_idx],
+                &state.notefield_stream_progress_lookup[player_idx],
                 profile,
                 placement,
                 play_style,
@@ -13060,6 +13100,8 @@ pub fn push_actors(
     state.notefield_hud_actor_scratch = notefield_hud_actor_scratch;
     state.player_actor_scratch = player_actor_scratch;
     state.presentation_skeleton = presentation_skeleton;
+    state.lobby_hud_cache = lobby_hud_cache;
+    state.lobby_hud_status_scratch = lobby_hud_status_scratch;
 }
 
 // ─── SMX sensor display profiling ──────────────────────────────────────────────
@@ -17853,17 +17895,28 @@ mod tests {
             tr("Lobby", "WaitingForReadyUp"),
             tr("Gameplay", "PressStartToReadyUp"),
         );
-        assert_eq!(
-            gameplay_lobby_wait_text_for(&joined, false, None).as_deref(),
-            Some(expected.as_str())
-        );
+        let mut actual = String::new();
+        assert!(write_gameplay_lobby_wait_text(
+            &joined,
+            false,
+            None,
+            &mut actual
+        ));
+        assert_eq!(actual, expected);
     }
 
     #[test]
     fn gameplay_wait_text_unlocks_once_solo_lobby_player_is_ready() {
         let joined = test_joined_lobby(vec![test_lobby_player("ScreenGameplay", true)]);
 
-        assert_eq!(gameplay_lobby_wait_text_for(&joined, true, None), None);
+        let mut actual = String::new();
+        assert!(!write_gameplay_lobby_wait_text(
+            &joined,
+            true,
+            None,
+            &mut actual
+        ));
+        assert!(actual.is_empty());
     }
 
     #[test]

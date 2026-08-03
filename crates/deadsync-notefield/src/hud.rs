@@ -1,6 +1,6 @@
 use crate::{
-    LayoutMiniIndicatorPosition, ZmodMeasureCounterText, stream_segment_index_exclusive_end,
-    zmod_broken_run_counter_text, zmod_broken_run_segment, zmod_measure_counter_text,
+    BrokenRunLookup, LayoutMiniIndicatorPosition, ZmodMeasureCounterText,
+    stream_segment_index_exclusive_end, zmod_broken_run_counter_text, zmod_measure_counter_text,
     zmod_run_timer_index,
 };
 use deadlib_present::actors::{Actor, TextAlign};
@@ -14,6 +14,7 @@ use std::sync::Arc;
 pub(crate) struct CounterHudRequest<'a> {
     pub style: CounterHudStyle,
     pub segments: &'a [StreamSegment],
+    pub broken_run_lookup: &'a BrokenRunLookup,
     pub current_beat: f32,
     pub current_display_beat: f32,
     pub current_bpm: f32,
@@ -146,7 +147,7 @@ fn append_broken_counter(
         return;
     }
     let Some((segment_index, broken_end, is_broken)) =
-        zmod_broken_run_segment(request.segments, current_measure)
+        request.broken_run_lookup.segment(current_measure)
     else {
         return;
     };
@@ -410,12 +411,14 @@ mod tests {
                 is_break: true,
             },
         ];
+        let broken_run_lookup = BrokenRunLookup::new(&segments);
         let mut actors = Vec::new();
         compose_counter_hud(
             &mut actors,
             CounterHudRequest {
                 style: counter_style(),
                 segments: &segments,
+                broken_run_lookup: &broken_run_lookup,
                 current_beat: 12.0,
                 current_display_beat: 12.0,
                 current_bpm: 120.0,
@@ -464,12 +467,14 @@ mod tests {
             end: 8,
             is_break: false,
         }];
+        let broken_run_lookup = BrokenRunLookup::new(&segments);
         let mut actors = Vec::new();
         compose_counter_hud(
             &mut actors,
             CounterHudRequest {
                 style: counter_style(),
                 segments: &segments,
+                broken_run_lookup: &broken_run_lookup,
                 current_beat: 12.0,
                 current_display_beat: 12.0,
                 current_bpm: 120.0,

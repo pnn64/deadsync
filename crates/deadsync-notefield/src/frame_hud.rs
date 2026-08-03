@@ -56,6 +56,7 @@ pub struct ErrorBarHudFrame<'a> {
 #[derive(Clone, Copy)]
 pub struct CounterHudFrame<'a> {
     pub segments: &'a [StreamSegment],
+    pub broken_run_lookup: &'a crate::BrokenRunLookup,
     pub current_bpm: f32,
     pub font: &'static str,
     pub counter_text: fn(ZmodMeasureCounterText) -> Arc<str>,
@@ -131,6 +132,7 @@ pub fn compose_notefield_hud<S>(
             CounterHudRequest {
                 style: request.style.counter_hud,
                 segments: counter.segments,
+                broken_run_lookup: counter.broken_run_lookup,
                 current_beat: prepared.current_beat,
                 current_display_beat: request.visual.current_display_beat,
                 current_bpm: counter.current_bpm,

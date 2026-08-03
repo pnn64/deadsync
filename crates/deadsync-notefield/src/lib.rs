@@ -62,14 +62,17 @@ pub use measure_lines::{
     CueScanBench, CueScanBenchFrame, MeasureLinePlanBench, MeasureLinePlanBenchFrame,
     MeasureLineTraversalBench, MeasureLineTraversalBenchFrame,
 };
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub use mini_indicator::benchmark_broken_run_segment_legacy;
 pub use mini_indicator::{
-    MiniIndicatorColorStyle, MiniIndicatorMode, MiniIndicatorProgress, MiniIndicatorScoreType,
-    MiniIndicatorSize, MiniIndicatorSubtractiveDisplay, ZmodComboColorParams, ZmodComboColorStyle,
-    ZmodMeasureCounterText, ZmodMiniIndicatorOutput, ZmodMiniIndicatorParams,
-    ZmodMiniIndicatorText, zmod_broken_run_end, zmod_combo_quint_active,
-    zmod_mini_indicator_output, zmod_mini_indicator_zoom, zmod_percent_from_points,
-    zmod_resolved_combo_color, zmod_resolved_mini_indicator_mode, zmod_static_combo_color,
-    zmod_stream_prog_completion_for_beat,
+    BrokenRunLookup, MiniIndicatorColorStyle, MiniIndicatorMode, MiniIndicatorProgress,
+    MiniIndicatorScoreType, MiniIndicatorSize, MiniIndicatorSubtractiveDisplay,
+    StreamProgressLookup, ZmodComboColorParams, ZmodComboColorStyle, ZmodMeasureCounterText,
+    ZmodMiniIndicatorOutput, ZmodMiniIndicatorParams, ZmodMiniIndicatorText, zmod_broken_run_end,
+    zmod_combo_quint_active, zmod_mini_indicator_output, zmod_mini_indicator_zoom,
+    zmod_percent_from_points, zmod_resolved_combo_color, zmod_resolved_mini_indicator_mode,
+    zmod_static_combo_color, zmod_stream_prog_completion_for_beat,
 };
 #[cfg(feature = "bench-support")]
 #[doc(hidden)]
@@ -122,9 +125,11 @@ pub(crate) use holds::{
     tap_part_for_note_type, tap_replacement_head, translated_uv_rect,
 };
 pub(crate) use measure_lines::{MeasureComposeRequest, compose_measure_lines};
+#[cfg(test)]
+pub(crate) use mini_indicator::zmod_broken_run_segment;
 pub(crate) use mini_indicator::{
-    stream_segment_index_exclusive_end, zmod_broken_run_counter_text, zmod_broken_run_segment,
-    zmod_measure_counter_text, zmod_run_timer_index,
+    stream_segment_index_exclusive_end, zmod_broken_run_counter_text, zmod_measure_counter_text,
+    zmod_run_timer_index,
 };
 #[cfg(test)]
 pub(crate) use notes::for_each_visible_hold_index;

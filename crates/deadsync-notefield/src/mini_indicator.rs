@@ -157,40 +157,198 @@ pub(crate) fn stream_segment_index_inclusive_end(
     segs.partition_point(|s| curr_measure > s.end as f32)
 }
 
-pub fn zmod_broken_run_end(segs: &[StreamSegment], start_index: usize) -> (i32, bool) {
-    let Some(first) = segs.get(start_index).copied() else {
-        return (0, false);
-    };
-    if first.is_break {
-        return (first.end as i32, false);
+#[derive(Clone, Copy, Debug)]
+struct BrokenRunSpan {
+    end: f32,
+    segment_index: usize,
+    broken_end: i32,
+    broken: bool,
+}
+
+/// Song-lifetime prefix totals for the StreamProg mini indicator.
+///
+/// The gameplay screen owns one immutable lookup per player. It is built while
+/// entering gameplay, uses one boxed allocation sized to the chart's segment
+/// count, and is read only on the game/render thread. There are no misses,
+/// eviction, synchronization, or destruction during a song. A frame performs
+/// one binary search and one prefix lookup, so its worst-case work is
+/// logarithmic in the number of stream segments.
+#[derive(Clone, Debug, Default)]
+pub struct StreamProgressLookup {
+    segments: Box<[StreamProgressEntry]>,
+}
+
+#[derive(Clone, Copy, Debug)]
+struct StreamProgressEntry {
+    start: f32,
+    end: f32,
+    stream_before: f64,
+    is_break: bool,
+}
+
+impl StreamProgressLookup {
+    pub fn new(segments: &[StreamSegment]) -> Self {
+        let mut stream_before = 0.0;
+        let entries = segments
+            .iter()
+            .map(|segment| {
+                let start = segment.start as f32;
+                let end = segment.end as f32;
+                let entry = StreamProgressEntry {
+                    start,
+                    end,
+                    stream_before,
+                    is_break: segment.is_break,
+                };
+                if !segment.is_break {
+                    stream_before += f64::from(end - start);
+                }
+                entry
+            })
+            .collect::<Vec<_>>()
+            .into_boxed_slice();
+        Self { segments: entries }
     }
 
-    let last_index = segs.len().saturating_sub(1);
+    pub fn storage_bytes(&self) -> usize {
+        self.segments
+            .len()
+            .saturating_mul(std::mem::size_of::<StreamProgressEntry>())
+    }
+
+    #[inline(always)]
+    pub fn completion_for_beat(&self, total_stream_measures: f64, beat_floor: f32) -> Option<f64> {
+        if total_stream_measures <= 0.0 || self.segments.is_empty() {
+            return None;
+        }
+        let current = if beat_floor.is_finite() {
+            (beat_floor / 4.0).ceil().max(0.0)
+        } else {
+            0.0
+        };
+        let index = self
+            .segments
+            .partition_point(|segment| current >= segment.end);
+        let Some(segment) = self.segments.get(index) else {
+            let completed = self.segments.last().map_or(0.0, |last| {
+                last.stream_before
+                    + if last.is_break {
+                        0.0
+                    } else {
+                        f64::from(last.end - last.start)
+                    }
+            });
+            return Some((completed / total_stream_measures).clamp(0.0, 1.0));
+        };
+        let partial = if segment.is_break || current <= segment.start {
+            0.0
+        } else {
+            f64::from(current.min(segment.end) - segment.start)
+        };
+        Some(((segment.stream_before + partial) / total_stream_measures).clamp(0.0, 1.0))
+    }
+}
+
+/// Song-lifetime canonical spans for the broken-run measure counter.
+///
+/// The gameplay screen owns one immutable lookup per player. Construction is a
+/// single linear pass at screen entry and stores only canonical run spans in a
+/// boxed slice. Steady gameplay performs one binary search, with no allocation,
+/// scanning, eviction, or synchronization. Storage is released with the screen.
+#[derive(Clone, Debug, Default)]
+pub struct BrokenRunLookup {
+    spans: Box<[BrokenRunSpan]>,
+}
+
+impl BrokenRunLookup {
+    pub fn new(segments: &[StreamSegment]) -> Self {
+        let mut spans = Vec::with_capacity(segments.len());
+        let mut index = 0;
+        while let Some(segment) = segments.get(index).copied() {
+            if segment.is_break {
+                spans.push(BrokenRunSpan {
+                    end: segment.end as f32,
+                    segment_index: index,
+                    broken_end: segment.end as i32,
+                    broken: false,
+                });
+                index += 1;
+                continue;
+            }
+            let (broken_end, broken, next_index) = broken_run_end_and_next(segments, index);
+            spans.push(BrokenRunSpan {
+                end: broken_end as f32,
+                segment_index: index,
+                broken_end,
+                broken,
+            });
+            index = next_index.max(index + 1);
+        }
+        Self {
+            spans: spans.into_boxed_slice(),
+        }
+    }
+
+    pub fn storage_bytes(&self) -> usize {
+        self.spans
+            .len()
+            .saturating_mul(std::mem::size_of::<BrokenRunSpan>())
+    }
+
+    #[inline(always)]
+    pub fn segment(&self, current_measure: f32) -> Option<(usize, i32, bool)> {
+        if current_measure.is_nan() {
+            return None;
+        }
+        let index = self
+            .spans
+            .partition_point(|span| current_measure >= span.end);
+        self.spans
+            .get(index)
+            .map(|span| (span.segment_index, span.broken_end, span.broken))
+    }
+}
+
+fn broken_run_end_and_next(segments: &[StreamSegment], start_index: usize) -> (i32, bool, usize) {
+    let Some(first) = segments.get(start_index).copied() else {
+        return (0, false, segments.len());
+    };
+    if first.is_break {
+        return (first.end as i32, false, start_index.saturating_add(1));
+    }
+
+    let last_index = segments.len().saturating_sub(1);
     let mut end = first.end;
     let mut broken = false;
-
-    for i in (start_index + 1)..segs.len() {
-        let seg = segs[i];
-        let len = seg.end - seg.start;
-        if seg.is_break {
-            if len < 4 && i != last_index {
+    let mut index = start_index + 1;
+    while index < segments.len() {
+        let segment = segments[index];
+        let len = segment.end - segment.start;
+        if segment.is_break {
+            if len < 4 && index != last_index {
                 end += len;
                 broken = true;
+                index += 1;
                 continue;
             }
             break;
         }
-
         broken = true;
         end += len;
-        if !segs[i - 1].is_break {
+        if !segments[index - 1].is_break {
             end += 1;
         }
+        index += 1;
     }
-
-    (end as i32, broken)
+    (end as i32, broken, index)
 }
 
+pub fn zmod_broken_run_end(segs: &[StreamSegment], start_index: usize) -> (i32, bool) {
+    let (end, broken, _) = broken_run_end_and_next(segs, start_index);
+    (end, broken)
+}
+
+#[cfg(any(test, feature = "bench-support"))]
 pub(crate) fn zmod_broken_run_segment(
     segs: &[StreamSegment],
     curr_measure: f32,
@@ -208,6 +366,15 @@ pub(crate) fn zmod_broken_run_segment(
         }
     }
     None
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn benchmark_broken_run_segment_legacy(
+    segments: &[StreamSegment],
+    current_measure: f32,
+) -> Option<(usize, i32, bool)> {
+    zmod_broken_run_segment(segments, current_measure)
 }
 
 pub(crate) fn zmod_run_timer_index(segs: &[StreamSegment], curr_measure: f32) -> Option<usize> {
@@ -704,4 +871,88 @@ pub fn zmod_stream_prog_completion_for_beat(
         }
     }
     Some((done / total_stream_measures).clamp(0.0, 1.0))
+}
+
+#[cfg(test)]
+mod lookup_tests {
+    use super::*;
+
+    fn segments() -> Vec<StreamSegment> {
+        vec![
+            StreamSegment {
+                start: 0,
+                end: 4,
+                is_break: false,
+            },
+            StreamSegment {
+                start: 4,
+                end: 6,
+                is_break: true,
+            },
+            StreamSegment {
+                start: 6,
+                end: 10,
+                is_break: false,
+            },
+            StreamSegment {
+                start: 10,
+                end: 15,
+                is_break: true,
+            },
+            StreamSegment {
+                start: 15,
+                end: 20,
+                is_break: false,
+            },
+        ]
+    }
+
+    #[test]
+    fn stream_progress_lookup_matches_full_scan_at_boundaries_and_invalid_beats() {
+        let segments = segments();
+        let lookup = StreamProgressLookup::new(&segments);
+        let total = 13.0;
+        for beat in [
+            f32::NEG_INFINITY,
+            -4.0,
+            0.0,
+            12.0,
+            16.0,
+            20.0,
+            24.0,
+            39.9,
+            40.0,
+            60.0,
+            80.0,
+            f32::INFINITY,
+            f32::NAN,
+        ] {
+            assert_eq!(
+                lookup.completion_for_beat(total, beat),
+                zmod_stream_prog_completion_for_beat(total, &segments, beat),
+                "beat={beat:?}",
+            );
+        }
+        assert_eq!(lookup.completion_for_beat(0.0, 12.0), None);
+        assert_eq!(
+            StreamProgressLookup::default().completion_for_beat(1.0, 0.0),
+            None
+        );
+    }
+
+    #[test]
+    fn broken_run_lookup_matches_legacy_scan_across_spans() {
+        let segments = segments();
+        let lookup = BrokenRunLookup::new(&segments);
+        for quarter_measure in -4..=88 {
+            let current = quarter_measure as f32 * 0.25;
+            assert_eq!(
+                lookup.segment(current),
+                zmod_broken_run_segment(&segments, current),
+                "measure={current}",
+            );
+        }
+        assert_eq!(lookup.segment(f32::NAN), None);
+        assert_eq!(BrokenRunLookup::default().segment(0.0), None);
+    }
 }

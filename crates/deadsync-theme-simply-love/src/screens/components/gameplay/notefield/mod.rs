@@ -11,14 +11,14 @@ use deadsync_gameplay::{
     gameplay_error_bar_trim_max_window_ix, hold_explosion_enabled_for_options,
 };
 use deadsync_notefield::{
-    BuiltNotefield, ComboHudFrame, ComboMilestoneAssets, CounterHudFrame, ErrorBarHudFrame,
-    ErrorBarModes, HoldMeshScratch, IndicatorSprite, JudgmentHudFrame, LayoutMiniIndicatorPosition,
-    MeasureCounterOptions, MeasureLineMode, MiniHudFrame, ModelMeshCache, NotefieldChartView,
-    NotefieldComposeRequest, NotefieldFeedbackFrameView, NotefieldFieldFrameView,
-    NotefieldFrameFeatures, NotefieldGeometry, NotefieldHudFrameView, NotefieldLaneFeedback,
-    NotefieldNoteskinView, NotefieldOptions, NotefieldSongLuaView, NotefieldVisualState,
-    TapJudgmentHudFrame, TapJudgmentSprite, ZmodLayoutParams, compose_notefield_field,
-    compose_notefield_hud, prepare_notefield,
+    BrokenRunLookup, BuiltNotefield, ComboHudFrame, ComboMilestoneAssets, CounterHudFrame,
+    ErrorBarHudFrame, ErrorBarModes, HoldMeshScratch, IndicatorSprite, JudgmentHudFrame,
+    LayoutMiniIndicatorPosition, MeasureCounterOptions, MeasureLineMode, MiniHudFrame,
+    ModelMeshCache, NotefieldChartView, NotefieldComposeRequest, NotefieldFeedbackFrameView,
+    NotefieldFieldFrameView, NotefieldFrameFeatures, NotefieldGeometry, NotefieldHudFrameView,
+    NotefieldLaneFeedback, NotefieldNoteskinView, NotefieldOptions, NotefieldSongLuaView,
+    NotefieldVisualState, StreamProgressLookup, TapJudgmentHudFrame, TapJudgmentSprite,
+    ZmodLayoutParams, compose_notefield_field, compose_notefield_hud, prepare_notefield,
 };
 use deadsync_notefield::{FieldPlacement, ProxyCaptureRequests, ViewOverride};
 use deadsync_profile as profile_data;
@@ -373,6 +373,8 @@ pub(crate) fn compose_frame(
     actor_resources: &ActorResourceArena,
     model_caches: &[RefCell<ModelMeshCache>; MAX_PLAYERS],
     hold_mesh_scratch: &[RefCell<HoldMeshScratch>; MAX_PLAYERS],
+    broken_run_lookup: &BrokenRunLookup,
+    stream_progress_lookup: &StreamProgressLookup,
     profile: &profile_data::Profile,
     placement: FieldPlacement,
     play_style: profile_data::PlayStyle,
@@ -769,18 +771,21 @@ pub(crate) fn compose_frame(
 
     let counter_frame = options.measure_counter.map(|_| CounterHudFrame {
         segments: state.measure_counter_segments(player_idx),
+        broken_run_lookup,
         current_bpm: state.current_bpm_display(),
         font: mc_font_name,
         counter_text: cached_zmod_measure_counter_text,
         timer_text: zmod_run_timer_fmt,
     });
     let mini_frame =
-        zmod_mini_indicator_text(state, p, profile, player_idx).map(|(text, color)| MiniHudFrame {
-            text,
-            color,
-            failed: p.is_failing || p.life <= 0.0,
-            font: mc_font_name,
-        });
+        zmod_mini_indicator_text(state, p, profile, player_idx, stream_progress_lookup).map(
+            |(text, color)| MiniHudFrame {
+                text,
+                color,
+                failed: p.is_failing || p.life <= 0.0,
+                font: mc_font_name,
+            },
+        );
 
     let held_misses = state.held_miss_judgments_for_columns(col_start, num_cols);
     let hold_judgments = state.hold_judgments_for_columns(col_start, num_cols);
