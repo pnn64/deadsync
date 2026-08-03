@@ -19,7 +19,7 @@ use deadsync_input::{InputEvent, VirtualAction};
 use std::cell::{Cell, RefCell};
 use std::sync::Arc;
 
-use deadlib_present::space::screen_center_x;
+use deadlib_present::space::{screen_center_x, screen_height, screen_width};
 
 /* ---------------------------- transitions ---------------------------- */
 const TRANSITION_IN_DURATION: f32 = 0.5;
@@ -132,6 +132,12 @@ pub fn init() -> State {
     }
 }
 
+pub fn reset_for_entry(state: &mut State) {
+    let active_color_index = state.active_color_index;
+    *state = init();
+    state.active_color_index = active_color_index;
+}
+
 pub fn sync_runtime_view(state: &mut State, view: MainMenuRuntimeView) {
     state.runtime_view = view;
     state.selected_index = state
@@ -147,7 +153,7 @@ pub fn handle_raw_key_event(_state: &mut State, key: &RawKeyboardEvent) -> Theme
     }
     match key.code {
         KeyCode::F4 => return ThemeEffect::Navigate(Screen::Sandbox),
-        KeyCode::Escape => return ThemeEffect::Exit,
+        KeyCode::Escape => return ThemeEffect::Navigate(Screen::Init),
         _ => {}
     }
     ThemeEffect::None
@@ -161,6 +167,17 @@ pub fn out_transition() -> (Vec<Actor>, f32) {
     // Simply Love's ScreenTitleMenu out actor only holds the screen for one
     // second. The menu owns its actor fades and the shell adds the fly burst.
     (Vec::new(), TRANSITION_OUT_DURATION)
+}
+
+pub fn cancel_transition() -> (Vec<Actor>, f32) {
+    let actor = act!(quad:
+        align(0.0, 0.0): xy(0.0, 0.0):
+        zoomto(screen_width(), screen_height()):
+        diffuse(1.0, 1.0, 1.0, 0.0):
+        z(1200):
+        decelerate(TRANSITION_OUT_DURATION): alpha(1.0)
+    );
+    (vec![actor], TRANSITION_OUT_DURATION)
 }
 
 fn smooth_p(t: f32) -> f32 {
@@ -672,9 +689,12 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
                 if undo != 0 {
                     move_selection(state, undo as isize);
                     state.menu_lr_undo[side_ix] = 0;
-                    crate::effects::sfx_then("assets/sounds/change.ogg", ThemeEffect::Exit)
+                    crate::effects::sfx_then(
+                        "assets/sounds/change.ogg",
+                        ThemeEffect::Navigate(Screen::Init),
+                    )
                 } else {
-                    ThemeEffect::Exit
+                    ThemeEffect::Navigate(Screen::Init)
                 }
             }
         };
@@ -690,7 +710,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
         VirtualAction::p1_start | VirtualAction::p2_start => {
             start_selected(state, matches!(ev.action, VirtualAction::p2_start))
         }
-        VirtualAction::p1_back | VirtualAction::p2_back => ThemeEffect::Exit,
+        VirtualAction::p1_back | VirtualAction::p2_back => ThemeEffect::Navigate(Screen::Init),
         _ => ThemeEffect::None,
     }
 }
@@ -831,5 +851,68 @@ mod tests {
         state.selected_index = OPTION_COUNT;
         sync_runtime_view(&mut state, MainMenuRuntimeView::default());
         assert_eq!(state.selected_index, OPTION_COUNT - 1);
+    }
+
+    #[test]
+    fn title_menu_back_replays_intro_without_changing_exit_item() {
+        let mut state = init();
+        assert!(matches!(
+            handle_raw_key_event(
+                &mut state,
+                &RawKeyboardEvent {
+                    code: KeyCode::Escape,
+                    pressed: true,
+                    repeat: false,
+                    timestamp: Instant::now(),
+                    host_nanos: 0,
+                }
+            ),
+            ThemeEffect::Navigate(Screen::Init)
+        ));
+        assert!(matches!(
+            handle_input(&mut state, &input(VirtualAction::p1_back)),
+            ThemeEffect::Navigate(Screen::Init)
+        ));
+
+        state.runtime_view.dedicated_three_key_nav = true;
+        let _ = handle_input(&mut state, &input(VirtualAction::p1_menu_left));
+        let ThemeEffect::Batch(effects) =
+            handle_input(&mut state, &input(VirtualAction::p1_menu_right))
+        else {
+            panic!("expected three-key cancel batch");
+        };
+        assert!(matches!(effects[1], ThemeEffect::Navigate(Screen::Init)));
+
+        state.selected_index = 2;
+        let ThemeEffect::Batch(effects) = handle_input(&mut state, &input(VirtualAction::p1_start))
+        else {
+            panic!("expected batched exit effect");
+        };
+        assert!(matches!(effects[1], ThemeEffect::Exit));
+    }
+
+    #[test]
+    fn cancel_transition_matches_simply_love_white_fade() {
+        let (actors, duration) = cancel_transition();
+        assert_eq!(duration, 1.0);
+        assert_eq!(actors.len(), 1);
+        let Actor::Sprite { tint, .. } = &actors[0] else {
+            panic!("expected white cancel quad");
+        };
+        assert_eq!(*tint, [1.0, 1.0, 1.0, 0.0]);
+    }
+
+    #[test]
+    fn reset_for_entry_preserves_color_and_resets_selection() {
+        let mut state = init();
+        state.selected_index = 2;
+        state.active_color_index = 7;
+        state.rainbow_mode = true;
+
+        reset_for_entry(&mut state);
+
+        assert_eq!(state.selected_index, 0);
+        assert_eq!(state.active_color_index, 7);
+        assert!(!state.rainbow_mode);
     }
 }

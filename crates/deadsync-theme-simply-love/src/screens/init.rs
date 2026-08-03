@@ -156,6 +156,12 @@ pub fn init(songs_root: PathBuf, courses_root: PathBuf) -> State {
     }
 }
 
+pub fn replay_intro(state: &mut State) {
+    state.elapsed = 0.0;
+    state.phase = InitPhase::Playing;
+    state.loading = None;
+}
+
 #[inline(always)]
 fn arc_phase_label(phase: crate::views::SimplyLoveContentReloadPhase) -> Arc<str> {
     match phase {
@@ -872,6 +878,29 @@ mod tests {
         assert!(matches!(
             handle_input(&mut state, &press(VirtualAction::p1_back)),
             ThemeEffect::None
+        ));
+    }
+
+    #[test]
+    fn replay_intro_bypasses_loading_and_returns_to_menu() {
+        let mut state = init(PathBuf::from("Songs"), PathBuf::from("Courses"));
+        let _ = update(&mut state, 0.0);
+        state.active_color_index = 7;
+
+        replay_intro(&mut state);
+
+        assert!(matches!(state.phase, InitPhase::Playing));
+        assert!(state.loading.is_none());
+        assert_eq!(state.active_color_index, 7);
+        assert!(matches!(update(&mut state, 0.0), ThemeEffect::None));
+        assert!(matches!(
+            update(&mut state, arrows_finished_at()),
+            ThemeEffect::None
+        ));
+        assert!(matches!(state.phase, InitPhase::FadingOut));
+        assert!(matches!(
+            update(&mut state, BAR_SQUISH_DURATION + 0.001),
+            ThemeEffect::Navigate(Screen::Menu)
         ));
     }
 

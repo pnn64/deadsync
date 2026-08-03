@@ -791,6 +791,13 @@ mod tests {
             }
         );
         assert_eq!(
+            navigation_transition_start(Screen::Menu, Screen::Init, &TransitionState::Idle),
+            NavigationTransitionStart::GlobalFade {
+                target: Screen::Init,
+                stop_screen_sfx: false,
+            }
+        );
+        assert_eq!(
             navigation_transition_start(Screen::Evaluation, Screen::Menu, &TransitionState::Idle,),
             NavigationTransitionStart::GlobalFade {
                 target: Screen::Menu,

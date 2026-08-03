@@ -153,9 +153,7 @@ impl App {
         let _ = self.run_commands(commands, event_loop);
 
         if target_screen == CurrentScreen::Menu {
-            let current_color_index = self.state.screens.menu_state.active_color_index;
-            self.state.screens.menu_state = menu::init();
-            self.state.screens.menu_state.active_color_index = current_color_index;
+            menu::reset_for_entry(&mut self.state.screens.menu_state);
         } else if target_screen == CurrentScreen::Options {
             self.reset_options_state_for_entry(prev);
         } else if target_screen == CurrentScreen::ConfigurePads {
@@ -290,6 +288,7 @@ impl App {
 
         if from == CurrentScreen::Init && target == CurrentScreen::Menu {
             debug!("Instant navigation Init→Menu (out-transition handled by Init screen)");
+            menu::reset_for_entry(&mut self.state.screens.menu_state);
             self.commit_screen_change(target);
             apply_actor_entry_transition(&mut self.state.shell, target);
             deadlib_present::runtime::clear_all();
@@ -338,7 +337,7 @@ impl App {
             deadsync_audio_stream::stop_screen_sfx();
         }
         let (_, out_duration) =
-            self.get_out_transition_for_screen(self.state.screens.current_screen);
+            self.get_out_transition_for_route(self.state.screens.current_screen, target);
         apply_global_fade_out_transition(&mut self.state.shell, target, out_duration);
         self.sync_gameplay_input_capture();
     }
@@ -355,7 +354,7 @@ impl App {
         info!("{}", plan.log.message());
         match plan.effect {
             ProcessExitNavigationEffect::BeginFade { target } => {
-                let (_, out_duration) = self.get_out_transition_for_screen(current);
+                let (_, out_duration) = self.get_out_transition_for_route(current, target);
                 apply_global_fade_out_transition(&mut self.state.shell, target, out_duration);
                 Vec::new()
             }
@@ -418,8 +417,13 @@ impl App {
         let _ = self.run_commands(commands, event_loop);
     }
 
-    pub(super) fn get_out_transition_for_screen(&self, screen: CurrentScreen) -> (Vec<Actor>, f32) {
+    pub(super) fn get_out_transition_for_route(
+        &self,
+        screen: CurrentScreen,
+        target: CurrentScreen,
+    ) -> (Vec<Actor>, f32) {
         match screen {
+            CurrentScreen::Menu if target == CurrentScreen::Init => menu::cancel_transition(),
             CurrentScreen::Menu => menu::out_transition(),
             CurrentScreen::Gameplay => gameplay::out_transition(),
             CurrentScreen::Practice => gameplay::out_transition(),

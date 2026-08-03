@@ -429,7 +429,7 @@ pub const fn uses_actor_fade(screen: SimplyLoveScreen) -> bool {
 /// Simply Love's exact actor-only transition pairs.
 pub const fn uses_actor_only_transition(from: SimplyLoveScreen, to: SimplyLoveScreen) -> bool {
     if matches!(from, SimplyLoveScreen::Menu) {
-        return !matches!(to, SimplyLoveScreen::Menu);
+        return !matches!(to, SimplyLoveScreen::Menu | SimplyLoveScreen::Init);
     }
     matches!(
         (from, to),
@@ -571,6 +571,10 @@ mod tests {
         assert!(!uses_actor_only_transition(
             SimplyLoveScreen::Gameplay,
             SimplyLoveScreen::Evaluation,
+        ));
+        assert!(!uses_actor_only_transition(
+            SimplyLoveScreen::Menu,
+            SimplyLoveScreen::Init,
         ));
     }
 }

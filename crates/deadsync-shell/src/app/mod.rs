@@ -5087,6 +5087,11 @@ impl App {
         const CLEAR: [f32; 4] = [0.03, 0.03, 0.03, 1.0];
         let mut screen_alpha_multiplier = 1.0;
         let mut menu_exit_elapsed = None;
+        let menu_canceling = self.state.screens.current_screen == CurrentScreen::Menu
+            && matches!(
+                &self.state.shell.transition,
+                TransitionState::FadingOut { target, .. } if *target == CurrentScreen::Init
+            );
 
         let is_actor_fade_screen = is_actor_fade_screen(self.state.screens.current_screen);
 
@@ -5105,7 +5110,8 @@ impl App {
                     }
                 }
                 TransitionState::FadingOut { elapsed, .. }
-                    if self.state.screens.current_screen == CurrentScreen::Menu =>
+                    if self.state.screens.current_screen == CurrentScreen::Menu
+                        && !menu_canceling =>
                 {
                     menu_exit_elapsed = Some(elapsed);
                 }
@@ -5400,20 +5406,21 @@ impl App {
         }
         self.append_gameplay_offset_prompt_actors(&mut actors);
 
-        let menu_splash_elapsed = if self.state.screens.current_screen == CurrentScreen::Menu {
-            match &self.state.shell.transition {
-                TransitionState::FadingOut { elapsed, .. }
-                | TransitionState::ActorsFadeOut { elapsed, .. } => Some(*elapsed),
-                _ => None,
-            }
-        } else {
-            None
-        };
+        let menu_splash_elapsed =
+            if self.state.screens.current_screen == CurrentScreen::Menu && !menu_canceling {
+                match &self.state.shell.transition {
+                    TransitionState::FadingOut { elapsed, .. }
+                    | TransitionState::ActorsFadeOut { elapsed, .. } => Some(*elapsed),
+                    _ => None,
+                }
+            } else {
+                None
+            };
 
         match &self.state.shell.transition {
-            TransitionState::FadingOut { .. } => {
+            TransitionState::FadingOut { target, .. } => {
                 let (out_actors, _) =
-                    self.get_out_transition_for_screen(self.state.screens.current_screen);
+                    self.get_out_transition_for_route(self.state.screens.current_screen, *target);
                 actors.extend(out_actors);
             }
             TransitionState::FadingIn { .. } => {
@@ -6316,9 +6323,11 @@ impl App {
 
         if target == CurrentScreen::Menu {
             self.state.session.reset_for_menu(profile::combo_carry());
-            let current_color_index = self.state.screens.menu_state.active_color_index;
-            self.state.screens.menu_state = menu::init();
-            self.state.screens.menu_state.active_color_index = current_color_index;
+            menu::reset_for_entry(&mut self.state.screens.menu_state);
+        } else if target == CurrentScreen::Init {
+            let active_color_index = self.state.screens.menu_state.active_color_index;
+            init::replay_intro(&mut self.state.screens.init_state);
+            self.state.screens.init_state.active_color_index = active_color_index;
         } else if target == CurrentScreen::Options {
             self.reset_options_state_for_entry(prev);
         } else if target == CurrentScreen::Credits {
