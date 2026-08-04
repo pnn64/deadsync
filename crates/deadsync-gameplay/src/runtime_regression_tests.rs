@@ -1083,6 +1083,36 @@ mod runtime_regression_tests {
     }
 
     #[test]
+    fn gameplay_init_prewarms_active_chart_buffers_only() {
+        let mut profiles = std::array::from_fn(|_| TestProfile::default());
+        profiles[0].error_bar_options = GameplayErrorBarOptions {
+            mask_bits: GAMEPLAY_ERROR_BAR_AVERAGE,
+            short_average_enabled: true,
+            long_average_enabled: true,
+            ..GameplayErrorBarOptions::default()
+        };
+        let state = regression_state_with_profiles(profiles);
+        let note_range = state.chart_runtime.note_ranges.range(0);
+        let row_range = state.chart_runtime.row_indices.row_entry_ranges[0];
+        let note_count = note_range.1 - note_range.0;
+        let row_count = row_range.1 - row_range.0;
+        let expected_life = life_history_capacity(note_count, row_count, 0);
+        let expected_error = error_avg_capacity(note_count, row_count);
+        let active = &state.players_runtime.players[0];
+        let inactive = &state.players_runtime.players[1];
+
+        assert_eq!(active.life_history.len(), 1);
+        assert_eq!(active.life_history[0].1, 0.5);
+        assert!(active.life_history.capacity() >= expected_life);
+        assert!(active.error_bar_avg_samples.capacity() >= expected_error);
+        assert!(active.error_bar_long_avg_samples.capacity() >= expected_error);
+        assert_eq!(inactive.combo_milestones.capacity(), 0);
+        assert_eq!(inactive.life_history.capacity(), 0);
+        assert_eq!(inactive.error_bar_avg_samples.capacity(), 0);
+        assert_eq!(inactive.error_bar_long_avg_samples.capacity(), 0);
+    }
+
+    #[test]
     fn detached_player_timing_keeps_independent_clock_queries() {
         let mut state = regression_state();
         Arc::make_mut(&mut state.timing_runtime.timing_players[0])

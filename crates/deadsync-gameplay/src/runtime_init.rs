@@ -890,19 +890,31 @@ where
     let graph_prep_ms = graph_prep_started.elapsed().as_secs_f64() * 1000.0;
 
     let finalize_started = Instant::now();
-    let mut players = std::array::from_fn(|_| init_player_runtime());
     let in_course_stage = course_display_totals.is_some();
-    for p in 0..num_players {
+    let players = std::array::from_fn(|p| {
+        if p >= num_players {
+            return init_player_runtime_with_caps(PlayerBufferCaps::EMPTY);
+        }
+        let note_count = note_ranges[p].1.saturating_sub(note_ranges[p].0);
+        let row_count = row_entry_ranges[p].1.saturating_sub(row_entry_ranges[p].0);
+        let hold_roll_count = (holds_total[p] as usize).saturating_add(rolls_total[p] as usize);
+        let caps = player_buffer_caps(
+            note_count,
+            row_count,
+            hold_roll_count,
+            player_profiles[p].error_bar_options(),
+        );
         let course_carry = course_display_carry.as_ref().map(|carry| carry[p]);
-        players[p] = init_player_runtime_for_song(
+        init_player_runtime_for_song_with_caps(
             init_music_time,
             in_course_stage,
             course_carry,
             player_profiles[p].carry_combo_between_songs(),
             replay_mode,
             combo_carry[p],
-        );
-    }
+            caps,
+        )
+    });
     let assist_clap_rows = build_assist_clap_rows(&notes, note_ranges[0]);
     let song_offset_seconds = song.offset;
     let base_attack_appearance = std::array::from_fn(|player| {

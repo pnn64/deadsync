@@ -1871,8 +1871,10 @@ where
             judge_start_ns,
         );
         for player in 0..self.setup.num_players {
-            self.players_runtime.players[player] =
-                init_player_runtime_for_practice(judge_start_music_time);
+            reset_player_runtime_for_practice(
+                &mut self.players_runtime.players[player],
+                judge_start_music_time,
+            );
 
             self.chart_runtime.mine_scan.next_tap_miss_cursor[player] = cursors.note_cursor[player];
             self.control

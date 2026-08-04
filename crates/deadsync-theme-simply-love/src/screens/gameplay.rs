@@ -1000,6 +1000,9 @@ pub struct State {
     song_lua_proxy_request_index: SongLuaProxyRequestIndex,
     song_lua_background_overlay_topology_indices: Vec<SongLuaOverlayTopologyIndex>,
     song_lua_foreground_proxy_request_indices: Vec<SongLuaProxyRequestIndex>,
+    song_lua_aft_capture_scratch: SongLuaAftCaptureScratch,
+    song_lua_background_aft_capture_scratch: Vec<SongLuaAftCaptureScratch>,
+    song_lua_foreground_aft_capture_scratch: Vec<SongLuaAftCaptureScratch>,
     song_lua_projected_mesh_scratch: Vec<SongLuaProjectedMeshScratch>,
     song_lua_background_projected_mesh_scratch: Vec<Vec<SongLuaProjectedMeshScratch>>,
     song_lua_foreground_projected_mesh_scratch: Vec<Vec<SongLuaProjectedMeshScratch>>,
@@ -1225,6 +1228,22 @@ impl State {
                 .iter()
                 .map(|layer| SongLuaProxyRequestIndex::new(&layer.overlays))
                 .collect();
+        let song_lua_aft_capture_scratch = SongLuaAftCaptureScratch::new(
+            &song_lua_visuals.overlays,
+            &song_lua_proxy_request_index.topology,
+        );
+        let song_lua_background_aft_capture_scratch = song_lua_visuals
+            .background_visual_layers
+            .iter()
+            .zip(&song_lua_background_overlay_topology_indices)
+            .map(|(layer, topology)| SongLuaAftCaptureScratch::new(&layer.overlays, topology))
+            .collect();
+        let song_lua_foreground_aft_capture_scratch = song_lua_visuals
+            .foreground_visual_layers
+            .iter()
+            .zip(&song_lua_foreground_proxy_request_indices)
+            .map(|(layer, index)| SongLuaAftCaptureScratch::new(&layer.overlays, &index.topology))
+            .collect();
         let has_song_lua_proxies = !song_lua_proxy_request_index.proxy_indices.is_empty()
             || song_lua_foreground_proxy_request_indices
                 .iter()
@@ -1369,6 +1388,9 @@ impl State {
             song_lua_proxy_request_index,
             song_lua_background_overlay_topology_indices,
             song_lua_foreground_proxy_request_indices,
+            song_lua_aft_capture_scratch,
+            song_lua_background_aft_capture_scratch,
+            song_lua_foreground_aft_capture_scratch,
             song_lua_projected_mesh_scratch,
             song_lua_background_projected_mesh_scratch,
             song_lua_foreground_projected_mesh_scratch,
@@ -5560,6 +5582,7 @@ type SongLuaActorSegments = SmallVec<[Arc<[Actor]>; 5]>;
 const SONG_LUA_SCREEN_CAPTURE_SLOTS: usize = 64;
 const SONG_LUA_SCREEN_CAPTURE_CAPACITY: usize = 32;
 const SONG_LUA_PROXY_FRAME_BANKS: usize = 2;
+const SONG_LUA_AFT_FRAME_BANKS: usize = 2;
 const SONG_LUA_PLAYER_PROXY_SOURCE_COUNT: usize = 4;
 const SONG_LUA_FIELD_PROXY_SOURCE: usize = 0;
 const SONG_LUA_JUDGMENT_PROXY_SOURCE: usize = 1;
@@ -5660,6 +5683,97 @@ impl SongLuaProxyActorScratch {
             .get_mut(player)?
             .get_mut(source)
     }
+}
+
+/// Song-lifetime backing for ActorFrameTexture capture output.
+///
+/// Owner/thread model: gameplay `State`, exclusively mutated during actor
+/// composition on the game/render frame thread. Lifetime: one song. Capacity:
+/// each AFT sprite has two frame banks sized at screen entry from its compiled
+/// capture descendants, including the maximum two actors emitted by glow and
+/// model layers. Warmup occurs during screen initialization. Gameplay misses
+/// grow only the affected slot and retain that high-water mark; there is no
+/// lookup, eviction, pruning, or gameplay destruction. Two banks cover the
+/// renderer retaining the preceding frame. Per-slot replacement/growth counts
+/// are available from `SharedActorFrameScratch::stats`. Worst-case frame work
+/// remains linear in the already-required captured actors.
+#[derive(Default)]
+struct SongLuaAftCaptureScratch {
+    slots: Vec<Option<[SharedActorFrameScratch; SONG_LUA_AFT_FRAME_BANKS]>>,
+    active_bank: usize,
+}
+
+impl SongLuaAftCaptureScratch {
+    fn new(overlays: &[SongLuaOverlayActor], topology: &SongLuaOverlayTopologyIndex) -> Self {
+        let slots = overlays
+            .iter()
+            .enumerate()
+            .map(|(index, overlay)| {
+                matches!(overlay.kind, SongLuaOverlayKind::AftSprite { .. }).then(|| {
+                    let capacity = song_lua_aft_capture_capacity(overlays, topology, index);
+                    std::array::from_fn(|_| SharedActorFrameScratch::with_capacity(capacity))
+                })
+            })
+            .collect();
+        Self {
+            slots,
+            active_bank: SONG_LUA_AFT_FRAME_BANKS - 1,
+        }
+    }
+
+    fn begin_frame(&mut self) {
+        self.active_bank = (self.active_bank + 1) % SONG_LUA_AFT_FRAME_BANKS;
+    }
+
+    fn overlay(&mut self, index: usize) -> Option<&mut SharedActorFrameScratch> {
+        self.slots
+            .get_mut(index)?
+            .as_mut()
+            .map(|banks| &mut banks[self.active_bank])
+    }
+}
+
+fn song_lua_aft_actor_capacity(kind: &SongLuaOverlayKind) -> usize {
+    match kind {
+        SongLuaOverlayKind::Actor
+        | SongLuaOverlayKind::ActorFrame
+        | SongLuaOverlayKind::ActorFrameTexture
+        | SongLuaOverlayKind::AftSprite { .. }
+        | SongLuaOverlayKind::Sound { .. } => 0,
+        SongLuaOverlayKind::ActorProxy { .. } => 1,
+        SongLuaOverlayKind::Model { layers } => layers.len().saturating_mul(2),
+        SongLuaOverlayKind::NoteskinActor { slots } => slots.len().saturating_mul(2),
+        _ => 2,
+    }
+}
+
+fn song_lua_aft_capture_capacity(
+    overlays: &[SongLuaOverlayActor],
+    topology: &SongLuaOverlayTopologyIndex,
+    aft_sprite_index: usize,
+) -> usize {
+    let Some(capture_index) = topology
+        .aft_sprite_targets
+        .get(aft_sprite_index)
+        .copied()
+        .and_then(SongLuaOverlayIndex::get)
+    else {
+        return 0;
+    };
+    overlays
+        .iter()
+        .enumerate()
+        .filter(|(index, _)| {
+            topology
+                .aft_ancestors
+                .get(*index)
+                .copied()
+                .and_then(SongLuaOverlayIndex::get)
+                == Some(capture_index)
+        })
+        .fold(2usize, |capacity, (_, overlay)| {
+            capacity.saturating_add(song_lua_aft_actor_capacity(&overlay.kind))
+        })
 }
 
 #[derive(Clone, Copy)]
@@ -7211,7 +7325,8 @@ fn song_lua_capture_overlay_child_states(
     }
 }
 
-fn song_lua_capture_children(
+fn song_lua_capture_children_into(
+    out: &mut Vec<Actor>,
     overlays: &[SongLuaOverlayActor],
     overlay_states: &[SongLuaOverlayState],
     local_overlay_states: &[SongLuaOverlayState],
@@ -7225,7 +7340,7 @@ fn song_lua_capture_children(
     capture_states: &mut Vec<SongLuaOverlayState>,
     order_scratch: &mut Vec<usize>,
     projected_mesh_scratch: &mut [SongLuaProjectedMeshScratch],
-) -> Vec<Actor> {
+) {
     song_lua_capture_overlay_states_into_scratch(
         overlays,
         overlay_states,
@@ -7236,7 +7351,6 @@ fn song_lua_capture_children(
         overlay_space_height,
         capture_states,
     );
-    let mut out = Vec::new();
     song_lua_overlay_order_into(
         overlays,
         capture_states,
@@ -7298,6 +7412,41 @@ fn song_lua_capture_children(
             out.extend(actors);
         }
     }
+}
+
+#[cfg(test)]
+fn song_lua_capture_children(
+    overlays: &[SongLuaOverlayActor],
+    overlay_states: &[SongLuaOverlayState],
+    local_overlay_states: &[SongLuaOverlayState],
+    order_cache: &mut SongLuaOverlayOrderCache,
+    topology_index: &SongLuaOverlayTopologyIndex,
+    asset_manager: &AssetManager,
+    capture_index: usize,
+    proxy_sources: &SongLuaScreenProxySources<'_>,
+    overlay_space_width: f32,
+    overlay_space_height: f32,
+    capture_states: &mut Vec<SongLuaOverlayState>,
+    order_scratch: &mut Vec<usize>,
+    projected_mesh_scratch: &mut [SongLuaProjectedMeshScratch],
+) -> Vec<Actor> {
+    let mut out = Vec::new();
+    song_lua_capture_children_into(
+        &mut out,
+        overlays,
+        overlay_states,
+        local_overlay_states,
+        order_cache,
+        topology_index,
+        asset_manager,
+        capture_index,
+        proxy_sources,
+        overlay_space_width,
+        overlay_space_height,
+        capture_states,
+        order_scratch,
+        projected_mesh_scratch,
+    );
     out
 }
 
@@ -8186,6 +8335,103 @@ fn song_lua_combined_rgb_aft_state(mut state: SongLuaOverlayState) -> SongLuaOve
     state
 }
 
+fn song_lua_shift_capture_z(actor: &mut Actor, z_shift: i16) {
+    match actor {
+        Actor::Sprite { z, .. }
+        | Actor::Text { z, .. }
+        | Actor::Mesh { z, .. }
+        | Actor::ReusableMesh { z, .. }
+        | Actor::TexturedMesh { z, .. }
+        | Actor::ReusableTexturedMesh { z, .. }
+        | Actor::SharedFrame { z, .. }
+        | Actor::RetainedFrame { z, .. } => *z = song_lua_add_z(*z, z_shift),
+        Actor::Frame { children, z, .. } => {
+            *z = song_lua_add_z(*z, z_shift);
+            for child in children {
+                song_lua_shift_capture_z(child, z_shift);
+            }
+        }
+        Actor::Camera { children, .. } => {
+            for child in children {
+                song_lua_shift_capture_z(child, z_shift);
+            }
+        }
+        Actor::Shadow { child, .. } => song_lua_shift_capture_z(child, z_shift),
+        Actor::CameraPush { .. } | Actor::CameraPop => {}
+    }
+}
+
+fn song_lua_build_shared_capture(
+    overlay: &SongLuaOverlayActor,
+    state: SongLuaOverlayState,
+    z: i16,
+    overlay_space_width: f32,
+    overlay_space_height: f32,
+    scratch: &mut SharedActorFrameScratch,
+    fill: impl FnOnce(&mut Vec<Actor>),
+) -> Option<Actor> {
+    if !state.visible || state.diffuse[3] <= f32::EPSILON {
+        return None;
+    }
+    let blend = match state.blend {
+        SongLuaOverlayBlendMode::Alpha => None,
+        SongLuaOverlayBlendMode::Add => Some(BlendMode::Add),
+        SongLuaOverlayBlendMode::Multiply => Some(BlendMode::Multiply),
+        SongLuaOverlayBlendMode::Subtract => Some(BlendMode::Subtract),
+    };
+    let extra_offset = song_lua_capture_channel_offset(
+        overlay.name.as_deref(),
+        state,
+        overlay_space_width,
+        overlay_space_height,
+    );
+    let view_proj = song_lua_capture_transform_matrix(
+        state,
+        extra_offset,
+        overlay_space_width,
+        overlay_space_height,
+    )
+    .map(|transform| {
+        glam::camera::rh::proj::opengl::orthographic(
+            -0.5 * screen_width(),
+            0.5 * screen_width(),
+            -0.5 * screen_height(),
+            0.5 * screen_height(),
+            -1.0,
+            1.0,
+        ) * transform
+    });
+    let offset = view_proj.map_or(extra_offset, |_| [0.0, 0.0]);
+    let children = scratch.refill(offset, |out| {
+        if let Some(view_proj) = view_proj {
+            out.push(Actor::CameraPush { view_proj });
+        }
+        let source_start = out.len();
+        fill(out);
+        if out.len() == source_start {
+            out.clear();
+            return;
+        }
+        for actor in &mut out[source_start..] {
+            song_lua_shift_capture_z(actor, z);
+        }
+        if view_proj.is_some() {
+            out.push(Actor::CameraPop);
+        }
+    })?;
+    Some(Actor::SharedFrame {
+        align: [0.0, 0.0],
+        offset: [0.0, 0.0],
+        size: [SizeSpec::Fill, SizeSpec::Fill],
+        children,
+        background: None,
+        z: 0,
+        tint: state.diffuse,
+        blend,
+    })
+}
+
+#[cfg(any(test, feature = "bench-support"))]
 fn song_lua_build_capture_actor(
     overlay: &SongLuaOverlayActor,
     state: SongLuaOverlayState,
@@ -10428,6 +10674,113 @@ impl SongLuaScratchPrewarmBenchmark {
 }
 
 #[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub struct SongLuaAftCaptureBenchmark {
+    overlay: SongLuaOverlayActor,
+    state: SongLuaOverlayState,
+    source: Vec<Actor>,
+    banks: [SharedActorFrameScratch; SONG_LUA_AFT_FRAME_BANKS],
+    active_bank: usize,
+    retained: Option<Actor>,
+}
+
+#[cfg(feature = "bench-support")]
+impl SongLuaAftCaptureBenchmark {
+    pub fn new(actor_count: usize) -> Self {
+        let overlay = SongLuaOverlayActor {
+            kind: SongLuaOverlayKind::AftSprite {
+                capture_name: "bench".to_string(),
+            },
+            name: None,
+            parent_index: None,
+            initial_state: SongLuaOverlayState::default(),
+            message_commands: Vec::new(),
+        };
+        let state = SongLuaOverlayState {
+            x: 0.5 * screen_width(),
+            y: 0.5 * screen_height(),
+            diffuse: [0.75, 0.5, 0.25, 0.8],
+            blend: SongLuaOverlayBlendMode::Add,
+            ..SongLuaOverlayState::default()
+        };
+        let source = (0..actor_count)
+            .map(|index| Actor::Frame {
+                align: [0.0, 0.0],
+                offset: [index as f32, 0.0],
+                size: [SizeSpec::Fill, SizeSpec::Fill],
+                children: Vec::new(),
+                background: None,
+                z: index.min(i16::MAX as usize) as i16,
+            })
+            .collect();
+        Self {
+            overlay,
+            state,
+            source,
+            banks: std::array::from_fn(|_| SharedActorFrameScratch::with_capacity(actor_count)),
+            active_bank: SONG_LUA_AFT_FRAME_BANKS - 1,
+            retained: None,
+        }
+    }
+
+    pub fn old_frame(&mut self) -> u64 {
+        let source = self.source.to_vec();
+        let actor = song_lua_build_capture_actor(
+            &self.overlay,
+            self.state,
+            100,
+            source,
+            screen_width(),
+            screen_height(),
+        )
+        .expect("benchmark capture source is visible and nonempty");
+        std::hint::black_box(&actor);
+        let checksum = self.checksum();
+        self.retained = Some(actor);
+        checksum
+    }
+
+    pub fn shared_frame(&mut self) -> u64 {
+        self.active_bank = (self.active_bank + 1) % SONG_LUA_AFT_FRAME_BANKS;
+        let source = &self.source;
+        let actor = song_lua_build_shared_capture(
+            &self.overlay,
+            self.state,
+            100,
+            screen_width(),
+            screen_height(),
+            &mut self.banks[self.active_bank],
+            |out| out.extend(source.iter().cloned()),
+        )
+        .expect("benchmark capture source is visible and nonempty");
+        std::hint::black_box(&actor);
+        let checksum = self.checksum();
+        self.retained = Some(actor);
+        checksum
+    }
+
+    pub fn storage_bytes(&self) -> usize {
+        self.banks
+            .iter()
+            .map(|bank| bank.capacity().saturating_mul(std::mem::size_of::<Actor>()))
+            .sum()
+    }
+
+    fn checksum(&self) -> u64 {
+        self.source.iter().fold(
+            u64::from(self.state.diffuse[3].to_bits()),
+            |checksum, actor| {
+                let z = match actor {
+                    Actor::Frame { z, .. } => song_lua_add_z(*z, 100),
+                    _ => 0,
+                };
+                checksum.rotate_left(7) ^ z as u16 as u64
+            },
+        )
+    }
+}
+
+#[cfg(feature = "bench-support")]
 fn append_benchmark_projected_grid(
     xs: &[f32],
     ys: &[f32],
@@ -12413,8 +12766,10 @@ fn push_song_lua_layer_actors(
     order_scratch: &mut Vec<usize>,
     capture_states: &mut Vec<SongLuaOverlayState>,
     capture_order_scratch: &mut Vec<usize>,
+    aft_capture_scratch: &mut SongLuaAftCaptureScratch,
     projected_mesh_scratch: &mut [SongLuaProjectedMeshScratch],
 ) {
+    aft_capture_scratch.begin_frame();
     let song_lua_overlay_base_z = song_lua_add_z(
         SONG_LUA_OVERLAY_LAYER_Z_BASE,
         song_lua_rounded_z(song_foreground_state.z),
@@ -12467,37 +12822,42 @@ fn push_song_lua_layer_actors(
                 } else {
                     overlay_state
                 };
-                if let Some(capture_index) = topology_index
+                let capture_index = topology_index
                     .aft_sprite_targets
                     .get(idx)
                     .copied()
-                    .and_then(SongLuaOverlayIndex::get)
+                    .and_then(SongLuaOverlayIndex::get);
+                if let (Some(capture_index), Some(capture_scratch)) =
+                    (capture_index, aft_capture_scratch.overlay(idx))
                 {
-                    let source = song_lua_capture_children(
-                        overlays,
-                        overlay_states,
-                        local_overlay_states,
-                        order_cache,
-                        topology_index,
-                        asset_manager,
-                        capture_index,
-                        proxy_sources,
-                        space_width,
-                        space_height,
-                        capture_states,
-                        capture_order_scratch,
-                        projected_mesh_scratch,
-                    );
-                    song_lua_build_capture_actor(
+                    song_lua_build_shared_capture(
                         overlay,
                         overlay_state,
                         song_lua_add_z(
                             song_lua_overlay_base_z,
                             draw_idx.min(i16::MAX as usize) as i16,
                         ),
-                        source,
                         space_width,
                         space_height,
+                        capture_scratch,
+                        |source| {
+                            song_lua_capture_children_into(
+                                source,
+                                overlays,
+                                overlay_states,
+                                local_overlay_states,
+                                order_cache,
+                                topology_index,
+                                asset_manager,
+                                capture_index,
+                                proxy_sources,
+                                space_width,
+                                space_height,
+                                capture_states,
+                                capture_order_scratch,
+                                projected_mesh_scratch,
+                            );
+                        },
                     )
                     .map(one_song_lua_actor)
                 } else {
@@ -12584,6 +12944,11 @@ fn push_actors_impl(
         std::mem::take(&mut state.song_lua_background_overlay_topology_indices);
     let mut song_lua_foreground_proxy_request_indices =
         std::mem::take(&mut state.song_lua_foreground_proxy_request_indices);
+    let mut song_lua_aft_capture_scratch = std::mem::take(&mut state.song_lua_aft_capture_scratch);
+    let mut song_lua_background_aft_capture_scratch =
+        std::mem::take(&mut state.song_lua_background_aft_capture_scratch);
+    let mut song_lua_foreground_aft_capture_scratch =
+        std::mem::take(&mut state.song_lua_foreground_aft_capture_scratch);
     let mut song_lua_projected_mesh_scratch =
         std::mem::take(&mut state.song_lua_projected_mesh_scratch);
     let mut song_lua_background_projected_mesh_scratch =
@@ -12768,6 +13133,10 @@ fn push_actors_impl(
         else {
             continue;
         };
+        let Some(aft_capture_scratch) = song_lua_background_aft_capture_scratch.get_mut(layer_idx)
+        else {
+            continue;
+        };
         let Some(projected_mesh_scratch) =
             song_lua_background_projected_mesh_scratch.get_mut(layer_idx)
         else {
@@ -12797,6 +13166,7 @@ fn push_actors_impl(
             &mut song_lua_order_scratch,
             &mut song_lua_capture_state_scratch,
             &mut song_lua_capture_order_scratch,
+            aft_capture_scratch,
             projected_mesh_scratch,
         );
     }
@@ -14521,6 +14891,7 @@ fn push_actors_impl(
         &mut song_lua_order_scratch,
         &mut song_lua_capture_state_scratch,
         &mut song_lua_capture_order_scratch,
+        &mut song_lua_aft_capture_scratch,
         &mut song_lua_projected_mesh_scratch,
     );
     if let Some(actor) = build_foreground_media(
@@ -14545,6 +14916,10 @@ fn push_actors_impl(
             continue;
         };
         let Some(topology_index) = song_lua_foreground_proxy_request_indices.get_mut(layer_idx)
+        else {
+            continue;
+        };
+        let Some(aft_capture_scratch) = song_lua_foreground_aft_capture_scratch.get_mut(layer_idx)
         else {
             continue;
         };
@@ -14577,6 +14952,7 @@ fn push_actors_impl(
             &mut song_lua_order_scratch,
             &mut song_lua_capture_state_scratch,
             &mut song_lua_capture_order_scratch,
+            aft_capture_scratch,
             projected_mesh_scratch,
         );
     }
@@ -14587,6 +14963,9 @@ fn push_actors_impl(
     state.song_lua_background_overlay_topology_indices =
         song_lua_background_overlay_topology_indices;
     state.song_lua_foreground_proxy_request_indices = song_lua_foreground_proxy_request_indices;
+    state.song_lua_aft_capture_scratch = song_lua_aft_capture_scratch;
+    state.song_lua_background_aft_capture_scratch = song_lua_background_aft_capture_scratch;
+    state.song_lua_foreground_aft_capture_scratch = song_lua_foreground_aft_capture_scratch;
     state.song_lua_projected_mesh_scratch = song_lua_projected_mesh_scratch;
     state.song_lua_background_projected_mesh_scratch = song_lua_background_projected_mesh_scratch;
     state.song_lua_foreground_projected_mesh_scratch = song_lua_foreground_projected_mesh_scratch;
@@ -16969,6 +17348,140 @@ mod tests {
     }
 
     #[test]
+    fn shared_aft_capture_preserves_style_offset_and_nested_z() {
+        let overlay = test_aft_overlay("CaptureAFT", true);
+        let state = SongLuaOverlayState {
+            x: 0.5 * screen_width(),
+            y: 0.5 * screen_height(),
+            diffuse: [0.5, 0.25, 0.1, 0.5],
+            blend: SongLuaOverlayBlendMode::Add,
+            ..SongLuaOverlayState::default()
+        };
+        let source = Actor::Frame {
+            align: [0.0, 0.0],
+            offset: [3.0, 4.0],
+            size: [SizeSpec::Fill, SizeSpec::Fill],
+            children: vec![Actor::Frame {
+                align: [0.0, 0.0],
+                offset: [5.0, 6.0],
+                size: [SizeSpec::Fill, SizeSpec::Fill],
+                children: Vec::new(),
+                background: None,
+                z: 4,
+            }],
+            background: None,
+            z: 3,
+        };
+        let old = song_lua_build_capture_actor(
+            &overlay,
+            state,
+            7,
+            vec![source.clone()],
+            screen_width(),
+            screen_height(),
+        )
+        .expect("legacy AFT capture");
+        let mut scratch = SharedActorFrameScratch::with_capacity(3);
+        let new = song_lua_build_shared_capture(
+            &overlay,
+            state,
+            7,
+            screen_width(),
+            screen_height(),
+            &mut scratch,
+            |children| children.push(source),
+        )
+        .expect("shared AFT capture");
+
+        let Actor::Frame {
+            offset: old_offset,
+            children: old_children,
+            ..
+        } = old
+        else {
+            panic!("expected untransformed legacy capture frame");
+        };
+        let [
+            Actor::Frame {
+                z: old_z,
+                children: old_nested,
+                ..
+            },
+        ] = old_children.as_slice()
+        else {
+            panic!("expected legacy captured frame");
+        };
+        let [
+            Actor::Frame {
+                z: old_nested_z, ..
+            },
+        ] = old_nested.as_slice()
+        else {
+            panic!("expected legacy nested frame");
+        };
+
+        let Actor::SharedFrame {
+            tint,
+            blend,
+            children,
+            ..
+        } = new
+        else {
+            panic!("expected shared capture frame");
+        };
+        let [
+            Actor::Frame {
+                offset: new_offset,
+                children: new_children,
+                ..
+            },
+        ] = children.as_ref()
+        else {
+            panic!("expected reusable inner frame");
+        };
+        let [
+            Actor::Frame {
+                z: new_z,
+                children: new_nested,
+                ..
+            },
+        ] = new_children.as_slice()
+        else {
+            panic!("expected shared captured frame");
+        };
+        let [
+            Actor::Frame {
+                z: new_nested_z, ..
+            },
+        ] = new_nested.as_slice()
+        else {
+            panic!("expected shared nested frame");
+        };
+
+        assert_eq!(*new_offset, old_offset);
+        assert_eq!((*new_z, *new_nested_z), (*old_z, *old_nested_z));
+        assert_eq!(tint, state.diffuse);
+        assert_eq!(blend, Some(BlendMode::Add));
+        assert_eq!(scratch.stats().growths, 0);
+    }
+
+    #[test]
+    fn aft_capture_scratch_prewarms_both_frame_banks() {
+        let overlays = vec![
+            test_capture_overlay("CaptureAFT"),
+            test_capture_proxy_child(0, SongLuaProxyTarget::Player { player_index: 0 }),
+            test_aft_overlay("CaptureAFT", true),
+        ];
+        let topology = SongLuaOverlayTopologyIndex::new(&overlays);
+        let scratch = SongLuaAftCaptureScratch::new(&overlays, &topology);
+        let banks = scratch.slots[2].as_ref().expect("AFT scratch banks");
+
+        assert_eq!(song_lua_aft_capture_capacity(&overlays, &topology, 2), 3);
+        assert!(banks.iter().all(|bank| bank.capacity() >= 3));
+        assert!(banks.iter().all(|bank| bank.stats().growths == 0));
+    }
+
+    #[test]
     fn song_lua_coincident_rgb_aft_uses_one_internal_blend_capture() {
         let overlays = vec![
             test_capture_overlay("CaptureAFT"),
@@ -16998,6 +17511,7 @@ mod tests {
         let mut order_scratch = Vec::new();
         let mut capture_states = Vec::new();
         let mut capture_order_scratch = Vec::new();
+        let mut aft_capture_scratch = SongLuaAftCaptureScratch::new(&overlays, &topology_index);
         let mut projected_mesh_scratch = song_lua_projected_mesh_scratch_for(&overlays);
 
         push_song_lua_layer_actors(
@@ -17018,12 +17532,16 @@ mod tests {
             &mut order_scratch,
             &mut capture_states,
             &mut capture_order_scratch,
+            &mut aft_capture_scratch,
             &mut projected_mesh_scratch,
         );
 
         assert_eq!(out.len(), 1);
-        let Actor::Frame { children, .. } = &out[0] else {
-            panic!("expected combined AFT frame");
+        let Actor::SharedFrame { children, .. } = &out[0] else {
+            panic!("expected shared combined AFT frame");
+        };
+        let [Actor::Frame { children, .. }] = children.as_ref() else {
+            panic!("expected reusable capture frame");
         };
         let [Actor::Frame { children, .. }] = children.as_slice() else {
             panic!("expected captured proxy frame");
@@ -17068,6 +17586,7 @@ mod tests {
         let mut order_scratch = Vec::new();
         let mut capture_states = Vec::new();
         let mut capture_order_scratch = Vec::new();
+        let mut aft_capture_scratch = SongLuaAftCaptureScratch::new(&overlays, &topology_index);
         let mut projected_mesh_scratch = song_lua_projected_mesh_scratch_for(&overlays);
 
         push_song_lua_layer_actors(
@@ -17088,6 +17607,7 @@ mod tests {
             &mut order_scratch,
             &mut capture_states,
             &mut capture_order_scratch,
+            &mut aft_capture_scratch,
             &mut projected_mesh_scratch,
         );
 
@@ -17130,6 +17650,7 @@ mod tests {
         let mut order_scratch = Vec::new();
         let mut capture_states = Vec::new();
         let mut capture_order_scratch = Vec::new();
+        let mut aft_capture_scratch = SongLuaAftCaptureScratch::new(&overlays, &topology_index);
         let mut projected_mesh_scratch = song_lua_projected_mesh_scratch_for(&overlays);
 
         push_song_lua_layer_actors(
@@ -17150,6 +17671,7 @@ mod tests {
             &mut order_scratch,
             &mut capture_states,
             &mut capture_order_scratch,
+            &mut aft_capture_scratch,
             &mut projected_mesh_scratch,
         );
 

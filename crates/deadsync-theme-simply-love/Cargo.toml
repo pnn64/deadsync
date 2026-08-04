@@ -94,6 +94,11 @@ harness = false
 required-features = ["bench-support"]
 
 [[bench]]
+name = "song_lua_aft_capture"
+harness = false
+required-features = ["bench-support"]
+
+[[bench]]
 name = "sync_heat_range"
 harness = false
 required-features = ["bench-support"]

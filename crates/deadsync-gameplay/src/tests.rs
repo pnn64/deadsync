@@ -82,6 +82,97 @@ mod tests {
     }
 
     #[test]
+    fn chart_player_buffers_use_bounded_capacities() {
+        let options = GameplayErrorBarOptions {
+            mask_bits: GAMEPLAY_ERROR_BAR_AVERAGE,
+            short_average_enabled: true,
+            long_average_enabled: false,
+            ..GameplayErrorBarOptions::default()
+        };
+        let caps = player_buffer_caps(120, 80, 25, options);
+
+        assert_eq!(caps.combo_milestones, COMBO_MILESTONE_CAPACITY);
+        assert_eq!(caps.life_history, 451);
+        assert_eq!(caps.short_error_avg, 200);
+        assert_eq!(caps.long_error_avg, 0);
+
+        let player = init_player_runtime_for_song_with_caps(
+            12.5, false, None, false, false, 0, caps,
+        );
+        assert_eq!(player.life_history, [(12.5, 0.5)]);
+        assert!(player.life_history.capacity() >= caps.life_history);
+        assert!(player.error_bar_avg_samples.capacity() >= caps.short_error_avg);
+        assert_eq!(player.error_bar_long_avg_samples.capacity(), 0);
+    }
+
+    #[test]
+    fn disabled_error_averages_allocate_no_sample_storage() {
+        let caps = player_buffer_caps(
+            10_000,
+            5_000,
+            1_000,
+            GameplayErrorBarOptions {
+                short_average_enabled: true,
+                long_average_enabled: true,
+                ..GameplayErrorBarOptions::default()
+            },
+        );
+
+        assert_eq!(caps.short_error_avg, 0);
+        assert_eq!(caps.long_error_avg, 0);
+    }
+
+    #[test]
+    fn gameplay_buffer_bounds_saturate_for_invalid_huge_charts() {
+        assert_eq!(life_history_capacity(usize::MAX, 1, 1), usize::MAX);
+        assert_eq!(error_avg_capacity(usize::MAX, 1), usize::MAX);
+    }
+
+    #[test]
+    fn practice_reset_reuses_chart_player_buffers() {
+        let caps = PlayerBufferCaps {
+            combo_milestones: 2,
+            life_history: 401,
+            short_error_avg: 200,
+            long_error_avg: 300,
+        };
+        let mut player = init_player_runtime_with_caps(caps);
+        player.combo = 99;
+        player.life = 0.1;
+        player.combo_milestones.push(ActiveComboMilestone {
+            kind: ComboMilestoneKind::Hundred,
+            elapsed: 1.0,
+        });
+        player.life_history.push((1.0, 0.1));
+        player.error_bar_avg_samples.push_back((1.0, 0.01));
+        player.error_bar_long_avg_samples.push_back((1.0, 0.01));
+        let old_caps = (
+            player.combo_milestones.capacity(),
+            player.life_history.capacity(),
+            player.error_bar_avg_samples.capacity(),
+            player.error_bar_long_avg_samples.capacity(),
+        );
+
+        reset_player_runtime_for_practice(&mut player, 42.0);
+
+        assert_eq!(player.combo, 0);
+        assert_eq!(player.life, 0.5);
+        assert!(player.combo_milestones.is_empty());
+        assert_eq!(player.life_history, [(42.0, 0.5)]);
+        assert!(player.error_bar_avg_samples.is_empty());
+        assert!(player.error_bar_long_avg_samples.is_empty());
+        assert_eq!(
+            old_caps,
+            (
+                player.combo_milestones.capacity(),
+                player.life_history.capacity(),
+                player.error_bar_avg_samples.capacity(),
+                player.error_bar_long_avg_samples.capacity(),
+            )
+        );
+    }
+
+    #[test]
     fn practice_player_runtime_records_start_life() {
         let player = init_player_runtime_for_practice(42.0);
 
