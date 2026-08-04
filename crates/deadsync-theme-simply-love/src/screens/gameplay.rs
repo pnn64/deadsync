@@ -616,10 +616,15 @@ const PROJECTED_MESH_VERTEX_CAPACITY: usize = 54;
 /// use, ultimately with the screen. Replacement and capacity counters are
 /// exposed to the benchmark; worst-case frame work is bounded by that actor's
 /// compiled vertex count.
+/// Static BitmapText uppercase content is also compiled into this overlay-local
+/// song-lifetime storage during screen entry. A gameplay frame only clones its
+/// `Arc<str>`; the fallback conversion exists for test-only builders that do not
+/// provide screen scratch.
 #[derive(Default)]
 struct SongLuaProjectedMeshScratch {
     textured_vertices: Option<Arc<Vec<TexturedMeshVertex>>>,
     mesh_vertices: Option<Arc<Vec<MeshVertex>>>,
+    uppercase_text: Option<Arc<str>>,
     capacity: usize,
     replacements: u64,
 }
@@ -629,6 +634,7 @@ impl SongLuaProjectedMeshScratch {
         Self {
             textured_vertices: Some(Arc::new(Vec::with_capacity(capacity))),
             mesh_vertices: None,
+            uppercase_text: None,
             capacity,
             replacements: 0,
         }
@@ -638,6 +644,7 @@ impl SongLuaProjectedMeshScratch {
         Self {
             textured_vertices: None,
             mesh_vertices: Some(Arc::new(Vec::with_capacity(capacity))),
+            uppercase_text: None,
             capacity,
             replacements: 0,
         }
@@ -716,19 +723,25 @@ fn song_lua_projected_mesh_scratch_for(
 ) -> Vec<SongLuaProjectedMeshScratch> {
     overlays
         .iter()
-        .map(|overlay| match &overlay.kind {
-            SongLuaOverlayKind::Sprite { .. } | SongLuaOverlayKind::Quad => {
-                SongLuaProjectedMeshScratch::textured(PROJECTED_MESH_VERTEX_CAPACITY)
+        .map(|overlay| {
+            let mut scratch = match &overlay.kind {
+                SongLuaOverlayKind::Sprite { .. } | SongLuaOverlayKind::Quad => {
+                    SongLuaProjectedMeshScratch::textured(PROJECTED_MESH_VERTEX_CAPACITY)
+                }
+                SongLuaOverlayKind::ActorMultiVertex {
+                    vertices,
+                    texture_key: Some(_),
+                    ..
+                } => SongLuaProjectedMeshScratch::textured(vertices.len()),
+                SongLuaOverlayKind::ActorMultiVertex { vertices, .. } => {
+                    SongLuaProjectedMeshScratch::mesh(vertices.len())
+                }
+                _ => SongLuaProjectedMeshScratch::default(),
+            };
+            if let SongLuaOverlayKind::BitmapText { text, .. } = &overlay.kind {
+                scratch.uppercase_text = Some(Arc::from(text.to_uppercase()));
             }
-            SongLuaOverlayKind::ActorMultiVertex {
-                vertices,
-                texture_key: Some(_),
-                ..
-            } => SongLuaProjectedMeshScratch::textured(vertices.len()),
-            SongLuaOverlayKind::ActorMultiVertex { vertices, .. } => {
-                SongLuaProjectedMeshScratch::mesh(vertices.len())
-            }
-            _ => SongLuaProjectedMeshScratch::default(),
+            scratch
         })
         .collect()
 }
@@ -7381,35 +7394,54 @@ fn song_lua_capture_children_into(
             continue;
         }
         let overlay_state = capture_states.get(idx).copied().unwrap_or_default();
-        let actor = match &overlay.kind {
+        match &overlay.kind {
             SongLuaOverlayKind::ActorProxy { target } => {
-                song_lua_proxy_source(target, proxy_sources).and_then(|source| {
-                    song_lua_build_proxy_frame_actor(
+                if let Some(actor) =
+                    song_lua_proxy_source(target, proxy_sources).and_then(|source| {
+                        song_lua_build_proxy_frame_actor(
+                            overlay_state,
+                            draw_idx.min(i16::MAX as usize) as i16,
+                            source,
+                            overlay_space_width,
+                            overlay_space_height,
+                        )
+                    })
+                {
+                    out.push(actor);
+                }
+            }
+            _ => {
+                let z = draw_idx.min(i16::MAX as usize) as i16;
+                if append_song_lua_multi_actor_overlay(
+                    out,
+                    overlay,
+                    overlay_state,
+                    asset_manager,
+                    z,
+                    overlay_space_width,
+                    overlay_space_height,
+                    0.0,
+                    0.0,
+                    0.0,
+                )
+                .is_none()
+                    && let Some(actors) = build_song_lua_overlay_actor_with_scratch(
+                        overlay,
                         overlay_state,
-                        draw_idx.min(i16::MAX as usize) as i16,
-                        source,
+                        song_lua_overlay_camera_state_indexed(capture_states, topology_index, idx),
+                        asset_manager,
+                        z,
                         overlay_space_width,
                         overlay_space_height,
+                        0.0,
+                        0.0,
+                        0.0,
+                        projected_mesh_scratch.get_mut(idx),
                     )
-                    .map(one_song_lua_actor)
-                })
+                {
+                    out.extend(actors);
+                }
             }
-            _ => build_song_lua_overlay_actor_with_scratch(
-                overlay,
-                overlay_state,
-                song_lua_overlay_camera_state_indexed(capture_states, topology_index, idx),
-                asset_manager,
-                draw_idx.min(i16::MAX as usize) as i16,
-                overlay_space_width,
-                overlay_space_height,
-                0.0,
-                0.0,
-                0.0,
-                projected_mesh_scratch.get_mut(idx),
-            ),
-        };
-        if let Some(actors) = actor {
-            out.extend(actors);
         }
     }
 }
@@ -8982,7 +9014,9 @@ fn song_lua_actor_multi_vertex_pos(
     [x * cos_z - y * sin_z, x * sin_z + y * cos_z]
 }
 
-fn song_lua_model_actor(
+#[allow(clippy::too_many_arguments)]
+fn append_song_lua_model_actors(
+    out: &mut impl Extend<Actor>,
     layers: &[SongLuaOverlayModelLayer],
     state: SongLuaOverlayState,
     asset_manager: &AssetManager,
@@ -8997,14 +9031,8 @@ fn song_lua_model_actor(
     glow: [f32; 4],
     blend: BlendMode,
     total_elapsed: f32,
-) -> Option<SongLuaActorList> {
-    let mut children = SongLuaActorList::new();
-    let expected = layers
-        .len()
-        .saturating_mul(1 + usize::from(glow[3] > f32::EPSILON));
-    if expected > 2 {
-        children.reserve(expected);
-    }
+) -> bool {
+    let mut emitted = false;
     let offset = [
         state.x * x_scale + effect_offset[0] * x_scale,
         state.y * y_scale + effect_offset[1] * y_scale,
@@ -9056,12 +9084,13 @@ fn song_lua_model_actor(
             z: song_lua_add_z(z, idx.min(i16::MAX as usize) as i16),
         };
         let glow_actor = song_lua_overlay_glow_actor(&actor, glow, state.text_glow_mode);
-        children.push(actor);
+        out.extend([actor]);
+        emitted = true;
         if let Some(glow_actor) = glow_actor {
-            children.push(glow_actor);
+            out.extend([glow_actor]);
         }
     }
-    (!children.is_empty()).then_some(children)
+    emitted
 }
 
 fn song_lua_model_layer_scroll(layer: &SongLuaOverlayModelLayer, total_elapsed: f32) -> [f32; 2] {
@@ -9077,7 +9106,9 @@ fn song_lua_model_layer_scroll(layer: &SongLuaOverlayModelLayer, total_elapsed: 
     [layer.uv_velocity[0] * clock, layer.uv_velocity[1] * clock]
 }
 
-fn song_lua_noteskin_actor(
+#[allow(clippy::too_many_arguments)]
+fn append_song_lua_noteskin_actors(
+    out: &mut impl Extend<Actor>,
     slots: &[SpriteSlot],
     state: SongLuaOverlayState,
     asset_manager: &AssetManager,
@@ -9093,14 +9124,8 @@ fn song_lua_noteskin_actor(
     blend: BlendMode,
     total_elapsed: f32,
     effect_beat: f32,
-) -> Option<SongLuaActorList> {
-    let mut children = SongLuaActorList::new();
-    let expected = slots
-        .len()
-        .saturating_mul(1 + usize::from(glow[3] > f32::EPSILON));
-    if expected > 2 {
-        children.reserve(expected);
-    }
+) -> bool {
+    let mut emitted = false;
     let center = [
         state.x * x_scale + effect_offset[0] * x_scale,
         state.y * y_scale + effect_offset[1] * y_scale,
@@ -9155,12 +9180,54 @@ fn song_lua_noteskin_actor(
             continue;
         };
         let glow_actor = song_lua_overlay_glow_actor(&actor, glow, state.text_glow_mode);
-        children.push(actor);
+        out.extend([actor]);
+        emitted = true;
         if let Some(glow_actor) = glow_actor {
-            children.push(glow_actor);
+            out.extend([glow_actor]);
         }
     }
-    (!children.is_empty()).then_some(children)
+    emitted
+}
+
+#[cfg(test)]
+#[allow(clippy::too_many_arguments)]
+fn song_lua_noteskin_actor(
+    slots: &[SpriteSlot],
+    state: SongLuaOverlayState,
+    asset_manager: &AssetManager,
+    z: i16,
+    x_scale: f32,
+    y_scale: f32,
+    actor_scale: [f32; 2],
+    effect_scale: [f32; 3],
+    effect_rot: [f32; 3],
+    effect_offset: [f32; 3],
+    tint: [f32; 4],
+    glow: [f32; 4],
+    blend: BlendMode,
+    total_elapsed: f32,
+    effect_beat: f32,
+) -> Option<SongLuaActorList> {
+    let mut out = SongLuaActorList::new();
+    append_song_lua_noteskin_actors(
+        &mut out,
+        slots,
+        state,
+        asset_manager,
+        z,
+        x_scale,
+        y_scale,
+        actor_scale,
+        effect_scale,
+        effect_rot,
+        effect_offset,
+        tint,
+        glow,
+        blend,
+        total_elapsed,
+        effect_beat,
+    )
+    .then_some(out)
 }
 
 fn song_lua_noteskin_slot_uv(
@@ -10385,6 +10452,86 @@ impl SongLuaProjectedMeshBenchmark {
 
 #[cfg(feature = "bench-support")]
 #[doc(hidden)]
+pub struct SongLuaMultiActorEmitBenchmark {
+    out: Vec<Actor>,
+    actor_count: usize,
+}
+
+#[cfg(feature = "bench-support")]
+impl SongLuaMultiActorEmitBenchmark {
+    pub fn new(actor_count: usize) -> Self {
+        Self {
+            out: Vec::with_capacity(actor_count),
+            actor_count,
+        }
+    }
+
+    pub fn legacy_frame(&self) -> u64 {
+        let mut out = SongLuaActorList::new();
+        if self.actor_count > 2 {
+            out.reserve(self.actor_count);
+        }
+        for _ in 0..self.actor_count {
+            out.push(Actor::CameraPop);
+        }
+        out.len() as u64
+    }
+
+    pub fn direct_frame(&mut self) -> u64 {
+        self.out.clear();
+        for _ in 0..self.actor_count {
+            self.out.push(Actor::CameraPop);
+        }
+        self.out.len() as u64
+    }
+
+    pub fn storage_bytes(&self) -> usize {
+        self.out
+            .capacity()
+            .saturating_mul(std::mem::size_of::<Actor>())
+    }
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub struct SongLuaUppercaseTextBenchmark {
+    source: Arc<str>,
+    uppercase: Arc<str>,
+}
+
+#[cfg(feature = "bench-support")]
+impl SongLuaUppercaseTextBenchmark {
+    pub fn new(source: &str) -> Self {
+        Self {
+            source: Arc::from(source),
+            uppercase: Arc::from(source.to_uppercase()),
+        }
+    }
+
+    pub fn legacy_frame(&self) -> u64 {
+        song_lua_text_checksum(TextContent::from(self.source.to_uppercase()).as_str())
+    }
+
+    pub fn cached_frame(&self) -> u64 {
+        song_lua_text_checksum(TextContent::from(Arc::clone(&self.uppercase)).as_str())
+    }
+
+    pub fn storage_bytes(&self) -> usize {
+        self.uppercase.len()
+    }
+}
+
+#[cfg(feature = "bench-support")]
+fn song_lua_text_checksum(text: &str) -> u64 {
+    text.as_bytes().iter().fold(0u64, |checksum, byte| {
+        checksum
+            .wrapping_mul(16777619)
+            .wrapping_add(u64::from(*byte))
+    })
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
 pub struct SongLuaActorBuildBenchmark {
     proxy_source: [Arc<[Actor]>; 1],
     mesh_source: Arc<[SongLuaOverlayMeshVertex]>,
@@ -11077,11 +11224,93 @@ fn song_lua_projected_overlay_actor(
 
 type SongLuaActorList = SmallVec<[Actor; 2]>;
 
-#[inline(always)]
-fn one_song_lua_actor(actor: Actor) -> SongLuaActorList {
-    let mut out = SmallVec::new();
-    out.push(actor);
-    out
+/// Emits compiled multi-output overlays directly into the caller's reused
+/// frame buffer. Returning `None` means the overlay is a single-output kind and
+/// should continue through the compact inline builder.
+#[allow(clippy::too_many_arguments)]
+fn append_song_lua_multi_actor_overlay(
+    out: &mut Vec<Actor>,
+    overlay: &SongLuaOverlayActor,
+    state: SongLuaOverlayState,
+    asset_manager: &AssetManager,
+    z: i16,
+    overlay_space_width: f32,
+    overlay_space_height: f32,
+    effect_time: f32,
+    effect_beat: f32,
+    total_elapsed: f32,
+) -> Option<bool> {
+    if !matches!(
+        overlay.kind,
+        SongLuaOverlayKind::Model { .. } | SongLuaOverlayKind::NoteskinActor { .. }
+    ) {
+        return None;
+    }
+    if !state.visible || !song_lua_overlay_has_visible_output(state) {
+        return Some(false);
+    }
+
+    let x_scale = screen_width() / overlay_space_width.max(1.0);
+    let y_scale = screen_height() / overlay_space_height.max(1.0);
+    let overlay_scale = song_lua_overlay_axis_scale(state);
+    let actor_scale = [overlay_scale[0].abs(), overlay_scale[1].abs()];
+    let effect = song_lua_overlay_effect_state(state);
+    let mut tint = state.diffuse;
+    let mut glow = state.glow;
+    let mut effect_offset = [0.0, 0.0, 0.0];
+    let mut effect_scale = [1.0, 1.0, 1.0];
+    let mut effect_rot = [state.rot_x_deg, state.rot_y_deg, state.rot_z_deg];
+    song_lua_apply_overlay_effect(
+        effect,
+        state.rainbow,
+        effect_time,
+        effect_beat,
+        &mut tint,
+        &mut glow,
+        &mut effect_offset,
+        &mut effect_scale,
+        &mut effect_rot,
+    );
+    let blend = song_lua_overlay_blend(state.blend);
+
+    Some(match &overlay.kind {
+        SongLuaOverlayKind::Model { layers } => append_song_lua_model_actors(
+            out,
+            layers,
+            state,
+            asset_manager,
+            z,
+            x_scale,
+            y_scale,
+            actor_scale,
+            effect_scale,
+            effect_rot,
+            effect_offset,
+            tint,
+            glow,
+            blend,
+            total_elapsed,
+        ),
+        SongLuaOverlayKind::NoteskinActor { slots } => append_song_lua_noteskin_actors(
+            out,
+            slots,
+            state,
+            asset_manager,
+            z,
+            x_scale,
+            y_scale,
+            actor_scale,
+            effect_scale,
+            effect_rot,
+            effect_offset,
+            tint,
+            glow,
+            blend,
+            total_elapsed,
+            effect_beat,
+        ),
+        _ => false,
+    })
 }
 
 fn build_song_lua_overlay_actor_with_scratch(
@@ -11340,7 +11569,13 @@ fn build_song_lua_overlay_actor_with_scratch(
             ..
         } => {
             let content = if state.uppercase {
-                TextContent::from(text.to_uppercase())
+                projected_mesh_scratch
+                    .as_deref()
+                    .and_then(|scratch| scratch.uppercase_text.as_ref())
+                    .map_or_else(
+                        || TextContent::from(text.to_uppercase()),
+                        |uppercase| TextContent::from(Arc::clone(uppercase)),
+                    )
             } else {
                 TextContent::from(text)
             };
@@ -11594,7 +11829,9 @@ fn build_song_lua_overlay_actor_with_scratch(
                 &mut effect_scale,
                 &mut effect_rot,
             );
-            song_lua_model_actor(
+            let mut out = SongLuaActorList::new();
+            append_song_lua_model_actors(
+                &mut out,
                 layers,
                 state,
                 asset_manager,
@@ -11610,6 +11847,7 @@ fn build_song_lua_overlay_actor_with_scratch(
                 overlay_blend,
                 total_elapsed,
             )
+            .then_some(out)
         }
         SongLuaOverlayKind::NoteskinActor { slots } => {
             let mut tint = state.diffuse;
@@ -11628,7 +11866,9 @@ fn build_song_lua_overlay_actor_with_scratch(
                 &mut effect_scale,
                 &mut effect_rot,
             );
-            song_lua_noteskin_actor(
+            let mut out = SongLuaActorList::new();
+            append_song_lua_noteskin_actors(
+                &mut out,
                 slots,
                 state,
                 asset_manager,
@@ -11645,6 +11885,7 @@ fn build_song_lua_overlay_actor_with_scratch(
                 total_elapsed,
                 effect_beat,
             )
+            .then_some(out)
         }
         SongLuaOverlayKind::SongMeterDisplay {
             stream_width,
@@ -12794,22 +13035,25 @@ fn push_song_lua_layer_actors(
             .get(idx)
             .copied()
             .unwrap_or_else(SongLuaOverlayState::default);
-        let actor = match &overlay.kind {
+        let z = song_lua_add_z(
+            song_lua_overlay_base_z,
+            draw_idx.min(i16::MAX as usize) as i16,
+        );
+        match &overlay.kind {
             SongLuaOverlayKind::ActorProxy { target } => {
-                song_lua_proxy_source(target, proxy_sources)
-                    .and_then(|source| {
+                if let Some(actor) =
+                    song_lua_proxy_source(target, proxy_sources).and_then(|source| {
                         song_lua_build_proxy_actor(
                             overlay_state,
-                            song_lua_add_z(
-                                song_lua_overlay_base_z,
-                                draw_idx.min(i16::MAX as usize) as i16,
-                            ),
+                            z,
                             source,
                             space_width,
                             space_height,
                         )
                     })
-                    .map(one_song_lua_actor)
+                {
+                    out.push(actor);
+                }
             }
             SongLuaOverlayKind::AftSprite { .. } => {
                 let overlay_state = if let Some((leader, _)) =
@@ -12830,13 +13074,10 @@ fn push_song_lua_layer_actors(
                 if let (Some(capture_index), Some(capture_scratch)) =
                     (capture_index, aft_capture_scratch.overlay(idx))
                 {
-                    song_lua_build_shared_capture(
+                    if let Some(actor) = song_lua_build_shared_capture(
                         overlay,
                         overlay_state,
-                        song_lua_add_z(
-                            song_lua_overlay_base_z,
-                            draw_idx.min(i16::MAX as usize) as i16,
-                        ),
+                        z,
                         space_width,
                         space_height,
                         capture_scratch,
@@ -12858,31 +13099,42 @@ fn push_song_lua_layer_actors(
                                 projected_mesh_scratch,
                             );
                         },
-                    )
-                    .map(one_song_lua_actor)
-                } else {
-                    None
+                    ) {
+                        out.push(actor);
+                    }
                 }
             }
-            _ => build_song_lua_overlay_actor_with_scratch(
-                overlay,
-                overlay_state,
-                song_lua_overlay_camera_state_indexed(overlay_states, topology_index, idx),
-                asset_manager,
-                song_lua_add_z(
-                    song_lua_overlay_base_z,
-                    draw_idx.min(i16::MAX as usize) as i16,
-                ),
-                space_width,
-                space_height,
-                effect_time,
-                effect_beat,
-                total_elapsed,
-                projected_mesh_scratch.get_mut(idx),
-            ),
-        };
-        if let Some(actors) = actor {
-            out.extend(actors);
+            _ => {
+                if append_song_lua_multi_actor_overlay(
+                    out,
+                    overlay,
+                    overlay_state,
+                    asset_manager,
+                    z,
+                    space_width,
+                    space_height,
+                    effect_time,
+                    effect_beat,
+                    total_elapsed,
+                )
+                .is_none()
+                    && let Some(actors) = build_song_lua_overlay_actor_with_scratch(
+                        overlay,
+                        overlay_state,
+                        song_lua_overlay_camera_state_indexed(overlay_states, topology_index, idx),
+                        asset_manager,
+                        z,
+                        space_width,
+                        space_height,
+                        effect_time,
+                        effect_beat,
+                        total_elapsed,
+                        projected_mesh_scratch.get_mut(idx),
+                    )
+                {
+                    out.extend(actors);
+                }
+            }
         }
     }
 }
@@ -18203,6 +18455,60 @@ mod tests {
         assert_eq!(*uv_offset, [0.375, -0.375]);
         assert_eq!(*uv_tex_shift, [0.25, -0.625]);
         assert_eq!(vertices.len(), 3);
+
+        let SongLuaOverlayKind::Model { layers } = &overlay.kind else {
+            unreachable!("test overlay is a model");
+        };
+        let multi_layer = SongLuaOverlayActor {
+            kind: SongLuaOverlayKind::Model {
+                layers: Arc::from(vec![
+                    layers[0].clone(),
+                    layers[0].clone(),
+                    layers[0].clone(),
+                ]),
+            },
+            name: None,
+            parent_index: None,
+            initial_state: SongLuaOverlayState::default(),
+            message_commands: Vec::new(),
+        };
+        let multi_state = SongLuaOverlayState {
+            x: 12.0,
+            y: 24.0,
+            glow: [0.25, 0.5, 0.75, 0.5],
+            ..SongLuaOverlayState::default()
+        };
+        let legacy = build_song_lua_overlay_actor(
+            &multi_layer,
+            multi_state,
+            None,
+            &asset_manager,
+            323,
+            screen_width(),
+            screen_height(),
+            0.0,
+            0.0,
+            1.0,
+        )
+        .expect_actors("multi-layer model should render");
+        let mut direct = Vec::with_capacity(legacy.len());
+        assert_eq!(
+            append_song_lua_multi_actor_overlay(
+                &mut direct,
+                &multi_layer,
+                multi_state,
+                &asset_manager,
+                323,
+                screen_width(),
+                screen_height(),
+                0.0,
+                0.0,
+                1.0,
+            ),
+            Some(true)
+        );
+        assert_eq!(legacy.len(), 6);
+        assert_eq!(format!("{legacy:?}"), format!("{direct:?}"));
     }
 
     #[test]
@@ -18243,6 +18549,32 @@ mod tests {
             0.0,
         )
         .expect("noteskin actor with song-lua rotation should render");
+        let mut direct_rotation = Vec::with_capacity(actor_rotation.len());
+        assert!(append_song_lua_noteskin_actors(
+            &mut direct_rotation,
+            &slots,
+            SongLuaOverlayState {
+                rot_z_deg: 90.0,
+                ..SongLuaOverlayState::default()
+            },
+            &asset_manager,
+            323,
+            1.0,
+            1.0,
+            [1.0, 1.0],
+            [1.0, 1.0, 1.0],
+            [0.0, 0.0, 90.0],
+            [0.0, 0.0, 0.0],
+            [1.0, 1.0, 1.0, 1.0],
+            [0.0, 0.0, 0.0, 0.0],
+            BlendMode::Alpha,
+            0.0,
+            0.0,
+        ));
+        assert_eq!(
+            format!("{actor_rotation:?}"),
+            format!("{direct_rotation:?}")
+        );
         let base_rotation = song_lua_noteskin_actor(
             &rotated_slots,
             SongLuaOverlayState::default(),
@@ -19853,7 +20185,7 @@ mod tests {
             kind: SongLuaOverlayKind::BitmapText {
                 font_name: "miso",
                 font_path: std::path::PathBuf::from("Fonts/Common Normal.ini"),
-                text: Arc::<str>::from("Mixed Case"),
+                text: Arc::<str>::from("Mixed Straße"),
                 stroke_color: None,
                 attributes: empty_text_attributes(),
             },
@@ -19862,25 +20194,38 @@ mod tests {
             initial_state: SongLuaOverlayState::default(),
             message_commands: Vec::new(),
         };
-        let text_actor = build_song_lua_overlay_actor(
-            &text,
-            SongLuaOverlayState {
-                x: 320.0,
-                y: 240.0,
-                uppercase: true,
-                vert_spacing: Some(18),
-                ..SongLuaOverlayState::default()
-            },
-            None,
-            &AssetManager::new(),
-            788,
-            screen_width(),
-            screen_height(),
-            0.0,
-            0.0,
-            0.0,
-        )
-        .expect_actor("bitmap text uppercase and vertspacing should render");
+        let mut scratch = song_lua_projected_mesh_scratch_for(std::slice::from_ref(&text))
+            .pop()
+            .expect("bitmap text should have overlay scratch");
+        let cached = Arc::clone(
+            scratch
+                .uppercase_text
+                .as_ref()
+                .expect("uppercase text should be prewarmed"),
+        );
+        let build = |scratch: &mut SongLuaProjectedMeshScratch| {
+            build_song_lua_overlay_actor_with_scratch(
+                &text,
+                SongLuaOverlayState {
+                    x: 320.0,
+                    y: 240.0,
+                    uppercase: true,
+                    vert_spacing: Some(18),
+                    ..SongLuaOverlayState::default()
+                },
+                None,
+                &AssetManager::new(),
+                788,
+                screen_width(),
+                screen_height(),
+                0.0,
+                0.0,
+                0.0,
+                Some(scratch),
+            )
+            .expect_actor("bitmap text uppercase and vertspacing should render")
+        };
+        let text_actor = build(&mut scratch);
 
         match text_actor {
             Actor::Text {
@@ -19890,13 +20235,24 @@ mod tests {
                 ..
             } => {
                 assert_eq!(z, 788);
-                assert_eq!(content.as_str(), "MIXED CASE");
+                assert_eq!(content.as_str(), "MIXED STRASSE");
+                let TextContent::Shared(shared) = content else {
+                    panic!("prewarmed uppercase text should stay shared");
+                };
+                assert!(Arc::ptr_eq(&shared, &cached));
                 assert_eq!(line_spacing, Some(18));
             }
             other => {
                 panic!("expected bitmap text actor with uppercase and vertspacing, got {other:?}")
             }
         }
+        let Actor::Text { content, .. } = build(&mut scratch) else {
+            panic!("second uppercase frame should remain text");
+        };
+        let TextContent::Shared(shared) = content else {
+            panic!("second uppercase frame should stay shared");
+        };
+        assert!(Arc::ptr_eq(&shared, &cached));
     }
 
     #[test]

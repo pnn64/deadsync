@@ -1190,6 +1190,19 @@ mod tests {
     }
 
     #[test]
+    fn density_life_capacity_covers_song_sampling_schedule() {
+        assert_eq!(density_graph_life_capacity(240.0, 0.25), 962);
+        assert_eq!(density_graph_life_capacity(3_600.0, 0.125), 28_802);
+        assert_eq!(density_graph_life_capacity(0.0, 0.25), 0);
+        assert_eq!(density_graph_life_capacity(f32::NAN, 0.25), 0);
+        assert_eq!(density_graph_life_capacity(240.0, 0.0), 0);
+        assert_eq!(
+            density_graph_life_capacity(f32::MAX, f32::MIN_POSITIVE),
+            usize::MAX
+        );
+    }
+
+    #[test]
     fn density_graph_u0_tracks_visible_window() {
         let window = DensityGraphWindow {
             first_second: 0.0,

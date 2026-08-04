@@ -879,9 +879,11 @@ where
         density_graph_life_update_rate = 0.25_f32;
     }
     let density_graph_life_next_update_elapsed = 0.0_f32;
+    let density_graph_life_capacity =
+        density_graph_life_capacity(density_graph_duration, density_graph_life_update_rate);
     let density_graph_life_points: [Vec<[f32; 2]>; MAX_PLAYERS] = std::array::from_fn(|p| {
         if density_graph_enabled && p < num_players {
-            Vec::with_capacity(1024)
+            Vec::with_capacity(density_graph_life_capacity)
         } else {
             Vec::new()
         }

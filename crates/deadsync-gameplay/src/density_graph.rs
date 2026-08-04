@@ -194,6 +194,24 @@ pub fn density_graph_life_catch_up_steps(
         .min(64)
 }
 
+/// Maximum number of life samples the gameplay density graph can retain for a song.
+///
+/// The buffer is owned by the gameplay thread for the song lifetime and is
+/// populated at `life_update_rate`. Two spare entries cover the inclusive first
+/// sample and floating-point boundary rounding, so a live song never has to grow
+/// this buffer. The simplifier may retain fewer points, but never more than the
+/// number of scheduled samples.
+pub fn density_graph_life_capacity(duration: f32, life_update_rate: f32) -> usize {
+    if !duration.is_finite()
+        || duration <= 0.0
+        || !life_update_rate.is_finite()
+        || life_update_rate <= 0.0
+    {
+        return 0;
+    }
+    ((duration / life_update_rate).ceil() as usize).saturating_add(2)
+}
+
 pub fn density_graph_life_sample_x(
     current_music_time: f32,
     first_second: f32,

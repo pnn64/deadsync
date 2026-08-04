@@ -1,7 +1,7 @@
 use deadsync_theme_simply_love::screens::gameplay::{
     SongLuaActorBuildBenchmark, SongLuaEaseBenchmark, SongLuaMessageStateBenchmark,
-    SongLuaOrderBenchmark, SongLuaProjectedMeshBenchmark, SongLuaProxyRequestBenchmark,
-    SongLuaTopologyBenchmark,
+    SongLuaMultiActorEmitBenchmark, SongLuaOrderBenchmark, SongLuaProjectedMeshBenchmark,
+    SongLuaProxyRequestBenchmark, SongLuaTopologyBenchmark, SongLuaUppercaseTextBenchmark,
 };
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::hint::black_box;
@@ -190,6 +190,8 @@ fn main() {
     const ORDER_FRAMES: usize = 100_000;
     const MESH_FRAMES: usize = 50_000;
     const ACTOR_BUILD_FRAMES: usize = 100_000;
+    const MULTI_ACTOR_FRAMES: usize = 100_000;
+    const UPPERCASE_FRAMES: usize = 100_000;
 
     let now = MESSAGE_EVENTS as f32 * 0.125 + 1.0;
     let mut cached_messages = SongLuaMessageStateBenchmark::new(MESSAGE_EVENTS);
@@ -343,6 +345,16 @@ fn main() {
     let legacy_actor_mesh_result = measure(ACTOR_BUILD_FRAMES, || actor_build.legacy_mesh_frame());
     let reused_actor_mesh_result = measure(ACTOR_BUILD_FRAMES, || actor_build.reused_mesh_frame());
 
+    let mut multi_actor = SongLuaMultiActorEmitBenchmark::new(8);
+    assert_eq!(multi_actor.legacy_frame(), multi_actor.direct_frame());
+    let legacy_multi_actor_result = measure(MULTI_ACTOR_FRAMES, || multi_actor.legacy_frame());
+    let direct_multi_actor_result = measure(MULTI_ACTOR_FRAMES, || multi_actor.direct_frame());
+
+    let uppercase = SongLuaUppercaseTextBenchmark::new("Mixed Straße à la carte gameplay");
+    assert_eq!(uppercase.legacy_frame(), uppercase.cached_frame());
+    let legacy_uppercase_result = measure(UPPERCASE_FRAMES, || uppercase.legacy_frame());
+    let cached_uppercase_result = measure(UPPERCASE_FRAMES, || uppercase.cached_frame());
+
     assert_eq!(
         legacy_message_result.checksum,
         cached_message_result.checksum
@@ -380,6 +392,14 @@ fn main() {
     assert_eq!(
         legacy_actor_mesh_result.checksum,
         reused_actor_mesh_result.checksum
+    );
+    assert_eq!(
+        legacy_multi_actor_result.checksum,
+        direct_multi_actor_result.checksum
+    );
+    assert_eq!(
+        legacy_uppercase_result.checksum,
+        cached_uppercase_result.checksum
     );
 
     println!("Song Lua gameplay frame hot paths");
@@ -485,5 +505,35 @@ fn main() {
     println!(
         "ActorMultiVertex storage: {} bytes",
         actor_build.mesh_storage_bytes(),
+    );
+    println!("multi-layer Model/Noteskin output (8 actors)");
+    print_result(
+        "temporary SmallVec",
+        MULTI_ACTOR_FRAMES,
+        &legacy_multi_actor_result,
+    );
+    print_result(
+        "direct frame Vec",
+        MULTI_ACTOR_FRAMES,
+        &direct_multi_actor_result,
+    );
+    println!(
+        "multi-actor song storage: {} bytes",
+        multi_actor.storage_bytes(),
+    );
+    println!("uppercase BitmapText (Unicode, 32 bytes)");
+    print_result(
+        "per-frame uppercase",
+        UPPERCASE_FRAMES,
+        &legacy_uppercase_result,
+    );
+    print_result(
+        "compiled Arc<str>",
+        UPPERCASE_FRAMES,
+        &cached_uppercase_result,
+    );
+    println!(
+        "uppercase song storage: {} bytes",
+        uppercase.storage_bytes()
     );
 }

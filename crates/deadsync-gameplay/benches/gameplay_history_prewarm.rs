@@ -1,4 +1,6 @@
-use deadsync_gameplay::{error_avg_capacity, life_history_capacity};
+use deadsync_gameplay::{
+    density_graph_life_capacity, error_avg_capacity, life_history_capacity, push_density_life_point,
+};
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::collections::VecDeque;
 use std::hint::black_box;
@@ -14,6 +16,8 @@ const ROW_COUNT: usize = 4_000;
 const HOLD_ROLL_COUNT: usize = 1_000;
 const LIFE_POINTS: usize = life_history_capacity(NOTE_COUNT, ROW_COUNT, HOLD_ROLL_COUNT);
 const ERROR_SAMPLES: usize = error_avg_capacity(NOTE_COUNT, ROW_COUNT);
+const DENSITY_DURATION: f32 = 3_600.0;
+const DENSITY_RATE: f32 = 0.125;
 
 struct CountingAlloc {
     enabled: AtomicBool,
@@ -198,6 +202,25 @@ fn measure_error(prewarmed: bool) -> BenchResult {
     )
 }
 
+fn measure_density(prewarmed: bool) -> BenchResult {
+    let samples = density_graph_life_capacity(DENSITY_DURATION, DENSITY_RATE);
+    measure(
+        || {
+            (0..CASES)
+                .map(|_| Vec::<[f32; 2]>::with_capacity(if prewarmed { samples } else { 1_024 }))
+                .collect()
+        },
+        |points| {
+            for index in 0..samples {
+                let x = index as f32 * DENSITY_RATE;
+                let y = if index % 2 == 0 { 0.0 } else { 105.0 };
+                black_box(push_density_life_point(points, x, y));
+            }
+            points.len()
+        },
+    )
+}
+
 fn print_result(label: &str, result: &BenchResult, samples: usize) {
     let cases = CASES as f64;
     println!(
@@ -217,8 +240,11 @@ fn main() {
     let chart_life = measure_life(true);
     let old_error = measure_error(false);
     let chart_error = measure_error(true);
+    let old_density = measure_density(false);
+    let song_density = measure_density(true);
     assert_eq!(old_life.checksum, chart_life.checksum);
     assert_eq!(old_error.checksum, chart_error.checksum);
+    assert_eq!(old_density.checksum, song_density.checksum);
 
     println!(
         "Gameplay chart buffer prewarm ({NOTE_COUNT} notes, {ROW_COUNT} rows, \
@@ -230,4 +256,8 @@ fn main() {
     println!("error average ({ERROR_SAMPLES} worst-case samples)");
     print_result("fixed cap 64", &old_error, ERROR_SAMPLES);
     print_result("chart-prewarmed", &chart_error, ERROR_SAMPLES);
+    let density_samples = density_graph_life_capacity(DENSITY_DURATION, DENSITY_RATE);
+    println!("density life ({DENSITY_DURATION:.0}s song, {density_samples} worst-case points)");
+    print_result("fixed cap 1024", &old_density, density_samples);
+    print_result("song-prewarmed", &song_density, density_samples);
 }
