@@ -10,7 +10,9 @@ use std::time::{Duration, Instant};
 #[global_allocator]
 static ALLOC: CountingAlloc = CountingAlloc::new();
 
-const HOLDS: usize = 4;
+const HOLDS: usize = 12;
+const OLD_HOLD_PAIRS: usize = 8;
+const NEW_HOLD_PAIRS: usize = 16;
 const BODY_VERTICES: usize = 1920;
 const WARMUP_FRAMES: usize = 32;
 const MEASURE_FRAMES: usize = 2000;
@@ -93,6 +95,7 @@ impl AllocSnapshot {
 
 struct BenchResult {
     elapsed: Duration,
+    cycles: u64,
     alloc: AllocSnapshot,
     checksum: usize,
 }
@@ -100,17 +103,21 @@ struct BenchResult {
 fn main() {
     let texture: Arc<str> = Arc::from("hold-bench");
     let fresh = run_fresh(&texture);
-    let reused = run_reused(&texture);
+    let bounded = run_reused(&texture, OLD_HOLD_PAIRS);
+    let reused = run_reused(&texture, NEW_HOLD_PAIRS);
+    assert_eq!(fresh.checksum, bounded.checksum);
     assert_eq!(fresh.checksum, reused.checksum);
 
     println!("hold mesh ownership microbenchmark");
     println!("{HOLDS} visible holds, {BODY_VERTICES} vertices per body pass");
     print_result("fresh Vec -> Arc<[T]>", &fresh);
-    print_result("reused Arc<Vec<T>>", &reused);
+    print_result("old 8-pair pool", &bounded);
+    print_result("new 16-pair pool", &reused);
     println!(
-        "speedup: {:.2}x, allocation reduction: {:.2}%",
-        fresh.elapsed.as_secs_f64() / reused.elapsed.as_secs_f64(),
-        100.0 * (1.0 - reused.alloc.allocs as f64 / fresh.alloc.allocs as f64),
+        "expanded-pool speedup: {:.2}x, cycles reduction: {:.2}%, allocation reduction: {:.2}%",
+        bounded.elapsed.as_secs_f64() / reused.elapsed.as_secs_f64(),
+        100.0 * (1.0 - reused.cycles as f64 / bounded.cycles as f64),
+        100.0 * (1.0 - reused.alloc.allocs as f64 / bounded.alloc.allocs as f64),
     );
 }
 
@@ -125,6 +132,7 @@ fn run_fresh(texture: &Arc<str>) -> BenchResult {
         ));
     }
     let before = ALLOC.snapshot();
+    let before_cycles = read_cycles();
     let started = Instant::now();
     let mut checksum = 0usize;
     for _ in 0..MEASURE_FRAMES {
@@ -137,14 +145,15 @@ fn run_fresh(texture: &Arc<str>) -> BenchResult {
     }
     BenchResult {
         elapsed: started.elapsed(),
+        cycles: read_cycles().saturating_sub(before_cycles),
         alloc: ALLOC.snapshot().delta(before),
         checksum,
     }
 }
 
-fn run_reused(texture: &Arc<str>) -> BenchResult {
+fn run_reused(texture: &Arc<str>, pair_limit: usize) -> BenchResult {
     let mut actors = Vec::with_capacity(HOLDS * 6);
-    let mut scratch = HoldMeshScratch::with_columns(HOLDS);
+    let mut scratch = HoldMeshScratch::bench_with_pair_limit(HOLDS, pair_limit);
     for _ in 0..WARMUP_FRAMES {
         black_box(bench_reused_hold_mesh_frame(
             &mut actors,
@@ -155,6 +164,7 @@ fn run_reused(texture: &Arc<str>) -> BenchResult {
         ));
     }
     let before = ALLOC.snapshot();
+    let before_cycles = read_cycles();
     let started = Instant::now();
     let mut checksum = 0usize;
     for _ in 0..MEASURE_FRAMES {
@@ -168,6 +178,7 @@ fn run_reused(texture: &Arc<str>) -> BenchResult {
     }
     BenchResult {
         elapsed: started.elapsed(),
+        cycles: read_cycles().saturating_sub(before_cycles),
         alloc: ALLOC.snapshot().delta(before),
         checksum,
     }
@@ -176,11 +187,30 @@ fn run_reused(texture: &Arc<str>) -> BenchResult {
 fn print_result(name: &str, result: &BenchResult) {
     let frames = MEASURE_FRAMES as f64;
     println!(
-        "{name:<22} {:>9.1} us/frame  {:>8.1} allocs/frame  {:>9.1} KiB/frame  \
-         {:>5.1} reallocs/frame",
+        "{name:<22} {:>8.1} us/frame {:>9.0} cycles/frame {:>9.0} frames/s  \
+         {:>7.1} allocs/frame {:>9.1} KiB/frame {:>5.1} reallocs/frame",
         result.elapsed.as_secs_f64() * 1_000_000.0 / frames,
+        result.cycles as f64 / frames,
+        frames / result.elapsed.as_secs_f64(),
         result.alloc.allocs as f64 / frames,
         result.alloc.bytes as f64 / frames / 1024.0,
         result.alloc.reallocs as f64 / frames,
     );
+}
+
+#[cfg(target_arch = "x86_64")]
+fn read_cycles() -> u64 {
+    // SAFETY: LFENCE/RDTSC only serialize and read this thread's timestamp
+    // counter; they do not dereference memory.
+    unsafe {
+        core::arch::x86_64::_mm_lfence();
+        let cycles = core::arch::x86_64::_rdtsc();
+        core::arch::x86_64::_mm_lfence();
+        cycles
+    }
+}
+
+#[cfg(not(target_arch = "x86_64"))]
+fn read_cycles() -> u64 {
+    0
 }

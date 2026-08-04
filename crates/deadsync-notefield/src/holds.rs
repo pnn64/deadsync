@@ -142,6 +142,7 @@ struct RenderedHoldBody {
 
 const HOLD_BODY_BUFFER_VERTICES: usize = 2048;
 const HOLD_CAP_BUFFER_VERTICES: usize = 6;
+const HOLD_MESH_PAIRS_PER_FRAME: usize = MAX_COLS * 2;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct HoldMeshScratchStats {
@@ -154,56 +155,52 @@ pub struct HoldMeshScratchStats {
 
 struct HoldMeshBufferPool {
     buffers: Vec<Arc<Vec<TexturedMeshVertex>>>,
-    cursor: usize,
-    max_buffers: usize,
-    initial_capacity: usize,
+    used_pairs: u64,
+    current_pairs: usize,
+    max_pairs: usize,
     stats: HoldMeshScratchStats,
 }
 
 impl HoldMeshBufferPool {
-    fn new(initial_buffers: usize, max_buffers: usize, initial_capacity: usize) -> Self {
-        let initial_buffers = initial_buffers.min(max_buffers);
+    fn new(enabled: bool, max_pairs: usize, initial_capacity: usize) -> Self {
+        let max_pairs = usize::from(enabled) * max_pairs.min(u64::BITS as usize);
         Self {
-            buffers: (0..initial_buffers)
+            buffers: (0..max_pairs.saturating_mul(2))
                 .map(|_| Arc::new(Vec::with_capacity(initial_capacity)))
                 .collect(),
-            cursor: 0,
-            max_buffers,
-            initial_capacity,
+            used_pairs: 0,
+            current_pairs: 0,
+            max_pairs,
             stats: HoldMeshScratchStats::default(),
         }
     }
 
     #[inline(always)]
     fn begin_frame(&mut self) {
-        self.cursor = 0;
+        self.used_pairs = 0;
+        self.current_pairs = 0;
     }
 
     fn acquire_pair(&mut self) -> Option<usize> {
-        let end = self.cursor.saturating_add(2);
-        if end > self.max_buffers {
+        let pair = (0..self.max_pairs).find(|&pair| {
+            let bit = 1_u64 << pair;
+            let start = pair * 2;
+            self.used_pairs & bit == 0
+                && Arc::strong_count(&self.buffers[start]) == 1
+                && Arc::strong_count(&self.buffers[start + 1]) == 1
+        });
+        let Some(pair) = pair else {
             self.stats.saturated_pairs = self.stats.saturated_pairs.saturating_add(1);
             return None;
-        }
-        while self.buffers.len() < end {
-            self.buffers
-                .push(Arc::new(Vec::with_capacity(self.initial_capacity)));
-            self.stats.buffer_grows = self.stats.buffer_grows.saturating_add(1);
-        }
-        let start = self.cursor;
-        self.cursor = end;
-        self.stats.high_water_pairs = self.stats.high_water_pairs.max(end / 2);
-        for buffer in &mut self.buffers[start..end] {
-            if Arc::get_mut(buffer).is_none() {
-                *buffer = Arc::new(Vec::with_capacity(self.initial_capacity));
-                self.stats.busy_replacements = self.stats.busy_replacements.saturating_add(1);
-            }
-            let vertices = Arc::get_mut(buffer).expect("replacement buffer must be unique");
-            vertices.clear();
-            if vertices.capacity() < self.initial_capacity {
-                vertices.reserve_exact(self.initial_capacity - vertices.capacity());
-                self.stats.capacity_grows = self.stats.capacity_grows.saturating_add(1);
-            }
+        };
+        let start = pair * 2;
+        self.used_pairs |= 1_u64 << pair;
+        self.current_pairs += 1;
+        self.stats.high_water_pairs = self.stats.high_water_pairs.max(self.current_pairs);
+        for buffer in &mut self.buffers[start..start + 2] {
+            Arc::get_mut(buffer)
+                .expect("selected hold buffer must be uniquely owned")
+                .clear();
         }
         Some(start)
     }
@@ -233,14 +230,17 @@ impl HoldMeshBufferPool {
 /// Per-player reusable storage for transformed hold bodies and caps.
 ///
 /// Owner: the game-thread notefield state for one player. Thread safety: none;
-/// callers hold `&mut self`. Lifetime: one song. Capacity: one body and two cap
-/// pairs per lane are populated at song construction, bounded at the engine's
-/// maximum column count. Warmup: gameplay state construction. A malformed chart
-/// with overlapping holds saturates to the allocation-backed compatibility path;
-/// there is no scan, eviction, or destruction on a frame. Buffers are freed with
-/// gameplay state. Counters expose growth, saturation, and unexpected outstanding
-/// actor references. Normal-frame work is bounded to clearing six vectors per
-/// visible hold; retained capacity is not initialized or scanned.
+/// callers hold `&mut self`. Lifetime: one song. Capacity: twice the engine lane
+/// bound in body pairs and twice that many cap pairs are populated at song
+/// construction. Warmup: gameplay state construction. Each frame selects only
+/// uniquely owned pairs, letting composition avoid storage still held by the
+/// renderer. Up to twice the engine lane bound of simultaneous visible holds
+/// covers dense and malformed overlap without live allocation; larger combined
+/// composition/render ownership saturates to the allocation-backed compatibility path.
+/// There is no scan, eviction, or destruction on a frame. Buffers are freed with
+/// gameplay state. Counters expose saturation and unexpected references. Normal
+/// frame work is bounded to clearing six vectors per visible hold; retained
+/// capacity is not initialized or scanned.
 pub struct HoldMeshScratch {
     bodies: HoldMeshBufferPool,
     caps: HoldMeshBufferPool,
@@ -254,11 +254,22 @@ impl Default for HoldMeshScratch {
 
 impl HoldMeshScratch {
     pub fn with_columns(columns: usize) -> Self {
+        Self::with_pair_limit(columns, HOLD_MESH_PAIRS_PER_FRAME)
+    }
+
+    fn with_pair_limit(columns: usize, body_pairs: usize) -> Self {
         let columns = columns.min(MAX_COLS);
+        let enabled = columns > 0;
         Self {
-            bodies: HoldMeshBufferPool::new(columns * 2, MAX_COLS * 2, HOLD_BODY_BUFFER_VERTICES),
-            caps: HoldMeshBufferPool::new(columns * 4, MAX_COLS * 4, HOLD_CAP_BUFFER_VERTICES),
+            bodies: HoldMeshBufferPool::new(enabled, body_pairs, HOLD_BODY_BUFFER_VERTICES),
+            caps: HoldMeshBufferPool::new(enabled, body_pairs * 2, HOLD_CAP_BUFFER_VERTICES),
         }
+    }
+
+    #[cfg(feature = "bench-support")]
+    #[doc(hidden)]
+    pub fn bench_with_pair_limit(columns: usize, body_pairs: usize) -> Self {
+        Self::with_pair_limit(columns, body_pairs)
     }
 
     #[inline(always)]
@@ -1926,41 +1937,11 @@ pub fn bench_reused_hold_mesh_frame(
     actors.clear();
     scratch.begin_frame();
     for _ in 0..holds {
-        let body_start = scratch
-            .bodies
-            .acquire_pair()
-            .expect("benchmark hold count must fit the body pool");
-        {
+        if let Some(body_start) = scratch.bodies.acquire_pair() {
             let (diffuse, glow) = scratch.bodies.pair_mut(body_start);
             diffuse.resize(body_vertices, TexturedMeshVertex::default());
             glow.resize(body_vertices, TexturedMeshVertex::default());
-        }
-        let (diffuse, glow) = scratch.bodies.shared_pair(body_start);
-        actors.push(hold_reusable_strip_actor(
-            Arc::clone(texture),
-            diffuse,
-            BlendMode::Alpha,
-            true,
-            110,
-        ));
-        actors.push(hold_reusable_strip_glow_actor(
-            Arc::clone(texture),
-            glow,
-            true,
-            111,
-        ));
-
-        for _ in 0..2 {
-            let cap_start = scratch
-                .caps
-                .acquire_pair()
-                .expect("benchmark hold count must fit the cap pool");
-            {
-                let (diffuse, glow) = scratch.caps.pair_mut(cap_start);
-                diffuse.resize(HOLD_CAP_BUFFER_VERTICES, TexturedMeshVertex::default());
-                glow.resize(HOLD_CAP_BUFFER_VERTICES, TexturedMeshVertex::default());
-            }
-            let (diffuse, glow) = scratch.caps.shared_pair(cap_start);
+            let (diffuse, glow) = scratch.bodies.shared_pair(body_start);
             actors.push(hold_reusable_strip_actor(
                 Arc::clone(texture),
                 diffuse,
@@ -1974,6 +1955,58 @@ pub fn bench_reused_hold_mesh_frame(
                 true,
                 111,
             ));
+        } else {
+            for glow in [false, true] {
+                let vertices = vec![TexturedMeshVertex::default(); body_vertices];
+                actors.push(if glow {
+                    hold_strip_glow_actor(Arc::clone(texture), Arc::from(vertices), true, 111)
+                } else {
+                    hold_strip_actor(
+                        Arc::clone(texture),
+                        Arc::from(vertices),
+                        BlendMode::Alpha,
+                        true,
+                        110,
+                    )
+                });
+            }
+        }
+
+        for _ in 0..2 {
+            if let Some(cap_start) = scratch.caps.acquire_pair() {
+                let (diffuse, glow) = scratch.caps.pair_mut(cap_start);
+                diffuse.resize(HOLD_CAP_BUFFER_VERTICES, TexturedMeshVertex::default());
+                glow.resize(HOLD_CAP_BUFFER_VERTICES, TexturedMeshVertex::default());
+                let (diffuse, glow) = scratch.caps.shared_pair(cap_start);
+                actors.push(hold_reusable_strip_actor(
+                    Arc::clone(texture),
+                    diffuse,
+                    BlendMode::Alpha,
+                    true,
+                    110,
+                ));
+                actors.push(hold_reusable_strip_glow_actor(
+                    Arc::clone(texture),
+                    glow,
+                    true,
+                    111,
+                ));
+            } else {
+                let vertices = [TexturedMeshVertex::default(); HOLD_CAP_BUFFER_VERTICES];
+                actors.push(hold_strip_actor(
+                    Arc::clone(texture),
+                    Arc::new(vertices),
+                    BlendMode::Alpha,
+                    true,
+                    110,
+                ));
+                actors.push(hold_strip_glow_actor(
+                    Arc::clone(texture),
+                    Arc::new(vertices),
+                    true,
+                    111,
+                ));
+            }
         }
     }
     hold_mesh_vertex_count(actors)
@@ -2403,7 +2436,7 @@ mod tests {
     }
 
     #[test]
-    fn hold_mesh_scratch_replaces_buffers_still_owned_by_a_render_list() {
+    fn hold_mesh_scratch_rotates_while_prior_frame_is_retained() {
         let mut scratch = HoldMeshScratch::with_columns(1);
         scratch.begin_frame();
         let first = scratch.bodies.acquire_pair().expect("prewarmed body pair");
@@ -2413,28 +2446,28 @@ mod tests {
         let second = scratch
             .bodies
             .acquire_pair()
-            .expect("replacement body pair");
+            .expect("second frame body pair");
         let (next_diffuse, next_glow) = scratch.bodies.shared_pair(second);
 
         assert!(!Arc::ptr_eq(&held_diffuse, &next_diffuse));
         assert!(!Arc::ptr_eq(&held_glow, &next_glow));
-        assert_eq!(scratch.stats().busy_replacements, 2);
+        assert_eq!(scratch.stats().busy_replacements, 0);
     }
 
     #[test]
-    fn hold_mesh_scratch_saturates_without_growing_past_lane_bound() {
+    fn hold_mesh_scratch_saturates_without_growing_past_overlap_bound() {
         let mut scratch = HoldMeshScratch::with_columns(MAX_COLS);
         scratch.begin_frame();
-        for _ in 0..MAX_COLS {
+        for _ in 0..HOLD_MESH_PAIRS_PER_FRAME {
             assert!(scratch.bodies.acquire_pair().is_some());
         }
         assert!(scratch.bodies.acquire_pair().is_none());
-        assert_eq!(scratch.bodies.buffers.len(), MAX_COLS * 2);
+        assert_eq!(scratch.bodies.buffers.len(), HOLD_MESH_PAIRS_PER_FRAME * 2);
         assert_eq!(
             scratch.stats(),
             HoldMeshScratchStats {
                 saturated_pairs: 1,
-                high_water_pairs: MAX_COLS,
+                high_water_pairs: HOLD_MESH_PAIRS_PER_FRAME,
                 ..HoldMeshScratchStats::default()
             }
         );

@@ -14099,6 +14099,7 @@ mod tests {
         assert_eq!(state.next_mine_ix_cursor, [0; MAX_PLAYERS]);
         assert_eq!(state.mine_note_ix[1], [4, 8]);
         assert_eq!(state.mine_note_time_ns[1], [40, 80]);
+        assert!(state.pending_mine_hit_indices.capacity() >= 2);
 
         state.set_next_tap_miss_cursor(1, 9);
         state.pending_mine_hit_indices.push(4);

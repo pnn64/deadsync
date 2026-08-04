@@ -207,7 +207,7 @@ pub struct GameplayMineScanState {
     pub mine_note_ix: [Vec<usize>; MAX_PLAYERS],
     pub mine_note_time_ns: [Vec<SongTimeNs>; MAX_PLAYERS],
     pub next_mine_ix_cursor: [usize; MAX_PLAYERS],
-    /// Frame batch whose peak capacity is retained until gameplay teardown.
+    /// Song-sized frame batch allocated during setup and cleared after each use.
     pub pending_mine_hit_indices: Vec<usize>,
 }
 
@@ -230,13 +230,14 @@ impl GameplayMineScanState {
         mine_note_ix: [Vec<usize>; MAX_PLAYERS],
         mine_note_time_ns: [Vec<SongTimeNs>; MAX_PLAYERS],
     ) -> Self {
+        let mine_count = mine_note_ix.iter().map(Vec::len).sum();
         Self {
             next_tap_miss_cursor: note_range_start,
             next_mine_avoid_cursor: note_range_start,
             mine_note_ix,
             mine_note_time_ns,
             next_mine_ix_cursor: [0; MAX_PLAYERS],
-            pending_mine_hit_indices: Vec::new(),
+            pending_mine_hit_indices: Vec::with_capacity(mine_count),
         }
     }
 

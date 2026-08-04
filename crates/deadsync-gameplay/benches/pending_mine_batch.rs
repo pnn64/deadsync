@@ -11,6 +11,7 @@ const WARMUP_FRAMES: usize = 1_024;
 const MEASURE_FRAMES: usize = 50_000;
 const HIT_INTERVAL: usize = 8;
 const MINES_PER_BATCH: usize = 8;
+const FIRST_BATCH_SONGS: usize = 10_000;
 
 struct CountingAlloc {
     allocs: AtomicU64,
@@ -106,7 +107,30 @@ struct BenchResult {
     output: BatchOutput,
 }
 
+struct FirstBatchResult {
+    elapsed: Duration,
+    cycles: u64,
+    alloc: AllocSnapshot,
+    output: BatchOutput,
+}
+
 fn main() {
+    let lazy_first = run_first_batches(false);
+    let sized_first = run_first_batches(true);
+    assert_eq!(
+        sized_first.output, lazy_first.output,
+        "lazy/pre-sized first-batch output mismatch"
+    );
+    println!("gameplay first pending-mine batch microbenchmark");
+    println!("{MINES_PER_BATCH} simultaneous mine hits, {FIRST_BATCH_SONGS} fresh song states");
+    print_first_result("lazy capacity", &lazy_first);
+    print_first_result("pre-sized", &sized_first);
+    println!(
+        "first-batch speedup {:.2}x | cycles reduction {:.1}%\n",
+        lazy_first.elapsed.as_secs_f64() / sized_first.elapsed.as_secs_f64(),
+        100.0 * (1.0 - sized_first.cycles as f64 / lazy_first.cycles as f64),
+    );
+
     let old = run(false);
     let new = run(true);
     assert_eq!(new.output, old.output, "old/new output checksum mismatch");
@@ -122,6 +146,32 @@ fn main() {
         old.elapsed.as_secs_f64() / new.elapsed.as_secs_f64(),
         100.0 * (1.0 - new.cycles as f64 / old.cycles as f64),
     );
+}
+
+fn run_first_batches(pre_size: bool) -> FirstBatchResult {
+    let capacity = usize::from(pre_size) * MINES_PER_BATCH;
+    let mut batches: Vec<Vec<usize>> = (0..FIRST_BATCH_SONGS)
+        .map(|_| Vec::with_capacity(capacity))
+        .collect();
+    let before_alloc = ALLOC.snapshot();
+    let before_cycles = read_cycles();
+    let started = Instant::now();
+    let mut output = BatchOutput::default();
+    for (song, pending) in batches.iter_mut().enumerate() {
+        let current = black_box(process_frame(
+            pending,
+            song.saturating_mul(HIT_INTERVAL),
+            true,
+        ));
+        output.checksum = output.checksum.rotate_left(9) ^ current.checksum;
+        output.hits += current.hits;
+    }
+    FirstBatchResult {
+        elapsed: started.elapsed(),
+        cycles: read_cycles().saturating_sub(before_cycles),
+        alloc: ALLOC.snapshot().delta(before_alloc),
+        output,
+    }
 }
 
 fn run(recycle: bool) -> BenchResult {
@@ -192,6 +242,18 @@ fn print_result(name: &str, result: &BenchResult) {
         result.alloc.reallocs,
         result.alloc.deallocs,
         result.alloc.bytes,
+    );
+}
+
+fn print_first_result(name: &str, result: &FirstBatchResult) {
+    let songs = FIRST_BATCH_SONGS as f64;
+    println!(
+        "{name:<22} {:>9.1} ns/batch {:>9.0} cycles/batch  allocs={:.2} reallocs={:.2} bytes={:.0}/batch",
+        result.elapsed.as_secs_f64() * 1.0e9 / songs,
+        result.cycles as f64 / songs,
+        result.alloc.allocs as f64 / songs,
+        result.alloc.reallocs as f64 / songs,
+        result.alloc.bytes as f64 / songs,
     );
 }
 

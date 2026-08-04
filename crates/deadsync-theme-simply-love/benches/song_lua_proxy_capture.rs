@@ -1,6 +1,7 @@
 use deadsync_theme_simply_love::screens::gameplay::{
     bench_song_lua_proxy_capture_cycles, bench_song_lua_proxy_capture_cycles_legacy,
     bench_song_lua_proxy_capture_cycles_screen_reuse,
+    bench_song_lua_proxy_capture_cycles_single_bank,
 };
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::hint::black_box;
@@ -90,6 +91,15 @@ impl AllocSnapshot {
             bytes: self.bytes - before.bytes,
         }
     }
+
+    fn saturating_sub(self, other: Self) -> Self {
+        Self {
+            allocs: self.allocs.saturating_sub(other.allocs),
+            reallocs: self.reallocs.saturating_sub(other.reallocs),
+            deallocs: self.deallocs.saturating_sub(other.deallocs),
+            bytes: self.bytes.saturating_sub(other.bytes),
+        }
+    }
 }
 
 struct BenchResult {
@@ -103,25 +113,31 @@ fn main() {
     for players in [1, 2] {
         let old = measure(bench_song_lua_proxy_capture_cycles_legacy, players);
         let screen = measure(bench_song_lua_proxy_capture_cycles_screen_reuse, players);
+        let single = measure(bench_song_lua_proxy_capture_cycles_single_bank, players);
         let new = measure(bench_song_lua_proxy_capture_cycles, players);
         assert_eq!(old.checksum, screen.checksum);
+        assert_eq!(old.checksum, single.checksum);
         assert_eq!(old.checksum, new.checksum);
         println!("Song-Lua proxy capture: {players} player(s), {CYCLES} frames");
         print_result("old", &old);
         print_result("screen reuse", &screen);
-        print_result("new", &new);
+        print_result("single bank", &single);
+        print_result("double bank", &new);
         println!(
-            "  screen speedup={:.2}x alloc reduction={:.2}% | full speedup={:.2}x alloc reduction={:.2}%\n",
+            "  screen speedup={:.2}x alloc reduction={:.2}% | double-bank speedup={:.2}x alloc reduction={:.2}%\n",
             old.elapsed.as_secs_f64() / screen.elapsed.as_secs_f64(),
             percent_reduction(old.alloc.allocs, screen.alloc.allocs),
-            old.elapsed.as_secs_f64() / new.elapsed.as_secs_f64(),
-            percent_reduction(old.alloc.allocs, new.alloc.allocs),
+            single.elapsed.as_secs_f64() / new.elapsed.as_secs_f64(),
+            percent_reduction(single.alloc.allocs, new.alloc.allocs),
         );
     }
 }
 
 fn measure(run: fn(usize, usize) -> usize, players: usize) -> BenchResult {
     black_box(run(players, 32));
+    let before_setup = ALLOC.snapshot();
+    black_box(run(players, 0));
+    let setup = ALLOC.snapshot().delta(before_setup);
     let before = ALLOC.snapshot();
     let started = Instant::now();
     let before_cycles = read_cycles();
@@ -129,7 +145,7 @@ fn measure(run: fn(usize, usize) -> usize, players: usize) -> BenchResult {
     BenchResult {
         elapsed: started.elapsed(),
         cycles: read_cycles().saturating_sub(before_cycles),
-        alloc: ALLOC.snapshot().delta(before),
+        alloc: ALLOC.snapshot().delta(before).saturating_sub(setup),
         checksum,
     }
 }

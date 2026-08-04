@@ -5522,6 +5522,7 @@ type SongLuaActorSegments = SmallVec<[Arc<[Actor]>; 5]>;
 
 const SONG_LUA_SCREEN_CAPTURE_SLOTS: usize = 64;
 const SONG_LUA_SCREEN_CAPTURE_CAPACITY: usize = 32;
+const SONG_LUA_PROXY_FRAME_BANKS: usize = 2;
 const SONG_LUA_PLAYER_PROXY_SOURCE_COUNT: usize = 4;
 const SONG_LUA_FIELD_PROXY_SOURCE: usize = 0;
 const SONG_LUA_JUDGMENT_PROXY_SOURCE: usize = 1;
@@ -5533,19 +5534,21 @@ const SONG_LUA_PLAYER_PROXY_SOURCE: usize = 3;
 /// Owner/thread model: gameplay `State`, exclusively mutated during actor
 /// composition on the game/render frame thread. Lifetime: one song, allocated
 /// only when a compiled overlay contains a proxy. Capacity/warmup: 64 bounded
-/// screen segments plus four pre-sized player sources per active player are
-/// reserved at screen entry. A miss after slot saturation bypasses insertion
-/// and uses the owned fallback; child-vector overflow grows only the affected
-/// slot. There is no lookup, eviction, scan, pruning, or mid-song destruction.
-/// Replacements/growths are tracked by each backing slot. Worst-case steady
-/// frame work is linear in actors already emitted for the requested captures.
-struct SongLuaProxyActorScratch {
+/// screen segments plus four pre-sized player sources per active player and
+/// in-flight frame are reserved at screen entry. Two banks let composition
+/// proceed while the renderer still owns the preceding frame. A miss after
+/// slot saturation bypasses insertion and uses the owned fallback;
+/// child-vector overflow grows only the affected slot. There is no lookup,
+/// eviction, scan, pruning, or mid-song destruction. Replacements/growths are
+/// tracked by each backing slot. Worst-case steady frame work is linear in
+/// actors already emitted for the requested captures.
+struct SongLuaProxyActorBank {
     screen: [SharedActorFrameScratch; SONG_LUA_SCREEN_CAPTURE_SLOTS],
     screen_used: usize,
     players: [[SharedActorFrameScratch; SONG_LUA_PLAYER_PROXY_SOURCE_COUNT]; MAX_PLAYERS],
 }
 
-impl SongLuaProxyActorScratch {
+impl SongLuaProxyActorBank {
     fn new(active_players: usize) -> Self {
         Self {
             screen: std::array::from_fn(|_| {
@@ -5580,15 +5583,45 @@ impl SongLuaProxyActorScratch {
             }
         }
     }
+}
+
+struct SongLuaProxyActorScratch {
+    banks: [SongLuaProxyActorBank; SONG_LUA_PROXY_FRAME_BANKS],
+    active_bank: usize,
+    frame_banks: usize,
+}
+
+impl SongLuaProxyActorScratch {
+    fn new(active_players: usize) -> Self {
+        Self::with_frame_banks(active_players, SONG_LUA_PROXY_FRAME_BANKS)
+    }
+
+    fn with_frame_banks(active_players: usize, frame_banks: usize) -> Self {
+        let frame_banks = frame_banks.clamp(1, SONG_LUA_PROXY_FRAME_BANKS);
+        Self {
+            banks: std::array::from_fn(|_| SongLuaProxyActorBank::new(active_players)),
+            active_bank: frame_banks - 1,
+            frame_banks,
+        }
+    }
+
+    fn begin_frame(&mut self) {
+        self.active_bank = (self.active_bank + 1) % self.frame_banks;
+        self.banks[self.active_bank].begin_frame();
+    }
 
     fn next_screen(&mut self) -> Option<&mut SharedActorFrameScratch> {
-        let slot = self.screen.get_mut(self.screen_used)?;
-        self.screen_used += 1;
+        let bank = &mut self.banks[self.active_bank];
+        let slot = bank.screen.get_mut(bank.screen_used)?;
+        bank.screen_used += 1;
         Some(slot)
     }
 
     fn player(&mut self, player: usize, source: usize) -> Option<&mut SharedActorFrameScratch> {
-        self.players.get_mut(player)?.get_mut(source)
+        self.banks[self.active_bank]
+            .players
+            .get_mut(player)?
+            .get_mut(source)
     }
 }
 
@@ -5683,6 +5716,7 @@ fn song_lua_share_actor_source_in_place(
     Some([children])
 }
 
+#[cfg(feature = "bench-support")]
 fn song_lua_shared_segment_actor(segment: Arc<[Actor]>) -> Actor {
     Actor::SharedFrame {
         align: [0.0, 0.0],
@@ -5711,7 +5745,12 @@ fn song_lua_render_captured_source(
             .map(|segment| song_lua_captured_segment_actors(segment).len())
             .sum()
     });
-    let hud_len = hud_source.map_or(0, |source| source.len());
+    let hud_len = hud_source.map_or(0, |source| {
+        source
+            .iter()
+            .map(|segment| song_lua_captured_segment_actors(segment).len())
+            .sum()
+    });
     let field_has_camera = field_source.is_some_and(|source| {
         source.iter().any(|segment| {
             song_lua_captured_segment_actors(segment)
@@ -5731,7 +5770,7 @@ fn song_lua_render_captured_source(
     let hud_actors = hud_source
         .into_iter()
         .flat_map(|source| source.iter())
-        .map(|segment| song_lua_shared_segment_actor(Arc::clone(segment)));
+        .flat_map(|segment| song_lua_captured_segment_actors(segment).iter().cloned());
     scratch
         .refill([-transform.target_x, -transform.target_y], |out| {
             append_song_lua_player_transform(
@@ -5915,20 +5954,50 @@ pub fn bench_song_lua_proxy_capture_cycles_screen_reuse(players: usize, cycles: 
 #[cfg(feature = "bench-support")]
 #[doc(hidden)]
 pub fn bench_song_lua_proxy_capture_cycles(players: usize, cycles: usize) -> usize {
+    bench_song_lua_proxy_capture_cycles_with_banks(players, cycles, SONG_LUA_PROXY_FRAME_BANKS)
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn bench_song_lua_proxy_capture_cycles_single_bank(players: usize, cycles: usize) -> usize {
+    bench_song_lua_proxy_capture_cycles_with_banks(players, cycles, 1)
+}
+
+#[cfg(feature = "bench-support")]
+fn bench_song_lua_proxy_capture_cycles_with_banks(
+    players: usize,
+    cycles: usize,
+    frame_banks: usize,
+) -> usize {
     let players = players.clamp(1, MAX_PLAYERS);
     let mut root_actors = Vec::with_capacity(96);
+    let mut retained_root_actors = Vec::with_capacity(96);
     let mut player_actors: [Vec<Actor>; MAX_PLAYERS] =
+        std::array::from_fn(|_| Vec::with_capacity(16));
+    let mut retained_player_actors: [Vec<Actor>; MAX_PLAYERS] =
         std::array::from_fn(|_| Vec::with_capacity(16));
     let mut capture_sources: [[SharedActorFrameScratch; 3]; MAX_PLAYERS] =
         std::array::from_fn(|_| std::array::from_fn(|_| SharedActorFrameScratch::with_capacity(8)));
-    let mut proxy_scratch = SongLuaProxyActorScratch::new(players);
+    let mut proxy_scratch = SongLuaProxyActorScratch::with_frame_banks(players, frame_banks);
+    let mut current_sources: Vec<SongLuaSingleSource> = Vec::with_capacity(players * 4);
+    let mut retained_sources: Vec<SongLuaSingleSource> = Vec::with_capacity(players * 4);
     let mut checksum = 0usize;
 
     for _ in 0..cycles {
+        retained_root_actors.clear();
+        std::mem::swap(&mut root_actors, &mut retained_root_actors);
         root_actors.clear();
-        for actors in player_actors.iter_mut().take(players) {
-            actors.clear();
+        for player in 0..players {
+            retained_player_actors[player].clear();
+            std::mem::swap(
+                &mut player_actors[player],
+                &mut retained_player_actors[player],
+            );
+            player_actors[player].clear();
         }
+        retained_sources.clear();
+        std::mem::swap(&mut current_sources, &mut retained_sources);
+        current_sources.clear();
         proxy_scratch.begin_frame();
         let mut underlay_source = Some(SongLuaActorSegments::new());
         let mut overlay_source = Some(SongLuaActorSegments::new());
@@ -6004,12 +6073,12 @@ pub fn bench_song_lua_proxy_capture_cycles(players: usize, cycles: usize) -> usi
                     .player(player, SONG_LUA_PLAYER_PROXY_SOURCE)
                     .expect("active player has player scratch"),
             );
-            checksum = checksum.wrapping_add(
-                field_source.as_ref().map_or(0, |source| source.len())
-                    + judgment_source.as_ref().map_or(0, |source| source.len())
-                    + combo_source.as_ref().map_or(0, |source| source.len())
-                    + player_source.as_ref().map_or(0, |source| source.len()),
-            );
+            for source in [field_source, judgment_source, combo_source, player_source] {
+                checksum = checksum.wrapping_add(source.as_ref().map_or(0, |source| source.len()));
+                if let Some(source) = source {
+                    current_sources.push(source);
+                }
+            }
         }
         checksum = checksum.wrapping_add(
             root_actors.len()
@@ -16935,6 +17004,82 @@ mod tests {
         };
 
         assert!(group.contains(&leader));
+    }
+
+    #[test]
+    fn song_lua_proxy_scratch_rotates_while_prior_frame_is_retained() {
+        let mut scratch = SongLuaProxyActorScratch::new(1);
+        scratch.begin_frame();
+        let first = scratch
+            .next_screen()
+            .expect("first frame has screen capture storage")
+            .refill([0.0, 0.0], |actors| actors.push(Actor::CameraPop))
+            .expect("first capture is populated");
+
+        scratch.begin_frame();
+        let second_slot = scratch
+            .next_screen()
+            .expect("second frame has screen capture storage");
+        let second = second_slot
+            .refill([0.0, 0.0], |actors| actors.push(Actor::CameraPop))
+            .expect("second capture is populated");
+        assert!(!Arc::ptr_eq(&first, &second));
+        assert_eq!(second_slot.stats().replacements, 0);
+
+        drop(first);
+        drop(second);
+        scratch.begin_frame();
+        let first_bank_slot = scratch
+            .next_screen()
+            .expect("released first bank is reusable");
+        assert!(
+            first_bank_slot
+                .refill([0.0, 0.0], |actors| actors.push(Actor::CameraPop))
+                .is_some()
+        );
+        assert_eq!(first_bank_slot.stats().replacements, 0);
+    }
+
+    #[test]
+    fn song_lua_hud_proxy_flattens_identity_capture_without_retaining_it() {
+        let mut capture_scratch = SharedActorFrameScratch::with_capacity(2);
+        let capture = [capture_scratch
+            .refill([0.0, 0.0], |actors| {
+                actors.extend([Actor::CameraPop, Actor::CameraPop]);
+            })
+            .expect("HUD capture is populated")];
+        let mut proxy_scratch = SharedActorFrameScratch::with_capacity(2);
+        let transform = SongLuaCaptureTransform {
+            z_shift: 0,
+            tint: [1.0; 4],
+            blend: None,
+            playfield_center_x: screen_center_x(),
+            target_x: screen_center_x(),
+            target_y: screen_center_y(),
+            rotation_x: 0.0,
+            rotation_z: 0.0,
+            rotation_y: 0.0,
+            skew_x: 0.0,
+            skew_y: 0.0,
+            zoom_x: 1.0,
+            zoom_y: 1.0,
+            zoom_z: 1.0,
+        };
+
+        let proxy =
+            song_lua_render_captured_source(None, Some(&capture), transform, &mut proxy_scratch)
+                .expect("HUD proxy is populated");
+
+        assert_eq!(Arc::strong_count(&capture[0]), 2);
+        let [Actor::Frame { children, .. }] = proxy[0].as_ref() else {
+            panic!("proxy scratch keeps one frame wrapper");
+        };
+        assert_eq!(children.len(), 2);
+        assert!(
+            children
+                .iter()
+                .all(|actor| matches!(actor, Actor::CameraPop))
+        );
     }
 
     #[test]
