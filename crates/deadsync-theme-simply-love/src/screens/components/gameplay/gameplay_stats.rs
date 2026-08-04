@@ -290,6 +290,26 @@ fn step_stats_hmr_categories(state: &State, player_idx: usize) -> [(usize, u32, 
 const DENSITY_LIFE_COMPACT_THRESHOLD: usize = 63;
 const DENSITY_LIFE_LINE_WIDTH: f32 = 2.0;
 
+fn density_life_edge_feather(
+    pixel_width: u32,
+    pixel_height: u32,
+    logical_width: f32,
+    logical_height: f32,
+) -> f32 {
+    if pixel_width == 0
+        || pixel_height == 0
+        || !logical_width.is_finite()
+        || !logical_height.is_finite()
+        || logical_width <= 0.0
+        || logical_height <= 0.0
+    {
+        return 0.5;
+    }
+    let pixel_scale =
+        (pixel_width as f32 / logical_width + pixel_height as f32 / logical_height) * 0.5;
+    pixel_scale.recip() * 0.5
+}
+
 fn clip_density_life_points_impl(
     points: &mut Vec<[f32; 2]>,
     offset: f32,
@@ -336,7 +356,9 @@ pub fn benchmark_clip_density_life_points(points: &mut Vec<[f32; 2]>, offset: f3
 
 #[cfg(test)]
 mod density_life_clip_tests {
-    use super::{DENSITY_LIFE_COMPACT_THRESHOLD, clip_density_life_points_impl};
+    use super::{
+        DENSITY_LIFE_COMPACT_THRESHOLD, clip_density_life_points_impl, density_life_edge_feather,
+    };
 
     fn visible_points(points: &[[f32; 2]], offset: f32) -> &[[f32; 2]] {
         let start = points.partition_point(|point| point[0] < offset);
@@ -385,6 +407,14 @@ mod density_life_clip_tests {
         clip_density_life_points_impl(&mut points, 3.0, DENSITY_LIFE_COMPACT_THRESHOLD);
 
         assert!(points.is_empty());
+    }
+
+    #[test]
+    fn edge_feather_tracks_half_a_physical_pixel() {
+        let feather = density_life_edge_feather(1600, 900, 854.0, 480.0);
+
+        assert!((feather - 0.266_75).abs() < 0.001);
+        assert_eq!(density_life_edge_feather(854, 480, 854.0, 480.0), 0.5);
     }
 }
 
@@ -445,12 +475,16 @@ fn refresh_density_graph_meshes_for_player(state: &mut State, player_idx: usize)
         return;
     }
 
+    let (pixel_width, pixel_height) = current_window_px();
+    let edge_feather =
+        density_life_edge_feather(pixel_width, pixel_height, screen_width(), screen_height());
     density::update_density_life_mesh_reusable(
         &mut render.life_mesh[player_idx],
         points,
         offset,
         graph_w,
         DENSITY_LIFE_LINE_WIDTH,
+        edge_feather,
         [1.0_f32, 1.0_f32, 1.0_f32, 1.0_f32],
     );
 }

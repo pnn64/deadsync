@@ -126,10 +126,15 @@ mod tests {
 
         assert_eq!(update, GameplayLifeDeltaUpdate::default());
         assert_near(player.life, 0.4);
-        assert_eq!(player.life_history.len(), 2);
+        assert_eq!(player.life_history.len(), 3);
         assert_eq!(player.life_history[0], (0.0, 1.0));
-        assert_eq!(player.life_history[1].0, 12.0);
-        assert_near(player.life_history[1].1, 0.4);
+        assert_eq!(
+            player.life_history[1].0,
+            12.0 - deadsync_rules::life::LIFE_HISTORY_SAME_TIME_SHIFT
+        );
+        assert_near(player.life_history[1].1, 1.0);
+        assert_eq!(player.life_history[2].0, 12.0);
+        assert_near(player.life_history[2].1, 0.4);
         let course_life = player
             .course_submit_life
             .as_ref()
@@ -566,7 +571,17 @@ mod tests {
 
         assert_eq!(update, GameplayLifeDeltaUpdate::default());
         assert_near(meter.life, 0.504);
-        assert_eq!(history, vec![(0.0, 0.5), (12.0, 0.504)]);
+        assert_eq!(
+            history,
+            vec![
+                (0.0, 0.5),
+                (
+                    12.0 - deadsync_rules::life::LIFE_HISTORY_SAME_TIME_SHIFT,
+                    0.5,
+                ),
+                (12.0, 0.504),
+            ]
+        );
     }
 
     #[test]
@@ -611,7 +626,17 @@ mod tests {
         assert_eq!(meter.life, 0.0);
         assert!(meter.is_failing);
         assert_eq!(meter.fail_time, Some(8.0));
-        assert_eq!(history, vec![(0.0, 0.05), (8.0, 0.0)]);
+        assert_eq!(
+            history,
+            vec![
+                (0.0, 0.05),
+                (
+                    8.0 - deadsync_rules::life::LIFE_HISTORY_SAME_TIME_SHIFT,
+                    0.05,
+                ),
+                (8.0, 0.0),
+            ]
+        );
     }
 
     #[test]

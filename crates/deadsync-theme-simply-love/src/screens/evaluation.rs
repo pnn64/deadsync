@@ -1069,6 +1069,16 @@ mod tests {
     }
 
     #[test]
+    fn evaluation_life_sampling_keeps_long_plateau_before_drop() {
+        let shift = deadsync_rules::life::LIFE_HISTORY_SAME_TIME_SHIFT;
+        let history = [(0.0, 1.0), (60.0 - shift, 1.0), (60.0, 0.8)];
+
+        assert!((life_record_lerp_at(&history, 0.0, 30.0) - 1.0).abs() < 0.001);
+        assert!((life_record_lerp_at(&history, 0.0, 59.0) - 1.0).abs() < 0.001);
+        assert!((life_record_lerp_at(&history, 0.0, 60.0) - 0.8).abs() < 0.001);
+    }
+
+    #[test]
     fn fail_remaining_time_uses_precise_song_end_and_rate() {
         let remaining = fail_seconds_remaining(100.75, 40.25, 1.5);
         assert!((remaining - 40.333_332).abs() < 0.001);

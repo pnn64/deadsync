@@ -15,6 +15,7 @@ const MAX_POINTS: usize = 961;
 const WARMUP_REFRESHES: usize = 128;
 const MEASURE_REFRESHES: usize = 2_000;
 const GRAPH_WIDTH: f32 = 512.0;
+const EDGE_FEATHER: f32 = 0.266_75;
 
 struct CountingAlloc {
     allocs: AtomicU64,
@@ -138,6 +139,7 @@ fn measure_shared(points: &[[f32; 2]]) -> BenchResult {
                 0.0,
                 GRAPH_WIDTH,
                 2.0,
+                EDGE_FEATHER,
                 [1.0; 4],
             );
         }
@@ -155,6 +157,7 @@ fn measure_shared(points: &[[f32; 2]]) -> BenchResult {
                 0.0,
                 GRAPH_WIDTH,
                 2.0,
+                EDGE_FEATHER,
                 [1.0; 4],
             );
             checksum = checksum.rotate_left(11)
@@ -179,6 +182,7 @@ fn measure_reusable(points: &[[f32; 2]]) -> BenchResult {
                 0.0,
                 GRAPH_WIDTH,
                 2.0,
+                EDGE_FEATHER,
                 [1.0; 4],
             );
         }
@@ -196,6 +200,7 @@ fn measure_reusable(points: &[[f32; 2]]) -> BenchResult {
                 0.0,
                 GRAPH_WIDTH,
                 2.0,
+                EDGE_FEATHER,
                 [1.0; 4],
             );
             checksum = checksum.rotate_left(11)

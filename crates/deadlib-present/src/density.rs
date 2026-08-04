@@ -452,7 +452,7 @@ pub fn update_density_hist_mesh_reusable(
 }
 
 const DENSITY_LIFE_MIN_LEN_SQ: f32 = 0.000_000_01_f32;
-const DENSITY_LIFE_SEGMENT_VERTS: usize = 6;
+const DENSITY_LIFE_SEGMENT_VERTS: usize = 18;
 
 #[derive(Clone, Copy, Debug)]
 struct LifeWindow {
@@ -549,12 +549,19 @@ fn write_density_life_segment(
     b: [f32; 2],
     a_offset: [f32; 2],
     b_offset: [f32; 2],
+    a_outer: [f32; 2],
+    b_outer: [f32; 2],
     color: [f32; 4],
 ) -> usize {
     let l0 = [a[0] + a_offset[0], a[1] + a_offset[1]];
     let r0 = [a[0] - a_offset[0], a[1] - a_offset[1]];
     let l1 = [b[0] + b_offset[0], b[1] + b_offset[1]];
     let r1 = [b[0] - b_offset[0], b[1] - b_offset[1]];
+    let ol0 = [a[0] + a_outer[0], a[1] + a_outer[1]];
+    let or0 = [a[0] - a_outer[0], a[1] - a_outer[1]];
+    let ol1 = [b[0] + b_outer[0], b[1] + b_outer[1]];
+    let or1 = [b[0] - b_outer[0], b[1] - b_outer[1]];
+    let edge_color = [color[0], color[1], color[2], 0.0];
 
     let verts = [
         MeshVertex { pos: l0, color },
@@ -563,9 +570,46 @@ fn write_density_life_segment(
         MeshVertex { pos: r0, color },
         MeshVertex { pos: r1, color },
         MeshVertex { pos: l1, color },
+        // ITGmania's OpenGL line strip uses GL_LINE_SMOOTH. These two
+        // transparent fringes provide equivalent coverage for triangle meshes.
+        MeshVertex {
+            pos: ol0,
+            color: edge_color,
+        },
+        MeshVertex { pos: l0, color },
+        MeshVertex {
+            pos: ol1,
+            color: edge_color,
+        },
+        MeshVertex { pos: l0, color },
+        MeshVertex { pos: l1, color },
+        MeshVertex {
+            pos: ol1,
+            color: edge_color,
+        },
+        MeshVertex { pos: r0, color },
+        MeshVertex {
+            pos: or0,
+            color: edge_color,
+        },
+        MeshVertex { pos: r1, color },
+        MeshVertex {
+            pos: or0,
+            color: edge_color,
+        },
+        MeshVertex {
+            pos: or1,
+            color: edge_color,
+        },
+        MeshVertex { pos: r1, color },
     ];
     dst[written..written + verts.len()].copy_from_slice(&verts);
     written + verts.len()
+}
+
+#[inline(always)]
+fn density_life_outer_offset(offset: [f32; 2], scale: f32) -> [f32; 2] {
+    [offset[0] * scale, offset[1] * scale]
 }
 
 #[inline(always)]
@@ -574,24 +618,33 @@ fn fill_density_life_vertices(
     points: &[[f32; 2]],
     window: LifeWindow,
     half: f32,
+    feather: f32,
     color: [f32; 4],
 ) -> usize {
+    let inner_half = (half - feather * 0.5).max(f32::EPSILON);
+    let outer_scale = (half + feather * 0.5) / inner_half;
     let mut written = 0usize;
-    let mut a_offset = density_life_offset(points, window, 0, half);
+    let mut a_offset = density_life_offset(points, window, 0, inner_half);
+    let mut a_outer = density_life_outer_offset(a_offset, outer_scale);
     for index in 0..window.point_count - 1 {
         let mut a = density_life_window_point(points, window, index);
         let mut b = density_life_window_point(points, window, index + 1);
-        let b_offset = density_life_offset(points, window, index + 1, half);
+        let b_offset = density_life_offset(points, window, index + 1, inner_half);
+        let b_outer = density_life_outer_offset(b_offset, outer_scale);
         let dx = b[0] - a[0];
         let dy = b[1] - a[1];
         if dx.mul_add(dx, dy * dy) <= DENSITY_LIFE_MIN_LEN_SQ {
             a_offset = b_offset;
+            a_outer = b_outer;
             continue;
         }
         a[0] -= window.left;
         b[0] -= window.left;
-        written = write_density_life_segment(dst, written, a, b, a_offset, b_offset, color);
+        written = write_density_life_segment(
+            dst, written, a, b, a_offset, b_offset, a_outer, b_outer, color,
+        );
         a_offset = b_offset;
+        a_outer = b_outer;
     }
     written
 }
@@ -655,6 +708,7 @@ pub fn update_density_life_mesh(
     offset: f32,
     width: f32,
     thickness: f32,
+    feather: f32,
     color: [f32; 4],
 ) {
     let Some((window, len, half)) = density_life_mesh_window(points, offset, width, thickness)
@@ -662,16 +716,17 @@ pub fn update_density_life_mesh(
         *mesh = None;
         return;
     };
+    let feather = feather.max(0.0);
     if let Some(existing) = mesh.as_mut().and_then(Arc::get_mut)
         && existing.len() == len
     {
-        let written = fill_density_life_vertices(existing, points, window, half, color);
+        let written = fill_density_life_vertices(existing, points, window, half, feather, color);
         debug_assert_eq!(written, len);
         return;
     }
 
     let mut verts = vec![MeshVertex::default(); len];
-    let written = fill_density_life_vertices(&mut verts, points, window, half, color);
+    let written = fill_density_life_vertices(&mut verts, points, window, half, feather, color);
     debug_assert_eq!(written, len);
     *mesh = Some(Arc::from(verts.into_boxed_slice()));
 }
@@ -687,12 +742,14 @@ pub fn update_density_life_mesh_reusable(
     offset: f32,
     width: f32,
     thickness: f32,
+    feather: f32,
     color: [f32; 4],
 ) {
     let Some((window, half)) = density_life_window(points, offset, width, thickness) else {
         *mesh = None;
         return;
     };
+    let feather = feather.max(0.0);
     let max_len = (window.point_count - 1) * DENSITY_LIFE_SEGMENT_VERTS;
 
     if mesh.as_mut().and_then(Arc::get_mut).is_none() {
@@ -703,7 +760,7 @@ pub fn update_density_life_mesh_reusable(
         .and_then(Arc::get_mut)
         .expect("replacement density life mesh must be uniquely owned");
     vertices.resize(max_len, MeshVertex::default());
-    let written = fill_density_life_vertices(vertices, points, window, half, color);
+    let written = fill_density_life_vertices(vertices, points, window, half, feather, color);
     vertices.truncate(written);
     if written == 0 {
         *mesh = None;
@@ -958,7 +1015,7 @@ mod tests {
         let mut mesh = None;
         let points = [[0.0, 0.0], [10.0, 0.0], [10.0, 10.0]];
 
-        update_density_life_mesh(&mut mesh, &points, 0.0, 32.0, 4.0, [1.0; 4]);
+        update_density_life_mesh(&mut mesh, &points, 0.0, 32.0, 4.0, 0.5, [1.0; 4]);
 
         let mesh = mesh.expect("life mesh");
         assert_eq!(mesh.len(), 2 * DENSITY_LIFE_SEGMENT_VERTS);
@@ -968,8 +1025,8 @@ mod tests {
                     && (vertex.pos[1] - expected[1]).abs() < 0.000_1
             })
         };
-        assert!(has_pos([8.0, 2.0]));
-        assert!(has_pos([12.0, -2.0]));
+        assert!(has_pos([8.25, 1.75]));
+        assert!(has_pos([11.75, -1.75]));
         assert!(!mesh.iter().any(|vertex| points.contains(&vertex.pos)));
     }
 
@@ -992,18 +1049,20 @@ mod tests {
         let mut mesh = None;
         let points = [[0.0, 8.0], [12.0, 8.0], [24.0, 8.0]];
 
-        update_density_life_mesh(&mut mesh, &points, 0.25, 10.0, 2.0, [1.0; 4]);
+        update_density_life_mesh(&mut mesh, &points, 0.25, 10.0, 2.0, 0.5, [1.0; 4]);
 
         let mesh = mesh.expect("life mesh");
         assert_eq!(mesh.len(), DENSITY_LIFE_SEGMENT_VERTS);
         assert!(
             mesh.iter()
-                .all(|vertex| vertex.pos[0] == 0.0 || vertex.pos[0] == 10.0)
+                .all(|vertex| matches!(vertex.pos[0], 0.0 | 10.0))
         );
         assert!(
             mesh.iter()
-                .all(|vertex| vertex.pos[1] == 7.0 || vertex.pos[1] == 9.0)
+                .all(|vertex| (6.75..=9.25).contains(&vertex.pos[1]))
         );
+        assert!(mesh.iter().any(|vertex| vertex.color[3] == 0.0));
+        assert!(mesh.iter().any(|vertex| vertex.color[3] == 1.0));
     }
 
     #[test]
@@ -1011,11 +1070,27 @@ mod tests {
         let mut mesh = None;
         let points = [[0.0, 8.0], [12.0, 8.0], [24.0, 20.0]];
 
-        update_density_life_mesh(&mut mesh, &points, 0.0, 32.0, 2.0, [1.0, 1.0, 1.0, 1.0]);
+        update_density_life_mesh(
+            &mut mesh,
+            &points,
+            0.0,
+            32.0,
+            2.0,
+            0.5,
+            [1.0, 1.0, 1.0, 1.0],
+        );
         let expected = mesh.as_ref().expect("life mesh").to_vec();
         let first_ptr = mesh.as_ref().expect("life mesh").as_ptr();
 
-        update_density_life_mesh(&mut mesh, &points, 0.0, 32.0, 2.0, [1.0, 1.0, 1.0, 1.0]);
+        update_density_life_mesh(
+            &mut mesh,
+            &points,
+            0.0,
+            32.0,
+            2.0,
+            0.5,
+            [1.0, 1.0, 1.0, 1.0],
+        );
         let second_ptr = mesh.as_ref().expect("life mesh").as_ptr();
 
         assert_eq!(first_ptr, second_ptr);
@@ -1028,13 +1103,22 @@ mod tests {
         let mut shared = None;
         let mut reusable = None;
 
-        update_density_life_mesh(&mut shared, &points, 0.0, 32.0, 2.0, [0.5, 0.75, 1.0, 1.0]);
+        update_density_life_mesh(
+            &mut shared,
+            &points,
+            0.0,
+            32.0,
+            2.0,
+            0.5,
+            [0.5, 0.75, 1.0, 1.0],
+        );
         update_density_life_mesh_reusable(
             &mut reusable,
             &points,
             0.0,
             32.0,
             2.0,
+            0.5,
             [0.5, 0.75, 1.0, 1.0],
         );
         assert_mesh_matches(
@@ -1049,6 +1133,7 @@ mod tests {
             0.0,
             32.0,
             2.0,
+            0.5,
             [0.5, 0.75, 1.0, 1.0],
         );
         update_density_life_mesh_reusable(
@@ -1057,6 +1142,7 @@ mod tests {
             0.0,
             32.0,
             2.0,
+            0.5,
             [0.5, 0.75, 1.0, 1.0],
         );
 
@@ -1074,11 +1160,11 @@ mod tests {
     fn reusable_density_life_mesh_keeps_a_busy_previous_frame_immutable() {
         let points = [[0.0, 8.0], [12.0, 8.0], [24.0, 20.0]];
         let mut mesh = None;
-        update_density_life_mesh_reusable(&mut mesh, &points, 0.0, 32.0, 2.0, [1.0; 4]);
+        update_density_life_mesh_reusable(&mut mesh, &points, 0.0, 32.0, 2.0, 0.5, [1.0; 4]);
         let previous = Arc::clone(mesh.as_ref().expect("life mesh"));
         let previous_vertices = previous.as_slice().to_vec();
 
-        update_density_life_mesh_reusable(&mut mesh, &points[..2], 0.0, 32.0, 2.0, [0.5; 4]);
+        update_density_life_mesh_reusable(&mut mesh, &points[..2], 0.0, 32.0, 2.0, 0.5, [0.5; 4]);
 
         assert!(!Arc::ptr_eq(
             mesh.as_ref().expect("replacement mesh"),

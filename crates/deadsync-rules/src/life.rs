@@ -66,8 +66,12 @@ pub const fn judge_life_delta(grade: JudgeGrade) -> f32 {
     }
 }
 
-#[inline(always)]
+/// Record ITGmania-compatible life samples, retaining each plateau endpoint
+/// and shifting the pre-change value when two samples share a timestamp.
+#[inline]
 pub fn record_life_history(history: &mut Vec<(f32, f32)>, t: f32, life: f32) {
+    const EPS: f32 = 0.000_001_f32;
+
     let life = life.clamp(0.0_f32, 1.0_f32);
     let Some(&(last_t, last_life)) = history.last() else {
         history.push((t, life));
@@ -75,19 +79,32 @@ pub fn record_life_history(history: &mut Vec<(f32, f32)>, t: f32, life: f32) {
     };
 
     if t > last_t {
-        if (life - last_life).abs() > 0.000_001_f32 {
-            history.push((t, life));
+        history.push((t, life));
+        if history.len() >= 3 {
+            let len = history.len();
+            let a = history[len - 3].1;
+            let b = history[len - 2].1;
+            let c = history[len - 1].1;
+            if a == b && b == c {
+                history.remove(len - 2);
+            }
         }
         return;
     }
 
-    if (t - last_t).abs() <= 0.000_001_f32 {
-        if (life - last_life).abs() <= 0.000_001_f32 {
+    if (t - last_t).abs() <= EPS {
+        if life == last_life {
             return;
         }
+        let shifted_t = t - LIFE_HISTORY_SAME_TIME_SHIFT;
         let last_ix = history.len() - 1;
-        history[last_ix].0 = t - LIFE_HISTORY_SAME_TIME_SHIFT;
-        history.push((t, life));
+        if last_ix > 0 && (history[last_ix - 1].0 - shifted_t).abs() <= EPS {
+            history[last_ix - 1] = (shifted_t, last_life);
+            history[last_ix] = (t, life);
+        } else {
+            history[last_ix].0 = shifted_t;
+            history.push((t, life));
+        }
     }
 }
 
@@ -214,14 +231,15 @@ mod tests {
     }
 
     #[test]
-    fn life_history_records_changes_only() {
+    fn life_history_compacts_only_interior_plateau_samples() {
         let mut history = Vec::new();
 
         record_life_history(&mut history, 1.0, 0.8);
         record_life_history(&mut history, 2.0, 0.8);
-        record_life_history(&mut history, 3.0, 0.7);
+        record_life_history(&mut history, 3.0, 0.8);
+        record_life_history(&mut history, 4.0, 0.7);
 
-        assert_eq!(history, vec![(1.0, 0.8), (3.0, 0.7)]);
+        assert_eq!(history, vec![(1.0, 0.8), (3.0, 0.8), (4.0, 0.7)]);
     }
 
     #[test]
@@ -234,6 +252,43 @@ mod tests {
         assert_eq!(
             history,
             vec![(4.0 - LIFE_HISTORY_SAME_TIME_SHIFT, 0.8), (4.0, 0.7)]
+        );
+    }
+
+    #[test]
+    fn life_history_preserves_plateau_until_same_time_drop() {
+        let mut history = Vec::new();
+
+        record_life_history(&mut history, 1.0, 1.0);
+        record_life_history(&mut history, 40.0, 1.0);
+        record_life_history(&mut history, 40.0, 0.9);
+
+        assert_eq!(
+            history,
+            vec![
+                (1.0, 1.0),
+                (40.0 - LIFE_HISTORY_SAME_TIME_SHIFT, 1.0),
+                (40.0, 0.9),
+            ]
+        );
+    }
+
+    #[test]
+    fn life_history_keeps_only_latest_pre_change_value_in_same_frame() {
+        let mut history = Vec::new();
+
+        record_life_history(&mut history, 1.0, 0.8);
+        record_life_history(&mut history, 4.0, 0.8);
+        record_life_history(&mut history, 4.0, 0.7);
+        record_life_history(&mut history, 4.0, 0.6);
+
+        assert_eq!(
+            history,
+            vec![
+                (1.0, 0.8),
+                (4.0 - LIFE_HISTORY_SAME_TIME_SHIFT, 0.7),
+                (4.0, 0.6),
+            ]
         );
     }
 
