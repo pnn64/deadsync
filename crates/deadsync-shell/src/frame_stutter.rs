@@ -9,7 +9,7 @@ pub struct ComposeBreakdown {
     pub actor_build_us: u32,
     pub build_screen_us: u32,
     pub resolve_textures_us: u32,
-    pub render_objects: u32,
+    pub render_ops: u32,
     pub render_cameras: u32,
     pub text_layout: TextLayoutFrameStats,
 }
@@ -113,7 +113,7 @@ pub fn trace_frame_stutter(
         actor_stats.textured_meshes,
         actor_stats.cameras,
         actor_stats.shadows,
-        compose_breakdown.render_objects,
+        compose_breakdown.render_ops,
         compose_breakdown.render_cameras,
         compose_breakdown.text_layout.owned_hits,
         compose_breakdown.text_layout.shared_hits,

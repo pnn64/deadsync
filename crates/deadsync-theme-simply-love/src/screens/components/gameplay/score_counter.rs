@@ -146,7 +146,7 @@ mod tests {
     use deadlib_present::compose::build_screen;
     use deadlib_present::font::{Font, Glyph};
     use deadlib_present::space::Metrics;
-    use deadlib_render::ObjectType;
+    use deadlib_render::DrawOp;
     use glam::Vec4;
     use std::collections::HashMap;
     use std::sync::Arc;
@@ -227,23 +227,23 @@ mod tests {
             top: 480.0,
             bottom: 0.0,
         };
-        build_screen(actors, [0.0, 0.0, 0.0, 1.0], &metrics, fonts, 0.0)
-            .objects
-            .into_iter()
-            .flat_map(|object| match object.object_type {
-                ObjectType::TexturedMesh {
-                    instance, vertices, ..
-                } => vertices
-                    .iter()
-                    .map(|vertex| {
-                        let point = instance.transform()
-                            * Vec4::new(vertex.pos[0], vertex.pos[1], vertex.pos[2], 1.0);
-                        [point.x, point.y, point.z, vertex.uv[0], vertex.uv[1]]
-                    })
-                    .collect::<Vec<_>>(),
-                _ => Vec::new(),
-            })
-            .collect()
+        let frame = build_screen(actors, [0.0, 0.0, 0.0, 1.0], &metrics, fonts, 0.0);
+        let mut out = Vec::new();
+        for op in &frame.ops {
+            let DrawOp::TexturedMesh(run) = op else {
+                continue;
+            };
+            let vertices = &frame.tmesh_geometries[run.geometry as usize].vertices;
+            let end = run.instance_start + run.instance_count;
+            for instance in &frame.tmesh_instances[run.instance_start as usize..end as usize] {
+                out.extend(vertices.iter().map(|vertex| {
+                    let point = instance.transform()
+                        * Vec4::new(vertex.pos[0], vertex.pos[1], vertex.pos[2], 1.0);
+                    [point.x, point.y, point.z, vertex.uv[0], vertex.uv[1]]
+                }));
+            }
+        }
+        out
     }
 
     fn test_fonts() -> font::FontMap {

@@ -6,12 +6,6 @@ license = "GPL-3.0"
 
 [features]
 test-util = []
-bench-support = []
-
-[[bench]]
-name = "draw_prep"
-harness = false
-required-features = ["bench-support"]
 
 [[bench]]
 name = "backend_bindings"

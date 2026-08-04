@@ -28,11 +28,7 @@ mod tests {
         compose::{self, TextureContext, TextureMeta},
         space,
     };
-    use deadlib_render::{
-        ObjectType,
-        draw_prep::{self, DrawScratch},
-        frame_compare::{compare_draw_scratch, compare_render_lists},
-    };
+    use deadlib_render::{DrawOp, DrawStorageStats, frame_compare::compare_render_frames};
     use deadsync_assets::noteskin::{self, Noteskin};
     use deadsync_assets::song_lua::compile_song_lua;
     use deadsync_chart::SongData;
@@ -624,7 +620,7 @@ mod tests {
         text_cache: &mut compose::TextLayoutCache,
         scratch: &mut compose::ComposeScratch,
         texture_ctx: &T,
-    ) -> deadlib_render::RenderList {
+    ) -> deadlib_render::RenderFrame {
         actors.clear();
         screen_gameplay::push_actors(
             actors,
@@ -654,7 +650,7 @@ mod tests {
         actors: &mut Vec<deadlib_present::actors::Actor>,
         text_cache: &mut compose::TextLayoutCache,
         scratch: &mut compose::ComposeScratch,
-    ) -> deadlib_render::RenderList {
+    ) -> deadlib_render::RenderFrame {
         compose_fixture_frame_with_textures(
             state,
             assets,
@@ -673,7 +669,7 @@ mod tests {
         actors: &mut Vec<deadlib_present::actors::Actor>,
         text_cache: &mut compose::TextLayoutCache,
         scratch: &mut compose::ComposeScratch,
-    ) -> deadlib_render::RenderList {
+    ) -> deadlib_render::RenderFrame {
         actors.clear();
         crate::screens::practice::push_actors(
             actors,
@@ -702,7 +698,6 @@ mod tests {
         actors: &mut Vec<deadlib_present::actors::Actor>,
         text_cache: &mut compose::TextLayoutCache,
         compose_scratch: &mut compose::ComposeScratch,
-        draw_scratch: &mut DrawScratch,
     ) -> usize {
         let mut render = compose_fixture_frame_with_textures(
             state,
@@ -713,14 +708,13 @@ mod tests {
             compose_scratch,
             &FIXTURE_TEXTURES,
         );
-        draw_prep::prepare(&render, draw_scratch, |_, _| false);
         let checksum = render
-            .objects
+            .ops
             .len()
             .wrapping_add(render.sprite_instances.len())
-            .wrapping_add(render.batches.len())
-            .wrapping_add(draw_scratch.ops.len());
-        compose_scratch.recycle_render_list(&mut render);
+            .wrapping_add(render.mesh_vertices.len())
+            .wrapping_add(render.tmesh_instances.len());
+        compose_scratch.recycle_frame(&mut render);
         actors.clear();
         checksum
     }
@@ -732,7 +726,7 @@ mod tests {
         actors: &mut Vec<deadlib_present::actors::Actor>,
         text_cache: &mut compose::TextLayoutCache,
         compose_scratch: &mut compose::ComposeScratch,
-    ) -> deadlib_render::RenderList {
+    ) -> deadlib_render::RenderFrame {
         assert_repeatable_composition(compose_scratch, |scratch| {
             compose_fixture_frame(state, assets, metrics, actors, text_cache, scratch)
         })
@@ -740,38 +734,30 @@ mod tests {
 
     fn assert_repeatable_composition(
         compose_scratch: &mut compose::ComposeScratch,
-        mut compose_frame: impl FnMut(&mut compose::ComposeScratch) -> deadlib_render::RenderList,
-    ) -> deadlib_render::RenderList {
+        mut compose_frame: impl FnMut(&mut compose::ComposeScratch) -> deadlib_render::RenderFrame,
+    ) -> deadlib_render::RenderFrame {
         let mut warm = compose_frame(compose_scratch);
-        compose_scratch.recycle_render_list(&mut warm);
+        compose_scratch.recycle_frame(&mut warm);
 
         let mut expected_frame = compose_frame(compose_scratch);
         let expected = expected_frame.clone();
-        compose_scratch.recycle_render_list(&mut expected_frame);
+        compose_scratch.recycle_frame(&mut expected_frame);
         let mut actual = compose_frame(compose_scratch);
 
         assert!(
             expected
-                .objects
+                .ops
                 .iter()
-                .any(|object| matches!(object.object_type, ObjectType::Sprite(_)))
+                .any(|op| matches!(op, DrawOp::Sprite(_)))
         );
         assert!(
             expected
-                .objects
+                .ops
                 .iter()
-                .any(|object| matches!(object.object_type, ObjectType::TexturedMesh { .. }))
+                .any(|op| matches!(op, DrawOp::TexturedMesh(_)))
         );
-        assert!(!expected.batches.is_empty());
-        assert_eq!(compare_render_lists(&expected, &actual), Ok(()));
-
-        let mut expected_draw = DrawScratch::default();
-        let mut actual_draw = DrawScratch::default();
-        draw_prep::prepare(&expected, &mut expected_draw, |_, _| false);
-        draw_prep::prepare(&actual, &mut actual_draw, |_, _| false);
-        assert!(!expected_draw.ops.is_empty());
-        assert_eq!(compare_draw_scratch(&expected_draw, &actual_draw), Ok(()));
-        compose_scratch.recycle_render_list(&mut actual);
+        assert_eq!(compare_render_frames(&expected, &actual), Ok(()));
+        compose_scratch.recycle_frame(&mut actual);
         expected
     }
 
@@ -916,9 +902,8 @@ L000
                     &mut text_cache,
                     &mut compose_scratch,
                 );
-                assert!(expected.objects.len() >= 250);
                 assert!(expected.sprite_instances.len() >= 240);
-                assert!(expected.batches.len() >= 120);
+                assert!(expected.ops.len() >= 120);
                 let player = &mut state.players_runtime.players[0];
                 player.combo = 0;
                 player.last_judgment = None;
@@ -932,8 +917,11 @@ L000
                     &mut text_cache,
                     &mut compose_scratch,
                 );
-                assert!(expected.objects.len() > without_feedback.objects.len());
-                compose_scratch.recycle_render_list(&mut without_feedback);
+                assert!(
+                    expected.sprite_instances.len() > without_feedback.sprite_instances.len()
+                        || expected.ops.len() > without_feedback.ops.len()
+                );
+                compose_scratch.recycle_frame(&mut without_feedback);
 
                 state.profiles_runtime.profiles[0]
                     .set_scroll_option(profile_data::ScrollOption::Reverse);
@@ -947,7 +935,7 @@ L000
                     &mut text_cache,
                     &mut compose_scratch,
                 );
-                assert_ne!(compare_render_lists(&expected, &reverse), Ok(()));
+                assert_ne!(compare_render_frames(&expected, &reverse), Ok(()));
             },
         );
     }
@@ -1000,9 +988,9 @@ L000
     #[derive(Clone, Copy)]
     struct GpuFrameStats {
         hash: u64,
-        objects: usize,
+        ops: usize,
         instances: usize,
-        batches: usize,
+        geometries: usize,
         noteskin_sprites: usize,
     }
 
@@ -1065,7 +1053,7 @@ L000
     struct GpuTimingStorage {
         actor_capacity: usize,
         compose: compose::ComposeStorageStats,
-        draw: deadlib_render::draw_prep::DrawStorageStats,
+        draw: DrawStorageStats,
     }
 
     #[cfg(target_os = "windows")]
@@ -1408,7 +1396,7 @@ L000
             .draw(&render, assets.textures(), false)
             .map_err(|error| format!("timing draw failed: {error}"))?;
         let draw_us = gpu_elapsed_us(draw_started);
-        compose_scratch.recycle_render_list(&mut render);
+        compose_scratch.recycle_frame(&mut render);
         let frame_us = gpu_elapsed_us(frame_started);
 
         Ok(GpuFrameTiming {
@@ -1593,7 +1581,7 @@ L000
         );
         let missing_keys = missing_capture_texture_keys(&texture_ctx, assets);
         if !missing_keys.is_empty() {
-            compose_scratch.recycle_render_list(&mut render);
+            compose_scratch.recycle_frame(&mut render);
             for key in &missing_keys {
                 ensure_gpu_capture_texture(assets, backend, key, None)?;
             }
@@ -1636,15 +1624,19 @@ L000
             });
         }
         let noteskin_sprites = render
-            .objects
+            .ops
             .iter()
-            .filter(|object| {
-                matches!(object.object_type, ObjectType::Sprite(_))
-                    && noteskin_handles.contains(&object.texture_handle)
+            .filter_map(|op| {
+                let DrawOp::Sprite(run) = op else {
+                    return None;
+                };
+                noteskin_handles
+                    .contains(&run.texture_handle)
+                    .then_some(run.instance_count as usize)
             })
-            .count();
+            .sum();
         if noteskin_sprites < 200 {
-            compose_scratch.recycle_render_list(&mut render);
+            compose_scratch.recycle_frame(&mut render);
             return Err(format!(
                 "{name} frame has only {noteskin_sprites} resident noteskin sprites"
             ));
@@ -1678,12 +1670,12 @@ L000
             .map_err(|error| format!("failed to save '{}': {error}", path.display()))?;
         let stats = GpuFrameStats {
             hash: gpu_frame_hash(&image),
-            objects: render.objects.len(),
+            ops: render.ops.len(),
             instances: render.sprite_instances.len(),
-            batches: render.batches.len(),
+            geometries: render.tmesh_geometries.len(),
             noteskin_sprites,
         };
-        compose_scratch.recycle_render_list(&mut render);
+        compose_scratch.recycle_frame(&mut render);
         Ok((path, stats))
     }
 
@@ -1791,19 +1783,19 @@ L000
             let manifest = format!(
                 "fixture=F0-sprite-core\nbackend={backend_type}\nprofile={profile}\n\
                  resolution=640x480\nmusic_time_seconds=2.5\n\
-                 normal_hash={:016x}\nnormal_objects={}\nnormal_instances={}\nnormal_batches={}\n\
+                 normal_hash={:016x}\nnormal_ops={}\nnormal_instances={}\nnormal_geometries={}\n\
                  normal_noteskin_sprites={}\n\
-                 reverse_hash={:016x}\nreverse_objects={}\nreverse_instances={}\nreverse_batches={}\n\
+                 reverse_hash={:016x}\nreverse_ops={}\nreverse_instances={}\nreverse_geometries={}\n\
                  reverse_noteskin_sprites={}\n",
                 normal.hash,
-                normal.objects,
+                normal.ops,
                 normal.instances,
-                normal.batches,
+                normal.geometries,
                 normal.noteskin_sprites,
                 reverse.hash,
-                reverse.objects,
+                reverse.ops,
                 reverse.instances,
-                reverse.batches,
+                reverse.geometries,
                 reverse.noteskin_sprites,
             );
             std::fs::write(&manifest_path, manifest).map_err(|error| {
@@ -1908,7 +1900,6 @@ L000
                 let mut actors = Vec::with_capacity(512);
                 let mut text_cache = compose::TextLayoutCache::default();
                 let mut compose_scratch = compose::ComposeScratch::default();
-                let mut draw_scratch = DrawScratch::default();
                 let mut checksum = 0usize;
 
                 for _ in 0..WARMUP_FRAMES {
@@ -1919,14 +1910,9 @@ L000
                         &mut actors,
                         &mut text_cache,
                         &mut compose_scratch,
-                        &mut draw_scratch,
                     ));
                 }
-                let capacity_before = (
-                    actors.capacity(),
-                    compose_scratch.storage_stats(),
-                    draw_scratch.storage_stats(),
-                );
+                let capacity_before = (actors.capacity(), compose_scratch.storage_stats());
 
                 ALLOC.begin();
                 for _ in 0..MEASURE_FRAMES {
@@ -1937,15 +1923,10 @@ L000
                         &mut actors,
                         &mut text_cache,
                         &mut compose_scratch,
-                        &mut draw_scratch,
                     ));
                 }
                 let counts = ALLOC.end();
-                let capacity_after = (
-                    actors.capacity(),
-                    compose_scratch.storage_stats(),
-                    draw_scratch.storage_stats(),
-                );
+                let capacity_after = (actors.capacity(), compose_scratch.storage_stats());
 
                 assert_ne!(std::hint::black_box(checksum), 0);
                 assert_eq!(capacity_after, capacity_before);
@@ -2162,7 +2143,7 @@ M000
                     &mut text_cache,
                     &mut compose_scratch,
                 );
-                assert_ne!(compare_render_lists(&normal, &reverse), Ok(()));
+                assert_ne!(compare_render_frames(&normal, &reverse), Ok(()));
 
                 state.clear_active_holds();
                 state.display.hold_feedback.clear();
@@ -2177,10 +2158,10 @@ M000
                     &mut compose_scratch,
                 );
                 assert_ne!(
-                    compare_render_lists(&reverse, &without_live_feedback),
+                    compare_render_frames(&reverse, &without_live_feedback),
                     Ok(())
                 );
-                compose_scratch.recycle_render_list(&mut without_live_feedback);
+                compose_scratch.recycle_frame(&mut without_live_feedback);
             },
         );
     }
@@ -2318,12 +2299,8 @@ M000
                             &mut text_cache,
                             &mut compose_scratch,
                         );
-                        assert!(frame.objects.iter().any(|object| {
-                            matches!(
-                                object.object_type,
-                                ObjectType::TexturedMesh { geom_cache_key, .. }
-                                    if geom_cache_key != deadlib_render::INVALID_TMESH_CACHE_KEY
-                            )
+                        assert!(frame.tmesh_geometries.iter().any(|geometry| {
+                            geometry.cache_key != deadlib_render::INVALID_TMESH_CACHE_KEY
                         }));
                         frame
                     };
@@ -2332,9 +2309,9 @@ M000
                 let alternate =
                     render_variant(profile_data::ScrollOption::Alternate, [0.0, 1.0, 0.0, 1.0]);
                 let cross = render_variant(profile_data::ScrollOption::Cross, [0.0, 1.0, 1.0, 0.0]);
-                assert_ne!(compare_render_lists(&split, &alternate), Ok(()));
-                assert_ne!(compare_render_lists(&split, &cross), Ok(()));
-                assert_ne!(compare_render_lists(&alternate, &cross), Ok(()));
+                assert_ne!(compare_render_frames(&split, &alternate), Ok(()));
+                assert_ne!(compare_render_frames(&split, &cross), Ok(()));
+                assert_ne!(compare_render_frames(&alternate, &cross), Ok(()));
             },
         );
     }
@@ -2589,7 +2566,7 @@ return Def.ActorFrame{
                             &mut text_cache,
                             &mut compose_scratch,
                         );
-                        assert_ne!(compare_render_lists(&first, &second), Ok(()));
+                        assert_ne!(compare_render_frames(&first, &second), Ok(()));
                     },
                 );
             })
@@ -2716,7 +2693,7 @@ return Def.ActorFrame{
                 (autoplay, disabled)
             },
         );
-        assert_ne!(compare_render_lists(&autoplay, &autoplay_disabled), Ok(()));
+        assert_ne!(compare_render_frames(&autoplay, &autoplay_disabled), Ok(()));
 
         let (practice_base, practice) = with_session(
             profile_data::PlayStyle::Single,
@@ -2769,9 +2746,9 @@ return Def.ActorFrame{
                 (base, practice_frame)
             },
         );
-        assert_ne!(compare_render_lists(&practice_base, &practice), Ok(()));
-        assert_ne!(compare_render_lists(&versus, &autoplay), Ok(()));
-        assert_ne!(compare_render_lists(&versus, &practice), Ok(()));
+        assert_ne!(compare_render_frames(&practice_base, &practice), Ok(()));
+        assert_ne!(compare_render_frames(&versus, &autoplay), Ok(()));
+        assert_ne!(compare_render_frames(&versus, &practice), Ok(()));
     }
 
     fn generated_runtime_mod_lua() -> &'static str {

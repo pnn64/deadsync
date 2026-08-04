@@ -1,6 +1,8 @@
-pub mod draw_prep;
+mod frame;
 #[cfg(any(test, feature = "test-util"))]
 pub mod frame_compare;
+
+pub use frame::*;
 
 use glam::Mat4 as Matrix4;
 use std::ops::Deref;
@@ -77,255 +79,13 @@ impl<V> TextureHandleMap<V> {
     }
 }
 
-#[derive(Clone)]
-pub struct RenderList {
-    pub clear_color: [f32; 4],
-    pub cameras: Vec<Matrix4>,
-    pub sprite_instances: Vec<SpriteInstanceRaw>,
-    /// Source objects in draw order for direct consumers such as the software renderer.
-    pub objects: Vec<RenderObject>,
-    /// Compact logical runs sorted by `(z, order)` and consumed by draw prep.
-    pub batches: Vec<RenderBatch>,
-}
-
-#[repr(C)]
-#[derive(Clone)]
-pub struct RenderObject {
-    pub texture_handle: TextureHandle,
-    pub order: u32,
-    pub z: i16,
-    pub blend: BlendMode,
-    pub camera: u8,
-    // Keep the frequently scanned draw header and ObjectType discriminant in
-    // the first cache line. The payload is 144 bytes even for a sprite.
-    pub object_type: ObjectType,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct RenderBatch {
-    pub z: i16,
-    pub order: u32,
-    pub kind: RenderBatchKind,
-}
-
-impl RenderBatch {
-    #[inline(always)]
-    pub const fn sort_key(self) -> (i16, u32) {
-        (self.z, self.order)
-    }
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum RenderBatchKind {
-    Sprite {
-        instance_start: u32,
-        instance_count: u32,
-        blend: BlendMode,
-        texture_handle: TextureHandle,
-        camera: u8,
-    },
-    Mesh {
-        object_start: u32,
-        object_count: u32,
-        blend: BlendMode,
-        camera: u8,
-    },
-    TexturedMesh {
-        object_start: u32,
-        object_count: u32,
-    },
-}
-
-pub fn build_render_batches(objects: &[RenderObject], batches: &mut Vec<RenderBatch>) {
-    build_render_batches_inner::<false, false>(objects, batches);
-    batches.sort_unstable_by_key(|batch| batch.sort_key());
-}
-
-/// Builds batches without sorting when `objects` are already ordered by `(z, order)`.
-pub fn build_sorted_render_batches(objects: &[RenderObject], batches: &mut Vec<RenderBatch>) {
-    debug_assert!(
-        objects
-            .windows(2)
-            .all(|pair| (pair[0].z, pair[0].order) <= (pair[1].z, pair[1].order))
-    );
-    build_render_batches_inner::<true, false>(objects, batches);
-}
-
-/// Builds batches without sorting when `objects` are already in draw order.
-/// Returns `false` at the first order inversion and leaves `batches` empty.
-pub fn build_ordered_render_batches(
-    objects: &[RenderObject],
-    batches: &mut Vec<RenderBatch>,
-) -> bool {
-    build_render_batches_inner::<true, true>(objects, batches)
-}
-
-fn build_render_batches_inner<const SORTED: bool, const REQUIRE_ORDERED: bool>(
-    objects: &[RenderObject],
-    batches: &mut Vec<RenderBatch>,
-) -> bool {
-    batches.clear();
-    if batches.capacity() < objects.len() {
-        batches.reserve(objects.len());
-    }
-    let mut index = 0usize;
-    while index < objects.len() {
-        let object = &objects[index];
-        if REQUIRE_ORDERED
-            && index != 0
-            && (objects[index - 1].z, objects[index - 1].order) > (object.z, object.order)
-        {
-            batches.clear();
-            return false;
-        }
-        match &object.object_type {
-            ObjectType::Sprite(instance_start) => {
-                if object.texture_handle == INVALID_TEXTURE_HANDLE {
-                    index += 1;
-                    continue;
-                }
-                let mut count = 1usize;
-                while let Some(next) = objects.get(index + count)
-                    && next.z == object.z
-                    && batch_order_continues::<SORTED, REQUIRE_ORDERED>(objects, index, count)
-                    && next.texture_handle == object.texture_handle
-                    && next.blend == object.blend
-                    && next.camera == object.camera
-                    && let ObjectType::Sprite(next_instance) = &next.object_type
-                    && *next_instance == instance_start.saturating_add(count as u32)
-                {
-                    count += 1;
-                }
-                batches.push(RenderBatch {
-                    z: object.z,
-                    order: object.order,
-                    kind: RenderBatchKind::Sprite {
-                        instance_start: *instance_start,
-                        instance_count: count as u32,
-                        blend: object.blend,
-                        texture_handle: object.texture_handle,
-                        camera: object.camera,
-                    },
-                });
-                index += count;
-            }
-            ObjectType::Mesh { vertices, .. } => {
-                if vertices.is_empty() {
-                    index += 1;
-                    continue;
-                }
-                let mut count = 1usize;
-                while let Some(next) = objects.get(index + count)
-                    && next.z == object.z
-                    && batch_order_continues::<SORTED, REQUIRE_ORDERED>(objects, index, count)
-                    && next.blend == object.blend
-                    && next.camera == object.camera
-                    && matches!(&next.object_type, ObjectType::Mesh { vertices, .. } if !vertices.is_empty())
-                {
-                    count += 1;
-                }
-                batches.push(RenderBatch {
-                    z: object.z,
-                    order: object.order,
-                    kind: RenderBatchKind::Mesh {
-                        object_start: index as u32,
-                        object_count: count as u32,
-                        blend: object.blend,
-                        camera: object.camera,
-                    },
-                });
-                index += count;
-            }
-            ObjectType::TexturedMesh { vertices, .. } => {
-                if vertices.is_empty() || object.texture_handle == INVALID_TEXTURE_HANDLE {
-                    index += 1;
-                    continue;
-                }
-                let mut count = 1usize;
-                while let Some(next) = objects.get(index + count)
-                    && next.z == object.z
-                    && batch_order_continues::<SORTED, REQUIRE_ORDERED>(objects, index, count)
-                    && same_tmesh_batch(object, next)
-                {
-                    count += 1;
-                }
-                batches.push(RenderBatch {
-                    z: object.z,
-                    order: object.order,
-                    kind: RenderBatchKind::TexturedMesh {
-                        object_start: index as u32,
-                        object_count: count as u32,
-                    },
-                });
-                index += count;
-            }
-        }
-    }
-    true
-}
-
-#[inline(always)]
-fn batch_order_continues<const SORTED: bool, const REQUIRE_ORDERED: bool>(
-    objects: &[RenderObject],
-    index: usize,
-    count: usize,
-) -> bool {
-    if !SORTED {
-        return objects[index + count].order == objects[index].order.saturating_add(count as u32);
-    }
-    // Once objects are sorted, gaps only represent work emitted on another
-    // z-layer. Adjacent compatible objects still preserve their complete draw
-    // order, so splitting the run at a gap would only add a draw call.
-    !REQUIRE_ORDERED || objects[index + count - 1].order <= objects[index + count].order
-}
-
-#[inline(always)]
-fn same_tmesh_batch(left: &RenderObject, right: &RenderObject) -> bool {
-    let (
-        ObjectType::TexturedMesh {
-            vertices: left_vertices,
-            geom_cache_key: left_cache_key,
-            depth_test: left_depth_test,
-            ..
-        },
-        ObjectType::TexturedMesh {
-            vertices: right_vertices,
-            geom_cache_key: right_cache_key,
-            depth_test: right_depth_test,
-            ..
-        },
-    ) = (&left.object_type, &right.object_type)
-    else {
-        return false;
-    };
-    left.texture_handle == right.texture_handle
-        && left.blend == right.blend
-        && left.camera == right.camera
-        && left_depth_test == right_depth_test
-        && left_cache_key == right_cache_key
-        && (*left_cache_key != INVALID_TMESH_CACHE_KEY
-            || same_tmesh_vertices(left_vertices, right_vertices))
-}
-
-#[inline(always)]
-fn same_tmesh_vertices(left: &TexturedMeshVertices, right: &TexturedMeshVertices) -> bool {
-    match (left, right) {
-        (TexturedMeshVertices::Shared(left), TexturedMeshVertices::Shared(right)) => {
-            Arc::ptr_eq(left, right)
-        }
-        (TexturedMeshVertices::Reusable(left), TexturedMeshVertices::Reusable(right)) => {
-            Arc::ptr_eq(left, right)
-        }
-        _ => false,
-    }
-}
-
 #[repr(C)]
 #[derive(
     Clone,
     Copy,
     Debug,
     Default,
+    PartialEq,
     serde::Serialize,
     serde::Deserialize,
     bytemuck::Pod,
@@ -334,31 +94,6 @@ fn same_tmesh_vertices(left: &TexturedMeshVertices, right: &TexturedMeshVertices
 pub struct MeshVertex {
     pub pos: [f32; 2],
     pub color: [f32; 4],
-}
-
-#[derive(Clone)]
-pub enum MeshVertices {
-    Shared(Arc<[MeshVertex]>),
-    Reusable(Arc<Vec<MeshVertex>>),
-}
-
-impl AsRef<[MeshVertex]> for MeshVertices {
-    #[inline(always)]
-    fn as_ref(&self) -> &[MeshVertex] {
-        match self {
-            Self::Shared(vertices) => vertices.as_ref(),
-            Self::Reusable(vertices) => vertices.as_slice(),
-        }
-    }
-}
-
-impl Deref for MeshVertices {
-    type Target = [MeshVertex];
-
-    #[inline(always)]
-    fn deref(&self) -> &Self::Target {
-        self.as_ref()
-    }
 }
 
 #[repr(C)]
@@ -557,22 +292,6 @@ impl TexturedMeshInstanceRaw {
             transform.w_axis.w,
         ];
     }
-}
-
-#[derive(Clone)]
-pub enum ObjectType {
-    Sprite(u32),
-    Mesh {
-        transform: Matrix4,
-        tint: [f32; 4],
-        vertices: MeshVertices,
-    },
-    TexturedMesh {
-        instance: TexturedMeshInstanceRaw,
-        vertices: TexturedMeshVertices,
-        geom_cache_key: TMeshCacheKey,
-        depth_test: bool,
-    },
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -841,7 +560,7 @@ pub struct DrawStats {
     pub backend_prepare_us: u32,
     pub backend_upload_us: u32,
     pub backend_record_us: u32,
-    pub storage: draw_prep::DrawStorageStats,
+    pub storage: DrawStorageStats,
 }
 impl PresentModePolicy {
     #[inline(always)]
@@ -904,156 +623,6 @@ mod tests {
         assert_eq!(textures.remove(&1), Some(11));
         assert_eq!(textures.get(&1), None);
         assert_eq!(textures.values().copied().collect::<Vec<_>>(), vec![30]);
-    }
-
-    #[test]
-    fn render_object_keeps_batch_header_next_to_payload_tag() {
-        assert_eq!(std::mem::offset_of!(RenderObject, texture_handle), 0);
-        assert_eq!(std::mem::offset_of!(RenderObject, order), 8);
-        assert_eq!(std::mem::offset_of!(RenderObject, z), 12);
-        assert_eq!(std::mem::offset_of!(RenderObject, blend), 14);
-        assert_eq!(std::mem::offset_of!(RenderObject, camera), 15);
-        assert_eq!(std::mem::offset_of!(RenderObject, object_type), 16);
-        assert_eq!(std::mem::size_of::<RenderObject>(), 160);
-    }
-
-    fn batch_sprite(z: i16, order: u32) -> RenderObject {
-        RenderObject {
-            object_type: ObjectType::Sprite(order),
-            texture_handle: u64::from(order) + 1,
-            blend: BlendMode::Alpha,
-            z,
-            order,
-            camera: 0,
-        }
-    }
-
-    #[test]
-    fn render_batches_order_without_permuting_large_objects() {
-        let objects = vec![
-            batch_sprite(5, 3),
-            batch_sprite(4, 0),
-            batch_sprite(5, 1),
-            batch_sprite(5, 2),
-        ];
-        let original_keys = objects
-            .iter()
-            .map(|object| (object.z, object.order))
-            .collect::<Vec<_>>();
-        let mut batches = Vec::new();
-
-        build_render_batches(&objects, &mut batches);
-
-        assert_eq!(
-            batches
-                .iter()
-                .map(|batch| batch.sort_key())
-                .collect::<Vec<_>>(),
-            vec![(4, 0), (5, 1), (5, 2), (5, 3)]
-        );
-        assert_eq!(
-            objects
-                .iter()
-                .map(|object| (object.z, object.order))
-                .collect::<Vec<_>>(),
-            original_keys
-        );
-    }
-
-    #[test]
-    fn ordered_batch_build_aborts_at_first_order_inversion() {
-        let objects = vec![batch_sprite(5, 0), batch_sprite(4, 1)];
-        let mut batches = Vec::new();
-
-        assert!(!build_ordered_render_batches(&objects, &mut batches));
-        assert!(batches.is_empty());
-    }
-
-    #[test]
-    fn sorted_batch_build_keeps_compatible_sprites_across_order_gaps() {
-        let objects = vec![
-            RenderObject {
-                object_type: ObjectType::Sprite(0),
-                texture_handle: 7,
-                blend: BlendMode::Alpha,
-                z: 5,
-                order: 10,
-                camera: 0,
-            },
-            RenderObject {
-                object_type: ObjectType::Sprite(1),
-                texture_handle: 7,
-                blend: BlendMode::Alpha,
-                z: 5,
-                order: 14,
-                camera: 0,
-            },
-        ];
-        let mut general = Vec::new();
-        let mut sorted = Vec::new();
-        let mut ordered = Vec::new();
-
-        build_render_batches(&objects, &mut general);
-        build_sorted_render_batches(&objects, &mut sorted);
-        assert!(build_ordered_render_batches(&objects, &mut ordered));
-
-        assert_eq!(general.len(), 2);
-        assert_eq!(sorted, ordered);
-        assert!(matches!(
-            sorted.as_slice(),
-            [RenderBatch {
-                kind: RenderBatchKind::Sprite {
-                    instance_start: 0,
-                    instance_count: 2,
-                    texture_handle: 7,
-                    ..
-                },
-                ..
-            }]
-        ));
-    }
-
-    #[test]
-    fn ordered_batch_build_detects_inversion_inside_compatible_run() {
-        let objects = vec![
-            RenderObject {
-                object_type: ObjectType::Sprite(0),
-                texture_handle: 7,
-                blend: BlendMode::Alpha,
-                z: 5,
-                order: 14,
-                camera: 0,
-            },
-            RenderObject {
-                object_type: ObjectType::Sprite(1),
-                texture_handle: 7,
-                blend: BlendMode::Alpha,
-                z: 5,
-                order: 10,
-                camera: 0,
-            },
-        ];
-        let mut batches = Vec::new();
-
-        assert!(!build_ordered_render_batches(&objects, &mut batches));
-        assert!(batches.is_empty());
-    }
-
-    #[test]
-    fn sorted_batch_build_matches_general_builder() {
-        let objects = vec![
-            batch_sprite(4, 0),
-            batch_sprite(5, 1),
-            batch_sprite(5, 2),
-            batch_sprite(5, 3),
-        ];
-        let mut expected = Vec::new();
-        let mut actual = Vec::new();
-
-        build_render_batches(&objects, &mut expected);
-        build_sorted_render_batches(&objects, &mut actual);
-
-        assert_eq!(actual, expected);
     }
 
     #[test]

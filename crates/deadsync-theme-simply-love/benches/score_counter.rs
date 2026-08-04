@@ -252,14 +252,18 @@ fn compose_frame(
         scratch,
     );
     let checksum = render
-        .objects
+        .ops
         .iter()
-        .map(|object| match &object.object_type {
-            deadlib_render::ObjectType::TexturedMesh { vertices, .. } => vertices.len(),
+        .map(|op| match op {
+            deadlib_render::DrawOp::TexturedMesh(run) => render.tmesh_geometries
+                [run.geometry as usize]
+                .vertices
+                .len()
+                .saturating_mul(run.instance_count as usize),
             _ => 0,
         })
         .sum();
-    scratch.recycle_render_list(&mut render);
+    scratch.recycle_frame(&mut render);
     checksum
 }
 

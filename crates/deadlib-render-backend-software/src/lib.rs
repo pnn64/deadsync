@@ -1,6 +1,7 @@
 use deadlib_render::{
-    BlendMode, DrawStats, ObjectType, RenderList, RenderObject, SamplerDesc, SamplerFilter,
-    SamplerWrap, SpriteInstanceRaw, TextureHandle,
+    BlendMode, DrawOp, DrawStats, RenderFrame, SOFTWARE_MESH_STORAGE_SLOT,
+    SOFTWARE_OBJECTS_STORAGE_SLOT, SOFTWARE_TMESH_STORAGE_SLOT, SamplerDesc, SamplerFilter,
+    SamplerWrap, TextureHandle, draw_storage_stats,
 };
 use glam::{Mat4 as Matrix4, Vec4 as Vector4};
 use image::RgbaImage;
@@ -62,8 +63,10 @@ enum PreparedObject {
         blend: BlendMode,
     },
     DirectMesh {
-        object_index: u32,
-        mvp: Matrix4,
+        vertex_start: u32,
+        vertex_count: u32,
+        projection: Matrix4,
+        blend: BlendMode,
     },
     TexturedMesh {
         vertex_start: u32,
@@ -73,8 +76,11 @@ enum PreparedObject {
         texture_handle: TextureHandle,
     },
     DirectTexturedMesh {
-        object_index: u32,
+        geometry: u32,
+        instance: u32,
         mvp: Matrix4,
+        blend: BlendMode,
+        texture_handle: TextureHandle,
     },
 }
 
@@ -149,7 +155,7 @@ pub fn update_texture(texture: &mut Texture, image: &RgbaImage) -> Result<(), Bo
 
 pub fn draw(
     state: &mut State,
-    render_list: &RenderList,
+    frame: &RenderFrame,
     textures: &(impl TextureLookup + Sync),
     _apply_present_back_pressure: bool,
 ) -> Result<DrawStats, Box<dyn Error>> {
@@ -174,22 +180,17 @@ pub fn draw(
         return Ok(DrawStats::default());
     }
 
-    let objects = render_list.objects.as_slice();
-    let cameras = render_list.cameras.as_slice();
-    let sprite_instances = render_list.sprite_instances.as_slice();
     let default_proj = state.projection;
     let threads = match state.thread_hint {
         Some(threads) if threads >= 1 => threads.min(state.available_threads),
         _ => state.available_threads,
     };
-    let use_parallel = threads > 1 && h >= SOFTWARE_ROW_CHUNK * 2 && !objects.is_empty();
+    let use_parallel = threads > 1 && h >= SOFTWARE_ROW_CHUNK * 2 && !frame.ops.is_empty();
     let stage_meshes = use_parallel && h.div_ceil(SOFTWARE_ROW_CHUNK) >= MIN_STAGE_MESH_STRIPES;
     let backend_prepare_started = Instant::now();
     ensure_worker_pool(state, threads)?;
     prepare_objects(
-        objects,
-        sprite_instances,
-        cameras,
+        frame,
         default_proj,
         textures,
         w,
@@ -217,7 +218,7 @@ pub fn draw(
     let mut buffer = state.surface.buffer_mut()?;
     let backend_setup_us = elapsed_us_since(backend_setup_started);
     let backend_record_started = Instant::now();
-    let clear = pack_rgba(render_list.clear_color);
+    let clear = pack_rgba(frame.clear_color);
     for pixel in buffer.iter_mut() {
         *pixel = clear;
     }
@@ -235,7 +236,7 @@ pub fn draw(
                     let y_start = chunk_index * SOFTWARE_ROW_CHUNK;
                     let y_end = y_start + stripe.len() / w;
                     draw_rows(
-                        objects,
+                        frame,
                         prepared_objects,
                         prepared_mesh_vertices,
                         prepared_tmesh_vertices,
@@ -251,7 +252,7 @@ pub fn draw(
         })
     } else {
         draw_rows(
-            objects,
+            frame,
             prepared_objects,
             prepared_mesh_vertices,
             prepared_tmesh_vertices,
@@ -269,19 +270,17 @@ pub fn draw(
     buffer.present()?;
 
     // The software path retains its own prepared-object and projected-vertex storage.
-    let mut storage = deadlib_render::draw_prep::DrawStorageStats::default();
-    storage.capacities[deadlib_render::draw_prep::SOFTWARE_OBJECTS_STORAGE_SLOT] =
+    let mut storage = draw_storage_stats(frame, None);
+    storage.capacities[SOFTWARE_OBJECTS_STORAGE_SLOT] =
         state.prepared_objects.capacity().min(u32::MAX as usize) as u32;
-    storage.capacities[deadlib_render::draw_prep::SOFTWARE_MESH_STORAGE_SLOT] = state
+    storage.capacities[SOFTWARE_MESH_STORAGE_SLOT] = state
         .prepared_mesh_vertices
         .capacity()
-        .min(u32::MAX as usize)
-        as u32;
-    storage.capacities[deadlib_render::draw_prep::SOFTWARE_TMESH_STORAGE_SLOT] = state
+        .min(u32::MAX as usize) as u32;
+    storage.capacities[SOFTWARE_TMESH_STORAGE_SLOT] = state
         .prepared_tmesh_vertices
         .capacity()
-        .min(u32::MAX as usize)
-        as u32;
+        .min(u32::MAX as usize) as u32;
     Ok(DrawStats {
         vertices,
         present_us: elapsed_us_since(present_started),
@@ -295,9 +294,7 @@ pub fn draw(
 
 #[allow(clippy::too_many_arguments)]
 fn prepare_objects(
-    objects: &[RenderObject],
-    sprite_instances: &[SpriteInstanceRaw],
-    cameras: &[Matrix4],
+    frame: &RenderFrame,
     default_proj: Matrix4,
     textures: &(impl TextureLookup + Sync),
     width: usize,
@@ -308,65 +305,81 @@ fn prepare_objects(
     stage_meshes: bool,
 ) {
     prepared.clear();
-    prepared.reserve(objects.len());
+    prepared.reserve(
+        frame
+            .sprite_instances
+            .len()
+            .saturating_add(frame.tmesh_instances.len()),
+    );
     mesh_vertices.clear();
     tmesh_vertices.clear();
 
-    for (object_index, object) in objects.iter().enumerate() {
-        let projection = cameras
-            .get(object.camera as usize)
-            .copied()
-            .unwrap_or(default_proj);
-        match &object.object_type {
-            ObjectType::Sprite(sprite_index) => {
-                let Some(sprite) = sprite_instances.get(*sprite_index as usize) else {
-                    continue;
-                };
-                if sprite.tint[3] <= 0.0 {
-                    continue;
+    for op in &frame.ops {
+        match *op {
+            DrawOp::Sprite(run) => {
+                let projection = frame
+                    .cameras
+                    .get(run.camera as usize)
+                    .copied()
+                    .unwrap_or(default_proj);
+                let end = run.instance_start.saturating_add(run.instance_count);
+                for sprite_index in run.instance_start..end {
+                    let Some(sprite) = frame.sprite_instances.get(sprite_index as usize) else {
+                        continue;
+                    };
+                    if sprite.tint[3] <= 0.0 {
+                        continue;
+                    }
+                    let Some(vertices) = prepare_sprite_vertices(
+                        &projection,
+                        sprite.center,
+                        sprite.size,
+                        sprite.rot_sin_cos,
+                        sprite.uv_scale,
+                        sprite.uv_offset,
+                        sprite.local_offset,
+                        sprite.local_offset_rot_sin_cos,
+                        width,
+                        height,
+                    ) else {
+                        continue;
+                    };
+                    prepared.push(PreparedObject::Sprite {
+                        vertices,
+                        tint: sprite.tint,
+                        texture_mask: sprite.texture_mask != 0.0,
+                        blend: run.blend,
+                        texture_handle: run.texture_handle,
+                    });
                 }
-                let Some(vertices) = prepare_sprite_vertices(
-                    &projection,
-                    sprite.center,
-                    sprite.size,
-                    sprite.rot_sin_cos,
-                    sprite.uv_scale,
-                    sprite.uv_offset,
-                    sprite.local_offset,
-                    sprite.local_offset_rot_sin_cos,
-                    width,
-                    height,
-                ) else {
+            }
+            DrawOp::Mesh(run) => {
+                let projection = frame
+                    .cameras
+                    .get(run.camera as usize)
+                    .copied()
+                    .unwrap_or(default_proj);
+                let start = run.vertex_start as usize;
+                let end = start.saturating_add(run.vertex_count as usize);
+                let Some(vertices) = frame.mesh_vertices.get(start..end) else {
                     continue;
                 };
-                prepared.push(PreparedObject::Sprite {
-                    vertices,
-                    tint: sprite.tint,
-                    texture_mask: sprite.texture_mask != 0.0,
-                    blend: object.blend,
-                    texture_handle: object.texture_handle,
-                });
-            }
-            ObjectType::Mesh {
-                transform,
-                tint,
-                vertices,
-            } => {
-                let mvp = projection * *transform;
                 if !stage_meshes
                     || vertices.len() > mesh_vertices.capacity().saturating_sub(mesh_vertices.len())
                 {
                     prepared.push(PreparedObject::DirectMesh {
-                        object_index: object_index as u32,
-                        mvp,
+                        vertex_start: run.vertex_start,
+                        vertex_count: run.vertex_count,
+                        projection,
+                        blend: run.blend,
                     });
                     continue;
                 }
                 let Some((vertex_start, projected_count)) = prepare_mesh_vertices(
                     mesh_vertices,
-                    &mvp,
-                    *tint,
-                    vertices.as_ref(),
+                    &projection,
+                    [1.0; 4],
+                    vertices,
                     width,
                     height,
                 ) else {
@@ -375,55 +388,70 @@ fn prepare_objects(
                 prepared.push(PreparedObject::Mesh {
                     vertex_start,
                     projected_count,
-                    blend: object.blend,
+                    blend: run.blend,
                 });
             }
-            ObjectType::TexturedMesh {
-                instance, vertices, ..
-            } => {
-                let mvp = projection * instance.transform();
-                if !stage_meshes
-                    || vertices.len()
-                        > tmesh_vertices
-                            .capacity()
-                            .saturating_sub(tmesh_vertices.len())
-                {
-                    prepared.push(PreparedObject::DirectTexturedMesh {
-                        object_index: object_index as u32,
-                        mvp,
-                    });
-                    continue;
-                }
-                if textures.software_texture(object.texture_handle).is_none() {
-                    continue;
-                }
-                let Some((vertex_start, projected_count)) = prepare_tmesh_vertices(
-                    tmesh_vertices,
-                    &mvp,
-                    instance.tint,
-                    instance.uv_scale,
-                    instance.uv_offset,
-                    instance.uv_tex_shift,
-                    vertices.as_ref(),
-                    width,
-                    height,
-                ) else {
+            DrawOp::TexturedMesh(run) => {
+                let Some(geometry) = frame.tmesh_geometries.get(run.geometry as usize) else {
                     continue;
                 };
-                prepared.push(PreparedObject::TexturedMesh {
-                    vertex_start,
-                    projected_count,
-                    texture_mask: instance.texture_mask != 0.0,
-                    blend: object.blend,
-                    texture_handle: object.texture_handle,
-                });
+                if textures.software_texture(run.texture_handle).is_none() {
+                    continue;
+                }
+                let projection = frame
+                    .cameras
+                    .get(run.camera as usize)
+                    .copied()
+                    .unwrap_or(default_proj);
+                let end = run.instance_start.saturating_add(run.instance_count);
+                for instance_index in run.instance_start..end {
+                    let Some(instance) = frame.tmesh_instances.get(instance_index as usize) else {
+                        continue;
+                    };
+                    let mvp = projection * instance.transform();
+                    if !stage_meshes
+                        || geometry.vertices.len()
+                            > tmesh_vertices
+                                .capacity()
+                                .saturating_sub(tmesh_vertices.len())
+                    {
+                        prepared.push(PreparedObject::DirectTexturedMesh {
+                            geometry: run.geometry,
+                            instance: instance_index,
+                            mvp,
+                            blend: run.blend,
+                            texture_handle: run.texture_handle,
+                        });
+                        continue;
+                    }
+                    let Some((vertex_start, projected_count)) = prepare_tmesh_vertices(
+                        tmesh_vertices,
+                        &mvp,
+                        instance.tint,
+                        instance.uv_scale,
+                        instance.uv_offset,
+                        instance.uv_tex_shift,
+                        geometry.vertices.as_ref(),
+                        width,
+                        height,
+                    ) else {
+                        continue;
+                    };
+                    prepared.push(PreparedObject::TexturedMesh {
+                        vertex_start,
+                        projected_count,
+                        texture_mask: instance.texture_mask != 0.0,
+                        blend: run.blend,
+                        texture_handle: run.texture_handle,
+                    });
+                }
             }
         }
     }
 }
 
 fn draw_rows(
-    objects: &[RenderObject],
+    frame: &RenderFrame,
     prepared_objects: &[PreparedObject],
     mesh_vertices: &[ScreenVertexColor],
     tmesh_vertices: &[ScreenVertexTexColor],
@@ -481,19 +509,21 @@ fn draw_rows(
                 );
                 *projected_count
             }
-            PreparedObject::DirectMesh { object_index, mvp } => {
-                let Some(RenderObject {
-                    object_type: ObjectType::Mesh { tint, vertices, .. },
-                    blend,
-                    ..
-                }) = objects.get(*object_index as usize)
-                else {
+            PreparedObject::DirectMesh {
+                vertex_start,
+                vertex_count,
+                projection,
+                blend,
+            } => {
+                let start = *vertex_start as usize;
+                let end = start.saturating_add(*vertex_count as usize);
+                let Some(vertices) = frame.mesh_vertices.get(start..end) else {
                     continue;
                 };
                 rasterize_mesh_triangles(
-                    mvp,
-                    *tint,
-                    vertices.as_ref(),
+                    projection,
+                    [1.0; 4],
+                    vertices,
                     *blend,
                     width,
                     height,
@@ -528,17 +558,17 @@ fn draw_rows(
                 );
                 *projected_count
             }
-            PreparedObject::DirectTexturedMesh { object_index, mvp } => {
-                let Some(RenderObject {
-                    object_type:
-                        ObjectType::TexturedMesh {
-                            instance, vertices, ..
-                        },
-                    texture_handle,
-                    blend,
-                    ..
-                }) = objects.get(*object_index as usize)
-                else {
+            PreparedObject::DirectTexturedMesh {
+                geometry,
+                instance,
+                mvp,
+                blend,
+                texture_handle,
+            } => {
+                let Some(geometry) = frame.tmesh_geometries.get(*geometry as usize) else {
+                    continue;
+                };
+                let Some(instance) = frame.tmesh_instances.get(*instance as usize) else {
                     continue;
                 };
                 let Some(tex) = textures.software_texture(*texture_handle) else {
@@ -546,7 +576,7 @@ fn draw_rows(
                 };
                 rasterize_textured_mesh_triangles(
                     mvp,
-                    vertices.as_ref(),
+                    geometry.vertices.as_ref(),
                     instance.tint,
                     instance.uv_scale,
                     instance.uv_offset,
@@ -2149,8 +2179,9 @@ fn edge_function(x0: f32, y0: f32, x1: f32, y1: f32, px: f32, py: f32) -> f32 {
 mod tests {
     use super::*;
     use deadlib_render::{
-        INVALID_TMESH_CACHE_KEY, MeshVertex, MeshVertices, TexturedMeshInstanceRaw,
-        TexturedMeshVertex, TexturedMeshVertices,
+        INVALID_TMESH_CACHE_KEY, MeshRun, MeshVertex, SpriteInstanceRaw, SpriteRun,
+        TexturedMeshGeometry, TexturedMeshInstanceRaw, TexturedMeshRun, TexturedMeshVertex,
+        TexturedMeshVertices,
     };
     use glam::Vec3;
     use image::Rgba;
@@ -2173,40 +2204,21 @@ mod tests {
     #[test]
     fn prepared_objects_preserve_striped_mixed_rendering() {
         let textures = test_textures();
-        let sprites = vec![
-            sprite([-90.0, 15.0], 0.17, 0.92),
-            sprite([0.0, 0.0], -0.31, 0.0),
-            sprite([65.0, -35.0], 0.43, 0.75),
-            sprite([95.0, 40.0], -0.12, 0.68),
-        ];
-        let cameras = vec![ortho_for_window(WIDTH as u32, HEIGHT as u32)];
+        let frame = mixed_frame();
         let fallback = Matrix4::from_scale_rotation_translation(
             Vec3::splat(0.93),
             glam::Quat::from_rotation_z(0.04),
             Vec3::new(0.03, -0.02, 0.0),
-        ) * cameras[0];
-        let objects = mixed_objects();
+        ) * frame.cameras[0];
         let clear = pack_rgba([0.025, 0.05, 0.075, 1.0]);
-        let mut legacy_pixels = vec![clear; WIDTH * HEIGHT];
-        let mut current_pixels = vec![clear; WIDTH * HEIGHT];
+        let mut staged_pixels = vec![clear; WIDTH * HEIGHT];
         let mut direct_pixels = vec![clear; WIDTH * HEIGHT];
-
-        let legacy_vertices = render_legacy_stripes(
-            &objects,
-            &sprites,
-            &cameras,
-            fallback,
-            &textures,
-            &mut legacy_pixels,
-        );
 
         let mut prepared = Vec::new();
         let mut prepared_mesh = Vec::with_capacity(MESH_STAGE_VERTEX_CAP);
         let mut prepared_tmesh = Vec::with_capacity(MESH_STAGE_VERTEX_CAP);
         prepare_objects(
-            &objects,
-            &sprites,
-            &cameras,
+            &frame,
             fallback,
             &textures,
             WIDTH,
@@ -2218,18 +2230,16 @@ mod tests {
         );
         assert!(!prepared_mesh.is_empty());
         assert_eq!(prepared_tmesh.len(), 3);
-        let current_vertices = render_prepared_stripes(
-            &objects,
+        let staged_vertices = render_prepared_stripes(
+            &frame,
             &prepared,
             &prepared_mesh,
             &prepared_tmesh,
             &textures,
-            &mut current_pixels,
+            &mut staged_pixels,
         );
         prepare_objects(
-            &objects,
-            &sprites,
-            &cameras,
+            &frame,
             fallback,
             &textures,
             WIDTH,
@@ -2252,7 +2262,7 @@ mod tests {
                 .any(|object| matches!(object, PreparedObject::DirectTexturedMesh { .. }))
         );
         let direct_vertices = render_prepared_stripes(
-            &objects,
+            &frame,
             &prepared,
             &prepared_mesh,
             &prepared_tmesh,
@@ -2260,18 +2270,16 @@ mod tests {
             &mut direct_pixels,
         );
 
-        assert_eq!(current_vertices, legacy_vertices);
-        assert_eq!(direct_vertices, legacy_vertices);
-        assert_eq!(current_vertices, 42);
-        assert_eq!(current_pixels, legacy_pixels);
-        assert_eq!(direct_pixels, legacy_pixels);
-        assert!(current_pixels.iter().any(|pixel| *pixel != clear));
+        assert_eq!(staged_vertices, direct_vertices);
+        assert!(staged_vertices > 0);
+        assert_eq!(staged_pixels, direct_pixels);
+        assert!(staged_pixels.iter().any(|pixel| *pixel != clear));
     }
 
     #[test]
     fn mesh_staging_saturates_without_growing_buffers() {
         let textures = test_textures();
-        let objects = mixed_objects();
+        let frame = mixed_frame();
         let mut prepared = Vec::new();
         let mut prepared_mesh = Vec::with_capacity(2);
         let mut prepared_tmesh = Vec::with_capacity(2);
@@ -2279,9 +2287,7 @@ mod tests {
         let tmesh_capacity = prepared_tmesh.capacity();
 
         prepare_objects(
-            &objects,
-            &[],
-            &[],
+            &frame,
             Matrix4::IDENTITY,
             &textures,
             WIDTH,
@@ -2309,7 +2315,7 @@ mod tests {
     }
 
     fn render_prepared_stripes(
-        objects: &[RenderObject],
+        frame: &RenderFrame,
         prepared: &[PreparedObject],
         mesh_vertices: &[ScreenVertexColor],
         tmesh_vertices: &[ScreenVertexTexColor],
@@ -2323,7 +2329,7 @@ mod tests {
                 let y_start = chunk_index * SOFTWARE_ROW_CHUNK;
                 let y_end = y_start + stripe.len() / WIDTH;
                 draw_rows(
-                    objects,
+                    frame,
                     prepared,
                     mesh_vertices,
                     tmesh_vertices,
@@ -2338,173 +2344,8 @@ mod tests {
             .sum()
     }
 
-    fn render_legacy_stripes(
-        objects: &[RenderObject],
-        sprites: &[SpriteInstanceRaw],
-        cameras: &[Matrix4],
-        fallback: Matrix4,
-        textures: &TestTextures,
-        pixels: &mut [u32],
-    ) -> u32 {
-        pixels
-            .chunks_mut(WIDTH * SOFTWARE_ROW_CHUNK)
-            .enumerate()
-            .map(|(chunk_index, stripe)| {
-                let y_start = chunk_index * SOFTWARE_ROW_CHUNK;
-                let y_end = y_start + stripe.len() / WIDTH;
-                draw_rows_legacy(
-                    objects, sprites, cameras, fallback, textures, y_start, y_end, stripe,
-                )
-            })
-            .sum()
-    }
-
-    #[allow(clippy::too_many_arguments)]
-    fn draw_rows_legacy(
-        objects: &[RenderObject],
-        sprites: &[SpriteInstanceRaw],
-        cameras: &[Matrix4],
-        fallback: Matrix4,
-        textures: &TestTextures,
-        stripe_y_start: usize,
-        stripe_y_end: usize,
-        buffer: &mut [u32],
-    ) -> u32 {
-        let mut vertices_drawn = 0_u32;
-        for object in objects {
-            let projection = cameras
-                .get(object.camera as usize)
-                .copied()
-                .unwrap_or(fallback);
-            let drawn = match &object.object_type {
-                ObjectType::Sprite(sprite_index) => {
-                    let Some(sprite) = sprites.get(*sprite_index as usize) else {
-                        continue;
-                    };
-                    if sprite.tint[3] <= 0.0 {
-                        continue;
-                    }
-                    let Some(texture) = textures.software_texture(object.texture_handle) else {
-                        continue;
-                    };
-                    let Some(vertices) =
-                        project_sprite_like_legacy(&projection, sprite, WIDTH, HEIGHT)
-                    else {
-                        continue;
-                    };
-                    rasterize_prepared_sprite(
-                        &vertices,
-                        sprite.tint,
-                        sprite.texture_mask != 0.0,
-                        object.blend,
-                        &texture.image,
-                        texture.sampler,
-                        WIDTH,
-                        HEIGHT,
-                        stripe_y_start,
-                        stripe_y_end,
-                        buffer,
-                    )
-                }
-                ObjectType::Mesh {
-                    transform,
-                    tint,
-                    vertices,
-                } => {
-                    let mvp = projection * *transform;
-                    rasterize_mesh_triangles(
-                        &mvp,
-                        *tint,
-                        vertices.as_ref(),
-                        object.blend,
-                        WIDTH,
-                        HEIGHT,
-                        stripe_y_start,
-                        stripe_y_end,
-                        buffer,
-                    )
-                }
-                ObjectType::TexturedMesh {
-                    instance, vertices, ..
-                } => {
-                    let Some(texture) = textures.software_texture(object.texture_handle) else {
-                        continue;
-                    };
-                    let mvp = projection * instance.transform();
-                    rasterize_textured_mesh_triangles(
-                        &mvp,
-                        vertices.as_ref(),
-                        instance.tint,
-                        instance.uv_scale,
-                        instance.uv_offset,
-                        instance.uv_tex_shift,
-                        instance.texture_mask != 0.0,
-                        object.blend,
-                        &texture.image,
-                        texture.sampler,
-                        WIDTH,
-                        HEIGHT,
-                        stripe_y_start,
-                        stripe_y_end,
-                        buffer,
-                    )
-                }
-            };
-            vertices_drawn = vertices_drawn.saturating_add(drawn);
-        }
-        vertices_drawn
-    }
-
-    fn project_sprite_like_legacy(
-        projection: &Matrix4,
-        sprite: &SpriteInstanceRaw,
-        width: usize,
-        height: usize,
-    ) -> Option<[ScreenVertex; 4]> {
-        let mut center = sprite.center;
-        if sprite.local_offset[0] != 0.0 || sprite.local_offset[1] != 0.0 {
-            let sine = sprite.local_offset_rot_sin_cos[0];
-            let cosine = sprite.local_offset_rot_sin_cos[1];
-            center[0] += cosine.mul_add(sprite.local_offset[0], -(sine * sprite.local_offset[1]));
-            center[1] += sine.mul_add(sprite.local_offset[0], cosine * sprite.local_offset[1]);
-        }
-
-        let positions: [(f32, f32); 4] = [(-0.5, -0.5), (0.5, -0.5), (0.5, 0.5), (-0.5, 0.5)];
-        let base_uvs: [(f32, f32); 4] = [(0.0, 1.0), (1.0, 1.0), (1.0, 0.0), (0.0, 0.0)];
-        let mut vertices = [ScreenVertex {
-            x: 0.0,
-            y: 0.0,
-            u: 0.0,
-            v: 0.0,
-        }; 4];
-
-        for index in 0..4 {
-            let local_x = positions[index].0 * sprite.size[0];
-            let local_y = positions[index].1 * sprite.size[1];
-            let world = Vector4::new(
-                sprite.rot_sin_cos[1]
-                    .mul_add(local_x, -(sprite.rot_sin_cos[0] * local_y) + center[0]),
-                sprite.rot_sin_cos[0].mul_add(local_x, sprite.rot_sin_cos[1] * local_y + center[1]),
-                center[2],
-                1.0,
-            );
-            let clip = *projection * world;
-            if clip.w == 0.0 {
-                return None;
-            }
-            let base_uv = base_uvs[index];
-            vertices[index] = ScreenVertex {
-                x: ((clip.x / clip.w + 1.0) * 0.5) * width as f32,
-                y: ((1.0 - clip.y / clip.w) * 0.5) * height as f32,
-                u: base_uv.0.mul_add(sprite.uv_scale[0], sprite.uv_offset[0]),
-                v: base_uv.1.mul_add(sprite.uv_scale[1], sprite.uv_offset[1]),
-            };
-        }
-        Some(vertices)
-    }
-
-    fn mixed_objects() -> Vec<RenderObject> {
-        let mesh_vertices: Arc<[MeshVertex]> = vec![
+    fn mixed_frame() -> RenderFrame {
+        let mesh_vertices = vec![
             MeshVertex {
                 pos: [-120.0, -80.0],
                 color: [1.0, 0.2, 0.1, 0.7],
@@ -2529,8 +2370,7 @@ mod tests {
                 pos: [1.0, 1.0],
                 color: [1.0; 4],
             },
-        ]
-        .into();
+        ];
         let textured_vertices: Arc<[TexturedMeshVertex]> = vec![
             textured_vertex([-80.0, -60.0, 0.0], [0.0, 1.0]),
             textured_vertex([75.0, -55.0, 0.0], [1.0, 1.0]),
@@ -2540,79 +2380,85 @@ mod tests {
             textured_vertex([1.0, 1.0, 0.0], [0.0, 0.0]),
         ]
         .into();
-        vec![
-            render_object(
-                ObjectType::Mesh {
-                    transform: Matrix4::from_translation(Vec3::new(35.0, 0.0, 0.0)),
-                    tint: [0.8, 0.9, 1.0, 0.85],
-                    vertices: MeshVertices::Shared(mesh_vertices),
-                },
-                TEXTURE_HANDLE,
-                BlendMode::Alpha,
-                0,
-            ),
-            render_object(ObjectType::Sprite(0), TEXTURE_HANDLE, BlendMode::Alpha, 0),
-            render_object(ObjectType::Sprite(1), TEXTURE_HANDLE, BlendMode::Alpha, 0),
-            render_object(
-                ObjectType::Sprite(2),
-                MISSING_TEXTURE_HANDLE,
-                BlendMode::Alpha,
-                0,
-            ),
-            render_object(
-                ObjectType::TexturedMesh {
-                    instance: TexturedMeshInstanceRaw::new(
-                        Matrix4::from_translation(Vec3::new(50.0, 5.0, 0.0)),
-                        [0.7, 0.8, 1.0, 0.72],
-                        [0.85, 0.9],
-                        [0.07, 0.11],
-                        [0.2, 0.3],
-                        false,
-                    ),
-                    vertices: TexturedMeshVertices::Shared(textured_vertices.clone()),
-                    geom_cache_key: INVALID_TMESH_CACHE_KEY,
+        RenderFrame {
+            clear_color: [0.025, 0.05, 0.075, 1.0],
+            cameras: vec![ortho_for_window(WIDTH as u32, HEIGHT as u32)],
+            sprite_instances: vec![
+                sprite([-30.0, 15.0], 0.17, 0.92),
+                sprite([0.0, 0.0], -0.31, 0.0),
+                sprite([25.0, -25.0], 0.43, 0.75),
+                sprite([30.0, 20.0], -0.12, 0.68),
+            ],
+            mesh_vertices,
+            tmesh_instances: vec![
+                TexturedMeshInstanceRaw::new(
+                    Matrix4::from_translation(Vec3::new(50.0, 5.0, 0.0)),
+                    [0.7, 0.8, 1.0, 0.72],
+                    [0.85, 0.9],
+                    [0.07, 0.11],
+                    [0.2, 0.3],
+                    false,
+                ),
+                TexturedMeshInstanceRaw::new(
+                    Matrix4::from_translation(Vec3::new(-45.0, 20.0, 0.0)),
+                    [0.8, 0.7, 0.9, 0.65],
+                    [0.9, 0.85],
+                    [0.03, 0.08],
+                    [0.1, 0.2],
+                    false,
+                ),
+            ],
+            tmesh_geometries: vec![TexturedMeshGeometry {
+                vertices: TexturedMeshVertices::Shared(textured_vertices),
+                cache_key: INVALID_TMESH_CACHE_KEY,
+            }],
+            ops: vec![
+                DrawOp::Mesh(MeshRun {
+                    vertex_start: 0,
+                    vertex_count: 6,
+                    blend: BlendMode::Alpha,
+                    camera: 0,
+                }),
+                DrawOp::Sprite(SpriteRun {
+                    instance_start: 0,
+                    instance_count: 2,
+                    blend: BlendMode::Alpha,
+                    texture_handle: TEXTURE_HANDLE,
+                    camera: 0,
+                }),
+                DrawOp::Sprite(SpriteRun {
+                    instance_start: 2,
+                    instance_count: 1,
+                    blend: BlendMode::Alpha,
+                    texture_handle: MISSING_TEXTURE_HANDLE,
+                    camera: 0,
+                }),
+                DrawOp::TexturedMesh(TexturedMeshRun {
+                    geometry: 0,
+                    instance_start: 0,
+                    instance_count: 1,
+                    blend: BlendMode::Alpha,
+                    texture_handle: TEXTURE_HANDLE,
+                    camera: 0,
                     depth_test: false,
-                },
-                TEXTURE_HANDLE,
-                BlendMode::Alpha,
-                0,
-            ),
-            render_object(
-                ObjectType::TexturedMesh {
-                    instance: TexturedMeshInstanceRaw::new(
-                        Matrix4::from_translation(Vec3::new(-45.0, 20.0, 0.0)),
-                        [0.8, 0.7, 0.9, 0.65],
-                        [0.9, 0.85],
-                        [0.03, 0.08],
-                        [0.1, 0.2],
-                        false,
-                    ),
-                    vertices: TexturedMeshVertices::Shared(textured_vertices),
-                    geom_cache_key: INVALID_TMESH_CACHE_KEY,
+                }),
+                DrawOp::TexturedMesh(TexturedMeshRun {
+                    geometry: 0,
+                    instance_start: 1,
+                    instance_count: 1,
+                    blend: BlendMode::Alpha,
+                    texture_handle: MISSING_TEXTURE_HANDLE,
+                    camera: 0,
                     depth_test: false,
-                },
-                MISSING_TEXTURE_HANDLE,
-                BlendMode::Alpha,
-                0,
-            ),
-            render_object(ObjectType::Sprite(3), TEXTURE_HANDLE, BlendMode::Add, 99),
-            render_object(ObjectType::Sprite(100), TEXTURE_HANDLE, BlendMode::Alpha, 0),
-        ]
-    }
-
-    fn render_object(
-        object_type: ObjectType,
-        texture_handle: TextureHandle,
-        blend: BlendMode,
-        camera: u8,
-    ) -> RenderObject {
-        RenderObject {
-            object_type,
-            texture_handle,
-            blend,
-            z: 0,
-            order: 0,
-            camera,
+                }),
+                DrawOp::Sprite(SpriteRun {
+                    instance_start: 3,
+                    instance_count: 1,
+                    blend: BlendMode::Add,
+                    texture_handle: TEXTURE_HANDLE,
+                    camera: 99,
+                }),
+            ],
         }
     }
 

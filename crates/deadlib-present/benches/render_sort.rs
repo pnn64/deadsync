@@ -7,7 +7,7 @@ use std::time::Instant;
 #[global_allocator]
 static ALLOC: CountingAlloc = CountingAlloc::new();
 
-const OBJECTS: usize = 1_024;
+const ITEMS: usize = 1_024;
 const WARMUP_FRAMES: usize = 1_000;
 const MEASURE_FRAMES: usize = 10_000;
 const BENCH_RUNS: usize = 7;
@@ -89,7 +89,7 @@ impl AllocSnapshot {
 fn main() {
     let legacy = median(RenderSortBenchmark::sort_legacy_frame);
     println!(
-        "render-object sparse-z sort benchmark ({OBJECTS} objects, median of {BENCH_RUNS} runs)"
+        "compact draw-item sparse-z sort benchmark ({ITEMS} items, median of {BENCH_RUNS} runs)"
     );
     print_result("legacy direct", &legacy);
     compare(
@@ -99,7 +99,7 @@ fn main() {
     );
 
     println!(
-        "\nrender-object dense-z sort benchmark ({OBJECTS} objects, median of {BENCH_RUNS} runs)"
+        "\ncompact draw-item dense-z sort benchmark ({ITEMS} items, median of {BENCH_RUNS} runs)"
     );
     compare(
         "generic dense",
@@ -167,7 +167,7 @@ fn take_median(mut runs: Vec<BenchResult>) -> BenchResult {
 }
 
 fn measure(sort_frame: fn(&mut RenderSortBenchmark, usize) -> u64) -> BenchResult {
-    let mut sort = RenderSortBenchmark::new(OBJECTS);
+    let mut sort = RenderSortBenchmark::new(ITEMS);
     for frame in 0..WARMUP_FRAMES {
         black_box(sort_frame(&mut sort, frame));
     }
@@ -190,11 +190,11 @@ fn measure(sort_frame: fn(&mut RenderSortBenchmark, usize) -> u64) -> BenchResul
 fn print_result(label: &str, result: &BenchResult) {
     let frames = MEASURE_FRAMES as f64;
     println!(
-        "{label:<14} {:>9.2} us/frame  {:>9.0} cycles/frame  {:>7.1} M objects/s  \
+        "{label:<14} {:>9.2} us/frame  {:>9.0} cycles/frame  {:>7.1} M items/s  \
          {:>5.2} allocs/frame  {:>7.1} bytes/frame  {:>5.2} reallocs/frame",
         result.elapsed.as_secs_f64() * 1_000_000.0 / frames,
         result.cycles as f64 / frames,
-        frames * OBJECTS as f64 / result.elapsed.as_secs_f64() / 1_000_000.0,
+        frames * ITEMS as f64 / result.elapsed.as_secs_f64() / 1_000_000.0,
         result.allocated.allocs as f64 / frames,
         result.allocated.bytes as f64 / frames,
         result.allocated.reallocs as f64 / frames,

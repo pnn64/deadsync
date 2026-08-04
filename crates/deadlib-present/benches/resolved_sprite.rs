@@ -175,10 +175,10 @@ impl Bench {
             &Textures,
         );
         assert_eq!(render.sprite_instances.len(), OUTPUT_PASSES);
-        let checksum = (render.objects.len() as u64).rotate_left(7)
-            ^ (render.batches.len() as u64).rotate_left(13)
+        let checksum = (render.ops.len() as u64).rotate_left(7)
+            ^ (render.tmesh_geometries.len() as u64).rotate_left(13)
             ^ u64::from(render.sprite_instances[0].center[0].to_bits());
-        self.scratch.recycle_render_list(&mut render);
+        self.scratch.recycle_frame(&mut render);
         checksum
     }
 
@@ -199,10 +199,10 @@ impl Bench {
             &Textures,
         );
         assert_eq!(render.sprite_instances.len(), OUTPUT_PASSES);
-        let checksum = (render.objects.len() as u64).rotate_left(7)
-            ^ (render.batches.len() as u64).rotate_left(13)
+        let checksum = (render.ops.len() as u64).rotate_left(7)
+            ^ (render.tmesh_geometries.len() as u64).rotate_left(13)
             ^ u64::from(render.sprite_instances[0].center[0].to_bits());
-        self.scratch.recycle_render_list(&mut render);
+        self.scratch.recycle_frame(&mut render);
         checksum
     }
 }

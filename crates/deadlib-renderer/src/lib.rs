@@ -1,5 +1,5 @@
 use deadlib_render::{
-    BackendType, DrawStats, PresentModePolicy, RenderList, SamplerDesc, TextureHandle,
+    BackendType, DrawStats, PresentModePolicy, RenderFrame, SamplerDesc, TextureHandle,
     TextureHandleMap,
 };
 use deadlib_render_backend_gl as opengl;
@@ -122,7 +122,7 @@ pub struct Backend(BackendImpl);
 impl Backend {
     pub fn draw(
         &mut self,
-        render_list: &RenderList,
+        frame: &RenderFrame,
         textures: &TextureHandleMap<Texture>,
         apply_present_back_pressure: bool,
     ) -> Result<DrawStats, Box<dyn Error>> {
@@ -130,14 +130,14 @@ impl Backend {
             #[cfg(all(not(target_pointer_width = "32"), not(target_vendor = "win7")))]
             BackendImpl::Vulkan(state) => vulkan::draw(
                 state,
-                render_list,
+                frame,
                 &VulkanTextureLookup(textures),
                 apply_present_back_pressure,
             ),
             #[cfg(all(not(target_pointer_width = "32"), not(target_vendor = "win7")))]
             BackendImpl::VulkanWgpu(state) => wgpu_core::draw(
                 state,
-                render_list,
+                frame,
                 &WgpuTextureLookup {
                     textures,
                     kind: WgpuTextureKind::Vulkan,
@@ -147,7 +147,7 @@ impl Backend {
             #[cfg(target_os = "macos")]
             BackendImpl::Metal(state) => wgpu_core::draw(
                 state,
-                render_list,
+                frame,
                 &WgpuTextureLookup {
                     textures,
                     kind: WgpuTextureKind::Metal,
@@ -156,13 +156,13 @@ impl Backend {
             ),
             BackendImpl::OpenGL(state) => opengl::draw(
                 state,
-                render_list,
+                frame,
                 &OpenGlTextureLookup(textures),
                 apply_present_back_pressure,
             ),
             BackendImpl::OpenGLWgpu(state) => wgpu_core::draw(
                 state,
-                render_list,
+                frame,
                 &WgpuTextureLookup {
                     textures,
                     kind: WgpuTextureKind::OpenGL,
@@ -171,14 +171,14 @@ impl Backend {
             ),
             BackendImpl::Software(state) => software::draw(
                 state,
-                render_list,
+                frame,
                 &SoftwareTextureLookup(textures),
                 apply_present_back_pressure,
             ),
             #[cfg(target_os = "windows")]
             BackendImpl::DirectX(state) => wgpu_core::draw(
                 state,
-                render_list,
+                frame,
                 &WgpuTextureLookup {
                     textures,
                     kind: WgpuTextureKind::DirectX,

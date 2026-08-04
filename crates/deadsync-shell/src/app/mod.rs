@@ -582,7 +582,7 @@ fn prewarm_gameplay_text_layout_cache(
             &PRESENT_TEXTURE_CONTEXT,
             state.actor_resources(),
         );
-    compose_scratch.recycle_render_list(&mut render);
+    compose_scratch.recycle_frame(&mut render);
     gameplay::prewarm_text_layout(cache, fonts, state);
     screens::components::gameplay::gameplay_stats::prewarm_text_layout(cache, fonts, assets, state);
     screens::components::gameplay::notefield::prewarm_text_layout(cache, fonts, state);
@@ -2838,7 +2838,7 @@ impl App {
             actor_build_us,
             build_screen_us,
             resolve_textures_us,
-            render_objects: saturating_u32(screen.objects.len()),
+            render_ops: saturating_u32(screen.ops.len()),
             render_cameras: saturating_u32(screen.cameras.len()),
             text_layout,
         };
@@ -2870,10 +2870,9 @@ impl App {
             }
         }
         if uses_gameplay_present {
-            self.gameplay_compose_scratch
-                .recycle_render_list(&mut screen);
+            self.gameplay_compose_scratch.recycle_frame(&mut screen);
         } else {
-            self.ui_compose_scratch.recycle_render_list(&mut screen);
+            self.ui_compose_scratch.recycle_frame(&mut screen);
         }
         let gameplay_storage = if uses_gameplay_present
             && log::log_enabled!(target: "deadsync_shell::frame_pacing_trace", log::Level::Trace)

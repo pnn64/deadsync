@@ -322,14 +322,14 @@ fn compose_frame(
         cache,
         scratch,
     );
-    let checksum = render.objects.len().wrapping_add(
+    let checksum = render.ops.len().wrapping_add(
         render
             .sprite_instances
             .iter()
             .map(|instance| instance.center[0].to_bits() as usize)
             .fold(0usize, usize::wrapping_add),
     );
-    scratch.recycle_render_list(&mut render);
+    scratch.recycle_frame(&mut render);
     checksum
 }
 

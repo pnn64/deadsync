@@ -5,7 +5,7 @@ use deadlib_present::compose::{
 };
 use deadlib_present::font::{Font, FontMap, Glyph};
 use deadlib_present::space::Metrics;
-use deadlib_render::{BlendMode, INVALID_TMESH_CACHE_KEY, ObjectType, TexturedMeshVertex};
+use deadlib_render::{BlendMode, DrawOp, INVALID_TMESH_CACHE_KEY, TexturedMeshVertex};
 use glam::Mat4;
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::collections::HashMap;
@@ -236,12 +236,12 @@ fn compose_frame(
         cache,
         scratch,
     );
-    assert_eq!(render.objects.len(), MESHES + GLOW_MESHES);
-    let checksum = render.objects.len() as u64
-        ^ u64::from(render.objects.first().unwrap().order)
-        ^ (u64::from(render.objects.last().unwrap().order) << 32);
+    assert_eq!(render.tmesh_instances.len(), MESHES + GLOW_MESHES);
+    let checksum = render.ops.len() as u64
+        ^ u64::from(render.tmesh_instances.first().unwrap().tint[0].to_bits())
+        ^ (u64::from(render.tmesh_instances.last().unwrap().tint[0].to_bits()) << 32);
     black_box(&render);
-    scratch.recycle_render_list(&mut render);
+    scratch.recycle_frame(&mut render);
     checksum
 }
 
@@ -574,24 +574,20 @@ fn compose_clipped_text_frame(
         cache,
         scratch,
     );
-    assert_eq!(render.objects.len(), CLIPPED_TEXTS);
-    let mut checksum = render.objects.len() as u64;
-    for object in &render.objects {
-        let ObjectType::TexturedMesh {
-            vertices,
-            geom_cache_key,
-            ..
-        } = &object.object_type
-        else {
+    assert_eq!(render.ops.len(), CLIPPED_TEXTS);
+    let mut checksum = render.ops.len() as u64;
+    for op in &render.ops {
+        let DrawOp::TexturedMesh(run) = op else {
             panic!("clipped text should remain a textured mesh");
         };
-        assert_eq!(*geom_cache_key, INVALID_TMESH_CACHE_KEY);
+        let geometry = &render.tmesh_geometries[run.geometry as usize];
+        assert_eq!(geometry.cache_key, INVALID_TMESH_CACHE_KEY);
         checksum = checksum
             .wrapping_mul(31)
-            .wrapping_add(vertices.len() as u64);
+            .wrapping_add(geometry.vertices.len() as u64);
     }
     black_box(&render);
-    scratch.recycle_render_list(&mut render);
+    scratch.recycle_frame(&mut render);
     checksum
 }
 

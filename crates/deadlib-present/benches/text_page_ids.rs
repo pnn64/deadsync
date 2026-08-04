@@ -6,7 +6,7 @@ use deadlib_present::compose::{
 use deadlib_present::font::{Font, FontMap, Glyph};
 use deadlib_present::space::Metrics;
 use deadlib_present::texture::{TextureContext, TextureMeta};
-use deadlib_render::{BlendMode, ObjectType, TexturedMeshVertices};
+use deadlib_render::{BlendMode, DrawOp, TexturedMeshVertices};
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::collections::HashMap;
 use std::hint::black_box;
@@ -375,25 +375,21 @@ fn compose_frame(
     );
     assert_handles(&render, texture_ctx.texture_registry_generation());
     let checksum = render_checksum(&render);
-    scratch.recycle_render_list(&mut render);
+    scratch.recycle_frame(&mut render);
     checksum
 }
 
-fn render_checksum(render: &deadlib_render::RenderList) -> u64 {
-    let mut checksum = render.objects.len() as u64;
-    for object in &render.objects {
-        checksum = checksum.rotate_left(5) ^ object.texture_handle;
-        checksum ^= (object.z as u16 as u64) << 32;
-        let ObjectType::TexturedMesh {
-            vertices,
-            geom_cache_key,
-            ..
-        } = &object.object_type
-        else {
+fn render_checksum(render: &deadlib_render::RenderFrame) -> u64 {
+    let mut checksum = render.ops.len() as u64;
+    for op in &render.ops {
+        let DrawOp::TexturedMesh(run) = op else {
             continue;
         };
+        checksum = checksum.rotate_left(5) ^ run.texture_handle;
+        let geometry = &render.tmesh_geometries[run.geometry as usize];
+        let vertices = &geometry.vertices;
         checksum = checksum.rotate_left(7) ^ vertices.len() as u64;
-        checksum ^= u64::from(*geom_cache_key != deadlib_render::INVALID_TMESH_CACHE_KEY) << 63;
+        checksum ^= u64::from(geometry.cache_key != deadlib_render::INVALID_TMESH_CACHE_KEY) << 63;
         let vertices = vertices.as_ref();
         for vertex in vertices.first().into_iter().chain(vertices.last()) {
             checksum = checksum.rotate_left(11) ^ vertex.pos[0].to_bits() as u64;
@@ -401,27 +397,21 @@ fn render_checksum(render: &deadlib_render::RenderList) -> u64 {
             checksum = checksum.rotate_left(11) ^ vertex.uv[0].to_bits() as u64;
             checksum = checksum.rotate_left(11) ^ vertex.color[0].to_bits() as u64;
         }
-        checksum ^= match vertices {
-            _ if matches!(
-                &object.object_type,
-                ObjectType::TexturedMesh {
-                    vertices: TexturedMeshVertices::Shared(_),
-                    ..
-                }
-            ) =>
-            {
-                1
-            }
+        checksum ^= match &geometry.vertices {
+            TexturedMeshVertices::Shared(_) => 1,
             _ => 2,
         };
     }
     checksum
 }
 
-fn assert_handles(render: &deadlib_render::RenderList, generation: u64) {
-    assert_eq!(render.objects.len(), PAGE_COUNT);
-    for (page, object) in render.objects.iter().enumerate() {
-        assert_eq!(object.texture_handle, page_handle(generation, page));
+fn assert_handles(render: &deadlib_render::RenderFrame, generation: u64) {
+    assert_eq!(render.ops.len(), PAGE_COUNT);
+    for (page, op) in render.ops.iter().enumerate() {
+        let DrawOp::TexturedMesh(run) = op else {
+            panic!("text page benchmark emits textured meshes");
+        };
+        assert_eq!(run.texture_handle, page_handle(generation, page));
     }
 }
 

@@ -1,6 +1,5 @@
 use deadlib_render::{
-    BlendMode, ObjectType, RenderObject, SpriteInstanceRaw, TextureHandle, TextureHandleMap,
-    TexturedMeshInstanceRaw, draw_prep::TexturedMeshSource,
+    SpriteInstanceRaw, TextureHandle, TextureHandleMap, TexturedMeshInstanceRaw, TexturedMeshSource,
 };
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::collections::HashMap;
@@ -22,8 +21,6 @@ const KEY_WARMUP_FRAMES: usize = 250;
 const KEY_MEASURE_FRAMES: usize = 25_000;
 const SPRITE_RUNS: usize = 64;
 const TMESH_RUNS: usize = 144;
-const HOT_OBJECTS: usize = 4_096;
-const HOT_SCAN_FRAMES: usize = 20_000;
 const TEXTURE_LOOKUPS: usize = 2_048;
 const TEXTURE_LOOKUP_FRAMES: usize = 40_000;
 
@@ -159,7 +156,6 @@ fn main() {
     benchmark_source_layout(&sources);
     benchmark_frame_key_layout();
     benchmark_gl_instance_submission();
-    benchmark_render_object_layout();
     benchmark_texture_slots();
 }
 
@@ -304,146 +300,6 @@ fn benchmark_gl_instance_submission() {
         base.binds,
         100.0 * (1.0 - base.binds as f64 / pointer.binds as f64),
     );
-}
-
-#[repr(C)]
-struct LegacyRenderObject {
-    object_type: ObjectType,
-    texture_handle: TextureHandle,
-    order: u32,
-    z: i16,
-    blend: BlendMode,
-    camera: u8,
-}
-
-fn benchmark_render_object_layout() {
-    let current = (0..HOT_OBJECTS)
-        .map(|index| RenderObject {
-            texture_handle: (index % 64 + 1) as u64,
-            order: index as u32,
-            z: (index % 12) as i16 - 6,
-            blend: if index % 7 == 0 {
-                BlendMode::Add
-            } else {
-                BlendMode::Alpha
-            },
-            camera: (index % 3) as u8,
-            object_type: ObjectType::Sprite(index as u32),
-        })
-        .collect::<Vec<_>>();
-    let legacy = (0..HOT_OBJECTS)
-        .map(|index| LegacyRenderObject {
-            object_type: ObjectType::Sprite(index as u32),
-            texture_handle: (index % 64 + 1) as u64,
-            order: index as u32,
-            z: (index % 12) as i16 - 6,
-            blend: if index % 7 == 0 {
-                BlendMode::Add
-            } else {
-                BlendMode::Alpha
-            },
-            camera: (index % 3) as u8,
-        })
-        .collect::<Vec<_>>();
-    assert_eq!(std::mem::size_of::<LegacyRenderObject>(), 160);
-    assert_eq!(std::mem::size_of::<RenderObject>(), 160);
-
-    let mut old_runs = Vec::with_capacity(BENCH_RUNS);
-    let mut new_runs = Vec::with_capacity(BENCH_RUNS);
-    for run in 0..BENCH_RUNS {
-        let (old, new) = if run % 2 == 0 {
-            let new = measure_hot(&current, HOT_SCAN_FRAMES, scan_render_headers);
-            let old = measure_hot(&legacy, HOT_SCAN_FRAMES, scan_legacy_headers);
-            (old, new)
-        } else {
-            let old = measure_hot(&legacy, HOT_SCAN_FRAMES, scan_legacy_headers);
-            let new = measure_hot(&current, HOT_SCAN_FRAMES, scan_render_headers);
-            (old, new)
-        };
-        assert_eq!(old.checksum, new.checksum);
-        assert_zero_alloc(&old);
-        assert_zero_alloc(&new);
-        old_runs.push(old);
-        new_runs.push(new);
-    }
-    old_runs.sort_unstable_by_key(|result| result.elapsed);
-    new_runs.sort_unstable_by_key(|result| result.elapsed);
-    let old = old_runs.swap_remove(BENCH_RUNS / 2);
-    let new = new_runs.swap_remove(BENCH_RUNS / 2);
-
-    println!("\nrender-object hot-header scan ({HOT_OBJECTS} sprites, median of {BENCH_RUNS})");
-    print_hot_result("payload first", &old, HOT_SCAN_FRAMES, HOT_OBJECTS);
-    print_hot_result("header first", &new, HOT_SCAN_FRAMES, HOT_OBJECTS);
-    println!(
-        "  speedup {:.2}x | cycles reduction {:.1}% | header/payload distance {} -> {} bytes",
-        old.elapsed.as_secs_f64() / new.elapsed.as_secs_f64(),
-        100.0 * (1.0 - new.cycles as f64 / old.cycles as f64),
-        std::mem::offset_of!(LegacyRenderObject, texture_handle),
-        std::mem::offset_of!(RenderObject, object_type),
-    );
-}
-
-fn scan_render_headers(objects: &[RenderObject]) -> u64 {
-    let mut checksum = 0u64;
-    for object in objects {
-        let ObjectType::Sprite(instance) = object.object_type else {
-            continue;
-        };
-        checksum = observe_header(
-            checksum,
-            instance,
-            object.texture_handle,
-            object.order,
-            object.z,
-            object.blend,
-            object.camera,
-        );
-    }
-    black_box(checksum)
-}
-
-fn scan_legacy_headers(objects: &[LegacyRenderObject]) -> u64 {
-    let mut checksum = 0u64;
-    for object in objects {
-        let ObjectType::Sprite(instance) = object.object_type else {
-            continue;
-        };
-        checksum = observe_header(
-            checksum,
-            instance,
-            object.texture_handle,
-            object.order,
-            object.z,
-            object.blend,
-            object.camera,
-        );
-    }
-    black_box(checksum)
-}
-
-#[inline(always)]
-fn observe_header(
-    checksum: u64,
-    instance: u32,
-    texture: u64,
-    order: u32,
-    z: i16,
-    blend: BlendMode,
-    camera: u8,
-) -> u64 {
-    let blend = match blend {
-        BlendMode::Alpha => 0,
-        BlendMode::Add => 1,
-        BlendMode::Multiply => 2,
-        BlendMode::Subtract => 3,
-    };
-    checksum.rotate_left(7)
-        ^ texture
-        ^ (u64::from(instance) << 32)
-        ^ u64::from(order)
-        ^ ((i64::from(z) as u64) << 17)
-        ^ (blend << 8)
-        ^ u64::from(camera)
 }
 
 struct LegacyTextureMap<V> {

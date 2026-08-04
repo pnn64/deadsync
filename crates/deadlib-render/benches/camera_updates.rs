@@ -1,4 +1,4 @@
-use deadlib_render::draw_prep::CameraUploadCache;
+use deadlib_render::CameraUploadCache;
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::hint::black_box;
 use std::sync::atomic::{AtomicU64, Ordering};

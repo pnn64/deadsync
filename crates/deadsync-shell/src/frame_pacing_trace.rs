@@ -1,7 +1,7 @@
 use deadlib_present::compose::{COMPOSE_STORAGE_NAMES, COMPOSE_STORAGE_SLOTS, ComposeStorageStats};
 use deadlib_render::{
-    ClockDomainTrace, DrawStats, PresentModeTrace,
-    draw_prep::{DRAW_STORAGE_NAMES, DRAW_STORAGE_SLOTS, DrawStorageStats},
+    ClockDomainTrace, DRAW_STORAGE_NAMES, DRAW_STORAGE_SLOTS, DrawStats, DrawStorageStats,
+    PresentModeTrace,
 };
 use std::time::{Duration, Instant};
 
