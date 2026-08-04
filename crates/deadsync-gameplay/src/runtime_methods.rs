@@ -1031,6 +1031,17 @@ where
         music_time_ns: SongTimeNs,
         cutoff_rows: &[usize; MAX_PLAYERS],
     ) {
+        if !time_based_mine_avoidance_work_ready_for_players(
+            &self.chart_runtime.notes,
+            &self.chart_runtime.mine_scan.mine_note_ix,
+            &self.chart_runtime.mine_scan.next_mine_ix_cursor,
+            cutoff_rows,
+            self.setup.num_players,
+        ) {
+            // Song setup, seeks, and full scans keep both mine cursors paired.
+            // With no due mine, neither cursor can change on this frame.
+            return;
+        }
         let music_time_sec = song_time_ns_to_seconds(music_time_ns);
         let log_mine_avoid = log::log_enabled!(log::Level::Trace);
         let player_updates = apply_time_based_mine_avoidance_for_players(
@@ -1077,6 +1088,16 @@ where
         music_time_ns: SongTimeNs,
         cutoff_rows: &[usize; MAX_PLAYERS],
     ) {
+        if !time_based_tap_miss_work_ready_for_players(
+            &self.chart_runtime.notes,
+            &self.chart_runtime.note_time_cache_ns,
+            &self.chart_runtime.mine_scan.next_tap_miss_cursor,
+            self.chart_runtime.note_ranges.ranges(),
+            cutoff_rows,
+            self.setup.num_players,
+        ) {
+            return;
+        }
         let rate = normalized_song_rate(self.music_rate());
         let music_time_sec = song_time_ns_to_seconds(music_time_ns);
         let mut miss_events = [None; 16];

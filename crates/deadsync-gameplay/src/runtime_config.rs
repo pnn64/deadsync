@@ -765,7 +765,6 @@ pub fn current_song_clock_snapshot(
     global_offset_seconds: f32,
 ) -> SongClockSnapshot {
     let stream_clock = audio_snapshot.stream_clock;
-    let fallback_rate = normalized_song_rate(music_rate);
     if stream_clock.has_music_mapping {
         return SongClockSnapshot {
             song_time_ns: stream_clock.music_nanos,
@@ -774,7 +773,7 @@ pub fn current_song_clock_snapshot(
             {
                 stream_clock.music_seconds_per_second
             } else {
-                fallback_rate
+                normalized_song_rate(music_rate)
             },
             mapped_audio: true,
             valid_at: stream_clock.valid_at,
@@ -784,6 +783,7 @@ pub fn current_song_clock_snapshot(
         };
     }
 
+    let fallback_rate = normalized_song_rate(music_rate);
     let song_time = music_time_from_stream_position(
         stream_clock.stream_seconds,
         audio_lead_in_seconds,

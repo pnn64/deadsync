@@ -1368,7 +1368,7 @@ mod runtime_regression_tests {
 
         let mut mine_state =
             regression_state_with_segments(timing_segments, ROWS_PER_BEAT as usize * 4);
-        set_regression_mine(&mut mine_state, 0, 0, ROWS_PER_BEAT as usize, note_time_ns);
+        set_regression_mine(&mut mine_state, 1, 0, ROWS_PER_BEAT as usize, note_time_ns);
         let mine_distance_ns = max_step_distance_ns(
             &mine_state.timing_runtime.timing_profile,
             mine_state.music_rate(),
@@ -1377,15 +1377,19 @@ mod runtime_regression_tests {
             .saturating_add(mine_distance_ns)
             .saturating_add(song_time_ns_from_seconds(0.5));
         mine_state.apply_time_based_mine_avoidance(inside_delay_music_time);
-        assert_eq!(mine_state.chart_runtime.notes[0].mine_result, None);
+        assert_eq!(mine_state.chart_runtime.notes[1].mine_result, None);
         assert_eq!(mine_state.chart_runtime.mine_scan.next_mine_ix_cursor[0], 0);
+        assert_eq!(
+            mine_state.chart_runtime.mine_scan.next_mine_avoid_cursor[0],
+            1
+        );
 
         let after_delay_music_time = note_time_ns
             .saturating_add(mine_distance_ns)
             .saturating_add(song_time_ns_from_seconds(2.1));
         mine_state.apply_time_based_mine_avoidance(after_delay_music_time);
         assert_eq!(
-            mine_state.chart_runtime.notes[0].mine_result,
+            mine_state.chart_runtime.notes[1].mine_result,
             Some(MineResult::Avoided)
         );
     }

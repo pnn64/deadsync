@@ -541,6 +541,29 @@ pub struct TimeBasedTapMissPlayersUpdate {
     pub stopped: bool,
 }
 
+#[inline(always)]
+pub fn time_based_tap_miss_work_ready_for_players(
+    notes: &[Note],
+    note_time_cache_ns: &[SongTimeNs],
+    next_cursors: &[usize],
+    note_ranges: &[(usize, usize)],
+    cutoff_rows: &[usize],
+    num_players: usize,
+) -> bool {
+    let active_players = num_players.min(MAX_PLAYERS);
+    (0..active_players).any(|player| {
+        let note_range = player_note_range_for_ranges(note_ranges, active_players, player);
+        let end = note_range.1.min(notes.len()).min(note_time_cache_ns.len());
+        let cursor = next_cursors
+            .get(player)
+            .copied()
+            .unwrap_or(note_range.0)
+            .max(note_range.0.min(end));
+        cursor < end
+            && notes[cursor].row_index < cutoff_rows.get(player).copied().unwrap_or(0)
+    })
+}
+
 pub fn apply_next_time_based_tap_miss_for_player(
     notes: &mut [Note],
     note_time_cache_ns: &[SongTimeNs],

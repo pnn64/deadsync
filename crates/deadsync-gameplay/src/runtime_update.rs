@@ -34,10 +34,13 @@ where
         // Music time driven directly by the audio device clock, interpolated
         // between callbacks for smooth, continuous motion.
         let music_rate = self.music_rate();
-        let stream_lead_in = self
-            .clock
-            .audio_clock
-            .stream_lead_in_seconds(music_rate);
+        let stream_lead_in = if audio_snapshot.stream_clock.has_music_mapping {
+            0.0
+        } else {
+            self.clock
+                .audio_clock
+                .stream_lead_in_seconds(music_rate)
+        };
         let song_clock = current_song_clock_snapshot(
             audio_snapshot,
             music_rate,
@@ -631,13 +634,18 @@ where
     #[inline(always)]
     pub fn music_time_from_audio_snapshot(&self, audio_snapshot: GameplayAudioSnapshot) -> f32 {
         let music_rate = self.music_rate();
+        let stream_lead_in = if audio_snapshot.stream_clock.has_music_mapping {
+            0.0
+        } else {
+            self.clock
+                .audio_clock
+                .stream_lead_in_seconds(music_rate)
+        };
         song_time_ns_to_seconds(
             current_song_clock_snapshot(
                 audio_snapshot,
                 music_rate,
-                self.clock
-                    .audio_clock
-                    .stream_lead_in_seconds(music_rate),
+                stream_lead_in,
                 self.clock.offsets.global_offset_seconds(),
             )
             .song_time_ns,

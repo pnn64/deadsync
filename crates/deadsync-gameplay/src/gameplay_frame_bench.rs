@@ -1639,3 +1639,331 @@ impl TwoPlayerColumnMapBench {
         output
     }
 }
+
+#[derive(Clone, Copy)]
+pub struct MappedAudioClockBench {
+    snapshot: GameplayAudioSnapshot,
+}
+
+impl Default for MappedAudioClockBench {
+    fn default() -> Self {
+        Self {
+            snapshot: GameplayAudioSnapshot {
+                stream_clock: GameplayStreamClockSnapshot {
+                    music_seconds_per_second: 1.25,
+                    has_music_mapping: true,
+                    valid_at_host_nanos: 1,
+                    ..GameplayStreamClockSnapshot::default()
+                },
+                ..GameplayAudioSnapshot::default()
+            },
+        }
+    }
+}
+
+impl MappedAudioClockBench {
+    pub fn old_frame(&self, frame: usize) -> GameplayFrameHotPathBenchOutput {
+        let audio_snapshot = mapped_audio_bench_snapshot(self.snapshot, frame);
+        let music_rate = std::hint::black_box(1.25_f32);
+        let stream_lead_in =
+            std::hint::black_box(2.5_f32 / normalized_song_rate(music_rate));
+        record_song_clock(current_song_clock_snapshot_legacy(
+            audio_snapshot,
+            music_rate,
+            stream_lead_in,
+            -0.008,
+        ))
+    }
+
+    pub fn new_frame(&self, frame: usize) -> GameplayFrameHotPathBenchOutput {
+        let audio_snapshot = mapped_audio_bench_snapshot(self.snapshot, frame);
+        let music_rate = std::hint::black_box(1.25_f32);
+        let stream_lead_in = if audio_snapshot.stream_clock.has_music_mapping {
+            0.0
+        } else {
+            2.5 / normalized_song_rate(music_rate)
+        };
+        record_song_clock(current_song_clock_snapshot(
+            audio_snapshot,
+            music_rate,
+            stream_lead_in,
+            -0.008,
+        ))
+    }
+}
+
+#[inline(always)]
+fn mapped_audio_bench_snapshot(
+    mut snapshot: GameplayAudioSnapshot,
+    frame: usize,
+) -> GameplayAudioSnapshot {
+    snapshot.stream_clock.music_nanos = clock_bench_time_ns(frame);
+    snapshot.stream_clock.valid_at_host_nanos = frame as u64 + 1;
+    snapshot.timing_diag_callback_gap_ns = frame as u64 & 31;
+    snapshot
+}
+
+#[inline(never)]
+fn current_song_clock_snapshot_legacy(
+    audio_snapshot: GameplayAudioSnapshot,
+    music_rate: f32,
+    audio_lead_in_seconds: f32,
+    global_offset_seconds: f32,
+) -> SongClockSnapshot {
+    let stream_clock = audio_snapshot.stream_clock;
+    let fallback_rate = normalized_song_rate(music_rate);
+    if stream_clock.has_music_mapping {
+        return SongClockSnapshot {
+            song_time_ns: stream_clock.music_nanos,
+            seconds_per_second: if stream_clock.music_seconds_per_second.is_finite()
+                && stream_clock.music_seconds_per_second > 0.0
+            {
+                stream_clock.music_seconds_per_second
+            } else {
+                fallback_rate
+            },
+            mapped_audio: true,
+            valid_at: stream_clock.valid_at,
+            valid_at_host_nanos: stream_clock.valid_at_host_nanos,
+            timing_diag_enabled: audio_snapshot.timing_diag_enabled,
+            timing_diag_callback_gap_ns: audio_snapshot.timing_diag_callback_gap_ns,
+        };
+    }
+    let song_time = music_time_from_stream_position(
+        stream_clock.stream_seconds,
+        audio_lead_in_seconds,
+        global_offset_seconds,
+        fallback_rate,
+    );
+    SongClockSnapshot {
+        song_time_ns: song_time_ns_from_seconds(song_time),
+        seconds_per_second: fallback_rate,
+        mapped_audio: false,
+        valid_at: stream_clock.valid_at,
+        valid_at_host_nanos: stream_clock.valid_at_host_nanos,
+        timing_diag_enabled: audio_snapshot.timing_diag_enabled,
+        timing_diag_callback_gap_ns: audio_snapshot.timing_diag_callback_gap_ns,
+    }
+}
+
+#[inline(always)]
+fn record_song_clock(snapshot: SongClockSnapshot) -> GameplayFrameHotPathBenchOutput {
+    GameplayFrameHotPathBenchOutput {
+        checksum: snapshot.song_time_ns as u64
+            ^ u64::from(snapshot.seconds_per_second.to_bits()).rotate_left(7)
+            ^ snapshot.valid_at_host_nanos.rotate_left(19)
+            ^ snapshot.timing_diag_callback_gap_ns.rotate_left(31)
+            ^ (u64::from(snapshot.mapped_audio) << 61)
+            ^ (u64::from(snapshot.timing_diag_enabled) << 62),
+        samples: 1,
+    }
+}
+
+#[derive(Clone)]
+pub struct SparseTapMissDueBench {
+    notes: Vec<Note>,
+    note_times_ns: Vec<SongTimeNs>,
+    held_windows: Vec<bool>,
+    hold_decay_active: Vec<bool>,
+    decaying_holds: Vec<usize>,
+    cursors: [usize; MAX_PLAYERS],
+    ranges: [(usize, usize); MAX_PLAYERS],
+}
+
+impl Default for SparseTapMissDueBench {
+    fn default() -> Self {
+        const NOTES_PER_PLAYER: usize = 4_096;
+        let mut notes = Vec::with_capacity(NOTES_PER_PLAYER * MAX_PLAYERS);
+        let mut note_times_ns = Vec::with_capacity(notes.capacity());
+        for player in 0..MAX_PLAYERS {
+            for index in 0..NOTES_PER_PLAYER {
+                let row_index = index * 24;
+                notes.push(Note {
+                    beat: row_index as f32 / ROWS_PER_BEAT as f32,
+                    quantization_idx: 1,
+                    column: player * (MAX_COLS / MAX_PLAYERS),
+                    note_type: NoteType::Tap,
+                    row_index,
+                    result: None,
+                    early_result: None,
+                    hold: None,
+                    mine_result: None,
+                    is_fake: false,
+                    can_be_judged: true,
+                });
+                note_times_ns.push(index as SongTimeNs * 800_000_000);
+            }
+        }
+        Self {
+            held_windows: vec![false; notes.len()],
+            hold_decay_active: vec![false; notes.len()],
+            decaying_holds: Vec::with_capacity(8),
+            cursors: [0, NOTES_PER_PLAYER],
+            ranges: [
+                (0, NOTES_PER_PLAYER),
+                (NOTES_PER_PLAYER, NOTES_PER_PLAYER * MAX_PLAYERS),
+            ],
+            notes,
+            note_times_ns,
+        }
+    }
+}
+
+impl SparseTapMissDueBench {
+    pub fn old_frame(&mut self, frame: usize) -> GameplayFrameHotPathBenchOutput {
+        self.frame(frame, false)
+    }
+
+    pub fn new_frame(&mut self, frame: usize) -> GameplayFrameHotPathBenchOutput {
+        self.frame(frame, true)
+    }
+
+    fn frame(&mut self, frame: usize, guarded: bool) -> GameplayFrameHotPathBenchOutput {
+        let cutoff_rows = [frame / 4 + 1; MAX_PLAYERS];
+        let ready = !guarded
+            || time_based_tap_miss_work_ready_for_players(
+                &self.notes,
+                &self.note_times_ns,
+                &self.cursors,
+                &self.ranges,
+                &cutoff_rows,
+                MAX_PLAYERS,
+            );
+        if !ready {
+            return GameplayFrameHotPathBenchOutput {
+                checksum: (self.cursors[0] as u64).rotate_left(7)
+                    ^ (self.cursors[1] as u64).rotate_left(19),
+                samples: 0,
+            };
+        }
+        let mut events = [None; 16];
+        let event_count = collect_time_based_tap_misses_for_players(
+            &mut self.notes,
+            &self.note_times_ns,
+            &self.held_windows,
+            &mut self.hold_decay_active,
+            &mut self.decaying_holds,
+            &mut self.cursors,
+            &self.ranges,
+            &cutoff_rows,
+            clock_bench_time_ns(frame),
+            1.0,
+            &[true; MAX_PLAYERS],
+            MAX_PLAYERS,
+            &mut events,
+        )
+        .event_count;
+        let mut output = GameplayFrameHotPathBenchOutput {
+            checksum: (self.cursors[0] as u64).rotate_left(7)
+                ^ (self.cursors[1] as u64).rotate_left(19),
+            samples: event_count,
+        };
+        for event in events.into_iter().take(event_count).flatten() {
+            output.checksum = output.checksum.rotate_left(11)
+                ^ event.player as u64
+                ^ (event.event.note_index as u64).rotate_left(23)
+                ^ u64::from(event.event.judgment.time_error_ms.to_bits());
+        }
+        output
+    }
+}
+
+#[derive(Clone)]
+pub struct SparseMineAvoidDueBench {
+    notes: Vec<Note>,
+    mine_note_ix: Vec<Vec<usize>>,
+    cursors: [usize; MAX_PLAYERS],
+    next_note_cursors: [usize; MAX_PLAYERS],
+    ranges: [(usize, usize); MAX_PLAYERS],
+}
+
+impl Default for SparseMineAvoidDueBench {
+    fn default() -> Self {
+        const MINES_PER_PLAYER: usize = 4_096;
+        let mut notes = Vec::with_capacity(MINES_PER_PLAYER * MAX_PLAYERS);
+        let mut mine_note_ix = Vec::with_capacity(MAX_PLAYERS);
+        for player in 0..MAX_PLAYERS {
+            let start = notes.len();
+            let mut player_mines = Vec::with_capacity(MINES_PER_PLAYER);
+            for index in 0..MINES_PER_PLAYER {
+                let note_index = notes.len();
+                let row_index = index * 24;
+                player_mines.push(note_index);
+                notes.push(Note {
+                    beat: row_index as f32 / ROWS_PER_BEAT as f32,
+                    quantization_idx: 1,
+                    column: player * (MAX_COLS / MAX_PLAYERS),
+                    note_type: NoteType::Mine,
+                    row_index,
+                    result: None,
+                    early_result: None,
+                    hold: None,
+                    mine_result: None,
+                    is_fake: false,
+                    can_be_judged: true,
+                });
+            }
+            debug_assert_eq!(notes.len() - start, MINES_PER_PLAYER);
+            mine_note_ix.push(player_mines);
+        }
+        Self {
+            cursors: [0; MAX_PLAYERS],
+            next_note_cursors: [0, MINES_PER_PLAYER],
+            ranges: [
+                (0, MINES_PER_PLAYER),
+                (MINES_PER_PLAYER, MINES_PER_PLAYER * MAX_PLAYERS),
+            ],
+            notes,
+            mine_note_ix,
+        }
+    }
+}
+
+impl SparseMineAvoidDueBench {
+    pub fn old_frame(&mut self, frame: usize) -> GameplayFrameHotPathBenchOutput {
+        self.frame(frame, false)
+    }
+
+    pub fn new_frame(&mut self, frame: usize) -> GameplayFrameHotPathBenchOutput {
+        self.frame(frame, true)
+    }
+
+    fn frame(&mut self, frame: usize, guarded: bool) -> GameplayFrameHotPathBenchOutput {
+        let cutoff_rows = [frame / 4 + 1; MAX_PLAYERS];
+        let ready = !guarded
+            || time_based_mine_avoidance_work_ready_for_players(
+                &self.notes,
+                &self.mine_note_ix,
+                &self.cursors,
+                &cutoff_rows,
+                MAX_PLAYERS,
+            );
+        let mut output = GameplayFrameHotPathBenchOutput::default();
+        if ready {
+            let updates = apply_time_based_mine_avoidance_for_players(
+                &mut self.notes,
+                &self.mine_note_ix,
+                &self.cursors,
+                &cutoff_rows,
+                &self.ranges,
+                MAX_PLAYERS,
+            );
+            for player in 0..updates.players_scanned {
+                let update = updates.updates[player];
+                self.cursors[player] = update.mine_end;
+                self.next_note_cursors[player] = update.next_mine_avoid_cursor;
+                output.samples += update.avoided_count as usize;
+                if let Some(event) = update.last_avoided {
+                    output.checksum ^= (event.note_index as u64).rotate_left(41)
+                        ^ (event.row_index as u64).rotate_left(53)
+                        ^ event.column as u64;
+                }
+            }
+        }
+        output.checksum ^= (self.cursors[0] as u64).rotate_left(7)
+            ^ (self.cursors[1] as u64).rotate_left(19)
+            ^ (self.next_note_cursors[0] as u64).rotate_left(31)
+            ^ (self.next_note_cursors[1] as u64).rotate_left(43);
+        output
+    }
+}

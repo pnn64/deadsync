@@ -3795,6 +3795,51 @@ mod tests {
     }
 
     #[test]
+    fn tap_miss_work_guard_matches_player_ranges_and_strict_cutoffs() {
+        let notes = [
+            test_note_at(NoteType::Tap, None, false, 48, 1.0),
+            test_note_at(NoteType::Tap, None, false, 96, 2.0),
+            test_note_at(NoteType::Tap, None, false, 144, 3.0),
+            test_note_at(NoteType::Tap, None, false, 192, 4.0),
+        ];
+        let times = [1, 2, 3, 4];
+        let ranges = [(0, 2), (2, 4)];
+
+        assert!(!time_based_tap_miss_work_ready_for_players(
+            &notes,
+            &times,
+            &[0, 2],
+            &ranges,
+            &[48, 144],
+            2,
+        ));
+        assert!(time_based_tap_miss_work_ready_for_players(
+            &notes,
+            &times,
+            &[0, 2],
+            &ranges,
+            &[49, 144],
+            2,
+        ));
+        assert!(time_based_tap_miss_work_ready_for_players(
+            &notes,
+            &times,
+            &[2, 2],
+            &ranges,
+            &[usize::MAX, 145],
+            2,
+        ));
+        assert!(!time_based_tap_miss_work_ready_for_players(
+            &notes,
+            &times[..2],
+            &[2, 2],
+            &ranges,
+            &[usize::MAX; MAX_PLAYERS],
+            2,
+        ));
+    }
+
+    #[test]
     fn time_based_tap_miss_judgment_builds_canonical_miss() {
         let note_time_ns = 1_000;
         let music_time_ns = note_time_ns + song_time_ns_from_seconds(0.2);
@@ -12945,6 +12990,28 @@ mod tests {
     }
 
     #[test]
+    fn mapped_audio_clock_ignores_unused_fallback_inputs() {
+        let snapshot = current_song_clock_snapshot(
+            GameplayAudioSnapshot {
+                stream_clock: GameplayStreamClockSnapshot {
+                    music_nanos: song_time_ns_from_seconds(4.25),
+                    music_seconds_per_second: 1.5,
+                    has_music_mapping: true,
+                    ..GameplayStreamClockSnapshot::default()
+                },
+                ..GameplayAudioSnapshot::default()
+            },
+            f32::NAN,
+            f32::NAN,
+            f32::NAN,
+        );
+
+        assert_eq!(snapshot.song_time_ns, song_time_ns_from_seconds(4.25));
+        assert_eq!(snapshot.seconds_per_second, 1.5);
+        assert!(snapshot.mapped_audio);
+    }
+
+    #[test]
     fn audio_clock_state_tracks_lead_in_stream_and_output_delay() {
         let mut state = GameplayAudioClockState::new(-1.25, 2.0, -0.1);
 
@@ -16566,6 +16633,48 @@ mod tests {
         assert_eq!(notes[0].mine_result, Some(MineResult::Avoided));
         assert_eq!(notes[1].mine_result, Some(MineResult::Hit));
         assert_eq!(notes[2].mine_result, None);
+    }
+
+    #[test]
+    fn mine_avoidance_work_guard_matches_players_and_strict_cutoffs() {
+        let notes = vec![
+            test_note_at(NoteType::Mine, None, false, 48, 1.0),
+            test_note_at(NoteType::Mine, None, false, 96, 2.0),
+            test_note_at(NoteType::Mine, None, false, 144, 3.0),
+            test_note_at(NoteType::Mine, None, false, 192, 4.0),
+        ];
+        let mine_ix = vec![vec![0, 1], vec![2, 3]];
+        assert!(
+            !time_based_mine_avoidance_work_ready_for_players(
+                &notes,
+                &mine_ix,
+                &[0, 0],
+                &[48, 144],
+                2,
+            ),
+            "mines exactly on the cutoff are not due"
+        );
+        assert!(time_based_mine_avoidance_work_ready_for_players(
+            &notes,
+            &mine_ix,
+            &[0, 0],
+            &[48, 145],
+            2,
+        ));
+        assert!(time_based_mine_avoidance_work_ready_for_players(
+            &notes,
+            &mine_ix,
+            &[0, 0],
+            &[49, 144],
+            1,
+        ));
+        assert!(!time_based_mine_avoidance_work_ready_for_players(
+            &notes,
+            &mine_ix,
+            &[usize::MAX, usize::MAX],
+            &[usize::MAX; 2],
+            2,
+        ));
     }
 
     #[test]

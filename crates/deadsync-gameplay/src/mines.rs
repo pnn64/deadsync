@@ -550,6 +550,33 @@ pub struct MineAvoidancePlayersUpdate {
     pub updates: [MineAvoidancePlayerUpdate; MAX_PLAYERS],
 }
 
+#[inline(always)]
+pub fn time_based_mine_avoidance_work_ready_for_players(
+    notes: &[Note],
+    mine_note_ix: &[Vec<usize>],
+    mine_cursors: &[usize],
+    cutoff_rows: &[usize],
+    num_players: usize,
+) -> bool {
+    let active_players = num_players.min(MAX_PLAYERS);
+    for player in 0..active_players {
+        let mine_ix = mine_note_ix
+            .get(player)
+            .map(Vec::as_slice)
+            .unwrap_or_default();
+        let mine_end = mine_cursors
+            .get(player)
+            .copied()
+            .unwrap_or(0)
+            .min(mine_ix.len());
+        let cutoff_row = cutoff_rows.get(player).copied().unwrap_or(0);
+        if mine_end < mine_ix.len() && notes[mine_ix[mine_end]].row_index < cutoff_row {
+            return true;
+        }
+    }
+    false
+}
+
 pub fn apply_time_based_mine_avoidance_for_players(
     notes: &mut [Note],
     mine_note_ix: &[Vec<usize>],

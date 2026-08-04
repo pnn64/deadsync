@@ -273,4 +273,3 @@ pub fn reference_bpm_from_display_tag(
     }
     tag.parse::<f32>().ok()
 }
-

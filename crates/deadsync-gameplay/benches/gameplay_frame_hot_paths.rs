@@ -2,9 +2,10 @@ use deadsync_gameplay::{
     ActiveColumnScanBench, ActiveHoldMaskBench, CrossoverCueCursorBench, DisabledAssistClapBench,
     DisplayBpmCacheBench, GameplayFrameHotPathBenchOutput, IdleAttackRefreshBench,
     IdleHoldPhaseBench, IdleLaneScanBench, IdleReceptorGlowBench, InputLaneSearchCursorBench,
-    InputQueueDrainBench, JudgedRowCursorBench, LiveNotefieldOptionsBench, OptionalFrameWorkBench,
-    PressedLaneMaskBench, RegularCueCursorBench, ResolutionDistanceCacheBench,
-    SharedClockBeatBench, SharedMissCutoffBench, SparseFeedbackTickBench,
+    InputQueueDrainBench, JudgedRowCursorBench, LiveNotefieldOptionsBench, MappedAudioClockBench,
+    OptionalFrameWorkBench, PressedLaneMaskBench, RegularCueCursorBench,
+    ResolutionDistanceCacheBench, SharedClockBeatBench, SharedMissCutoffBench,
+    SparseFeedbackTickBench, SparseMineAvoidDueBench, SparseTapMissDueBench,
     StableNotefieldRefreshBench, TwoPlayerColumnMapBench,
 };
 use std::alloc::{GlobalAlloc, Layout, System};
@@ -293,6 +294,32 @@ fn main() {
         "96 hot lane-owner queries across 8 versus lanes",
         |frame| column_map.old_frame(frame),
         |frame| column_map.new_frame(frame),
+    );
+
+    let mapped_clock = MappedAudioClockBench::default();
+    run_pair(
+        "mapped audio clock fallback",
+        "authoritative mapped audio at 120 Hz with an unused rate-scaled lead-in",
+        |frame| mapped_clock.old_frame(frame),
+        |frame| mapped_clock.new_frame(frame),
+    );
+
+    let mut old_tap_misses = SparseTapMissDueBench::default();
+    let mut new_tap_misses = old_tap_misses.clone();
+    run_pair(
+        "not-yet-due tap misses",
+        "2 players and 8192 half-beat notes, with one cutoff crossing every 96 frames",
+        move |frame| old_tap_misses.old_frame(frame),
+        move |frame| new_tap_misses.new_frame(frame),
+    );
+
+    let mut old_mine_avoidance = SparseMineAvoidDueBench::default();
+    let mut new_mine_avoidance = old_mine_avoidance.clone();
+    run_pair(
+        "not-yet-due mine avoidance",
+        "2 players and 8192 half-beat mines, with one cutoff crossing every 96 frames",
+        move |frame| old_mine_avoidance.old_frame(frame),
+        move |frame| new_mine_avoidance.new_frame(frame),
     );
 }
 
