@@ -708,7 +708,7 @@ fn build_body_text(
         ..
     } = &mut actor
     {
-        *attributes = build_body_attributes(content.as_str(), default_number_color);
+        *attributes = build_body_attributes(content.as_str(), default_number_color).into();
     }
     actor
 }

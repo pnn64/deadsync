@@ -356,7 +356,7 @@ pub enum Actor {
         glow: [f32; 4],
         font: &'static str,
         content: TextContent,
-        attributes: Vec<TextAttribute>,
+        attributes: TextAttributes,
         align_text: TextAlign, // talign: left/center/right
         z: i16,
         scale: [f32; 2],
@@ -847,6 +847,65 @@ pub struct TextAttribute {
     pub glow: Option<[f32; 4]>,
 }
 
+/// Attribute storage for transient text actors.
+///
+/// Most text has no attributes, while compiled theme text owns an immutable
+/// song-lifetime slice. Keeping those cases distinct avoids both an empty
+/// `Arc` allocation and a per-frame clone of the compiled slice. `Owned` is
+/// retained for one-off callers and tests that naturally build a `Vec`.
+#[derive(Clone, Debug, Default)]
+pub enum TextAttributes {
+    #[default]
+    Empty,
+    Owned(Vec<TextAttribute>),
+    Shared(Arc<[TextAttribute]>),
+}
+
+impl TextAttributes {
+    #[inline(always)]
+    pub fn as_slice(&self) -> &[TextAttribute] {
+        match self {
+            Self::Empty => &[],
+            Self::Owned(attributes) => attributes,
+            Self::Shared(attributes) => attributes,
+        }
+    }
+
+    #[inline(always)]
+    pub fn is_empty(&self) -> bool {
+        self.as_slice().is_empty()
+    }
+}
+
+impl From<Vec<TextAttribute>> for TextAttributes {
+    fn from(attributes: Vec<TextAttribute>) -> Self {
+        if attributes.is_empty() {
+            Self::Empty
+        } else {
+            Self::Owned(attributes)
+        }
+    }
+}
+
+impl From<Arc<[TextAttribute]>> for TextAttributes {
+    fn from(attributes: Arc<[TextAttribute]>) -> Self {
+        if attributes.is_empty() {
+            Self::Empty
+        } else {
+            Self::Shared(attributes)
+        }
+    }
+}
+
+impl std::ops::Deref for TextAttributes {
+    type Target = [TextAttribute];
+
+    #[inline(always)]
+    fn deref(&self) -> &Self::Target {
+        self.as_slice()
+    }
+}
+
 impl TextAttribute {
     #[inline(always)]
     pub fn colors(self) -> [[f32; 4]; 4] {
@@ -1012,7 +1071,7 @@ mod tests {
             glow: [0.0, 0.0, 0.0, 0.0],
             font: "test",
             content: TextContent::Static("x"),
-            attributes: Vec::new(),
+            attributes: TextAttributes::default(),
             align_text: TextAlign::Left,
             z: 0,
             scale: [1.0, 1.0],

@@ -385,7 +385,7 @@ fn text_actor(content: Arc<str>, offset: [f32; 2], z: i16) -> Actor {
         glow: [0.0; 4],
         font: "bench",
         content: TextContent::Shared(content),
-        attributes: Vec::new(),
+        attributes: Default::default(),
         align_text: TextAlign::Left,
         z,
         scale: [0.5, 0.5],

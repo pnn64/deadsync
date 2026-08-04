@@ -1900,7 +1900,7 @@ impl TextBuilder {
             glow: self.glow,
             font: self.font,
             content: self.content,
-            attributes: Vec::new(),
+            attributes: crate::actors::TextAttributes::default(),
             align_text: self.talign,
             z: self.z,
             scale: [self.sx, self.sy],

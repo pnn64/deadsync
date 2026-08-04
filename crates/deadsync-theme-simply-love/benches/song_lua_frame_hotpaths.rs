@@ -1,7 +1,8 @@
 use deadsync_theme_simply_love::screens::gameplay::{
     SongLuaActorBuildBenchmark, SongLuaEaseBenchmark, SongLuaMessageStateBenchmark,
     SongLuaMultiActorEmitBenchmark, SongLuaOrderBenchmark, SongLuaProjectedMeshBenchmark,
-    SongLuaProxyRequestBenchmark, SongLuaTopologyBenchmark, SongLuaUppercaseTextBenchmark,
+    SongLuaProxyRequestBenchmark, SongLuaTextAttributeBenchmark, SongLuaTexturedGlowBenchmark,
+    SongLuaTopologyBenchmark, SongLuaUppercaseTextBenchmark,
 };
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::hint::black_box;
@@ -192,6 +193,9 @@ fn main() {
     const ACTOR_BUILD_FRAMES: usize = 100_000;
     const MULTI_ACTOR_FRAMES: usize = 100_000;
     const UPPERCASE_FRAMES: usize = 100_000;
+    const TEXT_ATTRIBUTE_FRAMES: usize = 100_000;
+    const TEXTURED_GLOW_FRAMES: usize = 50_000;
+    const ATTRIBUTE_TEXT: &str = "Gameplay attribute colors";
 
     let now = MESSAGE_EVENTS as f32 * 0.125 + 1.0;
     let mut cached_messages = SongLuaMessageStateBenchmark::new(MESSAGE_EVENTS);
@@ -355,6 +359,37 @@ fn main() {
     let legacy_uppercase_result = measure(UPPERCASE_FRAMES, || uppercase.legacy_frame());
     let cached_uppercase_result = measure(UPPERCASE_FRAMES, || uppercase.cached_frame());
 
+    let text_attributes = SongLuaTextAttributeBenchmark::new(ATTRIBUTE_TEXT, 8);
+    assert_eq!(
+        text_attributes.legacy_static_frame(),
+        text_attributes.shared_static_frame()
+    );
+    let legacy_static_attribute_result = measure(TEXT_ATTRIBUTE_FRAMES, || {
+        text_attributes.legacy_static_frame()
+    });
+    let shared_static_attribute_result = measure(TEXT_ATTRIBUTE_FRAMES, || {
+        text_attributes.shared_static_frame()
+    });
+    let mut rainbow_tick = 0usize;
+    let legacy_rainbow_result = measure(TEXT_ATTRIBUTE_FRAMES, || {
+        let elapsed = (rainbow_tick % 70) as f32 * 0.2;
+        rainbow_tick = rainbow_tick.wrapping_add(1);
+        text_attributes.legacy_rainbow_frame(ATTRIBUTE_TEXT, black_box(elapsed))
+    });
+    let mut rainbow_tick = 0usize;
+    let prewarmed_rainbow_result = measure(TEXT_ATTRIBUTE_FRAMES, || {
+        let elapsed = (rainbow_tick % 70) as f32 * 0.2;
+        rainbow_tick = rainbow_tick.wrapping_add(1);
+        text_attributes.prewarmed_rainbow_frame(black_box(elapsed))
+    });
+
+    let mut textured_glow = SongLuaTexturedGlowBenchmark::new(96);
+    assert_eq!(textured_glow.legacy_frame(), textured_glow.reused_frame());
+    let legacy_textured_glow_result =
+        measure(TEXTURED_GLOW_FRAMES, || textured_glow.legacy_frame());
+    let reused_textured_glow_result =
+        measure(TEXTURED_GLOW_FRAMES, || textured_glow.reused_frame());
+
     assert_eq!(
         legacy_message_result.checksum,
         cached_message_result.checksum
@@ -400,6 +435,18 @@ fn main() {
     assert_eq!(
         legacy_uppercase_result.checksum,
         cached_uppercase_result.checksum
+    );
+    assert_eq!(
+        legacy_static_attribute_result.checksum,
+        shared_static_attribute_result.checksum
+    );
+    assert_eq!(
+        legacy_rainbow_result.checksum,
+        prewarmed_rainbow_result.checksum
+    );
+    assert_eq!(
+        legacy_textured_glow_result.checksum,
+        reused_textured_glow_result.checksum
     );
 
     println!("Song Lua gameplay frame hot paths");
@@ -535,5 +582,46 @@ fn main() {
     println!(
         "uppercase song storage: {} bytes",
         uppercase.storage_bytes()
+    );
+    println!("static BitmapText attributes (8 spans)");
+    print_result(
+        "clone Vec",
+        TEXT_ATTRIBUTE_FRAMES,
+        &legacy_static_attribute_result,
+    );
+    print_result(
+        "clone shared Arc",
+        TEXT_ATTRIBUTE_FRAMES,
+        &shared_static_attribute_result,
+    );
+    println!("rainbow BitmapText attributes (25 characters)");
+    print_result(
+        "build every frame",
+        TEXT_ATTRIBUTE_FRAMES,
+        &legacy_rainbow_result,
+    );
+    print_result(
+        "seven warm phases",
+        TEXT_ATTRIBUTE_FRAMES,
+        &prewarmed_rainbow_result,
+    );
+    println!(
+        "rainbow song storage: {} bytes",
+        text_attributes.storage_bytes()
+    );
+    println!("textured glow pass (96 vertices)");
+    print_result(
+        "copy immutable",
+        TEXTURED_GLOW_FRAMES,
+        &legacy_textured_glow_result,
+    );
+    print_result(
+        "reused glow buffer",
+        TEXTURED_GLOW_FRAMES,
+        &reused_textured_glow_result,
+    );
+    println!(
+        "textured glow storage: {} bytes",
+        textured_glow.storage_bytes()
     );
 }

@@ -604,7 +604,7 @@ fn clipped_text_actors(content: &Arc<str>) -> Vec<Actor> {
                 glow: [0.0; 4],
                 font: "clip-bench",
                 content: TextContent::Shared(Arc::clone(content)),
-                attributes: Vec::new(),
+                attributes: Default::default(),
                 align_text: TextAlign::Left,
                 z: 0,
                 scale: [1.0, 1.0],
