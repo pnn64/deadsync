@@ -1261,6 +1261,43 @@ impl State {
             SongLuaMessageStateCache::default();
             song_lua_visuals.foreground_visual_layers.len()
         ];
+        let song_lua_max_overlay_count = std::iter::once(song_lua_visuals.overlays.len())
+            .chain(
+                song_lua_visuals
+                    .background_visual_layers
+                    .iter()
+                    .map(|layer| layer.overlays.len()),
+            )
+            .chain(
+                song_lua_visuals
+                    .foreground_visual_layers
+                    .iter()
+                    .map(|layer| layer.overlays.len()),
+            )
+            .max()
+            .unwrap_or(0);
+        let song_lua_local_state_scratch = Vec::with_capacity(song_lua_visuals.overlays.len());
+        let song_lua_overlay_state_scratch = Vec::with_capacity(song_lua_visuals.overlays.len());
+        let song_lua_background_layer_local_state_scratch = song_lua_visuals
+            .background_visual_layers
+            .iter()
+            .map(|layer| Vec::with_capacity(layer.overlays.len()))
+            .collect();
+        let song_lua_background_layer_state_scratch = song_lua_visuals
+            .background_visual_layers
+            .iter()
+            .map(|layer| Vec::with_capacity(layer.overlays.len()))
+            .collect();
+        let song_lua_foreground_layer_local_state_scratch = song_lua_visuals
+            .foreground_visual_layers
+            .iter()
+            .map(|layer| Vec::with_capacity(layer.overlays.len()))
+            .collect();
+        let song_lua_foreground_layer_state_scratch = song_lua_visuals
+            .foreground_visual_layers
+            .iter()
+            .map(|layer| Vec::with_capacity(layer.overlays.len()))
+            .collect();
         let song_lua_sound_events = song_lua_sound_events(song_lua_visuals);
         let active_song_lua_video_paths = song_lua_video_paths(song_lua_visuals);
         let static_song_lua_video_path_count = active_song_lua_video_paths.len();
@@ -1342,15 +1379,15 @@ impl State {
             song_lua_song_foreground_message_state_cache: SongLuaMessageStateCache::default(),
             song_lua_background_song_foreground_message_state_cache,
             song_lua_foreground_song_foreground_message_state_cache,
-            song_lua_local_state_scratch: Vec::new(),
-            song_lua_overlay_state_scratch: Vec::new(),
-            song_lua_background_layer_local_state_scratch: Vec::new(),
-            song_lua_background_layer_state_scratch: Vec::new(),
-            song_lua_foreground_layer_local_state_scratch: Vec::new(),
-            song_lua_foreground_layer_state_scratch: Vec::new(),
-            song_lua_capture_state_scratch: Vec::new(),
-            song_lua_order_scratch: Vec::new(),
-            song_lua_capture_order_scratch: Vec::new(),
+            song_lua_local_state_scratch,
+            song_lua_overlay_state_scratch,
+            song_lua_background_layer_local_state_scratch,
+            song_lua_background_layer_state_scratch,
+            song_lua_foreground_layer_local_state_scratch,
+            song_lua_foreground_layer_state_scratch,
+            song_lua_capture_state_scratch: Vec::with_capacity(song_lua_max_overlay_count),
+            song_lua_order_scratch: Vec::with_capacity(song_lua_max_overlay_count),
+            song_lua_capture_order_scratch: Vec::with_capacity(song_lua_max_overlay_count),
             song_lua_proxy_actor_scratch: has_song_lua_proxies
                 .then(|| SongLuaProxyActorScratch::new(active_players)),
             actor_resources,
@@ -10244,6 +10281,152 @@ impl SongLuaActorBuildBenchmark {
     }
 }
 
+#[cfg(any(test, feature = "bench-support"))]
+#[doc(hidden)]
+pub struct SongLuaScratchPrewarmBenchmark {
+    main_count: usize,
+    background_counts: Vec<usize>,
+    foreground_counts: Vec<usize>,
+    local_states: Vec<SongLuaOverlayState>,
+    overlay_states: Vec<SongLuaOverlayState>,
+    background_local_states: Vec<Vec<SongLuaOverlayState>>,
+    background_states: Vec<Vec<SongLuaOverlayState>>,
+    foreground_local_states: Vec<Vec<SongLuaOverlayState>>,
+    foreground_states: Vec<Vec<SongLuaOverlayState>>,
+    capture_states: Vec<SongLuaOverlayState>,
+    order: Vec<usize>,
+    capture_order: Vec<usize>,
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+impl SongLuaScratchPrewarmBenchmark {
+    pub fn cold(
+        main_count: usize,
+        background_counts: &[usize],
+        foreground_counts: &[usize],
+    ) -> Self {
+        Self::new(main_count, background_counts, foreground_counts, false)
+    }
+
+    pub fn prewarmed(
+        main_count: usize,
+        background_counts: &[usize],
+        foreground_counts: &[usize],
+    ) -> Self {
+        Self::new(main_count, background_counts, foreground_counts, true)
+    }
+
+    fn new(
+        main_count: usize,
+        background_counts: &[usize],
+        foreground_counts: &[usize],
+        prewarmed: bool,
+    ) -> Self {
+        let max_count = std::iter::once(main_count)
+            .chain(background_counts.iter().copied())
+            .chain(foreground_counts.iter().copied())
+            .max()
+            .unwrap_or(0);
+        let state_vec = |count| {
+            if prewarmed {
+                Vec::with_capacity(count)
+            } else {
+                Vec::new()
+            }
+        };
+        let layer_vec = |counts: &[usize]| {
+            if prewarmed {
+                counts.iter().map(|&count| state_vec(count)).collect()
+            } else {
+                Vec::new()
+            }
+        };
+        Self {
+            main_count,
+            background_counts: background_counts.to_vec(),
+            foreground_counts: foreground_counts.to_vec(),
+            local_states: state_vec(main_count),
+            overlay_states: state_vec(main_count),
+            background_local_states: layer_vec(background_counts),
+            background_states: layer_vec(background_counts),
+            foreground_local_states: layer_vec(foreground_counts),
+            foreground_states: layer_vec(foreground_counts),
+            capture_states: state_vec(max_count),
+            order: if prewarmed {
+                Vec::with_capacity(max_count)
+            } else {
+                Vec::new()
+            },
+            capture_order: if prewarmed {
+                Vec::with_capacity(max_count)
+            } else {
+                Vec::new()
+            },
+        }
+    }
+
+    pub fn opening_frame(&mut self) -> usize {
+        self.local_states
+            .resize(self.main_count, SongLuaOverlayState::default());
+        self.overlay_states
+            .resize(self.main_count, SongLuaOverlayState::default());
+        Self::fill_layers(&self.background_counts, &mut self.background_local_states);
+        Self::fill_layers(&self.background_counts, &mut self.background_states);
+        Self::fill_layers(&self.foreground_counts, &mut self.foreground_local_states);
+        Self::fill_layers(&self.foreground_counts, &mut self.foreground_states);
+        let max_count = std::iter::once(self.main_count)
+            .chain(self.background_counts.iter().copied())
+            .chain(self.foreground_counts.iter().copied())
+            .max()
+            .unwrap_or(0);
+        self.capture_states
+            .resize(max_count, SongLuaOverlayState::default());
+        self.order.extend(0..max_count);
+        self.capture_order.extend(0..max_count);
+        self.local_states.len()
+            + self.overlay_states.len()
+            + self
+                .background_local_states
+                .iter()
+                .map(Vec::len)
+                .sum::<usize>()
+            + self.background_states.iter().map(Vec::len).sum::<usize>()
+            + self
+                .foreground_local_states
+                .iter()
+                .map(Vec::len)
+                .sum::<usize>()
+            + self.foreground_states.iter().map(Vec::len).sum::<usize>()
+            + self.capture_states.len()
+            + self.order.len()
+            + self.capture_order.len()
+    }
+
+    fn fill_layers(counts: &[usize], layers: &mut Vec<Vec<SongLuaOverlayState>>) {
+        layers.resize_with(counts.len(), Vec::new);
+        for (&count, states) in counts.iter().zip(layers) {
+            states.resize(count, SongLuaOverlayState::default());
+        }
+    }
+
+    pub fn storage_bytes(&self) -> usize {
+        let state_bytes = std::mem::size_of::<SongLuaOverlayState>();
+        let index_bytes = std::mem::size_of::<usize>();
+        let nested_state_capacity = |layers: &[Vec<SongLuaOverlayState>]| {
+            layers.iter().map(Vec::capacity).sum::<usize>() * state_bytes
+        };
+        (self.local_states.capacity()
+            + self.overlay_states.capacity()
+            + self.capture_states.capacity())
+            * state_bytes
+            + nested_state_capacity(&self.background_local_states)
+            + nested_state_capacity(&self.background_states)
+            + nested_state_capacity(&self.foreground_local_states)
+            + nested_state_capacity(&self.foreground_states)
+            + (self.order.capacity() + self.capture_order.capacity()) * index_bytes
+    }
+}
+
 #[cfg(feature = "bench-support")]
 fn append_benchmark_projected_grid(
     xs: &[f32],
@@ -15029,6 +15212,15 @@ mod tests {
         assert!(scratch.iter().all(Vec::is_empty));
         assert!(scratch[0].capacity() >= 384);
         assert_eq!(scratch[1].capacity(), 0);
+    }
+
+    #[test]
+    fn song_lua_prewarmed_scratch_matches_cold_opening_frame() {
+        let mut cold = SongLuaScratchPrewarmBenchmark::cold(64, &[32, 96], &[48]);
+        let mut prewarmed = SongLuaScratchPrewarmBenchmark::prewarmed(64, &[32, 96], &[48]);
+
+        assert_eq!(cold.opening_frame(), prewarmed.opening_frame());
+        assert!(prewarmed.storage_bytes() > 0);
     }
 
     #[test]

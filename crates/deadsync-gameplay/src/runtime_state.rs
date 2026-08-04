@@ -1,4 +1,4 @@
-﻿#[derive(Clone, Debug)]
+#[derive(Clone, Debug)]
 pub struct GameplayNoteCountStatsState {
     stats: [Vec<NoteCountStat>; MAX_PLAYERS],
 }
@@ -308,7 +308,7 @@ impl GameplayHoldRuntimeState {
             hold_decay_active: vec![false; notes_len],
             tap_miss_held_window: vec![false; notes_len],
             pending_missed_hold_resolution: vec![false; notes_len],
-            pending_missed_hold_indices: Vec::new(),
+            pending_missed_hold_indices: Vec::with_capacity(decaying_hold_capacity),
         }
     }
 
@@ -594,11 +594,7 @@ impl GameplayHoldFeedbackState {
     }
 
     #[inline(always)]
-    pub(crate) fn set_held_miss(
-        &mut self,
-        col: usize,
-        judgment: Option<HeldMissRenderInfo>,
-    ) {
+    pub(crate) fn set_held_miss(&mut self, col: usize, judgment: Option<HeldMissRenderInfo>) {
         let Some(slot) = self.held_miss_judgments.get_mut(col) else {
             return;
         };
@@ -612,9 +608,7 @@ impl GameplayHoldFeedbackState {
         while active != 0 {
             let col = active.trailing_zeros() as usize;
             let bit = 1 << col;
-            if self.hold_judgments[col]
-                .is_some_and(|info| hold_judgment_expired_at(info, now))
-            {
+            if self.hold_judgments[col].is_some_and(|info| hold_judgment_expired_at(info, now)) {
                 self.hold_judgments[col] = None;
                 self.hold_mask &= !bit;
             }
@@ -699,11 +693,7 @@ impl GameplayVisualFeedbackState {
     }
 
     #[inline(always)]
-    pub(crate) fn set_tap_explosion(
-        &mut self,
-        col: usize,
-        explosion: Option<ActiveTapExplosion>,
-    ) {
+    pub(crate) fn set_tap_explosion(&mut self, col: usize, explosion: Option<ActiveTapExplosion>) {
         let Some(slot) = self.tap_explosions.get_mut(col) else {
             return;
         };
@@ -712,11 +702,7 @@ impl GameplayVisualFeedbackState {
     }
 
     #[inline(always)]
-    pub(crate) fn set_column_flash(
-        &mut self,
-        col: usize,
-        flash: Option<ActiveColumnFlash>,
-    ) {
+    pub(crate) fn set_column_flash(&mut self, col: usize, flash: Option<ActiveColumnFlash>) {
         let Some(slot) = self.column_flashes.get_mut(col) else {
             return;
         };
@@ -764,9 +750,7 @@ impl GameplayVisualFeedbackState {
         while active != 0 {
             let col = active.trailing_zeros() as usize;
             let bit = 1 << col;
-            if self.column_flashes[col]
-                .is_some_and(|flash| column_flash_expired_at(flash, now))
-            {
+            if self.column_flashes[col].is_some_and(|flash| column_flash_expired_at(flash, now)) {
                 self.column_flashes[col] = None;
                 self.flash_mask &= !bit;
             }

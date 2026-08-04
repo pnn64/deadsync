@@ -1,4 +1,4 @@
-﻿#[cfg(test)]
+#[cfg(test)]
 mod tests {
     use super::*;
     use deadsync_chart::{ArrowStats, ChartData, StaminaCounts, TechCounts};
@@ -72,6 +72,7 @@ mod tests {
         assert_eq!(player.judgment_counts, [0; judgment::JUDGE_GRADE_COUNT]);
         assert_eq!(player.scoring_counts, [0; judgment::JUDGE_GRADE_COUNT]);
         assert!(player.combo_milestones.is_empty());
+        assert_eq!(player.combo_milestones.capacity(), COMBO_MILESTONE_CAPACITY);
         assert_eq!(player.hands_holding_count_for_stats, 0);
         assert!(player.failed_ex_score_inputs.is_none());
         assert!(player.course_submit_life.is_none());
@@ -5102,7 +5103,10 @@ mod tests {
         assert_eq!(input_lane_mask(MAX_COLS + 1), u8::MAX);
 
         let inputs = lane_inputs_from_mask(0b1010_0101, 4);
-        assert_eq!(inputs, [true, false, true, false, false, false, false, false]);
+        assert_eq!(
+            inputs,
+            [true, false, true, false, false, false, false, false]
+        );
     }
 
     #[test]
@@ -7114,7 +7118,10 @@ mod tests {
         assert_eq!(song_lua_message_command_index(&indices, "HIDE"), Some(0));
         assert_eq!(song_lua_message_command_index(&indices, "show"), Some(1));
         assert_eq!(song_lua_message_command_index(&indices, "ÄHIDE"), Some(3));
-        assert_eq!(song_lua_message_command_index(&indices, &long_command), Some(4));
+        assert_eq!(
+            song_lua_message_command_index(&indices, &long_command),
+            Some(4)
+        );
         assert_eq!(song_lua_message_command_index(&indices, "missing"), None);
     }
 
@@ -8349,8 +8356,7 @@ mod tests {
         let input_lane_counts = [0; MAX_COLS];
         let mut press_timers = [0.0; MAX_COLS];
         let mut lift_timers = [0.0; MAX_COLS];
-        let mut lift_start_alpha: [f32; MAX_COLS] =
-            std::array::from_fn(|col| col as f32 / 10.0);
+        let mut lift_start_alpha: [f32; MAX_COLS] = std::array::from_fn(|col| col as f32 / 10.0);
         let mut lift_start_zoom: [f32; MAX_COLS] =
             std::array::from_fn(|col| 1.0 + col as f32 / 10.0);
         let expected_alpha = lift_start_alpha;
@@ -10555,10 +10561,7 @@ mod tests {
     fn zmod_fail_stream_progress_requires_sixteenth_density() {
         let data = dense_note_data(4, 15, 4);
 
-        assert_eq!(
-            zmod_fail_stream_progress_for_note_data(&data, 4, 9.0),
-            None
-        );
+        assert_eq!(zmod_fail_stream_progress_for_note_data(&data, 4, 9.0), None);
         assert_eq!(
             zmod_fail_stream_progress_for_note_data(&data, 4, f32::NAN),
             None
@@ -13134,30 +13137,12 @@ mod tests {
     fn frame_stable_note_scroll_advances_through_plateau_without_snapback() {
         let raw_time_ns = song_time_ns_from_seconds(10.0);
         let mut clock = FrameStableDisplayClock::new(raw_time_ns);
-        let first = frame_stable_display_clock_step(
-            &mut clock,
-            raw_time_ns,
-            0.004,
-            1.0,
-            true,
-            |_| {},
-        );
-        let plateau_one = frame_stable_display_clock_step(
-            &mut clock,
-            raw_time_ns,
-            0.004,
-            1.0,
-            false,
-            |_| {},
-        );
-        let plateau_two = frame_stable_display_clock_step(
-            &mut clock,
-            raw_time_ns,
-            0.004,
-            1.0,
-            false,
-            |_| {},
-        );
+        let first =
+            frame_stable_display_clock_step(&mut clock, raw_time_ns, 0.004, 1.0, true, |_| {});
+        let plateau_one =
+            frame_stable_display_clock_step(&mut clock, raw_time_ns, 0.004, 1.0, false, |_| {});
+        let plateau_two =
+            frame_stable_display_clock_step(&mut clock, raw_time_ns, 0.004, 1.0, false, |_| {});
         let resumed_raw_time_ns = raw_time_ns.saturating_add(4_000_000);
         let after_resume = frame_stable_display_clock_step(
             &mut clock,
@@ -13870,9 +13855,8 @@ mod tests {
         global_offset_seconds: f32,
         times: impl IntoIterator<Item = SongTimeNs>,
     ) {
-        let players = std::array::from_fn(|player| {
-            if player == 0 { timing } else { player_timing }
-        });
+        let players =
+            std::array::from_fn(|player| if player == 0 { timing } else { player_timing });
         let profile = TimingProfile::default_itg_with_fa_plus();
         for time_ns in times {
             assert_beat_info_same(
@@ -13911,8 +13895,12 @@ mod tests {
             for (player, timing_player) in players.iter().take(2).enumerate() {
                 let visible_time_ns = time_ns.saturating_sub((player as i64 + 1) * 11_000_000);
                 assert_eq!(
-                    cache.visible_beat(player, timing_player, visible_time_ns).to_bits(),
-                    timing_player.get_beat_for_time_ns(visible_time_ns).to_bits(),
+                    cache
+                        .visible_beat(player, timing_player, visible_time_ns)
+                        .to_bits(),
+                    timing_player
+                        .get_beat_for_time_ns(visible_time_ns)
+                        .to_bits(),
                 );
                 assert_eq!(
                     cache
@@ -13921,8 +13909,14 @@ mod tests {
                     timing_player.get_beat_for_time_ns(time_ns).to_bits(),
                 );
                 let expected_rows = lane_search_rows_for_timing(timing_player, time_ns);
-                assert_eq!(cache.lane_search_rows(player, timing_player, time_ns), expected_rows);
-                assert_eq!(cache.lane_search_rows(player, timing_player, time_ns), expected_rows);
+                assert_eq!(
+                    cache.lane_search_rows(player, timing_player, time_ns),
+                    expected_rows
+                );
+                assert_eq!(
+                    cache.lane_search_rows(player, timing_player, time_ns),
+                    expected_rows
+                );
             }
             let expected_cutoffs =
                 missed_note_cutoff_rows_for_players(&profile, &players, 1.35, time_ns, 2);
@@ -13950,9 +13944,8 @@ mod tests {
     fn time_to_beat_caches_match_uncached_across_events_and_rewinds() {
         let timing = eventful_cache_timing(0.012, 1.0);
         let player_timing = eventful_cache_timing(-0.021, 1.1);
-        let players = std::array::from_fn(|player| {
-            if player == 0 { &timing } else { &player_timing }
-        });
+        let players =
+            std::array::from_fn(|player| if player == 0 { &timing } else { &player_timing });
         let mut cache = GameplayTimeToBeatCaches::new(&timing, &players);
         let start = song_time_ns_from_seconds(-0.5);
         let end = timing
@@ -13972,7 +13965,9 @@ mod tests {
             &timing,
             &player_timing,
             0.012,
-            (0..=64).rev().map(|i| start.saturating_add(step.saturating_mul(i * 3))),
+            (0..=64)
+                .rev()
+                .map(|i| start.saturating_add(step.saturating_mul(i * 3))),
         );
     }
 
@@ -14117,6 +14112,7 @@ mod tests {
     fn hold_runtime_state_initializes_resets_and_clears() {
         let mut state = GameplayHoldRuntimeState::new(3, 4);
         assert_eq!(state.decaying_hold_indices.capacity(), 4);
+        assert_eq!(state.pending_missed_hold_indices.capacity(), 4);
         assert_eq!(state.hold_decay_active, [false; 3]);
         assert_eq!(state.tap_miss_held_window, [false; 3]);
         assert_eq!(state.pending_missed_hold_resolution, [false; 3]);
@@ -15238,13 +15234,7 @@ mod tests {
             .map(|index| {
                 let mut indices = [usize::MAX; MAX_COLS];
                 indices[0] = index;
-                build_row_entry(
-                    (index + 1) * 48,
-                    indices,
-                    1,
-                    &notes,
-                    &note_times,
-                )
+                build_row_entry((index + 1) * 48, indices, 1, &notes, &note_times)
             })
             .collect::<Vec<_>>();
         let mut scan_start = 0;
@@ -15802,15 +15792,7 @@ mod tests {
         let mut legacy = current.clone();
 
         apply_mines_insert(&mut current, &context, &timing, 0, 4, 0, last_row);
-        apply_mines_insert_legacy_for_bench(
-            &mut legacy,
-            &context,
-            &timing,
-            0,
-            4,
-            0,
-            last_row,
-        );
+        apply_mines_insert_legacy_for_bench(&mut legacy, &context, &timing, 0, 4, 0, last_row);
 
         assert_eq!(current.len(), legacy.len());
         for (current, legacy) in current.iter().zip(&legacy) {

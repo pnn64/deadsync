@@ -1,4 +1,4 @@
-﻿#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 pub enum GameplayTween {
     Linear,
     Accelerate,
@@ -897,12 +897,13 @@ pub struct GameplayNoteskinData {
     pub effects: GameplayNoteskinEffects,
 }
 
-
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ComboMilestoneKind {
     Hundred,
     Thousand,
 }
+
+pub const COMBO_MILESTONE_CAPACITY: usize = 2;
 
 #[derive(Clone, Debug)]
 pub struct ActiveComboMilestone {
@@ -1340,4 +1341,3 @@ pub fn update_danger_fx_for_health(
     }
     fx.last_health = health;
 }
-

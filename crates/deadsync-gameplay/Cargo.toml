@@ -33,6 +33,11 @@ harness = false
 required-features = ["bench-support"]
 
 [[bench]]
+name = "gameplay_event_prewarm"
+harness = false
+required-features = ["bench-support"]
+
+[[bench]]
 name = "song_lua_window_preprocess"
 harness = false
 required-features = ["bench-support"]

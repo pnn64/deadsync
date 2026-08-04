@@ -1,4 +1,4 @@
-﻿#[derive(Clone, Debug)]
+#[derive(Clone, Debug)]
 pub struct JudgmentRenderInfo {
     pub judgment: Judgment,
     pub started_at_screen_s: f32,
@@ -151,7 +151,7 @@ pub fn init_player_runtime() -> PlayerRuntime {
         fail_time: None,
         calories_burned: 0.0,
         earned_grade_points: 0,
-        combo_milestones: Vec::new(),
+        combo_milestones: Vec::with_capacity(COMBO_MILESTONE_CAPACITY),
         hands_achieved: 0,
         holds_held: 0,
         holds_held_for_score: 0,
@@ -559,8 +559,7 @@ pub fn time_based_tap_miss_work_ready_for_players(
             .copied()
             .unwrap_or(note_range.0)
             .max(note_range.0.min(end));
-        cursor < end
-            && notes[cursor].row_index < cutoff_rows.get(player).copied().unwrap_or(0)
+        cursor < end && notes[cursor].row_index < cutoff_rows.get(player).copied().unwrap_or(0)
     })
 }
 
