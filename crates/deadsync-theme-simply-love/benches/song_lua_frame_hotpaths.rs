@@ -1,8 +1,9 @@
 use deadsync_theme_simply_love::screens::gameplay::{
-    SongLuaActorBuildBenchmark, SongLuaEaseBenchmark, SongLuaMessageStateBenchmark,
-    SongLuaMultiActorEmitBenchmark, SongLuaOrderBenchmark, SongLuaProjectedMeshBenchmark,
-    SongLuaProxyRequestBenchmark, SongLuaTextAttributeBenchmark, SongLuaTexturedGlowBenchmark,
-    SongLuaTopologyBenchmark, SongLuaUppercaseTextBenchmark,
+    SongLuaActorBuildBenchmark, SongLuaEaseBenchmark, SongLuaGraphDisplayBenchmark,
+    SongLuaMessageStateBenchmark, SongLuaMultiActorEmitBenchmark, SongLuaOrderBenchmark,
+    SongLuaProjectedMeshBenchmark, SongLuaProxyRequestBenchmark, SongLuaTextAttributeBenchmark,
+    SongLuaTexturedGlowBenchmark, SongLuaTopologyBenchmark, SongLuaUppercaseTextBenchmark,
+    SongLuaWhiteTextureKeyBenchmark,
 };
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::hint::black_box;
@@ -20,6 +21,7 @@ const TOPOLOGY_GROUPS: usize = 16;
 const TOPOLOGY_CHAIN_DEPTH: usize = 32;
 const TOPOLOGY_REFERENCES: usize = 128;
 const RGB_AFT_REFERENCES: usize = TOPOLOGY_GROUPS * 3;
+const GRAPH_POINTS: usize = 128;
 const WARMUP_FRAMES: usize = 1_000;
 
 struct CountingAlloc {
@@ -195,6 +197,8 @@ fn main() {
     const UPPERCASE_FRAMES: usize = 100_000;
     const TEXT_ATTRIBUTE_FRAMES: usize = 100_000;
     const TEXTURED_GLOW_FRAMES: usize = 50_000;
+    const WHITE_TEXTURE_FRAMES: usize = 200_000;
+    const GRAPH_FRAMES: usize = 20_000;
     const ATTRIBUTE_TEXT: &str = "Gameplay attribute colors";
 
     let now = MESSAGE_EVENTS as f32 * 0.125 + 1.0;
@@ -391,6 +395,31 @@ fn main() {
         measure(TEXTURED_GLOW_FRAMES, || textured_glow.reused_frame());
 
     assert_eq!(
+        SongLuaWhiteTextureKeyBenchmark::legacy_frame(),
+        SongLuaWhiteTextureKeyBenchmark::shared_frame()
+    );
+    let legacy_white_texture_result = measure(WHITE_TEXTURE_FRAMES, || {
+        SongLuaWhiteTextureKeyBenchmark::legacy_frame()
+    });
+    let shared_white_texture_result = measure(WHITE_TEXTURE_FRAMES, || {
+        SongLuaWhiteTextureKeyBenchmark::shared_frame()
+    });
+
+    let mut graph_display = SongLuaGraphDisplayBenchmark::new(GRAPH_POINTS);
+    assert_eq!(graph_display.legacy_frame(), graph_display.reused_frame());
+    let legacy_graph_result = measure(GRAPH_FRAMES, || graph_display.legacy_frame());
+    let reused_graph_result = measure(GRAPH_FRAMES, || graph_display.reused_frame());
+
+    assert_eq!(
+        textured_glow.legacy_frame(),
+        textured_glow.prewarmed_static_frame()
+    );
+    let legacy_model_glow_result = measure(TEXTURED_GLOW_FRAMES, || textured_glow.legacy_frame());
+    let prewarmed_model_glow_result = measure(TEXTURED_GLOW_FRAMES, || {
+        textured_glow.prewarmed_static_frame()
+    });
+
+    assert_eq!(
         legacy_message_result.checksum,
         cached_message_result.checksum
     );
@@ -447,6 +476,15 @@ fn main() {
     assert_eq!(
         legacy_textured_glow_result.checksum,
         reused_textured_glow_result.checksum
+    );
+    assert_eq!(
+        legacy_white_texture_result.checksum,
+        shared_white_texture_result.checksum
+    );
+    assert_eq!(legacy_graph_result.checksum, reused_graph_result.checksum);
+    assert_eq!(
+        legacy_model_glow_result.checksum,
+        prewarmed_model_glow_result.checksum
     );
 
     println!("Song Lua gameplay frame hot paths");
@@ -623,5 +661,40 @@ fn main() {
     println!(
         "textured glow storage: {} bytes",
         textured_glow.storage_bytes()
+    );
+    println!("projected/skewed Quad texture key");
+    print_result(
+        "allocate Arc<str>",
+        WHITE_TEXTURE_FRAMES,
+        &legacy_white_texture_result,
+    );
+    print_result(
+        "clone shared Arc",
+        WHITE_TEXTURE_FRAMES,
+        &shared_white_texture_result,
+    );
+    println!("GraphDisplay ({GRAPH_POINTS} points, body + line)");
+    print_result("fresh meshes/frame", GRAPH_FRAMES, &legacy_graph_result);
+    print_result("reused song buffers", GRAPH_FRAMES, &reused_graph_result);
+    println!(
+        "GraphDisplay storage: {} bytes, {} replacements, {} growths",
+        graph_display.storage_bytes(),
+        graph_display.replacements(),
+        graph_display.growths(),
+    );
+    println!("static Model glow pass (96 vertices/layer)");
+    print_result(
+        "copy vertices",
+        TEXTURED_GLOW_FRAMES,
+        &legacy_model_glow_result,
+    );
+    print_result(
+        "clone prewarmed Arc",
+        TEXTURED_GLOW_FRAMES,
+        &prewarmed_model_glow_result,
+    );
+    println!(
+        "static Model glow storage: {} bytes/layer",
+        textured_glow.static_storage_bytes()
     );
 }
