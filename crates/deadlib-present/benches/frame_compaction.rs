@@ -98,6 +98,7 @@ struct BenchResult {
 
 fn main() {
     benchmark_retained_append();
+    benchmark_sprite_analysis();
     benchmark_sprite_gather();
 }
 
@@ -119,6 +120,22 @@ fn median_retained(plan: fn(&mut RetainedAppendBenchmark) -> u64) -> BenchResult
         let mut bench = RetainedAppendBenchmark::new(RETAINED_DRAWS);
         measure(|| plan(&mut bench), 0)
     }))
+}
+
+fn benchmark_sprite_analysis() {
+    let scanned = median_gather(SpriteGatherBenchmark::scanned_analysis_frame);
+    let inline = median_gather(SpriteGatherBenchmark::inline_analysis_frame);
+    assert_eq!(scanned.checksum, inline.checksum);
+    assert_eq!(scanned.ops, inline.ops);
+    assert_zero_alloc(&scanned);
+    assert_zero_alloc(&inline);
+
+    println!(
+        "\nfallback sprite analysis ({SPRITES} sprites across {SPRITE_LAYERS} interleaved layers)"
+    );
+    print_result("second pass", &scanned, SPRITES);
+    print_result("inline", &inline, SPRITES);
+    print_ratio(&scanned, &inline);
 }
 
 fn benchmark_sprite_gather() {

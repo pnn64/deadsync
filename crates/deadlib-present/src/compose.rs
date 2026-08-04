@@ -735,16 +735,28 @@ fn build_screen_segments_cached_with_scratch_and_texture_context_impl<
     tmesh_geometries.clear();
     ops.clear();
     tmesh_geom_map.clear();
-    finish_frame(
-        &mut builder,
-        &mut mesh_vertices,
-        &mut tmesh_instances,
-        &mut tmesh_geometries,
-        &mut ops,
-        &mut tmesh_geom_map,
-    );
+    // Fallback sorting can fragment sprite runs. Count the gather plan while
+    // finalizing so the hot path never rescans the completed operation list.
+    let gather_plan = if sort_fallback {
+        finish_frame::<true>(
+            &mut builder,
+            &mut mesh_vertices,
+            &mut tmesh_instances,
+            &mut tmesh_geometries,
+            &mut ops,
+            &mut tmesh_geom_map,
+        )
+    } else {
+        finish_frame::<false>(
+            &mut builder,
+            &mut mesh_vertices,
+            &mut tmesh_instances,
+            &mut tmesh_geometries,
+            &mut ops,
+            &mut tmesh_geom_map,
+        )
+    };
     if sort_fallback {
-        let gather_plan = analyze_final_sprite_gather(&ops);
         let gather = if sprite_gather_is_profitable(gather_plan) {
             let mut sorted_sprite_instances = std::mem::take(&mut scratch.sorted_sprite_instances);
             gather_finalized_sprites(
@@ -1016,6 +1028,7 @@ struct SpriteGatherStats {
     runs_after: u32,
 }
 
+#[cfg(any(test, feature = "bench-support"))]
 fn analyze_final_sprite_gather(ops: &[renderer::DrawOp]) -> SpriteGatherStats {
     let mut stats = SpriteGatherStats::default();
     let mut previous = None;
@@ -1094,17 +1107,19 @@ fn sprite_runs_are_compatible(previous: renderer::SpriteRun, current: renderer::
 }
 
 #[allow(clippy::too_many_arguments)]
-fn finish_frame(
+fn finish_frame<const TRACK_SPRITE_RUNS: bool>(
     builder: &mut FrameBuilder,
     mesh_vertices: &mut Vec<renderer::MeshVertex>,
     tmesh_instances: &mut Vec<renderer::TexturedMeshInstanceRaw>,
     tmesh_geometries: &mut Vec<renderer::TexturedMeshGeometry>,
     ops: &mut Vec<renderer::DrawOp>,
     geom_map: &mut HashMap<TMeshGeomKey, u32, rustc_hash::FxBuildHasher>,
-) {
+) -> SpriteGatherStats {
     if ops.capacity() < builder.items.len() {
         ops.reserve(builder.items.len());
     }
+    let mut sprite_stats = SpriteGatherStats::default();
+    let mut previous_sprite = None;
     let mut cursor = 0usize;
     while cursor < builder.items.len() {
         let item = builder.items[cursor];
@@ -1131,13 +1146,25 @@ fn finish_frame(
                     }
                     instance_count = instance_count.saturating_add(1);
                 }
-                ops.push(renderer::DrawOp::Sprite(renderer::SpriteRun {
+                let run = renderer::SpriteRun {
                     instance_start,
                     instance_count,
                     blend,
                     texture_handle,
                     camera,
-                }));
+                };
+                if TRACK_SPRITE_RUNS {
+                    sprite_stats.sprites = sprite_stats.sprites.saturating_add(instance_count);
+                    sprite_stats.runs_before = sprite_stats.runs_before.saturating_add(1);
+                    sprite_stats.runs_after =
+                        sprite_stats
+                            .runs_after
+                            .saturating_add(u32::from(previous_sprite.is_none_or(|previous| {
+                                !sprite_runs_are_compatible(previous, run)
+                            })));
+                    previous_sprite = Some(run);
+                }
+                ops.push(renderer::DrawOp::Sprite(run));
                 cursor = cursor.saturating_add(instance_count as usize);
             }
             DrawKind::Mesh => {
@@ -1182,6 +1209,9 @@ fn finish_frame(
                     blend,
                     camera,
                 }));
+                if TRACK_SPRITE_RUNS {
+                    previous_sprite = None;
+                }
                 cursor += object_count;
             }
             DrawKind::TexturedMesh => {
@@ -1242,11 +1272,15 @@ fn finish_frame(
                     camera,
                     depth_test,
                 }));
+                if TRACK_SPRITE_RUNS {
+                    previous_sprite = None;
+                }
                 cursor += object_count;
             }
         }
     }
     builder.clear();
+    sprite_stats
 }
 
 fn push_tmesh_geometry(
@@ -6354,22 +6388,41 @@ impl SpriteGatherBenchmark {
     }
 
     pub fn legacy_frame(&mut self) -> u64 {
-        self.finish(false)
+        self.prepare();
+        self.gather_stats = self.finalize::<false>();
+        self.frame_checksum()
+    }
+
+    pub fn scanned_analysis_frame(&mut self) -> u64 {
+        self.prepare();
+        self.finalize::<false>();
+        self.gather_stats = analyze_final_sprite_gather(&self.ops);
+        self.analysis_checksum()
+    }
+
+    pub fn inline_analysis_frame(&mut self) -> u64 {
+        self.prepare();
+        self.gather_stats = self.finalize::<true>();
+        self.analysis_checksum()
     }
 
     pub fn gathered_frame(&mut self) -> u64 {
-        self.finish(true)
+        self.prepare();
+        self.gather_stats = self.finalize::<true>();
+        gather_finalized_sprites(
+            &mut self.ops,
+            &mut self.sprites,
+            &mut self.gathered,
+            self.gather_stats,
+        );
+        self.frame_checksum()
     }
 
     pub fn op_count(&self) -> usize {
         self.ops.len()
     }
 
-    pub fn gathered_sprites(&self) -> u32 {
-        self.gather_stats.sprites
-    }
-
-    fn finish(&mut self, gather: bool) -> u64 {
+    fn prepare(&mut self) {
         self.builder.clear();
         self.builder.items.extend_from_slice(&self.items);
         self.sprites.clear();
@@ -6379,21 +6432,27 @@ impl SpriteGatherBenchmark {
         self.tmesh_geometries.clear();
         self.ops.clear();
         self.geom_map.clear();
-        finish_frame(
+    }
+
+    fn finalize<const TRACK_SPRITE_RUNS: bool>(&mut self) -> SpriteGatherStats {
+        finish_frame::<TRACK_SPRITE_RUNS>(
             &mut self.builder,
             &mut self.mesh_vertices,
             &mut self.tmesh_instances,
             &mut self.tmesh_geometries,
             &mut self.ops,
             &mut self.geom_map,
-        );
-        self.gather_stats = if gather {
-            let plan = analyze_final_sprite_gather(&self.ops);
-            gather_finalized_sprites(&mut self.ops, &mut self.sprites, &mut self.gathered, plan);
-            plan
-        } else {
-            SpriteGatherStats::default()
-        };
+        )
+    }
+
+    fn analysis_checksum(&self) -> u64 {
+        self.frame_checksum()
+            ^ u64::from(self.gather_stats.sprites)
+            ^ u64::from(self.gather_stats.runs_before).rotate_left(21)
+            ^ u64::from(self.gather_stats.runs_after).rotate_left(42)
+    }
+
+    fn frame_checksum(&self) -> u64 {
         self.ops.iter().fold(0u64, |checksum, op| {
             let renderer::DrawOp::Sprite(run) = *op else {
                 return checksum;
@@ -7100,9 +7159,9 @@ mod tests {
     use crate::font::{Font, Glyph};
     use crate::space::Metrics;
     use deadlib_render::{
-        BlendMode, DrawOp, INVALID_TMESH_CACHE_KEY, MeshRun, MeshVertex, RenderFrame,
-        SpriteInstanceRaw, SpriteRun, TMeshCacheKey, TexturedMeshGeometry, TexturedMeshInstanceRaw,
-        TexturedMeshRun, TexturedMeshVertex, TexturedMeshVertices,
+        BlendMode, DrawOp, INVALID_TEXTURE_HANDLE, INVALID_TMESH_CACHE_KEY, MeshRun, MeshVertex,
+        RenderFrame, SpriteInstanceRaw, SpriteRun, TMeshCacheKey, TexturedMeshGeometry,
+        TexturedMeshInstanceRaw, TexturedMeshRun, TexturedMeshVertex, TexturedMeshVertices,
     };
     use glam::{Mat4 as Matrix4, Vec3 as Vector3};
     use std::cell::Cell;
@@ -7189,15 +7248,22 @@ mod tests {
     }
 
     fn finish_test_builder(
-        mut builder: FrameBuilder,
+        builder: FrameBuilder,
         sprite_instances: Vec<SpriteInstanceRaw>,
     ) -> RenderFrame {
+        finish_test_builder_with_stats::<false>(builder, sprite_instances).0
+    }
+
+    fn finish_test_builder_with_stats<const TRACK_SPRITE_RUNS: bool>(
+        mut builder: FrameBuilder,
+        sprite_instances: Vec<SpriteInstanceRaw>,
+    ) -> (RenderFrame, super::SpriteGatherStats) {
         let mut mesh_vertices = Vec::new();
         let mut tmesh_instances = Vec::new();
         let mut tmesh_geometries = Vec::new();
         let mut ops = Vec::new();
         let mut geom_map = HashMap::default();
-        finish_frame(
+        let stats = finish_frame::<TRACK_SPRITE_RUNS>(
             &mut builder,
             &mut mesh_vertices,
             &mut tmesh_instances,
@@ -7205,15 +7271,18 @@ mod tests {
             &mut ops,
             &mut geom_map,
         );
-        RenderFrame {
-            clear_color: [0.0; 4],
-            cameras: vec![Matrix4::IDENTITY],
-            sprite_instances,
-            mesh_vertices,
-            tmesh_instances,
-            tmesh_geometries,
-            ops,
-        }
+        (
+            RenderFrame {
+                clear_color: [0.0; 4],
+                cameras: vec![Matrix4::IDENTITY],
+                sprite_instances,
+                mesh_vertices,
+                tmesh_instances,
+                tmesh_geometries,
+                ops,
+            },
+            stats,
+        )
     }
 
     fn assert_test_frames_equal(expected: &RenderFrame, actual: &RenderFrame) {
@@ -7348,26 +7417,60 @@ mod tests {
         };
 
         let legacy = finish_test_builder(make_builder(), sprites.clone());
-        let mut gathered = finish_test_builder(make_builder(), sprites);
+        let (mut gathered, inline_gather) =
+            finish_test_builder_with_stats::<true>(make_builder(), sprites);
         let mut gather_scratch = Vec::new();
-        let gather = analyze_final_sprite_gather(&gathered.ops);
+        let scanned_gather = analyze_final_sprite_gather(&gathered.ops);
+        assert_eq!(scanned_gather, inline_gather);
         gather_finalized_sprites(
             &mut gathered.ops,
             &mut gathered.sprite_instances,
             &mut gather_scratch,
-            gather,
+            inline_gather,
         );
 
         assert_eq!(legacy.ops.len(), 4);
         assert_eq!(gathered.ops.len(), 1);
-        assert_eq!(gather.sprites, 4);
-        assert_eq!(gather.runs_before, 4);
-        assert_eq!(gather.runs_after, 1);
+        assert_eq!(inline_gather.sprites, 4);
+        assert_eq!(inline_gather.runs_before, 4);
+        assert_eq!(inline_gather.runs_after, 1);
         assert_ne!(legacy.sprite_instances, gathered.sprite_instances);
         assert_eq!(
             sprite_painter_stream(&legacy),
             sprite_painter_stream(&gathered)
         );
+    }
+
+    #[test]
+    fn inline_sprite_analysis_matches_second_pass_across_mixed_draws() {
+        let mut builder = FrameBuilder::default();
+        builder.push_sprite(7, 0, 0, BlendMode::Alpha, 0, 0);
+        builder.push_sprite(INVALID_TEXTURE_HANDLE, 1, 0, BlendMode::Alpha, 0, 1);
+        builder.push_sprite(7, 2, 0, BlendMode::Alpha, 0, 2);
+        builder.push_mesh(
+            0,
+            3,
+            0,
+            BlendMode::Alpha,
+            0,
+            MeshPayload {
+                transform: Matrix4::IDENTITY,
+                tint: [1.0; 4],
+                vertices: MeshVertices::Shared(Arc::from([MeshVertex::default(); 3])),
+            },
+        );
+        builder.push_sprite(7, 4, 0, BlendMode::Alpha, 0, 3);
+
+        let (frame, inline) = finish_test_builder_with_stats::<true>(
+            builder,
+            (0..4)
+                .map(|index| test_sprite_instance(index as f32))
+                .collect(),
+        );
+        assert_eq!(inline, analyze_final_sprite_gather(&frame.ops));
+        assert_eq!(inline.sprites, 3);
+        assert_eq!(inline.runs_before, 3);
+        assert_eq!(inline.runs_after, 2);
     }
 
     fn sprite_run(frame: &RenderFrame, index: usize) -> SpriteRun {
@@ -7628,7 +7731,7 @@ mod tests {
         let mut geometry_map =
             HashMap::<super::TMeshGeomKey, u32, rustc_hash::FxBuildHasher>::default();
 
-        super::finish_frame(
+        super::finish_frame::<false>(
             &mut builder,
             &mut mesh_vertices,
             &mut instances,
