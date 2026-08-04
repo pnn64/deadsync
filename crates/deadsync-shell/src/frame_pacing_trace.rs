@@ -23,6 +23,9 @@ pub struct GameplayPacingPhases {
     pub compose_us: u32,
     pub sort_us: u32,
     pub sort_fallback: bool,
+    pub sprite_gathered: u32,
+    pub sprite_runs_before: u32,
+    pub sprite_runs_after: u32,
     pub upload_us: u32,
     pub storage: GameplayStorageSample,
 }
@@ -228,6 +231,10 @@ pub struct GameplayPacingTrace {
     draw_upload_sum_us: u64,
     draw_record_sum_us: u64,
     sort_fallback_frames: u32,
+    sprite_gather_frames: u32,
+    sprites_gathered: u64,
+    sprite_runs_before: u64,
+    sprite_runs_after: u64,
     display_error_abs_sum_us: u64,
     display_error_abs_max_us: u32,
     display_error_last_us: i32,
@@ -287,6 +294,10 @@ impl GameplayPacingTrace {
             draw_upload_sum_us: 0,
             draw_record_sum_us: 0,
             sort_fallback_frames: 0,
+            sprite_gather_frames: 0,
+            sprites_gathered: 0,
+            sprite_runs_before: 0,
+            sprite_runs_after: 0,
             display_error_abs_sum_us: 0,
             display_error_abs_max_us: 0,
             display_error_last_us: 0,
@@ -438,6 +449,18 @@ impl GameplayPacingTrace {
         self.sort_fallback_frames = self
             .sort_fallback_frames
             .saturating_add(u32::from(phases.sort_fallback));
+        self.sprite_gather_frames = self
+            .sprite_gather_frames
+            .saturating_add(u32::from(phases.sprite_gathered != 0));
+        self.sprites_gathered = self
+            .sprites_gathered
+            .saturating_add(u64::from(phases.sprite_gathered));
+        self.sprite_runs_before = self
+            .sprite_runs_before
+            .saturating_add(u64::from(phases.sprite_runs_before));
+        self.sprite_runs_after = self
+            .sprite_runs_after
+            .saturating_add(u64::from(phases.sprite_runs_after));
         self.record_phase(Phase::Frame, dt_us);
         self.record_phase(Phase::ActorBuild, phases.actor_build_us);
         self.record_phase(Phase::BuildScreen, phases.build_screen_us);
@@ -524,7 +547,7 @@ impl GameplayPacingTrace {
             .iter()
             .fold(0u32, |sum, hist| sum.saturating_add(hist.capped));
         log::trace!(
-            "Gameplay frame pacing: frames={} req=[chain:{} other:{}] dt_ms=[avg:{:.3} max:{:.3}] redraw_ms=[late_avg:{:.3} late_max:{:.3} deliver_avg:{:.3} deliver_max:{:.3} >=1ms:{} >=2ms:{}] draw_ms=[avg:{:.3} max:{:.3}] present_ms=[avg:{:.3} max:{:.3} >=1ms:{} >=3ms:{}] draw_cpu_ms=[setup_avg:{:.3} prep_avg:{:.3} upload_avg:{:.3} record_avg:{:.3}] sort_fallbacks={} tails_us=[order:p50/p95/p99/worst samples:{} capped:{} frame:{} actor:{} build:{} compose:{} sort:{} asset_upload:{} draw:{} setup:{} prep:{} backend_upload:{} record:{}] cpu_storage=[order:capacity/growth_events total_growth_events:{} {}] display_dbg=[err_last_ms:{:+.3} abs_avg_ms:{:.3} abs_max_ms:{:.3} catch:{} catch_last:{}] present_dbg=[mode:{} display:{} host:{} mapped:{} inflight_avg:{:.2} inflight_max:{} image_wait:{} back_pressure:{} queue_idle:{} subopt:{} interval_ms_avg:{:.3} interval_ms_max:{:.3} margin_ms_avg:{:.3} margin_ms_max:{:.3} cal_ms_avg:{:.3} cal_ms_max:{:.3}] audio_dbg=[path:{} req:{} fallback:{} clock:{} qual:{} sf:{} cf:{} rate:{} buf:{} pad:{} q:{} tick_ms:{:.3} span_ms:{:.3} out_ms:{:.3} underruns:{}]",
+            "Gameplay frame pacing: frames={} req=[chain:{} other:{}] dt_ms=[avg:{:.3} max:{:.3}] redraw_ms=[late_avg:{:.3} late_max:{:.3} deliver_avg:{:.3} deliver_max:{:.3} >=1ms:{} >=2ms:{}] draw_ms=[avg:{:.3} max:{:.3}] present_ms=[avg:{:.3} max:{:.3} >=1ms:{} >=3ms:{}] draw_cpu_ms=[setup_avg:{:.3} prep_avg:{:.3} upload_avg:{:.3} record_avg:{:.3}] sort_fallbacks={} sprite_gather=[frames:{} sprites:{} runs:{}->{}] tails_us=[order:p50/p95/p99/worst samples:{} capped:{} frame:{} actor:{} build:{} compose:{} sort:{} asset_upload:{} draw:{} setup:{} prep:{} backend_upload:{} record:{}] cpu_storage=[order:capacity/growth_events total_growth_events:{} {}] display_dbg=[err_last_ms:{:+.3} abs_avg_ms:{:.3} abs_max_ms:{:.3} catch:{} catch_last:{}] present_dbg=[mode:{} display:{} host:{} mapped:{} inflight_avg:{:.2} inflight_max:{} image_wait:{} back_pressure:{} queue_idle:{} subopt:{} interval_ms_avg:{:.3} interval_ms_max:{:.3} margin_ms_avg:{:.3} margin_ms_max:{:.3} cal_ms_avg:{:.3} cal_ms_max:{:.3}] audio_dbg=[path:{} req:{} fallback:{} clock:{} qual:{} sf:{} cf:{} rate:{} buf:{} pad:{} q:{} tick_ms:{:.3} span_ms:{:.3} out_ms:{:.3} underruns:{}]",
             frames,
             self.chain_frames,
             self.other_frames,
@@ -547,6 +570,10 @@ impl GameplayPacingTrace {
             ms(self.draw_upload_sum_us),
             ms(self.draw_record_sum_us),
             self.sort_fallback_frames,
+            self.sprite_gather_frames,
+            self.sprites_gathered,
+            self.sprite_runs_before,
+            self.sprite_runs_after,
             tail_samples,
             tail_capped,
             frame_tail,
@@ -678,6 +705,9 @@ mod tests {
                 compose_us: 1_000,
                 sort_us: 75,
                 sort_fallback: true,
+                sprite_gathered: 48,
+                sprite_runs_before: 24,
+                sprite_runs_after: 3,
                 upload_us: 50,
                 storage: GameplayStorageSample::new(
                     256,
@@ -699,6 +729,10 @@ mod tests {
         assert_eq!(trace.present_over_1ms, 1);
         assert_eq!(trace.draw_upload_sum_us, 250);
         assert_eq!(trace.sort_fallback_frames, 1);
+        assert_eq!(trace.sprite_gather_frames, 1);
+        assert_eq!(trace.sprites_gathered, 48);
+        assert_eq!(trace.sprite_runs_before, 24);
+        assert_eq!(trace.sprite_runs_after, 3);
         assert_eq!(trace.display_error_last_us, -2_000);
         assert_eq!(trace.display_catching_up_frames, 1);
         assert_eq!(trace.storage.high[0], 256);

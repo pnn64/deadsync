@@ -28,7 +28,10 @@ mod tests {
         compose::{self, TextureContext, TextureMeta},
         space,
     };
-    use deadlib_render::{DrawOp, DrawStorageStats, frame_compare::compare_render_frames};
+    use deadlib_render::{
+        DrawOp, DrawStorageStats,
+        frame_compare::{compare_render_frames, compare_render_frames_semantic},
+    };
     use deadsync_assets::noteskin::{self, Noteskin};
     use deadsync_assets::song_lua::compile_song_lua;
     use deadsync_chart::SongData;
@@ -612,7 +615,7 @@ mod tests {
         state.trigger_tap_judgment_explosion(player_idx, column, &judgment);
     }
 
-    fn compose_fixture_frame_with_textures<T: TextureContext + ?Sized>(
+    fn compose_fixture_frame_contiguous<T: TextureContext + ?Sized>(
         state: &mut screen_gameplay::State,
         assets: &crate::assets::AssetManager,
         metrics: &space::Metrics,
@@ -632,6 +635,38 @@ mod tests {
         );
         compose::build_screen_cached_with_scratch_and_texture_context_and_actor_resources(
             actors,
+            [0.0, 0.0, 0.0, 1.0],
+            metrics,
+            assets.fonts(),
+            10.0,
+            text_cache,
+            scratch,
+            texture_ctx,
+            state.actor_resources(),
+        )
+    }
+
+    fn compose_fixture_frame_with_textures<T: TextureContext + ?Sized>(
+        state: &mut screen_gameplay::State,
+        assets: &crate::assets::AssetManager,
+        metrics: &space::Metrics,
+        actors: &mut Vec<deadlib_present::actors::Actor>,
+        text_cache: &mut compose::TextLayoutCache,
+        scratch: &mut compose::ComposeScratch,
+        texture_ctx: &T,
+    ) -> deadlib_render::RenderFrame {
+        actors.clear();
+        let segments = screen_gameplay::push_actors_segmented(
+            actors,
+            state,
+            assets,
+            screen_gameplay::ActorViewOverride::default(),
+            123.0,
+            crate::views::SimplyLoveVisualPolicyView::default(),
+        );
+        let actor_segments = segments.slices(state, actors);
+        compose::build_screen_segments_cached_with_scratch_and_texture_context_and_actor_resources(
+            &actor_segments,
             [0.0, 0.0, 0.0, 1.0],
             metrics,
             assets.fonts(),
@@ -671,15 +706,16 @@ mod tests {
         scratch: &mut compose::ComposeScratch,
     ) -> deadlib_render::RenderFrame {
         actors.clear();
-        crate::screens::practice::push_actors(
+        let segments = crate::screens::practice::push_actors_segmented(
             actors,
             state,
             assets,
             123.0,
             crate::views::SimplyLoveVisualPolicyView::default(),
         );
-        compose::build_screen_cached_with_scratch_and_texture_context_and_actor_resources(
-            actors,
+        let actor_segments = segments.slices(&state.gameplay, actors);
+        compose::build_screen_segments_cached_with_scratch_and_texture_context_and_actor_resources(
+            &actor_segments,
             [0.0, 0.0, 0.0, 1.0],
             metrics,
             assets.fonts(),
@@ -691,6 +727,41 @@ mod tests {
         )
     }
 
+    fn assert_segmented_matches_contiguous(
+        state: &mut screen_gameplay::State,
+        assets: &crate::assets::AssetManager,
+        metrics: &space::Metrics,
+        actors: &mut Vec<deadlib_present::actors::Actor>,
+    ) {
+        let mut contiguous_text = compose::TextLayoutCache::default();
+        let mut segmented_text = compose::TextLayoutCache::default();
+        let mut contiguous_scratch = compose::ComposeScratch::default();
+        let mut segmented_scratch = compose::ComposeScratch::default();
+        let mut contiguous = compose_fixture_frame_contiguous(
+            state,
+            assets,
+            metrics,
+            actors,
+            &mut contiguous_text,
+            &mut contiguous_scratch,
+            &FIXTURE_TEXTURES,
+        );
+        let mut segmented = compose_fixture_frame(
+            state,
+            assets,
+            metrics,
+            actors,
+            &mut segmented_text,
+            &mut segmented_scratch,
+        );
+        assert_eq!(
+            compare_render_frames_semantic(&contiguous, &segmented),
+            Ok(())
+        );
+        contiguous_scratch.recycle_frame(&mut contiguous);
+        segmented_scratch.recycle_frame(&mut segmented);
+    }
+
     fn prepare_fixture_frame(
         state: &mut screen_gameplay::State,
         assets: &crate::assets::AssetManager,
@@ -699,15 +770,8 @@ mod tests {
         text_cache: &mut compose::TextLayoutCache,
         compose_scratch: &mut compose::ComposeScratch,
     ) -> usize {
-        let mut render = compose_fixture_frame_with_textures(
-            state,
-            assets,
-            metrics,
-            actors,
-            text_cache,
-            compose_scratch,
-            &FIXTURE_TEXTURES,
-        );
+        let mut render =
+            compose_fixture_frame(state, assets, metrics, actors, text_cache, compose_scratch);
         let checksum = render
             .ops
             .len()
@@ -936,6 +1000,31 @@ L000
                     &mut compose_scratch,
                 );
                 assert_ne!(compare_render_frames(&expected, &reverse), Ok(()));
+            },
+        );
+    }
+
+    #[test]
+    fn sprite_core_segmented_notefield_matches_contiguous_actor_path() {
+        let simfile = write_fixture("f0-sprite-core-segmented", generated_sprite_core_simfile());
+        with_session(
+            profile_data::PlayStyle::Single,
+            profile_data::PlayerSide::P1,
+            true,
+            false,
+            || {
+                let (mut state, assets, metrics) = sprite_core_fixture(&simfile);
+                let mut actors = Vec::with_capacity(512);
+
+                for reverse in [false, true] {
+                    if reverse {
+                        state.profiles_runtime.profiles[0]
+                            .set_scroll_option(profile_data::ScrollOption::Reverse);
+                        state.refresh_live_notefield_options(120.0);
+                    }
+                    add_sprite_core_feedback(&mut state, 0, 0, 42);
+                    assert_segmented_matches_contiguous(&mut state, &assets, &metrics, &mut actors);
+                }
             },
         );
     }
@@ -1952,6 +2041,45 @@ L000
         );
     }
 
+    #[test]
+    fn sprite_core_skips_unprofitable_sprite_gather() {
+        let simfile = write_fixture("f0-sprite-core-gather", generated_sprite_core_simfile());
+        with_session(
+            profile_data::PlayStyle::Single,
+            profile_data::PlayerSide::P1,
+            true,
+            false,
+            || {
+                let (mut state, assets, metrics) = sprite_core_fixture(&simfile);
+                let mut actors = Vec::with_capacity(512);
+                let mut text_cache = compose::TextLayoutCache::default();
+                let mut compose_scratch = compose::ComposeScratch::default();
+
+                compose_scratch.begin_frame_stats(true);
+                let checksum = prepare_fixture_frame(
+                    &mut state,
+                    &assets,
+                    &metrics,
+                    &mut actors,
+                    &mut text_cache,
+                    &mut compose_scratch,
+                );
+                let stats = compose_scratch.frame_stats();
+                assert_ne!(checksum, 0);
+                assert!(stats.sort_fallback);
+                assert_eq!(stats.sprite_gathered, 0);
+                assert_eq!(stats.sprite_runs_after, stats.sprite_runs_before);
+                println!(
+                    "F0 sprite gather: fallback={} sprites={} runs={} -> {}",
+                    stats.sort_fallback,
+                    stats.sprite_gathered,
+                    stats.sprite_runs_before,
+                    stats.sprite_runs_after,
+                );
+            },
+        );
+    }
+
     fn generated_hold_mine_simfile() -> &'static str {
         r#"#VERSION:0.83;
 #TITLE:F0 Hold Mine;
@@ -2545,6 +2673,12 @@ return Def.ActorFrame{
                         let first_transform = state.gameplay.song_lua_player_transform(0);
                         assert!(first_transform.rotation_z > 0.0);
                         assert!(first_transform.zoom_x < 1.0);
+                        assert_segmented_matches_contiguous(
+                            &mut state,
+                            &assets,
+                            &metrics,
+                            &mut actors,
+                        );
                         let first = assert_repeatable_frame(
                             &mut state,
                             &assets,
@@ -2634,6 +2768,7 @@ return Def.ActorFrame{
                 let mut actors = Vec::with_capacity(1024);
                 let mut text_cache = compose::TextLayoutCache::default();
                 let mut compose_scratch = compose::ComposeScratch::default();
+                assert_segmented_matches_contiguous(&mut state, &assets, &metrics, &mut actors);
                 assert_repeatable_frame(
                     &mut state,
                     &assets,

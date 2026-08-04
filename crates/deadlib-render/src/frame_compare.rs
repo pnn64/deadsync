@@ -1,6 +1,6 @@
 //! Exact structural comparisons for renderer parity tests.
 
-use crate::{RenderFrame, TexturedMeshVertices};
+use crate::{DrawOp, RenderFrame, SpriteInstanceRaw, SpriteRun, TexturedMeshVertices};
 use bytemuck::Pod;
 use glam::Mat4;
 use std::sync::Arc;
@@ -76,6 +76,147 @@ pub fn compare_render_frames(expected: &RenderFrame, actual: &RenderFrame) -> Co
     compare_values("draw_op", &expected.ops, &actual.ops)
 }
 
+/// Compares backend-visible painter output while allowing sprite instances to
+/// be gathered into different contiguous runs.
+///
+/// This is stricter than an image comparison: every sprite instance and mesh
+/// byte is checked in painter order. Retained allocation identity is ignored
+/// because it changes reuse behavior, not renderer output.
+pub fn compare_render_frames_semantic(
+    expected: &RenderFrame,
+    actual: &RenderFrame,
+) -> CompareResult {
+    compare_pod_value(
+        "frame",
+        0,
+        "clear_color",
+        &expected.clear_color,
+        &actual.clear_color,
+    )?;
+    compare_mat_slices("camera", &expected.cameras, &actual.cameras)?;
+    compare_pod_slices(
+        "mesh_vertex",
+        &expected.mesh_vertices,
+        &actual.mesh_vertices,
+    )?;
+    compare_pod_slices(
+        "tmesh_instance",
+        &expected.tmesh_instances,
+        &actual.tmesh_instances,
+    )?;
+    compare_count(
+        "tmesh_geometry",
+        expected.tmesh_geometries.len(),
+        actual.tmesh_geometries.len(),
+    )?;
+    for (index, (expected, actual)) in expected
+        .tmesh_geometries
+        .iter()
+        .zip(&actual.tmesh_geometries)
+        .enumerate()
+    {
+        compare_value(
+            "tmesh_geometry",
+            index,
+            "cache_key",
+            expected.cache_key,
+            actual.cache_key,
+        )?;
+        compare_tmesh_vertex_bytes(index, &expected.vertices, &actual.vertices)?;
+    }
+
+    let mut expected = SemanticDraws::new(expected);
+    let mut actual = SemanticDraws::new(actual);
+    let mut index = 0usize;
+    loop {
+        match (expected.next(), actual.next()) {
+            (None, None) => return Ok(()),
+            (
+                Some(SemanticDraw::Sprite(expected_run, expected_instance)),
+                Some(SemanticDraw::Sprite(actual_run, actual_instance)),
+            ) => {
+                compare_value(
+                    "draw_primitive",
+                    index,
+                    "sprite_state",
+                    sprite_state(expected_run),
+                    sprite_state(actual_run),
+                )?;
+                compare_pod_value(
+                    "draw_primitive",
+                    index,
+                    "sprite_instance",
+                    expected_instance,
+                    actual_instance,
+                )?;
+            }
+            (Some(SemanticDraw::Other(expected)), Some(SemanticDraw::Other(actual))) => {
+                compare_value("draw_primitive", index, "value", expected, actual)?;
+            }
+            (Some(_), Some(_)) => return difference("draw_primitive", index, "kind"),
+            _ => return difference("draw_primitive", index, "count"),
+        }
+        index += 1;
+    }
+}
+
+#[derive(Clone, Copy)]
+enum SemanticDraw<'a> {
+    Sprite(SpriteRun, &'a SpriteInstanceRaw),
+    Other(DrawOp),
+}
+
+struct SemanticDraws<'a> {
+    frame: &'a RenderFrame,
+    op: usize,
+    sprite_offset: u32,
+}
+
+impl<'a> SemanticDraws<'a> {
+    const fn new(frame: &'a RenderFrame) -> Self {
+        Self {
+            frame,
+            op: 0,
+            sprite_offset: 0,
+        }
+    }
+}
+
+impl<'a> Iterator for SemanticDraws<'a> {
+    type Item = SemanticDraw<'a>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        loop {
+            let op = *self.frame.ops.get(self.op)?;
+            match op {
+                DrawOp::Sprite(run) if self.sprite_offset < run.instance_count => {
+                    let instance = self
+                        .frame
+                        .sprite_instances
+                        .get(run.instance_start.saturating_add(self.sprite_offset) as usize)
+                        .expect("sprite draw range references a live instance");
+                    self.sprite_offset += 1;
+                    return Some(SemanticDraw::Sprite(run, instance));
+                }
+                DrawOp::Sprite(_) => {
+                    self.op += 1;
+                    self.sprite_offset = 0;
+                }
+                other => {
+                    self.op += 1;
+                    self.sprite_offset = 0;
+                    return Some(SemanticDraw::Other(other));
+                }
+            }
+        }
+    }
+}
+
+#[inline(always)]
+const fn sprite_state(run: SpriteRun) -> (crate::BlendMode, crate::TextureHandle, u8) {
+    (run.blend, run.texture_handle, run.camera)
+}
+
 fn compare_tmesh_vertices(
     index: usize,
     expected: &TexturedMeshVertices,
@@ -91,6 +232,14 @@ fn compare_tmesh_vertices(
         (TexturedMeshVertices::Transient(_), TexturedMeshVertices::Transient(_)) => {}
         _ => return difference("tmesh_geometry", index, "storage"),
     }
+    compare_pod_slices_at("tmesh_geometry", index, expected.as_ref(), actual.as_ref())
+}
+
+fn compare_tmesh_vertex_bytes(
+    index: usize,
+    expected: &TexturedMeshVertices,
+    actual: &TexturedMeshVertices,
+) -> CompareResult {
     compare_pod_slices_at("tmesh_geometry", index, expected.as_ref(), actual.as_ref())
 }
 

@@ -110,6 +110,29 @@ impl FrameBuilder {
         self.items.reserve(additional);
     }
 
+    fn append_retained(&mut self, cached: &Self, sprite_start: u32, order_counter: &mut u32) {
+        let mesh_start = saturating_u32(self.meshes.len());
+        let textured_mesh_start = saturating_u32(self.textured_meshes.len());
+        self.items.reserve(cached.items.len());
+        self.meshes.reserve(cached.meshes.len());
+        self.textured_meshes.reserve(cached.textured_meshes.len());
+        self.meshes.extend(cached.meshes.iter().cloned());
+        self.textured_meshes
+            .extend(cached.textured_meshes.iter().cloned());
+
+        self.items.extend(cached.items.iter().map(|item| {
+            let mut item = *item;
+            item.payload_index = match item.kind {
+                DrawKind::Sprite => item.payload_index.saturating_add(sprite_start),
+                DrawKind::Mesh => item.payload_index.saturating_add(mesh_start),
+                DrawKind::TexturedMesh => item.payload_index.saturating_add(textured_mesh_start),
+            };
+            item.order = *order_counter;
+            *order_counter = order_counter.saturating_add(1);
+            item
+        }));
+    }
+
     fn truncate(&mut self, len: usize) {
         self.items.truncate(len);
     }
@@ -540,9 +563,66 @@ pub fn build_screen_cached_with_scratch_and_texture_context_and_actor_resources<
     )
 }
 
+#[inline(always)]
+#[allow(clippy::too_many_arguments)]
+/// Composes ordered borrowed actor slices as one continuous actor stream.
+/// Camera scopes and painter order may cross slice boundaries.
+pub fn build_screen_segments_cached_with_scratch_and_texture_context_and_actor_resources<
+    T: TextureContext + ?Sized,
+>(
+    actor_segments: &[&[actors::Actor]],
+    clear_color: [f32; 4],
+    m: &Metrics,
+    fonts: &font::FontMap,
+    total_elapsed: f32,
+    text_cache: &mut TextLayoutCache,
+    scratch: &mut ComposeScratch,
+    texture_ctx: &T,
+    actor_resources: &actors::ActorResourceArena,
+) -> RenderFrame {
+    build_screen_segments_cached_with_scratch_and_texture_context_impl(
+        actor_segments,
+        clear_color,
+        m,
+        fonts,
+        total_elapsed,
+        text_cache,
+        scratch,
+        texture_ctx,
+        Some(actor_resources),
+    )
+}
+
 #[allow(clippy::too_many_arguments)]
 fn build_screen_cached_with_scratch_and_texture_context_impl<T: TextureContext + ?Sized>(
     actors: &[actors::Actor],
+    clear_color: [f32; 4],
+    m: &Metrics,
+    fonts: &font::FontMap,
+    total_elapsed: f32,
+    text_cache: &mut TextLayoutCache,
+    scratch: &mut ComposeScratch,
+    texture_ctx: &T,
+    actor_resources: Option<&actors::ActorResourceArena>,
+) -> RenderFrame {
+    build_screen_segments_cached_with_scratch_and_texture_context_impl(
+        &[actors],
+        clear_color,
+        m,
+        fonts,
+        total_elapsed,
+        text_cache,
+        scratch,
+        texture_ctx,
+        actor_resources,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn build_screen_segments_cached_with_scratch_and_texture_context_impl<
+    T: TextureContext + ?Sized,
+>(
+    actor_segments: &[&[actors::Actor]],
     clear_color: [f32; 4],
     m: &Metrics,
     fonts: &font::FontMap,
@@ -557,7 +637,10 @@ fn build_screen_cached_with_scratch_and_texture_context_impl<T: TextureContext +
     let actor_textures = actor_resources.map(actors::ActorResourceArena::texture_keys);
     let mut builder = std::mem::take(&mut scratch.frame_builder);
     builder.clear();
-    let object_capacity = actors.len().saturating_mul(4).max(64);
+    let actor_count = actor_segments
+        .iter()
+        .fold(0usize, |count, actors| count.saturating_add(actors.len()));
+    let object_capacity = actor_count.saturating_mul(4).max(64);
     if builder.items.capacity() < object_capacity {
         builder.reserve(object_capacity);
     }
@@ -596,8 +679,8 @@ fn build_screen_cached_with_scratch_and_texture_context_impl<T: TextureContext +
     let parent_z: i16 = 0;
     let camera: u8 = 0;
 
-    build_actor_list(
-        actors,
+    build_actor_sequence(
+        actor_segments.iter().flat_map(|actors| actors.iter()),
         root_rect,
         m,
         fonts,
@@ -617,17 +700,17 @@ fn build_screen_cached_with_scratch_and_texture_context_impl<T: TextureContext +
         total_elapsed,
     );
 
-    if !builder
+    let sort_fallback = !builder
         .items
         .windows(2)
-        .all(|pair| pair[0].sort_key() <= pair[1].sort_key())
-    {
+        .all(|pair| pair[0].sort_key() <= pair[1].sort_key());
+    if sort_fallback {
         let sort_started = scratch.collect_frame_stats.then(Instant::now);
         sort_composed_draw_items(&mut builder.items, scratch);
         if let Some(started) = sort_started {
             scratch.frame_stats.sort_us = elapsed_us_since(started);
-            scratch.frame_stats.sort_fallback = true;
         }
+        scratch.frame_stats.sort_fallback = scratch.collect_frame_stats;
     }
     scratch.masks = masks;
     scratch.texture_cache = texture_cache;
@@ -660,6 +743,31 @@ fn build_screen_cached_with_scratch_and_texture_context_impl<T: TextureContext +
         &mut ops,
         &mut tmesh_geom_map,
     );
+    if sort_fallback {
+        let gather_plan = analyze_final_sprite_gather(&ops);
+        let gather = if sprite_gather_is_profitable(gather_plan) {
+            let mut sorted_sprite_instances = std::mem::take(&mut scratch.sorted_sprite_instances);
+            gather_finalized_sprites(
+                &mut ops,
+                &mut sprite_instances,
+                &mut sorted_sprite_instances,
+                gather_plan,
+            );
+            scratch.sorted_sprite_instances = sorted_sprite_instances;
+            gather_plan
+        } else {
+            SpriteGatherStats {
+                sprites: 0,
+                runs_before: gather_plan.runs_before,
+                runs_after: gather_plan.runs_before,
+            }
+        };
+        if scratch.collect_frame_stats {
+            scratch.frame_stats.sprite_gathered = gather.sprites;
+            scratch.frame_stats.sprite_runs_before = gather.runs_before;
+            scratch.frame_stats.sprite_runs_after = gather.runs_after;
+        }
+    }
     scratch.frame_builder = builder;
     scratch.tmesh_geom_map = tmesh_geom_map;
 
@@ -678,6 +786,7 @@ fn build_screen_cached_with_scratch_and_texture_context_impl<T: TextureContext +
 pub struct ComposeScratch {
     frame_builder: FrameBuilder,
     sprite_instances: Vec<renderer::SpriteInstanceRaw>,
+    sorted_sprite_instances: Vec<renderer::SpriteInstanceRaw>,
     mesh_vertices: Vec<renderer::MeshVertex>,
     tmesh_instances: Vec<renderer::TexturedMeshInstanceRaw>,
     tmesh_geometries: Vec<renderer::TexturedMeshGeometry>,
@@ -697,12 +806,13 @@ pub struct ComposeScratch {
     frame_stats: ComposeFrameStats,
 }
 
-pub const COMPOSE_STORAGE_SLOTS: usize = 22;
+pub const COMPOSE_STORAGE_SLOTS: usize = 23;
 pub const COMPOSE_STORAGE_NAMES: [&str; COMPOSE_STORAGE_SLOTS] = [
     "draw_items",
     "mesh_payloads",
     "tmesh_payloads",
     "sprite_inst",
+    "sprite_sort",
     "mesh_vertices",
     "tmesh_inst",
     "tmesh_geoms",
@@ -732,6 +842,9 @@ pub struct ComposeStorageStats {
 pub struct ComposeFrameStats {
     pub sort_us: u32,
     pub sort_fallback: bool,
+    pub sprite_gathered: u32,
+    pub sprite_runs_before: u32,
+    pub sprite_runs_after: u32,
 }
 
 impl ComposeScratch {
@@ -810,6 +923,7 @@ impl ComposeScratch {
                 saturating_u32(self.frame_builder.meshes.capacity()),
                 saturating_u32(self.frame_builder.textured_meshes.capacity()),
                 saturating_u32(self.sprite_instances.capacity()),
+                saturating_u32(self.sorted_sprite_instances.capacity()),
                 saturating_u32(self.mesh_vertices.capacity()),
                 saturating_u32(self.tmesh_instances.capacity()),
                 saturating_u32(self.tmesh_geometries.capacity()),
@@ -894,6 +1008,90 @@ enum TMeshGeomKey {
 }
 
 const FRAME_TMESH_GEOMS_MAX: usize = 128;
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+struct SpriteGatherStats {
+    sprites: u32,
+    runs_before: u32,
+    runs_after: u32,
+}
+
+fn analyze_final_sprite_gather(ops: &[renderer::DrawOp]) -> SpriteGatherStats {
+    let mut stats = SpriteGatherStats::default();
+    let mut previous = None;
+    for op in ops {
+        let renderer::DrawOp::Sprite(run) = *op else {
+            previous = None;
+            continue;
+        };
+        stats.sprites = stats.sprites.saturating_add(run.instance_count);
+        stats.runs_before = stats.runs_before.saturating_add(1);
+        stats.runs_after = stats.runs_after.saturating_add(u32::from(
+            previous.is_none_or(|previous| !sprite_runs_are_compatible(previous, run)),
+        ));
+        previous = Some(run);
+    }
+    stats
+}
+
+fn gather_finalized_sprites(
+    ops: &mut Vec<renderer::DrawOp>,
+    sprite_instances: &mut Vec<renderer::SpriteInstanceRaw>,
+    sorted: &mut Vec<renderer::SpriteInstanceRaw>,
+    plan: SpriteGatherStats,
+) {
+    sorted.clear();
+    let sprite_count = plan.sprites as usize;
+    if sorted.capacity() < sprite_count {
+        sorted.reserve(sprite_count);
+    }
+
+    let mut write = 0usize;
+    for read in 0..ops.len() {
+        let mut op = ops[read];
+        if let renderer::DrawOp::Sprite(ref mut run) = op {
+            let start = run.instance_start as usize;
+            let end = start.saturating_add(run.instance_count as usize);
+            let new_start = saturating_u32(sorted.len());
+            sorted.extend_from_slice(
+                sprite_instances
+                    .get(start..end)
+                    .expect("sprite draw range references live instances"),
+            );
+            run.instance_start = new_start;
+
+            if write > 0
+                && let renderer::DrawOp::Sprite(previous) = &mut ops[write - 1]
+                && sprite_runs_are_compatible(*previous, *run)
+            {
+                previous.instance_count =
+                    previous.instance_count.saturating_add(run.instance_count);
+                continue;
+            }
+        }
+        ops[write] = op;
+        write += 1;
+    }
+    ops.truncate(write);
+    debug_assert_eq!(sorted.len(), sprite_count);
+    std::mem::swap(sprite_instances, sorted);
+}
+
+const MIN_GATHER_SAVED_RUNS: u32 = 8;
+const GATHER_SAVED_RUN_RATIO: u32 = 4;
+
+#[inline(always)]
+const fn sprite_gather_is_profitable(stats: SpriteGatherStats) -> bool {
+    let saved = stats.runs_before.saturating_sub(stats.runs_after);
+    saved >= MIN_GATHER_SAVED_RUNS && saved.saturating_mul(GATHER_SAVED_RUN_RATIO) >= stats.sprites
+}
+
+#[inline(always)]
+fn sprite_runs_are_compatible(previous: renderer::SpriteRun, current: renderer::SpriteRun) -> bool {
+    previous.blend == current.blend
+        && previous.texture_handle == current.texture_handle
+        && previous.camera == current.camera
+}
 
 #[allow(clippy::too_many_arguments)]
 fn finish_frame(
@@ -3230,6 +3428,18 @@ fn append_retained_frame(
 ) {
     let sprite_start = sprite_instances.len().min(u32::MAX as usize) as u32;
     sprite_instances.extend_from_slice(&cached.sprite_instances);
+    out.append_retained(&cached.builder, sprite_start, order_counter);
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn append_retained_frame_legacy(
+    cached: &CachedRetainedFrame,
+    order_counter: &mut u32,
+    out: &mut FrameBuilder,
+    sprite_instances: &mut Vec<renderer::SpriteInstanceRaw>,
+) {
+    let sprite_start = sprite_instances.len().min(u32::MAX as usize) as u32;
+    sprite_instances.extend_from_slice(&cached.sprite_instances);
     out.reserve(cached.builder.len());
     for index in 0..cached.builder.len() {
         let mut object = cached
@@ -3537,6 +3747,52 @@ fn build_actor_list<'a, T: TextureContext + ?Sized>(
     actor_textures: Option<&[Arc<str>]>,
     total_elapsed: f32,
 ) {
+    build_actor_sequence(
+        actors,
+        parent,
+        m,
+        fonts,
+        scratch,
+        base_z,
+        camera,
+        style,
+        cameras,
+        masks,
+        order_counter,
+        out,
+        sprite_instances,
+        text_cache,
+        texture_cache,
+        texture_ctx,
+        actor_textures,
+        total_elapsed,
+    );
+}
+
+#[allow(clippy::too_many_arguments)]
+fn build_actor_sequence<'a, T, I>(
+    actors: I,
+    parent: SmRect,
+    m: &Metrics,
+    fonts: &'a font::FontMap,
+    scratch: &mut ComposeScratch,
+    base_z: i16,
+    camera: u8,
+    style: ComposeStyle,
+    cameras: &mut Vec<Matrix4>,
+    masks: &mut Vec<WorldRect>,
+    order_counter: &mut u32,
+    out: &mut FrameBuilder,
+    sprite_instances: &mut Vec<renderer::SpriteInstanceRaw>,
+    text_cache: &mut TextLayoutCache,
+    texture_cache: &mut TextureLookupCache,
+    texture_ctx: &T,
+    actor_textures: Option<&[Arc<str>]>,
+    total_elapsed: f32,
+) where
+    T: TextureContext + ?Sized,
+    I: IntoIterator<Item = &'a actors::Actor>,
+{
     let mut active_camera = camera;
     let mut camera_stack: SmallVec<[u8; 4]> = SmallVec::new();
     for actor in actors {
@@ -5915,6 +6171,244 @@ fn clipped_sprite_object_to_world_rect_impl<const ACCEPT_CONTAINED_SPRITE: bool>
     }
 }
 
+/// Mixed-payload retained-frame append benchmark support.
+#[cfg(feature = "bench-support")]
+pub struct RetainedAppendBenchmark {
+    cached: CachedRetainedFrame,
+    out: FrameBuilder,
+    sprites: Vec<renderer::SpriteInstanceRaw>,
+}
+
+#[cfg(feature = "bench-support")]
+impl RetainedAppendBenchmark {
+    pub fn new(draw_count: usize) -> Self {
+        let mesh_vertices: Arc<[renderer::MeshVertex]> =
+            Arc::from([renderer::MeshVertex::default(); 6]);
+        let tmesh_vertices: Arc<[renderer::TexturedMeshVertex]> =
+            Arc::from([renderer::TexturedMeshVertex::default(); 6]);
+        let mut builder = FrameBuilder::default();
+        builder.reserve(draw_count);
+        let mut sprites = Vec::with_capacity(draw_count.div_ceil(3));
+        for index in 0..draw_count {
+            match index % 3 {
+                0 => {
+                    let sprite = renderer::SpriteInstanceRaw {
+                        center: [index as f32, 0.0, 0.0, 1.0],
+                        size: [16.0; 2],
+                        rot_sin_cos: [0.0, 1.0],
+                        tint: [1.0; 4],
+                        uv_scale: [1.0; 2],
+                        uv_offset: [0.0; 2],
+                        local_offset: [0.0; 2],
+                        local_offset_rot_sin_cos: [0.0, 1.0],
+                        edge_fade: [0.0; 4],
+                        texture_mask: 0.0,
+                    };
+                    let sprite_index = saturating_u32(sprites.len());
+                    sprites.push(sprite);
+                    builder.push_sprite(
+                        1,
+                        0,
+                        (index % 8) as i16,
+                        BlendMode::Alpha,
+                        0,
+                        sprite_index,
+                    );
+                }
+                1 => builder.push_mesh(
+                    0,
+                    0,
+                    (index % 8) as i16,
+                    BlendMode::Add,
+                    0,
+                    MeshPayload {
+                        transform: Matrix4::IDENTITY,
+                        tint: [1.0; 4],
+                        vertices: MeshVertices::Shared(Arc::clone(&mesh_vertices)),
+                    },
+                ),
+                _ => builder.push_textured_mesh(
+                    2,
+                    0,
+                    (index % 8) as i16,
+                    BlendMode::Alpha,
+                    0,
+                    TexturedMeshPayload {
+                        instance: renderer::TexturedMeshInstanceRaw::new(
+                            Matrix4::IDENTITY,
+                            [1.0; 4],
+                            [1.0; 2],
+                            [0.0; 2],
+                            [0.0; 2],
+                            false,
+                        ),
+                        vertices: renderer::TexturedMeshVertices::Shared(Arc::clone(
+                            &tmesh_vertices,
+                        )),
+                        geom_cache_key: index as u64 + 1,
+                        depth_test: false,
+                    },
+                ),
+            }
+        }
+        Self {
+            cached: CachedRetainedFrame {
+                builder,
+                sprite_instances: sprites,
+            },
+            out: FrameBuilder::default(),
+            sprites: Vec::new(),
+        }
+    }
+
+    pub fn legacy_frame(&mut self) -> u64 {
+        self.append(true)
+    }
+
+    pub fn bulk_frame(&mut self) -> u64 {
+        self.append(false)
+    }
+
+    fn append(&mut self, legacy: bool) -> u64 {
+        self.out.clear();
+        self.sprites.clear();
+        let mut order = 17;
+        if legacy {
+            append_retained_frame_legacy(
+                &self.cached,
+                &mut order,
+                &mut self.out,
+                &mut self.sprites,
+            );
+        } else {
+            append_retained_frame(&self.cached, &mut order, &mut self.out, &mut self.sprites);
+        }
+        self.out.items.iter().fold(order as u64, |checksum, item| {
+            checksum.rotate_left(7)
+                ^ u64::from(item.order)
+                ^ u64::from(item.payload_index).rotate_left(17)
+                ^ item.texture_handle
+        })
+    }
+}
+
+/// Fragmented sprite-run finalization benchmark support.
+#[cfg(feature = "bench-support")]
+pub struct SpriteGatherBenchmark {
+    items: Vec<DrawItem>,
+    source_sprites: Vec<renderer::SpriteInstanceRaw>,
+    builder: FrameBuilder,
+    sprites: Vec<renderer::SpriteInstanceRaw>,
+    gathered: Vec<renderer::SpriteInstanceRaw>,
+    mesh_vertices: Vec<renderer::MeshVertex>,
+    tmesh_instances: Vec<renderer::TexturedMeshInstanceRaw>,
+    tmesh_geometries: Vec<renderer::TexturedMeshGeometry>,
+    ops: Vec<renderer::DrawOp>,
+    geom_map: HashMap<TMeshGeomKey, u32, rustc_hash::FxBuildHasher>,
+    gather_stats: SpriteGatherStats,
+}
+
+#[cfg(feature = "bench-support")]
+impl SpriteGatherBenchmark {
+    pub fn new(sprite_count: usize, layers: usize) -> Self {
+        let layers = layers.clamp(1, i16::MAX as usize);
+        let mut items = Vec::with_capacity(sprite_count);
+        let mut source_sprites = Vec::with_capacity(sprite_count);
+        for index in 0..sprite_count {
+            items.push(DrawItem {
+                texture_handle: 1,
+                order: index as u32,
+                payload_index: index as u32,
+                z: (index % layers) as i16,
+                blend: BlendMode::Alpha,
+                camera: 0,
+                kind: DrawKind::Sprite,
+            });
+            source_sprites.push(renderer::SpriteInstanceRaw {
+                center: [index as f32, 0.0, 0.0, 1.0],
+                size: [16.0; 2],
+                rot_sin_cos: [0.0, 1.0],
+                tint: [1.0; 4],
+                uv_scale: [1.0; 2],
+                uv_offset: [0.0; 2],
+                local_offset: [0.0; 2],
+                local_offset_rot_sin_cos: [0.0, 1.0],
+                edge_fade: [0.0; 4],
+                texture_mask: 0.0,
+            });
+        }
+        items.sort_unstable_by_key(|item| item.sort_key());
+        Self {
+            items,
+            source_sprites,
+            builder: FrameBuilder::default(),
+            sprites: Vec::new(),
+            gathered: Vec::new(),
+            mesh_vertices: Vec::new(),
+            tmesh_instances: Vec::new(),
+            tmesh_geometries: Vec::new(),
+            ops: Vec::new(),
+            geom_map: HashMap::default(),
+            gather_stats: SpriteGatherStats::default(),
+        }
+    }
+
+    pub fn legacy_frame(&mut self) -> u64 {
+        self.finish(false)
+    }
+
+    pub fn gathered_frame(&mut self) -> u64 {
+        self.finish(true)
+    }
+
+    pub fn op_count(&self) -> usize {
+        self.ops.len()
+    }
+
+    pub fn gathered_sprites(&self) -> u32 {
+        self.gather_stats.sprites
+    }
+
+    fn finish(&mut self, gather: bool) -> u64 {
+        self.builder.clear();
+        self.builder.items.extend_from_slice(&self.items);
+        self.sprites.clear();
+        self.sprites.extend_from_slice(&self.source_sprites);
+        self.mesh_vertices.clear();
+        self.tmesh_instances.clear();
+        self.tmesh_geometries.clear();
+        self.ops.clear();
+        self.geom_map.clear();
+        finish_frame(
+            &mut self.builder,
+            &mut self.mesh_vertices,
+            &mut self.tmesh_instances,
+            &mut self.tmesh_geometries,
+            &mut self.ops,
+            &mut self.geom_map,
+        );
+        self.gather_stats = if gather {
+            let plan = analyze_final_sprite_gather(&self.ops);
+            gather_finalized_sprites(&mut self.ops, &mut self.sprites, &mut self.gathered, plan);
+            plan
+        } else {
+            SpriteGatherStats::default()
+        };
+        self.ops.iter().fold(0u64, |checksum, op| {
+            let renderer::DrawOp::Sprite(run) = *op else {
+                return checksum;
+            };
+            let instances = &self.sprites[run.instance_start as usize
+                ..run.instance_start.saturating_add(run.instance_count) as usize];
+            instances.iter().fold(checksum, |checksum, instance| {
+                checksum.rotate_left(5)
+                    ^ u64::from(instance.center[0].to_bits())
+                    ^ run.texture_handle
+            })
+        })
+    }
+}
+
 /// Gameplay-shaped fully contained sprite-clipping benchmark support.
 #[cfg(feature = "bench-support")]
 pub struct SpriteClipBenchmark {
@@ -6580,19 +7074,23 @@ fn clip_rotated_sprite_to_world_rect(
 #[cfg(test)]
 mod tests {
     use super::{
-        CachedGlyph, CachedTextLayout, CachedTextMeshBatch, CachedTextMeshVariants, CachedTextPage,
-        ComposeScratch, DrawItem, EditableDraw, EditablePayload, FrameBuilder, TextAttrCursor,
-        TextLayoutCache, TextLayoutKey, TextMeshBatchBuilder, TextPageId, TextureCacheEntry,
-        TextureContext, TextureLookupCache, TextureMeta, WorldRect, build_cached_text_layout,
-        build_screen_cached_with_scratch_and_texture_context,
+        CachedGlyph, CachedRetainedFrame, CachedTextLayout, CachedTextMeshBatch,
+        CachedTextMeshVariants, CachedTextPage, ComposeScratch, DrawItem, EditableDraw,
+        EditablePayload, FrameBuilder, MeshPayload, MeshVertices, TextAttrCursor, TextLayoutCache,
+        TextLayoutKey, TextMeshBatchBuilder, TextPageId, TextureCacheEntry, TextureContext,
+        TextureLookupCache, TextureMeta, TexturedMeshPayload, WorldRect,
+        analyze_final_sprite_gather, append_retained_frame, append_retained_frame_legacy,
+        build_cached_text_layout, build_screen_cached_with_scratch_and_texture_context,
         build_screen_cached_with_scratch_and_texture_context_and_actor_resources,
+        build_screen_segments_cached_with_scratch_and_texture_context_and_actor_resources,
         build_transient_text_mesh_builders, clip_object_to_world_masks,
         clip_sprite_object_to_world_rect, clip_textured_mesh_to_world_rect,
         clip_textured_mesh_to_world_rect_legacy, clipped_sprite_object_to_world_rect,
-        clipped_sprite_object_to_world_rect_legacy, fold_sprite_xy_rot, font_chain_key,
-        is_affine_world_transform, push_shadow_objects_for_range, resolve_sprite_size_like_sm,
-        sort_composed_draw_items, sort_draw_items, sort_draw_items_legacy, str_ptr,
-        textured_mesh_world_bounds, textured_mesh_world_bounds_legacy, wrap_text_lines_by_words,
+        clipped_sprite_object_to_world_rect_legacy, finish_frame, fold_sprite_xy_rot,
+        font_chain_key, gather_finalized_sprites, is_affine_world_transform,
+        push_shadow_objects_for_range, resolve_sprite_size_like_sm, sort_composed_draw_items,
+        sort_draw_items, sort_draw_items_legacy, str_ptr, textured_mesh_world_bounds,
+        textured_mesh_world_bounds_legacy, wrap_text_lines_by_words,
     };
     use crate::actors::{
         Actor, ActorResourceArena, RetainedActorFrame, SizeSpec, SpriteSource, TextAlign,
@@ -6604,7 +7102,7 @@ mod tests {
     use deadlib_render::{
         BlendMode, DrawOp, INVALID_TMESH_CACHE_KEY, MeshRun, MeshVertex, RenderFrame,
         SpriteInstanceRaw, SpriteRun, TMeshCacheKey, TexturedMeshGeometry, TexturedMeshInstanceRaw,
-        TexturedMeshRun, TexturedMeshVertex,
+        TexturedMeshRun, TexturedMeshVertex, TexturedMeshVertices,
     };
     use glam::{Mat4 as Matrix4, Vec3 as Vector3};
     use std::cell::Cell;
@@ -6673,6 +7171,203 @@ mod tests {
             scratch,
             &TestDrawTextureContext,
         )
+    }
+
+    fn test_sprite_instance(x: f32) -> SpriteInstanceRaw {
+        SpriteInstanceRaw {
+            center: [x, 0.0, 0.0, 1.0],
+            size: [1.0; 2],
+            rot_sin_cos: [0.0, 1.0],
+            tint: [1.0; 4],
+            uv_scale: [1.0; 2],
+            uv_offset: [0.0; 2],
+            local_offset: [0.0; 2],
+            local_offset_rot_sin_cos: [0.0, 1.0],
+            edge_fade: [0.0; 4],
+            texture_mask: 0.0,
+        }
+    }
+
+    fn finish_test_builder(
+        mut builder: FrameBuilder,
+        sprite_instances: Vec<SpriteInstanceRaw>,
+    ) -> RenderFrame {
+        let mut mesh_vertices = Vec::new();
+        let mut tmesh_instances = Vec::new();
+        let mut tmesh_geometries = Vec::new();
+        let mut ops = Vec::new();
+        let mut geom_map = HashMap::default();
+        finish_frame(
+            &mut builder,
+            &mut mesh_vertices,
+            &mut tmesh_instances,
+            &mut tmesh_geometries,
+            &mut ops,
+            &mut geom_map,
+        );
+        RenderFrame {
+            clear_color: [0.0; 4],
+            cameras: vec![Matrix4::IDENTITY],
+            sprite_instances,
+            mesh_vertices,
+            tmesh_instances,
+            tmesh_geometries,
+            ops,
+        }
+    }
+
+    fn assert_test_frames_equal(expected: &RenderFrame, actual: &RenderFrame) {
+        assert_eq!(expected.clear_color, actual.clear_color);
+        assert_eq!(expected.cameras, actual.cameras);
+        assert_eq!(expected.sprite_instances, actual.sprite_instances);
+        assert_eq!(expected.mesh_vertices, actual.mesh_vertices);
+        assert_eq!(expected.tmesh_instances, actual.tmesh_instances);
+        assert_eq!(
+            expected.tmesh_geometries.len(),
+            actual.tmesh_geometries.len()
+        );
+        for (expected, actual) in expected
+            .tmesh_geometries
+            .iter()
+            .zip(&actual.tmesh_geometries)
+        {
+            assert_eq!(expected.cache_key, actual.cache_key);
+            assert_eq!(expected.vertices.as_ref(), actual.vertices.as_ref());
+        }
+        assert_eq!(expected.ops, actual.ops);
+    }
+
+    fn sprite_painter_stream(
+        frame: &RenderFrame,
+    ) -> Vec<(
+        BlendMode,
+        deadlib_render::TextureHandle,
+        u8,
+        SpriteInstanceRaw,
+    )> {
+        let mut stream = Vec::new();
+        for op in &frame.ops {
+            let DrawOp::Sprite(run) = *op else {
+                panic!("sprite-only test frame contains a non-sprite operation");
+            };
+            for index in run.instance_start..run.instance_start + run.instance_count {
+                stream.push((
+                    run.blend,
+                    run.texture_handle,
+                    run.camera,
+                    frame.sprite_instances[index as usize],
+                ));
+            }
+        }
+        stream
+    }
+
+    #[test]
+    fn retained_bulk_splice_matches_per_object_append() {
+        let mesh_vertices: Arc<[MeshVertex]> = Arc::from([MeshVertex::default(); 3]);
+        let tmesh_vertices: Arc<[TexturedMeshVertex]> =
+            Arc::from([TexturedMeshVertex::default(); 3]);
+        let mut cached_builder = FrameBuilder::default();
+        cached_builder.push_sprite(7, 0, 2, BlendMode::Alpha, 0, 0);
+        cached_builder.push_mesh(
+            0,
+            0,
+            3,
+            BlendMode::Add,
+            0,
+            MeshPayload {
+                transform: Matrix4::IDENTITY,
+                tint: [1.0; 4],
+                vertices: MeshVertices::Shared(mesh_vertices),
+            },
+        );
+        cached_builder.push_textured_mesh(
+            8,
+            0,
+            4,
+            BlendMode::Alpha,
+            0,
+            TexturedMeshPayload {
+                instance: TexturedMeshInstanceRaw::new(
+                    Matrix4::IDENTITY,
+                    [1.0; 4],
+                    [1.0; 2],
+                    [0.0; 2],
+                    [0.0; 2],
+                    false,
+                ),
+                vertices: TexturedMeshVertices::Shared(tmesh_vertices),
+                geom_cache_key: 41,
+                depth_test: false,
+            },
+        );
+        let cached = CachedRetainedFrame {
+            builder: cached_builder,
+            sprite_instances: vec![test_sprite_instance(4.0)],
+        };
+
+        let mut legacy_builder = FrameBuilder::default();
+        let mut bulk_builder = FrameBuilder::default();
+        let mut legacy_sprites = vec![test_sprite_instance(-1.0)];
+        let mut bulk_sprites = legacy_sprites.clone();
+        let mut legacy_order = 7;
+        let mut bulk_order = 7;
+        append_retained_frame_legacy(
+            &cached,
+            &mut legacy_order,
+            &mut legacy_builder,
+            &mut legacy_sprites,
+        );
+        append_retained_frame(
+            &cached,
+            &mut bulk_order,
+            &mut bulk_builder,
+            &mut bulk_sprites,
+        );
+
+        assert_eq!(legacy_order, bulk_order);
+        let legacy = finish_test_builder(legacy_builder, legacy_sprites);
+        let bulk = finish_test_builder(bulk_builder, bulk_sprites);
+        assert_test_frames_equal(&legacy, &bulk);
+    }
+
+    #[test]
+    fn fallback_sprite_gather_coalesces_without_changing_painter_output() {
+        let sprites = vec![
+            test_sprite_instance(0.0),
+            test_sprite_instance(1.0),
+            test_sprite_instance(2.0),
+            test_sprite_instance(3.0),
+        ];
+        let make_builder = || {
+            let mut builder = FrameBuilder::default();
+            for (order, (index, z)) in [(0, 0), (2, 0), (1, 1), (3, 1)].into_iter().enumerate() {
+                builder.push_sprite(7, order as u32, z, BlendMode::Alpha, 0, index);
+            }
+            builder
+        };
+
+        let legacy = finish_test_builder(make_builder(), sprites.clone());
+        let mut gathered = finish_test_builder(make_builder(), sprites);
+        let mut gather_scratch = Vec::new();
+        let gather = analyze_final_sprite_gather(&gathered.ops);
+        gather_finalized_sprites(
+            &mut gathered.ops,
+            &mut gathered.sprite_instances,
+            &mut gather_scratch,
+            gather,
+        );
+
+        assert_eq!(legacy.ops.len(), 4);
+        assert_eq!(gathered.ops.len(), 1);
+        assert_eq!(gather.sprites, 4);
+        assert_eq!(gather.runs_before, 4);
+        assert_eq!(gather.runs_after, 1);
+        assert_ne!(legacy.sprite_instances, gathered.sprite_instances);
+        assert_eq!(
+            sprite_painter_stream(&legacy),
+            sprite_painter_stream(&gathered)
+        );
     }
 
     fn sprite_run(frame: &RenderFrame, index: usize) -> SpriteRun {
@@ -7003,6 +7698,37 @@ mod tests {
         }
         assert_eq!(nested_render.ops, flat_render.ops);
         assert_eq!(nested_render.mesh_vertices, flat_render.mesh_vertices);
+
+        let resources = ActorResourceArena::new(0);
+        let mut contiguous_text = TextLayoutCache::default();
+        let mut contiguous_scratch = ComposeScratch::default();
+        let contiguous = build_screen_cached_with_scratch_and_texture_context_and_actor_resources(
+            &flat,
+            [0.0, 0.0, 0.0, 1.0],
+            &metrics,
+            &fonts,
+            0.0,
+            &mut contiguous_text,
+            &mut contiguous_scratch,
+            &TestDrawTextureContext,
+            &resources,
+        );
+        let segments = [&flat[..1], &flat[1..2], &flat[2..]];
+        let mut segmented_text = TextLayoutCache::default();
+        let mut segmented_scratch = ComposeScratch::default();
+        let segmented =
+            build_screen_segments_cached_with_scratch_and_texture_context_and_actor_resources(
+                &segments,
+                [0.0, 0.0, 0.0, 1.0],
+                &metrics,
+                &fonts,
+                0.0,
+                &mut segmented_text,
+                &mut segmented_scratch,
+                &TestDrawTextureContext,
+                &resources,
+            );
+        assert_test_frames_equal(&contiguous, &segmented);
     }
 
     fn test_font() -> Font {

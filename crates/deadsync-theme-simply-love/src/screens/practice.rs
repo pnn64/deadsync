@@ -892,16 +892,63 @@ pub fn push_actors(
     arrow_effect_time_s: f32,
     visual_policy: crate::views::SimplyLoveVisualPolicyView,
 ) {
-    actors.reserve(128);
-    let view = practice_view(state);
-    gameplay_screen::push_actors(
+    let _ = push_actors_impl(
         actors,
-        &mut state.gameplay,
+        state,
         asset_manager,
-        view,
         arrow_effect_time_s,
         visual_policy,
+        false,
     );
+}
+
+pub fn push_actors_segmented(
+    actors: &mut Vec<Actor>,
+    state: &mut State,
+    asset_manager: &AssetManager,
+    arrow_effect_time_s: f32,
+    visual_policy: crate::views::SimplyLoveVisualPolicyView,
+) -> gameplay_screen::GameplayActorSegments {
+    push_actors_impl(
+        actors,
+        state,
+        asset_manager,
+        arrow_effect_time_s,
+        visual_policy,
+        true,
+    )
+}
+
+fn push_actors_impl(
+    actors: &mut Vec<Actor>,
+    state: &mut State,
+    asset_manager: &AssetManager,
+    arrow_effect_time_s: f32,
+    visual_policy: crate::views::SimplyLoveVisualPolicyView,
+    segmented: bool,
+) -> gameplay_screen::GameplayActorSegments {
+    actors.reserve(128);
+    let view = practice_view(state);
+    let segments = if segmented {
+        gameplay_screen::push_actors_segmented(
+            actors,
+            &mut state.gameplay,
+            asset_manager,
+            view,
+            arrow_effect_time_s,
+            visual_policy,
+        )
+    } else {
+        gameplay_screen::push_actors(
+            actors,
+            &mut state.gameplay,
+            asset_manager,
+            view,
+            arrow_effect_time_s,
+            visual_policy,
+        );
+        gameplay_screen::GameplayActorSegments::empty(actors.len())
+    };
     if matches!(state.mode, Mode::Editing) {
         append_edit_markers(state, actors);
         append_edit_overlay(state, actors);
@@ -912,6 +959,7 @@ pub fn push_actors(
     // Render any active flash text regardless of mode so music-rate changes
     // (and other transient feedback) are visible during loop playback as well.
     append_flash_overlay(state, actors);
+    segments
 }
 
 fn practice_view(state: &State) -> gameplay_screen::ActorViewOverride {

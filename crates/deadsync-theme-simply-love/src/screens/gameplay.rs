@@ -11988,6 +11988,51 @@ enum PlayerActorAssembly {
     DirectIdentity,
 }
 
+#[derive(Clone, Copy, Debug)]
+struct PlayerActorSegment {
+    player: usize,
+    assembly: PlayerActorAssembly,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct GameplayActorSegments {
+    insert: usize,
+    players: [Option<PlayerActorSegment>; 2],
+}
+
+impl GameplayActorSegments {
+    pub const fn empty(insert: usize) -> Self {
+        Self {
+            insert,
+            players: [None; 2],
+        }
+    }
+
+    pub fn slices<'a>(&self, state: &'a State, actors: &'a [Actor]) -> [&'a [Actor]; 6] {
+        let insert = self.insert.min(actors.len());
+        let empty = &actors[0..0];
+        let mut slices = [empty; 6];
+        slices[0] = &actors[..insert];
+        for (slot, segment) in self.players.iter().enumerate() {
+            let Some(segment) = segment else {
+                continue;
+            };
+            let first = 1 + slot * 2;
+            match segment.assembly {
+                PlayerActorAssembly::Buffered => {
+                    slices[first] = &state.player_actor_scratch[segment.player];
+                }
+                PlayerActorAssembly::DirectIdentity => {
+                    slices[first] = &state.notefield_hud_actor_scratch[segment.player];
+                    slices[first + 1] = &state.notefield_actor_scratch[segment.player];
+                }
+            }
+        }
+        slices[5] = &actors[insert..];
+        slices
+    }
+}
+
 #[inline(always)]
 fn player_actor_assembly_for_transform(
     requests_player_proxy: bool,
@@ -12238,6 +12283,45 @@ pub fn push_actors(
     arrow_effect_time_s: f32,
     visual_policy: crate::views::SimplyLoveVisualPolicyView,
 ) {
+    let _ = push_actors_impl(
+        actors,
+        state,
+        asset_manager,
+        view,
+        arrow_effect_time_s,
+        visual_policy,
+        false,
+    );
+}
+
+pub fn push_actors_segmented(
+    actors: &mut Vec<Actor>,
+    state: &mut State,
+    asset_manager: &AssetManager,
+    view: ActorViewOverride,
+    arrow_effect_time_s: f32,
+    visual_policy: crate::views::SimplyLoveVisualPolicyView,
+) -> GameplayActorSegments {
+    push_actors_impl(
+        actors,
+        state,
+        asset_manager,
+        view,
+        arrow_effect_time_s,
+        visual_policy,
+        true,
+    )
+}
+
+fn push_actors_impl(
+    actors: &mut Vec<Actor>,
+    state: &mut State,
+    asset_manager: &AssetManager,
+    view: ActorViewOverride,
+    arrow_effect_time_s: f32,
+    visual_policy: crate::views::SimplyLoveVisualPolicyView,
+    segmented: bool,
+) -> GameplayActorSegments {
     let mut song_lua_overlay_order = std::mem::take(&mut state.song_lua_overlay_order);
     let mut song_lua_background_visual_layer_orders =
         std::mem::take(&mut state.song_lua_background_visual_layer_orders);
@@ -13122,20 +13206,30 @@ pub fn push_actors(
         &notefield_hud_actor_scratch[1],
         &player_actor_scratch[1],
     );
-    actors.reserve(
-        p1_actor_count
-            .saturating_add(p2_actor_count)
-            .saturating_add(48),
-    );
+    let player_actor_capacity = if segmented {
+        0
+    } else {
+        p1_actor_count.saturating_add(p2_actor_count)
+    };
+    actors.reserve(player_actor_capacity.saturating_add(48));
+    let segment_insert = actors.len();
+    let mut segment_players = [None; 2];
     if has_p2_actors {
         if !replacement_active_players[1] {
-            append_player_actor_bundle(
-                actors,
-                p2_actor_assembly,
-                &mut notefield_actor_scratch[1],
-                &mut notefield_hud_actor_scratch[1],
-                &mut player_actor_scratch[1],
-            );
+            if segmented {
+                segment_players[0] = Some(PlayerActorSegment {
+                    player: 1,
+                    assembly: p2_actor_assembly,
+                });
+            } else {
+                append_player_actor_bundle(
+                    actors,
+                    p2_actor_assembly,
+                    &mut notefield_actor_scratch[1],
+                    &mut notefield_hud_actor_scratch[1],
+                    &mut player_actor_scratch[1],
+                );
+            }
         } else {
             clear_player_actor_bundle(
                 &mut notefield_actor_scratch[1],
@@ -13145,13 +13239,20 @@ pub fn push_actors(
         }
     }
     if !replacement_active_players[0] {
-        append_player_actor_bundle(
-            actors,
-            p1_actor_assembly,
-            &mut notefield_actor_scratch[0],
-            &mut notefield_hud_actor_scratch[0],
-            &mut player_actor_scratch[0],
-        );
+        if segmented {
+            segment_players[1] = Some(PlayerActorSegment {
+                player: 0,
+                assembly: p1_actor_assembly,
+            });
+        } else {
+            append_player_actor_bundle(
+                actors,
+                p1_actor_assembly,
+                &mut notefield_actor_scratch[0],
+                &mut notefield_hud_actor_scratch[0],
+                &mut player_actor_scratch[0],
+            );
+        }
     } else {
         clear_player_actor_bundle(
             &mut notefield_actor_scratch[0],
@@ -14267,6 +14368,10 @@ pub fn push_actors(
     state.presentation_skeleton = presentation_skeleton;
     state.lobby_hud_cache = lobby_hud_cache;
     state.lobby_hud_status_scratch = lobby_hud_status_scratch;
+    GameplayActorSegments {
+        insert: segment_insert,
+        players: segment_players,
+    }
 }
 
 // ─── SMX sensor display profiling ──────────────────────────────────────────────

@@ -2,7 +2,7 @@ use deadlib_render::{
     BlendMode, DrawOp, MeshRun, MeshVertex, RenderFrame, SpriteInstanceRaw, SpriteRun,
     TexturedMeshGeometry, TexturedMeshInstanceRaw, TexturedMeshRun, TexturedMeshVertex,
     TexturedMeshVertices,
-    frame_compare::{FrameMismatch, compare_render_frames},
+    frame_compare::{FrameMismatch, compare_render_frames, compare_render_frames_semantic},
 };
 use glam::Mat4;
 use std::sync::Arc;
@@ -107,6 +107,16 @@ fn retained_geometry_identity_is_compared() {
 }
 
 #[test]
+fn semantic_comparison_ignores_retained_geometry_allocation_identity() {
+    let expected = render_fixture();
+    let mut actual = expected.clone();
+    let copied: Arc<[TexturedMeshVertex]> = Arc::from(actual.tmesh_geometries[0].vertices.as_ref());
+    actual.tmesh_geometries[0].vertices = TexturedMeshVertices::Shared(copied);
+
+    assert_eq!(compare_render_frames_semantic(&expected, &actual), Ok(()));
+}
+
+#[test]
 fn draw_operation_state_is_compared() {
     let expected = render_fixture();
     let mut actual = expected.clone();
@@ -122,4 +132,32 @@ fn draw_operation_state_is_compared() {
             field: "value",
         })
     );
+}
+
+#[test]
+fn semantic_comparison_accepts_equivalent_sprite_run_coalescing() {
+    let mut expected = render_fixture();
+    expected.sprite_instances.push(SpriteInstanceRaw {
+        center: [2.0, 3.0, 0.0, 1.0],
+        ..sprite_instance()
+    });
+    expected.ops.insert(
+        1,
+        DrawOp::Sprite(SpriteRun {
+            instance_start: 1,
+            instance_count: 1,
+            blend: BlendMode::Alpha,
+            texture_handle: 7,
+            camera: 0,
+        }),
+    );
+    let mut actual = expected.clone();
+    actual.ops.remove(1);
+    let DrawOp::Sprite(run) = &mut actual.ops[0] else {
+        panic!("fixture starts with a sprite operation");
+    };
+    run.instance_count = 2;
+
+    assert_ne!(compare_render_frames(&expected, &actual), Ok(()));
+    assert_eq!(compare_render_frames_semantic(&expected, &actual), Ok(()));
 }

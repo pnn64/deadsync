@@ -1,4 +1,13 @@
-use deadlib_present::actors::Actor;
+use deadlib_present::{
+    actors::{Actor, ActorResourceArena},
+    compose::{
+        ComposeScratch, NullTextureContext, TextLayoutCache,
+        build_screen_cached_with_scratch_and_texture_context_and_actor_resources,
+        build_screen_segments_cached_with_scratch_and_texture_context_and_actor_resources,
+    },
+    font,
+    space::Metrics,
+};
 use deadsync_theme_simply_love::screens::gameplay::{
     BENCH_NOTEFIELD_ACTOR_SCRATCH_CAPACITY, BENCH_NOTEFIELD_HUD_ACTOR_SCRATCH_CAPACITY,
     benchmark_append_direct_identity_player_actors, benchmark_append_player_actors,
@@ -110,6 +119,17 @@ fn fill_incrementally(actors: &mut Vec<Actor>, count: usize, base: f32) {
         actors.push(Actor::CameraPush {
             view_proj: Mat4::from_translation(Vec3::new(base + index as f32, 0.0, 0.0)),
         });
+    }
+}
+
+fn fill_balanced_cameras(actors: &mut Vec<Actor>, count: usize, base: f32) {
+    assert_eq!(count % 2, 0);
+    actors.clear();
+    for index in 0..count / 2 {
+        actors.push(Actor::CameraPush {
+            view_proj: Mat4::from_translation(Vec3::new(base + index as f32, 0.0, 0.0)),
+        });
+        actors.push(Actor::CameraPop);
     }
 }
 
@@ -257,17 +277,143 @@ fn measure_assembled(
     }
 }
 
+struct ComposeBench {
+    field: Vec<Actor>,
+    hud: Vec<Actor>,
+    contiguous: Vec<Actor>,
+    fonts: font::FontMap,
+    text_cache: TextLayoutCache,
+    scratch: ComposeScratch,
+    resources: ActorResourceArena,
+}
+
+impl ComposeBench {
+    fn new() -> Self {
+        Self {
+            field: Vec::with_capacity(FIELD_ACTORS),
+            hud: Vec::with_capacity(HUD_ACTORS),
+            contiguous: Vec::with_capacity(FIELD_ACTORS + HUD_ACTORS),
+            fonts: font::FontMap::default(),
+            text_cache: TextLayoutCache::default(),
+            scratch: ComposeScratch::default(),
+            resources: ActorResourceArena::new(0),
+        }
+    }
+
+    fn fill(&mut self) {
+        fill_balanced_cameras(&mut self.field, FIELD_ACTORS, 0.0);
+        fill_balanced_cameras(&mut self.hud, HUD_ACTORS, 10_000.0);
+    }
+
+    fn contiguous_frame(&mut self, metrics: &Metrics) -> f32 {
+        self.fill();
+        self.contiguous.clear();
+        self.contiguous.append(&mut self.hud);
+        self.contiguous.append(&mut self.field);
+        let mut render = build_screen_cached_with_scratch_and_texture_context_and_actor_resources(
+            &self.contiguous,
+            [0.0, 0.0, 0.0, 1.0],
+            metrics,
+            &self.fonts,
+            0.0,
+            &mut self.text_cache,
+            &mut self.scratch,
+            &NullTextureContext,
+            &self.resources,
+        );
+        let checksum = compose_checksum(&render);
+        self.scratch.recycle_frame(&mut render);
+        checksum
+    }
+
+    fn segmented_frame(&mut self, metrics: &Metrics) -> f32 {
+        self.fill();
+        let segments = [self.hud.as_slice(), self.field.as_slice()];
+        let mut render =
+            build_screen_segments_cached_with_scratch_and_texture_context_and_actor_resources(
+                &segments,
+                [0.0, 0.0, 0.0, 1.0],
+                metrics,
+                &self.fonts,
+                0.0,
+                &mut self.text_cache,
+                &mut self.scratch,
+                &NullTextureContext,
+                &self.resources,
+            );
+        let checksum = compose_checksum(&render);
+        self.scratch.recycle_frame(&mut render);
+        checksum
+    }
+}
+
+fn compose_checksum(render: &deadlib_render::RenderFrame) -> f32 {
+    render.cameras.len() as f32
+        + render.cameras.last().map_or(0.0, |camera| camera.w_axis.x)
+        + render.ops.len() as f32
+}
+
+fn measure_composed(segmented: bool) -> BenchResult {
+    let metrics = Metrics {
+        left: -427.0,
+        right: 427.0,
+        top: 240.0,
+        bottom: -240.0,
+    };
+    let mut bench = ComposeBench::new();
+    let mut run = || {
+        if segmented {
+            bench.segmented_frame(&metrics)
+        } else {
+            bench.contiguous_frame(&metrics)
+        }
+    };
+    for _ in 0..WARMUP_FRAMES {
+        black_box(run());
+    }
+    let before = ALLOC.snapshot();
+    let before_cycles = read_cycles();
+    let started = Instant::now();
+    let mut checksum = 0.0f32;
+    for _ in 0..MEASURE_FRAMES {
+        checksum += black_box(run());
+    }
+    BenchResult {
+        elapsed: started.elapsed(),
+        cycles: read_cycles().saturating_sub(before_cycles),
+        allocated: ALLOC.snapshot().delta(before),
+        checksum,
+    }
+}
+
 fn print_result(label: &str, result: &BenchResult) {
     let frames = MEASURE_FRAMES as f64;
     println!(
-        "{label:<17} {:>9.2} ns/frame  {:>8.0} cycles/frame  \
+        "{label:<17} {:>9.2} ns/frame  {:>8.0} cycles/frame  {:>6.1} M actors/s  \
          {:>5.2} allocs/frame  {:>7.1} bytes/frame  {:>5.2} reallocs/frame",
         result.elapsed.as_secs_f64() * 1_000_000_000.0 / frames,
         result.cycles as f64 / frames,
+        frames * (FIELD_ACTORS + HUD_ACTORS) as f64 / result.elapsed.as_secs_f64() / 1_000_000.0,
         result.allocated.allocs as f64 / frames,
         result.allocated.bytes as f64 / frames,
         result.allocated.reallocs as f64 / frames,
     );
+}
+
+fn assert_zero_alloc(result: &BenchResult) {
+    assert_eq!(result.allocated.allocs, 0);
+    assert_eq!(result.allocated.reallocs, 0);
+    assert_eq!(result.allocated.bytes, 0);
+}
+
+fn print_speedup(old: &BenchResult, new: &BenchResult) {
+    let speedup = old.elapsed.as_secs_f64() / new.elapsed.as_secs_f64();
+    let cycle_reduction = if old.cycles == 0 {
+        0.0
+    } else {
+        (1.0 - new.cycles as f64 / old.cycles as f64) * 100.0
+    };
+    println!("  speedup {speedup:.2}x | cycles reduction {cycle_reduction:.1}%");
 }
 
 fn peak_scratch_frame(presized: bool) -> f32 {
@@ -348,6 +494,9 @@ fn main() {
     assert_eq!(legacy.checksum, direct.checksum);
     assert_eq!(direct.checksum, buffered.checksum);
     assert_eq!(buffered.checksum, assembled.checksum);
+    for result in [&legacy, &direct, &buffered, &assembled] {
+        assert_zero_alloc(result);
+    }
     black_box((legacy.checksum, direct.checksum, assembled.checksum));
 
     println!("identity notefield presentation benchmark");
@@ -355,6 +504,17 @@ fn main() {
     print_result("direct append", &direct);
     print_result("buffered final", &buffered);
     print_result("direct final", &assembled);
+
+    let contiguous_compose = measure_composed(false);
+    let segmented_compose = measure_composed(true);
+    assert_eq!(contiguous_compose.checksum, segmented_compose.checksum);
+    black_box((contiguous_compose.checksum, segmented_compose.checksum));
+    println!("\nnotefield actor handoff + composition benchmark");
+    print_result("contiguous copy", &contiguous_compose);
+    print_result("borrowed segments", &segmented_compose);
+    assert_zero_alloc(&contiguous_compose);
+    assert_zero_alloc(&segmented_compose);
+    print_speedup(&contiguous_compose, &segmented_compose);
 
     let growing_scratch = measure_peak_scratch(false);
     let presized_scratch = measure_peak_scratch(true);

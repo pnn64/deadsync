@@ -33,6 +33,11 @@ harness = false
 required-features = ["bench-support"]
 
 [[bench]]
+name = "frame_compaction"
+harness = false
+required-features = ["bench-support"]
+
+[[bench]]
 name = "textured_mesh_compose"
 harness = false
 required-features = ["bench-support"]

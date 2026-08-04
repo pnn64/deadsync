@@ -2570,7 +2570,8 @@ impl App {
         self.sync_theme_background_video(total_elapsed, &frame_config);
         let actor_build_started = Instant::now();
         let arrow_effect_time_s = arrow_effect_time_seconds(actor_build_started);
-        let (mut actors, clear_color) = self.get_current_actors(arrow_effect_time_s, &frame_config);
+        let (mut actors, clear_color, gameplay_segments) =
+            self.get_current_actors(arrow_effect_time_s, &frame_config);
         let actor_build_us = elapsed_us_since(actor_build_started);
         self.state.shell.update_fps_stats(redraw_started);
         let screens = &self.state.screens;
@@ -2760,12 +2761,50 @@ impl App {
                 .map(|state| state.gameplay.actor_resources()),
             _ => None,
         };
+        let segmented_actors =
+            gameplay_segments
+                .as_ref()
+                .map(|segments| match self.state.screens.current_screen {
+                    CurrentScreen::Gameplay => segments.slices(
+                        self.state
+                            .screens
+                            .gameplay_state
+                            .as_ref()
+                            .expect("gameplay segments require gameplay state"),
+                        &actors,
+                    ),
+                    CurrentScreen::Practice => segments.slices(
+                        &self
+                            .state
+                            .screens
+                            .practice_state
+                            .as_ref()
+                            .expect("gameplay segments require practice state")
+                            .gameplay,
+                        &actors,
+                    ),
+                    _ => unreachable!("only gameplay screens produce actor segments"),
+                });
         let (mut screen, text_layout, compose_frame) = if uses_gameplay_present {
             let text_layout_cache = &mut self.gameplay_text_layout_cache;
             let compose_scratch = &mut self.gameplay_compose_scratch;
             text_layout_cache.begin_frame_stats(collect_text_layout_stats);
             compose_scratch.begin_frame_stats(collect_pacing_stats);
-            let screen = if let Some(actor_resources) = actor_resources {
+            let screen = if let (Some(actor_segments), Some(actor_resources)) =
+                (segmented_actors.as_ref(), actor_resources)
+            {
+                compose::build_screen_segments_cached_with_scratch_and_texture_context_and_actor_resources(
+                    actor_segments,
+                    clear_color,
+                    &self.state.shell.metrics,
+                    fonts,
+                    total_elapsed,
+                    text_layout_cache,
+                    compose_scratch,
+                    &PRESENT_TEXTURE_CONTEXT,
+                    actor_resources,
+                )
+            } else if let Some(actor_resources) = actor_resources {
                 compose::build_screen_cached_with_scratch_and_texture_context_and_actor_resources(
                     &actors,
                     clear_color,
@@ -2982,6 +3021,9 @@ impl App {
                 compose_us,
                 sort_us: compose_frame.sort_us,
                 sort_fallback: compose_frame.sort_fallback,
+                sprite_gathered: compose_frame.sprite_gathered,
+                sprite_runs_before: compose_frame.sprite_runs_before,
+                sprite_runs_after: compose_frame.sprite_runs_after,
                 upload_us,
                 storage: gameplay_storage,
             },
@@ -5082,7 +5124,11 @@ impl App {
         &mut self,
         arrow_effect_time_s: f32,
         config: &config::Config,
-    ) -> (Vec<Actor>, [f32; 4]) {
+    ) -> (
+        Vec<Actor>,
+        [f32; 4],
+        Option<gameplay::GameplayActorSegments>,
+    ) {
         const CLEAR: [f32; 4] = [0.03, 0.03, 0.03, 1.0];
         let mut screen_alpha_multiplier = 1.0;
         let mut menu_exit_elapsed = None;
@@ -5120,6 +5166,7 @@ impl App {
 
         let mut actors = std::mem::take(&mut self.actor_scratch);
         actors.clear();
+        let mut gameplay_segments = None;
         let visual_policy = simply_love_visual_policy(config);
 
         match self.state.screens.current_screen {
@@ -5163,7 +5210,7 @@ impl App {
                         }
                         _ => 1.0,
                     };
-                    gameplay::push_actors(
+                    gameplay_segments = Some(gameplay::push_actors_segmented(
                         &mut actors,
                         gs,
                         &self.asset_manager,
@@ -5173,7 +5220,7 @@ impl App {
                         },
                         arrow_effect_time_s,
                         visual_policy,
-                    );
+                    ));
                 }
             }
             CurrentScreen::Practice => {
@@ -5181,13 +5228,13 @@ impl App {
                     screens::components::gameplay::gameplay_stats::refresh_density_graph_meshes(
                         &mut ps.gameplay,
                     );
-                    practice::push_actors(
+                    gameplay_segments = Some(practice::push_actors_segmented(
                         &mut actors,
                         ps,
                         &self.asset_manager,
                         arrow_effect_time_s,
                         visual_policy,
-                    );
+                    ));
                 }
             }
             CurrentScreen::Options => {
@@ -5440,7 +5487,7 @@ impl App {
 
         self.append_screenshot_overlay_actors(&mut actors, Instant::now());
 
-        (actors, CLEAR)
+        (actors, CLEAR, gameplay_segments)
     }
 
     fn push_frame_stats_overlay(&mut self, actors: &mut Vec<Actor>) {
