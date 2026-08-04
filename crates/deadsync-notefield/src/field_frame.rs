@@ -42,6 +42,14 @@ pub struct NotefieldFieldResult {
     pub captured_actors: Option<CapturedActorSource>,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct HoldLaneFrame {
+    receptor_draw_y: f32,
+    receptor_center_x: f32,
+    target_arrow_px: f32,
+    use_legacy_sprites: bool,
+}
+
 /// Compose the complete canonical playfield pass in display order:
 /// measure lines/cues, receptor feedback, holds, taps/mines, then camera wrap.
 pub fn compose_notefield_field<S, F>(
@@ -304,6 +312,8 @@ fn compose_field_contents<S, F>(
         };
     }
 
+    let hold_depth_test = hold_body_needs_z_buffer(&visual);
+    let mut hold_lane_frames = [None; MAX_COLS];
     let mut render_hold = |note_index: usize| {
         let note = &request.chart.notes[note_index];
         if note.column < col_start || note.column >= col_end {
@@ -336,10 +346,20 @@ fn compose_field_contents<S, F>(
         let dir = col_dir;
         let lane_receptor_y = column_receptor_ys[local_col];
         let lane_offset = lane_offsets[local_col];
-        let receptor_draw_y = lane_receptor_y
-            + crate::move_col_extra(&visual.move_y_cols, local_col)
-            + crate::tipsy_y_extra(local_col, travel.arrow_effect_time_s(), visual.tipsy);
-        let receptor_center_x = lane_center_x_from_adjusted_travel(local_col, 0.0);
+        let lane_frame = *hold_lane_frames[local_col].get_or_insert_with(|| {
+            hold_lane_frame(
+                local_col,
+                lane_receptor_y,
+                lane_center_x_from_adjusted_travel(local_col, 0.0),
+                target_arrow_px,
+                travel.arrow_effect_time_s(),
+                visual,
+                lane_effect_params[local_col],
+                lane_transform_caches[local_col],
+            )
+        });
+        let receptor_draw_y = lane_frame.receptor_draw_y;
+        let receptor_center_x = lane_frame.receptor_center_x;
         let head_travel_offset = if is_head_dynamic {
             travel.raw_beat(head_beat)
         } else {
@@ -430,7 +450,7 @@ fn compose_field_contents<S, F>(
                     transform_cache,
                 )
         };
-        let hold_target_arrow_px = hold_arrow_px_for_adjusted_travel(0.0);
+        let hold_target_arrow_px = lane_frame.target_arrow_px;
         let hold_head_zoom = visual_arrow_effect_zoom_cached(
             head_anchor_adjusted_travel,
             lane_effect_params[local_col],
@@ -438,15 +458,7 @@ fn compose_field_contents<S, F>(
         );
         let hold_head_target_arrow_px = target_arrow_px * hold_head_zoom;
         let hold_note_scale = field_zoom * hold_head_zoom;
-        let col_bumpy = lane_effect_params[local_col].bumpy;
-        let hold_depth_test = hold_body_needs_z_buffer(&visual);
-        let use_legacy_hold_sprites = visual_use_legacy_hold_sprites(
-            col_bumpy,
-            visual.drunk,
-            visual.tornado,
-            visual.beat,
-            visual.pulse_outer,
-        );
+        let use_legacy_hold_sprites = lane_frame.use_legacy_sprites;
         let sample_hold_path = |screen_y: f32| {
             let adjusted_travel = travel.adjusted_from_screen_y_with_lane_offset(
                 lane_receptor_y,
@@ -1299,6 +1311,35 @@ fn hold_body_needs_z_buffer(visual: &VisualEffects) -> bool {
     })
 }
 
+#[allow(clippy::too_many_arguments)]
+#[inline(always)]
+fn hold_lane_frame(
+    local_col: usize,
+    receptor_y: f32,
+    receptor_center_x: f32,
+    target_arrow_px: f32,
+    arrow_effect_time_s: f32,
+    visual: VisualEffects,
+    effect_params: VisualEffectParams,
+    transform_cache: LaneNoteTransformCache,
+) -> HoldLaneFrame {
+    HoldLaneFrame {
+        receptor_draw_y: receptor_y
+            + crate::move_col_extra(&visual.move_y_cols, local_col)
+            + crate::tipsy_y_extra(local_col, arrow_effect_time_s, visual.tipsy),
+        receptor_center_x,
+        target_arrow_px: target_arrow_px
+            * visual_arrow_effect_zoom_cached(0.0, effect_params, transform_cache),
+        use_legacy_sprites: visual_use_legacy_hold_sprites(
+            effect_params.bumpy,
+            visual.drunk,
+            visual.tornado,
+            visual.beat,
+            visual.pulse_outer,
+        ),
+    }
+}
+
 #[inline(always)]
 fn calc_note_rotation_z(
     note_beat: f32,
@@ -1351,6 +1392,122 @@ fn finish_field_camera(
         actors.push(Actor::CameraPop);
     }
 }
+
+#[cfg(any(test, feature = "bench-support"))]
+mod hold_lane_frame_bench {
+    use super::*;
+
+    const HOLD_COUNT: usize = 24;
+
+    #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+    pub struct HoldLaneFrameBenchFrame {
+        pub checksum: u64,
+        pub samples: usize,
+    }
+
+    #[derive(Clone)]
+    pub struct HoldLaneFrameBench {
+        visual: VisualEffects,
+        receptor_ys: [f32; MAX_COLS],
+        effect_params: [VisualEffectParams; MAX_COLS],
+        transform_caches: [LaneNoteTransformCache; MAX_COLS],
+    }
+
+    impl Default for HoldLaneFrameBench {
+        fn default() -> Self {
+            let mut visual = VisualEffects {
+                tipsy: 0.7,
+                drunk: 0.4,
+                tornado: 0.25,
+                beat: 0.3,
+                tiny: 0.2,
+                pulse_outer: 0.15,
+                ..VisualEffects::default()
+            };
+            for column in 0..MAX_COLS {
+                visual.move_y_cols[column] = (column as f32 - 3.5) * 0.08;
+                visual.tiny_cols[column] = column as f32 * 0.025;
+            }
+            let mut effect_params = [VisualEffectParams::default(); MAX_COLS];
+            let mut lane_offsets = [0.0; MAX_COLS];
+            fill_gameplay_lane_effects(
+                &visual,
+                12.0,
+                MAX_COLS,
+                &mut effect_params,
+                &mut lane_offsets,
+            );
+            Self {
+                visual,
+                receptor_ys: std::array::from_fn(|column| 128.0 + column as f32 * 0.5),
+                transform_caches: std::array::from_fn(|column| {
+                    lane_note_transform_cache(96.0, effect_params[column])
+                }),
+                effect_params,
+            }
+        }
+    }
+
+    impl HoldLaneFrameBench {
+        pub fn old_frame(&self, frame: usize) -> HoldLaneFrameBenchFrame {
+            let time = frame as f32 / 120.0;
+            let mut output = HoldLaneFrameBenchFrame::default();
+            for hold in 0..HOLD_COUNT {
+                let column = (frame + hold) % MAX_COLS;
+                record(&mut output, lane_value(self, column, time), column);
+            }
+            output
+        }
+
+        pub fn new_frame(&self, frame: usize) -> HoldLaneFrameBenchFrame {
+            let time = frame as f32 / 120.0;
+            let lane_values: [HoldLaneFrame; MAX_COLS] =
+                std::array::from_fn(|column| lane_value(self, column, time));
+            let mut output = HoldLaneFrameBenchFrame::default();
+            for hold in 0..HOLD_COUNT {
+                let column = (frame + hold) % MAX_COLS;
+                record(&mut output, lane_values[column], column);
+            }
+            output
+        }
+    }
+
+    #[inline(always)]
+    fn lane_value(bench: &HoldLaneFrameBench, column: usize, time: f32) -> HoldLaneFrame {
+        hold_lane_frame(
+            column,
+            bench.receptor_ys[column],
+            96.0 + column as f32 * 64.0,
+            64.0,
+            time,
+            bench.visual,
+            bench.effect_params[column],
+            bench.transform_caches[column],
+        )
+    }
+
+    #[inline(always)]
+    fn record(output: &mut HoldLaneFrameBenchFrame, value: HoldLaneFrame, column: usize) {
+        output.checksum = output.checksum.rotate_left(7)
+            ^ u64::from(value.receptor_draw_y.to_bits())
+            ^ u64::from(value.receptor_center_x.to_bits()).rotate_left(11)
+            ^ u64::from(value.target_arrow_px.to_bits()).rotate_left(23)
+            ^ (column as u64)
+            ^ u64::from(value.use_legacy_sprites);
+        output.samples += 1;
+    }
+
+    #[test]
+    fn lane_reuse_preserves_hold_frame_values() {
+        let bench = HoldLaneFrameBench::default();
+        for frame in [0, 1, 119, 120, 12_345] {
+            assert_eq!(bench.new_frame(frame), bench.old_frame(frame));
+        }
+    }
+}
+
+#[cfg(feature = "bench-support")]
+pub use hold_lane_frame_bench::{HoldLaneFrameBench, HoldLaneFrameBenchFrame};
 
 #[cfg(feature = "bench-support")]
 mod camera_wrap_bench {

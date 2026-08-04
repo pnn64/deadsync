@@ -44,7 +44,9 @@ pub use display_mods::{
 pub use error_bar::{ErrorBarModes, error_bar_boundaries_s};
 #[cfg(feature = "bench-support")]
 #[doc(hidden)]
-pub use field_frame::{CameraWrapBench, CameraWrapBenchFrame};
+pub use field_frame::{
+    CameraWrapBench, CameraWrapBenchFrame, HoldLaneFrameBench, HoldLaneFrameBenchFrame,
+};
 pub use field_frame::{NotefieldFieldFrameView, NotefieldFieldResult, compose_notefield_field};
 #[cfg(feature = "bench-support")]
 #[doc(hidden)]

@@ -2165,8 +2165,8 @@ fn build_song_lua_runtime_windows_for_data(
     let mut song_foreground = SongLuaCapturedActor::default();
     let mut song_foreground_events = Vec::new();
     let mut hidden_players = [false; MAX_PLAYERS];
-    let mut note_hides: [Vec<deadsync_gameplay::SongLuaNoteHideWindowRuntime>; MAX_PLAYERS] =
-        std::array::from_fn(|_| Vec::new());
+    let mut note_hides: [deadsync_gameplay::SongLuaNoteHideWindows; MAX_PLAYERS] =
+        std::array::from_fn(|_| deadsync_gameplay::SongLuaNoteHideWindows::default());
     let mut column_offsets: [Vec<deadsync_gameplay::SongLuaColumnOffsetWindowRuntime>;
         MAX_PLAYERS] = std::array::from_fn(|_| Vec::new());
 

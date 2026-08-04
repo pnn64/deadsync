@@ -5,8 +5,8 @@ use deadsync_gameplay::{
     InputQueueDrainBench, JudgedRowCursorBench, LiveNotefieldOptionsBench, MappedAudioClockBench,
     OptionalFrameWorkBench, PressedLaneMaskBench, RegularCueCursorBench,
     ResolutionDistanceCacheBench, SharedClockBeatBench, SharedMissCutoffBench,
-    SparseFeedbackTickBench, SparseMineAvoidDueBench, SparseTapMissDueBench,
-    StableNotefieldRefreshBench, TwoPlayerColumnMapBench,
+    SongLuaNoteHideIndexBench, SparseFeedbackTickBench, SparseMineAvoidDueBench,
+    SparseTapMissDueBench, StableNotefieldRefreshBench, TwoPlayerColumnMapBench,
 };
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::hint::black_box;
@@ -103,6 +103,14 @@ struct BenchResult {
 
 fn main() {
     println!("gameplay frame hot-path microbenchmarks");
+
+    let note_hides = SongLuaNoteHideIndexBench::default();
+    run_pair(
+        "song-Lua note-hide lane index",
+        "96 visible-note queries across 256 unsorted hide windows",
+        |frame| note_hides.old_frame(frame),
+        |frame| note_hides.new_frame(frame),
+    );
 
     let old_lane_search = InputLaneSearchCursorBench::default();
     let mut new_lane_search = old_lane_search.clone();

@@ -771,7 +771,7 @@ mod tests {
             song_foreground: 11_u16,
             song_foreground_events: vec![build_song_lua_overlay_message_runtime(5.0, 4)],
             hidden_players: [false; MAX_PLAYERS],
-            note_hides: std::array::from_fn(|_| Vec::new()),
+            note_hides: std::array::from_fn(|_| SongLuaNoteHideWindows::default()),
             column_offsets: std::array::from_fn(|_| Vec::new()),
             screen_width: 800.0,
             screen_height: 600.0,
@@ -6955,7 +6955,7 @@ mod tests {
 
     #[test]
     fn song_lua_note_hide_windows_cover_matching_column_bounds() {
-        let windows = [
+        let windows = SongLuaNoteHideWindows::new(vec![
             SongLuaNoteHideWindowRuntime {
                 column: 2,
                 start_beat: 40.0,
@@ -6966,13 +6966,65 @@ mod tests {
                 start_beat: 48.0,
                 end_beat: 52.0,
             },
-        ];
+        ]);
 
         assert!(song_lua_note_hidden(&windows, 2, 40.0));
         assert!(song_lua_note_hidden(&windows, 2, 44.0));
         assert!(song_lua_note_hidden(&windows, 2, 39.99995));
         assert!(!song_lua_note_hidden(&windows, 1, 42.0));
         assert!(!song_lua_note_hidden(&windows, 2, 44.01));
+    }
+
+    #[test]
+    fn song_lua_note_hide_lane_index_matches_unsorted_scan() {
+        const EPS: f32 = 1.0e-4;
+        let source = vec![
+            SongLuaNoteHideWindowRuntime {
+                column: 7,
+                start_beat: -4.0,
+                end_beat: 1.0,
+            },
+            SongLuaNoteHideWindowRuntime {
+                column: 2,
+                start_beat: 40.0,
+                end_beat: 44.0,
+            },
+            SongLuaNoteHideWindowRuntime {
+                column: 2,
+                start_beat: 42.0,
+                end_beat: 48.0,
+            },
+            SongLuaNoteHideWindowRuntime {
+                column: MAX_COLS + 1,
+                start_beat: 3.0,
+                end_beat: 6.0,
+            },
+            SongLuaNoteHideWindowRuntime {
+                column: 0,
+                start_beat: f32::NEG_INFINITY,
+                end_beat: f32::INFINITY,
+            },
+        ];
+        let indexed = SongLuaNoteHideWindows::new(source.clone());
+
+        for column in 0..=MAX_COLS + 1 {
+            for beat in [-8.0, -4.00005, 0.0, 3.0, 39.99995, 42.0, 44.0, 48.0002] {
+                let legacy = source.iter().any(|window| {
+                    window.column == column
+                        && beat + EPS >= window.start_beat
+                        && beat <= window.end_beat + EPS
+                });
+                assert_eq!(
+                    song_lua_note_hidden(&indexed, column, beat),
+                    legacy,
+                    "column={column}, beat={beat}"
+                );
+            }
+        }
+        assert_eq!(
+            indexed.storage_bytes(),
+            source.len() * std::mem::size_of::<SongLuaNoteHideWindowRuntime>()
+        );
     }
 
     #[test]
@@ -6986,11 +7038,11 @@ mod tests {
 
     #[test]
     fn song_lua_field_note_hide_maps_global_columns() {
-        let windows = [SongLuaNoteHideWindowRuntime {
+        let windows = SongLuaNoteHideWindows::new(vec![SongLuaNoteHideWindowRuntime {
             column: 2,
             start_beat: 40.0,
             end_beat: 44.0,
-        }];
+        }]);
 
         assert!(song_lua_field_note_hidden(&windows, 4, 6, 42.0));
         assert!(!song_lua_field_note_hidden(&windows, 4, 5, 42.0));

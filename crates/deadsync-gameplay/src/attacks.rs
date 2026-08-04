@@ -603,6 +603,73 @@ pub struct SongLuaNoteHideWindowRuntime {
     pub end_beat: f32,
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+struct SongLuaNoteHideRange {
+    start: usize,
+    end: usize,
+}
+
+/// Song-lifetime note-hide windows grouped by lane for gameplay queries.
+///
+/// The gameplay screen builds this immutable lookup before play and shares it
+/// with the game/render thread for the life of the song. Capacity is exactly
+/// the number of source windows, with fixed lane ranges and no synchronization,
+/// misses, insertion, eviction, or gameplay-time destruction. A query scans
+/// only its lane's windows, performs no allocation, and has a worst-case cost
+/// bounded by the number of hide windows assigned to that lane. `storage_bytes`
+/// provides instrumentation for the owned window storage; the lookup is freed
+/// when the gameplay screen is dropped.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct SongLuaNoteHideWindows {
+    windows: Vec<SongLuaNoteHideWindowRuntime>,
+    lane_ranges: [SongLuaNoteHideRange; MAX_COLS],
+}
+
+impl SongLuaNoteHideWindows {
+    pub fn new(mut windows: Vec<SongLuaNoteHideWindowRuntime>) -> Self {
+        windows.sort_unstable_by_key(|window| window.column);
+        let lane_ranges = std::array::from_fn(|column| {
+            let start = windows.partition_point(|window| window.column < column);
+            let end = windows.partition_point(|window| window.column <= column);
+            SongLuaNoteHideRange { start, end }
+        });
+        Self {
+            windows,
+            lane_ranges,
+        }
+    }
+
+    #[inline(always)]
+    pub fn as_slice(&self) -> &[SongLuaNoteHideWindowRuntime] {
+        &self.windows
+    }
+
+    #[inline(always)]
+    pub fn iter(&self) -> std::slice::Iter<'_, SongLuaNoteHideWindowRuntime> {
+        self.windows.iter()
+    }
+
+    pub fn storage_bytes(&self) -> usize {
+        self.windows
+            .len()
+            .saturating_mul(std::mem::size_of::<SongLuaNoteHideWindowRuntime>())
+    }
+
+    #[inline(always)]
+    fn column_windows(&self, column: usize) -> &[SongLuaNoteHideWindowRuntime] {
+        if let Some(range) = self.lane_ranges.get(column) {
+            return &self.windows[range.start..range.end];
+        }
+        let start = self
+            .windows
+            .partition_point(|window| window.column < column);
+        let end = self
+            .windows
+            .partition_point(|window| window.column <= column);
+        &self.windows[start..end]
+    }
+}
+
 #[inline(always)]
 pub const fn build_song_lua_note_hide_window_runtime(
     column: usize,
@@ -618,7 +685,7 @@ pub const fn build_song_lua_note_hide_window_runtime(
 
 pub fn build_song_lua_note_hide_windows_for_players(
     hides: impl IntoIterator<Item = (usize, usize, f32, f32)>,
-) -> [Vec<SongLuaNoteHideWindowRuntime>; MAX_PLAYERS] {
+) -> [SongLuaNoteHideWindows; MAX_PLAYERS] {
     let mut out: [Vec<SongLuaNoteHideWindowRuntime>; MAX_PLAYERS] =
         std::array::from_fn(|_| Vec::new());
     for (player, column, start_beat, end_beat) in hides {
@@ -628,7 +695,7 @@ pub fn build_song_lua_note_hide_windows_for_players(
             ));
         }
     }
-    out
+    out.map(SongLuaNoteHideWindows::new)
 }
 
 pub fn build_song_lua_hidden_players(flags: &[bool]) -> [bool; MAX_PLAYERS] {
@@ -789,7 +856,7 @@ pub struct SongLuaRuntimeVisuals<OverlayActor, CapturedActor, StateDelta> {
     pub song_foreground: CapturedActor,
     pub song_foreground_events: Vec<SongLuaOverlayMessageRuntime>,
     pub hidden_players: [bool; MAX_PLAYERS],
-    pub note_hides: [Vec<SongLuaNoteHideWindowRuntime>; MAX_PLAYERS],
+    pub note_hides: [SongLuaNoteHideWindows; MAX_PLAYERS],
     pub column_offsets: [Vec<SongLuaColumnOffsetWindowRuntime>; MAX_PLAYERS],
     pub screen_width: f32,
     pub screen_height: f32,
@@ -817,7 +884,7 @@ pub fn build_song_lua_runtime_visuals<OverlayActor, CapturedActor, StateDelta>(
     song_foreground: CapturedActor,
     song_foreground_events: Vec<SongLuaOverlayMessageRuntime>,
     hidden_players: [bool; MAX_PLAYERS],
-    note_hides: [Vec<SongLuaNoteHideWindowRuntime>; MAX_PLAYERS],
+    note_hides: [SongLuaNoteHideWindows; MAX_PLAYERS],
     column_offsets: [Vec<SongLuaColumnOffsetWindowRuntime>; MAX_PLAYERS],
     screen_width: f32,
     screen_height: f32,
@@ -2258,12 +2325,12 @@ pub fn song_lua_extend_column_offset_tails(out: &mut [SongLuaColumnOffsetWindowR
 
 #[inline(always)]
 pub fn song_lua_note_hidden(
-    windows: &[SongLuaNoteHideWindowRuntime],
+    windows: &SongLuaNoteHideWindows,
     local_col: usize,
     beat: f32,
 ) -> bool {
     const EPS: f32 = 1.0e-4;
-    windows.iter().any(|window| {
+    windows.column_windows(local_col).iter().any(|window| {
         window.column == local_col
             && beat + EPS >= window.start_beat
             && beat <= window.end_beat + EPS
@@ -2272,7 +2339,7 @@ pub fn song_lua_note_hidden(
 
 #[inline(always)]
 pub fn song_lua_field_note_hidden(
-    windows: &[SongLuaNoteHideWindowRuntime],
+    windows: &SongLuaNoteHideWindows,
     cols_per_player: usize,
     column: usize,
     beat: f32,

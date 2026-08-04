@@ -8,9 +8,11 @@ use crate::{
 use deadlib_present::actors::{Actor, SpriteSource};
 use deadsync_core::input::MAX_COLS;
 use deadsync_core::note::NoteType;
+#[cfg(any(test, feature = "bench-support"))]
+use deadsync_gameplay::SongLuaNoteHideWindowRuntime;
 use deadsync_gameplay::{
     ActiveColumnFlash, ActiveHold, ActiveMineExplosion, ActiveTapExplosion, ColumnCue,
-    SongLuaNoteHideWindowRuntime, hold_explosion_active, song_lua_note_hidden,
+    SongLuaNoteHideWindows, hold_explosion_active, song_lua_note_hidden,
 };
 use deadsync_noteskin::NoteskinSlot;
 use std::sync::Arc;
@@ -281,7 +283,7 @@ pub(crate) fn compose_notefield_feedback<S, F>(
 #[inline(always)]
 fn visible_tap_explosion<'a>(
     active: &'a Option<ActiveTapExplosion>,
-    note_hides: &[SongLuaNoteHideWindowRuntime],
+    note_hides: &SongLuaNoteHideWindows,
     local_col: usize,
     current_beat: f32,
 ) -> Option<&'a ActiveTapExplosion> {
@@ -296,7 +298,12 @@ fn visible_tap_explosion_legacy<'a>(
     local_col: usize,
     current_beat: f32,
 ) -> Option<&'a ActiveTapExplosion> {
-    if song_lua_note_hidden(note_hides, local_col, current_beat) {
+    const EPS: f32 = 1.0e-4;
+    if note_hides.iter().any(|window| {
+        window.column == local_col
+            && current_beat + EPS >= window.start_beat
+            && current_beat <= window.end_beat + EPS
+    }) {
         None
     } else {
         active.as_ref()
@@ -329,20 +336,23 @@ pub struct TapExplosionCullBenchFrame {
 #[cfg(feature = "bench-support")]
 #[derive(Clone)]
 pub struct TapExplosionCullBench {
-    note_hides: Vec<SongLuaNoteHideWindowRuntime>,
+    note_hides: SongLuaNoteHideWindows,
+    legacy_note_hides: Vec<SongLuaNoteHideWindowRuntime>,
 }
 
 #[cfg(feature = "bench-support")]
 impl Default for TapExplosionCullBench {
     fn default() -> Self {
+        let legacy_note_hides = (0..256)
+            .map(|index| SongLuaNoteHideWindowRuntime {
+                column: index % MAX_COLS,
+                start_beat: index as f32 * 4.0,
+                end_beat: index as f32 * 4.0 + 2.0,
+            })
+            .collect::<Vec<_>>();
         Self {
-            note_hides: (0..256)
-                .map(|index| SongLuaNoteHideWindowRuntime {
-                    column: index % MAX_COLS,
-                    start_beat: index as f32 * 4.0,
-                    end_beat: index as f32 * 4.0 + 2.0,
-                })
-                .collect(),
+            note_hides: SongLuaNoteHideWindows::new(legacy_note_hides.clone()),
+            legacy_note_hides,
         }
     }
 }
@@ -350,23 +360,25 @@ impl Default for TapExplosionCullBench {
 #[cfg(feature = "bench-support")]
 impl TapExplosionCullBench {
     pub fn old_frame(&self, frame: usize) -> TapExplosionCullBenchFrame {
-        self.frame(frame, visible_tap_explosion_legacy)
+        self.frame(frame, |active, local_col, beat| {
+            visible_tap_explosion_legacy(active, &self.legacy_note_hides, local_col, beat)
+        })
     }
 
     pub fn new_frame(&self, frame: usize) -> TapExplosionCullBenchFrame {
-        self.frame(frame, visible_tap_explosion)
+        self.frame(frame, |active, local_col, beat| {
+            visible_tap_explosion(active, &self.note_hides, local_col, beat)
+        })
     }
 
-    fn frame(
-        &self,
-        frame: usize,
-        select: for<'a> fn(
+    fn frame<F>(&self, frame: usize, mut select: F) -> TapExplosionCullBenchFrame
+    where
+        F: for<'a> FnMut(
             &'a Option<ActiveTapExplosion>,
-            &[SongLuaNoteHideWindowRuntime],
             usize,
             f32,
         ) -> Option<&'a ActiveTapExplosion>,
-    ) -> TapExplosionCullBenchFrame {
+    {
         let mut explosions = [None; MAX_COLS];
         if frame % 257 == 0 {
             explosions[frame % MAX_COLS] = Some(ActiveTapExplosion {
@@ -383,7 +395,7 @@ impl TapExplosionCullBench {
             samples: 0,
         };
         for (local_col, active) in explosions.iter().enumerate() {
-            if let Some(active) = select(active, &self.note_hides, local_col, beat) {
+            if let Some(active) = select(active, local_col, beat) {
                 output.checksum = output.checksum.rotate_left(7)
                     ^ u64::from(active.elapsed.to_bits())
                     ^ local_col as u64;
@@ -629,11 +641,12 @@ mod tests {
             start_beat: 4.0,
         });
         let inactive = None;
-        let note_hides = [SongLuaNoteHideWindowRuntime {
+        let legacy_note_hides = [SongLuaNoteHideWindowRuntime {
             column: 2,
             start_beat: 4.0,
             end_beat: 8.0,
         }];
+        let note_hides = SongLuaNoteHideWindows::new(legacy_note_hides.to_vec());
 
         for (explosion, col, beat) in [
             (&inactive, 2, 6.0),
@@ -641,7 +654,7 @@ mod tests {
             (&active, 2, 6.0),
             (&active, 2, 9.0),
         ] {
-            let old = visible_tap_explosion_legacy(explosion, &note_hides, col, beat)
+            let old = visible_tap_explosion_legacy(explosion, &legacy_note_hides, col, beat)
                 .map(|value| (value.window, value.elapsed.to_bits()));
             let new = visible_tap_explosion(explosion, &note_hides, col, beat)
                 .map(|value| (value.window, value.elapsed.to_bits()));
@@ -983,7 +996,7 @@ mod tests {
         noteskin: &'a NoteskinRuntime<TestSlot>,
         timing: &'a TimingData,
         notes: &'a [Note],
-        note_hides: &'a [SongLuaNoteHideWindowRuntime],
+        note_hides: &'a SongLuaNoteHideWindows,
         placement: FieldPlacement,
         player_idx: usize,
         num_players: usize,
@@ -1158,11 +1171,12 @@ mod tests {
         let noteskin = noteskin();
         let timing = TimingData::default();
         let notes = [note(0)];
+        let note_hides = SongLuaNoteHideWindows::default();
         let mut request = request(
             &noteskin,
             &timing,
             &notes,
-            &[],
+            &note_hides,
             FieldPlacement::P1,
             0,
             1,
@@ -1263,11 +1277,11 @@ mod tests {
         let noteskin = noteskin();
         let timing = TimingData::default();
         let notes = [note(2), note(3)];
-        let hides = [SongLuaNoteHideWindowRuntime {
+        let hides = SongLuaNoteHideWindows::new(vec![SongLuaNoteHideWindowRuntime {
             column: 0,
             start_beat: 0.0,
             end_beat: 2.0,
-        }];
+        }]);
         let request = request(
             &noteskin,
             &timing,

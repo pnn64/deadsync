@@ -9,8 +9,8 @@ use crate::{
 use deadsync_core::input::MAX_COLS;
 use deadsync_gameplay::{
     AccelEffects, AppearanceEffects, PerspectiveEffects, ScrollEffects,
-    SongLuaColumnOffsetWindowRuntime, SongLuaNoteHideWindowRuntime, VisibilityEffects,
-    VisualEffects, song_lua_column_y_offset,
+    SongLuaColumnOffsetWindowRuntime, SongLuaNoteHideWindows, VisibilityEffects, VisualEffects,
+    song_lua_column_offset_window_value,
 };
 use deadsync_noteskin::NoteskinRuntime;
 use deadsync_rules::note::{Note, NoteCountStat};
@@ -136,7 +136,7 @@ pub struct NotefieldNoteskinView<'a, S> {
 /// Song Lua note visibility and per-column placement inputs for one player.
 #[derive(Clone, Copy, Debug)]
 pub struct NotefieldSongLuaView<'a> {
-    pub note_hides: &'a [SongLuaNoteHideWindowRuntime],
+    pub note_hides: &'a SongLuaNoteHideWindows,
     pub column_offsets: &'a [SongLuaColumnOffsetWindowRuntime],
 }
 
@@ -434,8 +434,12 @@ fn song_lua_column_y_offsets(
         return [0.0; MAX_COLS];
     }
     let mut out = [0.0; MAX_COLS];
-    for (local_col, offset) in out.iter_mut().take(active_cols).enumerate() {
-        *offset = song_lua_column_y_offset(windows, local_col, current_time_s);
+    for window in windows {
+        if window.column < active_cols
+            && let Some(offset) = song_lua_column_offset_window_value(window, current_time_s)
+        {
+            out[window.column] = offset;
+        }
     }
     out
 }
@@ -459,7 +463,12 @@ fn song_lua_column_y_offsets_legacy(
 ) -> [f32; MAX_COLS] {
     std::array::from_fn(|local_col| {
         if local_col < num_cols {
-            song_lua_column_y_offset(windows, local_col, current_time_s)
+            windows
+                .iter()
+                .filter(|window| window.column == local_col)
+                .filter_map(|window| song_lua_column_offset_window_value(window, current_time_s))
+                .next_back()
+                .unwrap_or(0.0)
         } else {
             Default::default()
         }
@@ -476,14 +485,32 @@ pub struct NotefieldPrepBenchFrame {
 #[cfg(feature = "bench-support")]
 pub struct NotefieldPrepBench {
     empty_windows: Vec<SongLuaColumnOffsetWindowRuntime>,
+    populated_windows: Vec<SongLuaColumnOffsetWindowRuntime>,
     col_offsets: [f32; MAX_COLS],
 }
 
 #[cfg(feature = "bench-support")]
 impl Default for NotefieldPrepBench {
     fn default() -> Self {
+        let populated_windows = (0..256)
+            .map(|index| {
+                let start_second = (index / MAX_COLS) as f32 * 0.5;
+                SongLuaColumnOffsetWindowRuntime {
+                    column: index % MAX_COLS,
+                    start_second,
+                    end_second: start_second + 0.25,
+                    sustain_end_second: start_second + 4.0,
+                    from_y: index as f32 * -0.25,
+                    to_y: index as f32 * 0.5,
+                    easing: None,
+                    opt1: None,
+                    opt2: None,
+                }
+            })
+            .collect();
         Self {
             empty_windows: Vec::new(),
+            populated_windows,
             col_offsets: [-224.0, -160.0, -96.0, -32.0, 32.0, 96.0, 160.0, 224.0],
         }
     }
@@ -536,6 +563,36 @@ impl NotefieldPrepBench {
                 &mut output,
                 song_lua_column_y_offsets(
                     std::hint::black_box(&self.empty_windows),
+                    MAX_COLS,
+                    (frame + iteration) as f32 / 120.0,
+                ),
+            );
+        }
+        output
+    }
+
+    pub fn old_populated_song_lua_frame(&self, frame: usize) -> NotefieldPrepBenchFrame {
+        let mut output = NotefieldPrepBenchFrame::default();
+        for iteration in 0..Self::BATCH {
+            record_prep_array(
+                &mut output,
+                song_lua_column_y_offsets_legacy(
+                    std::hint::black_box(&self.populated_windows),
+                    MAX_COLS,
+                    (frame + iteration) as f32 / 120.0,
+                ),
+            );
+        }
+        output
+    }
+
+    pub fn new_populated_song_lua_frame(&self, frame: usize) -> NotefieldPrepBenchFrame {
+        let mut output = NotefieldPrepBenchFrame::default();
+        for iteration in 0..Self::BATCH {
+            record_prep_array(
+                &mut output,
+                song_lua_column_y_offsets(
+                    std::hint::black_box(&self.populated_windows),
                     MAX_COLS,
                     (frame + iteration) as f32 / 120.0,
                 ),
@@ -711,21 +768,33 @@ mod tests {
 
     #[test]
     fn song_lua_populated_offsets_keep_legacy_values() {
-        let windows = [SongLuaColumnOffsetWindowRuntime {
-            column: 2,
-            start_second: 1.0,
-            end_second: 3.0,
-            sustain_end_second: 4.0,
-            from_y: -8.0,
-            to_y: 24.0,
-            easing: None,
-            opt1: None,
-            opt2: None,
-        }];
-        for now in [0.0, 1.0, 2.0, 3.5, 5.0] {
-            let old = song_lua_column_y_offsets_legacy(&windows, 4, now).map(f32::to_bits);
-            let new = song_lua_column_y_offsets(&windows, 4, now).map(f32::to_bits);
-            assert_eq!(new, old, "now={now}");
+        let window = |column, start_second, end_second, sustain_end_second, from_y, to_y| {
+            SongLuaColumnOffsetWindowRuntime {
+                column,
+                start_second,
+                end_second,
+                sustain_end_second,
+                from_y,
+                to_y,
+                easing: None,
+                opt1: None,
+                opt2: None,
+            }
+        };
+        let windows = [
+            window(2, 1.0, 3.0, 4.0, -8.0, 24.0),
+            window(0, -2.0, 0.0, 8.0, 4.0, 12.0),
+            window(2, 2.0, 2.5, 6.0, 100.0, 200.0),
+            window(MAX_COLS + 2, 0.0, 10.0, 12.0, 1.0, 2.0),
+            window(2, 20.0, 21.0, 22.0, -50.0, -25.0),
+        ];
+        for num_cols in [0, 1, 4, MAX_COLS, MAX_COLS + 4] {
+            for now in [-3.0, 0.0, 1.0, 2.0, 2.25, 3.5, 5.0, 20.5, 30.0] {
+                let old =
+                    song_lua_column_y_offsets_legacy(&windows, num_cols, now).map(f32::to_bits);
+                let new = song_lua_column_y_offsets(&windows, num_cols, now).map(f32::to_bits);
+                assert_eq!(new, old, "num_cols={num_cols}, now={now}");
+            }
         }
     }
 

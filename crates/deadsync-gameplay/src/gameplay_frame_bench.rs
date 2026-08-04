@@ -5,6 +5,76 @@ pub struct GameplayFrameHotPathBenchOutput {
 }
 
 #[derive(Clone)]
+pub struct SongLuaNoteHideIndexBench {
+    legacy_windows: Vec<SongLuaNoteHideWindowRuntime>,
+    indexed_windows: SongLuaNoteHideWindows,
+}
+
+impl Default for SongLuaNoteHideIndexBench {
+    fn default() -> Self {
+        let legacy_windows = (0..256)
+            .rev()
+            .map(|index| SongLuaNoteHideWindowRuntime {
+                column: index % MAX_COLS,
+                start_beat: (index / MAX_COLS) as f32 * 4.0,
+                end_beat: (index / MAX_COLS) as f32 * 4.0 + 2.0,
+            })
+            .collect::<Vec<_>>();
+        Self {
+            indexed_windows: SongLuaNoteHideWindows::new(legacy_windows.clone()),
+            legacy_windows,
+        }
+    }
+}
+
+impl SongLuaNoteHideIndexBench {
+    pub fn old_frame(&self, frame: usize) -> GameplayFrameHotPathBenchOutput {
+        self.frame(frame, |column, beat| {
+            legacy_song_lua_note_hidden(&self.legacy_windows, column, beat)
+        })
+    }
+
+    pub fn new_frame(&self, frame: usize) -> GameplayFrameHotPathBenchOutput {
+        self.frame(frame, |column, beat| {
+            song_lua_note_hidden(&self.indexed_windows, column, beat)
+        })
+    }
+
+    fn frame(
+        &self,
+        frame: usize,
+        mut hidden: impl FnMut(usize, f32) -> bool,
+    ) -> GameplayFrameHotPathBenchOutput {
+        let mut output = GameplayFrameHotPathBenchOutput::default();
+        for sample in 0..96 {
+            let column = (frame + sample) % MAX_COLS;
+            let beat = ((frame * 3 + sample * 17) % 256) as f32 * 0.5;
+            let is_hidden = hidden(column, beat);
+            output.checksum = output.checksum.rotate_left(5)
+                ^ u64::from(beat.to_bits())
+                ^ column as u64
+                ^ u64::from(is_hidden);
+            output.samples += usize::from(is_hidden);
+        }
+        output
+    }
+}
+
+#[inline(always)]
+fn legacy_song_lua_note_hidden(
+    windows: &[SongLuaNoteHideWindowRuntime],
+    local_col: usize,
+    beat: f32,
+) -> bool {
+    const EPS: f32 = 1.0e-4;
+    windows.iter().any(|window| {
+        window.column == local_col
+            && beat + EPS >= window.start_beat
+            && beat <= window.end_beat + EPS
+    })
+}
+
+#[derive(Clone)]
 pub struct InputLaneSearchCursorBench {
     notes: Vec<Note>,
     note_indices: Vec<usize>,

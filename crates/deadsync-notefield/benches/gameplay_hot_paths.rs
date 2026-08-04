@@ -1,8 +1,9 @@
 use deadsync_notefield::{
     CameraWrapBench, CommonNoteTransformBench, CueScanBench, FeedbackLaneCacheBench,
-    HoldTravelReuseBench, IdentityAccelBench, LaneVisualCacheBench, MeasureLineMode,
-    MeasureLinePlanBench, MeasureLineTraversalBench, NotefieldPrepBench, OneRateCmodBench,
-    TapExplosionCullBench, VisibleLaneCursorBench, VisibleRangeBench, XmodTimingBench,
+    HoldLaneFrameBench, HoldTravelReuseBench, IdentityAccelBench, LaneVisualCacheBench,
+    MeasureLineMode, MeasureLinePlanBench, MeasureLineTraversalBench, NotefieldPrepBench,
+    OneRateCmodBench, TapExplosionCullBench, VisibleLaneCursorBench, VisibleRangeBench,
+    XmodTimingBench,
 };
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::hint::black_box;
@@ -137,6 +138,24 @@ fn main() {
         },
         |frame| {
             let output = preparation.new_song_lua_frame(frame);
+            Output {
+                checksum: output.checksum,
+                samples: output.samples,
+            }
+        },
+    );
+    run_pair(
+        "populated song-Lua column offsets",
+        "256 x 8-lane preparations with 256 ordered offset windows",
+        |frame| {
+            let output = preparation.old_populated_song_lua_frame(frame);
+            Output {
+                checksum: output.checksum,
+                samples: output.samples,
+            }
+        },
+        |frame| {
+            let output = preparation.new_populated_song_lua_frame(frame);
             Output {
                 checksum: output.checksum,
                 samples: output.samples,
@@ -510,6 +529,25 @@ fn main() {
         },
     );
     let hold_travel = HoldTravelReuseBench::default();
+    let hold_lanes = HoldLaneFrameBench::default();
+    run_pair(
+        "hold lane-frame invariant reuse",
+        "24 visible holds across 8 lanes with active visual modifiers",
+        |frame| {
+            let output = hold_lanes.old_frame(frame);
+            Output {
+                checksum: output.checksum,
+                samples: output.samples,
+            }
+        },
+        |frame| {
+            let output = hold_lanes.new_frame(frame);
+            Output {
+                checksum: output.checksum,
+                samples: output.samples,
+            }
+        },
+    );
     run_pair(
         "hold-head travel reuse",
         "24 visible holds with active acceleration effects",

@@ -250,7 +250,7 @@ mod runtime_regression_tests {
                     (),
                     Vec::new(),
                     [false; MAX_PLAYERS],
-                    std::array::from_fn(|_| Vec::new()),
+                    std::array::from_fn(|_| SongLuaNoteHideWindows::default()),
                     std::array::from_fn(|_| Vec::new()),
                     params.screen_width,
                     params.screen_height,
@@ -3338,11 +3338,13 @@ mod runtime_regression_tests {
         state.display.receptor_feedback.glow_lift_timers.fill(0.0);
         state.display.receptor_feedback.bop_timers.fill(0.0);
         set_single_judged_tap(&mut state, column, row_index, JudgeGrade::Great, 0.0);
-        state.mods.song_lua_visuals.note_hides[0].push(SongLuaNoteHideWindowRuntime {
-            column,
-            start_beat: 0.0,
-            end_beat: 2.0,
-        });
+        state.mods.song_lua_visuals.note_hides[0] = SongLuaNoteHideWindows::new(vec![
+            SongLuaNoteHideWindowRuntime {
+                column,
+                start_beat: 0.0,
+                end_beat: 2.0,
+            },
+        ]);
 
         state.trigger_completed_row_tap_explosions(0, row_index);
 
