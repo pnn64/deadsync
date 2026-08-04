@@ -623,9 +623,11 @@ const SONG_LUA_RAINBOW_TEXT_PREWARM_MAX_CHARS: usize = 64;
 /// uses owned per-frame construction rather than retaining unbounded song
 /// storage. GraphDisplay body/line geometry and its two-child frame are sized
 /// from the compiled point count. Static Model glow vertices are whitened once
-/// per layer during entry. Gameplay frames only refill or clone these prewarmed
-/// buffers. The fallback conversion also supports test-only builders that do
-/// not provide screen scratch.
+/// per layer during entry. BitmapText gets two buffers sized for its compiled
+/// spans plus one whole-text span: one for dynamic diffuse composition and one
+/// for glow/stroke extraction. Gameplay frames only refill or clone these
+/// prewarmed buffers. The fallback conversion also supports test-only builders
+/// that do not provide screen scratch.
 #[derive(Default)]
 struct SongLuaProjectedMeshScratch {
     textured_vertices: Option<Arc<Vec<TexturedMeshVertex>>>,
@@ -635,9 +637,12 @@ struct SongLuaProjectedMeshScratch {
     graph_line_vertices: Option<Arc<Vec<MeshVertex>>>,
     graph_frame: Option<SharedActorFrameScratch>,
     model_glow_vertices: Option<Vec<Arc<[TexturedMeshVertex]>>>,
+    text_diffuse_attributes: Option<Arc<Vec<TextAttribute>>>,
+    text_glow_attributes: Option<Arc<Vec<TextAttribute>>>,
     uppercase_text: Option<Arc<str>>,
     rainbow_text_attributes: Option<[Arc<[TextAttribute]>; SONG_LUA_TEXT_RAINBOW_COLORS.len()]>,
     capacity: usize,
+    text_attribute_capacity: usize,
     replacements: u64,
 }
 
@@ -651,9 +656,12 @@ impl SongLuaProjectedMeshScratch {
             graph_line_vertices: None,
             graph_frame: None,
             model_glow_vertices: None,
+            text_diffuse_attributes: None,
+            text_glow_attributes: None,
             uppercase_text: None,
             rainbow_text_attributes: None,
             capacity,
+            text_attribute_capacity: 0,
             replacements: 0,
         }
     }
@@ -667,9 +675,12 @@ impl SongLuaProjectedMeshScratch {
             graph_line_vertices: None,
             graph_frame: None,
             model_glow_vertices: None,
+            text_diffuse_attributes: None,
+            text_glow_attributes: None,
             uppercase_text: None,
             rainbow_text_attributes: None,
             capacity,
+            text_attribute_capacity: 0,
             replacements: 0,
         }
     }
@@ -708,13 +719,20 @@ impl SongLuaProjectedMeshScratch {
         }
     }
 
+    fn prewarm_text_attributes(&mut self, attribute_count: usize) {
+        let capacity = attribute_count.saturating_add(1);
+        self.text_diffuse_attributes = Some(Arc::new(Vec::with_capacity(capacity)));
+        self.text_glow_attributes = Some(Arc::new(Vec::with_capacity(capacity)));
+        self.text_attribute_capacity = capacity;
+    }
+
     fn update_projected(
         &mut self,
         grid: &[TexturedMeshVertex],
         width: usize,
         height: usize,
     ) -> Arc<Vec<TexturedMeshVertex>> {
-        update_song_lua_mesh_vertices(
+        update_song_lua_shared_vec(
             &mut self.textured_vertices,
             self.capacity,
             &mut self.replacements,
@@ -726,7 +744,7 @@ impl SongLuaProjectedMeshScratch {
         &mut self,
         fill: impl FnOnce(&mut Vec<TexturedMeshVertex>),
     ) -> Arc<Vec<TexturedMeshVertex>> {
-        update_song_lua_mesh_vertices(
+        update_song_lua_shared_vec(
             &mut self.textured_vertices,
             self.capacity,
             &mut self.replacements,
@@ -738,7 +756,7 @@ impl SongLuaProjectedMeshScratch {
         &mut self,
         vertices: &[TexturedMeshVertex],
     ) -> Arc<Vec<TexturedMeshVertex>> {
-        update_song_lua_mesh_vertices(
+        update_song_lua_shared_vec(
             &mut self.textured_glow_vertices,
             self.capacity,
             &mut self.replacements,
@@ -759,7 +777,7 @@ impl SongLuaProjectedMeshScratch {
     }
 
     fn update_mesh(&mut self, fill: impl FnOnce(&mut Vec<MeshVertex>)) -> Arc<Vec<MeshVertex>> {
-        update_song_lua_mesh_vertices(
+        update_song_lua_shared_vec(
             &mut self.mesh_vertices,
             self.capacity,
             &mut self.replacements,
@@ -771,7 +789,7 @@ impl SongLuaProjectedMeshScratch {
         &mut self,
         fill: impl FnOnce(&mut Vec<MeshVertex>),
     ) -> Arc<Vec<MeshVertex>> {
-        update_song_lua_mesh_vertices(
+        update_song_lua_shared_vec(
             &mut self.graph_body_vertices,
             self.capacity,
             &mut self.replacements,
@@ -783,12 +801,33 @@ impl SongLuaProjectedMeshScratch {
         &mut self,
         fill: impl FnOnce(&mut Vec<MeshVertex>),
     ) -> Arc<Vec<MeshVertex>> {
-        update_song_lua_mesh_vertices(
+        update_song_lua_shared_vec(
             &mut self.graph_line_vertices,
             self.capacity,
             &mut self.replacements,
             fill,
         )
+    }
+
+    fn update_text_diffuse(
+        &mut self,
+        fill: impl FnOnce(&mut Vec<TextAttribute>),
+    ) -> TextAttributes {
+        TextAttributes::from(update_song_lua_shared_vec(
+            &mut self.text_diffuse_attributes,
+            self.text_attribute_capacity,
+            &mut self.replacements,
+            fill,
+        ))
+    }
+
+    fn update_text_glow(&mut self, fill: impl FnOnce(&mut Vec<TextAttribute>)) -> TextAttributes {
+        TextAttributes::from(update_song_lua_shared_vec(
+            &mut self.text_glow_attributes,
+            self.text_attribute_capacity,
+            &mut self.replacements,
+            fill,
+        ))
     }
 
     #[cfg(feature = "bench-support")]
@@ -833,6 +872,16 @@ impl SongLuaProjectedMeshScratch {
                 })
                 .sum()
         });
+        let dynamic_text = self
+            .text_diffuse_attributes
+            .as_ref()
+            .map_or(0, |attributes| attributes.capacity())
+            .saturating_add(
+                self.text_glow_attributes
+                    .as_ref()
+                    .map_or(0, |attributes| attributes.capacity()),
+            )
+            .saturating_mul(std::mem::size_of::<TextAttribute>());
         let rainbow = self
             .rainbow_text_attributes
             .as_ref()
@@ -846,11 +895,12 @@ impl SongLuaProjectedMeshScratch {
             .saturating_add(graph)
             .saturating_add(graph_frame)
             .saturating_add(model_glow)
+            .saturating_add(dynamic_text)
             .saturating_add(rainbow)
     }
 }
 
-fn update_song_lua_mesh_vertices<T>(
+fn update_song_lua_shared_vec<T>(
     shared: &mut Option<Arc<Vec<T>>>,
     capacity: usize,
     replacements: &mut u64,
@@ -861,9 +911,9 @@ fn update_song_lua_mesh_vertices<T>(
         *replacements = (*replacements).saturating_add(1);
         *shared = Arc::new(Vec::with_capacity(capacity));
     }
-    let vertices = Arc::get_mut(shared).expect("mesh buffer was just made unique");
-    vertices.clear();
-    fill(vertices);
+    let values = Arc::get_mut(shared).expect("shared vector was just made unique");
+    values.clear();
+    fill(values);
     Arc::clone(shared)
 }
 
@@ -895,7 +945,11 @@ fn song_lua_projected_mesh_scratch_for(
                 SongLuaOverlayKind::Model { layers } => SongLuaProjectedMeshScratch::model(layers),
                 _ => SongLuaProjectedMeshScratch::default(),
             };
-            if let SongLuaOverlayKind::BitmapText { text, .. } = &overlay.kind {
+            if let SongLuaOverlayKind::BitmapText {
+                text, attributes, ..
+            } = &overlay.kind
+            {
+                scratch.prewarm_text_attributes(attributes.len());
                 scratch.uppercase_text = Some(Arc::from(text.to_uppercase()));
                 let char_count = text.chars().count();
                 if (1..=SONG_LUA_RAINBOW_TEXT_PREWARM_MAX_CHARS).contains(&char_count) {
@@ -8883,19 +8937,30 @@ fn song_lua_rainbow_scroll_phases(
     })
 }
 
-fn song_lua_transparent_text_attributes(text: &str) -> TextAttributes {
+fn song_lua_transparent_text_attributes(
+    text: &str,
+    scratch: Option<&mut SongLuaProjectedMeshScratch>,
+) -> TextAttributes {
     let char_count = text.chars().count();
     if char_count == 0 {
         return TextAttributes::default();
     }
-    vec![TextAttribute {
-        start: 0,
-        length: char_count,
-        color: [1.0, 1.0, 1.0, 0.0],
-        vertex_colors: None,
-        glow: None,
-    }]
-    .into()
+    let fill = |out: &mut Vec<TextAttribute>| {
+        out.push(TextAttribute {
+            start: 0,
+            length: char_count,
+            color: [1.0, 1.0, 1.0, 0.0],
+            vertex_colors: None,
+            glow: None,
+        });
+    };
+    if let Some(scratch) = scratch {
+        scratch.update_text_glow(fill)
+    } else {
+        let mut out = Vec::with_capacity(1);
+        fill(&mut out);
+        out.into()
+    }
 }
 
 fn song_lua_text_attributes_have_glow(attributes: &[TextAttribute]) -> bool {
@@ -8908,37 +8973,45 @@ fn song_lua_text_glow_attributes(
     text: &str,
     attributes: &[TextAttribute],
     glow: [f32; 4],
+    scratch: Option<&mut SongLuaProjectedMeshScratch>,
 ) -> TextAttributes {
     let char_count = text.chars().count();
     if char_count == 0 {
         return TextAttributes::default();
     }
-    let mut out = Vec::with_capacity(attributes.len() + usize::from(glow[3] > f32::EPSILON));
-    if glow[3] > f32::EPSILON {
-        out.push(TextAttribute {
-            start: 0,
-            length: char_count,
-            color: glow,
-            vertex_colors: None,
-            glow: None,
-        });
-    }
-    for attr in attributes {
-        let Some(glow) = attr.glow else {
-            continue;
-        };
-        if glow[3] <= f32::EPSILON {
-            continue;
+    let fill = |out: &mut Vec<TextAttribute>| {
+        if glow[3] > f32::EPSILON {
+            out.push(TextAttribute {
+                start: 0,
+                length: char_count,
+                color: glow,
+                vertex_colors: None,
+                glow: None,
+            });
         }
-        out.push(TextAttribute {
-            start: attr.start,
-            length: attr.length,
-            color: glow,
-            vertex_colors: None,
-            glow: None,
-        });
+        for attr in attributes {
+            let Some(glow) = attr.glow else {
+                continue;
+            };
+            if glow[3] <= f32::EPSILON {
+                continue;
+            }
+            out.push(TextAttribute {
+                start: attr.start,
+                length: attr.length,
+                color: glow,
+                vertex_colors: None,
+                glow: None,
+            });
+        }
+    };
+    if let Some(scratch) = scratch {
+        scratch.update_text_glow(fill)
+    } else {
+        let mut out = Vec::with_capacity(attributes.len() + usize::from(glow[3] > f32::EPSILON));
+        fill(&mut out);
+        out.into()
     }
-    out.into()
 }
 
 fn song_lua_text_attributes_for_diffuse_mode(
@@ -8946,6 +9019,7 @@ fn song_lua_text_attributes_for_diffuse_mode(
     color: [f32; 4],
     text: &str,
     mult_attrs_with_diffuse: bool,
+    scratch: Option<&mut SongLuaProjectedMeshScratch>,
 ) -> (TextAttributes, [f32; 4]) {
     if attributes.is_empty() || mult_attrs_with_diffuse {
         return (TextAttributes::from(Arc::clone(attributes)), color);
@@ -8963,16 +9037,24 @@ fn song_lua_text_attributes_for_diffuse_mode(
             [1.0, 1.0, 1.0, 1.0],
         );
     }
-    let mut out = Vec::with_capacity(attributes.len() + 1);
-    out.push(TextAttribute {
-        start: 0,
-        length: char_count,
-        color,
-        vertex_colors: None,
-        glow: None,
-    });
-    out.extend_from_slice(attributes);
-    (out.into(), [1.0, 1.0, 1.0, 1.0])
+    let fill = |out: &mut Vec<TextAttribute>| {
+        out.push(TextAttribute {
+            start: 0,
+            length: char_count,
+            color,
+            vertex_colors: None,
+            glow: None,
+        });
+        out.extend_from_slice(attributes);
+    };
+    let attributes = if let Some(scratch) = scratch {
+        scratch.update_text_diffuse(fill)
+    } else {
+        let mut out = Vec::with_capacity(attributes.len() + 1);
+        fill(&mut out);
+        out.into()
+    };
+    (attributes, [1.0, 1.0, 1.0, 1.0])
 }
 
 #[cfg(any(test, feature = "bench-support"))]
@@ -10781,8 +10863,10 @@ pub struct SongLuaUppercaseTextBenchmark {
 #[cfg(feature = "bench-support")]
 #[doc(hidden)]
 pub struct SongLuaTextAttributeBenchmark {
+    text: Arc<str>,
     attributes: Arc<[TextAttribute]>,
     rainbow_phases: [Arc<[TextAttribute]>; SONG_LUA_TEXT_RAINBOW_COLORS.len()],
+    scratch: SongLuaProjectedMeshScratch,
 }
 
 #[cfg(feature = "bench-support")]
@@ -10795,12 +10879,16 @@ impl SongLuaTextAttributeBenchmark {
                 length: 1,
                 color: [0.25, 0.5, 0.75, 1.0],
                 vertex_colors: None,
-                glow: None,
+                glow: Some([0.75, 0.25, 0.5, 0.75]),
             })
             .collect::<Vec<_>>();
+        let mut scratch = SongLuaProjectedMeshScratch::default();
+        scratch.prewarm_text_attributes(attribute_count);
         Self {
+            text: Arc::from(text),
             attributes: Arc::from(attributes.into_boxed_slice()),
             rainbow_phases: song_lua_rainbow_scroll_phases(text),
+            scratch,
         }
     }
 
@@ -10825,12 +10913,84 @@ impl SongLuaTextAttributeBenchmark {
         song_lua_text_attribute_checksum(&attributes)
     }
 
+    pub fn legacy_diffuse_frame(&self) -> u64 {
+        let (attributes, color) = song_lua_text_attributes_for_diffuse_mode(
+            &self.attributes,
+            [0.5, 0.625, 0.75, 0.875],
+            &self.text,
+            false,
+            None,
+        );
+        song_lua_text_attribute_checksum(attributes.as_slice())
+            ^ u64::from(color[3].to_bits()).rotate_left(17)
+    }
+
+    pub fn reused_diffuse_frame(&mut self) -> u64 {
+        let (attributes, color) = song_lua_text_attributes_for_diffuse_mode(
+            &self.attributes,
+            [0.5, 0.625, 0.75, 0.875],
+            &self.text,
+            false,
+            Some(&mut self.scratch),
+        );
+        song_lua_text_attribute_checksum(attributes.as_slice())
+            ^ u64::from(color[3].to_bits()).rotate_left(17)
+    }
+
+    pub fn legacy_glow_frame(&self) -> u64 {
+        let attributes = song_lua_text_glow_attributes(
+            &self.text,
+            &self.attributes,
+            [0.125, 0.25, 0.5, 0.75],
+            None,
+        );
+        song_lua_text_attribute_checksum(attributes.as_slice())
+    }
+
+    pub fn reused_glow_frame(&mut self) -> u64 {
+        let attributes = song_lua_text_glow_attributes(
+            &self.text,
+            &self.attributes,
+            [0.125, 0.25, 0.5, 0.75],
+            Some(&mut self.scratch),
+        );
+        song_lua_text_attribute_checksum(attributes.as_slice())
+    }
+
+    pub fn legacy_stroke_frame(&self) -> u64 {
+        let attributes = song_lua_transparent_text_attributes(&self.text, None);
+        song_lua_text_attribute_checksum(attributes.as_slice())
+    }
+
+    pub fn reused_stroke_frame(&mut self) -> u64 {
+        let attributes = song_lua_transparent_text_attributes(&self.text, Some(&mut self.scratch));
+        song_lua_text_attribute_checksum(attributes.as_slice())
+    }
+
     pub fn storage_bytes(&self) -> usize {
         self.rainbow_phases
             .iter()
             .map(|attributes| attributes.len())
             .sum::<usize>()
             .saturating_mul(std::mem::size_of::<TextAttribute>())
+    }
+
+    pub fn dynamic_storage_bytes(&self) -> usize {
+        self.scratch
+            .text_diffuse_attributes
+            .as_ref()
+            .map_or(0, |attributes| attributes.capacity())
+            .saturating_add(
+                self.scratch
+                    .text_glow_attributes
+                    .as_ref()
+                    .map_or(0, |attributes| attributes.capacity()),
+            )
+            .saturating_mul(std::mem::size_of::<TextAttribute>())
+    }
+
+    pub fn replacements(&self) -> u64 {
+        self.scratch.replacements
     }
 }
 
@@ -12287,6 +12447,7 @@ fn build_song_lua_overlay_actor_with_scratch(
                     color,
                     content.as_str(),
                     state.mult_attrs_with_diffuse,
+                    projected_mesh_scratch.as_deref_mut(),
                 )
             };
             let actor = Actor::Text {
@@ -13035,6 +13196,7 @@ fn song_lua_overlay_glow_actor_with_static_vertices(
                     content.as_str(),
                     base_attributes.as_slice(),
                     glow,
+                    scratch.as_deref_mut(),
                 );
                 let stroke_color = (glow[3] > f32::EPSILON
                     && matches!(
@@ -13049,7 +13211,10 @@ fn song_lua_overlay_glow_actor_with_static_vertices(
                     SongLuaTextGlowMode::Inner => (glow, None),
                     SongLuaTextGlowMode::Both => (glow, Some(glow)),
                     SongLuaTextGlowMode::Stroke => {
-                        attributes = song_lua_transparent_text_attributes(content.as_str());
+                        attributes = song_lua_transparent_text_attributes(
+                            content.as_str(),
+                            scratch.as_deref_mut(),
+                        );
                         ([1.0, 1.0, 1.0, 1.0], Some(glow))
                     }
                 };
@@ -20128,7 +20293,8 @@ mod tests {
             initial_state: SongLuaOverlayState::default(),
             message_commands: Vec::new(),
         };
-        let actors = build_song_lua_overlay_actor(
+        let mut scratch = song_lua_projected_mesh_scratch_for(std::slice::from_ref(&overlay));
+        let actors = build_song_lua_overlay_actor_with_scratch(
             &overlay,
             SongLuaOverlayState {
                 x: 320.0,
@@ -20145,16 +20311,17 @@ mod tests {
             0.0,
             0.0,
             0.0,
+            scratch.first_mut(),
         )
         .expect_actors("text glow bitmap text should render");
 
-        match actors.as_slice() {
+        let first_ptr = match actors.as_slice() {
             [
                 _,
                 Actor::Text {
                     color,
                     stroke_color,
-                    attributes,
+                    attributes: TextAttributes::Reusable(attributes),
                     blend,
                     ..
                 },
@@ -20164,9 +20331,44 @@ mod tests {
                 assert_eq!(blend, &BlendMode::Add);
                 assert_eq!(attributes.len(), 1);
                 assert_eq!(attributes[0].color, [1.0, 1.0, 1.0, 0.0]);
+                Arc::as_ptr(attributes)
             }
             other => panic!("expected text plus stroke-only glow actors, got {other:?}"),
-        }
+        };
+        drop(actors);
+
+        let actors = build_song_lua_overlay_actor_with_scratch(
+            &overlay,
+            SongLuaOverlayState {
+                x: 320.0,
+                y: 240.0,
+                glow: [0.2, 0.3, 0.4, 0.5],
+                text_glow_mode: SongLuaTextGlowMode::Stroke,
+                ..SongLuaOverlayState::default()
+            },
+            None,
+            &AssetManager::new(),
+            781,
+            640.0,
+            480.0,
+            0.0,
+            0.0,
+            0.0,
+            scratch.first_mut(),
+        )
+        .expect_actors("prewarmed text glow should render again");
+        let [
+            _,
+            Actor::Text {
+                attributes: TextAttributes::Reusable(attributes),
+                ..
+            },
+        ] = actors.as_slice()
+        else {
+            panic!("expected reusable stroke-only glow attributes");
+        };
+        assert_eq!(Arc::as_ptr(attributes), first_ptr);
+        assert_eq!(scratch[0].replacements, 0);
     }
 
     #[test]
@@ -20190,7 +20392,8 @@ mod tests {
             initial_state: SongLuaOverlayState::default(),
             message_commands: Vec::new(),
         };
-        let actors = build_song_lua_overlay_actor(
+        let mut scratch = song_lua_projected_mesh_scratch_for(std::slice::from_ref(&overlay));
+        let actors = build_song_lua_overlay_actor_with_scratch(
             &overlay,
             SongLuaOverlayState {
                 x: 320.0,
@@ -20205,16 +20408,17 @@ mod tests {
             0.0,
             0.0,
             0.0,
+            scratch.first_mut(),
         )
         .expect_actors("attribute glow bitmap text should render");
 
-        match actors.as_slice() {
+        let first_ptr = match actors.as_slice() {
             [
                 _,
                 Actor::Text {
                     color,
                     stroke_color,
-                    attributes,
+                    attributes: TextAttributes::Reusable(attributes),
                     blend,
                     ..
                 },
@@ -20226,9 +20430,42 @@ mod tests {
                 assert_eq!(attributes[0].start, 1);
                 assert_eq!(attributes[0].length, 2);
                 assert_eq!(attributes[0].color, [0.7, 0.3, 0.9, 0.5]);
+                Arc::as_ptr(attributes)
             }
             other => panic!("expected text plus attribute glow actors, got {other:?}"),
-        }
+        };
+        drop(actors);
+
+        let actors = build_song_lua_overlay_actor_with_scratch(
+            &overlay,
+            SongLuaOverlayState {
+                x: 320.0,
+                y: 240.0,
+                ..SongLuaOverlayState::default()
+            },
+            None,
+            &AssetManager::new(),
+            783,
+            640.0,
+            480.0,
+            0.0,
+            0.0,
+            0.0,
+            scratch.first_mut(),
+        )
+        .expect_actors("prewarmed attribute glow should render again");
+        let [
+            _,
+            Actor::Text {
+                attributes: TextAttributes::Reusable(attributes),
+                ..
+            },
+        ] = actors.as_slice()
+        else {
+            panic!("expected reusable attribute glow attributes");
+        };
+        assert_eq!(Arc::as_ptr(attributes), first_ptr);
+        assert_eq!(scratch[0].replacements, 0);
     }
 
     #[test]
@@ -21233,7 +21470,8 @@ mod tests {
             initial_state: SongLuaOverlayState::default(),
             message_commands: Vec::new(),
         };
-        let text_actor = build_song_lua_overlay_actor(
+        let mut scratch = song_lua_projected_mesh_scratch_for(std::slice::from_ref(&text));
+        let text_actor = build_song_lua_overlay_actor_with_scratch(
             &text,
             SongLuaOverlayState {
                 x: 320.0,
@@ -21249,13 +21487,14 @@ mod tests {
             0.0,
             0.0,
             0.0,
+            scratch.first_mut(),
         )
         .expect_actor("bitmap text with non-multiplied attributes should render");
 
-        match text_actor {
+        let first_ptr = match text_actor {
             Actor::Text {
                 color,
-                attributes,
+                attributes: TextAttributes::Reusable(attributes),
                 z,
                 ..
             } => {
@@ -21268,11 +21507,41 @@ mod tests {
                 assert_eq!(attributes[1].start, 1);
                 assert_eq!(attributes[1].length, 2);
                 assert_eq!(attributes[1].color, [0.2, 0.4, 0.6, 0.8]);
+                Arc::as_ptr(&attributes)
             }
             other => {
                 panic!("expected bitmap text actor with non-multiplied attributes, got {other:?}")
             }
-        }
+        };
+
+        let text_actor = build_song_lua_overlay_actor_with_scratch(
+            &text,
+            SongLuaOverlayState {
+                x: 320.0,
+                y: 240.0,
+                diffuse: [0.5, 0.6, 0.7, 0.9],
+                ..SongLuaOverlayState::default()
+            },
+            None,
+            &AssetManager::new(),
+            792,
+            screen_width(),
+            screen_height(),
+            0.0,
+            0.0,
+            0.0,
+            scratch.first_mut(),
+        )
+        .expect_actor("prewarmed diffuse attributes should render again");
+        let Actor::Text {
+            attributes: TextAttributes::Reusable(attributes),
+            ..
+        } = text_actor
+        else {
+            panic!("expected reusable diffuse attributes");
+        };
+        assert_eq!(Arc::as_ptr(&attributes), first_ptr);
+        assert_eq!(scratch[0].replacements, 0);
     }
 
     #[test]

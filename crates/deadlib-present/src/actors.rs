@@ -851,14 +851,17 @@ pub struct TextAttribute {
 ///
 /// Most text has no attributes, while compiled theme text owns an immutable
 /// song-lifetime slice. Keeping those cases distinct avoids both an empty
-/// `Arc` allocation and a per-frame clone of the compiled slice. `Owned` is
-/// retained for one-off callers and tests that naturally build a `Vec`.
+/// `Arc` allocation and a per-frame clone of the compiled slice. Dynamic theme
+/// attributes can use an owner-retained `Reusable` vector; the owner must not
+/// mutate it while a cloned actor is live. `Owned` is retained for one-off
+/// callers and tests that naturally build a `Vec`.
 #[derive(Clone, Debug, Default)]
 pub enum TextAttributes {
     #[default]
     Empty,
     Owned(Vec<TextAttribute>),
     Shared(Arc<[TextAttribute]>),
+    Reusable(Arc<Vec<TextAttribute>>),
 }
 
 impl TextAttributes {
@@ -868,6 +871,7 @@ impl TextAttributes {
             Self::Empty => &[],
             Self::Owned(attributes) => attributes,
             Self::Shared(attributes) => attributes,
+            Self::Reusable(attributes) => attributes,
         }
     }
 
@@ -893,6 +897,16 @@ impl From<Arc<[TextAttribute]>> for TextAttributes {
             Self::Empty
         } else {
             Self::Shared(attributes)
+        }
+    }
+}
+
+impl From<Arc<Vec<TextAttribute>>> for TextAttributes {
+    fn from(attributes: Arc<Vec<TextAttribute>>) -> Self {
+        if attributes.is_empty() {
+            Self::Empty
+        } else {
+            Self::Reusable(attributes)
         }
     }
 }

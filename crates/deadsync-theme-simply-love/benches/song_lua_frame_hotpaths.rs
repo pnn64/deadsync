@@ -363,7 +363,7 @@ fn main() {
     let legacy_uppercase_result = measure(UPPERCASE_FRAMES, || uppercase.legacy_frame());
     let cached_uppercase_result = measure(UPPERCASE_FRAMES, || uppercase.cached_frame());
 
-    let text_attributes = SongLuaTextAttributeBenchmark::new(ATTRIBUTE_TEXT, 8);
+    let mut text_attributes = SongLuaTextAttributeBenchmark::new(ATTRIBUTE_TEXT, 8);
     assert_eq!(
         text_attributes.legacy_static_frame(),
         text_attributes.shared_static_frame()
@@ -385,6 +385,36 @@ fn main() {
         let elapsed = (rainbow_tick % 70) as f32 * 0.2;
         rainbow_tick = rainbow_tick.wrapping_add(1);
         text_attributes.prewarmed_rainbow_frame(black_box(elapsed))
+    });
+    assert_eq!(
+        text_attributes.legacy_diffuse_frame(),
+        text_attributes.reused_diffuse_frame()
+    );
+    let legacy_diffuse_attribute_result = measure(TEXT_ATTRIBUTE_FRAMES, || {
+        text_attributes.legacy_diffuse_frame()
+    });
+    let reused_diffuse_attribute_result = measure(TEXT_ATTRIBUTE_FRAMES, || {
+        text_attributes.reused_diffuse_frame()
+    });
+    assert_eq!(
+        text_attributes.legacy_glow_frame(),
+        text_attributes.reused_glow_frame()
+    );
+    let legacy_glow_attribute_result = measure(TEXT_ATTRIBUTE_FRAMES, || {
+        text_attributes.legacy_glow_frame()
+    });
+    let reused_glow_attribute_result = measure(TEXT_ATTRIBUTE_FRAMES, || {
+        text_attributes.reused_glow_frame()
+    });
+    assert_eq!(
+        text_attributes.legacy_stroke_frame(),
+        text_attributes.reused_stroke_frame()
+    );
+    let legacy_stroke_attribute_result = measure(TEXT_ATTRIBUTE_FRAMES, || {
+        text_attributes.legacy_stroke_frame()
+    });
+    let reused_stroke_attribute_result = measure(TEXT_ATTRIBUTE_FRAMES, || {
+        text_attributes.reused_stroke_frame()
     });
 
     let mut textured_glow = SongLuaTexturedGlowBenchmark::new(96);
@@ -472,6 +502,18 @@ fn main() {
     assert_eq!(
         legacy_rainbow_result.checksum,
         prewarmed_rainbow_result.checksum
+    );
+    assert_eq!(
+        legacy_diffuse_attribute_result.checksum,
+        reused_diffuse_attribute_result.checksum
+    );
+    assert_eq!(
+        legacy_glow_attribute_result.checksum,
+        reused_glow_attribute_result.checksum
+    );
+    assert_eq!(
+        legacy_stroke_attribute_result.checksum,
+        reused_stroke_attribute_result.checksum
     );
     assert_eq!(
         legacy_textured_glow_result.checksum,
@@ -646,6 +688,44 @@ fn main() {
     println!(
         "rainbow song storage: {} bytes",
         text_attributes.storage_bytes()
+    );
+    println!("dynamic BitmapText diffuse composition (8 spans)");
+    print_result(
+        "fresh Vec",
+        TEXT_ATTRIBUTE_FRAMES,
+        &legacy_diffuse_attribute_result,
+    );
+    print_result(
+        "reused song buffer",
+        TEXT_ATTRIBUTE_FRAMES,
+        &reused_diffuse_attribute_result,
+    );
+    println!("BitmapText attribute glow extraction (8 spans)");
+    print_result(
+        "fresh Vec",
+        TEXT_ATTRIBUTE_FRAMES,
+        &legacy_glow_attribute_result,
+    );
+    print_result(
+        "reused song buffer",
+        TEXT_ATTRIBUTE_FRAMES,
+        &reused_glow_attribute_result,
+    );
+    println!("BitmapText stroke-only transparency");
+    print_result(
+        "fresh Vec",
+        TEXT_ATTRIBUTE_FRAMES,
+        &legacy_stroke_attribute_result,
+    );
+    print_result(
+        "reused song buffer",
+        TEXT_ATTRIBUTE_FRAMES,
+        &reused_stroke_attribute_result,
+    );
+    println!(
+        "dynamic BitmapText storage: {} bytes, {} replacements",
+        text_attributes.dynamic_storage_bytes(),
+        text_attributes.replacements(),
     );
     println!("textured glow pass (96 vertices)");
     print_result(
