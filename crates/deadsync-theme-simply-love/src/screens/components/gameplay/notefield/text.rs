@@ -516,14 +516,16 @@ fn preferred_mods_text_key(
 }
 
 #[inline(always)]
-pub(crate) fn preferred_mods_text(state: &State, player_idx: usize) -> Arc<str> {
+fn preferred_mods_text_from(
+    profile: &profile_data::Profile,
+    scroll_speed: ScrollSpeedSetting,
+) -> Arc<str> {
     // Simply Love's DisplayMods reads ModsLevel_Preferred. Runtime chart
     // attacks belong to the current/song levels and must not alter this text.
-    let profile = &state.profiles()[player_idx];
-    let key = preferred_mods_text_key(profile, state.scroll_speed_for_player(player_idx));
+    let key = preferred_mods_text_key(profile, scroll_speed);
     cached_text(&GAMEPLAY_MODS_CACHE, key, TEXT_CACHE_LIMIT, || {
         crate_gameplay_mods_text(GameplayModsTextParams {
-            speed: state.scroll_speed_for_player(player_idx),
+            speed: scroll_speed,
             noteskin: profile.noteskin.as_str(),
             insert_mask: key.insert_mask,
             remove_mask: key.remove_mask,
@@ -550,6 +552,66 @@ pub(crate) fn preferred_mods_text(state: &State, player_idx: usize) -> Arc<str> 
             disabled_timing_windows: key.disabled_timing_windows,
         })
     })
+}
+
+#[inline(always)]
+pub(crate) fn preferred_mods_text(state: &State, player_idx: usize) -> Arc<str> {
+    preferred_mods_text_from(
+        &state.profiles()[player_idx],
+        state.scroll_speed_for_player(player_idx),
+    )
+}
+
+#[cfg(feature = "bench-support")]
+pub struct DisplayModsTextBench {
+    profile: profile_data::Profile,
+    scroll_speed: ScrollSpeedSetting,
+    cached: Arc<str>,
+}
+
+#[cfg(feature = "bench-support")]
+impl Default for DisplayModsTextBench {
+    fn default() -> Self {
+        let profile = profile_data::Profile {
+            accel_effects_active_mask: profile_data::AccelEffectsMask::BOOST,
+            visual_effects_active_mask: profile_data::VisualEffectsMask::DRUNK,
+            appearance_effects_active_mask: profile_data::AppearanceEffectsMask::HIDDEN,
+            scroll_option: profile_data::ScrollOption::Reverse,
+            mini_percent: 25,
+            spacing_percent: 125,
+            hide_targets: true,
+            ..profile_data::Profile::default()
+        };
+        let scroll_speed = ScrollSpeedSetting::XMod(2.0);
+        let cached = preferred_mods_text_from(&profile, scroll_speed);
+        Self {
+            profile,
+            scroll_speed,
+            cached,
+        }
+    }
+}
+
+#[cfg(feature = "bench-support")]
+impl DisplayModsTextBench {
+    const SAMPLES: usize = 256;
+
+    pub fn old_frame(&self, frame: usize) -> usize {
+        (0..Self::SAMPLES).fold(frame, |checksum, sample| {
+            let text = preferred_mods_text_from(
+                std::hint::black_box(&self.profile),
+                std::hint::black_box(self.scroll_speed),
+            );
+            checksum.rotate_left(7) ^ text.len() ^ sample
+        })
+    }
+
+    pub fn new_frame(&self, frame: usize) -> usize {
+        (0..Self::SAMPLES).fold(frame, |checksum, sample| {
+            let text = Arc::clone(std::hint::black_box(&self.cached));
+            checksum.rotate_left(7) ^ text.len() ^ sample
+        })
+    }
 }
 
 #[cfg(test)]

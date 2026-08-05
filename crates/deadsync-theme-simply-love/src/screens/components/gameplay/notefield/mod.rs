@@ -33,6 +33,9 @@ mod prewarm;
 mod text;
 mod zmod;
 pub use prewarm::prewarm_text_layout;
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub use text::DisplayModsTextBench;
 pub(crate) use text::preferred_mods_text;
 #[cfg(feature = "bench-support")]
 #[doc(hidden)]
@@ -412,6 +415,7 @@ pub(crate) fn compose_frame(
     center_1player_notefield: bool,
     capture_requests: ProxyCaptureRequests,
     warn_cmod_for_itl_chart: bool,
+    display_mods_text: &std::sync::Arc<str>,
     view: ViewOverride,
     actors: &mut Vec<Actor>,
     hud_actors: &mut Vec<Actor>,
@@ -746,18 +750,19 @@ pub(crate) fn compose_frame(
             &noteskin_sprite_source,
         )
     };
-    display_mods::compose(
-        hud_actors,
-        state,
-        player_idx,
-        DisplayModsFrame {
-            hidden: request.view.hide_display_mods,
-            warn_cmod_for_itl_chart,
-            elapsed_screen_s: elapsed_screen,
-            playfield_center_x,
-            notefield_offset_y,
-        },
-    );
+    if let Some(alpha) = display_mods::active_alpha(request.view.hide_display_mods, elapsed_screen)
+    {
+        display_mods::compose(
+            hud_actors,
+            DisplayModsFrame {
+                mods_text: std::sync::Arc::clone(display_mods_text),
+                warn_cmod_for_itl_chart,
+                alpha,
+                playfield_center_x,
+                notefield_offset_y,
+            },
+        );
+    }
 
     let combo_frame = NotefieldHudFrameView::combo_active(
         request.view.hide_combo,

@@ -1,9 +1,7 @@
 use crate::act;
-use crate::screens::gameplay::GameplayCoreState;
 use deadlib_present::actors::Actor;
 use deadlib_present::space::screen_height;
-
-use super::notefield::preferred_mods_text;
+use std::sync::Arc;
 
 // Simply Love ScreenGameplay in/default.lua keeps intro cover actors alive for 2.0s.
 const TRANSITION_IN_DURATION: f32 = 2.0;
@@ -16,46 +14,42 @@ const DISPLAY_MODS_WARNING_W: f32 = 90.0;
 const DISPLAY_MODS_WARNING_H: f32 = 30.0;
 const DISPLAY_MODS_WARNING_ZOOM: f32 = 1.5;
 
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 pub(super) struct DisplayModsFrame {
-    pub hidden: bool,
+    pub mods_text: Arc<str>,
     pub warn_cmod_for_itl_chart: bool,
-    pub elapsed_screen_s: f32,
+    pub alpha: f32,
     pub playfield_center_x: f32,
     pub notefield_offset_y: f32,
 }
 
+#[inline]
+pub(super) fn active_alpha(hidden: bool, elapsed_screen_s: f32) -> Option<f32> {
+    if hidden {
+        return None;
+    }
+    let alpha = display_mods_alpha(elapsed_screen_s);
+    (alpha > 0.0).then_some(alpha)
+}
+
 /// Compose Simply Love's concrete DisplayMods chrome between the canonical
 /// field and HUD passes.
-pub(super) fn compose(
-    actors: &mut Vec<Actor>,
-    state: &GameplayCoreState,
-    player_idx: usize,
-    frame: DisplayModsFrame,
-) {
-    if frame.hidden {
-        return;
-    }
-    let alpha = display_mods_alpha(frame.elapsed_screen_s);
-    if alpha <= 0.0 {
-        return;
-    }
-
-    let mods_text = preferred_mods_text(state, player_idx);
+pub(super) fn compose(actors: &mut Vec<Actor>, frame: DisplayModsFrame) {
     let mods_line_y = screen_height() * 0.25 * 1.3 + frame.notefield_offset_y;
-    let mods_line_count = mods_text
+    let mods_line_count = frame
+        .mods_text
         .split(", ")
         .filter(|part| !part.is_empty())
         .count()
         .max(1) as f32;
-    if !mods_text.is_empty() {
+    if !frame.mods_text.is_empty() {
         actors.push(act!(text:
-            font("miso"): settext(mods_text):
+            font("miso"): settext(frame.mods_text):
             align(0.5, 0.0): xy(frame.playfield_center_x, mods_line_y):
             zoom(DISPLAY_MODS_ZOOM): wrapwidthpixels(DISPLAY_MODS_WRAP_WIDTH_PX): horizalign(center):
             shadowcolor(0.0, 0.0, 0.0, 1.0):
             shadowlength(1.0):
-            diffuse(1.0, 1.0, 1.0, alpha):
+            diffuse(1.0, 1.0, 1.0, frame.alpha):
             z(84)
         ));
     }
@@ -65,14 +59,14 @@ pub(super) fn compose(
             align(0.5, 0.5):
             xy(frame.playfield_center_x, warning_y):
             setsize(DISPLAY_MODS_WARNING_W, DISPLAY_MODS_WARNING_H):
-            diffuse(0.0, 0.0, 0.0, 0.8 * alpha):
+            diffuse(0.0, 0.0, 0.0, 0.8 * frame.alpha):
             z(84)
         ));
         actors.push(act!(text:
             font("miso"): settext("CMod On"):
             align(0.5, 0.5): xy(frame.playfield_center_x, warning_y):
             zoom(DISPLAY_MODS_WARNING_ZOOM):
-            diffuse(1.0, 0.0, 0.0, alpha):
+            diffuse(1.0, 0.0, 0.0, frame.alpha):
             z(85)
         ));
     }
@@ -96,12 +90,19 @@ fn display_mods_alpha(elapsed_screen_s: f32) -> f32 {
 
 #[cfg(test)]
 mod tests {
-    use super::display_mods_alpha;
+    use super::{active_alpha, display_mods_alpha};
 
     #[test]
     fn display_mods_holds_then_decelerates_out() {
         assert_eq!(display_mods_alpha(5.0), 1.0);
         assert!((display_mods_alpha(5.25) - 0.25).abs() < f32::EPSILON);
         assert_eq!(display_mods_alpha(5.5), 0.0);
+    }
+
+    #[test]
+    fn display_mods_gate_rejects_hidden_and_expired_frames() {
+        assert_eq!(active_alpha(true, 0.0), None);
+        assert_eq!(active_alpha(false, 5.0), Some(1.0));
+        assert_eq!(active_alpha(false, 5.5), None);
     }
 }

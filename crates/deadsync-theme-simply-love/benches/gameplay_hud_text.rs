@@ -1,4 +1,6 @@
 use deadlib_present::actors::TextContent;
+use deadlib_present::font::{Font, Glyph};
+use deadsync_assets::AssetManager;
 use deadsync_theme_simply_love::screens::components::gameplay::gameplay_stats::{
     benchmark_game_time, benchmark_game_time_cached, benchmark_game_time_legacy,
     benchmark_judgment_rows, benchmark_judgment_rows_legacy, benchmark_live_timing,
@@ -6,16 +8,17 @@ use deadsync_theme_simply_love::screens::components::gameplay::gameplay_stats::{
     benchmark_padded_runs_cached, benchmark_padded_runs_legacy,
 };
 use deadsync_theme_simply_love::screens::components::gameplay::notefield::{
-    benchmark_combo_text, benchmark_combo_text_legacy, benchmark_disabled_mini_indicator,
-    benchmark_disabled_mini_indicator_legacy, benchmark_error_bar_label,
-    benchmark_error_bar_label_legacy, benchmark_offset_ms, benchmark_offset_ms_legacy,
-    prepare_combo_text_benchmark,
+    DisplayModsTextBench, benchmark_combo_text, benchmark_combo_text_legacy,
+    benchmark_disabled_mini_indicator, benchmark_disabled_mini_indicator_legacy,
+    benchmark_error_bar_label, benchmark_error_bar_label_legacy, benchmark_offset_ms,
+    benchmark_offset_ms_legacy, prepare_combo_text_benchmark,
 };
 use deadsync_theme_simply_love::screens::gameplay::{
-    GameplayHudTextBenchmarkCache, GameplayHudTextBenchmarkSnapshot, GameplayNotefieldWidthBench,
-    benchmark_gameplay_hud_text_legacy,
+    DifficultyMeterBench, GameplayHudTextBenchmarkCache, GameplayHudTextBenchmarkSnapshot,
+    GameplayNotefieldWidthBench, benchmark_gameplay_hud_text_legacy, benchmark_intro_text_width,
 };
 use std::alloc::{GlobalAlloc, Layout, System};
+use std::collections::HashMap;
 use std::hint::black_box;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -301,6 +304,37 @@ fn print_result_for(label: &str, result: &BenchResult, operations: usize) {
 }
 
 fn main() {
+    let display_mods = DisplayModsTextBench::default();
+    let mods_lookup = measure_dynamic_text(|frame| display_mods.old_frame(frame));
+    let mods_snapshot = measure_dynamic_text(|frame| display_mods.new_frame(frame));
+    assert_eq!(mods_lookup.checksum, mods_snapshot.checksum);
+
+    println!("song-static modifier text benchmark (256 reads/frame)");
+    print_result_for("key + lookup", &mods_lookup, DYNAMIC_TEXT_OPS);
+    print_result_for("arc snapshot", &mods_snapshot, DYNAMIC_TEXT_OPS);
+
+    let assets = intro_asset_manager();
+    let intro_text = "EVENT 12";
+    let cached_intro_width = benchmark_intro_text_width(&assets, intro_text);
+    let intro_measure = measure_dynamic_text(|_| {
+        benchmark_intro_text_width(black_box(&assets), black_box(intro_text)).to_bits() as usize
+    });
+    let intro_cached = measure_dynamic_text(|_| black_box(cached_intro_width).to_bits() as usize);
+    assert_eq!(intro_measure.checksum, intro_cached.checksum);
+
+    println!("\nsong-static Stage/Event text-width benchmark");
+    print_result_for("glyph measure", &intro_measure, DYNAMIC_TEXT_OPS);
+    print_result_for("cached width", &intro_cached, DYNAMIC_TEXT_OPS);
+
+    let difficulty_meter = DifficultyMeterBench::default();
+    let target_scans = measure_dynamic_text(|frame| difficulty_meter.old_frame(frame));
+    let retained_meter = measure_dynamic_text(|frame| difficulty_meter.new_frame(frame));
+    assert_eq!(target_scans.checksum, retained_meter.checksum);
+
+    println!("\nretained difficulty-box placement benchmark (256 hits/frame)");
+    print_result_for("target scans", &target_scans, DYNAMIC_TEXT_OPS);
+    print_result_for("retained hit", &retained_meter, DYNAMIC_TEXT_OPS);
+
     let notefield_width = GameplayNotefieldWidthBench::default();
     let width_scans = measure_dynamic_text(|frame| notefield_width.old_frame(frame));
     let width_snapshot = measure_dynamic_text(|frame| notefield_width.new_frame(frame));
@@ -521,6 +555,47 @@ fn main() {
     println!("\nlive timing song workload (value changes every 6 frames)");
     print_result_for("legacy cache", &timing_song_legacy, TIMING_SONG_FRAMES);
     print_result_for("inline slots", &timing_song_inline, TIMING_SONG_FRAMES);
+}
+
+fn intro_asset_manager() -> AssetManager {
+    let mut assets = AssetManager::new();
+    assets.register_font("miso", intro_test_font());
+    assets
+}
+
+fn intro_test_font() -> Font {
+    let glyph = Glyph {
+        texture_key: Arc::from("test/font.png"),
+        stroke_texture_key: None,
+        tex_rect: [0.0, 0.0, 8.0, 16.0],
+        uv_scale: [1.0, 1.0],
+        uv_offset: [0.0, 0.0],
+        size: [8.0, 16.0],
+        offset: [0.0, 0.0],
+        advance: 8.0,
+        advance_i32: 8,
+    };
+    let mut glyph_map = HashMap::new();
+    for ch in 32u8..=126 {
+        glyph_map.insert(char::from(ch), glyph.clone());
+    }
+    let mut ascii_glyphs = Box::new(std::array::from_fn(|_| None));
+    for ch in 32u8..=126 {
+        ascii_glyphs[ch as usize] = Some(glyph.clone());
+    }
+    Font {
+        glyph_map,
+        ascii_glyphs,
+        default_glyph: Some(glyph),
+        line_spacing: 20,
+        height: 16,
+        fallback_font_name: None,
+        cache_tag: 0,
+        chain_key: 0,
+        default_stroke_color: [0.0, 0.0, 0.0, 1.0],
+        stroke_texture_map: HashMap::new(),
+        texture_hints_map: HashMap::new(),
+    }
 }
 
 #[cfg(target_arch = "x86_64")]

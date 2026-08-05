@@ -81,7 +81,7 @@ use deadsync_rules::timing::TimingSegments;
 use deadsync_score as score_data;
 use glam::{Mat4 as Matrix4, Vec3 as Vector3, Vec4 as Vector4};
 use smallvec::SmallVec;
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::collections::HashSet;
 use std::hash::Hasher;
 use std::num::NonZeroUsize;
@@ -1708,6 +1708,15 @@ pub struct State {
     /// geometry and profile spacing. The gameplay/render thread only reads this
     /// two-slot array; it has no misses, growth, synchronization, or eviction.
     notefield_widths: [f32; MAX_PLAYERS],
+    /// Preferred modifier text is immutable for one song. Screen entry resolves
+    /// the bounded global text cache once per player; gameplay only clones the
+    /// stored `Arc` while the opening banner can still be visible.
+    display_mods_text: [Arc<str>; MAX_PLAYERS],
+    /// One song-static logical width for the Stage/Event label. The game thread
+    /// warms it during the transition, reads it without synchronization during
+    /// gameplay, and drops it with the screen. There is no growth or eviction;
+    /// a skipped transition causes at most one bounded font measurement miss.
+    intro_text_width: Cell<Option<f32>>,
     notefield_judgment_assets: [notefield::ResolvedJudgmentAssets; MAX_PLAYERS],
     sync_overlay_text_cache: RefCell<SyncOverlayTextCache>,
     pub background_path_dirty: bool,
@@ -1924,6 +1933,8 @@ impl State {
             StreamProgressLookup::new(gameplay.mini_indicator_stream_segments(player))
         });
         let notefield_widths = gameplay_notefield_widths(&gameplay, &noteskin_assets);
+        let display_mods_text =
+            std::array::from_fn(|player| notefield::preferred_mods_text(&gameplay, player));
         let actor_resources = ActorResourceArena::default();
         notefield::prewarm_actor_resources(
             &actor_resources,
@@ -2127,6 +2138,8 @@ impl State {
             notefield_broken_run_lookup,
             notefield_stream_progress_lookup,
             notefield_widths,
+            display_mods_text,
+            intro_text_width: Cell::new(None),
             notefield_judgment_assets,
             sync_overlay_text_cache: RefCell::new(SyncOverlayTextCache::default()),
             background_path_dirty: true,
@@ -2236,6 +2249,11 @@ impl State {
             .get(player)
             .copied()
             .unwrap_or(DEFAULT_NOTEFIELD_WIDTH)
+    }
+
+    #[inline(always)]
+    fn display_mods_text(&self, player: usize) -> &Arc<str> {
+        &self.display_mods_text[player]
     }
 }
 
@@ -3339,8 +3357,7 @@ fn local_lobby_side_is_active(state: &State, side: profile_data::PlayerSide) -> 
     }
 }
 
-fn intro_text_width(asset_manager: &AssetManager, state: &State, text: &str) -> f32 {
-    let font_key = machine_font_key(state.machine_font(), FontRole::Header);
+fn intro_text_width_for_font(asset_manager: &AssetManager, font_key: &str, text: &str) -> f32 {
     asset_manager.with_fonts(|all_fonts| {
         asset_manager
             .with_font(font_key, |f| {
@@ -3349,6 +3366,30 @@ fn intro_text_width(asset_manager: &AssetManager, state: &State, text: &str) -> 
             .unwrap_or(0.0)
             .max(0.0)
     })
+}
+
+fn intro_text_width(asset_manager: &AssetManager, state: &State, text: &str) -> f32 {
+    intro_text_width_for_font(
+        asset_manager,
+        machine_font_key(state.machine_font(), FontRole::Header),
+        text,
+    )
+}
+
+#[inline]
+fn cached_intro_text_width(cache: &Cell<Option<f32>>, measure: impl FnOnce() -> f32) -> f32 {
+    if let Some(width) = cache.get() {
+        return width;
+    }
+    let width = measure();
+    cache.set(Some(width));
+    width
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn benchmark_intro_text_width(asset_manager: &AssetManager, text: &str) -> f32 {
+    intro_text_width_for_font(asset_manager, "miso", text)
 }
 
 fn intro_text_target_x(
@@ -3373,10 +3414,10 @@ fn intro_text_target_x(
         profile_data::PlayerSide::P2 => 1.0,
     };
     let notefield_width = state.cols_per_player() as f32 * 64.0;
-    screen_center_x()
-        + (notefield_width * 0.5
-            + intro_text_width(asset_manager, state, text) * INTRO_TEXT_GETWIDTH_PAD)
-            * side_sign
+    let text_width = cached_intro_text_width(&state.intro_text_width, || {
+        intro_text_width(asset_manager, state, text)
+    });
+    screen_center_x() + (notefield_width * 0.5 + text_width * INTRO_TEXT_GETWIDTH_PAD) * side_sign
 }
 
 fn gameplay_player_index_for_side(state: &State, side: profile_data::PlayerSide) -> Option<usize> {
@@ -3593,6 +3634,44 @@ fn difficulty_meter_x(
         side_difficulty_meter_x(player_side)
     } else {
         resting_x
+    }
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub struct DifficultyMeterBench {
+    profile: profile_data::Profile,
+    cached: bool,
+}
+
+#[cfg(feature = "bench-support")]
+impl Default for DifficultyMeterBench {
+    fn default() -> Self {
+        let profile = profile_data::Profile {
+            note_field_offset_y: -50,
+            ..profile_data::Profile::default()
+        };
+        let cached = saved_targets_hit_meter(&profile, 8, DIFFICULTY_METER_Y);
+        Self { profile, cached }
+    }
+}
+
+#[cfg(feature = "bench-support")]
+impl DifficultyMeterBench {
+    const SAMPLES: usize = 256;
+
+    pub fn old_frame(&self, frame: usize) -> usize {
+        (0..Self::SAMPLES).fold(frame, |checksum, sample| {
+            let hit =
+                saved_targets_hit_meter(std::hint::black_box(&self.profile), 8, DIFFICULTY_METER_Y);
+            checksum.rotate_left(7) ^ hit as usize ^ sample
+        })
+    }
+
+    pub fn new_frame(&self, frame: usize) -> usize {
+        (0..Self::SAMPLES).fold(frame, |checksum, sample| {
+            checksum.rotate_left(7) ^ std::hint::black_box(self.cached) as usize ^ sample
+        })
     }
 }
 
@@ -4701,6 +4780,16 @@ pub fn in_transition(
     visual_policy: crate::views::SimplyLoveVisualPolicyView,
 ) -> (Vec<Actor>, f32) {
     if is_restart {
+        if let Some(gs) = state {
+            let _ = intro_text_target_x(
+                gs,
+                asset_manager,
+                gs.stage_intro_text.as_ref(),
+                gs.runtime_view.play_style,
+                gs.runtime_view.player_side,
+                gs.runtime_view.policy.center_single_notefield,
+            );
+        }
         // SL/zmod parity: on a song restart, skip the splode + stage-text
         // splash and run only a brief fade-from-black so the first gameplay
         // frame doesn't pop in. The "RESTART N" label still appears in the
@@ -16838,6 +16927,7 @@ fn push_actors_impl(
                     combo: requests.combo,
                 },
                 state.itl_cmod_warning[player_idx],
+                state.display_mods_text(player_idx),
                 notefield_view,
                 field_scratch,
                 hud_scratch,
@@ -17424,19 +17514,19 @@ fn push_actors_impl(
             &players[..player_count]
         {
             let profile = &state.profiles()[player_idx];
-            let diff_x = difficulty_meter_x(
-                state,
-                profile,
-                player_idx,
-                player_side,
-                field_x,
-                state.notefield_width(player_idx),
-                diff_x,
-            );
             // Difficulty Box
             let y = DIFFICULTY_METER_Y;
             let static_slot = [STATIC_DIFFICULTY_P1, STATIC_DIFFICULTY_P2][player_idx.min(1)];
             presentation_skeleton.push(static_slot, actors, |actors| {
+                let diff_x = difficulty_meter_x(
+                    state,
+                    profile,
+                    player_idx,
+                    player_side,
+                    field_x,
+                    state.notefield_width(player_idx),
+                    diff_x,
+                );
                 let chart = &state.charts()[player_idx];
                 let difficulty_color =
                     color::difficulty_rgba(&chart.difficulty, state.active_color_index());
@@ -19893,6 +19983,24 @@ mod tests {
             56.0,
             DIFFICULTY_METER_SIZE
         ));
+    }
+
+    #[test]
+    fn intro_text_width_cache_measures_once() {
+        let cache = Cell::new(None);
+        let calls = Cell::new(0);
+        let first = cached_intro_text_width(&cache, || {
+            calls.set(calls.get() + 1);
+            123.5
+        });
+        let second = cached_intro_text_width(&cache, || {
+            calls.set(calls.get() + 1);
+            999.0
+        });
+
+        assert_eq!(first, 123.5);
+        assert_eq!(second, first);
+        assert_eq!(calls.get(), 1);
     }
 
     #[test]
