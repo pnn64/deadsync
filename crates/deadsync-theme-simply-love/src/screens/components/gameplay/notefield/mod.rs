@@ -69,6 +69,16 @@ pub fn benchmark_error_bar_label_legacy(early: bool, scaled: bool) -> std::sync:
 pub const fn benchmark_error_bar_label(early: bool, scaled: bool) -> TextContent {
     text::error_bar_text_label(early, scaled)
 }
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn benchmark_disabled_mini_indicator_legacy(frame: usize) -> usize {
+    zmod::benchmark_disabled_mini_indicator_legacy(frame)
+}
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn benchmark_disabled_mini_indicator(frame: usize) -> usize {
+    zmod::benchmark_disabled_mini_indicator(frame)
+}
 use text::{
     cached_int_i32, cached_zmod_measure_counter_text, effective_accel_effects_for_player,
     effective_mini_percent_for_player, effective_perspective_effects_for_player,
@@ -694,9 +704,18 @@ pub(crate) fn compose_frame(
             }
             let col = col_start + local_col;
             NotefieldLaneFeedback {
-                active_hold: state.active_hold(col),
-                receptor_bop_zoom: state.receptor_bop_zoom(col),
-                receptor_press_visual: state.receptor_glow_visual_for_col(col),
+                active_hold: options
+                    .hold_explosion_enabled
+                    .then(|| state.active_hold(col))
+                    .flatten(),
+                receptor_bop_zoom: if options.hide_targets {
+                    0.0
+                } else {
+                    state.receptor_bop_zoom(col)
+                },
+                receptor_press_visual: (!options.hide_targets)
+                    .then(|| state.receptor_glow_visual_for_col(col))
+                    .flatten(),
             }
         }),
         countdown_font: mc_font_name,

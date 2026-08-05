@@ -1313,6 +1313,31 @@ impl deadsync_gameplay::GameplayProfileData for GameplayProfile {
     fn hide_early_dw_column_flash(&self) -> bool {
         self.hide_early_dw_column_flash
     }
+
+    fn combo_milestones_enabled(&self) -> bool {
+        !self.hide_combo && !self.hide_combo_explosions
+    }
+}
+
+#[cfg(test)]
+mod gameplay_profile_tests {
+    use super::*;
+    use deadsync_gameplay::GameplayProfileData;
+
+    #[test]
+    fn hidden_combo_art_disables_milestone_runtime_work() {
+        let mut profile = GameplayProfile(deadsync_profile::Profile::default());
+        profile.hide_combo = false;
+        profile.hide_combo_explosions = false;
+        assert!(profile.combo_milestones_enabled());
+
+        profile.hide_combo_explosions = true;
+        assert!(!profile.combo_milestones_enabled());
+
+        profile.hide_combo_explosions = false;
+        profile.hide_combo = true;
+        assert!(!profile.combo_milestones_enabled());
+    }
 }
 
 pub fn itl_score_calc_input_from_runtime<RuntimeProfile, OverlayActor, CapturedActor, StateDelta>(

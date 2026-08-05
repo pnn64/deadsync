@@ -904,6 +904,7 @@ where
             note_count,
             row_count,
             hold_roll_count,
+            player_profiles[p].combo_milestones_enabled(),
             player_profiles[p].error_bar_options(),
         );
         let course_carry = course_display_carry.as_ref().map(|carry| carry[p]);

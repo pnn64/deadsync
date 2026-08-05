@@ -266,6 +266,18 @@ pub(super) fn zmod_indicator_mode(profile: &profile_data::Profile) -> MiniIndica
 }
 
 #[inline(always)]
+fn mini_indicator_output_if_enabled<T>(
+    mode: MiniIndicatorMode,
+    build: impl FnOnce() -> Option<T>,
+) -> Option<T> {
+    if mode == MiniIndicatorMode::None {
+        None
+    } else {
+        build()
+    }
+}
+
+#[inline(always)]
 fn mini_indicator_color_style(style: profile_data::MiniIndicatorColor) -> MiniIndicatorColorStyle {
     match style {
         profile_data::MiniIndicatorColor::Default => MiniIndicatorColorStyle::Default,
@@ -315,28 +327,111 @@ pub(super) fn zmod_mini_indicator_text(
     stream_progress_lookup: &StreamProgressLookup,
 ) -> Option<(Arc<str>, [f32; 4])> {
     let mode = zmod_indicator_mode(profile);
-    let progress =
-        zmod_mini_indicator_progress(state, p, player_idx, profile.mini_indicator_score_type);
+    mini_indicator_output_if_enabled(mode, || {
+        let progress =
+            zmod_mini_indicator_progress(state, p, player_idx, profile.mini_indicator_score_type);
+        let output = zmod_mini_indicator_output(
+            &progress,
+            ZmodMiniIndicatorParams {
+                mode,
+                color_style: mini_indicator_color_style(profile.mini_indicator_color),
+                subtractive_display: mini_indicator_subtractive_display(
+                    profile.mini_indicator_subtractive_display,
+                ),
+                score_type: mini_indicator_score_type(profile.mini_indicator_score_type),
+                combo_color: zmod_static_combo_color(state, p, profile, player_idx),
+                is_failing: p.is_failing,
+                life: p.life,
+                rival_score_percent: state.mini_indicator_rival_score_percent(player_idx),
+                target_score_percent: state.mini_indicator_target_score_percent(player_idx),
+                stream_completion: zmod_stream_prog_completion(
+                    state,
+                    player_idx,
+                    stream_progress_lookup,
+                ),
+            },
+        )?;
+        Some((cached_zmod_mini_indicator_text(output.text), output.color))
+    })
+}
+
+#[cfg(feature = "bench-support")]
+fn disabled_mini_indicator_bench_work(frame: usize) -> Option<u64> {
+    let current_possible_dp = 2_000_i32.saturating_add(frame as i32 & 1_023);
+    let possible_dp = 20_000;
+    let actual_dp = current_possible_dp.saturating_sub((frame as i32 & 255) * 2);
+    let (kept_percent, lost_percent, pace_percent) =
+        judgment::predictive_itg_score_percents(current_possible_dp, possible_dp, actual_dp);
+    let progress = MiniIndicatorProgress {
+        kept_percent,
+        lost_percent,
+        pace_percent,
+        current_score_percent: zmod_percent_from_points(actual_dp, possible_dp),
+        current_possible_ratio: f64::from(current_possible_dp) / f64::from(possible_dp),
+        current_possible_dp,
+        actual_dp,
+        judged_any: true,
+        ..MiniIndicatorProgress::default()
+    };
     let output = zmod_mini_indicator_output(
         &progress,
         ZmodMiniIndicatorParams {
-            mode,
-            color_style: mini_indicator_color_style(profile.mini_indicator_color),
-            subtractive_display: mini_indicator_subtractive_display(
-                profile.mini_indicator_subtractive_display,
-            ),
-            score_type: mini_indicator_score_type(profile.mini_indicator_score_type),
-            combo_color: zmod_static_combo_color(state, p, profile, player_idx),
-            is_failing: p.is_failing,
-            life: p.life,
-            rival_score_percent: state.mini_indicator_rival_score_percent(player_idx),
-            target_score_percent: state.mini_indicator_target_score_percent(player_idx),
-            stream_completion: zmod_stream_prog_completion(
-                state,
-                player_idx,
-                stream_progress_lookup,
-            ),
+            mode: MiniIndicatorMode::None,
+            color_style: MiniIndicatorColorStyle::Detailed,
+            subtractive_display: MiniIndicatorSubtractiveDisplay::CountThenPercent,
+            score_type: MiniIndicatorScoreType::Itg,
+            combo_color: [1.0; 4],
+            is_failing: false,
+            life: 1.0,
+            rival_score_percent: 95.0,
+            target_score_percent: 90.0,
+            stream_completion: Some(0.5),
         },
-    )?;
-    Some((cached_zmod_mini_indicator_text(output.text), output.color))
+    );
+    std::hint::black_box(output.map(|value| u64::from(value.color[3].to_bits())))
+}
+
+#[cfg(feature = "bench-support")]
+pub(super) fn benchmark_disabled_mini_indicator_legacy(frame: usize) -> usize {
+    usize::from(disabled_mini_indicator_bench_work(frame).is_some())
+}
+
+#[cfg(feature = "bench-support")]
+pub(super) fn benchmark_disabled_mini_indicator(frame: usize) -> usize {
+    usize::from(
+        mini_indicator_output_if_enabled(MiniIndicatorMode::None, || {
+            disabled_mini_indicator_bench_work(frame)
+        })
+        .is_some(),
+    )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::cell::Cell;
+
+    #[test]
+    fn disabled_mini_indicator_does_not_build_frame_inputs() {
+        let calls = Cell::new(0);
+        let output = mini_indicator_output_if_enabled(MiniIndicatorMode::None, || {
+            calls.set(calls.get() + 1);
+            Some(7)
+        });
+
+        assert_eq!(output, None);
+        assert_eq!(calls.get(), 0);
+    }
+
+    #[test]
+    fn enabled_mini_indicator_preserves_frame_output() {
+        let calls = Cell::new(0);
+        let output = mini_indicator_output_if_enabled(MiniIndicatorMode::PredictiveScoring, || {
+            calls.set(calls.get() + 1);
+            Some(7)
+        });
+
+        assert_eq!(output, Some(7));
+        assert_eq!(calls.get(), 1);
+    }
 }

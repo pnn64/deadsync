@@ -181,6 +181,46 @@ fn measure_combo(prewarmed: bool) -> BenchResult {
     )
 }
 
+fn measure_disabled_combo_setup(prewarm: bool) -> BenchResult {
+    let make = || {
+        if prewarm {
+            Vec::<ActiveComboMilestone>::with_capacity(COMBO_MILESTONE_CAPACITY)
+        } else {
+            Vec::new()
+        }
+    };
+    for _ in 0..2_048 {
+        black_box(make());
+    }
+
+    let cycle_start = cycle_counter();
+    let started = Instant::now();
+    let mut checksum = 0usize;
+    for _ in 0..EVENTS {
+        let milestones = make();
+        checksum = checksum.wrapping_add(milestones.len());
+        black_box(milestones);
+    }
+    let elapsed = started.elapsed();
+    let cycle_end = cycle_counter();
+
+    let before = ALLOC.snapshot();
+    ALLOC.enabled.store(true, Ordering::Relaxed);
+    for _ in 0..EVENTS {
+        black_box(make());
+    }
+    ALLOC.enabled.store(false, Ordering::Relaxed);
+
+    BenchResult {
+        ns_per_event: elapsed.as_secs_f64() * 1_000_000_000.0 / EVENTS as f64,
+        cycles_per_event: cycle_start
+            .zip(cycle_end)
+            .map(|(start, end)| end.wrapping_sub(start) as f64 / EVENTS as f64),
+        allocated: ALLOC.snapshot().delta(before),
+        checksum,
+    }
+}
+
 struct PendingHoldCase {
     resolution: [bool; 1],
     indices: Vec<usize>,
@@ -223,15 +263,24 @@ fn print_result(label: &str, result: &BenchResult) {
 }
 
 fn main() {
+    let disabled_prewarmed_combo = measure_disabled_combo_setup(true);
+    let disabled_gated_combo = measure_disabled_combo_setup(false);
     let cold_combo = measure_combo(false);
     let prewarmed_combo = measure_combo(true);
     let cold_hold = measure_pending_hold(false);
     let prewarmed_hold = measure_pending_hold(true);
 
     assert_eq!(cold_combo.checksum, prewarmed_combo.checksum);
+    assert_eq!(
+        disabled_prewarmed_combo.checksum,
+        disabled_gated_combo.checksum
+    );
     assert_eq!(cold_hold.checksum, prewarmed_hold.checksum);
 
     println!("Gameplay first-event buffer prewarm ({EVENTS} independent songs)");
+    println!("disabled combo milestone setup");
+    print_result("legacy prewarm", &disabled_prewarmed_combo);
+    print_result("option-gated", &disabled_gated_combo);
     println!("combo milestone (bounded to {COMBO_MILESTONE_CAPACITY} live kinds)");
     print_result("cold Vec", &cold_combo);
     print_result("song-prewarmed", &prewarmed_combo);

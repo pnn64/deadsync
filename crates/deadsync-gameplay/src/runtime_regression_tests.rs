@@ -25,6 +25,7 @@ mod runtime_regression_tests {
         noteskin_name: &'static str,
         mini_percent: f32,
         density_graph: bool,
+        combo_milestones_enabled: bool,
     }
 
     impl Default for TestProfile {
@@ -45,6 +46,7 @@ mod runtime_regression_tests {
                 noteskin_name: DEFAULT_NOTESKIN_NAME,
                 mini_percent: 0.0,
                 density_graph: false,
+                combo_milestones_enabled: true,
             }
         }
     }
@@ -227,6 +229,10 @@ mod runtime_regression_tests {
 
         fn hide_early_dw_column_flash(&self) -> bool {
             false
+        }
+
+        fn combo_milestones_enabled(&self) -> bool {
+            self.combo_milestones_enabled
         }
     }
 
@@ -1108,6 +1114,7 @@ mod runtime_regression_tests {
         let active = &state.players_runtime.players[0];
         let inactive = &state.players_runtime.players[1];
 
+        assert!(active.combo_milestones.capacity() >= COMBO_MILESTONE_CAPACITY);
         assert_eq!(active.life_history.len(), 1);
         assert_eq!(active.life_history[0].1, 0.5);
         assert!(active.life_history.capacity() >= expected_life);
@@ -1122,6 +1129,17 @@ mod runtime_regression_tests {
         assert_eq!(inactive.life_history.capacity(), 0);
         assert_eq!(inactive.error_bar_avg_samples.capacity(), 0);
         assert_eq!(inactive.error_bar_long_avg_samples.capacity(), 0);
+    }
+
+    #[test]
+    fn gameplay_init_does_not_prewarm_hidden_combo_milestones() {
+        let mut profiles = std::array::from_fn(|_| TestProfile::default());
+        profiles[0].combo_milestones_enabled = false;
+
+        let state = regression_state_with_profiles(profiles);
+
+        assert_eq!(state.players_runtime.players[0].combo_milestones.capacity(), 0);
+        assert!(state.players_runtime.players[0].combo_milestones.is_empty());
     }
 
     #[test]

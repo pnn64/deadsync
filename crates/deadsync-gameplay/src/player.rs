@@ -187,12 +187,13 @@ pub fn player_buffer_caps(
     note_count: usize,
     row_count: usize,
     hold_roll_count: usize,
+    combo_milestones_enabled: bool,
     error_options: GameplayErrorBarOptions,
 ) -> PlayerBufferCaps {
     let average_visible = error_options.mask_bits & GAMEPLAY_ERROR_BAR_AVERAGE != 0;
     let error_capacity = error_avg_capacity(note_count, row_count);
     PlayerBufferCaps {
-        combo_milestones: COMBO_MILESTONE_CAPACITY,
+        combo_milestones: usize::from(combo_milestones_enabled) * COMBO_MILESTONE_CAPACITY,
         life_history: life_history_capacity(note_count, row_count, hold_roll_count),
         short_error_avg: usize::from(average_visible && error_options.short_average_enabled)
             * error_capacity,
@@ -424,11 +425,16 @@ pub fn write_player_combo_state(player: &mut PlayerRuntime, state: ComboState) {
 }
 
 #[inline(always)]
-pub fn apply_combo_update(player: &mut PlayerRuntime, update: ComboUpdate) {
+pub fn apply_combo_update(
+    player: &mut PlayerRuntime,
+    update: ComboUpdate,
+    combo_milestones_enabled: bool,
+) {
     apply_combo_update_feedback(
         &mut player.current_combo_window_counts,
         &mut player.combo_milestones,
         update,
+        combo_milestones_enabled,
     );
 }
 

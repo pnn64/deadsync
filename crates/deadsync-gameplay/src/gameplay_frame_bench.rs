@@ -5,6 +5,63 @@ pub struct GameplayFrameHotPathBenchOutput {
 }
 
 #[derive(Clone)]
+pub struct DisabledComboMilestoneBench {
+    player: PlayerRuntime,
+}
+
+impl DisabledComboMilestoneBench {
+    pub fn legacy() -> Self {
+        Self {
+            player: init_player_runtime(),
+        }
+    }
+
+    pub fn gated() -> Self {
+        Self {
+            player: init_player_runtime_with_caps(PlayerBufferCaps::EMPTY),
+        }
+    }
+
+    pub fn old_frame(&mut self, frame: usize) -> GameplayFrameHotPathBenchOutput {
+        let update = disabled_combo_milestone_update(&mut self.player, frame);
+        apply_combo_update(&mut self.player, update, true);
+        tick_player_combo_milestones(&mut self.player, 1.0 / 120.0);
+        disabled_combo_milestone_output(&self.player, frame)
+    }
+
+    pub fn new_frame(&mut self, frame: usize) -> GameplayFrameHotPathBenchOutput {
+        let update = disabled_combo_milestone_update(&mut self.player, frame);
+        apply_combo_update(&mut self.player, update, false);
+        disabled_combo_milestone_output(&self.player, frame)
+    }
+}
+
+#[inline(always)]
+fn disabled_combo_milestone_update(player: &mut PlayerRuntime, frame: usize) -> ComboUpdate {
+    let combo_broken = frame % 1_009 == 0;
+    if combo_broken {
+        player.current_combo_window_counts.w1 = 7;
+    }
+    ComboUpdate {
+        combo_broken,
+        hit_hundred_milestone: frame % 120 == 0,
+        hit_thousand_milestone: frame % 1_200 == 0,
+    }
+}
+
+#[inline(always)]
+fn disabled_combo_milestone_output(
+    player: &PlayerRuntime,
+    frame: usize,
+) -> GameplayFrameHotPathBenchOutput {
+    GameplayFrameHotPathBenchOutput {
+        checksum: (frame as u64).rotate_left(7)
+            ^ u64::from(player.current_combo_window_counts.w1),
+        samples: usize::from(player.current_combo_window_counts.w1 != 0),
+    }
+}
+
+#[derive(Clone)]
 pub struct SongLuaNoteHideIndexBench {
     legacy_windows: Vec<SongLuaNoteHideWindowRuntime>,
     indexed_windows: SongLuaNoteHideWindows,

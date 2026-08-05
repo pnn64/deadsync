@@ -124,10 +124,42 @@ pub(crate) fn compose_notefield_feedback<S, F>(
     let beat_factor = notes.beat_factor;
     let mut lane_effects = [crate::VisualEffectParams::default(); MAX_COLS];
     let mut lane_centers = [[0.0; 2]; MAX_COLS];
+    let targets_enabled = !options.hide_targets && prepared.receptor_alpha > f32::EPSILON;
+    let lane_work_mask = feedback_lane_work_mask(
+        num_cols,
+        targets_enabled,
+        options.hold_explosion_enabled,
+        tap_explosion.is_some(),
+        notes.mine.mine_hit_explosion.is_some(),
+        &frame.lanes,
+        frame.tap_explosions,
+        frame.mine_explosions,
+    );
+    if lane_work_mask == 0 {
+        return;
+    }
 
     for (local_col, &receptor_y) in field.column_receptor_ys.iter().take(num_cols).enumerate() {
+        if lane_work_mask & (1 << local_col) == 0 {
+            continue;
+        }
         let lane = frame.lanes[local_col];
-        let hidden = song_lua_note_hidden(request.song_lua.note_hides, local_col, current_beat);
+        let hold_candidate = options.hold_explosion_enabled && lane.active_hold.is_some();
+        let tap_candidate = tap_explosion.is_some()
+            && frame
+                .tap_explosions
+                .get(local_col)
+                .is_some_and(Option::is_some);
+        let mine_candidate = notes.mine.mine_hit_explosion.is_some()
+            && frame
+                .mine_explosions
+                .get(local_col)
+                .is_some_and(Option::is_some);
+        let hidden = (targets_enabled || hold_candidate || tap_candidate)
+            && song_lua_note_hidden(request.song_lua.note_hides, local_col, current_beat);
+        if hidden && !mine_candidate {
+            continue;
+        }
         let effect = gameplay_visual_effect_params(&visual, local_col);
         lane_effects[local_col] = effect;
         let confusion_rotation_deg = visual_confusion_rotation_deg(current_beat, effect);
@@ -169,8 +201,7 @@ pub(crate) fn compose_notefield_feedback<S, F>(
                 })
             })
         };
-        let targets_visible =
-            !hidden && !options.hide_targets && prepared.receptor_alpha > f32::EPSILON;
+        let targets_visible = !hidden && targets_enabled;
         let target_slot = targets_visible.then(|| &receptor.receptor_off[local_col]);
         let target_reverse = targets_visible
             .then(|| receptor.receptor_off_reverse.get(local_col).copied())
@@ -187,32 +218,34 @@ pub(crate) fn compose_notefield_feedback<S, F>(
                 visual,
             })
         };
-        compose_receptor_actors(
-            actors,
-            model_cache,
-            ReceptorActorsRequest {
-                target_slot,
-                target_reverse,
-                hold_slot,
-                center,
-                hidden,
-                hide_targets: options.hide_targets,
-                reverse: field.column_reverse_percent[local_col] > 0.5,
-                bop_zoom: lane.receptor_bop_zoom,
-                effect_zoom,
-                confusion_rotation_deg,
-                elapsed: elapsed_screen,
-                beat: current_beat,
-                receptor_alpha: prepared.receptor_alpha,
-                field_zoom,
-                rotation_y_deg: 0.0,
-                pulse: &receptor.receptor_pulse,
-                press_behavior: receptor.receptor_glow_behavior,
-                style: request.style.receptor,
-            },
-            resolve_press,
-            sprite_source,
-        );
+        if target_slot.is_some() || hold_slot.is_some() {
+            compose_receptor_actors(
+                actors,
+                model_cache,
+                ReceptorActorsRequest {
+                    target_slot,
+                    target_reverse,
+                    hold_slot,
+                    center,
+                    hidden,
+                    hide_targets: options.hide_targets,
+                    reverse: field.column_reverse_percent[local_col] > 0.5,
+                    bop_zoom: lane.receptor_bop_zoom,
+                    effect_zoom,
+                    confusion_rotation_deg,
+                    elapsed: elapsed_screen,
+                    beat: current_beat,
+                    receptor_alpha: prepared.receptor_alpha,
+                    field_zoom,
+                    rotation_y_deg: 0.0,
+                    pulse: &receptor.receptor_pulse,
+                    press_behavior: receptor.receptor_glow_behavior,
+                    style: request.style.receptor,
+                },
+                resolve_press,
+                sprite_source,
+            );
+        }
     }
 
     // Tap explosions are independent of the concrete "Hide Combo
@@ -278,6 +311,36 @@ pub(crate) fn compose_notefield_feedback<S, F>(
             sprite_source,
         );
     }
+}
+
+#[inline(always)]
+fn feedback_lane_work_mask(
+    num_cols: usize,
+    targets_enabled: bool,
+    hold_explosions_enabled: bool,
+    tap_explosions_available: bool,
+    mine_explosions_available: bool,
+    lanes: &[NotefieldLaneFeedback<'_>; MAX_COLS],
+    tap_explosions: &[Option<ActiveTapExplosion>],
+    mine_explosions: &[Option<ActiveMineExplosion>],
+) -> u16 {
+    let num_cols = num_cols.min(MAX_COLS);
+    let mut mask = if targets_enabled {
+        (1_u16 << num_cols) - 1
+    } else {
+        0
+    };
+    for local_col in 0..num_cols {
+        let hold_active = hold_explosions_enabled && lanes[local_col].active_hold.is_some();
+        let tap_active =
+            tap_explosions_available && tap_explosions.get(local_col).is_some_and(Option::is_some);
+        let mine_active = mine_explosions_available
+            && mine_explosions.get(local_col).is_some_and(Option::is_some);
+        if hold_active || tap_active || mine_active {
+            mask |= 1 << local_col;
+        }
+    }
+    mask
 }
 
 #[inline(always)]
@@ -477,6 +540,34 @@ impl FeedbackLaneCacheBench {
             }
         }
         output
+    }
+
+    pub fn old_hidden_targets_frame(&self, frame: usize) -> FeedbackLaneCacheBenchFrame {
+        let arrow_effect_time_s = frame as f32 / 120.0;
+        for local_col in 0..Self::LANES {
+            std::hint::black_box(self.lane_values(local_col, arrow_effect_time_s));
+        }
+        FeedbackLaneCacheBenchFrame::default()
+    }
+
+    pub fn new_hidden_targets_frame(&self, frame: usize) -> FeedbackLaneCacheBenchFrame {
+        let lanes = [NotefieldLaneFeedback::default(); MAX_COLS];
+        let tap_explosions = [None; MAX_COLS];
+        let mine_explosions = [const { None }; MAX_COLS];
+        let mask = feedback_lane_work_mask(
+            Self::LANES,
+            std::hint::black_box(false),
+            std::hint::black_box(false),
+            std::hint::black_box(true),
+            std::hint::black_box(true),
+            &lanes,
+            &tap_explosions,
+            &mine_explosions,
+        );
+        if mask != 0 {
+            std::hint::black_box(self.lane_values(frame % Self::LANES, frame as f32 / 120.0));
+        }
+        FeedbackLaneCacheBenchFrame::default()
     }
 
     fn lane_values(
@@ -1270,6 +1361,56 @@ mod tests {
         assert_eq!(tap.map(f32::to_bits), target.map(f32::to_bits));
         assert_eq!(mine.map(f32::to_bits), target.map(f32::to_bits));
         assert!(hud.is_empty());
+    }
+
+    #[test]
+    fn hidden_idle_receptors_emit_no_feedback_actors() {
+        let noteskin = noteskin();
+        let timing = TimingData::default();
+        let notes = [note(0)];
+        let note_hides = SongLuaNoteHideWindows::default();
+        let mut request = request(
+            &noteskin,
+            &timing,
+            &notes,
+            &note_hides,
+            FieldPlacement::P1,
+            0,
+            1,
+            2,
+            2,
+        );
+        request.options.hide_targets = true;
+        request.options.hold_explosion_enabled = false;
+        let prepared = prepare_notefield(&request).expect("test notefield should prepare");
+        let inactive_taps = [None; 2];
+        let inactive_mines = [const { None }; 2];
+        let frame = NotefieldFeedbackFrameView {
+            column_cues: None,
+            column_cue_cursor: None,
+            crossover_cues: None,
+            crossover_cue_entries: None,
+            crossover_cue_cursor: None,
+            column_flashes: None,
+            tap_explosions: &inactive_taps,
+            mine_explosions: &inactive_mines,
+            lanes: [NotefieldLaneFeedback::default(); MAX_COLS],
+            countdown_font: "test",
+            countdown_text,
+        };
+        let mut actors = Vec::new();
+
+        compose_notefield_feedback(
+            &mut actors,
+            &mut Vec::new(),
+            &mut ModelMeshCache::default(),
+            &request,
+            &prepared,
+            &frame,
+            &source,
+        );
+
+        assert!(actors.is_empty());
     }
 
     #[test]

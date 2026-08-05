@@ -381,6 +381,24 @@ fn main() {
 
     let feedback_lanes = FeedbackLaneCacheBench::default();
     run_pair(
+        "hidden idle receptor feedback",
+        "4 hidden target lanes with hold explosions disabled and no active tap/mine feedback",
+        |frame| {
+            let output = feedback_lanes.old_hidden_targets_frame(frame);
+            Output {
+                checksum: output.checksum,
+                samples: output.samples,
+            }
+        },
+        |frame| {
+            let output = feedback_lanes.new_hidden_targets_frame(frame);
+            Output {
+                checksum: output.checksum,
+                samples: output.samples,
+            }
+        },
+    );
+    run_pair(
         "notefield feedback lane reuse",
         "4 receptors with active tap and mine feedback passes",
         |frame| {

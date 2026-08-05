@@ -127,6 +127,7 @@ pub trait GameplayProfileData: Clone {
     fn hide_early_dw_judgments(&self) -> bool;
     fn hide_early_dw_flash(&self) -> bool;
     fn hide_early_dw_column_flash(&self) -> bool;
+    fn combo_milestones_enabled(&self) -> bool;
 
     #[inline(always)]
     fn chart_effects(&self) -> ChartAttackEffects {
@@ -253,4 +254,3 @@ impl Default for GameplaySession {
         }
     }
 }
-

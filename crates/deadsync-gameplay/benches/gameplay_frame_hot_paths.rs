@@ -1,12 +1,13 @@
 use deadsync_gameplay::{
     ActiveColumnScanBench, ActiveHoldMaskBench, CrossoverCueCursorBench, DisabledAssistClapBench,
-    DisplayBpmCacheBench, GameplayFrameHotPathBenchOutput, IdleAttackRefreshBench,
-    IdleHoldPhaseBench, IdleLaneScanBench, IdleReceptorGlowBench, InputLaneSearchCursorBench,
-    InputQueueDrainBench, JudgedRowCursorBench, LiveNotefieldOptionsBench, MappedAudioClockBench,
-    OptionalFrameWorkBench, PressedLaneMaskBench, RegularCueCursorBench,
-    ResolutionDistanceCacheBench, SharedClockBeatBench, SharedMissCutoffBench,
-    SongLuaNoteHideIndexBench, SparseFeedbackTickBench, SparseMineAvoidDueBench,
-    SparseTapMissDueBench, StableNotefieldRefreshBench, TwoPlayerColumnMapBench,
+    DisabledComboMilestoneBench, DisplayBpmCacheBench, GameplayFrameHotPathBenchOutput,
+    IdleAttackRefreshBench, IdleHoldPhaseBench, IdleLaneScanBench, IdleReceptorGlowBench,
+    InputLaneSearchCursorBench, InputQueueDrainBench, JudgedRowCursorBench,
+    LiveNotefieldOptionsBench, MappedAudioClockBench, OptionalFrameWorkBench, PressedLaneMaskBench,
+    RegularCueCursorBench, ResolutionDistanceCacheBench, SharedClockBeatBench,
+    SharedMissCutoffBench, SongLuaNoteHideIndexBench, SparseFeedbackTickBench,
+    SparseMineAvoidDueBench, SparseTapMissDueBench, StableNotefieldRefreshBench,
+    TwoPlayerColumnMapBench,
 };
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::hint::black_box;
@@ -259,6 +260,15 @@ fn main() {
         "8 lanes, five feedback types triggered every 257-733 frames",
         move |frame| old_feedback.old_frame(frame),
         move |frame| new_feedback.new_frame(frame),
+    );
+
+    let mut old_combo_milestones = DisabledComboMilestoneBench::legacy();
+    let mut new_combo_milestones = DisabledComboMilestoneBench::gated();
+    run_pair(
+        "disabled combo milestone lifecycle",
+        "hidden combo explosion art with milestone crossings during 120 Hz gameplay",
+        move |frame| old_combo_milestones.old_frame(frame),
+        move |frame| new_combo_milestones.new_frame(frame),
     );
 
     let mut old_motion = StableNotefieldRefreshBench::default();

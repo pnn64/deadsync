@@ -948,9 +948,13 @@ pub fn apply_combo_update_feedback(
     current_combo_window_counts: &mut WindowCounts,
     milestones: &mut Vec<ActiveComboMilestone>,
     update: ComboUpdate,
+    milestones_enabled: bool,
 ) {
     if update.combo_broken {
         *current_combo_window_counts = WindowCounts::default();
+    }
+    if !milestones_enabled {
+        return;
     }
     if update.hit_thousand_milestone {
         trigger_combo_milestone(milestones, ComboMilestoneKind::Thousand);
@@ -996,9 +1000,10 @@ pub fn apply_mine_hit_player_update(
     player: &mut PlayerRuntime,
     state: MineHitPlayerState,
     update: MineHitPlayerUpdate,
+    combo_milestones_enabled: bool,
 ) {
     write_mine_hit_player_state(player, state);
-    apply_combo_update(player, update.combo_update);
+    apply_combo_update(player, update.combo_update, combo_milestones_enabled);
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]

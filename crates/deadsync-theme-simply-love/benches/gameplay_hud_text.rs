@@ -6,7 +6,8 @@ use deadsync_theme_simply_love::screens::components::gameplay::gameplay_stats::{
     benchmark_padded_runs_cached, benchmark_padded_runs_legacy,
 };
 use deadsync_theme_simply_love::screens::components::gameplay::notefield::{
-    benchmark_combo_text, benchmark_combo_text_legacy, benchmark_error_bar_label,
+    benchmark_combo_text, benchmark_combo_text_legacy, benchmark_disabled_mini_indicator,
+    benchmark_disabled_mini_indicator_legacy, benchmark_error_bar_label,
     benchmark_error_bar_label_legacy, benchmark_offset_ms, benchmark_offset_ms_legacy,
     prepare_combo_text_benchmark,
 };
@@ -300,6 +301,14 @@ fn print_result_for(label: &str, result: &BenchResult, operations: usize) {
 }
 
 fn main() {
+    let mini_legacy = measure_dynamic_text(benchmark_disabled_mini_indicator_legacy);
+    let mini_gated = measure_dynamic_text(benchmark_disabled_mini_indicator);
+    assert_eq!(mini_legacy.checksum, mini_gated.checksum);
+
+    println!("disabled mini-indicator frame benchmark");
+    print_result_for("legacy work", &mini_legacy, DYNAMIC_TEXT_OPS);
+    print_result_for("option gate", &mini_gated, DYNAMIC_TEXT_OPS);
+
     let legacy = measure(|frame| {
         let (bpm, life) = inputs(frame);
         benchmark_gameplay_hud_text_legacy(bpm, true, life, "AutoPlay")

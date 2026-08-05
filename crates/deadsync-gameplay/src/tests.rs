@@ -89,7 +89,7 @@ mod tests {
             long_average_enabled: false,
             ..GameplayErrorBarOptions::default()
         };
-        let caps = player_buffer_caps(120, 80, 25, options);
+        let caps = player_buffer_caps(120, 80, 25, true, options);
 
         assert_eq!(caps.combo_milestones, COMBO_MILESTONE_CAPACITY);
         assert_eq!(caps.life_history, 451);
@@ -111,6 +111,7 @@ mod tests {
             10_000,
             5_000,
             1_000,
+            true,
             GameplayErrorBarOptions {
                 short_average_enabled: true,
                 long_average_enabled: true,
@@ -120,6 +121,20 @@ mod tests {
 
         assert_eq!(caps.short_error_avg, 0);
         assert_eq!(caps.long_error_avg, 0);
+    }
+
+    #[test]
+    fn disabled_combo_milestones_allocate_no_event_storage() {
+        let caps = player_buffer_caps(
+            10_000,
+            5_000,
+            1_000,
+            false,
+            GameplayErrorBarOptions::default(),
+        );
+
+        assert_eq!(caps.combo_milestones, 0);
+        assert_eq!(init_player_runtime_with_caps(caps).combo_milestones.capacity(), 0);
     }
 
     #[test]
@@ -295,6 +310,7 @@ mod tests {
                 hit_hundred_milestone: true,
                 ..ComboUpdate::default()
             },
+            true,
         );
 
         assert_eq!(player.current_combo_window_counts.w1, 0);
@@ -614,6 +630,7 @@ mod tests {
                 },
                 ..MineHitPlayerUpdate::default()
             },
+            true,
         );
 
         assert_eq!(player.mines_hit, 3);
@@ -3334,6 +3351,7 @@ mod tests {
                 combo_broken: true,
                 ..ComboUpdate::default()
             },
+            true,
         );
 
         assert_eq!(counts.w0, 0);
@@ -3359,6 +3377,7 @@ mod tests {
                 hit_thousand_milestone: true,
                 ..ComboUpdate::default()
             },
+            true,
         );
 
         assert_eq!(milestones.len(), 2);
@@ -3381,11 +3400,42 @@ mod tests {
                 hit_hundred_milestone: true,
                 ..ComboUpdate::default()
             },
+            true,
         );
 
         assert_eq!(milestones.len(), 1);
         assert_eq!(milestones[0].kind, ComboMilestoneKind::Hundred);
         assert_near(milestones[0].elapsed, 0.0);
+    }
+
+    #[test]
+    fn disabled_combo_feedback_preserves_combo_break_state_without_events() {
+        let mut counts = WindowCounts {
+            w1: 7,
+            ..WindowCounts::default()
+        };
+        let mut milestones = Vec::new();
+
+        apply_combo_update_feedback(
+            &mut counts,
+            &mut milestones,
+            ComboUpdate {
+                combo_broken: true,
+                hit_hundred_milestone: true,
+                hit_thousand_milestone: true,
+            },
+            false,
+        );
+
+        assert_eq!(counts.w0, 0);
+        assert_eq!(counts.w1, 0);
+        assert_eq!(counts.w2, 0);
+        assert_eq!(counts.w3, 0);
+        assert_eq!(counts.w4, 0);
+        assert_eq!(counts.w5, 0);
+        assert_eq!(counts.miss, 0);
+        assert!(milestones.is_empty());
+        assert_eq!(milestones.capacity(), 0);
     }
 
     #[test]

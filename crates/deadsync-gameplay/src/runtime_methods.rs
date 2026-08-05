@@ -379,10 +379,13 @@ where
                     scoring_blocked,
                     self.player_is_dead(player),
                 );
+                let combo_milestones_enabled =
+                    self.profiles_runtime.profiles[player].combo_milestones_enabled();
                 apply_mine_hit_player_update(
                     &mut self.players_runtime.players[player],
                     player_state,
                     player_update,
+                    combo_milestones_enabled,
                 );
 
                 self.display.receptor_feedback.clear_lift_glow(column);
@@ -566,9 +569,12 @@ where
         ) {
             update_itg_grade_totals(&mut self.players_runtime.players[player]);
         }
+        let combo_milestones_enabled =
+            self.profiles_runtime.profiles[player].combo_milestones_enabled();
         apply_combo_update(
             &mut self.players_runtime.players[player],
             player_update.combo_update,
+            combo_milestones_enabled,
         );
         if update.effects.reset_receptor_glow {
             self.display.receptor_feedback.clear_lift_glow(column);
@@ -615,9 +621,12 @@ where
         ) {
             update_itg_grade_totals(&mut self.players_runtime.players[player]);
         }
+        let combo_milestones_enabled =
+            self.profiles_runtime.profiles[player].combo_milestones_enabled();
         apply_combo_update(
             &mut self.players_runtime.players[player],
             player_update.combo_update,
+            combo_milestones_enabled,
         );
         if update.effects.trigger_hold_explosion {
             self.trigger_hold_explosion(column);
@@ -962,7 +971,12 @@ where
         );
         self.display.toggle_flash.tick(delta_time);
         for player in 0..self.setup.num_players {
-            tick_player_combo_milestones(&mut self.players_runtime.players[player], delta_time);
+            if self.profiles_runtime.profiles[player].combo_milestones_enabled() {
+                tick_player_combo_milestones(
+                    &mut self.players_runtime.players[player],
+                    delta_time,
+                );
+            }
         }
         let now = self.boundary.total_elapsed_in_screen;
         self.display.visual_feedback.tick(delta_time, now);
@@ -1223,6 +1237,8 @@ where
         }
         let current_music_time = self.current_music_time_seconds();
         if plan.apply_player_state {
+            let combo_milestones_enabled =
+                self.profiles_runtime.profiles[player].combo_milestones_enabled();
             let p = &mut self.players_runtime.players[player];
             let player_dead = player_runtime_is_dead(p);
             let carried_holds_down = carried_holds_down_at_row(
@@ -1246,7 +1262,7 @@ where
             if plan.apply_life_change {
                 apply_life_change(p, current_music_time, plan.life_delta);
             }
-            apply_combo_update(p, update.combo_update);
+            apply_combo_update(p, update.combo_update, combo_milestones_enabled);
         }
         if plan.show_final_visual {
             // Arrow Cloud's gameplay HUD uses the row-final JudgmentMessage for
