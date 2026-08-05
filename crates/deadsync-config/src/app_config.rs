@@ -224,6 +224,8 @@ pub struct Config {
     pub machine_default_sync_offset: DefaultSyncOffset,
     /// Post-session flow from Select Music/Course: show Evaluation Summary.
     pub machine_show_eval_summary: bool,
+    /// Enable Simply Love's evaluation easter eggs, including grade-flag taunts.
+    pub machine_easter_eggs: bool,
     /// Evaluation easter egg: show and play "nice" when a score contains 69.
     pub machine_nice_sound: bool,
     /// Post-session flow from Select Music/Course: show Name Entry.
@@ -460,6 +462,7 @@ impl Default for Config {
             machine_pack_ini_offsets: machine.machine_pack_ini_offsets,
             machine_default_sync_offset: machine.machine_default_sync_offset,
             machine_show_eval_summary: machine.machine_show_eval_summary,
+            machine_easter_eggs: machine.machine_easter_eggs,
             machine_nice_sound: machine.machine_nice_sound,
             machine_show_name_entry: machine.machine_show_name_entry,
             machine_show_gameover: machine.machine_show_gameover,
@@ -566,6 +569,10 @@ mod tests {
         assert_eq!(
             Config::default().custom_sounds_enabled,
             DEFAULT_CUSTOM_SOUNDS_ENABLED
+        );
+        assert_eq!(
+            Config::default().machine_easter_eggs,
+            DEFAULT_MACHINE_EASTER_EGGS
         );
         assert_eq!(
             Config::default().machine_nice_sound,

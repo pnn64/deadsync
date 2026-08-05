@@ -867,6 +867,29 @@ mod tests {
     }
 
     #[test]
+    fn disabled_easter_eggs_hide_grade_flag_taunts() {
+        for taunt in [
+            grade_star_taunt_from_counts(counts(1, 0, 0, 0, 0)),
+            grade_star_taunt_from_counts(counts(7, 1, 0, 0, 0)),
+        ] {
+            let actors = actors(
+                score_data::Grade::Tier04,
+                EvalGradeParams {
+                    elapsed: 12.0,
+                    taunt,
+                    easter_eggs: false,
+                    ..Default::default()
+                },
+            );
+
+            assert_eq!(texture_count(&actors, STAR_TEX), 1);
+            assert_eq!(texture_count(&actors, AFFLUENT_TEX), 0);
+            assert_eq!(texture_prefix_count(&actors, AFFLUENT_CLIP_KEY_PREFIX), 0);
+            assert_eq!(texture_count(&actors, GOLDSTAR_TEX), 0);
+        }
+    }
+
+    #[test]
     fn worse_than_one_w3_gets_no_taunt() {
         let actors = actors(
             score_data::Grade::Tier04,

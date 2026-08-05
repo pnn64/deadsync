@@ -113,6 +113,15 @@ pub(in crate::screens::options) const MACHINE_OPTIONS_ROWS: &[SubRow] = &[
         inline: true,
     },
     SubRow {
+        id: SubRowId::EasterEggs,
+        label: lookup_key("OptionsMachine", "EasterEggs"),
+        choices: &[
+            localized_choice("Common", "Off"),
+            localized_choice("Common", "On"),
+        ],
+        inline: true,
+    },
+    SubRow {
         id: SubRowId::NiceSound,
         label: lookup_key("OptionsMachine", "NiceSound"),
         choices: &[
@@ -352,6 +361,14 @@ pub(in crate::screens::options) const MACHINE_OPTIONS_ITEMS: &[Item] = &[
         help: &[HelpEntry::Paragraph(lookup_key(
             "OptionsMachineHelp",
             "EvalSummaryHelp",
+        ))],
+    },
+    Item {
+        id: ItemId::MchEasterEggs,
+        name: lookup_key("OptionsMachine", "EasterEggs"),
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsMachineHelp",
+            "EasterEggsHelp",
         ))],
     },
     Item {

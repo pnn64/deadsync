@@ -1,8 +1,9 @@
 use crate::bools::{parse_bool_str, parse_loose_bool_str};
 use crate::defaults::{
     DEFAULT_ALLOW_SWITCH_PROFILE_IN_MENU, DEFAULT_KEYBOARD_FEATURES,
-    DEFAULT_MACHINE_ALLOW_PER_PLAYER_GLOBAL_OFFSETS, DEFAULT_MACHINE_ENABLE_HEART_RATE_MONITORS,
-    DEFAULT_MACHINE_ENABLE_REPLAYS, DEFAULT_MACHINE_NICE_SOUND, DEFAULT_MACHINE_PACK_INI_OFFSETS,
+    DEFAULT_MACHINE_ALLOW_PER_PLAYER_GLOBAL_OFFSETS, DEFAULT_MACHINE_EASTER_EGGS,
+    DEFAULT_MACHINE_ENABLE_HEART_RATE_MONITORS, DEFAULT_MACHINE_ENABLE_REPLAYS,
+    DEFAULT_MACHINE_NICE_SOUND, DEFAULT_MACHINE_PACK_INI_OFFSETS,
     DEFAULT_MACHINE_SHOW_EVAL_SUMMARY, DEFAULT_MACHINE_SHOW_GAMEOVER,
     DEFAULT_MACHINE_SHOW_NAME_ENTRY, DEFAULT_MACHINE_SHOW_SELECT_COLOR,
     DEFAULT_MACHINE_SHOW_SELECT_PLAY_MODE, DEFAULT_MACHINE_SHOW_SELECT_PROFILE,
@@ -1466,6 +1467,7 @@ pub fn load_theme_presentation_options(
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct MachineFlowOptions {
     pub machine_show_eval_summary: bool,
+    pub machine_easter_eggs: bool,
     pub machine_nice_sound: bool,
     pub machine_show_name_entry: bool,
     pub machine_show_gameover: bool,
@@ -1490,6 +1492,7 @@ impl Default for MachineFlowOptions {
     fn default() -> Self {
         Self {
             machine_show_eval_summary: DEFAULT_MACHINE_SHOW_EVAL_SUMMARY,
+            machine_easter_eggs: DEFAULT_MACHINE_EASTER_EGGS,
             machine_nice_sound: DEFAULT_MACHINE_NICE_SOUND,
             machine_show_name_entry: DEFAULT_MACHINE_SHOW_NAME_ENTRY,
             machine_show_gameover: DEFAULT_MACHINE_SHOW_GAMEOVER,
@@ -1527,6 +1530,10 @@ pub fn load_machine_flow_options(
             .get("Theme", "MachineShowEvalSummary")
             .and_then(parse_bool_str)
             .unwrap_or(default.machine_show_eval_summary),
+        machine_easter_eggs: conf
+            .get("Theme", "MachineEasterEggs")
+            .and_then(parse_loose_bool_str)
+            .unwrap_or(default.machine_easter_eggs),
         machine_nice_sound: conf
             .get("Theme", "MachineNiceSound")
             .and_then(parse_loose_bool_str)
@@ -1668,6 +1675,7 @@ pub fn push_theme_option_lines(
         "MachineShowEvalSummary",
         machine.machine_show_eval_summary,
     );
+    push_bool(content, "MachineEasterEggs", machine.machine_easter_eggs);
     push_bool(content, "MachineNiceSound", machine.machine_nice_sound);
     push_bool(
         content,
@@ -1828,6 +1836,7 @@ mod tests {
     fn default_machine_flow_options() -> MachineFlowOptions {
         MachineFlowOptions {
             machine_show_eval_summary: true,
+            machine_easter_eggs: true,
             machine_nice_sound: false,
             machine_show_name_entry: true,
             machine_show_gameover: true,
@@ -1873,6 +1882,7 @@ SrpgVariant=SRPG9\n\
 VideoBackgrounds=1\n\
 RandomBackgroundMode=Off\n\
 MachineShowEvalSummary=1\n\
+MachineEasterEggs=1\n\
 MachineNiceSound=0\n\
 MachineShowGameOver=1\n\
 MachineShowNameEntry=1\n\
@@ -2442,6 +2452,7 @@ MachineEvaluationStyle=Default\n\
             r#"
             [Theme]
             MachineShowEvalSummary=false
+            MachineEasterEggs=0
             MachineNiceSound=0
             MachineShowNameEntry=0
             MachineShowGameOver=0
@@ -2466,6 +2477,7 @@ MachineEvaluationStyle=Default\n\
         let loaded = load_machine_flow_options(&conf, default_machine_flow_options());
 
         assert!(!loaded.machine_show_eval_summary);
+        assert!(!loaded.machine_easter_eggs);
         assert!(!loaded.machine_nice_sound);
         assert!(!loaded.machine_show_name_entry);
         assert!(!loaded.machine_show_gameover);
@@ -2503,6 +2515,7 @@ MachineEvaluationStyle=Default\n\
             r#"
             [Theme]
             MachineShowEvalSummary=bad
+            MachineEasterEggs=bad
             MachineNiceSound=bad
             MachineShowNameEntry=bad
             MachineShowGameOver=bad
@@ -2530,6 +2543,7 @@ MachineEvaluationStyle=Default\n\
             loaded.machine_show_eval_summary,
             default.machine_show_eval_summary
         );
+        assert_eq!(loaded.machine_easter_eggs, default.machine_easter_eggs);
         assert_eq!(loaded.machine_nice_sound, default.machine_nice_sound);
         assert_eq!(
             loaded.machine_show_name_entry,

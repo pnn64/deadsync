@@ -817,6 +817,12 @@ pub fn init(view: OptionsInitView) -> State {
     set_choice_by_id(
         &mut state.sub[SubmenuKind::Machine].choice_indices,
         MACHINE_OPTIONS_ROWS,
+        SubRowId::EasterEggs,
+        usize::from(cfg.machine_easter_eggs),
+    );
+    set_choice_by_id(
+        &mut state.sub[SubmenuKind::Machine].choice_indices,
+        MACHINE_OPTIONS_ROWS,
         SubRowId::NiceSound,
         usize::from(cfg.machine_nice_sound),
     );

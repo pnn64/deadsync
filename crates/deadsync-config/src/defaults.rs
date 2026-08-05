@@ -62,6 +62,7 @@ pub const DEFAULT_MACHINE_ENABLE_HEART_RATE_MONITORS: bool = false;
 pub const DEFAULT_MACHINE_ALLOW_PER_PLAYER_GLOBAL_OFFSETS: bool = false;
 pub const DEFAULT_MACHINE_PACK_INI_OFFSETS: bool = false;
 pub const DEFAULT_MACHINE_SHOW_EVAL_SUMMARY: bool = true;
+pub const DEFAULT_MACHINE_EASTER_EGGS: bool = true;
 pub const DEFAULT_MACHINE_NICE_SOUND: bool = false;
 pub const DEFAULT_MACHINE_SHOW_NAME_ENTRY: bool = true;
 pub const DEFAULT_MACHINE_SHOW_GAMEOVER: bool = true;
@@ -126,6 +127,7 @@ mod tests {
     #[test]
     fn core_user_visible_defaults_match_policy() {
         assert!(DEFAULT_CUSTOM_SOUNDS_ENABLED);
+        assert!(DEFAULT_MACHINE_EASTER_EGGS);
         assert!(!DEFAULT_MACHINE_NICE_SOUND);
         assert!(DEFAULT_HIDE_MOUSE_CURSOR);
         assert_eq!(DEFAULT_MUSIC_WHEEL_SWITCH_SPEED, 15);

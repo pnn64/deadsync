@@ -4756,7 +4756,7 @@ pub fn push_actors(
                     zoom: 0.4,
                     elapsed: state.session_elapsed,
                     taunt: eval_grades::grade_star_taunt_from_counts(si.judgment_counts),
-                    ..Default::default()
+                    easter_eggs: policy.machine_easter_eggs,
                 },
             ));
 

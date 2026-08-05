@@ -133,6 +133,7 @@ update_config_fn!(pub fn update_machine_show_select_play_mode(enabled: bool) => 
 update_config_fn!(pub fn update_machine_preferred_style(style: MachinePreferredPlayStyle) => set_machine_preferred_style);
 update_config_fn!(pub fn update_machine_preferred_play_mode(mode: MachinePreferredPlayMode) => set_machine_preferred_play_mode);
 update_config_fn!(pub fn update_machine_show_eval_summary(enabled: bool) => set_machine_show_eval_summary);
+update_config_fn!(pub fn update_machine_easter_eggs(enabled: bool) => set_machine_easter_eggs);
 update_config_fn!(pub fn update_machine_nice_sound(enabled: bool) => set_machine_nice_sound);
 update_config_fn!(pub fn update_machine_show_name_entry(enabled: bool) => set_machine_show_name_entry);
 update_config_fn!(pub fn update_machine_show_gameover(enabled: bool) => set_machine_show_gameover);

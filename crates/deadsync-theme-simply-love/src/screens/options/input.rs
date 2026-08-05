@@ -629,6 +629,9 @@ pub(super) fn apply_submenu_choice_delta(
                     SubRowId::EvalSummary => {
                         crate::SimplyLoveMachineConfigRequest::ShowEvaluationSummary(enabled)
                     }
+                    SubRowId::EasterEggs => {
+                        crate::SimplyLoveMachineConfigRequest::EasterEggs(enabled)
+                    }
                     SubRowId::NiceSound => {
                         crate::SimplyLoveMachineConfigRequest::NiceSound(enabled)
                     }

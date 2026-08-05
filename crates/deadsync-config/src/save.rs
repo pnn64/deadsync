@@ -558,6 +558,7 @@ fn theme_presentation_options(cfg: &Config) -> ThemePresentationOptions {
 fn machine_flow_options(cfg: &Config) -> MachineFlowOptions {
     MachineFlowOptions {
         machine_show_eval_summary: cfg.machine_show_eval_summary,
+        machine_easter_eggs: cfg.machine_easter_eggs,
         machine_nice_sound: cfg.machine_nice_sound,
         machine_show_name_entry: cfg.machine_show_name_entry,
         machine_show_gameover: cfg.machine_show_gameover,

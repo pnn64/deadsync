@@ -318,6 +318,10 @@ pub fn set_machine_show_eval_summary(cfg: &mut Config, enabled: bool) -> bool {
     set_if_changed(&mut cfg.machine_show_eval_summary, enabled)
 }
 
+pub fn set_machine_easter_eggs(cfg: &mut Config, enabled: bool) -> bool {
+    set_if_changed(&mut cfg.machine_easter_eggs, enabled)
+}
+
 pub fn set_machine_nice_sound(cfg: &mut Config, enabled: bool) -> bool {
     set_if_changed(&mut cfg.machine_nice_sound, enabled)
 }

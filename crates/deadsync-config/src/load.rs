@@ -421,6 +421,7 @@ fn apply_machine_flow(
     cfg: &mut Config,
 ) {
     cfg.machine_show_eval_summary = loaded.machine_show_eval_summary;
+    cfg.machine_easter_eggs = loaded.machine_easter_eggs;
     cfg.machine_nice_sound = loaded.machine_nice_sound;
     cfg.machine_show_name_entry = loaded.machine_show_name_entry;
     cfg.machine_show_gameover = loaded.machine_show_gameover;

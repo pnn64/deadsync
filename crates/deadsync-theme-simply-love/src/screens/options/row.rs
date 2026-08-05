@@ -91,6 +91,7 @@ pub enum SubRowId {
     BarColor,
     EvaluationStyle,
     EvalSummary,
+    EasterEggs,
     NiceSound,
     NameEntry,
     GameoverScreen,

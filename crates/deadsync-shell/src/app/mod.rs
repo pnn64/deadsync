@@ -393,6 +393,7 @@ fn evaluation_context_view() -> EvaluationContextView {
             shade_scatterplot_judgments: config.shade_scatterplot_judgments,
             only_dedicated_menu_buttons: config.only_dedicated_menu_buttons,
             three_key_navigation: config.three_key_navigation,
+            machine_easter_eggs: config.machine_easter_eggs,
             machine_nice_sound: config.machine_nice_sound,
             show_gameplay_timer: config.show_select_music_gameplay_timer,
             translated_titles: config.translated_titles,

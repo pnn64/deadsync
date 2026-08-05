@@ -562,6 +562,7 @@ pub enum SimplyLoveMachineConfigRequest {
     BarColor(MachineBarColor),
     EvaluationStyle(MachineEvaluationStyle),
     ShowEvaluationSummary(bool),
+    EasterEggs(bool),
     NiceSound(bool),
     ShowNameEntry(bool),
     ShowGameover(bool),

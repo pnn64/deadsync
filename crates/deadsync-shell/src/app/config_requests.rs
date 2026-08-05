@@ -154,6 +154,7 @@ pub(super) fn execute_machine(request: SimplyLoveMachineConfigRequest) {
         Request::ShowEvaluationSummary(enabled) => {
             config::update_machine_show_eval_summary(enabled)
         }
+        Request::EasterEggs(enabled) => config::update_machine_easter_eggs(enabled),
         Request::NiceSound(enabled) => config::update_machine_nice_sound(enabled),
         Request::ShowNameEntry(enabled) => config::update_machine_show_name_entry(enabled),
         Request::ShowGameover(enabled) => config::update_machine_show_gameover(enabled),
