@@ -59,6 +59,9 @@ pub use frame_hud::{
     ComboHudFrame, CounterHudFrame, ErrorBarHudFrame, JudgmentHudFrame, MiniHudFrame,
     NotefieldHudComposeResult, NotefieldHudFrameView, TapJudgmentHudFrame, compose_notefield_hud,
 };
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub use frame_hud::{HudOptionGateBench, HudOptionGateBenchFrame};
 pub use holds::{HoldMeshScratch, HoldMeshScratchStats, offset_center};
 #[cfg(feature = "bench-support")]
 #[doc(hidden)]

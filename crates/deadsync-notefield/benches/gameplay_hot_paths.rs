@@ -1,9 +1,9 @@
 use deadsync_notefield::{
     CameraWrapBench, CommonNoteTransformBench, CueScanBench, FeedbackLaneCacheBench,
-    HoldLaneFrameBench, HoldTravelReuseBench, IdentityAccelBench, LaneVisualCacheBench,
-    MeasureLineMode, MeasureLinePlanBench, MeasureLineTraversalBench, NotefieldPrepBench,
-    OneRateCmodBench, TapExplosionCullBench, VisibleLaneCursorBench, VisibleRangeBench,
-    XmodTimingBench,
+    HoldLaneFrameBench, HoldTravelReuseBench, HudOptionGateBench, IdentityAccelBench,
+    LaneVisualCacheBench, MeasureLineMode, MeasureLinePlanBench, MeasureLineTraversalBench,
+    NotefieldPrepBench, OneRateCmodBench, TapExplosionCullBench, VisibleLaneCursorBench,
+    VisibleRangeBench, XmodTimingBench,
 };
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::hint::black_box;
@@ -194,6 +194,62 @@ fn main() {
         },
         |frame| {
             let output = tap_explosions.new_frame(frame);
+            Output {
+                checksum: output.checksum,
+                samples: output.samples,
+            }
+        },
+    );
+
+    let hud_options = HudOptionGateBench::default();
+    run_pair(
+        "hidden combo HUD preparation",
+        "256 player HUDs with combo hidden while Song Lua combo capture remains available",
+        |frame| {
+            let output = hud_options.old_hidden_combo_frame(frame);
+            Output {
+                checksum: output.checksum,
+                samples: output.samples,
+            }
+        },
+        |frame| {
+            let output = hud_options.new_hidden_combo_frame(frame);
+            Output {
+                checksum: output.checksum,
+                samples: output.samples,
+            }
+        },
+    );
+    run_pair(
+        "disabled error HUD preparation",
+        "256 eight-lane HUDs with graphical bars and millisecond display disabled",
+        |frame| {
+            let output = hud_options.old_disabled_error_frame(frame);
+            Output {
+                checksum: output.checksum,
+                samples: output.samples,
+            }
+        },
+        |frame| {
+            let output = hud_options.new_disabled_error_frame(frame);
+            Output {
+                checksum: output.checksum,
+                samples: output.samples,
+            }
+        },
+    );
+    run_pair(
+        "expired judgment HUD preparation",
+        "256 retained tap judgments outside their 0.9 second actor lifetime",
+        |frame| {
+            let output = hud_options.old_expired_judgment_frame(frame);
+            Output {
+                checksum: output.checksum,
+                samples: output.samples,
+            }
+        },
+        |frame| {
+            let output = hud_options.new_expired_judgment_frame(frame);
             Output {
                 checksum: output.checksum,
                 samples: output.samples,

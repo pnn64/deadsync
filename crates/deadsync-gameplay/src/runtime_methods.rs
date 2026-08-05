@@ -128,6 +128,9 @@ where
         tap_music_time_s: f32,
     ) {
         let options = self.profiles_runtime.profiles[player].error_bar_options();
+        if !gameplay_error_hud_active(options) {
+            return;
+        }
         let show_text = options.mask_bits & GAMEPLAY_ERROR_BAR_TEXT != 0;
         let show_monochrome = options.mask_bits & GAMEPLAY_ERROR_BAR_MONOCHROME != 0;
         let show_colorful = options.mask_bits & GAMEPLAY_ERROR_BAR_COLORFUL != 0;

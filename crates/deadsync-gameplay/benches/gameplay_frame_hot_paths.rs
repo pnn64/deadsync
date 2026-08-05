@@ -1,8 +1,8 @@
 use deadsync_gameplay::{
     ActiveColumnScanBench, ActiveHoldMaskBench, CrossoverCueCursorBench, DisabledAssistClapBench,
-    DisabledComboMilestoneBench, DisplayBpmCacheBench, GameplayFrameHotPathBenchOutput,
-    IdleAttackRefreshBench, IdleHoldPhaseBench, IdleLaneScanBench, IdleReceptorGlowBench,
-    InputLaneSearchCursorBench, InputQueueDrainBench, JudgedRowCursorBench,
+    DisabledComboMilestoneBench, DisabledErrorHudBench, DisplayBpmCacheBench,
+    GameplayFrameHotPathBenchOutput, IdleAttackRefreshBench, IdleHoldPhaseBench, IdleLaneScanBench,
+    IdleReceptorGlowBench, InputLaneSearchCursorBench, InputQueueDrainBench, JudgedRowCursorBench,
     LiveNotefieldOptionsBench, MappedAudioClockBench, OptionalFrameWorkBench, PressedLaneMaskBench,
     RegularCueCursorBench, ResolutionDistanceCacheBench, SharedClockBeatBench,
     SharedMissCutoffBench, SongLuaNoteHideIndexBench, SparseFeedbackTickBench,
@@ -147,6 +147,14 @@ fn main() {
         "8192 clap rows while timing ticks are disabled",
         move |frame| old_assist.old_frame(frame),
         move |frame| new_assist.new_frame(frame),
+    );
+
+    let error_hud = DisabledErrorHudBench::default();
+    run_pair(
+        "disabled error-HUD events",
+        "256 tap judgments while every graphical and numeric error-HUD mode is disabled",
+        |frame| error_hud.old_frame(frame),
+        |frame| error_hud.new_frame(frame),
     );
 
     let columns = ActiveColumnScanBench::default();

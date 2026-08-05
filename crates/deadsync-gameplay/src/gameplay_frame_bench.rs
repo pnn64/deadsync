@@ -9,6 +9,102 @@ pub struct DisabledComboMilestoneBench {
     player: PlayerRuntime,
 }
 
+#[derive(Clone, Copy)]
+pub struct DisabledErrorHudBench {
+    options: GameplayErrorBarOptions,
+}
+
+impl Default for DisabledErrorHudBench {
+    fn default() -> Self {
+        Self {
+            options: GameplayErrorBarOptions {
+                text_scalable: true,
+                text_threshold_ms: 10,
+                show_fa_plus_window: true,
+                trim: GameplayErrorBarTrim::Great,
+                multi_tick: true,
+                short_average_enabled: true,
+                short_average_intensity: 1.25,
+                long_average_enabled: true,
+                long_average_threshold_ms: 3,
+                long_average_intensity: 1.5,
+                long_average_min_samples: 10,
+                average_interval_ms: 500,
+                ..GameplayErrorBarOptions::default()
+            },
+        }
+    }
+}
+
+impl DisabledErrorHudBench {
+    pub fn old_frame(&self, frame: usize) -> GameplayFrameHotPathBenchOutput {
+        let mut samples = 0;
+        for sample in 0..256 {
+            samples += std::hint::black_box(bench_error_hud_event_legacy(
+                self.options,
+                frame + sample,
+            ))
+            .samples;
+        }
+        disabled_error_hud_output(frame, samples)
+    }
+
+    pub fn new_frame(&self, frame: usize) -> GameplayFrameHotPathBenchOutput {
+        let mut samples = 0;
+        for sample in 0..256 {
+            if gameplay_error_hud_active(self.options) {
+                samples += bench_error_hud_event_legacy(self.options, frame + sample).samples;
+            }
+        }
+        disabled_error_hud_output(frame, samples)
+    }
+}
+
+#[inline(never)]
+fn bench_error_hud_event_legacy(
+    options: GameplayErrorBarOptions,
+    frame: usize,
+) -> GameplayFrameHotPathBenchOutput {
+    let show_text = options.mask_bits & GAMEPLAY_ERROR_BAR_TEXT != 0;
+    let show_monochrome = options.mask_bits & GAMEPLAY_ERROR_BAR_MONOCHROME != 0;
+    let show_colorful = options.mask_bits & GAMEPLAY_ERROR_BAR_COLORFUL != 0;
+    let show_highlight = options.mask_bits & GAMEPLAY_ERROR_BAR_HIGHLIGHT != 0;
+    let show_average = options.mask_bits & GAMEPLAY_ERROR_BAR_AVERAGE != 0;
+    let blue_window_s = blue_fantastic_window_ms(FantasticWindowOptions {
+        base_fa_plus_s: 0.015,
+        custom_fantastic_window_s: None,
+        fa_plus_10ms_blue_window: true,
+    }) / 1000.0;
+    let offset_s = ((frame % 193) as f32 - 96.0) / 1000.0;
+    let mut samples = usize::from(options.error_ms_display);
+    if show_text {
+        let threshold_s = if options.text_scalable {
+            options.text_threshold_ms as f32 / 1000.0
+        } else if options.show_fa_plus_window {
+            blue_window_s
+        } else {
+            0.015
+        };
+        samples += usize::from(offset_s.abs() > threshold_s);
+    }
+    if show_monochrome || show_colorful || show_highlight || show_average {
+        let max_window_ix = gameplay_error_bar_trim_max_window_ix(options.trim);
+        samples += max_window_ix + usize::from(options.multi_tick);
+    }
+    disabled_error_hud_output(frame, samples)
+}
+
+#[inline(always)]
+fn disabled_error_hud_output(
+    frame: usize,
+    samples: usize,
+) -> GameplayFrameHotPathBenchOutput {
+    GameplayFrameHotPathBenchOutput {
+        checksum: (frame as u64).rotate_left(13) ^ samples as u64,
+        samples,
+    }
+}
+
 impl DisabledComboMilestoneBench {
     pub fn legacy() -> Self {
         Self {

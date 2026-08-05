@@ -78,6 +78,14 @@ pub struct TapJudgmentHudFrame<'a> {
     pub frame_rows: usize,
 }
 
+impl TapJudgmentHudFrame<'_> {
+    /// Whether a retained gameplay judgment can still produce a tap actor.
+    #[inline]
+    pub fn render_active(render: &JudgmentRenderInfo, elapsed_screen: f32) -> bool {
+        crate::judgment_feedback::tap_judgment_active(render, elapsed_screen)
+    }
+}
+
 /// Prepared judgment snapshots and renderer-neutral assets for local lanes.
 pub struct JudgmentHudFrame<'a> {
     pub tap: Option<TapJudgmentHudFrame<'a>>,
@@ -93,11 +101,25 @@ pub struct JudgmentHudFrame<'a> {
 /// view to [`compose_notefield_hud`]. Lane-indexed judgment slices are
 /// local-lane ordered for the player span in `PreparedNotefield::frame_plan`.
 pub struct NotefieldHudFrameView<'a> {
-    pub combo: ComboHudFrame<'a>,
-    pub error_bar: ErrorBarHudFrame<'a>,
+    pub combo: Option<ComboHudFrame<'a>>,
+    pub error_bar: Option<ErrorBarHudFrame<'a>>,
     pub counter: Option<CounterHudFrame<'a>>,
     pub mini: Option<MiniHudFrame>,
-    pub judgment: JudgmentHudFrame<'a>,
+    pub judgment: Option<JudgmentHudFrame<'a>>,
+}
+
+impl NotefieldHudFrameView<'_> {
+    /// Whether combo preparation can produce actors for this frame.
+    #[inline]
+    pub const fn combo_active(hide_combo: bool, blind: bool, combo_visible: bool) -> bool {
+        !hide_combo && !blind && combo_visible
+    }
+
+    /// Whether graphical or numeric timing feedback can produce actors this frame.
+    #[inline]
+    pub const fn error_active(blind: bool, error_bar: bool, error_ms: bool) -> bool {
+        !blind && (error_bar || error_ms)
+    }
 }
 
 /// Proxy captures produced while composing the canonical HUD sequence.
@@ -118,14 +140,18 @@ pub fn compose_notefield_hud<S>(
     capture_scratch: &mut CapturedActorScratch,
 ) -> NotefieldHudComposeResult {
     let combo_capture_start = actors.len();
-    compose_combo(actors, request, prepared, &frame.combo);
+    if let Some(combo) = frame.combo.as_ref() {
+        compose_combo(actors, request, prepared, combo);
+    }
     let combo_actors = request
         .capture_requests
         .combo
         .then(|| share_actor_range(actors, combo_capture_start, &mut capture_scratch.combo))
         .flatten();
 
-    compose_error(actors, request, prepared, &frame.error_bar);
+    if let Some(error_bar) = frame.error_bar.as_ref() {
+        compose_error(actors, request, prepared, error_bar);
+    }
 
     if let (Some(options), Some(counter)) = (request.options.measure_counter, frame.counter) {
         compose_counter_hud(
@@ -177,7 +203,9 @@ pub fn compose_notefield_hud<S>(
     }
 
     let judgment_capture_start = actors.len();
-    compose_judgment(actors, request, prepared, &frame.judgment);
+    if let Some(judgment) = frame.judgment.as_ref() {
+        compose_judgment(actors, request, prepared, judgment);
+    }
     let judgment_actors = request
         .capture_requests
         .judgment
@@ -202,9 +230,11 @@ fn compose_combo<S>(
     prepared: &PreparedNotefield<'_, S>,
     frame: &ComboHudFrame<'_>,
 ) {
-    let show = !request.view.hide_combo
-        && !prepared.blind_active
-        && request.options.frame_features.combo_visible;
+    let show = NotefieldHudFrameView::combo_active(
+        request.view.hide_combo,
+        prepared.blind_active,
+        request.options.frame_features.combo_visible,
+    );
     let milestone_assets =
         (show && !request.options.hide_combo_explosions && !frame.milestones.is_empty())
             .then_some(frame.milestone_assets.as_ref())
@@ -404,4 +434,216 @@ fn compose_judgment<S>(
             column_reverse_percent: &field.column_reverse_percent[..prepared.frame_plan.num_cols],
         },
     );
+}
+
+#[cfg(feature = "bench-support")]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct HudOptionGateBenchFrame {
+    pub checksum: u64,
+    pub samples: usize,
+}
+
+#[cfg(feature = "bench-support")]
+pub struct HudOptionGateBench {
+    receptor_ys: [f32; 8],
+    tap: JudgmentRenderInfo,
+}
+
+#[cfg(feature = "bench-support")]
+const HUD_GATE_BENCH_SAMPLES: usize = 256;
+
+#[cfg(feature = "bench-support")]
+impl Default for HudOptionGateBench {
+    fn default() -> Self {
+        Self {
+            receptor_ys: [-144.0, -96.0, -48.0, 0.0, 0.0, 48.0, 96.0, 144.0],
+            tap: JudgmentRenderInfo {
+                judgment: deadsync_rules::judgment::Judgment {
+                    time_error_ms: -12.0,
+                    time_error_music_ns: -12_000_000,
+                    grade: deadsync_rules::judgment::JudgeGrade::Fantastic,
+                    window: Some(deadsync_rules::judgment::TimingWindow::W1),
+                    miss_because_held: false,
+                },
+                started_at_screen_s: 1.0,
+            },
+        }
+    }
+}
+
+#[cfg(feature = "bench-support")]
+impl HudOptionGateBench {
+    pub fn old_hidden_combo_frame(&self, frame: usize) -> HudOptionGateBenchFrame {
+        let mut samples = 0;
+        for sample in 0..HUD_GATE_BENCH_SAMPLES {
+            let show = NotefieldHudFrameView::combo_active(true, false, true);
+            samples += std::hint::black_box(bench_combo_output(show, frame + sample)).samples;
+        }
+        bench_hud_output(frame, samples)
+    }
+
+    pub fn new_hidden_combo_frame(&self, frame: usize) -> HudOptionGateBenchFrame {
+        let mut samples = 0;
+        for sample in 0..HUD_GATE_BENCH_SAMPLES {
+            if NotefieldHudFrameView::combo_active(true, false, true) {
+                samples += bench_combo_output(true, frame + sample).samples;
+            }
+        }
+        bench_hud_output(frame, samples)
+    }
+
+    pub fn old_disabled_error_frame(&self, frame: usize) -> HudOptionGateBenchFrame {
+        let mut samples = 0;
+        for sample in 0..HUD_GATE_BENCH_SAMPLES {
+            let average_y = self.receptor_ys.iter().sum::<f32>() / self.receptor_ys.len() as f32;
+            samples +=
+                std::hint::black_box(bench_error_output(false, false, average_y, frame + sample))
+                    .samples;
+        }
+        bench_hud_output(frame, samples)
+    }
+
+    pub fn new_disabled_error_frame(&self, frame: usize) -> HudOptionGateBenchFrame {
+        let mut samples = 0;
+        for sample in 0..HUD_GATE_BENCH_SAMPLES {
+            if NotefieldHudFrameView::error_active(false, false, false) {
+                let average_y =
+                    self.receptor_ys.iter().sum::<f32>() / self.receptor_ys.len() as f32;
+                samples += bench_error_output(false, false, average_y, frame + sample).samples;
+            }
+        }
+        bench_hud_output(frame, samples)
+    }
+
+    pub fn old_expired_judgment_frame(&self, frame: usize) -> HudOptionGateBenchFrame {
+        let mut samples = 0;
+        for sample in 0..HUD_GATE_BENCH_SAMPLES {
+            let tap = std::hint::black_box(&self.tap);
+            let judgment = &tap.judgment;
+            let rows = tap_judgment_rows(TapJudgmentRowsParams {
+                grade: judgment.grade,
+                window: judgment.window,
+                time_error_ms: judgment.time_error_ms,
+                frame_rows: 14,
+                show_fa_plus_window: true,
+                fa_plus_10ms_blue_window: false,
+                split_15_10ms: false,
+                custom_fantastic_window: false,
+            });
+            let rotation = judgment_tilt_rotation_deg(JudgmentTiltParams {
+                enabled: true,
+                grade: judgment.grade,
+                time_error_ms: judgment.time_error_ms,
+                min_threshold_ms: 5.0,
+                max_threshold_ms: 100.0,
+                multiplier: 1.0,
+            });
+            samples += std::hint::black_box(bench_judgment_output(
+                TapJudgmentHudFrame::render_active(tap, 2.0 + (frame + sample) as f32 / 120.0),
+                rows,
+                rotation,
+                frame + sample,
+            ))
+            .samples;
+        }
+        bench_hud_output(frame, samples)
+    }
+
+    pub fn new_expired_judgment_frame(&self, frame: usize) -> HudOptionGateBenchFrame {
+        let mut samples = 0;
+        for sample in 0..HUD_GATE_BENCH_SAMPLES {
+            let tap = std::hint::black_box(&self.tap);
+            if TapJudgmentHudFrame::render_active(tap, 2.0 + (frame + sample) as f32 / 120.0) {
+                samples += self.old_expired_judgment_frame(frame + sample).samples;
+            }
+        }
+        bench_hud_output(frame, samples)
+    }
+}
+
+#[cfg(feature = "bench-support")]
+#[inline(never)]
+fn bench_combo_output(show: bool, frame: usize) -> HudOptionGateBenchFrame {
+    if !show {
+        return bench_hud_output(frame, 0);
+    }
+    bench_hud_output(frame, usize::from(frame.is_multiple_of(257)) + 1)
+}
+
+#[cfg(feature = "bench-support")]
+#[inline(never)]
+fn bench_error_output(
+    error_bar: bool,
+    error_ms: bool,
+    average_y: f32,
+    frame: usize,
+) -> HudOptionGateBenchFrame {
+    let samples = if error_bar || error_ms {
+        usize::from(average_y.is_finite())
+    } else {
+        0
+    };
+    bench_hud_output(frame, samples)
+}
+
+#[cfg(feature = "bench-support")]
+#[inline(never)]
+fn bench_judgment_output(
+    active: bool,
+    rows: (usize, Option<usize>),
+    rotation: f32,
+    frame: usize,
+) -> HudOptionGateBenchFrame {
+    let samples = if active {
+        rows.0 + rows.1.unwrap_or_default() + usize::from(rotation.is_finite())
+    } else {
+        0
+    };
+    bench_hud_output(frame, samples)
+}
+
+#[cfg(feature = "bench-support")]
+#[inline(always)]
+fn bench_hud_output(frame: usize, samples: usize) -> HudOptionGateBenchFrame {
+    HudOptionGateBenchFrame {
+        checksum: (frame as u64).rotate_left(9) ^ samples as u64,
+        samples,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn combo_hud_gate_requires_every_visibility_input() {
+        let cases = [
+            ((false, false, true), true),
+            ((true, false, true), false),
+            ((false, true, true), false),
+            ((false, false, false), false),
+        ];
+        for ((hide_combo, blind, combo_visible), expected) in cases {
+            assert_eq!(
+                NotefieldHudFrameView::combo_active(hide_combo, blind, combo_visible),
+                expected
+            );
+        }
+    }
+
+    #[test]
+    fn error_hud_gate_accepts_either_enabled_output() {
+        let cases = [
+            ((false, false, false), false),
+            ((false, true, false), true),
+            ((false, false, true), true),
+            ((true, true, true), false),
+        ];
+        for ((blind, error_bar, error_ms), expected) in cases {
+            assert_eq!(
+                NotefieldHudFrameView::error_active(blind, error_bar, error_ms),
+                expected
+            );
+        }
+    }
 }

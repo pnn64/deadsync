@@ -753,51 +753,59 @@ pub(crate) fn compose_frame(
         },
     );
 
-    let show_combo =
-        !request.view.hide_combo && !blind_active && options.frame_features.combo_visible;
-    let milestone_assets = (show_combo
-        && !options.hide_combo_explosions
-        && !p.combo_milestones.is_empty())
+    let combo_frame = NotefieldHudFrameView::combo_active(
+        request.view.hide_combo,
+        blind_active,
+        options.frame_features.combo_visible,
+    )
     .then(|| {
-        let combo_splode_tex = visual_effects.combo_100milestone_splode;
-        let combo_minisplode_tex = visual_effects.combo_100milestone_minisplode;
-        let combo_swoosh_tex = visual_effects.combo_1000milestone_swoosh;
-        ComboMilestoneAssets {
-            burst: "combo_explosion.png".into_sprite_source(),
-            hundred: combo_splode_tex.into_sprite_source(),
-            hundred_mini: combo_minisplode_tex.into_sprite_source(),
-            thousand: combo_swoosh_tex.into_sprite_source(),
-            hundred_zoom_scale: assets::visual_styles::effect_zoom_scale(combo_splode_tex),
-            hundred_mini_zoom_scale: assets::visual_styles::effect_zoom_scale(combo_minisplode_tex),
-            thousand_zoom_scale: assets::visual_styles::effect_zoom_scale(combo_swoosh_tex),
+        let milestone_assets = (!options.hide_combo_explosions && !p.combo_milestones.is_empty())
+            .then(|| {
+                let combo_splode_tex = visual_effects.combo_100milestone_splode;
+                let combo_minisplode_tex = visual_effects.combo_100milestone_minisplode;
+                let combo_swoosh_tex = visual_effects.combo_1000milestone_swoosh;
+                ComboMilestoneAssets {
+                    burst: "combo_explosion.png".into_sprite_source(),
+                    hundred: combo_splode_tex.into_sprite_source(),
+                    hundred_mini: combo_minisplode_tex.into_sprite_source(),
+                    thousand: combo_swoosh_tex.into_sprite_source(),
+                    hundred_zoom_scale: assets::visual_styles::effect_zoom_scale(combo_splode_tex),
+                    hundred_mini_zoom_scale: assets::visual_styles::effect_zoom_scale(
+                        combo_minisplode_tex,
+                    ),
+                    thousand_zoom_scale: assets::visual_styles::effect_zoom_scale(combo_swoosh_tex),
+                }
+            });
+        let player_color = if milestone_assets.is_some() {
+            color::decorative_rgba(state.player_color_index())
+        } else {
+            [1.0; 4]
+        };
+        let combo_color = if p.miss_combo < style.combo_feedback.threshold
+            && p.combo >= style.combo_feedback.threshold
+        {
+            zmod_resolved_combo_color(state, p, profile, player_idx)
+        } else {
+            [1.0; 4]
+        };
+        ComboHudFrame {
+            milestones: &p.combo_milestones,
+            milestone_assets,
+            combo: p.combo,
+            miss_combo: p.miss_combo,
+            player_color,
+            combo_color,
+            font: zmod_combo_font_name(profile.combo_font),
+            number_text: TextContent::inline_u32,
         }
     });
-    let player_color = if milestone_assets.is_some() {
-        color::decorative_rgba(state.player_color_index())
-    } else {
-        [1.0; 4]
-    };
-    let combo_color = if show_combo
-        && p.miss_combo < style.combo_feedback.threshold
-        && p.combo >= style.combo_feedback.threshold
-    {
-        zmod_resolved_combo_color(state, p, profile, player_idx)
-    } else {
-        [1.0; 4]
-    };
-    let combo_frame = ComboHudFrame {
-        milestones: &p.combo_milestones,
-        milestone_assets,
-        combo: p.combo,
-        miss_combo: p.miss_combo,
-        player_color,
-        combo_color,
-        font: zmod_combo_font_name(profile.combo_font),
-        number_text: TextContent::inline_u32,
-    };
 
-    let timing_windows_s = state.timing_profile_windows_s();
-    let error_bar_frame = ErrorBarHudFrame {
+    let error_bar_frame = NotefieldHudFrameView::error_active(
+        blind_active,
+        options.frame_features.error_bar,
+        options.error_ms_display,
+    )
+    .then(|| ErrorBarHudFrame {
         mono_ticks: &p.error_bar_mono_ticks,
         color_ticks: &p.error_bar_color_ticks,
         average_ticks: &p.error_bar_avg_ticks,
@@ -805,14 +813,14 @@ pub(crate) fn compose_frame(
         average_bar_started_at: p.error_bar_avg_bar_started_at,
         flash_early: &p.error_bar_color_flash_early,
         flash_late: &p.error_bar_color_flash_late,
-        timing_windows_s,
+        timing_windows_s: state.timing_profile_windows_s(),
         offset_indicator: p.offset_indicator_text,
         long_average_tick: p.error_bar_long_avg_tick,
         long_average_active: p.error_bar_long_avg_visible,
         text: p.error_bar_text,
         offset_text: offset_ms_text,
         text_label: error_bar_text_label,
-    };
+    });
 
     let counter_frame = options.measure_counter.map(|_| CounterHudFrame {
         segments: state.measure_counter_segments(player_idx),
@@ -832,10 +840,9 @@ pub(crate) fn compose_frame(
             },
         );
 
-    let held_misses = state.held_miss_judgments_for_columns(col_start, num_cols);
-    let hold_judgments = state.hold_judgments_for_columns(col_start, num_cols);
     let tap = if !blind_active
         && let Some(render) = p.last_judgment.as_ref()
+        && TapJudgmentHudFrame::render_active(render, elapsed_screen)
         && let Some(texture) = judgment_texture
         && let Some(sprite) = judgment_assets.judgment_sprite_metadata()
     {
@@ -851,7 +858,19 @@ pub(crate) fn compose_frame(
     } else {
         None
     };
-    let held_miss_sprite = (!blind_active && held_misses.iter().any(Option::is_some))
+    let held_misses = if !blind_active && held_miss_texture.is_some() {
+        state.held_miss_judgments_for_columns(col_start, num_cols)
+    } else {
+        &[]
+    };
+    let hold_judgments = if !blind_active && hold_judgment_texture.is_some() {
+        state.hold_judgments_for_columns(col_start, num_cols)
+    } else {
+        &[]
+    };
+    let held_miss_sprite = held_misses
+        .iter()
+        .any(Option::is_some)
         .then(|| {
             held_miss_texture.map(|(texture, scale)| IndicatorSprite {
                 source: texture.actor_texture_source(actor_resources),
@@ -859,21 +878,25 @@ pub(crate) fn compose_frame(
             })
         })
         .flatten();
-    let hold_sprite = (!blind_active && hold_judgments.iter().any(Option::is_some))
+    let hold_sprite = hold_judgments
+        .iter()
+        .any(Option::is_some)
         .then(|| hold_judgment_texture.map(|texture| texture.actor_texture_source(actor_resources)))
         .flatten();
-    let hud_frame = NotefieldHudFrameView {
-        combo: combo_frame,
-        error_bar: error_bar_frame,
-        counter: counter_frame,
-        mini: mini_frame,
-        judgment: JudgmentHudFrame {
+    let judgment_frame = (tap.is_some() || held_miss_sprite.is_some() || hold_sprite.is_some())
+        .then_some(JudgmentHudFrame {
             tap,
             held_misses,
             held_miss_sprite,
             hold_judgments,
             hold_sprite,
-        },
+        });
+    let hud_frame = NotefieldHudFrameView {
+        combo: combo_frame,
+        error_bar: error_bar_frame,
+        counter: counter_frame,
+        mini: mini_frame,
+        judgment: judgment_frame,
     };
     let hud_result = compose_notefield_hud(
         hud_actors,

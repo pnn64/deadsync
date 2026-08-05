@@ -2095,6 +2095,33 @@ mod runtime_regression_tests {
     }
 
     #[test]
+    fn disabled_error_hud_does_not_record_tap_feedback() {
+        let mut state = regression_state();
+        state.boundary.total_elapsed_in_screen = 4.0;
+
+        state.error_bar_register_tap(
+            0,
+            &Judgment {
+                time_error_ms: 96.0,
+                time_error_music_ns: judgment::judgment_time_error_music_ns_from_ms(96.0, 1.0),
+                grade: JudgeGrade::Decent,
+                window: Some(TimingWindow::W4),
+                miss_because_held: false,
+            },
+            1.0,
+        );
+
+        let player = &state.players_runtime.players[0];
+        assert!(player.offset_indicator_text.is_none());
+        assert!(player.error_bar_text.is_none());
+        assert!(player.error_bar_mono_ticks.iter().all(Option::is_none));
+        assert!(player.error_bar_color_ticks.iter().all(Option::is_none));
+        assert!(player.error_bar_avg_ticks.iter().all(Option::is_none));
+        assert!(player.error_bar_avg_samples.is_empty());
+        assert!(player.error_bar_long_avg_samples.is_empty());
+    }
+
+    #[test]
     fn jump_row_finalization_uses_row_judgment_for_error_bar_hud() {
         let p1 = error_bar_profile(GameplayErrorBarOptions {
             mask_bits: GAMEPLAY_ERROR_BAR_TEXT,

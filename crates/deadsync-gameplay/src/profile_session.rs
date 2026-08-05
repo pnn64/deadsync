@@ -86,6 +86,16 @@ pub const GAMEPLAY_ERROR_BAR_MONOCHROME: u8 = 1 << 1;
 pub const GAMEPLAY_ERROR_BAR_TEXT: u8 = 1 << 2;
 pub const GAMEPLAY_ERROR_BAR_HIGHLIGHT: u8 = 1 << 3;
 pub const GAMEPLAY_ERROR_BAR_AVERAGE: u8 = 1 << 4;
+const GAMEPLAY_ERROR_BAR_ALL: u8 = GAMEPLAY_ERROR_BAR_COLORFUL
+    | GAMEPLAY_ERROR_BAR_MONOCHROME
+    | GAMEPLAY_ERROR_BAR_TEXT
+    | GAMEPLAY_ERROR_BAR_HIGHLIGHT
+    | GAMEPLAY_ERROR_BAR_AVERAGE;
+
+#[inline]
+pub(crate) const fn gameplay_error_hud_active(options: GameplayErrorBarOptions) -> bool {
+    options.error_ms_display || options.mask_bits & GAMEPLAY_ERROR_BAR_ALL != 0
+}
 
 pub trait GameplayProfileData: Clone {
     fn insert_mask_bits(&self) -> u8;

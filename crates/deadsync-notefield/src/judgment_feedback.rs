@@ -114,8 +114,16 @@ fn append_tap_judgment(actors: &mut Vec<Actor>, request: &JudgmentFeedbackReques
     }
 }
 
+const TAP_JUDGMENT_DURATION_S: f32 = 0.9;
+
+/// Whether the most recent tap judgment is still inside its actor lifetime.
+#[inline]
+pub(crate) fn tap_judgment_active(render: &JudgmentRenderInfo, elapsed_screen: f32) -> bool {
+    (elapsed_screen - render.started_at_screen_s).max(0.0) < TAP_JUDGMENT_DURATION_S
+}
+
 fn tap_judgment_zoom(elapsed: f32, zoom_mod: f32) -> Option<f32> {
-    if elapsed >= 0.9 {
+    if elapsed >= TAP_JUDGMENT_DURATION_S {
         return None;
     }
     let zoom = if elapsed < 0.1 {
@@ -422,6 +430,15 @@ mod tests {
                 other => panic!("expected tap judgment sprite, got {other:?}"),
             }
         }
+    }
+
+    #[test]
+    fn tap_judgment_activity_matches_actor_lifetime_boundary() {
+        let info = judgment_info(2.0);
+        assert!(tap_judgment_active(&info, 1.5));
+        assert!(tap_judgment_active(&info, 2.899));
+        assert!(!tap_judgment_active(&info, 2.9));
+        assert!(!tap_judgment_active(&info, 3.5));
     }
 
     #[test]

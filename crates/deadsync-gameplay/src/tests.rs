@@ -4510,6 +4510,23 @@ mod tests {
     }
 
     #[test]
+    fn error_hud_activity_requires_a_rendered_mode_or_offset_text() {
+        assert!(!gameplay_error_hud_active(GameplayErrorBarOptions::default()));
+        assert!(gameplay_error_hud_active(GameplayErrorBarOptions {
+            mask_bits: GAMEPLAY_ERROR_BAR_TEXT,
+            ..GameplayErrorBarOptions::default()
+        }));
+        assert!(gameplay_error_hud_active(GameplayErrorBarOptions {
+            error_ms_display: true,
+            ..GameplayErrorBarOptions::default()
+        }));
+        assert!(!gameplay_error_hud_active(GameplayErrorBarOptions {
+            mask_bits: 1 << 7,
+            ..GameplayErrorBarOptions::default()
+        }));
+    }
+
+    #[test]
     fn error_bar_trim_max_window_indices_match_profile_labels() {
         assert_eq!(
             gameplay_error_bar_trim_max_window_ix(GameplayErrorBarTrim::Off),
