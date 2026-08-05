@@ -1730,6 +1730,326 @@ fn gameplay_actor_scratch(active_players: usize, capacity: usize) -> [Vec<Actor>
     })
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum GameplayStepStatsMode {
+    Hidden,
+    Side,
+    Versus,
+    Double,
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+impl GameplayStepStatsMode {
+    const fn checksum(self) -> u64 {
+        match self {
+            Self::Hidden => 0,
+            Self::Side => 1,
+            Self::Versus => 2,
+            Self::Double => 3,
+        }
+    }
+}
+
+const fn gameplay_step_stats_mode(
+    play_style: profile_data::PlayStyle,
+    num_cols: usize,
+    p1_enabled: bool,
+    p2_enabled: bool,
+) -> GameplayStepStatsMode {
+    let enabled = match play_style {
+        profile_data::PlayStyle::Single | profile_data::PlayStyle::Double => p1_enabled,
+        profile_data::PlayStyle::Versus => p1_enabled || p2_enabled,
+    };
+    if !enabled {
+        return GameplayStepStatsMode::Hidden;
+    }
+    if num_cols <= 4 && !matches!(play_style, profile_data::PlayStyle::Versus) {
+        GameplayStepStatsMode::Side
+    } else {
+        match play_style {
+            profile_data::PlayStyle::Versus => GameplayStepStatsMode::Versus,
+            profile_data::PlayStyle::Double => GameplayStepStatsMode::Double,
+            profile_data::PlayStyle::Single => GameplayStepStatsMode::Hidden,
+        }
+    }
+}
+
+/// Game-thread, song-lifetime scratch detached while one actor frame is built.
+///
+/// The box is allocated and every variable-capacity field is prewarmed at
+/// gameplay entry. A frame moves only the owning pointer, so there are no
+/// misses, growth, pruning, synchronization, or destruction on the live path.
+/// The owner is restored before returning and dropped at screen transition.
+/// The frame-orchestration benchmark covers allocation counts and worst-sample
+/// cost; steady-state work is bounded to one pointer take and restore.
+#[derive(Default)]
+struct GameplayFrameScratch {
+    lobby_hud_cache: lobby_hud::LobbyHudCache,
+    lobby_hud_status_scratch: String,
+    song_lua_overlay_order: SongLuaOverlayOrderCache,
+    song_lua_background_visual_layer_orders: Vec<SongLuaOverlayOrderCache>,
+    song_lua_foreground_visual_layer_orders: Vec<SongLuaOverlayOrderCache>,
+    song_lua_proxy_request_index: SongLuaProxyRequestIndex,
+    song_lua_background_overlay_topology_indices: Vec<SongLuaOverlayTopologyIndex>,
+    song_lua_foreground_proxy_request_indices: Vec<SongLuaProxyRequestIndex>,
+    song_lua_aft_capture_scratch: SongLuaAftCaptureScratch,
+    song_lua_background_aft_capture_scratch: Vec<SongLuaAftCaptureScratch>,
+    song_lua_foreground_aft_capture_scratch: Vec<SongLuaAftCaptureScratch>,
+    song_lua_projected_mesh_scratch: Vec<SongLuaProjectedMeshScratch>,
+    song_lua_background_projected_mesh_scratch: Vec<Vec<SongLuaProjectedMeshScratch>>,
+    song_lua_foreground_projected_mesh_scratch: Vec<Vec<SongLuaProjectedMeshScratch>>,
+    song_lua_message_state_cache: Vec<SongLuaMessageStateCache>,
+    song_lua_background_layer_message_state_cache: Vec<Vec<SongLuaMessageStateCache>>,
+    song_lua_foreground_layer_message_state_cache: Vec<Vec<SongLuaMessageStateCache>>,
+    song_lua_player_message_state_cache: [SongLuaMessageStateCache; MAX_PLAYERS],
+    song_lua_song_foreground_message_state_cache: SongLuaMessageStateCache,
+    song_lua_background_song_foreground_message_state_cache: Vec<SongLuaMessageStateCache>,
+    song_lua_foreground_song_foreground_message_state_cache: Vec<SongLuaMessageStateCache>,
+    song_lua_local_state_scratch: Vec<SongLuaOverlayState>,
+    song_lua_overlay_state_scratch: Vec<SongLuaOverlayState>,
+    song_lua_background_layer_local_state_scratch: Vec<Vec<SongLuaOverlayState>>,
+    song_lua_background_layer_state_scratch: Vec<Vec<SongLuaOverlayState>>,
+    song_lua_foreground_layer_local_state_scratch: Vec<Vec<SongLuaOverlayState>>,
+    song_lua_foreground_layer_state_scratch: Vec<Vec<SongLuaOverlayState>>,
+    song_lua_capture_state_scratch: Vec<SongLuaOverlayState>,
+    song_lua_order_scratch: Vec<usize>,
+    song_lua_capture_order_scratch: Vec<usize>,
+    song_lua_capture_visit_scratch: SongLuaCaptureVisitScratch,
+    song_lua_proxy_actor_scratch: Option<SongLuaProxyActorScratch>,
+    notefield_actor_scratch: [Vec<Actor>; MAX_PLAYERS],
+    notefield_hud_actor_scratch: [Vec<Actor>; MAX_PLAYERS],
+    player_actor_scratch: [Vec<Actor>; MAX_PLAYERS],
+    presentation_skeleton: GameplayPresentationSkeleton,
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+#[doc(hidden)]
+pub struct GameplayFrameOrchestrationBenchmark {
+    legacy_scratch: GameplayFrameScratch,
+    boxed_scratch: Option<Box<GameplayFrameScratch>>,
+    layer_count: usize,
+    layer_scratch: [Vec<Vec<()>>; 6],
+    play_style: profile_data::PlayStyle,
+    num_cols: usize,
+    p1_step_stats: bool,
+    p2_step_stats: bool,
+    step_stats_mode: GameplayStepStatsMode,
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+impl GameplayFrameOrchestrationBenchmark {
+    pub fn new(layer_count: usize) -> Self {
+        let scratch = || {
+            let mut scratch = GameplayFrameScratch::default();
+            scratch.lobby_hud_status_scratch = String::with_capacity(128);
+            scratch.song_lua_order_scratch = Vec::with_capacity(256);
+            scratch.song_lua_capture_order_scratch = Vec::with_capacity(256);
+            scratch.song_lua_capture_state_scratch = Vec::with_capacity(256);
+            scratch
+        };
+        let play_style = profile_data::PlayStyle::Versus;
+        let num_cols = 8;
+        let p1_step_stats = false;
+        let p2_step_stats = true;
+        Self {
+            legacy_scratch: scratch(),
+            boxed_scratch: Some(Box::new(scratch())),
+            layer_count,
+            layer_scratch: std::array::from_fn(|_| (0..layer_count).map(|_| Vec::new()).collect()),
+            play_style,
+            num_cols,
+            p1_step_stats,
+            p2_step_stats,
+            step_stats_mode: gameplay_step_stats_mode(
+                play_style,
+                num_cols,
+                p1_step_stats,
+                p2_step_stats,
+            ),
+        }
+    }
+
+    fn scratch_checksum(scratch: &GameplayFrameScratch) -> u64 {
+        (scratch.lobby_hud_status_scratch.capacity()
+            + scratch.song_lua_order_scratch.capacity()
+            + scratch.song_lua_capture_order_scratch.capacity()
+            + scratch.song_lua_capture_state_scratch.capacity()) as u64
+    }
+
+    pub fn scratch_fields_legacy(&mut self) -> u64 {
+        macro_rules! detach {
+            ($($field:ident),+ $(,)?) => {
+                $(let $field = std::mem::take(&mut self.legacy_scratch.$field);)+
+            };
+        }
+        detach!(
+            lobby_hud_cache,
+            lobby_hud_status_scratch,
+            song_lua_overlay_order,
+            song_lua_background_visual_layer_orders,
+            song_lua_foreground_visual_layer_orders,
+            song_lua_proxy_request_index,
+            song_lua_background_overlay_topology_indices,
+            song_lua_foreground_proxy_request_indices,
+            song_lua_aft_capture_scratch,
+            song_lua_background_aft_capture_scratch,
+            song_lua_foreground_aft_capture_scratch,
+            song_lua_projected_mesh_scratch,
+            song_lua_background_projected_mesh_scratch,
+            song_lua_foreground_projected_mesh_scratch,
+            song_lua_message_state_cache,
+            song_lua_background_layer_message_state_cache,
+            song_lua_foreground_layer_message_state_cache,
+            song_lua_player_message_state_cache,
+            song_lua_song_foreground_message_state_cache,
+            song_lua_background_song_foreground_message_state_cache,
+            song_lua_foreground_song_foreground_message_state_cache,
+            song_lua_local_state_scratch,
+            song_lua_overlay_state_scratch,
+            song_lua_background_layer_local_state_scratch,
+            song_lua_background_layer_state_scratch,
+            song_lua_foreground_layer_local_state_scratch,
+            song_lua_foreground_layer_state_scratch,
+            song_lua_capture_state_scratch,
+            song_lua_order_scratch,
+            song_lua_capture_order_scratch,
+            song_lua_capture_visit_scratch,
+            song_lua_proxy_actor_scratch,
+            notefield_actor_scratch,
+            notefield_hud_actor_scratch,
+            player_actor_scratch,
+            presentation_skeleton,
+        );
+        std::hint::black_box((
+            &lobby_hud_cache,
+            &lobby_hud_status_scratch,
+            &song_lua_overlay_order,
+            &song_lua_background_visual_layer_orders,
+            &song_lua_foreground_visual_layer_orders,
+            &song_lua_proxy_request_index,
+            &song_lua_background_overlay_topology_indices,
+            &song_lua_foreground_proxy_request_indices,
+            &song_lua_aft_capture_scratch,
+            &song_lua_background_aft_capture_scratch,
+            &song_lua_foreground_aft_capture_scratch,
+            &song_lua_projected_mesh_scratch,
+            &song_lua_background_projected_mesh_scratch,
+            &song_lua_foreground_projected_mesh_scratch,
+            &song_lua_message_state_cache,
+            &song_lua_background_layer_message_state_cache,
+            &song_lua_foreground_layer_message_state_cache,
+            &song_lua_player_message_state_cache,
+            &song_lua_song_foreground_message_state_cache,
+            &song_lua_background_song_foreground_message_state_cache,
+            &song_lua_foreground_song_foreground_message_state_cache,
+            &song_lua_local_state_scratch,
+            &song_lua_overlay_state_scratch,
+            &song_lua_background_layer_local_state_scratch,
+            &song_lua_background_layer_state_scratch,
+            &song_lua_foreground_layer_local_state_scratch,
+            &song_lua_foreground_layer_state_scratch,
+            &song_lua_capture_state_scratch,
+            &song_lua_order_scratch,
+            &song_lua_capture_order_scratch,
+            &song_lua_capture_visit_scratch,
+            &song_lua_proxy_actor_scratch,
+            &notefield_actor_scratch,
+            &notefield_hud_actor_scratch,
+            &player_actor_scratch,
+            &presentation_skeleton,
+        ));
+        let checksum = (lobby_hud_status_scratch.capacity()
+            + song_lua_order_scratch.capacity()
+            + song_lua_capture_order_scratch.capacity()
+            + song_lua_capture_state_scratch.capacity()) as u64;
+        macro_rules! restore {
+            ($($field:ident),+ $(,)?) => {
+                $(self.legacy_scratch.$field = $field;)+
+            };
+        }
+        restore!(
+            lobby_hud_cache,
+            lobby_hud_status_scratch,
+            song_lua_overlay_order,
+            song_lua_background_visual_layer_orders,
+            song_lua_foreground_visual_layer_orders,
+            song_lua_proxy_request_index,
+            song_lua_background_overlay_topology_indices,
+            song_lua_foreground_proxy_request_indices,
+            song_lua_aft_capture_scratch,
+            song_lua_background_aft_capture_scratch,
+            song_lua_foreground_aft_capture_scratch,
+            song_lua_projected_mesh_scratch,
+            song_lua_background_projected_mesh_scratch,
+            song_lua_foreground_projected_mesh_scratch,
+            song_lua_message_state_cache,
+            song_lua_background_layer_message_state_cache,
+            song_lua_foreground_layer_message_state_cache,
+            song_lua_player_message_state_cache,
+            song_lua_song_foreground_message_state_cache,
+            song_lua_background_song_foreground_message_state_cache,
+            song_lua_foreground_song_foreground_message_state_cache,
+            song_lua_local_state_scratch,
+            song_lua_overlay_state_scratch,
+            song_lua_background_layer_local_state_scratch,
+            song_lua_background_layer_state_scratch,
+            song_lua_foreground_layer_local_state_scratch,
+            song_lua_foreground_layer_state_scratch,
+            song_lua_capture_state_scratch,
+            song_lua_order_scratch,
+            song_lua_capture_order_scratch,
+            song_lua_capture_visit_scratch,
+            song_lua_proxy_actor_scratch,
+            notefield_actor_scratch,
+            notefield_hud_actor_scratch,
+            player_actor_scratch,
+            presentation_skeleton,
+        );
+        checksum
+    }
+
+    pub fn scratch_pointer(&mut self) -> u64 {
+        let scratch = std::hint::black_box(
+            self.boxed_scratch
+                .take()
+                .expect("benchmark scratch is restored after every frame"),
+        );
+        let checksum = Self::scratch_checksum(&scratch);
+        self.boxed_scratch = Some(std::hint::black_box(scratch));
+        checksum
+    }
+
+    pub fn layer_resize_legacy(&mut self) -> u64 {
+        let layer_count = std::hint::black_box(self.layer_count);
+        for layers in &mut self.layer_scratch {
+            layers.resize_with(layer_count, Vec::new);
+        }
+        self.layer_checksum()
+    }
+
+    pub fn fixed_layer_lengths(&self) -> u64 {
+        self.layer_checksum()
+    }
+
+    fn layer_checksum(&self) -> u64 {
+        self.layer_scratch.iter().map(Vec::len).sum::<usize>() as u64
+    }
+
+    pub fn step_stats_legacy(&self) -> u64 {
+        gameplay_step_stats_mode(
+            std::hint::black_box(self.play_style),
+            std::hint::black_box(self.num_cols),
+            std::hint::black_box(self.p1_step_stats),
+            std::hint::black_box(self.p2_step_stats),
+        )
+        .checksum()
+    }
+
+    pub const fn cached_step_stats(&self) -> u64 {
+        self.step_stats_mode.checksum()
+    }
+}
+
 pub struct State {
     pub gameplay: GameplayCoreState,
     /// Game-thread, song-lifetime identity for the fixed two HUD slots. Built
@@ -1757,8 +2077,7 @@ pub struct State {
     pub lobby_ready_p2: bool,
     pub lobby_disconnect_hold_p1: Option<Instant>,
     pub lobby_disconnect_hold_p2: Option<Instant>,
-    lobby_hud_cache: lobby_hud::LobbyHudCache,
-    lobby_hud_status_scratch: String,
+    step_stats_mode: GameplayStepStatsMode,
     pub(crate) song_banner_key: Option<Arc<str>>,
     pub(crate) pack_banner_key: Option<Arc<str>>,
     pub(crate) notefield_model_cache: [RefCell<ModelMeshCache>; MAX_PLAYERS],
@@ -1821,41 +2140,8 @@ pub struct State {
     // Time banked toward the next shell-owned sensor refresh. Seeded to fire on
     // the first frame.
     smx_sensor_refresh_accum: f32,
-    song_lua_overlay_order: SongLuaOverlayOrderCache,
-    song_lua_background_visual_layer_orders: Vec<SongLuaOverlayOrderCache>,
-    song_lua_foreground_visual_layer_orders: Vec<SongLuaOverlayOrderCache>,
-    song_lua_proxy_request_index: SongLuaProxyRequestIndex,
-    song_lua_background_overlay_topology_indices: Vec<SongLuaOverlayTopologyIndex>,
-    song_lua_foreground_proxy_request_indices: Vec<SongLuaProxyRequestIndex>,
-    song_lua_aft_capture_scratch: SongLuaAftCaptureScratch,
-    song_lua_background_aft_capture_scratch: Vec<SongLuaAftCaptureScratch>,
-    song_lua_foreground_aft_capture_scratch: Vec<SongLuaAftCaptureScratch>,
-    song_lua_projected_mesh_scratch: Vec<SongLuaProjectedMeshScratch>,
-    song_lua_background_projected_mesh_scratch: Vec<Vec<SongLuaProjectedMeshScratch>>,
-    song_lua_foreground_projected_mesh_scratch: Vec<Vec<SongLuaProjectedMeshScratch>>,
-    song_lua_message_state_cache: Vec<SongLuaMessageStateCache>,
-    song_lua_background_layer_message_state_cache: Vec<Vec<SongLuaMessageStateCache>>,
-    song_lua_foreground_layer_message_state_cache: Vec<Vec<SongLuaMessageStateCache>>,
-    song_lua_player_message_state_cache: [SongLuaMessageStateCache; MAX_PLAYERS],
-    song_lua_song_foreground_message_state_cache: SongLuaMessageStateCache,
-    song_lua_background_song_foreground_message_state_cache: Vec<SongLuaMessageStateCache>,
-    song_lua_foreground_song_foreground_message_state_cache: Vec<SongLuaMessageStateCache>,
-    song_lua_local_state_scratch: Vec<SongLuaOverlayState>,
-    song_lua_overlay_state_scratch: Vec<SongLuaOverlayState>,
-    song_lua_background_layer_local_state_scratch: Vec<Vec<SongLuaOverlayState>>,
-    song_lua_background_layer_state_scratch: Vec<Vec<SongLuaOverlayState>>,
-    song_lua_foreground_layer_local_state_scratch: Vec<Vec<SongLuaOverlayState>>,
-    song_lua_foreground_layer_state_scratch: Vec<Vec<SongLuaOverlayState>>,
-    song_lua_capture_state_scratch: Vec<SongLuaOverlayState>,
-    song_lua_order_scratch: Vec<usize>,
-    song_lua_capture_order_scratch: Vec<usize>,
-    song_lua_capture_visit_scratch: SongLuaCaptureVisitScratch,
-    song_lua_proxy_actor_scratch: Option<SongLuaProxyActorScratch>,
+    frame_scratch: Option<Box<GameplayFrameScratch>>,
     actor_resources: ActorResourceArena,
-    notefield_actor_scratch: [Vec<Actor>; MAX_PLAYERS],
-    notefield_hud_actor_scratch: [Vec<Actor>; MAX_PLAYERS],
-    player_actor_scratch: [Vec<Actor>; MAX_PLAYERS],
-    presentation_skeleton: GameplayPresentationSkeleton,
 }
 
 const STATIC_FILTER: usize = 0;
@@ -2188,6 +2474,86 @@ impl State {
             gameplay_actor_scratch(active_players, NOTEFIELD_HUD_ACTOR_SCRATCH_CAPACITY);
         let player_actor_scratch =
             gameplay_actor_scratch(active_players, PLAYER_ACTOR_SCRATCH_CAPACITY);
+        let step_stats_mode = gameplay_step_stats_mode(
+            hud_snapshot.play_style,
+            gameplay.num_cols(),
+            !step_stats_profiles[0].step_statistics.is_empty(),
+            !step_stats_profiles[1].step_statistics.is_empty(),
+        );
+        let frame_scratch = GameplayFrameScratch {
+            lobby_hud_cache: lobby_hud::LobbyHudCache::default(),
+            lobby_hud_status_scratch: String::with_capacity(128),
+            song_lua_overlay_order,
+            song_lua_background_visual_layer_orders,
+            song_lua_foreground_visual_layer_orders,
+            song_lua_proxy_request_index,
+            song_lua_background_overlay_topology_indices,
+            song_lua_foreground_proxy_request_indices,
+            song_lua_aft_capture_scratch,
+            song_lua_background_aft_capture_scratch,
+            song_lua_foreground_aft_capture_scratch,
+            song_lua_projected_mesh_scratch,
+            song_lua_background_projected_mesh_scratch,
+            song_lua_foreground_projected_mesh_scratch,
+            song_lua_message_state_cache,
+            song_lua_background_layer_message_state_cache,
+            song_lua_foreground_layer_message_state_cache,
+            song_lua_player_message_state_cache: [SongLuaMessageStateCache::default(); MAX_PLAYERS],
+            song_lua_song_foreground_message_state_cache: SongLuaMessageStateCache::default(),
+            song_lua_background_song_foreground_message_state_cache,
+            song_lua_foreground_song_foreground_message_state_cache,
+            song_lua_local_state_scratch,
+            song_lua_overlay_state_scratch,
+            song_lua_background_layer_local_state_scratch,
+            song_lua_background_layer_state_scratch,
+            song_lua_foreground_layer_local_state_scratch,
+            song_lua_foreground_layer_state_scratch,
+            song_lua_capture_state_scratch: Vec::with_capacity(song_lua_max_overlay_count),
+            song_lua_order_scratch: Vec::with_capacity(song_lua_max_overlay_count),
+            song_lua_capture_order_scratch: Vec::with_capacity(song_lua_max_overlay_count),
+            song_lua_capture_visit_scratch: SongLuaCaptureVisitScratch::with_capacity(
+                song_lua_max_overlay_count,
+            ),
+            song_lua_proxy_actor_scratch: (song_lua_proxy_count != 0).then(|| {
+                SongLuaProxyActorScratch::with_proxy_capacity(active_players, song_lua_proxy_count)
+            }),
+            notefield_actor_scratch,
+            notefield_hud_actor_scratch,
+            player_actor_scratch,
+            presentation_skeleton: GameplayPresentationSkeleton::default(),
+        };
+        debug_assert_eq!(
+            frame_scratch
+                .song_lua_background_layer_local_state_scratch
+                .len(),
+            song_lua_visuals.background_visual_layers.len()
+        );
+        debug_assert_eq!(
+            frame_scratch.song_lua_background_layer_state_scratch.len(),
+            song_lua_visuals.background_visual_layers.len()
+        );
+        debug_assert_eq!(
+            frame_scratch
+                .song_lua_background_layer_message_state_cache
+                .len(),
+            song_lua_visuals.background_visual_layers.len()
+        );
+        debug_assert_eq!(
+            frame_scratch
+                .song_lua_foreground_layer_local_state_scratch
+                .len(),
+            song_lua_visuals.foreground_visual_layers.len()
+        );
+        debug_assert_eq!(
+            frame_scratch.song_lua_foreground_layer_state_scratch.len(),
+            song_lua_visuals.foreground_visual_layers.len()
+        );
+        debug_assert_eq!(
+            frame_scratch
+                .song_lua_foreground_layer_message_state_cache
+                .len(),
+            song_lua_visuals.foreground_visual_layers.len()
+        );
         let mut state = Self {
             gameplay,
             hud_snapshot,
@@ -2210,8 +2576,7 @@ impl State {
             lobby_ready_p2: false,
             lobby_disconnect_hold_p1: None,
             lobby_disconnect_hold_p2: None,
-            lobby_hud_cache: lobby_hud::LobbyHudCache::default(),
-            lobby_hud_status_scratch: String::with_capacity(128),
+            step_stats_mode,
             song_banner_key,
             pack_banner_key,
             notefield_model_cache,
@@ -2250,45 +2615,8 @@ impl State {
             smx_sensor_views: [None, None],
             heart_rate_view: HeartRateView::default(),
             smx_sensor_refresh_accum: SMX_SENSOR_REFRESH_INTERVAL,
-            song_lua_overlay_order,
-            song_lua_background_visual_layer_orders,
-            song_lua_foreground_visual_layer_orders,
-            song_lua_proxy_request_index,
-            song_lua_background_overlay_topology_indices,
-            song_lua_foreground_proxy_request_indices,
-            song_lua_aft_capture_scratch,
-            song_lua_background_aft_capture_scratch,
-            song_lua_foreground_aft_capture_scratch,
-            song_lua_projected_mesh_scratch,
-            song_lua_background_projected_mesh_scratch,
-            song_lua_foreground_projected_mesh_scratch,
-            song_lua_message_state_cache,
-            song_lua_background_layer_message_state_cache,
-            song_lua_foreground_layer_message_state_cache,
-            song_lua_player_message_state_cache: [SongLuaMessageStateCache::default(); MAX_PLAYERS],
-            song_lua_song_foreground_message_state_cache: SongLuaMessageStateCache::default(),
-            song_lua_background_song_foreground_message_state_cache,
-            song_lua_foreground_song_foreground_message_state_cache,
-            song_lua_local_state_scratch,
-            song_lua_overlay_state_scratch,
-            song_lua_background_layer_local_state_scratch,
-            song_lua_background_layer_state_scratch,
-            song_lua_foreground_layer_local_state_scratch,
-            song_lua_foreground_layer_state_scratch,
-            song_lua_capture_state_scratch: Vec::with_capacity(song_lua_max_overlay_count),
-            song_lua_order_scratch: Vec::with_capacity(song_lua_max_overlay_count),
-            song_lua_capture_order_scratch: Vec::with_capacity(song_lua_max_overlay_count),
-            song_lua_capture_visit_scratch: SongLuaCaptureVisitScratch::with_capacity(
-                song_lua_max_overlay_count,
-            ),
-            song_lua_proxy_actor_scratch: (song_lua_proxy_count != 0).then(|| {
-                SongLuaProxyActorScratch::with_proxy_capacity(active_players, song_lua_proxy_count)
-            }),
+            frame_scratch: Some(Box::new(frame_scratch)),
             actor_resources,
-            notefield_actor_scratch,
-            notefield_hud_actor_scratch,
-            player_actor_scratch,
-            presentation_skeleton: GameplayPresentationSkeleton::default(),
         };
         refresh_foreground_media(&mut state);
         state
@@ -16786,6 +17114,10 @@ impl GameplayActorSegments {
         let insert = self.insert.min(actors.len());
         let empty = &actors[0..0];
         let mut slices = [empty; 6];
+        let scratch = state
+            .frame_scratch
+            .as_deref()
+            .expect("gameplay frame scratch is restored before segment access");
         slices[0] = &actors[..insert];
         for (slot, segment) in self.players.iter().enumerate() {
             let Some(segment) = segment else {
@@ -16794,11 +17126,11 @@ impl GameplayActorSegments {
             let first = 1 + slot * 2;
             match segment.assembly {
                 PlayerActorAssembly::Buffered => {
-                    slices[first] = &state.player_actor_scratch[segment.player];
+                    slices[first] = &scratch.player_actor_scratch[segment.player];
                 }
                 PlayerActorAssembly::DirectIdentity => {
-                    slices[first] = &state.notefield_hud_actor_scratch[segment.player];
-                    slices[first + 1] = &state.notefield_actor_scratch[segment.player];
+                    slices[first] = &scratch.notefield_hud_actor_scratch[segment.player];
+                    slices[first + 1] = &scratch.notefield_actor_scratch[segment.player];
                 }
             }
         }
@@ -17167,67 +17499,50 @@ fn push_actors_impl(
     visual_policy: crate::views::SimplyLoveVisualPolicyView,
     segmented: bool,
 ) -> GameplayActorSegments {
-    let mut song_lua_overlay_order = std::mem::take(&mut state.song_lua_overlay_order);
-    let mut song_lua_background_visual_layer_orders =
-        std::mem::take(&mut state.song_lua_background_visual_layer_orders);
-    let mut song_lua_foreground_visual_layer_orders =
-        std::mem::take(&mut state.song_lua_foreground_visual_layer_orders);
-    let mut song_lua_proxy_request_index = std::mem::take(&mut state.song_lua_proxy_request_index);
-    let mut song_lua_background_overlay_topology_indices =
-        std::mem::take(&mut state.song_lua_background_overlay_topology_indices);
-    let mut song_lua_foreground_proxy_request_indices =
-        std::mem::take(&mut state.song_lua_foreground_proxy_request_indices);
-    let mut song_lua_aft_capture_scratch = std::mem::take(&mut state.song_lua_aft_capture_scratch);
-    let mut song_lua_background_aft_capture_scratch =
-        std::mem::take(&mut state.song_lua_background_aft_capture_scratch);
-    let mut song_lua_foreground_aft_capture_scratch =
-        std::mem::take(&mut state.song_lua_foreground_aft_capture_scratch);
-    let mut song_lua_projected_mesh_scratch =
-        std::mem::take(&mut state.song_lua_projected_mesh_scratch);
-    let mut song_lua_background_projected_mesh_scratch =
-        std::mem::take(&mut state.song_lua_background_projected_mesh_scratch);
-    let mut song_lua_foreground_projected_mesh_scratch =
-        std::mem::take(&mut state.song_lua_foreground_projected_mesh_scratch);
-    let mut song_lua_message_state_cache = std::mem::take(&mut state.song_lua_message_state_cache);
-    let mut song_lua_background_layer_message_state_cache =
-        std::mem::take(&mut state.song_lua_background_layer_message_state_cache);
-    let mut song_lua_foreground_layer_message_state_cache =
-        std::mem::take(&mut state.song_lua_foreground_layer_message_state_cache);
-    let mut song_lua_player_message_state_cache =
-        std::mem::take(&mut state.song_lua_player_message_state_cache);
-    let mut song_lua_song_foreground_message_state_cache =
-        std::mem::take(&mut state.song_lua_song_foreground_message_state_cache);
-    let mut song_lua_background_song_foreground_message_state_cache =
-        std::mem::take(&mut state.song_lua_background_song_foreground_message_state_cache);
-    let mut song_lua_foreground_song_foreground_message_state_cache =
-        std::mem::take(&mut state.song_lua_foreground_song_foreground_message_state_cache);
-    let mut song_lua_local_state_scratch = std::mem::take(&mut state.song_lua_local_state_scratch);
-    let mut song_lua_overlay_state_scratch =
-        std::mem::take(&mut state.song_lua_overlay_state_scratch);
-    let mut song_lua_background_layer_local_state_scratch =
-        std::mem::take(&mut state.song_lua_background_layer_local_state_scratch);
-    let mut song_lua_background_layer_state_scratch =
-        std::mem::take(&mut state.song_lua_background_layer_state_scratch);
-    let mut song_lua_foreground_layer_local_state_scratch =
-        std::mem::take(&mut state.song_lua_foreground_layer_local_state_scratch);
-    let mut song_lua_foreground_layer_state_scratch =
-        std::mem::take(&mut state.song_lua_foreground_layer_state_scratch);
-    let mut song_lua_capture_state_scratch =
-        std::mem::take(&mut state.song_lua_capture_state_scratch);
-    let mut song_lua_order_scratch = std::mem::take(&mut state.song_lua_order_scratch);
-    let mut song_lua_capture_order_scratch =
-        std::mem::take(&mut state.song_lua_capture_order_scratch);
-    let mut song_lua_capture_visit_scratch =
-        std::mem::take(&mut state.song_lua_capture_visit_scratch);
-    let mut song_lua_proxy_actor_scratch = std::mem::take(&mut state.song_lua_proxy_actor_scratch);
-    let mut notefield_actor_scratch = std::mem::take(&mut state.notefield_actor_scratch);
-    let mut notefield_hud_actor_scratch = std::mem::take(&mut state.notefield_hud_actor_scratch);
-    let mut player_actor_scratch = std::mem::take(&mut state.player_actor_scratch);
-    let mut presentation_skeleton = std::mem::take(&mut state.presentation_skeleton);
-    let mut lobby_hud_cache = std::mem::take(&mut state.lobby_hud_cache);
-    let mut lobby_hud_status_scratch = std::mem::take(&mut state.lobby_hud_status_scratch);
+    let mut frame_scratch = state
+        .frame_scratch
+        .take()
+        .expect("gameplay frame scratch is restored after every actor build");
+    let GameplayFrameScratch {
+        lobby_hud_cache,
+        lobby_hud_status_scratch,
+        song_lua_overlay_order,
+        song_lua_background_visual_layer_orders,
+        song_lua_foreground_visual_layer_orders,
+        song_lua_proxy_request_index,
+        song_lua_background_overlay_topology_indices,
+        song_lua_foreground_proxy_request_indices,
+        song_lua_aft_capture_scratch,
+        song_lua_background_aft_capture_scratch,
+        song_lua_foreground_aft_capture_scratch,
+        song_lua_projected_mesh_scratch,
+        song_lua_background_projected_mesh_scratch,
+        song_lua_foreground_projected_mesh_scratch,
+        song_lua_message_state_cache,
+        song_lua_background_layer_message_state_cache,
+        song_lua_foreground_layer_message_state_cache,
+        song_lua_player_message_state_cache,
+        song_lua_song_foreground_message_state_cache,
+        song_lua_background_song_foreground_message_state_cache,
+        song_lua_foreground_song_foreground_message_state_cache,
+        song_lua_local_state_scratch,
+        song_lua_overlay_state_scratch,
+        song_lua_background_layer_local_state_scratch,
+        song_lua_background_layer_state_scratch,
+        song_lua_foreground_layer_local_state_scratch,
+        song_lua_foreground_layer_state_scratch,
+        song_lua_capture_state_scratch,
+        song_lua_order_scratch,
+        song_lua_capture_order_scratch,
+        song_lua_capture_visit_scratch,
+        song_lua_proxy_actor_scratch,
+        notefield_actor_scratch,
+        notefield_hud_actor_scratch,
+        player_actor_scratch,
+        presentation_skeleton,
+    } = frame_scratch.as_mut();
     presentation_skeleton.prepare();
-    for actors in &mut player_actor_scratch {
+    for actors in player_actor_scratch.iter_mut() {
         actors.clear();
     }
     if let Some(scratch) = song_lua_proxy_actor_scratch.as_mut() {
@@ -17260,17 +17575,11 @@ fn push_actors_impl(
         song_lua_visuals.screen_width,
         song_lua_visuals.screen_height,
         &song_lua_overlay_order,
-        &mut song_lua_message_state_cache,
-        &mut song_lua_local_state_scratch,
-        &mut song_lua_overlay_state_scratch,
+        song_lua_message_state_cache,
+        song_lua_local_state_scratch,
+        song_lua_overlay_state_scratch,
     );
     let song_lua_now = state.current_music_time_display();
-    song_lua_background_layer_local_state_scratch
-        .resize_with(song_lua_visuals.background_visual_layers.len(), Vec::new);
-    song_lua_background_layer_state_scratch
-        .resize_with(song_lua_visuals.background_visual_layers.len(), Vec::new);
-    song_lua_background_layer_message_state_cache
-        .resize_with(song_lua_visuals.background_visual_layers.len(), Vec::new);
     for (layer_idx, layer) in song_lua_visuals.background_visual_layers.iter().enumerate() {
         let local_states = &mut song_lua_background_layer_local_state_scratch[layer_idx];
         let layer_states = &mut song_lua_background_layer_state_scratch[layer_idx];
@@ -17292,12 +17601,6 @@ fn push_actors_impl(
             layer_states,
         );
     }
-    song_lua_foreground_layer_local_state_scratch
-        .resize_with(song_lua_visuals.foreground_visual_layers.len(), Vec::new);
-    song_lua_foreground_layer_state_scratch
-        .resize_with(song_lua_visuals.foreground_visual_layers.len(), Vec::new);
-    song_lua_foreground_layer_message_state_cache
-        .resize_with(song_lua_visuals.foreground_visual_layers.len(), Vec::new);
     for (layer_idx, layer) in song_lua_visuals.foreground_visual_layers.iter().enumerate() {
         let local_states = &mut song_lua_foreground_layer_local_state_scratch[layer_idx];
         let layer_states = &mut song_lua_foreground_layer_state_scratch[layer_idx];
@@ -17323,13 +17626,13 @@ fn push_actors_impl(
         &song_lua_visuals.overlays,
         &song_lua_overlay_state_scratch,
         &song_lua_proxy_request_index,
-        &mut song_lua_capture_visit_scratch,
+        song_lua_capture_visit_scratch,
     );
     for ((layer, layer_states), request_index) in song_lua_visuals
         .foreground_visual_layers
         .iter()
-        .zip(&song_lua_foreground_layer_state_scratch)
-        .zip(&song_lua_foreground_proxy_request_indices)
+        .zip(song_lua_foreground_layer_state_scratch.iter())
+        .zip(song_lua_foreground_proxy_request_indices.iter())
     {
         if song_lua_now < layer.start_second {
             continue;
@@ -17340,7 +17643,7 @@ fn push_actors_impl(
                 &layer.overlays,
                 layer_states,
                 request_index,
-                &mut song_lua_capture_visit_scratch,
+                song_lua_capture_visit_scratch,
             ),
         );
     }
@@ -17361,8 +17664,8 @@ fn push_actors_impl(
     for (layer_idx, ((layer, local_states), layer_states)) in song_lua_visuals
         .background_visual_layers
         .iter()
-        .zip(&song_lua_background_layer_local_state_scratch)
-        .zip(&song_lua_background_layer_state_scratch)
+        .zip(song_lua_background_layer_local_state_scratch.iter())
+        .zip(song_lua_background_layer_state_scratch.iter())
         .enumerate()
     {
         if song_lua_now < layer.start_second {
@@ -17406,9 +17709,9 @@ fn push_actors_impl(
             song_lua_now,
             state.current_beat(),
             state.total_elapsed_in_screen(),
-            &mut song_lua_order_scratch,
-            &mut song_lua_capture_state_scratch,
-            &mut song_lua_capture_order_scratch,
+            song_lua_order_scratch,
+            song_lua_capture_state_scratch,
+            song_lua_capture_order_scratch,
             aft_capture_scratch,
             projected_mesh_scratch,
         );
@@ -17598,7 +17901,7 @@ fn push_actors_impl(
     if !hide_gameplay_hud {
         let overlay_start = actors.len();
         if state.runtime_view.lobby.snapshot.joined_lobby.is_some() {
-            let has_status = write_gameplay_lobby_hud_status(state, &mut lobby_hud_status_scratch);
+            let has_status = write_gameplay_lobby_hud_status(state, lobby_hud_status_scratch);
             let joined = state
                 .runtime_view
                 .lobby
@@ -17608,7 +17911,7 @@ fn push_actors_impl(
                 .expect("checked joined lobby");
             lobby_hud::push_cached_panel(
                 actors,
-                &mut lobby_hud_cache,
+                lobby_hud_cache,
                 lobby_hud::CachedRenderParams {
                     screen_name: "ScreenGameplay",
                     joined,
@@ -17916,7 +18219,7 @@ fn push_actors_impl(
         &song_lua_overlay_state_scratch,
         &replacement_proxy_sources,
         &song_lua_proxy_request_index,
-        &mut song_lua_capture_visit_scratch,
+        song_lua_capture_visit_scratch,
     );
 
     // Danger overlay (Simply Love parity): red flashing in danger + green recovery, optional HideDanger.
@@ -18968,34 +19271,19 @@ fn push_actors_impl(
                 right_avatar,
             }));
         });
-        let show_step_stats = match play_style {
-            profile_data::PlayStyle::Single | profile_data::PlayStyle::Double => state
-                .profiles()
-                .first()
-                .is_some_and(|p| !p.step_statistics.is_empty()),
-            profile_data::PlayStyle::Versus => {
-                state
-                    .profiles()
-                    .first()
-                    .is_some_and(|p| !p.step_statistics.is_empty())
-                    || state
-                        .profiles()
-                        .get(1)
-                        .is_some_and(|p| !p.step_statistics.is_empty())
-            }
-        };
-        if show_step_stats {
-            if state.num_cols() <= 4 && play_style != profile_data::PlayStyle::Versus {
-                gameplay_stats::push_step_stats(
-                    actors,
-                    state,
-                    asset_manager,
-                    playfield_center_x,
-                    player_side,
-                );
-            } else if play_style == profile_data::PlayStyle::Versus {
+        match state.step_stats_mode {
+            GameplayStepStatsMode::Hidden => {}
+            GameplayStepStatsMode::Side => gameplay_stats::push_step_stats(
+                actors,
+                state,
+                asset_manager,
+                playfield_center_x,
+                player_side,
+            ),
+            GameplayStepStatsMode::Versus => {
                 gameplay_stats::push_versus_step_stats(actors, state, asset_manager);
-            } else if play_style == profile_data::PlayStyle::Double {
+            }
+            GameplayStepStatsMode::Double => {
                 gameplay_stats::push_double_step_stats(
                     actors,
                     state,
@@ -19013,7 +19301,7 @@ fn push_actors_impl(
         );
     }
     let song_foreground_state =
-        song_lua_song_foreground_state(state, &mut song_lua_song_foreground_message_state_cache);
+        song_lua_song_foreground_state(state, song_lua_song_foreground_message_state_cache);
     let p1_proxy_slices = [
         p1_proxy_sources[0].as_ref().map(|source| source.as_slice()),
         p1_proxy_sources[1].as_ref().map(|source| source.as_slice()),
@@ -19053,7 +19341,7 @@ fn push_actors_impl(
     push_song_lua_layer_actors(
         actors,
         &song_lua_visuals.overlays,
-        &mut song_lua_overlay_order,
+        song_lua_overlay_order,
         &mut song_lua_proxy_request_index.topology,
         &song_lua_local_state_scratch,
         &song_lua_overlay_state_scratch,
@@ -19066,11 +19354,11 @@ fn push_actors_impl(
         state.current_music_time_display(),
         state.current_beat(),
         state.total_elapsed_in_screen(),
-        &mut song_lua_order_scratch,
-        &mut song_lua_capture_state_scratch,
-        &mut song_lua_capture_order_scratch,
-        &mut song_lua_aft_capture_scratch,
-        &mut song_lua_projected_mesh_scratch,
+        song_lua_order_scratch,
+        song_lua_capture_state_scratch,
+        song_lua_capture_order_scratch,
+        song_lua_aft_capture_scratch,
+        song_lua_projected_mesh_scratch,
     );
     if let Some(actor) = build_foreground_media(
         state,
@@ -19083,8 +19371,8 @@ fn push_actors_impl(
     for (layer_idx, ((layer, local_states), layer_states)) in song_lua_visuals
         .foreground_visual_layers
         .iter()
-        .zip(&song_lua_foreground_layer_local_state_scratch)
-        .zip(&song_lua_foreground_layer_state_scratch)
+        .zip(song_lua_foreground_layer_local_state_scratch.iter())
+        .zip(song_lua_foreground_layer_state_scratch.iter())
         .enumerate()
     {
         if song_lua_now < layer.start_second {
@@ -19128,57 +19416,14 @@ fn push_actors_impl(
             song_lua_now,
             state.current_beat(),
             state.total_elapsed_in_screen(),
-            &mut song_lua_order_scratch,
-            &mut song_lua_capture_state_scratch,
-            &mut song_lua_capture_order_scratch,
+            song_lua_order_scratch,
+            song_lua_capture_state_scratch,
+            song_lua_capture_order_scratch,
             aft_capture_scratch,
             projected_mesh_scratch,
         );
     }
-    state.song_lua_overlay_order = song_lua_overlay_order;
-    state.song_lua_background_visual_layer_orders = song_lua_background_visual_layer_orders;
-    state.song_lua_foreground_visual_layer_orders = song_lua_foreground_visual_layer_orders;
-    state.song_lua_proxy_request_index = song_lua_proxy_request_index;
-    state.song_lua_background_overlay_topology_indices =
-        song_lua_background_overlay_topology_indices;
-    state.song_lua_foreground_proxy_request_indices = song_lua_foreground_proxy_request_indices;
-    state.song_lua_aft_capture_scratch = song_lua_aft_capture_scratch;
-    state.song_lua_background_aft_capture_scratch = song_lua_background_aft_capture_scratch;
-    state.song_lua_foreground_aft_capture_scratch = song_lua_foreground_aft_capture_scratch;
-    state.song_lua_projected_mesh_scratch = song_lua_projected_mesh_scratch;
-    state.song_lua_background_projected_mesh_scratch = song_lua_background_projected_mesh_scratch;
-    state.song_lua_foreground_projected_mesh_scratch = song_lua_foreground_projected_mesh_scratch;
-    state.song_lua_message_state_cache = song_lua_message_state_cache;
-    state.song_lua_background_layer_message_state_cache =
-        song_lua_background_layer_message_state_cache;
-    state.song_lua_foreground_layer_message_state_cache =
-        song_lua_foreground_layer_message_state_cache;
-    state.song_lua_player_message_state_cache = song_lua_player_message_state_cache;
-    state.song_lua_song_foreground_message_state_cache =
-        song_lua_song_foreground_message_state_cache;
-    state.song_lua_background_song_foreground_message_state_cache =
-        song_lua_background_song_foreground_message_state_cache;
-    state.song_lua_foreground_song_foreground_message_state_cache =
-        song_lua_foreground_song_foreground_message_state_cache;
-    state.song_lua_local_state_scratch = song_lua_local_state_scratch;
-    state.song_lua_overlay_state_scratch = song_lua_overlay_state_scratch;
-    state.song_lua_background_layer_local_state_scratch =
-        song_lua_background_layer_local_state_scratch;
-    state.song_lua_background_layer_state_scratch = song_lua_background_layer_state_scratch;
-    state.song_lua_foreground_layer_local_state_scratch =
-        song_lua_foreground_layer_local_state_scratch;
-    state.song_lua_foreground_layer_state_scratch = song_lua_foreground_layer_state_scratch;
-    state.song_lua_capture_state_scratch = song_lua_capture_state_scratch;
-    state.song_lua_order_scratch = song_lua_order_scratch;
-    state.song_lua_capture_order_scratch = song_lua_capture_order_scratch;
-    state.song_lua_capture_visit_scratch = song_lua_capture_visit_scratch;
-    state.song_lua_proxy_actor_scratch = song_lua_proxy_actor_scratch;
-    state.notefield_actor_scratch = notefield_actor_scratch;
-    state.notefield_hud_actor_scratch = notefield_hud_actor_scratch;
-    state.player_actor_scratch = player_actor_scratch;
-    state.presentation_skeleton = presentation_skeleton;
-    state.lobby_hud_cache = lobby_hud_cache;
-    state.lobby_hud_status_scratch = lobby_hud_status_scratch;
+    state.frame_scratch = Some(frame_scratch);
     GameplayActorSegments {
         insert: segment_insert,
         players: segment_players,
@@ -19771,6 +20016,50 @@ mod tests {
         assert!(scratch.iter().all(Vec::is_empty));
         assert!(scratch[0].capacity() >= 384);
         assert_eq!(scratch[1].capacity(), 0);
+    }
+
+    #[test]
+    fn frame_scratch_pointer_transfer_preserves_storage() {
+        let mut scratch = GameplayFrameScratch::default();
+        scratch.lobby_hud_status_scratch = String::with_capacity(128);
+        scratch.song_lua_order_scratch = Vec::with_capacity(64);
+        let mut owner = Some(Box::new(scratch));
+        let address = std::ptr::from_ref(owner.as_deref().unwrap());
+
+        let detached = owner.take().unwrap();
+        assert_eq!(detached.lobby_hud_status_scratch.capacity(), 128);
+        assert!(detached.song_lua_order_scratch.capacity() >= 64);
+        owner = Some(detached);
+
+        assert_eq!(std::ptr::from_ref(owner.as_deref().unwrap()), address);
+    }
+
+    #[test]
+    fn fixed_layer_scratch_matches_legacy_maintenance() {
+        let mut benchmark = GameplayFrameOrchestrationBenchmark::new(7);
+
+        assert_eq!(benchmark.layer_resize_legacy(), 42);
+        assert_eq!(benchmark.fixed_layer_lengths(), 42);
+    }
+
+    #[test]
+    fn step_stats_mode_preserves_option_behavior() {
+        use profile_data::PlayStyle::{Double, Single, Versus};
+
+        let cases = [
+            (Single, 4, false, false, GameplayStepStatsMode::Hidden),
+            (Single, 4, true, false, GameplayStepStatsMode::Side),
+            (Single, 8, true, false, GameplayStepStatsMode::Hidden),
+            (Double, 4, true, false, GameplayStepStatsMode::Side),
+            (Double, 8, true, false, GameplayStepStatsMode::Double),
+            (Double, 8, false, true, GameplayStepStatsMode::Hidden),
+            (Versus, 8, false, false, GameplayStepStatsMode::Hidden),
+            (Versus, 8, true, false, GameplayStepStatsMode::Versus),
+            (Versus, 8, false, true, GameplayStepStatsMode::Versus),
+        ];
+        for (style, cols, p1, p2, expected) in cases {
+            assert_eq!(gameplay_step_stats_mode(style, cols, p1, p2), expected);
+        }
     }
 
     #[test]

@@ -79,6 +79,11 @@ harness = false
 required-features = ["bench-support"]
 
 [[bench]]
+name = "gameplay_frame_orchestration"
+harness = false
+required-features = ["bench-support"]
+
+[[bench]]
 name = "gameplay_lobby_hud"
 harness = false
 required-features = ["bench-support"]
