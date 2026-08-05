@@ -622,9 +622,9 @@ const SONG_LUA_RAINBOW_TEXT_PREWARM_MAX_CHARS: usize = 64;
 /// that actor's compiled vertex count.
 /// Static BitmapText uppercase content and the seven rainbow-scroll phases are
 /// also compiled into this overlay-local song-lifetime storage during screen
-/// entry. Rainbow storage is capped at 64 characters per actor; larger text
-/// uses owned per-frame construction rather than retaining unbounded song
-/// storage. GraphDisplay body/line geometry and its two-child frame are sized
+/// entry. Rainbow phase storage is capped at 64 characters per actor; larger
+/// text reuses one current-phase buffer sized from the compiled text instead of
+/// retaining seven copies or allocating during gameplay. GraphDisplay body/line geometry and its two-child frame are sized
 /// from the compiled point count. Static Model glow vertices and stable
 /// renderer geometry keys are computed once per layer during entry.
 /// NoteskinActor slots get an exact-capacity, sealed model cache plus one
@@ -749,8 +749,8 @@ impl SongLuaProjectedMeshScratch {
         }
     }
 
-    fn prewarm_text_attributes(&mut self, attribute_count: usize) {
-        let capacity = attribute_count.saturating_add(1);
+    fn prewarm_text_attributes(&mut self, attribute_count: usize, text_char_count: usize) {
+        let capacity = attribute_count.saturating_add(1).max(text_char_count);
         self.text_diffuse_attributes = Some(Arc::new(Vec::with_capacity(capacity)));
         self.text_glow_attributes = Some(Arc::new(Vec::with_capacity(capacity)));
         self.text_attribute_capacity = capacity;
@@ -799,11 +799,14 @@ impl SongLuaProjectedMeshScratch {
         )
     }
 
-    fn rainbow_attributes(&self, total_elapsed: f32) -> Option<TextAttributes> {
+    fn rainbow_attributes(&mut self, text: &str, total_elapsed: f32) -> TextAttributes {
         let phase = song_lua_rainbow_scroll_phase(total_elapsed);
-        self.rainbow_text_attributes
-            .as_ref()
-            .map(|attributes| TextAttributes::from(Arc::clone(&attributes[phase])))
+        if let Some(attributes) = self.rainbow_text_attributes.as_ref() {
+            return TextAttributes::from(Arc::clone(&attributes[phase]));
+        }
+        self.update_text_diffuse(|out| {
+            append_song_lua_rainbow_scroll_attributes_at_phase(text, phase, out);
+        })
     }
 
     fn update_mesh(&mut self, fill: impl FnOnce(&mut Vec<MeshVertex>)) -> Arc<Vec<MeshVertex>> {
@@ -1046,9 +1049,13 @@ fn song_lua_projected_mesh_scratch_for(
                 text, attributes, ..
             } = &overlay.kind
             {
-                scratch.prewarm_text_attributes(attributes.len());
-                scratch.uppercase_text = Some(Arc::from(text.to_uppercase()));
+                let uppercase_text = Arc::<str>::from(text.to_uppercase());
                 let char_count = text.chars().count();
+                scratch.prewarm_text_attributes(
+                    attributes.len(),
+                    char_count.max(uppercase_text.chars().count()),
+                );
+                scratch.uppercase_text = Some(uppercase_text);
                 if (1..=SONG_LUA_RAINBOW_TEXT_PREWARM_MAX_CHARS).contains(&char_count) {
                     scratch.rainbow_text_attributes =
                         Some(song_lua_rainbow_scroll_phases(text.as_ref()));
@@ -8918,16 +8925,19 @@ fn song_lua_style_capture_actor(
         },
         Actor::CameraPush { view_proj } => Actor::CameraPush { view_proj },
         Actor::CameraPop => Actor::CameraPop,
-        Actor::Shadow { len, color, child } => Actor::Shadow {
+        Actor::Shadow {
             len,
-            color: song_lua_capture_tint(color, capture_tint),
-            child: Box::new(song_lua_style_capture_actor(
-                *child,
-                capture_tint,
-                blend,
-                z_shift,
-            )),
-        },
+            color,
+            mut child,
+        } => {
+            let actor = std::mem::replace(child.as_mut(), Actor::CameraPop);
+            *child = song_lua_style_capture_actor(actor, capture_tint, blend, z_shift);
+            Actor::Shadow {
+                len,
+                color: song_lua_capture_tint(color, capture_tint),
+                child,
+            }
+        }
     }
 }
 
@@ -9432,9 +9442,16 @@ fn song_lua_rainbow_scroll_attributes_at_phase(
 ) -> Vec<TextAttribute> {
     let char_count = text.chars().count();
     let mut out = Vec::with_capacity(char_count);
-    if char_count == 0 {
-        return out;
-    }
+    append_song_lua_rainbow_scroll_attributes_at_phase(text, first_color, &mut out);
+    out
+}
+
+fn append_song_lua_rainbow_scroll_attributes_at_phase(
+    text: &str,
+    first_color: usize,
+    out: &mut Vec<TextAttribute>,
+) {
+    let char_count = text.chars().count();
     for index in 0..char_count {
         out.push(TextAttribute {
             start: index,
@@ -9445,7 +9462,6 @@ fn song_lua_rainbow_scroll_attributes_at_phase(
             glow: None,
         });
     }
-    out
 }
 
 #[inline(always)]
@@ -11578,9 +11594,11 @@ pub struct SongLuaUppercaseTextBenchmark {
 #[doc(hidden)]
 pub struct SongLuaTextAttributeBenchmark {
     text: Arc<str>,
+    long_text: Arc<str>,
     attributes: Arc<[TextAttribute]>,
     rainbow_phases: [Arc<[TextAttribute]>; SONG_LUA_TEXT_RAINBOW_COLORS.len()],
     scratch: SongLuaProjectedMeshScratch,
+    long_rainbow_scratch: SongLuaProjectedMeshScratch,
 }
 
 #[cfg(feature = "bench-support")]
@@ -11596,13 +11614,19 @@ impl SongLuaTextAttributeBenchmark {
                 glow: Some([0.75, 0.25, 0.5, 0.75]),
             })
             .collect::<Vec<_>>();
+        let long_text = text.repeat(4);
+        assert!(long_text.chars().count() > SONG_LUA_RAINBOW_TEXT_PREWARM_MAX_CHARS);
         let mut scratch = SongLuaProjectedMeshScratch::default();
-        scratch.prewarm_text_attributes(attribute_count);
+        scratch.prewarm_text_attributes(attribute_count, char_count);
+        let mut long_rainbow_scratch = SongLuaProjectedMeshScratch::default();
+        long_rainbow_scratch.prewarm_text_attributes(attribute_count, long_text.chars().count());
         Self {
             text: Arc::from(text),
+            long_text: Arc::from(long_text),
             attributes: Arc::from(attributes.into_boxed_slice()),
             rainbow_phases: song_lua_rainbow_scroll_phases(text),
             scratch,
+            long_rainbow_scratch,
         }
     }
 
@@ -11625,6 +11649,18 @@ impl SongLuaTextAttributeBenchmark {
         let phase = song_lua_rainbow_scroll_phase(total_elapsed);
         let attributes = Arc::clone(&self.rainbow_phases[phase]);
         song_lua_text_attribute_checksum(&attributes)
+    }
+
+    pub fn legacy_long_rainbow_frame(&self, total_elapsed: f32) -> u64 {
+        let attributes = song_lua_rainbow_scroll_attributes(&self.long_text, total_elapsed);
+        song_lua_text_attribute_checksum(&attributes)
+    }
+
+    pub fn reused_long_rainbow_frame(&mut self, total_elapsed: f32) -> u64 {
+        let attributes = self
+            .long_rainbow_scratch
+            .rainbow_attributes(&self.long_text, total_elapsed);
+        song_lua_text_attribute_checksum(attributes.as_slice())
     }
 
     pub fn legacy_diffuse_frame(&self) -> u64 {
@@ -11701,6 +11737,10 @@ impl SongLuaTextAttributeBenchmark {
                     .map_or(0, |attributes| attributes.capacity()),
             )
             .saturating_mul(std::mem::size_of::<TextAttribute>())
+    }
+
+    pub fn long_rainbow_storage_bytes(&self) -> usize {
+        self.long_rainbow_scratch.storage_bytes()
     }
 
     pub fn replacements(&self) -> u64 {
@@ -12235,6 +12275,10 @@ pub struct SongLuaActorBuildBenchmark {
     mesh_source: Arc<[SongLuaOverlayMeshVertex]>,
     captured_mesh_vertices: Arc<[MeshVertex]>,
     mesh_scratch: SongLuaProjectedMeshScratch,
+    legacy_capture_shadow: Actor,
+    reused_capture_shadow: Actor,
+    legacy_fold_shadow: Actor,
+    reused_fold_shadow: Actor,
 }
 
 #[cfg(feature = "bench-support")]
@@ -12287,6 +12331,10 @@ impl SongLuaActorBuildBenchmark {
             mesh_source: Arc::from(mesh_source.into_boxed_slice()),
             captured_mesh_vertices: Arc::from(captured_mesh_vertices.into_boxed_slice()),
             mesh_scratch: SongLuaProjectedMeshScratch::mesh(vertex_count),
+            legacy_capture_shadow: Self::shadow_actor(),
+            reused_capture_shadow: Self::shadow_actor(),
+            legacy_fold_shadow: Self::shadow_actor(),
+            reused_fold_shadow: Self::shadow_actor(),
         }
     }
 
@@ -12475,6 +12523,38 @@ impl SongLuaActorBuildBenchmark {
         ))
     }
 
+    pub fn legacy_capture_shadow_frame(&mut self) -> u64 {
+        let actor = std::mem::replace(&mut self.legacy_capture_shadow, Actor::CameraPop);
+        let actor = Self::legacy_style_shadow(actor, [0.9, 0.8, 0.7, 0.95], 1);
+        let checksum = Self::shadow_checksum(&actor);
+        self.legacy_capture_shadow = actor;
+        checksum
+    }
+
+    pub fn reused_capture_shadow_frame(&mut self) -> u64 {
+        let actor = std::mem::replace(&mut self.reused_capture_shadow, Actor::CameraPop);
+        let actor = song_lua_style_capture_actor(actor, [0.9, 0.8, 0.7, 0.95], None, 1);
+        let checksum = Self::shadow_checksum(&actor);
+        self.reused_capture_shadow = actor;
+        checksum
+    }
+
+    pub fn legacy_fold_shadow_frame(&mut self) -> u64 {
+        let actor = std::mem::replace(&mut self.legacy_fold_shadow, Actor::CameraPop);
+        let actor = Self::legacy_fold_shadow(actor, 100.0, 15.0);
+        let checksum = Self::shadow_checksum(&actor);
+        self.legacy_fold_shadow = actor;
+        checksum
+    }
+
+    pub fn reused_fold_shadow_frame(&mut self) -> u64 {
+        let actor = std::mem::replace(&mut self.reused_fold_shadow, Actor::CameraPop);
+        let actor = song_lua_player_y_fold_actor(actor, 100.0, 15.0);
+        let checksum = Self::shadow_checksum(&actor);
+        self.reused_fold_shadow = actor;
+        checksum
+    }
+
     pub fn mesh_storage_bytes(&self) -> usize {
         self.mesh_scratch.storage_bytes()
     }
@@ -12498,6 +12578,63 @@ impl SongLuaActorBuildBenchmark {
             blend: BlendMode::Alpha,
             z,
         }
+    }
+
+    fn shadow_actor() -> Actor {
+        Actor::Shadow {
+            len: [2.0, -2.0],
+            color: [0.1, 0.2, 0.3, 0.5],
+            child: Box::new(Self::tagged_proxy_actor(140.0, 3)),
+        }
+    }
+
+    fn legacy_style_shadow(actor: Actor, capture_tint: [f32; 4], z_shift: i16) -> Actor {
+        let Actor::Shadow { len, color, child } = actor else {
+            unreachable!("benchmark actor must remain a shadow");
+        };
+        Actor::Shadow {
+            len,
+            color: song_lua_capture_tint(color, capture_tint),
+            child: Box::new(song_lua_style_capture_actor(
+                *child,
+                capture_tint,
+                None,
+                z_shift,
+            )),
+        }
+    }
+
+    fn legacy_fold_shadow(actor: Actor, pivot_x: f32, rotation_y_deg: f32) -> Actor {
+        let Actor::Shadow { len, color, child } = actor else {
+            unreachable!("benchmark actor must remain a shadow");
+        };
+        Actor::Shadow {
+            len,
+            color,
+            child: Box::new(song_lua_player_y_fold_actor(
+                *child,
+                pivot_x,
+                rotation_y_deg,
+            )),
+        }
+    }
+
+    fn shadow_checksum(actor: &Actor) -> u64 {
+        let Actor::Shadow { len, color, child } = actor else {
+            unreachable!("benchmark actor must remain a shadow");
+        };
+        let mut checksum = u64::from(len[0].to_bits())
+            ^ u64::from(len[1].to_bits()).rotate_left(7)
+            ^ u64::from(color[3].to_bits()).rotate_left(13);
+        if let Actor::Mesh {
+            offset, tint, z, ..
+        } = child.as_ref()
+        {
+            checksum ^= u64::from(offset[0].to_bits()).rotate_left(19);
+            checksum ^= u64::from(tint[3].to_bits()).rotate_left(23);
+            checksum ^= (*z as u16 as u64).rotate_left(29);
+        }
+        checksum
     }
 
     fn legacy_normalized_proxy(segment: &Arc<[Actor]>) -> Actor {
@@ -13572,12 +13709,10 @@ fn build_song_lua_overlay_actor_with_scratch(
                 &mut effect_rot,
             );
             let (text_attributes, color) = if state.rainbow_scroll {
-                let attributes = projected_mesh_scratch
-                    .as_deref()
-                    .and_then(|scratch| scratch.rainbow_attributes(total_elapsed))
-                    .unwrap_or_else(|| {
-                        song_lua_rainbow_scroll_attributes(content.as_str(), total_elapsed).into()
-                    });
+                let attributes = projected_mesh_scratch.as_deref_mut().map_or_else(
+                    || song_lua_rainbow_scroll_attributes(content.as_str(), total_elapsed).into(),
+                    |scratch| scratch.rainbow_attributes(content.as_str(), total_elapsed),
+                );
                 (attributes, color)
             } else {
                 song_lua_text_attributes_for_diffuse_mode(
@@ -19810,6 +19945,37 @@ mod tests {
     }
 
     #[test]
+    fn song_lua_capture_style_preserves_shadow_and_styles_child() {
+        let actor = Actor::Shadow {
+            len: [2.0, -3.0],
+            color: [0.8, 0.6, 0.4, 0.5],
+            child: Box::new(Actor::Mesh {
+                align: [0.0, 0.0],
+                offset: [0.0, 0.0],
+                size: [SizeSpec::Px(1.0), SizeSpec::Px(1.0)],
+                tint: [0.8, 0.6, 0.4, 0.5],
+                vertices: Arc::from([]),
+                visible: true,
+                blend: BlendMode::Alpha,
+                z: 3,
+            }),
+        };
+
+        let styled = song_lua_style_capture_actor(actor, [0.5, 0.25, 0.1, 0.5], None, 4);
+
+        let Actor::Shadow { len, color, child } = styled else {
+            panic!("expected shadow actor");
+        };
+        assert_eq!(len, [2.0, -3.0]);
+        assert_eq!(color, [0.4, 0.15, 0.040000003, 0.25]);
+        let Actor::Mesh { tint, z, .. } = child.as_ref() else {
+            panic!("expected styled mesh child");
+        };
+        assert_eq!(*tint, [0.4, 0.15, 0.040000003, 0.25]);
+        assert_eq!(*z, 7);
+    }
+
+    #[test]
     fn song_lua_capture_style_shares_mesh_vertices_and_composes_tint() {
         let vertices = Arc::<[MeshVertex]>::from(vec![MeshVertex {
             pos: [0.0, 0.0],
@@ -21639,6 +21805,57 @@ mod tests {
             }
             other => panic!("expected rainbow-scroll bitmap text actor, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn long_song_lua_rainbow_text_uses_prewarmed_current_phase_buffer() {
+        let text = "R".repeat(SONG_LUA_RAINBOW_TEXT_PREWARM_MAX_CHARS + 17);
+        let overlay = SongLuaOverlayActor {
+            kind: SongLuaOverlayKind::BitmapText {
+                font_name: "miso",
+                font_path: std::path::PathBuf::from("Fonts/Common Normal.ini"),
+                text: Arc::from(text.as_str()),
+                stroke_color: None,
+                attributes: empty_text_attributes(),
+            },
+            name: None,
+            parent_index: None,
+            initial_state: SongLuaOverlayState::default(),
+            message_commands: Vec::new(),
+        };
+        let mut scratch = song_lua_projected_mesh_scratch_for(std::slice::from_ref(&overlay));
+        assert!(scratch[0].rainbow_text_attributes.is_none());
+        assert!(scratch[0].text_attribute_capacity >= text.chars().count());
+
+        let actor = build_song_lua_overlay_actor_with_scratch(
+            &overlay,
+            SongLuaOverlayState {
+                rainbow_scroll: true,
+                ..SongLuaOverlayState::default()
+            },
+            None,
+            &AssetManager::new(),
+            780,
+            640.0,
+            480.0,
+            0.0,
+            0.0,
+            0.4,
+            scratch.first_mut(),
+        )
+        .expect_actor("long rainbow-scroll bitmap text should render");
+
+        let Actor::Text {
+            attributes: TextAttributes::Reusable(attributes),
+            ..
+        } = actor
+        else {
+            panic!("expected text with reusable rainbow attributes");
+        };
+        assert_eq!(attributes.len(), text.chars().count());
+        assert_eq!(attributes[0].color, [0.4, 0.3, 0.5, 1.0]);
+        assert_eq!(attributes[1].color, [0.2, 0.6, 1.0, 1.0]);
+        assert_eq!(scratch[0].replacements, 0);
     }
 
     #[test]

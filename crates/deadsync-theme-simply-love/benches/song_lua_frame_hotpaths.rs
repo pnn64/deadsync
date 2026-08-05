@@ -394,6 +394,14 @@ fn main() {
         actor_build.legacy_captured_mesh_frame(),
         actor_build.shared_captured_mesh_frame()
     );
+    assert_eq!(
+        actor_build.legacy_capture_shadow_frame(),
+        actor_build.reused_capture_shadow_frame()
+    );
+    assert_eq!(
+        actor_build.legacy_fold_shadow_frame(),
+        actor_build.reused_fold_shadow_frame()
+    );
     let legacy_proxy_build_result =
         measure(ACTOR_BUILD_FRAMES, || actor_build.legacy_proxy_frame());
     let compact_proxy_build_result =
@@ -425,6 +433,18 @@ fn main() {
     });
     let shared_captured_mesh_result = measure(ACTOR_BUILD_FRAMES, || {
         actor_build.shared_captured_mesh_frame()
+    });
+    let legacy_capture_shadow_result = measure(ACTOR_BUILD_FRAMES, || {
+        actor_build.legacy_capture_shadow_frame()
+    });
+    let reused_capture_shadow_result = measure(ACTOR_BUILD_FRAMES, || {
+        actor_build.reused_capture_shadow_frame()
+    });
+    let legacy_fold_shadow_result = measure(ACTOR_BUILD_FRAMES, || {
+        actor_build.legacy_fold_shadow_frame()
+    });
+    let reused_fold_shadow_result = measure(ACTOR_BUILD_FRAMES, || {
+        actor_build.reused_fold_shadow_frame()
     });
 
     let mut multi_actor = SongLuaMultiActorEmitBenchmark::new(8);
@@ -459,6 +479,18 @@ fn main() {
         let elapsed = (rainbow_tick % 70) as f32 * 0.2;
         rainbow_tick = rainbow_tick.wrapping_add(1);
         text_attributes.prewarmed_rainbow_frame(black_box(elapsed))
+    });
+    let mut long_rainbow_tick = 0usize;
+    let legacy_long_rainbow_result = measure(TEXT_ATTRIBUTE_FRAMES, || {
+        let elapsed = (long_rainbow_tick % 70) as f32 * 0.2;
+        long_rainbow_tick = long_rainbow_tick.wrapping_add(1);
+        text_attributes.legacy_long_rainbow_frame(black_box(elapsed))
+    });
+    let mut long_rainbow_tick = 0usize;
+    let reused_long_rainbow_result = measure(TEXT_ATTRIBUTE_FRAMES, || {
+        let elapsed = (long_rainbow_tick % 70) as f32 * 0.2;
+        long_rainbow_tick = long_rainbow_tick.wrapping_add(1);
+        text_attributes.reused_long_rainbow_frame(black_box(elapsed))
     });
     assert_eq!(
         text_attributes.legacy_diffuse_frame(),
@@ -656,6 +688,24 @@ fn main() {
         &shared_captured_mesh_result,
     );
     assert_eq!(
+        legacy_capture_shadow_result.checksum,
+        reused_capture_shadow_result.checksum
+    );
+    assert_alloc_removed(
+        "capture shadow box reuse",
+        &legacy_capture_shadow_result,
+        &reused_capture_shadow_result,
+    );
+    assert_eq!(
+        legacy_fold_shadow_result.checksum,
+        reused_fold_shadow_result.checksum
+    );
+    assert_alloc_removed(
+        "player Y-fold shadow box reuse",
+        &legacy_fold_shadow_result,
+        &reused_fold_shadow_result,
+    );
+    assert_eq!(
         legacy_multi_actor_result.checksum,
         direct_multi_actor_result.checksum
     );
@@ -670,6 +720,15 @@ fn main() {
     assert_eq!(
         legacy_rainbow_result.checksum,
         prewarmed_rainbow_result.checksum
+    );
+    assert_eq!(
+        legacy_long_rainbow_result.checksum,
+        reused_long_rainbow_result.checksum
+    );
+    assert_alloc_removed(
+        "long rainbow BitmapText attributes",
+        &legacy_long_rainbow_result,
+        &reused_long_rainbow_result,
     );
     assert_eq!(
         legacy_diffuse_attribute_result.checksum,
@@ -892,6 +951,24 @@ fn main() {
         ACTOR_BUILD_FRAMES,
         &shared_captured_mesh_result,
     );
+    println!("capture-style Shadow transform");
+    print_result(
+        "replace Box",
+        ACTOR_BUILD_FRAMES,
+        &legacy_capture_shadow_result,
+    );
+    print_result(
+        "reuse Box",
+        ACTOR_BUILD_FRAMES,
+        &reused_capture_shadow_result,
+    );
+    println!("player rotation-Y Shadow transform");
+    print_result(
+        "replace Box",
+        ACTOR_BUILD_FRAMES,
+        &legacy_fold_shadow_result,
+    );
+    print_result("reuse Box", ACTOR_BUILD_FRAMES, &reused_fold_shadow_result);
     println!("multi-layer Model/Noteskin output (8 actors)");
     print_result(
         "temporary SmallVec",
@@ -947,6 +1024,21 @@ fn main() {
     println!(
         "rainbow song storage: {} bytes",
         text_attributes.storage_bytes()
+    );
+    println!("long rainbow BitmapText attributes (>64 characters)");
+    print_result(
+        "build every frame",
+        TEXT_ATTRIBUTE_FRAMES,
+        &legacy_long_rainbow_result,
+    );
+    print_result(
+        "reuse song buffer",
+        TEXT_ATTRIBUTE_FRAMES,
+        &reused_long_rainbow_result,
+    );
+    println!(
+        "long rainbow song storage: {} bytes",
+        text_attributes.long_rainbow_storage_bytes()
     );
     println!("dynamic BitmapText diffuse composition (8 spans)");
     print_result(

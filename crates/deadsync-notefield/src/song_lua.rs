@@ -400,15 +400,15 @@ pub fn song_lua_player_y_fold_actor(actor: Actor, pivot_x: f32, rotation_y_deg: 
         },
         Actor::CameraPush { view_proj } => Actor::CameraPush { view_proj },
         Actor::CameraPop => Actor::CameraPop,
-        Actor::Shadow { len, color, child } => Actor::Shadow {
+        Actor::Shadow {
             len,
             color,
-            child: Box::new(song_lua_player_y_fold_actor(
-                *child,
-                pivot_x,
-                rotation_y_deg,
-            )),
-        },
+            mut child,
+        } => {
+            let actor = std::mem::replace(child.as_mut(), Actor::CameraPop);
+            *child = song_lua_player_y_fold_actor(actor, pivot_x, rotation_y_deg);
+            Actor::Shadow { len, color, child }
+        }
     }
 }
 
