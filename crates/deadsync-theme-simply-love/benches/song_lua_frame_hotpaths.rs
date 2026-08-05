@@ -2,8 +2,9 @@ use deadsync_theme_simply_love::screens::gameplay::{
     SongLuaActorBuildBenchmark, SongLuaCaptureTraversalBenchmark, SongLuaEaseBenchmark,
     SongLuaGraphDisplayBenchmark, SongLuaMessageStateBenchmark, SongLuaMultiActorEmitBenchmark,
     SongLuaNoteskinModelBenchmark, SongLuaOrderBenchmark, SongLuaProjectedMeshBenchmark,
-    SongLuaProxyRequestBenchmark, SongLuaTextAttributeBenchmark, SongLuaTexturedGlowBenchmark,
-    SongLuaTopologyBenchmark, SongLuaUppercaseTextBenchmark, SongLuaWhiteTextureKeyBenchmark,
+    SongLuaProxyRequestBenchmark, SongLuaStaticStateBenchmark, SongLuaTextAttributeBenchmark,
+    SongLuaTexturedGlowBenchmark, SongLuaTopologyBenchmark, SongLuaUppercaseTextBenchmark,
+    SongLuaWhiteTextureKeyBenchmark,
 };
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::hint::black_box;
@@ -191,6 +192,12 @@ fn assert_alloc_removed(label: &str, legacy: &BenchResult, reused: &BenchResult)
     assert_eq!(reused.allocated.bytes, 0, "{label} allocated bytes");
 }
 
+fn assert_zero_alloc(label: &str, result: &BenchResult) {
+    assert_eq!(result.allocated.allocs, 0, "{label} allocated");
+    assert_eq!(result.allocated.reallocs, 0, "{label} reallocated");
+    assert_eq!(result.allocated.bytes, 0, "{label} allocated bytes");
+}
+
 fn main() {
     const MESSAGE_FRAMES: usize = 20_000;
     const BLOCK_FRAMES: usize = 50_000;
@@ -226,6 +233,16 @@ fn main() {
     let cached_message_result = measure(MESSAGE_FRAMES, || {
         cached_messages.cached_frame(black_box(now)).to_bits() as u64
     });
+
+    let mut static_state = SongLuaStaticStateBenchmark::new();
+    assert_eq!(
+        static_state.legacy_frame(now),
+        static_state.static_frame(now)
+    );
+    let legacy_static_state_result =
+        measure(MESSAGE_FRAMES, || static_state.legacy_frame(black_box(now)));
+    let fast_static_state_result =
+        measure(MESSAGE_FRAMES, || static_state.static_frame(black_box(now)));
 
     let block_now = MESSAGE_BLOCKS as f32 * 0.01 + 1.0;
     let legacy_blocks = SongLuaMessageStateBenchmark::long_command(MESSAGE_BLOCKS);
@@ -319,10 +336,17 @@ fn main() {
         rgb_aft_benchmark.legacy_rgb_aft_groups(),
         rgb_aft_benchmark.indexed_rgb_aft_groups()
     );
+    assert_eq!(
+        rgb_aft_benchmark.indexed_rgb_aft_groups(),
+        rgb_aft_benchmark.prepared_rgb_aft_groups()
+    );
     let legacy_rgb_aft_result =
         measure(RGB_AFT_FRAMES, || rgb_aft_benchmark.legacy_rgb_aft_groups());
     let indexed_rgb_aft_result = measure(RGB_AFT_FRAMES, || {
         rgb_aft_benchmark.indexed_rgb_aft_groups()
+    });
+    let prepared_rgb_aft_result = measure(RGB_AFT_FRAMES, || {
+        rgb_aft_benchmark.prepared_rgb_aft_groups()
     });
 
     let mut legacy_order = SongLuaOrderBenchmark::new(ORDER_ACTORS);
@@ -542,9 +566,11 @@ fn main() {
     });
 
     let mut graph_display = SongLuaGraphDisplayBenchmark::new(GRAPH_POINTS);
-    assert_eq!(graph_display.legacy_frame(), graph_display.reused_frame());
+    assert_eq!(graph_display.legacy_frame(), graph_display.rebuilt_frame());
+    assert_eq!(graph_display.rebuilt_frame(), graph_display.cached_frame());
     let legacy_graph_result = measure(GRAPH_FRAMES, || graph_display.legacy_frame());
-    let reused_graph_result = measure(GRAPH_FRAMES, || graph_display.reused_frame());
+    let rebuilt_graph_result = measure(GRAPH_FRAMES, || graph_display.rebuilt_frame());
+    let cached_graph_result = measure(GRAPH_FRAMES, || graph_display.cached_frame());
 
     assert_eq!(
         textured_glow.legacy_frame(),
@@ -599,6 +625,12 @@ fn main() {
         legacy_message_result.checksum,
         cached_message_result.checksum
     );
+    assert_eq!(
+        legacy_static_state_result.checksum,
+        fast_static_state_result.checksum
+    );
+    assert_zero_alloc("static Song Lua state", &legacy_static_state_result);
+    assert_zero_alloc("static Song Lua state fast path", &fast_static_state_result);
     assert_eq!(legacy_block_result.checksum, cached_block_result.checksum);
     assert_eq!(legacy_ease_result.checksum, bounded_ease_result.checksum);
     assert_eq!(legacy_proxy_result.checksum, indexed_proxy_result.checksum);
@@ -636,6 +668,11 @@ fn main() {
         legacy_rgb_aft_result.checksum,
         indexed_rgb_aft_result.checksum
     );
+    assert_eq!(
+        indexed_rgb_aft_result.checksum,
+        prepared_rgb_aft_result.checksum
+    );
+    assert_zero_alloc("prepared RGB AFT groups", &prepared_rgb_aft_result);
     assert_eq!(legacy_order_result.checksum, cached_order_result.checksum);
     assert_eq!(
         legacy_changing_order_result.checksum,
@@ -750,7 +787,10 @@ fn main() {
         legacy_white_texture_result.checksum,
         shared_white_texture_result.checksum
     );
-    assert_eq!(legacy_graph_result.checksum, reused_graph_result.checksum);
+    assert_eq!(legacy_graph_result.checksum, rebuilt_graph_result.checksum);
+    assert_eq!(rebuilt_graph_result.checksum, cached_graph_result.checksum);
+    assert_zero_alloc("rebuilt GraphDisplay geometry", &rebuilt_graph_result);
+    assert_zero_alloc("cached GraphDisplay geometry", &cached_graph_result);
     assert_eq!(
         legacy_model_glow_result.checksum,
         prewarmed_model_glow_result.checksum
@@ -785,6 +825,17 @@ fn main() {
     println!("message state ({MESSAGE_EVENTS} prior events)");
     print_result("replay history", MESSAGE_FRAMES, &legacy_message_result);
     print_result("incremental cache", MESSAGE_FRAMES, &cached_message_result);
+    println!("static overlay state (empty message/ease timelines)");
+    print_result(
+        "runtime machinery",
+        MESSAGE_FRAMES,
+        &legacy_static_state_result,
+    );
+    print_result(
+        "initial-state fast",
+        MESSAGE_FRAMES,
+        &fast_static_state_result,
+    );
     println!("message command ({MESSAGE_BLOCKS} completed blocks)");
     print_result("scan blocks", BLOCK_FRAMES, &legacy_block_result);
     print_result("block cursor", BLOCK_FRAMES, &cached_block_result);
@@ -852,6 +903,7 @@ fn main() {
     );
     print_result("scan all overlays", RGB_AFT_FRAMES, &legacy_rgb_aft_result);
     print_result("capture peers", RGB_AFT_FRAMES, &indexed_rgb_aft_result);
+    print_result("prepare triples", RGB_AFT_FRAMES, &prepared_rgb_aft_result);
     println!(
         "topology storage: {} bytes/overlay",
         rgb_aft_benchmark.topology_bytes_per_overlay(),
@@ -1106,7 +1158,8 @@ fn main() {
     );
     println!("GraphDisplay ({GRAPH_POINTS} points, body + line)");
     print_result("fresh meshes/frame", GRAPH_FRAMES, &legacy_graph_result);
-    print_result("reused song buffers", GRAPH_FRAMES, &reused_graph_result);
+    print_result("rebuild song buffers", GRAPH_FRAMES, &rebuilt_graph_result);
+    print_result("cached geometry", GRAPH_FRAMES, &cached_graph_result);
     println!(
         "GraphDisplay storage: {} bytes, {} replacements, {} growths",
         graph_display.storage_bytes(),

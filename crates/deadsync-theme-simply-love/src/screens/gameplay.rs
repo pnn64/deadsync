@@ -473,12 +473,12 @@ impl SongLuaOverlayIndex {
 /// The gameplay screen owns one immutable index for the root overlays and one
 /// per visual layer. Construction runs during screen entry, groups AFT sprites
 /// by capture name, stores each peer index once, and pre-sizes an inverse draw
-/// position buffer. The game/render thread updates that buffer linearly before
-/// rendering a layer; there is no synchronization, allocation, miss, eviction,
-/// or pruning path. Storage is bounded by the compiled overlay count and is
-/// released with the gameplay screen. `storage_bytes` exposes the retained
-/// index footprint for benchmarks; RGB grouping work is one linear preparation
-/// plus a bounded scan of the sprites referencing each capture.
+/// position and resolved-group buffers. The game/render thread updates those
+/// buffers linearly before rendering a layer; canonical three-channel groups
+/// are resolved once rather than once per channel. There is no synchronization,
+/// allocation, miss, eviction, or pruning path. Storage is bounded by the
+/// compiled overlay count and is released with the gameplay screen.
+/// `storage_bytes` exposes the retained index footprint for benchmarks.
 #[derive(Default)]
 struct SongLuaOverlayTopologyIndex {
     aft_ancestors: Vec<SongLuaOverlayIndex>,
@@ -487,6 +487,7 @@ struct SongLuaOverlayTopologyIndex {
     aft_sprite_groups: Vec<SongLuaOverlayIndex>,
     aft_peer_groups: Box<[Box<[usize]>]>,
     draw_positions: Vec<usize>,
+    rgb_aft_groups: Vec<Option<(usize, [usize; 3])>>,
 }
 
 impl SongLuaOverlayTopologyIndex {
@@ -550,6 +551,7 @@ impl SongLuaOverlayTopologyIndex {
                 .map(Vec::into_boxed_slice)
                 .collect(),
             draw_positions: vec![usize::MAX; overlays.len()],
+            rgb_aft_groups: vec![None; overlays.len()],
         }
     }
 
@@ -574,6 +576,52 @@ impl SongLuaOverlayTopologyIndex {
             .map_or(&[], Box::as_ref)
     }
 
+    fn prepare_rgb_aft_groups(
+        &mut self,
+        overlay_states: &[SongLuaOverlayState],
+        draw_order: &[usize],
+    ) {
+        self.prepare_rgb_draw_positions(draw_order);
+        self.rgb_aft_groups.fill(None);
+        let peer_groups = &self.aft_peer_groups;
+        let draw_positions = &self.draw_positions;
+        let resolved = &mut self.rgb_aft_groups;
+        for peers in peer_groups {
+            if peers.len() < 3 {
+                continue;
+            }
+            if peers.len() == 3 {
+                let Some(first) = peers.first().copied() else {
+                    continue;
+                };
+                if let Some(group) = song_lua_rgb_aft_group_from_peers(
+                    overlay_states,
+                    first,
+                    peers.iter().copied(),
+                    draw_positions,
+                ) {
+                    for &index in peers.iter() {
+                        resolved[index] = Some(group);
+                    }
+                }
+                continue;
+            }
+            for &index in peers.iter() {
+                resolved[index] = song_lua_rgb_aft_group_from_peers(
+                    overlay_states,
+                    index,
+                    peers.iter().copied(),
+                    draw_positions,
+                );
+            }
+        }
+    }
+
+    #[inline(always)]
+    fn rgb_aft_group(&self, index: usize) -> Option<(usize, [usize; 3])> {
+        self.rgb_aft_groups.get(index).copied().flatten()
+    }
+
     #[cfg(feature = "bench-support")]
     fn storage_bytes(&self) -> usize {
         let fixed = self
@@ -587,6 +635,10 @@ impl SongLuaOverlayTopologyIndex {
             .draw_positions
             .len()
             .saturating_mul(std::mem::size_of::<usize>());
+        let resolved = self
+            .rgb_aft_groups
+            .len()
+            .saturating_mul(std::mem::size_of::<Option<(usize, [usize; 3])>>());
         let groups = self
             .aft_peer_groups
             .len()
@@ -601,6 +653,7 @@ impl SongLuaOverlayTopologyIndex {
             .saturating_add(positions)
             .saturating_add(groups)
             .saturating_add(peers)
+            .saturating_add(resolved)
     }
 }
 
@@ -643,6 +696,8 @@ struct SongLuaProjectedMeshScratch {
     mesh_vertices: Option<Arc<Vec<MeshVertex>>>,
     graph_body_vertices: Option<Arc<Vec<MeshVertex>>>,
     graph_line_vertices: Option<Arc<Vec<MeshVertex>>>,
+    graph_body_key: Option<[u32; 10]>,
+    graph_line_key: Option<[u32; 11]>,
     graph_frame: Option<SharedActorFrameScratch>,
     model_geometry_keys: Option<Vec<TMeshCacheKey>>,
     model_glow_vertices: Option<Vec<Arc<[TexturedMeshVertex]>>>,
@@ -665,6 +720,8 @@ impl SongLuaProjectedMeshScratch {
             mesh_vertices: None,
             graph_body_vertices: None,
             graph_line_vertices: None,
+            graph_body_key: None,
+            graph_line_key: None,
             graph_frame: None,
             model_geometry_keys: None,
             model_glow_vertices: None,
@@ -687,6 +744,8 @@ impl SongLuaProjectedMeshScratch {
             mesh_vertices: Some(Arc::new(Vec::with_capacity(capacity))),
             graph_body_vertices: None,
             graph_line_vertices: None,
+            graph_body_key: None,
+            graph_line_key: None,
             graph_frame: None,
             model_geometry_keys: None,
             model_glow_vertices: None,
@@ -820,8 +879,15 @@ impl SongLuaProjectedMeshScratch {
 
     fn update_graph_body(
         &mut self,
+        key: [u32; 10],
         fill: impl FnOnce(&mut Vec<MeshVertex>),
     ) -> Arc<Vec<MeshVertex>> {
+        if self.graph_body_key == Some(key)
+            && let Some(vertices) = self.graph_body_vertices.as_ref()
+        {
+            return Arc::clone(vertices);
+        }
+        self.graph_body_key = Some(key);
         update_song_lua_shared_vec(
             &mut self.graph_body_vertices,
             self.capacity,
@@ -832,8 +898,15 @@ impl SongLuaProjectedMeshScratch {
 
     fn update_graph_line(
         &mut self,
+        key: [u32; 11],
         fill: impl FnOnce(&mut Vec<MeshVertex>),
     ) -> Arc<Vec<MeshVertex>> {
+        if self.graph_line_key == Some(key)
+            && let Some(vertices) = self.graph_line_vertices.as_ref()
+        {
+            return Arc::clone(vertices);
+        }
+        self.graph_line_key = Some(key);
         update_song_lua_shared_vec(
             &mut self.graph_line_vertices,
             self.capacity,
@@ -8399,11 +8472,39 @@ fn song_lua_overlay_render_state_from(
     overlay_ease_ranges: &[std::ops::Range<usize>],
     message_cache: &mut SongLuaMessageStateCache,
 ) -> SongLuaOverlayState {
+    let events = overlay_events.get(overlay_index).map(Vec::as_slice);
+    let has_events = events.is_some_and(|events| !events.is_empty());
+    let has_eases = overlay_ease_ranges
+        .get(overlay_index)
+        .is_some_and(|range| !range.is_empty());
+    if !has_events && !has_eases {
+        return overlay.initial_state;
+    }
+    song_lua_overlay_render_state_dynamic(
+        now,
+        overlay_index,
+        overlay,
+        events,
+        overlay_eases,
+        overlay_ease_ranges,
+        message_cache,
+    )
+}
+
+fn song_lua_overlay_render_state_dynamic(
+    now: f32,
+    overlay_index: usize,
+    overlay: &SongLuaOverlayActor,
+    events: Option<&[SongLuaOverlayMessageRuntime]>,
+    overlay_eases: &[SongLuaOverlayEaseWindowRuntime],
+    overlay_ease_ranges: &[std::ops::Range<usize>],
+    message_cache: &mut SongLuaMessageStateCache,
+) -> SongLuaOverlayState {
     let current = song_lua_message_state_cached(
         now,
         overlay.initial_state,
         &overlay.message_commands,
-        overlay_events.get(overlay_index).map(Vec::as_slice),
+        events,
         message_cache,
     );
     apply_song_lua_overlay_runtime_eases_for(
@@ -8412,6 +8513,27 @@ fn song_lua_overlay_render_state_from(
         overlay_eases,
         overlay_ease_ranges,
         current,
+    )
+}
+
+#[cfg(feature = "bench-support")]
+fn song_lua_overlay_render_state_from_legacy(
+    now: f32,
+    overlay_index: usize,
+    overlay: &SongLuaOverlayActor,
+    overlay_events: &[Vec<SongLuaOverlayMessageRuntime>],
+    overlay_eases: &[SongLuaOverlayEaseWindowRuntime],
+    overlay_ease_ranges: &[std::ops::Range<usize>],
+    message_cache: &mut SongLuaMessageStateCache,
+) -> SongLuaOverlayState {
+    song_lua_overlay_render_state_dynamic(
+        now,
+        overlay_index,
+        overlay,
+        overlay_events.get(overlay_index).map(Vec::as_slice),
+        overlay_eases,
+        overlay_ease_ranges,
+        message_cache,
     )
 }
 
@@ -9053,21 +9175,25 @@ fn song_lua_rgb_aft_group_for_indexed(
     topology_index: &SongLuaOverlayTopologyIndex,
     index: usize,
 ) -> Option<(usize, [usize; 3])> {
-    let group = song_lua_rgb_aft_channels_from_peers(
+    song_lua_rgb_aft_group_from_peers(
         overlay_states,
         index,
         topology_index.aft_sprite_peers(index).iter().copied(),
-    )?;
+        &topology_index.draw_positions,
+    )
+}
+
+fn song_lua_rgb_aft_group_from_peers(
+    overlay_states: &[SongLuaOverlayState],
+    index: usize,
+    peers: impl IntoIterator<Item = usize>,
+    draw_positions: &[usize],
+) -> Option<(usize, [usize; 3])> {
+    let group = song_lua_rgb_aft_channels_from_peers(overlay_states, index, peers)?;
     let leader = group
         .iter()
         .copied()
-        .min_by_key(|index| {
-            topology_index
-                .draw_positions
-                .get(*index)
-                .copied()
-                .unwrap_or(usize::MAX)
-        })
+        .min_by_key(|index| draw_positions.get(*index).copied().unwrap_or(usize::MAX))
         .unwrap_or(index);
     Some((leader, group))
 }
@@ -10399,6 +10525,18 @@ fn song_lua_graph_display_body_actor(
         state.diffuse[3] * body_state.diffuse[3],
     ];
     let bottom = top + height;
+    let geometry_key = [
+        left.to_bits(),
+        top.to_bits(),
+        width.to_bits(),
+        height.to_bits(),
+        tint[0].to_bits(),
+        tint[1].to_bits(),
+        tint[2].to_bits(),
+        tint[3].to_bits(),
+        x_scale.to_bits(),
+        y_scale.to_bits(),
+    ];
     let fill = |vertices: &mut Vec<MeshVertex>| {
         for (index, pair) in values.windows(2).enumerate() {
             let x0 = left + width * index as f32 / (values.len() - 1) as f32;
@@ -10433,7 +10571,7 @@ fn song_lua_graph_display_body_actor(
             offset: [0.0, 0.0],
             size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
             tint: [1.0, 1.0, 1.0, 1.0],
-            vertices: scratch.update_graph_body(fill),
+            vertices: scratch.update_graph_body(geometry_key, fill),
             visible,
             blend,
             z,
@@ -10480,7 +10618,8 @@ fn song_lua_graph_display_line_actor(
         * line_scale[1].abs();
     let left = state.x - width * state.halign + line_state.x * graph_scale[0];
     let top = state.y - size[1] * graph_scale[1].abs() * state.valign;
-    let y = top + size[1] * graph_scale[1].abs() * 0.5 + line_state.y * graph_scale[1];
+    let height = size[1] * graph_scale[1].abs();
+    let y = top + height * 0.5 + line_state.y * graph_scale[1];
     let tint = [
         state.diffuse[0] * line_state.diffuse[0],
         state.diffuse[1] * line_state.diffuse[1],
@@ -10488,12 +10627,25 @@ fn song_lua_graph_display_line_actor(
         state.diffuse[3] * line_state.diffuse[3],
     ];
     let stroke = line_height.max(1.0);
+    let geometry_key = [
+        left.to_bits(),
+        y.to_bits(),
+        width.to_bits(),
+        height.to_bits(),
+        stroke.to_bits(),
+        tint[0].to_bits(),
+        tint[1].to_bits(),
+        tint[2].to_bits(),
+        tint[3].to_bits(),
+        x_scale.to_bits(),
+        y_scale.to_bits(),
+    ];
     let fill = |vertices: &mut Vec<MeshVertex>| {
         for (index, pair) in values.windows(2).enumerate() {
             let x0 = left + width * index as f32 / (values.len() - 1) as f32;
             let x1 = left + width * (index + 1) as f32 / (values.len() - 1) as f32;
-            let y0 = y + (0.5 - pair[0].clamp(0.0, 1.0)) * size[1] * graph_scale[1].abs();
-            let y1 = y + (0.5 - pair[1].clamp(0.0, 1.0)) * size[1] * graph_scale[1].abs();
+            let y0 = y + (0.5 - pair[0].clamp(0.0, 1.0)) * height;
+            let y1 = y + (0.5 - pair[1].clamp(0.0, 1.0)) * height;
             push_graph_display_line_segment(
                 vertices,
                 [x0 * x_scale, y0 * y_scale],
@@ -10515,7 +10667,7 @@ fn song_lua_graph_display_line_actor(
             offset: [0.0, 0.0],
             size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
             tint: [1.0, 1.0, 1.0, 1.0],
-            vertices: scratch.update_graph_line(fill),
+            vertices: scratch.update_graph_line(geometry_key, fill),
             visible,
             blend,
             z,
@@ -10896,6 +11048,75 @@ impl SongLuaMessageStateBenchmark {
         );
         state.x + state.y + state.z + state.draw_order as f32
     }
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub struct SongLuaStaticStateBenchmark {
+    overlay: SongLuaOverlayActor,
+    events: Vec<Vec<SongLuaOverlayMessageRuntime>>,
+    ranges: Vec<std::ops::Range<usize>>,
+    legacy_cache: SongLuaMessageStateCache,
+    fast_cache: SongLuaMessageStateCache,
+}
+
+#[cfg(feature = "bench-support")]
+impl SongLuaStaticStateBenchmark {
+    pub fn new() -> Self {
+        Self {
+            overlay: SongLuaOverlayActor {
+                kind: SongLuaOverlayKind::Actor,
+                name: None,
+                parent_index: None,
+                initial_state: SongLuaOverlayState {
+                    x: 123.0,
+                    y: -45.0,
+                    diffuse: [0.25, 0.5, 0.75, 0.875],
+                    draw_order: 17,
+                    ..SongLuaOverlayState::default()
+                },
+                message_commands: Vec::new(),
+            },
+            events: vec![Vec::new()],
+            ranges: vec![0..0],
+            legacy_cache: SongLuaMessageStateCache::default(),
+            fast_cache: SongLuaMessageStateCache::default(),
+        }
+    }
+
+    pub fn legacy_frame(&mut self, now: f32) -> u64 {
+        let state = song_lua_overlay_render_state_from_legacy(
+            now,
+            0,
+            &self.overlay,
+            &self.events,
+            &[],
+            &self.ranges,
+            &mut self.legacy_cache,
+        );
+        song_lua_overlay_state_checksum(state)
+    }
+
+    pub fn static_frame(&mut self, now: f32) -> u64 {
+        let state = song_lua_overlay_render_state_from(
+            now,
+            0,
+            &self.overlay,
+            &self.events,
+            &[],
+            &self.ranges,
+            &mut self.fast_cache,
+        );
+        song_lua_overlay_state_checksum(state)
+    }
+}
+
+#[cfg(feature = "bench-support")]
+fn song_lua_overlay_state_checksum(state: SongLuaOverlayState) -> u64 {
+    u64::from(state.x.to_bits())
+        ^ u64::from(state.y.to_bits()).rotate_left(11)
+        ^ u64::from(state.diffuse[3].to_bits()).rotate_left(23)
+        ^ (state.draw_order as u32 as u64).rotate_left(37)
 }
 
 #[cfg(feature = "bench-support")]
@@ -11361,6 +11582,17 @@ impl SongLuaTopologyBenchmark {
             .enumerate()
             .filter(|(_, overlay)| matches!(overlay.kind, SongLuaOverlayKind::AftSprite { .. }))
             .map(|(index, _)| song_lua_rgb_aft_group_for_indexed(&self.states, &self.index, index))
+            .fold(0, Self::rgb_group_checksum)
+    }
+
+    pub fn prepared_rgb_aft_groups(&mut self) -> u64 {
+        self.index
+            .prepare_rgb_aft_groups(&self.states, &self.draw_order);
+        self.overlays
+            .iter()
+            .enumerate()
+            .filter(|(_, overlay)| matches!(overlay.kind, SongLuaOverlayKind::AftSprite { .. }))
+            .map(|(index, _)| self.index.rgb_aft_group(index))
             .fold(0, Self::rgb_group_checksum)
     }
 
@@ -12077,7 +12309,13 @@ impl SongLuaGraphDisplayBenchmark {
         self.frame(None)
     }
 
-    pub fn reused_frame(&mut self) -> u64 {
+    pub fn rebuilt_frame(&mut self) -> u64 {
+        self.scratch.graph_body_key = None;
+        self.scratch.graph_line_key = None;
+        self.cached_frame()
+    }
+
+    pub fn cached_frame(&mut self) -> u64 {
         let values = Arc::clone(&self.values);
         let actor = song_lua_graph_display_actor(
             Self::state(),
@@ -15286,7 +15524,7 @@ fn push_song_lua_layer_actors(
     );
     out.reserve(overlays.len());
     song_lua_overlay_order_into(overlays, overlay_states, order_cache, None, order_scratch);
-    topology_index.prepare_rgb_draw_positions(order_scratch);
+    topology_index.prepare_rgb_aft_groups(overlay_states, order_scratch);
     for (draw_idx, idx) in order_scratch.iter().copied().enumerate() {
         let Some(overlay) = overlays.get(idx) else {
             continue;
@@ -15326,9 +15564,7 @@ fn push_song_lua_layer_actors(
                 }
             }
             SongLuaOverlayKind::AftSprite { .. } => {
-                let overlay_state = if let Some((leader, _)) =
-                    song_lua_rgb_aft_group_for_indexed(overlay_states, topology_index, idx)
-                {
+                let overlay_state = if let Some((leader, _)) = topology_index.rgb_aft_group(idx) {
                     if leader != idx {
                         continue;
                     }
@@ -18216,6 +18452,51 @@ mod tests {
     }
 
     #[test]
+    fn song_lua_static_overlay_state_skips_runtime_caches() {
+        let overlay = SongLuaOverlayActor {
+            kind: SongLuaOverlayKind::Actor,
+            name: None,
+            parent_index: None,
+            initial_state: SongLuaOverlayState {
+                x: 123.0,
+                y: -45.0,
+                diffuse: [0.25, 0.5, 0.75, 0.875],
+                draw_order: 17,
+                ..SongLuaOverlayState::default()
+            },
+            message_commands: Vec::new(),
+        };
+        let events = vec![Vec::new()];
+        let ranges = vec![0..0];
+        let mut dynamic_cache = SongLuaMessageStateCache::default();
+        let mut static_cache = SongLuaMessageStateCache::default();
+
+        for now in [-1.0, 0.0, 42.0, 10_000.0] {
+            let expected = song_lua_overlay_render_state_dynamic(
+                now,
+                0,
+                &overlay,
+                Some(&events[0]),
+                &[],
+                &ranges,
+                &mut dynamic_cache,
+            );
+            let actual = song_lua_overlay_render_state_from(
+                now,
+                0,
+                &overlay,
+                &events,
+                &[],
+                &ranges,
+                &mut static_cache,
+            );
+            assert_eq!(actual, expected, "now={now}");
+        }
+        assert!(dynamic_cache.initialized);
+        assert!(!static_cache.initialized);
+    }
+
+    #[test]
     fn song_lua_message_block_cursor_matches_replay_across_block_rewinds() {
         let command = SongLuaOverlayMessageCommand {
             message: "LongCommand".to_string(),
@@ -20420,11 +20701,17 @@ mod tests {
         topology.prepare_rgb_draw_positions(&order);
         let indexed = song_lua_rgb_aft_group_for_indexed(&states, &topology, red_index);
         assert_eq!(indexed, legacy);
+        topology.prepare_rgb_aft_groups(&states, &order);
+        let prepared = topology.rgb_aft_group(red_index);
+        assert_eq!(prepared, indexed);
         let Some((leader, group)) = legacy else {
             panic!("fixture RGB AFT state should combine before rgbsplit");
         };
 
         assert!(group.contains(&leader));
+        for index in group {
+            assert_eq!(topology.rgb_aft_group(index), prepared);
+        }
     }
 
     #[test]
@@ -21568,6 +21855,46 @@ mod tests {
             0
         );
         assert_eq!(scratch.graph_frame.as_ref().unwrap().stats().growths, 0);
+
+        let changed_state = SongLuaOverlayState {
+            x: state.x + 10.0,
+            ..state
+        };
+        let changed = song_lua_graph_display_actor(
+            changed_state,
+            &values,
+            body_state,
+            line_state,
+            [120.0, 60.0],
+            1.0,
+            1.0,
+            324,
+            Some(&mut scratch),
+        )
+        .expect("changed GraphDisplay should render");
+        let Actor::SharedFrame { children, .. } = &changed else {
+            panic!("expected changed GraphDisplay shared frame");
+        };
+        let [
+            Actor::Frame {
+                children: graph_children,
+                ..
+            },
+        ] = children.as_ref()
+        else {
+            panic!("expected changed GraphDisplay identity frame");
+        };
+        let [
+            Actor::ReusableMesh { vertices: body, .. },
+            Actor::ReusableMesh { vertices: line, .. },
+        ] = graph_children.as_slice()
+        else {
+            panic!("expected changed reusable GraphDisplay meshes");
+        };
+        assert_eq!(body[0].pos, [270.0, 145.0]);
+        assert_ne!(Arc::as_ptr(body), body_ptr);
+        assert_ne!(Arc::as_ptr(line), line_ptr);
+        assert_eq!(scratch.replacements, 2);
     }
 
     #[test]
