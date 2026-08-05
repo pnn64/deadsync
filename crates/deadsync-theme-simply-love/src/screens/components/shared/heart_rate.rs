@@ -1,10 +1,13 @@
 use crate::act;
-use deadlib_present::actors::Actor;
+use deadlib_present::actors::{Actor, TextContent};
+#[cfg(feature = "bench-support")]
 use deadlib_present::cache::{TextCache, cached_text, text_cache_with_capacity};
 use deadlib_present::color;
 use deadsync_core::input::MAX_PLAYERS;
+#[cfg(feature = "bench-support")]
 use std::cell::RefCell;
-use std::sync::{Arc, LazyLock};
+#[cfg(feature = "bench-support")]
+use std::sync::Arc;
 
 const ZONE_RGBA: [[f32; 4]; 5] = [
     color::rgba_hex("#5CE087"),
@@ -14,11 +17,11 @@ const ZONE_RGBA: [[f32; 4]; 5] = [
     color::rgba_hex("#FF3030"),
 ];
 
+#[cfg(feature = "bench-support")]
 thread_local! {
-    static TEXT_CACHE: RefCell<TextCache<u16>> = RefCell::new(text_cache_with_capacity(512));
+    static BENCH_TEXT_CACHE: RefCell<TextCache<u16>> =
+        RefCell::new(text_cache_with_capacity(512));
 }
-
-static UNKNOWN_TEXT: LazyLock<Arc<str>> = LazyLock::new(|| Arc::<str>::from("--"));
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct HeartRatePlayerView {
@@ -32,15 +35,47 @@ pub struct HeartRateView {
     pub players: [HeartRatePlayerView; MAX_PLAYERS],
 }
 
-fn cached_text_for_bpm(bpm: u16) -> Arc<str> {
-    // Owner: render thread. Lifetime: session. Capacity: 512 readings. Misses
-    // format one small integer; the cache saturates without pruning.
-    cached_text(&TEXT_CACHE, bpm, 512, || bpm.to_string())
+/// Fixed two-player display text updated only when a monitor reading changes.
+///
+/// The gameplay thread owns this song-lifetime plan. Its two inline values use
+/// no heap, cache, synchronization, growth, eviction, or destruction work.
+/// Stable frames only clone one bounded `TextContent` value per visible player.
+pub(crate) struct HeartRateTextPlan {
+    bpm: [Option<u16>; MAX_PLAYERS],
+    text: [TextContent; MAX_PLAYERS],
 }
 
-pub(crate) fn text(bpm: Option<u16>) -> Arc<str> {
-    bpm.map(cached_text_for_bpm)
-        .unwrap_or_else(|| Arc::clone(&UNKNOWN_TEXT))
+impl Default for HeartRateTextPlan {
+    fn default() -> Self {
+        Self {
+            bpm: [None; MAX_PLAYERS],
+            text: std::array::from_fn(|_| TextContent::Static("--")),
+        }
+    }
+}
+
+impl HeartRateTextPlan {
+    pub(crate) fn sync(&mut self, view: HeartRateView) {
+        for (player, reading) in view.players.into_iter().enumerate() {
+            if self.bpm[player] != reading.bpm {
+                self.bpm[player] = reading.bpm;
+                self.text[player] = text(reading.bpm);
+            }
+        }
+    }
+
+    #[inline(always)]
+    pub(crate) fn get(&self, player: usize) -> TextContent {
+        self.text
+            .get(player)
+            .cloned()
+            .unwrap_or(TextContent::Static("--"))
+    }
+}
+
+#[inline(always)]
+pub(crate) fn text(bpm: Option<u16>) -> TextContent {
+    bpm.map_or(TextContent::Static("--"), TextContent::inline_u16)
 }
 
 pub(crate) fn pulse_scale(elapsed: f32, bpm: u16) -> f32 {
@@ -71,6 +106,7 @@ fn zone_color(bpm: u16) -> [f32; 4] {
 pub fn push(
     actors: &mut Vec<Actor>,
     reading: HeartRatePlayerView,
+    display_text: TextContent,
     elapsed: f32,
     x: f32,
     y: f32,
@@ -92,15 +128,67 @@ pub fn push(
         diffuse(heart_rgba[0], heart_rgba[1], heart_rgba[2], alpha): z(z)
     ));
     actors.push(act!(text:
-        font("miso"): settext(text(reading.bpm)): align(0.0, 0.5): horizalign(left):
+        font("miso"): settext(display_text): align(0.0, 0.5): horizalign(left):
         xy(x + 16.0 * zoom, y): zoom(2.0 * zoom):
         diffuse(text_rgba[0], text_rgba[1], text_rgba[2], alpha): z(z)
     ));
 }
 
+#[cfg(feature = "bench-support")]
+#[inline(always)]
+fn cached_text_legacy(bpm: u16) -> Arc<str> {
+    cached_text(&BENCH_TEXT_CACHE, bpm, 512, || bpm.to_string())
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub struct HeartRateTextBenchmark {
+    plan: HeartRateTextPlan,
+}
+
+#[cfg(feature = "bench-support")]
+impl Default for HeartRateTextBenchmark {
+    fn default() -> Self {
+        let mut plan = HeartRateTextPlan::default();
+        plan.sync(HeartRateView {
+            players: [
+                HeartRatePlayerView {
+                    configured: true,
+                    connected: true,
+                    bpm: Some(147),
+                },
+                HeartRatePlayerView::default(),
+            ],
+        });
+        Self { plan }
+    }
+}
+
+#[cfg(feature = "bench-support")]
+impl HeartRateTextBenchmark {
+    const SAMPLES: usize = 256;
+
+    pub fn legacy_frame(&self, frame: usize) -> usize {
+        (0..Self::SAMPLES).fold(frame, |checksum, sample| {
+            let text = cached_text_legacy(std::hint::black_box(147));
+            checksum.rotate_left(7) ^ text.len() ^ sample
+        })
+    }
+
+    pub fn planned_frame(&self, frame: usize) -> usize {
+        (0..Self::SAMPLES).fold(frame, |checksum, sample| {
+            let text = self.plan.get(std::hint::black_box(0));
+            checksum.rotate_left(7) ^ text.as_str().len() ^ sample
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{ZONE_RGBA, pulse_scale, zone_color};
+    use super::{
+        HeartRatePlayerView, HeartRateTextPlan, HeartRateView, ZONE_RGBA, pulse_scale, text,
+        zone_color,
+    };
 
     #[test]
     fn heart_pulse_repeats_at_the_reported_rate() {
@@ -123,5 +211,27 @@ mod tests {
         assert_eq!(zone_color(160), ZONE_RGBA[3]);
         assert_eq!(zone_color(180), ZONE_RGBA[4]);
         assert_eq!(zone_color(200), ZONE_RGBA[4]);
+    }
+
+    #[test]
+    fn heart_rate_text_plan_preserves_missing_and_numeric_readings() {
+        let mut plan = HeartRateTextPlan::default();
+        assert_eq!(plan.get(0).as_str(), "--");
+        plan.sync(HeartRateView {
+            players: [
+                HeartRatePlayerView {
+                    configured: true,
+                    connected: true,
+                    bpm: Some(147),
+                },
+                HeartRatePlayerView {
+                    configured: true,
+                    connected: true,
+                    bpm: Some(u16::MAX),
+                },
+            ],
+        });
+        assert_eq!(plan.get(0).as_str(), text(Some(147)).as_str());
+        assert_eq!(plan.get(1).as_str(), "65535");
     }
 }

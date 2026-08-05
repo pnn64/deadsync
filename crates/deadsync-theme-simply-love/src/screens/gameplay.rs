@@ -8,6 +8,7 @@ use crate::screens::components::gameplay::score_counter::{
 };
 use crate::screens::components::gameplay::{gameplay_stats, notefield, step_stats_gifs};
 use crate::screens::components::shared::banner as shared_banner;
+use crate::screens::components::shared::heart_rate;
 pub use crate::screens::components::shared::heart_rate::{HeartRatePlayerView, HeartRateView};
 use crate::screens::components::shared::screen_bar::{self, AvatarParams, ScreenBarParams};
 use crate::screens::components::shared::{gs_scorebox, lobby_hud};
@@ -2285,6 +2286,7 @@ pub struct State {
     song_lua_foreground_owner_index: SongLuaForegroundOwnerIndex,
     smx_sensor_views: [Option<SmxSensorPadView>; 2],
     pub heart_rate_view: HeartRateView,
+    pub(crate) heart_rate_text: heart_rate::HeartRateTextPlan,
     // Time banked toward the next shell-owned sensor refresh. Seeded to fire on
     // the first frame.
     smx_sensor_refresh_accum: f32,
@@ -2817,6 +2819,7 @@ impl State {
             song_lua_foreground_owner_index,
             smx_sensor_views: [None, None],
             heart_rate_view: HeartRateView::default(),
+            heart_rate_text: heart_rate::HeartRateTextPlan::default(),
             smx_sensor_refresh_accum: SMX_SENSOR_REFRESH_INTERVAL,
             frame_scratch: Some(Box::new(frame_scratch)),
             actor_resources,
@@ -4862,7 +4865,17 @@ pub fn set_smx_sensor_pad_view(
 }
 
 pub fn set_heart_rate_view(state: &mut State, view: HeartRateView) {
+    state.heart_rate_text.sync(view);
     state.heart_rate_view = view;
+}
+
+/// Refresh song-rate-derived presentation only on an explicit Practice rate
+/// change. Ordinary gameplay never calls this from the frame loop.
+pub fn sync_music_rate_text(state: &mut State) {
+    let rate = state.music_rate();
+    let max_nps = std::array::from_fn(|player| state.charts()[player].max_nps as f32);
+    state.rate_text = cached_rate_text(rate);
+    state.gameplay_stats_text.sync_music_rate(max_nps, rate);
 }
 
 pub fn runtime_profile_side(state: &State, player_idx: usize) -> profile_data::PlayerSide {

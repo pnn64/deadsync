@@ -12533,7 +12533,16 @@ fn push_heart_rates(
     for (side, y) in slots.into_iter().flatten() {
         let reading = view.players[profile_data::player_side_index(side)];
         if reading.configured && reading.connected {
-            heart_rate::push(actors, reading, elapsed, x, y, 0.8, 121);
+            heart_rate::push(
+                actors,
+                reading,
+                heart_rate::text(reading.bpm),
+                elapsed,
+                x,
+                y,
+                0.8,
+                121,
+            );
         }
     }
 }

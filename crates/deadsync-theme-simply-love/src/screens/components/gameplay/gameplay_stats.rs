@@ -16,6 +16,7 @@ use crate::step_stats::{
 use deadlib_present::actors::{Actor, InlineText, SizeSpec, TextAlign, TextContent};
 #[cfg(feature = "bench-support")]
 use deadlib_present::cache::{SharedStrCache, cached_shared_str};
+#[cfg(feature = "bench-support")]
 use deadlib_present::cache::{TextCache, cached_text, text_cache_with_capacity};
 use deadlib_present::color;
 use deadlib_present::compose::TextLayoutCache;
@@ -24,6 +25,7 @@ use deadlib_present::font;
 use deadlib_present::space::*;
 use deadlib_render::BlendMode;
 use deadsync_core::input::MAX_PLAYERS;
+#[cfg(feature = "bench-support")]
 use deadsync_gameplay::{FantasticWindowOptions, blue_fantastic_window_ms};
 use deadsync_profile as profile_data;
 use deadsync_profile_gameplay::score_display_mode_from_profile;
@@ -34,6 +36,7 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::sync::{Arc, LazyLock};
 
+#[cfg(feature = "bench-support")]
 const TEXT_CACHE_LIMIT: usize = 8192;
 const COUNT_PREWARM_CAP: u32 = 2048;
 const TIME_PREWARM_CAP_S: u32 = 600;
@@ -135,8 +138,6 @@ thread_local! {
     static LIVE_TIMING_INLINE_CACHE: RefCell<SlotTextCache<(i32, i32), InlineText, 6>> = const {
         RefCell::new(SlotTextCache::new())
     };
-    static BLUE_WINDOW_LABEL_CACHE: RefCell<TextCache<i32>> = RefCell::new(text_cache_with_capacity(64));
-    static PEAK_NPS_CACHE: RefCell<TextCache<u32>> = RefCell::new(text_cache_with_capacity(512));
 }
 
 #[cfg(feature = "bench-support")]
@@ -146,6 +147,8 @@ thread_local! {
     static BENCH_PADDED_BRIGHT_CACHE: RefCell<TextCache<(u32, u8)>> = RefCell::new(text_cache_with_capacity(2048));
     static BENCH_GAME_TIME_CACHE: RefCell<TextCache<(u32, u8)>> = RefCell::new(text_cache_with_capacity(1024));
     static BENCH_LIVE_TIMING_CACHE: RefCell<TextCache<(i32, i32)>> = RefCell::new(text_cache_with_capacity(4096));
+    static BENCH_BLUE_WINDOW_LABEL_CACHE: RefCell<TextCache<i32>> = RefCell::new(text_cache_with_capacity(64));
+    static BENCH_PEAK_NPS_CACHE: RefCell<TextCache<u32>> = RefCell::new(text_cache_with_capacity(512));
 }
 
 static DIGIT_TEXT: LazyLock<[Arc<str>; 10]> =
@@ -174,23 +177,6 @@ static LIVE_TIMING_LABELS: LazyLock<[Arc<str>; 3]> = LazyLock::new(|| {
 #[inline(always)]
 fn gameplay_font_key(state: &State, role: FontRole) -> &'static str {
     machine_font_key(state.machine_font(), role)
-}
-
-#[inline(always)]
-fn player_blue_window_ms(state: &State, player_idx: usize) -> f32 {
-    let base = state.default_fa_plus_window_s();
-    let Some(profile) = state.profiles().get(player_idx) else {
-        return base * 1000.0;
-    };
-    blue_fantastic_window_ms(FantasticWindowOptions {
-        base_fa_plus_s: base,
-        custom_fantastic_window_s: profile.custom_fantastic_window.then(|| {
-            f32::from(profile_data::clamp_custom_fantastic_window_ms(
-                profile.custom_fantastic_window_ms,
-            )) / 1000.0
-        }),
-        fa_plus_10ms_blue_window: profile.fa_plus_10ms_blue_window,
-    })
 }
 
 #[derive(Clone, Copy)]
@@ -285,11 +271,11 @@ fn time_total_text(state: &State) -> Arc<str> {
 
 /// Song-lifetime text identities used by Step Statistics composition.
 ///
-/// The gameplay thread owns one immutable plan. Localization and owned chart
-/// strings are resolved at screen entry; live frames only clone `Arc` handles
-/// and index two fixed description slots. There is no cache lookup, growth,
-/// eviction, or miss path during gameplay, and all strings are destroyed with
-/// the screen. Worst-case frame work is sixteen bounded handle clones.
+/// The gameplay thread owns one song-lifetime plan. Localization and owned
+/// chart strings are resolved at screen entry; live frames only clone `Arc`
+/// handles and index fixed arrays. Practice refreshes peak NPS only on its
+/// explicit rate-change boundary. There is no cache lookup, growth, eviction,
+/// or miss path during ordinary frames, and all strings die with the screen.
 pub(crate) struct GameplayStatsTextPlan {
     step_info: [Arc<str>; 4],
     holds_mines_rolls: [Arc<str>; 3],
@@ -299,6 +285,9 @@ pub(crate) struct GameplayStatsTextPlan {
     song_artist: Arc<str>,
     descriptions: [[Arc<str>; 2]; MAX_PLAYERS],
     description_counts: [u8; MAX_PLAYERS],
+    peak_nps: [Arc<str>; MAX_PLAYERS],
+    blue_window: [Arc<str>; MAX_PLAYERS],
+    blue_window_ms: [f32; MAX_PLAYERS],
 }
 
 impl GameplayStatsTextPlan {
@@ -307,13 +296,45 @@ impl GameplayStatsTextPlan {
             let chart = &gameplay.charts()[player];
             (chart.description.as_str(), chart.step_artist.as_str())
         });
-        Self::from_parts(gameplay.song().artist.as_str(), descriptions, course)
+        let rate = gameplay.music_rate();
+        let peak_nps = std::array::from_fn(|player| {
+            peak_nps_text((gameplay.charts()[player].max_nps as f32 * rate).max(0.0))
+        });
+        let blue_window_ms = std::array::from_fn(|player| gameplay.player_blue_window_ms(player));
+        let blue_window = blue_window_ms.map(|ms| blue_window_label(ms.round() as i32));
+        Self::from_parts_with_derived(
+            gameplay.song().artist.as_str(),
+            descriptions,
+            course,
+            peak_nps,
+            blue_window,
+            blue_window_ms,
+        )
     }
 
+    #[cfg(feature = "bench-support")]
     fn from_parts(
         song_artist: &str,
         chart_text: [(&str, &str); MAX_PLAYERS],
         course: bool,
+    ) -> Self {
+        Self::from_parts_with_derived(
+            song_artist,
+            chart_text,
+            course,
+            std::array::from_fn(|_| peak_nps_text(0.0)),
+            std::array::from_fn(|_| blue_window_label(0)),
+            [0.0; MAX_PLAYERS],
+        )
+    }
+
+    fn from_parts_with_derived(
+        song_artist: &str,
+        chart_text: [(&str, &str); MAX_PLAYERS],
+        course: bool,
+        peak_nps: [Arc<str>; MAX_PLAYERS],
+        blue_window: [Arc<str>; MAX_PLAYERS],
+        blue_window_ms: [f32; MAX_PLAYERS],
     ) -> Self {
         let labels = if course {
             &STEP_INFO_COURSE_LABELS
@@ -344,6 +365,9 @@ impl GameplayStatsTextPlan {
             song_artist: Arc::from(song_artist),
             descriptions,
             description_counts,
+            peak_nps,
+            blue_window,
+            blue_window_ms,
         }
     }
 
@@ -379,6 +403,29 @@ impl GameplayStatsTextPlan {
         }
         let index = ((elapsed / 2.0).floor() as usize) % count;
         Arc::clone(&values[index])
+    }
+
+    #[inline(always)]
+    fn peak_nps(&self, player: usize) -> Arc<str> {
+        self.peak_nps
+            .get(player)
+            .map_or_else(|| Arc::clone(&EMPTY_STATS_TEXT), Arc::clone)
+    }
+
+    #[inline(always)]
+    fn blue_window(&self, player: usize) -> Arc<str> {
+        self.blue_window
+            .get(player)
+            .map_or_else(|| Arc::clone(&EMPTY_STATS_TEXT), Arc::clone)
+    }
+
+    #[inline(always)]
+    fn blue_window_ms(&self, player: usize) -> f32 {
+        self.blue_window_ms.get(player).copied().unwrap_or_default()
+    }
+
+    pub(crate) fn sync_music_rate(&mut self, max_nps: [f32; MAX_PLAYERS], rate: f32) {
+        self.peak_nps = max_nps.map(|peak| peak_nps_text((peak * rate).max(0.0)));
     }
 }
 
@@ -477,16 +524,105 @@ impl GameplayStatsTextBenchmark {
     }
 }
 
+/// Focused old/new harness for song-invariant derived Step Statistics data.
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub struct GameplayStatsDerivedTextBenchmark {
+    plan: GameplayStatsTextPlan,
+    max_nps: [f32; MAX_PLAYERS],
+    rate: f32,
+}
+
+#[cfg(feature = "bench-support")]
+impl Default for GameplayStatsDerivedTextBenchmark {
+    fn default() -> Self {
+        let max_nps = [12.75, 18.5];
+        let rate = 1.1;
+        let peak_nps = max_nps.map(|peak| peak_nps_text(peak * rate));
+        let blue_window_ms = std::array::from_fn(benchmark_blue_window_ms);
+        let blue_window = blue_window_ms.map(|ms| blue_window_label(ms.round() as i32));
+        Self {
+            plan: GameplayStatsTextPlan::from_parts_with_derived(
+                "Artist",
+                [("Hard 11", "P1 Credit"), ("Expert 13", "P2 Credit")],
+                false,
+                peak_nps,
+                blue_window,
+                blue_window_ms,
+            ),
+            max_nps,
+            rate,
+        }
+    }
+}
+
+#[cfg(feature = "bench-support")]
+fn benchmark_blue_window_ms(player: usize) -> f32 {
+    blue_fantastic_window_ms(FantasticWindowOptions {
+        base_fa_plus_s: 0.015,
+        custom_fantastic_window_s: (player == 0).then_some(0.012),
+        fa_plus_10ms_blue_window: player == 1,
+    })
+}
+
+#[cfg(feature = "bench-support")]
+impl GameplayStatsDerivedTextBenchmark {
+    const SAMPLES: usize = 256;
+
+    pub fn legacy_peak_frame(&self, frame: usize) -> usize {
+        (0..Self::SAMPLES).fold(frame, |checksum, sample| {
+            let player = sample % MAX_PLAYERS;
+            let peak = (std::hint::black_box(self.max_nps[player]) * self.rate).max(0.0);
+            let text = cached_peak_nps_text_legacy(peak);
+            checksum.rotate_left(7) ^ text.len() ^ sample
+        })
+    }
+
+    pub fn planned_peak_frame(&self, frame: usize) -> usize {
+        (0..Self::SAMPLES).fold(frame, |checksum, sample| {
+            let player = sample % MAX_PLAYERS;
+            let text = self.plan.peak_nps(std::hint::black_box(player));
+            checksum.rotate_left(7) ^ text.len() ^ sample
+        })
+    }
+
+    pub fn legacy_blue_frame(&self, frame: usize) -> usize {
+        (0..Self::SAMPLES).fold(frame, |checksum, sample| {
+            let player = std::hint::black_box(sample % MAX_PLAYERS);
+            let ms = benchmark_blue_window_ms(player);
+            let text = cached_blue_window_label_legacy(ms.round() as i32);
+            checksum.rotate_left(7) ^ text.len() ^ ms.to_bits() as usize ^ sample
+        })
+    }
+
+    pub fn planned_blue_frame(&self, frame: usize) -> usize {
+        (0..Self::SAMPLES).fold(frame, |checksum, sample| {
+            let player = std::hint::black_box(sample % MAX_PLAYERS);
+            let ms = self.plan.blue_window_ms(player);
+            let text = self.plan.blue_window(player);
+            checksum.rotate_left(7) ^ text.len() ^ ms.to_bits() as usize ^ sample
+        })
+    }
+
+    pub fn behavior_matches(&self) -> bool {
+        self.legacy_peak_frame(17) == self.planned_peak_frame(17)
+            && self.legacy_blue_frame(17) == self.planned_blue_frame(17)
+    }
+}
+
 #[cfg(test)]
 mod gameplay_stats_text_plan_tests {
     use super::*;
 
     #[test]
     fn prewarmed_text_preserves_labels_and_description_cycle() {
-        let plan = GameplayStatsTextPlan::from_parts(
+        let plan = GameplayStatsTextPlan::from_parts_with_derived(
             "Artist",
             [("Description", "Credit"), ("Same", "Same")],
             true,
+            [peak_nps_text(14.25), peak_nps_text(18.5)],
+            [blue_window_label(12), blue_window_label(10)],
+            [12.0, 10.0],
         );
 
         assert_eq!(
@@ -511,6 +647,13 @@ mod gameplay_stats_text_plan_tests {
         assert_eq!(plan.description(0, 4.0).as_ref(), "Description");
         assert_eq!(plan.description(1, 2.0).as_ref(), "Same");
         assert_eq!(plan.step_info(usize::MAX).as_ref(), "");
+        assert_eq!(plan.peak_nps(0).as_ref(), peak_nps_text(14.25).as_ref());
+        assert_eq!(plan.blue_window(0).as_ref(), blue_window_label(12).as_ref());
+        assert_eq!(plan.blue_window_ms(0), 12.0);
+        let mut plan = plan;
+        plan.sync_music_rate([10.0, 20.0], 1.5);
+        assert_eq!(plan.peak_nps(0).as_ref(), peak_nps_text(15.0).as_ref());
+        assert_eq!(plan.peak_nps(1).as_ref(), peak_nps_text(30.0).as_ref());
     }
 }
 
@@ -942,11 +1085,20 @@ fn padded_runs(count: u32, digits: usize) -> (TextContent, TextContent) {
     }
 }
 
-#[inline(always)]
-fn cached_blue_window_label(ms: i32) -> Arc<str> {
+fn blue_window_label(ms: i32) -> Arc<str> {
     use crate::assets::i18n::tr_fmt;
-    cached_text(&BLUE_WINDOW_LABEL_CACHE, ms, TEXT_CACHE_LIMIT, || {
-        tr_fmt("Gameplay", "BlueWindowLabel", &[("ms", &ms.to_string())]).to_string()
+    Arc::from(tr_fmt(
+        "Gameplay",
+        "BlueWindowLabel",
+        &[("ms", &ms.to_string())],
+    ))
+}
+
+#[cfg(feature = "bench-support")]
+#[inline(always)]
+fn cached_blue_window_label_legacy(ms: i32) -> Arc<str> {
+    cached_text(&BENCH_BLUE_WINDOW_LABEL_CACHE, ms, TEXT_CACHE_LIMIT, || {
+        blue_window_label(ms).as_ref().to_owned()
     })
 }
 
@@ -976,17 +1128,24 @@ fn padded_runs_for_window(count: u32, digits: usize, disabled: bool) -> (TextCon
     }
 }
 
-#[inline(always)]
-fn cached_peak_nps_text(peak: f32) -> Arc<str> {
+fn peak_nps_text(peak: f32) -> Arc<str> {
     use crate::assets::i18n::tr_fmt;
-    cached_text(&PEAK_NPS_CACHE, peak.to_bits(), TEXT_CACHE_LIMIT, || {
-        tr_fmt(
-            "Gameplay",
-            "PeakNps",
-            &[("peak_nps", &format!("{:.2}", peak.max(0.0)))],
-        )
-        .to_string()
-    })
+    Arc::from(tr_fmt(
+        "Gameplay",
+        "PeakNps",
+        &[("peak_nps", &format!("{:.2}", peak.max(0.0)))],
+    ))
+}
+
+#[cfg(feature = "bench-support")]
+#[inline(always)]
+fn cached_peak_nps_text_legacy(peak: f32) -> Arc<str> {
+    cached_text(
+        &BENCH_PEAK_NPS_CACHE,
+        peak.to_bits(),
+        TEXT_CACHE_LIMIT,
+        || peak_nps_text(peak).as_ref().to_owned(),
+    )
 }
 
 #[inline(always)]
@@ -1563,7 +1722,6 @@ pub fn prewarm_text_layout(
         cache.prewarm_text(fonts, "miso", label.as_ref(), None);
     }
     for player in 0..state.num_players() {
-        let chart = &state.charts()[player];
         cache.prewarm_text(fonts, "miso", state.song_full_title.as_ref(), None);
         cache.prewarm_text(
             fonts,
@@ -1575,7 +1733,7 @@ pub fn prewarm_text_layout(
         for description in &state.gameplay_stats_text.descriptions[player] {
             cache.prewarm_text(fonts, "miso", description.as_ref(), None);
         }
-        let peak = cached_peak_nps_text(chart.max_nps.max(0.0) as f32);
+        let peak = state.gameplay_stats_text.peak_nps(player);
         cache.prewarm_text(fonts, "miso", peak.as_ref(), None);
     }
 }
@@ -1666,7 +1824,16 @@ pub fn push_heart_rates(actors: &mut Vec<Actor>, state: &State, playfield_center
         };
         let x = layout.sidepane_center_x + x_sign * 94.0 * layout.banner_data_zoom;
         let y = layout.sidepane_center_y - 37.0 * layout.banner_data_zoom;
-        heart_rate::push(actors, reading, elapsed, x, y, layout.banner_data_zoom, 72);
+        heart_rate::push(
+            actors,
+            reading,
+            state.heart_rate_text.get(side_idx),
+            elapsed,
+            x,
+            y,
+            layout.banner_data_zoom,
+            72,
+        );
     }
 }
 
@@ -1690,9 +1857,7 @@ fn push_peak_nps_on_graph(
         return;
     }
 
-    let scaled_peak =
-        (state.charts()[player_idx].max_nps as f32 * step_stats_music_rate(state)).max(0.0);
-    let peak_nps_text = cached_peak_nps_text(scaled_peak);
+    let peak_nps_text = state.gameplay_stats_text.peak_nps(player_idx);
     let align_left = player_side == profile_data::PlayerSide::P2;
     let x = if align_left {
         graph.x + PEAK_NPS_GRAPH_PAD
@@ -1851,7 +2016,7 @@ pub fn push_versus_step_stats(
 
                     let (start, end) = state.note_range_for_player(player_idx);
                     if show_fa_split && end > start {
-                        let blue_window_ms = player_blue_window_ms(state, player_idx);
+                        let blue_window_ms = state.gameplay_stats_text.blue_window_ms(player_idx);
                         let wc = state.display_window_counts(
                             player_idx,
                             Some(blue_window_ms),
@@ -1965,7 +2130,7 @@ pub fn push_versus_step_stats(
         }
 
         let (score_value, score_color) = if player_profile.show_ex_score {
-            let blue_window_ms = player_blue_window_ms(state, player_idx);
+            let blue_window_ms = state.gameplay_stats_text.blue_window_ms(player_idx);
             (
                 state
                     .display_gameplay_ex_score_percent(
@@ -2000,7 +2165,7 @@ pub fn push_versus_step_stats(
         );
 
         if player_profile.show_ex_score && player_profile.show_hard_ex_score {
-            let blue_window_ms = player_blue_window_ms(state, player_idx);
+            let blue_window_ms = state.gameplay_stats_text.blue_window_ms(player_idx);
             let hard_ex_percent = state.display_gameplay_hard_ex_score_percent(
                 player_idx,
                 score_display_mode_from_profile(player_profile.score_display_mode),
@@ -2162,8 +2327,8 @@ pub fn push_double_step_stats(
         let show_blue_ms_label = player_profile.custom_fantastic_window
             || (show_fa_plus_window && player_profile.fa_plus_10ms_blue_window);
         let disabled_windows = player_profile.timing_windows.disabled_windows();
-        let blue_window_ms = player_blue_window_ms(state, 0);
-        let blue_window_label = cached_blue_window_label(blue_window_ms.round() as i32);
+        let blue_window_ms = state.gameplay_stats_text.blue_window_ms(0);
+        let blue_window_label = state.gameplay_stats_text.blue_window(0);
         let row_height = if show_fa_split { 29.0 } else { 35.0 };
         let y_base = -280.0;
 
@@ -3045,8 +3210,8 @@ fn build_side_pane(
     let show_blue_ms_label = player_profile.custom_fantastic_window
         || (show_fa_plus_window && player_profile.fa_plus_10ms_blue_window);
     let disabled_windows = player_profile.timing_windows.disabled_windows();
-    let blue_window_ms = player_blue_window_ms(state, player_idx);
-    let blue_window_label = cached_blue_window_label(blue_window_ms.round() as i32);
+    let blue_window_ms = state.gameplay_stats_text.blue_window_ms(player_idx);
+    let blue_window_label = state.gameplay_stats_text.blue_window(player_idx);
     actors.reserve(if show_fa_split {
         22 + usize::from(show_blue_ms_label)
     } else {

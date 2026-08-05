@@ -1,3 +1,5 @@
+use deadsync_theme_simply_love::screens::components::gameplay::gameplay_stats::GameplayStatsDerivedTextBenchmark;
+use deadsync_theme_simply_love::screens::components::shared::heart_rate::HeartRateTextBenchmark;
 use deadsync_theme_simply_love::screens::gameplay::{
     GameplayBpmCacheBench, GameplayLifeTextBench, GameplayScorePollingBench,
 };
@@ -232,6 +234,39 @@ fn main() {
         "profile scan",
         old,
         "pending flag",
+        new,
+    );
+
+    let stats = GameplayStatsDerivedTextBenchmark::default();
+    assert!(stats.behavior_matches());
+    let old = measure(|frame| stats.legacy_peak_frame(frame));
+    let new = measure(|frame| stats.planned_peak_frame(frame));
+    compare(
+        "song-static peak NPS (256 reads/frame)",
+        "scale + cache",
+        old,
+        "planned text",
+        new,
+    );
+
+    let old = measure(|frame| stats.legacy_blue_frame(frame));
+    let new = measure(|frame| stats.planned_blue_frame(frame));
+    compare(
+        "song-static blue window (256 reads/frame)",
+        "derive + cache",
+        old,
+        "planned value",
+        new,
+    );
+
+    let heart_rate = HeartRateTextBenchmark::default();
+    let old = measure(|frame| heart_rate.legacy_frame(frame));
+    let new = measure(|frame| heart_rate.planned_frame(frame));
+    compare(
+        "stable heart-rate text (256 reads/frame)",
+        "hash cache",
+        old,
+        "inline plan",
         new,
     );
 }

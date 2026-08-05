@@ -1799,6 +1799,7 @@ fn change_music_rate(state: &mut State, delta: f32) -> bool {
         .gameplay
         .push_audio_command(GameplayAudioCommand::SetMusicRate(new_rate));
     if changed {
+        gameplay_screen::sync_music_rate_text(&mut state.gameplay);
         set_music_rate_flash(state, "FlashMusicRate", new_rate);
         queue_sfx(state, EDIT_LINE_SOUND);
     }
