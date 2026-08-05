@@ -102,7 +102,15 @@ impl Service {
         }
     }
 
-    pub(crate) fn poll(&mut self) -> Vec<SimplyLoveQrLoginEvent> {
+    /// Returns `None` without touching the queue when no login is active.
+    /// Each side's terminal event is last on its FIFO worker stream, so all
+    /// legitimate events have arrived when `pending_sides` reaches zero.
+    pub(crate) fn poll(&mut self) -> Option<Vec<SimplyLoveQrLoginEvent>> {
+        self.active.as_ref()?;
+        Some(self.drain_events())
+    }
+
+    fn drain_events(&mut self) -> Vec<SimplyLoveQrLoginEvent> {
         let worker_events = self.rx.try_iter().collect::<Vec<_>>();
         let mut events = Vec::with_capacity(worker_events.len());
         for (id, event) in worker_events {
@@ -156,6 +164,11 @@ impl Service {
             self.active = None;
         }
         events
+    }
+
+    #[cfg(feature = "bench-support")]
+    pub(crate) fn poll_idle_legacy(&mut self) -> Vec<SimplyLoveQrLoginEvent> {
+        self.drain_events()
     }
 
     fn start_arrowcloud(
@@ -417,5 +430,63 @@ mod tests {
         assert_eq!(slot.availability, SimplyLoveQrLoginSlotAvailability::Guest);
         assert!(slot.display_name.is_empty());
         assert!(slot.target_profile_id.is_none());
+    }
+
+    #[test]
+    fn qr_login_poll_only_runs_while_a_login_is_active() {
+        let mut service = Service::default();
+        assert!(service.poll().is_none());
+
+        let slots = [
+            SimplyLoveQrLoginSlot {
+                side: PlayerSide::P1,
+                availability: SimplyLoveQrLoginSlotAvailability::Ready,
+                had_existing_key: false,
+                display_name: "Player".to_owned(),
+                target_profile_id: None,
+            },
+            unavailable_slot(PlayerSide::P2, SimplyLoveQrLoginSlotAvailability::NotJoined),
+        ];
+        service.active = Some(ActiveLogin {
+            id: 9,
+            service: SimplyLoveQrLoginService::ArrowCloud,
+            slots,
+            pending_sides: side_bit(PlayerSide::P1),
+            cancel: Arc::new(AtomicBool::new(false)),
+        });
+        assert!(service.poll().is_some_and(|events| events.is_empty()));
+        service
+            .tx
+            .send((
+                9,
+                WorkerEvent::Started {
+                    side: PlayerSide::P1,
+                    short_code: "ABCD".to_owned(),
+                    verification_url: "https://example.invalid/login".to_owned(),
+                },
+            ))
+            .expect("the service owns the matching receiver");
+        let events = service.poll().expect("the login is active");
+        assert!(matches!(
+            events.as_slice(),
+            [SimplyLoveQrLoginEvent::Started { side: PlayerSide::P1, short_code, .. }]
+                if short_code == "ABCD"
+        ));
+
+        service
+            .tx
+            .send((
+                9,
+                WorkerEvent::Failed {
+                    side: PlayerSide::P1,
+                    reason: "finished".to_owned(),
+                },
+            ))
+            .expect("the service owns the matching receiver");
+        assert!(matches!(
+            service.poll().expect("the login is still active").as_slice(),
+            [SimplyLoveQrLoginEvent::Failed { reason, .. }] if reason == "finished"
+        ));
+        assert!(service.poll().is_none());
     }
 }

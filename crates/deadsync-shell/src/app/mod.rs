@@ -1217,7 +1217,9 @@ impl App {
     }
 
     fn poll_score_import(&mut self) {
-        let events = self.score_import.poll();
+        let Some(events) = self.score_import.poll() else {
+            return;
+        };
         if !events.is_empty() {
             options::apply_score_import_events(&mut self.state.screens.options_state, events);
         }
@@ -1234,9 +1236,12 @@ impl App {
     }
 
     fn poll_qr_login(&mut self) {
+        let Some(events) = self.qr_login.poll() else {
+            return;
+        };
         let mut arrowcloud = Vec::new();
         let mut groovestats = Vec::new();
-        for event in self.qr_login.poll() {
+        for event in events {
             match event.service() {
                 SimplyLoveQrLoginService::ArrowCloud => arrowcloud.push(event),
                 SimplyLoveQrLoginService::GrooveStats => groovestats.push(event),
@@ -1257,10 +1262,13 @@ impl App {
     }
 
     fn poll_sync_analysis(&mut self) {
+        let Some(events) = self.sync_analysis.poll() else {
+            return;
+        };
         let mut song_events = Vec::new();
         let mut select_pack_events = Vec::new();
         let mut options_pack_events = Vec::new();
-        for (owner, event) in self.sync_analysis.poll() {
+        for (owner, event) in events {
             match owner {
                 SimplyLoveSyncOwner::SelectMusicSong => song_events.push(event),
                 SimplyLoveSyncOwner::SelectMusicPack => select_pack_events.push(event),

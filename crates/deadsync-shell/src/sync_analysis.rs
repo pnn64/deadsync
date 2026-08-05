@@ -71,7 +71,17 @@ impl Service {
         self.jobs.retain(|job| job.owner != owner);
     }
 
-    pub(crate) fn poll(&mut self) -> Vec<(SimplyLoveSyncOwner, SimplyLoveSyncEvent)> {
+    /// Returns `None` without reading a clock or constructing scratch vectors
+    /// when no analysis jobs exist. Terminal events are last on each job's
+    /// FIFO channel, so removing a finished job cannot strand later work.
+    pub(crate) fn poll(&mut self) -> Option<Vec<(SimplyLoveSyncOwner, SimplyLoveSyncEvent)>> {
+        if self.jobs.is_empty() {
+            return None;
+        }
+        Some(self.drain_events())
+    }
+
+    fn drain_events(&mut self) -> Vec<(SimplyLoveSyncOwner, SimplyLoveSyncEvent)> {
         let started = Instant::now();
         let mut events = Vec::new();
         let mut finished = Vec::new();
@@ -104,6 +114,11 @@ impl Service {
         }
         self.jobs.retain(|job| !finished.contains(&job.owner));
         events
+    }
+
+    #[cfg(feature = "bench-support")]
+    pub(crate) fn poll_idle_legacy(&mut self) -> Vec<(SimplyLoveSyncOwner, SimplyLoveSyncEvent)> {
+        self.drain_events()
     }
 }
 
@@ -307,6 +322,37 @@ fn pack_worker_count(target_count: usize) -> usize {
         count => usize::from(count).min(available).max(1),
     };
     configured.min(target_count).max(1)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn sync_poll_only_runs_while_a_job_is_active() {
+        let mut service = Service::default();
+        assert!(service.poll().is_none());
+
+        let (tx, rx) = mpsc::channel();
+        service.jobs.push(Job {
+            owner: SimplyLoveSyncOwner::SelectMusicSong,
+            cancel: Arc::new(AtomicBool::new(false)),
+            rx,
+        });
+        assert!(service.poll().is_some_and(|events| events.is_empty()));
+        tx.send(SimplyLoveSyncEvent::Finished)
+            .expect("the service owns the matching receiver");
+        let events = service.poll().expect("the job is active");
+
+        assert!(matches!(
+            events.as_slice(),
+            [(
+                SimplyLoveSyncOwner::SelectMusicSong,
+                SimplyLoveSyncEvent::Finished
+            )]
+        ));
+        assert!(service.poll().is_none());
+    }
 }
 
 fn analyze_song_chart_stream<F>(

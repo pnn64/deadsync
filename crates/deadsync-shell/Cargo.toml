@@ -4,6 +4,9 @@ version = "0.1.0"
 edition = "2024"
 license = "GPL-3.0"
 
+[features]
+bench-support = []
+
 [dependencies]
 deadlib-assets = { path = "../deadlib-assets" }
 deadlib-platform = { path = "../deadlib-platform" }
@@ -57,3 +60,8 @@ objc2-foundation = "0.3.2"
 perf = { level = "warn", priority = -1 }
 
 inline_always = "allow"
+
+[[bench]]
+name = "gameplay_idle_workers"
+harness = false
+required-features = ["bench-support"]

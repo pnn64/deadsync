@@ -101,7 +101,15 @@ impl Service {
         }
     }
 
-    pub(crate) fn poll(&mut self) -> Vec<SimplyLoveScoreImportEvent> {
+    /// Returns `None` without touching the queue when no import is active.
+    /// `Finished` is the worker's final FIFO event, so clearing `active` cannot
+    /// strand a later event from that job.
+    pub(crate) fn poll(&mut self) -> Option<Vec<SimplyLoveScoreImportEvent>> {
+        self.active.as_ref()?;
+        Some(self.drain_events())
+    }
+
+    fn drain_events(&mut self) -> Vec<SimplyLoveScoreImportEvent> {
         let active_id = self.active.as_ref().map(|(id, _)| *id);
         let mut finished = false;
         let events = self
@@ -119,6 +127,11 @@ impl Service {
             self.active = None;
         }
         events
+    }
+
+    #[cfg(feature = "bench-support")]
+    pub(crate) fn poll_idle_legacy(&mut self) -> Vec<SimplyLoveScoreImportEvent> {
+        self.drain_events()
     }
 }
 
@@ -164,5 +177,28 @@ mod tests {
         assert_eq!(view.imported_scores, 8);
         assert_eq!(view.elapsed_seconds, 4.5);
         assert!(!view.canceled);
+    }
+
+    #[test]
+    fn score_import_poll_only_runs_while_a_job_is_active() {
+        let mut service = Service::default();
+        assert!(service.poll().is_none());
+
+        service.active = Some((7, Arc::new(AtomicBool::new(false))));
+        assert!(service.poll().is_some_and(|events| events.is_empty()));
+        service
+            .tx
+            .send((
+                7,
+                SimplyLoveScoreImportEvent::Finished(Err("finished".to_owned())),
+            ))
+            .expect("the service owns the matching receiver");
+        let events = service.poll().expect("the job is active");
+
+        assert!(matches!(
+            events.as_slice(),
+            [SimplyLoveScoreImportEvent::Finished(Err(reason))] if reason == "finished"
+        ));
+        assert!(service.poll().is_none());
     }
 }
