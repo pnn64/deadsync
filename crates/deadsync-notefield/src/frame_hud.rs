@@ -1,7 +1,9 @@
 use crate::actor_builder::{CapturedActorScratch, CapturedActorSource, share_actor_range};
 use crate::combo_feedback::{ComboFeedbackRequest, ComboMilestoneAssets, compose_combo_feedback};
 use crate::compose::{NotefieldComposeRequest, PreparedNotefield};
-use crate::error_bar::{ErrorBarComposeRequest, ErrorBarState, compose_error_bar};
+use crate::error_bar::{
+    ErrorBarComposeRequest, ErrorBarState, compose_error_bar, offset_indicator_active,
+};
 use crate::feedback::{
     JudgmentTiltParams, TapJudgmentRowsParams, judgment_actor_zoom, judgment_tilt_rotation_deg,
     tap_judgment_rows,
@@ -50,6 +52,19 @@ pub struct ErrorBarHudFrame<'a> {
     pub text: Option<ErrorBarText>,
     pub offset_text: fn(f32) -> TextContent,
     pub text_label: fn(bool, bool) -> TextContent,
+}
+
+impl ErrorBarHudFrame<'_> {
+    /// Whether the retained millisecond indicator is inside its actor lifetime.
+    #[inline]
+    pub fn offset_active(
+        indicator: Option<OffsetIndicatorText>,
+        elapsed_screen: f32,
+        duration: f32,
+    ) -> bool {
+        indicator
+            .is_some_and(|indicator| offset_indicator_active(indicator, elapsed_screen, duration))
+    }
 }
 
 /// Prepared measure-counter inputs for one HUD frame.
@@ -115,10 +130,10 @@ impl NotefieldHudFrameView<'_> {
         !hide_combo && !blind && combo_visible
     }
 
-    /// Whether graphical or numeric timing feedback can produce actors this frame.
+    /// Whether graphical or currently active numeric timing feedback can emit actors.
     #[inline]
-    pub const fn error_active(blind: bool, error_bar: bool, error_ms: bool) -> bool {
-        !blind && (error_bar || error_ms)
+    pub const fn error_active(blind: bool, error_bar: bool, offset_active: bool) -> bool {
+        !blind && (error_bar || offset_active)
     }
 }
 
@@ -515,6 +530,37 @@ impl HudOptionGateBench {
         bench_hud_output(frame, samples)
     }
 
+    pub fn old_expired_offset_frame(&self, frame: usize) -> HudOptionGateBenchFrame {
+        let mut samples = 0;
+        for sample in 0..HUD_GATE_BENCH_SAMPLES {
+            if NotefieldHudFrameView::error_active(false, false, true) {
+                let average_y =
+                    self.receptor_ys.iter().sum::<f32>() / self.receptor_ys.len() as f32;
+                std::hint::black_box(average_y);
+                samples += bench_error_output(false, false, average_y, frame + sample).samples;
+            }
+        }
+        bench_hud_output(frame, samples)
+    }
+
+    pub fn new_expired_offset_frame(&self, frame: usize) -> HudOptionGateBenchFrame {
+        let mut samples = 0;
+        for sample in 0..HUD_GATE_BENCH_SAMPLES {
+            let indicator = Some(OffsetIndicatorText {
+                started_at: 1.0,
+                offset_ms: -12.0,
+                window: deadsync_rules::judgment::TimingWindow::W1,
+            });
+            let offset_active = ErrorBarHudFrame::offset_active(indicator, 2.0, 0.5);
+            if NotefieldHudFrameView::error_active(false, false, offset_active) {
+                let average_y =
+                    self.receptor_ys.iter().sum::<f32>() / self.receptor_ys.len() as f32;
+                samples += bench_error_output(false, false, average_y, frame + sample).samples;
+            }
+        }
+        bench_hud_output(frame, samples)
+    }
+
     pub fn old_expired_judgment_frame(&self, frame: usize) -> HudOptionGateBenchFrame {
         let mut samples = 0;
         for sample in 0..HUD_GATE_BENCH_SAMPLES {
@@ -632,7 +678,7 @@ mod tests {
     }
 
     #[test]
-    fn error_hud_gate_accepts_either_enabled_output() {
+    fn error_hud_gate_accepts_either_renderable_output() {
         let cases = [
             ((false, false, false), false),
             ((false, true, false), true),
@@ -645,5 +691,19 @@ mod tests {
                 expected
             );
         }
+    }
+
+    #[test]
+    fn offset_indicator_gate_matches_half_open_actor_lifetime() {
+        let indicator = Some(OffsetIndicatorText {
+            started_at: 1.0,
+            offset_ms: 12.0,
+            window: deadsync_rules::judgment::TimingWindow::W2,
+        });
+        assert!(!ErrorBarHudFrame::offset_active(indicator, 0.99, 0.5));
+        assert!(ErrorBarHudFrame::offset_active(indicator, 1.0, 0.5));
+        assert!(ErrorBarHudFrame::offset_active(indicator, 1.499, 0.5));
+        assert!(!ErrorBarHudFrame::offset_active(indicator, 1.5, 0.5));
+        assert!(!ErrorBarHudFrame::offset_active(None, 1.0, 0.5));
     }
 }

@@ -149,6 +149,111 @@ const INTRO_TEXT_GETWIDTH_PAD: f32 = 0.25;
 const DIFFICULTY_METER_Y: f32 = 56.0;
 const DIFFICULTY_METER_SIZE: f32 = 30.0;
 const TARGET_ARROW_PIXEL_SIZE: f32 = 64.0;
+const DEFAULT_NOTEFIELD_WIDTH: f32 = 256.0;
+
+fn notefield_layout_width(
+    column_xs: &[i32],
+    receptor_size: [i32; 2],
+    cols: usize,
+    spacing_multiplier: f32,
+) -> f32 {
+    let cols = cols.min(column_xs.len());
+    if cols == 0 {
+        return DEFAULT_NOTEFIELD_WIDTH;
+    }
+    let (min_x, max_x) =
+        column_xs[..cols]
+            .iter()
+            .fold((f32::INFINITY, f32::NEG_INFINITY), |(min_x, max_x), &x| {
+                let x = x as f32 * spacing_multiplier;
+                (min_x.min(x), max_x.max(x))
+            });
+    let [width, height] = receptor_size.map(|value| value.max(0) as f32);
+    let arrow_width = if height > 0.0 {
+        width * (TARGET_ARROW_PIXEL_SIZE / height)
+    } else {
+        width
+    };
+    (max_x - min_x) + arrow_width
+}
+
+fn gameplay_notefield_widths(
+    gameplay: &GameplayCoreState,
+    assets: &GameplayNoteskinAssets,
+) -> [f32; MAX_PLAYERS] {
+    std::array::from_fn(|player| {
+        let Some(noteskin) = assets.noteskin[player].as_deref() else {
+            return DEFAULT_NOTEFIELD_WIDTH;
+        };
+        let receptor = assets.receptor_noteskin[player]
+            .as_deref()
+            .unwrap_or(noteskin);
+        let cols = gameplay
+            .cols_per_player()
+            .min(noteskin.column_xs.len())
+            .min(receptor.receptor_off.len());
+        let Some(receptor) = receptor.receptor_off.first() else {
+            return DEFAULT_NOTEFIELD_WIDTH;
+        };
+        notefield_layout_width(
+            &noteskin.column_xs,
+            receptor.size(),
+            cols,
+            spacing_multiplier_for_percent(gameplay.profiles()[player].spacing_percent),
+        )
+    })
+}
+
+#[cfg(feature = "bench-support")]
+pub struct GameplayNotefieldWidthBench {
+    column_xs: [i32; 8],
+    receptor_size: [i32; 2],
+    spacing_multiplier: f32,
+    cached: f32,
+}
+
+#[cfg(feature = "bench-support")]
+impl Default for GameplayNotefieldWidthBench {
+    fn default() -> Self {
+        let column_xs = [-224, -160, -96, -32, 32, 96, 160, 224];
+        let receptor_size = [128, 128];
+        let spacing_multiplier = 1.25;
+        Self {
+            cached: notefield_layout_width(
+                &column_xs,
+                receptor_size,
+                column_xs.len(),
+                spacing_multiplier,
+            ),
+            column_xs,
+            receptor_size,
+            spacing_multiplier,
+        }
+    }
+}
+
+#[cfg(feature = "bench-support")]
+impl GameplayNotefieldWidthBench {
+    const SAMPLES: usize = 256;
+
+    pub fn old_frame(&self, frame: usize) -> usize {
+        (0..Self::SAMPLES).fold(frame, |checksum, sample| {
+            let width = notefield_layout_width(
+                std::hint::black_box(&self.column_xs),
+                std::hint::black_box(self.receptor_size),
+                self.column_xs.len(),
+                std::hint::black_box(self.spacing_multiplier),
+            );
+            checksum.rotate_left(7) ^ width.to_bits() as usize ^ sample
+        })
+    }
+
+    pub fn new_frame(&self, frame: usize) -> usize {
+        (0..Self::SAMPLES).fold(frame, |checksum, sample| {
+            checksum.rotate_left(7) ^ std::hint::black_box(self.cached).to_bits() as usize ^ sample
+        })
+    }
+}
 
 pub use deadsync_notefield::ViewOverride as NotefieldViewOverride;
 
@@ -1599,6 +1704,10 @@ pub struct State {
     pub(crate) notefield_capture_scratch: [RefCell<CapturedActorScratch>; MAX_PLAYERS],
     notefield_broken_run_lookup: [BrokenRunLookup; MAX_PLAYERS],
     notefield_stream_progress_lookup: [StreamProgressLookup; MAX_PLAYERS],
+    /// Fixed song-lifetime width derived at screen entry from immutable noteskin
+    /// geometry and profile spacing. The gameplay/render thread only reads this
+    /// two-slot array; it has no misses, growth, synchronization, or eviction.
+    notefield_widths: [f32; MAX_PLAYERS],
     notefield_judgment_assets: [notefield::ResolvedJudgmentAssets; MAX_PLAYERS],
     sync_overlay_text_cache: RefCell<SyncOverlayTextCache>,
     pub background_path_dirty: bool,
@@ -1814,6 +1923,7 @@ impl State {
         let notefield_stream_progress_lookup = std::array::from_fn(|player| {
             StreamProgressLookup::new(gameplay.mini_indicator_stream_segments(player))
         });
+        let notefield_widths = gameplay_notefield_widths(&gameplay, &noteskin_assets);
         let actor_resources = ActorResourceArena::default();
         notefield::prewarm_actor_resources(
             &actor_resources,
@@ -2016,6 +2126,7 @@ impl State {
             notefield_capture_scratch,
             notefield_broken_run_lookup,
             notefield_stream_progress_lookup,
+            notefield_widths,
             notefield_judgment_assets,
             sync_overlay_text_cache: RefCell::new(SyncOverlayTextCache::default()),
             background_path_dirty: true,
@@ -2117,6 +2228,14 @@ impl State {
                 acc
             },
         )
+    }
+
+    #[inline(always)]
+    fn notefield_width(&self, player: usize) -> f32 {
+        self.notefield_widths
+            .get(player)
+            .copied()
+            .unwrap_or(DEFAULT_NOTEFIELD_WIDTH)
     }
 }
 
@@ -16683,44 +16802,6 @@ fn push_actors_impl(
         song_lua_proxy_actor_scratch.as_mut(),
     );
 
-    let notefield_width = |player_idx: usize| -> f32 {
-        let Some(ns) = state.noteskin_assets.noteskin[player_idx].as_ref() else {
-            return 256.0;
-        };
-        let receptor_ns = state.noteskin_assets.receptor_noteskin[player_idx]
-            .as_deref()
-            .unwrap_or(ns);
-        let cols = state
-            .cols_per_player()
-            .min(ns.column_xs.len())
-            .min(receptor_ns.receptor_off.len());
-        if cols == 0 {
-            return 256.0;
-        }
-        let spacing_mult =
-            spacing_multiplier_for_percent(state.profiles()[player_idx].spacing_percent);
-        let mut min_x = f32::INFINITY;
-        let mut max_x = f32::NEG_INFINITY;
-        for x in ns.column_xs.iter().take(cols) {
-            let xf = *x as f32 * spacing_mult;
-            min_x = min_x.min(xf);
-            max_x = max_x.max(xf);
-        }
-
-        // SL parity (GetNotefieldWidth): layout width is style/lane based and must
-        // not shrink/grow with Mini (field zoom).
-        let target_arrow_px = 64.0;
-        let size = receptor_ns.receptor_off[0].size();
-        let w = size[0].max(0) as f32;
-        let h = size[1].max(0) as f32;
-        let arrow_w = if h > 0.0 && target_arrow_px > 0.0 {
-            w * (target_arrow_px / h)
-        } else {
-            w
-        };
-        (max_x - min_x) + arrow_w
-    };
-
     let mut build_player_bundle =
         |player_idx: usize,
          profile: &profile_data::Profile,
@@ -17056,7 +17137,7 @@ fn push_actors_impl(
                 }
                 actors.push(act!(quad:
                     align(0.5, 0.5): xy(field_x, screen_center_y()):
-                    zoomto(notefield_width(player_idx), screen_height()):
+                    zoomto(state.notefield_width(player_idx), screen_height()):
                     diffuse(0.0, 0.0, 0.0, filter_alpha):
                     z(-99)
                 ));
@@ -17288,7 +17369,7 @@ fn push_actors_impl(
             let mut field_geom: [Option<(profile_data::PlayerSide, f32, f32)>; 2] = [None, None];
             for &(player_idx, player_side, field_x, ..) in &players[..player_count] {
                 if player_idx < 2 {
-                    let half_w = notefield_width(player_idx) * 0.5;
+                    let half_w = state.notefield_width(player_idx) * 0.5;
                     field_geom[player_idx] =
                         Some((player_side, field_x - half_w, field_x + half_w));
                 }
@@ -17349,7 +17430,7 @@ fn push_actors_impl(
                 player_idx,
                 player_side,
                 field_x,
-                notefield_width(player_idx),
+                state.notefield_width(player_idx),
                 diff_x,
             );
             // Difficulty Box
@@ -17545,7 +17626,7 @@ fn push_actors_impl(
                 play_style,
                 player_side,
                 playfield_center_x,
-                notefield_width(0),
+                state.notefield_width(0),
                 state.profiles()[0].nps_graph_at_top,
             );
             actors.push(act!(text:
@@ -17881,7 +17962,7 @@ fn push_actors_impl(
 
                             // SL: if double style, position next to notefield.
                             if play_style == profile_data::PlayStyle::Double {
-                                let half_nf = notefield_width(player_idx) * 0.5;
+                                let half_nf = state.notefield_width(player_idx) * 0.5;
                                 x = screen_center_x()
                                     + match side {
                                         profile_data::PlayerSide::P1 => -(half_nf + 10.0),
@@ -18870,6 +18951,18 @@ mod tests {
         assert!(scratch.iter().all(Vec::is_empty));
         assert!(scratch[0].capacity() >= 384);
         assert_eq!(scratch[1].capacity(), 0);
+    }
+
+    #[test]
+    fn notefield_width_preserves_lane_span_spacing_and_receptor_scale() {
+        let columns = [-96, -32, 32, 96];
+        assert_eq!(notefield_layout_width(&columns, [128, 128], 4, 1.0), 256.0);
+        assert_eq!(notefield_layout_width(&columns, [128, 128], 4, 1.5), 352.0);
+        assert_eq!(notefield_layout_width(&columns, [96, 48], 4, 1.0), 320.0);
+        assert_eq!(
+            notefield_layout_width(&columns, [128, 128], 0, 1.0),
+            DEFAULT_NOTEFIELD_WIDTH
+        );
     }
 
     #[test]

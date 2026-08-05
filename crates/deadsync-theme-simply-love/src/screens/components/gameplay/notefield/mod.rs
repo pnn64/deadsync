@@ -501,6 +501,7 @@ pub(crate) fn compose_frame(
         })
         .unwrap_or((&[], &[], &[], &[], &[]));
     let base_noteskin = noteskin_assets.noteskin[player_idx].as_deref();
+    let mine_noteskin = noteskin_assets.mine_noteskin[player_idx].as_deref();
     let tap_explosion_noteskin = if profile.tap_explosion_noteskin_hidden() {
         None
     } else {
@@ -571,7 +572,7 @@ pub(crate) fn compose_frame(
         },
         noteskin: NotefieldNoteskinView {
             base: base_noteskin,
-            mine: noteskin_assets.mine_noteskin[player_idx].as_deref(),
+            mine: mine_noteskin,
             receptor: noteskin_assets.receptor_noteskin[player_idx].as_deref(),
             tap_explosion: tap_explosion_noteskin,
         },
@@ -696,8 +697,13 @@ pub(crate) fn compose_frame(
             .frame_features
             .column_flash
             .then(|| state.column_flashes_for_columns(col_start, num_cols)),
-        tap_explosions: state.tap_explosions_for_columns(col_start, num_cols),
-        mine_explosions: state.mine_explosions_for_columns(col_start, num_cols),
+        tap_explosions: tap_explosion_noteskin
+            .is_some()
+            .then(|| state.tap_explosions_for_columns(col_start, num_cols)),
+        mine_explosions: mine_noteskin
+            .or(base_noteskin)
+            .is_some_and(|noteskin| noteskin.mine_hit_explosion.is_some())
+            .then(|| state.mine_explosions_for_columns(col_start, num_cols)),
         lanes: from_fn(|local_col| {
             if local_col >= num_cols {
                 return NotefieldLaneFeedback::default();
@@ -800,10 +806,16 @@ pub(crate) fn compose_frame(
         }
     });
 
+    let offset_indicator_active = options.error_ms_display
+        && ErrorBarHudFrame::offset_active(
+            p.offset_indicator_text,
+            elapsed_screen,
+            style.error_bar.offset_indicator_duration,
+        );
     let error_bar_frame = NotefieldHudFrameView::error_active(
         blind_active,
         options.frame_features.error_bar,
-        options.error_ms_display,
+        offset_indicator_active,
     )
     .then(|| ErrorBarHudFrame {
         mono_ticks: &p.error_bar_mono_ticks,

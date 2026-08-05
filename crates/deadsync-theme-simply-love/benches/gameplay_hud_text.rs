@@ -12,7 +12,7 @@ use deadsync_theme_simply_love::screens::components::gameplay::notefield::{
     prepare_combo_text_benchmark,
 };
 use deadsync_theme_simply_love::screens::gameplay::{
-    GameplayHudTextBenchmarkCache, GameplayHudTextBenchmarkSnapshot,
+    GameplayHudTextBenchmarkCache, GameplayHudTextBenchmarkSnapshot, GameplayNotefieldWidthBench,
     benchmark_gameplay_hud_text_legacy,
 };
 use std::alloc::{GlobalAlloc, Layout, System};
@@ -301,6 +301,15 @@ fn print_result_for(label: &str, result: &BenchResult, operations: usize) {
 }
 
 fn main() {
+    let notefield_width = GameplayNotefieldWidthBench::default();
+    let width_scans = measure_dynamic_text(|frame| notefield_width.old_frame(frame));
+    let width_snapshot = measure_dynamic_text(|frame| notefield_width.new_frame(frame));
+    assert_eq!(width_scans.checksum, width_snapshot.checksum);
+
+    println!("song-static notefield width benchmark (256 layout consumers/frame)");
+    print_result_for("lane scans", &width_scans, DYNAMIC_TEXT_OPS);
+    print_result_for("width snapshot", &width_snapshot, DYNAMIC_TEXT_OPS);
+
     let mini_legacy = measure_dynamic_text(benchmark_disabled_mini_indicator_legacy);
     let mini_gated = measure_dynamic_text(benchmark_disabled_mini_indicator);
     assert_eq!(mini_legacy.checksum, mini_gated.checksum);

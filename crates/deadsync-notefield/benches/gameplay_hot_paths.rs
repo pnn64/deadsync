@@ -200,6 +200,24 @@ fn main() {
             }
         },
     );
+    run_pair(
+        "unavailable explosion assets",
+        "256 frames of retained tap/mine state with neither effect asset renderable",
+        |frame| {
+            let output = tap_explosions.old_missing_assets_frame(frame);
+            Output {
+                checksum: output.checksum,
+                samples: output.samples,
+            }
+        },
+        |frame| {
+            let output = tap_explosions.new_missing_assets_frame(frame);
+            Output {
+                checksum: output.checksum,
+                samples: output.samples,
+            }
+        },
+    );
 
     let hud_options = HudOptionGateBench::default();
     run_pair(
@@ -232,6 +250,24 @@ fn main() {
         },
         |frame| {
             let output = hud_options.new_disabled_error_frame(frame);
+            Output {
+                checksum: output.checksum,
+                samples: output.samples,
+            }
+        },
+    );
+    run_pair(
+        "expired offset HUD preparation",
+        "256 retained millisecond indicators outside their configured actor lifetime",
+        |frame| {
+            let output = hud_options.old_expired_offset_frame(frame);
+            Output {
+                checksum: output.checksum,
+                samples: output.samples,
+            }
+        },
+        |frame| {
+            let output = hud_options.new_expired_offset_frame(frame);
             Output {
                 checksum: output.checksum,
                 samples: output.samples,

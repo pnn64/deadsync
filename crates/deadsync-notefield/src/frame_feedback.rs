@@ -43,10 +43,10 @@ pub struct NotefieldFeedbackFrameView<'a> {
     pub crossover_cue_cursor: Option<usize>,
     /// Column flashes are ordered by local lane within the prepared player span.
     pub column_flashes: Option<&'a [Option<ActiveColumnFlash>]>,
-    /// Tap explosions are ordered by local lane within the prepared player span.
-    pub tap_explosions: &'a [Option<ActiveTapExplosion>],
-    /// Mine explosions are ordered by local lane within the prepared player span.
-    pub mine_explosions: &'a [Option<ActiveMineExplosion>],
+    /// Tap explosions are ordered by local lane, or absent when no asset can render them.
+    pub tap_explosions: Option<&'a [Option<ActiveTapExplosion>]>,
+    /// Mine explosions are ordered by local lane, or absent when no asset can render them.
+    pub mine_explosions: Option<&'a [Option<ActiveMineExplosion>]>,
     /// Lane feedback is ordered by local lane within the prepared player span.
     pub lanes: [NotefieldLaneFeedback<'a>; MAX_COLS],
     pub countdown_font: &'static str,
@@ -132,8 +132,8 @@ pub(crate) fn compose_notefield_feedback<S, F>(
         tap_explosion.is_some(),
         notes.mine.mine_hit_explosion.is_some(),
         &frame.lanes,
-        frame.tap_explosions,
-        frame.mine_explosions,
+        frame.tap_explosions.unwrap_or_default(),
+        frame.mine_explosions.unwrap_or_default(),
     );
     if lane_work_mask == 0 {
         return;
@@ -148,11 +148,13 @@ pub(crate) fn compose_notefield_feedback<S, F>(
         let tap_candidate = tap_explosion.is_some()
             && frame
                 .tap_explosions
+                .unwrap_or_default()
                 .get(local_col)
                 .is_some_and(Option::is_some);
         let mine_candidate = notes.mine.mine_hit_explosion.is_some()
             && frame
                 .mine_explosions
+                .unwrap_or_default()
                 .get(local_col)
                 .is_some_and(Option::is_some);
         let hidden = (targets_enabled || hold_candidate || tap_candidate)
@@ -250,66 +252,72 @@ pub(crate) fn compose_notefield_feedback<S, F>(
 
     // Tap explosions are independent of the concrete "Hide Combo
     // Explosions" option, which applies only to combo milestone art.
-    for (local_col, active) in frame.tap_explosions.iter().take(num_cols).enumerate() {
-        let Some(active) =
-            visible_tap_explosion(active, request.song_lua.note_hides, local_col, current_beat)
-        else {
-            continue;
-        };
-        let Some(explosion) = tap_explosion.and_then(|noteskin| {
-            noteskin.tap_explosion_for_col_with_bright(local_col, active.window, active.bright)
-        }) else {
-            continue;
-        };
-        let effect = lane_effects[local_col];
-        let center = lane_centers[local_col];
-        compose_explosion_layers(
-            actors,
-            ExplosionComposeRequest {
-                layers: explosion.layers.as_ref(),
-                elapsed_s: active.elapsed,
-                current_frame_beat: request.visual.current_display_beat,
-                relative_frame_beat: Some(
-                    (request.visual.current_display_beat - active.start_beat).max(0.0),
-                ),
-                uv_elapsed_s: elapsed_screen,
-                center,
-                field_zoom,
-                effect_zoom: visual_arrow_effect_zoom(0.0, effect),
-                rotation: ExplosionRotation::Tap {
-                    rotation_y_deg: 0.0,
-                    extra_z_deg: visual_confusion_rotation_deg(current_beat, effect),
+    if let (Some(tap_explosion), Some(tap_explosions)) = (tap_explosion, frame.tap_explosions) {
+        for (local_col, active) in tap_explosions.iter().take(num_cols).enumerate() {
+            let Some(active) =
+                visible_tap_explosion(active, request.song_lua.note_hides, local_col, current_beat)
+            else {
+                continue;
+            };
+            let Some(explosion) = tap_explosion.tap_explosion_for_col_with_bright(
+                local_col,
+                active.window,
+                active.bright,
+            ) else {
+                continue;
+            };
+            let effect = lane_effects[local_col];
+            let center = lane_centers[local_col];
+            compose_explosion_layers(
+                actors,
+                ExplosionComposeRequest {
+                    layers: explosion.layers.as_ref(),
+                    elapsed_s: active.elapsed,
+                    current_frame_beat: request.visual.current_display_beat,
+                    relative_frame_beat: Some(
+                        (request.visual.current_display_beat - active.start_beat).max(0.0),
+                    ),
+                    uv_elapsed_s: elapsed_screen,
+                    center,
+                    field_zoom,
+                    effect_zoom: visual_arrow_effect_zoom(0.0, effect),
+                    rotation: ExplosionRotation::Tap {
+                        rotation_y_deg: 0.0,
+                        extra_z_deg: visual_confusion_rotation_deg(current_beat, effect),
+                    },
+                    z: request.style.actors.tap_explosion_z,
                 },
-                z: request.style.actors.tap_explosion_z,
-            },
-            sprite_source,
-        );
+                sprite_source,
+            );
+        }
     }
 
-    for (local_col, active) in frame.mine_explosions.iter().take(num_cols).enumerate() {
-        let Some(active) = active.as_ref() else {
-            continue;
-        };
-        let Some(explosion) = notes.mine.mine_hit_explosion.as_ref() else {
-            continue;
-        };
-        let effect = lane_effects[local_col];
-        compose_explosion_layers(
-            actors,
-            ExplosionComposeRequest {
-                layers: explosion.layers.as_ref(),
-                elapsed_s: active.elapsed,
-                current_frame_beat: current_beat,
-                relative_frame_beat: None,
-                uv_elapsed_s: elapsed_screen,
-                center: lane_centers[local_col],
-                field_zoom,
-                effect_zoom: visual_arrow_effect_zoom(0.0, effect),
-                rotation: ExplosionRotation::Mine,
-                z: request.style.actors.mine_explosion_z,
-            },
-            sprite_source,
-        );
+    if let (Some(explosion), Some(mine_explosions)) = (
+        notes.mine.mine_hit_explosion.as_ref(),
+        frame.mine_explosions,
+    ) {
+        for (local_col, active) in mine_explosions.iter().take(num_cols).enumerate() {
+            let Some(active) = active.as_ref() else {
+                continue;
+            };
+            let effect = lane_effects[local_col];
+            compose_explosion_layers(
+                actors,
+                ExplosionComposeRequest {
+                    layers: explosion.layers.as_ref(),
+                    elapsed_s: active.elapsed,
+                    current_frame_beat: current_beat,
+                    relative_frame_beat: None,
+                    uv_elapsed_s: elapsed_screen,
+                    center: lane_centers[local_col],
+                    field_zoom,
+                    effect_zoom: visual_arrow_effect_zoom(0.0, effect),
+                    rotation: ExplosionRotation::Mine,
+                    z: request.style.actors.mine_explosion_z,
+                },
+                sprite_source,
+            );
+        }
     }
 }
 
@@ -401,6 +409,8 @@ pub struct TapExplosionCullBenchFrame {
 pub struct TapExplosionCullBench {
     note_hides: SongLuaNoteHideWindows,
     legacy_note_hides: Vec<SongLuaNoteHideWindowRuntime>,
+    tap_explosions: [Option<ActiveTapExplosion>; MAX_COLS],
+    mine_explosions: [Option<ActiveMineExplosion>; MAX_COLS],
 }
 
 #[cfg(feature = "bench-support")]
@@ -416,12 +426,30 @@ impl Default for TapExplosionCullBench {
         Self {
             note_hides: SongLuaNoteHideWindows::new(legacy_note_hides.clone()),
             legacy_note_hides,
+            tap_explosions: std::array::from_fn(|lane| {
+                Some(ActiveTapExplosion {
+                    window: "W1",
+                    bright: lane.is_multiple_of(2),
+                    elapsed: 0.1,
+                    duration: 0.5,
+                    start_beat: 4.0,
+                })
+            }),
+            mine_explosions: std::array::from_fn(|_| {
+                Some(ActiveMineExplosion {
+                    elapsed: 0.1,
+                    duration: 0.5,
+                    started_at_screen_s: 0.0,
+                })
+            }),
         }
     }
 }
 
 #[cfg(feature = "bench-support")]
 impl TapExplosionCullBench {
+    const ASSET_GATE_SAMPLES: usize = 256;
+
     pub fn old_frame(&self, frame: usize) -> TapExplosionCullBenchFrame {
         self.frame(frame, |active, local_col, beat| {
             visible_tap_explosion_legacy(active, &self.legacy_note_hides, local_col, beat)
@@ -432,6 +460,42 @@ impl TapExplosionCullBench {
         self.frame(frame, |active, local_col, beat| {
             visible_tap_explosion(active, &self.note_hides, local_col, beat)
         })
+    }
+
+    pub fn old_missing_assets_frame(&self, frame: usize) -> TapExplosionCullBenchFrame {
+        for _ in 0..Self::ASSET_GATE_SAMPLES {
+            for (local_col, active) in self.tap_explosions.iter().enumerate() {
+                if visible_tap_explosion(active, &self.note_hides, local_col, 4.0).is_some() {
+                    std::hint::black_box(local_col);
+                }
+            }
+            for (local_col, active) in self.mine_explosions.iter().enumerate() {
+                if active.is_some() {
+                    std::hint::black_box(local_col);
+                }
+            }
+        }
+        TapExplosionCullBenchFrame {
+            checksum: frame as u64,
+            samples: 0,
+        }
+    }
+
+    pub fn new_missing_assets_frame(&self, frame: usize) -> TapExplosionCullBenchFrame {
+        for _ in 0..Self::ASSET_GATE_SAMPLES {
+            let tap_explosions = std::hint::black_box(None::<&[Option<ActiveTapExplosion>]>);
+            let mine_explosions = std::hint::black_box(None::<&[Option<ActiveMineExplosion>]>);
+            if let Some(explosions) = tap_explosions {
+                std::hint::black_box(explosions);
+            }
+            if let Some(explosions) = mine_explosions {
+                std::hint::black_box(explosions);
+            }
+        }
+        TapExplosionCullBenchFrame {
+            checksum: frame as u64,
+            samples: 0,
+        }
     }
 
     fn frame<F>(&self, frame: usize, mut select: F) -> TapExplosionCullBenchFrame
@@ -1298,8 +1362,8 @@ mod tests {
             crossover_cue_entries: None,
             crossover_cue_cursor: None,
             column_flashes: Some(&flashes),
-            tap_explosions: &taps,
-            mine_explosions: &mines,
+            tap_explosions: Some(&taps),
+            mine_explosions: Some(&mines),
             lanes: std::array::from_fn(|lane| match lane {
                 0 => NotefieldLaneFeedback {
                     active_hold: Some(&hold),
@@ -1392,8 +1456,8 @@ mod tests {
             crossover_cue_entries: None,
             crossover_cue_cursor: None,
             column_flashes: None,
-            tap_explosions: &inactive_taps,
-            mine_explosions: &inactive_mines,
+            tap_explosions: Some(&inactive_taps),
+            mine_explosions: Some(&inactive_mines),
             lanes: [NotefieldLaneFeedback::default(); MAX_COLS],
             countdown_font: "test",
             countdown_text,
@@ -1411,6 +1475,59 @@ mod tests {
         );
 
         assert!(actors.is_empty());
+    }
+
+    #[test]
+    fn unavailable_explosion_assets_skip_retained_feedback_state() {
+        let noteskin = noteskin();
+        let timing = TimingData::default();
+        let notes = [note(0)];
+        let note_hides = SongLuaNoteHideWindows::default();
+        let request = request(
+            &noteskin,
+            &timing,
+            &notes,
+            &note_hides,
+            FieldPlacement::P1,
+            0,
+            1,
+            2,
+            2,
+        );
+        let prepared = prepare_notefield(&request).expect("test notefield should prepare");
+        let frame = NotefieldFeedbackFrameView {
+            column_cues: None,
+            column_cue_cursor: None,
+            crossover_cues: None,
+            crossover_cue_entries: None,
+            crossover_cue_cursor: None,
+            column_flashes: None,
+            tap_explosions: None,
+            mine_explosions: None,
+            lanes: std::array::from_fn(|lane| {
+                (lane < 2)
+                    .then_some(NotefieldLaneFeedback {
+                        receptor_bop_zoom: 1.0,
+                        ..NotefieldLaneFeedback::default()
+                    })
+                    .unwrap_or_default()
+            }),
+            countdown_font: "test",
+            countdown_text,
+        };
+        let mut actors = Vec::new();
+
+        compose_notefield_feedback(
+            &mut actors,
+            &mut Vec::new(),
+            &mut ModelMeshCache::default(),
+            &request,
+            &prepared,
+            &frame,
+            &source,
+        );
+
+        assert_eq!(sprite_keys(&actors), ["target0", "target1"]);
     }
 
     #[test]
@@ -1454,8 +1571,8 @@ mod tests {
             crossover_cue_entries: None,
             crossover_cue_cursor: None,
             column_flashes: None,
-            tap_explosions: &taps,
-            mine_explosions: &mines,
+            tap_explosions: Some(&taps),
+            mine_explosions: Some(&mines),
             lanes: std::array::from_fn(|lane| {
                 if lane < 2 {
                     NotefieldLaneFeedback {

@@ -66,6 +66,15 @@ pub(crate) fn compose_error_bar(actors: &mut Vec<Actor>, request: ErrorBarCompos
     append_text_feedback(actors, &request);
 }
 
+#[inline]
+pub(crate) fn offset_indicator_active(
+    indicator: OffsetIndicatorText,
+    elapsed_s: f32,
+    duration: f32,
+) -> bool {
+    (0.0..duration).contains(&(elapsed_s - indicator.started_at))
+}
+
 /// Compose the four canonical graphical error-bar modes in their established
 /// insertion order. Theme code supplies only resolved options and visual data.
 pub(crate) fn compose_error_bar_modes(
@@ -356,8 +365,11 @@ fn append_offset_indicator(actors: &mut Vec<Actor>, request: &ErrorBarComposeReq
         return;
     };
     let style = request.style;
-    let age = request.elapsed_s - indicator.started_at;
-    if !(0.0..style.offset_indicator_duration).contains(&age) {
+    if !offset_indicator_active(
+        indicator,
+        request.elapsed_s,
+        style.offset_indicator_duration,
+    ) {
         return;
     }
     let mut y = request.offset_indicator_position[1];
