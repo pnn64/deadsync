@@ -1865,6 +1865,9 @@ impl SongLuaLayerActivity {
 struct GameplayFrameScratch {
     lobby_hud_cache: lobby_hud::LobbyHudCache,
     lobby_hud_status_scratch: String,
+    /// Stable frames compare one compact key and clone the retained handle; a
+    /// timing-segment change resolves the prewarmed bounded shared cache.
+    bpm_text: GameplayBpmTextPlan,
     song_lua_overlay_order: SongLuaOverlayOrderCache,
     song_lua_background_visual_layer_orders: Vec<SongLuaOverlayOrderCache>,
     song_lua_foreground_visual_layer_orders: Vec<SongLuaOverlayOrderCache>,
@@ -2199,6 +2202,10 @@ pub struct State {
     pub scorebox_profile_snapshot: [score_data::GameplayScoreboxProfileSnapshot; MAX_PLAYERS],
     pub scorebox_side_snapshot: [Option<score_data::CachedPlayerLeaderboardData>; MAX_PLAYERS],
     scorebox_plans: [gs_scorebox::GameplayScoreboxPlan; MAX_PLAYERS],
+    /// Whether an active scorebox still has an asynchronous leaderboard load
+    /// to poll. The game thread updates this two-entry reduction only when a
+    /// score snapshot changes; completed songs pay one boolean test per frame.
+    scorebox_refresh_pending: bool,
     itl_cmod_warning: [bool; MAX_PLAYERS],
     runtime_view: GameplayRuntimeView,
     live_lobby_runtime: bool,
@@ -2232,6 +2239,10 @@ pub struct State {
     /// its localized label once; gameplay reads the stored `Arc` directly and
     /// skips the actor entirely for the empty 1.0x label.
     rate_text: Arc<str>,
+    /// Exact 0.0%-100.0% lookup table prepared at screen entry. Gameplay uses a
+    /// direct quantized index; the fixed song-lifetime storage has no misses,
+    /// growth, eviction, synchronization, or live-frame destruction.
+    life_percent_text: GameplayLifeTextPlan,
     /// One song-static logical width for the Stage/Event label. The game thread
     /// warms it during the transition, reads it without synchronization during
     /// gameplay, and drops it with the screen. There is no growth or eviction;
@@ -2422,6 +2433,8 @@ impl State {
                 runtime_view.policy.scorebox_pane_filter,
             )
         });
+        let scorebox_refresh_pending =
+            scorebox_refresh_pending_from(&scorebox_profile_snapshot, &scorebox_side_snapshot);
         let song = gameplay.song();
         let song_full_title: Arc<str> =
             Arc::from(song.display_full_title(runtime_view.policy.translated_titles));
@@ -2459,6 +2472,11 @@ impl State {
         let display_mods_text =
             std::array::from_fn(|player| notefield::preferred_mods_text(&gameplay, player));
         let rate_text = cached_rate_text(gameplay.music_rate());
+        let bpm_text = GameplayBpmTextPlan::new(
+            display_bpm(gameplay.current_bpm_display(), gameplay.music_rate()),
+            runtime_view.policy.show_bpm_decimal,
+        );
+        let life_percent_text = GameplayLifeTextPlan::new();
         let actor_resources = ActorResourceArena::default();
         notefield::prewarm_actor_resources(
             &actor_resources,
@@ -2658,6 +2676,7 @@ impl State {
         let frame_scratch = GameplayFrameScratch {
             lobby_hud_cache: lobby_hud::LobbyHudCache::default(),
             lobby_hud_status_scratch: String::with_capacity(128),
+            bpm_text,
             song_lua_overlay_order,
             song_lua_background_visual_layer_orders,
             song_lua_foreground_visual_layer_orders,
@@ -2747,6 +2766,7 @@ impl State {
             scorebox_profile_snapshot,
             scorebox_side_snapshot,
             scorebox_plans,
+            scorebox_refresh_pending,
             itl_cmod_warning: [false; MAX_PLAYERS],
             live_lobby_runtime: runtime_view.lobby.snapshot.joined_lobby.is_some(),
             runtime_view,
@@ -2767,6 +2787,7 @@ impl State {
             notefield_widths,
             display_mods_text,
             rate_text,
+            life_percent_text,
             intro_text_width: Cell::new(None),
             notefield_judgment_assets,
             notefield_plans,
@@ -4621,6 +4642,24 @@ pub fn active_song_lua_video_paths(state: &State) -> &[PathBuf] {
 }
 
 #[inline(always)]
+fn scorebox_refresh_pending_from(
+    profiles: &[score_data::GameplayScoreboxProfileSnapshot; MAX_PLAYERS],
+    snapshots: &[Option<score_data::CachedPlayerLeaderboardData>; MAX_PLAYERS],
+) -> bool {
+    profiles.iter().zip(snapshots).any(|(profile, snapshot)| {
+        profile.display_scorebox
+            && profile.gs_active
+            && snapshot.as_ref().is_some_and(|snapshot| snapshot.loading)
+    })
+}
+
+/// Whether gameplay still needs the shell to poll asynchronous score loading.
+#[inline(always)]
+pub const fn scorebox_refresh_pending(state: &State) -> bool {
+    state.scorebox_refresh_pending
+}
+
+#[inline(always)]
 fn current_foreground_media(state: &State) -> Option<(&Path, Arc<str>)> {
     Some((
         state.current_foreground_path.as_deref()?,
@@ -4640,6 +4679,10 @@ pub fn sync_score_runtime_view(state: &mut State, view: GameplayScoreRuntimeView
             );
         }
     }
+    state.scorebox_refresh_pending = scorebox_refresh_pending_from(
+        &state.scorebox_profile_snapshot,
+        &state.scorebox_side_snapshot,
+    );
     state.itl_cmod_warning = view.itl_cmod_warning;
 }
 
@@ -4876,22 +4919,28 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
 thread_local! {
     static RATE_TEXT_CACHE: RefCell<TextCache<u32>> = RefCell::new(text_cache_with_capacity(128));
     static BPM_TEXT_CACHE: RefCell<TextCache<(u64, bool)>> = RefCell::new(text_cache_with_capacity(512));
-    static LIFE_PERCENT_TEXT_CACHE: RefCell<TextCache<u32>> =
-        RefCell::new(text_cache_with_capacity(1024));
     static METER_TEXT_CACHE: RefCell<TextCache<u32>> = RefCell::new(text_cache_with_capacity(64));
     static AUTOSYNC_TEXT_CACHE: RefCell<TextCache<AutosyncTextKey>> =
         RefCell::new(text_cache_with_capacity(256));
-    static RECENT_BPM_TEXT_CACHE: RefCell<RecentTextCache<(u64, bool)>> =
+}
+
+#[cfg(feature = "bench-support")]
+thread_local! {
+    static BENCH_LIFE_PERCENT_TEXT_CACHE: RefCell<TextCache<u32>> =
+        RefCell::new(text_cache_with_capacity(1024));
+    static BENCH_RECENT_BPM_TEXT_CACHE: RefCell<RecentTextCache<(u64, bool)>> =
         RefCell::new(RecentTextCache::default());
-    static RECENT_LIFE_PERCENT_TEXT_CACHE: RefCell<RecentTextCache<u32>> =
+    static BENCH_RECENT_LIFE_PERCENT_TEXT_CACHE: RefCell<RecentTextCache<u32>> =
         RefCell::new(RecentTextCache::default());
 }
 
+#[cfg(feature = "bench-support")]
 struct RecentTextCache<K> {
     entries: [Option<(K, Arc<str>)>; 2],
     next: usize,
 }
 
+#[cfg(feature = "bench-support")]
 impl<K> Default for RecentTextCache<K> {
     fn default() -> Self {
         Self {
@@ -4901,6 +4950,7 @@ impl<K> Default for RecentTextCache<K> {
     }
 }
 
+#[cfg(feature = "bench-support")]
 impl<K: Copy + Eq> RecentTextCache<K> {
     #[inline(always)]
     fn get_or_insert_with(&mut self, key: K, build: impl FnOnce() -> Arc<str>) -> Arc<str> {
@@ -4988,27 +5038,99 @@ fn shared_cached_bpm_text(bpm: f64, show_decimal: bool) -> Arc<str> {
 }
 
 #[inline(always)]
-fn cached_bpm_text(bpm: f64, show_decimal: bool) -> Arc<str> {
+fn display_bpm(base_bpm: f32, music_rate: f32) -> f64 {
+    let rate = if music_rate.is_finite() {
+        f64::from(music_rate)
+    } else {
+        1.0
+    };
+    if base_bpm.is_finite() {
+        f64::from(base_bpm) * rate
+    } else {
+        0.0
+    }
+}
+
+struct GameplayBpmTextPlan {
+    key: (u64, bool),
+    text: Arc<str>,
+}
+
+impl GameplayBpmTextPlan {
+    fn new(bpm: f64, show_decimal: bool) -> Self {
+        Self {
+            key: (bpm.to_bits(), show_decimal),
+            text: shared_cached_bpm_text(bpm, show_decimal),
+        }
+    }
+
+    #[inline(always)]
+    fn resolve(&mut self, bpm: f64, show_decimal: bool) -> Arc<str> {
+        let key = (bpm.to_bits(), show_decimal);
+        if self.key != key {
+            self.key = key;
+            self.text = shared_cached_bpm_text(bpm, show_decimal);
+        }
+        Arc::clone(&self.text)
+    }
+}
+
+impl Default for GameplayBpmTextPlan {
+    fn default() -> Self {
+        Self::new(0.0, false)
+    }
+}
+
+#[cfg(feature = "bench-support")]
+#[inline(always)]
+fn cached_bpm_text_legacy(bpm: f64, show_decimal: bool) -> Arc<str> {
     let key = (bpm.to_bits(), show_decimal);
-    RECENT_BPM_TEXT_CACHE.with(|cache| {
+    BENCH_RECENT_BPM_TEXT_CACHE.with(|cache| {
         cache
             .borrow_mut()
             .get_or_insert_with(key, || shared_cached_bpm_text(bpm, show_decimal))
     })
 }
 
+const LIFE_PERCENT_TEXT_COUNT: usize = 1_001;
+
+struct GameplayLifeTextPlan {
+    values: Box<[Arc<str>; LIFE_PERCENT_TEXT_COUNT]>,
+}
+
+impl GameplayLifeTextPlan {
+    fn new() -> Self {
+        Self {
+            values: Box::new(std::array::from_fn(|key| {
+                Arc::from(format!("{:.1}%", key as f32 / 10.0))
+            })),
+        }
+    }
+
+    #[inline(always)]
+    fn resolve(&self, life_percent: f32) -> Arc<str> {
+        let key = quantize_tenths_u32(life_percent).min((LIFE_PERCENT_TEXT_COUNT - 1) as u32);
+        Arc::clone(&self.values[key as usize])
+    }
+}
+
+#[cfg(feature = "bench-support")]
 #[inline(always)]
 fn shared_cached_life_percent_text(life_percent: f32) -> Arc<str> {
     let key = quantize_tenths_u32(life_percent);
-    cached_text(&LIFE_PERCENT_TEXT_CACHE, key, TEXT_CACHE_LIMIT, || {
-        format!("{:.1}%", key as f32 / 10.0)
-    })
+    cached_text(
+        &BENCH_LIFE_PERCENT_TEXT_CACHE,
+        key,
+        TEXT_CACHE_LIMIT,
+        || format!("{:.1}%", key as f32 / 10.0),
+    )
 }
 
+#[cfg(feature = "bench-support")]
 #[inline(always)]
-fn cached_life_percent_text(life_percent: f32) -> Arc<str> {
+fn cached_life_percent_text_legacy(life_percent: f32) -> Arc<str> {
     let key = quantize_tenths_u32(life_percent);
-    RECENT_LIFE_PERCENT_TEXT_CACHE.with(|cache| {
+    BENCH_RECENT_LIFE_PERCENT_TEXT_CACHE.with(|cache| {
         cache
             .borrow_mut()
             .get_or_insert_with(key, || shared_cached_life_percent_text(life_percent))
@@ -5075,6 +5197,7 @@ fn surround_life_color(profile: &profile_data::Profile, life: f32, elapsed: f32)
 
 #[inline]
 fn visible_life_percent_text(
+    text_plan: &GameplayLifeTextPlan,
     life_percent: f32,
     lifemeter_type: profile_data::LifeMeterType,
     enabled: bool,
@@ -5088,7 +5211,7 @@ fn visible_life_percent_text(
             profile_data::LifeMeterType::Vertical => true,
             profile_data::LifeMeterType::Surround => false,
         };
-    visible.then(|| cached_life_percent_text(life_percent))
+    visible.then(|| text_plan.resolve(life_percent))
 }
 
 #[cfg(feature = "bench-support")]
@@ -5125,6 +5248,8 @@ pub fn benchmark_gameplay_hud_text_legacy(
 pub struct GameplayHudTextBenchmarkCache {
     overlay: SyncOverlayTextCache,
     autoplay_line: Arc<str>,
+    bpm: GameplayBpmTextPlan,
+    life: GameplayLifeTextPlan,
 }
 
 #[cfg(feature = "bench-support")]
@@ -5133,6 +5258,8 @@ impl GameplayHudTextBenchmarkCache {
         Self {
             overlay: SyncOverlayTextCache::default(),
             autoplay_line: Arc::from(autoplay_line),
+            bpm: GameplayBpmTextPlan::new(0.0, false),
+            life: GameplayLifeTextPlan::new(),
         }
     }
 
@@ -5156,8 +5283,8 @@ impl GameplayHudTextBenchmarkCache {
             })
             .expect("autoplay produces one overlay line");
         GameplayHudTextBenchmarkSnapshot {
-            bpm: cached_bpm_text(bpm, show_bpm_decimal),
-            life: cached_life_percent_text(life_percent),
+            bpm: self.bpm.resolve(bpm, show_bpm_decimal),
+            life: self.life.resolve(life_percent),
             overlay,
             overlay_line_count,
         }
@@ -5169,6 +5296,7 @@ impl GameplayHudTextBenchmarkCache {
 pub struct GameplayLifemeterOptionBench {
     hidden_percent: profile_data::Profile,
     surround: profile_data::Profile,
+    life_text: GameplayLifeTextPlan,
 }
 
 #[cfg(feature = "bench-support")]
@@ -5186,6 +5314,7 @@ impl Default for GameplayLifemeterOptionBench {
                 responsive_colors: true,
                 ..profile_data::Profile::default()
             },
+            life_text: GameplayLifeTextPlan::new(),
         }
     }
 }
@@ -5196,7 +5325,7 @@ impl GameplayLifemeterOptionBench {
 
     pub fn old_hidden_percent_frame(&self, frame: usize) -> usize {
         (0..Self::SAMPLES).fold(frame, |checksum, sample| {
-            let text = cached_life_percent_text(std::hint::black_box(87.3));
+            let text = cached_life_percent_text_legacy(std::hint::black_box(87.3));
             std::hint::black_box(text);
             checksum.rotate_left(7) ^ sample
         })
@@ -5205,6 +5334,7 @@ impl GameplayLifemeterOptionBench {
     pub fn new_hidden_percent_frame(&self, frame: usize) -> usize {
         (0..Self::SAMPLES).fold(frame, |checksum, sample| {
             let text = visible_life_percent_text(
+                &self.life_text,
                 std::hint::black_box(87.3),
                 self.hidden_percent.lifemeter_type,
                 self.hidden_percent.show_life_percent,
@@ -5233,6 +5363,128 @@ impl GameplayLifemeterOptionBench {
             checksum.rotate_left(7)
                 ^ rgba_checksum(surround_life_color(&self.surround, 1.0, elapsed))
                 ^ sample
+        })
+    }
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub struct GameplayBpmCacheBench {
+    plan: GameplayBpmTextPlan,
+}
+
+#[cfg(feature = "bench-support")]
+impl Default for GameplayBpmCacheBench {
+    fn default() -> Self {
+        Self {
+            plan: GameplayBpmTextPlan::new(175.25, true),
+        }
+    }
+}
+
+#[cfg(feature = "bench-support")]
+impl GameplayBpmCacheBench {
+    const SAMPLES: usize = 256;
+
+    pub fn legacy_frame(&self, frame: usize) -> usize {
+        (0..Self::SAMPLES).fold(frame, |checksum, sample| {
+            let text = cached_bpm_text_legacy(std::hint::black_box(175.25), true);
+            checksum.rotate_left(7) ^ std::hint::black_box(text.len()) ^ sample
+        })
+    }
+
+    pub fn planned_frame(&mut self, frame: usize) -> usize {
+        (0..Self::SAMPLES).fold(frame, |checksum, sample| {
+            let text = self.plan.resolve(std::hint::black_box(175.25), true);
+            checksum.rotate_left(7) ^ std::hint::black_box(text.len()) ^ sample
+        })
+    }
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub struct GameplayLifeTextBench {
+    plan: GameplayLifeTextPlan,
+}
+
+#[cfg(feature = "bench-support")]
+impl Default for GameplayLifeTextBench {
+    fn default() -> Self {
+        Self {
+            plan: GameplayLifeTextPlan::new(),
+        }
+    }
+}
+
+#[cfg(feature = "bench-support")]
+impl GameplayLifeTextBench {
+    const SAMPLES: usize = 256;
+
+    pub fn legacy_frame(&self, frame: usize) -> usize {
+        (0..Self::SAMPLES).fold(frame, |checksum, sample| {
+            let text = cached_life_percent_text_legacy(std::hint::black_box(87.3));
+            checksum.rotate_left(7) ^ std::hint::black_box(text.len()) ^ sample
+        })
+    }
+
+    pub fn planned_frame(&self, frame: usize) -> usize {
+        (0..Self::SAMPLES).fold(frame, |checksum, sample| {
+            let text = self.plan.resolve(std::hint::black_box(87.3));
+            checksum.rotate_left(7) ^ std::hint::black_box(text.len()) ^ sample
+        })
+    }
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub struct GameplayScorePollingBench {
+    profiles: [score_data::GameplayScoreboxProfileSnapshot; MAX_PLAYERS],
+    snapshots: [Option<score_data::CachedPlayerLeaderboardData>; MAX_PLAYERS],
+    pending: bool,
+}
+
+#[cfg(feature = "bench-support")]
+impl Default for GameplayScorePollingBench {
+    fn default() -> Self {
+        let mut profiles: [score_data::GameplayScoreboxProfileSnapshot; MAX_PLAYERS] =
+            std::array::from_fn(|_| Default::default());
+        profiles[0].display_scorebox = true;
+        profiles[0].gs_active = true;
+        let snapshots = [
+            Some(score_data::CachedPlayerLeaderboardData {
+                loading: false,
+                data: None,
+                error: None,
+            }),
+            None,
+        ];
+        let pending = scorebox_refresh_pending_from(&profiles, &snapshots);
+        Self {
+            profiles,
+            snapshots,
+            pending,
+        }
+    }
+}
+
+#[cfg(feature = "bench-support")]
+impl GameplayScorePollingBench {
+    const SAMPLES: usize = 256;
+
+    pub fn scan_frame(&self, frame: usize) -> usize {
+        (0..Self::SAMPLES).fold(frame, |checksum, sample| {
+            let pending = scorebox_refresh_pending_from(
+                std::hint::black_box(&self.profiles),
+                std::hint::black_box(&self.snapshots),
+            );
+            checksum.rotate_left(7) ^ usize::from(pending) ^ sample
+        })
+    }
+
+    pub fn flagged_frame(&self, frame: usize) -> usize {
+        (0..Self::SAMPLES).fold(frame, |checksum, sample| {
+            let pending = std::hint::black_box(self.pending);
+            checksum.rotate_left(7) ^ usize::from(pending) ^ sample
         })
     }
 }
@@ -5513,8 +5765,7 @@ pub fn prewarm_text_layout(cache: &mut TextLayoutCache, fonts: &font::FontMap, s
     if !state.rate_text.is_empty() {
         cache.prewarm_text(fonts, "miso", state.rate_text.as_ref(), None);
     }
-    for tenths in 0..=1_000 {
-        let text = cached_life_percent_text(tenths as f32 / 10.0);
+    for text in state.life_percent_text.values.iter() {
         cache.prewarm_text(fonts, "miso", text.as_ref(), None);
     }
     for player in 0..state.num_players() {
@@ -5536,7 +5787,7 @@ pub fn prewarm_text_layout(cache: &mut TextLayoutCache, fonts: &font::FontMap, s
             continue;
         };
         for &(_, bpm) in &gameplay_chart.timing_segments.bpms {
-            let text = cached_bpm_text(
+            let text = shared_cached_bpm_text(
                 f64::from(bpm.max(0.0)) * f64::from(state.music_rate()),
                 policy.show_bpm_decimal,
             );
@@ -18005,6 +18256,7 @@ fn push_actors_impl(
     let GameplayFrameScratch {
         lobby_hud_cache,
         lobby_hud_status_scratch,
+        bpm_text,
         song_lua_overlay_order,
         song_lua_background_visual_layer_orders,
         song_lua_foreground_visual_layer_orders,
@@ -19239,19 +19491,8 @@ fn push_actors_impl(
         }
         // Current BPM Display (1:1 with Simply Love)
         {
-            let base_bpm = state.current_bpm_display();
-            let music_rate = state.music_rate();
-            let rate = if music_rate.is_finite() {
-                music_rate as f64
-            } else {
-                1.0
-            };
-            let display_bpm = if base_bpm.is_finite() {
-                f64::from(base_bpm) * rate
-            } else {
-                0.0
-            };
-            let bpm_text = cached_bpm_text(display_bpm, policy.show_bpm_decimal);
+            let display_bpm = display_bpm(state.current_bpm_display(), state.music_rate());
+            let bpm_text = bpm_text.resolve(display_bpm, policy.show_bpm_decimal);
             // Final world-space positions derived from analyzing the SM Lua transforms.
             // The parent frame is bottom-aligned to y=52, and its children are positioned
             // relative to that y-coordinate, with a zoom of 1.33 applied to the whole group.
@@ -19375,6 +19616,7 @@ fn push_actors_impl(
                 let is_hot = !dead && life_for_render >= 1.0;
                 let profile = &state.profiles()[player_idx];
                 let life_percent_text = visible_life_percent_text(
+                    &state.life_percent_text,
                     life_for_render * 100.0,
                     profile.lifemeter_type,
                     profile.show_life_percent,
@@ -21157,20 +21399,21 @@ mod tests {
     #[test]
     fn bpm_decimal_shows_authored_precision_without_trailing_zeroes() {
         assert_eq!(
-            cached_bpm_text(f64::from(100.001_f32), true).as_ref(),
+            shared_cached_bpm_text(f64::from(100.001_f32), true).as_ref(),
             "100.001"
         );
         assert_eq!(
-            cached_bpm_text(f64::from(133.33_f32), true).as_ref(),
+            shared_cached_bpm_text(f64::from(133.33_f32), true).as_ref(),
             "133.33"
         );
-        assert_eq!(cached_bpm_text(100.000, true).as_ref(), "100");
-        assert_eq!(cached_bpm_text(150.0, true).as_ref(), "150");
-        assert_eq!(cached_bpm_text(100.001, false).as_ref(), "100");
+        assert_eq!(shared_cached_bpm_text(100.000, true).as_ref(), "100");
+        assert_eq!(shared_cached_bpm_text(150.0, true).as_ref(), "150");
+        assert_eq!(shared_cached_bpm_text(100.001, false).as_ref(), "100");
     }
 
     #[test]
-    fn recent_hud_text_cache_matches_shared_numeric_text() {
+    fn song_owned_hud_text_matches_numeric_formatting() {
+        let mut bpm_plan = GameplayBpmTextPlan::new(0.0, false);
         for (bpm, show_decimal) in [
             (150.0, false),
             (133.33, true),
@@ -21180,22 +21423,26 @@ mod tests {
             (150.0, false),
         ] {
             assert_eq!(
-                cached_bpm_text(bpm, show_decimal),
+                bpm_plan.resolve(bpm, show_decimal),
                 shared_cached_bpm_text(bpm, show_decimal)
             );
         }
+        let life_plan = GameplayLifeTextPlan::new();
         for life in [87.34, 87.35, 0.0, 100.0, f32::NAN, 87.34] {
+            let key = quantize_tenths_u32(life).min(1_000);
             assert_eq!(
-                cached_life_percent_text(life),
-                shared_cached_life_percent_text(life)
+                life_plan.resolve(life).as_ref(),
+                format!("{:.1}%", key as f32 / 10.0)
             );
         }
     }
 
     #[test]
     fn life_percent_text_only_resolves_for_visible_meter_layouts() {
+        let text_plan = GameplayLifeTextPlan::new();
         assert!(
             visible_life_percent_text(
+                &text_plan,
                 87.3,
                 profile_data::LifeMeterType::Standard,
                 false,
@@ -21206,6 +21453,7 @@ mod tests {
         );
         assert!(
             visible_life_percent_text(
+                &text_plan,
                 87.3,
                 profile_data::LifeMeterType::Surround,
                 true,
@@ -21216,6 +21464,7 @@ mod tests {
         );
         assert!(
             visible_life_percent_text(
+                &text_plan,
                 100.0,
                 profile_data::LifeMeterType::Vertical,
                 true,
@@ -21226,6 +21475,7 @@ mod tests {
         );
         assert_eq!(
             visible_life_percent_text(
+                &text_plan,
                 87.3,
                 profile_data::LifeMeterType::Vertical,
                 true,
@@ -21235,6 +21485,33 @@ mod tests {
             .as_deref(),
             Some("87.3%")
         );
+    }
+
+    #[test]
+    fn scorebox_polling_stops_when_loading_finishes() {
+        let mut profiles: [score_data::GameplayScoreboxProfileSnapshot; MAX_PLAYERS] =
+            std::array::from_fn(|_| Default::default());
+        profiles[0].display_scorebox = true;
+        profiles[0].gs_active = true;
+        let mut snapshots = [
+            Some(score_data::CachedPlayerLeaderboardData::loading()),
+            None,
+        ];
+
+        assert!(scorebox_refresh_pending_from(&profiles, &snapshots));
+        snapshots[0] = Some(score_data::CachedPlayerLeaderboardData {
+            loading: false,
+            data: None,
+            error: None,
+        });
+        assert!(!scorebox_refresh_pending_from(&profiles, &snapshots));
+
+        snapshots[0] = Some(score_data::CachedPlayerLeaderboardData::loading());
+        profiles[0].display_scorebox = false;
+        assert!(!scorebox_refresh_pending_from(&profiles, &snapshots));
+        profiles[0].display_scorebox = true;
+        profiles[0].gs_active = false;
+        assert!(!scorebox_refresh_pending_from(&profiles, &snapshots));
     }
 
     #[test]

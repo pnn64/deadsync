@@ -256,6 +256,9 @@ pub(crate) fn sync_initial_scores(state: &mut gameplay::State) {
 }
 
 pub(crate) fn sync_scores(state: &mut gameplay::State) {
+    if !gameplay::scorebox_refresh_pending(state) {
+        return;
+    }
     let view = score_runtime_view(state);
     gameplay::sync_score_runtime_view(state, view);
 }
