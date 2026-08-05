@@ -1774,6 +1774,85 @@ const fn gameplay_step_stats_mode(
     }
 }
 
+/// Song-lifetime activation index for one visual-layer list.
+///
+/// The gameplay thread owns both buffers. Screen entry stores every start once
+/// and reserves the complete active-index capacity. Steady frames compare only
+/// the adjacent start boundary; a single crossing shifts at most the bounded
+/// active list, while a multi-layer seek rebuilds it once in O(n log n), always
+/// preserving source draw order. There are no gameplay allocations, misses,
+/// eviction, pruning, synchronization, or destruction before screen exit. The
+/// layer-activity benchmark records steady and worst-sample cost; storage drops
+/// with the screen.
+#[derive(Default)]
+struct SongLuaLayerActivity {
+    starts: Box<[(f32, usize)]>,
+    active: Vec<usize>,
+    next_start: usize,
+}
+
+impl SongLuaLayerActivity {
+    fn new(starts: impl IntoIterator<Item = f32>, now: f32) -> Self {
+        let mut starts = starts
+            .into_iter()
+            .enumerate()
+            .map(|(index, start)| (start, index))
+            .collect::<Vec<_>>();
+        starts.sort_by(|left, right| {
+            left.0
+                .total_cmp(&right.0)
+                .then_with(|| left.1.cmp(&right.1))
+        });
+        let mut activity = Self {
+            active: Vec::with_capacity(starts.len()),
+            starts: starts.into_boxed_slice(),
+            next_start: 0,
+        };
+        activity.sync(now);
+        activity
+    }
+
+    #[inline]
+    fn sync(&mut self, now: f32) -> &[usize] {
+        let old_next_start = self.next_start;
+        while let Some(&(start, _)) = self.starts.get(self.next_start) {
+            // Match the old `if now < start { continue; }` behavior, including
+            // its treatment of NaN as active.
+            if now < start {
+                break;
+            }
+            self.next_start += 1;
+        }
+        while self.next_start > 0 && now < self.starts[self.next_start - 1].0 {
+            self.next_start -= 1;
+        }
+        match self.next_start.abs_diff(old_next_start) {
+            0 => {}
+            1 if self.next_start > old_next_start => {
+                let index = self.starts[old_next_start].1;
+                let insert_at = self.active.binary_search(&index).unwrap_or_else(|at| at);
+                self.active.insert(insert_at, index);
+            }
+            1 => {
+                let index = self.starts[self.next_start].1;
+                if let Ok(remove_at) = self.active.binary_search(&index) {
+                    self.active.remove(remove_at);
+                }
+            }
+            _ => {
+                self.active.clear();
+                self.active.extend(
+                    self.starts[..self.next_start]
+                        .iter()
+                        .map(|(_, index)| *index),
+                );
+                self.active.sort_unstable();
+            }
+        }
+        &self.active
+    }
+}
+
 /// Game-thread, song-lifetime scratch detached while one actor frame is built.
 ///
 /// The box is allocated and every variable-capacity field is prewarmed at
@@ -1789,6 +1868,8 @@ struct GameplayFrameScratch {
     song_lua_overlay_order: SongLuaOverlayOrderCache,
     song_lua_background_visual_layer_orders: Vec<SongLuaOverlayOrderCache>,
     song_lua_foreground_visual_layer_orders: Vec<SongLuaOverlayOrderCache>,
+    song_lua_background_layer_activity: SongLuaLayerActivity,
+    song_lua_foreground_layer_activity: SongLuaLayerActivity,
     song_lua_proxy_request_index: SongLuaProxyRequestIndex,
     song_lua_background_overlay_topology_indices: Vec<SongLuaOverlayTopologyIndex>,
     song_lua_foreground_proxy_request_indices: Vec<SongLuaProxyRequestIndex>,
@@ -2050,6 +2131,53 @@ impl GameplayFrameOrchestrationBenchmark {
     }
 }
 
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub struct SongLuaLayerActivityBenchmark {
+    starts: Vec<f32>,
+    activity: SongLuaLayerActivity,
+    now: f32,
+}
+
+#[cfg(feature = "bench-support")]
+impl SongLuaLayerActivityBenchmark {
+    pub fn new(layer_count: usize, active_count: usize) -> Self {
+        let layer_count = layer_count.max(1);
+        let starts = (0..layer_count)
+            .map(|index| ((index * 37) % layer_count) as f32)
+            .collect::<Vec<_>>();
+        let now = active_count.min(layer_count).saturating_sub(1) as f32;
+        Self {
+            activity: SongLuaLayerActivity::new(starts.iter().copied(), now),
+            starts,
+            now,
+        }
+    }
+
+    pub fn full_scans(&self) -> u64 {
+        let mut checksum = 0u64;
+        for pass in 0..5u64 {
+            for (index, start) in self.starts.iter().copied().enumerate() {
+                if !(self.now < start) {
+                    checksum = checksum.rotate_left(7) ^ index as u64 ^ pass;
+                }
+            }
+        }
+        checksum
+    }
+
+    pub fn active_cursor(&mut self) -> u64 {
+        let active = self.activity.sync(self.now);
+        let mut checksum = 0u64;
+        for pass in 0..5u64 {
+            for &index in active {
+                checksum = checksum.rotate_left(7) ^ index as u64 ^ pass;
+            }
+        }
+        checksum
+    }
+}
+
 pub struct State {
     pub gameplay: GameplayCoreState,
     /// Game-thread, song-lifetime identity for the fixed two HUD slots. Built
@@ -2135,6 +2263,7 @@ pub struct State {
     next_foreground_change_ix: usize,
     current_foreground_path: Option<PathBuf>,
     current_foreground_key: Option<Arc<str>>,
+    song_lua_foreground_owner_index: SongLuaForegroundOwnerIndex,
     smx_sensor_views: [Option<SmxSensorPadView>; 2],
     pub heart_rate_view: HeartRateView,
     // Time banked toward the next shell-owned sensor refresh. Seeded to fire on
@@ -2467,6 +2596,22 @@ impl State {
         let song_lua_sound_events = song_lua_sound_events(song_lua_visuals);
         let active_song_lua_video_paths = song_lua_video_paths(song_lua_visuals);
         let static_song_lua_video_path_count = active_song_lua_video_paths.len();
+        let song_lua_foreground_owner_index = SongLuaForegroundOwnerIndex::new(song_lua_visuals);
+        let song_lua_now = gameplay.current_music_time_display();
+        let song_lua_background_layer_activity = SongLuaLayerActivity::new(
+            song_lua_visuals
+                .background_visual_layers
+                .iter()
+                .map(|layer| layer.start_second),
+            song_lua_now,
+        );
+        let song_lua_foreground_layer_activity = SongLuaLayerActivity::new(
+            song_lua_visuals
+                .foreground_visual_layers
+                .iter()
+                .map(|layer| layer.start_second),
+            song_lua_now,
+        );
         let active_players = gameplay.num_players();
         let notefield_actor_scratch =
             gameplay_actor_scratch(active_players, NOTEFIELD_ACTOR_SCRATCH_CAPACITY);
@@ -2486,6 +2631,8 @@ impl State {
             song_lua_overlay_order,
             song_lua_background_visual_layer_orders,
             song_lua_foreground_visual_layer_orders,
+            song_lua_background_layer_activity,
+            song_lua_foreground_layer_activity,
             song_lua_proxy_request_index,
             song_lua_background_overlay_topology_indices,
             song_lua_foreground_proxy_request_indices,
@@ -2612,6 +2759,7 @@ impl State {
             next_foreground_change_ix: 0,
             current_foreground_path: None,
             current_foreground_key: None,
+            song_lua_foreground_owner_index,
             smx_sensor_views: [None, None],
             heart_rate_view: HeartRateView::default(),
             smx_sensor_refresh_accum: SMX_SENSOR_REFRESH_INTERVAL,
@@ -4396,6 +4544,9 @@ pub fn refresh_foreground_media(state: &mut State) -> bool {
     state.current_foreground_key = next_path.as_deref().map(crate::assets::media_path_key);
     state.current_foreground_path = next_path;
     state
+        .song_lua_foreground_owner_index
+        .select(state.current_foreground_path.as_deref());
+    state
         .active_song_lua_video_paths
         .truncate(state.static_song_lua_video_path_count);
     if let Some(path) = state.current_foreground_path.as_ref()
@@ -5894,6 +6045,268 @@ fn gameplay_header_rgba(color: crate::config::Color) -> [f32; 4] {
     }
 }
 
+const SONG_LUA_FG_OWNER_ROOT: u8 = 0;
+const SONG_LUA_FG_OWNER_BACKGROUND: u8 = 1;
+const SONG_LUA_FG_OWNER_FOREGROUND: u8 = 2;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct SongLuaForegroundOwnerRef {
+    source: u8,
+    layer_index: usize,
+    overlay_index: usize,
+}
+
+struct SongLuaForegroundOwnerPath {
+    path: PathBuf,
+    owner_start: usize,
+    owner_end: usize,
+}
+
+/// Path-specific Song Lua ownership index for the active simfile foreground.
+///
+/// The gameplay thread owns immutable, exactly-sized path and owner tables built
+/// at screen entry. Foreground events select a path with binary search; gameplay
+/// frames read only its contiguous owner range. Misses saturate to an empty
+/// range, there is no growth, eviction, synchronization, or live-frame pruning,
+/// and storage is freed at screen exit. The foreground-owner benchmark covers
+/// full scans versus indexed reads, allocation counts, and worst-sample cost.
+#[derive(Default)]
+struct SongLuaForegroundOwnerIndex {
+    paths: Box<[SongLuaForegroundOwnerPath]>,
+    owners: Box<[SongLuaForegroundOwnerRef]>,
+    active_start: usize,
+    active_end: usize,
+}
+
+impl SongLuaForegroundOwnerIndex {
+    fn new(
+        visuals: &SongLuaRuntimeVisuals<
+            SongLuaOverlayActor,
+            SongLuaCapturedActor,
+            SongLuaRuntimeOverlayStateDelta,
+        >,
+    ) -> Self {
+        let capacity = visuals.overlays.len()
+            + visuals
+                .background_visual_layers
+                .iter()
+                .map(|layer| layer.overlays.len())
+                .sum::<usize>()
+            + visuals
+                .foreground_visual_layers
+                .iter()
+                .map(|layer| layer.overlays.len())
+                .sum::<usize>();
+        let mut entries = Vec::with_capacity(capacity);
+        Self::push_entries(&mut entries, SONG_LUA_FG_OWNER_ROOT, 0, &visuals.overlays);
+        for (layer_index, layer) in visuals.background_visual_layers.iter().enumerate() {
+            Self::push_entries(
+                &mut entries,
+                SONG_LUA_FG_OWNER_BACKGROUND,
+                layer_index,
+                &layer.overlays,
+            );
+        }
+        for (layer_index, layer) in visuals.foreground_visual_layers.iter().enumerate() {
+            Self::push_entries(
+                &mut entries,
+                SONG_LUA_FG_OWNER_FOREGROUND,
+                layer_index,
+                &layer.overlays,
+            );
+        }
+        entries.sort_by(|left, right| {
+            left.0
+                .cmp(right.0)
+                .then_with(|| left.1.source.cmp(&right.1.source))
+                .then_with(|| left.1.layer_index.cmp(&right.1.layer_index))
+                .then_with(|| left.1.overlay_index.cmp(&right.1.overlay_index))
+        });
+
+        let mut paths = Vec::new();
+        let mut owners = Vec::with_capacity(entries.len());
+        let mut cursor = 0;
+        while cursor < entries.len() {
+            let owner_start = owners.len();
+            let path = entries[cursor].0.to_path_buf();
+            while cursor < entries.len() && entries[cursor].0 == path.as_path() {
+                owners.push(entries[cursor].1);
+                cursor += 1;
+            }
+            paths.push(SongLuaForegroundOwnerPath {
+                path,
+                owner_start,
+                owner_end: owners.len(),
+            });
+        }
+        Self {
+            paths: paths.into_boxed_slice(),
+            owners: owners.into_boxed_slice(),
+            active_start: 0,
+            active_end: 0,
+        }
+    }
+
+    fn push_entries<'a>(
+        out: &mut Vec<(&'a Path, SongLuaForegroundOwnerRef)>,
+        source: u8,
+        layer_index: usize,
+        overlays: &'a [SongLuaOverlayActor],
+    ) {
+        out.extend(
+            overlays
+                .iter()
+                .enumerate()
+                .filter_map(|(overlay_index, overlay)| match &overlay.kind {
+                    SongLuaOverlayKind::Sprite { texture_path, .. } => Some((
+                        texture_path.as_path(),
+                        SongLuaForegroundOwnerRef {
+                            source,
+                            layer_index,
+                            overlay_index,
+                        },
+                    )),
+                    _ => None,
+                }),
+        );
+    }
+
+    fn select(&mut self, path: Option<&Path>) {
+        let Some(path) = path else {
+            self.active_start = 0;
+            self.active_end = 0;
+            return;
+        };
+        let Ok(index) = self
+            .paths
+            .binary_search_by(|candidate| candidate.path.as_path().cmp(path))
+        else {
+            self.active_start = 0;
+            self.active_end = 0;
+            return;
+        };
+        self.active_start = self.paths[index].owner_start;
+        self.active_end = self.paths[index].owner_end;
+    }
+
+    fn owns(
+        &self,
+        now: f32,
+        visuals: &SongLuaRuntimeVisuals<
+            SongLuaOverlayActor,
+            SongLuaCapturedActor,
+            SongLuaRuntimeOverlayStateDelta,
+        >,
+        overlay_states: &[SongLuaOverlayState],
+        background_layer_states: &[Vec<SongLuaOverlayState>],
+        foreground_layer_states: &[Vec<SongLuaOverlayState>],
+    ) -> bool {
+        self.owners[self.active_start..self.active_end]
+            .iter()
+            .any(|owner| {
+                let state = match owner.source {
+                    SONG_LUA_FG_OWNER_ROOT => overlay_states.get(owner.overlay_index),
+                    SONG_LUA_FG_OWNER_BACKGROUND => visuals
+                        .background_visual_layers
+                        .get(owner.layer_index)
+                        .filter(|layer| !(now < layer.start_second))
+                        .and_then(|_| background_layer_states.get(owner.layer_index))
+                        .and_then(|states| states.get(owner.overlay_index)),
+                    SONG_LUA_FG_OWNER_FOREGROUND => visuals
+                        .foreground_visual_layers
+                        .get(owner.layer_index)
+                        .filter(|layer| !(now < layer.start_second))
+                        .and_then(|_| foreground_layer_states.get(owner.layer_index))
+                        .and_then(|states| states.get(owner.overlay_index)),
+                    _ => None,
+                };
+                state.is_some_and(|state| state.visible && state.diffuse[3] > f32::EPSILON)
+            })
+    }
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub struct SongLuaForegroundOwnerBenchmark {
+    visuals: SongLuaRuntimeVisuals<
+        SongLuaOverlayActor,
+        SongLuaCapturedActor,
+        SongLuaRuntimeOverlayStateDelta,
+    >,
+    states: Vec<SongLuaOverlayState>,
+    path: PathBuf,
+    index: SongLuaForegroundOwnerIndex,
+}
+
+#[cfg(feature = "bench-support")]
+impl SongLuaForegroundOwnerBenchmark {
+    pub fn new(overlay_count: usize) -> Self {
+        let overlay_count = overlay_count.max(1);
+        let path = PathBuf::from("foreground-target.avi");
+        let overlays = (0..overlay_count)
+            .map(|index| {
+                let texture_path = if index + 1 == overlay_count {
+                    path.clone()
+                } else {
+                    PathBuf::from("other-texture.png")
+                };
+                SongLuaOverlayActor {
+                    kind: SongLuaOverlayKind::Sprite {
+                        texture_key: Arc::from(texture_path.to_string_lossy().into_owned()),
+                        texture_path,
+                    },
+                    name: None,
+                    parent_index: None,
+                    initial_state: SongLuaOverlayState::default(),
+                    message_commands: Vec::new(),
+                }
+            })
+            .collect::<Vec<_>>();
+        let states = overlays
+            .iter()
+            .map(|overlay| overlay.initial_state)
+            .collect();
+        let visuals = SongLuaRuntimeVisuals {
+            overlays,
+            overlay_eases: Vec::new(),
+            overlay_ease_ranges: Vec::new(),
+            overlay_events: Vec::new(),
+            background_visual_layers: Vec::new(),
+            foreground_visual_layers: Vec::new(),
+            player_actors: std::array::from_fn(|_| SongLuaCapturedActor::default()),
+            player_events: std::array::from_fn(|_| Vec::new()),
+            song_foreground: SongLuaCapturedActor::default(),
+            song_foreground_events: Vec::new(),
+            hidden_players: [false; MAX_PLAYERS],
+            note_hides: std::array::from_fn(|_| Default::default()),
+            column_offsets: std::array::from_fn(|_| Vec::new()),
+            screen_width: 640.0,
+            screen_height: 480.0,
+        };
+        let mut index = SongLuaForegroundOwnerIndex::new(&visuals);
+        index.select(Some(path.as_path()));
+        Self {
+            visuals,
+            states,
+            path,
+            index,
+        }
+    }
+
+    pub fn full_scan(&self) -> u64 {
+        u64::from(song_lua_has_visible_tex(
+            &self.visuals.overlays,
+            &self.states,
+            &self.path,
+        ))
+    }
+
+    pub fn indexed(&self) -> u64 {
+        u64::from(self.index.owns(1.0, &self.visuals, &self.states, &[], &[]))
+    }
+}
+
+#[cfg(any(test, feature = "bench-support"))]
 fn song_lua_has_visible_tex(
     overlays: &[SongLuaOverlayActor],
     overlay_states: &[SongLuaOverlayState],
@@ -5908,45 +6321,6 @@ fn song_lua_has_visible_tex(
     })
 }
 
-fn song_lua_owns_fg_media(
-    state: &State,
-    overlay_states: &[SongLuaOverlayState],
-    path: &Path,
-    background_layer_states: &[Vec<SongLuaOverlayState>],
-    foreground_layer_states: &[Vec<SongLuaOverlayState>],
-) -> bool {
-    let song_lua_visuals = state.song_lua_visuals();
-    let now = state.current_music_time_display();
-    if song_lua_has_visible_tex(&song_lua_visuals.overlays, overlay_states, path) {
-        return true;
-    }
-    for (layer, layer_states) in song_lua_visuals
-        .background_visual_layers
-        .iter()
-        .zip(background_layer_states)
-    {
-        if now < layer.start_second {
-            continue;
-        }
-        if song_lua_has_visible_tex(&layer.overlays, layer_states, path) {
-            return true;
-        }
-    }
-    for (layer, layer_states) in song_lua_visuals
-        .foreground_visual_layers
-        .iter()
-        .zip(foreground_layer_states)
-    {
-        if now < layer.start_second {
-            continue;
-        }
-        if song_lua_has_visible_tex(&layer.overlays, layer_states, path) {
-            return true;
-        }
-    }
-    false
-}
-
 fn active_foreground_media(state: &State) -> Option<(&Path, Arc<str>)> {
     current_foreground_media(state)
 }
@@ -5957,11 +6331,11 @@ fn build_foreground_media(
     background_layer_states: &[Vec<SongLuaOverlayState>],
     foreground_layer_states: &[Vec<SongLuaOverlayState>],
 ) -> Option<Actor> {
-    let (path, texture_key) = active_foreground_media(state)?;
-    if song_lua_owns_fg_media(
-        state,
+    let (_, texture_key) = active_foreground_media(state)?;
+    if state.song_lua_foreground_owner_index.owns(
+        state.current_music_time_display(),
+        state.song_lua_visuals(),
         overlay_states,
-        path,
         background_layer_states,
         foreground_layer_states,
     ) {
@@ -6734,17 +7108,19 @@ fn song_lua_overlay_local_states_into(
     dynamic_indices: &[usize],
     message_caches: &mut Vec<SongLuaMessageStateCache>,
     out: &mut Vec<SongLuaOverlayState>,
-) {
+) -> bool {
+    let mut changed = false;
     if out.len() != overlays.len() {
         out.clear();
         out.extend(overlays.iter().map(|overlay| overlay.initial_state));
+        changed = true;
     }
     message_caches.resize(overlays.len(), SongLuaMessageStateCache::default());
     for &idx in dynamic_indices {
         let Some(overlay) = overlays.get(idx) else {
             continue;
         };
-        out[idx] = song_lua_overlay_render_state_from(
+        let next = song_lua_overlay_render_state_from(
             now,
             idx,
             overlay,
@@ -6753,7 +7129,10 @@ fn song_lua_overlay_local_states_into(
             overlay_ease_ranges,
             &mut message_caches[idx],
         );
+        changed |= out[idx] != next;
+        out[idx] = next;
     }
+    changed
 }
 
 #[cfg(test)]
@@ -6916,7 +7295,7 @@ fn song_lua_overlay_state_sets_active_into(
     local_out: &mut Vec<SongLuaOverlayState>,
     overlay_out: &mut Vec<SongLuaOverlayState>,
 ) {
-    song_lua_overlay_local_states_into(
+    let local_changed = song_lua_overlay_local_states_into(
         now,
         overlays,
         overlay_events,
@@ -6926,14 +7305,16 @@ fn song_lua_overlay_state_sets_active_into(
         message_caches,
         local_out,
     );
-    song_lua_overlay_states_from_local_into(
-        overlays,
-        local_out,
-        &order_cache.dynamic_composed_indices,
-        screen_width,
-        screen_height,
-        overlay_out,
-    );
+    if local_changed || overlay_out.len() != overlays.len() {
+        song_lua_overlay_states_from_local_into(
+            overlays,
+            local_out,
+            &order_cache.dynamic_composed_indices,
+            screen_width,
+            screen_height,
+            overlay_out,
+        );
+    }
 }
 
 #[cfg(test)]
@@ -12784,6 +13165,28 @@ impl SongLuaStatePlanBenchmark {
         Self::checksum(&self.planned_composed)
     }
 
+    pub fn planned_always_compose_frame(&mut self, now: f32) -> u64 {
+        let _ = song_lua_overlay_local_states_into(
+            now,
+            &self.overlays,
+            &self.events,
+            &[],
+            &self.ranges,
+            &self.plan.dynamic_local_indices,
+            &mut self.planned_caches,
+            &mut self.planned_local,
+        );
+        song_lua_overlay_states_from_local_into(
+            &self.overlays,
+            &self.planned_local,
+            &self.plan.dynamic_composed_indices,
+            640.0,
+            480.0,
+            &mut self.planned_composed,
+        );
+        Self::checksum(&self.planned_composed)
+    }
+
     fn checksum(states: &[SongLuaOverlayState]) -> u64 {
         states.iter().fold(0, |checksum, state| {
             checksum.rotate_left(7) ^ song_lua_overlay_state_checksum(*state)
@@ -17509,6 +17912,8 @@ fn push_actors_impl(
         song_lua_overlay_order,
         song_lua_background_visual_layer_orders,
         song_lua_foreground_visual_layer_orders,
+        song_lua_background_layer_activity,
+        song_lua_foreground_layer_activity,
         song_lua_proxy_request_index,
         song_lua_background_overlay_topology_indices,
         song_lua_foreground_proxy_request_indices,
@@ -17566,8 +17971,9 @@ fn push_actors_impl(
     let song_lua_space_width = song_lua_overlay_space_width(state);
     let song_lua_space_height = song_lua_overlay_space_height(state);
     let player_color = color::decorative_rgba(state.player_color_index());
+    let song_lua_now = state.current_music_time_display();
     song_lua_overlay_state_sets_from_into(
-        state.current_music_time_display(),
+        song_lua_now,
         &song_lua_visuals.overlays,
         &song_lua_visuals.overlay_events,
         &song_lua_visuals.overlay_eases,
@@ -17579,14 +17985,13 @@ fn push_actors_impl(
         song_lua_local_state_scratch,
         song_lua_overlay_state_scratch,
     );
-    let song_lua_now = state.current_music_time_display();
-    for (layer_idx, layer) in song_lua_visuals.background_visual_layers.iter().enumerate() {
+    let song_lua_background_active_layers = song_lua_background_layer_activity.sync(song_lua_now);
+    let song_lua_foreground_active_layers = song_lua_foreground_layer_activity.sync(song_lua_now);
+    for &layer_idx in song_lua_background_active_layers {
+        let layer = &song_lua_visuals.background_visual_layers[layer_idx];
         let local_states = &mut song_lua_background_layer_local_state_scratch[layer_idx];
         let layer_states = &mut song_lua_background_layer_state_scratch[layer_idx];
         let message_caches = &mut song_lua_background_layer_message_state_cache[layer_idx];
-        if song_lua_now < layer.start_second {
-            continue;
-        }
         song_lua_overlay_state_sets_from_into(
             song_lua_now,
             &layer.overlays,
@@ -17601,13 +18006,11 @@ fn push_actors_impl(
             layer_states,
         );
     }
-    for (layer_idx, layer) in song_lua_visuals.foreground_visual_layers.iter().enumerate() {
+    for &layer_idx in song_lua_foreground_active_layers {
+        let layer = &song_lua_visuals.foreground_visual_layers[layer_idx];
         let local_states = &mut song_lua_foreground_layer_local_state_scratch[layer_idx];
         let layer_states = &mut song_lua_foreground_layer_state_scratch[layer_idx];
         let message_caches = &mut song_lua_foreground_layer_message_state_cache[layer_idx];
-        if song_lua_now < layer.start_second {
-            continue;
-        }
         song_lua_overlay_state_sets_from_into(
             song_lua_now,
             &layer.overlays,
@@ -17628,15 +18031,10 @@ fn push_actors_impl(
         &song_lua_proxy_request_index,
         song_lua_capture_visit_scratch,
     );
-    for ((layer, layer_states), request_index) in song_lua_visuals
-        .foreground_visual_layers
-        .iter()
-        .zip(song_lua_foreground_layer_state_scratch.iter())
-        .zip(song_lua_foreground_proxy_request_indices.iter())
-    {
-        if song_lua_now < layer.start_second {
-            continue;
-        }
+    for &layer_idx in song_lua_foreground_active_layers {
+        let layer = &song_lua_visuals.foreground_visual_layers[layer_idx];
+        let layer_states = &song_lua_foreground_layer_state_scratch[layer_idx];
+        let request_index = &song_lua_foreground_proxy_request_indices[layer_idx];
         song_lua_merge_proxy_requests(
             &mut proxy_requests,
             song_lua_proxy_requests_indexed(
@@ -17661,16 +18059,10 @@ fn push_actors_impl(
         policy.background_brightness,
         policy.background_color,
     );
-    for (layer_idx, ((layer, local_states), layer_states)) in song_lua_visuals
-        .background_visual_layers
-        .iter()
-        .zip(song_lua_background_layer_local_state_scratch.iter())
-        .zip(song_lua_background_layer_state_scratch.iter())
-        .enumerate()
-    {
-        if song_lua_now < layer.start_second {
-            continue;
-        }
+    for &layer_idx in song_lua_background_active_layers {
+        let layer = &song_lua_visuals.background_visual_layers[layer_idx];
+        let local_states = &song_lua_background_layer_local_state_scratch[layer_idx];
+        let layer_states = &song_lua_background_layer_state_scratch[layer_idx];
         let Some(order_cache) = song_lua_background_visual_layer_orders.get_mut(layer_idx) else {
             continue;
         };
@@ -19368,16 +19760,10 @@ fn push_actors_impl(
     ) {
         actors.push(actor);
     }
-    for (layer_idx, ((layer, local_states), layer_states)) in song_lua_visuals
-        .foreground_visual_layers
-        .iter()
-        .zip(song_lua_foreground_layer_local_state_scratch.iter())
-        .zip(song_lua_foreground_layer_state_scratch.iter())
-        .enumerate()
-    {
-        if song_lua_now < layer.start_second {
-            continue;
-        }
+    for &layer_idx in song_lua_foreground_active_layers {
+        let layer = &song_lua_visuals.foreground_visual_layers[layer_idx];
+        let local_states = &song_lua_foreground_layer_local_state_scratch[layer_idx];
+        let layer_states = &song_lua_foreground_layer_state_scratch[layer_idx];
         let Some(order_cache) = song_lua_foreground_visual_layer_orders.get_mut(layer_idx) else {
             continue;
         };
@@ -20349,6 +20735,20 @@ mod tests {
                 song_layer2_animation_legacy(&events, now),
                 "now={now}"
             );
+        }
+    }
+
+    #[test]
+    fn song_lua_layer_activity_matches_full_scan_across_boundaries_and_seeks() {
+        let starts = [5.0, 1.0, 9.0, 3.0, 3.0];
+        let mut activity = SongLuaLayerActivity::new(starts, f32::NEG_INFINITY);
+        for now in [-1.0, 1.0, 3.0, 8.0, 12.0, 2.0, f32::NAN, 0.0, 9.0] {
+            let expected = starts
+                .iter()
+                .enumerate()
+                .filter_map(|(index, start)| (!(now < *start)).then_some(index))
+                .collect::<Vec<_>>();
+            assert_eq!(activity.sync(now), expected, "now={now}");
         }
     }
 
@@ -25858,6 +26258,96 @@ mod tests {
             &overlays,
             &states,
             path.as_path()
+        ));
+    }
+
+    #[test]
+    fn song_lua_foreground_owner_index_matches_visibility_and_layer_start() {
+        let path = std::path::PathBuf::from("badapple.avi");
+        let layer = |start_second: f32, overlay: SongLuaOverlayActor| {
+            deadsync_gameplay::SongLuaVisualLayerRuntime {
+                start_second,
+                screen_width: 640.0,
+                screen_height: 480.0,
+                overlays: vec![overlay],
+                overlay_eases: Vec::new(),
+                overlay_ease_ranges: vec![0..0],
+                overlay_events: vec![Vec::new()],
+                song_foreground: SongLuaCapturedActor::default(),
+                song_foreground_events: Vec::new(),
+            }
+        };
+        let overlay = || SongLuaOverlayActor {
+            kind: test_sprite_path_kind(path.clone()),
+            name: None,
+            parent_index: None,
+            initial_state: SongLuaOverlayState::default(),
+            message_commands: Vec::new(),
+        };
+        let visuals = SongLuaRuntimeVisuals {
+            overlays: Vec::new(),
+            overlay_eases: Vec::new(),
+            overlay_ease_ranges: Vec::new(),
+            overlay_events: Vec::new(),
+            background_visual_layers: vec![layer(5.0, overlay())],
+            foreground_visual_layers: vec![layer(10.0, overlay())],
+            player_actors: std::array::from_fn(|_| SongLuaCapturedActor::default()),
+            player_events: std::array::from_fn(|_| Vec::new()),
+            song_foreground: SongLuaCapturedActor::default(),
+            song_foreground_events: Vec::new(),
+            hidden_players: [false; MAX_PLAYERS],
+            note_hides: std::array::from_fn(|_| Default::default()),
+            column_offsets: std::array::from_fn(|_| Vec::new()),
+            screen_width: 640.0,
+            screen_height: 480.0,
+        };
+        let mut index = SongLuaForegroundOwnerIndex::new(&visuals);
+        index.select(Some(path.as_path()));
+        let root_states = Vec::new();
+        let mut background_states = vec![vec![SongLuaOverlayState::default()]];
+        let mut foreground_states = vec![vec![SongLuaOverlayState {
+            visible: false,
+            ..SongLuaOverlayState::default()
+        }]];
+
+        assert!(!index.owns(
+            4.99,
+            &visuals,
+            &root_states,
+            &background_states,
+            &foreground_states,
+        ));
+        assert!(index.owns(
+            5.0,
+            &visuals,
+            &root_states,
+            &background_states,
+            &foreground_states,
+        ));
+        background_states[0][0].visible = false;
+        assert!(!index.owns(
+            9.99,
+            &visuals,
+            &root_states,
+            &background_states,
+            &foreground_states,
+        ));
+        foreground_states[0][0].visible = true;
+        assert!(index.owns(
+            10.0,
+            &visuals,
+            &root_states,
+            &background_states,
+            &foreground_states,
+        ));
+
+        index.select(Some(Path::new("not-owned.avi")));
+        assert!(!index.owns(
+            10.0,
+            &visuals,
+            &root_states,
+            &background_states,
+            &foreground_states,
         ));
     }
 

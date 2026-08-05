@@ -84,6 +84,11 @@ harness = false
 required-features = ["bench-support"]
 
 [[bench]]
+name = "gameplay_song_lua_lifetime"
+harness = false
+required-features = ["bench-support"]
+
+[[bench]]
 name = "gameplay_lobby_hud"
 harness = false
 required-features = ["bench-support"]
