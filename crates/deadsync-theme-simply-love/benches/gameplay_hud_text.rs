@@ -1,4 +1,9 @@
 use deadlib_present::actors::TextContent;
+use deadsync_theme_simply_love::screens::components::gameplay::gameplay_stats::{
+    benchmark_game_time, benchmark_game_time_cached, benchmark_game_time_legacy,
+    benchmark_live_timing, benchmark_live_timing_cached, benchmark_live_timing_legacy,
+    benchmark_padded_runs, benchmark_padded_runs_cached, benchmark_padded_runs_legacy,
+};
 use deadsync_theme_simply_love::screens::components::gameplay::notefield::{
     benchmark_combo_text, benchmark_combo_text_legacy, prepare_combo_text_benchmark,
 };
@@ -19,6 +24,8 @@ const WARMUP_FRAMES: usize = 20_000;
 const MEASURE_FRAMES: usize = 2_000_000;
 const SMX_SENSOR_VALUES_PER_FRAME: usize = 8;
 const COMBO_VALUES_PER_FRAME: usize = 2;
+const DYNAMIC_TEXT_OPS: usize = 1_000_000;
+const TIMING_SONG_FRAMES: usize = 24_000;
 
 struct CountingAlloc {
     allocs: AtomicU64,
@@ -145,9 +152,48 @@ fn smx_sensor_value(frame: usize, slot: usize) -> u16 {
 }
 
 fn text_checksum(text: &TextContent) -> usize {
-    text.as_str().bytes().fold(0usize, |checksum, byte| {
+    text_checksum_str(text.as_str())
+}
+
+fn text_checksum_str(text: &str) -> usize {
+    text.bytes().fold(0usize, |checksum, byte| {
         checksum.rotate_left(5) ^ byte as usize
     })
+}
+
+fn measure_dynamic_text(mut text: impl FnMut(usize) -> usize) -> BenchResult {
+    for index in 0..WARMUP_FRAMES {
+        black_box(text(index));
+    }
+    let before = ALLOC.snapshot();
+    let before_cycles = read_cycles();
+    let started = Instant::now();
+    let mut output_checksum = 0usize;
+    for index in 0..DYNAMIC_TEXT_OPS {
+        output_checksum = output_checksum.rotate_left(7) ^ black_box(text(index));
+    }
+    BenchResult {
+        elapsed: started.elapsed(),
+        cycles: read_cycles().saturating_sub(before_cycles),
+        allocated: ALLOC.snapshot().delta(before),
+        checksum: output_checksum,
+    }
+}
+
+fn measure_text_frames(frames: usize, mut text: impl FnMut(usize) -> usize) -> BenchResult {
+    let before = ALLOC.snapshot();
+    let before_cycles = read_cycles();
+    let started = Instant::now();
+    let mut output_checksum = 0usize;
+    for index in 0..frames {
+        output_checksum = output_checksum.rotate_left(7) ^ black_box(text(index));
+    }
+    BenchResult {
+        elapsed: started.elapsed(),
+        cycles: read_cycles().saturating_sub(before_cycles),
+        allocated: ALLOC.snapshot().delta(before),
+        checksum: output_checksum,
+    }
 }
 
 fn measure_smx_sensor_text(mut text: impl FnMut(u16) -> TextContent) -> BenchResult {
@@ -233,7 +279,11 @@ fn measure_prompt_text(mut text: impl FnMut(&Arc<str>) -> TextContent) -> BenchR
 }
 
 fn print_result(label: &str, result: &BenchResult) {
-    let frames = MEASURE_FRAMES as f64;
+    print_result_for(label, result, MEASURE_FRAMES);
+}
+
+fn print_result_for(label: &str, result: &BenchResult, operations: usize) {
+    let frames = operations as f64;
     println!(
         "{label:<13} {:>9.2} ns/frame  {:>8.0} cycles/frame  {:>10.0} frames/s  \
          {:>5.2} allocs/frame  {:>7.1} bytes/frame  {:>5.2} reallocs/frame",
@@ -307,6 +357,101 @@ fn main() {
     println!("\nactive gameplay exit-prompt text benchmark");
     print_result("owned prompt", &owned_prompt);
     print_result("shared prompt", &shared_prompt);
+
+    let padded_legacy = measure_dynamic_text(|index| {
+        let count = 8_193 + (index % 100_000) as u32;
+        let (dim, bright) = benchmark_padded_runs_legacy(count, 6);
+        text_checksum_str(dim.as_ref()) ^ text_checksum_str(bright.as_ref())
+    });
+    let padded_inline = measure_dynamic_text(|index| {
+        let count = 8_193 + (index % 100_000) as u32;
+        let (dim, bright) = benchmark_padded_runs(count, 6);
+        text_checksum(&dim) ^ text_checksum(&bright)
+    });
+    assert_eq!(padded_legacy.checksum, padded_inline.checksum);
+
+    println!("\nsaturated padded judgment text benchmark");
+    print_result_for("legacy miss", &padded_legacy, DYNAMIC_TEXT_OPS);
+    print_result_for("inline value", &padded_inline, DYNAMIC_TEXT_OPS);
+
+    let clock_legacy = measure_dynamic_text(|index| {
+        text_checksum_str(benchmark_game_time_legacy(601 + index as u32, 1).as_ref())
+    });
+    let clock_inline =
+        measure_dynamic_text(|index| text_checksum(&benchmark_game_time(601 + index as u32, 1)));
+    assert_eq!(clock_legacy.checksum, clock_inline.checksum);
+
+    println!("\nfirst-use gameplay clock text benchmark");
+    print_result_for("legacy miss", &clock_legacy, DYNAMIC_TEXT_OPS);
+    print_result_for("inline value", &clock_inline, DYNAMIC_TEXT_OPS);
+
+    let timing_legacy = measure_dynamic_text(|index| {
+        let recent = (index % 4_001) as f32 * 0.1 - 200.0;
+        let all = (index.wrapping_mul(17) % 4_001) as f32 * 0.1 - 200.0;
+        text_checksum_str(benchmark_live_timing_legacy(recent, all).as_ref())
+    });
+    let timing_inline = measure_dynamic_text(|index| {
+        let recent = (index % 4_001) as f32 * 0.1 - 200.0;
+        let all = (index.wrapping_mul(17) % 4_001) as f32 * 0.1 - 200.0;
+        text_checksum(&benchmark_live_timing(recent, all))
+    });
+    assert_eq!(timing_legacy.checksum, timing_inline.checksum);
+
+    println!("\nsaturated live timing-pair text benchmark");
+    print_result_for("legacy miss", &timing_legacy, DYNAMIC_TEXT_OPS);
+    print_result_for("inline value", &timing_inline, DYNAMIC_TEXT_OPS);
+
+    let padded_key = (42u32, 4u8);
+    let padded_hit = measure_dynamic_text(|_| {
+        let (dim, bright) = benchmark_padded_runs_cached(padded_key.0, padded_key.1 as usize);
+        text_checksum_str(dim.as_ref()) ^ text_checksum_str(bright.as_ref())
+    });
+    let padded_inline_steady = measure_dynamic_text(|_| {
+        let (dim, bright) = benchmark_padded_runs(padded_key.0, padded_key.1 as usize);
+        text_checksum(&dim) ^ text_checksum(&bright)
+    });
+
+    let clock_key = (599u32, 2u8);
+    let clock_hit = measure_dynamic_text(|_| {
+        let text = benchmark_game_time_cached(clock_key.0, clock_key.1);
+        text_checksum_str(text.as_ref())
+    });
+    let clock_inline_steady =
+        measure_dynamic_text(|_| text_checksum(&benchmark_game_time(clock_key.0, clock_key.1)));
+
+    let timing_key = (12.3f32, -5.7f32);
+    let timing_hit = measure_dynamic_text(|_| {
+        let text = benchmark_live_timing_cached(timing_key.0, timing_key.1);
+        text_checksum_str(text.as_ref())
+    });
+    let timing_inline_steady =
+        measure_dynamic_text(|_| text_checksum(&benchmark_live_timing(timing_key.0, timing_key.1)));
+
+    println!("\nwarmed repeated-value CPU guard (allocation-free on both paths)");
+    print_result_for("padded hit", &padded_hit, DYNAMIC_TEXT_OPS);
+    print_result_for("padded inline", &padded_inline_steady, DYNAMIC_TEXT_OPS);
+    print_result_for("clock hit", &clock_hit, DYNAMIC_TEXT_OPS);
+    print_result_for("clock inline", &clock_inline_steady, DYNAMIC_TEXT_OPS);
+    print_result_for("timing hit", &timing_hit, DYNAMIC_TEXT_OPS);
+    print_result_for("timing inline", &timing_inline_steady, DYNAMIC_TEXT_OPS);
+
+    let timing_song_legacy = measure_text_frames(TIMING_SONG_FRAMES, |frame| {
+        let update = frame / 6;
+        let recent = update as f32 * 0.1 - 200.0;
+        let all = update as f32 * -0.07 + 120.0;
+        text_checksum_str(benchmark_live_timing_cached(recent, all).as_ref())
+    });
+    let timing_song_inline = measure_text_frames(TIMING_SONG_FRAMES, |frame| {
+        let update = frame / 6;
+        let recent = update as f32 * 0.1 - 200.0;
+        let all = update as f32 * -0.07 + 120.0;
+        text_checksum(&benchmark_live_timing(recent, all))
+    });
+    assert_eq!(timing_song_legacy.checksum, timing_song_inline.checksum);
+
+    println!("\nlive timing song workload (value changes every 6 frames)");
+    print_result_for("legacy cache", &timing_song_legacy, TIMING_SONG_FRAMES);
+    print_result_for("inline slots", &timing_song_inline, TIMING_SONG_FRAMES);
 }
 
 #[cfg(target_arch = "x86_64")]

@@ -932,8 +932,71 @@ pub enum TextContent {
     Static(&'static str),
     Owned(String),
     Shared(Arc<str>),
+    Inline(InlineText),
     InlineU16(InlineU16Text),
     InlineU32(InlineU32Text),
+}
+
+/// Heap-free UTF-8 text for short, frame-local formatted values.
+///
+/// The payload stays below `String`'s size so adding this variant does not
+/// enlarge [`TextContent`]. Writers fail instead of spilling onto the heap.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct InlineText {
+    bytes: [u8; 14],
+    len: u8,
+}
+
+impl InlineText {
+    pub const CAPACITY: usize = 14;
+
+    #[inline(always)]
+    pub const fn new() -> Self {
+        Self {
+            bytes: [0; Self::CAPACITY],
+            len: 0,
+        }
+    }
+
+    #[inline(always)]
+    pub fn as_str(&self) -> &str {
+        let bytes = &self.bytes[..self.len as usize];
+        std::str::from_utf8(bytes).expect("inline text contains valid UTF-8")
+    }
+
+    /// Formats text into the fixed payload and fails instead of allocating.
+    #[inline]
+    pub fn format(args: std::fmt::Arguments<'_>) -> Option<Self> {
+        let mut text = Self::new();
+        std::fmt::write(&mut text, args).ok()?;
+        Some(text)
+    }
+
+    /// Copies text into the fixed payload and fails instead of allocating.
+    #[inline]
+    pub fn copy_from(value: &str) -> Option<Self> {
+        let mut text = Self::new();
+        std::fmt::Write::write_str(&mut text, value).ok()?;
+        Some(text)
+    }
+}
+
+impl Default for InlineText {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl std::fmt::Write for InlineText {
+    fn write_str(&mut self, value: &str) -> std::fmt::Result {
+        let end = self.len as usize + value.len();
+        if end > self.bytes.len() {
+            return Err(std::fmt::Error);
+        }
+        self.bytes[self.len as usize..end].copy_from_slice(value.as_bytes());
+        self.len = end as u8;
+        Ok(())
+    }
 }
 
 /// Heap-free decimal text for the full `u16` range.
@@ -1018,12 +1081,26 @@ impl TextContent {
         Self::InlineU32(InlineU32Text::new(value))
     }
 
+    /// Formats a short value directly into the actor without allocating.
+    /// Returns `None` when the result exceeds the inline payload.
+    #[inline]
+    pub fn inline_format(args: std::fmt::Arguments<'_>) -> Option<Self> {
+        InlineText::format(args).map(Self::Inline)
+    }
+
+    /// Copies short text into the actor without allocating.
+    #[inline]
+    pub fn inline_str(value: &str) -> Option<Self> {
+        InlineText::copy_from(value).map(Self::Inline)
+    }
+
     #[inline(always)]
     pub fn as_str(&self) -> &str {
         match self {
             Self::Static(s) => s,
             Self::Owned(s) => s.as_str(),
             Self::Shared(s) => s.as_ref(),
+            Self::Inline(s) => s.as_str(),
             Self::InlineU16(s) => s.as_str(),
             Self::InlineU32(s) => s.as_str(),
         }
@@ -1032,6 +1109,11 @@ impl TextContent {
     #[inline(always)]
     pub fn len(&self) -> usize {
         self.as_str().len()
+    }
+
+    #[inline(always)]
+    pub fn is_empty(&self) -> bool {
+        self.as_str().is_empty()
     }
 }
 
@@ -1122,6 +1204,24 @@ mod tests {
             let text = TextContent::inline_u32(value);
             assert_eq!(text.as_str(), value.to_string());
         }
+    }
+
+    #[test]
+    fn inline_format_preserves_short_utf8_text_and_rejects_overflow() {
+        let text = TextContent::inline_format(format_args!(
+            "{hours}:{mins:02}:{secs:02}",
+            hours = 2,
+            mins = 3,
+            secs = 4
+        ))
+        .expect("short time text fits inline");
+        assert_eq!(text.as_str(), "2:03:04");
+
+        let utf8 = TextContent::inline_format(format_args!("sync {symbol}", symbol = '±'))
+            .expect("short UTF-8 text fits inline");
+        assert_eq!(utf8.as_str(), "sync ±");
+        assert!(TextContent::inline_format(format_args!("{}", "x".repeat(15))).is_none());
+        assert_eq!(std::mem::size_of::<TextContent>(), 24);
     }
 
     #[test]
