@@ -1,9 +1,9 @@
 use deadsync_theme_simply_love::screens::gameplay::{
     SongLuaActorBuildBenchmark, SongLuaCaptureTraversalBenchmark, SongLuaEaseBenchmark,
     SongLuaGraphDisplayBenchmark, SongLuaMessageStateBenchmark, SongLuaMultiActorEmitBenchmark,
-    SongLuaOrderBenchmark, SongLuaProjectedMeshBenchmark, SongLuaProxyRequestBenchmark,
-    SongLuaTextAttributeBenchmark, SongLuaTexturedGlowBenchmark, SongLuaTopologyBenchmark,
-    SongLuaUppercaseTextBenchmark, SongLuaWhiteTextureKeyBenchmark,
+    SongLuaNoteskinModelBenchmark, SongLuaOrderBenchmark, SongLuaProjectedMeshBenchmark,
+    SongLuaProxyRequestBenchmark, SongLuaTextAttributeBenchmark, SongLuaTexturedGlowBenchmark,
+    SongLuaTopologyBenchmark, SongLuaUppercaseTextBenchmark, SongLuaWhiteTextureKeyBenchmark,
 };
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::hint::black_box;
@@ -208,6 +208,7 @@ fn main() {
     const UPPERCASE_FRAMES: usize = 100_000;
     const TEXT_ATTRIBUTE_FRAMES: usize = 100_000;
     const TEXTURED_GLOW_FRAMES: usize = 50_000;
+    const NOTESKIN_TWEEN_FRAMES: usize = 100_000;
     const WHITE_TEXTURE_FRAMES: usize = 200_000;
     const GRAPH_FRAMES: usize = 20_000;
     const ATTRIBUTE_TEXT: &str = "Gameplay attribute colors";
@@ -522,6 +523,46 @@ fn main() {
         textured_glow.prewarmed_static_frame()
     });
 
+    let mut noteskin_model = SongLuaNoteskinModelBenchmark::new(96, 64);
+    assert_eq!(
+        noteskin_model.legacy_geometry_frame(),
+        noteskin_model.prewarmed_geometry_frame()
+    );
+    assert_eq!(
+        noteskin_model.legacy_glow_frame(),
+        noteskin_model.prewarmed_glow_frame()
+    );
+    assert_eq!(
+        noteskin_model.legacy_tween_frame(4.25),
+        noteskin_model.cursor_tween_frame(4.25)
+    );
+    let cache_keys = noteskin_model.cache_keys();
+    assert!(cache_keys.iter().all(|key| *key != 0));
+    assert_ne!(cache_keys[0], cache_keys[1]);
+    let legacy_noteskin_geometry_result = measure(TEXTURED_GLOW_FRAMES, || {
+        noteskin_model.legacy_geometry_frame()
+    });
+    let prewarmed_noteskin_geometry_result = measure(TEXTURED_GLOW_FRAMES, || {
+        noteskin_model.prewarmed_geometry_frame()
+    });
+    let legacy_noteskin_glow_result =
+        measure(TEXTURED_GLOW_FRAMES, || noteskin_model.legacy_glow_frame());
+    let prewarmed_noteskin_glow_result = measure(TEXTURED_GLOW_FRAMES, || {
+        noteskin_model.prewarmed_glow_frame()
+    });
+    let mut tween_tick = 0usize;
+    let legacy_noteskin_tween_result = measure(NOTESKIN_TWEEN_FRAMES, || {
+        let time = 4.0 + (tween_tick % 1_000) as f32 * 0.000_01;
+        tween_tick = tween_tick.wrapping_add(1);
+        noteskin_model.legacy_tween_frame(black_box(time))
+    });
+    let mut tween_tick = 0usize;
+    let cursor_noteskin_tween_result = measure(NOTESKIN_TWEEN_FRAMES, || {
+        let time = 4.0 + (tween_tick % 1_000) as f32 * 0.000_01;
+        tween_tick = tween_tick.wrapping_add(1);
+        noteskin_model.cursor_tween_frame(black_box(time))
+    });
+
     assert_eq!(
         legacy_message_result.checksum,
         cached_message_result.checksum
@@ -655,6 +696,31 @@ fn main() {
         legacy_model_glow_result.checksum,
         prewarmed_model_glow_result.checksum
     );
+    assert_eq!(
+        legacy_noteskin_geometry_result.checksum,
+        prewarmed_noteskin_geometry_result.checksum
+    );
+    assert_eq!(
+        legacy_noteskin_glow_result.checksum,
+        prewarmed_noteskin_glow_result.checksum
+    );
+    assert_eq!(
+        legacy_noteskin_tween_result.checksum,
+        cursor_noteskin_tween_result.checksum
+    );
+    assert_alloc_removed(
+        "Song Lua noteskin model geometry",
+        &legacy_noteskin_geometry_result,
+        &prewarmed_noteskin_geometry_result,
+    );
+    assert_alloc_removed(
+        "Song Lua noteskin model glow",
+        &legacy_noteskin_glow_result,
+        &prewarmed_noteskin_glow_result,
+    );
+    assert_eq!(cursor_noteskin_tween_result.allocated.allocs, 0);
+    assert_eq!(cursor_noteskin_tween_result.allocated.reallocs, 0);
+    assert_eq!(cursor_noteskin_tween_result.allocated.bytes, 0);
 
     println!("Song Lua gameplay frame hot paths");
     println!("message state ({MESSAGE_EVENTS} prior events)");
@@ -969,5 +1035,44 @@ fn main() {
     println!(
         "static Model glow storage: {} bytes/layer",
         textured_glow.static_storage_bytes()
+    );
+    println!("Song Lua NoteskinActor model geometry (96 vertices)");
+    print_result(
+        "rebuild vertices",
+        TEXTURED_GLOW_FRAMES,
+        &legacy_noteskin_geometry_result,
+    );
+    print_result(
+        "clone prewarmed Arc",
+        TEXTURED_GLOW_FRAMES,
+        &prewarmed_noteskin_geometry_result,
+    );
+    println!("Song Lua NoteskinActor glow geometry (96 vertices)");
+    print_result(
+        "copy/recolor",
+        TEXTURED_GLOW_FRAMES,
+        &legacy_noteskin_glow_result,
+    );
+    print_result(
+        "clone prewarmed Arc",
+        TEXTURED_GLOW_FRAMES,
+        &prewarmed_noteskin_glow_result,
+    );
+    println!("Song Lua NoteskinActor model tween (64 completed segments)");
+    print_result(
+        "scan timeline",
+        NOTESKIN_TWEEN_FRAMES,
+        &legacy_noteskin_tween_result,
+    );
+    print_result(
+        "monotonic cursor",
+        NOTESKIN_TWEEN_FRAMES,
+        &cursor_noteskin_tween_result,
+    );
+    println!(
+        "NoteskinActor song storage: {} bytes, base/glow cache keys {:#x}/{:#x}",
+        noteskin_model.storage_bytes(),
+        cache_keys[0],
+        cache_keys[1],
     );
 }

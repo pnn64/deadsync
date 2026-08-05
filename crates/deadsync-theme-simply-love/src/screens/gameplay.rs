@@ -27,7 +27,9 @@ use deadlib_present::space::widescale;
 use deadlib_present::space::{
     is_wide, screen_center_x, screen_center_y, screen_height, screen_width,
 };
-use deadlib_render::{BlendMode, INVALID_TMESH_CACHE_KEY, MeshVertex, TexturedMeshVertex};
+use deadlib_render::{
+    BlendMode, INVALID_TMESH_CACHE_KEY, MeshVertex, TMeshCacheKey, TexturedMeshVertex,
+};
 use deadsync_assets::noteskin::{self, Noteskin, SpriteSlot};
 use deadsync_assets::song_lua::{
     CompiledSongLua, SongLuaCapturedActor, SongLuaOverlayActor, SongLuaOverlayBlendMode,
@@ -59,8 +61,8 @@ use deadsync_notefield::{
     BrokenRunLookup, CapturedActorScratch, CapturedActorSource, FieldPlacement, HoldMeshScratch,
     ModelMeshCache, ModelMeshCacheStats, ProxyCaptureRequests, SongLuaPlayerTransformRequest,
     StreamProgressLookup, ViewOverride, noteskin_model_actor_from_draw,
-    song_lua_player_skew_x_matrix, song_lua_player_skew_y_matrix, song_lua_player_transform_matrix,
-    song_lua_player_y_fold_actor,
+    noteskin_model_actor_from_draw_cached, song_lua_player_skew_x_matrix,
+    song_lua_player_skew_y_matrix, song_lua_player_transform_matrix, song_lua_player_y_fold_actor,
 };
 use deadsync_noteskin::{
     ModelDrawState, NoteskinSlot, ReceptorGlowBehavior, ReceptorStepBehavior, Style, TweenType,
@@ -81,6 +83,7 @@ use glam::{Mat4 as Matrix4, Vec3 as Vector3, Vec4 as Vector4};
 use smallvec::SmallVec;
 use std::cell::RefCell;
 use std::collections::HashSet;
+use std::hash::Hasher;
 use std::num::NonZeroUsize;
 use std::ops::{Deref, DerefMut};
 use std::path::{Path, PathBuf};
@@ -622,8 +625,13 @@ const SONG_LUA_RAINBOW_TEXT_PREWARM_MAX_CHARS: usize = 64;
 /// entry. Rainbow storage is capped at 64 characters per actor; larger text
 /// uses owned per-frame construction rather than retaining unbounded song
 /// storage. GraphDisplay body/line geometry and its two-child frame are sized
-/// from the compiled point count. Static Model glow vertices are whitened once
-/// per layer during entry. BitmapText gets two buffers sized for its compiled
+/// from the compiled point count. Static Model glow vertices and stable
+/// renderer geometry keys are computed once per layer during entry.
+/// NoteskinActor slots get an exact-capacity, sealed model cache plus one
+/// pre-whitened glow array per model slot. A gameplay miss preserves output but
+/// counts as failed prewarm and may allocate; registered slots never grow,
+/// prune, or evict, and all model storage is destroyed with the song screen.
+/// BitmapText gets two buffers sized for its compiled
 /// spans plus one whole-text span: one for dynamic diffuse composition and one
 /// for glow/stroke extraction. Gameplay frames only refill or clone these
 /// prewarmed buffers. The fallback conversion also supports test-only builders
@@ -636,7 +644,10 @@ struct SongLuaProjectedMeshScratch {
     graph_body_vertices: Option<Arc<Vec<MeshVertex>>>,
     graph_line_vertices: Option<Arc<Vec<MeshVertex>>>,
     graph_frame: Option<SharedActorFrameScratch>,
+    model_geometry_keys: Option<Vec<TMeshCacheKey>>,
     model_glow_vertices: Option<Vec<Arc<[TexturedMeshVertex]>>>,
+    noteskin_model_cache: Option<ModelMeshCache>,
+    noteskin_glow_vertices: Option<Vec<Option<Arc<[TexturedMeshVertex]>>>>,
     text_diffuse_attributes: Option<Arc<Vec<TextAttribute>>>,
     text_glow_attributes: Option<Arc<Vec<TextAttribute>>>,
     uppercase_text: Option<Arc<str>>,
@@ -655,7 +666,10 @@ impl SongLuaProjectedMeshScratch {
             graph_body_vertices: None,
             graph_line_vertices: None,
             graph_frame: None,
+            model_geometry_keys: None,
             model_glow_vertices: None,
+            noteskin_model_cache: None,
+            noteskin_glow_vertices: None,
             text_diffuse_attributes: None,
             text_glow_attributes: None,
             uppercase_text: None,
@@ -674,7 +688,10 @@ impl SongLuaProjectedMeshScratch {
             graph_body_vertices: None,
             graph_line_vertices: None,
             graph_frame: None,
+            model_geometry_keys: None,
             model_glow_vertices: None,
+            noteskin_model_cache: None,
+            noteskin_glow_vertices: None,
             text_diffuse_attributes: None,
             text_glow_attributes: None,
             uppercase_text: None,
@@ -696,25 +713,38 @@ impl SongLuaProjectedMeshScratch {
     }
 
     fn model(layers: &[SongLuaOverlayModelLayer]) -> Self {
+        let model_geometry_keys = layers
+            .iter()
+            .map(|layer| song_lua_model_geometry_key(&layer.vertices))
+            .collect();
         let model_glow_vertices = layers
             .iter()
-            .map(|layer| {
-                Arc::from(
-                    layer
-                        .vertices
-                        .iter()
-                        .copied()
-                        .map(|mut vertex| {
-                            vertex.color = [1.0, 1.0, 1.0, vertex.color[3]];
-                            vertex
-                        })
-                        .collect::<Vec<_>>()
-                        .into_boxed_slice(),
-                )
-            })
+            .map(|layer| song_lua_static_glow_vertices(&layer.vertices))
             .collect();
         Self {
+            model_geometry_keys: Some(model_geometry_keys),
             model_glow_vertices: Some(model_glow_vertices),
+            ..Self::default()
+        }
+    }
+
+    fn noteskin(slots: &[SpriteSlot]) -> Self {
+        let mut model_cache = ModelMeshCache::with_capacity(slots.len());
+        for slot in slots {
+            model_cache.prewarm_slot(slot);
+        }
+        let noteskin_glow_vertices = slots
+            .iter()
+            .map(|slot| {
+                model_cache
+                    .model_geometry(slot)
+                    .map(|(_, vertices)| song_lua_static_glow_vertices(&vertices))
+            })
+            .collect();
+        model_cache.seal();
+        Self {
+            noteskin_model_cache: Some(model_cache),
+            noteskin_glow_vertices: Some(noteskin_glow_vertices),
             ..Self::default()
         }
     }
@@ -872,6 +902,23 @@ impl SongLuaProjectedMeshScratch {
                 })
                 .sum()
         });
+        let model_keys = self
+            .model_geometry_keys
+            .as_ref()
+            .map_or(0, |keys| keys.capacity())
+            .saturating_mul(std::mem::size_of::<TMeshCacheKey>());
+        let noteskin_models = self.noteskin_glow_vertices.as_ref().map_or(0, |slots| {
+            slots
+                .iter()
+                .flatten()
+                .map(|vertices| {
+                    vertices
+                        .len()
+                        .saturating_mul(std::mem::size_of::<TexturedMeshVertex>())
+                        .saturating_mul(2)
+                })
+                .sum()
+        });
         let dynamic_text = self
             .text_diffuse_attributes
             .as_ref()
@@ -894,10 +941,57 @@ impl SongLuaProjectedMeshScratch {
             .saturating_add(plain)
             .saturating_add(graph)
             .saturating_add(graph_frame)
+            .saturating_add(model_keys)
             .saturating_add(model_glow)
+            .saturating_add(noteskin_models)
             .saturating_add(dynamic_text)
             .saturating_add(rainbow)
     }
+}
+
+fn song_lua_static_glow_vertices(vertices: &[TexturedMeshVertex]) -> Arc<[TexturedMeshVertex]> {
+    Arc::from(
+        vertices
+            .iter()
+            .copied()
+            .map(|mut vertex| {
+                vertex.color = [1.0, 1.0, 1.0, vertex.color[3]];
+                vertex
+            })
+            .collect::<Vec<_>>()
+            .into_boxed_slice(),
+    )
+}
+
+fn song_lua_model_geometry_key(vertices: &[TexturedMeshVertex]) -> TMeshCacheKey {
+    let mut hasher = rustc_hash::FxHasher::default();
+    hasher.write(b"deadsync-song-lua-model-v1");
+    hasher.write_usize(vertices.len());
+    for vertex in vertices {
+        for value in vertex.pos {
+            hasher.write_u32(value.to_bits());
+        }
+        for value in vertex.uv {
+            hasher.write_u32(value.to_bits());
+        }
+        for value in vertex.tex_matrix_scale {
+            hasher.write_u32(value.to_bits());
+        }
+        for value in vertex.color {
+            hasher.write_u32(value.to_bits());
+        }
+    }
+    hasher.finish().max(1)
+}
+
+fn song_lua_glow_geometry_key(base: TMeshCacheKey) -> TMeshCacheKey {
+    if base == INVALID_TMESH_CACHE_KEY {
+        return INVALID_TMESH_CACHE_KEY;
+    }
+    let mut hasher = rustc_hash::FxHasher::default();
+    hasher.write(b"deadsync-song-lua-glow-v1");
+    hasher.write_u64(base);
+    hasher.finish().max(1)
 }
 
 fn update_song_lua_shared_vec<T>(
@@ -943,6 +1037,9 @@ fn song_lua_projected_mesh_scratch_for(
                     SongLuaProjectedMeshScratch::graph(vertex_count)
                 }
                 SongLuaOverlayKind::Model { layers } => SongLuaProjectedMeshScratch::model(layers),
+                SongLuaOverlayKind::NoteskinActor { slots } => {
+                    SongLuaProjectedMeshScratch::noteskin(slots)
+                }
                 _ => SongLuaProjectedMeshScratch::default(),
             };
             if let SongLuaOverlayKind::BitmapText {
@@ -8075,7 +8172,7 @@ fn song_lua_capture_children_into(
                     0.0,
                     0.0,
                     0.0,
-                    projected_mesh_scratch.get(idx),
+                    projected_mesh_scratch.get_mut(idx),
                 )
                 .is_none()
                     && let Some(actors) = build_song_lua_overlay_actor_with_scratch(
@@ -9721,6 +9818,7 @@ fn append_song_lua_model_actors(
     glow: [f32; 4],
     blend: BlendMode,
     total_elapsed: f32,
+    prewarmed_geometry_keys: Option<&[TMeshCacheKey]>,
     prewarmed_glow_vertices: Option<&[Arc<[TexturedMeshVertex]>]>,
 ) -> bool {
     let mut emitted = false;
@@ -9761,7 +9859,10 @@ fn append_song_lua_model_actors(
             tint: song_lua_capture_tint(layer.draw.tint, tint),
             glow: [1.0, 1.0, 1.0, 0.0],
             vertices: Arc::clone(&layer.vertices),
-            geom_cache_key: INVALID_TMESH_CACHE_KEY,
+            geom_cache_key: prewarmed_geometry_keys
+                .and_then(|keys| keys.get(idx))
+                .copied()
+                .unwrap_or(INVALID_TMESH_CACHE_KEY),
             uv_scale: layer.uv_scale,
             uv_offset,
             uv_tex_shift,
@@ -9821,8 +9922,16 @@ fn append_song_lua_noteskin_actors(
     blend: BlendMode,
     total_elapsed: f32,
     effect_beat: f32,
+    scratch: Option<&mut SongLuaProjectedMeshScratch>,
 ) -> bool {
     let mut emitted = false;
+    let (mut model_cache, glow_vertices) = match scratch {
+        Some(scratch) => (
+            scratch.noteskin_model_cache.as_mut(),
+            scratch.noteskin_glow_vertices.as_deref(),
+        ),
+        None => (None, None),
+    };
     let center = [
         state.x * x_scale + effect_offset[0] * x_scale,
         state.y * y_scale + effect_offset[1] * y_scale,
@@ -9831,7 +9940,10 @@ fn append_song_lua_noteskin_actors(
         if !asset_manager.has_texture_key(slot.texture_key()) {
             continue;
         }
-        let mut draw = slot.model_draw_at(total_elapsed, effect_beat);
+        let mut draw = model_cache.as_deref_mut().map_or_else(
+            || slot.model_draw_at(total_elapsed, effect_beat),
+            |cache| cache.draw_at(slot, total_elapsed, effect_beat),
+        );
         draw.pos[0] *= x_scale * actor_scale[0] * effect_scale[0];
         draw.pos[1] *= y_scale * actor_scale[1] * effect_scale[1];
         draw.pos[2] *= actor_scale[1].abs() * effect_scale[2];
@@ -9849,17 +9961,32 @@ fn append_song_lua_noteskin_actors(
         }
         let layer_z = song_lua_add_z(z, idx.min(i16::MAX as usize) as i16);
         let actor = if slot.model.is_some() {
-            noteskin_model_actor_from_draw(
-                slot,
-                draw,
-                center,
-                size,
-                uv,
-                -(slot.def.rotation_deg as f32 + effect_rot[2]),
-                tint,
-                blend,
-                layer_z,
-            )
+            if let Some(cache) = model_cache.as_deref_mut() {
+                noteskin_model_actor_from_draw_cached(
+                    slot,
+                    draw,
+                    center,
+                    size,
+                    uv,
+                    -(slot.def.rotation_deg as f32 + effect_rot[2]),
+                    tint,
+                    blend,
+                    layer_z,
+                    cache,
+                )
+            } else {
+                noteskin_model_actor_from_draw(
+                    slot,
+                    draw,
+                    center,
+                    size,
+                    uv,
+                    -(slot.def.rotation_deg as f32 + effect_rot[2]),
+                    tint,
+                    blend,
+                    layer_z,
+                )
+            }
         } else {
             song_lua_noteskin_sprite_actor(
                 slot,
@@ -9876,7 +10003,15 @@ fn append_song_lua_noteskin_actors(
         let Some(actor) = actor else {
             continue;
         };
-        let glow_actor = song_lua_overlay_glow_actor(&actor, glow, state.text_glow_mode, None);
+        let glow_actor = song_lua_overlay_glow_actor_with_static_vertices(
+            &actor,
+            glow,
+            state.text_glow_mode,
+            None,
+            glow_vertices
+                .and_then(|vertices| vertices.get(idx))
+                .and_then(Option::as_ref),
+        );
         out.extend([actor]);
         emitted = true;
         if let Some(glow_actor) = glow_actor {
@@ -9923,6 +10058,7 @@ fn song_lua_noteskin_actor(
         blend,
         total_elapsed,
         effect_beat,
+        None,
     )
     .then_some(out)
 }
@@ -11587,6 +11723,168 @@ fn song_lua_text_attribute_checksum(attributes: &[TextAttribute]) -> u64 {
 
 #[cfg(feature = "bench-support")]
 #[doc(hidden)]
+pub struct SongLuaNoteskinModelBenchmark {
+    slot: SpriteSlot,
+    cache: ModelMeshCache,
+    glow_vertices: Arc<[TexturedMeshVertex]>,
+}
+
+#[cfg(feature = "bench-support")]
+impl SongLuaNoteskinModelBenchmark {
+    pub fn new(vertex_count: usize, timeline_segments: usize) -> Self {
+        let vertex_count = vertex_count.max(3);
+        let mut slot = noteskin::test_model_slot();
+        let vertices = (0..vertex_count)
+            .map(|index| deadsync_noteskin::ModelVertex {
+                pos: [
+                    (index % 8) as f32 * 8.0,
+                    (index / 8) as f32 * 8.0,
+                    (index % 3) as f32,
+                ],
+                uv: [(index % 8) as f32 / 7.0, (index / 8) as f32 / 12.0],
+                tex_matrix_scale: [1.0, 1.0],
+            })
+            .collect::<Vec<_>>();
+        slot.model = Some(Arc::new(deadsync_noteskin::ModelMesh {
+            vertices: Arc::from(vertices.into_boxed_slice()),
+            bounds: [0.0, 0.0, 0.0, 64.0, 96.0, 2.0],
+        }));
+        let mut timeline = Vec::with_capacity(timeline_segments);
+        let mut from = ModelDrawState::default();
+        for segment in 0..timeline_segments {
+            let to = ModelDrawState {
+                pos: [segment as f32 * 0.25, segment as f32 * -0.125, 0.0],
+                rot: [segment as f32, 0.0, segment as f32 * 3.0],
+                zoom: [1.0 + segment as f32 * 0.001, 1.0, 1.0],
+                ..from
+            };
+            timeline.push(deadsync_noteskin::ModelTweenSegment {
+                start: segment as f32 * 0.05,
+                duration: 0.05,
+                tween: TweenType::Linear,
+                from,
+                to,
+            });
+            from = to;
+        }
+        slot.model_timeline = Arc::from(timeline.into_boxed_slice());
+
+        let mut cache = ModelMeshCache::with_capacity(1);
+        cache.prewarm_slot(&slot);
+        let (_, vertices) = cache
+            .model_geometry(&slot)
+            .expect("benchmark model geometry should prewarm");
+        let glow_vertices = song_lua_static_glow_vertices(&vertices);
+        cache.seal();
+        Self {
+            slot,
+            cache,
+            glow_vertices,
+        }
+    }
+
+    pub fn legacy_geometry_frame(&self) -> u64 {
+        let actor = noteskin_model_actor_from_draw(
+            &self.slot,
+            ModelDrawState::default(),
+            [320.0, 240.0],
+            [64.0, 96.0],
+            [0.0, 0.0, 1.0, 1.0],
+            0.0,
+            [0.5, 0.75, 1.0, 0.8],
+            BlendMode::Alpha,
+            123,
+        )
+        .expect("benchmark model should render");
+        song_lua_textured_actor_checksum(&actor)
+    }
+
+    pub fn prewarmed_geometry_frame(&mut self) -> u64 {
+        let actor = self.cached_actor(ModelDrawState::default());
+        song_lua_textured_actor_checksum(&actor)
+    }
+
+    pub fn legacy_glow_frame(&mut self) -> u64 {
+        let actor = self.cached_actor(ModelDrawState::default());
+        let glow = song_lua_overlay_glow_actor(
+            &actor,
+            [0.2, 0.4, 0.8, 0.75],
+            SongLuaTextGlowMode::Inner,
+            None,
+        )
+        .expect("benchmark glow should render");
+        song_lua_textured_actor_checksum(&glow)
+    }
+
+    pub fn prewarmed_glow_frame(&mut self) -> u64 {
+        let actor = self.cached_actor(ModelDrawState::default());
+        let glow = song_lua_overlay_glow_actor_with_static_vertices(
+            &actor,
+            [0.2, 0.4, 0.8, 0.75],
+            SongLuaTextGlowMode::Inner,
+            None,
+            Some(&self.glow_vertices),
+        )
+        .expect("benchmark glow should render");
+        song_lua_textured_actor_checksum(&glow)
+    }
+
+    pub fn legacy_tween_frame(&self, time: f32) -> u64 {
+        song_lua_model_draw_checksum(self.slot.model_draw_at(time, time * 4.0))
+    }
+
+    pub fn cursor_tween_frame(&mut self, time: f32) -> u64 {
+        self.cache.begin_frame();
+        song_lua_model_draw_checksum(self.cache.draw_at(&self.slot, time, time * 4.0))
+    }
+
+    pub fn storage_bytes(&self) -> usize {
+        self.glow_vertices
+            .len()
+            .saturating_mul(std::mem::size_of::<TexturedMeshVertex>())
+            .saturating_mul(2)
+    }
+
+    pub fn cache_keys(&mut self) -> [TMeshCacheKey; 2] {
+        let actor = self.cached_actor(ModelDrawState::default());
+        let Actor::TexturedMesh {
+            geom_cache_key: base,
+            ..
+        } = actor
+        else {
+            unreachable!("benchmark model should emit a textured mesh")
+        };
+        [base, song_lua_glow_geometry_key(base)]
+    }
+
+    fn cached_actor(&mut self, draw: ModelDrawState) -> Actor {
+        noteskin_model_actor_from_draw_cached(
+            &self.slot,
+            draw,
+            [320.0, 240.0],
+            [64.0, 96.0],
+            [0.0, 0.0, 1.0, 1.0],
+            0.0,
+            [0.5, 0.75, 1.0, 0.8],
+            BlendMode::Alpha,
+            123,
+            &mut self.cache,
+        )
+        .expect("benchmark model should render")
+    }
+}
+
+#[cfg(feature = "bench-support")]
+fn song_lua_model_draw_checksum(draw: ModelDrawState) -> u64 {
+    u64::from(draw.pos[0].to_bits())
+        ^ u64::from(draw.pos[1].to_bits()).rotate_left(11)
+        ^ u64::from(draw.rot[0].to_bits()).rotate_left(23)
+        ^ u64::from(draw.rot[2].to_bits()).rotate_left(37)
+        ^ u64::from(draw.zoom[0].to_bits()).rotate_left(49)
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
 pub struct SongLuaTexturedGlowBenchmark {
     texture: Arc<str>,
     immutable_vertices: Arc<[TexturedMeshVertex]>,
@@ -12886,7 +13184,7 @@ fn append_song_lua_multi_actor_overlay(
     effect_time: f32,
     effect_beat: f32,
     total_elapsed: f32,
-    scratch: Option<&SongLuaProjectedMeshScratch>,
+    scratch: Option<&mut SongLuaProjectedMeshScratch>,
 ) -> Option<bool> {
     if !matches!(
         overlay.kind,
@@ -12922,24 +13220,34 @@ fn append_song_lua_multi_actor_overlay(
     let blend = song_lua_overlay_blend(state.blend);
 
     Some(match &overlay.kind {
-        SongLuaOverlayKind::Model { layers } => append_song_lua_model_actors(
-            out,
-            layers,
-            state,
-            asset_manager,
-            z,
-            x_scale,
-            y_scale,
-            actor_scale,
-            effect_scale,
-            effect_rot,
-            effect_offset,
-            tint,
-            glow,
-            blend,
-            total_elapsed,
-            scratch.and_then(|scratch| scratch.model_glow_vertices.as_deref()),
-        ),
+        SongLuaOverlayKind::Model { layers } => {
+            let (geometry_keys, glow_vertices) =
+                scratch.as_deref().map_or((None, None), |scratch| {
+                    (
+                        scratch.model_geometry_keys.as_deref(),
+                        scratch.model_glow_vertices.as_deref(),
+                    )
+                });
+            append_song_lua_model_actors(
+                out,
+                layers,
+                state,
+                asset_manager,
+                z,
+                x_scale,
+                y_scale,
+                actor_scale,
+                effect_scale,
+                effect_rot,
+                effect_offset,
+                tint,
+                glow,
+                blend,
+                total_elapsed,
+                geometry_keys,
+                glow_vertices,
+            )
+        }
         SongLuaOverlayKind::NoteskinActor { slots } => append_song_lua_noteskin_actors(
             out,
             slots,
@@ -12957,6 +13265,7 @@ fn append_song_lua_multi_actor_overlay(
             blend,
             total_elapsed,
             effect_beat,
+            scratch,
         ),
         _ => false,
     })
@@ -13505,6 +13814,15 @@ fn build_song_lua_overlay_actor_with_scratch(
                 &mut effect_rot,
             );
             let mut out = SongLuaActorList::new();
+            let (geometry_keys, glow_vertices) =
+                projected_mesh_scratch
+                    .as_deref()
+                    .map_or((None, None), |scratch| {
+                        (
+                            scratch.model_geometry_keys.as_deref(),
+                            scratch.model_glow_vertices.as_deref(),
+                        )
+                    });
             append_song_lua_model_actors(
                 &mut out,
                 layers,
@@ -13521,9 +13839,8 @@ fn build_song_lua_overlay_actor_with_scratch(
                 glow,
                 overlay_blend,
                 total_elapsed,
-                projected_mesh_scratch
-                    .as_deref()
-                    .and_then(|scratch| scratch.model_glow_vertices.as_deref()),
+                geometry_keys,
+                glow_vertices,
             )
             .then_some(out)
         }
@@ -13562,6 +13879,7 @@ fn build_song_lua_overlay_actor_with_scratch(
                 overlay_blend,
                 total_elapsed,
                 effect_beat,
+                projected_mesh_scratch.as_deref_mut(),
             )
             .then_some(out)
         }
@@ -14089,6 +14407,7 @@ fn song_lua_overlay_glow_actor_with_static_vertices(
             local_transform,
             texture,
             vertices,
+            geom_cache_key,
             uv_scale,
             uv_offset,
             uv_tex_shift,
@@ -14114,7 +14433,7 @@ fn song_lua_overlay_glow_actor_with_static_vertices(
                     tint: [1.0, 1.0, 1.0, 0.0],
                     glow,
                     vertices: Arc::clone(vertices),
-                    geom_cache_key: INVALID_TMESH_CACHE_KEY,
+                    geom_cache_key: song_lua_glow_geometry_key(*geom_cache_key),
                     uv_scale: *uv_scale,
                     uv_offset: *uv_offset,
                     uv_tex_shift: *uv_tex_shift,
@@ -14933,7 +15252,7 @@ fn push_song_lua_layer_actors(
                     effect_time,
                     effect_beat,
                     total_elapsed,
-                    projected_mesh_scratch.get(idx),
+                    projected_mesh_scratch.get_mut(idx),
                 )
                 .is_none()
                     && let Some(actors) = build_song_lua_overlay_actor_with_scratch(
@@ -20549,14 +20868,15 @@ mod tests {
         assert_eq!(format!("{legacy:?}"), format!("{direct:?}"));
 
         let mut scratches = song_lua_projected_mesh_scratch_for(std::slice::from_ref(&multi_layer));
-        let model_scratch = scratches.pop().expect("model scratch should be prewarmed");
+        let mut model_scratch = scratches.pop().expect("model scratch should be prewarmed");
         let prewarmed = model_scratch
             .model_glow_vertices
             .as_ref()
-            .expect("model glow vertices should be compiled during entry");
+            .expect("model glow vertices should be compiled during entry")
+            .clone();
         assert_eq!(prewarmed.len(), 3);
         let mut warmed = Vec::with_capacity(legacy.len());
-        let append_warmed = |out: &mut Vec<Actor>| {
+        let mut append_warmed = |out: &mut Vec<Actor>| {
             out.clear();
             assert_eq!(
                 append_song_lua_multi_actor_overlay(
@@ -20570,20 +20890,39 @@ mod tests {
                     0.0,
                     0.0,
                     1.0,
-                    Some(&model_scratch),
+                    Some(&mut model_scratch),
                 ),
                 Some(true)
             );
         };
         append_warmed(&mut warmed);
-        assert_eq!(format!("{legacy:?}"), format!("{warmed:?}"));
+        let mut normalized = warmed.clone();
+        for actor in &mut normalized {
+            if let Actor::TexturedMesh { geom_cache_key, .. } = actor {
+                *geom_cache_key = INVALID_TMESH_CACHE_KEY;
+            }
+        }
+        assert_eq!(format!("{legacy:?}"), format!("{normalized:?}"));
         for (layer_index, prewarmed_vertices) in prewarmed.iter().enumerate() {
             let Actor::TexturedMesh {
-                vertices, blend, ..
+                geom_cache_key: base_key,
+                ..
+            } = &warmed[layer_index * 2]
+            else {
+                panic!("expected prewarmed static model base mesh");
+            };
+            let Actor::TexturedMesh {
+                vertices,
+                geom_cache_key: glow_key,
+                blend,
+                ..
             } = &warmed[layer_index * 2 + 1]
             else {
                 panic!("expected prewarmed static model glow mesh");
             };
+            assert_ne!(*base_key, INVALID_TMESH_CACHE_KEY);
+            assert_ne!(*glow_key, INVALID_TMESH_CACHE_KEY);
+            assert_ne!(base_key, glow_key);
             assert_eq!(*blend, BlendMode::Add);
             assert!(Arc::ptr_eq(vertices, prewarmed_vertices));
         }
@@ -20655,6 +20994,7 @@ mod tests {
             BlendMode::Alpha,
             0.0,
             0.0,
+            None,
         ));
         assert_eq!(
             format!("{actor_rotation:?}"),
@@ -20689,6 +21029,92 @@ mod tests {
                 .zip(base_cols.iter())
                 .all(|(left, right)| (left - right).abs() <= 0.000_1)
         );
+
+        let overlay = SongLuaOverlayActor {
+            kind: SongLuaOverlayKind::NoteskinActor {
+                slots: Arc::clone(&slots),
+            },
+            name: None,
+            parent_index: None,
+            initial_state: SongLuaOverlayState::default(),
+            message_commands: Vec::new(),
+        };
+        let state = SongLuaOverlayState {
+            rot_z_deg: 90.0,
+            glow: [0.25, 0.5, 0.75, 0.5],
+            ..SongLuaOverlayState::default()
+        };
+        let legacy = build_song_lua_overlay_actor(
+            &overlay,
+            state,
+            None,
+            &asset_manager,
+            323,
+            screen_width(),
+            screen_height(),
+            0.0,
+            0.0,
+            1.0,
+        )
+        .expect_actors("legacy noteskin model should render");
+        let mut scratches = song_lua_projected_mesh_scratch_for(std::slice::from_ref(&overlay));
+        let scratch = scratches
+            .first_mut()
+            .expect("noteskin model scratch should prewarm");
+        let prewarmed_glow = scratch
+            .noteskin_glow_vertices
+            .as_ref()
+            .expect("noteskin glow geometry should prewarm")
+            .clone();
+        let mut warmed = Vec::with_capacity(legacy.len());
+        assert_eq!(
+            append_song_lua_multi_actor_overlay(
+                &mut warmed,
+                &overlay,
+                state,
+                &asset_manager,
+                323,
+                screen_width(),
+                screen_height(),
+                0.0,
+                0.0,
+                1.0,
+                Some(scratch),
+            ),
+            Some(true)
+        );
+        let mut normalized = warmed.clone();
+        for actor in &mut normalized {
+            if let Actor::TexturedMesh { geom_cache_key, .. } = actor {
+                *geom_cache_key = INVALID_TMESH_CACHE_KEY;
+            }
+        }
+        assert_eq!(format!("{legacy:?}"), format!("{normalized:?}"));
+        for (slot_index, actors) in warmed.chunks_exact(2).enumerate() {
+            let [
+                Actor::TexturedMesh {
+                    geom_cache_key: base_key,
+                    ..
+                },
+                Actor::TexturedMesh {
+                    vertices,
+                    geom_cache_key: glow_key,
+                    blend,
+                    ..
+                },
+            ] = actors
+            else {
+                panic!("expected prewarmed noteskin base/glow pair");
+            };
+            assert_ne!(*base_key, INVALID_TMESH_CACHE_KEY);
+            assert_ne!(*glow_key, INVALID_TMESH_CACHE_KEY);
+            assert_ne!(base_key, glow_key);
+            assert_eq!(*blend, BlendMode::Add);
+            let expected = prewarmed_glow[slot_index]
+                .as_ref()
+                .expect("rendered model slot should have prewarmed glow geometry");
+            assert!(Arc::ptr_eq(vertices, expected));
+        }
     }
 
     #[test]

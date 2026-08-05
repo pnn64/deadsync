@@ -146,7 +146,7 @@ impl ModelMeshCache {
     #[inline(always)]
     pub fn prewarm_slot<S: NoteskinSlot>(&mut self, slot: &S) -> bool {
         if slot.model().is_some() {
-            let _ = self.get_or_insert_slot(slot);
+            let _ = self.model_geometry(slot);
         } else {
             let _ = self.ensure_slot(slot);
         }
@@ -189,8 +189,10 @@ impl ModelMeshCache {
         draw
     }
 
+    /// Return the slot's retained geometry and stable renderer cache key.
+    /// Callers should register known slots before sealing the song cache.
     #[inline(always)]
-    fn get_or_insert_slot<S: NoteskinSlot>(
+    pub fn model_geometry<S: NoteskinSlot>(
         &mut self,
         slot: &S,
     ) -> Option<(TMeshCacheKey, Arc<[TexturedMeshVertex]>)> {
@@ -535,7 +537,7 @@ mod bench_support {
             for note in 0..VISIBLE_NOTES {
                 let slot = &self.slots[note % self.slots.len()];
                 let draw = self.cache.draw_at(slot, time, beat);
-                let (_, geometry) = self.cache.get_or_insert_slot(slot).expect("prewarmed");
+                let (_, geometry) = self.cache.model_geometry(slot).expect("prewarmed");
                 mix_output(&mut output, draw, geometry.len());
             }
             output
@@ -798,7 +800,7 @@ pub fn noteskin_model_actor_from_draw<S: NoteskinSlot>(
 }
 
 #[inline(always)]
-pub(crate) fn noteskin_model_actor_from_draw_cached<S: NoteskinSlot>(
+pub fn noteskin_model_actor_from_draw_cached<S: NoteskinSlot>(
     slot: &S,
     draw: ModelDrawState,
     xy: [f32; 2],
@@ -818,7 +820,7 @@ pub(crate) fn noteskin_model_actor_from_draw_cached<S: NoteskinSlot>(
     let tint = model_tint(color, draw);
     let affine = model_affine_transform(model, size, rotation_deg, draw);
     let local_transform = model_draw_transform(model.size(), affine);
-    let (geom_cache_key, vertices) = cache.get_or_insert_slot(slot)?;
+    let (geom_cache_key, vertices) = cache.model_geometry(slot)?;
     let (uv_scale, uv_offset, uv_tex_shift) = slot.model_uv_params(uv_rect);
     Some(actor_from_vertices(
         slot,

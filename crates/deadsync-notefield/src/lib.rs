@@ -98,7 +98,7 @@ pub use notes::{
 };
 pub use noteskin_model::{
     ModelMeshCache, ModelMeshCacheStats, NoteskinFrameCacheStats, noteskin_model_actor,
-    noteskin_model_actor_from_draw,
+    noteskin_model_actor_from_draw, noteskin_model_actor_from_draw_cached,
     noteskin_model_actor_from_draw_depth_sorted_affine_cached_geometry,
 };
 #[cfg(feature = "bench-support")]
@@ -153,7 +153,6 @@ pub(crate) use notes::{
     lane_hold_window_bounds_by_note_row_from_cursor, lane_window_bounds_by_note_row_from_cursor,
     mine_hides_after_resolution, scroll_travel,
 };
-pub(crate) use noteskin_model::noteskin_model_actor_from_draw_cached;
 pub(crate) use placement::{
     FieldLayoutRequest, HudLayoutOffsets, HudLayoutParams, average_error_bar_mini_scale,
     combo_actor_zoom, effective_mini_value, field_layout, fill_lane_col_offsets,
