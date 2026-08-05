@@ -975,6 +975,24 @@ pub fn benchmark_live_timing(recent_ms: f32, all_ms: f32) -> TextContent {
     live_timing_pair_text(recent_ms, all_ms)
 }
 
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn benchmark_judgment_rows_legacy(labels: &[Arc<str>; 6]) -> usize {
+    let labels = labels.iter().cloned().collect::<Vec<_>>();
+    labels.iter().fold(0usize, |sum, label| {
+        sum.wrapping_mul(31).wrapping_add(label.len())
+    })
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn benchmark_judgment_rows(labels: &[Arc<str>; 6]) -> usize {
+    labels.iter().fold(0usize, |sum, label| {
+        let label = Arc::clone(label);
+        sum.wrapping_mul(31).wrapping_add(label.len())
+    })
+}
+
 #[cfg(test)]
 mod dynamic_hud_text_tests {
     use super::{game_time_text, live_timing_pair_text, padded_num_text, padded_runs_for_window};
@@ -1945,8 +1963,8 @@ pub fn push_double_step_stats(
                         state.display_judgment_count(0, JudgeGrade::WayOff),
                         state.display_judgment_count(0, JudgeGrade::Miss),
                     ];
-                    let labels: Vec<Arc<str>> = (0..6).map(judgment_label).collect();
-                    for row_i in 0..labels.len() {
+                    for (row_i, count) in counts.into_iter().enumerate() {
+                        let label = judgment_label(row_i);
                         let disabled = standard_row_disabled(disabled_windows, row_i);
                         let local_y = y_base + (row_i as f32 * row_height);
                         let y_numbers = origin_y + (local_y * base_zoom);
@@ -1961,7 +1979,6 @@ pub fn push_double_step_stats(
                         } else {
                             color::JUDGMENT_DIM_RGBA[row_i]
                         };
-                        let count = counts[row_i];
                         let (dim_text, bright_text) =
                             padded_runs_for_window(count, digits, disabled);
                         let dim_len = dim_text.len() as f32;
@@ -1988,7 +2005,7 @@ pub fn push_double_step_stats(
                         }
 
                         actors.push(act!(text:
-                            font("miso"): settext(labels[row_i].clone()):
+                            font("miso"): settext(label):
                             align(1.0, 0.5): horizalign(right):
                             xy(label_x, y_label):
                             zoom(label_zoom):

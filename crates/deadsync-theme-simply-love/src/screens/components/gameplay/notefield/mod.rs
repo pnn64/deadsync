@@ -49,12 +49,31 @@ pub fn benchmark_combo_text(value: u32) -> TextContent {
 pub fn prepare_combo_text_benchmark() {
     text::prepare_combo_text_benchmark();
 }
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn benchmark_offset_ms_legacy(value: f32) -> std::sync::Arc<str> {
+    text::benchmark_offset_ms_legacy(value)
+}
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn benchmark_offset_ms(value: f32) -> TextContent {
+    text::offset_ms_text(value)
+}
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn benchmark_error_bar_label_legacy(early: bool, scaled: bool) -> std::sync::Arc<str> {
+    text::benchmark_error_bar_label_legacy(early, scaled)
+}
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub const fn benchmark_error_bar_label(early: bool, scaled: bool) -> TextContent {
+    text::error_bar_text_label(early, scaled)
+}
 use text::{
-    cached_error_bar_text_label, cached_int_i32, cached_offset_ms,
-    cached_zmod_measure_counter_text, effective_accel_effects_for_player,
+    cached_int_i32, cached_zmod_measure_counter_text, effective_accel_effects_for_player,
     effective_mini_percent_for_player, effective_perspective_effects_for_player,
     effective_scroll_effects_for_player, effective_spacing_multiplier_for_player,
-    effective_visual_effects_for_player, zmod_run_timer_fmt,
+    effective_visual_effects_for_player, error_bar_text_label, offset_ms_text, zmod_run_timer_fmt,
 };
 use zmod::{
     zmod_combo_font_name, zmod_indicator_mode, zmod_mini_indicator_text, zmod_mini_indicator_zoom,
@@ -772,8 +791,8 @@ pub(crate) fn compose_frame(
         long_average_tick: p.error_bar_long_avg_tick,
         long_average_active: p.error_bar_long_avg_visible,
         text: p.error_bar_text,
-        offset_text: cached_offset_ms,
-        text_label: cached_error_bar_text_label,
+        offset_text: offset_ms_text,
+        text_label: error_bar_text_label,
     };
 
     let counter_frame = options.measure_counter.map(|_| CounterHudFrame {

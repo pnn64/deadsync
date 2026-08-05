@@ -48,8 +48,8 @@ pub struct ErrorBarHudFrame<'a> {
     pub long_average_tick: Option<ErrorBarTick>,
     pub long_average_active: bool,
     pub text: Option<ErrorBarText>,
-    pub offset_text: fn(f32) -> Arc<str>,
-    pub text_label: fn(bool, bool) -> Arc<str>,
+    pub offset_text: fn(f32) -> TextContent,
+    pub text_label: fn(bool, bool) -> TextContent,
 }
 
 /// Prepared measure-counter inputs for one HUD frame.

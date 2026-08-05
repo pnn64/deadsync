@@ -1,11 +1,14 @@
 use deadlib_present::actors::TextContent;
 use deadsync_theme_simply_love::screens::components::gameplay::gameplay_stats::{
     benchmark_game_time, benchmark_game_time_cached, benchmark_game_time_legacy,
-    benchmark_live_timing, benchmark_live_timing_cached, benchmark_live_timing_legacy,
-    benchmark_padded_runs, benchmark_padded_runs_cached, benchmark_padded_runs_legacy,
+    benchmark_judgment_rows, benchmark_judgment_rows_legacy, benchmark_live_timing,
+    benchmark_live_timing_cached, benchmark_live_timing_legacy, benchmark_padded_runs,
+    benchmark_padded_runs_cached, benchmark_padded_runs_legacy,
 };
 use deadsync_theme_simply_love::screens::components::gameplay::notefield::{
-    benchmark_combo_text, benchmark_combo_text_legacy, prepare_combo_text_benchmark,
+    benchmark_combo_text, benchmark_combo_text_legacy, benchmark_error_bar_label,
+    benchmark_error_bar_label_legacy, benchmark_offset_ms, benchmark_offset_ms_legacy,
+    prepare_combo_text_benchmark,
 };
 use deadsync_theme_simply_love::screens::gameplay::{
     GameplayHudTextBenchmarkCache, GameplayHudTextBenchmarkSnapshot,
@@ -357,6 +360,54 @@ fn main() {
     println!("\nactive gameplay exit-prompt text benchmark");
     print_result("owned prompt", &owned_prompt);
     print_result("shared prompt", &shared_prompt);
+
+    let offset_legacy = measure_dynamic_text(|index| {
+        let centi_ms = (index % 36_001) as i32 - 18_000;
+        text_checksum_str(benchmark_offset_ms_legacy(centi_ms as f32 * 0.01).as_ref())
+    });
+    let offset_inline = measure_dynamic_text(|index| {
+        let centi_ms = (index % 36_001) as i32 - 18_000;
+        text_checksum(&benchmark_offset_ms(centi_ms as f32 * 0.01))
+    });
+    assert_eq!(offset_legacy.checksum, offset_inline.checksum);
+
+    println!("\nsaturated gameplay offset-ms text benchmark");
+    print_result_for("legacy cache", &offset_legacy, DYNAMIC_TEXT_OPS);
+    print_result_for("inline value", &offset_inline, DYNAMIC_TEXT_OPS);
+
+    let label_legacy = measure_dynamic_text(|index| {
+        let early = index & 1 == 0;
+        let scaled = index & 2 == 0;
+        text_checksum_str(benchmark_error_bar_label_legacy(early, scaled).as_ref())
+    });
+    let label_static = measure_dynamic_text(|index| {
+        let early = index & 1 == 0;
+        let scaled = index & 2 == 0;
+        text_checksum(&benchmark_error_bar_label(early, scaled))
+    });
+    assert_eq!(label_legacy.checksum, label_static.checksum);
+
+    println!("\nwarmed gameplay error-label benchmark");
+    print_result_for("legacy cache", &label_legacy, DYNAMIC_TEXT_OPS);
+    print_result_for("static value", &label_static, DYNAMIC_TEXT_OPS);
+
+    let judgment_labels: [Arc<str>; 6] = [
+        Arc::from("Fantastic"),
+        Arc::from("Excellent"),
+        Arc::from("Great"),
+        Arc::from("Decent"),
+        Arc::from("Way Off"),
+        Arc::from("Miss"),
+    ];
+    let rows_legacy =
+        measure_dynamic_text(|_| benchmark_judgment_rows_legacy(black_box(&judgment_labels)));
+    let rows_direct =
+        measure_dynamic_text(|_| benchmark_judgment_rows(black_box(&judgment_labels)));
+    assert_eq!(rows_legacy.checksum, rows_direct.checksum);
+
+    println!("\nstandard step-stats judgment-row benchmark");
+    print_result_for("heap rows", &rows_legacy, DYNAMIC_TEXT_OPS);
+    print_result_for("direct rows", &rows_direct, DYNAMIC_TEXT_OPS);
 
     let padded_legacy = measure_dynamic_text(|index| {
         let count = 8_193 + (index % 100_000) as u32;

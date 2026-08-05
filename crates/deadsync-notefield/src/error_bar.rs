@@ -1,10 +1,9 @@
 use crate::{average_error_bar_mini_scale, smoothstep01};
-use deadlib_present::actors::Actor;
+use deadlib_present::actors::{Actor, TextContent};
 use deadlib_present::dsl::{SpriteBuilder, TextBuilder};
 use deadsync_gameplay::{ErrorBarText, ErrorBarTick, OffsetIndicatorText};
 use deadsync_rules::judgment::TimingWindow;
 use deadsync_theme::{ErrorBarLayers, ErrorBarPalette, ErrorBarStyle};
-use std::sync::Arc;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct ErrorBarModes {
@@ -49,13 +48,13 @@ pub(crate) struct ErrorBarComposeRequest<'a> {
     pub offset_indicator: Option<OffsetIndicatorText>,
     pub offset_indicator_visible: bool,
     pub offset_indicator_position: [f32; 2],
-    pub offset_text: fn(f32) -> Arc<str>,
+    pub offset_text: fn(f32) -> TextContent,
     pub long_average_tick: Option<ErrorBarTick>,
     pub long_average_visible: bool,
     pub long_average_intensity: f32,
     pub text: Option<ErrorBarText>,
     pub text_visible: bool,
-    pub text_label: fn(bool, bool) -> Arc<str>,
+    pub text_label: fn(bool, bool) -> TextContent,
 }
 
 /// Compose the complete canonical error-bar actor sequence: offset indicator,
@@ -371,7 +370,7 @@ fn append_offset_indicator(actors: &mut Vec<Actor>, request: &ErrorBarComposeReq
     let color = error_bar_color_for_window(style.palette, indicator.window, request.show_fa_plus);
     let mut text = TextBuilder::new();
     text.font(style.offset_indicator_font);
-    text.settext((request.offset_text)(indicator.offset_ms).into());
+    text.settext((request.offset_text)(indicator.offset_ms));
     text.align(0.5, 0.5);
     text.xy(request.offset_indicator_position[0], y);
     text.zoom(style.offset_indicator_zoom);
@@ -473,7 +472,7 @@ fn append_text_feedback(actors: &mut Vec<Actor>, request: &ErrorBarComposeReques
     };
     let mut text = TextBuilder::new();
     text.font(style.text_font);
-    text.settext((request.text_label)(feedback.early, feedback.scaled).into());
+    text.settext((request.text_label)(feedback.early, feedback.scaled));
     text.align(0.5, 0.5);
     text.xy(request.position[0] + x, request.position[1]);
     text.zoom(zoom);
@@ -793,12 +792,13 @@ mod tests {
         }
     }
 
-    fn offset_text(offset_ms: f32) -> Arc<str> {
-        Arc::from(format!("{offset_ms:.1}"))
+    fn offset_text(offset_ms: f32) -> TextContent {
+        TextContent::inline_format(format_args!("{offset_ms:.1}"))
+            .unwrap_or_else(|| TextContent::Owned(format!("{offset_ms:.1}")))
     }
 
-    fn text_label(early: bool, scaled: bool) -> Arc<str> {
-        Arc::from(match (early, scaled) {
+    fn text_label(early: bool, scaled: bool) -> TextContent {
+        TextContent::Static(match (early, scaled) {
             (true, true) => "Fast",
             (true, false) => "Early",
             (false, true) => "Slow",

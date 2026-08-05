@@ -1,5 +1,4 @@
 use crate::screens::gameplay::GameplayCoreState as State;
-#[cfg(any(test, feature = "bench-support"))]
 use deadlib_present::actors::TextContent;
 use deadlib_present::cache::{TextCache, cached_text};
 use deadsync_core::input::MAX_PLAYERS;
@@ -54,18 +53,19 @@ thread_local! {
     static RATIO_CACHE_I32: RefCell<FastTextCache<(i32, i32)>> = RefCell::new(
         HashMap::with_capacity_and_hasher(1024, BuildHasherDefault::default()),
     );
-    static OFFSET_MS_CACHE_F32: RefCell<FastTextCache<i32>> = RefCell::new(HashMap::with_capacity_and_hasher(
-        512,
-        BuildHasherDefault::default(),
-    ));
-    static ERROR_BAR_TEXT_LABEL_CACHE: RefCell<FastTextCache<(bool, i32)>> = RefCell::new(
-        HashMap::with_capacity_and_hasher(256, BuildHasherDefault::default()),
-    );
     static RUN_TIMER_CACHE: RefCell<FastTextCache<(i32, i32, bool)>> = RefCell::new(
         HashMap::with_capacity_and_hasher(1024, BuildHasherDefault::default()),
     );
     static GAMEPLAY_MODS_CACHE: RefCell<FastTextCache<GameplayModsTextKey>> = RefCell::new(
         HashMap::with_capacity_and_hasher(256, BuildHasherDefault::default()),
+    );
+    #[cfg(feature = "bench-support")]
+    static BENCH_OFFSET_MS_CACHE: RefCell<FastTextCache<i32>> = RefCell::new(
+        HashMap::with_capacity_and_hasher(512, BuildHasherDefault::default()),
+    );
+    #[cfg(feature = "bench-support")]
+    static BENCH_ERROR_BAR_LABEL_CACHE: RefCell<FastTextCache<(bool, bool)>> = RefCell::new(
+        HashMap::with_capacity_and_hasher(4, BuildHasherDefault::default()),
     );
 }
 
@@ -185,27 +185,37 @@ pub(super) fn cached_ratio_i32(curr: i32, total: i32) -> Arc<str> {
 }
 
 #[inline(always)]
-pub(super) fn cached_offset_ms(value: f32) -> Arc<str> {
+pub(super) fn offset_ms_text(value: f32) -> TextContent {
     let key = quantize_centi_i32(f64::from(value));
-    cached_text(&OFFSET_MS_CACHE_F32, key, TEXT_CACHE_LIMIT, || {
+    TextContent::inline_format(format_args!("{:.2}ms", key as f64 / 100.0))
+        .expect("an i32 centisecond value and ms suffix fit inline")
+}
+
+#[inline(always)]
+pub(super) const fn error_bar_text_label(early: bool, scaled: bool) -> TextContent {
+    TextContent::Static(match (early, scaled) {
+        (true, true) => "FAST",
+        (true, false) => "EARLY",
+        (false, true) => "SLOW",
+        (false, false) => "LATE",
+    })
+}
+
+#[cfg(feature = "bench-support")]
+pub(super) fn benchmark_offset_ms_legacy(value: f32) -> Arc<str> {
+    let key = quantize_centi_i32(f64::from(value));
+    cached_text(&BENCH_OFFSET_MS_CACHE, key, TEXT_CACHE_LIMIT, || {
         format!("{:.2}ms", key as f64 / 100.0)
     })
 }
 
-#[inline(always)]
-pub(super) fn cached_error_bar_text_label(early: bool, scaled: bool) -> Arc<str> {
-    let rounded = if scaled { -2 } else { -1 };
+#[cfg(feature = "bench-support")]
+pub(super) fn benchmark_error_bar_label_legacy(early: bool, scaled: bool) -> Arc<str> {
     cached_text(
-        &ERROR_BAR_TEXT_LABEL_CACHE,
-        (early, rounded),
+        &BENCH_ERROR_BAR_LABEL_CACHE,
+        (early, scaled),
         TEXT_CACHE_LIMIT,
-        || {
-            if scaled {
-                if early { "FAST" } else { "SLOW" }.to_string()
-            } else {
-                if early { "EARLY" } else { "LATE" }.to_string()
-            }
-        },
+        || error_bar_text_label(early, scaled).as_str().to_string(),
     )
 }
 
@@ -578,6 +588,39 @@ mod tests {
     fn inline_combo_text_preserves_all_decimal_boundaries() {
         for value in [0, 9, 10, 99, 100, u16::MAX as u32, u32::MAX] {
             assert_eq!(TextContent::inline_u32(value).as_str(), value.to_string());
+        }
+    }
+
+    #[test]
+    fn inline_offset_text_preserves_quantized_display() {
+        for (value, expected) in [
+            (f32::NEG_INFINITY, "0.00ms"),
+            (f32::MIN, "-21474836.48ms"),
+            (-180.005, "-180.01ms"),
+            (-12.345, "-12.35ms"),
+            (0.0, "0.00ms"),
+            (12.345, "12.35ms"),
+            (180.005, "180.01ms"),
+            (f32::MAX, "21474836.47ms"),
+            (f32::INFINITY, "0.00ms"),
+        ] {
+            let text = offset_ms_text(value);
+            assert!(matches!(text, TextContent::Inline(_)));
+            assert_eq!(text.as_str(), expected);
+        }
+    }
+
+    #[test]
+    fn error_bar_labels_match_fast_slow_modes() {
+        for (early, scaled, expected) in [
+            (true, true, "FAST"),
+            (true, false, "EARLY"),
+            (false, true, "SLOW"),
+            (false, false, "LATE"),
+        ] {
+            let text = error_bar_text_label(early, scaled);
+            assert!(matches!(text, TextContent::Static(_)));
+            assert_eq!(text.as_str(), expected);
         }
     }
 }
