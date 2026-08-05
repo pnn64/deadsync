@@ -384,6 +384,7 @@ pub enum Actor {
         align: [f32; 2],
         offset: [f32; 2],
         size: [SizeSpec; 2],
+        tint: [f32; 4],
         vertices: Arc<[MeshVertex]>,
         visible: bool,
         blend: BlendMode,
@@ -664,18 +665,7 @@ impl Actor {
                 color[3] *= alpha;
                 shadow_color[3] *= alpha;
             }
-            Self::Mesh { vertices, .. } => {
-                let mut out = Vec::with_capacity(vertices.len());
-                for vertex in vertices.iter() {
-                    let mut color = vertex.color;
-                    color[3] *= alpha;
-                    out.push(MeshVertex {
-                        pos: vertex.pos,
-                        color,
-                    });
-                }
-                *vertices = Arc::from(out);
-            }
+            Self::Mesh { tint, .. } => tint[3] *= alpha,
             Self::ReusableMesh { tint, .. } => tint[3] *= alpha,
             Self::TexturedMesh { tint, glow, .. }
             | Self::ReusableTexturedMesh { tint, glow, .. } => {
@@ -1295,7 +1285,7 @@ mod tests {
     }
 
     #[test]
-    fn mul_alpha_rebuilds_mesh_vertices() {
+    fn mul_alpha_shares_mesh_vertices_and_modulates_tint() {
         let original: Arc<[MeshVertex]> = Arc::from(vec![MeshVertex {
             pos: [4.0, 8.0],
             color: [1.0, 1.0, 1.0, 0.8],
@@ -1304,6 +1294,7 @@ mod tests {
             align: [0.0, 0.0],
             offset: [0.0, 0.0],
             size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
+            tint: [1.0, 1.0, 1.0, 0.8],
             vertices: Arc::clone(&original),
             visible: true,
             blend: BlendMode::Alpha,
@@ -1314,11 +1305,11 @@ mod tests {
 
         approx_eq(original[0].color[3], 0.8);
 
-        let Actor::Mesh { vertices, .. } = actor else {
+        let Actor::Mesh { tint, vertices, .. } = actor else {
             panic!("expected mesh actor");
         };
-        assert!(!Arc::ptr_eq(&vertices, &original));
-        approx_eq(vertices[0].color[3], 0.2);
+        assert!(Arc::ptr_eq(&vertices, &original));
+        approx_eq(tint[3], 0.2);
     }
 
     #[test]

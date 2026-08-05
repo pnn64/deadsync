@@ -1,9 +1,9 @@
 use deadsync_theme_simply_love::screens::gameplay::{
-    SongLuaActorBuildBenchmark, SongLuaEaseBenchmark, SongLuaGraphDisplayBenchmark,
-    SongLuaMessageStateBenchmark, SongLuaMultiActorEmitBenchmark, SongLuaOrderBenchmark,
-    SongLuaProjectedMeshBenchmark, SongLuaProxyRequestBenchmark, SongLuaTextAttributeBenchmark,
-    SongLuaTexturedGlowBenchmark, SongLuaTopologyBenchmark, SongLuaUppercaseTextBenchmark,
-    SongLuaWhiteTextureKeyBenchmark,
+    SongLuaActorBuildBenchmark, SongLuaCaptureTraversalBenchmark, SongLuaEaseBenchmark,
+    SongLuaGraphDisplayBenchmark, SongLuaMessageStateBenchmark, SongLuaMultiActorEmitBenchmark,
+    SongLuaOrderBenchmark, SongLuaProjectedMeshBenchmark, SongLuaProxyRequestBenchmark,
+    SongLuaTextAttributeBenchmark, SongLuaTexturedGlowBenchmark, SongLuaTopologyBenchmark,
+    SongLuaUppercaseTextBenchmark, SongLuaWhiteTextureKeyBenchmark,
 };
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::hint::black_box;
@@ -196,6 +196,7 @@ fn main() {
     const BLOCK_FRAMES: usize = 50_000;
     const EASE_FRAMES: usize = 100_000;
     const PROXY_FRAMES: usize = 20_000;
+    const CAPTURE_TRAVERSAL_FRAMES: usize = 20_000;
     const AFT_TARGET_FRAMES: usize = 2_000;
     const RGB_AFT_FRAMES: usize = 2_000;
     const ANCESTRY_FRAMES: usize = 20_000;
@@ -252,13 +253,35 @@ fn main() {
         ease_benchmark.bounded_frame(black_box(ease_now)).to_bits() as u64
     });
 
-    let proxy_benchmark = SongLuaProxyRequestBenchmark::new(8, 16, 128);
+    let mut proxy_benchmark = SongLuaProxyRequestBenchmark::new(8, 16, 128);
     assert_eq!(
         proxy_benchmark.legacy_frame(),
         proxy_benchmark.indexed_frame()
     );
     let legacy_proxy_result = measure(PROXY_FRAMES, || proxy_benchmark.legacy_frame());
     let indexed_proxy_result = measure(PROXY_FRAMES, || proxy_benchmark.indexed_frame());
+
+    let mut capture_traversal = SongLuaCaptureTraversalBenchmark::new(16, 32);
+    assert_eq!(
+        capture_traversal.legacy_requests(),
+        capture_traversal.deduped_requests()
+    );
+    assert_eq!(
+        capture_traversal.legacy_replacements(),
+        capture_traversal.fused_replacements()
+    );
+    let legacy_capture_request_result = measure(CAPTURE_TRAVERSAL_FRAMES, || {
+        capture_traversal.legacy_requests()
+    });
+    let deduped_capture_request_result = measure(CAPTURE_TRAVERSAL_FRAMES, || {
+        capture_traversal.deduped_requests()
+    });
+    let legacy_replacement_result = measure(CAPTURE_TRAVERSAL_FRAMES, || {
+        capture_traversal.legacy_replacements()
+    });
+    let fused_replacement_result = measure(CAPTURE_TRAVERSAL_FRAMES, || {
+        capture_traversal.fused_replacements()
+    });
 
     let topology_benchmark =
         SongLuaTopologyBenchmark::new(TOPOLOGY_GROUPS, TOPOLOGY_CHAIN_DEPTH, TOPOLOGY_REFERENCES);
@@ -366,6 +389,10 @@ fn main() {
         actor_build.legacy_mesh_frame(),
         actor_build.reused_mesh_frame()
     );
+    assert_eq!(
+        actor_build.legacy_captured_mesh_frame(),
+        actor_build.shared_captured_mesh_frame()
+    );
     let legacy_proxy_build_result =
         measure(ACTOR_BUILD_FRAMES, || actor_build.legacy_proxy_frame());
     let compact_proxy_build_result =
@@ -392,6 +419,12 @@ fn main() {
     let inline_group_result = measure(ACTOR_BUILD_FRAMES, || actor_build.inline_group_frame());
     let legacy_actor_mesh_result = measure(ACTOR_BUILD_FRAMES, || actor_build.legacy_mesh_frame());
     let reused_actor_mesh_result = measure(ACTOR_BUILD_FRAMES, || actor_build.reused_mesh_frame());
+    let legacy_captured_mesh_result = measure(ACTOR_BUILD_FRAMES, || {
+        actor_build.legacy_captured_mesh_frame()
+    });
+    let shared_captured_mesh_result = measure(ACTOR_BUILD_FRAMES, || {
+        actor_build.shared_captured_mesh_frame()
+    });
 
     let mut multi_actor = SongLuaMultiActorEmitBenchmark::new(8);
     assert_eq!(multi_actor.legacy_frame(), multi_actor.direct_frame());
@@ -497,6 +530,24 @@ fn main() {
     assert_eq!(legacy_ease_result.checksum, bounded_ease_result.checksum);
     assert_eq!(legacy_proxy_result.checksum, indexed_proxy_result.checksum);
     assert_eq!(
+        legacy_capture_request_result.checksum,
+        deduped_capture_request_result.checksum
+    );
+    assert_eq!(
+        legacy_replacement_result.checksum,
+        fused_replacement_result.checksum
+    );
+    assert_alloc_removed(
+        "nested capture request traversal",
+        &legacy_capture_request_result,
+        &deduped_capture_request_result,
+    );
+    assert_alloc_removed(
+        "player replacement traversal",
+        &legacy_replacement_result,
+        &fused_replacement_result,
+    );
+    assert_eq!(
         legacy_aft_target_result.checksum,
         indexed_aft_target_result.checksum
     );
@@ -555,6 +606,15 @@ fn main() {
         reused_actor_mesh_result.checksum
     );
     assert_eq!(
+        legacy_captured_mesh_result.checksum,
+        shared_captured_mesh_result.checksum
+    );
+    assert_alloc_removed(
+        "captured immutable mesh tint",
+        &legacy_captured_mesh_result,
+        &shared_captured_mesh_result,
+    );
+    assert_eq!(
         legacy_multi_actor_result.checksum,
         direct_multi_actor_result.checksum
     );
@@ -609,6 +669,28 @@ fn main() {
     println!("proxy requests (8 captures, 16 children, 128 references)");
     print_result("scan topology", PROXY_FRAMES, &legacy_proxy_result);
     print_result("topology index", PROXY_FRAMES, &indexed_proxy_result);
+    println!("nested capture requests (depth 16, 32 duplicate references)");
+    print_result(
+        "repeat traversal",
+        CAPTURE_TRAVERSAL_FRAMES,
+        &legacy_capture_request_result,
+    );
+    print_result(
+        "generation marks",
+        CAPTURE_TRAVERSAL_FRAMES,
+        &deduped_capture_request_result,
+    );
+    println!("player replacement detection (depth 16, 32 references)");
+    print_result(
+        "walk per player/ref",
+        CAPTURE_TRAVERSAL_FRAMES,
+        &legacy_replacement_result,
+    );
+    print_result(
+        "fused capture walk",
+        CAPTURE_TRAVERSAL_FRAMES,
+        &fused_replacement_result,
+    );
     println!(
         "AFT target lookup ({TOPOLOGY_REFERENCES} references, {} overlays)",
         TOPOLOGY_GROUPS * TOPOLOGY_CHAIN_DEPTH
@@ -732,6 +814,17 @@ fn main() {
     println!(
         "ActorMultiVertex storage: {} bytes",
         actor_build.mesh_storage_bytes(),
+    );
+    println!("captured immutable Mesh tint (96 vertices)");
+    print_result(
+        "copy/recolor Arc",
+        ACTOR_BUILD_FRAMES,
+        &legacy_captured_mesh_result,
+    );
+    print_result(
+        "shared Arc + tint",
+        ACTOR_BUILD_FRAMES,
+        &shared_captured_mesh_result,
     );
     println!("multi-layer Model/Noteskin output (8 actors)");
     print_result(

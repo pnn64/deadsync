@@ -203,6 +203,7 @@ pub fn song_lua_player_y_fold_actor(actor: Actor, pivot_x: f32, rotation_y_deg: 
             align,
             mut offset,
             size,
+            tint,
             vertices,
             visible,
             blend,
@@ -213,6 +214,7 @@ pub fn song_lua_player_y_fold_actor(actor: Actor, pivot_x: f32, rotation_y_deg: 
                 align,
                 offset,
                 size,
+                tint,
                 vertices,
                 visible,
                 blend,
@@ -724,6 +726,7 @@ mod tests {
             align: [0.25, 0.75],
             offset: [140.0, 17.0],
             size: [SizeSpec::Px(31.0), SizeSpec::Fill],
+            tint: [0.9, 0.8, 0.7, 0.6],
             vertices: Arc::clone(&mesh_vertices),
             visible: false,
             blend: BlendMode::Add,
@@ -733,6 +736,7 @@ mod tests {
             align,
             offset,
             size,
+            tint,
             vertices,
             visible,
             blend,
@@ -746,6 +750,7 @@ mod tests {
         assert_eq!(offset[1], 17.0);
         assert!(matches!(size[0], SizeSpec::Px(31.0)));
         assert!(matches!(size[1], SizeSpec::Fill));
+        assert_eq!(tint, [0.9, 0.8, 0.7, 0.6]);
         assert!(Arc::ptr_eq(&vertices, &mesh_vertices));
         assert!(!visible);
         assert_eq!(blend, BlendMode::Add);

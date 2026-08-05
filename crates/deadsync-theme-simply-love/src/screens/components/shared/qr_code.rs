@@ -381,6 +381,7 @@ pub fn build(params: QrCodeParams<'_>) -> Vec<Actor> {
                 align: [0.5, 0.5],
                 offset: [0.0, 0.0],
                 size: [SizeSpec::Px(params.size), SizeSpec::Px(params.size)],
+                tint: [1.0; 4],
                 vertices: data.vertices,
                 visible: true,
                 blend: BlendMode::Alpha,

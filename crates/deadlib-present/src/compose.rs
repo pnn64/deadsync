@@ -4412,6 +4412,7 @@ fn build_actor_recursive<'a, T: TextureContext + ?Sized>(
             align,
             offset,
             size,
+            tint,
             vertices,
             visible,
             blend,
@@ -4437,7 +4438,7 @@ fn build_actor_recursive<'a, T: TextureContext + ?Sized>(
                 camera,
                 MeshPayload {
                     transform,
-                    tint: style.tint,
+                    tint: mul_rgba(style.tint, *tint),
                     vertices: MeshVertices::Shared(Arc::clone(vertices)),
                 },
             );
@@ -7631,6 +7632,7 @@ mod tests {
             align: [0.0, 0.0],
             offset: [0.0, 0.0],
             size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
+            tint: [1.0; 4],
             vertices: Arc::from(vec![MeshVertex::default(); 3]),
             visible: true,
             blend: BlendMode::Alpha,
@@ -7770,6 +7772,7 @@ mod tests {
             align: [0.0, 0.0],
             offset: [3.0, 4.0],
             size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
+            tint: [1.0; 4],
             vertices,
             visible: true,
             blend: BlendMode::Alpha,
@@ -9768,7 +9771,7 @@ mod tests {
     }
 
     #[test]
-    fn shared_frame_tint_modulates_mesh() {
+    fn mesh_and_shared_frame_tints_modulate_shared_vertices() {
         let metrics = Metrics {
             left: 0.0,
             right: 100.0,
@@ -9779,6 +9782,7 @@ mod tests {
             align: [0.0, 0.0],
             offset: [0.0, 0.0],
             size: [SizeSpec::Px(1.0), SizeSpec::Px(1.0)],
+            tint: [0.5, 0.5, 0.5, 0.5],
             vertices: Arc::from(vec![MeshVertex {
                 pos: [0.0, 0.0],
                 color: [0.8, 0.6, 0.4, 0.5],
@@ -9804,7 +9808,7 @@ mod tests {
         assert_eq!(run.vertex_count, 1);
         assert_eq!(
             render.mesh_vertices[run.vertex_start as usize].color,
-            [0.4, 0.15, 0.040000003, 0.25]
+            [0.2, 0.075, 0.020000001, 0.125]
         );
     }
 

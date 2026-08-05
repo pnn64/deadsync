@@ -970,6 +970,54 @@ struct SongLuaProxyRequestIndex {
     proxy_indices: Vec<usize>,
 }
 
+/// Song-lifetime visitation marks for nested AFT/proxy traversals.
+///
+/// Owner/thread model: gameplay `State`, used only by the frame-building
+/// thread. Lifetime: one song. Capacity is the largest compiled overlay layer
+/// and is populated at screen entry. Each traversal advances a generation, so
+/// gameplay frames neither clear the full array nor allocate a recursion stack.
+/// A wrapped generation performs one bounded fill. Duplicate references and
+/// cycles are skipped after their first visit; there is no eviction, pruning,
+/// or destruction before the gameplay transition. Worst-case frame work is one
+/// visit per compiled capture rather than one visit per reference.
+#[derive(Default)]
+struct SongLuaCaptureVisitScratch {
+    marks: Vec<u32>,
+    generation: u32,
+}
+
+impl SongLuaCaptureVisitScratch {
+    fn with_capacity(capacity: usize) -> Self {
+        Self {
+            marks: vec![0; capacity],
+            generation: 0,
+        }
+    }
+
+    fn begin(&mut self, required: usize) {
+        debug_assert!(
+            required <= self.marks.len(),
+            "song-lifetime capture marks must cover every compiled overlay"
+        );
+        self.generation = self.generation.wrapping_add(1);
+        if self.generation == 0 {
+            self.marks.fill(0);
+            self.generation = 1;
+        }
+    }
+
+    fn visit(&mut self, index: usize) -> bool {
+        let Some(mark) = self.marks.get_mut(index) else {
+            return false;
+        };
+        if *mark == self.generation {
+            return false;
+        }
+        *mark = self.generation;
+        true
+    }
+}
+
 impl SongLuaProxyRequestIndex {
     fn new(overlays: &[SongLuaOverlayActor]) -> Self {
         let topology = SongLuaOverlayTopologyIndex::new(overlays);
@@ -1251,6 +1299,7 @@ pub struct State {
     song_lua_capture_state_scratch: Vec<SongLuaOverlayState>,
     song_lua_order_scratch: Vec<usize>,
     song_lua_capture_order_scratch: Vec<usize>,
+    song_lua_capture_visit_scratch: SongLuaCaptureVisitScratch,
     song_lua_proxy_actor_scratch: Option<SongLuaProxyActorScratch>,
     actor_resources: ActorResourceArena,
     notefield_actor_scratch: [Vec<Actor>; MAX_PLAYERS],
@@ -1640,6 +1689,9 @@ impl State {
             song_lua_capture_state_scratch: Vec::with_capacity(song_lua_max_overlay_count),
             song_lua_order_scratch: Vec::with_capacity(song_lua_max_overlay_count),
             song_lua_capture_order_scratch: Vec::with_capacity(song_lua_max_overlay_count),
+            song_lua_capture_visit_scratch: SongLuaCaptureVisitScratch::with_capacity(
+                song_lua_max_overlay_count,
+            ),
             song_lua_proxy_actor_scratch: (song_lua_proxy_count != 0).then(|| {
                 SongLuaProxyActorScratch::with_proxy_capacity(active_players, song_lua_proxy_count)
             }),
@@ -5638,7 +5690,8 @@ fn song_lua_proxy_active_players_indexed(
     out
 }
 
-fn song_lua_capture_replaces_player_indexed(
+#[cfg(feature = "bench-support")]
+fn song_lua_capture_replaces_player_indexed_legacy(
     overlays: &[SongLuaOverlayActor],
     capture_index: usize,
     player_index: usize,
@@ -5671,7 +5724,7 @@ fn song_lua_capture_replaces_player_indexed(
                 .copied()
                 .and_then(SongLuaOverlayIndex::get)
                 .is_some_and(|nested_capture| {
-                    song_lua_capture_replaces_player_indexed(
+                    song_lua_capture_replaces_player_indexed_legacy(
                         overlays,
                         nested_capture,
                         player_index,
@@ -5686,7 +5739,8 @@ fn song_lua_capture_replaces_player_indexed(
     replaced
 }
 
-fn song_lua_replacement_active_players_indexed(
+#[cfg(feature = "bench-support")]
+fn song_lua_replacement_active_players_indexed_legacy(
     overlays: &[SongLuaOverlayActor],
     overlay_states: &[SongLuaOverlayState],
     proxy_sources: &[SongLuaPlayerProxySources<'_>; 2],
@@ -5713,7 +5767,7 @@ fn song_lua_replacement_active_players_indexed(
         }
         for player_index in 0..out.len() {
             let mut capture_stack = SmallVec::<[usize; 8]>::new();
-            if song_lua_capture_replaces_player_indexed(
+            if song_lua_capture_replaces_player_indexed_legacy(
                 overlays,
                 capture_index,
                 player_index,
@@ -5724,6 +5778,51 @@ fn song_lua_replacement_active_players_indexed(
                 out[player_index] = true;
             }
         }
+    }
+    out
+}
+
+fn song_lua_replacement_active_players_indexed(
+    overlays: &[SongLuaOverlayActor],
+    overlay_states: &[SongLuaOverlayState],
+    proxy_sources: &[SongLuaPlayerProxySources<'_>; 2],
+    index: &SongLuaProxyRequestIndex,
+    visit_scratch: &mut SongLuaCaptureVisitScratch,
+) -> [bool; 2] {
+    let mut out =
+        song_lua_proxy_active_players_indexed(overlays, overlay_states, proxy_sources, index);
+    let mut requests = SongLuaScreenProxyRequests::default();
+    visit_scratch.begin(overlays.len());
+    for (overlay_index, capture_index) in index
+        .topology
+        .aft_sprite_targets
+        .iter()
+        .copied()
+        .map(SongLuaOverlayIndex::get)
+        .enumerate()
+    {
+        let Some(capture_index) = capture_index else {
+            continue;
+        };
+        let Some(overlay_state) = overlay_states.get(overlay_index) else {
+            continue;
+        };
+        if !song_lua_overlay_is_visible(*overlay_state) {
+            continue;
+        }
+        song_lua_collect_capture_requests_indexed(
+            overlays,
+            overlay_states,
+            capture_index,
+            index,
+            &mut requests,
+            visit_scratch,
+        );
+    }
+    for (player_index, active) in out.iter_mut().enumerate() {
+        let player_requests = requests.players[player_index];
+        *active |= (player_requests.player && proxy_sources[player_index].player.is_some())
+            || (player_requests.note_field && proxy_sources[player_index].note_field.is_some());
     }
     out
 }
@@ -6776,7 +6875,8 @@ fn song_lua_proxy_requests(
     requests
 }
 
-fn song_lua_collect_capture_requests_indexed(
+#[cfg(feature = "bench-support")]
+fn song_lua_collect_capture_requests_indexed_legacy(
     overlays: &[SongLuaOverlayActor],
     overlay_states: &[SongLuaOverlayState],
     capture_index: usize,
@@ -6811,7 +6911,7 @@ fn song_lua_collect_capture_requests_indexed(
                     .copied()
                     .and_then(SongLuaOverlayIndex::get)
                 {
-                    song_lua_collect_capture_requests_indexed(
+                    song_lua_collect_capture_requests_indexed_legacy(
                         overlays,
                         overlay_states,
                         nested_capture,
@@ -6827,7 +6927,8 @@ fn song_lua_collect_capture_requests_indexed(
     capture_stack.pop();
 }
 
-fn song_lua_proxy_requests_indexed(
+#[cfg(feature = "bench-support")]
+fn song_lua_proxy_requests_indexed_legacy(
     overlays: &[SongLuaOverlayActor],
     overlay_states: &[SongLuaOverlayState],
     index: &SongLuaProxyRequestIndex,
@@ -6853,13 +6954,104 @@ fn song_lua_proxy_requests_indexed(
                     .copied()
                     .and_then(SongLuaOverlayIndex::get)
                 {
-                    song_lua_collect_capture_requests_indexed(
+                    song_lua_collect_capture_requests_indexed_legacy(
                         overlays,
                         overlay_states,
                         capture_index,
                         index,
                         &mut requests,
                         &mut capture_stack,
+                    );
+                }
+            }
+            _ => {}
+        }
+    }
+    requests
+}
+
+fn song_lua_collect_capture_requests_indexed(
+    overlays: &[SongLuaOverlayActor],
+    overlay_states: &[SongLuaOverlayState],
+    capture_index: usize,
+    index: &SongLuaProxyRequestIndex,
+    requests: &mut SongLuaScreenProxyRequests,
+    visit_scratch: &mut SongLuaCaptureVisitScratch,
+) {
+    if !visit_scratch.visit(capture_index) {
+        return;
+    }
+    let Some(children) = index.capture_children.get(capture_index) else {
+        return;
+    };
+    for &overlay_index in children {
+        let Some(overlay_state) = overlay_states.get(overlay_index).copied() else {
+            continue;
+        };
+        if !song_lua_overlay_is_visible(overlay_state) {
+            continue;
+        }
+        match &overlays[overlay_index].kind {
+            SongLuaOverlayKind::ActorProxy { target } => {
+                song_lua_mark_proxy_target(requests, target);
+            }
+            SongLuaOverlayKind::AftSprite { .. } => {
+                if let Some(nested_capture) = index
+                    .topology
+                    .aft_sprite_targets
+                    .get(overlay_index)
+                    .copied()
+                    .and_then(SongLuaOverlayIndex::get)
+                {
+                    song_lua_collect_capture_requests_indexed(
+                        overlays,
+                        overlay_states,
+                        nested_capture,
+                        index,
+                        requests,
+                        visit_scratch,
+                    );
+                }
+            }
+            _ => {}
+        }
+    }
+}
+
+fn song_lua_proxy_requests_indexed(
+    overlays: &[SongLuaOverlayActor],
+    overlay_states: &[SongLuaOverlayState],
+    index: &SongLuaProxyRequestIndex,
+    visit_scratch: &mut SongLuaCaptureVisitScratch,
+) -> SongLuaScreenProxyRequests {
+    let mut requests = SongLuaScreenProxyRequests::default();
+    visit_scratch.begin(overlays.len());
+    for &overlay_index in &index.root_indices {
+        let Some(overlay_state) = overlay_states.get(overlay_index).copied() else {
+            continue;
+        };
+        if !song_lua_overlay_is_visible(overlay_state) {
+            continue;
+        }
+        match &overlays[overlay_index].kind {
+            SongLuaOverlayKind::ActorProxy { target } => {
+                song_lua_mark_proxy_target(&mut requests, target);
+            }
+            SongLuaOverlayKind::AftSprite { .. } => {
+                if let Some(capture_index) = index
+                    .topology
+                    .aft_sprite_targets
+                    .get(overlay_index)
+                    .copied()
+                    .and_then(SongLuaOverlayIndex::get)
+                {
+                    song_lua_collect_capture_requests_indexed(
+                        overlays,
+                        overlay_states,
+                        capture_index,
+                        index,
+                        &mut requests,
+                        visit_scratch,
                     );
                 }
             }
@@ -7356,6 +7548,7 @@ fn song_lua_proxy_local_actor(actor: Actor) -> Actor {
             align,
             offset,
             size,
+            tint,
             vertices,
             visible,
             blend,
@@ -7364,6 +7557,7 @@ fn song_lua_proxy_local_actor(actor: Actor) -> Actor {
             align,
             offset,
             size,
+            tint,
             vertices,
             visible,
             blend,
@@ -8451,36 +8645,21 @@ fn song_lua_style_capture_actor(
             align,
             offset,
             size,
+            tint: actor_tint,
             vertices,
             visible,
             blend: actor_blend,
             z,
-        } => {
-            let vertices = if capture_tint == [1.0; 4] {
-                vertices
-            } else {
-                Arc::from(
-                    vertices
-                        .iter()
-                        .copied()
-                        .map(|mut vertex| {
-                            vertex.color = song_lua_capture_tint(vertex.color, capture_tint);
-                            vertex
-                        })
-                        .collect::<Vec<_>>()
-                        .into_boxed_slice(),
-                )
-            };
-            Actor::Mesh {
-                align,
-                offset,
-                size,
-                vertices,
-                visible,
-                blend: blend.unwrap_or(actor_blend),
-                z: song_lua_add_z(z, z_shift),
-            }
-        }
+        } => Actor::Mesh {
+            align,
+            offset,
+            size,
+            tint: song_lua_capture_tint(actor_tint, capture_tint),
+            vertices,
+            visible,
+            blend: blend.unwrap_or(actor_blend),
+            z: song_lua_add_z(z, z_shift),
+        },
         Actor::ReusableMesh {
             align,
             offset,
@@ -10114,6 +10293,7 @@ fn song_lua_graph_display_body_actor(
             align: [0.0, 0.0],
             offset: [0.0, 0.0],
             size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
+            tint: [1.0; 4],
             vertices: Arc::from(vertices.into_boxed_slice()),
             visible,
             blend,
@@ -10195,6 +10375,7 @@ fn song_lua_graph_display_line_actor(
             align: [0.0, 0.0],
             offset: [0.0, 0.0],
             size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
+            tint: [1.0; 4],
             vertices: Arc::from(vertices.into_boxed_slice()),
             visible,
             blend,
@@ -10634,6 +10815,7 @@ pub struct SongLuaProxyRequestBenchmark {
     overlays: Vec<SongLuaOverlayActor>,
     states: Vec<SongLuaOverlayState>,
     index: SongLuaProxyRequestIndex,
+    visit_scratch: SongLuaCaptureVisitScratch,
 }
 
 #[cfg(feature = "bench-support")]
@@ -10685,6 +10867,7 @@ impl SongLuaProxyRequestBenchmark {
             .collect::<Vec<_>>();
         let index = SongLuaProxyRequestIndex::new(&overlays);
         Self {
+            visit_scratch: SongLuaCaptureVisitScratch::with_capacity(overlays.len()),
             overlays,
             states,
             index,
@@ -10695,11 +10878,20 @@ impl SongLuaProxyRequestBenchmark {
         Self::checksum(song_lua_proxy_requests(&self.overlays, &self.states))
     }
 
-    pub fn indexed_frame(&self) -> u64 {
+    pub fn repeated_indexed_frame(&self) -> u64 {
+        Self::checksum(song_lua_proxy_requests_indexed_legacy(
+            &self.overlays,
+            &self.states,
+            &self.index,
+        ))
+    }
+
+    pub fn indexed_frame(&mut self) -> u64 {
         Self::checksum(song_lua_proxy_requests_indexed(
             &self.overlays,
             &self.states,
             &self.index,
+            &mut self.visit_scratch,
         ))
     }
 
@@ -10714,6 +10906,144 @@ impl SongLuaProxyRequestBenchmark {
         }
         bits |= u64::from(requests.underlay) << 8;
         bits | (u64::from(requests.overlay) << 9)
+    }
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub struct SongLuaCaptureTraversalBenchmark {
+    overlays: Vec<SongLuaOverlayActor>,
+    states: Vec<SongLuaOverlayState>,
+    index: SongLuaProxyRequestIndex,
+    visit_scratch: SongLuaCaptureVisitScratch,
+    source: [Arc<[Actor]>; 1],
+}
+
+#[cfg(feature = "bench-support")]
+impl SongLuaCaptureTraversalBenchmark {
+    pub fn new(depth: usize, reference_count: usize) -> Self {
+        let depth = depth.max(1);
+        let mut overlays = Vec::with_capacity(depth * 2 + reference_count + 2);
+        let mut capture_indices = Vec::with_capacity(depth);
+        let mut capture_names = Vec::with_capacity(depth);
+        for capture in 0..depth {
+            let name = format!("NestedCapture{capture}");
+            capture_indices.push(overlays.len());
+            capture_names.push(name.clone());
+            overlays.push(SongLuaOverlayActor {
+                kind: SongLuaOverlayKind::ActorFrameTexture,
+                name: Some(name),
+                parent_index: None,
+                initial_state: SongLuaOverlayState::default(),
+                message_commands: Vec::new(),
+            });
+        }
+        for capture in 0..depth.saturating_sub(1) {
+            overlays.push(SongLuaOverlayActor {
+                kind: SongLuaOverlayKind::AftSprite {
+                    capture_name: capture_names[capture + 1].clone(),
+                },
+                name: None,
+                parent_index: Some(capture_indices[capture]),
+                initial_state: SongLuaOverlayState::default(),
+                message_commands: Vec::new(),
+            });
+        }
+        let last_capture = capture_indices[depth - 1];
+        for player_index in 0..2 {
+            overlays.push(SongLuaOverlayActor {
+                kind: SongLuaOverlayKind::ActorProxy {
+                    target: SongLuaProxyTarget::NoteField { player_index },
+                },
+                name: None,
+                parent_index: Some(last_capture),
+                initial_state: SongLuaOverlayState::default(),
+                message_commands: Vec::new(),
+            });
+        }
+        for _ in 0..reference_count.max(1) {
+            overlays.push(SongLuaOverlayActor {
+                kind: SongLuaOverlayKind::AftSprite {
+                    capture_name: capture_names[0].clone(),
+                },
+                name: None,
+                parent_index: None,
+                initial_state: SongLuaOverlayState::default(),
+                message_commands: Vec::new(),
+            });
+        }
+        let states = overlays
+            .iter()
+            .map(|overlay| overlay.initial_state)
+            .collect();
+        let index = SongLuaProxyRequestIndex::new(&overlays);
+        Self {
+            visit_scratch: SongLuaCaptureVisitScratch::with_capacity(overlays.len()),
+            source: [Arc::from([Actor::CameraPop])],
+            overlays,
+            states,
+            index,
+        }
+    }
+
+    pub fn legacy_requests(&self) -> u64 {
+        SongLuaProxyRequestBenchmark::checksum(song_lua_proxy_requests_indexed_legacy(
+            &self.overlays,
+            &self.states,
+            &self.index,
+        ))
+    }
+
+    pub fn deduped_requests(&mut self) -> u64 {
+        SongLuaProxyRequestBenchmark::checksum(song_lua_proxy_requests_indexed(
+            &self.overlays,
+            &self.states,
+            &self.index,
+            &mut self.visit_scratch,
+        ))
+    }
+
+    pub fn legacy_replacements(&self) -> u64 {
+        let proxy_sources = [
+            SongLuaPlayerProxySources {
+                note_field: Some(&self.source),
+                ..SongLuaPlayerProxySources::default()
+            },
+            SongLuaPlayerProxySources {
+                note_field: Some(&self.source),
+                ..SongLuaPlayerProxySources::default()
+            },
+        ];
+        Self::player_checksum(song_lua_replacement_active_players_indexed_legacy(
+            &self.overlays,
+            &self.states,
+            &proxy_sources,
+            &self.index,
+        ))
+    }
+
+    pub fn fused_replacements(&mut self) -> u64 {
+        let proxy_sources = [
+            SongLuaPlayerProxySources {
+                note_field: Some(&self.source),
+                ..SongLuaPlayerProxySources::default()
+            },
+            SongLuaPlayerProxySources {
+                note_field: Some(&self.source),
+                ..SongLuaPlayerProxySources::default()
+            },
+        ];
+        Self::player_checksum(song_lua_replacement_active_players_indexed(
+            &self.overlays,
+            &self.states,
+            &proxy_sources,
+            &self.index,
+            &mut self.visit_scratch,
+        ))
+    }
+
+    fn player_checksum(players: [bool; 2]) -> u64 {
+        u64::from(players[0]) | (u64::from(players[1]) << 1)
     }
 }
 
@@ -11605,6 +11935,7 @@ pub struct SongLuaActorBuildBenchmark {
     captured_proxy_source: [Arc<[Actor]>; 1],
     proxy_scratch: SongLuaProxyActorScratch,
     mesh_source: Arc<[SongLuaOverlayMeshVertex]>,
+    captured_mesh_vertices: Arc<[MeshVertex]>,
     mesh_scratch: SongLuaProjectedMeshScratch,
 }
 
@@ -11617,6 +11948,13 @@ impl SongLuaActorBuildBenchmark {
                 pos: [index as f32 * 0.25, -(index as f32) * 0.125],
                 color: [0.25, 0.5, 0.75, 1.0],
                 uv: [0.0, 0.0],
+            })
+            .collect::<Vec<_>>();
+        let captured_mesh_vertices = mesh_source
+            .iter()
+            .map(|vertex| MeshVertex {
+                pos: vertex.pos,
+                color: vertex.color,
             })
             .collect::<Vec<_>>();
         Self {
@@ -11649,6 +11987,7 @@ impl SongLuaActorBuildBenchmark {
             }])],
             proxy_scratch: SongLuaProxyActorScratch::with_capacity_and_banks(0, 3, 1),
             mesh_source: Arc::from(mesh_source.into_boxed_slice()),
+            captured_mesh_vertices: Arc::from(captured_mesh_vertices.into_boxed_slice()),
             mesh_scratch: SongLuaProjectedMeshScratch::mesh(vertex_count),
         }
     }
@@ -11797,6 +12136,47 @@ impl SongLuaActorBuildBenchmark {
         Self::mesh_checksum(&vertices)
     }
 
+    pub fn legacy_captured_mesh_frame(&self) -> u64 {
+        let capture_tint = [0.5, 0.75, 0.25, 0.8];
+        let vertices = self
+            .captured_mesh_vertices
+            .iter()
+            .copied()
+            .map(|mut vertex| {
+                vertex.color = song_lua_capture_tint(vertex.color, capture_tint);
+                vertex
+            })
+            .collect::<Vec<_>>();
+        Self::captured_mesh_checksum(Actor::Mesh {
+            align: [0.0, 0.0],
+            offset: [0.0, 0.0],
+            size: [SizeSpec::Fill, SizeSpec::Fill],
+            tint: [1.0; 4],
+            vertices: Arc::from(vertices.into_boxed_slice()),
+            visible: true,
+            blend: BlendMode::Alpha,
+            z: 17,
+        })
+    }
+
+    pub fn shared_captured_mesh_frame(&self) -> u64 {
+        Self::captured_mesh_checksum(song_lua_style_capture_actor(
+            Actor::Mesh {
+                align: [0.0, 0.0],
+                offset: [0.0, 0.0],
+                size: [SizeSpec::Fill, SizeSpec::Fill],
+                tint: [1.0; 4],
+                vertices: Arc::clone(&self.captured_mesh_vertices),
+                visible: true,
+                blend: BlendMode::Alpha,
+                z: 0,
+            },
+            [0.5, 0.75, 0.25, 0.8],
+            None,
+            17,
+        ))
+    }
+
     pub fn mesh_storage_bytes(&self) -> usize {
         self.mesh_scratch.storage_bytes()
     }
@@ -11814,6 +12194,7 @@ impl SongLuaActorBuildBenchmark {
             align: [0.0, 0.0],
             offset: [x, 0.0],
             size: [SizeSpec::Fill, SizeSpec::Fill],
+            tint: [1.0; 4],
             vertices: Arc::from([]),
             visible: true,
             blend: BlendMode::Alpha,
@@ -11921,6 +12302,22 @@ impl SongLuaActorBuildBenchmark {
                     ^ u64::from(vertex.pos[1].to_bits()).rotate_left(19)
                     ^ u64::from(vertex.color[3].to_bits()).rotate_left(37)
             })
+    }
+
+    fn captured_mesh_checksum(actor: Actor) -> u64 {
+        let Actor::Mesh {
+            tint, vertices, z, ..
+        } = actor
+        else {
+            unreachable!("capture tint benchmark must emit an immutable mesh");
+        };
+        vertices.iter().fold(z as u16 as u64, |checksum, vertex| {
+            let color = song_lua_capture_tint(vertex.color, tint);
+            checksum.rotate_left(7)
+                ^ u64::from(vertex.pos[0].to_bits())
+                ^ u64::from(color[0].to_bits()).rotate_left(19)
+                ^ u64::from(color[3].to_bits()).rotate_left(37)
+        })
     }
 }
 
@@ -13077,6 +13474,7 @@ fn build_song_lua_overlay_actor_with_scratch(
                         state.y * y_scale + effect_offset[1] * y_scale,
                     ],
                     size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
+                    tint: [1.0; 4],
                     vertices: mesh,
                     visible: state.visible,
                     blend: overlay_blend,
@@ -14656,6 +15054,8 @@ fn push_actors_impl(
     let mut song_lua_order_scratch = std::mem::take(&mut state.song_lua_order_scratch);
     let mut song_lua_capture_order_scratch =
         std::mem::take(&mut state.song_lua_capture_order_scratch);
+    let mut song_lua_capture_visit_scratch =
+        std::mem::take(&mut state.song_lua_capture_visit_scratch);
     let mut song_lua_proxy_actor_scratch = std::mem::take(&mut state.song_lua_proxy_actor_scratch);
     let mut notefield_actor_scratch = std::mem::take(&mut state.notefield_actor_scratch);
     let mut notefield_hud_actor_scratch = std::mem::take(&mut state.notefield_hud_actor_scratch);
@@ -14762,6 +15162,7 @@ fn push_actors_impl(
         &song_lua_visuals.overlays,
         &song_lua_overlay_state_scratch,
         &song_lua_proxy_request_index,
+        &mut song_lua_capture_visit_scratch,
     );
     for ((layer, layer_states), request_index) in song_lua_visuals
         .foreground_visual_layers
@@ -14771,7 +15172,12 @@ fn push_actors_impl(
     {
         song_lua_merge_proxy_requests(
             &mut proxy_requests,
-            song_lua_proxy_requests_indexed(&layer.overlays, layer_states, request_index),
+            song_lua_proxy_requests_indexed(
+                &layer.overlays,
+                layer_states,
+                request_index,
+                &mut song_lua_capture_visit_scratch,
+            ),
         );
     }
     let mut underlay_proxy_source = proxy_requests
@@ -15383,6 +15789,7 @@ fn push_actors_impl(
         &song_lua_overlay_state_scratch,
         &replacement_proxy_sources,
         &song_lua_proxy_request_index,
+        &mut song_lua_capture_visit_scratch,
     );
 
     // Danger overlay (Simply Love parity): red flashing in danger + green recovery, optional HideDanger.
@@ -15653,6 +16060,7 @@ fn push_actors_impl(
                     align: [0.0, 0.0],
                     offset: [x, y_mesh_top],
                     size: [SizeSpec::Px(graph_w), SizeSpec::Px(graph_mesh_h)],
+                    tint: [1.0; 4],
                     vertices: mesh.clone(),
                     visible: true,
                     blend: BlendMode::Alpha,
@@ -16667,6 +17075,7 @@ fn push_actors_impl(
     state.song_lua_capture_state_scratch = song_lua_capture_state_scratch;
     state.song_lua_order_scratch = song_lua_order_scratch;
     state.song_lua_capture_order_scratch = song_lua_capture_order_scratch;
+    state.song_lua_capture_visit_scratch = song_lua_capture_visit_scratch;
     state.song_lua_proxy_actor_scratch = song_lua_proxy_actor_scratch;
     state.notefield_actor_scratch = notefield_actor_scratch;
     state.notefield_hud_actor_scratch = notefield_hud_actor_scratch;
@@ -18418,8 +18827,9 @@ mod tests {
         let overlay_states = vec![SongLuaOverlayState::default(); overlays.len()];
         let requests = song_lua_proxy_requests(&overlays, &overlay_states);
         let index = SongLuaProxyRequestIndex::new(&overlays);
+        let mut visit_scratch = SongLuaCaptureVisitScratch::with_capacity(overlays.len());
         assert_eq!(
-            song_lua_proxy_requests_indexed(&overlays, &overlay_states, &index),
+            song_lua_proxy_requests_indexed(&overlays, &overlay_states, &index, &mut visit_scratch,),
             requests
         );
 
@@ -18444,8 +18854,9 @@ mod tests {
             .collect::<Vec<_>>();
         let requests = song_lua_proxy_requests(&overlays, &overlay_states);
         let index = SongLuaProxyRequestIndex::new(&overlays);
+        let mut visit_scratch = SongLuaCaptureVisitScratch::with_capacity(overlays.len());
         assert_eq!(
-            song_lua_proxy_requests_indexed(&overlays, &overlay_states, &index),
+            song_lua_proxy_requests_indexed(&overlays, &overlay_states, &index, &mut visit_scratch,),
             requests
         );
 
@@ -18468,12 +18879,69 @@ mod tests {
             .collect::<Vec<_>>();
         let requests = song_lua_proxy_requests(&overlays, &overlay_states);
         let index = SongLuaProxyRequestIndex::new(&overlays);
+        let mut visit_scratch = SongLuaCaptureVisitScratch::with_capacity(overlays.len());
         assert_eq!(
-            song_lua_proxy_requests_indexed(&overlays, &overlay_states, &index),
+            song_lua_proxy_requests_indexed(&overlays, &overlay_states, &index, &mut visit_scratch,),
             requests
         );
 
         assert!(!requests.players[0].combo);
+    }
+
+    #[test]
+    fn song_lua_capture_marks_match_nested_duplicate_and_cycle_behavior() {
+        let mut nested = test_aft_overlay("capture-b", true);
+        nested.parent_index = Some(0);
+        let mut cycle = test_aft_overlay("capture-a", true);
+        cycle.parent_index = Some(1);
+        let overlays = vec![
+            test_capture_overlay("Capture-A"),
+            test_capture_overlay("Capture-B"),
+            nested,
+            test_capture_proxy_child(1, SongLuaProxyTarget::NoteField { player_index: 0 }),
+            cycle,
+            test_aft_overlay("capture-a", true),
+            test_aft_overlay("capture-a", true),
+        ];
+        let overlay_states = overlays
+            .iter()
+            .map(|overlay| overlay.initial_state)
+            .collect::<Vec<_>>();
+        let expected = song_lua_proxy_requests(&overlays, &overlay_states);
+        let index = SongLuaProxyRequestIndex::new(&overlays);
+        let mut visit_scratch = SongLuaCaptureVisitScratch::with_capacity(overlays.len());
+
+        for _ in 0..2 {
+            assert_eq!(
+                song_lua_proxy_requests_indexed(
+                    &overlays,
+                    &overlay_states,
+                    &index,
+                    &mut visit_scratch,
+                ),
+                expected
+            );
+        }
+        assert!(expected.players[0].note_field);
+
+        let source = vec![Arc::<[Actor]>::from(vec![test_source_actor()])];
+        let sources = [
+            SongLuaPlayerProxySources {
+                note_field: Some(source.as_slice()),
+                ..SongLuaPlayerProxySources::default()
+            },
+            SongLuaPlayerProxySources::default(),
+        ];
+        assert_eq!(
+            song_lua_replacement_active_players_indexed(
+                &overlays,
+                &overlay_states,
+                &sources,
+                &index,
+                &mut visit_scratch,
+            ),
+            [true, false]
+        );
     }
 
     #[test]
@@ -18497,6 +18965,7 @@ mod tests {
         ];
         let expected = song_lua_replacement_active_players(&overlays, &overlay_states, &sources);
         let index = SongLuaProxyRequestIndex::new(&overlays);
+        let mut visit_scratch = SongLuaCaptureVisitScratch::with_capacity(overlays.len());
 
         assert_eq!(
             song_lua_replacement_active_players_indexed(
@@ -18504,6 +18973,7 @@ mod tests {
                 &overlay_states,
                 &sources,
                 &index,
+                &mut visit_scratch,
             ),
             expected
         );
@@ -19021,15 +19491,17 @@ mod tests {
     }
 
     #[test]
-    fn song_lua_capture_style_tints_mesh_vertices() {
+    fn song_lua_capture_style_shares_mesh_vertices_and_composes_tint() {
+        let vertices = Arc::<[MeshVertex]>::from(vec![MeshVertex {
+            pos: [0.0, 0.0],
+            color: [0.8, 0.6, 0.4, 0.5],
+        }]);
         let actor = Actor::Mesh {
             align: [0.0, 0.0],
             offset: [0.0, 0.0],
             size: [SizeSpec::Px(1.0), SizeSpec::Px(1.0)],
-            vertices: Arc::from(vec![MeshVertex {
-                pos: [0.0, 0.0],
-                color: [0.8, 0.6, 0.4, 0.5],
-            }]),
+            tint: [0.8, 0.6, 0.4, 0.5],
+            vertices: Arc::clone(&vertices),
             visible: true,
             blend: BlendMode::Alpha,
             z: 3,
@@ -19038,12 +19510,18 @@ mod tests {
         let styled = song_lua_style_capture_actor(actor, [0.5, 0.25, 0.1, 0.5], None, 4);
 
         let Actor::Mesh {
-            vertices, blend, z, ..
+            vertices: styled_vertices,
+            tint,
+            blend,
+            z,
+            ..
         } = styled
         else {
             panic!("expected mesh actor");
         };
-        assert_eq!(vertices[0].color, [0.4, 0.15, 0.040000003, 0.25]);
+        assert!(Arc::ptr_eq(&styled_vertices, &vertices));
+        assert_eq!(styled_vertices[0].color, [0.8, 0.6, 0.4, 0.5]);
+        assert_eq!(tint, [0.4, 0.15, 0.040000003, 0.25]);
         assert_eq!(blend, BlendMode::Alpha);
         assert_eq!(z, 7);
     }

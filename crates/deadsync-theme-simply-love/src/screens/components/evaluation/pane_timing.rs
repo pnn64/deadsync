@@ -239,6 +239,7 @@ pub fn build_timing_pane(
             align: [0.0, 0.0],
             offset: [0.0, topbar_height],
             size: [SizeSpec::Px(pane_width), SizeSpec::Px(graph_area_height)],
+            tint: [1.0; 4],
             vertices: mesh.clone(),
             visible: true,
             blend: BlendMode::Alpha,
