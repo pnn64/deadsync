@@ -313,6 +313,68 @@ pub const TRANSITION_OUT_DELAY: f32 = 0.5;
 pub const TRANSITION_OUT_FADE_DURATION: f32 = 1.0;
 const TRANSITION_OUT_DURATION: f32 = TRANSITION_OUT_DELAY + TRANSITION_OUT_FADE_DURATION;
 
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum BackgroundTransition {
+    CrossFade(f32),
+    FadeCenterHorizontal,
+    FadeCenterVertical,
+    FadeDown,
+    FadeLeft,
+    FadeRight,
+    FadeUp,
+    SlideDown,
+    SlideLeft,
+    SlideRight,
+    SlideUp,
+}
+
+impl BackgroundTransition {
+    fn from_name(name: &str) -> Option<Self> {
+        if name.eq_ignore_ascii_case("CrossFade_Fastest") {
+            Some(Self::CrossFade(0.5))
+        } else if name.eq_ignore_ascii_case("CrossFade_Faster") {
+            Some(Self::CrossFade(0.75))
+        } else if name.eq_ignore_ascii_case("CrossFade") {
+            Some(Self::CrossFade(1.0))
+        } else if name.eq_ignore_ascii_case("FadeCenterHorizontal") {
+            Some(Self::FadeCenterHorizontal)
+        } else if name.eq_ignore_ascii_case("FadeCenterVertical") {
+            Some(Self::FadeCenterVertical)
+        } else if name.eq_ignore_ascii_case("FadeDown") {
+            Some(Self::FadeDown)
+        } else if name.eq_ignore_ascii_case("FadeLeft") {
+            Some(Self::FadeLeft)
+        } else if name.eq_ignore_ascii_case("FadeRight") {
+            Some(Self::FadeRight)
+        } else if name.eq_ignore_ascii_case("FadeUp") {
+            Some(Self::FadeUp)
+        } else if name.eq_ignore_ascii_case("SlideDown") {
+            Some(Self::SlideDown)
+        } else if name.eq_ignore_ascii_case("SlideLeft") {
+            Some(Self::SlideLeft)
+        } else if name.eq_ignore_ascii_case("SlideRight") {
+            Some(Self::SlideRight)
+        } else if name.eq_ignore_ascii_case("SlideUp") {
+            Some(Self::SlideUp)
+        } else {
+            None
+        }
+    }
+
+    const fn duration(self) -> f32 {
+        match self {
+            Self::CrossFade(duration) => duration,
+            _ => 1.0,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct SongLayer2Event {
+    start_second: f32,
+    color: Option<[f32; 4]>,
+}
+
 pub struct DensityGraphRenderState {
     pub cache: [Option<DensityHistCache>; MAX_PLAYERS],
     pub mesh: [Option<Arc<Vec<MeshVertex>>>; MAX_PLAYERS],
@@ -1726,13 +1788,25 @@ pub struct State {
     pub background_path_dirty: bool,
     pub background_changes: Vec<SongBackgroundChange>,
     pub next_background_change_ix: usize,
+    /// Song-lifetime layer-2 timeline compiled at screen entry and owned by the
+    /// gameplay thread. Capacity is exact and immutable; steady frames advance
+    /// the adjacent cursor without misses, growth, pruning, or allocation.
+    /// Backward seeks walk only crossed events. Storage is freed with the
+    /// screen; the benchmark records traversal cost and allocations.
+    song_layer2_events: Vec<SongLayer2Event>,
+    next_song_layer2_event_ix: Cell<usize>,
     pub current_background_path: Option<PathBuf>,
     pub current_background_key: Option<Arc<str>>,
     pub background_allow_video: bool,
     pub background_texture_key: Arc<str>,
     pub previous_background_texture_key: Option<Arc<str>>,
-    pub background_transition: String,
-    pub background_transition_start_time: f32,
+    /// Screen-owned compiled transition state. Names are parsed when the shell
+    /// changes the background; gameplay frames perform no lookup or allocation.
+    /// Expiry saturates to one comparison and rewinds can reactivate it. There
+    /// is no eviction or growth, and destruction happens with the screen.
+    background_transition: Option<BackgroundTransition>,
+    background_transition_expired: Cell<bool>,
+    background_transition_start_time: f32,
     pub song_lua_sound_paths: Vec<PathBuf>,
     song_lua_sound_events: Vec<SongLuaSoundEvent>,
     next_song_lua_sound_event_ix: usize,
@@ -1958,6 +2032,9 @@ impl State {
             .iter()
             .take_while(|change| change.start_beat <= gameplay.current_beat())
             .count();
+        let song_layer2_events = build_song_layer2_events(&gameplay);
+        let next_song_layer2_event_ix = song_layer2_events
+            .partition_point(|event| event.start_second <= gameplay.current_music_time_display());
         let song_lua_visuals = gameplay.song_lua_visuals();
         let song_lua_overlay_order = song_lua_overlay_order_cache_from(
             &song_lua_visuals.overlays,
@@ -2151,12 +2228,15 @@ impl State {
             background_path_dirty: true,
             background_changes,
             next_background_change_ix,
+            song_layer2_events,
+            next_song_layer2_event_ix: Cell::new(next_song_layer2_event_ix),
             current_background_path: None,
             current_background_key: None,
             background_allow_video: false,
             background_texture_key: Arc::from("__black"),
             previous_background_texture_key: None,
-            background_transition: String::new(),
+            background_transition: None,
+            background_transition_expired: Cell::new(false),
             background_transition_start_time,
             song_lua_sound_paths,
             song_lua_sound_events,
@@ -5139,6 +5219,23 @@ fn active_background_change(state: &State) -> Option<&SongBackgroundChange> {
         .and_then(|ix| state.background_changes.get(ix))
 }
 
+pub fn begin_background_transition(
+    state: &mut State,
+    previous_texture_key: Arc<str>,
+    transition_name: &str,
+    start_time: f32,
+) {
+    let transition = if &*previous_texture_key == "__black" {
+        None
+    } else {
+        BackgroundTransition::from_name(transition_name)
+    };
+    state.previous_background_texture_key = transition.map(|_| previous_texture_key);
+    state.background_transition = transition;
+    state.background_transition_expired.set(false);
+    state.background_transition_start_time = start_time;
+}
+
 fn bgchange_tint(change: Option<&SongBackgroundChange>, brightness: f32) -> [f32; 4] {
     let color = change.and_then(|change| change.color1).unwrap_or([1.0; 4]);
     [color[0], color[1], color[2], color[3] * brightness]
@@ -5233,14 +5330,16 @@ fn push_bgchange_transition(
     if &**key == "__black" {
         return;
     }
-    let Some(duration) = bgchange_transition_duration(&state.background_transition) else {
+    let now = state.current_music_time_display();
+    let start_time = state.background_transition_start_time;
+    let Some((transition, progress)) = background_transition_frame(
+        state.background_transition,
+        &state.background_transition_expired,
+        start_time,
+        now,
+    ) else {
         return;
     };
-    let elapsed = state.current_music_time_display() - state.background_transition_start_time;
-    let progress = (elapsed / duration).clamp(0.0, 1.0);
-    if progress >= 1.0 {
-        return;
-    }
     let mut actor = background_media_sprite(
         key.clone(),
         [1.0, 1.0, 1.0, bg_brightness],
@@ -5250,40 +5349,43 @@ fn push_bgchange_transition(
         w,
         h,
     );
-    apply_bgchange_transition(&mut actor, &state.background_transition, progress, w, h);
+    apply_bgchange_transition(&mut actor, transition, progress, w, h);
     actors.push(actor);
 }
 
-fn bgchange_transition_duration(transition: &str) -> Option<f32> {
-    if transition.eq_ignore_ascii_case("CrossFade_Fastest") {
-        Some(0.5)
-    } else if transition.eq_ignore_ascii_case("CrossFade_Faster") {
-        Some(0.75)
-    } else if [
-        "CrossFade",
-        "FadeCenterHorizontal",
-        "FadeCenterVertical",
-        "FadeDown",
-        "FadeLeft",
-        "FadeRight",
-        "FadeUp",
-        "SlideDown",
-        "SlideLeft",
-        "SlideRight",
-        "SlideUp",
-    ]
-    .iter()
-    .any(|name| transition.eq_ignore_ascii_case(name))
-    {
-        Some(1.0)
-    } else {
-        None
+fn background_transition_frame(
+    transition: Option<BackgroundTransition>,
+    expired: &Cell<bool>,
+    start_time: f32,
+    now: f32,
+) -> Option<(BackgroundTransition, f32)> {
+    let current = transition?;
+    if expired.get() && now >= start_time + current.duration() {
+        return None;
     }
+    let progress = ((now - start_time) / current.duration()).clamp(0.0, 1.0);
+    if progress >= 1.0 {
+        expired.set(true);
+        return None;
+    }
+    expired.set(false);
+    Some((current, progress))
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn background_transition_frame_legacy(
+    transition_name: &str,
+    start_time: f32,
+    now: f32,
+) -> Option<(BackgroundTransition, f32)> {
+    let transition = BackgroundTransition::from_name(transition_name)?;
+    let progress = ((now - start_time) / transition.duration()).clamp(0.0, 1.0);
+    (progress < 1.0).then_some((transition, progress))
 }
 
 fn apply_bgchange_transition(
     actor: &mut Actor,
-    transition: &str,
+    transition: BackgroundTransition,
     progress: f32,
     screen_w: f32,
     screen_h: f32,
@@ -5304,78 +5406,133 @@ fn apply_bgchange_transition(
     else {
         return;
     };
-    if transition.eq_ignore_ascii_case("CrossFade")
-        || transition.eq_ignore_ascii_case("CrossFade_Faster")
-        || transition.eq_ignore_ascii_case("CrossFade_Fastest")
-    {
-        tint[3] *= 1.0 - progress;
-    } else if transition.eq_ignore_ascii_case("SlideLeft") {
-        offset[0] -= screen_w * progress;
-        tint[3] *= 1.0 - progress;
-    } else if transition.eq_ignore_ascii_case("SlideRight") {
-        offset[0] += screen_w * progress;
-        tint[3] *= 1.0 - progress;
-    } else if transition.eq_ignore_ascii_case("SlideUp") {
-        offset[1] -= screen_h * progress;
-        tint[3] *= 1.0 - progress;
-    } else if transition.eq_ignore_ascii_case("SlideDown") {
-        offset[1] += screen_h * progress;
-        tint[3] *= 1.0 - progress;
-    } else if transition.eq_ignore_ascii_case("FadeUp") {
-        *cropbottom = -0.3 + 1.6 * progress;
-        *fadebottom = 0.3;
-    } else if transition.eq_ignore_ascii_case("FadeDown") {
-        *croptop = -0.3 + 1.6 * progress;
-        *fadetop = 0.3;
-    } else if transition.eq_ignore_ascii_case("FadeRight") {
-        *cropleft = -0.3 + 1.6 * progress;
-        *fadeleft = 0.3;
-    } else if transition.eq_ignore_ascii_case("FadeLeft") {
-        *cropright = -0.3 + 1.6 * progress;
-        *faderight = 0.3;
-    } else if transition.eq_ignore_ascii_case("FadeCenterHorizontal") {
-        *croptop = -0.3 + 0.8 * progress;
-        *cropbottom = -0.3 + 0.8 * progress;
-        *fadetop = 0.3;
-        *fadebottom = 0.3;
-    } else if transition.eq_ignore_ascii_case("FadeCenterVertical") {
-        *cropleft = -0.3 + 0.8 * progress;
-        *cropright = -0.3 + 0.8 * progress;
-        *fadeleft = 0.3;
-        *faderight = 0.3;
+    match transition {
+        BackgroundTransition::CrossFade(_) => tint[3] *= 1.0 - progress,
+        BackgroundTransition::SlideLeft => {
+            offset[0] -= screen_w * progress;
+            tint[3] *= 1.0 - progress;
+        }
+        BackgroundTransition::SlideRight => {
+            offset[0] += screen_w * progress;
+            tint[3] *= 1.0 - progress;
+        }
+        BackgroundTransition::SlideUp => {
+            offset[1] -= screen_h * progress;
+            tint[3] *= 1.0 - progress;
+        }
+        BackgroundTransition::SlideDown => {
+            offset[1] += screen_h * progress;
+            tint[3] *= 1.0 - progress;
+        }
+        BackgroundTransition::FadeUp => {
+            *cropbottom = -0.3 + 1.6 * progress;
+            *fadebottom = 0.3;
+        }
+        BackgroundTransition::FadeDown => {
+            *croptop = -0.3 + 1.6 * progress;
+            *fadetop = 0.3;
+        }
+        BackgroundTransition::FadeRight => {
+            *cropleft = -0.3 + 1.6 * progress;
+            *fadeleft = 0.3;
+        }
+        BackgroundTransition::FadeLeft => {
+            *cropright = -0.3 + 1.6 * progress;
+            *faderight = 0.3;
+        }
+        BackgroundTransition::FadeCenterHorizontal => {
+            *croptop = -0.3 + 0.8 * progress;
+            *cropbottom = -0.3 + 0.8 * progress;
+            *fadetop = 0.3;
+            *fadebottom = 0.3;
+        }
+        BackgroundTransition::FadeCenterVertical => {
+            *cropleft = -0.3 + 0.8 * progress;
+            *cropright = -0.3 + 0.8 * progress;
+            *fadeleft = 0.3;
+            *faderight = 0.3;
+        }
     }
 }
 
-fn push_layer2_bganimations(actors: &mut Vec<Actor>, state: &State) {
-    const FLASH_SECONDS: f32 = 0.6;
-    let Some((change, elapsed)) = state
+const LAYER2_FLASH_SECONDS: f32 = 0.6;
+
+fn song_layer2_color(target: &SongBackgroundChangeTarget) -> Option<[f32; 4]> {
+    let SongBackgroundChangeTarget::Animation(name) = target else {
+        return None;
+    };
+    if name.eq_ignore_ascii_case("white flash") {
+        Some([1.0; 4])
+    } else if name.eq_ignore_ascii_case("yellow flash") {
+        Some([1.0, 1.0, 160.0 / 255.0, 1.0])
+    } else {
+        None
+    }
+}
+
+fn build_song_layer2_events(gameplay: &GameplayCoreState) -> Vec<SongLayer2Event> {
+    gameplay
         .song()
         .background_layer2_changes
         .iter()
-        .rev()
-        .filter_map(|change| {
-            let start = state.timing().get_time_for_beat(change.start_beat);
-            let elapsed = state.current_music_time_display() - start;
-            (0.0..=FLASH_SECONDS)
-                .contains(&elapsed)
-                .then_some((change, elapsed))
+        .map(|change| SongLayer2Event {
+            start_second: gameplay.timing().get_time_for_beat(change.start_beat),
+            color: song_layer2_color(&change.target),
         })
-        .next()
-    else {
-        return;
-    };
-    let SongBackgroundChangeTarget::Animation(name) = &change.target else {
-        return;
-    };
-    let mut color = if name.eq_ignore_ascii_case("white flash") {
-        [1.0, 1.0, 1.0, 1.0]
-    } else if name.eq_ignore_ascii_case("yellow flash") {
-        [1.0, 1.0, 160.0 / 255.0, 1.0]
-    } else {
-        return;
-    };
-    let progress = (elapsed / FLASH_SECONDS).clamp(0.0, 1.0);
+        .collect()
+}
+
+fn song_layer2_animation_from(
+    events: &[SongLayer2Event],
+    next_event_ix: &Cell<usize>,
+    now: f32,
+) -> Option<[f32; 4]> {
+    if !now.is_finite() {
+        return None;
+    }
+    let mut next_ix = next_event_ix.get().min(events.len());
+    while next_ix < events.len() && events[next_ix].start_second <= now {
+        next_ix += 1;
+    }
+    while next_ix > 0 && events[next_ix - 1].start_second > now {
+        next_ix -= 1;
+    }
+    next_event_ix.set(next_ix);
+
+    let event = next_ix.checked_sub(1).and_then(|index| events.get(index))?;
+    let elapsed = now - event.start_second;
+    if !(0.0..=LAYER2_FLASH_SECONDS).contains(&elapsed) {
+        return None;
+    }
+    let mut color = event.color?;
+    let progress = (elapsed / LAYER2_FLASH_SECONDS).clamp(0.0, 1.0);
     color[3] *= 1.0 - progress * progress;
+    Some(color)
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn song_layer2_animation_legacy(events: &[SongLayer2Event], now: f32) -> Option<[f32; 4]> {
+    let (event, elapsed) = events.iter().rev().find_map(|event| {
+        let elapsed = now - event.start_second;
+        (0.0..=LAYER2_FLASH_SECONDS)
+            .contains(&elapsed)
+            .then_some((event, elapsed))
+    })?;
+    let mut color = event.color?;
+    let progress = (elapsed / LAYER2_FLASH_SECONDS).clamp(0.0, 1.0);
+    color[3] *= 1.0 - progress * progress;
+    Some(color)
+}
+
+fn push_layer2_bganimations(actors: &mut Vec<Actor>, state: &State) {
+    let now = state.current_music_time_display();
+    let Some(color) = song_layer2_animation_from(
+        &state.song_layer2_events,
+        &state.next_song_layer2_event_ix,
+        now,
+    ) else {
+        return;
+    };
     actors.push(act!(quad:
         align(0.5, 0.5): xy(screen_center_x(), screen_center_y()):
         setsize(screen_width() * 2.0, screen_height() * 2.0):
@@ -12065,6 +12222,117 @@ impl SongLuaNoScriptBenchmark {
 
 #[cfg(feature = "bench-support")]
 #[doc(hidden)]
+pub struct GameplayInactiveFrameBenchmark {
+    transition_name: String,
+    transition: BackgroundTransition,
+    transition_expired: Cell<bool>,
+    layer2_events: Vec<SongLayer2Event>,
+    layer2_cursor: Cell<usize>,
+    overlays: Vec<SongLuaOverlayActor>,
+    overlay_states: Vec<SongLuaOverlayState>,
+    legacy_actors: Vec<Actor>,
+    fast_actors: Vec<Actor>,
+    legacy_order_cache: SongLuaOverlayOrderCache,
+    fast_order_cache: SongLuaOverlayOrderCache,
+    legacy_topology: SongLuaOverlayTopologyIndex,
+    fast_topology: SongLuaOverlayTopologyIndex,
+    legacy_order: Vec<usize>,
+    fast_order: Vec<usize>,
+    legacy_aft: SongLuaAftCaptureScratch,
+    fast_aft: SongLuaAftCaptureScratch,
+}
+
+#[cfg(feature = "bench-support")]
+impl GameplayInactiveFrameBenchmark {
+    pub fn new(layer2_event_count: usize) -> Self {
+        let layer2_events = (0..layer2_event_count)
+            .map(|index| SongLayer2Event {
+                start_second: index as f32 * 0.25,
+                color: Some(if index.is_multiple_of(2) {
+                    [1.0; 4]
+                } else {
+                    [1.0, 1.0, 160.0 / 255.0, 1.0]
+                }),
+            })
+            .collect();
+        Self {
+            transition_name: "FadeCenterVertical".to_string(),
+            transition: BackgroundTransition::FadeCenterVertical,
+            transition_expired: Cell::new(false),
+            layer2_events,
+            layer2_cursor: Cell::new(0),
+            overlays: Vec::new(),
+            overlay_states: Vec::new(),
+            legacy_actors: Vec::new(),
+            fast_actors: Vec::new(),
+            legacy_order_cache: SongLuaOverlayOrderCache::default(),
+            fast_order_cache: SongLuaOverlayOrderCache::default(),
+            legacy_topology: SongLuaOverlayTopologyIndex::default(),
+            fast_topology: SongLuaOverlayTopologyIndex::default(),
+            legacy_order: Vec::new(),
+            fast_order: Vec::new(),
+            legacy_aft: SongLuaAftCaptureScratch::default(),
+            fast_aft: SongLuaAftCaptureScratch::default(),
+        }
+    }
+
+    pub fn expired_transition_legacy(&self, now: f32) -> u64 {
+        background_transition_frame_legacy(&self.transition_name, 0.0, now)
+            .map_or(0, |(_, progress)| u64::from(progress.to_bits()))
+    }
+
+    pub fn expired_transition_compiled(&self, now: f32) -> u64 {
+        background_transition_frame(Some(self.transition), &self.transition_expired, 0.0, now)
+            .map_or(0, |(_, progress)| u64::from(progress.to_bits()))
+    }
+
+    pub fn expired_layer2_legacy(&self, now: f32) -> u64 {
+        song_layer2_animation_legacy(&self.layer2_events, now)
+            .map_or(0, |color| u64::from(color[3].to_bits()))
+    }
+
+    pub fn expired_layer2_cursor(&self, now: f32) -> u64 {
+        song_layer2_animation_from(&self.layer2_events, &self.layer2_cursor, now)
+            .map_or(0, |color| u64::from(color[3].to_bits()))
+    }
+
+    pub fn empty_layer_legacy(&mut self) -> u64 {
+        let _ = prepare_active_song_lua_layer(
+            &mut self.legacy_actors,
+            &self.overlays,
+            &self.overlay_states,
+            SongLuaOverlayState::default(),
+            &mut self.legacy_order_cache,
+            &mut self.legacy_topology,
+            &mut self.legacy_order,
+            &mut self.legacy_aft,
+        );
+        self.legacy_actors.len() as u64 | ((self.legacy_order.len() as u64) << 32)
+    }
+
+    pub fn empty_layer_fast(&mut self) -> u64 {
+        let _ = prepare_song_lua_layer(
+            &mut self.fast_actors,
+            &self.overlays,
+            &self.overlay_states,
+            SongLuaOverlayState::default(),
+            &mut self.fast_order_cache,
+            &mut self.fast_topology,
+            &mut self.fast_order,
+            &mut self.fast_aft,
+        );
+        self.fast_actors.len() as u64 | ((self.fast_order.len() as u64) << 32)
+    }
+
+    pub fn expired_layer2_now(&self) -> f32 {
+        self.layer2_events
+            .last()
+            .map_or(1.0, |event| event.start_second + 1.0)
+    }
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
 pub struct SongLuaStatePlanBenchmark {
     overlays: Vec<SongLuaOverlayActor>,
     events: Vec<Vec<SongLuaOverlayMessageRuntime>>,
@@ -16649,6 +16917,53 @@ fn song_lua_player_target_x(
     })
 }
 
+fn prepare_song_lua_layer(
+    out: &mut Vec<Actor>,
+    overlays: &[SongLuaOverlayActor],
+    overlay_states: &[SongLuaOverlayState],
+    song_foreground_state: SongLuaOverlayState,
+    order_cache: &mut SongLuaOverlayOrderCache,
+    topology_index: &mut SongLuaOverlayTopologyIndex,
+    order_scratch: &mut Vec<usize>,
+    aft_capture_scratch: &mut SongLuaAftCaptureScratch,
+) -> Option<i16> {
+    if overlays.is_empty() {
+        order_scratch.clear();
+        return None;
+    }
+    Some(prepare_active_song_lua_layer(
+        out,
+        overlays,
+        overlay_states,
+        song_foreground_state,
+        order_cache,
+        topology_index,
+        order_scratch,
+        aft_capture_scratch,
+    ))
+}
+
+fn prepare_active_song_lua_layer(
+    out: &mut Vec<Actor>,
+    overlays: &[SongLuaOverlayActor],
+    overlay_states: &[SongLuaOverlayState],
+    song_foreground_state: SongLuaOverlayState,
+    order_cache: &mut SongLuaOverlayOrderCache,
+    topology_index: &mut SongLuaOverlayTopologyIndex,
+    order_scratch: &mut Vec<usize>,
+    aft_capture_scratch: &mut SongLuaAftCaptureScratch,
+) -> i16 {
+    aft_capture_scratch.begin_frame();
+    let base_z = song_lua_add_z(
+        SONG_LUA_OVERLAY_LAYER_Z_BASE,
+        song_lua_rounded_z(song_foreground_state.z),
+    );
+    out.reserve(overlays.len());
+    song_lua_overlay_order_into(overlays, overlay_states, order_cache, None, order_scratch);
+    topology_index.prepare_rgb_aft_groups(overlay_states, order_scratch);
+    base_z
+}
+
 fn push_song_lua_layer_actors(
     out: &mut Vec<Actor>,
     overlays: &[SongLuaOverlayActor],
@@ -16671,14 +16986,18 @@ fn push_song_lua_layer_actors(
     aft_capture_scratch: &mut SongLuaAftCaptureScratch,
     projected_mesh_scratch: &mut [SongLuaProjectedMeshScratch],
 ) {
-    aft_capture_scratch.begin_frame();
-    let song_lua_overlay_base_z = song_lua_add_z(
-        SONG_LUA_OVERLAY_LAYER_Z_BASE,
-        song_lua_rounded_z(song_foreground_state.z),
-    );
-    out.reserve(overlays.len());
-    song_lua_overlay_order_into(overlays, overlay_states, order_cache, None, order_scratch);
-    topology_index.prepare_rgb_aft_groups(overlay_states, order_scratch);
+    let Some(song_lua_overlay_base_z) = prepare_song_lua_layer(
+        out,
+        overlays,
+        overlay_states,
+        song_foreground_state,
+        order_cache,
+        topology_index,
+        order_scratch,
+        aft_capture_scratch,
+    ) else {
+        return;
+    };
     for (draw_idx, idx) in order_scratch.iter().copied().enumerate() {
         let Some(overlay) = overlays.get(idx) else {
             continue;
@@ -16917,10 +17236,9 @@ fn push_actors_impl(
 
     let notefield_view = view.notefield;
     let hide_gameplay_hud = view.hide_gameplay_hud;
-    let hud_snapshot = &state.hud_snapshot;
     actors.reserve(96);
-    let play_style = hud_snapshot.play_style;
-    let player_side = hud_snapshot.player_side;
+    let play_style = state.hud_snapshot.play_style;
+    let player_side = state.hud_snapshot.player_side;
     let is_p2_single = profile_data::is_single_p2_side(play_style, player_side);
     let runtime_player_is_p2 = profile_data::runtime_player_is_p2(play_style, player_side);
     let policy = state.runtime_view.policy;
@@ -18579,6 +18897,7 @@ fn push_actors_impl(
             z(110)
         ));
         }
+        let hud_snapshot = &state.hud_snapshot;
         let p1_avatar = hud_snapshot
             .p1
             .avatar_texture_key
@@ -19678,6 +19997,112 @@ mod tests {
             assert_eq!(actual, expected, "now={now}");
         }
         assert!(!fast_cache.initialized);
+    }
+
+    #[test]
+    fn compiled_background_transitions_match_names_expiry_and_seek() {
+        for name in [
+            "CrossFade_Fastest",
+            "CrossFade_Faster",
+            "CrossFade",
+            "FadeCenterHorizontal",
+            "FadeCenterVertical",
+            "FadeDown",
+            "FadeLeft",
+            "FadeRight",
+            "FadeUp",
+            "SlideDown",
+            "SlideLeft",
+            "SlideRight",
+            "SlideUp",
+        ] {
+            let transition = BackgroundTransition::from_name(name).expect("known transition");
+            let expired = Cell::new(false);
+            let duration = transition.duration();
+            for now in [
+                0.0,
+                duration * 0.5,
+                duration,
+                duration + 10.0,
+                duration * 0.25,
+            ] {
+                assert_eq!(
+                    background_transition_frame(Some(transition), &expired, 0.0, now),
+                    background_transition_frame_legacy(name, 0.0, now),
+                    "name={name}, now={now}"
+                );
+            }
+        }
+        assert_eq!(BackgroundTransition::from_name("NotATransition"), None);
+    }
+
+    #[test]
+    fn song_layer2_cursor_matches_reverse_scan_across_seeks() {
+        let events = vec![
+            SongLayer2Event {
+                start_second: 1.0,
+                color: Some([1.0; 4]),
+            },
+            SongLayer2Event {
+                start_second: 2.0,
+                color: None,
+            },
+            SongLayer2Event {
+                start_second: 3.0,
+                color: Some([1.0, 1.0, 160.0 / 255.0, 1.0]),
+            },
+        ];
+        let cursor = Cell::new(0);
+
+        for now in [-1.0, 1.0, 1.3, 1.7, 2.1, 3.25, 4.0, 1.2, 3.6] {
+            assert_eq!(
+                song_layer2_animation_from(&events, &cursor, now),
+                song_layer2_animation_legacy(&events, now),
+                "now={now}"
+            );
+        }
+    }
+
+    #[test]
+    fn empty_song_lua_layer_skips_preparation_without_changing_output() {
+        let mut legacy_actors = vec![Actor::CameraPop];
+        let mut fast_actors = legacy_actors.clone();
+        let mut legacy_order_cache = SongLuaOverlayOrderCache::default();
+        let mut fast_order_cache = SongLuaOverlayOrderCache::default();
+        let mut legacy_topology = SongLuaOverlayTopologyIndex::default();
+        let mut fast_topology = SongLuaOverlayTopologyIndex::default();
+        let mut legacy_order = vec![7];
+        let mut fast_order = legacy_order.clone();
+        let mut legacy_aft = SongLuaAftCaptureScratch::default();
+        let mut fast_aft = SongLuaAftCaptureScratch::default();
+
+        let _ = prepare_active_song_lua_layer(
+            &mut legacy_actors,
+            &[],
+            &[],
+            SongLuaOverlayState::default(),
+            &mut legacy_order_cache,
+            &mut legacy_topology,
+            &mut legacy_order,
+            &mut legacy_aft,
+        );
+        assert_eq!(
+            prepare_song_lua_layer(
+                &mut fast_actors,
+                &[],
+                &[],
+                SongLuaOverlayState::default(),
+                &mut fast_order_cache,
+                &mut fast_topology,
+                &mut fast_order,
+                &mut fast_aft,
+            ),
+            None
+        );
+
+        assert_eq!(fast_actors.len(), legacy_actors.len());
+        assert!(matches!(fast_actors.as_slice(), [Actor::CameraPop]));
+        assert_eq!(fast_order, legacy_order);
     }
 
     #[test]

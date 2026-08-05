@@ -4907,17 +4907,9 @@ impl App {
                     .map(|change| change.transition.clone())
                     .unwrap_or_default();
                 let old_texture_key = old_texture_key.expect("tracked background transition key");
-                if transition.is_empty() || &*old_texture_key == "__black" {
-                    gs.previous_background_texture_key = None;
-                    gs.background_transition.clear();
-                } else {
-                    gs.previous_background_texture_key = Some(old_texture_key);
-                    gs.background_transition = transition;
-                    gs.background_transition_start_time =
-                        deadsync_core::song_time::song_time_ns_to_seconds(
-                            gs.current_music_time_ns(),
-                        );
-                }
+                let start_time =
+                    deadsync_core::song_time::song_time_ns_to_seconds(gs.current_music_time_ns());
+                gameplay::begin_background_transition(gs, old_texture_key, &transition, start_time);
             }
             let active_change = Self::active_gameplay_background_change(gs);
             let bg_start_change = active_change.filter(|change| {
