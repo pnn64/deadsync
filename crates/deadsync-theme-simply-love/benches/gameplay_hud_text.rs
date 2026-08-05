@@ -15,7 +15,8 @@ use deadsync_theme_simply_love::screens::components::gameplay::notefield::{
 };
 use deadsync_theme_simply_love::screens::gameplay::{
     DifficultyMeterBench, GameplayHudTextBenchmarkCache, GameplayHudTextBenchmarkSnapshot,
-    GameplayNotefieldWidthBench, benchmark_gameplay_hud_text_legacy, benchmark_intro_text_width,
+    GameplayLifemeterOptionBench, GameplayNotefieldWidthBench, GameplayRateTextBench,
+    benchmark_gameplay_hud_text_legacy, benchmark_intro_text_width,
 };
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::collections::HashMap;
@@ -304,6 +305,35 @@ fn print_result_for(label: &str, result: &BenchResult, operations: usize) {
 }
 
 fn main() {
+    deadsync_theme_simply_love::i18n::init(deadsync_assets::language::load_for_tests("en"));
+    let lifemeter = GameplayLifemeterOptionBench::default();
+    let hidden_percent_lookup =
+        measure_dynamic_text(|frame| lifemeter.old_hidden_percent_frame(frame));
+    let hidden_percent_gate =
+        measure_dynamic_text(|frame| lifemeter.new_hidden_percent_frame(frame));
+    assert_eq!(hidden_percent_lookup.checksum, hidden_percent_gate.checksum);
+
+    println!("hidden life-percent benchmark (256 evaluations/frame)");
+    print_result_for("cache lookup", &hidden_percent_lookup, DYNAMIC_TEXT_OPS);
+    print_result_for("option gate", &hidden_percent_gate, DYNAMIC_TEXT_OPS);
+
+    let surround_unused = measure_dynamic_text(|frame| lifemeter.old_surround_frame(frame));
+    let surround_direct = measure_dynamic_text(|frame| lifemeter.new_surround_frame(frame));
+    assert_eq!(surround_unused.checksum, surround_direct.checksum);
+
+    println!("\nSurround rainbow-life benchmark (256 evaluations/frame)");
+    print_result_for("double color", &surround_unused, DYNAMIC_TEXT_OPS);
+    print_result_for("visible color", &surround_direct, DYNAMIC_TEXT_OPS);
+
+    let rate_text = GameplayRateTextBench::default();
+    let rate_lookup = measure_dynamic_text(|frame| rate_text.old_frame(frame));
+    let rate_snapshot = measure_dynamic_text(|frame| rate_text.new_frame(frame));
+    assert_eq!(rate_lookup.checksum, rate_snapshot.checksum);
+
+    println!("\nsong-static rate text benchmark (256 reads/frame)");
+    print_result_for("hash lookup", &rate_lookup, DYNAMIC_TEXT_OPS);
+    print_result_for("arc snapshot", &rate_snapshot, DYNAMIC_TEXT_OPS);
+
     let display_mods = DisplayModsTextBench::default();
     let mods_lookup = measure_dynamic_text(|frame| display_mods.old_frame(frame));
     let mods_snapshot = measure_dynamic_text(|frame| display_mods.new_frame(frame));
