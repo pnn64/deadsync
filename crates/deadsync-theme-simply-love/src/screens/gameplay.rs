@@ -2520,15 +2520,16 @@ impl State {
         song_lua_proxy_request_index
             .topology
             .include_camera_eases(&song_lua_visuals.overlays, &song_lua_visuals.overlay_eases);
-        let song_lua_background_overlay_topology_indices = song_lua_visuals
-            .background_visual_layers
-            .iter()
-            .map(|layer| {
-                let mut topology = SongLuaOverlayTopologyIndex::new(&layer.overlays);
-                topology.include_camera_eases(&layer.overlays, &layer.overlay_eases);
-                topology
-            })
-            .collect();
+        let song_lua_background_overlay_topology_indices: Vec<SongLuaOverlayTopologyIndex> =
+            song_lua_visuals
+                .background_visual_layers
+                .iter()
+                .map(|layer| {
+                    let mut topology = SongLuaOverlayTopologyIndex::new(&layer.overlays);
+                    topology.include_camera_eases(&layer.overlays, &layer.overlay_eases);
+                    topology
+                })
+                .collect();
         let song_lua_foreground_proxy_request_indices: Vec<SongLuaProxyRequestIndex> =
             song_lua_visuals
                 .foreground_visual_layers
@@ -2548,13 +2549,13 @@ impl State {
         let song_lua_background_aft_capture_scratch = song_lua_visuals
             .background_visual_layers
             .iter()
-            .zip(&song_lua_background_overlay_topology_indices)
+            .zip(song_lua_background_overlay_topology_indices.iter())
             .map(|(layer, topology)| SongLuaAftCaptureScratch::new(&layer.overlays, topology))
             .collect();
         let song_lua_foreground_aft_capture_scratch = song_lua_visuals
             .foreground_visual_layers
             .iter()
-            .zip(&song_lua_foreground_proxy_request_indices)
+            .zip(song_lua_foreground_proxy_request_indices.iter())
             .map(|(layer, index)| SongLuaAftCaptureScratch::new(&layer.overlays, &index.topology))
             .collect();
         let song_lua_proxy_count = song_lua_proxy_request_index.proxy_indices.len()
