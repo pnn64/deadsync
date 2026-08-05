@@ -6397,6 +6397,40 @@ fn song_lua_overlay_state_sets_from_into(
     local_out: &mut Vec<SongLuaOverlayState>,
     overlay_out: &mut Vec<SongLuaOverlayState>,
 ) {
+    if overlays.is_empty() {
+        message_caches.clear();
+        local_out.clear();
+        overlay_out.clear();
+        return;
+    }
+    song_lua_overlay_state_sets_active_into(
+        now,
+        overlays,
+        overlay_events,
+        overlay_eases,
+        overlay_ease_ranges,
+        screen_width,
+        screen_height,
+        order_cache,
+        message_caches,
+        local_out,
+        overlay_out,
+    );
+}
+
+fn song_lua_overlay_state_sets_active_into(
+    now: f32,
+    overlays: &[SongLuaOverlayActor],
+    overlay_events: &[Vec<SongLuaOverlayMessageRuntime>],
+    overlay_eases: &[SongLuaOverlayEaseWindowRuntime],
+    overlay_ease_ranges: &[std::ops::Range<usize>],
+    screen_width: f32,
+    screen_height: f32,
+    order_cache: &SongLuaOverlayOrderCache,
+    message_caches: &mut Vec<SongLuaMessageStateCache>,
+    local_out: &mut Vec<SongLuaOverlayState>,
+    overlay_out: &mut Vec<SongLuaOverlayState>,
+) {
     song_lua_overlay_local_states_into(
         now,
         overlays,
@@ -6679,6 +6713,25 @@ fn song_lua_replacement_active_players_indexed_legacy(
 }
 
 fn song_lua_replacement_active_players_indexed(
+    overlays: &[SongLuaOverlayActor],
+    overlay_states: &[SongLuaOverlayState],
+    proxy_sources: &[SongLuaPlayerProxySources<'_>; 2],
+    index: &SongLuaProxyRequestIndex,
+    visit_scratch: &mut SongLuaCaptureVisitScratch,
+) -> [bool; 2] {
+    if index.proxy_indices.is_empty() {
+        return [false; 2];
+    }
+    song_lua_replacement_active_players_indexed_active(
+        overlays,
+        overlay_states,
+        proxy_sources,
+        index,
+        visit_scratch,
+    )
+}
+
+fn song_lua_replacement_active_players_indexed_active(
     overlays: &[SongLuaOverlayActor],
     overlay_states: &[SongLuaOverlayState],
     proxy_sources: &[SongLuaPlayerProxySources<'_>; 2],
@@ -7915,6 +7968,18 @@ fn song_lua_collect_capture_requests_indexed(
 }
 
 fn song_lua_proxy_requests_indexed(
+    overlays: &[SongLuaOverlayActor],
+    overlay_states: &[SongLuaOverlayState],
+    index: &SongLuaProxyRequestIndex,
+    visit_scratch: &mut SongLuaCaptureVisitScratch,
+) -> SongLuaScreenProxyRequests {
+    if index.proxy_indices.is_empty() {
+        return SongLuaScreenProxyRequests::default();
+    }
+    song_lua_proxy_requests_indexed_active(overlays, overlay_states, index, visit_scratch)
+}
+
+fn song_lua_proxy_requests_indexed_active(
     overlays: &[SongLuaOverlayActor],
     overlay_states: &[SongLuaOverlayState],
     index: &SongLuaProxyRequestIndex,
@@ -9364,10 +9429,9 @@ fn song_lua_player_render_state(
     let Some(actor) = song_lua_visuals.player_actors.get(player_index) else {
         return SongLuaOverlayState::default();
     };
-    song_lua_message_state_cached(
+    song_lua_captured_actor_state_from(
         state.current_music_time_display(),
-        actor.initial_state,
-        &actor.message_commands,
+        actor,
         song_lua_visuals
             .player_events
             .get(player_index)
@@ -9382,11 +9446,24 @@ fn song_lua_song_foreground_state_from(
     events: &[SongLuaOverlayMessageRuntime],
     message_cache: &mut SongLuaMessageStateCache,
 ) -> SongLuaOverlayState {
+    song_lua_captured_actor_state_from(now, song_foreground, Some(events), message_cache)
+}
+
+fn song_lua_captured_actor_state_from(
+    now: f32,
+    actor: &SongLuaCapturedActor,
+    events: Option<&[SongLuaOverlayMessageRuntime]>,
+    message_cache: &mut SongLuaMessageStateCache,
+) -> SongLuaOverlayState {
+    if events.is_none_or(<[_]>::is_empty) {
+        message_cache.initialized = false;
+        return actor.initial_state;
+    }
     song_lua_message_state_cached(
         now,
-        song_foreground.initial_state,
-        &song_foreground.message_commands,
-        Some(events),
+        actor.initial_state,
+        &actor.message_commands,
+        events,
         message_cache,
     )
 }
@@ -11821,6 +11898,168 @@ impl SongLuaStaticStateBenchmark {
             &mut self.fast_cache,
         );
         song_lua_overlay_state_checksum(state)
+    }
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub struct SongLuaNoScriptBenchmark {
+    overlays: Vec<SongLuaOverlayActor>,
+    overlay_events: Vec<Vec<SongLuaOverlayMessageRuntime>>,
+    overlay_eases: Vec<SongLuaOverlayEaseWindowRuntime>,
+    overlay_ease_ranges: Vec<std::ops::Range<usize>>,
+    overlay_states: Vec<SongLuaOverlayState>,
+    actor_events: Vec<SongLuaOverlayMessageRuntime>,
+    order_cache: SongLuaOverlayOrderCache,
+    legacy_state_caches: Vec<SongLuaMessageStateCache>,
+    fast_state_caches: Vec<SongLuaMessageStateCache>,
+    legacy_local_states: Vec<SongLuaOverlayState>,
+    fast_local_states: Vec<SongLuaOverlayState>,
+    legacy_states: Vec<SongLuaOverlayState>,
+    fast_states: Vec<SongLuaOverlayState>,
+    proxy_index: SongLuaProxyRequestIndex,
+    legacy_visit: SongLuaCaptureVisitScratch,
+    fast_visit: SongLuaCaptureVisitScratch,
+    actor: SongLuaCapturedActor,
+    legacy_message_caches: [SongLuaMessageStateCache; 3],
+    fast_message_caches: [SongLuaMessageStateCache; 3],
+}
+
+#[cfg(feature = "bench-support")]
+impl SongLuaNoScriptBenchmark {
+    pub fn new() -> Self {
+        Self {
+            overlays: Vec::new(),
+            overlay_events: Vec::new(),
+            overlay_eases: Vec::new(),
+            overlay_ease_ranges: Vec::new(),
+            overlay_states: Vec::new(),
+            actor_events: Vec::new(),
+            order_cache: SongLuaOverlayOrderCache::default(),
+            legacy_state_caches: Vec::new(),
+            fast_state_caches: Vec::new(),
+            legacy_local_states: Vec::new(),
+            fast_local_states: Vec::new(),
+            legacy_states: Vec::new(),
+            fast_states: Vec::new(),
+            proxy_index: SongLuaProxyRequestIndex::new(&[]),
+            legacy_visit: SongLuaCaptureVisitScratch::with_capacity(0),
+            fast_visit: SongLuaCaptureVisitScratch::with_capacity(0),
+            actor: SongLuaCapturedActor {
+                initial_state: SongLuaOverlayState {
+                    x: 123.0,
+                    y: -45.0,
+                    draw_order: 17,
+                    ..SongLuaOverlayState::default()
+                },
+                message_commands: Vec::new(),
+            },
+            legacy_message_caches: std::array::from_fn(|_| SongLuaMessageStateCache::default()),
+            fast_message_caches: std::array::from_fn(|_| SongLuaMessageStateCache::default()),
+        }
+    }
+
+    pub fn legacy_state_frame(&mut self, now: f32) -> u64 {
+        song_lua_overlay_state_sets_active_into(
+            now,
+            &self.overlays,
+            &self.overlay_events,
+            &self.overlay_eases,
+            &self.overlay_ease_ranges,
+            640.0,
+            480.0,
+            &self.order_cache,
+            &mut self.legacy_state_caches,
+            &mut self.legacy_local_states,
+            &mut self.legacy_states,
+        );
+        self.legacy_state_caches.len() as u64
+            | ((self.legacy_local_states.len() as u64) << 16)
+            | ((self.legacy_states.len() as u64) << 32)
+    }
+
+    pub fn fast_state_frame(&mut self, now: f32) -> u64 {
+        song_lua_overlay_state_sets_from_into(
+            now,
+            &self.overlays,
+            &self.overlay_events,
+            &self.overlay_eases,
+            &self.overlay_ease_ranges,
+            640.0,
+            480.0,
+            &self.order_cache,
+            &mut self.fast_state_caches,
+            &mut self.fast_local_states,
+            &mut self.fast_states,
+        );
+        self.fast_state_caches.len() as u64
+            | ((self.fast_local_states.len() as u64) << 16)
+            | ((self.fast_states.len() as u64) << 32)
+    }
+
+    pub fn legacy_proxy_frame(&mut self) -> u64 {
+        let requests = song_lua_proxy_requests_indexed_active(
+            &self.overlays,
+            &self.overlay_states,
+            &self.proxy_index,
+            &mut self.legacy_visit,
+        );
+        let players = song_lua_replacement_active_players_indexed_active(
+            &self.overlays,
+            &self.overlay_states,
+            &[SongLuaPlayerProxySources::default(); 2],
+            &self.proxy_index,
+            &mut self.legacy_visit,
+        );
+        SongLuaProxyRequestBenchmark::checksum(requests)
+            | (SongLuaCaptureTraversalBenchmark::player_checksum(players) << 16)
+    }
+
+    pub fn fast_proxy_frame(&mut self) -> u64 {
+        let requests = song_lua_proxy_requests_indexed(
+            &self.overlays,
+            &self.overlay_states,
+            &self.proxy_index,
+            &mut self.fast_visit,
+        );
+        let players = song_lua_replacement_active_players_indexed(
+            &self.overlays,
+            &self.overlay_states,
+            &[SongLuaPlayerProxySources::default(); 2],
+            &self.proxy_index,
+            &mut self.fast_visit,
+        );
+        SongLuaProxyRequestBenchmark::checksum(requests)
+            | (SongLuaCaptureTraversalBenchmark::player_checksum(players) << 16)
+    }
+
+    pub fn legacy_message_frame(&mut self, now: f32) -> u64 {
+        self.legacy_message_caches
+            .iter_mut()
+            .fold(0, |checksum, cache| {
+                checksum.rotate_left(7)
+                    ^ song_lua_overlay_state_checksum(song_lua_message_state_cached(
+                        now,
+                        self.actor.initial_state,
+                        &self.actor.message_commands,
+                        Some(&self.actor_events),
+                        cache,
+                    ))
+            })
+    }
+
+    pub fn fast_message_frame(&mut self, now: f32) -> u64 {
+        self.fast_message_caches
+            .iter_mut()
+            .fold(0, |checksum, cache| {
+                checksum.rotate_left(7)
+                    ^ song_lua_overlay_state_checksum(song_lua_captured_actor_state_from(
+                        now,
+                        &self.actor,
+                        Some(&self.actor_events),
+                        cache,
+                    ))
+            })
     }
 }
 
@@ -19354,6 +19593,91 @@ mod tests {
         }
         assert!(dynamic_cache.initialized);
         assert!(!static_cache.initialized);
+    }
+
+    #[test]
+    fn song_lua_empty_overlay_state_clears_reused_outputs() {
+        let mut message_caches = vec![SongLuaMessageStateCache::default()];
+        let mut local_states = vec![SongLuaOverlayState::default()];
+        let mut states = vec![SongLuaOverlayState::default()];
+
+        song_lua_overlay_state_sets_from_into(
+            42.0,
+            &[],
+            &[],
+            &[],
+            &[],
+            640.0,
+            480.0,
+            &SongLuaOverlayOrderCache::default(),
+            &mut message_caches,
+            &mut local_states,
+            &mut states,
+        );
+
+        assert!(message_caches.is_empty());
+        assert!(local_states.is_empty());
+        assert!(states.is_empty());
+    }
+
+    #[test]
+    fn song_lua_proxy_free_analysis_skips_capture_visits() {
+        let overlays = vec![SongLuaOverlayActor {
+            kind: SongLuaOverlayKind::Quad,
+            name: None,
+            parent_index: None,
+            initial_state: SongLuaOverlayState::default(),
+            message_commands: Vec::new(),
+        }];
+        let states = vec![SongLuaOverlayState::default()];
+        let index = SongLuaProxyRequestIndex::new(&overlays);
+        let mut visit_scratch = SongLuaCaptureVisitScratch::with_capacity(overlays.len());
+        let sources = [SongLuaPlayerProxySources::default(); 2];
+
+        assert_eq!(
+            song_lua_proxy_requests_indexed(&overlays, &states, &index, &mut visit_scratch),
+            SongLuaScreenProxyRequests::default()
+        );
+        assert_eq!(
+            song_lua_replacement_active_players_indexed(
+                &overlays,
+                &states,
+                &sources,
+                &index,
+                &mut visit_scratch,
+            ),
+            [false; 2]
+        );
+        assert_eq!(visit_scratch.generation, 0);
+    }
+
+    #[test]
+    fn song_lua_empty_captured_timeline_returns_initial_state() {
+        let actor = SongLuaCapturedActor {
+            initial_state: SongLuaOverlayState {
+                x: 123.0,
+                y: -45.0,
+                draw_order: 17,
+                ..SongLuaOverlayState::default()
+            },
+            message_commands: Vec::new(),
+        };
+        let mut expected_cache = SongLuaMessageStateCache::default();
+        let mut fast_cache = SongLuaMessageStateCache::default();
+
+        for now in [-1.0, 0.0, 42.0, 10_000.0] {
+            let expected = song_lua_message_state_cached(
+                now,
+                actor.initial_state,
+                &actor.message_commands,
+                Some(&[]),
+                &mut expected_cache,
+            );
+            let actual =
+                song_lua_captured_actor_state_from(now, &actor, Some(&[]), &mut fast_cache);
+            assert_eq!(actual, expected, "now={now}");
+        }
+        assert!(!fast_cache.initialized);
     }
 
     #[test]

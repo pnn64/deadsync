@@ -1,10 +1,11 @@
 use deadsync_theme_simply_love::screens::gameplay::{
     SongLuaActorBuildBenchmark, SongLuaCaptureTraversalBenchmark, SongLuaEaseBenchmark,
     SongLuaGraphDisplayBenchmark, SongLuaMessageStateBenchmark, SongLuaMultiActorEmitBenchmark,
-    SongLuaNoteskinModelBenchmark, SongLuaOrderBenchmark, SongLuaProjectedMeshBenchmark,
-    SongLuaProxyRequestBenchmark, SongLuaStatePlanBenchmark, SongLuaStaticOrderBenchmark,
-    SongLuaStaticStateBenchmark, SongLuaTextAttributeBenchmark, SongLuaTexturedGlowBenchmark,
-    SongLuaTopologyBenchmark, SongLuaUppercaseTextBenchmark, SongLuaWhiteTextureKeyBenchmark,
+    SongLuaNoScriptBenchmark, SongLuaNoteskinModelBenchmark, SongLuaOrderBenchmark,
+    SongLuaProjectedMeshBenchmark, SongLuaProxyRequestBenchmark, SongLuaStatePlanBenchmark,
+    SongLuaStaticOrderBenchmark, SongLuaStaticStateBenchmark, SongLuaTextAttributeBenchmark,
+    SongLuaTexturedGlowBenchmark, SongLuaTopologyBenchmark, SongLuaUppercaseTextBenchmark,
+    SongLuaWhiteTextureKeyBenchmark,
 };
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::hint::black_box;
@@ -202,6 +203,7 @@ fn assert_zero_alloc(label: &str, result: &BenchResult) {
 
 fn main() {
     const MESSAGE_FRAMES: usize = 20_000;
+    const EMPTY_SCRIPT_FRAMES: usize = 200_000;
     const BLOCK_FRAMES: usize = 50_000;
     const EASE_FRAMES: usize = 100_000;
     const PROXY_FRAMES: usize = 20_000;
@@ -247,6 +249,38 @@ fn main() {
         measure(MESSAGE_FRAMES, || static_state.legacy_frame(black_box(now)));
     let fast_static_state_result =
         measure(MESSAGE_FRAMES, || static_state.static_frame(black_box(now)));
+
+    let mut legacy_no_script = SongLuaNoScriptBenchmark::new();
+    let mut fast_no_script = SongLuaNoScriptBenchmark::new();
+    assert_eq!(
+        legacy_no_script.legacy_state_frame(now),
+        fast_no_script.fast_state_frame(now)
+    );
+    assert_eq!(
+        legacy_no_script.legacy_proxy_frame(),
+        fast_no_script.fast_proxy_frame()
+    );
+    assert_eq!(
+        legacy_no_script.legacy_message_frame(now),
+        fast_no_script.fast_message_frame(now)
+    );
+    let legacy_empty_state_result = measure(EMPTY_SCRIPT_FRAMES, || {
+        legacy_no_script.legacy_state_frame(black_box(now))
+    });
+    let fast_empty_state_result = measure(EMPTY_SCRIPT_FRAMES, || {
+        fast_no_script.fast_state_frame(black_box(now))
+    });
+    let legacy_empty_proxy_result = measure(EMPTY_SCRIPT_FRAMES, || {
+        legacy_no_script.legacy_proxy_frame()
+    });
+    let fast_empty_proxy_result =
+        measure(EMPTY_SCRIPT_FRAMES, || fast_no_script.fast_proxy_frame());
+    let legacy_empty_message_result = measure(EMPTY_SCRIPT_FRAMES, || {
+        legacy_no_script.legacy_message_frame(black_box(now))
+    });
+    let fast_empty_message_result = measure(EMPTY_SCRIPT_FRAMES, || {
+        fast_no_script.fast_message_frame(black_box(now))
+    });
 
     let mut legacy_state_plan = SongLuaStatePlanBenchmark::new(STATE_PLAN_ACTORS);
     let mut planned_state_plan = SongLuaStatePlanBenchmark::new(STATE_PLAN_ACTORS);
@@ -664,6 +698,24 @@ fn main() {
     assert_zero_alloc("static Song Lua state", &legacy_static_state_result);
     assert_zero_alloc("static Song Lua state fast path", &fast_static_state_result);
     assert_eq!(
+        legacy_empty_state_result.checksum,
+        fast_empty_state_result.checksum
+    );
+    assert_eq!(
+        legacy_empty_proxy_result.checksum,
+        fast_empty_proxy_result.checksum
+    );
+    assert_eq!(
+        legacy_empty_message_result.checksum,
+        fast_empty_message_result.checksum
+    );
+    assert_zero_alloc("empty Song Lua state fast path", &fast_empty_state_result);
+    assert_zero_alloc("empty Song Lua proxy fast path", &fast_empty_proxy_result);
+    assert_zero_alloc(
+        "empty Song Lua message fast path",
+        &fast_empty_message_result,
+    );
+    assert_eq!(
         legacy_state_plan_result.checksum,
         planned_state_plan_result.checksum
     );
@@ -880,6 +932,37 @@ fn main() {
         "initial-state fast",
         MESSAGE_FRAMES,
         &fast_static_state_result,
+    );
+    println!("ordinary song (no Song Lua overlays/events)");
+    print_result(
+        "state machinery",
+        EMPTY_SCRIPT_FRAMES,
+        &legacy_empty_state_result,
+    );
+    print_result(
+        "skip empty state",
+        EMPTY_SCRIPT_FRAMES,
+        &fast_empty_state_result,
+    );
+    print_result(
+        "proxy analysis",
+        EMPTY_SCRIPT_FRAMES,
+        &legacy_empty_proxy_result,
+    );
+    print_result(
+        "skip empty proxy",
+        EMPTY_SCRIPT_FRAMES,
+        &fast_empty_proxy_result,
+    );
+    print_result(
+        "message timelines",
+        EMPTY_SCRIPT_FRAMES,
+        &legacy_empty_message_result,
+    );
+    print_result(
+        "initial actor state",
+        EMPTY_SCRIPT_FRAMES,
+        &fast_empty_message_result,
     );
     println!("overlay state plan ({STATE_PLAN_ACTORS} actors, 1/64 dynamic local, 1/4 composed)");
     print_result(
