@@ -2,9 +2,9 @@ use deadsync_theme_simply_love::screens::gameplay::{
     SongLuaActorBuildBenchmark, SongLuaCaptureTraversalBenchmark, SongLuaEaseBenchmark,
     SongLuaGraphDisplayBenchmark, SongLuaMessageStateBenchmark, SongLuaMultiActorEmitBenchmark,
     SongLuaNoteskinModelBenchmark, SongLuaOrderBenchmark, SongLuaProjectedMeshBenchmark,
-    SongLuaProxyRequestBenchmark, SongLuaStaticStateBenchmark, SongLuaTextAttributeBenchmark,
-    SongLuaTexturedGlowBenchmark, SongLuaTopologyBenchmark, SongLuaUppercaseTextBenchmark,
-    SongLuaWhiteTextureKeyBenchmark,
+    SongLuaProxyRequestBenchmark, SongLuaStatePlanBenchmark, SongLuaStaticOrderBenchmark,
+    SongLuaStaticStateBenchmark, SongLuaTextAttributeBenchmark, SongLuaTexturedGlowBenchmark,
+    SongLuaTopologyBenchmark, SongLuaUppercaseTextBenchmark, SongLuaWhiteTextureKeyBenchmark,
 };
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::hint::black_box;
@@ -18,6 +18,8 @@ const MESSAGE_EVENTS: usize = 2_048;
 const MESSAGE_BLOCKS: usize = 512;
 const FUTURE_EASES: usize = 2_048;
 const ORDER_ACTORS: usize = 256;
+const STATIC_ORDER_ACTORS: usize = 512;
+const STATE_PLAN_ACTORS: usize = 512;
 const TOPOLOGY_GROUPS: usize = 16;
 const TOPOLOGY_CHAIN_DEPTH: usize = 32;
 const TOPOLOGY_REFERENCES: usize = 128;
@@ -208,7 +210,9 @@ fn main() {
     const RGB_AFT_FRAMES: usize = 2_000;
     const ANCESTRY_FRAMES: usize = 20_000;
     const CAMERA_FRAMES: usize = 20_000;
+    const STATE_PLAN_FRAMES: usize = 20_000;
     const ORDER_FRAMES: usize = 100_000;
+    const STATIC_ORDER_FRAMES: usize = 50_000;
     const MESH_FRAMES: usize = 50_000;
     const ACTOR_BUILD_FRAMES: usize = 100_000;
     const MULTI_ACTOR_FRAMES: usize = 100_000;
@@ -243,6 +247,19 @@ fn main() {
         measure(MESSAGE_FRAMES, || static_state.legacy_frame(black_box(now)));
     let fast_static_state_result =
         measure(MESSAGE_FRAMES, || static_state.static_frame(black_box(now)));
+
+    let mut legacy_state_plan = SongLuaStatePlanBenchmark::new(STATE_PLAN_ACTORS);
+    let mut planned_state_plan = SongLuaStatePlanBenchmark::new(STATE_PLAN_ACTORS);
+    assert_eq!(
+        legacy_state_plan.legacy_frame(0.5),
+        planned_state_plan.planned_frame(0.5)
+    );
+    let legacy_state_plan_result = measure(STATE_PLAN_FRAMES, || {
+        legacy_state_plan.legacy_frame(black_box(0.5))
+    });
+    let planned_state_plan_result = measure(STATE_PLAN_FRAMES, || {
+        planned_state_plan.planned_frame(black_box(0.5))
+    });
 
     let block_now = MESSAGE_BLOCKS as f32 * 0.01 + 1.0;
     let legacy_blocks = SongLuaMessageStateBenchmark::long_command(MESSAGE_BLOCKS);
@@ -315,6 +332,10 @@ fn main() {
         topology_benchmark.legacy_camera_states(),
         topology_benchmark.indexed_camera_states()
     );
+    assert_eq!(
+        topology_benchmark.indexed_camera_states(),
+        topology_benchmark.precomputed_camera_states()
+    );
     let legacy_aft_target_result = measure(AFT_TARGET_FRAMES, || {
         topology_benchmark.legacy_aft_targets()
     });
@@ -330,21 +351,17 @@ fn main() {
     let legacy_camera_result = measure(CAMERA_FRAMES, || topology_benchmark.legacy_camera_states());
     let indexed_camera_result =
         measure(CAMERA_FRAMES, || topology_benchmark.indexed_camera_states());
+    let precomputed_camera_result = measure(CAMERA_FRAMES, || {
+        topology_benchmark.precomputed_camera_states()
+    });
     let mut rgb_aft_benchmark =
         SongLuaTopologyBenchmark::new(TOPOLOGY_GROUPS, TOPOLOGY_CHAIN_DEPTH, RGB_AFT_REFERENCES);
     assert_eq!(
         rgb_aft_benchmark.legacy_rgb_aft_groups(),
-        rgb_aft_benchmark.indexed_rgb_aft_groups()
-    );
-    assert_eq!(
-        rgb_aft_benchmark.indexed_rgb_aft_groups(),
         rgb_aft_benchmark.prepared_rgb_aft_groups()
     );
     let legacy_rgb_aft_result =
         measure(RGB_AFT_FRAMES, || rgb_aft_benchmark.legacy_rgb_aft_groups());
-    let indexed_rgb_aft_result = measure(RGB_AFT_FRAMES, || {
-        rgb_aft_benchmark.indexed_rgb_aft_groups()
-    });
     let prepared_rgb_aft_result = measure(RGB_AFT_FRAMES, || {
         rgb_aft_benchmark.prepared_rgb_aft_groups()
     });
@@ -372,6 +389,21 @@ fn main() {
         let checksum = cached_changing_order.cached_changing_frame(changing_tick);
         changing_tick = changing_tick.wrapping_add(1);
         checksum.min(u64::MAX as usize) as u64
+    });
+
+    let mut recursive_static_order = SongLuaStaticOrderBenchmark::new(STATIC_ORDER_ACTORS);
+    let mut flat_static_order = SongLuaStaticOrderBenchmark::new(STATIC_ORDER_ACTORS);
+    assert_eq!(
+        recursive_static_order.recursive_frame(),
+        flat_static_order.flat_frame()
+    );
+    let recursive_static_order_result = measure(STATIC_ORDER_FRAMES, || {
+        recursive_static_order
+            .recursive_frame()
+            .min(u64::MAX as usize) as u64
+    });
+    let flat_static_order_result = measure(STATIC_ORDER_FRAMES, || {
+        flat_static_order.flat_frame().min(u64::MAX as usize) as u64
     });
 
     let legacy_mesh = SongLuaProjectedMeshBenchmark::default();
@@ -631,6 +663,12 @@ fn main() {
     );
     assert_zero_alloc("static Song Lua state", &legacy_static_state_result);
     assert_zero_alloc("static Song Lua state fast path", &fast_static_state_result);
+    assert_eq!(
+        legacy_state_plan_result.checksum,
+        planned_state_plan_result.checksum
+    );
+    assert_zero_alloc("full overlay state scan", &legacy_state_plan_result);
+    assert_zero_alloc("planned overlay state updates", &planned_state_plan_result);
     assert_eq!(legacy_block_result.checksum, cached_block_result.checksum);
     assert_eq!(legacy_ease_result.checksum, bounded_ease_result.checksum);
     assert_eq!(legacy_proxy_result.checksum, indexed_proxy_result.checksum);
@@ -665,11 +703,12 @@ fn main() {
         indexed_camera_result.checksum
     );
     assert_eq!(
-        legacy_rgb_aft_result.checksum,
-        indexed_rgb_aft_result.checksum
+        indexed_camera_result.checksum,
+        precomputed_camera_result.checksum
     );
+    assert_zero_alloc("precomputed camera states", &precomputed_camera_result);
     assert_eq!(
-        indexed_rgb_aft_result.checksum,
+        legacy_rgb_aft_result.checksum,
         prepared_rgb_aft_result.checksum
     );
     assert_zero_alloc("prepared RGB AFT groups", &prepared_rgb_aft_result);
@@ -678,6 +717,12 @@ fn main() {
         legacy_changing_order_result.checksum,
         cached_changing_order_result.checksum
     );
+    assert_eq!(
+        recursive_static_order_result.checksum,
+        flat_static_order_result.checksum
+    );
+    assert_zero_alloc("recursive static order", &recursive_static_order_result);
+    assert_zero_alloc("flat static order", &flat_static_order_result);
     assert_eq!(legacy_mesh_result.checksum, reused_mesh_result.checksum);
     assert_eq!(
         legacy_proxy_build_result.checksum,
@@ -836,6 +881,17 @@ fn main() {
         MESSAGE_FRAMES,
         &fast_static_state_result,
     );
+    println!("overlay state plan ({STATE_PLAN_ACTORS} actors, 1/64 dynamic local, 1/4 composed)");
+    print_result(
+        "scan every actor",
+        STATE_PLAN_FRAMES,
+        &legacy_state_plan_result,
+    );
+    print_result(
+        "update planned set",
+        STATE_PLAN_FRAMES,
+        &planned_state_plan_result,
+    );
     println!("message command ({MESSAGE_BLOCKS} completed blocks)");
     print_result("scan blocks", BLOCK_FRAMES, &legacy_block_result);
     print_result("block cursor", BLOCK_FRAMES, &cached_block_result);
@@ -897,12 +953,16 @@ fn main() {
     );
     print_result("walk parents", CAMERA_FRAMES, &legacy_camera_result);
     print_result("camera index", CAMERA_FRAMES, &indexed_camera_result);
+    print_result(
+        "precomputed lookup",
+        CAMERA_FRAMES,
+        &precomputed_camera_result,
+    );
     println!(
         "RGB AFT grouping ({RGB_AFT_REFERENCES} sprites, {} overlays)",
         TOPOLOGY_GROUPS * TOPOLOGY_CHAIN_DEPTH + RGB_AFT_REFERENCES
     );
     print_result("scan all overlays", RGB_AFT_FRAMES, &legacy_rgb_aft_result);
-    print_result("capture peers", RGB_AFT_FRAMES, &indexed_rgb_aft_result);
     print_result("prepare triples", RGB_AFT_FRAMES, &prepared_rgb_aft_result);
     println!(
         "topology storage: {} bytes/overlay",
@@ -921,6 +981,17 @@ fn main() {
         "cache changed frame",
         ORDER_FRAMES,
         &cached_changing_order_result,
+    );
+    println!("static nested order ({STATIC_ORDER_ACTORS} actors)");
+    print_result(
+        "recursive traversal",
+        STATIC_ORDER_FRAMES,
+        &recursive_static_order_result,
+    );
+    print_result(
+        "flat index copy",
+        STATIC_ORDER_FRAMES,
+        &flat_static_order_result,
     );
     println!("projected mesh (4x4 scratch grid)");
     print_result("fresh immutable", MESH_FRAMES, &legacy_mesh_result);
