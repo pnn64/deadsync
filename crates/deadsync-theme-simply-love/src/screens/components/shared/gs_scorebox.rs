@@ -70,6 +70,56 @@ struct GameplayScoreboxPane {
     rows: [GameplayScoreboxRow; SCOREBOX_NUM_ENTRIES],
 }
 
+/// Screen-owned leaderboard pane data prepared outside gameplay composition.
+///
+/// The gameplay thread owns one plan per player side. Snapshot integration
+/// rebuilds it only when the shell supplies an updated leaderboard. Live frames
+/// borrow the bounded pane vector and append directly into the reusable screen
+/// actor buffer, with no filtering, text creation, temporary actor vector, or
+/// eviction. Storage is released with the gameplay screen; steady-frame work is
+/// bounded by the two currently blended panes and five rows per pane.
+#[derive(Default)]
+pub(crate) struct GameplayScoreboxPlan {
+    panes: Vec<GameplayScoreboxPane>,
+}
+
+impl GameplayScoreboxPlan {
+    pub(crate) fn new(
+        snapshot: Option<&score_data::CachedPlayerLeaderboardData>,
+        profile: &score_data::GameplayScoreboxProfileSnapshot,
+        filter: score_data::SelectMusicScoreboxFilter,
+    ) -> Self {
+        if !profile.display_scorebox || !profile.gs_active {
+            return Self::default();
+        }
+        Self {
+            panes: snapshot.map_or_else(Vec::new, |snapshot| {
+                gameplay_panes_from_snapshot(snapshot, profile, filter)
+            }),
+        }
+    }
+
+    pub(crate) fn push_actors(
+        &self,
+        actors: &mut Vec<Actor>,
+        srpg10: bool,
+        center_x: f32,
+        center_y: f32,
+        zoom: f32,
+        elapsed_seconds: f32,
+    ) {
+        push_gameplay_scorebox_actors_from_panes(
+            actors,
+            &self.panes,
+            srpg10,
+            center_x,
+            center_y,
+            zoom,
+            elapsed_seconds,
+        );
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct SelectMusicScoreboxView {
     pub mode_text: String,
@@ -686,7 +736,7 @@ fn is_fallback_text(pane: &GameplayScoreboxPane) -> bool {
 
 fn push_mode_text(
     actors: &mut Vec<Actor>,
-    text: &str,
+    text: &Arc<str>,
     center_x: f32,
     center_y: f32,
     zoom: f32,
@@ -699,7 +749,7 @@ fn push_mode_text(
     let c = color_with_alpha([1.0, 1.0, 1.0, SCOREBOX_MODE_ALPHA], alpha);
     actors.push(act!(text:
         font("miso"):
-        settext(text.to_owned()):
+        settext(Arc::clone(text)):
         align(0.5, 0.5):
         xy(center_x + 2.0 * zoom, center_y - 5.0 * zoom):
         zoom(0.9 * zoom):
@@ -711,7 +761,7 @@ fn push_mode_text(
 
 fn push_centered_logo(
     actors: &mut Vec<Actor>,
-    texture: &str,
+    texture: &'static str,
     center_x: f32,
     center_y: f32,
     zoom: f32,
@@ -725,7 +775,7 @@ fn push_centered_logo(
     let dims = assets::texture_dims(texture).unwrap_or(assets::TexMeta { w: 1, h: 1 });
     let fit = scorebox_theme::fit_scorebox_logo(dims.w, dims.h, sprite_zoom, zoom);
     let c = color_with_alpha([1.0; 4], alpha);
-    actors.push(act!(sprite(texture):
+    actors.push(act!(sprite_static(texture):
         align(0.5, 0.5):
         xy(center_x, center_y):
         setsize(fit.width, fit.height):
@@ -736,7 +786,7 @@ fn push_centered_logo(
 
 fn push_mode_overlay(
     actors: &mut Vec<Actor>,
-    text: &str,
+    text: &'static str,
     rgba: [f32; 4],
     center_x: f32,
     center_y: f32,
@@ -750,7 +800,7 @@ fn push_mode_overlay(
     let c = color_with_alpha(rgba, alpha);
     actors.push(act!(text:
         font("miso"):
-        settext(text.to_owned()):
+        settext(text):
         align(0.5, 0.5):
         xy(center_x + 2.0 * zoom, center_y - 5.0 * zoom):
         zoom(0.9 * zoom):
@@ -773,7 +823,7 @@ fn push_fallback_mode_text(
     if is_fallback_text(cur) {
         push_mode_text(
             actors,
-            cur.mode_text.as_ref(),
+            &cur.mode_text,
             center_x,
             center_y,
             zoom,
@@ -784,7 +834,7 @@ fn push_fallback_mode_text(
     if cycle.next_idx != cycle.cur_idx && is_fallback_text(next) {
         push_mode_text(
             actors,
-            next.mode_text.as_ref(),
+            &next.mode_text,
             center_x,
             center_y,
             zoom,
@@ -1102,7 +1152,8 @@ pub fn select_music_scorebox_actors(
     )
 }
 
-pub fn gameplay_scorebox_actors_from_snapshot(
+#[cfg(any(test, feature = "bench-support"))]
+fn gameplay_scorebox_actors_from_snapshot_legacy(
     snapshot: Option<&score_data::CachedPlayerLeaderboardData>,
     profile_snapshot: &score_data::GameplayScoreboxProfileSnapshot,
     filter: score_data::SelectMusicScoreboxFilter,
@@ -1118,28 +1169,6 @@ pub fn gameplay_scorebox_actors_from_snapshot(
     let Some(snapshot) = snapshot else {
         return Vec::new();
     };
-    gameplay_scorebox_actors_from_cached_snapshot(
-        snapshot,
-        profile_snapshot,
-        filter,
-        srpg10,
-        center_x,
-        center_y,
-        zoom,
-        elapsed_seconds,
-    )
-}
-
-pub(crate) fn gameplay_scorebox_actors_from_cached_snapshot(
-    snapshot: &score_data::CachedPlayerLeaderboardData,
-    profile_snapshot: &score_data::GameplayScoreboxProfileSnapshot,
-    filter: score_data::SelectMusicScoreboxFilter,
-    srpg10: bool,
-    center_x: f32,
-    center_y: f32,
-    zoom: f32,
-    elapsed_seconds: f32,
-) -> Vec<Actor> {
     let panes = gameplay_panes_from_snapshot(snapshot, profile_snapshot, filter);
     gameplay_scorebox_actors_from_panes(&panes, srpg10, center_x, center_y, zoom, elapsed_seconds)
 }
@@ -1152,8 +1181,30 @@ fn gameplay_scorebox_actors_from_panes(
     zoom: f32,
     elapsed_seconds: f32,
 ) -> Vec<Actor> {
+    let mut actors = Vec::with_capacity(4 + SCOREBOX_NUM_ENTRIES * 6);
+    push_gameplay_scorebox_actors_from_panes(
+        &mut actors,
+        panes,
+        srpg10,
+        center_x,
+        center_y,
+        zoom,
+        elapsed_seconds,
+    );
+    actors
+}
+
+fn push_gameplay_scorebox_actors_from_panes(
+    actors: &mut Vec<Actor>,
+    panes: &[GameplayScoreboxPane],
+    srpg10: bool,
+    center_x: f32,
+    center_y: f32,
+    zoom: f32,
+    elapsed_seconds: f32,
+) {
     if panes.is_empty() {
-        return Vec::new();
+        return;
     }
 
     let cycle = scorebox_cycle_state(panes.len(), elapsed_seconds);
@@ -1170,7 +1221,7 @@ fn gameplay_scorebox_actors_from_panes(
     let h = SCOREBOX_H * zoom;
     let border = SCOREBOX_BORDER * zoom;
 
-    let mut actors = Vec::with_capacity(4 + SCOREBOX_NUM_ENTRIES * 6);
+    actors.reserve(4 + SCOREBOX_NUM_ENTRIES * 6);
     actors.push(act!(quad:
         align(0.5, 0.5):
         xy(center_x, center_y):
@@ -1186,19 +1237,11 @@ fn gameplay_scorebox_actors_from_panes(
         z(z_base + 1)
     ));
     push_header_overlays(
-        &mut actors,
-        cycle,
-        cur,
-        next,
-        center_x,
-        center_y,
-        zoom,
-        z_base,
-        srpg10,
+        actors, cycle, cur, next, center_x, center_y, zoom, z_base, srpg10,
     );
 
     push_rows(
-        &mut actors,
+        actors,
         cur.rows.as_slice(),
         center_x,
         center_y,
@@ -1208,7 +1251,7 @@ fn gameplay_scorebox_actors_from_panes(
     );
     if cycle.next_idx != cycle.cur_idx {
         push_rows(
-            &mut actors,
+            actors,
             next.rows.as_slice(),
             center_x,
             center_y,
@@ -1217,8 +1260,124 @@ fn gameplay_scorebox_actors_from_panes(
             cycle.next_alpha,
         );
     }
+}
 
-    actors
+#[cfg(feature = "bench-support")]
+fn gameplay_scorebox_actor_checksum(actors: &[Actor]) -> usize {
+    actors.iter().fold(actors.len(), |checksum, actor| {
+        let value = match actor {
+            Actor::Text { content, .. } => content.len(),
+            Actor::Sprite { source, .. } => source.texture_key().map_or(0, str::len),
+            _ => 1,
+        };
+        checksum.rotate_left(5) ^ value
+    })
+}
+
+/// Focused old/new harness for gameplay leaderboard pane preparation and
+/// direct actor-buffer composition.
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub struct GameplayScoreboxBenchmark {
+    snapshot: score_data::CachedPlayerLeaderboardData,
+    profile: score_data::GameplayScoreboxProfileSnapshot,
+    filter: score_data::SelectMusicScoreboxFilter,
+    plan: GameplayScoreboxPlan,
+    scratch: Vec<Actor>,
+}
+
+#[cfg(feature = "bench-support")]
+impl GameplayScoreboxBenchmark {
+    pub fn new() -> Self {
+        let entry = |rank: u32, pane: usize| score_data::LeaderboardEntry {
+            rank,
+            name: format!("player-{pane}-{rank}"),
+            machine_tag: None,
+            score: 10_000.0 - f64::from(rank),
+            date: String::new(),
+            is_rival: rank == 2,
+            is_self: rank == 5,
+            is_fail: false,
+        };
+        let panes = (0..4)
+            .map(|pane| score_data::LeaderboardPane {
+                name: ["GrooveStats", "EX", "SRPG", "ITL"][pane].to_string(),
+                entries: (1..=5).map(|rank| entry(rank, pane)).collect(),
+                is_ex: pane == 1,
+                disabled: false,
+                personalized: true,
+                arrowcloud_kind: None,
+            })
+            .collect();
+        let snapshot = score_data::CachedPlayerLeaderboardData {
+            loading: false,
+            error: None,
+            data: Some(Arc::new(score_data::PlayerLeaderboardData {
+                panes,
+                srpg_self_score: None,
+                itl_self_score: None,
+                itl_self_rank: None,
+            })),
+        };
+        let mut profile = score_data::GameplayScoreboxProfileSnapshot::default();
+        profile.display_scorebox = true;
+        profile.gs_active = true;
+        let filter = score_data::SelectMusicScoreboxFilter {
+            itg: true,
+            ex: true,
+            hard_ex: true,
+            tournaments: true,
+        };
+        let plan = GameplayScoreboxPlan::new(Some(&snapshot), &profile, filter);
+        let mut scratch = Vec::new();
+        plan.push_actors(&mut scratch, false, 320.0, 160.0, 1.0, 4.25);
+        scratch.clear();
+        Self {
+            snapshot,
+            profile,
+            filter,
+            plan,
+            scratch,
+        }
+    }
+
+    pub fn legacy_frame(&self, elapsed_seconds: f32) -> usize {
+        let actors = gameplay_scorebox_actors_from_snapshot_legacy(
+            Some(&self.snapshot),
+            &self.profile,
+            self.filter,
+            false,
+            320.0,
+            160.0,
+            1.0,
+            elapsed_seconds,
+        );
+        gameplay_scorebox_actor_checksum(std::hint::black_box(&actors))
+    }
+
+    pub fn prewarmed_frame(&mut self, elapsed_seconds: f32) -> usize {
+        self.scratch.clear();
+        self.plan
+            .push_actors(&mut self.scratch, false, 320.0, 160.0, 1.0, elapsed_seconds);
+        gameplay_scorebox_actor_checksum(std::hint::black_box(&self.scratch))
+    }
+
+    pub fn behavior_matches(&mut self, elapsed_seconds: f32) -> bool {
+        let legacy = gameplay_scorebox_actors_from_snapshot_legacy(
+            Some(&self.snapshot),
+            &self.profile,
+            self.filter,
+            false,
+            320.0,
+            160.0,
+            1.0,
+            elapsed_seconds,
+        );
+        self.scratch.clear();
+        self.plan
+            .push_actors(&mut self.scratch, false, 320.0, 160.0, 1.0, elapsed_seconds);
+        format!("{legacy:?}") == format!("{:?}", self.scratch)
+    }
 }
 
 #[cfg(test)]
@@ -1478,5 +1637,47 @@ mod tests {
         assert_eq!(panes.len(), 1);
         assert_eq!(panes[0].kind, PaneKind::HardEx);
         assert_eq!(panes[0].mode_text.as_ref(), "H.EX");
+    }
+
+    #[test]
+    fn prewarmed_gameplay_plan_preserves_actor_output() {
+        let snapshot = score_data::CachedPlayerLeaderboardData {
+            loading: false,
+            error: None,
+            data: Some(Arc::new(score_data::PlayerLeaderboardData {
+                panes: vec![
+                    pane(
+                        "GrooveStats",
+                        vec![
+                            entry(1, "world", false, false),
+                            entry(8, "self", true, false),
+                        ],
+                    ),
+                    pane("ITL Online 2026", vec![entry(2, "rival", false, true)]),
+                ],
+                srpg_self_score: None,
+                itl_self_score: None,
+                itl_self_rank: None,
+            })),
+        };
+        let mut profile = scorebox_profile(false);
+        profile.display_scorebox = true;
+        profile.gs_active = true;
+        let filter = score_data::SelectMusicScoreboxFilter::default();
+        let legacy = gameplay_scorebox_actors_from_snapshot_legacy(
+            Some(&snapshot),
+            &profile,
+            filter,
+            false,
+            320.0,
+            160.0,
+            1.0,
+            4.25,
+        );
+        let plan = GameplayScoreboxPlan::new(Some(&snapshot), &profile, filter);
+        let mut prewarmed = Vec::new();
+        plan.push_actors(&mut prewarmed, false, 320.0, 160.0, 1.0, 4.25);
+
+        assert_eq!(format!("{legacy:?}"), format!("{prewarmed:?}"));
     }
 }

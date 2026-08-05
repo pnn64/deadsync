@@ -6,17 +6,17 @@ use crate::screens::components::gameplay::score_counter::{
     ScoreCounterParams, prewarm_score_counter_layout, push_score_counter,
 };
 use crate::screens::components::gameplay::step_stats_gifs;
-use crate::screens::components::shared::{gs_scorebox, heart_rate};
-use crate::screens::gameplay::{self as gameplay_screen, State};
+use crate::screens::components::shared::heart_rate;
+use crate::screens::gameplay::{self as gameplay_screen, GameplayCoreState, State};
 use crate::step_stats as step_stats_theme;
 use crate::step_stats::{
     STEP_STATS_BANNER_H, STEP_STATS_BANNER_W, StepStatsGraphRect, StepStatsPaneLayout,
     StepStatsPaneParams,
 };
 use deadlib_present::actors::{Actor, InlineText, SizeSpec, TextAlign, TextContent};
-use deadlib_present::cache::{
-    SharedStrCache, TextCache, cached_shared_str, cached_text, text_cache_with_capacity,
-};
+#[cfg(feature = "bench-support")]
+use deadlib_present::cache::{SharedStrCache, cached_shared_str};
+use deadlib_present::cache::{TextCache, cached_text, text_cache_with_capacity};
 use deadlib_present::color;
 use deadlib_present::compose::TextLayoutCache;
 use deadlib_present::density;
@@ -30,6 +30,7 @@ use deadsync_profile_gameplay::score_display_mode_from_profile;
 use deadsync_rules::judgment::{self, JudgeGrade};
 use deadsync_rules::timing::LiveTimingSnapshot;
 use std::cell::RefCell;
+#[cfg(feature = "bench-support")]
 use std::collections::HashMap;
 use std::sync::{Arc, LazyLock};
 
@@ -39,6 +40,14 @@ const TIME_PREWARM_CAP_S: u32 = 600;
 const PEAK_NPS_GRAPH_PAD: f32 = 4.0;
 const PEAK_NPS_ALPHA: f32 = 0.75;
 const DISABLED_WINDOW_RGBA: [f32; 4] = color::JUDGMENT_FA_PLUS_WHITE_EVAL_DIM_RGBA;
+
+static EMPTY_STATS_TEXT: LazyLock<Arc<str>> = LazyLock::new(|| Arc::from(""));
+
+#[cfg(feature = "bench-support")]
+thread_local! {
+    static BENCH_STATS_STR_CACHE: RefCell<SharedStrCache> =
+        RefCell::new(HashMap::with_capacity(16));
+}
 
 struct FixedTextCache<K, V, const N: usize> {
     entries: [Option<(K, V)>; N],
@@ -128,7 +137,6 @@ thread_local! {
     };
     static BLUE_WINDOW_LABEL_CACHE: RefCell<TextCache<i32>> = RefCell::new(text_cache_with_capacity(64));
     static PEAK_NPS_CACHE: RefCell<TextCache<u32>> = RefCell::new(text_cache_with_capacity(512));
-    static STR_REF_CACHE: RefCell<SharedStrCache> = RefCell::new(HashMap::with_capacity(512));
 }
 
 #[cfg(feature = "bench-support")]
@@ -237,6 +245,8 @@ const HOLDS_MINES_ROLLS_LABELS: [LookupKey; 3] = [
     lookup_key("Gameplay", "RollsLabel"),
 ];
 
+#[inline(always)]
+#[cfg(feature = "bench-support")]
 fn step_info_label(index: usize, course: bool) -> Arc<str> {
     let labels = if course {
         &STEP_INFO_COURSE_LABELS
@@ -249,6 +259,7 @@ fn step_info_label(index: usize, course: bool) -> Arc<str> {
         .unwrap_or_else(|| Arc::from(""))
 }
 
+#[cfg(feature = "bench-support")]
 fn holds_mines_rolls_label(index: usize) -> Arc<str> {
     HOLDS_MINES_ROLLS_LABELS
         .get(index)
@@ -256,6 +267,7 @@ fn holds_mines_rolls_label(index: usize) -> Arc<str> {
         .unwrap_or_else(|| Arc::from(""))
 }
 
+#[cfg(feature = "bench-support")]
 fn judgment_label(index: usize) -> Arc<str> {
     JUDGMENT_INFO
         .get(index)
@@ -263,25 +275,243 @@ fn judgment_label(index: usize) -> Arc<str> {
         .unwrap_or_else(|| Arc::from(""))
 }
 
-fn time_remaining_left_text() -> Arc<str> {
-    tr("Gameplay", "TimeRemaining")
-}
-
-fn time_remaining_right_text() -> Arc<str> {
-    tr("Gameplay", "TimeRemaining")
+fn time_remaining_text(state: &State) -> Arc<str> {
+    Arc::clone(&state.gameplay_stats_text.time_remaining)
 }
 
 fn time_total_text(state: &State) -> Arc<str> {
-    if state.course_display_timing().is_some() {
-        tr("Gameplay", "TimeCourse")
-    } else {
-        tr("Gameplay", "TimeSong")
+    Arc::clone(&state.gameplay_stats_text.time_total)
+}
+
+/// Song-lifetime text identities used by Step Statistics composition.
+///
+/// The gameplay thread owns one immutable plan. Localization and owned chart
+/// strings are resolved at screen entry; live frames only clone `Arc` handles
+/// and index two fixed description slots. There is no cache lookup, growth,
+/// eviction, or miss path during gameplay, and all strings are destroyed with
+/// the screen. Worst-case frame work is sixteen bounded handle clones.
+pub(crate) struct GameplayStatsTextPlan {
+    step_info: [Arc<str>; 4],
+    holds_mines_rolls: [Arc<str>; 3],
+    judgments: [Arc<str>; 6],
+    time_remaining: Arc<str>,
+    time_total: Arc<str>,
+    song_artist: Arc<str>,
+    descriptions: [[Arc<str>; 2]; MAX_PLAYERS],
+    description_counts: [u8; MAX_PLAYERS],
+}
+
+impl GameplayStatsTextPlan {
+    pub(crate) fn from_gameplay(gameplay: &GameplayCoreState, course: bool) -> Self {
+        let descriptions = std::array::from_fn(|player| {
+            let chart = &gameplay.charts()[player];
+            (chart.description.as_str(), chart.step_artist.as_str())
+        });
+        Self::from_parts(gameplay.song().artist.as_str(), descriptions, course)
+    }
+
+    fn from_parts(
+        song_artist: &str,
+        chart_text: [(&str, &str); MAX_PLAYERS],
+        course: bool,
+    ) -> Self {
+        let labels = if course {
+            &STEP_INFO_COURSE_LABELS
+        } else {
+            &STEP_INFO_LABELS
+        };
+        let mut description_counts = [0u8; MAX_PLAYERS];
+        let descriptions = std::array::from_fn(|player| {
+            let desc = chart_text[player].0.trim();
+            let credit = chart_text[player].1.trim();
+            let mut values = [Arc::clone(&EMPTY_STATS_TEXT), Arc::clone(&EMPTY_STATS_TEXT)];
+            if !desc.is_empty() {
+                values[usize::from(description_counts[player])] = Arc::from(desc);
+                description_counts[player] += 1;
+            }
+            if !credit.is_empty() && credit != desc && description_counts[player] < 2 {
+                values[usize::from(description_counts[player])] = Arc::from(credit);
+                description_counts[player] += 1;
+            }
+            values
+        });
+        Self {
+            step_info: std::array::from_fn(|index| labels[index].get()),
+            holds_mines_rolls: std::array::from_fn(|index| HOLDS_MINES_ROLLS_LABELS[index].get()),
+            judgments: std::array::from_fn(|index| JUDGMENT_INFO[index].label.get()),
+            time_remaining: tr("Gameplay", "TimeRemaining"),
+            time_total: tr("Gameplay", ["TimeSong", "TimeCourse"][usize::from(course)]),
+            song_artist: Arc::from(song_artist),
+            descriptions,
+            description_counts,
+        }
+    }
+
+    #[inline(always)]
+    fn step_info(&self, index: usize) -> Arc<str> {
+        self.step_info
+            .get(index)
+            .map_or_else(|| Arc::clone(&EMPTY_STATS_TEXT), Arc::clone)
+    }
+
+    #[inline(always)]
+    fn holds_mines_rolls(&self, index: usize) -> Arc<str> {
+        self.holds_mines_rolls
+            .get(index)
+            .map_or_else(|| Arc::clone(&EMPTY_STATS_TEXT), Arc::clone)
+    }
+
+    #[inline(always)]
+    fn judgment(&self, index: usize) -> Arc<str> {
+        self.judgments
+            .get(index)
+            .map_or_else(|| Arc::clone(&EMPTY_STATS_TEXT), Arc::clone)
+    }
+
+    #[inline(always)]
+    fn description(&self, player: usize, elapsed: f32) -> Arc<str> {
+        let Some(values) = self.descriptions.get(player) else {
+            return Arc::from("");
+        };
+        let count = usize::from(self.description_counts[player]);
+        if count == 0 {
+            return Arc::clone(&values[0]);
+        }
+        let index = ((elapsed / 2.0).floor() as usize) % count;
+        Arc::clone(&values[index])
     }
 }
 
+#[cfg(feature = "bench-support")]
 #[inline(always)]
-fn cached_str_ref(text: &str) -> Arc<str> {
-    cached_shared_str(&STR_REF_CACHE, text, TEXT_CACHE_LIMIT)
+fn stats_text_checksum(checksum: usize, text: &Arc<str>) -> usize {
+    checksum.rotate_left(5) ^ text.len()
+}
+
+/// Focused old/new harness for immutable Step Statistics text resolution.
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub struct GameplayStatsTextBenchmark {
+    plan: GameplayStatsTextPlan,
+    artist: String,
+    chart_text: [(String, String); MAX_PLAYERS],
+}
+
+#[cfg(feature = "bench-support")]
+impl GameplayStatsTextBenchmark {
+    pub fn new() -> Self {
+        let artist = "Benchmark Artist".to_string();
+        let chart_text = [
+            ("Hard 11".to_string(), "P1 Credit".to_string()),
+            ("Expert 13".to_string(), "P2 Credit".to_string()),
+        ];
+        let plan = GameplayStatsTextPlan::from_parts(
+            artist.as_str(),
+            std::array::from_fn(|player| {
+                (chart_text[player].0.as_str(), chart_text[player].1.as_str())
+            }),
+            false,
+        );
+        let benchmark = Self {
+            plan,
+            artist,
+            chart_text,
+        };
+        std::hint::black_box(benchmark.legacy_frame(4.25));
+        benchmark
+    }
+
+    pub fn legacy_frame(&self, elapsed_seconds: f32) -> usize {
+        let mut checksum = 0usize;
+        for index in 0..4 {
+            checksum = stats_text_checksum(checksum, &step_info_label(index, false));
+        }
+        for index in 0..3 {
+            checksum = stats_text_checksum(checksum, &holds_mines_rolls_label(index));
+        }
+        for index in 0..6 {
+            checksum = stats_text_checksum(checksum, &judgment_label(index));
+        }
+        checksum = stats_text_checksum(checksum, &tr("Gameplay", "TimeRemaining"));
+        checksum = stats_text_checksum(checksum, &tr("Gameplay", "TimeSong"));
+        checksum = stats_text_checksum(
+            checksum,
+            &cached_shared_str(&BENCH_STATS_STR_CACHE, &self.artist, TEXT_CACHE_LIMIT),
+        );
+        for (description, credit) in &self.chart_text {
+            let texts = [description.as_str(), credit.as_str()];
+            let index = ((elapsed_seconds / 2.0).floor() as usize) % texts.len();
+            checksum = stats_text_checksum(
+                checksum,
+                &cached_shared_str(&BENCH_STATS_STR_CACHE, texts[index], TEXT_CACHE_LIMIT),
+            );
+        }
+        std::hint::black_box(checksum)
+    }
+
+    pub fn prewarmed_frame(&self, elapsed_seconds: f32) -> usize {
+        let mut checksum = 0usize;
+        for index in 0..4 {
+            checksum = stats_text_checksum(checksum, &self.plan.step_info(index));
+        }
+        for index in 0..3 {
+            checksum = stats_text_checksum(checksum, &self.plan.holds_mines_rolls(index));
+        }
+        for index in 0..6 {
+            checksum = stats_text_checksum(checksum, &self.plan.judgment(index));
+        }
+        checksum = stats_text_checksum(checksum, &Arc::clone(&self.plan.time_remaining));
+        checksum = stats_text_checksum(checksum, &Arc::clone(&self.plan.time_total));
+        checksum = stats_text_checksum(checksum, &Arc::clone(&self.plan.song_artist));
+        for player in 0..MAX_PLAYERS {
+            checksum =
+                stats_text_checksum(checksum, &self.plan.description(player, elapsed_seconds));
+        }
+        std::hint::black_box(checksum)
+    }
+
+    pub fn behavior_matches(&self) -> bool {
+        [0.0, 2.0, 4.25, 7.9]
+            .into_iter()
+            .all(|elapsed| self.legacy_frame(elapsed) == self.prewarmed_frame(elapsed))
+    }
+}
+
+#[cfg(test)]
+mod gameplay_stats_text_plan_tests {
+    use super::*;
+
+    #[test]
+    fn prewarmed_text_preserves_labels_and_description_cycle() {
+        let plan = GameplayStatsTextPlan::from_parts(
+            "Artist",
+            [("Description", "Credit"), ("Same", "Same")],
+            true,
+        );
+
+        assert_eq!(
+            plan.step_info(2).as_ref(),
+            tr("Gameplay", "SongInfoCourse").as_ref()
+        );
+        assert_eq!(
+            plan.holds_mines_rolls(1).as_ref(),
+            tr("Gameplay", "MinesLabel").as_ref()
+        );
+        assert_eq!(
+            plan.judgment(0).as_ref(),
+            JUDGMENT_INFO[0].label.get().as_ref()
+        );
+        assert_eq!(
+            plan.time_total.as_ref(),
+            tr("Gameplay", "TimeCourse").as_ref()
+        );
+        assert_eq!(plan.song_artist.as_ref(), "Artist");
+        assert_eq!(plan.description(0, 0.0).as_ref(), "Description");
+        assert_eq!(plan.description(0, 2.0).as_ref(), "Credit");
+        assert_eq!(plan.description(0, 4.0).as_ref(), "Description");
+        assert_eq!(plan.description(1, 2.0).as_ref(), "Same");
+        assert_eq!(plan.step_info(usize::MAX).as_ref(), "");
+    }
 }
 
 #[inline(always)]
@@ -1188,13 +1418,13 @@ fn digit_text(digit: u8) -> Arc<str> {
 }
 
 #[inline(always)]
-fn step_info_label_text(index: usize, course: bool) -> Arc<str> {
-    step_info_label(index, course)
+fn step_info_label_text(state: &State, index: usize) -> Arc<str> {
+    state.gameplay_stats_text.step_info(index)
 }
 
 #[inline(always)]
-fn holds_mines_rolls_label_text(index: usize) -> Arc<str> {
-    holds_mines_rolls_label(index)
+fn holds_mines_rolls_label_text(state: &State, index: usize) -> Arc<str> {
+    state.gameplay_stats_text.holds_mines_rolls(index)
 }
 
 pub fn prewarm_text_layout(
@@ -1316,38 +1546,35 @@ pub fn prewarm_text_layout(
     cache.prewarm_text(fonts, "miso", time_total_text(state).as_ref(), None);
     cache.prewarm_text(fonts, "miso", &tr("Gameplay", "TimeSong"), None);
     cache.prewarm_text(fonts, "miso", &tr("Gameplay", "TimeCourse"), None);
-    cache.prewarm_text(fonts, "miso", &time_remaining_left_text(), None);
-    cache.prewarm_text(fonts, "miso", &time_remaining_right_text(), None);
+    cache.prewarm_text(fonts, "miso", &time_remaining_text(state), None);
     cache.prewarm_text(fonts, "miso", SLASH_TEXT.as_ref(), None);
     for label in LIVE_TIMING_LABELS.iter() {
         cache.prewarm_text(fonts, "miso", label.as_ref(), None);
     }
     let zero_timing = live_timing_pair_text(0.0, 0.0);
     cache.prewarm_text(fonts, "miso", zero_timing.as_str(), None);
-    for label in (0..4)
-        .map(|index| step_info_label(index, false))
-        .collect::<Vec<_>>()
-        .iter()
-    {
+    for label in &state.gameplay_stats_text.step_info {
         cache.prewarm_text(fonts, "miso", label.as_ref(), None);
     }
-    if state.course_display_info.is_some() {
-        let label = step_info_label(2, true);
+    for label in &state.gameplay_stats_text.holds_mines_rolls {
         cache.prewarm_text(fonts, "miso", label.as_ref(), None);
     }
-    for label in (0..3)
-        .map(holds_mines_rolls_label)
-        .collect::<Vec<_>>()
-        .iter()
-    {
+    for label in &state.gameplay_stats_text.judgments {
         cache.prewarm_text(fonts, "miso", label.as_ref(), None);
     }
     for player in 0..state.num_players() {
         let chart = &state.charts()[player];
         cache.prewarm_text(fonts, "miso", state.song_full_title.as_ref(), None);
-        cache.prewarm_text(fonts, "miso", state.song().artist.as_str(), None);
+        cache.prewarm_text(
+            fonts,
+            "miso",
+            state.gameplay_stats_text.song_artist.as_ref(),
+            None,
+        );
         cache.prewarm_text(fonts, "miso", state.pack_group.as_ref(), None);
-        cache.prewarm_text(fonts, "miso", chart.description.as_str(), None);
+        for description in &state.gameplay_stats_text.descriptions[player] {
+            cache.prewarm_text(fonts, "miso", description.as_ref(), None);
+        }
         let peak = cached_peak_nps_text(chart.max_nps.max(0.0) as f32);
         cache.prewarm_text(fonts, "miso", peak.as_ref(), None);
     }
@@ -1964,7 +2191,7 @@ pub fn push_double_step_stats(
                         state.display_judgment_count(0, JudgeGrade::Miss),
                     ];
                     for (row_i, count) in counts.into_iter().enumerate() {
-                        let label = judgment_label(row_i);
+                        let label = state.gameplay_stats_text.judgment(row_i);
                         let disabled = standard_row_disabled(disabled_windows, row_i);
                         let local_y = y_base + (row_i as f32 * row_height);
                         let y_numbers = origin_y + (local_y * base_zoom);
@@ -2049,15 +2276,15 @@ pub fn push_double_step_stats(
                         color::JUDGMENT_DIM_RGBA[5],
                     ];
 
-                    let fa_label = judgment_label(0);
+                    let fa_label = state.gameplay_stats_text.judgment(0);
                     let labels = [
                         fa_label.clone(),
                         fa_label,
-                        judgment_label(1),
-                        judgment_label(2),
-                        judgment_label(3),
-                        judgment_label(4),
-                        judgment_label(5),
+                        state.gameplay_stats_text.judgment(1),
+                        state.gameplay_stats_text.judgment(2),
+                        state.gameplay_stats_text.judgment(3),
+                        state.gameplay_stats_text.judgment(4),
+                        state.gameplay_stats_text.judgment(5),
                     ];
                     for row_i in 0..labels.len() {
                         let disabled = split_row_disabled(disabled_windows, row_i);
@@ -2146,18 +2373,14 @@ pub fn push_double_step_stats(
     if mask.contains(profile_data::StepStatisticsMask::STEP_COUNTS) && display_scorebox {
         let frame = step_stats_theme::double_scorebox_frame(layout, notefield_width);
         let side = gameplay_screen::runtime_profile_side(state, 0);
-        let snapshot = gameplay_screen::scorebox_snapshot_for_side(state, side);
-        let profile_snapshot = gameplay_screen::scorebox_profile_for_side(state, side);
-        actors.extend(gs_scorebox::gameplay_scorebox_actors_from_snapshot(
-            snapshot,
-            profile_snapshot,
-            gameplay_screen::scorebox_pane_filter(state),
-            gameplay_screen::scorebox_uses_srpg10(state),
+        gameplay_screen::push_scorebox_actors_for_side(
+            actors,
+            state,
+            side,
             frame.center_x,
             frame.center_y,
             frame.zoom,
-            state.current_music_time_display(),
-        ));
+        );
     }
 
     // Time.lua (double): x(-GetNotefieldWidth() + 150), y(75)
@@ -2195,7 +2418,7 @@ pub fn push_double_step_stats(
         ));
         actors.push(act!(text:
             font("miso"):
-            settext(time_remaining_right_text()):
+            settext(time_remaining_text(state)):
             align(1.0, 0.5):
             horizalign(right):
             xy(label_x, base_y + 1.0 * number_zoom):
@@ -2366,27 +2589,9 @@ fn build_steps_info(
         (2, profile_data::PlayerSide::P2) => 1,
         _ => 0,
     };
-    let course_info = state.course_display_info.as_ref();
-    let chart = &state.charts()[player_idx];
-    let desc = chart.description.trim();
-    let cred = chart.step_artist.trim();
-
-    let mut cycle = [None::<&str>; 2];
-    let mut cycle_len = 0usize;
-    if !desc.is_empty() {
-        cycle[cycle_len] = Some(desc);
-        cycle_len += 1;
-    }
-    if !cred.is_empty() && cred != desc && cycle_len < cycle.len() {
-        cycle[cycle_len] = Some(cred);
-        cycle_len += 1;
-    }
-    let desc_text = if cycle_len == 0 {
-        ""
-    } else {
-        let idx = ((state.gameplay.total_elapsed_in_screen() / 2.0).floor() as usize) % cycle_len;
-        cycle[idx].unwrap_or("")
-    };
+    let desc_text = state
+        .gameplay_stats_text
+        .description(player_idx, state.gameplay.total_elapsed_in_screen());
 
     let ar = screen_width() / screen_height().max(1.0);
     let pnum = profile_data::player_side_number(player_side);
@@ -2419,7 +2624,7 @@ fn build_steps_info(
         for i in 0..4 {
             let y = origin_y + (row_h * (i as f32 + 1.0) * group_zoom);
             actors.push(act!(text:
-                font("miso"): settext(step_info_label_text(i, course_info.is_some())):
+                font("miso"): settext(step_info_label_text(state, i)):
                 align(0.0, 0.5): xy(origin_x, y):
                 zoom(group_zoom): z(z):
                 horizalign(left)
@@ -2438,7 +2643,7 @@ fn build_steps_info(
     ));
     let y_artist = origin_y + (row_h * 2.0 * group_zoom);
     actors.push(act!(text:
-        font("miso"): settext(cached_str_ref(state.song().artist.as_str())):
+        font("miso"): settext(Arc::clone(&state.gameplay_stats_text.song_artist)):
         align(0.0, 0.5): xy(values_x, y_artist):
         maxwidth(maxwidth):
         zoom(group_zoom): z(z):
@@ -2454,7 +2659,7 @@ fn build_steps_info(
     ));
     let y_desc = origin_y + (row_h * 4.0 * group_zoom);
     actors.push(act!(text:
-        font("miso"): settext(cached_str_ref(desc_text)):
+        font("miso"): settext(desc_text):
         align(0.0, 0.5): xy(values_x, y_desc):
         maxwidth(maxwidth):
         zoom(group_zoom): z(z):
@@ -2551,7 +2756,7 @@ fn push_holds_mines_rolls_pane_at(
                 let label_x = right_anchor_x - total_value_width_for_label - (10.0 * frame_zoom);
 
                 actors.push(act!(text:
-                    font("miso"): settext(holds_mines_rolls_label_text(*label_index)):
+                    font("miso"): settext(holds_mines_rolls_label_text(state, *label_index)):
                     align(1.0, 0.5): xy(label_x, item_y):
                     zoom(label_zoom):
                     horizalign(right):
@@ -2677,7 +2882,7 @@ fn build_holds_mines_rolls_pane(
             let label_x = right_anchor_x - total_value_width_for_label - (10.0 * frame.zoom);
 
             actors.push(act!(text:
-                font("miso"): settext(holds_mines_rolls_label_text(*label_index)): align(1.0, 0.5): xy(label_x, item_y):
+                font("miso"): settext(holds_mines_rolls_label_text(state, *label_index)): align(1.0, 0.5): xy(label_x, item_y):
                 zoom(label_zoom): horizalign(right): diffuse(white[0], white[1], white[2], white[3]): z(70)
             ));
         }
@@ -2697,16 +2902,14 @@ fn build_scorebox_pane(
 
     let frame = step_stats_theme::scorebox_frame(layout, wide, player_side, state.num_players());
 
-    actors.extend(gs_scorebox::gameplay_scorebox_actors_from_snapshot(
-        gameplay_screen::scorebox_snapshot_for_side(state, player_side),
-        gameplay_screen::scorebox_profile_for_side(state, player_side),
-        gameplay_screen::scorebox_pane_filter(state),
-        gameplay_screen::scorebox_uses_srpg10(state),
+    gameplay_screen::push_scorebox_actors_for_side(
+        actors,
+        state,
+        player_side,
         frame.center_x,
         frame.center_y,
         frame.zoom,
-        state.current_music_time_display(),
-    ));
+    );
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -3045,7 +3248,7 @@ fn build_side_pane(
                 let label_zoom = final_text_base_zoom * 0.833;
                 let sublabel_y = label_world_y + (12.0 * final_text_base_zoom);
                 let sublabel_zoom = final_text_base_zoom * 0.6;
-                let label = judgment_label(*label_index);
+                let label = state.gameplay_stats_text.judgment(*label_index);
 
                 if player_side == profile_data::PlayerSide::P1 {
                     actors.push(act!(text:
@@ -3189,7 +3392,7 @@ fn build_side_pane(
                     z(71):
                     diffuse(remaining_color[0], remaining_color[1], remaining_color[2], remaining_color[3])
                 ));
-                actors.push(act!(text: font(font_name): settext(time_remaining_left_text()):
+                actors.push(act!(text: font(font_name): settext(time_remaining_text(state)):
                     align(0.0, 0.5): horizalign(left):
                     xy(time_x + label_dir * label_offset_remaining, y_pos_remaining + 1.0):
                     zoom(text_zoom): z(71):
@@ -3202,7 +3405,7 @@ fn build_side_pane(
                     z(71):
                     diffuse(remaining_color[0], remaining_color[1], remaining_color[2], remaining_color[3])
                 ));
-                actors.push(act!(text: font(font_name): settext(time_remaining_left_text()):
+                actors.push(act!(text: font(font_name): settext(time_remaining_text(state)):
                     align(1.0, 0.5): horizalign(right):
                     xy(time_x + label_dir * label_offset_remaining, y_pos_remaining + 1.0):
                     zoom(text_zoom): z(71):

@@ -9,8 +9,8 @@ use crate::screens::components::gameplay::score_counter::{
 use crate::screens::components::gameplay::{gameplay_stats, notefield, step_stats_gifs};
 use crate::screens::components::shared::banner as shared_banner;
 pub use crate::screens::components::shared::heart_rate::{HeartRatePlayerView, HeartRateView};
-use crate::screens::components::shared::lobby_hud;
 use crate::screens::components::shared::screen_bar::{self, AvatarParams, ScreenBarParams};
+use crate::screens::components::shared::{gs_scorebox, lobby_hud};
 use crate::screens::{Screen, ThemeEffect};
 use crate::views::{GameplayInitView, GameplayRuntimeView, GameplayScoreRuntimeView};
 use deadlib_present::actors::{
@@ -2193,10 +2193,12 @@ pub struct State {
     pub stage_intro_text: Arc<str>,
     pub replay_status_text: Option<Arc<str>>,
     pub course_display_info: Option<CourseDisplayInfo>,
+    pub(crate) gameplay_stats_text: gameplay_stats::GameplayStatsTextPlan,
     pub pack_group: Arc<str>,
     pub pack_banner_path: Option<PathBuf>,
     pub scorebox_profile_snapshot: [score_data::GameplayScoreboxProfileSnapshot; MAX_PLAYERS],
     pub scorebox_side_snapshot: [Option<score_data::CachedPlayerLeaderboardData>; MAX_PLAYERS],
+    scorebox_plans: [gs_scorebox::GameplayScoreboxPlan; MAX_PLAYERS],
     itl_cmod_warning: [bool; MAX_PLAYERS],
     runtime_view: GameplayRuntimeView,
     live_lobby_runtime: bool,
@@ -2208,6 +2210,11 @@ pub struct State {
     step_stats_mode: GameplayStepStatsMode,
     pub(crate) song_banner_key: Option<Arc<str>>,
     pub(crate) pack_banner_key: Option<Arc<str>>,
+    /// Immutable song background texture identity resolved at screen entry.
+    /// SongBgWithMovieViz frames clone this handle instead of allocating a new
+    /// path string. There are no misses, growth, eviction, or gameplay-thread
+    /// destruction; the single optional entry is released with the screen.
+    song_background_key: Option<Arc<str>>,
     pub(crate) notefield_model_cache: [RefCell<ModelMeshCache>; MAX_PLAYERS],
     pub(crate) notefield_hold_mesh_scratch: [RefCell<HoldMeshScratch>; MAX_PLAYERS],
     pub(crate) notefield_capture_scratch: [RefCell<CapturedActorScratch>; MAX_PLAYERS],
@@ -2394,6 +2401,10 @@ impl State {
             std::array::from_fn(|player| gameplay.profiles()[player].0.clone());
         let step_stats_extra_resolved =
             step_stats_gifs::resolve_random_extras(&step_stats_profiles);
+        let gameplay_stats_text = gameplay_stats::GameplayStatsTextPlan::from_gameplay(
+            &gameplay,
+            course_display_info.is_some(),
+        );
         let notefield_judgment_assets = std::array::from_fn(|player| {
             notefield::ResolvedJudgmentAssets::from_profile(&step_stats_profiles[player])
         });
@@ -2404,6 +2415,13 @@ impl State {
                 gameplay.player_blue_window_ms(player) / 1000.0,
             )
         });
+        let scorebox_plans = std::array::from_fn(|side| {
+            gs_scorebox::GameplayScoreboxPlan::new(
+                scorebox_side_snapshot[side].as_ref(),
+                &scorebox_profile_snapshot[side],
+                runtime_view.policy.scorebox_pane_filter,
+            )
+        });
         let song = gameplay.song();
         let song_full_title: Arc<str> =
             Arc::from(song.display_full_title(runtime_view.policy.translated_titles));
@@ -2412,6 +2430,10 @@ impl State {
             .as_deref()
             .map(crate::assets::media_path_key);
         let pack_banner_key = pack_banner_path
+            .as_deref()
+            .map(crate::assets::media_path_key);
+        let song_background_key = song
+            .background_path
             .as_deref()
             .map(crate::assets::media_path_key);
         let notefield_model_cache =
@@ -2719,10 +2741,12 @@ impl State {
             stage_intro_text,
             replay_status_text,
             course_display_info,
+            gameplay_stats_text,
             pack_group,
             pack_banner_path,
             scorebox_profile_snapshot,
             scorebox_side_snapshot,
+            scorebox_plans,
             itl_cmod_warning: [false; MAX_PLAYERS],
             live_lobby_runtime: runtime_view.lobby.snapshot.joined_lobby.is_some(),
             runtime_view,
@@ -2734,6 +2758,7 @@ impl State {
             step_stats_mode,
             song_banner_key,
             pack_banner_key,
+            song_background_key,
             notefield_model_cache,
             notefield_hold_mesh_scratch,
             notefield_capture_scratch,
@@ -4458,7 +4483,6 @@ fn write_gameplay_lobby_hud_status(state: &State, text: &mut String) -> bool {
     true
 }
 
-#[inline(always)]
 pub fn scorebox_snapshot_for_side(
     state: &State,
     side: profile_data::PlayerSide,
@@ -4466,7 +4490,6 @@ pub fn scorebox_snapshot_for_side(
     state.scorebox_side_snapshot[profile_data::player_side_index(side)].as_ref()
 }
 
-#[inline(always)]
 pub fn scorebox_profile_for_side(
     state: &State,
     side: profile_data::PlayerSide,
@@ -4474,14 +4497,22 @@ pub fn scorebox_profile_for_side(
     &state.scorebox_profile_snapshot[profile_data::player_side_index(side)]
 }
 
-#[inline(always)]
-pub fn scorebox_pane_filter(state: &State) -> deadsync_score::SelectMusicScoreboxFilter {
-    state.runtime_view.policy.scorebox_pane_filter
-}
-
-#[inline(always)]
-pub fn scorebox_uses_srpg10(state: &State) -> bool {
-    state.runtime_view.policy.srpg10_scorebox
+pub fn push_scorebox_actors_for_side(
+    actors: &mut Vec<Actor>,
+    state: &State,
+    side: profile_data::PlayerSide,
+    center_x: f32,
+    center_y: f32,
+    zoom: f32,
+) {
+    state.scorebox_plans[profile_data::player_side_index(side)].push_actors(
+        actors,
+        state.runtime_view.policy.srpg10_scorebox,
+        center_x,
+        center_y,
+        zoom,
+        state.current_music_time_display(),
+    );
 }
 
 pub fn on_enter(state: &mut State) {
@@ -4504,6 +4535,15 @@ pub fn on_exit(state: &mut State) {
 
 #[inline(always)]
 pub fn sync_runtime_view(state: &mut State, view: GameplayRuntimeView) {
+    if state.runtime_view.policy.scorebox_pane_filter != view.policy.scorebox_pane_filter {
+        state.scorebox_plans = std::array::from_fn(|side| {
+            gs_scorebox::GameplayScoreboxPlan::new(
+                state.scorebox_side_snapshot[side].as_ref(),
+                &state.scorebox_profile_snapshot[side],
+                view.policy.scorebox_pane_filter,
+            )
+        });
+    }
     state.runtime_view = view;
 }
 
@@ -4590,13 +4630,14 @@ fn current_foreground_media(state: &State) -> Option<(&Path, Arc<str>)> {
 
 #[inline(always)]
 pub fn sync_score_runtime_view(state: &mut State, view: GameplayScoreRuntimeView) {
-    for (current, update) in state
-        .scorebox_side_snapshot
-        .iter_mut()
-        .zip(view.scorebox_updates)
-    {
+    for (side, update) in view.scorebox_updates.into_iter().enumerate() {
         if update.is_some() {
-            *current = update;
+            state.scorebox_side_snapshot[side] = update;
+            state.scorebox_plans[side] = gs_scorebox::GameplayScoreboxPlan::new(
+                state.scorebox_side_snapshot[side].as_ref(),
+                &state.scorebox_profile_snapshot[side],
+                state.runtime_view.policy.scorebox_pane_filter,
+            );
         }
     }
     state.itl_cmod_warning = view.itl_cmod_warning;
@@ -5775,9 +5816,9 @@ fn push_current_bgchange_media(
     }
     let change = active_background_change(state);
     if change.is_some_and(|change| change.effect_is("SongBgWithMovieViz")) {
-        if let Some(path) = state.song().background_path.as_ref() {
+        if let Some(key) = state.song_background_key.as_ref() {
             actors.push(background_media_sprite(
-                crate::assets::media_path_key(path),
+                Arc::clone(key),
                 bgchange_tint(change, bg_brightness),
                 BlendMode::Alpha,
                 x,
@@ -5805,6 +5846,47 @@ fn push_current_bgchange_media(
             w,
             h,
         ));
+    }
+}
+
+/// Focused old/new harness for the immutable SongBgWithMovieViz texture key.
+#[cfg(any(test, feature = "bench-support"))]
+#[doc(hidden)]
+pub struct GameplayBackgroundKeyBenchmark {
+    path: PathBuf,
+    cached: Arc<str>,
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+impl GameplayBackgroundKeyBenchmark {
+    pub fn new() -> Self {
+        let path = PathBuf::from("Songs/Benchmark Pack/Benchmark Song/background image.png");
+        let cached = crate::assets::media_path_key(&path);
+        Self { path, cached }
+    }
+
+    pub fn legacy_frame(&self) -> usize {
+        let key = crate::assets::media_path_key(std::hint::black_box(&self.path));
+        std::hint::black_box(key.len())
+    }
+
+    pub fn prewarmed_frame(&self) -> usize {
+        let key = Arc::clone(std::hint::black_box(&self.cached));
+        std::hint::black_box(key.len())
+    }
+
+    pub fn behavior_matches(&self) -> bool {
+        crate::assets::media_path_key(&self.path).as_ref() == self.cached.as_ref()
+    }
+}
+
+#[cfg(test)]
+mod gameplay_background_key_tests {
+    use super::GameplayBackgroundKeyBenchmark;
+
+    #[test]
+    fn prewarmed_movie_visualizer_background_key_preserves_identity() {
+        assert!(GameplayBackgroundKeyBenchmark::new().behavior_matches());
     }
 }
 
