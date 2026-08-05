@@ -181,6 +181,16 @@ fn print_result(label: &str, iterations: usize, result: &BenchResult) {
     );
 }
 
+fn assert_alloc_removed(label: &str, legacy: &BenchResult, reused: &BenchResult) {
+    assert!(
+        legacy.allocated.allocs > 0 || legacy.allocated.reallocs > 0,
+        "{label} legacy path must exercise allocator churn"
+    );
+    assert_eq!(reused.allocated.allocs, 0, "{label} allocated");
+    assert_eq!(reused.allocated.reallocs, 0, "{label} reallocated");
+    assert_eq!(reused.allocated.bytes, 0, "{label} allocated bytes");
+}
+
 fn main() {
     const MESSAGE_FRAMES: usize = 20_000;
     const BLOCK_FRAMES: usize = 50_000;
@@ -337,6 +347,18 @@ fn main() {
         actor_build.compact_proxy_frame()
     );
     assert_eq!(
+        actor_build.legacy_captured_proxy_frame(),
+        actor_build.reused_captured_proxy_frame()
+    );
+    assert_eq!(
+        actor_build.legacy_local_z_proxy_frame(),
+        actor_build.reused_local_z_proxy_frame()
+    );
+    assert_eq!(
+        actor_build.legacy_camera_proxy_frame(),
+        actor_build.reused_camera_proxy_frame()
+    );
+    assert_eq!(
         actor_build.legacy_group_frame(),
         actor_build.inline_group_frame()
     );
@@ -348,6 +370,24 @@ fn main() {
         measure(ACTOR_BUILD_FRAMES, || actor_build.legacy_proxy_frame());
     let compact_proxy_build_result =
         measure(ACTOR_BUILD_FRAMES, || actor_build.compact_proxy_frame());
+    let legacy_captured_proxy_result = measure(ACTOR_BUILD_FRAMES, || {
+        actor_build.legacy_captured_proxy_frame()
+    });
+    let reused_captured_proxy_result = measure(ACTOR_BUILD_FRAMES, || {
+        actor_build.reused_captured_proxy_frame()
+    });
+    let legacy_local_z_proxy_result = measure(ACTOR_BUILD_FRAMES, || {
+        actor_build.legacy_local_z_proxy_frame()
+    });
+    let reused_local_z_proxy_result = measure(ACTOR_BUILD_FRAMES, || {
+        actor_build.reused_local_z_proxy_frame()
+    });
+    let legacy_camera_proxy_result = measure(ACTOR_BUILD_FRAMES, || {
+        actor_build.legacy_camera_proxy_frame()
+    });
+    let reused_camera_proxy_result = measure(ACTOR_BUILD_FRAMES, || {
+        actor_build.reused_camera_proxy_frame()
+    });
     let legacy_group_result = measure(ACTOR_BUILD_FRAMES, || actor_build.legacy_group_frame());
     let inline_group_result = measure(ACTOR_BUILD_FRAMES, || actor_build.inline_group_frame());
     let legacy_actor_mesh_result = measure(ACTOR_BUILD_FRAMES, || actor_build.legacy_mesh_frame());
@@ -482,6 +522,33 @@ fn main() {
         legacy_proxy_build_result.checksum,
         compact_proxy_build_result.checksum
     );
+    assert_eq!(
+        legacy_captured_proxy_result.checksum,
+        reused_captured_proxy_result.checksum
+    );
+    assert_eq!(
+        legacy_local_z_proxy_result.checksum,
+        reused_local_z_proxy_result.checksum
+    );
+    assert_eq!(
+        legacy_camera_proxy_result.checksum,
+        reused_camera_proxy_result.checksum
+    );
+    assert_alloc_removed(
+        "captured proxy normalization",
+        &legacy_captured_proxy_result,
+        &reused_captured_proxy_result,
+    );
+    assert_alloc_removed(
+        "local-z proxy normalization",
+        &legacy_local_z_proxy_result,
+        &reused_local_z_proxy_result,
+    );
+    assert_alloc_removed(
+        "camera-scope proxy normalization",
+        &legacy_camera_proxy_result,
+        &reused_camera_proxy_result,
+    );
     assert_eq!(legacy_group_result.checksum, inline_group_result.checksum);
     assert_eq!(
         legacy_actor_mesh_result.checksum,
@@ -614,6 +681,39 @@ fn main() {
         "direct shared",
         ACTOR_BUILD_FRAMES,
         &compact_proxy_build_result,
+    );
+    println!("ActorProxy captured-frame normalization (16 actors)");
+    print_result(
+        "clone nested frame",
+        ACTOR_BUILD_FRAMES,
+        &legacy_captured_proxy_result,
+    );
+    print_result(
+        "flatten into prewarm",
+        ACTOR_BUILD_FRAMES,
+        &reused_captured_proxy_result,
+    );
+    println!("ActorProxy local-z normalization (3 actors)");
+    print_result(
+        "fresh copied segment",
+        ACTOR_BUILD_FRAMES,
+        &legacy_local_z_proxy_result,
+    );
+    print_result(
+        "prewarmed segment",
+        ACTOR_BUILD_FRAMES,
+        &reused_local_z_proxy_result,
+    );
+    println!("ActorProxy camera-scope normalization (6 actors)");
+    print_result(
+        "temporary run buffers",
+        ACTOR_BUILD_FRAMES,
+        &legacy_camera_proxy_result,
+    );
+    print_result(
+        "in-place run sort",
+        ACTOR_BUILD_FRAMES,
+        &reused_camera_proxy_result,
     );
     println!("single-draw Model/Noteskin group");
     print_result("frame Vec", ACTOR_BUILD_FRAMES, &legacy_group_result);
