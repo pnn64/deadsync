@@ -1227,6 +1227,11 @@ where
     }
 
     #[inline(always)]
+    pub fn lane_hold_index_lists(&self) -> &[Vec<usize>] {
+        &self.chart_runtime.lane_indices.hold_indices
+    }
+
+    #[inline(always)]
     pub fn active_hold(&self, col: usize) -> Option<&ActiveHold> {
         self.hold_runtime
             .active_holds
@@ -1261,6 +1266,11 @@ where
     #[inline(always)]
     pub fn lane_note_row_indices(&self, col: usize) -> &[usize] {
         self.chart_runtime.lane_indices.note_row_indices(col)
+    }
+
+    #[inline(always)]
+    pub fn lane_note_row_index_lists(&self) -> &[Vec<usize>] {
+        &self.chart_runtime.lane_indices.note_row_indices
     }
 
     #[inline(always)]

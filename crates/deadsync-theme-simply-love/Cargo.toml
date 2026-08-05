@@ -89,6 +89,11 @@ harness = false
 required-features = ["bench-support"]
 
 [[bench]]
+name = "gameplay_notefield_prewarm"
+harness = false
+required-features = ["bench-support"]
+
+[[bench]]
 name = "gameplay_lobby_hud"
 harness = false
 required-features = ["bench-support"]

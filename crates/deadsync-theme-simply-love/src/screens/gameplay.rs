@@ -2231,6 +2231,7 @@ pub struct State {
     /// a skipped transition causes at most one bounded font measurement miss.
     intro_text_width: Cell<Option<f32>>,
     notefield_judgment_assets: [notefield::ResolvedJudgmentAssets; MAX_PLAYERS],
+    notefield_plans: [notefield::GameplayNotefieldPlan; MAX_PLAYERS],
     sync_overlay_text_cache: RefCell<SyncOverlayTextCache>,
     pub background_path_dirty: bool,
     pub background_changes: Vec<SongBackgroundChange>,
@@ -2395,6 +2396,13 @@ impl State {
             step_stats_gifs::resolve_random_extras(&step_stats_profiles);
         let notefield_judgment_assets = std::array::from_fn(|player| {
             notefield::ResolvedJudgmentAssets::from_profile(&step_stats_profiles[player])
+        });
+        let notefield_plans = std::array::from_fn(|player| {
+            notefield::gameplay_notefield_plan(
+                &step_stats_profiles[player],
+                &notefield_judgment_assets[player],
+                gameplay.player_blue_window_ms(player) / 1000.0,
+            )
         });
         let song = gameplay.song();
         let song_full_title: Arc<str> =
@@ -2736,6 +2744,7 @@ impl State {
             rate_text,
             intro_text_width: Cell::new(None),
             notefield_judgment_assets,
+            notefield_plans,
             sync_overlay_text_cache: RefCell::new(SyncOverlayTextCache::default()),
             background_path_dirty: true,
             background_changes,
@@ -2782,6 +2791,11 @@ impl State {
         player_idx: usize,
     ) -> &notefield::ResolvedJudgmentAssets {
         &self.notefield_judgment_assets[player_idx]
+    }
+
+    #[inline(always)]
+    pub(crate) fn notefield_plan(&self, player_idx: usize) -> &notefield::GameplayNotefieldPlan {
+        &self.notefield_plans[player_idx]
     }
 
     #[inline(always)]
@@ -18363,6 +18377,7 @@ fn push_actors_impl(
             } = notefield::compose_frame(
                 state,
                 state.notefield_judgment_assets(player_idx),
+                state.notefield_plan(player_idx),
                 player_idx,
                 arrow_effect_time_s,
                 &state.noteskin_assets,

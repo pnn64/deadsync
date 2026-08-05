@@ -12,7 +12,7 @@ pub enum LayoutMiniIndicatorPosition {
     UnderUpArrow,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ZmodLayoutParams {
     pub judgment_height: f32,
     pub has_error_bar: bool,

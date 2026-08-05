@@ -287,8 +287,8 @@ fn compose_field_contents<S, F>(
     let mut visible_hold_bounds = [(0, 0); MAX_COLS];
     for local_col in 0..num_cols {
         let col = col_start + local_col;
-        let note_indices = request.chart.lane_note_row_indices[col];
-        let hold_indices = request.chart.lane_hold_indices[col];
+        let note_indices = request.chart.lane_note_rows(col);
+        let hold_indices = request.chart.lane_holds(col);
         visible_note_bounds[local_col] = match visible_row_range {
             Some(range) => lane_window_bounds_by_note_row_from_cursor(
                 request.chart.note_itg_rows,
@@ -706,7 +706,7 @@ fn compose_field_contents<S, F>(
     for local_col in 0..num_cols {
         let col = col_start + local_col;
         for_each_lane_index(
-            request.chart.lane_hold_indices[col],
+            request.chart.lane_holds(col),
             visible_hold_bounds[local_col],
             &mut render_hold,
         );
@@ -804,7 +804,7 @@ fn compose_visible_notes<S, F>(
         let lane_offset = lane_offsets[local_col];
         let effect_params = lane_effect_params[local_col];
         for_each_lane_index(
-            request.chart.lane_note_row_indices[col],
+            request.chart.lane_note_rows(col),
             visible_note_bounds[local_col],
             |note_index| {
                 let note = &request.chart.notes[note_index];

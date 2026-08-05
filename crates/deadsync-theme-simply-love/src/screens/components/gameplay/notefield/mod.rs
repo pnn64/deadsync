@@ -1,10 +1,12 @@
 use crate::assets;
 use crate::notefield_style::notefield_style;
 use crate::screens::gameplay::{GameplayCoreState as State, GameplayNoteskinAssets};
-use deadlib_present::actors::{Actor, ActorResourceArena, IntoTextureKey, TextContent};
+use deadlib_present::actors::{Actor, ActorResourceArena, SpriteSource, TextContent};
 use deadlib_present::color;
 use deadlib_present::space::*;
 use deadsync_assets::noteskin::SpriteSlot;
+#[cfg(feature = "bench-support")]
+use deadsync_core::input::MAX_COLS;
 use deadsync_core::input::MAX_PLAYERS;
 use deadsync_gameplay::{
     FantasticWindowOptions, GameplayErrorBarTrim, TapExplosionOptions, blue_fantastic_window_ms,
@@ -396,9 +398,322 @@ fn hold_explosion_enabled(profile: &profile_data::Profile) -> bool {
     })
 }
 
+/// Immutable profile-derived notefield inputs for one player and song.
+///
+/// The gameplay/render thread owns this fixed two-slot screen cache. It is
+/// populated at gameplay entry from the immutable profile and resolved assets,
+/// then read without synchronization, misses, growth, or eviction. Destruction
+/// happens with the gameplay screen. A live frame performs one indexed borrow;
+/// all clamps, masks, option translation, and font selection happen at warmup.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct GameplayNotefieldPlan {
+    style: NotefieldStyle,
+    options: NotefieldOptions,
+    tap_explosion_noteskin_visible: bool,
+    small_combo_font: &'static str,
+    combo_font: Option<&'static str>,
+}
+
+pub(crate) fn gameplay_notefield_plan(
+    profile: &profile_data::Profile,
+    judgment_assets: &ResolvedJudgmentAssets,
+    blue_fantastic_window_s: f32,
+) -> GameplayNotefieldPlan {
+    let style = notefield_style();
+    let measure_line_mode = match profile.measure_lines {
+        profile_data::MeasureLines::Off => MeasureLineMode::Off,
+        profile_data::MeasureLines::Measure => MeasureLineMode::Measure,
+        profile_data::MeasureLines::Quarter => MeasureLineMode::Quarter,
+        profile_data::MeasureLines::Eighth => MeasureLineMode::Eighth,
+    };
+    let error_bar_mask = {
+        let mut mask = profile.error_bar_active_mask;
+        if mask.is_empty() {
+            mask =
+                profile_data::error_bar_mask_from_style(profile.error_bar, profile.error_bar_text);
+        }
+        mask
+    };
+    let has_judgment_texture = judgment_assets.judgment().is_some();
+    let mini_indicator_position = match profile.mini_indicator_position {
+        profile_data::MiniIndicatorPosition::Default => LayoutMiniIndicatorPosition::Default,
+        profile_data::MiniIndicatorPosition::UnderUpArrow => {
+            LayoutMiniIndicatorPosition::UnderUpArrow
+        }
+    };
+    let options = NotefieldOptions {
+        frame_features: NotefieldFrameFeatures {
+            measure_line_mode,
+            measure_cues: profile.measure_cues,
+            column_cues: profile.column_cues,
+            crossover_cues: profile.crossover_cues,
+            crossover_countdown: profile.column_countdown,
+            column_flash: profile.column_flash_on_miss,
+            error_bar: !error_bar_mask.is_empty(),
+            error_bar_text: error_bar_mask.contains(profile_data::ErrorBarMask::TEXT),
+            held_miss_asset: judgment_assets.held_miss().is_some(),
+            combo_visible: !profile.hide_combo,
+        },
+        notefield_offset: [
+            profile.note_field_offset_x.clamp(0, 50) as f32,
+            profile.note_field_offset_y.clamp(-50, 50) as f32,
+        ],
+        judgment_offset: [
+            profile
+                .judgment_offset_x
+                .clamp(profile_data::HUD_OFFSET_MIN, profile_data::HUD_OFFSET_MAX)
+                as f32,
+            profile
+                .judgment_offset_y
+                .clamp(profile_data::HUD_OFFSET_MIN, profile_data::HUD_OFFSET_MAX)
+                as f32,
+        ],
+        combo_offset: [
+            profile
+                .combo_offset_x
+                .clamp(profile_data::HUD_OFFSET_MIN, profile_data::HUD_OFFSET_MAX)
+                as f32,
+            profile
+                .combo_offset_y
+                .clamp(profile_data::HUD_OFFSET_MIN, profile_data::HUD_OFFSET_MAX)
+                as f32,
+        ],
+        error_bar_offset: [
+            profile
+                .error_bar_offset_x
+                .clamp(profile_data::HUD_OFFSET_MIN, profile_data::HUD_OFFSET_MAX)
+                as f32,
+            profile
+                .error_bar_offset_y
+                .clamp(profile_data::HUD_OFFSET_MIN, profile_data::HUD_OFFSET_MAX)
+                as f32,
+        ],
+        zmod_layout: zmod_layout_params(profile, style, has_judgment_texture),
+        has_judgment_texture,
+        error_bar_up: profile.error_bar_up,
+        fallback_mini_percent: profile.mini_percent as f32,
+        column_flash_compact: profile.column_flash_size == profile_data::ColumnFlashSize::Compact,
+        column_flash_dimmed: column_flash_dimmed(profile.column_flash_brightness),
+        hide_targets: profile.hide_targets,
+        hold_explosion_enabled: hold_explosion_enabled(profile),
+        hide_combo_explosions: profile.hide_combo_explosions,
+        judgment_back: profile.judgment_back,
+        show_fa_plus_window: profile.show_fa_plus_window,
+        fa_plus_10ms_blue_window: profile.fa_plus_10ms_blue_window,
+        split_15_10ms: profile.split_15_10ms,
+        custom_fantastic_window: profile.custom_fantastic_window,
+        judgment_tilt_enabled: profile.judgment_tilt,
+        judgment_tilt_min_ms: profile.tilt_min_threshold_ms as f32,
+        judgment_tilt_max_ms: profile.tilt_max_threshold_ms as f32,
+        judgment_tilt_multiplier: profile.tilt_multiplier,
+        blue_fantastic_window_s,
+        error_bar_modes: ErrorBarModes {
+            colorful: error_bar_mask.contains(profile_data::ErrorBarMask::COLORFUL),
+            monochrome: error_bar_mask.contains(profile_data::ErrorBarMask::MONOCHROME),
+            highlight: error_bar_mask.contains(profile_data::ErrorBarMask::HIGHLIGHT),
+            average: error_bar_mask.contains(profile_data::ErrorBarMask::AVERAGE),
+        },
+        error_bar_max_window_ix: error_bar_trim_max_window_ix(profile.error_bar_trim),
+        monochrome_background: profile.background_filter.is_off(),
+        error_bar_multi_tick: profile.error_bar_multi_tick,
+        short_average_error_bar: profile.short_average_error_bar_enabled,
+        center_tick: profile.center_tick,
+        error_ms_display: profile.error_ms_display,
+        long_error_bar_enabled: profile.long_error_bar_enabled,
+        long_error_bar_intensity: profile_data::clamp_long_error_bar_intensity(
+            profile.long_error_bar_intensity,
+        ),
+        measure_counter: (profile.measure_counter != profile_data::MeasureCounter::None).then_some(
+            MeasureCounterOptions {
+                lookahead: profile.measure_counter_lookahead.min(4),
+                multiplier: profile.measure_counter.multiplier(),
+                vertical: profile.measure_counter_vert,
+                left: profile.measure_counter_left,
+                broken_run: profile.broken_run,
+                run_timer: profile.run_timer,
+            },
+        ),
+        mini_indicator_position,
+        mini_indicator_zoom: zmod_mini_indicator_zoom(profile.mini_indicator_size),
+        counter_left: profile.measure_counter_left,
+    };
+    GameplayNotefieldPlan {
+        style,
+        options,
+        tap_explosion_noteskin_visible: !profile.tap_explosion_noteskin_hidden(),
+        small_combo_font: zmod_small_combo_font(profile.combo_font),
+        combo_font: zmod_combo_font_name(profile.combo_font),
+    }
+}
+
+#[inline(always)]
+fn combo_milestone_assets(effects: &crate::visual_styles::EffectAssets) -> ComboMilestoneAssets {
+    let hundred = effects.combo_100milestone_splode;
+    let hundred_mini = effects.combo_100milestone_minisplode;
+    let thousand = effects.combo_1000milestone_swoosh;
+    ComboMilestoneAssets {
+        burst: SpriteSource::static_texture("combo_explosion.png"),
+        hundred: SpriteSource::static_texture(hundred),
+        hundred_mini: SpriteSource::static_texture(hundred_mini),
+        thousand: SpriteSource::static_texture(thousand),
+        hundred_zoom_scale: assets::visual_styles::effect_zoom_scale(hundred),
+        hundred_mini_zoom_scale: assets::visual_styles::effect_zoom_scale(hundred_mini),
+        thousand_zoom_scale: assets::visual_styles::effect_zoom_scale(thousand),
+    }
+}
+
+#[cfg(feature = "bench-support")]
+fn combo_milestone_assets_legacy(
+    effects: &crate::visual_styles::EffectAssets,
+) -> ComboMilestoneAssets {
+    use deadlib_present::actors::IntoTextureKey;
+
+    let hundred = effects.combo_100milestone_splode;
+    let hundred_mini = effects.combo_100milestone_minisplode;
+    let thousand = effects.combo_1000milestone_swoosh;
+    ComboMilestoneAssets {
+        burst: "combo_explosion.png".into_sprite_source(),
+        hundred: hundred.into_sprite_source(),
+        hundred_mini: hundred_mini.into_sprite_source(),
+        thousand: thousand.into_sprite_source(),
+        hundred_zoom_scale: assets::visual_styles::effect_zoom_scale(hundred),
+        hundred_mini_zoom_scale: assets::visual_styles::effect_zoom_scale(hundred_mini),
+        thousand_zoom_scale: assets::visual_styles::effect_zoom_scale(thousand),
+    }
+}
+
+#[cfg(feature = "bench-support")]
+fn milestone_checksum(assets: &ComboMilestoneAssets) -> usize {
+    [
+        &assets.burst,
+        &assets.hundred,
+        &assets.hundred_mini,
+        &assets.thousand,
+    ]
+    .into_iter()
+    .filter_map(|source| source.texture_key())
+    .fold(0usize, |sum, key| {
+        sum.wrapping_mul(31)
+            .wrapping_add(key.len())
+            .wrapping_add(usize::from(key.as_bytes()[0]))
+    })
+    .wrapping_add(assets.hundred_zoom_scale.to_bits() as usize)
+    .wrapping_add(assets.hundred_mini_zoom_scale.to_bits() as usize)
+    .wrapping_add(assets.thousand_zoom_scale.to_bits() as usize)
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn benchmark_combo_milestone_legacy() -> usize {
+    let assets = combo_milestone_assets_legacy(&crate::visual_styles::ASSETS[0].effects);
+    milestone_checksum(std::hint::black_box(&assets))
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn benchmark_combo_milestone_static() -> usize {
+    let assets = combo_milestone_assets(&crate::visual_styles::ASSETS[0].effects);
+    milestone_checksum(std::hint::black_box(&assets))
+}
+
+#[cfg(feature = "bench-support")]
+fn notefield_plan_checksum(plan: GameplayNotefieldPlan) -> usize {
+    std::hint::black_box(plan);
+    1
+}
+
+/// Focused old/new harness for the profile-derived per-frame option rebuild.
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub struct NotefieldPlanBenchmark {
+    profile: profile_data::Profile,
+    judgment_assets: ResolvedJudgmentAssets,
+    blue_fantastic_window_s: f32,
+    cached: GameplayNotefieldPlan,
+}
+
+#[cfg(feature = "bench-support")]
+impl NotefieldPlanBenchmark {
+    pub fn new(profile: profile_data::Profile, blue_fantastic_window_s: f32) -> Self {
+        let judgment_assets = ResolvedJudgmentAssets::from_profile(&profile);
+        let cached = gameplay_notefield_plan(&profile, &judgment_assets, blue_fantastic_window_s);
+        Self {
+            profile,
+            judgment_assets,
+            blue_fantastic_window_s,
+            cached,
+        }
+    }
+
+    pub fn legacy_frame(&self) -> usize {
+        notefield_plan_checksum(gameplay_notefield_plan(
+            std::hint::black_box(&self.profile),
+            std::hint::black_box(&self.judgment_assets),
+            std::hint::black_box(self.blue_fantastic_window_s),
+        ))
+    }
+
+    pub fn cached_frame(&self) -> usize {
+        notefield_plan_checksum(std::hint::black_box(self.cached))
+    }
+
+    pub fn behavior_matches(&self) -> bool {
+        gameplay_notefield_plan(
+            &self.profile,
+            &self.judgment_assets,
+            self.blue_fantastic_window_s,
+        ) == self.cached
+    }
+}
+
+/// Focused old/new harness for the two 16-pointer lane view arrays formerly
+/// rebuilt for every player frame.
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub struct NotefieldLaneViewBenchmark {
+    note_rows: [Vec<usize>; MAX_COLS],
+    holds: [Vec<usize>; MAX_COLS],
+}
+
+#[cfg(feature = "bench-support")]
+impl NotefieldLaneViewBenchmark {
+    pub fn new() -> Self {
+        Self {
+            note_rows: from_fn(|col| vec![col, col + MAX_COLS]),
+            holds: from_fn(|col| vec![col * 2]),
+        }
+    }
+
+    pub fn legacy_frame(&self) -> usize {
+        let note_rows: [&[usize]; MAX_COLS] = from_fn(|col| self.note_rows[col].as_slice());
+        let holds: [&[usize]; MAX_COLS] = from_fn(|col| self.holds[col].as_slice());
+        let (note_rows, holds) = std::hint::black_box((note_rows, holds));
+        note_rows
+            .iter()
+            .chain(holds.iter())
+            .enumerate()
+            .fold(0usize, |sum, (index, lane)| {
+                sum.wrapping_add(index.wrapping_mul(31) ^ lane.len())
+            })
+    }
+
+    pub fn borrowed_frame(&self) -> usize {
+        let (note_rows, holds) =
+            std::hint::black_box((self.note_rows.as_slice(), self.holds.as_slice()));
+        note_rows
+            .iter()
+            .chain(holds.iter())
+            .enumerate()
+            .fold(0usize, |sum, (index, lane)| {
+                sum.wrapping_add(index.wrapping_mul(31) ^ lane.len())
+            })
+    }
+}
+
 pub(crate) fn compose_frame(
     state: &State,
     judgment_assets: &ResolvedJudgmentAssets,
+    notefield_plan: &GameplayNotefieldPlan,
     player_idx: usize,
     arrow_effect_time_s: f32,
     noteskin_assets: &GameplayNoteskinAssets,
@@ -424,55 +739,13 @@ pub(crate) fn compose_frame(
     hud_actors.clear();
     let hold_judgment_texture = judgment_assets.hold_judgment();
     let held_miss_texture = judgment_assets.held_miss();
-
-    let measure_line_mode = match profile.measure_lines {
-        profile_data::MeasureLines::Off => MeasureLineMode::Off,
-        profile_data::MeasureLines::Measure => MeasureLineMode::Measure,
-        profile_data::MeasureLines::Quarter => MeasureLineMode::Quarter,
-        profile_data::MeasureLines::Eighth => MeasureLineMode::Eighth,
-    };
-    let error_bar_mask = {
-        let mut mask = profile.error_bar_active_mask;
-        if mask.is_empty() {
-            mask =
-                profile_data::error_bar_mask_from_style(profile.error_bar, profile.error_bar_text);
-        }
-        mask
-    };
     let p = &state.players()[player_idx];
     let mut model_cache = model_caches[player_idx].borrow_mut();
 
     // Collect concrete profile/runtime inputs here; canonical placement stays
     // independent of Profile, gameplay state, config, and theme globals.
-    let style = notefield_style();
-    let notefield_offset_x = profile.note_field_offset_x.clamp(0, 50) as f32;
-    let notefield_offset_y = profile.note_field_offset_y.clamp(-50, 50) as f32;
-    let judgment_offset_x = profile
-        .judgment_offset_x
-        .clamp(profile_data::HUD_OFFSET_MIN, profile_data::HUD_OFFSET_MAX)
-        as f32;
-    let judgment_offset_y = profile
-        .judgment_offset_y
-        .clamp(profile_data::HUD_OFFSET_MIN, profile_data::HUD_OFFSET_MAX)
-        as f32;
-    let combo_offset_x = profile
-        .combo_offset_x
-        .clamp(profile_data::HUD_OFFSET_MIN, profile_data::HUD_OFFSET_MAX)
-        as f32;
-    let combo_offset_y = profile
-        .combo_offset_y
-        .clamp(profile_data::HUD_OFFSET_MIN, profile_data::HUD_OFFSET_MAX)
-        as f32;
-    let error_bar_offset_x = profile
-        .error_bar_offset_x
-        .clamp(profile_data::HUD_OFFSET_MIN, profile_data::HUD_OFFSET_MAX)
-        as f32;
-    let error_bar_offset_y = profile
-        .error_bar_offset_y
-        .clamp(profile_data::HUD_OFFSET_MIN, profile_data::HUD_OFFSET_MAX)
-        as f32;
+    let style = notefield_plan.style;
     let judgment_texture = judgment_assets.judgment();
-    let has_judgment_texture = judgment_texture.is_some();
     let elapsed_screen = state.total_elapsed_in_screen();
     let accel = effective_accel_effects_for_player(state, player_idx);
     let scroll = effective_scroll_effects_for_player(state, player_idx);
@@ -506,12 +779,12 @@ pub(crate) fn compose_frame(
         .unwrap_or((&[], &[], &[], &[], &[]));
     let base_noteskin = noteskin_assets.noteskin[player_idx].as_deref();
     let mine_noteskin = noteskin_assets.mine_noteskin[player_idx].as_deref();
-    let tap_explosion_noteskin = if profile.tap_explosion_noteskin_hidden() {
-        None
-    } else {
+    let tap_explosion_noteskin = if notefield_plan.tap_explosion_noteskin_visible {
         noteskin_assets.tap_explosion_noteskin[player_idx]
             .as_deref()
             .or(base_noteskin)
+    } else {
+        None
     };
     let request = NotefieldComposeRequest {
         style,
@@ -553,8 +826,8 @@ pub(crate) fn compose_frame(
             timing: state.timing_for_player(player_idx),
             notes: state.notes(),
             note_range: state.note_range_for_player(player_idx),
-            lane_note_row_indices: from_fn(|col| state.lane_note_row_indices(col)),
-            lane_hold_indices: from_fn(|col| state.lane_hold_indices(col)),
+            lane_note_row_indices: state.lane_note_row_index_lists(),
+            lane_hold_indices: state.lane_hold_index_lists(),
             note_itg_rows: state.note_itg_rows(),
             note_time_cache_ns: state.note_time_cache_ns(),
             hold_end_time_cache_ns: state.hold_end_time_cache_ns(),
@@ -584,79 +857,7 @@ pub(crate) fn compose_frame(
             note_hides: &state.song_lua_visuals().note_hides[player_idx],
             column_offsets: &state.song_lua_visuals().column_offsets[player_idx],
         },
-        options: NotefieldOptions {
-            frame_features: NotefieldFrameFeatures {
-                measure_line_mode,
-                measure_cues: profile.measure_cues,
-                column_cues: profile.column_cues,
-                crossover_cues: profile.crossover_cues,
-                crossover_countdown: profile.column_countdown,
-                column_flash: profile.column_flash_on_miss,
-                error_bar: !error_bar_mask.is_empty(),
-                error_bar_text: error_bar_mask.contains(profile_data::ErrorBarMask::TEXT),
-                held_miss_asset: held_miss_texture.is_some(),
-                combo_visible: !profile.hide_combo,
-            },
-            notefield_offset: [notefield_offset_x, notefield_offset_y],
-            judgment_offset: [judgment_offset_x, judgment_offset_y],
-            combo_offset: [combo_offset_x, combo_offset_y],
-            error_bar_offset: [error_bar_offset_x, error_bar_offset_y],
-            zmod_layout: zmod_layout_params(profile, style, has_judgment_texture),
-            has_judgment_texture,
-            error_bar_up: profile.error_bar_up,
-            fallback_mini_percent: profile.mini_percent as f32,
-            column_flash_compact: profile.column_flash_size
-                == profile_data::ColumnFlashSize::Compact,
-            column_flash_dimmed: column_flash_dimmed(profile.column_flash_brightness),
-            hide_targets: profile.hide_targets,
-            hold_explosion_enabled: hold_explosion_enabled(profile),
-            hide_combo_explosions: profile.hide_combo_explosions,
-            judgment_back: profile.judgment_back,
-            show_fa_plus_window: profile.show_fa_plus_window,
-            fa_plus_10ms_blue_window: profile.fa_plus_10ms_blue_window,
-            split_15_10ms: profile.split_15_10ms,
-            custom_fantastic_window: profile.custom_fantastic_window,
-            judgment_tilt_enabled: profile.judgment_tilt,
-            judgment_tilt_min_ms: profile.tilt_min_threshold_ms as f32,
-            judgment_tilt_max_ms: profile.tilt_max_threshold_ms as f32,
-            judgment_tilt_multiplier: profile.tilt_multiplier,
-            blue_fantastic_window_s: player_blue_window_ms(state, player_idx) / 1000.0,
-            error_bar_modes: ErrorBarModes {
-                colorful: error_bar_mask.contains(profile_data::ErrorBarMask::COLORFUL),
-                monochrome: error_bar_mask.contains(profile_data::ErrorBarMask::MONOCHROME),
-                highlight: error_bar_mask.contains(profile_data::ErrorBarMask::HIGHLIGHT),
-                average: error_bar_mask.contains(profile_data::ErrorBarMask::AVERAGE),
-            },
-            error_bar_max_window_ix: error_bar_trim_max_window_ix(profile.error_bar_trim),
-            monochrome_background: profile.background_filter.is_off(),
-            error_bar_multi_tick: profile.error_bar_multi_tick,
-            short_average_error_bar: profile.short_average_error_bar_enabled,
-            center_tick: profile.center_tick,
-            error_ms_display: profile.error_ms_display,
-            long_error_bar_enabled: profile.long_error_bar_enabled,
-            long_error_bar_intensity: profile_data::clamp_long_error_bar_intensity(
-                profile.long_error_bar_intensity,
-            ),
-            measure_counter: (profile.measure_counter != profile_data::MeasureCounter::None)
-                .then_some(MeasureCounterOptions {
-                    lookahead: profile.measure_counter_lookahead.min(4),
-                    multiplier: profile.measure_counter.multiplier(),
-                    vertical: profile.measure_counter_vert,
-                    left: profile.measure_counter_left,
-                    broken_run: profile.broken_run,
-                    run_timer: profile.run_timer,
-                }),
-            mini_indicator_position: match profile.mini_indicator_position {
-                profile_data::MiniIndicatorPosition::Default => {
-                    LayoutMiniIndicatorPosition::Default
-                }
-                profile_data::MiniIndicatorPosition::UnderUpArrow => {
-                    LayoutMiniIndicatorPosition::UnderUpArrow
-                }
-            },
-            mini_indicator_zoom: zmod_mini_indicator_zoom(profile.mini_indicator_size),
-            counter_left: profile.measure_counter_left,
-        },
+        options: notefield_plan.options,
         capture_requests,
         arrow_effect_time_s,
     };
@@ -672,7 +873,7 @@ pub(crate) fn compose_frame(
     let playfield_center_x = field.playfield_center_x;
     let layout_center_x = field.layout_center_x;
     let notefield_offset_y = field.notefield_offset_y;
-    let mc_font_name = zmod_small_combo_font(profile.combo_font);
+    let mc_font_name = notefield_plan.small_combo_font;
     let blind_active = prepared.blind_active;
 
     let noteskin_sprite_source = |slot: &SpriteSlot| slot.actor_texture_source(actor_resources);
@@ -771,22 +972,7 @@ pub(crate) fn compose_frame(
     )
     .then(|| {
         let milestone_assets = (!options.hide_combo_explosions && !p.combo_milestones.is_empty())
-            .then(|| {
-                let combo_splode_tex = visual_effects.combo_100milestone_splode;
-                let combo_minisplode_tex = visual_effects.combo_100milestone_minisplode;
-                let combo_swoosh_tex = visual_effects.combo_1000milestone_swoosh;
-                ComboMilestoneAssets {
-                    burst: "combo_explosion.png".into_sprite_source(),
-                    hundred: combo_splode_tex.into_sprite_source(),
-                    hundred_mini: combo_minisplode_tex.into_sprite_source(),
-                    thousand: combo_swoosh_tex.into_sprite_source(),
-                    hundred_zoom_scale: assets::visual_styles::effect_zoom_scale(combo_splode_tex),
-                    hundred_mini_zoom_scale: assets::visual_styles::effect_zoom_scale(
-                        combo_minisplode_tex,
-                    ),
-                    thousand_zoom_scale: assets::visual_styles::effect_zoom_scale(combo_swoosh_tex),
-                }
-            });
+            .then(|| combo_milestone_assets(visual_effects));
         let player_color = if milestone_assets.is_some() {
             color::decorative_rgba(state.player_color_index())
         } else {
@@ -806,7 +992,7 @@ pub(crate) fn compose_frame(
             miss_combo: p.miss_combo,
             player_color,
             combo_color,
-            font: zmod_combo_font_name(profile.combo_font),
+            font: notefield_plan.combo_font,
             number_text: TextContent::inline_u32,
         }
     });

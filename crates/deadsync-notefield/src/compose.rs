@@ -64,8 +64,8 @@ pub struct NotefieldChartView<'a> {
     pub timing: Option<&'a TimingData>,
     pub notes: &'a [Note],
     pub note_range: (usize, usize),
-    pub lane_note_row_indices: [&'a [usize]; MAX_COLS],
-    pub lane_hold_indices: [&'a [usize]; MAX_COLS],
+    pub lane_note_row_indices: &'a [Vec<usize>],
+    pub lane_hold_indices: &'a [Vec<usize>],
     pub note_itg_rows: &'a [i32],
     /// Song-load timing caches aligned one-to-one with `notes`. Empty or short
     /// slices are valid and fall back to canonical timing queries.
@@ -91,6 +91,18 @@ pub struct NotefieldChartView<'a> {
 }
 
 impl NotefieldChartView<'_> {
+    #[inline(always)]
+    pub(crate) fn lane_note_rows(&self, col: usize) -> &[usize] {
+        self.lane_note_row_indices
+            .get(col)
+            .map_or(&[], Vec::as_slice)
+    }
+
+    #[inline(always)]
+    pub(crate) fn lane_holds(&self, col: usize) -> &[usize] {
+        self.lane_hold_indices.get(col).map_or(&[], Vec::as_slice)
+    }
+
     #[inline(always)]
     pub fn tap_row_flags(&self, note_index: usize) -> u8 {
         self.tap_row_hold_roll_flags
@@ -141,7 +153,7 @@ pub struct NotefieldSongLuaView<'a> {
 }
 
 /// Profile-derived behavior and resolved asset availability in canonical terms.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct NotefieldOptions {
     pub frame_features: NotefieldFrameFeatures,
     pub notefield_offset: [f32; 2],
@@ -182,7 +194,7 @@ pub struct NotefieldOptions {
     pub counter_left: bool,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct MeasureCounterOptions {
     pub lookahead: u8,
     pub multiplier: f32,
@@ -697,6 +709,43 @@ mod tests {
             held_miss_asset: true,
             combo_visible: true,
         }
+    }
+
+    #[test]
+    fn borrowed_lane_storage_preserves_lane_views() {
+        let note_rows = [vec![2, 9], vec![4], vec![]];
+        let holds = [vec![], vec![7, 11]];
+        let view = NotefieldChartView {
+            timing: None,
+            notes: &[],
+            note_range: (0, 0),
+            lane_note_row_indices: &note_rows,
+            lane_hold_indices: &holds,
+            note_itg_rows: &[],
+            note_time_cache_ns: &[],
+            hold_end_time_cache_ns: &[],
+            note_displayed_beat_cache: &[],
+            decaying_hold_indices: &[],
+            tap_row_hold_roll_flags: &[],
+            visible_music_time_ns: 0,
+            visible_beat: 0.0,
+            search_beat: 0.0,
+            scroll_reference_bpm: 120.0,
+            music_rate: 1.0,
+            note_count_stats: &[],
+            time_signatures: &[],
+            bpms: &[],
+            stops: &[],
+            delays: &[],
+            scrolls: &[],
+            displayed_beat_monotonic: true,
+        };
+
+        assert_eq!(view.lane_note_rows(0), &[2, 9]);
+        assert_eq!(view.lane_note_rows(1), &[4]);
+        assert!(view.lane_note_rows(3).is_empty());
+        assert_eq!(view.lane_holds(1), &[7, 11]);
+        assert!(view.lane_holds(2).is_empty());
     }
 
     #[test]

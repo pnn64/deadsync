@@ -1,12 +1,13 @@
 use super::{
-    JudgmentSpriteMetadata, ResolvedJudgmentAssets, error_bar_trim_max_window_ix,
-    hold_explosion_enabled, judgment_frame_size, prewarm_actor_resources,
-    resolved_held_miss_texture, resolved_hold_judgment_texture, resolved_judgment_texture,
+    JudgmentSpriteMetadata, ResolvedJudgmentAssets, combo_milestone_assets,
+    error_bar_trim_max_window_ix, gameplay_notefield_plan, hold_explosion_enabled,
+    judgment_frame_size, prewarm_actor_resources, resolved_held_miss_texture,
+    resolved_hold_judgment_texture, resolved_judgment_texture,
 };
 use crate::assets;
 use crate::notefield_style::notefield_style;
 use crate::screens::gameplay::GameplayNoteskinAssets;
-use deadlib_present::actors::ActorResourceArena;
+use deadlib_present::actors::{ActorResourceArena, SpriteSource};
 use deadsync_assets::noteskin::load_itg_skin;
 use deadsync_core::note::NoteType;
 use deadsync_gameplay::{ActiveHold, hold_explosion_active, hold_head_render_flags};
@@ -15,6 +16,76 @@ use deadsync_noteskin::{NUM_QUANTIZATIONS, NoteskinSlot, Quantization, Style};
 use deadsync_profile as profile_data;
 use deadsync_rules::timing;
 use std::sync::Arc;
+
+#[test]
+fn song_plan_preserves_profile_derived_notefield_behavior() {
+    let mut profile = profile_data::Profile::default();
+    profile.note_field_offset_x = 99;
+    profile.note_field_offset_y = -99;
+    profile.judgment_offset_x = profile_data::HUD_OFFSET_MAX + 10;
+    profile.combo_offset_y = profile_data::HUD_OFFSET_MIN - 10;
+    profile.measure_lines = profile_data::MeasureLines::Eighth;
+    profile.hide_combo = true;
+    profile.combo_font = profile_data::ComboFont::SourceCode;
+    profile.error_bar_active_mask =
+        profile_data::ErrorBarMask::COLORFUL | profile_data::ErrorBarMask::TEXT;
+    let judgment_assets = ResolvedJudgmentAssets::from_profile(&profile);
+    let plan = gameplay_notefield_plan(&profile, &judgment_assets, 0.012_345);
+
+    assert_eq!(plan.style, notefield_style());
+    assert_eq!(plan.options.notefield_offset, [50.0, -50.0]);
+    assert_eq!(
+        plan.options.judgment_offset[0],
+        profile_data::HUD_OFFSET_MAX as f32
+    );
+    assert_eq!(
+        plan.options.combo_offset[1],
+        profile_data::HUD_OFFSET_MIN as f32
+    );
+    assert_eq!(
+        plan.options.frame_features.measure_line_mode,
+        deadsync_notefield::MeasureLineMode::Eighth
+    );
+    assert!(!plan.options.frame_features.combo_visible);
+    assert!(plan.options.error_bar_modes.colorful);
+    assert!(plan.options.frame_features.error_bar_text);
+    assert_eq!(plan.options.blue_fantastic_window_s, 0.012_345);
+    assert_eq!(plan.small_combo_font, "combo_source_code");
+    assert_eq!(plan.combo_font, Some("combo_source_code"));
+    assert_eq!(
+        plan.tap_explosion_noteskin_visible,
+        !profile.tap_explosion_noteskin_hidden()
+    );
+}
+
+#[test]
+fn combo_milestone_assets_keep_keys_and_use_static_sources() {
+    let effects = &crate::visual_styles::ASSETS[0].effects;
+    let assets = combo_milestone_assets(effects);
+    let sources = [
+        (&assets.burst, "combo_explosion.png"),
+        (&assets.hundred, effects.combo_100milestone_splode),
+        (&assets.hundred_mini, effects.combo_100milestone_minisplode),
+        (&assets.thousand, effects.combo_1000milestone_swoosh),
+    ];
+
+    for (source, expected) in sources {
+        assert!(matches!(source, SpriteSource::TextureStatic(_)));
+        assert_eq!(source.texture_key(), Some(expected));
+    }
+    assert_eq!(
+        assets.hundred_zoom_scale,
+        crate::visual_styles::effect_zoom_scale(effects.combo_100milestone_splode)
+    );
+    assert_eq!(
+        assets.hundred_mini_zoom_scale,
+        crate::visual_styles::effect_zoom_scale(effects.combo_100milestone_minisplode)
+    );
+    assert_eq!(
+        assets.thousand_zoom_scale,
+        crate::visual_styles::effect_zoom_scale(effects.combo_1000milestone_swoosh)
+    );
+}
 
 #[test]
 fn cached_judgment_assets_match_legacy_resolution() {
