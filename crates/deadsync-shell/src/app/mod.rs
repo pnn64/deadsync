@@ -6358,7 +6358,7 @@ impl App {
         }
     }
 
-    fn handle_screen_state_on_fade(&mut self, prev: CurrentScreen, target: CurrentScreen) {
+    fn prepare_screen_state(&mut self, prev: CurrentScreen, target: CurrentScreen) {
         if prev == CurrentScreen::SelectColor {
             let idx = self.state.screens.select_color_state.active_color_index;
             self.sync_screen_color_index(idx);

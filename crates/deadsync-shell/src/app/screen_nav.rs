@@ -141,6 +141,8 @@ impl App {
             self.enter_groovestats_login();
         }
 
+        self.prepare_screen_state(prev, target_screen);
+
         let config = config::get();
         let commands = actor_transition_music_commands(
             prev,
@@ -152,82 +154,13 @@ impl App {
         );
         let _ = self.run_commands(commands, event_loop);
 
-        if target_screen == CurrentScreen::Menu {
-            menu::reset_for_entry(&mut self.state.screens.menu_state);
-        } else if target_screen == CurrentScreen::Options {
-            self.reset_options_state_for_entry(prev);
-        } else if target_screen == CurrentScreen::ConfigurePads {
+        if target_screen == CurrentScreen::ConfigurePads {
             // The full screen is reached only from Options (Song Select uses an
             // in-place overlay instead): return there and show all pads.
             let pad_state = &mut self.state.screens.pad_config_state;
-            screens::pad_config::set_fsr_enabled(pad_state, config::get().use_fsrs);
             screens::pad_config::set_return_screen(pad_state, CurrentScreen::Options);
             screens::pad_config::set_filter(pad_state, screens::pad_config::PadFilter::All);
             screens::pad_config::reset_modes(pad_state);
-        } else if target_screen == CurrentScreen::ManageLocalProfiles {
-            let color_index = self.state.screens.options_state.active_color_index;
-            self.state.screens.manage_local_profiles_state =
-                manage_local_profiles::init(crate::local_profiles::view());
-            self.state
-                .screens
-                .manage_local_profiles_state
-                .active_color_index = color_index;
-        } else if target_screen == CurrentScreen::SelectProfile {
-            let current_color_index = self.state.screens.select_profile_state.active_color_index;
-            self.state.screens.select_profile_state =
-                select_profile::init(crate::local_profiles::picker_view());
-            self.state.screens.select_profile_state.active_color_index = current_color_index;
-            select_profile::set_fast_switch(
-                &mut self.state.screens.select_profile_state,
-                prev == CurrentScreen::SelectMusic,
-            );
-            if prev == CurrentScreen::Menu {
-                let p2 = self.state.screens.menu_state.started_by_p2;
-                select_profile::set_joined(&mut self.state.screens.select_profile_state, !p2, p2);
-            }
-        } else if target_screen == CurrentScreen::SelectStyle {
-            let current_color_index = self.state.screens.select_style_state.active_color_index;
-            self.state.screens.select_style_state =
-                select_style::init(crate::select_flow::runtime_view());
-            self.state.screens.select_style_state.active_color_index = current_color_index;
-        } else if target_screen == CurrentScreen::Mappings {
-            let color_index = self.state.screens.options_state.active_color_index;
-            self.state.screens.mappings_state = mappings::init(crate::mappings::runtime_view());
-            self.state.screens.mappings_state.active_color_index = color_index;
-        } else if target_screen == CurrentScreen::TestLights {
-            let color_index = self.state.screens.options_state.active_color_index;
-            self.state.screens.test_lights_state = test_lights::init();
-            self.state.screens.test_lights_state.active_color_index = color_index;
-            test_lights::on_enter(&mut self.state.screens.test_lights_state);
-            self.lights.set_test_auto_cycle();
-        } else if target_screen == CurrentScreen::OverscanAdjustment {
-            let color_index = self.state.screens.options_state.active_color_index;
-            self.state.screens.overscan_adjustment_state = overscan_adjustment::init();
-            self.state
-                .screens
-                .overscan_adjustment_state
-                .active_color_index = color_index;
-            overscan_adjustment::on_enter(
-                &mut self.state.screens.overscan_adjustment_state,
-                overscan_view(),
-            );
-        } else if target_screen == CurrentScreen::SmxAssignPads {
-            let color_index = self.state.screens.options_state.active_color_index;
-            self.state.screens.smx_assign_state = screens::smx_assign::init();
-            self.state.screens.smx_assign_state.active_color_index = color_index;
-            screens::smx_assign::on_enter(
-                &mut self.state.screens.smx_assign_state,
-                &crate::smx_config::smx_assignment_view(),
-                prev,
-            );
-        }
-
-        if prev == CurrentScreen::SelectColor {
-            let idx = self.state.screens.select_color_state.active_color_index;
-            self.sync_screen_color_index(idx);
-        } else if prev == CurrentScreen::Options {
-            let idx = self.state.screens.options_state.active_color_index;
-            self.sync_screen_color_index(idx);
         }
 
         if target_screen == CurrentScreen::Options {
@@ -403,7 +336,7 @@ impl App {
 
         let mut commands: Vec<Command> = Vec::new();
         commands.extend(self.handle_audio_and_profile_on_fade(prev, target));
-        self.handle_screen_state_on_fade(prev, target);
+        self.prepare_screen_state(prev, target);
         commands.extend(self.handle_screen_entry_on_fade(prev, target));
 
         if target == CurrentScreen::Options {
