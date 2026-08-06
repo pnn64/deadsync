@@ -2254,6 +2254,11 @@ pub struct State {
     sync_overlay_text_cache: RefCell<SyncOverlayTextCache>,
     pub background_path_dirty: bool,
     pub background_changes: Vec<SongBackgroundChange>,
+    /// Song-lifetime beat-to-seconds results parallel to `background_changes`.
+    /// Built exactly once at screen entry so video timing never walks the chart
+    /// timing map during a live frame. The two vectors have identical lengths
+    /// and are immutable until screen destruction.
+    background_change_start_seconds: Vec<f32>,
     pub next_background_change_ix: usize,
     /// Song-lifetime layer-2 timeline compiled at screen entry and owned by the
     /// gameplay thread. Capacity is exact and immutable; steady frames advance
@@ -2498,6 +2503,10 @@ impl State {
             .iter()
             .take_while(|change| change.start_beat <= gameplay.current_beat())
             .count();
+        let background_change_start_seconds = background_changes
+            .iter()
+            .map(|change| gameplay.music_time_for_beat(change.start_beat))
+            .collect();
         let song_layer2_events = build_song_layer2_events(&gameplay);
         let next_song_layer2_event_ix = song_layer2_events
             .partition_point(|event| event.start_second <= gameplay.current_music_time_display());
@@ -2798,6 +2807,7 @@ impl State {
             sync_overlay_text_cache: RefCell::new(SyncOverlayTextCache::default()),
             background_path_dirty: true,
             background_changes,
+            background_change_start_seconds,
             next_background_change_ix,
             song_layer2_events,
             next_song_layer2_event_ix: Cell::new(next_song_layer2_event_ix),
@@ -2853,6 +2863,14 @@ impl State {
     #[inline(always)]
     pub fn actor_resources(&self) -> &ActorResourceArena {
         &self.actor_resources
+    }
+
+    #[inline(always)]
+    pub fn active_background_start_sec(&self) -> Option<f32> {
+        active_background_start_sec(
+            &self.background_change_start_seconds,
+            self.next_background_change_ix,
+        )
     }
 
     pub fn notefield_model_cache_stats(&self) -> [ModelMeshCacheStats; MAX_PLAYERS] {
@@ -6100,6 +6118,14 @@ fn active_background_change(state: &State) -> Option<&SongBackgroundChange> {
         .next_background_change_ix
         .checked_sub(1)
         .and_then(|ix| state.background_changes.get(ix))
+}
+
+#[inline(always)]
+fn active_background_start_sec(start_seconds: &[f32], next_change_ix: usize) -> Option<f32> {
+    next_change_ix
+        .checked_sub(1)
+        .and_then(|ix| start_seconds.get(ix))
+        .copied()
 }
 
 pub fn begin_background_transition(
@@ -20839,6 +20865,17 @@ mod tests {
         assert!(scratch.iter().all(Vec::is_empty));
         assert!(scratch[0].capacity() >= 384);
         assert_eq!(scratch[1].capacity(), 0);
+    }
+
+    #[test]
+    fn background_start_cache_tracks_the_active_timeline_cursor() {
+        let start_seconds = [0.25, 4.5, 9.75];
+
+        assert_eq!(active_background_start_sec(&start_seconds, 0), None);
+        assert_eq!(active_background_start_sec(&start_seconds, 1), Some(0.25));
+        assert_eq!(active_background_start_sec(&start_seconds, 2), Some(4.5));
+        assert_eq!(active_background_start_sec(&start_seconds, 3), Some(9.75));
+        assert_eq!(active_background_start_sec(&start_seconds, 4), None);
     }
 
     #[test]

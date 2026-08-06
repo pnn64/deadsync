@@ -26,7 +26,7 @@ use std::fmt::Display;
 use std::path::Path;
 use std::sync::{
     Mutex, MutexGuard,
-    atomic::{AtomicU8, Ordering},
+    atomic::{AtomicU8, AtomicU64, Ordering},
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -144,6 +144,7 @@ pub struct SmxUnderglowColors {
 
 pub struct RuntimeConfigStore {
     config: Mutex<Config>,
+    config_generation: AtomicU64,
     input_routing_bits: AtomicU8,
     machine_default_noteskin: Mutex<String>,
     additional_song_folders: Mutex<Vec<AdditionalSongFolder>>,
@@ -161,6 +162,7 @@ impl RuntimeConfigStore {
         let input_routing_bits = InputRoutingConfig::from_config(&config).bits();
         Self {
             config: Mutex::new(config),
+            config_generation: AtomicU64::new(1),
             input_routing_bits: AtomicU8::new(input_routing_bits),
             machine_default_noteskin: Mutex::new(DEFAULT_MACHINE_NOTESKIN.to_string()),
             additional_song_folders: Mutex::new(Vec::new()),
@@ -183,6 +185,29 @@ impl RuntimeConfigStore {
     }
 
     #[inline(always)]
+    pub fn config_generation(&self) -> u64 {
+        self.config_generation.load(Ordering::Acquire)
+    }
+
+    pub fn config_snapshot(&self) -> (u64, Config) {
+        let config = self.lock_config();
+        (self.config_generation.load(Ordering::Acquire), *config)
+    }
+
+    #[inline(always)]
+    pub fn config_if_changed(&self, generation: u64) -> Option<(u64, Config)> {
+        if self.config_generation() == generation {
+            return None;
+        }
+        Some(self.config_snapshot())
+    }
+
+    #[inline(always)]
+    fn bump_config_generation(&self) {
+        self.config_generation.fetch_add(1, Ordering::Release);
+    }
+
+    #[inline(always)]
     pub fn input_routing_config(&self) -> InputRoutingConfig {
         InputRoutingConfig::from_bits(self.input_routing_bits.load(Ordering::Acquire))
     }
@@ -197,7 +222,11 @@ impl RuntimeConfigStore {
 
     pub fn publish_config(&self, cfg: Config) -> PublishedConfigEffects {
         let effects = PublishedConfigEffects::from_config(&cfg);
-        *self.lock_config() = cfg;
+        {
+            let mut current = self.lock_config();
+            *current = cfg;
+            self.bump_config_generation();
+        }
         self.publish_input_routing_config(&cfg);
         effects
     }
@@ -205,6 +234,9 @@ impl RuntimeConfigStore {
     pub fn update_config(&self, apply: impl FnOnce(&mut Config) -> bool) -> bool {
         let mut cfg = self.lock_config();
         let changed = apply(&mut cfg);
+        if changed {
+            self.bump_config_generation();
+        }
         self.publish_input_routing_config(&cfg);
         changed
     }
@@ -230,6 +262,7 @@ impl RuntimeConfigStore {
         if dedicated.disabled_by_missing_bindings {
             cfg.only_dedicated_menu_buttons = dedicated.enabled;
         }
+        self.bump_config_generation();
         self.publish_input_routing_config(&cfg);
         ThreeKeyNavigationUpdate {
             changed: true,
@@ -246,6 +279,9 @@ impl RuntimeConfigStore {
         let dedicated = resolve_dedicated_menu_navigation(enabled, dedicated_bindings_supported);
         let enabled = dedicated.enabled;
         let changed = set_if_changed(&mut cfg.only_dedicated_menu_buttons, enabled);
+        if changed {
+            self.bump_config_generation();
+        }
         self.publish_input_routing_config(&cfg);
         DedicatedMenuButtonsUpdate {
             changed,
@@ -257,6 +293,7 @@ impl RuntimeConfigStore {
     pub fn update_input_debounce_seconds(&self, seconds: f32) -> Option<f32> {
         let mut cfg = self.lock_config();
         if config_update::set_input_debounce_seconds(&mut cfg, seconds) {
+            self.bump_config_generation();
             Some(cfg.input_debounce_seconds)
         } else {
             None
@@ -365,6 +402,7 @@ impl RuntimeConfigStore {
     ) -> Option<AudioMixLevels> {
         let mut cfg = self.lock_config();
         if apply(&mut cfg) {
+            self.bump_config_generation();
             Some(audio_mix_levels_from_config(&cfg))
         } else {
             None
@@ -527,6 +565,7 @@ impl RuntimeConfigStore {
         );
         if dedicated.disabled_by_missing_bindings {
             cfg.only_dedicated_menu_buttons = dedicated.enabled;
+            self.bump_config_generation();
         }
         self.publish_input_routing_config(&cfg);
         InputRuntimeState {
@@ -928,6 +967,62 @@ SmxP1Serial= pad-1\n"),
         }));
         assert_eq!(store.config().master_volume, 40);
         assert!(!store.update_config(|_| false));
+    }
+
+    #[test]
+    fn runtime_config_snapshot_only_refreshes_after_a_real_change() {
+        let store = RuntimeConfigStore::new();
+        let (generation, config) = store.config_snapshot();
+        assert_eq!(config.master_volume, Config::default().master_volume);
+        assert!(store.config_if_changed(generation).is_none());
+
+        assert!(!store.update_config(|_| false));
+        assert!(store.config_if_changed(generation).is_none());
+
+        assert!(store.update_config(|cfg| {
+            cfg.master_volume = 40;
+            true
+        }));
+        let (next_generation, config) = store
+            .config_if_changed(generation)
+            .expect("changed configuration must publish a new snapshot");
+        assert_ne!(next_generation, generation);
+        assert_eq!(config.master_volume, 40);
+        assert!(store.config_if_changed(next_generation).is_none());
+    }
+
+    #[test]
+    fn direct_config_mutators_publish_snapshot_generations() {
+        let store = RuntimeConfigStore::new();
+        let mut generation = store.config_generation();
+
+        assert_eq!(store.update_input_debounce_seconds(1.0), Some(0.2));
+        let next = store.config_generation();
+        assert_ne!(next, generation);
+        generation = next;
+
+        assert!(store.update_master_volume(40).is_some());
+        let next = store.config_generation();
+        assert_ne!(next, generation);
+        generation = next;
+
+        let three_key_navigation = !store.config().three_key_navigation;
+        assert!(
+            store
+                .update_three_key_navigation(three_key_navigation, true)
+                .changed
+        );
+        let next = store.config_generation();
+        assert_ne!(next, generation);
+        generation = next;
+
+        let dedicated = !store.config().only_dedicated_menu_buttons;
+        assert!(
+            store
+                .update_only_dedicated_menu_buttons(dedicated, true)
+                .changed
+        );
+        assert_ne!(store.config_generation(), generation);
     }
 
     #[test]

@@ -1060,6 +1060,15 @@ pub struct App {
     >,
     asset_manager: AssetManager,
     dynamic_media: DynamicMedia,
+    /// Last immutable runtime configuration snapshot observed by the game
+    /// thread. The global store publishes a generation on mutation, so stable
+    /// gameplay frames avoid its mutex and the full `Config` copy.
+    frame_config: config::Config,
+    frame_config_generation: u64,
+    /// Last raw-key capture request sent by the game thread. A stable confirmed
+    /// registration reduces the gameplay path to one registration-state load;
+    /// unknown or failed registrations keep retrying until the backend confirms.
+    raw_keyboard_capture_request: Option<bool>,
     options_song_pack_generation: u64,
     profile_import: crate::profile_import::Service,
     profile_load: crate::profile_load::Service,
@@ -2437,9 +2446,16 @@ impl App {
         deadlib_present::runtime::tick(logic_dt);
         screens::components::shared::visual_style_bg::tick_global(logic_dt);
 
-        // One immutable configuration snapshot owns this frame. Downstream
-        // gameplay and device helpers must not reacquire the global config lock.
-        let frame_config = config::get();
+        // One immutable configuration snapshot owns this frame. Stable frames
+        // only read the generation atomic; the global mutex and full Config copy
+        // are paid once after an actual mutation.
+        if let Some((generation, config)) =
+            config::snapshot_if_changed(self.frame_config_generation)
+        {
+            self.frame_config = config;
+            self.frame_config_generation = generation;
+        }
+        let frame_config = self.frame_config;
         self.sync_gameplay_input_capture();
         self.sync_pad_config_fsr(&frame_config);
         self.reconcile_smx_assignment(&frame_config);
@@ -3068,6 +3084,7 @@ impl App {
         backend_type: BackendType,
         overlay_mode: u8,
         color_index: i32,
+        config_generation: u64,
         config: config::Config,
         profile_data: profile_data::Profile,
     ) -> Self {
@@ -3094,6 +3111,9 @@ impl App {
             smx_difficulty_tint_cache: std::collections::HashMap::new(),
             asset_manager: AssetManager::new(),
             dynamic_media: DynamicMedia::new(),
+            frame_config: config,
+            frame_config_generation: config_generation,
+            raw_keyboard_capture_request: None,
             options_song_pack_generation: deadsync_simfile::runtime_cache::song_cache_generation(),
             profile_import: crate::profile_import::Service::default(),
             profile_load: crate::profile_load::Service::default(),
@@ -4935,8 +4955,7 @@ impl App {
                     current_sec: deadsync_core::song_time::song_time_ns_to_seconds(
                         gs.current_music_time_ns(),
                     ),
-                    start_sec: bg_start_change
-                        .map(|change| gs.music_time_for_beat(change.start_beat)),
+                    start_sec: bg_start_change.and_then(|_| gs.active_background_start_sec()),
                     rate: active_change.map_or(1.0, |change| change.rate),
                 },
                 foreground_videos_changed,
@@ -8046,7 +8065,7 @@ impl ApplicationHandler<UserEvent> for App {
 }
 
 pub fn run() -> Result<(), Box<dyn std::error::Error>> {
-    let config = config::get();
+    let (config_generation, config) = config::snapshot();
     let backend_type = config.video_renderer;
     let show_stats_mode = config.show_stats_mode.min(2);
     let color_index = config.simply_love_color;
@@ -8056,6 +8075,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
         backend_type,
         show_stats_mode,
         color_index,
+        config_generation,
         config,
         profile_data,
     );

@@ -5,7 +5,10 @@ edition = "2024"
 license = "GPL-3.0"
 
 [features]
-bench-support = ["deadsync-theme-simply-love/bench-support"]
+bench-support = [
+    "deadsync-input-native/bench-support",
+    "deadsync-theme-simply-love/bench-support",
+]
 
 [dependencies]
 deadlib-assets = { path = "../deadlib-assets" }

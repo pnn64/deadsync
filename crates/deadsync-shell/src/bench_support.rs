@@ -1,4 +1,6 @@
-use crate::{pad_config, profile_import, qr_login, score_import, smx_config, sync_analysis};
+use crate::{input, pad_config, profile_import, qr_login, score_import, smx_config, sync_analysis};
+use deadsync_config::prelude as config;
+use deadsync_rules::timing::{StopSegment, TimingData, TimingSegments};
 use deadsync_theme_simply_love::screens::SimplyLoveScreen;
 use deadsync_theme_simply_love::screens::components::shared::heart_rate::HeartRateViewSyncBenchmark;
 use deadsync_theme_simply_love::screens::gameplay::{HeartRatePlayerView, HeartRateView};
@@ -8,6 +10,7 @@ use deadsync_theme_simply_love::{
 use std::hint::black_box;
 
 const POLLS_PER_FRAME: usize = 256;
+const BACKGROUND_ACTIVE_BEAT: f32 = 700.0;
 
 /// Old and current idle worker-maintenance paths used by the release benchmark.
 pub struct GameplayIdleWorkersBenchmark {
@@ -19,12 +22,35 @@ pub struct GameplayIdleWorkersBenchmark {
     options_lights: deadsync_smx::OptionsLightPreview,
     player_options_lights: deadsync_smx::PlayerOptionsLightPreview,
     fsr_enabled: [bool; 2],
+    frame_config: config::Config,
+    frame_config_generation: u64,
+    background_timing: TimingData,
+    background_start_seconds: Vec<f32>,
+    raw_capture_request: Option<bool>,
 }
 
 impl Default for GameplayIdleWorkersBenchmark {
     fn default() -> Self {
         let generation = deadsync_heart_rate::player_readings_generation();
         let heart_rate = HeartRateViewSyncBenchmark::new(generation, current_heart_rate_view());
+        let (frame_config_generation, frame_config) = config::snapshot();
+        let timing_segments = TimingSegments {
+            bpms: (0..96)
+                .map(|index| (index as f32 * 8.0, 90.0 + (index % 11) as f32 * 13.0))
+                .collect(),
+            stops: (1..16)
+                .map(|index| StopSegment {
+                    beat: index as f32 * 44.0,
+                    duration: 0.025 * (index % 5) as f32,
+                })
+                .collect(),
+            ..TimingSegments::default()
+        };
+        let background_timing = TimingData::from_segments(0.0, 0.0, &timing_segments, &[]);
+        let background_start_seconds =
+            vec![background_timing.get_time_for_beat(BACKGROUND_ACTIVE_BEAT)];
+        #[cfg(windows)]
+        deadsync_input_native::benchmark_seed_raw_keyboard_capture(true);
         Self {
             qr_login: qr_login::Service::default(),
             profile_import: profile_import::Service::default(),
@@ -34,6 +60,11 @@ impl Default for GameplayIdleWorkersBenchmark {
             options_lights: deadsync_smx::OptionsLightPreview::default(),
             player_options_lights: deadsync_smx::PlayerOptionsLightPreview::default(),
             fsr_enabled: [true; 2],
+            frame_config,
+            frame_config_generation,
+            background_timing,
+            background_start_seconds,
+            raw_capture_request: Some(true),
         }
     }
 }
@@ -222,6 +253,79 @@ impl GameplayIdleWorkersBenchmark {
             checksum.rotate_left(5) ^ sample
         })
     }
+
+    pub fn legacy_config_frame(&mut self) -> usize {
+        (0..POLLS_PER_FRAME).fold(0, |checksum, sample| {
+            let config = config::get();
+            checksum.rotate_left(5) ^ config_checksum(config) ^ sample
+        })
+    }
+
+    pub fn gated_config_frame(&mut self) -> usize {
+        (0..POLLS_PER_FRAME).fold(0, |checksum, sample| {
+            if let Some((generation, config)) =
+                config::snapshot_if_changed(self.frame_config_generation)
+            {
+                self.frame_config = config;
+                self.frame_config_generation = generation;
+            }
+            checksum.rotate_left(5) ^ config_checksum(black_box(self.frame_config)) ^ sample
+        })
+    }
+
+    #[cfg(windows)]
+    pub fn legacy_raw_capture_frame(&mut self) -> usize {
+        (0..POLLS_PER_FRAME).fold(0, |checksum, sample| {
+            deadsync_input_native::benchmark_set_raw_keyboard_capture_legacy(black_box(true));
+            checksum.rotate_left(5) ^ usize::from(self.raw_capture_request == Some(true)) ^ sample
+        })
+    }
+
+    #[cfg(windows)]
+    pub fn gated_raw_capture_frame(&mut self) -> usize {
+        (0..POLLS_PER_FRAME).fold(0, |checksum, sample| {
+            let requested = black_box(true);
+            if input::raw_keyboard_capture_request_needed(
+                self.raw_capture_request,
+                deadsync_input_native::raw_keyboard_capture_synced(requested),
+                requested,
+            ) {
+                deadsync_input_native::set_raw_keyboard_capture_enabled(requested);
+                self.raw_capture_request = Some(requested);
+            }
+            checksum.rotate_left(5) ^ usize::from(self.raw_capture_request == Some(true)) ^ sample
+        })
+    }
+
+    pub fn legacy_background_timing_frame(&self) -> usize {
+        (0..POLLS_PER_FRAME).fold(0, |checksum, sample| {
+            let start = black_box(&self.background_timing)
+                .get_time_for_beat(black_box(BACKGROUND_ACTIVE_BEAT));
+            checksum.rotate_left(5) ^ start.to_bits() as usize ^ sample
+        })
+    }
+
+    pub fn cached_background_timing_frame(&self) -> usize {
+        (0..POLLS_PER_FRAME).fold(0, |checksum, sample| {
+            let next_change_ix = black_box(1usize);
+            let start = next_change_ix
+                .checked_sub(1)
+                .and_then(|index| black_box(&self.background_start_seconds).get(index))
+                .copied()
+                .expect("benchmark active background timestamp");
+            checksum.rotate_left(5) ^ start.to_bits() as usize ^ sample
+        })
+    }
+}
+
+#[inline(always)]
+fn config_checksum(config: config::Config) -> usize {
+    config.max_fps as usize
+        ^ config.master_volume as usize
+        ^ config.simply_love_color as usize
+        ^ ((config.show_video_backgrounds as usize) << 8)
+        ^ ((config.smx_input as usize) << 9)
+        ^ config.bg_brightness.to_bits() as usize
 }
 
 fn current_heart_rate_view() -> HeartRateView {

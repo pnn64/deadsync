@@ -186,15 +186,25 @@ fn print_result(label: &str, result: &BenchResult) {
     );
 }
 
-fn compare(title: &str, old: BenchResult, new: BenchResult) {
+fn compare_labeled(
+    title: &str,
+    old_label: &str,
+    new_label: &str,
+    old: BenchResult,
+    new: BenchResult,
+) {
     assert_eq!(old.checksum, new.checksum);
-    assert_eq!(new.allocated.allocs, 0, "inactive gate allocated");
-    assert_eq!(new.allocated.reallocs, 0, "inactive gate reallocated");
-    assert_eq!(new.allocated.deallocs, 0, "inactive gate freed");
+    assert_eq!(new.allocated.allocs, 0, "optimized path allocated");
+    assert_eq!(new.allocated.reallocs, 0, "optimized path reallocated");
+    assert_eq!(new.allocated.deallocs, 0, "optimized path freed");
     println!("{title} (256 probes/frame)");
-    print_result("unconditional work", &old);
-    print_result("lifecycle gate", &new);
+    print_result(old_label, &old);
+    print_result(new_label, &new);
     println!();
+}
+
+fn compare(title: &str, old: BenchResult, new: BenchResult) {
+    compare_labeled(title, "unconditional work", "lifecycle gate", old, new);
 }
 
 fn main() {
@@ -260,5 +270,38 @@ fn main() {
         "inactive SMX Player Options light preview",
         measure(|| old.legacy_player_options_lights_frame()),
         measure(|| new.gated_player_options_lights_frame()),
+    );
+
+    let mut old = GameplayIdleWorkersBenchmark::default();
+    let mut new = GameplayIdleWorkersBenchmark::default();
+    compare_labeled(
+        "stable gameplay configuration snapshot",
+        "mutex snapshot",
+        "generation cache",
+        measure(|| old.legacy_config_frame()),
+        measure(|| new.gated_config_frame()),
+    );
+
+    #[cfg(windows)]
+    {
+        let mut old = GameplayIdleWorkersBenchmark::default();
+        let mut new = GameplayIdleWorkersBenchmark::default();
+        compare_labeled(
+            "unchanged Windows raw-key capture state",
+            "republish state",
+            "unchanged gate",
+            measure(|| old.legacy_raw_capture_frame()),
+            measure(|| new.gated_raw_capture_frame()),
+        );
+    }
+
+    let old = GameplayIdleWorkersBenchmark::default();
+    let new = GameplayIdleWorkersBenchmark::default();
+    compare_labeled(
+        "active gameplay background start timestamp",
+        "beat conversion",
+        "precomputed lookup",
+        measure(|| old.legacy_background_timing_frame()),
+        measure(|| new.cached_background_timing_frame()),
     );
 }

@@ -86,7 +86,7 @@ pub use crate::pad_order::pad_index_for_uuid_saved as pad_index_for_uuid;
 pub use crate::runtime::{
     additional_song_folder_roots, audio_mix_levels, default_profiles, flush_pending_saves, get,
     group_is_never_cached, input_routing_config, machine_default_noteskin, never_cache_list,
-    null_or_die_bias_cfg, smx_pad_assignment, song_path_is_writable,
+    null_or_die_bias_cfg, smx_pad_assignment, snapshot, snapshot_if_changed, song_path_is_writable,
 };
 pub use crate::runtime_load::{bootstrap_log_to_file, bootstrap_show_console, load};
 pub use crate::runtime_state::InputRoutingConfig;

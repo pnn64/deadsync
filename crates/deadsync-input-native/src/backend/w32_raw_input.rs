@@ -144,6 +144,10 @@ pub fn set_window_focused(focused: bool) {
 
 #[inline(always)]
 pub fn set_capture_enabled(enabled: bool) {
+    let registered = REGISTERED_KEYBOARD_CAPTURE.load(Ordering::Acquire);
+    if !keyboard_capture_sync_needed(CAPTURE_ENABLED.load(Ordering::Relaxed), registered, enabled) {
+        return;
+    }
     CAPTURE_ENABLED.store(enabled, Ordering::Relaxed);
     let hwnd = HWND(RAW_INPUT_HWND.load(Ordering::Acquire) as *mut c_void);
     if !hwnd.0.is_null() {
@@ -152,11 +156,45 @@ pub fn set_capture_enabled(enabled: bool) {
 }
 
 #[inline(always)]
+pub fn capture_synced(enabled: bool) -> bool {
+    REGISTERED_KEYBOARD_CAPTURE.load(Ordering::Acquire) == keyboard_capture_state(enabled)
+}
+
+#[inline(always)]
 const fn keyboard_capture_state(enabled: bool) -> u8 {
     if enabled {
         KEYBOARD_CAPTURE_ENABLED
     } else {
         KEYBOARD_CAPTURE_DISABLED
+    }
+}
+
+#[inline(always)]
+const fn keyboard_capture_sync_needed(current: bool, registered: u8, requested: bool) -> bool {
+    current != requested || registered != keyboard_capture_state(requested)
+}
+
+#[cfg(feature = "bench-support")]
+pub fn benchmark_seed_capture_state(enabled: bool) {
+    CAPTURE_ENABLED.store(enabled, Ordering::Relaxed);
+    REGISTERED_KEYBOARD_CAPTURE.store(keyboard_capture_state(enabled), Ordering::Release);
+    // A non-null sentinel models the live message window. Both benchmark paths
+    // observe the confirmed matching registration and therefore never pass this
+    // value to Win32; the legacy path still pays its real steady-state loads.
+    RAW_INPUT_HWND.store(1, Ordering::Release);
+}
+
+#[cfg(feature = "bench-support")]
+#[inline(always)]
+pub fn benchmark_set_capture_legacy(enabled: bool) {
+    CAPTURE_ENABLED.store(enabled, Ordering::Relaxed);
+    if RAW_INPUT_HWND.load(Ordering::Acquire) != 0 {
+        let enabled = CAPTURE_ENABLED.load(Ordering::Relaxed);
+        let desired = keyboard_capture_state(enabled);
+        let registered = REGISTERED_KEYBOARD_CAPTURE.load(Ordering::Acquire);
+        if registered != desired {
+            std::hint::black_box((registered, desired));
+        }
     }
 }
 
@@ -1263,8 +1301,9 @@ pub fn run_keyboard_only(
 #[cfg(test)]
 mod tests {
     use super::{
-        RAW_KEY_HELD_SLOTS, RAWINPUTHEADER, hid_report_payload, rawinput_uuid, remember_report,
-        report_is_duplicate, update_held_state,
+        KEYBOARD_CAPTURE_DISABLED, KEYBOARD_CAPTURE_ENABLED, KEYBOARD_CAPTURE_UNKNOWN,
+        RAW_KEY_HELD_SLOTS, RAWINPUTHEADER, hid_report_payload, keyboard_capture_sync_needed,
+        rawinput_uuid, remember_report, report_is_duplicate, update_held_state,
     };
     use std::mem::size_of;
 
@@ -1294,6 +1333,30 @@ mod tests {
         assert!(!update_held_state(&mut held, 7, true));
         assert!(update_held_state(&mut held, 7, false));
         assert!(!update_held_state(&mut held, 7, false));
+    }
+
+    #[test]
+    fn capture_sync_skips_only_a_confirmed_matching_registration() {
+        assert!(!keyboard_capture_sync_needed(
+            false,
+            KEYBOARD_CAPTURE_DISABLED,
+            false,
+        ));
+        assert!(!keyboard_capture_sync_needed(
+            true,
+            KEYBOARD_CAPTURE_ENABLED,
+            true,
+        ));
+        assert!(keyboard_capture_sync_needed(
+            false,
+            KEYBOARD_CAPTURE_UNKNOWN,
+            false,
+        ));
+        assert!(keyboard_capture_sync_needed(
+            false,
+            KEYBOARD_CAPTURE_DISABLED,
+            true,
+        ));
     }
 
     #[test]

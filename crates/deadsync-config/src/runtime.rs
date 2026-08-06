@@ -48,6 +48,15 @@ pub fn get() -> Config {
     RUNTIME_CONFIG.config()
 }
 
+pub fn snapshot() -> (u64, Config) {
+    RUNTIME_CONFIG.config_snapshot()
+}
+
+#[inline(always)]
+pub fn snapshot_if_changed(generation: u64) -> Option<(u64, Config)> {
+    RUNTIME_CONFIG.config_if_changed(generation)
+}
+
 #[inline(always)]
 pub fn input_routing_config() -> InputRoutingConfig {
     RUNTIME_CONFIG.input_routing_config()
