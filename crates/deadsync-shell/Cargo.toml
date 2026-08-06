@@ -53,6 +53,7 @@ smallvec = "1.15.2"
 winit = "0.30.13"
 
 [dev-dependencies]
+deadsync-notefield = { path = "../deadsync-notefield", features = ["bench-support"] }
 deadsync-theme-simply-love = { path = "../deadsync-theme-simply-love", features = ["test-support"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
@@ -72,5 +73,10 @@ required-features = ["bench-support"]
 
 [[bench]]
 name = "gameplay_live_allocations"
+harness = false
+required-features = ["bench-support"]
+
+[[bench]]
+name = "gameplay_remaining_hotpaths"
 harness = false
 required-features = ["bench-support"]

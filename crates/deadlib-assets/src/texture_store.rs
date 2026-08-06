@@ -132,6 +132,14 @@ impl<T> TextureStore<T> {
         }
     }
 
+    #[inline(always)]
+    fn uploaded_texture_dims_match(&self, key: &str, width: u32, height: u32) -> bool {
+        self.texture_handles
+            .get(key)
+            .and_then(|handle| self.uploaded_texture_dims.get(handle))
+            .is_some_and(|meta| meta.w == width && meta.h == height)
+    }
+
     pub fn queue_texture_upload_shared(
         &mut self,
         key: String,
@@ -153,7 +161,9 @@ impl<T> TextureStore<T> {
         image: RgbaImage,
         recycle_tx: SyncSender<Vec<u8>>,
     ) {
-        register_texture_dims(&key, image.width(), image.height());
+        if !self.uploaded_texture_dims_match(&key, image.width(), image.height()) {
+            register_texture_dims(&key, image.width(), image.height());
+        }
         self.pending_texture_uploads.push_recyclable_shared(
             key,
             image,
@@ -194,6 +204,52 @@ impl<T> TextureStore<T> {
 impl<T> Default for TextureStore<T> {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub struct VideoTextureMetadataBenchmark {
+    textures: TextureStore<()>,
+    key: Arc<str>,
+    width: u32,
+    height: u32,
+}
+
+#[cfg(feature = "bench-support")]
+impl VideoTextureMetadataBenchmark {
+    pub fn new(width: u32, height: u32) -> Self {
+        let key: Arc<str> = Arc::from("__gameplay_video_metadata_benchmark__");
+        let mut textures = TextureStore::new();
+        textures.insert_texture(key.to_string(), (), width, height);
+        register_texture_dims(&key, width, height);
+        Self {
+            textures,
+            key,
+            width,
+            height,
+        }
+    }
+
+    pub fn global_frame(&self) -> u64 {
+        register_texture_dims(&self.key, self.width, self.height);
+        self.checksum()
+    }
+
+    pub fn local_frame(&self) -> u64 {
+        if !self
+            .textures
+            .uploaded_texture_dims_match(&self.key, self.width, self.height)
+        {
+            register_texture_dims(&self.key, self.width, self.height);
+        }
+        self.checksum()
+    }
+
+    fn checksum(&self) -> u64 {
+        self.textures.texture_handle(&self.key).unwrap_or_default()
+            ^ u64::from(self.width).rotate_left(17)
+            ^ u64::from(self.height).rotate_left(37)
     }
 }
 
@@ -287,6 +343,20 @@ mod tests {
         assert!(textures.remove_texture("queued").is_none());
         assert!(!textures.has_texture_key("queued"));
         assert!(!textures.has_pending_texture_upload("queued"));
+    }
+
+    #[test]
+    fn uploaded_dimensions_distinguish_steady_video_frames_from_resizes() {
+        let mut textures = TextureStore::<()>::new();
+        textures.insert_texture("video-frame".to_string(), (), 640, 360);
+
+        assert!(textures.uploaded_texture_dims_match("video-frame", 640, 360));
+        assert!(!textures.uploaded_texture_dims_match("video-frame", 1280, 720));
+        assert!(!textures.uploaded_texture_dims_match("missing-video", 640, 360));
+
+        textures.set_texture_for_key("video-frame".to_string(), (), 1280, 720);
+        assert!(textures.uploaded_texture_dims_match("video-frame", 1280, 720));
+        assert!(!textures.uploaded_texture_dims_match("video-frame", 640, 360));
     }
 
     #[test]

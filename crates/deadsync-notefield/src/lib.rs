@@ -65,7 +65,9 @@ pub use frame_hud::{HudOptionGateBench, HudOptionGateBenchFrame};
 pub use holds::{HoldMeshScratch, HoldMeshScratchStats, offset_center};
 #[cfg(feature = "bench-support")]
 #[doc(hidden)]
-pub use holds::{bench_fresh_hold_mesh_frame, bench_reused_hold_mesh_frame};
+pub use holds::{
+    HoldPairAcquireBenchmark, bench_fresh_hold_mesh_frame, bench_reused_hold_mesh_frame,
+};
 pub use judgment_feedback::{IndicatorSprite, TapJudgmentSprite};
 #[cfg(feature = "bench-support")]
 #[doc(hidden)]

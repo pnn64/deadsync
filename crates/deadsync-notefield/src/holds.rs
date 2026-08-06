@@ -155,7 +155,8 @@ pub struct HoldMeshScratchStats {
 
 struct HoldMeshBufferPool {
     buffers: Vec<Arc<Vec<TexturedMeshVertex>>>,
-    used_pairs: u64,
+    available_pairs: u64,
+    availability_ready: bool,
     current_pairs: usize,
     max_pairs: usize,
     stats: HoldMeshScratchStats,
@@ -168,7 +169,8 @@ impl HoldMeshBufferPool {
             buffers: (0..max_pairs.saturating_mul(2))
                 .map(|_| Arc::new(Vec::with_capacity(initial_capacity)))
                 .collect(),
-            used_pairs: 0,
+            available_pairs: 0,
+            availability_ready: false,
             current_pairs: 0,
             max_pairs,
             stats: HoldMeshScratchStats::default(),
@@ -177,24 +179,22 @@ impl HoldMeshBufferPool {
 
     #[inline(always)]
     fn begin_frame(&mut self) {
-        self.used_pairs = 0;
+        self.availability_ready = false;
         self.current_pairs = 0;
     }
 
     fn acquire_pair(&mut self) -> Option<usize> {
-        let pair = (0..self.max_pairs).find(|&pair| {
-            let bit = 1_u64 << pair;
-            let start = pair * 2;
-            self.used_pairs & bit == 0
-                && Arc::strong_count(&self.buffers[start]) == 1
-                && Arc::strong_count(&self.buffers[start + 1]) == 1
-        });
-        let Some(pair) = pair else {
+        if !self.availability_ready {
+            self.available_pairs = self.reusable_pair_mask();
+            self.availability_ready = true;
+        }
+        if self.available_pairs == 0 {
             self.stats.saturated_pairs = self.stats.saturated_pairs.saturating_add(1);
             return None;
-        };
+        }
+        let pair = self.available_pairs.trailing_zeros() as usize;
         let start = pair * 2;
-        self.used_pairs |= 1_u64 << pair;
+        self.available_pairs &= !(1_u64 << pair);
         self.current_pairs += 1;
         self.stats.high_water_pairs = self.stats.high_water_pairs.max(self.current_pairs);
         for buffer in &mut self.buffers[start..start + 2] {
@@ -203,6 +203,15 @@ impl HoldMeshBufferPool {
                 .clear();
         }
         Some(start)
+    }
+
+    fn reusable_pair_mask(&self) -> u64 {
+        (0..self.max_pairs).fold(0_u64, |mask, pair| {
+            let start = pair * 2;
+            let reusable = Arc::strong_count(&self.buffers[start]) == 1
+                && Arc::strong_count(&self.buffers[start + 1]) == 1;
+            mask | (u64::from(reusable) << pair)
+        })
     }
 
     fn pair_mut(
@@ -237,10 +246,12 @@ impl HoldMeshBufferPool {
 /// renderer. Up to twice the engine lane bound of simultaneous visible holds
 /// covers dense and malformed overlap without live allocation; larger combined
 /// composition/render ownership saturates to the allocation-backed compatibility path.
-/// There is no scan, eviction, or destruction on a frame. Buffers are freed with
-/// gameplay state. Counters expose saturation and unexpected references. Normal
-/// frame work is bounded to clearing six vectors per visible hold; retained
-/// capacity is not initialized or scanned.
+/// There is no per-hold scan, eviction, or destruction on a frame. Buffers are
+/// freed with gameplay state. Counters expose saturation and unexpected
+/// references. The first visible hold triggers one bounded availability scan;
+/// later holds use constant-time bit selection, while hold-free frames do no
+/// pool work. Normal frame work is bounded to that scan plus clearing six
+/// vectors per visible hold; retained capacity is not initialized.
 pub struct HoldMeshScratch {
     bodies: HoldMeshBufferPool,
     caps: HoldMeshBufferPool,
@@ -1883,6 +1894,61 @@ fn hold_reusable_strip_glow_actor(
 
 #[cfg(feature = "bench-support")]
 #[doc(hidden)]
+pub struct HoldPairAcquireBenchmark {
+    pool: HoldMeshBufferPool,
+}
+
+#[cfg(feature = "bench-support")]
+impl HoldPairAcquireBenchmark {
+    pub fn new(pairs: usize) -> Self {
+        Self {
+            pool: HoldMeshBufferPool::new(true, pairs, 0),
+        }
+    }
+
+    pub fn linear_frame(&self, acquisitions: usize) -> u64 {
+        let mut used_pairs = 0_u64;
+        let mut checksum = 0_u64;
+        for _ in 0..acquisitions {
+            let pair = (0..self.pool.max_pairs).find(|&pair| {
+                let bit = 1_u64 << pair;
+                let start = pair * 2;
+                used_pairs & bit == 0
+                    && Arc::strong_count(&self.pool.buffers[start]) == 1
+                    && Arc::strong_count(&self.pool.buffers[start + 1]) == 1
+            });
+            let Some(pair) = pair else { break };
+            used_pairs |= 1_u64 << pair;
+            checksum = checksum.rotate_left(7) ^ pair as u64;
+        }
+        checksum ^ used_pairs
+    }
+
+    pub fn bitmask_frame(&self, acquisitions: usize) -> u64 {
+        let mut available_pairs = 0_u64;
+        let mut availability_ready = false;
+        let mut used_pairs = 0_u64;
+        let mut checksum = 0_u64;
+        for _ in 0..acquisitions {
+            if !availability_ready {
+                available_pairs = self.pool.reusable_pair_mask();
+                availability_ready = true;
+            }
+            if available_pairs == 0 {
+                break;
+            }
+            let pair = available_pairs.trailing_zeros() as usize;
+            let bit = 1_u64 << pair;
+            available_pairs &= !bit;
+            used_pairs |= bit;
+            checksum = checksum.rotate_left(7) ^ pair as u64;
+        }
+        checksum ^ used_pairs
+    }
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
 pub fn bench_fresh_hold_mesh_frame(
     actors: &mut Vec<Actor>,
     texture: &Arc<str>,
@@ -2447,6 +2513,8 @@ mod tests {
             .bodies
             .acquire_pair()
             .expect("second frame body pair");
+        assert_eq!(first, 0);
+        assert_eq!(second, 2);
         let (next_diffuse, next_glow) = scratch.bodies.shared_pair(second);
 
         assert!(!Arc::ptr_eq(&held_diffuse, &next_diffuse));

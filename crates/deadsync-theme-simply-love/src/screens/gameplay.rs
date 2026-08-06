@@ -8201,6 +8201,69 @@ const SONG_LUA_JUDGMENT_PROXY_SOURCE: usize = 1;
 const SONG_LUA_COMBO_PROXY_SOURCE: usize = 2;
 const SONG_LUA_PLAYER_PROXY_SOURCE: usize = 3;
 
+struct SongLuaProxyJoinScratch {
+    sources: [Arc<[Actor]>; SONG_LUA_PROXY_SEGMENTS_PER_ACTOR],
+    _replacements: u64,
+}
+
+impl SongLuaProxyJoinScratch {
+    fn new() -> Self {
+        Self {
+            sources: std::array::from_fn(|index| Self::new_source(index + 1)),
+            _replacements: 0,
+        }
+    }
+
+    fn new_source(len: usize) -> Arc<[Actor]> {
+        Arc::from(
+            (0..len)
+                .map(|_| Actor::SharedFrame {
+                    align: [0.0, 0.0],
+                    offset: [0.0, 0.0],
+                    size: [SizeSpec::Fill, SizeSpec::Fill],
+                    children: Arc::from([]),
+                    background: None,
+                    z: 0,
+                    tint: [1.0; 4],
+                    blend: None,
+                })
+                .collect::<Vec<_>>()
+                .into_boxed_slice(),
+        )
+    }
+
+    fn refill(
+        &mut self,
+        segment_count: usize,
+        diffuse: [f32; 4],
+        blend: Option<BlendMode>,
+        mut segment: impl FnMut(usize) -> Arc<[Actor]>,
+    ) -> Arc<[Actor]> {
+        let source = &mut self.sources[segment_count - 1];
+        if Arc::strong_count(source) != 1 {
+            *source = Self::new_source(segment_count);
+            self._replacements = self._replacements.saturating_add(1);
+        }
+        let actors =
+            Arc::get_mut(source).expect("proxy join source is uniquely owned after replacement");
+        for (index, actor) in actors.iter_mut().enumerate() {
+            let Actor::SharedFrame {
+                children,
+                tint,
+                blend: actor_blend,
+                ..
+            } = actor
+            else {
+                panic!("proxy join source must remain shared frames");
+            };
+            *children = segment(index);
+            *tint = diffuse;
+            *actor_blend = blend;
+        }
+        Arc::clone(source)
+    }
+}
+
 /// Song-lifetime backing for Song Lua ActorProxy sources.
 ///
 /// Owner/thread model: gameplay `State`, exclusively mutated during actor
@@ -8208,8 +8271,9 @@ const SONG_LUA_PLAYER_PROXY_SOURCE: usize = 3;
 /// only when a compiled overlay contains a proxy. Capacity/warmup: 64 bounded
 /// screen segments, four pre-sized player sources per active player, and up to
 /// five normalized source segments per compiled proxy and in-flight frame are
-/// reserved at screen entry. Two banks let composition proceed while the
-/// renderer still owns the preceding frame. A
+/// reserved at screen entry, together with the outer proxy frame that joins
+/// those segments. Two banks let composition proceed while the renderer still
+/// owns the preceding frame. A
 /// miss after slot saturation bypasses insertion and uses the owned fallback;
 /// child-vector overflow grows only the affected slot. There is no lookup,
 /// eviction, scan, pruning, or mid-song destruction. Replacements/growths are
@@ -8220,6 +8284,7 @@ struct SongLuaProxyActorBank {
     screen_used: usize,
     players: [[SharedActorFrameScratch; SONG_LUA_PLAYER_PROXY_SOURCE_COUNT]; MAX_PLAYERS],
     proxy_segments: Vec<SharedActorFrameScratch>,
+    proxy_frames: Vec<SongLuaProxyJoinScratch>,
     proxy_groups_used: usize,
 }
 
@@ -8257,6 +8322,9 @@ impl SongLuaProxyActorBank {
                         },
                     )
                 })
+                .collect(),
+            proxy_frames: (0..proxy_count)
+                .map(|_| SongLuaProxyJoinScratch::new())
                 .collect(),
             proxy_groups_used: 0,
         }
@@ -8326,29 +8394,57 @@ impl SongLuaProxyActorScratch {
             .get_mut(source)
     }
 
-    fn reserve_proxy_segments(&mut self) -> usize {
+    fn reserve_proxy_group(&mut self) -> Option<(usize, usize)> {
         let bank = &mut self.banks[self.active_bank];
-        let start = bank
-            .proxy_groups_used
-            .saturating_mul(SONG_LUA_PROXY_SEGMENTS_PER_ACTOR);
+        let group = bank.proxy_groups_used;
         bank.proxy_groups_used = bank.proxy_groups_used.saturating_add(1);
-        start
+        bank.proxy_frames.get(group)?;
+        Some((
+            group,
+            group.saturating_mul(SONG_LUA_PROXY_SEGMENTS_PER_ACTOR),
+        ))
     }
 
     fn normalize_segment(&mut self, segment: &Arc<[Actor]>, slot_index: usize) -> Arc<[Actor]> {
-        if !segment.iter().any(song_lua_proxy_actor_has_z) {
-            return Arc::clone(segment);
-        }
         let bank = &mut self.banks[self.active_bank];
-        let Some(slot) = bank.proxy_segments.get_mut(slot_index) else {
-            return song_lua_proxy_source_segment_owned(segment);
-        };
-        let (offset, actors) = song_lua_proxy_segment_actors(segment);
-        slot.refill(offset, |children| {
-            song_lua_proxy_local_children_into(actors.iter().cloned(), children);
-        })
-        .unwrap_or_else(|| Arc::from([]))
+        song_lua_normalize_proxy_segment(segment, bank.proxy_segments.get_mut(slot_index))
     }
+
+    fn join_proxy_segments(
+        &mut self,
+        group: usize,
+        segment_start: usize,
+        source: &[Arc<[Actor]>],
+        diffuse: [f32; 4],
+        blend: Option<BlendMode>,
+    ) -> Arc<[Actor]> {
+        let bank = &mut self.banks[self.active_bank];
+        let proxy_frames = &mut bank.proxy_frames;
+        let proxy_segments = &mut bank.proxy_segments;
+        proxy_frames[group].refill(source.len(), diffuse, blend, |index| {
+            song_lua_normalize_proxy_segment(
+                &source[index],
+                proxy_segments.get_mut(segment_start + index),
+            )
+        })
+    }
+}
+
+fn song_lua_normalize_proxy_segment(
+    segment: &Arc<[Actor]>,
+    slot: Option<&mut SharedActorFrameScratch>,
+) -> Arc<[Actor]> {
+    if !segment.iter().any(song_lua_proxy_actor_has_z) {
+        return Arc::clone(segment);
+    }
+    let Some(slot) = slot else {
+        return song_lua_proxy_source_segment_owned(segment);
+    };
+    let (offset, actors) = song_lua_proxy_segment_actors(segment);
+    slot.refill(offset, |children| {
+        song_lua_proxy_local_children_into(actors.iter().cloned(), children);
+    })
+    .unwrap_or_else(|| Arc::from([]))
 }
 
 /// Song-lifetime backing for ActorFrameTexture capture output.
@@ -9410,7 +9506,8 @@ fn song_lua_build_proxy_actor_with_scratch(
     if let [segment] = source {
         let slot_index = scratch
             .as_deref_mut()
-            .map(SongLuaProxyActorScratch::reserve_proxy_segments);
+            .and_then(SongLuaProxyActorScratch::reserve_proxy_group)
+            .map(|(_, start)| start);
         return Some(Actor::SharedFrame {
             align: [0.0, 0.0],
             offset,
@@ -9469,22 +9566,34 @@ fn song_lua_build_proxy_frame_actor_with_scratch(
         state.x * screen_width() / overlay_space_width.max(1.0),
         state.y * screen_height() / overlay_space_height.max(1.0),
     ];
-    let proxy_segment_start = scratch
-        .as_deref_mut()
-        .map(SongLuaProxyActorScratch::reserve_proxy_segments);
+    if source.len() <= SONG_LUA_PROXY_SEGMENTS_PER_ACTOR
+        && let Some((group, proxy_segment_start)) = scratch
+            .as_deref_mut()
+            .and_then(SongLuaProxyActorScratch::reserve_proxy_group)
+    {
+        let children = scratch
+            .as_deref_mut()
+            .expect("reserved proxy group requires scratch")
+            .join_proxy_segments(group, proxy_segment_start, source, state.diffuse, blend);
+        return Some(Actor::SharedFrame {
+            align: [0.0, 0.0],
+            offset,
+            size: [SizeSpec::Fill, SizeSpec::Fill],
+            children,
+            background: None,
+            z,
+            tint: [1.0; 4],
+            blend: None,
+        });
+    }
+
     let mut children = Vec::with_capacity(source.len());
-    for (segment_index, segment) in source.iter().enumerate() {
-        let slot_index = proxy_segment_start
-            .filter(|_| segment_index < SONG_LUA_PROXY_SEGMENTS_PER_ACTOR)
-            .map(|start| start + segment_index);
+    for segment in source {
         children.push(Actor::SharedFrame {
             align: [0.0, 0.0],
             offset: [0.0, 0.0],
             size: [SizeSpec::Fill, SizeSpec::Fill],
-            children: match (scratch.as_deref_mut(), slot_index) {
-                (Some(scratch), Some(slot_index)) => scratch.normalize_segment(segment, slot_index),
-                _ => song_lua_proxy_source_segment_owned(segment),
-            },
+            children: song_lua_proxy_source_segment_owned(segment),
             background: None,
             z: 0,
             tint: state.diffuse,
@@ -15130,6 +15239,7 @@ fn song_lua_text_checksum(text: &str) -> u64 {
 #[doc(hidden)]
 pub struct SongLuaActorBuildBenchmark {
     proxy_source: [Arc<[Actor]>; 1],
+    segmented_proxy_source: [Arc<[Actor]>; 3],
     local_z_proxy_source: [Arc<[Actor]>; 1],
     camera_proxy_source: [Arc<[Actor]>; 1],
     captured_proxy_source: [Arc<[Actor]>; 1],
@@ -15163,6 +15273,7 @@ impl SongLuaActorBuildBenchmark {
             .collect::<Vec<_>>();
         Self {
             proxy_source: [Arc::from([Actor::CameraPop])],
+            segmented_proxy_source: std::array::from_fn(|_| Arc::from([Actor::CameraPop])),
             local_z_proxy_source: [Arc::from([
                 Self::tagged_proxy_actor(30.0, 3),
                 Self::tagged_proxy_actor(10.0, 1),
@@ -15229,6 +15340,52 @@ impl SongLuaActorBuildBenchmark {
                 &self.proxy_source,
                 screen_width(),
                 screen_height(),
+            )
+            .expect("benchmark proxy must render"),
+        )
+    }
+
+    pub fn legacy_segmented_proxy_frame(&mut self) -> u64 {
+        self.proxy_scratch.begin_frame();
+        let (_, segment_start) = self
+            .proxy_scratch
+            .reserve_proxy_group()
+            .expect("benchmark proxy group is prewarmed");
+        let mut children = Vec::with_capacity(self.segmented_proxy_source.len());
+        for (index, segment) in self.segmented_proxy_source.iter().enumerate() {
+            children.push(Actor::SharedFrame {
+                align: [0.0, 0.0],
+                offset: [0.0, 0.0],
+                size: [SizeSpec::Fill, SizeSpec::Fill],
+                children: self
+                    .proxy_scratch
+                    .normalize_segment(segment, segment_start + index),
+                background: None,
+                z: 0,
+                tint: [1.0; 4],
+                blend: Some(BlendMode::Alpha),
+            });
+        }
+        Self::proxy_checksum(Actor::Frame {
+            align: [0.0, 0.0],
+            offset: [24.0, -12.0],
+            size: [SizeSpec::Fill, SizeSpec::Fill],
+            children,
+            background: None,
+            z: 321,
+        })
+    }
+
+    pub fn prewarmed_segmented_proxy_frame(&mut self) -> u64 {
+        self.proxy_scratch.begin_frame();
+        Self::proxy_checksum(
+            song_lua_build_proxy_frame_actor_with_scratch(
+                Self::proxy_state(),
+                321,
+                &self.segmented_proxy_source,
+                screen_width(),
+                screen_height(),
+                Some(&mut self.proxy_scratch),
             )
             .expect("benchmark proxy must render"),
         )
@@ -23241,6 +23398,37 @@ mod tests {
         let bank = &scratch.banks[0];
         assert_eq!(bank.proxy_segments[0].stats().growths, 0);
         assert_eq!(bank.proxy_segments[0].stats().replacements, 0);
+    }
+
+    #[test]
+    fn song_lua_proxy_prewarm_reuses_segment_join_frame() {
+        let source: [Arc<[Actor]>; 3] = std::array::from_fn(|_| Arc::from([Actor::CameraPop]));
+        let mut scratch = SongLuaProxyActorScratch::with_capacity_and_banks(0, 1, 1);
+
+        for _ in 0..2 {
+            scratch.begin_frame();
+            let actor = song_lua_build_proxy_frame_actor_with_scratch(
+                SongLuaOverlayState::default(),
+                1234,
+                &source,
+                640.0,
+                480.0,
+                Some(&mut scratch),
+            )
+            .expect("prewarmed segmented proxy should render");
+            let Actor::SharedFrame { z, children, .. } = actor else {
+                panic!("expected prewarmed outer proxy frame");
+            };
+            assert_eq!(z, 1234);
+            assert_eq!(children.len(), source.len());
+            assert!(
+                children
+                    .iter()
+                    .all(|actor| matches!(actor, Actor::SharedFrame { .. }))
+            );
+        }
+
+        assert_eq!(scratch.banks[0].proxy_frames[0]._replacements, 0);
     }
 
     #[test]
