@@ -593,6 +593,12 @@ fn prewarm_gameplay_text_layout_cache(
     gameplay::prewarm_text_layout(cache, fonts, state);
     screens::components::gameplay::gameplay_stats::prewarm_text_layout(cache, fonts, assets, state);
     screens::components::gameplay::notefield::prewarm_text_layout(cache, fonts, state);
+    screens::components::gameplay::notefield::prewarm_frame_text_scratch(
+        cache,
+        compose_scratch,
+        fonts,
+        state,
+    );
     // Keep a bounded song-local allowance for genuinely dynamic values. Reserving
     // it here avoids layout-arena growth and all pruning during live gameplay.
     cache.lock_growth_with_reserve(GAMEPLAY_TEXT_LAYOUT_LIVE_RESERVE);

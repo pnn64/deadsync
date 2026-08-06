@@ -22,7 +22,6 @@ use deadsync_gameplay::{
     JudgmentRenderInfo, OffsetIndicatorText,
 };
 use deadsync_rules::stream::StreamSegment;
-use std::sync::Arc;
 
 /// Prepared combo values and renderer-neutral assets for one HUD frame.
 pub struct ComboHudFrame<'a> {
@@ -80,7 +79,7 @@ pub struct CounterHudFrame<'a> {
 
 /// Fully resolved theme-selected mini-indicator content.
 pub struct MiniHudFrame {
-    pub text: Arc<str>,
+    pub text: TextContent,
     pub color: [f32; 4],
     pub failed: bool,
     pub font: &'static str,
@@ -202,7 +201,7 @@ pub fn compose_notefield_hud<S>(
             actors,
             MiniIndicatorRequest {
                 style: request.style.mini_indicator,
-                text: Arc::clone(&mini.text),
+                text: mini.text.clone(),
                 color: mini.color,
                 failed: mini.failed,
                 position: request.options.mini_indicator_position,

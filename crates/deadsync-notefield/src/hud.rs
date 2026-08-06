@@ -8,7 +8,6 @@ use deadlib_present::dsl::TextBuilder;
 use deadsync_rules::scroll::ScrollSpeedSetting;
 use deadsync_rules::stream::StreamSegment;
 use deadsync_theme::{CounterHudStyle, MiniIndicatorStyle};
-use std::sync::Arc;
 
 #[derive(Clone, Copy)]
 pub(crate) struct CounterHudRequest<'a> {
@@ -266,7 +265,7 @@ fn append_hud_text(
 
 pub(crate) struct MiniIndicatorRequest {
     pub style: MiniIndicatorStyle,
-    pub text: Arc<str>,
+    pub text: TextContent,
     pub color: [f32; 4],
     pub failed: bool,
     pub position: LayoutMiniIndicatorPosition,
@@ -305,7 +304,7 @@ pub(crate) fn compose_mini_indicator(actors: &mut Vec<Actor>, request: MiniIndic
 
     let mut text = TextBuilder::new();
     text.font(request.font);
-    text.settext(request.text.into());
+    text.settext(request.text);
     text.align(align_x, 0.5);
     text.xy(x, request.y);
     text.zoom(request.zoom);
@@ -521,7 +520,7 @@ mod tests {
                     shadow_len: 1.0,
                     text_z: 85,
                 },
-                text: Arc::from("-1.23%"),
+                text: TextContent::Static("-1.23%"),
                 color: [1.0, 0.0, 0.0, 0.8],
                 failed: true,
                 position: LayoutMiniIndicatorPosition::UnderUpArrow,

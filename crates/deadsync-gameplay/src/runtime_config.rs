@@ -414,9 +414,9 @@ pub fn needs_stream_data<Profile: GameplayProfileData>(profile: &Profile) -> boo
 #[inline(always)]
 pub const fn mini_indicator_needs_stream_data(options: GameplayMiniIndicatorOptions) -> bool {
     options.measure_counter_enabled
-        || !matches!(
+        || matches!(
             mini_indicator_mode_for_options(options),
-            GameplayMiniIndicatorMode::None
+            GameplayMiniIndicatorMode::StreamProg
         )
 }
 

@@ -34,7 +34,7 @@ use super::display_mods::{self, DisplayModsFrame};
 mod prewarm;
 mod text;
 mod zmod;
-pub use prewarm::prewarm_text_layout;
+pub use prewarm::{prewarm_frame_text_scratch, prewarm_text_layout};
 #[cfg(feature = "bench-support")]
 #[doc(hidden)]
 pub use text::DisplayModsTextBench;
@@ -116,12 +116,30 @@ pub fn benchmark_disabled_mini_indicator_legacy(frame: usize) -> usize {
 pub fn benchmark_disabled_mini_indicator(frame: usize) -> usize {
     zmod::benchmark_disabled_mini_indicator(frame)
 }
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn benchmark_pacemaker_text_legacy(value: f64, negative: bool) -> TextContent {
+    text::benchmark_pacemaker_text_legacy(value, negative)
+}
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn benchmark_pacemaker_text(value: f64, negative: bool) -> TextContent {
+    text::benchmark_pacemaker_text(value, negative)
+}
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn reset_mini_text_benchmark() {
+    text::reset_mini_text_benchmark();
+}
 use text::{
     cached_int_i32, effective_accel_effects_for_player, effective_mini_percent_for_player,
     effective_perspective_effects_for_player, effective_scroll_effects_for_player,
     effective_spacing_multiplier_for_player, effective_visual_effects_for_player,
     error_bar_text_label, offset_ms_text, zmod_measure_counter_text, zmod_run_timer_fmt,
 };
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub use zmod::PacemakerFrameBench;
 pub(crate) use zmod::zmod_target_score_missed;
 use zmod::{
     zmod_combo_font_name, zmod_indicator_mode, zmod_mini_indicator_text, zmod_mini_indicator_zoom,

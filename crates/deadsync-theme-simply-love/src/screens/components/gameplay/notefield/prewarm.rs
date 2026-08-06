@@ -1,14 +1,13 @@
 use crate::screens::gameplay::GameplayCoreState as State;
-use deadlib_present::actors::TextContent;
-use deadlib_present::compose::TextLayoutCache;
+use deadlib_present::actors::{InlineText, TextContent};
+use deadlib_present::compose::{ComposeScratch, TextLayoutCache};
 use deadlib_present::font;
 use deadsync_notefield::{MiniIndicatorMode, ZmodMeasureCounterText, zmod_broken_run_end};
 use deadsync_profile as profile_data;
 
 use super::super::display_mods::DISPLAY_MODS_WRAP_WIDTH_PX;
 use super::text::{
-    cached_int_i32, cached_neg_int_u32, cached_percent2_f64, cached_signed_percent2_f64,
-    preferred_mods_text, zmod_measure_counter_text, zmod_run_timer_fmt,
+    cached_int_i32, preferred_mods_text, zmod_measure_counter_text, zmod_run_timer_fmt,
 };
 use super::{
     COLUMN_COUNTDOWN_PREWARM_CAP, COMBO_PREWARM_CAP, MEASURE_PREWARM_CAP, RUN_TIMER_PREWARM_CAP_S,
@@ -40,20 +39,6 @@ pub fn prewarm_text_layout(cache: &mut TextLayoutCache, fonts: &font::FontMap, s
         let text = zmod_run_timer_fmt(second, threshold, trailing);
         cache.prewarm_text(fonts, font_name, text.as_str(), None);
     };
-    let prewarm_percent = |cache: &mut TextLayoutCache, font_name: &'static str, value: f64| {
-        let text = cached_percent2_f64(value.clamp(0.0, 100.0));
-        cache.prewarm_text(fonts, font_name, text.as_ref(), None);
-    };
-    let prewarm_signed_percent =
-        |cache: &mut TextLayoutCache, font_name: &'static str, value: f64, neg: bool| {
-            let text = cached_signed_percent2_f64(value.clamp(0.0, 100.0), neg);
-            cache.prewarm_text(fonts, font_name, text.as_ref(), None);
-        };
-    let prewarm_neg_u32 = |cache: &mut TextLayoutCache, font_name: &'static str, value: u32| {
-        let text = cached_neg_int_u32(value);
-        cache.prewarm_text(fonts, font_name, text.as_ref(), None);
-    };
-
     let mut max_combo = 0u32;
     let mut max_measure_len = 0i32;
     let music_end_seconds =
@@ -158,26 +143,6 @@ pub fn prewarm_text_layout(cache: &mut TextLayoutCache, fonts: &font::FontMap, s
                 prewarm_i32(cache, mc_font_name, countdown_max);
             }
         }
-        if zmod_indicator_mode(profile) != MiniIndicatorMode::None {
-            for &value in &[0.0, 50.0, 89.0, 95.0, 100.0] {
-                prewarm_percent(cache, mc_font_name, value);
-                prewarm_signed_percent(cache, mc_font_name, value, true);
-                prewarm_signed_percent(cache, mc_font_name, value, false);
-            }
-            prewarm_percent(
-                cache,
-                mc_font_name,
-                state.mini_indicator_target_score_percent(player),
-            );
-            prewarm_percent(
-                cache,
-                mc_font_name,
-                state.mini_indicator_rival_score_percent(player),
-            );
-            prewarm_neg_u32(cache, mc_font_name, 0);
-            prewarm_neg_u32(cache, mc_font_name, max_combo.min(COMBO_PREWARM_CAP));
-            prewarm_neg_u32(cache, mc_font_name, max_combo);
-        }
         if profile.error_ms_display {
             cache.prewarm_text(fonts, "wendy", "0.00ms", None);
         }
@@ -187,4 +152,33 @@ pub fn prewarm_text_layout(cache: &mut TextLayoutCache, fonts: &font::FontMap, s
     cache.prewarm_text(fonts, "game", "Late", None);
     cache.prewarm_text(fonts, "wendy", "EARLY", None);
     cache.prewarm_text(fonts, "wendy", "LATE", None);
+}
+
+pub fn prewarm_frame_text_scratch(
+    cache: &mut TextLayoutCache,
+    scratch: &mut ComposeScratch,
+    fonts: &font::FontMap,
+    state: &State,
+) {
+    let mut longest = InlineText::new();
+    assert!(longest.push_ascii(b'-'));
+    assert!(longest.push_u32(u32::MAX));
+    let enabled_players = (0..state.num_players())
+        .filter(|&player| zmod_indicator_mode(&state.profiles()[player]) != MiniIndicatorMode::None)
+        .count();
+    let vertex_buffers = enabled_players.saturating_mul(4);
+    for player in 0..state.num_players() {
+        let profile = &state.profiles()[player];
+        if zmod_indicator_mode(profile) == MiniIndicatorMode::None {
+            continue;
+        }
+        deadlib_present::compose::prewarm_frame_inline_text(
+            cache,
+            scratch,
+            fonts,
+            zmod_small_combo_font(profile.combo_font),
+            longest,
+            vertex_buffers,
+        );
+    }
 }

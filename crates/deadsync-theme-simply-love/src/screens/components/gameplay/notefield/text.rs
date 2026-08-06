@@ -26,17 +26,10 @@ use super::TEXT_CACHE_LIMIT;
 type FastTextCache<K> = TextCache<K, BuildHasherDefault<XxHash64>>;
 
 thread_local! {
-    static PERCENT2_CACHE_F64: RefCell<FastTextCache<u32>> = RefCell::new(HashMap::with_capacity_and_hasher(
-        512,
-        BuildHasherDefault::default(),
-    ));
-    static SIGNED_PERCENT2_CACHE_F64: RefCell<FastTextCache<(u32, bool)>> = RefCell::new(
-        HashMap::with_capacity_and_hasher(512, BuildHasherDefault::default()),
+    #[cfg(feature = "bench-support")]
+    static BENCH_MINI_SIGNED_CACHE: RefCell<FastTextCache<(u32, bool)>> = RefCell::new(
+        HashMap::with_capacity_and_hasher(TEXT_CACHE_LIMIT, BuildHasherDefault::default()),
     );
-    static NEG_INT_CACHE_U32: RefCell<FastTextCache<u32>> = RefCell::new(HashMap::with_capacity_and_hasher(
-        256,
-        BuildHasherDefault::default(),
-    ));
     static INT_CACHE_I32: RefCell<FastTextCache<i32>> = RefCell::new(HashMap::with_capacity_and_hasher(
         512,
         BuildHasherDefault::default(),
@@ -70,6 +63,33 @@ thread_local! {
     );
 }
 
+#[cfg(feature = "bench-support")]
+pub(super) fn reset_mini_text_benchmark() {
+    BENCH_MINI_SIGNED_CACHE.with(|cache| cache.borrow_mut().clear());
+}
+
+#[cfg(feature = "bench-support")]
+pub(super) fn benchmark_pacemaker_text_legacy(value: f64, negative: bool) -> TextContent {
+    let centi = quantize_centi_u32(value);
+    TextContent::Shared(cached_text(
+        &BENCH_MINI_SIGNED_CACHE,
+        (centi, negative),
+        TEXT_CACHE_LIMIT,
+        || {
+            if negative {
+                format!("-{:.2}%", centi as f64 / 100.0)
+            } else {
+                format!("+{:.2}%", centi as f64 / 100.0)
+            }
+        },
+    ))
+}
+
+#[cfg(feature = "bench-support")]
+pub(super) fn benchmark_pacemaker_text(value: f64, negative: bool) -> TextContent {
+    zmod_mini_indicator_text_content(ZmodMiniIndicatorText::SignedPercent { value, negative })
+}
+
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 struct GameplayModsTextKey {
     speed_tag: u8,
@@ -96,38 +116,6 @@ struct GameplayModsTextKey {
     blind: i16,
     cover: i16,
     disabled_timing_windows: u8,
-}
-
-#[inline(always)]
-pub(super) fn cached_percent2_f64(value: f64) -> Arc<str> {
-    let key = quantize_centi_u32(value);
-    cached_text(&PERCENT2_CACHE_F64, key, TEXT_CACHE_LIMIT, || {
-        format!("{:.2}%", key as f64 / 100.0)
-    })
-}
-
-#[inline(always)]
-pub(super) fn cached_signed_percent2_f64(value: f64, neg: bool) -> Arc<str> {
-    let key = quantize_centi_u32(value);
-    cached_text(
-        &SIGNED_PERCENT2_CACHE_F64,
-        (key, neg),
-        TEXT_CACHE_LIMIT,
-        || {
-            if neg {
-                format!("-{:.2}%", key as f64 / 100.0)
-            } else {
-                format!("+{:.2}%", key as f64 / 100.0)
-            }
-        },
-    )
-}
-
-#[inline(always)]
-pub(super) fn cached_neg_int_u32(value: u32) -> Arc<str> {
-    cached_text(&NEG_INT_CACHE_U32, value, TEXT_CACHE_LIMIT, || {
-        format!("-{value}")
-    })
 }
 
 #[inline(always)]
@@ -302,14 +290,32 @@ pub(super) fn benchmark_run_timer_legacy(
     ))
 }
 
-pub(super) fn cached_zmod_mini_indicator_text(text: ZmodMiniIndicatorText) -> Arc<str> {
+pub(super) fn zmod_mini_indicator_text_content(text: ZmodMiniIndicatorText) -> TextContent {
+    let mut out = InlineText::new();
     match text {
-        ZmodMiniIndicatorText::Percent(value) => cached_percent2_f64(value),
+        ZmodMiniIndicatorText::Percent(value) => push_percent(&mut out, value, None),
         ZmodMiniIndicatorText::SignedPercent { value, negative } => {
-            cached_signed_percent2_f64(value, negative)
+            push_percent(&mut out, value, Some(negative));
         }
-        ZmodMiniIndicatorText::NegativeInt(value) => cached_neg_int_u32(value),
+        ZmodMiniIndicatorText::NegativeInt(value) => {
+            assert!(out.push_ascii(b'-'));
+            assert!(out.push_u32(value));
+        }
     }
+    TextContent::frame_inline(out)
+}
+
+#[inline]
+fn push_percent(out: &mut InlineText, value: f64, negative: Option<bool>) {
+    let centi = quantize_centi_u32(value);
+    if let Some(negative) = negative {
+        assert!(out.push_ascii(if negative { b'-' } else { b'+' }));
+    }
+    assert!(out.push_u32(centi / 100));
+    assert!(out.push_ascii(b'.'));
+    assert!(out.push_ascii(b'0' + ((centi / 10) % 10) as u8));
+    assert!(out.push_ascii(b'0' + (centi % 10) as u8));
+    assert!(out.push_ascii(b'%'));
 }
 
 #[inline(always)]
@@ -765,5 +771,34 @@ mod tests {
             assert!(matches!(text, TextContent::Inline(_)));
             assert_eq!(text.as_str(), expected);
         }
+    }
+
+    #[test]
+    fn inline_mini_indicator_text_preserves_quantized_display() {
+        for (value, expected) in [
+            (f64::NEG_INFINITY, "0.00%"),
+            (-1.0, "0.00%"),
+            (0.0, "0.00%"),
+            (1.234, "1.23%"),
+            (1.235, "1.24%"),
+            (100.0, "100.00%"),
+            (f64::INFINITY, "0.00%"),
+            (f64::NAN, "0.00%"),
+        ] {
+            let text = zmod_mini_indicator_text_content(ZmodMiniIndicatorText::Percent(value));
+            assert!(matches!(text, TextContent::FrameInline(_)));
+            assert_eq!(text.as_str(), expected);
+        }
+
+        for (negative, expected) in [(true, "-12.35%"), (false, "+12.35%")] {
+            let text = zmod_mini_indicator_text_content(ZmodMiniIndicatorText::SignedPercent {
+                value: 12.345,
+                negative,
+            });
+            assert_eq!(text.as_str(), expected);
+        }
+
+        let text = zmod_mini_indicator_text_content(ZmodMiniIndicatorText::NegativeInt(u32::MAX));
+        assert_eq!(text.as_str(), "-4294967295");
     }
 }

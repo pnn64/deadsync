@@ -5549,6 +5549,7 @@ impl GameplayLifeTextBench {
 pub struct GameplayScorePollingBench {
     profiles: [score_data::GameplayScoreboxProfileSnapshot; MAX_PLAYERS],
     snapshots: [Option<score_data::CachedPlayerLeaderboardData>; MAX_PLAYERS],
+    rival_score_types: [Option<profile_data::MiniIndicatorScoreType>; MAX_PLAYERS],
     pending: bool,
 }
 
@@ -5567,10 +5568,12 @@ impl Default for GameplayScorePollingBench {
             }),
             None,
         ];
-        let pending = scorebox_refresh_pending_from(&profiles, &snapshots);
+        let rival_score_types = [None; MAX_PLAYERS];
+        let pending = scorebox_refresh_pending_from(&profiles, &snapshots, &rival_score_types);
         Self {
             profiles,
             snapshots,
+            rival_score_types,
             pending,
         }
     }
@@ -5585,6 +5588,7 @@ impl GameplayScorePollingBench {
             let pending = scorebox_refresh_pending_from(
                 std::hint::black_box(&self.profiles),
                 std::hint::black_box(&self.snapshots),
+                std::hint::black_box(&self.rival_score_types),
             );
             checksum.rotate_left(7) ^ usize::from(pending) ^ sample
         })

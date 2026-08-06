@@ -765,14 +765,17 @@ where
     let mut mini_indicator_rival_score_percent = [0.0_f64; MAX_PLAYERS];
 
     for p in 0..num_players {
-        if mini_indicator_mode(&player_profiles[p]) == GameplayMiniIndicatorMode::None {
+        let indicator_mode = mini_indicator_mode(&player_profiles[p]);
+        if indicator_mode == GameplayMiniIndicatorMode::None {
             continue;
         }
-        let constant_bpm = !timing_players[p].has_bpm_changes();
-        let (stream_segments, total_stream, _total_break) =
-            zmod_stream_totals_for_densities(&measure_densities[p], constant_bpm);
-        mini_indicator_total_stream_measures[p] = total_stream.max(0.0);
-        mini_indicator_stream_segments[p] = stream_segments;
+        if indicator_mode == GameplayMiniIndicatorMode::StreamProg {
+            let constant_bpm = !timing_players[p].has_bpm_changes();
+            let (stream_segments, total_stream, _total_break) =
+                zmod_stream_totals_for_densities(&measure_densities[p], constant_bpm);
+            mini_indicator_total_stream_measures[p] = total_stream.max(0.0);
+            mini_indicator_stream_segments[p] = stream_segments;
+        }
 
         let personal_best = mini_indicator_data.personal_best_percent[p];
         let machine_best = mini_indicator_data.machine_best_percent[p];

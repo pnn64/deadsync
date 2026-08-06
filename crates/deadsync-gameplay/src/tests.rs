@@ -10399,7 +10399,7 @@ mod tests {
     }
 
     #[test]
-    fn mini_indicator_needs_stream_data_for_measure_or_mode() {
+    fn mini_indicator_needs_stream_data_only_for_measure_or_stream_progress() {
         assert!(!mini_indicator_needs_stream_data(
             GameplayMiniIndicatorOptions::default()
         ));
@@ -10415,9 +10415,15 @@ mod tests {
                 ..GameplayMiniIndicatorOptions::default()
             }
         ));
-        assert!(mini_indicator_needs_stream_data(
+        assert!(!mini_indicator_needs_stream_data(
             GameplayMiniIndicatorOptions {
                 pacemaker: true,
+                ..GameplayMiniIndicatorOptions::default()
+            }
+        ));
+        assert!(!mini_indicator_needs_stream_data(
+            GameplayMiniIndicatorOptions {
+                requested_mode: GameplayMiniIndicatorMode::RivalScoring,
                 ..GameplayMiniIndicatorOptions::default()
             }
         ));

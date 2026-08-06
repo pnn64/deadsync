@@ -1779,7 +1779,7 @@ impl CachedTextPage {
     }
 }
 
-type TextPageBuilder = SmallVec<[CachedTextPage; 2]>;
+type TextPageBuilder = Vec<CachedTextPage>;
 
 #[inline(always)]
 fn intern_text_page(pages: &mut TextPageBuilder, key: &Arc<str>) -> TextPageId {
@@ -1859,9 +1859,9 @@ struct CachedTextLayout {
     line_spacing: i32,
     max_logical_width_i: i32,
     glyph_count: usize,
-    texture_pages: Box<[CachedTextPage]>,
-    lines: Box<[CachedLine]>,
-    glyphs: Box<[CachedGlyph]>,
+    texture_pages: Vec<CachedTextPage>,
+    lines: Vec<CachedLine>,
+    glyphs: Vec<CachedGlyph>,
     fill_batches: CachedTextMeshVariants,
     stroke_batches: CachedTextMeshVariants,
 }
@@ -1879,6 +1879,36 @@ pub fn benchmark_text_layout_type_sizes() -> (usize, usize, usize) {
 }
 
 impl CachedTextLayout {
+    fn empty() -> Self {
+        Self {
+            layout_seed: 0,
+            font_height: 0,
+            line_spacing: 0,
+            max_logical_width_i: 0,
+            glyph_count: 0,
+            texture_pages: Vec::new(),
+            lines: Vec::new(),
+            glyphs: Vec::new(),
+            fill_batches: CachedTextMeshVariants::default(),
+            stroke_batches: CachedTextMeshVariants::default(),
+        }
+    }
+
+    fn frame_inline_scratch() -> Self {
+        Self {
+            layout_seed: 0,
+            font_height: 0,
+            line_spacing: 0,
+            max_logical_width_i: 0,
+            glyph_count: 0,
+            texture_pages: Vec::with_capacity(2),
+            lines: Vec::with_capacity(1),
+            glyphs: Vec::with_capacity(actors::InlineText::CAPACITY),
+            fill_batches: CachedTextMeshVariants::default(),
+            stroke_batches: CachedTextMeshVariants::default(),
+        }
+    }
+
     #[inline(always)]
     fn texture_page(&self, id: TextPageId) -> &CachedTextPage {
         self.texture_pages
@@ -2143,6 +2173,8 @@ pub struct TextLayoutCache {
     max_aliases: usize,
     frame_stats: Option<TextLayoutFrameStats>,
     uncached_layout: Option<Box<CachedTextLayout>>,
+    frame_inline_layout: CachedTextLayout,
+    frame_inline_key: Option<(TextLayoutKey, actors::InlineText)>,
 }
 
 impl Default for TextLayoutCache {
@@ -2164,6 +2196,8 @@ impl TextLayoutCache {
             max_aliases: max_entries,
             frame_stats: None,
             uncached_layout: None,
+            frame_inline_layout: CachedTextLayout::frame_inline_scratch(),
+            frame_inline_key: None,
         }
     }
 
@@ -2211,6 +2245,12 @@ impl TextLayoutCache {
         self.alias_count = 0;
         self.frame_stats = None;
         self.uncached_layout = None;
+        self.frame_inline_layout.texture_pages.clear();
+        self.frame_inline_layout.lines.clear();
+        self.frame_inline_layout.glyphs.clear();
+        self.frame_inline_layout.fill_batches = CachedTextMeshVariants::default();
+        self.frame_inline_layout.stroke_batches = CachedTextMeshVariants::default();
+        self.frame_inline_key = None;
     }
 
     /// Reset optional per-frame instrumentation. Disable it on ordinary frames
@@ -2358,6 +2398,9 @@ impl TextLayoutCache {
             actors::TextContent::Inline(text) => {
                 self.get_or_build_owned(key, font, fonts, text.as_str())
             }
+            actors::TextContent::FrameInline(text) => {
+                self.get_or_build_frame_inline(key, font, fonts, *text)
+            }
             actors::TextContent::InlineU16(text) => {
                 self.get_or_build_owned(key, font, fonts, text.as_str())
             }
@@ -2365,6 +2408,41 @@ impl TextLayoutCache {
                 self.get_or_build_owned(key, font, fonts, text.as_str())
             }
         }
+    }
+
+    fn get_or_build_frame_inline(
+        &mut self,
+        key: TextLayoutKey,
+        font: &font::Font,
+        fonts: &font::FontMap,
+        text: actors::InlineText,
+    ) -> &CachedTextLayout {
+        if self.frame_inline_key == Some((key, text)) {
+            if let Some(frame_stats) = self.frame_stats.as_mut() {
+                frame_stats.owned_hits = frame_stats.owned_hits.saturating_add(1);
+            }
+            return &self.frame_inline_layout;
+        }
+        rebuild_cached_text_layout(
+            &mut self.frame_inline_layout,
+            font,
+            fonts,
+            text.as_str(),
+            key.line_spacing,
+            key.wrap_width_pixels,
+            text_layout_mesh_seed(key, text.as_str()),
+        );
+        self.frame_inline_key = Some((key, text));
+        if let Some(frame_stats) = self.frame_stats.as_mut() {
+            frame_stats.misses = frame_stats.misses.saturating_add(1);
+            frame_stats.built_lines = frame_stats
+                .built_lines
+                .saturating_add(saturating_u32(self.frame_inline_layout.lines.len()));
+            frame_stats.built_glyphs = frame_stats
+                .built_glyphs
+                .saturating_add(saturating_u32(self.frame_inline_layout.glyph_count));
+        }
+        &self.frame_inline_layout
     }
 
     fn get_or_build_owned(
@@ -2455,6 +2533,46 @@ impl TextLayoutCache {
             self.layouts[layout_index].as_ref()
         } else {
             self.uncached_layout_ref()
+        }
+    }
+}
+
+/// Prepares the fixed layout and transient vertex storage used by changing
+/// short numeric text. Call this at a screen/song boundary before live frames.
+pub fn prewarm_frame_inline_text(
+    cache: &mut TextLayoutCache,
+    scratch: &mut ComposeScratch,
+    fonts: &font::FontMap,
+    font_name: &'static str,
+    text: actors::InlineText,
+    vertex_buffers: usize,
+) {
+    let Some(font) = fonts.get(font_name) else {
+        return;
+    };
+    let content = actors::TextContent::frame_inline(text);
+    let layout = cache.get_or_build(font, fonts, &content, None, None);
+    let vertices_per_buffer = layout.glyph_count.saturating_mul(6);
+    let texture_pages = layout.texture_pages.len().max(1);
+    let vertex_buffers = vertex_buffers.saturating_mul(texture_pages);
+    if scratch.transient_text_mesh_builders.capacity() < texture_pages {
+        scratch
+            .transient_text_mesh_builders
+            .reserve(texture_pages.saturating_sub(scratch.transient_text_mesh_builders.len()));
+    }
+    scratch
+        .recycled_text_mesh_vertices
+        .reserve(vertex_buffers.saturating_sub(scratch.recycled_text_mesh_vertices.len()));
+    while scratch.recycled_text_mesh_vertices.len() < vertex_buffers {
+        scratch.recycled_text_mesh_vertices.push(Vec::new());
+    }
+    for vertices in scratch
+        .recycled_text_mesh_vertices
+        .iter_mut()
+        .take(vertex_buffers)
+    {
+        if vertices.capacity() < vertices_per_buffer {
+            vertices.reserve(vertices_per_buffer);
         }
     }
 }
@@ -3199,19 +3317,69 @@ fn build_cached_text_layout(
     wrap_width_pixels: i32,
     layout_seed: u64,
 ) -> CachedTextLayout {
+    build_cached_text_layout_reusing(
+        font,
+        fonts,
+        text,
+        line_spacing,
+        wrap_width_pixels,
+        layout_seed,
+        CachedTextLayout::empty(),
+    )
+}
+
+fn rebuild_cached_text_layout(
+    layout: &mut CachedTextLayout,
+    font: &font::Font,
+    fonts: &font::FontMap,
+    text: &str,
+    line_spacing: i32,
+    wrap_width_pixels: i32,
+    layout_seed: u64,
+) {
+    let reusable = std::mem::replace(layout, CachedTextLayout::empty());
+    *layout = build_cached_text_layout_reusing(
+        font,
+        fonts,
+        text,
+        line_spacing,
+        wrap_width_pixels,
+        layout_seed,
+        reusable,
+    );
+}
+
+fn build_cached_text_layout_reusing(
+    font: &font::Font,
+    fonts: &font::FontMap,
+    text: &str,
+    line_spacing: i32,
+    wrap_width_pixels: i32,
+    layout_seed: u64,
+    reusable: CachedTextLayout,
+) -> CachedTextLayout {
     let draws_space = font.glyph_map.contains_key(&' ');
     let space_glyph = font::find_glyph(font, ' ', fonts);
     let space_width = space_glyph.map_or(0, |glyph| glyph.advance_i32);
     let mut max_logical_width_i = 0i32;
-    let mut lines = Vec::with_capacity(
-        text.as_bytes()
-            .iter()
-            .filter(|&&b| b == b'\n')
-            .count()
-            .saturating_add(1),
-    );
-    let mut glyphs = Vec::with_capacity(text.len());
-    let mut texture_pages = TextPageBuilder::new();
+    let line_count = text
+        .as_bytes()
+        .iter()
+        .filter(|&&b| b == b'\n')
+        .count()
+        .saturating_add(1);
+    let mut lines = reusable.lines;
+    lines.clear();
+    if lines.capacity() < line_count {
+        lines.reserve(line_count);
+    }
+    let mut glyphs = reusable.glyphs;
+    glyphs.clear();
+    if glyphs.capacity() < text.len() {
+        glyphs.reserve(text.len());
+    }
+    let mut texture_pages = reusable.texture_pages;
+    texture_pages.clear();
     let mut start_char = 0usize;
 
     for src in text.split('\n') {
@@ -3332,9 +3500,9 @@ fn build_cached_text_layout(
         line_spacing,
         max_logical_width_i,
         glyph_count: glyphs.len(),
-        texture_pages: texture_pages.into_vec().into_boxed_slice(),
-        lines: lines.into_boxed_slice(),
-        glyphs: glyphs.into_boxed_slice(),
+        texture_pages,
+        lines,
+        glyphs,
         fill_batches: CachedTextMeshVariants::default(),
         stroke_batches: CachedTextMeshVariants::default(),
     }
@@ -4584,6 +4752,7 @@ fn build_actor_recursive<'a, T: TextureContext + ?Sized>(
                 return;
             }
             if let Some(fm) = fonts.get(font) {
+                let frame_inline = matches!(content, actors::TextContent::FrameInline(_));
                 let layout =
                     text_cache.get_or_build(fm, fonts, content, *wrap_width_pixels, *line_spacing);
                 if layout.lines.is_empty() {
@@ -4627,7 +4796,8 @@ fn build_actor_recursive<'a, T: TextureContext + ?Sized>(
                     *offset,
                 ) {
                     let text_distortion = distortion.max(0.0);
-                    if attributes.is_empty() && !*jitter && text_distortion <= 1e-6 {
+                    if !frame_inline && attributes.is_empty() && !*jitter && text_distortion <= 1e-6
+                    {
                         push_text_mesh_batches(
                             out,
                             layout,
@@ -4720,7 +4890,7 @@ fn build_actor_recursive<'a, T: TextureContext + ?Sized>(
                         if needs_stroke {
                             let stroke_start = out.len();
                             let stroke_start_sprite = sprite_instances.len();
-                            if text_distortion > 1e-6 {
+                            if frame_inline || text_distortion > 1e-6 {
                                 build_transient_text_mesh_builders(
                                     layout,
                                     *align_text,
@@ -7151,13 +7321,13 @@ mod tests {
         clip_textured_mesh_to_world_rect_legacy, clipped_sprite_object_to_world_rect,
         clipped_sprite_object_to_world_rect_legacy, finish_frame, fold_sprite_xy_rot,
         font_chain_key, gather_finalized_sprites, is_affine_world_transform,
-        push_shadow_objects_for_range, resolve_sprite_size_like_sm, sort_composed_draw_items,
-        sort_draw_items, sort_draw_items_legacy, str_ptr, textured_mesh_world_bounds,
-        textured_mesh_world_bounds_legacy, wrap_text_lines_by_words,
+        prewarm_frame_inline_text, push_shadow_objects_for_range, resolve_sprite_size_like_sm,
+        sort_composed_draw_items, sort_draw_items, sort_draw_items_legacy, str_ptr,
+        textured_mesh_world_bounds, textured_mesh_world_bounds_legacy, wrap_text_lines_by_words,
     };
     use crate::actors::{
-        Actor, ActorResourceArena, RetainedActorFrame, SizeSpec, SpriteSource, TextAlign,
-        TextAttribute, TextAttributes, TextContent,
+        Actor, ActorResourceArena, InlineText, RetainedActorFrame, SizeSpec, SpriteSource,
+        TextAlign, TextAttribute, TextAttributes, TextContent,
     };
     use crate::font;
     use crate::font::{Font, Glyph};
@@ -7556,9 +7726,9 @@ mod tests {
             line_spacing: 10,
             max_logical_width_i: 0,
             glyph_count: 0,
-            texture_pages: Vec::new().into_boxed_slice(),
-            lines: Box::new([]),
-            glyphs: Box::new([]),
+            texture_pages: Vec::new(),
+            lines: Vec::new(),
+            glyphs: Vec::new(),
             fill_batches: CachedTextMeshVariants::default(),
             stroke_batches: CachedTextMeshVariants::default(),
         }
@@ -8061,7 +8231,7 @@ mod tests {
         assert_eq!(std::mem::size_of::<CachedGlyph>(), 56);
         assert_eq!(std::mem::size_of::<CachedTextMeshBatch>(), 32);
         assert_eq!(std::mem::size_of::<CachedTextMeshVariants>(), 48);
-        assert_eq!(std::mem::size_of::<CachedTextLayout>(), 176);
+        assert_eq!(std::mem::size_of::<CachedTextLayout>(), 200);
         assert_eq!(std::mem::size_of::<TextMeshBatchBuilder>(), 32);
         assert_eq!(std::mem::size_of::<CachedTextPage>(), 32);
     }
@@ -9124,6 +9294,72 @@ mod tests {
         assert_eq!(stats.owned_hits, 1);
         assert_eq!(stats.misses, 3);
         assert_eq!(stats.owned_entries, 2);
+    }
+
+    #[test]
+    fn frame_inline_layout_matches_owned_without_cache_growth() {
+        fn signature(
+            layout: &CachedTextLayout,
+        ) -> (i32, i32, usize, Vec<(i32, usize)>, Vec<(i32, usize)>) {
+            (
+                layout.line_spacing,
+                layout.max_logical_width_i,
+                layout.glyph_count,
+                layout
+                    .lines
+                    .iter()
+                    .map(|line| (line.width_i32, line.glyph_len))
+                    .collect(),
+                layout
+                    .glyphs
+                    .iter()
+                    .map(|glyph| (glyph.advance_i32, glyph.char_index))
+                    .collect(),
+            )
+        }
+
+        let fonts = font::FontMap::from_iter([("test", test_font())]);
+        let font = &fonts["test"];
+        let key = TextLayoutKey {
+            font_key: font_chain_key(font, &fonts),
+            line_spacing: font.line_spacing,
+            wrap_width_pixels: -1,
+        };
+        let mut cache = TextLayoutCache::new(4);
+        let owned = signature(cache.get_or_build_owned(key, font, &fonts, "ABAB"));
+        let text = InlineText::copy_from("ABAB").expect("test text fits inline");
+        let frame = signature(cache.get_or_build_frame_inline(key, font, &fonts, text));
+
+        assert_eq!(frame, owned);
+        assert_eq!(cache.entry_count, 1);
+
+        cache.begin_frame_stats(true);
+        let other = InlineText::copy_from("BABA").expect("test text fits inline");
+        let _ = cache.get_or_build_frame_inline(key, font, &fonts, other);
+        let _ = cache.get_or_build_frame_inline(key, font, &fonts, other);
+        let stats = cache.frame_stats();
+        assert_eq!(stats.misses, 1);
+        assert_eq!(stats.owned_hits, 1);
+        assert_eq!(stats.owned_entries, 1);
+    }
+
+    #[test]
+    fn frame_inline_prewarm_sizes_reusable_vertex_buffers() {
+        let fonts = font::FontMap::from_iter([("test", test_font_split_pages())]);
+        let mut cache = TextLayoutCache::new(4);
+        let mut scratch = ComposeScratch::default();
+        let text = InlineText::copy_from("ABABABABABA").expect("test text fits inline");
+
+        prewarm_frame_inline_text(&mut cache, &mut scratch, &fonts, "test", text, 4);
+
+        assert_eq!(cache.entry_count, 0);
+        assert_eq!(scratch.recycled_text_mesh_vertices.len(), 8);
+        assert!(
+            scratch
+                .recycled_text_mesh_vertices
+                .iter()
+                .all(|vertices| vertices.capacity() >= text.as_str().len() * 6)
+        );
     }
 
     #[test]

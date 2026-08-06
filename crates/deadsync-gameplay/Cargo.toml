@@ -43,6 +43,11 @@ harness = false
 required-features = ["bench-support"]
 
 [[bench]]
+name = "mini_indicator_stream_prep"
+harness = false
+required-features = ["bench-support"]
+
+[[bench]]
 name = "song_lua_window_preprocess"
 harness = false
 required-features = ["bench-support"]

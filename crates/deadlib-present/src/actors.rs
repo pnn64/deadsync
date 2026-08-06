@@ -923,6 +923,9 @@ pub enum TextContent {
     Owned(String),
     Shared(Arc<str>),
     Inline(InlineText),
+    /// Short changing text laid out through reusable frame scratch instead of
+    /// being inserted into the persistent whole-string layout cache.
+    FrameInline(InlineText),
     InlineU16(InlineU16Text),
     InlineU32(InlineU32Text),
 }
@@ -1134,6 +1137,11 @@ impl TextContent {
         Self::InlineU32(InlineU32Text::new(value))
     }
 
+    #[inline(always)]
+    pub const fn frame_inline(value: InlineText) -> Self {
+        Self::FrameInline(value)
+    }
+
     /// Formats a short value directly into the actor without allocating.
     /// Returns `None` when the result exceeds the inline payload.
     #[inline]
@@ -1154,6 +1162,7 @@ impl TextContent {
             Self::Owned(s) => s.as_str(),
             Self::Shared(s) => s.as_ref(),
             Self::Inline(s) => s.as_str(),
+            Self::FrameInline(s) => s.as_str(),
             Self::InlineU16(s) => s.as_str(),
             Self::InlineU32(s) => s.as_str(),
         }
