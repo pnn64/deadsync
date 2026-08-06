@@ -500,17 +500,18 @@ impl SongData {
         Some((v, v))
     }
 
-    pub fn display_bpm_range(&self) -> Option<(f64, f64)> {
+    fn tagged_display_bpm_range(&self) -> Option<(f64, f64)> {
         let s = self.display_bpm.trim();
-        if !s.is_empty()
-            && s != "*"
-            && let Some((lo, hi)) = Self::parse_display_bpm_tag(s)
-            && lo.is_finite()
-            && hi.is_finite()
-            && lo > 0.0
-            && hi > 0.0
-        {
-            return Some((lo, hi));
+        if s.is_empty() || s == "*" {
+            return None;
+        }
+        let (lo, hi) = Self::parse_display_bpm_tag(s)?;
+        (lo.is_finite() && hi.is_finite() && lo > 0.0 && hi > 0.0).then_some((lo, hi))
+    }
+
+    pub fn display_bpm_range(&self) -> Option<(f64, f64)> {
+        if let Some(range) = self.tagged_display_bpm_range() {
+            return Some(range);
         }
         let lo = self.min_bpm;
         let hi = self.max_bpm;
@@ -536,13 +537,17 @@ impl SongData {
             match &chart.display_bpm {
                 Some(ChartDisplayBpm::Specified { min, max }) => return Some((*min, *max)),
                 Some(ChartDisplayBpm::Random) => return None,
-                None => {
-                    let lo = chart.min_bpm;
-                    let hi = chart.max_bpm;
-                    if lo.is_finite() && hi.is_finite() && lo > 0.0 && hi > 0.0 {
-                        return Some((lo.min(hi), lo.max(hi)));
-                    }
-                }
+                None => {}
+            }
+        }
+        if let Some(range) = self.tagged_display_bpm_range() {
+            return Some(range);
+        }
+        if let Some(chart) = chart {
+            let lo = chart.min_bpm;
+            let hi = chart.max_bpm;
+            if lo.is_finite() && hi.is_finite() && lo > 0.0 && hi > 0.0 {
+                return Some((lo.min(hi), lo.max(hi)));
             }
         }
         self.display_bpm_range()
@@ -1080,14 +1085,14 @@ mod tests {
     }
 
     #[test]
-    fn display_bpm_pair_uses_chart_then_fallback() {
+    fn display_bpm_pair_inherits_song_tag() {
         let mut song = song_data();
         song.display_bpm = "100:160".to_string();
         let mut chart = chart_data();
 
         assert_eq!(
             song.display_bpm_pair_or(Some(&chart), [60.0, 60.0]),
-            [150.0, 210.0]
+            [100.0, 160.0]
         );
 
         chart.display_bpm = Some(ChartDisplayBpm::Specified {
@@ -1106,6 +1111,24 @@ mod tests {
         );
 
         assert_eq!(song.display_bpm_pair_or(None, [60.0, 60.0]), [100.0, 160.0]);
+
+        chart.display_bpm = None;
+        song.display_bpm.clear();
+        assert_eq!(
+            song.display_bpm_pair_or(Some(&chart), [60.0, 60.0]),
+            [150.0, 210.0]
+        );
+    }
+
+    #[test]
+    fn chart_display_bpm_prefers_song_tag_over_actual_range() {
+        let mut song = song_data();
+        song.display_bpm = "155".to_string();
+        let mut chart = chart_data();
+        chart.min_bpm = 155.0;
+        chart.max_bpm = 620.0;
+
+        assert_eq!(song.formatted_chart_display_bpm(Some(&chart)), "155");
     }
 
     #[test]

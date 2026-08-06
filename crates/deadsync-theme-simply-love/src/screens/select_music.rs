@@ -657,15 +657,19 @@ fn default_preview_start(song: &SongData, total_len: f64) -> f64 {
     sec_at_beat(song, i_beat)
 }
 
+fn song_music_length(song: &SongData) -> f32 {
+    if song.music_length_seconds.is_finite() && song.music_length_seconds > 0.0 {
+        song.music_length_seconds
+    } else {
+        song.total_length_seconds.max(0) as f32
+    }
+}
+
 fn compute_preview_cut(song: &SongData) -> Option<(std::path::PathBuf, AudioCut)> {
     let path = song.music_path.clone()?;
     let mut start = song.sample_start.unwrap_or(0.0) as f64;
     let mut length = song.sample_length.unwrap_or(0.0) as f64;
-    let total_len = if song.music_length_seconds.is_finite() && song.music_length_seconds > 0.0 {
-        song.music_length_seconds as f64
-    } else {
-        song.total_length_seconds.max(0) as f64
-    };
+    let total_len = f64::from(song_music_length(song));
 
     if !(length.is_finite() && length > 0.0) {
         start = default_preview_start(song, total_len);
@@ -3257,12 +3261,7 @@ pub fn init(init_view: SelectMusicInitView) -> State {
 
             pack_song_count += 1;
             matched_songs += 1;
-            pack_total_seconds +=
-                if song.music_length_seconds.is_finite() && song.music_length_seconds > 0.0 {
-                    song.music_length_seconds as f64
-                } else {
-                    song.total_length_seconds.max(0) as f64
-                };
+            pack_total_seconds += f64::from(song_music_length(song));
             all_entries.push(MusicWheelEntry::Song(song.clone()));
 
             // Check for last played song
@@ -12839,7 +12838,7 @@ pub fn push_actors(
             (
                 cached_str_ref(s.artist.as_str()),
                 bpm,
-                format_chart_length(((s.total_length_seconds.max(0) as f32) / music_rate) as i32),
+                format_chart_length((song_music_length(s) / music_rate) as i32),
             )
         }
         Some(entry @ MusicWheelEntry::PackHeader { .. }) if entry.is_series_header() => {
@@ -15945,6 +15944,18 @@ mod tests {
 
         assert!((cut.start_sec - 7.5).abs() <= 0.0001);
         assert!((cut.length_sec - 0.001).abs() <= 0.000001);
+    }
+
+    #[test]
+    fn song_music_length_prefers_audio_and_falls_back() {
+        let mut song = (*test_song("length test")).clone();
+        song.music_length_seconds = 194.75;
+        song.total_length_seconds = 190;
+
+        assert_eq!(super::song_music_length(&song), 194.75);
+
+        song.music_length_seconds = 0.0;
+        assert_eq!(super::song_music_length(&song), 190.0);
     }
 
     #[test]
