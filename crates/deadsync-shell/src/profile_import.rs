@@ -21,6 +21,7 @@ pub(crate) struct Service {
     tx: mpsc::SyncSender<SimplyLoveProfileImportEvent>,
     rx: mpsc::Receiver<SimplyLoveProfileImportEvent>,
     import_cancel: Option<Arc<AtomicBool>>,
+    active_jobs: usize,
 }
 
 impl Default for Service {
@@ -30,12 +31,14 @@ impl Default for Service {
             tx,
             rx,
             import_cancel: None,
+            active_jobs: 0,
         }
     }
 }
 
 impl Service {
-    pub(crate) fn discover(&self) {
+    pub(crate) fn discover(&mut self) {
+        self.active_jobs += 1;
         let tx = self.tx.clone();
         std::thread::spawn(move || {
             let candidates = candidate_views(detect_itg_local_profiles());
@@ -46,7 +49,8 @@ impl Service {
         });
     }
 
-    pub(crate) fn browse(&self, title: String) {
+    pub(crate) fn browse(&mut self, title: String) {
+        self.active_jobs += 1;
         let tx = self.tx.clone();
         std::thread::spawn(move || {
             let Some(dir) = rfd::FileDialog::new().set_title(title).pick_folder() else {
@@ -63,6 +67,7 @@ impl Service {
 
     pub(crate) fn start(&mut self, dir: PathBuf) {
         self.cancel();
+        self.active_jobs += 1;
         let cancel = Arc::new(AtomicBool::new(false));
         let thread_cancel = Arc::clone(&cancel);
         let tx = self.tx.clone();
@@ -91,8 +96,23 @@ impl Service {
         }
     }
 
-    pub(crate) fn poll(&mut self) -> Vec<SimplyLoveProfileImportEvent> {
+    /// Returns `None` without probing the channel when discovery, browsing,
+    /// and import workers are all inactive. Every worker sends exactly one
+    /// terminal event, which keeps the activity count live until it is drained.
+    pub(crate) fn poll(&mut self) -> Option<Vec<SimplyLoveProfileImportEvent>> {
+        if self.active_jobs == 0 {
+            return None;
+        }
+        Some(self.drain_events())
+    }
+
+    fn drain_events(&mut self) -> Vec<SimplyLoveProfileImportEvent> {
         let events = self.rx.try_iter().collect::<Vec<_>>();
+        let completed = events
+            .iter()
+            .filter(|event| profile_import_event_is_terminal(event))
+            .count();
+        self.active_jobs = self.active_jobs.saturating_sub(completed);
         if events
             .iter()
             .any(|event| matches!(event, SimplyLoveProfileImportEvent::Finished(_)))
@@ -101,6 +121,20 @@ impl Service {
         }
         events
     }
+
+    #[cfg(feature = "bench-support")]
+    pub(crate) fn poll_idle_legacy(&mut self) -> Vec<SimplyLoveProfileImportEvent> {
+        self.drain_events()
+    }
+}
+
+fn profile_import_event_is_terminal(event: &SimplyLoveProfileImportEvent) -> bool {
+    matches!(
+        event,
+        SimplyLoveProfileImportEvent::Candidates { .. }
+            | SimplyLoveProfileImportEvent::BrowseCanceled
+            | SimplyLoveProfileImportEvent::Finished(_)
+    )
 }
 
 fn candidate_views(candidates: Vec<ItgProfileCandidate>) -> Vec<SimplyLoveItgProfileCandidate> {
@@ -206,5 +240,23 @@ mod tests {
         assert_eq!(summary.scores_imported, 4);
         assert_eq!(summary.favorites_imported, 2);
         assert!(summary.online_keys_imported());
+    }
+
+    #[test]
+    fn profile_import_poll_only_runs_while_a_worker_is_active() {
+        let mut service = Service::default();
+        assert!(service.poll().is_none());
+
+        service.active_jobs = 1;
+        assert!(service.poll().is_some_and(|events| events.is_empty()));
+        service
+            .tx
+            .send(SimplyLoveProfileImportEvent::BrowseCanceled)
+            .expect("the service owns the matching receiver");
+        assert!(matches!(
+            service.poll().expect("the worker is active").as_slice(),
+            [SimplyLoveProfileImportEvent::BrowseCanceled]
+        ));
+        assert!(service.poll().is_none());
     }
 }

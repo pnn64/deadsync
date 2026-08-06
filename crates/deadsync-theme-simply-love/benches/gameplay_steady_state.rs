@@ -2,6 +2,7 @@ use deadsync_theme_simply_love::screens::components::gameplay::gameplay_stats::G
 use deadsync_theme_simply_love::screens::components::shared::heart_rate::HeartRateTextBenchmark;
 use deadsync_theme_simply_love::screens::gameplay::{
     GameplayBpmCacheBench, GameplayLifeTextBench, GameplayScorePollingBench,
+    GameplaySyncOverlayIdleBenchmark,
 };
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::hint::black_box;
@@ -267,6 +268,17 @@ fn main() {
         "hash cache",
         old,
         "inline plan",
+        new,
+    );
+
+    let mut overlay = GameplaySyncOverlayIdleBenchmark::default();
+    let old = measure(|frame| overlay.legacy_frame(frame));
+    let new = measure(|frame| overlay.gated_frame(frame));
+    compare(
+        "idle sync-overlay status (256 checks/frame)",
+        "cache resolve",
+        old,
+        "idle predicate",
         new,
     );
 }

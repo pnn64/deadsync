@@ -147,6 +147,62 @@ pub struct HeartRateTextBenchmark {
 }
 
 #[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub struct HeartRateViewSyncBenchmark {
+    plan: HeartRateTextPlan,
+    view: HeartRateView,
+    generation: u64,
+}
+
+#[cfg(feature = "bench-support")]
+impl HeartRateViewSyncBenchmark {
+    pub fn new(generation: u64, view: HeartRateView) -> Self {
+        let mut plan = HeartRateTextPlan::default();
+        plan.sync(view);
+        Self {
+            plan,
+            view,
+            generation,
+        }
+    }
+
+    pub fn sync_legacy(&mut self, view: HeartRateView) -> usize {
+        self.plan.sync(view);
+        self.view = view;
+        self.checksum()
+    }
+
+    pub fn sync_generation(
+        &mut self,
+        generation: u64,
+        build: impl FnOnce() -> HeartRateView,
+    ) -> usize {
+        if self.generation != generation {
+            let view = build();
+            self.plan.sync(view);
+            self.view = view;
+            self.generation = generation;
+        }
+        self.checksum()
+    }
+
+    fn checksum(&self) -> usize {
+        self.view
+            .players
+            .iter()
+            .enumerate()
+            .fold(0, |checksum, (player, reading)| {
+                checksum.rotate_left(3)
+                    ^ player
+                    ^ usize::from(reading.configured)
+                    ^ (usize::from(reading.connected) << 1)
+                    ^ (usize::from(reading.bpm.unwrap_or_default()) << 2)
+                    ^ self.plan.get(player).as_str().len()
+            })
+    }
+}
+
+#[cfg(feature = "bench-support")]
 impl Default for HeartRateTextBenchmark {
     fn default() -> Self {
         let mut plan = HeartRateTextPlan::default();

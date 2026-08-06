@@ -1,5 +1,5 @@
 use std::collections::{HashMap, HashSet};
-use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, OnceLock, RwLock};
 use std::thread;
 use std::time::{Duration, Instant};
@@ -50,6 +50,7 @@ impl Default for Shared {
 // lock. Bits 0/1 are configured/connected; the remaining bits encode BPM + 1
 // so zero remains `None`.
 static PLAYER_READINGS: [AtomicU32; 2] = [AtomicU32::new(0), AtomicU32::new(0)];
+static PLAYER_READINGS_GENERATION: AtomicU64 = AtomicU64::new(0);
 
 #[inline(always)]
 fn encode_reading(reading: PlayerReading) -> u32 {
@@ -69,7 +70,17 @@ fn decode_reading(bits: u32) -> PlayerReading {
 
 #[inline(always)]
 fn publish_reading(player: usize, reading: PlayerReading) {
-    PLAYER_READINGS[player].store(encode_reading(reading), Ordering::Release);
+    publish_reading_bits(
+        &PLAYER_READINGS[player],
+        &PLAYER_READINGS_GENERATION,
+        encode_reading(reading),
+    );
+}
+
+fn publish_reading_bits(reading: &AtomicU32, generation: &AtomicU64, bits: u32) {
+    if reading.swap(bits, Ordering::Release) != bits {
+        generation.fetch_add(1, Ordering::Release);
+    }
 }
 
 struct Runtime {
@@ -126,6 +137,10 @@ pub fn configure(enabled: bool, discover: bool, device_ids: [Option<&str>; 2]) {
 
 pub fn player_readings() -> [PlayerReading; 2] {
     std::array::from_fn(|player| decode_reading(PLAYER_READINGS[player].load(Ordering::Acquire)))
+}
+
+pub fn player_readings_generation() -> u64 {
+    PLAYER_READINGS_GENERATION.load(Ordering::Acquire)
 }
 
 pub fn discovery_snapshot() -> DiscoverySnapshot {
@@ -606,6 +621,19 @@ mod tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn reading_generation_advances_only_when_packed_value_changes() {
+        let reading = AtomicU32::new(7);
+        let generation = AtomicU64::new(11);
+
+        publish_reading_bits(&reading, &generation, 7);
+        assert_eq!(generation.load(Ordering::Relaxed), 11);
+
+        publish_reading_bits(&reading, &generation, 9);
+        assert_eq!(reading.load(Ordering::Relaxed), 9);
+        assert_eq!(generation.load(Ordering::Relaxed), 12);
     }
 
     #[test]

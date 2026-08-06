@@ -86,8 +86,13 @@ fn readings_view() -> gameplay::HeartRateView {
     gameplay::HeartRateView { players }
 }
 
-pub(crate) fn refresh_gameplay(state: &mut gameplay::State) {
-    gameplay::set_heart_rate_view(state, readings_view());
+pub(crate) fn refresh_gameplay(state: &mut gameplay::State) -> bool {
+    let generation = deadsync_heart_rate::player_readings_generation();
+    if gameplay::heart_rate_generation(state) == generation {
+        return false;
+    }
+    gameplay::set_heart_rate_view(state, generation, readings_view());
+    true
 }
 
 pub(crate) fn refresh_select_music(state: &mut select_music::State, enabled: bool) {

@@ -1198,22 +1198,25 @@ impl App {
     }
 
     fn poll_profile_import(&mut self) {
-        let events = self.profile_import.poll();
-        if !events.is_empty() {
-            if events
-                .iter()
-                .any(|event| matches!(event, SimplyLoveProfileImportEvent::Finished(_)))
-            {
-                manage_local_profiles::sync_runtime_view(
-                    &mut self.state.screens.manage_local_profiles_state,
-                    crate::local_profiles::view(),
-                );
-            }
-            manage_local_profiles::apply_import_events(
+        let Some(events) = self.profile_import.poll() else {
+            return;
+        };
+        if events.is_empty() {
+            return;
+        }
+        if events
+            .iter()
+            .any(|event| matches!(event, SimplyLoveProfileImportEvent::Finished(_)))
+        {
+            manage_local_profiles::sync_runtime_view(
                 &mut self.state.screens.manage_local_profiles_state,
-                events,
+                crate::local_profiles::view(),
             );
         }
+        manage_local_profiles::apply_import_events(
+            &mut self.state.screens.manage_local_profiles_state,
+            events,
+        );
     }
 
     fn poll_score_import(&mut self) {

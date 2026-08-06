@@ -191,7 +191,7 @@ fn compare(title: &str, old: BenchResult, new: BenchResult) {
     assert_eq!(new.allocated.allocs, 0, "inactive gate allocated");
     assert_eq!(new.allocated.reallocs, 0, "inactive gate reallocated");
     assert_eq!(new.allocated.deallocs, 0, "inactive gate freed");
-    println!("{title} (256 polls/frame)");
+    println!("{title} (256 probes/frame)");
     print_result("legacy queue poll", &old);
     print_result("inactive gate", &new);
     println!();
@@ -220,5 +220,21 @@ fn main() {
         "idle sync-analysis maintenance",
         measure(|| old.legacy_sync_frame()),
         measure(|| new.gated_sync_frame()),
+    );
+
+    let mut old = GameplayIdleWorkersBenchmark::default();
+    let mut new = GameplayIdleWorkersBenchmark::default();
+    compare(
+        "idle profile-import maintenance",
+        measure(|| old.legacy_profile_import_frame()),
+        measure(|| new.gated_profile_import_frame()),
+    );
+
+    let mut old = GameplayIdleWorkersBenchmark::default();
+    let mut new = GameplayIdleWorkersBenchmark::default();
+    compare(
+        "stable gameplay heart-rate readings",
+        measure(|| old.legacy_heart_rate_frame()),
+        measure(|| new.gated_heart_rate_frame()),
     );
 }

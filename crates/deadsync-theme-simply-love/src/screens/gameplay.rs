@@ -2286,6 +2286,7 @@ pub struct State {
     song_lua_foreground_owner_index: SongLuaForegroundOwnerIndex,
     smx_sensor_views: [Option<SmxSensorPadView>; 2],
     pub heart_rate_view: HeartRateView,
+    heart_rate_generation: u64,
     pub(crate) heart_rate_text: heart_rate::HeartRateTextPlan,
     // Time banked toward the next shell-owned sensor refresh. Seeded to fire on
     // the first frame.
@@ -2820,6 +2821,7 @@ impl State {
             song_lua_foreground_owner_index,
             smx_sensor_views: [None, None],
             heart_rate_view: HeartRateView::default(),
+            heart_rate_generation: u64::MAX,
             heart_rate_text: heart_rate::HeartRateTextPlan::default(),
             smx_sensor_refresh_accum: SMX_SENSOR_REFRESH_INTERVAL,
             frame_scratch: Some(Box::new(frame_scratch)),
@@ -4865,9 +4867,14 @@ pub fn set_smx_sensor_pad_view(
     }
 }
 
-pub fn set_heart_rate_view(state: &mut State, view: HeartRateView) {
+pub fn heart_rate_generation(state: &State) -> u64 {
+    state.heart_rate_generation
+}
+
+pub fn set_heart_rate_view(state: &mut State, generation: u64, view: HeartRateView) {
     state.heart_rate_text.sync(view);
     state.heart_rate_view = view;
+    state.heart_rate_generation = generation;
 }
 
 /// Refresh song-rate-derived presentation only on an explicit Practice rate
@@ -5562,6 +5569,12 @@ fn quantize_offset_seconds(v: f32) -> f32 {
 }
 
 #[inline(always)]
+fn quantized_offset_changed(start: f32, new: f32) -> bool {
+    let delta = quantize_offset_seconds(new) - quantize_offset_seconds(start);
+    !(delta.abs() < 0.000_1_f32)
+}
+
+#[inline(always)]
 fn quantized_offset_change_line(label: &str, start: f32, new: f32) -> Option<String> {
     let start_q = quantize_offset_seconds(start);
     let new_q = quantize_offset_seconds(new);
@@ -5631,6 +5644,15 @@ struct SyncOverlayTextInput<'a> {
 }
 
 impl SyncOverlayTextInput<'_> {
+    #[inline(always)]
+    fn is_idle(self) -> bool {
+        !self.autoplay_enabled
+            && self.timing_tick_status.is_none()
+            && self.autosync_status.is_none()
+            && !quantized_offset_changed(self.initial_global_offset, self.global_offset)
+            && !quantized_offset_changed(self.initial_song_offset, self.song_offset)
+    }
+
     fn key(self) -> SyncOverlayTextKey {
         SyncOverlayTextKey {
             autoplay_enabled: self.autoplay_enabled,
@@ -5733,6 +5755,16 @@ fn compose_sync_overlay_text(input: SyncOverlayTextInput<'_>) -> Option<(Arc<str
     Some((Arc::<str>::from(out), line_count))
 }
 
+fn resolve_sync_overlay_text(
+    cache: &RefCell<SyncOverlayTextCache>,
+    input: SyncOverlayTextInput<'_>,
+) -> Option<(Arc<str>, usize)> {
+    if input.is_idle() {
+        return None;
+    }
+    cache.borrow_mut().resolve(input)
+}
+
 fn sync_overlay_text(state: &State) -> Option<(Arc<str>, usize)> {
     let input = SyncOverlayTextInput {
         autoplay_enabled: state.autoplay_enabled(),
@@ -5744,7 +5776,59 @@ fn sync_overlay_text(state: &State) -> Option<(Arc<str>, usize)> {
         initial_song_offset: state.initial_song_offset_seconds(),
         song_offset: state.song_offset_seconds(),
     };
-    state.sync_overlay_text_cache.borrow_mut().resolve(input)
+    resolve_sync_overlay_text(&state.sync_overlay_text_cache, input)
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub struct GameplaySyncOverlayIdleBenchmark {
+    legacy_cache: SyncOverlayTextCache,
+    gated_cache: SyncOverlayTextCache,
+    input: SyncOverlayTextInput<'static>,
+}
+
+#[cfg(feature = "bench-support")]
+impl Default for GameplaySyncOverlayIdleBenchmark {
+    fn default() -> Self {
+        Self {
+            legacy_cache: SyncOverlayTextCache::default(),
+            gated_cache: SyncOverlayTextCache::default(),
+            input: SyncOverlayTextInput {
+                autoplay_enabled: false,
+                replay_status: None,
+                timing_tick_status: None,
+                autosync_status: None,
+                initial_global_offset: -0.012,
+                global_offset: -0.012,
+                initial_song_offset: 0.003,
+                song_offset: 0.003,
+            },
+        }
+    }
+}
+
+#[cfg(feature = "bench-support")]
+impl GameplaySyncOverlayIdleBenchmark {
+    const SAMPLES: usize = 256;
+
+    pub fn legacy_frame(&mut self, frame: usize) -> usize {
+        (0..Self::SAMPLES).fold(frame, |checksum, sample| {
+            let value = std::hint::black_box(&mut self.legacy_cache).resolve(self.input);
+            checksum.rotate_left(5) ^ value.map_or(0, |(text, lines)| text.len() + lines) ^ sample
+        })
+    }
+
+    pub fn gated_frame(&mut self, frame: usize) -> usize {
+        (0..Self::SAMPLES).fold(frame, |checksum, sample| {
+            let input = std::hint::black_box(self.input);
+            let value = if input.is_idle() {
+                None
+            } else {
+                self.gated_cache.resolve(input)
+            };
+            checksum.rotate_left(5) ^ value.map_or(0, |(text, lines)| text.len() + lines) ^ sample
+        })
+    }
 }
 
 #[inline(always)]
@@ -21610,6 +21694,29 @@ mod tests {
                 assert!(Arc::ptr_eq(actual, repeated));
             }
         }
+    }
+
+    #[test]
+    fn idle_sync_overlay_bypasses_cache_without_changing_output() {
+        let input = SyncOverlayTextInput {
+            autoplay_enabled: false,
+            replay_status: None,
+            timing_tick_status: None,
+            autosync_status: None,
+            initial_global_offset: -0.012,
+            global_offset: -0.012,
+            initial_song_offset: 0.003,
+            song_offset: 0.003,
+        };
+        let cache = RefCell::new(SyncOverlayTextCache::default());
+
+        assert!(input.is_idle());
+        assert!(compose_sync_overlay_text(input).is_none());
+        assert!(resolve_sync_overlay_text(&cache, input).is_none());
+        let cache = cache.borrow();
+        assert!(!cache.initialized);
+        assert!(cache.key.is_none());
+        assert!(cache.value.is_none());
     }
 
     #[test]
