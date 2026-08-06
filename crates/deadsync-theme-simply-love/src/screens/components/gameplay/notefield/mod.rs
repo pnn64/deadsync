@@ -122,6 +122,7 @@ use text::{
     effective_spacing_multiplier_for_player, effective_visual_effects_for_player,
     error_bar_text_label, offset_ms_text, zmod_measure_counter_text, zmod_run_timer_fmt,
 };
+pub(crate) use zmod::zmod_target_score_missed;
 use zmod::{
     zmod_combo_font_name, zmod_indicator_mode, zmod_mini_indicator_text, zmod_mini_indicator_zoom,
     zmod_resolved_combo_color, zmod_small_combo_font,

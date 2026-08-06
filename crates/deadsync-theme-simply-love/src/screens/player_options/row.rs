@@ -50,6 +50,7 @@ pub enum RowId {
     IndicatorScoreType,
     MiniIndicatorSubtractiveDisplay,
     TargetScore,
+    TargetScorePercent,
     MiniIndicatorSize,
     MiniIndicatorColor,
     MiniIndicatorPosition,

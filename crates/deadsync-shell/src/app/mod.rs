@@ -3252,6 +3252,10 @@ impl App {
                 Vec::new()
             }
             ThemeEffectExecution::Runtime(request) => match request {
+                SimplyLoveRuntimeRequest::RestartGameplay => {
+                    self.try_gameplay_restart(event_loop, "missed target");
+                    Vec::new()
+                }
                 SimplyLoveRuntimeRequest::Profile(SimplyLoveProfileRequest::Select {
                     p1,
                     p2,

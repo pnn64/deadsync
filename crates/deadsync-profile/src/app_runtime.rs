@@ -416,6 +416,18 @@ pub fn machine_record_local(chart_hash: &str) -> Option<(String, deadsync_score:
     )
 }
 
+pub fn machine_scalar_record_local(
+    chart_hash: &str,
+    hard_ex: bool,
+) -> Option<(String, deadsync_score::LocalScalarScore)> {
+    deadsync_score::runtime_machine_scalar_record_local_lazy(
+        chart_hash,
+        hard_ex,
+        local_score_profile_sources,
+    )
+    .0
+}
+
 pub fn machine_leaderboard_local(
     chart_hash: &str,
     max_entries: usize,

@@ -761,7 +761,7 @@ where
     let mut mini_indicator_stream_segments: [Vec<StreamSegment>; MAX_PLAYERS] =
         std::array::from_fn(|_| Vec::new());
     let mut mini_indicator_total_stream_measures = [0.0_f32; MAX_PLAYERS];
-    let mut mini_indicator_target_score_percent = [89.0_f64; MAX_PLAYERS];
+    let mut mini_indicator_target_score_percent = [92.0_f64; MAX_PLAYERS];
     let mut mini_indicator_rival_score_percent = [0.0_f64; MAX_PLAYERS];
 
     for p in 0..num_players {
@@ -779,13 +779,13 @@ where
 
         mini_indicator_target_score_percent[p] = resolve_target_score_percent(
             player_profiles[p].target_score(),
+            mini_indicator_data.specified_target_percent[p],
             personal_best,
             machine_best,
         );
 
-        mini_indicator_rival_score_percent[p] = machine_best
-            .unwrap_or(0.0)
-            .max(personal_best.unwrap_or(0.0));
+        mini_indicator_rival_score_percent[p] =
+            mini_indicator_data.rival_score_percent[p].unwrap_or(0.0);
     }
 
     let hud_prep_ms = hud_prep_started.elapsed().as_secs_f64() * 1000.0;

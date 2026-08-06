@@ -240,6 +240,21 @@ fn gameplay_target_score_setting(
         deadsync_profile::TargetScoreSetting::SPlus => {
             deadsync_gameplay::GameplayTargetScoreSetting::SPlus
         }
+        deadsync_profile::TargetScoreSetting::Star1 => {
+            deadsync_gameplay::GameplayTargetScoreSetting::Star1
+        }
+        deadsync_profile::TargetScoreSetting::Star2 => {
+            deadsync_gameplay::GameplayTargetScoreSetting::Star2
+        }
+        deadsync_profile::TargetScoreSetting::Star3 => {
+            deadsync_gameplay::GameplayTargetScoreSetting::Star3
+        }
+        deadsync_profile::TargetScoreSetting::Star4 => {
+            deadsync_gameplay::GameplayTargetScoreSetting::Star4
+        }
+        deadsync_profile::TargetScoreSetting::SpecifiedValue => {
+            deadsync_gameplay::GameplayTargetScoreSetting::SpecifiedValue
+        }
         deadsync_profile::TargetScoreSetting::MachineBest => {
             deadsync_gameplay::GameplayTargetScoreSetting::MachineBest
         }

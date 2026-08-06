@@ -2202,6 +2202,8 @@ pub struct State {
     pub pack_banner_path: Option<PathBuf>,
     pub scorebox_profile_snapshot: [score_data::GameplayScoreboxProfileSnapshot; MAX_PLAYERS],
     pub scorebox_side_snapshot: [Option<score_data::CachedPlayerLeaderboardData>; MAX_PLAYERS],
+    rival_score_types: [Option<profile_data::MiniIndicatorScoreType>; MAX_PLAYERS],
+    missed_target_handled: [bool; MAX_PLAYERS],
     scorebox_plans: [gs_scorebox::GameplayScoreboxPlan; MAX_PLAYERS],
     /// Whether an active scorebox still has an asynchronous leaderboard load
     /// to poll. The game thread updates this two-entry reduction only when a
@@ -2395,6 +2397,7 @@ impl State {
             None,
             scores.scorebox_profiles,
             scores.scorebox_snapshots,
+            scores.rival_score_types,
             runtime,
             hud,
         )
@@ -2412,6 +2415,7 @@ impl State {
         pack_banner_path: Option<PathBuf>,
         scorebox_profile_snapshot: [score_data::GameplayScoreboxProfileSnapshot; MAX_PLAYERS],
         scorebox_side_snapshot: [Option<score_data::CachedPlayerLeaderboardData>; MAX_PLAYERS],
+        rival_score_types: [Option<profile_data::MiniIndicatorScoreType>; MAX_PLAYERS],
         runtime_view: GameplayRuntimeView,
         hud_snapshot: profile_data::GameplayHudSnapshot,
     ) -> Self {
@@ -2441,8 +2445,11 @@ impl State {
                 runtime_view.policy.scorebox_pane_filter,
             )
         });
-        let scorebox_refresh_pending =
-            scorebox_refresh_pending_from(&scorebox_profile_snapshot, &scorebox_side_snapshot);
+        let scorebox_refresh_pending = scorebox_refresh_pending_from(
+            &scorebox_profile_snapshot,
+            &scorebox_side_snapshot,
+            &rival_score_types,
+        );
         let song = gameplay.song();
         let song_full_title: Arc<str> =
             Arc::from(song.display_full_title(runtime_view.policy.translated_titles));
@@ -2778,6 +2785,8 @@ impl State {
             pack_banner_path,
             scorebox_profile_snapshot,
             scorebox_side_snapshot,
+            rival_score_types,
+            missed_target_handled: [false; MAX_PLAYERS],
             scorebox_plans,
             scorebox_refresh_pending,
             itl_cmod_warning: [false; MAX_PLAYERS],
@@ -3970,6 +3979,7 @@ pub fn init(
         pack_banner_path,
         scores.scorebox_profiles,
         scores.scorebox_snapshots,
+        scores.rival_score_types,
         runtime,
         hud,
     )
@@ -4669,12 +4679,15 @@ pub fn active_song_lua_video_paths(state: &State) -> &[PathBuf] {
 fn scorebox_refresh_pending_from(
     profiles: &[score_data::GameplayScoreboxProfileSnapshot; MAX_PLAYERS],
     snapshots: &[Option<score_data::CachedPlayerLeaderboardData>; MAX_PLAYERS],
+    rival_score_types: &[Option<profile_data::MiniIndicatorScoreType>; MAX_PLAYERS],
 ) -> bool {
-    profiles.iter().zip(snapshots).any(|(profile, snapshot)| {
-        profile.display_scorebox
-            && profile.gs_active
-            && snapshot.as_ref().is_some_and(|snapshot| snapshot.loading)
-    })
+    profiles.iter().zip(snapshots).zip(rival_score_types).any(
+        |((profile, snapshot), rival_score_type)| {
+            (profile.display_scorebox || rival_score_type.is_some())
+                && profile.gs_active
+                && snapshot.as_ref().is_some_and(|snapshot| snapshot.loading)
+        },
+    )
 }
 
 /// Whether gameplay still needs the shell to poll asynchronous score loading.
@@ -4703,11 +4716,26 @@ pub fn sync_score_runtime_view(state: &mut State, view: GameplayScoreRuntimeView
             );
         }
     }
+    for (player, rival_score) in view.rival_score_updates.into_iter().enumerate() {
+        if let Some(rival_score) = rival_score {
+            state
+                .gameplay
+                .set_mini_indicator_rival_score_percent(player, rival_score);
+        }
+    }
     state.scorebox_refresh_pending = scorebox_refresh_pending_from(
         &state.scorebox_profile_snapshot,
         &state.scorebox_side_snapshot,
+        &state.rival_score_types,
     );
     state.itl_cmod_warning = view.itl_cmod_warning;
+}
+
+pub fn rival_score_type_for_side(
+    state: &State,
+    side: profile_data::PlayerSide,
+) -> Option<profile_data::MiniIndicatorScoreType> {
+    state.rival_score_types[profile_data::player_side_index(side)]
 }
 
 /// Runs concrete-theme work that must happen before the deterministic gameplay
@@ -4752,12 +4780,54 @@ pub fn update(
     audio_snapshot: GameplayAudioSnapshot,
     fallback_host_nanos: impl FnOnce() -> u64,
 ) -> ThemeEffect {
-    map_gameplay_action(update_core(
-        state,
-        delta_time,
-        audio_snapshot,
-        fallback_host_nanos,
-    ))
+    let action = update_core(state, delta_time, audio_snapshot, fallback_host_nanos);
+    match action {
+        GameplayAction::None => missed_target_effect(state).unwrap_or(ThemeEffect::None),
+        action => map_gameplay_action(action),
+    }
+}
+
+fn missed_target_effect(state: &mut State) -> Option<ThemeEffect> {
+    for player_idx in 0..state.gameplay.num_players().min(MAX_PLAYERS) {
+        if state.missed_target_handled[player_idx] {
+            continue;
+        }
+        let profile = &state.gameplay.profiles()[player_idx];
+        let policy = profile.target_score_miss_policy;
+        if matches!(
+            policy,
+            profile_data::TargetScoreMissPolicy::Nothing
+                | profile_data::TargetScoreMissPolicy::DimMiniIndicator
+        ) {
+            continue;
+        }
+        let score_type = profile.mini_indicator_score_type;
+        let target_score_percent = state
+            .gameplay
+            .mini_indicator_target_score_percent(player_idx);
+        if !notefield::zmod_target_score_missed(
+            &state.gameplay,
+            player_idx,
+            score_type,
+            target_score_percent,
+        ) {
+            continue;
+        }
+
+        state.missed_target_handled[player_idx] = true;
+        return Some(match policy {
+            profile_data::TargetScoreMissPolicy::Fail => {
+                state.gameplay.force_fail_player(player_idx);
+                ThemeEffect::NavigateNoFade(Screen::Evaluation)
+            }
+            profile_data::TargetScoreMissPolicy::RestartSong => {
+                ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::RestartGameplay)
+            }
+            profile_data::TargetScoreMissPolicy::Nothing
+            | profile_data::TargetScoreMissPolicy::DimMiniIndicator => unreachable!(),
+        });
+    }
+    None
 }
 
 fn song_lua_sound_time_crossed(previous: f32, now: f32, event_second: f32) -> bool {
@@ -21789,21 +21859,44 @@ mod tests {
             Some(score_data::CachedPlayerLeaderboardData::loading()),
             None,
         ];
+        let mut rival_score_types = [None; MAX_PLAYERS];
 
-        assert!(scorebox_refresh_pending_from(&profiles, &snapshots));
+        assert!(scorebox_refresh_pending_from(
+            &profiles,
+            &snapshots,
+            &rival_score_types,
+        ));
         snapshots[0] = Some(score_data::CachedPlayerLeaderboardData {
             loading: false,
             data: None,
             error: None,
         });
-        assert!(!scorebox_refresh_pending_from(&profiles, &snapshots));
+        assert!(!scorebox_refresh_pending_from(
+            &profiles,
+            &snapshots,
+            &rival_score_types,
+        ));
 
         snapshots[0] = Some(score_data::CachedPlayerLeaderboardData::loading());
         profiles[0].display_scorebox = false;
-        assert!(!scorebox_refresh_pending_from(&profiles, &snapshots));
+        assert!(!scorebox_refresh_pending_from(
+            &profiles,
+            &snapshots,
+            &rival_score_types,
+        ));
+        rival_score_types[0] = Some(profile_data::MiniIndicatorScoreType::Itg);
+        assert!(scorebox_refresh_pending_from(
+            &profiles,
+            &snapshots,
+            &rival_score_types,
+        ));
         profiles[0].display_scorebox = true;
         profiles[0].gs_active = false;
-        assert!(!scorebox_refresh_pending_from(&profiles, &snapshots));
+        assert!(!scorebox_refresh_pending_from(
+            &profiles,
+            &snapshots,
+            &rival_score_types,
+        ));
     }
 
     #[test]

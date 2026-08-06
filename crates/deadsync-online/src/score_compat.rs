@@ -66,6 +66,7 @@ pub use profile::{
     machine_leaderboard_local_without_names as get_machine_leaderboard_local,
     machine_record_local as get_machine_record_local,
     machine_replays_local as get_machine_replays_local,
+    machine_scalar_record_local as get_machine_scalar_record_local,
     personal_leaderboard_local_for_side as get_personal_leaderboard_local_for_side,
     played_chart_counts_for_id as played_chart_counts_for_profile, played_chart_counts_for_machine,
     prewarm_select_music_score_caches,

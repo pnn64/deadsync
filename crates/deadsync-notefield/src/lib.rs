@@ -89,7 +89,7 @@ pub use mini_indicator::{
     ZmodMiniIndicatorOutput, ZmodMiniIndicatorParams, ZmodMiniIndicatorText, zmod_broken_run_end,
     zmod_combo_quint_active, zmod_mini_indicator_output, zmod_mini_indicator_zoom,
     zmod_percent_from_points, zmod_resolved_combo_color, zmod_resolved_mini_indicator_mode,
-    zmod_static_combo_color, zmod_stream_prog_completion_for_beat,
+    zmod_static_combo_color, zmod_stream_prog_completion_for_beat, zmod_target_score_missed,
 };
 #[cfg(feature = "bench-support")]
 #[doc(hidden)]
@@ -299,7 +299,7 @@ mod tests {
         zmod_percent_from_points, zmod_resolved_combo_color, zmod_resolved_mini_indicator_mode,
         zmod_rival_color, zmod_run_timer_index, zmod_static_combo_color, zmod_stream_prog_color,
         zmod_stream_prog_completion_for_beat, zmod_subtractive_counter_state,
-        zmod_subtractive_points,
+        zmod_subtractive_points, zmod_target_score_missed,
     };
     use deadsync_core::note::NoteType;
     use deadsync_core::timing::beat_to_note_row;
@@ -2887,7 +2887,9 @@ mod tests {
         };
         let progress = MiniIndicatorProgress {
             judged_any: true,
-            current_score_percent: 98.0,
+            // A valid mid-chart state: 49% of the chart's DP earned after 50%
+            // of its DP has become available (98% current pace).
+            current_score_percent: 49.0,
             current_possible_ratio: 0.5,
             ..MiniIndicatorProgress::default()
         };
@@ -2895,10 +2897,10 @@ mod tests {
             zmod_mini_indicator_output(&progress, params),
             Some(ZmodMiniIndicatorOutput {
                 text: ZmodMiniIndicatorText::SignedPercent {
-                    value: 48.5,
-                    negative: false,
+                    value: 0.5,
+                    negative: true,
                 },
-                color: zmod_rival_color(98.0, 49.5),
+                color: zmod_rival_color(49.0, 49.5),
             })
         );
 
@@ -2923,10 +2925,10 @@ mod tests {
             zmod_mini_indicator_output(&progress, params),
             Some(ZmodMiniIndicatorOutput {
                 text: ZmodMiniIndicatorText::SignedPercent {
-                    value: 49.0,
+                    value: 0.0,
                     negative: false,
                 },
-                color: zmod_pacemaker_color(9800.0, 4900.0),
+                color: zmod_pacemaker_color(4900.0, 4900.0),
             })
         );
 
@@ -2954,6 +2956,69 @@ mod tests {
                 color: zmod_stream_prog_color(1.2),
             })
         );
+    }
+
+    #[test]
+    fn zmod_pacemaker_tracks_valid_first_and_final_note_progress() {
+        let params = ZmodMiniIndicatorParams {
+            mode: MiniIndicatorMode::Pacemaker,
+            color_style: MiniIndicatorColorStyle::Default,
+            subtractive_display: MiniIndicatorSubtractiveDisplay::CountThenPercent,
+            score_type: MiniIndicatorScoreType::Itg,
+            combo_color: [1.0; 4],
+            is_failing: false,
+            life: 1.0,
+            rival_score_percent: 0.0,
+            target_score_percent: 92.0,
+            stream_completion: None,
+        };
+        let first_note = MiniIndicatorProgress {
+            judged_any: true,
+            current_score_percent: 0.5,
+            current_possible_ratio: 0.005,
+            ..MiniIndicatorProgress::default()
+        };
+        assert_eq!(
+            zmod_mini_indicator_output(&first_note, params).map(|output| output.text),
+            Some(ZmodMiniIndicatorText::SignedPercent {
+                value: 0.04,
+                negative: false,
+            }),
+        );
+
+        let final_note = MiniIndicatorProgress {
+            judged_any: true,
+            current_score_percent: 98.0,
+            current_possible_ratio: 1.0,
+            ..MiniIndicatorProgress::default()
+        };
+        assert_eq!(
+            zmod_mini_indicator_output(&final_note, params).map(|output| output.text),
+            Some(ZmodMiniIndicatorText::SignedPercent {
+                value: 6.0,
+                negative: false,
+            }),
+        );
+    }
+
+    #[test]
+    fn zmod_missed_target_requires_score_to_be_unattainable() {
+        let no_judgment = MiniIndicatorProgress::default();
+        assert!(!zmod_target_score_missed(&no_judgment, 92.0));
+
+        let exactly_attainable = MiniIndicatorProgress {
+            judged_any: true,
+            current_score_percent: 42.0,
+            current_possible_ratio: 0.5,
+            ..MiniIndicatorProgress::default()
+        };
+        assert!(!zmod_target_score_missed(&exactly_attainable, 92.0));
+
+        let missed = MiniIndicatorProgress {
+            current_score_percent: 41.99,
+            ..exactly_attainable
+        };
+        assert!(zmod_target_score_missed(&missed, 92.0));
     }
 
     #[test]

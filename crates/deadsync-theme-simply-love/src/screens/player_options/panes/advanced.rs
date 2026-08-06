@@ -4,6 +4,7 @@ use super::super::constants::{
     MINI_INDICATOR_POSITION_VARIANTS, MINI_INDICATOR_SIZE_VARIANTS,
     MINI_INDICATOR_SUBTRACTIVE_DISPLAY_VARIANTS, MINI_INDICATOR_VARIANTS,
     SCORE_DISPLAY_MODE_VARIANTS, SCORE_POSITION_VARIANTS, STEP_STATS_EXTRA_VARIANTS,
+    TARGET_SCORE_MISS_POLICY_VARIANTS,
 };
 use super::super::row::{
     BitMapping, BitmaskInit, BitmaskWriteback, CursorInit, CycleInit, NumericInit,
@@ -21,7 +22,8 @@ use deadsync_profile::{
     LifeMeterType, MeasureCounter, MeasureLines, MiniIndicator, MiniIndicatorColor,
     MiniIndicatorPosition, MiniIndicatorScoreType, MiniIndicatorSize,
     MiniIndicatorSubtractiveDisplay, PlayerOptionsData, ScatterplotMaxWindow, ScoreDisplayMode,
-    ScorePosition, StepStatsExtra, TargetScoreSetting, TimingWindowsOption, TurnOption,
+    ScorePosition, StepStatsExtra, TargetScoreMissPolicy, TargetScoreSetting, TimingWindowsOption,
+    TurnOption,
 };
 
 // =============================== Bindings ===============================
@@ -114,12 +116,26 @@ const TARGET_SCORE: ChoiceBinding<usize> = index_binding!(
     TARGET_SCORE_VARIANTS,
     TargetScoreSetting::S,
     target_score,
-    false,
+    true,
     Some(CycleInit {
         from_profile: |p| {
             TARGET_SCORE_VARIANTS
                 .iter()
                 .position(|&v| v == p.target_score)
+                .unwrap_or(0)
+        }
+    })
+);
+const ACTION_ON_MISSED_TARGET: ChoiceBinding<usize> = index_binding!(
+    TARGET_SCORE_MISS_POLICY_VARIANTS,
+    TargetScoreMissPolicy::Nothing,
+    target_score_miss_policy,
+    true,
+    Some(CycleInit {
+        from_profile: |p| {
+            TARGET_SCORE_MISS_POLICY_VARIANTS
+                .iter()
+                .position(|&v| v == p.target_score_miss_policy)
                 .unwrap_or(0)
         }
     })
@@ -871,12 +887,14 @@ const RESULTS_EXTRAS: BitmaskBinding = fanout_bitmask_binding!(
     sync_visibility = false,
 );
 
-const ACTION_ON_MISSED_TARGET: CustomBinding = CustomBinding {
+const TARGET_SCORE_PERCENT: CustomBinding = CustomBinding {
     apply: |state, player_idx, row_id, delta, wrap| {
-        if choice::cycle_choice_index(state, player_idx, row_id, delta, wrap).is_none() {
+        let Some(new_index) = choice::cycle_choice_index(state, player_idx, row_id, delta, wrap)
+        else {
             return Outcome::NONE;
-        }
-        Outcome::persisted_with_visibility()
+        };
+        state.player_options[player_idx].target_score_percent = (new_index as u8).min(100);
+        Outcome::persisted()
     },
 };
 
@@ -1398,13 +1416,14 @@ pub(super) fn build_advanced_rows(return_screen: Screen, scorebox_available: boo
             tr("PlayerOptions", "ScorePositionStepStatistics").to_string(),
         ],
     ));
-    b.push(Row::custom(
+    b.push(Row::cycle(
         RowId::ActionOnMissedTarget,
         lookup_key("PlayerOptions", "TargetScoreMissPolicy"),
         lookup_key("PlayerOptionsHelp", "TargetScoreMissPolicyHelp"),
-        ACTION_ON_MISSED_TARGET,
+        CycleBinding::Index(ACTION_ON_MISSED_TARGET),
         vec![
             tr("PlayerOptions", "TargetScoreMissPolicyNothing").to_string(),
+            tr("PlayerOptions", "TargetScoreMissPolicyDimMiniIndicator").to_string(),
             tr("PlayerOptions", "TargetScoreMissPolicyFail").to_string(),
             tr("PlayerOptions", "TargetScoreMissPolicyRestartSong").to_string(),
         ],
@@ -1464,12 +1483,24 @@ pub(super) fn build_advanced_rows(return_screen: Screen, scorebox_available: boo
                 tr("PlayerOptions", "TargetScoreSMinus").to_string(),
                 tr("PlayerOptions", "TargetScoreS").to_string(),
                 tr("PlayerOptions", "TargetScoreSPlus").to_string(),
+                tr("PlayerOptions", "TargetScoreStar1").to_string(),
+                tr("PlayerOptions", "TargetScoreStar2").to_string(),
+                tr("PlayerOptions", "TargetScoreStar3").to_string(),
+                tr("PlayerOptions", "TargetScoreStar4").to_string(),
+                tr("PlayerOptions", "TargetScoreSpecifiedValue").to_string(),
                 tr("PlayerOptions", "TargetScoreMachineBest").to_string(),
                 tr("PlayerOptions", "TargetScorePersonalBest").to_string(),
             ],
         )
         .with_initial_choice_index(10), // S by default
     );
+    b.push(Row::custom(
+        RowId::TargetScorePercent,
+        lookup_key("PlayerOptions", "TargetScorePercent"),
+        lookup_key("PlayerOptionsHelp", "TargetScorePercentHelp"),
+        TARGET_SCORE_PERCENT,
+        (0..=100).map(|percent| format!("{percent}%")).collect(),
+    ));
     b.push(Row::cycle(
         RowId::MiniIndicatorSize,
         lookup_key("PlayerOptions", "MiniIndicatorSize"),

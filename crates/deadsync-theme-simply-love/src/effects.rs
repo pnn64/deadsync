@@ -838,6 +838,7 @@ pub enum SimplyLoveUpdaterRequest {
 /// produced a generic theme effect.
 #[derive(Clone, Debug)]
 pub enum SimplyLoveRuntimeRequest {
+    RestartGameplay,
     Audio(AudioRequest),
     Media(SimplyLoveMediaRequest),
     Content(SimplyLoveContentRequest),

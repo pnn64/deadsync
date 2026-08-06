@@ -4181,6 +4181,11 @@ pub enum TargetScoreSetting {
     #[default]
     S,
     SPlus,
+    Star1,
+    Star2,
+    Star3,
+    Star4,
+    SpecifiedValue,
     MachineBest,
     PersonalBest,
 }
@@ -4208,6 +4213,11 @@ impl FromStr for TargetScoreSetting {
             "sminus" | "s-" => Ok(Self::SMinus),
             "" | "s" => Ok(Self::S),
             "splus" | "s+" => Ok(Self::SPlus),
+            "star" | "star1" | "1star" => Ok(Self::Star1),
+            "star2" | "2star" => Ok(Self::Star2),
+            "star3" | "3star" => Ok(Self::Star3),
+            "star4" | "4star" => Ok(Self::Star4),
+            "specifiedvalue" | "specified" => Ok(Self::SpecifiedValue),
             "machinebest" | "machine" => Ok(Self::MachineBest),
             "personalbest" | "personal" => Ok(Self::PersonalBest),
             other => Err(format!("'{other}' is not a valid TargetScore setting")),
@@ -4230,8 +4240,55 @@ impl core::fmt::Display for TargetScoreSetting {
             Self::SMinus => write!(f, "S-"),
             Self::S => write!(f, "S"),
             Self::SPlus => write!(f, "S+"),
+            Self::Star1 => write!(f, "Star1"),
+            Self::Star2 => write!(f, "Star2"),
+            Self::Star3 => write!(f, "Star3"),
+            Self::Star4 => write!(f, "Star4"),
+            Self::SpecifiedValue => write!(f, "Specified Value"),
             Self::MachineBest => write!(f, "Machine Best"),
             Self::PersonalBest => write!(f, "Personal Best"),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum TargetScoreMissPolicy {
+    #[default]
+    Nothing,
+    DimMiniIndicator,
+    Fail,
+    RestartSong,
+}
+
+impl FromStr for TargetScoreMissPolicy {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let key: String = s
+            .trim()
+            .chars()
+            .filter(|ch| ch.is_ascii_alphanumeric())
+            .map(|ch| ch.to_ascii_lowercase())
+            .collect();
+        match key.as_str() {
+            "" | "nothing" => Ok(Self::Nothing),
+            "dimsscore" | "dimminiindicator" | "dim" => Ok(Self::DimMiniIndicator),
+            "fail" => Ok(Self::Fail),
+            "restart" | "restartsong" => Ok(Self::RestartSong),
+            other => Err(format!(
+                "'{other}' is not a valid ActionOnMissedTarget setting"
+            )),
+        }
+    }
+}
+
+impl core::fmt::Display for TargetScoreMissPolicy {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Self::Nothing => write!(f, "Nothing"),
+            Self::DimMiniIndicator => write!(f, "DimSScore"),
+            Self::Fail => write!(f, "Fail"),
+            Self::RestartSong => write!(f, "Restart"),
         }
     }
 }
@@ -6587,6 +6644,8 @@ pub struct PlayerOptionsData {
     pub step_statistics: StepStatisticsMask,
     pub step_stats_extra: StepStatsExtra,
     pub target_score: TargetScoreSetting,
+    pub target_score_percent: u8,
+    pub target_score_miss_policy: TargetScoreMissPolicy,
     pub lifemeter_type: LifeMeterType,
     pub measure_counter: MeasureCounter,
     pub measure_counter_lookahead: u8,
@@ -6723,6 +6782,8 @@ fn default_player_options() -> PlayerOptionsData {
         step_statistics: StepStatisticsMask::default(),
         step_stats_extra: StepStatsExtra::default(),
         target_score: TargetScoreSetting::default(),
+        target_score_percent: 100,
+        target_score_miss_policy: TargetScoreMissPolicy::default(),
         lifemeter_type: LifeMeterType::default(),
         measure_counter: MeasureCounter::default(),
         measure_counter_lookahead: 2,
@@ -7271,6 +7332,13 @@ where
     options.target_score = get("TargetScore")
         .and_then(|s| TargetScoreSetting::from_str(&s).ok())
         .unwrap_or(options.target_score);
+    options.target_score_percent = get("TargetScorePercent")
+        .or_else(|| get("TargetScoreNumber"))
+        .and_then(|s| s.parse::<u8>().ok())
+        .map_or(options.target_score_percent, |value| value.min(100));
+    options.target_score_miss_policy = get("ActionOnMissedTarget")
+        .and_then(|s| TargetScoreMissPolicy::from_str(&s).ok())
+        .unwrap_or(options.target_score_miss_policy);
     options.lifemeter_type = get("LifeMeterType")
         .and_then(|s| LifeMeterType::from_str(&s).ok())
         .unwrap_or(options.lifemeter_type);
@@ -7801,6 +7869,14 @@ pub fn append_player_options_section(
     content.push_str(&format!("StepStatistics={}\n", options.step_statistics));
     content.push_str(&format!("StepStatsExtra={}\n", options.step_stats_extra));
     content.push_str(&format!("TargetScore={}\n", options.target_score));
+    content.push_str(&format!(
+        "TargetScorePercent={}\n",
+        options.target_score_percent.min(100)
+    ));
+    content.push_str(&format!(
+        "ActionOnMissedTarget={}\n",
+        options.target_score_miss_policy
+    ));
     content.push_str(&format!("LifeMeterType={}\n", options.lifemeter_type));
     content.push_str(&format!("MeasureCounter={}\n", options.measure_counter));
     content.push_str(&format!(
@@ -8235,6 +8311,8 @@ pub struct Profile {
     pub step_statistics: StepStatisticsMask,
     pub step_stats_extra: StepStatsExtra,
     pub target_score: TargetScoreSetting,
+    pub target_score_percent: u8,
+    pub target_score_miss_policy: TargetScoreMissPolicy,
     pub lifemeter_type: LifeMeterType,
     pub measure_counter: MeasureCounter,
     pub measure_counter_lookahead: u8,
@@ -8418,6 +8496,8 @@ impl Default for Profile {
             step_statistics: player_options.step_statistics,
             step_stats_extra: player_options.step_stats_extra,
             target_score: player_options.target_score,
+            target_score_percent: player_options.target_score_percent,
+            target_score_miss_policy: player_options.target_score_miss_policy,
             lifemeter_type: player_options.lifemeter_type,
             measure_counter: player_options.measure_counter,
             measure_counter_lookahead: player_options.measure_counter_lookahead,
@@ -9168,6 +9248,14 @@ impl Profile {
         set_value_if_changed(&mut self.target_score, setting)
     }
 
+    pub fn set_target_score_percent(&mut self, percent: u8) -> bool {
+        set_value_if_changed(&mut self.target_score_percent, percent.min(100))
+    }
+
+    pub fn set_target_score_miss_policy(&mut self, policy: TargetScoreMissPolicy) -> bool {
+        set_value_if_changed(&mut self.target_score_miss_policy, policy)
+    }
+
     pub fn set_lifemeter_type(&mut self, setting: LifeMeterType) -> bool {
         set_value_if_changed(&mut self.lifemeter_type, setting)
     }
@@ -9335,6 +9423,8 @@ impl Profile {
             step_statistics: self.step_statistics,
             step_stats_extra: self.step_stats_extra,
             target_score: self.target_score,
+            target_score_percent: self.target_score_percent,
+            target_score_miss_policy: self.target_score_miss_policy,
             lifemeter_type: self.lifemeter_type,
             measure_counter: self.measure_counter,
             measure_counter_lookahead: self.measure_counter_lookahead,
@@ -9473,6 +9563,8 @@ impl Profile {
         self.step_statistics = options.step_statistics;
         self.step_stats_extra = options.step_stats_extra;
         self.target_score = options.target_score;
+        self.target_score_percent = options.target_score_percent;
+        self.target_score_miss_policy = options.target_score_miss_policy;
         self.lifemeter_type = options.lifemeter_type;
         self.measure_counter = options.measure_counter;
         self.measure_counter_lookahead = options.measure_counter_lookahead;
@@ -13133,6 +13225,24 @@ ApiKey = gs-key
             Ok(TargetScoreSetting::S)
         );
         assert!(TargetScoreSetting::from_str("ss").is_err());
+    }
+
+    #[test]
+    fn target_score_miss_policy_round_trips_zmod_values() {
+        for (raw, policy) in [
+            ("Nothing", TargetScoreMissPolicy::Nothing),
+            ("DimSScore", TargetScoreMissPolicy::DimMiniIndicator),
+            ("Fail", TargetScoreMissPolicy::Fail),
+            ("Restart", TargetScoreMissPolicy::RestartSong),
+            ("Restart Song", TargetScoreMissPolicy::RestartSong),
+        ] {
+            assert_eq!(TargetScoreMissPolicy::from_str(raw), Ok(policy));
+            assert_eq!(
+                TargetScoreMissPolicy::from_str(&policy.to_string()),
+                Ok(policy)
+            );
+        }
+        assert!(TargetScoreMissPolicy::from_str("Quit").is_err());
     }
 
     #[test]

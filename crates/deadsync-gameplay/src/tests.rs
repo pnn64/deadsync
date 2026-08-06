@@ -10278,15 +10278,19 @@ mod tests {
     fn target_score_fixed_grades_map_to_percentages() {
         assert_eq!(
             target_score_setting_percent(GameplayTargetScoreSetting::CMinus),
-            Some(50.0)
+            Some(55.0)
         );
         assert_eq!(
             target_score_setting_percent(GameplayTargetScoreSetting::S),
-            Some(89.0)
+            Some(92.0)
         );
         assert_eq!(
             target_score_setting_percent(GameplayTargetScoreSetting::SPlus),
-            Some(92.0)
+            Some(94.0)
+        );
+        assert_eq!(
+            target_score_setting_percent(GameplayTargetScoreSetting::Star4),
+            Some(100.0)
         );
         assert_eq!(
             target_score_setting_percent(GameplayTargetScoreSetting::MachineBest),
@@ -10297,12 +10301,18 @@ mod tests {
     #[test]
     fn target_score_resolves_best_score_settings() {
         assert_eq!(
-            resolve_target_score_percent(GameplayTargetScoreSetting::MachineBest, Some(91.0), None),
-            91.0
+            resolve_target_score_percent(
+                GameplayTargetScoreSetting::MachineBest,
+                100.0,
+                Some(91.0),
+                None,
+            ),
+            92.0
         );
         assert_eq!(
             resolve_target_score_percent(
                 GameplayTargetScoreSetting::MachineBest,
+                100.0,
                 Some(91.0),
                 Some(94.0),
             ),
@@ -10311,26 +10321,42 @@ mod tests {
         assert_eq!(
             resolve_target_score_percent(
                 GameplayTargetScoreSetting::PersonalBest,
+                100.0,
                 Some(91.0),
                 Some(94.0),
             ),
             91.0
+        );
+        assert_eq!(
+            resolve_target_score_percent(
+                GameplayTargetScoreSetting::SpecifiedValue,
+                97.5,
+                None,
+                None,
+            ),
+            97.5
         );
     }
 
     #[test]
     fn target_score_resolution_defaults_to_s_percent() {
         assert_eq!(
-            resolve_target_score_percent(GameplayTargetScoreSetting::MachineBest, None, None),
-            89.0
+            resolve_target_score_percent(
+                GameplayTargetScoreSetting::MachineBest,
+                100.0,
+                None,
+                None,
+            ),
+            92.0
         );
         assert_eq!(
             resolve_target_score_percent(
                 GameplayTargetScoreSetting::PersonalBest,
+                100.0,
                 None,
                 Some(94.0)
             ),
-            89.0
+            92.0
         );
     }
 
@@ -10419,7 +10445,7 @@ mod tests {
 
         assert!(state.stream_segments(MAX_PLAYERS).is_empty());
         assert_eq!(state.total_stream_measures(MAX_PLAYERS), 0.0);
-        assert_eq!(state.target_score_percent(MAX_PLAYERS), 89.0);
+        assert_eq!(state.target_score_percent(MAX_PLAYERS), 92.0);
         assert_eq!(state.rival_score_percent(MAX_PLAYERS), 0.0);
 
         state.clear_stream_segments();

@@ -104,6 +104,7 @@ pub struct GameplayScoreInitView {
     pub mini_indicator: deadsync_gameplay::GameplayMiniIndicatorData,
     pub scorebox_profiles: [deadsync_score::GameplayScoreboxProfileSnapshot; 2],
     pub scorebox_snapshots: [Option<deadsync_score::CachedPlayerLeaderboardData>; 2],
+    pub rival_score_types: [Option<deadsync_profile::MiniIndicatorScoreType>; 2],
 }
 
 impl Default for GameplayScoreInitView {
@@ -112,6 +113,7 @@ impl Default for GameplayScoreInitView {
             mini_indicator: Default::default(),
             scorebox_profiles: std::array::from_fn(|_| Default::default()),
             scorebox_snapshots: std::array::from_fn(|_| None),
+            rival_score_types: [None; 2],
         }
     }
 }
@@ -122,6 +124,7 @@ pub struct GameplayScoreRuntimeView {
     /// Newly completed snapshots only; `None` preserves the screen's current
     /// value without cloning it on steady gameplay frames.
     pub scorebox_updates: [Option<deadsync_score::CachedPlayerLeaderboardData>; 2],
+    pub rival_score_updates: [Option<f64>; 2],
     pub itl_cmod_warning: [bool; 2],
 }
 
@@ -129,6 +132,7 @@ impl Default for GameplayScoreRuntimeView {
     fn default() -> Self {
         Self {
             scorebox_updates: std::array::from_fn(|_| None),
+            rival_score_updates: [None; 2],
             itl_cmod_warning: [false; 2],
         }
     }

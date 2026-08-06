@@ -112,7 +112,8 @@ use deadsync_profile::{
     ErrorBarTrim, HideLightType, LifeMeterType, MeasureCounter, MeasureLines, MiniIndicator,
     MiniIndicatorColor, MiniIndicatorPosition, MiniIndicatorScoreType, MiniIndicatorSize,
     MiniIndicatorSubtractiveDisplay, NoCmodAlternative, Perspective, ScatterplotMaxWindow,
-    ScoreDisplayMode, ScorePosition, TargetScoreSetting, TimingWindowsOption, TurnOption,
+    ScoreDisplayMode, ScorePosition, TargetScoreMissPolicy, TargetScoreSetting,
+    TimingWindowsOption, TurnOption,
 };
 
 /// `NoCmodAlternative` variants in row-choice order (index ↔ enum).
@@ -131,6 +132,13 @@ pub(super) const MINI_INDICATOR_VARIANTS: [MiniIndicator; 7] = [
     MiniIndicator::RivalScoring,
     MiniIndicator::Pacemaker,
     MiniIndicator::StreamProg,
+];
+
+pub(super) const TARGET_SCORE_MISS_POLICY_VARIANTS: [TargetScoreMissPolicy; 4] = [
+    TargetScoreMissPolicy::Nothing,
+    TargetScoreMissPolicy::DimMiniIndicator,
+    TargetScoreMissPolicy::Fail,
+    TargetScoreMissPolicy::RestartSong,
 ];
 
 pub(super) const COLUMN_FLASH_BRIGHTNESS_VARIANTS: [ColumnFlashBrightness; 2] =
@@ -212,7 +220,7 @@ pub(super) const STEP_STATS_EXTRA_VARIANTS: [deadsync_profile::StepStatsExtra; 1
     deadsync_profile::StepStatsExtra::Sonic,
 ];
 
-pub(super) const TARGET_SCORE_VARIANTS: [TargetScoreSetting; 14] = [
+pub(super) const TARGET_SCORE_VARIANTS: [TargetScoreSetting; 19] = [
     TargetScoreSetting::CMinus,
     TargetScoreSetting::C,
     TargetScoreSetting::CPlus,
@@ -225,6 +233,11 @@ pub(super) const TARGET_SCORE_VARIANTS: [TargetScoreSetting; 14] = [
     TargetScoreSetting::SMinus,
     TargetScoreSetting::S,
     TargetScoreSetting::SPlus,
+    TargetScoreSetting::Star1,
+    TargetScoreSetting::Star2,
+    TargetScoreSetting::Star3,
+    TargetScoreSetting::Star4,
+    TargetScoreSetting::SpecifiedValue,
     TargetScoreSetting::MachineBest,
     TargetScoreSetting::PersonalBest,
 ];

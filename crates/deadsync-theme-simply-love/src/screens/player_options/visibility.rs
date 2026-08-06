@@ -1,5 +1,5 @@
 use super::*;
-use deadsync_profile::{ErrorBarMask, MiniIndicator, StepStatisticsMask};
+use deadsync_profile::{ErrorBarMask, MiniIndicator, StepStatisticsMask, TargetScoreSetting};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) struct RowVisibility {
@@ -16,6 +16,7 @@ pub(super) struct RowVisibility {
     pub(super) show_density_graph_background: bool,
     pub(super) show_step_stats_extra: bool,
     pub(super) show_target_score: bool,
+    pub(super) show_target_score_percent: bool,
     pub(super) show_early_dw_options: bool,
     pub(super) show_fa_plus_window_options: bool,
     pub(super) show_combo_rows: bool,
@@ -96,6 +97,9 @@ pub(super) fn row_visible_with_flags(id: RowId, visibility: RowVisibility) -> bo
     }
     if id == RowId::TargetScore {
         return visibility.show_target_score;
+    }
+    if id == RowId::TargetScorePercent {
+        return visibility.show_target_score && visibility.show_target_score_percent;
     }
     if id == RowId::EarlyDecentWayOffOptions {
         return visibility.show_early_dw_options;
@@ -205,6 +209,9 @@ pub(super) fn conditional_row_parent(id: RowId) -> Option<RowId> {
     }
     if id == RowId::TargetScore {
         return Some(RowId::MiniIndicator);
+    }
+    if id == RowId::TargetScorePercent {
+        return Some(RowId::TargetScore);
     }
     if id == RowId::ComboColors
         || id == RowId::ComboColorMode
@@ -514,6 +521,14 @@ pub(super) fn target_score_visible(row_map: &RowMap, active: [bool; PLAYER_SLOTS
     !any_active || !has_trigger_row
 }
 
+pub(super) fn target_score_percent_visible(row_map: &RowMap, active: [bool; PLAYER_SLOTS]) -> bool {
+    active_player_indices(active).any(|player_idx| {
+        selected_choice(row_map, RowId::TargetScore, player_idx)
+            .and_then(|idx| TARGET_SCORE_VARIANTS.get(idx))
+            .is_some_and(|&setting| setting == TargetScoreSetting::SpecifiedValue)
+    })
+}
+
 pub(super) fn early_dw_options_visible(row_map: &RowMap, active: [bool; PLAYER_SLOTS]) -> bool {
     if row_map.get(RowId::RescoreEarlyHits).is_none() {
         return true;
@@ -723,6 +738,7 @@ pub(super) fn row_visibility(
         ),
         show_step_stats_extra: step_stats_extra_visible(row_map, active, option_masks),
         show_target_score: target_score_visible(row_map, active),
+        show_target_score_percent: target_score_percent_visible(row_map, active),
         show_early_dw_options: early_dw_options_visible(row_map, active),
         show_fa_plus_window_options: fa_plus_window_options_visible(row_map, active, option_masks),
         show_combo_rows: combo_rows_visible(active, option_masks),

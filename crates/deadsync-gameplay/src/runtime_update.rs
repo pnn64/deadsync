@@ -1212,6 +1212,13 @@ where
     }
 
     #[inline(always)]
+    pub fn set_mini_indicator_rival_score_percent(&mut self, player: usize, percent: f64) -> bool {
+        self.display
+            .mini_indicator
+            .set_rival_score_percent(player, percent)
+    }
+
+    #[inline(always)]
     pub fn clear_mini_indicator_stream_segments(&mut self) {
         self.display.mini_indicator.clear_stream_segments();
     }
@@ -1749,6 +1756,23 @@ where
         }
         let live = self.live_ex_score_inputs(player_idx, player_blue_window_ms);
         capture_player_failed_ex_score_inputs(&mut self.players_runtime.players[player_idx], live);
+    }
+
+    pub fn force_fail_player(&mut self, player_idx: usize) -> bool {
+        if player_idx >= self.setup.num_players.min(MAX_PLAYERS)
+            || self.player_is_dead(player_idx)
+        {
+            return false;
+        }
+        let current_music_time = self.current_music_time_seconds();
+        apply_life_change(
+            &mut self.players_runtime.players[player_idx],
+            current_music_time,
+            -1.0,
+        );
+        self.capture_failed_ex_score_inputs(player_idx, self.player_blue_window_ms(player_idx));
+        self.display.density_graph.life_dirty[player_idx] = true;
+        true
     }
 
     pub fn display_ex_score_data(

@@ -8,6 +8,7 @@ use deadsync_notefield::{
     zmod_mini_indicator_zoom as crate_zmod_mini_indicator_zoom, zmod_percent_from_points,
     zmod_resolved_combo_color as crate_zmod_resolved_combo_color,
     zmod_resolved_mini_indicator_mode, zmod_static_combo_color as crate_zmod_static_combo_color,
+    zmod_target_score_missed as crate_zmod_target_score_missed,
 };
 use deadsync_profile as profile_data;
 use deadsync_rules::judgment::{self, HOLD_SCORE_HELD, JudgeGrade};
@@ -232,6 +233,21 @@ fn zmod_mini_indicator_progress(
     }
 }
 
+pub(crate) fn zmod_target_score_missed(
+    state: &State,
+    player_idx: usize,
+    score_type: profile_data::MiniIndicatorScoreType,
+    target_score_percent: f64,
+) -> bool {
+    let Some(player) = state.player(player_idx) else {
+        return false;
+    };
+    crate_zmod_target_score_missed(
+        &zmod_mini_indicator_progress(state, player, player_idx, score_type),
+        target_score_percent,
+    )
+}
+
 #[inline(always)]
 fn mini_indicator_score_type(
     score_type: profile_data::MiniIndicatorScoreType,
@@ -351,7 +367,16 @@ pub(super) fn zmod_mini_indicator_text(
                 ),
             },
         )?;
-        Some((cached_zmod_mini_indicator_text(output.text), output.color))
+        let mut color = output.color;
+        if profile.target_score_miss_policy == profile_data::TargetScoreMissPolicy::DimMiniIndicator
+            && crate_zmod_target_score_missed(
+                &progress,
+                state.mini_indicator_target_score_percent(player_idx),
+            )
+        {
+            color[3] *= 0.65;
+        }
+        Some((cached_zmod_mini_indicator_text(output.text), color))
     })
 }
 

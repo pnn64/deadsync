@@ -214,10 +214,25 @@ pub struct MachineBest {
     pub initials: String,
 }
 
+#[derive(Clone, Debug)]
+pub struct MachineBestScalar {
+    pub score: LocalScoreBestScalar,
+    pub initials: String,
+}
+
+#[derive(Default)]
+pub struct MachineLocalScoreBests {
+    pub itg: HashMap<String, MachineBest>,
+    pub ex: HashMap<String, MachineBestScalar>,
+    pub hard_ex: HashMap<String, MachineBestScalar>,
+}
+
 #[derive(Default)]
 pub struct MachineLocalScoreCacheState {
     pub loaded: bool,
     pub best_itg: HashMap<String, MachineBest>,
+    pub best_ex: HashMap<String, MachineBestScalar>,
+    pub best_hard_ex: HashMap<String, MachineBestScalar>,
 }
 
 impl GsScoreCacheState {
@@ -675,6 +690,70 @@ impl MachineLocalScoreCacheState {
                     },
                 );
             }
+        }
+    }
+
+    pub fn scalar_record(
+        &self,
+        chart_hash: &str,
+        hard_ex: bool,
+    ) -> Option<(String, LocalScalarScore)> {
+        let best = if hard_ex {
+            self.best_hard_ex.get(chart_hash)
+        } else {
+            self.best_ex.get(chart_hash)
+        }?;
+        Some((
+            best.initials.clone(),
+            LocalScalarScore {
+                percent: best.score.percent,
+                is_fail: best.score.grade == Grade::Failed,
+            },
+        ))
+    }
+
+    pub fn update_scalar_if_loaded(
+        &mut self,
+        chart_hash: &str,
+        ex: LocalScoreBestScalar,
+        hard_ex: LocalScoreBestScalar,
+        initials: &str,
+    ) {
+        if !self.loaded {
+            return;
+        }
+        update_machine_scalar(&mut self.best_ex, chart_hash, ex, initials);
+        update_machine_scalar(&mut self.best_hard_ex, chart_hash, hard_ex, initials);
+    }
+}
+
+fn update_machine_scalar(
+    best_by_chart: &mut HashMap<String, MachineBestScalar>,
+    chart_hash: &str,
+    score: LocalScoreBestScalar,
+    initials: &str,
+) {
+    match best_by_chart.get_mut(chart_hash) {
+        Some(existing)
+            if is_better_scalar_score(
+                score.grade,
+                score.percent,
+                existing.score.grade,
+                existing.score.percent,
+            ) =>
+        {
+            existing.score = score;
+            existing.initials = initials.to_string();
+        }
+        Some(_) => {}
+        None => {
+            best_by_chart.insert(
+                chart_hash.to_string(),
+                MachineBestScalar {
+                    score,
+                    initials: initials.to_string(),
+                },
+            );
         }
     }
 }
@@ -1610,6 +1689,18 @@ pub fn runtime_append_local_score_for_profile(
     .err();
 
     runtime_update_machine_cache_if_loaded(chart_hash, append.cached_score, profile_initials);
+    runtime_update_machine_scalar_cache_if_loaded(
+        chart_hash,
+        LocalScoreBestScalar {
+            grade: append.cached_score.grade,
+            percent: append.header.ex_score_percent,
+        },
+        LocalScoreBestScalar {
+            grade: append.cached_score.grade,
+            percent: append.header.hard_ex_score_percent,
+        },
+        profile_initials,
+    );
     RuntimeLocalScoreAppendResult {
         append: Some(append),
         store_error: None,
@@ -1835,20 +1926,22 @@ where
 
     let profiles = profiles();
     let load_started = Instant::now();
-    let best_itg = machine_best_itg_from_profiles(profiles.as_ref());
+    let best = machine_local_score_bests_from_profiles(profiles.as_ref());
     let mut state = cache.lock().unwrap();
     if state.loaded {
         return ScoreCacheRuntimeResult::default();
     }
 
     state.loaded = true;
-    state.best_itg = best_itg;
+    state.best_itg = best.itg;
+    state.best_ex = best.ex;
+    state.best_hard_ex = best.hard_ex;
     ScoreCacheRuntimeResult {
         load_report: Some(ScoreCacheLoadReport {
             kind: ScoreCacheLoadKind::MachineLocal,
             profile_id: None,
             primary_entries: state.best_itg.len(),
-            secondary_entries: 0,
+            secondary_entries: state.best_ex.len().saturating_add(state.best_hard_ex.len()),
             elapsed_ms: load_started.elapsed().as_secs_f64() * 1000.0,
         }),
         write_errors: Vec::new(),
@@ -1866,6 +1959,18 @@ pub fn runtime_update_machine_cache_if_loaded(
         .update_if_loaded(chart_hash, score, initials);
 }
 
+pub fn runtime_update_machine_scalar_cache_if_loaded(
+    chart_hash: &str,
+    ex: LocalScoreBestScalar,
+    hard_ex: LocalScoreBestScalar,
+    initials: &str,
+) {
+    RUNTIME_MACHINE_LOCAL_SCORE_CACHE
+        .lock()
+        .unwrap()
+        .update_scalar_if_loaded(chart_hash, ex, hard_ex, initials);
+}
+
 pub fn runtime_machine_record_local(
     chart_hash: &str,
     profiles: &[LocalScoreProfileSource],
@@ -1878,6 +1983,20 @@ pub fn runtime_machine_record_local_lazy(
     profiles: impl FnOnce() -> Vec<LocalScoreProfileSource>,
 ) -> (Option<(String, CachedScore)>, ScoreCacheRuntimeResult) {
     machine_record_local_with_cache(&RUNTIME_MACHINE_LOCAL_SCORE_CACHE, chart_hash, profiles)
+}
+
+pub fn runtime_machine_scalar_record_local_lazy(
+    chart_hash: &str,
+    hard_ex: bool,
+    profiles: impl FnOnce() -> Vec<LocalScoreProfileSource>,
+) -> (Option<(String, LocalScalarScore)>, ScoreCacheRuntimeResult) {
+    let result =
+        ensure_machine_local_score_cache_loaded_with(&RUNTIME_MACHINE_LOCAL_SCORE_CACHE, profiles);
+    let record = RUNTIME_MACHINE_LOCAL_SCORE_CACHE
+        .lock()
+        .unwrap()
+        .scalar_record(chart_hash, hard_ex);
+    (record, result)
 }
 
 fn machine_record_local_with_cache<P>(
@@ -6571,6 +6690,30 @@ mod tests {
         assert!(second_result.load_report.is_none());
         assert!(second_result.write_errors.is_empty());
         assert_eq!(load_calls.get(), 1);
+    }
+
+    #[test]
+    fn machine_scalar_cache_keeps_independent_ex_and_hard_ex_bests() {
+        let mut cache = MachineLocalScoreCacheState {
+            loaded: true,
+            ..MachineLocalScoreCacheState::default()
+        };
+        cache.update_scalar_if_loaded(
+            "chart",
+            LocalScoreBestScalar {
+                grade: Grade::Tier04,
+                percent: 94.0,
+            },
+            LocalScoreBestScalar {
+                grade: Grade::Tier03,
+                percent: 96.0,
+            },
+            "AAA",
+        );
+
+        assert_eq!(cache.scalar_record("chart", false).unwrap().1.percent, 94.0);
+        assert_eq!(cache.scalar_record("chart", true).unwrap().1.percent, 96.0);
+        assert_eq!(cache.scalar_record("chart", true).unwrap().0, "AAA");
     }
 
     #[test]

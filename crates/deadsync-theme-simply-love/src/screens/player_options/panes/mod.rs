@@ -358,6 +358,17 @@ pub(super) fn apply_profile_defaults(
             .unwrap_or(0)
             .min(row.choices.len().saturating_sub(1));
     }
+    if let Some(row) = row_map.get_mut(RowId::ActionOnMissedTarget) {
+        row.selected_choice_index[player_idx] = TARGET_SCORE_MISS_POLICY_VARIANTS
+            .iter()
+            .position(|&v| v == profile.target_score_miss_policy)
+            .unwrap_or(0)
+            .min(row.choices.len().saturating_sub(1));
+    }
+    if let Some(row) = row_map.get_mut(RowId::TargetScorePercent) {
+        row.selected_choice_index[player_idx] = usize::from(profile.target_score_percent.min(100))
+            .min(row.choices.len().saturating_sub(1));
+    }
     if let Some(row) = row_map.get_mut(RowId::CustomBlueFantasticWindowMs) {
         let ms =
             deadsync_profile::clamp_custom_fantastic_window_ms(profile.custom_fantastic_window_ms);

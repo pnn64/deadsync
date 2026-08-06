@@ -422,15 +422,19 @@ pub const fn mini_indicator_needs_stream_data(options: GameplayMiniIndicatorOpti
 
 #[derive(Clone, Debug)]
 pub struct GameplayMiniIndicatorData {
+    pub specified_target_percent: [f64; MAX_PLAYERS],
     pub personal_best_percent: [Option<f64>; MAX_PLAYERS],
     pub machine_best_percent: [Option<f64>; MAX_PLAYERS],
+    pub rival_score_percent: [Option<f64>; MAX_PLAYERS],
 }
 
 impl Default for GameplayMiniIndicatorData {
     fn default() -> Self {
         Self {
+            specified_target_percent: [100.0; MAX_PLAYERS],
             personal_best_percent: [None; MAX_PLAYERS],
             machine_best_percent: [None; MAX_PLAYERS],
+            rival_score_percent: [None; MAX_PLAYERS],
         }
     }
 }
@@ -448,7 +452,7 @@ impl Default for GameplayMiniIndicatorRuntimeState {
         Self {
             stream_segments: std::array::from_fn(|_| Vec::new()),
             total_stream_measures: [0.0; MAX_PLAYERS],
-            target_score_percent: [89.0; MAX_PLAYERS],
+            target_score_percent: [92.0; MAX_PLAYERS],
             rival_score_percent: [0.0; MAX_PLAYERS],
         }
     }
@@ -487,12 +491,21 @@ impl GameplayMiniIndicatorRuntimeState {
         self.target_score_percent
             .get(player)
             .copied()
-            .unwrap_or(89.0)
+            .unwrap_or(92.0)
     }
 
     #[inline(always)]
     pub fn rival_score_percent(&self, player: usize) -> f64 {
         self.rival_score_percent.get(player).copied().unwrap_or(0.0)
+    }
+
+    #[inline(always)]
+    pub fn set_rival_score_percent(&mut self, player: usize, percent: f64) -> bool {
+        let Some(slot) = self.rival_score_percent.get_mut(player) else {
+            return false;
+        };
+        *slot = percent.clamp(0.0, 100.0);
+        true
     }
 
     #[inline(always)]

@@ -125,25 +125,75 @@ fn mini_indicator_machine_best(
     match score_type {
         profile_data::MiniIndicatorScoreType::Itg => scores::get_machine_record_local(chart_hash)
             .map(|(_, score)| (score.score_percent * 100.0).clamp(0.0, 100.0)),
-        profile_data::MiniIndicatorScoreType::Ex | profile_data::MiniIndicatorScoreType::HardEx => {
-            None
+        profile_data::MiniIndicatorScoreType::Ex => {
+            scores::get_machine_scalar_record_local(chart_hash, false)
+                .map(|(_, score)| score.percent.clamp(0.0, 100.0))
+        }
+        profile_data::MiniIndicatorScoreType::HardEx => {
+            scores::get_machine_scalar_record_local(chart_hash, true)
+                .map(|(_, score)| score.percent.clamp(0.0, 100.0))
         }
     }
+}
+
+fn leaderboard_matches_score_type(
+    pane: &deadsync_score::LeaderboardPane,
+    score_type: profile_data::MiniIndicatorScoreType,
+) -> bool {
+    match score_type {
+        profile_data::MiniIndicatorScoreType::Itg => !pane.is_ex && !pane.is_hard_ex(),
+        profile_data::MiniIndicatorScoreType::Ex => pane.is_ex && !pane.is_hard_ex(),
+        profile_data::MiniIndicatorScoreType::HardEx => pane.is_hard_ex(),
+    }
+}
+
+fn mini_indicator_rival_score(
+    snapshot: Option<&deadsync_score::CachedPlayerLeaderboardData>,
+    score_type: profile_data::MiniIndicatorScoreType,
+) -> Option<f64> {
+    let panes = snapshot?
+        .data
+        .as_ref()?
+        .panes
+        .iter()
+        .filter(|pane| !pane.disabled && leaderboard_matches_score_type(pane, score_type));
+    let mut rival = None::<f64>;
+    let mut world_record = None::<f64>;
+    for entry in panes
+        .flat_map(|pane| pane.entries.iter())
+        .filter(|entry| !entry.is_fail && entry.score.is_finite())
+    {
+        if entry.is_rival || entry.is_self {
+            rival = Some(rival.map_or(entry.score, |score| score.max(entry.score)));
+        }
+        if entry.rank == 1 {
+            world_record = Some(world_record.map_or(entry.score, |score| score.max(entry.score)));
+        }
+    }
+    rival
+        .or(world_record)
+        .map(|score_10000| (score_10000 / 100.0).clamp(0.0, 100.0))
 }
 
 fn mini_indicator_view(
     charts: &[Arc<ChartData>; 2],
     profiles: &[profile_data::Profile; 2],
     session: &GameplaySession,
+    scorebox_snapshots: &[Option<deadsync_score::CachedPlayerLeaderboardData>; 2],
 ) -> GameplayMiniIndicatorData {
     let mut view = GameplayMiniIndicatorData::default();
     for player in 0..session.play_style.player_count() {
         let side = profile_side_from_gameplay(session.runtime_player_side(player));
         let chart_hash = charts[player].short_hash.as_str();
         let score_type = profiles[player].mini_indicator_score_type;
+        view.specified_target_percent[player] =
+            f64::from(profiles[player].target_score_percent.min(100));
         view.personal_best_percent[player] =
             mini_indicator_personal_best(chart_hash, side, score_type);
         view.machine_best_percent[player] = mini_indicator_machine_best(chart_hash, score_type);
+        let side_idx = profile_data::player_side_index(side);
+        view.rival_score_percent[player] =
+            mini_indicator_rival_score(scorebox_snapshots[side_idx].as_ref(), score_type);
     }
     view
 }
@@ -174,12 +224,18 @@ fn score_init_view(
     let runtime_profiles = gameplay_runtime_profile_data(profiles, session);
     let scorebox_profiles = scorebox_profiles(&runtime_profiles, session);
     let mut scorebox_snapshots = std::array::from_fn(|_| None);
+    let mut rival_score_types = [None; 2];
     for player in 0..session.play_style.player_count() {
         let side = profile_side_from_gameplay(session.runtime_player_side(player));
         let side_idx = profile_data::player_side_index(side);
         let profile = &scorebox_profiles[side_idx];
         let chart_hash = runtime_charts[player].short_hash.trim();
-        if profile.display_scorebox && profile.gs_active && !chart_hash.is_empty() {
+        let wants_rival =
+            runtime_profiles[player].mini_indicator == profile_data::MiniIndicator::RivalScoring;
+        rival_score_types[side_idx] =
+            wants_rival.then_some(runtime_profiles[player].mini_indicator_score_type);
+        if (profile.display_scorebox || wants_rival) && profile.gs_active && !chart_hash.is_empty()
+        {
             scorebox_snapshots[side_idx] = scores::get_or_fetch_player_leaderboards_for_profile(
                 chart_hash,
                 profile,
@@ -188,9 +244,15 @@ fn score_init_view(
         }
     }
     GameplayScoreInitView {
-        mini_indicator: mini_indicator_view(&runtime_charts, &runtime_profiles, session),
+        mini_indicator: mini_indicator_view(
+            &runtime_charts,
+            &runtime_profiles,
+            session,
+            &scorebox_snapshots,
+        ),
         scorebox_profiles,
         scorebox_snapshots,
+        rival_score_types,
     }
 }
 
@@ -213,11 +275,13 @@ pub(crate) fn init_view(
 
 pub(crate) fn score_runtime_view(state: &gameplay::State) -> GameplayScoreRuntimeView {
     let mut scorebox_updates = std::array::from_fn(|_| None);
+    let mut rival_score_updates = [None; 2];
     for player in 0..state.num_players() {
         let side = profile_side_from_gameplay(state.runtime_player_side(player));
         let side_idx = profile_data::player_side_index(side);
         let profile = gameplay::scorebox_profile_for_side(state, side);
-        if !profile.display_scorebox
+        let rival_score_type = gameplay::rival_score_type_for_side(state, side);
+        if (!profile.display_scorebox && rival_score_type.is_none())
             || !profile.gs_active
             || !gameplay::scorebox_snapshot_for_side(state, side)
                 .is_some_and(|snapshot| snapshot.loading)
@@ -234,11 +298,16 @@ pub(crate) fn score_runtime_view(state: &gameplay::State) -> GameplayScoreRuntim
             GAMEPLAY_SCOREBOX_ENTRIES,
         ) && !snapshot.loading
         {
+            if let Some(score_type) = rival_score_type {
+                rival_score_updates[player] =
+                    mini_indicator_rival_score(Some(&snapshot), score_type);
+            }
             scorebox_updates[side_idx] = Some(snapshot);
         }
     }
     GameplayScoreRuntimeView {
         scorebox_updates,
+        rival_score_updates,
         itl_cmod_warning: state.itl_cmod_warning_snapshot(),
     }
 }
@@ -553,12 +622,44 @@ pub(crate) fn handle_practice_raw_key(
 
 #[cfg(test)]
 mod tests {
-    use super::{background_chart, policy_view, scorebox_profiles, smx_sensor_value};
+    use super::{
+        background_chart, mini_indicator_rival_score, policy_view, scorebox_profiles,
+        smx_sensor_value,
+    };
     use deadsync_chart::GameplayChartData;
     use deadsync_gameplay::GameplaySession;
     use deadsync_profile as profile_data;
     use deadsync_profile_gameplay::gameplay_runtime_profile_data;
     use std::sync::Arc;
+
+    fn leaderboard_entry(
+        rank: u32,
+        score: f64,
+        is_self: bool,
+        is_rival: bool,
+    ) -> deadsync_score::LeaderboardEntry {
+        deadsync_score::LeaderboardEntry {
+            rank,
+            name: format!("player-{rank}"),
+            machine_tag: None,
+            score,
+            date: String::new(),
+            is_rival,
+            is_self,
+            is_fail: false,
+        }
+    }
+
+    fn leaderboard_snapshot(
+        panes: Vec<deadsync_score::LeaderboardPane>,
+    ) -> deadsync_score::CachedPlayerLeaderboardData {
+        deadsync_score::CachedPlayerLeaderboardData::ready(deadsync_score::PlayerLeaderboardData {
+            panes,
+            srpg_self_score: None,
+            itl_self_score: None,
+            itl_self_rank: None,
+        })
+    }
 
     #[test]
     fn gameplay_policy_carries_presentation_fields() {
@@ -650,6 +751,71 @@ mod tests {
             assert_eq!(snapshots[p2].gs_username(), "p2-user");
             assert_eq!(snapshots[p2].persistent_profile_id(), Some("p2-profile"));
         }
+    }
+
+    #[test]
+    fn rival_score_prefers_marked_player_then_world_record() {
+        let pane = deadsync_score::leaderboard_pane(
+            "GrooveStats",
+            vec![
+                leaderboard_entry(1, 9_990.0, false, false),
+                leaderboard_entry(2, 9_750.0, false, true),
+            ],
+            false,
+        )
+        .expect("non-empty pane");
+        let snapshot = leaderboard_snapshot(vec![pane.clone()]);
+        assert_eq!(
+            mini_indicator_rival_score(Some(&snapshot), profile_data::MiniIndicatorScoreType::Itg,),
+            Some(97.5),
+        );
+
+        let mut pane_without_rival = pane;
+        for entry in &mut pane_without_rival.entries {
+            entry.is_rival = false;
+        }
+        let snapshot = leaderboard_snapshot(vec![pane_without_rival]);
+        assert_eq!(
+            mini_indicator_rival_score(Some(&snapshot), profile_data::MiniIndicatorScoreType::Itg,),
+            Some(99.9),
+        );
+    }
+
+    #[test]
+    fn rival_score_uses_matching_score_type() {
+        let itg = deadsync_score::leaderboard_pane(
+            "GrooveStats",
+            vec![leaderboard_entry(1, 9_900.0, true, false)],
+            false,
+        )
+        .expect("non-empty pane");
+        let ex = deadsync_score::leaderboard_pane(
+            "EX",
+            vec![leaderboard_entry(1, 9_500.0, true, false)],
+            true,
+        )
+        .expect("non-empty pane");
+        let hard_ex = deadsync_score::arrowcloud_hard_ex_leaderboard_pane(
+            vec![leaderboard_entry(1, 9_000.0, true, false)],
+            true,
+        );
+        let snapshot = leaderboard_snapshot(vec![itg, ex, hard_ex]);
+
+        assert_eq!(
+            mini_indicator_rival_score(Some(&snapshot), profile_data::MiniIndicatorScoreType::Itg,),
+            Some(99.0),
+        );
+        assert_eq!(
+            mini_indicator_rival_score(Some(&snapshot), profile_data::MiniIndicatorScoreType::Ex,),
+            Some(95.0),
+        );
+        assert_eq!(
+            mini_indicator_rival_score(
+                Some(&snapshot),
+                profile_data::MiniIndicatorScoreType::HardEx,
+            ),
+            Some(90.0),
+        );
     }
 
     #[test]

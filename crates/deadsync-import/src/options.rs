@@ -23,7 +23,7 @@
 //!   `BackgroundFilter`, `ComboColors`, `ComboMode`, `LifeMeterType`,
 //!   `MeasureCounter`, `MeasureLines`, `ErrorBarTrim`, `MiniIndicator`,
 //!   `StepStatsExtra`, `DataVisualizations` -> `step_statistics`,
-//!   `TargetScore` -> `target_score` (Machine/Personal best only)
+//!   `TargetScore`, `ActionOnMissedTarget`
 //! * `PlayerOptionsString` -> turn + scroll (reverse) modifiers
 //! * SelectMultiple flag groups: `Colorful`/`Monochrome`/`Text`/`Highlight`/
 //!   `Average` -> `error_bar_active_mask`; `Flash*` -> `column_flash_mask`
@@ -39,8 +39,8 @@ use deadsync_profile::{
     BackgroundFilter, ColumnFlashMask, ComboColors, ComboFont, ComboMode, ErrorBarMask,
     ErrorBarTrim, HeldMissGraphic, HoldJudgmentGraphic, JudgmentGraphic, LifeMeterType,
     MeasureCounter, MeasureLines, MiniIndicator, NoteSkin, PlayerOptionsData, ScrollOption,
-    StepStatisticsMask, StepStatsExtra, TargetScoreSetting, TurnOption, error_bar_style_from_mask,
-    error_bar_text_from_mask,
+    StepStatisticsMask, StepStatsExtra, TargetScoreMissPolicy, TargetScoreSetting, TurnOption,
+    error_bar_style_from_mask, error_bar_text_from_mask,
 };
 use deadsync_rules::scroll::ScrollSpeedSetting;
 
@@ -234,11 +234,15 @@ pub fn translate_player_options(map: &SlSettings, base: &PlayerOptionsData) -> P
     if let Some(v) = sl_enum::<StepStatsExtra>(map, "StepStatsExtra") {
         out.step_stats_extra = v;
     }
-    // Simply Love's `TargetScore` is one of SpecifiedValue / Machine best /
-    // Personal best / Ghost Data. Only the latter two have a DeadSync equivalent;
-    // the numeric and ghost-data variants are rejected by `FromStr` and ignored.
+    // zmod stores its exact numeric target separately from the target source.
     if let Some(v) = sl_enum::<TargetScoreSetting>(map, "TargetScore") {
         out.target_score = v;
+    }
+    if let Some(percent) = sl_str(map, "TargetScoreNumber").and_then(|v| v.parse::<u8>().ok()) {
+        out.target_score_percent = percent.min(100);
+    }
+    if let Some(policy) = sl_enum::<TargetScoreMissPolicy>(map, "ActionOnMissedTarget") {
+        out.target_score_miss_policy = policy;
     }
 
     apply_bool_toggles(&mut out, map);
@@ -571,7 +575,7 @@ mod tests {
         let pb = translate_player_options(&sl(&[("TargetScore", "Personal best")]), &base);
         assert_eq!(pb.target_score, TargetScoreSetting::PersonalBest);
 
-        // SL's numeric / ghost-data targets have no DeadSync equivalent → default.
+        // Numeric targets import directly; ghost data still requires replay support.
         let specified = translate_player_options(
             &sl(&[
                 ("TargetScore", "SpecifiedValue"),
@@ -579,7 +583,13 @@ mod tests {
             ]),
             &base,
         );
-        assert_eq!(specified.target_score, base.target_score);
+        assert_eq!(specified.target_score, TargetScoreSetting::SpecifiedValue);
+        assert_eq!(specified.target_score_percent, 95);
+        let restart = translate_player_options(&sl(&[("ActionOnMissedTarget", "Restart")]), &base);
+        assert_eq!(
+            restart.target_score_miss_policy,
+            TargetScoreMissPolicy::RestartSong
+        );
         let ghost = translate_player_options(&sl(&[("TargetScore", "Ghost Data")]), &base);
         assert_eq!(ghost.target_score, base.target_score);
     }

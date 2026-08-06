@@ -5,12 +5,13 @@ use std::path::{Path, PathBuf};
 
 use crate::{
     ArrowCloudScores, CachedScore, Grade, GsScoreEntry, LeaderboardEntry, LocalScoreEntry,
-    LocalScoreHeader, LocalScoreIndex, MachineBest, MachineLeaderboardPlay, MachineReplayEntry,
-    MachineReplayPlay, cached_score_from_gs_entry, decode_gs_score_entry, decode_local_score_entry,
-    decode_local_score_header, decode_local_score_index, encode_gs_score_entry,
-    encode_local_score_entry, encode_local_score_index, fix_gs_cached_score, grade_from_code,
-    gs_score_entry_from_cached, is_better_itg, machine_leaderboard_entries, machine_replay_entries,
-    parse_score_file_name, score_file_shard, update_local_score_index,
+    LocalScoreHeader, LocalScoreIndex, MachineBest, MachineBestScalar, MachineLeaderboardPlay,
+    MachineLocalScoreBests, MachineReplayEntry, MachineReplayPlay, cached_score_from_gs_entry,
+    decode_gs_score_entry, decode_local_score_entry, decode_local_score_header,
+    decode_local_score_index, encode_gs_score_entry, encode_local_score_entry,
+    encode_local_score_index, fix_gs_cached_score, grade_from_code, gs_score_entry_from_cached,
+    is_better_itg, machine_leaderboard_entries, machine_replay_entries, parse_score_file_name,
+    score_file_shard, update_local_score_index,
 };
 
 #[derive(Debug)]
@@ -635,14 +636,14 @@ pub struct LocalScoreProfileSource {
     pub display_name: String,
 }
 
-pub fn machine_best_itg_from_profiles(
+pub fn machine_local_score_bests_from_profiles(
     profiles: &[LocalScoreProfileSource],
-) -> HashMap<String, MachineBest> {
-    let mut best_itg: HashMap<String, MachineBest> = HashMap::new();
+) -> MachineLocalScoreBests {
+    let mut best = MachineLocalScoreBests::default();
     for profile in profiles {
         let idx = load_local_score_index_from_root(&profile.root);
         for (chart_hash, score) in idx.best_itg {
-            match best_itg.get_mut(&chart_hash) {
+            match best.itg.get_mut(&chart_hash) {
                 Some(existing) => {
                     if is_better_itg(&score, &existing.score) {
                         existing.score = score;
@@ -650,7 +651,7 @@ pub fn machine_best_itg_from_profiles(
                     }
                 }
                 None => {
-                    best_itg.insert(
+                    best.itg.insert(
                         chart_hash,
                         MachineBest {
                             score,
@@ -660,8 +661,46 @@ pub fn machine_best_itg_from_profiles(
                 }
             }
         }
+        merge_machine_scalars(&mut best.ex, idx.best_ex, profile.initials.as_str());
+        merge_machine_scalars(
+            &mut best.hard_ex,
+            idx.best_hard_ex,
+            profile.initials.as_str(),
+        );
     }
-    best_itg
+    best
+}
+
+fn merge_machine_scalars(
+    machine: &mut HashMap<String, MachineBestScalar>,
+    profile: HashMap<String, crate::LocalScoreBestScalar>,
+    initials: &str,
+) {
+    for (chart_hash, score) in profile {
+        match machine.get_mut(&chart_hash) {
+            Some(existing)
+                if crate::is_better_scalar_score(
+                    score.grade,
+                    score.percent,
+                    existing.score.grade,
+                    existing.score.percent,
+                ) =>
+            {
+                existing.score = score;
+                existing.initials = initials.to_string();
+            }
+            Some(_) => {}
+            None => {
+                machine.insert(
+                    chart_hash,
+                    MachineBestScalar {
+                        score,
+                        initials: initials.to_string(),
+                    },
+                );
+            }
+        }
+    }
 }
 
 fn push_local_leaderboard_plays_from_root(

@@ -60,6 +60,21 @@ pub struct MiniIndicatorProgress {
     pub judged_any: bool,
 }
 
+/// Matches zmod's missed-target test: the score already earned plus every
+/// remaining point cannot reach the configured target.
+#[inline(always)]
+pub fn zmod_target_score_missed(
+    progress: &MiniIndicatorProgress,
+    target_score_percent: f64,
+) -> bool {
+    if !progress.judged_any {
+        return false;
+    }
+    let attainable = progress.current_score_percent.clamp(0.0, 100.0)
+        + (1.0 - progress.current_possible_ratio.clamp(0.0, 1.0)) * 100.0;
+    attainable < target_score_percent.clamp(0.0, 100.0)
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ZmodMeasureCounterText {
     Ratio { current: i32, total: i32 },

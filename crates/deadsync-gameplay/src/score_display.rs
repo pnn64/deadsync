@@ -272,37 +272,50 @@ pub enum GameplayTargetScoreSetting {
     #[default]
     S,
     SPlus,
+    Star1,
+    Star2,
+    Star3,
+    Star4,
+    SpecifiedValue,
     MachineBest,
     PersonalBest,
 }
 
 pub const fn target_score_setting_percent(setting: GameplayTargetScoreSetting) -> Option<f64> {
     match setting {
-        GameplayTargetScoreSetting::CMinus => Some(50.0),
-        GameplayTargetScoreSetting::C => Some(55.0),
-        GameplayTargetScoreSetting::CPlus => Some(60.0),
-        GameplayTargetScoreSetting::BMinus => Some(64.0),
-        GameplayTargetScoreSetting::B => Some(68.0),
-        GameplayTargetScoreSetting::BPlus => Some(72.0),
-        GameplayTargetScoreSetting::AMinus => Some(76.0),
-        GameplayTargetScoreSetting::A => Some(80.0),
-        GameplayTargetScoreSetting::APlus => Some(83.0),
-        GameplayTargetScoreSetting::SMinus => Some(86.0),
-        GameplayTargetScoreSetting::S => Some(89.0),
-        GameplayTargetScoreSetting::SPlus => Some(92.0),
-        GameplayTargetScoreSetting::MachineBest | GameplayTargetScoreSetting::PersonalBest => None,
+        GameplayTargetScoreSetting::CMinus => Some(55.0),
+        GameplayTargetScoreSetting::C => Some(60.0),
+        GameplayTargetScoreSetting::CPlus => Some(64.0),
+        GameplayTargetScoreSetting::BMinus => Some(68.0),
+        GameplayTargetScoreSetting::B => Some(72.0),
+        GameplayTargetScoreSetting::BPlus => Some(76.0),
+        GameplayTargetScoreSetting::AMinus => Some(80.0),
+        GameplayTargetScoreSetting::A => Some(83.0),
+        GameplayTargetScoreSetting::APlus => Some(86.0),
+        GameplayTargetScoreSetting::SMinus => Some(89.0),
+        GameplayTargetScoreSetting::S => Some(92.0),
+        GameplayTargetScoreSetting::SPlus => Some(94.0),
+        GameplayTargetScoreSetting::Star1 => Some(96.0),
+        GameplayTargetScoreSetting::Star2 => Some(98.0),
+        GameplayTargetScoreSetting::Star3 => Some(99.0),
+        GameplayTargetScoreSetting::Star4 => Some(100.0),
+        GameplayTargetScoreSetting::SpecifiedValue
+        | GameplayTargetScoreSetting::MachineBest
+        | GameplayTargetScoreSetting::PersonalBest => None,
     }
 }
 
 pub fn resolve_target_score_percent(
     setting: GameplayTargetScoreSetting,
+    specified_percent: f64,
     personal_best: Option<f64>,
     machine_best: Option<f64>,
 ) -> f64 {
     match setting {
-        GameplayTargetScoreSetting::MachineBest => machine_best.or(personal_best),
+        GameplayTargetScoreSetting::SpecifiedValue => Some(specified_percent.clamp(0.0, 100.0)),
+        GameplayTargetScoreSetting::MachineBest => machine_best,
         GameplayTargetScoreSetting::PersonalBest => personal_best,
         fixed => target_score_setting_percent(fixed),
     }
-    .unwrap_or(89.0)
+    .unwrap_or(92.0)
 }
