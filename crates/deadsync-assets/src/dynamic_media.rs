@@ -8,10 +8,12 @@ use image::RgbaImage;
 use std::borrow::Cow;
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use std::time::Instant;
 
 pub struct DynamicVideoState {
     pub player: video::Player,
+    pub upload_key: Arc<str>,
     pub started_at: Option<Instant>,
     pub path: PathBuf,
     pub looped: bool,
@@ -347,6 +349,7 @@ pub fn set_image_background_texture(
 
 pub struct DynamicBackgroundState {
     pub key: String,
+    upload_key: Arc<str>,
     pub path: PathBuf,
     pub video: Option<video::Player>,
     video_start_sec: f32,
@@ -361,8 +364,10 @@ impl DynamicBackgroundState {
         video_start_sec: f32,
         video_rate: f32,
     ) -> Self {
+        let upload_key = Arc::from(key.as_str());
         Self {
             key,
+            upload_key,
             path,
             video,
             video_start_sec,
@@ -372,6 +377,11 @@ impl DynamicBackgroundState {
 
     pub fn video_play_time(&self, gameplay_time_sec: f32) -> f32 {
         self.video_timing.play_time(gameplay_time_sec)
+    }
+
+    #[inline(always)]
+    pub fn video_upload_key(&self) -> Arc<str> {
+        Arc::clone(&self.upload_key)
     }
 
     pub fn set_video_rate(&mut self, video_rate: f32, gameplay_time_sec: f32) {

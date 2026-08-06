@@ -9,6 +9,29 @@ use deadsync_theme_simply_love::{
 };
 use std::hint::black_box;
 
+/// Old and current steady-state paths for failed gameplay banner preparation.
+pub struct GameplayMediaFailureBenchmark {
+    banner: crate::dynamic_media::BannerVideoFailureBenchmark,
+}
+
+impl Default for GameplayMediaFailureBenchmark {
+    fn default() -> Self {
+        Self {
+            banner: crate::dynamic_media::BannerVideoFailureBenchmark::default(),
+        }
+    }
+}
+
+impl GameplayMediaFailureBenchmark {
+    pub fn legacy_banner_retry_frame(&mut self) -> usize {
+        self.banner.legacy_retry_frame()
+    }
+
+    pub fn saturated_banner_failure_frame(&self) -> usize {
+        self.banner.saturated_frame()
+    }
+}
+
 const POLLS_PER_FRAME: usize = 256;
 const BACKGROUND_ACTIVE_BEAT: f32 = 700.0;
 

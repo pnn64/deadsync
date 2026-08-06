@@ -1,7 +1,7 @@
 use crate::{
     GeneratedTexture, TexMeta, clear_texture_handles, generated_texture, register_texture_dims,
     register_texture_handle, remove_texture_handle, take_pending_generated_texture_keys,
-    upload::{PendingTextureUpload, TextureUploadBudget, TextureUploadQueue},
+    upload::{PendingTextureUpload, TextureUploadBudget, TextureUploadKey, TextureUploadQueue},
 };
 use deadlib_render::{SamplerDesc, TextureHandle, TextureHandleMap};
 use image::RgbaImage;
@@ -147,15 +147,14 @@ impl<T> TextureStore<T> {
         self.queue_texture_upload_with_sampler(key, image, SamplerDesc::default());
     }
 
-    pub fn queue_recyclable_texture_upload(
+    pub fn queue_recyclable_texture_upload_shared(
         &mut self,
-        key: String,
+        key: Arc<str>,
         image: RgbaImage,
         recycle_tx: SyncSender<Vec<u8>>,
     ) {
-        self.reserve_texture_handle(key.clone());
         register_texture_dims(&key, image.width(), image.height());
-        self.pending_texture_uploads.push_recyclable(
+        self.pending_texture_uploads.push_recyclable_shared(
             key,
             image,
             SamplerDesc::default(),
@@ -186,7 +185,7 @@ impl<T> TextureStore<T> {
         budget: TextureUploadBudget,
         drained_uploads: usize,
         drained_bytes: usize,
-    ) -> Option<(String, PendingTextureUpload)> {
+    ) -> Option<(TextureUploadKey, PendingTextureUpload)> {
         self.pending_texture_uploads
             .pop_next(budget, drained_uploads, drained_bytes)
     }

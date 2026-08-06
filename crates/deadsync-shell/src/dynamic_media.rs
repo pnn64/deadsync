@@ -31,6 +31,33 @@ struct DynamicBannerState {
     path: PathBuf,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum BannerVideoPrepState {
+    Pending(bool),
+    Failed(bool),
+}
+
+impl BannerVideoPrepState {
+    const fn pending(looped: bool) -> Self {
+        Self::Pending(looped)
+    }
+
+    const fn failed(looped: bool) -> Self {
+        Self::Failed(looped)
+    }
+
+    const fn looped(self) -> bool {
+        match self {
+            Self::Pending(looped) | Self::Failed(looped) => looped,
+        }
+    }
+}
+
+struct SongLuaVideoState {
+    player: video::Player,
+    upload_key: Arc<str>,
+}
+
 #[derive(Clone, Copy)]
 pub(crate) struct BgVideoTiming {
     pub current_sec: f32,
@@ -51,7 +78,10 @@ fn sync_bg_video_timing(state: &mut DynamicBackgroundState, timing: BgVideoTimin
 pub struct DynamicMedia {
     current_dynamic_banner: Option<DynamicBannerState>,
     active_banner_videos: HashMap<String, DynamicVideoState>,
-    pending_banner_video_preps: HashMap<PathBuf, bool>,
+    /// Screen-local banner preparation states. Entries are retained after a
+    /// failure only while that exact path/mode remains desired, preventing
+    /// live-frame retry storms without becoming a session-growing cache.
+    banner_video_preps: HashMap<PathBuf, BannerVideoPrepState>,
     banner_video_prep_tx: mpsc::Sender<BannerVideoPrepResult>,
     banner_video_prep_rx: mpsc::Receiver<BannerVideoPrepResult>,
     current_dynamic_cdtitle: Option<(Arc<str>, PathBuf)>,
@@ -59,7 +89,7 @@ pub struct DynamicMedia {
     dynamic_pack_banner_keys: std::collections::HashSet<String>,
     wheel_item_background_keys: HashSet<String>,
     current_dynamic_background: Option<DynamicBackgroundState>,
-    active_song_lua_videos: HashMap<String, video::Player>,
+    active_song_lua_videos: HashMap<String, SongLuaVideoState>,
     failed_song_lua_video_keys: HashSet<String>,
     gameplay_background_keys: HashSet<String>,
     pending_gameplay_background_preps: HashSet<String>,
@@ -77,7 +107,7 @@ impl DynamicMedia {
         Self {
             current_dynamic_banner: None,
             active_banner_videos: HashMap::new(),
-            pending_banner_video_preps: HashMap::new(),
+            banner_video_preps: HashMap::new(),
             banner_video_prep_tx,
             banner_video_prep_rx,
             current_dynamic_cdtitle: None,
@@ -127,6 +157,7 @@ impl DynamicMedia {
             retire_dynamic_video_state(state);
             key
         }));
+        self.banner_video_preps.clear();
         if let Some((key, _)) = self.current_dynamic_cdtitle.take() {
             keys.push(key.to_string());
         }
@@ -139,8 +170,8 @@ impl DynamicMedia {
         if let Some(state) = self.current_dynamic_background.take() {
             keys.push(retire_dynamic_background_state(state));
         }
-        keys.extend(self.active_song_lua_videos.drain().map(|(key, player)| {
-            retire_video_player(player);
+        keys.extend(self.active_song_lua_videos.drain().map(|(key, state)| {
+            retire_video_player(state.player);
             key
         }));
         keys.extend(self.failed_song_lua_video_keys.drain());
@@ -347,6 +378,7 @@ impl DynamicMedia {
         looped: bool,
     ) {
         let desired_path = desired_path.filter(|path| dynamic::is_dynamic_video_path(path));
+        self.retain_banner_video_prep(desired_path, looped);
         let stale_keys = self
             .active_banner_videos
             .iter()
@@ -369,7 +401,10 @@ impl DynamicMedia {
             .active_banner_videos
             .values()
             .any(|state| state.path.as_path() == path)
-            || self.pending_banner_video_preps.get(path) == Some(&looped)
+            || self
+                .banner_video_preps
+                .get(path)
+                .is_some_and(|prep| prep.looped() == looped)
         {
             return;
         }
@@ -383,6 +418,7 @@ impl DynamicMedia {
         desired_paths: &[&Path],
         looped: bool,
     ) {
+        self.retain_banner_video_preps(desired_paths, looped);
         let stale_keys = self
             .active_banner_videos
             .iter()
@@ -406,7 +442,10 @@ impl DynamicMedia {
                 .active_banner_videos
                 .values()
                 .any(|state| state.path.as_path() == *path)
-                || self.pending_banner_video_preps.get(*path) == Some(&looped)
+                || self
+                    .banner_video_preps
+                    .get(*path)
+                    .is_some_and(|prep| prep.looped() == looped)
             {
                 continue;
             }
@@ -695,8 +734,8 @@ impl DynamicMedia {
             .collect::<Vec<_>>();
 
         for key in stale_active {
-            if let Some(player) = self.active_song_lua_videos.remove(&key) {
-                retire_video_player(player);
+            if let Some(state) = self.active_song_lua_videos.remove(&key) {
+                retire_video_player(state.player);
             }
             self.release_texture_key(assets, backend, key);
         }
@@ -727,8 +766,13 @@ impl DynamicMedia {
                             path.display()
                         ),
                     }
-                    self.active_song_lua_videos
-                        .insert(prepared.key, prepared.player);
+                    self.active_song_lua_videos.insert(
+                        prepared.key.clone(),
+                        SongLuaVideoState {
+                            player: prepared.player,
+                            upload_key: Arc::from(prepared.key),
+                        },
+                    );
                 }
                 SongLuaVideoPrepResult::FailedOpen { key, msg } => {
                     warn!(
@@ -760,8 +804,8 @@ impl DynamicMedia {
 
     pub fn clear_gameplay_backgrounds(&mut self, assets: &mut AssetManager, backend: &mut Backend) {
         self.destroy_current_dynamic_background(assets, backend);
-        for (key, player) in std::mem::take(&mut self.active_song_lua_videos) {
-            retire_video_player(player);
+        for (key, state) in std::mem::take(&mut self.active_song_lua_videos) {
+            retire_video_player(state.player);
             self.release_texture_key(assets, backend, key);
         }
         for key in std::mem::take(&mut self.failed_song_lua_video_keys) {
@@ -830,7 +874,7 @@ impl DynamicMedia {
                 .map_or(0.0, |start| start.elapsed().as_secs_f32());
             if let Some(frame) = video.player.take_due_frame(play_time) {
                 video.started_at.get_or_insert_with(Instant::now);
-                assets.queue_video_frame_upload(key.clone(), frame);
+                assets.queue_video_frame_upload_shared(Arc::clone(&video.upload_key), frame);
             }
         }
 
@@ -842,17 +886,17 @@ impl DynamicMedia {
             if let Some(video) = state.video.as_mut()
                 && let Some(frame) = video.take_due_frame(play_time)
             {
-                assets.queue_video_frame_upload(state.key.clone(), frame);
+                assets.queue_video_frame_upload_shared(state.video_upload_key(), frame);
             }
         }
 
         let song_lua_play_time = gameplay_time_sec.unwrap_or(0.0).max(0.0);
-        for (key, player) in &mut self.active_song_lua_videos {
+        for (key, state) in &mut self.active_song_lua_videos {
             if assets.has_pending_texture_upload(key) {
                 continue;
             }
-            if let Some(frame) = player.take_due_frame(song_lua_play_time) {
-                assets.queue_video_frame_upload(key.clone(), frame);
+            if let Some(frame) = state.player.take_due_frame(song_lua_play_time) {
+                assets.queue_video_frame_upload_shared(Arc::clone(&state.upload_key), frame);
             }
         }
     }
@@ -944,11 +988,15 @@ impl DynamicMedia {
     }
 
     fn spawn_banner_video_prep(&mut self, path: &Path, looped: bool) {
-        if self.pending_banner_video_preps.get(path) == Some(&looped) {
+        if self
+            .banner_video_preps
+            .get(path)
+            .is_some_and(|prep| prep.looped() == looped)
+        {
             return;
         }
-        self.pending_banner_video_preps
-            .insert(path.to_path_buf(), looped);
+        self.banner_video_preps
+            .insert(path.to_path_buf(), BannerVideoPrepState::pending(looped));
 
         let key = path.to_string_lossy().into_owned();
         let path = path.to_path_buf();
@@ -956,6 +1004,17 @@ impl DynamicMedia {
         thread::spawn(move || {
             let result = prepare_banner_video(key, path, looped);
             let _ = tx.send(result);
+        });
+    }
+
+    fn retain_banner_video_prep(&mut self, desired_path: Option<&Path>, looped: bool) {
+        self.banner_video_preps
+            .retain(|path, prep| Some(path.as_path()) == desired_path && prep.looped() == looped);
+    }
+
+    fn retain_banner_video_preps(&mut self, desired_paths: &[&Path], looped: bool) {
+        self.banner_video_preps.retain(|path, prep| {
+            dynamic_video_path_in_set(path, desired_paths) && prep.looped() == looped
         });
     }
 
@@ -988,10 +1047,12 @@ impl DynamicMedia {
                         continue;
                     }
                     assets.queue_texture_upload(prepared.key.clone(), prepared.poster);
+                    let upload_key = Arc::from(prepared.key.as_str());
                     if let Some(old) = self.active_banner_videos.insert(
                         prepared.key,
                         DynamicVideoState {
                             player: prepared.player,
+                            upload_key,
                             started_at: None,
                             path: prepared.path,
                             looped: prepared.looped,
@@ -1005,9 +1066,12 @@ impl DynamicMedia {
                     looped: failed_looped,
                     msg,
                 } => {
-                    self.clear_pending_banner_video_prep(&path, failed_looped);
                     if Some(path.as_path()) == desired_path && failed_looped == looped {
                         warn!("Failed to start banner video '{}': {msg}", path.display());
+                        self.banner_video_preps
+                            .insert(path, BannerVideoPrepState::failed(failed_looped));
+                    } else {
+                        self.clear_pending_banner_video_prep(&path, failed_looped);
                     }
                 }
             }
@@ -1032,10 +1096,12 @@ impl DynamicMedia {
                         continue;
                     }
                     assets.queue_texture_upload(prepared.key.clone(), prepared.poster);
+                    let upload_key = Arc::from(prepared.key.as_str());
                     if let Some(old) = self.active_banner_videos.insert(
                         prepared.key,
                         DynamicVideoState {
                             player: prepared.player,
+                            upload_key,
                             started_at: None,
                             path: prepared.path,
                             looped: prepared.looped,
@@ -1049,12 +1115,15 @@ impl DynamicMedia {
                     looped: failed_looped,
                     msg,
                 } => {
-                    self.clear_pending_banner_video_prep(&path, failed_looped);
                     if desired_paths.iter().any(|desired| {
                         dynamic::is_dynamic_video_path(desired) && *desired == path.as_path()
                     }) && failed_looped == looped
                     {
                         warn!("Failed to start banner video '{}': {msg}", path.display());
+                        self.banner_video_preps
+                            .insert(path, BannerVideoPrepState::failed(failed_looped));
+                    } else {
+                        self.clear_pending_banner_video_prep(&path, failed_looped);
                     }
                 }
             }
@@ -1062,8 +1131,12 @@ impl DynamicMedia {
     }
 
     fn clear_pending_banner_video_prep(&mut self, path: &Path, looped: bool) {
-        if self.pending_banner_video_preps.get(path) == Some(&looped) {
-            self.pending_banner_video_preps.remove(path);
+        if self
+            .banner_video_preps
+            .get(path)
+            .is_some_and(|prep| prep.looped() == looped)
+        {
+            self.banner_video_preps.remove(path);
         }
     }
 
@@ -1137,6 +1210,54 @@ impl DynamicMedia {
         if let Some(key) = key {
             self.release_texture_key(assets, backend, key);
         }
+    }
+}
+
+/// Models the steady frames after a desired banner decoder failed to open.
+#[cfg(feature = "bench-support")]
+pub(crate) struct BannerVideoFailureBenchmark {
+    path: PathBuf,
+    legacy_pending: HashMap<PathBuf, bool>,
+    saturated: HashMap<PathBuf, BannerVideoPrepState>,
+}
+
+#[cfg(feature = "bench-support")]
+impl Default for BannerVideoFailureBenchmark {
+    fn default() -> Self {
+        let path = PathBuf::from("Songs/Benchmark Pack/Video Song/banner.mp4");
+        let mut saturated = HashMap::with_capacity(1);
+        saturated.insert(path.clone(), BannerVideoPrepState::failed(true));
+        Self {
+            path,
+            legacy_pending: HashMap::with_capacity(1),
+            saturated,
+        }
+    }
+}
+
+#[cfg(feature = "bench-support")]
+impl BannerVideoFailureBenchmark {
+    pub(crate) fn legacy_retry_frame(&mut self) -> usize {
+        // The old failure path removed the pending entry. The next frame then
+        // rebuilt the three owned values needed to launch the same worker.
+        self.legacy_pending.insert(self.path.clone(), true);
+        let key = self.path.to_string_lossy().into_owned();
+        let worker_path = self.path.clone();
+        self.legacy_pending.remove(self.path.as_path());
+        std::hint::black_box(key.len().wrapping_mul(31) + worker_path.as_os_str().len())
+    }
+
+    pub(crate) fn saturated_frame(&self) -> usize {
+        let prep = self
+            .saturated
+            .get(self.path.as_path())
+            .copied()
+            .expect("failed desired banner remains saturated");
+        std::hint::black_box(
+            self.path.to_string_lossy().len().wrapping_mul(31)
+                + self.path.as_os_str().len()
+                + usize::from(!matches!(prep, BannerVideoPrepState::Failed(true))),
+        )
     }
 }
 
@@ -1268,13 +1389,13 @@ mod tests {
     }
 
     #[test]
-    fn failed_banner_video_prep_clears_pending_key() {
+    fn failed_banner_video_prep_saturates_until_the_request_changes() {
         let mut assets = AssetManager::new();
         let mut media = DynamicMedia::new();
         let key = "banner.mp4".to_string();
         media
-            .pending_banner_video_preps
-            .insert(PathBuf::from(&key), false);
+            .banner_video_preps
+            .insert(PathBuf::from(&key), BannerVideoPrepState::pending(false));
         media
             .banner_video_prep_tx
             .send(BannerVideoPrepResult::Failed {
@@ -1286,12 +1407,14 @@ mod tests {
 
         media.drain_banner_video_preps(&mut assets, Some(Path::new(&key)), false);
 
-        assert!(
-            !media
-                .pending_banner_video_preps
-                .contains_key(Path::new(&key))
+        assert_eq!(
+            media.banner_video_preps.get(Path::new(&key)),
+            Some(&BannerVideoPrepState::failed(false))
         );
         assert!(!media.active_banner_videos.contains_key(&key));
+
+        media.retain_banner_video_prep(None, false);
+        assert!(!media.banner_video_preps.contains_key(Path::new(&key)));
     }
 
     #[test]
@@ -1299,7 +1422,9 @@ mod tests {
         let mut assets = AssetManager::new();
         let mut media = DynamicMedia::new();
         let path = PathBuf::from("banner.mp4");
-        media.pending_banner_video_preps.insert(path.clone(), false);
+        media
+            .banner_video_preps
+            .insert(path.clone(), BannerVideoPrepState::pending(false));
         media
             .banner_video_prep_tx
             .send(BannerVideoPrepResult::Failed {
@@ -1311,6 +1436,9 @@ mod tests {
 
         media.drain_banner_video_preps(&mut assets, Some(&path), false);
 
-        assert_eq!(media.pending_banner_video_preps.get(&path), Some(&false));
+        assert_eq!(
+            media.banner_video_preps.get(&path),
+            Some(&BannerVideoPrepState::pending(false))
+        );
     }
 }

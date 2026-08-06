@@ -1,12 +1,15 @@
 use crate::{
     FontStore, TextureDecodeJob, TextureKeyLoad, TextureStore, prepare_initial_texture_images,
     prepare_texture_key_load, register_texture_dims,
-    upload::{PendingTextureUpload, TextureUploadBudget},
+    upload::{PendingTextureUpload, TextureUploadBudget, TextureUploadKey},
 };
 use deadlib_present::font::{Font, FontMap};
 use deadlib_render::{SamplerDesc, TextureHandle, TextureHandleMap};
 use image::RgbaImage;
-use std::{path::PathBuf, sync::mpsc::SyncSender};
+use std::{
+    path::PathBuf,
+    sync::{Arc, mpsc::SyncSender},
+};
 
 pub enum TextureUploadAction<'a, T> {
     Update {
@@ -140,14 +143,14 @@ impl<T> AssetStore<T> {
         self.texture_store.queue_texture_upload(key, image);
     }
 
-    pub fn queue_recyclable_texture_upload(
+    pub fn queue_recyclable_texture_upload_shared(
         &mut self,
-        key: String,
+        key: Arc<str>,
         image: RgbaImage,
         recycle_tx: SyncSender<Vec<u8>>,
     ) {
         self.texture_store
-            .queue_recyclable_texture_upload(key, image, recycle_tx);
+            .queue_recyclable_texture_upload_shared(key, image, recycle_tx);
     }
 
     pub fn queue_pending_generated_textures(&mut self) {
@@ -159,7 +162,7 @@ impl<T> AssetStore<T> {
         budget: TextureUploadBudget,
         drained_uploads: usize,
         drained_bytes: usize,
-    ) -> Option<(String, PendingTextureUpload)> {
+    ) -> Option<(TextureUploadKey, PendingTextureUpload)> {
         self.texture_store
             .pop_next_upload(budget, drained_uploads, drained_bytes)
     }
@@ -179,16 +182,18 @@ impl<T> AssetStore<T> {
             drained_bytes = drained_bytes.saturating_add(upload.bytes);
 
             let mut updated = false;
-            if let Some(texture) =
-                self.uploaded_texture_mut(&key, upload.image().width(), upload.image().height())
-            {
+            if let Some(texture) = self.uploaded_texture_mut(
+                key.as_str(),
+                upload.image().width(),
+                upload.image().height(),
+            ) {
                 match apply(TextureUploadAction::Update {
                     texture,
                     image: upload.image(),
                 }) {
                     Ok(_) => updated = true,
                     Err(error) => errors.push(TextureUploadDrainError::Update {
-                        key: key.clone(),
+                        key: key.as_str().to_owned(),
                         error,
                     }),
                 }
@@ -203,7 +208,7 @@ impl<T> AssetStore<T> {
             }) {
                 Ok(Some(texture)) => {
                     let (handle, old) = self.set_texture_for_key(
-                        key,
+                        key.into_string(),
                         texture,
                         upload.image().width(),
                         upload.image().height(),
@@ -213,7 +218,10 @@ impl<T> AssetStore<T> {
                     }
                 }
                 Ok(None) => {}
-                Err(error) => errors.push(TextureUploadDrainError::Create { key, error }),
+                Err(error) => errors.push(TextureUploadDrainError::Create {
+                    key: key.into_string(),
+                    error,
+                }),
             }
         }
         (retired, errors)
@@ -352,7 +360,7 @@ mod tests {
         let mut store = AssetStore::<u32>::new();
         let (recycle_tx, recycle_rx) = sync_channel(1);
         let image = RgbaImage::from_raw(2, 1, vec![1, 2, 3, 4, 5, 6, 7, 8]).unwrap();
-        store.queue_recyclable_texture_upload("video".to_string(), image, recycle_tx);
+        store.queue_recyclable_texture_upload_shared(Arc::from("video"), image, recycle_tx);
 
         let (_, errors): (_, Vec<TextureUploadDrainError<()>>) = store.drain_texture_uploads_with(
             TextureUploadBudget {

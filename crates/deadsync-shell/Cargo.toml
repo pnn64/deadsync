@@ -6,6 +6,7 @@ license = "GPL-3.0"
 
 [features]
 bench-support = [
+    "deadlib-assets/bench-support",
     "deadsync-input-native/bench-support",
     "deadsync-theme-simply-love/bench-support",
 ]
@@ -66,5 +67,10 @@ inline_always = "allow"
 
 [[bench]]
 name = "gameplay_idle_workers"
+harness = false
+required-features = ["bench-support"]
+
+[[bench]]
+name = "gameplay_live_allocations"
 harness = false
 required-features = ["bench-support"]

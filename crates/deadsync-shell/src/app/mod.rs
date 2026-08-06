@@ -549,6 +549,7 @@ fn prewarm_gameplay_text_layout_cache(
     metrics: &Metrics,
     cache: &mut compose::TextLayoutCache,
     compose_scratch: &mut compose::ComposeScratch,
+    actor_scratch: &mut Vec<Actor>,
     state: &mut gameplay::State,
     config: &config::Config,
 ) {
@@ -562,9 +563,13 @@ fn prewarm_gameplay_text_layout_cache(
 
     let fonts = assets.fonts();
     screens::components::gameplay::gameplay_stats::refresh_density_graph_meshes(state);
-    let mut actors = Vec::with_capacity(256);
+    // Build the representative opening frame in the App-owned actor buffer.
+    // Any song-specific capacity growth is therefore paid at this transition
+    // boundary and retained for the first live frame instead of being repeated
+    // in a temporary Vec and then again during gameplay.
+    actor_scratch.clear();
     gameplay::push_actors(
-        &mut actors,
+        actor_scratch,
         state,
         assets,
         gameplay::ActorViewOverride::default(),
@@ -573,7 +578,7 @@ fn prewarm_gameplay_text_layout_cache(
     );
     let mut render =
         compose::build_screen_cached_with_scratch_and_texture_context_and_actor_resources(
-            &actors,
+            actor_scratch,
             [0.0, 0.0, 0.0, 1.0],
             metrics,
             fonts,
@@ -584,6 +589,7 @@ fn prewarm_gameplay_text_layout_cache(
             state.actor_resources(),
         );
     compose_scratch.recycle_frame(&mut render);
+    actor_scratch.clear();
     gameplay::prewarm_text_layout(cache, fonts, state);
     screens::components::gameplay::gameplay_stats::prewarm_text_layout(cache, fonts, assets, state);
     screens::components::gameplay::notefield::prewarm_text_layout(cache, fonts, state);
@@ -6897,6 +6903,7 @@ impl App {
                     &self.state.shell.metrics,
                     &mut self.gameplay_text_layout_cache,
                     &mut self.gameplay_compose_scratch,
+                    &mut self.actor_scratch,
                     &mut gs,
                     &cfg,
                 );
@@ -7292,6 +7299,7 @@ impl App {
                     &self.state.shell.metrics,
                     &mut self.gameplay_text_layout_cache,
                     &mut self.gameplay_compose_scratch,
+                    &mut self.actor_scratch,
                     &mut gs,
                     &cfg,
                 );
