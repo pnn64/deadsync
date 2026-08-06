@@ -76,6 +76,38 @@ pub const fn benchmark_error_bar_label(early: bool, scaled: bool) -> TextContent
 }
 #[cfg(feature = "bench-support")]
 #[doc(hidden)]
+pub fn benchmark_measure_counter_text_legacy(
+    value: deadsync_notefield::ZmodMeasureCounterText,
+) -> TextContent {
+    text::benchmark_measure_counter_text_legacy(value)
+}
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn benchmark_measure_counter_text(
+    value: deadsync_notefield::ZmodMeasureCounterText,
+) -> TextContent {
+    text::zmod_measure_counter_text(value)
+}
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn benchmark_run_timer_legacy(
+    seconds: i32,
+    minute_threshold: i32,
+    trailing_space: bool,
+) -> TextContent {
+    text::benchmark_run_timer_legacy(seconds, minute_threshold, trailing_space)
+}
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn benchmark_run_timer(
+    seconds: i32,
+    minute_threshold: i32,
+    trailing_space: bool,
+) -> TextContent {
+    text::zmod_run_timer_fmt(seconds, minute_threshold, trailing_space)
+}
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
 pub fn benchmark_disabled_mini_indicator_legacy(frame: usize) -> usize {
     zmod::benchmark_disabled_mini_indicator_legacy(frame)
 }
@@ -85,10 +117,10 @@ pub fn benchmark_disabled_mini_indicator(frame: usize) -> usize {
     zmod::benchmark_disabled_mini_indicator(frame)
 }
 use text::{
-    cached_int_i32, cached_zmod_measure_counter_text, effective_accel_effects_for_player,
-    effective_mini_percent_for_player, effective_perspective_effects_for_player,
-    effective_scroll_effects_for_player, effective_spacing_multiplier_for_player,
-    effective_visual_effects_for_player, error_bar_text_label, offset_ms_text, zmod_run_timer_fmt,
+    cached_int_i32, effective_accel_effects_for_player, effective_mini_percent_for_player,
+    effective_perspective_effects_for_player, effective_scroll_effects_for_player,
+    effective_spacing_multiplier_for_player, effective_visual_effects_for_player,
+    error_bar_text_label, offset_ms_text, zmod_measure_counter_text, zmod_run_timer_fmt,
 };
 use zmod::{
     zmod_combo_font_name, zmod_indicator_mode, zmod_mini_indicator_text, zmod_mini_indicator_zoom,
@@ -1030,7 +1062,7 @@ pub(crate) fn compose_frame(
         broken_run_lookup,
         current_bpm: state.current_bpm_display(),
         font: mc_font_name,
-        counter_text: cached_zmod_measure_counter_text,
+        counter_text: zmod_measure_counter_text,
         timer_text: zmod_run_timer_fmt,
     });
     let mini_frame =

@@ -4,7 +4,7 @@ use image::RgbaImage;
 use rustc_hash::FxHashMap;
 use std::sync::{
     Arc, LazyLock, RwLock,
-    atomic::{AtomicU64, Ordering},
+    atomic::{AtomicBool, AtomicU64, Ordering},
 };
 
 #[derive(Clone, Copy, Debug)]
@@ -145,6 +145,10 @@ static TEXTURE_HANDLE_ALIASES: LazyLock<RwLock<FastU64Map<TextureHandle>>> =
 
 static GENERATED_TEXTURES: LazyLock<RwLock<GeneratedTextureRegistry<GeneratedTexture>>> =
     LazyLock::new(|| RwLock::new(GeneratedTextureRegistry::default()));
+// Producers publish after inserting under the registry write lock. The render
+// thread uses this as an idle fast gate, then takes that same lock to drain;
+// a concurrent late publish can only cause one harmless extra poll.
+static GENERATED_TEXTURES_PENDING: AtomicBool = AtomicBool::new(false);
 static TEXTURE_REGISTRY_GENERATION: AtomicU64 = AtomicU64::new(1);
 
 #[inline(always)]
@@ -268,6 +272,7 @@ pub fn register_generated_texture(key: &str, image: RgbaImage, sampler: SamplerD
             sampler,
         },
     );
+    GENERATED_TEXTURES_PENDING.store(true, Ordering::Release);
     register_texture_dims(key, w, h);
 }
 
@@ -276,7 +281,33 @@ pub fn generated_texture(key: &str) -> Option<GeneratedTexture> {
 }
 
 pub fn take_pending_generated_texture_keys() -> Vec<String> {
+    if !GENERATED_TEXTURES_PENDING.swap(false, Ordering::AcqRel) {
+        return Vec::new();
+    }
     GENERATED_TEXTURES.write().unwrap().take_pending_keys()
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn prepare_generated_texture_idle_poll_benchmark() {
+    GENERATED_TEXTURES_PENDING.store(false, Ordering::Release);
+    let _ = GENERATED_TEXTURES.write().unwrap().take_pending_keys();
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn generated_texture_idle_poll_legacy_for_bench() -> usize {
+    GENERATED_TEXTURES
+        .write()
+        .unwrap()
+        .take_pending_keys()
+        .len()
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn generated_texture_idle_poll_for_bench() -> usize {
+    take_pending_generated_texture_keys().len()
 }
 
 #[cfg(any(test, feature = "bench-support"))]
@@ -518,6 +549,25 @@ mod tests {
 
         registry.register("generated/lifebar", 3);
         assert_eq!(registry.take_pending_keys(), ["generated/lifebar"]);
+    }
+
+    #[test]
+    fn generated_texture_pending_gate_coalesces_idle_polls() {
+        GENERATED_TEXTURES_PENDING.store(false, Ordering::Release);
+        let _ = GENERATED_TEXTURES.write().unwrap().take_pending_keys();
+        register_generated_texture(
+            "generated/pending-gate-test",
+            RgbaImage::new(1, 1),
+            SamplerDesc::default(),
+        );
+
+        let pending = take_pending_generated_texture_keys();
+        assert!(
+            pending
+                .iter()
+                .any(|key| key == "generated/pending-gate-test")
+        );
+        assert!(take_pending_generated_texture_keys().is_empty());
     }
 
     #[test]

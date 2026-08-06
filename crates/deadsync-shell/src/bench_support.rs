@@ -14,6 +14,29 @@ pub struct GameplayMediaFailureBenchmark {
     banner: crate::dynamic_media::BannerVideoFailureBenchmark,
 }
 
+/// Old reconciliation and current settled paths for stable gameplay banners.
+pub struct GameplayBannerSyncBenchmark {
+    banner: crate::dynamic_media::BannerVideoSyncBenchmark,
+}
+
+impl Default for GameplayBannerSyncBenchmark {
+    fn default() -> Self {
+        Self {
+            banner: crate::dynamic_media::BannerVideoSyncBenchmark::default(),
+        }
+    }
+}
+
+impl GameplayBannerSyncBenchmark {
+    pub fn legacy_frame(&mut self) -> u64 {
+        self.banner.legacy_frame() as u64
+    }
+
+    pub fn settled_frame(&mut self) -> u64 {
+        self.banner.settled_frame() as u64
+    }
+}
+
 impl Default for GameplayMediaFailureBenchmark {
     fn default() -> Self {
         Self {

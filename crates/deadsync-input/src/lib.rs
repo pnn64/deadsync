@@ -625,7 +625,7 @@ fn emit_normalized_actions_legacy(
     });
 }
 
-#[cfg(any(test, feature = "bench-support"))]
+#[cfg(feature = "bench-support")]
 #[inline(always)]
 fn normalized_actions_bench_mask(round: usize) -> u32 {
     const MASKS: [u32; 6] = [

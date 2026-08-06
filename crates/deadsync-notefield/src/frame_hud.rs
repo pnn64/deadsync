@@ -74,8 +74,8 @@ pub struct CounterHudFrame<'a> {
     pub broken_run_lookup: &'a crate::BrokenRunLookup,
     pub current_bpm: f32,
     pub font: &'static str,
-    pub counter_text: fn(ZmodMeasureCounterText) -> Arc<str>,
-    pub timer_text: fn(i32, i32, bool) -> Arc<str>,
+    pub counter_text: fn(ZmodMeasureCounterText) -> TextContent,
+    pub timer_text: fn(i32, i32, bool) -> TextContent,
 }
 
 /// Fully resolved theme-selected mini-indicator content.

@@ -3,7 +3,7 @@ use crate::{
     stream_segment_index_exclusive_end, zmod_broken_run_counter_text, zmod_measure_counter_text,
     zmod_run_timer_index,
 };
-use deadlib_present::actors::{Actor, TextAlign};
+use deadlib_present::actors::{Actor, TextAlign, TextContent};
 use deadlib_present::dsl::TextBuilder;
 use deadsync_rules::scroll::ScrollSpeedSetting;
 use deadsync_rules::stream::StreamSegment;
@@ -30,8 +30,8 @@ pub(crate) struct CounterHudRequest<'a> {
     pub playfield_center_x: f32,
     pub field_zoom: f32,
     pub font: &'static str,
-    pub counter_text: fn(ZmodMeasureCounterText) -> Arc<str>,
-    pub timer_text: fn(i32, i32, bool) -> Arc<str>,
+    pub counter_text: fn(ZmodMeasureCounterText) -> TextContent,
+    pub timer_text: fn(i32, i32, bool) -> TextContent,
 }
 
 /// Compose the canonical measure counter, broken-run counter, and run timer.
@@ -220,7 +220,7 @@ fn append_run_timer(
     } else {
         (request.timer_text)(remaining, 59, true)
     };
-    let color = if text.contains(' ') {
+    let color = if text.as_str().contains(' ') {
         request.style.run_active_color
     } else {
         request.style.run_inactive_color
@@ -245,7 +245,7 @@ fn append_hud_text(
     actors: &mut Vec<Actor>,
     style: CounterHudStyle,
     font: &'static str,
-    content: Arc<str>,
+    content: TextContent,
     offset: [f32; 2],
     align: [f32; 2],
     zoom: f32,
@@ -253,7 +253,7 @@ fn append_hud_text(
 ) {
     let mut text = TextBuilder::new();
     text.font(font);
-    text.settext(content.into());
+    text.settext(content);
     text.align(align[0], align[1]);
     text.horizalign(TextAlign::Center);
     text.xy(offset[0], offset[1]);
@@ -342,18 +342,18 @@ mod tests {
         }
     }
 
-    fn counter_text(value: ZmodMeasureCounterText) -> Arc<str> {
-        match value {
+    fn counter_text(value: ZmodMeasureCounterText) -> TextContent {
+        TextContent::Owned(match value {
             ZmodMeasureCounterText::Ratio { current, total } => {
-                Arc::from(format!("{current}/{total}"))
+                format!("{current}/{total}")
             }
-            ZmodMeasureCounterText::Break(value) => Arc::from(format!("({value})")),
-            ZmodMeasureCounterText::Total(value) => Arc::from(value.to_string()),
-        }
+            ZmodMeasureCounterText::Break(value) => format!("({value})"),
+            ZmodMeasureCounterText::Total(value) => value.to_string(),
+        })
     }
 
-    fn timer_text(value: i32, _mode: i32, active: bool) -> Arc<str> {
-        Arc::from(if active {
+    fn timer_text(value: i32, _mode: i32, active: bool) -> TextContent {
+        TextContent::Owned(if active {
             format!(" {value}")
         } else {
             value.to_string()

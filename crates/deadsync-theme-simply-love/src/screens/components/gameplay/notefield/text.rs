@@ -1,5 +1,5 @@
 use crate::screens::gameplay::GameplayCoreState as State;
-use deadlib_present::actors::TextContent;
+use deadlib_present::actors::{InlineText, TextContent};
 use deadlib_present::cache::{TextCache, cached_text};
 use deadsync_core::input::MAX_PLAYERS;
 use deadsync_gameplay::{
@@ -37,10 +37,6 @@ thread_local! {
         256,
         BuildHasherDefault::default(),
     ));
-    static PAREN_INT_CACHE_I32: RefCell<FastTextCache<i32>> = RefCell::new(HashMap::with_capacity_and_hasher(
-        512,
-        BuildHasherDefault::default(),
-    ));
     static INT_CACHE_I32: RefCell<FastTextCache<i32>> = RefCell::new(HashMap::with_capacity_and_hasher(
         512,
         BuildHasherDefault::default(),
@@ -53,9 +49,6 @@ thread_local! {
     static RATIO_CACHE_I32: RefCell<FastTextCache<(i32, i32)>> = RefCell::new(
         HashMap::with_capacity_and_hasher(1024, BuildHasherDefault::default()),
     );
-    static RUN_TIMER_CACHE: RefCell<FastTextCache<(i32, i32, bool)>> = RefCell::new(
-        HashMap::with_capacity_and_hasher(1024, BuildHasherDefault::default()),
-    );
     static GAMEPLAY_MODS_CACHE: RefCell<FastTextCache<GameplayModsTextKey>> = RefCell::new(
         HashMap::with_capacity_and_hasher(256, BuildHasherDefault::default()),
     );
@@ -66,6 +59,14 @@ thread_local! {
     #[cfg(feature = "bench-support")]
     static BENCH_ERROR_BAR_LABEL_CACHE: RefCell<FastTextCache<(bool, bool)>> = RefCell::new(
         HashMap::with_capacity_and_hasher(4, BuildHasherDefault::default()),
+    );
+    #[cfg(feature = "bench-support")]
+    static BENCH_PAREN_INT_CACHE: RefCell<FastTextCache<i32>> = RefCell::new(
+        HashMap::with_capacity_and_hasher(512, BuildHasherDefault::default()),
+    );
+    #[cfg(feature = "bench-support")]
+    static BENCH_RUN_TIMER_CACHE: RefCell<FastTextCache<(i32, i32, bool)>> = RefCell::new(
+        HashMap::with_capacity_and_hasher(1024, BuildHasherDefault::default()),
     );
 }
 
@@ -126,13 +127,6 @@ pub(super) fn cached_signed_percent2_f64(value: f64, neg: bool) -> Arc<str> {
 pub(super) fn cached_neg_int_u32(value: u32) -> Arc<str> {
     cached_text(&NEG_INT_CACHE_U32, value, TEXT_CACHE_LIMIT, || {
         format!("-{value}")
-    })
-}
-
-#[inline(always)]
-pub(super) fn cached_paren_i32(value: i32) -> Arc<str> {
-    cached_text(&PAREN_INT_CACHE_I32, value, TEXT_CACHE_LIMIT, || {
-        format!("({value})")
     })
 }
 
@@ -219,48 +213,93 @@ pub(super) fn benchmark_error_bar_label_legacy(early: bool, scaled: bool) -> Arc
     )
 }
 
-pub(super) fn cached_run_timer(
-    seconds: i32,
-    minute_threshold: i32,
-    trailing_space: bool,
-) -> Arc<str> {
-    let seconds = seconds.max(0);
-    cached_text(
-        &RUN_TIMER_CACHE,
-        (seconds, minute_threshold, trailing_space),
-        TEXT_CACHE_LIMIT,
-        || {
-            let mut s = if seconds < 10 {
-                format!("0.0{seconds}")
-            } else if seconds > minute_threshold {
-                let minutes = seconds / 60;
-                let secs = seconds % 60;
-                format!("{minutes}.{secs:02}")
-            } else {
-                format!("0.{seconds}")
-            };
-            if trailing_space {
-                s.push(' ');
-            }
-            s
-        },
-    )
-}
-
-pub(super) fn cached_zmod_measure_counter_text(text: ZmodMeasureCounterText) -> Arc<str> {
-    match text {
-        ZmodMeasureCounterText::Break(value) => cached_paren_i32(value),
-        ZmodMeasureCounterText::Ratio { current, total } => cached_ratio_i32(current, total),
-        ZmodMeasureCounterText::Total(value) => cached_int_i32(value),
-    }
-}
-
 pub(super) fn zmod_run_timer_fmt(
     seconds: i32,
     minute_threshold: i32,
     trailing_space: bool,
-) -> Arc<str> {
-    cached_run_timer(seconds, minute_threshold, trailing_space)
+) -> TextContent {
+    let seconds = seconds.max(0);
+    let mut text = InlineText::new();
+    if seconds < 10 {
+        assert!(text.push_ascii(b'0'));
+        assert!(text.push_ascii(b'.'));
+        assert!(text.push_ascii(b'0'));
+        assert!(text.push_u32(seconds as u32));
+    } else if seconds > minute_threshold {
+        let secs = seconds % 60;
+        assert!(text.push_u32((seconds / 60) as u32));
+        assert!(text.push_ascii(b'.'));
+        assert!(text.push_ascii(b'0' + (secs / 10) as u8));
+        assert!(text.push_ascii(b'0' + (secs % 10) as u8));
+    } else {
+        assert!(text.push_ascii(b'0'));
+        assert!(text.push_ascii(b'.'));
+        assert!(text.push_u32(seconds as u32));
+    }
+    if trailing_space {
+        assert!(text.push_ascii(b' '));
+    }
+    TextContent::Inline(text)
+}
+
+pub(super) fn zmod_measure_counter_text(text: ZmodMeasureCounterText) -> TextContent {
+    let mut out = InlineText::new();
+    match text {
+        ZmodMeasureCounterText::Break(value) => {
+            assert!(out.push_ascii(b'('));
+            assert!(out.push_i32(value));
+            assert!(out.push_ascii(b')'));
+        }
+        ZmodMeasureCounterText::Ratio { current, total } => {
+            if !out.push_i32(current) || !out.push_ascii(b'/') || !out.push_i32(total) {
+                return TextContent::Shared(cached_ratio_i32(current, total));
+            }
+        }
+        ZmodMeasureCounterText::Total(value) => {
+            assert!(out.push_i32(value));
+        }
+    }
+    TextContent::Inline(out)
+}
+
+#[cfg(feature = "bench-support")]
+pub(super) fn benchmark_measure_counter_text_legacy(text: ZmodMeasureCounterText) -> TextContent {
+    TextContent::Shared(match text {
+        ZmodMeasureCounterText::Break(value) => {
+            cached_text(&BENCH_PAREN_INT_CACHE, value, TEXT_CACHE_LIMIT, || {
+                format!("({value})")
+            })
+        }
+        ZmodMeasureCounterText::Ratio { current, total } => cached_ratio_i32(current, total),
+        ZmodMeasureCounterText::Total(value) => cached_int_i32(value),
+    })
+}
+
+#[cfg(feature = "bench-support")]
+pub(super) fn benchmark_run_timer_legacy(
+    seconds: i32,
+    minute_threshold: i32,
+    trailing_space: bool,
+) -> TextContent {
+    let seconds = seconds.max(0);
+    TextContent::Shared(cached_text(
+        &BENCH_RUN_TIMER_CACHE,
+        (seconds, minute_threshold, trailing_space),
+        TEXT_CACHE_LIMIT,
+        || {
+            let mut text = if seconds < 10 {
+                format!("0.0{seconds}")
+            } else if seconds > minute_threshold {
+                format!("{}.{:02}", seconds / 60, seconds % 60)
+            } else {
+                format!("0.{seconds}")
+            };
+            if trailing_space {
+                text.push(' ');
+            }
+            text
+        },
+    ))
 }
 
 pub(super) fn cached_zmod_mini_indicator_text(text: ZmodMiniIndicatorText) -> Arc<str> {
@@ -682,6 +721,48 @@ mod tests {
         ] {
             let text = error_bar_text_label(early, scaled);
             assert!(matches!(text, TextContent::Static(_)));
+            assert_eq!(text.as_str(), expected);
+        }
+    }
+
+    #[test]
+    fn inline_measure_counter_text_preserves_every_variant() {
+        for (value, expected) in [
+            (ZmodMeasureCounterText::Break(-12), "(-12)"),
+            (
+                ZmodMeasureCounterText::Ratio {
+                    current: 37,
+                    total: 64,
+                },
+                "37/64",
+            ),
+            (ZmodMeasureCounterText::Total(i32::MAX), "2147483647"),
+        ] {
+            let text = zmod_measure_counter_text(value);
+            assert!(matches!(text, TextContent::Inline(_)));
+            assert_eq!(text.as_str(), expected);
+        }
+
+        let overflow = zmod_measure_counter_text(ZmodMeasureCounterText::Ratio {
+            current: i32::MIN,
+            total: i32::MIN,
+        });
+        assert!(matches!(overflow, TextContent::Shared(_)));
+        assert_eq!(overflow.as_str(), "-2147483648/-2147483648");
+    }
+
+    #[test]
+    fn inline_run_timer_preserves_threshold_and_spacing() {
+        for (seconds, threshold, trailing, expected) in [
+            (-1, 59, false, "0.00"),
+            (7, 59, true, "0.07 "),
+            (59, 59, false, "0.59"),
+            (60, 59, true, "1.00 "),
+            (3_661, 59, false, "61.01"),
+            (i32::MAX, 59, true, "35791394.07 "),
+        ] {
+            let text = zmod_run_timer_fmt(seconds, threshold, trailing);
+            assert!(matches!(text, TextContent::Inline(_)));
             assert_eq!(text.as_str(), expected);
         }
     }

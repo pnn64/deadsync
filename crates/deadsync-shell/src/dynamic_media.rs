@@ -17,6 +17,7 @@ use deadsync_assets::media_cache;
 use deadsync_profile as profile_data;
 use deadsync_profile::compat as profile;
 use log::warn;
+use smallvec::SmallVec;
 use std::{
     borrow::Cow,
     collections::{HashMap, HashSet},
@@ -58,6 +59,69 @@ struct SongLuaVideoState {
     upload_key: Arc<str>,
 }
 
+const MAX_CACHED_BANNER_VIDEO_PATHS: usize = 8;
+
+/// Render-thread snapshot of the desired banner-video set.
+///
+/// Owner/threading: `DynamicMedia` on the render thread; no synchronization.
+/// Lifetime: one screen request, replaced at transitions. Capacity: eight
+/// paths inline, matching the largest live caller; larger sets bypass the
+/// settled fast path. Warmup: gameplay entry. Miss/eviction: a changed request
+/// reconciles immediately and replaces the snapshot; no gameplay pruning.
+/// Destruction: paths drop with `DynamicMedia`. Instrumentation: the release
+/// benchmark compares reconciled and settled frames. Worst steady-frame cost:
+/// at most eight path comparisons and no allocation, decoder, upload, or scan.
+#[derive(Default)]
+struct BannerVideoRequest {
+    paths: SmallVec<[PathBuf; MAX_CACHED_BANNER_VIDEO_PATHS]>,
+    looped: bool,
+    settled: bool,
+    cacheable: bool,
+}
+
+impl BannerVideoRequest {
+    fn matches(&self, desired_paths: &[&Path], looped: bool) -> bool {
+        if !self.cacheable || self.looped != looped {
+            return false;
+        }
+        let mut cached = self.paths.iter();
+        for desired in desired_paths
+            .iter()
+            .copied()
+            .filter(|path| dynamic::is_dynamic_video_path(path))
+        {
+            if cached.next().is_none_or(|path| path != desired) {
+                return false;
+            }
+        }
+        cached.next().is_none()
+    }
+
+    /// Returns whether reconciliation is required for a changed request.
+    fn begin(&mut self, desired_paths: &[&Path], looped: bool) -> bool {
+        if self.matches(desired_paths, looped) {
+            return !self.settled;
+        }
+        self.paths.clear();
+        self.looped = looped;
+        self.settled = false;
+        self.cacheable = true;
+        for path in desired_paths
+            .iter()
+            .copied()
+            .filter(|path| dynamic::is_dynamic_video_path(path))
+        {
+            if self.paths.len() == MAX_CACHED_BANNER_VIDEO_PATHS {
+                self.paths.clear();
+                self.cacheable = false;
+                break;
+            }
+            self.paths.push(path.to_path_buf());
+        }
+        true
+    }
+}
+
 #[derive(Clone, Copy)]
 pub(crate) struct BgVideoTiming {
     pub current_sec: f32,
@@ -84,6 +148,8 @@ pub struct DynamicMedia {
     banner_video_preps: HashMap<PathBuf, BannerVideoPrepState>,
     banner_video_prep_tx: mpsc::Sender<BannerVideoPrepResult>,
     banner_video_prep_rx: mpsc::Receiver<BannerVideoPrepResult>,
+    banner_video_request: BannerVideoRequest,
+    banner_video_workers: usize,
     current_dynamic_cdtitle: Option<(Arc<str>, PathBuf)>,
     current_dynamic_pack_banner: Option<(String, PathBuf)>,
     dynamic_pack_banner_keys: std::collections::HashSet<String>,
@@ -110,6 +176,8 @@ impl DynamicMedia {
             banner_video_preps: HashMap::new(),
             banner_video_prep_tx,
             banner_video_prep_rx,
+            banner_video_request: BannerVideoRequest::default(),
+            banner_video_workers: 0,
             current_dynamic_cdtitle: None,
             current_dynamic_pack_banner: None,
             dynamic_pack_banner_keys: std::collections::HashSet::new(),
@@ -158,6 +226,7 @@ impl DynamicMedia {
             key
         }));
         self.banner_video_preps.clear();
+        self.banner_video_request = BannerVideoRequest::default();
         if let Some((key, _)) = self.current_dynamic_cdtitle.take() {
             keys.push(key.to_string());
         }
@@ -378,6 +447,10 @@ impl DynamicMedia {
         looped: bool,
     ) {
         let desired_path = desired_path.filter(|path| dynamic::is_dynamic_video_path(path));
+        let desired_paths = desired_path.as_slice();
+        if !self.banner_video_request.begin(desired_paths, looped) {
+            return;
+        }
         self.retain_banner_video_prep(desired_path, looped);
         let stale_keys = self
             .active_banner_videos
@@ -394,21 +467,19 @@ impl DynamicMedia {
             self.release_texture_key(assets, backend, key);
         }
         self.drain_banner_video_preps(assets, desired_path, looped);
-        let Some(path) = desired_path else {
-            return;
-        };
-        if self
-            .active_banner_videos
-            .values()
-            .any(|state| state.path.as_path() == path)
-            || self
+        if let Some(path) = desired_path
+            && !self
+                .active_banner_videos
+                .values()
+                .any(|state| state.path.as_path() == path)
+            && !self
                 .banner_video_preps
                 .get(path)
                 .is_some_and(|prep| prep.looped() == looped)
         {
-            return;
+            self.spawn_banner_video_prep(path, looped);
         }
-        self.spawn_banner_video_prep(path, looped);
+        self.finish_banner_video_request(desired_paths, looped);
     }
 
     pub fn sync_active_banner_videos(
@@ -418,6 +489,9 @@ impl DynamicMedia {
         desired_paths: &[&Path],
         looped: bool,
     ) {
+        if !self.banner_video_request.begin(desired_paths, looped) {
+            return;
+        }
         self.retain_banner_video_preps(desired_paths, looped);
         let stale_keys = self
             .active_banner_videos
@@ -451,6 +525,25 @@ impl DynamicMedia {
             }
             self.spawn_banner_video_prep(path, looped);
         }
+        self.finish_banner_video_request(desired_paths, looped);
+    }
+
+    fn finish_banner_video_request(&mut self, desired_paths: &[&Path], looped: bool) {
+        self.banner_video_request.settled = self.banner_video_request.cacheable
+            && self.banner_video_workers == 0
+            && desired_paths
+                .iter()
+                .copied()
+                .filter(|path| dynamic::is_dynamic_video_path(path))
+                .all(|path| {
+                    self.active_banner_videos
+                        .values()
+                        .any(|state| state.path.as_path() == path && state.looped == looped)
+                        || self
+                            .banner_video_preps
+                            .get(path)
+                            .is_some_and(|prep| *prep == BannerVideoPrepState::failed(looped))
+                });
     }
 
     pub fn set_background(
@@ -997,6 +1090,7 @@ impl DynamicMedia {
         }
         self.banner_video_preps
             .insert(path.to_path_buf(), BannerVideoPrepState::pending(looped));
+        self.banner_video_workers = self.banner_video_workers.saturating_add(1);
 
         let key = path.to_string_lossy().into_owned();
         let path = path.to_path_buf();
@@ -1039,6 +1133,7 @@ impl DynamicMedia {
         looped: bool,
     ) {
         while let Ok(result) = self.banner_video_prep_rx.try_recv() {
+            self.banner_video_workers = self.banner_video_workers.saturating_sub(1);
             match result {
                 BannerVideoPrepResult::Ready(prepared) => {
                     self.clear_pending_banner_video_prep(&prepared.path, prepared.looped);
@@ -1085,6 +1180,7 @@ impl DynamicMedia {
         looped: bool,
     ) {
         while let Ok(result) = self.banner_video_prep_rx.try_recv() {
+            self.banner_video_workers = self.banner_video_workers.saturating_sub(1);
             match result {
                 BannerVideoPrepResult::Ready(prepared) => {
                     self.clear_pending_banner_video_prep(&prepared.path, prepared.looped);
@@ -1261,6 +1357,75 @@ impl BannerVideoFailureBenchmark {
     }
 }
 
+/// Models two prewarmed gameplay banners after both decoders have settled.
+#[cfg(feature = "bench-support")]
+pub(crate) struct BannerVideoSyncBenchmark {
+    desired: [PathBuf; 2],
+    active: HashMap<PathBuf, bool>,
+    preps: HashMap<PathBuf, BannerVideoPrepState>,
+    request: BannerVideoRequest,
+}
+
+#[cfg(feature = "bench-support")]
+impl Default for BannerVideoSyncBenchmark {
+    fn default() -> Self {
+        let desired = [
+            PathBuf::from("Songs/Benchmark Pack/P1/banner.mp4"),
+            PathBuf::from("Songs/Benchmark Pack/P2/banner.webm"),
+        ];
+        let active = desired.iter().cloned().map(|path| (path, true)).collect();
+        let mut request = BannerVideoRequest::default();
+        let desired_paths = desired.each_ref().map(PathBuf::as_path);
+        assert!(request.begin(&desired_paths, true));
+        request.settled = true;
+        Self {
+            desired,
+            active,
+            preps: HashMap::new(),
+            request,
+        }
+    }
+}
+
+#[cfg(feature = "bench-support")]
+impl BannerVideoSyncBenchmark {
+    pub(crate) fn legacy_frame(&mut self) -> usize {
+        let desired = self.desired.each_ref().map(PathBuf::as_path);
+        self.preps
+            .retain(|path, prep| dynamic_video_path_in_set(path, &desired) && prep.looped());
+        let stale = self
+            .active
+            .iter()
+            .filter(|(path, looped)| !dynamic_video_path_in_set(path, &desired) || !**looped)
+            .map(|(path, _)| path.clone())
+            .collect::<Vec<_>>();
+        for path in stale {
+            self.active.remove(&path);
+        }
+        for path in desired {
+            std::hint::black_box(
+                self.active.contains_key(path)
+                    || self.preps.get(path).is_some_and(|prep| prep.looped()),
+            );
+        }
+        self.checksum()
+    }
+
+    pub(crate) fn settled_frame(&mut self) -> usize {
+        let desired = self.desired.each_ref().map(PathBuf::as_path);
+        assert!(!self.request.begin(&desired, true));
+        self.checksum()
+    }
+
+    fn checksum(&self) -> usize {
+        self.desired
+            .iter()
+            .fold(self.active.len(), |checksum, path| {
+                checksum.rotate_left(7) ^ path.as_os_str().len()
+            })
+    }
+}
+
 impl Default for DynamicMedia {
     fn default() -> Self {
         Self::new()
@@ -1301,6 +1466,57 @@ mod tests {
         );
         assert_eq!(state.video_start_sec(), -1.0);
         assert_eq!(state.video_play_time(1.0), 1.0);
+    }
+
+    #[test]
+    fn settled_banner_request_skips_until_paths_or_mode_change() {
+        let paths = [Path::new("p1.mp4"), Path::new("p2.webm")];
+        let mut request = BannerVideoRequest::default();
+
+        assert!(request.begin(&paths, true));
+        request.settled = true;
+        assert!(!request.begin(&paths, true));
+        assert!(request.begin(&paths, false));
+
+        let changed = [Path::new("p1.mp4"), Path::new("p3.avi")];
+        request.settled = true;
+        assert!(request.begin(&changed, false));
+    }
+
+    #[test]
+    fn banner_request_cache_is_bounded_and_ignores_static_art() {
+        let videos = (0..=MAX_CACHED_BANNER_VIDEO_PATHS)
+            .map(|index| PathBuf::from(format!("banner-{index}.mp4")))
+            .collect::<Vec<_>>();
+        let paths = videos.iter().map(PathBuf::as_path).collect::<Vec<_>>();
+        let mut request = BannerVideoRequest::default();
+
+        assert!(request.begin(&paths, true));
+        assert!(!request.cacheable);
+        assert!(request.paths.is_empty());
+
+        let mixed = [Path::new("banner.png"), Path::new("banner.mp4")];
+        assert!(request.begin(&mixed, true));
+        assert_eq!(request.paths.as_slice(), [PathBuf::from("banner.mp4")]);
+    }
+
+    #[test]
+    fn banner_request_settles_only_after_workers_finish() {
+        let path = Path::new("banner.mp4");
+        let paths = [path];
+        let mut media = DynamicMedia::new();
+        assert!(media.banner_video_request.begin(&paths, true));
+        media
+            .banner_video_preps
+            .insert(path.to_path_buf(), BannerVideoPrepState::failed(true));
+
+        media.banner_video_workers = 1;
+        media.finish_banner_video_request(&paths, true);
+        assert!(!media.banner_video_request.settled);
+
+        media.banner_video_workers = 0;
+        media.finish_banner_video_request(&paths, true);
+        assert!(media.banner_video_request.settled);
     }
 
     #[test]

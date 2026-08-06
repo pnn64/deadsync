@@ -1,5 +1,14 @@
+use deadlib_assets::registry::{
+    generated_texture_idle_poll_for_bench, generated_texture_idle_poll_legacy_for_bench,
+    prepare_generated_texture_idle_poll_benchmark,
+};
 use deadlib_assets::texture_store::VideoTextureMetadataBenchmark;
-use deadsync_notefield::HoldPairAcquireBenchmark;
+use deadsync_notefield::{HoldPairAcquireBenchmark, ZmodMeasureCounterText};
+use deadsync_shell::bench_support::GameplayBannerSyncBenchmark;
+use deadsync_theme_simply_love::screens::components::gameplay::notefield::{
+    benchmark_measure_counter_text, benchmark_measure_counter_text_legacy, benchmark_run_timer,
+    benchmark_run_timer_legacy,
+};
 use deadsync_theme_simply_love::screens::gameplay::SongLuaActorBuildBenchmark;
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::hint::black_box;
@@ -13,6 +22,9 @@ const WARMUP_FRAMES: usize = 2_000;
 const PROXY_FRAMES: usize = 100_000;
 const HOLD_FRAMES: usize = 500_000;
 const VIDEO_FRAMES: usize = 200_000;
+const HUD_FRAMES: usize = 500_000;
+const BANNER_FRAMES: usize = 500_000;
+const GENERATED_IDLE_FRAMES: usize = 1_000_000;
 const TAIL_SAMPLES: usize = 20_000;
 const TAIL_BATCH_FRAMES: usize = 512;
 
@@ -149,6 +161,71 @@ fn main() {
         || new_video.local_frame(),
         false,
     );
+
+    let mut old_hud_frame = 0usize;
+    let mut new_hud_frame = 0usize;
+    run_pair(
+        "measure-counter and run-timer text",
+        HUD_FRAMES,
+        || {
+            let checksum = hud_text_frame(
+                old_hud_frame,
+                benchmark_measure_counter_text_legacy,
+                benchmark_run_timer_legacy,
+            );
+            old_hud_frame += 1;
+            checksum
+        },
+        || {
+            let checksum = hud_text_frame(
+                new_hud_frame,
+                benchmark_measure_counter_text,
+                benchmark_run_timer,
+            );
+            new_hud_frame += 1;
+            checksum
+        },
+        false,
+    );
+
+    let mut old_banners = GameplayBannerSyncBenchmark::default();
+    let mut new_banners = GameplayBannerSyncBenchmark::default();
+    run_pair(
+        "settled gameplay banner request",
+        BANNER_FRAMES,
+        || old_banners.legacy_frame(),
+        || new_banners.settled_frame(),
+        false,
+    );
+
+    prepare_generated_texture_idle_poll_benchmark();
+    run_pair(
+        "idle generated-texture queue",
+        GENERATED_IDLE_FRAMES,
+        || generated_texture_idle_poll_legacy_for_bench() as u64,
+        || generated_texture_idle_poll_for_bench() as u64,
+        false,
+    );
+}
+
+fn hud_text_frame(
+    frame: usize,
+    counter: fn(ZmodMeasureCounterText) -> deadlib_present::actors::TextContent,
+    timer: fn(i32, i32, bool) -> deadlib_present::actors::TextContent,
+) -> u64 {
+    let current = (frame % 64 + 1) as i32;
+    let seconds = (frame % 600) as i32;
+    let values = [
+        counter(ZmodMeasureCounterText::Ratio { current, total: 64 }),
+        counter(ZmodMeasureCounterText::Break(16)),
+        counter(ZmodMeasureCounterText::Total(64)),
+        timer(seconds, 59, true),
+    ];
+    values.iter().fold(0_u64, |checksum, text| {
+        text.as_str().bytes().fold(checksum, |checksum, byte| {
+            checksum.rotate_left(5) ^ u64::from(byte)
+        })
+    })
 }
 
 fn run_pair(

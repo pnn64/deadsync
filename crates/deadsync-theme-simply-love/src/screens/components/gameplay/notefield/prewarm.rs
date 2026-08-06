@@ -2,13 +2,13 @@ use crate::screens::gameplay::GameplayCoreState as State;
 use deadlib_present::actors::TextContent;
 use deadlib_present::compose::TextLayoutCache;
 use deadlib_present::font;
-use deadsync_notefield::{MiniIndicatorMode, zmod_broken_run_end};
+use deadsync_notefield::{MiniIndicatorMode, ZmodMeasureCounterText, zmod_broken_run_end};
 use deadsync_profile as profile_data;
 
 use super::super::display_mods::DISPLAY_MODS_WRAP_WIDTH_PX;
 use super::text::{
-    cached_int_i32, cached_neg_int_u32, cached_paren_i32, cached_percent2_f64, cached_ratio_i32,
-    cached_signed_percent2_f64, preferred_mods_text, zmod_run_timer_fmt,
+    cached_int_i32, cached_neg_int_u32, cached_percent2_f64, cached_signed_percent2_f64,
+    preferred_mods_text, zmod_measure_counter_text, zmod_run_timer_fmt,
 };
 use super::{
     COLUMN_COUNTDOWN_PREWARM_CAP, COMBO_PREWARM_CAP, MEASURE_PREWARM_CAP, RUN_TIMER_PREWARM_CAP_S,
@@ -26,8 +26,11 @@ pub fn prewarm_text_layout(cache: &mut TextLayoutCache, fonts: &font::FontMap, s
     };
     let prewarm_ratio =
         |cache: &mut TextLayoutCache, font_name: &'static str, curr: i32, total: i32| {
-            let text = cached_ratio_i32(curr, total);
-            cache.prewarm_text(fonts, font_name, text.as_ref(), None);
+            let text = zmod_measure_counter_text(ZmodMeasureCounterText::Ratio {
+                current: curr,
+                total,
+            });
+            cache.prewarm_text(fonts, font_name, text.as_str(), None);
         };
     let prewarm_timer = |cache: &mut TextLayoutCache,
                          font_name: &'static str,
@@ -35,7 +38,7 @@ pub fn prewarm_text_layout(cache: &mut TextLayoutCache, fonts: &font::FontMap, s
                          threshold: i32,
                          trailing: bool| {
         let text = zmod_run_timer_fmt(second, threshold, trailing);
-        cache.prewarm_text(fonts, font_name, text.as_ref(), None);
+        cache.prewarm_text(fonts, font_name, text.as_str(), None);
     };
     let prewarm_percent = |cache: &mut TextLayoutCache, font_name: &'static str, value: f64| {
         let text = cached_percent2_f64(value.clamp(0.0, 100.0));
@@ -98,17 +101,21 @@ pub fn prewarm_text_layout(cache: &mut TextLayoutCache, fonts: &font::FontMap, s
         }
         let prewarm_measure_len = max_measure_len.min(MEASURE_PREWARM_CAP);
         for total in 1..=prewarm_measure_len {
-            prewarm_i32(cache, mc_font_name, total);
-            let break_text = cached_paren_i32(total);
-            cache.prewarm_text(fonts, mc_font_name, break_text.as_ref(), None);
+            let total_text = zmod_measure_counter_text(ZmodMeasureCounterText::Total(total));
+            cache.prewarm_text(fonts, mc_font_name, total_text.as_str(), None);
+            let break_text = zmod_measure_counter_text(ZmodMeasureCounterText::Break(total));
+            cache.prewarm_text(fonts, mc_font_name, break_text.as_str(), None);
             for curr in 1..=total {
                 prewarm_ratio(cache, mc_font_name, curr, total);
             }
         }
         if max_measure_len > prewarm_measure_len {
-            prewarm_i32(cache, mc_font_name, max_measure_len);
-            let break_text = cached_paren_i32(max_measure_len);
-            cache.prewarm_text(fonts, mc_font_name, break_text.as_ref(), None);
+            let total_text =
+                zmod_measure_counter_text(ZmodMeasureCounterText::Total(max_measure_len));
+            cache.prewarm_text(fonts, mc_font_name, total_text.as_str(), None);
+            let break_text =
+                zmod_measure_counter_text(ZmodMeasureCounterText::Break(max_measure_len));
+            cache.prewarm_text(fonts, mc_font_name, break_text.as_str(), None);
             prewarm_ratio(cache, mc_font_name, 1, max_measure_len);
             prewarm_ratio(cache, mc_font_name, max_measure_len, max_measure_len);
         }

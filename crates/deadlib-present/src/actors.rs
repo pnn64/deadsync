@@ -937,6 +937,22 @@ pub struct InlineText {
     len: u8,
 }
 
+#[inline(always)]
+const fn decimal_digits(value: u32) -> usize {
+    match value {
+        0..=9 => 1,
+        10..=99 => 2,
+        100..=999 => 3,
+        1_000..=9_999 => 4,
+        10_000..=99_999 => 5,
+        100_000..=999_999 => 6,
+        1_000_000..=9_999_999 => 7,
+        10_000_000..=99_999_999 => 8,
+        100_000_000..=999_999_999 => 9,
+        _ => 10,
+    }
+}
+
 impl InlineText {
     pub const CAPACITY: usize = 14;
 
@@ -968,6 +984,53 @@ impl InlineText {
         let mut text = Self::new();
         std::fmt::Write::write_str(&mut text, value).ok()?;
         Some(text)
+    }
+
+    #[inline(always)]
+    pub fn push_ascii(&mut self, byte: u8) -> bool {
+        let index = self.len as usize;
+        if !byte.is_ascii() || index == Self::CAPACITY {
+            return false;
+        }
+        self.bytes[index] = byte;
+        self.len += 1;
+        true
+    }
+
+    #[inline]
+    pub fn push_u32(&mut self, mut value: u32) -> bool {
+        let digits = decimal_digits(value);
+        let start = self.len as usize;
+        let end = start + digits;
+        if end > Self::CAPACITY {
+            return false;
+        }
+        let mut index = end;
+        loop {
+            index -= 1;
+            self.bytes[index] = b'0' + (value % 10) as u8;
+            value /= 10;
+            if value == 0 {
+                self.len = end as u8;
+                return true;
+            }
+        }
+    }
+
+    #[inline]
+    pub fn push_i32(&mut self, value: i32) -> bool {
+        let negative = value.is_negative();
+        let magnitude = value.unsigned_abs();
+        if self.len as usize + decimal_digits(magnitude) + usize::from(negative) > Self::CAPACITY {
+            return false;
+        }
+        if negative {
+            let inserted = self.push_ascii(b'-');
+            debug_assert!(inserted);
+        }
+        let inserted = self.push_u32(magnitude);
+        debug_assert!(inserted);
+        true
     }
 }
 
@@ -1212,6 +1275,20 @@ mod tests {
         assert_eq!(utf8.as_str(), "sync ±");
         assert!(TextContent::inline_format(format_args!("{}", "x".repeat(15))).is_none());
         assert_eq!(std::mem::size_of::<TextContent>(), 24);
+    }
+
+    #[test]
+    fn inline_text_writes_numeric_values_without_fmt() {
+        let mut text = InlineText::new();
+        assert!(text.push_i32(i32::MIN));
+        assert!(text.push_ascii(b'/'));
+        assert!(text.push_u32(42));
+
+        assert_eq!(text.as_str(), "-2147483648/42");
+        assert_eq!(
+            std::mem::size_of::<TextContent>(),
+            std::mem::size_of::<String>()
+        );
     }
 
     #[test]
