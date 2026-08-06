@@ -192,8 +192,8 @@ fn compare(title: &str, old: BenchResult, new: BenchResult) {
     assert_eq!(new.allocated.reallocs, 0, "inactive gate reallocated");
     assert_eq!(new.allocated.deallocs, 0, "inactive gate freed");
     println!("{title} (256 probes/frame)");
-    print_result("legacy queue poll", &old);
-    print_result("inactive gate", &new);
+    print_result("unconditional work", &old);
+    print_result("lifecycle gate", &new);
     println!();
 }
 
@@ -236,5 +236,29 @@ fn main() {
         "stable gameplay heart-rate readings",
         measure(|| old.legacy_heart_rate_frame()),
         measure(|| new.gated_heart_rate_frame()),
+    );
+
+    let mut old = GameplayIdleWorkersBenchmark::default();
+    let mut new = GameplayIdleWorkersBenchmark::default();
+    compare(
+        "inactive gameplay FSR configuration",
+        measure(|| old.legacy_fsr_frame()),
+        measure(|| new.gated_fsr_frame()),
+    );
+
+    let mut old = GameplayIdleWorkersBenchmark::default();
+    let mut new = GameplayIdleWorkersBenchmark::default();
+    compare(
+        "inactive SMX Options light preview",
+        measure(|| old.legacy_options_lights_frame()),
+        measure(|| new.gated_options_lights_frame()),
+    );
+
+    let mut old = GameplayIdleWorkersBenchmark::default();
+    let mut new = GameplayIdleWorkersBenchmark::default();
+    compare(
+        "inactive SMX Player Options light preview",
+        measure(|| old.legacy_player_options_lights_frame()),
+        measure(|| new.gated_player_options_lights_frame()),
     );
 }

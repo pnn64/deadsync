@@ -255,8 +255,18 @@ pub const fn smx_options_light_preview_active(
 }
 
 #[inline(always)]
+pub const fn smx_options_light_frame_needed(screen: Screen, preview_active: bool) -> bool {
+    matches!(screen, Screen::Options) || preview_active
+}
+
+#[inline(always)]
 pub const fn smx_player_options_light_preview_allowed(screen: Screen, smx_input: bool) -> bool {
     matches!(screen, Screen::PlayerOptions) && smx_input
+}
+
+#[inline(always)]
+pub const fn smx_player_options_light_frame_needed(screen: Screen, preview_active: bool) -> bool {
+    matches!(screen, Screen::PlayerOptions) || preview_active
 }
 
 #[inline(always)]
@@ -476,6 +486,22 @@ mod tests {
         ));
         assert!(!smx_light_preview_restore_auto(Screen::Gameplay));
         assert!(smx_light_preview_restore_auto(Screen::Options));
+
+        assert!(!smx_options_light_frame_needed(Screen::Gameplay, false));
+        assert!(smx_options_light_frame_needed(Screen::Gameplay, true));
+        assert!(smx_options_light_frame_needed(Screen::Options, false));
+        assert!(!smx_player_options_light_frame_needed(
+            Screen::Gameplay,
+            false
+        ));
+        assert!(smx_player_options_light_frame_needed(
+            Screen::Gameplay,
+            true
+        ));
+        assert!(smx_player_options_light_frame_needed(
+            Screen::PlayerOptions,
+            false
+        ));
     }
 
     #[test]

@@ -19,6 +19,11 @@ pub struct PadConfigFsrPlan {
     pub managed_active: bool,
 }
 
+#[inline(always)]
+pub const fn pad_config_fsr_frame_needed(screen: Screen, fsr_pads_active: bool) -> bool {
+    fsr_pads_active || matches!(screen, Screen::ConfigurePads | Screen::SelectMusic)
+}
+
 pub fn pad_config_fsr_plan(
     screen: Screen,
     use_fsrs: bool,
@@ -139,6 +144,7 @@ mod tests {
 
     #[test]
     fn fsr_plan_skips_when_unrelated_and_inactive() {
+        assert!(!pad_config_fsr_frame_needed(Screen::Gameplay, false));
         assert_eq!(
             pad_config_fsr_plan(Screen::Gameplay, true, false, false, true),
             None
@@ -171,6 +177,7 @@ mod tests {
 
     #[test]
     fn fsr_plan_deactivates_when_leaving_target() {
+        assert!(pad_config_fsr_frame_needed(Screen::Gameplay, true));
         assert_eq!(
             pad_config_fsr_plan(Screen::Menu, true, false, true, true),
             Some(PadConfigFsrPlan {
@@ -179,6 +186,13 @@ mod tests {
                 managed_active: true,
             })
         );
+    }
+
+    #[test]
+    fn fsr_frame_gate_keeps_both_configuration_surfaces_live() {
+        assert!(pad_config_fsr_frame_needed(Screen::ConfigurePads, false));
+        assert!(pad_config_fsr_frame_needed(Screen::SelectMusic, false));
+        assert!(!pad_config_fsr_frame_needed(Screen::Menu, false));
     }
 
     #[test]

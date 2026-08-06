@@ -1,12 +1,13 @@
 use super::App;
 use crate::navigation::TransitionState;
 use crate::pad_config::{
-    PadConfigFsrTarget, apply_pad_commands, pad_config_fsr_plan, pad_config_profile_cursor,
-    pad_config_profile_entries,
+    PadConfigFsrTarget, apply_pad_commands, pad_config_fsr_frame_needed, pad_config_fsr_plan,
+    pad_config_profile_cursor, pad_config_profile_entries,
 };
 use crate::smx_config::{
     SmxAssignmentSource, resolve_smx_pad_config, smx_autoprompt_plan, smx_light_brightness_plan,
-    smx_light_preview_restore_auto, smx_options_light_preview_active,
+    smx_light_preview_restore_auto, smx_options_light_frame_needed,
+    smx_options_light_preview_active, smx_player_options_light_frame_needed,
     smx_player_options_light_preview_allowed, smx_runtime_assignment_plan,
 };
 use deadsync_config::prelude as config;
@@ -20,12 +21,15 @@ impl App {
     #[inline(always)]
     pub(super) fn sync_pad_config_fsr(&mut self, cfg: &config::Config) {
         use screens::pad_config;
+        let screen = self.state.screens.current_screen;
+        if !pad_config_fsr_frame_needed(screen, self.fsr_pads_active) {
+            return;
+        }
         pad_config::set_fsr_enabled(&mut self.state.screens.pad_config_state, cfg.use_fsrs);
         pad_config::set_fsr_enabled(
             &mut self.state.screens.select_music_state.pad_config_overlay,
             cfg.use_fsrs,
         );
-        let screen = self.state.screens.current_screen;
         let Some(plan) = pad_config_fsr_plan(
             screen,
             cfg.use_fsrs,
@@ -243,8 +247,15 @@ impl App {
     /// is taking the lights over. (Driven from the app loop so the lifecycle is
     /// in one place.)
     pub(super) fn drive_smx_options_lights(&mut self, dt: f32, cfg: &config::Config) {
+        let screen = self.state.screens.current_screen;
+        if !smx_options_light_frame_needed(
+            screen,
+            self.state.screens.smx_options_light_preview.is_active(),
+        ) {
+            return;
+        }
         let active = smx_options_light_preview_active(
-            self.state.screens.current_screen,
+            screen,
             cfg.smx_input,
             options::is_smx_config_view(&self.state.screens.options_state),
         );
@@ -260,7 +271,7 @@ impl App {
             colors,
             cfg.smx_default_light_brightness,
             (cfg.smx_underglow_theme, cfg.smx_underglow_grb),
-            self.state.screens.current_screen == CurrentScreen::SmxAssignPads,
+            screen == CurrentScreen::SmxAssignPads,
         );
         // Put the strips back on the theme colour (no-op when underglow is off;
         // auto-lighting above restores the firmware default there).
@@ -275,24 +286,28 @@ impl App {
     /// once no side is previewing (or on leaving the page). Sent every frame; the
     /// SDK coalesces light writes to the pad's refresh rate.
     pub(super) fn drive_smx_player_options_lights(&mut self, dt: f32, cfg: &config::Config) {
-        let preview = smx_player_options_light_preview_allowed(
-            self.state.screens.current_screen,
-            cfg.smx_input,
-        )
-        .then(|| {
-            self.state
-                .screens
-                .player_options_state
-                .as_ref()
-                .map(player_options::pad_light_brightness_preview)
-        })
-        .flatten()
-        .filter(|p| p.iter().any(Option::is_some));
+        let screen = self.state.screens.current_screen;
+        if !smx_player_options_light_frame_needed(
+            screen,
+            self.state.screens.smx_po_light_preview.is_active(),
+        ) {
+            return;
+        }
+        let preview = smx_player_options_light_preview_allowed(screen, cfg.smx_input)
+            .then(|| {
+                self.state
+                    .screens
+                    .player_options_state
+                    .as_ref()
+                    .map(player_options::pad_light_brightness_preview)
+            })
+            .flatten()
+            .filter(|p| p.iter().any(Option::is_some));
 
         self.state.screens.smx_po_light_preview.update(
             preview,
             dt,
-            smx_light_preview_restore_auto(self.state.screens.current_screen),
+            smx_light_preview_restore_auto(screen),
         );
     }
 

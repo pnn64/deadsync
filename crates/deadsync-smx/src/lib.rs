@@ -779,6 +779,11 @@ impl Default for OptionsLightPreview {
 impl OptionsLightPreview {
     const RESEND_INTERVAL: f32 = 0.25;
 
+    #[inline(always)]
+    pub const fn is_active(&self) -> bool {
+        self.active
+    }
+
     pub fn update(
         &mut self,
         active: bool,
@@ -836,6 +841,11 @@ impl Default for PlayerOptionsLightPreview {
 
 impl PlayerOptionsLightPreview {
     const HUE_PERIOD_S: f32 = 5.0;
+
+    #[inline(always)]
+    pub const fn is_active(&self) -> bool {
+        self.active
+    }
 
     pub fn update(&mut self, preview: Option<[Option<u8>; 2]>, dt: f32, restore_auto_lights: bool) {
         let Some(preview) = preview.filter(|p| p.iter().any(Option::is_some)) else {
@@ -1170,6 +1180,7 @@ mod tests {
     fn options_light_preview_requests_theme_restore_on_exit() {
         let mut preview = super::OptionsLightPreview::default();
 
+        assert!(!preview.is_active());
         assert!(!preview.update(
             true,
             0.1,
@@ -1178,7 +1189,9 @@ mod tests {
             (true, false),
             false
         ));
+        assert!(preview.is_active());
         assert!(preview.update(false, 0.0, [None, None], 100, (false, false), false));
+        assert!(!preview.is_active());
         assert!(!preview.update(false, 0.0, [None, None], 100, (false, false), false));
     }
 
@@ -1201,9 +1214,12 @@ mod tests {
     fn player_options_light_preview_tracks_phase_and_resets_on_exit() {
         let mut preview = super::PlayerOptionsLightPreview::default();
 
+        assert!(!preview.is_active());
         preview.update(Some([Some(50), None]), 2.5, true);
+        assert!(preview.is_active());
         assert!((preview.phase() - 0.5).abs() < f32::EPSILON);
         preview.update(None, 0.0, true);
+        assert!(!preview.is_active());
         assert_eq!(preview.phase(), 0.0);
     }
 

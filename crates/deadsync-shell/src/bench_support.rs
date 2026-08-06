@@ -1,4 +1,5 @@
-use crate::{profile_import, qr_login, score_import, sync_analysis};
+use crate::{pad_config, profile_import, qr_login, score_import, smx_config, sync_analysis};
+use deadsync_theme_simply_love::screens::SimplyLoveScreen;
 use deadsync_theme_simply_love::screens::components::shared::heart_rate::HeartRateViewSyncBenchmark;
 use deadsync_theme_simply_love::screens::gameplay::{HeartRatePlayerView, HeartRateView};
 use deadsync_theme_simply_love::{
@@ -15,6 +16,9 @@ pub struct GameplayIdleWorkersBenchmark {
     score_import: score_import::Service,
     sync_analysis: sync_analysis::Service,
     heart_rate: HeartRateViewSyncBenchmark,
+    options_lights: deadsync_smx::OptionsLightPreview,
+    player_options_lights: deadsync_smx::PlayerOptionsLightPreview,
+    fsr_enabled: [bool; 2],
 }
 
 impl Default for GameplayIdleWorkersBenchmark {
@@ -27,6 +31,9 @@ impl Default for GameplayIdleWorkersBenchmark {
             score_import: score_import::Service::default(),
             sync_analysis: sync_analysis::Service::default(),
             heart_rate,
+            options_lights: deadsync_smx::OptionsLightPreview::default(),
+            player_options_lights: deadsync_smx::PlayerOptionsLightPreview::default(),
+            fsr_enabled: [true; 2],
         }
     }
 }
@@ -106,6 +113,113 @@ impl GameplayIdleWorkersBenchmark {
                 .heart_rate
                 .sync_generation(generation, current_heart_rate_view);
             checksum.rotate_left(5) ^ value ^ sample
+        })
+    }
+
+    pub fn legacy_fsr_frame(&mut self) -> usize {
+        (0..POLLS_PER_FRAME).fold(0, |checksum, sample| {
+            let screen = black_box(SimplyLoveScreen::Gameplay);
+            let enabled = black_box(&mut self.fsr_enabled);
+            enabled[0] = true;
+            enabled[1] = true;
+            let plan = pad_config::pad_config_fsr_plan(
+                screen,
+                black_box(true),
+                black_box(false),
+                black_box(false),
+                black_box(true),
+            );
+            checksum.rotate_left(5)
+                ^ usize::from(plan.is_some())
+                ^ usize::from(enabled[0])
+                ^ (usize::from(enabled[1]) << 1)
+                ^ sample
+        })
+    }
+
+    pub fn gated_fsr_frame(&mut self) -> usize {
+        (0..POLLS_PER_FRAME).fold(0, |checksum, sample| {
+            let screen = black_box(SimplyLoveScreen::Gameplay);
+            let active = black_box(false);
+            let needed = pad_config::pad_config_fsr_frame_needed(screen, active);
+            let plan = if needed {
+                let enabled = black_box(&mut self.fsr_enabled);
+                enabled[0] = true;
+                enabled[1] = true;
+                pad_config::pad_config_fsr_plan(
+                    screen,
+                    black_box(true),
+                    black_box(false),
+                    active,
+                    black_box(true),
+                )
+            } else {
+                None
+            };
+            let enabled = black_box(self.fsr_enabled);
+            checksum.rotate_left(5)
+                ^ usize::from(plan.is_some())
+                ^ usize::from(enabled[0])
+                ^ (usize::from(enabled[1]) << 1)
+                ^ sample
+        })
+    }
+
+    pub fn legacy_options_lights_frame(&mut self) -> usize {
+        (0..POLLS_PER_FRAME).fold(0, |checksum, sample| {
+            let screen = black_box(SimplyLoveScreen::Gameplay);
+            let active = smx_config::smx_options_light_preview_active(
+                screen,
+                black_box(true),
+                black_box(false),
+            );
+            let colors = if active {
+                [Some([1, 2, 3]); 2]
+            } else {
+                [None; 2]
+            };
+            let restored = black_box(&mut self.options_lights).update(
+                active,
+                1.0 / 240.0,
+                colors,
+                100,
+                (false, false),
+                false,
+            );
+            checksum.rotate_left(5) ^ usize::from(restored) ^ sample
+        })
+    }
+
+    pub fn gated_options_lights_frame(&mut self) -> usize {
+        (0..POLLS_PER_FRAME).fold(0, |checksum, sample| {
+            let screen = black_box(SimplyLoveScreen::Gameplay);
+            let preview = black_box(&mut self.options_lights);
+            let needed = smx_config::smx_options_light_frame_needed(screen, preview.is_active());
+            let restored =
+                needed && preview.update(false, 1.0 / 240.0, [None; 2], 100, (false, false), false);
+            checksum.rotate_left(5) ^ usize::from(restored) ^ sample
+        })
+    }
+
+    pub fn legacy_player_options_lights_frame(&mut self) -> usize {
+        (0..POLLS_PER_FRAME).fold(0, |checksum, sample| {
+            let screen = black_box(SimplyLoveScreen::Gameplay);
+            let preview =
+                smx_config::smx_player_options_light_preview_allowed(screen, black_box(true))
+                    .then(|| [Some(50), None]);
+            black_box(&mut self.player_options_lights).update(preview, 1.0 / 240.0, false);
+            checksum.rotate_left(5) ^ sample
+        })
+    }
+
+    pub fn gated_player_options_lights_frame(&mut self) -> usize {
+        (0..POLLS_PER_FRAME).fold(0, |checksum, sample| {
+            let screen = black_box(SimplyLoveScreen::Gameplay);
+            let preview = black_box(&mut self.player_options_lights);
+            if smx_config::smx_player_options_light_frame_needed(screen, preview.is_active()) {
+                preview.update(None, 1.0 / 240.0, false);
+            }
+            checksum.rotate_left(5) ^ sample
         })
     }
 }
