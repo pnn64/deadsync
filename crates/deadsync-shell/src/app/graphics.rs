@@ -33,6 +33,8 @@ const fn runtime_backend_type(choice: RendererChoice) -> BackendType {
         RendererChoice::VulkanWgpu => BackendType::VulkanWgpu,
         #[cfg(target_os = "macos")]
         RendererChoice::Metal => BackendType::Metal,
+        #[cfg(target_os = "macos")]
+        RendererChoice::MetalWgpu => BackendType::MetalWgpu,
         RendererChoice::OpenGl => BackendType::OpenGL,
         RendererChoice::OpenGlWgpu => BackendType::OpenGLWgpu,
         RendererChoice::Software => BackendType::Software,
@@ -71,6 +73,8 @@ const fn theme_renderer_choice(backend: BackendType) -> RendererChoice {
         BackendType::VulkanWgpu => RendererChoice::VulkanWgpu,
         #[cfg(target_os = "macos")]
         BackendType::Metal => RendererChoice::Metal,
+        #[cfg(target_os = "macos")]
+        BackendType::MetalWgpu => RendererChoice::MetalWgpu,
         BackendType::OpenGL => RendererChoice::OpenGl,
         BackendType::OpenGLWgpu => RendererChoice::OpenGlWgpu,
         BackendType::Software => RendererChoice::Software,

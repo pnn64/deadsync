@@ -93,6 +93,7 @@ const CREDITS: &[CreditLine] = &[
     name("gooseguy123"),
     name("Ash"),
     name("Kerpa"),
+    name("glitchbear"),
     spacer(),
     spacer(),
     section("DeadSync Supporters"),

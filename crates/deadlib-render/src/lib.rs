@@ -341,6 +341,8 @@ pub enum BackendType {
     VulkanWgpu,
     #[cfg(target_os = "macos")]
     Metal,
+    #[cfg(target_os = "macos")]
+    MetalWgpu,
     OpenGL,
     OpenGLWgpu,
     Software,
@@ -356,7 +358,9 @@ impl core::fmt::Display for BackendType {
             #[cfg(all(not(target_pointer_width = "32"), not(target_vendor = "win7")))]
             Self::VulkanWgpu => f.write_str("Vulkan (wgpu)"),
             #[cfg(target_os = "macos")]
-            Self::Metal => f.write_str("Metal (wgpu)"),
+            Self::Metal => f.write_str("Metal"),
+            #[cfg(target_os = "macos")]
+            Self::MetalWgpu => f.write_str("Metal (wgpu)"),
             Self::OpenGL => f.write_str("OpenGL"),
             Self::OpenGLWgpu => f.write_str("OpenGL (wgpu)"),
             Self::Software => f.write_str("Software"),
@@ -376,9 +380,9 @@ impl core::str::FromStr for BackendType {
             #[cfg(all(not(target_pointer_width = "32"), not(target_vendor = "win7")))]
             "vulkan-wgpu" | "vulkan_wgpu" | "wgpu-vulkan" | "vulkan (wgpu)" => Ok(Self::VulkanWgpu),
             #[cfg(target_os = "macos")]
-            "metal" | "metal-wgpu" | "metal_wgpu" | "wgpu-metal" | "metal (wgpu)" => {
-                Ok(Self::Metal)
-            }
+            "metal" | "metal-native" | "metal_native" | "native-metal" => Ok(Self::Metal),
+            #[cfg(target_os = "macos")]
+            "metal-wgpu" | "metal_wgpu" | "wgpu-metal" | "metal (wgpu)" => Ok(Self::MetalWgpu),
             "opengl" => Ok(Self::OpenGL),
             "opengl-wgpu" | "opengl_wgpu" | "wgpu-opengl" | "opengl (wgpu)" => Ok(Self::OpenGLWgpu),
             "software" | "cpu" => Ok(Self::Software),
@@ -416,7 +420,8 @@ pub const BACKEND_TYPE_CHOICES: &[(BackendType, &str)] = &[
 pub const BACKEND_TYPE_CHOICES: &[(BackendType, &str)] = &[
     (BackendType::OpenGL, "OpenGL"),
     (BackendType::Vulkan, "Vulkan"),
-    (BackendType::Metal, "Metal (wgpu)"),
+    (BackendType::Metal, "Metal"),
+    (BackendType::MetalWgpu, "Metal (wgpu)"),
     (BackendType::OpenGLWgpu, "OpenGL (wgpu)"),
     (BackendType::VulkanWgpu, "Vulkan (wgpu)"),
     (BackendType::Software, "Software"),
@@ -673,11 +678,30 @@ mod tests {
                 .any(|(backend, _)| *backend == BackendType::VulkanWgpu)
         );
         #[cfg(target_os = "macos")]
-        assert!(
-            BACKEND_TYPE_CHOICES
-                .iter()
-                .any(|(backend, _)| *backend == BackendType::Metal)
-        );
+        {
+            assert!(
+                BACKEND_TYPE_CHOICES
+                    .iter()
+                    .any(|(backend, _)| *backend == BackendType::Metal)
+            );
+            assert!(
+                BACKEND_TYPE_CHOICES
+                    .iter()
+                    .any(|(backend, _)| *backend == BackendType::MetalWgpu)
+            );
+        }
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn metal_backend_names_distinguish_native_and_wgpu() {
+        assert_eq!("metal".parse(), Ok(BackendType::Metal));
+        assert_eq!("Metal".parse(), Ok(BackendType::Metal));
+        assert_eq!("metal-native".parse(), Ok(BackendType::Metal));
+        assert_eq!("Metal (wgpu)".parse(), Ok(BackendType::MetalWgpu));
+        assert_eq!("wgpu-metal".parse(), Ok(BackendType::MetalWgpu));
+        assert_eq!(BackendType::Metal.to_string(), "Metal");
+        assert_eq!(BackendType::MetalWgpu.to_string(), "Metal (wgpu)");
     }
 
     #[test]

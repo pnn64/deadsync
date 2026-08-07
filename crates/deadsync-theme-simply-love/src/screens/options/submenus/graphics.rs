@@ -313,6 +313,7 @@ pub(in crate::screens::options) const VIDEO_RENDERER_LABELS: &[Choice] = &[
 pub(in crate::screens::options) const VIDEO_RENDERER_LABELS: &[Choice] = &[
     localized_choice("OptionsGraphics", "RendererOpenGL"),
     localized_choice("OptionsGraphics", "RendererVulkan"),
+    localized_choice("OptionsGraphics", "RendererMetalNative"),
     localized_choice("OptionsGraphics", "RendererMetal"),
     localized_choice("OptionsGraphics", "RendererOpenGLWgpu"),
     localized_choice("OptionsGraphics", "RendererVulkanWgpu"),

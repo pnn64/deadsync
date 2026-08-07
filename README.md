@@ -42,6 +42,12 @@ brew install cmake vulkan-loader molten-vk
 - The **Xcode Command Line Tools** provide the compiler/linker plus the Git and
   Python that `shaderc-sys` invokes during its build.
 
+DeadSync also includes a direct native **Metal** renderer that does not use
+wgpu. Choose `Metal` under Graphics > Video Renderer to use it, or choose
+`Metal (wgpu)` to keep using wgpu's Metal backend. The native renderer itself
+needs only Apple's system Metal framework; the Homebrew Vulkan packages above
+remain necessary while the Vulkan backend is part of the default build.
+
 You do **not** need the LunarG Vulkan SDK for a normal build/run on macOS — the
 Homebrew loader + MoltenVK are enough. Install the SDK only if you want the
 Vulkan **validation layers** for debugging (`GfxDebug` in `deadsync.ini`).

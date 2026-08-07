@@ -126,6 +126,8 @@ pub enum RendererChoice {
     VulkanWgpu,
     #[cfg(target_os = "macos")]
     Metal,
+    #[cfg(target_os = "macos")]
+    MetalWgpu,
     #[default]
     OpenGl,
     OpenGlWgpu,
@@ -163,6 +165,7 @@ impl RendererChoice {
         Self::OpenGl,
         Self::Vulkan,
         Self::Metal,
+        Self::MetalWgpu,
         Self::OpenGlWgpu,
         Self::VulkanWgpu,
         Self::Software,

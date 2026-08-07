@@ -15,6 +15,9 @@ winit = "0.30.13"
 [target.'cfg(all(not(target_pointer_width = "32"), not(target_vendor = "win7")))'.dependencies]
 deadlib-render-backend-vulkan = { path = "../deadlib-render-backend-vulkan" }
 
+[target.'cfg(target_os = "macos")'.dependencies]
+deadlib-render-backend-metal = { path = "../deadlib-render-backend-metal" }
+
 [lints.clippy]
 perf = { level = "warn", priority = -1 }
 

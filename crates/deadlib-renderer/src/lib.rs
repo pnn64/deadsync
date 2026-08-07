@@ -3,6 +3,8 @@ use deadlib_render::{
     TextureHandleMap,
 };
 use deadlib_render_backend_gl as opengl;
+#[cfg(target_os = "macos")]
+use deadlib_render_backend_metal as metal;
 use deadlib_render_backend_software as software;
 #[cfg(all(not(target_pointer_width = "32"), not(target_vendor = "win7")))]
 use deadlib_render_backend_vulkan as vulkan;
@@ -26,7 +28,9 @@ pub enum Texture {
     #[cfg(all(not(target_pointer_width = "32"), not(target_vendor = "win7")))]
     VulkanWgpu(wgpu_core::Texture),
     #[cfg(target_os = "macos")]
-    Metal(wgpu_core::Texture),
+    Metal(metal::Texture),
+    #[cfg(target_os = "macos")]
+    MetalWgpu(wgpu_core::Texture),
     OpenGL(opengl::Texture),
     OpenGLWgpu(wgpu_core::Texture),
     Software(software::Texture),
@@ -38,6 +42,9 @@ struct SoftwareTextureLookup<'a>(&'a TextureHandleMap<Texture>);
 
 struct OpenGlTextureLookup<'a>(&'a TextureHandleMap<Texture>);
 
+#[cfg(target_os = "macos")]
+struct MetalTextureLookup<'a>(&'a TextureHandleMap<Texture>);
+
 #[cfg(all(not(target_pointer_width = "32"), not(target_vendor = "win7")))]
 struct VulkanTextureLookup<'a>(&'a TextureHandleMap<Texture>);
 
@@ -46,7 +53,7 @@ enum WgpuTextureKind {
     #[cfg(all(not(target_pointer_width = "32"), not(target_vendor = "win7")))]
     Vulkan,
     #[cfg(target_os = "macos")]
-    Metal,
+    MetalWgpu,
     OpenGL,
     #[cfg(target_os = "windows")]
     DirectX,
@@ -76,13 +83,23 @@ impl opengl::TextureLookup for OpenGlTextureLookup<'_> {
     }
 }
 
+#[cfg(target_os = "macos")]
+impl metal::TextureLookup for MetalTextureLookup<'_> {
+    fn metal_texture(&self, handle: TextureHandle) -> Option<&metal::Texture> {
+        match self.0.get(&handle)? {
+            Texture::Metal(texture) => Some(texture),
+            _ => None,
+        }
+    }
+}
+
 impl wgpu_core::TextureLookup for WgpuTextureLookup<'_> {
     fn wgpu_texture(&self, handle: TextureHandle) -> Option<&wgpu_core::Texture> {
         match (self.kind, self.textures.get(&handle)?) {
             #[cfg(all(not(target_pointer_width = "32"), not(target_vendor = "win7")))]
             (WgpuTextureKind::Vulkan, Texture::VulkanWgpu(texture)) => Some(texture),
             #[cfg(target_os = "macos")]
-            (WgpuTextureKind::Metal, Texture::Metal(texture)) => Some(texture),
+            (WgpuTextureKind::MetalWgpu, Texture::MetalWgpu(texture)) => Some(texture),
             (WgpuTextureKind::OpenGL, Texture::OpenGLWgpu(texture)) => Some(texture),
             #[cfg(target_os = "windows")]
             (WgpuTextureKind::DirectX, Texture::DirectX(texture)) => Some(texture),
@@ -107,7 +124,9 @@ enum BackendImpl {
     #[cfg(all(not(target_pointer_width = "32"), not(target_vendor = "win7")))]
     VulkanWgpu(Box<wgpu_core::State>),
     #[cfg(target_os = "macos")]
-    Metal(Box<wgpu_core::State>),
+    Metal(Box<metal::State>),
+    #[cfg(target_os = "macos")]
+    MetalWgpu(Box<wgpu_core::State>),
     OpenGL(Box<opengl::State>),
     OpenGLWgpu(Box<wgpu_core::State>),
     Software(Box<software::State>),
@@ -145,12 +164,19 @@ impl Backend {
                 apply_present_back_pressure,
             ),
             #[cfg(target_os = "macos")]
-            BackendImpl::Metal(state) => wgpu_core::draw(
+            BackendImpl::Metal(state) => metal::draw(
+                state,
+                frame,
+                &MetalTextureLookup(textures),
+                apply_present_back_pressure,
+            ),
+            #[cfg(target_os = "macos")]
+            BackendImpl::MetalWgpu(state) => wgpu_core::draw(
                 state,
                 frame,
                 &WgpuTextureLookup {
                     textures,
-                    kind: WgpuTextureKind::Metal,
+                    kind: WgpuTextureKind::MetalWgpu,
                 },
                 apply_present_back_pressure,
             ),
@@ -195,7 +221,9 @@ impl Backend {
             #[cfg(all(not(target_pointer_width = "32"), not(target_vendor = "win7")))]
             BackendImpl::VulkanWgpu(state) => wgpu_core::request_screenshot(state),
             #[cfg(target_os = "macos")]
-            BackendImpl::Metal(state) => wgpu_core::request_screenshot(state),
+            BackendImpl::Metal(state) => metal::request_screenshot(state),
+            #[cfg(target_os = "macos")]
+            BackendImpl::MetalWgpu(state) => wgpu_core::request_screenshot(state),
             BackendImpl::OpenGL(state) => opengl::request_screenshot(state),
             BackendImpl::OpenGLWgpu(state) => wgpu_core::request_screenshot(state),
             BackendImpl::Software(state) => software::request_screenshot(state),
@@ -212,7 +240,9 @@ impl Backend {
             #[cfg(all(not(target_pointer_width = "32"), not(target_vendor = "win7")))]
             BackendImpl::VulkanWgpu(state) => wgpu_core::capture_frame(state),
             #[cfg(target_os = "macos")]
-            BackendImpl::Metal(state) => wgpu_core::capture_frame(state),
+            BackendImpl::Metal(state) => metal::capture_frame(state),
+            #[cfg(target_os = "macos")]
+            BackendImpl::MetalWgpu(state) => wgpu_core::capture_frame(state),
             BackendImpl::OpenGLWgpu(state) => wgpu_core::capture_frame(state),
             BackendImpl::Software(_) => Err(std::io::Error::other(
                 "Screenshot capture is not implemented for Software renderer yet",
@@ -236,7 +266,9 @@ impl Backend {
             #[cfg(all(not(target_pointer_width = "32"), not(target_vendor = "win7")))]
             BackendImpl::VulkanWgpu(state) => wgpu_core::resize(state, width, height),
             #[cfg(target_os = "macos")]
-            BackendImpl::Metal(state) => wgpu_core::resize(state, width, height),
+            BackendImpl::Metal(state) => metal::resize(state, width, height),
+            #[cfg(target_os = "macos")]
+            BackendImpl::MetalWgpu(state) => wgpu_core::resize(state, width, height),
             BackendImpl::OpenGL(state) => opengl::resize(state, width, height),
             BackendImpl::OpenGLWgpu(state) => wgpu_core::resize(state, width, height),
             BackendImpl::Software(state) => software::resize(state, width, height),
@@ -252,7 +284,9 @@ impl Backend {
             #[cfg(all(not(target_pointer_width = "32"), not(target_vendor = "win7")))]
             BackendImpl::VulkanWgpu(state) => wgpu_core::cleanup(state),
             #[cfg(target_os = "macos")]
-            BackendImpl::Metal(state) => wgpu_core::cleanup(state),
+            BackendImpl::Metal(state) => metal::cleanup(state),
+            #[cfg(target_os = "macos")]
+            BackendImpl::MetalWgpu(state) => wgpu_core::cleanup(state),
             BackendImpl::OpenGL(state) => opengl::cleanup(state),
             BackendImpl::OpenGLWgpu(state) => wgpu_core::cleanup(state),
             BackendImpl::Software(state) => software::cleanup(state),
@@ -279,8 +313,13 @@ impl Backend {
             }
             #[cfg(target_os = "macos")]
             BackendImpl::Metal(state) => {
-                let tex = wgpu_core::create_texture(state, image, sampler)?;
+                let tex = metal::create_texture(state, image, sampler)?;
                 Ok(Texture::Metal(tex))
+            }
+            #[cfg(target_os = "macos")]
+            BackendImpl::MetalWgpu(state) => {
+                let tex = wgpu_core::create_texture(state, image, sampler)?;
+                Ok(Texture::MetalWgpu(tex))
             }
             BackendImpl::OpenGL(state) => {
                 let tex = opengl::create_texture(state, image, sampler)?;
@@ -318,6 +357,10 @@ impl Backend {
             }
             #[cfg(target_os = "macos")]
             (BackendImpl::Metal(state), Texture::Metal(texture)) => {
+                metal::update_texture(state, texture, image)
+            }
+            #[cfg(target_os = "macos")]
+            (BackendImpl::MetalWgpu(state), Texture::MetalWgpu(texture)) => {
                 wgpu_core::update_texture(state, texture, image)
             }
             (BackendImpl::OpenGL(state), Texture::OpenGL(texture)) => {
@@ -360,6 +403,10 @@ impl Backend {
             BackendImpl::Metal(_) => {
                 drop(old_textures);
             }
+            #[cfg(target_os = "macos")]
+            BackendImpl::MetalWgpu(_) => {
+                drop(old_textures);
+            }
             BackendImpl::OpenGL(state) => {
                 for tex in old_textures.values() {
                     if let Texture::OpenGL(texture) = tex {
@@ -398,6 +445,10 @@ impl Backend {
             BackendImpl::Metal(_) => {
                 drop(old_textures);
             }
+            #[cfg(target_os = "macos")]
+            BackendImpl::MetalWgpu(_) => {
+                drop(old_textures);
+            }
             BackendImpl::OpenGL(state) => {
                 for tex in old_textures.values() {
                     if let Texture::OpenGL(texture) = tex {
@@ -425,7 +476,9 @@ impl Backend {
             #[cfg(all(not(target_pointer_width = "32"), not(target_vendor = "win7")))]
             BackendImpl::VulkanWgpu(state) => wgpu_core::wait_for_idle(state),
             #[cfg(target_os = "macos")]
-            BackendImpl::Metal(state) => wgpu_core::wait_for_idle(state),
+            BackendImpl::Metal(state) => metal::wait_for_idle(state),
+            #[cfg(target_os = "macos")]
+            BackendImpl::MetalWgpu(state) => wgpu_core::wait_for_idle(state),
             BackendImpl::OpenGL(_) => {
                 // This is a no-op for OpenGL.
             }
@@ -464,7 +517,14 @@ pub fn create_backend(
             gfx_debug_enabled,
         )?)),
         #[cfg(target_os = "macos")]
-        BackendType::Metal => BackendImpl::Metal(Box::new(wgpu_core::init_metal(
+        BackendType::Metal => BackendImpl::Metal(Box::new(metal::init(
+            window,
+            vsync_enabled,
+            present_mode_policy,
+            gfx_debug_enabled,
+        )?)),
+        #[cfg(target_os = "macos")]
+        BackendType::MetalWgpu => BackendImpl::MetalWgpu(Box::new(wgpu_core::init_metal(
             window,
             vsync_enabled,
             present_mode_policy,
@@ -513,6 +573,10 @@ impl Backend {
             }
             #[cfg(target_os = "macos")]
             BackendImpl::Metal(state) => {
+                metal::set_present_config(state, vsync_enabled, present_mode_policy)
+            }
+            #[cfg(target_os = "macos")]
+            BackendImpl::MetalWgpu(state) => {
                 wgpu_core::set_present_config(state, vsync_enabled, present_mode_policy)
             }
             BackendImpl::OpenGL(state) => opengl::set_vsync_enabled(state, vsync_enabled),
