@@ -2174,6 +2174,93 @@ M000
     }
 
     #[test]
+    fn disabling_holding_explosions_keeps_hold_and_roll_heads_engaged() {
+        let simfile = write_fixture("holding-explosion-off", generated_hold_mine_simfile());
+        with_session(
+            profile_data::PlayStyle::Single,
+            profile_data::PlayerSide::P1,
+            true,
+            false,
+            || {
+                let metrics = space::metrics_for_window(640, 480);
+                space::set_current_metrics(metrics);
+                space::set_current_window_px(640, 480);
+                space::set_overscan(0, 0, 0, 0);
+
+                let mut profiles = [
+                    profile_data::Profile::default(),
+                    profile_data::Profile::default(),
+                ];
+                profiles[0].noteskin = profile_data::NoteSkin::new("lambda");
+                profiles[0]
+                    .tap_explosion_active_mask
+                    .remove(profile_data::TapExplosionMask::HOLDING);
+                let mut state = build_test_state(
+                    &simfile,
+                    GameplayViewport::new(640.0, 480.0),
+                    GameplaySession::default(),
+                    profiles,
+                );
+                set_fixture_time(&mut state, 2.5);
+                add_hold_mine_state(&mut state);
+                let hold = state
+                    .active_hold(0)
+                    .cloned()
+                    .expect("fixture hold should be active");
+                let roll = state
+                    .active_hold(1)
+                    .cloned()
+                    .expect("fixture roll should be active");
+                state.clear_active_holds();
+
+                let assets = fixture_assets();
+                let mut actors = Vec::with_capacity(512);
+                let mut text_cache = compose::TextLayoutCache::default();
+                let mut compose_scratch = compose::ComposeScratch::default();
+                let inactive = compose_fixture_frame(
+                    &mut state,
+                    &assets,
+                    &metrics,
+                    &mut actors,
+                    &mut text_cache,
+                    &mut compose_scratch,
+                );
+
+                state.set_active_hold(0, Some(hold));
+                let engaged_hold = compose_fixture_frame(
+                    &mut state,
+                    &assets,
+                    &metrics,
+                    &mut actors,
+                    &mut text_cache,
+                    &mut compose_scratch,
+                );
+                assert_ne!(
+                    compare_render_frames(&inactive, &engaged_hold),
+                    Ok(()),
+                    "an active hold must stay pinned when Holding explosions are disabled"
+                );
+
+                state.set_active_hold(0, None);
+                state.set_active_hold(1, Some(roll));
+                let engaged_roll = compose_fixture_frame(
+                    &mut state,
+                    &assets,
+                    &metrics,
+                    &mut actors,
+                    &mut text_cache,
+                    &mut compose_scratch,
+                );
+                assert_ne!(
+                    compare_render_frames(&inactive, &engaged_roll),
+                    Ok(()),
+                    "an active roll must stay pinned when Holding explosions are disabled"
+                );
+            },
+        );
+    }
+
+    #[test]
     fn hold_mine_frame_is_structurally_repeatable() {
         let simfile = write_fixture("f0-hold-mine", generated_hold_mine_simfile());
         with_session(

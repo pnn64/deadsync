@@ -966,10 +966,7 @@ pub(crate) fn compose_frame(
             }
             let col = col_start + local_col;
             NotefieldLaneFeedback {
-                active_hold: options
-                    .hold_explosion_enabled
-                    .then(|| state.active_hold(col))
-                    .flatten(),
+                active_hold: state.active_hold(col),
                 receptor_bop_zoom: if options.hide_targets {
                     0.0
                 } else {
