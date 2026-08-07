@@ -523,6 +523,9 @@ pub enum MusicWheelSlotRuntimeRequest<'a> {
     Pack {
         key: Option<&'a str>,
     },
+    Series {
+        key: &'a str,
+    },
     Song {
         song: &'a deadsync_chart::SongData,
         chart_hashes: [Option<&'a str>; 2],

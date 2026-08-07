@@ -96,6 +96,10 @@ pub enum SimplyLoveProfileRequest {
         side: deadsync_profile::PlayerSide,
         pack_name: String,
     },
+    ToggleSeriesFavorite {
+        side: deadsync_profile::PlayerSide,
+        series_name: String,
+    },
     MarkPacksKnown {
         profile_ids: Vec<String>,
         pack_names: Vec<String>,

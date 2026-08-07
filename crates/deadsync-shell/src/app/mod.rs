@@ -1778,6 +1778,9 @@ impl App {
             MusicWheelSlotRuntimeRequest::Pack { key } => {
                 profile_data::FavoriteMembershipQuery::Pack(key)
             }
+            MusicWheelSlotRuntimeRequest::Series { key } => {
+                profile_data::FavoriteMembershipQuery::Series(key)
+            }
             MusicWheelSlotRuntimeRequest::Song { song, .. } => {
                 profile_data::FavoriteMembershipQuery::Song(song)
             }
@@ -1787,7 +1790,8 @@ impl App {
             let mut view = MusicWheelSlotRuntimeView::default();
             match request.slots[slot_idx] {
                 MusicWheelSlotRuntimeRequest::Empty => {}
-                MusicWheelSlotRuntimeRequest::Pack { .. } => {
+                MusicWheelSlotRuntimeRequest::Pack { .. }
+                | MusicWheelSlotRuntimeRequest::Series { .. } => {
                     for side_idx in 0..2 {
                         view.sides[side_idx].favorite =
                             joined[side_idx] && favorite_membership[slot_idx][side_idx];
@@ -3442,6 +3446,12 @@ impl App {
                     SimplyLoveProfileRequest::TogglePackFavorite { side, pack_name },
                 ) => {
                     profile::toggle_pack_favorite(side, &pack_name);
+                    Vec::new()
+                }
+                SimplyLoveRuntimeRequest::Profile(
+                    SimplyLoveProfileRequest::ToggleSeriesFavorite { side, series_name },
+                ) => {
+                    profile::toggle_series_favorite(side, &series_name);
                     Vec::new()
                 }
                 SimplyLoveRuntimeRequest::Profile(SimplyLoveProfileRequest::MarkPacksKnown {

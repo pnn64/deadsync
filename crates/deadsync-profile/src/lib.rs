@@ -291,12 +291,14 @@ pub fn runtime_with_session_players<R>(
 pub struct FavoriteSnapshot {
     pub chart_hashes: [HashSet<String>; PLAYER_SLOTS],
     pub pack_names: [HashSet<String>; PLAYER_SLOTS],
+    pub series_names: [HashSet<String>; PLAYER_SLOTS],
 }
 
 pub fn favorite_snapshot(profiles: &[Profile; PLAYER_SLOTS]) -> FavoriteSnapshot {
     FavoriteSnapshot {
         chart_hashes: std::array::from_fn(|idx| profiles[idx].favorites.clone()),
         pack_names: std::array::from_fn(|idx| profiles[idx].favorited_packs.clone()),
+        series_names: std::array::from_fn(|idx| profiles[idx].favorited_series.clone()),
     }
 }
 
@@ -492,6 +494,7 @@ pub fn runtime_apply_loaded_profile_data_for_side(
     stats: ProfileStats,
     favorites: HashSet<String>,
     favorited_packs: HashSet<String>,
+    favorited_series: HashSet<String>,
     groovestats_ini_loaded: bool,
     groovestats_get: impl FnMut(&str, &str) -> Option<String>,
     arrowcloud_ini_loaded: bool,
@@ -512,6 +515,7 @@ pub fn runtime_apply_loaded_profile_data_for_side(
         stats,
         favorites,
         favorited_packs,
+        favorited_series,
         groovestats_ini_loaded,
         groovestats_get,
         arrowcloud_ini_loaded,
@@ -554,6 +558,7 @@ pub fn runtime_load_profile_data_for_side(
         stats_error,
         favorites,
         favorited_packs,
+        favorited_series,
         avatar_path,
     } = load_profile_sidecars_dir(profile_dir, default_profile);
 
@@ -571,6 +576,7 @@ pub fn runtime_load_profile_data_for_side(
         stats,
         favorites,
         favorited_packs,
+        favorited_series,
         groovestats_ini.is_some(),
         |section, key| {
             groovestats_ini
@@ -925,6 +931,26 @@ pub fn runtime_toggle_favorited_pack_for_side(
     save_favorited_packs_dir(
         &runtime_profile_dir_for_id(root, &profile_id, duplicate),
         &packs,
+    );
+    is_now_favorite
+}
+
+pub fn runtime_toggle_favorited_series_for_side(
+    root: &Path,
+    side: PlayerSide,
+    series_name: &str,
+    duplicate: impl FnMut(&str, &Path, &Path, &Path),
+) -> bool {
+    let Some(profile_id) = runtime_active_local_profile_id_for_side(side) else {
+        return false;
+    };
+    let (is_now_favorite, series) = {
+        let mut profiles = runtime_lock_profiles();
+        toggle_favorited_series_for_side(&mut profiles, side, series_name)
+    };
+    save_favorited_series_dir(
+        &runtime_profile_dir_for_id(root, &profile_id, duplicate),
+        &series,
     );
     is_now_favorite
 }
@@ -2520,6 +2546,7 @@ pub fn profile_has_favorite(
 pub enum FavoriteMembershipQuery<'a> {
     None,
     Pack(Option<&'a str>),
+    Series(&'a str),
     Song(&'a deadsync_chart::SongData),
 }
 
@@ -2532,6 +2559,9 @@ pub fn favorite_membership<const N: usize>(
             FavoriteMembershipQuery::None | FavoriteMembershipQuery::Pack(None) => false,
             FavoriteMembershipQuery::Pack(Some(pack)) => {
                 profiles[side_idx].favorited_packs.contains(pack)
+            }
+            FavoriteMembershipQuery::Series(series) => {
+                profiles[side_idx].favorited_series.contains(series)
             }
             FavoriteMembershipQuery::Song(song) => song
                 .charts
@@ -2549,6 +2579,16 @@ pub fn toggle_favorited_pack_for_side(
     let profile = &mut profiles[player_side_index(side)];
     let is_now_favorite = toggle_favorited_pack(&mut profile.favorited_packs, pack_name);
     (is_now_favorite, profile.favorited_packs.clone())
+}
+
+pub fn toggle_favorited_series_for_side(
+    profiles: &mut [Profile; PLAYER_SLOTS],
+    side: PlayerSide,
+    series_name: &str,
+) -> (bool, HashSet<String>) {
+    let profile = &mut profiles[player_side_index(side)];
+    let is_now_favorite = toggle_favorited_series(&mut profile.favorited_series, series_name);
+    (is_now_favorite, profile.favorited_series.clone())
 }
 
 pub fn seed_favorited_pack_for_side(
@@ -2643,6 +2683,7 @@ pub fn apply_loaded_profile_data(
     stats: ProfileStats,
     favorites: HashSet<String>,
     favorited_packs: HashSet<String>,
+    favorited_series: HashSet<String>,
     groovestats_ini_loaded: bool,
     mut groovestats_get: impl FnMut(&str, &str) -> Option<String>,
     arrowcloud_ini_loaded: bool,
@@ -2738,6 +2779,7 @@ pub fn apply_loaded_profile_data(
     profile.known_pack_names = stats.known_pack_names;
     profile.favorites = favorites;
     profile.favorited_packs = favorited_packs;
+    profile.favorited_series = favorited_series;
 
     if groovestats_ini_loaded {
         profile.groovestats_api_key = groovestats_get("GrooveStats", "ApiKey")
@@ -2790,6 +2832,7 @@ pub const PROFILE_STATS_FILE: &str = "stats.bin";
 pub const PROFILE_STATS_TMP_FILE: &str = "stats.bin.tmp";
 pub const FAVORITES_FILE: &str = "favorites.txt";
 pub const FAVORITED_PACKS_FILE: &str = "favorited_packs.txt";
+pub const FAVORITED_SERIES_FILE: &str = "favorited_series.txt";
 
 #[inline(always)]
 pub fn profile_ini_path(dir: &Path) -> PathBuf {
@@ -2824,6 +2867,11 @@ pub fn favorites_path(dir: &Path) -> PathBuf {
 #[inline(always)]
 pub fn favorited_packs_path(dir: &Path) -> PathBuf {
     dir.join(FAVORITED_PACKS_FILE)
+}
+
+#[inline(always)]
+pub fn favorited_series_path(dir: &Path) -> PathBuf {
+    dir.join(FAVORITED_SERIES_FILE)
 }
 
 /// Read the embedded `Guid` and `DisplayName` from a folder's `profile.ini`.
@@ -6343,12 +6391,20 @@ pub fn load_favorited_packs_dir(dir: &Path) -> HashSet<String> {
     parse_favorited_packs_content(&text)
 }
 
+pub fn load_favorited_series_dir(dir: &Path) -> HashSet<String> {
+    let Ok(text) = fs::read_to_string(favorited_series_path(dir)) else {
+        return HashSet::new();
+    };
+    parse_favorited_packs_content(&text)
+}
+
 #[derive(Debug)]
 pub struct ProfileSidecarLoadData {
     pub stats: ProfileStats,
     pub stats_error: Option<ProfileStatsLoadError>,
     pub favorites: HashSet<String>,
     pub favorited_packs: HashSet<String>,
+    pub favorited_series: HashSet<String>,
     pub avatar_path: Option<PathBuf>,
 }
 
@@ -6376,6 +6432,7 @@ pub fn load_profile_sidecars_dir(dir: &Path, default_profile: &Profile) -> Profi
         stats_error,
         favorites: load_favorites_dir(dir),
         favorited_packs: load_favorited_packs_dir(dir),
+        favorited_series: load_favorited_series_dir(dir),
         avatar_path: find_profile_avatar_path(dir),
     }
 }
@@ -6387,15 +6444,30 @@ pub fn save_favorited_packs_dir(dir: &Path, packs: &HashSet<String>) {
     );
 }
 
-pub fn toggle_favorited_pack(packs: &mut HashSet<String>, pack_name: &str) -> bool {
-    let existing = packs.iter().find(|p| *p == pack_name).cloned();
+pub fn save_favorited_series_dir(dir: &Path, series: &HashSet<String>) {
+    save_set_file(
+        favorited_series_path(dir).as_path(),
+        render_favorited_packs_content(series),
+    );
+}
+
+fn toggle_named_favorite(names: &mut HashSet<String>, name: &str) -> bool {
+    let existing = names.iter().find(|existing| *existing == name).cloned();
     if let Some(existing) = existing {
-        packs.remove(&existing);
+        names.remove(&existing);
         false
     } else {
-        packs.insert(pack_name.to_string());
+        names.insert(name.to_string());
         true
     }
+}
+
+pub fn toggle_favorited_pack(packs: &mut HashSet<String>, pack_name: &str) -> bool {
+    toggle_named_favorite(packs, pack_name)
+}
+
+pub fn toggle_favorited_series(series: &mut HashSet<String>, series_name: &str) -> bool {
+    toggle_named_favorite(series, series_name)
 }
 
 pub fn add_known_pack_names<'a>(
@@ -8168,6 +8240,7 @@ pub struct Profile {
     pub known_pack_names: HashSet<String>,
     pub favorites: HashSet<String>,
     pub favorited_packs: HashSet<String>,
+    pub favorited_series: HashSet<String>,
     pub noteskin: NoteSkin,
     pub mine_noteskin: Option<NoteSkin>,
     pub receptor_noteskin: Option<NoteSkin>,
@@ -8385,6 +8458,7 @@ impl Default for Profile {
             known_pack_names: HashSet::new(),
             favorites: HashSet::new(),
             favorited_packs: HashSet::new(),
+            favorited_series: HashSet::new(),
             noteskin: player_options.noteskin.clone(),
             mine_noteskin: player_options.mine_noteskin.clone(),
             receptor_noteskin: player_options.receptor_noteskin.clone(),
@@ -9932,16 +10006,24 @@ mod tests {
         let mut profiles = [Profile::default(), Profile::default()];
         profiles[0].favorited_packs.insert("Pack A".to_string());
         profiles[1].favorited_packs.insert("Pack B".to_string());
+        profiles[1].favorited_series.insert("ITG".to_string());
         let queries = [
             FavoriteMembershipQuery::Pack(Some("Pack A")),
             FavoriteMembershipQuery::Pack(Some("Pack B")),
+            FavoriteMembershipQuery::Series("ITG"),
             FavoriteMembershipQuery::Pack(None),
             FavoriteMembershipQuery::None,
         ];
 
         assert_eq!(
             favorite_membership(&profiles, &queries),
-            [[true, false], [false, true], [false, false], [false, false]]
+            [
+                [true, false],
+                [false, true],
+                [false, true],
+                [false, false],
+                [false, false]
+            ]
         );
     }
 
@@ -11444,6 +11526,23 @@ mod tests {
     }
 
     #[test]
+    fn favorited_series_dir_load_save_and_toggle_round_trip() {
+        let dir = temp_profile_dir("favorited-series");
+        assert!(load_favorited_series_dir(&dir).is_empty());
+
+        let mut series = HashSet::from(["ITG".to_string(), "DanceDanceRevolution".to_string()]);
+        save_favorited_series_dir(&dir, &series);
+        assert_eq!(load_favorited_series_dir(&dir), series);
+
+        assert!(!toggle_favorited_series(&mut series, "ITG"));
+        assert!(!series.contains("ITG"));
+        assert!(toggle_favorited_series(&mut series, "ITG"));
+        assert!(series.contains("ITG"));
+
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
     fn profile_sidecars_load_defaults_when_files_are_missing() {
         let dir = temp_profile_dir("profile-sidecars-missing");
         let mut default_profile = Profile::default();
@@ -11456,6 +11555,7 @@ mod tests {
         assert!(sidecars.stats_error.is_none());
         assert!(sidecars.favorites.is_empty());
         assert!(sidecars.favorited_packs.is_empty());
+        assert!(sidecars.favorited_series.is_empty());
         assert!(sidecars.avatar_path.is_none());
 
         let _ = fs::remove_dir_all(dir);
@@ -11471,11 +11571,13 @@ mod tests {
         };
         let favorites = HashSet::from(["chart-hash".to_string()]);
         let packs = HashSet::from(["Pack A".to_string()]);
+        let series = HashSet::from(["Series A".to_string()]);
         let avatar = dir.join("profile.png");
 
         write_profile_stats_dir(&dir, &stats).expect("stats should write");
         save_favorites_dir(&dir, &favorites);
         save_favorited_packs_dir(&dir, &packs);
+        save_favorited_series_dir(&dir, &series);
         fs::write(&avatar, b"avatar").expect("avatar should write");
 
         let sidecars = load_profile_sidecars_dir(&dir, &default_profile);
@@ -11484,6 +11586,7 @@ mod tests {
         assert!(sidecars.stats_error.is_none());
         assert_eq!(sidecars.favorites, favorites);
         assert_eq!(sidecars.favorited_packs, packs);
+        assert_eq!(sidecars.favorited_series, series);
         assert_eq!(sidecars.avatar_path, Some(avatar));
 
         let _ = fs::remove_dir_all(dir);
@@ -12410,6 +12513,7 @@ ApiKey = gs-key
             },
             HashSet::from(["chart-a".to_string()]),
             HashSet::from(["Pack A".to_string()]),
+            HashSet::from(["Series A".to_string()]),
             true,
             |section, key| gs_values.get(&(section, key)).cloned(),
             true,
@@ -12430,6 +12534,7 @@ ApiKey = gs-key
         assert!(profile.known_pack_names.contains("Pack A"));
         assert!(profile.favorites.contains("chart-a"));
         assert!(profile.favorited_packs.contains("Pack A"));
+        assert!(profile.favorited_series.contains("Series A"));
         assert_eq!(profile.groovestats_api_key, "gs-key");
         assert!(profile.groovestats_is_pad_player);
         assert_eq!(profile.groovestats_username, "player");
@@ -12845,6 +12950,13 @@ ApiKey = gs-key
 
         seed_favorited_pack_for_side(&mut profiles, PlayerSide::P1, "Alpha");
         assert!(profile_has_favorited_pack(&profiles[0], "Alpha"));
+
+        let (added, series) =
+            toggle_favorited_series_for_side(&mut profiles, PlayerSide::P1, "ITG");
+        assert!(added);
+        assert_eq!(series, HashSet::from(["ITG".to_string()]));
+
+        assert!(profiles[0].favorited_series.contains("ITG"));
     }
 
     #[test]

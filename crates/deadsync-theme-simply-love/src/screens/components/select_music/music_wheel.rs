@@ -629,6 +629,12 @@ pub(crate) fn runtime_slot_requests<'a>(
         let list_index =
             ((selected_index as isize + offset + entries.len() as isize) as usize) % entries.len();
         match &entries[list_index] {
+            MusicWheelEntry::PackHeader {
+                name,
+                pack_key: None,
+                parent_series: Some(_),
+                ..
+            } => MusicWheelSlotRuntimeRequest::Series { key: name },
             MusicWheelEntry::PackHeader { pack_key, .. } => MusicWheelSlotRuntimeRequest::Pack {
                 key: pack_key.as_deref(),
             },
@@ -979,7 +985,7 @@ pub fn push(actors: &mut Vec<Actor>, p: MusicWheelParams) {
                     // Favorite heart icon on favorited pack headers — mirrors
                     // the song-row heart so the player can spot favorited packs
                     // while scrolling Group sort.
-                    if pack_key.is_some() {
+                    if pack_key.is_some() || is_series_header {
                         let p1_fav =
                             p1_joined && runtime_for_side(profile_data::PlayerSide::P1).favorite;
                         let p2_fav =
@@ -1886,6 +1892,32 @@ mod tests {
         assert!(matches!(
             slots[center + 1],
             MusicWheelSlotRuntimeRequest::Pack { key: Some("After") }
+        ));
+    }
+
+    #[test]
+    fn runtime_slot_requests_identify_series_headers() {
+        let entries = [MusicWheelEntry::PackHeader {
+            name: "ITG Series".to_string(),
+            original_index: 0,
+            banner_path: None,
+            song_count: 3,
+            pack_key: None,
+            parent_series: Some("ITG Series".to_string()),
+        }];
+
+        let slots = runtime_slot_requests(
+            &entries,
+            0,
+            [None, None],
+            [0, 0],
+            profile_data::PlayStyle::Single,
+            None,
+        );
+
+        assert!(matches!(
+            slots[MUSIC_WHEEL_SLOT_COUNT / 2],
+            MusicWheelSlotRuntimeRequest::Series { key: "ITG Series" }
         ));
     }
 

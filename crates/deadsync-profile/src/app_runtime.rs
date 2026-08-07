@@ -1405,6 +1405,15 @@ pub fn toggle_pack_favorite(side: PlayerSide, pack_name: &str) -> bool {
     )
 }
 
+pub fn toggle_series_favorite(side: PlayerSide, series_name: &str) -> bool {
+    crate::runtime_toggle_favorited_series_for_side(
+        &profiles_root(),
+        side,
+        series_name,
+        warn_duplicate_profile_guid,
+    )
+}
+
 pub fn set_active_profile_for_side_with_defaults(
     side: PlayerSide,
     profile: ActiveProfile,

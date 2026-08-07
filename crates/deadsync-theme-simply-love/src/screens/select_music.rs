@@ -564,8 +564,12 @@ pub fn sync_runtime_view(state: &mut State, view: SelectMusicRuntimeView) {
     state.profiles = view.profiles;
     if let Some(favorites) = view.favorites {
         state.favorites = favorites;
-        state.joined_favorites_entries =
-            build_favorites_view_entries(&state.group_entries, state.session, &state.favorites);
+        state.joined_favorites_entries = build_favorites_view_entries(
+            &state.group_entries,
+            &state.series_entries,
+            state.session,
+            &state.favorites,
+        );
         if matches!(state.sort_mode, WheelSortMode::Favorites(_)) {
             let sort_mode = state.sort_mode;
             apply_wheel_sort(state, sort_mode);
@@ -2089,13 +2093,16 @@ fn series_name_for_song(
     None
 }
 
-fn series_name_for_pack(series_entries: &[MusicWheelEntry], pack_key: &str) -> Option<String> {
+fn series_name_for_pack<'a>(
+    series_entries: &'a [MusicWheelEntry],
+    pack_key: &str,
+) -> Option<&'a str> {
     series_entries.iter().find_map(|entry| match entry {
         MusicWheelEntry::PackHeader {
             pack_key: Some(key),
             parent_series,
             ..
-        } if key == pack_key => parent_series.clone(),
+        } if key == pack_key => parent_series.as_deref(),
         _ => None,
     })
 }
@@ -2712,6 +2719,7 @@ fn build_top_grades_grouped_entries_for_side(
 
 fn build_favorites_view_entries(
     grouped_entries: &[MusicWheelEntry],
+    series_entries: &[MusicWheelEntry],
     session: SelectMusicSessionView,
     favorites: &profile_data::FavoriteSnapshot,
 ) -> Vec<MusicWheelEntry> {
@@ -2721,6 +2729,10 @@ fn build_favorites_view_entries(
     let pack_is_favorited = |pack_key: &str| -> bool {
         (p1_joined && favorites.pack_names[0].contains(pack_key))
             || (p2_joined && favorites.pack_names[1].contains(pack_key))
+            || series_name_for_pack(series_entries, pack_key).is_some_and(|series| {
+                (p1_joined && favorites.series_names[0].contains(series))
+                    || (p2_joined && favorites.series_names[1].contains(series))
+            })
     };
 
     let song_is_favorited = |song: &SongData| -> bool {
@@ -2741,11 +2753,16 @@ fn build_favorites_view_entries(
 
 fn build_favorites_view_entries_for_side(
     grouped_entries: &[MusicWheelEntry],
+    series_entries: &[MusicWheelEntry],
     side: profile_data::PlayerSide,
     favorites: &profile_data::FavoriteSnapshot,
 ) -> Vec<MusicWheelEntry> {
     let side_index = profile_data::player_side_index(side);
-    let pack_is_favorited = |pack_key: &str| favorites.pack_names[side_index].contains(pack_key);
+    let pack_is_favorited = |pack_key: &str| {
+        favorites.pack_names[side_index].contains(pack_key)
+            || series_name_for_pack(series_entries, pack_key)
+                .is_some_and(|series| favorites.series_names[side_index].contains(series))
+    };
     let song_is_favorited = |song: &SongData| {
         song.charts
             .iter()
@@ -2996,6 +3013,7 @@ fn apply_wheel_sort(state: &mut State, sort_mode: WheelSortMode) {
                         .expanded_pack_name
                         .as_deref()
                         .and_then(|pack| series_name_for_pack(&state.series_entries, pack))
+                        .map(str::to_owned)
                 });
         }
         WheelSortMode::Group => {
@@ -3101,8 +3119,12 @@ fn apply_wheel_sort(state: &mut State, sort_mode: WheelSortMode) {
         WheelSortMode::Favorites(side) => {
             // Simply Love's Preferred sort is per-player: the side whose Start
             // activated Favorites determines which profile's list is shown.
-            state.all_entries =
-                build_favorites_view_entries_for_side(&state.group_entries, side, &state.favorites);
+            state.all_entries = build_favorites_view_entries_for_side(
+                &state.group_entries,
+                &state.series_entries,
+                side,
+                &state.favorites,
+            );
             state.expanded_pack_name = selected_song
                 .as_ref()
                 .and_then(|song| group_name_for_song(&state.all_entries, song))
@@ -3330,8 +3352,12 @@ pub fn init(init_view: SelectMusicInitView) -> State {
         build_top_grades_grouped_entries_for_side(&all_entries, target_chart_type, p1_history);
     let top_grades_p2_entries =
         build_top_grades_grouped_entries_for_side(&all_entries, target_chart_type, p2_history);
-    let joined_favorites_entries =
-        build_favorites_view_entries(&all_entries, init_view.session, &init_view.favorites);
+    let joined_favorites_entries = build_favorites_view_entries(
+        &all_entries,
+        &series_entries,
+        init_view.session,
+        &init_view.favorites,
+    );
     let playlist_library = build_playlist_library(
         &all_entries,
         &init_view.playlists,
@@ -3355,6 +3381,7 @@ pub fn init(init_view: SelectMusicInitView) -> State {
             initial_expanded_pack_name
                 .as_deref()
                 .and_then(|pack| series_name_for_pack(&series_entries, pack))
+                .map(str::to_owned)
         })
         .flatten();
     let initial_entries = if use_series_sort {
@@ -4174,6 +4201,22 @@ fn advance_nav_hold(state: &mut State, dt: f32) -> bool {
     nav_hold_started(state)
 }
 
+fn finish_favorite_toggle(state: &mut State, is_now_favorite: bool) {
+    state.joined_favorites_entries = build_favorites_view_entries(
+        &state.group_entries,
+        &state.series_entries,
+        state.session,
+        &state.favorites,
+    );
+    if matches!(state.sort_mode, WheelSortMode::Favorites(_)) {
+        apply_wheel_sort(state, state.sort_mode);
+    }
+    queue_sfx(
+        state,
+        crate::screens::favorite_code::toggle_sfx(is_now_favorite),
+    );
+}
+
 fn toggle_favorite_for_selected_entry(state: &mut State, side: profile_data::PlayerSide) {
     let side_idx = profile_data::player_side_index(side);
     if state.profiles.local_profile_id(side).is_none() {
@@ -4200,48 +4243,46 @@ fn toggle_favorite_for_selected_entry(state: &mut State, side: profile_data::Pla
                         chart_hash: chart.short_hash.clone(),
                     },
                 );
-                state.joined_favorites_entries = build_favorites_view_entries(
-                    &state.group_entries,
-                    state.session,
-                    &state.favorites,
-                );
-                if matches!(state.sort_mode, WheelSortMode::Favorites(_)) {
-                    let sort_mode = state.sort_mode;
-                    apply_wheel_sort(state, sort_mode);
-                }
-                queue_sfx(
-                    state,
-                    crate::screens::favorite_code::toggle_sfx(is_now_favorite),
-                );
+                finish_favorite_toggle(state, is_now_favorite);
             }
         }
-        Some(entry @ MusicWheelEntry::PackHeader { .. }) => {
-            let Some(pack_key) = entry.pack_key() else {
-                return;
-            };
+        Some(MusicWheelEntry::PackHeader {
+            name,
+            pack_key: None,
+            parent_series: Some(_),
+            ..
+        }) => {
+            let is_now_favorite = profile_data::toggle_favorited_series(
+                &mut state.favorites.series_names[side_idx],
+                &name,
+            );
+            queue_profile(
+                state,
+                crate::SimplyLoveProfileRequest::ToggleSeriesFavorite {
+                    side,
+                    series_name: name,
+                },
+            );
+            finish_favorite_toggle(state, is_now_favorite);
+        }
+        Some(MusicWheelEntry::PackHeader {
+            pack_key: Some(pack_key),
+            ..
+        }) => {
             let is_now_favorite = profile_data::toggle_favorited_pack(
                 &mut state.favorites.pack_names[side_idx],
-                pack_key,
+                &pack_key,
             );
             queue_profile(
                 state,
                 crate::SimplyLoveProfileRequest::TogglePackFavorite {
                     side,
-                    pack_name: pack_key.to_owned(),
+                    pack_name: pack_key,
                 },
             );
-            state.joined_favorites_entries =
-                build_favorites_view_entries(&state.group_entries, state.session, &state.favorites);
-            if matches!(state.sort_mode, WheelSortMode::Favorites(_)) {
-                let sort_mode = state.sort_mode;
-                apply_wheel_sort(state, sort_mode);
-            }
-            queue_sfx(
-                state,
-                crate::screens::favorite_code::toggle_sfx(is_now_favorite),
-            );
+            finish_favorite_toggle(state, is_now_favorite);
         }
-        None => {}
+        Some(MusicWheelEntry::PackHeader { .. }) | None => {}
     }
 }
 
@@ -4575,6 +4616,10 @@ fn build_select_music_menu(state: &State) -> select_music_menu::MenuLists {
         .get(state.selected_index)
         .and_then(MusicWheelEntry::pack_key)
         .is_some();
+    let has_series_selected = state
+        .entries
+        .get(state.selected_index)
+        .is_some_and(MusicWheelEntry::is_series_header);
     let p1_joined = state.session.side_joined(profile_data::PlayerSide::P1);
     let p2_joined = state.session.side_joined(profile_data::PlayerSide::P2);
     let single_player_joined = p1_joined ^ p2_joined;
@@ -4589,7 +4634,7 @@ fn build_select_music_menu(state: &State) -> select_music_menu::MenuLists {
         standalone.push(select_music_menu::ITEM_PRACTICE_MODE);
         standalone.push(select_music_menu::ITEM_SHOW_LEADERBOARD);
         standalone.push(select_music_menu::ITEM_TOGGLE_FAVORITE);
-    } else if has_pack_selected {
+    } else if has_pack_selected || has_series_selected {
         standalone.push(select_music_menu::ITEM_TOGGLE_FAVORITE);
     }
     // Favorites shortcut (only when favorites exist)
@@ -11985,9 +12030,9 @@ impl SelectMusicWheelChartBench {
                     .flatten()
                     .map(|hash| hash.len())
                     .sum::<usize>(),
-                MusicWheelSlotRuntimeRequest::Empty | MusicWheelSlotRuntimeRequest::Pack { .. } => {
-                    0
-                }
+                MusicWheelSlotRuntimeRequest::Empty
+                | MusicWheelSlotRuntimeRequest::Pack { .. }
+                | MusicWheelSlotRuntimeRequest::Series { .. } => 0,
             })
             .sum::<usize>();
         self.actors.clear();
@@ -15644,6 +15689,50 @@ mod tests {
     }
 
     #[test]
+    fn series_favorite_updates_local_view_before_shell_persistence() {
+        let mut state = init_placeholder();
+        state.profiles.local_profile_ids[0] = Some("alice".to_string());
+        state.entries = vec![super::MusicWheelEntry::PackHeader {
+            name: "ITG Series".to_string(),
+            original_index: 0,
+            banner_path: None,
+            song_count: 3,
+            pack_key: None,
+            parent_series: Some("ITG Series".to_string()),
+        }];
+
+        let menu = super::build_select_music_menu(&state);
+        assert!(
+            menu.standalone
+                .iter()
+                .any(|item| { item.action == super::select_music_menu::Action::ToggleFavorite })
+        );
+
+        super::toggle_favorite_for_selected_entry(&mut state, profile_data::PlayerSide::P1);
+
+        assert!(state.favorites.series_names[0].contains("ITG Series"));
+        assert!(state.favorites.pack_names[0].is_empty());
+        let ThemeEffect::Batch(effects) =
+            super::prepend_pending_runtime(&mut state, ThemeEffect::None)
+        else {
+            panic!("favorite persistence should precede its sound");
+        };
+        assert!(matches!(
+            effects.as_slice(),
+            [
+                ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Profile(
+                    crate::SimplyLoveProfileRequest::ToggleSeriesFavorite { side, series_name }
+                )),
+                ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Audio(
+                    deadsync_theme::AudioRequest::PlaySfx(path)
+                )),
+            ] if *side == profile_data::PlayerSide::P1
+                && series_name == "ITG Series"
+                && path == "assets/sounds/start.ogg"
+        ));
+    }
+
+    #[test]
     fn chart_favorite_uses_player_chart_and_toggles_off() {
         let song = super::bench_folder_stats_song(0);
         let p1_hash = song.charts[1].short_hash.clone();
@@ -16121,6 +16210,7 @@ mod tests {
         state.favorites.pack_names[1].insert("Pack B".to_string());
         state.joined_favorites_entries = super::build_favorites_view_entries(
             &state.group_entries,
+            &state.series_entries,
             state.session,
             &state.favorites,
         );
@@ -16167,6 +16257,39 @@ mod tests {
             } if name == "Pack B" && key == "Pack B"
         ));
         assert_eq!(song_titles(&favorites), ["Song B1"]);
+    }
+
+    #[test]
+    fn favorites_view_includes_every_pack_in_favorited_series() {
+        let grouped_entries = test_entries();
+        let packs = [
+            test_pack("Pack A", "ITG Series"),
+            test_pack("Pack B", "ITG Series"),
+        ];
+        let series_entries = super::build_series_grouped_entries(&grouped_entries, &packs);
+        let mut favorites = profile_data::FavoriteSnapshot::default();
+        favorites.series_names[0].insert("ITG Series".to_string());
+        let session = crate::views::SelectMusicSessionView {
+            joined: [true, false],
+            ..Default::default()
+        };
+
+        let entries = super::build_favorites_view_entries(
+            &grouped_entries,
+            &series_entries,
+            session,
+            &favorites,
+        );
+
+        let headers = entries
+            .iter()
+            .filter_map(|entry| match entry {
+                super::MusicWheelEntry::PackHeader { name, .. } => Some(name.as_str()),
+                super::MusicWheelEntry::Song(_) => None,
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(headers, ["Pack A", "Pack B"]);
+        assert_eq!(song_titles(&entries), ["Song A1", "Song A2", "Song B1"]);
     }
 
     #[test]
