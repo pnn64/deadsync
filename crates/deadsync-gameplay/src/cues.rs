@@ -149,7 +149,7 @@ pub fn build_crossover_rows<const LANES: usize>(
     notes: &[Note],
     note_range: (usize, usize),
     col_start: usize,
-) -> (Vec<[u8; LANES]>, Vec<f32>) {
+) -> (Vec<[u8; LANES]>, Vec<f32>, Vec<usize>) {
     use std::collections::BTreeMap;
 
     let (start, end) = note_range;
@@ -195,11 +195,13 @@ pub fn build_crossover_rows<const LANES: usize>(
     }
     let mut row_arrays = Vec::with_capacity(rows.len());
     let mut row_to_beat = Vec::with_capacity(rows.len());
-    for (_row_index, (arr, beat)) in rows {
+    let mut row_indices = Vec::with_capacity(rows.len());
+    for (row_index, (arr, beat)) in rows {
         row_arrays.push(arr);
         row_to_beat.push(beat);
+        row_indices.push(row_index);
     }
-    (row_arrays, row_to_beat)
+    (row_arrays, row_to_beat, row_indices)
 }
 
 pub type CrossoverAnnotationBuilder =

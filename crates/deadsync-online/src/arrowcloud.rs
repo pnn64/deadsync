@@ -10,7 +10,6 @@ use deadsync_rules::{
     judgment,
     note::Note,
     scroll::ScrollSpeedSetting,
-    stream::StreamSegment,
     timing::{ScatterPoint, WindowCounts},
 };
 use deadsync_score::{
@@ -2022,7 +2021,6 @@ pub struct ArrowCloudGameplayPayloadInput<'a> {
     pub note_times: &'a [i64],
     pub col_offset: usize,
     pub cols_per_player: usize,
-    pub stream_segments: &'a [StreamSegment],
     pub fail_time_ns: Option<i64>,
     pub submit_stats: ArrowCloudSubmitStats,
     pub total_holds: u32,
@@ -2109,7 +2107,6 @@ pub fn payload_from_gameplay_input(input: ArrowCloudGameplayPayloadInput<'_>) ->
         input.note_times,
         input.col_offset,
         input.cols_per_player,
-        input.stream_segments,
     );
     let fail_time_s = input.fail_time_ns.map(song_time_ns_to_seconds);
 
@@ -2242,8 +2239,6 @@ where
     let totals = gs.display_totals_for_player(player_idx);
     let (start, end) = gs.note_range_for_player(player_idx);
     let graph = gs.density_graph_view();
-    let stream_segments = gs.stream_segments_for_results(player_idx);
-
     Some(payload_from_gameplay_input(
         ArrowCloudGameplayPayloadInput {
             song_name: song.display_full_title(true),
@@ -2257,7 +2252,6 @@ where
             note_times: &gs.note_time_cache_ns()[start..end],
             col_offset: player_idx.saturating_mul(gs.cols_per_player()),
             cols_per_player: gs.cols_per_player(),
-            stream_segments: &stream_segments,
             fail_time_ns,
             submit_stats,
             total_holds: totals.holds_total,
@@ -2730,6 +2724,7 @@ mod tests {
         AccelEffectsMask, AppearanceEffectsMask, Perspective, ScrollOption, TurnOption,
         VisualEffectsMask,
     };
+    use deadsync_rules::timing::ScatterFoot;
     use deadsync_rules::{judgment, scroll::ScrollSpeedSetting, timing::WindowCounts};
     use deadsync_score::{
         ArrowCloudPaneKind, ArrowCloudServerGrade, ArrowCloudSubmitUiStatus, ArrowCloudUserContext,
@@ -2808,25 +2803,28 @@ mod tests {
                 time_sec: 1.0,
                 offset_ms: Some(8.0),
                 direction_code: 1,
-                is_stream: false,
-                is_left_foot: false,
                 miss_because_held: false,
+                row_index: 0,
+                quantization_idx: 0,
+                parity_foot: ScatterFoot::Unknown,
             },
             ScatterPoint {
                 time_sec: 1.5,
                 offset_ms: None,
                 direction_code: 2,
-                is_stream: false,
-                is_left_foot: false,
                 miss_because_held: false,
+                row_index: 1,
+                quantization_idx: 0,
+                parity_foot: ScatterFoot::Unknown,
             },
             ScatterPoint {
                 time_sec: 3.0,
                 offset_ms: Some(1.0),
                 direction_code: 3,
-                is_stream: false,
-                is_left_foot: false,
                 miss_because_held: false,
+                row_index: 2,
+                quantization_idx: 0,
+                parity_foot: ScatterFoot::Unknown,
             },
         ];
 
@@ -3460,7 +3458,6 @@ mod tests {
     fn payload_from_gameplay_input_builds_runtime_fields() {
         let notes: [deadsync_rules::note::Note; 0] = [];
         let note_times: [i64; 0] = [];
-        let stream_segments: [deadsync_rules::stream::StreamSegment; 0] = [];
         let life_history = [(0.0, 0.5), (10.0, 1.0)];
         let profile = Profile::default();
 
@@ -3476,7 +3473,6 @@ mod tests {
             note_times: &note_times,
             col_offset: 0,
             cols_per_player: 4,
-            stream_segments: &stream_segments,
             fail_time_ns: None,
             submit_stats: ArrowCloudSubmitStats {
                 judgment_counts: [10, 20, 30, 40, 50, 60],

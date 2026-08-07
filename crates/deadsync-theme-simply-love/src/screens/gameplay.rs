@@ -3001,7 +3001,7 @@ pub(crate) fn gameplay_crossover_annotations_for_player(
     }
     let annotations = match cols_per_player {
         4 => {
-            let (rows, row_to_beat) = build_crossover_rows::<4>(notes, note_range, col_start);
+            let (rows, row_to_beat, _) = build_crossover_rows::<4>(notes, note_range, col_start);
             deadsync_simfile::timing::crossover_annotations::<4>(
                 &rows,
                 &row_to_beat,
@@ -3009,7 +3009,7 @@ pub(crate) fn gameplay_crossover_annotations_for_player(
             )
         }
         8 => {
-            let (rows, row_to_beat) = build_crossover_rows::<8>(notes, note_range, col_start);
+            let (rows, row_to_beat, _) = build_crossover_rows::<8>(notes, note_range, col_start);
             deadsync_simfile::timing::crossover_annotations::<8>(
                 &rows,
                 &row_to_beat,

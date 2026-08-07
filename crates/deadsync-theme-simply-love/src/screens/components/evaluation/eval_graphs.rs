@@ -1,6 +1,6 @@
 use deadlib_present::color;
 use deadlib_render::MeshVertex;
-use deadsync_rules::timing::{self, HistogramMs, ScatterPoint};
+use deadsync_rules::timing::{self, HistogramMs, ScatterFoot, ScatterPoint};
 
 use super::utils::arrow_code_rgba;
 
@@ -17,7 +17,8 @@ pub enum ScatterPlotScale {
     Ex,
     HardEx,
     Arrow,
-    Foot,
+    Quant,
+    FootParity,
 }
 
 const HIST_BIN_MS: f32 = 1.0;
@@ -99,14 +100,26 @@ fn color_for_abs_ms(
 }
 
 #[inline(always)]
-fn color_for_foot(is_stream: bool, is_left_foot: bool) -> [f32; 4] {
-    if !is_stream {
-        return [0.0, 0.0, 0.0, 1.0];
+fn color_for_quant(quantization_idx: u8) -> [f32; 4] {
+    match quantization_idx {
+        0 => [232.0 / 255.0, 0.0, 0.0, 1.0],
+        1 => [0.0, 102.0 / 255.0, 1.0, 1.0],
+        2 => [149.0 / 255.0, 0.0, 1.0, 1.0],
+        3 => [0.0, 1.0, 0.0, 1.0],
+        4 => [1.0, 102.0 / 255.0, 153.0 / 255.0, 1.0],
+        5 => [1.0, 1.0, 0.0, 1.0],
+        6 => [1.0, 205.0 / 255.0, 224.0 / 255.0, 1.0],
+        7 | 8 => [0.0, 232.0 / 255.0, 229.0 / 255.0, 1.0],
+        _ => [0.0, 0.0, 0.0, 1.0],
     }
-    if is_left_foot {
-        [1.0, 0.0, 0.0, 1.0]
-    } else {
-        [0.0, 0.0, 1.0, 1.0]
+}
+
+#[inline(always)]
+fn color_for_foot(parity_foot: ScatterFoot) -> [f32; 4] {
+    match parity_foot {
+        ScatterFoot::Left => [1.0, 0.0, 0.0, 1.0],
+        ScatterFoot::Right => [0.0, 0.0, 1.0, 1.0],
+        ScatterFoot::Both | ScatterFoot::Unknown => [0.0, 0.0, 0.0, 1.0],
     }
 }
 
@@ -128,7 +141,8 @@ fn color_for_scatter(
             color_for_abs_ms(abs_ms, timing_windows_ms, TimingHistogramScale::HardEx)
         }
         ScatterPlotScale::Arrow => arrow_code_rgba(sp.direction_code),
-        ScatterPlotScale::Foot => color_for_foot(sp.is_stream, sp.is_left_foot),
+        ScatterPlotScale::Quant => color_for_quant(sp.quantization_idx),
+        ScatterPlotScale::FootParity => color_for_foot(sp.parity_foot),
     }
 }
 
@@ -139,7 +153,8 @@ fn miss_color_for_scatter(sp: &ScatterPoint, scale: ScatterPlotScale) -> [f32; 4
             [1.0, 0.0, 0.0, 1.0]
         }
         ScatterPlotScale::Arrow => arrow_code_rgba(sp.direction_code),
-        ScatterPlotScale::Foot => color_for_foot(sp.is_stream, sp.is_left_foot),
+        ScatterPlotScale::Quant => color_for_quant(sp.quantization_idx),
+        ScatterPlotScale::FootParity => color_for_foot(sp.parity_foot),
     }
 }
 
@@ -147,7 +162,7 @@ fn miss_color_for_scatter(sp: &ScatterPoint, scale: ScatterPlotScale) -> [f32; 4
 fn scatter_hit_alpha(scale: ScatterPlotScale) -> f32 {
     match scale {
         ScatterPlotScale::Itg | ScatterPlotScale::Ex | ScatterPlotScale::HardEx => 1.0,
-        ScatterPlotScale::Arrow | ScatterPlotScale::Foot => 0.666,
+        ScatterPlotScale::Arrow | ScatterPlotScale::Quant | ScatterPlotScale::FootParity => 0.666,
     }
 }
 
@@ -237,7 +252,9 @@ pub fn build_scatter_background_mesh(
             (timing_windows_ms[3], color::JUDGMENT_RGBA[3]),
             (timing_windows_ms[4], color::JUDGMENT_RGBA[4]),
         ],
-        ScatterPlotScale::Arrow | ScatterPlotScale::Foot => return Vec::new(),
+        ScatterPlotScale::Arrow | ScatterPlotScale::Quant | ScatterPlotScale::FootParity => {
+            return Vec::new();
+        }
     };
 
     // Matches Simply Love's `diffusealpha(0.1)` on its judgment-region quads.
@@ -486,9 +503,10 @@ mod tests {
             time_sec: 1.0,
             offset_ms: Some(offset_ms),
             direction_code: 1,
-            is_stream: true,
-            is_left_foot: true,
             miss_because_held: false,
+            row_index: 0,
+            quantization_idx: 0,
+            parity_foot: ScatterFoot::Unknown,
         }
     }
 
@@ -564,6 +582,22 @@ mod tests {
                 .iter()
                 .all(|v| v.color == [purple[0], purple[1], purple[2], 0.666])
         );
+    }
+
+    #[test]
+    fn quant_scatter_uses_simply_love_palette() {
+        assert_eq!(color_for_quant(0), [232.0 / 255.0, 0.0, 0.0, 1.0]);
+        assert_eq!(color_for_quant(6), [1.0, 205.0 / 255.0, 224.0 / 255.0, 1.0]);
+        assert_eq!(color_for_quant(7), color_for_quant(8));
+        assert_eq!(color_for_quant(u8::MAX), [0.0, 0.0, 0.0, 1.0]);
+    }
+
+    #[test]
+    fn foot_scatter_colors_real_parity() {
+        assert_eq!(color_for_foot(ScatterFoot::Left), [1.0, 0.0, 0.0, 1.0]);
+        assert_eq!(color_for_foot(ScatterFoot::Right), [0.0, 0.0, 1.0, 1.0]);
+        assert_eq!(color_for_foot(ScatterFoot::Both), [0.0, 0.0, 0.0, 1.0]);
+        assert_eq!(color_for_foot(ScatterFoot::Unknown), [0.0, 0.0, 0.0, 1.0]);
     }
 
     #[test]

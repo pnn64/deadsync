@@ -96,9 +96,8 @@ mod tests {
         assert_eq!(caps.short_error_avg, 200);
         assert_eq!(caps.long_error_avg, 0);
 
-        let player = init_player_runtime_for_song_with_caps(
-            12.5, false, None, false, false, 0, caps,
-        );
+        let player =
+            init_player_runtime_for_song_with_caps(12.5, false, None, false, false, 0, caps);
         assert_eq!(player.life_history, [(12.5, 0.5)]);
         assert!(player.life_history.capacity() >= caps.life_history);
         assert!(player.error_bar_avg_samples.capacity() >= caps.short_error_avg);
@@ -134,7 +133,12 @@ mod tests {
         );
 
         assert_eq!(caps.combo_milestones, 0);
-        assert_eq!(init_player_runtime_with_caps(caps).combo_milestones.capacity(), 0);
+        assert_eq!(
+            init_player_runtime_with_caps(caps)
+                .combo_milestones
+                .capacity(),
+            0
+        );
     }
 
     #[test]
@@ -4511,7 +4515,9 @@ mod tests {
 
     #[test]
     fn error_hud_activity_requires_a_rendered_mode_or_offset_text() {
-        assert!(!gameplay_error_hud_active(GameplayErrorBarOptions::default()));
+        assert!(!gameplay_error_hud_active(
+            GameplayErrorBarOptions::default()
+        ));
         assert!(gameplay_error_hud_active(GameplayErrorBarOptions {
             mask_bits: GAMEPLAY_ERROR_BAR_TEXT,
             ..GameplayErrorBarOptions::default()
@@ -12952,7 +12958,8 @@ mod tests {
         let mut mine = test_note_at(NoteType::Mine, None, false, 336, 7.0);
         mine.column = 2;
 
-        let (rows, beats) = build_crossover_rows::<4>(&[tap, lift, hold, roll, mine], (0, 5), 0);
+        let (rows, beats, row_indices) =
+            build_crossover_rows::<4>(&[tap, lift, hold, roll, mine], (0, 5), 0);
 
         assert_eq!(
             rows,
@@ -12967,6 +12974,7 @@ mod tests {
             ]
         );
         assert_eq!(beats, vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0]);
+        assert_eq!(row_indices, vec![48, 96, 144, 192, 240, 288, 336]);
     }
 
     #[test]
@@ -12983,13 +12991,14 @@ mod tests {
         fake_mine.column = 4;
         let notes = [before, in_range, after, fake_tap, fake_mine];
 
-        let (rows, beats) = build_crossover_rows::<4>(&notes, (0, notes.len()), 2);
+        let (rows, beats, row_indices) = build_crossover_rows::<4>(&notes, (0, notes.len()), 2);
 
         assert_eq!(
             rows,
             vec![[b'1', b'0', b'0', b'0'], [b'0', b'0', b'M', b'0']]
         );
         assert_eq!(beats, vec![1.0, 3.0]);
+        assert_eq!(row_indices, vec![48, 144]);
     }
 
     #[test]
@@ -13002,13 +13011,14 @@ mod tests {
         same_lane_mine.column = 1;
         let notes = [mine, tap, same_lane_mine];
 
-        let (rows, beats) = build_crossover_rows::<4>(&notes, (0, notes.len()), 0);
+        let (rows, beats, row_indices) = build_crossover_rows::<4>(&notes, (0, notes.len()), 0);
 
         assert_eq!(
             rows,
             vec![[b'1', b'0', b'0', b'0'], [b'0', b'M', b'0', b'0']]
         );
         assert_eq!(beats, vec![1.0, 2.0]);
+        assert_eq!(row_indices, vec![48, 96]);
     }
 
     #[test]

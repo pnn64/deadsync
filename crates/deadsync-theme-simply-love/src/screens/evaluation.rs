@@ -28,7 +28,7 @@ use crate::screens::input as screen_input;
 use crate::views::SimplyLoveLobbyRuntimeView;
 use deadlib_present::font;
 use deadsync_core::input::MAX_PLAYERS;
-use deadsync_gameplay::{FantasticWindowOptions, blue_fantastic_window_ms};
+use deadsync_gameplay::{FantasticWindowOptions, blue_fantastic_window_ms, build_crossover_rows};
 use deadsync_online::lobbies as lobby_data;
 use deadsync_rules::judgment;
 use deadsync_rules::timing as timing_stats;
@@ -69,6 +69,77 @@ fn player_blue_window_ms(gs: &gameplay::State, player_idx: usize) -> f32 {
         }),
         fa_plus_10ms_blue_window: profile.fa_plus_10ms_blue_window,
     })
+}
+
+fn collect_foot_parity<const LANES: usize>(
+    notes: &[deadsync_rules::note::Note],
+    note_range: (usize, usize),
+    timing_segments: &deadsync_rules::timing::TimingSegments,
+    col_start: usize,
+) -> (
+    HashMap<usize, timing_stats::ScatterFoot>,
+    HashMap<(usize, usize), timing_stats::ScatterFoot>,
+) {
+    use timing_stats::ScatterFoot;
+
+    let (rows, row_to_beat, row_indices) =
+        build_crossover_rows::<LANES>(notes, note_range, col_start);
+    let annotations = deadsync_simfile::timing::crossover_annotations::<LANES>(
+        &rows,
+        &row_to_beat,
+        timing_segments,
+    );
+    let mut row_feet = HashMap::with_capacity(annotations.len());
+    let mut note_feet = HashMap::with_capacity(annotations.len());
+    for (annotation, row_index) in annotations.iter().zip(row_indices) {
+        let row_foot = match (
+            annotation.left_foot_mask != 0,
+            annotation.right_foot_mask != 0,
+        ) {
+            (true, true) => ScatterFoot::Both,
+            (true, false) => ScatterFoot::Left,
+            (false, true) => ScatterFoot::Right,
+            (false, false) => ScatterFoot::Unknown,
+        };
+        if row_foot != ScatterFoot::Unknown {
+            row_feet.insert(row_index, row_foot);
+        }
+        for lane in 0..LANES {
+            let bit = 1u8 << lane;
+            let foot = if annotation.left_foot_mask & bit != 0 {
+                ScatterFoot::Left
+            } else if annotation.right_foot_mask & bit != 0 {
+                ScatterFoot::Right
+            } else {
+                continue;
+            };
+            note_feet.insert((row_index, col_start + lane), foot);
+        }
+    }
+    (row_feet, note_feet)
+}
+
+fn foot_parity_for_results(
+    gs: &gameplay::State,
+    player_idx: usize,
+) -> (
+    HashMap<usize, timing_stats::ScatterFoot>,
+    HashMap<(usize, usize), timing_stats::ScatterFoot>,
+) {
+    if player_idx >= gs.num_players() {
+        return Default::default();
+    }
+    let note_range = gs.note_range_for_player(player_idx);
+    let Some(chart) = gs.gameplay_chart(player_idx) else {
+        return Default::default();
+    };
+    let cols_per_player = gs.cols_per_player();
+    let col_start = player_idx.saturating_mul(cols_per_player);
+    match cols_per_player {
+        4 => collect_foot_parity::<4>(gs.notes(), note_range, &chart.timing_segments, col_start),
+        8 => collect_foot_parity::<8>(gs.notes(), note_range, &chart.timing_segments, col_start),
+        _ => Default::default(),
+    }
 }
 const TRANSITION_OUT_DURATION: f32 = 0.4;
 // Simply Love ScreenEvaluationStage in/default.lua (non-SRPG9 branch)
@@ -781,7 +852,7 @@ fn build_eval_scatter_bg_mesh(
         EvalGraphPane::Itg => ScatterPlotScale::Itg,
         EvalGraphPane::Ex => ScatterPlotScale::Ex,
         EvalGraphPane::HardEx => ScatterPlotScale::HardEx,
-        EvalGraphPane::Arrow | EvalGraphPane::Foot => return None,
+        EvalGraphPane::Arrow | EvalGraphPane::Quant | EvalGraphPane::FootParity => return None,
     };
     const GRAPH_H: f32 = 64.0;
     let verts =
@@ -847,15 +918,15 @@ fn course_graph_stripe_actors(
 #[cfg(test)]
 mod tests {
     use super::{
-        CellIcon, CourseGraphStage, EvalPane, GRAPH_LIFE_SAMPLE_COUNT, Nice69Buf,
+        CellIcon, CourseGraphStage, EvalGraphPane, EvalPane, GRAPH_LIFE_SAMPLE_COUNT, Nice69Buf,
         SUBMIT_FOOTER_F5_LABEL, SimplyLoveGrooveStatsService, SubmitFooterCell,
         active_groovestats_service_name, build_course_density_graph_mesh, build_fail_label_text,
         cached_fail_label_text, course_graph_stage_spans, course_graph_stripe_actors,
-        eval_grade_for_result, eval_graph_x, eval_pane_cycle, eval_pane_shift,
-        eval_pane_skip_duplicate, fail_seconds_remaining, graph_display_life_points,
-        leaderboard_requests, life_record_lerp_at, stage_in_stinger_texture_key,
-        submission_retry_available, submit_footer_gs_label, submit_footer_gs_label_for,
-        submit_footer_lines,
+        eval_grade_for_result, eval_graph_cycle, eval_graph_pane_label, eval_graph_x,
+        eval_pane_cycle, eval_pane_shift, eval_pane_skip_duplicate, fail_seconds_remaining,
+        graph_display_life_points, leaderboard_requests, life_record_lerp_at,
+        stage_in_stinger_texture_key, submission_retry_available, submit_footer_gs_label,
+        submit_footer_gs_label_for, submit_footer_lines,
     };
     use crate::assets::i18n;
     use deadlib_present::actors::{Actor, TextAlign};
@@ -867,6 +938,21 @@ mod tests {
     fn fail_label_appends_stream_measure_progress() {
         assert_eq!(&*cached_fail_label_text(125.9, None), "2:05");
         assert_eq!(&*cached_fail_label_text(125.9, Some((3, 8))), "2:05\n3/8");
+    }
+
+    #[test]
+    fn scatter_cycle_includes_quantization_and_real_foot_parity() {
+        assert_eq!(
+            eval_graph_cycle(false, false),
+            vec![
+                EvalGraphPane::Itg,
+                EvalGraphPane::Arrow,
+                EvalGraphPane::Quant,
+                EvalGraphPane::FootParity,
+            ]
+        );
+        assert_eq!(eval_graph_pane_label(EvalGraphPane::Quant), "Quantization");
+        assert_eq!(eval_graph_pane_label(EvalGraphPane::FootParity), "Foot");
     }
 
     #[test]
@@ -1901,7 +1987,8 @@ enum EvalGraphPane {
     Ex,
     HardEx,
     Arrow,
-    Foot,
+    Quant,
+    FootParity,
 }
 
 #[inline(always)]
@@ -1918,7 +2005,22 @@ const fn eval_graph_default_for(show_fa_plus_pane: bool, show_hard_ex: bool) -> 
 #[inline(always)]
 fn eval_graph_cycle(show_fa_plus_pane: bool, show_hard_ex: bool) -> Vec<EvalGraphPane> {
     let scoring = eval_graph_default_for(show_fa_plus_pane, show_hard_ex);
-    vec![scoring, EvalGraphPane::Arrow, EvalGraphPane::Foot]
+    vec![
+        scoring,
+        EvalGraphPane::Arrow,
+        EvalGraphPane::Quant,
+        EvalGraphPane::FootParity,
+    ]
+}
+
+#[inline(always)]
+const fn eval_graph_pane_label(pane: EvalGraphPane) -> &'static str {
+    match pane {
+        EvalGraphPane::Itg | EvalGraphPane::Ex | EvalGraphPane::HardEx => "Judgment",
+        EvalGraphPane::Arrow => "Column",
+        EvalGraphPane::Quant => "Quantization",
+        EvalGraphPane::FootParity => "Foot",
+    }
 }
 
 #[inline(always)]
@@ -1995,7 +2097,8 @@ pub struct State {
     pub scatter_bg_mesh_ex: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS],
     pub scatter_bg_mesh_hard_ex: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS],
     pub scatter_mesh_arrow: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS],
-    pub scatter_mesh_foot: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS],
+    pub scatter_mesh_quant: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS],
+    pub scatter_mesh_foot_parity: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS],
     pub density_graph_texture_key: String,
     pub return_to_course: bool,
     pub auto_advance_seconds: Option<f32>,
@@ -2058,7 +2161,8 @@ impl Clone for State {
             scatter_bg_mesh_ex: self.scatter_bg_mesh_ex.clone(),
             scatter_bg_mesh_hard_ex: self.scatter_bg_mesh_hard_ex.clone(),
             scatter_mesh_arrow: self.scatter_mesh_arrow.clone(),
-            scatter_mesh_foot: self.scatter_mesh_foot.clone(),
+            scatter_mesh_quant: self.scatter_mesh_quant.clone(),
+            scatter_mesh_foot_parity: self.scatter_mesh_foot_parity.clone(),
             density_graph_texture_key: self.density_graph_texture_key.clone(),
             return_to_course: self.return_to_course,
             auto_advance_seconds: self.auto_advance_seconds,
@@ -2123,7 +2227,9 @@ pub fn init(gameplay_results: Option<gameplay::State>, init_view: EvaluationInit
         std::array::from_fn(|_| None);
     let mut scatter_mesh_arrow: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS] =
         std::array::from_fn(|_| None);
-    let mut scatter_mesh_foot: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS] =
+    let mut scatter_mesh_quant: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS] =
+        std::array::from_fn(|_| None);
+    let mut scatter_mesh_foot_parity: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS] =
         std::array::from_fn(|_| None);
     let mut active_pane: [EvalPane; MAX_PLAYERS] = [EvalPane::Standard; MAX_PLAYERS];
     let mut active_graph: [EvalGraphPane; MAX_PLAYERS] = [EvalGraphPane::Itg; MAX_PLAYERS];
@@ -2145,7 +2251,6 @@ pub fn init(gameplay_results: Option<gameplay::State>, init_view: EvaluationInit
             let p = &gs.players()[player_idx];
             let prof = &gs.profiles()[player_idx];
             let col_offset = player_idx.saturating_mul(cols_per_player);
-            let stream_segments = gs.stream_segments_for_results(player_idx);
             fail_stream_progress[player_idx] = p.fail_time.and_then(|fail_time| {
                 let timing = gs.timing_for_player(player_idx)?;
                 let chart = gs.gameplay_chart(player_idx)?;
@@ -2156,18 +2261,23 @@ pub fn init(gameplay_results: Option<gameplay::State>, init_view: EvaluationInit
                 )
             });
 
-            // Compute timing statistics across all non-miss tap judgments
+            // Compute timing statistics across all non-miss tap judgments.
+            let (foot_by_row, foot_by_note) = foot_parity_for_results(&gs, player_idx);
             let stats = timing_stats::compute_note_timing_stats(notes);
-            let arrow_timing =
-                timing_stats::compute_arrow_timing_stats(notes, col_offset, cols_per_player);
-            // Prepare scatter points and histogram bins
-            let scatter = timing_stats::build_scatter_points(
+            let arrow_timing = timing_stats::compute_arrow_timing_stats(
                 notes,
-                note_times,
                 col_offset,
                 cols_per_player,
-                &stream_segments,
+                (!foot_by_note.is_empty()).then_some(&foot_by_note),
             );
+            // Prepare scatter points and histogram bins
+            let mut scatter =
+                timing_stats::build_scatter_points(notes, note_times, col_offset, cols_per_player);
+            for point in &mut scatter {
+                if let Some(&foot) = foot_by_row.get(&point.row_index) {
+                    point.parity_foot = foot;
+                }
+            }
             let histogram = timing_stats::build_histogram_ms(notes);
             let scatter_worst_window_ms = {
                 let tw = timing_stats::effective_windows_ms();
@@ -2515,7 +2625,7 @@ pub fn init(gameplay_results: Option<gameplay::State>, init_view: EvaluationInit
                 (!verts.is_empty()).then(|| Arc::from(verts.into_boxed_slice()))
             };
 
-            scatter_mesh_foot[player_idx] = {
+            scatter_mesh_quant[player_idx] = {
                 const GRAPH_H: f32 = 64.0;
                 let verts = eval_graphs::build_scatter_mesh(
                     &si.scatter,
@@ -2526,7 +2636,23 @@ pub fn init(gameplay_results: Option<gameplay::State>, init_view: EvaluationInit
                     graph_width,
                     GRAPH_H,
                     si.scatter_worst_window_ms,
-                    eval_graphs::ScatterPlotScale::Foot,
+                    eval_graphs::ScatterPlotScale::Quant,
+                );
+                (!verts.is_empty()).then(|| Arc::from(verts.into_boxed_slice()))
+            };
+
+            scatter_mesh_foot_parity[player_idx] = {
+                const GRAPH_H: f32 = 64.0;
+                let verts = eval_graphs::build_scatter_mesh(
+                    &si.scatter,
+                    si.graph_first_second,
+                    si.graph_last_second,
+                    si.fail_time,
+                    si.dim_post_fail_scatter,
+                    graph_width,
+                    GRAPH_H,
+                    si.scatter_worst_window_ms,
+                    eval_graphs::ScatterPlotScale::FootParity,
                 );
                 (!verts.is_empty()).then(|| Arc::from(verts.into_boxed_slice()))
             };
@@ -2652,7 +2778,8 @@ pub fn init(gameplay_results: Option<gameplay::State>, init_view: EvaluationInit
         scatter_bg_mesh_ex,
         scatter_bg_mesh_hard_ex,
         scatter_mesh_arrow,
-        scatter_mesh_foot,
+        scatter_mesh_quant,
+        scatter_mesh_foot_parity,
         density_graph_texture_key: "__white".to_string(),
         return_to_course: false,
         auto_advance_seconds: None,
@@ -2777,10 +2904,15 @@ pub fn init_from_score_info(
             let si = score_info.get(player_idx).and_then(|s| s.as_ref())?;
             build_eval_scatter_mesh(si, graph_width, eval_graphs::ScatterPlotScale::Arrow)
         });
-    let scatter_mesh_foot: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS] =
+    let scatter_mesh_quant: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS] =
         std::array::from_fn(|player_idx| {
             let si = score_info.get(player_idx).and_then(|s| s.as_ref())?;
-            build_eval_scatter_mesh(si, graph_width, eval_graphs::ScatterPlotScale::Foot)
+            build_eval_scatter_mesh(si, graph_width, eval_graphs::ScatterPlotScale::Quant)
+        });
+    let scatter_mesh_foot_parity: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS] =
+        std::array::from_fn(|player_idx| {
+            let si = score_info.get(player_idx).and_then(|s| s.as_ref())?;
+            build_eval_scatter_mesh(si, graph_width, eval_graphs::ScatterPlotScale::FootParity)
         });
     let timing_hist_mesh: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS] =
         std::array::from_fn(|player_idx| {
@@ -2834,7 +2966,8 @@ pub fn init_from_score_info(
         scatter_bg_mesh_ex,
         scatter_bg_mesh_hard_ex,
         scatter_mesh_arrow,
-        scatter_mesh_foot,
+        scatter_mesh_quant,
+        scatter_mesh_foot_parity,
         density_graph_texture_key: "__white".to_string(),
         return_to_course: false,
         auto_advance_seconds: None,
@@ -5413,19 +5546,24 @@ pub fn push_actors(
                     EvalGraphPane::Ex => state.scatter_mesh_ex[player_idx].as_ref(),
                     EvalGraphPane::HardEx => state.scatter_mesh_hard_ex[player_idx].as_ref(),
                     EvalGraphPane::Arrow => state.scatter_mesh_arrow[player_idx].as_ref(),
-                    EvalGraphPane::Foot => state.scatter_mesh_foot[player_idx].as_ref(),
+                    EvalGraphPane::Quant => state.scatter_mesh_quant[player_idx].as_ref(),
+                    EvalGraphPane::FootParity => {
+                        state.scatter_mesh_foot_parity[player_idx].as_ref()
+                    }
                 };
                 let scatter_bg_mesh = if shade {
                     match graph_mode {
                         EvalGraphPane::Itg => state.scatter_bg_mesh_itg[player_idx].as_ref(),
                         EvalGraphPane::Ex => state.scatter_bg_mesh_ex[player_idx].as_ref(),
                         EvalGraphPane::HardEx => state.scatter_bg_mesh_hard_ex[player_idx].as_ref(),
-                        EvalGraphPane::Arrow | EvalGraphPane::Foot => None,
+                        EvalGraphPane::Arrow | EvalGraphPane::Quant | EvalGraphPane::FootParity => {
+                            None
+                        }
                     }
                 } else {
                     None
                 };
-                let show_feet_overlay = graph_mode == EvalGraphPane::Foot;
+                let show_feet_overlay = graph_mode == EvalGraphPane::FootParity;
 
                 let graph_children_vec: Vec<Actor> = vec![
                     act!(quad:
@@ -5535,6 +5673,15 @@ pub fn push_actors(
                             act!(sprite("__white"): visible(false))
                         }
                     },
+                    act!(text:
+                        font("miso"):
+                        settext(eval_graph_pane_label(graph_mode)):
+                        align(0.0, 1.0):
+                        xy(3.0, graph_height - 2.0):
+                        zoom(0.5):
+                        diffuse(1.0, 1.0, 1.0, 0.6):
+                        z(6)
+                    ),
                     {
                         let first = si.graph_first_second;
                         let last = si.graph_last_second.max(first + 0.001_f32);

@@ -9,8 +9,25 @@ use rssp::timing as rssp_timing;
 pub struct CrossoverAnnotation {
     pub beat: f32,
     pub column_mask: u8,
+    pub left_foot_mask: u8,
+    pub right_foot_mask: u8,
     pub crossover: bool,
     pub bracket: bool,
+}
+
+#[inline]
+fn foot_masks(annotation: &rssp::RowAnnotation) -> (u8, u8) {
+    let mut left = 0u8;
+    let mut right = 0u8;
+    for (lane, &foot) in annotation.feet().iter().enumerate() {
+        let bit = 1u8 << lane;
+        match foot {
+            rssp::Foot::LeftHeel | rssp::Foot::LeftToe => left |= bit,
+            rssp::Foot::RightHeel | rssp::Foot::RightToe => right |= bit,
+            rssp::Foot::None => {}
+        }
+    }
+    (left, right)
 }
 
 pub fn parse_time_signatures(tag: Option<&str>) -> Vec<TimeSignatureSegment> {
@@ -172,11 +189,16 @@ pub fn crossover_annotations<const LANES: usize>(
     };
     rssp::step_parity::annotate_timing_rows(rows, row_to_beat, &timing, &mut scratch)
         .into_iter()
-        .map(|annotation| CrossoverAnnotation {
-            beat: annotation.beat,
-            column_mask: annotation.column_mask,
-            crossover: annotation.row_tech.crossovers > 0,
-            bracket: annotation.foot_count() > 1,
+        .map(|annotation| {
+            let (left_foot_mask, right_foot_mask) = foot_masks(&annotation);
+            CrossoverAnnotation {
+                beat: annotation.beat,
+                column_mask: annotation.column_mask,
+                left_foot_mask,
+                right_foot_mask,
+                crossover: annotation.row_tech.crossovers > 0,
+                bracket: annotation.foot_count() > 1,
+            }
         })
         .collect()
 }
@@ -296,9 +318,41 @@ mod tests {
         assert_eq!(annotations.len(), 2);
         assert_eq!(annotations[0].beat, 0.0);
         assert_eq!(annotations[0].column_mask, 0b0001);
+        assert_eq!(
+            annotations[0].left_foot_mask | annotations[0].right_foot_mask,
+            annotations[0].column_mask
+        );
+        assert_eq!(
+            annotations[1].left_foot_mask | annotations[1].right_foot_mask,
+            annotations[1].column_mask
+        );
+        assert_eq!(
+            annotations[0].left_foot_mask & annotations[0].right_foot_mask,
+            0
+        );
         assert!(!annotations[0].bracket);
         assert_eq!(annotations[1].beat, 1.0);
         assert_eq!(annotations[1].column_mask, 0b0010);
         assert!(!annotations[1].bracket);
+    }
+
+    #[test]
+    fn crossover_annotations_keep_each_foot_lane() {
+        let rows = [[b'1', b'0', b'0', b'1']];
+        let beats = [0.0];
+        let segments = deadsync_rules::timing::TimingSegments {
+            bpms: vec![(0.0, 120.0)],
+            ..deadsync_rules::timing::TimingSegments::default()
+        };
+
+        let annotations = crossover_annotations(&rows, &beats, &segments);
+
+        assert_eq!(annotations.len(), 1);
+        assert_ne!(annotations[0].left_foot_mask, 0);
+        assert_ne!(annotations[0].right_foot_mask, 0);
+        assert_eq!(
+            annotations[0].left_foot_mask | annotations[0].right_foot_mask,
+            0b1001
+        );
     }
 }
