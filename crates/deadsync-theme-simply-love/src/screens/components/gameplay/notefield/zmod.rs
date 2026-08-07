@@ -16,6 +16,7 @@ use deadsync_notefield::{
 use deadsync_profile as profile_data;
 use deadsync_rules::judgment::{self, HOLD_SCORE_HELD, JudgeGrade};
 
+use super::super::FRAME_TEXT_MINI_BASE;
 use super::player_blue_window_ms;
 use super::text::zmod_mini_indicator_text_content;
 
@@ -438,7 +439,11 @@ pub(super) fn zmod_mini_indicator_text(
         if dims_missed_target && crate_zmod_target_score_missed(&progress, target_score_percent) {
             color[3] *= 0.65;
         }
-        Some((zmod_mini_indicator_text_content(output.text), color))
+        Some((
+            zmod_mini_indicator_text_content(output.text)
+                .with_frame_inline_slot(FRAME_TEXT_MINI_BASE + player_idx as u8),
+            color,
+        ))
     })
 }
 

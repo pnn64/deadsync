@@ -21,7 +21,7 @@ use deadlib_present::actors::{
 use deadlib_present::anim::EffectState;
 use deadlib_present::cache::{TextCache, cached_text, text_cache_with_capacity};
 use deadlib_present::color;
-use deadlib_present::compose::TextLayoutCache;
+use deadlib_present::compose::{ComposeScratch, TextLayoutCache};
 use deadlib_present::density::{self, DensityHistCache};
 use deadlib_present::font;
 use deadlib_present::space::widescale;
@@ -5945,7 +5945,12 @@ fn cached_autosync_text(state: &State, old_offset: f32, new_offset: f32) -> Arc<
     })
 }
 
-pub fn prewarm_text_layout(cache: &mut TextLayoutCache, fonts: &font::FontMap, state: &State) {
+pub fn prewarm_text_layout(
+    cache: &mut TextLayoutCache,
+    scratch: &mut ComposeScratch,
+    fonts: &font::FontMap,
+    state: &State,
+) {
     let policy = state.runtime_view.policy;
     prewarm_score_counter_layout(
         cache,
@@ -6029,6 +6034,18 @@ pub fn prewarm_text_layout(cache: &mut TextLayoutCache, fonts: &font::FontMap, s
         let text = cached_autosync_text(state, old_offset, new_offset);
         cache.prewarm_text(fonts, "miso", text.as_ref(), None);
     }
+    if !state.runtime_view.policy.smx_input
+        || !state
+            .profiles()
+            .iter()
+            .take(state.num_players())
+            .any(|profile| profile.smx_fsr_display)
+    {
+        return;
+    }
+    let font_name = machine_font_key(state.machine_font(), FontRole::Normal);
+    cache.prewarm_u16_domain(fonts, font_name, 0, 500, None, TextAlign::Left);
+    scratch.prewarm_draw_sort(16);
 }
 
 // --- TRANSITIONS ---
@@ -20643,7 +20660,7 @@ const SMX_SENSOR_BG: [f32; 4] = [0.0, 0.0, 0.0, 0.35];
 #[inline(always)]
 fn smx_sensor_value_content(value: Option<u16>) -> (TextContent, [f32; 4]) {
     match value {
-        Some(value) => (TextContent::inline_u16(value), SMX_SENSOR_VALUE_COLOR),
+        Some(value) => (TextContent::prewarmed_u16(value, 0), SMX_SENSOR_VALUE_COLOR),
         None => (TextContent::Static("--"), SMX_SENSOR_VALUE_IDLE_COLOR),
     }
 }
@@ -21180,6 +21197,7 @@ mod tests {
         let (idle, idle_color) = smx_sensor_value_content(None);
 
         assert_eq!(value.as_str(), "500");
+        assert!(matches!(value, TextContent::PrewarmedU16 { domain: 0, .. }));
         assert_eq!(value_color, SMX_SENSOR_VALUE_COLOR);
         assert_eq!(idle.as_str(), "--");
         assert_eq!(idle_color, SMX_SENSOR_VALUE_IDLE_COLOR);

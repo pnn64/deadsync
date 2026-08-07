@@ -6,6 +6,7 @@ use deadsync_notefield::{MiniIndicatorMode, ZmodMeasureCounterText, zmod_broken_
 use deadsync_profile as profile_data;
 
 use super::super::display_mods::DISPLAY_MODS_WRAP_WIDTH_PX;
+use super::super::{FRAME_TEXT_MINI_BASE, FRAME_TEXT_OFFSET_BASE, FRAME_TEXT_VERTEX_BUFFERS};
 use super::text::{
     cached_int_i32, preferred_mods_text, zmod_measure_counter_text, zmod_run_timer_fmt,
 };
@@ -143,9 +144,6 @@ pub fn prewarm_text_layout(cache: &mut TextLayoutCache, fonts: &font::FontMap, s
                 prewarm_i32(cache, mc_font_name, countdown_max);
             }
         }
-        if profile.error_ms_display {
-            cache.prewarm_text(fonts, "wendy", "0.00ms", None);
-        }
     }
 
     cache.prewarm_text(fonts, "game", "Early", None);
@@ -163,22 +161,31 @@ pub fn prewarm_frame_text_scratch(
     let mut longest = InlineText::new();
     assert!(longest.push_ascii(b'-'));
     assert!(longest.push_u32(u32::MAX));
-    let enabled_players = (0..state.num_players())
-        .filter(|&player| zmod_indicator_mode(&state.profiles()[player]) != MiniIndicatorMode::None)
-        .count();
-    let vertex_buffers = enabled_players.saturating_mul(4);
+    let offset_longest =
+        InlineText::copy_from("-21474836.48ms").expect("an i32 centisecond offset fits inline");
     for player in 0..state.num_players() {
         let profile = &state.profiles()[player];
-        if zmod_indicator_mode(profile) == MiniIndicatorMode::None {
-            continue;
+        if zmod_indicator_mode(profile) != MiniIndicatorMode::None {
+            deadlib_present::compose::prewarm_frame_inline_text_slot(
+                cache,
+                scratch,
+                fonts,
+                zmod_small_combo_font(profile.combo_font),
+                longest,
+                FRAME_TEXT_MINI_BASE + player as u8,
+                FRAME_TEXT_VERTEX_BUFFERS,
+            );
         }
-        deadlib_present::compose::prewarm_frame_inline_text(
-            cache,
-            scratch,
-            fonts,
-            zmod_small_combo_font(profile.combo_font),
-            longest,
-            vertex_buffers,
-        );
+        if profile.error_ms_display {
+            deadlib_present::compose::prewarm_frame_inline_text_slot(
+                cache,
+                scratch,
+                fonts,
+                "wendy",
+                offset_longest,
+                FRAME_TEXT_OFFSET_BASE + player as u8,
+                FRAME_TEXT_VERTEX_BUFFERS,
+            );
+        }
     }
 }

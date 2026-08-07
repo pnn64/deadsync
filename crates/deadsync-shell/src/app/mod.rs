@@ -590,9 +590,15 @@ fn prewarm_gameplay_text_layout_cache(
         );
     compose_scratch.recycle_frame(&mut render);
     actor_scratch.clear();
-    gameplay::prewarm_text_layout(cache, fonts, state);
+    gameplay::prewarm_text_layout(cache, compose_scratch, fonts, state);
     screens::components::gameplay::gameplay_stats::prewarm_text_layout(cache, fonts, assets, state);
     screens::components::gameplay::notefield::prewarm_text_layout(cache, fonts, state);
+    screens::components::gameplay::gameplay_stats::prewarm_frame_text_scratch(
+        cache,
+        compose_scratch,
+        fonts,
+        state,
+    );
     screens::components::gameplay::notefield::prewarm_frame_text_scratch(
         cache,
         compose_scratch,

@@ -49,6 +49,7 @@ pub struct ErrorBarHudFrame<'a> {
     pub long_average_tick: Option<ErrorBarTick>,
     pub long_average_active: bool,
     pub text: Option<ErrorBarText>,
+    pub frame_text_slot: u8,
     pub offset_text: fn(f32) -> TextContent,
     pub text_label: fn(bool, bool) -> TextContent,
 }
@@ -352,6 +353,7 @@ fn compose_error<S>(
                 && frame.long_average_active,
             long_average_intensity: request.options.long_error_bar_intensity,
             text: frame.text,
+            frame_text_slot: frame.frame_text_slot,
             text_visible: !prepared.blind_active
                 && show
                 && request.options.frame_features.error_bar_text,

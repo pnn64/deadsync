@@ -1072,6 +1072,7 @@ pub(crate) fn compose_frame(
         long_average_tick: p.error_bar_long_avg_tick,
         long_average_active: p.error_bar_long_avg_visible,
         text: p.error_bar_text,
+        frame_text_slot: super::FRAME_TEXT_OFFSET_BASE + player_idx as u8,
         offset_text: offset_ms_text,
         text_label: error_bar_text_label,
     });

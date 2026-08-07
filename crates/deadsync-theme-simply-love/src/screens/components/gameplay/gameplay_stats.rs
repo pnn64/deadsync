@@ -19,7 +19,7 @@ use deadlib_present::cache::{SharedStrCache, cached_shared_str};
 #[cfg(feature = "bench-support")]
 use deadlib_present::cache::{TextCache, cached_text, text_cache_with_capacity};
 use deadlib_present::color;
-use deadlib_present::compose::TextLayoutCache;
+use deadlib_present::compose::{ComposeScratch, TextLayoutCache, prewarm_frame_inline_text_slot};
 use deadlib_present::density;
 use deadlib_present::font;
 use deadlib_present::space::*;
@@ -35,6 +35,8 @@ use std::cell::RefCell;
 #[cfg(feature = "bench-support")]
 use std::collections::HashMap;
 use std::sync::{Arc, LazyLock};
+
+use super::{FRAME_TEXT_LIVE_TIMING_BASE, FRAME_TEXT_VERTEX_BUFFERS};
 
 #[cfg(feature = "bench-support")]
 const TEXT_CACHE_LIMIT: usize = 8192;
@@ -1180,10 +1182,6 @@ fn timing_tenths(ms: f32) -> i32 {
     }
 }
 
-fn live_timing_pair_text(recent_ms: f32, all_ms: f32) -> TextContent {
-    live_timing_pair_text_in_slot(recent_ms, all_ms, 0)
-}
-
 #[inline(always)]
 fn live_timing_pair_text_in_slot(recent_ms: f32, all_ms: f32, slot: usize) -> TextContent {
     let key = (timing_tenths(recent_ms), timing_tenths(all_ms));
@@ -1204,7 +1202,7 @@ fn live_timing_pair_text_in_slot(recent_ms: f32, all_ms: f32, slot: usize) -> Te
             .expect("two rounded f32 timing values always fit the inline text payload")
         })
     });
-    TextContent::Inline(text)
+    TextContent::frame_inline_slot(text, FRAME_TEXT_LIVE_TIMING_BASE + slot.min(5) as u8)
 }
 
 #[inline(always)]
@@ -1361,7 +1359,7 @@ pub fn benchmark_live_timing_cached(recent_ms: f32, all_ms: f32) -> Arc<str> {
 #[cfg(feature = "bench-support")]
 #[doc(hidden)]
 pub fn benchmark_live_timing(recent_ms: f32, all_ms: f32) -> TextContent {
-    live_timing_pair_text(recent_ms, all_ms)
+    live_timing_pair_text_in_slot(recent_ms, all_ms, 0)
 }
 
 #[cfg(feature = "bench-support")]
@@ -1384,7 +1382,9 @@ pub fn benchmark_judgment_rows(labels: &[Arc<str>; 6]) -> usize {
 
 #[cfg(test)]
 mod dynamic_hud_text_tests {
-    use super::{game_time_text, live_timing_pair_text, padded_num_text, padded_runs_for_window};
+    use super::{
+        game_time_text, live_timing_pair_text_in_slot, padded_num_text, padded_runs_for_window,
+    };
     use deadlib_present::actors::{InlineText, TextContent};
 
     #[test]
@@ -1438,9 +1438,15 @@ mod dynamic_hud_text_tests {
             (12.34, -5.66, "12.3/-5.7"),
             (f32::NAN, f32::INFINITY, "0.0/0.0"),
         ] {
-            let text = live_timing_pair_text(recent, all);
+            let text = live_timing_pair_text_in_slot(recent, all, 0);
             assert_eq!(text.as_str(), expected);
-            assert!(matches!(text, TextContent::Inline(_)));
+            assert!(matches!(
+                text,
+                TextContent::FrameInline {
+                    slot: super::FRAME_TEXT_LIVE_TIMING_BASE,
+                    ..
+                }
+            ));
         }
 
         let recent = f32::MAX;
@@ -1452,7 +1458,7 @@ mod dynamic_hud_text_tests {
             recent_tenths as f32 * 0.1,
             all_tenths as f32 * 0.1
         );
-        let text = live_timing_pair_text(recent, all);
+        let text = live_timing_pair_text_in_slot(recent, all, 0);
         assert_eq!(text.as_str(), expected);
         assert!(matches!(text, TextContent::Owned(_)));
     }
@@ -1710,8 +1716,6 @@ pub fn prewarm_text_layout(
     for label in LIVE_TIMING_LABELS.iter() {
         cache.prewarm_text(fonts, "miso", label.as_ref(), None);
     }
-    let zero_timing = live_timing_pair_text(0.0, 0.0);
-    cache.prewarm_text(fonts, "miso", zero_timing.as_str(), None);
     for label in &state.gameplay_stats_text.step_info {
         cache.prewarm_text(fonts, "miso", label.as_ref(), None);
     }
@@ -1735,6 +1739,40 @@ pub fn prewarm_text_layout(
         }
         let peak = state.gameplay_stats_text.peak_nps(player);
         cache.prewarm_text(fonts, "miso", peak.as_ref(), None);
+    }
+}
+
+/// Prepares the six direct slots used by two players' live timing values.
+pub fn prewarm_frame_text_scratch(
+    cache: &mut TextLayoutCache,
+    scratch: &mut ComposeScratch,
+    fonts: &font::FontMap,
+    state: &State,
+) {
+    let longest =
+        InlineText::copy_from("-999.9/-999.9").expect("bounded gameplay timing text fits inline");
+    for player in 0..state.num_players() {
+        let profile = &state.profiles()[player];
+        if !profile.live_timing_stats {
+            continue;
+        }
+        for index in 0..LIVE_TIMING_LABELS.len() {
+            if !profile
+                .live_timing_stats_mask
+                .contains(live_timing_stat_mask(index))
+            {
+                continue;
+            }
+            prewarm_frame_inline_text_slot(
+                cache,
+                scratch,
+                fonts,
+                "miso",
+                longest,
+                FRAME_TEXT_LIVE_TIMING_BASE + (player * LIVE_TIMING_LABELS.len() + index) as u8,
+                FRAME_TEXT_VERTEX_BUFFERS,
+            );
+        }
     }
 }
 

@@ -1,7 +1,7 @@
-use deadlib_present::actors::{Actor, InlineText, TextContent};
+use deadlib_present::actors::{Actor, InlineText, TextAlign, TextContent};
 use deadlib_present::compose::{
     ComposeScratch, TextLayoutCache, build_screen_cached_with_scratch_and_texture_context,
-    prewarm_frame_inline_text,
+    prewarm_frame_inline_text_slot,
 };
 use deadlib_present::dsl::TextBuilder;
 use deadlib_present::font::{Font, FontMap, Glyph};
@@ -24,7 +24,14 @@ static ALLOC: CountingAlloc = CountingAlloc::new();
 const WARMUP_OPS: usize = 20_000;
 const FRAME_OPS: usize = 500_000;
 const SONG_TEXT_OPS: usize = 24_000;
+const DYNAMIC_LAYOUT_FRAMES: usize = 24_000;
 const SAMPLE_BATCH: usize = 256;
+
+#[derive(Clone, Copy)]
+enum DynamicTextWarmup {
+    FrameSlots,
+    U16Domain(u16),
+}
 
 struct CountingAlloc {
     allocs: AtomicU64,
@@ -151,6 +158,10 @@ fn pacemaker_text_input(frame: usize) -> (f64, bool) {
     (((frame * 37) % 10_001) as f64 * 0.01, frame & 1 == 0)
 }
 
+fn smx_sensor_value(frame: usize, actor: usize) -> u16 {
+    ((frame / 2 * 17 + actor * 61) % 501) as u16
+}
+
 fn print_result(label: &str, result: &BenchResult, ops: usize) {
     let ns_per_op = result.elapsed.as_secs_f64() * 1e9 / ops as f64;
     let cycles_per_op = result.cycles as f64 / ops as f64;
@@ -211,12 +222,13 @@ fn main() {
     let mut frame_scratch = ComposeScratch::default();
     let mut frame_actors = vec![text_actor(benchmark_pacemaker_text(100.0, false))];
     let longest = InlineText::copy_from("-4294967295").expect("benchmark text fits inline");
-    prewarm_frame_inline_text(
+    prewarm_frame_inline_text_slot(
         &mut frame_cache,
         &mut frame_scratch,
         &fonts,
         "test",
         longest,
+        0,
         4,
     );
     warm_compose(
@@ -260,6 +272,54 @@ fn main() {
     print_result("whole-string cache", &legacy_compose, SONG_TEXT_OPS);
     print_result("frame-inline scratch", &frame_compose, SONG_TEXT_OPS);
 
+    run_dynamic_layout_workload(
+        "offset-ms rendered layout",
+        1,
+        |frame, _| {
+            let centi = (frame / 6 % 36_001) as i32 - 18_000;
+            InlineText::format(format_args!("{:.2}ms", centi as f64 * 0.01))
+                .expect("offset benchmark text fits inline")
+        },
+        InlineText::copy_from("-21474836.48ms").expect("offset text fits inline"),
+        DynamicTextWarmup::FrameSlots,
+        None,
+        &metrics,
+        &fonts,
+        &texture_ctx,
+    );
+    run_dynamic_layout_workload(
+        "six live-timing pairs",
+        6,
+        |frame, actor| {
+            let update = frame / 6;
+            let recent = (update.wrapping_mul(17 + actor) % 4_001) as f32 * 0.1 - 200.0;
+            let all = (update.wrapping_mul(29 + actor) % 4_001) as f32 * 0.1 - 200.0;
+            InlineText::format(format_args!("{recent:.1}/{all:.1}"))
+                .expect("timing benchmark text fits inline")
+        },
+        InlineText::copy_from("-999.9/-999.9").expect("timing text fits inline"),
+        DynamicTextWarmup::FrameSlots,
+        None,
+        &metrics,
+        &fonts,
+        &texture_ctx,
+    );
+    run_dynamic_layout_workload(
+        "eight SMX sensor values",
+        8,
+        |frame, actor| {
+            let mut text = InlineText::new();
+            assert!(text.push_u32(u32::from(smx_sensor_value(frame, actor))));
+            text
+        },
+        InlineText::copy_from("500").expect("sensor text fits inline"),
+        DynamicTextWarmup::U16Domain(500),
+        Some(smx_sensor_value),
+        &metrics,
+        &fonts,
+        &texture_ctx,
+    );
+
     let bench = PacemakerFrameBench::default();
     for frame in [0, 1, 255, 8_192, 16_000] {
         assert_eq!(bench.legacy_frame(frame), bench.optimized_frame(frame));
@@ -293,6 +353,17 @@ fn compose_text(
     texture_ctx: &BenchTextureContext,
 ) -> usize {
     actors[0] = text_actor(content);
+    compose_text_group(actors, metrics, fonts, cache, scratch, texture_ctx)
+}
+
+fn compose_text_group(
+    actors: &[Actor],
+    metrics: &Metrics,
+    fonts: &FontMap,
+    cache: &mut TextLayoutCache,
+    scratch: &mut ComposeScratch,
+    texture_ctx: &BenchTextureContext,
+) -> usize {
     let mut render = build_screen_cached_with_scratch_and_texture_context(
         actors,
         [0.0; 4],
@@ -313,15 +384,18 @@ fn compose_text(
             TexturedMeshVertices::Reusable(vertices) => vertices.as_slice(),
             TexturedMeshVertices::Transient(vertices) => vertices.as_slice(),
         };
-        checksum = checksum.rotate_left(3)
-            ^ run.texture_handle as usize
-            ^ (run.camera as usize) << 8
-            ^ (run.depth_test as usize) << 16
-            ^ (run.blend as usize) << 24
-            ^ vertices.len();
         for instance in &render.tmesh_instances
             [run.instance_start as usize..(run.instance_start + run.instance_count) as usize]
         {
+            // Normalize shared batching versus transient one-actor runs: visual
+            // behavior is the ordered instance plus its resolved geometry, not
+            // how many draw runs happen to reference that geometry.
+            checksum = checksum.rotate_left(3)
+                ^ run.texture_handle as usize
+                ^ (run.camera as usize) << 8
+                ^ (run.depth_test as usize) << 16
+                ^ (run.blend as usize) << 24
+                ^ vertices.len();
             for value in instance
                 .model_col0
                 .iter()
@@ -352,6 +426,125 @@ fn compose_text(
     });
     scratch.recycle_frame(&mut render);
     checksum
+}
+
+fn run_dynamic_layout_workload(
+    title: &str,
+    actor_count: usize,
+    value: impl Fn(usize, usize) -> InlineText + Copy,
+    longest: InlineText,
+    warmup: DynamicTextWarmup,
+    dense_value: Option<fn(usize, usize) -> u16>,
+    metrics: &Metrics,
+    fonts: &FontMap,
+    texture_ctx: &BenchTextureContext,
+) {
+    let mut legacy_cache = TextLayoutCache::new(4_097);
+    let mut legacy_scratch = ComposeScratch::default();
+    let mut legacy_actors = (0..actor_count)
+        .map(|actor| text_actor(TextContent::Inline(value(0, actor))))
+        .collect::<Vec<_>>();
+    black_box(compose_text_group(
+        &legacy_actors,
+        metrics,
+        fonts,
+        &mut legacy_cache,
+        &mut legacy_scratch,
+        texture_ctx,
+    ));
+    legacy_cache.lock_growth_with_reserve(4_096);
+
+    let optimized_capacity = match warmup {
+        DynamicTextWarmup::FrameSlots => 1,
+        DynamicTextWarmup::U16Domain(_) => 1,
+    };
+    let mut optimized_cache = TextLayoutCache::new(optimized_capacity);
+    let mut optimized_scratch = ComposeScratch::default();
+    match warmup {
+        DynamicTextWarmup::FrameSlots => {
+            for slot in 0..actor_count {
+                prewarm_frame_inline_text_slot(
+                    &mut optimized_cache,
+                    &mut optimized_scratch,
+                    fonts,
+                    "test",
+                    longest,
+                    slot as u8,
+                    actor_count * 4,
+                );
+            }
+        }
+        DynamicTextWarmup::U16Domain(max) => {
+            optimized_cache.prewarm_u16_domain(fonts, "test", 0, max, None, TextAlign::Left);
+        }
+    }
+    let optimized_content = |frame, actor| match warmup {
+        DynamicTextWarmup::FrameSlots => {
+            TextContent::frame_inline_slot(value(frame, actor), actor as u8)
+        }
+        DynamicTextWarmup::U16Domain(_) => {
+            let value =
+                dense_value.expect("dense workload supplies its numeric value")(frame, actor);
+            TextContent::prewarmed_u16(value, 0)
+        }
+    };
+    let mut optimized_actors = (0..actor_count)
+        .map(|actor| text_actor(optimized_content(0, actor)))
+        .collect::<Vec<_>>();
+    black_box(compose_text_group(
+        &optimized_actors,
+        metrics,
+        fonts,
+        &mut optimized_cache,
+        &mut optimized_scratch,
+        texture_ctx,
+    ));
+    if matches!(warmup, DynamicTextWarmup::U16Domain(_)) {
+        optimized_scratch.prewarm_draw_sort(actor_count * 2);
+    }
+    optimized_cache.lock_growth();
+
+    let legacy = measure(DYNAMIC_LAYOUT_FRAMES, false, |frame| {
+        for (actor, output) in legacy_actors.iter_mut().enumerate() {
+            *output = text_actor(TextContent::Inline(value(frame, actor)));
+        }
+        compose_text_group(
+            &legacy_actors,
+            metrics,
+            fonts,
+            &mut legacy_cache,
+            &mut legacy_scratch,
+            texture_ctx,
+        )
+    });
+    let optimized = measure(DYNAMIC_LAYOUT_FRAMES, false, |frame| {
+        for (actor, output) in optimized_actors.iter_mut().enumerate() {
+            *output = text_actor(optimized_content(frame, actor));
+        }
+        compose_text_group(
+            &optimized_actors,
+            metrics,
+            fonts,
+            &mut optimized_cache,
+            &mut optimized_scratch,
+            texture_ctx,
+        )
+    });
+
+    println!("\n{title} ({DYNAMIC_LAYOUT_FRAMES} song frames)");
+    print_result("whole-string cache", &legacy, DYNAMIC_LAYOUT_FRAMES);
+    let optimized_label = match warmup {
+        DynamicTextWarmup::FrameSlots => "direct frame slots",
+        DynamicTextWarmup::U16Domain(_) => "prewarmed domain",
+    };
+    print_result(optimized_label, &optimized, DYNAMIC_LAYOUT_FRAMES);
+    assert_eq!(
+        legacy.checksum, optimized.checksum,
+        "{title} behavior changed"
+    );
+    assert_eq!(optimized.allocated.allocs, 0, "{title} allocated");
+    assert_eq!(optimized.allocated.reallocs, 0, "{title} reallocated");
+    assert_eq!(optimized.allocated.frees, 0, "{title} freed");
 }
 
 fn warm_compose(
@@ -411,7 +604,7 @@ fn numeric_font() -> FontMap {
     };
     let mut glyph_map = HashMap::new();
     let mut ascii_glyphs = Box::new(std::array::from_fn(|_| None));
-    for ch in "+-0123456789.%".chars() {
+    for ch in "+-0123456789.%/ms".chars() {
         glyph_map.insert(ch, glyph.clone());
         ascii_glyphs[ch as usize] = Some(glyph.clone());
     }

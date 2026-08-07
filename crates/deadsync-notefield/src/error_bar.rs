@@ -53,6 +53,7 @@ pub(crate) struct ErrorBarComposeRequest<'a> {
     pub long_average_visible: bool,
     pub long_average_intensity: f32,
     pub text: Option<ErrorBarText>,
+    pub frame_text_slot: u8,
     pub text_visible: bool,
     pub text_label: fn(bool, bool) -> TextContent,
 }
@@ -382,7 +383,9 @@ fn append_offset_indicator(actors: &mut Vec<Actor>, request: &ErrorBarComposeReq
     let color = error_bar_color_for_window(style.palette, indicator.window, request.show_fa_plus);
     let mut text = TextBuilder::new();
     text.font(style.offset_indicator_font);
-    text.settext((request.offset_text)(indicator.offset_ms));
+    text.settext(
+        (request.offset_text)(indicator.offset_ms).with_frame_inline_slot(request.frame_text_slot),
+    );
     text.align(0.5, 0.5);
     text.xy(request.offset_indicator_position[0], y);
     text.zoom(style.offset_indicator_zoom);
@@ -847,6 +850,7 @@ mod tests {
             long_average_visible: false,
             long_average_intensity: 1.0,
             text: None,
+            frame_text_slot: 0,
             text_visible: false,
             text_label,
         }
@@ -1252,6 +1256,7 @@ mod tests {
             window: TimingWindow::W2,
         });
         request.offset_indicator_position = [100.0, 195.0];
+        request.frame_text_slot = 7;
         let mut actors = Vec::new();
 
         compose_error_bar(&mut actors, request);
@@ -1267,6 +1272,13 @@ mod tests {
             1.0,
             90,
         );
+        assert!(matches!(
+            &actors[0],
+            Actor::Text {
+                content: TextContent::FrameInline { slot: 7, .. },
+                ..
+            }
+        ));
 
         request.has_error_bar = false;
         actors.clear();

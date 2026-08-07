@@ -786,7 +786,7 @@ mod tests {
             (f64::NAN, "0.00%"),
         ] {
             let text = zmod_mini_indicator_text_content(ZmodMiniIndicatorText::Percent(value));
-            assert!(matches!(text, TextContent::FrameInline(_)));
+            assert!(matches!(text, TextContent::FrameInline { slot: 0, .. }));
             assert_eq!(text.as_str(), expected);
         }
 

@@ -923,10 +923,18 @@ pub enum TextContent {
     Owned(String),
     Shared(Arc<str>),
     Inline(InlineText),
-    /// Short changing text laid out through reusable frame scratch instead of
-    /// being inserted into the persistent whole-string layout cache.
-    FrameInline(InlineText),
+    /// Short changing text laid out through an independently reusable frame
+    /// slot instead of the persistent whole-string layout cache.
+    FrameInline {
+        text: InlineText,
+        slot: u8,
+    },
     InlineU16(InlineU16Text),
+    /// Heap-free decimal text resolved through a caller-prewarmed dense domain.
+    PrewarmedU16 {
+        text: InlineU16Text,
+        domain: u8,
+    },
     InlineU32(InlineU32Text),
 }
 
@@ -1060,11 +1068,13 @@ impl std::fmt::Write for InlineText {
 pub struct InlineU16Text {
     bytes: [u8; 5],
     start: u8,
+    value: u16,
 }
 
 impl InlineU16Text {
     #[inline(always)]
     pub fn new(mut value: u16) -> Self {
+        let original = value;
         let mut bytes = [0; 5];
         let mut start = bytes.len();
         loop {
@@ -1078,6 +1088,7 @@ impl InlineU16Text {
         Self {
             bytes,
             start: start as u8,
+            value: original,
         }
     }
 
@@ -1085,6 +1096,11 @@ impl InlineU16Text {
     pub fn as_str(&self) -> &str {
         let digits = &self.bytes[self.start as usize..];
         std::str::from_utf8(digits).expect("inline u16 text contains only ASCII decimal digits")
+    }
+
+    #[inline(always)]
+    pub const fn value(&self) -> u16 {
+        self.value
     }
 }
 
@@ -1133,13 +1149,47 @@ impl TextContent {
     }
 
     #[inline(always)]
+    pub fn prewarmed_u16(value: u16, domain: u8) -> Self {
+        Self::PrewarmedU16 {
+            text: InlineU16Text::new(value),
+            domain,
+        }
+    }
+
+    #[inline(always)]
     pub fn inline_u32(value: u32) -> Self {
         Self::InlineU32(InlineU32Text::new(value))
     }
 
     #[inline(always)]
     pub const fn frame_inline(value: InlineText) -> Self {
-        Self::FrameInline(value)
+        Self::FrameInline {
+            text: value,
+            slot: 0,
+        }
+    }
+
+    #[inline(always)]
+    pub const fn frame_inline_slot(value: InlineText, slot: u8) -> Self {
+        Self::FrameInline { text: value, slot }
+    }
+
+    /// Routes a heap-free numeric payload through one prewarmed frame slot.
+    /// Other storage variants retain their original lifetime semantics.
+    #[inline]
+    pub fn with_frame_inline_slot(self, slot: u8) -> Self {
+        let text =
+            match self {
+                Self::Inline(text) | Self::FrameInline { text, .. } => text,
+                Self::InlineU16(text) => InlineText::copy_from(text.as_str())
+                    .expect("a u16 decimal value fits inline text"),
+                Self::PrewarmedU16 { text, .. } => InlineText::copy_from(text.as_str())
+                    .expect("a u16 decimal value fits inline text"),
+                Self::InlineU32(text) => InlineText::copy_from(text.as_str())
+                    .expect("a u32 decimal value fits inline text"),
+                other => return other,
+            };
+        Self::frame_inline_slot(text, slot)
     }
 
     /// Formats a short value directly into the actor without allocating.
@@ -1162,8 +1212,9 @@ impl TextContent {
             Self::Owned(s) => s.as_str(),
             Self::Shared(s) => s.as_ref(),
             Self::Inline(s) => s.as_str(),
-            Self::FrameInline(s) => s.as_str(),
+            Self::FrameInline { text, .. } => text.as_str(),
             Self::InlineU16(s) => s.as_str(),
+            Self::PrewarmedU16 { text, .. } => text.as_str(),
             Self::InlineU32(s) => s.as_str(),
         }
     }
@@ -1257,6 +1308,12 @@ mod tests {
         for value in [0, 7, 42, 250, 500, 8_191, u16::MAX] {
             let text = TextContent::inline_u16(value);
             assert_eq!(text.as_str(), value.to_string());
+            let prewarmed = TextContent::prewarmed_u16(value, 3);
+            assert_eq!(prewarmed.as_str(), text.as_str());
+            assert!(matches!(
+                prewarmed,
+                TextContent::PrewarmedU16 { text, domain: 3 } if text.value() == value
+            ));
         }
     }
 
@@ -1266,6 +1323,26 @@ mod tests {
             let text = TextContent::inline_u32(value);
             assert_eq!(text.as_str(), value.to_string());
         }
+    }
+
+    #[test]
+    fn numeric_text_routes_to_requested_frame_slot_without_changing_bytes() {
+        for (source, expected) in [
+            (TextContent::inline_u16(u16::MAX), "65535"),
+            (TextContent::inline_u32(u32::MAX), "4294967295"),
+            (
+                TextContent::inline_format(format_args!("-12.34ms")).expect("text fits"),
+                "-12.34ms",
+            ),
+        ] {
+            let text = source.with_frame_inline_slot(17);
+            assert_eq!(text.as_str(), expected);
+            assert!(matches!(text, TextContent::FrameInline { slot: 17, .. }));
+        }
+        assert!(matches!(
+            TextContent::Static("--").with_frame_inline_slot(17),
+            TextContent::Static("--")
+        ));
     }
 
     #[test]
