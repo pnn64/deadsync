@@ -21,8 +21,8 @@ pub use deadlib_assets::{
 };
 pub use manager::AssetManager;
 pub use textures::{
-    canonical_texture_key, held_miss_texture_choices, hold_judgment_texture_choices,
-    judgment_texture_choices,
+    canonical_texture_key, graphic_texture_roots, held_miss_texture_choices,
+    hold_judgment_texture_choices, judgment_texture_choices,
 };
 
 /// Resolve a bundled or data-overlay asset without exposing platform paths to

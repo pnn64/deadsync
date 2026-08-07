@@ -2192,7 +2192,7 @@ pub struct State {
     hud_snapshot: profile_data::GameplayHudSnapshot,
     pub noteskin_assets: GameplayNoteskinAssets,
     pub density_graph: DensityGraphRenderState,
-    pub step_stats_extra_resolved: [profile_data::StepStatsExtra; MAX_PLAYERS],
+    pub step_stats_extra_resolved: [crate::step_stats_gifs::ResolvedStepStatsExtra; MAX_PLAYERS],
     pub song_full_title: Arc<str>,
     pub stage_intro_text: Arc<str>,
     pub replay_status_text: Option<Arc<str>>,

@@ -1,20 +1,19 @@
 use crate::act;
 use crate::screens::gameplay::State;
 use crate::step_stats_gifs::{
-    GifRenderParams, frame_for_extra, gif_render_layout, resolve_random_extra,
+    GifRenderParams, ResolvedStepStatsExtra, gif_render_layout, resolve_extra,
 };
 use deadlib_present::actors::Actor;
 use deadlib_present::space::{is_wide, screen_height, screen_width};
 use deadsync_core::input::MAX_PLAYERS;
-use deadsync_profile::{PlayerSide, StepStatsExtra};
+use deadsync_profile::PlayerSide;
 
-const CROP: f32 = 0.02;
 const GIF_Z: i16 = 65;
 
 pub fn resolve_random_extras(
     profiles: &[deadsync_profile::Profile; MAX_PLAYERS],
-) -> [StepStatsExtra; MAX_PLAYERS] {
-    std::array::from_fn(|player_idx| resolve_random_extra(profiles[player_idx].step_stats_extra))
+) -> [ResolvedStepStatsExtra; MAX_PLAYERS] {
+    std::array::from_fn(|player_idx| resolve_extra(&profiles[player_idx].step_stats_extra))
 }
 
 pub fn push_step_stats_extra(
@@ -45,17 +44,21 @@ pub fn push_step_stats_extra(
         return;
     };
 
-    let frame = frame_for_extra(extra, state.current_beat());
-    if layout.crop {
+    let frame = layout.frame_at(
+        state.current_beat(),
+        state.gameplay.current_music_time_seconds(),
+    );
+    let [crop_left, crop_right, crop_top, crop_bottom] = layout.crop;
+    if layout.crop != [0.0; 4] {
         actors.push(act!(sprite(layout.texture):
             align(layout.align_x, 0.5):
             xy(layout.x, layout.y):
             setstate(frame):
             zoom(layout.zoom):
-            cropleft(CROP):
-            cropright(CROP):
-            croptop(CROP):
-            cropbottom(CROP):
+            cropleft(crop_left):
+            cropright(crop_right):
+            croptop(crop_top):
+            cropbottom(crop_bottom):
             z(GIF_Z)
         ));
     } else {

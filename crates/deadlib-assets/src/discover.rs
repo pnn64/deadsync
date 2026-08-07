@@ -16,7 +16,7 @@ use std::{
 };
 
 pub const NONE_TEXTURE_CHOICE_KEY: &str = "None";
-pub const INITIAL_GRAPHIC_TEXTURES: [GraphicTextureDiscovery; 3] = [
+pub const INITIAL_GRAPHIC_TEXTURES: [GraphicTextureDiscovery; 4] = [
     GraphicTextureDiscovery {
         folder: "judgements",
         love_first: true,
@@ -31,6 +31,11 @@ pub const INITIAL_GRAPHIC_TEXTURES: [GraphicTextureDiscovery; 3] = [
         folder: "held_miss",
         love_first: false,
         require_multiframe_hint: false,
+    },
+    GraphicTextureDiscovery {
+        folder: "step_stats_gifs",
+        love_first: false,
+        require_multiframe_hint: true,
     },
 ];
 

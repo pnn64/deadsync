@@ -225,6 +225,10 @@ pub(super) fn apply_profile_defaults(
             })
             .unwrap_or(0);
     }
+    if let Some(row) = row_map.get_mut(RowId::StepStatsExtra) {
+        row.selected_choice_index[player_idx] =
+            crate::step_stats_gifs::option_index(&profile.step_stats_extra);
+    }
     // Initialize Mini row from profile (range -100..150, stored as percent).
     if let Some(row) = row_map.get_mut(RowId::Mini) {
         let val = profile.mini_percent.clamp(-100, 150);

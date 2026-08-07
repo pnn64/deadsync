@@ -644,11 +644,6 @@ pub fn initial_texture_assets() -> impl Iterator<Item = TextureAssetSpec> {
         .chain(SRPG10_EVAL_TEXTURES.into_iter().map(texture_asset))
         .chain(GRADE_TEXTURE_ASSETS.iter().copied())
         .chain(SUBMIT_TEXTURE_ASSETS.iter().copied())
-        .chain(
-            crate::step_stats_gifs::STEP_STATS_GIF_TEXTURES
-                .into_iter()
-                .map(texture_asset),
-        )
 }
 
 #[inline(always)]
@@ -978,11 +973,6 @@ mod tests {
             assets
                 .iter()
                 .any(|asset| asset.key == SRPG10_ASSETS.shared_background)
-        );
-        assert!(
-            assets
-                .iter()
-                .any(|asset| asset.key == crate::step_stats_gifs::STEP_STATS_GIF_TEXTURES[0])
         );
     }
 

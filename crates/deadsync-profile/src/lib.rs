@@ -4988,43 +4988,29 @@ impl core::fmt::Display for StepStatisticsMask {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub enum StepStatsExtra {
     #[default]
     None,
     ErrorStats,
-    AmongUs,
-    Bocchi,
-    BrodyQuest,
-    CatJAM,
-    CrabPls,
-    DancingDuck,
-    DonChan,
-    NyanCat,
     Randomizer,
-    RinCat,
-    Snoop,
-    Sonic,
+    Gif(Arc<str>),
 }
 
 impl StepStatsExtra {
-    pub const RANDOMIZER_CHOICES: [Self; 11] = [
-        Self::AmongUs,
-        Self::Bocchi,
-        Self::BrodyQuest,
-        Self::CatJAM,
-        Self::CrabPls,
-        Self::DancingDuck,
-        Self::DonChan,
-        Self::NyanCat,
-        Self::RinCat,
-        Self::Snoop,
-        Self::Sonic,
-    ];
+    #[inline(always)]
+    pub fn gif(name: impl Into<Arc<str>>) -> Self {
+        Self::Gif(name.into())
+    }
 
     #[inline(always)]
-    pub const fn renderable(self) -> bool {
-        !matches!(self, Self::None | Self::ErrorStats | Self::Randomizer)
+    pub fn as_str(&self) -> &str {
+        match self {
+            Self::None => "None",
+            Self::ErrorStats => "ErrorStats",
+            Self::Randomizer => "Randomizer",
+            Self::Gif(name) => name,
+        }
     }
 }
 
@@ -5032,44 +5018,25 @@ impl FromStr for StepStatsExtra {
     type Err = String;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match normalize_option_key(s).as_str() {
-            "" | "none" => Ok(Self::None),
-            "errorstats" | "error" => Ok(Self::ErrorStats),
-            "amongus" => Ok(Self::AmongUs),
-            "bocchi" => Ok(Self::Bocchi),
-            "brodyquest" => Ok(Self::BrodyQuest),
-            "catjam" => Ok(Self::CatJAM),
-            "crabpls" => Ok(Self::CrabPls),
-            "dancingduck" => Ok(Self::DancingDuck),
-            "donchan" => Ok(Self::DonChan),
-            "nyancat" => Ok(Self::NyanCat),
-            "randomizer" | "random" => Ok(Self::Randomizer),
-            "rincat" => Ok(Self::RinCat),
-            "snoop" => Ok(Self::Snoop),
-            "sonic" => Ok(Self::Sonic),
-            other => Err(format!("'{other}' is not a valid StepStatsExtra setting")),
+        let trimmed = s.trim();
+        if trimmed.chars().any(char::is_control) {
+            return Err("StepStatsExtra contains a control character".to_string());
         }
+        Ok(match normalize_option_key(trimmed).as_str() {
+            "" | "none" => Self::None,
+            "errorstats" | "error" => Self::ErrorStats,
+            "randomizer" | "random" => Self::Randomizer,
+            "dancingduck" => Self::gif("Dancing Duck"),
+            "nyancat" => Self::gif("Nyan Cat"),
+            "rincat" => Self::gif("Rin Cat"),
+            _ => Self::gif(trimmed),
+        })
     }
 }
 
 impl core::fmt::Display for StepStatsExtra {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        match self {
-            Self::None => write!(f, "None"),
-            Self::ErrorStats => write!(f, "ErrorStats"),
-            Self::AmongUs => write!(f, "AmongUs"),
-            Self::Bocchi => write!(f, "Bocchi"),
-            Self::BrodyQuest => write!(f, "BrodyQuest"),
-            Self::CatJAM => write!(f, "CatJAM"),
-            Self::CrabPls => write!(f, "CrabPls"),
-            Self::DancingDuck => write!(f, "Dancing Duck"),
-            Self::DonChan => write!(f, "DonChan"),
-            Self::NyanCat => write!(f, "Nyan Cat"),
-            Self::Randomizer => write!(f, "Randomizer"),
-            Self::RinCat => write!(f, "Rin Cat"),
-            Self::Snoop => write!(f, "Snoop"),
-            Self::Sonic => write!(f, "Sonic"),
-        }
+        f.write_str(self.as_str())
     }
 }
 
@@ -7328,7 +7295,7 @@ where
     }
     options.step_stats_extra = get("StepStatsExtra")
         .and_then(|s| StepStatsExtra::from_str(&s).ok())
-        .unwrap_or(options.step_stats_extra);
+        .unwrap_or_else(|| options.step_stats_extra.clone());
     options.target_score = get("TargetScore")
         .and_then(|s| TargetScoreSetting::from_str(&s).ok())
         .unwrap_or(options.target_score);
@@ -8494,7 +8461,7 @@ impl Default for Profile {
             long_error_bar_threshold_ms: player_options.long_error_bar_threshold_ms,
             long_error_bar_min_samples: player_options.long_error_bar_min_samples,
             step_statistics: player_options.step_statistics,
-            step_stats_extra: player_options.step_stats_extra,
+            step_stats_extra: player_options.step_stats_extra.clone(),
             target_score: player_options.target_score,
             target_score_percent: player_options.target_score_percent,
             target_score_miss_policy: player_options.target_score_miss_policy,
@@ -9421,7 +9388,7 @@ impl Profile {
             long_error_bar_threshold_ms: self.long_error_bar_threshold_ms,
             long_error_bar_min_samples: self.long_error_bar_min_samples,
             step_statistics: self.step_statistics,
-            step_stats_extra: self.step_stats_extra,
+            step_stats_extra: self.step_stats_extra.clone(),
             target_score: self.target_score,
             target_score_percent: self.target_score_percent,
             target_score_miss_policy: self.target_score_miss_policy,
@@ -9561,7 +9528,7 @@ impl Profile {
         self.long_error_bar_threshold_ms = options.long_error_bar_threshold_ms;
         self.long_error_bar_min_samples = options.long_error_bar_min_samples;
         self.step_statistics = options.step_statistics;
-        self.step_stats_extra = options.step_stats_extra;
+        self.step_stats_extra = options.step_stats_extra.clone();
         self.target_score = options.target_score;
         self.target_score_percent = options.target_score_percent;
         self.target_score_miss_policy = options.target_score_miss_policy;
@@ -11927,7 +11894,7 @@ mod tests {
             tap_explosion_active_mask: TapExplosionMask::FANTASTIC | TapExplosionMask::MISS,
             score_position: ScorePosition::StepStatistics,
             score_display_mode: ScoreDisplayMode::Predictive,
-            step_stats_extra: StepStatsExtra::CatJAM,
+            step_stats_extra: StepStatsExtra::gif("CatJAM"),
             column_flash_brightness: ColumnFlashBrightness::Dimmed,
             column_flash_size: ColumnFlashSize::Compact,
             mini_percent: 42,
@@ -12045,7 +12012,7 @@ mod tests {
                 .step_statistics
                 .contains(StepStatisticsMask::PACK_BANNER)
         );
-        assert_eq!(options.step_stats_extra, StepStatsExtra::CatJAM);
+        assert_eq!(options.step_stats_extra, StepStatsExtra::gif("CatJAM"));
         assert_eq!(options.target_score, TargetScoreSetting::A);
         assert_eq!(options.lifemeter_type, LifeMeterType::Vertical);
         assert_eq!(options.measure_counter, MeasureCounter::Sixteenth);
@@ -13649,34 +13616,37 @@ ApiKey = gs-key
         for setting in [
             StepStatsExtra::None,
             StepStatsExtra::ErrorStats,
-            StepStatsExtra::AmongUs,
-            StepStatsExtra::Bocchi,
-            StepStatsExtra::BrodyQuest,
-            StepStatsExtra::CatJAM,
-            StepStatsExtra::CrabPls,
-            StepStatsExtra::DancingDuck,
-            StepStatsExtra::DonChan,
-            StepStatsExtra::NyanCat,
+            StepStatsExtra::gif("AmongUs"),
+            StepStatsExtra::gif("Bocchi"),
+            StepStatsExtra::gif("BrodyQuest"),
+            StepStatsExtra::gif("CatJAM"),
+            StepStatsExtra::gif("CrabPls"),
+            StepStatsExtra::gif("Dancing Duck"),
+            StepStatsExtra::gif("DonChan"),
+            StepStatsExtra::gif("Nyan Cat"),
             StepStatsExtra::Randomizer,
-            StepStatsExtra::RinCat,
-            StepStatsExtra::Snoop,
-            StepStatsExtra::Sonic,
+            StepStatsExtra::gif("Rin Cat"),
+            StepStatsExtra::gif("Snoop"),
+            StepStatsExtra::gif("Sonic"),
         ] {
             assert_eq!(setting.to_string().parse::<StepStatsExtra>(), Ok(setting));
         }
         assert_eq!(
             StepStatsExtra::from_str("DancingDuck"),
-            Ok(StepStatsExtra::DancingDuck)
+            Ok(StepStatsExtra::gif("Dancing Duck"))
         );
         assert_eq!(
             StepStatsExtra::from_str("NyanCat"),
-            Ok(StepStatsExtra::NyanCat)
+            Ok(StepStatsExtra::gif("Nyan Cat"))
         );
         assert_eq!(
             StepStatsExtra::from_str("RinCat"),
-            Ok(StepStatsExtra::RinCat)
+            Ok(StepStatsExtra::gif("Rin Cat"))
         );
-        assert!(StepStatsExtra::from_str("lanes").is_err());
+        assert_eq!(
+            StepStatsExtra::from_str("RootReducer spooky"),
+            Ok(StepStatsExtra::gif("RootReducer spooky"))
+        );
     }
 
     #[test]

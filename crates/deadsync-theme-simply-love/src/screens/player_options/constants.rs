@@ -203,23 +203,6 @@ pub(super) const SCORE_POSITION_VARIANTS: [ScorePosition; 2] =
 pub(super) const SCORE_DISPLAY_MODE_VARIANTS: [ScoreDisplayMode; 2] =
     [ScoreDisplayMode::Normal, ScoreDisplayMode::Predictive];
 
-pub(super) const STEP_STATS_EXTRA_VARIANTS: [deadsync_profile::StepStatsExtra; 14] = [
-    deadsync_profile::StepStatsExtra::None,
-    deadsync_profile::StepStatsExtra::ErrorStats,
-    deadsync_profile::StepStatsExtra::AmongUs,
-    deadsync_profile::StepStatsExtra::Bocchi,
-    deadsync_profile::StepStatsExtra::BrodyQuest,
-    deadsync_profile::StepStatsExtra::CatJAM,
-    deadsync_profile::StepStatsExtra::CrabPls,
-    deadsync_profile::StepStatsExtra::DancingDuck,
-    deadsync_profile::StepStatsExtra::DonChan,
-    deadsync_profile::StepStatsExtra::NyanCat,
-    deadsync_profile::StepStatsExtra::Randomizer,
-    deadsync_profile::StepStatsExtra::RinCat,
-    deadsync_profile::StepStatsExtra::Snoop,
-    deadsync_profile::StepStatsExtra::Sonic,
-];
-
 pub(super) const TARGET_SCORE_VARIANTS: [TargetScoreSetting; 19] = [
     TargetScoreSetting::CMinus,
     TargetScoreSetting::C,

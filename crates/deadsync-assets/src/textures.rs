@@ -1,8 +1,8 @@
 use crate::manager::AssetManager;
 use deadlib_assets::{
     GraphicTextureChoiceCache, INITIAL_GRAPHIC_TEXTURES, InitialTextureLoad, TextureChoice,
-    TextureKeyStoreLoad, canonical_texture_key_with_asset_roots, graphic_texture_roots,
-    initial_texture_decode_jobs,
+    TextureKeyStoreLoad, canonical_texture_key_with_asset_roots,
+    graphic_texture_roots as discover_graphic_texture_roots, initial_texture_decode_jobs,
 };
 use deadlib_platform::dirs;
 use deadlib_render::{SamplerDesc, SamplerWrap};
@@ -12,21 +12,21 @@ use std::path::{Path, PathBuf};
 
 static GRAPHIC_TEXTURE_CHOICES: GraphicTextureChoiceCache = GraphicTextureChoiceCache::new();
 
-fn graphics_roots(folder: &str) -> Vec<PathBuf> {
+pub fn graphic_texture_roots(folder: &str) -> Vec<PathBuf> {
     let dirs = dirs::app_dirs();
-    graphic_texture_roots(folder, dirs.portable, &dirs.data_dir, &dirs.exe_dir)
+    discover_graphic_texture_roots(folder, dirs.portable, &dirs.data_dir, &dirs.exe_dir)
 }
 
 pub fn judgment_texture_choices() -> &'static [TextureChoice] {
-    GRAPHIC_TEXTURE_CHOICES.judgment_texture_choices(graphics_roots)
+    GRAPHIC_TEXTURE_CHOICES.judgment_texture_choices(graphic_texture_roots)
 }
 
 pub fn hold_judgment_texture_choices() -> &'static [TextureChoice] {
-    GRAPHIC_TEXTURE_CHOICES.hold_judgment_texture_choices(graphics_roots)
+    GRAPHIC_TEXTURE_CHOICES.hold_judgment_texture_choices(graphic_texture_roots)
 }
 
 pub fn held_miss_texture_choices() -> &'static [TextureChoice] {
-    GRAPHIC_TEXTURE_CHOICES.held_miss_texture_choices(graphics_roots)
+    GRAPHIC_TEXTURE_CHOICES.held_miss_texture_choices(graphic_texture_roots)
 }
 
 pub fn canonical_texture_key<P: AsRef<Path>>(p: P) -> String {
@@ -60,7 +60,7 @@ impl AssetManager {
             &dirs::app_dirs().noteskin_roots(),
             |path| canonical_texture_key(path),
             &INITIAL_GRAPHIC_TEXTURES,
-            graphics_roots,
+            graphic_texture_roots,
             |path| dirs::app_dirs().resolve_asset_path(path),
         );
 
