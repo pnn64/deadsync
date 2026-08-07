@@ -1789,7 +1789,9 @@ pub fn push_step_stats(
         return;
     }
     let layout = step_stats_pane_layout(state, playfield_center_x, player_side);
-    actors.reserve(if wide { 48 } else { 1 });
+    let player_idx = step_stats_player_idx(state, player_side);
+    let extra_actor_count = state.step_stats_extra_resolved[player_idx].actor_count();
+    actors.reserve((if wide { 48 } else { 1 }) + extra_actor_count);
     if mask.contains(profile_data::StepStatisticsMask::SONG_BANNER) {
         build_banner(actors, state, layout, wide, player_side);
     }
@@ -1801,12 +1803,16 @@ pub fn push_step_stats(
     step_stats_gifs::push_step_stats_extra(
         actors,
         state,
-        player_side,
-        step_stats_player_idx(state, player_side),
-        layout.sidepane_center_x,
-        layout.sidepane_center_y,
-        layout.banner_data_zoom,
-        layout.note_field_is_centered,
+        player_idx,
+        crate::step_stats_gifs::GifRenderParams {
+            player_side,
+            wide,
+            aspect_ratio: screen_width() / screen_height().max(1.0),
+            pane_x: layout.sidepane_center_x,
+            pane_y: layout.sidepane_center_y,
+            banner_data_zoom: layout.banner_data_zoom,
+            note_field_is_centered: layout.note_field_is_centered,
+        },
     );
     build_side_pane(
         actors,
@@ -2255,7 +2261,8 @@ pub fn push_double_step_stats(
     if !is_wide() {
         return;
     }
-    let is_ultrawide = screen_width() / screen_height().max(1.0) > (21.0 / 9.0);
+    let aspect_ratio = screen_width() / screen_height().max(1.0);
+    let is_ultrawide = aspect_ratio > (21.0 / 9.0);
     if is_ultrawide {
         return;
     }
@@ -2339,12 +2346,16 @@ pub fn push_double_step_stats(
     step_stats_gifs::push_step_stats_extra(
         actors,
         state,
-        gameplay_screen::runtime_profile_side(state, 0),
         0,
-        pane_cx,
-        pane_cy,
-        banner_data_zoom,
-        note_field_is_centered,
+        crate::step_stats_gifs::GifRenderParams {
+            player_side: gameplay_screen::runtime_profile_side(state, 0),
+            wide: true,
+            aspect_ratio,
+            pane_x: pane_cx,
+            pane_y: pane_cy,
+            banner_data_zoom,
+            note_field_is_centered,
+        },
     );
 
     // TapNoteJudgments.lua (double): x(-GetNotefieldWidth() + 75), y(40), zoom(0.8)

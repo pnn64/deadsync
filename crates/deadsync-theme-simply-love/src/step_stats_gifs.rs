@@ -8,6 +8,7 @@ use std::fs;
 use std::path::{Component, Path, PathBuf};
 use std::rc::Rc;
 use std::sync::LazyLock;
+use std::{fmt, ptr};
 
 const GIF_FOLDER: &str = "step_stats_gifs";
 const MAX_GIFS: usize = 256;
@@ -47,6 +48,7 @@ pub struct GifDefinition {
     frames: Box<[u32]>,
     frame_ends: Box<[f32]>,
     cycle: f32,
+    uniform_delay_recip: f32,
     // [normal/wide][P1/P2]. Lua is evaluated only while the immutable catalog
     // is built, so player/aspect conditionals cost nothing during gameplay.
     styles: [[GifStyle; 2]; 2],
@@ -64,13 +66,42 @@ impl GifDefinition {
     }
 }
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Default)]
 pub enum ResolvedStepStatsExtra {
     #[default]
     None,
     ErrorStats,
-    Gif(usize),
+    Gif(&'static GifDefinition),
 }
+
+impl ResolvedStepStatsExtra {
+    #[inline(always)]
+    pub const fn actor_count(self) -> usize {
+        matches!(self, Self::Gif(_)) as usize
+    }
+}
+
+impl fmt::Debug for ResolvedStepStatsExtra {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::None => formatter.write_str("None"),
+            Self::ErrorStats => formatter.write_str("ErrorStats"),
+            Self::Gif(gif) => formatter.debug_tuple("Gif").field(&gif.name).finish(),
+        }
+    }
+}
+
+impl PartialEq for ResolvedStepStatsExtra {
+    fn eq(&self, other: &Self) -> bool {
+        match (*self, *other) {
+            (Self::None, Self::None) | (Self::ErrorStats, Self::ErrorStats) => true,
+            (Self::Gif(left), Self::Gif(right)) => ptr::eq(left, right),
+            _ => false,
+        }
+    }
+}
+
+impl Eq for ResolvedStepStatsExtra {}
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct GifRenderParams {
@@ -94,6 +125,7 @@ pub struct GifRenderLayout {
     frames: &'static [u32],
     frame_ends: &'static [f32],
     cycle: f32,
+    uniform_delay_recip: f32,
     effect_clock: EffectClock,
 }
 
@@ -103,7 +135,13 @@ impl GifRenderLayout {
             EffectClock::Time => seconds,
             EffectClock::Beat => beat,
         };
-        mixed_frame(clock, self.frames, self.frame_ends, self.cycle)
+        scheduled_frame(
+            clock,
+            self.frames,
+            self.frame_ends,
+            self.cycle,
+            self.uniform_delay_recip,
+        )
     }
 }
 
@@ -121,11 +159,12 @@ struct CapturedGif {
 /// scripts at `MAX_SCRIPT_BYTES`, and animations at `MAX_FRAMES`. Warmup reads
 /// and compiles the Lua files outside live gameplay with strict memory and
 /// instruction limits and without OS, I/O, or package libraries. Resolved
-/// gameplay state is a fixed catalog index, so gameplay has no file-I/O,
-/// parsing, allocation, insertion, miss recovery, eviction, or destruction
-/// work. Invalid entries are logged and omitted. Entries live until process
-/// exit, and catalog size is logged once. Worst-case per-frame work is one
-/// indexed lookup plus a binary search over precomputed frame timing.
+/// gameplay state is a direct process-lifetime catalog reference, so gameplay
+/// has no catalog search, file-I/O, parsing, allocation, insertion, miss
+/// recovery, eviction, or destruction work. Invalid entries are logged and
+/// omitted. Entries live until process exit, and catalog size is logged once.
+/// Per-frame timing is an exact corrected O(1) lookup for uniform schedules and
+/// a binary search for mixed schedules.
 static CATALOG: LazyLock<Vec<GifDefinition>> = LazyLock::new(|| {
     let roots = catalog_roots();
     let catalog = discover_in_roots(&roots);
@@ -135,7 +174,7 @@ static CATALOG: LazyLock<Vec<GifDefinition>> = LazyLock::new(|| {
 
 fn catalog_roots() -> Vec<PathBuf> {
     let roots = deadsync_assets::graphic_texture_roots(GIF_FOLDER);
-    #[cfg(test)]
+    #[cfg(any(test, feature = "bench-support"))]
     let roots = {
         let mut roots = roots;
         let source_root = Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -197,12 +236,12 @@ pub fn resolve_extra(setting: &StepStatsExtra) -> ResolvedStepStatsExtra {
                 ResolvedStepStatsExtra::None
             } else {
                 let index = (rand::random::<u64>() as usize) % catalog().len();
-                ResolvedStepStatsExtra::Gif(index)
+                ResolvedStepStatsExtra::Gif(&catalog()[index])
             }
         }
         StepStatsExtra::Gif(name) => catalog()
             .iter()
-            .position(|gif| gif.name.eq_ignore_ascii_case(name))
+            .find(|gif| gif.name.eq_ignore_ascii_case(name))
             .map(ResolvedStepStatsExtra::Gif)
             .unwrap_or(ResolvedStepStatsExtra::None),
     }
@@ -212,10 +251,9 @@ pub fn gif_render_layout(
     extra: ResolvedStepStatsExtra,
     params: GifRenderParams,
 ) -> Option<GifRenderLayout> {
-    let ResolvedStepStatsExtra::Gif(index) = extra else {
+    let ResolvedStepStatsExtra::Gif(gif) = extra else {
         return None;
     };
-    let gif = catalog().get(index)?;
     let style = gif.style(params.player_side, params.wide);
     let side_sign = match params.player_side {
         PlayerSide::P1 => 1.0,
@@ -247,8 +285,27 @@ pub fn gif_render_layout(
         frames: &gif.frames,
         frame_ends: &gif.frame_ends,
         cycle: gif.cycle,
+        uniform_delay_recip: gif.uniform_delay_recip,
         effect_clock: style.effect_clock,
     })
+}
+
+#[cfg(feature = "bench-support")]
+pub fn benchmark_gif_render_layout_legacy(
+    index: usize,
+    params: GifRenderParams,
+) -> Option<GifRenderLayout> {
+    let gif = catalog().get(index)?;
+    gif_render_layout(ResolvedStepStatsExtra::Gif(gif), params)
+}
+
+#[cfg(feature = "bench-support")]
+pub fn benchmark_gif_frame_legacy(layout: GifRenderLayout, beat: f32, seconds: f32) -> u32 {
+    let clock = match layout.effect_clock {
+        EffectClock::Time => seconds,
+        EffectClock::Beat => beat,
+    };
+    mixed_frame(clock, layout.frames, layout.frame_ends, layout.cycle)
 }
 
 fn player_index(side: PlayerSide) -> usize {
@@ -258,7 +315,13 @@ fn player_index(side: PlayerSide) -> usize {
     }
 }
 
-fn mixed_frame(clock: f32, frames: &[u32], frame_ends: &[f32], cycle: f32) -> u32 {
+fn scheduled_frame(
+    clock: f32,
+    frames: &[u32],
+    frame_ends: &[f32],
+    cycle: f32,
+    uniform_delay_recip: f32,
+) -> u32 {
     if frames.is_empty() || frames.len() != frame_ends.len() {
         return 0;
     }
@@ -266,8 +329,28 @@ fn mixed_frame(clock: f32, frames: &[u32], frame_ends: &[f32], cycle: f32) -> u3
         return frames[0];
     }
     let phase = clock.rem_euclid(cycle);
-    let index = frame_ends.partition_point(|&end| end <= phase);
+    let index = if uniform_delay_recip > 0.0 {
+        uniform_frame_index(phase, frame_ends, uniform_delay_recip)
+    } else {
+        frame_ends.partition_point(|&end| end <= phase)
+    };
     frames.get(index).copied().unwrap_or(frames[0])
+}
+
+fn uniform_frame_index(phase: f32, frame_ends: &[f32], delay_recip: f32) -> usize {
+    let mut index = ((phase * delay_recip) as usize).min(frame_ends.len() - 1);
+    while index > 0 && frame_ends[index - 1] > phase {
+        index -= 1;
+    }
+    while index < frame_ends.len() && frame_ends[index] <= phase {
+        index += 1;
+    }
+    index
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn mixed_frame(clock: f32, frames: &[u32], frame_ends: &[f32], cycle: f32) -> u32 {
+    scheduled_frame(clock, frames, frame_ends, cycle, 0.0)
 }
 
 fn discover_in_roots(roots: &[PathBuf]) -> Vec<GifDefinition> {
@@ -394,13 +477,14 @@ fn compile_definition(name: &str, content: &str, source: &str) -> Result<GifDefi
             return Err("texture or animation frames vary by player/aspect context".to_string());
         }
     }
-    let (frame_ends, cycle) = frame_timing(&p1_normal.delays)?;
+    let (frame_ends, cycle, uniform_delay_recip) = frame_timing(&p1_normal.delays)?;
     Ok(GifDefinition {
         name: name.to_string(),
         texture: p1_normal.texture,
         frames: p1_normal.frames.into_boxed_slice(),
         frame_ends,
         cycle,
+        uniform_delay_recip,
         styles: [
             [p1_normal.style, p2_normal.style],
             [p1_wide.style, p2_wide.style],
@@ -408,7 +492,7 @@ fn compile_definition(name: &str, content: &str, source: &str) -> Result<GifDefi
     })
 }
 
-fn frame_timing(delays: &[f32]) -> Result<(Box<[f32]>, f32), String> {
+fn frame_timing(delays: &[f32]) -> Result<(Box<[f32]>, f32, f32), String> {
     let mut cycle = 0.0;
     let mut ends = Vec::with_capacity(delays.len());
     for &delay in delays {
@@ -421,7 +505,18 @@ fn frame_timing(delays: &[f32]) -> Result<(Box<[f32]>, f32), String> {
         }
         ends.push(cycle);
     }
-    Ok((ends.into_boxed_slice(), cycle))
+    let uniform_delay_recip = delays
+        .first()
+        .copied()
+        .filter(|delay| *delay > 0.0)
+        .filter(|delay| {
+            delays
+                .iter()
+                .all(|other| other.to_bits() == delay.to_bits())
+        })
+        .map(f32::recip)
+        .unwrap_or(0.0);
+    Ok((ends.into_boxed_slice(), cycle, uniform_delay_recip))
 }
 
 fn capture_script(
@@ -716,6 +811,7 @@ return t
         assert_eq!(&*gif.frames, &[0, 1, 2, 3, 0, 1, 2, 3]);
         assert_eq!(&*gif.frame_ends, &[0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0]);
         assert_eq!(gif.cycle, 4.0);
+        assert_eq!(gif.uniform_delay_recip, 2.0);
         assert_eq!(gif.styles[0][0].effect_clock, EffectClock::Beat);
         assert_eq!(gif.styles[0][0].crop, [0.02; 4]);
     }
@@ -748,11 +844,49 @@ return Def.Sprite {
 
     #[test]
     fn frame_lookup_respects_mixed_delays_and_wraps() {
-        let (ends, cycle) = frame_timing(&[0.125, 0.25, 0.125]).unwrap();
+        let (ends, cycle, uniform_delay_recip) = frame_timing(&[0.125, 0.25, 0.125]).unwrap();
+        assert_eq!(uniform_delay_recip, 0.0);
         assert_eq!(mixed_frame(0.0, &[1, 2, 0], &ends, cycle), 1);
         assert_eq!(mixed_frame(0.124, &[1, 2, 0], &ends, cycle), 1);
         assert_eq!(mixed_frame(0.125, &[1, 2, 0], &ends, cycle), 2);
         assert_eq!(mixed_frame(0.5, &[1, 2, 0], &ends, cycle), 1);
+    }
+
+    #[test]
+    fn uniform_frame_lookup_matches_binary_search_at_boundaries() {
+        let frames = [3, 5, 7, 9, 11, 13, 15, 17];
+        let (ends, cycle, uniform_delay_recip) = frame_timing(&[0.125; 8]).unwrap();
+        assert!(uniform_delay_recip > 0.0);
+
+        for step in -16_384..=16_384 {
+            let clock = step as f32 / 1_024.0;
+            assert_eq!(
+                scheduled_frame(clock, &frames, &ends, cycle, uniform_delay_recip),
+                mixed_frame(clock, &frames, &ends, cycle),
+                "clock={clock}"
+            );
+        }
+        for &end in ends.iter() {
+            for clock in [end - f32::EPSILON, end, end + f32::EPSILON] {
+                assert_eq!(
+                    scheduled_frame(clock, &frames, &ends, cycle, uniform_delay_recip),
+                    mixed_frame(clock, &frames, &ends, cycle),
+                    "clock={clock}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resolved_gif_keeps_precompiled_catalog_entry() {
+        let resolved = resolve_extra(&StepStatsExtra::gif("AmongUs"));
+        let ResolvedStepStatsExtra::Gif(gif) = resolved else {
+            panic!("AmongUs should resolve to a GIF");
+        };
+
+        assert_eq!(gif.name(), "AmongUs");
+        assert_eq!(resolved.actor_count(), 1);
+        assert_eq!(ResolvedStepStatsExtra::None.actor_count(), 0);
     }
 
     #[test]
