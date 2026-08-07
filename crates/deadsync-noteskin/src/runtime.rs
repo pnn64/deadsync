@@ -308,6 +308,7 @@ pub struct ItgCompiledSpriteOps<T> {
     pub apply_model: fn(&mut T, model::ItgModelSlotPlan),
     pub apply_model_draw: fn(&mut T, ModelDrawState, Arc<[ModelTweenSegment]>, ModelEffectState),
     pub apply_parent_command: fn(&mut T, &str),
+    pub apply_xy_rotation: fn(&mut T, Option<i32>, Option<i32>),
     pub apply_rotation: fn(&mut T, i32),
     pub apply_frame: fn(&mut T, usize),
     pub apply_state: fn(&mut T, &HashMap<String, String>),
@@ -1246,12 +1247,20 @@ pub fn itg_resolve_path_ref_decl<T>(
 pub fn itg_resolve_ref_decl<T>(
     data: &itg::NoteskinData,
     button: &str,
+    steps_type: &str,
     reference: actor::ItgLuaRefDecl,
     arg0_path: Option<&Path>,
     mut resolve_element: impl FnMut(&str, &str) -> Vec<ItgResolvedSprite<T>>,
     apply_frame: impl FnMut(&mut T, usize),
     apply_state: impl FnMut(&mut T, &HashMap<String, String>),
 ) -> Vec<ItgResolvedSprite<T>> {
+    if reference
+        .condition_expr
+        .as_deref()
+        .is_some_and(|condition| !actor::actor_condition_matches(condition, button, steps_type))
+    {
+        return Vec::new();
+    }
     let child_button = reference.button_override.as_deref().unwrap_or(button);
     let wrapper_commands = reference
         .wrapper_expr
@@ -1275,7 +1284,10 @@ pub fn itg_resolve_actor_file_compiled<T>(
     compiled_actors: &compiled::CompiledActors,
     button: &str,
     element: &str,
+    steps_type: &str,
     path: &Path,
+    rotation_x: Option<i32>,
+    rotation_y: Option<i32>,
     rotation_z: Option<i32>,
     depth: usize,
     visiting: &mut HashSet<String>,
@@ -1291,6 +1303,7 @@ pub fn itg_resolve_actor_file_compiled<T>(
         bool,
     ) -> Option<T>,
     mut apply_model: impl FnMut(&mut T, model::ItgModelSlotPlan),
+    mut apply_xy_rotation: impl FnMut(&mut T, Option<i32>, Option<i32>),
     mut apply_rotation: impl FnMut(&mut T, i32),
     mut apply_frame: impl FnMut(&mut T, usize),
     mut apply_state: impl FnMut(&mut T, &HashMap<String, String>),
@@ -1313,6 +1326,7 @@ pub fn itg_resolve_actor_file_compiled<T>(
         let Some(mut slot) = load_frame(path, 0).or_else(|| load_texture(path)) else {
             return Vec::new();
         };
+        apply_xy_rotation(&mut slot, rotation_x, rotation_y);
         if let Some(rotation_z) = rotation_z {
             apply_rotation(&mut slot, rotation_z);
         }
@@ -1385,12 +1399,19 @@ pub fn itg_resolve_actor_file_compiled<T>(
         out.extend(itg_resolve_ref_decl(
             data,
             button,
+            steps_type,
             reference,
             arg0_path,
             |child_button, child_element| resolve_element(child_button, child_element, visiting),
             &mut apply_frame,
             &mut apply_state,
         ));
+    }
+
+    if rotation_x.is_some() || rotation_y.is_some() {
+        for sprite in &mut out {
+            apply_xy_rotation(&mut sprite.slot, rotation_x, rotation_y);
+        }
     }
 
     visiting.remove(&path_key);
@@ -1459,6 +1480,8 @@ pub fn itg_resolve_actor_sprites_compiled<T>(
     mut resolve_file: impl FnMut(
         &Path,
         Option<i32>,
+        Option<i32>,
+        Option<i32>,
         usize,
         &mut HashSet<String>,
         Option<&Path>,
@@ -1488,6 +1511,8 @@ pub fn itg_resolve_actor_sprites_inner_compiled<T>(
     mut resolve_file: impl FnMut(
         &Path,
         Option<i32>,
+        Option<i32>,
+        Option<i32>,
         usize,
         &mut HashSet<String>,
         Option<&Path>,
@@ -1516,7 +1541,15 @@ pub fn itg_resolve_actor_sprites_inner_compiled<T>(
         return Vec::new();
     };
 
-    let mut out = resolve_file(&path, request.rotation_z, depth, visiting, None);
+    let mut out = resolve_file(
+        &path,
+        request.rotation_x,
+        request.rotation_y,
+        request.rotation_z,
+        depth,
+        visiting,
+        None,
+    );
     apply_loader_command(&mut out, request.init_command.as_deref());
 
     visiting.remove(&visit_key);
@@ -1529,6 +1562,7 @@ pub fn itg_resolve_actor_sprites_with_ops_compiled<T>(
     compiled_actors: &compiled::CompiledActors,
     button: &str,
     element: &str,
+    steps_type: &str,
     ops: ItgCompiledSpriteOps<T>,
 ) -> Vec<ItgResolvedSprite<T>> {
     let mut visiting = HashSet::new();
@@ -1538,6 +1572,7 @@ pub fn itg_resolve_actor_sprites_with_ops_compiled<T>(
         compiled_actors,
         button,
         element,
+        steps_type,
         0,
         &mut visiting,
         &ops,
@@ -1550,6 +1585,7 @@ fn itg_resolve_actor_sprites_with_ops_inner<T>(
     compiled_actors: &compiled::CompiledActors,
     button: &str,
     element: &str,
+    steps_type: &str,
     depth: usize,
     visiting: &mut HashSet<String>,
     ops: &ItgCompiledSpriteOps<T>,
@@ -1561,14 +1597,17 @@ fn itg_resolve_actor_sprites_with_ops_inner<T>(
         element,
         depth,
         visiting,
-        |path, rotation_z, depth, visiting, arg0_path| {
+        |path, rotation_x, rotation_y, rotation_z, depth, visiting, arg0_path| {
             itg_resolve_actor_file_with_ops_inner(
                 data,
                 compiled,
                 compiled_actors,
                 button,
                 element,
+                steps_type,
                 path,
+                rotation_x,
+                rotation_y,
                 rotation_z,
                 depth,
                 visiting,
@@ -1586,7 +1625,10 @@ fn itg_resolve_actor_file_with_ops_inner<T>(
     compiled_actors: &compiled::CompiledActors,
     button: &str,
     element: &str,
+    steps_type: &str,
     path: &Path,
+    rotation_x: Option<i32>,
+    rotation_y: Option<i32>,
     rotation_z: Option<i32>,
     depth: usize,
     visiting: &mut HashSet<String>,
@@ -1598,7 +1640,10 @@ fn itg_resolve_actor_file_with_ops_inner<T>(
         compiled_actors,
         button,
         element,
+        steps_type,
         path,
+        rotation_x,
+        rotation_y,
         rotation_z,
         depth,
         visiting,
@@ -1607,6 +1652,7 @@ fn itg_resolve_actor_file_with_ops_inner<T>(
         ops.load_frame,
         ops.load_animated,
         ops.apply_model,
+        ops.apply_xy_rotation,
         ops.apply_rotation,
         ops.apply_frame,
         ops.apply_state,
@@ -1617,7 +1663,10 @@ fn itg_resolve_actor_file_with_ops_inner<T>(
                 compiled_actors,
                 button,
                 element,
+                steps_type,
                 path,
+                None,
+                None,
                 rotation_z,
                 depth + 1,
                 visiting,
@@ -1632,6 +1681,7 @@ fn itg_resolve_actor_file_with_ops_inner<T>(
                 compiled_actors,
                 child_button,
                 child_element,
+                steps_type,
                 depth + 1,
                 visiting,
                 ops,
@@ -2144,6 +2194,7 @@ pub fn itg_noteskin_runtime_with_ops_compiled<T: Clone>(
                 compiled_actors,
                 button,
                 element,
+                style.steps_type(),
                 ops,
             )
         },
@@ -2155,6 +2206,7 @@ pub fn itg_noteskin_runtime_with_ops_compiled<T: Clone>(
                     compiled_actors,
                     button,
                     element,
+                    style.steps_type(),
                     ops,
                 ),
                 ops.apply_model_draw,
@@ -2186,6 +2238,7 @@ pub fn itg_noteskin_runtime_with_ops_compiled<T: Clone>(
                 compiled_actors,
                 button,
                 element,
+                style.steps_type(),
                 ops,
             )
         },
@@ -3625,6 +3678,7 @@ mod tests {
                             element: "Fake".to_string(),
                             wrapper_expr: None,
                             frame_override: None,
+                            condition_expr: None,
                             commands: HashMap::new(),
                         }],
                         ..Default::default()
@@ -3654,6 +3708,7 @@ mod tests {
             &compiled_actors,
             "Down",
             "Tap Note",
+            "StepsType_Dance_Single",
             ItgCompiledSpriteOps {
                 load_texture: |_| Some(Slot(7)),
                 load_frame: |_, _| None,
@@ -3662,6 +3717,7 @@ mod tests {
                 apply_model: |_, _| {},
                 apply_model_draw: |_, _, _, _| {},
                 apply_parent_command: |_, _| {},
+                apply_xy_rotation: |_, _, _| {},
                 apply_rotation: |_, _| {},
                 apply_frame: |_, _| {},
                 apply_state: |_, _| {},
@@ -3846,6 +3902,8 @@ mod tests {
                 load_button: "Up".to_string(),
                 load_element: "Tap Note".to_string(),
                 blank: false,
+                rotation_x: Some(10),
+                rotation_y: Some(20),
                 rotation_z: Some(90),
                 init_command: Some("zoom,2".to_string()),
             }],
@@ -3856,8 +3914,10 @@ mod tests {
             &loader,
             "Left",
             "Tap Note",
-            |path, rotation_z, depth, visiting, arg0_path| {
+            |path, rotation_x, rotation_y, rotation_z, depth, visiting, arg0_path| {
                 assert_eq!(path, actor_path.as_path());
+                assert_eq!(rotation_x, Some(10));
+                assert_eq!(rotation_y, Some(20));
                 assert_eq!(rotation_z, Some(90));
                 assert_eq!(depth, 0);
                 assert!(arg0_path.is_none());
@@ -3904,6 +3964,8 @@ mod tests {
                 load_button: String::new(),
                 load_element: String::new(),
                 blank: true,
+                rotation_x: None,
+                rotation_y: None,
                 rotation_z: None,
                 init_command: Some("zoom,2".to_string()),
             }],
@@ -3914,7 +3976,7 @@ mod tests {
             &loader,
             "Left",
             "Tap Note",
-            |_, _, _, _, _| panic!("blank loader requests should not resolve files"),
+            |_, _, _, _, _, _, _| panic!("blank loader requests should not resolve files"),
             |_, _| panic!("blank loader requests should not apply commands"),
         );
 
@@ -3956,7 +4018,10 @@ mod tests {
             &actors,
             "Down",
             "Tap Note",
+            "StepsType_Dance_Single",
             std::path::Path::new("Tap Note.png"),
+            None,
+            None,
             Some(90),
             0,
             &mut visiting,
@@ -3969,6 +4034,7 @@ mod tests {
             },
             |_, _, _, _, _, _| panic!("animated loader should not run"),
             |_, _| panic!("model plan should not apply"),
+            |_, _, _| {},
             |slot, rotation_z| *slot += rotation_z / 10,
             |_, _| panic!("frame override should not apply"),
             |_, _| panic!("state commands should not apply"),
@@ -4027,7 +4093,10 @@ mod tests {
             &actors,
             "Down",
             "Tap Note",
+            "StepsType_Dance_Single",
             &actor_path,
+            None,
+            None,
             Some(90),
             0,
             &mut visiting,
@@ -4040,6 +4109,7 @@ mod tests {
             },
             |_, _, _, _, _, _| panic!("animated loader should not run"),
             |_, _| panic!("model plan should not apply"),
+            |_, _, _| {},
             |slot, rotation_z| *slot += rotation_z / 10,
             |_, _| panic!("frame override should not apply"),
             |slot, commands| *slot += commands.len() as i32,
@@ -4377,12 +4447,14 @@ mod tests {
             element: "Explosion".to_string(),
             wrapper_expr: Some("\"Wrapper.lua\"".to_string()),
             frame_override: Some(3),
+            condition_expr: None,
             commands: HashMap::from([("initcommand".to_string(), "zoom,4".to_string())]),
         };
 
         let child = itg_resolve_ref_decl(
             &data,
             "Down",
+            "StepsType_Dance_Single",
             reference,
             None,
             |button, element| {
@@ -4405,6 +4477,36 @@ mod tests {
             Some("zoom,4")
         );
         let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn ref_decl_skips_nonmatching_actor_condition() {
+        let data = crate::itg::NoteskinData {
+            name: "default".to_string(),
+            metrics: crate::itg::IniData::default(),
+            search_dirs: Vec::new(),
+        };
+        let reference = crate::actor::ItgLuaRefDecl {
+            button_override: Some("Center".to_string()),
+            element: "Outline Receptor".to_string(),
+            wrapper_expr: None,
+            frame_override: None,
+            condition_expr: Some("Var \"Button\" == \"Center\"".to_string()),
+            commands: HashMap::new(),
+        };
+
+        let child: Vec<ItgResolvedSprite<i32>> = itg_resolve_ref_decl(
+            &data,
+            "UpLeft",
+            "StepsType_Pump_Single",
+            reference,
+            None,
+            |_, _| panic!("hidden actor condition should not resolve its child"),
+            |_, _| {},
+            |_, _| {},
+        );
+
+        assert!(child.is_empty());
     }
 
     #[test]

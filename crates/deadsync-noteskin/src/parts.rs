@@ -18,6 +18,16 @@ impl Style {
     pub const fn game_name(self) -> &'static str {
         if self.is_pump() { "pump" } else { "dance" }
     }
+
+    #[inline(always)]
+    pub const fn steps_type(self) -> &'static str {
+        match self.num_cols {
+            5 => "StepsType_Pump_Single",
+            10 => "StepsType_Pump_Double",
+            8 => "StepsType_Dance_Double",
+            _ => "StepsType_Dance_Single",
+        }
+    }
 }
 
 pub fn itg_column_xs(num_cols: usize) -> Vec<i32> {

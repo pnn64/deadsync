@@ -519,7 +519,12 @@ fn make_actor_for_path(make_actor: &Function, value: Value) -> mlua::Result<Tabl
 }
 
 fn copy_actor_fields(src: &Table, dst: &Table) -> mlua::Result<()> {
-    for key in ["InitCommand", "BaseRotationZ"] {
+    for key in [
+        "InitCommand",
+        "BaseRotationX",
+        "BaseRotationY",
+        "BaseRotationZ",
+    ] {
         let value = src.get::<Value>(key)?;
         if !matches!(value, Value::Nil) {
             dst.set(key, value)?;
@@ -864,6 +869,8 @@ fn read_entry(button: &str, element: &str, actor: &Table) -> Result<CompiledLoad
         .get::<Option<String>>("__load_element")
         .map_err(|err| err.to_string())?
         .unwrap_or_else(|| element.to_string());
+    let rotation_x = actor.get::<Option<i32>>("BaseRotationX").unwrap_or(None);
+    let rotation_y = actor.get::<Option<i32>>("BaseRotationY").unwrap_or(None);
     let rotation_z = actor.get::<Option<i32>>("BaseRotationZ").unwrap_or(None);
     let init_command = actor_loader_command(actor)?;
     Ok(CompiledLoaderEntry {
@@ -872,6 +879,8 @@ fn read_entry(button: &str, element: &str, actor: &Table) -> Result<CompiledLoad
         load_button,
         load_element,
         blank,
+        rotation_x,
+        rotation_y,
         rotation_z,
         init_command,
     })
@@ -928,6 +937,8 @@ mod tests {
                 load_button: marker.to_string(),
                 load_element: String::new(),
                 blank: false,
+                rotation_x: None,
+                rotation_y: None,
                 rotation_z: None,
                 init_command: None,
             };
@@ -976,7 +987,11 @@ function skin.Load()
     if type(actor_file) == "function" then
         actor = actor_file(nil)
     else
-        actor = Def.Sprite { Texture = NOTESKIN:GetPath(load_button, element) }
+        actor = Def.Sprite {
+            Texture = NOTESKIN:GetPath(load_button, element),
+            BaseRotationX = 180,
+            BaseRotationY = 180,
+        }
     end
     if skin.PartsToRotate[element] then
         actor.BaseRotationZ = skin.Rotate[button]
@@ -1015,6 +1030,8 @@ return skin
         assert_eq!(receptor.rotation_z, Some(90));
         assert_eq!(hold_body.load_button, "Down");
         assert_eq!(hold_body.load_element, "Hold Body Active");
+        assert_eq!(hold_body.rotation_x, Some(180));
+        assert_eq!(hold_body.rotation_y, Some(180));
         assert_eq!(hold_body.rotation_z, Some(90));
         assert_eq!(explosion.load_button, "Down");
         assert_eq!(explosion.load_element, "Explosion");

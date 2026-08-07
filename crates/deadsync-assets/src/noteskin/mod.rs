@@ -225,6 +225,7 @@ fn itg_compiled_sprite_ops() -> deadsync_noteskin::ItgCompiledSpriteOps<SpriteSl
         apply_model: apply_model_slot_plan,
         apply_model_draw: itg_apply_model_draw,
         apply_parent_command: itg_apply_parent_command,
+        apply_xy_rotation: itg_apply_xy_rotation,
         apply_rotation: itg_apply_rotation,
         apply_frame: itg_apply_frame_override,
         apply_state: itg_apply_state_properties_from_commands,
@@ -250,6 +251,15 @@ fn itg_apply_model_draw(
 
 fn itg_apply_parent_command(slot: &mut SpriteSlot, command: &str) {
     noteskin_script::itg_apply_parent_command(&mut slot.def, &mut slot.model_draw, command);
+}
+
+fn itg_apply_xy_rotation(slot: &mut SpriteSlot, rotation_x: Option<i32>, rotation_y: Option<i32>) {
+    if rotation_x.is_some_and(|degrees| degrees.rem_euclid(360) == 180) {
+        slot.def.mirror_v = !slot.def.mirror_v;
+    }
+    if rotation_y.is_some_and(|degrees| degrees.rem_euclid(360) == 180) {
+        slot.def.mirror_h = !slot.def.mirror_h;
+    }
 }
 
 fn itg_apply_rotation(slot: &mut SpriteSlot, rotation_z: i32) {
@@ -352,6 +362,11 @@ mod tests {
             .expect("bundled pump/default should compile and load");
         assert_eq!(ns.column_xs, vec![-96, -48, 0, 48, 96]);
         assert_eq!(ns.receptor_off.len(), 5);
+        assert!(!ns.receptor_off[0].def.mirror_h);
+        assert!(!ns.receptor_off[1].def.mirror_h);
+        assert!(!ns.receptor_off[2].def.mirror_h);
+        assert!(ns.receptor_off[3].def.mirror_h);
+        assert!(ns.receptor_off[4].def.mirror_h);
         assert_eq!(ns.notes.len(), 5 * NUM_QUANTIZATIONS);
     }
 
@@ -915,6 +930,54 @@ return skin
             uv[0] < uv[2],
             "mirroring stays as actor scale, not a reversed UV rect; got {uv:?}"
         );
+
+        let _ = fs::remove_dir_all(&root);
+        clear_itg_runtime_caches();
+    }
+
+    #[test]
+    fn loader_base_rotation_y_mirrors_receptor() {
+        clear_itg_runtime_caches();
+        let root = temp_noteskin_root("loader-base-rotation-y");
+        let skin_dir = root.join("dance/mirror-y");
+        fs::create_dir_all(&skin_dir).unwrap();
+        fs::write(
+            skin_dir.join("metrics.ini"),
+            "[Global]\nFallbackNoteSkin=mirror-y\n",
+        )
+        .unwrap();
+        fs::write(
+            skin_dir.join("NoteSkin.lua"),
+            r#"local skin = {}
+
+function skin.Load()
+    local button = Var "Button"
+    local element = Var "Element"
+    if element == "Receptor" then
+        local t = LoadActor(NOTESKIN:GetPath("Left", "Receptor"))
+        t.BaseRotationY = button == "Right" and 180 or 0
+        return t
+    end
+    return LoadActor(NOTESKIN:GetPath("Down", element))
+end
+
+return skin
+"#,
+        )
+        .unwrap();
+        write_noteskin_png(&skin_dir.join("Down Tap Note.png"));
+        write_noteskin_png(&skin_dir.join("Down Receptor.png"));
+        write_noteskin_png(&skin_dir.join("Left Receptor.png"));
+
+        let style = Style {
+            num_cols: 4,
+            num_players: 1,
+        };
+        let ns = load_itg(&root, "dance", "mirror-y", &style)
+            .expect("BaseRotationY test noteskin should load");
+
+        assert!(!ns.receptor_off[0].def.mirror_h);
+        assert!(ns.receptor_off[3].def.mirror_h);
 
         let _ = fs::remove_dir_all(&root);
         clear_itg_runtime_caches();

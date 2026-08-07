@@ -48,6 +48,7 @@ pub struct ItgLuaRefDecl {
     pub element: String,
     pub wrapper_expr: Option<String>,
     pub frame_override: Option<usize>,
+    pub condition_expr: Option<String>,
     pub commands: HashMap<String, String>,
 }
 
@@ -153,6 +154,7 @@ pub fn parse_actor_decl(content: &str, metrics: &noteskin_itg::IniData) -> ItgLu
         let (mut commands, mut next_cursor) =
             find_post_call_commands(content, close, metrics, &command_context);
         let mut frame_override = find_post_call_frame_override(content, close);
+        let mut condition_expr = find_post_call_property(content, close, "Condition");
         if commands.is_empty()
             && let Some((outer_args, outer_close)) =
                 find_enclosing_loadactor_for_noteskin(content, call_start, close)
@@ -168,6 +170,7 @@ pub fn parse_actor_decl(content: &str, metrics: &noteskin_itg::IniData) -> ItgLu
                 commands = outer_commands;
                 next_cursor = outer_next_cursor;
                 frame_override = outer_frame_override;
+                condition_expr = find_post_call_property(content, outer_close, "Condition");
             }
         }
         decl.refs.push(ItgLuaRefDecl {
@@ -175,6 +178,7 @@ pub fn parse_actor_decl(content: &str, metrics: &noteskin_itg::IniData) -> ItgLu
             element,
             wrapper_expr,
             frame_override,
+            condition_expr,
             commands,
         });
         cursor = next_cursor;
@@ -482,6 +486,69 @@ fn find_post_call_frame_override(content: &str, call_close: usize) -> Option<usi
     }
     let end = find_matching(content, after, '{', '}')?;
     parse_frame_override_block(&content[after + 1..end])
+}
+
+fn find_post_call_property(content: &str, call_close: usize, property: &str) -> Option<String> {
+    let mut after = skip_ws(content, call_close + 1);
+    if !content
+        .get(after..)
+        .is_some_and(|tail| tail.starts_with(".."))
+    {
+        return None;
+    }
+    after += 2;
+    after = skip_ws(content, after);
+    if content.as_bytes().get(after).is_none_or(|ch| *ch != b'{') {
+        return None;
+    }
+    let end = find_matching(content, after, '{', '}')?;
+    for raw in content[after + 1..end].lines() {
+        let line = raw
+            .split_once("--")
+            .map_or(raw, |(prefix, _)| prefix)
+            .trim()
+            .trim_end_matches(',')
+            .trim_end_matches(';')
+            .trim();
+        let Some((key, value)) = line.split_once('=') else {
+            continue;
+        };
+        if key.trim().eq_ignore_ascii_case(property) {
+            return Some(value.trim().to_string());
+        }
+    }
+    None
+}
+
+pub fn actor_condition_matches(condition: &str, button: &str, steps_type: &str) -> bool {
+    condition
+        .split(" and ")
+        .all(|term| actor_condition_term(term, button, steps_type).unwrap_or(true))
+}
+
+fn actor_condition_term(term: &str, button: &str, steps_type: &str) -> Option<bool> {
+    let term = term.trim();
+    let (lhs, rhs, equal) = if let Some((lhs, rhs)) = term.split_once("~=") {
+        (lhs, rhs, false)
+    } else if let Some((lhs, rhs)) = term.split_once("==") {
+        (lhs, rhs, true)
+    } else {
+        return match term {
+            "true" => Some(true),
+            "false" => Some(false),
+            _ => None,
+        };
+    };
+    let lhs = lhs.trim();
+    let actual = if lhs.contains("Var \"Button\"") || lhs.contains("Var 'Button'") {
+        button
+    } else if lhs.contains("GetCurrentStyle") && lhs.contains("GetStepsType") {
+        steps_type
+    } else {
+        return None;
+    };
+    let expected = parse_lua_quoted(rhs.trim())?;
+    Some(actual.eq_ignore_ascii_case(&expected) == equal)
 }
 
 fn parse_frame_override_block(block: &str) -> Option<usize> {
@@ -1426,6 +1493,51 @@ fn parse_lua_float_token(raw: &str) -> Option<f32> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn pump_receptor_conditions_follow_button_and_steps_type() {
+        let center_condition = "Var \"Button\" == \"Center\" and \
+            GAMESTATE:GetCurrentStyle():GetStepsType() ~= 'StepsType_Pump_Halfdouble'";
+        let halfdouble_condition = "Var \"Button\" == \"DownLeft\" and \
+            GAMESTATE:GetCurrentStyle():GetStepsType() == 'StepsType_Pump_Halfdouble'";
+
+        assert!(actor_condition_matches(
+            center_condition,
+            "Center",
+            "StepsType_Pump_Single"
+        ));
+        assert!(!actor_condition_matches(
+            center_condition,
+            "UpLeft",
+            "StepsType_Pump_Single"
+        ));
+        assert!(!actor_condition_matches(
+            halfdouble_condition,
+            "DownLeft",
+            "StepsType_Pump_Single"
+        ));
+    }
+
+    #[test]
+    fn actor_refs_preserve_condition_expression() {
+        let content = r#"
+return Def.ActorFrame {
+    NOTESKIN:LoadActor("Center", "Outline Receptor")..{
+        Condition=Var "Button" == "Center" and GAMESTATE:GetCurrentStyle():GetStepsType() ~= 'StepsType_Pump_Halfdouble';
+    };
+}
+"#;
+
+        let decl = parse_actor_decl(content, &noteskin_itg::IniData::default());
+
+        assert_eq!(decl.refs.len(), 1);
+        assert_eq!(
+            decl.refs[0].condition_expr.as_deref(),
+            Some(
+                "Var \"Button\" == \"Center\" and GAMESTATE:GetCurrentStyle():GetStepsType() ~= 'StepsType_Pump_Halfdouble'"
+            )
+        );
+    }
 
     #[test]
     fn self_chain_commands_append_in_call_order() {

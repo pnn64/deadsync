@@ -7,7 +7,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 use crate::actor as noteskin_actor;
 
-pub const CACHE_SCHEMA_VERSION: u32 = 3;
+pub const CACHE_SCHEMA_VERSION: u32 = 5;
 pub const ACTOR_RECURSION_MAX_DEPTH: usize = 24;
 pub const ACTOR_FILE_RECURSION_MAX_DEPTH: usize = 48;
 static CACHE_TMP_COUNTER: AtomicU64 = AtomicU64::new(0);
@@ -27,6 +27,8 @@ pub struct CompiledLoaderEntry {
     pub load_button: String,
     pub load_element: String,
     pub blank: bool,
+    pub rotation_x: Option<i32>,
+    pub rotation_y: Option<i32>,
     pub rotation_z: Option<i32>,
     pub init_command: Option<String>,
 }
@@ -58,6 +60,8 @@ pub struct ItgLoadRequest {
     pub blank: bool,
     pub load_button: String,
     pub load_element: String,
+    pub rotation_x: Option<i32>,
+    pub rotation_y: Option<i32>,
     pub rotation_z: Option<i32>,
     pub init_command: Option<String>,
 }
@@ -89,6 +93,8 @@ impl CompiledLoader {
                 blank: entry.blank,
                 load_button: entry.load_button.clone(),
                 load_element: entry.load_element.clone(),
+                rotation_x: entry.rotation_x,
+                rotation_y: entry.rotation_y,
                 rotation_z: entry.rotation_z,
                 init_command: entry.init_command.clone(),
             };
@@ -98,6 +104,8 @@ impl CompiledLoader {
             blank: false,
             load_button: button.to_string(),
             load_element: element.to_string(),
+            rotation_x: None,
+            rotation_y: None,
             rotation_z: None,
             init_command: None,
         }
@@ -254,6 +262,8 @@ mod tests {
                 blank: false,
                 load_button: "Down".to_string(),
                 load_element: "Receptor".to_string(),
+                rotation_x: None,
+                rotation_y: None,
                 rotation_z: None,
                 init_command: None,
             }
@@ -266,6 +276,8 @@ mod tests {
             blank: false,
             load_button: "Down".to_string(),
             load_element: "Tap Note".to_string(),
+            rotation_x: None,
+            rotation_y: None,
             rotation_z: None,
             init_command: None,
         };
@@ -285,6 +297,8 @@ mod tests {
                 load_button: "Left".to_string(),
                 load_element: "Roll Explosion".to_string(),
                 blank: true,
+                rotation_x: Some(10),
+                rotation_y: Some(20),
                 rotation_z: Some(90),
                 init_command: Some("zoom,2".to_string()),
             }],
@@ -296,6 +310,8 @@ mod tests {
                 blank: true,
                 load_button: "Left".to_string(),
                 load_element: "Roll Explosion".to_string(),
+                rotation_x: Some(10),
+                rotation_y: Some(20),
                 rotation_z: Some(90),
                 init_command: Some("zoom,2".to_string()),
             }
@@ -310,6 +326,8 @@ mod tests {
             load_button: marker.to_string(),
             load_element: String::new(),
             blank: false,
+            rotation_x: None,
+            rotation_y: None,
             rotation_z: None,
             init_command: None,
         };
