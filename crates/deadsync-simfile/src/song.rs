@@ -455,6 +455,36 @@ mod tests {
     }
 
     #[test]
+    fn parses_pump_charts_into_song_payload() {
+        let root = test_dir("pump-chart");
+        let simfile = root.join("song.sm");
+        fs::write(
+            &simfile,
+            b"#TITLE:Pump Chart;\n\
+              #BPMS:0.000=120.000;\n\
+              #NOTES:\n\
+              pump-single:\n\
+              :\n\
+              Challenge:\n\
+              10:\n\
+              0.000,0.000,0.000,0.000,0.000:\n\
+              10000\n\
+              00100\n\
+              00001\n\
+              ;",
+        )
+        .unwrap();
+        let options = ParseSongOptions::new(Vec::new(), Vec::new(), Vec::new());
+
+        let song = parse_song_file(&simfile, &options, |_| 0.0).unwrap();
+
+        assert_eq!(song.charts.len(), 1);
+        assert_eq!(song.charts[0].chart_type, "pump-single");
+        assert_eq!(song.charts[0].parsed_notes.len(), 3);
+        assert_eq!(song.charts[0].parsed_notes[1].column, 2);
+    }
+
+    #[test]
     fn parsed_song_meta_records_first_and_last_step_seconds() {
         let root = test_dir("first-second");
         let song_dir = root.join("Song");

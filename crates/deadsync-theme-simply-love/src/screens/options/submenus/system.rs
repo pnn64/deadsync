@@ -11,7 +11,10 @@ pub(in crate::screens::options) const SYSTEM_OPTIONS_ROWS: &[SubRow] = &[
     SubRow {
         id: SubRowId::Game,
         label: lookup_key("OptionsSystem", "Game"),
-        choices: &[localized_choice("OptionsSystem", "DanceGame")],
+        choices: &[
+            localized_choice("OptionsSystem", "DanceGame"),
+            localized_choice("OptionsSystem", "PumpGame"),
+        ],
         inline: false,
     },
     SubRow {

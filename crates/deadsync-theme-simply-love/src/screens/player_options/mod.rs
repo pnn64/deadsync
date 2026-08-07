@@ -588,7 +588,7 @@ pub fn pad_light_brightness_preview(state: &State) -> [Option<u8>; PLAYER_SLOTS]
     // In Doubles a single player owns BOTH pads, so the brightness value applies
     // to both (see `pad_light_brightness_for_pad`). Mirror the lone active side's
     // preview onto the other pad so both light up while the value is being tuned.
-    if matches!(state.play_style, profile_data::PlayStyle::Double)
+    if state.play_style.is_double()
         && let Some(pct) = preview.iter().flatten().copied().next()
     {
         preview = [Some(pct); PLAYER_SLOTS];
@@ -604,14 +604,17 @@ const fn active_players(
 ) -> [bool; PLAYER_SLOTS] {
     let joined_count = joined[P1] as usize + joined[P2] as usize;
     match play_style {
-        profile_data::PlayStyle::Versus => {
+        profile_data::PlayStyle::Versus | profile_data::PlayStyle::PumpVersus => {
             if joined_count > 0 {
                 joined
             } else {
                 [true, true]
             }
         }
-        profile_data::PlayStyle::Single | profile_data::PlayStyle::Double => {
+        profile_data::PlayStyle::Single
+        | profile_data::PlayStyle::Double
+        | profile_data::PlayStyle::PumpSingle
+        | profile_data::PlayStyle::PumpDouble => {
             if joined_count == 1 {
                 joined
             } else {
@@ -635,8 +638,11 @@ const fn persisted_player_idx(
     side: profile_data::PlayerSide,
 ) -> usize {
     match play_style {
-        profile_data::PlayStyle::Versus => P1,
-        profile_data::PlayStyle::Single | profile_data::PlayStyle::Double => match side {
+        profile_data::PlayStyle::Versus | profile_data::PlayStyle::PumpVersus => P1,
+        profile_data::PlayStyle::Single
+        | profile_data::PlayStyle::Double
+        | profile_data::PlayStyle::PumpSingle
+        | profile_data::PlayStyle::PumpDouble => match side {
             profile_data::PlayerSide::P1 => P1,
             profile_data::PlayerSide::P2 => P2,
         },

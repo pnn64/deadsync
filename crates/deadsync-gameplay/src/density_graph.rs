@@ -9,9 +9,15 @@ pub enum StepStatsPlayStyle {
 #[inline(always)]
 pub const fn step_stats_play_style(play_style: GameplayInputPlayStyle) -> StepStatsPlayStyle {
     match play_style {
-        GameplayInputPlayStyle::Single => StepStatsPlayStyle::Single,
-        GameplayInputPlayStyle::Double => StepStatsPlayStyle::Double,
-        GameplayInputPlayStyle::Versus => StepStatsPlayStyle::Versus,
+        GameplayInputPlayStyle::Single | GameplayInputPlayStyle::PumpSingle => {
+            StepStatsPlayStyle::Single
+        }
+        GameplayInputPlayStyle::Double | GameplayInputPlayStyle::PumpDouble => {
+            StepStatsPlayStyle::Double
+        }
+        GameplayInputPlayStyle::Versus | GameplayInputPlayStyle::PumpVersus => {
+            StepStatsPlayStyle::Versus
+        }
     }
 }
 

@@ -1,6 +1,6 @@
 use deadsync_chart::song::sync_pref_offset;
 use deadsync_chart::{ChartData, ChartDisplayBpm, GameplayChartData, SongData, SyncPref};
-use deadsync_core::input::{InputSource, Lane, MAX_COLS, MAX_PLAYERS};
+use deadsync_core::input::{InputSource, Lane, LaneMask, MAX_COLS, MAX_PLAYERS};
 use deadsync_core::note::NoteType;
 use deadsync_core::song_time::{
     INVALID_SONG_TIME_NS, SongTimeNs, clamp_song_time_ns, normalized_song_rate,

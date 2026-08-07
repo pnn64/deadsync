@@ -1,5 +1,6 @@
 pub const MAX_PLAYERS: usize = 2;
-pub const MAX_COLS: usize = 8;
+pub const MAX_COLS: usize = 10;
+pub type LaneMask = u16;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u8)]
@@ -12,6 +13,8 @@ pub enum Lane {
     P2Down = 5,
     P2Up = 6,
     P2Right = 7,
+    Col8 = 8,
+    Col9 = 9,
 }
 
 impl Lane {
@@ -41,11 +44,13 @@ mod tests {
         assert_eq!(Lane::P2Down.index(), 5);
         assert_eq!(Lane::P2Up.index(), 6);
         assert_eq!(Lane::P2Right.index(), 7);
+        assert_eq!(Lane::Col8.index(), 8);
+        assert_eq!(Lane::Col9.index(), 9);
     }
 
     #[test]
     fn player_and_column_limits_match_lane_model() {
         assert_eq!(MAX_PLAYERS, 2);
-        assert_eq!(MAX_COLS, 8);
+        assert_eq!(MAX_COLS, 10);
     }
 }

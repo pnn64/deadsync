@@ -851,7 +851,7 @@ pub struct ActiveHoldColumnsUpdate {
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct MaskedActiveHoldUpdate {
-    pub remaining_mask: u8,
+    pub remaining_mask: LaneMask,
     pub event_count: usize,
     pub stopped: bool,
 }
@@ -859,7 +859,7 @@ pub struct MaskedActiveHoldUpdate {
 #[allow(clippy::too_many_arguments)]
 pub fn update_active_hold_columns_masked(
     active_holds: &mut [Option<ActiveHold>],
-    active_mask: u8,
+    active_mask: LaneMask,
     notes: &mut [Note],
     inputs: &[bool; MAX_COLS],
     num_cols: usize,
@@ -913,7 +913,7 @@ pub fn update_active_hold_columns_masked(
 
 pub fn collect_due_autoplay_active_hold_resolutions_masked(
     active_holds: &mut [Option<ActiveHold>],
-    active_mask: u8,
+    active_mask: LaneMask,
     num_cols: usize,
     cutoff_time_ns: SongTimeNs,
     events: &mut [Option<ActiveHoldColumnResolution>],

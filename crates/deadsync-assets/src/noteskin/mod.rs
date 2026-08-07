@@ -129,13 +129,14 @@ where
 
 pub fn load_itg_default(style: &Style) -> Result<Noteskin, String> {
     let roots = noteskin_roots();
-    let loaded = noteskin_itg::load_itg_default_from_roots(&roots, "dance", |root, game, skin| {
+    let game = style.game_name();
+    let loaded = noteskin_itg::load_itg_default_from_roots(&roots, game, |root, game, skin| {
         load_itg(root, game, skin, style)
     })?;
     if loaded.used_default_fallback {
         warn!(
-            "ITG default noteskin load failed; using dance/{} fallback",
-            loaded.skin
+            "ITG default noteskin load failed; using {game}/{} fallback",
+            loaded.skin,
         );
     }
     Ok(loaded.value)
@@ -143,14 +144,24 @@ pub fn load_itg_default(style: &Style) -> Result<Noteskin, String> {
 
 pub fn load_itg_skin(style: &Style, skin: &str) -> Result<Noteskin, String> {
     let roots = noteskin_roots();
-    let loaded =
-        noteskin_itg::load_itg_skin_from_roots(&roots, "dance", skin, |root, game, skin| {
-            load_itg(root, game, skin, style)
-        })?;
+    let game = style.game_name();
+    let loaded = noteskin_itg::load_itg_skin_from_roots(&roots, game, skin, |root, game, skin| {
+        load_itg(root, game, skin, style)
+    })
+    .or_else(|requested_error| {
+        if game == "pump" {
+            noteskin_itg::load_itg_default_from_roots(&roots, game, |root, game, skin| {
+                load_itg(root, game, skin, style)
+            })
+            .map_err(|_| requested_error)
+        } else {
+            Err(requested_error)
+        }
+    })?;
     if loaded.used_default_fallback {
         warn!(
-            "ITG default noteskin load failed; using dance/{} fallback",
-            loaded.skin
+            "ITG noteskin '{skin}' unavailable; using {game}/{} fallback",
+            loaded.skin,
         );
     }
     Ok(loaded.value)
@@ -328,6 +339,20 @@ mod tests {
         };
         assert!(load_itg_skin(&style, "default").is_ok());
         assert!(load_itg_skin(&style, "cel").is_ok());
+    }
+
+    #[test]
+    fn loads_bundled_pump_default_noteskin() {
+        let style = Style {
+            num_cols: 5,
+            num_players: 1,
+        };
+        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../assets/noteskins");
+        let ns = load_itg(&root, "pump", "default", &style)
+            .expect("bundled pump/default should compile and load");
+        assert_eq!(ns.column_xs, vec![-96, -48, 0, 48, 96]);
+        assert_eq!(ns.receptor_off.len(), 5);
+        assert_eq!(ns.notes.len(), 5 * NUM_QUANTIZATIONS);
     }
 
     #[test]

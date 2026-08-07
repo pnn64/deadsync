@@ -13,6 +13,7 @@ use deadlib_present::actors::Actor;
 use deadlib_present::color;
 use deadlib_present::font;
 use deadlib_present::space::{screen_height, screen_width, widescale};
+use deadsync_config::prelude::GameFlag;
 use deadsync_core::input::InputSource;
 use deadsync_input::KeyCode;
 use deadsync_input::RawKeyboardEvent;
@@ -93,37 +94,60 @@ const fn invalid_capture_key(code: KeyCode) -> bool {
     )
 }
 
-/// Logical mapping rows we expose in this prototype.
-const NUM_MAPPING_ROWS: usize = 18;
-const MAPPING_LABELS: [&str; NUM_MAPPING_ROWS] = [
-    "MenuLeft",
-    "MenuRight",
-    "MenuUp",
-    "MenuDown",
-    "Start",
-    "Select",
-    "Back",
-    "Restart",
-    "Insert Coin",
-    "Operator",
-    "EffectUp",
-    "EffectDown",
-    "Left",
-    "Right",
-    "Up",
-    "Down",
-    "UpLeft",
-    "UpRight",
-];
+const COMMON_MAPPING_ROWS: usize = 12;
+const DANCE_MAPPING_ROWS: usize = COMMON_MAPPING_ROWS + 6;
+const PUMP_MAPPING_ROWS: usize = COMMON_MAPPING_ROWS + 5;
+
+const fn mapping_row_count(game: GameFlag) -> usize {
+    match game {
+        GameFlag::Dance => DANCE_MAPPING_ROWS,
+        GameFlag::Pump => PUMP_MAPPING_ROWS,
+    }
+}
+
+const fn mapping_label(game: GameFlag, row_idx: usize) -> &'static str {
+    match row_idx {
+        0 => "MenuLeft",
+        1 => "MenuRight",
+        2 => "MenuUp",
+        3 => "MenuDown",
+        4 => "Start",
+        5 => "Select",
+        6 => "Back",
+        7 => "Restart",
+        8 => "Insert Coin",
+        9 => "Operator",
+        10 => "EffectUp",
+        11 => "EffectDown",
+        12..=17 => match (game, row_idx - COMMON_MAPPING_ROWS) {
+            (GameFlag::Dance, 0) => "Left",
+            (GameFlag::Dance, 1) => "Right",
+            (GameFlag::Dance, 2) => "Up",
+            (GameFlag::Dance, 3) => "Down",
+            (GameFlag::Dance, 4) => "UpLeft",
+            (GameFlag::Dance, 5) => "UpRight",
+            (GameFlag::Pump, 0) => "UpLeft",
+            (GameFlag::Pump, 1) => "UpRight",
+            (GameFlag::Pump, 2) => "Center",
+            (GameFlag::Pump, 3) => "DownLeft",
+            (GameFlag::Pump, 4) => "DownRight",
+            _ => "",
+        },
+        _ => "",
+    }
+}
 
 /// Map each visual row to the underlying virtual actions for P1/P2.
 #[inline(always)]
-const fn row_actions(row_idx: usize) -> (Option<VirtualAction>, Option<VirtualAction>) {
+const fn row_actions(
+    game: GameFlag,
+    row_idx: usize,
+) -> (Option<VirtualAction>, Option<VirtualAction>) {
     use VirtualAction::{
-        p1_back, p1_down, p1_left, p1_menu_down, p1_menu_left, p1_menu_right, p1_menu_up,
-        p1_operator, p1_restart, p1_right, p1_select, p1_start, p1_up, p2_back, p2_down, p2_left,
-        p2_menu_down, p2_menu_left, p2_menu_right, p2_menu_up, p2_operator, p2_restart, p2_right,
-        p2_select, p2_start, p2_up,
+        p1_back, p1_center, p1_down, p1_left, p1_menu_down, p1_menu_left, p1_menu_right,
+        p1_menu_up, p1_operator, p1_restart, p1_right, p1_select, p1_start, p1_up, p2_back,
+        p2_center, p2_down, p2_left, p2_menu_down, p2_menu_left, p2_menu_right, p2_menu_up,
+        p2_operator, p2_restart, p2_right, p2_select, p2_start, p2_up,
     };
     match row_idx {
         // Menu navigation
@@ -140,16 +164,25 @@ const fn row_actions(row_idx: usize) -> (Option<VirtualAction>, Option<VirtualAc
         8 => (None, None),
         // Operator
         9 => (Some(p1_operator), Some(p2_operator)),
-        // EffectUp/EffectDown, UpLeft/UpRight reserved for future expansion.
+        // EffectUp/EffectDown are reserved for future expansion.
         10 => (None, None),
         11 => (None, None),
-        // Gameplay directions
-        12 => (Some(p1_left), Some(p2_left)),
-        13 => (Some(p1_right), Some(p2_right)),
-        14 => (Some(p1_up), Some(p2_up)),
-        15 => (Some(p1_down), Some(p2_down)),
-        16 => (None, None),
-        17 => (None, None),
+        12..=17 => match (game, row_idx - COMMON_MAPPING_ROWS) {
+            (GameFlag::Dance, 0) => (Some(p1_left), Some(p2_left)),
+            (GameFlag::Dance, 1) => (Some(p1_right), Some(p2_right)),
+            (GameFlag::Dance, 2) => (Some(p1_up), Some(p2_up)),
+            (GameFlag::Dance, 3) => (Some(p1_down), Some(p2_down)),
+            (GameFlag::Dance, 4 | 5) => (None, None),
+            // The Pump chart lane order is DownLeft, UpLeft, Center,
+            // UpRight, DownRight. These aliases preserve that order in the
+            // existing compact VirtualAction representation.
+            (GameFlag::Pump, 0) => (Some(p1_down), Some(p2_down)),
+            (GameFlag::Pump, 1) => (Some(p1_up), Some(p2_up)),
+            (GameFlag::Pump, 2) => (Some(p1_center), Some(p2_center)),
+            (GameFlag::Pump, 3) => (Some(p1_left), Some(p2_left)),
+            (GameFlag::Pump, 4) => (Some(p1_right), Some(p2_right)),
+            _ => (None, None),
+        },
         _ => (None, None),
     }
 }
@@ -215,7 +248,7 @@ pub struct State {
     pub active_color_index: i32,
     runtime: MappingsRuntimeView,
     bg: visual_style_bg::State,
-    /// 0..NUM_MAPPING_ROWS-1 = mapping rows, `NUM_MAPPING_ROWS` = Exit.
+    /// Mapping rows followed by the Exit row.
     selected_row: usize,
     prev_selected_row: usize,
     active_slot: ActiveSlot,
@@ -298,12 +331,12 @@ fn on_nav_release(state: &mut State, dir: NavDirection) {
 }
 
 #[inline(always)]
-const fn total_rows() -> usize {
-    NUM_MAPPING_ROWS + 1 // + Exit row
+const fn total_rows(game: GameFlag) -> usize {
+    mapping_row_count(game) + 1
 }
 
 fn move_selection(state: &mut State, dir: NavDirection, wrap: NavWrap) -> ThemeEffect {
-    let total = total_rows();
+    let total = total_rows(state.runtime.game);
     if total == 0 {
         return ThemeEffect::None;
     }
@@ -405,10 +438,10 @@ fn cancel_capture(state: &mut State) {
 
 #[inline(always)]
 fn focused_binding_target(state: &State) -> Option<(VirtualAction, usize)> {
-    if state.selected_row >= NUM_MAPPING_ROWS {
+    if state.selected_row >= mapping_row_count(state.runtime.game) {
         return None;
     }
-    let (p1_act_opt, p2_act_opt) = row_actions(state.selected_row);
+    let (p1_act_opt, p2_act_opt) = row_actions(state.runtime.game, state.selected_row);
     match state.active_slot {
         ActiveSlot::P1Primary => p1_act_opt.map(|action| (action, 1)),
         ActiveSlot::P1Secondary => p1_act_opt.map(|action| (action, 2)),
@@ -576,7 +609,7 @@ pub fn update(state: &mut State, dt: f32) -> ThemeEffect {
 
         let first_row_y = content_top + FIRST_ROW_TOP_MARGIN_PX + TABLE_TOP_EXTRA_PX;
 
-        let total = total_rows();
+        let total = total_rows(state.runtime.game);
         let anchor_row: usize = 4;
         let max_offset = total.saturating_sub(VISIBLE_ROWS);
         let offset_rows = if total <= VISIBLE_ROWS {
@@ -671,7 +704,7 @@ pub fn handle_raw_key_event(state: &mut State, key_event: &RawKeyboardEvent) -> 
         // keyboard bindings across all P1/P2 actions.
         let mut effect = ThemeEffect::None;
         if let (Some(row_idx), Some(slot)) = (state.capture_row, state.capture_slot) {
-            let (p1_act_opt, p2_act_opt) = row_actions(row_idx);
+            let (p1_act_opt, p2_act_opt) = row_actions(state.runtime.game, row_idx);
             let action_opt = match slot {
                 ActiveSlot::P1Primary | ActiveSlot::P1Secondary => p1_act_opt,
                 ActiveSlot::P2Primary | ActiveSlot::P2Secondary => p2_act_opt,
@@ -723,13 +756,13 @@ pub fn handle_raw_key_event(state: &mut State, key_event: &RawKeyboardEvent) -> 
             }
         }
         KeyCode::ArrowLeft => {
-            if is_pressed && state.selected_row < NUM_MAPPING_ROWS {
+            if is_pressed && state.selected_row < mapping_row_count(state.runtime.game) {
                 set_active_slot(state, active_slot_prev(state.active_slot));
                 return crate::effects::sfx(CHANGE_VALUE_SFX);
             }
         }
         KeyCode::ArrowRight => {
-            if is_pressed && state.selected_row < NUM_MAPPING_ROWS {
+            if is_pressed && state.selected_row < mapping_row_count(state.runtime.game) {
                 set_active_slot(state, active_slot_next(state.active_slot));
                 return crate::effects::sfx(CHANGE_VALUE_SFX);
             }
@@ -741,13 +774,13 @@ pub fn handle_raw_key_event(state: &mut State, key_event: &RawKeyboardEvent) -> 
         }
         KeyCode::Enter => {
             if is_pressed {
-                if state.selected_row == NUM_MAPPING_ROWS {
+                if state.selected_row == mapping_row_count(state.runtime.game) {
                     return crate::effects::sfx_then(
                         START_SFX,
                         ThemeEffect::Navigate(Screen::Options),
                     );
                 }
-                if state.selected_row < NUM_MAPPING_ROWS {
+                if state.selected_row < mapping_row_count(state.runtime.game) {
                     begin_keyboard_capture(state, code, key_event.timestamp);
                     return crate::effects::sfx(CHANGE_VALUE_SFX);
                 }
@@ -828,7 +861,7 @@ pub fn handle_raw_pad_event(state: &mut State, pad_event: &PadEvent) -> (bool, T
 
     let mut effect = ThemeEffect::None;
     if let (Some(row_idx), Some(slot)) = (state.capture_row, state.capture_slot) {
-        let (p1_act_opt, p2_act_opt) = row_actions(row_idx);
+        let (p1_act_opt, p2_act_opt) = row_actions(state.runtime.game, row_idx);
         let action_opt = match slot {
             ActiveSlot::P1Primary | ActiveSlot::P1Secondary => p1_act_opt,
             ActiveSlot::P2Primary | ActiveSlot::P2Secondary => p2_act_opt,
@@ -909,7 +942,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
                         on_nav_press(state, NavDirection::Up);
                         state.menu_lr_undo_row = 1;
                         effect
-                    } else if state.selected_row < NUM_MAPPING_ROWS {
+                    } else if state.selected_row < mapping_row_count(state.runtime.game) {
                         let prev_slot = state.active_slot;
                         set_active_slot(state, active_slot_prev(state.active_slot));
                         state.menu_lr_undo_slot = Some(prev_slot);
@@ -924,7 +957,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
                         on_nav_press(state, NavDirection::Down);
                         state.menu_lr_undo_row = -1;
                         effect
-                    } else if state.selected_row < NUM_MAPPING_ROWS {
+                    } else if state.selected_row < mapping_row_count(state.runtime.game) {
                         let prev_slot = state.active_slot;
                         set_active_slot(state, active_slot_next(state.active_slot));
                         state.menu_lr_undo_slot = Some(prev_slot);
@@ -936,7 +969,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
                 screen_input::ThreeKeyMenuAction::Confirm => {
                     state.menu_lr_undo_row = 0;
                     if matches!(state.three_key_focus, ThreeKeyFocus::Row) {
-                        if state.selected_row == NUM_MAPPING_ROWS {
+                        if state.selected_row == mapping_row_count(state.runtime.game) {
                             crate::effects::sfx_then(
                                 START_SFX,
                                 ThemeEffect::Navigate(Screen::Options),
@@ -946,7 +979,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
                             state.menu_lr_undo_slot = None;
                             crate::effects::sfx(START_SFX)
                         }
-                    } else if state.selected_row < NUM_MAPPING_ROWS {
+                    } else if state.selected_row < mapping_row_count(state.runtime.game) {
                         begin_capture(state, ev.emitted_at);
                         crate::effects::sfx(CHANGE_VALUE_SFX)
                     } else {
@@ -1010,7 +1043,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
         | VirtualAction::p1_menu_left
         | VirtualAction::p2_left
         | VirtualAction::p2_menu_left => {
-            if ev.pressed && state.selected_row < NUM_MAPPING_ROWS {
+            if ev.pressed && state.selected_row < mapping_row_count(state.runtime.game) {
                 set_active_slot(state, active_slot_prev(state.active_slot));
                 return crate::effects::sfx(CHANGE_VALUE_SFX);
             }
@@ -1019,7 +1052,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
         | VirtualAction::p1_menu_right
         | VirtualAction::p2_right
         | VirtualAction::p2_menu_right => {
-            if ev.pressed && state.selected_row < NUM_MAPPING_ROWS {
+            if ev.pressed && state.selected_row < mapping_row_count(state.runtime.game) {
                 set_active_slot(state, active_slot_next(state.active_slot));
                 return crate::effects::sfx(CHANGE_VALUE_SFX);
             }
@@ -1030,12 +1063,12 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
         | VirtualAction::p2_select
             if ev.pressed =>
         {
-            if state.selected_row == NUM_MAPPING_ROWS {
+            if state.selected_row == mapping_row_count(state.runtime.game) {
                 return crate::effects::sfx_then(START_SFX, ThemeEffect::Navigate(Screen::Options));
             }
 
             // Begin capture on the currently focused slot in this row.
-            if state.selected_row < NUM_MAPPING_ROWS {
+            if state.selected_row < mapping_row_count(state.runtime.game) {
                 begin_capture(state, ev.emitted_at);
                 return crate::effects::sfx(CHANGE_VALUE_SFX);
             }
@@ -1212,7 +1245,8 @@ pub fn push_actors(
     let p2_side_x = desc_x + desc_w + gap;
 
     // Scrolling window (like PlayerOptions): only VISIBLE_ROWS rows shown.
-    let total = total_rows();
+    let mapping_rows = mapping_row_count(state.runtime.game);
+    let total = total_rows(state.runtime.game);
     let anchor_row: usize = 4;
     let max_offset = total.saturating_sub(VISIBLE_ROWS);
     let offset_rows = if total <= VISIBLE_ROWS {
@@ -1228,7 +1262,7 @@ pub fn push_actors(
     let mut visible_mapping_rows = 0_usize;
     for i_vis in 0..VISIBLE_ROWS {
         let row_idx = offset_rows + i_vis;
-        if row_idx >= NUM_MAPPING_ROWS {
+        if row_idx >= mapping_rows {
             break;
         }
         visible_mapping_rows += 1;
@@ -1256,7 +1290,7 @@ pub fn push_actors(
         let labels_center_x = desc_x + desc_w * 0.5;
         for i_vis in 0..VISIBLE_ROWS {
             let row_idx = offset_rows + i_vis;
-            if row_idx >= NUM_MAPPING_ROWS {
+            if row_idx >= mapping_rows {
                 break;
             }
             let row_center_y =
@@ -1266,7 +1300,7 @@ pub fn push_actors(
                 xy(labels_center_x, row_center_y):
                 zoom(DESC_BODY_ZOOM):
                 diffuse(1.0, 1.0, 1.0, 1.0):
-                font("miso"): settext(MAPPING_LABELS[row_idx]):
+                font("miso"): settext(mapping_label(state.runtime.game, row_idx)):
                 horizalign(center)
             ));
         }
@@ -1295,9 +1329,9 @@ pub fn push_actors(
 
     // Helper for computing the cursor center X for a given row index and slot.
     let slot_center_x_for_row = |row_idx: usize, slot: ActiveSlot| -> f32 {
-        if row_idx >= total_rows() {
+        if row_idx >= total {
             content_center_x
-        } else if row_idx == NUM_MAPPING_ROWS {
+        } else if row_idx == mapping_rows {
             // Exit row always uses the centered Exit label.
             content_center_x
         } else {
@@ -1395,7 +1429,7 @@ pub fn push_actors(
         let row_mid_y = (0.5 * ROW_H).mul_add(s, row_y);
         let is_active = row_idx == state.selected_row;
 
-        if !is_exit && row_idx >= NUM_MAPPING_ROWS {
+        if !is_exit && row_idx >= mapping_rows {
             continue;
         }
         let show_mapping_row = !is_exit;
@@ -1436,7 +1470,7 @@ pub fn push_actors(
                 diffuse(default_bg_color[0], default_bg_color[1], default_bg_color[2], default_bg_color[3])
             ));
 
-            let (p1_act_opt, p2_act_opt) = row_actions(row_idx);
+            let (p1_act_opt, p2_act_opt) = row_actions(state.runtime.game, row_idx);
             let (
                 p1_primary_text,
                 p1_secondary_text,
@@ -1861,9 +1895,10 @@ pub fn get_actors(
 #[cfg(test)]
 mod tests {
     use super::{
-        ActiveSlot, NAV_INITIAL_HOLD_DELAY, NAV_REPEAT_SCROLL_INTERVAL, NUM_MAPPING_ROWS,
-        NavDirection, begin_capture, handle_input, handle_raw_key_event, handle_raw_pad_event,
-        init as init_with_runtime, invalid_capture_key, keymap_raw_nav_action, repeat_navigation,
+        ActiveSlot, DANCE_MAPPING_ROWS, NAV_INITIAL_HOLD_DELAY, NAV_REPEAT_SCROLL_INTERVAL,
+        NavDirection, PUMP_MAPPING_ROWS, begin_capture, handle_input, handle_raw_key_event,
+        handle_raw_pad_event, init as init_with_runtime, invalid_capture_key,
+        keymap_raw_nav_action, mapping_label, mapping_row_count, repeat_navigation, row_actions,
     };
     use crate::effects::{
         SimplyLoveConfigRequest, SimplyLoveEffect, SimplyLoveMappingsConfigRequest,
@@ -1871,6 +1906,7 @@ mod tests {
     };
     use crate::screens::Screen;
     use crate::views::MappingsRuntimeView;
+    use deadsync_config::prelude::GameFlag;
     use deadsync_core::input::InputSource;
     use deadsync_input::KeyCode;
     use deadsync_input::RawKeyboardEvent;
@@ -1935,6 +1971,22 @@ mod tests {
     }
 
     #[test]
+    fn pump_exposes_five_bindable_panel_rows() {
+        assert_eq!(mapping_row_count(GameFlag::Pump), PUMP_MAPPING_ROWS);
+        let labels: Vec<_> = (12..PUMP_MAPPING_ROWS)
+            .map(|row| mapping_label(GameFlag::Pump, row))
+            .collect();
+        assert_eq!(
+            labels,
+            ["UpLeft", "UpRight", "Center", "DownLeft", "DownRight"]
+        );
+        assert!((12..PUMP_MAPPING_ROWS).all(|row| {
+            let (p1, p2) = row_actions(GameFlag::Pump, row);
+            p1.is_some() && p2.is_some()
+        }));
+    }
+
+    #[test]
     fn p2_gamepad_can_navigate_and_begin_capture() {
         let mut state = init();
 
@@ -1965,7 +2017,7 @@ mod tests {
     #[test]
     fn exit_sfx_precedes_navigation() {
         let mut state = init();
-        state.selected_row = NUM_MAPPING_ROWS;
+        state.selected_row = DANCE_MAPPING_ROWS;
 
         let effect =
             handle_raw_key_event(&mut state, &raw_key(KeyCode::Enter, true, Instant::now()));

@@ -42,9 +42,10 @@ pub(super) fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
 
 fn preferred_difficulty_index(state: &State) -> usize {
     match (state.session.play_style, state.session.player_side) {
-        (profile_data::PlayStyle::Versus, profile_data::PlayerSide::P2) => {
-            state.p2_preferred_difficulty_index
-        }
+        (
+            profile_data::PlayStyle::Versus | profile_data::PlayStyle::PumpVersus,
+            profile_data::PlayerSide::P2,
+        ) => state.p2_preferred_difficulty_index,
         _ => state.preferred_difficulty_index,
     }
 }

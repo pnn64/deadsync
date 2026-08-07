@@ -3,10 +3,18 @@ use deadsync_core::note::NoteType;
 
 pub fn step_type_lanes(step_type: &str) -> usize {
     let step_type = step_type.trim();
-    if step_type.eq_ignore_ascii_case("dance-double")
+    if step_type.eq_ignore_ascii_case("pump-double")
+        || step_type.eq_ignore_ascii_case("pump_double")
+    {
+        10
+    } else if step_type.eq_ignore_ascii_case("dance-double")
         || step_type.eq_ignore_ascii_case("dance_double")
     {
         8
+    } else if step_type.eq_ignore_ascii_case("pump-single")
+        || step_type.eq_ignore_ascii_case("pump_single")
+    {
+        5
     } else {
         4
     }
@@ -162,13 +170,26 @@ mod tests {
     use deadsync_core::note::NoteType;
 
     #[test]
-    fn step_type_lanes_matches_dance_double_only() {
+    fn step_type_lanes_supports_dance_and_pump() {
         assert_eq!(step_type_lanes("dance-double"), 8);
         assert_eq!(step_type_lanes("dance_double"), 8);
         assert_eq!(step_type_lanes(" DANCE_DOUBLE "), 8);
         assert_eq!(step_type_lanes("dance__double"), 4);
         assert_eq!(step_type_lanes(" dance-single "), 4);
-        assert_eq!(step_type_lanes("pump-double"), 4);
+        assert_eq!(step_type_lanes("pump-single"), 5);
+        assert_eq!(step_type_lanes("PUMP_SINGLE"), 5);
+        assert_eq!(step_type_lanes("pump-double"), 10);
+        assert_eq!(step_type_lanes("PUMP_DOUBLE"), 10);
+        assert_eq!(step_type_lanes("pump-halfdouble"), 4);
+    }
+
+    #[test]
+    fn parse_chart_notes_reads_all_ten_pump_columns() {
+        let notes = parse_chart_notes(b"1000100001\n", 10);
+        assert_eq!(notes.len(), 3);
+        assert_eq!(notes[0].column, 0);
+        assert_eq!(notes[1].column, 4);
+        assert_eq!(notes[2].column, 9);
     }
 
     #[test]

@@ -203,7 +203,11 @@ fn set_player(
     set(report, up_right, state.button(player, ButtonLight::Down));
     set(report, center, state.button(player, ButtonLight::Left));
     set(report, lower_left, state.button(player, ButtonLight::Right));
-    set(report, lower_right, false);
+    set(
+        report,
+        lower_right,
+        state.button(player, ButtonLight::Select),
+    );
 }
 
 fn set(report: &mut [u8; REPORT_SIZE], light_index: usize, on: bool) {
@@ -222,6 +226,7 @@ mod tests {
         state.set_cabinet(CabinetLight::BassLeft, true);
         state.set_button(Player::P1, ButtonLight::Up, true);
         state.set_button(Player::P1, ButtonLight::Left, true);
+        state.set_button(Player::P1, ButtonLight::Select, true);
         state.set_button(Player::P1, ButtonLight::Start, true);
         state.set_button(Player::P2, ButtonLight::Down, true);
         state.set_button(Player::P2, ButtonLight::Right, true);
@@ -235,7 +240,7 @@ mod tests {
         assert_eq!(report[P1_UL], ON);
         assert_eq!(report[P1_CN], ON);
         assert_eq!(report[P1_LL], 0);
-        assert_eq!(report[P1_LR], 0);
+        assert_eq!(report[P1_LR], ON);
         assert_eq!(report[P2_UR], ON);
         assert_eq!(report[P2_LL], ON);
         assert_eq!(report[P2_LR], 0);

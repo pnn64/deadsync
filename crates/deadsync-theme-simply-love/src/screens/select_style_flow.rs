@@ -1,4 +1,5 @@
 use crate::screens::Screen;
+use deadsync_config::prelude::GameFlag;
 use deadsync_input::{InputEvent, VirtualAction};
 use deadsync_profile::PlayStyle;
 
@@ -26,11 +27,26 @@ impl Choice {
     }
 
     #[inline(always)]
-    pub const fn play_style(self) -> PlayStyle {
-        match self {
-            Self::Single => PlayStyle::Single,
-            Self::Versus => PlayStyle::Versus,
-            Self::Double => PlayStyle::Double,
+    pub const fn play_style(self, game: GameFlag) -> PlayStyle {
+        match (game, self) {
+            (GameFlag::Dance, Self::Single) => PlayStyle::Single,
+            (GameFlag::Dance, Self::Versus) => PlayStyle::Versus,
+            (GameFlag::Dance, Self::Double) => PlayStyle::Double,
+            (GameFlag::Pump, Self::Single) => PlayStyle::PumpSingle,
+            (GameFlag::Pump, Self::Versus) => PlayStyle::PumpVersus,
+            (GameFlag::Pump, Self::Double) => PlayStyle::PumpDouble,
+        }
+    }
+
+    #[inline(always)]
+    pub const fn index_for_style(style: PlayStyle) -> usize {
+        match style {
+            PlayStyle::Single => 0,
+            PlayStyle::Versus => 1,
+            PlayStyle::Double => 2,
+            PlayStyle::PumpSingle => 0,
+            PlayStyle::PumpVersus => 1,
+            PlayStyle::PumpDouble => 2,
         }
     }
 }
@@ -116,7 +132,14 @@ pub fn update(state: &mut State, dt: f32, confirm_exit_elapsed: f32) -> Option<S
     None
 }
 
-pub fn handle_input(state: &mut State, ev: &InputEvent) -> InputEffect {
+fn confirm(state: &mut State, game: GameFlag) -> InputEffect {
+    state.exit_requested = true;
+    state.exit_chosen_anim = true;
+    state.exit_target = Some(Screen::SelectPlayMode);
+    InputEffect::Confirm(Choice::from_index(state.selected_index).play_style(game))
+}
+
+pub fn handle_input(state: &mut State, ev: &InputEvent, game: GameFlag) -> InputEffect {
     if !ev.pressed || state.exit_requested {
         return InputEffect::None;
     }
@@ -136,11 +159,17 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> InputEffect {
             state.selected_index = (state.selected_index + 1) % CHOICE_COUNT;
             InputEffect::Move
         }
-        VirtualAction::p1_start | VirtualAction::p2_start => {
-            state.exit_requested = true;
-            state.exit_chosen_anim = true;
-            state.exit_target = Some(Screen::SelectPlayMode);
-            InputEffect::Confirm(Choice::from_index(state.selected_index).play_style())
+        VirtualAction::p1_up
+        | VirtualAction::p2_up
+        | VirtualAction::p1_down
+        | VirtualAction::p2_down
+        | VirtualAction::p1_menu_up
+        | VirtualAction::p2_menu_up
+        | VirtualAction::p1_menu_down
+        | VirtualAction::p2_menu_down => InputEffect::None,
+        VirtualAction::p1_start | VirtualAction::p2_start => confirm(state, game),
+        VirtualAction::p1_center | VirtualAction::p2_center if game == GameFlag::Pump => {
+            confirm(state, game)
         }
         VirtualAction::p1_back | VirtualAction::p2_back => {
             state.exit_requested = true;
@@ -149,5 +178,84 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> InputEffect {
             InputEffect::Back
         }
         _ => InputEffect::None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use deadsync_core::input::InputSource;
+    use std::time::Instant;
+
+    fn press(action: VirtualAction) -> InputEvent {
+        let now = Instant::now();
+        InputEvent {
+            action,
+            input_slot: 0,
+            pressed: true,
+            source: InputSource::Gamepad,
+            timestamp: now,
+            timestamp_host_nanos: 0,
+            stored_at: now,
+            emitted_at: now,
+        }
+    }
+
+    #[test]
+    fn active_game_selects_the_style_family() {
+        assert_eq!(
+            Choice::Single.play_style(GameFlag::Dance),
+            PlayStyle::Single
+        );
+        assert_eq!(
+            Choice::Versus.play_style(GameFlag::Dance),
+            PlayStyle::Versus
+        );
+        assert_eq!(
+            Choice::Double.play_style(GameFlag::Dance),
+            PlayStyle::Double
+        );
+        assert_eq!(
+            Choice::Single.play_style(GameFlag::Pump),
+            PlayStyle::PumpSingle
+        );
+        assert_eq!(
+            Choice::Versus.play_style(GameFlag::Pump),
+            PlayStyle::PumpVersus
+        );
+        assert_eq!(
+            Choice::Double.play_style(GameFlag::Pump),
+            PlayStyle::PumpDouble
+        );
+    }
+
+    #[test]
+    fn dance_and_pump_styles_share_three_choice_positions() {
+        assert_eq!(CHOICE_COUNT, 3);
+        assert_eq!(Choice::index_for_style(PlayStyle::Single), 0);
+        assert_eq!(Choice::index_for_style(PlayStyle::PumpSingle), 0);
+        assert_eq!(Choice::index_for_style(PlayStyle::Versus), 1);
+        assert_eq!(Choice::index_for_style(PlayStyle::PumpVersus), 1);
+        assert_eq!(Choice::index_for_style(PlayStyle::Double), 2);
+        assert_eq!(Choice::index_for_style(PlayStyle::PumpDouble), 2);
+    }
+
+    #[test]
+    fn pump_center_acts_as_start_only_for_pump() {
+        let mut dance = State::default();
+        let mut pump = State::default();
+
+        assert_eq!(
+            handle_input(
+                &mut dance,
+                &press(VirtualAction::p1_center),
+                GameFlag::Dance
+            ),
+            InputEffect::None
+        );
+        assert_eq!(
+            handle_input(&mut pump, &press(VirtualAction::p1_center), GameFlag::Pump),
+            InputEffect::Confirm(PlayStyle::PumpSingle)
+        );
     }
 }

@@ -15,7 +15,7 @@ pub(super) fn execute_options(request: SimplyLoveOptionsConfigRequest) {
     use SimplyLoveOptionsConfigRequest as Request;
 
     match request {
-        Request::GameDance => config::update_game_flag(config::GameFlag::Dance),
+        Request::Game(flag) => config::update_game_flag(flag),
         Request::ThemeSimplyLove => config::update_theme_flag(config::ThemeFlag::SimplyLove),
         Request::Language(flag) => {
             config::update_language_flag(flag);

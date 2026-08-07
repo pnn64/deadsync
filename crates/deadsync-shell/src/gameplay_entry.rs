@@ -62,13 +62,13 @@ pub fn gameplay_chart_entry_plan(
     let chart_type = play_style.chart_type();
     let mut resolved_steps_index = requested_steps;
     let chart_indices = match play_style {
-        PlayStyle::Versus => {
+        PlayStyle::Versus | PlayStyle::PumpVersus => {
             let p1 = resolve_chart(song, chart_type, requested_steps[0], preferred_steps[0]);
             let p2 = resolve_chart(song, chart_type, requested_steps[1], preferred_steps[1]);
             resolved_steps_index = [p1.0, p2.0];
             [p1.1, p2.1]
         }
-        PlayStyle::Single | PlayStyle::Double => {
+        PlayStyle::Single | PlayStyle::Double | PlayStyle::PumpSingle | PlayStyle::PumpDouble => {
             let side = player_side_index(player_side);
             let resolved = resolve_chart(
                 song,
@@ -103,7 +103,7 @@ pub fn gameplay_last_played_commands(
 ) -> Vec<Command> {
     let mut commands = Vec::with_capacity(MAX_PLAYERS);
     match play_style {
-        PlayStyle::Versus => {
+        PlayStyle::Versus | PlayStyle::PumpVersus => {
             for (idx, side) in [(0, PlayerSide::P1), (1, PlayerSide::P2)] {
                 commands.push(Command::UpdateLastPlayed {
                     side,
@@ -114,7 +114,7 @@ pub fn gameplay_last_played_commands(
                 });
             }
         }
-        PlayStyle::Single | PlayStyle::Double => {
+        PlayStyle::Single | PlayStyle::Double | PlayStyle::PumpSingle | PlayStyle::PumpDouble => {
             let index = player_side_index(player_side);
             commands.push(Command::UpdateLastPlayed {
                 side: player_side,

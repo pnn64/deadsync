@@ -2529,11 +2529,7 @@ pub fn init(gameplay_results: Option<gameplay::State>, init_view: EvaluationInit
         }
 
         let play_style = context.play_style;
-        let graph_width: f32 = if play_style == profile_data::PlayStyle::Versus {
-            300.0
-        } else {
-            610.0
-        };
+        let graph_width: f32 = if play_style.is_versus() { 300.0 } else { 610.0 };
 
         for player_idx in 0..MAX_PLAYERS {
             let Some(si) = score_info[player_idx].as_ref() else {
@@ -2713,7 +2709,7 @@ pub fn init(gameplay_results: Option<gameplay::State>, init_view: EvaluationInit
         }
 
         match play_style {
-            profile_data::PlayStyle::Versus => {
+            profile_data::PlayStyle::Versus | profile_data::PlayStyle::PumpVersus => {
                 active_pane[0] = score_info[0].as_ref().map_or(EvalPane::Standard, |si| {
                     eval_pane_default_for(si.show_fa_plus_pane)
                 });
@@ -2727,7 +2723,10 @@ pub fn init(gameplay_results: Option<gameplay::State>, init_view: EvaluationInit
                     eval_graph_default_for(si.show_fa_plus_pane, si.show_hard_ex_score)
                 });
             }
-            profile_data::PlayStyle::Single | profile_data::PlayStyle::Double => {
+            profile_data::PlayStyle::Single
+            | profile_data::PlayStyle::Double
+            | profile_data::PlayStyle::PumpSingle
+            | profile_data::PlayStyle::PumpDouble => {
                 let joined = context.player_side;
                 let primary = score_info[0].as_ref().map_or(EvalPane::Standard, |si| {
                     eval_pane_default_for(si.show_fa_plus_pane)
@@ -2820,7 +2819,7 @@ pub fn init_from_score_info(
     let mut active_graph: [EvalGraphPane; MAX_PLAYERS] = [EvalGraphPane::Itg; MAX_PLAYERS];
     let play_style = context.play_style;
     match play_style {
-        profile_data::PlayStyle::Versus => {
+        profile_data::PlayStyle::Versus | profile_data::PlayStyle::PumpVersus => {
             active_pane[0] = score_info[0].as_ref().map_or(EvalPane::Standard, |si| {
                 eval_pane_default_for(si.show_fa_plus_pane)
             });
@@ -2834,7 +2833,10 @@ pub fn init_from_score_info(
                 eval_graph_default_for(si.show_fa_plus_pane, si.show_hard_ex_score)
             });
         }
-        profile_data::PlayStyle::Single | profile_data::PlayStyle::Double => {
+        profile_data::PlayStyle::Single
+        | profile_data::PlayStyle::Double
+        | profile_data::PlayStyle::PumpSingle
+        | profile_data::PlayStyle::PumpDouble => {
             let joined = context.player_side;
             let primary = score_info[0].as_ref().map_or(EvalPane::Standard, |si| {
                 eval_pane_default_for(si.show_fa_plus_pane)
@@ -2854,11 +2856,7 @@ pub fn init_from_score_info(
         }
     }
 
-    let graph_width = if play_style == profile_data::PlayStyle::Versus {
-        300.0
-    } else {
-        610.0
-    };
+    let graph_width = if play_style.is_versus() { 300.0 } else { 610.0 };
     let density_graph_mesh: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS] =
         std::array::from_fn(|player_idx| {
             let si = score_info.get(player_idx).and_then(|s| s.as_ref())?;
@@ -3310,7 +3308,7 @@ pub fn update(state: &mut State, dt: f32) -> ThemeEffect {
         ) {
             state.active_pane[controller_idx] = EvalPane::GrooveStats;
             state.leaderboards_requested[player_idx] = true;
-            if play_style != profile_data::PlayStyle::Versus {
+            if !play_style.is_versus() {
                 let has_gs = eval_has_gs_pane(
                     state.allow_online_panes,
                     state.context.policy.enable_groovestats,
@@ -4412,7 +4410,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
         player.groovestats_linked && player.arrowcloud_linked
     });
     let player_idx_for_controller = |controller: profile_data::PlayerSide| {
-        if play_style == profile_data::PlayStyle::Versus {
+        if play_style.is_versus() {
             profile_data::player_side_index(controller)
         } else {
             0
@@ -4427,7 +4425,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
         let old_pane = state.active_pane[controller_idx];
         let has_hard_ex = si.show_hard_ex_score;
         let has_online_panes = state.allow_online_panes;
-        let gs_side = if play_style == profile_data::PlayStyle::Versus {
+        let gs_side = if play_style.is_versus() {
             controller
         } else {
             state.context.player_side
@@ -4466,7 +4464,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
             eval_pane_shift_in_cycle(state.active_pane[controller_idx], dir, &panes);
 
         // Don't allow duplicate panes in single/double.
-        if play_style != profile_data::PlayStyle::Versus {
+        if !play_style.is_versus() {
             let other_idx = 1 - controller_idx;
             state.active_pane[controller_idx] = eval_pane_skip_duplicate(
                 state.active_pane[controller_idx],
@@ -4492,7 +4490,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
         );
 
         // Single/double have one lower graph; keep both controller slots in sync.
-        if play_style != profile_data::PlayStyle::Versus {
+        if !play_style.is_versus() {
             let other_idx = 1 - controller_idx;
             state.active_graph[other_idx] = state.active_graph[controller_idx];
         }
@@ -4649,7 +4647,7 @@ pub fn push_actors(
         let pane_bg_color = color::rgba_hex("#1E282F");
 
         let pane_x_left = screen_center_x() - 305.0;
-        if play_style == profile_data::PlayStyle::Versus {
+        if play_style.is_versus() {
             let pane_w = 300.0;
             let pane_x_right = screen_center_x() + 5.0;
             for x in [pane_x_left, pane_x_right] {
@@ -4795,6 +4793,10 @@ pub fn push_actors(
         let style_label = match play_style {
             profile_data::PlayStyle::Double => "Double",
             profile_data::PlayStyle::Single | profile_data::PlayStyle::Versus => "Single",
+            profile_data::PlayStyle::PumpDouble => "Pump Double",
+            profile_data::PlayStyle::PumpSingle | profile_data::PlayStyle::PumpVersus => {
+                "Pump Single"
+            }
         };
 
         let upper_single = [(0, player_side)];
@@ -4802,12 +4804,11 @@ pub fn push_actors(
             (0, profile_data::PlayerSide::P1),
             (1, profile_data::PlayerSide::P2),
         ];
-        let upper_players: &[(usize, profile_data::PlayerSide)] =
-            if play_style == profile_data::PlayStyle::Versus {
-                &upper_vs
-            } else {
-                &upper_single
-            };
+        let upper_players: &[(usize, profile_data::PlayerSide)] = if play_style.is_versus() {
+            &upper_vs
+        } else {
+            &upper_single
+        };
 
         for &(player_idx, side) in upper_players {
             let Some(si) = state.score_info.get(player_idx).and_then(|s| s.as_ref()) else {
@@ -5250,12 +5251,11 @@ pub fn push_actors(
             (0, profile_data::PlayerSide::P1),
             (1, profile_data::PlayerSide::P2),
         ];
-        let progress_players: &[(usize, profile_data::PlayerSide)] =
-            if play_style == profile_data::PlayStyle::Versus {
-                &progress_vs
-            } else {
-                &progress_single
-            };
+        let progress_players: &[(usize, profile_data::PlayerSide)] = if play_style.is_versus() {
+            &progress_vs
+        } else {
+            &progress_single
+        };
         for &(player_idx, side) in progress_players {
             let progress = state.event_progress[player_idx].as_slice();
             if progress.is_empty() {
@@ -5264,7 +5264,7 @@ pub fn push_actors(
             actors.extend(eval_panes::build_event_progress_boxes(
                 asset_manager,
                 side,
-                play_style != profile_data::PlayStyle::Versus,
+                !play_style.is_versus(),
                 progress,
             ));
         }
@@ -5272,7 +5272,7 @@ pub fn push_actors(
 
     // --- Panes (Simply Love ScreenEvaluation common/Panes) ---
     {
-        let double_expanded_controller = if play_style == profile_data::PlayStyle::Double {
+        let double_expanded_controller = if play_style.is_double() {
             state
                 .active_pane
                 .iter()
@@ -5371,7 +5371,7 @@ pub fn push_actors(
                     state.screen_elapsed,
                 )),
                 EvalPane::Column => {
-                    let pane3_player_side = if play_style == profile_data::PlayStyle::Versus {
+                    let pane3_player_side = if play_style.is_versus() {
                         controller
                     } else {
                         player_side
@@ -5417,7 +5417,7 @@ pub fn push_actors(
                     let title = tr("Evaluation", "TestInputTitle");
                     let instructions = tr("Evaluation", "TestInputInstructions");
 
-                    if play_style == profile_data::PlayStyle::Double {
+                    if play_style.is_double() {
                         let pad_scale = 0.75_f32 * panel_scale;
                         let pad_half = test_input::evaluation_pad_half_width(pad_scale);
                         let gap = pad_half + 6.0;
@@ -5459,13 +5459,9 @@ pub fn push_actors(
 
     // --- Player Modifiers Bar (Simply Love PerPlayer/Lower/PlayerModifiers) ---
     {
-        let graph_width = if play_style == profile_data::PlayStyle::Versus {
-            300.0
-        } else {
-            610.0
-        };
+        let graph_width = if play_style.is_versus() { 300.0 } else { 610.0 };
 
-        if play_style == profile_data::PlayStyle::Versus {
+        if play_style.is_versus() {
             for (player_idx, center_x) in [
                 (0, screen_center_x() - 155.0),
                 (1, screen_center_x() + 155.0),
@@ -5491,18 +5487,14 @@ pub fn push_actors(
 
     // --- Graphs (density + scatter + life) ---
     {
-        let graph_width = if play_style == profile_data::PlayStyle::Versus {
-            300.0
-        } else {
-            610.0
-        };
+        let graph_width = if play_style.is_versus() { 300.0 } else { 610.0 };
         let graph_height = 64.0_f32;
         let frame_center_y = screen_center_y() + 124.0;
 
         let cx = screen_center_x();
         let graph_single = [(0, cx)];
         let graph_vs = [(0, cx - 155.0), (1, cx + 155.0)];
-        let graph_players: &[(usize, f32)] = if play_style == profile_data::PlayStyle::Versus {
+        let graph_players: &[(usize, f32)] = if play_style.is_versus() {
             &graph_vs
         } else {
             &graph_single
@@ -5513,7 +5505,7 @@ pub fn push_actors(
                 continue;
             };
 
-            let graph_controller_idx = if play_style == profile_data::PlayStyle::Versus {
+            let graph_controller_idx = if play_style.is_versus() {
                 player_idx
             } else if player_side == profile_data::PlayerSide::P1 {
                 0
@@ -5524,7 +5516,7 @@ pub fn push_actors(
             let shade = policy.shade_scatterplot_judgments;
             let graph_key = GraphCacheKey {
                 graph: graph_mode,
-                versus: play_style == profile_data::PlayStyle::Versus,
+                versus: play_style.is_versus(),
                 shade,
                 panel_alpha_bits: sl_panel_alpha.to_bits(),
                 tex_key_hash: fnv1a_str(&state.density_graph_texture_key),
@@ -5887,7 +5879,7 @@ pub fn push_actors(
             (0, screen_center_x() - 155.0),
             (1, screen_center_x() + 155.0),
         ];
-        let label_players: &[(usize, f32)] = if play_style == profile_data::PlayStyle::Versus {
+        let label_players: &[(usize, f32)] = if play_style.is_versus() {
             &label_vs
         } else {
             &label_single
@@ -6147,20 +6139,19 @@ pub fn push_actors(
         (None, None)
     };
 
-    let (footer_left, footer_right, left_avatar, right_avatar) =
-        if play_style == profile_data::PlayStyle::Versus {
-            (
-                p1_footer_text,
-                p2_footer_text,
-                p1_footer_avatar,
-                p2_footer_avatar,
-            )
-        } else {
-            match player_side {
-                profile_data::PlayerSide::P1 => (p1_footer_text, None, p1_footer_avatar, None),
-                profile_data::PlayerSide::P2 => (None, p2_footer_text, None, p2_footer_avatar),
-            }
-        };
+    let (footer_left, footer_right, left_avatar, right_avatar) = if play_style.is_versus() {
+        (
+            p1_footer_text,
+            p2_footer_text,
+            p1_footer_avatar,
+            p2_footer_avatar,
+        )
+    } else {
+        match player_side {
+            profile_data::PlayerSide::P1 => (p1_footer_text, None, p1_footer_avatar, None),
+            profile_data::PlayerSide::P2 => (None, p2_footer_text, None, p2_footer_avatar),
+        }
+    };
     actors.push(screen_bar::build_no_background(ScreenBarParams {
         visual_policy,
         title: "",
@@ -6211,12 +6202,11 @@ pub fn push_actors(
             (0, profile_data::PlayerSide::P1),
             (1, profile_data::PlayerSide::P2),
         ];
-        let progress_players: &[(usize, profile_data::PlayerSide)] =
-            if play_style == profile_data::PlayStyle::Versus {
-                &progress_vs
-            } else {
-                &progress_single
-            };
+        let progress_players: &[(usize, profile_data::PlayerSide)] = if play_style.is_versus() {
+            &progress_vs
+        } else {
+            &progress_single
+        };
         let mut panels = Vec::with_capacity(progress_players.len());
         for &(player_idx, side) in progress_players {
             let Some((progress, page_idx)) = event_progress_page(
@@ -6235,7 +6225,7 @@ pub fn push_actors(
             .map(|si| si.song.as_ref());
         actors.extend(eval_panes::build_event_overlay(
             asset_manager,
-            play_style != profile_data::PlayStyle::Versus,
+            !play_style.is_versus(),
             overlay_song,
             policy.translated_titles,
             panels.as_slice(),

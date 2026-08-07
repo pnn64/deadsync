@@ -262,7 +262,7 @@ pub fn build_course_summary_score_info(
 ) -> [Option<ScoreInfo>; MAX_PLAYERS] {
     let mut score_info = std::array::from_fn(|_| None);
     match play_style {
-        PlayStyle::Versus => {
+        PlayStyle::Versus | PlayStyle::PumpVersus => {
             for side in [PlayerSide::P1, PlayerSide::P2] {
                 let idx = profile_data::player_side_index(side);
                 score_info[idx] = score_info_from_stage(stage, side);
@@ -273,7 +273,7 @@ pub fn build_course_summary_score_info(
                 }
             }
         }
-        PlayStyle::Single | PlayStyle::Double => {
+        PlayStyle::Single | PlayStyle::Double | PlayStyle::PumpSingle | PlayStyle::PumpDouble => {
             let idx = profile_data::player_side_index(active_side);
             score_info[0] = score_info_from_stage(stage, active_side);
             if let Some(score) = score_info[0].as_mut() {

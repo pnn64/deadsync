@@ -56,7 +56,7 @@ pub const fn gameplay_combo_carry_updates(
         return [None; MAX_PLAYERS];
     }
     match context.play_style {
-        PlayStyle::Versus => [
+        PlayStyle::Versus | PlayStyle::PumpVersus => [
             match context.player_combos[0] {
                 Some(combo) => Some(ComboCarryUpdate {
                     side: PlayerSide::P1,
@@ -72,7 +72,7 @@ pub const fn gameplay_combo_carry_updates(
                 None => None,
             },
         ],
-        PlayStyle::Single | PlayStyle::Double => [
+        PlayStyle::Single | PlayStyle::Double | PlayStyle::PumpSingle | PlayStyle::PumpDouble => [
             match context.player_combos[0] {
                 Some(combo) => Some(ComboCarryUpdate {
                     side: context.active_side,
@@ -108,8 +108,10 @@ pub const fn course_last_played_sides(
     active_side: PlayerSide,
 ) -> [Option<PlayerSide>; MAX_PLAYERS] {
     match play_style {
-        PlayStyle::Versus => [Some(PlayerSide::P1), Some(PlayerSide::P2)],
-        PlayStyle::Single | PlayStyle::Double => [Some(active_side), None],
+        PlayStyle::Versus | PlayStyle::PumpVersus => [Some(PlayerSide::P1), Some(PlayerSide::P2)],
+        PlayStyle::Single | PlayStyle::Double | PlayStyle::PumpSingle | PlayStyle::PumpDouble => {
+            [Some(active_side), None]
+        }
     }
 }
 

@@ -1481,7 +1481,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
     }
 
     let play_style = state.context.play_style;
-    if play_style == profile_data::PlayStyle::Versus {
+    if play_style.is_versus() {
         return match ev.action {
             VirtualAction::p1_left | VirtualAction::p1_menu_left => {
                 handle_wheel_dir(state, PadDir::Left, ev.pressed, ev.timestamp)

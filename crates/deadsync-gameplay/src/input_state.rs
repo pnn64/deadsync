@@ -2,7 +2,7 @@
 pub struct ActiveInputSlot {
     pub source: InputSource,
     pub input_slot: u32,
-    pub lane_mask: u8,
+    pub lane_mask: LaneMask,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -21,7 +21,7 @@ pub struct GameplayInputState {
     slot_count: usize,
     lane_counts: [u16; MAX_COLS],
     // Bit `i` is set exactly when `lane_counts[i] != 0`; `update_slot` owns both.
-    pressed_lane_mask: u8,
+    pressed_lane_mask: LaneMask,
 }
 
 impl Default for GameplayInputState {
@@ -49,7 +49,7 @@ impl GameplayInputState {
     }
 
     #[inline(always)]
-    pub const fn pressed_lane_mask(&self) -> u8 {
+    pub const fn pressed_lane_mask(&self) -> LaneMask {
         self.pressed_lane_mask
     }
 

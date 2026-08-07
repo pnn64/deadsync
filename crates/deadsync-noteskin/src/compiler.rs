@@ -13,10 +13,11 @@ use std::path::{Path, PathBuf};
 use std::sync::{LazyLock, Mutex};
 use twox_hash::XxHash64;
 
-const COMPILER_VERSION: u32 = 9;
+const COMPILER_VERSION: u32 = 11;
 static COMPILED_HASH_CACHE: LazyLock<Mutex<HashMap<String, String>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
-const DANCE_BUTTONS: [&str; 6] = ["UpLeft", "UpRight", "Left", "Down", "Up", "Right"];
+const PUMP_BUTTONS: [&str; 5] = ["DownLeft", "UpLeft", "Center", "UpRight", "DownRight"];
+const DANCE_BUTTONS: [&str; 4] = ["Left", "Down", "Up", "Right"];
 const CORE_ELEMENTS: [&str; 33] = [
     "Explosion",
     "Go Receptor",
@@ -301,7 +302,7 @@ fn compile_data(
             version: COMPILER_VERSION,
             game: game.to_string(),
             skin: data.name.clone(),
-            entries: compile_entries(&lua, &noteskin, data)?,
+            entries: compile_entries(&lua, &noteskin, game, data)?,
         },
         actors: CompiledActors {
             version: COMPILER_VERSION,
@@ -613,9 +614,10 @@ fn load_noteskin_table(lua: &Lua, paths: &[PathBuf]) -> Result<Table, String> {
 fn compile_entries(
     lua: &Lua,
     noteskin: &Table,
+    game: &str,
     data: &noteskin_itg::NoteskinData,
 ) -> Result<Vec<CompiledLoaderEntry>, String> {
-    let (buttons, elements) = collect_loader_domain(data);
+    let (buttons, elements) = collect_loader_domain(game, data);
     normalize_noteskin_tables(noteskin, &buttons, &elements)
         .map_err(|err| format!("failed to normalize noteskin loader tables: {err}"))?;
     let load = noteskin
@@ -725,10 +727,22 @@ fn normalize_table_aliases(
     Ok(())
 }
 
-fn collect_loader_domain(data: &noteskin_itg::NoteskinData) -> (Vec<String>, Vec<String>) {
+fn game_buttons(game: &str) -> &'static [&'static str] {
+    if game.trim().eq_ignore_ascii_case("pump") {
+        &PUMP_BUTTONS
+    } else {
+        &DANCE_BUTTONS
+    }
+}
+
+fn collect_loader_domain(
+    game: &str,
+    data: &noteskin_itg::NoteskinData,
+) -> (Vec<String>, Vec<String>) {
     let mut buttons = Vec::new();
     let mut button_seen = HashSet::new();
-    for button in ["Left", "Down", "Up", "Right"] {
+    let game_buttons = game_buttons(game);
+    for &button in game_buttons {
         push_unique(&mut buttons, &mut button_seen, button);
     }
     let mut elements = Vec::new();
@@ -746,7 +760,7 @@ fn collect_loader_domain(data: &noteskin_itg::NoteskinData) -> (Vec<String>, Vec
                 continue;
             };
             let stem = trim_variant_suffix(name);
-            let Some((button, element)) = split_prefixed_stem(stem) else {
+            let Some((button, element)) = split_prefixed_stem(stem, game_buttons) else {
                 continue;
             };
             if let Some(button) = button {
@@ -787,19 +801,19 @@ fn trim_variant_suffix(name: &str) -> &str {
     }
 }
 
-fn split_prefixed_stem(stem: &str) -> Option<(Option<&str>, &str)> {
+fn split_prefixed_stem<'a>(stem: &'a str, buttons: &[&str]) -> Option<(Option<&'a str>, &'a str)> {
     let trimmed = stem.trim();
     if let Some(rest) = trimmed.strip_prefix("Fallback ") {
         return Some((None, rest.trim()));
     }
-    for button in DANCE_BUTTONS {
+    for &button in buttons {
         let Some(rest) = trimmed.strip_prefix(button) else {
             continue;
         };
         let Some(rest) = rest.strip_prefix(' ') else {
             continue;
         };
-        return Some((Some(button), rest.trim()));
+        return Some((Some(&trimmed[..button.len()]), rest.trim()));
     }
     None
 }

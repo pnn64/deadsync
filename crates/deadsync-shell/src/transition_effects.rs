@@ -47,7 +47,7 @@ pub fn transition_effect_plan(context: TransitionEffectContext<'_>) -> Transitio
     ) {
         if let Some(options) = context.player_options {
             match options.play_style {
-                PlayStyle::Versus => {
+                PlayStyle::Versus | PlayStyle::PumpVersus => {
                     for (index, side) in [(0, PlayerSide::P1), (1, PlayerSide::P2)] {
                         commands.push(Command::UpdateScrollSpeed {
                             side,
@@ -55,7 +55,10 @@ pub fn transition_effect_plan(context: TransitionEffectContext<'_>) -> Transitio
                         });
                     }
                 }
-                PlayStyle::Single | PlayStyle::Double => {
+                PlayStyle::Single
+                | PlayStyle::Double
+                | PlayStyle::PumpSingle
+                | PlayStyle::PumpDouble => {
                     let index = player_side_index(options.player_side);
                     commands.push(Command::UpdateScrollSpeed {
                         side: options.player_side,
@@ -64,7 +67,7 @@ pub fn transition_effect_plan(context: TransitionEffectContext<'_>) -> Transitio
                 }
             }
             commands.push(Command::UpdateSessionMusicRate(options.music_rate));
-            let index = if options.play_style == PlayStyle::Versus {
+            let index = if options.play_style.is_versus() {
                 0
             } else {
                 player_side_index(options.player_side)

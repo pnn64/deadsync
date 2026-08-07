@@ -20,7 +20,7 @@ pub fn build_label(text: impl Into<TextContent>, machine_font: MachineFont) -> A
 }
 
 fn states(play_style: PlayStyle, joined: [bool; 2]) -> [bool; 2] {
-    if play_style == PlayStyle::Double {
+    if play_style.is_double() {
         return [true, true];
     }
     joined

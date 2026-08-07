@@ -71,7 +71,8 @@ impl FavoriteCodeTracker {
             | VirtualAction::p1_menu_right
             | VirtualAction::p1_select
             | VirtualAction::p1_operator
-            | VirtualAction::p1_restart => Some(PlayerSide::P1),
+            | VirtualAction::p1_restart
+            | VirtualAction::p1_center => Some(PlayerSide::P1),
             VirtualAction::p2_left
             | VirtualAction::p2_right
             | VirtualAction::p2_up
@@ -84,7 +85,8 @@ impl FavoriteCodeTracker {
             | VirtualAction::p2_menu_right
             | VirtualAction::p2_select
             | VirtualAction::p2_operator
-            | VirtualAction::p2_restart => Some(PlayerSide::P2),
+            | VirtualAction::p2_restart
+            | VirtualAction::p2_center => Some(PlayerSide::P2),
             VirtualAction::system_fast_forward | VirtualAction::system_slow_down => None,
         }
     }

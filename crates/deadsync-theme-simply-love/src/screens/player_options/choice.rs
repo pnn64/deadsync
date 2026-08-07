@@ -1,5 +1,5 @@
 use super::*;
-use deadsync_profile::{PlayStyle, PlayerSide};
+use deadsync_profile::PlayerSide;
 
 // ============================ Dispatchers ============================
 // Dispatch reads `row.behavior` to decide how to apply input.
@@ -14,7 +14,7 @@ use deadsync_profile::{PlayStyle, PlayerSide};
 pub(super) fn persist_ctx(state: &State, player_idx: usize) -> (bool, PlayerSide) {
     let play_style = state.play_style;
     let persisted_idx = state.persisted_player_idx;
-    let should_persist = play_style == PlayStyle::Versus || player_idx == persisted_idx;
+    let should_persist = play_style.is_versus() || player_idx == persisted_idx;
     let side = deadsync_profile::player_side_for_index(player_idx);
     (should_persist, side)
 }

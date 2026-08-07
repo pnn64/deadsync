@@ -13,6 +13,7 @@ use crate::views::SelectFlowRuntimeView;
 use deadlib_present::actors::Actor;
 use deadlib_present::color;
 use deadlib_present::space::{screen_center_x, screen_center_y, widescale};
+use deadsync_config::prelude::GameFlag;
 use deadsync_input::InputEvent;
 use deadsync_theme::AudioRequest;
 
@@ -32,15 +33,16 @@ const CHOICE_Y_OFFSET_16_9: f32 = 10.0;
 
 const PAD_UNUSED_RGBA: [f32; 4] = [0.2, 0.2, 0.2, 1.0];
 const DANCE_PAD_LAYOUT: [bool; 9] = [false, true, false, true, false, true, false, true, false];
+const PUMP_PAD_LAYOUT: [bool; 9] = [true, false, true, false, true, false, true, false, true];
 
 #[inline(always)]
-fn choice_label(choice: Choice) -> String {
+fn choice_label(choice: Choice) -> std::sync::Arc<str> {
     let key = match choice {
         Choice::Single => "SinglePlayer",
         Choice::Versus => "TwoPlayers",
         Choice::Double => "Double",
     };
-    tr("SelectStyle", key).to_string()
+    tr("SelectStyle", key)
 }
 
 pub struct State {
@@ -52,9 +54,7 @@ pub struct State {
 
 pub fn init(runtime: SelectFlowRuntimeView) -> State {
     let mut flow = StyleFlow::default();
-    flow.set_selected_index(usize::from(
-        runtime.players.iter().all(|player| player.joined),
-    ));
+    flow.set_selected_index(Choice::index_for_style(runtime.play_style));
     State {
         active_color_index: color::DEFAULT_COLOR_INDEX,
         flow,
@@ -92,7 +92,7 @@ pub fn update(state: &mut State, dt: f32) -> Option<ThemeEffect> {
 }
 
 pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
-    match style_flow::handle_input(&mut state.flow, ev) {
+    match style_flow::handle_input(&mut state.flow, ev, state.runtime.game) {
         InputEffect::None => ThemeEffect::None,
         InputEffect::Move => ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Audio(
             AudioRequest::PlaySfx("assets/sounds/change.ogg".to_owned()),
@@ -146,6 +146,7 @@ fn push_pad_tiles(
     alpha_mul: f32,
     used_rgba: [f32; 4],
     unused_rgba: [f32; 4],
+    layout: &[bool; 9],
 ) {
     let tile_zoom = widescale(PAD_TILE_ZOOM_4_3, PAD_TILE_ZOOM_16_9) * zoom;
     let tile_step = PAD_TILE_NATIVE_SIZE * tile_zoom;
@@ -153,11 +154,7 @@ fn push_pad_tiles(
     for row in 0..3 {
         for col in 0..3 {
             let idx = row * 3 + col;
-            let mut tint = if DANCE_PAD_LAYOUT[idx] {
-                used_rgba
-            } else {
-                unused_rgba
-            };
+            let mut tint = if layout[idx] { used_rgba } else { unused_rgba };
             tint[3] *= alpha_mul;
 
             let x = tile_step.mul_add(col as f32 - 1.0, base_x);
@@ -221,6 +218,10 @@ pub fn push_actors(
     let cy = screen_center_y() + widescale(CHOICE_Y_OFFSET_4_3, CHOICE_Y_OFFSET_16_9);
     let choice_x_off = widescale(CHOICE_X_OFFSET_4_3, CHOICE_X_OFFSET_16_9);
     let dual_pad_off = widescale(PAD_DUAL_OFFSET_4_3, PAD_DUAL_OFFSET_16_9);
+    let layout = match state.runtime.game {
+        GameFlag::Dance => &DANCE_PAD_LAYOUT,
+        GameFlag::Pump => &PUMP_PAD_LAYOUT,
+    };
 
     for i in 0..style_flow::CHOICE_COUNT {
         let choice = Choice::from_index(i);
@@ -242,20 +243,56 @@ pub fn push_actors(
         match choice {
             Choice::Single => {
                 let used = color::decorative_rgba(state.active_color_index);
-                push_pad_tiles(actors, x, cy, zoom, alpha, used, PAD_UNUSED_RGBA);
+                push_pad_tiles(actors, x, cy, zoom, alpha, used, PAD_UNUSED_RGBA, layout);
             }
             Choice::Versus => {
                 let left = color::decorative_rgba(state.active_color_index - 1);
                 let right = color::decorative_rgba(state.active_color_index + 2);
                 let off = dual_pad_off * zoom;
-                push_pad_tiles(actors, x - off, cy, zoom, alpha, left, PAD_UNUSED_RGBA);
-                push_pad_tiles(actors, x + off, cy, zoom, alpha, right, PAD_UNUSED_RGBA);
+                push_pad_tiles(
+                    actors,
+                    x - off,
+                    cy,
+                    zoom,
+                    alpha,
+                    left,
+                    PAD_UNUSED_RGBA,
+                    layout,
+                );
+                push_pad_tiles(
+                    actors,
+                    x + off,
+                    cy,
+                    zoom,
+                    alpha,
+                    right,
+                    PAD_UNUSED_RGBA,
+                    layout,
+                );
             }
             Choice::Double => {
                 let used = color::decorative_rgba(state.active_color_index + 1);
                 let off = dual_pad_off * zoom;
-                push_pad_tiles(actors, x - off, cy, zoom, alpha, used, PAD_UNUSED_RGBA);
-                push_pad_tiles(actors, x + off, cy, zoom, alpha, used, PAD_UNUSED_RGBA);
+                push_pad_tiles(
+                    actors,
+                    x - off,
+                    cy,
+                    zoom,
+                    alpha,
+                    used,
+                    PAD_UNUSED_RGBA,
+                    layout,
+                );
+                push_pad_tiles(
+                    actors,
+                    x + off,
+                    cy,
+                    zoom,
+                    alpha,
+                    used,
+                    PAD_UNUSED_RGBA,
+                    layout,
+                );
             }
         }
 

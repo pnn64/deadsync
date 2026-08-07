@@ -132,18 +132,34 @@ pub fn clear_data_cache() {
 }
 
 #[inline(always)]
-pub fn button_for_col(col: usize) -> &'static str {
-    match col % 4 {
-        0 => "Left",
-        1 => "Down",
-        2 => "Up",
-        _ => "Right",
+pub fn button_for_col(num_cols: usize, col: usize) -> &'static str {
+    if matches!(num_cols, 5 | 10) {
+        match col % 5 {
+            0 => "DownLeft",
+            1 => "UpLeft",
+            2 => "Center",
+            3 => "UpRight",
+            _ => "DownRight",
+        }
+    } else {
+        match col % 4 {
+            0 => "Left",
+            1 => "Down",
+            2 => "Up",
+            _ => "Right",
+        }
     }
 }
 
 pub fn down_col(num_cols: usize) -> usize {
     (0..num_cols)
-        .find(|&col| button_for_col(col).eq_ignore_ascii_case("Down"))
+        .find(|&col| {
+            button_for_col(num_cols, col).eq_ignore_ascii_case(if matches!(num_cols, 5 | 10) {
+                "Center"
+            } else {
+                "Down"
+            })
+        })
         .unwrap_or(0)
 }
 
@@ -1182,15 +1198,22 @@ mod tests {
 
     #[test]
     fn button_for_col_cycles_dance_panels() {
-        assert_eq!(button_for_col(0), "Left");
-        assert_eq!(button_for_col(1), "Down");
-        assert_eq!(button_for_col(2), "Up");
-        assert_eq!(button_for_col(3), "Right");
-        assert_eq!(button_for_col(4), "Left");
+        assert_eq!(button_for_col(4, 0), "Left");
+        assert_eq!(button_for_col(4, 1), "Down");
+        assert_eq!(button_for_col(4, 2), "Up");
+        assert_eq!(button_for_col(4, 3), "Right");
+        assert_eq!(button_for_col(8, 4), "Left");
+        assert_eq!(button_for_col(5, 0), "DownLeft");
+        assert_eq!(button_for_col(5, 1), "UpLeft");
+        assert_eq!(button_for_col(5, 2), "Center");
+        assert_eq!(button_for_col(5, 3), "UpRight");
+        assert_eq!(button_for_col(5, 4), "DownRight");
         assert_eq!(down_col(0), 0);
         assert_eq!(down_col(1), 0);
         assert_eq!(down_col(4), 1);
         assert_eq!(down_col(8), 1);
+        assert_eq!(down_col(5), 2);
+        assert_eq!(down_col(10), 2);
     }
 
     #[test]

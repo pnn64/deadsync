@@ -1,5 +1,6 @@
 pub const NUM_QUANTIZATIONS: usize = 9;
 pub const ITG_DANCE_COL_SPACING: i32 = 64;
+pub const ITG_PUMP_COL_SPACING: i32 = 48;
 
 #[derive(Debug, Clone, Copy)]
 pub struct Style {
@@ -7,13 +8,37 @@ pub struct Style {
     pub num_players: usize,
 }
 
+impl Style {
+    #[inline(always)]
+    pub const fn is_pump(self) -> bool {
+        matches!(self.num_cols, 5 | 10)
+    }
+
+    #[inline(always)]
+    pub const fn game_name(self) -> &'static str {
+        if self.is_pump() { "pump" } else { "dance" }
+    }
+}
+
 pub fn itg_column_xs(num_cols: usize) -> Vec<i32> {
     if num_cols == 0 {
         return Vec::new();
     }
-    let half_spacing = ITG_DANCE_COL_SPACING / 2;
+    let spacing = if matches!(num_cols, 5 | 10) {
+        ITG_PUMP_COL_SPACING
+    } else {
+        ITG_DANCE_COL_SPACING
+    };
+    let half_spacing = spacing / 2;
     (0..num_cols)
-        .map(|i| (i as i32 * ITG_DANCE_COL_SPACING) - ((num_cols - 1) as i32 * half_spacing))
+        .map(|i| {
+            let centered = (i as i32 * spacing) - ((num_cols - 1) as i32 * half_spacing);
+            if num_cols == 10 {
+                centered + if i < 5 { -4 } else { 4 }
+            } else {
+                centered
+            }
+        })
         .collect()
 }
 
@@ -200,6 +225,15 @@ mod tests {
         assert_eq!(
             itg_column_xs(8),
             vec![-224, -160, -96, -32, 32, 96, 160, 224]
+        );
+    }
+
+    #[test]
+    fn itg_column_xs_uses_pump_spacing_and_double_gap() {
+        assert_eq!(itg_column_xs(5), vec![-96, -48, 0, 48, 96]);
+        assert_eq!(
+            itg_column_xs(10),
+            vec![-220, -172, -124, -76, -28, 28, 76, 124, 172, 220]
         );
     }
 

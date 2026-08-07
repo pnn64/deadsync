@@ -2560,7 +2560,7 @@ mod tests {
         conf.load_str(
             r#"
             [Options]
-            Game=dance
+            Game=pump
             AutoDownloadUnlocks=1
             AutoPopulateGrooveStatsScores=1
             UpdaterInstallEnabled=0
@@ -2613,7 +2613,7 @@ mod tests {
 
         let loaded = load_system_options(&conf, default_system_options());
 
-        assert_eq!(loaded.game_flag, GameFlag::Dance);
+        assert_eq!(loaded.game_flag, GameFlag::Pump);
         assert!(loaded.auto_download_unlocks);
         assert!(loaded.auto_populate_gs_scores);
         assert!(!loaded.updater_install_enabled);

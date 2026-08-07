@@ -510,7 +510,10 @@ pub fn init(view: OptionsInitView) -> State {
         &mut state.sub[SubmenuKind::System].choice_indices,
         SYSTEM_OPTIONS_ROWS,
         SubRowId::Game,
-        0,
+        match cfg.game_flag {
+            deadsync_config::prelude::GameFlag::Dance => 0,
+            deadsync_config::prelude::GameFlag::Pump => 1,
+        },
     );
     set_choice_by_id(
         &mut state.sub[SubmenuKind::System].choice_indices,

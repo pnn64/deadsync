@@ -306,10 +306,12 @@ pub enum VirtualAction {
     // System (non-player-scoped) tier.
     system_fast_forward,
     system_slow_down,
+    p1_center,
+    p2_center,
 }
 
 impl VirtualAction {
-    pub const COUNT: usize = Self::system_slow_down as usize + 1;
+    pub const COUNT: usize = Self::p2_center as usize + 1;
 
     #[inline(always)]
     pub const fn from_ix(ix: usize) -> Option<Self> {
@@ -342,6 +344,8 @@ impl VirtualAction {
             25 => Some(Self::p2_restart),
             26 => Some(Self::system_fast_forward),
             27 => Some(Self::system_slow_down),
+            28 => Some(Self::p1_center),
+            29 => Some(Self::p2_center),
             _ => None,
         }
     }
@@ -377,6 +381,8 @@ impl VirtualAction {
                 | Self::p2_down
                 | Self::p2_left
                 | Self::p2_right
+                | Self::p1_center
+                | Self::p2_center
         )
     }
 
@@ -440,6 +446,8 @@ pub const ALL_VIRTUAL_ACTIONS: [VirtualAction; VirtualAction::COUNT] = [
     VirtualAction::p2_up,
     VirtualAction::system_fast_forward,
     VirtualAction::system_slow_down,
+    VirtualAction::p1_center,
+    VirtualAction::p2_center,
 ];
 
 /// Bitmask of all `System`-tier actions. Used to strip system actions from the
@@ -483,6 +491,8 @@ pub fn action_from_ini_key_lower(key: &str) -> Option<VirtualAction> {
         "p2_select" => Some(p2_select),
         "p2_operator" => Some(p2_operator),
         "p2_restart" => Some(p2_restart),
+        "p1_center" => Some(VirtualAction::p1_center),
+        "p2_center" => Some(VirtualAction::p2_center),
         "system_fastforward" => Some(VirtualAction::system_fast_forward),
         "system_slowdown" => Some(VirtualAction::system_slow_down),
         _ => None,
@@ -526,6 +536,8 @@ pub const fn action_to_ini_key(action: VirtualAction) -> &'static str {
         p2_restart => "P2_Restart",
         VirtualAction::system_fast_forward => "System_FastForward",
         VirtualAction::system_slow_down => "System_SlowDown",
+        VirtualAction::p1_center => "P1_Center",
+        VirtualAction::p2_center => "P2_Center",
     }
 }
 
@@ -687,6 +699,8 @@ pub const fn lane_from_action(action: VirtualAction) -> Option<Lane> {
         VirtualAction::p2_down => Some(Lane::P2Down),
         VirtualAction::p2_up => Some(Lane::P2Up),
         VirtualAction::p2_right => Some(Lane::P2Right),
+        VirtualAction::p1_center => Some(Lane::Col8),
+        VirtualAction::p2_center => Some(Lane::Col9),
         _ => None,
     }
 }
@@ -702,6 +716,8 @@ pub const fn lane_from_column(column: usize) -> Option<Lane> {
         5 => Some(Lane::P2Down),
         6 => Some(Lane::P2Up),
         7 => Some(Lane::P2Right),
+        8 => Some(Lane::Col8),
+        9 => Some(Lane::Col9),
         _ => None,
     }
 }
@@ -959,10 +975,7 @@ mod tests {
         assert!(!VirtualAction::p1_start.is_gameplay_arrow());
         assert_eq!(VirtualAction::from_ix(0), Some(VirtualAction::p1_up));
         assert_eq!(VirtualAction::from_ix(VirtualAction::COUNT), None);
-        assert_eq!(
-            VirtualAction::system_slow_down.ix(),
-            VirtualAction::COUNT - 1
-        );
+        assert_eq!(VirtualAction::system_slow_down.ix(), 27);
         assert!(VirtualAction::system_fast_forward.is_system());
         assert!(VirtualAction::system_slow_down.is_system());
         assert!(!VirtualAction::p2_restart.is_system());
@@ -1013,6 +1026,8 @@ mod tests {
             lane_from_action(VirtualAction::p2_right),
             Some(Lane::P2Right)
         );
+        assert_eq!(lane_from_action(VirtualAction::p1_center), Some(Lane::Col8));
+        assert_eq!(lane_from_action(VirtualAction::p2_center), Some(Lane::Col9));
         assert_eq!(lane_from_action(VirtualAction::p1_start), None);
     }
 
@@ -1026,7 +1041,9 @@ mod tests {
         assert_eq!(lane_from_column(5), Some(Lane::P2Down));
         assert_eq!(lane_from_column(6), Some(Lane::P2Up));
         assert_eq!(lane_from_column(7), Some(Lane::P2Right));
-        assert_eq!(lane_from_column(8), None);
+        assert_eq!(lane_from_column(8), Some(Lane::Col8));
+        assert_eq!(lane_from_column(9), Some(Lane::Col9));
+        assert_eq!(lane_from_column(10), None);
     }
 
     #[test]

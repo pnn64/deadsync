@@ -1235,7 +1235,7 @@ fn resolution_distance_output(
 #[derive(Clone, Default)]
 pub struct PressedLaneMaskBench {
     lane_counts: [u16; MAX_COLS],
-    pressed_lane_mask: u8,
+    pressed_lane_mask: LaneMask,
 }
 
 impl PressedLaneMaskBench {
@@ -1265,7 +1265,7 @@ impl PressedLaneMaskBench {
 #[inline(always)]
 fn pressed_lane_output(
     inputs: &[bool; MAX_COLS],
-    pressed_lane_mask: Option<u8>,
+    pressed_lane_mask: Option<LaneMask>,
 ) -> GameplayFrameHotPathBenchOutput {
     let mut output = GameplayFrameHotPathBenchOutput::default();
     if let Some(mut lanes) = pressed_lane_mask {

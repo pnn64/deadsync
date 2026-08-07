@@ -3,8 +3,8 @@ use crate::views::{DensityGraphView, ManageLocalProfilesView, SimplyLoveDensityG
 #[cfg(target_os = "windows")]
 use deadsync_config::prelude::WindowsPadBackend;
 use deadsync_config::prelude::{
-    BreakdownStyle, DefaultFailType, DefaultSyncOffset, GameplayBannerMode, LanguageFlag, LogLevel,
-    MachineBarColor, MachineEvaluationStyle, MachineFont, MachinePreferredPlayMode,
+    BreakdownStyle, DefaultFailType, DefaultSyncOffset, GameFlag, GameplayBannerMode, LanguageFlag,
+    LogLevel, MachineBarColor, MachineEvaluationStyle, MachineFont, MachinePreferredPlayMode,
     MachinePreferredPlayStyle, NewPackMode, NoteScrollClock, RandomBackgroundMode,
     SelectMusicItlRankMode, SelectMusicItlWheelMode, SelectMusicPatternInfoMode,
     SelectMusicScoreboxPlacement, SelectMusicSongSelectBgMode, SelectMusicStepArtistBoxMode,
@@ -624,7 +624,7 @@ pub enum SimplyLoveGameplayConfigRequest {
 /// System, input, and SMX preferences chosen in Options and persisted by shell.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SimplyLoveOptionsConfigRequest {
-    GameDance,
+    Game(GameFlag),
     ThemeSimplyLove,
     Language(LanguageFlag),
     LogLevel(LogLevel),

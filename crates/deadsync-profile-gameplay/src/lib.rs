@@ -45,6 +45,15 @@ pub fn gameplay_play_style_from_profile(
         deadsync_profile::PlayStyle::Single => deadsync_gameplay::GameplayInputPlayStyle::Single,
         deadsync_profile::PlayStyle::Versus => deadsync_gameplay::GameplayInputPlayStyle::Versus,
         deadsync_profile::PlayStyle::Double => deadsync_gameplay::GameplayInputPlayStyle::Double,
+        deadsync_profile::PlayStyle::PumpSingle => {
+            deadsync_gameplay::GameplayInputPlayStyle::PumpSingle
+        }
+        deadsync_profile::PlayStyle::PumpVersus => {
+            deadsync_gameplay::GameplayInputPlayStyle::PumpVersus
+        }
+        deadsync_profile::PlayStyle::PumpDouble => {
+            deadsync_gameplay::GameplayInputPlayStyle::PumpDouble
+        }
     }
 }
 
@@ -358,13 +367,16 @@ pub const fn song_lua_compile_play_style(
     play_style: deadsync_gameplay::GameplayInputPlayStyle,
 ) -> deadsync_gameplay::SongLuaCompilePlayStyle {
     match play_style {
-        deadsync_gameplay::GameplayInputPlayStyle::Single => {
+        deadsync_gameplay::GameplayInputPlayStyle::Single
+        | deadsync_gameplay::GameplayInputPlayStyle::PumpSingle => {
             deadsync_gameplay::SongLuaCompilePlayStyle::Single
         }
-        deadsync_gameplay::GameplayInputPlayStyle::Versus => {
+        deadsync_gameplay::GameplayInputPlayStyle::Versus
+        | deadsync_gameplay::GameplayInputPlayStyle::PumpVersus => {
             deadsync_gameplay::SongLuaCompilePlayStyle::Versus
         }
-        deadsync_gameplay::GameplayInputPlayStyle::Double => {
+        deadsync_gameplay::GameplayInputPlayStyle::Double
+        | deadsync_gameplay::GameplayInputPlayStyle::PumpDouble => {
             deadsync_gameplay::SongLuaCompilePlayStyle::Double
         }
     }
@@ -868,6 +880,9 @@ pub fn song_lua_compile_context(
         deadsync_gameplay::GameplayInputPlayStyle::Single => "single",
         deadsync_gameplay::GameplayInputPlayStyle::Versus => "versus",
         deadsync_gameplay::GameplayInputPlayStyle::Double => "double",
+        deadsync_gameplay::GameplayInputPlayStyle::PumpSingle => "pump-single",
+        deadsync_gameplay::GameplayInputPlayStyle::PumpVersus => "pump-versus",
+        deadsync_gameplay::GameplayInputPlayStyle::PumpDouble => "pump-double",
     }
     .to_string();
     context.global_offset_seconds = machine_global_offset_seconds;

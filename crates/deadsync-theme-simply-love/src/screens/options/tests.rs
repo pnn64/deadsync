@@ -33,8 +33,16 @@ fn test_app_paths() -> AppPathsView {
 }
 
 fn init_with_audio(audio_options: AudioOptionsView) -> State {
+    init_with_config_and_audio(config::Config::default(), audio_options)
+}
+
+fn init_with_config(config: config::Config) -> State {
+    init_with_config_and_audio(config, AudioOptionsView::default())
+}
+
+fn init_with_config_and_audio(config: config::Config, audio_options: AudioOptionsView) -> State {
     super::init(OptionsInitView {
-        config: config::Config::default(),
+        config,
         updater_capabilities: SimplyLoveUpdaterCapabilities {
             app_update: true,
             ffmpeg_install: true,
@@ -55,6 +63,22 @@ fn init_with_audio(audio_options: AudioOptionsView) -> State {
         smx_gifs: deadsync_theme::views::SmxGifCatalogView::default(),
         score_import_profiles: Vec::new(),
     })
+}
+
+#[test]
+fn system_game_choice_tracks_the_saved_game() {
+    let config = config::Config {
+        game_flag: config::GameFlag::Pump,
+        ..config::Config::default()
+    };
+    let state = init_with_config(config);
+    let game_row = SYSTEM_OPTIONS_ROWS
+        .iter()
+        .position(|row| row.id == SubRowId::Game)
+        .expect("system options must contain the game row");
+
+    assert_eq!(SYSTEM_OPTIONS_ROWS[game_row].choices.len(), 2);
+    assert_eq!(state.sub[SubmenuKind::System].choice_indices[game_row], 1);
 }
 
 #[test]

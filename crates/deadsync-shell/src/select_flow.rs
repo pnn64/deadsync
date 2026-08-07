@@ -17,10 +17,12 @@ pub(crate) fn players_view() -> [SelectFlowPlayerView; 2] {
 }
 
 pub(crate) fn runtime_view() -> SelectFlowRuntimeView {
+    let cfg = config::get();
     SelectFlowRuntimeView {
         players: players_view(),
+        game: cfg.game_flag,
         play_style: profile::get_session_play_style(),
         play_mode: profile::get_session_play_mode(),
-        color_index: config::get().simply_love_color,
+        color_index: cfg.simply_love_color,
     }
 }

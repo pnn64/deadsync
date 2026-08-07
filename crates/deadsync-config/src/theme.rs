@@ -1104,15 +1104,18 @@ impl FromStr for MachineEvaluationStyle {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum GameFlag {
+    #[default]
     Dance,
+    Pump,
 }
 
 impl GameFlag {
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Dance => "dance",
+            Self::Pump => "pump",
         }
     }
 }
@@ -1123,6 +1126,7 @@ impl FromStr for GameFlag {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.trim().to_ascii_lowercase().as_str() {
             "dance" => Ok(Self::Dance),
+            "pump" => Ok(Self::Pump),
             _ => Err(()),
         }
     }
@@ -1816,6 +1820,14 @@ impl FromStr for LogLevel {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn game_flag_round_trips_supported_games() {
+        for game in [GameFlag::Dance, GameFlag::Pump] {
+            assert_eq!(GameFlag::from_str(game.as_str()), Ok(game));
+        }
+        assert_eq!(GameFlag::default(), GameFlag::Dance);
+    }
 
     fn default_theme_presentation_options() -> ThemePresentationOptions {
         ThemePresentationOptions {

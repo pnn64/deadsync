@@ -10,6 +10,39 @@ pub const fn remap_live_input_lane(
     player_side: GameplayInputPlayerSide,
     lane: Lane,
 ) -> Option<Lane> {
+    if play_style.is_pump() {
+        let (pad, local_col) = match lane {
+            Lane::Left => (GameplayInputPlayerSide::P1, 0),
+            Lane::Down => (GameplayInputPlayerSide::P1, 1),
+            Lane::Col8 => (GameplayInputPlayerSide::P1, 2),
+            Lane::Up => (GameplayInputPlayerSide::P1, 3),
+            Lane::Right => (GameplayInputPlayerSide::P1, 4),
+            Lane::P2Left => (GameplayInputPlayerSide::P2, 0),
+            Lane::P2Down => (GameplayInputPlayerSide::P2, 1),
+            Lane::Col9 => (GameplayInputPlayerSide::P2, 2),
+            Lane::P2Up => (GameplayInputPlayerSide::P2, 3),
+            Lane::P2Right => (GameplayInputPlayerSide::P2, 4),
+        };
+        if matches!(play_style, GameplayInputPlayStyle::PumpSingle) {
+            let same_pad = matches!(
+                (pad, player_side),
+                (GameplayInputPlayerSide::P1, GameplayInputPlayerSide::P1)
+                    | (GameplayInputPlayerSide::P2, GameplayInputPlayerSide::P2)
+            );
+            return if same_pad {
+                lane_from_column(local_col)
+            } else {
+                None
+            };
+        }
+        let col = local_col
+            + if matches!(pad, GameplayInputPlayerSide::P2) {
+                5
+            } else {
+                0
+            };
+        return lane_from_column(col);
+    }
     match (play_style, player_side, lane) {
         // Single-player: reject the other side entirely so only one set of
         // bindings can play.
@@ -59,21 +92,21 @@ pub const fn live_input_lane_for_queue(
 }
 
 #[inline(always)]
-pub const fn input_lane_bit(lane_idx: usize) -> u8 {
-    1u8 << lane_idx
+pub const fn input_lane_bit(lane_idx: usize) -> LaneMask {
+    1u16 << lane_idx
 }
 
 #[inline(always)]
-pub const fn input_lane_mask(num_cols: usize) -> u8 {
+pub const fn input_lane_mask(num_cols: usize) -> LaneMask {
     if num_cols >= MAX_COLS {
-        u8::MAX
+        (1u16 << MAX_COLS) - 1
     } else {
-        ((1u16 << num_cols) - 1) as u8
+        (1u16 << num_cols) - 1
     }
 }
 
 #[inline(always)]
-pub fn lane_inputs_from_mask(mask: u8, num_cols: usize) -> [bool; MAX_COLS] {
+pub fn lane_inputs_from_mask(mask: LaneMask, num_cols: usize) -> [bool; MAX_COLS] {
     let mut inputs = [false; MAX_COLS];
     let mut lanes = mask & input_lane_mask(num_cols);
     while lanes != 0 {

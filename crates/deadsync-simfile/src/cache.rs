@@ -23,7 +23,7 @@ use twox_hash::XxHash64;
 
 use crate::song::{ParseSongOptions, parse_song_data_file};
 
-pub const SONG_CACHE_VERSION: u8 = 13;
+pub const SONG_CACHE_VERSION: u8 = 15;
 pub const SONG_CACHE_MAGIC: [u8; 8] = *b"DSCACHE1";
 const MAX_SONG_CACHE_HEADER_BYTES: usize = 64 * 1024 * 1024;
 

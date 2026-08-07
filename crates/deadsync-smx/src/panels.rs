@@ -44,6 +44,8 @@ const BLACK: Rgb = [0, 0, 0];
 /// L, D, U, R direction columns mapped to 3x3 grid panel indices
 /// (panel names: UL,U,UR,L,C,R,DL,D,DR).
 const DIR_TO_PANEL: [usize; 4] = [3, 7, 1, 5];
+/// DL, UL, C, UR, DR Pump columns mapped to the 3x3 grid.
+const PUMP_TO_PANEL: [usize; 5] = [6, 0, 4, 2, 8];
 
 /// Map a logical column to the SMX pad slot and panel index.
 ///
@@ -55,13 +57,15 @@ pub fn smx_panel_for_col(
     num_players: usize,
     column: usize,
 ) -> Option<(usize, usize)> {
-    if cols_per_player == 0 {
+    if cols_per_player == 0 || column >= cols_per_player.saturating_mul(num_players) {
         return None;
     }
     let local = column % cols_per_player;
-    let (pad, local_col) = if cols_per_player >= 8 && num_players == 1 {
-        // One human on two pads (doubles): the first four columns are the left pad.
-        (if local < 4 { 0 } else { 1 }, local % 4)
+    let pump = matches!(cols_per_player, 5 | 10);
+    let lanes_per_pad = if pump { 5 } else { 4 };
+    let (pad, local_col) = if cols_per_player > lanes_per_pad && num_players == 1 {
+        // One human on two pads (doubles): split at the native pad lane count.
+        (local / lanes_per_pad, local % lanes_per_pad)
     } else {
         let pad = column / cols_per_player;
         if pad >= PADS {
@@ -69,7 +73,12 @@ pub fn smx_panel_for_col(
         }
         (pad, local)
     };
-    DIR_TO_PANEL.get(local_col).map(|&panel| (pad, panel))
+    let panel = if pump {
+        PUMP_TO_PANEL.get(local_col)
+    } else {
+        DIR_TO_PANEL.get(local_col)
+    }?;
+    Some((pad, *panel))
 }
 
 /// Floor for frame durations when advancing playback, so a malformed zero
@@ -1064,6 +1073,25 @@ mod tests {
         assert_eq!(smx_panel_for_col(8, 1, 3), Some((0, 5)));
         assert_eq!(smx_panel_for_col(8, 1, 4), Some((1, 3)));
         assert_eq!(smx_panel_for_col(8, 1, 7), Some((1, 5)));
+    }
+
+    #[test]
+    fn panel_mapping_pump_single_and_versus() {
+        let pump = [6, 0, 4, 2, 8];
+        for (column, panel) in pump.into_iter().enumerate() {
+            assert_eq!(smx_panel_for_col(5, 1, column), Some((0, panel)));
+            assert_eq!(smx_panel_for_col(5, 2, column), Some((0, panel)));
+            assert_eq!(smx_panel_for_col(5, 2, column + 5), Some((1, panel)));
+        }
+    }
+
+    #[test]
+    fn panel_mapping_pump_double_splits_at_five_columns() {
+        let pump = [6, 0, 4, 2, 8];
+        for (column, panel) in pump.into_iter().enumerate() {
+            assert_eq!(smx_panel_for_col(10, 1, column), Some((0, panel)));
+            assert_eq!(smx_panel_for_col(10, 1, column + 5), Some((1, panel)));
+        }
     }
 
     #[test]

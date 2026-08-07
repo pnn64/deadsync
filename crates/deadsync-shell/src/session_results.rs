@@ -75,7 +75,7 @@ pub fn stage_summary_from_score_info(
     let mut players: [Option<PlayerStageSummary>; MAX_PLAYERS] = std::array::from_fn(|_| None);
 
     match play_style {
-        PlayStyle::Versus => {
+        PlayStyle::Versus | PlayStyle::PumpVersus => {
             for (idx, side) in [(0, PlayerSide::P1), (1, PlayerSide::P2)] {
                 let Some(score) = score_info.get(idx).and_then(|entry| entry.as_ref()) else {
                     continue;
@@ -85,7 +85,7 @@ pub fn stage_summary_from_score_info(
                 players[player_side_index(side)] = Some(player_stage_summary(score));
             }
         }
-        PlayStyle::Single | PlayStyle::Double => {
+        PlayStyle::Single | PlayStyle::Double | PlayStyle::PumpSingle | PlayStyle::PumpDouble => {
             let score = score_info.first().and_then(|entry| entry.as_ref())?;
             song = Some(score.song.clone());
             music_rate = score.music_rate;

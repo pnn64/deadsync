@@ -4,6 +4,9 @@ pub enum GameplayInputPlayStyle {
     Single,
     Versus,
     Double,
+    PumpSingle,
+    PumpVersus,
+    PumpDouble,
 }
 
 impl GameplayInputPlayStyle {
@@ -12,20 +15,42 @@ impl GameplayInputPlayStyle {
         match self {
             Self::Single | Self::Versus => 4,
             Self::Double => 8,
+            Self::PumpSingle | Self::PumpVersus => 5,
+            Self::PumpDouble => 10,
         }
     }
 
     #[inline(always)]
     pub const fn player_count(self) -> usize {
         match self {
-            Self::Single | Self::Double => 1,
-            Self::Versus => 2,
+            Self::Single | Self::Double | Self::PumpSingle | Self::PumpDouble => 1,
+            Self::Versus | Self::PumpVersus => 2,
         }
     }
 
     #[inline(always)]
     pub const fn total_cols(self) -> usize {
         self.cols_per_player() * self.player_count()
+    }
+
+    #[inline(always)]
+    pub const fn is_pump(self) -> bool {
+        matches!(self, Self::PumpSingle | Self::PumpVersus | Self::PumpDouble)
+    }
+
+    #[inline(always)]
+    pub const fn is_versus(self) -> bool {
+        matches!(self, Self::Versus | Self::PumpVersus)
+    }
+
+    #[inline(always)]
+    pub const fn is_double(self) -> bool {
+        matches!(self, Self::Double | Self::PumpDouble)
+    }
+
+    #[inline(always)]
+    pub const fn is_single(self) -> bool {
+        matches!(self, Self::Single | Self::PumpSingle)
     }
 }
 
@@ -193,7 +218,10 @@ pub const fn gameplay_runtime_player_is_p2(
     matches!(
         (play_style, side),
         (
-            GameplayInputPlayStyle::Single | GameplayInputPlayStyle::Double,
+            GameplayInputPlayStyle::Single
+                | GameplayInputPlayStyle::Double
+                | GameplayInputPlayStyle::PumpSingle
+                | GameplayInputPlayStyle::PumpDouble,
             GameplayInputPlayerSide::P2
         )
     )
@@ -206,7 +234,10 @@ pub const fn gameplay_is_single_p2_side(
 ) -> bool {
     matches!(
         (play_style, side),
-        (GameplayInputPlayStyle::Single, GameplayInputPlayerSide::P2)
+        (
+            GameplayInputPlayStyle::Single | GameplayInputPlayStyle::PumpSingle,
+            GameplayInputPlayerSide::P2
+        )
     )
 }
 
@@ -216,7 +247,7 @@ pub const fn gameplay_runtime_player_side(
     session_side: GameplayInputPlayerSide,
     player_idx: usize,
 ) -> GameplayInputPlayerSide {
-    if matches!(play_style, GameplayInputPlayStyle::Versus) {
+    if play_style.is_versus() {
         gameplay_player_side_for_index(player_idx)
     } else {
         session_side

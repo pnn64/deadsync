@@ -328,7 +328,10 @@ pub(super) fn apply_submenu_choice_delta(
         match row.id {
             SubRowId::Game => {
                 action = Some(options_config_effect(
-                    crate::SimplyLoveOptionsConfigRequest::GameDance,
+                    crate::SimplyLoveOptionsConfigRequest::Game(match new_index {
+                        1 => deadsync_config::prelude::GameFlag::Pump,
+                        _ => deadsync_config::prelude::GameFlag::Dance,
+                    }),
                 ));
             }
             SubRowId::Theme => {

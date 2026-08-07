@@ -12,8 +12,13 @@ use deadsync_theme_simply_love::views::{
 
 fn pad_in_play(session: SelectMusicSessionView, pad: usize) -> bool {
     match session.play_style {
-        profile_data::PlayStyle::Double | profile_data::PlayStyle::Versus => true,
-        profile_data::PlayStyle::Single => session.joined.get(pad).copied().unwrap_or(false),
+        profile_data::PlayStyle::Double
+        | profile_data::PlayStyle::Versus
+        | profile_data::PlayStyle::PumpDouble
+        | profile_data::PlayStyle::PumpVersus => true,
+        profile_data::PlayStyle::Single | profile_data::PlayStyle::PumpSingle => {
+            session.joined.get(pad).copied().unwrap_or(false)
+        }
     }
 }
 
@@ -163,7 +168,7 @@ impl App {
             config,
         );
         let mut scorebox_hashes: [Option<String>; 2] = Default::default();
-        if profile_view.play_style == profile_data::PlayStyle::Versus {
+        if profile_view.play_style.is_versus() {
             scorebox_hashes = scorebox_request.chart_hashes;
         } else {
             let side = if profile_data::runtime_player_is_p2(

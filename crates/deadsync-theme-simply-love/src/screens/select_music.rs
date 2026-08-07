@@ -4392,7 +4392,8 @@ const fn input_side(action: VirtualAction) -> Option<profile_data::PlayerSide> {
         | VirtualAction::p1_menu_right
         | VirtualAction::p1_select
         | VirtualAction::p1_operator
-        | VirtualAction::p1_restart => Some(profile_data::PlayerSide::P1),
+        | VirtualAction::p1_restart
+        | VirtualAction::p1_center => Some(profile_data::PlayerSide::P1),
         VirtualAction::p2_up
         | VirtualAction::p2_down
         | VirtualAction::p2_left
@@ -4405,7 +4406,8 @@ const fn input_side(action: VirtualAction) -> Option<profile_data::PlayerSide> {
         | VirtualAction::p2_menu_right
         | VirtualAction::p2_select
         | VirtualAction::p2_operator
-        | VirtualAction::p2_restart => Some(profile_data::PlayerSide::P2),
+        | VirtualAction::p2_restart
+        | VirtualAction::p2_center => Some(profile_data::PlayerSide::P2),
         VirtualAction::system_fast_forward | VirtualAction::system_slow_down => None,
     }
 }
@@ -4542,12 +4544,17 @@ fn build_pad_profile_menu_items(state: &State) -> Option<Vec<select_music_menu::
         let is_p2 = slot == 1;
         // In play? Doubles/Versus drive both pads; Singles only the joined side.
         let in_play = match style {
-            profile_data::PlayStyle::Double | profile_data::PlayStyle::Versus => true,
-            profile_data::PlayStyle::Single => state.session.side_joined(if is_p2 {
-                profile_data::PlayerSide::P2
-            } else {
-                profile_data::PlayerSide::P1
-            }),
+            profile_data::PlayStyle::Double
+            | profile_data::PlayStyle::Versus
+            | profile_data::PlayStyle::PumpDouble
+            | profile_data::PlayStyle::PumpVersus => true,
+            profile_data::PlayStyle::Single | profile_data::PlayStyle::PumpSingle => {
+                state.session.side_joined(if is_p2 {
+                    profile_data::PlayerSide::P2
+                } else {
+                    profile_data::PlayerSide::P1
+                })
+            }
         };
         if !in_play {
             continue;
@@ -4703,10 +4710,10 @@ fn build_select_music_menu(state: &State) -> select_music_menu::MenuLists {
     }
 
     let styles = match (state.session.play_style, single_player_joined) {
-        (profile_data::PlayStyle::Single, true) => {
+        (profile_data::PlayStyle::Single | profile_data::PlayStyle::PumpSingle, true) => {
             Some(vec![select_music_menu::ITEM_SWITCH_TO_DOUBLE])
         }
-        (profile_data::PlayStyle::Double, true) => {
+        (profile_data::PlayStyle::Double | profile_data::PlayStyle::PumpDouble, true) => {
             Some(vec![select_music_menu::ITEM_SWITCH_TO_SINGLE])
         }
         _ => None,
@@ -4804,8 +4811,11 @@ fn show_pad_config_overlay(state: &mut State) {
     // physical pads (in Versus the second side may be a guest, but its pad is
     // still in play and tunable), so show both; Singles shows just the joined side.
     let (mut p1, mut p2) = match state.session.play_style {
-        profile_data::PlayStyle::Double | profile_data::PlayStyle::Versus => (true, true),
-        profile_data::PlayStyle::Single => (
+        profile_data::PlayStyle::Double
+        | profile_data::PlayStyle::Versus
+        | profile_data::PlayStyle::PumpDouble
+        | profile_data::PlayStyle::PumpVersus => (true, true),
+        profile_data::PlayStyle::Single | profile_data::PlayStyle::PumpSingle => (
             state.session.side_joined(profile_data::PlayerSide::P1),
             state.session.side_joined(profile_data::PlayerSide::P2),
         ),
@@ -6841,7 +6851,10 @@ const fn steps_index_for_side(
     p2_selected_steps_index: usize,
 ) -> usize {
     match (play_style, side) {
-        (profile_data::PlayStyle::Versus, profile_data::PlayerSide::P2) => p2_selected_steps_index,
+        (
+            profile_data::PlayStyle::Versus | profile_data::PlayStyle::PumpVersus,
+            profile_data::PlayerSide::P2,
+        ) => p2_selected_steps_index,
         _ => selected_steps_index,
     }
 }
@@ -6855,7 +6868,7 @@ fn set_steps_index_for_side(
     if matches!(
         (play_style, side),
         (
-            profile_data::PlayStyle::Versus,
+            profile_data::PlayStyle::Versus | profile_data::PlayStyle::PumpVersus,
             profile_data::PlayerSide::P2
         )
     ) {
@@ -7071,9 +7084,10 @@ fn hide_sync_overlay(state: &mut State) {
 #[inline(always)]
 fn selected_steps_index_for_sync(state: &State) -> usize {
     match (state.session.play_style, state.session.player_side) {
-        (profile_data::PlayStyle::Versus, profile_data::PlayerSide::P2) => {
-            state.p2_selected_steps_index
-        }
+        (
+            profile_data::PlayStyle::Versus | profile_data::PlayStyle::PumpVersus,
+            profile_data::PlayerSide::P2,
+        ) => state.p2_selected_steps_index,
         _ => state.selected_steps_index,
     }
 }
@@ -7081,9 +7095,10 @@ fn selected_steps_index_for_sync(state: &State) -> usize {
 #[inline(always)]
 fn preferred_steps_index_for_sync(state: &State) -> usize {
     match (state.session.play_style, state.session.player_side) {
-        (profile_data::PlayStyle::Versus, profile_data::PlayerSide::P2) => {
-            state.p2_preferred_difficulty_index
-        }
+        (
+            profile_data::PlayStyle::Versus | profile_data::PlayStyle::PumpVersus,
+            profile_data::PlayerSide::P2,
+        ) => state.p2_preferred_difficulty_index,
         _ => state.preferred_difficulty_index,
     }
 }
@@ -7091,7 +7106,10 @@ fn preferred_steps_index_for_sync(state: &State) -> usize {
 #[inline(always)]
 fn set_selected_steps_index_for_sync(state: &mut State, steps_index: usize) {
     match (state.session.play_style, state.session.player_side) {
-        (profile_data::PlayStyle::Versus, profile_data::PlayerSide::P2) => {
+        (
+            profile_data::PlayStyle::Versus | profile_data::PlayStyle::PumpVersus,
+            profile_data::PlayerSide::P2,
+        ) => {
             state.p2_selected_steps_index = steps_index;
             if steps_index < STANDARD_DIFFICULTY_COUNT {
                 state.p2_preferred_difficulty_index = steps_index;
@@ -8852,6 +8870,13 @@ fn handle_sync_overlay_input(state: &mut State, ev: &InputEvent) -> ThemeEffect 
 fn switch_single_player_style(state: &mut State, new_style: profile_data::PlayStyle) {
     hide_select_music_menu(state);
 
+    let new_style = match (state.session.play_style.is_pump(), new_style.is_double()) {
+        (true, true) => profile_data::PlayStyle::PumpDouble,
+        (true, false) => profile_data::PlayStyle::PumpSingle,
+        (false, true) => profile_data::PlayStyle::Double,
+        (false, false) => profile_data::PlayStyle::Single,
+    };
+
     let p1_joined = state.session.side_joined(profile_data::PlayerSide::P1);
     let p2_joined = state.session.side_joined(profile_data::PlayerSide::P2);
     let side = match (p1_joined, p2_joined) {
@@ -9142,7 +9167,12 @@ fn cancel_late_join_session(state: &mut State) {
         profile_data::PlayerSide::P1 => [true, false],
         profile_data::PlayerSide::P2 => [false, true],
     };
-    set_session(state, profile_data::PlayStyle::Single, staying_side, joined);
+    let style = if state.session.play_style.is_pump() {
+        profile_data::PlayStyle::PumpSingle
+    } else {
+        profile_data::PlayStyle::Single
+    };
+    set_session(state, style, staying_side, joined);
 }
 
 fn handle_test_input_overlay_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
@@ -10907,7 +10937,7 @@ fn handle_input_impl(state: &mut State, ev: &InputEvent, fine: bool) -> ThemeEff
     let only_dedicated_menu_buttons = state.policy.dedicated_menu_only;
 
     let play_style = state.session.play_style;
-    if play_style == profile_data::PlayStyle::Versus {
+    if play_style.is_versus() {
         return match ev.action {
             action if direct_lr_blocked_by_dedicated_menu(action, only_dedicated_menu_buttons) => {
                 ThemeEffect::None
@@ -11320,7 +11350,7 @@ fn update_impl(state: &mut State, dt: f32, smx: &SmxAssignmentView) -> ThemeEffe
             state,
             &song,
             play_style.chart_type(),
-            play_style == profile_data::PlayStyle::Versus,
+            play_style.is_versus(),
         );
     }
 
@@ -11471,7 +11501,7 @@ fn update_impl(state: &mut State, dt: f32, smx: &SmxAssignmentView) -> ThemeEffe
             presentation.show_scorebox && presentation.scorebox_cycle_enabled;
 
         if let Some(song) = selected_song.as_ref() {
-            let is_versus = play_style == profile_data::PlayStyle::Versus;
+            let is_versus = play_style.is_versus();
             ensure_chart_cache_for_song(state, song, target_chart_type, is_versus);
 
             if !displayed_chart_matches(
@@ -11656,7 +11686,7 @@ pub fn prime_displayed_chart_data(state: &mut State) {
     let song = song.clone();
     let play_style = state.session.play_style;
     let target_chart_type = play_style.chart_type();
-    let is_versus = play_style == profile_data::PlayStyle::Versus;
+    let is_versus = play_style.is_versus();
     ensure_chart_cache_for_song(state, &song, target_chart_type, is_versus);
 
     state.displayed_chart_p1 = state.cached_chart_ix_p1.map(|chart_ix| DisplayedChart {
@@ -12438,7 +12468,8 @@ fn immediate_selected_charts(
     let p1 = state
         .cached_chart_ix_p1
         .and_then(|chart_ix| song.charts.get(chart_ix));
-    let p2 = (play_style == profile_data::PlayStyle::Versus)
+    let p2 = play_style
+        .is_versus()
         .then(|| {
             state
                 .cached_chart_ix_p2
@@ -12687,7 +12718,7 @@ pub fn push_actors(
     let solo_side = solo_runtime_side(play_style, side);
     let is_p2_solo = solo_side == profile_data::PlayerSide::P2;
     let is_p2_single = profile_data::is_single_p2_side(play_style, side);
-    let is_versus = play_style == profile_data::PlayStyle::Versus;
+    let is_versus = play_style.is_versus();
     let target_chart_type = play_style.chart_type();
     let selected_entry = state.entries.get(state.selected_index);
     let [immediate_chart_p1, immediate_chart_p2] = immediate_selected_charts(state, play_style);
@@ -14081,8 +14112,13 @@ pub fn push_actors(
     if state.test_input_overlay_visible {
         let play_style = state.session.play_style;
         let (mut show_p1, mut show_p2, pad_spacing) = match play_style {
-            profile_data::PlayStyle::Double => (true, true, 105.0),
-            profile_data::PlayStyle::Single | profile_data::PlayStyle::Versus => (
+            profile_data::PlayStyle::Double | profile_data::PlayStyle::PumpDouble => {
+                (true, true, 105.0)
+            }
+            profile_data::PlayStyle::Single
+            | profile_data::PlayStyle::Versus
+            | profile_data::PlayStyle::PumpSingle
+            | profile_data::PlayStyle::PumpVersus => (
                 state.session.side_joined(profile_data::PlayerSide::P1),
                 state.session.side_joined(profile_data::PlayerSide::P2),
                 125.0,

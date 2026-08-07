@@ -327,7 +327,7 @@ pub const fn smx_pad_blackout(
                 | Screen::ConfigurePads
                 | Screen::Input
         );
-    if in_game && matches!(play_style, PlayStyle::Single) {
+    if in_game && play_style.is_single() {
         let used = player_side_index(player_side);
         [used != 0, used != 1]
     } else {
@@ -437,7 +437,7 @@ fn smx_slot_for_gameplay<Profile, OverlayActor, CapturedActor, StateDelta>(
 where
     Profile: GameplayProfileData,
 {
-    let doubles = state.cols_per_player() >= 8 && state.num_players() == 1;
+    let doubles = play_style.is_double() && state.num_players() == 1;
     std::array::from_fn(|pad| {
         physical_player_slot_for_chart_pad(play_style, player_side, doubles, pad)
     })

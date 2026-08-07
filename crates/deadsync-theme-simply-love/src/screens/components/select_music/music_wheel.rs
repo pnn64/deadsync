@@ -808,7 +808,7 @@ pub fn push(actors: &mut Vec<Actor>, p: MusicWheelParams) {
     let itl_points_color = [1.0, 1.0, 1.0, 1.0];
     let joined_sides = usize::from(p1_joined) + usize::from(p2_joined);
     let itl_wheel_mode = itl_wheel_mode_for_sides(p.itl_wheel_mode, joined_sides);
-    let is_double_style = matches!(play_style, profile_data::PlayStyle::Double);
+    let is_double_style = play_style.is_double();
 
     let header_font = machine_font_key(p.machine_font, FontRole::Header);
     let numbers_font = machine_font_key(p.machine_font, FontRole::Numbers);

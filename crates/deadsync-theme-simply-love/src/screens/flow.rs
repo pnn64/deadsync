@@ -162,7 +162,7 @@ pub fn late_join_side(
     action: VirtualAction,
     context: LateJoinContext,
 ) -> Option<PlayerSide> {
-    if !pressed || !context.screen_allows_join || context.play_style == PlayStyle::Double {
+    if !pressed || !context.screen_allows_join || context.play_style.is_double() {
         return None;
     }
     if !matches!(

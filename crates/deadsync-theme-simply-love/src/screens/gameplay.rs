@@ -1753,24 +1753,35 @@ impl GameplayStepStatsMode {
 
 const fn gameplay_step_stats_mode(
     play_style: profile_data::PlayStyle,
-    num_cols: usize,
+    _num_cols: usize,
     p1_enabled: bool,
     p2_enabled: bool,
 ) -> GameplayStepStatsMode {
     let enabled = match play_style {
-        profile_data::PlayStyle::Single | profile_data::PlayStyle::Double => p1_enabled,
-        profile_data::PlayStyle::Versus => p1_enabled || p2_enabled,
+        profile_data::PlayStyle::Single
+        | profile_data::PlayStyle::Double
+        | profile_data::PlayStyle::PumpSingle
+        | profile_data::PlayStyle::PumpDouble => p1_enabled,
+        profile_data::PlayStyle::Versus | profile_data::PlayStyle::PumpVersus => {
+            p1_enabled || p2_enabled
+        }
     };
     if !enabled {
         return GameplayStepStatsMode::Hidden;
     }
-    if num_cols <= 4 && !matches!(play_style, profile_data::PlayStyle::Versus) {
+    if !play_style.is_versus() && !play_style.is_double() {
         GameplayStepStatsMode::Side
     } else {
         match play_style {
-            profile_data::PlayStyle::Versus => GameplayStepStatsMode::Versus,
-            profile_data::PlayStyle::Double => GameplayStepStatsMode::Double,
-            profile_data::PlayStyle::Single => GameplayStepStatsMode::Hidden,
+            profile_data::PlayStyle::Versus | profile_data::PlayStyle::PumpVersus => {
+                GameplayStepStatsMode::Versus
+            }
+            profile_data::PlayStyle::Double | profile_data::PlayStyle::PumpDouble => {
+                GameplayStepStatsMode::Double
+            }
+            profile_data::PlayStyle::Single | profile_data::PlayStyle::PumpSingle => {
+                GameplayStepStatsMode::Hidden
+            }
         }
     }
 }
@@ -2934,20 +2945,23 @@ fn banner_visibility(
     first_mask: profile_data::StepStatisticsMask,
     second_mask: profile_data::StepStatisticsMask,
 ) -> (bool, bool) {
-    match play_style {
-        profile_data::PlayStyle::Single if num_cols <= 4 => (
+    if play_style.is_single() && num_cols <= play_style.cols_per_player() {
+        (
             first_mask.contains(profile_data::StepStatisticsMask::SONG_BANNER),
             wide && first_mask.pack_info_enabled(),
-        ),
-        profile_data::PlayStyle::Double if num_cols > 4 && wide && !ultrawide => (
+        )
+    } else if play_style.is_double() && wide && !ultrawide {
+        (
             first_mask.contains(profile_data::StepStatisticsMask::SONG_BANNER),
             first_mask.pack_info_enabled(),
-        ),
-        profile_data::PlayStyle::Versus if wide && !ultrawide => (
+        )
+    } else if play_style.is_versus() && wide && !ultrawide {
+        (
             (first_mask | second_mask).contains(profile_data::StepStatisticsMask::SONG_BANNER),
             false,
-        ),
-        _ => (false, false),
+        )
+    } else {
+        (false, false)
     }
 }
 
@@ -4057,8 +4071,7 @@ fn intro_text_target_x(
     center_1player_notefield: bool,
 ) -> f32 {
     let centered_notefield = state.num_players() == 1
-        && (play_style == profile_data::PlayStyle::Double
-            || (play_style == profile_data::PlayStyle::Single && center_1player_notefield));
+        && (play_style.is_double() || (play_style.is_single() && center_1player_notefield));
     if !centered_notefield || state.cols_per_player() == 0 {
         return screen_center_x();
     }
@@ -4138,7 +4151,7 @@ fn gameplay_bpm_x(
 ) -> f32 {
     if position == crate::config::GameplayBpmPosition::NearField
         && num_players == 1
-        && play_style == profile_data::PlayStyle::Single
+        && play_style.is_single()
     {
         let side = if player_side == profile_data::PlayerSide::P1 {
             1.0
@@ -4898,7 +4911,7 @@ pub fn smx_sensor_pad_plan(state: &State, smx_input: bool) -> [Option<(usize, us
     if !smx_input {
         return out;
     }
-    if state.runtime_view.play_style == profile_data::PlayStyle::Double {
+    if state.runtime_view.play_style.is_double() {
         // One player drives both pads; key the sensor arrays by SDK pad.
         if state.profiles()[0].smx_fsr_display {
             out = [Some((0, 0)), Some((1, 1))];
@@ -18684,9 +18697,8 @@ fn push_actors_impl(
     let policy = state.runtime_view.policy;
     let center_1player_notefield =
         policy.center_single_notefield || notefield_view.force_center_1player;
-    let centered_single_notefield = play_style == profile_data::PlayStyle::Single
-        && state.num_players() == 1
-        && center_1player_notefield;
+    let centered_single_notefield =
+        play_style.is_single() && state.num_players() == 1 && center_1player_notefield;
     let song_lua_visuals = state.song_lua_visuals();
     let song_lua_space_width = song_lua_overlay_space_width(state);
     let song_lua_space_height = song_lua_overlay_space_height(state);
@@ -19258,7 +19270,7 @@ fn push_actors_impl(
         f32,
         [(usize, f32); 2],
     ) = match play_style {
-        profile_data::PlayStyle::Versus => {
+        profile_data::PlayStyle::Versus | profile_data::PlayStyle::PumpVersus => {
             let (p1_x, p1_player_source, p1_sources, p1_assembly) = build_player_bundle(
                 0,
                 &state.profiles()[0],
@@ -19350,15 +19362,17 @@ fn push_actors_impl(
                 continue;
             };
             let (x, w, fl, fr) = match play_style {
-                profile_data::PlayStyle::Double => (0.0, sw, 0.0, 0.0),
-                profile_data::PlayStyle::Versus => {
+                profile_data::PlayStyle::Double | profile_data::PlayStyle::PumpDouble => {
+                    (0.0, sw, 0.0, 0.0)
+                }
+                profile_data::PlayStyle::Versus | profile_data::PlayStyle::PumpVersus => {
                     if player_idx == 0 {
                         (0.0, cx, 0.0, 0.1)
                     } else {
                         (cx, sw - cx, 0.1, 0.0)
                     }
                 }
-                profile_data::PlayStyle::Single => {
+                profile_data::PlayStyle::Single | profile_data::PlayStyle::PumpSingle => {
                     if centered_single_notefield {
                         (0.0, sw, 0.0, 0.0)
                     } else if is_p2_single {
@@ -19515,7 +19529,7 @@ fn push_actors_impl(
 
         let mut players = [(0usize, profile_data::PlayerSide::P1, 0.0, 0.0, 0.0, 0.0); 2];
         let player_count = match play_style {
-            profile_data::PlayStyle::Versus => {
+            profile_data::PlayStyle::Versus | profile_data::PlayStyle::PumpVersus => {
                 players[0] = (
                     0,
                     profile_data::PlayerSide::P1,
@@ -19631,7 +19645,7 @@ fn push_actors_impl(
         // edge (P1: right, P2: left). Build per-slot geometry (side + edges) here,
         // where the notefield layout is known.
         if policy.smx_input {
-            let is_doubles = play_style == profile_data::PlayStyle::Double;
+            let is_doubles = play_style.is_double();
             let is_centered_single = centered_single_notefield;
             let mut field_geom: [Option<(profile_data::PlayerSide, f32, f32)>; 2] = [None, None];
             for &(player_idx, player_side, field_x, ..) in &players[..player_count] {
@@ -19743,18 +19757,18 @@ fn push_actors_impl(
             let note_field_is_centered = (field_x - screen_center_x()).abs() < 1.0;
             let nps_graph_at_top = state.profiles()[player_idx].nps_graph_at_top;
             let single_score_swapped = state.num_players() == 1
-                && play_style != profile_data::PlayStyle::Double
+                && !play_style.is_double()
                 && nps_graph_at_top
                 && !note_field_is_centered;
             let score_in_single_step_stats = profile.score_position
                 == profile_data::ScorePosition::StepStatistics
                 && !profile.step_statistics.is_empty()
-                && play_style == profile_data::PlayStyle::Single
+                && play_style.is_single()
                 && state.num_cols() <= 4;
             let score_in_versus_step_stats = profile.score_position
                 == profile_data::ScorePosition::StepStatistics
                 && !profile.step_statistics.is_empty()
-                && play_style == profile_data::PlayStyle::Versus
+                && play_style.is_versus()
                 && is_wide()
                 && !is_ultrawide;
             let step_stats_score_pos = if score_in_single_step_stats {
@@ -19936,7 +19950,7 @@ fn push_actors_impl(
         {
             let player_life_color = |player_idx: usize| -> [f32; 4] {
                 match play_style {
-                    profile_data::PlayStyle::Versus => {
+                    profile_data::PlayStyle::Versus | profile_data::PlayStyle::PumpVersus => {
                         if player_idx == 0 {
                             color::decorative_rgba(state.active_color_index())
                         } else {
@@ -19957,7 +19971,7 @@ fn push_actors_impl(
 
             let mut life_players = [(0usize, profile_data::PlayerSide::P1); 2];
             let life_player_count = match play_style {
-                profile_data::PlayStyle::Versus => {
+                profile_data::PlayStyle::Versus | profile_data::PlayStyle::PumpVersus => {
                     life_players[0] = (0, profile_data::PlayerSide::P1);
                     life_players[1] = (1, profile_data::PlayerSide::P2);
                     2
@@ -20021,7 +20035,8 @@ fn push_actors_impl(
                         let meter_cy = 20.0;
                         let meter_cx = screen_center_x()
                             + match play_style {
-                                profile_data::PlayStyle::Versus => match side {
+                                profile_data::PlayStyle::Versus
+                                | profile_data::PlayStyle::PumpVersus => match side {
                                     profile_data::PlayerSide::P1 => -widescale(238.0, 288.0),
                                     profile_data::PlayerSide::P2 => widescale(238.0, 288.0),
                                 },
@@ -20115,7 +20130,7 @@ fn push_actors_impl(
                         let y = 80.0;
                         let croptop = 1.0 - life_for_render;
 
-                        if play_style == profile_data::PlayStyle::Double {
+                        if play_style.is_double() {
                             // Double: two quads flanking left/right, moving in unison.
                             actors.push(act!(quad:
                                 align(0.0, 0.0): xy(0.0, y):
@@ -20186,7 +20201,7 @@ fn push_actors_impl(
                                 };
 
                             // SL: if double style, position next to notefield.
-                            if play_style == profile_data::PlayStyle::Double {
+                            if play_style.is_double() {
                                 let half_nf = state.notefield_width(player_idx) * 0.5;
                                 x = screen_center_x()
                                     + match side {
@@ -20345,20 +20360,19 @@ fn push_actors_impl(
             (None, None)
         };
 
-        let (footer_left, footer_right, left_avatar, right_avatar) =
-            if play_style == profile_data::PlayStyle::Versus {
-                (
-                    p1_footer_text,
-                    p2_footer_text,
-                    p1_footer_avatar,
-                    p2_footer_avatar,
-                )
-            } else {
-                match player_side {
-                    profile_data::PlayerSide::P1 => (p1_footer_text, None, p1_footer_avatar, None),
-                    profile_data::PlayerSide::P2 => (None, p2_footer_text, None, p2_footer_avatar),
-                }
-            };
+        let (footer_left, footer_right, left_avatar, right_avatar) = if play_style.is_versus() {
+            (
+                p1_footer_text,
+                p2_footer_text,
+                p1_footer_avatar,
+                p2_footer_avatar,
+            )
+        } else {
+            match player_side {
+                profile_data::PlayerSide::P1 => (p1_footer_text, None, p1_footer_avatar, None),
+                profile_data::PlayerSide::P2 => (None, p2_footer_text, None, p2_footer_avatar),
+            }
+        };
         presentation_skeleton.push(STATIC_FOOTER, actors, |actors| {
             actors.push(screen_bar::build_no_background(ScreenBarParams {
                 visual_policy,

@@ -273,6 +273,7 @@ impl Default for PlayerOptionsInitView {
 #[derive(Clone, Debug)]
 pub struct MappingsRuntimeView {
     pub keymap: Keymap,
+    pub game: deadsync_config::prelude::GameFlag,
     pub machine_font: deadsync_config::prelude::MachineFont,
     pub input_debounce_seconds: f32,
     pub dedicated_three_key_nav: bool,
@@ -282,6 +283,7 @@ impl Default for MappingsRuntimeView {
     fn default() -> Self {
         Self {
             keymap: deadsync_input::default_keymap(),
+            game: deadsync_config::prelude::GameFlag::default(),
             machine_font: deadsync_config::prelude::MachineFont::default(),
             input_debounce_seconds: 0.02,
             dedicated_three_key_nav: false,
@@ -302,6 +304,7 @@ pub struct SelectFlowPlayerView {
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct SelectFlowRuntimeView {
     pub players: [SelectFlowPlayerView; 2],
+    pub game: deadsync_config::prelude::GameFlag,
     pub play_style: PlayStyle,
     pub play_mode: PlayMode,
     pub color_index: i32,

@@ -1115,15 +1115,27 @@ fn turn_take_from(turn: GameplayTurnOption, cols: usize, seed: u64) -> Option<Ve
     }
     match (turn, cols) {
         (GameplayTurnOption::None, _) => None,
+        (GameplayTurnOption::Mirror, 5) => Some(vec![3, 4, 2, 0, 1]),
+        (GameplayTurnOption::Mirror, 10) => Some(vec![8, 9, 7, 5, 6, 3, 4, 2, 0, 1]),
         (GameplayTurnOption::Mirror, _) => Some((0..cols).rev().collect()),
+        (GameplayTurnOption::LRMirror, 5) => Some(vec![4, 3, 2, 1, 0]),
+        (GameplayTurnOption::LRMirror, 10) => Some(vec![9, 8, 7, 6, 5, 4, 3, 2, 1, 0]),
         (GameplayTurnOption::LRMirror, 4) => Some(vec![3, 1, 2, 0]),
         (GameplayTurnOption::LRMirror, 8) => Some(vec![7, 5, 6, 4, 3, 1, 2, 0]),
         (GameplayTurnOption::UDMirror, 4) => Some(vec![0, 2, 1, 3]),
         (GameplayTurnOption::UDMirror, 8) => Some(vec![0, 2, 1, 3, 4, 6, 5, 7]),
+        (GameplayTurnOption::UDMirror, 5) => Some(vec![1, 0, 2, 4, 3]),
+        (GameplayTurnOption::UDMirror, 10) => {
+            Some(vec![1, 0, 2, 4, 3, 6, 5, 7, 9, 8])
+        }
         (GameplayTurnOption::Left, 4) => Some(vec![2, 0, 3, 1]),
         (GameplayTurnOption::Left, 8) => Some(vec![2, 0, 3, 1, 6, 4, 7, 5]),
+        (GameplayTurnOption::Left, 5) => Some(vec![1, 3, 2, 4, 0]),
+        (GameplayTurnOption::Left, 10) => Some(vec![8, 9, 7, 5, 6, 3, 4, 2, 0, 1]),
         (GameplayTurnOption::Right, 4) => Some(vec![1, 3, 0, 2]),
         (GameplayTurnOption::Right, 8) => Some(vec![1, 3, 0, 2, 5, 7, 4, 6]),
+        (GameplayTurnOption::Right, 5) => Some(vec![4, 0, 2, 1, 3]),
+        (GameplayTurnOption::Right, 10) => Some(vec![8, 9, 7, 5, 6, 3, 4, 2, 0, 1]),
         (GameplayTurnOption::Shuffle, _) => {
             let mut out: Vec<usize> = (0..cols).collect();
             let mut attempt_seed = seed as u32;

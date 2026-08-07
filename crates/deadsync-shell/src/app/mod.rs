@@ -678,8 +678,13 @@ fn options_pack_sync_view() -> OptionsPackSyncView {
 
 fn noteskin_catalog_view() -> NoteskinCatalogView {
     let roots = deadlib_platform::dirs::app_dirs().noteskin_roots();
+    let game = if profile::get_session_play_style().is_pump() {
+        "pump"
+    } else {
+        "dance"
+    };
     NoteskinCatalogView {
-        names: deadsync_noteskin::itg::discover_skins(&roots, "dance"),
+        names: deadsync_noteskin::itg::discover_skins(&roots, game),
     }
 }
 
@@ -4815,7 +4820,12 @@ impl App {
         };
 
         profile::set_session_joined(true, true);
-        profile::set_session_play_style(profile_data::PlayStyle::Versus);
+        let joined_style = if session.play_style.is_pump() {
+            profile_data::PlayStyle::PumpVersus
+        } else {
+            profile_data::PlayStyle::Versus
+        };
+        profile::set_session_play_style(joined_style);
         let show_select_profile = config::get().machine_show_select_profile;
         let join_profile = if show_select_profile {
             profile_data::ActiveProfile::Guest
@@ -4839,7 +4849,10 @@ impl App {
                 &mut self.state.screens.select_style_state,
                 crate::select_flow::runtime_view(),
             );
-            select_style::set_selected_index(&mut self.state.screens.select_style_state, 1);
+            select_style::set_selected_index(
+                &mut self.state.screens.select_style_state,
+                if joined_style.is_pump() { 4 } else { 1 },
+            );
         } else if screen == CurrentScreen::SelectColor {
             select_color::sync_runtime_view(
                 &mut self.state.screens.select_color_state,
@@ -6567,7 +6580,7 @@ impl App {
                     };
                     let play_style = profile::get_session_play_style();
                     let (steps, pref) = match play_style {
-                        profile_data::PlayStyle::Versus => (
+                        profile_data::PlayStyle::Versus | profile_data::PlayStyle::PumpVersus => (
                             [
                                 sm_state.selected_steps_index,
                                 sm_state.p2_selected_steps_index,
@@ -6577,7 +6590,10 @@ impl App {
                                 sm_state.p2_preferred_difficulty_index,
                             ],
                         ),
-                        profile_data::PlayStyle::Single | profile_data::PlayStyle::Double => (
+                        profile_data::PlayStyle::Single
+                        | profile_data::PlayStyle::Double
+                        | profile_data::PlayStyle::PumpSingle
+                        | profile_data::PlayStyle::PumpDouble => (
                             [sm_state.selected_steps_index; 2],
                             [sm_state.preferred_difficulty_index; 2],
                         ),
@@ -6641,7 +6657,7 @@ impl App {
                     };
                     let play_style = profile::get_session_play_style();
                     let (steps, pref) = match play_style {
-                        profile_data::PlayStyle::Versus => (
+                        profile_data::PlayStyle::Versus | profile_data::PlayStyle::PumpVersus => (
                             [
                                 sm_state.selected_steps_index,
                                 sm_state.p2_selected_steps_index,
@@ -6651,7 +6667,10 @@ impl App {
                                 sm_state.p2_preferred_difficulty_index,
                             ],
                         ),
-                        profile_data::PlayStyle::Single | profile_data::PlayStyle::Double => (
+                        profile_data::PlayStyle::Single
+                        | profile_data::PlayStyle::Double
+                        | profile_data::PlayStyle::PumpSingle
+                        | profile_data::PlayStyle::PumpDouble => (
                             [sm_state.selected_steps_index; 2],
                             [sm_state.preferred_difficulty_index; 2],
                         ),
@@ -6805,7 +6824,7 @@ impl App {
                 }
                 let payload_ms = payload_started.elapsed().as_secs_f64() * 1000.0;
 
-                if play_style == profile_data::PlayStyle::Versus {
+                if play_style.is_versus() {
                     self.state
                         .screens
                         .select_music_state
@@ -7158,7 +7177,7 @@ impl App {
                 let payload_ms = payload_started.elapsed().as_secs_f64() * 1000.0;
 
                 // Keep SelectMusic's current stepchart in sync with what we're about to play.
-                if play_style == profile_data::PlayStyle::Versus {
+                if play_style.is_versus() {
                     self.state
                         .screens
                         .select_music_state
@@ -7542,7 +7561,8 @@ impl App {
 
                     if let Some(po) = self.state.screens.player_options_state.as_ref() {
                         match profile_session.play_style {
-                            profile_data::PlayStyle::Versus => {
+                            profile_data::PlayStyle::Versus
+                            | profile_data::PlayStyle::PumpVersus => {
                                 self.state.screens.select_music_state.selected_steps_index =
                                     po.chart_steps_index[0];
                                 self.state
@@ -7558,7 +7578,10 @@ impl App {
                                     .select_music_state
                                     .p2_preferred_difficulty_index = po.chart_difficulty_index[1];
                             }
-                            profile_data::PlayStyle::Single | profile_data::PlayStyle::Double => {
+                            profile_data::PlayStyle::Single
+                            | profile_data::PlayStyle::Double
+                            | profile_data::PlayStyle::PumpSingle
+                            | profile_data::PlayStyle::PumpDouble => {
                                 let idx =
                                     profile_data::player_side_index(profile_session.player_side);
                                 self.state.screens.select_music_state.selected_steps_index =
@@ -7719,7 +7742,7 @@ impl App {
                 chart_opt: chart_to_graph,
             });
 
-            if profile_session.play_style == profile_data::PlayStyle::Versus {
+            if profile_session.play_style.is_versus() {
                 let chart_to_graph_p2 = match self
                     .state
                     .screens

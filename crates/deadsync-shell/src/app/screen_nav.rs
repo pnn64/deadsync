@@ -194,8 +194,10 @@ impl App {
             self.state.session.pending_post_select_summary_exit = pending;
         }
         if plan.apply_preferred_style {
-            let play_style =
-                profile_data::play_style_from_machine_preference(cfg.machine_preferred_style);
+            let play_style = profile_data::play_style_from_machine_preference(
+                cfg.machine_preferred_style,
+                cfg.game_flag,
+            );
             profile::set_session_play_style(play_style);
             self.state.session.preferred_difficulty_index =
                 profile::get().last_played(play_style).difficulty_index;

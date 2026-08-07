@@ -21,9 +21,15 @@ impl SongLuaCompilePlayStyleLike for GameplayInputPlayStyle {
     #[inline(always)]
     fn as_song_lua_compile_play_style(self) -> SongLuaCompilePlayStyle {
         match self {
-            GameplayInputPlayStyle::Single => SongLuaCompilePlayStyle::Single,
-            GameplayInputPlayStyle::Versus => SongLuaCompilePlayStyle::Versus,
-            GameplayInputPlayStyle::Double => SongLuaCompilePlayStyle::Double,
+            GameplayInputPlayStyle::Single | GameplayInputPlayStyle::PumpSingle => {
+                SongLuaCompilePlayStyle::Single
+            }
+            GameplayInputPlayStyle::Versus | GameplayInputPlayStyle::PumpVersus => {
+                SongLuaCompilePlayStyle::Versus
+            }
+            GameplayInputPlayStyle::Double | GameplayInputPlayStyle::PumpDouble => {
+                SongLuaCompilePlayStyle::Double
+            }
         }
     }
 }
@@ -573,4 +579,3 @@ where
         center_1player_notefield,
     )
 }
-

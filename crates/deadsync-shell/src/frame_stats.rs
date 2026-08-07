@@ -95,7 +95,7 @@ pub fn frame_stats_target_us(refresh_ns: u64, fallback_interval: Option<Duration
 
 #[inline(always)]
 pub const fn frame_stats_two_player(play_style: PlayStyle, num_players: usize) -> bool {
-    matches!(play_style, PlayStyle::Versus | PlayStyle::Double) || num_players >= 2
+    play_style.is_versus() || play_style.is_double() || num_players >= 2
 }
 
 /// Exponentially-decaying bucketed histogram with bounded, allocation-free storage.

@@ -291,7 +291,7 @@ pub struct GameplayChartRuntimeState {
 #[derive(Clone, Debug, Default)]
 pub struct GameplayHoldRuntimeState {
     active_holds: [Option<ActiveHold>; MAX_COLS],
-    active_hold_mask: u8,
+    active_hold_mask: LaneMask,
     pub decaying_hold_indices: Vec<usize>,
     pub hold_decay_active: Vec<bool>,
     pub tap_miss_held_window: Vec<bool>,
@@ -335,12 +335,12 @@ impl GameplayHoldRuntimeState {
     }
 
     #[inline(always)]
-    pub fn active_hold_mask(&self) -> u8 {
+    pub fn active_hold_mask(&self) -> LaneMask {
         self.active_hold_mask
     }
 
     #[inline(always)]
-    pub fn set_active_hold_mask(&mut self, mask: u8) {
+    pub fn set_active_hold_mask(&mut self, mask: LaneMask) {
         self.active_hold_mask = mask;
     }
 
@@ -550,8 +550,8 @@ impl GameplayCueRuntimeState {
 pub struct GameplayHoldFeedbackState {
     hold_judgments: [Option<HoldJudgmentRenderInfo>; MAX_COLS],
     held_miss_judgments: [Option<HeldMissRenderInfo>; MAX_COLS],
-    hold_mask: u8,
-    held_miss_mask: u8,
+    hold_mask: LaneMask,
+    held_miss_mask: LaneMask,
 }
 
 impl GameplayHoldFeedbackState {
@@ -643,9 +643,9 @@ pub struct GameplayVisualFeedbackState {
     column_flashes: [Option<ActiveColumnFlash>; MAX_COLS],
     pub last_tap_judgments: [Option<ColumnTapJudgment>; MAX_COLS],
     mine_explosions: [Option<ActiveMineExplosion>; MAX_COLS],
-    tap_mask: u8,
-    flash_mask: u8,
-    mine_mask: u8,
+    tap_mask: LaneMask,
+    flash_mask: LaneMask,
+    mine_mask: LaneMask,
 }
 
 impl GameplayVisualFeedbackState {
@@ -779,8 +779,8 @@ impl GameplayVisualFeedbackState {
 }
 
 #[inline(always)]
-fn set_feedback_bit(mask: &mut u8, col: usize, active: bool) {
-    if col >= u8::BITS as usize {
+fn set_feedback_bit(mask: &mut LaneMask, col: usize, active: bool) {
+    if col >= LaneMask::BITS as usize {
         return;
     }
     let bit = 1 << col;

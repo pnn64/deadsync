@@ -660,15 +660,14 @@ pub fn push_actors(
             None
         };
 
-        let (left_avatar, right_avatar) =
-            if state.runtime.play_style == profile_data::PlayStyle::Versus {
-                (p1_avatar_key, p2_avatar_key)
-            } else {
-                match state.runtime.player_side {
-                    profile_data::PlayerSide::P1 => (p1_avatar_key, None),
-                    profile_data::PlayerSide::P2 => (None, p2_avatar_key),
-                }
-            };
+        let (left_avatar, right_avatar) = if state.runtime.play_style.is_versus() {
+            (p1_avatar_key, p2_avatar_key)
+        } else {
+            match state.runtime.player_side {
+                profile_data::PlayerSide::P1 => (p1_avatar_key, None),
+                profile_data::PlayerSide::P2 => (None, p2_avatar_key),
+            }
+        };
 
         if let Some(key) = left_avatar {
             actors.push(act!(sprite(key):

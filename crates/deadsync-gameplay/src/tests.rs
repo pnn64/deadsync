@@ -4643,6 +4643,9 @@ mod tests {
         assert_eq!(GameplayInputPlayStyle::Versus.player_count(), 2);
         assert_eq!(GameplayInputPlayStyle::Double.player_count(), 1);
         assert_eq!(GameplayInputPlayStyle::Double.total_cols(), 8);
+        assert_eq!(GameplayInputPlayStyle::PumpSingle.cols_per_player(), 5);
+        assert_eq!(GameplayInputPlayStyle::PumpVersus.total_cols(), 10);
+        assert_eq!(GameplayInputPlayStyle::PumpDouble.cols_per_player(), 10);
 
         assert_eq!(gameplay_player_side_index(GameplayInputPlayerSide::P2), 1);
         assert_eq!(
@@ -4757,6 +4760,46 @@ mod tests {
                 Lane::P2Down,
             ),
             Some(Lane::P2Down)
+        );
+    }
+
+    #[test]
+    fn remap_live_input_lane_uses_itgmania_pump_track_order() {
+        let p1 = [Lane::Left, Lane::Down, Lane::Col8, Lane::Up, Lane::Right];
+        let p2 = [
+            Lane::P2Left,
+            Lane::P2Down,
+            Lane::Col9,
+            Lane::P2Up,
+            Lane::P2Right,
+        ];
+        for (col, lane) in p1.into_iter().chain(p2).enumerate() {
+            assert_eq!(
+                remap_live_input_lane(
+                    GameplayInputPlayStyle::PumpDouble,
+                    GameplayInputPlayerSide::P1,
+                    lane,
+                )
+                .map(Lane::index),
+                Some(col)
+            );
+        }
+        assert_eq!(
+            remap_live_input_lane(
+                GameplayInputPlayStyle::PumpSingle,
+                GameplayInputPlayerSide::P2,
+                Lane::Col9,
+            )
+            .map(Lane::index),
+            Some(2)
+        );
+        assert_eq!(
+            remap_live_input_lane(
+                GameplayInputPlayStyle::PumpSingle,
+                GameplayInputPlayerSide::P1,
+                Lane::Col9,
+            ),
+            None
         );
     }
 
@@ -5276,13 +5319,15 @@ mod tests {
     fn lane_input_mask_expands_only_active_gameplay_columns() {
         assert_eq!(input_lane_mask(0), 0);
         assert_eq!(input_lane_mask(4), 0b0000_1111);
-        assert_eq!(input_lane_mask(MAX_COLS), u8::MAX);
-        assert_eq!(input_lane_mask(MAX_COLS + 1), u8::MAX);
+        assert_eq!(input_lane_mask(MAX_COLS), 0b11_1111_1111);
+        assert_eq!(input_lane_mask(MAX_COLS + 1), 0b11_1111_1111);
 
         let inputs = lane_inputs_from_mask(0b1010_0101, 4);
         assert_eq!(
             inputs,
-            [true, false, true, false, false, false, false, false]
+            [
+                true, false, true, false, false, false, false, false, false, false,
+            ]
         );
     }
 
@@ -16345,6 +16390,30 @@ mod tests {
         assert_eq!(
             turn_take_from(GameplayTurnOption::Shuffle, 4, 29),
             Some(vec![2, 0, 1, 3])
+        );
+    }
+
+    #[test]
+    fn pump_turn_mappings_match_itgmania() {
+        assert_eq!(
+            turn_take_from(GameplayTurnOption::Mirror, 5, 0),
+            Some(vec![3, 4, 2, 0, 1])
+        );
+        assert_eq!(
+            turn_take_from(GameplayTurnOption::LRMirror, 5, 0),
+            Some(vec![4, 3, 2, 1, 0])
+        );
+        assert_eq!(
+            turn_take_from(GameplayTurnOption::UDMirror, 10, 0),
+            Some(vec![1, 0, 2, 4, 3, 6, 5, 7, 9, 8])
+        );
+        assert_eq!(
+            turn_take_from(GameplayTurnOption::Left, 10, 0),
+            Some(vec![8, 9, 7, 5, 6, 3, 4, 2, 0, 1])
+        );
+        assert_eq!(
+            turn_take_from(GameplayTurnOption::Right, 5, 0),
+            Some(vec![4, 0, 2, 1, 3])
         );
     }
 

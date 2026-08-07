@@ -153,9 +153,16 @@ where
         return None;
     }
     let local = column % state.cols_per_player();
-    let (player, local_col) = if state.cols_per_player() >= 8 && state.num_players() == 1 {
-        let player = if local < 4 { Player::P1 } else { Player::P2 };
-        (player, local % 4)
+    let pump = matches!(state.cols_per_player(), 5 | 10);
+    let lanes_per_pad = if pump { 5 } else { 4 };
+    let (player, local_col) = if state.cols_per_player() > lanes_per_pad && state.num_players() == 1
+    {
+        let player = if local < lanes_per_pad {
+            Player::P1
+        } else {
+            Player::P2
+        };
+        (player, local % lanes_per_pad)
     } else {
         let player_ix = column / state.cols_per_player();
         let player = match player_ix {
@@ -165,16 +172,27 @@ where
         };
         (player, local)
     };
-    button_light_for_col(local_col).map(|button| (player, button))
+    button_light_for_col(pump, local_col).map(|button| (player, button))
 }
 
-const fn button_light_for_col(local_col: usize) -> Option<ButtonLight> {
-    match local_col {
-        0 => Some(ButtonLight::Left),
-        1 => Some(ButtonLight::Down),
-        2 => Some(ButtonLight::Up),
-        3 => Some(ButtonLight::Right),
-        _ => None,
+const fn button_light_for_col(pump: bool, local_col: usize) -> Option<ButtonLight> {
+    if pump {
+        match local_col {
+            0 => Some(ButtonLight::Right),
+            1 => Some(ButtonLight::Up),
+            2 => Some(ButtonLight::Left),
+            3 => Some(ButtonLight::Down),
+            4 => Some(ButtonLight::Select),
+            _ => None,
+        }
+    } else {
+        match local_col {
+            0 => Some(ButtonLight::Left),
+            1 => Some(ButtonLight::Down),
+            2 => Some(ButtonLight::Up),
+            3 => Some(ButtonLight::Right),
+            _ => None,
+        }
     }
 }
 
@@ -226,10 +244,19 @@ mod tests {
 
     #[test]
     fn button_light_mapping_uses_four_panel_order() {
-        assert_eq!(button_light_for_col(0), Some(ButtonLight::Left));
-        assert_eq!(button_light_for_col(1), Some(ButtonLight::Down));
-        assert_eq!(button_light_for_col(2), Some(ButtonLight::Up));
-        assert_eq!(button_light_for_col(3), Some(ButtonLight::Right));
-        assert_eq!(button_light_for_col(4), None);
+        assert_eq!(button_light_for_col(false, 0), Some(ButtonLight::Left));
+        assert_eq!(button_light_for_col(false, 1), Some(ButtonLight::Down));
+        assert_eq!(button_light_for_col(false, 2), Some(ButtonLight::Up));
+        assert_eq!(button_light_for_col(false, 3), Some(ButtonLight::Right));
+        assert_eq!(button_light_for_col(false, 4), None);
+    }
+
+    #[test]
+    fn pump_columns_cover_all_fusion_panels() {
+        assert_eq!(button_light_for_col(true, 0), Some(ButtonLight::Right));
+        assert_eq!(button_light_for_col(true, 1), Some(ButtonLight::Up));
+        assert_eq!(button_light_for_col(true, 2), Some(ButtonLight::Left));
+        assert_eq!(button_light_for_col(true, 3), Some(ButtonLight::Down));
+        assert_eq!(button_light_for_col(true, 4), Some(ButtonLight::Select));
     }
 }

@@ -39,6 +39,7 @@ pub fn default_keymap() -> Keymap {
             InputBinding::Key(KeyCode::KeyD),
         ],
     );
+    km.bind(A::p1_center, &[InputBinding::Key(KeyCode::Space)]);
     km.bind(A::p1_select, &[InputBinding::Key(KeyCode::Slash)]);
     km.bind(A::p1_start, &[InputBinding::Key(KeyCode::Enter)]);
     km.bind(A::p1_back, &[InputBinding::Key(KeyCode::Escape)]);
@@ -47,6 +48,7 @@ pub fn default_keymap() -> Keymap {
     km.bind(A::p2_down, &[InputBinding::Key(KeyCode::Numpad2)]);
     km.bind(A::p2_left, &[InputBinding::Key(KeyCode::Numpad4)]);
     km.bind(A::p2_right, &[InputBinding::Key(KeyCode::Numpad6)]);
+    km.bind(A::p2_center, &[InputBinding::Key(KeyCode::Numpad5)]);
     km.bind(A::p2_select, &[InputBinding::Key(KeyCode::NumpadDecimal)]);
     km.bind(A::p2_start, &[InputBinding::Key(KeyCode::NumpadEnter)]);
     km.bind(A::p2_back, &[InputBinding::Key(KeyCode::Numpad0)]);
@@ -108,7 +110,7 @@ where
     km
 }
 
-pub const DEFAULT_KEYMAP_INI_LINES: [(&str, &str); 28] = [
+pub const DEFAULT_KEYMAP_INI_LINES: [(&str, &str); 30] = [
     ("P1_Back", "KeyCode::Escape"),
     ("P1_Down", "KeyCode::ArrowDown,KeyCode::KeyS"),
     ("P1_Left", "KeyCode::ArrowLeft,KeyCode::KeyA"),
@@ -137,6 +139,8 @@ pub const DEFAULT_KEYMAP_INI_LINES: [(&str, &str); 28] = [
     ("P2_Up", "KeyCode::Numpad8"),
     ("System_FastForward", "KeyCode::Tab"),
     ("System_SlowDown", "KeyCode::Backquote"),
+    ("P1_Center", "KeyCode::Space"),
+    ("P2_Center", "KeyCode::Numpad5"),
 ];
 
 pub fn keymap_ini_lines(keymap: &Keymap) -> Vec<(&'static str, String)> {
@@ -178,6 +182,7 @@ pub const fn default_key_for_action(action: VirtualAction) -> Option<KeyCode> {
         A::p1_down => Some(KeyCode::ArrowDown),
         A::p1_left => Some(KeyCode::ArrowLeft),
         A::p1_right => Some(KeyCode::ArrowRight),
+        A::p1_center => Some(KeyCode::Space),
         A::p1_select => Some(KeyCode::Slash),
         A::p1_start => Some(KeyCode::Enter),
         A::p1_back => Some(KeyCode::Escape),
@@ -186,6 +191,7 @@ pub const fn default_key_for_action(action: VirtualAction) -> Option<KeyCode> {
         A::p2_down => Some(KeyCode::Numpad2),
         A::p2_left => Some(KeyCode::Numpad4),
         A::p2_right => Some(KeyCode::Numpad6),
+        A::p2_center => Some(KeyCode::Numpad5),
         A::p2_select => Some(KeyCode::NumpadDecimal),
         A::p2_start => Some(KeyCode::NumpadEnter),
         A::p2_back => Some(KeyCode::Numpad0),
@@ -903,7 +909,7 @@ mod tests {
         write_keymap_ini_section(&mut content, &default_keymap());
 
         assert!(content.starts_with("[Keymaps]\nP1_Back=KeyCode::Escape\n"));
-        assert!(content.ends_with("System_SlowDown=KeyCode::Backquote\n\n"));
+        assert!(content.ends_with("P2_Center=KeyCode::Numpad5\n\n"));
     }
 
     #[test]
@@ -913,7 +919,7 @@ mod tests {
 
         assert!(content.starts_with("[Keymaps]\nP1_Back=KeyCode::Escape\n"));
         assert!(content.contains("P1_MenuDown=\n"));
-        assert!(content.ends_with("System_SlowDown=KeyCode::Backquote\n\n"));
+        assert!(content.ends_with("P2_Center=KeyCode::Numpad5\n\n"));
     }
 
     #[test]

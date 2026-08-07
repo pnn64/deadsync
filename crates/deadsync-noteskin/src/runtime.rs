@@ -1780,7 +1780,7 @@ pub fn itg_runtime_columns_compiled<T: Clone>(
     let mut receptor_pulse_command: Option<String> = None;
 
     for col in 0..style.num_cols {
-        let button = itg::button_for_col(col);
+        let button = itg::button_for_col(style.num_cols, col);
         let note_sprites = resolve_slots(button, "Tap Note");
         let note_sprites = itg_tap_note_layers(note_sprites, || resolve_prefix_slot("_arrow"));
         let note_column = itg_tap_note_column(note_sprites, quantizations, &mut tap_layer_info)
@@ -1874,6 +1874,7 @@ pub fn itg_runtime_columns_compiled<T: Clone>(
 }
 
 pub fn itg_apply_hold_explosions_by_col<T: Clone>(
+    num_cols: usize,
     hold_columns: &mut [HoldVisuals<T>],
     roll_columns: &mut [HoldVisuals<T>],
     default_hold_explosion: Option<&T>,
@@ -1881,7 +1882,7 @@ pub fn itg_apply_hold_explosions_by_col<T: Clone>(
     mut resolve: impl FnMut(&str, &str, &str, &str, Option<&T>) -> Option<T>,
 ) {
     for (col, visuals) in hold_columns.iter_mut().enumerate() {
-        let button = itg::button_for_col(col);
+        let button = itg::button_for_col(num_cols, col);
         visuals.explosion = resolve(
             button,
             "holdingoncommand",
@@ -1891,7 +1892,7 @@ pub fn itg_apply_hold_explosions_by_col<T: Clone>(
         );
     }
     for (col, visuals) in roll_columns.iter_mut().enumerate() {
-        let button = itg::button_for_col(col);
+        let button = itg::button_for_col(num_cols, col);
         visuals.explosion = resolve(
             button,
             "rolloncommand",
@@ -1911,7 +1912,7 @@ pub fn itg_tap_explosions_by_col_compiled<T: Clone>(
 ) -> Vec<TapExplosionMap<T>> {
     let mut out = Vec::with_capacity(style.num_cols);
     for col in 0..style.num_cols {
-        let button = itg::button_for_col(col);
+        let button = itg::button_for_col(style.num_cols, col);
         let column_explosion_sprites = if button.eq_ignore_ascii_case("Down") {
             down_explosion_sprites.to_vec()
         } else {
@@ -1979,18 +1980,19 @@ pub fn itg_noteskin_runtime_compiled<T: Clone>(
         receptor_pulse_command,
     } = columns;
     let down_col = itg::down_col(style.num_cols);
+    let base_button = if style.is_pump() { "Center" } else { "Down" };
     let (mut hold, mut roll) = default_hold_visuals(&hold_columns, &roll_columns, down_col);
 
-    let explosion_sprites = resolve_sprites("Down", "Explosion");
-    let hold_explosion_request = compiled.load_request("Down", "Hold Explosion");
-    let roll_explosion_request = compiled.load_request("Down", "Roll Explosion");
+    let explosion_sprites = resolve_sprites(base_button, "Explosion");
+    let hold_explosion_request = compiled.load_request(base_button, "Hold Explosion");
+    let roll_explosion_request = compiled.load_request(base_button, "Roll Explosion");
     let hold_explosion_blank = hold_explosion_request.blank;
     let roll_explosion_blank = roll_explosion_request.blank;
-    let hold_explosion_sprites = resolve_sprites("Down", "Hold Explosion");
+    let hold_explosion_sprites = resolve_sprites(base_button, "Hold Explosion");
     hold.explosion = resolve_hold_explosion(
         &explosion_sprites,
         &hold_explosion_sprites,
-        "Down",
+        base_button,
         "holdingoncommand",
         "hold explosion",
         hold_explosion_blank,
@@ -1998,11 +2000,11 @@ pub fn itg_noteskin_runtime_compiled<T: Clone>(
         Some("_down hold explosion"),
         None,
     );
-    let roll_explosion_sprites = resolve_sprites("Down", "Roll Explosion");
+    let roll_explosion_sprites = resolve_sprites(base_button, "Roll Explosion");
     let roll_explosion = resolve_hold_explosion(
         &explosion_sprites,
         &roll_explosion_sprites,
-        "Down",
+        base_button,
         "rolloncommand",
         "roll explosion",
         roll_explosion_blank,
@@ -2055,6 +2057,7 @@ pub fn itg_noteskin_runtime_compiled<T: Clone>(
                 )
             };
         itg_apply_hold_explosions_by_col(
+            style.num_cols,
             &mut hold_columns,
             &mut roll_columns,
             hold.explosion.as_ref(),
@@ -2072,8 +2075,8 @@ pub fn itg_noteskin_runtime_compiled<T: Clone>(
     );
     let mine_hit_explosion = itg_hit_mine_explosion_from_layers(
         &explosion_sprites,
-        || resolve_direct_slot("Down", "HitMine Explosion"),
-        || resolve_actor_first_sprite("Down", "HitMine Explosion"),
+        || resolve_direct_slot(base_button, "HitMine Explosion"),
+        || resolve_actor_first_sprite(base_button, "HitMine Explosion"),
         data.metrics
             .get("GhostArrowBright", "HitMineCommand")
             .map(str::to_string),
@@ -2081,7 +2084,7 @@ pub fn itg_noteskin_runtime_compiled<T: Clone>(
     let tap_explosions = default_tap_explosions(&tap_explosions_by_col, down_col);
     let hold_let_go_gray_percent =
         crate::parts::clamped_hold_let_go_gray_percent(&note_display_metrics);
-    let receptor = resolve_sprites("Down", "Receptor");
+    let receptor = resolve_sprites(base_button, "Receptor");
     let receptor_glow_behavior = itg_receptor_glow_behavior_from_layers(&receptor, |metric_key| {
         data.metrics
             .get("ReceptorOverlay", metric_key)
@@ -3407,6 +3410,7 @@ mod tests {
         let mut calls = Vec::new();
 
         itg_apply_hold_explosions_by_col(
+            4,
             &mut hold_columns,
             &mut roll_columns,
             Some(&10),
