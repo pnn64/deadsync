@@ -2221,6 +2221,57 @@ mod runtime_regression_tests {
     }
 
     #[test]
+    fn pump_checkpoint_schedule_uses_itg_rows_for_compact_charts() {
+        let mut timing_segments = TimingSegments::default();
+        timing_segments.bpms = vec![(0.0, 120.0)];
+        let row_to_beat = vec![0.0, 1.0, 2.0];
+        let timing = Arc::new(TimingData::from_segments(
+            0.0,
+            0.0,
+            &timing_segments,
+            &row_to_beat,
+        ));
+        let mut hold = test_hold(0, 1, 2);
+        hold.beat = 1.0;
+        if let Some(data) = hold.hold.as_mut() {
+            data.end_beat = 2.0;
+            data.last_held_beat = 1.0;
+        }
+        let notes = vec![hold];
+        let note_ranges = [(0, 1), (1, 1)];
+        let note_time_cache_ns = vec![timing.get_time_for_beat_ns(1.0)];
+        let hold_end_time_cache_ns = vec![Some(timing.get_time_for_beat_ns(2.0))];
+        let timing_players = std::array::from_fn(|_| Arc::clone(&timing));
+        let gameplay_chart = GameplayChartData {
+            notes: Vec::new(),
+            parsed_notes: Vec::new(),
+            row_to_beat,
+            timing_segments,
+            timing: timing.as_ref().clone(),
+            chart_attacks: None,
+        };
+        let gameplay_charts = std::array::from_fn(|_| Arc::new(gameplay_chart.clone()));
+
+        let (events, score_rows) = build_pump_hold_events(
+            &notes,
+            &note_ranges,
+            &note_time_cache_ns,
+            &hold_end_time_cache_ns,
+            &timing_players,
+            &gameplay_charts,
+            1,
+        );
+        let checkpoint_rows: Vec<_> = events
+            .iter()
+            .filter(|event| event.kind == PumpHoldEventKind::Checkpoint)
+            .map(|event| event.row_index)
+            .collect();
+
+        assert_eq!(checkpoint_rows, [60, 72, 84, 96]);
+        assert_eq!(score_rows[0], 4);
+    }
+
+    #[test]
     fn pump_missed_head_can_recover_before_first_checkpoint() {
         let mut timing_segments = TimingSegments::default();
         timing_segments.bpms = vec![(0.0, 120.0)];

@@ -8,7 +8,7 @@ use deadsync_core::song_time::{
     song_time_ns_delta_seconds, song_time_ns_from_seconds, song_time_ns_invalid,
     song_time_ns_span_seconds, song_time_ns_to_seconds,
 };
-use deadsync_core::timing::{ROWS_PER_BEAT, beat_to_note_row};
+use deadsync_core::timing::{ROWS_PER_BEAT, beat_to_note_row, note_row_to_beat};
 use deadsync_input::{
     INPUT_SLOT_INVALID, InputEdge as GameplayInputEdge, InputEvent, VirtualAction,
     lane_from_action, lane_from_column,

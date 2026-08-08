@@ -17,6 +17,20 @@ use deadsync_gameplay::{
 use deadsync_noteskin::NoteskinSlot;
 use std::sync::Arc;
 
+// ITGmania draws each Pump pad center-first so overlapping inner and outer
+// panels layer above it symmetrically.
+const PUMP_SINGLE_DRAW_ORDER: [usize; 5] = [2, 1, 3, 0, 4];
+const PUMP_DOUBLE_DRAW_ORDER: [usize; 10] = [2, 1, 3, 0, 4, 7, 6, 8, 5, 9];
+
+#[inline(always)]
+const fn column_draw_col(num_cols: usize, draw_index: usize) -> usize {
+    match num_cols {
+        5 => PUMP_SINGLE_DRAW_ORDER[draw_index],
+        10 => PUMP_DOUBLE_DRAW_ORDER[draw_index],
+        _ => draw_index,
+    }
+}
+
 /// Dynamic receptor state for one local notefield lane.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct NotefieldLaneFeedback<'a> {
@@ -139,7 +153,9 @@ pub(crate) fn compose_notefield_feedback<S, F>(
         return;
     }
 
-    for (local_col, &receptor_y) in field.column_receptor_ys.iter().take(num_cols).enumerate() {
+    for draw_index in 0..num_cols {
+        let local_col = column_draw_col(num_cols, draw_index);
+        let receptor_y = field.column_receptor_ys[local_col];
         if lane_work_mask & (1 << local_col) == 0 {
             continue;
         }
@@ -270,7 +286,11 @@ pub(crate) fn compose_notefield_feedback<S, F>(
     // Tap explosions are independent of the concrete "Hide Combo
     // Explosions" option, which applies only to combo milestone art.
     if let (Some(tap_explosion), Some(tap_explosions)) = (tap_explosion, frame.tap_explosions) {
-        for (local_col, active) in tap_explosions.iter().take(num_cols).enumerate() {
+        for draw_index in 0..num_cols {
+            let local_col = column_draw_col(num_cols, draw_index);
+            let Some(active) = tap_explosions.get(local_col) else {
+                continue;
+            };
             let Some(active) =
                 visible_tap_explosion(active, request.song_lua.note_hides, local_col, current_beat)
             else {
@@ -313,7 +333,11 @@ pub(crate) fn compose_notefield_feedback<S, F>(
         notes.mine.mine_hit_explosion.as_ref(),
         frame.mine_explosions,
     ) {
-        for (local_col, active) in mine_explosions.iter().take(num_cols).enumerate() {
+        for draw_index in 0..num_cols {
+            let local_col = column_draw_col(num_cols, draw_index);
+            let Some(active) = mine_explosions.get(local_col) else {
+                continue;
+            };
             let Some(active) = active.as_ref() else {
                 continue;
             };
@@ -832,6 +856,20 @@ mod tests {
                 .map(|value| (value.window, value.elapsed.to_bits()));
             assert_eq!(new, old);
         }
+    }
+
+    #[test]
+    fn column_draw_order_matches_itgmania_pump_styles() {
+        let draw_order = |num_cols| {
+            (0..num_cols)
+                .map(|draw_index| column_draw_col(num_cols, draw_index))
+                .collect::<Vec<_>>()
+        };
+
+        assert_eq!(draw_order(4), [0, 1, 2, 3]);
+        assert_eq!(draw_order(5), [2, 1, 3, 0, 4]);
+        assert_eq!(draw_order(8), [0, 1, 2, 3, 4, 5, 6, 7]);
+        assert_eq!(draw_order(10), [2, 1, 3, 0, 4, 7, 6, 8, 5, 9]);
     }
 
     fn explosion(key: &str) -> TapExplosion<TestSlot> {
@@ -1547,6 +1585,64 @@ mod tests {
         );
 
         assert_eq!(sprite_keys(&actors), ["target0", "target1"]);
+    }
+
+    #[test]
+    fn pump_receptors_emit_center_to_outer_draw_order() {
+        let mut noteskin = noteskin();
+        noteskin.receptor_off = (0..5)
+            .map(|lane| TestSlot::new(format!("target{lane}")))
+            .collect();
+        noteskin.receptor_glow = vec![None; 5];
+        noteskin.receptor_off_reverse = vec![Default::default(); 5];
+        noteskin.receptor_glow_reverse = vec![Default::default(); 5];
+        noteskin.column_xs = vec![-96, -48, 0, 48, 96];
+        let timing = TimingData::default();
+        let note_hides = SongLuaNoteHideWindows::default();
+        let request = request(
+            &noteskin,
+            &timing,
+            &[],
+            &note_hides,
+            FieldPlacement::P1,
+            0,
+            1,
+            5,
+            5,
+        );
+        let prepared = prepare_notefield(&request).expect("Pump notefield should prepare");
+        let frame = NotefieldFeedbackFrameView {
+            column_cues: None,
+            column_cue_cursor: None,
+            crossover_cues: None,
+            crossover_cue_entries: None,
+            crossover_cue_cursor: None,
+            column_flashes: None,
+            tap_explosions: None,
+            mine_explosions: None,
+            lanes: std::array::from_fn(|lane| NotefieldLaneFeedback {
+                receptor_bop_zoom: if lane < 5 { 1.0 } else { 0.0 },
+                ..NotefieldLaneFeedback::default()
+            }),
+            countdown_font: "test",
+            countdown_text,
+        };
+        let mut actors = Vec::new();
+
+        compose_notefield_feedback(
+            &mut actors,
+            &mut Vec::new(),
+            &mut ModelMeshCache::default(),
+            &request,
+            &prepared,
+            &frame,
+            &source,
+        );
+
+        assert_eq!(
+            sprite_keys(&actors),
+            ["target2", "target1", "target3", "target0", "target4"]
+        );
     }
 
     #[test]

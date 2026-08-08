@@ -40,7 +40,7 @@ fn pump_tap_rows(notes: &[Note], note_range: (usize, usize)) -> Vec<usize> {
                     NoteType::Tap | NoteType::Lift | NoteType::Hold | NoteType::Roll
                 )
         })
-        .map(|note| note.row_index)
+        .map(|note| beat_to_note_row(note.beat).max(0) as usize)
         .collect();
     rows.sort_unstable();
     rows.dedup();
@@ -72,8 +72,12 @@ fn push_pump_checkpoints(
             .map_or(usize::MAX, |next| {
                 beat_to_note_row(next.beat).max(0) as usize
             });
-        let first_body_row = note.row_index.saturating_add(1).max(segment_row);
-        let last_row = hold.end_row_index.min(next_segment_row.saturating_sub(1));
+        // Note::row_index addresses compact chart rows; checkpoints use ITG's
+        // fixed 48-row beat grid instead.
+        let note_row = beat_to_note_row(note.beat).max(0) as usize;
+        let end_row = beat_to_note_row(hold.end_beat).max(0) as usize;
+        let first_body_row = note_row.saturating_add(1).max(segment_row);
+        let last_row = end_row.min(next_segment_row.saturating_sub(1));
         if first_body_row > last_row {
             continue;
         }
@@ -81,17 +85,16 @@ fn push_pump_checkpoints(
         let remainder = first_body_row % rows_per_tick;
         let mut row = first_body_row.saturating_add((rows_per_tick - remainder) % rows_per_tick);
         while row <= last_row {
-            if let Some(beat) = timing.get_beat_for_row(row) {
-                events.push(PumpHoldEvent {
-                    time_ns: timing.get_time_for_beat_ns(beat),
-                    row_index: row,
-                    player,
-                    note_index,
-                    column: note.column,
-                    kind: PumpHoldEventKind::Checkpoint,
-                    has_tap: tap_rows.binary_search(&row).is_ok(),
-                });
-            }
+            let beat = note_row_to_beat(row as i32);
+            events.push(PumpHoldEvent {
+                time_ns: timing.get_time_for_beat_ns(beat),
+                row_index: row,
+                player,
+                note_index,
+                column: note.column,
+                kind: PumpHoldEventKind::Checkpoint,
+                has_tap: tap_rows.binary_search(&row).is_ok(),
+            });
             row = row.saturating_add(rows_per_tick);
         }
     }
@@ -128,7 +131,7 @@ pub fn build_pump_hold_events(
             };
             events.push(PumpHoldEvent {
                 time_ns: note_time_cache_ns[note_index],
-                row_index: note.row_index,
+                row_index: beat_to_note_row(note.beat).max(0) as usize,
                 player,
                 note_index,
                 column: note.column,
@@ -146,10 +149,10 @@ pub fn build_pump_hold_events(
             );
             events.push(PumpHoldEvent {
                 time_ns: end_time_ns,
-                row_index: note
-                    .hold
-                    .as_ref()
-                    .map_or(note.row_index, |hold| hold.end_row_index),
+                row_index: note.hold.as_ref().map_or_else(
+                    || beat_to_note_row(note.beat).max(0) as usize,
+                    |hold| beat_to_note_row(hold.end_beat).max(0) as usize,
+                ),
                 player,
                 note_index,
                 column: note.column,
