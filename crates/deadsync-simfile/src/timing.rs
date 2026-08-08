@@ -6,6 +6,19 @@ use deadsync_rules::timing::{
 };
 use rssp::timing as rssp_timing;
 
+fn parse_itg_int(value: &str) -> Option<i32> {
+    // ITG uses atoi/std::stoi here, so values such as "8.000" parse as 8.
+    let value = value.trim_start();
+    let digit_start = usize::from(matches!(value.as_bytes().first(), Some(b'+' | b'-')));
+    let digit_count = value.as_bytes()[digit_start..]
+        .iter()
+        .take_while(|byte| byte.is_ascii_digit())
+        .count();
+    (digit_count != 0)
+        .then(|| &value[..digit_start + digit_count])
+        .and_then(|prefix| prefix.parse().ok())
+}
+
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct CrossoverAnnotation {
     pub beat: f32,
@@ -87,8 +100,7 @@ pub fn parse_tickcounts(tag: Option<&str>) -> Vec<TickcountSegment> {
         let (Some(beat), Some(ticks)) = (parts.next(), parts.next()) else {
             continue;
         };
-        let (Ok(beat), Ok(ticks)) = (beat.trim().parse::<f32>(), ticks.trim().parse::<i32>())
-        else {
+        let (Ok(beat), Some(ticks)) = (beat.trim().parse::<f32>(), parse_itg_int(ticks)) else {
             continue;
         };
         if beat.is_finite() {
@@ -138,14 +150,10 @@ pub fn parse_combos(tag: Option<&str>) -> Vec<ComboSegment> {
         let (Some(beat), Some(combo)) = (parts.next(), parts.next()) else {
             continue;
         };
-        let (Ok(beat), Ok(combo)) = (beat.trim().parse::<f32>(), combo.trim().parse::<i32>())
-        else {
+        let (Ok(beat), Some(combo)) = (beat.trim().parse::<f32>(), parse_itg_int(combo)) else {
             continue;
         };
-        let miss_combo = parts
-            .next()
-            .and_then(|value| value.trim().parse::<i32>().ok())
-            .unwrap_or(combo);
+        let miss_combo = parts.next().and_then(parse_itg_int).unwrap_or(combo);
         if beat.is_finite() {
             out.push(ComboSegment {
                 beat,
@@ -340,7 +348,7 @@ mod tests {
 
     #[test]
     fn parse_tickcounts_filters_sorts_clamps_and_adds_default() {
-        let tickcounts = parse_tickcounts(Some("8.000=2, bad, 4.000=99, 4.000=3, 12.000=-2"));
+        let tickcounts = parse_tickcounts(Some("8.000=2, bad, 4.000=99, 4.000=3.000, 12.000=-2"));
 
         assert_eq!(tickcounts.len(), 4);
         assert_eq!((tickcounts[0].beat, tickcounts[0].ticks), (0.0, 4));
@@ -351,7 +359,7 @@ mod tests {
 
     #[test]
     fn parse_combos_matches_itg_two_and_three_value_forms() {
-        let combos = parse_combos(Some("8.000=2, bad, 4.000=3=5, 4.000=4=6"));
+        let combos = parse_combos(Some("8.000=2.000, bad, 4.000=3=5, 4.000=4.000=6.000"));
 
         assert_eq!(combos.len(), 3);
         assert_eq!(

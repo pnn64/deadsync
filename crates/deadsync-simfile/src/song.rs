@@ -521,14 +521,19 @@ mod tests {
         let simfile = root.join("song.ssc");
         fs::write(
             &simfile,
-            b"#TITLE:Pump Chart;\n\
+            b"#VERSION:0.83 StepPrime;\n\
+              #TITLE:Pump Chart;\n\
               #BPMS:0.000=120.000;\n\
-              #TICKCOUNTS:0.000=8;\n\
-              #COMBOS:0.000=3=2;\n\
               #NOTEDATA:;\n\
               #STEPSTYPE:pump-single;\n\
               #DIFFICULTY:Challenge;\n\
               #METER:10;\n\
+              #TICKCOUNTS:0.000=4.000\n\
+              ,46.000=1.000\n\
+              ,47.000=16.000\n\
+              ,50.000=4.000\n\
+              ;\n\
+              #COMBOS:0.000=3.000=2.000;\n\
               #NOTES:\n\
               10000\n\
               00100\n\
@@ -546,7 +551,14 @@ mod tests {
         assert_eq!(song.charts[0].parsed_notes[1].column, 2);
         let timing =
             deadsync_rules::timing::TimingSegments::from(song.charts[0].timing_segments.clone());
-        assert_eq!(timing.tickcounts[0].ticks, 8);
+        assert_eq!(
+            timing
+                .tickcounts
+                .iter()
+                .map(|segment| (segment.beat, segment.ticks))
+                .collect::<Vec<_>>(),
+            [(0.0, 4), (46.0, 1), (47.0, 16), (50.0, 4)]
+        );
         assert_eq!(timing.combos[0].combo, 3);
         assert_eq!(timing.combos[0].miss_combo, 2);
     }

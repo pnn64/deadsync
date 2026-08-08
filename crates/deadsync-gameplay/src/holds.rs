@@ -37,7 +37,7 @@ fn pump_tap_rows(notes: &[Note], note_range: (usize, usize)) -> Vec<usize> {
                 && !note.is_fake
                 && matches!(
                     note.note_type,
-                    NoteType::Tap | NoteType::Lift | NoteType::Hold | NoteType::Roll
+                    NoteType::Tap | NoteType::Hold | NoteType::Roll
                 )
         })
         .map(|note| beat_to_note_row(note.beat).max(0) as usize)

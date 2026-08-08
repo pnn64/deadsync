@@ -15564,6 +15564,16 @@ mod tests {
     }
 
     #[test]
+    fn pump_lift_rows_do_not_suppress_hold_checkpoints() {
+        let notes = [
+            test_note_at(NoteType::Lift, None, false, 1, 0.25),
+            test_note_at(NoteType::Tap, None, false, 2, 0.5),
+        ];
+
+        assert_eq!(pump_tap_rows(&notes, (0, notes.len())), vec![24]);
+    }
+
+    #[test]
     fn row_finalization_player_state_records_counts_combo_and_hands() {
         let mut state = RowFinalizationPlayerState::default();
         let judgment = test_judgment(JudgeGrade::Great);
