@@ -475,12 +475,21 @@ where
 
     #[inline(always)]
     pub fn refresh_roll_life_on_step(&mut self, column: usize, event_time_ns: SongTimeNs) {
-        refresh_roll_life_for_active_column(
-            &mut self.hold_runtime.active_holds,
-            &mut self.chart_runtime.notes,
-            column,
-            event_time_ns,
-        );
+        if self.setup.session.play_style.is_pump() {
+            refresh_pump_roll_life_for_active_column(
+                &mut self.hold_runtime.active_holds,
+                &mut self.chart_runtime.notes,
+                column,
+                event_time_ns,
+            );
+        } else {
+            refresh_roll_life_for_active_column(
+                &mut self.hold_runtime.active_holds,
+                &mut self.chart_runtime.notes,
+                column,
+                event_time_ns,
+            );
+        }
     }
 
     #[inline(always)]
@@ -1878,6 +1887,7 @@ where
         self.display.visual_feedback.clear();
         self.display.receptor_feedback.reset_for_practice();
         self.hold_runtime.reset_live_state();
+        self.hold_runtime.reanchor_pump_events(judge_start_ns);
         self.reset_live_input_state();
         self.clear_pending_input_edges();
         self.progress.replay.reset_for_restart();

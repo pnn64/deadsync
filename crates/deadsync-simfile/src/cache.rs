@@ -9,7 +9,8 @@ use deadsync_core::note::NoteType;
 use deadsync_rules::judgment::HOLD_SCORE_HELD;
 use deadsync_rules::timing::{
     DelaySegment, FakeSegment, ScrollSegment, SpeedSegment, SpeedUnit, StopSegment,
-    TimeSignatureSegment, TimingData, TimingSegments, WarpSegment, default_time_signatures,
+    TickcountSegment, TimeSignatureSegment, TimingData, TimingSegments, WarpSegment,
+    default_tickcounts, default_time_signatures,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -23,7 +24,7 @@ use twox_hash::XxHash64;
 
 use crate::song::{ParseSongOptions, parse_song_data_file};
 
-pub const SONG_CACHE_VERSION: u8 = 15;
+pub const SONG_CACHE_VERSION: u8 = 16;
 pub const SONG_CACHE_MAGIC: [u8; 8] = *b"DSCACHE1";
 const MAX_SONG_CACHE_HEADER_BYTES: usize = 64 * 1024 * 1024;
 
@@ -461,6 +462,7 @@ pub struct CachedTimingSegments {
     scrolls: Vec<(f32, f32)>,
     fakes: Vec<(f32, f32)>,
     time_signatures: Vec<(f32, i32, i32)>,
+    tickcounts: Vec<(f32, u8)>,
 }
 
 impl From<&TimingSegments> for CachedTimingSegments {
@@ -502,6 +504,11 @@ impl From<&TimingSegments> for CachedTimingSegments {
                 .time_signatures
                 .iter()
                 .map(|seg| (seg.beat, seg.numerator, seg.denominator))
+                .collect(),
+            tickcounts: segments
+                .tickcounts
+                .iter()
+                .map(|seg| (seg.beat, seg.ticks))
                 .collect(),
         }
     }
@@ -555,6 +562,15 @@ impl From<CachedTimingSegments> for TimingSegments {
                 default_time_signatures()
             } else {
                 time_signatures
+            },
+            tickcounts: if segments.tickcounts.is_empty() {
+                default_tickcounts()
+            } else {
+                segments
+                    .tickcounts
+                    .into_iter()
+                    .map(|(beat, ticks)| TickcountSegment { beat, ticks })
+                    .collect()
             },
         }
     }
@@ -2283,6 +2299,10 @@ mod tests {
             numerator: 3,
             denominator: 4,
         }];
+        segments.tickcounts = vec![TickcountSegment {
+            beat: 12.0,
+            ticks: 8,
+        }];
 
         let round_trip = TimingSegments::from(CachedTimingSegments::from(&segments));
 
@@ -2290,6 +2310,8 @@ mod tests {
         assert_eq!(round_trip.bpms, vec![(0.0, 120.0)]);
         assert_eq!(round_trip.speeds[0].unit, SpeedUnit::Seconds);
         assert_eq!(round_trip.time_signatures[0].numerator, 3);
+        assert_eq!(round_trip.tickcounts[0].beat, 12.0);
+        assert_eq!(round_trip.tickcounts[0].ticks, 8);
     }
 
     #[test]

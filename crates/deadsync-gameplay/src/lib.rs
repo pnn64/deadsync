@@ -74,6 +74,9 @@ pub const M_MOD_HIGH_CAP: f32 = 600.0;
 const REPLAY_EDGE_FLOOR_PER_LANE: usize = 64;
 pub const REPLAY_EDGE_RATE_PER_SEC: usize = 256;
 pub const INITIAL_HOLD_LIFE: f32 = 1.0;
+pub const PUMP_INITIAL_HOLD_LIFE: f32 = 0.05;
+pub const PUMP_CHECKPOINT_WINDOW_SECONDS: f32 =
+    0.1664 + deadsync_rules::timing::TIMING_WINDOW_ADD_S;
 pub const TOGGLE_FLASH_DURATION: f32 = 1.5;
 pub const TOGGLE_FLASH_FADE_START: f32 = 0.8;
 pub const INSERT_MASK_BIT_WIDE: u8 = 1u8 << 0;

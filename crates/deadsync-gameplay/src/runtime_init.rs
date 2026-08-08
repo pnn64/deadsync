@@ -376,6 +376,19 @@ where
             note_displayed_beat_cache.push([displayed_head; 2]);
         }
     }
+    let (pump_hold_events, pump_checkpoint_score_rows) = if play_style.is_pump() {
+        build_pump_hold_events(
+            &notes,
+            &note_ranges,
+            &note_time_cache_ns,
+            &hold_end_time_cache_ns,
+            &timing_players,
+            &gameplay_charts,
+            num_players,
+        )
+    } else {
+        (Vec::new(), [0; MAX_PLAYERS])
+    };
     let displayed_beat_monotonic = std::array::from_fn(|player| {
         gameplay_charts[player]
             .timing_segments
@@ -902,7 +915,9 @@ where
         }
         let note_count = note_ranges[p].1.saturating_sub(note_ranges[p].0);
         let row_count = row_entry_ranges[p].1.saturating_sub(row_entry_ranges[p].0);
-        let hold_roll_count = (holds_total[p] as usize).saturating_add(rolls_total[p] as usize);
+        let hold_roll_count = (holds_total[p] as usize)
+            .saturating_add(rolls_total[p] as usize)
+            .saturating_add(pump_checkpoint_score_rows[p] as usize);
         let caps = player_buffer_caps(
             note_count,
             row_count,
@@ -1017,7 +1032,11 @@ where
                 notefield_search_beat,
             },
         },
-        hold_runtime: GameplayHoldRuntimeState::new(notes_len, decaying_hold_capacity),
+        hold_runtime: GameplayHoldRuntimeState::new_with_pump_events(
+            notes_len,
+            decaying_hold_capacity,
+            pump_hold_events,
+        ),
         players_runtime: GameplayPlayersRuntimeState {
             players,
             column_judgments_active: [true; MAX_PLAYERS],

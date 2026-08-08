@@ -573,6 +573,7 @@ pub fn apply_row_finalization_player_state(
     note_count: u32,
     carried_holds_down: usize,
     player_dead: bool,
+    combo_per_row: bool,
 ) -> RowFinalizationPlayerUpdate {
     let final_grade = judgment.grade;
     let grade_ix = judgment::display_judge_ix(final_grade);
@@ -582,7 +583,9 @@ pub fn apply_row_finalization_player_state(
         state.scoring_counts[grade_ix] = state.scoring_counts[grade_ix].saturating_add(1);
     }
     record_combo_window_count_for_judgment(&mut state.current_combo_window_counts, judgment);
-    let combo_update = combo::apply_row_combo_state(&mut state.combo, final_grade, note_count, 1);
+    let row_combo_count = if combo_per_row { 1 } else { note_count };
+    let combo_update =
+        combo::apply_row_combo_state(&mut state.combo, final_grade, row_combo_count, 1);
     let awarded_hand = finalized_row_awards_hand(final_grade, note_count, carried_holds_down);
     if awarded_hand {
         state.hands_achieved = state.hands_achieved.saturating_add(1);

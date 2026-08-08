@@ -10,6 +10,178 @@ pub struct ActiveHold {
     pub last_update_time_ns: SongTimeNs,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub enum PumpHoldEventKind {
+    Head,
+    Checkpoint,
+    Tail,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct PumpHoldEvent {
+    pub time_ns: SongTimeNs,
+    pub row_index: usize,
+    pub player: usize,
+    pub note_index: usize,
+    pub column: usize,
+    pub kind: PumpHoldEventKind,
+    pub has_tap: bool,
+}
+
+fn pump_tap_rows(notes: &[Note], note_range: (usize, usize)) -> Vec<usize> {
+    let end = note_range.1.min(notes.len());
+    let mut rows: Vec<usize> = notes[note_range.0.min(end)..end]
+        .iter()
+        .filter(|note| {
+            note.can_be_judged
+                && !note.is_fake
+                && matches!(
+                    note.note_type,
+                    NoteType::Tap | NoteType::Lift | NoteType::Hold | NoteType::Roll
+                )
+        })
+        .map(|note| note.row_index)
+        .collect();
+    rows.sort_unstable();
+    rows.dedup();
+    rows
+}
+
+fn push_pump_checkpoints(
+    events: &mut Vec<PumpHoldEvent>,
+    notes: &[Note],
+    tap_rows: &[usize],
+    note_index: usize,
+    player: usize,
+    timing: &TimingData,
+    segments: &TimingSegments,
+) {
+    let note = &notes[note_index];
+    let Some(hold) = note.hold.as_ref() else {
+        return;
+    };
+    for (segment_ix, segment) in segments.tickcounts.iter().enumerate() {
+        let ticks = usize::from(segment.ticks.min(48));
+        if ticks == 0 {
+            continue;
+        }
+        let segment_row = beat_to_note_row(segment.beat).max(0) as usize;
+        let next_segment_row = segments
+            .tickcounts
+            .get(segment_ix + 1)
+            .map_or(usize::MAX, |next| {
+                beat_to_note_row(next.beat).max(0) as usize
+            });
+        let first_body_row = note.row_index.saturating_add(1).max(segment_row);
+        let last_row = hold.end_row_index.min(next_segment_row.saturating_sub(1));
+        if first_body_row > last_row {
+            continue;
+        }
+        let rows_per_tick = (ROWS_PER_BEAT as usize / ticks).max(1);
+        let remainder = first_body_row % rows_per_tick;
+        let mut row = first_body_row.saturating_add((rows_per_tick - remainder) % rows_per_tick);
+        while row <= last_row {
+            if let Some(beat) = timing.get_beat_for_row(row) {
+                events.push(PumpHoldEvent {
+                    time_ns: timing.get_time_for_beat_ns(beat),
+                    row_index: row,
+                    player,
+                    note_index,
+                    column: note.column,
+                    kind: PumpHoldEventKind::Checkpoint,
+                    has_tap: tap_rows.binary_search(&row).is_ok(),
+                });
+            }
+            row = row.saturating_add(rows_per_tick);
+        }
+    }
+}
+
+pub fn build_pump_hold_events(
+    notes: &[Note],
+    note_ranges: &[(usize, usize); MAX_PLAYERS],
+    note_time_cache_ns: &[SongTimeNs],
+    hold_end_time_cache_ns: &[Option<SongTimeNs>],
+    timing_players: &[Arc<TimingData>; MAX_PLAYERS],
+    gameplay_charts: &[Arc<GameplayChartData>; MAX_PLAYERS],
+    num_players: usize,
+) -> (Vec<PumpHoldEvent>, [u32; MAX_PLAYERS]) {
+    let mut events = Vec::new();
+    for player in 0..num_players.min(MAX_PLAYERS) {
+        let note_range = note_ranges[player];
+        let tap_rows = pump_tap_rows(notes, note_range);
+        let end = note_range
+            .1
+            .min(notes.len())
+            .min(note_time_cache_ns.len())
+            .min(hold_end_time_cache_ns.len());
+        for note_index in note_range.0.min(end)..end {
+            let note = &notes[note_index];
+            if !note.can_be_judged
+                || note.is_fake
+                || !matches!(note.note_type, NoteType::Hold | NoteType::Roll)
+            {
+                continue;
+            }
+            let Some(end_time_ns) = hold_end_time_cache_ns[note_index] else {
+                continue;
+            };
+            events.push(PumpHoldEvent {
+                time_ns: note_time_cache_ns[note_index],
+                row_index: note.row_index,
+                player,
+                note_index,
+                column: note.column,
+                kind: PumpHoldEventKind::Head,
+                has_tap: true,
+            });
+            push_pump_checkpoints(
+                &mut events,
+                notes,
+                &tap_rows,
+                note_index,
+                player,
+                &timing_players[player],
+                &gameplay_charts[player].timing_segments,
+            );
+            events.push(PumpHoldEvent {
+                time_ns: end_time_ns,
+                row_index: note
+                    .hold
+                    .as_ref()
+                    .map_or(note.row_index, |hold| hold.end_row_index),
+                player,
+                note_index,
+                column: note.column,
+                kind: PumpHoldEventKind::Tail,
+                has_tap: false,
+            });
+        }
+    }
+    events.sort_unstable_by(|a, b| {
+        a.time_ns
+            .cmp(&b.time_ns)
+            .then_with(|| a.row_index.cmp(&b.row_index))
+            .then_with(|| a.player.cmp(&b.player))
+            .then_with(|| a.kind.cmp(&b.kind))
+            .then_with(|| a.column.cmp(&b.column))
+    });
+
+    let mut score_rows = [0u32; MAX_PLAYERS];
+    let mut previous = None;
+    for event in &events {
+        if event.kind != PumpHoldEventKind::Checkpoint || event.has_tap {
+            continue;
+        }
+        let key = (event.player, event.row_index);
+        if previous != Some(key) {
+            score_rows[event.player] = score_rows[event.player].saturating_add(1);
+            previous = Some(key);
+        }
+    }
+    (events, score_rows)
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ActiveHoldResolution {
     LetGo {
@@ -694,6 +866,29 @@ pub fn refresh_roll_life_for_step(
     true
 }
 
+pub fn refresh_pump_roll_life_for_step(
+    active: &mut ActiveHold,
+    hold: &mut HoldData,
+    event_time_ns: SongTimeNs,
+) -> bool {
+    if !matches!(active.note_type, NoteType::Roll)
+        || active.let_go
+        || song_time_ns_invalid(event_time_ns)
+        || event_time_ns < active.start_time_ns
+        || matches!(hold.result, Some(HoldResult::LetGo | HoldResult::Missed))
+    {
+        return false;
+    }
+    active.life = MAX_HOLD_LIFE;
+    active.last_update_time_ns = active
+        .last_update_time_ns
+        .max(event_time_ns.min(active.end_time_ns));
+    hold.life = MAX_HOLD_LIFE;
+    hold.let_go_started_at = None;
+    hold.let_go_starting_life = 0.0;
+    true
+}
+
 pub fn sync_active_hold_pressed_column(
     active_holds: &mut [Option<ActiveHold>],
     column: usize,
@@ -723,6 +918,24 @@ pub fn refresh_roll_life_for_active_column(
         return false;
     };
     refresh_roll_life_for_step(active, hold, event_time_ns)
+}
+
+pub fn refresh_pump_roll_life_for_active_column(
+    active_holds: &mut [Option<ActiveHold>],
+    notes: &mut [Note],
+    column: usize,
+    event_time_ns: SongTimeNs,
+) -> bool {
+    let Some(active) = active_holds.get_mut(column).and_then(Option::as_mut) else {
+        return false;
+    };
+    let Some(note) = notes.get_mut(active.note_index) else {
+        return false;
+    };
+    let Some(hold) = note.hold.as_mut() else {
+        return false;
+    };
+    refresh_pump_roll_life_for_step(active, hold, event_time_ns)
 }
 
 pub fn advance_active_hold_to_time(
@@ -790,6 +1003,56 @@ pub fn advance_active_hold_to_time(
         clear_active: resolution.is_some() || active.let_go,
         resolution,
     }
+}
+
+pub fn advance_pump_active_hold_to_time(
+    active: &mut ActiveHold,
+    hold: &mut HoldData,
+    timing: &TimingData,
+    note_start_row: usize,
+    note_start_beat: f32,
+    target_time_ns: SongTimeNs,
+    music_rate: f32,
+) {
+    let from_time_ns = active.last_update_time_ns;
+    let final_time_ns = target_time_ns.max(from_time_ns).min(active.end_time_ns);
+    if final_time_ns <= from_time_ns || active.let_go {
+        return;
+    }
+
+    let body_from_ns = from_time_ns.max(active.start_time_ns);
+    let body_to_ns = final_time_ns.max(active.start_time_ns);
+    if body_to_ns > body_from_ns {
+        let progress_time = song_time_ns_to_seconds(body_to_ns);
+        if progress_time.is_finite() && active.life > 0.0 {
+            let current_beat = timing.get_beat_for_time(progress_time);
+            advance_hold_last_held(hold, timing, current_beat, note_start_row, note_start_beat);
+        }
+        active.life = match active.note_type {
+            NoteType::Hold if active.is_pressed => MAX_HOLD_LIFE,
+            NoteType::Hold => {
+                let rate = normalized_song_rate(music_rate);
+                let elapsed_s =
+                    song_time_ns_delta_seconds(body_to_ns.saturating_sub(body_from_ns), 0) / rate;
+                (active.life - elapsed_s / PUMP_CHECKPOINT_WINDOW_SECONDS).max(0.0)
+            }
+            NoteType::Roll => {
+                advance_hold_life_ns(
+                    NoteType::Roll,
+                    active.life,
+                    false,
+                    body_to_ns.saturating_sub(body_from_ns),
+                    music_rate,
+                )
+                .life_after
+            }
+            _ => active.life,
+        };
+        hold.life = active.life;
+        hold.let_go_started_at = None;
+        hold.let_go_starting_life = 0.0;
+    }
+    active.last_update_time_ns = final_time_ns;
 }
 
 pub fn integrate_active_hold_column(

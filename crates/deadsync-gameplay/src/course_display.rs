@@ -65,6 +65,8 @@ pub struct CourseDisplayCarry {
     pub rolls_held_for_score: u32,
     pub rolls_let_go_for_score: u32,
     pub mines_hit_for_score: u32,
+    pub checkpoints_hit: u32,
+    pub checkpoints_missed: u32,
 }
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -330,6 +332,8 @@ pub struct CourseDisplayStage {
     pub rolls_held_for_score: u32,
     pub rolls_let_go_for_score: u32,
     pub mines_hit_for_score: u32,
+    pub checkpoints_hit: u32,
+    pub checkpoints_missed: u32,
 }
 
 pub fn course_display_carry_for_stage(
@@ -396,6 +400,12 @@ pub fn course_display_carry_for_stage(
         mines_hit_for_score: previous
             .mines_hit_for_score
             .saturating_add(stage.mines_hit_for_score),
+        checkpoints_hit: previous
+            .checkpoints_hit
+            .saturating_add(stage.checkpoints_hit),
+        checkpoints_missed: previous
+            .checkpoints_missed
+            .saturating_add(stage.checkpoints_missed),
     }
 }
 
@@ -451,6 +461,8 @@ pub fn player_course_display_stage(
         rolls_held_for_score: player.rolls_held_for_score,
         rolls_let_go_for_score: player.rolls_let_go_for_score,
         mines_hit_for_score: player.mines_hit_for_score,
+        checkpoints_hit: player.checkpoints_hit,
+        checkpoints_missed: player.checkpoints_missed,
     }
 }
 

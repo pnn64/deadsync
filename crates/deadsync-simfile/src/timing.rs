@@ -1,7 +1,8 @@
 use deadsync_core::timing::beat_to_note_row;
 use deadsync_rules::timing::{
     DelaySegment, FakeSegment, ScrollSegment, SpeedSegment, SpeedUnit, StopSegment,
-    TimeSignatureSegment, TimingSegments, WarpSegment, default_time_signatures,
+    TickcountSegment, TimeSignatureSegment, TimingSegments, WarpSegment, default_tickcounts,
+    default_time_signatures,
 };
 use rssp::timing as rssp_timing;
 
@@ -75,6 +76,57 @@ pub fn parse_time_signatures(tag: Option<&str>) -> Vec<TimeSignatureSegment> {
     out
 }
 
+pub fn parse_tickcounts(tag: Option<&str>) -> Vec<TickcountSegment> {
+    let Some(s) = tag.map(str::trim).filter(|s| !s.is_empty()) else {
+        return default_tickcounts();
+    };
+
+    let mut out = Vec::new();
+    for segment in s.split(',') {
+        let mut parts = segment.trim().split('=');
+        let (Some(beat), Some(ticks)) = (parts.next(), parts.next()) else {
+            continue;
+        };
+        let (Ok(beat), Ok(ticks)) = (beat.trim().parse::<f32>(), ticks.trim().parse::<i32>())
+        else {
+            continue;
+        };
+        if beat.is_finite() {
+            out.push(TickcountSegment {
+                beat,
+                ticks: ticks.clamp(0, 48) as u8,
+            });
+        }
+    }
+
+    if out.is_empty() {
+        return default_tickcounts();
+    }
+
+    out.sort_by(|a, b| {
+        beat_to_note_row(a.beat)
+            .cmp(&beat_to_note_row(b.beat))
+            .then_with(|| a.beat.total_cmp(&b.beat))
+    });
+    let mut deduped: Vec<TickcountSegment> = Vec::with_capacity(out.len());
+    for segment in out {
+        if deduped
+            .last()
+            .is_some_and(|last| beat_to_note_row(last.beat) == beat_to_note_row(segment.beat))
+        {
+            let last = deduped.len() - 1;
+            deduped[last] = segment;
+        } else {
+            deduped.push(segment);
+        }
+    }
+    let mut out = deduped;
+    if out.first().is_none_or(|seg| beat_to_note_row(seg.beat) > 0) {
+        out.insert(0, default_tickcounts()[0]);
+    }
+    out
+}
+
 pub fn timing_segments_from_rssp(segments: &rssp_timing::TimingSegments) -> TimingSegments {
     let speeds = segments
         .speeds
@@ -135,6 +187,7 @@ pub fn timing_segments_from_rssp(segments: &rssp_timing::TimingSegments) -> Timi
             })
             .collect(),
         time_signatures: default_time_signatures(),
+        tickcounts: default_tickcounts(),
     }
 }
 
@@ -206,8 +259,8 @@ pub fn crossover_annotations<const LANES: usize>(
 #[cfg(test)]
 mod tests {
     use super::{
-        crossover_annotations, parse_time_signatures, rssp_timing_segments_from_deadsync,
-        timing_segments_from_rssp,
+        crossover_annotations, parse_tickcounts, parse_time_signatures,
+        rssp_timing_segments_from_deadsync, timing_segments_from_rssp,
     };
     use deadsync_rules::timing::{SpeedUnit, default_time_signature};
     use rssp::timing as rssp_timing;
@@ -224,6 +277,17 @@ mod tests {
         assert_eq!(signatures[1].numerator, 7);
         assert_eq!(signatures[2].beat, 8.0);
         assert_eq!(signatures[2].numerator, 3);
+    }
+
+    #[test]
+    fn parse_tickcounts_filters_sorts_clamps_and_adds_default() {
+        let tickcounts = parse_tickcounts(Some("8.000=2, bad, 4.000=99, 4.000=3, 12.000=-2"));
+
+        assert_eq!(tickcounts.len(), 4);
+        assert_eq!((tickcounts[0].beat, tickcounts[0].ticks), (0.0, 4));
+        assert_eq!((tickcounts[1].beat, tickcounts[1].ticks), (4.0, 3));
+        assert_eq!((tickcounts[2].beat, tickcounts[2].ticks), (8.0, 2));
+        assert_eq!((tickcounts[3].beat, tickcounts[3].ticks), (12.0, 0));
     }
 
     #[test]

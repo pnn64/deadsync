@@ -259,6 +259,12 @@ pub struct TimeSignatureSegment {
     pub denominator: i32,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct TickcountSegment {
+    pub beat: f32,
+    pub ticks: u8,
+}
+
 #[derive(Debug, Clone)]
 pub struct TimingSegments {
     pub beat0_offset_adjust: f32,
@@ -270,6 +276,7 @@ pub struct TimingSegments {
     pub scrolls: Vec<ScrollSegment>,
     pub fakes: Vec<FakeSegment>,
     pub time_signatures: Vec<TimeSignatureSegment>,
+    pub tickcounts: Vec<TickcountSegment>,
 }
 
 impl Default for TimingSegments {
@@ -284,6 +291,7 @@ impl Default for TimingSegments {
             scrolls: Vec::new(),
             fakes: Vec::new(),
             time_signatures: default_time_signatures(),
+            tickcounts: default_tickcounts(),
         }
     }
 }
@@ -298,6 +306,13 @@ pub fn default_time_signature() -> TimeSignatureSegment {
 
 pub fn default_time_signatures() -> Vec<TimeSignatureSegment> {
     vec![default_time_signature()]
+}
+
+pub fn default_tickcounts() -> Vec<TickcountSegment> {
+    vec![TickcountSegment {
+        beat: 0.0,
+        ticks: 4,
+    }]
 }
 
 #[derive(Debug, Clone, Copy)]

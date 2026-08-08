@@ -90,6 +90,8 @@ pub struct PlayerRuntime {
     pub rolls_held: u32,
     pub rolls_held_for_score: u32,
     pub rolls_let_go_for_score: u32,
+    pub checkpoints_hit: u32,
+    pub checkpoints_missed: u32,
     pub mines_hit: u32,
     pub mines_hit_for_score: u32,
     pub mines_avoided: u32,
@@ -232,6 +234,8 @@ pub fn init_player_runtime_with_caps(caps: PlayerBufferCaps) -> PlayerRuntime {
         rolls_held: 0,
         rolls_held_for_score: 0,
         rolls_let_go_for_score: 0,
+        checkpoints_hit: 0,
+        checkpoints_missed: 0,
         mines_hit: 0,
         mines_hit_for_score: 0,
         mines_avoided: 0,
@@ -440,11 +444,13 @@ pub fn apply_combo_update(
 
 #[inline(always)]
 pub fn update_itg_grade_totals(player: &mut PlayerRuntime) {
-    player.earned_grade_points = judgment::calculate_itg_grade_points_from_counts(
+    player.earned_grade_points = judgment::itg_grade_points_with_checkpoints(
         &player.scoring_counts,
         player.holds_held_for_score,
         player.rolls_held_for_score,
         player.mines_hit_for_score,
+        player.checkpoints_hit,
+        player.checkpoints_missed,
     );
 }
 
@@ -486,6 +492,8 @@ pub fn player_score_stage(player: &PlayerRuntime) -> ItgScoreStage {
         rolls_held_for_score: player.rolls_held_for_score,
         rolls_let_go_for_score: player.rolls_let_go_for_score,
         mines_hit_for_score: player.mines_hit_for_score,
+        checkpoints_hit: player.checkpoints_hit,
+        checkpoints_missed: player.checkpoints_missed,
     }
 }
 

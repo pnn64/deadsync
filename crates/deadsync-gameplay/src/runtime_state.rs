@@ -297,10 +297,24 @@ pub struct GameplayHoldRuntimeState {
     pub tap_miss_held_window: Vec<bool>,
     pub pending_missed_hold_resolution: Vec<bool>,
     pub pending_missed_hold_indices: Vec<usize>,
+    pub pump_events: Vec<PumpHoldEvent>,
+    pub pump_event_cursor: usize,
+    pub pump_checkpoint_hits: Vec<u32>,
+    pub pump_checkpoint_misses: Vec<u32>,
+    pub pump_pending_tail: Vec<bool>,
+    pub pump_pending_tail_indices: Vec<usize>,
 }
 
 impl GameplayHoldRuntimeState {
     pub fn new(notes_len: usize, decaying_hold_capacity: usize) -> Self {
+        Self::new_with_pump_events(notes_len, decaying_hold_capacity, Vec::new())
+    }
+
+    pub fn new_with_pump_events(
+        notes_len: usize,
+        decaying_hold_capacity: usize,
+        pump_events: Vec<PumpHoldEvent>,
+    ) -> Self {
         Self {
             active_holds: std::array::from_fn(|_| None),
             active_hold_mask: 0,
@@ -309,6 +323,12 @@ impl GameplayHoldRuntimeState {
             tap_miss_held_window: vec![false; notes_len],
             pending_missed_hold_resolution: vec![false; notes_len],
             pending_missed_hold_indices: Vec::with_capacity(decaying_hold_capacity),
+            pump_events,
+            pump_event_cursor: 0,
+            pump_checkpoint_hits: vec![0; notes_len],
+            pump_checkpoint_misses: vec![0; notes_len],
+            pump_pending_tail: vec![false; notes_len],
+            pump_pending_tail_indices: Vec::with_capacity(decaying_hold_capacity),
         }
     }
 
@@ -321,6 +341,11 @@ impl GameplayHoldRuntimeState {
         self.tap_miss_held_window.fill(false);
         self.pending_missed_hold_resolution.fill(false);
         self.pending_missed_hold_indices.clear();
+        self.pump_event_cursor = 0;
+        self.pump_checkpoint_hits.fill(0);
+        self.pump_checkpoint_misses.fill(0);
+        self.pump_pending_tail.fill(false);
+        self.pump_pending_tail_indices.clear();
     }
 
     #[inline(always)]
@@ -332,6 +357,19 @@ impl GameplayHoldRuntimeState {
         self.tap_miss_held_window.clear();
         self.pending_missed_hold_resolution.clear();
         self.pending_missed_hold_indices.clear();
+        self.pump_events.clear();
+        self.pump_event_cursor = 0;
+        self.pump_checkpoint_hits.clear();
+        self.pump_checkpoint_misses.clear();
+        self.pump_pending_tail.clear();
+        self.pump_pending_tail_indices.clear();
+    }
+
+    #[inline(always)]
+    pub fn reanchor_pump_events(&mut self, music_time_ns: SongTimeNs) {
+        self.pump_event_cursor = self
+            .pump_events
+            .partition_point(|event| event.time_ns < music_time_ns);
     }
 
     #[inline(always)]

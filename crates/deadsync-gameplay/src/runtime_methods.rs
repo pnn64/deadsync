@@ -660,6 +660,9 @@ where
 
     #[inline(always)]
     pub fn settle_due_autoplay_active_holds(&mut self, cutoff_time_ns: SongTimeNs) {
+        if self.setup.session.play_style.is_pump() {
+            return;
+        }
         let active_mask = self.hold_runtime.active_hold_mask();
         if active_mask == 0 {
             return;
@@ -727,6 +730,28 @@ where
 
         let player = self.player_for_col(column);
         let rate = self.music_rate();
+        if self.setup.session.play_style.is_pump() {
+            let Some(active) = self.hold_runtime.active_holds[column].as_mut() else {
+                return;
+            };
+            let note_index = active.note_index;
+            let Some(note) = self.chart_runtime.notes.get_mut(note_index) else {
+                return;
+            };
+            let Some(hold) = note.hold.as_mut() else {
+                return;
+            };
+            advance_pump_active_hold_to_time(
+                active,
+                hold,
+                &self.timing_runtime.timing_players[player],
+                note.row_index,
+                note.beat,
+                target_time_ns,
+                rate,
+            );
+            return;
+        }
         let resolution = integrate_active_hold_column(
             &mut self.hold_runtime.active_holds,
             &mut self.chart_runtime.notes,
@@ -744,6 +769,10 @@ where
     pub fn update_active_holds(&mut self, inputs: &[bool; MAX_COLS], current_time_ns: SongTimeNs) {
         let active_mask = self.hold_runtime.active_hold_mask();
         if active_mask == 0 {
+            return;
+        }
+        if self.setup.session.play_style.is_pump() {
+            self.update_pump_active_holds(inputs, current_time_ns);
             return;
         }
         let timing_players: [&_; MAX_PLAYERS] =
@@ -770,6 +799,323 @@ where
         for event in events.iter().take(update.event_count).flatten() {
             self.resolve_active_hold(event.column, event.resolution);
         }
+    }
+
+    fn advance_pump_holds_for_player(
+        &mut self,
+        player: usize,
+        inputs: &[bool; MAX_COLS],
+        target_time_ns: SongTimeNs,
+    ) {
+        let live_autoplay = self.live_autoplay_enabled();
+        let rate = self.music_rate();
+        let (col_start, col_end) = self.player_col_range(player);
+        for column in col_start..col_end.min(MAX_COLS) {
+            let Some(active) = self.hold_runtime.active_holds[column].as_mut() else {
+                continue;
+            };
+            active.is_pressed = active_hold_counts_as_pressed(live_autoplay, inputs[column]);
+            let note_index = active.note_index;
+            let Some(note) = self.chart_runtime.notes.get_mut(note_index) else {
+                continue;
+            };
+            let Some(hold) = note.hold.as_mut() else {
+                continue;
+            };
+            advance_pump_active_hold_to_time(
+                active,
+                hold,
+                &self.timing_runtime.timing_players[player],
+                note.row_index,
+                note.beat,
+                target_time_ns,
+                rate,
+            );
+        }
+    }
+
+    fn update_pump_active_holds(&mut self, inputs: &[bool; MAX_COLS], current_time_ns: SongTimeNs) {
+        for player in 0..self.setup.num_players {
+            self.advance_pump_holds_for_player(player, inputs, current_time_ns);
+        }
+    }
+
+    fn start_unstepped_pump_hold(&mut self, event: PumpHoldEvent, lane_pressed: bool) {
+        let Some(end_time_ns) = self
+            .chart_runtime
+            .hold_end_time_cache_ns
+            .get(event.note_index)
+            .copied()
+            .flatten()
+        else {
+            return;
+        };
+        self.start_active_hold(
+            event.column,
+            event.note_index,
+            event.time_ns,
+            end_time_ns,
+            event.time_ns,
+        );
+        let initial_life = if lane_pressed {
+            MAX_HOLD_LIFE
+        } else {
+            PUMP_INITIAL_HOLD_LIFE
+        };
+        if let Some(active) = self.hold_runtime.active_holds[event.column].as_mut()
+            && active.note_index == event.note_index
+        {
+            active.life = initial_life;
+            active.is_pressed = lane_pressed;
+            active.last_update_time_ns = event.time_ns;
+        }
+        if let Some(hold) = self.chart_runtime.notes[event.note_index].hold.as_mut() {
+            hold.life = initial_life;
+            hold.let_go_started_at = None;
+            hold.let_go_starting_life = 0.0;
+        }
+    }
+
+    fn apply_pump_checkpoint(&mut self, player: usize, row_start: usize, row_end: usize) {
+        let mut held = 0u32;
+        let mut missed = 0u32;
+        let mut held_columns = 0 as LaneMask;
+        let mut has_tap = false;
+        for event_ix in row_start..row_end {
+            let event = self.hold_runtime.pump_events[event_ix];
+            if event.kind != PumpHoldEventKind::Checkpoint {
+                continue;
+            }
+            has_tap |= event.has_tap;
+            let active_held = self.hold_runtime.active_holds[event.column]
+                .as_ref()
+                .is_some_and(|active| {
+                    active.note_index == event.note_index && active.life > 0.0 && !active.let_go
+                });
+            if active_held {
+                held = held.saturating_add(1);
+                held_columns |= 1 << event.column;
+                self.hold_runtime.pump_checkpoint_hits[event.note_index] =
+                    self.hold_runtime.pump_checkpoint_hits[event.note_index].saturating_add(1);
+            } else {
+                missed = missed.saturating_add(1);
+                self.hold_runtime.pump_checkpoint_misses[event.note_index] =
+                    self.hold_runtime.pump_checkpoint_misses[event.note_index].saturating_add(1);
+            }
+        }
+        if held.saturating_add(missed) == 0 || has_tap {
+            return;
+        }
+
+        let checkpoint_hit = missed == 0;
+        if checkpoint_hit {
+            let mut columns = held_columns;
+            while columns != 0 {
+                let column = columns.trailing_zeros() as usize;
+                columns &= columns - 1;
+                self.trigger_hold_explosion(column);
+            }
+        }
+        if self.autoplay_blocks_scoring() || self.player_is_dead(player) {
+            return;
+        }
+
+        let grade = if checkpoint_hit {
+            JudgeGrade::Fantastic
+        } else {
+            JudgeGrade::Miss
+        };
+        let combo_milestones_enabled =
+            self.profiles_runtime.profiles[player].combo_milestones_enabled();
+        let player_runtime = &mut self.players_runtime.players[player];
+        if checkpoint_hit {
+            player_runtime.checkpoints_hit = player_runtime.checkpoints_hit.saturating_add(1);
+        } else {
+            player_runtime.checkpoints_missed = player_runtime.checkpoints_missed.saturating_add(1);
+        }
+        let mut combo_state = player_combo_state(player_runtime);
+        let combo_update = combo::apply_row_combo_state(&mut combo_state, grade, 1, 1);
+        write_player_combo_state(player_runtime, combo_state);
+        update_itg_grade_totals(player_runtime);
+        let life_delta = if checkpoint_hit {
+            deadsync_rules::life::LIFE_HELD
+        } else {
+            deadsync_rules::life::LIFE_LET_GO
+        };
+        apply_life_change(
+            player_runtime,
+            song_time_ns_to_seconds(self.hold_runtime.pump_events[row_start].time_ns),
+            life_delta,
+        );
+        apply_combo_update(player_runtime, combo_update, combo_milestones_enabled);
+        if !checkpoint_hit {
+            self.capture_failed_ex_score_inputs(player, self.player_blue_window_ms(player));
+        }
+    }
+
+    fn queue_pump_hold_tail(&mut self, note_index: usize) {
+        let Some(pending) = self.hold_runtime.pump_pending_tail.get_mut(note_index) else {
+            return;
+        };
+        if !*pending {
+            *pending = true;
+            self.hold_runtime.pump_pending_tail_indices.push(note_index);
+        }
+    }
+
+    fn resolve_pump_hold_tail_ready(
+        &mut self,
+        note_index: usize,
+        column: usize,
+    ) {
+        let active_life = self.hold_runtime.active_holds[column]
+            .as_ref()
+            .filter(|active| active.note_index == note_index)
+            .map_or(0.0, |active| active.life);
+        let note_type = self.chart_runtime.notes[note_index].note_type;
+        let head_hit = self.chart_runtime.notes[note_index]
+            .result
+            .as_ref()
+            .is_some_and(|judgment| judgment.grade != JudgeGrade::Miss);
+        let hits = self.hold_runtime.pump_checkpoint_hits[note_index];
+        let misses = self.hold_runtime.pump_checkpoint_misses[note_index];
+        let held = match note_type {
+            NoteType::Hold => misses == 0 && (hits > 0 || head_hit),
+            NoteType::Roll => active_life > 0.0,
+            _ => false,
+        };
+        self.hold_runtime.pump_pending_tail[note_index] = false;
+        if self.hold_runtime.active_holds[column]
+            .as_ref()
+            .is_some_and(|active| active.note_index == note_index)
+        {
+            self.hold_runtime.active_holds[column] = None;
+            self.hold_runtime.sync_active_hold_col(column);
+        }
+        if let Some(hold) = self.chart_runtime.notes[note_index].hold.as_mut() {
+            hold.life = active_life;
+        }
+        if held {
+            self.handle_hold_success(column, note_index);
+        } else {
+            let tail_time_ns = self.chart_runtime.hold_end_time_cache_ns[note_index]
+                .unwrap_or(self.clock.song_position.current_music_time_ns);
+            self.handle_hold_let_go(column, note_index, tail_time_ns);
+            self.hold_runtime.hold_decay_active[note_index] = false;
+        }
+        // Pump themes hide the terminal hold judgment while retaining its score,
+        // life change, statistics, and Held explosion.
+        self.display
+            .hold_feedback
+            .set_hold_judgment(column, None);
+    }
+
+    fn resolve_pump_hold_tail(&mut self, event: PumpHoldEvent) {
+        if self.chart_runtime.notes[event.note_index].result.is_none() {
+            self.queue_pump_hold_tail(event.note_index);
+            return;
+        }
+        self.resolve_pump_hold_tail_ready(event.note_index, event.column);
+    }
+
+    fn resolve_pending_pump_hold_tails(&mut self) {
+        let mut index = 0;
+        while index < self.hold_runtime.pump_pending_tail_indices.len() {
+            let note_index = self.hold_runtime.pump_pending_tail_indices[index];
+            if self
+                .chart_runtime
+                .notes
+                .get(note_index)
+                .is_none_or(|note| note.result.is_none())
+            {
+                index += 1;
+                continue;
+            }
+            let column = self.chart_runtime.notes[note_index].column;
+            self.resolve_pump_hold_tail_ready(note_index, column);
+            self.hold_runtime
+                .pump_pending_tail_indices
+                .swap_remove(index);
+        }
+    }
+
+    fn process_pump_hold_events_until(
+        &mut self,
+        music_time_ns: SongTimeNs,
+        inputs: &[bool; MAX_COLS],
+    ) {
+        while self.hold_runtime.pump_event_cursor < self.hold_runtime.pump_events.len() {
+            let row_start = self.hold_runtime.pump_event_cursor;
+            let first = self.hold_runtime.pump_events[row_start];
+            if first.time_ns > music_time_ns {
+                break;
+            }
+            let mut row_end = row_start + 1;
+            while row_end < self.hold_runtime.pump_events.len() {
+                let event = self.hold_runtime.pump_events[row_end];
+                if (event.time_ns, event.row_index, event.player)
+                    != (first.time_ns, first.row_index, first.player)
+                {
+                    break;
+                }
+                row_end += 1;
+            }
+            self.hold_runtime.pump_event_cursor = row_end;
+            self.advance_pump_holds_for_player(first.player, inputs, first.time_ns);
+
+            for event_ix in row_start..row_end {
+                let event = self.hold_runtime.pump_events[event_ix];
+                if event.kind != PumpHoldEventKind::Head {
+                    continue;
+                }
+                let lane_pressed = self.live_autoplay_enabled() || inputs[event.column];
+                let active_matches = self.hold_runtime.active_holds[event.column]
+                    .as_ref()
+                    .is_some_and(|active| active.note_index == event.note_index);
+                if lane_pressed && self.chart_runtime.notes[event.note_index].result.is_none() {
+                    self.judge_a_tap(event.column, event.time_ns);
+                }
+                let active_matches_after = self.hold_runtime.active_holds[event.column]
+                    .as_ref()
+                    .is_some_and(|active| active.note_index == event.note_index);
+                if !active_matches && !active_matches_after {
+                    self.start_unstepped_pump_hold(event, lane_pressed);
+                }
+            }
+            self.apply_pump_checkpoint(first.player, row_start, row_end);
+            for event_ix in row_start..row_end {
+                let event = self.hold_runtime.pump_events[event_ix];
+                if event.kind == PumpHoldEventKind::Tail {
+                    self.resolve_pump_hold_tail(event);
+                }
+            }
+        }
+    }
+
+    fn process_pump_hold_events(
+        &mut self,
+        previous_music_time_ns: SongTimeNs,
+        music_time_ns: SongTimeNs,
+        inputs: &[bool; MAX_COLS],
+    ) {
+        if !self.setup.session.play_style.is_pump() {
+            return;
+        }
+        if music_time_ns < previous_music_time_ns {
+            self.hold_runtime.reanchor_pump_events(music_time_ns);
+            return;
+        }
+        self.process_pump_hold_events_until(music_time_ns, inputs);
+    }
+
+    fn process_pump_hold_events_before_input(&mut self, music_time_ns: SongTimeNs) {
+        if !self.setup.session.play_style.is_pump() {
+            return;
+        }
+        let pressed_lane_mask = self.control.input_state.pressed_lane_mask()
+            & input_lane_mask(self.setup.num_cols.min(MAX_COLS));
+        let inputs = lane_inputs_from_mask(pressed_lane_mask, self.setup.num_cols.min(MAX_COLS));
+        self.process_pump_hold_events_until(music_time_ns, &inputs);
     }
 
     #[inline(always)]
@@ -1137,7 +1483,23 @@ where
             for player_event in miss_events.iter().take(update.event_count).flatten() {
                 let player = player_event.player;
                 let event = player_event.event;
-                if event.queue_missed_hold_resolution {
+                let pump_hold_miss = self.setup.session.play_style.is_pump()
+                    && matches!(
+                        self.chart_runtime.notes[event.note_index].note_type,
+                        NoteType::Hold | NoteType::Roll
+                    );
+                if pump_hold_miss {
+                    let column = self.chart_runtime.notes[event.note_index].column;
+                    let active_life = self.hold_runtime.active_holds[column]
+                        .as_ref()
+                        .filter(|active| active.note_index == event.note_index)
+                        .map_or(PUMP_INITIAL_HOLD_LIFE, |active| active.life);
+                    if let Some(hold) = self.chart_runtime.notes[event.note_index].hold.as_mut() {
+                        hold.result = None;
+                        hold.life = active_life;
+                    }
+                    self.hold_runtime.hold_decay_active[event.note_index] = false;
+                } else if event.queue_missed_hold_resolution {
                     self.queue_missed_hold_resolution(event.note_index);
                 }
                 self.set_final_note_result(event.note_index, event.judgment);
@@ -1257,6 +1619,7 @@ where
                 plan.note_count,
                 carried_holds_down,
                 player_dead,
+                self.setup.session.play_style.is_pump(),
             );
             set_row_finalization_player_state(p, row_state);
             if update.update_grade_totals {
@@ -1498,6 +1861,7 @@ where
             None
         };
         let current_inputs = self.scan_held_lane_activity(previous_music_time_ns, music_time_ns);
+        self.process_pump_hold_events(previous_music_time_ns, music_time_ns, &current_inputs);
         if let Some(started) = held_mines_started {
             phase_timings.held_mines_us = elapsed_us_since(started);
         }
@@ -1563,6 +1927,7 @@ where
             None
         };
         self.apply_time_based_tap_misses_with_cutoff(music_time_ns, &cutoff_rows);
+        self.resolve_pending_pump_hold_tails();
         if let Some(started) = tap_miss_started {
             phase_timings.tap_miss_us = elapsed_us_since(started);
         }
@@ -1722,7 +2087,7 @@ where
                 return false;
             }
 
-            let Some(hit) = self.note_hit_eval(
+            let Some(mut hit) = self.note_hit_eval(
                 player,
                 self.chart_runtime.note_time_cache_ns[note_index],
                 current_time_ns,
@@ -1741,6 +2106,16 @@ where
                 );
                 return false;
             };
+            if self.setup.session.play_style.is_pump()
+                && matches!(note_type, NoteType::Hold | NoteType::Roll)
+                && let Some(max_hit) = self.note_hit_eval(
+                    player,
+                    self.chart_runtime.note_time_cache_ns[note_index],
+                    self.chart_runtime.note_time_cache_ns[note_index],
+                )
+            {
+                hit = max_hit;
+            }
             let (song_offset_s, global_offset_s, lead_in_s, stream_pos_s) = if timing_hit_log {
                 (
                     self.clock.offsets.song_offset_seconds(),
@@ -1954,7 +2329,7 @@ where
 
             for &idx in &judge_indices[..judge_count] {
                 let note_col = self.chart_runtime.notes[idx].column;
-                let Some(hit) = self.note_hit_eval(
+                let Some(mut hit) = self.note_hit_eval(
                     player,
                     self.chart_runtime.note_time_cache_ns[idx],
                     current_time_ns,
@@ -1973,6 +2348,19 @@ where
                     );
                     continue;
                 };
+                if self.setup.session.play_style.is_pump()
+                    && matches!(
+                        self.chart_runtime.notes[idx].note_type,
+                        NoteType::Hold | NoteType::Roll
+                    )
+                    && let Some(max_hit) = self.note_hit_eval(
+                        player,
+                        self.chart_runtime.note_time_cache_ns[idx],
+                        self.chart_runtime.note_time_cache_ns[idx],
+                    )
+                {
+                    hit = max_hit;
+                }
                 log_tap_judge_candidate(
                     input_log,
                     "hit",

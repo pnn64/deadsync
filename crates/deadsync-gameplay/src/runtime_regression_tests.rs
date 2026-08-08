@@ -967,6 +967,71 @@ mod runtime_regression_tests {
         )
     }
 
+    fn hold_regression_state(play_style: GameplayInputPlayStyle) -> State {
+        let mut timing_segments = TimingSegments::default();
+        timing_segments.bpms = vec![(0.0, 120.0)];
+        hold_regression_state_with_timing(play_style, timing_segments)
+    }
+
+    fn hold_regression_state_with_timing(
+        play_style: GameplayInputPlayStyle,
+        timing_segments: TimingSegments,
+    ) -> State {
+        hold_regression_state_with_timing_and_tail(play_style, timing_segments, 96)
+    }
+
+    fn hold_regression_state_with_timing_and_tail(
+        play_style: GameplayInputPlayStyle,
+        timing_segments: TimingSegments,
+        tail_row: usize,
+    ) -> State {
+        let mut song = regression_song();
+        song.charts[0].chart_type = if play_style.is_pump() {
+            "pump-single".to_string()
+        } else {
+            "dance-single".to_string()
+        };
+        song.charts[0].stats.total_arrows = 1;
+        song.charts[0].stats.total_steps = 1;
+        song.charts[0].holds_total = 1;
+        song.charts[0].possible_grade_points = 10;
+        let chart = Arc::new(song.charts[0].clone());
+        let mut gameplay_chart = regression_payload_with_segments(timing_segments, 96);
+        gameplay_chart.parsed_notes = vec![ParsedNote {
+            row_index: 48,
+            column: 0,
+            note_type: NoteType::Hold,
+            tail_row_index: Some(tail_row),
+        }];
+        init_gameplay_runtime(
+            Arc::new(song),
+            [chart.clone(), chart],
+            [Arc::new(gameplay_chart.clone()), Arc::new(gameplay_chart)],
+            GameplayViewport::default(),
+            GameplaySession {
+                play_style,
+                ..GameplaySession::default()
+            },
+            GameplayConfig::default(),
+            SyncPref::Default,
+            GameplayMiniIndicatorData::default(),
+            GameplayNoteskinData::default(),
+            NoSongLuaRuntime,
+            empty_crossover_annotations,
+            5,
+            1.0,
+            [ScrollSpeedSetting::default(); MAX_PLAYERS],
+            std::array::from_fn(|_| TestProfile::default()),
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            [0; MAX_PLAYERS],
+        )
+    }
+
     fn set_regression_mine(
         state: &mut State,
         note_index: usize,
@@ -2092,6 +2157,230 @@ mod runtime_regression_tests {
         process_input_edges(&mut state, false, &mut phase_timings, clock);
 
         assert!(state.display.receptor_feedback.bop_timers[0] > 0.0);
+    }
+
+    #[test]
+    fn pump_preheld_hold_head_is_fantastic_and_scores_checkpoints() {
+        let mut state = hold_regression_state(GameplayInputPlayStyle::PumpSingle);
+        let head_time_ns = state.hold_runtime.pump_events[0].time_ns;
+        let tail_time_ns = state
+            .hold_runtime
+            .pump_events
+            .iter()
+            .find(|event| event.kind == PumpHoldEventKind::Tail)
+            .expect("pump hold tail event")
+            .time_ns;
+        let inputs = std::array::from_fn(|column| column == 0);
+
+        state.process_pump_hold_events(head_time_ns.saturating_sub(1), tail_time_ns, &inputs);
+
+        let head = state.chart_runtime.notes[0]
+            .result
+            .as_ref()
+            .expect("pre-held Pump head is judged");
+        assert_eq!(head.grade, JudgeGrade::Fantastic);
+        assert_eq!(head.time_error_music_ns, 0);
+        assert_eq!(state.players_runtime.players[0].checkpoints_hit, 4);
+        assert_eq!(state.players_runtime.players[0].combo, 4);
+        assert_eq!(
+            state.chart_runtime.notes[0]
+                .hold
+                .as_ref()
+                .and_then(|hold| hold.result),
+            Some(HoldResult::Held)
+        );
+        assert_eq!(state.players_runtime.players[0].holds_held_for_score, 1);
+        assert_eq!(state.players_runtime.players[0].scoring_counts[0], 0);
+        assert_eq!(state.players_runtime.players[0].earned_grade_points, 5);
+        assert!(state.display.hold_feedback.hold_judgments[0].is_none());
+    }
+
+    #[test]
+    fn pump_checkpoint_schedule_uses_chart_tickcounts() {
+        let mut timing_segments = TimingSegments::default();
+        timing_segments.bpms = vec![(0.0, 120.0)];
+        timing_segments.tickcounts = vec![deadsync_rules::timing::TickcountSegment {
+            beat: 0.0,
+            ticks: 2,
+        }];
+
+        let state = hold_regression_state_with_timing(
+            GameplayInputPlayStyle::PumpSingle,
+            timing_segments,
+        );
+
+        assert_eq!(
+            state
+                .hold_runtime
+                .pump_events
+                .iter()
+                .filter(|event| event.kind == PumpHoldEventKind::Checkpoint)
+                .count(),
+            2
+        );
+    }
+
+    #[test]
+    fn pump_missed_head_can_recover_before_first_checkpoint() {
+        let mut timing_segments = TimingSegments::default();
+        timing_segments.bpms = vec![(0.0, 120.0)];
+        timing_segments.tickcounts = vec![deadsync_rules::timing::TickcountSegment {
+            beat: 0.0,
+            ticks: 1,
+        }];
+        let mut state = hold_regression_state_with_timing(
+            GameplayInputPlayStyle::PumpSingle,
+            timing_segments,
+        );
+        let head_time_ns = state.chart_runtime.note_time_cache_ns[0];
+        let checkpoints: Vec<SongTimeNs> = state
+            .hold_runtime
+            .pump_events
+            .iter()
+            .filter(|event| event.kind == PumpHoldEventKind::Checkpoint)
+            .map(|event| event.time_ns)
+            .collect();
+        state.process_pump_hold_events(
+            head_time_ns.saturating_sub(1),
+            head_time_ns,
+            &[false; MAX_COLS],
+        );
+        let miss_time_ns = head_time_ns
+            .saturating_add(state.timing_runtime.step_resolution_distance_ns)
+            .saturating_add(song_time_ns_from_seconds(0.1));
+        assert!(miss_time_ns < checkpoints[0]);
+
+        state.apply_time_based_tap_misses(miss_time_ns);
+        assert_eq!(
+            state.chart_runtime.notes[0]
+                .result
+                .as_ref()
+                .map(|judgment| judgment.grade),
+            Some(JudgeGrade::Miss)
+        );
+        assert!(
+            state.chart_runtime.notes[0]
+                .hold
+                .as_ref()
+                .is_some_and(|hold| hold.result.is_none())
+        );
+
+        let regrab_time_ns = miss_time_ns.saturating_add(song_time_ns_from_seconds(0.01));
+        state.integrate_active_hold_to_time(0, regrab_time_ns);
+        state.sync_active_hold_pressed_state(0, true);
+        let held_inputs = std::array::from_fn(|column| column == 0);
+        state.process_pump_hold_events(miss_time_ns, checkpoints[0], &held_inputs);
+
+        assert_eq!(state.players_runtime.players[0].checkpoints_hit, 1);
+        assert_eq!(state.players_runtime.players[0].checkpoints_missed, 0);
+        assert_eq!(
+            state.chart_runtime.notes[0]
+                .hold
+                .as_ref()
+                .and_then(|hold| hold.result),
+            Some(HoldResult::Held)
+        );
+    }
+
+    #[test]
+    fn pump_release_before_last_checkpoint_breaks_combo_and_lets_go() {
+        let mut state = hold_regression_state(GameplayInputPlayStyle::PumpSingle);
+        let checkpoints: Vec<SongTimeNs> = state
+            .hold_runtime
+            .pump_events
+            .iter()
+            .filter(|event| event.kind == PumpHoldEventKind::Checkpoint)
+            .map(|event| event.time_ns)
+            .collect();
+        assert_eq!(checkpoints.len(), 4);
+        let held_inputs = std::array::from_fn(|column| column == 0);
+        let released_inputs = [false; MAX_COLS];
+
+        state.process_pump_hold_events(
+            state.hold_runtime.pump_events[0].time_ns.saturating_sub(1),
+            checkpoints[1],
+            &held_inputs,
+        );
+        state.process_pump_hold_events(checkpoints[1], checkpoints[3], &released_inputs);
+
+        assert_eq!(state.players_runtime.players[0].checkpoints_hit, 3);
+        assert_eq!(state.players_runtime.players[0].checkpoints_missed, 1);
+        assert_eq!(state.players_runtime.players[0].combo, 0);
+        assert_eq!(state.players_runtime.players[0].miss_combo, 1);
+        assert_eq!(state.players_runtime.players[0].holds_let_go_for_score, 1);
+        assert_eq!(state.players_runtime.players[0].earned_grade_points, -8);
+        assert_eq!(
+            state.chart_runtime.notes[0]
+                .hold
+                .as_ref()
+                .and_then(|hold| hold.result),
+            Some(HoldResult::LetGo)
+        );
+    }
+
+    #[test]
+    fn pump_hold_head_edges_use_max_precision() {
+        let mut state = hold_regression_state(GameplayInputPlayStyle::PumpSingle);
+        let head_time_ns = state.hold_runtime.pump_events[0].time_ns;
+        let late_time_ns = head_time_ns.saturating_add(song_time_ns_from_seconds(0.02));
+
+        assert!(state.judge_a_tap(0, late_time_ns));
+
+        let judgment = state.chart_runtime.notes[0]
+            .result
+            .as_ref()
+            .expect("Pump hold head judgment");
+        assert_eq!(judgment.grade, JudgeGrade::Fantastic);
+        assert_eq!(judgment.time_error_music_ns, 0);
+    }
+
+    #[test]
+    fn pump_short_hold_waits_for_late_head_judgment() {
+        let mut timing_segments = TimingSegments::default();
+        timing_segments.bpms = vec![(0.0, 120.0)];
+        let mut state = hold_regression_state_with_timing_and_tail(
+            GameplayInputPlayStyle::PumpSingle,
+            timing_segments,
+            55,
+        );
+        let head_time_ns = state.chart_runtime.note_time_cache_ns[0];
+        let tail_time_ns = state.chart_runtime.hold_end_time_cache_ns[0]
+            .expect("short Pump hold tail time");
+
+        state.process_pump_hold_events(head_time_ns.saturating_sub(1), tail_time_ns, &[false; MAX_COLS]);
+        assert!(state.chart_runtime.notes[0].result.is_none());
+        assert!(
+            state.chart_runtime.notes[0]
+                .hold
+                .as_ref()
+                .is_some_and(|hold| hold.result.is_none())
+        );
+
+        assert!(state.judge_a_tap(0, tail_time_ns.saturating_add(song_time_ns_from_seconds(0.02))));
+        state.resolve_pending_pump_hold_tails();
+
+        assert_eq!(
+            state.chart_runtime.notes[0]
+                .hold
+                .as_ref()
+                .and_then(|hold| hold.result),
+            Some(HoldResult::Held)
+        );
+        assert!(state.hold_runtime.active_holds[0].is_none());
+    }
+
+    #[test]
+    fn dance_preheld_hold_head_keeps_existing_itg_behavior() {
+        let mut state = hold_regression_state(GameplayInputPlayStyle::Single);
+        assert!(state.hold_runtime.pump_events.is_empty());
+        let head_time_ns = state.chart_runtime.note_time_cache_ns[0];
+        let inputs = std::array::from_fn(|column| column == 0);
+
+        state.process_pump_hold_events(head_time_ns.saturating_sub(1), head_time_ns, &inputs);
+
+        assert!(state.chart_runtime.notes[0].result.is_none());
+        assert!(state.hold_runtime.active_holds[0].is_none());
+        assert_eq!(state.players_runtime.players[0].combo, 0);
     }
 
     #[test]

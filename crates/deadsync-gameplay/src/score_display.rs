@@ -88,6 +88,8 @@ pub struct ItgScoreStage {
     pub rolls_held_for_score: u32,
     pub rolls_let_go_for_score: u32,
     pub mines_hit_for_score: u32,
+    pub checkpoints_hit: u32,
+    pub checkpoints_missed: u32,
 }
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -96,6 +98,8 @@ pub struct ItgScoreInputs {
     pub holds_held_for_score: u32,
     pub rolls_held_for_score: u32,
     pub mines_hit_for_score: u32,
+    pub checkpoints_hit: u32,
+    pub checkpoints_missed: u32,
     pub holds_resolved_for_score: u32,
     pub rolls_resolved_for_score: u32,
     pub possible_grade_points: i32,
@@ -126,6 +130,12 @@ pub fn itg_score_inputs_from_display(
         mines_hit_for_score: stage
             .mines_hit_for_score
             .saturating_add(carry.mines_hit_for_score),
+        checkpoints_hit: stage
+            .checkpoints_hit
+            .saturating_add(carry.checkpoints_hit),
+        checkpoints_missed: stage
+            .checkpoints_missed
+            .saturating_add(carry.checkpoints_missed),
         holds_resolved_for_score: holds_held_for_score
             .saturating_add(stage.holds_let_go_for_score)
             .saturating_add(carry.holds_let_go_for_score),
@@ -137,21 +147,25 @@ pub fn itg_score_inputs_from_display(
 }
 
 pub fn itg_score_percent_from_inputs(inputs: ItgScoreInputs) -> f64 {
-    judgment::calculate_itg_score_percent_from_counts(
+    let points = judgment::itg_grade_points_with_checkpoints(
         &inputs.scoring_counts,
         inputs.holds_held_for_score,
         inputs.rolls_held_for_score,
         inputs.mines_hit_for_score,
-        inputs.possible_grade_points,
-    )
+        inputs.checkpoints_hit,
+        inputs.checkpoints_missed,
+    );
+    judgment::calculate_itg_score_percent_from_points(points, inputs.possible_grade_points)
 }
 
 pub fn predictive_itg_score_percent_from_inputs(inputs: ItgScoreInputs) -> f64 {
-    let actual = judgment::calculate_itg_grade_points_from_counts(
+    let actual = judgment::itg_grade_points_with_checkpoints(
         &inputs.scoring_counts,
         inputs.holds_held_for_score,
         inputs.rolls_held_for_score,
         inputs.mines_hit_for_score,
+        inputs.checkpoints_hit,
+        inputs.checkpoints_missed,
     );
     let current_possible = judgment::current_possible_grade_points_from_counts(
         &inputs.scoring_counts,

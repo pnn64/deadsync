@@ -549,6 +549,7 @@ pub fn process_input_edges<Profile, OverlayActor, CapturedActor, StateDelta>(
                 pending_edges_after,
             );
         }
+        state.process_pump_hold_events_before_input(edge.event_music_time_ns);
         if edge_judges_tap {
             state.refresh_roll_life_on_step(lane_idx, edge.event_music_time_ns);
         }

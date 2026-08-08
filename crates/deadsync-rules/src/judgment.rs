@@ -173,6 +173,8 @@ pub fn add_judgment_to_window_counts(
 
 pub const HOLD_SCORE_HELD: i32 = 5;
 pub const MINE_SCORE_HIT: i32 = -6;
+pub const CHECKPOINT_SCORE_HIT: i32 = 0;
+pub const CHECKPOINT_SCORE_MISS: i32 = -8;
 
 const GRADE_POINTS_BY_IX: [i32; JUDGE_GRADE_COUNT] = [5, 4, 2, 0, -6, -12];
 
@@ -192,6 +194,24 @@ pub fn calculate_itg_grade_points_from_counts(
     total += rolls_held_for_score as i32 * HOLD_SCORE_HELD;
     total += mines_hit_for_score as i32 * MINE_SCORE_HIT;
     total
+}
+
+pub fn itg_grade_points_with_checkpoints(
+    scoring_counts: &JudgeCounts,
+    holds_held_for_score: u32,
+    rolls_held_for_score: u32,
+    mines_hit_for_score: u32,
+    checkpoints_hit: u32,
+    checkpoints_missed: u32,
+) -> i32 {
+    calculate_itg_grade_points_from_counts(
+        scoring_counts,
+        holds_held_for_score,
+        rolls_held_for_score,
+        mines_hit_for_score,
+    )
+    .saturating_add((checkpoints_hit as i32).saturating_mul(CHECKPOINT_SCORE_HIT))
+    .saturating_add((checkpoints_missed as i32).saturating_mul(CHECKPOINT_SCORE_MISS))
 }
 
 pub fn calculate_itg_score_percent_from_counts(

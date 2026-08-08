@@ -10,7 +10,7 @@ use crate::changes::{
 use crate::media::resolve_song_asset_path_like_itg;
 use crate::notes::{parse_chart_notes, step_type_lanes};
 use crate::stats::build_stamina_counts;
-use crate::timing::{parse_time_signatures, timing_segments_from_rssp};
+use crate::timing::{parse_tickcounts, parse_time_signatures, timing_segments_from_rssp};
 use deadsync_chart::SongData;
 use rssp::{AnalysisOptions, SimfileSummary, analyze};
 use std::fs;
@@ -177,6 +177,7 @@ fn build_charts(
 ) -> Vec<SerializableChartData> {
     let charts = std::mem::take(&mut summary.charts);
     let global_time_signatures = summary.normalized_time_signatures.as_str();
+    let global_tickcounts = summary.normalized_tickcounts.as_str();
     let allow_steps_timing =
         rssp::timing::steps_timing_allowed(summary.ssc_version, summary.timing_format);
     charts
@@ -197,8 +198,22 @@ fn build_charts(
             } else {
                 global_time_signatures
             };
+            let chart_tickcounts = chart
+                .chart_tickcounts
+                .as_deref()
+                .filter(|s| !s.trim().is_empty());
+            let global_tickcounts =
+                (!global_tickcounts.trim().is_empty()).then_some(global_tickcounts);
+            let tickcount_tag = if allow_steps_timing && chart.chart_has_own_timing {
+                chart_tickcounts
+            } else if allow_steps_timing {
+                chart_tickcounts.or(global_tickcounts)
+            } else {
+                global_tickcounts
+            };
             let mut timing_segments = timing_segments_from_rssp(chart.timing_segments.as_ref());
             timing_segments.time_signatures = parse_time_signatures(time_signature_tag);
+            timing_segments.tickcounts = parse_tickcounts(tickcount_tag);
             let stamina_counts = build_stamina_counts(&chart);
             let meter = chart.rating_str.parse().unwrap_or(0);
             let music_path = chart_music_path(simfile_dir, song_music_path, &chart.music_path);
@@ -260,6 +275,7 @@ fn build_charts_legacy(
     song_music_path: Option<&Path>,
 ) -> Vec<SerializableChartData> {
     let global_time_signatures = summary.normalized_time_signatures.clone();
+    let global_tickcounts = summary.normalized_tickcounts.clone();
     let allow_steps_timing =
         rssp::timing::steps_timing_allowed(summary.ssc_version, summary.timing_format);
     summary
@@ -281,8 +297,22 @@ fn build_charts_legacy(
             } else {
                 global_time_signatures
             };
+            let chart_tickcounts = chart
+                .chart_tickcounts
+                .as_deref()
+                .filter(|s| !s.trim().is_empty());
+            let global_tickcounts =
+                (!global_tickcounts.trim().is_empty()).then_some(global_tickcounts.as_str());
+            let tickcount_tag = if allow_steps_timing && chart.chart_has_own_timing {
+                chart_tickcounts
+            } else if allow_steps_timing {
+                chart_tickcounts.or(global_tickcounts)
+            } else {
+                global_tickcounts
+            };
             let mut timing_segments = timing_segments_from_rssp(chart.timing_segments.as_ref());
             timing_segments.time_signatures = parse_time_signatures(time_signature_tag);
+            timing_segments.tickcounts = parse_tickcounts(tickcount_tag);
             let stamina_counts = build_stamina_counts(chart);
             SerializableChartData {
                 chart_type: chart.step_type_str.clone(),

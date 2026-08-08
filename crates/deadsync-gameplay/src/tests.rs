@@ -404,6 +404,17 @@ mod tests {
     }
 
     #[test]
+    fn update_itg_grade_totals_applies_pump_checkpoint_weights() {
+        let mut player = init_player_runtime();
+        player.checkpoints_hit = 4;
+        player.checkpoints_missed = 2;
+
+        update_itg_grade_totals(&mut player);
+
+        assert_eq!(player.earned_grade_points, -16);
+    }
+
+    #[test]
     fn apply_course_combo_carry_writes_runtime_combo_fields() {
         let mut player = init_player_runtime();
         player.combo = 4;
@@ -10577,6 +10588,8 @@ mod tests {
                 rolls_held_for_score: 9,
                 rolls_let_go_for_score: 10,
                 mines_hit_for_score: 11,
+                checkpoints_hit: 0,
+                checkpoints_missed: 0,
             },
         );
 
@@ -10664,6 +10677,8 @@ mod tests {
                 rolls_held_for_score: 9,
                 rolls_let_go_for_score: 10,
                 mines_hit_for_score: 11,
+                checkpoints_hit: 17,
+                checkpoints_missed: 18,
             },
             CourseDisplayCarry {
                 scoring_counts: [10, 20, 30, 40, 50, 60],
@@ -10672,6 +10687,8 @@ mod tests {
                 rolls_held_for_score: 14,
                 rolls_let_go_for_score: 15,
                 mines_hit_for_score: 16,
+                checkpoints_hit: 19,
+                checkpoints_missed: 20,
                 ..CourseDisplayCarry::default()
             },
             CourseDisplayTotals {
@@ -10683,6 +10700,8 @@ mod tests {
         assert_eq!(inputs.scoring_counts, [11, 22, 33, 44, 55, 66]);
         assert_eq!(inputs.holds_held_for_score, 19);
         assert_eq!(inputs.holds_resolved_for_score, 40);
+        assert_eq!(inputs.checkpoints_hit, 36);
+        assert_eq!(inputs.checkpoints_missed, 38);
         assert_eq!(inputs.rolls_held_for_score, 23);
         assert_eq!(inputs.rolls_resolved_for_score, 48);
         assert_eq!(inputs.mines_hit_for_score, 27);
@@ -15549,7 +15568,7 @@ mod tests {
         let mut state = RowFinalizationPlayerState::default();
         let judgment = test_judgment(JudgeGrade::Great);
 
-        let update = apply_row_finalization_player_state(&mut state, &judgment, 2, 1, false);
+        let update = apply_row_finalization_player_state(&mut state, &judgment, 2, 1, false, false);
 
         let ix = judgment::display_judge_ix(JudgeGrade::Great);
         assert_eq!(state.judgment_counts[ix], 1);
@@ -15567,6 +15586,16 @@ mod tests {
                 awarded_hand: true,
             }
         );
+    }
+
+    #[test]
+    fn pump_row_finalization_increments_combo_once_per_row() {
+        let mut state = RowFinalizationPlayerState::default();
+        let judgment = test_judgment(JudgeGrade::Fantastic);
+
+        apply_row_finalization_player_state(&mut state, &judgment, 3, 0, false, true);
+
+        assert_eq!(state.combo.combo, 1);
     }
 
     #[test]
@@ -15696,7 +15725,7 @@ mod tests {
         };
         let judgment = test_judgment(JudgeGrade::Miss);
 
-        let update = apply_row_finalization_player_state(&mut state, &judgment, 1, 0, true);
+        let update = apply_row_finalization_player_state(&mut state, &judgment, 1, 0, true, false);
 
         let ix = judgment::display_judge_ix(JudgeGrade::Miss);
         assert_eq!(state.judgment_counts[ix], 1);
