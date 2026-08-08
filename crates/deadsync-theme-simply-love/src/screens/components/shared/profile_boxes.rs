@@ -14,6 +14,7 @@ use deadlib_present::actors::{self, Actor};
 use deadlib_present::color;
 use deadlib_present::space::{screen_center_x, screen_center_y};
 use deadlib_render::BlendMode;
+use deadsync_config::prelude::GameFlag;
 use deadsync_input::{InputEvent, VirtualAction};
 use deadsync_notefield::noteskin_model_actor;
 use deadsync_noteskin::{NUM_QUANTIZATIONS, Quantization, Style};
@@ -131,18 +132,27 @@ pub struct State {
     menu_lr_undo: [i8; 2],
 }
 
+/// Logic-thread-only cache owned for one profile-picker screen lifetime.
+/// It is sized for the profile choices plus the default skin, warms the
+/// default during screen init, and loads at most one skin on a menu-frame miss.
+/// Entries are never evicted and are dropped with the screen; this cache is not
+/// used during gameplay. There is no instrumentation because the bounded set is
+/// visible in the picker, and its worst-case frame work is one noteskin load.
 struct NoteskinCache {
     cache: HashMap<String, Arc<Noteskin>>,
     style: Style,
 }
 
 impl NoteskinCache {
-    fn new(_choices: &[Choice]) -> Self {
+    fn new(game: GameFlag, choice_count: usize) -> Self {
         let style = Style {
-            num_cols: 4,
+            num_cols: match game {
+                GameFlag::Dance => 4,
+                GameFlag::Pump => 5,
+            },
             num_players: 1,
         };
-        let mut cache = HashMap::with_capacity(1);
+        let mut cache = HashMap::with_capacity(choice_count.saturating_add(1));
         if let Ok(default_skin) =
             noteskin::load_itg_skin_cached(&style, profile_data::NoteSkin::DEFAULT_NAME)
         {
@@ -181,6 +191,11 @@ impl NoteskinCache {
 
         self.cache.values().next().cloned()
     }
+}
+
+#[inline(always)]
+const fn preview_col(style: Style) -> usize {
+    if style.is_pump() { 3 } else { 2 }
 }
 
 fn preview_noteskin_for_choice(
@@ -329,7 +344,7 @@ fn init_with_profiles(
     p2_profile: profile_data::ActiveProfile,
 ) -> State {
     let choices = build_choices(&view);
-    let noteskin_cache = NoteskinCache::new(&choices);
+    let noteskin_cache = NoteskinCache::new(view.game, choices.len());
     let p1_selected_index = selected_index_for(&choices, p1_profile);
     let p2_selected_index = selected_index_for(&choices, p2_profile);
 
@@ -1244,6 +1259,7 @@ fn push_scroller_frame(
     selected_index: usize,
     scroll_anim: f32,
     preview_noteskin: Option<&Noteskin>,
+    preview_col: usize,
     preview_time: f32,
     preview_beat: f32,
     frame_cx: f32,
@@ -1453,7 +1469,7 @@ fn push_scroller_frame(
         let preview_y = frame_cy + PREVIEW_Y_OFF;
 
         if let Some(ns) = preview_noteskin {
-            let note_idx = 2 * NUM_QUANTIZATIONS + Quantization::Q4th as usize;
+            let note_idx = preview_col * NUM_QUANTIZATIONS + Quantization::Q4th as usize;
             const TARGET_ARROW_PIXEL_SIZE: f32 = 40.0;
             const PREVIEW_SCALE: f32 = 0.4;
             let target_height = TARGET_ARROW_PIXEL_SIZE * PREVIEW_SCALE;
@@ -1663,6 +1679,7 @@ fn build_box_actors(
 
     let col_overlay = [0.0, 0.0, 0.0, 0.5];
     let border_rgba = [1.0, 1.0, 1.0, 1.0];
+    let preview_col = preview_col(state.noteskin_cache.style);
 
     // P1: keep both frames alive (visibility via alpha) so tween state doesn't reset.
     {
@@ -1680,6 +1697,7 @@ fn build_box_actors(
             state.p1_selected_index,
             state.p1_scroll_anim,
             state.p1_preview_noteskin.as_deref(),
+            preview_col,
             state.preview_time,
             state.preview_beat,
             p1_cx,
@@ -1768,6 +1786,7 @@ fn build_box_actors(
             state.p2_selected_index,
             state.p2_scroll_anim,
             state.p2_preview_noteskin.as_deref(),
+            preview_col,
             state.preview_time,
             state.preview_beat,
             p2_cx,
@@ -1952,6 +1971,7 @@ mod tests {
     #[test]
     fn picker_uses_shell_prepared_choices_and_default_selection() {
         let state = init(ProfilePickerView {
+            game: GameFlag::Dance,
             guest: ProfilePickerEntryView {
                 id: String::new(),
                 display_name: String::new(),
@@ -1999,6 +2019,24 @@ mod tests {
         assert_eq!(
             state.choices[1].mini_indicator,
             profile_data::MiniIndicator::Pacemaker
+        );
+    }
+
+    #[test]
+    fn pump_picker_uses_pump_noteskin_preview_style() {
+        let mut view = ProfilePickerView::default();
+        view.game = GameFlag::Pump;
+
+        let state = init(view);
+
+        assert!(state.noteskin_cache.style.is_pump());
+        assert_eq!(preview_col(state.noteskin_cache.style), 3);
+        assert_eq!(
+            deadsync_noteskin::itg::button_for_col(
+                state.noteskin_cache.style.num_cols,
+                preview_col(state.noteskin_cache.style),
+            ),
+            "UpRight"
         );
     }
 }

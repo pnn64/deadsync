@@ -26,6 +26,7 @@ pub fn view() -> ManageLocalProfilesView {
 }
 
 pub fn picker_view() -> ProfilePickerView {
+    let config = deadsync_config::prelude::get();
     let default_options = profile::new_profile_player_options();
     let guest_options = profile::guest_player_options();
     let default_speed_mod = default_options.scroll_speed.to_string();
@@ -104,6 +105,7 @@ pub fn picker_view() -> ProfilePickerView {
         })
         .collect();
     ProfilePickerView {
+        game: config.game_flag,
         guest: ProfilePickerEntryView {
             id: String::new(),
             display_name: String::new(),
@@ -120,7 +122,7 @@ pub fn picker_view() -> ProfilePickerView {
             profile::get_default_profile_for_side(PlayerSide::P1),
             profile::get_default_profile_for_side(PlayerSide::P2),
         ],
-        three_key_navigation: deadsync_config::prelude::get().three_key_navigation,
+        three_key_navigation: config.three_key_navigation,
     }
 }
 

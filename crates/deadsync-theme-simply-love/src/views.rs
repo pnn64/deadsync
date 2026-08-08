@@ -688,6 +688,7 @@ pub struct LocalProfileView {
 /// Select Music profile overlay.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ProfilePickerView {
+    pub game: deadsync_config::prelude::GameFlag,
     pub guest: ProfilePickerEntryView,
     pub profiles: Vec<ProfilePickerEntryView>,
     pub default_profiles: [deadsync_profile::ActiveProfile; 2],
@@ -698,6 +699,7 @@ impl Default for ProfilePickerView {
     fn default() -> Self {
         let options = deadsync_profile::PlayerOptionsData::default();
         Self {
+            game: deadsync_config::prelude::GameFlag::default(),
             guest: ProfilePickerEntryView {
                 id: String::new(),
                 display_name: String::new(),
