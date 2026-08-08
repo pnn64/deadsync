@@ -10,7 +10,9 @@ use crate::changes::{
 use crate::media::resolve_song_asset_path_like_itg;
 use crate::notes::{parse_chart_notes, step_type_lanes};
 use crate::stats::build_stamina_counts;
-use crate::timing::{parse_tickcounts, parse_time_signatures, timing_segments_from_rssp};
+use crate::timing::{
+    parse_combos, parse_tickcounts, parse_time_signatures, timing_segments_from_rssp,
+};
 use deadsync_chart::SongData;
 use rssp::{AnalysisOptions, SimfileSummary, analyze};
 use std::fs;
@@ -178,6 +180,7 @@ fn build_charts(
     let charts = std::mem::take(&mut summary.charts);
     let global_time_signatures = summary.normalized_time_signatures.as_str();
     let global_tickcounts = summary.normalized_tickcounts.as_str();
+    let global_combos = summary.normalized_combos.as_str();
     let allow_steps_timing =
         rssp::timing::steps_timing_allowed(summary.ssc_version, summary.timing_format);
     charts
@@ -211,9 +214,22 @@ fn build_charts(
             } else {
                 global_tickcounts
             };
+            let chart_combos = chart
+                .chart_combos
+                .as_deref()
+                .filter(|s| !s.trim().is_empty());
+            let global_combos = (!global_combos.trim().is_empty()).then_some(global_combos);
+            let combo_tag = if allow_steps_timing && chart.chart_has_own_timing {
+                chart_combos
+            } else if allow_steps_timing {
+                chart_combos.or(global_combos)
+            } else {
+                global_combos
+            };
             let mut timing_segments = timing_segments_from_rssp(chart.timing_segments.as_ref());
             timing_segments.time_signatures = parse_time_signatures(time_signature_tag);
             timing_segments.tickcounts = parse_tickcounts(tickcount_tag);
+            timing_segments.combos = parse_combos(combo_tag);
             let stamina_counts = build_stamina_counts(&chart);
             let meter = chart.rating_str.parse().unwrap_or(0);
             let music_path = chart_music_path(simfile_dir, song_music_path, &chart.music_path);
@@ -276,6 +292,7 @@ fn build_charts_legacy(
 ) -> Vec<SerializableChartData> {
     let global_time_signatures = summary.normalized_time_signatures.clone();
     let global_tickcounts = summary.normalized_tickcounts.clone();
+    let global_combos = summary.normalized_combos.clone();
     let allow_steps_timing =
         rssp::timing::steps_timing_allowed(summary.ssc_version, summary.timing_format);
     summary
@@ -310,9 +327,23 @@ fn build_charts_legacy(
             } else {
                 global_tickcounts
             };
+            let chart_combos = chart
+                .chart_combos
+                .as_deref()
+                .filter(|s| !s.trim().is_empty());
+            let global_combos =
+                (!global_combos.trim().is_empty()).then_some(global_combos.as_str());
+            let combo_tag = if allow_steps_timing && chart.chart_has_own_timing {
+                chart_combos
+            } else if allow_steps_timing {
+                chart_combos.or(global_combos)
+            } else {
+                global_combos
+            };
             let mut timing_segments = timing_segments_from_rssp(chart.timing_segments.as_ref());
             timing_segments.time_signatures = parse_time_signatures(time_signature_tag);
             timing_segments.tickcounts = parse_tickcounts(tickcount_tag);
+            timing_segments.combos = parse_combos(combo_tag);
             let stamina_counts = build_stamina_counts(chart);
             SerializableChartData {
                 chart_type: chart.step_type_str.clone(),
@@ -487,17 +518,18 @@ mod tests {
     #[test]
     fn parses_pump_charts_into_song_payload() {
         let root = test_dir("pump-chart");
-        let simfile = root.join("song.sm");
+        let simfile = root.join("song.ssc");
         fs::write(
             &simfile,
             b"#TITLE:Pump Chart;\n\
               #BPMS:0.000=120.000;\n\
+              #TICKCOUNTS:0.000=8;\n\
+              #COMBOS:0.000=3=2;\n\
+              #NOTEDATA:;\n\
+              #STEPSTYPE:pump-single;\n\
+              #DIFFICULTY:Challenge;\n\
+              #METER:10;\n\
               #NOTES:\n\
-              pump-single:\n\
-              :\n\
-              Challenge:\n\
-              10:\n\
-              0.000,0.000,0.000,0.000,0.000:\n\
               10000\n\
               00100\n\
               00001\n\
@@ -512,6 +544,11 @@ mod tests {
         assert_eq!(song.charts[0].chart_type, "pump-single");
         assert_eq!(song.charts[0].parsed_notes.len(), 3);
         assert_eq!(song.charts[0].parsed_notes[1].column, 2);
+        let timing =
+            deadsync_rules::timing::TimingSegments::from(song.charts[0].timing_segments.clone());
+        assert_eq!(timing.tickcounts[0].ticks, 8);
+        assert_eq!(timing.combos[0].combo, 3);
+        assert_eq!(timing.combos[0].miss_combo, 2);
     }
 
     #[test]

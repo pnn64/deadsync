@@ -28,7 +28,7 @@ use deadsync_rules::stream::{
 use deadsync_rules::timing::{
     BeatInfo, BeatInfoCache, FA_PLUS_W0_MS, FA_PLUS_W010_MS, TimingData, TimingProfile,
     TimingProfileNs, TimingSegments, WindowCounts, classify_offset_ns_with_disabled_windows,
-    largest_enabled_tap_window_ns,
+    combo_multipliers_at_beat, largest_enabled_tap_window_ns,
 };
 use std::collections::{BTreeMap, VecDeque};
 use std::hash::Hasher;

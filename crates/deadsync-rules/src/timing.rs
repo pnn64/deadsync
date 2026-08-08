@@ -265,6 +265,13 @@ pub struct TickcountSegment {
     pub ticks: u8,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ComboSegment {
+    pub beat: f32,
+    pub combo: u32,
+    pub miss_combo: u32,
+}
+
 #[derive(Debug, Clone)]
 pub struct TimingSegments {
     pub beat0_offset_adjust: f32,
@@ -277,6 +284,7 @@ pub struct TimingSegments {
     pub fakes: Vec<FakeSegment>,
     pub time_signatures: Vec<TimeSignatureSegment>,
     pub tickcounts: Vec<TickcountSegment>,
+    pub combos: Vec<ComboSegment>,
 }
 
 impl Default for TimingSegments {
@@ -292,6 +300,7 @@ impl Default for TimingSegments {
             fakes: Vec::new(),
             time_signatures: default_time_signatures(),
             tickcounts: default_tickcounts(),
+            combos: default_combos(),
         }
     }
 }
@@ -313,6 +322,29 @@ pub fn default_tickcounts() -> Vec<TickcountSegment> {
         beat: 0.0,
         ticks: 4,
     }]
+}
+
+pub const fn default_combo() -> ComboSegment {
+    ComboSegment {
+        beat: 0.0,
+        combo: 1,
+        miss_combo: 1,
+    }
+}
+
+pub fn default_combos() -> Vec<ComboSegment> {
+    vec![default_combo()]
+}
+
+pub fn combo_multipliers_at_beat(segments: &[ComboSegment], beat: f32) -> (u32, u32) {
+    let row = beat_to_note_row(beat);
+    let index = segments.partition_point(|segment| beat_to_note_row(segment.beat) <= row);
+    let segment = index
+        .checked_sub(1)
+        .and_then(|index| segments.get(index))
+        .copied()
+        .unwrap_or_else(default_combo);
+    (segment.combo, segment.miss_combo)
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -2014,6 +2046,27 @@ mod tests {
             },
             &[],
         )
+    }
+
+    #[test]
+    fn combo_multipliers_select_the_active_canonical_row() {
+        let segments = [
+            ComboSegment {
+                beat: 0.0,
+                combo: 1,
+                miss_combo: 1,
+            },
+            ComboSegment {
+                beat: 4.0,
+                combo: 3,
+                miss_combo: 2,
+            },
+        ];
+
+        assert_eq!(combo_multipliers_at_beat(&segments, 3.98), (1, 1));
+        assert_eq!(combo_multipliers_at_beat(&segments, 4.0), (3, 2));
+        assert_eq!(combo_multipliers_at_beat(&segments, 8.0), (3, 2));
+        assert_eq!(combo_multipliers_at_beat(&[], 8.0), (1, 1));
     }
 
     fn timing_with_scrolls(scrolls: Vec<ScrollSegment>) -> TimingData {

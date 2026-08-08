@@ -7,7 +7,7 @@ mod runtime_regression_tests {
     use deadsync_core::song_time::SongTimeNs;
     use deadsync_input::{InputEvent, VirtualAction};
     use deadsync_rules::note::{HoldData, HoldResult, MineResult};
-    use deadsync_rules::timing::{DelaySegment, TimingData, TimingSegments};
+    use deadsync_rules::timing::{ComboSegment, DelaySegment, TimingData, TimingSegments};
     use std::path::PathBuf;
     use std::sync::Arc;
     use std::time::Instant;
@@ -2193,6 +2193,35 @@ mod runtime_regression_tests {
         assert_eq!(state.players_runtime.players[0].scoring_counts[0], 0);
         assert_eq!(state.players_runtime.players[0].earned_grade_points, 5);
         assert!(state.display.hold_feedback.hold_judgments[0].is_none());
+    }
+
+    #[test]
+    fn pump_checkpoints_apply_chart_combo_multiplier() {
+        let mut timing_segments = TimingSegments::default();
+        timing_segments.bpms = vec![(0.0, 120.0)];
+        timing_segments.combos = vec![ComboSegment {
+            beat: 0.0,
+            combo: 3,
+            miss_combo: 2,
+        }];
+        let mut state = hold_regression_state_with_timing(
+            GameplayInputPlayStyle::PumpSingle,
+            timing_segments,
+        );
+        let head_time_ns = state.hold_runtime.pump_events[0].time_ns;
+        let tail_time_ns = state
+            .hold_runtime
+            .pump_events
+            .iter()
+            .find(|event| event.kind == PumpHoldEventKind::Tail)
+            .expect("pump hold tail event")
+            .time_ns;
+        let inputs = std::array::from_fn(|column| column == 0);
+
+        state.process_pump_hold_events(head_time_ns.saturating_sub(1), tail_time_ns, &inputs);
+
+        assert_eq!(state.players_runtime.players[0].checkpoints_hit, 4);
+        assert_eq!(state.players_runtime.players[0].combo, 12);
     }
 
     #[test]

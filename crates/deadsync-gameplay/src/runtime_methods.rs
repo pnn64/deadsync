@@ -920,6 +920,12 @@ where
             return;
         }
 
+        let checkpoint_beat =
+            note_row_to_beat(self.hold_runtime.pump_events[row_start].row_index as i32);
+        let (combo_multiplier, miss_combo_multiplier) = combo_multipliers_at_beat(
+            &self.source.gameplay_charts[player].timing_segments.combos,
+            checkpoint_beat,
+        );
         let grade = if checkpoint_hit {
             JudgeGrade::Fantastic
         } else {
@@ -934,7 +940,12 @@ where
             player_runtime.checkpoints_missed = player_runtime.checkpoints_missed.saturating_add(1);
         }
         let mut combo_state = player_combo_state(player_runtime);
-        let combo_update = combo::apply_row_combo_state(&mut combo_state, grade, 1, 1);
+        let combo_update = combo::apply_row_combo_state(
+            &mut combo_state,
+            grade,
+            combo_multiplier,
+            miss_combo_multiplier,
+        );
         write_player_combo_state(player_runtime, combo_state);
         update_itg_grade_totals(player_runtime);
         let life_delta = if checkpoint_hit {
@@ -1602,6 +1613,13 @@ where
         }
         let current_music_time = self.current_music_time_seconds();
         if plan.apply_player_state {
+            let beat = self.timing_runtime.timing_players[player]
+                .get_beat_for_row(row_index)
+                .unwrap_or(0.0);
+            let (combo_multiplier, miss_combo_multiplier) = combo_multipliers_at_beat(
+                &self.source.gameplay_charts[player].timing_segments.combos,
+                beat,
+            );
             let combo_milestones_enabled =
                 self.profiles_runtime.profiles[player].combo_milestones_enabled();
             let p = &mut self.players_runtime.players[player];
@@ -1620,6 +1638,8 @@ where
                 carried_holds_down,
                 player_dead,
                 self.setup.session.play_style.is_pump(),
+                combo_multiplier,
+                miss_combo_multiplier,
             );
             set_row_finalization_player_state(p, row_state);
             if update.update_grade_totals {

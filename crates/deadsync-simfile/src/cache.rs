@@ -8,9 +8,9 @@ use deadsync_chart::{
 use deadsync_core::note::NoteType;
 use deadsync_rules::judgment::HOLD_SCORE_HELD;
 use deadsync_rules::timing::{
-    DelaySegment, FakeSegment, ScrollSegment, SpeedSegment, SpeedUnit, StopSegment,
+    ComboSegment, DelaySegment, FakeSegment, ScrollSegment, SpeedSegment, SpeedUnit, StopSegment,
     TickcountSegment, TimeSignatureSegment, TimingData, TimingSegments, WarpSegment,
-    default_tickcounts, default_time_signatures,
+    default_combos, default_tickcounts, default_time_signatures,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -24,7 +24,7 @@ use twox_hash::XxHash64;
 
 use crate::song::{ParseSongOptions, parse_song_data_file};
 
-pub const SONG_CACHE_VERSION: u8 = 16;
+pub const SONG_CACHE_VERSION: u8 = 17;
 pub const SONG_CACHE_MAGIC: [u8; 8] = *b"DSCACHE1";
 const MAX_SONG_CACHE_HEADER_BYTES: usize = 64 * 1024 * 1024;
 
@@ -463,6 +463,7 @@ pub struct CachedTimingSegments {
     fakes: Vec<(f32, f32)>,
     time_signatures: Vec<(f32, i32, i32)>,
     tickcounts: Vec<(f32, u8)>,
+    combos: Vec<(f32, u32, u32)>,
 }
 
 impl From<&TimingSegments> for CachedTimingSegments {
@@ -509,6 +510,11 @@ impl From<&TimingSegments> for CachedTimingSegments {
                 .tickcounts
                 .iter()
                 .map(|seg| (seg.beat, seg.ticks))
+                .collect(),
+            combos: segments
+                .combos
+                .iter()
+                .map(|seg| (seg.beat, seg.combo, seg.miss_combo))
                 .collect(),
         }
     }
@@ -570,6 +576,19 @@ impl From<CachedTimingSegments> for TimingSegments {
                     .tickcounts
                     .into_iter()
                     .map(|(beat, ticks)| TickcountSegment { beat, ticks })
+                    .collect()
+            },
+            combos: if segments.combos.is_empty() {
+                default_combos()
+            } else {
+                segments
+                    .combos
+                    .into_iter()
+                    .map(|(beat, combo, miss_combo)| ComboSegment {
+                        beat,
+                        combo,
+                        miss_combo,
+                    })
                     .collect()
             },
         }
@@ -2303,6 +2322,11 @@ mod tests {
             beat: 12.0,
             ticks: 8,
         }];
+        segments.combos = vec![ComboSegment {
+            beat: 16.0,
+            combo: 3,
+            miss_combo: 2,
+        }];
 
         let round_trip = TimingSegments::from(CachedTimingSegments::from(&segments));
 
@@ -2312,6 +2336,9 @@ mod tests {
         assert_eq!(round_trip.time_signatures[0].numerator, 3);
         assert_eq!(round_trip.tickcounts[0].beat, 12.0);
         assert_eq!(round_trip.tickcounts[0].ticks, 8);
+        assert_eq!(round_trip.combos[0].beat, 16.0);
+        assert_eq!(round_trip.combos[0].combo, 3);
+        assert_eq!(round_trip.combos[0].miss_combo, 2);
     }
 
     #[test]

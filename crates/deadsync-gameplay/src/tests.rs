@@ -15568,7 +15568,8 @@ mod tests {
         let mut state = RowFinalizationPlayerState::default();
         let judgment = test_judgment(JudgeGrade::Great);
 
-        let update = apply_row_finalization_player_state(&mut state, &judgment, 2, 1, false, false);
+        let update =
+            apply_row_finalization_player_state(&mut state, &judgment, 2, 1, false, false, 1, 1);
 
         let ix = judgment::display_judge_ix(JudgeGrade::Great);
         assert_eq!(state.judgment_counts[ix], 1);
@@ -15589,13 +15590,13 @@ mod tests {
     }
 
     #[test]
-    fn pump_row_finalization_increments_combo_once_per_row() {
+    fn pump_row_finalization_applies_combo_multiplier_once_per_row() {
         let mut state = RowFinalizationPlayerState::default();
         let judgment = test_judgment(JudgeGrade::Fantastic);
 
-        apply_row_finalization_player_state(&mut state, &judgment, 3, 0, false, true);
+        apply_row_finalization_player_state(&mut state, &judgment, 3, 0, false, true, 3, 2);
 
-        assert_eq!(state.combo.combo, 1);
+        assert_eq!(state.combo.combo, 3);
     }
 
     #[test]
@@ -15725,7 +15726,8 @@ mod tests {
         };
         let judgment = test_judgment(JudgeGrade::Miss);
 
-        let update = apply_row_finalization_player_state(&mut state, &judgment, 1, 0, true, false);
+        let update =
+            apply_row_finalization_player_state(&mut state, &judgment, 1, 0, true, false, 1, 1);
 
         let ix = judgment::display_judge_ix(JudgeGrade::Miss);
         assert_eq!(state.judgment_counts[ix], 1);

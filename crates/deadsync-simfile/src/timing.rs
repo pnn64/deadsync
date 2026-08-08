@@ -1,8 +1,8 @@
 use deadsync_core::timing::beat_to_note_row;
 use deadsync_rules::timing::{
-    DelaySegment, FakeSegment, ScrollSegment, SpeedSegment, SpeedUnit, StopSegment,
-    TickcountSegment, TimeSignatureSegment, TimingSegments, WarpSegment, default_tickcounts,
-    default_time_signatures,
+    ComboSegment, DelaySegment, FakeSegment, ScrollSegment, SpeedSegment, SpeedUnit, StopSegment,
+    TickcountSegment, TimeSignatureSegment, TimingSegments, WarpSegment, default_combos,
+    default_tickcounts, default_time_signatures,
 };
 use rssp::timing as rssp_timing;
 
@@ -127,6 +127,64 @@ pub fn parse_tickcounts(tag: Option<&str>) -> Vec<TickcountSegment> {
     out
 }
 
+pub fn parse_combos(tag: Option<&str>) -> Vec<ComboSegment> {
+    let Some(s) = tag.map(str::trim).filter(|s| !s.is_empty()) else {
+        return default_combos();
+    };
+
+    let mut out = Vec::new();
+    for segment in s.split(',') {
+        let mut parts = segment.trim().split('=');
+        let (Some(beat), Some(combo)) = (parts.next(), parts.next()) else {
+            continue;
+        };
+        let (Ok(beat), Ok(combo)) = (beat.trim().parse::<f32>(), combo.trim().parse::<i32>())
+        else {
+            continue;
+        };
+        let miss_combo = parts
+            .next()
+            .and_then(|value| value.trim().parse::<i32>().ok())
+            .unwrap_or(combo);
+        if beat.is_finite() {
+            out.push(ComboSegment {
+                beat,
+                combo: combo.max(0) as u32,
+                miss_combo: miss_combo.max(0) as u32,
+            });
+        }
+    }
+
+    if out.is_empty() {
+        return default_combos();
+    }
+
+    out.sort_by(|a, b| {
+        beat_to_note_row(a.beat)
+            .cmp(&beat_to_note_row(b.beat))
+            .then_with(|| a.beat.total_cmp(&b.beat))
+    });
+    let mut deduped: Vec<ComboSegment> = Vec::with_capacity(out.len());
+    for segment in out {
+        if deduped
+            .last()
+            .is_some_and(|last| beat_to_note_row(last.beat) == beat_to_note_row(segment.beat))
+        {
+            let last = deduped.len() - 1;
+            deduped[last] = segment;
+        } else {
+            deduped.push(segment);
+        }
+    }
+    if deduped
+        .first()
+        .is_none_or(|segment| beat_to_note_row(segment.beat) > 0)
+    {
+        deduped.insert(0, default_combos()[0]);
+    }
+    deduped
+}
+
 pub fn timing_segments_from_rssp(segments: &rssp_timing::TimingSegments) -> TimingSegments {
     let speeds = segments
         .speeds
@@ -188,6 +246,7 @@ pub fn timing_segments_from_rssp(segments: &rssp_timing::TimingSegments) -> Timi
             .collect(),
         time_signatures: default_time_signatures(),
         tickcounts: default_tickcounts(),
+        combos: default_combos(),
     }
 }
 
@@ -259,7 +318,7 @@ pub fn crossover_annotations<const LANES: usize>(
 #[cfg(test)]
 mod tests {
     use super::{
-        crossover_annotations, parse_tickcounts, parse_time_signatures,
+        crossover_annotations, parse_combos, parse_tickcounts, parse_time_signatures,
         rssp_timing_segments_from_deadsync, timing_segments_from_rssp,
     };
     use deadsync_rules::timing::{SpeedUnit, default_time_signature};
@@ -288,6 +347,25 @@ mod tests {
         assert_eq!((tickcounts[1].beat, tickcounts[1].ticks), (4.0, 3));
         assert_eq!((tickcounts[2].beat, tickcounts[2].ticks), (8.0, 2));
         assert_eq!((tickcounts[3].beat, tickcounts[3].ticks), (12.0, 0));
+    }
+
+    #[test]
+    fn parse_combos_matches_itg_two_and_three_value_forms() {
+        let combos = parse_combos(Some("8.000=2, bad, 4.000=3=5, 4.000=4=6"));
+
+        assert_eq!(combos.len(), 3);
+        assert_eq!(
+            (combos[0].beat, combos[0].combo, combos[0].miss_combo),
+            (0.0, 1, 1)
+        );
+        assert_eq!(
+            (combos[1].beat, combos[1].combo, combos[1].miss_combo),
+            (4.0, 4, 6)
+        );
+        assert_eq!(
+            (combos[2].beat, combos[2].combo, combos[2].miss_combo),
+            (8.0, 2, 2)
+        );
     }
 
     #[test]
