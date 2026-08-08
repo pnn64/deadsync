@@ -367,7 +367,61 @@ mod tests {
         assert!(!ns.receptor_off[2].def.mirror_h);
         assert!(ns.receptor_off[3].def.mirror_h);
         assert!(ns.receptor_off[4].def.mirror_h);
+        assert!(
+            ns.receptor_off[2]
+                .texture_key()
+                .ends_with("Center Ready Receptor 1x3.png"),
+            "center receptor should use the ready panel instead of the outline-only layer"
+        );
+        let center_glow = ns.receptor_glow[2]
+            .as_ref()
+            .expect("center receptor should keep its pressed glow layer");
+        assert_eq!(
+            [ns.receptor_off[2].def.src[1], center_glow.def.src[1]],
+            [0, 64]
+        );
+        for quantization in 0..NUM_QUANTIZATIONS {
+            assert!(!ns.notes[quantization].def.mirror_h);
+            assert!(!ns.notes[NUM_QUANTIZATIONS + quantization].def.mirror_h);
+            assert!(ns.notes[3 * NUM_QUANTIZATIONS + quantization].def.mirror_h);
+            assert!(ns.notes[4 * NUM_QUANTIZATIONS + quantization].def.mirror_h);
+        }
         assert_eq!(ns.notes.len(), 5 * NUM_QUANTIZATIONS);
+    }
+
+    #[test]
+    fn loads_every_bundled_pump_noteskin() {
+        const PUMP_SKINS: [&str; 14] = [
+            "default",
+            "cmd",
+            "cmd-routine-p1",
+            "cmd-routine-p2",
+            "complex",
+            "delta",
+            "delta-note",
+            "delta-routine-p1",
+            "delta-routine-p2",
+            "frame5p",
+            "newextra",
+            "pad",
+            "rhythm",
+            "simple",
+        ];
+
+        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../assets/noteskins");
+        let names = noteskin_itg::discover_skins(&[root.clone()], "pump");
+        assert_eq!(names, PUMP_SKINS);
+        for num_cols in [5, 10] {
+            let style = Style {
+                num_cols,
+                num_players: 1,
+            };
+            for skin in PUMP_SKINS {
+                load_itg(&root, "pump", skin, &style).unwrap_or_else(|err| {
+                    panic!("bundled {num_cols}-panel pump/{skin} should compile and load: {err}")
+                });
+            }
+        }
     }
 
     #[test]

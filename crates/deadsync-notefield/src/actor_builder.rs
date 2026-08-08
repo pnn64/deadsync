@@ -234,7 +234,7 @@ mod tests {
         request.total_cols = 10;
         let max_limited = notefield_frame_plan(request).expect("capped P2 field should resolve");
         assert_eq!(max_limited.col_start, 6);
-        assert_eq!(max_limited.num_cols, 2);
+        assert_eq!(max_limited.num_cols, 4);
     }
 
     #[test]

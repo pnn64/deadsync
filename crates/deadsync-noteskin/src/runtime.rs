@@ -1749,6 +1749,7 @@ pub fn itg_receptor_column<T: Clone>(
     mut apply_init: impl FnMut(&mut T, &str),
     mut base_zoom: impl FnMut(&T) -> f32,
 ) -> Option<ItgReceptorColumn<T>> {
+    let layers = itg_receptor_visual_layers(layers);
     let layer_commands = layers
         .iter()
         .map(|sprite| &sprite.commands)
@@ -1781,10 +1782,19 @@ pub fn itg_receptor_column<T: Clone>(
     })
 }
 
+fn itg_receptor_visual_layers<T>(layers: &[ItgResolvedSprite<T>]) -> &[ItgResolvedSprite<T>] {
+    if layers.len() > 2 {
+        &layers[layers.len() - 2..]
+    } else {
+        layers
+    }
+}
+
 pub fn itg_receptor_glow_behavior_from_layers<T>(
     layers: &[ItgResolvedSprite<T>],
     metric_command: impl FnMut(&str) -> Option<String>,
 ) -> ReceptorGlowBehavior {
+    let layers = itg_receptor_visual_layers(layers);
     receptor::receptor_glow_behavior(layers.get(1).map(|sprite| &sprite.commands), metric_command)
 }
 
@@ -4554,6 +4564,41 @@ mod tests {
         assert_eq!(column.pulse_command.as_deref(), Some("zoom,2"));
         assert_eq!(column.off_reverse.reverse_off.vert_align, Some(0.0));
         assert_eq!(column.glow_reverse.reverse_on.vert_align, Some(1.0));
+    }
+
+    #[test]
+    fn receptor_column_uses_base_and_glow_after_static_underlay() {
+        let layers = [
+            ItgResolvedSprite {
+                element: "Outline".to_string(),
+                slot: Slot(1),
+                commands: HashMap::new(),
+            },
+            ItgResolvedSprite {
+                element: "Base".to_string(),
+                slot: Slot(2),
+                commands: HashMap::new(),
+            },
+            ItgResolvedSprite {
+                element: "Glow".to_string(),
+                slot: Slot(3),
+                commands: HashMap::new(),
+            },
+        ];
+
+        let column = itg_receptor_column(
+            &layers,
+            &crate::itg::IniData::default(),
+            || None,
+            || None,
+            || None,
+            |_, _| {},
+            |_| 1.0,
+        )
+        .expect("base receptor should resolve");
+
+        assert_eq!(column.off, Slot(2));
+        assert_eq!(column.glow, Some(Slot(3)));
     }
 
     #[test]

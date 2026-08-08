@@ -69,6 +69,8 @@ pub struct ItgLuaActorDecl {
 }
 
 pub fn parse_actor_decl(content: &str, metrics: &noteskin_itg::IniData) -> ItgLuaActorDecl {
+    let content = strip_lua_comments(content);
+    let content = content.as_str();
     let mut decl = ItgLuaActorDecl::default();
     let arg0_aliases = parse_arg0_aliases(content);
     let command_context = command_context(content);
@@ -185,6 +187,72 @@ pub fn parse_actor_decl(content: &str, metrics: &noteskin_itg::IniData) -> ItgLu
     }
 
     decl
+}
+
+fn strip_lua_comments(content: &str) -> String {
+    let bytes = content.as_bytes();
+    let mut out = Vec::with_capacity(content.len());
+    let mut idx = 0usize;
+    let mut quote = 0u8;
+    while idx < bytes.len() {
+        let byte = bytes[idx];
+        if quote != 0 {
+            out.push(byte);
+            if byte == b'\\' && idx + 1 < bytes.len() {
+                idx += 1;
+                out.push(bytes[idx]);
+            } else if byte == quote {
+                quote = 0;
+            }
+            idx += 1;
+            continue;
+        }
+        if matches!(byte, b'\'' | b'"') {
+            quote = byte;
+            out.push(byte);
+            idx += 1;
+            continue;
+        }
+        if byte != b'-' || bytes.get(idx + 1) != Some(&b'-') {
+            out.push(byte);
+            idx += 1;
+            continue;
+        }
+
+        let mut body = idx + 2;
+        let mut equals = 0usize;
+        if bytes.get(body) == Some(&b'[') {
+            body += 1;
+            while bytes.get(body) == Some(&b'=') {
+                equals += 1;
+                body += 1;
+            }
+        }
+        let long_comment = bytes.get(body) == Some(&b'[');
+        if long_comment {
+            idx = body + 1;
+            while idx < bytes.len() {
+                let equals_end = idx + 1 + equals;
+                let closing = bytes[idx] == b']'
+                    && equals_end < bytes.len()
+                    && bytes[idx + 1..equals_end].iter().all(|byte| *byte == b'=')
+                    && bytes[equals_end] == b']';
+                if closing {
+                    idx += equals + 2;
+                    break;
+                }
+                out.push(if bytes[idx] == b'\n' { b'\n' } else { b' ' });
+                idx += 1;
+            }
+        } else {
+            idx += 2;
+            while idx < bytes.len() && bytes[idx] != b'\n' {
+                out.push(b' ');
+                idx += 1;
+            }
+        }
+    }
+    String::from_utf8(out).expect("comment removal preserves valid UTF-8")
 }
 
 pub fn parse_wrapper_commands(
@@ -1536,6 +1604,39 @@ return Def.ActorFrame {
             Some(
                 "Var \"Button\" == \"Center\" and GAMESTATE:GetCurrentStyle():GetStepsType() ~= 'StepsType_Pump_Halfdouble'"
             )
+        );
+    }
+
+    #[test]
+    fn actor_parser_ignores_commented_receptor_layers() {
+        let content = r#"
+return Def.ActorFrame {
+    NOTESKIN:LoadActor(Var "Button", "Ready Receptor")..{
+        Name="Base";
+        Frames={{ Frame = 0 }};
+    };
+    --[[
+    NOTESKIN:LoadActor(Var "Button", "Ready Receptor")..{
+        Name="Tap";
+        Frames={{ Frame = 2 }};
+    };
+    ]]
+    -- NOTESKIN:LoadActor(Var "Button", "Ready Receptor")..{ Frames={{ Frame = 2 }}; };
+    NOTESKIN:LoadActor(Var "Button", "Ready Receptor")..{
+        Name="Glow";
+        Frames={{ Frame = 1 }};
+    };
+}
+"#;
+
+        let decl = parse_actor_decl(content, &noteskin_itg::IniData::default());
+
+        assert_eq!(
+            decl.refs
+                .iter()
+                .map(|reference| reference.frame_override)
+                .collect::<Vec<_>>(),
+            [Some(0), Some(1)]
         );
     }
 

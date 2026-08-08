@@ -5,9 +5,8 @@ use std::sync::Arc;
 
 // This should match the native resolution of "rounded-square.png" from the theme (64x64).
 const PANEL_NATIVE_SIZE: f32 = 64.0;
-// Defines which panels are "active" for the dance-single layout.
 const DANCE_LAYOUT: [bool; 9] = [false, true, false, true, false, true, false, true, false];
-// Defines the layout for an inactive player.
+const PUMP_LAYOUT: [bool; 9] = [true, false, true, false, true, false, true, false, true];
 const INACTIVE_LAYOUT: [bool; 9] = [
     false, false, false, false, false, false, false, false, false,
 ];
@@ -22,6 +21,7 @@ pub struct PadDisplayParams {
     pub zoom: f32,
     pub z: i16,
     pub is_active: bool,
+    pub is_pump: bool,
 }
 
 struct CachedPadChildren {
@@ -30,13 +30,13 @@ struct CachedPadChildren {
 }
 
 thread_local! {
-    static PAD_CHILDREN_CACHE: RefCell<[Option<CachedPadChildren>; 2]> =
-        const { RefCell::new([None, None]) };
+    static PAD_CHILDREN_CACHE: RefCell<[Option<CachedPadChildren>; 4]> =
+        const { RefCell::new([None, None, None, None]) };
 }
 
 /// Builds a 3x3 pad display actor, positioned and scaled as a group.
 pub fn build(params: PadDisplayParams) -> Actor {
-    let children = cached_children(params.zoom, params.is_active);
+    let children = cached_children(params.zoom, params.is_active, params.is_pump);
     Actor::SharedFrame {
         align: [0.5, 0.5],
         offset: [params.center_x, params.center_y],
@@ -49,8 +49,8 @@ pub fn build(params: PadDisplayParams) -> Actor {
     }
 }
 
-fn cached_children(zoom: f32, is_active: bool) -> Arc<[Actor]> {
-    let slot = usize::from(is_active);
+fn cached_children(zoom: f32, is_active: bool, is_pump: bool) -> Arc<[Actor]> {
+    let slot = usize::from(is_active) * 2 + usize::from(is_pump);
     PAD_CHILDREN_CACHE.with(|cache| {
         let mut cache = cache.borrow_mut();
         if let Some(cached) = cache[slot].as_ref()
@@ -59,7 +59,7 @@ fn cached_children(zoom: f32, is_active: bool) -> Arc<[Actor]> {
             return Arc::clone(&cached.children);
         }
 
-        let children = Arc::<[Actor]>::from(build_children(zoom, is_active));
+        let children = Arc::<[Actor]>::from(build_children(zoom, is_active, is_pump));
         cache[slot] = Some(CachedPadChildren {
             zoom_bits: zoom.to_bits(),
             children: Arc::clone(&children),
@@ -68,15 +68,19 @@ fn cached_children(zoom: f32, is_active: bool) -> Arc<[Actor]> {
     })
 }
 
-fn build_children(zoom: f32, is_active: bool) -> Vec<Actor> {
-    let mut children = Vec::with_capacity(9);
-
-    // Choose which layout to use based on whether the player is active.
-    let layout = if is_active {
-        DANCE_LAYOUT
-    } else {
+const fn panel_layout(is_active: bool, is_pump: bool) -> [bool; 9] {
+    if !is_active {
         INACTIVE_LAYOUT
-    };
+    } else if is_pump {
+        PUMP_LAYOUT
+    } else {
+        DANCE_LAYOUT
+    }
+}
+
+fn build_children(zoom: f32, is_active: bool, is_pump: bool) -> Vec<Actor> {
+    let mut children = Vec::with_capacity(9);
+    let layout = panel_layout(is_active, is_pump);
 
     // This is the final size of one panel after zoom.
     let zoomed_panel_size = PANEL_NATIVE_SIZE * zoom;
@@ -117,18 +121,27 @@ mod tests {
 
     #[test]
     fn cached_pad_children_match_legacy_content_and_refresh_for_inputs() {
-        let legacy = build_children(0.125, true);
-        let first = cached_children(0.125, true);
-        let repeated = cached_children(0.125, true);
+        let legacy = build_children(0.125, true, false);
+        let first = cached_children(0.125, true, false);
+        let repeated = cached_children(0.125, true, false);
         assert_eq!(format!("{legacy:?}"), format!("{:?}", first.as_ref()));
         assert!(Arc::ptr_eq(&first, &repeated));
 
-        let changed_zoom = cached_children(0.25, true);
-        let inactive = cached_children(0.125, false);
+        let changed_zoom = cached_children(0.25, true, false);
+        let pump = cached_children(0.125, true, true);
+        let inactive = cached_children(0.125, false, false);
         assert!(!Arc::ptr_eq(&first, &changed_zoom));
+        assert!(!Arc::ptr_eq(&first, &pump));
         assert_ne!(
             format!("{:?}", first.as_ref()),
             format!("{:?}", inactive.as_ref())
         );
+    }
+
+    #[test]
+    fn pump_uses_corners_and_center() {
+        assert_eq!(panel_layout(true, false), DANCE_LAYOUT);
+        assert_eq!(panel_layout(true, true), PUMP_LAYOUT);
+        assert_eq!(panel_layout(false, true), INACTIVE_LAYOUT);
     }
 }

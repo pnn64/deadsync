@@ -1304,8 +1304,23 @@ fn draw_combo_preview(actors: &mut Vec<Actor>, rc: &RowCtx, primary_player_idx: 
     }
 }
 
-const PREVIEW_ARROWS: [(usize, f32, f32); 4] =
+const DANCE_PREVIEW_ARROWS: [(usize, f32, f32); 4] =
     [(0, 0.0, -1.5), (1, 1.0, -0.5), (2, 3.0, 0.5), (3, 2.0, 1.5)];
+const PUMP_PREVIEW_ARROWS: [(usize, f32, f32); 5] = [
+    (0, 0.0, -2.0),
+    (1, 1.0, -1.0),
+    (2, 2.0, 0.0),
+    (3, 3.0, 1.0),
+    (4, 4.0, 2.0),
+];
+
+const fn preview_arrows(num_cols: usize) -> &'static [(usize, f32, f32)] {
+    if matches!(num_cols, 5 | 10) {
+        &PUMP_PREVIEW_ARROWS
+    } else {
+        &DANCE_PREVIEW_ARROWS
+    }
+}
 
 #[allow(clippy::too_many_arguments, clippy::too_many_lines)]
 fn draw_noteskin_note(
@@ -1398,6 +1413,8 @@ fn draw_noteskin_note(
                     align(0.5, 0.5):
                     xy(center[0], center[1]):
                     setsize(size[0], size[1]):
+                    zoomx(slot_preview_zoom_x(note_slot, 1.0)):
+                    zoomy(slot_preview_zoom_y(note_slot, 1.0)):
                     rotationz(draw.rot[2] - note_slot.def.rotation_deg as f32):
                     customtexturerect(uv[0], uv[1], uv[2], uv[3]):
                     diffuse(color[0], color[1], color[2], color[3]):
@@ -1409,6 +1426,8 @@ fn draw_noteskin_note(
                     align(0.5, 0.5):
                     xy(center[0], center[1]):
                     setsize(size[0], size[1]):
+                    zoomx(slot_preview_zoom_x(note_slot, 1.0)):
+                    zoomy(slot_preview_zoom_y(note_slot, 1.0)):
                     rotationz(draw.rot[2] - note_slot.def.rotation_deg as f32):
                     customtexturerect(uv[0], uv[1], uv[2], uv[3]):
                     diffuse(color[0], color[1], color[2], color[3]):
@@ -1463,6 +1482,8 @@ fn draw_noteskin_note(
             align(0.5, 0.5):
             xy(center[0], center[1]):
             setsize(size[0], size[1]):
+            zoomx(slot_preview_zoom_x(note_slot, 1.0)):
+            zoomy(slot_preview_zoom_y(note_slot, 1.0)):
             rotationz(-note_slot.def.rotation_deg as f32):
             customtexturerect(uv[0], uv[1], uv[2], uv[3]):
             diffuse(1.0, 1.0, 1.0, rc.a):
@@ -1473,7 +1494,7 @@ fn draw_noteskin_note(
 
 fn draw_noteskin_preview(actors: &mut Vec<Actor>, rc: &RowCtx, ns: &Noteskin, center_x: f32) {
     let target_height = NOTESKIN_PREVIEW_ARROW_PIXEL_SIZE * NOTESKIN_PREVIEW_SCALE;
-    for (col, quant_idx, x_mult) in PREVIEW_ARROWS {
+    for &(col, quant_idx, x_mult) in preview_arrows(ns.column_xs.len()) {
         let x = center_x + x_mult * target_height;
         let note_idx = col * NUM_QUANTIZATIONS + Quantization::Q4th as usize;
         draw_noteskin_note(actors, rc, ns, note_idx, quant_idx, x);
@@ -1593,7 +1614,7 @@ fn draw_receptor_preview(
         receptor_color[2],
         receptor_color[3] * rc.a,
     ];
-    for (col, _, x_mult) in PREVIEW_ARROWS {
+    for &(col, _, x_mult) in preview_arrows(receptor_ns.column_xs.len()) {
         let Some(receptor_slot) = receptor_ns.receptor_off.get(col) else {
             continue;
         };
@@ -1875,5 +1896,29 @@ fn draw_tap_explosion_row_preview(actors: &mut Vec<Actor>, rc: &RowCtx, primary_
             .or_else(|| rc.fc.state.noteskin.previews[P2].base.as_deref())
             .unwrap_or(explosion_ns);
         draw_tap_explosion_preview(actors, rc, explosion_ns, receptor_ns, rc.fc.preview_x[P2]);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::preview_arrows;
+
+    #[test]
+    fn preview_arrows_match_active_game_columns() {
+        assert_eq!(
+            preview_arrows(4)
+                .iter()
+                .map(|(col, _, _)| *col)
+                .collect::<Vec<_>>(),
+            [0, 1, 2, 3]
+        );
+        assert_eq!(
+            preview_arrows(5)
+                .iter()
+                .map(|(col, _, _)| *col)
+                .collect::<Vec<_>>(),
+            [0, 1, 2, 3, 4]
+        );
+        assert_eq!(preview_arrows(10), preview_arrows(5));
     }
 }

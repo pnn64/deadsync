@@ -28,6 +28,7 @@ fn states(play_style: PlayStyle, joined: [bool; 2]) -> [bool; 2] {
 
 pub fn build(play_style: PlayStyle, joined: [bool; 2]) -> [Actor; 2] {
     let [p1_active, p2_active] = states(play_style, joined);
+    let is_pump = play_style.is_pump();
     let pad_zoom = 0.24 * widescale(0.435, 0.525);
     [
         pad_display::build(pad_display::PadDisplayParams {
@@ -36,6 +37,7 @@ pub fn build(play_style: PlayStyle, joined: [bool; 2]) -> [Actor; 2] {
             zoom: pad_zoom,
             z: 121,
             is_active: p1_active,
+            is_pump,
         }),
         pad_display::build(pad_display::PadDisplayParams {
             center_x: screen_width() - widescale(15.0, 17.0),
@@ -43,6 +45,7 @@ pub fn build(play_style: PlayStyle, joined: [bool; 2]) -> [Actor; 2] {
             zoom: pad_zoom,
             z: 121,
             is_active: p2_active,
+            is_pump,
         }),
     ]
 }

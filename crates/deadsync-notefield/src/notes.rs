@@ -268,6 +268,16 @@ pub(crate) fn compose_note_layer<S, F>(
         actor.align(0.5, 0.5);
         actor.xy(request.sprite_center[0], request.sprite_center[1]);
         actor.size(request.size[0], request.size[1]);
+        actor.zoomx(if request.slot.sprite_def().mirror_h {
+            -1.0
+        } else {
+            1.0
+        });
+        actor.zoomy(if request.slot.sprite_def().mirror_v {
+            -1.0
+        } else {
+            1.0
+        });
         actor.rotationy(request.rotation_y_deg);
         actor.rotationz(request.sprite_rotation_z_deg);
         actor.customtexturerect(request.uv);
@@ -339,6 +349,16 @@ fn compose_note_glow<S, F>(
     actor.align(0.5, 0.5);
     actor.xy(request.sprite_center[0], request.sprite_center[1]);
     actor.size(request.size[0], request.size[1]);
+    actor.zoomx(if request.slot.sprite_def().mirror_h {
+        -1.0
+    } else {
+        1.0
+    });
+    actor.zoomy(if request.slot.sprite_def().mirror_v {
+        -1.0
+    } else {
+        1.0
+    });
     actor.rotationy(request.rotation_y_deg);
     actor.rotationz(request.sprite_rotation_z_deg);
     actor.customtexturerect(request.uv);
@@ -2075,7 +2095,9 @@ mod tests {
 
     #[test]
     fn note_layer_sprite_preserves_diffuse_then_glow_and_additive_blend() {
-        let slot = GlowSlot::sprite();
+        let mut slot = GlowSlot::sprite();
+        slot.def.mirror_h = true;
+        slot.def.mirror_v = true;
         let mut request = layer_request(&slot);
         request.draw.blend_add = true;
         request.blend = BlendMode::Add;
@@ -2095,6 +2117,8 @@ mod tests {
             world_z,
             rot_y_deg,
             rot_z_deg,
+            flip_x,
+            flip_y,
             ..
         } = &actors[0]
         else {
@@ -2107,12 +2131,16 @@ mod tests {
         assert_eq!(*world_z, 9.0);
         assert_eq!(*rot_y_deg, 12.0);
         assert_eq!(*rot_z_deg, 34.0);
+        assert!(*flip_x);
+        assert!(*flip_y);
 
         let Actor::Sprite {
             tint,
             glow,
             blend,
             world_z,
+            flip_x,
+            flip_y,
             ..
         } = &actors[1]
         else {
@@ -2122,6 +2150,8 @@ mod tests {
         assert_eq!(*glow, [1.0, 1.0, 1.0, 0.75]);
         assert_eq!(*blend, BlendMode::Add);
         assert_eq!(*world_z, 9.0);
+        assert!(*flip_x);
+        assert!(*flip_y);
     }
 
     #[test]

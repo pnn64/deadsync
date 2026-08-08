@@ -13,7 +13,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{LazyLock, Mutex};
 use twox_hash::XxHash64;
 
-const COMPILER_VERSION: u32 = 11;
+const COMPILER_VERSION: u32 = 12;
 static COMPILED_HASH_CACHE: LazyLock<Mutex<HashMap<String, String>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
 const PUMP_BUTTONS: [&str; 5] = ["DownLeft", "UpLeft", "Center", "UpRight", "DownRight"];

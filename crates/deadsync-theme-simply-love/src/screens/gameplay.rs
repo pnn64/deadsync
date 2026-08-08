@@ -1753,7 +1753,7 @@ impl GameplayStepStatsMode {
 
 const fn gameplay_step_stats_mode(
     play_style: profile_data::PlayStyle,
-    _num_cols: usize,
+    num_cols: usize,
     p1_enabled: bool,
     p2_enabled: bool,
 ) -> GameplayStepStatsMode {
@@ -1769,7 +1769,7 @@ const fn gameplay_step_stats_mode(
     if !enabled {
         return GameplayStepStatsMode::Hidden;
     }
-    if !play_style.is_versus() && !play_style.is_double() {
+    if num_cols <= 5 && !play_style.is_versus() {
         GameplayStepStatsMode::Side
     } else {
         match play_style {
