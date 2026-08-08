@@ -349,6 +349,7 @@ pub fn handle_raw_pad_event(state: &mut State, pad_event: &PadEvent) {
 pub fn push_actors(
     actors: &mut Vec<Actor>,
     state: &State,
+    game: GameFlag,
     visual_policy: crate::views::SimplyLoveVisualPolicyView,
 ) {
     actors.reserve(56);
@@ -365,6 +366,7 @@ pub fn push_actors(
 
     actors.extend(test_input::build_test_input_screen_content(
         &state.test_input,
+        game,
         state.active_color_index,
         visual_policy.machine_font,
     ));
@@ -372,7 +374,7 @@ pub fn push_actors(
 
 pub fn get_actors(state: &State) -> Vec<Actor> {
     let mut actors = Vec::with_capacity(56);
-    push_actors(&mut actors, state, Default::default());
+    push_actors(&mut actors, state, GameFlag::Dance, Default::default());
     actors
 }
 

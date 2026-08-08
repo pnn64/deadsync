@@ -14149,6 +14149,11 @@ pub fn push_actors(
         }
         actors.extend(test_input::build_select_music_overlay(
             &state.test_input_overlay,
+            if play_style.is_pump() {
+                GameFlag::Pump
+            } else {
+                GameFlag::Dance
+            },
             state.active_color_index,
             show_p1,
             show_p2,

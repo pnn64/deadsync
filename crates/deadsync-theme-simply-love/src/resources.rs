@@ -141,6 +141,7 @@ pub const BASE_TEXTURE_ASSETS: &[TextureAssetSpec] = &[
     texture_asset("select_mode/center-border.png"),
     texture_asset("select_mode/center-feet.png"),
     texture_asset("test_input/dance.png"),
+    texture_asset("test_input/pump.png"),
     texture_asset("test_input/buttons.png"),
     texture_asset("test_input/highlight.png"),
     texture_asset("test_input/highlightgreen.png"),

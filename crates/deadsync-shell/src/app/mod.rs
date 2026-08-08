@@ -5342,6 +5342,7 @@ impl App {
             CurrentScreen::Input => input_screen::push_actors(
                 &mut actors,
                 &self.state.screens.input_state,
+                config.game_flag,
                 visual_policy,
             ),
             CurrentScreen::ConfigurePads => {

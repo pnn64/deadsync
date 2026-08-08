@@ -18,6 +18,7 @@ use deadlib_present::color;
 use deadlib_present::space::widescale;
 use deadlib_present::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 use deadlib_render::{BlendMode, MeshVertex};
+use deadsync_config::prelude::GameFlag;
 use deadsync_score as score_data;
 
 use crate::assets::AssetManager;
@@ -5396,6 +5397,11 @@ pub fn push_actors(
                     ));
                 }
                 EvalPane::TestInput => {
+                    let game = if play_style.is_pump() {
+                        GameFlag::Pump
+                    } else {
+                        GameFlag::Dance
+                    };
                     // Centered, uniformly scaled TestInput panel (text on left, pad on right).
                     let pane_ox = crate::screens::components::evaluation::test_input_pane_origin_x(
                         controller,
@@ -5423,6 +5429,7 @@ pub fn push_actors(
                         let gap = pad_half + 6.0;
                         actors.extend(test_input::build_evaluation_pad(
                             &state.test_input_state,
+                            game,
                             test_input::PlayerSlot::P1,
                             pane_ox - gap,
                             panel_center_y,
@@ -5430,6 +5437,7 @@ pub fn push_actors(
                         ));
                         actors.extend(test_input::build_evaluation_pad(
                             &state.test_input_state,
+                            game,
                             test_input::PlayerSlot::P2,
                             pane_ox + gap,
                             panel_center_y,
@@ -5442,6 +5450,7 @@ pub fn push_actors(
                         };
                         actors.extend(test_input::build_evaluation_panel(
                             &state.test_input_state,
+                            game,
                             slot,
                             anchor_x,
                             anchor_y,

@@ -3,6 +3,7 @@ use crate::assets::{FontRole, machine_font_key};
 use crate::config::MachineFont;
 use deadlib_present::actors::Actor;
 use deadlib_present::space::{screen_center_x, screen_center_y, screen_height, screen_width};
+use deadsync_config::prelude::GameFlag;
 use deadsync_input::KeyCode;
 use deadsync_input::RawKeyboardEvent;
 use deadsync_input::{InputEvent, PadDir, PadEvent, VirtualAction, with_keymap};
@@ -21,6 +22,7 @@ pub enum LogicalButton {
     Down,
     Left,
     Right,
+    Center,
     MenuLeft,
     MenuRight,
     Start,
@@ -281,24 +283,24 @@ pub fn clear(state: &mut State) {
 
 const fn player_from_action(act: VirtualAction) -> Option<PlayerSlot> {
     use VirtualAction::{
-        p1_down, p1_left, p1_menu_down, p1_menu_left, p1_menu_right, p1_menu_up, p1_right,
-        p1_select, p1_start, p1_up, p2_down, p2_left, p2_menu_down, p2_menu_left, p2_menu_right,
-        p2_menu_up, p2_right, p2_select, p2_start, p2_up,
+        p1_center, p1_down, p1_left, p1_menu_down, p1_menu_left, p1_menu_right, p1_menu_up,
+        p1_right, p1_select, p1_start, p1_up, p2_center, p2_down, p2_left, p2_menu_down,
+        p2_menu_left, p2_menu_right, p2_menu_up, p2_right, p2_select, p2_start, p2_up,
     };
     match act {
         p1_up | p1_down | p1_left | p1_right | p1_menu_up | p1_menu_down | p1_menu_left
-        | p1_menu_right | p1_start | p1_select => Some(PlayerSlot::P1),
+        | p1_menu_right | p1_start | p1_select | p1_center => Some(PlayerSlot::P1),
         p2_up | p2_down | p2_left | p2_right | p2_menu_up | p2_menu_down | p2_menu_left
-        | p2_menu_right | p2_start | p2_select => Some(PlayerSlot::P2),
+        | p2_menu_right | p2_start | p2_select | p2_center => Some(PlayerSlot::P2),
         _ => None,
     }
 }
 
 const fn logical_button_from_action(act: VirtualAction) -> Option<LogicalButton> {
     use VirtualAction::{
-        p1_down, p1_left, p1_menu_down, p1_menu_left, p1_menu_right, p1_menu_up, p1_right,
-        p1_select, p1_start, p1_up, p2_down, p2_left, p2_menu_down, p2_menu_left, p2_menu_right,
-        p2_menu_up, p2_right, p2_select, p2_start, p2_up,
+        p1_center, p1_down, p1_left, p1_menu_down, p1_menu_left, p1_menu_right, p1_menu_up,
+        p1_right, p1_select, p1_start, p1_up, p2_center, p2_down, p2_left, p2_menu_down,
+        p2_menu_left, p2_menu_right, p2_menu_up, p2_right, p2_select, p2_start, p2_up,
     };
     match act {
         p1_up | p1_menu_up | p2_up | p2_menu_up => Some(LogicalButton::Up),
@@ -309,6 +311,7 @@ const fn logical_button_from_action(act: VirtualAction) -> Option<LogicalButton>
         p1_menu_right | p2_menu_right => Some(LogicalButton::MenuRight),
         p1_start | p2_start => Some(LogicalButton::Start),
         p1_select | p2_select => Some(LogicalButton::Select),
+        p1_center | p2_center => Some(LogicalButton::Center),
         _ => None,
     }
 }
@@ -405,6 +408,7 @@ fn held_alpha(state: &State, slot: PlayerSlot, button: LogicalButton) -> f32 {
 fn push_pad(
     actors: &mut Vec<Actor>,
     state: &State,
+    game: GameFlag,
     slot: PlayerSlot,
     pad_x: f32,
     pad_y: f32,
@@ -416,6 +420,7 @@ fn push_pad(
     push_pad_scaled(
         actors,
         state,
+        game,
         slot,
         pad_x,
         pad_y,
@@ -430,6 +435,7 @@ fn push_pad(
 fn push_pad_scaled(
     actors: &mut Vec<Actor>,
     state: &State,
+    game: GameFlag,
     slot: PlayerSlot,
     pad_x: f32,
     pad_y: f32,
@@ -448,12 +454,20 @@ fn push_pad_scaled(
     let menu_y = pad_y + 160.0 * scale;
     let menu_x_offset = 37.0_f32 * scale;
 
-    actors.push(act!(sprite("test_input/dance.png"):
-        align(0.5, 0.5):
-        xy(pad_x, pad_y):
-        zoom(sprite_zoom):
-        z(z)
-    ));
+    actors.push(match game {
+        GameFlag::Dance => act!(sprite("test_input/dance.png"):
+            align(0.5, 0.5):
+            xy(pad_x, pad_y):
+            zoom(sprite_zoom):
+            z(z)
+        ),
+        GameFlag::Pump => act!(sprite("test_input/pump.png"):
+            align(0.5, 0.5):
+            xy(pad_x, pad_y):
+            zoom(sprite_zoom):
+            z(z)
+        ),
+    });
 
     if show_player_label && let Some(player_label_font) = player_label_font {
         let label = match slot {
@@ -471,34 +485,32 @@ fn push_pad_scaled(
         ));
     }
 
-    actors.push(act!(sprite("test_input/highlight.png"):
-        align(0.5, 0.5):
-        xy(pad_x, pad_y - arrow_v_offset):
-        zoom(sprite_zoom):
-        diffuse(1.0, 1.0, 1.0, held_alpha(state, slot, LogicalButton::Up)):
-        z(z + 1.0)
-    ));
-    actors.push(act!(sprite("test_input/highlight.png"):
-        align(0.5, 0.5):
-        xy(pad_x, pad_y + arrow_v_offset):
-        zoom(sprite_zoom):
-        diffuse(1.0, 1.0, 1.0, held_alpha(state, slot, LogicalButton::Down)):
-        z(z + 1.0)
-    ));
-    actors.push(act!(sprite("test_input/highlight.png"):
-        align(0.5, 0.5):
-        xy(pad_x - arrow_h_offset, pad_y):
-        zoom(sprite_zoom):
-        diffuse(1.0, 1.0, 1.0, held_alpha(state, slot, LogicalButton::Left)):
-        z(z + 1.0)
-    ));
-    actors.push(act!(sprite("test_input/highlight.png"):
-        align(0.5, 0.5):
-        xy(pad_x + arrow_h_offset, pad_y):
-        zoom(sprite_zoom):
-        diffuse(1.0, 1.0, 1.0, held_alpha(state, slot, LogicalButton::Right)):
-        z(z + 1.0)
-    ));
+    let highlights: &[(LogicalButton, f32, f32)] = match game {
+        GameFlag::Dance => &[
+            (LogicalButton::Up, 0.0, -arrow_v_offset),
+            (LogicalButton::Down, 0.0, arrow_v_offset),
+            (LogicalButton::Left, -arrow_h_offset, 0.0),
+            (LogicalButton::Right, arrow_h_offset, 0.0),
+        ],
+        // Pump's compact action aliases follow chart lane order:
+        // Down=UpLeft, Up=UpRight, Center, Left=DownLeft, Right=DownRight.
+        GameFlag::Pump => &[
+            (LogicalButton::Down, -arrow_h_offset, -arrow_v_offset),
+            (LogicalButton::Up, arrow_h_offset, -arrow_v_offset),
+            (LogicalButton::Center, 0.0, 0.0),
+            (LogicalButton::Left, -arrow_h_offset, arrow_v_offset),
+            (LogicalButton::Right, arrow_h_offset, arrow_v_offset),
+        ],
+    };
+    for &(button, offset_x, offset_y) in highlights {
+        actors.push(act!(sprite("test_input/highlight.png"):
+            align(0.5, 0.5):
+            xy(pad_x + offset_x, pad_y + offset_y):
+            zoom(sprite_zoom):
+            diffuse(1.0, 1.0, 1.0, held_alpha(state, slot, button)):
+            z(z + 1.0)
+        ));
+    }
 
     if !show_menu_buttons {
         return;
@@ -581,6 +593,7 @@ fn push_polling_readout(actors: &mut Vec<Actor>, state: &State, z: f32) {
 
 pub fn build_test_input_screen_content(
     state: &State,
+    game: GameFlag,
     _active_color_index: i32,
     machine_font: MachineFont,
 ) -> Vec<Actor> {
@@ -593,6 +606,7 @@ pub fn build_test_input_screen_content(
     push_pad(
         &mut actors,
         state,
+        game,
         PlayerSlot::P1,
         cx - pad_spacing,
         cy,
@@ -604,6 +618,7 @@ pub fn build_test_input_screen_content(
     push_pad(
         &mut actors,
         state,
+        game,
         PlayerSlot::P2,
         cx + pad_spacing,
         cy,
@@ -650,6 +665,7 @@ pub fn build_test_input_screen_content(
 /// `scale` scales the entire pad uniformly (1.0 = full size; SL Pane6 uses ~0.8).
 pub fn build_evaluation_pad(
     state: &State,
+    game: GameFlag,
     slot: PlayerSlot,
     pad_x: f32,
     pad_y: f32,
@@ -659,6 +675,7 @@ pub fn build_evaluation_pad(
     push_pad_scaled(
         &mut actors,
         state,
+        game,
         slot,
         pad_x,
         pad_y,
@@ -725,6 +742,7 @@ pub fn evaluation_panel_size() -> (f32, f32) {
 /// top-left corner. `scale` uniformly scales the entire panel.
 pub fn build_evaluation_panel(
     state: &State,
+    game: GameFlag,
     slot: PlayerSlot,
     anchor_x: f32,
     anchor_y: f32,
@@ -758,6 +776,7 @@ pub fn build_evaluation_panel(
     push_pad_scaled(
         &mut actors,
         state,
+        game,
         slot,
         pad_x,
         pad_y,
@@ -821,6 +840,7 @@ pub fn build_evaluation_panel(
 
 pub fn build_select_music_overlay(
     state: &State,
+    game: GameFlag,
     _active_color_index: i32,
     show_p1: bool,
     show_p2: bool,
@@ -845,6 +865,7 @@ pub fn build_select_music_overlay(
         push_pad(
             &mut actors,
             state,
+            game,
             PlayerSlot::P1,
             cx - pad_spacing,
             cy,
@@ -858,6 +879,7 @@ pub fn build_select_music_overlay(
         push_pad(
             &mut actors,
             state,
+            game,
             PlayerSlot::P2,
             cx + pad_spacing,
             cy,
@@ -889,6 +911,62 @@ mod tests {
     use super::*;
     use deadsync_input::{PadCode, PadId};
     use std::time::Duration;
+
+    #[test]
+    fn test_input_pad_tracks_active_game() {
+        let mut state = State::default();
+        state
+            .buttons_held
+            .insert((PlayerSlot::P1, LogicalButton::Center), true);
+
+        let pump = build_evaluation_pad(&state, GameFlag::Pump, PlayerSlot::P1, 100.0, 200.0, 1.0);
+        let Actor::Sprite { source, .. } = &pump[0] else {
+            panic!("expected Pump pad sprite");
+        };
+        assert_eq!(source.texture_key(), Some("test_input/pump.png"));
+        assert_eq!(pump.len(), 6);
+        let offsets: [[f32; 2]; 5] = std::array::from_fn(|idx| {
+            let Actor::Sprite { offset, .. } = &pump[idx + 1] else {
+                panic!("expected Pump panel highlight");
+            };
+            *offset
+        });
+        assert_eq!(
+            offsets,
+            [
+                [33.0, 132.0],
+                [167.0, 132.0],
+                [100.0, 200.0],
+                [33.0, 268.0],
+                [167.0, 268.0],
+            ]
+        );
+        let Actor::Sprite { offset, tint, .. } = &pump[3] else {
+            panic!("expected Pump center highlight");
+        };
+        assert_eq!(*offset, [100.0, 200.0]);
+        assert_eq!(tint[3], 1.0);
+
+        let dance =
+            build_evaluation_pad(&state, GameFlag::Dance, PlayerSlot::P1, 100.0, 200.0, 1.0);
+        let Actor::Sprite { source, .. } = &dance[0] else {
+            panic!("expected Dance pad sprite");
+        };
+        assert_eq!(source.texture_key(), Some("test_input/dance.png"));
+        assert_eq!(dance.len(), 5);
+    }
+
+    #[test]
+    fn pump_center_is_tracked_as_a_player_panel() {
+        assert_eq!(
+            player_from_action(VirtualAction::p1_center),
+            Some(PlayerSlot::P1)
+        );
+        assert_eq!(
+            logical_button_from_action(VirtualAction::p2_center),
+            Some(LogicalButton::Center)
+        );
+    }
 
     #[test]
     fn dedups_pad_events_from_the_same_report() {
