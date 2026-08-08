@@ -20,7 +20,9 @@ use deadsync_audio_decode::resample::{
     write_resampler_output,
 };
 use log::{debug, error, warn};
-use rubato::{Resampler, SincFixedOut};
+use rubato::audioadapter::Adapter;
+use rubato::audioadapter_buffers::direct::{SequentialSliceOfSlices, SequentialSliceOfVecs};
+use rubato::{Adjustable, Async, FixedAsync, ResampleError, Resampler, ResamplerConstructionError};
 use smallvec::SmallVec;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -59,6 +61,50 @@ const RESAMPLE_MAX_RELATIVE_RATIO: f64 = 64.0;
 /// and resampler/SOLA rebuilds, so all three stay in agreement (otherwise
 /// a rate like 1.0001 could activate SOLA without triggering rebuild).
 const RATE_EPS: f32 = 0.0005;
+
+fn new_resampler(
+    ratio: f64,
+    max_relative_ratio: f64,
+    channels: usize,
+) -> Result<Async<f32>, ResamplerConstructionError> {
+    Async::new_sinc(
+        ratio,
+        max_relative_ratio,
+        &resampler_params(),
+        OUT_FRAMES_PER_CALL,
+        channels,
+        FixedAsync::Output,
+    )
+}
+
+fn process_resampler(
+    resampler: &mut Async<f32>,
+    input: &impl Adapter<f32>,
+    output: &mut [Vec<f32>],
+) -> Result<(usize, usize), ResampleError> {
+    let channels = resampler.nbr_channels();
+    let output_frames = resampler.output_frames_max();
+    let mut output = SequentialSliceOfVecs::new_mut(output, channels, output_frames)
+        .expect("resampler output allocation matches its channel and frame counts");
+    resampler.process_into_buffer(input, &mut output, None)
+}
+
+fn compat_lead_frames(ratio: f64) -> usize {
+    // Rubato 0.16 obtained the sinc lookahead by requesting extra input before
+    // its first fixed-output block. Rubato 4 emits that lookahead as leading
+    // output instead, so trim the equivalent frames to preserve our alignment.
+    let half_sinc = resampler_params().sinc_len / 2;
+    (half_sinc.saturating_sub(1) as f64 * ratio).round() as usize
+}
+
+fn trim_resampler_lead(samples: &mut Vec<i16>, channels: usize, frames_left: &mut usize) {
+    if channels == 0 || *frames_left == 0 {
+        return;
+    }
+    let drop_frames = (*frames_left).min(samples.len() / channels);
+    drop_front_samples(samples, drop_frames * channels);
+    *frames_left -= drop_frames;
+}
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct OutputFormat {
@@ -305,7 +351,8 @@ fn music_decoder_thread_loop(
         }
     }
 
-    let mut resampler: Option<SincFixedOut<f32>> = None;
+    let mut resampler: Option<Async<f32>> = None;
+    let mut resampler_lead_frames: usize;
     let mut resampler_rate = f32::NAN;
     let mut resampler_pp = false;
     let mut resample_out: Option<Vec<Vec<f32>>> = None;
@@ -359,15 +406,9 @@ fn music_decoder_thread_loop(
                 s.reset();
             }
         } else {
-            let new_resampler = SincFixedOut::<f32>::new(
-                ratio,
-                RESAMPLE_MAX_RELATIVE_RATIO,
-                resampler_params(),
-                OUT_FRAMES_PER_CALL,
-                in_ch,
-            )?;
-            resample_in = Some(new_resampler.input_buffer_allocate(true));
-            resample_out = Some(new_resampler.output_buffer_allocate(true));
+            let new_resampler = new_resampler(ratio, RESAMPLE_MAX_RELATIVE_RATIO, in_ch)?;
+            resample_in = Some(vec![vec![0.0; new_resampler.input_frames_max()]; in_ch]);
+            resample_out = Some(vec![vec![0.0; new_resampler.output_frames_max()]; in_ch]);
             in_planar = Some(PlanarAccum::new(in_ch, PLANAR_INPUT_CAP_FRAMES));
             resampler = Some(new_resampler);
             resampler_rate = current_rate_f32;
@@ -380,6 +421,11 @@ fn music_decoder_thread_loop(
                 None
             };
         }
+        resampler_lead_frames = if direct_audio {
+            0
+        } else {
+            compat_lead_frames(ratio)
+        };
 
         let start_frame_f = (cut.start_sec * f64::from(in_hz)).max(0.0);
         let start_floor = start_frame_f.floor() as u64;
@@ -520,6 +566,7 @@ fn music_decoder_thread_loop(
                     resample_out = None;
                     in_planar = None;
                     sola = None;
+                    resampler_lead_frames = 0;
                 } else {
                     let need_rebuild = pp_changed || resampler.is_none();
                     let mut reuse_resampler = false;
@@ -528,15 +575,12 @@ fn music_decoder_thread_loop(
                         reuse_resampler = existing.set_resample_ratio(ratio, false).is_ok();
                     }
                     if !reuse_resampler {
-                        let new_resampler = SincFixedOut::<f32>::new(
-                            ratio,
-                            RESAMPLE_MAX_RELATIVE_RATIO,
-                            resampler_params(),
-                            OUT_FRAMES_PER_CALL,
-                            in_ch,
-                        )?;
-                        resample_in = Some(new_resampler.input_buffer_allocate(true));
-                        resample_out = Some(new_resampler.output_buffer_allocate(true));
+                        let new_resampler =
+                            new_resampler(ratio, RESAMPLE_MAX_RELATIVE_RATIO, in_ch)?;
+                        resample_in =
+                            Some(vec![vec![0.0; new_resampler.input_frames_max()]; in_ch]);
+                        resample_out =
+                            Some(vec![vec![0.0; new_resampler.output_frames_max()]; in_ch]);
                         resampler = Some(new_resampler);
                     }
                     resampler_rate = current_rate_f32;
@@ -557,6 +601,7 @@ fn music_decoder_thread_loop(
                     } else {
                         sola = None;
                     }
+                    resampler_lead_frames = compat_lead_frames(ratio);
                 }
             }
             if resampler.is_none() {
@@ -671,12 +716,13 @@ fn music_decoder_thread_loop(
                     for channel in &in_planar.channels {
                         input_slices.push(&channel[start..end]);
                     }
-                    resampler
-                        .process_into_buffer(input_slices.as_slice(), resample_out, None)?
-                        .1
+                    let input = SequentialSliceOfSlices::new(input_slices.as_slice(), in_ch, need)
+                        .expect("planar accumulator exposes every requested input frame");
+                    process_resampler(resampler, &input, resample_out)?.1
                 };
                 in_planar.consume_frames(need);
                 write_resampler_output(resample_out, produced_frames, out_ch, &mut out_tmp);
+                trim_resampler_lead(&mut out_tmp, out_ch, &mut resampler_lead_frames);
                 if produced_frames == 0 {
                     break;
                 }
@@ -763,13 +809,14 @@ fn music_decoder_thread_loop(
                     dst[..need].fill(0.0);
                     dst[..copy_frames].copy_from_slice(&channel[start..end]);
                 }
-                let produced_frames = resampler
-                    .process_into_buffer(resample_in.as_slice(), resample_out, None)?
-                    .1;
+                let input = SequentialSliceOfVecs::new(resample_in.as_slice(), in_ch, need)
+                    .expect("resampler input allocation holds the padded final chunk");
+                let produced_frames = process_resampler(resampler, &input, resample_out)?.1;
                 in_planar.clear();
                 if produced_frames > 0 {
                     let produced_frames =
                         write_resampler_output(resample_out, produced_frames, out_ch, &mut out_tmp);
+                    trim_resampler_lead(&mut out_tmp, out_ch, &mut resampler_lead_frames);
                     let music_sec_per_frame = if produced_frames == 0 {
                         0.0
                     } else if current_pp {
@@ -812,12 +859,13 @@ fn music_decoder_thread_loop(
             for dst in resample_in.iter_mut() {
                 dst[..need].fill(0.0);
             }
-            let produced_frames = resampler
-                .process_into_buffer(resample_in.as_slice(), resample_out, None)?
-                .1;
+            let input = SequentialSliceOfVecs::new(resample_in.as_slice(), in_ch, need)
+                .expect("resampler input allocation holds a zero drain chunk");
+            let produced_frames = process_resampler(resampler, &input, resample_out)?.1;
             if produced_frames > 0 {
                 let _produced_frames =
                     write_resampler_output(resample_out, produced_frames, out_ch, &mut out_tmp);
+                trim_resampler_lead(&mut out_tmp, out_ch, &mut resampler_lead_frames);
                 let music_sec_per_frame = f64::from(current_rate_f32) / f64::from(out_hz.max(1));
                 let _ = cap_out_frames(&mut out_tmp, out_ch, &mut frames_left_out);
                 if !out_tmp.is_empty() {
@@ -886,15 +934,15 @@ pub fn load_and_resample_sfx(
     }
 
     let ratio = f64::from(out_hz) / f64::from(in_hz);
-    let mut resampler =
-        SincFixedOut::<f32>::new(ratio, 1.0, resampler_params(), OUT_FRAMES_PER_CALL, in_ch)?;
+    let mut resampler = new_resampler(ratio, 1.0, in_ch)?;
 
     let mut in_planar = PlanarAccum::new(in_ch, PLANAR_INPUT_CAP_FRAMES);
-    let mut resample_in = resampler.input_buffer_allocate(true);
-    let mut resample_out = resampler.output_buffer_allocate(true);
+    let mut resample_in = vec![vec![0.0; resampler.input_frames_max()]; in_ch];
+    let mut resample_out = vec![vec![0.0; resampler.output_frames_max()]; in_ch];
     let mut out_tmp = Vec::with_capacity(OUT_FRAMES_PER_CALL * out_ch);
     let mut pkt_buf = Vec::new();
     let mut resampled_data = Vec::new();
+    let mut resampler_lead_frames = compat_lead_frames(ratio);
 
     while reader.read_dec_packet_into(&mut pkt_buf)? {
         if pkt_buf.is_empty() {
@@ -914,15 +962,16 @@ pub fn load_and_resample_sfx(
                 for channel in &in_planar.channels {
                     input_slices.push(&channel[start..end]);
                 }
-                resampler
-                    .process_into_buffer(input_slices.as_slice(), &mut resample_out, None)?
-                    .1
+                let input = SequentialSliceOfSlices::new(input_slices.as_slice(), in_ch, need)
+                    .expect("planar accumulator exposes every requested input frame");
+                process_resampler(&mut resampler, &input, &mut resample_out)?.1
             };
             in_planar.consume_frames(need);
             if produced_frames == 0 {
                 break;
             }
             write_resampler_output(&resample_out, produced_frames, out_ch, &mut out_tmp);
+            trim_resampler_lead(&mut out_tmp, out_ch, &mut resampler_lead_frames);
             resampled_data.extend_from_slice(&out_tmp);
         }
     }
@@ -937,11 +986,12 @@ pub fn load_and_resample_sfx(
             dst[..need].fill(0.0);
             dst[..copy_frames].copy_from_slice(&channel[start..end]);
         }
-        let produced_frames = resampler
-            .process_into_buffer(resample_in.as_slice(), &mut resample_out, None)?
-            .1;
+        let input = SequentialSliceOfVecs::new(resample_in.as_slice(), in_ch, need)
+            .expect("resampler input allocation holds the padded final chunk");
+        let produced_frames = process_resampler(&mut resampler, &input, &mut resample_out)?.1;
         if produced_frames > 0 {
             write_resampler_output(&resample_out, produced_frames, out_ch, &mut out_tmp);
+            trim_resampler_lead(&mut out_tmp, out_ch, &mut resampler_lead_frames);
             resampled_data.extend_from_slice(&out_tmp);
         }
         in_planar.clear();
@@ -951,11 +1001,12 @@ pub fn load_and_resample_sfx(
     for dst in &mut resample_in {
         dst[..need].fill(0.0);
     }
-    let produced_frames = resampler
-        .process_into_buffer(resample_in.as_slice(), &mut resample_out, None)?
-        .1;
+    let input = SequentialSliceOfVecs::new(resample_in.as_slice(), in_ch, need)
+        .expect("resampler input allocation holds a zero drain chunk");
+    let produced_frames = process_resampler(&mut resampler, &input, &mut resample_out)?.1;
     if produced_frames > 0 {
         write_resampler_output(&resample_out, produced_frames, out_ch, &mut out_tmp);
+        trim_resampler_lead(&mut out_tmp, out_ch, &mut resampler_lead_frames);
         resampled_data.extend_from_slice(&out_tmp);
     }
     Ok(Arc::from(resampled_data.into_boxed_slice()))
@@ -964,18 +1015,136 @@ pub fn load_and_resample_sfx(
 #[cfg(test)]
 mod tests {
     use super::{
-        lead_in_silence_timing, music_output_start_sec, push_music_block, seek_preroll_in_frames,
+        OUT_FRAMES_PER_CALL, compat_lead_frames, lead_in_silence_timing, music_output_start_sec,
+        new_resampler, process_resampler, push_music_block, seek_preroll_in_frames,
+        trim_resampler_lead, write_resampler_output,
     };
     use deadsync_audio::{MusicBlockTiming, music_transport};
+    use rubato::audioadapter_buffers::direct::SequentialSliceOfVecs;
+    use rubato::{Adjustable, Resampler};
+    use rubato_016::{Resampler as OldResampler, SincFixedOut};
     use std::sync::Arc;
     use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
     use std::time::{Duration, Instant};
+
+    fn input_signal(start: usize, frames: usize) -> Vec<Vec<f32>> {
+        (0..2)
+            .map(|channel| {
+                (0..frames)
+                    .map(|frame| {
+                        let frame = start + frame;
+                        let value = (frame * 73 + channel * 19_997 + 31) % 65_521;
+                        (value as f32 - 32_760.0) / 32_768.0
+                    })
+                    .collect()
+            })
+            .collect()
+    }
+
+    fn current_resample_output(original_ratio: f64, ratio: f64, target_frames: usize) -> Vec<i16> {
+        let mut resampler = new_resampler(original_ratio, 64.0, 2)
+            .expect("current characterization resampler must be valid");
+        if ratio != original_ratio {
+            resampler.reset();
+            resampler
+                .set_resample_ratio(ratio, false)
+                .expect("current characterization ratio is in range");
+        }
+        let output_frames = resampler.output_frames_max();
+        let mut resample_out = vec![vec![0.0; output_frames]; 2];
+        let mut next_input_frame = 0usize;
+        let mut lead_frames = compat_lead_frames(ratio);
+        let mut output = Vec::with_capacity(target_frames * 2);
+        let mut out_tmp = Vec::new();
+        while output.len() / 2 < target_frames {
+            let need = resampler.input_frames_next();
+            let input = input_signal(next_input_frame, need);
+            let input = SequentialSliceOfVecs::new(input.as_slice(), 2, need)
+                .expect("current characterization input has the requested shape");
+            let produced = process_resampler(&mut resampler, &input, &mut resample_out)
+                .expect("current characterization buffers must fit")
+                .1;
+            write_resampler_output(&resample_out, produced, 2, &mut out_tmp);
+            trim_resampler_lead(&mut out_tmp, 2, &mut lead_frames);
+            output.extend_from_slice(&out_tmp);
+            next_input_frame += need;
+        }
+        output.truncate(target_frames * 2);
+        output
+    }
+
+    fn old_resample_output(original_ratio: f64, ratio: f64, target_frames: usize) -> Vec<i16> {
+        let mut resampler = SincFixedOut::<f32>::new(
+            original_ratio,
+            64.0,
+            rubato_016::SincInterpolationParameters {
+                sinc_len: 256,
+                f_cutoff: 0.95,
+                interpolation: rubato_016::SincInterpolationType::Linear,
+                oversampling_factor: 128,
+                window: rubato_016::WindowFunction::BlackmanHarris2,
+            },
+            OUT_FRAMES_PER_CALL,
+            2,
+        )
+        .expect("old characterization resampler must be valid");
+        if ratio != original_ratio {
+            resampler.reset();
+            resampler
+                .set_resample_ratio(ratio, false)
+                .expect("old characterization ratio is in range");
+        }
+        let mut resample_out = resampler.output_buffer_allocate(true);
+        let mut next_input_frame = 0usize;
+        let mut output = Vec::with_capacity(target_frames * 2);
+        let mut out_tmp = Vec::new();
+        while output.len() / 2 < target_frames {
+            let need = resampler.input_frames_next();
+            let input = input_signal(next_input_frame, need);
+            let produced = resampler
+                .process_into_buffer(input.as_slice(), &mut resample_out, None)
+                .expect("old characterization buffers must fit")
+                .1;
+            write_resampler_output(&resample_out, produced, 2, &mut out_tmp);
+            output.extend_from_slice(&out_tmp);
+            next_input_frame += need;
+        }
+        output.truncate(target_frames * 2);
+        output
+    }
 
     #[test]
     fn seeked_map_starts_at_decoder_frame() {
         let sec = music_output_start_sec(true, 44_092, 1.0, 44_100);
 
         assert!((sec - (44_092.0 / 44_100.0)).abs() <= 1e-12);
+    }
+
+    #[test]
+    fn rubato_4_preserves_016_stream_output() {
+        const TARGET_FRAMES: usize = 8 * OUT_FRAMES_PER_CALL;
+        const MAX_MEAN_PCM_DIFF: f64 = 256.0; // Less than 0.8% of full scale.
+        for (original_ratio, ratio) in [
+            (48_000.0 / 44_100.0, 48_000.0 / 44_100.0),
+            (44_100.0 / 48_000.0, 44_100.0 / 48_000.0),
+            (1.0, 0.5),
+            (1.0, 2.0),
+        ] {
+            let old = old_resample_output(original_ratio, ratio, TARGET_FRAMES);
+            let current = current_resample_output(original_ratio, ratio, TARGET_FRAMES);
+            assert_eq!(current.len(), old.len());
+
+            let total_diff: u64 = old
+                .iter()
+                .zip(&current)
+                .map(|(old, current)| i32::from(*old).abs_diff(i32::from(*current)) as u64)
+                .sum();
+            let mean_diff = total_diff as f64 / old.len() as f64;
+            assert!(
+                mean_diff < MAX_MEAN_PCM_DIFF,
+                "Rubato 4 PCM drifted from 0.16 at ratio {ratio}: mean absolute difference {mean_diff:.2}"
+            );
+        }
     }
 
     #[test]
