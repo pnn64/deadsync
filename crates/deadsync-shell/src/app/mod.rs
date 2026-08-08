@@ -4174,7 +4174,11 @@ impl App {
                 .as_mut()
                 .expect("prompt presence checked above"),
             ev.pressed,
-            ev.action,
+            screens::input::menu_action(
+                ev.action,
+                config::get().game_flag,
+                self.state.play_input_policy.only_dedicated_menu_buttons,
+            ),
             self.state.play_input_policy.only_dedicated_menu_buttons,
         );
         match input {

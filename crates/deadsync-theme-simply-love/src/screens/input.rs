@@ -2,6 +2,7 @@ use crate::screens::components::shared::{test_input, transitions, visual_style_b
 use crate::screens::{Screen, ThemeEffect};
 use deadlib_present::actors::Actor;
 use deadlib_present::color;
+use deadsync_config::prelude::GameFlag;
 use deadsync_core::input::InputSource;
 use deadsync_input::RawKeyboardEvent;
 use deadsync_input::{InputEvent, PadEvent, VirtualAction, with_keymap};
@@ -65,6 +66,23 @@ pub enum ThreeKeyMenuAction {
     Next,
     Confirm,
     Cancel,
+}
+
+/// Apply ITGmania's game-button-to-menu-button mapping.
+///
+/// Pump Center has Start as its secondary menu button. Like ITGmania, the
+/// secondary mapping is disabled when only dedicated menu buttons are allowed.
+#[inline(always)]
+pub const fn menu_action(
+    action: VirtualAction,
+    game: GameFlag,
+    only_dedicated_menu_buttons: bool,
+) -> VirtualAction {
+    match (game, only_dedicated_menu_buttons, action) {
+        (GameFlag::Pump, false, VirtualAction::p1_center) => VirtualAction::p1_start,
+        (GameFlag::Pump, false, VirtualAction::p2_center) => VirtualAction::p2_start,
+        _ => action,
+    }
 }
 
 #[inline(always)]
@@ -356,4 +374,29 @@ pub fn get_actors(state: &State) -> Vec<Actor> {
     let mut actors = Vec::with_capacity(56);
     push_actors(&mut actors, state, Default::default());
     actors
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn pump_center_is_start_except_in_dedicated_mode() {
+        assert_eq!(
+            menu_action(VirtualAction::p1_center, GameFlag::Pump, false),
+            VirtualAction::p1_start,
+        );
+        assert_eq!(
+            menu_action(VirtualAction::p2_center, GameFlag::Pump, false),
+            VirtualAction::p2_start,
+        );
+        assert_eq!(
+            menu_action(VirtualAction::p1_center, GameFlag::Pump, true),
+            VirtualAction::p1_center,
+        );
+        assert_eq!(
+            menu_action(VirtualAction::p1_center, GameFlag::Dance, false),
+            VirtualAction::p1_center,
+        );
+    }
 }

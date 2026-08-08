@@ -168,9 +168,6 @@ pub fn handle_input(state: &mut State, ev: &InputEvent, game: GameFlag) -> Input
         | VirtualAction::p1_menu_down
         | VirtualAction::p2_menu_down => InputEffect::None,
         VirtualAction::p1_start | VirtualAction::p2_start => confirm(state, game),
-        VirtualAction::p1_center | VirtualAction::p2_center if game == GameFlag::Pump => {
-            confirm(state, game)
-        }
         VirtualAction::p1_back | VirtualAction::p2_back => {
             state.exit_requested = true;
             state.exit_chosen_anim = false;
@@ -184,22 +181,6 @@ pub fn handle_input(state: &mut State, ev: &InputEvent, game: GameFlag) -> Input
 #[cfg(test)]
 mod tests {
     use super::*;
-    use deadsync_core::input::InputSource;
-    use std::time::Instant;
-
-    fn press(action: VirtualAction) -> InputEvent {
-        let now = Instant::now();
-        InputEvent {
-            action,
-            input_slot: 0,
-            pressed: true,
-            source: InputSource::Gamepad,
-            timestamp: now,
-            timestamp_host_nanos: 0,
-            stored_at: now,
-            emitted_at: now,
-        }
-    }
 
     #[test]
     fn active_game_selects_the_style_family() {
@@ -238,24 +219,5 @@ mod tests {
         assert_eq!(Choice::index_for_style(PlayStyle::PumpVersus), 1);
         assert_eq!(Choice::index_for_style(PlayStyle::Double), 2);
         assert_eq!(Choice::index_for_style(PlayStyle::PumpDouble), 2);
-    }
-
-    #[test]
-    fn pump_center_acts_as_start_only_for_pump() {
-        let mut dance = State::default();
-        let mut pump = State::default();
-
-        assert_eq!(
-            handle_input(
-                &mut dance,
-                &press(VirtualAction::p1_center),
-                GameFlag::Dance
-            ),
-            InputEffect::None
-        );
-        assert_eq!(
-            handle_input(&mut pump, &press(VirtualAction::p1_center), GameFlag::Pump),
-            InputEffect::Confirm(PlayStyle::PumpSingle)
-        );
     }
 }

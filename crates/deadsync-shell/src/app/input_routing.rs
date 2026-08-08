@@ -136,11 +136,29 @@ impl App {
         if self.route_gameplay_offset_prompt_input(event_loop, &ev) {
             return Ok(());
         }
-        if let Some(action) = self.try_handle_late_join(&ev) {
+        let current_screen = self.state.screens.current_screen;
+        let input_policy = self.input_route_policy(current_screen);
+        let mut menu_ev = ev;
+        menu_ev.action = screens::input::menu_action(
+            ev.action,
+            config::get().game_flag,
+            input_policy.only_dedicated_menu_buttons,
+        );
+        if let Some(action) = self.try_handle_late_join(&menu_ev) {
             self.handle_action(action, event_loop)?;
             return Ok(());
         }
-        let current_screen = self.state.screens.current_screen;
+        let mut ev = ev;
+        if !matches!(
+            current_screen,
+            CurrentScreen::Gameplay
+                | CurrentScreen::Practice
+                | CurrentScreen::SelectMusic
+                | CurrentScreen::Input
+                | CurrentScreen::ConfigurePads
+        ) {
+            ev.action = menu_ev.action;
+        }
         let evaluation_test_input_active = current_screen == CurrentScreen::Evaluation
             && screens::evaluation::test_input_pane_active(&self.state.screens.evaluation_state);
         match pre_screen_input_route(
@@ -148,9 +166,7 @@ impl App {
             ev.action,
             PreScreenInputContext {
                 screen: current_screen,
-                only_dedicated_menu_buttons: self
-                    .input_route_policy(current_screen)
-                    .only_dedicated_menu_buttons,
+                only_dedicated_menu_buttons: input_policy.only_dedicated_menu_buttons,
                 evaluation_test_input_active,
                 gameplay_offset_prompt_active: self.state.gameplay_offset_save_prompt.is_some(),
                 course_active: self.state.session.course_run.is_some(),

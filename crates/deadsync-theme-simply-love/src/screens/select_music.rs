@@ -47,6 +47,7 @@ use deadsync_chart::{
     ChartData, ChartDisplayBpm, STANDARD_DIFFICULTY_COUNT, STANDARD_DIFFICULTY_NAMES, SongData,
     SongPack, SyncPref,
 };
+use deadsync_config::prelude::GameFlag;
 use deadsync_core::input::InputSource;
 use deadsync_input::{
     InputEvent, KeyCode, Keymap, PadDir, PadEvent, RawKeyboardEvent, VirtualAction, with_keymap,
@@ -10777,11 +10778,27 @@ pub fn handle_raw_pad_event(state: &mut State, pad_event: &PadEvent) {
 }
 
 pub fn handle_input(state: &mut State, ev: &InputEvent, fine: bool) -> ThemeEffect {
-    let effect = handle_input_impl(state, ev, fine);
+    let game_action = ev.action;
+    let mut menu_ev = *ev;
+    if !state.pad_config_overlay_visible && !state.test_input_overlay_visible {
+        let game = if state.session.play_style.is_pump() {
+            GameFlag::Pump
+        } else {
+            GameFlag::Dance
+        };
+        menu_ev.action =
+            screen_input::menu_action(ev.action, game, state.policy.dedicated_menu_only);
+    }
+    let effect = handle_input_impl(state, &menu_ev, fine, game_action);
     prepend_pending_runtime(state, effect)
 }
 
-fn handle_input_impl(state: &mut State, ev: &InputEvent, fine: bool) -> ThemeEffect {
+fn handle_input_impl(
+    state: &mut State,
+    ev: &InputEvent,
+    fine: bool,
+    game_action: VirtualAction,
+) -> ThemeEffect {
     update_select_hold_state(state, ev);
 
     // The Configure Pads overlay is a focused modal: handle its input first, so
@@ -10928,7 +10945,7 @@ fn handle_input_impl(state: &mut State, ev: &InputEvent, fine: bool) -> ThemeEff
     }
 
     if ev.pressed
-        && let Some(side) = state.favorite_code.check(ev.action, ev.timestamp)
+        && let Some(side) = state.favorite_code.check(game_action, ev.timestamp)
     {
         toggle_favorite_for_selected_entry(state, side);
     }
@@ -17144,6 +17161,39 @@ mod tests {
         let action =
             handle_raw_key_event(&mut state, Some(&raw_key(KeyCode::KeyT, true, false)), None);
         assert_stop_then_consume(action);
+        assert!(state.test_input_overlay_visible);
+    }
+
+    #[test]
+    fn pump_center_confirms_select_music_prompts() {
+        let mut state = init_placeholder();
+        state.session.play_style = profile_data::PlayStyle::PumpSingle;
+        state.out_prompt = super::OutPromptState::PressStartForOptions { elapsed: 0.0 };
+
+        super::handle_input(
+            &mut state,
+            &input_event(VirtualAction::p1_center, InputSource::Gamepad, true),
+            false,
+        );
+
+        assert!(matches!(
+            state.out_prompt,
+            super::OutPromptState::EnteringOptions { .. }
+        ));
+    }
+
+    #[test]
+    fn pump_center_remains_center_in_test_input_overlay() {
+        let mut state = init_placeholder();
+        state.session.play_style = profile_data::PlayStyle::PumpSingle;
+        state.test_input_overlay_visible = true;
+
+        super::handle_input(
+            &mut state,
+            &input_event(VirtualAction::p1_center, InputSource::Gamepad, true),
+            false,
+        );
+
         assert!(state.test_input_overlay_visible);
     }
 
