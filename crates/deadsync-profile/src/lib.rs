@@ -2409,6 +2409,8 @@ pub fn update_guest_profile_player_options(
         if profile.current_player_options() == *player_options
             && profile.player_options_singles == *player_options
             && profile.player_options_doubles == *player_options
+            && profile.player_options_pump_singles == *player_options
+            && profile.player_options_pump_doubles == *player_options
         {
             continue;
         }
@@ -2718,6 +2720,16 @@ pub fn apply_loaded_profile_data(
             &default_profile.player_options_doubles,
         )
         .unwrap_or_else(|| default_profile.player_options_doubles.clone());
+        profile.player_options_pump_singles = load_player_options(
+            player_options_section(PlayStyle::PumpSingle),
+            &default_profile.player_options_pump_singles,
+        )
+        .unwrap_or_else(|| profile.player_options_singles.clone());
+        profile.player_options_pump_doubles = load_player_options(
+            player_options_section(PlayStyle::PumpDouble),
+            &default_profile.player_options_pump_doubles,
+        )
+        .unwrap_or_else(|| profile.player_options_doubles.clone());
         profile.apply_player_options_for_style(play_style);
 
         let mut load_last_played = |section: &str, default: &LastPlayed| {
@@ -3090,6 +3102,8 @@ pub fn create_local_profile_from_import_dir(
         calories_burned_today: 0.0,
         player_options_singles: data.options_singles.clone(),
         player_options_doubles: data.options_doubles.clone(),
+        player_options_pump_singles: data.options_singles.clone(),
+        player_options_pump_doubles: data.options_doubles.clone(),
         ..Profile::default()
     };
 
@@ -3533,10 +3547,10 @@ impl PlayStyle {
 #[inline(always)]
 pub const fn player_options_section(style: PlayStyle) -> &'static str {
     match style {
-        PlayStyle::Single | PlayStyle::Versus | PlayStyle::PumpSingle | PlayStyle::PumpVersus => {
-            "PlayerOptionsSingles"
-        }
-        PlayStyle::Double | PlayStyle::PumpDouble => "PlayerOptionsDoubles",
+        PlayStyle::Single | PlayStyle::Versus => "PlayerOptionsSingles",
+        PlayStyle::Double => "PlayerOptionsDoubles",
+        PlayStyle::PumpSingle | PlayStyle::PumpVersus => "PlayerOptionsPumpSingles",
+        PlayStyle::PumpDouble => "PlayerOptionsPumpDoubles",
     }
 }
 
@@ -8093,6 +8107,16 @@ pub fn append_profile_ini_content(content: &mut String, guid: &str, profile: &Pr
         player_options_section(PlayStyle::Double),
         &profile.player_options_doubles,
     );
+    append_player_options_section(
+        content,
+        player_options_section(PlayStyle::PumpSingle),
+        &profile.player_options_pump_singles,
+    );
+    append_player_options_section(
+        content,
+        player_options_section(PlayStyle::PumpDouble),
+        &profile.player_options_pump_doubles,
+    );
     append_userprofile_section(content, guid, profile);
     append_editable_section(content, profile);
     append_last_played_section(content, "LastPlayedSingles", &profile.last_played_singles);
@@ -8465,6 +8489,8 @@ pub struct Profile {
     pub global_offset_shift_ms: i32,
     pub player_options_singles: PlayerOptionsData,
     pub player_options_doubles: PlayerOptionsData,
+    pub player_options_pump_singles: PlayerOptionsData,
+    pub player_options_pump_doubles: PlayerOptionsData,
     // Persisted "last played" selections so future sessions can reopen
     // SelectMusic on the most recently played chart for each chart family.
     // Singles is shared by Single and Versus. Double uses its own entry.
@@ -8633,7 +8659,9 @@ impl Default for Profile {
             visual_delay_ms: player_options.visual_delay_ms,
             global_offset_shift_ms: player_options.global_offset_shift_ms,
             player_options_singles: player_options.clone(),
-            player_options_doubles: player_options,
+            player_options_doubles: player_options.clone(),
+            player_options_pump_singles: player_options.clone(),
+            player_options_pump_doubles: player_options,
             last_played_singles: LastPlayed::default(),
             last_played_doubles: LastPlayed::default(),
             last_played_course_singles: LastPlayedCourse::default(),
@@ -9714,22 +9742,20 @@ impl Profile {
     #[inline(always)]
     pub const fn player_options(&self, style: PlayStyle) -> &PlayerOptionsData {
         match style {
-            PlayStyle::Single
-            | PlayStyle::Versus
-            | PlayStyle::PumpSingle
-            | PlayStyle::PumpVersus => &self.player_options_singles,
-            PlayStyle::Double | PlayStyle::PumpDouble => &self.player_options_doubles,
+            PlayStyle::Single | PlayStyle::Versus => &self.player_options_singles,
+            PlayStyle::Double => &self.player_options_doubles,
+            PlayStyle::PumpSingle | PlayStyle::PumpVersus => &self.player_options_pump_singles,
+            PlayStyle::PumpDouble => &self.player_options_pump_doubles,
         }
     }
 
     #[inline(always)]
     pub fn player_options_mut(&mut self, style: PlayStyle) -> &mut PlayerOptionsData {
         match style {
-            PlayStyle::Single
-            | PlayStyle::Versus
-            | PlayStyle::PumpSingle
-            | PlayStyle::PumpVersus => &mut self.player_options_singles,
-            PlayStyle::Double | PlayStyle::PumpDouble => &mut self.player_options_doubles,
+            PlayStyle::Single | PlayStyle::Versus => &mut self.player_options_singles,
+            PlayStyle::Double => &mut self.player_options_doubles,
+            PlayStyle::PumpSingle | PlayStyle::PumpVersus => &mut self.player_options_pump_singles,
+            PlayStyle::PumpDouble => &mut self.player_options_pump_doubles,
         }
     }
 
@@ -9741,7 +9767,9 @@ impl Profile {
     pub fn store_current_player_options_for_all_styles(&mut self) {
         let options = self.current_player_options();
         self.player_options_singles = options.clone();
-        self.player_options_doubles = options;
+        self.player_options_doubles = options.clone();
+        self.player_options_pump_singles = options.clone();
+        self.player_options_pump_doubles = options;
     }
 
     pub fn apply_player_options_for_style(&mut self, style: PlayStyle) {
@@ -11825,6 +11853,20 @@ mod tests {
             default_profile.player_options_doubles.noteskin.as_str(),
             "metal"
         );
+        assert_eq!(
+            default_profile
+                .player_options_pump_singles
+                .noteskin
+                .as_str(),
+            "metal"
+        );
+        assert_eq!(
+            default_profile
+                .player_options_pump_doubles
+                .noteskin
+                .as_str(),
+            "metal"
+        );
     }
 
     #[test]
@@ -12282,11 +12324,18 @@ mod tests {
         };
         profile.player_options_singles.no_cmod_alternative = NoCmodAlternative::XMod;
         profile.player_options_doubles.no_cmod_alternative = NoCmodAlternative::MMod;
+        profile.player_options_pump_singles.noteskin = NoteSkin::new("prime");
+        profile.player_options_pump_doubles.noteskin = NoteSkin::new("delta");
 
         let profile_ini = render_profile_ini_content("profile-guid", &profile);
 
         assert!(profile_ini.starts_with("[PlayerOptionsSingles]\n"));
         assert!(profile_ini.contains("[PlayerOptionsDoubles]\n"));
+        assert!(profile_ini.contains("[PlayerOptionsPumpSingles]\n"));
+        assert!(profile_ini.contains("[PlayerOptionsPumpDoubles]\n"));
+        assert!(profile_ini.contains("[PlayerOptionsPumpSingles]\nBackgroundFilter="));
+        assert!(profile_ini.contains("NoteSkin=prime\n"));
+        assert!(profile_ini.contains("NoteSkin=delta\n"));
         assert!(profile_ini.contains("[userprofile]\nGuid=profile-guid\n"));
         assert!(profile_ini.contains("DisplayName=Test Player\n"));
         assert!(profile_ini.contains("PlayerInitials=TEST\n"));
@@ -12501,6 +12550,51 @@ ApiKey = gs-key
             player_options_section(PlayStyle::Double),
             "PlayerOptionsDoubles"
         );
+        assert_eq!(
+            player_options_section(PlayStyle::PumpSingle),
+            "PlayerOptionsPumpSingles"
+        );
+        assert_eq!(
+            player_options_section(PlayStyle::PumpVersus),
+            "PlayerOptionsPumpSingles"
+        );
+        assert_eq!(
+            player_options_section(PlayStyle::PumpDouble),
+            "PlayerOptionsPumpDoubles"
+        );
+    }
+
+    #[test]
+    fn player_options_are_isolated_by_game_and_side_count() {
+        let dance_single = test_player_options(NoteSkin::new("cel"), 60);
+        let dance_double = test_player_options(NoteSkin::new("metal"), 70);
+        let pump_single = test_player_options(NoteSkin::new("prime"), 80);
+        let pump_double = test_player_options(NoteSkin::new("delta"), 90);
+        let mut profile = Profile::default();
+
+        for (style, options) in [
+            (PlayStyle::Single, &dance_single),
+            (PlayStyle::Double, &dance_double),
+            (PlayStyle::PumpSingle, &pump_single),
+            (PlayStyle::PumpDouble, &pump_double),
+        ] {
+            profile.set_current_player_options(options.clone());
+            profile.store_current_player_options(style);
+        }
+
+        assert_eq!(profile.player_options(PlayStyle::Single), &dance_single);
+        assert_eq!(profile.player_options(PlayStyle::Versus), &dance_single);
+        assert_eq!(profile.player_options(PlayStyle::Double), &dance_double);
+        assert_eq!(profile.player_options(PlayStyle::PumpSingle), &pump_single);
+        assert_eq!(profile.player_options(PlayStyle::PumpVersus), &pump_single);
+        assert_eq!(profile.player_options(PlayStyle::PumpDouble), &pump_double);
+
+        profile.apply_player_options_for_style(PlayStyle::Single);
+        assert_eq!(profile.noteskin.as_str(), "cel");
+        profile.apply_player_options_for_style(PlayStyle::PumpSingle);
+        assert_eq!(profile.noteskin.as_str(), "prime");
+        profile.apply_player_options_for_style(PlayStyle::Single);
+        assert_eq!(profile.noteskin.as_str(), "cel");
     }
 
     #[test]
@@ -12571,6 +12665,8 @@ ApiKey = gs-key
             (("Stats", "IgnoreStepCountCalories"), "1".to_string()),
             (("Stats", "CaloriesBurnedDate"), today.to_string()),
             (("Stats", "CaloriesBurnedToday"), "12.5".to_string()),
+            (("PlayerOptionsSingles", "NoteSkin"), "cel".to_string()),
+            (("PlayerOptionsDoubles", "NoteSkin"), "metal".to_string()),
         ]);
         let gs_values = HashMap::from([
             (("GrooveStats", "ApiKey"), "gs-key".to_string()),
@@ -12583,7 +12679,7 @@ ApiKey = gs-key
         apply_loaded_profile_data(
             &mut profile,
             &default_profile,
-            PlayStyle::Double,
+            PlayStyle::PumpSingle,
             today,
             true,
             |section| profile_values.keys().any(|(s, _)| *s == section),
@@ -12622,6 +12718,14 @@ ApiKey = gs-key
         assert_eq!(profile.groovestats_password.expose(), "secret");
         assert!(!format!("{profile:?}").contains("secret"));
         assert_eq!(profile.arrowcloud_api_key, "ac-key");
+        assert_eq!(profile.player_options_singles.noteskin.as_str(), "cel");
+        assert_eq!(profile.player_options_doubles.noteskin.as_str(), "metal");
+        assert_eq!(profile.player_options_pump_singles.noteskin.as_str(), "cel");
+        assert_eq!(
+            profile.player_options_pump_doubles.noteskin.as_str(),
+            "metal"
+        );
+        assert_eq!(profile.noteskin.as_str(), "cel");
     }
 
     #[test]
@@ -12730,13 +12834,15 @@ ApiKey = gs-key
     }
 
     #[test]
-    fn profile_with_player_options_seeds_both_styles() {
+    fn profile_with_player_options_seeds_all_styles() {
         let options = test_player_options(NoteSkin::new("cel"), 60);
         let profile = profile_with_player_options(&options);
 
         assert_eq!(profile.noteskin.as_str(), "cel");
         assert_eq!(profile.player_options_singles, options);
         assert_eq!(profile.player_options_doubles, options);
+        assert_eq!(profile.player_options_pump_singles, options);
+        assert_eq!(profile.player_options_pump_doubles, options);
     }
 
     #[test]
@@ -12843,9 +12949,13 @@ ApiKey = gs-key
         profiles[0].noteskin = NoteSkin::new("old-guest");
         profiles[0].player_options_singles.noteskin = NoteSkin::new("old-guest");
         profiles[0].player_options_doubles.noteskin = NoteSkin::new("old-guest");
+        profiles[0].player_options_pump_singles.noteskin = NoteSkin::new("old-guest");
+        profiles[0].player_options_pump_doubles.noteskin = NoteSkin::new("old-guest");
         profiles[1].noteskin = NoteSkin::new("local-skin");
         profiles[1].player_options_singles.noteskin = NoteSkin::new("local-skin");
         profiles[1].player_options_doubles.noteskin = NoteSkin::new("local-skin");
+        profiles[1].player_options_pump_singles.noteskin = NoteSkin::new("local-skin");
+        profiles[1].player_options_pump_doubles.noteskin = NoteSkin::new("local-skin");
 
         let guest_options = PlayerOptionsData {
             scroll_speed: ScrollSpeedSetting::MMod(425.0),
@@ -12859,6 +12969,14 @@ ApiKey = gs-key
         assert_eq!(profiles[0].noteskin.as_str(), "cel");
         assert_eq!(profiles[0].player_options_singles.noteskin.as_str(), "cel");
         assert_eq!(profiles[0].player_options_doubles.noteskin.as_str(), "cel");
+        assert_eq!(
+            profiles[0].player_options_pump_singles.noteskin.as_str(),
+            "cel"
+        );
+        assert_eq!(
+            profiles[0].player_options_pump_doubles.noteskin.as_str(),
+            "cel"
+        );
         assert_eq!(profiles[0].scroll_speed, ScrollSpeedSetting::MMod(425.0));
         assert_eq!(profiles[1].noteskin.as_str(), "local-skin");
         assert_eq!(
@@ -12867,6 +12985,14 @@ ApiKey = gs-key
         );
         assert_eq!(
             profiles[1].player_options_doubles.noteskin.as_str(),
+            "local-skin"
+        );
+        assert_eq!(
+            profiles[1].player_options_pump_singles.noteskin.as_str(),
+            "local-skin"
+        );
+        assert_eq!(
+            profiles[1].player_options_pump_doubles.noteskin.as_str(),
             "local-skin"
         );
     }
