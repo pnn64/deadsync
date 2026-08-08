@@ -425,6 +425,25 @@ mod tests {
     }
 
     #[test]
+    fn pump_delta_keeps_tap_note_fade() {
+        let style = Style {
+            num_cols: 5,
+            num_players: 1,
+        };
+        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../assets/noteskins");
+        let ns = load_itg(&root, "pump", "delta", &style)
+            .expect("bundled pump/delta should compile and load");
+
+        assert!(
+            ns.note_layers
+                .iter()
+                .flat_map(|layers| layers.iter())
+                .any(|slot| (slot.model_draw.fade[2] - 1.0).abs() <= f32::EPSILON),
+            "delta tap-note layers should retain fadetop,1"
+        );
+    }
+
+    #[test]
     fn cel_exposes_model_and_uv_motion() {
         let style = Style {
             num_cols: 4,

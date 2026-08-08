@@ -10,9 +10,12 @@ use deadsync_noteskin::mine::{
     mine_gradient_samples_from_slot, mine_gradient_slot_plan, mine_gradient_texture,
 };
 use deadsync_noteskin::model::ItgModelSlotPlan;
-use deadsync_noteskin::script::apply_sprite_animation_command_plans;
 #[cfg(test)]
 use deadsync_noteskin::script::apply_sprite_animation_script_plans;
+use deadsync_noteskin::script::{
+    apply_sprite_animation_command_plans, normalized_script_command, parse_script_bool,
+    parse_script_number, split_script_token,
+};
 use deadsync_noteskin::{
     AnimationRate, ModelAutoRotKey, ModelDrawState, ModelEffectState, ModelMesh, ModelTweenCursor,
     ModelTweenSegment, NoteskinSlot, SpriteDefinition, SpriteSlotPlan, SpriteSourcePlan,
@@ -735,8 +738,8 @@ pub fn itg_slot_from_path(path: &Path) -> Option<SpriteSlot> {
 
 pub fn itg_apply_frame_override(slot: &mut SpriteSlot, frame: usize) {
     let key = slot.texture_key().to_string();
-    let Some((tex_w, tex_h)) = texture_dimensions(&key) else {
-        return;
+    let (tex_w, tex_h) = match slot.source.as_ref() {
+        SpriteSource::Atlas { tex_dims, .. } | SpriteSource::Animated { tex_dims, .. } => *tex_dims,
     };
     let (grid_x, grid_y) = assets::sprite_sheet_dims(&key);
     let plan = sprite_sheet_frame(
@@ -838,6 +841,63 @@ pub fn itg_apply_state_properties_from_commands(
     let beat_based = slot_is_beat_based(slot);
     apply_sprite_animation_command_plans(slot, commands, beat_based, |slot, plan, beat_based| {
         itg_apply_sprite_animation_plan(slot, plan, beat_based);
+    });
+    itg_apply_initial_sprite_state(slot, commands);
+}
+
+fn itg_apply_initial_sprite_state(
+    slot: &mut SpriteSlot,
+    commands: &std::collections::HashMap<String, String>,
+) {
+    let mut frame = None;
+    let mut paused = false;
+    for key in ["initcommand", "oncommand"] {
+        let Some(script) = commands.get(key) else {
+            continue;
+        };
+        let script = normalized_script_command(script);
+        for raw in script.split(';') {
+            let Some((command, args)) = split_script_token(raw.trim()) else {
+                continue;
+            };
+            match command.as_str() {
+                "setstate" => {
+                    frame = args
+                        .first()
+                        .and_then(|arg| parse_script_number(arg))
+                        .map(|value| value.max(0.0) as usize);
+                }
+                "pause" => paused = true,
+                "play" => paused = false,
+                "animate" => {
+                    if let Some(enabled) = args.first().map(|arg| parse_script_bool(arg)) {
+                        paused = !enabled;
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+    if let Some(frame) = frame {
+        itg_apply_frame_override(slot, frame);
+    }
+    if paused {
+        freeze_sprite_animation(slot);
+    }
+}
+
+fn freeze_sprite_animation(slot: &mut SpriteSlot) {
+    let SpriteSource::Animated {
+        texture_key,
+        tex_dims,
+        ..
+    } = slot.source.as_ref()
+    else {
+        return;
+    };
+    slot.source = source_from_plan(SpriteSourcePlan::Atlas {
+        texture_key: texture_key.to_string(),
+        tex_dims: *tex_dims,
     });
 }
 
@@ -971,6 +1031,28 @@ mod contract_tests {
     }
 
     #[test]
+    fn paused_initial_state_freezes_selected_sprite_frame() {
+        let mut slot = slot_from_plan(generated_animation_sprite_slot_plan(
+            "tests/paused 3x1.png".to_string(),
+            (192, 64),
+            [64, 64],
+            3,
+            AnimationRate::FramesPerSecond(30.0),
+            false,
+        ));
+        let commands = std::collections::HashMap::from([(
+            "initcommand".to_string(),
+            "pause;setstate,2".to_string(),
+        )]);
+
+        itg_apply_initial_sprite_state(&mut slot, &commands);
+
+        assert!(matches!(slot.source.as_ref(), SpriteSource::Atlas { .. }));
+        assert_eq!(slot.def.src, [128, 0]);
+        assert_eq!(slot.frame_index(10.0, 40.0), 0);
+    }
+
+    #[test]
     fn noteskin_slot_contract_preserves_data_and_identity() {
         let slot = test_model_slot();
         let cloned_slot = slot.clone();
@@ -1031,6 +1113,7 @@ mod contract_tests {
         assert_eq!(contract_draw.zoom, inherent_draw.zoom);
         assert_eq!(contract_draw.tint, inherent_draw.tint);
         assert_eq!(contract_draw.glow, inherent_draw.glow);
+        assert_eq!(contract_draw.fade, inherent_draw.fade);
         assert_eq!(contract_draw.vert_align, inherent_draw.vert_align);
         assert_eq!(contract_draw.blend_add, inherent_draw.blend_add);
         assert_eq!(contract_draw.visible, inherent_draw.visible);

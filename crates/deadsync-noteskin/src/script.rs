@@ -24,6 +24,8 @@ pub enum ScriptControl {
     FinishTweening,
     PlayCommand,
     Animate,
+    Play,
+    Pause,
     SetState,
     SetStateProperties,
     SetAllStateDelays,
@@ -51,6 +53,10 @@ pub enum ScriptActorMod {
     Diffuse([f32; 4]),
     DiffuseAlpha(f32),
     Glow([f32; 4]),
+    FadeLeft(f32),
+    FadeRight(f32),
+    FadeTop(f32),
+    FadeBottom(f32),
     VertAlign(f32),
     BlendAdd(bool),
     Visible(bool),
@@ -439,6 +445,8 @@ pub fn parse_script_control(cmd: &str) -> Option<ScriptControl> {
         "finishtweening" => Some(ScriptControl::FinishTweening),
         "playcommand" => Some(ScriptControl::PlayCommand),
         "animate" => Some(ScriptControl::Animate),
+        "play" => Some(ScriptControl::Play),
+        "pause" => Some(ScriptControl::Pause),
         "setstate" => Some(ScriptControl::SetState),
         "setstateproperties" => Some(ScriptControl::SetStateProperties),
         "setallstatedelays" => Some(ScriptControl::SetAllStateDelays),
@@ -472,6 +480,10 @@ pub fn parse_script_actor_mod(cmd: &str, args: &[String]) -> Option<ScriptActorM
         "diffuse" => parse_script_color_args(args).map(ScriptActorMod::Diffuse),
         "diffusealpha" => first.map(ScriptActorMod::DiffuseAlpha),
         "glow" => parse_script_color_args(args).map(ScriptActorMod::Glow),
+        "fadeleft" => first.map(ScriptActorMod::FadeLeft),
+        "faderight" => first.map(ScriptActorMod::FadeRight),
+        "fadetop" => first.map(ScriptActorMod::FadeTop),
+        "fadebottom" => first.map(ScriptActorMod::FadeBottom),
         "vertalign" | "valign" => args
             .first()
             .and_then(|v| parse_script_vertalign(v))
@@ -780,6 +792,10 @@ pub fn itg_apply_parent_actor_mod(
         }
         ScriptActorMod::DiffuseAlpha(alpha) => draw.tint[3] *= alpha,
         ScriptActorMod::Glow(color) => draw.glow = color,
+        ScriptActorMod::FadeLeft(v) => draw.fade[0] = v,
+        ScriptActorMod::FadeRight(v) => draw.fade[1] = v,
+        ScriptActorMod::FadeTop(v) => draw.fade[2] = v,
+        ScriptActorMod::FadeBottom(v) => draw.fade[3] = v,
         ScriptActorMod::VertAlign(v) => draw.vert_align = v,
         ScriptActorMod::BlendAdd(v) => draw.blend_add = v,
         ScriptActorMod::Visible(v) => draw.visible &= v,
@@ -828,6 +844,10 @@ pub fn itg_apply_actor_mods(state: &mut ModelDrawState, mods: &[ItgActorMod]) {
             ItgActorMod::Diffuse(v) => state.tint = v,
             ItgActorMod::DiffuseAlpha(v) => state.tint[3] = v,
             ItgActorMod::Glow(v) => state.glow = v,
+            ItgActorMod::FadeLeft(v) => state.fade[0] = v,
+            ItgActorMod::FadeRight(v) => state.fade[1] = v,
+            ItgActorMod::FadeTop(v) => state.fade[2] = v,
+            ItgActorMod::FadeBottom(v) => state.fade[3] = v,
             ItgActorMod::VertAlign(v) => state.vert_align = v,
             ItgActorMod::BlendAdd(v) => state.blend_add = v,
             ItgActorMod::Visible(v) => state.visible = v,
@@ -1058,6 +1078,9 @@ pub fn model_draw_program(
     state.glow[1] = state.glow[1].clamp(0.0, 1.0);
     state.glow[2] = state.glow[2].clamp(0.0, 1.0);
     state.glow[3] = state.glow[3].clamp(0.0, 1.0);
+    for fade in &mut state.fade {
+        *fade = fade.clamp(0.0, 1.0);
+    }
 
     (state, Arc::from(timeline), effect)
 }
@@ -1172,6 +1195,22 @@ mod tests {
         assert!((draw.vert_align - 1.0).abs() <= f32::EPSILON);
         assert_eq!(draw.glow, [0.1, 0.2, 0.3, 0.4]);
         assert!(matches!(effect.mode, ModelEffectMode::None));
+    }
+
+    #[test]
+    fn model_draw_program_parses_edge_fades_and_animation_controls() {
+        let commands = HashMap::from([(
+            "initcommand".to_string(),
+            "pause;fadetop,0.5;fadeleft,2;faderight,-1;fadebottom,0.25".to_string(),
+        )]);
+
+        let (draw, timeline, effect) = model_draw_program(&commands);
+
+        assert_eq!(draw.fade, [1.0, 0.0, 0.5, 0.25]);
+        assert!(timeline.is_empty());
+        assert!(matches!(effect.mode, ModelEffectMode::None));
+        assert_eq!(parse_script_control("play"), Some(ScriptControl::Play));
+        assert_eq!(parse_script_control("pause"), Some(ScriptControl::Pause));
     }
 
     #[test]

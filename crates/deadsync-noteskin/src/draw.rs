@@ -68,6 +68,8 @@ pub struct ModelDrawState {
     pub zoom: [f32; 3],
     pub tint: [f32; 4],
     pub glow: [f32; 4],
+    /// Edge fades in left, right, top, bottom order.
+    pub fade: [f32; 4],
     pub vert_align: f32,
     pub blend_add: bool,
     pub visible: bool,
@@ -81,6 +83,7 @@ impl Default for ModelDrawState {
             zoom: [1.0, 1.0, 1.0],
             tint: [1.0, 1.0, 1.0, 1.0],
             glow: [1.0, 1.0, 1.0, 0.0],
+            fade: [0.0; 4],
             vert_align: 0.5,
             blend_add: false,
             visible: true,
@@ -286,6 +289,7 @@ pub fn model_draw_at(
         for i in 0..4 {
             s.tint[i] = lerp(seg.from.tint[i], seg.to.tint[i], p);
             s.glow[i] = lerp(seg.from.glow[i], seg.to.glow[i], p);
+            s.fade[i] = lerp(seg.from.fade[i], seg.to.fade[i], p);
         }
         s.vert_align = lerp(seg.from.vert_align, seg.to.vert_align, p);
         s.blend_add = if p >= 1.0 {
@@ -463,6 +467,9 @@ fn sanitize_model_draw(mut out: ModelDrawState) -> ModelDrawState {
     out.glow[1] = out.glow[1].clamp(0.0, 1.0);
     out.glow[2] = out.glow[2].clamp(0.0, 1.0);
     out.glow[3] = out.glow[3].clamp(0.0, 1.0);
+    for fade in &mut out.fade {
+        *fade = fade.clamp(0.0, 1.0);
+    }
     out
 }
 
@@ -489,6 +496,9 @@ mod tests {
             assert_eq!(actual.to_bits(), expected.to_bits());
         }
         for (actual, expected) in actual.glow.into_iter().zip(expected.glow) {
+            assert_eq!(actual.to_bits(), expected.to_bits());
+        }
+        for (actual, expected) in actual.fade.into_iter().zip(expected.fade) {
             assert_eq!(actual.to_bits(), expected.to_bits());
         }
         assert_eq!(actual.vert_align.to_bits(), expected.vert_align.to_bits());

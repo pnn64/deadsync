@@ -281,6 +281,10 @@ pub(crate) fn compose_note_layer<S, F>(
         actor.rotationy(request.rotation_y_deg);
         actor.rotationz(request.sprite_rotation_z_deg);
         actor.customtexturerect(request.uv);
+        actor.fadeleft(request.draw.fade[0]);
+        actor.faderight(request.draw.fade[1]);
+        actor.fadetop(request.draw.fade[2]);
+        actor.fadebottom(request.draw.fade[3]);
         actor.diffuse(request.tint);
         actor.blend(request.blend);
         actor.z(request.z);
@@ -362,6 +366,10 @@ fn compose_note_glow<S, F>(
     actor.rotationy(request.rotation_y_deg);
     actor.rotationz(request.sprite_rotation_z_deg);
     actor.customtexturerect(request.uv);
+    actor.fadeleft(request.draw.fade[0]);
+    actor.faderight(request.draw.fade[1]);
+    actor.fadetop(request.draw.fade[2]);
+    actor.fadebottom(request.draw.fade[3]);
     actor.diffuse([1.0, 1.0, 1.0, 0.0]);
     actor.glow([1.0, 1.0, 1.0, glow_alpha]);
     actor.blend(if request.draw.blend_add {
@@ -2100,6 +2108,7 @@ mod tests {
         slot.def.mirror_v = true;
         let mut request = layer_request(&slot);
         request.draw.blend_add = true;
+        request.draw.fade = [0.1, 0.2, 0.3, 0.4];
         request.blend = BlendMode::Add;
         let mut actors = Vec::new();
         let mut cache = ModelMeshCache::default();
@@ -2119,6 +2128,10 @@ mod tests {
             rot_z_deg,
             flip_x,
             flip_y,
+            fadeleft,
+            faderight,
+            fadetop,
+            fadebottom,
             ..
         } = &actors[0]
         else {
@@ -2133,6 +2146,10 @@ mod tests {
         assert_eq!(*rot_z_deg, 34.0);
         assert!(*flip_x);
         assert!(*flip_y);
+        assert_eq!(
+            [*fadeleft, *faderight, *fadetop, *fadebottom],
+            [0.1, 0.2, 0.3, 0.4]
+        );
 
         let Actor::Sprite {
             tint,
@@ -2141,6 +2158,10 @@ mod tests {
             world_z,
             flip_x,
             flip_y,
+            fadeleft,
+            faderight,
+            fadetop,
+            fadebottom,
             ..
         } = &actors[1]
         else {
@@ -2152,6 +2173,10 @@ mod tests {
         assert_eq!(*world_z, 9.0);
         assert!(*flip_x);
         assert!(*flip_y);
+        assert_eq!(
+            [*fadeleft, *faderight, *fadetop, *fadebottom],
+            [0.1, 0.2, 0.3, 0.4]
+        );
     }
 
     #[test]

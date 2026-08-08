@@ -988,6 +988,14 @@ mod tests {
     }
 
     #[test]
+    fn parse_explosion_animation_accepts_paused_sprite_state() {
+        let anim = parse_explosion_animation("pause;setstate,2;diffusealpha,1");
+
+        assert_eq!(anim.duration(), 0.0);
+        assert_eq!(anim.state_at(0.0).diffuse[3], 1.0);
+    }
+
+    #[test]
     fn parse_explosion_animation_parses_judgment_line_color() {
         let anim = parse_explosion_animation(
             r#"finishtweening;diffuse,JudgmentLineToColor("JudgmentLine_W5");diffusealpha,1;sleep,.1;decelerate,.2;diffusealpha,0"#,
