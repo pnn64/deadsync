@@ -2,6 +2,7 @@ use crate::act;
 use crate::assets;
 use deadlib_present::actors::Actor;
 use deadlib_present::space::screen_center_x;
+use deadsync_config::prelude::GameFlag;
 
 /// Parameters to tweak the layout easily.
 #[derive(Clone, Copy, Debug)]
@@ -24,7 +25,11 @@ impl Default for LogoParams {
 
 /// Build the “banner inside logo” stack with the actor DSL.
 /// Returns a `Vec<Actor>` to be included in a screen's actor list.
-pub fn build_logo(params: LogoParams, title_logo_texture_key: Option<&'static str>) -> Vec<Actor> {
+pub fn build_logo(
+    params: LogoParams,
+    title_logo_texture_key: Option<&'static str>,
+    game: GameFlag,
+) -> Vec<Actor> {
     if let Some(texture_key) = title_logo_texture_key {
         let dims = assets::texture_dims(texture_key).unwrap_or(assets::TexMeta { w: 1, h: 1 });
         let aspect = if dims.h > 0 {
@@ -59,10 +64,15 @@ pub fn build_logo(params: LogoParams, title_logo_texture_key: Option<&'static st
     // The dance banner will be centered vertically within the logo's final height.
     let dance_center_y = 0.5f32.mul_add(logo_h, logo_top_y) - params.banner_y_offset_inside;
 
+    let game_logo = match game {
+        GameFlag::Dance => "dance.png",
+        GameFlag::Pump => "pump.png",
+    };
+
     vec![
         // The dance banner's width is constrained to the logo's width.
         // `zoomtowidth` will automatically calculate its height while preserving its aspect ratio.
-        act!(sprite("dance.png"):
+        act!(sprite(game_logo):
             align(0.5, 0.5):
             xy(center_x, dance_center_y):
             zoomtowidth(logo_w)
@@ -78,6 +88,29 @@ pub fn build_logo(params: LogoParams, title_logo_texture_key: Option<&'static st
 }
 
 /// Convenience: build with default params.
-pub fn build_logo_default(title_logo_texture_key: Option<&'static str>) -> Vec<Actor> {
-    build_logo(LogoParams::default(), title_logo_texture_key)
+pub fn build_logo_default(
+    title_logo_texture_key: Option<&'static str>,
+    game: GameFlag,
+) -> Vec<Actor> {
+    build_logo(LogoParams::default(), title_logo_texture_key, game)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn decorative_logo_tracks_active_game() {
+        let pump = build_logo_default(None, GameFlag::Pump);
+        let Actor::Sprite { source, .. } = &pump[0] else {
+            panic!("expected decorative logo sprite");
+        };
+        assert_eq!(source.texture_key(), Some("pump.png"));
+
+        let dance = build_logo_default(None, GameFlag::Dance);
+        let Actor::Sprite { source, .. } = &dance[0] else {
+            panic!("expected decorative logo sprite");
+        };
+        assert_eq!(source.texture_key(), Some("dance.png"));
+    }
 }

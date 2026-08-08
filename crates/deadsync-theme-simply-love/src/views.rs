@@ -1307,6 +1307,7 @@ pub struct MainMenuSmxConflictView {
 /// Shell-prepared runtime data consumed by Simply Love's concrete main menu.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct MainMenuRuntimeView {
+    pub game: deadsync_config::prelude::GameFlag,
     pub allow_shutdown_host: bool,
     pub dedicated_three_key_nav: bool,
     pub song_count: usize,

@@ -38,7 +38,7 @@ pub(crate) fn pane_origin_x(controller: profile_data::PlayerSide) -> f32 {
 #[inline(always)]
 pub(crate) fn pane3_origin_x(controller: profile_data::PlayerSide, num_cols: usize) -> f32 {
     let origin = pane_origin_x(controller);
-    if num_cols == 8 && controller == profile_data::PlayerSide::P2 {
+    if matches!(num_cols, 8 | 10) && controller == profile_data::PlayerSide::P2 {
         origin - 310.0
     } else {
         origin

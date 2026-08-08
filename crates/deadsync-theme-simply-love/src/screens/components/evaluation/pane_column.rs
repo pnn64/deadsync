@@ -6,6 +6,7 @@ use deadlib_present::color;
 use deadlib_present::font;
 use deadlib_present::space::screen_center_y;
 use deadlib_render::{BlendMode, SamplerDesc};
+use deadsync_assets::noteskin::SpriteSlot;
 use deadsync_notefield::noteskin_model_actor;
 use deadsync_noteskin::{NUM_QUANTIZATIONS, Quantization};
 use deadsync_profile as profile_data;
@@ -21,7 +22,7 @@ const PANE3_DOUBLE_WIDTH: f32 = 520.0;
 
 #[inline(always)]
 fn pane3_width(num_cols: usize) -> f32 {
-    if num_cols == 8 {
+    if matches!(num_cols, 8 | 10) {
         PANE3_DOUBLE_WIDTH
     } else {
         PANE3_SINGLE_WIDTH
@@ -60,6 +61,16 @@ fn pane3_solid_arrow_texture(texture_key: &str) -> String {
     }
     assets::register_generated_texture(&key, mask, SamplerDesc::default());
     key
+}
+
+#[inline(always)]
+fn pane3_zoom_x(slot: &SpriteSlot) -> f32 {
+    if slot.def.mirror_h { -1.0 } else { 1.0 }
+}
+
+#[inline(always)]
+fn pane3_zoom_y(slot: &SpriteSlot) -> f32 {
+    if slot.def.mirror_v { -1.0 } else { 1.0 }
 }
 
 #[inline(always)]
@@ -261,8 +272,8 @@ pub fn build_column_judgments_pane(
     let cy = screen_center_y();
     let pane_origin_x = pane3_origin_x(controller, num_cols);
 
-    // Pane3 geometry (SL/zmod): 230x146 normally; dance-double expands to
-    // 520px and P2's controller pane shifts left into the same full-width slot.
+    // Pane3 geometry (SL/zmod): 230x146 normally; one-player/two-sides styles
+    // (dance-double and pump-double) expand to 520px.
     let box_width = pane3_width(num_cols);
     let box_height: f32 = 146.0;
     let col_width = box_width / num_cols as f32;
@@ -412,7 +423,7 @@ pub fn build_column_judgments_pane(
                             if !draw.visible {
                                 continue;
                             }
-                            let frame = slot.frame_index(elapsed, beat);
+                            let frame = slot.frame_index_from_phase(note_uv_phase);
                             let uv_elapsed = if slot.model.is_some() {
                                 note_uv_phase
                             } else {
@@ -461,6 +472,8 @@ pub fn build_column_judgments_pane(
                                         align(0.5, 0.5):
                                         xy(center[0], center[1]):
                                         setsize(size[0], size[1]):
+                                        zoomx(pane3_zoom_x(slot)):
+                                        zoomy(pane3_zoom_y(slot)):
                                         rotationz(draw.rot[2] - slot.def.rotation_deg as f32):
                                         customtexturerect(uv[0], uv[1], uv[2], uv[3]):
                                         diffuse(arrow_rgba[0], arrow_rgba[1], arrow_rgba[2], arrow_rgba[3]):
@@ -496,6 +509,8 @@ pub fn build_column_judgments_pane(
                                     align(0.5, 0.5):
                                     xy(center[0], center[1]):
                                     setsize(size[0], size[1]):
+                                    zoomx(pane3_zoom_x(slot)):
+                                    zoomy(pane3_zoom_y(slot)):
                                     rotationz(draw.rot[2] - slot.def.rotation_deg as f32):
                                     customtexturerect(uv[0], uv[1], uv[2], uv[3]):
                                     diffuse(color[0], color[1], color[2], color[3]):
@@ -507,6 +522,8 @@ pub fn build_column_judgments_pane(
                                     align(0.5, 0.5):
                                     xy(center[0], center[1]):
                                     setsize(size[0], size[1]):
+                                    zoomx(pane3_zoom_x(slot)):
+                                    zoomy(pane3_zoom_y(slot)):
                                     rotationz(draw.rot[2] - slot.def.rotation_deg as f32):
                                     customtexturerect(uv[0], uv[1], uv[2], uv[3]):
                                     diffuse(color[0], color[1], color[2], color[3]):
@@ -518,7 +535,7 @@ pub fn build_column_judgments_pane(
                     } else if let Some(slot) = ns.notes.get(note_idx) {
                         let draw = slot.model_draw_at(elapsed, beat);
                         if draw.visible {
-                            let frame = slot.frame_index(elapsed, beat);
+                        let frame = slot.frame_index_from_phase(note_uv_phase);
                             let uv_elapsed = if slot.model.is_some() {
                                 note_uv_phase
                             } else {
@@ -553,6 +570,8 @@ pub fn build_column_judgments_pane(
                                             align(0.5, 0.5):
                                             xy(center[0], center[1]):
                                             setsize(final_size[0], final_size[1]):
+                                            zoomx(pane3_zoom_x(slot)):
+                                            zoomy(pane3_zoom_y(slot)):
                                             rotationz(draw.rot[2] - slot.def.rotation_deg as f32):
                                             customtexturerect(uv[0], uv[1], uv[2], uv[3]):
                                             diffuse(arrow_rgba[0], arrow_rgba[1], arrow_rgba[2], arrow_rgba[3]):
@@ -580,6 +599,8 @@ pub fn build_column_judgments_pane(
                                             align(0.5, 0.5):
                                             xy(center[0], center[1]):
                                             setsize(final_size[0], final_size[1]):
+                                            zoomx(pane3_zoom_x(slot)):
+                                            zoomy(pane3_zoom_y(slot)):
                                             rotationz(draw.rot[2] - slot.def.rotation_deg as f32):
                                             customtexturerect(uv[0], uv[1], uv[2], uv[3]):
                                             diffuse(color[0], color[1], color[2], color[3]):
@@ -709,7 +730,7 @@ pub(crate) fn build_pane3_arrow_preview(
             if !draw.visible {
                 continue;
             }
-            let frame = slot.frame_index(elapsed, beat);
+            let frame = slot.frame_index_from_phase(note_uv_phase);
             let uv_elapsed = if slot.model.is_some() {
                 note_uv_phase
             } else {
@@ -754,6 +775,8 @@ pub(crate) fn build_pane3_arrow_preview(
                         align(0.5, 0.5):
                         xy(pos[0], pos[1]):
                         setsize(size[0], size[1]):
+                        zoomx(pane3_zoom_x(slot)):
+                        zoomy(pane3_zoom_y(slot)):
                         rotationz(draw.rot[2] - slot.def.rotation_deg as f32):
                         customtexturerect(uv[0], uv[1], uv[2], uv[3]):
                         diffuse(arrow_rgba[0], arrow_rgba[1], arrow_rgba[2], arrow_rgba[3]):
@@ -789,6 +812,8 @@ pub(crate) fn build_pane3_arrow_preview(
                     align(0.5, 0.5):
                     xy(pos[0], pos[1]):
                     setsize(size[0], size[1]):
+                    zoomx(pane3_zoom_x(slot)):
+                    zoomy(pane3_zoom_y(slot)):
                     rotationz(draw.rot[2] - slot.def.rotation_deg as f32):
                     customtexturerect(uv[0], uv[1], uv[2], uv[3]):
                     diffuse(color[0], color[1], color[2], color[3]):
@@ -800,6 +825,8 @@ pub(crate) fn build_pane3_arrow_preview(
                     align(0.5, 0.5):
                     xy(pos[0], pos[1]):
                     setsize(size[0], size[1]):
+                    zoomx(pane3_zoom_x(slot)):
+                    zoomy(pane3_zoom_y(slot)):
                     rotationz(draw.rot[2] - slot.def.rotation_deg as f32):
                     customtexturerect(uv[0], uv[1], uv[2], uv[3]):
                     diffuse(color[0], color[1], color[2], color[3]):
@@ -813,7 +840,7 @@ pub(crate) fn build_pane3_arrow_preview(
         if !draw.visible {
             return actors;
         }
-        let frame = slot.frame_index(elapsed, beat);
+        let frame = slot.frame_index_from_phase(note_uv_phase);
         let uv_elapsed = if slot.model.is_some() {
             note_uv_phase
         } else {
@@ -848,6 +875,8 @@ pub(crate) fn build_pane3_arrow_preview(
                     align(0.5, 0.5):
                     xy(cx, cy):
                     setsize(final_size[0], final_size[1]):
+                    zoomx(pane3_zoom_x(slot)):
+                    zoomy(pane3_zoom_y(slot)):
                     rotationz(draw.rot[2] - slot.def.rotation_deg as f32):
                     customtexturerect(uv[0], uv[1], uv[2], uv[3]):
                     diffuse(arrow_rgba[0], arrow_rgba[1], arrow_rgba[2], arrow_rgba[3]):
@@ -875,6 +904,8 @@ pub(crate) fn build_pane3_arrow_preview(
                     align(0.5, 0.5):
                     xy(cx, cy):
                     setsize(final_size[0], final_size[1]):
+                    zoomx(pane3_zoom_x(slot)):
+                    zoomy(pane3_zoom_y(slot)):
                     rotationz(draw.rot[2] - slot.def.rotation_deg as f32):
                     customtexturerect(uv[0], uv[1], uv[2], uv[3]):
                     diffuse(color[0], color[1], color[2], color[3]):
@@ -891,11 +922,14 @@ pub(crate) fn build_pane3_arrow_preview(
 mod tests {
     use super::super::utils::{arrow_breakdown_rgba, pane3_origin_x};
     use super::{
-        PANE3_DOUBLE_WIDTH, PANE3_SINGLE_WIDTH, RowCounts, RowKind, column_row_counts, pane3_width,
-        row_disabled,
+        PANE3_DOUBLE_WIDTH, PANE3_SINGLE_WIDTH, RowCounts, RowKind, build_pane3_arrow_preview,
+        column_row_counts, pane3_width, row_disabled,
     };
     use crate::screens::evaluation::ColumnJudgments;
+    use deadlib_present::actors::Actor;
     use deadlib_present::color;
+    use deadsync_assets::noteskin::load_itg_default;
+    use deadsync_noteskin::Style;
     use deadsync_profile as profile_data;
 
     #[test]
@@ -990,10 +1024,16 @@ mod tests {
     #[test]
     fn pane3_doubles_layout_uses_full_width_slot() {
         assert_eq!(pane3_width(4), PANE3_SINGLE_WIDTH);
+        assert_eq!(pane3_width(5), PANE3_SINGLE_WIDTH);
         assert_eq!(pane3_width(8), PANE3_DOUBLE_WIDTH);
+        assert_eq!(pane3_width(10), PANE3_DOUBLE_WIDTH);
         assert_eq!(
             pane3_origin_x(profile_data::PlayerSide::P1, 8),
             pane3_origin_x(profile_data::PlayerSide::P2, 8)
+        );
+        assert_eq!(
+            pane3_origin_x(profile_data::PlayerSide::P1, 10),
+            pane3_origin_x(profile_data::PlayerSide::P2, 10)
         );
     }
 
@@ -1008,5 +1048,44 @@ mod tests {
         assert_eq!(arrow_breakdown_rgba(6), color::rgba_hex("#00D7FF"));
         assert_eq!(arrow_breakdown_rgba(7), [1.0, 1.0, 1.0, 1.0]);
         assert_eq!(arrow_breakdown_rgba(8), [1.0, 1.0, 1.0, 1.0]);
+    }
+
+    #[test]
+    fn pump_evaluation_preview_preserves_right_panel_mirroring() {
+        let noteskin = load_itg_default(&Style {
+            num_cols: 5,
+            num_players: 1,
+        })
+        .expect("bundled pump default noteskin should load");
+        let left = build_pane3_arrow_preview(&noteskin, 0, [0.0, 0.0], None, 0.0, 1.0);
+        let right = build_pane3_arrow_preview(&noteskin, 3, [0.0, 0.0], None, 0.0, 1.0);
+
+        let first_flip_x = |actors: &[Actor]| {
+            actors.iter().find_map(|actor| match actor {
+                Actor::Sprite { flip_x, .. } => Some(*flip_x),
+                _ => None,
+            })
+        };
+        assert_eq!(first_flip_x(&left), Some(false));
+        assert_eq!(first_flip_x(&right), Some(true));
+    }
+
+    #[test]
+    fn pump_evaluation_preview_advances_noteskin_animation_phase() {
+        let noteskin = load_itg_default(&Style {
+            num_cols: 5,
+            num_players: 1,
+        })
+        .expect("bundled pump default noteskin should load");
+        let at_start = build_pane3_arrow_preview(&noteskin, 0, [0.0, 0.0], None, 0.0, 1.0);
+        let at_next_frame = build_pane3_arrow_preview(&noteskin, 0, [0.0, 0.0], None, 0.2, 1.0);
+
+        let first_uv = |actors: &[Actor]| {
+            actors.iter().find_map(|actor| match actor {
+                Actor::Sprite { uv_rect, .. } => Some(*uv_rect),
+                _ => None,
+            })
+        };
+        assert_ne!(first_uv(&at_start), first_uv(&at_next_frame));
     }
 }

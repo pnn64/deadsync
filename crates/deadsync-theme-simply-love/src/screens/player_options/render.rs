@@ -1353,7 +1353,7 @@ fn draw_noteskin_note(
             if !draw.visible {
                 continue;
             }
-            let frame = note_slot.frame_index(elapsed, beat);
+            let frame = note_slot.frame_index_from_phase(note_uv_phase);
             let uv_elapsed = if note_slot.model.is_some() {
                 note_uv_phase
             } else {
@@ -1441,7 +1441,7 @@ fn draw_noteskin_note(
     let Some(note_slot) = ns.notes.get(note_idx) else {
         return;
     };
-    let frame = note_slot.frame_index(elapsed, beat);
+    let frame = note_slot.frame_index_from_phase(note_uv_phase);
     let uv_elapsed = if note_slot.model.is_some() {
         note_uv_phase
     } else {
@@ -1618,63 +1618,115 @@ fn draw_receptor_preview(
         let Some(receptor_slot) = receptor_ns.receptor_off.get(col) else {
             continue;
         };
-        let frame = receptor_slot.frame_index(rc.fc.state.preview_time, rc.fc.state.preview_beat);
-        let uv = receptor_slot.uv_for_frame_at(frame, rc.fc.state.preview_time);
-        let draw = receptor_slot.model_draw_at(rc.fc.state.preview_time, rc.fc.state.preview_beat);
-        if !draw.visible {
-            continue;
-        }
-        let logical = receptor_slot.logical_size();
-        let width = logical[0].max(1.0);
-        let height = logical[1].max(1.0);
-        let scale = if height > f32::EPSILON {
-            target_height / height
-        } else {
-            NOTESKIN_PREVIEW_SCALE
-        };
-        let size = [width * scale, target_height];
         let center = [center_x + x_mult * target_height, rc.current_row_y];
-        if let Some(model_actor) = noteskin_model_actor(
+        draw_receptor_slot_preview(
+            actors,
+            rc,
             receptor_slot,
             center,
-            size,
-            uv,
-            -receptor_slot.def.rotation_deg as f32,
-            rc.fc.state.preview_time,
-            rc.fc.state.preview_beat,
             color,
             BlendMode::Alpha,
-            106,
-        ) {
-            actors.push(model_actor);
-        } else {
-            let [sin_r, cos_r] = receptor_slot.base_rot_sin_cos();
-            let offset = [
-                draw.pos[0] * scale * cos_r - draw.pos[1] * scale * sin_r,
-                draw.pos[0] * scale * sin_r + draw.pos[1] * scale * cos_r,
-            ];
-            let sprite_size = [size[0] * draw.zoom[0].abs(), size[1] * draw.zoom[1].abs()];
-            if sprite_size[0] <= f32::EPSILON || sprite_size[1] <= f32::EPSILON {
-                continue;
-            }
-            actors.push(act!(sprite(receptor_slot.texture_key_shared()):
-                align(0.5, 0.5):
-                xy(center[0] + offset[0], center[1] + offset[1]):
-                setsize(sprite_size[0], sprite_size[1]):
-                zoomx(slot_preview_zoom_x(receptor_slot, 1.0)):
-                zoomy(slot_preview_zoom_y(receptor_slot, 1.0)):
-                rotationz(draw.rot[2] - receptor_slot.def.rotation_deg as f32):
-                customtexturerect(uv[0], uv[1], uv[2], uv[3]):
-                diffuse(
-                    color[0] * draw.tint[0],
-                    color[1] * draw.tint[1],
-                    color[2] * draw.tint[2],
-                    color[3] * draw.tint[3]
-                ):
-                z(Z_RECEPTOR_PREVIEW)
-            ));
+            i32::from(Z_RECEPTOR_PREVIEW),
+        );
+
+        let idle_alpha = receptor_ns
+            .receptor_idle_glow
+            .alpha(rc.fc.state.preview_beat, false);
+        if idle_alpha > f32::EPSILON
+            && let Some(glow_slot) = receptor_ns
+                .receptor_glow
+                .get(col)
+                .and_then(|slot| slot.as_ref())
+        {
+            draw_receptor_slot_preview(
+                actors,
+                rc,
+                glow_slot,
+                center,
+                [1.0, 1.0, 1.0, idle_alpha * rc.a],
+                BlendMode::Add,
+                i32::from(Z_RECEPTOR_PREVIEW) + 1,
+            );
         }
     }
+}
+
+fn draw_receptor_slot_preview(
+    actors: &mut Vec<Actor>,
+    rc: &RowCtx,
+    slot: &SpriteSlot,
+    center: [f32; 2],
+    color: [f32; 4],
+    blend: BlendMode,
+    z: i32,
+) {
+    let elapsed = rc.fc.state.preview_time;
+    let beat = rc.fc.state.preview_beat;
+    let frame = slot.frame_index(elapsed, beat);
+    let uv = slot.uv_for_frame_at(frame, elapsed);
+    let draw = slot.model_draw_at(elapsed, beat);
+    if !draw.visible {
+        return;
+    }
+    let target_height = NOTESKIN_PREVIEW_ARROW_PIXEL_SIZE * NOTESKIN_PREVIEW_SCALE;
+    let logical = slot.logical_size();
+    let width = logical[0].max(1.0);
+    let height = logical[1].max(1.0);
+    let scale = if height > f32::EPSILON {
+        target_height / height
+    } else {
+        NOTESKIN_PREVIEW_SCALE
+    };
+    let size = [width * scale, target_height];
+    let tint = [
+        color[0] * draw.tint[0],
+        color[1] * draw.tint[1],
+        color[2] * draw.tint[2],
+        color[3] * draw.tint[3],
+    ];
+    if let Some(model_actor) = noteskin_model_actor(
+        slot,
+        center,
+        size,
+        uv,
+        -slot.def.rotation_deg as f32,
+        elapsed,
+        beat,
+        tint,
+        blend,
+        z as i16,
+    ) {
+        actors.push(model_actor);
+        return;
+    }
+
+    let [sin_r, cos_r] = slot.base_rot_sin_cos();
+    let offset = [
+        draw.pos[0] * scale * cos_r - draw.pos[1] * scale * sin_r,
+        draw.pos[0] * scale * sin_r + draw.pos[1] * scale * cos_r,
+    ];
+    let sprite_size = [size[0] * draw.zoom[0].abs(), size[1] * draw.zoom[1].abs()];
+    if sprite_size[0] <= f32::EPSILON || sprite_size[1] <= f32::EPSILON {
+        return;
+    }
+    let mut actor = act!(sprite(slot.texture_key_shared()):
+        align(0.5, 0.5):
+        xy(center[0] + offset[0], center[1] + offset[1]):
+        setsize(sprite_size[0], sprite_size[1]):
+        zoomx(slot_preview_zoom_x(slot, 1.0)):
+        zoomy(slot_preview_zoom_y(slot, 1.0)):
+        rotationz(draw.rot[2] - slot.def.rotation_deg as f32):
+        customtexturerect(uv[0], uv[1], uv[2], uv[3]):
+        diffuse(tint[0], tint[1], tint[2], tint[3]):
+        z(z)
+    );
+    if let Actor::Sprite {
+        blend: actor_blend, ..
+    } = &mut actor
+    {
+        *actor_blend = blend;
+    }
+    actors.push(actor);
 }
 
 #[allow(clippy::too_many_lines)]

@@ -45,9 +45,10 @@ fn arrowcloud_status(status: ArrowCloudStatus) -> MainMenuArrowCloudStatus {
 }
 
 pub(crate) fn runtime_view() -> MainMenuRuntimeView {
-    let (allow_shutdown_host, dedicated_three_key_nav, smx_input) = {
+    let (game, allow_shutdown_host, dedicated_three_key_nav, smx_input) = {
         let config = deadsync_config::prelude::get();
         (
+            config.game_flag,
             config.allow_shutdown_host,
             config.three_key_navigation && config.only_dedicated_menu_buttons,
             config.smx_input,
@@ -68,6 +69,7 @@ pub(crate) fn runtime_view() -> MainMenuRuntimeView {
         });
 
     MainMenuRuntimeView {
+        game,
         allow_shutdown_host,
         dedicated_three_key_nav,
         song_count,

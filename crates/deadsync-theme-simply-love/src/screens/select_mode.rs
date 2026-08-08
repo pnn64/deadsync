@@ -13,6 +13,7 @@ use deadlib_present::actors::Actor;
 use deadlib_present::color;
 use deadlib_present::font;
 use deadlib_present::space::{screen_center_x, screen_center_y};
+use deadsync_config::prelude::GameFlag;
 use deadsync_input::InputEvent;
 use deadsync_theme::AudioRequest;
 
@@ -27,9 +28,7 @@ const CURSOR_MAX_W: f32 = 170.0;
 const TIME_PER_ARROW: f32 = 0.2;
 const ARROW_H: f32 = 20.0;
 const ARROW_PAD_Y: f32 = 5.0;
-const LOOP_RESET_Y: f32 = 24.0 * ARROW_H;
 const ARROW_SPRITE_SZ: f32 = 150.0;
-const ARROW_SPRITE_ZOOM: f32 = 0.18;
 
 fn choice_labels() -> [String; 2] {
     [
@@ -46,10 +45,86 @@ fn choice_description(choice: Choice) -> String {
     tr("SelectMode", key).replace("\\n", "\n")
 }
 
-const PATTERN: [&str; 24] = [
+const DANCE_PATTERN: [&str; 24] = [
     "left", "down", "left", "right", "down", "up", "left", "right", "left", "down", "up", "right",
     "left", "right", "down", "up", "down", "right", "left", "right", "up", "down", "up", "right",
 ];
+
+const PUMP_PATTERN: [&str; 24] = [
+    "upright",
+    "center",
+    "downright",
+    "downleft",
+    "center",
+    "upleft",
+    "upright",
+    "downleft",
+    "downright",
+    "center",
+    "upright",
+    "downleft",
+    "upleft",
+    "center",
+    "upright",
+    "center",
+    "downright",
+    "upleft",
+    "downright",
+    "upright",
+    "center",
+    "upleft",
+    "center",
+    "downleft",
+];
+
+const DANCE_COLUMNS: [(&str, f32); 4] = [
+    ("left", -36.0),
+    ("down", -12.0),
+    ("up", 12.0),
+    ("right", 36.0),
+];
+const PUMP_COLUMNS: [(&str, f32); 5] = [
+    ("downleft", -48.0),
+    ("upleft", -24.0),
+    ("center", 0.0),
+    ("upright", 24.0),
+    ("downright", 48.0),
+];
+
+#[derive(Clone, Copy)]
+struct DemoConfig {
+    pattern: &'static [&'static str],
+    columns: &'static [(&'static str, f32)],
+    field_y: f32,
+    field_zoom: f32,
+}
+
+#[inline(always)]
+const fn demo_config(game: GameFlag) -> DemoConfig {
+    match game {
+        GameFlag::Dance => DemoConfig {
+            pattern: &DANCE_PATTERN,
+            columns: &DANCE_COLUMNS,
+            field_y: 15.0,
+            field_zoom: 1.0,
+        },
+        GameFlag::Pump => DemoConfig {
+            pattern: &PUMP_PATTERN,
+            columns: &PUMP_COLUMNS,
+            field_y: 10.0,
+            field_zoom: 0.9,
+        },
+    }
+}
+
+#[inline(always)]
+fn column_zoom(game: GameFlag, dir: &str) -> f32 {
+    match game {
+        GameFlag::Dance => 0.18,
+        GameFlag::Pump if dir == "center" => 0.165,
+        GameFlag::Pump => 0.2,
+    }
+}
 
 #[inline(always)]
 const fn choice_cursor_label_width(choice: Choice) -> f32 {
@@ -396,14 +471,15 @@ pub fn push_actors(
         texcoordvelocity(-2.0, 0.0)
     ));
 
-    // Gameplay demo: faux playfield (dance).
+    // Gameplay demo: faux playfield for the active game.
     let field_alpha = fade_after(exit_t, 0.4, 0.2);
     let marathon = selected_index == 1;
     let f_ease = if marathon { 75.0 } else { 0.0 };
-    let cycle_dur = TIME_PER_ARROW * (PATTERN.len() as f32);
+    let demo = demo_config(state.runtime.game);
+    let cycle_dur = TIME_PER_ARROW * (demo.pattern.len() as f32);
     let base_t = state.flow.demo_time();
 
-    let (nfx, nfy) = root_pt(90.0, 15.0);
+    let (nfx, nfy) = root_pt(90.0, demo.field_y);
     // Use a mask source quad for SM-style MaskSource/MaskDest clipping.
     let (mx, my) = root_pt(0.0, 0.0);
     let (mw, mh) = root_sz(300.0, 160.0);
@@ -414,32 +490,34 @@ pub fn push_actors(
         MaskSource()
     ));
 
-    let columns = [
-        ("left", -36.0),
-        ("down", -12.0),
-        ("up", 12.0),
-        ("right", 36.0),
-    ];
-
-    for (dir, x_off) in columns {
-        let (x, y) = (nfx + x_off * ROOT_ZOOM, nfy + (-55.0) * ROOT_ZOOM);
+    for &(dir, x_off) in demo.columns {
+        let (x, y) = (
+            nfx + x_off * ROOT_ZOOM * demo.field_zoom,
+            nfy + (-55.0) * ROOT_ZOOM * demo.field_zoom,
+        );
         let (aw, ah) = root_sz(ARROW_SPRITE_SZ, ARROW_SPRITE_SZ);
-        actors.push(act!(sprite("select_mode/arrow-body.png"):
+        let receptor_texture = if dir == "center" {
+            "select_mode/center-body.png"
+        } else {
+            "select_mode/arrow-body.png"
+        };
+        actors.push(act!(sprite(receptor_texture):
             align(0.5, 0.5): xy(x, y):
             setsize(aw, ah):
-            zoom(ARROW_SPRITE_ZOOM):
+            zoom(column_zoom(state.runtime.game, dir) * demo.field_zoom):
             rotationz(arrow_rotation(dir)):
             diffuse(1.0, 1.0, 1.0, field_alpha):
             MaskDest():
         ));
     }
 
-    for (i, dir) in PATTERN.iter().enumerate() {
-        let (_, col_x) = columns
+    for (i, dir) in demo.pattern.iter().enumerate() {
+        let (_, col_x) = demo
+            .columns
             .iter()
             .find(|(d, _)| d == dir)
             .copied()
-            .unwrap_or(("up", 12.0));
+            .unwrap_or(("center", 0.0));
 
         let i1 = (i as f32) + 1.0;
         let first_dur = TIME_PER_ARROW * i1;
@@ -453,7 +531,7 @@ pub fn push_actors(
             let loop_t = (base_t - first_dur).rem_euclid(cycle_dur);
             let loops = ((base_t - first_dur) / cycle_dur).floor().max(0.0);
             (
-                LOOP_RESET_Y,
+                demo.pattern.len() as f32 * ARROW_H,
                 (loop_t / cycle_dur).clamp(0.0, 1.0),
                 720.0 * (1.0 + loops),
             )
@@ -473,29 +551,50 @@ pub fn push_actors(
         };
 
         let tint = color::decorative_rgba(state.active_color_index + i as i32);
-        let (x, y) = (nfx + col_x * ROOT_ZOOM, nfy + y * ROOT_ZOOM);
+        let (x, y) = (
+            nfx + col_x * ROOT_ZOOM * demo.field_zoom,
+            nfy + y * ROOT_ZOOM * demo.field_zoom,
+        );
         let (aw, ah) = root_sz(ARROW_SPRITE_SZ, ARROW_SPRITE_SZ);
-        actors.push(act!(sprite("select_mode/arrow-border.png"):
+        let is_center = *dir == "center";
+        let arrow_zoom = column_zoom(state.runtime.game, dir) * demo.field_zoom;
+        let border_texture = if is_center {
+            "select_mode/center-border.png"
+        } else {
+            "select_mode/arrow-border.png"
+        };
+        let body_texture = if is_center {
+            "select_mode/center-body.png"
+        } else {
+            "select_mode/arrow-body.png"
+        };
+        let detail_texture = if is_center {
+            "select_mode/center-feet.png"
+        } else {
+            "select_mode/arrow-stripes.png"
+        };
+        actors.push(act!(sprite(border_texture):
             align(0.5, 0.5): xy(x, y):
             setsize(aw, ah):
-            zoom(ARROW_SPRITE_ZOOM):
+            zoom(arrow_zoom):
             diffuse(1.0, 1.0, 1.0, field_alpha):
             MaskDest():
             rotationz(rot):
         ));
-        actors.push(act!(sprite("select_mode/arrow-body.png"):
+        actors.push(act!(sprite(body_texture):
             align(0.5, 0.5): xy(x, y):
             setsize(aw, ah):
-            zoom(ARROW_SPRITE_ZOOM):
+            zoom(arrow_zoom):
             diffuse(tint[0], tint[1], tint[2], tint[3] * field_alpha):
             MaskDest():
             rotationz(rot):
         ));
-        actors.push(act!(sprite("select_mode/arrow-stripes.png"):
+        let detail_tint = if is_center { tint } else { [1.0; 4] };
+        actors.push(act!(sprite(detail_texture):
             align(0.5, 0.5): xy(x, y):
             setsize(aw, ah):
-            zoom(ARROW_SPRITE_ZOOM):
-            diffuse(1.0, 1.0, 1.0, field_alpha):
+            zoom(arrow_zoom):
+            diffuse(detail_tint[0], detail_tint[1], detail_tint[2], detail_tint[3] * field_alpha):
             blend(multiply):
             MaskDest():
             rotationz(rot):
@@ -515,6 +614,17 @@ mod tests {
     use deadsync_core::input::InputSource;
     use deadsync_input::VirtualAction;
     use std::time::Instant;
+
+    #[test]
+    fn pump_demo_uses_five_panel_layout_and_pattern() {
+        let demo = demo_config(GameFlag::Pump);
+        assert_eq!(demo.columns, &PUMP_COLUMNS);
+        assert_eq!(demo.pattern, &PUMP_PATTERN);
+        assert_eq!(demo.field_y, 10.0);
+        assert_eq!(demo.field_zoom, 0.9);
+        assert_eq!(column_zoom(GameFlag::Pump, "center"), 0.165);
+        assert_eq!(column_zoom(GameFlag::Pump, "upleft"), 0.2);
+    }
 
     #[test]
     fn confirm_requests_audio_before_profile_update() {

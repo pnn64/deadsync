@@ -5,9 +5,9 @@ pub use self::texture::{
     SpriteSlot, SpriteSource, build_model_geometry, load_itg_model_slots_from_path, test_model_slot,
 };
 use self::texture::{
-    apply_model_slot_plan, itg_apply_frame_override, itg_apply_state_properties_from_commands,
-    itg_slot_from_path, itg_slot_from_path_all_frames, itg_slot_from_path_animated,
-    itg_slot_from_path_with_frame, mine_fill_slots,
+    apply_model_slot_plan, itg_apply_frame_override, itg_apply_note_animation,
+    itg_apply_state_properties_from_commands, itg_slot_from_path, itg_slot_from_path_all_frames,
+    itg_slot_from_path_animated, itg_slot_from_path_with_frame, mine_fill_slots,
 };
 #[cfg(test)]
 use self::texture::{itg_apply_state_properties_from_script, itg_register_texture_dims_for_path};
@@ -185,14 +185,70 @@ fn load_itg_sprite_noteskin_compiled(
     compiled: &noteskin_compiled::CompiledLoader,
     compiled_actors: &noteskin_compiled::CompiledActors,
 ) -> Result<Noteskin, String> {
-    deadsync_noteskin::itg_noteskin_runtime_with_ops_compiled(
+    let mut noteskin = deadsync_noteskin::itg_noteskin_runtime_with_ops_compiled(
         data,
         *style,
         compiled,
         compiled_actors,
         NUM_QUANTIZATIONS,
         itg_compiled_sprite_ops(),
-    )
+    )?;
+    apply_note_animation(&mut noteskin, NUM_QUANTIZATIONS);
+    Ok(noteskin)
+}
+
+fn apply_note_animation(noteskin: &mut Noteskin, quantizations: usize) {
+    if quantizations == 0 {
+        return;
+    }
+    let tap_animation = noteskin.note_display_metrics.part_animation[NoteAnimPart::Tap as usize];
+    let tap_translate =
+        noteskin.note_display_metrics.part_texture_translate[NoteAnimPart::Tap as usize];
+    animate_layer_groups(
+        &mut noteskin.note_layers,
+        quantizations,
+        tap_animation,
+        tap_translate,
+        noteskin.animation_is_beat_based,
+    );
+    for (note, layers) in noteskin.notes.iter_mut().zip(&noteskin.note_layers) {
+        if let Some(first) = layers.first() {
+            *note = first.clone();
+        }
+    }
+
+    let lift_animation = noteskin.note_display_metrics.part_animation[NoteAnimPart::Lift as usize];
+    let lift_translate =
+        noteskin.note_display_metrics.part_texture_translate[NoteAnimPart::Lift as usize];
+    animate_layer_groups(
+        &mut noteskin.lift_note_layers,
+        quantizations,
+        lift_animation,
+        lift_translate,
+        noteskin.animation_is_beat_based,
+    );
+}
+
+fn animate_layer_groups(
+    groups: &mut [Arc<[SpriteSlot]>],
+    quantizations: usize,
+    animation: NotePartAnimation,
+    translate: NotePartTextureTranslate,
+    beat_based: bool,
+) {
+    for group in groups.chunks_exact_mut(quantizations) {
+        let Some(first) = group.first() else {
+            continue;
+        };
+        let mut layers = first.as_ref().to_vec();
+        for slot in &mut layers {
+            itg_apply_note_animation(slot, animation, translate, beat_based);
+        }
+        let layers = Arc::<[SpriteSlot]>::from(layers);
+        for entry in group {
+            *entry = Arc::clone(&layers);
+        }
+    }
 }
 
 fn itg_apply_loader_command(sprites: &mut [ItgLuaResolvedSprite], command: Option<&str>) {
@@ -388,6 +444,12 @@ mod tests {
             assert!(ns.notes[3 * NUM_QUANTIZATIONS + quantization].def.mirror_h);
             assert!(ns.notes[4 * NUM_QUANTIZATIONS + quantization].def.mirror_h);
         }
+        let up_left = &ns.notes[NUM_QUANTIZATIONS + Quantization::Q4th as usize];
+        assert_eq!(up_left.source.frame_count(), 6);
+        assert_ne!(
+            up_left.uv_for_frame_at(up_left.frame_index_from_phase(0.0), 0.0),
+            up_left.uv_for_frame_at(up_left.frame_index_from_phase(0.8), 0.0)
+        );
         assert_eq!(ns.notes.len(), 5 * NUM_QUANTIZATIONS);
     }
 

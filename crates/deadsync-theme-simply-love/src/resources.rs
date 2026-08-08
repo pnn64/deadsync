@@ -133,6 +133,7 @@ pub const BASE_TEXTURE_ASSETS: &[TextureAssetSpec] = &[
     texture_asset("logo.png"),
     texture_asset("init_arrow.png"),
     texture_asset("dance.png"),
+    texture_asset("pump.png"),
     texture_asset("select_mode/arrow-body.png"),
     texture_asset("select_mode/arrow-border.png"),
     texture_asset("select_mode/arrow-stripes.png"),

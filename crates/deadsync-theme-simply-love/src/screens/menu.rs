@@ -440,7 +440,10 @@ pub fn push_actors(
     let info1_y_tl = info2_y_tl - INFO_PX - INFO_GAP;
 
     let brand_alpha = alpha_multiplier * brand_exit_alpha(exit_elapsed);
-    let logo_actors = logo::build_logo_default(visual_policy.title_logo_texture_key);
+    let logo_actors = logo::build_logo_default(
+        visual_policy.title_logo_texture_key,
+        state.runtime_view.game,
+    );
     for mut actor in logo_actors {
         if let Actor::Sprite { tint, .. } = &mut actor {
             tint[3] *= brand_alpha;
