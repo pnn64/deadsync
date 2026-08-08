@@ -30,6 +30,8 @@ const fn backend_key(backend: BackendType) -> u8 {
         BackendType::Software => 5,
         #[cfg(target_os = "windows")]
         BackendType::DirectX => 6,
+        #[cfg(target_os = "macos")]
+        BackendType::MetalWgpu => 7,
     }
 }
 
