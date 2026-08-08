@@ -208,6 +208,18 @@ pub(crate) fn compose_notefield_feedback<S, F>(
         let target_reverse = targets_visible
             .then(|| receptor.receptor_off_reverse.get(local_col).copied())
             .flatten();
+        let idle_glow_slot = (targets_visible && receptor.receptor_idle_glow.is_visible())
+            .then(|| {
+                receptor
+                    .receptor_glow
+                    .get(local_col)
+                    .and_then(Option::as_ref)
+            })
+            .flatten();
+        let idle_glow_reverse = idle_glow_slot
+            .is_some()
+            .then(|| receptor.receptor_glow_reverse.get(local_col).copied())
+            .flatten();
         let resolve_press = || {
             let visual = lane.receptor_press_visual?;
             let slot = receptor
@@ -227,6 +239,8 @@ pub(crate) fn compose_notefield_feedback<S, F>(
                 ReceptorActorsRequest {
                     target_slot,
                     target_reverse,
+                    idle_glow_slot,
+                    idle_glow_reverse,
                     hold_slot,
                     center,
                     hidden,
@@ -237,10 +251,13 @@ pub(crate) fn compose_notefield_feedback<S, F>(
                     confusion_rotation_deg,
                     elapsed: elapsed_screen,
                     beat: current_beat,
+                    is_in_delay: prepared.is_in_delay,
+                    press_visual: lane.receptor_press_visual,
                     receptor_alpha: prepared.receptor_alpha,
                     field_zoom,
                     rotation_y_deg: 0.0,
                     pulse: &receptor.receptor_pulse,
+                    idle_glow: receptor.receptor_idle_glow,
                     press_behavior: receptor.receptor_glow_behavior,
                     style: request.style.receptor,
                 },
@@ -842,6 +859,7 @@ mod tests {
             tap_explosions_by_col,
             mine_hit_explosion: Some(explosion("mine")),
             receptor_glow_behavior: ReceptorGlowBehavior::default(),
+            receptor_idle_glow: Default::default(),
             receptor_pulse: ReceptorPulse::default(),
             hold_let_go_gray_percent: 0.25,
             hold_columns: vec![
@@ -1208,6 +1226,7 @@ mod tests {
                 tap_row_hold_roll_flags: &[],
                 visible_music_time_ns: 100_000_000,
                 visible_beat: 1.0,
+                is_in_delay: false,
                 search_beat: 1.0,
                 scroll_reference_bpm: 120.0,
                 music_rate: 1.0,

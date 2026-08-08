@@ -9,7 +9,8 @@ use crate::script::{itg_active_model_commands, model_draw_program};
 use crate::{
     ExplosionAnimation, ModelDrawState, ModelEffectState, ModelTweenSegment, NoteAnimPart,
     NoteColorType, NoteDisplayMetrics, NotePartTextureTranslate, ReceptorGlowBehavior,
-    ReceptorPulse, ReceptorReverseBehavior, ReceptorStepBehavior, ReceptorStepBehaviors,
+    ReceptorIdleGlow, ReceptorPulse, ReceptorReverseBehavior, ReceptorStepBehavior,
+    ReceptorStepBehaviors,
 };
 use crate::{actor, compiled, itg, model, receptor};
 use std::collections::{HashMap, HashSet};
@@ -281,6 +282,7 @@ pub struct ItgReceptorColumn<T> {
     pub glow_reverse: ReceptorReverseBehavior,
     pub step_behaviors: ReceptorStepBehaviors,
     pub pulse_command: Option<String>,
+    pub idle_glow: ReceptorIdleGlow,
 }
 
 #[derive(Debug, Clone)]
@@ -293,6 +295,7 @@ pub struct ItgRuntimeColumns<T> {
     pub receptor_off_reverse: Vec<ReceptorReverseBehavior>,
     pub receptor_glow_reverse: Vec<ReceptorReverseBehavior>,
     pub receptor_step_behaviors: Vec<ReceptorStepBehaviors>,
+    pub receptor_idle_glow: ReceptorIdleGlow,
     pub mines: Vec<Option<T>>,
     pub mine_frames: Vec<Option<T>>,
     pub hold_columns: Vec<HoldVisuals<T>>,
@@ -1772,6 +1775,16 @@ pub fn itg_receptor_column<T: Clone>(
     let step_behaviors =
         receptor::receptor_step_behaviors(metrics, receptor_commands, base_zoom(&off));
     let (off_reverse, glow_reverse) = receptor::itg_receptor_reverse_behaviors(&layer_commands);
+    let idle_glow = layers
+        .iter()
+        .any(|sprite| {
+            sprite
+                .commands
+                .get(actor::ITG_ACTOR_UPDATE_COMMAND)
+                .is_some_and(|update| update == actor::ITG_BEAT_FADE_GLOW_UPDATE)
+        })
+        .then_some(ReceptorIdleGlow::BeatFade)
+        .unwrap_or_default();
     Some(ItgReceptorColumn {
         off,
         glow: visuals.glow,
@@ -1779,6 +1792,7 @@ pub fn itg_receptor_column<T: Clone>(
         glow_reverse,
         step_behaviors,
         pulse_command: receptor::itg_receptor_pulse_command(&layer_commands).map(str::to_string),
+        idle_glow,
     })
 }
 
@@ -1838,6 +1852,7 @@ pub fn itg_runtime_columns_compiled<T: Clone>(
     let mut hold_columns = Vec::with_capacity(style.num_cols);
     let mut roll_columns = Vec::with_capacity(style.num_cols);
     let mut receptor_pulse_command: Option<String> = None;
+    let mut receptor_idle_glow = ReceptorIdleGlow::None;
 
     for col in 0..style.num_cols {
         let button = itg::button_for_col(style.num_cols, col);
@@ -1871,6 +1886,9 @@ pub fn itg_runtime_columns_compiled<T: Clone>(
         .ok_or_else(|| format!("failed to resolve Receptor for button '{button}'"))?;
         if receptor_pulse_command.is_none() {
             receptor_pulse_command = receptor_column.pulse_command.clone();
+        }
+        if receptor_idle_glow == ReceptorIdleGlow::None {
+            receptor_idle_glow = receptor_column.idle_glow;
         }
         receptor_off.push(receptor_column.off);
         receptor_glow.push(receptor_column.glow);
@@ -1925,6 +1943,7 @@ pub fn itg_runtime_columns_compiled<T: Clone>(
         receptor_off_reverse,
         receptor_glow_reverse,
         receptor_step_behaviors,
+        receptor_idle_glow,
         mines,
         mine_frames,
         hold_columns,
@@ -2033,6 +2052,7 @@ pub fn itg_noteskin_runtime_compiled<T: Clone>(
         receptor_off_reverse,
         receptor_glow_reverse,
         receptor_step_behaviors,
+        receptor_idle_glow,
         mines,
         mine_frames,
         mut hold_columns,
@@ -2174,6 +2194,7 @@ pub fn itg_noteskin_runtime_compiled<T: Clone>(
         hold_columns,
         roll_columns,
         receptor_glow_behavior,
+        receptor_idle_glow,
         receptor_pulse,
         column_xs,
         note_display_metrics,
@@ -2310,6 +2331,7 @@ pub struct NoteskinRuntime<T> {
     pub tap_explosions_by_col: Vec<TapExplosionMap<T>>,
     pub mine_hit_explosion: Option<TapExplosion<T>>,
     pub receptor_glow_behavior: ReceptorGlowBehavior,
+    pub receptor_idle_glow: ReceptorIdleGlow,
     pub receptor_pulse: ReceptorPulse,
     pub hold_let_go_gray_percent: f32,
     pub hold_columns: Vec<HoldVisuals<T>>,
@@ -2703,8 +2725,8 @@ mod tests {
     };
     use crate::{
         ExplosionAnimation, ExplosionSegment, ExplosionState, NoteAnimPart, NoteDisplayMetrics,
-        NotePartAnimation, NotePartTextureTranslate, ReceptorStepBehavior, ReceptorStepBehaviors,
-        Style, TweenType, compiled, itg,
+        NotePartAnimation, NotePartTextureTranslate, ReceptorIdleGlow, ReceptorStepBehavior,
+        ReceptorStepBehaviors, Style, TweenType, actor, compiled, itg,
     };
     use std::collections::{HashMap, HashSet};
     use std::sync::Arc;
@@ -3565,6 +3587,7 @@ mod tests {
             receptor_off_reverse: vec![Default::default()],
             receptor_glow_reverse: vec![Default::default()],
             receptor_step_behaviors: vec![ReceptorStepBehaviors::default()],
+            receptor_idle_glow: ReceptorIdleGlow::None,
             mines: vec![Some(Slot(4))],
             mine_frames: vec![None],
             hold_columns: vec![HoldVisuals {
@@ -4537,10 +4560,16 @@ mod tests {
             ItgResolvedSprite {
                 element: "Receptor".to_string(),
                 slot: Slot(2),
-                commands: HashMap::from([(
-                    "reverseoncommand".to_string(),
-                    "linear,0.2;vertalign,bottom".to_string(),
-                )]),
+                commands: HashMap::from([
+                    (
+                        "reverseoncommand".to_string(),
+                        "linear,0.2;vertalign,bottom".to_string(),
+                    ),
+                    (
+                        actor::ITG_ACTOR_UPDATE_COMMAND.to_string(),
+                        actor::ITG_BEAT_FADE_GLOW_UPDATE.to_string(),
+                    ),
+                ]),
             },
         ];
 
@@ -4562,6 +4591,7 @@ mod tests {
         assert_eq!(column.off, Slot(11));
         assert_eq!(column.glow, Some(Slot(2)));
         assert_eq!(column.pulse_command.as_deref(), Some("zoom,2"));
+        assert_eq!(column.idle_glow, ReceptorIdleGlow::BeatFade);
         assert_eq!(column.off_reverse.reverse_off.vert_align, Some(0.0));
         assert_eq!(column.glow_reverse.reverse_on.vert_align, Some(1.0));
     }
@@ -5044,6 +5074,7 @@ mod tests {
             tap_explosions_by_col: Vec::new(),
             mine_hit_explosion: None,
             receptor_glow_behavior: Default::default(),
+            receptor_idle_glow: ReceptorIdleGlow::None,
             receptor_pulse: Default::default(),
             hold_let_go_gray_percent: 0.25,
             hold_columns: Vec::new(),

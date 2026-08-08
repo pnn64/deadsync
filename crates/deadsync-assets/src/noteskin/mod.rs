@@ -16,7 +16,7 @@ pub use deadsync_noteskin::{
     GlowEffect, ModelAutoRotKey, ModelDrawState, ModelEffectClock, ModelEffectMode,
     ModelEffectState, ModelMesh, ModelTweenSegment, ModelVertex, NOTE_ANIM_PART_COUNT,
     NUM_QUANTIZATIONS, NoteAnimPart, NoteColorType, NoteDisplayMetrics, NotePartAnimation,
-    NotePartTextureTranslate, Quantization, ReceptorGlowBehavior, ReceptorPulse,
+    NotePartTextureTranslate, Quantization, ReceptorGlowBehavior, ReceptorIdleGlow, ReceptorPulse,
     ReceptorReverseBehavior, ReceptorReverseState, ReceptorStepBehavior, ReceptorStepBehaviors,
     SpriteDefinition, Style, TweenType,
 };
@@ -282,9 +282,10 @@ fn itg_slot_texture_key(slot: &SpriteSlot) -> String {
 mod tests {
     use super::{
         AnimationRate, ModelEffectClock, ModelEffectMode, NUM_QUANTIZATIONS, NoteAnimPart,
-        NoteColorType, Quantization, SpriteSlot, SpriteSource, Style, clear_itg_runtime_caches,
-        itg_apply_state_properties_from_script, itg_register_texture_dims_for_path, load_itg,
-        load_itg_model_slots_from_path, load_itg_skin, noteskin_itg,
+        NoteColorType, Quantization, ReceptorIdleGlow, SpriteSlot, SpriteSource, Style,
+        clear_itg_runtime_caches, itg_apply_state_properties_from_script,
+        itg_register_texture_dims_for_path, load_itg, load_itg_model_slots_from_path,
+        load_itg_skin, noteskin_itg,
     };
     use std::collections::HashSet;
     use std::fs;
@@ -362,6 +363,7 @@ mod tests {
             .expect("bundled pump/default should compile and load");
         assert_eq!(ns.column_xs, vec![-96, -48, 0, 48, 96]);
         assert_eq!(ns.receptor_off.len(), 5);
+        assert_eq!(ns.receptor_idle_glow, ReceptorIdleGlow::BeatFade);
         assert!(!ns.receptor_off[0].def.mirror_h);
         assert!(!ns.receptor_off[1].def.mirror_h);
         assert!(!ns.receptor_off[2].def.mirror_h);

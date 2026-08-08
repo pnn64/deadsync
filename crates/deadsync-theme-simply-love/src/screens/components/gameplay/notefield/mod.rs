@@ -887,6 +887,7 @@ pub(crate) fn compose_frame(
             tap_row_hold_roll_flags: &state.chart_runtime.lane_indices.tap_row_hold_roll_flags,
             visible_music_time_ns: state.visible_music_time_ns(player_idx),
             visible_beat: state.visible_beat(player_idx),
+            is_in_delay: state.is_in_delay(),
             search_beat: state.notefield_search_beat(player_idx),
             scroll_reference_bpm: state.scroll_reference_bpm(),
             music_rate: state.music_rate(),

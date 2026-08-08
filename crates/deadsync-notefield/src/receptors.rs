@@ -3,7 +3,7 @@ use deadlib_present::actors::{Actor, SpriteSource};
 use deadlib_present::dsl::SpriteBuilder;
 use deadlib_render::BlendMode;
 use deadsync_noteskin::{
-    NoteskinSlot, ReceptorGlowBehavior, ReceptorPulse, ReceptorReverseBehavior,
+    NoteskinSlot, ReceptorGlowBehavior, ReceptorIdleGlow, ReceptorPulse, ReceptorReverseBehavior,
 };
 use deadsync_theme::ReceptorStyle;
 
@@ -73,6 +73,8 @@ pub(crate) struct ReceptorActorsRequest<'a, S> {
     /// short-circuit behavior and never index the concrete noteskin slots.
     pub target_slot: Option<&'a S>,
     pub target_reverse: Option<ReceptorReverseBehavior>,
+    pub idle_glow_slot: Option<&'a S>,
+    pub idle_glow_reverse: Option<ReceptorReverseBehavior>,
     pub hold_slot: Option<&'a S>,
     pub center: [f32; 2],
     pub hidden: bool,
@@ -83,10 +85,13 @@ pub(crate) struct ReceptorActorsRequest<'a, S> {
     pub confusion_rotation_deg: f32,
     pub elapsed: f32,
     pub beat: f32,
+    pub is_in_delay: bool,
+    pub press_visual: Option<(f32, f32)>,
     pub receptor_alpha: f32,
     pub field_zoom: f32,
     pub rotation_y_deg: f32,
     pub pulse: &'a ReceptorPulse,
+    pub idle_glow: ReceptorIdleGlow,
     pub press_behavior: ReceptorGlowBehavior,
     pub style: ReceptorStyle,
 }
@@ -111,7 +116,7 @@ struct ReceptorSpriteDraw {
     z: i16,
 }
 
-/// Appends one lane's target, hold explosion, and press glow in canonical order.
+/// Appends one lane's target, idle glow, hold explosion, and press glow in canonical order.
 pub(crate) fn compose_receptor_actors<'a, S, F, P>(
     actors: &mut Vec<Actor>,
     model_cache: &mut ModelMeshCache,
@@ -125,6 +130,11 @@ pub(crate) fn compose_receptor_actors<'a, S, F, P>(
 {
     let targets_visible =
         !request.hidden && !request.hide_targets && request.receptor_alpha > f32::EPSILON;
+    let idle_press_zoom = if request.idle_glow.is_visible() {
+        request.press_visual.map_or(1.0, |visual| visual.1)
+    } else {
+        1.0
+    };
     if targets_visible {
         let slot = request
             .target_slot
@@ -157,7 +167,7 @@ pub(crate) fn compose_receptor_actors<'a, S, F, P>(
                     align: [0.5, reverse.vert_align()],
                     center,
                     size,
-                    zoom: mirrored_zoom(slot, request.bop_zoom),
+                    zoom: mirrored_zoom(slot, request.bop_zoom * idle_press_zoom),
                     tint: [
                         color[0] * draw.tint[0],
                         color[1] * draw.tint[1],
@@ -169,6 +179,55 @@ pub(crate) fn compose_receptor_actors<'a, S, F, P>(
                     uv,
                     blend: BlendMode::Alpha,
                     z: request.style.target_z,
+                },
+            );
+        }
+    }
+
+    if targets_visible
+        && request.idle_glow.is_visible()
+        && let Some(slot) = request.idle_glow_slot
+    {
+        let reverse = request
+            .idle_glow_reverse
+            .unwrap_or_default()
+            .state(request.reverse);
+        let rotation = slot.sprite_def().rotation_deg as f32 + reverse.base_rotation_z();
+        let frame = slot.frame_index(request.elapsed, request.beat);
+        let uv = slot.uv_for_frame_at(frame, request.elapsed);
+        let draw = model_cache.draw_at(slot, request.elapsed, request.beat);
+        let base_size = effect_size(slot, request.field_zoom, request.effect_zoom);
+        let size = [base_size[0] * draw.zoom[0], base_size[1] * draw.zoom[1]];
+        let alpha = request.idle_glow.alpha(request.beat, request.is_in_delay)
+            * draw.tint[3]
+            * request.receptor_alpha;
+        if draw.visible && alpha > f32::EPSILON && size[0] > f32::EPSILON && size[1] > f32::EPSILON
+        {
+            let center = draw_center(
+                slot,
+                request.center,
+                draw.pos,
+                request.field_zoom * request.effect_zoom,
+            );
+            append_receptor_sprite(
+                actors,
+                slot,
+                sprite_source,
+                ReceptorSpriteDraw {
+                    align: [0.5, reverse.vert_align()],
+                    center,
+                    size,
+                    zoom: mirrored_zoom(slot, request.bop_zoom * idle_press_zoom),
+                    tint: [draw.tint[0], draw.tint[1], draw.tint[2], alpha],
+                    rotation_y_deg: request.rotation_y_deg,
+                    rotation_z_deg: draw.rot[2] - rotation + request.confusion_rotation_deg,
+                    uv,
+                    blend: if request.press_behavior.blend_add || draw.blend_add {
+                        BlendMode::Add
+                    } else {
+                        BlendMode::Alpha
+                    },
+                    z: request.style.press_glow_z,
                 },
             );
         }
@@ -267,7 +326,10 @@ pub(crate) fn compose_receptor_actors<'a, S, F, P>(
         }
     }
 
-    if targets_visible && let Some(press) = resolve_press() {
+    if targets_visible
+        && !request.idle_glow.is_visible()
+        && let Some(press) = resolve_press()
+    {
         let (alpha, zoom) = press.visual;
         let slot = press.slot;
         let alpha = alpha * request.receptor_alpha;
@@ -515,6 +577,8 @@ mod tests {
         ReceptorActorsRequest {
             target_slot: target,
             target_reverse: None,
+            idle_glow_slot: None,
+            idle_glow_reverse: None,
             hold_slot: hold,
             center: [10.0, 20.0],
             hidden: false,
@@ -525,10 +589,13 @@ mod tests {
             confusion_rotation_deg: 0.0,
             elapsed: 2.0,
             beat: 3.0,
+            is_in_delay: false,
+            press_visual: None,
             receptor_alpha: 1.0,
             field_zoom: 1.0,
             rotation_y_deg: 0.0,
             pulse,
+            idle_glow: ReceptorIdleGlow::None,
             press_behavior: ReceptorGlowBehavior::default(),
             style: style(),
         }
@@ -593,6 +660,60 @@ mod tests {
         assert_sprite(&actors[1], "hold", 145, BlendMode::Add);
         assert_sprite(&actors[2], "hold", 145, BlendMode::Add);
         assert_sprite(&actors[3], "press", 105, BlendMode::Add);
+    }
+
+    #[test]
+    fn pump_idle_glow_uses_beat_alpha_and_additive_layer() {
+        let target = TestSlot::sprite("target");
+        let glow = TestSlot::sprite("glow");
+        let pulse = pulse();
+        let mut request = request(Some(&target), None, &pulse);
+        request.idle_glow = ReceptorIdleGlow::BeatFade;
+        request.idle_glow_slot = Some(&glow);
+        request.beat = 0.25;
+        let mut actors = Vec::new();
+
+        compose_receptor_actors(
+            &mut actors,
+            &mut ModelMeshCache::default(),
+            request,
+            || panic!("idle beat glow must not use the press-only path"),
+            &texture_source,
+        );
+
+        assert_eq!(actors.len(), 2);
+        assert_sprite(&actors[1], "glow", 105, BlendMode::Add);
+        let Actor::Sprite { tint, .. } = &actors[1] else {
+            panic!("expected idle glow sprite");
+        };
+        assert_eq!(*tint, [1.0, 1.0, 1.0, 0.5]);
+    }
+
+    #[test]
+    fn pump_idle_glow_hides_during_second_half_beat_and_delay_boundary() {
+        let target = TestSlot::sprite("target");
+        let glow = TestSlot::sprite("glow");
+        let pulse = pulse();
+
+        for (beat, is_in_delay) in [(0.75, false), (4.0, true)] {
+            let mut request = request(Some(&target), None, &pulse);
+            request.idle_glow = ReceptorIdleGlow::BeatFade;
+            request.idle_glow_slot = Some(&glow);
+            request.beat = beat;
+            request.is_in_delay = is_in_delay;
+            let mut actors = Vec::new();
+
+            compose_receptor_actors(
+                &mut actors,
+                &mut ModelMeshCache::default(),
+                request,
+                || None,
+                &texture_source,
+            );
+
+            assert_eq!(actors.len(), 1, "beat={beat}, delay={is_in_delay}");
+            assert_sprite(&actors[0], "target", 100, BlendMode::Alpha);
+        }
     }
 
     #[test]

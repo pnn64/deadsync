@@ -37,9 +37,9 @@ pub use parts::{
     clamped_hold_let_go_gray_percent, itg_column_xs,
 };
 pub use receptor::{
-    ItgReceptorVisuals, ReceptorGlowBehavior, ReceptorPulse, ReceptorReverseBehavior,
-    ReceptorReverseState, ReceptorStepBehavior, ReceptorStepBehaviors, itg_receptor_pulse_command,
-    itg_receptor_reverse_behaviors, itg_receptor_visuals,
+    ItgReceptorVisuals, ReceptorGlowBehavior, ReceptorIdleGlow, ReceptorPulse,
+    ReceptorReverseBehavior, ReceptorReverseState, ReceptorStepBehavior, ReceptorStepBehaviors,
+    itg_receptor_pulse_command, itg_receptor_reverse_behaviors, itg_receptor_visuals,
 };
 pub use runtime::{
     HoldVisualParts, HoldVisuals, ItgCompiledSpriteOps, ItgHoldKind, ItgReceptorColumn,

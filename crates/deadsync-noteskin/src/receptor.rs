@@ -83,6 +83,37 @@ impl Default for ReceptorGlowBehavior {
     }
 }
 
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum ReceptorIdleGlow {
+    #[default]
+    None,
+    BeatFade,
+}
+
+impl ReceptorIdleGlow {
+    #[inline(always)]
+    pub const fn is_visible(self) -> bool {
+        matches!(self, Self::BeatFade)
+    }
+
+    #[inline(always)]
+    pub fn alpha(self, beat: f32, is_in_delay: bool) -> f32 {
+        match self {
+            Self::None => 0.0,
+            Self::BeatFade => {
+                if !beat.is_finite() || beat < 0.0 {
+                    return 0.0;
+                }
+                let part = beat.rem_euclid(1.0).min(0.5);
+                if is_in_delay && part == 0.0 {
+                    return 0.0;
+                }
+                (1.0 - part * 2.0).clamp(0.0, 1.0)
+            }
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy)]
 pub struct ReceptorStepBehavior {
     pub duration: f32,
@@ -622,6 +653,19 @@ pub fn receptor_reverse_state(script: &str) -> ReceptorReverseState {
 mod tests {
     use super::*;
     use std::collections::HashMap;
+
+    #[test]
+    fn beat_fade_glow_matches_pump_receptor_update() {
+        let glow = ReceptorIdleGlow::BeatFade;
+
+        assert_eq!(glow.alpha(-0.25, false), 0.0);
+        assert_eq!(glow.alpha(0.0, false), 1.0);
+        assert_eq!(glow.alpha(0.25, false), 0.5);
+        assert_eq!(glow.alpha(0.5, false), 0.0);
+        assert_eq!(glow.alpha(0.75, false), 0.0);
+        assert_eq!(glow.alpha(1.0, false), 1.0);
+        assert_eq!(glow.alpha(1.0, true), 0.0);
+    }
 
     #[test]
     fn receptor_pulse_effecttiming_recalculates_period() {

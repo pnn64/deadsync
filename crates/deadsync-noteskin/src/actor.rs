@@ -8,6 +8,8 @@ use crate::itg as noteskin_itg;
 use crate::script::parse_linear_frames_expr;
 
 pub const ITG_ARG0_TOKEN: &str = "__ITG_ARG0__";
+pub const ITG_ACTOR_UPDATE_COMMAND: &str = "__deadsync_actor_update";
+pub const ITG_BEAT_FADE_GLOW_UPDATE: &str = "beat_fade_glow";
 
 const STACK_LOWERCASE_KEY_CAPACITY: usize = 128;
 
@@ -186,7 +188,57 @@ pub fn parse_actor_decl(content: &str, metrics: &noteskin_itg::IniData) -> ItgLu
         cursor = next_cursor;
     }
 
+    if has_beat_fade_glow_update(content, &command_context) {
+        let mark = |commands: &mut HashMap<String, String>| {
+            commands.insert(
+                ITG_ACTOR_UPDATE_COMMAND.to_string(),
+                ITG_BEAT_FADE_GLOW_UPDATE.to_string(),
+            );
+        };
+        decl.sprites
+            .iter_mut()
+            .for_each(|sprite| mark(&mut sprite.commands));
+        decl.models
+            .iter_mut()
+            .for_each(|model| mark(&mut model.commands));
+        decl.refs
+            .iter_mut()
+            .for_each(|reference| mark(&mut reference.commands));
+        decl.path_refs
+            .iter_mut()
+            .for_each(|reference| mark(&mut reference.commands));
+    }
+
     decl
+}
+
+fn has_beat_fade_glow_update(content: &str, context: &CommandContext) -> bool {
+    let compact = content
+        .chars()
+        .filter(|ch| !ch.is_whitespace())
+        .collect::<String>()
+        .to_ascii_lowercase();
+    let Some(update) = compact.split("setupdatefunction,").nth(1) else {
+        return false;
+    };
+    let function_name = update
+        .bytes()
+        .take_while(|byte| is_lua_ident(*byte))
+        .map(char::from)
+        .collect::<String>();
+    let Some(function) = get_ascii_lowercase(&context.functions, &function_name) else {
+        return false;
+    };
+    let body = function
+        .body
+        .chars()
+        .filter(|ch| !ch.is_whitespace())
+        .collect::<String>()
+        .to_ascii_lowercase();
+    body.contains("part=beat%1")
+        && body.contains("part=clamp(part,0,0.5)")
+        && body.contains("eff=scale(part,0,0.5,1,0)")
+        && body.contains(".glow:diffusealpha(eff)")
 }
 
 fn strip_lua_comments(content: &str) -> String {
@@ -1638,6 +1690,46 @@ return Def.ActorFrame {
                 .collect::<Vec<_>>(),
             [Some(0), Some(1)]
         );
+    }
+
+    #[test]
+    fn actor_parser_marks_pump_beat_fade_glow_update() {
+        let content = r#"
+local function Beat(self)
+    local this = self:GetChildren()
+    local beat = GAMESTATE:GetSongPosition():GetSongBeat()
+    local part = beat%1
+    part = clamp(part,0,0.5)
+    local eff = scale(part,0,0.5,1,0)
+    this.Glow:diffusealpha(eff)
+end
+
+return Def.ActorFrame {
+    InitCommand=cmd(SetUpdateFunction,Beat);
+    NOTESKIN:LoadActor(Var "Button", "Ready Receptor")..{
+        Name="Base";
+        Frames={{ Frame = 0 }};
+    };
+    NOTESKIN:LoadActor(Var "Button", "Ready Receptor")..{
+        Name="Glow";
+        Frames={{ Frame = 1 }};
+        InitCommand=cmd(blend,'BlendMode_Add');
+    };
+}
+"#;
+
+        let decl = parse_actor_decl(content, &noteskin_itg::IniData::default());
+
+        assert_eq!(decl.refs.len(), 2);
+        for reference in &decl.refs {
+            assert_eq!(
+                reference
+                    .commands
+                    .get(ITG_ACTOR_UPDATE_COMMAND)
+                    .map(String::as_str),
+                Some(ITG_BEAT_FADE_GLOW_UPDATE)
+            );
+        }
     }
 
     #[test]
