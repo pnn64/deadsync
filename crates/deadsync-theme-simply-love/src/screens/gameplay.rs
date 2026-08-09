@@ -18222,6 +18222,7 @@ pub fn benchmark_present_identity_notefield(
 #[derive(Clone, Copy, Debug, PartialEq)]
 enum PlayerActorAssembly {
     Buffered,
+    Hidden,
     DirectZ { z_shift: i16 },
 }
 
@@ -18257,6 +18258,7 @@ impl GameplayActorSegments {
                     segments[first] =
                         ActorSegment::new(&scratch.player_actor_scratch[segment.player]);
                 }
+                PlayerActorAssembly::Hidden => {}
                 PlayerActorAssembly::DirectZ { z_shift } => {
                     segments[first] = ActorSegment::shifted(
                         &scratch.notefield_hud_actor_scratch[segment.player],
@@ -18280,12 +18282,11 @@ fn player_actor_assembly_for_transform(
     visible: bool,
     transform: SongLuaCaptureTransform,
 ) -> PlayerActorAssembly {
-    if !requests_player_proxy
-        && visible
-        && transform.tint == [1.0; 4]
-        && transform.blend.is_none()
-        && song_lua_player_transform_has_identity_geometry(transform)
-    {
+    if requests_player_proxy {
+        PlayerActorAssembly::Buffered
+    } else if !visible {
+        PlayerActorAssembly::Hidden
+    } else if song_lua_player_transform_has_identity_geometry(transform) {
         PlayerActorAssembly::DirectZ {
             z_shift: transform.z_shift,
         }
@@ -19080,7 +19081,7 @@ pub fn push_actors(
                 player_state.visible,
                 capture_transform,
             );
-            if matches!(assembly, PlayerActorAssembly::DirectZ { .. }) {
+            if !matches!(assembly, PlayerActorAssembly::Buffered) {
                 player_scratch.clear();
             } else {
                 apply_song_lua_player_transform(
@@ -22024,7 +22025,7 @@ mod tests {
                     ..identity
                 },
             ),
-            PlayerActorAssembly::Buffered
+            PlayerActorAssembly::DirectZ { z_shift: 0 }
         );
         assert_eq!(
             player_actor_assembly_for_transform(
@@ -22035,7 +22036,7 @@ mod tests {
                     ..identity
                 },
             ),
-            PlayerActorAssembly::Buffered
+            PlayerActorAssembly::DirectZ { z_shift: 0 }
         );
         assert_eq!(
             player_actor_assembly_for_transform(true, true, identity),
@@ -22043,7 +22044,7 @@ mod tests {
         );
         assert_eq!(
             player_actor_assembly_for_transform(false, false, identity),
-            PlayerActorAssembly::Buffered
+            PlayerActorAssembly::Hidden
         );
         assert_eq!(
             player_actor_assembly_for_transform(
@@ -22098,8 +22099,8 @@ mod tests {
         let direct_hud = buffered_hud.clone();
         let mut buffered = Vec::new();
         let z_shift = 900;
-        let tint = [1.0; 4];
-        let blend = None;
+        let tint = [0.8, 0.7, 0.6, 0.5];
+        let blend = Some(BlendMode::Add);
         apply_song_lua_player_transform_legacy(
             &mut buffered_field,
             &mut buffered_hud,
