@@ -288,10 +288,10 @@ fn main() {
         let mut new = GameplayIdleWorkersBenchmark::default();
         compare_labeled(
             "unchanged Windows raw-key capture state",
-            "republish state",
-            "unchanged gate",
-            measure(|| old.legacy_raw_capture_frame()),
-            measure(|| new.gated_raw_capture_frame()),
+            "shell gate",
+            "backend dedupe",
+            measure(|| old.gated_raw_capture_frame()),
+            measure(|| new.direct_raw_capture_frame()),
         );
     }
 

@@ -155,6 +155,7 @@ pub fn set_capture_enabled(enabled: bool) {
     }
 }
 
+#[cfg(feature = "bench-support")]
 #[inline(always)]
 pub fn capture_synced(enabled: bool) -> bool {
     REGISTERED_KEYBOARD_CAPTURE.load(Ordering::Acquire) == keyboard_capture_state(enabled)
@@ -182,20 +183,6 @@ pub fn benchmark_seed_capture_state(enabled: bool) {
     // observe the confirmed matching registration and therefore never pass this
     // value to Win32; the legacy path still pays its real steady-state loads.
     RAW_INPUT_HWND.store(1, Ordering::Release);
-}
-
-#[cfg(feature = "bench-support")]
-#[inline(always)]
-pub fn benchmark_set_capture_legacy(enabled: bool) {
-    CAPTURE_ENABLED.store(enabled, Ordering::Relaxed);
-    if RAW_INPUT_HWND.load(Ordering::Acquire) != 0 {
-        let enabled = CAPTURE_ENABLED.load(Ordering::Relaxed);
-        let desired = keyboard_capture_state(enabled);
-        let registered = REGISTERED_KEYBOARD_CAPTURE.load(Ordering::Acquire);
-        if registered != desired {
-            std::hint::black_box((registered, desired));
-        }
-    }
 }
 
 #[inline(always)]

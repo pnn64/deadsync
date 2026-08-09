@@ -124,7 +124,7 @@ pub fn set_raw_keyboard_capture_enabled(enabled: bool) {
     crate::backend::w32_raw_input::set_capture_enabled(enabled);
 }
 
-#[cfg(windows)]
+#[cfg(all(windows, feature = "bench-support"))]
 #[inline(always)]
 pub fn raw_keyboard_capture_synced(enabled: bool) -> bool {
     crate::backend::w32_raw_input::capture_synced(enabled)
@@ -133,12 +133,6 @@ pub fn raw_keyboard_capture_synced(enabled: bool) -> bool {
 #[cfg(all(windows, feature = "bench-support"))]
 pub fn benchmark_seed_raw_keyboard_capture(enabled: bool) {
     crate::backend::w32_raw_input::benchmark_seed_capture_state(enabled);
-}
-
-#[cfg(all(windows, feature = "bench-support"))]
-#[inline(always)]
-pub fn benchmark_set_raw_keyboard_capture_legacy(enabled: bool) {
-    crate::backend::w32_raw_input::benchmark_set_capture_legacy(enabled);
 }
 
 #[cfg(any(target_os = "linux", target_os = "freebsd"))]
@@ -170,12 +164,6 @@ pub fn set_raw_keyboard_capture_enabled(enabled: bool) {
 
 #[cfg(any(target_os = "linux", target_os = "freebsd"))]
 #[inline(always)]
-pub const fn raw_keyboard_capture_synced(_enabled: bool) -> bool {
-    true
-}
-
-#[cfg(any(target_os = "linux", target_os = "freebsd"))]
-#[inline(always)]
 pub fn unix_raw_keyboard_backend_active() -> bool {
     crate::backend::evdev::keyboard_backend_active()
 }
@@ -192,12 +180,6 @@ pub fn set_raw_keyboard_capture_enabled(enabled: bool) {
     crate::backend::iohid::set_keyboard_capture_enabled(enabled);
 }
 
-#[cfg(target_os = "macos")]
-#[inline(always)]
-pub const fn raw_keyboard_capture_synced(_enabled: bool) -> bool {
-    true
-}
-
 #[cfg(all(
     not(windows),
     not(any(target_os = "linux", target_os = "freebsd", target_os = "macos"))
@@ -205,13 +187,4 @@ pub const fn raw_keyboard_capture_synced(_enabled: bool) -> bool {
 #[inline(always)]
 pub fn set_raw_keyboard_capture_enabled(enabled: bool) {
     let _ = enabled;
-}
-
-#[cfg(all(
-    not(windows),
-    not(any(target_os = "linux", target_os = "freebsd", target_os = "macos"))
-))]
-#[inline(always)]
-pub const fn raw_keyboard_capture_synced(_enabled: bool) -> bool {
-    true
 }

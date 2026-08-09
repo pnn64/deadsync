@@ -3,7 +3,7 @@ use crate::input::{
     GameplayQueuedEvent, GameplayRawKeyEvent, GameplayRawKeyRouteContext, PreScreenInputContext,
     PreScreenInputRoute, QueuedInputBatchState, QueuedInputEventRoute, allowed_gameplay_raw_action,
     gameplay_raw_key_route_plan, pre_screen_input_route, queued_input_flush_plan,
-    raw_keyboard_capture_enabled, raw_keyboard_capture_request_needed,
+    raw_keyboard_capture_enabled,
 };
 use deadsync_config::prelude as config;
 use deadsync_gameplay::RawKeyAction;
@@ -319,20 +319,11 @@ impl App {
             &self.state.shell.transition,
             cfg!(windows),
         );
-        if !raw_keyboard_capture_request_needed(
-            self.raw_keyboard_capture_request,
-            deadsync_input_native::raw_keyboard_capture_synced(capture_enabled),
-            capture_enabled,
-        ) {
-            return;
-        }
         deadsync_input_native::set_raw_keyboard_capture_enabled(capture_enabled);
-        self.raw_keyboard_capture_request = Some(capture_enabled);
     }
 
     #[inline(always)]
     pub(super) fn clear_gameplay_input_events(&mut self) {
         deadsync_input_native::set_raw_keyboard_capture_enabled(false);
-        self.raw_keyboard_capture_request = Some(false);
     }
 }

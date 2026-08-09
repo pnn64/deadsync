@@ -1089,10 +1089,6 @@ pub struct App {
     /// gameplay frames avoid its mutex and the full `Config` copy.
     frame_config: config::Config,
     frame_config_generation: u64,
-    /// Last raw-key capture request sent by the game thread. A stable confirmed
-    /// registration reduces the gameplay path to one registration-state load;
-    /// unknown or failed registrations keep retrying until the backend confirms.
-    raw_keyboard_capture_request: Option<bool>,
     options_song_pack_generation: u64,
     profile_import: crate::profile_import::Service,
     profile_load: crate::profile_load::Service,
@@ -3141,7 +3137,6 @@ impl App {
             dynamic_media: DynamicMedia::new(),
             frame_config: config,
             frame_config_generation: config_generation,
-            raw_keyboard_capture_request: None,
             options_song_pack_generation: deadsync_simfile::runtime_cache::song_cache_generation(),
             profile_import: crate::profile_import::Service::default(),
             profile_load: crate::profile_load::Service::default(),

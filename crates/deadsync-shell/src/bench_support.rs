@@ -1,4 +1,4 @@
-use crate::{input, pad_config, profile_import, qr_login, score_import, smx_config, sync_analysis};
+use crate::{pad_config, profile_import, qr_login, score_import, smx_config, sync_analysis};
 use deadsync_config::prelude as config;
 use deadsync_rules::timing::{StopSegment, TimingData, TimingSegments};
 use deadsync_theme_simply_love::screens::SimplyLoveScreen;
@@ -320,9 +320,9 @@ impl GameplayIdleWorkersBenchmark {
     }
 
     #[cfg(windows)]
-    pub fn legacy_raw_capture_frame(&mut self) -> usize {
+    pub fn direct_raw_capture_frame(&mut self) -> usize {
         (0..POLLS_PER_FRAME).fold(0, |checksum, sample| {
-            deadsync_input_native::benchmark_set_raw_keyboard_capture_legacy(black_box(true));
+            deadsync_input_native::set_raw_keyboard_capture_enabled(black_box(true));
             checksum.rotate_left(5) ^ usize::from(self.raw_capture_request == Some(true)) ^ sample
         })
     }
@@ -331,11 +331,9 @@ impl GameplayIdleWorkersBenchmark {
     pub fn gated_raw_capture_frame(&mut self) -> usize {
         (0..POLLS_PER_FRAME).fold(0, |checksum, sample| {
             let requested = black_box(true);
-            if input::raw_keyboard_capture_request_needed(
-                self.raw_capture_request,
-                deadsync_input_native::raw_keyboard_capture_synced(requested),
-                requested,
-            ) {
+            if self.raw_capture_request != Some(requested)
+                || !deadsync_input_native::raw_keyboard_capture_synced(requested)
+            {
                 deadsync_input_native::set_raw_keyboard_capture_enabled(requested);
                 self.raw_capture_request = Some(requested);
             }

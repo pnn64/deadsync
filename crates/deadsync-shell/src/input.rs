@@ -680,15 +680,6 @@ pub fn raw_keyboard_capture_enabled(
 }
 
 #[inline(always)]
-pub fn raw_keyboard_capture_request_needed(
-    last_request: Option<bool>,
-    registration_synced: bool,
-    requested: bool,
-) -> bool {
-    last_request != Some(requested) || !registration_synced
-}
-
-#[inline(always)]
 pub const fn allowed_gameplay_raw_action(
     action: RawKeyAction,
     keyboard_features: bool,
@@ -1336,14 +1327,6 @@ mod tests {
             &TransitionState::Idle,
             true,
         ));
-    }
-
-    #[test]
-    fn capture_request_gate_retries_until_registration_is_confirmed() {
-        assert!(!raw_keyboard_capture_request_needed(Some(true), true, true,));
-        assert!(raw_keyboard_capture_request_needed(Some(true), false, true,));
-        assert!(raw_keyboard_capture_request_needed(Some(false), true, true,));
-        assert!(raw_keyboard_capture_request_needed(None, true, true));
     }
 
     #[test]

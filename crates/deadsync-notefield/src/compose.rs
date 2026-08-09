@@ -526,7 +526,9 @@ impl Default for NotefieldPrepBench {
         Self {
             empty_windows: Vec::new(),
             populated_windows,
-            col_offsets: [-224.0, -160.0, -96.0, -32.0, 32.0, 96.0, 160.0, 224.0],
+            col_offsets: [
+                -288.0, -224.0, -160.0, -96.0, -32.0, 32.0, 96.0, 160.0, 224.0, 288.0,
+            ],
         }
     }
 }
