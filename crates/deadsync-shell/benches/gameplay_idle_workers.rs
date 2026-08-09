@@ -1,4 +1,6 @@
-use deadsync_shell::bench_support::{EvaluationSubmissionBenchmark, GameplayIdleWorkersBenchmark};
+use deadsync_shell::bench_support::{
+    EvaluationSubmissionBenchmark, GameplayIdleWorkersBenchmark, LobbyRefreshBenchmark,
+};
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::hint::black_box;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
@@ -310,6 +312,16 @@ fn main() {
         "batched snapshot",
         measure(|| old.legacy_frame()),
         measure(|| new.snapshot_frame()),
+    );
+
+    let old = LobbyRefreshBenchmark::default();
+    let new = LobbyRefreshBenchmark::default();
+    compare_labeled(
+        "idle lobby refresh state",
+        "poll then view",
+        "coherent refresh",
+        measure(|| old.legacy_frame()),
+        measure(|| new.refreshed_frame()),
     );
 
     #[cfg(windows)]

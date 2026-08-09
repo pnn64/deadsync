@@ -74,6 +74,47 @@ pub struct EvaluationSubmissionBenchmark {
     queries: [Option<(deadsync_profile::PlayerSide, &'static str)>; 2],
 }
 
+/// Old split and current coherent lobby refresh reads.
+pub struct LobbyRefreshBenchmark;
+
+impl Default for LobbyRefreshBenchmark {
+    fn default() -> Self {
+        deadsync_online::lobbies::runtime_disconnect();
+        Self
+    }
+}
+
+impl LobbyRefreshBenchmark {
+    pub fn legacy_frame(&self) -> usize {
+        (0..POLLS_PER_FRAME).fold(0usize, |checksum, sample| {
+            black_box(deadsync_online::lobbies::runtime_view());
+            let (snapshot, reconnect_status) = deadsync_online::lobbies::runtime_view();
+            checksum.rotate_left(5)
+                ^ lobby_view_checksum(&snapshot, reconnect_status.as_deref())
+                ^ sample
+        })
+    }
+
+    pub fn refreshed_frame(&self) -> usize {
+        (0..POLLS_PER_FRAME).fold(0usize, |checksum, sample| {
+            let (snapshot, reconnect_status) =
+                deadsync_online::lobbies::runtime_refresh_view_default();
+            checksum.rotate_left(5)
+                ^ lobby_view_checksum(&snapshot, reconnect_status.as_deref())
+                ^ sample
+        })
+    }
+}
+
+fn lobby_view_checksum(
+    snapshot: &deadsync_online::lobbies::Snapshot,
+    status: Option<&str>,
+) -> usize {
+    snapshot.available_lobbies.len()
+        ^ (snapshot.joined_lobby.is_some() as usize).rotate_left(7)
+        ^ status.map_or(0, str::len).rotate_left(13)
+}
+
 impl Default for EvaluationSubmissionBenchmark {
     fn default() -> Self {
         for (idx, query) in EVALUATION_SUBMISSION_QUERIES.iter().flatten().enumerate() {

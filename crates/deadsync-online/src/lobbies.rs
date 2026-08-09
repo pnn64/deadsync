@@ -1154,6 +1154,38 @@ pub fn runtime_view() -> (Arc<Snapshot>, Option<String>) {
     (snapshot, reconnect_status)
 }
 
+pub fn runtime_refresh_view_default() -> (Arc<Snapshot>, Option<String>) {
+    runtime_refresh_view(DEFAULT_RUNTIME_HOOKS)
+}
+
+fn runtime_refresh_view(hooks: LobbyRuntimeHooks) -> (Arc<Snapshot>, Option<String>) {
+    let now = Instant::now();
+    let snapshot = Arc::clone(&RUNTIME_SNAPSHOT.lock().unwrap());
+    let (target, reconnect_status) = {
+        let mut reconnect = RUNTIME_RECONNECT_STATE.lock().unwrap();
+        let target = (!matches!(
+            snapshot.connection,
+            ConnectionState::Connected | ConnectionState::Connecting
+        ))
+        .then(|| reconnect.ready_target(now))
+        .flatten();
+        let status = reconnect.status_text(&snapshot.connection, now);
+        (target, status)
+    };
+
+    if let Some(target) = target {
+        let _ = runtime_send_command(
+            hooks,
+            LobbyCommand::Join {
+                code: target.code,
+                password: target.password,
+            },
+        );
+        return runtime_view();
+    }
+    (snapshot, reconnect_status)
+}
+
 #[doc(hidden)]
 pub fn runtime_with_snapshot_for_test<R>(snapshot: Snapshot, f: impl FnOnce() -> R) -> R {
     let _guard = RUNTIME_TEST_MUTEX.lock().unwrap();
@@ -1206,10 +1238,6 @@ pub fn runtime_update_machine_state_sides_with_stats_default(
 
 pub fn runtime_select_song_default(song_info: LobbySongInfo) {
     runtime_select_song(DEFAULT_RUNTIME_HOOKS, song_info);
-}
-
-pub fn runtime_poll_reconnect_default() {
-    runtime_poll_reconnect(DEFAULT_RUNTIME_HOOKS);
 }
 
 pub fn runtime_search_lobbies(hooks: LobbyRuntimeHooks) {
@@ -1388,31 +1416,6 @@ pub fn runtime_disconnect() {
     runtime_clear_machine_state_cache();
     let mut snapshot = RUNTIME_SNAPSHOT.lock().unwrap();
     apply_local_lobby_disconnect(Arc::make_mut(&mut *snapshot));
-}
-
-pub fn runtime_poll_reconnect(hooks: LobbyRuntimeHooks) {
-    let target = {
-        let snapshot = Arc::clone(&RUNTIME_SNAPSHOT.lock().unwrap());
-        if matches!(
-            snapshot.connection,
-            ConnectionState::Connected | ConnectionState::Connecting
-        ) {
-            return;
-        }
-        let mut reconnect = RUNTIME_RECONNECT_STATE.lock().unwrap();
-        let Some(target) = reconnect.ready_target(Instant::now()) else {
-            return;
-        };
-        target
-    };
-
-    let _ = runtime_send_command(
-        hooks,
-        LobbyCommand::Join {
-            code: target.code,
-            password: target.password,
-        },
-    );
 }
 
 pub fn log_malformed_payload(event: Option<&str>, error: &str, raw_text: &str) {
@@ -1689,6 +1692,32 @@ mod tests {
         let (snapshot, reconnect_status) = runtime_view();
         let (same_snapshot, _) = runtime_view();
         assert!(Arc::ptr_eq(&snapshot, &same_snapshot));
+        assert_eq!(snapshot.connection, ConnectionState::Connecting);
+        assert_eq!(
+            reconnect_status.as_deref(),
+            Some("Reconnecting to lobby...")
+        );
+
+        reset_runtime_test_state();
+    }
+
+    #[test]
+    fn runtime_refresh_view_combines_idle_poll_and_snapshot() {
+        let _guard = RUNTIME_TEST_MUTEX.lock().unwrap();
+        reset_runtime_test_state();
+
+        let (snapshot, reconnect_status) = runtime_refresh_view(runtime_hooks());
+
+        assert_eq!(snapshot.connection, ConnectionState::Disconnected);
+        assert!(reconnect_status.is_none());
+
+        RUNTIME_RECONNECT_STATE
+            .lock()
+            .unwrap()
+            .set_join_target("ROOM".to_string(), "PASS".to_string());
+        Arc::make_mut(&mut *RUNTIME_SNAPSHOT.lock().unwrap()).connection =
+            ConnectionState::Connecting;
+        let (snapshot, reconnect_status) = runtime_refresh_view(runtime_hooks());
         assert_eq!(snapshot.connection, ConnectionState::Connecting);
         assert_eq!(
             reconnect_status.as_deref(),

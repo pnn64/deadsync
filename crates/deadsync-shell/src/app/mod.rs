@@ -1457,18 +1457,14 @@ impl App {
         self.lights.tick(delta_time, elapsed_seconds);
     }
 
-    fn lobby_runtime_view() -> SimplyLoveLobbyRuntimeView {
-        let (snapshot, reconnect_status_text) = deadsync_online::lobbies::runtime_view();
+    fn refresh_lobby_runtime_view() -> SimplyLoveLobbyRuntimeView {
+        let (snapshot, reconnect_status_text) =
+            deadsync_online::lobbies::runtime_refresh_view_default();
         SimplyLoveLobbyRuntimeView {
             snapshot,
             reconnect_status_text,
             disconnect_hold_seconds: deadsync_online::lobbies::LOBBY_DISCONNECT_HOLD_SECONDS,
         }
-    }
-
-    fn refresh_lobby_runtime_view() -> SimplyLoveLobbyRuntimeView {
-        deadsync_online::lobbies::runtime_poll_reconnect_default();
-        Self::lobby_runtime_view()
     }
 
     fn groovestats_service_view() -> SimplyLoveGrooveStatsService {
