@@ -630,7 +630,7 @@ mod tests {
             123.0,
             crate::views::SimplyLoveVisualPolicyView::default(),
         );
-        let actor_segments = segments.slices(state, actors);
+        let actor_segments = segments.segments(state, actors);
         compose::build_screen_segments_cached_with_scratch_and_texture_context_and_actor_resources(
             &actor_segments,
             [0.0, 0.0, 0.0, 1.0],
@@ -679,7 +679,7 @@ mod tests {
             123.0,
             crate::views::SimplyLoveVisualPolicyView::default(),
         );
-        let actor_segments = segments.slices(&state.gameplay, actors);
+        let actor_segments = segments.segments(&state.gameplay, actors);
         compose::build_screen_segments_cached_with_scratch_and_texture_context_and_actor_resources(
             &actor_segments,
             [0.0, 0.0, 0.0, 1.0],
@@ -1367,7 +1367,7 @@ L000
             123.0,
             crate::views::SimplyLoveVisualPolicyView::default(),
         );
-        let actor_segments = segments.slices(state, actors);
+        let actor_segments = segments.segments(state, actors);
         let actor_us = gpu_elapsed_us(actor_started);
 
         compose_scratch.begin_frame_stats(collect_sort_timing);

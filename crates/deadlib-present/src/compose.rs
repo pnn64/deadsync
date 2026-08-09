@@ -570,7 +570,7 @@ pub fn build_screen_cached_with_scratch_and_texture_context_and_actor_resources<
 pub fn build_screen_segments_cached_with_scratch_and_texture_context_and_actor_resources<
     T: TextureContext + ?Sized,
 >(
-    actor_segments: &[&[actors::Actor]],
+    actor_segments: &[ActorSegment<'_>],
     clear_color: [f32; 4],
     m: &Metrics,
     fonts: &font::FontMap,
@@ -593,6 +593,23 @@ pub fn build_screen_segments_cached_with_scratch_and_texture_context_and_actor_r
     )
 }
 
+/// A borrowed actor slice with a layer shift applied during composition.
+#[derive(Clone, Copy, Debug)]
+pub struct ActorSegment<'a> {
+    actors: &'a [actors::Actor],
+    z_shift: i16,
+}
+
+impl<'a> ActorSegment<'a> {
+    pub const fn new(actors: &'a [actors::Actor]) -> Self {
+        Self { actors, z_shift: 0 }
+    }
+
+    pub const fn shifted(actors: &'a [actors::Actor], z_shift: i16) -> Self {
+        Self { actors, z_shift }
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 fn build_screen_cached_with_scratch_and_texture_context_impl<T: TextureContext + ?Sized>(
     actors: &[actors::Actor],
@@ -606,7 +623,7 @@ fn build_screen_cached_with_scratch_and_texture_context_impl<T: TextureContext +
     actor_resources: Option<&actors::ActorResourceArena>,
 ) -> RenderFrame {
     build_screen_segments_cached_with_scratch_and_texture_context_impl(
-        &[actors],
+        &[ActorSegment::new(actors)],
         clear_color,
         m,
         fonts,
@@ -622,7 +639,7 @@ fn build_screen_cached_with_scratch_and_texture_context_impl<T: TextureContext +
 fn build_screen_segments_cached_with_scratch_and_texture_context_impl<
     T: TextureContext + ?Sized,
 >(
-    actor_segments: &[&[actors::Actor]],
+    actor_segments: &[ActorSegment<'_>],
     clear_color: [f32; 4],
     m: &Metrics,
     fonts: &font::FontMap,
@@ -637,9 +654,9 @@ fn build_screen_segments_cached_with_scratch_and_texture_context_impl<
     let actor_textures = actor_resources.map(actors::ActorResourceArena::texture_keys);
     let mut builder = std::mem::take(&mut scratch.frame_builder);
     builder.clear();
-    let actor_count = actor_segments
-        .iter()
-        .fold(0usize, |count, actors| count.saturating_add(actors.len()));
+    let actor_count = actor_segments.iter().fold(0usize, |count, segment| {
+        count.saturating_add(segment.actors.len())
+    });
     let object_capacity = actor_count.saturating_mul(4).max(64);
     if builder.items.capacity() < object_capacity {
         builder.reserve(object_capacity);
@@ -676,16 +693,20 @@ fn build_screen_segments_cached_with_scratch_and_texture_context_impl<
         w: m.right - m.left,
         h: m.top - m.bottom,
     };
-    let parent_z: i16 = 0;
     let camera: u8 = 0;
 
     build_actor_sequence(
-        actor_segments.iter().flat_map(|actors| actors.iter()),
+        actor_segments.iter().flat_map(|segment| {
+            let base_z = segment.z_shift;
+            segment
+                .actors
+                .iter()
+                .map(move |actor| ActorBuild { actor, base_z })
+        }),
         root_rect,
         m,
         fonts,
         scratch,
-        parent_z,
         camera,
         ComposeStyle::IDENTITY,
         &mut cameras,
@@ -4109,6 +4130,12 @@ struct ComposeStyle {
     blend: Option<BlendMode>,
 }
 
+#[derive(Clone, Copy)]
+struct ActorBuild<'a> {
+    actor: &'a actors::Actor,
+    base_z: i16,
+}
+
 impl ComposeStyle {
     const IDENTITY: Self = Self {
         tint: [1.0; 4],
@@ -4151,12 +4178,11 @@ fn build_actor_list<'a, T: TextureContext + ?Sized>(
     total_elapsed: f32,
 ) {
     build_actor_sequence(
-        actors,
+        actors.iter().map(|actor| ActorBuild { actor, base_z }),
         parent,
         m,
         fonts,
         scratch,
-        base_z,
         camera,
         style,
         cameras,
@@ -4174,12 +4200,11 @@ fn build_actor_list<'a, T: TextureContext + ?Sized>(
 
 #[allow(clippy::too_many_arguments)]
 fn build_actor_sequence<'a, T, I>(
-    actors: I,
+    actor_builds: I,
     parent: SmRect,
     m: &Metrics,
     fonts: &'a font::FontMap,
     scratch: &mut ComposeScratch,
-    base_z: i16,
     camera: u8,
     style: ComposeStyle,
     cameras: &mut Vec<Matrix4>,
@@ -4194,11 +4219,11 @@ fn build_actor_sequence<'a, T, I>(
     total_elapsed: f32,
 ) where
     T: TextureContext + ?Sized,
-    I: IntoIterator<Item = &'a actors::Actor>,
+    I: IntoIterator<Item = ActorBuild<'a>>,
 {
     let mut active_camera = camera;
     let mut camera_stack: SmallVec<[u8; 4]> = SmallVec::new();
-    for actor in actors {
+    for ActorBuild { actor, base_z } in actor_builds {
         match actor {
             actors::Actor::CameraPush { view_proj } => {
                 cameras.push(*view_proj);
@@ -7505,7 +7530,7 @@ fn clip_rotated_sprite_to_world_rect(
 #[cfg(test)]
 mod tests {
     use super::{
-        CachedGlyph, CachedRetainedFrame, CachedTextLayout, CachedTextMeshBatch,
+        ActorSegment, CachedGlyph, CachedRetainedFrame, CachedTextLayout, CachedTextMeshBatch,
         CachedTextMeshVariants, CachedTextPage, ComposeScratch, DrawItem, EditableDraw,
         EditablePayload, FrameBuilder, MeshPayload, MeshVertices, TextAttrCursor, TextLayoutCache,
         TextLayoutKey, TextMeshBatchBuilder, TextPageId, TextureCacheEntry, TextureContext,
@@ -8190,7 +8215,11 @@ mod tests {
             &TestDrawTextureContext,
             &resources,
         );
-        let segments = [&flat[..1], &flat[1..2], &flat[2..]];
+        let segments = [
+            ActorSegment::new(&flat[..1]),
+            ActorSegment::new(&flat[1..2]),
+            ActorSegment::new(&flat[2..]),
+        ];
         let mut segmented_text = TextLayoutCache::default();
         let mut segmented_scratch = ComposeScratch::default();
         let segmented =
@@ -8206,6 +8235,68 @@ mod tests {
                 &resources,
             );
         assert_test_frames_equal(&contiguous, &segmented);
+    }
+
+    #[test]
+    fn shifted_actor_segment_matches_materialized_actor_z() {
+        let vertices: Arc<[MeshVertex]> = Arc::from([
+            MeshVertex {
+                pos: [0.0, 0.0],
+                color: [1.0; 4],
+            },
+            MeshVertex {
+                pos: [12.0, 0.0],
+                color: [1.0; 4],
+            },
+            MeshVertex {
+                pos: [0.0, 9.0],
+                color: [1.0; 4],
+            },
+        ]);
+        let source = [Actor::Mesh {
+            align: [0.0, 0.0],
+            offset: [3.0, 4.0],
+            size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
+            tint: [0.5, 0.25, 0.75, 0.8],
+            vertices: Arc::clone(&vertices),
+            visible: true,
+            blend: BlendMode::Alpha,
+            z: 7,
+        }];
+        let materialized = [Actor::Mesh {
+            align: [0.0, 0.0],
+            offset: [3.0, 4.0],
+            size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
+            tint: [0.5, 0.25, 0.75, 0.8],
+            vertices,
+            visible: true,
+            blend: BlendMode::Alpha,
+            z: 107,
+        }];
+        let metrics = Metrics {
+            left: 0.0,
+            right: 100.0,
+            top: 100.0,
+            bottom: 0.0,
+        };
+        let fonts = font::FontMap::default();
+        let expected = build_screen(&materialized, [0.0, 0.0, 0.0, 1.0], &metrics, &fonts, 0.0);
+        let resources = ActorResourceArena::new(0);
+        let mut text = TextLayoutCache::default();
+        let mut scratch = ComposeScratch::default();
+        let actual =
+            build_screen_segments_cached_with_scratch_and_texture_context_and_actor_resources(
+                &[ActorSegment::shifted(&source, 100)],
+                [0.0, 0.0, 0.0, 1.0],
+                &metrics,
+                &fonts,
+                0.0,
+                &mut text,
+                &mut scratch,
+                &TestDrawTextureContext,
+                &resources,
+            );
+        assert_test_frames_equal(&expected, &actual);
     }
 
     fn test_font() -> Font {

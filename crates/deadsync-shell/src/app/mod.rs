@@ -576,7 +576,7 @@ fn prewarm_gameplay_text_layout_cache(
         arrow_effect_time_seconds(started),
         simply_love_visual_policy(config),
     );
-    let actor_segments = segments.slices(state, actor_scratch);
+    let actor_segments = segments.segments(state, actor_scratch);
     let mut render =
         compose::build_screen_segments_cached_with_scratch_and_texture_context_and_actor_resources(
             &actor_segments,
@@ -2821,7 +2821,7 @@ impl App {
             gameplay_segments
                 .as_ref()
                 .map(|segments| match self.state.screens.current_screen {
-                    CurrentScreen::Gameplay => segments.slices(
+                    CurrentScreen::Gameplay => segments.segments(
                         self.state
                             .screens
                             .gameplay_state
@@ -2829,7 +2829,7 @@ impl App {
                             .expect("gameplay segments require gameplay state"),
                         &actors,
                     ),
-                    CurrentScreen::Practice => segments.slices(
+                    CurrentScreen::Practice => segments.segments(
                         &self
                             .state
                             .screens

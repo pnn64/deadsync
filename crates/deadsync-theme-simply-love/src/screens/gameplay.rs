@@ -21,7 +21,7 @@ use deadlib_present::actors::{
 use deadlib_present::anim::EffectState;
 use deadlib_present::cache::{TextCache, cached_text, text_cache_with_capacity};
 use deadlib_present::color;
-use deadlib_present::compose::{ComposeScratch, TextLayoutCache};
+use deadlib_present::compose::{ActorSegment, ComposeScratch, TextLayoutCache};
 use deadlib_present::density::{self, DensityHistCache};
 use deadlib_present::font;
 use deadlib_present::space::widescale;
@@ -18063,11 +18063,8 @@ fn apply_song_lua_player_transform_legacy(
 }
 
 #[inline(always)]
-fn song_lua_player_transform_is_direct_identity(transform: SongLuaCaptureTransform) -> bool {
-    transform.z_shift == 0
-        && transform.tint == [1.0; 4]
-        && transform.blend.is_none()
-        && screen_width().is_finite()
+fn song_lua_player_transform_has_identity_geometry(transform: SongLuaCaptureTransform) -> bool {
+    screen_width().is_finite()
         && screen_height().is_finite()
         && screen_center_y().is_finite()
         && transform.playfield_center_x.is_finite()
@@ -18091,6 +18088,14 @@ fn song_lua_player_transform_is_direct_identity(transform: SongLuaCaptureTransfo
         && (transform.zoom_z - 1.0).abs() <= f32::EPSILON
         && (transform.target_x - transform.playfield_center_x).abs() <= f32::EPSILON
         && (screen_center_y() - transform.target_y).abs() <= f32::EPSILON
+}
+
+#[inline(always)]
+fn song_lua_player_transform_is_direct_identity(transform: SongLuaCaptureTransform) -> bool {
+    transform.z_shift == 0
+        && transform.tint == [1.0; 4]
+        && transform.blend.is_none()
+        && song_lua_player_transform_has_identity_geometry(transform)
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -18214,10 +18219,10 @@ pub fn benchmark_present_identity_notefield(
     );
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 enum PlayerActorAssembly {
     Buffered,
-    DirectIdentity,
+    DirectZ { z_shift: i16 },
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -18233,15 +18238,15 @@ pub struct GameplayActorSegments {
 }
 
 impl GameplayActorSegments {
-    pub fn slices<'a>(&self, state: &'a State, actors: &'a [Actor]) -> [&'a [Actor]; 6] {
+    pub fn segments<'a>(&self, state: &'a State, actors: &'a [Actor]) -> [ActorSegment<'a>; 6] {
         let insert = self.insert.min(actors.len());
         let empty = &actors[0..0];
-        let mut slices = [empty; 6];
+        let mut segments = [ActorSegment::new(empty); 6];
         let scratch = state
             .frame_scratch
             .as_deref()
             .expect("gameplay frame scratch is restored before segment access");
-        slices[0] = &actors[..insert];
+        segments[0] = ActorSegment::new(&actors[..insert]);
         for (slot, segment) in self.players.iter().enumerate() {
             let Some(segment) = segment else {
                 continue;
@@ -18249,16 +18254,23 @@ impl GameplayActorSegments {
             let first = 1 + slot * 2;
             match segment.assembly {
                 PlayerActorAssembly::Buffered => {
-                    slices[first] = &scratch.player_actor_scratch[segment.player];
+                    segments[first] =
+                        ActorSegment::new(&scratch.player_actor_scratch[segment.player]);
                 }
-                PlayerActorAssembly::DirectIdentity => {
-                    slices[first] = &scratch.notefield_hud_actor_scratch[segment.player];
-                    slices[first + 1] = &scratch.notefield_actor_scratch[segment.player];
+                PlayerActorAssembly::DirectZ { z_shift } => {
+                    segments[first] = ActorSegment::shifted(
+                        &scratch.notefield_hud_actor_scratch[segment.player],
+                        z_shift,
+                    );
+                    segments[first + 1] = ActorSegment::shifted(
+                        &scratch.notefield_actor_scratch[segment.player],
+                        z_shift,
+                    );
                 }
             }
         }
-        slices[5] = &actors[insert..];
-        slices
+        segments[5] = ActorSegment::new(&actors[insert..]);
+        segments
     }
 }
 
@@ -18268,9 +18280,15 @@ fn player_actor_assembly_for_transform(
     visible: bool,
     transform: SongLuaCaptureTransform,
 ) -> PlayerActorAssembly {
-    if !requests_player_proxy && visible && song_lua_player_transform_is_direct_identity(transform)
+    if !requests_player_proxy
+        && visible
+        && transform.tint == [1.0; 4]
+        && transform.blend.is_none()
+        && song_lua_player_transform_has_identity_geometry(transform)
     {
-        PlayerActorAssembly::DirectIdentity
+        PlayerActorAssembly::DirectZ {
+            z_shift: transform.z_shift,
+        }
     } else {
         PlayerActorAssembly::Buffered
     }
@@ -19062,7 +19080,7 @@ pub fn push_actors(
                 player_state.visible,
                 capture_transform,
             );
-            if assembly == PlayerActorAssembly::DirectIdentity {
+            if matches!(assembly, PlayerActorAssembly::DirectZ { .. }) {
                 player_scratch.clear();
             } else {
                 apply_song_lua_player_transform(
@@ -19085,7 +19103,7 @@ pub fn push_actors(
                     zoom_z,
                 );
             }
-            let player_source = if assembly == PlayerActorAssembly::Buffered {
+            let player_source = if matches!(assembly, PlayerActorAssembly::Buffered) {
                 if requests.player {
                     let source = song_lua_proxy_actor_scratch
                         .as_mut()
@@ -20945,6 +20963,11 @@ fn draw_smx_mini_pad(
 mod tests {
     use super::*;
     use deadlib_present::actors::TextAttribute;
+    use deadlib_present::compose::{
+        NullTextureContext,
+        build_screen_segments_cached_with_scratch_and_texture_context_and_actor_resources,
+    };
+    use deadlib_render::frame_compare::compare_render_frames_semantic;
 
     fn workspace_root() -> std::path::PathBuf {
         let manifest = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
@@ -21960,7 +21983,7 @@ mod tests {
     }
 
     #[test]
-    fn direct_identity_player_segments_respect_fallback_boundaries() {
+    fn direct_z_player_segments_respect_fallback_boundaries() {
         let identity = SongLuaCaptureTransform {
             z_shift: 0,
             tint: [1.0; 4],
@@ -21979,7 +22002,40 @@ mod tests {
         };
         assert_eq!(
             player_actor_assembly_for_transform(false, true, identity),
-            PlayerActorAssembly::DirectIdentity
+            PlayerActorAssembly::DirectZ { z_shift: 0 }
+        );
+        assert_eq!(
+            player_actor_assembly_for_transform(
+                false,
+                true,
+                SongLuaCaptureTransform {
+                    z_shift: 900,
+                    ..identity
+                },
+            ),
+            PlayerActorAssembly::DirectZ { z_shift: 900 }
+        );
+        assert_eq!(
+            player_actor_assembly_for_transform(
+                false,
+                true,
+                SongLuaCaptureTransform {
+                    tint: [0.8, 0.7, 0.6, 0.5],
+                    ..identity
+                },
+            ),
+            PlayerActorAssembly::Buffered
+        );
+        assert_eq!(
+            player_actor_assembly_for_transform(
+                false,
+                true,
+                SongLuaCaptureTransform {
+                    blend: Some(BlendMode::Add),
+                    ..identity
+                },
+            ),
+            PlayerActorAssembly::Buffered
         );
         assert_eq!(
             player_actor_assembly_for_transform(true, true, identity),
@@ -21999,6 +22055,107 @@ mod tests {
                 },
             ),
             PlayerActorAssembly::Buffered
+        );
+    }
+
+    #[test]
+    fn direct_z_segments_match_materialized_player_z() {
+        let metrics = deadlib_present::space::metrics_for_window(854, 480);
+        deadlib_present::space::set_current_metrics(metrics);
+        let vertices: Arc<[MeshVertex]> = Arc::from([
+            MeshVertex {
+                pos: [0.0, 0.0],
+                color: [1.0; 4],
+            },
+            MeshVertex {
+                pos: [12.0, 0.0],
+                color: [1.0; 4],
+            },
+            MeshVertex {
+                pos: [0.0, 9.0],
+                color: [1.0; 4],
+            },
+        ]);
+        let mesh = || Actor::Mesh {
+            align: [0.0, 0.0],
+            offset: [3.0, 4.0],
+            size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
+            tint: [0.5, 0.25, 0.75, 0.8],
+            vertices: Arc::clone(&vertices),
+            visible: true,
+            blend: BlendMode::Alpha,
+            z: 7,
+        };
+        let mut buffered_field = vec![
+            Actor::CameraPush {
+                view_proj: Matrix4::IDENTITY,
+            },
+            mesh(),
+            Actor::CameraPop,
+        ];
+        let mut buffered_hud = vec![mesh()];
+        let direct_field = buffered_field.clone();
+        let direct_hud = buffered_hud.clone();
+        let mut buffered = Vec::new();
+        let z_shift = 900;
+        let tint = [1.0; 4];
+        let blend = None;
+        apply_song_lua_player_transform_legacy(
+            &mut buffered_field,
+            &mut buffered_hud,
+            &mut buffered,
+            z_shift,
+            tint,
+            blend,
+            screen_center_x(),
+            screen_center_x(),
+            screen_center_y(),
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            1.0,
+            1.0,
+            1.0,
+        );
+
+        let resources = ActorResourceArena::new(0);
+        let fonts = font::FontMap::default();
+        let mut buffered_text = TextLayoutCache::default();
+        let mut buffered_scratch = ComposeScratch::default();
+        let buffered_frame =
+            build_screen_segments_cached_with_scratch_and_texture_context_and_actor_resources(
+                &[ActorSegment::new(&buffered)],
+                [0.0, 0.0, 0.0, 1.0],
+                &metrics,
+                &fonts,
+                0.0,
+                &mut buffered_text,
+                &mut buffered_scratch,
+                &NullTextureContext,
+                &resources,
+            );
+        let mut direct_text = TextLayoutCache::default();
+        let mut direct_scratch = ComposeScratch::default();
+        let direct_frame =
+            build_screen_segments_cached_with_scratch_and_texture_context_and_actor_resources(
+                &[
+                    ActorSegment::shifted(&direct_hud, z_shift),
+                    ActorSegment::shifted(&direct_field, z_shift),
+                ],
+                [0.0, 0.0, 0.0, 1.0],
+                &metrics,
+                &fonts,
+                0.0,
+                &mut direct_text,
+                &mut direct_scratch,
+                &NullTextureContext,
+                &resources,
+            );
+        assert_eq!(
+            compare_render_frames_semantic(&buffered_frame, &direct_frame),
+            Ok(())
         );
     }
 
