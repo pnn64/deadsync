@@ -1,13 +1,21 @@
-use deadlib_present::actors::Actor;
+use deadlib_present::actors::{Actor, ActorResourceArena, SizeSpec};
+use deadlib_present::compose::{
+    ActorSegment, ComposeScratch, NullTextureContext, TextLayoutCache,
+    build_screen_segments_cached_with_scratch_and_texture_context_and_actor_resources,
+};
+use deadlib_present::font;
+use deadlib_render::{BlendMode, MeshVertex};
 use deadsync_theme_simply_love::screens::gameplay::{
     BENCH_NOTEFIELD_ACTOR_SCRATCH_CAPACITY, BENCH_NOTEFIELD_HUD_ACTOR_SCRATCH_CAPACITY,
     benchmark_present_identity_notefield, benchmark_present_identity_notefield_legacy,
+    benchmark_present_transformed_notefield, benchmark_present_transformed_notefield_legacy,
 };
 use glam::{Mat4, Vec3};
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::hint::black_box;
+use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 #[global_allocator]
 static ALLOC: CountingAlloc = CountingAlloc::new();
@@ -21,6 +29,9 @@ const PEAK_HUD_ACTORS: usize = BENCH_NOTEFIELD_HUD_ACTOR_SCRATCH_CAPACITY;
 const PEAK_PLAYER_ACTORS: usize = PEAK_FIELD_ACTORS + PEAK_HUD_ACTORS;
 const WARMUP_PEAK_FRAMES: usize = 512;
 const MEASURE_PEAK_FRAMES: usize = 10_000;
+const TRANSFORM_BATCH_FRAMES: usize = 128;
+const TRANSFORM_WARMUP_BATCHES: usize = 8;
+const TRANSFORM_MEASURE_BATCHES: usize = 400;
 
 struct CountingAlloc {
     allocs: AtomicU64,
@@ -93,6 +104,12 @@ impl AllocSnapshot {
             reallocs: self.reallocs - before.reallocs,
             bytes: self.bytes - before.bytes,
         }
+    }
+
+    fn add(&mut self, other: Self) {
+        self.allocs += other.allocs;
+        self.reallocs += other.reallocs;
+        self.bytes += other.bytes;
     }
 }
 
@@ -259,7 +276,220 @@ fn print_peak_result(label: &str, result: &BenchResult) {
     );
 }
 
+struct TransformActors {
+    field: Vec<Actor>,
+    hud: Vec<Actor>,
+    out: Vec<Actor>,
+}
+
+fn transform_actor(vertices: &Arc<[MeshVertex]>, index: usize) -> Actor {
+    Actor::Mesh {
+        align: [0.0, 0.0],
+        offset: [index as f32, (index % 17) as f32],
+        size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
+        tint: [0.5, 0.25, 0.75, 0.8],
+        vertices: Arc::clone(vertices),
+        visible: true,
+        blend: BlendMode::Alpha,
+        z: (index % 64) as i16,
+    }
+}
+
+fn transform_batch(players: usize, vertices: &Arc<[MeshVertex]>) -> Vec<TransformActors> {
+    (0..TRANSFORM_BATCH_FRAMES * players)
+        .map(|frame_player| {
+            let base = frame_player * (FIELD_ACTORS + HUD_ACTORS);
+            let mut field = Vec::with_capacity(FIELD_ACTORS);
+            field.extend((0..FIELD_ACTORS).map(|index| transform_actor(vertices, base + index)));
+            let mut hud = Vec::with_capacity(HUD_ACTORS);
+            hud.extend(
+                (0..HUD_ACTORS).map(|index| transform_actor(vertices, base + FIELD_ACTORS + index)),
+            );
+            TransformActors {
+                field,
+                hud,
+                out: Vec::with_capacity(FIELD_ACTORS + HUD_ACTORS + 4),
+            }
+        })
+        .collect()
+}
+
+fn measure_transform<const DIRECT: bool>(players: usize) -> BenchResult {
+    let vertices: Arc<[MeshVertex]> = Arc::from([
+        MeshVertex {
+            pos: [0.0, 0.0],
+            color: [1.0; 4],
+        },
+        MeshVertex {
+            pos: [12.0, 0.0],
+            color: [1.0; 4],
+        },
+        MeshVertex {
+            pos: [0.0, 9.0],
+            color: [1.0; 4],
+        },
+    ]);
+    let mut elapsed = Duration::ZERO;
+    let mut cycles = 0u64;
+    let mut allocated = AllocSnapshot {
+        allocs: 0,
+        reallocs: 0,
+        bytes: 0,
+    };
+    let mut checksum = 0.0f32;
+    for batch in 0..TRANSFORM_WARMUP_BATCHES + TRANSFORM_MEASURE_BATCHES {
+        let mut actors = transform_batch(players, &vertices);
+        let before = ALLOC.snapshot();
+        let before_cycles = read_cycles();
+        let started = Instant::now();
+        let mut batch_checksum = 0.0f32;
+        for actors in &mut actors {
+            if DIRECT {
+                let segments = benchmark_present_transformed_notefield(&actors.field, &actors.hud);
+                black_box(segments);
+                batch_checksum += (actors.field.len() + actors.hud.len()) as f32;
+            } else {
+                benchmark_present_transformed_notefield_legacy(
+                    &mut actors.field,
+                    &mut actors.hud,
+                    &mut actors.out,
+                );
+                black_box(&actors.out);
+                batch_checksum += actors.out.len() as f32;
+            }
+        }
+        let batch_elapsed = started.elapsed();
+        let batch_cycles = read_cycles().saturating_sub(before_cycles);
+        let batch_allocated = ALLOC.snapshot().delta(before);
+        black_box(batch_checksum);
+        if batch >= TRANSFORM_WARMUP_BATCHES {
+            elapsed += batch_elapsed;
+            cycles += batch_cycles;
+            allocated.add(batch_allocated);
+            checksum += batch_checksum;
+        }
+    }
+    BenchResult {
+        elapsed,
+        cycles,
+        allocated,
+        checksum,
+    }
+}
+
+fn measure_transform_compose<const DIRECT: bool>(players: usize) -> BenchResult {
+    let vertices: Arc<[MeshVertex]> = Arc::from([
+        MeshVertex {
+            pos: [0.0, 0.0],
+            color: [1.0; 4],
+        },
+        MeshVertex {
+            pos: [12.0, 0.0],
+            color: [1.0; 4],
+        },
+        MeshVertex {
+            pos: [0.0, 9.0],
+            color: [1.0; 4],
+        },
+    ]);
+    let metrics = deadlib_present::space::metrics_for_window(854, 480);
+    let fonts = font::FontMap::default();
+    let resources = ActorResourceArena::new(0);
+    let mut text = TextLayoutCache::default();
+    let mut scratch = ComposeScratch::default();
+    let mut elapsed = Duration::ZERO;
+    let mut cycles = 0u64;
+    let mut allocated = AllocSnapshot {
+        allocs: 0,
+        reallocs: 0,
+        bytes: 0,
+    };
+    let mut checksum = 0.0f32;
+    for batch in 0..TRANSFORM_WARMUP_BATCHES + TRANSFORM_MEASURE_BATCHES {
+        let mut actors = transform_batch(players, &vertices);
+        let before = ALLOC.snapshot();
+        let before_cycles = read_cycles();
+        let started = Instant::now();
+        let mut batch_checksum = 0.0f32;
+        for frame_actors in actors.chunks_exact_mut(players) {
+            if !DIRECT {
+                for actors in frame_actors.iter_mut() {
+                    benchmark_present_transformed_notefield_legacy(
+                        &mut actors.field,
+                        &mut actors.hud,
+                        &mut actors.out,
+                    );
+                }
+            }
+            let mut segments = [ActorSegment::new(&[]); 4];
+            let mut segment_count = 0usize;
+            for actors in frame_actors.iter() {
+                if DIRECT {
+                    for segment in
+                        benchmark_present_transformed_notefield(&actors.field, &actors.hud)
+                    {
+                        segments[segment_count] = segment;
+                        segment_count += 1;
+                    }
+                } else {
+                    segments[segment_count] = ActorSegment::new(&actors.out);
+                    segment_count += 1;
+                }
+            }
+            let mut frame =
+                build_screen_segments_cached_with_scratch_and_texture_context_and_actor_resources(
+                    &segments[..segment_count],
+                    [0.0, 0.0, 0.0, 1.0],
+                    &metrics,
+                    &fonts,
+                    0.0,
+                    &mut text,
+                    &mut scratch,
+                    &NullTextureContext,
+                    &resources,
+                );
+            batch_checksum += (frame.ops.len() + frame.mesh_vertices.len()) as f32;
+            black_box(&frame);
+            scratch.recycle_frame(&mut frame);
+        }
+        let batch_elapsed = started.elapsed();
+        let batch_cycles = read_cycles().saturating_sub(before_cycles);
+        let batch_allocated = ALLOC.snapshot().delta(before);
+        black_box(batch_checksum);
+        if batch >= TRANSFORM_WARMUP_BATCHES {
+            elapsed += batch_elapsed;
+            cycles += batch_cycles;
+            allocated.add(batch_allocated);
+            checksum += batch_checksum;
+        }
+    }
+    BenchResult {
+        elapsed,
+        cycles,
+        allocated,
+        checksum,
+    }
+}
+
+fn print_transform_result(label: &str, result: &BenchResult, players: usize) {
+    let frames = (TRANSFORM_BATCH_FRAMES * TRANSFORM_MEASURE_BATCHES) as f64;
+    println!(
+        "{label:<17} {:>9.2} us/frame  {:>8.0} cycles/frame  {:>6.1} M actors/s  \
+         {:>5.2} allocs/frame  {:>7.1} bytes/frame",
+        result.elapsed.as_secs_f64() * 1_000_000.0 / frames,
+        result.cycles as f64 / frames,
+        frames * players as f64 * (FIELD_ACTORS + HUD_ACTORS) as f64
+            / result.elapsed.as_secs_f64()
+            / 1_000_000.0,
+        result.allocated.allocs as f64 / frames,
+        result.allocated.bytes as f64 / frames,
+    );
+}
+
 fn main() {
+    deadlib_present::space::set_current_metrics(deadlib_present::space::metrics_for_window(
+        854, 480,
+    ));
     let legacy = measure(benchmark_present_identity_notefield_legacy);
     let direct = measure(benchmark_present_identity_notefield);
     assert_eq!(legacy.checksum, direct.checksum);
@@ -282,6 +512,37 @@ fn main() {
     );
     print_peak_result("zero capacity", &growing_scratch);
     print_peak_result("presized", &presized_scratch);
+
+    println!(
+        "\ntransformed player handoff benchmark \
+         ({FIELD_ACTORS} field + {HUD_ACTORS} HUD mesh actors/player)"
+    );
+    for players in 1..=2 {
+        let materialized = measure_transform::<false>(players);
+        let direct = measure_transform::<true>(players);
+        assert_zero_alloc(&materialized);
+        assert_zero_alloc(&direct);
+        black_box((materialized.checksum, direct.checksum));
+        println!("{players}P");
+        print_transform_result("materialized", &materialized, players);
+        print_transform_result("borrowed segments", &direct, players);
+    }
+
+    println!("\ntransformed player handoff + composition benchmark");
+    for players in 1..=2 {
+        let materialized = measure_transform_compose::<false>(players);
+        let direct = measure_transform_compose::<true>(players);
+        assert_zero_alloc(&materialized);
+        assert_zero_alloc(&direct);
+        // Semantic parity is covered by unit tests; the two representations may
+        // consolidate equivalent draw runs differently.
+        assert!(materialized.checksum > 0.0);
+        assert!(direct.checksum > 0.0);
+        black_box((materialized.checksum, direct.checksum));
+        println!("{players}P");
+        print_transform_result("materialized", &materialized, players);
+        print_transform_result("borrowed segments", &direct, players);
+    }
 }
 
 #[cfg(target_arch = "x86_64")]

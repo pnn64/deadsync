@@ -593,20 +593,61 @@ pub fn build_screen_segments_cached_with_scratch_and_texture_context_and_actor_r
     )
 }
 
-/// A borrowed actor slice with a layer shift applied during composition.
+/// A borrowed actor slice with optional presentation metadata applied during composition.
 #[derive(Clone, Copy, Debug)]
 pub struct ActorSegment<'a> {
     actors: &'a [actors::Actor],
     z_shift: i16,
+    tint: [f32; 4],
+    blend: Option<BlendMode>,
+    camera: Option<ActorSegmentCamera>,
+}
+
+#[derive(Clone, Copy, Debug)]
+struct ActorSegmentCamera {
+    root: Matrix4,
+    suffix: Matrix4,
 }
 
 impl<'a> ActorSegment<'a> {
     pub const fn new(actors: &'a [actors::Actor]) -> Self {
-        Self { actors, z_shift: 0 }
+        Self {
+            actors,
+            z_shift: 0,
+            tint: [1.0; 4],
+            blend: None,
+            camera: None,
+        }
     }
 
     pub const fn shifted(actors: &'a [actors::Actor], z_shift: i16) -> Self {
-        Self { actors, z_shift }
+        Self {
+            actors,
+            z_shift,
+            tint: [1.0; 4],
+            blend: None,
+            camera: None,
+        }
+    }
+
+    pub const fn transformed(
+        actors: &'a [actors::Actor],
+        z_shift: i16,
+        tint: [f32; 4],
+        blend: Option<BlendMode>,
+        root_camera: Matrix4,
+        camera_suffix: Matrix4,
+    ) -> Self {
+        Self {
+            actors,
+            z_shift,
+            tint,
+            blend,
+            camera: Some(ActorSegmentCamera {
+                root: root_camera,
+                suffix: camera_suffix,
+            }),
+        }
     }
 }
 
@@ -698,17 +739,23 @@ fn build_screen_segments_cached_with_scratch_and_texture_context_impl<
     build_actor_sequence(
         actor_segments.iter().flat_map(|segment| {
             let base_z = segment.z_shift;
-            segment
-                .actors
-                .iter()
-                .map(move |actor| ActorBuild { actor, base_z })
+            let style = ComposeStyle {
+                tint: segment.tint,
+                blend: segment.blend,
+            };
+            let camera = segment.camera.as_ref();
+            segment.actors.iter().map(move |actor| ActorBuild {
+                actor,
+                base_z,
+                style,
+                camera,
+            })
         }),
         root_rect,
         m,
         fonts,
         scratch,
         camera,
-        ComposeStyle::IDENTITY,
         &mut cameras,
         &mut masks,
         &mut order_counter,
@@ -4131,17 +4178,14 @@ struct ComposeStyle {
 }
 
 #[derive(Clone, Copy)]
-struct ActorBuild<'a> {
+struct ActorBuild<'a, 'segment> {
     actor: &'a actors::Actor,
     base_z: i16,
+    style: ComposeStyle,
+    camera: Option<&'segment ActorSegmentCamera>,
 }
 
 impl ComposeStyle {
-    const IDENTITY: Self = Self {
-        tint: [1.0; 4],
-        blend: None,
-    };
-
     #[inline(always)]
     fn child(self, tint: [f32; 4], blend: Option<BlendMode>) -> Self {
         Self {
@@ -4178,13 +4222,17 @@ fn build_actor_list<'a, T: TextureContext + ?Sized>(
     total_elapsed: f32,
 ) {
     build_actor_sequence(
-        actors.iter().map(|actor| ActorBuild { actor, base_z }),
+        actors.iter().map(|actor| ActorBuild {
+            actor,
+            base_z,
+            style,
+            camera: None,
+        }),
         parent,
         m,
         fonts,
         scratch,
         camera,
-        style,
         cameras,
         masks,
         order_counter,
@@ -4199,14 +4247,13 @@ fn build_actor_list<'a, T: TextureContext + ?Sized>(
 }
 
 #[allow(clippy::too_many_arguments)]
-fn build_actor_sequence<'a, T, I>(
+fn build_actor_sequence<'a, 'segment, T, I>(
     actor_builds: I,
     parent: SmRect,
     m: &Metrics,
     fonts: &'a font::FontMap,
     scratch: &mut ComposeScratch,
     camera: u8,
-    style: ComposeStyle,
     cameras: &mut Vec<Matrix4>,
     masks: &mut Vec<WorldRect>,
     order_counter: &mut u32,
@@ -4219,40 +4266,95 @@ fn build_actor_sequence<'a, T, I>(
     total_elapsed: f32,
 ) where
     T: TextureContext + ?Sized,
-    I: IntoIterator<Item = ActorBuild<'a>>,
+    I: IntoIterator<Item = ActorBuild<'a, 'segment>>,
 {
     let mut active_camera = camera;
     let mut camera_stack: SmallVec<[u8; 4]> = SmallVec::new();
-    for ActorBuild { actor, base_z } in actor_builds {
+    let mut last_root_camera: Option<(Matrix4, u8)> = None;
+    for ActorBuild {
+        actor,
+        base_z,
+        style,
+        camera: segment_camera,
+    } in actor_builds
+    {
         match actor {
             actors::Actor::CameraPush { view_proj } => {
-                cameras.push(*view_proj);
+                cameras
+                    .push(segment_camera.map_or(*view_proj, |camera| *view_proj * camera.suffix));
                 camera_stack.push(active_camera);
                 active_camera = cameras.len().saturating_sub(1).try_into().unwrap_or(0u8);
             }
             actors::Actor::CameraPop => {
                 active_camera = camera_stack.pop().unwrap_or(camera);
             }
-            _ => build_actor_recursive(
-                actor,
-                parent,
-                m,
-                fonts,
-                scratch,
-                base_z,
-                active_camera,
-                style,
-                cameras,
-                masks,
-                order_counter,
-                out,
-                sprite_instances,
-                text_cache,
-                texture_cache,
-                texture_ctx,
-                actor_textures,
-                total_elapsed,
-            ),
+            actors::Actor::Camera {
+                view_proj,
+                children,
+            } => {
+                cameras
+                    .push(segment_camera.map_or(*view_proj, |camera| *view_proj * camera.suffix));
+                let id = cameras.len().saturating_sub(1).try_into().unwrap_or(0u8);
+                build_actor_list(
+                    children,
+                    parent,
+                    m,
+                    fonts,
+                    scratch,
+                    base_z,
+                    id,
+                    style,
+                    cameras,
+                    masks,
+                    order_counter,
+                    out,
+                    sprite_instances,
+                    text_cache,
+                    texture_cache,
+                    texture_ctx,
+                    actor_textures,
+                    total_elapsed,
+                );
+            }
+            _ => {
+                if camera_stack.is_empty() {
+                    active_camera =
+                        if let Some(root_camera) = segment_camera.map(|camera| camera.root) {
+                            if let Some((last_camera, id)) = last_root_camera
+                                && last_camera == root_camera
+                            {
+                                id
+                            } else {
+                                cameras.push(root_camera);
+                                let id = cameras.len().saturating_sub(1).try_into().unwrap_or(0u8);
+                                last_root_camera = Some((root_camera, id));
+                                id
+                            }
+                        } else {
+                            camera
+                        };
+                }
+                build_actor_recursive(
+                    actor,
+                    parent,
+                    m,
+                    fonts,
+                    scratch,
+                    base_z,
+                    active_camera,
+                    style,
+                    cameras,
+                    masks,
+                    order_counter,
+                    out,
+                    sprite_instances,
+                    text_cache,
+                    texture_cache,
+                    texture_ctx,
+                    actor_textures,
+                    total_elapsed,
+                );
+            }
         }
     }
 }
@@ -7543,7 +7645,7 @@ mod tests {
         clip_sprite_object_to_world_rect, clip_textured_mesh_to_world_rect,
         clip_textured_mesh_to_world_rect_legacy, clipped_sprite_object_to_world_rect,
         clipped_sprite_object_to_world_rect_legacy, finish_frame, fold_sprite_xy_rot,
-        font_chain_key, gather_finalized_sprites, is_affine_world_transform,
+        font_chain_key, gather_finalized_sprites, is_affine_world_transform, mul_rgba,
         prewarm_frame_inline_text_slot, push_shadow_objects_for_range, resolve_sprite_size_like_sm,
         sort_composed_draw_items, sort_draw_items, sort_draw_items_legacy, str_ptr,
         textured_mesh_world_bounds, textured_mesh_world_bounds_legacy, wrap_text_lines_by_words,
@@ -8287,6 +8389,107 @@ mod tests {
         let actual =
             build_screen_segments_cached_with_scratch_and_texture_context_and_actor_resources(
                 &[ActorSegment::shifted(&source, 100)],
+                [0.0, 0.0, 0.0, 1.0],
+                &metrics,
+                &fonts,
+                0.0,
+                &mut text,
+                &mut scratch,
+                &TestDrawTextureContext,
+                &resources,
+            );
+        assert_test_frames_equal(&expected, &actual);
+    }
+
+    #[test]
+    fn transformed_actor_segment_matches_materialized_style_and_cameras() {
+        let vertices: Arc<[MeshVertex]> = Arc::from([
+            MeshVertex {
+                pos: [0.0, 0.0],
+                color: [1.0; 4],
+            },
+            MeshVertex {
+                pos: [12.0, 0.0],
+                color: [1.0; 4],
+            },
+            MeshVertex {
+                pos: [0.0, 9.0],
+                color: [1.0; 4],
+            },
+        ]);
+        let mesh = |tint, blend, z| Actor::Mesh {
+            align: [0.0, 0.0],
+            offset: [3.0, 4.0],
+            size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
+            tint,
+            vertices: Arc::clone(&vertices),
+            visible: true,
+            blend,
+            z,
+        };
+        let view_proj = Matrix4::from_translation(Vector3::new(3.0, 4.0, 5.0));
+        let root_camera = Matrix4::from_scale(Vector3::new(0.5, 0.75, 1.0));
+        let camera_suffix = Matrix4::from_rotation_z(0.25);
+        let source = [
+            mesh([0.5, 0.25, 0.75, 0.8], BlendMode::Alpha, 7),
+            Actor::CameraPush { view_proj },
+            mesh([0.25, 0.5, 0.8, 1.0], BlendMode::Multiply, 8),
+            Actor::CameraPop,
+            Actor::Camera {
+                view_proj,
+                children: vec![mesh([0.2, 0.4, 0.6, 0.8], BlendMode::Subtract, 9)],
+            },
+        ];
+        let segment_tint = [0.8, 0.7, 0.6, 0.5];
+        let materialized = [
+            Actor::CameraPush {
+                view_proj: root_camera,
+            },
+            mesh(
+                mul_rgba([0.5, 0.25, 0.75, 0.8], segment_tint),
+                BlendMode::Add,
+                107,
+            ),
+            Actor::CameraPop,
+            Actor::CameraPush {
+                view_proj: view_proj * camera_suffix,
+            },
+            mesh(
+                mul_rgba([0.25, 0.5, 0.8, 1.0], segment_tint),
+                BlendMode::Add,
+                108,
+            ),
+            Actor::CameraPop,
+            Actor::Camera {
+                view_proj: view_proj * camera_suffix,
+                children: vec![mesh(
+                    mul_rgba([0.2, 0.4, 0.6, 0.8], segment_tint),
+                    BlendMode::Add,
+                    109,
+                )],
+            },
+        ];
+        let metrics = Metrics {
+            left: 0.0,
+            right: 100.0,
+            top: 100.0,
+            bottom: 0.0,
+        };
+        let fonts = font::FontMap::default();
+        let expected = build_screen(&materialized, [0.0, 0.0, 0.0, 1.0], &metrics, &fonts, 0.0);
+        let resources = ActorResourceArena::new(0);
+        let mut text = TextLayoutCache::default();
+        let mut scratch = ComposeScratch::default();
+        let actual =
+            build_screen_segments_cached_with_scratch_and_texture_context_and_actor_resources(
+                &[ActorSegment::transformed(
+                    &source,
+                    100,
+                    segment_tint,
+                    Some(BlendMode::Add),
+                    root_camera,
+                    camera_suffix,
+                )],
                 [0.0, 0.0, 0.0, 1.0],
                 &metrics,
                 &fonts,

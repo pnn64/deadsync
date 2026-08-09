@@ -18155,6 +18155,18 @@ fn push_song_lua_capture_actor(
     }
 }
 
+#[inline(always)]
+fn song_lua_player_root_camera(player_transform: Matrix4) -> Matrix4 {
+    glam::camera::rh::proj::opengl::orthographic(
+        -0.5 * screen_width(),
+        0.5 * screen_width(),
+        -0.5 * screen_height(),
+        0.5 * screen_height(),
+        -4096.0,
+        4096.0,
+    ) * player_transform
+}
+
 #[allow(clippy::too_many_arguments)]
 fn append_song_lua_player_transform<F, H>(
     field_actors: F,
@@ -18213,14 +18225,7 @@ fn append_song_lua_player_transform<F, H>(
         return;
     };
 
-    let root_camera = glam::camera::rh::proj::opengl::orthographic(
-        -0.5 * screen_width(),
-        0.5 * screen_width(),
-        -0.5 * screen_height(),
-        0.5 * screen_height(),
-        -4096.0,
-        4096.0,
-    ) * player_transform;
+    let root_camera = song_lua_player_root_camera(player_transform);
     out.reserve(field_len.saturating_add(hud_len).saturating_add(4));
     if !field_has_camera {
         if field_len + hud_len == 0 {
@@ -18540,11 +18545,105 @@ pub fn benchmark_present_identity_notefield(
     );
 }
 
+#[cfg(feature = "bench-support")]
+fn benchmark_player_transform() -> SongLuaCaptureTransform {
+    SongLuaCaptureTransform {
+        z_shift: 900,
+        tint: [0.8, 0.7, 0.6, 0.5],
+        blend: Some(BlendMode::Add),
+        playfield_center_x: screen_center_x(),
+        target_x: screen_center_x() + 24.0,
+        target_y: screen_center_y() - 12.0,
+        rotation_x: 4.0,
+        rotation_z: 8.0,
+        rotation_y: 0.0,
+        skew_x: 0.1,
+        skew_y: -0.05,
+        zoom_x: 0.9,
+        zoom_y: 1.1,
+        zoom_z: 1.0,
+    }
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn benchmark_present_transformed_notefield_legacy(
+    field_actors: &mut Vec<Actor>,
+    hud_actors: &mut Vec<Actor>,
+    out: &mut Vec<Actor>,
+) {
+    let transform = benchmark_player_transform();
+    apply_song_lua_player_transform_legacy(
+        field_actors,
+        hud_actors,
+        out,
+        transform.z_shift,
+        transform.tint,
+        transform.blend,
+        transform.playfield_center_x,
+        transform.target_x,
+        transform.target_y,
+        transform.rotation_x,
+        transform.rotation_z,
+        transform.rotation_y,
+        transform.skew_x,
+        transform.skew_y,
+        transform.zoom_x,
+        transform.zoom_y,
+        transform.zoom_z,
+    );
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn benchmark_present_transformed_notefield<'a>(
+    field_actors: &'a [Actor],
+    hud_actors: &'a [Actor],
+) -> [ActorSegment<'a>; 2] {
+    let PlayerActorAssembly::DirectTransform {
+        z_shift,
+        tint,
+        blend,
+        root_camera,
+        field_camera_suffix,
+    } = player_actor_assembly_for_transform(false, true, benchmark_player_transform())
+    else {
+        panic!("benchmark transform should compose directly");
+    };
+    [
+        ActorSegment::transformed(
+            hud_actors,
+            z_shift,
+            tint,
+            blend,
+            root_camera,
+            Matrix4::IDENTITY,
+        ),
+        ActorSegment::transformed(
+            field_actors,
+            z_shift,
+            tint,
+            blend,
+            root_camera,
+            field_camera_suffix,
+        ),
+    ]
+}
+
 #[derive(Clone, Copy, Debug, PartialEq)]
 enum PlayerActorAssembly {
     Buffered,
     Hidden,
-    DirectZ { z_shift: i16 },
+    DirectZ {
+        z_shift: i16,
+    },
+    DirectTransform {
+        z_shift: i16,
+        tint: [f32; 4],
+        blend: Option<BlendMode>,
+        root_camera: Matrix4,
+        field_camera_suffix: Matrix4,
+    },
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -18590,6 +18689,30 @@ impl GameplayActorSegments {
                         z_shift,
                     );
                 }
+                PlayerActorAssembly::DirectTransform {
+                    z_shift,
+                    tint,
+                    blend,
+                    root_camera,
+                    field_camera_suffix,
+                } => {
+                    segments[first] = ActorSegment::transformed(
+                        &scratch.notefield_hud_actor_scratch[segment.player],
+                        z_shift,
+                        tint,
+                        blend,
+                        root_camera,
+                        Matrix4::IDENTITY,
+                    );
+                    segments[first + 1] = ActorSegment::transformed(
+                        &scratch.notefield_actor_scratch[segment.player],
+                        z_shift,
+                        tint,
+                        blend,
+                        root_camera,
+                        field_camera_suffix,
+                    );
+                }
             }
         }
         segments[5] = ActorSegment::new(&actors[insert..]);
@@ -18610,6 +18733,33 @@ fn player_actor_assembly_for_transform(
     } else if song_lua_player_transform_has_identity_geometry(transform) {
         PlayerActorAssembly::DirectZ {
             z_shift: transform.z_shift,
+        }
+    } else if transform.rotation_y.is_finite() && transform.rotation_y.abs() <= f32::EPSILON {
+        let Some(field_camera_suffix) =
+            song_lua_player_transform_matrix(SongLuaPlayerTransformRequest {
+                screen_width: screen_width(),
+                screen_height: screen_height(),
+                screen_center_y: screen_center_y(),
+                playfield_center_x: transform.playfield_center_x,
+                target_x: transform.target_x,
+                target_y: transform.target_y,
+                rotation_x_deg: transform.rotation_x,
+                rotation_z_deg: transform.rotation_z,
+                skew_x: transform.skew_x,
+                skew_y: transform.skew_y,
+                zoom_x: transform.zoom_x,
+                zoom_y: transform.zoom_y,
+                zoom_z: transform.zoom_z,
+            })
+        else {
+            return PlayerActorAssembly::Buffered;
+        };
+        PlayerActorAssembly::DirectTransform {
+            z_shift: transform.z_shift,
+            tint: transform.tint,
+            blend: transform.blend,
+            root_camera: song_lua_player_root_camera(field_camera_suffix),
+            field_camera_suffix,
         }
     } else {
         PlayerActorAssembly::Buffered
@@ -22439,7 +22589,7 @@ mod tests {
     }
 
     #[test]
-    fn direct_z_player_segments_respect_fallback_boundaries() {
+    fn direct_player_segments_respect_fallback_boundaries() {
         let identity = SongLuaCaptureTransform {
             z_shift: 0,
             tint: [1.0; 4],
@@ -22501,12 +22651,23 @@ mod tests {
             player_actor_assembly_for_transform(false, false, identity),
             PlayerActorAssembly::Hidden
         );
-        assert_eq!(
+        assert!(matches!(
             player_actor_assembly_for_transform(
                 false,
                 true,
                 SongLuaCaptureTransform {
                     target_x: identity.target_x + 1.0,
+                    ..identity
+                },
+            ),
+            PlayerActorAssembly::DirectTransform { .. }
+        ));
+        assert_eq!(
+            player_actor_assembly_for_transform(
+                false,
+                true,
+                SongLuaCaptureTransform {
+                    rotation_y: 1.0,
                     ..identity
                 },
             ),
@@ -22599,6 +22760,159 @@ mod tests {
                 &[
                     ActorSegment::shifted(&direct_hud, z_shift),
                     ActorSegment::shifted(&direct_field, z_shift),
+                ],
+                [0.0, 0.0, 0.0, 1.0],
+                &metrics,
+                &fonts,
+                0.0,
+                &mut direct_text,
+                &mut direct_scratch,
+                &NullTextureContext,
+                &resources,
+            );
+        assert_eq!(
+            compare_render_frames_semantic(&buffered_frame, &direct_frame),
+            Ok(())
+        );
+    }
+
+    #[test]
+    fn direct_transform_segments_match_materialized_player_transform() {
+        let metrics = deadlib_present::space::metrics_for_window(854, 480);
+        deadlib_present::space::set_current_metrics(metrics);
+        let vertices: Arc<[MeshVertex]> = Arc::from([
+            MeshVertex {
+                pos: [0.0, 0.0],
+                color: [1.0; 4],
+            },
+            MeshVertex {
+                pos: [12.0, 0.0],
+                color: [1.0; 4],
+            },
+            MeshVertex {
+                pos: [0.0, 9.0],
+                color: [1.0; 4],
+            },
+        ]);
+        let mesh = || Actor::Mesh {
+            align: [0.0, 0.0],
+            offset: [3.0, 4.0],
+            size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
+            tint: [0.5, 0.25, 0.75, 0.8],
+            vertices: Arc::clone(&vertices),
+            visible: true,
+            blend: BlendMode::Alpha,
+            z: 7,
+        };
+        let hud_camera = Matrix4::from_scale(Vector3::new(0.75, 0.8, 1.0));
+        let field_camera = Matrix4::from_translation(Vector3::new(5.0, 7.0, 0.0));
+        let nested_camera = Matrix4::from_rotation_z(0.15);
+        let mut buffered_hud = vec![
+            mesh(),
+            Actor::CameraPush {
+                view_proj: hud_camera,
+            },
+            mesh(),
+            Actor::CameraPop,
+        ];
+        let mut buffered_field = vec![
+            mesh(),
+            Actor::CameraPush {
+                view_proj: field_camera,
+            },
+            mesh(),
+            Actor::CameraPop,
+            Actor::Camera {
+                view_proj: nested_camera,
+                children: vec![mesh()],
+            },
+        ];
+        let direct_hud = buffered_hud.clone();
+        let direct_field = buffered_field.clone();
+        let transform = SongLuaCaptureTransform {
+            z_shift: 900,
+            tint: [0.8, 0.7, 0.6, 0.5],
+            blend: Some(BlendMode::Add),
+            playfield_center_x: screen_center_x(),
+            target_x: screen_center_x() + 24.0,
+            target_y: screen_center_y() - 12.0,
+            rotation_x: 4.0,
+            rotation_z: 8.0,
+            rotation_y: 0.0,
+            skew_x: 0.1,
+            skew_y: -0.05,
+            zoom_x: 0.9,
+            zoom_y: 1.1,
+            zoom_z: 1.0,
+        };
+        let mut buffered = Vec::new();
+        apply_song_lua_player_transform_legacy(
+            &mut buffered_field,
+            &mut buffered_hud,
+            &mut buffered,
+            transform.z_shift,
+            transform.tint,
+            transform.blend,
+            transform.playfield_center_x,
+            transform.target_x,
+            transform.target_y,
+            transform.rotation_x,
+            transform.rotation_z,
+            transform.rotation_y,
+            transform.skew_x,
+            transform.skew_y,
+            transform.zoom_x,
+            transform.zoom_y,
+            transform.zoom_z,
+        );
+        let PlayerActorAssembly::DirectTransform {
+            z_shift,
+            tint,
+            blend,
+            root_camera,
+            field_camera_suffix,
+        } = player_actor_assembly_for_transform(false, true, transform)
+        else {
+            panic!("finite geometric transform should compose directly");
+        };
+
+        let resources = ActorResourceArena::new(0);
+        let fonts = font::FontMap::default();
+        let mut buffered_text = TextLayoutCache::default();
+        let mut buffered_scratch = ComposeScratch::default();
+        let buffered_frame =
+            build_screen_segments_cached_with_scratch_and_texture_context_and_actor_resources(
+                &[ActorSegment::new(&buffered)],
+                [0.0, 0.0, 0.0, 1.0],
+                &metrics,
+                &fonts,
+                0.0,
+                &mut buffered_text,
+                &mut buffered_scratch,
+                &NullTextureContext,
+                &resources,
+            );
+        let mut direct_text = TextLayoutCache::default();
+        let mut direct_scratch = ComposeScratch::default();
+        let direct_frame =
+            build_screen_segments_cached_with_scratch_and_texture_context_and_actor_resources(
+                &[
+                    ActorSegment::transformed(
+                        &direct_hud,
+                        z_shift,
+                        tint,
+                        blend,
+                        root_camera,
+                        Matrix4::IDENTITY,
+                    ),
+                    ActorSegment::transformed(
+                        &direct_field,
+                        z_shift,
+                        tint,
+                        blend,
+                        root_camera,
+                        field_camera_suffix,
+                    ),
                 ],
                 [0.0, 0.0, 0.0, 1.0],
                 &metrics,
