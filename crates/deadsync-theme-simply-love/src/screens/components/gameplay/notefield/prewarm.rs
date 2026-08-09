@@ -7,14 +7,13 @@ use deadsync_profile as profile_data;
 
 use super::super::display_mods::DISPLAY_MODS_WRAP_WIDTH_PX;
 use super::super::{
-    FRAME_TEXT_COMBO_BASE, FRAME_TEXT_MINI_BASE, FRAME_TEXT_OFFSET_BASE, FRAME_TEXT_VERTEX_BUFFERS,
+    FRAME_TEXT_COMBO_BASE, FRAME_TEXT_MINI_BASE, FRAME_TEXT_OFFSET_BASE, FRAME_TEXT_TIMER_BASE,
+    FRAME_TEXT_VERTEX_BUFFERS,
 };
-use super::text::{
-    cached_int_i32, preferred_mods_text, zmod_measure_counter_text, zmod_run_timer_fmt,
-};
+use super::text::{cached_int_i32, preferred_mods_text, zmod_measure_counter_text};
 use super::{
-    COLUMN_COUNTDOWN_PREWARM_CAP, MEASURE_PREWARM_CAP, RUN_TIMER_PREWARM_CAP_S,
-    zmod_combo_font_name, zmod_indicator_mode, zmod_small_combo_font,
+    COLUMN_COUNTDOWN_PREWARM_CAP, MEASURE_PREWARM_CAP, zmod_combo_font_name, zmod_indicator_mode,
+    zmod_small_combo_font,
 };
 
 pub fn prewarm_text_layout(cache: &mut TextLayoutCache, fonts: &font::FontMap, state: &State) {
@@ -30,19 +29,7 @@ pub fn prewarm_text_layout(cache: &mut TextLayoutCache, fonts: &font::FontMap, s
             });
             cache.prewarm_text(fonts, font_name, text.as_str(), None);
         };
-    let prewarm_timer = |cache: &mut TextLayoutCache,
-                         font_name: &'static str,
-                         second: i32,
-                         threshold: i32,
-                         trailing: bool| {
-        let text = zmod_run_timer_fmt(second, threshold, trailing);
-        cache.prewarm_text(fonts, font_name, text.as_str(), None);
-    };
     let mut max_measure_len = 0i32;
-    let music_end_seconds =
-        deadsync_core::song_time::song_time_ns_to_seconds(state.music_end_time_ns())
-            .ceil()
-            .max(0.0) as i32;
 
     for player in 0..state.num_players() {
         let profile = &state.profiles()[player];
@@ -87,12 +74,6 @@ pub fn prewarm_text_layout(cache: &mut TextLayoutCache, fonts: &font::FontMap, s
             prewarm_ratio(cache, mc_font_name, 1, max_measure_len);
             prewarm_ratio(cache, mc_font_name, max_measure_len, max_measure_len);
         }
-        for second in 0..=music_end_seconds.min(RUN_TIMER_PREWARM_CAP_S) {
-            prewarm_timer(cache, mc_font_name, second, 60, false);
-            prewarm_timer(cache, mc_font_name, second, 59, true);
-        }
-        prewarm_timer(cache, mc_font_name, music_end_seconds, 60, false);
-        prewarm_timer(cache, mc_font_name, music_end_seconds, 59, true);
         if profile.measure_counter != profile_data::MeasureCounter::None {
             let countdown_max = max_measure_len.clamp(16, MEASURE_PREWARM_CAP);
             for value in 0..=countdown_max {
@@ -144,6 +125,8 @@ pub fn prewarm_frame_text_scratch(
         .expect("the mini-indicator glyph domain fits inline");
     let offset_glyphs = InlineText::copy_from("-.ms0123456789")
         .expect("the offset-indicator glyph domain fits inline");
+    let timer_glyphs =
+        InlineText::copy_from(" .0123456789").expect("the run-timer glyph domain fits inline");
     for player in 0..state.num_players() {
         let profile = &state.profiles()[player];
         if let Some(font_name) = zmod_combo_font_name(profile.combo_font) {
@@ -174,6 +157,18 @@ pub fn prewarm_frame_text_scratch(
                 "wendy",
                 offset_glyphs,
                 FRAME_TEXT_OFFSET_BASE + player as u8,
+                TextAlign::Center,
+                FRAME_TEXT_VERTEX_BUFFERS,
+            );
+        }
+        if profile.measure_counter != profile_data::MeasureCounter::None && profile.run_timer {
+            deadlib_present::compose::prewarm_prepared_inline_text_slot(
+                cache,
+                scratch,
+                fonts,
+                zmod_small_combo_font(profile.combo_font),
+                timer_glyphs,
+                FRAME_TEXT_TIMER_BASE + player as u8,
                 TextAlign::Center,
                 FRAME_TEXT_VERTEX_BUFFERS,
             );

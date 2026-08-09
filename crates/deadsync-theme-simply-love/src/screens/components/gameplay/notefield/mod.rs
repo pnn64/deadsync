@@ -176,7 +176,6 @@ const TARGET_ARROW_PIXEL_SIZE: f32 = 64.0; // Dance lane width for hold bodies a
 const TEXT_CACHE_LIMIT: usize = 8192;
 const MEASURE_PREWARM_CAP: i32 = 64;
 const COLUMN_COUNTDOWN_PREWARM_CAP: i32 = 64;
-const RUN_TIMER_PREWARM_CAP_S: i32 = 600;
 
 #[inline(always)]
 fn column_flash_dimmed(brightness: profile_data::ColumnFlashBrightness) -> bool {
@@ -1085,6 +1084,7 @@ pub(crate) fn compose_frame(
         broken_run_lookup,
         current_bpm: state.current_bpm_display(),
         font: mc_font_name,
+        timer_text_slot: super::FRAME_TEXT_TIMER_BASE + player_idx as u8,
         counter_text: zmod_measure_counter_text,
         timer_text: zmod_run_timer_fmt,
     });

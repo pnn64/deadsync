@@ -75,6 +75,7 @@ pub struct CounterHudFrame<'a> {
     pub broken_run_lookup: &'a crate::BrokenRunLookup,
     pub current_bpm: f32,
     pub font: &'static str,
+    pub timer_text_slot: u8,
     pub counter_text: fn(ZmodMeasureCounterText) -> TextContent,
     pub timer_text: fn(i32, i32, bool) -> TextContent,
 }
@@ -191,6 +192,7 @@ pub fn compose_notefield_hud<S>(
                 playfield_center_x: prepared.field.playfield_center_x,
                 field_zoom: prepared.field_zoom,
                 font: counter.font,
+                timer_text_slot: counter.timer_text_slot,
                 counter_text: counter.counter_text,
                 timer_text: counter.timer_text,
             },

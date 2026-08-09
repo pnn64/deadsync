@@ -29,6 +29,7 @@ pub(crate) struct CounterHudRequest<'a> {
     pub playfield_center_x: f32,
     pub field_zoom: f32,
     pub font: &'static str,
+    pub timer_text_slot: u8,
     pub counter_text: fn(ZmodMeasureCounterText) -> TextContent,
     pub timer_text: fn(i32, i32, bool) -> TextContent,
 }
@@ -232,7 +233,7 @@ fn append_run_timer(
         actors,
         request.style,
         request.font,
-        text,
+        text.with_frame_inline_slot(request.timer_text_slot),
         [x, request.subtractive_scoring_y],
         [0.5, 0.5],
         request.style.base_zoom,
@@ -317,6 +318,7 @@ pub(crate) fn compose_mini_indicator(actors: &mut Vec<Actor>, request: MiniIndic
 #[cfg(test)]
 mod tests {
     use super::*;
+    use deadlib_present::actors::InlineText;
 
     fn counter_style() -> CounterHudStyle {
         CounterHudStyle {
@@ -342,21 +344,23 @@ mod tests {
     }
 
     fn counter_text(value: ZmodMeasureCounterText) -> TextContent {
-        TextContent::Owned(match value {
+        let text = match value {
             ZmodMeasureCounterText::Ratio { current, total } => {
                 format!("{current}/{total}")
             }
             ZmodMeasureCounterText::Break(value) => format!("({value})"),
             ZmodMeasureCounterText::Total(value) => value.to_string(),
-        })
+        };
+        TextContent::Inline(InlineText::copy_from(&text).expect("test counter text fits inline"))
     }
 
     fn timer_text(value: i32, _mode: i32, active: bool) -> TextContent {
-        TextContent::Owned(if active {
+        let text = if active {
             format!(" {value}")
         } else {
             value.to_string()
-        })
+        };
+        TextContent::Inline(InlineText::copy_from(&text).expect("test timer text fits inline"))
     }
 
     fn assert_text(
@@ -367,6 +371,7 @@ mod tests {
         zoom: f32,
         align_x: f32,
         text_align: TextAlign,
+        frame_slot: Option<u8>,
     ) {
         match actor {
             Actor::Text {
@@ -386,6 +391,13 @@ mod tests {
                 assert_eq!(*actual_color, color);
                 assert_eq!(*font, "hud-font");
                 assert_eq!(actual_content.as_str(), content);
+                assert_eq!(
+                    match actual_content {
+                        TextContent::FrameInline { slot, .. } => Some(*slot),
+                        _ => None,
+                    },
+                    frame_slot
+                );
                 assert_eq!(*align_text, text_align);
                 assert_eq!(*z, 85);
                 assert!((scale[0] - zoom).abs() <= 1e-6);
@@ -433,6 +445,7 @@ mod tests {
                 playfield_center_x: 320.0,
                 field_zoom: 1.0,
                 font: "hud-font",
+                timer_text_slot: 20,
                 counter_text,
                 timer_text,
             },
@@ -447,6 +460,7 @@ mod tests {
             0.3,
             0.5,
             TextAlign::Center,
+            None,
         );
         assert_text(
             &actors[1],
@@ -456,6 +470,7 @@ mod tests {
             0.35,
             0.5,
             TextAlign::Center,
+            None,
         );
     }
 
@@ -489,6 +504,7 @@ mod tests {
                 playfield_center_x: 320.0,
                 field_zoom: 1.0,
                 font: "hud-font",
+                timer_text_slot: 20,
                 counter_text,
                 timer_text,
             },
@@ -503,6 +519,7 @@ mod tests {
             0.35,
             0.5,
             TextAlign::Center,
+            Some(20),
         );
     }
 
@@ -543,6 +560,7 @@ mod tests {
             0.4,
             0.0,
             TextAlign::Left,
+            None,
         );
     }
 }

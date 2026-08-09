@@ -162,6 +162,47 @@ fn smx_sensor_value(frame: usize, actor: usize) -> u16 {
     ((frame / 2 * 17 + actor * 61) % 501) as u16
 }
 
+fn measure_counter_value(frame: usize, actor: usize) -> InlineText {
+    let update = frame / 30;
+    let mut text = InlineText::new();
+    if actor == 5 {
+        assert!(text.push_ascii(b'('));
+        assert!(text.push_i32((update % 64 + 1) as i32));
+        assert!(text.push_ascii(b')'));
+    } else {
+        let total = (update % 64 + 1) as i32;
+        let current = ((update + actor) % total as usize + 1) as i32;
+        assert!(text.push_i32(current));
+        assert!(text.push_ascii(b'/'));
+        assert!(text.push_i32(total));
+    }
+    text
+}
+
+fn run_timer_value(frame: usize, _: usize) -> InlineText {
+    let seconds = (frame / 60) as u32;
+    let mut text = InlineText::new();
+    if seconds < 10 {
+        assert!(text.push_ascii(b'0'));
+        assert!(text.push_ascii(b'.'));
+        assert!(text.push_ascii(b'0'));
+        assert!(text.push_u32(seconds));
+    } else if seconds > 60 {
+        assert!(text.push_u32(seconds / 60));
+        assert!(text.push_ascii(b'.'));
+        assert!(text.push_ascii(b'0' + ((seconds % 60) / 10) as u8));
+        assert!(text.push_ascii(b'0' + (seconds % 10) as u8));
+    } else {
+        assert!(text.push_ascii(b'0'));
+        assert!(text.push_ascii(b'.'));
+        assert!(text.push_u32(seconds));
+    }
+    if frame / 600 % 2 == 1 {
+        assert!(text.push_ascii(b' '));
+    }
+    text
+}
+
 fn print_result(label: &str, result: &BenchResult, ops: usize) {
     let ns_per_op = result.elapsed.as_secs_f64() * 1e9 / ops as f64;
     let cycles_per_op = result.cycles as f64 / ops as f64;
@@ -333,6 +374,7 @@ fn main() {
         },
         InlineText::copy_from("-.ms0123456789").expect("offset glyph domain fits inline"),
         DynamicTextWarmup::FrameSlots,
+        false,
         None,
         &metrics,
         &fonts,
@@ -350,6 +392,31 @@ fn main() {
         },
         InlineText::copy_from("-./0123456789").expect("timing glyph domain fits inline"),
         DynamicTextWarmup::FrameSlots,
+        false,
+        None,
+        &metrics,
+        &fonts,
+        &texture_ctx,
+    );
+    run_dynamic_layout_workload(
+        "six measure counters actor-to-upload",
+        6,
+        measure_counter_value,
+        InlineText::copy_from("-/()0123456789").expect("counter glyph domain fits inline"),
+        DynamicTextWarmup::FrameSlots,
+        true,
+        None,
+        &metrics,
+        &fonts,
+        &texture_ctx,
+    );
+    run_dynamic_layout_workload(
+        "run timer actor-to-upload",
+        1,
+        run_timer_value,
+        InlineText::copy_from(" .0123456789").expect("timer glyph domain fits inline"),
+        DynamicTextWarmup::FrameSlots,
+        true,
         None,
         &metrics,
         &fonts,
@@ -365,6 +432,7 @@ fn main() {
         },
         InlineText::copy_from("500").expect("sensor text fits inline"),
         DynamicTextWarmup::U16Domain(500),
+        false,
         Some(smx_sensor_value),
         &metrics,
         &fonts,
@@ -489,6 +557,7 @@ fn run_dynamic_layout_workload(
     value: impl Fn(usize, usize) -> InlineText + Copy,
     glyph_domain: InlineText,
     warmup: DynamicTextWarmup,
+    prewarm_whole_values: bool,
     dense_value: Option<fn(usize, usize) -> u16>,
     metrics: &Metrics,
     fonts: &FontMap,
@@ -509,7 +578,17 @@ fn run_dynamic_layout_workload(
         &mut legacy_uploads,
         texture_ctx,
     ));
-    legacy_cache.lock_growth_with_reserve(4_096);
+    if prewarm_whole_values {
+        for frame in 0..DYNAMIC_LAYOUT_FRAMES {
+            for actor in 0..actor_count {
+                let text = value(frame, actor);
+                legacy_cache.prewarm_text(fonts, "test", text.as_str(), None);
+            }
+        }
+        legacy_cache.lock_growth();
+    } else {
+        legacy_cache.lock_growth_with_reserve(4_096);
+    }
 
     let mut transient = matches!(warmup, DynamicTextWarmup::FrameSlots).then(|| {
         let mut cache = TextLayoutCache::new(1);
@@ -644,7 +723,15 @@ fn run_dynamic_layout_workload(
     });
 
     println!("\n{title} ({DYNAMIC_LAYOUT_FRAMES} song frames)");
-    print_result("whole-string cache", &legacy, DYNAMIC_LAYOUT_FRAMES);
+    print_result(
+        if prewarm_whole_values {
+            "prewarmed layouts"
+        } else {
+            "whole-string cache"
+        },
+        &legacy,
+        DYNAMIC_LAYOUT_FRAMES,
+    );
     if let Some(transient) = transient_result.as_ref() {
         print_result("transient slots", transient, DYNAMIC_LAYOUT_FRAMES);
     }
@@ -733,7 +820,7 @@ fn numeric_font() -> FontMap {
     };
     let mut glyph_map = HashMap::new();
     let mut ascii_glyphs = Box::new(std::array::from_fn(|_| None));
-    for ch in "+-0123456789.%/ms".chars() {
+    for ch in "+-0123456789.%/ms() ".chars() {
         glyph_map.insert(ch, glyph.clone());
         ascii_glyphs[ch as usize] = Some(glyph.clone());
     }
