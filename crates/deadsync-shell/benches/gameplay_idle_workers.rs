@@ -292,6 +292,16 @@ fn main() {
         measure(|| new.frame_auto_screenshot_config_frame()),
     );
 
+    let old = GameplayIdleWorkersBenchmark::default();
+    let new = GameplayIdleWorkersBenchmark::default();
+    compare_labeled(
+        "stable Evaluation runtime configuration",
+        "two mutex reads",
+        "borrowed snapshot",
+        measure(|| old.legacy_evaluation_config_frame()),
+        measure(|| new.frame_evaluation_config_frame()),
+    );
+
     #[cfg(windows)]
     {
         let mut old = GameplayIdleWorkersBenchmark::default();

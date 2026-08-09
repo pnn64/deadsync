@@ -380,8 +380,7 @@ fn apply_course_summary_column_judgments(
     }
 }
 
-fn evaluation_context_view() -> EvaluationContextView {
-    let config = config::get();
+fn evaluation_context_view(config: &config::Config) -> EvaluationContextView {
     let session = profile::get_session_snapshot();
     EvaluationContextView {
         policy: EvaluationPolicyView {
@@ -468,6 +467,7 @@ fn build_course_summary_eval_state(
     active_color_index: i32,
     session_elapsed: f32,
     gameplay_elapsed: f32,
+    config: &config::Config,
 ) -> evaluation::State {
     let profile_session = profile::get_session_snapshot();
     let score_info = build_course_summary_score_info(
@@ -479,7 +479,7 @@ fn build_course_summary_eval_state(
     let mut state = evaluation::init_from_score_info(
         score_info,
         stage.duration_seconds,
-        evaluation_context_view(),
+        evaluation_context_view(config),
     );
     state.active_color_index = active_color_index;
     state.session_elapsed = session_elapsed;
@@ -1504,7 +1504,10 @@ impl App {
         }
     }
 
-    fn evaluation_init_view(gameplay: &gameplay::State) -> EvaluationInitView {
+    fn evaluation_init_view(
+        gameplay: &gameplay::State,
+        config: &config::Config,
+    ) -> EvaluationInitView {
         EvaluationInitView {
             players: std::array::from_fn(|player_idx| {
                 if player_idx >= gameplay.num_players().min(MAX_PLAYERS) {
@@ -1527,13 +1530,15 @@ impl App {
                     itl: scores::itl_eval_state_from_gameplay(gameplay, player_idx),
                 }
             }),
-            context: evaluation_context_view(),
+            context: evaluation_context_view(config),
         }
     }
 
-    fn evaluation_runtime_view(state: &evaluation::State) -> EvaluationRuntimeView {
-        let config = config::get();
-        let pane_filter = scorebox_pane_filter(&config);
+    fn evaluation_runtime_view(
+        state: &evaluation::State,
+        config: &config::Config,
+    ) -> EvaluationRuntimeView {
+        let pane_filter = scorebox_pane_filter(config);
         let srpg10 = matches!(config.srpg_variant, config::SrpgVariant::Srpg10)
             && config.visual_style.is_srpg();
         let profile_view = profile_data::runtime_scorebox_view(
@@ -1556,7 +1561,7 @@ impl App {
                 )
             });
         EvaluationRuntimeView {
-            context: evaluation_context_view(),
+            context: evaluation_context_view(config),
             lobby: Self::refresh_lobby_runtime_view(),
             groovestats_service: Self::groovestats_service_view(),
             submissions: std::array::from_fn(|player_idx| {
@@ -1608,7 +1613,7 @@ impl App {
         retried
     }
 
-    fn sync_active_online_runtime_view(&mut self) {
+    fn sync_active_online_runtime_view(&mut self, config: &config::Config) {
         match self.state.screens.current_screen {
             CurrentScreen::Gameplay => {
                 let Some(state) = self.state.screens.gameplay_state.as_ref() else {
@@ -1628,7 +1633,8 @@ impl App {
             CurrentScreen::Evaluation => {
                 scores::tick_groovestats_auto_retries();
                 scores::tick_arrowcloud_auto_retries();
-                let view = Self::evaluation_runtime_view(&self.state.screens.evaluation_state);
+                let view =
+                    Self::evaluation_runtime_view(&self.state.screens.evaluation_state, config);
                 evaluation::sync_runtime_view(&mut self.state.screens.evaluation_state, view);
             }
             _ => {}
@@ -2498,7 +2504,7 @@ impl App {
         self.poll_score_import();
         self.poll_sync_analysis();
         self.poll_apply_replaygain();
-        self.sync_active_online_runtime_view();
+        self.sync_active_online_runtime_view(&frame_config);
         self.heart_rate.sync(
             frame_config.machine_enable_heart_rate_monitors,
             self.state.screens.current_screen == CurrentScreen::PlayerOptions,
@@ -4625,7 +4631,7 @@ impl App {
         stage_summary
     }
 
-    fn finalize_entered_evaluation(&mut self) {
+    fn finalize_entered_evaluation(&mut self, config: &config::Config) {
         if let Some(backend) = self.backend.as_mut() {
             self.dynamic_media
                 .clear_gameplay_backgrounds(&mut self.asset_manager, backend);
@@ -4643,7 +4649,6 @@ impl App {
         // is immediately replaced by a course summary, this is the cue tied to
         // the player's actual exit from gameplay.
         let failed = screens::evaluation::all_joined_players_failed(&eval_snapshot);
-        let config = config::get();
         if visual_styles::srpg10_active(config.visual_style, config.srpg_variant) {
             let sfx = if failed {
                 visual_styles::SRPG10_EVAL_FAILED_SFX
@@ -4693,6 +4698,7 @@ impl App {
                     color_idx,
                     session_elapsed,
                     gameplay_elapsed,
+                    config,
                 );
                 apply_course_summary_column_judgments(&mut course_page, &per_song_pages);
                 course_page.screen_elapsed = screen_elapsed;
@@ -4747,7 +4753,8 @@ impl App {
         page.return_to_course = true;
         page.auto_advance_seconds = None;
         self.state.screens.evaluation_state = page;
-        let view = Self::evaluation_runtime_view(&self.state.screens.evaluation_state);
+        let config = config::get();
+        let view = Self::evaluation_runtime_view(&self.state.screens.evaluation_state, &config);
         evaluation::sync_runtime_view(&mut self.state.screens.evaluation_state, view);
         deadsync_audio_stream::play_sfx("assets/sounds/change.ogg");
     }
@@ -7009,7 +7016,8 @@ impl App {
                 course_display_carry = Some(gameplay_results.course_display_carry());
                 let color_idx = gameplay_results.active_color_index();
                 Self::execute_evaluation_score_runtime(&gameplay_results);
-                let init_view = Self::evaluation_init_view(&gameplay_results);
+                let config = config::get();
+                let init_view = Self::evaluation_init_view(&gameplay_results, &config);
                 let mut eval_state = evaluation::init(Some(gameplay_results), init_view);
                 eval_state.active_color_index = color_idx;
                 let _ = self.append_stage_results_from_eval(&eval_state);
@@ -7408,6 +7416,7 @@ impl App {
         }
 
         if target == CurrentScreen::Evaluation {
+            let config = config::get();
             if let Some(gs) = self.state.screens.gameplay_state.as_mut() {
                 crate::gameplay_runtime::exit(gs);
             }
@@ -7429,7 +7438,7 @@ impl App {
             }
             let init_view = gameplay_results
                 .as_ref()
-                .map(Self::evaluation_init_view)
+                .map(|gameplay| Self::evaluation_init_view(gameplay, &config))
                 .unwrap_or_default();
             self.state.screens.evaluation_state = evaluation::init(gameplay_results, init_view);
             self.state.screens.evaluation_state.active_color_index = color_idx;
@@ -7442,8 +7451,8 @@ impl App {
             }
             self.state.screens.evaluation_state.gameplay_elapsed =
                 stage_stats::total_stage_duration_seconds(&self.state.session.played_stages);
-            self.finalize_entered_evaluation();
-            let view = Self::evaluation_runtime_view(&self.state.screens.evaluation_state);
+            self.finalize_entered_evaluation(&config);
+            let view = Self::evaluation_runtime_view(&self.state.screens.evaluation_state, &config);
             evaluation::sync_runtime_view(&mut self.state.screens.evaluation_state, view);
         }
 
@@ -8567,6 +8576,7 @@ mod tests {
     fn course_summary_merges_column_judgments_from_song_pages() {
         let song = test_song_with_duration("Songs/Test/course.ssc", "course", 120.0);
         let side = profile_data::PlayerSide::P2;
+        let config = config::Config::default();
         let mut course_score = std::array::from_fn(|_| None);
         course_score[0] = Some(test_score_info(
             song.clone(),
@@ -8576,7 +8586,7 @@ mod tests {
             1.0,
         ));
         let mut course_page =
-            evaluation::init_from_score_info(course_score, 120.0, evaluation_context_view());
+            evaluation::init_from_score_info(course_score, 120.0, evaluation_context_view(&config));
 
         let mut first = std::array::from_fn(|_| None);
         let mut first_p2 = test_score_info(
@@ -8616,7 +8626,8 @@ mod tests {
             ..Default::default()
         }];
         first[1] = Some(ignored_p1);
-        let first_page = evaluation::init_from_score_info(first, 60.0, evaluation_context_view());
+        let first_page =
+            evaluation::init_from_score_info(first, 60.0, evaluation_context_view(&config));
 
         let mut second = std::array::from_fn(|_| None);
         let mut second_p2 = test_score_info(
@@ -8644,7 +8655,8 @@ mod tests {
             },
         ];
         second[0] = Some(second_p2);
-        let second_page = evaluation::init_from_score_info(second, 60.0, evaluation_context_view());
+        let second_page =
+            evaluation::init_from_score_info(second, 60.0, evaluation_context_view(&config));
 
         apply_course_summary_column_judgments(&mut course_page, &[first_page, second_page]);
 

@@ -333,6 +333,21 @@ impl GameplayIdleWorkersBenchmark {
         })
     }
 
+    pub fn legacy_evaluation_config_frame(&self) -> usize {
+        (0..POLLS_PER_FRAME).fold(0, |checksum, sample| {
+            let runtime = config::get();
+            let context = config::get();
+            checksum.rotate_left(5) ^ evaluation_config_checksum(&runtime, &context) ^ sample
+        })
+    }
+
+    pub fn frame_evaluation_config_frame(&self) -> usize {
+        (0..POLLS_PER_FRAME).fold(0, |checksum, sample| {
+            let config = black_box(&self.frame_config);
+            checksum.rotate_left(5) ^ evaluation_config_checksum(config, config) ^ sample
+        })
+    }
+
     #[cfg(windows)]
     pub fn direct_raw_capture_frame(&mut self) -> usize {
         (0..POLLS_PER_FRAME).fold(0, |checksum, sample| {
@@ -384,6 +399,17 @@ fn config_checksum(config: config::Config) -> usize {
         ^ ((config.show_video_backgrounds as usize) << 8)
         ^ ((config.smx_input as usize) << 9)
         ^ config.bg_brightness.to_bits() as usize
+}
+
+fn evaluation_config_checksum(runtime: &config::Config, context: &config::Config) -> usize {
+    runtime.enable_groovestats as usize
+        ^ ((runtime.enable_arrowcloud as usize) << 1)
+        ^ ((runtime.auto_populate_gs_scores as usize) << 2)
+        ^ ((context.autosubmit_course_scores_individually as usize) << 3)
+        ^ ((context.submit_arrowcloud_fails as usize) << 4)
+        ^ ((context.smooth_histogram as usize) << 5)
+        ^ ((context.shade_scatterplot_judgments as usize) << 6)
+        ^ context.simply_love_color as usize
 }
 
 fn current_heart_rate_view() -> HeartRateView {
