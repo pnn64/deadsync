@@ -1720,6 +1720,9 @@ pub const BENCH_NOTEFIELD_ACTOR_SCRATCH_CAPACITY: usize = NOTEFIELD_ACTOR_SCRATC
 #[cfg(feature = "bench-support")]
 #[doc(hidden)]
 pub const BENCH_NOTEFIELD_HUD_ACTOR_SCRATCH_CAPACITY: usize = NOTEFIELD_HUD_ACTOR_SCRATCH_CAPACITY;
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub const BENCH_SONG_LUA_SCREEN_CAPTURE_CAPACITY: usize = SONG_LUA_SCREEN_CAPTURE_CAPACITY;
 
 fn gameplay_actor_scratch(active_players: usize, capacity: usize) -> [Vec<Actor>; MAX_PLAYERS] {
     std::array::from_fn(|player| {
@@ -2587,6 +2590,17 @@ impl State {
                 .iter()
                 .map(|index| index.proxy_indices.len())
                 .sum::<usize>();
+        let song_lua_proxy_segment_capacity = song_lua_foreground_proxy_request_indices
+            .iter()
+            .zip(song_lua_visuals.foreground_visual_layers.iter())
+            .map(|(index, layer)| song_lua_max_proxy_segment_capacity(&layer.overlays, index))
+            .fold(
+                song_lua_max_proxy_segment_capacity(
+                    &song_lua_visuals.overlays,
+                    &song_lua_proxy_request_index,
+                ),
+                usize::max,
+            );
         let song_lua_projected_mesh_scratch =
             song_lua_projected_mesh_scratch_for(&song_lua_visuals.overlays);
         let song_lua_background_projected_mesh_scratch = song_lua_visuals
@@ -2736,7 +2750,11 @@ impl State {
                 song_lua_max_overlay_count,
             ),
             song_lua_proxy_actor_scratch: (song_lua_proxy_count != 0).then(|| {
-                SongLuaProxyActorScratch::with_proxy_capacity(active_players, song_lua_proxy_count)
+                SongLuaProxyActorScratch::with_proxy_capacity(
+                    active_players,
+                    song_lua_proxy_count,
+                    song_lua_proxy_segment_capacity,
+                )
             }),
             notefield_actor_scratch,
             notefield_hud_actor_scratch,
@@ -8350,6 +8368,34 @@ const SONG_LUA_JUDGMENT_PROXY_SOURCE: usize = 1;
 const SONG_LUA_COMBO_PROXY_SOURCE: usize = 2;
 const SONG_LUA_PLAYER_PROXY_SOURCE: usize = 3;
 
+fn song_lua_proxy_segment_capacity(target: &SongLuaProxyTarget) -> usize {
+    match target {
+        SongLuaProxyTarget::Player { .. } => PLAYER_ACTOR_SCRATCH_CAPACITY,
+        SongLuaProxyTarget::NoteField { .. } => NOTEFIELD_ACTOR_SCRATCH_CAPACITY,
+        SongLuaProxyTarget::Judgment { .. }
+        | SongLuaProxyTarget::Combo { .. }
+        | SongLuaProxyTarget::Underlay
+        | SongLuaProxyTarget::Overlay => SONG_LUA_SCREEN_CAPTURE_CAPACITY,
+    }
+}
+
+fn song_lua_max_proxy_segment_capacity(
+    overlays: &[SongLuaOverlayActor],
+    index: &SongLuaProxyRequestIndex,
+) -> usize {
+    index
+        .proxy_indices
+        .iter()
+        .filter_map(|&proxy_index| match &overlays.get(proxy_index)?.kind {
+            SongLuaOverlayKind::ActorProxy { target } => {
+                Some(song_lua_proxy_segment_capacity(target))
+            }
+            _ => None,
+        })
+        .max()
+        .unwrap_or(SONG_LUA_SCREEN_CAPTURE_CAPACITY)
+}
+
 struct SongLuaProxyJoinScratch {
     sources: [Arc<[Actor]>; SONG_LUA_PROXY_SEGMENTS_PER_ACTOR],
     _replacements: u64,
@@ -8420,8 +8466,10 @@ impl SongLuaProxyJoinScratch {
 /// only when a compiled overlay contains a proxy. Capacity/warmup: 64 bounded
 /// screen segments, four pre-sized player sources per active player, and up to
 /// five normalized source segments per compiled proxy and in-flight frame are
-/// reserved at screen entry, together with the outer proxy frame that joins
-/// those segments. Two banks let composition proceed while the renderer still
+/// reserved at screen entry. The first segment uses the largest capacity
+/// required by any compiled proxy target; the other four use the bounded
+/// screen-capture capacity. The outer proxy frame that joins those segments is
+/// also prebuilt. Two banks let composition proceed while the renderer still
 /// owns the preceding frame. A
 /// miss after slot saturation bypasses insertion and uses the owned fallback;
 /// child-vector overflow grows only the affected slot. There is no lookup,
@@ -8438,7 +8486,7 @@ struct SongLuaProxyActorBank {
 }
 
 impl SongLuaProxyActorBank {
-    fn new(active_players: usize, proxy_count: usize) -> Self {
+    fn new(active_players: usize, proxy_count: usize, max_segment_capacity: usize) -> Self {
         Self {
             screen: std::array::from_fn(|_| {
                 SharedActorFrameScratch::with_capacity(SONG_LUA_SCREEN_CAPTURE_CAPACITY)
@@ -8465,7 +8513,7 @@ impl SongLuaProxyActorBank {
                 .map(|index| {
                     SharedActorFrameScratch::with_capacity(
                         if index % SONG_LUA_PROXY_SEGMENTS_PER_ACTOR == 0 {
-                            PLAYER_ACTOR_SCRATCH_CAPACITY
+                            max_segment_capacity
                         } else {
                             SONG_LUA_SCREEN_CAPTURE_CAPACITY
                         },
@@ -8499,7 +8547,7 @@ struct SongLuaProxyActorScratch {
 impl SongLuaProxyActorScratch {
     #[cfg(any(test, feature = "bench-support"))]
     fn new(active_players: usize) -> Self {
-        Self::with_proxy_capacity(active_players, 1)
+        Self::with_proxy_capacity(active_players, 1, PLAYER_ACTOR_SCRATCH_CAPACITY)
     }
 
     #[cfg(feature = "bench-support")]
@@ -8507,18 +8555,44 @@ impl SongLuaProxyActorScratch {
         Self::with_capacity_and_banks(active_players, 1, frame_banks)
     }
 
-    fn with_proxy_capacity(active_players: usize, proxy_count: usize) -> Self {
-        Self::with_capacity_and_banks(active_players, proxy_count, SONG_LUA_PROXY_FRAME_BANKS)
+    fn with_proxy_capacity(
+        active_players: usize,
+        proxy_count: usize,
+        max_segment_capacity: usize,
+    ) -> Self {
+        Self::with_segment_capacity_and_banks(
+            active_players,
+            proxy_count,
+            max_segment_capacity,
+            SONG_LUA_PROXY_FRAME_BANKS,
+        )
     }
 
+    #[cfg(any(test, feature = "bench-support"))]
     fn with_capacity_and_banks(
         active_players: usize,
         proxy_count: usize,
         frame_banks: usize,
     ) -> Self {
+        Self::with_segment_capacity_and_banks(
+            active_players,
+            proxy_count,
+            PLAYER_ACTOR_SCRATCH_CAPACITY,
+            frame_banks,
+        )
+    }
+
+    fn with_segment_capacity_and_banks(
+        active_players: usize,
+        proxy_count: usize,
+        max_segment_capacity: usize,
+        frame_banks: usize,
+    ) -> Self {
         let frame_banks = frame_banks.clamp(1, SONG_LUA_PROXY_FRAME_BANKS);
         Self {
-            banks: std::array::from_fn(|_| SongLuaProxyActorBank::new(active_players, proxy_count)),
+            banks: std::array::from_fn(|_| {
+                SongLuaProxyActorBank::new(active_players, proxy_count, max_segment_capacity)
+            }),
             active_bank: frame_banks - 1,
             frame_banks,
         }
@@ -24121,6 +24195,58 @@ mod tests {
         assert_eq!(*first_offset, [0.0, 0.0]);
         assert_eq!(*second_offset, [99.0, 0.0]);
         assert_eq!(*z, 0);
+    }
+
+    #[test]
+    fn song_lua_proxy_segment_reserve_tracks_largest_compiled_target() {
+        let proxy = |target| SongLuaOverlayActor {
+            kind: SongLuaOverlayKind::ActorProxy { target },
+            name: None,
+            parent_index: None,
+            initial_state: SongLuaOverlayState::default(),
+            message_commands: Vec::new(),
+        };
+        let small = vec![
+            proxy(SongLuaProxyTarget::Combo { player_index: 0 }),
+            proxy(SongLuaProxyTarget::Overlay),
+        ];
+        let note_field = vec![
+            proxy(SongLuaProxyTarget::Judgment { player_index: 0 }),
+            proxy(SongLuaProxyTarget::NoteField { player_index: 0 }),
+        ];
+        let player = vec![
+            proxy(SongLuaProxyTarget::NoteField { player_index: 0 }),
+            proxy(SongLuaProxyTarget::Player { player_index: 0 }),
+        ];
+
+        assert_eq!(
+            song_lua_max_proxy_segment_capacity(&small, &SongLuaProxyRequestIndex::new(&small)),
+            SONG_LUA_SCREEN_CAPTURE_CAPACITY
+        );
+        assert_eq!(
+            song_lua_max_proxy_segment_capacity(
+                &note_field,
+                &SongLuaProxyRequestIndex::new(&note_field)
+            ),
+            NOTEFIELD_ACTOR_SCRATCH_CAPACITY
+        );
+        assert_eq!(
+            song_lua_max_proxy_segment_capacity(&player, &SongLuaProxyRequestIndex::new(&player)),
+            PLAYER_ACTOR_SCRATCH_CAPACITY
+        );
+
+        let scratch = SongLuaProxyActorScratch::with_segment_capacity_and_banks(
+            0,
+            small.len(),
+            SONG_LUA_SCREEN_CAPTURE_CAPACITY,
+            1,
+        );
+        assert!(
+            scratch.banks[0]
+                .proxy_segments
+                .iter()
+                .all(|slot| slot.stats().capacity == SONG_LUA_SCREEN_CAPTURE_CAPACITY)
+        );
     }
 
     #[test]

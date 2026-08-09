@@ -1,10 +1,10 @@
 use deadlib_present::actors::Actor;
 use deadsync_theme_simply_love::screens::gameplay::{
     BENCH_NOTEFIELD_ACTOR_SCRATCH_CAPACITY, BENCH_NOTEFIELD_HUD_ACTOR_SCRATCH_CAPACITY,
-    bench_field_proxy_direct, bench_field_proxy_materialized, bench_player_proxy_captured,
-    bench_player_proxy_direct, bench_player_proxy_materialized,
-    bench_song_lua_proxy_capture_cycles, bench_song_lua_proxy_capture_cycles_legacy,
-    bench_song_lua_proxy_capture_cycles_screen_reuse,
+    BENCH_SONG_LUA_SCREEN_CAPTURE_CAPACITY, bench_field_proxy_direct,
+    bench_field_proxy_materialized, bench_player_proxy_captured, bench_player_proxy_direct,
+    bench_player_proxy_materialized, bench_song_lua_proxy_capture_cycles,
+    bench_song_lua_proxy_capture_cycles_legacy, bench_song_lua_proxy_capture_cycles_screen_reuse,
     bench_song_lua_proxy_capture_cycles_single_bank,
 };
 use std::alloc::{GlobalAlloc, Layout, System};
@@ -115,6 +115,13 @@ struct BenchResult {
 }
 
 fn main() {
+    println!(
+        "Small-target proxy reserve reduction: {} bytes per compiled proxy",
+        (BENCH_NOTEFIELD_ACTOR_SCRATCH_CAPACITY + BENCH_NOTEFIELD_HUD_ACTOR_SCRATCH_CAPACITY
+            - BENCH_SONG_LUA_SCREEN_CAPTURE_CAPACITY)
+            * size_of::<Actor>()
+            * 2,
+    );
     for players in [1, 2] {
         let old = measure(bench_song_lua_proxy_capture_cycles_legacy, players);
         let screen = measure(bench_song_lua_proxy_capture_cycles_screen_reuse, players);
