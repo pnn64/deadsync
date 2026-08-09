@@ -568,7 +568,7 @@ fn prewarm_gameplay_text_layout_cache(
     // boundary and retained for the first live frame instead of being repeated
     // in a temporary Vec and then again during gameplay.
     actor_scratch.clear();
-    gameplay::push_actors(
+    let segments = gameplay::push_actors(
         actor_scratch,
         state,
         assets,
@@ -576,9 +576,10 @@ fn prewarm_gameplay_text_layout_cache(
         arrow_effect_time_seconds(started),
         simply_love_visual_policy(config),
     );
+    let actor_segments = segments.slices(state, actor_scratch);
     let mut render =
-        compose::build_screen_cached_with_scratch_and_texture_context_and_actor_resources(
-            actor_scratch,
+        compose::build_screen_segments_cached_with_scratch_and_texture_context_and_actor_resources(
+            &actor_segments,
             [0.0, 0.0, 0.0, 1.0],
             metrics,
             fonts,
@@ -5282,7 +5283,7 @@ impl App {
                         }
                         _ => 1.0,
                     };
-                    gameplay_segments = Some(gameplay::push_actors_segmented(
+                    gameplay_segments = Some(gameplay::push_actors(
                         &mut actors,
                         gs,
                         &self.asset_manager,
@@ -5300,7 +5301,7 @@ impl App {
                     screens::components::gameplay::gameplay_stats::refresh_density_graph_meshes(
                         &mut ps.gameplay,
                     );
-                    gameplay_segments = Some(practice::push_actors_segmented(
+                    gameplay_segments = Some(practice::push_actors(
                         &mut actors,
                         ps,
                         &self.asset_manager,

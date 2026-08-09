@@ -79,11 +79,6 @@ harness = false
 required-features = ["bench-support"]
 
 [[bench]]
-name = "gameplay_actor_transfer"
-harness = false
-required-features = ["bench-support"]
-
-[[bench]]
 name = "gameplay_inactive_frame"
 harness = false
 required-features = ["bench-support"]

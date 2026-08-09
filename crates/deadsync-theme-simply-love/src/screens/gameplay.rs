@@ -18214,11 +18214,6 @@ pub fn benchmark_present_identity_notefield(
     );
 }
 
-#[inline(always)]
-fn append_player_actors(out: &mut Vec<Actor>, player_scratch: &mut Vec<Actor>) {
-    out.append(player_scratch);
-}
-
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum PlayerActorAssembly {
     Buffered,
@@ -18238,13 +18233,6 @@ pub struct GameplayActorSegments {
 }
 
 impl GameplayActorSegments {
-    pub const fn empty(insert: usize) -> Self {
-        Self {
-            insert,
-            players: [None; 2],
-        }
-    }
-
     pub fn slices<'a>(&self, state: &'a State, actors: &'a [Actor]) -> [&'a [Actor]; 6] {
         let insert = self.insert.min(actors.len());
         let empty = &actors[0..0];
@@ -18289,38 +18277,6 @@ fn player_actor_assembly_for_transform(
 }
 
 #[inline(always)]
-fn player_actor_bundle_len(
-    assembly: PlayerActorAssembly,
-    field_scratch: &[Actor],
-    hud_scratch: &[Actor],
-    player_scratch: &[Actor],
-) -> usize {
-    match assembly {
-        PlayerActorAssembly::Buffered => player_scratch.len(),
-        PlayerActorAssembly::DirectIdentity => {
-            field_scratch.len().saturating_add(hud_scratch.len())
-        }
-    }
-}
-
-#[inline(always)]
-fn append_player_actor_bundle(
-    out: &mut Vec<Actor>,
-    assembly: PlayerActorAssembly,
-    field_scratch: &mut Vec<Actor>,
-    hud_scratch: &mut Vec<Actor>,
-    player_scratch: &mut Vec<Actor>,
-) {
-    match assembly {
-        PlayerActorAssembly::Buffered => append_player_actors(out, player_scratch),
-        PlayerActorAssembly::DirectIdentity => {
-            out.append(hud_scratch);
-            out.append(field_scratch);
-        }
-    }
-}
-
-#[inline(always)]
 fn clear_player_actor_bundle(
     field_scratch: &mut Vec<Actor>,
     hud_scratch: &mut Vec<Actor>,
@@ -18329,46 +18285,6 @@ fn clear_player_actor_bundle(
     field_scratch.clear();
     hud_scratch.clear();
     player_scratch.clear();
-}
-
-#[inline(always)]
-#[cfg(any(test, feature = "bench-support"))]
-#[allow(clippy::extend_with_drain)] // Preserve the slower baseline used by the transfer benchmark.
-fn append_player_actors_legacy(out: &mut Vec<Actor>, player_scratch: &mut Vec<Actor>) {
-    out.extend(player_scratch.drain(..));
-}
-
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub fn benchmark_append_player_actors_legacy(
-    out: &mut Vec<Actor>,
-    player_scratch: &mut Vec<Actor>,
-) {
-    append_player_actors_legacy(out, player_scratch);
-}
-
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub fn benchmark_append_player_actors(out: &mut Vec<Actor>, player_scratch: &mut Vec<Actor>) {
-    append_player_actors(out, player_scratch);
-}
-
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub fn benchmark_append_direct_identity_player_actors(
-    out: &mut Vec<Actor>,
-    field_scratch: &mut Vec<Actor>,
-    hud_scratch: &mut Vec<Actor>,
-    player_scratch: &mut Vec<Actor>,
-) {
-    player_scratch.clear();
-    append_player_actor_bundle(
-        out,
-        PlayerActorAssembly::DirectIdentity,
-        field_scratch,
-        hud_scratch,
-        player_scratch,
-    );
 }
 
 fn song_lua_player_target_x(
@@ -18594,45 +18510,6 @@ pub fn push_actors(
     view: ActorViewOverride,
     arrow_effect_time_s: f32,
     visual_policy: crate::views::SimplyLoveVisualPolicyView,
-) {
-    let _ = push_actors_impl(
-        actors,
-        state,
-        asset_manager,
-        view,
-        arrow_effect_time_s,
-        visual_policy,
-        false,
-    );
-}
-
-pub fn push_actors_segmented(
-    actors: &mut Vec<Actor>,
-    state: &mut State,
-    asset_manager: &AssetManager,
-    view: ActorViewOverride,
-    arrow_effect_time_s: f32,
-    visual_policy: crate::views::SimplyLoveVisualPolicyView,
-) -> GameplayActorSegments {
-    push_actors_impl(
-        actors,
-        state,
-        asset_manager,
-        view,
-        arrow_effect_time_s,
-        visual_policy,
-        true,
-    )
-}
-
-fn push_actors_impl(
-    actors: &mut Vec<Actor>,
-    state: &mut State,
-    asset_manager: &AssetManager,
-    view: ActorViewOverride,
-    arrow_effect_time_s: f32,
-    visual_policy: crate::views::SimplyLoveVisualPolicyView,
-    segmented: bool,
 ) -> GameplayActorSegments {
     let mut frame_scratch = state
         .frame_scratch
@@ -19453,42 +19330,15 @@ fn push_actors_impl(
         );
     }
 
-    let p1_actor_count = player_actor_bundle_len(
-        p1_actor_assembly,
-        &notefield_actor_scratch[0],
-        &notefield_hud_actor_scratch[0],
-        &player_actor_scratch[0],
-    );
-    let p2_actor_count = player_actor_bundle_len(
-        p2_actor_assembly,
-        &notefield_actor_scratch[1],
-        &notefield_hud_actor_scratch[1],
-        &player_actor_scratch[1],
-    );
-    let player_actor_capacity = if segmented {
-        0
-    } else {
-        p1_actor_count.saturating_add(p2_actor_count)
-    };
-    actors.reserve(player_actor_capacity.saturating_add(48));
+    actors.reserve(48);
     let segment_insert = actors.len();
     let mut segment_players = [None; 2];
     if has_p2_actors {
         if !replacement_active_players[1] {
-            if segmented {
-                segment_players[0] = Some(PlayerActorSegment {
-                    player: 1,
-                    assembly: p2_actor_assembly,
-                });
-            } else {
-                append_player_actor_bundle(
-                    actors,
-                    p2_actor_assembly,
-                    &mut notefield_actor_scratch[1],
-                    &mut notefield_hud_actor_scratch[1],
-                    &mut player_actor_scratch[1],
-                );
-            }
+            segment_players[0] = Some(PlayerActorSegment {
+                player: 1,
+                assembly: p2_actor_assembly,
+            });
         } else {
             clear_player_actor_bundle(
                 &mut notefield_actor_scratch[1],
@@ -19498,20 +19348,10 @@ fn push_actors_impl(
         }
     }
     if !replacement_active_players[0] {
-        if segmented {
-            segment_players[1] = Some(PlayerActorSegment {
-                player: 0,
-                assembly: p1_actor_assembly,
-            });
-        } else {
-            append_player_actor_bundle(
-                actors,
-                p1_actor_assembly,
-                &mut notefield_actor_scratch[0],
-                &mut notefield_hud_actor_scratch[0],
-                &mut player_actor_scratch[0],
-            );
-        }
+        segment_players[1] = Some(PlayerActorSegment {
+            player: 0,
+            assembly: p1_actor_assembly,
+        });
     } else {
         clear_player_actor_bundle(
             &mut notefield_actor_scratch[0],
@@ -22043,42 +21883,6 @@ mod tests {
     }
 
     #[test]
-    fn bulk_player_actor_append_matches_legacy_order_and_reuses_source_capacity() {
-        let make_source = || {
-            (0..64)
-                .map(|index| Actor::CameraPush {
-                    view_proj: Matrix4::from_translation(Vector3::new(index as f32, 0.0, 0.0)),
-                })
-                .collect::<Vec<_>>()
-        };
-        let mut legacy_source = make_source();
-        let mut bulk_source = make_source();
-        let legacy_capacity = legacy_source.capacity();
-        let bulk_capacity = bulk_source.capacity();
-        let mut legacy = vec![Actor::CameraPop];
-        let mut bulk = vec![Actor::CameraPop];
-
-        append_player_actors_legacy(&mut legacy, &mut legacy_source);
-        append_player_actors(&mut bulk, &mut bulk_source);
-
-        let positions = |actors: &[Actor]| {
-            actors
-                .iter()
-                .map(|actor| match actor {
-                    Actor::CameraPop => -1.0,
-                    Actor::CameraPush { view_proj } => view_proj.w_axis.x,
-                    _ => panic!("unexpected actor kind"),
-                })
-                .collect::<Vec<_>>()
-        };
-        assert_eq!(positions(&bulk), positions(&legacy));
-        assert!(legacy_source.is_empty());
-        assert!(bulk_source.is_empty());
-        assert_eq!(legacy_source.capacity(), legacy_capacity);
-        assert_eq!(bulk_source.capacity(), bulk_capacity);
-    }
-
-    #[test]
     fn identity_notefield_presentation_matches_legacy_order_and_capacity() {
         let make_actors = |count: usize, base: f32| {
             (0..count)
@@ -22156,7 +21960,7 @@ mod tests {
     }
 
     #[test]
-    fn direct_identity_player_bundle_matches_buffered_output_and_fallback_boundaries() {
+    fn direct_identity_player_segments_respect_fallback_boundaries() {
         let identity = SongLuaCaptureTransform {
             z_shift: 0,
             tint: [1.0; 4],
@@ -22196,92 +22000,6 @@ mod tests {
             ),
             PlayerActorAssembly::Buffered
         );
-
-        let make_actors = |count: usize, base: f32| {
-            (0..count)
-                .map(|index| Actor::CameraPush {
-                    view_proj: Matrix4::from_translation(Vector3::new(
-                        base + index as f32,
-                        0.0,
-                        0.0,
-                    )),
-                })
-                .collect::<Vec<_>>()
-        };
-        let mut buffered_field = make_actors(64, 0.0);
-        let mut buffered_hud = make_actors(8, 1_000.0);
-        let mut buffered_player = Vec::with_capacity(72);
-        let mut buffered_out = vec![Actor::CameraPop];
-        apply_song_lua_player_transform(
-            &mut buffered_field,
-            &mut buffered_hud,
-            &mut buffered_player,
-            0,
-            [1.0; 4],
-            None,
-            screen_center_x(),
-            screen_center_x(),
-            screen_center_y(),
-            0.0,
-            0.0,
-            0.0,
-            0.0,
-            0.0,
-            1.0,
-            1.0,
-            1.0,
-        );
-        append_player_actor_bundle(
-            &mut buffered_out,
-            PlayerActorAssembly::Buffered,
-            &mut buffered_field,
-            &mut buffered_hud,
-            &mut buffered_player,
-        );
-
-        let mut direct_field = make_actors(64, 0.0);
-        let mut direct_hud = make_actors(8, 1_000.0);
-        let mut direct_player = Vec::with_capacity(72);
-        let direct_field_capacity = direct_field.capacity();
-        let direct_hud_capacity = direct_hud.capacity();
-        let direct_player_capacity = direct_player.capacity();
-        let mut direct_out = vec![Actor::CameraPop];
-        append_player_actor_bundle(
-            &mut direct_out,
-            PlayerActorAssembly::DirectIdentity,
-            &mut direct_field,
-            &mut direct_hud,
-            &mut direct_player,
-        );
-
-        let positions = |actors: &[Actor]| {
-            actors
-                .iter()
-                .map(|actor| match actor {
-                    Actor::CameraPop => -1.0,
-                    Actor::CameraPush { view_proj } => view_proj.w_axis.x,
-                    _ => panic!("unexpected actor kind"),
-                })
-                .collect::<Vec<_>>()
-        };
-        assert_eq!(positions(&direct_out), positions(&buffered_out));
-        assert!(direct_field.is_empty());
-        assert!(direct_hud.is_empty());
-        assert!(direct_player.is_empty());
-        assert_eq!(direct_field.capacity(), direct_field_capacity);
-        assert_eq!(direct_hud.capacity(), direct_hud_capacity);
-        assert_eq!(direct_player.capacity(), direct_player_capacity);
-
-        direct_field.extend(make_actors(2, 0.0));
-        direct_hud.extend(make_actors(2, 1_000.0));
-        direct_player.extend(make_actors(2, 2_000.0));
-        clear_player_actor_bundle(&mut direct_field, &mut direct_hud, &mut direct_player);
-        assert!(direct_field.is_empty());
-        assert!(direct_hud.is_empty());
-        assert!(direct_player.is_empty());
-        assert_eq!(direct_field.capacity(), direct_field_capacity);
-        assert_eq!(direct_hud.capacity(), direct_hud_capacity);
-        assert_eq!(direct_player.capacity(), direct_player_capacity);
     }
 
     #[test]
