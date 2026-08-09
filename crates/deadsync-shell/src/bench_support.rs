@@ -1,4 +1,6 @@
-use crate::{pad_config, profile_import, qr_login, score_import, smx_config, sync_analysis};
+use crate::{
+    lighting, pad_config, profile_import, qr_login, score_import, smx_config, sync_analysis,
+};
 use deadsync_config::prelude as config;
 use deadsync_rules::timing::{StopSegment, TimingData, TimingSegments};
 use deadsync_theme_simply_love::screens::SimplyLoveScreen;
@@ -453,6 +455,28 @@ impl GameplayIdleWorkersBenchmark {
             let preview = black_box(&mut self.player_options_lights);
             if smx_config::smx_player_options_light_frame_needed(screen, preview.is_active()) {
                 preview.update(None, 1.0 / 240.0, false);
+            }
+            checksum.rotate_left(5) ^ sample
+        })
+    }
+
+    pub fn legacy_disabled_lighting_frame(&self) -> usize {
+        (0..POLLS_PER_FRAME).fold(0usize, |checksum, sample| {
+            black_box(deadsync_profile::compat::get_session_snapshot());
+            checksum.rotate_left(5) ^ sample
+        })
+    }
+
+    pub fn gated_disabled_lighting_frame(&self) -> usize {
+        (0..POLLS_PER_FRAME).fold(0usize, |checksum, sample| {
+            let active = lighting::lighting_frame_active(
+                black_box(SimplyLoveScreen::Gameplay),
+                black_box(deadsync_lights::DriverKind::Off),
+                black_box(false),
+                black_box(false),
+            );
+            if active {
+                black_box(deadsync_profile::compat::get_session_snapshot());
             }
             checksum.rotate_left(5) ^ sample
         })

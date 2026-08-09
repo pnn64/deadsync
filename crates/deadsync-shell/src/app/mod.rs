@@ -43,9 +43,9 @@ use crate::input::{
 use crate::input_backend::{InputBackendConfig, launch_input_backends};
 use crate::lighting::{
     GameplayLightSyncTarget, LightInputRoute, OperatorMenuButtonRoute, SmxAnimationSyncKey,
-    SmxPanelDriver, hide_flags_for_profiles, light_input_route, lighting_frame_plan,
-    lights_test_view, load_cabinet_light_chart, operator_menu_button_route, smx_pad_blackout,
-    smx_pad_gif_frame_plan,
+    SmxPanelDriver, hide_flags_for_profiles, light_input_route, lighting_frame_active,
+    lighting_frame_plan, lights_test_view, load_cabinet_light_chart, operator_menu_button_route,
+    smx_pad_blackout, smx_pad_gif_frame_plan,
 };
 use crate::navigation::{
     TransitionCompletion, TransitionMusicPaths, TransitionState, is_actor_fade_screen,
@@ -1053,6 +1053,10 @@ pub struct App {
     pad_config_sync: pad_config_sync::PadConfigSync,
     lights: lights::Manager,
     gameplay_lights: lights::gameplay::GameplayLightTracker,
+    /// Whether the preceding frame had a physical lighting consumer or the
+    /// local test-light visualization. Disabled output is torn down once, then
+    /// the whole lighting transaction stays idle until a consumer returns.
+    lighting_active: bool,
     smx_panels: SmxPanelDriver,
     /// Last per-slot pad-light brightness pushed to the SMX crate (`[P1, P2]`),
     /// cached so the resolve-and-push only fires when the value actually changes.
@@ -1401,6 +1405,20 @@ impl App {
     fn sync_lights(&mut self, delta_time: f32, elapsed_seconds: f32, config: &config::Config) {
         self.lights
             .set_driver(config.lights_driver, config.lights_com_port.as_str());
+        let active = lighting_frame_active(
+            self.state.screens.current_screen,
+            config.lights_driver,
+            config.smx_input,
+            config.smx_panel_lights,
+        );
+        if !active {
+            if self.lighting_active {
+                self.deactivate_lighting(config.simply_love_color);
+            }
+            self.lighting_active = false;
+            return;
+        }
+        self.lighting_active = true;
         self.lights
             .set_gameplay_pad_lights(config.lights_gameplay_pad_lights);
         let plan = lighting_frame_plan(
@@ -1455,6 +1473,20 @@ impl App {
                 ));
         }
         self.lights.tick(delta_time, elapsed_seconds);
+    }
+
+    fn deactivate_lighting(&mut self, theme_index: i32) {
+        self.gameplay_lights.clear();
+        self.lights.clear_blinks();
+        self.smx_panels.deactivate();
+        let none = [config::SmxPackName::default(); 2];
+        self.sync_smx_pad_gifs(false, false, false, theme_index, none, none);
+        if self.smx_blackout_synced != [false; 2] {
+            self.smx_blackout_synced = [false; 2];
+            for pad in 0..deadsync_smx::panels::PADS {
+                self.smx_panels.set_pad_blackout(pad, false);
+            }
+        }
     }
 
     fn refresh_lobby_runtime_view() -> SimplyLoveLobbyRuntimeView {
@@ -3126,6 +3158,12 @@ impl App {
             pad_config_sync: pad_config_sync::PadConfigSync::default(),
             lights: lights::Manager::new(config.lights_driver, config.lights_com_port.as_str()),
             gameplay_lights: lights::gameplay::GameplayLightTracker::default(),
+            lighting_active: lighting_frame_active(
+                state.screens.current_screen,
+                config.lights_driver,
+                config.smx_input,
+                config.smx_panel_lights,
+            ),
             smx_panels: SmxPanelDriver::default(),
             smx_light_brightness: [100, 100],
             smx_gifs: None,

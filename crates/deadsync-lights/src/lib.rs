@@ -593,6 +593,11 @@ impl Manager {
         self.menu_button_pressed = [[false; BUTTON_COUNT]; PLAYER_COUNT];
     }
 
+    pub fn clear_blinks(&mut self) {
+        self.button_blink = [[0.0; BUTTON_COUNT]; PLAYER_COUNT];
+        self.cabinet_blink = [0.0; CABINET_COUNT];
+    }
+
     pub fn blink_cabinet(&mut self, light: CabinetLight) {
         self.cabinet_blink[light.ix()] = BLINK_SECONDS;
     }
@@ -1107,6 +1112,30 @@ mod tests {
         let chart = lights.build_state(0.0);
         assert!(!chart.button(Player::P1, ButtonLight::Left));
         assert!(chart.button(Player::P1, ButtonLight::Right));
+    }
+
+    #[test]
+    fn clearing_blinks_cancels_disabled_output_transients() {
+        let mut lights = Manager::new(DriverKind::Off, DEFAULT_LITBOARD_PORT);
+        lights.set_mode(Mode::Gameplay);
+        lights.set_gameplay_pad_lights(GameplayPadLightMode::Chart);
+        lights.blink_cabinet(CabinetLight::MarqueeUpperLeft);
+        lights.blink_button(Player::P1, ButtonLight::Right);
+        assert!(
+            lights
+                .build_state(0.0)
+                .cabinet(CabinetLight::MarqueeUpperLeft)
+        );
+        assert!(
+            lights
+                .build_state(0.0)
+                .button(Player::P1, ButtonLight::Right)
+        );
+
+        lights.clear_blinks();
+        let cleared = lights.build_state(0.0);
+        assert!(!cleared.cabinet(CabinetLight::MarqueeUpperLeft));
+        assert!(!cleared.button(Player::P1, ButtonLight::Right));
     }
 
     #[test]

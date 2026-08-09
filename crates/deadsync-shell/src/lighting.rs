@@ -10,7 +10,8 @@ use deadsync_lights::cabinet_chart::{
     CabinetLightEvent, CabinetLightPlan, GameplayLightChartKey, cabinet_light_chart_from_loaded,
 };
 use deadsync_lights::{
-    ButtonLight, CabinetLight, HideFlags, Mode, Player, ScreenLightContext, State as LightState,
+    ButtonLight, CabinetLight, DriverKind, HideFlags, Mode, Player, ScreenLightContext,
+    State as LightState,
 };
 use deadsync_profile::{
     HideLightType, PlayStyle, PlayerSide, physical_player_slot_for_chart_pad, player_side_index,
@@ -193,6 +194,19 @@ pub struct LightingFramePlan {
     pub smx_panels_enabled: bool,
     pub smx_select_music_beat: bool,
     pub gameplay_target: GameplayLightSyncTarget,
+}
+
+/// Whether this frame has a physical lighting consumer or is displaying the
+/// local light-test visualization.
+pub const fn lighting_frame_active(
+    screen: Screen,
+    driver: DriverKind,
+    smx_input: bool,
+    smx_panel_lights: bool,
+) -> bool {
+    matches!(screen, Screen::TestLights)
+        || !matches!(driver, DriverKind::Off)
+        || (smx_input && smx_panel_lights)
 }
 
 pub const fn lighting_frame_plan(
@@ -525,6 +539,34 @@ mod tests {
         assert_eq!(test_lights.screen_mode, None);
         assert_eq!(test_lights.gameplay_target, GameplayLightSyncTarget::Clear);
         assert!(test_lights.smx_panels_enabled);
+    }
+
+    #[test]
+    fn lighting_frame_gate_keeps_only_live_outputs_and_test_view() {
+        assert!(!lighting_frame_active(
+            Screen::Gameplay,
+            DriverKind::Off,
+            false,
+            false
+        ));
+        assert!(lighting_frame_active(
+            Screen::Gameplay,
+            DriverKind::Snek,
+            false,
+            false
+        ));
+        assert!(lighting_frame_active(
+            Screen::Gameplay,
+            DriverKind::Off,
+            true,
+            true
+        ));
+        assert!(lighting_frame_active(
+            Screen::TestLights,
+            DriverKind::Off,
+            false,
+            false
+        ));
     }
 
     #[test]

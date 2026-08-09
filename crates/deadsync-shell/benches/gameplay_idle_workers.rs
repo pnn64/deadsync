@@ -274,6 +274,16 @@ fn main() {
         measure(|| new.gated_player_options_lights_frame()),
     );
 
+    let old = GameplayIdleWorkersBenchmark::default();
+    let new = GameplayIdleWorkersBenchmark::default();
+    compare_labeled(
+        "disabled lighting session state",
+        "unconditional read",
+        "output gate",
+        measure(|| old.legacy_disabled_lighting_frame()),
+        measure(|| new.gated_disabled_lighting_frame()),
+    );
+
     let mut old = GameplayIdleWorkersBenchmark::default();
     let mut new = GameplayIdleWorkersBenchmark::default();
     compare_labeled(
