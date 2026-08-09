@@ -537,6 +537,12 @@ impl SharedActorFrameScratch {
         }
     }
 
+    /// Borrow the current identity frame without incrementing its reference
+    /// count. Callers must not retain the slice across the next mutation.
+    pub fn actors(&self) -> &[Actor] {
+        self.source.as_ref()
+    }
+
     fn new_source(capacity: usize) -> Arc<[Actor]> {
         Arc::from([Actor::Frame {
             align: [0.0, 0.0],

@@ -1,11 +1,15 @@
+use deadlib_present::actors::Actor;
 use deadsync_theme_simply_love::screens::gameplay::{
-    bench_field_proxy_direct, bench_field_proxy_materialized, bench_player_proxy_direct,
-    bench_player_proxy_materialized, bench_song_lua_proxy_capture_cycles,
-    bench_song_lua_proxy_capture_cycles_legacy, bench_song_lua_proxy_capture_cycles_screen_reuse,
+    BENCH_NOTEFIELD_ACTOR_SCRATCH_CAPACITY, BENCH_NOTEFIELD_HUD_ACTOR_SCRATCH_CAPACITY,
+    bench_field_proxy_direct, bench_field_proxy_materialized, bench_player_proxy_captured,
+    bench_player_proxy_direct, bench_player_proxy_materialized,
+    bench_song_lua_proxy_capture_cycles, bench_song_lua_proxy_capture_cycles_legacy,
+    bench_song_lua_proxy_capture_cycles_screen_reuse,
     bench_song_lua_proxy_capture_cycles_single_bank,
 };
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::hint::black_box;
+use std::mem::size_of;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 
@@ -133,15 +137,24 @@ fn main() {
         );
 
         let materialized = measure(bench_player_proxy_materialized, players);
+        let captured = measure(bench_player_proxy_captured, players);
         let direct = measure(bench_player_proxy_direct, players);
+        assert_eq!(materialized.checksum, captured.checksum);
         assert_eq!(materialized.checksum, direct.checksum);
         println!("Player proxy transfer: {players} player(s), {CYCLES} frames");
         print_result("materialized", &materialized);
-        print_result("direct", &direct);
+        print_result("captured", &captured);
+        print_result("borrowed", &direct);
         println!(
-            "  speedup={:.2}x cycle reduction={:.2}%\n",
+            "  incremental speedup={:.2}x cycle reduction={:.2}% | cumulative speedup={:.2}x cycle reduction={:.2}%  removed reserve={} bytes\n",
+            captured.elapsed.as_secs_f64() / direct.elapsed.as_secs_f64(),
+            percent_reduction(captured.cycles, direct.cycles),
             materialized.elapsed.as_secs_f64() / direct.elapsed.as_secs_f64(),
             percent_reduction(materialized.cycles, direct.cycles),
+            players
+                * (BENCH_NOTEFIELD_ACTOR_SCRATCH_CAPACITY
+                    + BENCH_NOTEFIELD_HUD_ACTOR_SCRATCH_CAPACITY)
+                * size_of::<Actor>(),
         );
 
         let materialized = measure(bench_field_proxy_materialized, players);
