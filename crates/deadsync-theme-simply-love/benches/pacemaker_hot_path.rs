@@ -1,7 +1,8 @@
 use deadlib_present::actors::{Actor, InlineText, TextAlign, TextContent};
 use deadlib_present::compose::{
     ComposeScratch, TextLayoutCache, build_screen_cached_with_scratch_and_texture_context,
-    prewarm_frame_inline_text_slot, prewarm_prepared_inline_text_slot,
+    prewarm_cached_prepared_inline_text_slot, prewarm_frame_inline_text_slot,
+    prewarm_prepared_inline_text_slot,
 };
 use deadlib_present::dsl::TextBuilder;
 use deadlib_present::font::{Font, FontMap, Glyph};
@@ -29,7 +30,7 @@ const SAMPLE_BATCH: usize = 256;
 
 #[derive(Clone, Copy)]
 enum DynamicTextWarmup {
-    FrameSlots,
+    FrameSlots { cache_geometry: bool },
     U16Domain(u16),
 }
 
@@ -373,7 +374,9 @@ fn main() {
                 .expect("offset benchmark text fits inline")
         },
         InlineText::copy_from("-.ms0123456789").expect("offset glyph domain fits inline"),
-        DynamicTextWarmup::FrameSlots,
+        DynamicTextWarmup::FrameSlots {
+            cache_geometry: false,
+        },
         false,
         None,
         &metrics,
@@ -391,7 +394,9 @@ fn main() {
                 .expect("timing benchmark text fits inline")
         },
         InlineText::copy_from("-./0123456789").expect("timing glyph domain fits inline"),
-        DynamicTextWarmup::FrameSlots,
+        DynamicTextWarmup::FrameSlots {
+            cache_geometry: false,
+        },
         false,
         None,
         &metrics,
@@ -403,7 +408,9 @@ fn main() {
         6,
         measure_counter_value,
         InlineText::copy_from("-/()0123456789").expect("counter glyph domain fits inline"),
-        DynamicTextWarmup::FrameSlots,
+        DynamicTextWarmup::FrameSlots {
+            cache_geometry: true,
+        },
         true,
         None,
         &metrics,
@@ -415,7 +422,9 @@ fn main() {
         1,
         run_timer_value,
         InlineText::copy_from(" .0123456789").expect("timer glyph domain fits inline"),
-        DynamicTextWarmup::FrameSlots,
+        DynamicTextWarmup::FrameSlots {
+            cache_geometry: false,
+        },
         true,
         None,
         &metrics,
@@ -590,7 +599,7 @@ fn run_dynamic_layout_workload(
         legacy_cache.lock_growth_with_reserve(4_096);
     }
 
-    let mut transient = matches!(warmup, DynamicTextWarmup::FrameSlots).then(|| {
+    let mut transient = matches!(warmup, DynamicTextWarmup::FrameSlots { .. }).then(|| {
         let mut cache = TextLayoutCache::new(1);
         let mut scratch = ComposeScratch::default();
         let mut uploads = TexturedMeshUploads::default();
@@ -622,25 +631,38 @@ fn run_dynamic_layout_workload(
     });
 
     let optimized_capacity = match warmup {
-        DynamicTextWarmup::FrameSlots => 1,
+        DynamicTextWarmup::FrameSlots { .. } => 1,
         DynamicTextWarmup::U16Domain(_) => 1,
     };
     let mut optimized_cache = TextLayoutCache::new(optimized_capacity);
     let mut optimized_scratch = ComposeScratch::default();
     let mut optimized_uploads = TexturedMeshUploads::default();
     match warmup {
-        DynamicTextWarmup::FrameSlots => {
+        DynamicTextWarmup::FrameSlots { cache_geometry } => {
             for slot in 0..actor_count {
-                prewarm_prepared_inline_text_slot(
-                    &mut optimized_cache,
-                    &mut optimized_scratch,
-                    fonts,
-                    "test",
-                    glyph_domain,
-                    slot as u8,
-                    TextAlign::Center,
-                    actor_count * 4,
-                );
+                if cache_geometry {
+                    prewarm_cached_prepared_inline_text_slot(
+                        &mut optimized_cache,
+                        &mut optimized_scratch,
+                        fonts,
+                        "test",
+                        glyph_domain,
+                        slot as u8,
+                        TextAlign::Center,
+                        actor_count * 4,
+                    );
+                } else {
+                    prewarm_prepared_inline_text_slot(
+                        &mut optimized_cache,
+                        &mut optimized_scratch,
+                        fonts,
+                        "test",
+                        glyph_domain,
+                        slot as u8,
+                        TextAlign::Center,
+                        actor_count * 4,
+                    );
+                }
             }
         }
         DynamicTextWarmup::U16Domain(max) => {
@@ -648,7 +670,7 @@ fn run_dynamic_layout_workload(
         }
     }
     let optimized_content = |frame, actor| match warmup {
-        DynamicTextWarmup::FrameSlots => {
+        DynamicTextWarmup::FrameSlots { .. } => {
             TextContent::frame_inline_slot(value(frame, actor), actor as u8)
         }
         DynamicTextWarmup::U16Domain(_) => {
@@ -660,7 +682,7 @@ fn run_dynamic_layout_workload(
     let mut optimized_actors = (0..actor_count)
         .map(|actor| {
             let content = match warmup {
-                DynamicTextWarmup::FrameSlots => {
+                DynamicTextWarmup::FrameSlots { .. } => {
                     TextContent::frame_inline_slot(glyph_domain, actor as u8)
                 }
                 DynamicTextWarmup::U16Domain(_) => optimized_content(0, actor),
@@ -680,6 +702,7 @@ fn run_dynamic_layout_workload(
     if matches!(warmup, DynamicTextWarmup::U16Domain(_)) {
         optimized_scratch.prewarm_draw_sort(actor_count * 2);
     }
+    optimized_uploads.sources.reserve(actor_count * 4);
     optimized_cache.lock_growth();
 
     let legacy = measure(DYNAMIC_LAYOUT_FRAMES, false, |frame| {
@@ -736,7 +759,12 @@ fn run_dynamic_layout_workload(
         print_result("transient slots", transient, DYNAMIC_LAYOUT_FRAMES);
     }
     let optimized_label = match warmup {
-        DynamicTextWarmup::FrameSlots => "direct frame slots",
+        DynamicTextWarmup::FrameSlots {
+            cache_geometry: true,
+        } => "cached frame slots",
+        DynamicTextWarmup::FrameSlots {
+            cache_geometry: false,
+        } => "direct frame slots",
         DynamicTextWarmup::U16Domain(_) => "prewarmed domain",
     };
     print_result(optimized_label, &optimized, DYNAMIC_LAYOUT_FRAMES);

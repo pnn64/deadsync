@@ -9,6 +9,11 @@ use deadsync_rules::scroll::ScrollSpeedSetting;
 use deadsync_rules::stream::StreamSegment;
 use deadsync_theme::{CounterHudStyle, MiniIndicatorStyle};
 
+pub const MEASURE_COUNTER_LOOKAHEAD_MAX: u8 = 4;
+pub const COUNTER_TEXT_SLOTS_PER_PLAYER: u8 = MEASURE_COUNTER_LOOKAHEAD_MAX + 3;
+const BROKEN_COUNTER_TEXT_SLOT: u8 = MEASURE_COUNTER_LOOKAHEAD_MAX + 1;
+const RUN_TIMER_TEXT_SLOT: u8 = MEASURE_COUNTER_LOOKAHEAD_MAX + 2;
+
 #[derive(Clone, Copy)]
 pub(crate) struct CounterHudRequest<'a> {
     pub style: CounterHudStyle,
@@ -29,7 +34,7 @@ pub(crate) struct CounterHudRequest<'a> {
     pub playfield_center_x: f32,
     pub field_zoom: f32,
     pub font: &'static str,
-    pub timer_text_slot: u8,
+    pub frame_text_slot: u8,
     pub counter_text: fn(ZmodMeasureCounterText) -> TextContent,
     pub timer_text: fn(i32, i32, bool) -> TextContent,
 }
@@ -76,7 +81,8 @@ fn append_measure_counters(
     column_width: f32,
     counter_y: f32,
 ) {
-    for j in (0..=request.lookahead).rev() {
+    let lookahead = request.lookahead.min(MEASURE_COUNTER_LOOKAHEAD_MAX);
+    for j in (0..=lookahead).rev() {
         let segment_index = base_index + j as usize;
         let Some(segment) = request.segments.get(segment_index).copied() else {
             continue;
@@ -88,7 +94,7 @@ fn append_measure_counters(
             request.segments,
             segment_index,
             is_lookahead,
-            request.lookahead.into(),
+            lookahead.into(),
             request.multiplier,
         ) else {
             continue;
@@ -113,10 +119,10 @@ fn append_measure_counters(
         if request.vertical {
             y += request.style.vertical_step_y * f32::from(j);
         } else {
-            let denominator = if request.lookahead == 0 {
+            let denominator = if lookahead == 0 {
                 1.0
             } else {
-                f32::from(request.lookahead)
+                f32::from(lookahead)
             };
             x += (column_width / denominator) * request.style.horizontal_span * f32::from(j);
         }
@@ -127,7 +133,8 @@ fn append_measure_counters(
             actors,
             request.style,
             request.font,
-            (request.counter_text)(text_kind),
+            (request.counter_text)(text_kind)
+                .with_frame_inline_slot(request.frame_text_slot.saturating_add(j)),
             [x, y],
             [0.5, 0.5],
             zoom,
@@ -173,7 +180,11 @@ fn append_broken_counter(
         actors,
         request.style,
         request.font,
-        (request.counter_text)(text_kind),
+        (request.counter_text)(text_kind).with_frame_inline_slot(
+            request
+                .frame_text_slot
+                .saturating_add(BROKEN_COUNTER_TEXT_SLOT),
+        ),
         [x, y],
         [0.5, 0.5],
         request.style.base_zoom,
@@ -233,7 +244,7 @@ fn append_run_timer(
         actors,
         request.style,
         request.font,
-        text.with_frame_inline_slot(request.timer_text_slot),
+        text.with_frame_inline_slot(request.frame_text_slot.saturating_add(RUN_TIMER_TEXT_SLOT)),
         [x, request.subtractive_scoring_y],
         [0.5, 0.5],
         request.style.base_zoom,
@@ -445,7 +456,7 @@ mod tests {
                 playfield_center_x: 320.0,
                 field_zoom: 1.0,
                 font: "hud-font",
-                timer_text_slot: 20,
+                frame_text_slot: 20,
                 counter_text,
                 timer_text,
             },
@@ -460,7 +471,7 @@ mod tests {
             0.3,
             0.5,
             TextAlign::Center,
-            None,
+            Some(21),
         );
         assert_text(
             &actors[1],
@@ -470,7 +481,7 @@ mod tests {
             0.35,
             0.5,
             TextAlign::Center,
-            None,
+            Some(20),
         );
     }
 
@@ -504,7 +515,7 @@ mod tests {
                 playfield_center_x: 320.0,
                 field_zoom: 1.0,
                 font: "hud-font",
-                timer_text_slot: 20,
+                frame_text_slot: 20,
                 counter_text,
                 timer_text,
             },
@@ -519,7 +530,7 @@ mod tests {
             0.35,
             0.5,
             TextAlign::Center,
-            Some(20),
+            Some(26),
         );
     }
 

@@ -1084,7 +1084,8 @@ pub(crate) fn compose_frame(
         broken_run_lookup,
         current_bpm: state.current_bpm_display(),
         font: mc_font_name,
-        timer_text_slot: super::FRAME_TEXT_TIMER_BASE + player_idx as u8,
+        frame_text_slot: super::FRAME_TEXT_COUNTER_BASE
+            + player_idx as u8 * deadsync_notefield::COUNTER_TEXT_SLOTS_PER_PLAYER,
         counter_text: zmod_measure_counter_text,
         timer_text: zmod_run_timer_fmt,
     });
