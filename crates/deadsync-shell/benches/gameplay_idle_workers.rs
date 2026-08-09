@@ -282,6 +282,16 @@ fn main() {
         measure(|| new.gated_config_frame()),
     );
 
+    let old = GameplayIdleWorkersBenchmark::default();
+    let new = GameplayIdleWorkersBenchmark::default();
+    compare_labeled(
+        "evaluation auto-screenshot configuration",
+        "second mutex read",
+        "frame snapshot",
+        measure(|| old.legacy_auto_screenshot_config_frame()),
+        measure(|| new.frame_auto_screenshot_config_frame()),
+    );
+
     #[cfg(windows)]
     {
         let mut old = GameplayIdleWorkersBenchmark::default();

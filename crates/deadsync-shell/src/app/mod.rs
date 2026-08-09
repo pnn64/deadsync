@@ -2580,7 +2580,7 @@ impl App {
                     already_taken: self.state.screens.evaluation_state.auto_screenshot_taken,
                     ready: auto_screenshot_ready,
                     mask: if current_screen == CurrentScreen::Evaluation {
-                        config::get().auto_screenshot_eval
+                        frame_config.auto_screenshot_eval
                     } else {
                         0
                     },

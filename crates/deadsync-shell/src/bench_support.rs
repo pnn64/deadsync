@@ -319,6 +319,20 @@ impl GameplayIdleWorkersBenchmark {
         })
     }
 
+    pub fn legacy_auto_screenshot_config_frame(&self) -> usize {
+        (0..POLLS_PER_FRAME).fold(0, |checksum, sample| {
+            checksum.rotate_left(5) ^ config::get().auto_screenshot_eval as usize ^ sample
+        })
+    }
+
+    pub fn frame_auto_screenshot_config_frame(&self) -> usize {
+        (0..POLLS_PER_FRAME).fold(0, |checksum, sample| {
+            checksum.rotate_left(5)
+                ^ black_box(self.frame_config.auto_screenshot_eval) as usize
+                ^ sample
+        })
+    }
+
     #[cfg(windows)]
     pub fn direct_raw_capture_frame(&mut self) -> usize {
         (0..POLLS_PER_FRAME).fold(0, |checksum, sample| {
