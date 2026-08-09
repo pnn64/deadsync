@@ -514,7 +514,7 @@ fn main() {
     print_peak_result("presized", &presized_scratch);
 
     println!(
-        "\ntransformed player handoff benchmark \
+        "\nY-folded transformed player handoff benchmark \
          ({FIELD_ACTORS} field + {HUD_ACTORS} HUD mesh actors/player)"
     );
     for players in 1..=2 {
@@ -528,7 +528,7 @@ fn main() {
         print_transform_result("borrowed segments", &direct, players);
     }
 
-    println!("\ntransformed player handoff + composition benchmark");
+    println!("\nY-folded transformed player handoff + composition benchmark");
     for players in 1..=2 {
         let materialized = measure_transform_compose::<false>(players);
         let direct = measure_transform_compose::<true>(players);

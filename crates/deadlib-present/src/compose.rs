@@ -601,12 +601,38 @@ pub struct ActorSegment<'a> {
     tint: [f32; 4],
     blend: Option<BlendMode>,
     camera: Option<ActorSegmentCamera>,
+    x_fold: Option<ActorXFold>,
 }
 
 #[derive(Clone, Copy, Debug)]
 struct ActorSegmentCamera {
     root: Matrix4,
     suffix: Matrix4,
+}
+
+/// Folds actor X offsets around a fixed pivot during composition.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct ActorXFold {
+    pivot_x: f32,
+    scale_x: f32,
+}
+
+impl ActorXFold {
+    pub const fn new(pivot_x: f32, scale_x: f32) -> Self {
+        Self { pivot_x, scale_x }
+    }
+
+    #[inline(always)]
+    fn offset(self, mut offset: [f32; 2]) -> [f32; 2] {
+        offset[0] = self.pivot_x + (offset[0] - self.pivot_x) * self.scale_x;
+        offset
+    }
+
+    #[inline(always)]
+    fn text_scale(self, mut scale: [f32; 2]) -> [f32; 2] {
+        scale[0] *= self.scale_x;
+        scale
+    }
 }
 
 impl<'a> ActorSegment<'a> {
@@ -617,6 +643,7 @@ impl<'a> ActorSegment<'a> {
             tint: [1.0; 4],
             blend: None,
             camera: None,
+            x_fold: None,
         }
     }
 
@@ -627,6 +654,18 @@ impl<'a> ActorSegment<'a> {
             tint: [1.0; 4],
             blend: None,
             camera: None,
+            x_fold: None,
+        }
+    }
+
+    pub const fn folded(actors: &'a [actors::Actor], z_shift: i16, x_fold: ActorXFold) -> Self {
+        Self {
+            actors,
+            z_shift,
+            tint: [1.0; 4],
+            blend: None,
+            camera: None,
+            x_fold: Some(x_fold),
         }
     }
 
@@ -637,6 +676,7 @@ impl<'a> ActorSegment<'a> {
         blend: Option<BlendMode>,
         root_camera: Matrix4,
         camera_suffix: Matrix4,
+        x_fold: Option<ActorXFold>,
     ) -> Self {
         Self {
             actors,
@@ -647,6 +687,7 @@ impl<'a> ActorSegment<'a> {
                 root: root_camera,
                 suffix: camera_suffix,
             }),
+            x_fold,
         }
     }
 }
@@ -744,11 +785,13 @@ fn build_screen_segments_cached_with_scratch_and_texture_context_impl<
                 blend: segment.blend,
             };
             let camera = segment.camera.as_ref();
+            let x_fold = segment.x_fold;
             segment.actors.iter().map(move |actor| ActorBuild {
                 actor,
                 base_z,
                 style,
                 camera,
+                x_fold,
             })
         }),
         root_rect,
@@ -4183,6 +4226,7 @@ struct ActorBuild<'a, 'segment> {
     base_z: i16,
     style: ComposeStyle,
     camera: Option<&'segment ActorSegmentCamera>,
+    x_fold: Option<ActorXFold>,
 }
 
 impl ComposeStyle {
@@ -4210,6 +4254,7 @@ fn build_actor_list<'a, T: TextureContext + ?Sized>(
     base_z: i16,
     camera: u8,
     style: ComposeStyle,
+    x_fold: Option<ActorXFold>,
     cameras: &mut Vec<Matrix4>,
     masks: &mut Vec<WorldRect>,
     order_counter: &mut u32,
@@ -4227,6 +4272,7 @@ fn build_actor_list<'a, T: TextureContext + ?Sized>(
             base_z,
             style,
             camera: None,
+            x_fold,
         }),
         parent,
         m,
@@ -4276,6 +4322,7 @@ fn build_actor_sequence<'a, 'segment, T, I>(
         base_z,
         style,
         camera: segment_camera,
+        x_fold,
     } in actor_builds
     {
         match actor {
@@ -4304,6 +4351,7 @@ fn build_actor_sequence<'a, 'segment, T, I>(
                     base_z,
                     id,
                     style,
+                    x_fold,
                     cameras,
                     masks,
                     order_counter,
@@ -4343,6 +4391,7 @@ fn build_actor_sequence<'a, 'segment, T, I>(
                     base_z,
                     active_camera,
                     style,
+                    x_fold,
                     cameras,
                     masks,
                     order_counter,
@@ -4517,6 +4566,7 @@ fn build_textured_mesh_actor<T: TextureContext + ?Sized>(
     base_z: i16,
     camera: u8,
     style: ComposeStyle,
+    x_fold: Option<ActorXFold>,
     order_counter: &mut u32,
     out: &mut FrameBuilder,
     texture_cache: &mut TextureLookupCache,
@@ -4526,7 +4576,8 @@ fn build_textured_mesh_actor<T: TextureContext + ?Sized>(
         return;
     }
 
-    let rect = place_rect(parent, mesh.align, mesh.offset, mesh.size);
+    let offset = x_fold.map_or(mesh.offset, |fold| fold.offset(mesh.offset));
+    let rect = place_rect(parent, mesh.align, offset, mesh.size);
     let base_x = m.left + rect.x;
     let base_y = m.top - rect.y;
     let transform = Matrix4::from_translation(Vector3::new(base_x, base_y, mesh.world_z))
@@ -4595,6 +4646,7 @@ fn build_actor_recursive<'a, T: TextureContext + ?Sized>(
     base_z: i16,
     camera: u8,
     style: ComposeStyle,
+    x_fold: Option<ActorXFold>,
     cameras: &mut Vec<Matrix4>,
     masks: &mut Vec<WorldRect>,
     order_counter: &mut u32,
@@ -4614,6 +4666,7 @@ fn build_actor_recursive<'a, T: TextureContext + ?Sized>(
             base_z,
             camera,
             style,
+            x_fold,
             order_counter,
             out,
             texture_cache,
@@ -4755,7 +4808,8 @@ fn build_actor_recursive<'a, T: TextureContext + ?Sized>(
                 texture_ctx,
             );
 
-            let rect = place_rect(parent, *align, *offset, resolved_size);
+            let offset = x_fold.map_or(*offset, |fold| fold.offset(*offset));
+            let rect = place_rect(parent, *align, offset, resolved_size);
             let mask_rect = sm_rect_to_world_edges(rect, m);
             if *mask_source {
                 masks.push(mask_rect);
@@ -4915,7 +4969,8 @@ fn build_actor_recursive<'a, T: TextureContext + ?Sized>(
                 return;
             }
 
-            let rect = place_rect(parent, *align, *offset, *size);
+            let offset = x_fold.map_or(*offset, |fold| fold.offset(*offset));
+            let rect = place_rect(parent, *align, offset, *size);
             let base_x = m.left + rect.x;
             let base_y = m.top - rect.y;
             let transform = Matrix4::from_translation(Vector3::new(base_x, base_y, 0.0))
@@ -4951,7 +5006,8 @@ fn build_actor_recursive<'a, T: TextureContext + ?Sized>(
                 return;
             }
 
-            let rect = place_rect(parent, *align, *offset, *size);
+            let offset = x_fold.map_or(*offset, |fold| fold.offset(*offset));
+            let rect = place_rect(parent, *align, offset, *size);
             let base_x = m.left + rect.x;
             let base_y = m.top - rect.y;
             let transform = Matrix4::from_translation(Vector3::new(base_x, base_y, 0.0))
@@ -4988,6 +5044,7 @@ fn build_actor_recursive<'a, T: TextureContext + ?Sized>(
                 base_z,
                 camera,
                 style,
+                x_fold,
                 cameras,
                 masks,
                 order_counter,
@@ -5028,6 +5085,7 @@ fn build_actor_recursive<'a, T: TextureContext + ?Sized>(
                 base_z,
                 id,
                 style,
+                x_fold,
                 cameras,
                 masks,
                 order_counter,
@@ -5084,7 +5142,7 @@ fn build_actor_recursive<'a, T: TextureContext + ?Sized>(
                     return;
                 }
                 let mut effect_color = *color;
-                let mut effect_scale = *scale;
+                let mut effect_scale = x_fold.map_or(*scale, |fold| fold.text_scale(*scale));
                 apply_effect_to_text(*effect, total_elapsed, &mut effect_color, &mut effect_scale);
                 effect_color = mul_rgba(effect_color, style.tint);
                 let mut stroke_rgba = stroke_color
@@ -5118,7 +5176,7 @@ fn build_actor_recursive<'a, T: TextureContext + ?Sized>(
                     *max_h_pre_zoom,
                     parent,
                     *align,
-                    *offset,
+                    x_fold.map_or(*offset, |fold| fold.offset(*offset)),
                 ) {
                     let text_distortion = distortion.max(0.0);
                     if !frame_inline && attributes.is_empty() && !*jitter && text_distortion <= 1e-6
@@ -5328,7 +5386,8 @@ fn build_actor_recursive<'a, T: TextureContext + ?Sized>(
             background,
             z,
         } => {
-            let rect = place_rect(parent, *align, *offset, *size);
+            let offset = x_fold.map_or(*offset, |fold| fold.offset(*offset));
+            let rect = place_rect(parent, *align, offset, *size);
             let layer = base_z.saturating_add(*z);
 
             if let Some(bg) = background {
@@ -5441,6 +5500,7 @@ fn build_actor_recursive<'a, T: TextureContext + ?Sized>(
                 layer,
                 camera,
                 style,
+                x_fold,
                 cameras,
                 masks,
                 order_counter,
@@ -5464,7 +5524,8 @@ fn build_actor_recursive<'a, T: TextureContext + ?Sized>(
             tint,
             blend,
         } => {
-            let rect = place_rect(parent, *align, *offset, *size);
+            let offset = x_fold.map_or(*offset, |fold| fold.offset(*offset));
+            let rect = place_rect(parent, *align, offset, *size);
             let layer = base_z.saturating_add(*z);
 
             if let Some(bg) = background {
@@ -5578,6 +5639,7 @@ fn build_actor_recursive<'a, T: TextureContext + ?Sized>(
                 layer,
                 camera,
                 child_style,
+                None,
                 cameras,
                 masks,
                 order_counter,
@@ -5604,7 +5666,8 @@ fn build_actor_recursive<'a, T: TextureContext + ?Sized>(
             if !*visible {
                 return;
             }
-            let rect = place_rect(parent, *align, *offset, *size);
+            let offset = x_fold.map_or(*offset, |fold| fold.offset(*offset));
+            let rect = place_rect(parent, *align, offset, *size);
             let layer = base_z.saturating_add(*z);
             let child_style = style.child(*tint, *blend);
             let cacheable = camera == 0 && masks.is_empty();
@@ -5633,6 +5696,7 @@ fn build_actor_recursive<'a, T: TextureContext + ?Sized>(
                 layer,
                 camera,
                 child_style,
+                None,
                 cameras,
                 masks,
                 order_counter,
@@ -7632,11 +7696,11 @@ fn clip_rotated_sprite_to_world_rect(
 #[cfg(test)]
 mod tests {
     use super::{
-        ActorSegment, CachedGlyph, CachedRetainedFrame, CachedTextLayout, CachedTextMeshBatch,
-        CachedTextMeshVariants, CachedTextPage, ComposeScratch, DrawItem, EditableDraw,
-        EditablePayload, FrameBuilder, MeshPayload, MeshVertices, TextAttrCursor, TextLayoutCache,
-        TextLayoutKey, TextMeshBatchBuilder, TextPageId, TextureCacheEntry, TextureContext,
-        TextureLookupCache, TextureMeta, TexturedMeshPayload, WorldRect,
+        ActorSegment, ActorXFold, CachedGlyph, CachedRetainedFrame, CachedTextLayout,
+        CachedTextMeshBatch, CachedTextMeshVariants, CachedTextPage, ComposeScratch, DrawItem,
+        EditableDraw, EditablePayload, FrameBuilder, MeshPayload, MeshVertices, TextAttrCursor,
+        TextLayoutCache, TextLayoutKey, TextMeshBatchBuilder, TextPageId, TextureCacheEntry,
+        TextureContext, TextureLookupCache, TextureMeta, TexturedMeshPayload, WorldRect,
         analyze_final_sprite_gather, append_retained_frame, append_retained_frame_legacy,
         build_cached_text_layout, build_screen_cached_with_scratch_and_texture_context,
         build_screen_cached_with_scratch_and_texture_context_and_actor_resources,
@@ -8489,12 +8553,138 @@ mod tests {
                     Some(BlendMode::Add),
                     root_camera,
                     camera_suffix,
+                    None,
                 )],
                 [0.0, 0.0, 0.0, 1.0],
                 &metrics,
                 &fonts,
                 0.0,
                 &mut text,
+                &mut scratch,
+                &TestDrawTextureContext,
+                &resources,
+            );
+        assert_test_frames_equal(&expected, &actual);
+    }
+
+    #[test]
+    fn folded_actor_segment_matches_materialized_wrapper_boundaries() {
+        let vertices: Arc<[MeshVertex]> = Arc::from([
+            MeshVertex {
+                pos: [0.0, 0.0],
+                color: [1.0; 4],
+            },
+            MeshVertex {
+                pos: [12.0, 0.0],
+                color: [1.0; 4],
+            },
+            MeshVertex {
+                pos: [0.0, 9.0],
+                color: [1.0; 4],
+            },
+        ]);
+        let mesh = |x| Actor::Mesh {
+            align: [0.0, 0.0],
+            offset: [x, 4.0],
+            size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
+            tint: [1.0; 4],
+            vertices: Arc::clone(&vertices),
+            visible: true,
+            blend: BlendMode::Alpha,
+            z: 0,
+        };
+        let text = test_stroked_text_actor();
+        let source = vec![
+            mesh(20.0),
+            Actor::Frame {
+                align: [0.0, 0.0],
+                offset: [30.0, 0.0],
+                size: [SizeSpec::Fill, SizeSpec::Fill],
+                children: vec![mesh(40.0)],
+                background: None,
+                z: 0,
+            },
+            Actor::SharedFrame {
+                align: [0.0, 0.0],
+                offset: [50.0, 0.0],
+                size: [SizeSpec::Fill, SizeSpec::Fill],
+                children: Arc::from([mesh(60.0)]),
+                background: None,
+                z: 0,
+                tint: [1.0; 4],
+                blend: None,
+            },
+            Actor::Camera {
+                view_proj: Matrix4::IDENTITY,
+                children: vec![mesh(70.0)],
+            },
+            Actor::Shadow {
+                len: [1.0, 1.0],
+                color: [0.0, 0.0, 0.0, 1.0],
+                child: Box::new(mesh(80.0)),
+            },
+            text.clone(),
+        ];
+        let mut materialized_text = text;
+        let Actor::Text { offset, scale, .. } = &mut materialized_text else {
+            unreachable!("test text helper returns a text actor");
+        };
+        offset[0] = 55.0;
+        scale[0] = 0.5;
+        let materialized = vec![
+            mesh(60.0),
+            Actor::Frame {
+                align: [0.0, 0.0],
+                offset: [65.0, 0.0],
+                size: [SizeSpec::Fill, SizeSpec::Fill],
+                children: vec![mesh(70.0)],
+                background: None,
+                z: 0,
+            },
+            Actor::SharedFrame {
+                align: [0.0, 0.0],
+                offset: [75.0, 0.0],
+                size: [SizeSpec::Fill, SizeSpec::Fill],
+                children: Arc::from([mesh(60.0)]),
+                background: None,
+                z: 0,
+                tint: [1.0; 4],
+                blend: None,
+            },
+            Actor::Camera {
+                view_proj: Matrix4::IDENTITY,
+                children: vec![mesh(85.0)],
+            },
+            Actor::Shadow {
+                len: [1.0, 1.0],
+                color: [0.0, 0.0, 0.0, 1.0],
+                child: Box::new(mesh(90.0)),
+            },
+            materialized_text,
+        ];
+        let metrics = Metrics {
+            left: 0.0,
+            right: 100.0,
+            top: 100.0,
+            bottom: 0.0,
+        };
+        let fonts = font::FontMap::from_iter([("test", test_font())]);
+        let expected = build_screen(&materialized, [0.0, 0.0, 0.0, 1.0], &metrics, &fonts, 0.0);
+        let resources = ActorResourceArena::new(0);
+        let mut text_cache = TextLayoutCache::default();
+        let mut scratch = ComposeScratch::default();
+        let actual =
+            build_screen_segments_cached_with_scratch_and_texture_context_and_actor_resources(
+                &[ActorSegment::folded(
+                    &source,
+                    0,
+                    ActorXFold::new(100.0, 0.5),
+                )],
+                [0.0, 0.0, 0.0, 1.0],
+                &metrics,
+                &fonts,
+                0.0,
+                &mut text_cache,
                 &mut scratch,
                 &TestDrawTextureContext,
                 &resources,

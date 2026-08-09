@@ -21,7 +21,7 @@ use deadlib_present::actors::{
 use deadlib_present::anim::EffectState;
 use deadlib_present::cache::{TextCache, cached_text, text_cache_with_capacity};
 use deadlib_present::color;
-use deadlib_present::compose::{ActorSegment, ComposeScratch, TextLayoutCache};
+use deadlib_present::compose::{ActorSegment, ActorXFold, ComposeScratch, TextLayoutCache};
 use deadlib_present::density::{self, DensityHistCache};
 use deadlib_present::font;
 use deadlib_present::space::widescale;
@@ -18556,7 +18556,7 @@ fn benchmark_player_transform() -> SongLuaCaptureTransform {
         target_y: screen_center_y() - 12.0,
         rotation_x: 4.0,
         rotation_z: 8.0,
-        rotation_y: 0.0,
+        rotation_y: 13.0,
         skew_x: 0.1,
         skew_y: -0.05,
         zoom_x: 0.9,
@@ -18606,6 +18606,7 @@ pub fn benchmark_present_transformed_notefield<'a>(
         blend,
         root_camera,
         field_camera_suffix,
+        x_fold,
     } = player_actor_assembly_for_transform(false, true, benchmark_player_transform())
     else {
         panic!("benchmark transform should compose directly");
@@ -18618,6 +18619,7 @@ pub fn benchmark_present_transformed_notefield<'a>(
             blend,
             root_camera,
             Matrix4::IDENTITY,
+            x_fold,
         ),
         ActorSegment::transformed(
             field_actors,
@@ -18626,6 +18628,7 @@ pub fn benchmark_present_transformed_notefield<'a>(
             blend,
             root_camera,
             field_camera_suffix,
+            x_fold,
         ),
     ]
 }
@@ -18637,12 +18640,17 @@ enum PlayerActorAssembly {
     DirectZ {
         z_shift: i16,
     },
+    DirectFold {
+        z_shift: i16,
+        x_fold: ActorXFold,
+    },
     DirectTransform {
         z_shift: i16,
         tint: [f32; 4],
         blend: Option<BlendMode>,
         root_camera: Matrix4,
         field_camera_suffix: Matrix4,
+        x_fold: Option<ActorXFold>,
     },
 }
 
@@ -18689,12 +18697,25 @@ impl GameplayActorSegments {
                         z_shift,
                     );
                 }
+                PlayerActorAssembly::DirectFold { z_shift, x_fold } => {
+                    segments[first] = ActorSegment::folded(
+                        &scratch.notefield_hud_actor_scratch[segment.player],
+                        z_shift,
+                        x_fold,
+                    );
+                    segments[first + 1] = ActorSegment::folded(
+                        &scratch.notefield_actor_scratch[segment.player],
+                        z_shift,
+                        x_fold,
+                    );
+                }
                 PlayerActorAssembly::DirectTransform {
                     z_shift,
                     tint,
                     blend,
                     root_camera,
                     field_camera_suffix,
+                    x_fold,
                 } => {
                     segments[first] = ActorSegment::transformed(
                         &scratch.notefield_hud_actor_scratch[segment.player],
@@ -18703,6 +18724,7 @@ impl GameplayActorSegments {
                         blend,
                         root_camera,
                         Matrix4::IDENTITY,
+                        x_fold,
                     );
                     segments[first + 1] = ActorSegment::transformed(
                         &scratch.notefield_actor_scratch[segment.player],
@@ -18711,6 +18733,7 @@ impl GameplayActorSegments {
                         blend,
                         root_camera,
                         field_camera_suffix,
+                        x_fold,
                     );
                 }
             }
@@ -18734,35 +18757,50 @@ fn player_actor_assembly_for_transform(
         PlayerActorAssembly::DirectZ {
             z_shift: transform.z_shift,
         }
-    } else if transform.rotation_y.is_finite() && transform.rotation_y.abs() <= f32::EPSILON {
-        let Some(field_camera_suffix) =
-            song_lua_player_transform_matrix(SongLuaPlayerTransformRequest {
-                screen_width: screen_width(),
-                screen_height: screen_height(),
-                screen_center_y: screen_center_y(),
-                playfield_center_x: transform.playfield_center_x,
-                target_x: transform.target_x,
-                target_y: transform.target_y,
-                rotation_x_deg: transform.rotation_x,
-                rotation_z_deg: transform.rotation_z,
-                skew_x: transform.skew_x,
-                skew_y: transform.skew_y,
-                zoom_x: transform.zoom_x,
-                zoom_y: transform.zoom_y,
-                zoom_z: transform.zoom_z,
-            })
-        else {
-            return PlayerActorAssembly::Buffered;
-        };
-        PlayerActorAssembly::DirectTransform {
-            z_shift: transform.z_shift,
-            tint: transform.tint,
-            blend: transform.blend,
-            root_camera: song_lua_player_root_camera(field_camera_suffix),
-            field_camera_suffix,
-        }
     } else {
-        PlayerActorAssembly::Buffered
+        let x_fold = if transform.playfield_center_x.is_finite()
+            && transform.rotation_y.is_finite()
+            && transform.rotation_y.abs() > f32::EPSILON
+        {
+            Some(ActorXFold::new(
+                transform.playfield_center_x,
+                transform.rotation_y.to_radians().cos(),
+            ))
+        } else {
+            None
+        };
+        let field_camera_suffix = song_lua_player_transform_matrix(SongLuaPlayerTransformRequest {
+            screen_width: screen_width(),
+            screen_height: screen_height(),
+            screen_center_y: screen_center_y(),
+            playfield_center_x: transform.playfield_center_x,
+            target_x: transform.target_x,
+            target_y: transform.target_y,
+            rotation_x_deg: transform.rotation_x,
+            rotation_z_deg: transform.rotation_z,
+            skew_x: transform.skew_x,
+            skew_y: transform.skew_y,
+            zoom_x: transform.zoom_x,
+            zoom_y: transform.zoom_y,
+            zoom_z: transform.zoom_z,
+        });
+        match (field_camera_suffix, x_fold) {
+            (Some(field_camera_suffix), x_fold) => PlayerActorAssembly::DirectTransform {
+                z_shift: transform.z_shift,
+                tint: transform.tint,
+                blend: transform.blend,
+                root_camera: song_lua_player_root_camera(field_camera_suffix),
+                field_camera_suffix,
+                x_fold,
+            },
+            (None, Some(x_fold)) => PlayerActorAssembly::DirectFold {
+                z_shift: transform.z_shift,
+                x_fold,
+            },
+            (None, None) => PlayerActorAssembly::DirectZ {
+                z_shift: transform.z_shift,
+            },
+        }
     }
 }
 
@@ -22662,7 +22700,7 @@ mod tests {
             ),
             PlayerActorAssembly::DirectTransform { .. }
         ));
-        assert_eq!(
+        assert!(matches!(
             player_actor_assembly_for_transform(
                 false,
                 true,
@@ -22671,8 +22709,8 @@ mod tests {
                     ..identity
                 },
             ),
-            PlayerActorAssembly::Buffered
-        );
+            PlayerActorAssembly::DirectFold { .. }
+        ));
     }
 
     #[test]
@@ -22838,7 +22876,7 @@ mod tests {
             target_y: screen_center_y() - 12.0,
             rotation_x: 4.0,
             rotation_z: 8.0,
-            rotation_y: 0.0,
+            rotation_y: 13.0,
             skew_x: 0.1,
             skew_y: -0.05,
             zoom_x: 0.9,
@@ -22871,6 +22909,7 @@ mod tests {
             blend,
             root_camera,
             field_camera_suffix,
+            x_fold,
         } = player_actor_assembly_for_transform(false, true, transform)
         else {
             panic!("finite geometric transform should compose directly");
@@ -22904,6 +22943,7 @@ mod tests {
                         blend,
                         root_camera,
                         Matrix4::IDENTITY,
+                        x_fold,
                     ),
                     ActorSegment::transformed(
                         &direct_field,
@@ -22912,6 +22952,7 @@ mod tests {
                         blend,
                         root_camera,
                         field_camera_suffix,
+                        x_fold,
                     ),
                 ],
                 [0.0, 0.0, 0.0, 1.0],
