@@ -2585,22 +2585,21 @@ impl State {
             .zip(song_lua_foreground_proxy_request_indices.iter())
             .map(|(layer, index)| SongLuaAftCaptureScratch::new(&layer.overlays, &index.topology))
             .collect();
-        let song_lua_proxy_count = song_lua_proxy_request_index.proxy_indices.len()
-            + song_lua_foreground_proxy_request_indices
-                .iter()
-                .map(|index| index.proxy_indices.len())
-                .sum::<usize>();
-        let song_lua_proxy_segment_capacity = song_lua_foreground_proxy_request_indices
+        let mut proxy_capacity_counts = song_lua_proxy_capacity_counts(
+            &song_lua_visuals.overlays,
+            &song_lua_proxy_request_index,
+        );
+        for (index, layer) in song_lua_foreground_proxy_request_indices
             .iter()
             .zip(song_lua_visuals.foreground_visual_layers.iter())
-            .map(|(index, layer)| song_lua_max_proxy_segment_capacity(&layer.overlays, index))
-            .fold(
-                song_lua_max_proxy_segment_capacity(
-                    &song_lua_visuals.overlays,
-                    &song_lua_proxy_request_index,
-                ),
-                usize::max,
-            );
+        {
+            let layer_counts = song_lua_proxy_capacity_counts(&layer.overlays, index);
+            for class in 0..SONG_LUA_PROXY_CAPACITY_CLASSES {
+                proxy_capacity_counts[class] =
+                    proxy_capacity_counts[class].saturating_add(layer_counts[class]);
+            }
+        }
+        let song_lua_proxy_count = proxy_capacity_counts.iter().sum::<usize>();
         let song_lua_projected_mesh_scratch =
             song_lua_projected_mesh_scratch_for(&song_lua_visuals.overlays);
         let song_lua_background_projected_mesh_scratch = song_lua_visuals
@@ -2750,11 +2749,7 @@ impl State {
                 song_lua_max_overlay_count,
             ),
             song_lua_proxy_actor_scratch: (song_lua_proxy_count != 0).then(|| {
-                SongLuaProxyActorScratch::with_proxy_capacity(
-                    active_players,
-                    song_lua_proxy_count,
-                    song_lua_proxy_segment_capacity,
-                )
+                SongLuaProxyActorScratch::with_proxy_counts(active_players, proxy_capacity_counts)
             }),
             notefield_actor_scratch,
             notefield_hud_actor_scratch,
@@ -8276,6 +8271,7 @@ fn song_lua_overlay_capture_index_by_name(
 struct SongLuaProxySource<'a> {
     segments: &'a [Arc<[Actor]>],
     offset: [f32; 2],
+    capacity_class: usize,
 }
 
 impl<'a> SongLuaProxySource<'a> {
@@ -8284,12 +8280,25 @@ impl<'a> SongLuaProxySource<'a> {
         Self {
             segments,
             offset: [0.0, 0.0],
+            capacity_class: SONG_LUA_SMALL_PROXY_CLASS,
         }
     }
 
     #[inline(always)]
     const fn offset(segments: &'a [Arc<[Actor]>], offset: [f32; 2]) -> Self {
-        Self { segments, offset }
+        Self {
+            segments,
+            offset,
+            capacity_class: SONG_LUA_SMALL_PROXY_CLASS,
+        }
+    }
+
+    #[inline(always)]
+    const fn with_capacity_class(self, capacity_class: usize) -> Self {
+        Self {
+            capacity_class,
+            ..self
+        }
     }
 
     #[inline(always)]
@@ -8367,33 +8376,42 @@ const SONG_LUA_FIELD_PROXY_SOURCE: usize = 0;
 const SONG_LUA_JUDGMENT_PROXY_SOURCE: usize = 1;
 const SONG_LUA_COMBO_PROXY_SOURCE: usize = 2;
 const SONG_LUA_PLAYER_PROXY_SOURCE: usize = 3;
+const SONG_LUA_PROXY_CAPACITY_CLASSES: usize = 3;
+const SONG_LUA_SMALL_PROXY_CLASS: usize = 0;
+const SONG_LUA_NOTEFIELD_PROXY_CLASS: usize = 1;
+const SONG_LUA_PLAYER_PROXY_CLASS: usize = 2;
+const SONG_LUA_PROXY_SEGMENT_CAPACITIES: [usize; SONG_LUA_PROXY_CAPACITY_CLASSES] = [
+    SONG_LUA_SCREEN_CAPTURE_CAPACITY,
+    NOTEFIELD_ACTOR_SCRATCH_CAPACITY,
+    PLAYER_ACTOR_SCRATCH_CAPACITY,
+];
 
-fn song_lua_proxy_segment_capacity(target: &SongLuaProxyTarget) -> usize {
+fn song_lua_proxy_capacity_class(target: &SongLuaProxyTarget) -> usize {
     match target {
-        SongLuaProxyTarget::Player { .. } => PLAYER_ACTOR_SCRATCH_CAPACITY,
-        SongLuaProxyTarget::NoteField { .. } => NOTEFIELD_ACTOR_SCRATCH_CAPACITY,
+        SongLuaProxyTarget::Player { .. } => SONG_LUA_PLAYER_PROXY_CLASS,
+        SongLuaProxyTarget::NoteField { .. } => SONG_LUA_NOTEFIELD_PROXY_CLASS,
         SongLuaProxyTarget::Judgment { .. }
         | SongLuaProxyTarget::Combo { .. }
         | SongLuaProxyTarget::Underlay
-        | SongLuaProxyTarget::Overlay => SONG_LUA_SCREEN_CAPTURE_CAPACITY,
+        | SongLuaProxyTarget::Overlay => SONG_LUA_SMALL_PROXY_CLASS,
     }
 }
 
-fn song_lua_max_proxy_segment_capacity(
+fn song_lua_proxy_capacity_counts(
     overlays: &[SongLuaOverlayActor],
     index: &SongLuaProxyRequestIndex,
-) -> usize {
-    index
-        .proxy_indices
-        .iter()
-        .filter_map(|&proxy_index| match &overlays.get(proxy_index)?.kind {
-            SongLuaOverlayKind::ActorProxy { target } => {
-                Some(song_lua_proxy_segment_capacity(target))
-            }
-            _ => None,
-        })
-        .max()
-        .unwrap_or(SONG_LUA_SCREEN_CAPTURE_CAPACITY)
+) -> [usize; SONG_LUA_PROXY_CAPACITY_CLASSES] {
+    let mut counts = [0usize; SONG_LUA_PROXY_CAPACITY_CLASSES];
+    for &proxy_index in &index.proxy_indices {
+        let Some(SongLuaOverlayKind::ActorProxy { target }) =
+            overlays.get(proxy_index).map(|overlay| &overlay.kind)
+        else {
+            continue;
+        };
+        let class = song_lua_proxy_capacity_class(target);
+        counts[class] = counts[class].saturating_add(1);
+    }
+    counts
 }
 
 struct SongLuaProxyJoinScratch {
@@ -8466,11 +8484,11 @@ impl SongLuaProxyJoinScratch {
 /// only when a compiled overlay contains a proxy. Capacity/warmup: 64 bounded
 /// screen segments, four pre-sized player sources per active player, and up to
 /// five normalized source segments per compiled proxy and in-flight frame are
-/// reserved at screen entry. The first segment uses the largest capacity
-/// required by any compiled proxy target; the other four use the bounded
-/// screen-capture capacity. The outer proxy frame that joins those segments is
-/// also prebuilt. Two banks let composition proceed while the renderer still
-/// owns the preceding frame. A
+/// reserved at screen entry in fixed pools for small, note-field, and player
+/// targets. Each group's first segment uses its target capacity; the other four
+/// use the bounded screen-capture capacity. The outer proxy frame that joins
+/// those segments is also prebuilt. Two banks let composition proceed while
+/// the renderer still owns the preceding frame. A
 /// miss after slot saturation bypasses insertion and uses the owned fallback;
 /// child-vector overflow grows only the affected slot. There is no lookup,
 /// eviction, scan, pruning, or mid-song destruction. Replacements/growths are
@@ -8482,11 +8500,32 @@ struct SongLuaProxyActorBank {
     players: [[SharedActorFrameScratch; SONG_LUA_PLAYER_PROXY_SOURCE_COUNT]; MAX_PLAYERS],
     proxy_segments: Vec<SharedActorFrameScratch>,
     proxy_frames: Vec<SongLuaProxyJoinScratch>,
-    proxy_groups_used: usize,
+    proxy_group_offsets: [usize; SONG_LUA_PROXY_CAPACITY_CLASSES + 1],
+    proxy_groups_used: [usize; SONG_LUA_PROXY_CAPACITY_CLASSES],
 }
 
 impl SongLuaProxyActorBank {
-    fn new(active_players: usize, proxy_count: usize, max_segment_capacity: usize) -> Self {
+    fn new(active_players: usize, proxy_counts: [usize; SONG_LUA_PROXY_CAPACITY_CLASSES]) -> Self {
+        let proxy_group_offsets = [
+            0,
+            proxy_counts[0],
+            proxy_counts[0].saturating_add(proxy_counts[1]),
+            proxy_counts.iter().sum(),
+        ];
+        let proxy_count = proxy_group_offsets[SONG_LUA_PROXY_CAPACITY_CLASSES];
+        let mut proxy_segments =
+            Vec::with_capacity(proxy_count.saturating_mul(SONG_LUA_PROXY_SEGMENTS_PER_ACTOR));
+        for class in 0..SONG_LUA_PROXY_CAPACITY_CLASSES {
+            for _ in 0..proxy_counts[class] {
+                for segment in 0..SONG_LUA_PROXY_SEGMENTS_PER_ACTOR {
+                    proxy_segments.push(SharedActorFrameScratch::with_capacity(if segment == 0 {
+                        SONG_LUA_PROXY_SEGMENT_CAPACITIES[class]
+                    } else {
+                        SONG_LUA_SCREEN_CAPTURE_CAPACITY
+                    }));
+                }
+            }
+        }
         Self {
             screen: std::array::from_fn(|_| {
                 SharedActorFrameScratch::with_capacity(SONG_LUA_SCREEN_CAPTURE_CAPACITY)
@@ -8509,27 +8548,18 @@ impl SongLuaProxyActorBank {
                     ),
                 ]
             }),
-            proxy_segments: (0..proxy_count.saturating_mul(SONG_LUA_PROXY_SEGMENTS_PER_ACTOR))
-                .map(|index| {
-                    SharedActorFrameScratch::with_capacity(
-                        if index % SONG_LUA_PROXY_SEGMENTS_PER_ACTOR == 0 {
-                            max_segment_capacity
-                        } else {
-                            SONG_LUA_SCREEN_CAPTURE_CAPACITY
-                        },
-                    )
-                })
-                .collect(),
+            proxy_segments,
             proxy_frames: (0..proxy_count)
                 .map(|_| SongLuaProxyJoinScratch::new())
                 .collect(),
-            proxy_groups_used: 0,
+            proxy_group_offsets,
+            proxy_groups_used: [0; SONG_LUA_PROXY_CAPACITY_CLASSES],
         }
     }
 
     fn begin_frame(&mut self) {
         self.screen_used = 0;
-        self.proxy_groups_used = 0;
+        self.proxy_groups_used.fill(0);
         for player in &mut self.players {
             for source in player {
                 source.clear();
@@ -8547,7 +8577,7 @@ struct SongLuaProxyActorScratch {
 impl SongLuaProxyActorScratch {
     #[cfg(any(test, feature = "bench-support"))]
     fn new(active_players: usize) -> Self {
-        Self::with_proxy_capacity(active_players, 1, PLAYER_ACTOR_SCRATCH_CAPACITY)
+        Self::with_proxy_counts(active_players, [1, 0, 0])
     }
 
     #[cfg(feature = "bench-support")]
@@ -8555,17 +8585,11 @@ impl SongLuaProxyActorScratch {
         Self::with_capacity_and_banks(active_players, 1, frame_banks)
     }
 
-    fn with_proxy_capacity(
+    fn with_proxy_counts(
         active_players: usize,
-        proxy_count: usize,
-        max_segment_capacity: usize,
+        proxy_counts: [usize; SONG_LUA_PROXY_CAPACITY_CLASSES],
     ) -> Self {
-        Self::with_segment_capacity_and_banks(
-            active_players,
-            proxy_count,
-            max_segment_capacity,
-            SONG_LUA_PROXY_FRAME_BANKS,
-        )
+        Self::with_proxy_counts_and_banks(active_players, proxy_counts, SONG_LUA_PROXY_FRAME_BANKS)
     }
 
     #[cfg(any(test, feature = "bench-support"))]
@@ -8574,24 +8598,18 @@ impl SongLuaProxyActorScratch {
         proxy_count: usize,
         frame_banks: usize,
     ) -> Self {
-        Self::with_segment_capacity_and_banks(
-            active_players,
-            proxy_count,
-            PLAYER_ACTOR_SCRATCH_CAPACITY,
-            frame_banks,
-        )
+        Self::with_proxy_counts_and_banks(active_players, [proxy_count, 0, 0], frame_banks)
     }
 
-    fn with_segment_capacity_and_banks(
+    fn with_proxy_counts_and_banks(
         active_players: usize,
-        proxy_count: usize,
-        max_segment_capacity: usize,
+        proxy_counts: [usize; SONG_LUA_PROXY_CAPACITY_CLASSES],
         frame_banks: usize,
     ) -> Self {
         let frame_banks = frame_banks.clamp(1, SONG_LUA_PROXY_FRAME_BANKS);
         Self {
             banks: std::array::from_fn(|_| {
-                SongLuaProxyActorBank::new(active_players, proxy_count, max_segment_capacity)
+                SongLuaProxyActorBank::new(active_players, proxy_counts)
             }),
             active_bank: frame_banks - 1,
             frame_banks,
@@ -8625,10 +8643,14 @@ impl SongLuaProxyActorScratch {
             .map(SharedActorFrameScratch::actors)
     }
 
-    fn reserve_proxy_group(&mut self) -> Option<(usize, usize)> {
+    fn reserve_proxy_group(&mut self, capacity_class: usize) -> Option<(usize, usize)> {
         let bank = &mut self.banks[self.active_bank];
-        let group = bank.proxy_groups_used;
-        bank.proxy_groups_used = bank.proxy_groups_used.saturating_add(1);
+        let used = bank.proxy_groups_used.get_mut(capacity_class)?;
+        let group = bank.proxy_group_offsets[capacity_class].saturating_add(*used);
+        *used = used.saturating_add(1);
+        if group >= bank.proxy_group_offsets[capacity_class + 1] {
+            return None;
+        }
         bank.proxy_frames.get(group)?;
         Some((
             group,
@@ -9630,7 +9652,7 @@ fn song_lua_proxy_source<'a>(
     target: &SongLuaProxyTarget,
     proxy_sources: &SongLuaScreenProxySources<'a>,
 ) -> Option<SongLuaProxySource<'a>> {
-    match target {
+    let source = match target {
         SongLuaProxyTarget::Player { player_index } => proxy_sources
             .players
             .get(*player_index)
@@ -9655,7 +9677,8 @@ fn song_lua_proxy_source<'a>(
             .overlay
             .filter(|segments| !segments.is_empty())
             .map(SongLuaProxySource::new),
-    }
+    };
+    source.map(|source| source.with_capacity_class(song_lua_proxy_capacity_class(target)))
 }
 
 fn song_lua_mark_proxy_target(
@@ -10022,7 +10045,7 @@ fn song_lua_build_proxy_actor_with_scratch(
     if let [segment] = source.segments {
         let slot_index = scratch
             .as_deref_mut()
-            .and_then(SongLuaProxyActorScratch::reserve_proxy_group)
+            .and_then(|scratch| scratch.reserve_proxy_group(source.capacity_class))
             .map(|(_, start)| start);
         return Some(Actor::SharedFrame {
             align: [0.0, 0.0],
@@ -10085,7 +10108,7 @@ fn song_lua_build_proxy_frame_actor_with_scratch(
     if source.segments.len() <= SONG_LUA_PROXY_SEGMENTS_PER_ACTOR
         && let Some((group, proxy_segment_start)) = scratch
             .as_deref_mut()
-            .and_then(SongLuaProxyActorScratch::reserve_proxy_group)
+            .and_then(|scratch| scratch.reserve_proxy_group(source.capacity_class))
     {
         let children = scratch
             .as_deref_mut()
@@ -15871,7 +15894,7 @@ impl SongLuaActorBuildBenchmark {
         self.proxy_scratch.begin_frame();
         let (_, segment_start) = self
             .proxy_scratch
-            .reserve_proxy_group()
+            .reserve_proxy_group(SONG_LUA_SMALL_PROXY_CLASS)
             .expect("benchmark proxy group is prewarmed");
         let mut children = Vec::with_capacity(self.segmented_proxy_source.len());
         for (index, segment) in self.segmented_proxy_source.iter().enumerate() {
@@ -24198,7 +24221,7 @@ mod tests {
     }
 
     #[test]
-    fn song_lua_proxy_segment_reserve_tracks_largest_compiled_target() {
+    fn song_lua_proxy_segment_reserve_tracks_each_compiled_target() {
         let proxy = |target| SongLuaOverlayActor {
             kind: SongLuaOverlayKind::ActorProxy { target },
             name: None,
@@ -24220,33 +24243,45 @@ mod tests {
         ];
 
         assert_eq!(
-            song_lua_max_proxy_segment_capacity(&small, &SongLuaProxyRequestIndex::new(&small)),
-            SONG_LUA_SCREEN_CAPTURE_CAPACITY
+            song_lua_proxy_capacity_counts(&small, &SongLuaProxyRequestIndex::new(&small)),
+            [2, 0, 0]
         );
         assert_eq!(
-            song_lua_max_proxy_segment_capacity(
+            song_lua_proxy_capacity_counts(
                 &note_field,
                 &SongLuaProxyRequestIndex::new(&note_field)
             ),
-            NOTEFIELD_ACTOR_SCRATCH_CAPACITY
+            [1, 1, 0]
         );
         assert_eq!(
-            song_lua_max_proxy_segment_capacity(&player, &SongLuaProxyRequestIndex::new(&player)),
-            PLAYER_ACTOR_SCRATCH_CAPACITY
+            song_lua_proxy_capacity_counts(&player, &SongLuaProxyRequestIndex::new(&player)),
+            [0, 1, 1]
         );
 
-        let scratch = SongLuaProxyActorScratch::with_segment_capacity_and_banks(
-            0,
-            small.len(),
-            SONG_LUA_SCREEN_CAPTURE_CAPACITY,
-            1,
+        let mut scratch = SongLuaProxyActorScratch::with_proxy_counts_and_banks(0, [1, 1, 1], 1);
+        scratch.begin_frame();
+        assert_eq!(
+            scratch.reserve_proxy_group(SONG_LUA_PLAYER_PROXY_CLASS),
+            Some((2, 10))
         );
-        assert!(
-            scratch.banks[0]
-                .proxy_segments
-                .iter()
-                .all(|slot| slot.stats().capacity == SONG_LUA_SCREEN_CAPTURE_CAPACITY)
+        assert_eq!(
+            scratch.reserve_proxy_group(SONG_LUA_SMALL_PROXY_CLASS),
+            Some((0, 0))
         );
+        assert_eq!(
+            scratch.reserve_proxy_group(SONG_LUA_NOTEFIELD_PROXY_CLASS),
+            Some((1, 5))
+        );
+        let segments = &scratch.banks[0].proxy_segments;
+        assert_eq!(
+            segments[0].stats().capacity,
+            SONG_LUA_SCREEN_CAPTURE_CAPACITY
+        );
+        assert_eq!(
+            segments[5].stats().capacity,
+            NOTEFIELD_ACTOR_SCRATCH_CAPACITY
+        );
+        assert_eq!(segments[10].stats().capacity, PLAYER_ACTOR_SCRATCH_CAPACITY);
     }
 
     #[test]

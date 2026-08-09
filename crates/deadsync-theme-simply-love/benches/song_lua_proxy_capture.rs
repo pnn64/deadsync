@@ -116,11 +116,12 @@ struct BenchResult {
 
 fn main() {
     println!(
-        "Small-target proxy reserve reduction: {} bytes per compiled proxy",
+        "Target-sized proxy reserve reduction: small={} note-field={} bytes per compiled proxy",
         (BENCH_NOTEFIELD_ACTOR_SCRATCH_CAPACITY + BENCH_NOTEFIELD_HUD_ACTOR_SCRATCH_CAPACITY
             - BENCH_SONG_LUA_SCREEN_CAPTURE_CAPACITY)
             * size_of::<Actor>()
             * 2,
+        BENCH_NOTEFIELD_HUD_ACTOR_SCRATCH_CAPACITY * size_of::<Actor>() * 2,
     );
     for players in [1, 2] {
         let old = measure(bench_song_lua_proxy_capture_cycles_legacy, players);
