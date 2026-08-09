@@ -8715,21 +8715,27 @@ fn song_lua_player_child_proxy_source(
         .map(|source| [source])
 }
 
-fn song_lua_share_actor_source_in_place(
-    actors: &mut Vec<Actor>,
-    scratch: &mut SharedActorFrameScratch,
-) -> Option<SongLuaSingleSource> {
-    let children = scratch.capture_range(actors, 0)?;
+#[inline(always)]
+fn push_song_lua_source(actors: &mut Vec<Actor>, children: Arc<[Actor]>) {
     actors.push(Actor::SharedFrame {
         align: [0.0, 0.0],
         offset: [0.0, 0.0],
         size: [SizeSpec::Fill, SizeSpec::Fill],
-        children: Arc::clone(&children),
+        children,
         background: None,
         z: 0,
         tint: [1.0; 4],
         blend: None,
     });
+}
+
+#[cfg(feature = "bench-support")]
+fn song_lua_share_actor_source_in_place(
+    actors: &mut Vec<Actor>,
+    scratch: &mut SharedActorFrameScratch,
+) -> Option<SongLuaSingleSource> {
+    let children = scratch.capture_range(actors, 0)?;
+    push_song_lua_source(actors, Arc::clone(&children));
     Some([children])
 }
 
@@ -8793,6 +8799,58 @@ fn song_lua_render_captured_source(
             append_song_lua_player_transform(
                 field_actors,
                 hud_actors,
+                field_len,
+                hud_len,
+                field_has_camera,
+                out,
+                transform.z_shift,
+                transform.tint,
+                transform.blend,
+                transform.playfield_center_x,
+                transform.target_x,
+                transform.target_y,
+                transform.rotation_x,
+                transform.rotation_z,
+                transform.rotation_y,
+                transform.skew_x,
+                transform.skew_y,
+                transform.zoom_x,
+                transform.zoom_y,
+                transform.zoom_z,
+            );
+        })
+        .map(|source| [source])
+}
+
+fn capture_player_source(
+    field_actors: &mut Vec<Actor>,
+    hud_actors: &mut Vec<Actor>,
+    transform: SongLuaCaptureTransform,
+    scratch: &mut SharedActorFrameScratch,
+) -> Option<SongLuaSingleSource> {
+    if song_lua_player_transform_is_direct_identity(transform) {
+        return scratch
+            .refill([0.0, 0.0], |out| {
+                out.reserve(field_actors.len().saturating_add(hud_actors.len()));
+                out.append(hud_actors);
+                out.append(field_actors);
+            })
+            .map(|source| [source]);
+    }
+
+    let field_len = field_actors.len();
+    let hud_len = hud_actors.len();
+    let field_has_camera = field_actors.iter().any(|actor| {
+        matches!(
+            actor,
+            Actor::Camera { .. } | Actor::CameraPush { .. } | Actor::CameraPop
+        )
+    });
+    scratch
+        .refill([0.0, 0.0], |out| {
+            append_song_lua_player_transform(
+                field_actors.drain(..),
+                hud_actors.drain(..),
                 field_len,
                 hud_len,
                 field_has_camera,
@@ -8978,6 +9036,112 @@ pub fn bench_song_lua_proxy_capture_cycles(players: usize, cycles: usize) -> usi
 #[doc(hidden)]
 pub fn bench_song_lua_proxy_capture_cycles_single_bank(players: usize, cycles: usize) -> usize {
     bench_song_lua_proxy_capture_cycles_with_banks(players, cycles, 1)
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn bench_player_proxy_materialized(players: usize, cycles: usize) -> usize {
+    bench_player_proxy_transfer::<false>(players, cycles)
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn bench_player_proxy_direct(players: usize, cycles: usize) -> usize {
+    bench_player_proxy_transfer::<true>(players, cycles)
+}
+
+#[cfg(feature = "bench-support")]
+fn bench_player_proxy_transfer<const DIRECT: bool>(players: usize, cycles: usize) -> usize {
+    let players = players.clamp(1, MAX_PLAYERS);
+    let mut fields: [Vec<Actor>; MAX_PLAYERS] = std::array::from_fn(|_| Vec::with_capacity(64));
+    let mut huds: [Vec<Actor>; MAX_PLAYERS] = std::array::from_fn(|_| Vec::with_capacity(8));
+    let mut player_actors: [Vec<Actor>; MAX_PLAYERS] =
+        std::array::from_fn(|_| Vec::with_capacity(PLAYER_ACTOR_SCRATCH_CAPACITY));
+    let mut retained_player_actors: [Vec<Actor>; MAX_PLAYERS] =
+        std::array::from_fn(|_| Vec::with_capacity(1));
+    let mut proxy_scratch = SongLuaProxyActorScratch::new(players);
+    let mut current_sources: Vec<SongLuaSingleSource> = Vec::with_capacity(players);
+    let mut retained_sources: Vec<SongLuaSingleSource> = Vec::with_capacity(players);
+    let transform = SongLuaCaptureTransform {
+        z_shift: 0,
+        tint: [1.0; 4],
+        blend: None,
+        playfield_center_x: screen_center_x(),
+        target_x: screen_center_x(),
+        target_y: screen_center_y(),
+        rotation_x: 0.0,
+        rotation_z: 0.0,
+        rotation_y: 0.0,
+        skew_x: 0.0,
+        skew_y: 0.0,
+        zoom_x: 1.0,
+        zoom_y: 1.0,
+        zoom_z: 1.0,
+    };
+    let mut checksum = 0usize;
+
+    for _ in 0..cycles {
+        for player in 0..players {
+            retained_player_actors[player].clear();
+            std::mem::swap(
+                &mut player_actors[player],
+                &mut retained_player_actors[player],
+            );
+            player_actors[player].clear();
+        }
+        retained_sources.clear();
+        std::mem::swap(&mut current_sources, &mut retained_sources);
+        current_sources.clear();
+        proxy_scratch.begin_frame();
+
+        for player in 0..players {
+            fields[player].extend((0..64).map(|_| Actor::CameraPop));
+            huds[player].extend((0..8).map(|_| Actor::CameraPop));
+            let scratch = proxy_scratch
+                .player(player, SONG_LUA_PLAYER_PROXY_SOURCE)
+                .expect("active player has player scratch");
+            let source = if DIRECT {
+                let source = capture_player_source(
+                    &mut fields[player],
+                    &mut huds[player],
+                    transform,
+                    scratch,
+                );
+                if let Some([children]) = source.as_ref() {
+                    push_song_lua_source(&mut player_actors[player], Arc::clone(children));
+                }
+                source
+            } else {
+                apply_song_lua_player_transform(
+                    &mut fields[player],
+                    &mut huds[player],
+                    &mut player_actors[player],
+                    transform.z_shift,
+                    transform.tint,
+                    transform.blend,
+                    transform.playfield_center_x,
+                    transform.target_x,
+                    transform.target_y,
+                    transform.rotation_x,
+                    transform.rotation_z,
+                    transform.rotation_y,
+                    transform.skew_x,
+                    transform.skew_y,
+                    transform.zoom_x,
+                    transform.zoom_y,
+                    transform.zoom_z,
+                );
+                song_lua_share_actor_source_in_place(&mut player_actors[player], scratch)
+            };
+            checksum = checksum.wrapping_add(
+                player_actors[player].len() + source.as_ref().map_or(0, |source| source.len()),
+            );
+            if let Some(source) = source {
+                current_sources.push(source);
+            }
+        }
+    }
+    checksum
 }
 
 #[cfg(feature = "bench-support")]
@@ -19081,52 +19245,60 @@ pub fn push_actors(
                 player_state.visible,
                 capture_transform,
             );
-            if !matches!(assembly, PlayerActorAssembly::Buffered) {
-                player_scratch.clear();
-            } else {
-                apply_song_lua_player_transform(
-                    field_scratch,
-                    hud_scratch,
-                    player_scratch,
-                    z_shift,
-                    player_state.diffuse,
-                    player_blend,
-                    layout_center_x,
-                    target_x,
-                    target_y,
-                    rotation_x,
-                    rotation_z,
-                    rotation_y,
-                    skew_x,
-                    skew_y,
-                    zoom_x,
-                    zoom_y,
-                    zoom_z,
-                );
-            }
-            let player_source = if matches!(assembly, PlayerActorAssembly::Buffered) {
-                if requests.player {
-                    let source = song_lua_proxy_actor_scratch
+            let captured_player_source = requests
+                .player
+                .then(|| {
+                    song_lua_proxy_actor_scratch
                         .as_mut()
                         .and_then(|scratch| {
                             scratch.player(player_idx, SONG_LUA_PLAYER_PROXY_SOURCE)
                         })
-                        .and_then(|scratch| {
-                            song_lua_share_actor_source_in_place(player_scratch, scratch)
-                        });
-                    if !player_state.visible {
-                        player_scratch.clear();
-                    }
-                    source
+                        .map(|scratch| {
+                            let source = capture_player_source(
+                                field_scratch,
+                                hud_scratch,
+                                capture_transform,
+                                scratch,
+                            );
+                            player_scratch.clear();
+                            if player_state.visible
+                                && let Some([children]) = source.as_ref()
+                            {
+                                push_song_lua_source(player_scratch, Arc::clone(children));
+                            }
+                            source
+                        })
+                })
+                .flatten();
+            if captured_player_source.is_none() {
+                if matches!(assembly, PlayerActorAssembly::Buffered) {
+                    apply_song_lua_player_transform(
+                        field_scratch,
+                        hud_scratch,
+                        player_scratch,
+                        z_shift,
+                        player_state.diffuse,
+                        player_blend,
+                        layout_center_x,
+                        target_x,
+                        target_y,
+                        rotation_x,
+                        rotation_z,
+                        rotation_y,
+                        skew_x,
+                        skew_y,
+                        zoom_x,
+                        zoom_y,
+                        zoom_z,
+                    );
                 } else {
-                    if !player_state.visible {
-                        player_scratch.clear();
-                    }
-                    None
+                    player_scratch.clear();
                 }
-            } else {
-                None
-            };
+            }
+            if !player_state.visible {
+                player_scratch.clear();
+            }
+            let player_source = captured_player_source.flatten();
             let proxy_sources = [
                 note_field_source,
                 judgment_actors.as_ref().and_then(|source| {
@@ -21981,6 +22153,130 @@ mod tests {
         assert!(direct_hud.is_empty());
         assert_eq!(direct_field.capacity(), direct_field_capacity);
         assert_eq!(direct_hud.capacity(), direct_hud_capacity);
+    }
+
+    #[test]
+    fn player_proxy_capture_matches_materialized_transform() {
+        let metrics = deadlib_present::space::metrics_for_window(854, 480);
+        deadlib_present::space::set_current_metrics(metrics);
+        let vertices: Arc<[MeshVertex]> = Arc::from([
+            MeshVertex {
+                pos: [0.0, 0.0],
+                color: [1.0; 4],
+            },
+            MeshVertex {
+                pos: [12.0, 0.0],
+                color: [1.0; 4],
+            },
+            MeshVertex {
+                pos: [0.0, 9.0],
+                color: [1.0; 4],
+            },
+        ]);
+        let mesh = || Actor::Mesh {
+            align: [0.0, 0.0],
+            offset: [3.0, 4.0],
+            size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
+            tint: [0.5, 0.25, 0.75, 0.8],
+            vertices: Arc::clone(&vertices),
+            visible: true,
+            blend: BlendMode::Alpha,
+            z: 7,
+        };
+        let mut legacy_field = vec![
+            Actor::CameraPush {
+                view_proj: Matrix4::IDENTITY,
+            },
+            mesh(),
+            Actor::CameraPop,
+        ];
+        let mut legacy_hud = vec![mesh()];
+        let mut direct_field = legacy_field.clone();
+        let mut direct_hud = legacy_hud.clone();
+        let transform = SongLuaCaptureTransform {
+            z_shift: 900,
+            tint: [0.8, 0.7, 0.6, 0.5],
+            blend: Some(BlendMode::Add),
+            playfield_center_x: screen_center_x(),
+            target_x: screen_center_x() + 24.0,
+            target_y: screen_center_y() - 12.0,
+            rotation_x: 4.0,
+            rotation_z: 8.0,
+            rotation_y: 3.0,
+            skew_x: 0.1,
+            skew_y: -0.05,
+            zoom_x: 0.9,
+            zoom_y: 1.1,
+            zoom_z: 1.0,
+        };
+
+        let mut legacy_player = Vec::new();
+        apply_song_lua_player_transform_legacy(
+            &mut legacy_field,
+            &mut legacy_hud,
+            &mut legacy_player,
+            transform.z_shift,
+            transform.tint,
+            transform.blend,
+            transform.playfield_center_x,
+            transform.target_x,
+            transform.target_y,
+            transform.rotation_x,
+            transform.rotation_z,
+            transform.rotation_y,
+            transform.skew_x,
+            transform.skew_y,
+            transform.zoom_x,
+            transform.zoom_y,
+            transform.zoom_z,
+        );
+        let mut legacy_scratch = SharedActorFrameScratch::with_capacity(8);
+        let legacy_source = legacy_scratch
+            .capture_range(&mut legacy_player, 0)
+            .expect("legacy player transform produces actors");
+        push_song_lua_source(&mut legacy_player, Arc::clone(&legacy_source));
+
+        let mut direct_player = Vec::new();
+        let mut direct_scratch = SharedActorFrameScratch::with_capacity(8);
+        let [direct_source] = capture_player_source(
+            &mut direct_field,
+            &mut direct_hud,
+            transform,
+            &mut direct_scratch,
+        )
+        .expect("direct player capture produces actors");
+        push_song_lua_source(&mut direct_player, direct_source);
+
+        let resources = ActorResourceArena::new(0);
+        let fonts = font::FontMap::default();
+        let compose = |actors: &[Actor]| {
+            let mut text = TextLayoutCache::default();
+            let mut scratch = ComposeScratch::default();
+            build_screen_segments_cached_with_scratch_and_texture_context_and_actor_resources(
+                &[ActorSegment::new(actors)],
+                [0.0, 0.0, 0.0, 1.0],
+                &metrics,
+                &fonts,
+                0.0,
+                &mut text,
+                &mut scratch,
+                &NullTextureContext,
+                &resources,
+            )
+        };
+        let legacy_frame = compose(&legacy_player);
+        let direct_frame = compose(&direct_player);
+
+        assert!(legacy_field.is_empty());
+        assert!(legacy_hud.is_empty());
+        assert!(direct_field.is_empty());
+        assert!(direct_hud.is_empty());
+        assert_eq!(legacy_player.len(), 1);
+        assert_eq!(direct_player.len(), 1);
+        assert_eq!(
+            compare_render_frames_semantic(&legacy_frame, &direct_frame),
+            Ok(())
+        );
     }
 
     #[test]
