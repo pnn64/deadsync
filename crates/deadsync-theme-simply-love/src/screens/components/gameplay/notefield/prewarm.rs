@@ -140,11 +140,10 @@ pub fn prewarm_frame_text_scratch(
     fonts: &font::FontMap,
     state: &State,
 ) {
-    let mut longest = InlineText::new();
-    assert!(longest.push_ascii(b'-'));
-    assert!(longest.push_u32(u32::MAX));
-    let offset_longest =
-        InlineText::copy_from("-21474836.48ms").expect("an i32 centisecond offset fits inline");
+    let mini_glyphs = InlineText::copy_from("+-.%0123456789")
+        .expect("the mini-indicator glyph domain fits inline");
+    let offset_glyphs = InlineText::copy_from("-.ms0123456789")
+        .expect("the offset-indicator glyph domain fits inline");
     for player in 0..state.num_players() {
         let profile = &state.profiles()[player];
         if let Some(font_name) = zmod_combo_font_name(profile.combo_font) {
@@ -162,19 +161,20 @@ pub fn prewarm_frame_text_scratch(
                 scratch,
                 fonts,
                 zmod_small_combo_font(profile.combo_font),
-                longest,
+                mini_glyphs,
                 FRAME_TEXT_MINI_BASE + player as u8,
                 FRAME_TEXT_VERTEX_BUFFERS,
             );
         }
         if profile.error_ms_display {
-            deadlib_present::compose::prewarm_frame_inline_text_slot(
+            deadlib_present::compose::prewarm_prepared_inline_text_slot(
                 cache,
                 scratch,
                 fonts,
                 "wendy",
-                offset_longest,
+                offset_glyphs,
                 FRAME_TEXT_OFFSET_BASE + player as u8,
+                TextAlign::Center,
                 FRAME_TEXT_VERTEX_BUFFERS,
             );
         }

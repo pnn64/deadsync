@@ -1958,13 +1958,13 @@ struct PreparedTextMeshBank {
 }
 
 impl PreparedTextMeshBank {
-    fn new(fill_pages: &[TextPageId], stroke_pages: &[TextPageId]) -> Self {
+    fn new(fill_pages: &[TextPageId], stroke_pages: &[TextPageId], vertex_capacity: usize) -> Self {
         let batches = |pages: &[TextPageId]| {
             pages
                 .iter()
                 .map(|&texture_page| PreparedTextMeshBatch {
                     texture_page,
-                    vertices: Arc::new(Vec::with_capacity(actors::InlineU32Text::CAPACITY * 6)),
+                    vertices: Arc::new(Vec::with_capacity(vertex_capacity)),
                 })
                 .collect()
         };
@@ -2025,10 +2025,13 @@ struct PreparedTextMeshes {
 }
 
 impl PreparedTextMeshes {
-    fn new(digits: &[Option<CachedGlyph>; 10], align: actors::TextAlign) -> Self {
-        let pages = |stroke: bool| {
-            let mut pages = Vec::with_capacity(10);
-            for glyph in digits.iter().flatten() {
+    fn new<'a, I>(glyphs: I, glyph_capacity: usize, align: actors::TextAlign) -> Self
+    where
+        I: Iterator<Item = &'a CachedGlyph> + Clone,
+    {
+        let pages = |glyphs: I, stroke: bool| {
+            let mut pages = Vec::with_capacity(glyph_capacity);
+            for glyph in glyphs {
                 let page = if stroke {
                     glyph.stroke_page
                 } else {
@@ -2042,11 +2045,17 @@ impl PreparedTextMeshes {
             }
             pages
         };
-        let fill_pages = pages(false);
-        let stroke_pages = pages(true);
+        let fill_pages = pages(glyphs.clone(), false);
+        let stroke_pages = pages(glyphs, true);
         Self {
             align,
-            banks: std::array::from_fn(|_| PreparedTextMeshBank::new(&fill_pages, &stroke_pages)),
+            banks: std::array::from_fn(|_| {
+                PreparedTextMeshBank::new(
+                    &fill_pages,
+                    &stroke_pages,
+                    glyph_capacity.saturating_mul(6),
+                )
+            }),
             current: None,
         }
     }
@@ -2058,6 +2067,25 @@ impl PreparedTextMeshes {
         max_logical_width_i: i32,
         lines: &[CachedLine],
         glyphs: &[CachedGlyph],
+    ) -> bool {
+        self.rebuild_aligned(
+            font_height,
+            line_spacing,
+            max_logical_width_i,
+            lines,
+            glyphs,
+            self.align,
+        )
+    }
+
+    fn rebuild_aligned(
+        &mut self,
+        font_height: i32,
+        line_spacing: i32,
+        max_logical_width_i: i32,
+        lines: &[CachedLine],
+        glyphs: &[CachedGlyph],
+        align: actors::TextAlign,
     ) -> bool {
         let bank_count = self.banks.len();
         let first = self.current.map_or(0, |current| (current + 1) % bank_count);
@@ -2079,8 +2107,9 @@ impl PreparedTextMeshes {
             max_logical_width_i,
             lines,
             glyphs,
-            self.align,
+            align,
         );
+        self.align = align;
         self.current = Some(bank_index);
         true
     }
@@ -2431,6 +2460,9 @@ struct TextLayoutKey {
 
 struct FrameInlineLayoutSlot {
     layout: CachedTextLayout,
+    meshes: Option<PreparedTextMeshes>,
+    prepared_key: Option<TextLayoutKey>,
+    glyphs: Vec<(u8, Option<CachedGlyph>)>,
     key: Option<(TextLayoutKey, actors::InlineText)>,
 }
 
@@ -2438,12 +2470,134 @@ impl FrameInlineLayoutSlot {
     fn new() -> Self {
         Self {
             layout: CachedTextLayout::frame_inline_scratch(),
+            meshes: None,
+            prepared_key: None,
+            glyphs: Vec::new(),
             key: None,
         }
     }
 
+    fn prepare(
+        &mut self,
+        key: TextLayoutKey,
+        font: &font::Font,
+        fonts: &font::FontMap,
+        glyph_domain: actors::InlineText,
+        align: actors::TextAlign,
+    ) {
+        self.clear();
+        self.layout.font_height = font.height;
+        self.layout.line_spacing = key.line_spacing;
+        self.glyphs.reserve(glyph_domain.as_str().len());
+        for (char_index, byte) in glyph_domain.as_str().bytes().enumerate() {
+            if self.glyphs.iter().any(|(known, _)| *known == byte) {
+                continue;
+            }
+            let glyph = font::find_glyph(font, char::from(byte), fonts)
+                .map(|glyph| cached_glyph(&mut self.layout.texture_pages, glyph, char_index, true));
+            self.glyphs.push((byte, glyph));
+        }
+        self.meshes = Some(PreparedTextMeshes::new(
+            self.glyphs.iter().filter_map(|(_, glyph)| glyph.as_ref()),
+            actors::InlineText::CAPACITY,
+            align,
+        ));
+        self.prepared_key = Some(key);
+    }
+
+    fn rebuild_prepared(
+        &mut self,
+        key: TextLayoutKey,
+        text: actors::InlineText,
+        align: actors::TextAlign,
+    ) -> bool {
+        if self.prepared_key != Some(key) {
+            return false;
+        }
+        self.layout.lines.clear();
+        self.layout.glyphs.clear();
+        self.layout.max_logical_width_i = 0;
+        self.layout.layout_seed = 0;
+        self.layout.fill_batches = CachedTextMeshVariants::default();
+        self.layout.stroke_batches = CachedTextMeshVariants::default();
+        let mut width_i32 = 0i32;
+        for (char_index, byte) in text.as_str().bytes().enumerate() {
+            let Some((_, glyph)) = self.glyphs.iter().find(|(known, _)| *known == byte) else {
+                return false;
+            };
+            let Some(mut glyph) = *glyph else {
+                continue;
+            };
+            glyph.char_index = char_index;
+            width_i32 += glyph.advance_i32;
+            self.layout.glyphs.push(glyph);
+        }
+        push_cached_line(
+            &mut self.layout.lines,
+            &mut self.layout.max_logical_width_i,
+            width_i32,
+            0,
+            self.layout.glyphs.len(),
+        );
+        self.layout.glyph_count = self.layout.glyphs.len();
+        let prepared = self.meshes.as_mut().is_some_and(|meshes| {
+            meshes.rebuild_aligned(
+                self.layout.font_height,
+                self.layout.line_spacing,
+                self.layout.max_logical_width_i,
+                &self.layout.lines,
+                &self.layout.glyphs,
+                align,
+            )
+        });
+        if !prepared {
+            self.layout.layout_seed = text_layout_mesh_seed(key, text.as_str());
+        }
+        self.key = Some((key, text));
+        true
+    }
+
+    fn ensure_mesh_align(
+        &mut self,
+        key: TextLayoutKey,
+        text: actors::InlineText,
+        align: actors::TextAlign,
+    ) {
+        let needs_rebuild = self
+            .meshes
+            .as_ref()
+            .is_some_and(|meshes| meshes.batches(align, false).is_none());
+        if !needs_rebuild {
+            return;
+        }
+        let prepared = self.meshes.as_mut().is_some_and(|meshes| {
+            meshes.rebuild_aligned(
+                self.layout.font_height,
+                self.layout.line_spacing,
+                self.layout.max_logical_width_i,
+                &self.layout.lines,
+                &self.layout.glyphs,
+                align,
+            )
+        });
+        self.layout.layout_seed = if prepared {
+            0
+        } else {
+            text_layout_mesh_seed(key, text.as_str())
+        };
+    }
+
+    fn disable_prepared(&mut self) {
+        self.meshes = None;
+        self.prepared_key = None;
+        self.glyphs.clear();
+    }
+
     fn clear(&mut self) {
         self.layout.clear_frame_inline_scratch();
+        self.meshes = None;
+        self.prepared_key = None;
+        self.glyphs.clear();
         self.key = None;
     }
 }
@@ -2482,7 +2636,11 @@ impl PreparedU32LayoutSlot {
             *slot = font::find_glyph(font, ch, fonts)
                 .map(|glyph| cached_glyph(&mut self.layout.texture_pages, glyph, digit, true));
         }
-        self.meshes = Some(PreparedTextMeshes::new(&self.digits, align));
+        self.meshes = Some(PreparedTextMeshes::new(
+            self.digits.iter().flatten(),
+            actors::InlineU32Text::CAPACITY,
+            align,
+        ));
         self.key = Some(key);
         self.value = None;
     }
@@ -2578,18 +2736,18 @@ pub struct TextLayoutFrameStats {
 /// `begin_frame_stats`/`frame_stats`. Worst-case work is one full layout build per
 /// uncached text actor in a frame; cache maintenance itself is constant-time.
 /// Frame-inline slots are single-threaded, screen/song-lifetime storage whose
-/// capacity is fixed by boundary prewarm. Each slot retains one short layout;
-/// misses rebuild only that slot, unprepared slot IDs saturate to one fallback,
-/// and clear/drop destruction happens at a transition. Existing hit/miss and
-/// built-glyph counters include slot activity. Worst-case work is one bounded
-/// 14-glyph rebuild per changed frame-inline actor. Prepared-u32 slots retain
-/// ten resolved glyph records plus two preallocated geometry banks. Stable
-/// values hit without hashing, font lookup, or geometry work; changes rebuild at
-/// most ten glyphs into a bank not owned by rendering. If both banks are busy,
-/// the existing allocation-backed layout path preserves correctness. Prepared
-/// geometry is dynamic and never enters the per-value GPU cache. Prewarmed-u16
-/// domains are bounded dense lookup tables populated at a transition; live hits
-/// are one bounds check and never hash, allocate, evict, or rebuild.
+/// capacity and glyph domain are fixed by boundary prewarm. Each prepared slot
+/// retains resolved glyph records, one short layout, and two preallocated mesh
+/// banks. Stable values hit without hashing, font lookup, or geometry work;
+/// changes copy at most 14 glyphs into a bank not owned by rendering. Unprepared
+/// slot IDs and out-of-domain text use the bounded transient fallback. If both
+/// banks are still render-owned, that fallback also preserves the prior frames.
+/// Clear/drop destruction happens at a transition, and existing hit/miss and
+/// built-glyph counters include slot activity. Prepared-u32 slots use the same
+/// bank model with ten decimal glyph records. Prepared geometry is dynamic and
+/// never enters the per-value GPU cache. Prewarmed-u16 domains are bounded dense
+/// lookup tables populated at a transition; live hits are one bounds check and
+/// never hash, allocate, evict, or rebuild.
 pub struct TextLayoutCache {
     // Keep arena growth moving pointers instead of large layouts with initialized OnceCells.
     #[allow(clippy::vec_box)]
@@ -2914,6 +3072,7 @@ impl TextLayoutCache {
         content: &actors::TextContent,
         wrap_width_pixels: Option<i32>,
         line_spacing: Option<i32>,
+        align: actors::TextAlign,
     ) -> ResolvedTextLayout<'_> {
         let key = TextLayoutKey {
             font_key: font_chain_key(font, fonts),
@@ -2933,9 +3092,9 @@ impl TextLayoutCache {
             actors::TextContent::Inline(text) => {
                 ResolvedTextLayout::cached(self.get_or_build_owned(key, font, fonts, text.as_str()))
             }
-            actors::TextContent::FrameInline { text, slot } => ResolvedTextLayout::cached(
-                self.get_or_build_frame_inline_slot(key, font, fonts, *text, *slot),
-            ),
+            actors::TextContent::FrameInline { text, slot } => {
+                self.get_or_build_frame_inline_slot(key, font, fonts, *text, *slot, align)
+            }
             actors::TextContent::InlineU16(text) => {
                 ResolvedTextLayout::cached(self.get_or_build_owned(key, font, fonts, text.as_str()))
             }
@@ -3003,7 +3162,8 @@ impl TextLayoutCache {
         fonts: &font::FontMap,
         text: actors::InlineText,
         slot: u8,
-    ) -> &CachedTextLayout {
+        align: actors::TextAlign,
+    ) -> ResolvedTextLayout<'_> {
         let Self {
             frame_inline_slots,
             frame_inline_fallback,
@@ -3014,21 +3174,28 @@ impl TextLayoutCache {
             .get_mut(usize::from(slot))
             .unwrap_or(frame_inline_fallback);
         if slot.key == Some((key, text)) {
+            slot.ensure_mesh_align(key, text, align);
             if let Some(frame_stats) = frame_stats.as_mut() {
                 frame_stats.owned_hits = frame_stats.owned_hits.saturating_add(1);
             }
-            return &slot.layout;
+            return ResolvedTextLayout {
+                layout: &slot.layout,
+                prepared_meshes: slot.meshes.as_ref(),
+            };
         }
-        rebuild_cached_text_layout(
-            &mut slot.layout,
-            font,
-            fonts,
-            text.as_str(),
-            key.line_spacing,
-            key.wrap_width_pixels,
-            text_layout_mesh_seed(key, text.as_str()),
-        );
-        slot.key = Some((key, text));
+        if !slot.rebuild_prepared(key, text, align) {
+            slot.disable_prepared();
+            rebuild_cached_text_layout(
+                &mut slot.layout,
+                font,
+                fonts,
+                text.as_str(),
+                key.line_spacing,
+                key.wrap_width_pixels,
+                text_layout_mesh_seed(key, text.as_str()),
+            );
+            slot.key = Some((key, text));
+        }
         if let Some(frame_stats) = frame_stats.as_mut() {
             frame_stats.misses = frame_stats.misses.saturating_add(1);
             frame_stats.built_lines = frame_stats
@@ -3038,7 +3205,10 @@ impl TextLayoutCache {
                 .built_glyphs
                 .saturating_add(saturating_u32(slot.layout.glyph_count));
         }
-        &slot.layout
+        ResolvedTextLayout {
+            layout: &slot.layout,
+            prepared_meshes: slot.meshes.as_ref(),
+        }
     }
 
     fn get_or_build_prewarmed_u16(
@@ -3179,7 +3349,41 @@ pub fn prewarm_frame_inline_text_slot(
             .resize_with(slot_index + 1, FrameInlineLayoutSlot::new);
     }
     let content = actors::TextContent::frame_inline_slot(text, slot);
-    let layout = cache.get_or_build(font, fonts, &content, None, None);
+    let layout = cache.get_or_build(font, fonts, &content, None, None, actors::TextAlign::Center);
+    let vertices_per_buffer = layout.glyph_count.saturating_mul(6);
+    let texture_pages = layout.texture_pages.len().max(1);
+    prewarm_transient_text_scratch(scratch, vertices_per_buffer, texture_pages, vertex_buffers);
+}
+
+/// Prepares one frame-inline slot from its complete ASCII glyph domain, with
+/// two reusable geometry banks plus the shared transient fallback pools.
+pub fn prewarm_prepared_inline_text_slot(
+    cache: &mut TextLayoutCache,
+    scratch: &mut ComposeScratch,
+    fonts: &font::FontMap,
+    font_name: &'static str,
+    glyph_domain: actors::InlineText,
+    slot: u8,
+    align: actors::TextAlign,
+    vertex_buffers: usize,
+) {
+    let Some(font) = fonts.get(font_name) else {
+        return;
+    };
+    let slot_index = usize::from(slot);
+    if cache.frame_inline_slots.len() <= slot_index {
+        cache
+            .frame_inline_slots
+            .resize_with(slot_index + 1, FrameInlineLayoutSlot::new);
+    }
+    let key = TextLayoutKey {
+        font_key: font_chain_key(font, fonts),
+        line_spacing: font.line_spacing,
+        wrap_width_pixels: -1,
+    };
+    cache.frame_inline_slots[slot_index].prepare(key, font, fonts, glyph_domain, align);
+    let content = actors::TextContent::frame_inline_slot(glyph_domain, slot);
+    let layout = cache.get_or_build(font, fonts, &content, None, None, align);
     let vertices_per_buffer = layout.glyph_count.saturating_mul(6);
     let texture_pages = layout.texture_pages.len().max(1);
     prewarm_transient_text_scratch(scratch, vertices_per_buffer, texture_pages, vertex_buffers);
@@ -5590,8 +5794,14 @@ fn build_actor_recursive<'a, T: TextureContext + ?Sized>(
             }
             if let Some(fm) = fonts.get(font) {
                 let frame_inline = matches!(content, actors::TextContent::FrameInline { .. });
-                let resolved =
-                    text_cache.get_or_build(fm, fonts, content, *wrap_width_pixels, *line_spacing);
+                let resolved = text_cache.get_or_build(
+                    fm,
+                    fonts,
+                    content,
+                    *wrap_width_pixels,
+                    *line_spacing,
+                    *align_text,
+                );
                 let layout = resolved.layout;
                 let prepared_meshes = resolved.prepared_meshes;
                 if layout.lines.is_empty() {
@@ -5635,7 +5845,14 @@ fn build_actor_recursive<'a, T: TextureContext + ?Sized>(
                     x_fold.map_or(*offset, |fold| fold.offset(*offset)),
                 ) {
                     let text_distortion = distortion.max(0.0);
-                    if !frame_inline && attributes.is_empty() && !*jitter && text_distortion <= 1e-6
+                    let transient_frame_inline = frame_inline
+                        && prepared_meshes
+                            .and_then(|meshes| meshes.batches(*align_text, false))
+                            .is_none();
+                    if !transient_frame_inline
+                        && attributes.is_empty()
+                        && !*jitter
+                        && text_distortion <= 1e-6
                     {
                         push_resolved_text_mesh_batches(
                             out,
@@ -5733,7 +5950,7 @@ fn build_actor_recursive<'a, T: TextureContext + ?Sized>(
                         if needs_stroke {
                             let stroke_start = out.len();
                             let stroke_start_sprite = sprite_instances.len();
-                            if frame_inline || text_distortion > 1e-6 {
+                            if transient_frame_inline || text_distortion > 1e-6 {
                                 build_transient_text_mesh_builders(
                                     layout,
                                     *align_text,
@@ -8267,9 +8484,9 @@ mod tests {
         clip_textured_mesh_to_world_rect_legacy, clipped_sprite_object_to_world_rect,
         clipped_sprite_object_to_world_rect_legacy, finish_frame, fold_sprite_xy_rot,
         font_chain_key, gather_finalized_sprites, is_affine_world_transform, mul_rgba,
-        prewarm_frame_inline_text_slot, prewarm_u32_text_slot, push_shadow_objects_for_range,
-        resolve_sprite_size_like_sm, sort_composed_draw_items, sort_draw_items,
-        sort_draw_items_legacy, str_ptr, textured_mesh_world_bounds,
+        prewarm_frame_inline_text_slot, prewarm_prepared_inline_text_slot, prewarm_u32_text_slot,
+        push_shadow_objects_for_range, resolve_sprite_size_like_sm, sort_composed_draw_items,
+        sort_draw_items, sort_draw_items_legacy, str_ptr, textured_mesh_world_bounds,
         textured_mesh_world_bounds_legacy, wrap_text_lines_by_words,
     };
     use crate::actors::{
@@ -9541,7 +9758,7 @@ mod tests {
 
         cache.prewarm_u16_domain(&fonts, "test", 7, 500, None, TextAlign::Left);
         let content = TextContent::prewarmed_u16(500, 7);
-        let layout = cache.get_or_build(font, &fonts, &content, None, None);
+        let layout = cache.get_or_build(font, &fonts, &content, None, None, TextAlign::Left);
 
         assert_eq!(content.as_str(), "500");
         assert!(layout.fill_batches.is_built(TextAlign::Left));
@@ -10671,15 +10888,19 @@ mod tests {
         let mut cache = TextLayoutCache::new(4);
         let owned = signature(cache.get_or_build_owned(key, font, &fonts, "ABAB"));
         let text = InlineText::copy_from("ABAB").expect("test text fits inline");
-        let frame = signature(cache.get_or_build_frame_inline_slot(key, font, &fonts, text, 0));
+        let frame =
+            cache.get_or_build_frame_inline_slot(key, font, &fonts, text, 0, TextAlign::Center);
+        let frame = signature(frame.layout);
 
         assert_eq!(frame, owned);
         assert_eq!(cache.entry_count, 1);
 
         cache.begin_frame_stats(true);
         let other = InlineText::copy_from("BABA").expect("test text fits inline");
-        let _ = cache.get_or_build_frame_inline_slot(key, font, &fonts, other, 0);
-        let _ = cache.get_or_build_frame_inline_slot(key, font, &fonts, other, 0);
+        let _ =
+            cache.get_or_build_frame_inline_slot(key, font, &fonts, other, 0, TextAlign::Center);
+        let _ =
+            cache.get_or_build_frame_inline_slot(key, font, &fonts, other, 0, TextAlign::Center);
         let stats = cache.frame_stats();
         assert_eq!(stats.misses, 1);
         assert_eq!(stats.owned_hits, 1);
@@ -10722,18 +10943,174 @@ mod tests {
         prewarm_frame_inline_text_slot(&mut cache, &mut scratch, &fonts, "test", second, 4, 2);
         cache.begin_frame_stats(true);
 
-        let _ = cache.get_or_build_frame_inline_slot(key, font, &fonts, first, 3);
-        let _ = cache.get_or_build_frame_inline_slot(key, font, &fonts, second, 4);
+        let _ =
+            cache.get_or_build_frame_inline_slot(key, font, &fonts, first, 3, TextAlign::Center);
+        let _ =
+            cache.get_or_build_frame_inline_slot(key, font, &fonts, second, 4, TextAlign::Center);
         let changed = InlineText::copy_from("ABA").expect("test text fits");
-        let _ = cache.get_or_build_frame_inline_slot(key, font, &fonts, changed, 3);
-        let _ = cache.get_or_build_frame_inline_slot(key, font, &fonts, second, 4);
-        let _ = cache.get_or_build_frame_inline_slot(key, font, &fonts, changed, 3);
+        let _ =
+            cache.get_or_build_frame_inline_slot(key, font, &fonts, changed, 3, TextAlign::Center);
+        let _ =
+            cache.get_or_build_frame_inline_slot(key, font, &fonts, second, 4, TextAlign::Center);
+        let _ =
+            cache.get_or_build_frame_inline_slot(key, font, &fonts, changed, 3, TextAlign::Center);
 
         let stats = cache.frame_stats();
         assert_eq!(stats.owned_hits, 4);
         assert_eq!(stats.misses, 1);
         assert_eq!(stats.owned_entries, 0);
         assert_eq!(cache.frame_inline_slots.len(), 5);
+    }
+
+    #[test]
+    fn prepared_frame_inline_matches_owned_text_across_values_and_alignment() {
+        fn actor(content: TextContent, align: TextAlign) -> Actor {
+            let mut actor = test_stroked_text_actor();
+            let Actor::Text {
+                content: actor_content,
+                align_text,
+                ..
+            } = &mut actor
+            else {
+                unreachable!("test text actor remains text");
+            };
+            *actor_content = content;
+            *align_text = align;
+            actor
+        }
+
+        let fonts = font::FontMap::from_iter([("test", test_font_split_pages())]);
+        let metrics = Metrics {
+            left: 0.0,
+            right: 640.0,
+            top: 240.0,
+            bottom: -240.0,
+        };
+        let mut owned_cache = TextLayoutCache::new(8);
+        let mut owned_scratch = ComposeScratch::default();
+        let mut prepared_cache = TextLayoutCache::new(1);
+        let mut prepared_scratch = ComposeScratch::default();
+        let glyph_domain = InlineText::copy_from("AB").expect("test domain fits inline");
+        prewarm_prepared_inline_text_slot(
+            &mut prepared_cache,
+            &mut prepared_scratch,
+            &fonts,
+            "test",
+            glyph_domain,
+            7,
+            TextAlign::Left,
+            4,
+        );
+
+        for (value, align) in [
+            ("AB", TextAlign::Left),
+            ("BA", TextAlign::Right),
+            ("AAB", TextAlign::Center),
+            ("BBAA", TextAlign::Left),
+        ] {
+            let inline = InlineText::copy_from(value).expect("test value fits inline");
+            let expected_actors = [actor(TextContent::Inline(inline), align)];
+            let prepared_actors = [actor(TextContent::frame_inline_slot(inline, 7), align)];
+            let mut expected = build_screen_cached_with_scratch(
+                &expected_actors,
+                [0.1, 0.2, 0.3, 1.0],
+                &metrics,
+                &fonts,
+                0.25,
+                &mut owned_cache,
+                &mut owned_scratch,
+            );
+            let mut actual = build_screen_cached_with_scratch(
+                &prepared_actors,
+                [0.1, 0.2, 0.3, 1.0],
+                &metrics,
+                &fonts,
+                0.25,
+                &mut prepared_cache,
+                &mut prepared_scratch,
+            );
+
+            assert_test_frames_semantic(&expected, &actual);
+            assert!(actual.tmesh_geometries.iter().all(|geometry| matches!(
+                geometry.vertices,
+                deadlib_render::TexturedMeshVertices::Reusable(_)
+            )));
+            owned_scratch.recycle_frame(&mut expected);
+            prepared_scratch.recycle_frame(&mut actual);
+        }
+
+        assert_eq!(prepared_cache.entry_count, 0);
+    }
+
+    #[test]
+    fn prepared_frame_inline_banks_fall_back_when_both_frames_are_busy() {
+        fn compose(
+            value: &str,
+            metrics: &Metrics,
+            fonts: &font::FontMap,
+            cache: &mut TextLayoutCache,
+            scratch: &mut ComposeScratch,
+        ) -> RenderFrame {
+            let text = InlineText::copy_from(value).expect("test value fits inline");
+            let mut actor = test_stroked_text_actor();
+            let Actor::Text { content, .. } = &mut actor else {
+                unreachable!("test text actor remains text");
+            };
+            *content = TextContent::frame_inline_slot(text, 0);
+            build_screen_cached_with_scratch(
+                &[actor],
+                [0.0, 0.0, 0.0, 1.0],
+                metrics,
+                fonts,
+                0.0,
+                cache,
+                scratch,
+            )
+        }
+
+        let fonts = font::FontMap::from_iter([("test", test_font_split_pages())]);
+        let metrics = Metrics {
+            left: 0.0,
+            right: 640.0,
+            top: 240.0,
+            bottom: -240.0,
+        };
+        let mut cache = TextLayoutCache::new(1);
+        let mut scratch = ComposeScratch::default();
+        let glyph_domain = InlineText::copy_from("AB").expect("test domain fits inline");
+        prewarm_prepared_inline_text_slot(
+            &mut cache,
+            &mut scratch,
+            &fonts,
+            "test",
+            glyph_domain,
+            0,
+            TextAlign::Left,
+            4,
+        );
+
+        let mut first = compose("A", &metrics, &fonts, &mut cache, &mut scratch);
+        let first_vertices = first.tmesh_geometries[0].vertices.as_ref().to_vec();
+        let mut second = compose("B", &metrics, &fonts, &mut cache, &mut scratch);
+        let mut saturated = compose("AB", &metrics, &fonts, &mut cache, &mut scratch);
+        assert!(matches!(
+            saturated.tmesh_geometries[0].vertices,
+            deadlib_render::TexturedMeshVertices::Transient(_)
+        ));
+        assert_eq!(
+            first.tmesh_geometries[0].vertices.as_ref(),
+            first_vertices.as_slice()
+        );
+
+        scratch.recycle_frame(&mut saturated);
+        scratch.recycle_frame(&mut first);
+        scratch.recycle_frame(&mut second);
+        let mut reused = compose("BA", &metrics, &fonts, &mut cache, &mut scratch);
+        assert!(matches!(
+            reused.tmesh_geometries[0].vertices,
+            deadlib_render::TexturedMeshVertices::Reusable(_)
+        ));
+        scratch.recycle_frame(&mut reused);
     }
 
     #[test]

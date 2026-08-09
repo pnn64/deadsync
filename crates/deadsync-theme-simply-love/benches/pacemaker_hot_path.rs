@@ -1,13 +1,13 @@
 use deadlib_present::actors::{Actor, InlineText, TextAlign, TextContent};
 use deadlib_present::compose::{
     ComposeScratch, TextLayoutCache, build_screen_cached_with_scratch_and_texture_context,
-    prewarm_frame_inline_text_slot,
+    prewarm_frame_inline_text_slot, prewarm_prepared_inline_text_slot,
 };
 use deadlib_present::dsl::TextBuilder;
 use deadlib_present::font::{Font, FontMap, Glyph};
 use deadlib_present::space::Metrics;
 use deadlib_present::texture::{TextureContext, TextureMeta};
-use deadlib_render::{DrawOp, TexturedMeshVertices};
+use deadlib_render::{DrawOp, TexturedMeshUploads, TexturedMeshVertices, resolve_textured_meshes};
 use deadsync_theme_simply_love::screens::components::gameplay::notefield::{
     PacemakerFrameBench, benchmark_pacemaker_text, benchmark_pacemaker_text_legacy,
     reset_mini_text_benchmark,
@@ -207,6 +207,7 @@ fn main() {
     let texture_ctx = BenchTextureContext;
     let mut legacy_cache = TextLayoutCache::new(4_097);
     let mut legacy_scratch = ComposeScratch::default();
+    let mut legacy_uploads = TexturedMeshUploads::default();
     let mut legacy_actors = vec![text_actor(TextContent::Static("+0.00%"))];
     warm_compose(
         &mut legacy_actors,
@@ -214,21 +215,50 @@ fn main() {
         &fonts,
         &mut legacy_cache,
         &mut legacy_scratch,
+        &mut legacy_uploads,
         &texture_ctx,
     );
     legacy_cache.lock_growth_with_reserve(4_096);
 
     let mut frame_cache = TextLayoutCache::new(1);
     let mut frame_scratch = ComposeScratch::default();
+    let mut frame_uploads = TexturedMeshUploads::default();
     let mut frame_actors = vec![text_actor(benchmark_pacemaker_text(100.0, false))];
-    let longest = InlineText::copy_from("-4294967295").expect("benchmark text fits inline");
+    let glyph_domain =
+        InlineText::copy_from("+-.%0123456789").expect("benchmark glyph domain fits inline");
+
+    let mut transient_cache = TextLayoutCache::new(1);
+    let mut transient_scratch = ComposeScratch::default();
+    let mut transient_uploads = TexturedMeshUploads::default();
+    let mut transient_actors = vec![text_actor(TextContent::frame_inline(glyph_domain))];
     prewarm_frame_inline_text_slot(
+        &mut transient_cache,
+        &mut transient_scratch,
+        &fonts,
+        "test",
+        glyph_domain,
+        0,
+        4,
+    );
+    warm_compose(
+        &mut transient_actors,
+        &metrics,
+        &fonts,
+        &mut transient_cache,
+        &mut transient_scratch,
+        &mut transient_uploads,
+        &texture_ctx,
+    );
+    transient_cache.lock_growth();
+
+    prewarm_prepared_inline_text_slot(
         &mut frame_cache,
         &mut frame_scratch,
         &fonts,
         "test",
-        longest,
+        glyph_domain,
         0,
+        TextAlign::Center,
         4,
     );
     warm_compose(
@@ -237,6 +267,7 @@ fn main() {
         &fonts,
         &mut frame_cache,
         &mut frame_scratch,
+        &mut frame_uploads,
         &texture_ctx,
     );
 
@@ -251,6 +282,20 @@ fn main() {
             &fonts,
             &mut legacy_cache,
             &mut legacy_scratch,
+            &mut legacy_uploads,
+            &texture_ctx,
+        )
+    });
+    let transient_compose = measure(SONG_TEXT_OPS, false, |frame| {
+        let (value, negative) = pacemaker_text_input(frame);
+        compose_text(
+            &mut transient_actors,
+            benchmark_pacemaker_text(value, negative),
+            &metrics,
+            &fonts,
+            &mut transient_cache,
+            &mut transient_scratch,
+            &mut transient_uploads,
             &texture_ctx,
         )
     });
@@ -263,24 +308,30 @@ fn main() {
             &fonts,
             &mut frame_cache,
             &mut frame_scratch,
+            &mut frame_uploads,
             &texture_ctx,
         )
     });
     assert_eq!(legacy_compose.checksum, frame_compose.checksum);
+    assert_eq!(transient_compose.checksum, frame_compose.checksum);
+    assert_eq!(transient_compose.allocated.allocs, 0);
+    assert_eq!(transient_compose.allocated.reallocs, 0);
+    assert_eq!(transient_compose.allocated.frees, 0);
 
-    println!("\npacemaker rendered text layout ({SONG_TEXT_OPS} changing frames)");
+    println!("\npacemaker actor-to-upload ({SONG_TEXT_OPS} changing frames)");
     print_result("whole-string cache", &legacy_compose, SONG_TEXT_OPS);
-    print_result("frame-inline scratch", &frame_compose, SONG_TEXT_OPS);
+    print_result("transient slots", &transient_compose, SONG_TEXT_OPS);
+    print_result("direct frame slots", &frame_compose, SONG_TEXT_OPS);
 
     run_dynamic_layout_workload(
-        "offset-ms rendered layout",
+        "offset-ms actor-to-upload",
         1,
         |frame, _| {
             let centi = (frame / 6 % 36_001) as i32 - 18_000;
             InlineText::format(format_args!("{:.2}ms", centi as f64 * 0.01))
                 .expect("offset benchmark text fits inline")
         },
-        InlineText::copy_from("-21474836.48ms").expect("offset text fits inline"),
+        InlineText::copy_from("-.ms0123456789").expect("offset glyph domain fits inline"),
         DynamicTextWarmup::FrameSlots,
         None,
         &metrics,
@@ -288,7 +339,7 @@ fn main() {
         &texture_ctx,
     );
     run_dynamic_layout_workload(
-        "six live-timing pairs",
+        "six live-timing pairs actor-to-upload",
         6,
         |frame, actor| {
             let update = frame / 6;
@@ -297,7 +348,7 @@ fn main() {
             InlineText::format(format_args!("{recent:.1}/{all:.1}"))
                 .expect("timing benchmark text fits inline")
         },
-        InlineText::copy_from("-999.9/-999.9").expect("timing text fits inline"),
+        InlineText::copy_from("-./0123456789").expect("timing glyph domain fits inline"),
         DynamicTextWarmup::FrameSlots,
         None,
         &metrics,
@@ -350,10 +401,11 @@ fn compose_text(
     fonts: &FontMap,
     cache: &mut TextLayoutCache,
     scratch: &mut ComposeScratch,
+    uploads: &mut TexturedMeshUploads,
     texture_ctx: &BenchTextureContext,
 ) -> usize {
     actors[0] = text_actor(content);
-    compose_text_group(actors, metrics, fonts, cache, scratch, texture_ctx)
+    compose_text_group(actors, metrics, fonts, cache, scratch, uploads, texture_ctx)
 }
 
 fn compose_text_group(
@@ -362,6 +414,7 @@ fn compose_text_group(
     fonts: &FontMap,
     cache: &mut TextLayoutCache,
     scratch: &mut ComposeScratch,
+    uploads: &mut TexturedMeshUploads,
     texture_ctx: &BenchTextureContext,
 ) -> usize {
     let mut render = build_screen_cached_with_scratch_and_texture_context(
@@ -374,6 +427,8 @@ fn compose_text_group(
         scratch,
         texture_ctx,
     );
+    resolve_textured_meshes(&render, uploads, |_, _| true);
+    black_box((uploads.vertices.len(), uploads.sources.len()));
     let checksum = render.ops.iter().fold(0usize, |mut checksum, op| {
         let DrawOp::TexturedMesh(run) = *op else {
             unreachable!("pacemaker text benchmark only emits textured meshes")
@@ -432,7 +487,7 @@ fn run_dynamic_layout_workload(
     title: &str,
     actor_count: usize,
     value: impl Fn(usize, usize) -> InlineText + Copy,
-    longest: InlineText,
+    glyph_domain: InlineText,
     warmup: DynamicTextWarmup,
     dense_value: Option<fn(usize, usize) -> u16>,
     metrics: &Metrics,
@@ -441,8 +496,9 @@ fn run_dynamic_layout_workload(
 ) {
     let mut legacy_cache = TextLayoutCache::new(4_097);
     let mut legacy_scratch = ComposeScratch::default();
+    let mut legacy_uploads = TexturedMeshUploads::default();
     let mut legacy_actors = (0..actor_count)
-        .map(|actor| text_actor(TextContent::Inline(value(0, actor))))
+        .map(|_| text_actor(TextContent::Inline(glyph_domain)))
         .collect::<Vec<_>>();
     black_box(compose_text_group(
         &legacy_actors,
@@ -450,9 +506,41 @@ fn run_dynamic_layout_workload(
         fonts,
         &mut legacy_cache,
         &mut legacy_scratch,
+        &mut legacy_uploads,
         texture_ctx,
     ));
     legacy_cache.lock_growth_with_reserve(4_096);
+
+    let mut transient = matches!(warmup, DynamicTextWarmup::FrameSlots).then(|| {
+        let mut cache = TextLayoutCache::new(1);
+        let mut scratch = ComposeScratch::default();
+        let mut uploads = TexturedMeshUploads::default();
+        for slot in 0..actor_count {
+            prewarm_frame_inline_text_slot(
+                &mut cache,
+                &mut scratch,
+                fonts,
+                "test",
+                glyph_domain,
+                slot as u8,
+                actor_count * 4,
+            );
+        }
+        let actors = (0..actor_count)
+            .map(|actor| text_actor(TextContent::frame_inline_slot(glyph_domain, actor as u8)))
+            .collect::<Vec<_>>();
+        black_box(compose_text_group(
+            &actors,
+            metrics,
+            fonts,
+            &mut cache,
+            &mut scratch,
+            &mut uploads,
+            texture_ctx,
+        ));
+        cache.lock_growth();
+        (cache, scratch, uploads, actors)
+    });
 
     let optimized_capacity = match warmup {
         DynamicTextWarmup::FrameSlots => 1,
@@ -460,16 +548,18 @@ fn run_dynamic_layout_workload(
     };
     let mut optimized_cache = TextLayoutCache::new(optimized_capacity);
     let mut optimized_scratch = ComposeScratch::default();
+    let mut optimized_uploads = TexturedMeshUploads::default();
     match warmup {
         DynamicTextWarmup::FrameSlots => {
             for slot in 0..actor_count {
-                prewarm_frame_inline_text_slot(
+                prewarm_prepared_inline_text_slot(
                     &mut optimized_cache,
                     &mut optimized_scratch,
                     fonts,
                     "test",
-                    longest,
+                    glyph_domain,
                     slot as u8,
+                    TextAlign::Center,
                     actor_count * 4,
                 );
             }
@@ -489,7 +579,15 @@ fn run_dynamic_layout_workload(
         }
     };
     let mut optimized_actors = (0..actor_count)
-        .map(|actor| text_actor(optimized_content(0, actor)))
+        .map(|actor| {
+            let content = match warmup {
+                DynamicTextWarmup::FrameSlots => {
+                    TextContent::frame_inline_slot(glyph_domain, actor as u8)
+                }
+                DynamicTextWarmup::U16Domain(_) => optimized_content(0, actor),
+            };
+            text_actor(content)
+        })
         .collect::<Vec<_>>();
     black_box(compose_text_group(
         &optimized_actors,
@@ -497,6 +595,7 @@ fn run_dynamic_layout_workload(
         fonts,
         &mut optimized_cache,
         &mut optimized_scratch,
+        &mut optimized_uploads,
         texture_ctx,
     ));
     if matches!(warmup, DynamicTextWarmup::U16Domain(_)) {
@@ -514,8 +613,20 @@ fn run_dynamic_layout_workload(
             fonts,
             &mut legacy_cache,
             &mut legacy_scratch,
+            &mut legacy_uploads,
             texture_ctx,
         )
+    });
+    let transient_result = transient.as_mut().map(|(cache, scratch, uploads, actors)| {
+        measure(DYNAMIC_LAYOUT_FRAMES, false, |frame| {
+            for (actor, output) in actors.iter_mut().enumerate() {
+                *output = text_actor(TextContent::frame_inline_slot(
+                    value(frame, actor),
+                    actor as u8,
+                ));
+            }
+            compose_text_group(actors, metrics, fonts, cache, scratch, uploads, texture_ctx)
+        })
     });
     let optimized = measure(DYNAMIC_LAYOUT_FRAMES, false, |frame| {
         for (actor, output) in optimized_actors.iter_mut().enumerate() {
@@ -527,12 +638,16 @@ fn run_dynamic_layout_workload(
             fonts,
             &mut optimized_cache,
             &mut optimized_scratch,
+            &mut optimized_uploads,
             texture_ctx,
         )
     });
 
     println!("\n{title} ({DYNAMIC_LAYOUT_FRAMES} song frames)");
     print_result("whole-string cache", &legacy, DYNAMIC_LAYOUT_FRAMES);
+    if let Some(transient) = transient_result.as_ref() {
+        print_result("transient slots", transient, DYNAMIC_LAYOUT_FRAMES);
+    }
     let optimized_label = match warmup {
         DynamicTextWarmup::FrameSlots => "direct frame slots",
         DynamicTextWarmup::U16Domain(_) => "prewarmed domain",
@@ -542,6 +657,18 @@ fn run_dynamic_layout_workload(
         legacy.checksum, optimized.checksum,
         "{title} behavior changed"
     );
+    if let Some(transient) = transient_result.as_ref() {
+        assert_eq!(
+            transient.checksum, optimized.checksum,
+            "{title} transient-slot behavior changed"
+        );
+        assert_eq!(transient.allocated.allocs, 0, "{title} baseline allocated");
+        assert_eq!(
+            transient.allocated.reallocs, 0,
+            "{title} baseline reallocated"
+        );
+        assert_eq!(transient.allocated.frees, 0, "{title} baseline freed");
+    }
     assert_eq!(optimized.allocated.allocs, 0, "{title} allocated");
     assert_eq!(optimized.allocated.reallocs, 0, "{title} reallocated");
     assert_eq!(optimized.allocated.frees, 0, "{title} freed");
@@ -553,6 +680,7 @@ fn warm_compose(
     fonts: &FontMap,
     cache: &mut TextLayoutCache,
     scratch: &mut ComposeScratch,
+    uploads: &mut TexturedMeshUploads,
     texture_ctx: &BenchTextureContext,
 ) {
     let content = match &actors[0] {
@@ -566,6 +694,7 @@ fn warm_compose(
         fonts,
         cache,
         scratch,
+        uploads,
         texture_ctx,
     ));
 }

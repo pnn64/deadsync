@@ -19,7 +19,9 @@ use deadlib_present::cache::{SharedStrCache, cached_shared_str};
 #[cfg(feature = "bench-support")]
 use deadlib_present::cache::{TextCache, cached_text, text_cache_with_capacity};
 use deadlib_present::color;
-use deadlib_present::compose::{ComposeScratch, TextLayoutCache, prewarm_frame_inline_text_slot};
+use deadlib_present::compose::{
+    ComposeScratch, TextLayoutCache, prewarm_prepared_inline_text_slot,
+};
 use deadlib_present::density;
 use deadlib_present::font;
 use deadlib_present::space::*;
@@ -1749,8 +1751,8 @@ pub fn prewarm_frame_text_scratch(
     fonts: &font::FontMap,
     state: &State,
 ) {
-    let longest =
-        InlineText::copy_from("-999.9/-999.9").expect("bounded gameplay timing text fits inline");
+    let glyph_domain =
+        InlineText::copy_from("-./0123456789").expect("the live-timing glyph domain fits inline");
     for player in 0..state.num_players() {
         let profile = &state.profiles()[player];
         if !profile.live_timing_stats {
@@ -1763,13 +1765,18 @@ pub fn prewarm_frame_text_scratch(
             {
                 continue;
             }
-            prewarm_frame_inline_text_slot(
+            prewarm_prepared_inline_text_slot(
                 cache,
                 scratch,
                 fonts,
                 "miso",
-                longest,
+                glyph_domain,
                 FRAME_TEXT_LIVE_TIMING_BASE + (player * LIVE_TIMING_LABELS.len() + index) as u8,
+                if player == 0 {
+                    TextAlign::Left
+                } else {
+                    TextAlign::Right
+                },
                 FRAME_TEXT_VERTEX_BUFFERS,
             );
         }
