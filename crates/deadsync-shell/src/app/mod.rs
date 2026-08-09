@@ -1658,8 +1658,11 @@ impl App {
                 }
             }
             CurrentScreen::Evaluation => {
-                scores::tick_groovestats_auto_retries();
-                scores::tick_arrowcloud_auto_retries();
+                scores::tick_evaluation_auto_retries(
+                    config.enable_groovestats,
+                    config.enable_boogiestats,
+                    config.enable_arrowcloud,
+                );
                 let view =
                     Self::evaluation_runtime_view(&self.state.screens.evaluation_state, config);
                 evaluation::sync_runtime_view(&mut self.state.screens.evaluation_state, view);

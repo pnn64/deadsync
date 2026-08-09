@@ -284,6 +284,16 @@ fn main() {
         measure(|| new.gated_disabled_lighting_frame()),
     );
 
+    let old = GameplayIdleWorkersBenchmark::default();
+    let new = GameplayIdleWorkersBenchmark::default();
+    compare_labeled(
+        "enabled services without submit retries",
+        "config and state locks",
+        "scheduled gates",
+        measure(|| old.legacy_idle_submit_retry_frame()),
+        measure(|| new.gated_idle_submit_retry_frame()),
+    );
+
     let mut old = GameplayIdleWorkersBenchmark::default();
     let mut new = GameplayIdleWorkersBenchmark::default();
     compare_labeled(

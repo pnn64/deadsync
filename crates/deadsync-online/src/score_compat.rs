@@ -3,13 +3,11 @@ use deadsync_profile::compat as profile;
 pub use crate::arrowcloud::{
     retry_manual_submit_from_app_runtime as retry_arrowcloud_submit,
     submit_gameplay_from_app_runtime as submit_arrowcloud_payloads_from_gameplay,
-    tick_auto_submit_retries_from_app_runtime as tick_arrowcloud_auto_retries,
 };
 pub use crate::groovestats::{
     eval_state_from_app_runtime as groovestats_eval_state_from_gameplay,
     retry_manual_submit_from_app_runtime as retry_groovestats_submit,
     submit_gameplay_from_app_runtime as submit_groovestats_payloads_from_gameplay,
-    tick_auto_submit_retries_from_app_runtime as tick_groovestats_auto_retries,
 };
 pub use crate::player_leaderboards::{
     ItlWheelSideContext,
@@ -81,6 +79,18 @@ pub struct EvaluationSubmissionSnapshot {
     pub arrowcloud_next_retry_secs: Option<u32>,
     pub groovestats_next_retry_is_auto: bool,
     pub arrowcloud_next_retry_is_auto: bool,
+}
+
+pub fn tick_evaluation_auto_retries(
+    groovestats_enabled: bool,
+    boogiestats_enabled: bool,
+    arrowcloud_enabled: bool,
+) -> bool {
+    let service = crate::groovestats::active_service(groovestats_enabled, boogiestats_enabled);
+    let groovestats =
+        crate::groovestats::tick_auto_submit_retries_from_app_frame(groovestats_enabled, service);
+    let arrowcloud = crate::arrowcloud::tick_auto_submit_retries_from_app_frame(arrowcloud_enabled);
+    groovestats || arrowcloud
 }
 
 pub fn evaluation_submission_snapshots<const N: usize>(

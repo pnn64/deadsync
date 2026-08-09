@@ -482,6 +482,26 @@ impl GameplayIdleWorkersBenchmark {
         })
     }
 
+    pub fn legacy_idle_submit_retry_frame(&self) -> usize {
+        (0..POLLS_PER_FRAME).fold(0usize, |checksum, sample| {
+            black_box(deadsync_online::runtime::active_groovestats_service());
+            black_box(config::get().enable_groovestats);
+            black_box(deadsync_online::groovestats::due_auto_submit_retries());
+            black_box(config::get().enable_arrowcloud);
+            black_box(deadsync_online::arrowcloud::due_auto_submit_retries());
+            checksum.rotate_left(5) ^ sample
+        })
+    }
+
+    pub fn gated_idle_submit_retry_frame(&self) -> usize {
+        (0..POLLS_PER_FRAME).fold(0usize, |checksum, sample| {
+            black_box(deadsync_online::score_compat::tick_evaluation_auto_retries(
+                true, false, true,
+            ));
+            checksum.rotate_left(5) ^ sample
+        })
+    }
+
     pub fn legacy_config_frame(&mut self) -> usize {
         (0..POLLS_PER_FRAME).fold(0, |checksum, sample| {
             let config = config::get();

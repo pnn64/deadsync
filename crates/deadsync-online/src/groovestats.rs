@@ -1771,10 +1771,9 @@ pub fn retry_manual_submit_from_app_runtime(
     retry_submit_from_app_runtime(chart_hash, side, true)
 }
 
-pub fn tick_auto_submit_retries_from_app_runtime() -> bool {
-    let service = crate::runtime::active_groovestats_service();
+pub(crate) fn tick_auto_submit_retries_from_app_frame(enabled: bool, service: Service) -> bool {
     tick_auto_submit_retries_if_enabled(
-        deadsync_config::runtime::get().enable_groovestats,
+        enabled,
         service,
         service_name(service),
         cache_submit_success_from_app_runtime,
@@ -2191,6 +2190,14 @@ impl GrooveStatsSubmitRetryEntry {
 
 static GROOVESTATS_SUBMIT_RETRY: LazyLock<Mutex<SubmitRetryState<GrooveStatsSubmitRetryEntry>>> =
     LazyLock::new(|| Mutex::new(SubmitRetryState::default()));
+static GROOVESTATS_SUBMIT_RETRY_SCHEDULED: AtomicBool = AtomicBool::new(false);
+
+fn sync_submit_retry_scheduled(retry: &SubmitRetryState<GrooveStatsSubmitRetryEntry>) {
+    GROOVESTATS_SUBMIT_RETRY_SCHEDULED.store(
+        retry.has_scheduled_retry(|entry| entry.next_retry_at),
+        Ordering::Release,
+    );
+}
 
 #[inline(always)]
 pub fn reset_submit_ui_status(side: profile_data::PlayerSide, chart_hash: &str) {
@@ -2348,22 +2355,24 @@ pub fn evaluation_submission_snapshots<const N: usize>(
 
 #[inline(always)]
 pub fn reset_submit_retry(side: profile_data::PlayerSide, chart_hash: &str) {
-    GROOVESTATS_SUBMIT_RETRY.lock().unwrap().reset_by_key(
-        profile_data::player_side_index(side),
-        chart_hash,
-        |entry| entry.chart_hash.as_str(),
-    );
+    let mut retry = GROOVESTATS_SUBMIT_RETRY.lock().unwrap();
+    retry.reset_by_key(profile_data::player_side_index(side), chart_hash, |entry| {
+        entry.chart_hash.as_str()
+    });
+    sync_submit_retry_scheduled(&retry);
 }
 
 #[inline(always)]
 pub fn store_submit_retry(entry: GrooveStatsSubmitRetryEntry) {
     let side = entry.side;
-    GROOVESTATS_SUBMIT_RETRY.lock().unwrap().upsert_by_key(
+    let mut retry = GROOVESTATS_SUBMIT_RETRY.lock().unwrap();
+    retry.upsert_by_key(
         profile_data::player_side_index(side),
         entry,
         |entry| entry.chart_hash.as_str(),
         GROOVESTATS_SUBMIT_RETRY_TRACKED_PER_SIDE,
     );
+    sync_submit_retry_scheduled(&retry);
 }
 
 #[inline(always)]
@@ -2372,14 +2381,17 @@ pub fn take_ready_submit_retry(
     side: profile_data::PlayerSide,
     manual: bool,
 ) -> Option<GrooveStatsSubmitRetryEntry> {
-    GROOVESTATS_SUBMIT_RETRY.lock().unwrap().take_ready_by_key(
+    let mut retry = GROOVESTATS_SUBMIT_RETRY.lock().unwrap();
+    let ready = retry.take_ready_by_key(
         profile_data::player_side_index(side),
         chart_hash,
         manual,
         Instant::now(),
         |entry| entry.chart_hash.as_str(),
         |entry| &mut entry.next_retry_at,
-    )
+    );
+    sync_submit_retry_scheduled(&retry);
+    ready
 }
 
 pub fn take_ready_submit_retry_request(
@@ -2441,6 +2453,9 @@ pub fn tick_auto_submit_retries_if_enabled(
     cache_success: fn(&GrooveStatsSubmitPlayerJob, &GrooveStatsSubmitApiPlayer),
     after_player: fn(&GrooveStatsSubmitPlayerJob),
 ) -> bool {
+    if !enabled || !GROOVESTATS_SUBMIT_RETRY_SCHEDULED.load(Ordering::Acquire) {
+        return false;
+    }
     let mut fired = false;
     for (hash, side, _) in due_auto_submit_retries() {
         if retry_submit_if_enabled(
@@ -2515,19 +2530,18 @@ pub fn record_submit_failure(
     chart_hash: &str,
     status: GrooveStatsSubmitUiStatus,
 ) {
-    GROOVESTATS_SUBMIT_RETRY
-        .lock()
-        .unwrap()
-        .record_failure_by_key(
-            profile_data::player_side_index(side),
-            chart_hash,
-            status.can_retry(),
-            GROOVESTATS_RETRY_MAX_ATTEMPTS,
-            Instant::now(),
-            |entry| entry.chart_hash.as_str(),
-            |entry| &mut entry.retry_attempt,
-            |entry| &mut entry.next_retry_at,
-        );
+    let mut retry = GROOVESTATS_SUBMIT_RETRY.lock().unwrap();
+    retry.record_failure_by_key(
+        profile_data::player_side_index(side),
+        chart_hash,
+        status.can_retry(),
+        GROOVESTATS_RETRY_MAX_ATTEMPTS,
+        Instant::now(),
+        |entry| entry.chart_hash.as_str(),
+        |entry| &mut entry.retry_attempt,
+        |entry| &mut entry.next_retry_at,
+    );
+    sync_submit_retry_scheduled(&retry);
 }
 
 #[inline(always)]

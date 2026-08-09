@@ -2337,6 +2337,17 @@ impl<T> SubmitRetryState<T> {
         }
     }
 
+    pub fn has_scheduled_retry<N>(&self, next_retry_at: N) -> bool
+    where
+        N: Fn(&T) -> Option<Instant>,
+    {
+        (0..2).any(|side_index| {
+            self.entries(side_index)
+                .iter()
+                .any(|entry| next_retry_at(entry).is_some())
+        })
+    }
+
     pub fn due_retries<K, S, A, N, Side>(
         &self,
         now: Instant,
@@ -8350,6 +8361,7 @@ mod tests {
                 attempt: Some(1),
             }
         );
+        assert!(state.has_scheduled_retry(|entry| entry.next_retry_at));
         assert!(
             state
                 .take_ready_by_key(
@@ -8397,6 +8409,7 @@ mod tests {
             ),
             None
         );
+        assert!(!state.has_scheduled_retry(|entry| entry.next_retry_at));
 
         assert!(state.record_failure_by_key(
             1,
@@ -8417,6 +8430,7 @@ mod tests {
             ),
             Some(0)
         );
+        assert!(!state.has_scheduled_retry(|entry| entry.next_retry_at));
     }
 
     #[test]
