@@ -675,6 +675,45 @@ pub fn submit_ui_status_for_side(
     arrowcloud_submit_ui_status(profile_data::player_side_index(side), chart_hash)
 }
 
+#[derive(Clone, Copy, Debug, Default)]
+pub struct EvaluationSubmissionSnapshot {
+    pub status: Option<ArrowCloudSubmitUiStatus>,
+    pub next_retry_secs: Option<u32>,
+    pub next_retry_is_auto: bool,
+}
+
+pub fn evaluation_submission_snapshots<const N: usize>(
+    queries: &[Option<(profile_data::PlayerSide, &str)>; N],
+) -> [EvaluationSubmissionSnapshot; N] {
+    let ui_queries = queries
+        .map(|query| query.map(|(side, hash)| (profile_data::player_side_index(side), hash)));
+    let statuses = deadsync_score::arrowcloud_submit_ui_statuses(&ui_queries);
+    let retry_views = {
+        let retry = ARROWCLOUD_SUBMIT_RETRY.lock().unwrap();
+        let now = Instant::now();
+        queries.map(|query| {
+            query.map_or_else(deadsync_score::SubmitRetryView::default, |(side, hash)| {
+                retry.view_by_key(
+                    profile_data::player_side_index(side),
+                    hash,
+                    now,
+                    |entry| entry.payload.hash.as_str(),
+                    |entry| entry.retry_attempt,
+                    |entry| entry.next_retry_at,
+                )
+            })
+        })
+    };
+    std::array::from_fn(|idx| EvaluationSubmissionSnapshot {
+        status: statuses[idx],
+        next_retry_secs: retry_views[idx].remaining_secs,
+        next_retry_is_auto: retry_views[idx].attempt.is_some_and(|attempt| {
+            attempt < ARROWCLOUD_RETRY_MAX_ATTEMPTS
+                && statuses[idx].is_some_and(|status| status.is_auto_retryable())
+        }),
+    })
+}
+
 #[inline(always)]
 pub fn reset_submit_retry(side: profile_data::PlayerSide, chart_hash: &str) {
     ARROWCLOUD_SUBMIT_RETRY.lock().unwrap().reset_by_key(
@@ -3699,6 +3738,18 @@ mod tests {
             submit_ui_status_for_side(second, side),
             Some(ArrowCloudSubmitUiStatus::Submitted)
         );
+        let snapshots =
+            evaluation_submission_snapshots(&[Some((side, first)), Some((side, second)), None]);
+        assert_eq!(
+            snapshots[0].status,
+            Some(ArrowCloudSubmitUiStatus::Submitting)
+        );
+        assert_eq!(
+            snapshots[1].status,
+            Some(ArrowCloudSubmitUiStatus::Submitted)
+        );
+        assert_eq!(snapshots[2].next_retry_secs, None);
+        assert!(!snapshots[2].next_retry_is_auto);
         assert!(update_submit_ui_status_if_token(
             side,
             first,

@@ -58,6 +58,123 @@ impl GameplayMediaFailureBenchmark {
 const POLLS_PER_FRAME: usize = 256;
 const BACKGROUND_ACTIVE_BEAT: f32 = 700.0;
 
+const EVALUATION_SUBMISSION_QUERIES: [Option<(deadsync_profile::PlayerSide, &'static str)>; 2] = [
+    Some((
+        deadsync_profile::PlayerSide::P1,
+        "benchmark-evaluation-submit-p1",
+    )),
+    Some((
+        deadsync_profile::PlayerSide::P2,
+        "benchmark-evaluation-submit-p2",
+    )),
+];
+
+/// Old per-field and current batched Evaluation submission-state reads.
+pub struct EvaluationSubmissionBenchmark {
+    queries: [Option<(deadsync_profile::PlayerSide, &'static str)>; 2],
+}
+
+impl Default for EvaluationSubmissionBenchmark {
+    fn default() -> Self {
+        for (idx, query) in EVALUATION_SUBMISSION_QUERIES.iter().flatten().enumerate() {
+            let (side, hash) = *query;
+            deadsync_online::groovestats::reset_submit_ui_status(side, hash);
+            deadsync_online::groovestats::reset_submit_event_ui(side, hash);
+            deadsync_online::groovestats::reset_submit_retry(side, hash);
+            deadsync_online::groovestats::set_submit_ui_status(
+                side,
+                hash,
+                10_000 + idx as u64,
+                deadsync_score::GrooveStatsSubmitUiStatus::TimedOut,
+            );
+            deadsync_online::arrowcloud::reset_submit_ui_status(side, hash);
+            deadsync_online::arrowcloud::reset_submit_retry(side, hash);
+            deadsync_online::arrowcloud::set_submit_ui_status(
+                side,
+                hash,
+                20_000 + idx as u64,
+                deadsync_score::ArrowCloudSubmitUiStatus::TimedOut,
+            );
+        }
+        Self {
+            queries: EVALUATION_SUBMISSION_QUERIES,
+        }
+    }
+}
+
+impl EvaluationSubmissionBenchmark {
+    pub fn legacy_frame(&self) -> usize {
+        (0..POLLS_PER_FRAME).fold(0, |checksum, sample| {
+            let value = black_box(&self.queries).iter().flatten().fold(
+                0usize,
+                |checksum, &(side, hash)| {
+                    checksum.rotate_left(7)
+                        ^ submission_checksum(
+                            deadsync_online::groovestats::submit_ui_status_for_side(hash, side)
+                                .is_some(),
+                            deadsync_online::arrowcloud::submit_ui_status_for_side(hash, side)
+                                .is_some(),
+                            deadsync_online::groovestats::submit_event_progress_for_side(
+                                hash, side,
+                            )
+                            .len(),
+                            deadsync_online::groovestats::submit_record_banner_for_side(hash, side)
+                                .is_some(),
+                            deadsync_online::groovestats::next_retry_remaining_secs(hash, side),
+                            deadsync_online::arrowcloud::next_retry_remaining_secs(hash, side),
+                            deadsync_online::groovestats::next_retry_is_auto(hash, side),
+                            deadsync_online::arrowcloud::next_retry_is_auto(hash, side),
+                        )
+                },
+            );
+            checksum.rotate_left(5) ^ value ^ sample
+        })
+    }
+
+    pub fn snapshot_frame(&self) -> usize {
+        (0..POLLS_PER_FRAME).fold(0, |checksum, sample| {
+            let snapshots = deadsync_online::score_compat::evaluation_submission_snapshots(
+                black_box(&self.queries),
+            );
+            let value = snapshots.iter().fold(0usize, |checksum, snapshot| {
+                checksum.rotate_left(7)
+                    ^ submission_checksum(
+                        snapshot.groovestats_status.is_some(),
+                        snapshot.arrowcloud_status.is_some(),
+                        snapshot.event_progress.len(),
+                        snapshot.record_banner.is_some(),
+                        snapshot.groovestats_next_retry_secs,
+                        snapshot.arrowcloud_next_retry_secs,
+                        snapshot.groovestats_next_retry_is_auto,
+                        snapshot.arrowcloud_next_retry_is_auto,
+                    )
+            });
+            checksum.rotate_left(5) ^ value ^ sample
+        })
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn submission_checksum(
+    groovestats_status: bool,
+    arrowcloud_status: bool,
+    event_progress_len: usize,
+    record_banner: bool,
+    groovestats_next_retry_secs: Option<u32>,
+    arrowcloud_next_retry_secs: Option<u32>,
+    groovestats_next_retry_is_auto: bool,
+    arrowcloud_next_retry_is_auto: bool,
+) -> usize {
+    groovestats_status as usize
+        ^ ((arrowcloud_status as usize) << 1)
+        ^ (event_progress_len << 2)
+        ^ ((record_banner as usize) << 10)
+        ^ ((groovestats_next_retry_secs.unwrap_or_default() as usize) << 11)
+        ^ ((arrowcloud_next_retry_secs.unwrap_or_default() as usize) << 19)
+        ^ ((groovestats_next_retry_is_auto as usize) << 27)
+        ^ ((arrowcloud_next_retry_is_auto as usize) << 28)
+}
+
 /// Old and current idle worker-maintenance paths used by the release benchmark.
 pub struct GameplayIdleWorkersBenchmark {
     qr_login: qr_login::Service,

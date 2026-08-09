@@ -1482,34 +1482,6 @@ impl App {
         }
     }
 
-    fn evaluation_submission_view(
-        score_info: Option<&evaluation::ScoreInfo>,
-    ) -> EvaluationSubmissionView {
-        let Some(score_info) = score_info else {
-            return EvaluationSubmissionView::default();
-        };
-        let chart_hash = score_info.chart.short_hash.as_str();
-        let side = score_info.side;
-        EvaluationSubmissionView {
-            groovestats_status: scores::get_groovestats_submit_ui_status_for_side(chart_hash, side),
-            arrowcloud_status: scores::get_arrowcloud_submit_ui_status_for_side(chart_hash, side),
-            event_progress: scores::get_groovestats_submit_event_progress_for_side(
-                chart_hash, side,
-            ),
-            record_banner: scores::get_groovestats_submit_record_banner_for_side(chart_hash, side),
-            groovestats_next_retry_secs: scores::groovestats_next_retry_remaining_secs(
-                chart_hash, side,
-            ),
-            arrowcloud_next_retry_secs: scores::arrowcloud_next_retry_remaining_secs(
-                chart_hash, side,
-            ),
-            groovestats_next_retry_is_auto: scores::groovestats_next_retry_is_auto(
-                chart_hash, side,
-            ),
-            arrowcloud_next_retry_is_auto: scores::arrowcloud_next_retry_is_auto(chart_hash, side),
-        }
-    }
-
     fn evaluation_init_view(
         gameplay: &gameplay::State,
         config: &config::Config,
@@ -1553,7 +1525,7 @@ impl App {
         let pane_filter = scorebox_pane_filter(config);
         let srpg10 = matches!(config.srpg_variant, config::SrpgVariant::Srpg10)
             && config.visual_style.is_srpg();
-        let favorite_queries = std::array::from_fn(|player_idx| {
+        let player_queries = std::array::from_fn(|player_idx| {
             state
                 .score_info
                 .get(player_idx)
@@ -1564,8 +1536,21 @@ impl App {
             config.enable_groovestats,
             config.enable_arrowcloud,
             config.auto_populate_gs_scores,
-            &favorite_queries,
+            &player_queries,
         );
+        let submissions =
+            scores::evaluation_submission_snapshots(&player_queries).map(|snapshot| {
+                EvaluationSubmissionView {
+                    groovestats_status: snapshot.groovestats_status,
+                    arrowcloud_status: snapshot.arrowcloud_status,
+                    event_progress: snapshot.event_progress,
+                    record_banner: snapshot.record_banner,
+                    groovestats_next_retry_secs: snapshot.groovestats_next_retry_secs,
+                    arrowcloud_next_retry_secs: snapshot.arrowcloud_next_retry_secs,
+                    groovestats_next_retry_is_auto: snapshot.groovestats_next_retry_is_auto,
+                    arrowcloud_next_retry_is_auto: snapshot.arrowcloud_next_retry_is_auto,
+                }
+            });
         let leaderboard_requests = evaluation::leaderboard_requests(state);
         let leaderboards: [Option<deadsync_score::CachedPlayerLeaderboardData>; MAX_PLAYERS] =
             std::array::from_fn(|player_idx| {
@@ -1586,11 +1571,7 @@ impl App {
             context,
             lobby: Self::refresh_lobby_runtime_view(),
             groovestats_service: Self::groovestats_service_view(),
-            submissions: std::array::from_fn(|player_idx| {
-                Self::evaluation_submission_view(
-                    state.score_info.get(player_idx).and_then(Option::as_ref),
-                )
-            }),
+            submissions,
             scoreboxes: std::array::from_fn(|player_idx| {
                 let Some(score_info) = state.score_info.get(player_idx).and_then(Option::as_ref)
                 else {

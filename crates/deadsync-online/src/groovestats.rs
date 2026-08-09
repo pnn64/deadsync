@@ -2299,6 +2299,53 @@ pub fn submit_record_banner_for_side(
     )
 }
 
+#[derive(Clone, Debug, Default)]
+pub struct EvaluationSubmissionSnapshot {
+    pub status: Option<GrooveStatsSubmitUiStatus>,
+    pub event_progress: Vec<EventProgress>,
+    pub record_banner: Option<GrooveStatsSubmitRecordBanner>,
+    pub next_retry_secs: Option<u32>,
+    pub next_retry_is_auto: bool,
+}
+
+pub fn evaluation_submission_snapshots<const N: usize>(
+    queries: &[Option<(profile_data::PlayerSide, &str)>; N],
+) -> [EvaluationSubmissionSnapshot; N] {
+    let ui_queries = queries
+        .map(|query| query.map(|(side, hash)| (profile_data::player_side_index(side), hash)));
+    let mut ui = deadsync_score::groovestats_submit_ui_snapshots(&ui_queries);
+    let retry_views = {
+        let retry = GROOVESTATS_SUBMIT_RETRY.lock().unwrap();
+        let now = Instant::now();
+        queries.map(|query| {
+            query.map_or_else(deadsync_score::SubmitRetryView::default, |(side, hash)| {
+                retry.view_by_key(
+                    profile_data::player_side_index(side),
+                    hash,
+                    now,
+                    |entry| entry.chart_hash.as_str(),
+                    |entry| entry.retry_attempt,
+                    |entry| entry.next_retry_at,
+                )
+            })
+        })
+    };
+    std::array::from_fn(|idx| {
+        let ui = std::mem::take(&mut ui[idx]);
+        let retry = retry_views[idx];
+        EvaluationSubmissionSnapshot {
+            next_retry_is_auto: retry.attempt.is_some_and(|attempt| {
+                attempt < GROOVESTATS_RETRY_MAX_ATTEMPTS
+                    && ui.status.is_some_and(|status| status.is_auto_retryable())
+            }),
+            status: ui.status,
+            event_progress: ui.event_progress,
+            record_banner: ui.record_banner,
+            next_retry_secs: retry.remaining_secs,
+        }
+    })
+}
+
 #[inline(always)]
 pub fn reset_submit_retry(side: profile_data::PlayerSide, chart_hash: &str) {
     GROOVESTATS_SUBMIT_RETRY.lock().unwrap().reset_by_key(
@@ -5076,6 +5123,19 @@ mod tests {
             submit_record_banner_for_side(second, side),
             Some(GrooveStatsSubmitRecordBanner::WorldRecord)
         );
+        let snapshots =
+            evaluation_submission_snapshots(&[Some((side, first)), Some((side, second)), None]);
+        assert_eq!(
+            snapshots[0].status,
+            Some(GrooveStatsSubmitUiStatus::Submitting)
+        );
+        assert_eq!(
+            snapshots[1].record_banner,
+            Some(GrooveStatsSubmitRecordBanner::WorldRecord)
+        );
+        assert!(snapshots[2].event_progress.is_empty());
+        assert_eq!(snapshots[2].next_retry_secs, None);
+        assert!(!snapshots[2].next_retry_is_auto);
         assert!(update_submit_ui_status_if_token(
             side,
             first,

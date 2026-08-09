@@ -1,22 +1,14 @@
 use deadsync_profile::compat as profile;
 
 pub use crate::arrowcloud::{
-    next_retry_is_auto as arrowcloud_next_retry_is_auto,
-    next_retry_remaining_secs as arrowcloud_next_retry_remaining_secs,
     retry_manual_submit_from_app_runtime as retry_arrowcloud_submit,
     submit_gameplay_from_app_runtime as submit_arrowcloud_payloads_from_gameplay,
-    submit_ui_status_for_side as get_arrowcloud_submit_ui_status_for_side,
     tick_auto_submit_retries_from_app_runtime as tick_arrowcloud_auto_retries,
 };
 pub use crate::groovestats::{
     eval_state_from_app_runtime as groovestats_eval_state_from_gameplay,
-    next_retry_is_auto as groovestats_next_retry_is_auto,
-    next_retry_remaining_secs as groovestats_next_retry_remaining_secs,
     retry_manual_submit_from_app_runtime as retry_groovestats_submit,
-    submit_event_progress_for_side as get_groovestats_submit_event_progress_for_side,
     submit_gameplay_from_app_runtime as submit_groovestats_payloads_from_gameplay,
-    submit_record_banner_for_side as get_groovestats_submit_record_banner_for_side,
-    submit_ui_status_for_side as get_groovestats_submit_ui_status_for_side,
     tick_auto_submit_retries_from_app_runtime as tick_groovestats_auto_retries,
 };
 pub use crate::player_leaderboards::{
@@ -78,3 +70,35 @@ pub use profile::{
     seed_session_online_itl_self_rank, seed_session_online_itl_self_score,
     total_songs_played_for_id as total_songs_played_for_profile, total_songs_played_for_side,
 };
+
+#[derive(Clone, Debug, Default)]
+pub struct EvaluationSubmissionSnapshot {
+    pub groovestats_status: Option<deadsync_score::GrooveStatsSubmitUiStatus>,
+    pub arrowcloud_status: Option<deadsync_score::ArrowCloudSubmitUiStatus>,
+    pub event_progress: Vec<deadsync_score::EventProgress>,
+    pub record_banner: Option<deadsync_score::GrooveStatsSubmitRecordBanner>,
+    pub groovestats_next_retry_secs: Option<u32>,
+    pub arrowcloud_next_retry_secs: Option<u32>,
+    pub groovestats_next_retry_is_auto: bool,
+    pub arrowcloud_next_retry_is_auto: bool,
+}
+
+pub fn evaluation_submission_snapshots<const N: usize>(
+    queries: &[Option<(deadsync_profile::PlayerSide, &str)>; N],
+) -> [EvaluationSubmissionSnapshot; N] {
+    let mut groovestats = crate::groovestats::evaluation_submission_snapshots(queries);
+    let arrowcloud = crate::arrowcloud::evaluation_submission_snapshots(queries);
+    std::array::from_fn(|idx| {
+        let groovestats = std::mem::take(&mut groovestats[idx]);
+        EvaluationSubmissionSnapshot {
+            groovestats_status: groovestats.status,
+            arrowcloud_status: arrowcloud[idx].status,
+            event_progress: groovestats.event_progress,
+            record_banner: groovestats.record_banner,
+            groovestats_next_retry_secs: groovestats.next_retry_secs,
+            arrowcloud_next_retry_secs: arrowcloud[idx].next_retry_secs,
+            groovestats_next_retry_is_auto: groovestats.next_retry_is_auto,
+            arrowcloud_next_retry_is_auto: arrowcloud[idx].next_retry_is_auto,
+        }
+    })
+}

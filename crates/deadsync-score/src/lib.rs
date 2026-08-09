@@ -2140,6 +2140,12 @@ pub struct SubmitRetryState<T> {
     by_side: [Vec<T>; 2],
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct SubmitRetryView {
+    pub remaining_secs: Option<u32>,
+    pub attempt: Option<u8>,
+}
+
 impl<T> Default for SubmitRetryState<T> {
     fn default() -> Self {
         Self {
@@ -2305,6 +2311,30 @@ impl<T> SubmitRetryState<T> {
     {
         self.get_by_key(side_index, chart_hash, key)
             .map(retry_attempt)
+    }
+
+    pub fn view_by_key<K, A, N>(
+        &self,
+        side_index: usize,
+        chart_hash: &str,
+        now: Instant,
+        key: K,
+        retry_attempt: A,
+        next_retry_at: N,
+    ) -> SubmitRetryView
+    where
+        K: Fn(&T) -> &str,
+        A: Fn(&T) -> u8,
+        N: Fn(&T) -> Option<Instant>,
+    {
+        let Some(entry) = self.get_by_key(side_index, chart_hash, key) else {
+            return SubmitRetryView::default();
+        };
+        SubmitRetryView {
+            remaining_secs: next_retry_at(entry)
+                .map(|target| duration_to_ceil_secs(target.saturating_duration_since(now))),
+            attempt: Some(retry_attempt(entry)),
+        }
     }
 
     pub fn due_retries<K, S, A, N, Side>(
@@ -2540,6 +2570,18 @@ impl<P: Clone + Default, B: Clone> SubmitEventUiState<P, B> {
             .iter()
             .find(|entry| entry.chart_hash.eq_ignore_ascii_case(hash))
             .and_then(|entry| entry.banner.clone())
+    }
+
+    pub fn view(&self, side_index: usize, chart_hash: &str) -> (P, Option<B>) {
+        let hash = chart_hash.trim();
+        if hash.is_empty() {
+            return (P::default(), None);
+        }
+        self.entries(side_index)
+            .iter()
+            .find(|entry| entry.chart_hash.eq_ignore_ascii_case(hash))
+            .map(|entry| (entry.progress.clone(), entry.banner.clone()))
+            .unwrap_or_default()
     }
 }
 
@@ -6466,6 +6508,41 @@ static ARROWCLOUD_SUBMIT_UI_STATUS: LazyLock<Mutex<SubmitUiState<ArrowCloudSubmi
     LazyLock::new(|| Mutex::new(SubmitUiState::default()));
 static ARROWCLOUD_SUBMIT_UI_TOKEN: AtomicU64 = AtomicU64::new(1);
 
+#[derive(Clone, Debug, Default)]
+pub struct GrooveStatsSubmitUiSnapshot {
+    pub status: Option<GrooveStatsSubmitUiStatus>,
+    pub event_progress: Vec<EventProgress>,
+    pub record_banner: Option<GrooveStatsSubmitRecordBanner>,
+}
+
+pub fn groovestats_submit_ui_snapshots<const N: usize>(
+    queries: &[Option<(usize, &str)>; N],
+) -> [GrooveStatsSubmitUiSnapshot; N] {
+    let statuses = {
+        let state = GROOVESTATS_SUBMIT_UI_STATUS.lock().unwrap();
+        queries.map(|query| query.and_then(|(side_index, hash)| state.get(side_index, hash)))
+    };
+    let events = GROOVESTATS_SUBMIT_EVENT_UI.lock().unwrap();
+    std::array::from_fn(|idx| {
+        let Some((side_index, hash)) = queries[idx] else {
+            return GrooveStatsSubmitUiSnapshot::default();
+        };
+        let (event_progress, record_banner) = events.view(side_index, hash);
+        GrooveStatsSubmitUiSnapshot {
+            status: statuses[idx],
+            event_progress,
+            record_banner,
+        }
+    })
+}
+
+pub fn arrowcloud_submit_ui_statuses<const N: usize>(
+    queries: &[Option<(usize, &str)>; N],
+) -> [Option<ArrowCloudSubmitUiStatus>; N] {
+    let state = ARROWCLOUD_SUBMIT_UI_STATUS.lock().unwrap();
+    queries.map(|query| query.and_then(|(side_index, hash)| state.get(side_index, hash)))
+}
+
 #[inline(always)]
 pub fn groovestats_reset_submit_ui_status(side_index: usize, chart_hash: &str) {
     GROOVESTATS_SUBMIT_UI_STATUS
@@ -8259,6 +8336,20 @@ mod tests {
             ),
             Some(2)
         );
+        assert_eq!(
+            state.view_by_key(
+                0,
+                "one",
+                now,
+                |entry| entry.hash.as_str(),
+                |entry| entry.attempt,
+                |entry| entry.next_retry_at,
+            ),
+            SubmitRetryView {
+                remaining_secs: Some(2),
+                attempt: Some(1),
+            }
+        );
         assert!(
             state
                 .take_ready_by_key(
@@ -8373,6 +8464,12 @@ mod tests {
         assert_eq!(state.progress(1, "abc").len(), 1);
         assert_eq!(
             state.banner(1, "abc"),
+            Some(GrooveStatsSubmitRecordBanner::WorldRecord)
+        );
+        let (view_progress, view_banner) = state.view(1, "abc");
+        assert_eq!(view_progress.len(), 1);
+        assert_eq!(
+            view_banner,
             Some(GrooveStatsSubmitRecordBanner::WorldRecord)
         );
 

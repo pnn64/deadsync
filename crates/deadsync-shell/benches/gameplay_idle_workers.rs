@@ -1,4 +1,4 @@
-use deadsync_shell::bench_support::GameplayIdleWorkersBenchmark;
+use deadsync_shell::bench_support::{EvaluationSubmissionBenchmark, GameplayIdleWorkersBenchmark};
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::hint::black_box;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
@@ -300,6 +300,16 @@ fn main() {
         "borrowed snapshot",
         measure(|| old.legacy_evaluation_config_frame()),
         measure(|| new.frame_evaluation_config_frame()),
+    );
+
+    let old = EvaluationSubmissionBenchmark::default();
+    let new = EvaluationSubmissionBenchmark::default();
+    compare_labeled(
+        "stable Evaluation submission state",
+        "per-field locks",
+        "batched snapshot",
+        measure(|| old.legacy_frame()),
+        measure(|| new.snapshot_frame()),
     );
 
     #[cfg(windows)]
