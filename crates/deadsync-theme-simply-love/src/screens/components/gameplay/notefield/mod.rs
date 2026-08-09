@@ -163,13 +163,17 @@ fn player_blue_window_ms(state: &State, player_idx: usize) -> f32 {
     })
 }
 
+#[inline(always)]
+fn combo_number_text(value: u32, slot: u8) -> TextContent {
+    TextContent::prepared_u32(value, slot)
+}
+
 // --- CONSTANTS ---
 
 // Gameplay Layout & Feel
 const TARGET_ARROW_PIXEL_SIZE: f32 = 64.0; // Dance lane width for hold bodies and square fallback visuals
 
 const TEXT_CACHE_LIMIT: usize = 8192;
-const COMBO_PREWARM_CAP: u32 = 2048;
 const MEASURE_PREWARM_CAP: i32 = 64;
 const COLUMN_COUNTDOWN_PREWARM_CAP: i32 = 64;
 const RUN_TIMER_PREWARM_CAP_S: i32 = 600;
@@ -1042,7 +1046,8 @@ pub(crate) fn compose_frame(
             player_color,
             combo_color,
             font: notefield_plan.combo_font,
-            number_text: TextContent::inline_u32,
+            number_text: combo_number_text,
+            number_text_slot: super::FRAME_TEXT_COMBO_BASE + player_idx as u8,
         }
     });
 

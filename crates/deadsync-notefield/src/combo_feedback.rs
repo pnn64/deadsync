@@ -34,7 +34,8 @@ pub(crate) struct ComboFeedbackRequest<'a> {
     pub player_color: [f32; 4],
     pub combo_color: [f32; 4],
     pub font: Option<&'static str>,
-    pub number_text: fn(u32) -> TextContent,
+    pub number_text: fn(u32, u8) -> TextContent,
+    pub number_text_slot: u8,
 }
 
 /// Compose canonical combo numbers and hundred/thousand milestone feedback.
@@ -172,7 +173,7 @@ fn append_combo_number(actors: &mut Vec<Actor>, request: &ComboFeedbackRequest<'
 
     let mut text = TextBuilder::new();
     text.font(font);
-    text.settext((request.number_text)(value));
+    text.settext((request.number_text)(value, request.number_text_slot));
     text.align(0.5, 0.5);
     text.xy(request.number_xy[0], request.number_xy[1]);
     text.zoom(request.style.number_zoom * zoom_mod);
@@ -266,7 +267,7 @@ mod tests {
         }
     }
 
-    fn number_text(value: u32) -> TextContent {
+    fn number_text(value: u32, _slot: u8) -> TextContent {
         TextContent::inline_u32(value)
     }
 
@@ -288,6 +289,7 @@ mod tests {
             combo_color: [0.1, 0.8, 0.3, 0.9],
             font: Some("combo-font"),
             number_text,
+            number_text_slot: 0,
         }
     }
 

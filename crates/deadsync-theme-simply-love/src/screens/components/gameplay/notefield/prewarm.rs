@@ -1,25 +1,23 @@
 use crate::screens::gameplay::GameplayCoreState as State;
-use deadlib_present::actors::{InlineText, TextContent};
-use deadlib_present::compose::{ComposeScratch, TextLayoutCache};
+use deadlib_present::actors::InlineText;
+use deadlib_present::compose::{ComposeScratch, TextLayoutCache, prewarm_u32_text_slot};
 use deadlib_present::font;
 use deadsync_notefield::{MiniIndicatorMode, ZmodMeasureCounterText, zmod_broken_run_end};
 use deadsync_profile as profile_data;
 
 use super::super::display_mods::DISPLAY_MODS_WRAP_WIDTH_PX;
-use super::super::{FRAME_TEXT_MINI_BASE, FRAME_TEXT_OFFSET_BASE, FRAME_TEXT_VERTEX_BUFFERS};
+use super::super::{
+    FRAME_TEXT_COMBO_BASE, FRAME_TEXT_MINI_BASE, FRAME_TEXT_OFFSET_BASE, FRAME_TEXT_VERTEX_BUFFERS,
+};
 use super::text::{
     cached_int_i32, preferred_mods_text, zmod_measure_counter_text, zmod_run_timer_fmt,
 };
 use super::{
-    COLUMN_COUNTDOWN_PREWARM_CAP, COMBO_PREWARM_CAP, MEASURE_PREWARM_CAP, RUN_TIMER_PREWARM_CAP_S,
+    COLUMN_COUNTDOWN_PREWARM_CAP, MEASURE_PREWARM_CAP, RUN_TIMER_PREWARM_CAP_S,
     zmod_combo_font_name, zmod_indicator_mode, zmod_small_combo_font,
 };
 
 pub fn prewarm_text_layout(cache: &mut TextLayoutCache, fonts: &font::FontMap, state: &State) {
-    let prewarm_u32 = |cache: &mut TextLayoutCache, font_name: &'static str, value: u32| {
-        let text = TextContent::inline_u32(value);
-        cache.prewarm_text(fonts, font_name, text.as_str(), None);
-    };
     let prewarm_i32 = |cache: &mut TextLayoutCache, font_name: &'static str, value: i32| {
         let text = cached_int_i32(value);
         cache.prewarm_text(fonts, font_name, text.as_ref(), None);
@@ -40,7 +38,6 @@ pub fn prewarm_text_layout(cache: &mut TextLayoutCache, fonts: &font::FontMap, s
         let text = zmod_run_timer_fmt(second, threshold, trailing);
         cache.prewarm_text(fonts, font_name, text.as_str(), None);
     };
-    let mut max_combo = 0u32;
     let mut max_measure_len = 0i32;
     let music_end_seconds =
         deadsync_core::song_time::song_time_ns_to_seconds(state.music_end_time_ns())
@@ -49,21 +46,6 @@ pub fn prewarm_text_layout(cache: &mut TextLayoutCache, fonts: &font::FontMap, s
 
     for player in 0..state.num_players() {
         let profile = &state.profiles()[player];
-        let totals = state.display_totals_for_player(player);
-        max_combo = max_combo.max(
-            totals
-                .total_steps
-                .saturating_add(totals.holds_total)
-                .saturating_add(totals.rolls_total),
-        );
-
-        if let Some(font_name) = zmod_combo_font_name(profile.combo_font) {
-            for value in 0..=max_combo.min(COMBO_PREWARM_CAP) {
-                prewarm_u32(cache, font_name, value);
-            }
-            prewarm_u32(cache, font_name, max_combo);
-        }
-
         let mods_text = preferred_mods_text(state, player);
         cache.prewarm_text(
             fonts,
@@ -165,6 +147,14 @@ pub fn prewarm_frame_text_scratch(
         InlineText::copy_from("-21474836.48ms").expect("an i32 centisecond offset fits inline");
     for player in 0..state.num_players() {
         let profile = &state.profiles()[player];
+        if let Some(font_name) = zmod_combo_font_name(profile.combo_font) {
+            prewarm_u32_text_slot(
+                cache,
+                fonts,
+                font_name,
+                FRAME_TEXT_COMBO_BASE + player as u8,
+            );
+        }
         if zmod_indicator_mode(profile) != MiniIndicatorMode::None {
             deadlib_present::compose::prewarm_frame_inline_text_slot(
                 cache,

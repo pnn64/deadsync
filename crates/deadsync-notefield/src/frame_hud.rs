@@ -32,7 +32,8 @@ pub struct ComboHudFrame<'a> {
     pub player_color: [f32; 4],
     pub combo_color: [f32; 4],
     pub font: Option<&'static str>,
-    pub number_text: fn(u32) -> TextContent,
+    pub number_text: fn(u32, u8) -> TextContent,
+    pub number_text_slot: u8,
 }
 
 /// Borrowed gameplay error-bar state plus prepared theme text adapters.
@@ -287,6 +288,7 @@ fn compose_combo<S>(
             combo_color,
             font: frame.font,
             number_text: frame.number_text,
+            number_text_slot: frame.number_text_slot,
         },
     );
 }

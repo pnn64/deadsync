@@ -1,5 +1,11 @@
-use deadlib_present::actors::TextContent;
-use deadlib_present::font::{Font, Glyph};
+use deadlib_present::actors::{Actor, TextAlign, TextContent};
+use deadlib_present::compose::{
+    ComposeScratch, TextLayoutCache, build_screen_cached_with_scratch, prewarm_u32_text_slot,
+};
+use deadlib_present::dsl::TextBuilder;
+use deadlib_present::font::{Font, FontMap, Glyph};
+use deadlib_present::space::Metrics;
+use deadlib_render::{BlendMode, DrawOp, RenderFrame};
 use deadsync_assets::AssetManager;
 use deadsync_theme_simply_love::screens::components::gameplay::gameplay_stats::{
     benchmark_game_time, benchmark_game_time_cached, benchmark_game_time_legacy,
@@ -34,6 +40,8 @@ const SMX_SENSOR_VALUES_PER_FRAME: usize = 8;
 const COMBO_VALUES_PER_FRAME: usize = 2;
 const DYNAMIC_TEXT_OPS: usize = 1_000_000;
 const TIMING_SONG_FRAMES: usize = 24_000;
+const COMBO_PRESENT_FRAMES: usize = 240_000;
+const COMBO_PRESENT_FONT: &str = "combo_bench";
 
 struct CountingAlloc {
     allocs: AtomicU64,
@@ -260,6 +268,167 @@ fn measure_combo_text(mut text: impl FnMut(u32) -> TextContent) -> BenchResult {
     }
 }
 
+struct ComboPresentBench {
+    fonts: Arc<FontMap>,
+    cache: TextLayoutCache,
+    scratch: ComposeScratch,
+    prepared: bool,
+}
+
+impl ComboPresentBench {
+    fn legacy(fonts: Arc<FontMap>) -> Self {
+        let mut cache = TextLayoutCache::new(8_192);
+        for value in 0..=2_048 {
+            let content = TextContent::inline_u32(value);
+            cache.prewarm_text(&fonts, COMBO_PRESENT_FONT, content.as_str(), None);
+        }
+        let max_content = TextContent::inline_u32(16_384);
+        cache.prewarm_text(&fonts, COMBO_PRESENT_FONT, max_content.as_str(), None);
+        cache.lock_growth_with_reserve(4_096);
+        Self {
+            fonts,
+            cache,
+            scratch: ComposeScratch::default(),
+            prepared: false,
+        }
+    }
+
+    fn prepared(fonts: Arc<FontMap>) -> Self {
+        let mut cache = TextLayoutCache::new(8_192);
+        let scratch = ComposeScratch::default();
+        for slot in 0..COMBO_VALUES_PER_FRAME as u8 {
+            prewarm_u32_text_slot(&mut cache, &fonts, COMBO_PRESENT_FONT, slot);
+        }
+        cache.lock_growth_with_reserve(4_096);
+        Self {
+            fonts,
+            cache,
+            scratch,
+            prepared: true,
+        }
+    }
+
+    fn compose(&mut self, frame: usize) -> usize {
+        let actors = combo_present_actors(frame, self.prepared);
+        let metrics = Metrics {
+            left: -427.0,
+            right: 427.0,
+            top: 240.0,
+            bottom: -240.0,
+        };
+        let mut render = build_screen_cached_with_scratch(
+            black_box(&actors),
+            [0.0, 0.0, 0.0, 1.0],
+            &metrics,
+            &self.fonts,
+            frame as f32 / 60.0,
+            &mut self.cache,
+            &mut self.scratch,
+        );
+        let checksum = combo_render_checksum(&render);
+        self.scratch.recycle_frame(&mut render);
+        checksum
+    }
+}
+
+fn combo_present_actors(frame: usize, prepared: bool) -> [Actor; COMBO_VALUES_PER_FRAME] {
+    std::array::from_fn(|player| {
+        let value = combo_value(frame, player);
+        let content = if prepared {
+            TextContent::prepared_u32(value, player as u8)
+        } else {
+            TextContent::inline_u32(value)
+        };
+        let mut text = TextBuilder::new();
+        text.font(COMBO_PRESENT_FONT);
+        text.settext(content);
+        text.align(0.5, 0.5);
+        text.xy(-160.0 + player as f32 * 320.0, 24.0);
+        text.zoom(0.8);
+        text.horizalign(TextAlign::Center);
+        text.shadowlength(1.0);
+        text.diffuse([0.25 + player as f32 * 0.5, 0.8, 0.4, 1.0]);
+        text.build(player as u64)
+    })
+}
+
+fn combo_render_checksum(frame: &RenderFrame) -> usize {
+    let mut checksum = frame.ops.len().wrapping_mul(0x9e37_79b9);
+    let mut mix = |value: usize| {
+        checksum = checksum.rotate_left(7) ^ value.wrapping_mul(0x85eb_ca6b);
+    };
+    for op in &frame.ops {
+        match *op {
+            DrawOp::TexturedMesh(run) => {
+                mix(run.instance_count as usize);
+                mix(run.texture_handle as usize);
+                mix(run.camera as usize);
+                mix(run.depth_test as usize);
+                mix(match run.blend {
+                    BlendMode::Alpha => 0,
+                    BlendMode::Add => 1,
+                    BlendMode::Multiply => 2,
+                    BlendMode::Subtract => 3,
+                });
+                for vertex in frame.tmesh_geometries[run.geometry as usize]
+                    .vertices
+                    .as_ref()
+                {
+                    for value in vertex
+                        .pos
+                        .iter()
+                        .chain(&vertex.uv)
+                        .chain(&vertex.color)
+                        .chain(&vertex.tex_matrix_scale)
+                    {
+                        mix(value.to_bits() as usize);
+                    }
+                }
+                let start = run.instance_start as usize;
+                let end = start + run.instance_count as usize;
+                for instance in &frame.tmesh_instances[start..end] {
+                    for value in instance
+                        .model_col0
+                        .iter()
+                        .chain(&instance.model_col1)
+                        .chain(&instance.model_col2)
+                        .chain(&instance.model_col3)
+                        .chain(&instance.tint)
+                        .chain(&instance.uv_scale)
+                        .chain(&instance.uv_offset)
+                        .chain(&instance.uv_tex_shift)
+                        .chain(std::slice::from_ref(&instance.texture_mask))
+                    {
+                        mix(value.to_bits() as usize);
+                    }
+                }
+            }
+            DrawOp::Sprite(run) => mix(run.instance_count as usize),
+            DrawOp::Mesh(run) => mix(run.vertex_count as usize),
+        }
+    }
+    checksum
+}
+
+fn measure_combo_presentation(bench: &mut ComboPresentBench) -> BenchResult {
+    for frame in 0..WARMUP_FRAMES {
+        black_box(bench.compose(frame));
+    }
+    let before = ALLOC.snapshot();
+    let before_cycles = read_cycles();
+    let started = Instant::now();
+    let mut checksum = 0usize;
+    for frame in 0..COMBO_PRESENT_FRAMES {
+        checksum = checksum.rotate_left(7) ^ black_box(bench.compose(frame));
+    }
+    BenchResult {
+        elapsed: started.elapsed(),
+        cycles: read_cycles().saturating_sub(before_cycles),
+        allocated: ALLOC.snapshot().delta(before),
+        checksum,
+    }
+}
+
 fn measure_prompt_text(mut text: impl FnMut(&Arc<str>) -> TextContent) -> BenchResult {
     let prompts: [Arc<str>; 3] = [
         Arc::from("Continue holding START to give up"),
@@ -306,6 +475,10 @@ fn print_result_for(label: &str, result: &BenchResult, operations: usize) {
 
 fn main() {
     deadsync_theme_simply_love::i18n::init(deadsync_assets::language::load_for_tests("en"));
+    if std::env::var_os("DEADSYNC_BENCH_COMBO_PRESENT_ONLY").is_some() {
+        benchmark_combo_presentation();
+        return;
+    }
     let lifemeter = GameplayLifemeterOptionBench::default();
     let hidden_percent_lookup =
         measure_dynamic_text(|frame| lifemeter.old_hidden_percent_frame(frame));
@@ -433,6 +606,8 @@ fn main() {
     );
     print_result("bounded cache", &saturated_combo_cache);
     print_result("inline values", &inline_combo_text);
+
+    benchmark_combo_presentation();
 
     let owned_prompt = measure_prompt_text(|text| TextContent::Owned(text.to_string()));
     let shared_prompt = measure_prompt_text(|text| TextContent::Shared(Arc::clone(text)));
@@ -587,10 +762,88 @@ fn main() {
     print_result_for("inline slots", &timing_song_inline, TIMING_SONG_FRAMES);
 }
 
+fn benchmark_combo_presentation() {
+    let combo_fonts = Arc::new(FontMap::from_iter([(
+        COMBO_PRESENT_FONT,
+        combo_present_font(),
+    )]));
+    let legacy_setup_start = ALLOC.snapshot();
+    let mut legacy_present = ComboPresentBench::legacy(Arc::clone(&combo_fonts));
+    let legacy_setup = ALLOC.snapshot().delta(legacy_setup_start);
+    let prepared_setup_start = ALLOC.snapshot();
+    let mut prepared_present = ComboPresentBench::prepared(combo_fonts);
+    let prepared_setup = ALLOC.snapshot().delta(prepared_setup_start);
+    for frame in [0, 1, 11, 12, 24, 49_151] {
+        assert_eq!(
+            legacy_present.compose(frame),
+            prepared_present.compose(frame),
+            "combo presentation differs at frame {frame}"
+        );
+    }
+    let legacy_present_result = measure_combo_presentation(&mut legacy_present);
+    let prepared_present_result = measure_combo_presentation(&mut prepared_present);
+    assert_eq!(
+        legacy_present_result.checksum,
+        prepared_present_result.checksum
+    );
+
+    println!(
+        "\ncombo actor-to-render benchmark \
+         ({COMBO_VALUES_PER_FRAME} players, combo changes every 12 frames)"
+    );
+    print_result_for("whole values", &legacy_present_result, COMBO_PRESENT_FRAMES);
+    print_result_for(
+        "digit slots",
+        &prepared_present_result,
+        COMBO_PRESENT_FRAMES,
+    );
+    println!(
+        "prewarm storage requested: whole values={} allocs / {} bytes, \
+         digit slots={} allocs / {} bytes",
+        legacy_setup.allocs, legacy_setup.bytes, prepared_setup.allocs, prepared_setup.bytes,
+    );
+}
+
 fn intro_asset_manager() -> AssetManager {
     let mut assets = AssetManager::new();
     assets.register_font("miso", intro_test_font());
     assets
+}
+
+fn combo_present_font() -> Font {
+    let fill_key = Arc::<str>::from("bench/combo-fill.png");
+    let stroke_key = Arc::<str>::from("bench/combo-stroke.png");
+    let mut glyph_map = HashMap::new();
+    let mut ascii_glyphs = Box::new(std::array::from_fn(|_| None));
+    for digit in 0..10u8 {
+        let ch = char::from(b'0' + digit);
+        let glyph = Glyph {
+            texture_key: Arc::clone(&fill_key),
+            stroke_texture_key: Some(Arc::clone(&stroke_key)),
+            tex_rect: [digit as f32 * 8.0, 0.0, 8.0, 16.0],
+            uv_scale: [1.0, 1.0],
+            uv_offset: [0.0, 0.0],
+            size: [8.0, 16.0],
+            offset: [0.0, 0.0],
+            advance: 8.0,
+            advance_i32: 8,
+        };
+        glyph_map.insert(ch, glyph.clone());
+        ascii_glyphs[ch as usize] = Some(glyph);
+    }
+    Font {
+        glyph_map,
+        ascii_glyphs,
+        default_glyph: None,
+        line_spacing: 20,
+        height: 16,
+        fallback_font_name: None,
+        cache_tag: 73,
+        chain_key: 73,
+        default_stroke_color: [0.0, 0.0, 0.0, 1.0],
+        stroke_texture_map: HashMap::from([(fill_key.to_string(), stroke_key.to_string())]),
+        texture_hints_map: HashMap::new(),
+    }
 }
 
 fn intro_test_font() -> Font {

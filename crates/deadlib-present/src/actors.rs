@@ -942,6 +942,11 @@ pub enum TextContent {
         domain: u8,
     },
     InlineU32(InlineU32Text),
+    /// Heap-free decimal text resolved through a caller-prewarmed glyph slot.
+    PreparedU32 {
+        text: InlineU32Text,
+        slot: u8,
+    },
 }
 
 /// Heap-free UTF-8 text for short, frame-local formatted values.
@@ -1168,6 +1173,14 @@ impl TextContent {
     }
 
     #[inline(always)]
+    pub fn prepared_u32(value: u32, slot: u8) -> Self {
+        Self::PreparedU32 {
+            text: InlineU32Text::new(value),
+            slot,
+        }
+    }
+
+    #[inline(always)]
     pub const fn frame_inline(value: InlineText) -> Self {
         Self::FrameInline {
             text: value,
@@ -1192,6 +1205,8 @@ impl TextContent {
                 Self::PrewarmedU16 { text, .. } => InlineText::copy_from(text.as_str())
                     .expect("a u16 decimal value fits inline text"),
                 Self::InlineU32(text) => InlineText::copy_from(text.as_str())
+                    .expect("a u32 decimal value fits inline text"),
+                Self::PreparedU32 { text, .. } => InlineText::copy_from(text.as_str())
                     .expect("a u32 decimal value fits inline text"),
                 other => return other,
             };
@@ -1222,6 +1237,7 @@ impl TextContent {
             Self::InlineU16(s) => s.as_str(),
             Self::PrewarmedU16 { text, .. } => text.as_str(),
             Self::InlineU32(s) => s.as_str(),
+            Self::PreparedU32 { text, .. } => text.as_str(),
         }
     }
 
@@ -1328,6 +1344,9 @@ mod tests {
         for value in [0, 7, 42, 250, 500, 8_191, u16::MAX as u32, u32::MAX] {
             let text = TextContent::inline_u32(value);
             assert_eq!(text.as_str(), value.to_string());
+            let prepared = TextContent::prepared_u32(value, 9);
+            assert_eq!(prepared.as_str(), text.as_str());
+            assert!(matches!(prepared, TextContent::PreparedU32 { slot: 9, .. }));
         }
     }
 

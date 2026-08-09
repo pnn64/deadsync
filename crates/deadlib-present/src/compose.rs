@@ -2295,6 +2295,72 @@ impl FrameInlineLayoutSlot {
     }
 }
 
+struct PreparedU32LayoutSlot {
+    layout: CachedTextLayout,
+    key: Option<TextLayoutKey>,
+    value: Option<actors::InlineU32Text>,
+    digits: [Option<CachedGlyph>; 10],
+}
+
+impl PreparedU32LayoutSlot {
+    fn new() -> Self {
+        Self {
+            layout: CachedTextLayout::frame_inline_scratch(),
+            key: None,
+            value: None,
+            digits: [None; 10],
+        }
+    }
+
+    fn prepare(&mut self, key: TextLayoutKey, font: &font::Font, fonts: &font::FontMap) {
+        self.layout.clear_frame_inline_scratch();
+        self.layout.font_height = font.height;
+        self.layout.line_spacing = key.line_spacing;
+        for (digit, slot) in self.digits.iter_mut().enumerate() {
+            let ch = char::from(b'0' + digit as u8);
+            *slot = font::find_glyph(font, ch, fonts)
+                .map(|glyph| cached_glyph(&mut self.layout.texture_pages, glyph, digit, true));
+        }
+        self.key = Some(key);
+        self.value = None;
+    }
+
+    fn rebuild(&mut self, key: TextLayoutKey, text: actors::InlineU32Text) {
+        self.layout.lines.clear();
+        self.layout.glyphs.clear();
+        self.layout.max_logical_width_i = 0;
+        self.layout.layout_seed = text_layout_mesh_seed(key, text.as_str());
+        self.layout.fill_batches = CachedTextMeshVariants::default();
+        self.layout.stroke_batches = CachedTextMeshVariants::default();
+        let mut width_i32 = 0i32;
+        for (char_index, byte) in text.as_str().bytes().enumerate() {
+            let digit = usize::from(byte - b'0');
+            let Some(mut glyph) = self.digits[digit] else {
+                continue;
+            };
+            glyph.char_index = char_index;
+            width_i32 += glyph.advance_i32;
+            self.layout.glyphs.push(glyph);
+        }
+        push_cached_line(
+            &mut self.layout.lines,
+            &mut self.layout.max_logical_width_i,
+            width_i32,
+            0,
+            self.layout.glyphs.len(),
+        );
+        self.layout.glyph_count = self.layout.glyphs.len();
+        self.value = Some(text);
+    }
+
+    fn clear(&mut self) {
+        self.layout.clear_frame_inline_scratch();
+        self.key = None;
+        self.value = None;
+        self.digits = [None; 10];
+    }
+}
+
 struct PrewarmedU16Domain {
     key: Option<TextLayoutKey>,
     layouts: Vec<Box<CachedTextLayout>>,
@@ -2341,9 +2407,12 @@ pub struct TextLayoutFrameStats {
 /// misses rebuild only that slot, unprepared slot IDs saturate to one fallback,
 /// and clear/drop destruction happens at a transition. Existing hit/miss and
 /// built-glyph counters include slot activity. Worst-case work is one bounded
-/// 14-glyph rebuild per changed frame-inline actor. Prewarmed-u16 domains are
-/// bounded dense lookup tables populated at a transition; live hits are one
-/// bounds check and never hash, allocate, evict, or rebuild.
+/// 14-glyph rebuild per changed frame-inline actor. Prepared-u32 slots retain
+/// ten resolved glyph records plus the last value's geometry. Stable values hit
+/// without hashing, font lookup, or geometry work; changes rebuild at most ten
+/// glyphs and replace only that slot's mesh. Prewarmed-u16 domains are bounded
+/// dense lookup tables populated at a transition; live hits are one bounds check
+/// and never hash, allocate, evict, or rebuild.
 pub struct TextLayoutCache {
     // Keep arena growth moving pointers instead of large layouts with initialized OnceCells.
     #[allow(clippy::vec_box)]
@@ -2358,6 +2427,7 @@ pub struct TextLayoutCache {
     uncached_layout: Option<Box<CachedTextLayout>>,
     frame_inline_slots: Vec<FrameInlineLayoutSlot>,
     frame_inline_fallback: FrameInlineLayoutSlot,
+    prepared_u32_slots: Vec<PreparedU32LayoutSlot>,
     prewarmed_u16_domains: Vec<PrewarmedU16Domain>,
 }
 
@@ -2382,6 +2452,7 @@ impl TextLayoutCache {
             uncached_layout: None,
             frame_inline_slots: vec![FrameInlineLayoutSlot::new()],
             frame_inline_fallback: FrameInlineLayoutSlot::new(),
+            prepared_u32_slots: Vec::new(),
             prewarmed_u16_domains: Vec::new(),
         }
     }
@@ -2434,6 +2505,9 @@ impl TextLayoutCache {
             slot.clear();
         }
         self.frame_inline_fallback.clear();
+        for slot in &mut self.prepared_u32_slots {
+            slot.clear();
+        }
         for domain in &mut self.prewarmed_u16_domains {
             domain.clear();
         }
@@ -2664,7 +2738,44 @@ impl TextLayoutCache {
             actors::TextContent::InlineU32(text) => {
                 self.get_or_build_owned(key, font, fonts, text.as_str())
             }
+            actors::TextContent::PreparedU32 { text, slot } => {
+                self.get_or_build_prepared_u32(key, font, fonts, *text, *slot)
+            }
         }
+    }
+
+    fn get_or_build_prepared_u32(
+        &mut self,
+        key: TextLayoutKey,
+        font: &font::Font,
+        fonts: &font::FontMap,
+        text: actors::InlineU32Text,
+        slot: u8,
+    ) -> &CachedTextLayout {
+        let slot_index = usize::from(slot);
+        if !self
+            .prepared_u32_slots
+            .get(slot_index)
+            .is_some_and(|slot| slot.key == Some(key))
+        {
+            return self.get_or_build_owned(key, font, fonts, text.as_str());
+        }
+        let slot = &mut self.prepared_u32_slots[slot_index];
+        if slot.value == Some(text) {
+            if let Some(frame_stats) = self.frame_stats.as_mut() {
+                frame_stats.owned_hits = frame_stats.owned_hits.saturating_add(1);
+            }
+            return &slot.layout;
+        }
+        slot.rebuild(key, text);
+        if let Some(frame_stats) = self.frame_stats.as_mut() {
+            frame_stats.misses = frame_stats.misses.saturating_add(1);
+            frame_stats.built_lines = frame_stats.built_lines.saturating_add(1);
+            frame_stats.built_glyphs = frame_stats
+                .built_glyphs
+                .saturating_add(saturating_u32(slot.layout.glyph_count));
+        }
+        &slot.layout
     }
 
     fn get_or_build_frame_inline_slot(
@@ -2853,6 +2964,42 @@ pub fn prewarm_frame_inline_text_slot(
     let layout = cache.get_or_build(font, fonts, &content, None, None);
     let vertices_per_buffer = layout.glyph_count.saturating_mul(6);
     let texture_pages = layout.texture_pages.len().max(1);
+    prewarm_transient_text_scratch(scratch, vertices_per_buffer, texture_pages, vertex_buffers);
+}
+
+/// Prepares one bounded decimal glyph slot. Live values resolve through ten
+/// retained glyph records without whole-value hashing, font lookup, or
+/// layout-cache insertion, and the slot retains its last value's mesh.
+pub fn prewarm_u32_text_slot(
+    cache: &mut TextLayoutCache,
+    fonts: &font::FontMap,
+    font_name: &'static str,
+    slot: u8,
+) {
+    let Some(font) = fonts.get(font_name) else {
+        return;
+    };
+    let slot_index = usize::from(slot);
+    if cache.prepared_u32_slots.len() <= slot_index {
+        cache
+            .prepared_u32_slots
+            .resize_with(slot_index + 1, PreparedU32LayoutSlot::new);
+    }
+    let key = TextLayoutKey {
+        font_key: font_chain_key(font, fonts),
+        line_spacing: font.line_spacing,
+        wrap_width_pixels: -1,
+    };
+    let slot = &mut cache.prepared_u32_slots[slot_index];
+    slot.prepare(key, font, fonts);
+}
+
+fn prewarm_transient_text_scratch(
+    scratch: &mut ComposeScratch,
+    vertices_per_buffer: usize,
+    texture_pages: usize,
+    vertex_buffers: usize,
+) {
     let vertex_buffers = vertex_buffers.saturating_mul(texture_pages);
     if scratch.transient_text_mesh_builders.capacity() < texture_pages {
         scratch
@@ -7710,9 +7857,10 @@ mod tests {
         clip_textured_mesh_to_world_rect_legacy, clipped_sprite_object_to_world_rect,
         clipped_sprite_object_to_world_rect_legacy, finish_frame, fold_sprite_xy_rot,
         font_chain_key, gather_finalized_sprites, is_affine_world_transform, mul_rgba,
-        prewarm_frame_inline_text_slot, push_shadow_objects_for_range, resolve_sprite_size_like_sm,
-        sort_composed_draw_items, sort_draw_items, sort_draw_items_legacy, str_ptr,
-        textured_mesh_world_bounds, textured_mesh_world_bounds_legacy, wrap_text_lines_by_words,
+        prewarm_frame_inline_text_slot, prewarm_u32_text_slot, push_shadow_objects_for_range,
+        resolve_sprite_size_like_sm, sort_composed_draw_items, sort_draw_items,
+        sort_draw_items_legacy, str_ptr, textured_mesh_world_bounds,
+        textured_mesh_world_bounds_legacy, wrap_text_lines_by_words,
     };
     use crate::actors::{
         Actor, ActorResourceArena, InlineText, RetainedActorFrame, SizeSpec, SpriteSource,
@@ -7867,6 +8015,35 @@ mod tests {
             assert_eq!(expected.vertices.as_ref(), actual.vertices.as_ref());
         }
         assert_eq!(expected.ops, actual.ops);
+    }
+
+    fn assert_test_frames_semantic(expected: &RenderFrame, actual: &RenderFrame) {
+        assert_eq!(expected.clear_color, actual.clear_color);
+        assert_eq!(expected.cameras, actual.cameras);
+        assert_eq!(expected.sprite_instances, actual.sprite_instances);
+        assert_eq!(expected.mesh_vertices, actual.mesh_vertices);
+        assert_eq!(expected.tmesh_instances, actual.tmesh_instances);
+        assert_eq!(expected.ops.len(), actual.ops.len());
+        for (expected_op, actual_op) in expected.ops.iter().zip(&actual.ops) {
+            match (*expected_op, *actual_op) {
+                (DrawOp::TexturedMesh(expected_run), DrawOp::TexturedMesh(actual_run)) => {
+                    assert_eq!(expected_run.instance_start, actual_run.instance_start);
+                    assert_eq!(expected_run.instance_count, actual_run.instance_count);
+                    assert_eq!(expected_run.blend, actual_run.blend);
+                    assert_eq!(expected_run.texture_handle, actual_run.texture_handle);
+                    assert_eq!(expected_run.camera, actual_run.camera);
+                    assert_eq!(expected_run.depth_test, actual_run.depth_test);
+                    let expected_geometry =
+                        &expected.tmesh_geometries[expected_run.geometry as usize];
+                    let actual_geometry = &actual.tmesh_geometries[actual_run.geometry as usize];
+                    assert_eq!(
+                        expected_geometry.vertices.as_ref(),
+                        actual_geometry.vertices.as_ref()
+                    );
+                }
+                _ => assert_eq!(expected_op, actual_op),
+            }
+        }
     }
 
     fn sprite_painter_stream(
@@ -8805,6 +8982,41 @@ mod tests {
         }
     }
 
+    fn test_numeric_font() -> Font {
+        let fill = [
+            Arc::<str>::from("test_numeric_fill_a"),
+            Arc::<str>::from("test_numeric_fill_b"),
+        ];
+        let stroke = [
+            Arc::<str>::from("test_numeric_stroke_a"),
+            Arc::<str>::from("test_numeric_stroke_b"),
+        ];
+        let mut glyph_map = HashMap::new();
+        let mut ascii = std::array::from_fn(|_| None);
+        for digit in 0..10 {
+            let ch = char::from(b'0' + digit);
+            let glyph = test_stroked_glyph(&fill[digit as usize % 2], &stroke[digit as usize % 2]);
+            glyph_map.insert(ch, glyph.clone());
+            ascii[ch as usize] = Some(glyph);
+        }
+        Font {
+            glyph_map,
+            ascii_glyphs: Box::new(ascii),
+            default_glyph: None,
+            line_spacing: 10,
+            height: 10,
+            fallback_font_name: None,
+            cache_tag: 5,
+            chain_key: 5,
+            default_stroke_color: [1.0; 4],
+            stroke_texture_map: HashMap::from([
+                (fill[0].to_string(), stroke[0].to_string()),
+                (fill[1].to_string(), stroke[1].to_string()),
+            ]),
+            texture_hints_map: HashMap::new(),
+        }
+    }
+
     fn test_stroked_text_actor() -> Actor {
         Actor::Text {
             align: [0.0, 0.0],
@@ -8836,6 +9048,27 @@ mod tests {
             shadow_color: [0.0; 4],
             effect: Default::default(),
         }
+    }
+
+    fn test_numeric_actor(content: TextContent) -> Actor {
+        let mut actor = test_stroked_text_actor();
+        let Actor::Text {
+            font,
+            content: actor_content,
+            align_text,
+            shadow_len,
+            shadow_color,
+            ..
+        } = &mut actor
+        else {
+            unreachable!("test text actor remains text");
+        };
+        *font = "numeric";
+        *actor_content = content;
+        *align_text = TextAlign::Center;
+        *shadow_len = [2.0, 2.0];
+        *shadow_color = [0.25, 0.5, 0.75, 0.8];
+        actor
     }
 
     #[derive(Default)]
@@ -10091,6 +10324,70 @@ mod tests {
         assert_eq!(stats.misses, 1);
         assert_eq!(stats.owned_entries, 0);
         assert_eq!(cache.frame_inline_slots.len(), 5);
+    }
+
+    #[test]
+    fn prepared_u32_matches_owned_text_without_value_cache_growth() {
+        let fonts = font::FontMap::from_iter([("numeric", test_numeric_font())]);
+        let metrics = Metrics {
+            left: 0.0,
+            right: 640.0,
+            top: 240.0,
+            bottom: -240.0,
+        };
+        let mut owned_cache = TextLayoutCache::new(32);
+        let mut owned_scratch = ComposeScratch::default();
+        let mut prepared_cache = TextLayoutCache::new(1);
+        let mut prepared_scratch = ComposeScratch::default();
+        prewarm_u32_text_slot(&mut prepared_cache, &fonts, "numeric", 7);
+        prepared_cache.begin_frame_stats(true);
+
+        let values = [0, 1, 8, 9, 10, 99, 100, 2_048, 8_193, u32::MAX];
+        for value in values {
+            let expected_actors = [test_numeric_actor(TextContent::inline_u32(value))];
+            let prepared_actors = [test_numeric_actor(TextContent::prepared_u32(value, 7))];
+            let mut expected = build_screen_cached_with_scratch(
+                &expected_actors,
+                [0.1, 0.2, 0.3, 1.0],
+                &metrics,
+                &fonts,
+                0.25,
+                &mut owned_cache,
+                &mut owned_scratch,
+            );
+            let mut actual = build_screen_cached_with_scratch(
+                &prepared_actors,
+                [0.1, 0.2, 0.3, 1.0],
+                &metrics,
+                &fonts,
+                0.25,
+                &mut prepared_cache,
+                &mut prepared_scratch,
+            );
+
+            assert_test_frames_semantic(&expected, &actual);
+            owned_scratch.recycle_frame(&mut expected);
+            prepared_scratch.recycle_frame(&mut actual);
+        }
+
+        let repeated = [test_numeric_actor(TextContent::prepared_u32(u32::MAX, 7))];
+        let mut frame = build_screen_cached_with_scratch(
+            &repeated,
+            [0.1, 0.2, 0.3, 1.0],
+            &metrics,
+            &fonts,
+            0.25,
+            &mut prepared_cache,
+            &mut prepared_scratch,
+        );
+        prepared_scratch.recycle_frame(&mut frame);
+
+        let stats = prepared_cache.frame_stats();
+        assert_eq!(stats.misses, values.len() as u32);
+        assert_eq!(stats.owned_hits, 1);
+        assert_eq!(stats.owned_entries, 0);
+        assert_eq!(prepared_cache.entry_count, 0);
+        assert_eq!(prepared_cache.prepared_u32_slots.len(), 8);
     }
 
     #[test]
