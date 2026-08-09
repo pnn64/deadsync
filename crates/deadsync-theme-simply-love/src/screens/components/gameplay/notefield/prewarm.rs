@@ -1,5 +1,5 @@
 use crate::screens::gameplay::GameplayCoreState as State;
-use deadlib_present::actors::InlineText;
+use deadlib_present::actors::{InlineText, TextAlign};
 use deadlib_present::compose::{ComposeScratch, TextLayoutCache, prewarm_u32_text_slot};
 use deadlib_present::font;
 use deadsync_notefield::{MiniIndicatorMode, ZmodMeasureCounterText, zmod_broken_run_end};
@@ -153,6 +153,7 @@ pub fn prewarm_frame_text_scratch(
                 fonts,
                 font_name,
                 FRAME_TEXT_COMBO_BASE + player as u8,
+                TextAlign::Center,
             );
         }
         if zmod_indicator_mode(profile) != MiniIndicatorMode::None {

@@ -1945,6 +1945,159 @@ struct CachedTextMeshBatch {
     vertices: Arc<[renderer::TexturedMeshVertex]>,
 }
 
+struct PreparedTextMeshBatch {
+    texture_page: TextPageId,
+    vertices: Arc<Vec<renderer::TexturedMeshVertex>>,
+}
+
+struct PreparedTextMeshBank {
+    fill: Vec<PreparedTextMeshBatch>,
+    stroke: Vec<PreparedTextMeshBatch>,
+    fill_len: usize,
+    stroke_len: usize,
+}
+
+impl PreparedTextMeshBank {
+    fn new(fill_pages: &[TextPageId], stroke_pages: &[TextPageId]) -> Self {
+        let batches = |pages: &[TextPageId]| {
+            pages
+                .iter()
+                .map(|&texture_page| PreparedTextMeshBatch {
+                    texture_page,
+                    vertices: Arc::new(Vec::with_capacity(actors::InlineU32Text::CAPACITY * 6)),
+                })
+                .collect()
+        };
+        Self {
+            fill: batches(fill_pages),
+            stroke: batches(stroke_pages),
+            fill_len: 0,
+            stroke_len: 0,
+        }
+    }
+
+    #[inline(always)]
+    fn is_free(&mut self) -> bool {
+        self.fill
+            .iter_mut()
+            .chain(&mut self.stroke)
+            .all(|batch| Arc::get_mut(&mut batch.vertices).is_some())
+    }
+
+    fn rebuild(
+        &mut self,
+        font_height: i32,
+        line_spacing: i32,
+        max_logical_width_i: i32,
+        lines: &[CachedLine],
+        glyphs: &[CachedGlyph],
+        align: actors::TextAlign,
+    ) {
+        rebuild_prepared_text_mesh_batches(
+            &mut self.fill,
+            &mut self.fill_len,
+            font_height,
+            line_spacing,
+            max_logical_width_i,
+            lines,
+            glyphs,
+            align,
+            false,
+        );
+        rebuild_prepared_text_mesh_batches(
+            &mut self.stroke,
+            &mut self.stroke_len,
+            font_height,
+            line_spacing,
+            max_logical_width_i,
+            lines,
+            glyphs,
+            align,
+            true,
+        );
+    }
+}
+
+struct PreparedTextMeshes {
+    align: actors::TextAlign,
+    banks: [PreparedTextMeshBank; 2],
+    current: Option<usize>,
+}
+
+impl PreparedTextMeshes {
+    fn new(digits: &[Option<CachedGlyph>; 10], align: actors::TextAlign) -> Self {
+        let pages = |stroke: bool| {
+            let mut pages = Vec::with_capacity(10);
+            for glyph in digits.iter().flatten() {
+                let page = if stroke {
+                    glyph.stroke_page
+                } else {
+                    glyph.draw_quad.then_some(glyph.texture_page)
+                };
+                if let Some(page) = page
+                    && !pages.contains(&page)
+                {
+                    pages.push(page);
+                }
+            }
+            pages
+        };
+        let fill_pages = pages(false);
+        let stroke_pages = pages(true);
+        Self {
+            align,
+            banks: std::array::from_fn(|_| PreparedTextMeshBank::new(&fill_pages, &stroke_pages)),
+            current: None,
+        }
+    }
+
+    fn rebuild(
+        &mut self,
+        font_height: i32,
+        line_spacing: i32,
+        max_logical_width_i: i32,
+        lines: &[CachedLine],
+        glyphs: &[CachedGlyph],
+    ) -> bool {
+        let bank_count = self.banks.len();
+        let first = self.current.map_or(0, |current| (current + 1) % bank_count);
+        let mut bank_index = None;
+        for offset in 0..bank_count {
+            let index = (first + offset) % bank_count;
+            if self.banks[index].is_free() {
+                bank_index = Some(index);
+                break;
+            }
+        }
+        let Some(bank_index) = bank_index else {
+            self.current = None;
+            return false;
+        };
+        self.banks[bank_index].rebuild(
+            font_height,
+            line_spacing,
+            max_logical_width_i,
+            lines,
+            glyphs,
+            self.align,
+        );
+        self.current = Some(bank_index);
+        true
+    }
+
+    fn batches(&self, align: actors::TextAlign, stroke: bool) -> Option<&[PreparedTextMeshBatch]> {
+        if align != self.align {
+            return None;
+        }
+        let bank = &self.banks[self.current?];
+        Some(if stroke {
+            &bank.stroke[..bank.stroke_len]
+        } else {
+            &bank.fill[..bank.fill_len]
+        })
+    }
+}
+
 #[derive(Default)]
 struct CachedTextMeshVariants {
     by_align: [OnceCell<Box<[CachedTextMeshBatch]>>; 3],
@@ -2297,6 +2450,7 @@ impl FrameInlineLayoutSlot {
 
 struct PreparedU32LayoutSlot {
     layout: CachedTextLayout,
+    meshes: Option<PreparedTextMeshes>,
     key: Option<TextLayoutKey>,
     value: Option<actors::InlineU32Text>,
     digits: [Option<CachedGlyph>; 10],
@@ -2306,13 +2460,20 @@ impl PreparedU32LayoutSlot {
     fn new() -> Self {
         Self {
             layout: CachedTextLayout::frame_inline_scratch(),
+            meshes: None,
             key: None,
             value: None,
             digits: [None; 10],
         }
     }
 
-    fn prepare(&mut self, key: TextLayoutKey, font: &font::Font, fonts: &font::FontMap) {
+    fn prepare(
+        &mut self,
+        key: TextLayoutKey,
+        font: &font::Font,
+        fonts: &font::FontMap,
+        align: actors::TextAlign,
+    ) {
         self.layout.clear_frame_inline_scratch();
         self.layout.font_height = font.height;
         self.layout.line_spacing = key.line_spacing;
@@ -2321,6 +2482,7 @@ impl PreparedU32LayoutSlot {
             *slot = font::find_glyph(font, ch, fonts)
                 .map(|glyph| cached_glyph(&mut self.layout.texture_pages, glyph, digit, true));
         }
+        self.meshes = Some(PreparedTextMeshes::new(&self.digits, align));
         self.key = Some(key);
         self.value = None;
     }
@@ -2329,7 +2491,7 @@ impl PreparedU32LayoutSlot {
         self.layout.lines.clear();
         self.layout.glyphs.clear();
         self.layout.max_logical_width_i = 0;
-        self.layout.layout_seed = text_layout_mesh_seed(key, text.as_str());
+        self.layout.layout_seed = 0;
         self.layout.fill_batches = CachedTextMeshVariants::default();
         self.layout.stroke_batches = CachedTextMeshVariants::default();
         let mut width_i32 = 0i32;
@@ -2350,11 +2512,24 @@ impl PreparedU32LayoutSlot {
             self.layout.glyphs.len(),
         );
         self.layout.glyph_count = self.layout.glyphs.len();
+        let prepared = self.meshes.as_mut().is_some_and(|meshes| {
+            meshes.rebuild(
+                self.layout.font_height,
+                self.layout.line_spacing,
+                self.layout.max_logical_width_i,
+                &self.layout.lines,
+                &self.layout.glyphs,
+            )
+        });
+        if !prepared {
+            self.layout.layout_seed = text_layout_mesh_seed(key, text.as_str());
+        }
         self.value = Some(text);
     }
 
     fn clear(&mut self) {
         self.layout.clear_frame_inline_scratch();
+        self.meshes = None;
         self.key = None;
         self.value = None;
         self.digits = [None; 10];
@@ -2408,11 +2583,13 @@ pub struct TextLayoutFrameStats {
 /// and clear/drop destruction happens at a transition. Existing hit/miss and
 /// built-glyph counters include slot activity. Worst-case work is one bounded
 /// 14-glyph rebuild per changed frame-inline actor. Prepared-u32 slots retain
-/// ten resolved glyph records plus the last value's geometry. Stable values hit
-/// without hashing, font lookup, or geometry work; changes rebuild at most ten
-/// glyphs and replace only that slot's mesh. Prewarmed-u16 domains are bounded
-/// dense lookup tables populated at a transition; live hits are one bounds check
-/// and never hash, allocate, evict, or rebuild.
+/// ten resolved glyph records plus two preallocated geometry banks. Stable
+/// values hit without hashing, font lookup, or geometry work; changes rebuild at
+/// most ten glyphs into a bank not owned by rendering. If both banks are busy,
+/// the existing allocation-backed layout path preserves correctness. Prepared
+/// geometry is dynamic and never enters the per-value GPU cache. Prewarmed-u16
+/// domains are bounded dense lookup tables populated at a transition; live hits
+/// are one bounds check and never hash, allocate, evict, or rebuild.
 pub struct TextLayoutCache {
     // Keep arena growth moving pointers instead of large layouts with initialized OnceCells.
     #[allow(clippy::vec_box)]
@@ -2429,6 +2606,30 @@ pub struct TextLayoutCache {
     frame_inline_fallback: FrameInlineLayoutSlot,
     prepared_u32_slots: Vec<PreparedU32LayoutSlot>,
     prewarmed_u16_domains: Vec<PrewarmedU16Domain>,
+}
+
+struct ResolvedTextLayout<'a> {
+    layout: &'a CachedTextLayout,
+    prepared_meshes: Option<&'a PreparedTextMeshes>,
+}
+
+impl<'a> ResolvedTextLayout<'a> {
+    #[inline(always)]
+    const fn cached(layout: &'a CachedTextLayout) -> Self {
+        Self {
+            layout,
+            prepared_meshes: None,
+        }
+    }
+}
+
+impl std::ops::Deref for ResolvedTextLayout<'_> {
+    type Target = CachedTextLayout;
+
+    #[inline(always)]
+    fn deref(&self) -> &Self::Target {
+        self.layout
+    }
 }
 
 impl Default for TextLayoutCache {
@@ -2713,30 +2914,36 @@ impl TextLayoutCache {
         content: &actors::TextContent,
         wrap_width_pixels: Option<i32>,
         line_spacing: Option<i32>,
-    ) -> &CachedTextLayout {
+    ) -> ResolvedTextLayout<'_> {
         let key = TextLayoutKey {
             font_key: font_chain_key(font, fonts),
             line_spacing: line_spacing.unwrap_or(font.line_spacing),
             wrap_width_pixels: wrap_width_pixels.unwrap_or(-1),
         };
         match content {
-            actors::TextContent::Static(text) => self.get_or_build_owned(key, font, fonts, text),
-            actors::TextContent::Owned(text) => self.get_or_build_owned(key, font, fonts, text),
-            actors::TextContent::Shared(text) => self.get_or_build_shared(key, font, fonts, text),
+            actors::TextContent::Static(text) => {
+                ResolvedTextLayout::cached(self.get_or_build_owned(key, font, fonts, text))
+            }
+            actors::TextContent::Owned(text) => {
+                ResolvedTextLayout::cached(self.get_or_build_owned(key, font, fonts, text))
+            }
+            actors::TextContent::Shared(text) => {
+                ResolvedTextLayout::cached(self.get_or_build_shared(key, font, fonts, text))
+            }
             actors::TextContent::Inline(text) => {
-                self.get_or_build_owned(key, font, fonts, text.as_str())
+                ResolvedTextLayout::cached(self.get_or_build_owned(key, font, fonts, text.as_str()))
             }
-            actors::TextContent::FrameInline { text, slot } => {
-                self.get_or_build_frame_inline_slot(key, font, fonts, *text, *slot)
-            }
+            actors::TextContent::FrameInline { text, slot } => ResolvedTextLayout::cached(
+                self.get_or_build_frame_inline_slot(key, font, fonts, *text, *slot),
+            ),
             actors::TextContent::InlineU16(text) => {
-                self.get_or_build_owned(key, font, fonts, text.as_str())
+                ResolvedTextLayout::cached(self.get_or_build_owned(key, font, fonts, text.as_str()))
             }
-            actors::TextContent::PrewarmedU16 { text, domain } => {
-                self.get_or_build_prewarmed_u16(key, font, fonts, *text, *domain)
-            }
+            actors::TextContent::PrewarmedU16 { text, domain } => ResolvedTextLayout::cached(
+                self.get_or_build_prewarmed_u16(key, font, fonts, *text, *domain),
+            ),
             actors::TextContent::InlineU32(text) => {
-                self.get_or_build_owned(key, font, fonts, text.as_str())
+                ResolvedTextLayout::cached(self.get_or_build_owned(key, font, fonts, text.as_str()))
             }
             actors::TextContent::PreparedU32 { text, slot } => {
                 self.get_or_build_prepared_u32(key, font, fonts, *text, *slot)
@@ -2751,21 +2958,29 @@ impl TextLayoutCache {
         fonts: &font::FontMap,
         text: actors::InlineU32Text,
         slot: u8,
-    ) -> &CachedTextLayout {
+    ) -> ResolvedTextLayout<'_> {
         let slot_index = usize::from(slot);
         if !self
             .prepared_u32_slots
             .get(slot_index)
             .is_some_and(|slot| slot.key == Some(key))
         {
-            return self.get_or_build_owned(key, font, fonts, text.as_str());
+            return ResolvedTextLayout::cached(self.get_or_build_owned(
+                key,
+                font,
+                fonts,
+                text.as_str(),
+            ));
         }
         let slot = &mut self.prepared_u32_slots[slot_index];
         if slot.value == Some(text) {
             if let Some(frame_stats) = self.frame_stats.as_mut() {
                 frame_stats.owned_hits = frame_stats.owned_hits.saturating_add(1);
             }
-            return &slot.layout;
+            return ResolvedTextLayout {
+                layout: &slot.layout,
+                prepared_meshes: slot.meshes.as_ref(),
+            };
         }
         slot.rebuild(key, text);
         if let Some(frame_stats) = self.frame_stats.as_mut() {
@@ -2775,7 +2990,10 @@ impl TextLayoutCache {
                 .built_glyphs
                 .saturating_add(saturating_u32(slot.layout.glyph_count));
         }
-        &slot.layout
+        ResolvedTextLayout {
+            layout: &slot.layout,
+            prepared_meshes: slot.meshes.as_ref(),
+        }
     }
 
     fn get_or_build_frame_inline_slot(
@@ -2967,14 +3185,16 @@ pub fn prewarm_frame_inline_text_slot(
     prewarm_transient_text_scratch(scratch, vertices_per_buffer, texture_pages, vertex_buffers);
 }
 
-/// Prepares one bounded decimal glyph slot. Live values resolve through ten
-/// retained glyph records without whole-value hashing, font lookup, or
-/// layout-cache insertion, and the slot retains its last value's mesh.
+/// Prepares one bounded decimal glyph slot. The normal double-buffered live path
+/// resolves through ten retained glyph records and two reusable mesh banks
+/// without allocation, whole-value hashing, font lookup, layout insertion, or
+/// per-value GPU caching.
 pub fn prewarm_u32_text_slot(
     cache: &mut TextLayoutCache,
     fonts: &font::FontMap,
     font_name: &'static str,
     slot: u8,
+    align: actors::TextAlign,
 ) {
     let Some(font) = fonts.get(font_name) else {
         return;
@@ -2991,7 +3211,7 @@ pub fn prewarm_u32_text_slot(
         wrap_width_pixels: -1,
     };
     let slot = &mut cache.prepared_u32_slots[slot_index];
-    slot.prepare(key, font, fonts);
+    slot.prepare(key, font, fonts, align);
 }
 
 fn prewarm_transient_text_scratch(
@@ -3462,6 +3682,19 @@ fn push_text_mesh_quad_with_color(
     color: [f32; 4],
 ) {
     let out = &mut text_mesh_batch_builder(builders, recycled_vertices, texture_page).vertices;
+    push_text_mesh_quad_vertices(out, quad_x, quad_y, size, uv_scale, uv_offset, color);
+}
+
+#[inline(always)]
+fn push_text_mesh_quad_vertices(
+    out: &mut Vec<renderer::TexturedMeshVertex>,
+    quad_x: f32,
+    quad_y: f32,
+    size: [f32; 2],
+    uv_scale: [f32; 2],
+    uv_offset: [f32; 2],
+    color: [f32; 4],
+) {
     let x0 = quad_x;
     let y0 = quad_y;
     let x1 = quad_x + size[0];
@@ -3565,10 +3798,47 @@ fn build_text_mesh_batches_for_align(
     align: actors::TextAlign,
     stroke: bool,
 ) -> Vec<CachedTextMeshBatch> {
-    if lines.is_empty() || glyphs.is_empty() {
-        return Vec::new();
-    }
+    let mut builders = Vec::new();
+    let mut recycled_vertices = Vec::new();
+    visit_text_mesh_quads(
+        font_height,
+        line_spacing,
+        max_logical_width_i,
+        lines,
+        glyphs,
+        align,
+        stroke,
+        |texture_page, quad_x_logical, quad_y_logical, size, uv_scale, uv_offset| {
+            push_text_mesh_quad(
+                &mut builders,
+                &mut recycled_vertices,
+                texture_page,
+                quad_x_logical,
+                quad_y_logical,
+                size,
+                uv_scale,
+                uv_offset,
+            );
+        },
+    );
 
+    finish_text_mesh_batches(builders, layout_seed, stroke, align)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn visit_text_mesh_quads(
+    font_height: i32,
+    line_spacing: i32,
+    max_logical_width_i: i32,
+    lines: &[CachedLine],
+    glyphs: &[CachedGlyph],
+    align: actors::TextAlign,
+    stroke: bool,
+    mut visit: impl FnMut(TextPageId, f32, f32, [f32; 2], [f32; 2], [f32; 2]),
+) {
+    if lines.is_empty() || glyphs.is_empty() {
+        return;
+    }
     let block_w_logical_even = quantize_up_even_i32(max_logical_width_i) as f32;
     let block_h_logical_i = if lines.len() > 1 {
         font_height + ((lines.len() - 1) as i32 * line_spacing)
@@ -3577,14 +3847,10 @@ fn build_text_mesh_batches_for_align(
     };
     let mut pen_y_logical = lrint_ties_even(-(block_h_logical_i as f32) * 0.5) as i32;
     let line_padding = line_spacing - font_height;
-    let mut builders = Vec::new();
-    let mut recycled_vertices = Vec::new();
-
     for line in lines {
         pen_y_logical += font_height;
         let baseline_local_logical = pen_y_logical as f32;
         let mut pen_x_logical = start_x_logical(align, block_w_logical_even, line.width_i32 as f32);
-
         let line_glyphs =
             &glyphs[line.glyph_start..line.glyph_start.saturating_add(line.glyph_len)];
         for glyph in line_glyphs {
@@ -3595,29 +3861,70 @@ fn build_text_mesh_batches_for_align(
             } else {
                 None
             };
-            let Some(texture_page) = texture_page else {
-                pen_x_logical += glyph.advance_i32;
-                continue;
-            };
-
-            let quad_x_logical = pen_x_logical as f32 + glyph.offset[0];
-            let quad_y_logical = baseline_local_logical + glyph.offset[1];
-            push_text_mesh_quad(
-                &mut builders,
-                &mut recycled_vertices,
-                texture_page,
-                quad_x_logical,
-                quad_y_logical,
-                glyph.size,
-                glyph.uv_scale,
-                glyph.uv_offset,
-            );
+            if let Some(texture_page) = texture_page {
+                visit(
+                    texture_page,
+                    pen_x_logical as f32 + glyph.offset[0],
+                    baseline_local_logical + glyph.offset[1],
+                    glyph.size,
+                    glyph.uv_scale,
+                    glyph.uv_offset,
+                );
+            }
             pen_x_logical += glyph.advance_i32;
         }
         pen_y_logical += line_padding;
     }
+}
 
-    finish_text_mesh_batches(builders, layout_seed, stroke, align)
+#[allow(clippy::too_many_arguments)]
+fn rebuild_prepared_text_mesh_batches(
+    batches: &mut [PreparedTextMeshBatch],
+    used_len: &mut usize,
+    font_height: i32,
+    line_spacing: i32,
+    max_logical_width_i: i32,
+    lines: &[CachedLine],
+    glyphs: &[CachedGlyph],
+    align: actors::TextAlign,
+    stroke: bool,
+) {
+    for batch in batches.iter_mut() {
+        Arc::get_mut(&mut batch.vertices)
+            .expect("prepared text bank must be uniquely owned")
+            .clear();
+    }
+    *used_len = 0;
+    visit_text_mesh_quads(
+        font_height,
+        line_spacing,
+        max_logical_width_i,
+        lines,
+        glyphs,
+        align,
+        stroke,
+        |texture_page, quad_x, quad_y, size, uv_scale, uv_offset| {
+            let batch_index = batches[..*used_len]
+                .iter()
+                .position(|batch| batch.texture_page == texture_page)
+                .unwrap_or_else(|| {
+                    let index = batches[*used_len..]
+                        .iter()
+                        .position(|batch| batch.texture_page == texture_page)
+                        .map(|index| index + *used_len)
+                        .expect("prepared digit page belongs to its prewarmed bank");
+                    batches.swap(*used_len, index);
+                    let inserted = *used_len;
+                    *used_len += 1;
+                    inserted
+                });
+            let vertices = Arc::get_mut(&mut batches[batch_index].vertices)
+                .expect("prepared text bank must remain uniquely owned");
+            push_text_mesh_quad_vertices(
+                vertices, quad_x, quad_y, size, uv_scale, uv_offset, [1.0; 4],
+            );
+        },
+    );
 }
 
 fn push_transient_text_mesh_quad(
@@ -5283,8 +5590,10 @@ fn build_actor_recursive<'a, T: TextureContext + ?Sized>(
             }
             if let Some(fm) = fonts.get(font) {
                 let frame_inline = matches!(content, actors::TextContent::FrameInline { .. });
-                let layout =
+                let resolved =
                     text_cache.get_or_build(fm, fonts, content, *wrap_width_pixels, *line_spacing);
+                let layout = resolved.layout;
+                let prepared_meshes = resolved.prepared_meshes;
                 if layout.lines.is_empty() {
                     return;
                 }
@@ -5328,10 +5637,12 @@ fn build_actor_recursive<'a, T: TextureContext + ?Sized>(
                     let text_distortion = distortion.max(0.0);
                     if !frame_inline && attributes.is_empty() && !*jitter && text_distortion <= 1e-6
                     {
-                        push_text_mesh_batches(
+                        push_resolved_text_mesh_batches(
                             out,
                             layout,
-                            layout.fill_batches(*align_text),
+                            prepared_meshes,
+                            *align_text,
+                            false,
                             &placement,
                             [1.0; 4],
                             *local_transform,
@@ -5352,10 +5663,12 @@ fn build_actor_recursive<'a, T: TextureContext + ?Sized>(
                         if needs_stroke {
                             let stroke_start = out.len();
                             let stroke_start_sprite = sprite_instances.len();
-                            push_text_mesh_batches(
+                            push_resolved_text_mesh_batches(
                                 out,
                                 layout,
-                                layout.stroke_batches(*align_text),
+                                prepared_meshes,
+                                *align_text,
+                                true,
                                 &placement,
                                 stroke_rgba,
                                 *local_transform,
@@ -5443,10 +5756,12 @@ fn build_actor_recursive<'a, T: TextureContext + ?Sized>(
                                     texture_ctx,
                                 );
                             } else {
-                                push_text_mesh_batches(
+                                push_resolved_text_mesh_batches(
                                     out,
                                     layout,
-                                    layout.stroke_batches(*align_text),
+                                    prepared_meshes,
+                                    *align_text,
+                                    true,
                                     &placement,
                                     stroke_rgba,
                                     *local_transform,
@@ -6270,6 +6585,101 @@ const fn quantize_up_even_i32(v: i32) -> i32 {
         v + 1
     } else {
         v
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn push_resolved_text_mesh_batches<T: TextureContext + ?Sized>(
+    out: &mut FrameBuilder,
+    layout: &CachedTextLayout,
+    prepared_meshes: Option<&PreparedTextMeshes>,
+    align: actors::TextAlign,
+    stroke: bool,
+    placement: &TextLayoutPlacement,
+    tint: [f32; 4],
+    local_transform: Matrix4,
+    m: &Metrics,
+    texture_generation: u64,
+    texture_ctx: &T,
+) {
+    if let Some(batches) = prepared_meshes.and_then(|meshes| meshes.batches(align, stroke)) {
+        push_prepared_text_mesh_batches(
+            out,
+            layout,
+            batches,
+            placement,
+            tint,
+            local_transform,
+            m,
+            texture_generation,
+            texture_ctx,
+        );
+        return;
+    }
+    let batches = if stroke {
+        layout.stroke_batches(align)
+    } else {
+        layout.fill_batches(align)
+    };
+    push_text_mesh_batches(
+        out,
+        layout,
+        batches,
+        placement,
+        tint,
+        local_transform,
+        m,
+        texture_generation,
+        texture_ctx,
+    );
+}
+
+#[allow(clippy::too_many_arguments)]
+fn push_prepared_text_mesh_batches<T: TextureContext + ?Sized>(
+    out: &mut FrameBuilder,
+    layout: &CachedTextLayout,
+    batches: &[PreparedTextMeshBatch],
+    placement: &TextLayoutPlacement,
+    tint: [f32; 4],
+    local_transform: Matrix4,
+    m: &Metrics,
+    texture_generation: u64,
+    texture_ctx: &T,
+) {
+    if batches.is_empty() || tint[3] <= 0.0 {
+        return;
+    }
+    let transform = Matrix4::from_translation(Vector3::new(
+        m.left + placement.block_center_x,
+        m.top - placement.block_center_y,
+        0.0,
+    )) * Matrix4::from_scale(Vector3::new(placement.sx, -placement.sy, 1.0))
+        * local_transform;
+
+    out.reserve(batches.len());
+    for batch in batches {
+        out.push_textured_mesh(
+            layout
+                .texture_page(batch.texture_page)
+                .texture_handle(texture_generation, texture_ctx),
+            0,
+            0,
+            BlendMode::Alpha,
+            0,
+            TexturedMeshPayload {
+                instance: renderer::TexturedMeshInstanceRaw::new(
+                    transform,
+                    tint,
+                    [1.0, 1.0],
+                    [0.0, 0.0],
+                    [0.0, 0.0],
+                    false,
+                ),
+                vertices: renderer::TexturedMeshVertices::Reusable(Arc::clone(&batch.vertices)),
+                geom_cache_key: renderer::INVALID_TMESH_CACHE_KEY,
+                depth_test: false,
+            },
+        );
     }
 }
 
@@ -10339,7 +10749,7 @@ mod tests {
         let mut owned_scratch = ComposeScratch::default();
         let mut prepared_cache = TextLayoutCache::new(1);
         let mut prepared_scratch = ComposeScratch::default();
-        prewarm_u32_text_slot(&mut prepared_cache, &fonts, "numeric", 7);
+        prewarm_u32_text_slot(&mut prepared_cache, &fonts, "numeric", 7, TextAlign::Center);
         prepared_cache.begin_frame_stats(true);
 
         let values = [0, 1, 8, 9, 10, 99, 100, 2_048, 8_193, u32::MAX];
@@ -10388,6 +10798,70 @@ mod tests {
         assert_eq!(stats.owned_entries, 0);
         assert_eq!(prepared_cache.entry_count, 0);
         assert_eq!(prepared_cache.prepared_u32_slots.len(), 8);
+    }
+
+    #[test]
+    fn prepared_u32_banks_preserve_busy_frames_and_reuse_after_release() {
+        fn reusable_ptr(frame: &RenderFrame) -> *const TexturedMeshVertex {
+            let deadlib_render::TexturedMeshVertices::Reusable(vertices) =
+                &frame.tmesh_geometries[0].vertices
+            else {
+                panic!("prepared text should use reusable geometry");
+            };
+            vertices.as_ptr()
+        }
+
+        fn compose(
+            value: u32,
+            metrics: &Metrics,
+            fonts: &font::FontMap,
+            cache: &mut TextLayoutCache,
+            scratch: &mut ComposeScratch,
+        ) -> RenderFrame {
+            build_screen_cached_with_scratch(
+                &[test_numeric_actor(TextContent::prepared_u32(value, 0))],
+                [0.0, 0.0, 0.0, 1.0],
+                metrics,
+                fonts,
+                0.0,
+                cache,
+                scratch,
+            )
+        }
+
+        let fonts = font::FontMap::from_iter([("numeric", test_numeric_font())]);
+        let metrics = Metrics {
+            left: 0.0,
+            right: 640.0,
+            top: 240.0,
+            bottom: -240.0,
+        };
+        let mut cache = TextLayoutCache::new(1);
+        let mut scratch = ComposeScratch::default();
+        prewarm_u32_text_slot(&mut cache, &fonts, "numeric", 0, TextAlign::Center);
+
+        let mut first = compose(12, &metrics, &fonts, &mut cache, &mut scratch);
+        let first_ptr = reusable_ptr(&first);
+        let first_vertices = first.tmesh_geometries[0].vertices.as_ref().to_vec();
+        let mut second = compose(13, &metrics, &fonts, &mut cache, &mut scratch);
+        assert_ne!(first_ptr, reusable_ptr(&second));
+
+        let mut saturated = compose(14, &metrics, &fonts, &mut cache, &mut scratch);
+        assert!(matches!(
+            saturated.tmesh_geometries[0].vertices,
+            deadlib_render::TexturedMeshVertices::Shared(_)
+        ));
+        assert_eq!(
+            first.tmesh_geometries[0].vertices.as_ref(),
+            first_vertices.as_slice()
+        );
+
+        scratch.recycle_frame(&mut saturated);
+        scratch.recycle_frame(&mut first);
+        scratch.recycle_frame(&mut second);
+        let mut reused = compose(15, &metrics, &fonts, &mut cache, &mut scratch);
+        assert_eq!(first_ptr, reusable_ptr(&reused));
+        scratch.recycle_frame(&mut reused);
     }
 
     #[test]

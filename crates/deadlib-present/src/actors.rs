@@ -1123,9 +1123,11 @@ pub struct InlineU32Text {
 }
 
 impl InlineU32Text {
+    pub const CAPACITY: usize = 10;
+
     #[inline(always)]
     pub fn new(mut value: u32) -> Self {
-        let mut bytes = [0; 10];
+        let mut bytes = [0; Self::CAPACITY];
         let mut start = bytes.len();
         loop {
             start -= 1;

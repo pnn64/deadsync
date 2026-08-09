@@ -5,7 +5,9 @@ use deadlib_present::compose::{
 use deadlib_present::dsl::TextBuilder;
 use deadlib_present::font::{Font, FontMap, Glyph};
 use deadlib_present::space::Metrics;
-use deadlib_render::{BlendMode, DrawOp, RenderFrame};
+use deadlib_render::{
+    BlendMode, DrawOp, RenderFrame, TexturedMeshUploads, resolve_textured_meshes,
+};
 use deadsync_assets::AssetManager;
 use deadsync_theme_simply_love::screens::components::gameplay::gameplay_stats::{
     benchmark_game_time, benchmark_game_time_cached, benchmark_game_time_legacy,
@@ -272,6 +274,7 @@ struct ComboPresentBench {
     fonts: Arc<FontMap>,
     cache: TextLayoutCache,
     scratch: ComposeScratch,
+    uploads: TexturedMeshUploads,
     prepared: bool,
 }
 
@@ -289,6 +292,7 @@ impl ComboPresentBench {
             fonts,
             cache,
             scratch: ComposeScratch::default(),
+            uploads: TexturedMeshUploads::default(),
             prepared: false,
         }
     }
@@ -297,13 +301,20 @@ impl ComboPresentBench {
         let mut cache = TextLayoutCache::new(8_192);
         let scratch = ComposeScratch::default();
         for slot in 0..COMBO_VALUES_PER_FRAME as u8 {
-            prewarm_u32_text_slot(&mut cache, &fonts, COMBO_PRESENT_FONT, slot);
+            prewarm_u32_text_slot(
+                &mut cache,
+                &fonts,
+                COMBO_PRESENT_FONT,
+                slot,
+                TextAlign::Center,
+            );
         }
         cache.lock_growth_with_reserve(4_096);
         Self {
             fonts,
             cache,
             scratch,
+            uploads: TexturedMeshUploads::default(),
             prepared: true,
         }
     }
@@ -325,6 +336,8 @@ impl ComboPresentBench {
             &mut self.cache,
             &mut self.scratch,
         );
+        resolve_textured_meshes(&render, &mut self.uploads, |_, _| true);
+        black_box((self.uploads.vertices.len(), self.uploads.sources.len()));
         let checksum = combo_render_checksum(&render);
         self.scratch.recycle_frame(&mut render);
         checksum
@@ -786,9 +799,12 @@ fn benchmark_combo_presentation() {
         legacy_present_result.checksum,
         prepared_present_result.checksum
     );
+    assert_eq!(prepared_present_result.allocated.allocs, 0);
+    assert_eq!(prepared_present_result.allocated.reallocs, 0);
+    assert_eq!(prepared_present_result.allocated.bytes, 0);
 
     println!(
-        "\ncombo actor-to-render benchmark \
+        "\ncombo actor-to-upload benchmark \
          ({COMBO_VALUES_PER_FRAME} players, combo changes every 12 frames)"
     );
     print_result_for("whole values", &legacy_present_result, COMBO_PRESENT_FRAMES);
