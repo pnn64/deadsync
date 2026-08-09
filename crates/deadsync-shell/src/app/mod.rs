@@ -380,8 +380,11 @@ fn apply_course_summary_column_judgments(
     }
 }
 
-fn evaluation_context_view(config: &config::Config) -> EvaluationContextView {
-    let session = profile::get_session_snapshot();
+fn evaluation_context_view(
+    config: &config::Config,
+    profiles: &profile_data::ScoreboxRuntimeView,
+    mut avatar_texture_keys: [Option<String>; MAX_PLAYERS],
+) -> EvaluationContextView {
     EvaluationContextView {
         policy: EvaluationPolicyView {
             enable_groovestats: config.enable_groovestats,
@@ -406,19 +409,17 @@ fn evaluation_context_view(config: &config::Config) -> EvaluationContextView {
             zmod_rating_box_text: config.zmod_rating_box_text,
             breakdown_style: config.select_music_breakdown_style,
         },
-        play_style: session.play_style,
-        player_side: session.player_side,
+        play_style: profiles.play_style,
+        player_side: profiles.player_side,
         players: std::array::from_fn(|player_idx| {
-            let side = profile_data::player_side_for_index(player_idx);
-            let side_profile = profile::get_for_side(side);
-            let (avatar_texture_key, display_name) = profile::footer_fields_for_side(side);
+            let player = &profiles.sides[player_idx];
             EvaluationPlayerView {
-                joined: session.side_joined(side),
-                guest: profile::is_session_side_guest(side),
-                avatar_texture_key,
-                display_name,
-                groovestats_linked: !side_profile.groovestats_api_key.trim().is_empty(),
-                arrowcloud_linked: !side_profile.arrowcloud_api_key.trim().is_empty(),
+                joined: player.joined,
+                guest: player.guest,
+                avatar_texture_key: avatar_texture_keys[player_idx].take(),
+                display_name: player.display_name.clone(),
+                groovestats_linked: !player.leaderboard.api_key().trim().is_empty(),
+                arrowcloud_linked: !player.leaderboard.arrowcloud_api_key().trim().is_empty(),
             }
         }),
     }
@@ -469,17 +470,21 @@ fn build_course_summary_eval_state(
     gameplay_elapsed: f32,
     config: &config::Config,
 ) -> evaluation::State {
-    let profile_session = profile::get_session_snapshot();
+    let (profiles, avatars) = profile_data::runtime_evaluation_profile_view(
+        config.enable_groovestats,
+        config.enable_arrowcloud,
+        config.auto_populate_gs_scores,
+    );
     let score_info = build_course_summary_score_info(
         stage,
         course_graph_stages,
-        profile_session.play_style,
-        profile_session.player_side,
+        profiles.play_style,
+        profiles.player_side,
     );
     let mut state = evaluation::init_from_score_info(
         score_info,
         stage.duration_seconds,
-        evaluation_context_view(config),
+        evaluation_context_view(config, &profiles, avatars),
     );
     state.active_color_index = active_color_index;
     state.session_elapsed = session_elapsed;
@@ -1508,6 +1513,11 @@ impl App {
         gameplay: &gameplay::State,
         config: &config::Config,
     ) -> EvaluationInitView {
+        let (profiles, avatars) = profile_data::runtime_evaluation_profile_view(
+            config.enable_groovestats,
+            config.enable_arrowcloud,
+            config.auto_populate_gs_scores,
+        );
         EvaluationInitView {
             players: std::array::from_fn(|player_idx| {
                 if player_idx >= gameplay.num_players().min(MAX_PLAYERS) {
@@ -1516,7 +1526,7 @@ impl App {
                 let side = if gameplay.num_players() >= 2 {
                     profile_data::player_side_for_index(player_idx)
                 } else {
-                    profile::get_session_player_side()
+                    profiles.player_side
                 };
                 let chart_hash = gameplay.charts()[player_idx].short_hash.as_str();
                 EvaluationInitPlayerView {
@@ -1530,7 +1540,7 @@ impl App {
                     itl: scores::itl_eval_state_from_gameplay(gameplay, player_idx),
                 }
             }),
-            context: evaluation_context_view(config),
+            context: evaluation_context_view(config, &profiles, avatars),
         }
     }
 
@@ -1541,7 +1551,7 @@ impl App {
         let pane_filter = scorebox_pane_filter(config);
         let srpg10 = matches!(config.srpg_variant, config::SrpgVariant::Srpg10)
             && config.visual_style.is_srpg();
-        let profile_view = profile_data::runtime_scorebox_view(
+        let (profile_view, avatars) = profile_data::runtime_evaluation_profile_view(
             config.enable_groovestats,
             config.enable_arrowcloud,
             config.auto_populate_gs_scores,
@@ -1560,8 +1570,10 @@ impl App {
                     EVALUATION_LEADERBOARD_ROWS,
                 )
             });
+        let context = evaluation_context_view(config, &profile_view, avatars);
+        let mut profile_sides = profile_view.sides.map(Some);
         EvaluationRuntimeView {
-            context: evaluation_context_view(config),
+            context,
             lobby: Self::refresh_lobby_runtime_view(),
             groovestats_service: Self::groovestats_service_view(),
             submissions: std::array::from_fn(|player_idx| {
@@ -1574,8 +1586,12 @@ impl App {
                 else {
                     return ScoreboxSideView::default();
                 };
+                let side_idx = profile_data::player_side_index(score_info.side);
+                let player = profile_sides[side_idx]
+                    .take()
+                    .expect("one Evaluation scorebox per player side");
                 Self::scorebox_side_view(
-                    profile_view.sides[profile_data::player_side_index(score_info.side)].clone(),
+                    player,
                     Some(score_info.chart.short_hash.clone()),
                     leaderboards[player_idx].clone(),
                     pane_filter,
@@ -8174,6 +8190,15 @@ mod tests {
     use super::*;
     use deadsync_chart::{ArrowStats, ChartData, SongData, StaminaCounts, TechCounts};
 
+    fn test_evaluation_context(config: &config::Config) -> EvaluationContextView {
+        let (profiles, avatars) = profile_data::runtime_evaluation_profile_view(
+            config.enable_groovestats,
+            config.enable_arrowcloud,
+            config.auto_populate_gs_scores,
+        );
+        evaluation_context_view(config, &profiles, avatars)
+    }
+
     #[test]
     fn visual_policy_resolves_runtime_style_and_bar_choices() {
         let mut config = config::Config {
@@ -8586,7 +8611,7 @@ mod tests {
             1.0,
         ));
         let mut course_page =
-            evaluation::init_from_score_info(course_score, 120.0, evaluation_context_view(&config));
+            evaluation::init_from_score_info(course_score, 120.0, test_evaluation_context(&config));
 
         let mut first = std::array::from_fn(|_| None);
         let mut first_p2 = test_score_info(
@@ -8627,7 +8652,7 @@ mod tests {
         }];
         first[1] = Some(ignored_p1);
         let first_page =
-            evaluation::init_from_score_info(first, 60.0, evaluation_context_view(&config));
+            evaluation::init_from_score_info(first, 60.0, test_evaluation_context(&config));
 
         let mut second = std::array::from_fn(|_| None);
         let mut second_p2 = test_score_info(
@@ -8656,7 +8681,7 @@ mod tests {
         ];
         second[0] = Some(second_p2);
         let second_page =
-            evaluation::init_from_score_info(second, 60.0, evaluation_context_view(&config));
+            evaluation::init_from_score_info(second, 60.0, test_evaluation_context(&config));
 
         apply_course_summary_column_judgments(&mut course_page, &[first_page, second_page]);
 

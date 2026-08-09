@@ -2085,6 +2085,7 @@ pub fn runtime_scorebox_profile_snapshot_for_side(
 pub struct ScoreboxProfileView {
     pub leaderboard: deadsync_score::GameplayScoreboxProfileSnapshot,
     pub joined: bool,
+    pub guest: bool,
     pub display_name: String,
     pub groovestats_username: String,
     pub player_initials: String,
@@ -2124,6 +2125,7 @@ pub fn scorebox_runtime_view(
                     active_profile_local_id(&active_profiles[side_idx]).map(str::to_string),
                 ),
                 joined,
+                guest: active_profile_is_guest(&active_profiles[side_idx]),
                 display_name: profile.display_name.clone(),
                 groovestats_username: profile.groovestats_username.clone(),
                 player_initials: profile.player_initials.clone(),
@@ -2155,6 +2157,40 @@ pub fn runtime_scorebox_view(
         enable_groovestats,
         enable_arrowcloud,
         auto_populate_gs_scores,
+    )
+}
+
+/// Capture all profile-owned Evaluation frame data under one session lock and
+/// one profile lock. The scorebox strings and avatar keys are the final owned
+/// copies consumed by the screen snapshot; no full `Profile` leaves the store.
+pub fn runtime_evaluation_profile_view(
+    enable_groovestats: bool,
+    enable_arrowcloud: bool,
+    auto_populate_gs_scores: bool,
+) -> (ScoreboxRuntimeView, [Option<String>; PLAYER_SLOTS]) {
+    let (play_style, player_side, joined_mask, active_profiles) = {
+        let session = runtime_lock_session();
+        (
+            session.play_style,
+            session.player_side,
+            session.joined_mask,
+            session.active_profiles.clone(),
+        )
+    };
+    let profiles = runtime_lock_profiles();
+    let avatars = std::array::from_fn(|side_idx| profiles[side_idx].avatar_texture_key.clone());
+    (
+        scorebox_runtime_view(
+            &profiles,
+            &active_profiles,
+            joined_mask,
+            play_style,
+            player_side,
+            enable_groovestats,
+            enable_arrowcloud,
+            auto_populate_gs_scores,
+        ),
+        avatars,
     )
 }
 
@@ -10063,10 +10099,12 @@ mod tests {
         ];
         let mut profiles = [Profile::default(), Profile::default()];
         profiles[0].display_name = "Player One".to_string();
+        profiles[0].avatar_texture_key = Some("avatar-one".to_string());
         profiles[0].player_initials = "P1".to_string();
         profiles[0].groovestats_username = "one".to_string();
         profiles[0].groovestats_api_key = "key-one".to_string();
         profiles[1].display_name = "Player Two".to_string();
+        profiles[1].avatar_texture_key = Some("avatar-two".to_string());
         profiles[1].player_initials = "P2".to_string();
         profiles[1].groovestats_username = "two".to_string();
         profiles[1].groovestats_api_key = "key-two".to_string();
@@ -10085,10 +10123,12 @@ mod tests {
         assert_eq!(view.play_style, PlayStyle::Versus);
         assert_eq!(view.player_side, PlayerSide::P2);
         assert!(!view.sides[0].joined);
+        assert!(!view.sides[0].guest);
         assert!(!view.sides[0].leaderboard.gs_active);
         assert_eq!(view.sides[0].display_name, "Player One");
         assert_eq!(view.sides[0].player_initials, "P1");
         assert!(view.sides[1].joined);
+        assert!(!view.sides[1].guest);
         assert!(view.sides[1].leaderboard.gs_active);
         assert_eq!(view.sides[1].leaderboard.gs_username(), "two");
         assert_eq!(
