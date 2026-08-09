@@ -1,7 +1,7 @@
 use deadsync_theme_simply_love::screens::gameplay::{
-    bench_player_proxy_direct, bench_player_proxy_materialized,
-    bench_song_lua_proxy_capture_cycles, bench_song_lua_proxy_capture_cycles_legacy,
-    bench_song_lua_proxy_capture_cycles_screen_reuse,
+    bench_field_proxy_direct, bench_field_proxy_materialized, bench_player_proxy_direct,
+    bench_player_proxy_materialized, bench_song_lua_proxy_capture_cycles,
+    bench_song_lua_proxy_capture_cycles_legacy, bench_song_lua_proxy_capture_cycles_screen_reuse,
     bench_song_lua_proxy_capture_cycles_single_bank,
 };
 use std::alloc::{GlobalAlloc, Layout, System};
@@ -136,6 +136,18 @@ fn main() {
         let direct = measure(bench_player_proxy_direct, players);
         assert_eq!(materialized.checksum, direct.checksum);
         println!("Player proxy transfer: {players} player(s), {CYCLES} frames");
+        print_result("materialized", &materialized);
+        print_result("direct", &direct);
+        println!(
+            "  speedup={:.2}x cycle reduction={:.2}%\n",
+            materialized.elapsed.as_secs_f64() / direct.elapsed.as_secs_f64(),
+            percent_reduction(materialized.cycles, direct.cycles),
+        );
+
+        let materialized = measure(bench_field_proxy_materialized, players);
+        let direct = measure(bench_field_proxy_direct, players);
+        assert_eq!(materialized.checksum, direct.checksum);
+        println!("Field proxy handoff: {players} player(s), {CYCLES} frames");
         print_result("materialized", &materialized);
         print_result("direct", &direct);
         println!(
