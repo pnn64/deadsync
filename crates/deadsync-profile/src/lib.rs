@@ -2167,7 +2167,12 @@ pub fn runtime_evaluation_profile_view(
     enable_groovestats: bool,
     enable_arrowcloud: bool,
     auto_populate_gs_scores: bool,
-) -> (ScoreboxRuntimeView, [Option<String>; PLAYER_SLOTS]) {
+    favorite_queries: &[Option<(PlayerSide, &str)>; PLAYER_SLOTS],
+) -> (
+    ScoreboxRuntimeView,
+    [Option<String>; PLAYER_SLOTS],
+    [bool; PLAYER_SLOTS],
+) {
     let (play_style, player_side, joined_mask, active_profiles) = {
         let session = runtime_lock_session();
         (
@@ -2179,6 +2184,7 @@ pub fn runtime_evaluation_profile_view(
     };
     let profiles = runtime_lock_profiles();
     let avatars = std::array::from_fn(|side_idx| profiles[side_idx].avatar_texture_key.clone());
+    let favorites = evaluation_favorite_membership(&profiles, favorite_queries);
     (
         scorebox_runtime_view(
             &profiles,
@@ -2191,7 +2197,24 @@ pub fn runtime_evaluation_profile_view(
             auto_populate_gs_scores,
         ),
         avatars,
+        favorites,
     )
+}
+
+fn evaluation_favorite_membership(
+    profiles: &[Profile; PLAYER_SLOTS],
+    queries: &[Option<(PlayerSide, &str)>; PLAYER_SLOTS],
+) -> [bool; PLAYER_SLOTS] {
+    queries.map(|query| {
+        query.is_some_and(|(side, chart_hash)| profile_has_favorite(profiles, side, chart_hash))
+    })
+}
+
+#[cfg(feature = "bench-support")]
+pub fn benchmark_evaluation_favorite_membership(
+    queries: &[Option<(PlayerSide, &str)>; PLAYER_SLOTS],
+) -> [bool; PLAYER_SLOTS] {
+    evaluation_favorite_membership(&runtime_lock_profiles(), queries)
 }
 
 pub fn gameplay_hud_snapshot_from_parts(
@@ -10173,6 +10196,24 @@ mod tests {
                 [false, false],
                 [false, false]
             ]
+        );
+    }
+
+    #[test]
+    fn evaluation_favorite_membership_uses_each_requested_side() {
+        let mut profiles = [Profile::default(), Profile::default()];
+        profiles[0].favorites.insert("p1-chart".to_string());
+        profiles[1].favorites.insert("p2-chart".to_string());
+
+        assert_eq!(
+            evaluation_favorite_membership(
+                &profiles,
+                &[
+                    Some((PlayerSide::P2, "p2-chart")),
+                    Some((PlayerSide::P1, "missing")),
+                ],
+            ),
+            [true, false]
         );
     }
 

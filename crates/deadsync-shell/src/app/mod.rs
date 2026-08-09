@@ -470,10 +470,11 @@ fn build_course_summary_eval_state(
     gameplay_elapsed: f32,
     config: &config::Config,
 ) -> evaluation::State {
-    let (profiles, avatars) = profile_data::runtime_evaluation_profile_view(
+    let (profiles, avatars, _) = profile_data::runtime_evaluation_profile_view(
         config.enable_groovestats,
         config.enable_arrowcloud,
         config.auto_populate_gs_scores,
+        &[None; MAX_PLAYERS],
     );
     let score_info = build_course_summary_score_info(
         stage,
@@ -1513,10 +1514,11 @@ impl App {
         gameplay: &gameplay::State,
         config: &config::Config,
     ) -> EvaluationInitView {
-        let (profiles, avatars) = profile_data::runtime_evaluation_profile_view(
+        let (profiles, avatars, _) = profile_data::runtime_evaluation_profile_view(
             config.enable_groovestats,
             config.enable_arrowcloud,
             config.auto_populate_gs_scores,
+            &[None; MAX_PLAYERS],
         );
         EvaluationInitView {
             players: std::array::from_fn(|player_idx| {
@@ -1551,10 +1553,18 @@ impl App {
         let pane_filter = scorebox_pane_filter(config);
         let srpg10 = matches!(config.srpg_variant, config::SrpgVariant::Srpg10)
             && config.visual_style.is_srpg();
-        let (profile_view, avatars) = profile_data::runtime_evaluation_profile_view(
+        let favorite_queries = std::array::from_fn(|player_idx| {
+            state
+                .score_info
+                .get(player_idx)
+                .and_then(Option::as_ref)
+                .map(|score_info| (score_info.side, score_info.chart.short_hash.as_str()))
+        });
+        let (profile_view, avatars, favorites) = profile_data::runtime_evaluation_profile_view(
             config.enable_groovestats,
             config.enable_arrowcloud,
             config.auto_populate_gs_scores,
+            &favorite_queries,
         );
         let leaderboard_requests = evaluation::leaderboard_requests(state);
         let leaderboards: [Option<deadsync_score::CachedPlayerLeaderboardData>; MAX_PLAYERS] =
@@ -1598,15 +1608,7 @@ impl App {
                     srpg10,
                 )
             }),
-            favorites: std::array::from_fn(|player_idx| {
-                state
-                    .score_info
-                    .get(player_idx)
-                    .and_then(Option::as_ref)
-                    .is_some_and(|score_info| {
-                        profile::is_favorite(score_info.side, &score_info.chart.short_hash)
-                    })
-            }),
+            favorites,
         }
     }
 
@@ -8191,10 +8193,11 @@ mod tests {
     use deadsync_chart::{ArrowStats, ChartData, SongData, StaminaCounts, TechCounts};
 
     fn test_evaluation_context(config: &config::Config) -> EvaluationContextView {
-        let (profiles, avatars) = profile_data::runtime_evaluation_profile_view(
+        let (profiles, avatars, _) = profile_data::runtime_evaluation_profile_view(
             config.enable_groovestats,
             config.enable_arrowcloud,
             config.auto_populate_gs_scores,
+            &[None; MAX_PLAYERS],
         );
         evaluation_context_view(config, &profiles, avatars)
     }

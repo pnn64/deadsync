@@ -1,7 +1,8 @@
 use deadsync_profile::{
     ActiveProfile, GameplayHudSnapshot, PlayStyle, PlayerSide, ScoreboxProfileView,
-    player_side_index, runtime_evaluation_profile_view, runtime_footer_fields_for_side,
-    runtime_gameplay_hud_snapshot, runtime_profile_for_side, runtime_scorebox_view,
+    ScoreboxRuntimeView, benchmark_evaluation_favorite_membership, player_side_index,
+    runtime_evaluation_profile_view, runtime_footer_fields_for_side, runtime_gameplay_hud_snapshot,
+    runtime_profile_for_side, runtime_profile_has_favorite_for_side, runtime_scorebox_view,
     runtime_session_side_guest, runtime_session_snapshot, runtime_set_active_profiles,
     runtime_set_session_joined, runtime_set_session_play_style, runtime_set_session_player_side,
     runtime_update_profile_for_side,
@@ -17,6 +18,11 @@ static ALLOC: CountingAlloc = CountingAlloc::new();
 const WARMUP_FRAMES: usize = 2_000;
 const MEASURE_FRAMES: usize = 102_400;
 const SAMPLE_FRAMES: usize = 256;
+const FAVORITE_PROBES: usize = 256;
+const EVALUATION_FAVORITES: [Option<(PlayerSide, &str)>; 2] = [
+    Some((PlayerSide::P1, "ALICE-chart-05")),
+    Some((PlayerSide::P2, "BOB-chart-07")),
+];
 
 struct CountingAlloc {
     allocs: AtomicU64,
@@ -135,6 +141,22 @@ fn main() {
         100.0 * (1.0 - new.alloc.allocs as f64 / old.alloc.allocs as f64),
         100.0 * (1.0 - new.alloc.bytes as f64 / old.alloc.bytes as f64),
     );
+
+    let old = run(legacy_evaluation_favorite_frame);
+    let new = run(shared_evaluation_favorite_frame);
+    assert_eq!(old.checksum, new.checksum, "old/new output mismatch");
+
+    println!();
+    println!(
+        "evaluation favorite membership microbenchmark ({MEASURE_FRAMES} frames, {FAVORITE_PROBES} probes/frame)"
+    );
+    print_result("old: two locks", &old);
+    print_result("new: one lock", &new);
+    println!(
+        "speedup {:.2}x | cycles reduction {:.1}%",
+        old.elapsed.as_secs_f64() / new.elapsed.as_secs_f64(),
+        100.0 * (1.0 - new.cycles as f64 / old.cycles as f64),
+    );
 }
 
 fn setup_runtime() {
@@ -187,6 +209,12 @@ fn legacy_evaluation_profile_frame() -> u64 {
                 display_name.as_str(),
                 !profile.groovestats_api_key.trim().is_empty(),
                 !profile.arrowcloud_api_key.trim().is_empty(),
+                runtime_profile_has_favorite_for_side(
+                    side,
+                    EVALUATION_FAVORITES[side_idx]
+                        .expect("benchmark favorite query")
+                        .1,
+                ),
             );
         let player = black_box(scorebox.sides[side_idx].clone());
         checksum = checksum.rotate_left(11) ^ scorebox_player_checksum(&player);
@@ -195,9 +223,40 @@ fn legacy_evaluation_profile_frame() -> u64 {
 }
 
 fn shared_evaluation_profile_frame() -> u64 {
-    let (scorebox, avatars) = runtime_evaluation_profile_view(true, true, true);
+    let (scorebox, avatars, favorites) =
+        runtime_evaluation_profile_view(true, true, true, &EVALUATION_FAVORITES);
+    evaluation_profile_checksum(scorebox, avatars, favorites)
+}
+
+fn legacy_evaluation_favorite_frame() -> u64 {
+    (0..FAVORITE_PROBES).fold(0, |checksum, probe| {
+        let favorites = std::array::from_fn(|side_idx| {
+            let (side, chart_hash) =
+                EVALUATION_FAVORITES[side_idx].expect("benchmark favorite query");
+            runtime_profile_has_favorite_for_side(side, chart_hash)
+        });
+        checksum.rotate_left(5) ^ favorite_checksum(favorites) ^ probe as u64
+    })
+}
+
+fn shared_evaluation_favorite_frame() -> u64 {
+    (0..FAVORITE_PROBES).fold(0, |checksum, probe| {
+        let favorites = benchmark_evaluation_favorite_membership(&EVALUATION_FAVORITES);
+        checksum.rotate_left(5) ^ favorite_checksum(favorites) ^ probe as u64
+    })
+}
+
+fn favorite_checksum(favorites: [bool; 2]) -> u64 {
+    favorites[0] as u64 ^ ((favorites[1] as u64) << 1)
+}
+
+fn evaluation_profile_checksum(
+    scorebox: ScoreboxRuntimeView,
+    avatars: [Option<String>; 2],
+    favorites: [bool; 2],
+) -> u64 {
     let mut checksum = scorebox.play_style as u64 ^ ((scorebox.player_side as u64) << 8);
-    for (player, avatar) in scorebox.sides.into_iter().zip(avatars) {
+    for ((player, avatar), favorite) in scorebox.sides.into_iter().zip(avatars).zip(favorites) {
         checksum = checksum.rotate_left(9)
             ^ evaluation_player_checksum(
                 player.joined,
@@ -206,6 +265,7 @@ fn shared_evaluation_profile_frame() -> u64 {
                 player.display_name.as_str(),
                 !player.leaderboard.api_key().trim().is_empty(),
                 !player.leaderboard.arrowcloud_api_key().trim().is_empty(),
+                favorite,
             );
         checksum = checksum.rotate_left(11) ^ scorebox_player_checksum(&player);
     }
@@ -219,11 +279,13 @@ fn evaluation_player_checksum(
     display_name: &str,
     groovestats_linked: bool,
     arrowcloud_linked: bool,
+    favorite: bool,
 ) -> u64 {
     joined as u64
         ^ ((guest as u64) << 1)
         ^ ((groovestats_linked as u64) << 2)
         ^ ((arrowcloud_linked as u64) << 3)
+        ^ ((favorite as u64) << 4)
         ^ ((avatar.map_or(0, str::len) as u64) << 8)
         ^ ((display_name.len() as u64) << 32)
 }
