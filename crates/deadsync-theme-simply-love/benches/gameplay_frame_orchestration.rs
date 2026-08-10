@@ -1,4 +1,6 @@
-use deadsync_theme_simply_love::screens::gameplay::GameplayFrameOrchestrationBenchmark;
+use deadsync_theme_simply_love::screens::gameplay::{
+    GameplayFrameOrchestrationBenchmark, SongLuaMessageTweenBenchmark,
+};
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::hint::black_box;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
@@ -185,6 +187,19 @@ fn print_result(label: &str, result: &BenchResult) {
     );
 }
 
+fn print_change(old: &BenchResult, new: &BenchResult) {
+    let percent = |before: f64, after: f64| (after / before - 1.0) * 100.0;
+    println!(
+        "  change: {:>7.2}% latency, {:>7.2}% cycles, {:>7.2}% throughput",
+        percent(old.ns_per_frame, new.ns_per_frame),
+        percent(
+            old.cycles_per_frame.unwrap_or(f64::NAN),
+            new.cycles_per_frame.unwrap_or(f64::NAN),
+        ),
+        percent(1_000.0 / old.ns_per_frame, 1_000.0 / new.ns_per_frame),
+    );
+}
+
 fn main() {
     let mut gameplay = GameplayFrameOrchestrationBenchmark::new(VISUAL_LAYERS);
     let steady = measure(|| gameplay.steady_frame());
@@ -195,4 +210,19 @@ fn main() {
 
     println!("steady gameplay macrobenchmark ({VISUAL_LAYERS} visual layers)");
     print_result("steady frame", &steady);
+
+    let mut reference_tween = SongLuaMessageTweenBenchmark::new();
+    let reference = measure(|| reference_tween.reference_frame());
+    let mut compiled_tween = SongLuaMessageTweenBenchmark::new();
+    let compiled = measure(|| compiled_tween.compiled_frame());
+    assert_eq!(reference.checksum, compiled.checksum);
+    assert_eq!(reference.allocated.allocs, 0);
+    assert_eq!(compiled.allocated.allocs, 0);
+    assert_eq!(reference.allocated.reallocs, 0);
+    assert_eq!(compiled.allocated.reallocs, 0);
+
+    println!("\nactive Song-Lua message tween easing");
+    print_result("old string dispatch", &reference);
+    print_result("new cached enum", &compiled);
+    print_change(&reference, &compiled);
 }

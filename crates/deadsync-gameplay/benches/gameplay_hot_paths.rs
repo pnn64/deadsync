@@ -3,8 +3,10 @@ use deadsync_gameplay::{
     AppearanceEffects, AppearanceOverrides, AttackMaskWindow, ChartAttackEffects,
     GameplayAttackRuntimeState, MiniAttackMode, PerspectiveOverrides, ScrollEffects,
     ScrollOverrides, SongLuaEase, SongLuaEaseMaskTarget, SongLuaEaseMaskWindow,
-    VisibilityOverrides, VisualEffects, VisualOverrides, partition_point_from_hint,
-    refresh_active_attack_player, refresh_active_attack_player_indexed, song_lua_ease_factor,
+    SongLuaNoteHideWindowRuntime, SongLuaNoteHideWindows, VisibilityOverrides, VisualEffects,
+    VisualOverrides, partition_point_from_hint, refresh_active_attack_player,
+    refresh_active_attack_player_indexed, refresh_active_attack_player_indexed_reference,
+    song_lua_ease_factor, song_lua_note_hidden, song_lua_note_hidden_reference,
 };
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::hint::black_box;
@@ -18,6 +20,8 @@ const EASE_ITERATIONS: usize = 5_000_000;
 const SEARCH_ITERATIONS: usize = 2_000_000;
 const WINDOW_FRAMES: usize = 100_000;
 const WINDOW_COUNT: usize = 512;
+const IDLE_ATTACK_FRAMES: usize = 2_000_000;
+const NOTE_HIDE_QUERIES: usize = 2_000_000;
 const WARMUP_DIVISOR: usize = 20;
 
 struct CountingAlloc {
@@ -475,6 +479,108 @@ fn window_benchmark() {
     );
 }
 
+fn idle_attack_benchmark() {
+    let masks = (0..WINDOW_COUNT).map(mask_window).collect::<Vec<_>>();
+    let eases = (0..WINDOW_COUNT).map(ease_window).collect::<Vec<_>>();
+    let indexed = GameplayAttackRuntimeState::new(
+        std::array::from_fn(|player| {
+            if player == 0 {
+                masks.clone()
+            } else {
+                Vec::new()
+            }
+        }),
+        std::array::from_fn(|player| {
+            if player == 0 {
+                eases.clone()
+            } else {
+                Vec::new()
+            }
+        }),
+    );
+    let (mask_indices, ease_indices) = indexed.active_window_indices(0);
+    let input = || ActiveAttackRefreshInput {
+        now: -10.0,
+        delta_time: 1.0 / 120.0,
+        attacks_cleared_for_outro: false,
+        base_appearance: AppearanceEffects::default(),
+        base_visual: VisualEffects::default(),
+        base_scroll: ScrollEffects::default(),
+        base_mini_percent: 0.0,
+        attack_windows: &indexed.mask_windows[0],
+        song_lua_ease_windows: &indexed.song_lua_ease_windows[0],
+    };
+    let reference = measure(IDLE_ATTACK_FRAMES, || {
+        refresh_checksum(refresh_active_attack_player_indexed_reference(
+            input(),
+            refresh_state(),
+            mask_indices,
+            ease_indices,
+        ))
+    });
+    let optimized = measure(IDLE_ATTACK_FRAMES, || {
+        refresh_checksum(refresh_active_attack_player_indexed(
+            input(),
+            refresh_state(),
+            mask_indices,
+            ease_indices,
+        ))
+    });
+    assert_eq!(reference.checksum, optimized.checksum);
+    assert_zero_alloc(&reference);
+    assert_zero_alloc(&optimized);
+
+    println!("\nsettled idle attack evaluation ({WINDOW_COUNT} + {WINDOW_COUNT} compiled windows)");
+    print_result("old selected pipeline", &reference);
+    print_result("new settled fast path", &optimized);
+    print_change(&reference, &optimized);
+}
+
+fn note_hide_benchmark() {
+    const HIDE_WINDOWS: usize = 1_024;
+    let source = (0..HIDE_WINDOWS)
+        .map(|index| SongLuaNoteHideWindowRuntime {
+            column: 0,
+            start_beat: index as f32 * 0.5,
+            end_beat: index as f32 * 0.5 + 0.25,
+        })
+        .collect::<Vec<_>>();
+    let indexed = SongLuaNoteHideWindows::new(source);
+    let mut reference_query = 0usize;
+    let reference = measure(NOTE_HIDE_QUERIES, || {
+        let beat = (reference_query % (HIDE_WINDOWS * 4)) as f32 * 0.125;
+        reference_query += 1;
+        u64::from(song_lua_note_hidden_reference(
+            black_box(&indexed),
+            0,
+            black_box(beat),
+        ))
+    });
+    let mut indexed_query = 0usize;
+    let optimized = measure(NOTE_HIDE_QUERIES, || {
+        let beat = (indexed_query % (HIDE_WINDOWS * 4)) as f32 * 0.125;
+        indexed_query += 1;
+        u64::from(song_lua_note_hidden(
+            black_box(&indexed),
+            0,
+            black_box(beat),
+        ))
+    });
+    assert_eq!(reference.checksum, optimized.checksum);
+    assert_zero_alloc(&reference);
+    assert_zero_alloc(&optimized);
+
+    let old_storage = HIDE_WINDOWS * std::mem::size_of::<SongLuaNoteHideWindowRuntime>();
+    println!("\nSong-Lua note-hide lookup ({HIDE_WINDOWS} windows, {NOTE_HIDE_QUERIES} queries)");
+    print_result("old lane scan", &reference);
+    print_result("new prefix index", &optimized);
+    print_change(&reference, &optimized);
+    println!(
+        "  retained index storage: old={old_storage} B / 1 allocation, new={} B / 2 allocations",
+        indexed.storage_bytes(),
+    );
+}
+
 fn assert_zero_alloc(result: &BenchResult) {
     assert_eq!(result.allocated.allocs, 0);
     assert_eq!(result.allocated.reallocs, 0);
@@ -486,6 +592,8 @@ fn main() {
     easing_benchmark();
     search_benchmark();
     window_benchmark();
+    idle_attack_benchmark();
+    note_hide_benchmark();
 }
 
 #[cfg(target_arch = "x86")]

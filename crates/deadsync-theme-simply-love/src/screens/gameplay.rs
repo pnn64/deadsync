@@ -51,7 +51,7 @@ use deadsync_gameplay::{
     GameplayNoteskinEffects, GameplayReceptorGlowBehavior, GameplayReceptorStepBehavior,
     GameplaySession, GameplayTween, GameplayViewport, HoldToExitKey, LeadInTiming,
     MINE_EXPLOSION_DURATION, RECEPTOR_STEP_WINDOWS, RECEPTOR_Y_OFFSET_FROM_CENTER,
-    RECEPTOR_Y_OFFSET_FROM_CENTER_REVERSE, ReplayInputEdge, ReplayOffsetSnapshot,
+    RECEPTOR_Y_OFFSET_FROM_CENTER_REVERSE, ReplayInputEdge, ReplayOffsetSnapshot, SongLuaEase,
     SongLuaOverlayMessageRuntime, SongLuaRuntimeVisuals, TAP_EXPLOSION_WINDOWS,
     autosync_mode_status_line, blue_fantastic_window_ms, build_crossover_rows,
     exit_transition_alpha, handle_core_input, scroll_receptor_y, song_lua_ease_factor,
@@ -1341,8 +1341,15 @@ impl SongLuaProxyRequestIndex {
     }
 }
 
-// Amortizes message-history replay across monotonic gameplay frames. A seek
-// before the last consumed event resets the cursor and replays from the start.
+/// Game-thread, song-lifetime cursor for one overlay's immutable message list.
+///
+/// It owns no variable-capacity storage and needs no synchronization. The first
+/// frame/event transition advances source cursors and compiles the active
+/// block's easing enum; steady tween frames only evaluate that enum. Backward
+/// seeks reset and replay message/block cursors, with work bounded by crossed
+/// events and blocks. There are no allocations, misses, eviction, or separate
+/// destruction; the cache drops with frame scratch. Parity tests cover seeks,
+/// and the message-tween benchmark reports cycles and allocation counts.
 #[derive(Clone, Copy, Debug)]
 struct SongLuaMessageStateCache {
     initialized: bool,
@@ -1352,6 +1359,7 @@ struct SongLuaMessageStateCache {
     active_command_index: Option<usize>,
     active_start_second: f32,
     active_next_block: usize,
+    active_easing: Option<(usize, SongLuaEase)>,
     active_block_state: SongLuaOverlayState,
     active_last_elapsed: f32,
 }
@@ -1366,6 +1374,7 @@ impl Default for SongLuaMessageStateCache {
             active_command_index: None,
             active_start_second: 0.0,
             active_next_block: 0,
+            active_easing: None,
             active_block_state: SongLuaOverlayState::default(),
             active_last_elapsed: f32::NEG_INFINITY,
         }
@@ -1387,6 +1396,7 @@ impl SongLuaMessageStateCache {
     #[inline(always)]
     fn reset_active_blocks(&mut self, state: SongLuaOverlayState) {
         self.active_next_block = 0;
+        self.active_easing = None;
         self.active_block_state = state;
         self.active_last_elapsed = f32::NEG_INFINITY;
     }
@@ -8842,6 +8852,54 @@ fn song_lua_overlay_apply_blocks_cached(
     blocks: &[SongLuaOverlayCommandBlock],
     elapsed: f32,
     next_block: &mut usize,
+    active_easing: &mut Option<(usize, SongLuaEase)>,
+    block_state: &mut SongLuaOverlayState,
+    last_elapsed: &mut f32,
+) -> SongLuaOverlayState {
+    if !elapsed.is_finite() {
+        return state;
+    }
+    if elapsed < *last_elapsed {
+        *next_block = 0;
+        *active_easing = None;
+        *block_state = state;
+    }
+    *last_elapsed = elapsed;
+
+    while let Some(block) = blocks.get(*next_block) {
+        if elapsed < block.start {
+            break;
+        }
+        if block.duration <= f32::EPSILON || elapsed >= block.start + block.duration {
+            apply_song_lua_overlay_delta(block_state, &block.delta);
+            *next_block += 1;
+            continue;
+        }
+        let target = song_lua_overlay_state_with_delta(*block_state, &block.delta);
+        let easing = match *active_easing {
+            Some((index, easing)) if index == *next_block => easing,
+            _ => {
+                let easing = SongLuaEase::from_name(block.easing.as_deref());
+                *active_easing = Some((*next_block, easing));
+                easing
+            }
+        };
+        let t = easing.factor(
+            ((elapsed - block.start) / block.duration).clamp(0.0, 1.0),
+            block.opt1,
+            block.opt2,
+        );
+        return song_lua_overlay_state_lerp(*block_state, target, t, &block.delta);
+    }
+    *block_state
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn song_lua_overlay_apply_blocks_cached_reference(
+    state: SongLuaOverlayState,
+    blocks: &[SongLuaOverlayCommandBlock],
+    elapsed: f32,
+    next_block: &mut usize,
     block_state: &mut SongLuaOverlayState,
     last_elapsed: &mut f32,
 ) -> SongLuaOverlayState {
@@ -8873,6 +8931,82 @@ fn song_lua_overlay_apply_blocks_cached(
         return song_lua_overlay_state_lerp(*block_state, target, t, &block.delta);
     }
     *block_state
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+#[doc(hidden)]
+pub struct SongLuaMessageTweenBenchmark {
+    blocks: [SongLuaOverlayCommandBlock; 1],
+    frame: usize,
+    next_block: usize,
+    active_easing: Option<(usize, SongLuaEase)>,
+    block_state: SongLuaOverlayState,
+    last_elapsed: f32,
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+impl Default for SongLuaMessageTweenBenchmark {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+impl SongLuaMessageTweenBenchmark {
+    pub fn new() -> Self {
+        Self {
+            blocks: [SongLuaOverlayCommandBlock {
+                start: 0.0,
+                duration: 20.0,
+                easing: Some("inOutElastic".to_owned()),
+                opt1: Some(0.35),
+                opt2: None,
+                delta: SongLuaOverlayStateDelta {
+                    x: Some(640.0),
+                    ..SongLuaOverlayStateDelta::default()
+                },
+            }],
+            frame: 0,
+            next_block: 0,
+            active_easing: None,
+            block_state: SongLuaOverlayState::default(),
+            last_elapsed: f32::NEG_INFINITY,
+        }
+    }
+
+    #[inline(always)]
+    fn elapsed(&mut self) -> f32 {
+        let elapsed = (self.frame % 1_200) as f32 / 120.0;
+        self.frame = self.frame.wrapping_add(1);
+        elapsed
+    }
+
+    pub fn reference_frame(&mut self) -> u64 {
+        let elapsed = self.elapsed();
+        let state = song_lua_overlay_apply_blocks_cached_reference(
+            SongLuaOverlayState::default(),
+            &self.blocks,
+            elapsed,
+            &mut self.next_block,
+            &mut self.block_state,
+            &mut self.last_elapsed,
+        );
+        u64::from(state.x.to_bits())
+    }
+
+    pub fn compiled_frame(&mut self) -> u64 {
+        let elapsed = self.elapsed();
+        let state = song_lua_overlay_apply_blocks_cached(
+            SongLuaOverlayState::default(),
+            &self.blocks,
+            elapsed,
+            &mut self.next_block,
+            &mut self.active_easing,
+            &mut self.block_state,
+            &mut self.last_elapsed,
+        );
+        u64::from(state.x.to_bits())
+    }
 }
 
 fn apply_song_lua_overlay_runtime_eases_for(
@@ -9037,6 +9171,7 @@ fn song_lua_message_state_cached(
                 &active_command.blocks,
                 event.event_second - cache.active_start_second,
                 &mut cache.active_next_block,
+                &mut cache.active_easing,
                 &mut cache.active_block_state,
                 &mut cache.active_last_elapsed,
             );
@@ -9057,6 +9192,7 @@ fn song_lua_message_state_cached(
         &command.blocks,
         now - cache.active_start_second,
         &mut cache.active_next_block,
+        &mut cache.active_easing,
         &mut cache.active_block_state,
         &mut cache.active_last_elapsed,
     )

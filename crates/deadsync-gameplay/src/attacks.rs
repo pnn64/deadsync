@@ -608,33 +608,59 @@ struct SongLuaNoteHideRange {
     end: usize,
 }
 
-/// Song-lifetime note-hide windows grouped by lane for gameplay queries.
+/// Song-lifetime note-hide windows indexed by lane and start beat.
 ///
 /// The gameplay screen builds this immutable lookup before play and shares it
 /// with the game/render thread for the life of the song. Capacity is exactly
 /// the number of source windows, with fixed lane ranges and no synchronization,
-/// misses, insertion, eviction, or gameplay-time destruction. A query scans
-/// only its lane's windows, performs no allocation, and has a worst-case cost
-/// bounded by the number of hide windows assigned to that lane. `storage_bytes`
-/// provides instrumentation for the owned window storage; the lookup is freed
-/// when the gameplay screen is dropped.
+/// misses, insertion, eviction, or gameplay-time destruction. Each lane stores
+/// prefix maximum end beats so finite queries use one binary search and one end
+/// comparison, with no allocation. Non-finite source/query values take the
+/// behavior-preserving lane scan. `storage_bytes` reports both owned arrays;
+/// the lookup is freed when the gameplay screen is dropped. Worst-case normal
+/// query work is O(log n) for the lane's window count.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct SongLuaNoteHideWindows {
-    windows: Vec<SongLuaNoteHideWindowRuntime>,
+    windows: Box<[SongLuaNoteHideWindowRuntime]>,
+    prefix_max_ends: Box<[f32]>,
     lane_ranges: [SongLuaNoteHideRange; MAX_COLS],
+    lane_has_nonfinite: [bool; MAX_COLS],
 }
 
 impl SongLuaNoteHideWindows {
     pub fn new(mut windows: Vec<SongLuaNoteHideWindowRuntime>) -> Self {
-        windows.sort_unstable_by_key(|window| window.column);
+        windows.sort_unstable_by(|left, right| {
+            left.column
+                .cmp(&right.column)
+                .then_with(|| left.start_beat.total_cmp(&right.start_beat))
+        });
         let lane_ranges = std::array::from_fn(|column| {
             let start = windows.partition_point(|window| window.column < column);
             let end = windows.partition_point(|window| window.column <= column);
             SongLuaNoteHideRange { start, end }
         });
+        let lane_has_nonfinite = std::array::from_fn(|column| {
+            let range = lane_ranges[column];
+            windows[range.start..range.end]
+                .iter()
+                .any(|window| !window.start_beat.is_finite() || !window.end_beat.is_finite())
+        });
+        let mut prefix_max_ends = Vec::with_capacity(windows.len());
+        let mut column = usize::MAX;
+        let mut max_end = f32::NEG_INFINITY;
+        for window in &windows {
+            if window.column != column {
+                column = window.column;
+                max_end = f32::NEG_INFINITY;
+            }
+            max_end = max_end.max(window.end_beat);
+            prefix_max_ends.push(max_end);
+        }
         Self {
-            windows,
+            windows: windows.into_boxed_slice(),
+            prefix_max_ends: prefix_max_ends.into_boxed_slice(),
             lane_ranges,
+            lane_has_nonfinite,
         }
     }
 
@@ -652,6 +678,11 @@ impl SongLuaNoteHideWindows {
         self.windows
             .len()
             .saturating_mul(std::mem::size_of::<SongLuaNoteHideWindowRuntime>())
+            .saturating_add(
+                self.prefix_max_ends
+                    .len()
+                    .saturating_mul(std::mem::size_of::<f32>()),
+            )
     }
 
     #[inline(always)]
@@ -666,6 +697,20 @@ impl SongLuaNoteHideWindows {
             .windows
             .partition_point(|window| window.column <= column);
         &self.windows[start..end]
+    }
+
+    #[inline(always)]
+    fn hidden(&self, column: usize, beat: f32) -> bool {
+        const EPS: f32 = 1.0e-4;
+        let Some(range) = self.lane_ranges.get(column).copied() else {
+            return song_lua_note_hidden_reference(self, column, beat);
+        };
+        if !beat.is_finite() || self.lane_has_nonfinite[column] {
+            return song_lua_note_hidden_reference(self, column, beat);
+        }
+        let windows = &self.windows[range.start..range.end];
+        let started = windows.partition_point(|window| window.start_beat <= beat + EPS);
+        started > 0 && self.prefix_max_ends[range.start + started - 1] + EPS >= beat
     }
 }
 
@@ -2300,6 +2345,16 @@ pub fn song_lua_extend_column_offset_tails(out: &mut [SongLuaColumnOffsetWindowR
 
 #[inline(always)]
 pub fn song_lua_note_hidden(windows: &SongLuaNoteHideWindows, local_col: usize, beat: f32) -> bool {
+    windows.hidden(local_col, beat)
+}
+
+/// Linear lane scan retained as the benchmark/reference path.
+#[inline]
+pub fn song_lua_note_hidden_reference(
+    windows: &SongLuaNoteHideWindows,
+    local_col: usize,
+    beat: f32,
+) -> bool {
     const EPS: f32 = 1.0e-4;
     windows.column_windows(local_col).iter().any(|window| {
         window.column == local_col
@@ -3290,39 +3345,60 @@ pub fn apply_active_attack_mask_window(
 
 pub fn refresh_active_attack_player(
     input: ActiveAttackRefreshInput<'_>,
-    mut state: ActiveAttackRefreshState,
+    state: ActiveAttackRefreshState,
 ) -> ActiveAttackRefreshOutput {
     if input.attack_windows.is_empty()
         && input.song_lua_ease_windows.is_empty()
         && !input.attacks_cleared_for_outro
     {
-        let appearance_speed = AppearanceEffects::approach_speeds();
+        return refresh_idle_attack_player(input, state);
+    }
+    refresh_active_attack_player_full(input, state, None, None)
+}
+
+#[inline(always)]
+fn appearance_bits_eq(left: AppearanceEffects, right: AppearanceEffects) -> bool {
+    left.hidden.to_bits() == right.hidden.to_bits()
+        && left.hidden_offset.to_bits() == right.hidden_offset.to_bits()
+        && left.sudden.to_bits() == right.sudden.to_bits()
+        && left.sudden_offset.to_bits() == right.sudden_offset.to_bits()
+        && left.stealth.to_bits() == right.stealth.to_bits()
+        && left.blink.to_bits() == right.blink.to_bits()
+        && left.random_vanish.to_bits() == right.random_vanish.to_bits()
+}
+
+#[inline]
+fn refresh_idle_attack_player(
+    input: ActiveAttackRefreshInput<'_>,
+    mut state: ActiveAttackRefreshState,
+) -> ActiveAttackRefreshOutput {
+    let appearance_speed = AppearanceEffects::approach_speeds();
+    if !appearance_bits_eq(state.attack_current_appearance, input.base_appearance) {
         approach_appearance_effects(
             &mut state.attack_current_appearance,
             input.base_appearance,
             appearance_speed,
             input.delta_time,
         );
-        let appearance = state.attack_current_appearance;
-        return ActiveAttackRefreshOutput {
-            attack_target_appearance: input.base_appearance,
-            attack_speed_appearance: appearance_speed,
-            attack_current_appearance: appearance,
-            active_attack_clear_all: false,
-            active_attack_chart: ChartAttackEffects::default(),
-            active_attack_accel: AccelOverrides::default(),
-            active_attack_visual: VisualOverrides::default(),
-            active_attack_appearance: appearance,
-            active_attack_visibility: VisibilityOverrides::default(),
-            active_attack_scroll: ScrollOverrides::default(),
-            active_attack_perspective: PerspectiveOverrides::default(),
-            active_attack_scroll_speed: None,
-            active_attack_mini_percent: None,
-            outro_attack_visual: state.outro_attack_visual,
-            player_transform: SongLuaPlayerTransformValues::default(),
-        };
     }
-    refresh_active_attack_player_full(input, state, None, None)
+    let appearance = state.attack_current_appearance;
+    ActiveAttackRefreshOutput {
+        attack_target_appearance: input.base_appearance,
+        attack_speed_appearance: appearance_speed,
+        attack_current_appearance: appearance,
+        active_attack_clear_all: false,
+        active_attack_chart: ChartAttackEffects::default(),
+        active_attack_accel: AccelOverrides::default(),
+        active_attack_visual: VisualOverrides::default(),
+        active_attack_appearance: appearance,
+        active_attack_visibility: VisibilityOverrides::default(),
+        active_attack_scroll: ScrollOverrides::default(),
+        active_attack_perspective: PerspectiveOverrides::default(),
+        active_attack_scroll_speed: None,
+        active_attack_mini_percent: None,
+        outro_attack_visual: state.outro_attack_visual,
+        player_transform: SongLuaPlayerTransformValues::default(),
+    }
 }
 
 pub fn refresh_active_attack_player_indexed(
@@ -3337,6 +3413,28 @@ pub fn refresh_active_attack_player_indexed(
     {
         return refresh_active_attack_player(input, state);
     }
+    if attack_window_indices.is_empty()
+        && ease_window_indices.is_empty()
+        && !input.attacks_cleared_for_outro
+        && appearance_bits_eq(state.attack_current_appearance, input.base_appearance)
+    {
+        return refresh_idle_attack_player(input, state);
+    }
+    refresh_active_attack_player_full(
+        input,
+        state,
+        Some(attack_window_indices),
+        Some(ease_window_indices),
+    )
+}
+
+/// Full selected-window evaluation retained as the benchmark/reference path.
+pub fn refresh_active_attack_player_indexed_reference(
+    input: ActiveAttackRefreshInput<'_>,
+    state: ActiveAttackRefreshState,
+    attack_window_indices: &[usize],
+    ease_window_indices: &[usize],
+) -> ActiveAttackRefreshOutput {
     refresh_active_attack_player_full(
         input,
         state,

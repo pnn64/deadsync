@@ -2322,6 +2322,53 @@ mod tests {
     }
 
     #[test]
+    fn indexed_attack_idle_fast_path_preserves_settled_and_residual_state() {
+        let masks = [attack_mask_window(
+            10.0,
+            12.0,
+            parse_attack_mods("40% drunk"),
+        )];
+        let eases = [song_lua_ease_mask_window(
+            SongLuaEaseMaskTarget::PlayerRotationZ,
+            10.0,
+            12.0,
+            12.0,
+            0.0,
+            90.0,
+        )];
+        let input = ActiveAttackRefreshInput {
+            now: 0.0,
+            delta_time: 0.25,
+            attacks_cleared_for_outro: false,
+            base_appearance: AppearanceEffects::default(),
+            base_visual: VisualEffects::default(),
+            base_scroll: ScrollEffects::default(),
+            base_mini_percent: 0.0,
+            attack_windows: &masks,
+            song_lua_ease_windows: &eases,
+        };
+        let settled = ActiveAttackRefreshState {
+            attack_current_appearance: AppearanceEffects::default(),
+            active_attack_visual: VisualOverrides::default(),
+            active_attack_visibility: VisibilityOverrides::default(),
+            active_attack_scroll: ScrollOverrides::default(),
+            active_attack_mini_percent: None,
+            outro_attack_visual: VisualOverrides::default(),
+        };
+        assert_eq!(
+            refresh_active_attack_player_indexed(input, settled, &[], &[]),
+            refresh_active_attack_player_indexed_reference(input, settled, &[], &[]),
+        );
+
+        let mut residual = settled;
+        residual.attack_current_appearance.stealth = 1.0;
+        assert_eq!(
+            refresh_active_attack_player_indexed(input, residual, &[], &[]),
+            refresh_active_attack_player_indexed_reference(input, residual, &[], &[]),
+        );
+    }
+
+    #[test]
     fn active_attack_refresh_outro_clears_visuals_and_preserves_visibility() {
         let lua_windows = [song_lua_ease_mask_window(
             SongLuaEaseMaskTarget::PlayerRotationZ,
@@ -7263,7 +7310,19 @@ mod tests {
         let indexed = SongLuaNoteHideWindows::new(source.clone());
 
         for column in 0..=MAX_COLS + 1 {
-            for beat in [-8.0, -4.00005, 0.0, 3.0, 39.99995, 42.0, 44.0, 48.0002] {
+            for beat in [
+                f32::NEG_INFINITY,
+                -8.0,
+                -4.00005,
+                0.0,
+                3.0,
+                39.99995,
+                42.0,
+                44.0,
+                48.0002,
+                f32::INFINITY,
+                f32::NAN,
+            ] {
                 let legacy = source.iter().any(|window| {
                     window.column == column
                         && beat + EPS >= window.start_beat
@@ -7278,7 +7337,9 @@ mod tests {
         }
         assert_eq!(
             indexed.storage_bytes(),
-            source.len() * std::mem::size_of::<SongLuaNoteHideWindowRuntime>()
+            source.len()
+                * (std::mem::size_of::<SongLuaNoteHideWindowRuntime>()
+                    + std::mem::size_of::<f32>())
         );
     }
 
