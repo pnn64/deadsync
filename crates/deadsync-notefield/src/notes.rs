@@ -727,24 +727,30 @@ impl ScrollTravel<'_> {
         draw_distance_after_targets: f32,
         draw_distance_before_targets: f32,
     ) -> Option<(i32, i32)> {
-        let first = find_first_displayed_beat(
+        let stop_at_row_precision = matches!(
+            self.raw,
+            RawTravel::ConstantOneRate { .. } | RawTravel::Constant { .. }
+        );
+        let first_row = find_first_displayed_beat_inner(
             self.request.search_beat,
             draw_distance_after_targets,
             self.request.note_count_stats,
             |beat| self.adjusted(self.raw_beat(beat)),
-        );
-        let last = find_last_displayed_beat(
+            stop_at_row_precision,
+        )
+        .map(beat_to_note_row);
+        let last_row = find_last_displayed_beat_inner(
             self.request.search_beat,
             draw_distance_before_targets,
             self.displayed_speed_percent,
             self.request.accel.boomerang > f32::EPSILON,
             |beat| self.adjusted_with_peak(self.raw_beat(beat)),
-        );
-        first.zip(last).map(|(first, last)| {
-            let first_row = beat_to_note_row(first);
-            let last_row = beat_to_note_row(last.max(first)).max(first_row);
-            (first_row, last_row)
-        })
+            stop_at_row_precision,
+        )
+        .map(beat_to_note_row);
+        first_row
+            .zip(last_row)
+            .map(|(first, last)| (first, last.max(first)))
     }
 
     pub fn arrow_effect_time_s(&self) -> f32 {
@@ -1002,7 +1008,27 @@ pub fn find_first_displayed_beat<F: FnMut(f32) -> f32>(
     current_beat: f32,
     draw_distance: f32,
     stats: &[NoteCountStat],
+    y_for_beat: F,
+) -> Option<f32> {
+    find_first_displayed_beat_inner(current_beat, draw_distance, stats, y_for_beat, false)
+}
+
+pub fn find_first_displayed_row<F: FnMut(f32) -> f32>(
+    current_beat: f32,
+    draw_distance: f32,
+    stats: &[NoteCountStat],
+    y_for_beat: F,
+) -> Option<i32> {
+    find_first_displayed_beat_inner(current_beat, draw_distance, stats, y_for_beat, true)
+        .map(beat_to_note_row)
+}
+
+fn find_first_displayed_beat_inner<F: FnMut(f32) -> f32>(
+    current_beat: f32,
+    draw_distance: f32,
+    stats: &[NoteCountStat],
     mut y_for_beat: F,
+    stop_at_row_precision: bool,
 ) -> Option<f32> {
     if !current_beat.is_finite() || !draw_distance.is_finite() {
         return None;
@@ -1022,16 +1048,56 @@ pub fn find_first_displayed_beat<F: FnMut(f32) -> f32>(
         } else {
             high = mid;
         }
+        if stop_at_row_precision && beat_to_note_row(low) == beat_to_note_row(high) {
+            break;
+        }
     }
     Some(first)
 }
 
+#[cfg(test)]
 pub(crate) fn find_last_displayed_beat<F: FnMut(f32) -> (f32, bool)>(
     current_beat: f32,
     draw_distance: f32,
     displayed_speed_percent: f32,
     boomerang: bool,
+    y_for_beat: F,
+) -> Option<f32> {
+    find_last_displayed_beat_inner(
+        current_beat,
+        draw_distance,
+        displayed_speed_percent,
+        boomerang,
+        y_for_beat,
+        false,
+    )
+}
+
+pub fn find_last_displayed_row<F: FnMut(f32) -> (f32, bool)>(
+    current_beat: f32,
+    draw_distance: f32,
+    displayed_speed_percent: f32,
+    boomerang: bool,
+    y_for_beat: F,
+) -> Option<i32> {
+    find_last_displayed_beat_inner(
+        current_beat,
+        draw_distance,
+        displayed_speed_percent,
+        boomerang,
+        y_for_beat,
+        true,
+    )
+    .map(beat_to_note_row)
+}
+
+fn find_last_displayed_beat_inner<F: FnMut(f32) -> (f32, bool)>(
+    current_beat: f32,
+    draw_distance: f32,
+    displayed_speed_percent: f32,
+    boomerang: bool,
     mut y_for_beat: F,
+    stop_at_row_precision: bool,
 ) -> Option<f32> {
     if !current_beat.is_finite() || !draw_distance.is_finite() {
         return None;
@@ -1048,6 +1114,20 @@ pub(crate) fn find_last_displayed_beat<F: FnMut(f32) -> (f32, bool)>(
             last += search_distance;
         }
         search_distance *= 0.5;
+        if stop_at_row_precision {
+            let rounding_guard = f32::EPSILON * last.abs() * 32.0;
+            let remaining = search_distance.mul_add(2.0, rounding_guard);
+            let cap = if displayed_speed_percent < 0.75 {
+                current_beat + 16.0
+            } else {
+                f32::INFINITY
+            };
+            let low_row = beat_to_note_row((last - remaining).min(cap));
+            let high_row = beat_to_note_row((last + remaining).min(cap));
+            if low_row == high_row {
+                break;
+            }
+        }
     }
     if displayed_speed_percent < 0.75 {
         last = last.min(current_beat + 16.0);
@@ -1065,9 +1145,10 @@ use crate::style::MAX_NOTES_AFTER;
 mod tests {
     use super::{
         MineLayerRequest, NoteGlowRequest, NoteLayerRequest, ScrollTravelRequest,
-        compose_mine_layers, compose_note_glow, compose_note_layer, for_each_visible_hold_index,
-        for_each_visible_note_index, hold_overlaps_visible_window, scroll_travel,
-        song_time_ns_delta_seconds,
+        compose_mine_layers, compose_note_glow, compose_note_layer, find_first_displayed_beat,
+        find_first_displayed_row, find_last_displayed_beat, find_last_displayed_row,
+        for_each_visible_hold_index, for_each_visible_note_index, hold_overlaps_visible_window,
+        scroll_travel, song_time_ns_delta_seconds,
     };
     use crate::{
         AccelYParams, ModelMeshCache, ModelMeshCacheStats, apply_accel_y, move_col_extra,
@@ -1080,7 +1161,7 @@ mod tests {
     use deadsync_noteskin::{
         ModelDrawState, ModelMesh, ModelVertex, NoteskinSlot, SpriteDefinition,
     };
-    use deadsync_rules::note::{HoldData, Note};
+    use deadsync_rules::note::{HoldData, Note, NoteCountStat};
     use deadsync_rules::scroll::ScrollSpeedSetting;
     use deadsync_rules::timing::{
         DelaySegment, ScrollSegment, SpeedSegment, SpeedUnit, StopSegment, TimingData,
@@ -1253,6 +1334,31 @@ mod tests {
             lane_tipsy: 0.0,
             lane_move_y: &[],
         }
+    }
+
+    fn full_precision_visible_range(
+        travel: &super::ScrollTravel<'_>,
+        draw_after: f32,
+        draw_before: f32,
+    ) -> Option<(i32, i32)> {
+        let first = find_first_displayed_beat(
+            travel.request.search_beat,
+            draw_after,
+            travel.request.note_count_stats,
+            |beat| travel.adjusted(travel.raw_beat(beat)),
+        );
+        let last = find_last_displayed_beat(
+            travel.request.search_beat,
+            draw_before,
+            travel.displayed_speed_percent,
+            travel.request.accel.boomerang > f32::EPSILON,
+            |beat| travel.adjusted_with_peak(travel.raw_beat(beat)),
+        );
+        first.zip(last).map(|(first, last)| {
+            let first_row = beat_to_note_row(first);
+            let last_row = beat_to_note_row(last.max(first)).max(first_row);
+            (first_row, last_row)
+        })
     }
 
     fn assert_near(actual: f32, expected: f32) {
@@ -2028,6 +2134,112 @@ mod tests {
 
         travel_request.accel.wave = f32::EPSILON * 2.0;
         assert!(!scroll_travel(travel_request).accel_is_identity);
+    }
+
+    #[test]
+    fn row_precision_search_matches_full_precision_boundaries() {
+        let stats = (0..4_096)
+            .map(|index| NoteCountStat {
+                beat: index as f32 * 0.25,
+                notes_lower: index * 2,
+                notes_upper: index * 2 + 2,
+            })
+            .collect::<Vec<_>>();
+        for current in [-2.0, 0.0, 0.1, 4.25, 63.5, 255.0, 1_023.0] {
+            for distance in [0.0, 1.0, 64.0, 320.0, 1_024.0] {
+                for slope in [0.25, 16.0, 48.0, 128.0] {
+                    let first = find_first_displayed_beat(current, distance, &stats, |beat| {
+                        (beat - current) * slope
+                    })
+                    .map(beat_to_note_row);
+                    let first_row = find_first_displayed_row(current, distance, &stats, |beat| {
+                        (beat - current) * slope
+                    });
+                    assert_eq!(first_row, first);
+
+                    for displayed_speed in [0.5, 0.75, 1.0] {
+                        for boomerang in [false, true] {
+                            let travel =
+                                |beat: f32| ((beat - current) * slope, beat <= current + 4.0);
+                            let last = find_last_displayed_beat(
+                                current,
+                                distance,
+                                displayed_speed,
+                                boomerang,
+                                travel,
+                            )
+                            .map(beat_to_note_row);
+                            let last_row = find_last_displayed_row(
+                                current,
+                                distance,
+                                displayed_speed,
+                                boomerang,
+                                travel,
+                            );
+                            assert_eq!(last_row, last);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn cmod_visible_range_matches_full_precision_with_timing_events() {
+        let timing = TimingData::from_segments(
+            0.0,
+            0.0,
+            &TimingSegments {
+                bpms: vec![(0.0, 120.0), (16.0, 180.0), (48.0, 90.0), (96.0, 240.0)],
+                stops: vec![StopSegment {
+                    beat: 32.0,
+                    duration: 0.5,
+                }],
+                delays: vec![DelaySegment {
+                    beat: 64.0,
+                    duration: 0.25,
+                }],
+                warps: vec![WarpSegment {
+                    beat: 80.0,
+                    length: 4.0,
+                }],
+                speeds: vec![SpeedSegment {
+                    beat: 0.0,
+                    ratio: 0.5,
+                    delay: 0.0,
+                    unit: SpeedUnit::Beats,
+                }],
+                ..TimingSegments::default()
+            },
+            &[],
+        );
+        let stats = (0..1_024)
+            .map(|index| NoteCountStat {
+                beat: index as f32 * 0.25,
+                notes_lower: index,
+                notes_upper: index + 1,
+            })
+            .collect::<Vec<_>>();
+        for beat in [-4.0, 0.0, 15.75, 32.0, 63.9, 80.0, 84.0, 127.0] {
+            for rate in [0.75, 1.0, 1.5] {
+                for boomerang in [0.0, 0.4] {
+                    let mut request = request(&timing, ScrollSpeedSetting::CMod(300.0), beat);
+                    request.music_rate = rate;
+                    request.accel.boomerang = boomerang;
+                    request.note_count_stats = &stats;
+                    let travel = scroll_travel(request);
+                    assert_eq!(
+                        travel.visible_row_range(),
+                        full_precision_visible_range(
+                            &travel,
+                            request.draw_distance_after_targets,
+                            request.draw_distance_before_targets,
+                        ),
+                        "beat={beat}, rate={rate}, boomerang={boomerang}",
+                    );
+                }
+            }
+        }
     }
 
     #[test]

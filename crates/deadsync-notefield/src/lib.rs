@@ -151,7 +151,9 @@ pub(crate) use notes::{
 /// Stable entry points used by the standalone hot-path benchmark.
 #[doc(hidden)]
 pub mod performance {
-    pub use crate::notes::find_first_displayed_beat;
+    pub use crate::notes::{
+        find_first_displayed_beat, find_first_displayed_row, find_last_displayed_row,
+    };
 }
 #[cfg(test)]
 use notes::{find_first_displayed_beat, find_last_displayed_beat, note_itg_row};

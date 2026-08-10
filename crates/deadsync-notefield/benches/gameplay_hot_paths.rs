@@ -1,8 +1,13 @@
+use deadsync_core::{song_time::song_time_ns_delta_seconds, timing::beat_to_note_row};
 use deadsync_gameplay::NoteCountStat;
 use deadsync_notefield::{
-    BrokenRunLookup, StreamProgressLookup, performance::find_first_displayed_beat,
+    BrokenRunLookup, StreamProgressLookup,
+    performance::{find_first_displayed_beat, find_first_displayed_row, find_last_displayed_row},
 };
-use deadsync_rules::stream::StreamSegment;
+use deadsync_rules::{
+    stream::StreamSegment,
+    timing::{TimingData, TimingSegments},
+};
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::hint::black_box;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
@@ -13,6 +18,7 @@ static ALLOC: CountingAlloc = CountingAlloc::new();
 
 const NOTE_SEARCHES: usize = 300_000;
 const NOTE_STATS: usize = 8_192;
+const CMOD_SEARCHES: usize = 50_000;
 const HUD_FRAMES: usize = 2_000_000;
 const HUD_SEGMENTS: usize = 512;
 const WARMUP_DIVISOR: usize = 20;
@@ -267,6 +273,131 @@ fn note_search_benchmark() {
     print_change(&old, &new);
 }
 
+fn legacy_visible_rows(
+    timing: &TimingData,
+    current_time_ns: i64,
+    current_beat: f32,
+    draw_after: f32,
+    draw_before: f32,
+    stats: &[NoteCountStat],
+) -> Option<(i32, i32)> {
+    let first = find_first_displayed_beat(current_beat, draw_after, stats, |beat| {
+        cmod_y(timing, current_time_ns, beat)
+    });
+    let last = legacy_last_beat(current_beat, draw_before, |beat| {
+        (cmod_y(timing, current_time_ns, beat), true)
+    });
+    first.zip(last).map(|(first, last)| {
+        let first_row = beat_to_note_row(first);
+        let last_row = beat_to_note_row(last.max(first)).max(first_row);
+        (first_row, last_row)
+    })
+}
+
+#[inline(always)]
+fn cmod_y(timing: &TimingData, current_time_ns: i64, beat: f32) -> f32 {
+    song_time_ns_delta_seconds(timing.get_time_for_beat_ns(beat), current_time_ns) * 320.0
+}
+
+fn legacy_last_beat(
+    current_beat: f32,
+    draw_distance: f32,
+    mut y_for_beat: impl FnMut(f32) -> (f32, bool),
+) -> Option<f32> {
+    if !current_beat.is_finite() || !draw_distance.is_finite() {
+        return None;
+    }
+    let mut search_distance = 10.0;
+    let mut last = current_beat + search_distance;
+    for _ in 0..20 {
+        let (y_offset, _) = y_for_beat(last);
+        if y_offset > draw_distance {
+            last -= search_distance;
+        } else {
+            last += search_distance;
+        }
+        search_distance *= 0.5;
+    }
+    Some(last)
+}
+
+fn row_precision_benchmark() {
+    let timing = TimingData::from_segments(
+        0.0,
+        0.0,
+        &TimingSegments {
+            bpms: (0..64)
+                .map(|index| (index as f32 * 16.0, 120.0 + (index % 5) as f32 * 15.0))
+                .collect(),
+            ..TimingSegments::default()
+        },
+        &[],
+    );
+    let stats = (0..NOTE_STATS)
+        .map(|index| NoteCountStat {
+            beat: index as f32 * 0.125,
+            notes_lower: index * 2,
+            notes_upper: index * 2 + 2,
+        })
+        .collect::<Vec<_>>();
+    let queries = (0..4_096)
+        .map(|query| {
+            let beat = 80.0 + (query % (NOTE_STATS - 640)) as f32 * 0.125;
+            (beat, timing.get_time_for_beat_ns(beat))
+        })
+        .collect::<Vec<_>>();
+    for &(beat, current_time_ns) in &queries {
+        let old = legacy_visible_rows(&timing, current_time_ns, beat, 768.0, 1_024.0, &stats);
+        let first = find_first_displayed_row(beat, 768.0, &stats, |candidate| {
+            cmod_y(&timing, current_time_ns, candidate)
+        });
+        let last = find_last_displayed_row(beat, 1_024.0, 1.0, false, |candidate| {
+            (cmod_y(&timing, current_time_ns, candidate), true)
+        });
+        assert_eq!(old, first.zip(last).map(|(a, b)| (a, b.max(a))));
+    }
+
+    let mut old_query = 0usize;
+    let old = measure(CMOD_SEARCHES, || {
+        let (beat, current_time_ns) = queries[old_query % queries.len()];
+        old_query += 1;
+        let (first, last) = legacy_visible_rows(
+            black_box(&timing),
+            current_time_ns,
+            black_box(beat),
+            768.0,
+            1_024.0,
+            black_box(&stats),
+        )
+        .unwrap_or_default();
+        first as u32 as u64 | (last as u32 as u64) << 32
+    });
+    let mut new_query = 0usize;
+    let new = measure(CMOD_SEARCHES, || {
+        let (beat, current_time_ns) = queries[new_query % queries.len()];
+        new_query += 1;
+        let first = find_first_displayed_row(beat, 768.0, black_box(&stats), |candidate| {
+            cmod_y(black_box(&timing), current_time_ns, candidate)
+        });
+        let last = find_last_displayed_row(beat, 1_024.0, 1.0, false, |candidate| {
+            (cmod_y(black_box(&timing), current_time_ns, candidate), true)
+        });
+        let (first, last) = first
+            .zip(last)
+            .map(|(a, b)| (a, b.max(a)))
+            .unwrap_or_default();
+        first as u32 as u64 | (last as u32 as u64) << 32
+    });
+    assert_eq!(old.checksum, new.checksum);
+    assert_zero_alloc(&old);
+    assert_zero_alloc(&new);
+
+    println!("\nCMod visible row range (64 BPMs, {CMOD_SEARCHES} frames)");
+    print_result("old full precision", &old);
+    print_result("new row precision", &new);
+    print_change(&old, &new);
+}
+
 #[derive(Clone, Copy)]
 struct ProgressEntry {
     start: f32,
@@ -455,6 +586,7 @@ fn counter_hud_lookup_benchmark() {
 
 fn main() {
     note_search_benchmark();
+    row_precision_benchmark();
     stream_progress_benchmark();
     counter_hud_lookup_benchmark();
 }
