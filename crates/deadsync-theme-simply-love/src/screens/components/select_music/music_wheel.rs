@@ -166,7 +166,7 @@ fn visit_visible_song_select_bg_paths(
             Some(MusicWheelEntry::PackHeader {
                 banner_path: Some(path),
                 ..
-            }) => Some(path.as_path()),
+            }) => Some(path.as_ref()),
             Some(MusicWheelEntry::Song(song)) => {
                 song_select_bg_path(song, mode).map(PathBuf::as_path)
             }
@@ -2037,7 +2037,7 @@ mod tests {
             MusicWheelEntry::PackHeader {
                 name: Arc::from("Pack"),
                 original_index: 0,
-                banner_path: Some(PathBuf::from("pack.png")),
+                banner_path: Some(Arc::from(PathBuf::from("pack.png"))),
                 song_count: 1,
                 pack_key: Some(Arc::from("Pack")),
                 parent_series: None,

@@ -885,7 +885,9 @@ pub fn selected_course_plan(state: &State) -> Option<SelectedCoursePlan> {
 fn selected_banner_path(state: &State) -> Option<PathBuf> {
     match state.entries.get(state.selected_index) {
         Some(MusicWheelEntry::Song(song)) => song.banner_path.clone(),
-        Some(MusicWheelEntry::PackHeader { banner_path, .. }) => banner_path.clone(),
+        Some(MusicWheelEntry::PackHeader { banner_path, .. }) => {
+            banner_path.as_deref().map(Path::to_path_buf)
+        }
         None => None,
     }
 }

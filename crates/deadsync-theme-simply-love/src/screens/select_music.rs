@@ -1009,7 +1009,7 @@ pub enum MusicWheelEntry {
     PackHeader {
         name: Arc<str>,
         original_index: usize,
-        banner_path: Option<PathBuf>,
+        banner_path: Option<Arc<Path>>,
         song_count: usize,
         pack_key: Option<Arc<str>>,
         /// Set on both a series header and its child pack headers. A series
@@ -1408,9 +1408,10 @@ pub struct State {
     /// for the screen lifetime. They are built during screen initialization or
     /// explicit content/history refresh, have no capacity growth, miss path, or
     /// eviction, and are released on the main thread with the screen. Switching
-    /// a sort clones only the `Arc`; `select_music_hot_paths` measures cycles,
-    /// throughput, and allocation churn. Worst-case switching work is the
-    /// subsequent bounded visible-list rebuild.
+    /// to a prebuilt sort clones only the `Arc` (Favorites is rebuilt when its
+    /// mutable profile data changes). `select_music_hot_paths` measures cycles,
+    /// throughput, and allocation churn. Worst-case cached-sort switching work
+    /// is the subsequent bounded visible-list rebuild.
     all_entries: Arc<[MusicWheelEntry]>,
     series_entries: Arc<[MusicWheelEntry]>,
     group_entries: Arc<[MusicWheelEntry]>,
@@ -2382,15 +2383,16 @@ fn build_series_grouped_entries(
                     .flat_map(|pack| pack.entries.iter())
                     .filter(|entry| matches!(entry, MusicWheelEntry::Song(_)))
                     .count();
+                let name: Arc<str> = Arc::from(name.as_str());
                 entries.push(MusicWheelEntry::PackHeader {
-                    name: Arc::from(name.as_str()),
+                    name: Arc::clone(&name),
                     // Simply Love inherits one white parent-section color;
                     // child packs keep their original song-group indices.
                     original_index: 0,
                     banner_path,
                     song_count,
                     pack_key: None,
-                    parent_series: Some(Arc::from(name.as_str())),
+                    parent_series: Some(Arc::clone(&name)),
                 });
                 for pack in packs {
                     push_series_pack(&mut entries, pack, Some(&name));
@@ -3286,7 +3288,7 @@ pub fn init(init_view: SelectMusicInitView) -> State {
                 all_entries.push(MusicWheelEntry::PackHeader {
                     name: Arc::from(name),
                     original_index: i,
-                    banner_path: pack.banner_path.clone(),
+                    banner_path: pack.banner_path.as_deref().map(Arc::from),
                     song_count: 0,
                     pack_key: Some(Arc::from(key.as_str())),
                     parent_series: None,
@@ -12028,7 +12030,9 @@ pub fn benchmark_select_music_entries(
         entries.push(MusicWheelEntry::PackHeader {
             name: Arc::clone(&name),
             original_index: pack_index,
-            banner_path: None,
+            banner_path: Some(Arc::from(PathBuf::from(format!(
+                "Benchmark/Packs/{pack_index:04}/banner.png"
+            )))),
             song_count: songs_per_pack,
             pack_key: Some(name),
             parent_series: None,
@@ -14433,7 +14437,7 @@ mod tests {
     use deadsync_online::lobbies as lobby_data;
     use deadsync_profile as profile_data;
     use rustc_hash::FxHashSet;
-    use std::path::PathBuf;
+    use std::path::{Path, PathBuf};
     use std::sync::Arc;
     use std::time::{Duration, Instant};
 
@@ -14960,7 +14964,7 @@ mod tests {
             super::MusicWheelEntry::PackHeader {
                 name: Arc::from("Folder Stats Pack"),
                 original_index: 0,
-                banner_path: Some(PathBuf::from("folder-stats.png")),
+                banner_path: Some(Arc::from(PathBuf::from("folder-stats.png"))),
                 song_count: 1,
                 pack_key: Some(Arc::from("folder-stats-pack")),
                 parent_series: None,
@@ -17426,7 +17430,12 @@ mod tests {
 
     #[test]
     fn visible_wheel_refill_reuses_capacity_without_changing_behavior() {
-        let all_entries = test_entries();
+        let mut all_entries = test_entries();
+        let shared_banner: Arc<Path> = Arc::from(PathBuf::from("Pack A/banner.png"));
+        let super::MusicWheelEntry::PackHeader { banner_path, .. } = &mut all_entries[0] else {
+            panic!("fixture should start with a pack header");
+        };
+        *banner_path = Some(Arc::clone(&shared_banner));
         let mut visible = Vec::new();
         super::fill_displayed_entries(
             &mut visible,
@@ -17457,6 +17466,14 @@ mod tests {
 
         assert_eq!(visible.as_ptr(), storage);
         assert_eq!(visible.capacity(), capacity);
+        let super::MusicWheelEntry::PackHeader {
+            banner_path: Some(visible_banner),
+            ..
+        } = &visible[0]
+        else {
+            panic!("visible header should preserve its banner");
+        };
+        assert!(Arc::ptr_eq(&shared_banner, visible_banner));
         assert_eq!(visible.len(), reference.len());
         assert_eq!(song_titles(&visible), song_titles(&reference));
         assert_eq!(

@@ -7,7 +7,7 @@ use std::alloc::{GlobalAlloc, Layout, System};
 use std::collections::{HashMap, HashSet};
 use std::hash::BuildHasher;
 use std::hint::black_box;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::Instant;
@@ -237,7 +237,7 @@ fn legacy_entries(entries: &[MusicWheelEntry]) -> Vec<LegacyEntry> {
             } => LegacyEntry::Header {
                 name: name.to_string(),
                 original_index: *original_index,
-                banner_path: banner_path.clone(),
+                banner_path: banner_path.as_deref().map(Path::to_path_buf),
                 song_count: *song_count,
                 pack_key: pack_key.as_deref().map(str::to_owned),
                 parent_series: parent_series.as_deref().map(str::to_owned),
