@@ -159,7 +159,12 @@ impl GameplayLaneIndexState {
 pub struct GameplayRowIndexState {
     pub row_entry_ranges: [(usize, usize); MAX_PLAYERS],
     pub judged_row_cursor: [usize; MAX_PLAYERS],
-    pub row_map_cache: [Vec<u32>; MAX_PLAYERS],
+    /// Song-lifetime row-entry index aligned one-to-one with chart notes.
+    ///
+    /// The game thread builds this once before gameplay. Judgment and
+    /// presentation use the already-known note index to read the corresponding
+    /// row directly, avoiding a second dense allocation sized to the chart's
+    /// largest row number. `u32::MAX` marks mines, fakes, and unjudgable notes.
     pub note_row_entry_indices: Vec<u32>,
 }
 
@@ -168,7 +173,6 @@ impl Default for GameplayRowIndexState {
         Self {
             row_entry_ranges: [(0, 0); MAX_PLAYERS],
             judged_row_cursor: [0; MAX_PLAYERS],
-            row_map_cache: std::array::from_fn(|_| Vec::new()),
             note_row_entry_indices: Vec::new(),
         }
     }
@@ -178,13 +182,11 @@ impl GameplayRowIndexState {
     pub fn new(
         row_entry_ranges: [(usize, usize); MAX_PLAYERS],
         judged_row_cursor: [usize; MAX_PLAYERS],
-        row_map_cache: [Vec<u32>; MAX_PLAYERS],
         note_row_entry_indices: Vec<u32>,
     ) -> Self {
         Self {
             row_entry_ranges,
             judged_row_cursor,
-            row_map_cache,
             note_row_entry_indices,
         }
     }
@@ -193,9 +195,6 @@ impl GameplayRowIndexState {
     pub fn clear_for_test(&mut self) {
         self.row_entry_ranges.fill((0, 0));
         self.judged_row_cursor.fill(0);
-        for row_map_cache in &mut self.row_map_cache {
-            row_map_cache.clear();
-        }
         self.note_row_entry_indices.clear();
     }
 }
@@ -413,11 +412,12 @@ pub struct GameplayCueRuntimeState {
     // reuses this cursor instead of repeating a binary search every frame.
     column_cue_cursor: [usize; MAX_PLAYERS],
     crossover_cues: [Vec<ColumnCue>; MAX_PLAYERS],
-    // Per crossover cue: None = not yet reached (or rewound before its start),
-    // Some(t) = the fade-in anchor time. During normal play this is the cue's own
-    // start; when the playhead seeks into the middle of a cue it is the landing
-    // time, so the cue fades in from there instead of popping in at full alpha.
-    crossover_cue_entry: [Vec<Option<f32>>; MAX_PLAYERS],
+    // Per crossover cue: NaN = not yet reached (or rewound before its start),
+    // otherwise the fade-in anchor time. The game thread owns these song-sized
+    // boxed slices and allocates them at gameplay setup. Live frames only write
+    // crossed/rewound entries: there is no growth, miss, eviction, or gameplay
+    // destruction, and the worst frame touches only the cues crossed by a seek.
+    crossover_cue_entry: [Box<[f32]>; MAX_PLAYERS],
     // Number of leading crossover cues whose start has been crossed (and thus
     // anchored) at the last evaluated time. Lets the gate anchor/rewind only the
     // cues that changed since the previous frame.
@@ -431,7 +431,7 @@ impl Default for GameplayCueRuntimeState {
             column_cues: std::array::from_fn(|_| Vec::new()),
             column_cue_cursor: [0; MAX_PLAYERS],
             crossover_cues: std::array::from_fn(|_| Vec::new()),
-            crossover_cue_entry: std::array::from_fn(|_| Vec::new()),
+            crossover_cue_entry: std::array::from_fn(|_| Box::default()),
             crossover_cue_cursor: [0; MAX_PLAYERS],
         }
     }
@@ -443,12 +443,15 @@ impl GameplayCueRuntimeState {
         column_cues: [Vec<ColumnCue>; MAX_PLAYERS],
         crossover_cues: [Vec<ColumnCue>; MAX_PLAYERS],
     ) -> Self {
+        let crossover_cue_entry = std::array::from_fn(|player| {
+            vec![f32::NAN; crossover_cues[player].len()].into_boxed_slice()
+        });
         Self {
             measure_counter_segments,
             column_cues,
             column_cue_cursor: [0; MAX_PLAYERS],
             crossover_cues,
-            crossover_cue_entry: std::array::from_fn(|_| Vec::new()),
+            crossover_cue_entry,
             crossover_cue_cursor: [0; MAX_PLAYERS],
         }
     }
@@ -479,13 +482,13 @@ impl GameplayCueRuntimeState {
     }
 
     // Per-cue fade-in anchor times for a player's crossover cues, parallel to
-    // `crossover_cues(player)`. Entries are None until the playhead reaches each
-    // cue; callers fall back to the cue's own start (natural fade-in).
+    // `crossover_cues(player)`. NaN entries have not been reached yet; callers
+    // fall back to the cue's own start (natural fade-in).
     #[inline(always)]
-    pub fn crossover_cue_entries(&self, player: usize) -> &[Option<f32>] {
+    pub fn crossover_cue_entries(&self, player: usize) -> &[f32] {
         self.crossover_cue_entry
             .get(player)
-            .map_or(&[], Vec::as_slice)
+            .map_or(&[], Box::as_ref)
     }
 
     #[inline(always)]
@@ -503,7 +506,8 @@ impl GameplayCueRuntimeState {
     pub fn crossover_cue_entry_time(&self, player: usize, index: usize) -> Option<f32> {
         self.crossover_cue_entry
             .get(player)
-            .and_then(|entry| entry.get(index).copied().flatten())
+            .and_then(|entry| entry.get(index).copied())
+            .filter(|entry| !entry.is_nan())
     }
 
     #[inline(always)]
@@ -531,9 +535,8 @@ impl GameplayCueRuntimeState {
             return;
         };
         if entry.len() != cues.len() {
-            entry.clear();
-            entry.resize(cues.len(), None);
-            self.crossover_cue_cursor[player] = 0;
+            debug_assert_eq!(entry.len(), cues.len(), "crossover cue anchors are pre-sized");
+            return;
         }
         if cues.is_empty() {
             return;
@@ -543,15 +546,15 @@ impl GameplayCueRuntimeState {
         if target > cursor {
             for i in cursor..target {
                 let start = cues[i].start_time;
-                entry[i] = Some(if current_time - start < CROSSOVER_CUE_SEEK_GUARD_SECONDS {
+                entry[i] = if current_time - start < CROSSOVER_CUE_SEEK_GUARD_SECONDS {
                     start
                 } else {
                     current_time
-                });
+                };
             }
         } else if target < cursor {
             for slot in &mut entry[target..cursor] {
-                *slot = None;
+                *slot = f32::NAN;
             }
         }
         self.crossover_cue_cursor[player] = target;
@@ -578,7 +581,7 @@ impl GameplayCueRuntimeState {
             cues.clear();
         }
         for entry in &mut self.crossover_cue_entry {
-            entry.clear();
+            *entry = Box::default();
         }
         self.crossover_cue_cursor = [0; MAX_PLAYERS];
     }

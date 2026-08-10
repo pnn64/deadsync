@@ -777,15 +777,10 @@ where
     }
 
     #[inline(always)]
-    pub fn completed_row_visibility(&self, player: usize) -> CompletedRowVisibility<'_> {
+    pub fn completed_row_visibility(&self, _player: usize) -> CompletedRowVisibility<'_> {
         CompletedRowVisibility::new(
             &self.chart_runtime.row_entries,
-            self.chart_runtime
-                .row_indices
-                .row_map_cache
-                .get(player)
-                .map(Vec::as_slice)
-                .unwrap_or_default(),
+            &self.chart_runtime.row_indices.note_row_entry_indices,
         )
     }
 
@@ -1382,7 +1377,7 @@ where
     }
 
     #[inline(always)]
-    pub fn crossover_cue_entries(&self, player: usize) -> &[Option<f32>] {
+    pub fn crossover_cue_entries(&self, player: usize) -> &[f32] {
         self.display.cue_runtime.crossover_cue_entries(player)
     }
 

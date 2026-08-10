@@ -402,14 +402,13 @@ mod runtime_regression_tests {
                 ));
             }
         }
-        for note in &state.chart_runtime.notes {
+        for (note_index, note) in state.chart_runtime.notes.iter().enumerate() {
             if note.can_be_judged && !matches!(note.note_type, NoteType::Mine) {
-                let player = state.player_for_col(note.column);
                 debug_assert!(
-                    row_entry_for_cached_row(
+                    row_entry_for_note(
                         &state.chart_runtime.row_entries,
-                        &state.chart_runtime.row_indices.row_map_cache[player],
-                        note.row_index
+                        &state.chart_runtime.row_indices.note_row_entry_indices,
+                        note_index
                     )
                     .is_some()
                 );
@@ -421,12 +420,6 @@ mod runtime_regression_tests {
             debug_assert!(
                 row_entry_index >= state.chart_runtime.row_indices.row_entry_ranges[player].0
                     && row_entry_index < state.chart_runtime.row_indices.row_entry_ranges[player].1
-            );
-            debug_assert_eq!(
-                state.chart_runtime.row_indices.row_map_cache[player]
-                    .get(row_entry.row_index)
-                    .copied(),
-                Some(row_entry_index as u32)
             );
             for &note_index in row_entry.note_indices() {
                 debug_assert!(note_index < state.chart_runtime.notes.len());
@@ -657,9 +650,7 @@ mod runtime_regression_tests {
             row_index,
             vec![0],
         )];
-        state.chart_runtime.row_indices.row_map_cache =
-            std::array::from_fn(|_| vec![u32::MAX; row_index + 1]);
-        state.chart_runtime.row_indices.row_map_cache[0][row_index] = 0;
+        state.chart_runtime.row_indices.note_row_entry_indices = vec![0];
     }
 
     fn test_input_edge_at(
@@ -2516,9 +2507,6 @@ mod runtime_regression_tests {
             vec![0, 1],
         )];
         state.chart_runtime.row_indices.row_entry_ranges = [(0, 1), (0, 0)];
-        state.chart_runtime.row_indices.row_map_cache =
-            std::array::from_fn(|_| vec![u32::MAX; row_index + 1]);
-        state.chart_runtime.row_indices.row_map_cache[0][row_index] = 0;
         state.chart_runtime.row_indices.note_row_entry_indices = vec![0, 0];
         state.chart_runtime.row_indices.judged_row_cursor = [0; MAX_PLAYERS];
         state.clock.song_position.current_music_time_ns = song_time_ns_from_seconds(1.096);
@@ -3463,7 +3451,7 @@ mod runtime_regression_tests {
             excellent: true,
             ..ColumnFlashOptions::default()
         });
-        disabled.trigger_completed_row_tap_explosions(0, row_index);
+        disabled.trigger_completed_row_tap_explosions(0, 0);
         assert!(disabled.display.visual_feedback.column_flashes[column].is_none());
         let judged = disabled.display.visual_feedback.last_tap_judgments[column]
             .expect("masked column flash should still record the ungated tap judgment");
@@ -3474,7 +3462,7 @@ mod runtime_regression_tests {
             great: true,
             ..ColumnFlashOptions::default()
         });
-        enabled.trigger_completed_row_tap_explosions(0, row_index);
+        enabled.trigger_completed_row_tap_explosions(0, 0);
         let flash = enabled.display.visual_feedback.column_flashes[column]
             .expect("Great should trigger column flash");
         assert_eq!(flash.grade, JudgeGrade::Great);
@@ -3534,7 +3522,7 @@ mod runtime_regression_tests {
 
     #[test]
     fn white_fantastic_column_flash_uses_only_white_mask() {
-        let (mut disabled, row_index, column) = fantastic_row_state(
+        let (mut disabled, _row_index, column) = fantastic_row_state(
             ColumnFlashOptions {
                 enabled: true,
                 blue_fantastic: true,
@@ -3543,10 +3531,10 @@ mod runtime_regression_tests {
             18.0,
             TimingWindow::W1,
         );
-        disabled.trigger_completed_row_tap_explosions(0, row_index);
+        disabled.trigger_completed_row_tap_explosions(0, 0);
         assert!(disabled.display.visual_feedback.column_flashes[column].is_none());
 
-        let (mut enabled, row_index, column) = fantastic_row_state(
+        let (mut enabled, _row_index, column) = fantastic_row_state(
             ColumnFlashOptions {
                 enabled: true,
                 white_fantastic: true,
@@ -3555,7 +3543,7 @@ mod runtime_regression_tests {
             18.0,
             TimingWindow::W1,
         );
-        enabled.trigger_completed_row_tap_explosions(0, row_index);
+        enabled.trigger_completed_row_tap_explosions(0, 0);
         let flash = enabled.display.visual_feedback.column_flashes[column]
             .expect("white Fantastic should flash");
         assert_eq!(flash.grade, JudgeGrade::Fantastic);
@@ -3564,7 +3552,7 @@ mod runtime_regression_tests {
 
     #[test]
     fn blue_fantastic_column_flash_uses_only_blue_mask() {
-        let (mut disabled, row_index, column) = fantastic_row_state(
+        let (mut disabled, _row_index, column) = fantastic_row_state(
             ColumnFlashOptions {
                 enabled: true,
                 white_fantastic: true,
@@ -3573,10 +3561,10 @@ mod runtime_regression_tests {
             4.0,
             TimingWindow::W0,
         );
-        disabled.trigger_completed_row_tap_explosions(0, row_index);
+        disabled.trigger_completed_row_tap_explosions(0, 0);
         assert!(disabled.display.visual_feedback.column_flashes[column].is_none());
 
-        let (mut enabled, row_index, column) = fantastic_row_state(
+        let (mut enabled, _row_index, column) = fantastic_row_state(
             ColumnFlashOptions {
                 enabled: true,
                 blue_fantastic: true,
@@ -3585,7 +3573,7 @@ mod runtime_regression_tests {
             4.0,
             TimingWindow::W0,
         );
-        enabled.trigger_completed_row_tap_explosions(0, row_index);
+        enabled.trigger_completed_row_tap_explosions(0, 0);
         let flash = enabled.display.visual_feedback.column_flashes[column]
             .expect("blue Fantastic should flash");
         assert_eq!(flash.grade, JudgeGrade::Fantastic);
@@ -3677,7 +3665,7 @@ mod runtime_regression_tests {
         set_single_judged_tap(&mut state, column, row_index, JudgeGrade::Fantastic, 18.0);
         state.chart_runtime.notes[0].result.as_mut().unwrap().window = Some(TimingWindow::W1);
 
-        state.trigger_completed_row_tap_explosions(0, row_index);
+        state.trigger_completed_row_tap_explosions(0, 0);
 
         let active = state.display.visual_feedback.tap_explosions[column]
             .expect("white Fantastic should flash");
@@ -3702,7 +3690,7 @@ mod runtime_regression_tests {
         set_single_judged_tap(&mut state, column, row_index, JudgeGrade::Fantastic, 4.0);
         state.chart_runtime.notes[0].result.as_mut().unwrap().window = Some(TimingWindow::W0);
 
-        state.trigger_completed_row_tap_explosions(0, row_index);
+        state.trigger_completed_row_tap_explosions(0, 0);
 
         let active = state.display.visual_feedback.tap_explosions[column]
             .expect("blue Fantastic should flash");
@@ -3802,7 +3790,7 @@ mod runtime_regression_tests {
             },
         ]);
 
-        state.trigger_completed_row_tap_explosions(0, row_index);
+        state.trigger_completed_row_tap_explosions(0, 0);
 
         assert!(state.display.visual_feedback.tap_explosions[column].is_none());
         assert_eq!(state.display.receptor_feedback.bop_timers[column], 0.0);
@@ -3848,10 +3836,6 @@ mod runtime_regression_tests {
             vec![0],
         )];
         state.chart_runtime.row_indices.row_entry_ranges = [(0, 1), (0, 0)];
-        state.chart_runtime.row_indices.row_map_cache =
-            std::array::from_fn(|_| vec![u32::MAX; row_index + 1]);
-        state.chart_runtime.row_indices.row_map_cache[0][row_index] = 0;
-
         assert!(state.judge_a_tap(column, note_time));
         assert!(state.display.visual_feedback.tap_explosions[column].is_some());
         assert_eq!(state.display.receptor_feedback.bop_timers[column], 0.0);

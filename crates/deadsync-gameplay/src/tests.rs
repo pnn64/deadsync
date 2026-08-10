@@ -12891,12 +12891,12 @@ mod tests {
         assert_near(cues[0].start_time, 0.0);
         assert_near(cues[0].duration, 1.0);
         assert_eq!(cues[0].columns.len(), 1);
-        assert_eq!(cues[0].columns[0].column, 0);
-        assert!(!cues[0].columns[0].is_mine);
+        assert_eq!(cues[0].columns.get(0).expect("first cue column").column, 0);
+        assert!(!cues[0].columns.get(0).expect("first cue column").is_mine);
         assert_near(cues[1].start_time, 1.0);
         assert_near(cues[1].duration, 3.0);
         assert_eq!(cues[1].columns.len(), 1);
-        assert_eq!(cues[1].columns[0].column, 2);
+        assert_eq!(cues[1].columns.get(0).expect("second cue column").column, 2);
     }
 
     #[test]
@@ -12920,10 +12920,10 @@ mod tests {
         assert_near(cues[0].start_time, -0.5);
         assert_near(cues[0].duration, 1.5);
         assert_eq!(cues[0].columns.len(), 2);
-        assert_eq!(cues[0].columns[0].column, 0);
-        assert!(cues[0].columns[0].is_mine);
-        assert_eq!(cues[0].columns[1].column, 2);
-        assert!(!cues[0].columns[1].is_mine);
+        assert_eq!(cues[0].columns.get(0).expect("first cue column").column, 0);
+        assert!(cues[0].columns.get(0).expect("first cue column").is_mine);
+        assert_eq!(cues[0].columns.get(1).expect("second cue column").column, 2);
+        assert!(!cues[0].columns.get(1).expect("second cue column").is_mine);
     }
 
     #[test]
@@ -12932,12 +12932,12 @@ mod tests {
             ColumnCue {
                 start_time: 1.0,
                 duration: 0.5,
-                columns: Vec::new(),
+                columns: ColumnCueColumns::default(),
             },
             ColumnCue {
                 start_time: 3.0,
                 duration: 0.5,
-                columns: Vec::new(),
+                columns: ColumnCueColumns::default(),
             },
         ];
 
@@ -12958,12 +12958,12 @@ mod tests {
             ColumnCue {
                 start_time: 1.0,
                 duration: 0.5,
-                columns: Vec::new(),
+                columns: ColumnCueColumns::default(),
             },
             ColumnCue {
                 start_time: 1.5 - fade,
                 duration: 0.5,
-                columns: Vec::new(),
+                columns: ColumnCueColumns::default(),
             },
         ];
 
@@ -12993,22 +12993,22 @@ mod tests {
             ColumnCue {
                 start_time: 1.0,
                 duration: 1.5,
-                columns: Vec::new(),
+                columns: ColumnCueColumns::default(),
             },
             ColumnCue {
                 start_time: 2.0,
                 duration: 1.5,
-                columns: Vec::new(),
+                columns: ColumnCueColumns::default(),
             },
             ColumnCue {
                 start_time: 3.0,
                 duration: 1.5,
-                columns: Vec::new(),
+                columns: ColumnCueColumns::default(),
             },
             ColumnCue {
                 start_time: 4.0,
                 duration: 1.5,
-                columns: Vec::new(),
+                columns: ColumnCueColumns::default(),
             },
         ];
         let times = [
@@ -13042,6 +13042,47 @@ mod tests {
 
         assert_eq!(column_cue_cursor_from_hint(&[], 2.0, 0), 0);
         assert_eq!(active_column_cue_range_from_cursor(&[], 2.0, 0), 0..0);
+    }
+
+    #[test]
+    fn compact_cue_columns_match_sorted_unique_lane_lists() {
+        let source = [
+            ColumnCueColumn {
+                column: 9,
+                is_mine: true,
+            },
+            ColumnCueColumn {
+                column: 1,
+                is_mine: false,
+            },
+            ColumnCueColumn {
+                column: 5,
+                is_mine: true,
+            },
+        ];
+        let columns = source.into_iter().collect::<ColumnCueColumns>();
+        let actual = columns.iter().collect::<Vec<_>>();
+
+        assert_eq!(
+            actual,
+            vec![
+                ColumnCueColumn {
+                    column: 1,
+                    is_mine: false,
+                },
+                ColumnCueColumn {
+                    column: 5,
+                    is_mine: true,
+                },
+                ColumnCueColumn {
+                    column: 9,
+                    is_mine: true,
+                },
+            ]
+        );
+        assert_eq!(columns.last(), actual.last().copied());
+        assert!(columns.contains(5));
+        assert!(!columns.contains(MAX_COLS));
     }
 
     fn xover_anno(beat: f32, note_count: u8, column_mask: u8, is_crossover: bool) -> CrossoverRow {
@@ -13167,9 +13208,9 @@ mod tests {
         assert_near(cues[0].start_time, -0.5);
         assert_near(cues[0].duration, 0.575);
         assert_eq!(cues[0].columns.len(), 2);
-        assert_eq!(cues[0].columns[0].column, 0);
-        assert!(!cues[0].columns[0].is_mine);
-        assert_eq!(cues[0].columns[1].column, 1);
+        assert_eq!(cues[0].columns.get(0).expect("first cue column").column, 0);
+        assert!(!cues[0].columns.get(0).expect("first cue column").is_mine);
+        assert_eq!(cues[0].columns.get(1).expect("second cue column").column, 1);
 
         let scooby = [
             xover_anno(0.0, 1, 0b0010, false),
@@ -13179,8 +13220,8 @@ mod tests {
         let cues = build_crossover_cues_core(&scooby, xover_time, 0, 500, 8, false, 0.0);
         assert_eq!(cues.len(), 1);
         assert_eq!(cues[0].columns.len(), 3);
-        assert_eq!(cues[0].columns[2].column, 3);
-        assert!(cues[0].columns[2].is_mine);
+        assert_eq!(cues[0].columns.get(2).expect("third cue column").column, 3);
+        assert!(cues[0].columns.get(2).expect("third cue column").is_mine);
     }
 
     #[test]
@@ -13262,8 +13303,8 @@ mod tests {
         ];
         let cues = build_crossover_cues_core(&shifted, xover_time, 4, 500, 8, false, 0.0);
         assert_eq!(cues.len(), 1);
-        assert_eq!(cues[0].columns[0].column, 4);
-        assert_eq!(cues[0].columns[1].column, 5);
+        assert_eq!(cues[0].columns.get(0).expect("first cue column").column, 4);
+        assert_eq!(cues[0].columns.get(1).expect("second cue column").column, 5);
 
         let bracket = [
             xover_anno(0.0, 1, 0b0100, false),
@@ -13286,7 +13327,7 @@ mod tests {
         let included = build_crossover_cues_core(&bracket_scooby, xover_time, 0, 500, 8, true, 0.0);
         assert_eq!(included.len(), 1);
         assert_eq!(included[0].columns.len(), 3);
-        assert!(included[0].columns[2].is_mine);
+        assert!(included[0].columns.get(2).expect("third cue column").is_mine);
     }
 
     #[test]
@@ -14391,26 +14432,21 @@ mod tests {
     }
 
     #[test]
-    fn row_index_state_clears_ranges_cursors_and_caches() {
-        let mut row_map_cache: [Vec<u32>; MAX_PLAYERS] = std::array::from_fn(|_| Vec::new());
-        row_map_cache[0].extend([u32::MAX, 4]);
+    fn row_index_state_clears_ranges_cursors_and_note_indices() {
         let mut state = GameplayRowIndexState::new(
             [(1, 3), (4, 6)],
             [2, 5],
-            row_map_cache,
             vec![0, 1, u32::MAX],
         );
 
         assert_eq!(state.row_entry_ranges[0], (1, 3));
         assert_eq!(state.judged_row_cursor[1], 5);
-        assert_eq!(state.row_map_cache[0][1], 4);
         assert_eq!(state.note_row_entry_indices[1], 1);
 
         state.clear_for_test();
 
         assert_eq!(state.row_entry_ranges, [(0, 0); MAX_PLAYERS]);
         assert_eq!(state.judged_row_cursor, [0; MAX_PLAYERS]);
-        assert!(state.row_map_cache[0].is_empty());
         assert!(state.note_row_entry_indices.is_empty());
     }
 
@@ -14487,41 +14523,65 @@ mod tests {
         column_cues[0].push(ColumnCue {
             start_time: 1.0,
             duration: 2.0,
-            columns: vec![ColumnCueColumn {
+            columns: [ColumnCueColumn {
                 column: 1,
                 is_mine: false,
-            }],
+            }]
+            .into(),
         });
         crossover_cues[1].push(ColumnCue {
             start_time: 3.0,
             duration: 4.0,
-            columns: vec![ColumnCueColumn {
+            columns: [ColumnCueColumn {
                 column: 5,
                 is_mine: true,
-            }],
+            }]
+            .into(),
         });
         let mut state =
             GameplayCueRuntimeState::new(measure_counter_segments, column_cues, crossover_cues);
 
         assert_eq!(state.measure_counter_segments(0)[0].start, 1);
-        assert_eq!(state.column_cues(0)[0].columns[0].column, 1);
+        assert_eq!(
+            state.column_cues(0)[0]
+                .columns
+                .get(0)
+                .expect("regular cue column")
+                .column,
+            1
+        );
         assert_eq!(state.column_cue_cursor(0), 0);
         assert!(state.column_cues(MAX_PLAYERS).is_empty());
         assert!(state.crossover_cues(0).is_empty());
-        assert_eq!(state.crossover_cues(1)[0].columns[0].column, 5);
+        assert_eq!(
+            state.crossover_cues(1)[0]
+                .columns
+                .get(0)
+                .expect("crossover cue column")
+                .column,
+            5
+        );
 
         state.set_column_cues_for_test(
             1,
             vec![ColumnCue {
                 start_time: 8.0,
                 duration: 1.0,
-                columns: vec![ColumnCueColumn {
+                columns: [ColumnCueColumn {
                     column: 7,
                     is_mine: false,
-                }],
+                }]
+                .into(),
             }],
         );
-        assert_eq!(state.column_cues(1)[0].columns[0].column, 7);
+        assert_eq!(
+            state.column_cues(1)[0]
+                .columns
+                .get(0)
+                .expect("replacement cue column")
+                .column,
+            7
+        );
 
         state.clear_for_test();
 
@@ -14543,7 +14603,7 @@ mod tests {
             .map(|start_time| ColumnCue {
                 start_time,
                 duration: 1.0,
-                columns: Vec::new(),
+                columns: ColumnCueColumns::default(),
             })
             .collect();
         let mut state =
@@ -14569,12 +14629,12 @@ mod tests {
             crossover_cues[0].push(ColumnCue {
                 start_time: 1.0,
                 duration: 1.0,
-                columns: Vec::new(),
+                columns: ColumnCueColumns::default(),
             });
             crossover_cues[0].push(ColumnCue {
                 start_time: 5.0,
                 duration: 1.0,
-                columns: Vec::new(),
+                columns: ColumnCueColumns::default(),
             });
             GameplayCueRuntimeState::new(measure_counter_segments, column_cues, crossover_cues)
         };
@@ -14582,6 +14642,13 @@ mod tests {
         // Normal forward play: each cue is caught near its start, so it anchors
         // to its own start (natural fade-in).
         let mut state = new_state();
+        assert_eq!(state.crossover_cue_entries(0).len(), 2);
+        assert!(
+            state
+                .crossover_cue_entries(0)
+                .iter()
+                .all(|entry| entry.is_nan())
+        );
         state.update_crossover_cue_anchors(0, 0.5);
         assert_eq!(state.crossover_cue_cursor(0), 0);
         state.update_crossover_cue_anchors(0, 1.0 + 0.01);
@@ -15255,7 +15322,7 @@ mod tests {
     }
 
     #[test]
-    fn cached_row_lookup_uses_row_map_and_final_outcome() {
+    fn note_aligned_row_lookup_uses_note_index_and_final_outcome() {
         let mut note = test_note_at(NoteType::Tap, None, false, 48, 1.0);
         note.result = Some(test_judgment(JudgeGrade::Great));
         let notes = [note];
@@ -15266,41 +15333,51 @@ mod tests {
         row_entries[0].final_outcome = Some(FinalizedRowOutcome {
             final_grade: JudgeGrade::Great,
         });
-        let mut row_map_cache = vec![u32::MAX; 49];
-        row_map_cache[48] = 0;
+        let note_row_entry_indices = [0, u32::MAX];
 
-        let row_entry =
-            row_entry_for_cached_row(&row_entries, &row_map_cache, 48).expect("cached row");
-        let outcome = finalized_row_outcome_for_cached_row(&row_entries, &row_map_cache, 48)
+        let row_entry = row_entry_for_note(&row_entries, &note_row_entry_indices, 0)
+            .expect("note-aligned row");
+        let outcome = finalized_row_outcome_for_note(&row_entries, &note_row_entry_indices, 0)
             .expect("finalized row outcome");
 
         assert_eq!(row_entry.note_indices(), &[0]);
         assert_eq!(outcome.final_grade, JudgeGrade::Great);
-        assert_eq!(row_entry_index_for_cached_row(&row_map_cache, 47), None);
+        assert_eq!(row_entry_index_for_note(&note_row_entry_indices, 1), None);
     }
 
     #[test]
-    fn completed_row_hide_policy_uses_cached_final_grade() {
+    fn completed_row_hide_policy_uses_note_aligned_final_grade() {
         let notes = [test_note_at(NoteType::Tap, None, false, 48, 1.0)];
         let note_times = [song_time_ns_from_seconds(1.0)];
         let mut note_indices = [usize::MAX; MAX_COLS];
         note_indices[0] = 0;
         let mut row_entries = vec![build_row_entry(48, note_indices, 1, &notes, &note_times)];
-        let mut row_map_cache = vec![u32::MAX; 49];
-        row_map_cache[48] = 0;
+        let note_row_entry_indices = [0, u32::MAX];
 
         row_entries[0].final_outcome = Some(FinalizedRowOutcome {
             final_grade: JudgeGrade::Great,
         });
-        assert!(completed_row_hides_note(&row_entries, &row_map_cache, 48));
-        let visibility = CompletedRowVisibility::new(&row_entries, &row_map_cache);
-        assert!(visibility.hides_note(48));
+        assert!(completed_row_hides_note(
+            &row_entries,
+            &note_row_entry_indices,
+            0
+        ));
+        let visibility = CompletedRowVisibility::new(&row_entries, &note_row_entry_indices);
+        assert!(visibility.hides_note(0));
 
         row_entries[0].final_outcome = Some(FinalizedRowOutcome {
             final_grade: JudgeGrade::Decent,
         });
-        assert!(!completed_row_hides_note(&row_entries, &row_map_cache, 48));
-        assert!(!completed_row_hides_note(&row_entries, &row_map_cache, 47));
+        assert!(!completed_row_hides_note(
+            &row_entries,
+            &note_row_entry_indices,
+            0
+        ));
+        assert!(!completed_row_hides_note(
+            &row_entries,
+            &note_row_entry_indices,
+            1
+        ));
     }
 
     #[test]

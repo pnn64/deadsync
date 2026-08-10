@@ -363,8 +363,11 @@ pub fn mark_row_entry_note_finalized(
 }
 
 #[inline(always)]
-pub fn row_entry_index_for_cached_row(row_map_cache: &[u32], row_index: usize) -> Option<usize> {
-    let pos = *row_map_cache.get(row_index)?;
+pub fn row_entry_index_for_note(
+    note_row_entry_indices: &[u32],
+    note_index: usize,
+) -> Option<usize> {
+    let pos = *note_row_entry_indices.get(note_index)?;
     if pos == u32::MAX {
         return None;
     }
@@ -382,22 +385,22 @@ pub fn finalized_row_outcome_for_entry(
 }
 
 #[inline(always)]
-pub fn finalized_row_outcome_for_cached_row(
+pub fn finalized_row_outcome_for_note(
     row_entries: &[RowEntry],
-    row_map_cache: &[u32],
-    row_index: usize,
+    note_row_entry_indices: &[u32],
+    note_index: usize,
 ) -> Option<FinalizedRowOutcome> {
-    let row_entry_index = row_entry_index_for_cached_row(row_map_cache, row_index)?;
+    let row_entry_index = row_entry_index_for_note(note_row_entry_indices, note_index)?;
     finalized_row_outcome_for_entry(row_entries, row_entry_index)
 }
 
 #[inline(always)]
 pub(crate) fn completed_row_hides_note(
     row_entries: &[RowEntry],
-    row_map_cache: &[u32],
-    row_index: usize,
+    note_row_entry_indices: &[u32],
+    note_index: usize,
 ) -> bool {
-    finalized_row_outcome_for_cached_row(row_entries, row_map_cache, row_index)
+    finalized_row_outcome_for_note(row_entries, note_row_entry_indices, note_index)
         .is_some_and(|outcome| row_final_grade_hides_note(outcome.final_grade))
 }
 
@@ -409,34 +412,32 @@ pub(crate) fn completed_row_hides_note(
 #[derive(Clone, Copy, Debug, Default)]
 pub struct CompletedRowVisibility<'a> {
     row_entries: &'a [RowEntry],
-    row_map_cache: &'a [u32],
+    note_row_entry_indices: &'a [u32],
 }
 
 impl<'a> CompletedRowVisibility<'a> {
     #[inline(always)]
-    pub const fn new(row_entries: &'a [RowEntry], row_map_cache: &'a [u32]) -> Self {
+    pub const fn new(row_entries: &'a [RowEntry], note_row_entry_indices: &'a [u32]) -> Self {
         Self {
             row_entries,
-            row_map_cache,
+            note_row_entry_indices,
         }
     }
 
     #[inline(always)]
-    pub fn hides_note(self, row_index: usize) -> bool {
-        completed_row_hides_note(self.row_entries, self.row_map_cache, row_index)
+    pub fn hides_note(self, note_index: usize) -> bool {
+        completed_row_hides_note(self.row_entries, self.note_row_entry_indices, note_index)
     }
 }
 
 #[inline(always)]
-pub fn row_entry_for_cached_row<'a>(
+pub fn row_entry_for_note<'a>(
     row_entries: &'a [RowEntry],
-    row_map_cache: &[u32],
-    row_index: usize,
+    note_row_entry_indices: &[u32],
+    note_index: usize,
 ) -> Option<&'a RowEntry> {
-    let pos = row_entry_index_for_cached_row(row_map_cache, row_index)?;
-    let row_entry = row_entries.get(pos as usize)?;
-    debug_assert_eq!(row_entry.row_index, row_index);
-    Some(row_entry)
+    let pos = row_entry_index_for_note(note_row_entry_indices, note_index)?;
+    row_entries.get(pos)
 }
 
 #[inline(always)]

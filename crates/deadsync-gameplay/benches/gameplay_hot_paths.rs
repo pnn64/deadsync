@@ -1,12 +1,14 @@
 use deadsync_gameplay::{
     AccelOverrides, ActiveAttackRefreshInput, ActiveAttackRefreshOutput, ActiveAttackRefreshState,
-    AppearanceEffects, AppearanceOverrides, AttackMaskWindow, ChartAttackEffects,
-    GameplayAttackRuntimeState, MiniAttackMode, PerspectiveOverrides, ScrollEffects,
-    ScrollOverrides, SongLuaEase, SongLuaEaseMaskTarget, SongLuaEaseMaskWindow,
-    SongLuaNoteHideWindowRuntime, SongLuaNoteHideWindows, VisibilityOverrides, VisualEffects,
-    VisualOverrides, partition_point_from_hint, refresh_active_attack_player,
+    AppearanceEffects, AppearanceOverrides, AttackMaskWindow, CROSSOVER_CUE_SEEK_GUARD_SECONDS,
+    ChartAttackEffects, ColumnCue, ColumnCueColumn, ColumnCueColumns, GameplayAttackRuntimeState,
+    GameplayCueRuntimeState, MiniAttackMode, PerspectiveOverrides, ScrollEffects, ScrollOverrides,
+    SongLuaEase, SongLuaEaseMaskTarget, SongLuaEaseMaskWindow, SongLuaNoteHideWindowRuntime,
+    SongLuaNoteHideWindows, VisibilityOverrides, VisualEffects, VisualOverrides,
+    column_cue_cursor_from_hint, partition_point_from_hint, refresh_active_attack_player,
     refresh_active_attack_player_indexed, refresh_active_attack_player_indexed_reference,
-    song_lua_ease_factor, song_lua_note_hidden, song_lua_note_hidden_reference,
+    row_entry_index_for_note, song_lua_ease_factor, song_lua_note_hidden,
+    song_lua_note_hidden_reference,
 };
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::hint::black_box;
@@ -22,6 +24,13 @@ const WINDOW_FRAMES: usize = 100_000;
 const WINDOW_COUNT: usize = 512;
 const IDLE_ATTACK_FRAMES: usize = 2_000_000;
 const NOTE_HIDE_QUERIES: usize = 2_000_000;
+const ROW_LOOKUPS: usize = 3_000_000;
+const ROW_COUNT: usize = 32_768;
+const ROW_STRIDE: usize = 48;
+const CUE_BUILD_ITERATIONS: usize = 100_000;
+const CUE_LOOKUPS: usize = 2_000_000;
+const CUE_COUNT: usize = 4_096;
+const CUE_ANCHOR_FRAMES: usize = 2_000_000;
 const WARMUP_DIVISOR: usize = 20;
 
 struct CountingAlloc {
@@ -581,6 +590,255 @@ fn note_hide_benchmark() {
     );
 }
 
+#[inline(always)]
+fn legacy_row_entry_index(row_map: &[u32], row_index: usize) -> Option<usize> {
+    let index = *row_map.get(row_index)?;
+    (index != u32::MAX).then_some(index as usize)
+}
+
+fn row_lookup_benchmark() {
+    let note_count = ROW_COUNT * 2;
+    let note_rows = (0..note_count)
+        .map(|note| note / 2 * ROW_STRIDE)
+        .collect::<Vec<_>>();
+    let mut dense_row_map = vec![u32::MAX; note_rows[note_count - 1] + 1];
+    let note_row_entries = (0..note_count)
+        .map(|note| (note / 2) as u32)
+        .collect::<Vec<_>>();
+    for note in (0..note_count).step_by(2) {
+        dense_row_map[note_rows[note]] = note_row_entries[note];
+    }
+
+    let mut old_query = 0usize;
+    let old = measure(ROW_LOOKUPS, || {
+        old_query = (old_query + 17) & (note_count - 1);
+        legacy_row_entry_index(black_box(&dense_row_map), black_box(note_rows[old_query]))
+            .unwrap_or_default() as u64
+    });
+    let mut new_query = 0usize;
+    let new = measure(ROW_LOOKUPS, || {
+        new_query = (new_query + 17) & (note_count - 1);
+        row_entry_index_for_note(black_box(&note_row_entries), black_box(new_query))
+            .unwrap_or_default() as u64
+    });
+    assert_eq!(old.checksum, new.checksum);
+    assert_zero_alloc(&old);
+    assert_zero_alloc(&new);
+
+    let old_bytes = dense_row_map.capacity() * std::mem::size_of::<u32>()
+        + note_row_entries.capacity() * std::mem::size_of::<u32>();
+    let new_bytes = note_row_entries.capacity() * std::mem::size_of::<u32>();
+    println!(
+        "\nnote-to-row lookup ({ROW_COUNT} sparse rows, {note_count} notes, {ROW_LOOKUPS} queries)"
+    );
+    print_result("old dense row map", &old);
+    print_result("new note-aligned map", &new);
+    print_change(&old, &new);
+    println!(
+        "  retained lookup storage: old={old_bytes} B / 2 allocations, new={new_bytes} B / 1 allocation ({:.2}% bytes)",
+        percent_change(old_bytes as f64, new_bytes as f64),
+    );
+}
+
+const BENCH_CUE_COLUMNS: [ColumnCueColumn; 4] = [
+    ColumnCueColumn {
+        column: 0,
+        is_mine: false,
+    },
+    ColumnCueColumn {
+        column: 3,
+        is_mine: true,
+    },
+    ColumnCueColumn {
+        column: 7,
+        is_mine: false,
+    },
+    ColumnCueColumn {
+        column: 9,
+        is_mine: true,
+    },
+];
+
+#[inline(always)]
+fn cue_checksum(columns: impl IntoIterator<Item = ColumnCueColumn>) -> u64 {
+    columns.into_iter().fold(0u64, |sum, column| {
+        sum.wrapping_add(column.column as u64 + u64::from(column.is_mine) * 31)
+    })
+}
+
+fn cue_columns_benchmark() {
+    let old_build = measure(CUE_BUILD_ITERATIONS, || {
+        let columns = Vec::from(BENCH_CUE_COLUMNS);
+        cue_checksum(columns)
+    });
+    let new_build = measure(CUE_BUILD_ITERATIONS, || {
+        let columns = ColumnCueColumns::from(BENCH_CUE_COLUMNS);
+        cue_checksum(&columns)
+    });
+    assert_eq!(old_build.checksum, new_build.checksum);
+    assert_zero_alloc(&new_build);
+
+    let old_columns = (0..CUE_COUNT)
+        .map(|_| Vec::from(BENCH_CUE_COLUMNS))
+        .collect::<Vec<_>>();
+    let new_columns = vec![ColumnCueColumns::from(BENCH_CUE_COLUMNS); CUE_COUNT];
+    let mut old_query = 0usize;
+    let old_read = measure(CUE_LOOKUPS, || {
+        old_query = (old_query + 17) & (CUE_COUNT - 1);
+        cue_checksum(old_columns[old_query].iter().copied())
+    });
+    let mut new_query = 0usize;
+    let new_read = measure(CUE_LOOKUPS, || {
+        new_query = (new_query + 17) & (CUE_COUNT - 1);
+        cue_checksum(&new_columns[new_query])
+    });
+    assert_eq!(old_read.checksum, new_read.checksum);
+    assert_zero_alloc(&old_read);
+    assert_zero_alloc(&new_read);
+
+    let old_bytes = old_columns.capacity() * std::mem::size_of::<Vec<ColumnCueColumn>>()
+        + old_columns
+            .iter()
+            .map(|columns| columns.capacity() * std::mem::size_of::<ColumnCueColumn>())
+            .sum::<usize>();
+    let new_bytes = new_columns.capacity() * std::mem::size_of::<ColumnCueColumns>();
+    println!("\ncolumn-cue construction ({CUE_BUILD_ITERATIONS} four-lane cues)");
+    print_result("old Vec columns", &old_build);
+    print_result("new lane masks", &new_build);
+    print_change(&old_build, &new_build);
+    println!("\ncolumn-cue traversal ({CUE_COUNT} retained cues, {CUE_LOOKUPS} queries)");
+    print_result("old Vec columns", &old_read);
+    print_result("new lane masks", &new_read);
+    print_change(&old_read, &new_read);
+    println!(
+        "  retained column storage: old={old_bytes} B / {} allocations, new={new_bytes} B / 1 allocation ({:.2}% bytes)",
+        CUE_COUNT + 1,
+        percent_change(old_bytes as f64, new_bytes as f64),
+    );
+}
+
+fn benchmark_cues() -> Vec<ColumnCue> {
+    (0..CUE_COUNT)
+        .map(|index| ColumnCue {
+            start_time: index as f32 * 0.25,
+            duration: 0.5,
+            columns: ColumnCueColumns::from(BENCH_CUE_COLUMNS),
+        })
+        .collect()
+}
+
+fn cue_state(cues: Vec<ColumnCue>) -> GameplayCueRuntimeState {
+    let mut crossover_cues = std::array::from_fn(|_| Vec::new());
+    crossover_cues[0] = cues;
+    GameplayCueRuntimeState::new(
+        std::array::from_fn(|_| Vec::new()),
+        std::array::from_fn(|_| Vec::new()),
+        crossover_cues,
+    )
+}
+
+fn legacy_cue_anchor_update(
+    cues: &[ColumnCue],
+    entries: &mut Vec<Option<f32>>,
+    cursor: &mut usize,
+    current_time: f32,
+) {
+    if entries.len() != cues.len() {
+        entries.clear();
+        entries.resize(cues.len(), None);
+        *cursor = 0;
+    }
+    let target = column_cue_cursor_from_hint(cues, current_time, *cursor);
+    if target > *cursor {
+        for index in *cursor..target {
+            let start = cues[index].start_time;
+            entries[index] = Some(if current_time - start < CROSSOVER_CUE_SEEK_GUARD_SECONDS {
+                start
+            } else {
+                current_time
+            });
+        }
+    } else if target < *cursor {
+        entries[target..*cursor].fill(None);
+    }
+    *cursor = target;
+}
+
+fn allocation_delta(operation: impl FnOnce()) -> AllocSnapshot {
+    let before = ALLOC.snapshot();
+    ALLOC.enabled.store(true, Ordering::Relaxed);
+    operation();
+    ALLOC.enabled.store(false, Ordering::Relaxed);
+    ALLOC.snapshot().delta(before)
+}
+
+fn cue_anchor_checksum(cursor: usize, anchor: Option<f32>) -> u64 {
+    cursor as u64 ^ u64::from(anchor.unwrap_or(f32::NAN).to_bits())
+}
+
+fn cue_anchor_benchmark() {
+    let cues = benchmark_cues();
+    let mut old_first_entries = Vec::new();
+    let mut old_first_cursor = 0usize;
+    let old_first = allocation_delta(|| {
+        legacy_cue_anchor_update(&cues, &mut old_first_entries, &mut old_first_cursor, 0.0);
+    });
+    let mut new_first_state = cue_state(cues.clone());
+    let new_first = allocation_delta(|| new_first_state.update_crossover_cue_anchors(0, 0.0));
+    assert_eq!(old_first.allocs, 1);
+    assert_eq!(new_first.allocs, 0);
+    assert_eq!(new_first.reallocs, 0);
+    assert_eq!(new_first.bytes, 0);
+
+    let mut old_entries = vec![None; cues.len()];
+    let mut old_cursor = 0usize;
+    let mut old_frame = 0usize;
+    let cycle_seconds = CUE_COUNT as f32 * 0.25 + 1.0;
+    let old = measure(CUE_ANCHOR_FRAMES, || {
+        let now = (old_frame as f32 * 0.02) % cycle_seconds;
+        old_frame += 1;
+        legacy_cue_anchor_update(&cues, &mut old_entries, &mut old_cursor, now);
+        cue_anchor_checksum(
+            old_cursor,
+            old_cursor
+                .checked_sub(1)
+                .and_then(|index| old_entries[index]),
+        )
+    });
+    let mut new_state = cue_state(cues.clone());
+    let mut new_frame = 0usize;
+    let new = measure(CUE_ANCHOR_FRAMES, || {
+        let now = (new_frame as f32 * 0.02) % cycle_seconds;
+        new_frame += 1;
+        new_state.update_crossover_cue_anchors(0, now);
+        let cursor = new_state.crossover_cue_cursor(0);
+        cue_anchor_checksum(
+            cursor,
+            cursor
+                .checked_sub(1)
+                .and_then(|index| new_state.crossover_cue_entry_time(0, index)),
+        )
+    });
+    assert_eq!(old.checksum, new.checksum);
+    assert_zero_alloc(&old);
+    assert_zero_alloc(&new);
+
+    let old_bytes = cues.len() * std::mem::size_of::<Option<f32>>();
+    let new_bytes = cues.len() * std::mem::size_of::<f32>();
+    println!("\ncrossover cue anchors ({CUE_COUNT} cues, {CUE_ANCHOR_FRAMES} frames)");
+    print_result("old Option Vec", &old);
+    print_result("new boxed f32", &new);
+    print_change(&old, &new);
+    println!(
+        "  first gameplay update: old={} alloc / {} B, new={} alloc / {} B",
+        old_first.allocs, old_first.bytes, new_first.allocs, new_first.bytes,
+    );
+    println!(
+        "  retained anchor storage: old={old_bytes} B, new={new_bytes} B ({:.2}% bytes)",
+        percent_change(old_bytes as f64, new_bytes as f64),
+    );
+}
+
 fn assert_zero_alloc(result: &BenchResult) {
     assert_eq!(result.allocated.allocs, 0);
     assert_eq!(result.allocated.reallocs, 0);
@@ -594,6 +852,9 @@ fn main() {
     window_benchmark();
     idle_attack_benchmark();
     note_hide_benchmark();
+    row_lookup_benchmark();
+    cue_columns_benchmark();
+    cue_anchor_benchmark();
 }
 
 #[cfg(target_arch = "x86")]

@@ -122,13 +122,13 @@ pub fn build_column_cues_for_player(
         return Vec::new();
     }
 
-    let mut column_times: Vec<(f32, Vec<ColumnCueColumn>)> = Vec::with_capacity(end - start);
+    let mut column_times: Vec<(f32, ColumnCueColumns)> = Vec::with_capacity(end - start);
     let mut i = start;
     while i < end {
         let row = notes[i].row_index;
         let mut row_time = 0.0_f32;
         let mut has_row_time = false;
-        let mut columns = Vec::with_capacity(4);
+        let mut columns = ColumnCueColumns::default();
         while i < end && notes[i].row_index == row {
             let note = &notes[i];
             if note.column >= col_start
@@ -139,16 +139,11 @@ pub fn build_column_cues_for_player(
                     row_time = song_time_ns_to_seconds(note_time_cache_ns[i]);
                     has_row_time = true;
                 }
-                columns.push(ColumnCueColumn {
-                    column: note.column,
-                    is_mine,
-                });
+                columns.insert(note.column, is_mine);
             }
             i += 1;
         }
         if has_row_time {
-            columns.sort_unstable_by_key(|c| c.column);
-            columns.dedup_by_key(|c| c.column);
             column_times.push((row_time, columns));
         }
     }

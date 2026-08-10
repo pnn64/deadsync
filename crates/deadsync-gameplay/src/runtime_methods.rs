@@ -1238,12 +1238,12 @@ where
     }
 
     #[inline(always)]
-    pub fn trigger_completed_row_tap_explosions(&mut self, player_idx: usize, row_index: usize) {
+    pub fn trigger_completed_row_tap_explosions(&mut self, player_idx: usize, note_index: usize) {
         let Some(plan) = ({
-            let Some(row_entry) = row_entry_for_cached_row(
+            let Some(row_entry) = row_entry_for_note(
                 &self.chart_runtime.row_entries,
-                &self.chart_runtime.row_indices.row_map_cache[player_idx],
-                row_index,
+                &self.chart_runtime.row_indices.note_row_entry_indices,
+                note_index,
             ) else {
                 return;
             };
@@ -2180,12 +2180,12 @@ where
                 self.trigger_receptor_glow_pulse(column);
                 return true;
             }
-            let Some(row_entry) = row_entry_for_cached_row(
+            let Some(row_entry) = row_entry_for_note(
                 &self.chart_runtime.row_entries,
-                &self.chart_runtime.row_indices.row_map_cache[player],
-                note_row_index,
+                &self.chart_runtime.row_indices.note_row_entry_indices,
+                note_index,
             ) else {
-                debug_assert!(false, "missing row cache for row {note_row_index}");
+                debug_assert!(false, "missing row entry for note {note_index}");
                 return false;
             };
             let row_rescore_track_count = count_rescore_tracks_on_row(row_entry);
@@ -2321,7 +2321,7 @@ where
                     lead_in_s,
                 );
 
-                self.trigger_completed_row_tap_explosions(player, note_row_index);
+                self.trigger_completed_row_tap_explosions(player, note_index);
                 if let Some(window_key) = hit_plan.receptor_window {
                     self.trigger_receptor_score_pulse(note_col, window_key);
                 }
@@ -2413,7 +2413,7 @@ where
                     lead_in_s,
                 );
 
-                self.trigger_completed_row_tap_explosions(player, note_row_index);
+                self.trigger_completed_row_tap_explosions(player, idx);
                 if let Some(window_key) = hit_plan.receptor_window {
                     self.trigger_receptor_score_pulse(note_col, window_key);
                 }
@@ -2487,12 +2487,12 @@ where
         let note_beat = self.chart_runtime.notes[note_index].beat;
 
         if rescore_early_hits {
-            let Some(row_entry) = row_entry_for_cached_row(
+            let Some(row_entry) = row_entry_for_note(
                 &self.chart_runtime.row_entries,
-                &self.chart_runtime.row_indices.row_map_cache[player],
-                note_row_index,
+                &self.chart_runtime.row_indices.note_row_entry_indices,
+                note_index,
             ) else {
-                debug_assert!(false, "missing row cache for row {note_row_index}");
+                debug_assert!(false, "missing row entry for note {note_index}");
                 return false;
             };
             let row_rescore_track_count = count_rescore_tracks_on_row(row_entry);
@@ -2577,7 +2577,7 @@ where
             lead_in_s,
         );
 
-        self.trigger_completed_row_tap_explosions(player, note_row_index);
+        self.trigger_completed_row_tap_explosions(player, note_index);
         if let Some(window_key) = hit_plan.receptor_window {
             self.trigger_receptor_score_pulse(note_col, window_key);
         }

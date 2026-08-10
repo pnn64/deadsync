@@ -818,7 +818,7 @@ fn compose_visible_notes<S, F>(
                         if mine_hides_after_resolution(note.mine_result) {
                             return;
                         }
-                    } else if note.result.is_some() && completed_rows.hides_note(note.row_index) {
+                    } else if note.result.is_some() && completed_rows.hides_note(note_index) {
                         return;
                     }
                 }

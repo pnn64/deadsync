@@ -145,8 +145,6 @@ where
     let mut holds_total: [u32; MAX_PLAYERS] = [0; MAX_PLAYERS];
     let mut rolls_total: [u32; MAX_PLAYERS] = [0; MAX_PLAYERS];
     let mut mines_total: [u32; MAX_PLAYERS] = [0; MAX_PLAYERS];
-    let mut max_row_index = 0usize;
-
     for player in 0..num_players {
         let timing_player = &timing_players[player];
         let parsed_notes = &gameplay_charts[player].parsed_notes;
@@ -154,8 +152,6 @@ where
         let col_offset = player.saturating_mul(cols_per_player);
         for parsed in parsed_notes {
             let row_index = parsed.row_index;
-            max_row_index = max_row_index.max(row_index);
-
             let Some(beat) = timing_player.get_beat_for_row(row_index) else {
                 continue;
             };
@@ -401,8 +397,6 @@ where
 
     let mut row_entries: Vec<RowEntry> = Vec::with_capacity(notes.len() / 2);
     let mut row_entry_ranges = [(0usize, 0usize); MAX_PLAYERS];
-    let mut row_map_cache: [Vec<u32>; MAX_PLAYERS] =
-        std::array::from_fn(|_| vec![u32::MAX; max_row_index + 1]);
     let mut note_row_entry_indices = vec![u32::MAX; notes.len()];
     let mut tap_row_hold_roll_flags = vec![0u8; notes.len()];
     for player in 0..num_players {
@@ -432,7 +426,6 @@ where
             }
             if nonmine_note_count != 0 {
                 let row_entry_index = row_entries.len() as u32;
-                row_map_cache[player][row_index] = row_entry_index;
                 for &note_index in &nonmine_note_indices[..usize::from(nonmine_note_count)] {
                     note_row_entry_indices[note_index] = row_entry_index;
                 }
@@ -985,7 +978,6 @@ where
             row_indices: GameplayRowIndexState::new(
                 row_entry_ranges,
                 row_entry_range_start,
-                row_map_cache,
                 note_row_entry_indices,
             ),
             note_time_cache_ns,

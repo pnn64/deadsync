@@ -49,8 +49,8 @@ pub struct NotefieldFeedbackFrameView<'a> {
     pub column_cue_cursor: Option<usize>,
     /// Crossover cue columns use chart-global column indices.
     pub crossover_cues: Option<&'a [ColumnCue]>,
-    /// Per-cue fade-in anchor times parallel to `crossover_cues`.
-    pub crossover_cue_entries: Option<&'a [Option<f32>]>,
+    /// Per-cue fade-in anchor times parallel to `crossover_cues`; NaN is unset.
+    pub crossover_cue_entries: Option<&'a [f32]>,
     /// First crossover cue after the current music time.
     pub crossover_cue_cursor: Option<usize>,
     /// Column flashes are ordered by local lane within the prepared player span.
@@ -1316,10 +1316,11 @@ mod tests {
         let cues = [ColumnCue {
             start_time: 0.0,
             duration: 1.0,
-            columns: vec![deadsync_gameplay::ColumnCueColumn {
+            columns: [deadsync_gameplay::ColumnCueColumn {
                 column: 3,
                 is_mine: false,
-            }],
+            }]
+            .into(),
         }];
         let frame = NotefieldFeedbackFrameView {
             column_cues: Some(&cues),

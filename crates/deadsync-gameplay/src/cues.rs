@@ -31,17 +31,156 @@ impl<T> GameplayPendingInputState<T> {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ColumnCueColumn {
     pub column: usize,
     pub is_mine: bool,
+}
+
+/// Compact set of the lanes highlighted by one gameplay cue.
+///
+/// Cue columns are bounded by [`MAX_COLS`], so two masks retain the complete
+/// column/mine state inline. This removes one heap allocation and one pointer
+/// chase per cue while preserving ascending-column iteration order.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct ColumnCueColumns {
+    lanes: LaneMask,
+    mines: LaneMask,
+}
+
+impl ColumnCueColumns {
+    #[inline(always)]
+    pub fn insert(&mut self, column: usize, is_mine: bool) -> bool {
+        if column >= MAX_COLS {
+            return false;
+        }
+        let Some(bit) = (1 as LaneMask).checked_shl(column as u32) else {
+            return false;
+        };
+        let inserted = self.lanes & bit == 0;
+        self.lanes |= bit;
+        if is_mine {
+            self.mines |= bit;
+        }
+        inserted
+    }
+
+    #[inline(always)]
+    pub const fn contains(&self, column: usize) -> bool {
+        column < MAX_COLS && self.lanes & ((1 as LaneMask) << column) != 0
+    }
+
+    #[inline(always)]
+    pub const fn len(&self) -> usize {
+        self.lanes.count_ones() as usize
+    }
+
+    #[inline(always)]
+    pub const fn is_empty(&self) -> bool {
+        self.lanes == 0
+    }
+
+    #[inline(always)]
+    pub const fn shares_lane(self, other: Self) -> bool {
+        self.lanes & other.lanes != 0
+    }
+
+    #[inline(always)]
+    pub fn extend_missing(&mut self, other: Self) {
+        let added = other.lanes & !self.lanes;
+        self.lanes |= added;
+        self.mines |= other.mines & added;
+    }
+
+    #[inline(always)]
+    pub const fn iter(self) -> ColumnCueColumnIter {
+        ColumnCueColumnIter {
+            remaining: self.lanes,
+            mines: self.mines,
+        }
+    }
+
+    #[inline(always)]
+    pub fn get(self, index: usize) -> Option<ColumnCueColumn> {
+        self.iter().nth(index)
+    }
+
+    #[inline(always)]
+    pub fn last(self) -> Option<ColumnCueColumn> {
+        if self.is_empty() {
+            return None;
+        }
+        let column = (LaneMask::BITS - 1 - self.lanes.leading_zeros()) as usize;
+        Some(ColumnCueColumn {
+            column,
+            is_mine: self.mines & ((1 as LaneMask) << column) != 0,
+        })
+    }
+}
+
+impl FromIterator<ColumnCueColumn> for ColumnCueColumns {
+    fn from_iter<T: IntoIterator<Item = ColumnCueColumn>>(iter: T) -> Self {
+        let mut columns = Self::default();
+        for column in iter {
+            columns.insert(column.column, column.is_mine);
+        }
+        columns
+    }
+}
+
+impl<const N: usize> From<[ColumnCueColumn; N]> for ColumnCueColumns {
+    fn from(columns: [ColumnCueColumn; N]) -> Self {
+        columns.into_iter().collect()
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct ColumnCueColumnIter {
+    remaining: LaneMask,
+    mines: LaneMask,
+}
+
+impl Iterator for ColumnCueColumnIter {
+    type Item = ColumnCueColumn;
+
+    #[inline(always)]
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.remaining == 0 {
+            return None;
+        }
+        let column = self.remaining.trailing_zeros() as usize;
+        let bit = (1 as LaneMask) << column;
+        self.remaining &= self.remaining - 1;
+        Some(ColumnCueColumn {
+            column,
+            is_mine: self.mines & bit != 0,
+        })
+    }
+
+    #[inline(always)]
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let len = self.remaining.count_ones() as usize;
+        (len, Some(len))
+    }
+}
+
+impl ExactSizeIterator for ColumnCueColumnIter {}
+
+impl IntoIterator for &ColumnCueColumns {
+    type Item = ColumnCueColumn;
+    type IntoIter = ColumnCueColumnIter;
+
+    #[inline(always)]
+    fn into_iter(self) -> Self::IntoIter {
+        self.iter()
+    }
 }
 
 #[derive(Clone, Debug)]
 pub struct ColumnCue {
     pub start_time: f32,
     pub duration: f32,
-    pub columns: Vec<ColumnCueColumn>,
+    pub columns: ColumnCueColumns,
 }
 
 #[inline(always)]
@@ -348,7 +487,7 @@ fn build_crossover_cues_core(
         };
         let prev_arrow_time = arrow_time(prev.beat);
         let cur_arrow_time = arrow_time(current.beat);
-        let mut columns = vec![
+        let mut columns = [
             ColumnCueColumn {
                 column: col_start + curr_col,
                 is_mine: false,
@@ -357,7 +496,9 @@ fn build_crossover_cues_core(
                 column: col_start + prev_col,
                 is_mine: false,
             },
-        ];
+        ]
+        .into_iter()
+        .collect::<ColumnCueColumns>();
         let mut start_time = prev_arrow_time - duration;
         let mut cue_duration = duration + fade;
         if !first_condition {
@@ -367,20 +508,14 @@ fn build_crossover_cues_core(
             && let Some(next_anno) = next
             && let Some(next_col) = crossover_arrow_col(next_anno.column_mask, true)
         {
-            columns.push(ColumnCueColumn {
-                column: col_start + next_col,
-                is_mine: true,
-            });
+            columns.insert(col_start + next_col, true);
         }
         let overlap = cues.last().map(|last| {
             let prev_end = last.start_time + last.duration;
             // Only one cue is active at a time and each cue drives all of its
             // columns with a single fade envelope, so a column shared by two
             // overlapping cues would fade out and back in (a visible reflash).
-            let shares_column = last
-                .columns
-                .iter()
-                .any(|prev_col| columns.iter().any(|c| c.column == prev_col.column));
+            let shares_column = last.columns.shares_lane(columns);
             (prev_end, shares_column)
         });
         if let Some((prev_end, shares_column)) = overlap
@@ -394,11 +529,7 @@ fn build_crossover_cues_core(
                     .last_mut()
                     .expect("cues is non-empty when overlap is Some");
                 last.duration = merged_end - last.start_time;
-                for col in columns {
-                    if !last.columns.iter().any(|c| c.column == col.column) {
-                        last.columns.push(col);
-                    }
-                }
+                last.columns.extend_missing(columns);
                 continue;
             }
             let duration_difference = prev_end - start_time;

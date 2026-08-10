@@ -228,9 +228,9 @@ pub(crate) struct ColumnFeedbackRequest<'a> {
     // can select the latest regular cue without another binary search.
     pub column_cue_cursor: Option<usize>,
     pub crossover_cues: Option<&'a [ColumnCue]>,
-    // Per-cue fade-in anchor times parallel to `crossover_cues`; None entries (or
+    // Per-cue fade-in anchor times parallel to `crossover_cues`; NaN entries (or
     // a missing slice) fall back to each cue's own start (natural fade-in).
-    pub crossover_cue_entries: Option<&'a [Option<f32>]>,
+    pub crossover_cue_entries: Option<&'a [f32]>,
     // The runtime already advances this cursor while updating crossover cue
     // entry anchors, so rendering can reuse it instead of searching again.
     pub crossover_cue_cursor: Option<usize>,
@@ -358,7 +358,8 @@ fn compose_column_cue(
                 // cue you seek into ramps up instead of popping in at full alpha.
                 let entry_time = request
                     .crossover_cue_entries
-                    .and_then(|entries| entries.get(cue_idx).copied().flatten())
+                    .and_then(|entries| entries.get(cue_idx).copied())
+                    .filter(|entry| !entry.is_nan())
                     .unwrap_or(cue.start_time);
                 let since_entry_real = (request.current_music_time - entry_time) / rate;
                 column_cue_alpha_anchored(
@@ -950,7 +951,7 @@ mod tests {
         let cues = [ColumnCue {
             start_time: 0.0,
             duration: 6.0,
-            columns: vec![
+            columns: [
                 ColumnCueColumn {
                     column: 0,
                     is_mine: false,
@@ -959,7 +960,8 @@ mod tests {
                     column: 1,
                     is_mine: true,
                 },
-            ],
+            ]
+            .into(),
         }];
         let mut actors = Vec::new();
         let mut hud = Vec::new();
@@ -1016,10 +1018,11 @@ mod tests {
         let cues = [ColumnCue {
             start_time: 0.0,
             duration: 6.0,
-            columns: vec![ColumnCueColumn {
+            columns: [ColumnCueColumn {
                 column: 2,
                 is_mine: false,
-            }],
+            }]
+            .into(),
         }];
         let mut actors = Vec::new();
         let mut hud = Vec::new();
@@ -1087,10 +1090,11 @@ mod tests {
         let cues = [ColumnCue {
             start_time: 0.0,
             duration: 1.0,
-            columns: vec![ColumnCueColumn {
+            columns: [ColumnCueColumn {
                 column: 9,
                 is_mine: false,
-            }],
+            }]
+            .into(),
         }];
         let flashes = [Some(ActiveColumnFlash {
             grade: JudgeGrade::Miss,
