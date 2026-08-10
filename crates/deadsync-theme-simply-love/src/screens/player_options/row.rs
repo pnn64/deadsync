@@ -293,7 +293,6 @@ pub enum BitMapping {
     SequentialOffset { offset: u8, width: u8 },
     /// `choice_index i` maps to `bits[i]`. Use for rows whose choices
     /// don't correspond to a contiguous bit range.
-    #[allow(dead_code)]
     Explicit(&'static [u32]),
 }
 

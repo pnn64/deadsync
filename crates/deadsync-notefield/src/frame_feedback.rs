@@ -888,6 +888,7 @@ mod tests {
                 perspective: PerspectiveEffects::default(),
                 visual: VisualEffects::default(),
                 appearance: AppearanceEffects::default(),
+                dynamic_sudden: false,
                 visibility: VisibilityEffects::default(),
                 mini_percent: 0.0,
                 spacing_multiplier: 1.0,

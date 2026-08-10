@@ -840,7 +840,7 @@ mod tests {
             avg_error_bar_interval_ms: 100,
             accel: [0; 5],
             visual: [0; 9],
-            appearance: [0; 5],
+            appearance: [0; 6],
             scroll: [0; 5],
             perspective_tilt: 0,
             perspective_skew: 0,
@@ -867,6 +867,18 @@ mod tests {
         assert_eq!(
             gameplay_mods_text(params),
             "1x, 50%\u{00A0}Drunk, Reverse, Overhead, devcel-2024"
+        );
+    }
+
+    #[test]
+    fn display_mods_distinguish_sudden_modes() {
+        let mut params = empty_mods_params();
+        params.appearance[1] = 100;
+        params.appearance[2] = 100;
+
+        assert_eq!(
+            gameplay_mods_text(params),
+            "1x, Sudden, Dynamic\u{00A0}Sudden, Overhead, devcel-2024"
         );
     }
 
@@ -1016,7 +1028,7 @@ mod tests {
         params.visual = [6, 7, 8, 9, 10, 11, 12, 13, 14];
         params.mini_percent = 15;
         params.spacing_percent = 16;
-        params.appearance = [17, 18, 19, 20, 21];
+        params.appearance = [17, 18, 19, 20, 21, 22];
         params.scroll = [22, 23, 24, 25, 26];
         params.dark = 27;
         params.blind = 28;
@@ -1031,7 +1043,8 @@ mod tests {
                 "10%\u{00A0}Invert, 11%\u{00A0}Tornado, 12%\u{00A0}Tipsy, ",
                 "13%\u{00A0}Bumpy, 14%\u{00A0}Beat, 15%\u{00A0}Mini, ",
                 "16%\u{00A0}Spacing, 17%\u{00A0}Hidden, 18%\u{00A0}Sudden, ",
-                "19%\u{00A0}Stealth, 20%\u{00A0}Blink, 21%\u{00A0}RandomVanish, ",
+                "19%\u{00A0}Dynamic\u{00A0}Sudden, 20%\u{00A0}Stealth, ",
+                "21%\u{00A0}Blink, 22%\u{00A0}RandomVanish, ",
                 "22%\u{00A0}Reverse, 23%\u{00A0}Split, 24%\u{00A0}Alternate, ",
                 "25%\u{00A0}Cross, 26%\u{00A0}Centered, 27%\u{00A0}Dark, ",
                 "28%\u{00A0}Blind, 29%\u{00A0}Hide\u{00A0}BG, Overhead"

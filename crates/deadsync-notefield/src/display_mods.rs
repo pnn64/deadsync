@@ -35,7 +35,7 @@ pub struct GameplayModsTextParams<'a> {
     pub avg_error_bar_interval_ms: u16,
     pub accel: [i16; 5],
     pub visual: [i16; 9],
-    pub appearance: [i16; 5],
+    pub appearance: [i16; 6],
     pub scroll: [i16; 5],
     pub perspective_tilt: i16,
     pub perspective_skew: i16,
@@ -265,12 +265,14 @@ pub fn gameplay_mods_text(params: GameplayModsTextParams<'_>) -> String {
     }
     append_mini_part(&mut out, params.mini_percent);
     append_spacing_part(&mut out, params.spacing_percent);
-    for (percent, name) in
-        params
-            .appearance
-            .into_iter()
-            .zip(["Hidden", "Sudden", "Stealth", "Blink", "RandomVanish"])
-    {
+    for (percent, name) in params.appearance.into_iter().zip([
+        "Hidden",
+        "Sudden",
+        "Dynamic Sudden",
+        "Stealth",
+        "Blink",
+        "RandomVanish",
+    ]) {
         append_mod_part(&mut out, percent, name);
     }
     for (percent, name) in

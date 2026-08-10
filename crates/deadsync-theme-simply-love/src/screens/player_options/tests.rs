@@ -4090,6 +4090,18 @@ pub(super) mod tests {
     }
 
     #[test]
+    fn uncommon_pane_offers_sudden_and_dynamic_sudden() {
+        ensure_i18n();
+        let (state, _) = setup_state();
+        let row = state.panes[OptionsPane::Uncommon.index()]
+            .row_map
+            .row(RowId::Appearance);
+
+        assert_eq!(row.choices[1].as_ref(), "Sudden");
+        assert_eq!(row.choices[2].as_ref(), "Dynamic Sudden");
+    }
+
+    #[test]
     fn generic_toggle_appearance_row_sets_bit_and_profile() {
         ensure_i18n();
         let (mut state, asset_manager) = setup_state();
@@ -4107,7 +4119,14 @@ pub(super) mod tests {
                     p.appearance_effects_active_mask =
                         AppearanceEffectsMask::from_bits_truncate(b as u8);
                 },
-                bit_mapping: BitMapping::Sequential { width: 5 },
+                bit_mapping: BitMapping::Explicit(&[
+                    1 << 0,
+                    1 << 1,
+                    1 << 5,
+                    1 << 2,
+                    1 << 3,
+                    1 << 4,
+                ]),
                 sync_visibility: false,
             },
         };
@@ -4115,8 +4134,15 @@ pub(super) mod tests {
             &mut state,
             RowId::Appearance,
             binding,
-            &["Hidden", "Sudden", "Stealth", "Blink", "RVanish"],
-            4,
+            &[
+                "Hidden",
+                "Sudden",
+                "Dynamic Sudden",
+                "Stealth",
+                "Blink",
+                "RVanish",
+            ],
+            2,
         );
         state.option_masks[P1].appearance_effects = AppearanceEffectsMask::empty();
         state.player_options[P1].appearance_effects_active_mask = AppearanceEffectsMask::empty();
@@ -4124,12 +4150,12 @@ pub(super) mod tests {
         let active = session_active_players(&state);
         handle_start_event(&mut state, &asset_manager, active, P1);
 
-        assert_eq!(state.option_masks[P1].appearance_effects.bits(), 1u8 << 4);
+        assert_eq!(state.option_masks[P1].appearance_effects.bits(), 1u8 << 5);
         assert_eq!(
             state.player_options[P1]
                 .appearance_effects_active_mask
                 .bits(),
-            1u8 << 4
+            1u8 << 5
         );
     }
 }

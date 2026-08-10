@@ -1913,6 +1913,13 @@ mod tests {
     }
 
     #[test]
+    fn dynamic_sudden_mask_enables_sudden_appearance() {
+        let effects = AppearanceEffects::from_mask_bits(APPEARANCE_MASK_BIT_DYNAMIC_SUDDEN);
+
+        assert_near(effects.sudden, 1.0);
+    }
+
+    #[test]
     fn appearance_target_applies_overrides_and_speeds() {
         let mut target = AppearanceEffects {
             hidden: 0.2,

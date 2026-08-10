@@ -53,6 +53,9 @@ pub struct NotefieldVisualState {
     pub perspective: PerspectiveEffects,
     pub visual: VisualEffects,
     pub appearance: AppearanceEffects,
+    /// Use a constant-time horizon for active Sudden appearance effects.
+    /// When fixed Sudden is also selected, this mode takes precedence.
+    pub dynamic_sudden: bool,
     pub visibility: VisibilityEffects,
     pub mini_percent: f32,
     pub spacing_multiplier: f32,

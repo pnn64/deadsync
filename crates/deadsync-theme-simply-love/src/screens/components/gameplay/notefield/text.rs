@@ -56,7 +56,7 @@ struct GameplayModsTextKey {
     avg_error_bar_interval_ms: u16,
     accel: [i16; 5],
     visual: [i16; 9],
-    appearance: [i16; 5],
+    appearance: [i16; 6],
     scroll: [i16; 5],
     perspective_tilt: i16,
     perspective_skew: i16,
@@ -319,6 +319,7 @@ fn preferred_mods_text_key(
     let visual = VisualEffects::from_mask_bits(profile.visual_effects_active_mask.bits());
     let appearance =
         AppearanceEffects::from_mask_bits(profile.appearance_effects_active_mask.bits());
+    let appearance_mask = profile.appearance_effects_active_mask;
     let scroll = scroll_effects_from_flags(
         profile
             .scroll_option
@@ -395,7 +396,10 @@ fn preferred_mods_text_key(
         ],
         appearance: [
             mod_percent_key(appearance.hidden),
-            mod_percent_key(appearance.sudden),
+            i16::from(appearance_mask.contains(profile_data::AppearanceEffectsMask::SUDDEN)) * 100,
+            i16::from(
+                appearance_mask.contains(profile_data::AppearanceEffectsMask::DYNAMIC_SUDDEN),
+            ) * 100,
             mod_percent_key(appearance.stealth),
             mod_percent_key(appearance.blink),
             mod_percent_key(appearance.random_vanish),
@@ -473,7 +477,9 @@ mod tests {
             accel_effects_active_mask: profile_data::AccelEffectsMask::BOOST,
             visual_effects_active_mask: profile_data::VisualEffectsMask::DRUNK
                 | profile_data::VisualEffectsMask::BIG,
-            appearance_effects_active_mask: profile_data::AppearanceEffectsMask::HIDDEN,
+            appearance_effects_active_mask: profile_data::AppearanceEffectsMask::HIDDEN
+                | profile_data::AppearanceEffectsMask::SUDDEN
+                | profile_data::AppearanceEffectsMask::DYNAMIC_SUDDEN,
             scroll_option: profile_data::ScrollOption::Reverse
                 .union(profile_data::ScrollOption::Centered),
             mini_percent: 25,
@@ -487,6 +493,8 @@ mod tests {
         assert_eq!(key.accel[0], 100);
         assert_eq!(key.visual[0], 100);
         assert_eq!(key.appearance[0], 100);
+        assert_eq!(key.appearance[1], 100);
+        assert_eq!(key.appearance[2], 100);
         assert_eq!(key.scroll[0], 100);
         assert_eq!(key.scroll[4], 100);
         assert_eq!(key.mini_percent, -75);

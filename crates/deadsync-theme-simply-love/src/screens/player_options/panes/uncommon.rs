@@ -48,13 +48,36 @@ const EFFECT: BitmaskBinding = simple_bitmask_binding!(
     profile_field = visual_effects_active_mask,
     width = 10,
 );
-const APPEARANCE: BitmaskBinding = simple_bitmask_binding!(
-    mask = AppearanceEffectsMask,
-    bits = u8,
-    state_field = appearance_effects,
-    profile_field = appearance_effects_active_mask,
-    width = 5,
-);
+const APPEARANCE_OPTION_BITS: &[u32] = &[
+    AppearanceEffectsMask::HIDDEN.bits() as u32,
+    AppearanceEffectsMask::SUDDEN.bits() as u32,
+    AppearanceEffectsMask::DYNAMIC_SUDDEN.bits() as u32,
+    AppearanceEffectsMask::STEALTH.bits() as u32,
+    AppearanceEffectsMask::BLINK.bits() as u32,
+    AppearanceEffectsMask::RANDOM_VANISH.bits() as u32,
+];
+const APPEARANCE: BitmaskBinding = BitmaskBinding::Generic {
+    init: BitmaskInit {
+        from_profile: |p| p.appearance_effects_active_mask.bits() as u32,
+        get_active: |m| m.appearance_effects.bits() as u32,
+        set_active: |m, b| {
+            debug_assert_eq!(
+                b & !(u8::MAX as u32),
+                0,
+                "AppearanceEffectsMask init bits exceed storage width",
+            );
+            m.appearance_effects = AppearanceEffectsMask::from_bits_retain(b as u8);
+        },
+        cursor: CursorInit::FirstActiveBit,
+    },
+    writeback: BitmaskWriteback {
+        project: |_m, p, b| {
+            p.appearance_effects_active_mask = AppearanceEffectsMask::from_bits_truncate(b as u8);
+        },
+        bit_mapping: BitMapping::Explicit(APPEARANCE_OPTION_BITS),
+        sync_visibility: false,
+    },
+};
 
 pub(super) fn build_uncommon_rows(return_screen: Screen) -> RowMap {
     let mut b = RowBuilder::new();
@@ -141,6 +164,7 @@ pub(super) fn build_uncommon_rows(return_screen: Screen) -> RowMap {
         vec![
             tr("PlayerOptions", "AppearanceHidden").to_string(),
             tr("PlayerOptions", "AppearanceSudden").to_string(),
+            tr("PlayerOptions", "AppearanceDynamicSudden").to_string(),
             tr("PlayerOptions", "AppearanceStealth").to_string(),
             tr("PlayerOptions", "AppearanceBlink").to_string(),
             tr("PlayerOptions", "AppearanceRVanish").to_string(),

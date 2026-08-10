@@ -142,6 +142,7 @@ const APPEARANCE_MASK_BIT_SUDDEN: u8 = 1u8 << 1;
 const APPEARANCE_MASK_BIT_STEALTH: u8 = 1u8 << 2;
 const APPEARANCE_MASK_BIT_BLINK: u8 = 1u8 << 3;
 const APPEARANCE_MASK_BIT_RANDOM_VANISH: u8 = 1u8 << 4;
+const APPEARANCE_MASK_BIT_DYNAMIC_SUDDEN: u8 = 1u8 << 5;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct AccelOverrides {
@@ -707,7 +708,9 @@ impl AppearanceEffects {
         Self {
             hidden: f32::from((mask & APPEARANCE_MASK_BIT_HIDDEN) != 0),
             hidden_offset: 0.0,
-            sudden: f32::from((mask & APPEARANCE_MASK_BIT_SUDDEN) != 0),
+            sudden: f32::from(
+                (mask & (APPEARANCE_MASK_BIT_SUDDEN | APPEARANCE_MASK_BIT_DYNAMIC_SUDDEN)) != 0,
+            ),
             sudden_offset: 0.0,
             stealth: f32::from((mask & APPEARANCE_MASK_BIT_STEALTH) != 0),
             blink: f32::from((mask & APPEARANCE_MASK_BIT_BLINK) != 0),

@@ -25,6 +25,8 @@ use deadsync_gameplay::{
 };
 use deadsync_noteskin::{NUM_QUANTIZATIONS, NoteskinSlot};
 use deadsync_rules::note::HoldResult;
+use deadsync_rules::scroll::ScrollSpeedSetting;
+use deadsync_rules::timing::TimingData;
 
 /// Borrowed runtime state needed by the canonical field actor pass.
 ///
@@ -118,7 +120,7 @@ fn compose_field_contents<S, F>(
     let options = &request.options;
     let elapsed_screen = request.visual.elapsed_screen_s;
     let visual = request.visual.visual;
-    let appearance = request.visual.appearance;
+    let appearance = resolved_appearance(request, prepared);
     let spacing_mult = request.visual.spacing_multiplier;
     let frame_plan = prepared.frame_plan;
     let col_start = frame_plan.col_start;
@@ -1269,6 +1271,98 @@ fn note_alpha_params(appearance: AppearanceEffects) -> NoteAlphaParams {
     }
 }
 
+#[derive(Clone, Copy)]
+struct DynamicSuddenParams<'a> {
+    timing: &'a TimingData,
+    music_time_s: f32,
+    current_beat: f32,
+    scroll_speed: ScrollSpeedSetting,
+    reference_bpm: f32,
+    music_rate: f32,
+    total_y_distance: f32,
+    mini: f32,
+}
+
+/// Dynamic Sudden v0.3 algorithm adapted from
+/// <https://github.com/telperion/ITGmania-modules>.
+///
+/// Copyright (c) 2024 Telperion. Permission to use, copy, modify, and/or
+/// distribute this software for any purpose with or without fee is granted,
+/// provided that the copyright and permission notice appear in all copies.
+/// The software is provided "as is", without warranty of any kind.
+fn dynamic_sudden_offset(params: DynamicSuddenParams<'_>) -> Option<f32> {
+    let rate = params.music_rate;
+    let display_bpm = params.reference_bpm * rate;
+    if !rate.is_finite()
+        || rate <= 0.0
+        || !display_bpm.is_finite()
+        || display_bpm <= 0.0
+        || !params.total_y_distance.is_finite()
+        || params.total_y_distance <= 0.0
+    {
+        return None;
+    }
+    let speed_multiplier = match params.scroll_speed {
+        ScrollSpeedSetting::XMod(multiplier) => multiplier,
+        ScrollSpeedSetting::MMod(target_bpm) => target_bpm / display_bpm,
+        ScrollSpeedSetting::CMod(_) => return None,
+    };
+    let mini_zoom = 1.0 - params.mini * 0.5;
+    let arrow_height = ScrollSpeedSetting::ARROW_SPACING * speed_multiplier * mini_zoom;
+    if !arrow_height.is_finite() || arrow_height <= 0.0 {
+        return None;
+    }
+
+    let effective_time_s = params.total_y_distance / arrow_height * (60.0 / display_bpm);
+    let horizon_beat = params
+        .timing
+        .get_beat_for_time(params.music_time_s + effective_time_s);
+    let vertical_in_centerline_units =
+        (horizon_beat - params.current_beat) * (arrow_height / 160.0) * rate;
+    (vertical_in_centerline_units.is_finite() && vertical_in_centerline_units >= 0.0)
+        .then_some(vertical_in_centerline_units - 1.0)
+}
+
+fn resolved_appearance<S>(
+    request: &NotefieldComposeRequest<'_, S>,
+    prepared: &PreparedNotefield<'_, S>,
+) -> AppearanceEffects {
+    let mut appearance = request.visual.appearance;
+    if !request.visual.dynamic_sudden {
+        return appearance;
+    }
+    if matches!(prepared.scroll_speed, ScrollSpeedSetting::CMod(_)) {
+        appearance.sudden = 0.0;
+        return appearance;
+    }
+    let Some(timing) = request.chart.timing else {
+        return appearance;
+    };
+    let receptor_y = if request.geometry.reverse_scroll {
+        prepared.field.receptor_y_reverse
+    } else {
+        prepared.field.receptor_y_normal
+    };
+    let total_y_distance = if request.geometry.reverse_scroll {
+        receptor_y
+    } else {
+        request.geometry.screen_height - receptor_y
+    };
+    if let Some(offset) = dynamic_sudden_offset(DynamicSuddenParams {
+        timing,
+        music_time_s: prepared.current_time_s,
+        current_beat: prepared.current_beat,
+        scroll_speed: prepared.scroll_speed,
+        reference_bpm: request.chart.scroll_reference_bpm,
+        music_rate: request.chart.music_rate,
+        total_y_distance,
+        mini: prepared.mini,
+    }) {
+        appearance.sudden_offset = offset;
+    }
+    appearance
+}
+
 #[allow(clippy::too_many_arguments)]
 #[inline(always)]
 fn note_x_offset(
@@ -1419,5 +1513,72 @@ mod camera_wrap_tests {
         }];
         finish_field_camera(&mut empty, 0, 1, true);
         assert!(empty.is_empty());
+    }
+}
+
+#[cfg(test)]
+mod dynamic_sudden_tests {
+    use super::{DynamicSuddenParams, dynamic_sudden_offset};
+    use deadsync_rules::scroll::ScrollSpeedSetting;
+    use deadsync_rules::timing::{TimingData, TimingSegments};
+
+    fn timing(bpm: f32) -> TimingData {
+        TimingData::from_segments(
+            0.0,
+            0.0,
+            &TimingSegments {
+                bpms: vec![(0.0, bpm)],
+                ..TimingSegments::default()
+            },
+            &[],
+        )
+    }
+
+    fn params(timing: &TimingData, scroll_speed: ScrollSpeedSetting) -> DynamicSuddenParams<'_> {
+        DynamicSuddenParams {
+            timing,
+            music_time_s: 0.0,
+            current_beat: 0.0,
+            scroll_speed,
+            reference_bpm: 120.0,
+            music_rate: 1.0,
+            total_y_distance: 368.0,
+            mini: 0.0,
+        }
+    }
+
+    #[test]
+    fn dynamic_sudden_places_the_max_bpm_horizon_at_the_screen_edge() {
+        let timing = timing(120.0);
+        let offset = dynamic_sudden_offset(params(&timing, ScrollSpeedSetting::XMod(1.0)))
+            .expect("XMod supports Dynamic Sudden");
+
+        assert!((offset - 1.3).abs() <= 0.000_1, "offset={offset}");
+    }
+
+    #[test]
+    fn dynamic_sudden_keeps_its_real_time_horizon_across_music_rates() {
+        let timing = timing(120.0);
+        let mut rated = params(&timing, ScrollSpeedSetting::XMod(1.0));
+        rated.music_rate = 1.5;
+        let offset = dynamic_sudden_offset(rated).expect("XMod supports Dynamic Sudden");
+
+        assert!((offset - 1.3).abs() <= 0.000_1, "offset={offset}");
+    }
+
+    #[test]
+    fn dynamic_sudden_supports_mmod_and_mini() {
+        let timing = timing(120.0);
+        let mut mmod = params(&timing, ScrollSpeedSetting::MMod(240.0));
+        mmod.mini = 0.5;
+        let offset = dynamic_sudden_offset(mmod).expect("MMod supports Dynamic Sudden");
+
+        assert!((offset - 1.3).abs() <= 0.000_1, "offset={offset}");
+    }
+
+    #[test]
+    fn dynamic_sudden_is_disabled_for_cmod() {
+        let timing = timing(120.0);
+        assert!(dynamic_sudden_offset(params(&timing, ScrollSpeedSetting::CMod(600.0))).is_none());
     }
 }

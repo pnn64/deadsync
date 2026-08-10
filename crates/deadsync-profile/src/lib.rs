@@ -4557,6 +4557,7 @@ bitflags! {
         const STEALTH        = 1 << 2;
         const BLINK          = 1 << 3;
         const RANDOM_VANISH  = 1 << 4;
+        const DYNAMIC_SUDDEN = 1 << 5;
     }
 }
 
@@ -13669,7 +13670,8 @@ ApiKey = gs-key
         assert_eq!(AppearanceEffectsMask::STEALTH.bits(), 1 << 2);
         assert_eq!(AppearanceEffectsMask::BLINK.bits(), 1 << 3);
         assert_eq!(AppearanceEffectsMask::RANDOM_VANISH.bits(), 1 << 4);
-        assert_eq!(AppearanceEffectsMask::all().bits(), 0b0001_1111);
+        assert_eq!(AppearanceEffectsMask::DYNAMIC_SUDDEN.bits(), 1 << 5);
+        assert_eq!(AppearanceEffectsMask::all().bits(), 0b0011_1111);
         assert_eq!(
             AppearanceEffectsMask::from_bits_truncate(u8::MAX),
             AppearanceEffectsMask::all()

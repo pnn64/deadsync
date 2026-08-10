@@ -553,6 +553,9 @@ pub(crate) fn compose_frame(
             perspective,
             visual,
             appearance,
+            dynamic_sudden: profile
+                .appearance_effects_active_mask
+                .contains(profile_data::AppearanceEffectsMask::DYNAMIC_SUDDEN),
             visibility,
             mini_percent,
             spacing_multiplier: spacing_mult,
