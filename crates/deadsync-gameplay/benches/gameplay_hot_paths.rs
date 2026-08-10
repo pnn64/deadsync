@@ -26,12 +26,17 @@ const WINDOW_COUNT: usize = 512;
 const IDLE_ATTACK_FRAMES: usize = 2_000_000;
 const NOTE_HIDE_QUERIES: usize = 2_000_000;
 const ROW_LOOKUPS: usize = 3_000_000;
-const ROW_COUNT: usize = 32_768;
-const ROW_STRIDE: usize = 48;
+const ROW_LOOKUP_SAMPLES: usize = 7;
+const ROW_TYPICAL_COUNT: usize = 512;
+const ROW_LARGE_COUNT: usize = 32_768;
+// The local 2,234-chart corpus has a median 1.49 row slots per note. Two notes
+// per populated row with a stride of three reproduces that density.
+const ROW_STRIDE: usize = 3;
 const CUE_BUILD_ITERATIONS: usize = 100_000;
 const CUE_LOOKUPS: usize = 2_000_000;
 const CUE_COUNT: usize = 4_096;
 const CUE_ANCHOR_FRAMES: usize = 2_000_000;
+const CUE_ANCHOR_SAMPLES: usize = 7;
 const WARMUP_DIVISOR: usize = 20;
 
 struct CountingAlloc {
@@ -597,45 +602,79 @@ fn legacy_row_entry_index(row_map: &[u32], row_index: usize) -> Option<usize> {
     (index != u32::MAX).then_some(index as usize)
 }
 
-fn row_lookup_benchmark() {
-    let note_count = ROW_COUNT * 2;
-    let mut dense_row_map = vec![u32::MAX; (ROW_COUNT - 1) * ROW_STRIDE + 1];
+fn measure_dense_row_lookup(row_map: &[u32], row_count: usize) -> BenchResult {
+    let mut query = 0usize;
+    measure(ROW_LOOKUPS, || {
+        query = (query + 17) & (row_count - 1);
+        legacy_row_entry_index(black_box(row_map), black_box(query * ROW_STRIDE))
+            .unwrap_or_default() as u64
+    })
+}
+
+fn measure_note_row_lookup(note_row_entries: &[u32], row_count: usize) -> BenchResult {
+    let mut query = 0usize;
+    measure(ROW_LOOKUPS, || {
+        query = (query + 17) & (row_count - 1);
+        row_entry_index_for_note(black_box(note_row_entries), black_box(query * 2))
+            .unwrap_or_default() as u64
+    })
+}
+
+fn row_lookup_case(label: &str, row_count: usize) {
+    assert!(row_count.is_power_of_two());
+    let note_count = row_count * 2;
+    let mut dense_row_maps: [Vec<u32>; MAX_PLAYERS] =
+        std::array::from_fn(|_| vec![u32::MAX; (row_count - 1) * ROW_STRIDE + 1]);
     let note_row_entries = (0..note_count)
         .map(|note| (note / 2) as u32)
         .collect::<Vec<_>>();
-    for row in 0..ROW_COUNT {
-        dense_row_map[row * ROW_STRIDE] = row as u32;
+    for row in 0..row_count {
+        dense_row_maps[0][row * ROW_STRIDE] = row as u32;
     }
 
-    let mut old_query = 0usize;
-    let old = measure(ROW_LOOKUPS, || {
-        old_query = (old_query + 17) & (ROW_COUNT - 1);
-        legacy_row_entry_index(black_box(&dense_row_map), black_box(old_query * ROW_STRIDE))
-            .unwrap_or_default() as u64
+    let mut samples = Vec::with_capacity(ROW_LOOKUP_SAMPLES);
+    for sample in 0..ROW_LOOKUP_SAMPLES {
+        let (old, new) = if sample % 2 == 0 {
+            (
+                measure_dense_row_lookup(&dense_row_maps[0], row_count),
+                measure_note_row_lookup(&note_row_entries, row_count),
+            )
+        } else {
+            let new = measure_note_row_lookup(&note_row_entries, row_count);
+            let old = measure_dense_row_lookup(&dense_row_maps[0], row_count);
+            (old, new)
+        };
+        assert_eq!(old.checksum, new.checksum);
+        assert_zero_alloc(&old);
+        assert_zero_alloc(&new);
+        samples.push((old, new));
+    }
+    samples.sort_unstable_by(|(old_a, new_a), (old_b, new_b)| {
+        paired_cycle_ratio(old_a, new_a).total_cmp(&paired_cycle_ratio(old_b, new_b))
     });
-    let mut new_query = 0usize;
-    let new = measure(ROW_LOOKUPS, || {
-        new_query = (new_query + 17) & (ROW_COUNT - 1);
-        row_entry_index_for_note(black_box(&note_row_entries), black_box(new_query * 2))
-            .unwrap_or_default() as u64
-    });
-    assert_eq!(old.checksum, new.checksum);
-    assert_zero_alloc(&old);
-    assert_zero_alloc(&new);
+    let (old, new) = samples.remove(samples.len() / 2);
 
-    let old_bytes = dense_row_map.capacity() * std::mem::size_of::<u32>()
+    let old_bytes = dense_row_maps
+        .iter()
+        .map(|map| map.capacity() * std::mem::size_of::<u32>())
+        .sum::<usize>()
         + note_row_entries.capacity() * std::mem::size_of::<u32>();
     let new_bytes = note_row_entries.capacity() * std::mem::size_of::<u32>();
     println!(
-        "\nnote-to-row lookup ({ROW_COUNT} sparse rows, {note_count} notes, {ROW_LOOKUPS} queries)"
+        "\nnote-to-row lookup ({label}: {row_count} populated rows, {note_count} notes, median of {ROW_LOOKUP_SAMPLES} paired samples)"
     );
     print_result("old dense row map", &old);
     print_result("new note-aligned map", &new);
     print_change(&old, &new);
     println!(
-        "  retained lookup storage: old={old_bytes} B / 2 allocations, new={new_bytes} B / 1 allocation ({:.2}% bytes)",
+        "  retained lookup storage: old={old_bytes} B / 3 allocations, new={new_bytes} B / 1 allocation ({:.2}% bytes)",
         percent_change(old_bytes as f64, new_bytes as f64),
     );
+}
+
+fn row_lookup_benchmark() {
+    row_lookup_case("representative", ROW_TYPICAL_COUNT);
+    row_lookup_case("large", ROW_LARGE_COUNT);
 }
 
 const BENCH_CUE_COLUMNS: [ColumnCueColumn; 4] = [
@@ -811,6 +850,70 @@ fn cue_anchor_checksum(cursor: usize, anchor: Option<f32>) -> u64 {
     cursor as u64 ^ u64::from(anchor.unwrap_or(f32::NAN).to_bits())
 }
 
+fn measure_legacy_anchors(
+    cues: &[ColumnCue],
+    cycle_seconds: f32,
+) -> (BenchResult, LegacyCueAnchorState) {
+    let mut state = LegacyCueAnchorState::prewarmed(cues.to_vec());
+    let mut frame = 0usize;
+    let result = measure(CUE_ANCHOR_FRAMES, || {
+        let now = (frame as f32 * 0.02) % cycle_seconds;
+        frame += 1;
+        state.update(0, now);
+        let cursor = state.cursor(0);
+        cue_anchor_checksum(
+            cursor,
+            cursor
+                .checked_sub(1)
+                .and_then(|index| state.entry_time(0, index)),
+        )
+    });
+    (result, state)
+}
+
+fn measure_compact_anchors(
+    cues: &[ColumnCue],
+    cycle_seconds: f32,
+) -> (BenchResult, GameplayCueRuntimeState) {
+    let mut state = cue_state(cues.to_vec());
+    let mut frame = 0usize;
+    let result = measure(CUE_ANCHOR_FRAMES, || {
+        let now = (frame as f32 * 0.02) % cycle_seconds;
+        frame += 1;
+        state.update_crossover_cue_anchors(0, now);
+        let cursor = state.crossover_cue_cursor(0);
+        cue_anchor_checksum(
+            cursor,
+            cursor
+                .checked_sub(1)
+                .and_then(|index| state.crossover_cue_entry_time(0, index)),
+        )
+    });
+    (result, state)
+}
+
+fn assert_anchor_parity(
+    cues: &[ColumnCue],
+    old: &LegacyCueAnchorState,
+    new: &GameplayCueRuntimeState,
+) {
+    assert_eq!(old.cursor(0), new.crossover_cue_cursor(0));
+    for index in 0..cues.len() {
+        assert_eq!(
+            old.entry_time(0, index),
+            new.crossover_cue_entry_time(0, index),
+            "anchor mismatch at cue {index}",
+        );
+    }
+}
+
+fn paired_cycle_ratio(old: &BenchResult, new: &BenchResult) -> f64 {
+    match (old.cycles_per_item, new.cycles_per_item) {
+        (Some(old), Some(new)) => new / old,
+        _ => new.ns_per_item / old.ns_per_item,
+    }
+}
+
 fn cue_anchor_benchmark() {
     let cues = benchmark_cues();
     let mut old_first_state = LegacyCueAnchorState::new(cues.clone());
@@ -822,50 +925,35 @@ fn cue_anchor_benchmark() {
     assert_eq!(new_first.reallocs, 0);
     assert_eq!(new_first.bytes, 0);
 
-    let mut old_state = LegacyCueAnchorState::prewarmed(cues.clone());
-    let mut old_frame = 0usize;
     let cycle_seconds = CUE_COUNT as f32 * 0.25 + 1.0;
-    let old = measure(CUE_ANCHOR_FRAMES, || {
-        let now = (old_frame as f32 * 0.02) % cycle_seconds;
-        old_frame += 1;
-        old_state.update(0, now);
-        let cursor = old_state.cursor(0);
-        cue_anchor_checksum(
-            cursor,
-            cursor
-                .checked_sub(1)
-                .and_then(|index| old_state.entry_time(0, index)),
-        )
-    });
-    let mut new_state = cue_state(cues.clone());
-    let mut new_frame = 0usize;
-    let new = measure(CUE_ANCHOR_FRAMES, || {
-        let now = (new_frame as f32 * 0.02) % cycle_seconds;
-        new_frame += 1;
-        new_state.update_crossover_cue_anchors(0, now);
-        let cursor = new_state.crossover_cue_cursor(0);
-        cue_anchor_checksum(
-            cursor,
-            cursor
-                .checked_sub(1)
-                .and_then(|index| new_state.crossover_cue_entry_time(0, index)),
-        )
-    });
-    assert_eq!(old.checksum, new.checksum);
-    assert_eq!(old_state.cursor(0), new_state.crossover_cue_cursor(0));
-    for index in 0..cues.len() {
-        assert_eq!(
-            old_state.entry_time(0, index),
-            new_state.crossover_cue_entry_time(0, index),
-            "anchor mismatch at cue {index}",
-        );
+    let mut samples = Vec::with_capacity(CUE_ANCHOR_SAMPLES);
+    for sample in 0..CUE_ANCHOR_SAMPLES {
+        let (old_run, new_run) = if sample % 2 == 0 {
+            (
+                measure_legacy_anchors(&cues, cycle_seconds),
+                measure_compact_anchors(&cues, cycle_seconds),
+            )
+        } else {
+            let new = measure_compact_anchors(&cues, cycle_seconds);
+            let old = measure_legacy_anchors(&cues, cycle_seconds);
+            (old, new)
+        };
+        assert_eq!(old_run.0.checksum, new_run.0.checksum);
+        assert_anchor_parity(&cues, &old_run.1, &new_run.1);
+        assert_zero_alloc(&old_run.0);
+        assert_zero_alloc(&new_run.0);
+        samples.push((old_run.0, new_run.0));
     }
-    assert_zero_alloc(&old);
-    assert_zero_alloc(&new);
+    samples.sort_unstable_by(|(old_a, new_a), (old_b, new_b)| {
+        paired_cycle_ratio(old_a, new_a).total_cmp(&paired_cycle_ratio(old_b, new_b))
+    });
+    let (old, new) = samples.remove(samples.len() / 2);
 
     let old_bytes = cues.len() * std::mem::size_of::<Option<f32>>();
     let new_bytes = cues.len() * std::mem::size_of::<f32>();
-    println!("\ncrossover cue anchors ({CUE_COUNT} cues, {CUE_ANCHOR_FRAMES} frames)");
+    println!(
+        "\ncrossover cue anchors ({CUE_COUNT} cues, {CUE_ANCHOR_FRAMES} frames, median of {CUE_ANCHOR_SAMPLES} paired samples)"
+    );
     print_result("old Option Vec", &old);
     print_result("new boxed f32", &new);
     print_change(&old, &new);

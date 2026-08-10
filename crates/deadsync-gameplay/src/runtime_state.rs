@@ -526,9 +526,9 @@ impl GameplayCueRuntimeState {
     // start, anchor it to the cue's start if it was reached within
     // CROSSOVER_CUE_SEEK_GUARD_SECONDS (normal play -> natural fade-in) or to
     // `current_time` if the start was jumped over (seek -> fade in from the
-    // landing point). Anchors are cleared for cues the playhead has rewound
-    // before, so a replayed section fades in naturally. Call once per player per
-    // frame.
+    // landing point). Rewinding moves the validity cursor back; replayed cues
+    // overwrite their stale anchors when crossed again and fade in naturally.
+    // Call once per player per frame.
     pub fn update_crossover_cue_anchors(&mut self, player: usize, current_time: f32) {
         let Some(cues) = self.crossover_cues.get(player) else {
             return;
