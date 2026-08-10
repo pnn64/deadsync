@@ -6,7 +6,7 @@ use crate::screens::components::shared::{transitions, visual_style_bg};
 use crate::screens::{Screen, ThemeEffect};
 use crate::views::{PostSongPlayerView, PostSongRuntimeView};
 use deadlib_present::actors::{Actor, SizeSpec};
-use deadlib_present::cache::{SharedStrCache, cached_shared_str};
+use deadlib_present::cache::{SharedStrCache, cached_shared_str, shared_str_cache_with_capacity};
 use deadlib_present::color;
 use deadlib_present::space::{screen_center_x, screen_center_y, screen_height};
 use deadsync_input::{InputEvent, VirtualAction};
@@ -71,7 +71,7 @@ static POSSIBLE_CHAR_TEXT: LazyLock<[Arc<str>; POSSIBLE_CHARS.len()]> =
 
 thread_local! {
     static STR_REF_CACHE: RefCell<SharedStrCache> =
-        RefCell::new(HashMap::with_capacity(64));
+        RefCell::new(shared_str_cache_with_capacity(64));
 }
 
 #[derive(Clone, Copy, Debug)]

@@ -7957,7 +7957,7 @@ mod tests {
         TextAlign, TextAttribute, TextAttributes, TextContent,
     };
     use crate::font;
-    use crate::font::{Font, Glyph};
+    use crate::font::{Font, Glyph, GlyphMap};
     use crate::space::Metrics;
     use deadlib_render::{
         BlendMode, DrawOp, INVALID_TEXTURE_HANDLE, INVALID_TMESH_CACHE_KEY, MeshRun, MeshVertex,
@@ -8890,7 +8890,7 @@ mod tests {
         let texture_key = Arc::<str>::from("test_font_page");
         let glyph_a = test_glyph(&texture_key);
         let glyph_b = test_glyph(&texture_key);
-        let mut glyph_map = HashMap::new();
+        let mut glyph_map = GlyphMap::default();
         glyph_map.insert('A', glyph_a.clone());
         glyph_map.insert('B', glyph_b.clone());
         let mut ascii = std::array::from_fn(|_| None);
@@ -8916,7 +8916,7 @@ mod tests {
         let texture_key_b = Arc::<str>::from("test_font_page_b");
         let glyph_a = test_glyph(&texture_key_a);
         let glyph_b = test_glyph(&texture_key_b);
-        let mut glyph_map = HashMap::new();
+        let mut glyph_map = GlyphMap::default();
         glyph_map.insert('A', glyph_a.clone());
         glyph_map.insert('B', glyph_b.clone());
         let mut ascii = std::array::from_fn(|_| None);
@@ -8942,7 +8942,7 @@ mod tests {
         let stroke_key = Arc::<str>::from("test_font_stroke_page");
         let glyph_a = test_stroked_glyph(&texture_key, &stroke_key);
         let glyph_b = test_stroked_glyph(&texture_key, &stroke_key);
-        let mut glyph_map = HashMap::new();
+        let mut glyph_map = GlyphMap::default();
         glyph_map.insert('A', glyph_a.clone());
         glyph_map.insert('B', glyph_b.clone());
         let mut ascii = std::array::from_fn(|_| None);
@@ -8976,7 +8976,7 @@ mod tests {
     ) -> Font {
         let glyph_a = test_stroked_glyph(fill_a, stroke_a);
         let glyph_b = test_stroked_glyph(fill_b, stroke_b);
-        let glyph_map = HashMap::from([('A', glyph_a.clone()), ('B', glyph_b.clone())]);
+        let glyph_map = GlyphMap::from_iter([('A', glyph_a.clone()), ('B', glyph_b.clone())]);
         let mut ascii = std::array::from_fn(|_| None);
         ascii['A' as usize] = Some(glyph_a);
         ascii['B' as usize] = Some(glyph_b);
@@ -9008,7 +9008,7 @@ mod tests {
             Arc::<str>::from("test_numeric_stroke_a"),
             Arc::<str>::from("test_numeric_stroke_b"),
         ];
-        let mut glyph_map = HashMap::new();
+        let mut glyph_map = GlyphMap::default();
         let mut ascii = std::array::from_fn(|_| None);
         for digit in 0..10 {
             let ch = char::from(b'0' + digit);
@@ -9229,7 +9229,7 @@ mod tests {
         assert!(!Arc::ptr_eq(&page_a, &page_b));
         let glyph_a = test_glyph(&page_a);
         let glyph_b = test_glyph(&page_b);
-        let glyph_map = HashMap::from([('A', glyph_a.clone()), ('B', glyph_b.clone())]);
+        let glyph_map = GlyphMap::from_iter([('A', glyph_a.clone()), ('B', glyph_b.clone())]);
         let mut ascii = std::array::from_fn(|_| None);
         ascii['A' as usize] = Some(glyph_a);
         ascii['B' as usize] = Some(glyph_b);

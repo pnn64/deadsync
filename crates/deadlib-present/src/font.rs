@@ -21,6 +21,7 @@ use std::sync::{Arc, OnceLock};
 
 use image;
 use log::{debug, trace, warn};
+use rustc_hash::FxBuildHasher;
 use smallvec::SmallVec;
 
 const FONT_DEFAULT_CHAR: char = '\u{F8FF}'; // SM default glyph (private use)
@@ -545,7 +546,7 @@ pub struct Glyph {
 
 #[derive(Debug, Clone)]
 pub struct Font {
-    pub glyph_map: HashMap<char, Glyph>,
+    pub glyph_map: GlyphMap,
     pub ascii_glyphs: Box<[Option<Glyph>; 128]>,
     pub default_glyph: Option<Glyph>,
     pub line_spacing: i32, // draw units (from main/default page)
@@ -558,7 +559,8 @@ pub struct Font {
     pub texture_hints_map: HashMap<String, String>,
 }
 
-pub type FontMap = HashMap<&'static str, Font, rustc_hash::FxBuildHasher>;
+pub type GlyphMap = HashMap<char, Glyph, FxBuildHasher>;
+pub type FontMap = HashMap<&'static str, Font, FxBuildHasher>;
 
 pub struct FontLoadData {
     pub font: Font,
@@ -2374,7 +2376,7 @@ pub fn parse_with_texture_context(
 
     // ---- NEW: import merge (before local pages)
     let mut required_textures: Vec<PathBuf> = Vec::new();
-    let mut all_glyphs: HashMap<char, Glyph> = HashMap::new();
+    let mut all_glyphs = GlyphMap::default();
     let mut stroke_texture_map: HashMap<String, String> = HashMap::new();
     let mut texture_hints_map: HashMap<String, String> = HashMap::new();
 
@@ -2908,7 +2910,7 @@ fn apply_space_nbsp_symmetry(char_to_frame: &mut std::collections::HashMap<char,
 }
 
 #[inline(always)]
-fn synthesize_space_from_nbsp(all_glyphs: &mut std::collections::HashMap<char, Glyph>) {
+fn synthesize_space_from_nbsp(all_glyphs: &mut GlyphMap) {
     if !all_glyphs.contains_key(&' ')
         && let Some(nbsp) = all_glyphs.get(&'\u{00A0}').cloned()
     {
@@ -2920,6 +2922,55 @@ fn synthesize_space_from_nbsp(all_glyphs: &mut std::collections::HashMap<char, G
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn test_glyph(advance_i32: i32) -> Glyph {
+        Glyph {
+            texture_key: Arc::from("test"),
+            stroke_texture_key: None,
+            tex_rect: [0.0; 4],
+            uv_scale: [1.0; 2],
+            uv_offset: [0.0; 2],
+            size: [1.0; 2],
+            offset: [0.0; 2],
+            advance: advance_i32 as f32,
+            advance_i32,
+        }
+    }
+
+    #[test]
+    fn fast_glyph_map_preserves_unicode_and_default_lookup() {
+        let unicode = test_glyph(17);
+        let default = test_glyph(9);
+        let mut glyph_map = GlyphMap::default();
+        glyph_map.insert('\u{65e5}', unicode);
+        let font = Font {
+            glyph_map,
+            ascii_glyphs: empty_ascii_glyphs(),
+            default_glyph: Some(default),
+            line_spacing: 0,
+            height: 0,
+            fallback_font_name: None,
+            cache_tag: 0,
+            chain_key: 0,
+            default_stroke_color: [0.0; 4],
+            stroke_texture_map: HashMap::new(),
+            texture_hints_map: HashMap::new(),
+        };
+        let fonts = FontMap::default();
+
+        assert_eq!(
+            find_glyph(&font, '\u{65e5}', &fonts).unwrap().advance_i32,
+            17
+        );
+        assert_eq!(
+            find_glyph(&font, '\u{6708}', &fonts).unwrap().advance_i32,
+            9
+        );
+        assert_eq!(
+            measure_line_width_logical(&font, "\u{65e5}\u{6708}", &fonts),
+            26
+        );
+    }
 
     #[test]
     fn replace_markers_keeps_plain_text_borrowed() {

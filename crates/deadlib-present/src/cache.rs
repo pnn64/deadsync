@@ -1,14 +1,18 @@
 use rustc_hash::FxBuildHasher;
 use std::cell::RefCell;
-use std::collections::{HashMap, hash_map::RandomState};
+use std::collections::HashMap;
 use std::hash::{BuildHasher, Hash};
 use std::sync::Arc;
 use std::thread::LocalKey;
 
 pub type TextCache<K, S = FxBuildHasher> = HashMap<K, Arc<str>, S>;
-pub type SharedStrCache<S = RandomState> = HashMap<Box<str>, Arc<str>, S>;
+pub type SharedStrCache<S = FxBuildHasher> = HashMap<Box<str>, Arc<str>, S>;
 
 pub fn text_cache_with_capacity<K>(capacity: usize) -> TextCache<K> {
+    HashMap::with_capacity_and_hasher(capacity, FxBuildHasher)
+}
+
+pub fn shared_str_cache_with_capacity(capacity: usize) -> SharedStrCache {
     HashMap::with_capacity_and_hasher(capacity, FxBuildHasher)
 }
 
@@ -65,7 +69,8 @@ mod tests {
 
     thread_local! {
         static TEST_CACHE: RefCell<TextCache<u32>> = RefCell::new(text_cache_with_capacity(4));
-        static TEST_STR_CACHE: RefCell<SharedStrCache> = RefCell::new(HashMap::with_capacity(4));
+        static TEST_STR_CACHE: RefCell<SharedStrCache> =
+            RefCell::new(shared_str_cache_with_capacity(4));
     }
 
     fn clear_test_cache() {

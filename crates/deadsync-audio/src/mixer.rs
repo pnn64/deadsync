@@ -175,14 +175,9 @@ pub fn scheduled_onset_decision(
 
 #[inline(always)]
 pub fn f32_to_i16(sample: f32) -> i16 {
-    let sample = sample.clamp(-1.0, 1.0);
-    if sample >= 1.0 {
-        i16::MAX
-    } else if sample <= -1.0 {
-        i16::MIN
-    } else {
-        (sample * (i16::MAX as f32 + 1.0)) as i16
-    }
+    // Rust float-to-integer casts saturate and map NaN to zero, which exactly
+    // covers the old clamp and boundary branches after scaling.
+    (sample * (i16::MAX as f32 + 1.0)) as i16
 }
 
 #[inline(always)]
@@ -249,6 +244,50 @@ mod tests {
         assert_eq!(f32_to_i16(0.0), 0);
         assert_eq!(f32_to_i16(0.5), 16_384);
         assert_eq!(f32_to_i16(-0.5), -16_384);
+    }
+
+    #[test]
+    fn saturating_conversion_matches_legacy_float_domain() {
+        fn legacy(sample: f32) -> i16 {
+            let sample = sample.clamp(-1.0, 1.0);
+            if sample >= 1.0 {
+                i16::MAX
+            } else if sample <= -1.0 {
+                i16::MIN
+            } else {
+                (sample * 32_768.0) as i16
+            }
+        }
+
+        let edges = [
+            f32::NEG_INFINITY,
+            -1.000_000_1,
+            -1.0,
+            -0.999_999_94,
+            -0.0,
+            0.0,
+            0.999_999_94,
+            1.0,
+            1.000_000_1,
+            f32::INFINITY,
+            f32::NAN,
+        ];
+        for sample in edges {
+            assert_eq!(f32_to_i16(sample), legacy(sample), "sample={sample:?}");
+        }
+        for exponent in 0..=u8::MAX {
+            for mantissa in (0..=0x7f_ffffu32).step_by(65_521) {
+                for sign in [0, 1u32 << 31] {
+                    let sample = f32::from_bits(sign | u32::from(exponent) << 23 | mantissa);
+                    assert_eq!(
+                        f32_to_i16(sample),
+                        legacy(sample),
+                        "bits={:08x}",
+                        sample.to_bits()
+                    );
+                }
+            }
+        }
     }
 
     #[test]

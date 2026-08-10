@@ -4,6 +4,10 @@ version = "0.1.0"
 edition = "2024"
 license = "GPL-3.0"
 
+[[bench]]
+name = "audio_sample_transforms"
+harness = false
+
 [features]
 test-support = []
 

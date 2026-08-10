@@ -2,12 +2,11 @@ use crate::act;
 use crate::assets::{FontRole, machine_font_key_for_text};
 use crate::views::{ScreenBarBackgroundView, SimplyLoveVisualPolicyView};
 use deadlib_present::actors::{self, Actor, Background, SizeSpec};
-use deadlib_present::cache::{SharedStrCache, cached_shared_str};
+use deadlib_present::cache::{SharedStrCache, cached_shared_str, shared_str_cache_with_capacity};
 use deadlib_present::color;
 use deadlib_present::space;
 use deadlib_present::space::{screen_center_x, screen_height, screen_width};
 use std::cell::RefCell;
-use std::collections::HashMap;
 use std::sync::Arc;
 
 // --- Constants ---
@@ -21,7 +20,7 @@ const TOP_TITLE_OFFSET_Y: f32 = 15.0;
 
 thread_local! {
     static STR_REF_CACHE: RefCell<SharedStrCache> =
-        RefCell::new(HashMap::with_capacity(64));
+        RefCell::new(shared_str_cache_with_capacity(64));
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]

@@ -21,7 +21,7 @@ pub(super) mod tests {
     use crate::assets::AssetManager;
     use crate::assets::i18n::{LookupKey, lookup_key};
     use crate::screens::{Screen, ThemeEffect};
-    use deadlib_present::font::{Font, Glyph};
+    use deadlib_present::font::{Font, Glyph, GlyphMap};
     use deadsync_chart::{ChartData, SongData};
     use deadsync_profile::PlayerOptionsData;
     use deadsync_profile::{
@@ -259,7 +259,7 @@ pub(super) mod tests {
             advance: 8.0,
             advance_i32: 8,
         };
-        let mut glyph_map = HashMap::new();
+        let mut glyph_map = GlyphMap::default();
         for ch in 32u8..=126 {
             glyph_map.insert(char::from(ch), glyph.clone());
         }

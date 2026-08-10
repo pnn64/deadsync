@@ -12,7 +12,8 @@ use crate::screens::components::{
 };
 use deadlib_present::actors::{Actor, SizeSpec};
 use deadlib_present::cache::{
-    SharedStrCache, TextCache, cached_shared_str, cached_text, text_cache_with_capacity,
+    SharedStrCache, TextCache, cached_shared_str, cached_text, shared_str_cache_with_capacity,
+    text_cache_with_capacity,
 };
 use deadlib_present::color;
 use deadlib_present::space::widescale;
@@ -228,7 +229,8 @@ thread_local! {
     static DIFFICULTY_TEXT_CACHE: RefCell<TextCache<(&'static str, &'static str)>> = RefCell::new(text_cache_with_capacity(64));
     static FAIL_LABEL_CACHE: RefCell<TextCache<(u32, Option<(u32, u32)>)>> = RefCell::new(text_cache_with_capacity(2048));
     static TOTAL_LABEL_CACHE: RefCell<TextCache<u32>> = RefCell::new(text_cache_with_capacity(512));
-    static STR_REF_CACHE: RefCell<SharedStrCache> = RefCell::new(HashMap::with_capacity(4096));
+    static STR_REF_CACHE: RefCell<SharedStrCache> =
+        RefCell::new(shared_str_cache_with_capacity(4096));
 }
 
 #[inline(always)]

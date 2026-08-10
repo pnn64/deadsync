@@ -183,7 +183,7 @@ mod tests {
     #[test]
     fn prepare_required_font_textures_skips_existing_keys() {
         let font = Font {
-            glyph_map: HashMap::new(),
+            glyph_map: font::GlyphMap::default(),
             ascii_glyphs: Box::new(std::array::from_fn(|_| None)),
             default_glyph: None,
             line_spacing: 0,
@@ -209,7 +209,7 @@ mod tests {
     #[test]
     fn set_font_fallback_applies_present_fallback_name() {
         let mut font = Font {
-            glyph_map: HashMap::new(),
+            glyph_map: font::GlyphMap::default(),
             ascii_glyphs: Box::new(std::array::from_fn(|_| None)),
             default_glyph: None,
             line_spacing: 0,

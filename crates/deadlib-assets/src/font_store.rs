@@ -51,11 +51,12 @@ impl Default for FontStore {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use deadlib_present::font::GlyphMap;
     use std::collections::HashMap;
 
     fn test_font() -> Font {
         Font {
-            glyph_map: HashMap::new(),
+            glyph_map: GlyphMap::default(),
             ascii_glyphs: Box::new(std::array::from_fn(|_| None)),
             default_glyph: None,
             line_spacing: 0,

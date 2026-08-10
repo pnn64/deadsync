@@ -144,7 +144,7 @@ pub fn prewarm_score_counter_layout(
 mod tests {
     use super::*;
     use deadlib_present::compose::build_screen;
-    use deadlib_present::font::{Font, Glyph};
+    use deadlib_present::font::{Font, Glyph, GlyphMap};
     use deadlib_present::space::Metrics;
     use deadlib_render::DrawOp;
     use glam::Vec4;
@@ -248,7 +248,7 @@ mod tests {
 
     fn test_fonts() -> font::FontMap {
         let texture: Arc<str> = Arc::from("score-counter-test");
-        let mut glyph_map = HashMap::new();
+        let mut glyph_map = GlyphMap::default();
         for (index, ch) in "0123456789.".chars().enumerate() {
             let advance = if matches!(ch, '1' | '.') { 15 } else { 37 };
             glyph_map.insert(

@@ -9,7 +9,8 @@ use crate::screens::select_music::MusicWheelEntry;
 use crate::views::{MUSIC_WHEEL_SLOT_COUNT, MusicWheelRuntimeView, MusicWheelSlotRuntimeRequest};
 use deadlib_present::actors::Actor;
 use deadlib_present::cache::{
-    SharedStrCache, TextCache, cached_shared_str, cached_text, text_cache_with_capacity,
+    SharedStrCache, TextCache, cached_shared_str, cached_text, shared_str_cache_with_capacity,
+    text_cache_with_capacity,
 };
 use deadlib_present::color;
 use deadlib_present::space::widescale;
@@ -291,7 +292,7 @@ thread_local! {
     static PACK_COUNT_TEXT_CACHE: RefCell<TextCache<usize>> =
         RefCell::new(text_cache_with_capacity(256));
     static STR_REF_CACHE: RefCell<SharedStrCache> =
-        RefCell::new(HashMap::with_capacity(1024));
+        RefCell::new(shared_str_cache_with_capacity(1024));
 }
 
 const fn col_quint_lamp() -> [f32; 4] {
