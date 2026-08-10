@@ -1,6 +1,8 @@
+use deadsync_gameplay::partition_point_from_hint;
 use deadsync_rules::judgment::JudgeGrade;
 use deadsync_rules::stream::StreamSegment;
 use deadsync_rules::timing::WindowCounts;
+use std::cell::Cell;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum MiniIndicatorScoreType {
@@ -182,15 +184,18 @@ struct BrokenRunSpan {
 
 /// Song-lifetime prefix totals for the StreamProg mini indicator.
 ///
-/// The gameplay screen owns one immutable lookup per player. It is built while
-/// entering gameplay, uses one boxed allocation sized to the chart's segment
-/// count, and is read only on the game/render thread. There are no misses,
-/// eviction, synchronization, or destruction during a song. A frame performs
-/// one binary search and one prefix lookup, so its worst-case work is
-/// logarithmic in the number of stream segments.
+/// The gameplay screen owns one lookup per player for the song lifetime. It is
+/// built while entering gameplay, uses one boxed allocation sized to the chart,
+/// and is accessed only on the game/render thread. A `Cell` retains the previous
+/// partition boundary, so forward frames usually inspect one nearby entry while
+/// seeks remain logarithmic through an exponential bracket and binary search.
+/// There are no misses, eviction, synchronization, gameplay-time allocation, or
+/// song-time destruction. `storage_bytes` exposes retained entry storage; the
+/// worst frame is O(log n), and the boxed entries are freed on screen exit.
 #[derive(Clone, Debug, Default)]
 pub struct StreamProgressLookup {
     segments: Box<[StreamProgressEntry]>,
+    cursor: Cell<usize>,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -222,7 +227,10 @@ impl StreamProgressLookup {
             })
             .collect::<Vec<_>>()
             .into_boxed_slice();
-        Self { segments: entries }
+        Self {
+            segments: entries,
+            cursor: Cell::new(0),
+        }
     }
 
     pub fn storage_bytes(&self) -> usize {
@@ -241,9 +249,10 @@ impl StreamProgressLookup {
         } else {
             0.0
         };
-        let index = self
-            .segments
-            .partition_point(|segment| current >= segment.end);
+        let index = partition_point_from_hint(&self.segments, self.cursor.get(), |segment| {
+            current >= segment.end
+        });
+        self.cursor.set(index);
         let Some(segment) = self.segments.get(index) else {
             let completed = self.segments.last().map_or(0.0, |last| {
                 last.stream_before
@@ -266,13 +275,17 @@ impl StreamProgressLookup {
 
 /// Song-lifetime canonical spans for the broken-run measure counter.
 ///
-/// The gameplay screen owns one immutable lookup per player. Construction is a
-/// single linear pass at screen entry and stores only canonical run spans in a
-/// boxed slice. Steady gameplay performs one binary search, with no allocation,
-/// scanning, eviction, or synchronization. Storage is released with the screen.
+/// The gameplay screen owns one lookup per player for the song lifetime.
+/// Construction is one linear pass at screen entry and stores canonical spans
+/// in a byte-bounded boxed slice. A game/render-thread-only `Cell` retains the
+/// previous boundary, making forward frames O(1) in the usual case; exponential
+/// bracketing keeps seeks O(log n). There are no misses, eviction,
+/// synchronization, or gameplay-time allocations. `storage_bytes` exposes the
+/// retained span storage, and all storage is released on screen exit.
 #[derive(Clone, Debug, Default)]
 pub struct BrokenRunLookup {
     spans: Box<[BrokenRunSpan]>,
+    cursor: Cell<usize>,
 }
 
 impl BrokenRunLookup {
@@ -301,6 +314,7 @@ impl BrokenRunLookup {
         }
         Self {
             spans: spans.into_boxed_slice(),
+            cursor: Cell::new(0),
         }
     }
 
@@ -315,9 +329,10 @@ impl BrokenRunLookup {
         if current_measure.is_nan() {
             return None;
         }
-        let index = self
-            .spans
-            .partition_point(|span| current_measure >= span.end);
+        let index = partition_point_from_hint(&self.spans, self.cursor.get(), |span| {
+            current_measure >= span.end
+        });
+        self.cursor.set(index);
         self.spans
             .get(index)
             .map(|span| (span.segment_index, span.broken_end, span.broken))
@@ -960,5 +975,26 @@ mod lookup_tests {
         }
         assert_eq!(lookup.segment(f32::NAN), None);
         assert_eq!(BrokenRunLookup::default().segment(0.0), None);
+    }
+
+    #[test]
+    fn cursor_lookups_match_legacy_across_forward_and_backward_seeks() {
+        let segments = segments();
+        let stream = StreamProgressLookup::new(&segments);
+        let broken = BrokenRunLookup::new(&segments);
+        let total = 13.0;
+        for measure in [0.0, 18.0, 2.0, 9.75, -1.0, 20.0, 5.5, 14.0, 0.25] {
+            let beat = measure * 4.0;
+            assert_eq!(
+                stream.completion_for_beat(total, beat),
+                zmod_stream_prog_completion_for_beat(total, &segments, beat),
+                "measure={measure}",
+            );
+            assert_eq!(
+                broken.segment(measure),
+                zmod_broken_run_segment(&segments, measure),
+                "measure={measure}",
+            );
+        }
     }
 }

@@ -985,12 +985,20 @@ fn note_count_at(stats: &[NoteCountStat], beat: f32) -> NoteCountStat {
     })
 }
 
-fn note_count_range_to(stats: &[NoteCountStat], low: f32, high_count: NoteCountStat) -> usize {
-    let low = note_count_at(stats, low);
-    high_count.notes_upper.saturating_sub(low.notes_lower)
+fn note_count_cutoff_beat(stats: &[NoteCountStat], high: NoteCountStat) -> Option<f32> {
+    if high.notes_upper <= MAX_NOTES_AFTER {
+        return None;
+    }
+    let min_notes_lower = high.notes_upper - MAX_NOTES_AFTER;
+    let index = stats.partition_point(|stat| stat.notes_lower < min_notes_lower);
+    match index {
+        0 => None,
+        index if index == stats.len() => Some(f32::INFINITY),
+        index => Some(stats[index].beat),
+    }
 }
 
-pub(crate) fn find_first_displayed_beat<F: FnMut(f32) -> f32>(
+pub fn find_first_displayed_beat<F: FnMut(f32) -> f32>(
     current_beat: f32,
     draw_distance: f32,
     stats: &[NoteCountStat],
@@ -1000,18 +1008,14 @@ pub(crate) fn find_first_displayed_beat<F: FnMut(f32) -> f32>(
         return None;
     }
     let mut high = current_beat.max(0.0);
-    let current_note_count = (!stats.is_empty()).then(|| note_count_at(stats, current_beat));
-    let mut low = if current_note_count.is_some() {
-        0.0
-    } else {
-        high - 4.0
-    };
+    let note_count_cutoff = (!stats.is_empty())
+        .then(|| note_count_at(stats, current_beat))
+        .and_then(|count| note_count_cutoff_beat(stats, count));
+    let mut low = if stats.is_empty() { high - 4.0 } else { 0.0 };
     let mut first = low;
     for _ in 0..24 {
         let mid = (low + high) * 0.5;
-        if y_for_beat(mid) < -draw_distance
-            || current_note_count
-                .is_some_and(|count| note_count_range_to(stats, mid, count) > MAX_NOTES_AFTER)
+        if y_for_beat(mid) < -draw_distance || note_count_cutoff.is_some_and(|cutoff| mid < cutoff)
         {
             first = mid;
             low = mid;

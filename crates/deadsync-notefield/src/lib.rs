@@ -148,6 +148,12 @@ pub(crate) use notes::{
     lane_hold_window_bounds_by_note_row_from_cursor, lane_window_bounds_by_note_row_from_cursor,
     mine_hides_after_resolution, scroll_travel,
 };
+
+/// Stable entry points used by the standalone hot-path benchmark.
+#[doc(hidden)]
+pub mod performance {
+    pub use crate::notes::find_first_displayed_beat;
+}
 #[cfg(test)]
 use notes::{find_first_displayed_beat, find_last_displayed_beat, note_itg_row};
 pub(crate) use placement::{

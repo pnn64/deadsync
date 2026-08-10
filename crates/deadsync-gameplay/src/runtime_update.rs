@@ -1019,48 +1019,14 @@ where
             return;
         }
 
-        let attacks = &mut self.mods.attacks;
-        attacks.update_window_indices(player, now);
-        let (attack_window_indices, ease_window_indices) = attacks.active_window_indices(player);
-        let output = refresh_active_attack_player_indexed(
-            ActiveAttackRefreshInput {
-                now,
-                delta_time,
-                attacks_cleared_for_outro: attacks.cleared_for_outro,
-                base_appearance: base.appearance,
-                base_visual: base.visual,
-                base_scroll: base.scroll,
-                base_mini_percent: base.mini_percent,
-                attack_windows: &attacks.mask_windows[player],
-                song_lua_ease_windows: &attacks.song_lua_ease_windows[player],
-            },
-            ActiveAttackRefreshState {
-                attack_current_appearance: attacks.current_appearance[player],
-                active_attack_visual: attacks.visual[player],
-                active_attack_visibility: attacks.visibility[player],
-                active_attack_scroll: attacks.scroll[player],
-                active_attack_mini_percent: attacks.mini_percent[player],
-                outro_attack_visual: attacks.outro_visual[player],
-            },
-            attack_window_indices,
-            ease_window_indices,
-        );
-
-        attacks.target_appearance[player] = output.attack_target_appearance;
-        attacks.speed_appearance[player] = output.attack_speed_appearance;
-        attacks.current_appearance[player] = output.attack_current_appearance;
-        attacks.outro_visual[player] = output.outro_attack_visual;
-        attacks.clear_all[player] = output.active_attack_clear_all;
-        attacks.chart[player] = output.active_attack_chart;
-        attacks.accel[player] = output.active_attack_accel;
-        attacks.visual[player] = output.active_attack_visual;
-        attacks.appearance[player] = output.active_attack_appearance;
-        attacks.visibility[player] = output.active_attack_visibility;
-        attacks.scroll[player] = output.active_attack_scroll;
-        attacks.perspective[player] = output.active_attack_perspective;
-        attacks.scroll_speed[player] = output.active_attack_scroll_speed;
-        attacks.mini_percent[player] = output.active_attack_mini_percent;
-        self.mods.song_lua_player_transforms[player] = output.player_transform.resolve();
+        let player_transform = self.mods.song_lua_player_transforms[player];
+        if let Some(transform) =
+            self.mods
+                .attacks
+                .refresh_player(player, now, delta_time, base, player_transform)
+        {
+            self.mods.song_lua_player_transforms[player] = transform;
+        }
     }
 
     #[inline(always)]

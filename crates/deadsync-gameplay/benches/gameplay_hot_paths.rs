@@ -1,11 +1,12 @@
 use deadsync_core::input::MAX_PLAYERS;
 use deadsync_gameplay::{
     AccelOverrides, ActiveAttackRefreshInput, ActiveAttackRefreshOutput, ActiveAttackRefreshState,
-    AppearanceEffects, AppearanceOverrides, AttackMaskWindow, CROSSOVER_CUE_SEEK_GUARD_SECONDS,
-    ChartAttackEffects, ColumnCue, ColumnCueColumn, ColumnCueColumns, GameplayAttackRuntimeState,
-    GameplayCueRuntimeState, MiniAttackMode, PerspectiveOverrides, ScrollEffects, ScrollOverrides,
-    SongLuaEase, SongLuaEaseMaskTarget, SongLuaEaseMaskWindow, SongLuaNoteHideWindowRuntime,
-    SongLuaNoteHideWindows, VisibilityOverrides, VisualEffects, VisualOverrides,
+    AppearanceEffects, AppearanceOverrides, AttackBaseEffects, AttackMaskWindow,
+    CROSSOVER_CUE_SEEK_GUARD_SECONDS, ChartAttackEffects, ColumnCue, ColumnCueColumn,
+    ColumnCueColumns, GameplayAttackRuntimeState, GameplayCueRuntimeState, MiniAttackMode,
+    PerspectiveOverrides, ScrollEffects, ScrollOverrides, SongLuaEase, SongLuaEaseMaskTarget,
+    SongLuaEaseMaskWindow, SongLuaNoteHideWindowRuntime, SongLuaNoteHideWindows,
+    SongLuaPlayerTransform, VisibilityOverrides, VisualEffects, VisualOverrides,
     column_cue_cursor_from_hint, partition_point_from_hint, refresh_active_attack_player,
     refresh_active_attack_player_indexed, refresh_active_attack_player_indexed_reference,
     row_entry_index_for_note, song_lua_ease_factor, song_lua_note_hidden,
@@ -24,6 +25,8 @@ const SEARCH_ITERATIONS: usize = 2_000_000;
 const WINDOW_FRAMES: usize = 100_000;
 const WINDOW_COUNT: usize = 512;
 const IDLE_ATTACK_FRAMES: usize = 2_000_000;
+const SETTLED_STATE_FRAMES: usize = 1_000_000;
+const SETTLED_STATE_SAMPLES: usize = 7;
 const NOTE_HIDE_QUERIES: usize = 2_000_000;
 const ROW_LOOKUPS: usize = 3_000_000;
 const ROW_LOOKUP_SAMPLES: usize = 7;
@@ -551,6 +554,132 @@ fn idle_attack_benchmark() {
     print_change(&reference, &optimized);
 }
 
+fn legacy_refresh_attack_state(
+    attacks: &mut GameplayAttackRuntimeState,
+    now: f32,
+    delta_time: f32,
+    base: AttackBaseEffects,
+) -> SongLuaPlayerTransform {
+    attacks.update_window_indices(0, now);
+    let (attack_window_indices, ease_window_indices) = attacks.active_window_indices(0);
+    let output = refresh_active_attack_player_indexed(
+        ActiveAttackRefreshInput {
+            now,
+            delta_time,
+            attacks_cleared_for_outro: attacks.cleared_for_outro,
+            base_appearance: base.appearance,
+            base_visual: base.visual,
+            base_scroll: base.scroll,
+            base_mini_percent: base.mini_percent,
+            attack_windows: &attacks.mask_windows[0],
+            song_lua_ease_windows: &attacks.song_lua_ease_windows[0],
+        },
+        ActiveAttackRefreshState {
+            attack_current_appearance: attacks.current_appearance[0],
+            active_attack_visual: attacks.visual[0],
+            active_attack_visibility: attacks.visibility[0],
+            active_attack_scroll: attacks.scroll[0],
+            active_attack_mini_percent: attacks.mini_percent[0],
+            outro_attack_visual: attacks.outro_visual[0],
+        },
+        attack_window_indices,
+        ease_window_indices,
+    );
+    attacks.target_appearance[0] = output.attack_target_appearance;
+    attacks.speed_appearance[0] = output.attack_speed_appearance;
+    attacks.current_appearance[0] = output.attack_current_appearance;
+    attacks.outro_visual[0] = output.outro_attack_visual;
+    attacks.clear_all[0] = output.active_attack_clear_all;
+    attacks.chart[0] = output.active_attack_chart;
+    attacks.accel[0] = output.active_attack_accel;
+    attacks.visual[0] = output.active_attack_visual;
+    attacks.appearance[0] = output.active_attack_appearance;
+    attacks.visibility[0] = output.active_attack_visibility;
+    attacks.scroll[0] = output.active_attack_scroll;
+    attacks.perspective[0] = output.active_attack_perspective;
+    attacks.scroll_speed[0] = output.active_attack_scroll_speed;
+    attacks.mini_percent[0] = output.active_attack_mini_percent;
+    output.player_transform.resolve()
+}
+
+fn measure_legacy_attack_state(
+    base: AttackBaseEffects,
+) -> (
+    BenchResult,
+    GameplayAttackRuntimeState,
+    SongLuaPlayerTransform,
+) {
+    let mut old_state = GameplayAttackRuntimeState::default();
+    let mut old_transform = legacy_refresh_attack_state(&mut old_state, 0.0, 1.0 / 120.0, base);
+    let result = measure(SETTLED_STATE_FRAMES, || {
+        old_transform =
+            legacy_refresh_attack_state(black_box(&mut old_state), 0.0, 1.0 / 120.0, base);
+        black_box(&old_state);
+        u64::from(old_transform.zoom_x.to_bits())
+    });
+    (result, old_state, old_transform)
+}
+
+fn measure_settled_attack_state(
+    base: AttackBaseEffects,
+) -> (
+    BenchResult,
+    GameplayAttackRuntimeState,
+    SongLuaPlayerTransform,
+) {
+    let mut new_state = GameplayAttackRuntimeState::default();
+    let mut new_transform = new_state
+        .refresh_player(0, 0.0, 1.0 / 120.0, base, SongLuaPlayerTransform::default())
+        .expect("first refresh canonicalizes attack state");
+    let result = measure(SETTLED_STATE_FRAMES, || {
+        if let Some(transform) = new_state.refresh_player(0, 0.0, 1.0 / 120.0, base, new_transform)
+        {
+            new_transform = transform;
+        }
+        black_box(&new_state);
+        u64::from(new_transform.zoom_x.to_bits())
+    });
+    (result, new_state, new_transform)
+}
+
+fn settled_attack_state_benchmark() {
+    let base = AttackBaseEffects::default();
+    let mut samples = Vec::with_capacity(SETTLED_STATE_SAMPLES);
+    for sample in 0..SETTLED_STATE_SAMPLES {
+        let (old_run, new_run) = if sample % 2 == 0 {
+            (
+                measure_legacy_attack_state(base),
+                measure_settled_attack_state(base),
+            )
+        } else {
+            let new = measure_settled_attack_state(base);
+            let old = measure_legacy_attack_state(base);
+            (old, new)
+        };
+        assert_eq!(old_run.0.checksum, new_run.0.checksum);
+        assert_eq!(old_run.1.clear_all, new_run.1.clear_all);
+        assert_eq!(old_run.1.chart, new_run.1.chart);
+        assert_eq!(old_run.1.visual, new_run.1.visual);
+        assert_eq!(old_run.1.current_appearance, new_run.1.current_appearance);
+        assert_eq!(old_run.1.appearance, new_run.1.appearance);
+        assert_eq!(old_run.2, new_run.2);
+        assert_zero_alloc(&old_run.0);
+        assert_zero_alloc(&new_run.0);
+        samples.push((old_run.0, new_run.0));
+    }
+    samples.sort_unstable_by(|(old_a, new_a), (old_b, new_b)| {
+        paired_cycle_ratio(old_a, new_a).total_cmp(&paired_cycle_ratio(old_b, new_b))
+    });
+    let (old, new) = samples.remove(samples.len() / 2);
+
+    println!(
+        "\nsettled no-attack state refresh ({SETTLED_STATE_FRAMES} frames, median of {SETTLED_STATE_SAMPLES} paired samples)"
+    );
+    print_result("old rebuild + stores", &old);
+    print_result("new unchanged check", &new);
+    print_change(&old, &new);
+}
+
 fn note_hide_benchmark() {
     const HIDE_WINDOWS: usize = 1_024;
     let source = (0..HIDE_WINDOWS)
@@ -979,6 +1108,7 @@ fn main() {
     search_benchmark();
     window_benchmark();
     idle_attack_benchmark();
+    settled_attack_state_benchmark();
     note_hide_benchmark();
     row_lookup_benchmark();
     cue_columns_benchmark();

@@ -3168,6 +3168,96 @@ impl GameplayAttackRuntimeState {
     }
 
     #[inline(always)]
+    fn idle_player_settled(
+        &self,
+        player: usize,
+        base_appearance: AppearanceEffects,
+        player_transform: SongLuaPlayerTransform,
+    ) -> bool {
+        self.mask_windows[player].is_empty()
+            && self.song_lua_ease_windows[player].is_empty()
+            && !self.cleared_for_outro
+            && !self.clear_all[player]
+            && self.chart[player] == ChartAttackEffects::default()
+            && self.accel[player] == AccelOverrides::default()
+            && self.visual[player] == VisualOverrides::default()
+            && appearance_bits_eq(self.current_appearance[player], base_appearance)
+            && appearance_bits_eq(self.target_appearance[player], base_appearance)
+            && appearance_bits_eq(
+                self.speed_appearance[player],
+                AppearanceEffects::approach_speeds(),
+            )
+            && appearance_bits_eq(self.appearance[player], base_appearance)
+            && self.visibility[player] == VisibilityOverrides::default()
+            && self.scroll[player] == ScrollOverrides::default()
+            && self.perspective[player] == PerspectiveOverrides::default()
+            && self.scroll_speed[player].is_none()
+            && self.mini_percent[player].is_none()
+            && player_transform == SongLuaPlayerTransform::default()
+    }
+
+    /// Refreshes one player's attack state and returns a changed transform.
+    ///
+    /// `None` means the caller should retain `player_transform`; the attack
+    /// state was already settled and no source windows can change it.
+    pub fn refresh_player(
+        &mut self,
+        player: usize,
+        now: f32,
+        delta_time: f32,
+        base: AttackBaseEffects,
+        player_transform: SongLuaPlayerTransform,
+    ) -> Option<SongLuaPlayerTransform> {
+        if player >= MAX_PLAYERS
+            || self.idle_player_settled(player, base.appearance, player_transform)
+        {
+            return None;
+        }
+
+        self.update_window_indices(player, now);
+        let (attack_window_indices, ease_window_indices) = self.active_window_indices(player);
+        let output = refresh_active_attack_player_indexed(
+            ActiveAttackRefreshInput {
+                now,
+                delta_time,
+                attacks_cleared_for_outro: self.cleared_for_outro,
+                base_appearance: base.appearance,
+                base_visual: base.visual,
+                base_scroll: base.scroll,
+                base_mini_percent: base.mini_percent,
+                attack_windows: &self.mask_windows[player],
+                song_lua_ease_windows: &self.song_lua_ease_windows[player],
+            },
+            ActiveAttackRefreshState {
+                attack_current_appearance: self.current_appearance[player],
+                active_attack_visual: self.visual[player],
+                active_attack_visibility: self.visibility[player],
+                active_attack_scroll: self.scroll[player],
+                active_attack_mini_percent: self.mini_percent[player],
+                outro_attack_visual: self.outro_visual[player],
+            },
+            attack_window_indices,
+            ease_window_indices,
+        );
+
+        self.target_appearance[player] = output.attack_target_appearance;
+        self.speed_appearance[player] = output.attack_speed_appearance;
+        self.current_appearance[player] = output.attack_current_appearance;
+        self.outro_visual[player] = output.outro_attack_visual;
+        self.clear_all[player] = output.active_attack_clear_all;
+        self.chart[player] = output.active_attack_chart;
+        self.accel[player] = output.active_attack_accel;
+        self.visual[player] = output.active_attack_visual;
+        self.appearance[player] = output.active_attack_appearance;
+        self.visibility[player] = output.active_attack_visibility;
+        self.scroll[player] = output.active_attack_scroll;
+        self.perspective[player] = output.active_attack_perspective;
+        self.scroll_speed[player] = output.active_attack_scroll_speed;
+        self.mini_percent[player] = output.active_attack_mini_percent;
+        Some(output.player_transform.resolve())
+    }
+
+    #[inline(always)]
     pub fn active_window_indices(&self, player: usize) -> (&[usize], &[usize]) {
         self.window_indices
             .get(player)

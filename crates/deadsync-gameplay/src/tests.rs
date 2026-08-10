@@ -2158,6 +2158,35 @@ mod tests {
     }
 
     #[test]
+    fn settled_attack_refresh_skips_only_unchanged_idle_state() {
+        let mut state = GameplayAttackRuntimeState::default();
+        let base = AttackBaseEffects::default();
+        let default_transform = SongLuaPlayerTransform::default();
+
+        let first = state
+            .refresh_player(0, 0.0, 1.0 / 120.0, base, default_transform)
+            .expect("first refresh canonicalizes derived fields");
+        assert_eq!(first, default_transform);
+        assert_eq!(state.refresh_player(0, 0.1, 1.0 / 120.0, base, first), None);
+
+        state.visual[0].drunk = Some(0.5);
+        let reset = state
+            .refresh_player(0, 0.2, 1.0 / 120.0, base, first)
+            .expect("externally changed state must be canonicalized");
+        assert_eq!(state.visual[0], VisualOverrides::default());
+        assert_eq!(reset, default_transform);
+
+        let changed_transform = SongLuaPlayerTransform {
+            rotation_z: 45.0,
+            ..SongLuaPlayerTransform::default()
+        };
+        assert_eq!(
+            state.refresh_player(0, 0.3, 1.0 / 120.0, base, changed_transform),
+            Some(default_transform),
+        );
+    }
+
+    #[test]
     fn outro_attack_visual_clear_snapshots_active_visual_once() {
         let mut cleared = false;
         let mut active = [VisualOverrides::default(); MAX_PLAYERS];
@@ -14514,7 +14543,8 @@ mod tests {
         let mut measure_counter_segments: [Vec<StreamSegment>; MAX_PLAYERS] =
             std::array::from_fn(|_| Vec::new());
         let mut column_cues: [Vec<ColumnCue>; MAX_PLAYERS] = std::array::from_fn(|_| Vec::new());
-        let mut crossover_cues: [Vec<ColumnCue>; MAX_PLAYERS] = std::array::from_fn(|_| Vec::new());
+        let mut crossover_cues: [Vec<ColumnCue>; MAX_PLAYERS] =
+            std::array::from_fn(|_| Vec::new());
         measure_counter_segments[0].push(StreamSegment {
             start: 1,
             end: 3,
@@ -14685,8 +14715,7 @@ mod tests {
                 columns: ColumnCueColumns::default(),
             })
             .collect::<Vec<_>>();
-        let mut crossover_cues: [Vec<ColumnCue>; MAX_PLAYERS] =
-            std::array::from_fn(|_| Vec::new());
+        let mut crossover_cues: [Vec<ColumnCue>; MAX_PLAYERS] = std::array::from_fn(|_| Vec::new());
         crossover_cues[0] = cues.clone();
         let mut state = GameplayCueRuntimeState::new(
             std::array::from_fn(|_| Vec::new()),
