@@ -134,10 +134,9 @@ use mini_indicator::{
     zmod_indicator_detailed_color, zmod_pacemaker_color, zmod_rival_color, zmod_stream_prog_color,
     zmod_subtractive_counter_state, zmod_subtractive_points,
 };
-pub(crate) use mini_indicator::{
-    stream_segment_index_exclusive_end, zmod_broken_run_counter_text, zmod_measure_counter_text,
-    zmod_run_timer_index,
-};
+#[cfg(test)]
+pub(crate) use mini_indicator::{stream_segment_index_exclusive_end, zmod_run_timer_index};
+pub(crate) use mini_indicator::{zmod_broken_run_counter_text, zmod_measure_counter_text};
 #[cfg(test)]
 pub(crate) use notes::for_each_visible_hold_index;
 #[cfg(test)]

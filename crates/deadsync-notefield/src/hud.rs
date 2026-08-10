@@ -1,7 +1,6 @@
 use crate::{
     BrokenRunLookup, LayoutMiniIndicatorPosition, ZmodMeasureCounterText,
-    stream_segment_index_exclusive_end, zmod_broken_run_counter_text, zmod_measure_counter_text,
-    zmod_run_timer_index,
+    zmod_broken_run_counter_text, zmod_measure_counter_text,
 };
 use deadlib_present::actors::{Actor, TextAlign, TextContent};
 use deadlib_present::dsl::TextBuilder;
@@ -50,7 +49,9 @@ pub(crate) fn compose_counter_hud(actors: &mut Vec<Actor>, request: CounterHudRe
 
     let beat_floor = request.current_beat.floor();
     let current_measure = beat_floor / 4.0;
-    let base_index = stream_segment_index_exclusive_end(segments, current_measure);
+    let (base_index, run_timer_index) = request
+        .broken_run_lookup
+        .segment_indices(segments, current_measure);
     let mut column_width = ScrollSpeedSetting::ARROW_SPACING * request.field_zoom;
     if request.left {
         column_width *= request.style.left_column_scale;
@@ -68,7 +69,7 @@ pub(crate) fn compose_counter_hud(actors: &mut Vec<Actor>, request: CounterHudRe
         );
         append_broken_counter(actors, request, current_measure, column_width, counter_y);
     }
-    append_run_timer(actors, request, current_measure, column_width);
+    append_run_timer(actors, request, run_timer_index, column_width);
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -195,16 +196,15 @@ fn append_broken_counter(
 fn append_run_timer(
     actors: &mut Vec<Actor>,
     request: CounterHudRequest<'_>,
-    current_measure: f32,
+    segment_index: usize,
     column_width: f32,
 ) {
     if !request.run_timer {
         return;
     }
-    let Some(segment_index) = zmod_run_timer_index(request.segments, current_measure) else {
+    let Some(segment) = request.segments.get(segment_index).copied() else {
         return;
     };
-    let segment = request.segments[segment_index];
     if segment.is_break {
         return;
     }

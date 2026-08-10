@@ -154,6 +154,7 @@ pub const fn zmod_resolved_mini_indicator_mode(
     }
 }
 
+#[cfg(test)]
 pub(crate) fn stream_segment_index_exclusive_end(
     segs: &[StreamSegment],
     curr_measure: f32,
@@ -164,6 +165,7 @@ pub(crate) fn stream_segment_index_exclusive_end(
     segs.partition_point(|s| curr_measure >= s.end as f32)
 }
 
+#[cfg(test)]
 pub(crate) fn stream_segment_index_inclusive_end(
     segs: &[StreamSegment],
     curr_measure: f32,
@@ -281,11 +283,14 @@ impl StreamProgressLookup {
 /// previous boundary, making forward frames O(1) in the usual case; exponential
 /// bracketing keeps seeks O(log n). There are no misses, eviction,
 /// synchronization, or gameplay-time allocations. `storage_bytes` exposes the
-/// retained span storage, and all storage is released on screen exit.
+/// retained span storage. A second cursor serves the measure counter and run
+/// timer from one source-boundary lookup. All storage is released on screen
+/// exit.
 #[derive(Clone, Debug, Default)]
 pub struct BrokenRunLookup {
     spans: Box<[BrokenRunSpan]>,
-    cursor: Cell<usize>,
+    broken_cursor: Cell<usize>,
+    segment_cursor: Cell<usize>,
 }
 
 impl BrokenRunLookup {
@@ -314,7 +319,8 @@ impl BrokenRunLookup {
         }
         Self {
             spans: spans.into_boxed_slice(),
-            cursor: Cell::new(0),
+            broken_cursor: Cell::new(0),
+            segment_cursor: Cell::new(0),
         }
     }
 
@@ -329,13 +335,34 @@ impl BrokenRunLookup {
         if current_measure.is_nan() {
             return None;
         }
-        let index = partition_point_from_hint(&self.spans, self.cursor.get(), |span| {
+        let index = partition_point_from_hint(&self.spans, self.broken_cursor.get(), |span| {
             current_measure >= span.end
         });
-        self.cursor.set(index);
+        self.broken_cursor.set(index);
         self.spans
             .get(index)
             .map(|span| (span.segment_index, span.broken_end, span.broken))
+    }
+
+    /// Returns the exclusive-end counter boundary and inclusive-end timer
+    /// boundary while sharing the previous source-segment hint.
+    #[inline(always)]
+    pub fn segment_indices(
+        &self,
+        segments: &[StreamSegment],
+        current_measure: f32,
+    ) -> (usize, usize) {
+        if current_measure.is_nan() {
+            return (segments.len(), segments.len());
+        }
+        let exclusive = partition_point_from_hint(segments, self.segment_cursor.get(), |segment| {
+            current_measure >= segment.end as f32
+        });
+        self.segment_cursor.set(exclusive);
+        let inclusive = partition_point_from_hint(segments, exclusive, |segment| {
+            current_measure > segment.end as f32
+        });
+        (exclusive, inclusive)
     }
 }
 
@@ -398,6 +425,7 @@ pub(crate) fn zmod_broken_run_segment(
     None
 }
 
+#[cfg(test)]
 pub(crate) fn zmod_run_timer_index(segs: &[StreamSegment], curr_measure: f32) -> Option<usize> {
     let index = stream_segment_index_inclusive_end(segs, curr_measure);
     if index < segs.len() {
@@ -993,6 +1021,14 @@ mod lookup_tests {
             assert_eq!(
                 broken.segment(measure),
                 zmod_broken_run_segment(&segments, measure),
+                "measure={measure}",
+            );
+            assert_eq!(
+                broken.segment_indices(&segments, measure),
+                (
+                    stream_segment_index_exclusive_end(&segments, measure),
+                    stream_segment_index_inclusive_end(&segments, measure),
+                ),
                 "measure={measure}",
             );
         }

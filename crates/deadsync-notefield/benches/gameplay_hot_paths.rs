@@ -1,5 +1,7 @@
 use deadsync_gameplay::NoteCountStat;
-use deadsync_notefield::{StreamProgressLookup, performance::find_first_displayed_beat};
+use deadsync_notefield::{
+    BrokenRunLookup, StreamProgressLookup, performance::find_first_displayed_beat,
+};
 use deadsync_rules::stream::StreamSegment;
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::hint::black_box;
@@ -396,9 +398,65 @@ fn stream_progress_benchmark() {
     );
 }
 
+fn legacy_segment_indices(segments: &[StreamSegment], current_measure: f32) -> (usize, usize) {
+    if current_measure.is_nan() {
+        return (segments.len(), segments.len());
+    }
+    (
+        segments.partition_point(|segment| current_measure >= segment.end as f32),
+        segments.partition_point(|segment| current_measure > segment.end as f32),
+    )
+}
+
+fn counter_hud_lookup_benchmark() {
+    let segments = (0..HUD_SEGMENTS)
+        .map(|index| StreamSegment {
+            start: index * 4,
+            end: index * 4 + 4,
+            is_break: index % 5 == 4,
+        })
+        .collect::<Vec<_>>();
+    let lookup = BrokenRunLookup::new(&segments);
+    let cycle_measures = HUD_SEGMENTS as f32 * 4.0;
+    for measure in [0.0, 128.0, 4.0, cycle_measures, 17.0, f32::NAN] {
+        assert_eq!(
+            legacy_segment_indices(&segments, measure),
+            lookup.segment_indices(&segments, measure),
+        );
+    }
+
+    let mut old_frame = 0usize;
+    let old = measure(HUD_FRAMES, || {
+        let current = (old_frame as f32 * 0.005) % cycle_measures;
+        old_frame += 1;
+        let (counter, timer) = legacy_segment_indices(black_box(&segments), black_box(current));
+        counter as u64 | (timer as u64) << 32
+    });
+    let mut new_frame = 0usize;
+    let new = measure(HUD_FRAMES, || {
+        let current = (new_frame as f32 * 0.005) % cycle_measures;
+        new_frame += 1;
+        let (counter, timer) = lookup.segment_indices(black_box(&segments), black_box(current));
+        counter as u64 | (timer as u64) << 32
+    });
+    assert_eq!(old.checksum, new.checksum);
+    assert_zero_alloc(&old);
+    assert_zero_alloc(&new);
+
+    println!("\ncounter HUD boundaries ({HUD_SEGMENTS} segments, {HUD_FRAMES} forward frames)");
+    print_result("old two binary searches", &old);
+    print_result("new shared cursor", &new);
+    print_change(&old, &new);
+    println!(
+        "  retained cursor storage: +{} B",
+        std::mem::size_of::<usize>()
+    );
+}
+
 fn main() {
     note_search_benchmark();
     stream_progress_benchmark();
+    counter_hud_lookup_benchmark();
 }
 
 #[cfg(target_arch = "x86")]
