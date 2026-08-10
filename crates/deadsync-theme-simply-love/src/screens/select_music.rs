@@ -1340,10 +1340,12 @@ fn build_info_box_children(key: &InfoBoxActorKey, box_w: f32) -> Vec<Actor> {
 /// (that would rewrite the pad's just-captured live values).
 pub struct State {
     /// Reused visible-wheel buffer owned by Select Music's main-thread state.
-    /// It lives for the screen, grows to the immutable source-list length on
-    /// warmup, and is then cleared/refilled without allocation. There are no
-    /// misses or evictions; replacement entries release on the main thread and
-    /// the allocation is destroyed with the screen. The
+    /// It lives for the screen, is pre-sized to the largest built-in cached sort
+    /// during initialization, and is then cleared/refilled without allocation.
+    /// A later dynamic Favorites or user-playlist view can grow it once; those
+    /// unbounded inputs are deliberately not used for eager reservation. There
+    /// are no evictions. Replacement entries release on the main thread and the
+    /// allocation is destroyed with the screen. The
     /// `select_music_hot_paths` benchmark instruments allocator churn and the
     /// worst per-frame work is one linear scan of the active sort list.
     pub entries: Vec<MusicWheelEntry>,
@@ -1439,11 +1441,11 @@ pub struct State {
     playlist_views: Vec<SelectMusicPlaylistView>,
     history: SelectMusicHistoryView,
     active_playlist_id: Option<String>,
-    expanded_series_name: Option<String>,
-    expanded_pack_name: Option<String>,
+    expanded_series_name: Option<Arc<str>>,
+    expanded_pack_name: Option<Arc<str>>,
     /// Last pack name for which we enqueued ReplayGain prewarm jobs. Guards
     /// against re-enqueueing every frame while the same pack is expanded.
-    last_replaygain_prewarmed_pack: Option<String>,
+    last_replaygain_prewarmed_pack: Option<Arc<str>>,
     pending_audio: Vec<AudioRequest>,
     pending_profile: Vec<crate::SimplyLoveProfileRequest>,
     pending_sync: Vec<crate::SimplyLoveSyncRequest>,
@@ -1693,7 +1695,7 @@ fn maybe_clear_selected_pack_on_score(state: &mut State, mode: NewPackMode) {
     let Some(pack_name) = group_name_for_song(&state.entries, &song) else {
         return;
     };
-    state.new_pack_names.remove(&pack_name);
+    state.new_pack_names.remove(pack_name.as_ref());
 }
 
 pub fn is_difficulty_playable(
@@ -2056,8 +2058,8 @@ fn first_song_entry_index(entries: &[MusicWheelEntry]) -> Option<usize> {
 fn group_name_for_song(
     grouped_entries: &[MusicWheelEntry],
     target_song: &Arc<SongData>,
-) -> Option<String> {
-    let mut current_pack_key: Option<&str> = None;
+) -> Option<Arc<str>> {
+    let mut current_pack_key: Option<&Arc<str>> = None;
     for entry in grouped_entries {
         match entry {
             MusicWheelEntry::PackHeader {
@@ -2066,11 +2068,11 @@ fn group_name_for_song(
                 ..
             } => {}
             MusicWheelEntry::PackHeader { name, pack_key, .. } => {
-                current_pack_key = Some(pack_key.as_deref().unwrap_or(name.as_ref()));
+                current_pack_key = Some(pack_key.as_ref().unwrap_or(name));
             }
             MusicWheelEntry::Song(song) => {
                 if Arc::ptr_eq(song, target_song) {
-                    return current_pack_key.map(str::to_string);
+                    return current_pack_key.map(Arc::clone);
                 }
             }
         }
@@ -2081,22 +2083,22 @@ fn group_name_for_song(
 fn series_name_for_song(
     series_entries: &[MusicWheelEntry],
     target_song: &Arc<SongData>,
-) -> Option<String> {
-    let mut current_series: Option<&str> = None;
+) -> Option<Arc<str>> {
+    let mut current_series: Option<&Arc<str>> = None;
     for entry in series_entries {
         match entry {
             MusicWheelEntry::PackHeader {
                 pack_key: Some(_),
                 parent_series,
                 ..
-            } => current_series = parent_series.as_deref(),
+            } => current_series = parent_series.as_ref(),
             MusicWheelEntry::PackHeader {
                 parent_series: None,
                 ..
             } => current_series = None,
             MusicWheelEntry::PackHeader { .. } => {}
             MusicWheelEntry::Song(song) if Arc::ptr_eq(song, target_song) => {
-                return current_series.map(str::to_string);
+                return current_series.map(Arc::clone);
             }
             MusicWheelEntry::Song(_) => {}
         }
@@ -2107,13 +2109,13 @@ fn series_name_for_song(
 fn series_name_for_pack<'a>(
     series_entries: &'a [MusicWheelEntry],
     pack_key: &str,
-) -> Option<&'a str> {
+) -> Option<&'a Arc<str>> {
     series_entries.iter().find_map(|entry| match entry {
         MusicWheelEntry::PackHeader {
             pack_key: Some(key),
             parent_series,
             ..
-        } if key.as_ref() == pack_key => parent_series.as_deref(),
+        } if key.as_ref() == pack_key => parent_series.as_ref(),
         _ => None,
     })
 }
@@ -2237,7 +2239,7 @@ fn song_sort_group_label(group: &SongSortGroup) -> String {
 }
 
 #[inline(always)]
-fn first_header_name(entries: &[MusicWheelEntry]) -> Option<String> {
+fn first_header_name(entries: &[MusicWheelEntry]) -> Option<Arc<str>> {
     entries.iter().find_map(|e| match e {
         MusicWheelEntry::PackHeader {
             pack_key: None,
@@ -2245,7 +2247,7 @@ fn first_header_name(entries: &[MusicWheelEntry]) -> Option<String> {
             ..
         } => None,
         MusicWheelEntry::PackHeader { name, pack_key, .. } => {
-            Some(pack_key.as_deref().unwrap_or(name.as_ref()).to_owned())
+            Some(Arc::clone(pack_key.as_ref().unwrap_or(name)))
         }
         MusicWheelEntry::Song(_) => None,
     })
@@ -2742,8 +2744,8 @@ fn build_favorites_view_entries(
         (p1_joined && favorites.pack_names[0].contains(pack_key))
             || (p2_joined && favorites.pack_names[1].contains(pack_key))
             || series_name_for_pack(series_entries, pack_key).is_some_and(|series| {
-                (p1_joined && favorites.series_names[0].contains(series))
-                    || (p2_joined && favorites.series_names[1].contains(series))
+                (p1_joined && favorites.series_names[0].contains(series.as_ref()))
+                    || (p2_joined && favorites.series_names[1].contains(series.as_ref()))
             })
     };
 
@@ -2773,7 +2775,7 @@ fn build_favorites_view_entries_for_side(
     let pack_is_favorited = |pack_key: &str| {
         favorites.pack_names[side_index].contains(pack_key)
             || series_name_for_pack(series_entries, pack_key)
-                .is_some_and(|series| favorites.series_names[side_index].contains(series))
+                .is_some_and(|series| favorites.series_names[side_index].contains(series.as_ref()))
     };
     let song_is_favorited = |song: &SongData| {
         song.charts
@@ -3027,7 +3029,7 @@ fn apply_wheel_sort(state: &mut State, sort_mode: WheelSortMode) {
                         .expanded_pack_name
                         .as_deref()
                         .and_then(|pack| series_name_for_pack(&state.series_entries, pack))
-                        .map(str::to_owned)
+                        .map(Arc::clone)
                 });
         }
         WheelSortMode::Group => {
@@ -3237,7 +3239,7 @@ pub fn init(init_view: SelectMusicInitView) -> State {
     };
 
     let mut last_song_arc: Option<Arc<SongData>> = None;
-    let mut last_pack_key: Option<String> = None;
+    let mut last_pack_key: Option<Arc<str>> = None;
     let last_path = last_played.song_music_path.as_deref();
 
     let mut matched_packs = 0usize;
@@ -3311,7 +3313,7 @@ pub fn init(init_view: SelectMusicInitView) -> State {
                     .is_some_and(|p| p.to_string_lossy() == last_path)
             {
                 last_song_arc = Some(song.clone());
-                last_pack_key = Some(pack_key.clone());
+                last_pack_key = Some(Arc::from(pack_key.as_str()));
             }
         }
 
@@ -3407,10 +3409,34 @@ pub fn init(init_view: SelectMusicInitView) -> State {
             initial_expanded_pack_name
                 .as_deref()
                 .and_then(|pack| series_name_for_pack(&series_entries, pack))
-                .map(str::to_owned)
+                .map(Arc::clone)
         })
         .flatten();
     let group_entries: Arc<[MusicWheelEntry]> = all_entries.into();
+    let cached_sort_capacity = [
+        &group_entries,
+        &series_entries,
+        &title_entries,
+        &artist_entries,
+        &genre_entries,
+        &bpm_entries,
+        &length_entries,
+        &meter_entries,
+        &popularity_entries,
+        &recent_entries,
+        &top_grades_entries,
+        &popularity_p1_entries,
+        &popularity_p2_entries,
+        &recent_p1_entries,
+        &recent_p2_entries,
+        &top_grades_p1_entries,
+        &top_grades_p2_entries,
+        &joined_favorites_entries,
+    ]
+    .into_iter()
+    .map(|entries| entries.len())
+    .max()
+    .unwrap_or(0);
     let initial_entries = if use_series_sort {
         Arc::clone(&series_entries)
     } else {
@@ -3444,7 +3470,7 @@ pub fn init(init_view: SelectMusicInitView) -> State {
         playlist_views: init_view.playlists,
         history: init_view.history,
         active_playlist_id: None,
-        entries: Vec::new(),
+        entries: Vec::with_capacity(cached_sort_capacity),
         selected_index: 0,
         selected_steps_index: initial_diff_index,
         preferred_difficulty_index: initial_diff_index,
@@ -3936,7 +3962,7 @@ fn maybe_prewarm_replaygain_for_pack(
         state.last_replaygain_prewarmed_pack = None;
         return None;
     };
-    if state.last_replaygain_prewarmed_pack.as_deref() == Some(pack.as_str()) {
+    if state.last_replaygain_prewarmed_pack.as_deref() == Some(pack.as_ref()) {
         return None;
     }
     let mut current_pack_key: Option<&str> = None;
@@ -3946,7 +3972,7 @@ fn maybe_prewarm_replaygain_for_pack(
             MusicWheelEntry::PackHeader { name, pack_key, .. } => {
                 current_pack_key = Some(pack_key.as_deref().unwrap_or(name.as_ref()));
             }
-            MusicWheelEntry::Song(song) if current_pack_key == Some(pack.as_str()) => {
+            MusicWheelEntry::Song(song) if current_pack_key == Some(pack.as_ref()) => {
                 if let Some(path) = song.music_path.clone() {
                     paths.push(path);
                 }
@@ -6473,7 +6499,7 @@ fn refresh_after_reload(state: &mut State, song_packs: Vec<SongPack>) {
             Some(MusicWheelEntry::PackHeader {
                 pack_key: Some(pack_key),
                 ..
-            }) => Some(pack_key.to_string()),
+            }) => Some(Arc::clone(pack_key)),
             _ => None,
         }
     };
@@ -6549,7 +6575,7 @@ fn refresh_after_reload(state: &mut State, song_packs: Vec<SongPack>) {
                     pack_key: None,
                     parent_series: Some(_),
                     ..
-                } if name.as_ref() == expanded
+                } if name.as_ref() == expanded.as_ref()
             )
         })
     {
@@ -6561,7 +6587,7 @@ fn refresh_after_reload(state: &mut State, song_packs: Vec<SongPack>) {
         && refreshed
             .all_entries
             .iter()
-            .any(|entry| entry.section_key() == Some(expanded.as_str()))
+            .any(|entry| entry.section_key() == Some(expanded.as_ref()))
     {
         refreshed.expanded_pack_name = Some(expanded);
         rebuild_displayed_entries(&mut refreshed);
@@ -6575,11 +6601,11 @@ fn refresh_after_reload(state: &mut State, song_packs: Vec<SongPack>) {
             refreshed.selected_index = index;
             restored = true;
         } else if let Some(pack_key) = selected_pack_key.as_ref()
-            && refreshed.expanded_pack_name.as_deref() != Some(pack_key.as_str())
+            && refreshed.expanded_pack_name.as_deref() != Some(pack_key.as_ref())
             && refreshed
                 .all_entries
                 .iter()
-                .any(|entry| entry.section_key() == Some(pack_key.as_str()))
+                .any(|entry| entry.section_key() == Some(pack_key.as_ref()))
         {
             refreshed.expanded_pack_name = Some(pack_key.clone());
             rebuild_displayed_entries(&mut refreshed);
@@ -6597,7 +6623,7 @@ fn refresh_after_reload(state: &mut State, song_packs: Vec<SongPack>) {
         && let Some(index) = refreshed
             .entries
             .iter()
-            .position(|entry| entry.section_key() == Some(pack_key.as_str()))
+            .position(|entry| entry.section_key() == Some(pack_key.as_ref()))
     {
         refreshed.selected_index = index;
     }
@@ -9845,13 +9871,13 @@ fn handle_song_search_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
     ThemeEffect::None
 }
 
-fn collapse_expanded_pack(state: &mut State, pack: String) {
+fn collapse_expanded_pack(state: &mut State, pack: Arc<str>) {
     debug!("Up+Down combo: Collapsing pack '{}'.", pack);
     rebuild_displayed_entries(state);
     if let Some(new_sel) = state
         .entries
         .iter()
-        .position(|entry| entry.section_key() == Some(pack.as_str()))
+        .position(|entry| entry.section_key() == Some(pack.as_ref()))
     {
         state.selected_index = new_sel;
         state.prev_selected_index = new_sel;
@@ -9880,7 +9906,7 @@ fn close_open_section_one_level(state: &mut State) {
                 pack_key: None,
                 parent_series: Some(_),
                 ..
-            } if name.as_ref() == series
+            } if name.as_ref() == series.as_ref()
         )
     }) {
         state.selected_index = new_sel;
@@ -10258,7 +10284,7 @@ fn handle_confirm_impl(state: &mut State) -> ThemeEffect {
             if state.expanded_series_name.as_deref() == Some(name.as_ref()) {
                 state.expanded_series_name = None;
             } else {
-                state.expanded_series_name = Some(name.to_string());
+                state.expanded_series_name = Some(Arc::clone(&name));
             }
             state.expanded_pack_name = None;
             rebuild_displayed_entries(state);
@@ -10288,9 +10314,11 @@ fn handle_confirm_impl(state: &mut State) -> ThemeEffect {
             ..
         }) => {
             queue_sfx(state, "assets/sounds/expand.ogg");
-            let target = pack_key.as_deref().unwrap_or(name.as_ref()).to_owned();
+            let target = pack_key
+                .as_ref()
+                .map_or_else(|| Arc::clone(&name), Arc::clone);
             if state.policy.interaction.new_pack_mode == NewPackMode::OpenPack
-                && state.new_pack_names.remove(target.as_str())
+                && state.new_pack_names.remove(target.as_ref())
             {
                 let profile_ids = joined_local_profile_ids(state.session, &state.profiles);
                 for (idx, profile_id) in state.profiles.local_profile_ids.iter().enumerate() {
@@ -10298,7 +10326,7 @@ fn handle_confirm_impl(state: &mut State) -> ThemeEffect {
                         .as_ref()
                         .is_some_and(|id| profile_ids.contains(id))
                     {
-                        state.known_packs.names[idx].insert(target.clone());
+                        state.known_packs.names[idx].insert(target.to_string());
                     }
                 }
                 if !profile_ids.is_empty() {
@@ -10306,24 +10334,24 @@ fn handle_confirm_impl(state: &mut State) -> ThemeEffect {
                         state,
                         crate::SimplyLoveProfileRequest::MarkPacksKnown {
                             profile_ids,
-                            pack_names: vec![target.clone()],
+                            pack_names: vec![target.to_string()],
                         },
                     );
                 }
             }
-            if state.expanded_pack_name.as_deref() == Some(target.as_str()) {
+            if state.expanded_pack_name.as_deref() == Some(target.as_ref()) {
                 state.expanded_pack_name = None;
             } else {
                 // ITGmania's SetOpenSections clears the parent when a
                 // top-level pack opens and preserves it for a child pack.
-                state.expanded_series_name = parent_series.map(|name| name.to_string());
-                state.expanded_pack_name = Some(target.clone());
+                state.expanded_series_name = parent_series;
+                state.expanded_pack_name = Some(Arc::clone(&target));
             }
             rebuild_displayed_entries(state);
             if let Some(new_sel) = state
                 .entries
                 .iter()
-                .position(|entry| entry.section_key() == Some(target.as_str()))
+                .position(|entry| entry.section_key() == Some(target.as_ref()))
             {
                 state.selected_index = new_sel;
             } else {
@@ -15184,7 +15212,7 @@ mod tests {
         song_b.music_path = Some(PathBuf::from("Pack A/Song A2/music.ogg"));
 
         let mut state = init_placeholder();
-        state.expanded_pack_name = Some("Pack A".to_string());
+        state.expanded_pack_name = Some(Arc::from("Pack A"));
         state.group_entries = vec![
             header("Pack A", 0, 2, Some("Pack A")),
             super::MusicWheelEntry::Song(Arc::new(song_a)),
@@ -16487,7 +16515,7 @@ mod tests {
             SelectMusicWheelStyle::Itg,
             false,
         );
-        state.expanded_pack_name = Some("Pack A".to_string());
+        state.expanded_pack_name = Some(Arc::from("Pack A"));
         state.selected_index = 0;
         state.prev_selected_index = 0;
 
@@ -17424,6 +17452,11 @@ mod tests {
         else {
             panic!("visible entries should preserve the pack header");
         };
+        let expanded = state
+            .expanded_pack_name
+            .as_ref()
+            .expect("sort should open its first pack");
+        assert!(Arc::ptr_eq(cached_key, expanded));
         assert!(Arc::ptr_eq(cached_name, visible_name));
         assert!(Arc::ptr_eq(cached_key, visible_key));
     }
@@ -17436,7 +17469,9 @@ mod tests {
             panic!("fixture should start with a pack header");
         };
         *banner_path = Some(Arc::clone(&shared_banner));
-        let mut visible = Vec::new();
+        let mut visible = Vec::with_capacity(all_entries.len());
+        let storage = visible.as_ptr();
+        let capacity = visible.capacity();
         super::fill_displayed_entries(
             &mut visible,
             &all_entries,
@@ -17445,8 +17480,8 @@ mod tests {
             SelectMusicWheelStyle::Itg,
             false,
         );
-        let storage = visible.as_ptr();
-        let capacity = visible.capacity();
+        assert_eq!(visible.as_ptr(), storage);
+        assert_eq!(visible.capacity(), capacity);
 
         super::fill_displayed_entries(
             &mut visible,
@@ -17733,8 +17768,8 @@ mod tests {
         ];
         let mut state = init_placeholder();
         state.all_entries = super::build_series_grouped_entries(&test_entries(), &packs).into();
-        state.expanded_series_name = Some("ITG Series".to_string());
-        state.expanded_pack_name = Some("Pack A".to_string());
+        state.expanded_series_name = Some(Arc::from("ITG Series"));
+        state.expanded_pack_name = Some(Arc::from("Pack A"));
         super::rebuild_displayed_entries(&mut state);
 
         super::close_open_section_one_level(&mut state);
@@ -17909,7 +17944,7 @@ mod tests {
         all_entries.push(header("Loose Pack", 2, 1, Some("Loose Pack")));
         all_entries.push(super::MusicWheelEntry::Song(test_song("Loose Song")));
         state.all_entries = all_entries.into();
-        state.expanded_series_name = Some("ITG Series".to_string());
+        state.expanded_series_name = Some(Arc::from("ITG Series"));
         super::rebuild_displayed_entries(&mut state);
         state.selected_index = state
             .entries

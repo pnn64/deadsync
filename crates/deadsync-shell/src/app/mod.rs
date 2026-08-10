@@ -7742,7 +7742,7 @@ impl App {
             {
                 Some(select_music::MusicWheelEntry::Song(song)) => song.banner_path.clone(),
                 Some(select_music::MusicWheelEntry::PackHeader { banner_path, .. }) => {
-                    banner_path.clone()
+                    banner_path.as_deref().map(Path::to_path_buf)
                 }
                 None => None,
             };
@@ -7887,7 +7887,7 @@ impl App {
             {
                 Some(select_music::MusicWheelEntry::Song(song)) => song.banner_path.clone(),
                 Some(select_music::MusicWheelEntry::PackHeader { banner_path, .. }) => {
-                    banner_path.clone()
+                    banner_path.as_deref().map(Path::to_path_buf)
                 }
                 None => None,
             };

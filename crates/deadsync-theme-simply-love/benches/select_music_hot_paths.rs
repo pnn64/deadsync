@@ -321,6 +321,30 @@ fn legacy_edge_checksum(entries: &[LegacyEntry]) -> u64 {
         ^ entries.last().map_or(0, legacy_entry_checksum)
 }
 
+fn new_first_section(entries: &[MusicWheelEntry]) -> Arc<str> {
+    entries
+        .iter()
+        .find_map(|entry| match entry {
+            MusicWheelEntry::PackHeader { name, pack_key, .. } => {
+                Some(Arc::clone(pack_key.as_ref().unwrap_or(name)))
+            }
+            MusicWheelEntry::Song(_) => None,
+        })
+        .expect("benchmark wheel should contain a header")
+}
+
+fn legacy_first_section(entries: &[LegacyEntry]) -> String {
+    entries
+        .iter()
+        .find_map(|entry| match entry {
+            LegacyEntry::Header { name, pack_key, .. } => {
+                Some(pack_key.as_ref().unwrap_or(name).clone())
+            }
+            LegacyEntry::Song(_) => None,
+        })
+        .expect("benchmark wheel should contain a header")
+}
+
 fn legacy_fill_displayed_entries(
     entries: &[LegacyEntry],
     expanded_pack_name: &str,
@@ -411,18 +435,22 @@ fn main() {
 
     let old_sort = measure(SORT_OPS, 20, || {
         let sorted = black_box(&legacy).clone();
-        let checksum = legacy_edge_checksum(&sorted);
+        let expanded = legacy_first_section(&sorted);
+        let checksum = legacy_edge_checksum(&sorted) ^ (expanded.len() as u64).rotate_left(17);
+        black_box(expanded);
         black_box(sorted);
         checksum
     });
     let new_sort = measure(SORT_OPS, 20, || {
         let sorted = Arc::clone(black_box(&shared));
-        let checksum = new_edge_checksum(&sorted);
+        let expanded = new_first_section(&sorted);
+        let checksum = new_edge_checksum(&sorted) ^ (expanded.len() as u64).rotate_left(17);
+        black_box(expanded);
         black_box(sorted);
         checksum
     });
     print_pair(
-        "2. switch immutable sort view",
+        "2. switch cached sort and selection",
         SORT_OPS,
         &old_sort,
         &new_sort,
@@ -430,8 +458,16 @@ fn main() {
 
     let expanded_pack = pack_names[PACK_COUNT / 2].as_str();
     let old_visible_once = legacy_fill_displayed_entries(&legacy, expanded_pack);
-    let mut new_visible = Vec::new();
+    let mut new_visible = Vec::with_capacity(shared.len());
+    let cold_before = ALLOC.snapshot();
+    ALLOC.enabled.store(true, Ordering::Relaxed);
     benchmark_fill_displayed_entries(&mut new_visible, &shared, Some(expanded_pack));
+    ALLOC.enabled.store(false, Ordering::Relaxed);
+    let cold_allocated = ALLOC.snapshot().delta(cold_before);
+    assert_eq!(cold_allocated.allocs, 0);
+    assert_eq!(cold_allocated.reallocs, 0);
+    assert_eq!(cold_allocated.deallocs, 0);
+    assert_eq!(cold_allocated.bytes, 0);
     assert_eq!(
         legacy_entries_checksum(&old_visible_once),
         new_entries_checksum(&new_visible),
