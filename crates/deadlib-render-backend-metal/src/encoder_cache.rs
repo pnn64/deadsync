@@ -38,6 +38,11 @@ impl EncoderCache {
     #[inline(always)]
     pub(crate) fn instance_buffer(&mut self, kind: DrawKind) -> BufferUpdate {
         if self.kind_changed(kind) {
+            // Textured-mesh instances occupy vertex slot 1, replacing the
+            // sprite/mesh camera bytes installed at that slot.
+            if kind == DrawKind::TexturedMesh {
+                self.cameras[0] = None;
+            }
             BufferUpdate::Bind
         } else {
             BufferUpdate::Offset
@@ -52,11 +57,6 @@ impl EncoderCache {
     #[inline(always)]
     pub(crate) fn camera_changed(&mut self, slot: usize, camera: u8) -> bool {
         update(&mut self.cameras[slot], camera)
-    }
-
-    #[inline(always)]
-    pub(crate) fn invalidate_camera(&mut self, slot: usize) {
-        self.cameras[slot] = None;
     }
 
     #[inline(always)]

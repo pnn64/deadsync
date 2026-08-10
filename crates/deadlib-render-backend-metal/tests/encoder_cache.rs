@@ -57,7 +57,46 @@ fn camera_slots_only_reupload_when_their_binding_was_replaced() {
     assert!(cache.camera_changed(1, 3));
     assert!(!cache.camera_changed(1, 3));
 
-    cache.invalidate_camera(0);
+    assert_eq!(
+        cache.instance_buffer(DrawKind::TexturedMesh),
+        BufferUpdate::Bind
+    );
     assert!(cache.camera_changed(0, 3));
     assert!(!cache.camera_changed(1, 3));
+}
+
+#[test]
+fn mixed_draw_trace_preserves_effective_state() {
+    let mut cache = EncoderCache::default();
+
+    assert_eq!(cache.instance_buffer(DrawKind::Sprite), BufferUpdate::Bind);
+    assert!(cache.pipeline_changed(DrawKind::Sprite, 1));
+    assert!(cache.camera_changed(0, 7));
+    assert!(cache.texture_changed(11));
+    assert!(cache.sampler_changed(11, false));
+    assert!(cache.depth_changed(false));
+    assert!(cache.cull_changed(CullMode::Back));
+
+    assert!(cache.kind_changed(DrawKind::Mesh));
+    assert!(cache.pipeline_changed(DrawKind::Mesh, 1));
+    assert!(!cache.camera_changed(0, 7));
+    assert!(!cache.depth_changed(false));
+    assert!(cache.cull_changed(CullMode::None));
+
+    assert_eq!(
+        cache.instance_buffer(DrawKind::TexturedMesh),
+        BufferUpdate::Bind
+    );
+    assert!(cache.pipeline_changed(DrawKind::TexturedMesh, 1));
+    assert!(cache.camera_changed(1, 7));
+    assert!(cache.depth_changed(true));
+    assert!(cache.cull_changed(CullMode::Back));
+    assert!(!cache.texture_changed(11));
+    assert!(!cache.sampler_changed(11, false));
+
+    assert_eq!(cache.instance_buffer(DrawKind::Sprite), BufferUpdate::Bind);
+    assert!(cache.camera_changed(0, 7));
+    assert!(!cache.camera_changed(1, 7));
+    assert!(!cache.texture_changed(11));
+    assert!(!cache.sampler_changed(11, false));
 }

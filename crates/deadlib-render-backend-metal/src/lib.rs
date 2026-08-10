@@ -511,7 +511,6 @@ fn draw_inner(
                 match cache.instance_buffer(DrawKind::TexturedMesh) {
                     BufferUpdate::Bind => {
                         tmesh_buffer_cache.reset();
-                        cache.invalidate_camera(0);
                         encoder.set_vertex_buffer(
                             1,
                             Some(&state.frames[slot_index].tmesh_instances.raw),

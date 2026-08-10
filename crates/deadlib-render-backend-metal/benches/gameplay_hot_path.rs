@@ -454,9 +454,6 @@ fn cached_encode(ops: &[DesiredState]) -> EncodeResult {
             DrawKind::Sprite | DrawKind::TexturedMesh => match cache.instance_buffer(op.kind) {
                 BufferUpdate::Bind => {
                     emit_full_bind(&mut out);
-                    if op.kind == DrawKind::TexturedMesh {
-                        cache.invalidate_camera(0);
-                    }
                 }
                 BufferUpdate::Offset => emit(&mut out, 1),
             },
@@ -573,7 +570,7 @@ fn main() {
     assert_zero_alloc(&legacy_lookup);
     assert_zero_alloc(&dense_lookup);
 
-    println!("native Metal gameplay CPU hot path");
+    println!("Metal gameplay CPU hot paths");
     println!("\nretained textured-mesh resolution and recording");
     print_measurement("legacy double hash lookup", &legacy_lookup, MESH_RUNS);
     print_measurement("dense cache slot", &dense_lookup, MESH_RUNS);
@@ -593,7 +590,7 @@ fn main() {
     assert_zero_alloc(&legacy_encoder);
     assert_zero_alloc(&cached_encoder);
 
-    println!("\nMetal encoder state and instance-buffer updates");
+    println!("\nMetal encoder command-planning model");
     print_measurement("legacy kind-local cache", &legacy_encoder, ops.len());
     print_measurement("persistent state cache", &cached_encoder, ops.len());
     println!(
