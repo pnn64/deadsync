@@ -804,7 +804,7 @@ mod tests {
             target,
             from,
             to,
-            easing: None,
+            easing: SongLuaEase::Linear,
             opt1: None,
             opt2: None,
         }
@@ -823,7 +823,7 @@ mod tests {
             sustain_end_second,
             from_y: 0.0,
             to_y: 64.0,
-            easing: None,
+            easing: SongLuaEase::Linear,
             opt1: None,
             opt2: None,
         }
@@ -2247,6 +2247,81 @@ mod tests {
     }
 
     #[test]
+    fn indexed_attack_refresh_matches_full_scan_across_playback_and_seeks() {
+        let mut persisted = attack_mask_window(1.0, 2.0, parse_attack_mods("40% drunk"));
+        persisted.persist_after_end = true;
+        persisted.sustain_end_second = 7.0;
+        let masks = vec![
+            attack_mask_window(0.0, 1.5, parse_attack_mods("25% reverse")),
+            persisted,
+            attack_mask_window(3.0, 5.0, parse_attack_mods("stealth,20% mini")),
+            attack_mask_window(4.0, 6.0, parse_attack_mods("50% tipsy")),
+        ];
+        let eases = vec![
+            song_lua_ease_mask_window(
+                SongLuaEaseMaskTarget::PlayerRotationZ,
+                0.5,
+                2.5,
+                4.0,
+                0.0,
+                90.0,
+            ),
+            song_lua_ease_mask_window(SongLuaEaseMaskTarget::AccelWave, 3.0, 5.0, 6.0, 0.0, 1.0),
+        ];
+        let mut indexed = GameplayAttackRuntimeState::new(
+            std::array::from_fn(|player| {
+                if player == 0 {
+                    masks.clone()
+                } else {
+                    Vec::new()
+                }
+            }),
+            std::array::from_fn(|player| {
+                if player == 0 {
+                    eases.clone()
+                } else {
+                    Vec::new()
+                }
+            }),
+        );
+        let state = ActiveAttackRefreshState {
+            attack_current_appearance: AppearanceEffects::default(),
+            active_attack_visual: VisualOverrides::default(),
+            active_attack_visibility: VisibilityOverrides::default(),
+            active_attack_scroll: ScrollOverrides::default(),
+            active_attack_mini_percent: None,
+            outro_attack_visual: VisualOverrides::default(),
+        };
+
+        for now in [-1.0, 0.0, 0.75, 1.75, 3.5, 5.5, 8.0, 2.25, 6.5, 0.25] {
+            indexed.update_window_indices(0, now);
+            let (mask_indices, ease_indices) = indexed.active_window_indices(0);
+            let input = ActiveAttackRefreshInput {
+                now,
+                delta_time: 1.0 / 120.0,
+                attacks_cleared_for_outro: false,
+                base_appearance: AppearanceEffects::default(),
+                base_visual: VisualEffects::default(),
+                base_scroll: ScrollEffects::default(),
+                base_mini_percent: 10.0,
+                attack_windows: &indexed.mask_windows[0],
+                song_lua_ease_windows: &indexed.song_lua_ease_windows[0],
+            };
+            assert_eq!(
+                refresh_active_attack_player_indexed(input, state, mask_indices, ease_indices),
+                refresh_active_attack_player(input, state),
+                "now={now}",
+            );
+        }
+
+        let (mask_stats, ease_stats) = indexed.window_index_stats(0).expect("player index");
+        assert!(mask_stats.time_rebuilds >= 3);
+        assert!(ease_stats.time_rebuilds >= 3);
+        assert!(mask_stats.max_active <= masks.len());
+        assert!(ease_stats.max_active <= eases.len());
+    }
+
+    #[test]
     fn active_attack_refresh_outro_clears_visuals_and_preserves_visibility() {
         let lua_windows = [song_lua_ease_mask_window(
             SongLuaEaseMaskTarget::PlayerRotationZ,
@@ -2370,7 +2445,7 @@ mod tests {
                 };
                 assert_eq!(
                     refresh_active_attack_player(input, state),
-                    refresh_active_attack_player_full(input, state),
+                    refresh_active_attack_player_full(input, state, None, None),
                 );
             }
         }
@@ -6590,7 +6665,7 @@ mod tests {
         assert_near(window.sustain_end_second, 4.0);
         assert_near(window.from, 0.25);
         assert_near(window.to, 0.75);
-        assert_eq!(window.easing.as_deref(), Some("outQuad"));
+        assert_eq!(window.easing, SongLuaEase::OutQuad);
         assert_eq!(window.opt1, Some(0.5));
         assert_eq!(window.opt2, Some(1.5));
     }
@@ -6757,7 +6832,7 @@ mod tests {
         assert_near(window.sustain_end_second, 3.0);
         assert_near(window.from, 0.25);
         assert_near(window.to, 0.75);
-        assert_eq!(window.easing.as_deref(), Some("linear"));
+        assert_eq!(window.easing, SongLuaEase::Linear);
         assert_eq!(window.opt1, Some(0.25));
         assert_eq!(window.opt2, Some(0.75));
     }
@@ -6787,7 +6862,7 @@ mod tests {
         assert_eq!(window.target, SongLuaEaseMaskTarget::PlayerRotationZ);
         assert_near(window.from, -45.0);
         assert_near(window.to, 90.0);
-        assert_eq!(window.easing.as_deref(), Some("outQuad"));
+        assert_eq!(window.easing, SongLuaEase::OutQuad);
         assert_eq!(window.opt1, None);
         assert_eq!(window.opt2, Some(1.5));
     }
@@ -6869,6 +6944,69 @@ mod tests {
     }
 
     #[test]
+    fn compiled_song_lua_eases_match_named_dispatch_bit_exactly() {
+        let names = [
+            "instant",
+            "linear",
+            "inQuad",
+            "outQuad",
+            "inOutQuad",
+            "outInQuad",
+            "inCubic",
+            "outCubic",
+            "inOutCubic",
+            "outInCubic",
+            "inQuart",
+            "outQuart",
+            "inOutQuart",
+            "outInQuart",
+            "inQuint",
+            "outQuint",
+            "inOutQuint",
+            "outInQuint",
+            "inSine",
+            "outSine",
+            "inOutSine",
+            "outInSine",
+            "inExpo",
+            "outExpo",
+            "inOutExpo",
+            "outInExpo",
+            "inCirc",
+            "outCirc",
+            "inOutCirc",
+            "outInCirc",
+            "inElastic",
+            "outElastic",
+            "inOutElastic",
+            "outInElastic",
+            "inBack",
+            "outBack",
+            "inOutBack",
+            "outInBack",
+            "inBounce",
+            "outBounce",
+            "inOutBounce",
+            "outInBounce",
+        ];
+        for name in names {
+            let compiled = SongLuaEase::from_name(Some(name));
+            assert_eq!(compiled.name(), name);
+            for t in [-0.25, 0.0, 0.125, 0.35, 0.5, 0.875, 1.0, 1.25] {
+                for options in [(None, None), (Some(1.25), Some(0.2))] {
+                    assert_eq!(
+                        compiled.factor(t, options.0, options.1).to_bits(),
+                        song_lua_ease_factor(Some(name), t, options.0, options.1).to_bits(),
+                        "name={name}, t={t}",
+                    );
+                }
+            }
+        }
+        assert_eq!(SongLuaEase::from_name(Some("unknown")), SongLuaEase::Linear);
+        assert!(std::mem::size_of::<SongLuaEase>() < std::mem::size_of::<Option<String>>());
+    }
+
+    #[test]
     fn song_lua_column_offsets_hold_after_ease_until_cutoff() {
         let windows = [SongLuaColumnOffsetWindowRuntime {
             column: 2,
@@ -6877,7 +7015,7 @@ mod tests {
             sustain_end_second: 3.0,
             from_y: 33.75,
             to_y: 0.0,
-            easing: Some("linear".to_string()),
+            easing: SongLuaEase::Linear,
             opt1: None,
             opt2: None,
         }];
@@ -7000,8 +7138,6 @@ mod tests {
         assert_eq!(windows[1].sustain_end_second, f32::MAX);
     }
 
-
-
     #[test]
     fn song_lua_column_offset_tails_stop_at_next_same_column() {
         let mut windows = [
@@ -7047,7 +7183,6 @@ mod tests {
         assert_near(windows[2].sustain_end_second, 5.0);
     }
 
-
     #[test]
     fn song_lua_column_offset_window_runtime_copies_fields() {
         let window = build_song_lua_column_offset_window_runtime(
@@ -7068,7 +7203,7 @@ mod tests {
         assert_near(window.sustain_end_second, 4.0);
         assert_near(window.from_y, -32.0);
         assert_near(window.to_y, 96.0);
-        assert_eq!(window.easing.as_deref(), Some("outQuad"));
+        assert_eq!(window.easing, SongLuaEase::OutQuad);
         assert_eq!(window.opt1, Some(0.25));
         assert_eq!(window.opt2, Some(0.75));
     }
@@ -7263,7 +7398,7 @@ mod tests {
         assert_eq!(window.cutoff_second, Some(3.0));
         assert_eq!(window.from, 11);
         assert_eq!(window.to, 22);
-        assert_eq!(window.easing.as_deref(), Some("inOutQuad"));
+        assert_eq!(window.easing, SongLuaEase::InOutQuad);
         assert_eq!(window.opt1, Some(0.5));
         assert_eq!(window.opt2, Some(1.5));
     }
@@ -7289,7 +7424,6 @@ mod tests {
         assert_near(flat[2].end_second, 3.0);
         assert_near(flat[3].start_second, 4.0);
     }
-
 
     #[test]
     fn song_lua_overlay_eases_offset_window_times_and_cutoffs() {
@@ -15914,7 +16048,6 @@ mod tests {
                 && note.note_type == NoteType::Mine
         }));
     }
-
 
     #[test]
     fn intelligent_insert_adds_middle_tap_between_matching_endpoints() {

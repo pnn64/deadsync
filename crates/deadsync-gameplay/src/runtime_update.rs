@@ -37,9 +37,7 @@ where
         let stream_lead_in = if audio_snapshot.stream_clock.has_music_mapping {
             0.0
         } else {
-            self.clock
-                .audio_clock
-                .stream_lead_in_seconds(music_rate)
+            self.clock.audio_clock.stream_lead_in_seconds(music_rate)
         };
         let song_clock = current_song_clock_snapshot(
             audio_snapshot,
@@ -646,9 +644,7 @@ where
         let stream_lead_in = if audio_snapshot.stream_clock.has_music_mapping {
             0.0
         } else {
-            self.clock
-                .audio_clock
-                .stream_lead_in_seconds(music_rate)
+            self.clock.audio_clock.stream_lead_in_seconds(music_rate)
         };
         song_time_ns_to_seconds(
             current_song_clock_snapshot(
@@ -1028,42 +1024,47 @@ where
             return;
         }
 
-        let output = refresh_active_attack_player(
+        let attacks = &mut self.mods.attacks;
+        attacks.update_window_indices(player, now);
+        let (attack_window_indices, ease_window_indices) = attacks.active_window_indices(player);
+        let output = refresh_active_attack_player_indexed(
             ActiveAttackRefreshInput {
                 now,
                 delta_time,
-                attacks_cleared_for_outro: self.mods.attacks.cleared_for_outro,
+                attacks_cleared_for_outro: attacks.cleared_for_outro,
                 base_appearance: base.appearance,
                 base_visual: base.visual,
                 base_scroll: base.scroll,
                 base_mini_percent: base.mini_percent,
-                attack_windows: &self.mods.attacks.mask_windows[player],
-                song_lua_ease_windows: &self.mods.attacks.song_lua_ease_windows[player],
+                attack_windows: &attacks.mask_windows[player],
+                song_lua_ease_windows: &attacks.song_lua_ease_windows[player],
             },
             ActiveAttackRefreshState {
-                attack_current_appearance: self.mods.attacks.current_appearance[player],
-                active_attack_visual: self.mods.attacks.visual[player],
-                active_attack_visibility: self.mods.attacks.visibility[player],
-                active_attack_scroll: self.mods.attacks.scroll[player],
-                active_attack_mini_percent: self.mods.attacks.mini_percent[player],
-                outro_attack_visual: self.mods.attacks.outro_visual[player],
+                attack_current_appearance: attacks.current_appearance[player],
+                active_attack_visual: attacks.visual[player],
+                active_attack_visibility: attacks.visibility[player],
+                active_attack_scroll: attacks.scroll[player],
+                active_attack_mini_percent: attacks.mini_percent[player],
+                outro_attack_visual: attacks.outro_visual[player],
             },
+            attack_window_indices,
+            ease_window_indices,
         );
 
-        self.mods.attacks.target_appearance[player] = output.attack_target_appearance;
-        self.mods.attacks.speed_appearance[player] = output.attack_speed_appearance;
-        self.mods.attacks.current_appearance[player] = output.attack_current_appearance;
-        self.mods.attacks.outro_visual[player] = output.outro_attack_visual;
-        self.mods.attacks.clear_all[player] = output.active_attack_clear_all;
-        self.mods.attacks.chart[player] = output.active_attack_chart;
-        self.mods.attacks.accel[player] = output.active_attack_accel;
-        self.mods.attacks.visual[player] = output.active_attack_visual;
-        self.mods.attacks.appearance[player] = output.active_attack_appearance;
-        self.mods.attacks.visibility[player] = output.active_attack_visibility;
-        self.mods.attacks.scroll[player] = output.active_attack_scroll;
-        self.mods.attacks.perspective[player] = output.active_attack_perspective;
-        self.mods.attacks.scroll_speed[player] = output.active_attack_scroll_speed;
-        self.mods.attacks.mini_percent[player] = output.active_attack_mini_percent;
+        attacks.target_appearance[player] = output.attack_target_appearance;
+        attacks.speed_appearance[player] = output.attack_speed_appearance;
+        attacks.current_appearance[player] = output.attack_current_appearance;
+        attacks.outro_visual[player] = output.outro_attack_visual;
+        attacks.clear_all[player] = output.active_attack_clear_all;
+        attacks.chart[player] = output.active_attack_chart;
+        attacks.accel[player] = output.active_attack_accel;
+        attacks.visual[player] = output.active_attack_visual;
+        attacks.appearance[player] = output.active_attack_appearance;
+        attacks.visibility[player] = output.active_attack_visibility;
+        attacks.scroll[player] = output.active_attack_scroll;
+        attacks.perspective[player] = output.active_attack_perspective;
+        attacks.scroll_speed[player] = output.active_attack_scroll_speed;
+        attacks.mini_percent[player] = output.active_attack_mini_percent;
         self.mods.song_lua_player_transforms[player] = output.player_transform.resolve();
     }
 
@@ -1768,8 +1769,7 @@ where
     }
 
     pub fn force_fail_player(&mut self, player_idx: usize) -> bool {
-        if player_idx >= self.setup.num_players.min(MAX_PLAYERS)
-            || self.player_is_dead(player_idx)
+        if player_idx >= self.setup.num_players.min(MAX_PLAYERS) || self.player_is_dead(player_idx)
         {
             return false;
         }
@@ -1988,11 +1988,13 @@ where
 
     #[inline(always)]
     pub fn assist_row_no_offset_ns(&mut self, music_time_ns: SongTimeNs) -> i32 {
-        self.timing_runtime.time_to_beat_caches.assist_row_no_offset(
-            &self.timing_runtime.timing,
-            self.clock.offsets.global_offset_seconds(),
-            music_time_ns,
-        )
+        self.timing_runtime
+            .time_to_beat_caches
+            .assist_row_no_offset(
+                &self.timing_runtime.timing,
+                self.clock.offsets.global_offset_seconds(),
+                music_time_ns,
+            )
     }
 
     #[inline(always)]
@@ -3044,11 +3046,7 @@ where
         );
         self.clock.song_position.current_music_time_display =
             song_time_ns_to_seconds(display_time_ns);
-        self.update_song_position_from_time(
-            music_time_ns,
-            display_time_ns,
-            visual_scroll_time_ns,
-        );
+        self.update_song_position_from_time(music_time_ns, display_time_ns, visual_scroll_time_ns);
     }
 
     pub fn update_song_position_from_time(

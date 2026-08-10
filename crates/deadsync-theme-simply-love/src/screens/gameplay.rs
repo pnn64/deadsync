@@ -8904,8 +8904,7 @@ fn apply_song_lua_overlay_runtime_eases_for(
             apply_song_lua_overlay_delta(&mut current, &ease.to.delta);
             continue;
         }
-        let t = song_lua_ease_factor(
-            ease.easing.as_deref(),
+        let t = ease.easing.factor(
             ((now - ease.start_second) / (ease.end_second - ease.start_second)).clamp(0.0, 1.0),
             ease.opt1,
             ease.opt2,

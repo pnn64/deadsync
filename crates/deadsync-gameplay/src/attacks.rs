@@ -1,4 +1,4 @@
-﻿#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct ChartAttackWindow {
     pub start_second: f32,
     pub len_seconds: f32,
@@ -375,8 +375,7 @@ pub fn begin_outro_attack_visual_clear(
     }
     *attacks_cleared_for_outro = true;
     let player_count = num_players.min(MAX_PLAYERS);
-    outro_attack_visual[..player_count]
-        .copy_from_slice(&active_attack_visual[..player_count]);
+    outro_attack_visual[..player_count].copy_from_slice(&active_attack_visual[..player_count]);
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -508,7 +507,7 @@ pub struct SongLuaEaseMaskWindow {
     pub target: SongLuaEaseMaskTarget,
     pub from: f32,
     pub to: f32,
-    pub easing: Option<String>,
+    pub easing: SongLuaEase,
     pub opt1: Option<f32>,
     pub opt2: Option<f32>,
 }
@@ -567,7 +566,7 @@ pub struct SongLuaColumnOffsetWindowRuntime {
     pub sustain_end_second: f32,
     pub from_y: f32,
     pub to_y: f32,
-    pub easing: Option<String>,
+    pub easing: SongLuaEase,
     pub opt1: Option<f32>,
     pub opt2: Option<f32>,
 }
@@ -590,7 +589,7 @@ pub fn build_song_lua_column_offset_window_runtime(
         sustain_end_second,
         from_y,
         to_y,
-        easing: easing.map(ToString::to_string),
+        easing: SongLuaEase::from_name(easing),
         opt1,
         opt2,
     }
@@ -814,7 +813,7 @@ pub struct SongLuaOverlayEaseWindowRuntime<StateDelta> {
     pub cutoff_second: Option<f32>,
     pub from: StateDelta,
     pub to: StateDelta,
-    pub easing: Option<String>,
+    pub easing: SongLuaEase,
     pub opt1: Option<f32>,
     pub opt2: Option<f32>,
 }
@@ -1012,7 +1011,7 @@ pub fn build_song_lua_overlay_ease_window_runtime<StateDelta>(
         cutoff_second,
         from,
         to,
-        easing: easing.map(ToString::to_string),
+        easing: SongLuaEase::from_name(easing),
         opt1,
         opt2,
     }
@@ -1250,7 +1249,7 @@ fn push_song_lua_ease_target(
         target,
         from,
         to,
-        easing: easing.map(ToString::to_string),
+        easing: SongLuaEase::from_name(easing),
         opt1,
         opt2,
     });
@@ -2154,7 +2153,6 @@ fn song_lua_extend_ease_tails_legacy(
     }
 }
 
-
 pub fn song_lua_extend_ease_tails(
     out: &mut [SongLuaEaseMaskWindow],
     constants: &[AttackMaskWindow],
@@ -2250,7 +2248,6 @@ fn song_lua_extend_column_offset_tails_legacy(out: &mut [SongLuaColumnOffsetWind
     }
 }
 
-
 pub fn song_lua_extend_column_offset_tails(out: &mut [SongLuaColumnOffsetWindowRuntime]) {
     const SAME_TICK_EPSILON: f32 = 0.001;
 
@@ -2302,11 +2299,7 @@ pub fn song_lua_extend_column_offset_tails(out: &mut [SongLuaColumnOffsetWindowR
 }
 
 #[inline(always)]
-pub fn song_lua_note_hidden(
-    windows: &SongLuaNoteHideWindows,
-    local_col: usize,
-    beat: f32,
-) -> bool {
+pub fn song_lua_note_hidden(windows: &SongLuaNoteHideWindows, local_col: usize, beat: f32) -> bool {
     const EPS: f32 = 1.0e-4;
     windows.column_windows(local_col).iter().any(|window| {
         window.column == local_col
@@ -2363,7 +2356,6 @@ pub fn group_song_lua_overlay_eases<StateDelta>(
     (overlay_eases, ranges)
 }
 
-
 #[inline(always)]
 pub fn offset_song_lua_overlay_eases<StateDelta>(
     eases: &mut [SongLuaOverlayEaseWindowRuntime<StateDelta>],
@@ -2406,8 +2398,7 @@ pub fn song_lua_ease_window_value(window: &SongLuaEaseMaskWindow, now: f32) -> O
     if duration <= f32::EPSILON {
         return Some(window.to);
     }
-    let factor = song_lua_ease_factor(
-        window.easing.as_deref(),
+    let factor = window.easing.factor(
         (now - window.start_second) / duration,
         window.opt1,
         window.opt2,
@@ -2737,10 +2728,33 @@ pub fn collect_active_attack_targets(
     windows: &[AttackMaskWindow],
     now: f32,
 ) -> AttackActiveTargets {
+    collect_active_attack_targets_selected(windows, None, now)
+}
+
+#[inline(always)]
+fn for_each_selected<T>(values: &[T], indices: Option<&[usize]>, mut visit: impl FnMut(&T)) {
+    if let Some(indices) = indices {
+        for &index in indices {
+            if let Some(value) = values.get(index) {
+                visit(value);
+            }
+        }
+    } else {
+        for value in values {
+            visit(value);
+        }
+    }
+}
+
+fn collect_active_attack_targets_selected(
+    windows: &[AttackMaskWindow],
+    indices: Option<&[usize]>,
+    now: f32,
+) -> AttackActiveTargets {
     let mut targets = AttackActiveTargets::default();
-    for window in windows {
+    for_each_selected(windows, indices, |window| {
         if now < window.start_second || now >= window.end_second {
-            continue;
+            return;
         }
         if window.clear_all {
             targets.clear_all = true;
@@ -2750,7 +2764,7 @@ pub fn collect_active_attack_targets(
         if window.mini_percent.is_some() {
             targets.mini_percent = true;
         }
-    }
+    });
     targets
 }
 
@@ -2868,6 +2882,7 @@ pub struct ActiveAttackRefreshOutput {
 pub struct GameplayAttackRuntimeState {
     pub mask_windows: [Vec<AttackMaskWindow>; MAX_PLAYERS],
     pub song_lua_ease_windows: [Vec<SongLuaEaseMaskWindow>; MAX_PLAYERS],
+    window_indices: [GameplayPlayerWindowIndex; MAX_PLAYERS],
     pub cleared_for_outro: bool,
     pub clear_all: [bool; MAX_PLAYERS],
     pub chart: [ChartAttackEffects; MAX_PLAYERS],
@@ -2885,11 +2900,162 @@ pub struct GameplayAttackRuntimeState {
     pub mini_percent: [Option<f32>; MAX_PLAYERS],
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct GameplayWindowIndexStats {
+    pub source_rebuilds: u64,
+    pub time_rebuilds: u64,
+    pub activations: u64,
+    pub pruned: u64,
+    pub max_active: usize,
+}
+
+/// Song-lifetime active-window index for one immutable window sequence.
+///
+/// The game thread owns and updates it. Setup reserves two index vectors to
+/// the source length, and ordinary forward playback only activates newly
+/// started windows and prunes expired active entries. A backwards seek or a
+/// test-time source replacement rebuilds in O(n), without exceeding reserved
+/// capacity; there are no misses, eviction, synchronization, or gameplay-time
+/// destruction. Storage is released with gameplay state. Stats expose rebuild,
+/// activation, pruning, and high-water counts. Forward-frame work is bounded by
+/// newly crossed windows plus the number of concurrently active windows.
+#[derive(Clone, Debug, Default)]
+struct ActiveWindowIndex {
+    source_ptr: usize,
+    source_len: usize,
+    start_order: Vec<usize>,
+    active: Vec<usize>,
+    next_start: usize,
+    last_now: Option<f32>,
+    stats: GameplayWindowIndexStats,
+}
+
+impl ActiveWindowIndex {
+    fn new<T>(windows: &[T], start_second: impl Fn(&T) -> f32 + Copy) -> Self {
+        let mut index = Self::default();
+        index.rebuild_source(windows, start_second);
+        index.stats = GameplayWindowIndexStats::default();
+        index
+    }
+
+    fn rebuild_source<T>(&mut self, windows: &[T], start_second: impl Fn(&T) -> f32 + Copy) {
+        self.source_ptr = windows.as_ptr() as usize;
+        self.source_len = windows.len();
+        self.start_order.clear();
+        self.start_order.reserve(windows.len());
+        self.active.clear();
+        self.active.reserve(windows.len());
+        self.start_order.extend(
+            windows
+                .iter()
+                .enumerate()
+                .filter_map(|(index, window)| start_second(window).is_finite().then_some(index)),
+        );
+        self.start_order.sort_unstable_by(|&left, &right| {
+            start_second(&windows[left])
+                .total_cmp(&start_second(&windows[right]))
+                .then(left.cmp(&right))
+        });
+        self.next_start = 0;
+        self.last_now = None;
+        self.stats.source_rebuilds = self.stats.source_rebuilds.saturating_add(1);
+    }
+
+    fn ensure_source<T>(&mut self, windows: &[T], start_second: impl Fn(&T) -> f32 + Copy) {
+        if self.source_ptr != windows.as_ptr() as usize || self.source_len != windows.len() {
+            self.rebuild_source(windows, start_second);
+        }
+    }
+
+    fn rebuild_time<T>(
+        &mut self,
+        windows: &[T],
+        now: f32,
+        start_second: impl Fn(&T) -> f32 + Copy,
+        is_active: impl Fn(&T, f32) -> bool + Copy,
+    ) {
+        self.active.clear();
+        if !now.is_finite() {
+            self.next_start = 0;
+        } else {
+            self.next_start = self
+                .start_order
+                .partition_point(|&index| start_second(&windows[index]) <= now);
+            self.active.extend(
+                windows
+                    .iter()
+                    .enumerate()
+                    .filter_map(|(index, window)| is_active(window, now).then_some(index)),
+            );
+        }
+        self.last_now = Some(now);
+        self.stats.time_rebuilds = self.stats.time_rebuilds.saturating_add(1);
+        self.stats.max_active = self.stats.max_active.max(self.active.len());
+    }
+
+    fn update<T>(
+        &mut self,
+        windows: &[T],
+        now: f32,
+        start_second: impl Fn(&T) -> f32 + Copy,
+        is_active: impl Fn(&T, f32) -> bool + Copy,
+    ) {
+        self.ensure_source(windows, start_second);
+        if !now.is_finite()
+            || self
+                .last_now
+                .is_none_or(|last| !last.is_finite() || now < last)
+        {
+            self.rebuild_time(windows, now, start_second, is_active);
+            return;
+        }
+
+        while let Some(&index) = self.start_order.get(self.next_start) {
+            if start_second(&windows[index]) > now {
+                break;
+            }
+            self.next_start += 1;
+            if is_active(&windows[index], now) {
+                let insert_at = self.active.binary_search(&index).unwrap_or_else(|at| at);
+                self.active.insert(insert_at, index);
+                self.stats.activations = self.stats.activations.saturating_add(1);
+            }
+        }
+        let previous_len = self.active.len();
+        self.active.retain(|&index| is_active(&windows[index], now));
+        self.stats.pruned = self
+            .stats
+            .pruned
+            .saturating_add(previous_len.saturating_sub(self.active.len()) as u64);
+        self.stats.max_active = self.stats.max_active.max(self.active.len());
+        self.last_now = Some(now);
+    }
+}
+
+#[derive(Clone, Debug, Default)]
+struct GameplayPlayerWindowIndex {
+    masks: ActiveWindowIndex,
+    eases: ActiveWindowIndex,
+}
+
+#[inline(always)]
+fn attack_window_active(window: &AttackMaskWindow, now: f32) -> bool {
+    now >= window.start_second
+        && now < window.sustain_end_second
+        && (now < window.end_second || window.persist_after_end)
+}
+
+#[inline(always)]
+fn ease_window_active(window: &SongLuaEaseMaskWindow, now: f32) -> bool {
+    now >= window.start_second && now < window.sustain_end_second
+}
+
 impl Default for GameplayAttackRuntimeState {
     fn default() -> Self {
         Self {
             mask_windows: std::array::from_fn(|_| Vec::new()),
             song_lua_ease_windows: std::array::from_fn(|_| Vec::new()),
+            window_indices: std::array::from_fn(|_| GameplayPlayerWindowIndex::default()),
             cleared_for_outro: false,
             clear_all: [false; MAX_PLAYERS],
             chart: [ChartAttackEffects::default(); MAX_PLAYERS],
@@ -2909,6 +3075,65 @@ impl Default for GameplayAttackRuntimeState {
     }
 }
 
+impl GameplayAttackRuntimeState {
+    pub fn new(
+        mask_windows: [Vec<AttackMaskWindow>; MAX_PLAYERS],
+        song_lua_ease_windows: [Vec<SongLuaEaseMaskWindow>; MAX_PLAYERS],
+    ) -> Self {
+        let window_indices = std::array::from_fn(|player| GameplayPlayerWindowIndex {
+            masks: ActiveWindowIndex::new(&mask_windows[player], |window| window.start_second),
+            eases: ActiveWindowIndex::new(&song_lua_ease_windows[player], |window| {
+                window.start_second
+            }),
+        });
+        Self {
+            mask_windows,
+            song_lua_ease_windows,
+            window_indices,
+            ..Self::default()
+        }
+    }
+
+    pub fn update_window_indices(&mut self, player: usize, now: f32) {
+        let Some(indices) = self.window_indices.get_mut(player) else {
+            return;
+        };
+        indices.masks.update(
+            &self.mask_windows[player],
+            now,
+            |window| window.start_second,
+            attack_window_active,
+        );
+        indices.eases.update(
+            &self.song_lua_ease_windows[player],
+            now,
+            |window| window.start_second,
+            ease_window_active,
+        );
+    }
+
+    #[inline(always)]
+    pub fn active_window_indices(&self, player: usize) -> (&[usize], &[usize]) {
+        self.window_indices
+            .get(player)
+            .map_or((&[], &[]), |indices| {
+                (
+                    indices.masks.active.as_slice(),
+                    indices.eases.active.as_slice(),
+                )
+            })
+    }
+
+    pub fn window_index_stats(
+        &self,
+        player: usize,
+    ) -> Option<(GameplayWindowIndexStats, GameplayWindowIndexStats)> {
+        self.window_indices
+            .get(player)
+            .map(|indices| (indices.masks.stats, indices.eases.stats))
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct GameplayModRuntimeState<OverlayActor, CapturedActor, StateDelta> {
     pub song_lua_visuals: SongLuaRuntimeVisuals<OverlayActor, CapturedActor, StateDelta>,
@@ -2921,11 +3146,20 @@ pub fn apply_song_lua_player_eases(
     windows: &[SongLuaEaseMaskWindow],
     now: f32,
 ) {
-    for window in windows {
+    apply_song_lua_player_eases_selected(player, windows, None, now);
+}
+
+fn apply_song_lua_player_eases_selected(
+    player: &mut SongLuaPlayerTransformValues,
+    windows: &[SongLuaEaseMaskWindow],
+    indices: Option<&[usize]>,
+    now: f32,
+) {
+    for_each_selected(windows, indices, |window| {
         if let Some(value) = song_lua_ease_window_value(window, now) {
             song_lua_apply_player_transform_target(window.target, value, player);
         }
-    }
+    });
 }
 
 pub fn apply_song_lua_attack_eases(
@@ -2936,7 +3170,27 @@ pub fn apply_song_lua_attack_eases(
     now: f32,
     mini_base_percent: f32,
 ) {
-    for window in windows {
+    apply_song_lua_attack_eases_selected(
+        attack,
+        appearance,
+        player,
+        windows,
+        None,
+        now,
+        mini_base_percent,
+    );
+}
+
+fn apply_song_lua_attack_eases_selected(
+    attack: &mut ActiveAttackMaskValues,
+    appearance: &mut AppearanceEffects,
+    player: &mut SongLuaPlayerTransformValues,
+    windows: &[SongLuaEaseMaskWindow],
+    indices: Option<&[usize]>,
+    now: f32,
+    mini_base_percent: f32,
+) {
+    for_each_selected(windows, indices, |window| {
         if let Some(value) = song_lua_ease_window_value(window, now) {
             let value = if matches!(window.target, SongLuaEaseMaskTarget::MiniPercent) {
                 mini_base_percent + value
@@ -2957,7 +3211,7 @@ pub fn apply_song_lua_attack_eases(
                 player,
             );
         }
-    }
+    });
 }
 
 pub fn apply_active_attack_mask_window(
@@ -3068,17 +3322,43 @@ pub fn refresh_active_attack_player(
             player_transform: SongLuaPlayerTransformValues::default(),
         };
     }
-    refresh_active_attack_player_full(input, state)
+    refresh_active_attack_player_full(input, state, None, None)
+}
+
+pub fn refresh_active_attack_player_indexed(
+    input: ActiveAttackRefreshInput<'_>,
+    state: ActiveAttackRefreshState,
+    attack_window_indices: &[usize],
+    ease_window_indices: &[usize],
+) -> ActiveAttackRefreshOutput {
+    if input.attack_windows.is_empty()
+        && input.song_lua_ease_windows.is_empty()
+        && !input.attacks_cleared_for_outro
+    {
+        return refresh_active_attack_player(input, state);
+    }
+    refresh_active_attack_player_full(
+        input,
+        state,
+        Some(attack_window_indices),
+        Some(ease_window_indices),
+    )
 }
 
 fn refresh_active_attack_player_full(
     input: ActiveAttackRefreshInput<'_>,
     mut state: ActiveAttackRefreshState,
+    attack_window_indices: Option<&[usize]>,
+    ease_window_indices: Option<&[usize]>,
 ) -> ActiveAttackRefreshOutput {
-    let active_targets = collect_active_attack_targets(input.attack_windows, input.now);
+    let active_targets = collect_active_attack_targets_selected(
+        input.attack_windows,
+        attack_window_indices,
+        input.now,
+    );
     let mut attack = ActiveAttackMaskValues::new(input.base_appearance);
     let mut player_transform = SongLuaPlayerTransformValues::default();
-    for window in input.attack_windows {
+    for_each_selected(input.attack_windows, attack_window_indices, |window| {
         let persisted = window.persist_after_end && input.now >= window.end_second;
         if !input.attacks_cleared_for_outro
             && input.now >= window.start_second
@@ -3093,7 +3373,7 @@ fn refresh_active_attack_player_full(
                 input.base_mini_percent,
             );
         }
-    }
+    });
 
     approach_appearance_effects(
         &mut state.attack_current_appearance,
@@ -3103,9 +3383,10 @@ fn refresh_active_attack_player_full(
     );
     let mut appearance = state.attack_current_appearance;
     if input.attacks_cleared_for_outro {
-        apply_song_lua_player_eases(
+        apply_song_lua_player_eases_selected(
             &mut player_transform,
             input.song_lua_ease_windows,
+            ease_window_indices,
             input.now,
         );
         let mut visual = state.outro_attack_visual;
@@ -3171,11 +3452,12 @@ fn refresh_active_attack_player_full(
     );
     attack.mini_percent = state.active_attack_mini_percent;
 
-    apply_song_lua_attack_eases(
+    apply_song_lua_attack_eases_selected(
         &mut attack,
         &mut appearance,
         &mut player_transform,
         input.song_lua_ease_windows,
+        ease_window_indices,
         input.now,
         base_mini_percent,
     );

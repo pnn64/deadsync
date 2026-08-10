@@ -779,29 +779,6 @@ pub(crate) struct LaneWindowCursor {
     pub end: usize,
 }
 
-#[inline(always)]
-fn partition_point_from_hint<T>(
-    values: &[T],
-    hint: usize,
-    mut predicate: impl FnMut(&T) -> bool,
-) -> usize {
-    let cursor = hint.min(values.len());
-    if cursor < values.len() && predicate(&values[cursor]) {
-        let next = cursor + 1;
-        if next == values.len() || !predicate(&values[next]) {
-            return next;
-        }
-    } else if cursor > 0 && !predicate(&values[cursor - 1]) {
-        let previous = cursor - 1;
-        if previous == 0 || predicate(&values[previous - 1]) {
-            return previous;
-        }
-    } else {
-        return cursor;
-    }
-    values.partition_point(predicate)
-}
-
 pub(crate) fn lane_window_bounds_by_note_row_from_cursor(
     note_itg_rows: &[i32],
     indices: &[usize],
@@ -814,10 +791,11 @@ pub(crate) fn lane_window_bounds_by_note_row_from_cursor(
         return Some((0, 0));
     }
     let low = low.max(0);
-    cursor.start = partition_point_from_hint(indices, cursor.start, |&note_index| {
-        note_itg_rows[note_index] < low
-    });
-    cursor.end = partition_point_from_hint(indices, cursor.end, |&note_index| {
+    cursor.start =
+        deadsync_gameplay::partition_point_from_hint(indices, cursor.start, |&note_index| {
+            note_itg_rows[note_index] < low
+        });
+    cursor.end = deadsync_gameplay::partition_point_from_hint(indices, cursor.end, |&note_index| {
         note_itg_rows[note_index] <= high
     });
     Some((cursor.start, cursor.end))

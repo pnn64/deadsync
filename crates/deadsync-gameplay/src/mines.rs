@@ -51,29 +51,6 @@ pub struct LaneNoteWindowCursor {
 }
 
 #[inline(always)]
-fn partition_point_from_hint<T>(
-    values: &[T],
-    hint: usize,
-    mut predicate: impl FnMut(&T) -> bool,
-) -> usize {
-    let cursor = hint.min(values.len());
-    if cursor < values.len() && predicate(&values[cursor]) {
-        let next = cursor + 1;
-        if next == values.len() || !predicate(&values[next]) {
-            return next;
-        }
-    } else if cursor > 0 && !predicate(&values[cursor - 1]) {
-        let previous = cursor - 1;
-        if previous == 0 || predicate(&values[previous - 1]) {
-            return previous;
-        }
-    } else {
-        return cursor;
-    }
-    values.partition_point(predicate)
-}
-
-#[inline(always)]
 pub fn lane_note_window_bounds_rows_from_cursor(
     note_indices: &[usize],
     notes: &[Note],

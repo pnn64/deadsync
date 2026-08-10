@@ -61,6 +61,83 @@ pub fn first_row_entry_index_at_or_after_time(
     start + row_entries[start..end].partition_point(|row| row.time_ns < time_ns)
 }
 
+/// Finds a monotonic partition boundary using the previous boundary as a hint.
+///
+/// Nearby playback advances probe exponentially around `hint`, keeping the
+/// common case inside the same cache lines. Large seeks retain logarithmic
+/// behavior by binary-searching only the bracketed range.
+#[inline(always)]
+pub fn partition_point_from_hint<T>(
+    values: &[T],
+    hint: usize,
+    mut predicate: impl FnMut(&T) -> bool,
+) -> usize {
+    let len = values.len();
+    let cursor = hint.min(len);
+    if cursor < len && predicate(&values[cursor]) {
+        let mut lower = cursor + 1;
+        let mut step = 1usize;
+        loop {
+            let probe = cursor.saturating_add(step);
+            if probe >= len {
+                return lower + values[lower..].partition_point(predicate);
+            }
+            if !predicate(&values[probe]) {
+                return lower + values[lower..=probe].partition_point(predicate);
+            }
+            lower = probe + 1;
+            step = step.saturating_mul(2);
+        }
+    }
+    if cursor > 0 && !predicate(&values[cursor - 1]) {
+        let mut upper = cursor;
+        let mut step = 1usize;
+        loop {
+            let Some(probe) = cursor.checked_sub(step + 1) else {
+                return values[..upper].partition_point(predicate);
+            };
+            if predicate(&values[probe]) {
+                let lower = probe + 1;
+                return lower + values[lower..upper].partition_point(predicate);
+            }
+            upper = probe + 1;
+            step = step.saturating_mul(2);
+        }
+    }
+    cursor
+}
+
+#[cfg(test)]
+mod hinted_partition_tests {
+    use super::partition_point_from_hint;
+
+    #[test]
+    fn hinted_partition_matches_binary_search_for_every_boundary_and_hint() {
+        let values = (0..257).collect::<Vec<_>>();
+        for boundary in 0..=values.len() {
+            for hint in 0..=values.len() + 3 {
+                let expected = values.partition_point(|&value| value < boundary);
+                let actual = partition_point_from_hint(&values, hint, |&value| value < boundary);
+                assert_eq!(actual, expected, "boundary={boundary}, hint={hint}");
+            }
+        }
+    }
+
+    #[test]
+    fn hinted_partition_handles_empty_and_duplicate_values() {
+        assert_eq!(partition_point_from_hint::<u8>(&[], 12, |_| true), 0);
+        let values = [1, 1, 1, 4, 4, 9, 9, 9, 9];
+        for target in 0..=10 {
+            for hint in 0..=values.len() {
+                assert_eq!(
+                    partition_point_from_hint(&values, hint, |&value| value < target),
+                    values.partition_point(|&value| value < target),
+                );
+            }
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct PracticePlayerCursors {
     pub note_cursor: usize,

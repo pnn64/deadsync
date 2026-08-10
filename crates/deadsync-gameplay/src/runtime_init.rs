@@ -1124,14 +1124,14 @@ where
         mods: GameplayModRuntimeState {
             song_lua_visuals,
             song_lua_player_transforms: song_lua_player_transforms_default(),
-            attacks: GameplayAttackRuntimeState {
-                mask_windows: attack_mask_windows,
-                song_lua_ease_windows,
-                current_appearance: base_attack_appearance,
-                target_appearance: base_attack_appearance,
-                speed_appearance: [AppearanceEffects::approach_speeds(); MAX_PLAYERS],
-                appearance: base_attack_appearance,
-                ..GameplayAttackRuntimeState::default()
+            attacks: {
+                let mut attacks =
+                    GameplayAttackRuntimeState::new(attack_mask_windows, song_lua_ease_windows);
+                attacks.current_appearance = base_attack_appearance;
+                attacks.target_appearance = base_attack_appearance;
+                attacks.speed_appearance = [AppearanceEffects::approach_speeds(); MAX_PLAYERS];
+                attacks.appearance = base_attack_appearance;
+                attacks
             },
         },
         control: GameplayControlRuntimeState {

@@ -76,169 +76,327 @@ fn song_lua_in_out_bounce(t: f32) -> f32 {
     }
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum SongLuaEase {
+    Instant,
+    #[default]
+    Linear,
+    InQuad,
+    OutQuad,
+    InOutQuad,
+    OutInQuad,
+    InCubic,
+    OutCubic,
+    InOutCubic,
+    OutInCubic,
+    InQuart,
+    OutQuart,
+    InOutQuart,
+    OutInQuart,
+    InQuint,
+    OutQuint,
+    InOutQuint,
+    OutInQuint,
+    InSine,
+    OutSine,
+    InOutSine,
+    OutInSine,
+    InExpo,
+    OutExpo,
+    InOutExpo,
+    OutInExpo,
+    InCirc,
+    OutCirc,
+    InOutCirc,
+    OutInCirc,
+    InElastic,
+    OutElastic,
+    InOutElastic,
+    OutInElastic,
+    InBack,
+    OutBack,
+    InOutBack,
+    OutInBack,
+    InBounce,
+    OutBounce,
+    InOutBounce,
+    OutInBounce,
+}
+
+impl SongLuaEase {
+    pub fn from_name(name: Option<&str>) -> Self {
+        match name.unwrap_or("linear") {
+            "instant" => Self::Instant,
+            "linear" => Self::Linear,
+            "inQuad" => Self::InQuad,
+            "outQuad" => Self::OutQuad,
+            "inOutQuad" => Self::InOutQuad,
+            "outInQuad" => Self::OutInQuad,
+            "inCubic" => Self::InCubic,
+            "outCubic" => Self::OutCubic,
+            "inOutCubic" => Self::InOutCubic,
+            "outInCubic" => Self::OutInCubic,
+            "inQuart" => Self::InQuart,
+            "outQuart" => Self::OutQuart,
+            "inOutQuart" => Self::InOutQuart,
+            "outInQuart" => Self::OutInQuart,
+            "inQuint" => Self::InQuint,
+            "outQuint" => Self::OutQuint,
+            "inOutQuint" => Self::InOutQuint,
+            "outInQuint" => Self::OutInQuint,
+            "inSine" => Self::InSine,
+            "outSine" => Self::OutSine,
+            "inOutSine" => Self::InOutSine,
+            "outInSine" => Self::OutInSine,
+            "inExpo" => Self::InExpo,
+            "outExpo" => Self::OutExpo,
+            "inOutExpo" => Self::InOutExpo,
+            "outInExpo" => Self::OutInExpo,
+            "inCirc" => Self::InCirc,
+            "outCirc" => Self::OutCirc,
+            "inOutCirc" => Self::InOutCirc,
+            "outInCirc" => Self::OutInCirc,
+            "inElastic" => Self::InElastic,
+            "outElastic" => Self::OutElastic,
+            "inOutElastic" => Self::InOutElastic,
+            "outInElastic" => Self::OutInElastic,
+            "inBack" => Self::InBack,
+            "outBack" => Self::OutBack,
+            "inOutBack" => Self::InOutBack,
+            "outInBack" => Self::OutInBack,
+            "inBounce" => Self::InBounce,
+            "outBounce" => Self::OutBounce,
+            "inOutBounce" => Self::InOutBounce,
+            "outInBounce" => Self::OutInBounce,
+            _ => Self::Linear,
+        }
+    }
+
+    pub const fn name(self) -> &'static str {
+        match self {
+            Self::Instant => "instant",
+            Self::Linear => "linear",
+            Self::InQuad => "inQuad",
+            Self::OutQuad => "outQuad",
+            Self::InOutQuad => "inOutQuad",
+            Self::OutInQuad => "outInQuad",
+            Self::InCubic => "inCubic",
+            Self::OutCubic => "outCubic",
+            Self::InOutCubic => "inOutCubic",
+            Self::OutInCubic => "outInCubic",
+            Self::InQuart => "inQuart",
+            Self::OutQuart => "outQuart",
+            Self::InOutQuart => "inOutQuart",
+            Self::OutInQuart => "outInQuart",
+            Self::InQuint => "inQuint",
+            Self::OutQuint => "outQuint",
+            Self::InOutQuint => "inOutQuint",
+            Self::OutInQuint => "outInQuint",
+            Self::InSine => "inSine",
+            Self::OutSine => "outSine",
+            Self::InOutSine => "inOutSine",
+            Self::OutInSine => "outInSine",
+            Self::InExpo => "inExpo",
+            Self::OutExpo => "outExpo",
+            Self::InOutExpo => "inOutExpo",
+            Self::OutInExpo => "outInExpo",
+            Self::InCirc => "inCirc",
+            Self::OutCirc => "outCirc",
+            Self::InOutCirc => "inOutCirc",
+            Self::OutInCirc => "outInCirc",
+            Self::InElastic => "inElastic",
+            Self::OutElastic => "outElastic",
+            Self::InOutElastic => "inOutElastic",
+            Self::OutInElastic => "outInElastic",
+            Self::InBack => "inBack",
+            Self::OutBack => "outBack",
+            Self::InOutBack => "inOutBack",
+            Self::OutInBack => "outInBack",
+            Self::InBounce => "inBounce",
+            Self::OutBounce => "outBounce",
+            Self::InOutBounce => "inOutBounce",
+            Self::OutInBounce => "outInBounce",
+        }
+    }
+
+    // Measured cross-crate gameplay hot path; inlining removes ~16 cycles/sample.
+    #[inline(always)]
+    pub fn factor(self, t: f32, opt1: Option<f32>, _opt2: Option<f32>) -> f32 {
+        let t = t.clamp(0.0, 1.0);
+        match self {
+            Self::Instant => 1.0,
+            Self::Linear => t,
+            Self::InQuad => song_lua_pow_in(t, 2.0),
+            Self::OutQuad => song_lua_pow_out(t, 2.0),
+            Self::InOutQuad => song_lua_pow_in_out(t, 2.0),
+            Self::OutInQuad => song_lua_pow_out_in(t, 2.0),
+            Self::InCubic => song_lua_pow_in(t, 3.0),
+            Self::OutCubic => song_lua_pow_out(t, 3.0),
+            Self::InOutCubic => song_lua_pow_in_out(t, 3.0),
+            Self::OutInCubic => song_lua_pow_out_in(t, 3.0),
+            Self::InQuart => song_lua_pow_in(t, 4.0),
+            Self::OutQuart => song_lua_pow_out(t, 4.0),
+            Self::InOutQuart => song_lua_pow_in_out(t, 4.0),
+            Self::OutInQuart => song_lua_pow_out_in(t, 4.0),
+            Self::InQuint => song_lua_pow_in(t, 5.0),
+            Self::OutQuint => song_lua_pow_out(t, 5.0),
+            Self::InOutQuint => song_lua_pow_in_out(t, 5.0),
+            Self::OutInQuint => song_lua_pow_out_in(t, 5.0),
+            Self::InSine => 1.0 - (t * std::f32::consts::FRAC_PI_2).cos(),
+            Self::OutSine => (t * std::f32::consts::FRAC_PI_2).sin(),
+            Self::InOutSine => -((std::f32::consts::PI * t).cos() - 1.0) * 0.5,
+            Self::OutInSine => {
+                if t < 0.5 {
+                    0.5 * ((t * std::f32::consts::PI).sin())
+                } else {
+                    0.5 + 0.5 * (1.0 - (((t * 2.0) - 1.0) * std::f32::consts::FRAC_PI_2).cos())
+                }
+            }
+            Self::InExpo => {
+                if t <= 0.0 {
+                    0.0
+                } else {
+                    2.0_f32.powf((10.0 * t) - 10.0)
+                }
+            }
+            Self::OutExpo => {
+                if t >= 1.0 {
+                    1.0
+                } else {
+                    1.0 - 2.0_f32.powf(-10.0 * t)
+                }
+            }
+            Self::InOutExpo => {
+                if t <= 0.0 {
+                    0.0
+                } else if t >= 1.0 {
+                    1.0
+                } else if t < 0.5 {
+                    0.5 * 2.0_f32.powf((20.0 * t) - 10.0)
+                } else {
+                    1.0 - (0.5 * 2.0_f32.powf((-20.0 * t) + 10.0))
+                }
+            }
+            Self::OutInExpo => {
+                if t < 0.5 {
+                    0.5 * (1.0 - 2.0_f32.powf(-20.0 * t))
+                } else if t >= 1.0 {
+                    1.0
+                } else {
+                    0.5 + 0.5 * 2.0_f32.powf((20.0 * t) - 20.0)
+                }
+            }
+            Self::InCirc => 1.0 - (1.0 - (t * t)).sqrt(),
+            Self::OutCirc => (1.0 - ((t - 1.0) * (t - 1.0))).sqrt(),
+            Self::InOutCirc => {
+                if t < 0.5 {
+                    0.5 * (1.0 - (1.0 - 4.0 * t * t).sqrt())
+                } else {
+                    0.5 * ((1.0 - ((-2.0 * t + 2.0) * (-2.0 * t + 2.0))).sqrt() + 1.0)
+                }
+            }
+            Self::OutInCirc => {
+                if t < 0.5 {
+                    0.5 * (1.0 - ((2.0 * t - 1.0) * (2.0 * t - 1.0))).sqrt()
+                } else {
+                    0.5 + 0.5 * (1.0 - (1.0 - ((2.0 * t - 1.0) * (2.0 * t - 1.0))).sqrt())
+                }
+            }
+            Self::InElastic => {
+                if t <= 0.0 {
+                    0.0
+                } else if t >= 1.0 {
+                    1.0
+                } else {
+                    let period = opt1.filter(|v| v.is_finite() && *v > 0.0).unwrap_or(0.3);
+                    let tau = std::f32::consts::TAU / period;
+                    let u = t - 1.0;
+                    -(2.0_f32.powf(10.0 * u)) * ((u - period * 0.25) * tau).sin()
+                }
+            }
+            Self::OutElastic => {
+                if t <= 0.0 {
+                    0.0
+                } else if t >= 1.0 {
+                    1.0
+                } else {
+                    let period = opt1.filter(|v| v.is_finite() && *v > 0.0).unwrap_or(0.3);
+                    let tau = std::f32::consts::TAU / period;
+                    2.0_f32.powf(-10.0 * t) * ((t - period * 0.25) * tau).sin() + 1.0
+                }
+            }
+            Self::InOutElastic => {
+                if t <= 0.0 {
+                    0.0
+                } else if t >= 1.0 {
+                    1.0
+                } else {
+                    let period = opt1.filter(|v| v.is_finite() && *v > 0.0).unwrap_or(0.3);
+                    let tau = std::f32::consts::TAU / period;
+                    if t < 0.5 {
+                        let u = (2.0 * t) - 1.0;
+                        -0.5 * 2.0_f32.powf(10.0 * u) * ((u - period * 0.375) * tau).sin()
+                    } else {
+                        let u = (2.0 * t) - 1.0;
+                        0.5 * 2.0_f32.powf(-10.0 * u) * ((u - period * 0.375) * tau).sin() + 1.0
+                    }
+                }
+            }
+            Self::OutInElastic => {
+                if t < 0.5 {
+                    0.5 * Self::OutElastic.factor(t * 2.0, opt1, _opt2)
+                } else {
+                    0.5 + 0.5 * Self::InElastic.factor((t * 2.0) - 1.0, opt1, _opt2)
+                }
+            }
+            Self::InBack => {
+                let overshoot = opt1.filter(|v| v.is_finite()).unwrap_or(1.70158);
+                t * t * (((overshoot + 1.0) * t) - overshoot)
+            }
+            Self::OutBack => {
+                let overshoot = opt1.filter(|v| v.is_finite()).unwrap_or(1.70158);
+                let u = t - 1.0;
+                (u * u * (((overshoot + 1.0) * u) + overshoot)) + 1.0
+            }
+            Self::InOutBack => {
+                let overshoot = opt1.filter(|v| v.is_finite()).unwrap_or(1.70158);
+                let s = overshoot * 1.525;
+                if t < 0.5 {
+                    let u = 2.0 * t;
+                    0.5 * (u * u * (((s + 1.0) * u) - s))
+                } else {
+                    let u = (2.0 * t) - 2.0;
+                    0.5 * (u * u * (((s + 1.0) * u) + s) + 2.0)
+                }
+            }
+            Self::OutInBack => {
+                if t < 0.5 {
+                    0.5 * Self::OutBack.factor(t * 2.0, opt1, _opt2)
+                } else {
+                    0.5 + 0.5 * Self::InBack.factor((t * 2.0) - 1.0, opt1, _opt2)
+                }
+            }
+            Self::InBounce => song_lua_in_bounce(t),
+            Self::OutBounce => song_lua_out_bounce(t),
+            Self::InOutBounce => song_lua_in_out_bounce(t),
+            Self::OutInBounce => {
+                if t < 0.5 {
+                    0.5 * song_lua_out_bounce(t * 2.0)
+                } else {
+                    0.5 + 0.5 * song_lua_in_bounce((t * 2.0) - 1.0)
+                }
+            }
+        }
+    }
+}
+
 pub fn song_lua_ease_factor(
     easing: Option<&str>,
     t: f32,
     opt1: Option<f32>,
     opt2: Option<f32>,
 ) -> f32 {
-    let t = t.clamp(0.0, 1.0);
-    let overshoot = opt1.filter(|v| v.is_finite()).unwrap_or(1.70158);
-    let elastic_period = opt1.filter(|v| v.is_finite() && *v > 0.0).unwrap_or(0.3);
-    let elastic_tau = std::f32::consts::TAU / elastic_period;
-    match easing.unwrap_or("linear") {
-        "instant" => 1.0,
-        "linear" => t,
-        "inQuad" => song_lua_pow_in(t, 2.0),
-        "outQuad" => song_lua_pow_out(t, 2.0),
-        "inOutQuad" => song_lua_pow_in_out(t, 2.0),
-        "outInQuad" => song_lua_pow_out_in(t, 2.0),
-        "inCubic" => song_lua_pow_in(t, 3.0),
-        "outCubic" => song_lua_pow_out(t, 3.0),
-        "inOutCubic" => song_lua_pow_in_out(t, 3.0),
-        "outInCubic" => song_lua_pow_out_in(t, 3.0),
-        "inQuart" => song_lua_pow_in(t, 4.0),
-        "outQuart" => song_lua_pow_out(t, 4.0),
-        "inOutQuart" => song_lua_pow_in_out(t, 4.0),
-        "outInQuart" => song_lua_pow_out_in(t, 4.0),
-        "inQuint" => song_lua_pow_in(t, 5.0),
-        "outQuint" => song_lua_pow_out(t, 5.0),
-        "inOutQuint" => song_lua_pow_in_out(t, 5.0),
-        "outInQuint" => song_lua_pow_out_in(t, 5.0),
-        "inSine" => 1.0 - (t * std::f32::consts::FRAC_PI_2).cos(),
-        "outSine" => (t * std::f32::consts::FRAC_PI_2).sin(),
-        "inOutSine" => -((std::f32::consts::PI * t).cos() - 1.0) * 0.5,
-        "outInSine" => {
-            if t < 0.5 {
-                0.5 * ((t * std::f32::consts::PI).sin())
-            } else {
-                0.5 + 0.5 * (1.0 - (((t * 2.0) - 1.0) * std::f32::consts::FRAC_PI_2).cos())
-            }
-        }
-        "inExpo" => {
-            if t <= 0.0 {
-                0.0
-            } else {
-                2.0_f32.powf((10.0 * t) - 10.0)
-            }
-        }
-        "outExpo" => {
-            if t >= 1.0 {
-                1.0
-            } else {
-                1.0 - 2.0_f32.powf(-10.0 * t)
-            }
-        }
-        "inOutExpo" => {
-            if t <= 0.0 {
-                0.0
-            } else if t >= 1.0 {
-                1.0
-            } else if t < 0.5 {
-                0.5 * 2.0_f32.powf((20.0 * t) - 10.0)
-            } else {
-                1.0 - (0.5 * 2.0_f32.powf((-20.0 * t) + 10.0))
-            }
-        }
-        "outInExpo" => {
-            if t < 0.5 {
-                0.5 * (1.0 - 2.0_f32.powf(-20.0 * t))
-            } else if t >= 1.0 {
-                1.0
-            } else {
-                0.5 + 0.5 * 2.0_f32.powf((20.0 * t) - 20.0)
-            }
-        }
-        "inCirc" => 1.0 - (1.0 - (t * t)).sqrt(),
-        "outCirc" => (1.0 - ((t - 1.0) * (t - 1.0))).sqrt(),
-        "inOutCirc" => {
-            if t < 0.5 {
-                0.5 * (1.0 - (1.0 - 4.0 * t * t).sqrt())
-            } else {
-                0.5 * ((1.0 - ((-2.0 * t + 2.0) * (-2.0 * t + 2.0))).sqrt() + 1.0)
-            }
-        }
-        "outInCirc" => {
-            if t < 0.5 {
-                0.5 * (1.0 - ((2.0 * t - 1.0) * (2.0 * t - 1.0))).sqrt()
-            } else {
-                0.5 + 0.5 * (1.0 - (1.0 - ((2.0 * t - 1.0) * (2.0 * t - 1.0))).sqrt())
-            }
-        }
-        "inElastic" => {
-            if t <= 0.0 {
-                0.0
-            } else if t >= 1.0 {
-                1.0
-            } else {
-                let u = t - 1.0;
-                -(2.0_f32.powf(10.0 * u)) * ((u - elastic_period * 0.25) * elastic_tau).sin()
-            }
-        }
-        "outElastic" => {
-            if t <= 0.0 {
-                0.0
-            } else if t >= 1.0 {
-                1.0
-            } else {
-                2.0_f32.powf(-10.0 * t) * ((t - elastic_period * 0.25) * elastic_tau).sin() + 1.0
-            }
-        }
-        "inOutElastic" => {
-            if t <= 0.0 {
-                0.0
-            } else if t >= 1.0 {
-                1.0
-            } else if t < 0.5 {
-                let u = (2.0 * t) - 1.0;
-                -0.5 * 2.0_f32.powf(10.0 * u) * ((u - elastic_period * 0.375) * elastic_tau).sin()
-            } else {
-                let u = (2.0 * t) - 1.0;
-                0.5 * 2.0_f32.powf(-10.0 * u) * ((u - elastic_period * 0.375) * elastic_tau).sin()
-                    + 1.0
-            }
-        }
-        "outInElastic" => {
-            if t < 0.5 {
-                0.5 * song_lua_ease_factor(Some("outElastic"), t * 2.0, opt1, opt2)
-            } else {
-                0.5 + 0.5 * song_lua_ease_factor(Some("inElastic"), (t * 2.0) - 1.0, opt1, opt2)
-            }
-        }
-        "inBack" => t * t * (((overshoot + 1.0) * t) - overshoot),
-        "outBack" => {
-            let u = t - 1.0;
-            (u * u * (((overshoot + 1.0) * u) + overshoot)) + 1.0
-        }
-        "inOutBack" => {
-            let s = overshoot * 1.525;
-            if t < 0.5 {
-                let u = 2.0 * t;
-                0.5 * (u * u * (((s + 1.0) * u) - s))
-            } else {
-                let u = (2.0 * t) - 2.0;
-                0.5 * (u * u * (((s + 1.0) * u) + s) + 2.0)
-            }
-        }
-        "outInBack" => {
-            if t < 0.5 {
-                0.5 * song_lua_ease_factor(Some("outBack"), t * 2.0, opt1, opt2)
-            } else {
-                0.5 + 0.5 * song_lua_ease_factor(Some("inBack"), (t * 2.0) - 1.0, opt1, opt2)
-            }
-        }
-        "inBounce" => song_lua_in_bounce(t),
-        "outBounce" => song_lua_out_bounce(t),
-        "inOutBounce" => song_lua_in_out_bounce(t),
-        "outInBounce" => {
-            if t < 0.5 {
-                0.5 * song_lua_out_bounce(t * 2.0)
-            } else {
-                0.5 + 0.5 * song_lua_in_bounce((t * 2.0) - 1.0)
-            }
-        }
-        _ => t,
-    }
+    SongLuaEase::from_name(easing).factor(t, opt1, opt2)
 }
 
 #[inline(always)]
@@ -258,7 +416,7 @@ pub fn song_lua_column_offset_window_value(
         return Some(window.to_y);
     }
     let t = ((now - window.start_second) / duration).clamp(0.0, 1.0);
-    let factor = song_lua_ease_factor(window.easing.as_deref(), t, window.opt1, window.opt2);
+    let factor = window.easing.factor(t, window.opt1, window.opt2);
     Some(window.from_y + (window.to_y - window.from_y) * factor)
 }
 
