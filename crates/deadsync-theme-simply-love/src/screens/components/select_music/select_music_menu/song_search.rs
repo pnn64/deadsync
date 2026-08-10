@@ -77,7 +77,7 @@ pub fn begin_song_search_results(
     let candidates = build_song_search_candidates(
         group_entries.iter().map(|entry| match entry {
             MusicWheelEntry::PackHeader { name, .. } => {
-                SongSearchCatalogEntry::PackHeader(name.as_str())
+                SongSearchCatalogEntry::PackHeader(name.as_ref())
             }
             MusicWheelEntry::Song(song) => SongSearchCatalogEntry::Song(song),
         }),

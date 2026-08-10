@@ -22,9 +22,9 @@ use deadsync_chart::{
 use deadsync_profile as profile_data;
 use deadsync_score as score_data;
 use deadsync_simfile::event_intro::is_srpg_event_song;
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 use std::cell::RefCell;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
@@ -384,7 +384,7 @@ fn cached_str_ref(text: &str) -> Arc<str> {
 
 fn song_pack_sync_style(
     song: &SongData,
-    prefs: Option<&HashMap<String, SyncPref>>,
+    prefs: Option<&FxHashMap<String, SyncPref>>,
     default: DefaultSyncOffset,
 ) -> Option<DefaultSyncOffset> {
     let prefs = prefs?;
@@ -704,7 +704,7 @@ pub struct MusicWheelParams<'a> {
     pub song_box_color: Option<[f32; 4]>,
     pub song_text_color: Option<[f32; 4]>,
     pub song_text_color_overrides: Option<&'a HashMap<usize, [f32; 4]>>,
-    pub song_has_edit_ptrs: Option<&'a HashSet<usize>>,
+    pub song_has_edit_ptrs: Option<&'a FxHashSet<usize>>,
     pub show_music_wheel_grades: bool,
     pub show_music_wheel_lamps: bool,
     pub itl_rank_mode: SelectMusicItlRankMode,
@@ -714,8 +714,8 @@ pub struct MusicWheelParams<'a> {
     pub song_select_bg_texture_keys: &'a [Arc<str>],
     pub expanded_series_name: Option<&'a str>,
     pub expanded_pack_name: Option<&'a str>,
-    pub new_pack_names: Option<&'a HashSet<String>>,
-    pub pack_sync_prefs: Option<&'a HashMap<String, SyncPref>>,
+    pub new_pack_names: Option<&'a FxHashSet<String>>,
+    pub pack_sync_prefs: Option<&'a FxHashMap<String, SyncPref>>,
     pub default_sync_offset: DefaultSyncOffset,
     pub runtime: &'a MusicWheelRuntimeView,
 }
@@ -887,10 +887,10 @@ pub fn push(actors: &mut Vec<Actor>, p: MusicWheelParams) {
                     {
                         let active = if is_series_header {
                             p.expanded_series_name
-                                .is_some_and(|expanded| expanded == name.as_str())
+                                .is_some_and(|expanded| expanded == name.as_ref())
                         } else {
                             p.expanded_pack_name.is_some_and(|expanded| {
-                                expanded == pack_key.as_deref().unwrap_or(name.as_str())
+                                expanded == pack_key.as_deref().unwrap_or(name.as_ref())
                             })
                         };
                         let alpha = if active { 0.5 } else { 0.1 };
@@ -916,7 +916,7 @@ pub fn push(actors: &mut Vec<Actor>, p: MusicWheelParams) {
                     if is_series_header {
                         let expanded = p
                             .expanded_series_name
-                            .is_some_and(|expanded| expanded == name.as_str());
+                            .is_some_and(|expanded| expanded == name.as_ref());
                         let [back, mid, front] = if expanded {
                             SERIES_FOLDER_EXPANDED
                         } else {
@@ -946,7 +946,7 @@ pub fn push(actors: &mut Vec<Actor>, p: MusicWheelParams) {
                     }
                     actors.push(act!(text:
                         font("miso"):
-                        settext(cached_str_ref(name.as_str())):
+                        settext(cached_str_ref(name.as_ref())):
                         align(0.0, 0.5):
                         xy(highlight_left_world + section_x_local, y_center_item):
                         maxwidth(pack_name_max_w):
@@ -1848,20 +1848,20 @@ mod tests {
         let song = song_with_art(None, None);
         let entries = vec![
             MusicWheelEntry::PackHeader {
-                name: "Before".to_string(),
+                name: Arc::from("Before"),
                 original_index: 0,
                 banner_path: None,
                 song_count: 1,
-                pack_key: Some("Before".to_string()),
+                pack_key: Some(Arc::from("Before")),
                 parent_series: None,
             },
             MusicWheelEntry::Song(song.clone()),
             MusicWheelEntry::PackHeader {
-                name: "After".to_string(),
+                name: Arc::from("After"),
                 original_index: 1,
                 banner_path: None,
                 song_count: 1,
-                pack_key: Some("After".to_string()),
+                pack_key: Some(Arc::from("After")),
                 parent_series: None,
             },
         ];
@@ -1899,12 +1899,12 @@ mod tests {
     #[test]
     fn runtime_slot_requests_identify_series_headers() {
         let entries = [MusicWheelEntry::PackHeader {
-            name: "ITG Series".to_string(),
+            name: Arc::from("ITG Series"),
             original_index: 0,
             banner_path: None,
             song_count: 3,
             pack_key: None,
-            parent_series: Some("ITG Series".to_string()),
+            parent_series: Some(Arc::from("ITG Series")),
         }];
 
         let slots = runtime_slot_requests(
@@ -2035,11 +2035,11 @@ mod tests {
     fn visible_song_select_bg_paths_includes_pack_and_song_art_once() {
         let entries = vec![
             MusicWheelEntry::PackHeader {
-                name: "Pack".to_string(),
+                name: Arc::from("Pack"),
                 original_index: 0,
                 banner_path: Some(PathBuf::from("pack.png")),
                 song_count: 1,
-                pack_key: Some("Pack".to_string()),
+                pack_key: Some(Arc::from("Pack")),
                 parent_series: None,
             },
             MusicWheelEntry::Song(song_with_art(Some("song.png"), Some("background.png"))),

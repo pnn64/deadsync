@@ -22,7 +22,7 @@ pub(super) fn show_from_selected(state: &mut State) {
         return;
     };
     let pack_name = name.clone();
-    show_for_group(state, pack_name.as_str());
+    show_for_group(state, pack_name.as_ref());
 }
 
 pub(super) fn poll(state: &mut State) -> bool {
@@ -97,9 +97,9 @@ fn pack_sync_targets_for_group(
     let mut current_pack_name: Option<&str> = None;
     let mut targets = Vec::new();
 
-    for entry in &state.group_entries {
+    for entry in state.group_entries.iter() {
         match entry {
-            MusicWheelEntry::PackHeader { name, .. } => current_pack_name = Some(name.as_str()),
+            MusicWheelEntry::PackHeader { name, .. } => current_pack_name = Some(name.as_ref()),
             MusicWheelEntry::Song(song) => {
                 if current_pack_name != Some(pack_group) {
                     continue;
