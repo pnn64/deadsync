@@ -725,7 +725,11 @@ fn playback_status_timing(
     let Some(sample) = sample_host_clock(host_clock) else {
         return fallback_timing(delay_frames, delay_ns, clock_health);
     };
-    let Some(status_clock_nanos) = timespec_nanos(status.get_htstamp()) else {
+    let status_timestamp = status.get_htstamp();
+    let Some(status_clock_nanos) = timespec_nanos(
+        i128::from(status_timestamp.tv_sec),
+        i128::from(status_timestamp.tv_nsec),
+    ) else {
         return fallback_timing(delay_frames, delay_ns, clock_health);
     };
     let status_host_nanos = host_nanos_from_clock(status_clock_nanos, sample);
@@ -812,15 +816,14 @@ fn current_clock_nanos(host_clock: AlsaHostClock) -> Option<u64> {
     if rc != 0 {
         return None;
     }
-    timespec_nanos(ts)
+    timespec_nanos(i128::from(ts.tv_sec), i128::from(ts.tv_nsec))
 }
 
 #[inline(always)]
-fn timespec_nanos(ts: timespec) -> Option<u64> {
-    if ts.tv_sec < 0 || ts.tv_nsec < 0 {
-        return None;
-    }
-    Some((ts.tv_sec as u64).saturating_mul(1_000_000_000) + ts.tv_nsec as u64)
+fn timespec_nanos(tv_sec: i128, tv_nsec: i128) -> Option<u64> {
+    let tv_sec = u64::try_from(tv_sec).ok()?;
+    let tv_nsec = u64::try_from(tv_nsec).ok()?;
+    Some(tv_sec.saturating_mul(1_000_000_000) + tv_nsec)
 }
 
 #[inline(always)]
@@ -848,4 +851,83 @@ fn frames_to_nanos(sample_rate_hz: u32, frames: u32) -> u64 {
 fn suggested_period_frames(sample_rate_hz: u32) -> u32 {
     let frames = sample_rate_hz.max(1) / 200;
     frames.clamp(128, 1024)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn pcm_id_policy_preserves_shared_and_exclusive_routes() {
+        assert_eq!(shared_pcm_id("hw:CARD=2,DEV=1"), "plughw:CARD=2,DEV=1");
+        assert_eq!(shared_pcm_id("default"), "default");
+        assert_eq!(
+            direct_pcm_id("hw:CARD=2,DEV=1").as_deref(),
+            Some("hw:CARD=2,DEV=1")
+        );
+        assert_eq!(direct_pcm_id("plughw:2,1").as_deref(), Some("hw:2,1"));
+        assert_eq!(direct_pcm_id("default"), None);
+        assert_eq!(
+            selected_pcm_id(
+                Some("plughw:CARD=2,DEV=1".to_string()),
+                "test device",
+                AlsaAccessMode::Exclusive,
+            )
+            .as_deref(),
+            Ok("hw:CARD=2,DEV=1")
+        );
+    }
+
+    #[test]
+    fn period_and_clock_math_remain_stable() {
+        assert_eq!(suggested_period_frames(8_000), 128);
+        assert_eq!(suggested_period_frames(48_000), 240);
+        assert_eq!(suggested_period_frames(192_000), 960);
+        assert_eq!(suggested_period_frames(384_000), 1024);
+        assert_eq!(frames_to_nanos(48_000, 480), 10_000_000);
+        assert_eq!(frames_to_nanos(44_100, 441), 10_000_000);
+        assert_eq!(frames_to_nanos(0, 480), 0);
+        assert_eq!(timespec_nanos(2, 3), Some(2_000_000_003));
+        assert_eq!(timespec_nanos(-1, 0), None);
+        assert_eq!(timespec_nanos(0, -1), None);
+
+        let sample = ClockSample {
+            host_nanos: 5_000,
+            clock_nanos: 2_000,
+        };
+        assert_eq!(host_nanos_from_clock(2_750, sample), 5_750);
+        assert_eq!(host_nanos_from_clock(1_250, sample), 4_250);
+    }
+
+    #[test]
+    fn clock_health_holds_degraded_quality_after_fallback() {
+        let mut health = AlsaClockHealth::new();
+        assert_eq!(
+            health.note_success(1_000, 2_000),
+            OutputTimingQuality::Trusted
+        );
+        health.note_fallback();
+        for sample in 0..ALSA_DEGRADED_HOLD_SAMPLES {
+            assert_eq!(
+                health.note_success(2_000 + u64::from(sample), 3_000 + u64::from(sample)),
+                OutputTimingQuality::Degraded
+            );
+        }
+        assert_eq!(
+            health.note_success(4_000, 5_000),
+            OutputTimingQuality::Trusted
+        );
+    }
+
+    #[test]
+    fn null_pcm_preserves_requested_stream_shape() {
+        let pcm = open_pcm("null").expect("ALSA null PCM should be available for regression tests");
+        let actual = configure_pcm(&pcm, 48_000, 2, AlsaAccessMode::Shared, 240, Some(480))
+            .expect("ALSA null PCM should accept the standard stereo stream shape");
+
+        assert_eq!(actual.sample_rate_hz, 48_000);
+        assert_eq!(actual.channels, 2);
+        assert_eq!(actual.period_frames, 240);
+        assert_eq!(actual.buffer_frames, 480);
+    }
 }
