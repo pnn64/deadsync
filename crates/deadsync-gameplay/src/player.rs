@@ -706,7 +706,7 @@ pub fn time_based_tap_miss_work_ready_for_players(
 pub fn apply_next_time_based_tap_miss_for_player(
     notes: &mut [Note],
     note_time_cache_ns: &[SongTimeNs],
-    tap_miss_held_window: &[bool],
+    tap_miss_held_at_note: &[bool],
     hold_decay_active: &mut [bool],
     decaying_hold_indices: &mut Vec<usize>,
     cursor: usize,
@@ -737,7 +737,7 @@ pub fn apply_next_time_based_tap_miss_for_player(
             }
         };
 
-        let miss_because_held = tap_miss_held_window.get(cursor).copied().unwrap_or(false);
+        let miss_because_held = tap_miss_held_at_note.get(cursor).copied().unwrap_or(false);
         let judgment = time_based_tap_miss_judgment(
             notes[cursor].early_result,
             note_time_ns,
@@ -778,7 +778,7 @@ pub fn apply_next_time_based_tap_miss_for_player(
 pub fn collect_time_based_tap_misses_for_player(
     notes: &mut [Note],
     note_time_cache_ns: &[SongTimeNs],
-    tap_miss_held_window: &[bool],
+    tap_miss_held_at_note: &[bool],
     hold_decay_active: &mut [bool],
     decaying_hold_indices: &mut Vec<usize>,
     cursor: usize,
@@ -797,7 +797,7 @@ pub fn collect_time_based_tap_misses_for_player(
         let step = apply_next_time_based_tap_miss_for_player(
             notes,
             note_time_cache_ns,
-            tap_miss_held_window,
+            tap_miss_held_at_note,
             hold_decay_active,
             decaying_hold_indices,
             cursor,
@@ -829,7 +829,7 @@ pub fn collect_time_based_tap_misses_for_player(
 pub fn collect_time_based_tap_misses_for_players(
     notes: &mut [Note],
     note_time_cache_ns: &[SongTimeNs],
-    tap_miss_held_window: &[bool],
+    tap_miss_held_at_note: &[bool],
     hold_decay_active: &mut [bool],
     decaying_hold_indices: &mut Vec<usize>,
     next_cursors: &mut [usize],
@@ -867,7 +867,7 @@ pub fn collect_time_based_tap_misses_for_players(
             let step = apply_next_time_based_tap_miss_for_player(
                 notes,
                 note_time_cache_ns,
-                tap_miss_held_window,
+                tap_miss_held_at_note,
                 hold_decay_active,
                 decaying_hold_indices,
                 cursor,

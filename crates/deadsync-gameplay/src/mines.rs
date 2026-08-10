@@ -671,34 +671,29 @@ pub const fn note_tracks_held_miss(note_type: NoteType) -> bool {
     matches!(note_type, NoteType::Tap | NoteType::Hold | NoteType::Roll)
 }
 
-pub fn track_held_miss_window_for_player(
+pub fn track_held_misses_at_note_time_for_player(
     notes: &[Note],
     note_times_ns: &[SongTimeNs],
-    tap_miss_held_window: &mut [bool],
+    tap_miss_held_at_note: &mut [bool],
     note_range: (usize, usize),
     col_range: (usize, usize),
     next_tap_miss_cursor: usize,
     inputs: &[bool; MAX_COLS],
+    pressed_since_ns: &[Option<SongTimeNs>; MAX_COLS],
     music_time_ns: SongTimeNs,
-    largest_window_ns: SongTimeNs,
 ) {
-    if largest_window_ns <= 0 {
-        return;
-    }
     let note_end = note_range
         .1
         .min(notes.len())
         .min(note_times_ns.len())
-        .min(tap_miss_held_window.len());
+        .min(tap_miss_held_at_note.len());
     let mut cursor = next_tap_miss_cursor.max(note_range.0.min(note_end));
     let col_start = col_range.0.min(MAX_COLS);
     let col_end = col_range.1.min(MAX_COLS).max(col_start);
-    let future_cutoff_time_ns = music_time_ns.saturating_add(largest_window_ns);
-    let mut seen_tracks = [false; MAX_COLS];
 
     while cursor < note_end {
         let note_time_ns = note_times_ns[cursor];
-        if note_time_ns > future_cutoff_time_ns {
+        if note_time_ns > music_time_ns {
             break;
         }
         let note = &notes[cursor];
@@ -711,68 +706,58 @@ pub fn track_held_miss_window_for_player(
             cursor += 1;
             continue;
         }
-        let local_track = note.column - col_start;
-        if seen_tracks[local_track] {
-            cursor += 1;
-            continue;
-        }
-        let offset_ns = (note_time_ns as i128 - music_time_ns as i128).unsigned_abs();
-        if offset_ns > largest_window_ns as u128 {
-            cursor += 1;
-            continue;
-        }
-        seen_tracks[local_track] = true;
-        if inputs[note.column] {
-            tap_miss_held_window[cursor] = true;
+        // ITGmania held misses require the lane to have stayed down through the
+        // note's timing point; a press elsewhere in the tap window is not enough.
+        if inputs[note.column]
+            && pressed_since_ns[note.column]
+                .is_some_and(|pressed_at_ns| pressed_at_ns <= note_time_ns)
+        {
+            tap_miss_held_at_note[cursor] = true;
         }
         cursor += 1;
     }
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct HeldMissWindowUpdate {
+pub struct HeldMissTrackingUpdate {
     pub players_scanned: usize,
 }
 
-pub fn track_held_miss_windows_for_players(
+pub fn track_held_misses_at_note_time_for_players(
     notes: &[Note],
     note_times_ns: &[SongTimeNs],
-    tap_miss_held_window: &mut [bool],
+    tap_miss_held_at_note: &mut [bool],
     note_ranges: &[(usize, usize)],
     next_tap_miss_cursor: &[usize],
-    largest_windows_ns: &[SongTimeNs],
     num_players: usize,
     cols_per_player: usize,
     inputs: &[bool; MAX_COLS],
+    pressed_since_ns: &[Option<SongTimeNs>; MAX_COLS],
     music_time_ns: SongTimeNs,
-) -> HeldMissWindowUpdate {
+) -> HeldMissTrackingUpdate {
     let active_players = num_players.min(MAX_PLAYERS);
     let mut players_scanned = 0usize;
     for player in 0..active_players {
-        let largest_window_ns = largest_windows_ns.get(player).copied().unwrap_or(0);
-        if largest_window_ns <= 0 {
-            continue;
-        }
         let note_range = player_note_range_for_ranges(note_ranges, active_players, player);
         let col_range = player_column_range(cols_per_player, player);
         let next_cursor = next_tap_miss_cursor
             .get(player)
             .copied()
             .unwrap_or(note_range.0);
-        track_held_miss_window_for_player(
+        track_held_misses_at_note_time_for_player(
             notes,
             note_times_ns,
-            tap_miss_held_window,
+            tap_miss_held_at_note,
             note_range,
             col_range,
             next_cursor,
             inputs,
+            pressed_since_ns,
             music_time_ns,
-            largest_window_ns,
         );
         players_scanned += 1;
     }
-    HeldMissWindowUpdate { players_scanned }
+    HeldMissTrackingUpdate { players_scanned }
 }
 
 #[inline(always)]

@@ -1285,7 +1285,7 @@ mod runtime_regression_tests {
         state.control.input_state.prev_inputs[0] = true;
         state.control.input_state.lane_pressed_since_ns[0] =
             Some(song_time_ns_from_seconds(0.9));
-        let held_window_before = state.hold_runtime.tap_miss_held_window.clone();
+        let held_window_before = state.hold_runtime.tap_miss_held_at_note.clone();
         let pending_mines_before = state
             .chart_runtime
             .mine_scan
@@ -1300,7 +1300,7 @@ mod runtime_regression_tests {
         assert!(inputs.iter().all(|pressed| !pressed));
         assert_eq!(state.control.input_state.prev_inputs, inputs);
         assert_eq!(
-            state.hold_runtime.tap_miss_held_window,
+            state.hold_runtime.tap_miss_held_at_note,
             held_window_before
         );
         assert_eq!(
@@ -2971,6 +2971,46 @@ mod runtime_regression_tests {
         );
         state.tick_visual_effects(0.0);
         assert!(state.display.hold_feedback.hold_judgments[0].is_none());
+    }
+
+    #[test]
+    fn partial_jump_hit_clears_only_its_held_miss_state() {
+        let mut state = regression_state();
+        let row_index = 48;
+        state.chart_runtime.notes = vec![
+            test_note(0, row_index, NoteType::Tap),
+            test_note(1, row_index, NoteType::Tap),
+        ];
+        state.chart_runtime.note_time_cache_ns = vec![song_time_ns_from_seconds(1.0); 2];
+        state.chart_runtime.row_entries = vec![test_row_entry_with_times(
+            &state.chart_runtime.notes,
+            &state.chart_runtime.note_time_cache_ns,
+            row_index,
+            vec![0, 1],
+        )];
+        state.chart_runtime.row_indices.note_row_entry_indices = vec![0, 0];
+        state.hold_runtime.tap_miss_held_at_note.fill(true);
+
+        state.set_final_note_result(
+            0,
+            Judgment {
+                time_error_ms: 0.0,
+                time_error_music_ns: 0,
+                grade: JudgeGrade::Fantastic,
+                window: Some(TimingWindow::W1),
+                miss_because_held: false,
+            },
+        );
+
+        assert!(!state.hold_runtime.tap_miss_held_at_note[0]);
+        assert!(state.hold_runtime.tap_miss_held_at_note[1]);
+        assert_eq!(
+            state.chart_runtime.notes[0]
+                .result
+                .as_ref()
+                .map(|judgment| judgment.grade),
+            Some(JudgeGrade::Fantastic)
+        );
     }
 
     #[test]

@@ -1916,14 +1916,6 @@ where
     }
 
     #[inline(always)]
-    pub fn player_largest_tap_window_ns(&self, player_idx: usize) -> SongTimeNs {
-        if player_idx >= self.setup.num_players {
-            return 0;
-        }
-        self.timing_runtime.player_judgment_timing[player_idx].largest_tap_window_music_ns
-    }
-
-    #[inline(always)]
     pub fn note_hit_eval(
         &self,
         player_idx: usize,

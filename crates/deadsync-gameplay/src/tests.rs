@@ -12799,47 +12799,68 @@ mod tests {
     }
 
     #[test]
-    fn held_miss_window_marks_first_pressed_track_in_window() {
+    fn held_miss_tracking_waits_for_note_time_and_requires_continuous_hold() {
         let mut tap = test_note_at(NoteType::Tap, None, false, 0, 0.0);
         tap.column = 0;
-        let mut duplicate_track = test_note_at(NoteType::Tap, None, false, 1, 0.0);
-        duplicate_track.column = 0;
-        let mut hold = test_note_at(NoteType::Hold, Some(test_hold()), false, 2, 0.0);
+        let mut hold = test_note_at(NoteType::Hold, Some(test_hold()), false, 1, 0.0);
         hold.column = 1;
-        let mut roll = test_note_at(NoteType::Roll, Some(test_hold()), false, 3, 0.0);
+        let mut roll = test_note_at(NoteType::Roll, Some(test_hold()), false, 2, 0.0);
         roll.column = 2;
-        let mut mine = test_note_at(NoteType::Mine, None, false, 4, 0.0);
+        let mut mine = test_note_at(NoteType::Mine, None, false, 3, 0.0);
         mine.column = 3;
-        let mut lift = test_note_at(NoteType::Lift, None, false, 5, 0.0);
+        let mut lift = test_note_at(NoteType::Lift, None, false, 4, 0.0);
         lift.column = 2;
-        let mut unjudgable = test_note_at(NoteType::Tap, None, false, 6, 0.0);
+        let mut unjudgable = test_note_at(NoteType::Tap, None, false, 5, 0.0);
         unjudgable.column = 3;
         unjudgable.can_be_judged = false;
-        let notes = [tap, duplicate_track, hold, roll, mine, lift, unjudgable];
-        let note_times = [1_000, 1_010, 1_020, 1_040, 1_050, 1_060, 1_070];
-        let mut held_window = [false; 7];
+        let mut future_tap = test_note_at(NoteType::Tap, None, false, 6, 0.0);
+        future_tap.column = 0;
+        let notes = [tap, hold, roll, mine, lift, unjudgable, future_tap];
+        let note_times = [1_000, 1_000, 1_000, 1_000, 1_000, 1_000, 1_010];
+        let mut held_at_note = [false; 7];
         let mut inputs = [false; MAX_COLS];
         inputs[0] = true;
         inputs[1] = true;
         inputs[3] = true;
+        let mut pressed_since = [None; MAX_COLS];
+        pressed_since[0] = Some(900);
+        pressed_since[1] = Some(1_001);
+        pressed_since[3] = Some(900);
 
-        track_held_miss_window_for_player(
+        track_held_misses_at_note_time_for_player(
             &notes,
             &note_times,
-            &mut held_window,
+            &mut held_at_note,
             (0, notes.len()),
             (0, 4),
             0,
             &inputs,
+            &pressed_since,
             1_000,
-            50,
         );
 
-        assert_eq!(held_window, [true, false, true, false, false, false, false]);
+        assert_eq!(
+            held_at_note,
+            [true, false, false, false, false, false, false]
+        );
+
+        track_held_misses_at_note_time_for_player(
+            &notes,
+            &note_times,
+            &mut held_at_note,
+            (0, notes.len()),
+            (0, 4),
+            0,
+            &inputs,
+            &pressed_since,
+            1_010,
+        );
+
+        assert!(held_at_note[6]);
     }
 
     #[test]
-    fn held_miss_windows_for_players_uses_ranges_and_player_windows() {
+    fn held_miss_tracking_for_players_uses_ranges_and_press_times() {
         let mut p1_tap = test_note_at(NoteType::Tap, None, false, 0, 0.0);
         p1_tap.column = 0;
         let mut p2_tap = test_note_at(NoteType::Tap, None, false, 1, 0.0);
@@ -12850,28 +12871,145 @@ mod tests {
         let note_times = [1_000, 1_010, 1_200];
         let note_ranges = [(0, 1), (1, 3)];
         let next_cursors = [0, 1];
-        let largest_windows = [0, 50];
-        let mut held_window = [false; 3];
+        let mut held_at_note = [false; 3];
         let mut inputs = [false; MAX_COLS];
         inputs[0] = true;
         inputs[4] = true;
         inputs[5] = true;
+        let mut pressed_since = [None; MAX_COLS];
+        pressed_since[0] = Some(1_001);
+        pressed_since[4] = Some(1_000);
+        pressed_since[5] = Some(900);
 
-        let update = track_held_miss_windows_for_players(
+        let update = track_held_misses_at_note_time_for_players(
             &notes,
             &note_times,
-            &mut held_window,
+            &mut held_at_note,
             &note_ranges,
             &next_cursors,
-            &largest_windows,
             2,
             4,
             &inputs,
+            &pressed_since,
+            1_010,
+        );
+
+        assert_eq!(update, HeldMissTrackingUpdate { players_scanned: 2 });
+        assert_eq!(held_at_note, [false, true, false]);
+    }
+
+    #[test]
+    fn future_bracket_lane_does_not_latch_as_held_miss() {
+        let mut prior_left = test_note_at(NoteType::Tap, None, false, 0, 0.0);
+        prior_left.column = 0;
+        prior_left.result = Some(test_judgment(JudgeGrade::Fantastic));
+        let mut bracket_left = test_note_at(NoteType::Tap, None, false, 1, 0.0);
+        bracket_left.column = 0;
+        let mut bracket_up = test_note_at(NoteType::Tap, None, false, 1, 0.0);
+        bracket_up.column = 2;
+        let mut notes = vec![prior_left, bracket_left, bracket_up];
+        let note_times = [1_000, 1_100, 1_100];
+        let mut held_at_note = [false; 3];
+        let mut inputs = [false; MAX_COLS];
+        inputs[0] = true;
+        let mut pressed_since = [None; MAX_COLS];
+        pressed_since[0] = Some(1_000);
+
+        track_held_misses_at_note_time_for_player(
+            &notes,
+            &note_times,
+            &mut held_at_note,
+            (0, notes.len()),
+            (0, 4),
+            0,
+            &inputs,
+            &pressed_since,
+            1_000,
+        );
+        assert_eq!(held_at_note, [false; 3]);
+
+        notes[2].result = Some(test_judgment(JudgeGrade::Fantastic));
+        inputs.fill(false);
+        pressed_since.fill(None);
+        track_held_misses_at_note_time_for_player(
+            &notes,
+            &note_times,
+            &mut held_at_note,
+            (0, notes.len()),
+            (0, 4),
+            0,
+            &inputs,
+            &pressed_since,
+            1_100,
+        );
+
+        let mut hold_decay = [false; 3];
+        let mut decaying = Vec::new();
+        let step = apply_next_time_based_tap_miss_for_player(
+            &mut notes,
+            &note_times,
+            &held_at_note,
+            &mut hold_decay,
+            &mut decaying,
+            0,
+            (0, 3),
+            2,
+            1_500,
+            1.0,
+            false,
+        );
+
+        let event = step.event.expect("unpressed bracket lane should miss");
+        assert_eq!(event.note_index, 1);
+        assert_eq!(event.judgment.grade, JudgeGrade::Miss);
+        assert!(!event.miss_because_held);
+    }
+
+    #[test]
+    fn held_miss_tracking_preserves_genuine_preheld_miss() {
+        let mut notes = vec![test_note_at(NoteType::Tap, None, false, 0, 0.0)];
+        let note_times = [1_000];
+        let mut held_at_note = [false];
+        let mut inputs = [false; MAX_COLS];
+        inputs[0] = true;
+        let mut pressed_since = [None; MAX_COLS];
+        pressed_since[0] = Some(900);
+
+        track_held_misses_at_note_time_for_player(
+            &notes,
+            &note_times,
+            &mut held_at_note,
+            (0, 1),
+            (0, 4),
+            0,
+            &inputs,
+            &pressed_since,
             1_000,
         );
 
-        assert_eq!(update, HeldMissWindowUpdate { players_scanned: 1 });
-        assert_eq!(held_window, [false, true, false]);
+        assert_eq!(held_at_note, [true]);
+
+        let mut hold_decay = [false];
+        let mut decaying = Vec::new();
+        let step = apply_next_time_based_tap_miss_for_player(
+            &mut notes,
+            &note_times,
+            &held_at_note,
+            &mut hold_decay,
+            &mut decaying,
+            0,
+            (0, 1),
+            1,
+            1_500,
+            1.0,
+            false,
+        );
+
+        assert!(
+            step.event
+                .expect("preheld note should miss")
+                .miss_because_held
+        );
     }
 
     #[test]
@@ -14513,20 +14651,20 @@ mod tests {
         assert_eq!(state.decaying_hold_indices.capacity(), 4);
         assert_eq!(state.pending_missed_hold_indices.capacity(), 4);
         assert_eq!(state.hold_decay_active, [false; 3]);
-        assert_eq!(state.tap_miss_held_window, [false; 3]);
+        assert_eq!(state.tap_miss_held_at_note, [false; 3]);
         assert_eq!(state.pending_missed_hold_resolution, [false; 3]);
         assert!(state.pending_missed_hold_indices.is_empty());
 
         state.decaying_hold_indices.extend([1, 2]);
         state.hold_decay_active[1] = true;
-        state.tap_miss_held_window[2] = true;
+        state.tap_miss_held_at_note[2] = true;
         state.pending_missed_hold_resolution[0] = true;
         state.pending_missed_hold_indices.push(0);
         state.reset_live_state();
 
         assert!(state.decaying_hold_indices.is_empty());
         assert_eq!(state.hold_decay_active, [false; 3]);
-        assert_eq!(state.tap_miss_held_window, [false; 3]);
+        assert_eq!(state.tap_miss_held_at_note, [false; 3]);
         assert_eq!(state.pending_missed_hold_resolution, [false; 3]);
         assert!(state.pending_missed_hold_indices.is_empty());
 
@@ -14534,7 +14672,7 @@ mod tests {
         state.clear_for_test();
         assert!(state.decaying_hold_indices.is_empty());
         assert!(state.hold_decay_active.is_empty());
-        assert!(state.tap_miss_held_window.is_empty());
+        assert!(state.tap_miss_held_at_note.is_empty());
         assert!(state.pending_missed_hold_resolution.is_empty());
     }
 

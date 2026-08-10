@@ -293,7 +293,7 @@ pub struct GameplayHoldRuntimeState {
     active_hold_mask: LaneMask,
     pub decaying_hold_indices: Vec<usize>,
     pub hold_decay_active: Vec<bool>,
-    pub tap_miss_held_window: Vec<bool>,
+    pub tap_miss_held_at_note: Vec<bool>,
     pub pending_missed_hold_resolution: Vec<bool>,
     pub pending_missed_hold_indices: Vec<usize>,
     pub pump_events: Vec<PumpHoldEvent>,
@@ -319,7 +319,7 @@ impl GameplayHoldRuntimeState {
             active_hold_mask: 0,
             decaying_hold_indices: Vec::with_capacity(decaying_hold_capacity),
             hold_decay_active: vec![false; notes_len],
-            tap_miss_held_window: vec![false; notes_len],
+            tap_miss_held_at_note: vec![false; notes_len],
             pending_missed_hold_resolution: vec![false; notes_len],
             pending_missed_hold_indices: Vec::with_capacity(decaying_hold_capacity),
             pump_events,
@@ -337,7 +337,7 @@ impl GameplayHoldRuntimeState {
         self.active_hold_mask = 0;
         self.decaying_hold_indices.clear();
         self.hold_decay_active.fill(false);
-        self.tap_miss_held_window.fill(false);
+        self.tap_miss_held_at_note.fill(false);
         self.pending_missed_hold_resolution.fill(false);
         self.pending_missed_hold_indices.clear();
         self.pump_event_cursor = 0;
@@ -353,7 +353,7 @@ impl GameplayHoldRuntimeState {
         self.active_hold_mask = 0;
         self.decaying_hold_indices.clear();
         self.hold_decay_active.clear();
-        self.tap_miss_held_window.clear();
+        self.tap_miss_held_at_note.clear();
         self.pending_missed_hold_resolution.clear();
         self.pending_missed_hold_indices.clear();
         self.pump_events.clear();

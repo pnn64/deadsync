@@ -1279,6 +1279,11 @@ where
 
     #[inline(always)]
     pub fn set_final_note_result(&mut self, note_index: usize, judgment: Judgment) {
+        if judgment.grade != JudgeGrade::Miss
+            && let Some(held_at_note) = self.hold_runtime.tap_miss_held_at_note.get_mut(note_index)
+        {
+            *held_at_note = false;
+        }
         let update = apply_final_note_result_to_rows(
             &mut self.chart_runtime.notes,
             &mut self.chart_runtime.row_entries,
@@ -1479,7 +1484,7 @@ where
             let update = collect_time_based_tap_misses_for_players(
                 &mut self.chart_runtime.notes,
                 &self.chart_runtime.note_time_cache_ns,
-                &self.hold_runtime.tap_miss_held_window,
+                &self.hold_runtime.tap_miss_held_at_note,
                 &mut self.hold_runtime.hold_decay_active,
                 &mut self.hold_runtime.decaying_hold_indices,
                 &mut self.chart_runtime.mine_scan.next_tap_miss_cursor,
@@ -2004,7 +2009,7 @@ where
                     }
                 }
             }
-            self.track_held_miss_windows(&current_inputs, music_time_ns);
+            self.track_held_misses(&current_inputs, music_time_ns);
         }
         self.set_previous_lane_inputs(current_inputs);
         current_inputs
@@ -2584,25 +2589,21 @@ where
         true
     }
 
-    pub fn track_held_miss_windows(
+    pub fn track_held_misses(
         &mut self,
         inputs: &[bool; MAX_COLS],
         music_time_ns: SongTimeNs,
     ) {
-        let mut largest_windows_ns = [0; MAX_PLAYERS];
-        for player in 0..self.setup.num_players.min(MAX_PLAYERS) {
-            largest_windows_ns[player] = self.player_largest_tap_window_ns(player);
-        }
-        track_held_miss_windows_for_players(
+        track_held_misses_at_note_time_for_players(
             &self.chart_runtime.notes,
             &self.chart_runtime.note_time_cache_ns,
-            &mut self.hold_runtime.tap_miss_held_window,
+            &mut self.hold_runtime.tap_miss_held_at_note,
             self.chart_runtime.note_ranges.ranges(),
             &self.chart_runtime.mine_scan.next_tap_miss_cursor,
-            &largest_windows_ns,
             self.setup.num_players,
             self.setup.cols_per_player,
             inputs,
+            &self.control.input_state.lane_pressed_since_ns,
             music_time_ns,
         );
     }
