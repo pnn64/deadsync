@@ -145,14 +145,14 @@ struct CacheStats {
 ///
 /// The three dynamic upload sets live for the session and are reused only after
 /// their command buffer completes. One session-lifetime render-pass descriptor
-/// is reconfigured without per-frame descriptor creation. Retained textured
-/// geometry is warmed on first draw, stored in dense slots behind a fast key
-/// map, capped at 16 MiB, and saturates instead of pruning. A saturated miss
-/// falls back to the current frame's bounded upload buffer. Cache entries are
-/// freed by the render thread during cleanup; hit/miss/saturation counters are
-/// logged then. Per-frame maintenance is O(draw ops + visible geometry), and the
-/// only unbounded GPU wait is explicit back pressure or reuse of one of the
-/// three in-flight frame slots.
+/// and its color attachment are reconfigured without per-frame object lookup.
+/// Retained textured geometry is warmed on first draw, stored in dense slots
+/// behind a fast key map, capped at 16 MiB, and saturates instead of pruning. A
+/// saturated miss falls back to the current frame's bounded upload buffer.
+/// Cache entries are freed by the render thread during cleanup;
+/// hit/miss/saturation counters are logged then. Per-frame maintenance is O(draw
+/// ops + visible geometry), and the only unbounded GPU wait is explicit back
+/// pressure or reuse of one of the three in-flight frame slots.
 pub struct State {
     window: Arc<Window>,
     device: Device,
@@ -164,7 +164,7 @@ pub struct State {
     depth_disabled: DepthStencilState,
     depth_enabled: DepthStencilState,
     depth: metal::Texture,
-    render_pass: RenderPassDescriptor,
+    render_pass: FramePass,
     frames: [FrameBuffers; FRAMES_IN_FLIGHT],
     frame_index: usize,
     window_size: (u32, u32),
@@ -391,11 +391,15 @@ fn draw_inner(
     let submitted_id = next_present_id(state);
 
     let setup_started = Instant::now();
-    configure_render_pass(&state.render_pass, drawable.texture(), frame.clear_color);
+    configure_render_pass(
+        &state.render_pass.color,
+        drawable.texture(),
+        frame.clear_color,
+    );
     let command = state.queue.new_command_buffer();
     command.set_label("DeadSync native Metal frame");
-    let encoder = command.new_render_command_encoder(&state.render_pass);
-    clear_render_target(&state.render_pass);
+    let encoder = command.new_render_command_encoder(&state.render_pass.descriptor);
+    clear_render_target(&state.render_pass.color);
     encoder.set_label("DeadSync native Metal render pass");
     encoder.set_viewport(MTLViewport {
         originX: 0.0,
@@ -659,7 +663,7 @@ pub fn resize(state: &mut State, width: u32, height: u32) {
     state.layer.set_contents_scale(state.window.scale_factor());
     set_layer_size(&state.layer, width, height);
     state.depth = create_depth_target(&state.device, width, height);
-    set_depth_target(&state.render_pass, &state.depth);
+    set_depth_target(&state.render_pass.descriptor, &state.depth);
 }
 
 pub fn set_present_config(
@@ -847,22 +851,34 @@ fn create_depth_target(device: &DeviceRef, width: u32, height: u32) -> metal::Te
     device.new_texture(&desc)
 }
 
-fn create_render_pass(depth: &TextureRef) -> RenderPassDescriptor {
-    let pass = RenderPassDescriptor::new().to_owned();
-    let color_attachment = pass.color_attachments().object_at(0).expect("attachment 0");
-    color_attachment.set_load_action(MTLLoadAction::Clear);
-    color_attachment.set_store_action(MTLStoreAction::Store);
-    let depth_attachment = pass.depth_attachment().expect("depth attachment");
+struct FramePass {
+    descriptor: RenderPassDescriptor,
+    color: RenderPassColorAttachmentDescriptor,
+}
+
+fn create_render_pass(depth: &TextureRef) -> FramePass {
+    let descriptor = RenderPassDescriptor::new().to_owned();
+    let color = descriptor
+        .color_attachments()
+        .object_at(0)
+        .expect("attachment 0")
+        .to_owned();
+    color.set_load_action(MTLLoadAction::Clear);
+    color.set_store_action(MTLStoreAction::Store);
+    let depth_attachment = descriptor.depth_attachment().expect("depth attachment");
     depth_attachment.set_texture(Some(depth));
     depth_attachment.set_load_action(MTLLoadAction::Clear);
     depth_attachment.set_store_action(MTLStoreAction::DontCare);
     depth_attachment.set_clear_depth(1.0);
-    pass
+    FramePass { descriptor, color }
 }
 
 #[inline(always)]
-fn configure_render_pass(pass: &RenderPassDescriptorRef, color: &TextureRef, clear: [f32; 4]) {
-    let attachment = pass.color_attachments().object_at(0).expect("attachment 0");
+fn configure_render_pass(
+    attachment: &RenderPassColorAttachmentDescriptorRef,
+    color: &TextureRef,
+    clear: [f32; 4],
+) {
     attachment.set_texture(Some(color));
     attachment.set_clear_color(MTLClearColor::new(
         f64::from(clear[0]),
@@ -873,11 +889,8 @@ fn configure_render_pass(pass: &RenderPassDescriptorRef, color: &TextureRef, cle
 }
 
 #[inline(always)]
-fn clear_render_target(pass: &RenderPassDescriptorRef) {
-    pass.color_attachments()
-        .object_at(0)
-        .expect("attachment 0")
-        .set_texture(None);
+fn clear_render_target(attachment: &RenderPassColorAttachmentDescriptorRef) {
+    attachment.set_texture(None);
 }
 
 fn set_depth_target(pass: &RenderPassDescriptorRef, depth: &TextureRef) {
@@ -1197,14 +1210,17 @@ mod tests {
             color_desc.set_usage(MTLTextureUsage::RenderTarget);
             let color = device.new_texture(&color_desc);
             let pass = create_render_pass(&depth);
-            let identity = pass.as_ptr();
+            let descriptor_identity = pass.descriptor.as_ptr();
+            let color_identity = pass.color.as_ptr();
 
-            configure_render_pass(&pass, &color, [0.1, 0.2, 0.3, 1.0]);
-            clear_render_target(&pass);
-            configure_render_pass(&pass, &color, [0.4, 0.5, 0.6, 1.0]);
-            clear_render_target(&pass);
+            configure_render_pass(&pass.color, &color, [0.1, 0.2, 0.3, 1.0]);
+            clear_render_target(&pass.color);
+            configure_render_pass(&pass.color, &color, [0.4, 0.5, 0.6, 1.0]);
+            clear_render_target(&pass.color);
 
-            assert_eq!(pass.as_ptr(), identity);
+            assert_eq!(pass.descriptor.as_ptr(), descriptor_identity);
+            assert_eq!(pass.color.as_ptr(), color_identity);
+            assert!(pass.color.texture().is_none());
         });
     }
 

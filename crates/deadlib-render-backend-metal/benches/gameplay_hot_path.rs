@@ -526,39 +526,60 @@ fn semantic_checksum(checksum: u64, state: DesiredState) -> u64 {
 
 #[cfg(target_os = "macos")]
 fn benchmark_render_pass() {
-    use metal::{MTLClearColor, MTLLoadAction, MTLStoreAction, RenderPassDescriptor};
+    use metal::{
+        Device, MTLClearColor, MTLLoadAction, MTLPixelFormat, MTLStoreAction, MTLTextureType,
+        MTLTextureUsage, RenderPassDescriptor, TextureDescriptor,
+    };
     use objc::rc::autoreleasepool;
 
+    let device = Device::system_default().expect("Metal device");
+    let color_desc = TextureDescriptor::new();
+    color_desc.set_texture_type(MTLTextureType::D2);
+    color_desc.set_pixel_format(MTLPixelFormat::BGRA8Unorm);
+    color_desc.set_width(64);
+    color_desc.set_height(64);
+    color_desc.set_usage(MTLTextureUsage::RenderTarget);
+    let color = device.new_texture(&color_desc);
     let legacy = measure(|| {
         autoreleasepool(|| {
             let pass = RenderPassDescriptor::new();
             let attachment = pass.color_attachments().object_at(0).expect("attachment 0");
             attachment.set_load_action(MTLLoadAction::Clear);
             attachment.set_store_action(MTLStoreAction::Store);
+            attachment.set_texture(Some(&color));
             attachment.set_clear_color(MTLClearColor::new(0.1, 0.2, 0.3, 1.0));
             black_box(pass as *const _ as usize as u64)
         })
     });
     let pass = autoreleasepool(|| RenderPassDescriptor::new().to_owned());
+    let attachment = pass
+        .color_attachments()
+        .object_at(0)
+        .expect("attachment 0")
+        .to_owned();
     let retained = measure(|| {
         autoreleasepool(|| {
-            let attachment = pass.color_attachments().object_at(0).expect("attachment 0");
+            attachment.set_texture(Some(&color));
             attachment.set_clear_color(MTLClearColor::new(0.1, 0.2, 0.3, 1.0));
+            attachment.set_texture(None);
             black_box(&pass);
+            black_box(&attachment);
             1
         })
     });
 
     println!("\nrender-pass descriptor setup (actual Metal objects)");
     print_measurement("legacy descriptor/frame", &legacy, 1);
-    print_measurement("retained descriptor", &retained, 1);
+    print_measurement("retained pass + attachment", &retained, 1);
     println!("Objective-C descriptor creates/frame: legacy 1, retained 0");
+    println!("Objective-C attachment getter messages/frame: legacy 2, retained 0");
 }
 
 #[cfg(not(target_os = "macos"))]
 fn benchmark_render_pass() {
     println!("\nrender-pass descriptor setup: run this benchmark on macOS for Metal timings");
     println!("Objective-C descriptor creates/frame: legacy 1, retained 0");
+    println!("Objective-C attachment getter messages/frame: legacy 2, retained 0");
 }
 
 fn main() {
