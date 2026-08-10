@@ -451,18 +451,6 @@ fn has_milkshape_ascii_signature(content: &str) -> bool {
     content.to_ascii_lowercase().contains("milkshape 3d ascii")
 }
 
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub fn has_milkshape_ascii_signature_for_bench(content: &str) -> bool {
-    has_milkshape_ascii_signature(content)
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-#[doc(hidden)]
-pub fn has_milkshape_ascii_signature_legacy_for_bench(content: &str) -> bool {
-    content.to_ascii_lowercase().contains("milkshape 3d ascii")
-}
-
 pub fn itg_parse_milkshape_model_auto_rot(path: &Path) -> Option<ItgModelAutoRot> {
     let content = fs::read_to_string(path).ok()?;
     if !has_milkshape_ascii_signature(&content) {
@@ -800,23 +788,6 @@ mod tests {
             }]),
             bounds: [0.0, 0.0, 0.0, 1.0, 1.0, 1.0],
         })
-    }
-
-    #[test]
-    fn milkshape_signature_matching_preserves_legacy_ascii_behavior() {
-        for content in [
-            "MilkShape 3D ASCII\nMeshes: 0",
-            "// prefix\nmIlKsHaPe 3D aScIi\nMeshes: 0",
-            "milkshape 3d unicode",
-            "MÍLKSHAPE 3D ASCII",
-            "",
-        ] {
-            assert_eq!(
-                has_milkshape_ascii_signature(content),
-                has_milkshape_ascii_signature_legacy_for_bench(content),
-                "signature classification changed for {content:?}"
-            );
-        }
     }
 
     #[test]

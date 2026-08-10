@@ -296,48 +296,6 @@ pub(crate) fn entries_with_local_self_state<'a>(
     Cow::Borrowed(pane.entries.as_slice())
 }
 
-#[cfg(any(test, feature = "bench-support"))]
-fn entries_with_local_self_state_legacy(
-    view: &ScoreboxSideView,
-    pane: &score_data::LeaderboardPane,
-) -> Vec<score_data::LeaderboardEntry> {
-    let kind = score_data::scorebox_pane_kind(pane);
-    let mut entries = pane.entries.clone();
-    let local_self = local_self_score_10000(view, kind);
-
-    if let Some(entry) = entries.iter_mut().find(|entry| entry.is_self) {
-        if let Some((local_score_10000, local_is_fail)) = local_self
-            && local_is_fail
-            && score_data::same_score_10000(entry.score, local_score_10000)
-        {
-            entry.is_fail = true;
-            if entry.machine_tag.is_none() {
-                entry.machine_tag = local_self_machine_tag(view);
-            }
-        }
-        return entries;
-    }
-
-    if let Some(entry) = entries
-        .iter_mut()
-        .find(|entry| leaderboard_entry_matches_local_self(view, entry))
-    {
-        entry.is_self = true;
-        if entry.machine_tag.is_none() {
-            entry.machine_tag = local_self_machine_tag(view);
-        }
-        if let Some((local_score_10000, local_is_fail)) = local_self
-            && local_is_fail
-            && score_data::same_score_10000(entry.score, local_score_10000)
-        {
-            entry.is_fail = true;
-        }
-        return entries;
-    }
-
-    entries
-}
-
 #[inline(always)]
 pub fn select_music_scorebox_view(
     runtime: &ScoreboxSideView,
@@ -663,40 +621,6 @@ fn select_music_panes_from_snapshot(
         panes.push(gameplay_pane_from_leaderboard(pane, entries.as_ref()));
     }
     panes
-}
-
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub fn leaderboard_rows_checksum_for_bench(
-    view: &ScoreboxSideView,
-    pane: &score_data::LeaderboardPane,
-) -> u64 {
-    let entries = entries_with_local_self_state(view, pane);
-    let selected = score_data::prioritized_leaderboard_entry_refs(entries.as_ref(), 10);
-    selected.into_iter().fold(0_u64, |checksum, entry| {
-        checksum.rotate_left(5)
-            ^ u64::from(entry.rank)
-            ^ entry.name.len() as u64
-            ^ ((entry.is_self as u64) << 62)
-            ^ ((entry.is_rival as u64) << 61)
-    })
-}
-
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub fn leaderboard_rows_checksum_legacy_for_bench(
-    view: &ScoreboxSideView,
-    pane: &score_data::LeaderboardPane,
-) -> u64 {
-    let entries = entries_with_local_self_state_legacy(view, pane);
-    let selected = score_data::prioritized_leaderboard_entries(entries.as_slice(), 10);
-    selected.iter().fold(0_u64, |checksum, entry| {
-        checksum.rotate_left(5)
-            ^ u64::from(entry.rank)
-            ^ entry.name.len() as u64
-            ^ ((entry.is_self as u64) << 62)
-            ^ ((entry.is_rival as u64) << 61)
-    })
 }
 
 #[inline(always)]
@@ -1152,27 +1076,6 @@ pub fn select_music_scorebox_actors(
     )
 }
 
-#[cfg(any(test, feature = "bench-support"))]
-fn gameplay_scorebox_actors_from_snapshot_legacy(
-    snapshot: Option<&score_data::CachedPlayerLeaderboardData>,
-    profile_snapshot: &score_data::GameplayScoreboxProfileSnapshot,
-    filter: score_data::SelectMusicScoreboxFilter,
-    srpg10: bool,
-    center_x: f32,
-    center_y: f32,
-    zoom: f32,
-    elapsed_seconds: f32,
-) -> Vec<Actor> {
-    if !profile_snapshot.display_scorebox || !profile_snapshot.gs_active {
-        return Vec::new();
-    }
-    let Some(snapshot) = snapshot else {
-        return Vec::new();
-    };
-    let panes = gameplay_panes_from_snapshot(snapshot, profile_snapshot, filter);
-    gameplay_scorebox_actors_from_panes(&panes, srpg10, center_x, center_y, zoom, elapsed_seconds)
-}
-
 fn gameplay_scorebox_actors_from_panes(
     panes: &[GameplayScoreboxPane],
     srpg10: bool,
@@ -1274,14 +1177,10 @@ fn gameplay_scorebox_actor_checksum(actors: &[Actor]) -> usize {
     })
 }
 
-/// Focused old/new harness for gameplay leaderboard pane preparation and
-/// direct actor-buffer composition.
+/// Transition macrobenchmark for prewarmed leaderboard composition.
 #[cfg(feature = "bench-support")]
 #[doc(hidden)]
 pub struct GameplayScoreboxBenchmark {
-    snapshot: score_data::CachedPlayerLeaderboardData,
-    profile: score_data::GameplayScoreboxProfileSnapshot,
-    filter: score_data::SelectMusicScoreboxFilter,
     plan: GameplayScoreboxPlan,
     scratch: Vec<Actor>,
 }
@@ -1332,51 +1231,14 @@ impl GameplayScoreboxBenchmark {
         let mut scratch = Vec::new();
         plan.push_actors(&mut scratch, false, 320.0, 160.0, 1.0, 4.25);
         scratch.clear();
-        Self {
-            snapshot,
-            profile,
-            filter,
-            plan,
-            scratch,
-        }
+        Self { plan, scratch }
     }
 
-    pub fn legacy_frame(&self, elapsed_seconds: f32) -> usize {
-        let actors = gameplay_scorebox_actors_from_snapshot_legacy(
-            Some(&self.snapshot),
-            &self.profile,
-            self.filter,
-            false,
-            320.0,
-            160.0,
-            1.0,
-            elapsed_seconds,
-        );
-        gameplay_scorebox_actor_checksum(std::hint::black_box(&actors))
-    }
-
-    pub fn prewarmed_frame(&mut self, elapsed_seconds: f32) -> usize {
+    pub fn frame(&mut self, elapsed_seconds: f32) -> usize {
         self.scratch.clear();
         self.plan
             .push_actors(&mut self.scratch, false, 320.0, 160.0, 1.0, elapsed_seconds);
         gameplay_scorebox_actor_checksum(std::hint::black_box(&self.scratch))
-    }
-
-    pub fn behavior_matches(&mut self, elapsed_seconds: f32) -> bool {
-        let legacy = gameplay_scorebox_actors_from_snapshot_legacy(
-            Some(&self.snapshot),
-            &self.profile,
-            self.filter,
-            false,
-            320.0,
-            160.0,
-            1.0,
-            elapsed_seconds,
-        );
-        self.scratch.clear();
-        self.plan
-            .push_actors(&mut self.scratch, false, 320.0, 160.0, 1.0, elapsed_seconds);
-        format!("{legacy:?}") == format!("{:?}", self.scratch)
     }
 }
 
@@ -1512,32 +1374,6 @@ mod tests {
     }
 
     #[test]
-    fn borrowed_leaderboard_state_matches_legacy_owned_rows() {
-        let runtime = ScoreboxSideView::default();
-        let pane = pane(
-            "GrooveStats",
-            vec![
-                entry(1, "world", false, false),
-                entry(2, "rival", false, true),
-                entry(20, "self", true, false),
-            ],
-        );
-        let current = entries_with_local_self_state(&runtime, &pane);
-        let legacy = entries_with_local_self_state_legacy(&runtime, &pane);
-
-        assert!(matches!(&current, Cow::Borrowed(_)));
-        assert_eq!(current.len(), legacy.len());
-        for (current, legacy) in current.iter().zip(&legacy) {
-            assert_eq!(current.rank, legacy.rank);
-            assert_eq!(current.name, legacy.name);
-            assert_eq!(current.machine_tag, legacy.machine_tag);
-            assert_eq!(current.is_self, legacy.is_self);
-            assert_eq!(current.is_rival, legacy.is_rival);
-            assert_eq!(current.is_fail, legacy.is_fail);
-        }
-    }
-
-    #[test]
     fn select_music_view_uses_prepared_local_records() {
         let runtime = ScoreboxSideView {
             chart_hash: Some("chart".to_string()),
@@ -1637,47 +1473,5 @@ mod tests {
         assert_eq!(panes.len(), 1);
         assert_eq!(panes[0].kind, PaneKind::HardEx);
         assert_eq!(panes[0].mode_text.as_ref(), "H.EX");
-    }
-
-    #[test]
-    fn prewarmed_gameplay_plan_preserves_actor_output() {
-        let snapshot = score_data::CachedPlayerLeaderboardData {
-            loading: false,
-            error: None,
-            data: Some(Arc::new(score_data::PlayerLeaderboardData {
-                panes: vec![
-                    pane(
-                        "GrooveStats",
-                        vec![
-                            entry(1, "world", false, false),
-                            entry(8, "self", true, false),
-                        ],
-                    ),
-                    pane("ITL Online 2026", vec![entry(2, "rival", false, true)]),
-                ],
-                srpg_self_score: None,
-                itl_self_score: None,
-                itl_self_rank: None,
-            })),
-        };
-        let mut profile = scorebox_profile(false);
-        profile.display_scorebox = true;
-        profile.gs_active = true;
-        let filter = score_data::SelectMusicScoreboxFilter::default();
-        let legacy = gameplay_scorebox_actors_from_snapshot_legacy(
-            Some(&snapshot),
-            &profile,
-            filter,
-            false,
-            320.0,
-            160.0,
-            1.0,
-            4.25,
-        );
-        let plan = GameplayScoreboxPlan::new(Some(&snapshot), &profile, filter);
-        let mut prewarmed = Vec::new();
-        plan.push_actors(&mut prewarmed, false, 320.0, 160.0, 1.0, 4.25);
-
-        assert_eq!(format!("{legacy:?}"), format!("{prewarmed:?}"));
     }
 }

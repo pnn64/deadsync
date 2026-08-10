@@ -4,14 +4,6 @@ version = "0.1.0"
 edition = "2024"
 license = "GPL-3.0"
 
-[features]
-bench-support = []
-
-[[bench]]
-name = "projection_upload"
-harness = false
-required-features = ["bench-support"]
-
 [dependencies]
 bytemuck = { version = "1.25.2", features = ["derive"] }
 deadlib-platform = { path = "../deadlib-platform" }

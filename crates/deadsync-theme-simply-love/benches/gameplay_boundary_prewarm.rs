@@ -176,7 +176,7 @@ fn print_result(label: &str, result: &BenchResult) {
     let frames = MEASURE_FRAMES as f64;
     println!(
         "{label:<25} {:>11.2} ns/frame  {:>11.2} cycles/frame  {:>11.2} worst ns  \
-         {:>8.3} Mframe/s  {:>6.2} alloc  {:>6.2} realloc  {:>6.2} free  {:>9.1} B/frame",
+         {:>8.3} Mframe/s  {:>6.2} alloc  {:>6.2} realloc  {:>6.2} free  {:>9.1} B/frame  {:016x}",
         result.ns_per_frame,
         result.cycles_per_frame.unwrap_or(f64::NAN),
         result.worst_sample_ns,
@@ -185,48 +185,37 @@ fn print_result(label: &str, result: &BenchResult) {
         result.allocated.reallocs as f64 / frames,
         result.allocated.deallocs as f64 / frames,
         result.allocated.bytes as f64 / frames,
+        result.checksum,
     );
 }
 
-fn assert_pair(legacy: &BenchResult, prewarmed: &BenchResult) {
-    assert_eq!(legacy.checksum, prewarmed.checksum);
-    assert_eq!(prewarmed.allocated.allocs, 0);
-    assert_eq!(prewarmed.allocated.reallocs, 0);
-    assert_eq!(prewarmed.allocated.deallocs, 0);
-    assert_eq!(prewarmed.allocated.bytes, 0);
+fn assert_prewarmed(result: &BenchResult) {
+    assert_eq!(result.allocated.allocs, 0);
+    assert_eq!(result.allocated.reallocs, 0);
+    assert_eq!(result.allocated.deallocs, 0);
+    assert_eq!(result.allocated.bytes, 0);
 }
 
 fn main() {
     deadsync_theme_simply_love::i18n::init(deadsync_assets::language::load_for_tests("en"));
 
     let mut scorebox = GameplayScoreboxBenchmark::new();
-    assert!(scorebox.behavior_matches(4.25));
-    let rebuilt_scorebox = measure(|| scorebox.legacy_frame(4.25));
-    let prewarmed_scorebox = measure(|| scorebox.prewarmed_frame(4.25));
-    assert_pair(&rebuilt_scorebox, &prewarmed_scorebox);
-    assert!(rebuilt_scorebox.allocated.allocs > 0);
+    let prewarmed_scorebox = measure(|| scorebox.frame(4.25));
+    assert_prewarmed(&prewarmed_scorebox);
 
     let background = GameplayBackgroundKeyBenchmark::new();
-    assert!(background.behavior_matches());
-    let rebuilt_background = measure(|| background.legacy_frame());
-    let prewarmed_background = measure(|| background.prewarmed_frame());
-    assert_pair(&rebuilt_background, &prewarmed_background);
-    assert!(rebuilt_background.allocated.allocs >= MEASURE_FRAMES as u64);
+    let prewarmed_background = measure(|| background.frame());
+    assert_prewarmed(&prewarmed_background);
 
     let stats = GameplayStatsTextBenchmark::new();
-    assert!(stats.behavior_matches());
-    let resolved_stats = measure(|| stats.legacy_frame(4.25));
-    let prewarmed_stats = measure(|| stats.prewarmed_frame(4.25));
-    assert_pair(&resolved_stats, &prewarmed_stats);
+    let prewarmed_stats = measure(|| stats.frame(4.25));
+    assert_prewarmed(&prewarmed_stats);
 
-    println!("gameplay boundary prewarm");
+    println!("transition/prewarm macrobenchmark");
     println!("scorebox actor composition (four panes, five rows each)");
-    print_result("rebuild panes + actor Vec", &rebuilt_scorebox);
     print_result("prewarmed direct append", &prewarmed_scorebox);
     println!("SongBgWithMovieViz background texture identity");
-    print_result("rebuild path Arc", &rebuilt_background);
     print_result("clone prewarmed Arc", &prewarmed_background);
     println!("Step Statistics immutable text identities");
-    print_result("resolve labels + strings", &resolved_stats);
     print_result("clone prewarmed Arcs", &prewarmed_stats);
 }

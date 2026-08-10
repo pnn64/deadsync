@@ -155,12 +155,6 @@ pub fn set_capture_enabled(enabled: bool) {
     }
 }
 
-#[cfg(feature = "bench-support")]
-#[inline(always)]
-pub fn capture_synced(enabled: bool) -> bool {
-    REGISTERED_KEYBOARD_CAPTURE.load(Ordering::Acquire) == keyboard_capture_state(enabled)
-}
-
 #[inline(always)]
 const fn keyboard_capture_state(enabled: bool) -> u8 {
     if enabled {
@@ -173,16 +167,6 @@ const fn keyboard_capture_state(enabled: bool) -> u8 {
 #[inline(always)]
 const fn keyboard_capture_sync_needed(current: bool, registered: u8, requested: bool) -> bool {
     current != requested || registered != keyboard_capture_state(requested)
-}
-
-#[cfg(feature = "bench-support")]
-pub fn benchmark_seed_capture_state(enabled: bool) {
-    CAPTURE_ENABLED.store(enabled, Ordering::Relaxed);
-    REGISTERED_KEYBOARD_CAPTURE.store(keyboard_capture_state(enabled), Ordering::Release);
-    // A non-null sentinel models the live message window. Both benchmark paths
-    // observe the confirmed matching registration and therefore never pass this
-    // value to Win32; the legacy path still pays its real steady-state loads.
-    RAW_INPUT_HWND.store(1, Ordering::Release);
 }
 
 #[inline(always)]

@@ -4,44 +4,6 @@ version = "0.1.0"
 edition = "2024"
 license = "GPL-3.0"
 
-[features]
-bench-support = []
-
-[[bench]]
-name = "hold_mesh"
-harness = false
-required-features = ["bench-support"]
-
-[[bench]]
-name = "placement_plan"
-harness = false
-required-features = ["bench-support"]
-
-[[bench]]
-name = "slot_frame_cache"
-harness = false
-required-features = ["bench-support"]
-
-[[bench]]
-name = "cmod_timing"
-harness = false
-required-features = ["bench-support"]
-
-[[bench]]
-name = "gameplay_hot_paths"
-harness = false
-required-features = ["bench-support"]
-
-[[bench]]
-name = "edit_measure_text"
-harness = false
-required-features = ["bench-support"]
-
-[[bench]]
-name = "stream_lookups"
-harness = false
-required-features = ["bench-support"]
-
 [dependencies]
 deadlib-present = { path = "../deadlib-present" }
 deadlib-render = { path = "../deadlib-render" }

@@ -2210,13 +2210,6 @@ fn evaluation_favorite_membership(
     })
 }
 
-#[cfg(feature = "bench-support")]
-pub fn benchmark_evaluation_favorite_membership(
-    queries: &[Option<(PlayerSide, &str)>; PLAYER_SLOTS],
-) -> [bool; PLAYER_SLOTS] {
-    evaluation_favorite_membership(&runtime_lock_profiles(), queries)
-}
-
 pub fn gameplay_hud_snapshot_from_parts(
     play_style: PlayStyle,
     player_side: PlayerSide,
@@ -6492,13 +6485,6 @@ pub fn parse_favorited_packs_content(text: &str) -> HashSet<String> {
 pub fn render_favorited_packs_content(packs: &HashSet<String>) -> String {
     let mut sorted: Vec<&str> = packs.iter().map(String::as_str).collect();
     sorted.sort_unstable_by(|a, b| favorites_view::ascii_case_insensitive_cmp(a, b));
-    sorted.join("\n")
-}
-
-#[cfg(feature = "bench-support")]
-pub fn render_favorited_packs_content_legacy_for_bench(packs: &HashSet<String>) -> String {
-    let mut sorted: Vec<&str> = packs.iter().map(String::as_str).collect();
-    sorted.sort_unstable_by(|a, b| a.to_ascii_lowercase().cmp(&b.to_ascii_lowercase()));
     sorted.join("\n")
 }
 

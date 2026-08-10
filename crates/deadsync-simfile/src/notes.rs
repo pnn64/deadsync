@@ -20,13 +20,6 @@ pub fn step_type_lanes(step_type: &str) -> usize {
     }
 }
 
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub fn step_type_lanes_legacy(step_type: &str) -> usize {
-    let normalized = step_type.trim().to_ascii_lowercase().replace('_', "-");
-    if normalized == "dance-double" { 8 } else { 4 }
-}
-
 fn invalidate_hold(
     invalid_heads: &mut Vec<usize>,
     hold_heads: &mut [Option<usize>],
@@ -156,12 +149,6 @@ fn parse_chart_notes_with_capacity(
         keep
     });
     notes
-}
-
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub fn parse_chart_notes_legacy(minimized_note_data: &[u8], lanes: usize) -> Vec<ParsedNote> {
-    parse_chart_notes_with_capacity(minimized_note_data, lanes, 0)
 }
 
 #[cfg(test)]

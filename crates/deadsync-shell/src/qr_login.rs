@@ -166,11 +166,6 @@ impl Service {
         events
     }
 
-    #[cfg(feature = "bench-support")]
-    pub(crate) fn poll_idle_legacy(&mut self) -> Vec<SimplyLoveQrLoginEvent> {
-        self.drain_events()
-    }
-
     fn start_arrowcloud(
         &self,
         id: u64,

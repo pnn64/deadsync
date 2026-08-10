@@ -1,6 +1,4 @@
 use crate::media::{is_mac_resource_fork, is_song_art_image, resolve_song_asset_path_like_itg};
-#[cfg(feature = "bench-support")]
-use crate::media::{song_art_file_key, song_art_file_stem};
 use crate::tags::latest_simfile_tag_values;
 use image::image_dimensions;
 use std::fs;
@@ -230,41 +228,6 @@ fn song_art_paths_match(left: &Path, right: &Path) -> bool {
                 byte.to_ascii_lowercase()
             }
         }))
-}
-
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub fn song_art_matches_for_bench(
-    path: &Path,
-    other: &Path,
-    starts_with: &[&str],
-    contains: &[&str],
-    ends_with: &[&str],
-) -> (bool, bool) {
-    (
-        song_art_stem_matches(path, starts_with, contains, ends_with),
-        song_art_paths_match(path, other),
-    )
-}
-
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub fn song_art_matches_legacy_for_bench(
-    path: &Path,
-    other: &Path,
-    starts_with: &[&str],
-    contains: &[&str],
-    ends_with: &[&str],
-) -> (bool, bool) {
-    let stem_matches = song_art_file_stem(path).is_some_and(|stem| {
-        starts_with.iter().any(|needle| stem.starts_with(needle))
-            || ends_with.iter().any(|needle| stem.ends_with(needle))
-            || contains.iter().any(|needle| stem.contains(needle))
-    });
-    (
-        stem_matches,
-        song_art_file_key(path) == song_art_file_key(other),
-    )
 }
 
 fn song_art_is_classified(

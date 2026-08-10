@@ -172,7 +172,7 @@ fn print_result(label: &str, result: &BenchResult) {
     let frames = MEASURE_FRAMES as f64;
     println!(
         "{label:<24} {:>9.2} ns/frame  {:>9.2} cycles/frame  {:>9.2} worst ns  \
-         {:>8.3} Mframe/s  {:>5.2} alloc  {:>5.2} realloc  {:>5.2} free  {:>7.1} B/frame",
+         {:>8.3} Mframe/s  {:>5.2} alloc  {:>5.2} realloc  {:>5.2} free  {:>7.1} B/frame  {:016x}",
         result.ns_per_frame,
         result.cycles_per_frame.unwrap_or(f64::NAN),
         result.worst_sample_ns,
@@ -181,44 +181,18 @@ fn print_result(label: &str, result: &BenchResult) {
         result.allocated.reallocs as f64 / frames,
         result.allocated.deallocs as f64 / frames,
         result.allocated.bytes as f64 / frames,
+        result.checksum,
     );
 }
 
-fn assert_pair(legacy: &BenchResult, fast: &BenchResult) {
-    assert_eq!(legacy.checksum, fast.checksum);
-    assert_eq!(fast.allocated.allocs, 0);
-    assert_eq!(fast.allocated.reallocs, 0);
-    assert_eq!(fast.allocated.deallocs, 0);
-    assert_eq!(fast.allocated.bytes, 0);
-}
-
 fn main() {
-    let mut legacy = GameplayFrameOrchestrationBenchmark::new(VISUAL_LAYERS);
-    let mut fast = GameplayFrameOrchestrationBenchmark::new(VISUAL_LAYERS);
-    let legacy_scratch = measure(|| legacy.scratch_fields_legacy());
-    let fast_scratch = measure(|| fast.scratch_pointer());
-    assert_pair(&legacy_scratch, &fast_scratch);
+    let mut gameplay = GameplayFrameOrchestrationBenchmark::new(VISUAL_LAYERS);
+    let steady = measure(|| gameplay.steady_frame());
+    assert_eq!(steady.allocated.allocs, 0);
+    assert_eq!(steady.allocated.reallocs, 0);
+    assert_eq!(steady.allocated.deallocs, 0);
+    assert_eq!(steady.allocated.bytes, 0);
 
-    let mut legacy = GameplayFrameOrchestrationBenchmark::new(VISUAL_LAYERS);
-    let fast = GameplayFrameOrchestrationBenchmark::new(VISUAL_LAYERS);
-    let legacy_layers = measure(|| legacy.layer_resize_legacy());
-    let fast_layers = measure(|| fast.fixed_layer_lengths());
-    assert_pair(&legacy_layers, &fast_layers);
-
-    let legacy = GameplayFrameOrchestrationBenchmark::new(VISUAL_LAYERS);
-    let fast = GameplayFrameOrchestrationBenchmark::new(VISUAL_LAYERS);
-    let legacy_stats = measure(|| legacy.step_stats_legacy());
-    let fast_stats = measure(|| fast.cached_step_stats());
-    assert_pair(&legacy_stats, &fast_stats);
-
-    println!("gameplay frame orchestration ({VISUAL_LAYERS} visual layers)");
-    println!("song-lifetime reusable scratch");
-    print_result("36 field take/restores", &legacy_scratch);
-    print_result("one boxed owner", &fast_scratch);
-    println!("immutable layer scratch widths");
-    print_result("six resize checks", &legacy_layers);
-    print_result("prewarmed invariant", &fast_layers);
-    println!("step-statistics option routing");
-    print_result("profile checks", &legacy_stats);
-    print_result("cached mode", &fast_stats);
+    println!("steady gameplay macrobenchmark ({VISUAL_LAYERS} visual layers)");
+    print_result("steady frame", &steady);
 }

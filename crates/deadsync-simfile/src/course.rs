@@ -502,45 +502,6 @@ fn select_song_by_play_rank(
     all_songs.get(ranked[pick].1).cloned()
 }
 
-#[cfg(any(test, feature = "bench-support"))]
-#[doc(hidden)]
-pub fn select_song_by_play_rank_for_bench(
-    all_songs: &[Arc<SongData>],
-    play_counts: &[u32],
-    sort: SongSort,
-    pick: usize,
-) -> Option<Arc<SongData>> {
-    let ranked = play_counts
-        .iter()
-        .copied()
-        .take(all_songs.len())
-        .enumerate()
-        .map(|(song_index, plays)| (plays, song_index))
-        .collect();
-    select_song_by_play_rank(all_songs, ranked, sort, pick)
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-#[doc(hidden)]
-pub fn select_song_by_play_rank_legacy_for_bench(
-    all_songs: &[Arc<SongData>],
-    play_counts: &[u32],
-    sort: SongSort,
-    pick: usize,
-) -> Option<Arc<SongData>> {
-    let mut ranked = all_songs
-        .iter()
-        .zip(play_counts)
-        .map(|(song, &plays)| (plays, Arc::clone(song)))
-        .collect::<Vec<_>>();
-    match sort {
-        SongSort::MostPlays => ranked.sort_by(|a, b| b.0.cmp(&a.0)),
-        SongSort::FewestPlays => ranked.sort_by(|a, b| a.0.cmp(&b.0)),
-        SongSort::TopGrades | SongSort::LowestGrades => return None,
-    }
-    ranked.get(pick).map(|(_, song)| Arc::clone(song))
-}
-
 fn random_pick_index(seed: u64, course_path: &Path, entry_index: usize, len: usize) -> usize {
     if len == 0 {
         return 0;

@@ -634,45 +634,6 @@ fn runtime_mod_store_current(
     current.insert(key, value);
 }
 
-#[cfg(any(test, feature = "bench-support"))]
-pub fn runtime_mod_state_updates_for_bench(entries: &[RuntimeModEaseEntry]) -> u64 {
-    let mut current: [HashMap<String, f32>; LUA_PLAYERS] = std::array::from_fn(|_| HashMap::new());
-    let mut checksum = 0_u64;
-    for entry in entries {
-        let mut key = Some(runtime_mod_key(&entry.target));
-        let mut players = runtime_mod_player_indices(entry.player).peekable();
-        while let Some(player) = players.next() {
-            let from = runtime_mod_current_value(&current[player], key.as_deref().unwrap(), entry);
-            let to = runtime_mod_end_value(from, entry);
-            runtime_mod_store_current(&mut current[player], &mut key, to, players.peek().is_some());
-            checksum = checksum.rotate_left(7)
-                ^ from.to_bits() as u64
-                ^ (to.to_bits() as u64).rotate_left(17)
-                ^ player as u64;
-        }
-    }
-    checksum
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-pub fn runtime_mod_state_updates_legacy_for_bench(entries: &[RuntimeModEaseEntry]) -> u64 {
-    let mut current: [HashMap<String, f32>; LUA_PLAYERS] = std::array::from_fn(|_| HashMap::new());
-    let mut checksum = 0_u64;
-    for entry in entries {
-        let key = runtime_mod_key(&entry.target);
-        for player in runtime_mod_entry_players(entry.player) {
-            let from = runtime_mod_start_value(&mut current[player], &key, entry);
-            let to = runtime_mod_end_value(from, entry);
-            current[player].insert(key.clone(), to);
-            checksum = checksum.rotate_left(7)
-                ^ from.to_bits() as u64
-                ^ (to.to_bits() as u64).rotate_left(17)
-                ^ player as u64;
-        }
-    }
-    checksum
-}
-
 pub fn runtime_mod_start_value(
     current: &mut HashMap<String, f32>,
     key: &str,
@@ -838,38 +799,6 @@ pub fn record_unsupported_xero_overlay_function_ease(
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    fn entry(target: &str, player: Option<u8>, to: f32, add: bool) -> RuntimeModEaseEntry {
-        RuntimeModEaseEntry {
-            unit: SongLuaTimeUnit::Beat,
-            start: 0.0,
-            limit: 1.0,
-            easing: "linear".to_owned(),
-            to,
-            target: target.to_owned(),
-            start_val: None,
-            opt1: None,
-            opt2: None,
-            player,
-            add,
-        }
-    }
-
-    #[test]
-    fn allocation_free_state_updates_match_legacy_player_and_value_behavior() {
-        let entries = [
-            entry("Zoom", None, 2.0, false),
-            entry("zoom", None, 0.5, true),
-            entry("Dark", Some(1), 0.75, false),
-            entry("Dark", Some(1), 0.25, true),
-            entry("Reverse", Some(2), 1.0, false),
-            entry("Reverse", Some(9), 0.5, true),
-        ];
-        assert_eq!(
-            runtime_mod_state_updates_for_bench(&entries),
-            runtime_mod_state_updates_legacy_for_bench(&entries)
-        );
-    }
 
     #[test]
     fn exported_player_list_keeps_invalid_player_fallback_behavior() {

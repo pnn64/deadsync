@@ -7,9 +7,9 @@ use std::time::Instant;
 #[global_allocator]
 static ALLOC: CountingAlloc = CountingAlloc::new();
 
-const FRAMES: usize = 100_000;
+const FRAMES: usize = 50_000;
 const WARMUP_FRAMES: usize = 2_000;
-const CAPTURE_ACTORS: usize = 32;
+const CAPTURE_ACTORS: usize = 256;
 
 struct CountingAlloc {
     enabled: AtomicBool,
@@ -158,24 +158,23 @@ fn print_result(label: &str, result: &BenchResult) {
     let frames = FRAMES as f64;
     println!(
         "{label:<20} {:>9.2} ns/frame  {:>9.2} cycles/frame  {:>7.2} Mframe/s  \
-         {:>5.2} allocs/frame  {:>8.1} bytes/frame  {:>5.2} reallocs/frame",
+         {:>5.2} allocs/frame  {:>8.1} bytes/frame  {:>5.2} reallocs/frame  {:016x}",
         result.ns_per_frame,
         result.cycles_per_frame.unwrap_or(f64::NAN),
         1_000.0 / result.ns_per_frame,
         result.allocated.allocs as f64 / frames,
         result.allocated.bytes as f64 / frames,
         result.allocated.reallocs as f64 / frames,
+        result.checksum,
     );
 }
 
 fn main() {
-    let old = measure(SongLuaAftCaptureBenchmark::old_frame);
-    let shared = measure(SongLuaAftCaptureBenchmark::shared_frame);
-    assert_eq!(old.checksum, shared.checksum);
+    let shared = measure(SongLuaAftCaptureBenchmark::frame);
 
     let scratch = SongLuaAftCaptureBenchmark::new(CAPTURE_ACTORS);
-    println!("SongLua AFT capture ({CAPTURE_ACTORS} child actors, {FRAMES} frames)");
-    print_result("owned Vec children", &old);
+    println!("Song-Lua/AFT worst-case macrobenchmark");
+    println!("{CAPTURE_ACTORS} child actors, {FRAMES} frames");
     print_result("two shared banks", &shared);
     println!(
         "song-lifetime shared storage: {} KiB",

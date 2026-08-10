@@ -115,11 +115,6 @@ impl Service {
         self.jobs.retain(|job| !finished.contains(&job.owner));
         events
     }
-
-    #[cfg(feature = "bench-support")]
-    pub(crate) fn poll_idle_legacy(&mut self) -> Vec<(SimplyLoveSyncOwner, SimplyLoveSyncEvent)> {
-        self.drain_events()
-    }
 }
 
 fn run_song(

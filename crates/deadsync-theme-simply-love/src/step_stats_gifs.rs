@@ -174,7 +174,7 @@ static CATALOG: LazyLock<Vec<GifDefinition>> = LazyLock::new(|| {
 
 fn catalog_roots() -> Vec<PathBuf> {
     let roots = deadsync_assets::graphic_texture_roots(GIF_FOLDER);
-    #[cfg(any(test, feature = "bench-support"))]
+    #[cfg(test)]
     let roots = {
         let mut roots = roots;
         let source_root = Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -290,24 +290,6 @@ pub fn gif_render_layout(
     })
 }
 
-#[cfg(feature = "bench-support")]
-pub fn benchmark_gif_render_layout_legacy(
-    index: usize,
-    params: GifRenderParams,
-) -> Option<GifRenderLayout> {
-    let gif = catalog().get(index)?;
-    gif_render_layout(ResolvedStepStatsExtra::Gif(gif), params)
-}
-
-#[cfg(feature = "bench-support")]
-pub fn benchmark_gif_frame_legacy(layout: GifRenderLayout, beat: f32, seconds: f32) -> u32 {
-    let clock = match layout.effect_clock {
-        EffectClock::Time => seconds,
-        EffectClock::Beat => beat,
-    };
-    mixed_frame(clock, layout.frames, layout.frame_ends, layout.cycle)
-}
-
 fn player_index(side: PlayerSide) -> usize {
     match side {
         PlayerSide::P1 => 0,
@@ -348,7 +330,7 @@ fn uniform_frame_index(phase: f32, frame_ends: &[f32], delay_recip: f32) -> usiz
     index
 }
 
-#[cfg(any(test, feature = "bench-support"))]
+#[cfg(test)]
 fn mixed_frame(clock: f32, frames: &[u32], frame_ends: &[f32], cycle: f32) -> u32 {
     scheduled_frame(clock, frames, frame_ends, cycle, 0.0)
 }

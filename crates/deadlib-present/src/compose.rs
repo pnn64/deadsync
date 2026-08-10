@@ -50,7 +50,7 @@ impl DrawItem {
         (self.z, self.order)
     }
 
-    #[cfg(any(test, feature = "bench-support"))]
+    #[cfg(test)]
     const fn synthetic(z: i16, order: u32, payload_index: u32) -> Self {
         Self {
             texture_handle: payload_index as renderer::TextureHandle,
@@ -1152,7 +1152,7 @@ struct SpriteGatherStats {
     runs_after: u32,
 }
 
-#[cfg(any(test, feature = "bench-support"))]
+#[cfg(test)]
 fn analyze_final_sprite_gather(ops: &[renderer::DrawOp]) -> SpriteGatherStats {
     let mut stats = SpriteGatherStats::default();
     let mut previous = None;
@@ -1506,11 +1506,6 @@ fn sort_composed_draw_items(objects: &mut [DrawItem], scratch: &mut ComposeScrat
     }
 }
 
-#[cfg(any(test, feature = "bench-support"))]
-fn sort_draw_items_legacy(objects: &mut [DrawItem], scratch: &mut ComposeScratch) {
-    sort_draw_items_impl(objects, scratch, false);
-}
-
 fn sort_draw_items_impl(
     objects: &mut [DrawItem],
     scratch: &mut ComposeScratch,
@@ -1744,103 +1739,6 @@ fn sort_draw_items_from_sparse_counts(objects: &mut [DrawItem], scratch: &mut Co
             .windows(2)
             .all(|pair| (pair[0].z, pair[0].order) <= (pair[1].z, pair[1].order))
     );
-}
-
-/// Sparse-z gameplay-shaped compact draw-item sorting benchmark support.
-#[cfg(feature = "bench-support")]
-pub struct RenderSortBenchmark {
-    objects: Vec<DrawItem>,
-    scratch: ComposeScratch,
-}
-
-#[cfg(feature = "bench-support")]
-impl RenderSortBenchmark {
-    pub fn new(object_count: usize) -> Self {
-        let objects = (0..object_count)
-            .map(|index| DrawItem::synthetic(0, index as u32, index as u32))
-            .collect();
-        Self {
-            objects,
-            scratch: ComposeScratch::default(),
-        }
-    }
-
-    pub fn sort_frame(&mut self, frame: usize) -> u64 {
-        self.sort_frame_with(frame, false)
-    }
-
-    pub fn sort_legacy_frame(&mut self, frame: usize) -> u64 {
-        self.sort_frame_with(frame, true)
-    }
-
-    pub fn sort_composed_frame(&mut self, frame: usize) -> u64 {
-        self.prepare_sparse_frame(frame);
-        sort_composed_draw_items(&mut self.objects, &mut self.scratch);
-        self.frame_checksum()
-    }
-
-    pub fn sort_dense_frame(&mut self, frame: usize) -> u64 {
-        self.prepare_dense_frame(frame);
-        sort_draw_items(&mut self.objects, &mut self.scratch);
-        self.frame_checksum()
-    }
-
-    pub fn sort_composed_dense_frame(&mut self, frame: usize) -> u64 {
-        self.prepare_dense_frame(frame);
-        sort_composed_draw_items(&mut self.objects, &mut self.scratch);
-        self.frame_checksum()
-    }
-
-    fn sort_frame_with(&mut self, frame: usize, legacy: bool) -> u64 {
-        self.prepare_sparse_frame(frame);
-        if legacy {
-            sort_draw_items_legacy(&mut self.objects, &mut self.scratch);
-        } else {
-            sort_draw_items(&mut self.objects, &mut self.scratch);
-        }
-        self.frame_checksum()
-    }
-
-    fn prepare_sparse_frame(&mut self, frame: usize) {
-        const Z_VALUES: [i16; 12] = [
-            -30_000, -99, 90, 2_101, 0, 1_500, -12_000, 50, 32_000, 91, -1, 8_000,
-        ];
-        for (position, object) in self.objects.iter_mut().enumerate() {
-            let mixed = position
-                .wrapping_mul(17)
-                .wrapping_add(frame.wrapping_mul(5))
-                % Z_VALUES.len();
-            object.z = Z_VALUES[mixed];
-            object.order = position as u32;
-        }
-    }
-
-    fn prepare_dense_frame(&mut self, frame: usize) {
-        for (position, object) in self.objects.iter_mut().enumerate() {
-            let mixed = position
-                .wrapping_mul(17)
-                .wrapping_add(frame.wrapping_mul(5))
-                % 32;
-            object.z = mixed as i16 - 16;
-            object.order = position as u32;
-        }
-    }
-
-    fn frame_checksum(&self) -> u64 {
-        let len = self.objects.len();
-        debug_assert!(
-            self.objects
-                .windows(2)
-                .all(|pair| (pair[0].z, pair[0].order) <= (pair[1].z, pair[1].order))
-        );
-        self.objects.iter().fold(len as u64, |checksum, object| {
-            checksum
-                .wrapping_mul(0x9e37_79b1_85eb_ca87)
-                .wrapping_add(u64::from(object.z as u16) << 32)
-                .wrapping_add(u64::from(object.order))
-                .wrapping_add(u64::from(object.payload_index))
-        })
-    }
 }
 
 #[repr(transparent)]
@@ -2191,18 +2089,6 @@ struct CachedTextLayout {
     glyphs: Vec<CachedGlyph>,
     fill_batches: CachedTextMeshVariants,
     stroke_batches: CachedTextMeshVariants,
-}
-
-/// Sizes of the cached text records whose representation is exercised by the
-/// text-page benchmark. Kept behind bench support so private layout details do
-/// not become part of the presentation API.
-#[cfg(feature = "bench-support")]
-pub fn benchmark_text_layout_type_sizes() -> (usize, usize, usize) {
-    (
-        std::mem::size_of::<CachedGlyph>(),
-        std::mem::size_of::<CachedTextMeshBatch>(),
-        std::mem::size_of::<CachedTextLayout>(),
-    )
 }
 
 impl CachedTextLayout {
@@ -4724,30 +4610,6 @@ fn append_retained_frame(
     let sprite_start = sprite_instances.len().min(u32::MAX as usize) as u32;
     sprite_instances.extend_from_slice(&cached.sprite_instances);
     out.append_retained(&cached.builder, sprite_start, order_counter);
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-fn append_retained_frame_legacy(
-    cached: &CachedRetainedFrame,
-    order_counter: &mut u32,
-    out: &mut FrameBuilder,
-    sprite_instances: &mut Vec<renderer::SpriteInstanceRaw>,
-) {
-    let sprite_start = sprite_instances.len().min(u32::MAX as usize) as u32;
-    sprite_instances.extend_from_slice(&cached.sprite_instances);
-    out.reserve(cached.builder.len());
-    for index in 0..cached.builder.len() {
-        let mut object = cached
-            .builder
-            .clone_retained_object(index)
-            .expect("retained frame contains only clonable payloads");
-        if let EditablePayload::Sprite(index) = &mut object.object_type {
-            *index = index.saturating_add(sprite_start);
-        }
-        object.order = *order_counter;
-        *order_counter = order_counter.saturating_add(1);
-        out.push(object);
-    }
 }
 
 #[inline(always)]
@@ -7460,23 +7322,6 @@ fn clipped_sprite_object_to_world_rect(
     )
 }
 
-#[cfg(any(test, feature = "bench-support"))]
-fn clipped_sprite_object_to_world_rect_legacy(
-    obj: &EditableDraw,
-    sprite_instances: &[renderer::SpriteInstanceRaw],
-    clip: WorldRect,
-    recycled_vertices: Option<&mut Vec<Vec<renderer::TexturedMeshVertex>>>,
-    textured_mesh_bounds: Option<WorldRect>,
-) -> Option<ClippedSpriteObject> {
-    clipped_sprite_object_to_world_rect_impl::<false>(
-        obj,
-        sprite_instances,
-        clip,
-        recycled_vertices,
-        textured_mesh_bounds,
-    )
-}
-
 #[inline(always)]
 fn clipped_sprite_object_to_world_rect_impl<const ACCEPT_CONTAINED_SPRITE: bool>(
     obj: &EditableDraw,
@@ -7665,369 +7510,6 @@ fn clipped_sprite_object_to_world_rect_impl<const ACCEPT_CONTAINED_SPRITE: bool>
     }
 }
 
-/// Mixed-payload retained-frame append benchmark support.
-#[cfg(feature = "bench-support")]
-pub struct RetainedAppendBenchmark {
-    cached: CachedRetainedFrame,
-    out: FrameBuilder,
-    sprites: Vec<renderer::SpriteInstanceRaw>,
-}
-
-#[cfg(feature = "bench-support")]
-impl RetainedAppendBenchmark {
-    pub fn new(draw_count: usize) -> Self {
-        let mesh_vertices: Arc<[renderer::MeshVertex]> =
-            Arc::from([renderer::MeshVertex::default(); 6]);
-        let tmesh_vertices: Arc<[renderer::TexturedMeshVertex]> =
-            Arc::from([renderer::TexturedMeshVertex::default(); 6]);
-        let mut builder = FrameBuilder::default();
-        builder.reserve(draw_count);
-        let mut sprites = Vec::with_capacity(draw_count.div_ceil(3));
-        for index in 0..draw_count {
-            match index % 3 {
-                0 => {
-                    let sprite = renderer::SpriteInstanceRaw {
-                        center: [index as f32, 0.0, 0.0, 1.0],
-                        size: [16.0; 2],
-                        rot_sin_cos: [0.0, 1.0],
-                        tint: [1.0; 4],
-                        uv_scale: [1.0; 2],
-                        uv_offset: [0.0; 2],
-                        local_offset: [0.0; 2],
-                        local_offset_rot_sin_cos: [0.0, 1.0],
-                        edge_fade: [0.0; 4],
-                        texture_mask: 0.0,
-                    };
-                    let sprite_index = saturating_u32(sprites.len());
-                    sprites.push(sprite);
-                    builder.push_sprite(
-                        1,
-                        0,
-                        (index % 8) as i16,
-                        BlendMode::Alpha,
-                        0,
-                        sprite_index,
-                    );
-                }
-                1 => builder.push_mesh(
-                    0,
-                    0,
-                    (index % 8) as i16,
-                    BlendMode::Add,
-                    0,
-                    MeshPayload {
-                        transform: Matrix4::IDENTITY,
-                        tint: [1.0; 4],
-                        vertices: MeshVertices::Shared(Arc::clone(&mesh_vertices)),
-                    },
-                ),
-                _ => builder.push_textured_mesh(
-                    2,
-                    0,
-                    (index % 8) as i16,
-                    BlendMode::Alpha,
-                    0,
-                    TexturedMeshPayload {
-                        instance: renderer::TexturedMeshInstanceRaw::new(
-                            Matrix4::IDENTITY,
-                            [1.0; 4],
-                            [1.0; 2],
-                            [0.0; 2],
-                            [0.0; 2],
-                            false,
-                        ),
-                        vertices: renderer::TexturedMeshVertices::Shared(Arc::clone(
-                            &tmesh_vertices,
-                        )),
-                        geom_cache_key: index as u64 + 1,
-                        depth_test: false,
-                    },
-                ),
-            }
-        }
-        Self {
-            cached: CachedRetainedFrame {
-                builder,
-                sprite_instances: sprites,
-            },
-            out: FrameBuilder::default(),
-            sprites: Vec::new(),
-        }
-    }
-
-    pub fn legacy_frame(&mut self) -> u64 {
-        self.append(true)
-    }
-
-    pub fn bulk_frame(&mut self) -> u64 {
-        self.append(false)
-    }
-
-    fn append(&mut self, legacy: bool) -> u64 {
-        self.out.clear();
-        self.sprites.clear();
-        let mut order = 17;
-        if legacy {
-            append_retained_frame_legacy(
-                &self.cached,
-                &mut order,
-                &mut self.out,
-                &mut self.sprites,
-            );
-        } else {
-            append_retained_frame(&self.cached, &mut order, &mut self.out, &mut self.sprites);
-        }
-        self.out.items.iter().fold(order as u64, |checksum, item| {
-            checksum.rotate_left(7)
-                ^ u64::from(item.order)
-                ^ u64::from(item.payload_index).rotate_left(17)
-                ^ item.texture_handle
-        })
-    }
-}
-
-/// Fragmented sprite-run finalization benchmark support.
-#[cfg(feature = "bench-support")]
-pub struct SpriteGatherBenchmark {
-    items: Vec<DrawItem>,
-    source_sprites: Vec<renderer::SpriteInstanceRaw>,
-    builder: FrameBuilder,
-    sprites: Vec<renderer::SpriteInstanceRaw>,
-    gathered: Vec<renderer::SpriteInstanceRaw>,
-    mesh_vertices: Vec<renderer::MeshVertex>,
-    tmesh_instances: Vec<renderer::TexturedMeshInstanceRaw>,
-    tmesh_geometries: Vec<renderer::TexturedMeshGeometry>,
-    ops: Vec<renderer::DrawOp>,
-    geom_map: HashMap<TMeshGeomKey, u32, rustc_hash::FxBuildHasher>,
-    gather_stats: SpriteGatherStats,
-}
-
-#[cfg(feature = "bench-support")]
-impl SpriteGatherBenchmark {
-    pub fn new(sprite_count: usize, layers: usize) -> Self {
-        let layers = layers.clamp(1, i16::MAX as usize);
-        let mut items = Vec::with_capacity(sprite_count);
-        let mut source_sprites = Vec::with_capacity(sprite_count);
-        for index in 0..sprite_count {
-            items.push(DrawItem {
-                texture_handle: 1,
-                order: index as u32,
-                payload_index: index as u32,
-                z: (index % layers) as i16,
-                blend: BlendMode::Alpha,
-                camera: 0,
-                kind: DrawKind::Sprite,
-            });
-            source_sprites.push(renderer::SpriteInstanceRaw {
-                center: [index as f32, 0.0, 0.0, 1.0],
-                size: [16.0; 2],
-                rot_sin_cos: [0.0, 1.0],
-                tint: [1.0; 4],
-                uv_scale: [1.0; 2],
-                uv_offset: [0.0; 2],
-                local_offset: [0.0; 2],
-                local_offset_rot_sin_cos: [0.0, 1.0],
-                edge_fade: [0.0; 4],
-                texture_mask: 0.0,
-            });
-        }
-        items.sort_unstable_by_key(|item| item.sort_key());
-        Self {
-            items,
-            source_sprites,
-            builder: FrameBuilder::default(),
-            sprites: Vec::new(),
-            gathered: Vec::new(),
-            mesh_vertices: Vec::new(),
-            tmesh_instances: Vec::new(),
-            tmesh_geometries: Vec::new(),
-            ops: Vec::new(),
-            geom_map: HashMap::default(),
-            gather_stats: SpriteGatherStats::default(),
-        }
-    }
-
-    pub fn legacy_frame(&mut self) -> u64 {
-        self.prepare();
-        self.gather_stats = self.finalize::<false>();
-        self.frame_checksum()
-    }
-
-    pub fn scanned_analysis_frame(&mut self) -> u64 {
-        self.prepare();
-        self.finalize::<false>();
-        self.gather_stats = analyze_final_sprite_gather(&self.ops);
-        self.analysis_checksum()
-    }
-
-    pub fn inline_analysis_frame(&mut self) -> u64 {
-        self.prepare();
-        self.gather_stats = self.finalize::<true>();
-        self.analysis_checksum()
-    }
-
-    pub fn gathered_frame(&mut self) -> u64 {
-        self.prepare();
-        self.gather_stats = self.finalize::<true>();
-        gather_finalized_sprites(
-            &mut self.ops,
-            &mut self.sprites,
-            &mut self.gathered,
-            self.gather_stats,
-        );
-        self.frame_checksum()
-    }
-
-    pub fn op_count(&self) -> usize {
-        self.ops.len()
-    }
-
-    fn prepare(&mut self) {
-        self.builder.clear();
-        self.builder.items.extend_from_slice(&self.items);
-        self.sprites.clear();
-        self.sprites.extend_from_slice(&self.source_sprites);
-        self.mesh_vertices.clear();
-        self.tmesh_instances.clear();
-        self.tmesh_geometries.clear();
-        self.ops.clear();
-        self.geom_map.clear();
-    }
-
-    fn finalize<const TRACK_SPRITE_RUNS: bool>(&mut self) -> SpriteGatherStats {
-        finish_frame::<TRACK_SPRITE_RUNS>(
-            &mut self.builder,
-            &mut self.mesh_vertices,
-            &mut self.tmesh_instances,
-            &mut self.tmesh_geometries,
-            &mut self.ops,
-            &mut self.geom_map,
-        )
-    }
-
-    fn analysis_checksum(&self) -> u64 {
-        self.frame_checksum()
-            ^ u64::from(self.gather_stats.sprites)
-            ^ u64::from(self.gather_stats.runs_before).rotate_left(21)
-            ^ u64::from(self.gather_stats.runs_after).rotate_left(42)
-    }
-
-    fn frame_checksum(&self) -> u64 {
-        self.ops.iter().fold(0u64, |checksum, op| {
-            let renderer::DrawOp::Sprite(run) = *op else {
-                return checksum;
-            };
-            let instances = &self.sprites[run.instance_start as usize
-                ..run.instance_start.saturating_add(run.instance_count) as usize];
-            instances.iter().fold(checksum, |checksum, instance| {
-                checksum.rotate_left(5)
-                    ^ u64::from(instance.center[0].to_bits())
-                    ^ run.texture_handle
-            })
-        })
-    }
-}
-
-/// Gameplay-shaped fully contained sprite-clipping benchmark support.
-#[cfg(feature = "bench-support")]
-pub struct SpriteClipBenchmark {
-    objects: Vec<EditableDraw>,
-    sprite_instances: Vec<renderer::SpriteInstanceRaw>,
-    clip: WorldRect,
-}
-
-#[cfg(feature = "bench-support")]
-impl SpriteClipBenchmark {
-    pub fn new(sprite_count: usize) -> Self {
-        let mut objects = Vec::with_capacity(sprite_count);
-        let mut sprite_instances = Vec::with_capacity(sprite_count);
-        for index in 0..sprite_count {
-            let column = index % 32;
-            let row = index / 32;
-            sprite_instances.push(renderer::SpriteInstanceRaw {
-                center: [
-                    32.0 + column as f32 * 18.0,
-                    32.0 + row as f32 * 24.0,
-                    0.0,
-                    1.0,
-                ],
-                size: [12.0, 16.0],
-                rot_sin_cos: [0.0, 1.0],
-                tint: [1.0; 4],
-                uv_scale: [1.0; 2],
-                uv_offset: [0.0; 2],
-                local_offset: [(index % 3) as f32 - 1.0, (index % 5) as f32 - 2.0],
-                local_offset_rot_sin_cos: [0.0, 1.0],
-                edge_fade: [0.0; 4],
-                texture_mask: 0.0,
-            });
-            objects.push(EditableDraw {
-                object_type: EditablePayload::Sprite(index as u32),
-                texture_handle: 1,
-                blend: BlendMode::Alpha,
-                z: 0,
-                order: index as u32,
-                camera: 0,
-            });
-        }
-        Self {
-            objects,
-            sprite_instances,
-            clip: WorldRect {
-                left: 0.0,
-                right: 640.0,
-                bottom: 0.0,
-                top: 480.0,
-            },
-        }
-    }
-
-    pub fn clip_legacy_frame(&mut self) -> u64 {
-        self.clip_frame::<false>()
-    }
-
-    pub fn clip_contained_frame(&mut self) -> u64 {
-        self.clip_frame::<true>()
-    }
-
-    fn clip_frame<const ACCEPT_CONTAINED: bool>(&mut self) -> u64 {
-        let mut checksum = self.objects.len() as u64;
-        for object in &self.objects {
-            let clipped = if ACCEPT_CONTAINED {
-                clipped_sprite_object_to_world_rect(
-                    object,
-                    &self.sprite_instances,
-                    self.clip,
-                    None,
-                    None,
-                )
-            } else {
-                clipped_sprite_object_to_world_rect_legacy(
-                    object,
-                    &self.sprite_instances,
-                    self.clip,
-                    None,
-                    None,
-                )
-            }
-            .expect("benchmark sprites are contained by the clip");
-            let EditablePayload::Sprite(index) = clipped.object_type else {
-                unreachable!("axis-aligned sprite clipping keeps sprite geometry");
-            };
-            if let Some(sprite) = clipped.sprite {
-                self.sprite_instances[index as usize] = sprite;
-            }
-            let sprite = self.sprite_instances[index as usize];
-            checksum = checksum.rotate_left(5)
-                ^ u64::from(sprite.center[0].to_bits())
-                ^ (u64::from(sprite.center[1].to_bits()) << 32)
-                ^ u64::from(sprite.size[0].to_bits())
-                ^ u64::from(sprite.uv_scale[1].to_bits());
-        }
-        checksum
-    }
-}
-
 #[derive(Clone, Copy)]
 struct ClipVertex {
     pos: [f32; 2],
@@ -8090,14 +7572,6 @@ fn textured_mesh_world_bounds(
     } else {
         textured_mesh_world_bounds_with(vertices, |pos| world_xy_3d(&transform, pos))
     }
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-fn textured_mesh_world_bounds_legacy(
-    vertices: &[renderer::TexturedMeshVertex],
-    transform: Matrix4,
-) -> Option<WorldRect> {
-    textured_mesh_world_bounds_with(vertices, |pos| world_xy_3d(&transform, pos))
 }
 
 #[inline(always)]
@@ -8265,32 +7739,6 @@ fn clip_textured_mesh_to_world_rect(
     }
 }
 
-#[cfg(any(test, feature = "bench-support"))]
-#[allow(clippy::too_many_arguments)]
-fn clip_textured_mesh_to_world_rect_legacy(
-    tint: [f32; 4],
-    vertices: &[renderer::TexturedMeshVertex],
-    transform: Matrix4,
-    uv_scale: [f32; 2],
-    uv_offset: [f32; 2],
-    uv_tex_shift: [f32; 2],
-    clip: WorldRect,
-    texture_mask: bool,
-    recycled_vertices: Option<&mut Vec<Vec<renderer::TexturedMeshVertex>>>,
-) -> Option<ClippedSpriteObject> {
-    clip_textured_mesh_to_world_rect_with(
-        tint,
-        vertices,
-        uv_scale,
-        uv_offset,
-        uv_tex_shift,
-        clip,
-        texture_mask,
-        recycled_vertices,
-        |pos| world_xy_3d(&transform, pos),
-    )
-}
-
 #[inline(always)]
 #[allow(clippy::too_many_arguments)]
 fn clip_textured_mesh_to_world_rect_with(
@@ -8408,111 +7856,6 @@ fn clip_textured_mesh_to_world_rect_with(
     })
 }
 
-/// Gameplay-shaped partially clipped text-mesh transform benchmark support.
-#[cfg(feature = "bench-support")]
-pub struct TexturedMeshClipBenchmark {
-    vertices: Vec<renderer::TexturedMeshVertex>,
-    transform: Matrix4,
-    clip: WorldRect,
-    recycled_vertices: Vec<Vec<renderer::TexturedMeshVertex>>,
-}
-
-#[cfg(feature = "bench-support")]
-impl TexturedMeshClipBenchmark {
-    pub fn new(glyphs: usize) -> Self {
-        let mut vertices = Vec::with_capacity(glyphs.saturating_mul(6));
-        for glyph in 0..glyphs {
-            let left = glyph as f32 * 12.0;
-            let right = left + 12.0;
-            let bottom = 0.0;
-            let top = 32.0;
-            for (pos, uv) in [
-                ([left, bottom, 0.0], [0.0, 1.0]),
-                ([right, bottom, 0.0], [1.0, 1.0]),
-                ([right, top, 0.0], [1.0, 0.0]),
-                ([left, bottom, 0.0], [0.0, 1.0]),
-                ([right, top, 0.0], [1.0, 0.0]),
-                ([left, top, 0.0], [0.0, 0.0]),
-            ] {
-                vertices.push(renderer::TexturedMeshVertex {
-                    pos,
-                    uv,
-                    color: [1.0; 4],
-                    tex_matrix_scale: [1.0; 2],
-                });
-            }
-        }
-        Self {
-            vertices,
-            transform: Matrix4::from_translation(Vector3::new(8.0, 36.0, 0.0))
-                * Matrix4::from_scale(Vector3::new(1.0, -1.0, 1.0)),
-            clip: WorldRect {
-                left: 8.0,
-                right: 328.0,
-                bottom: 12.0,
-                top: 36.0,
-            },
-            recycled_vertices: Vec::with_capacity(1),
-        }
-    }
-
-    pub fn clip_legacy_frame(&mut self) -> u64 {
-        self.clip_frame(true)
-    }
-
-    pub fn clip_affine_frame(&mut self) -> u64 {
-        self.clip_frame(false)
-    }
-
-    fn clip_frame(&mut self, legacy: bool) -> u64 {
-        let bounds = if legacy {
-            textured_mesh_world_bounds_legacy(&self.vertices, self.transform)
-        } else {
-            textured_mesh_world_bounds(&self.vertices, self.transform)
-        }
-        .expect("benchmark mesh is not empty");
-        let clipped = if legacy {
-            clip_textured_mesh_to_world_rect_legacy(
-                [1.0; 4],
-                &self.vertices,
-                self.transform,
-                [1.0; 2],
-                [0.0; 2],
-                [0.0; 2],
-                self.clip,
-                false,
-                Some(&mut self.recycled_vertices),
-            )
-        } else {
-            clip_textured_mesh_to_world_rect(
-                [1.0; 4],
-                &self.vertices,
-                self.transform,
-                [1.0; 2],
-                [0.0; 2],
-                [0.0; 2],
-                self.clip,
-                false,
-                Some(&mut self.recycled_vertices),
-            )
-        }
-        .expect("benchmark mesh intersects the clip");
-        let EditablePayload::TexturedMesh {
-            vertices: renderer::TexturedMeshVertices::Transient(mut vertices),
-            ..
-        } = clipped.object_type
-        else {
-            unreachable!("textured mesh clipping returns transient mesh geometry");
-        };
-        let checksum = (vertices.len() as u64)
-            ^ (u64::from(bounds.left.to_bits()) << 32)
-            ^ u64::from(bounds.right.to_bits());
-        vertices.clear();
-        self.recycled_vertices.push(vertices);
-        checksum
-    }
-}
-
 fn clip_rotated_sprite_to_world_rect(
     tint: [f32; 4],
     center: [f32; 4],
@@ -8593,25 +7936,21 @@ fn clip_rotated_sprite_to_world_rect(
 #[cfg(test)]
 mod tests {
     use super::{
-        ActorSegment, ActorXFold, CachedGlyph, CachedRetainedFrame, CachedTextLayout,
-        CachedTextMeshBatch, CachedTextMeshVariants, CachedTextPage, ComposeScratch, DrawItem,
-        EditableDraw, EditablePayload, FrameBuilder, MeshPayload, MeshVertices, TextAttrCursor,
-        TextLayoutCache, TextLayoutKey, TextMeshBatchBuilder, TextPageId, TextureCacheEntry,
-        TextureContext, TextureLookupCache, TextureMeta, TexturedMeshPayload, WorldRect,
-        analyze_final_sprite_gather, append_retained_frame, append_retained_frame_legacy,
+        ActorSegment, ActorXFold, CachedGlyph, CachedTextLayout, CachedTextMeshBatch,
+        CachedTextMeshVariants, CachedTextPage, ComposeScratch, DrawItem, EditableDraw,
+        EditablePayload, FrameBuilder, MeshPayload, MeshVertices, TextAttrCursor, TextLayoutCache,
+        TextLayoutKey, TextMeshBatchBuilder, TextPageId, TextureCacheEntry, TextureContext,
+        TextureLookupCache, TextureMeta, WorldRect, analyze_final_sprite_gather,
         build_cached_text_layout, build_screen_cached_with_scratch_and_texture_context,
         build_screen_cached_with_scratch_and_texture_context_and_actor_resources,
         build_screen_segments_cached_with_scratch_and_texture_context_and_actor_resources,
         build_transient_text_mesh_builders, clip_object_to_world_masks,
-        clip_sprite_object_to_world_rect, clip_textured_mesh_to_world_rect,
-        clip_textured_mesh_to_world_rect_legacy, clipped_sprite_object_to_world_rect,
-        clipped_sprite_object_to_world_rect_legacy, finish_frame, fold_sprite_xy_rot,
-        font_chain_key, gather_finalized_sprites, is_affine_world_transform, mul_rgba,
+        clip_sprite_object_to_world_rect, clipped_sprite_object_to_world_rect, finish_frame,
+        fold_sprite_xy_rot, font_chain_key, gather_finalized_sprites, mul_rgba,
         prewarm_cached_prepared_inline_text_slot, prewarm_frame_inline_text_slot,
         prewarm_prepared_inline_text_slot, prewarm_u32_text_slot, push_shadow_objects_for_range,
-        resolve_sprite_size_like_sm, sort_composed_draw_items, sort_draw_items,
-        sort_draw_items_legacy, str_ptr, textured_mesh_world_bounds,
-        textured_mesh_world_bounds_legacy, wrap_text_lines_by_words,
+        resolve_sprite_size_like_sm, sort_composed_draw_items, sort_draw_items, str_ptr,
+        wrap_text_lines_by_words,
     };
     use crate::actors::{
         Actor, ActorResourceArena, InlineText, RetainedActorFrame, SizeSpec, SpriteSource,
@@ -8623,7 +7962,7 @@ mod tests {
     use deadlib_render::{
         BlendMode, DrawOp, INVALID_TEXTURE_HANDLE, INVALID_TMESH_CACHE_KEY, MeshRun, MeshVertex,
         RenderFrame, SpriteInstanceRaw, SpriteRun, TMeshCacheKey, TexturedMeshGeometry,
-        TexturedMeshInstanceRaw, TexturedMeshRun, TexturedMeshVertex, TexturedMeshVertices,
+        TexturedMeshInstanceRaw, TexturedMeshRun, TexturedMeshVertex,
     };
     use glam::{Mat4 as Matrix4, Vec3 as Vector3};
     use std::cell::Cell;
@@ -8823,75 +8162,6 @@ mod tests {
     }
 
     #[test]
-    fn retained_bulk_splice_matches_per_object_append() {
-        let mesh_vertices: Arc<[MeshVertex]> = Arc::from([MeshVertex::default(); 3]);
-        let tmesh_vertices: Arc<[TexturedMeshVertex]> =
-            Arc::from([TexturedMeshVertex::default(); 3]);
-        let mut cached_builder = FrameBuilder::default();
-        cached_builder.push_sprite(7, 0, 2, BlendMode::Alpha, 0, 0);
-        cached_builder.push_mesh(
-            0,
-            0,
-            3,
-            BlendMode::Add,
-            0,
-            MeshPayload {
-                transform: Matrix4::IDENTITY,
-                tint: [1.0; 4],
-                vertices: MeshVertices::Shared(mesh_vertices),
-            },
-        );
-        cached_builder.push_textured_mesh(
-            8,
-            0,
-            4,
-            BlendMode::Alpha,
-            0,
-            TexturedMeshPayload {
-                instance: TexturedMeshInstanceRaw::new(
-                    Matrix4::IDENTITY,
-                    [1.0; 4],
-                    [1.0; 2],
-                    [0.0; 2],
-                    [0.0; 2],
-                    false,
-                ),
-                vertices: TexturedMeshVertices::Shared(tmesh_vertices),
-                geom_cache_key: 41,
-                depth_test: false,
-            },
-        );
-        let cached = CachedRetainedFrame {
-            builder: cached_builder,
-            sprite_instances: vec![test_sprite_instance(4.0)],
-        };
-
-        let mut legacy_builder = FrameBuilder::default();
-        let mut bulk_builder = FrameBuilder::default();
-        let mut legacy_sprites = vec![test_sprite_instance(-1.0)];
-        let mut bulk_sprites = legacy_sprites.clone();
-        let mut legacy_order = 7;
-        let mut bulk_order = 7;
-        append_retained_frame_legacy(
-            &cached,
-            &mut legacy_order,
-            &mut legacy_builder,
-            &mut legacy_sprites,
-        );
-        append_retained_frame(
-            &cached,
-            &mut bulk_order,
-            &mut bulk_builder,
-            &mut bulk_sprites,
-        );
-
-        assert_eq!(legacy_order, bulk_order);
-        let legacy = finish_test_builder(legacy_builder, legacy_sprites);
-        let bulk = finish_test_builder(bulk_builder, bulk_sprites);
-        assert_test_frames_equal(&legacy, &bulk);
-    }
-
-    #[test]
     fn fallback_sprite_gather_coalesces_without_changing_painter_output() {
         let sprites = vec![
             test_sprite_instance(0.0),
@@ -9030,10 +8300,6 @@ mod tests {
 
     fn boxed_lines(lines: &[&str]) -> Vec<Box<str>> {
         lines.iter().map(|line| Box::<str>::from(*line)).collect()
-    }
-
-    fn test_draw_item(z: i16, order: u32) -> DrawItem {
-        DrawItem::synthetic(z, order, order)
     }
 
     fn test_layout() -> CachedTextLayout {
@@ -10320,101 +9586,6 @@ mod tests {
     }
 
     #[test]
-    fn contained_sprite_clip_preserves_raw_instance_without_rebuild() {
-        let original = SpriteInstanceRaw {
-            center: [17.0, 23.0, 0.25, 1.0],
-            size: [10.0, 14.0],
-            rot_sin_cos: [0.0, 1.0],
-            tint: [0.25, 0.5, 0.75, 0.8],
-            uv_scale: [0.5, 0.75],
-            uv_offset: [0.125, 0.25],
-            local_offset: [2.0, -3.0],
-            local_offset_rot_sin_cos: [0.0, 1.0],
-            edge_fade: [0.1, 0.2, 0.3, 0.4],
-            texture_mask: 1.0,
-        };
-        let mut sprite_instances = vec![original];
-        let mut object = EditableDraw {
-            object_type: EditablePayload::Sprite(0),
-            texture_handle: 17,
-            blend: BlendMode::Alpha,
-            z: 3,
-            order: 9,
-            camera: 0,
-        };
-        let clip = WorldRect {
-            left: 0.0,
-            right: 64.0,
-            bottom: 0.0,
-            top: 64.0,
-        };
-
-        let current =
-            clipped_sprite_object_to_world_rect(&object, &sprite_instances, clip, None, None)
-                .unwrap();
-        let legacy = clipped_sprite_object_to_world_rect_legacy(
-            &object,
-            &sprite_instances,
-            clip,
-            None,
-            None,
-        )
-        .unwrap();
-        assert!(current.sprite.is_none());
-        assert_eq!(legacy.sprite, Some(original));
-
-        assert!(clip_sprite_object_to_world_rect(
-            &mut object,
-            &mut sprite_instances,
-            clip,
-        ));
-        assert!(matches!(object.object_type, EditablePayload::Sprite(0)));
-        assert_eq!(sprite_instances, [original]);
-    }
-
-    #[test]
-    fn partial_sprite_clip_still_matches_crop_rebuild() {
-        let original = SpriteInstanceRaw {
-            center: [0.0, 0.0, 0.0, 1.0],
-            size: [10.0, 10.0],
-            rot_sin_cos: [0.0, 1.0],
-            tint: [1.0; 4],
-            uv_scale: [1.0; 2],
-            uv_offset: [0.0; 2],
-            local_offset: [0.0; 2],
-            local_offset_rot_sin_cos: [0.0, 1.0],
-            edge_fade: [0.0; 4],
-            texture_mask: 0.0,
-        };
-        let object = EditableDraw {
-            object_type: EditablePayload::Sprite(0),
-            texture_handle: 1,
-            blend: BlendMode::Alpha,
-            z: 0,
-            order: 0,
-            camera: 0,
-        };
-        let clip = WorldRect {
-            left: -2.0,
-            right: 5.0,
-            bottom: -5.0,
-            top: 5.0,
-        };
-
-        let current =
-            clipped_sprite_object_to_world_rect(&object, &[original], clip, None, None).unwrap();
-        let legacy =
-            clipped_sprite_object_to_world_rect_legacy(&object, &[original], clip, None, None)
-                .unwrap();
-        assert_eq!(current.sprite, legacy.sprite);
-        let clipped = current.sprite.unwrap();
-        assert_eq!(clipped.center, [1.5, 0.0, 0.0, 1.0]);
-        assert_eq!(clipped.size, [7.0, 10.0]);
-        assert_eq!(clipped.uv_scale, [0.7, 1.0]);
-        assert_eq!(clipped.uv_offset, [0.3, 0.0]);
-    }
-
-    #[test]
     fn multi_mask_transient_mesh_reuses_candidate_buffers() {
         let source = vec![TexturedMeshVertex::default(); 3];
         let mut obj = EditableDraw {
@@ -10545,123 +9716,6 @@ mod tests {
         assert_eq!(actual_vertices.as_ref(), expected_vertices.as_ref());
         assert_eq!(actual_key, expected_key);
         assert_eq!(actual_depth, expected_depth);
-    }
-
-    #[test]
-    fn affine_textured_mesh_clipping_matches_projective_math() {
-        let vertex = |pos, uv| TexturedMeshVertex {
-            pos,
-            uv,
-            color: [0.25, 0.5, 0.75, 1.0],
-            tex_matrix_scale: [1.0; 2],
-        };
-        let vertices = [
-            vertex([-4.0, -4.0, 0.0], [0.0, 1.0]),
-            vertex([4.0, -4.0, 0.0], [1.0, 1.0]),
-            vertex([4.0, 4.0, 0.0], [1.0, 0.0]),
-            vertex([-4.0, -4.0, 0.0], [0.0, 1.0]),
-            vertex([4.0, 4.0, 0.0], [1.0, 0.0]),
-            vertex([-4.0, 4.0, 0.0], [0.0, 0.0]),
-        ];
-        let transform = Matrix4::from_translation(Vector3::new(7.0, 11.0, 0.0))
-            * Matrix4::from_rotation_z(0.37)
-            * Matrix4::from_scale(Vector3::new(1.5, -0.75, 1.0));
-        assert!(is_affine_world_transform(&transform));
-        let clip = WorldRect {
-            left: 4.0,
-            right: 11.0,
-            bottom: 8.0,
-            top: 14.0,
-        };
-
-        let current_bounds = textured_mesh_world_bounds(&vertices, transform).unwrap();
-        let legacy_bounds = textured_mesh_world_bounds_legacy(&vertices, transform).unwrap();
-        for (current, legacy) in [
-            (current_bounds.left, legacy_bounds.left),
-            (current_bounds.right, legacy_bounds.right),
-            (current_bounds.bottom, legacy_bounds.bottom),
-            (current_bounds.top, legacy_bounds.top),
-        ] {
-            assert!((current - legacy).abs() <= 1e-6);
-        }
-
-        let current = clip_textured_mesh_to_world_rect(
-            [0.8, 0.6, 0.4, 1.0],
-            &vertices,
-            transform,
-            [0.75, 0.5],
-            [0.125, 0.25],
-            [0.0; 2],
-            clip,
-            false,
-            None,
-        )
-        .unwrap();
-        let legacy = clip_textured_mesh_to_world_rect_legacy(
-            [0.8, 0.6, 0.4, 1.0],
-            &vertices,
-            transform,
-            [0.75, 0.5],
-            [0.125, 0.25],
-            [0.0; 2],
-            clip,
-            false,
-            None,
-        )
-        .unwrap();
-        let (
-            EditablePayload::TexturedMesh {
-                vertices: current_vertices,
-                ..
-            },
-            EditablePayload::TexturedMesh {
-                vertices: legacy_vertices,
-                ..
-            },
-        ) = (&current.object_type, &legacy.object_type)
-        else {
-            panic!("clipping should produce textured meshes");
-        };
-        assert_eq!(current_vertices.len(), legacy_vertices.len());
-        for (current, legacy) in current_vertices.iter().zip(legacy_vertices.iter()) {
-            for (current, legacy) in current.pos.iter().zip(legacy.pos) {
-                assert!((*current - legacy).abs() <= 1e-5);
-            }
-            for (current, legacy) in current.uv.iter().zip(legacy.uv) {
-                assert!((*current - legacy).abs() <= 1e-6);
-            }
-            assert_eq!(current.color, legacy.color);
-            assert_eq!(current.tex_matrix_scale, legacy.tex_matrix_scale);
-        }
-    }
-
-    #[test]
-    fn projective_textured_mesh_bounds_keep_perspective_divide() {
-        let mut transform = Matrix4::IDENTITY;
-        transform.x_axis.w = 0.25;
-        assert!(!is_affine_world_transform(&transform));
-        let vertices = [
-            TexturedMeshVertex {
-                pos: [-2.0, 3.0, 0.0],
-                ..TexturedMeshVertex::default()
-            },
-            TexturedMeshVertex {
-                pos: [2.0, 3.0, 0.0],
-                ..TexturedMeshVertex::default()
-            },
-        ];
-
-        let bounds = textured_mesh_world_bounds(&vertices, transform).unwrap();
-        let legacy = textured_mesh_world_bounds_legacy(&vertices, transform).unwrap();
-
-        assert_eq!(bounds.left, -4.0);
-        assert_eq!(bounds.right, 4.0 / 3.0);
-        assert_eq!(bounds.bottom, 2.0);
-        assert_eq!(bounds.top, 6.0);
-        assert_eq!(bounds.left, legacy.left);
-        assert_eq!(bounds.right, legacy.right);
-        assert_eq!(bounds.bottom, legacy.bottom);
-        assert_eq!(bounds.top, legacy.top);
     }
 
     #[test]
@@ -11840,84 +10894,6 @@ mod tests {
                 .map(|(index, (z, order))| DrawItem::synthetic(z, order, index as u32))
                 .collect(),
         );
-    }
-
-    #[test]
-    fn sparse_draw_item_sort_matches_legacy_order() {
-        const Z_VALUES: [i16; 9] = [-30_000, -99, 0, 50, 90, 91, 2_101, 8_000, 32_000];
-        let source: Vec<_> = (0usize..1_024)
-            .map(|index| {
-                DrawItem::synthetic(
-                    Z_VALUES[index.wrapping_mul(17).wrapping_add(5) % Z_VALUES.len()],
-                    index as u32,
-                    index as u32,
-                )
-            })
-            .collect();
-        let mut legacy = source.clone();
-        let mut indirect = source;
-
-        sort_draw_items_legacy(&mut legacy, &mut ComposeScratch::default());
-        sort_draw_items(&mut indirect, &mut ComposeScratch::default());
-
-        assert_eq!(
-            indirect
-                .iter()
-                .map(|item| (item.z, item.order, item.payload_index))
-                .collect::<Vec<_>>(),
-            legacy
-                .iter()
-                .map(|item| (item.z, item.order, item.payload_index))
-                .collect::<Vec<_>>()
-        );
-    }
-
-    #[test]
-    fn sparse_render_sort_reuses_lookup_and_matches_legacy_fallbacks() {
-        fn draw_items(z_values: &[i16], count: usize) -> Vec<DrawItem> {
-            (0..count)
-                .map(|index| {
-                    DrawItem::synthetic(
-                        z_values[index.wrapping_mul(17).wrapping_add(5) % z_values.len()],
-                        index as u32,
-                        index as u32,
-                    )
-                })
-                .collect()
-        }
-
-        fn assert_matches_legacy(source: Vec<DrawItem>, scratch: &mut ComposeScratch) {
-            let mut legacy = source.clone();
-            let mut optimized = source;
-
-            sort_draw_items_legacy(&mut legacy, &mut ComposeScratch::default());
-            sort_draw_items(&mut optimized, scratch);
-
-            let fingerprint = |items: &[DrawItem]| {
-                items
-                    .iter()
-                    .map(|item| (item.z, item.order, item.payload_index))
-                    .collect::<Vec<_>>()
-            };
-            assert_eq!(fingerprint(&optimized), fingerprint(&legacy));
-        }
-
-        let mut scratch = ComposeScratch::default();
-        assert_matches_legacy(draw_items(&[-30_000, -1_000, 0, 30_000], 256), &mut scratch);
-        assert_matches_legacy(draw_items(&[-29_999, -999, 1, 29_999], 256), &mut scratch);
-
-        let sixty_five_layers: Vec<_> = (0..65)
-            .map(|index| (-30_000 + index * 900) as i16)
-            .collect();
-        assert_matches_legacy(draw_items(&sixty_five_layers, 130), &mut scratch);
-
-        let descending_within_layers = vec![
-            test_draw_item(-30_000, 4),
-            test_draw_item(30_000, 3),
-            test_draw_item(-30_000, 2),
-            test_draw_item(30_000, 1),
-        ];
-        assert_matches_legacy(descending_within_layers, &mut scratch);
     }
 
     #[test]

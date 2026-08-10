@@ -468,7 +468,7 @@ impl GameplayReceptorFeedbackState {
     }
 
     #[inline(always)]
-    pub fn set_bop_timer_for_benchmark(&mut self, col: usize, timer: f32) {
+    pub fn set_bop_timer_for_test(&mut self, col: usize, timer: f32) {
         if let Some(slot) = self.bop_timers.get_mut(col) {
             *slot = timer;
         }

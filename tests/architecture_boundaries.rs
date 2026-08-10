@@ -7167,12 +7167,12 @@ fn present_model_lives_in_present_crate() {
         && (!text.contains("ASSET_TEXTURE_CONTEXT")
             || !text.contains("AssetTextureContext")
             || !text.contains("pub use present_dsl::SpriteBuilder"))
-        {
-            failures.push(format!(
-                "{} should own reusable asset-backed presentation texture context exports",
-                rel_path(&root, &deadlib_assets_lib)
-            ));
-        }
+    {
+        failures.push(format!(
+            "{} should own reusable asset-backed presentation texture context exports",
+            rel_path(&root, &deadlib_assets_lib)
+        ));
+    }
 
     let asset_dsl = root.join("crates/deadsync-assets/src/present_dsl.rs");
     if let Ok(text) = fs::read_to_string(&asset_dsl) {
@@ -7193,12 +7193,12 @@ fn present_model_lives_in_present_crate() {
         && (!text.contains("GraphicTextureChoiceCache")
             || !text.contains("load_initial_textures")
             || !text.contains("load_texture_key"))
-        {
-            failures.push(format!(
-                "{} should own app texture loading and choice discovery",
-                rel_path(&root, &asset_textures)
-            ));
-        }
+    {
+        failures.push(format!(
+            "{} should own app texture loading and choice discovery",
+            rel_path(&root, &asset_textures)
+        ));
+    }
 
     for dir in [
         "crates/deadsync-shell/src/app",
@@ -7312,12 +7312,13 @@ fn version_utils_live_in_version_crate() {
 
     let engine_mod = root.join("src/engine/mod.rs");
     if let Ok(text) = fs::read_to_string(&engine_mod)
-        && count_token_refs(&text, "pub mod version") != 0 {
-            failures.push(format!(
-                "{} declares engine::version; import deadsync_version directly",
-                rel_path(&root, &engine_mod)
-            ));
-        }
+        && count_token_refs(&text, "pub mod version") != 0
+    {
+        failures.push(format!(
+            "{} declares engine::version; import deadsync_version directly",
+            rel_path(&root, &engine_mod)
+        ));
+    }
 
     for dir in VERSION_IMPORT_SCAN_DIRS {
         let path = root.join(dir);

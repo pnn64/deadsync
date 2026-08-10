@@ -152,8 +152,6 @@ include!("runtime_init.rs");
 include!("runtime_methods.rs");
 include!("runtime_update.rs");
 include!("effective.rs");
-#[cfg(feature = "bench-support")]
-include!("gameplay_frame_bench.rs");
 include!("tests.rs");
 #[cfg(test)]
 include!("runtime_regression_tests.rs");

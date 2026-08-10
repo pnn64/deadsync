@@ -169,11 +169,9 @@ impl Default for ActorResourceArena {
 #[derive(Clone, Debug)]
 pub enum Background {
     Color([f32; 4]),
-    #[allow(dead_code)]
     Texture(&'static str),
 }
 
-#[allow(dead_code)]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum TextAlign {
     #[default]
@@ -182,7 +180,6 @@ pub enum TextAlign {
     Right,
 }
 
-#[allow(dead_code)]
 #[derive(Clone, Copy, Debug)]
 pub enum SizeSpec {
     Px(f32),
@@ -311,7 +308,6 @@ pub enum Actor {
         size: [SizeSpec; 2],
         source: SpriteSource,
         tint: [f32; 4],
-        #[allow(dead_code)]
         glow: [f32; 4],
         z: i16,
         cell: Option<(u32, u32)>,
@@ -352,7 +348,6 @@ pub enum Actor {
         local_transform: Matrix4,
         color: [f32; 4],
         stroke_color: Option<[f32; 4]>,
-        #[allow(dead_code)]
         glow: [f32; 4],
         font: &'static str,
         content: TextContent,

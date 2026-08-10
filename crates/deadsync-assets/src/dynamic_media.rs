@@ -108,15 +108,6 @@ where
         .collect()
 }
 
-#[cfg(any(test, feature = "bench-support"))]
-pub fn dynamic_video_key_set_legacy_for_bench(paths: &[PathBuf]) -> HashSet<String> {
-    paths
-        .iter()
-        .filter(|path| dynamic::is_dynamic_video_path(path))
-        .map(|path| path_texture_key(path))
-        .collect()
-}
-
 pub fn stale_texture_keys(current: &HashSet<String>, next: &HashSet<String>) -> Vec<String> {
     current.difference(next).cloned().collect()
 }
@@ -606,26 +597,6 @@ mod tests {
         assert!(!keys.contains("bg.png"));
         assert!(keys.contains("movie.mp4"));
         assert!(keys.contains("clip.avi"));
-    }
-
-    #[test]
-    fn dynamic_video_key_set_matches_owned_legacy_keys() {
-        let paths = [
-            PathBuf::from("Banners/still.PNG"),
-            PathBuf::from("Movies/Intro.MP4"),
-            PathBuf::from("Movies/intro.mp4"),
-            PathBuf::from("Movies/danse-été.webm"),
-            PathBuf::from("Movies/Intro.MP4"),
-        ];
-        let current = dynamic_video_key_set(paths.iter());
-        let legacy = dynamic_video_key_set_legacy_for_bench(&paths);
-        let current = current
-            .iter()
-            .map(|key| key.as_ref())
-            .collect::<HashSet<_>>();
-        let legacy = legacy.iter().map(String::as_str).collect::<HashSet<_>>();
-
-        assert_eq!(current, legacy);
     }
 
     #[test]

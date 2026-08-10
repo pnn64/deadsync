@@ -1157,110 +1157,6 @@ fn sort_songs_itgmania(songs: &mut [Arc<SongData>]) {
     songs.sort_by(|left, right| song_itgmania_cmp(left, right));
 }
 
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub fn sort_songs_itgmania_for_bench(songs: &mut [Arc<SongData>]) {
-    sort_songs_itgmania(songs);
-}
-
-#[cfg(feature = "bench-support")]
-fn itgmania_make_sort_bytes(text: &str) -> Vec<u8> {
-    let mut out = text.as_bytes().to_vec();
-    out.make_ascii_uppercase();
-
-    if matches!(out.first(), Some(b'.')) {
-        out.remove(0);
-    }
-
-    if let Some(&byte) = out.first() {
-        let is_alpha = byte.is_ascii_uppercase();
-        let is_digit = byte.is_ascii_digit();
-        if !is_alpha && !is_digit {
-            out.insert(0, b'~');
-        }
-    }
-
-    out
-}
-
-#[cfg(feature = "bench-support")]
-struct ItgmaniaSongTitleKey {
-    main_raw: Vec<u8>,
-    main_sort: Vec<u8>,
-    sub_sort: Vec<u8>,
-    path_fold: Vec<u8>,
-}
-
-#[cfg(feature = "bench-support")]
-impl ItgmaniaSongTitleKey {
-    fn new(song: &SongData) -> Self {
-        let main_raw_str = if song.translit_title.is_empty() {
-            song.title.as_str()
-        } else {
-            song.translit_title.as_str()
-        };
-        let sub_raw_str = if song.translit_subtitle.is_empty() {
-            song.subtitle.as_str()
-        } else {
-            song.translit_subtitle.as_str()
-        };
-
-        let mut path_fold = song
-            .simfile_path
-            .to_string_lossy()
-            .into_owned()
-            .into_bytes();
-        path_fold.make_ascii_lowercase();
-
-        Self {
-            main_raw: main_raw_str.as_bytes().to_vec(),
-            main_sort: itgmania_make_sort_bytes(main_raw_str),
-            sub_sort: itgmania_make_sort_bytes(sub_raw_str),
-            path_fold,
-        }
-    }
-}
-
-#[cfg(feature = "bench-support")]
-impl PartialEq for ItgmaniaSongTitleKey {
-    fn eq(&self, other: &Self) -> bool {
-        self.cmp(other) == std::cmp::Ordering::Equal
-    }
-}
-
-#[cfg(feature = "bench-support")]
-impl Eq for ItgmaniaSongTitleKey {}
-
-#[cfg(feature = "bench-support")]
-impl PartialOrd for ItgmaniaSongTitleKey {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-#[cfg(feature = "bench-support")]
-impl Ord for ItgmaniaSongTitleKey {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        if self.main_raw == other.main_raw {
-            match self.sub_sort.cmp(&other.sub_sort) {
-                std::cmp::Ordering::Equal => self.path_fold.cmp(&other.path_fold),
-                ordering => ordering,
-            }
-        } else {
-            match self.main_sort.cmp(&other.main_sort) {
-                std::cmp::Ordering::Equal => self.main_raw.cmp(&other.main_raw),
-                ordering => ordering,
-            }
-        }
-    }
-}
-
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub fn sort_songs_itgmania_legacy(songs: &mut [Arc<SongData>]) {
-    songs.sort_by_cached_key(|song| ItgmaniaSongTitleKey::new(song.as_ref()));
-}
-
 fn ci_key(text: &str) -> String {
     text.trim().to_ascii_lowercase()
 }
@@ -1374,23 +1270,6 @@ fn sort_song_packs(packs: &mut [SongPack]) {
             destinations.swap(index, destination);
         }
     }
-}
-
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub fn sort_song_packs_for_bench(packs: &mut [SongPack]) {
-    sort_song_packs(packs);
-}
-
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub fn sort_song_packs_legacy(packs: &mut [SongPack]) {
-    packs.sort_by_cached_key(|pack| {
-        (
-            pack.sort_title.to_ascii_lowercase(),
-            pack.group_name.to_ascii_lowercase(),
-        )
-    });
 }
 
 #[cfg(test)]

@@ -263,30 +263,6 @@ pub fn prepare<EnsureCached>(
     prepare_impl::<true, true, _>(render_list, scratch, ensure_cached_tmesh);
 }
 
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub fn __benchmark_prepare_adjacent_tmesh_reuse<EnsureCached>(
-    render_list: &RenderList,
-    scratch: &mut DrawScratch,
-    ensure_cached_tmesh: EnsureCached,
-) where
-    EnsureCached: FnMut(TMeshCacheKey, &[TexturedMeshVertex]) -> bool,
-{
-    prepare_impl::<false, true, _>(render_list, scratch, ensure_cached_tmesh);
-}
-
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub fn __benchmark_prepare_unreserved_tmesh_instances<EnsureCached>(
-    render_list: &RenderList,
-    scratch: &mut DrawScratch,
-    ensure_cached_tmesh: EnsureCached,
-) where
-    EnsureCached: FnMut(TMeshCacheKey, &[TexturedMeshVertex]) -> bool,
-{
-    prepare_impl::<true, false, _>(render_list, scratch, ensure_cached_tmesh);
-}
-
 fn prepare_impl<const REUSE_FRAME_GEOMS: bool, const RESERVE_TMESH_INSTANCES: bool, EnsureCached>(
     render_list: &RenderList,
     scratch: &mut DrawScratch,

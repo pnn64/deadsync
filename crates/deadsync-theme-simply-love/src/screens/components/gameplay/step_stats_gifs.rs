@@ -59,40 +59,6 @@ fn build_gif_actor(layout: crate::step_stats_gifs::GifRenderLayout, frame: u32) 
     }
 }
 
-#[cfg(feature = "bench-support")]
-pub fn benchmark_gif_actor(layout: crate::step_stats_gifs::GifRenderLayout, frame: u32) -> Actor {
-    build_gif_actor(layout, frame)
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-pub fn benchmark_gif_actor_legacy(
-    layout: crate::step_stats_gifs::GifRenderLayout,
-    frame: u32,
-) -> Actor {
-    let [crop_left, crop_right, crop_top, crop_bottom] = layout.crop;
-    if layout.crop != [0.0; 4] {
-        act!(sprite(layout.texture):
-            align(layout.align_x, 0.5):
-            xy(layout.x, layout.y):
-            setstate(frame):
-            zoom(layout.zoom):
-            cropleft(crop_left):
-            cropright(crop_right):
-            croptop(crop_top):
-            cropbottom(crop_bottom):
-            z(GIF_Z)
-        )
-    } else {
-        act!(sprite(layout.texture):
-            align(layout.align_x, 0.5):
-            xy(layout.x, layout.y):
-            setstate(frame):
-            zoom(layout.zoom):
-            z(GIF_Z)
-        )
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -136,7 +102,7 @@ mod tests {
     }
 
     #[test]
-    fn static_actor_matches_legacy_layout_without_owned_texture_key() {
+    fn static_actor_uses_layout_without_owned_texture_key() {
         let extra = resolve_extra(&StepStatsExtra::gif("AmongUs"));
         let layout = gif_render_layout(
             extra,
@@ -154,11 +120,5 @@ mod tests {
         let frame = layout.frame_at(12.25, 4.75);
 
         assert_actor(build_gif_actor(layout, frame), layout, frame, true);
-        assert_actor(
-            benchmark_gif_actor_legacy(layout, frame),
-            layout,
-            frame,
-            false,
-        );
     }
 }

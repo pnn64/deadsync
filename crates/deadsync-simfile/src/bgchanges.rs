@@ -69,13 +69,6 @@ fn push_bgchange_field(fields: &mut Vec<String>, field: &str, compact_field_grow
     fields.push(field.to_string());
 }
 
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub fn split_bgchange_sets_legacy_for_bench(changes: &str, entries: &[String]) -> Vec<Vec<String>> {
-    let changes = strip_newlines_owned(changes);
-    split_bgchange_sets(&changes, entries, false)
-}
-
 pub fn bgchange_field_rejects_non_media(field: &str) -> bool {
     contains_ignore_ascii_case(field, ".ini") || contains_ignore_ascii_case(field, ".xml")
 }
@@ -86,13 +79,6 @@ fn contains_ignore_ascii_case(haystack: &str, needle: &str) -> bool {
         .as_bytes()
         .windows(needle.len())
         .any(|window| window.eq_ignore_ascii_case(needle.as_bytes()))
-}
-
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub fn bgchange_field_rejects_non_media_legacy(field: &str) -> bool {
-    let lower = field.to_ascii_lowercase();
-    lower.contains(".ini") || lower.contains(".xml")
 }
 
 pub fn parse_bgchange_rate(field: Option<&str>) -> f32 {
@@ -164,48 +150,6 @@ pub fn parse_bgchange_color(field: &str) -> Option<[f32; 4]> {
         return None;
     }
     Some([red, green, blue, alpha])
-}
-
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub fn parse_bgchange_color_legacy(field: &str) -> Option<[f32; 4]> {
-    let field = field.trim().replace('^', ",");
-    if field.is_empty() {
-        return None;
-    }
-    if let Some(hex) = field.strip_prefix('#')
-        && matches!(hex.len(), 6 | 8)
-    {
-        let r = u8::from_str_radix(&hex[0..2], 16).ok()? as f32 / 255.0;
-        let g = u8::from_str_radix(&hex[2..4], 16).ok()? as f32 / 255.0;
-        let b = u8::from_str_radix(&hex[4..6], 16).ok()? as f32 / 255.0;
-        let a = if hex.len() == 8 {
-            u8::from_str_radix(&hex[6..8], 16).ok()? as f32 / 255.0
-        } else {
-            1.0
-        };
-        return Some([r, g, b, a]);
-    }
-    let parts = field
-        .split(',')
-        .map(str::trim)
-        .filter(|part| !part.is_empty())
-        .collect::<Vec<_>>();
-    match parts.as_slice() {
-        [r, g, b] => Some([
-            r.parse::<f32>().ok()?,
-            g.parse::<f32>().ok()?,
-            b.parse::<f32>().ok()?,
-            1.0,
-        ]),
-        [r, g, b, a] => Some([
-            r.parse::<f32>().ok()?,
-            g.parse::<f32>().ok()?,
-            b.parse::<f32>().ok()?,
-            a.parse::<f32>().ok()?,
-        ]),
-        _ => None,
-    }
 }
 
 fn match_bgchange_entry<'a>(changes: &'a str, start: usize, entries: &[String]) -> Option<&'a str> {

@@ -58,11 +58,6 @@ pub use files::{
     retarget_loader_env, song_dir_string, song_group_name, song_lookup_matches, song_music_path,
     song_named_image_path, song_simfile_path, strip_sprite_hints, theme_path, wildcard_matches,
 };
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub use files::{
-    song_lua_path_classification_for_bench, song_lua_path_classification_legacy_for_bench,
-};
 pub use host::{
     SONG_LUA_STARTUP_MESSAGE, SongLuaCompileGlobals, SongLuaDateGlobals, SongLuaGameStateGlobals,
     SongLuaHostState, clone_lua_value, create_arrow_effects_table, create_chunk_env_proxy,
@@ -194,13 +189,6 @@ pub use multitap::{
 };
 pub use net::{create_network_table, encode_query_params, query_value_text, url_encode_component};
 pub use noteskin::{SongLuaActorFactory, create_noteskin_table};
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub use noteskin::{
-    normalize_noteskin_template_path_for_bench, normalize_noteskin_template_path_legacy_for_bench,
-    noteskin_get_path_args_for_bench, noteskin_get_path_args_legacy_for_bench,
-    noteskin_model_field_for_bench, noteskin_model_field_legacy_for_bench,
-};
 pub use option_rows::{
     SongLuaNamedOptionRowSpec, SongLuaOperatorOptionRowSpec, SongLuaOptionRowSpec,
     SongLuaOptionValues, THEME_PREF_ROW_NAMES, conf_option_row_spec, create_conf_option_row,
@@ -243,20 +231,12 @@ pub use runtime_mod::{
     runtime_mod_entry_players, runtime_mod_key, runtime_mod_start_value,
     runtime_overlay_capture_key, runtime_player_option_ease_target,
 };
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub use runtime_mod::{
-    runtime_mod_state_updates_for_bench, runtime_mod_state_updates_legacy_for_bench,
-};
 pub use sl::{create_sl_streams, create_sl_table, init_sl_streams, parse_chart_info};
 pub use song_tables::{
     PlayerLuaTables, create_course_table, create_enabled_players_table, create_player_tables,
     create_song_options_table, create_song_table, create_song_util_table, create_songman_table,
     create_steps_table, create_trail_table,
 };
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub use tables::prefsmgr_default_value_legacy_for_bench;
 pub use tables::{
     create_author_table, create_background_filter_values, create_branch_table,
     create_charman_table, create_credits_table, create_difficulty_table, create_display_bpms_table,

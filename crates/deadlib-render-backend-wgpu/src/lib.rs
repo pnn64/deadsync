@@ -1517,51 +1517,6 @@ fn stage_projection_upload(
     true
 }
 
-#[cfg(any(test, feature = "bench-support"))]
-fn stage_projection_upload_legacy(
-    upload: &mut Vec<u8>,
-    cameras: &[Matrix4],
-    fallback: Matrix4,
-    stride: usize,
-) {
-    let needed = cameras.len().saturating_add(1).max(1);
-    upload.resize(needed * stride, 0);
-    for (index, matrix) in cameras
-        .iter()
-        .copied()
-        .chain(std::iter::once(fallback))
-        .enumerate()
-    {
-        let array = matrix.to_cols_array_2d();
-        let bytes = cast_slice(&array);
-        let offset = index * stride;
-        upload[offset..offset + bytes.len()].copy_from_slice(bytes);
-    }
-}
-
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub fn __benchmark_stage_projection_upload(
-    upload: &mut Vec<u8>,
-    keys: &mut Vec<[u32; 16]>,
-    cameras: &[Matrix4],
-    fallback: Matrix4,
-    stride: usize,
-) -> bool {
-    stage_projection_upload(upload, keys, cameras, fallback, stride)
-}
-
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub fn __benchmark_stage_projection_upload_legacy(
-    upload: &mut Vec<u8>,
-    cameras: &[Matrix4],
-    fallback: Matrix4,
-    stride: usize,
-) {
-    stage_projection_upload_legacy(upload, cameras, fallback, stride);
-}
-
 fn set_camera(
     pass: &mut wgpu::RenderPass<'_>,
     proj: &ProjState,
@@ -2449,64 +2404,9 @@ const TMESH_SHADER_UBO: &str = include_str!("shaders/wgpu_tmesh_ubo.wgsl");
 
 #[cfg(test)]
 mod tests {
-    use super::{Matrix4, stage_projection_upload, stage_projection_upload_legacy};
-    use glam::Vec3;
+    use super::{Matrix4, stage_projection_upload};
 
     const STRIDE: usize = 256;
-
-    #[test]
-    fn projection_cache_matches_legacy_bytes_and_skips_stable_frames() {
-        let mut cameras = vec![
-            Matrix4::IDENTITY,
-            Matrix4::from_translation(Vec3::new(12.0, -7.0, 0.0)),
-        ];
-        let mut fallback = Matrix4::from_scale(Vec3::new(2.0, -2.0, 1.0));
-        let mut upload = Vec::new();
-        let mut keys = Vec::new();
-        let mut legacy = Vec::new();
-
-        assert!(stage_projection_upload(
-            &mut upload,
-            &mut keys,
-            &cameras,
-            fallback,
-            STRIDE,
-        ));
-        stage_projection_upload_legacy(&mut legacy, &cameras, fallback, STRIDE);
-        assert_eq!(upload, legacy);
-        assert!(!stage_projection_upload(
-            &mut upload,
-            &mut keys,
-            &cameras,
-            fallback,
-            STRIDE,
-        ));
-
-        cameras[1] = Matrix4::from_translation(Vec3::new(13.0, -7.0, 0.0));
-        assert!(stage_projection_upload(
-            &mut upload,
-            &mut keys,
-            &cameras,
-            fallback,
-            STRIDE,
-        ));
-        stage_projection_upload_legacy(&mut legacy, &cameras, fallback, STRIDE);
-        assert_eq!(upload, legacy);
-
-        cameras.truncate(1);
-        fallback = Matrix4::from_scale(Vec3::new(3.0, -2.0, 1.0));
-        assert!(stage_projection_upload(
-            &mut upload,
-            &mut keys,
-            &cameras,
-            fallback,
-            STRIDE,
-        ));
-        stage_projection_upload_legacy(&mut legacy, &cameras, fallback, STRIDE);
-        assert_eq!(upload, legacy);
-        assert_eq!(upload.len(), 2 * STRIDE);
-        assert!(upload[64..STRIDE].iter().all(|byte| *byte == 0));
-    }
 
     #[test]
     fn projection_cache_compares_float_bits() {

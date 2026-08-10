@@ -35,8 +35,6 @@
 //! worker reports the result through the callback passed to [`init`], so the
 //! shell can apply it retroactively to the currently playing stream.
 
-#[cfg(any(test, feature = "bench-support"))]
-use deadsync_audio_analysis::ReplayGainCacheEntry;
 use deadsync_audio_analysis::{
     CacheFreshness, ReplayGainCacheFile, ReplayGainEntryMap, ReplayGainInfo, UNITY_GAIN,
     compute_loudness, gain_linear_from_info, read_replaygain_cache_file, replaygain_cache_check,
@@ -513,131 +511,6 @@ fn canonicalize_or_clone(path: &Path) -> PathBuf {
     fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf())
 }
 
-#[cfg(any(test, feature = "bench-support"))]
-pub fn memory_cache_lookup_workload_for_bench(paths: &[PathBuf], lookup_rounds: usize) -> u64 {
-    let mut map = MemoryCache::default();
-    map.reserve(paths.len().saturating_mul(2));
-    for (index, path) in paths.iter().enumerate() {
-        map.insert(
-            canonicalize_or_clone(path),
-            SlotState::Ready(benchmark_gain_info(index)),
-        );
-    }
-
-    let mut checksum = map.len() as u64;
-    for round in 0..lookup_rounds {
-        for (index, path) in paths.iter().enumerate() {
-            let gain = if let Some(gain) = terminal_gain_for_path(&map, path) {
-                gain
-            } else {
-                let canonical = canonicalize_or_clone(path);
-                let state = map.get(&canonical).copied().unwrap_or(SlotState::Failed);
-                cache_path_alias(&mut map, path, &canonical, state);
-                terminal_gain(state).unwrap_or(UNITY_GAIN)
-            };
-            checksum = checksum.wrapping_add(
-                u64::from(gain.to_bits()) ^ (index as u64).rotate_left((round & 31) as u32),
-            );
-        }
-    }
-    checksum
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-pub fn memory_cache_lookup_workload_legacy_for_bench(
-    paths: &[PathBuf],
-    lookup_rounds: usize,
-) -> u64 {
-    let mut map = std::collections::HashMap::with_capacity(paths.len());
-    for (index, path) in paths.iter().enumerate() {
-        map.insert(
-            canonicalize_or_clone(path),
-            SlotState::Ready(benchmark_gain_info(index)),
-        );
-    }
-
-    let mut checksum = map.len() as u64;
-    for round in 0..lookup_rounds {
-        for (index, path) in paths.iter().enumerate() {
-            let canonical = canonicalize_or_clone(path);
-            let gain = map
-                .get(&canonical)
-                .copied()
-                .and_then(terminal_gain)
-                .unwrap_or(UNITY_GAIN);
-            checksum = checksum.wrapping_add(
-                u64::from(gain.to_bits()) ^ (index as u64).rotate_left((round & 31) as u32),
-            );
-        }
-    }
-    checksum
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-pub fn disk_cache_lookup_workload_for_bench(keys: &[u64], lookup_rounds: usize) -> u64 {
-    let mut map = ReplayGainEntryMap::default();
-    map.reserve(keys.len());
-    for (index, &key) in keys.iter().enumerate() {
-        map.insert(key, benchmark_cache_entry(key, index));
-    }
-    disk_cache_lookup_checksum(&map, keys, lookup_rounds)
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-pub fn disk_cache_lookup_workload_legacy_for_bench(keys: &[u64], lookup_rounds: usize) -> u64 {
-    let mut map = std::collections::HashMap::with_capacity(keys.len());
-    for (index, &key) in keys.iter().enumerate() {
-        map.insert(key, benchmark_cache_entry(key, index));
-    }
-    disk_cache_lookup_checksum(&map, keys, lookup_rounds)
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-fn disk_cache_lookup_checksum<S>(
-    map: &std::collections::HashMap<u64, ReplayGainCacheEntry, S>,
-    keys: &[u64],
-    lookup_rounds: usize,
-) -> u64
-where
-    S: std::hash::BuildHasher,
-{
-    let mut checksum = map.len() as u64;
-    for round in 0..lookup_rounds {
-        for (index, key) in keys.iter().enumerate() {
-            let entry = map
-                .get(key)
-                .copied()
-                .unwrap_or_else(|| benchmark_cache_entry(*key, index.wrapping_add(lookup_rounds)));
-            checksum = checksum.wrapping_add(
-                entry.path_hash
-                    ^ u64::from(entry.lufs.to_bits())
-                    ^ (index as u64).rotate_left((round & 31) as u32),
-            );
-        }
-    }
-    checksum
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-fn benchmark_gain_info(index: usize) -> ReplayGainInfo {
-    ReplayGainInfo {
-        lufs: -24.0 + (index % 12) as f32,
-        true_peak_linear: 0.5 + (index % 5) as f32 * 0.05,
-    }
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-fn benchmark_cache_entry(key: u64, index: usize) -> ReplayGainCacheEntry {
-    let info = benchmark_gain_info(index);
-    ReplayGainCacheEntry {
-        path_hash: key,
-        mtime_unix_nanos: 1_000_000_000 + index as u64,
-        content_hash: key.rotate_left(17),
-        lufs: info.lufs,
-        true_peak_linear: info.true_peak_linear,
-    }
-}
-
 /// Single-file consolidated cache of every analyzed song. Replaces the
 /// legacy per-song `.bin` layout, which doesn't scale to libraries of
 /// 10k+ songs.
@@ -843,8 +716,6 @@ fn flush_now_with_timeout(timeout: Duration) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::atomic::{AtomicU64, Ordering};
-    use std::time::{SystemTime, UNIX_EPOCH};
 
     #[test]
     fn blocking_worker_threads_are_bounded_by_jobs() {
@@ -872,55 +743,5 @@ mod tests {
         );
         assert_eq!(terminal_gain(SlotState::Failed), Some(UNITY_GAIN));
         assert_eq!(terminal_gain(SlotState::Pending), None);
-    }
-
-    #[test]
-    fn optimized_cache_workloads_match_legacy_for_canonical_and_alias_paths() {
-        static NEXT_ID: AtomicU64 = AtomicU64::new(0);
-        let id = NEXT_ID.fetch_add(1, Ordering::Relaxed);
-        let stamp = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_nanos();
-        let root = std::env::temp_dir().join(format!(
-            "deadsync-replaygain-lookup-{}-{stamp}-{id}",
-            std::process::id()
-        ));
-        let child = root.join("child");
-        fs::create_dir_all(&child).unwrap();
-        let paths = (0..8)
-            .map(|index| {
-                let path = root.join(format!("track-{index}.ogg"));
-                fs::write(&path, [index as u8]).unwrap();
-                path
-            })
-            .collect::<Vec<_>>();
-        let canonical = paths
-            .iter()
-            .map(|path| fs::canonicalize(path).unwrap())
-            .collect::<Vec<_>>();
-        let aliases = paths
-            .iter()
-            .map(|path| child.join("..").join(path.file_name().unwrap()))
-            .collect::<Vec<_>>();
-
-        assert_eq!(
-            memory_cache_lookup_workload_for_bench(&canonical, 5),
-            memory_cache_lookup_workload_legacy_for_bench(&canonical, 5)
-        );
-        assert_eq!(
-            memory_cache_lookup_workload_for_bench(&aliases, 5),
-            memory_cache_lookup_workload_legacy_for_bench(&aliases, 5)
-        );
-
-        let keys = (0..64)
-            .map(|index| (index as u64).wrapping_mul(0x9e37_79b9_7f4a_7c15))
-            .collect::<Vec<_>>();
-        assert_eq!(
-            disk_cache_lookup_workload_for_bench(&keys, 7),
-            disk_cache_lookup_workload_legacy_for_bench(&keys, 7)
-        );
-
-        let _ = fs::remove_dir_all(root);
     }
 }

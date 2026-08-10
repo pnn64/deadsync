@@ -89,49 +89,6 @@ fn collapse_song_asset_path_with(path: &str, backslash_separator: bool) -> Strin
     collapsed
 }
 
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub fn collapse_song_asset_path_legacy(path: &str) -> String {
-    let has_root = path.starts_with('/');
-    let mut parts: Vec<&str> = Vec::with_capacity(path.split('/').count());
-    for part in path.split('/') {
-        if part.is_empty() || part == "." {
-            continue;
-        }
-        if part == ".." {
-            if parts.last().is_some_and(|last| *last != "..") {
-                parts.pop();
-            } else {
-                parts.push("..");
-            }
-            continue;
-        }
-        parts.push(part);
-    }
-    let collapsed = parts.join("/");
-    if has_root {
-        if collapsed.is_empty() {
-            "/".to_string()
-        } else {
-            format!("/{collapsed}")
-        }
-    } else {
-        collapsed
-    }
-}
-
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub fn collapse_song_asset_path_like_itg_for_bench(path: &str) -> String {
-    collapse_song_asset_path_like_itg(path)
-}
-
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub fn collapse_song_asset_path_like_itg_legacy_for_bench(path: &str) -> String {
-    collapse_song_asset_path_legacy(&path.replace('\\', "/"))
-}
-
 pub fn resolve_song_dir_entry_ci(base: &Path, name: &str) -> Option<PathBuf> {
     let entries = fs::read_dir(base).ok()?;
     for entry in entries.flatten() {
@@ -144,23 +101,6 @@ pub fn resolve_song_dir_entry_ci(base: &Path, name: &str) -> Option<PathBuf> {
         }
     }
     None
-}
-
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub fn find_name_ci_for_bench(names: &[String], want: &str) -> Option<usize> {
-    names
-        .iter()
-        .position(|name| name.eq_ignore_ascii_case(want))
-}
-
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub fn find_name_ci_legacy_for_bench(names: &[String], want: &str) -> Option<usize> {
-    let want = want.to_ascii_lowercase();
-    names
-        .iter()
-        .position(|name| name.to_ascii_lowercase() == want)
 }
 
 pub fn resolve_song_path_like_itg(song_dir: &Path, asset_tag: &str) -> Option<PathBuf> {
@@ -311,42 +251,6 @@ fn foreground_media_candidate_cmp(
     })
 }
 
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub fn select_foreground_media_index_for_bench(paths: &[PathBuf]) -> Option<usize> {
-    let mut best: Option<(usize, u8)> = None;
-    for (index, path) in paths.iter().enumerate() {
-        let Some(rank) = foreground_media_ext_rank(path) else {
-            continue;
-        };
-        if best.as_ref().is_none_or(|(best_index, best_rank)| {
-            foreground_media_candidate_cmp(rank, path, *best_rank, &paths[*best_index]).is_lt()
-        }) {
-            best = Some((index, rank));
-        }
-    }
-    best.map(|(index, _)| index)
-}
-
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub fn select_foreground_media_index_legacy_for_bench(paths: &[PathBuf]) -> Option<usize> {
-    let mut media = paths
-        .iter()
-        .enumerate()
-        .filter_map(|(index, path)| {
-            let rank = foreground_media_ext_rank(path)?;
-            let name = path
-                .file_name()
-                .map(|name| name.to_string_lossy().to_ascii_lowercase())
-                .unwrap_or_default();
-            Some(((rank, name), index))
-        })
-        .collect::<Vec<_>>();
-    media.sort_by(|left, right| left.0.cmp(&right.0));
-    media.into_iter().next().map(|(_, index)| index)
-}
-
 pub fn resolve_foreground_media_path(song_dir: &Path, target: &str) -> Option<PathBuf> {
     let path = resolve_song_path_like_itg(song_dir, target)?;
     if path_uses_lua_like_itg(&path) {
@@ -370,69 +274,10 @@ pub fn foreground_media_ext_rank(path: &Path) -> Option<u8> {
     }
 }
 
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub fn foreground_media_ext_rank_legacy(path: &Path) -> Option<u8> {
-    let ext = path.extension()?.to_str()?;
-    if matches!(
-        ext.to_ascii_lowercase().as_str(),
-        "avi"
-            | "f4v"
-            | "flv"
-            | "m4v"
-            | "mkv"
-            | "mov"
-            | "mp4"
-            | "mpeg"
-            | "mpg"
-            | "ogv"
-            | "webm"
-            | "wmv"
-    ) {
-        Some(0)
-    } else if ext.eq_ignore_ascii_case("png") {
-        Some(1)
-    } else if ext.eq_ignore_ascii_case("jpg") {
-        Some(2)
-    } else if ext.eq_ignore_ascii_case("jpeg") {
-        Some(3)
-    } else if ext.eq_ignore_ascii_case("gif") {
-        Some(4)
-    } else if ext.eq_ignore_ascii_case("bmp") {
-        Some(5)
-    } else {
-        None
-    }
-}
-
 pub fn is_bgchange_movie_path(path: &Path) -> bool {
     path.extension()
         .and_then(|ext| ext.to_str())
         .is_some_and(|ext| extension_matches(ext, &BGCHANGE_MOVIE_EXTENSIONS))
-}
-
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub fn is_bgchange_movie_path_legacy(path: &Path) -> bool {
-    path.extension()
-        .and_then(|ext| ext.to_str())
-        .is_some_and(|ext| {
-            matches!(
-                ext.to_ascii_lowercase().as_str(),
-                "avi"
-                    | "f4v"
-                    | "flv"
-                    | "m4v"
-                    | "mkv"
-                    | "mov"
-                    | "mp4"
-                    | "mpeg"
-                    | "mpg"
-                    | "ogv"
-                    | "webm"
-                    | "wmv"
-            )
-        })
 }
 
 pub fn random_movie_paths_for_song(song: &SongData, roots: &[PathBuf]) -> Vec<PathBuf> {
@@ -489,29 +334,6 @@ fn retain_whitelisted_random_movies(
     paths
 }
 
-#[cfg(any(test, feature = "bench-support"))]
-#[doc(hidden)]
-pub fn retain_whitelisted_random_movies_for_bench(
-    paths: Vec<PathBuf>,
-    whitelist: &HashSet<String>,
-) -> Vec<PathBuf> {
-    retain_whitelisted_random_movies(paths, whitelist)
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-#[doc(hidden)]
-pub fn retain_whitelisted_random_movies_legacy_for_bench(
-    paths: Vec<PathBuf>,
-    whitelist: &HashSet<String>,
-) -> Vec<PathBuf> {
-    let filtered = paths
-        .iter()
-        .filter(|path| random_movie_is_whitelisted(path, whitelist))
-        .cloned()
-        .collect::<Vec<_>>();
-    if filtered.is_empty() { paths } else { filtered }
-}
-
 fn list_random_movie_paths(dir: &Path) -> Vec<PathBuf> {
     let Ok(entries) = fs::read_dir(dir) else {
         return Vec::new();
@@ -541,25 +363,6 @@ fn random_movie_path_cmp(left: &Path, right: &Path) -> Ordering {
                 .cmp(right.bytes().map(|byte| byte.to_ascii_lowercase()))
         }
     }
-}
-
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub fn sort_random_movie_paths_for_bench(paths: &mut [PathBuf]) {
-    paths.sort_by(|left, right| random_movie_path_cmp(left, right));
-}
-
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub fn sort_random_movie_paths_legacy_for_bench(paths: &mut [PathBuf]) {
-    paths.sort_by(|a, b| {
-        a.file_name()
-            .map(|name| name.to_string_lossy().to_ascii_lowercase())
-            .cmp(
-                &b.file_name()
-                    .map(|name| name.to_string_lossy().to_ascii_lowercase()),
-            )
-    });
 }
 
 fn song_group_name(song: &SongData) -> Option<String> {
@@ -617,55 +420,10 @@ fn parse_ini_sections(text: &str) -> HashMap<String, Vec<(String, String)>> {
     sections
 }
 
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub fn parse_ini_sections_for_bench(text: &str) -> HashMap<String, Vec<(String, String)>> {
-    parse_ini_sections(text)
-}
-
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub fn parse_ini_sections_legacy_for_bench(text: &str) -> HashMap<String, Vec<(String, String)>> {
-    let mut sections = HashMap::<String, Vec<(String, String)>>::new();
-    let mut current = String::new();
-    for line in text.lines() {
-        let line = line.trim();
-        if line.is_empty() || line.starts_with(';') || line.starts_with('#') {
-            continue;
-        }
-        if line.starts_with('[') && line.ends_with(']') {
-            current = line[1..line.len() - 1].trim().to_owned();
-            sections.entry(current.clone()).or_default();
-            continue;
-        }
-        let Some((key, value)) = line.split_once('=') else {
-            continue;
-        };
-        sections
-            .entry(current.clone())
-            .or_default()
-            .push((key.trim().to_owned(), value.trim().to_owned()));
-    }
-    sections
-}
-
 pub fn is_song_art_image(path: &Path) -> bool {
     path.extension()
         .and_then(|ext| ext.to_str())
         .is_some_and(|ext| extension_matches(ext, &SONG_ART_EXTENSIONS))
-}
-
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub fn is_song_art_image_legacy(path: &Path) -> bool {
-    path.extension()
-        .and_then(|ext| ext.to_str())
-        .is_some_and(|ext| {
-            matches!(
-                ext.to_ascii_lowercase().as_str(),
-                "png" | "jpg" | "jpeg" | "gif" | "bmp"
-            )
-        })
 }
 
 pub fn is_mac_resource_fork(path: &Path) -> bool {

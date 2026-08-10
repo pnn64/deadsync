@@ -209,18 +209,6 @@ pub fn open_graphics_submenu(state: &mut State) {
     open_submenu_now(state, SubmenuKind::Graphics);
 }
 
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub fn benchmark_select_submenu(state: &mut State, index: usize) {
-    open_submenu_now(state, SubmenuKind::ALL[index]);
-}
-
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub const fn benchmark_submenu_count() -> usize {
-    SubmenuKind::ALL.len()
-}
-
 fn open_submenu_now(state: &mut State, kind: SubmenuKind) {
     state.view = OptionsView::Submenu(kind);
     state.pending_submenu_kind = None;

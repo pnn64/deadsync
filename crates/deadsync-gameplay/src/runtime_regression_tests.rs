@@ -1386,7 +1386,7 @@ mod runtime_regression_tests {
             false,
             0,
         );
-        state.set_song_position_for_benchmark(0.0, 1_000_000_000, 0.0, 1.0);
+        state.set_song_position_for_test(0.0, 1_000_000_000, 0.0, 1.0);
 
         state.run_autoplay_or_replay_frame(1_000_000_000);
 

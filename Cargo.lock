@@ -1251,7 +1251,7 @@ dependencies = [
 
 [[package]]
 name = "deadsync"
-version = "0.5.393"
+version = "0.5.395"
 dependencies = [
  "deadlib-platform",
  "deadlib-present",
@@ -1713,7 +1713,7 @@ dependencies = [
 
 [[package]]
 name = "deadsync-theme-simply-love"
-version = "0.5.393"
+version = "0.5.395"
 dependencies = [
  "bitflags 2.13.1",
  "chrono",
@@ -1772,7 +1772,7 @@ dependencies = [
 
 [[package]]
 name = "deadsync-version"
-version = "0.5.393"
+version = "0.5.395"
 dependencies = [
  "log",
  "semver",
@@ -4104,9 +4104,9 @@ checksum = "bc6355899e1c9462875b6757c79f3caa011a1fdae12bbb1a2e72dd1f234f8336"
 
 [[package]]
 name = "portable-atomic"
-version = "1.14.0"
+version = "1.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3d20d5497ef88037a52ff98267d066e7f11fcc5e99bbfbd58a42336193aacec3"
+checksum = "05c8b63e8d9609db387f0324918f81d68fe27748f084ef092fb35954d0539a85"
 
 [[package]]
 name = "portable-atomic-util"
@@ -4242,15 +4242,6 @@ name = "quick-error"
 version = "2.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a993555f31e5a609f617c12db6250dedcac1b0a85076912c436e6fc9b2c8e6a3"
-
-[[package]]
-name = "quick-xml"
-version = "0.30.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "eff6510e86862b57b210fd8cbe8ed3f0d7d600b9c2863cd4549a2e033c66e956"
-dependencies = [
- "memchr",
-]
 
 [[package]]
 name = "quick-xml"
@@ -4590,8 +4581,8 @@ checksum = "6c20b6793b5c2fa6553b250154b78d6d0db37e72700ae35fad9387a46f487c97"
 
 [[package]]
 name = "rssp"
-version = "0.4.102"
-source = "git+https://github.com/pnn64/rssp?branch=main#faacbbda246b2b6d0e0b72737d0d31369144ab8d"
+version = "0.4.104"
+source = "git+https://github.com/pnn64/rssp?branch=main#b49831eecd2172078054322336220381d674d0df"
 dependencies = [
  "memchr",
  "rssp-core",
@@ -4600,8 +4591,8 @@ dependencies = [
 
 [[package]]
 name = "rssp-core"
-version = "0.4.102"
-source = "git+https://github.com/pnn64/rssp?branch=main#faacbbda246b2b6d0e0b72737d0d31369144ab8d"
+version = "0.4.104"
+source = "git+https://github.com/pnn64/rssp?branch=main#b49831eecd2172078054322336220381d674d0df"
 
 [[package]]
 name = "rtrb"
@@ -5935,7 +5926,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "338e30461b3a2b67d70eb30a6d89f8e0c93a833e07d2ae89085cd070c4a00ac0"
 dependencies = [
  "proc-macro2",
- "quick-xml 0.41.0",
+ "quick-xml",
  "quote",
 ]
 
@@ -6502,13 +6493,13 @@ checksum = "ea6fc2961e4ef194dcbfe56bb845534d0dc8098940c7e5c012a258bfec6701bd"
 
 [[package]]
 name = "xcb"
-version = "1.7.0"
+version = "1.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ee4c580d8205abb0a5cf4eb7e927bd664e425b6c3263f9c5310583da96970cf6"
+checksum = "a6c2ad15e0e922856ee89afe862b8992334bbe7953adad56cd1199358cb30566"
 dependencies = [
- "bitflags 1.3.2",
+ "bitflags 2.13.1",
  "libc",
- "quick-xml 0.30.0",
+ "quick-xml",
 ]
 
 [[package]]

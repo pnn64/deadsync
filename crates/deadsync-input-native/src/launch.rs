@@ -124,17 +124,6 @@ pub fn set_raw_keyboard_capture_enabled(enabled: bool) {
     crate::backend::w32_raw_input::set_capture_enabled(enabled);
 }
 
-#[cfg(all(windows, feature = "bench-support"))]
-#[inline(always)]
-pub fn raw_keyboard_capture_synced(enabled: bool) -> bool {
-    crate::backend::w32_raw_input::capture_synced(enabled)
-}
-
-#[cfg(all(windows, feature = "bench-support"))]
-pub fn benchmark_seed_raw_keyboard_capture(enabled: bool) {
-    crate::backend::w32_raw_input::benchmark_seed_capture_state(enabled);
-}
-
 #[cfg(any(target_os = "linux", target_os = "freebsd"))]
 #[inline(always)]
 pub fn set_raw_keyboard_window_focused(focused: bool) {

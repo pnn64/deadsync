@@ -26,16 +26,7 @@ use super::TEXT_CACHE_LIMIT;
 type FastTextCache<K> = TextCache<K, BuildHasherDefault<XxHash64>>;
 
 thread_local! {
-    #[cfg(feature = "bench-support")]
-    static BENCH_MINI_SIGNED_CACHE: RefCell<FastTextCache<(u32, bool)>> = RefCell::new(
-        HashMap::with_capacity_and_hasher(TEXT_CACHE_LIMIT, BuildHasherDefault::default()),
-    );
     static INT_CACHE_I32: RefCell<FastTextCache<i32>> = RefCell::new(HashMap::with_capacity_and_hasher(
-        512,
-        BuildHasherDefault::default(),
-    ));
-    #[cfg(feature = "bench-support")]
-    static INT_CACHE_U32: RefCell<FastTextCache<u32>> = RefCell::new(HashMap::with_capacity_and_hasher(
         512,
         BuildHasherDefault::default(),
     ));
@@ -45,49 +36,6 @@ thread_local! {
     static GAMEPLAY_MODS_CACHE: RefCell<FastTextCache<GameplayModsTextKey>> = RefCell::new(
         HashMap::with_capacity_and_hasher(256, BuildHasherDefault::default()),
     );
-    #[cfg(feature = "bench-support")]
-    static BENCH_OFFSET_MS_CACHE: RefCell<FastTextCache<i32>> = RefCell::new(
-        HashMap::with_capacity_and_hasher(512, BuildHasherDefault::default()),
-    );
-    #[cfg(feature = "bench-support")]
-    static BENCH_ERROR_BAR_LABEL_CACHE: RefCell<FastTextCache<(bool, bool)>> = RefCell::new(
-        HashMap::with_capacity_and_hasher(4, BuildHasherDefault::default()),
-    );
-    #[cfg(feature = "bench-support")]
-    static BENCH_PAREN_INT_CACHE: RefCell<FastTextCache<i32>> = RefCell::new(
-        HashMap::with_capacity_and_hasher(512, BuildHasherDefault::default()),
-    );
-    #[cfg(feature = "bench-support")]
-    static BENCH_RUN_TIMER_CACHE: RefCell<FastTextCache<(i32, i32, bool)>> = RefCell::new(
-        HashMap::with_capacity_and_hasher(1024, BuildHasherDefault::default()),
-    );
-}
-
-#[cfg(feature = "bench-support")]
-pub(super) fn reset_mini_text_benchmark() {
-    BENCH_MINI_SIGNED_CACHE.with(|cache| cache.borrow_mut().clear());
-}
-
-#[cfg(feature = "bench-support")]
-pub(super) fn benchmark_pacemaker_text_legacy(value: f64, negative: bool) -> TextContent {
-    let centi = quantize_centi_u32(value);
-    TextContent::Shared(cached_text(
-        &BENCH_MINI_SIGNED_CACHE,
-        (centi, negative),
-        TEXT_CACHE_LIMIT,
-        || {
-            if negative {
-                format!("-{:.2}%", centi as f64 / 100.0)
-            } else {
-                format!("+{:.2}%", centi as f64 / 100.0)
-            }
-        },
-    ))
-}
-
-#[cfg(feature = "bench-support")]
-pub(super) fn benchmark_pacemaker_text(value: f64, negative: bool) -> TextContent {
-    zmod_mini_indicator_text_content(ZmodMiniIndicatorText::SignedPercent { value, negative })
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
@@ -125,40 +73,6 @@ pub(super) fn cached_int_i32(value: i32) -> Arc<str> {
     })
 }
 
-#[cfg(feature = "bench-support")]
-#[inline(always)]
-fn shared_cached_int_u32(value: u32) -> Arc<str> {
-    cached_text(&INT_CACHE_U32, value, TEXT_CACHE_LIMIT, || {
-        value.to_string()
-    })
-}
-
-#[cfg(feature = "bench-support")]
-fn saturate_combo_text_cache() {
-    INT_CACHE_U32.with(|cache| {
-        let mut cache = cache.borrow_mut();
-        cache.clear();
-        for value in 0..TEXT_CACHE_LIMIT as u32 {
-            cache.insert(value, Arc::<str>::from(value.to_string()));
-        }
-    });
-}
-
-#[cfg(feature = "bench-support")]
-pub(super) fn prepare_combo_text_benchmark() {
-    saturate_combo_text_cache();
-}
-
-#[cfg(feature = "bench-support")]
-pub(super) fn benchmark_combo_text_legacy(value: u32) -> TextContent {
-    TextContent::Shared(shared_cached_int_u32(value))
-}
-
-#[cfg(feature = "bench-support")]
-pub(super) fn benchmark_combo_text(value: u32) -> TextContent {
-    TextContent::inline_u32(value)
-}
-
 #[inline(always)]
 pub(super) fn cached_ratio_i32(curr: i32, total: i32) -> Arc<str> {
     cached_text(&RATIO_CACHE_I32, (curr, total), TEXT_CACHE_LIMIT, || {
@@ -181,24 +95,6 @@ pub(super) const fn error_bar_text_label(early: bool, scaled: bool) -> TextConte
         (false, true) => "SLOW",
         (false, false) => "LATE",
     })
-}
-
-#[cfg(feature = "bench-support")]
-pub(super) fn benchmark_offset_ms_legacy(value: f32) -> Arc<str> {
-    let key = quantize_centi_i32(f64::from(value));
-    cached_text(&BENCH_OFFSET_MS_CACHE, key, TEXT_CACHE_LIMIT, || {
-        format!("{:.2}ms", key as f64 / 100.0)
-    })
-}
-
-#[cfg(feature = "bench-support")]
-pub(super) fn benchmark_error_bar_label_legacy(early: bool, scaled: bool) -> Arc<str> {
-    cached_text(
-        &BENCH_ERROR_BAR_LABEL_CACHE,
-        (early, scaled),
-        TEXT_CACHE_LIMIT,
-        || error_bar_text_label(early, scaled).as_str().to_string(),
-    )
 }
 
 pub(super) fn zmod_run_timer_fmt(
@@ -248,46 +144,6 @@ pub(super) fn zmod_measure_counter_text(text: ZmodMeasureCounterText) -> TextCon
         }
     }
     TextContent::Inline(out)
-}
-
-#[cfg(feature = "bench-support")]
-pub(super) fn benchmark_measure_counter_text_legacy(text: ZmodMeasureCounterText) -> TextContent {
-    TextContent::Shared(match text {
-        ZmodMeasureCounterText::Break(value) => {
-            cached_text(&BENCH_PAREN_INT_CACHE, value, TEXT_CACHE_LIMIT, || {
-                format!("({value})")
-            })
-        }
-        ZmodMeasureCounterText::Ratio { current, total } => cached_ratio_i32(current, total),
-        ZmodMeasureCounterText::Total(value) => cached_int_i32(value),
-    })
-}
-
-#[cfg(feature = "bench-support")]
-pub(super) fn benchmark_run_timer_legacy(
-    seconds: i32,
-    minute_threshold: i32,
-    trailing_space: bool,
-) -> TextContent {
-    let seconds = seconds.max(0);
-    TextContent::Shared(cached_text(
-        &BENCH_RUN_TIMER_CACHE,
-        (seconds, minute_threshold, trailing_space),
-        TEXT_CACHE_LIMIT,
-        || {
-            let mut text = if seconds < 10 {
-                format!("0.0{seconds}")
-            } else if seconds > minute_threshold {
-                format!("{}.{:02}", seconds / 60, seconds % 60)
-            } else {
-                format!("0.{seconds}")
-            };
-            if trailing_space {
-                text.push(' ');
-            }
-            text
-        },
-    ))
 }
 
 pub(super) fn zmod_mini_indicator_text_content(text: ZmodMiniIndicatorText) -> TextContent {
@@ -605,58 +461,6 @@ pub(crate) fn preferred_mods_text(state: &State, player_idx: usize) -> Arc<str> 
         &state.profiles()[player_idx],
         state.scroll_speed_for_player(player_idx),
     )
-}
-
-#[cfg(feature = "bench-support")]
-pub struct DisplayModsTextBench {
-    profile: profile_data::Profile,
-    scroll_speed: ScrollSpeedSetting,
-    cached: Arc<str>,
-}
-
-#[cfg(feature = "bench-support")]
-impl Default for DisplayModsTextBench {
-    fn default() -> Self {
-        let profile = profile_data::Profile {
-            accel_effects_active_mask: profile_data::AccelEffectsMask::BOOST,
-            visual_effects_active_mask: profile_data::VisualEffectsMask::DRUNK,
-            appearance_effects_active_mask: profile_data::AppearanceEffectsMask::HIDDEN,
-            scroll_option: profile_data::ScrollOption::Reverse,
-            mini_percent: 25,
-            spacing_percent: 125,
-            hide_targets: true,
-            ..profile_data::Profile::default()
-        };
-        let scroll_speed = ScrollSpeedSetting::XMod(2.0);
-        let cached = preferred_mods_text_from(&profile, scroll_speed);
-        Self {
-            profile,
-            scroll_speed,
-            cached,
-        }
-    }
-}
-
-#[cfg(feature = "bench-support")]
-impl DisplayModsTextBench {
-    const SAMPLES: usize = 256;
-
-    pub fn old_frame(&self, frame: usize) -> usize {
-        (0..Self::SAMPLES).fold(frame, |checksum, sample| {
-            let text = preferred_mods_text_from(
-                std::hint::black_box(&self.profile),
-                std::hint::black_box(self.scroll_speed),
-            );
-            checksum.rotate_left(7) ^ text.len() ^ sample
-        })
-    }
-
-    pub fn new_frame(&self, frame: usize) -> usize {
-        (0..Self::SAMPLES).fold(frame, |checksum, sample| {
-            let text = Arc::clone(std::hint::black_box(&self.cached));
-            checksum.rotate_left(7) ^ text.len() ^ sample
-        })
-    }
 }
 
 #[cfg(test)]

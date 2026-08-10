@@ -349,13 +349,6 @@ pub fn element_contains_hint(element: &str, hint: &str) -> bool {
         .any(|candidate| candidate.eq_ignore_ascii_case(hint))
 }
 
-#[cfg(any(test, feature = "bench-support"))]
-pub fn element_contains_hint_legacy_for_bench(element: &str, hint: &str) -> bool {
-    element
-        .to_ascii_lowercase()
-        .contains(&hint.to_ascii_lowercase())
-}
-
 fn parse_arg0_aliases(content: &str) -> HashSet<String> {
     let mut out = HashSet::new();
     for raw in content.lines() {
@@ -1222,112 +1215,6 @@ fn has_command_suffix(key: &str) -> bool {
         .is_some_and(|suffix| suffix.eq_ignore_ascii_case(b"command"))
 }
 
-#[cfg(any(test, feature = "bench-support"))]
-fn get_ascii_lowercase_legacy<'a, V>(map: &'a HashMap<String, V>, key: &str) -> Option<&'a V> {
-    map.get(&key.to_ascii_lowercase())
-}
-
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub fn actor_helper_lookup_for_bench(functions: &HashMap<String, u64>, name: &str) -> Option<u64> {
-    get_ascii_lowercase(functions, name).copied()
-}
-
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub fn actor_helper_lookup_legacy_for_bench(
-    functions: &HashMap<String, u64>,
-    name: &str,
-) -> Option<u64> {
-    get_ascii_lowercase_legacy(functions, name).copied()
-}
-
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub fn actor_argument_lookup_for_bench(
-    scope: &HashMap<String, u64>,
-    colors: &HashMap<String, u64>,
-    raw: &str,
-) -> Option<u64> {
-    let key = raw.trim().trim_matches('"').trim_matches('\'');
-    get_ascii_lowercase_from_two(scope, colors, key).copied()
-}
-
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub fn actor_argument_lookup_legacy_for_bench(
-    scope: &HashMap<String, u64>,
-    colors: &HashMap<String, u64>,
-    raw: &str,
-) -> Option<u64> {
-    let key = raw
-        .trim()
-        .trim_matches('"')
-        .trim_matches('\'')
-        .to_ascii_lowercase();
-    scope.get(&key).or_else(|| colors.get(&key)).copied()
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-fn actor_key_checksum(key: &str) -> u64 {
-    if let Some(index) = parse_numbered_actor_key(key, b"frame") {
-        return (index as u64).wrapping_mul(4).wrapping_add(1);
-    }
-    if let Some(index) = parse_numbered_actor_key(key, b"delay") {
-        return (index as u64).wrapping_mul(4).wrapping_add(2);
-    }
-    if has_command_suffix(key) {
-        return retained_command_key_checksum(&key.to_ascii_lowercase())
-            .wrapping_mul(4)
-            .wrapping_add(3);
-    }
-    0
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-fn actor_key_checksum_legacy(key: &str) -> u64 {
-    let key = key.to_ascii_lowercase();
-    if let Some(index) = key
-        .strip_prefix("frame")
-        .filter(|digits| digits.bytes().all(|byte| byte.is_ascii_digit()))
-        .and_then(|digits| digits.parse::<usize>().ok())
-    {
-        return (index as u64).wrapping_mul(4).wrapping_add(1);
-    }
-    if let Some(index) = key
-        .strip_prefix("delay")
-        .filter(|digits| digits.bytes().all(|byte| byte.is_ascii_digit()))
-        .and_then(|digits| digits.parse::<usize>().ok())
-    {
-        return (index as u64).wrapping_mul(4).wrapping_add(2);
-    }
-    if key.ends_with("command") {
-        return retained_command_key_checksum(&key)
-            .wrapping_mul(4)
-            .wrapping_add(3);
-    }
-    0
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-fn retained_command_key_checksum(key: &str) -> u64 {
-    key.bytes().fold(0_u64, |checksum, byte| {
-        checksum.rotate_left(5) ^ u64::from(byte)
-    })
-}
-
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub fn actor_key_checksum_for_bench(key: &str) -> u64 {
-    actor_key_checksum(key)
-}
-
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub fn actor_key_checksum_legacy_for_bench(key: &str) -> u64 {
-    actor_key_checksum_legacy(key)
-}
-
 fn return_function_body(body: &str) -> Option<&str> {
     let return_idx = body.find("return")?;
     let mut cursor = return_idx + "return".len();
@@ -1752,56 +1639,6 @@ return Def.ActorFrame {
     }
 
     #[test]
-    fn lowercase_map_lookup_matches_owned_normalization() {
-        let mut values = HashMap::new();
-        for (index, key) in [
-            "pulse",
-            "accent",
-            "already_lowercase",
-            "dÃ¶wn",
-            "a_very_long_function_name_that_exceeds_the_stack_normalization_capacity_because_actor_helpers_can_technically_have_unbounded_identifier_lengths",
-        ]
-        .into_iter()
-        .enumerate()
-        {
-            values.insert(key.to_string(), index);
-        }
-        for key in [
-            "PuLsE",
-            "\"ACCENT\"",
-            "already_lowercase",
-            "DÃ¶WN",
-            "missing",
-            "A_VERY_LONG_FUNCTION_NAME_THAT_EXCEEDS_THE_STACK_NORMALIZATION_CAPACITY_BECAUSE_ACTOR_HELPERS_CAN_TECHNICALLY_HAVE_UNBOUNDED_IDENTIFIER_LENGTHS",
-        ] {
-            let key = key.trim_matches('"');
-            assert_eq!(
-                get_ascii_lowercase(&values, key),
-                get_ascii_lowercase_legacy(&values, key)
-            );
-        }
-    }
-
-    #[test]
-    fn actor_key_classification_matches_legacy_normalization() {
-        for key in [
-            "Frame0",
-            "fRaMe0012",
-            "frame",
-            "FrameNope",
-            "Delay3",
-            "dElAy0009",
-            "InitCommand",
-            "PRESSCOMMAND",
-            "NotACommandValue",
-            "DÃ¶wnCommand",
-            "",
-        ] {
-            assert_eq!(actor_key_checksum(key), actor_key_checksum_legacy(key));
-        }
-    }
-
-    #[test]
     fn mixed_case_actor_keys_helpers_and_arguments_retain_behavior() {
         let content = r##"
 local Accent = color("#ff0000")
@@ -1912,24 +1749,5 @@ return Def.ActorFrame .. {
         assert!(is_lua_path(Path::new("Down Receptor.LUA")));
         assert!(!is_lua_path(Path::new("Down Receptor.png")));
         assert!(!is_lua_path(Path::new("Down Receptor")));
-    }
-
-    #[test]
-    fn element_hint_matching_is_case_insensitive() {
-        let cases = [
-            ("Down Hold Explosion", "hold explosion", true),
-            ("Down Tap Note", "hold explosion", false),
-            ("ROLL EXPLOSION", "roll", true),
-            ("Down Hold Explosion", "", true),
-            ("", "hold", false),
-            ("Döwn Hold Explosion", "DÖWN", false),
-        ];
-        for (element, hint, expected) in cases {
-            assert_eq!(element_contains_hint(element, hint), expected);
-            assert_eq!(
-                element_contains_hint(element, hint),
-                element_contains_hint_legacy_for_bench(element, hint)
-            );
-        }
     }
 }

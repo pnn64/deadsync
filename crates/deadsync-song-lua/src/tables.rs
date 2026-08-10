@@ -1929,26 +1929,6 @@ fn prefsmgr_default_value_normalized(
     }
 }
 
-#[cfg(any(test, feature = "bench-support"))]
-#[doc(hidden)]
-pub fn prefsmgr_default_value_legacy_for_bench(
-    lua: &Lua,
-    key: &str,
-    global_offset_seconds: f32,
-    display_aspect_ratio: f32,
-    display_width: i32,
-    display_height: i32,
-) -> mlua::Result<Value> {
-    prefsmgr_default_value_normalized(
-        lua,
-        &key.to_ascii_lowercase(),
-        global_offset_seconds,
-        display_aspect_ratio,
-        display_width,
-        display_height,
-    )
-}
-
 pub fn set_path_methods(
     lua: &Lua,
     table: &Table,
@@ -2724,41 +2704,9 @@ mod tests {
         create_author_table, create_display_bpms_table, create_ex_judgment_counts,
         create_gameplay_layout, create_radar_values_table, create_range_table,
         create_single_value_array, create_song_group_table, create_split_table, create_style_table,
-        create_timing_table, display_bpms_for_args, lua_table_to_string, prefsmgr_default_value,
-        prefsmgr_default_value_legacy_for_bench, rotate_lua_table, set_path_methods,
-        set_string_method,
+        create_timing_table, display_bpms_for_args, lua_table_to_string, rotate_lua_table,
+        set_path_methods, set_string_method,
     };
-
-    #[test]
-    fn prefsmgr_defaults_preserve_case_insensitive_dispatch_and_long_key_fallback() {
-        let lua = Lua::new();
-        let long_key = "A".repeat(129);
-        for key in [
-            "globaloffsetseconds",
-            "GlobalOffsetSeconds",
-            "TIMINGWINDOWSECONDSW1",
-            "SongsPerPlay",
-            "unknown",
-            "ÄGLOBALOFFSETSECONDS",
-            long_key.as_str(),
-        ] {
-            let current = prefsmgr_default_value(&lua, key, 0.02, 16.0 / 9.0, 1280, 720).unwrap();
-            let legacy =
-                prefsmgr_default_value_legacy_for_bench(&lua, key, 0.02, 16.0 / 9.0, 1280, 720)
-                    .unwrap();
-            assert_eq!(
-                current.type_name(),
-                legacy.type_name(),
-                "type changed for {key:?}"
-            );
-            assert_eq!(
-                current.to_string().unwrap(),
-                legacy.to_string().unwrap(),
-                "value changed for {key:?}"
-            );
-        }
-    }
-
     #[test]
     fn split_table_handles_empty_separator() {
         let lua = Lua::new();

@@ -2,8 +2,6 @@ use super::technique_bg;
 use crate::act;
 use crate::views::{SimplyLoveVisualPolicyView, VisualBackgroundView};
 use deadlib_present::actors::Actor;
-#[cfg(test)]
-use deadlib_present::actors::SpriteSource;
 use deadlib_present::color;
 use deadlib_present::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 use std::sync::{
@@ -226,172 +224,6 @@ pub fn set_srpg_background_key(key: Option<String>) {
     }
 }
 
-#[cfg(feature = "bench-support")]
-fn set_srpg_background_key_legacy(key: Option<String>) {
-    if let Ok(mut slot) = SRPG_BACKGROUND_KEY.get_or_init(|| Mutex::new(None)).lock() {
-        *slot = key.map(Arc::<str>::from);
-    }
-}
-
-#[cfg(feature = "bench-support")]
-pub struct TechniqueBackgroundBench {
-    inner: technique_bg::BenchState,
-}
-
-#[cfg(feature = "bench-support")]
-impl TechniqueBackgroundBench {
-    pub fn new() -> Self {
-        Self {
-            inner: technique_bg::BenchState::new(),
-        }
-    }
-
-    pub fn build(&self, elapsed_s: f64) -> Vec<Actor> {
-        self.inner.build(elapsed_s)
-    }
-
-    pub fn build_legacy(&self, elapsed_s: f64) -> Vec<Actor> {
-        self.inner.build_legacy(elapsed_s)
-    }
-
-    pub fn projection(&self, width: f32, height: f32) -> [f32; 16] {
-        self.inner.projection(width, height)
-    }
-}
-
-#[cfg(feature = "bench-support")]
-impl Default for TechniqueBackgroundBench {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-#[cfg(feature = "bench-support")]
-pub fn technique_projection_legacy_for_bench(width: f32, height: f32) -> [f32; 16] {
-    technique_bg::projection_legacy_for_bench(width, height)
-}
-
-#[cfg(feature = "bench-support")]
-pub fn technique_layout_checksum_for_bench(elapsed_s: f64) -> u64 {
-    technique_bg::layout_checksum_for_bench(elapsed_s)
-}
-
-#[cfg(feature = "bench-support")]
-pub fn technique_layout_legacy_checksum_for_bench(elapsed_s: f64) -> u64 {
-    technique_bg::layout_legacy_checksum_for_bench(elapsed_s)
-}
-
-#[cfg(feature = "bench-support")]
-pub fn technique_layer_checksum_for_bench(elapsed_s: f64) -> u64 {
-    technique_bg::layer_checksum_for_bench(elapsed_s)
-}
-
-#[cfg(feature = "bench-support")]
-pub fn technique_layer_legacy_checksum_for_bench(elapsed_s: f64) -> u64 {
-    technique_bg::layer_legacy_checksum_for_bench(elapsed_s)
-}
-
-#[cfg(feature = "bench-support")]
-pub struct OtherVisualBackgroundBench {}
-
-#[cfg(feature = "bench-support")]
-impl OtherVisualBackgroundBench {
-    pub fn new() -> Self {
-        Self {}
-    }
-
-    pub fn build_srpg(&self) -> Vec<Actor> {
-        let mut actors = Vec::new();
-        push_srpg(&mut actors, &srpg_bench_params());
-        actors
-    }
-
-    pub fn build_srpg_legacy(&self) -> Vec<Actor> {
-        let mut actors = Vec::new();
-        push_srpg_legacy(&mut actors, &srpg_bench_params());
-        actors
-    }
-
-    pub fn set_srpg_key(&self, key: Option<&str>) {
-        set_srpg_background_key(key.map(str::to_owned));
-    }
-
-    pub fn set_srpg_key_legacy(&self, key: Option<&str>) {
-        set_srpg_background_key_legacy(key.map(str::to_owned));
-    }
-}
-
-#[cfg(feature = "bench-support")]
-impl Default for OtherVisualBackgroundBench {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-#[cfg(feature = "bench-support")]
-fn background_bench_params() -> Params {
-    Params {
-        active_color_index: 3,
-        backdrop_rgba: [0.05, 0.1, 0.15, 1.0],
-        alpha_mul: 0.65,
-        visual_policy: SimplyLoveVisualPolicyView::default(),
-    }
-}
-
-#[cfg(feature = "bench-support")]
-fn srpg_bench_params() -> Params {
-    let mut params = background_bench_params();
-    params.visual_policy.background = VisualBackgroundView::Srpg;
-    params.visual_policy.assets =
-        crate::visual_styles::for_style(deadsync_config::prelude::VisualStyle::Srpg9);
-    params
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-fn srpg_background_key_legacy(fallback_key: &'static str) -> Arc<str> {
-    let fallback = || Arc::<str>::from(fallback_key);
-    match SRPG_BACKGROUND_KEY.get_or_init(|| Mutex::new(None)).lock() {
-        Ok(slot) => slot.clone().unwrap_or_else(fallback),
-        Err(_) => fallback(),
-    }
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-fn push_srpg_legacy(out: &mut Vec<Actor>, params: &Params) {
-    out.reserve(3);
-    let w = screen_width();
-    let h = screen_height();
-    let background_key = srpg_background_key_legacy(params.visual_policy.assets.shared_background);
-    out.push(act!(quad:
-        align(0.0, 0.0):
-        xy(0.0, 0.0):
-        zoomto(w, h):
-        diffuse(params.backdrop_rgba[0], params.backdrop_rgba[1], params.backdrop_rgba[2], params.backdrop_rgba[3]):
-        z(-100)
-    ));
-
-    let mut tint =
-        srpg_background_tint(params.active_color_index, params.visual_policy.srpg10_tint);
-    tint[0] = (tint[0] * 3.0).min(1.0);
-    tint[1] = (tint[1] * 3.0).min(1.0);
-    tint[2] = (tint[2] * 3.0).min(1.0);
-    tint[3] = params.alpha_mul;
-    out.push(act!(sprite(background_key):
-        align(0.5, 0.5):
-        xy(screen_center_x(), screen_center_y()):
-        setsize((h * 16.0 / 9.0).max(w), h):
-        diffuse(tint[0], tint[1], tint[2], tint[3]):
-        z(-99)
-    ));
-    out.push(act!(quad:
-        align(0.0, 0.0):
-        xy(0.0, 0.0):
-        zoomto(w, h):
-        diffuse(0.0, 0.0, 0.0, 0.5 * params.alpha_mul):
-        z(-98)
-    ));
-}
-
 fn srpg_background_tint(active_color_index: i32, srpg10: bool) -> [f32; 4] {
     if srpg10 {
         color::srpg10_rgba(active_color_index)
@@ -503,23 +335,6 @@ mod tests {
         }
     }
 
-    fn normalized_actor_debug(mut actors: Vec<Actor>) -> Vec<(Option<String>, String)> {
-        actors
-            .iter_mut()
-            .map(|actor| {
-                let texture = match actor {
-                    Actor::Sprite { source, .. } => {
-                        let texture = source.texture_key().map(str::to_owned);
-                        *source = SpriteSource::Solid;
-                        texture
-                    }
-                    _ => None,
-                };
-                (texture, format!("{actor:?}"))
-            })
-            .collect()
-    }
-
     #[test]
     fn build_reads_shared_elapsed_clock() {
         set_global_elapsed_for_test(2.5);
@@ -581,27 +396,6 @@ mod tests {
                 }
             }
         }
-    }
-
-    #[test]
-    fn srpg_variants_and_dynamic_key_match_legacy_output() {
-        let _guard = SRPG_TEST_LOCK.lock().expect("SRPG test lock poisoned");
-        for variant in SrpgVariant::ALL {
-            let params = params_for(VisualBackgroundView::Srpg, VisualStyle::Srpg9, variant);
-            for key in [None, Some("dynamic/srpg-video".to_string())] {
-                set_srpg_background_key(key);
-                let mut optimized = Vec::new();
-                let mut legacy = Vec::new();
-                push_srpg(&mut optimized, &params);
-                push_srpg_legacy(&mut legacy, &params);
-                assert_eq!(
-                    normalized_actor_debug(optimized),
-                    normalized_actor_debug(legacy),
-                    "variant={variant:?}"
-                );
-            }
-        }
-        set_srpg_background_key(None);
     }
 
     #[test]

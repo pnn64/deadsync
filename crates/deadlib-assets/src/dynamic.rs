@@ -74,22 +74,6 @@ fn ensure_cache_parent(cache_path: &Path) -> bool {
     true
 }
 
-#[cfg(feature = "bench-support")]
-fn load_raw_cached_banner_image_legacy(cache_path: &Path) -> Option<RgbaImage> {
-    let mut bytes = fs::read(cache_path).ok()?;
-    if bytes.len() < BANNER_CACHE_HEADER_SIZE || bytes[..8] != BANNER_CACHE_MAGIC {
-        return None;
-    }
-    let width = u32::from_le_bytes([bytes[8], bytes[9], bytes[10], bytes[11]]);
-    let height = u32::from_le_bytes([bytes[12], bytes[13], bytes[14], bytes[15]]);
-    let payload_len = usize::try_from(width.checked_mul(height)?.checked_mul(4)?).ok()?;
-    if bytes.len() != BANNER_CACHE_HEADER_SIZE.saturating_add(payload_len) {
-        return None;
-    }
-    let payload = bytes.split_off(BANNER_CACHE_HEADER_SIZE);
-    RgbaImage::from_raw(width, height, payload)
-}
-
 fn load_raw_cached_banner_image(cache_path: &Path) -> Option<RgbaImage> {
     let mut file = fs::File::open(cache_path).ok()?;
     let file_len = usize::try_from(file.metadata().ok()?.len()).ok()?;
@@ -109,18 +93,6 @@ fn load_raw_cached_banner_image(cache_path: &Path) -> Option<RgbaImage> {
     let mut payload = vec![0_u8; payload_len];
     file.read_exact(&mut payload).ok()?;
     RgbaImage::from_raw(width, height, payload)
-}
-
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub fn load_raw_cached_banner_image_legacy_for_bench(cache_path: &Path) -> Option<RgbaImage> {
-    load_raw_cached_banner_image_legacy(cache_path)
-}
-
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub fn load_raw_cached_banner_image_direct_for_bench(cache_path: &Path) -> Option<RgbaImage> {
-    load_raw_cached_banner_image(cache_path)
 }
 
 pub fn save_raw_cached_banner_image(cache_path: &Path, rgba: &RgbaImage) -> bool {
@@ -271,33 +243,6 @@ fn path_has_extension(path: &Path, extensions: &[&str]) -> bool {
                 .iter()
                 .any(|candidate| extension.eq_ignore_ascii_case(candidate))
         })
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-#[doc(hidden)]
-pub fn dynamic_path_classification_legacy_for_bench(path: &Path) -> u8 {
-    let classify = |extensions: &[&str]| {
-        path.extension()
-            .and_then(|extension| extension.to_str())
-            .is_some_and(|extension| {
-                let extension = extension.to_ascii_lowercase();
-                extensions.contains(&extension.as_str())
-            })
-    };
-    let cacheable = classify(&[
-        "png", "jpg", "jpeg", "gif", "bmp", "webp", "tga", "tif", "tiff", "mp4", "avi", "f4v",
-        "flv", "m4v", "mov", "ogv", "webm", "mkv", "mpg", "mpeg", "wmv",
-    ]);
-    let video = classify(&[
-        "mp4", "avi", "f4v", "flv", "m4v", "mov", "ogv", "webm", "mkv", "mpg", "mpeg", "wmv",
-    ]);
-    u8::from(cacheable) | (u8::from(video) << 1)
-}
-
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub fn dynamic_path_classification_for_bench(path: &Path) -> u8 {
-    u8::from(is_cacheable_dynamic_image_path(path)) | (u8::from(is_dynamic_video_path(path)) << 1)
 }
 
 pub fn ensure_cached_dynamic_image_on_disk(
@@ -688,30 +633,6 @@ mod tests {
                 "bg.mp4".to_string(),
             ]
         );
-    }
-
-    #[test]
-    fn dynamic_path_classification_preserves_case_insensitive_extensions() {
-        for (path, expected) in [
-            ("banner.PNG", 1),
-            ("background.JpEg", 1),
-            ("movie.MP4", 3),
-            ("clip.WeBm", 3),
-            ("chart.ssc", 0),
-            ("extensionless", 0),
-            ("trailing.", 0),
-            ("unicode.ÉPNG", 0),
-        ] {
-            let path = Path::new(path);
-            let current = u8::from(is_cacheable_dynamic_image_path(path))
-                | (u8::from(is_dynamic_video_path(path)) << 1);
-            assert_eq!(current, expected, "wrong classification for {path:?}");
-            assert_eq!(
-                current,
-                dynamic_path_classification_legacy_for_bench(path),
-                "classification changed for {path:?}"
-            );
-        }
     }
 
     #[test]

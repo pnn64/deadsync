@@ -9,92 +9,7 @@ bench-support = []
 test-support = []
 
 [[bench]]
-name = "score_counter"
-harness = false
-required-features = ["bench-support"]
-
-[[bench]]
-name = "i18n_lookup"
-harness = false
-required-features = ["bench-support"]
-
-[[bench]]
-name = "song_lua_proxy_capture"
-harness = false
-required-features = ["bench-support"]
-
-[[bench]]
-name = "select_music_intro"
-harness = false
-required-features = ["bench-support"]
-
-[[bench]]
-name = "select_music_media"
-harness = false
-required-features = ["bench-support"]
-
-[[bench]]
-name = "select_music_folder_stats"
-harness = false
-required-features = ["bench-support"]
-
-[[bench]]
-name = "select_music_matrix_rating"
-harness = false
-required-features = ["bench-support"]
-
-[[bench]]
-name = "select_music_wheel_charts"
-harness = false
-required-features = ["bench-support"]
-
-[[bench]]
-name = "select_course_song_lookup"
-harness = false
-required-features = ["bench-support"]
-
-[[bench]]
-name = "leaderboard_rows"
-harness = false
-required-features = ["bench-support"]
-
-[[bench]]
-name = "judgment_assets"
-harness = false
-required-features = ["bench-support"]
-
-[[bench]]
-name = "gameplay_hud_text"
-harness = false
-required-features = ["bench-support"]
-
-[[bench]]
-name = "pacemaker_hot_path"
-harness = false
-required-features = ["bench-support"]
-
-[[bench]]
-name = "step_stats_gif_hot_path"
-harness = false
-required-features = ["bench-support"]
-
-[[bench]]
-name = "gameplay_inactive_frame"
-harness = false
-required-features = ["bench-support"]
-
-[[bench]]
 name = "gameplay_frame_orchestration"
-harness = false
-required-features = ["bench-support"]
-
-[[bench]]
-name = "gameplay_song_lua_lifetime"
-harness = false
-required-features = ["bench-support"]
-
-[[bench]]
-name = "gameplay_notefield_prewarm"
 harness = false
 required-features = ["bench-support"]
 
@@ -104,82 +19,12 @@ harness = false
 required-features = ["bench-support"]
 
 [[bench]]
-name = "gameplay_steady_state"
-harness = false
-required-features = ["bench-support"]
-
-[[bench]]
-name = "gameplay_lobby_hud"
-harness = false
-required-features = ["bench-support"]
-
-[[bench]]
 name = "direct_notefield_presentation"
 harness = false
 required-features = ["bench-support"]
 
 [[bench]]
-name = "song_lua_frame_hotpaths"
-harness = false
-required-features = ["bench-support"]
-
-[[bench]]
-name = "song_lua_scratch_prewarm"
-harness = false
-required-features = ["bench-support"]
-
-[[bench]]
 name = "song_lua_aft_capture"
-harness = false
-required-features = ["bench-support"]
-
-[[bench]]
-name = "sync_heat_range"
-harness = false
-required-features = ["bench-support"]
-
-[[bench]]
-name = "download_pack_substyles"
-harness = false
-required-features = ["bench-support"]
-
-[[bench]]
-name = "score_import_pack_membership"
-harness = false
-required-features = ["bench-support"]
-
-[[bench]]
-name = "technique_background"
-harness = false
-required-features = ["bench-support"]
-
-[[bench]]
-name = "visual_style_backgrounds"
-harness = false
-required-features = ["bench-support"]
-
-[[bench]]
-name = "qr_mesh_cache"
-harness = false
-required-features = ["bench-support"]
-
-[[bench]]
-name = "density_life_compaction"
-harness = false
-required-features = ["bench-support"]
-
-[[bench]]
-name = "evaluation_life_line"
-harness = false
-required-features = ["bench-support"]
-
-[[bench]]
-name = "player_options_frame"
-harness = false
-required-features = ["bench-support"]
-
-[[bench]]
-name = "machine_options_frame"
 harness = false
 required-features = ["bench-support"]
 

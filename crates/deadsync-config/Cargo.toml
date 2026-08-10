@@ -4,14 +4,6 @@ version = "0.1.0"
 edition = "2024"
 license = "GPL-3.0"
 
-[features]
-bench-support = []
-
-[[bench]]
-name = "simple_ini"
-harness = false
-required-features = ["bench-support"]
-
 [dependencies]
 deadlib-platform = { path = "../deadlib-platform" }
 deadlib-present = { path = "../deadlib-present" }

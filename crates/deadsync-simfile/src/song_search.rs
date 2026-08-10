@@ -59,24 +59,6 @@ pub fn song_search_difficulties_text(song: &SongData, chart_type: &str) -> Strin
     if out.is_empty() { "-".to_string() } else { out }
 }
 
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub fn song_search_difficulties_text_legacy(song: &SongData, chart_type: &str) -> String {
-    const ORDER: [&str; 5] = ["beginner", "easy", "medium", "hard", "challenge"];
-    let mut out = String::new();
-    for diff in ORDER {
-        if let Some(chart) = song.charts.iter().find(|c| {
-            c.chart_type.eq_ignore_ascii_case(chart_type) && c.difficulty.eq_ignore_ascii_case(diff)
-        }) {
-            if !out.is_empty() {
-                out.push_str("   ");
-            }
-            out.push_str(&chart.meter.to_string());
-        }
-    }
-    if out.is_empty() { "-".to_string() } else { out }
-}
-
 fn parse_song_search_filter(input: &str) -> SongSearchFilter {
     let mut filter = SongSearchFilter::default();
     let mut stripped = String::with_capacity(input.len());
@@ -126,108 +108,6 @@ fn parse_song_search_filter(input: &str) -> SongSearchFilter {
     }
     filter.terms = stripped;
     filter
-}
-
-#[cfg(feature = "bench-support")]
-#[derive(Default)]
-struct LegacySongSearchFilter {
-    pack_term: Option<String>,
-    song_term: Option<String>,
-    difficulty: Option<u8>,
-    bpm_tier: Option<i32>,
-}
-
-#[cfg(feature = "bench-support")]
-fn parse_song_search_filter_legacy(input: &str) -> LegacySongSearchFilter {
-    let lower = input.to_ascii_lowercase();
-    let chars: Vec<char> = lower.chars().collect();
-    let mut filter = LegacySongSearchFilter::default();
-    let mut stripped = String::with_capacity(lower.len());
-    let mut i = 0usize;
-    while i < chars.len() {
-        if chars[i] == '[' {
-            let mut j = i + 1;
-            let mut value: u32 = 0;
-            let mut has_digit = false;
-            while j < chars.len() {
-                let Some(d) = chars[j].to_digit(10) else {
-                    break;
-                };
-                has_digit = true;
-                value = value.saturating_mul(10).saturating_add(d);
-                j += 1;
-            }
-            if has_digit && j < chars.len() && chars[j] == ']' {
-                if value <= 35 {
-                    filter.difficulty = Some(value as u8);
-                } else {
-                    filter.bpm_tier = Some(song_search_bpm_tier(value as f64));
-                }
-                i = j + 1;
-                continue;
-            }
-        }
-        stripped.push(chars[i]);
-        i += 1;
-    }
-
-    let stripped = stripped.trim();
-    if let Some((left, right)) = stripped.split_once('/') {
-        if !left.is_empty() {
-            filter.pack_term = Some(left.to_string());
-        }
-        if !right.is_empty() {
-            filter.song_term = Some(right.to_string());
-        }
-    } else if !stripped.is_empty() {
-        filter.song_term = Some(stripped.to_string());
-    }
-    filter
-}
-
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub fn parse_song_search_filter_for_bench(input: &str) -> u64 {
-    let filter = parse_song_search_filter(input);
-    search_filter_checksum(
-        filter.pack_term(),
-        filter.song_term(),
-        filter.difficulty,
-        filter.bpm_tier,
-    )
-}
-
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub fn parse_song_search_filter_legacy_for_bench(input: &str) -> u64 {
-    let filter = parse_song_search_filter_legacy(input);
-    search_filter_checksum(
-        filter.pack_term.as_deref(),
-        filter.song_term.as_deref(),
-        filter.difficulty,
-        filter.bpm_tier,
-    )
-}
-
-#[cfg(feature = "bench-support")]
-fn search_filter_checksum(
-    pack_term: Option<&str>,
-    song_term: Option<&str>,
-    difficulty: Option<u8>,
-    bpm_tier: Option<i32>,
-) -> u64 {
-    fn text_checksum(text: Option<&str>) -> u64 {
-        text.map_or(0, |text| {
-            text.bytes().fold(text.len() as u64, |checksum, byte| {
-                checksum.rotate_left(5) ^ u64::from(byte)
-            })
-        })
-    }
-
-    text_checksum(pack_term)
-        ^ text_checksum(song_term).rotate_left(13)
-        ^ u64::from(difficulty.unwrap_or_default()).rotate_left(29)
-        ^ (bpm_tier.unwrap_or_default() as u64).rotate_left(41)
 }
 
 #[inline]
@@ -298,23 +178,6 @@ fn display_full_title_cmp(left: &SongData, right: &SongData) -> Ordering {
 
 fn sort_song_search_candidates(candidates: &mut [SongSearchCandidate]) {
     candidates.sort_by(|left, right| display_full_title_cmp(&left.song, &right.song));
-}
-
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub fn sort_song_search_candidates_for_bench(candidates: &mut [SongSearchCandidate]) {
-    sort_song_search_candidates(candidates);
-}
-
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub fn sort_song_search_candidates_legacy(candidates: &mut [SongSearchCandidate]) {
-    candidates.sort_by_cached_key(|candidate| {
-        candidate
-            .song
-            .display_full_title(false)
-            .to_ascii_lowercase()
-    });
 }
 
 pub fn build_song_search_candidates<'a>(
@@ -391,83 +254,6 @@ pub fn build_song_search_candidates<'a>(
     }
     sort_song_search_candidates(&mut out);
 
-    out
-}
-
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub fn build_song_search_candidates_legacy<'a>(
-    entries: impl IntoIterator<Item = SongSearchCatalogEntry<'a>>,
-    search_text: &str,
-    chart_type: &str,
-) -> Vec<SongSearchCandidate> {
-    let filter = parse_song_search_filter(search_text);
-    let mut out = Vec::new();
-    let mut current_pack_name: Option<&str> = None;
-
-    for entry in entries {
-        match entry {
-            SongSearchCatalogEntry::PackHeader(name) => current_pack_name = Some(name),
-            SongSearchCatalogEntry::Song(song) => {
-                if !song
-                    .charts
-                    .iter()
-                    .any(|chart| chart.chart_type.eq_ignore_ascii_case(chart_type))
-                {
-                    continue;
-                }
-                let pack_name = current_pack_name.unwrap_or_default();
-                if let Some(pack_term) = filter.pack_term()
-                    && !pack_name.to_ascii_lowercase().contains(pack_term)
-                {
-                    continue;
-                }
-                if let Some(song_term) = filter.song_term() {
-                    let display = song.display_full_title(false).to_ascii_lowercase();
-                    let translit = song.display_full_title(true).to_ascii_lowercase();
-                    if !display.contains(song_term) && !translit.contains(song_term) {
-                        continue;
-                    }
-                }
-                if let Some(diff) = filter.difficulty
-                    && !song.charts.iter().any(|chart| {
-                        chart.chart_type.eq_ignore_ascii_case(chart_type)
-                            && !chart.difficulty.eq_ignore_ascii_case("edit")
-                            && chart.meter == diff as u32
-                    })
-                {
-                    continue;
-                }
-                if let Some(want_tier) = filter.bpm_tier {
-                    let Some((bpm_lo, bpm_hi)) = song.display_bpm_range() else {
-                        continue;
-                    };
-                    let mut lo = song_search_bpm_tier(bpm_lo);
-                    let mut hi = song_search_bpm_tier(bpm_hi);
-                    if lo > hi {
-                        std::mem::swap(&mut lo, &mut hi);
-                    }
-                    if lo == hi {
-                        if want_tier != lo {
-                            continue;
-                        }
-                    } else if want_tier < lo || want_tier > hi {
-                        continue;
-                    }
-                }
-                out.push(SongSearchCandidate {
-                    pack_name: pack_name.to_string(),
-                    song: Arc::clone(song),
-                });
-            }
-        }
-    }
-    out.sort_by_cached_key(|candidate| {
-        candidate
-            .song
-            .display_full_title(false)
-            .to_ascii_lowercase()
-    });
     out
 }
 

@@ -4,44 +4,6 @@ version = "0.1.0"
 edition = "2024"
 license = "GPL-3.0"
 
-[features]
-bench-support = []
-
-[[bench]]
-name = "element_hints"
-harness = false
-required-features = ["bench-support"]
-
-[[bench]]
-name = "compiled_entry_sort"
-harness = false
-required-features = ["bench-support"]
-
-[[bench]]
-name = "compiled_loader_lookup"
-harness = false
-required-features = ["bench-support"]
-
-[[bench]]
-name = "model_signature"
-harness = false
-required-features = ["bench-support"]
-
-[[bench]]
-name = "itg_lookup_caches"
-harness = false
-required-features = ["bench-support"]
-
-[[bench]]
-name = "tap_explosion_registry"
-harness = false
-required-features = ["bench-support"]
-
-[[bench]]
-name = "actor_command_keys"
-harness = false
-required-features = ["bench-support"]
-
 [dependencies]
 bincode = "2.0.1"
 hashbrown = "0.17.1"

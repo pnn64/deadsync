@@ -175,7 +175,7 @@ impl GameplayWindowCountsState {
     }
 
     #[inline(always)]
-    pub fn set_player_for_benchmark(
+    pub fn set_player_for_test(
         &mut self,
         player: usize,
         canonical: WindowCounts,

@@ -760,15 +760,6 @@ pub fn song_lua_message_command_index(
     indices.get(&message.to_ascii_lowercase()).copied()
 }
 
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub fn song_lua_message_command_index_legacy_for_bench(
-    indices: &BTreeMap<String, usize>,
-    message: &str,
-) -> Option<usize> {
-    indices.get(&message.to_ascii_lowercase()).copied()
-}
-
 pub fn build_song_lua_message_seconds(
     beats: impl IntoIterator<Item = f32>,
     timing_player: &TimingData,
@@ -2163,13 +2154,6 @@ fn song_lua_extend_ease_tails_legacy(
     }
 }
 
-#[cfg(any(test, feature = "bench-support"))]
-pub fn song_lua_extend_ease_tails_legacy_for_bench(
-    out: &mut [SongLuaEaseMaskWindow],
-    constants: &[AttackMaskWindow],
-) {
-    song_lua_extend_ease_tails_legacy(out, constants);
-}
 
 pub fn song_lua_extend_ease_tails(
     out: &mut [SongLuaEaseMaskWindow],
@@ -2266,12 +2250,6 @@ fn song_lua_extend_column_offset_tails_legacy(out: &mut [SongLuaColumnOffsetWind
     }
 }
 
-#[cfg(any(test, feature = "bench-support"))]
-pub fn song_lua_extend_column_offset_tails_legacy_for_bench(
-    out: &mut [SongLuaColumnOffsetWindowRuntime],
-) {
-    song_lua_extend_column_offset_tails_legacy(out);
-}
 
 pub fn song_lua_extend_column_offset_tails(out: &mut [SongLuaColumnOffsetWindowRuntime]) {
     const SAME_TICK_EPSILON: f32 = 0.001;
@@ -2385,37 +2363,6 @@ pub fn group_song_lua_overlay_eases<StateDelta>(
     (overlay_eases, ranges)
 }
 
-#[cfg(any(test, feature = "bench-support"))]
-pub fn group_song_lua_overlay_eases_legacy_for_bench<StateDelta>(
-    overlay_count: usize,
-    overlay_eases: Vec<SongLuaOverlayEaseWindowRuntime<StateDelta>>,
-) -> (
-    Vec<SongLuaOverlayEaseWindowRuntime<StateDelta>>,
-    Vec<std::ops::Range<usize>>,
-) {
-    let mut buckets = Vec::with_capacity(overlay_count);
-    buckets.resize_with(overlay_count, Vec::new);
-    for ease in overlay_eases {
-        if let Some(bucket) = buckets.get_mut(ease.overlay_index) {
-            bucket.push(ease);
-        }
-    }
-    let total_len = buckets.iter().map(Vec::len).sum();
-    let mut flat = Vec::with_capacity(total_len);
-    let mut ranges = Vec::with_capacity(overlay_count);
-    for mut bucket in buckets {
-        bucket.sort_by(|left, right| {
-            left.start_second
-                .total_cmp(&right.start_second)
-                .then_with(|| left.end_second.total_cmp(&right.end_second))
-                .then_with(|| left.sustain_end_second.total_cmp(&right.sustain_end_second))
-        });
-        let start = flat.len();
-        flat.extend(bucket);
-        ranges.push(start..flat.len());
-    }
-    (flat, ranges)
-}
 
 #[inline(always)]
 pub fn offset_song_lua_overlay_eases<StateDelta>(

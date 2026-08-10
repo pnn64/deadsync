@@ -1,9 +1,5 @@
 pub mod app;
 
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub mod bench_support;
-
 mod apply_replaygain;
 mod command;
 mod content_reload;

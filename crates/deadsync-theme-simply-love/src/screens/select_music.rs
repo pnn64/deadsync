@@ -1270,52 +1270,6 @@ impl MatrixRatingCache {
     }
 }
 
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub struct SelectMusicMatrixRatingBench {
-    cache: RefCell<MatrixRatingCache>,
-    profile: [deadsync_chart::MatrixRatingInput; 2],
-}
-
-#[cfg(feature = "bench-support")]
-impl Default for SelectMusicMatrixRatingBench {
-    fn default() -> Self {
-        Self {
-            cache: RefCell::new(MatrixRatingCache::default()),
-            profile: [
-                deadsync_chart::MatrixRatingInput {
-                    effective_bpm: 180.0,
-                    measures: 32,
-                },
-                deadsync_chart::MatrixRatingInput {
-                    effective_bpm: 300.0,
-                    measures: 12,
-                },
-            ],
-        }
-    }
-}
-
-#[cfg(feature = "bench-support")]
-impl SelectMusicMatrixRatingBench {
-    pub fn uncached(&self, music_rate: f32) -> f64 {
-        deadsync_simfile::matrix::matrix_rating_at_rate(10.0, &self.profile, music_rate)
-    }
-
-    pub fn cached(&self, music_rate: f32) -> f64 {
-        self.cache.borrow_mut().resolve_key(
-            MatrixRatingCacheKey {
-                song: 1,
-                chart_ix: 0,
-                music_rate_bits: music_rate.to_bits(),
-            },
-            10.0,
-            &self.profile,
-            music_rate,
-        )
-    }
-}
-
 impl InfoBoxActorCache {
     fn resolve(
         &mut self,
@@ -5520,13 +5474,6 @@ fn sync_percentile_pair(values: &[f64], lo_pct: f64, hi_pct: f64) -> (f64, f64) 
     )
 }
 
-#[cfg(any(test, feature = "bench-support"))]
-fn sync_percentile_legacy(values: &[f64], pct: f64) -> f64 {
-    let mut sorted = values.to_vec();
-    sorted.sort_by(f64::total_cmp);
-    sync_percentile_from_sorted(&sorted, pct)
-}
-
 #[inline(always)]
 fn sync_viridis(t: f64) -> [f32; 4] {
     const STOPS: [[u8; 3]; 5] = [
@@ -5571,50 +5518,6 @@ fn sync_heat_value_range(values: &[f64], clim_pct: Option<(f64, f64)>) -> Option
     } else {
         Some((lo - 1.0, hi + 1.0))
     }
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-fn sync_heat_value_range_legacy(
-    values: &[f64],
-    clim_pct: Option<(f64, f64)>,
-) -> Option<(f64, f64)> {
-    if values.is_empty() {
-        return None;
-    }
-    if let Some((lo_pct, hi_pct)) = clim_pct {
-        let lo = sync_percentile_legacy(values, lo_pct);
-        let hi = sync_percentile_legacy(values, hi_pct);
-        if hi > lo {
-            return Some((lo, hi));
-        }
-    }
-    let lo = values.iter().copied().fold(f64::INFINITY, f64::min);
-    let hi = values.iter().copied().fold(f64::NEG_INFINITY, f64::max);
-    if !lo.is_finite() || !hi.is_finite() {
-        None
-    } else if hi > lo {
-        Some((lo, hi))
-    } else {
-        Some((lo - 1.0, hi + 1.0))
-    }
-}
-
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub fn sync_heat_value_range_for_bench(
-    values: &[f64],
-    clim_pct: Option<(f64, f64)>,
-) -> Option<(f64, f64)> {
-    sync_heat_value_range(values, clim_pct)
-}
-
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub fn sync_heat_value_range_legacy_for_bench(
-    values: &[f64],
-    clim_pct: Option<(f64, f64)>,
-) -> Option<(f64, f64)> {
-    sync_heat_value_range_legacy(values, clim_pct)
 }
 
 fn build_sync_heat_image(
@@ -11953,250 +11856,9 @@ fn push_sl_select_music_wheel_cascade_mask(
     }
 }
 
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub fn bench_select_music_intro_frame(selection_animation_timer: f32, actors: &mut Vec<Actor>) {
-    push_sl_select_music_bg_flash(actors, selection_animation_timer);
-    push_sl_select_music_wheel_cascade_mask(actors, selection_animation_timer);
-}
-
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub struct SelectMusicMediaBench {
-    state: State,
-    assets: AssetManager,
-    smx: SmxAssignmentView,
-    actors: Vec<Actor>,
-}
-
-#[cfg(feature = "bench-support")]
-impl SelectMusicMediaBench {
-    pub fn new() -> Self {
-        let mut state = init_placeholder();
-        state.entries = (0..MUSIC_WHEEL_SLOT_COUNT)
-            .map(|index| MusicWheelEntry::Song(bench_media_song(index)))
-            .collect();
-        state.selected_index = MUSIC_WHEEL_SLOT_COUNT / 2;
-        state.prev_selected_index = state.selected_index;
-        state.policy.media.show_banners = true;
-        state.policy.media.show_cdtitles = true;
-        state.policy.media.show_folder_stats = false;
-        state.policy.media.show_previews = false;
-        state.policy.media.song_select_bg_mode = crate::config::SelectMusicSongSelectBgMode::Bg;
-        state.banner_high_quality_requested = true;
-        Self {
-            state,
-            assets: AssetManager::new(),
-            smx: SmxAssignmentView::default(),
-            actors: Vec::with_capacity(256),
-        }
-    }
-
-    pub fn frame(&mut self) -> usize {
-        let effect = update(&mut self.state, 0.0, &self.smx);
-        self.actors.clear();
-        push_actors(
-            &mut self.actors,
-            &self.state,
-            &self.assets,
-            1,
-            crate::views::SimplyLoveVisualPolicyView::default(),
-        );
-        self.actors.len() + usize::from(!matches!(effect, ThemeEffect::None))
-    }
-}
-
-#[cfg(feature = "bench-support")]
-impl Default for SelectMusicMediaBench {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub struct SelectMusicWheelChartBench {
-    state: State,
-    assets: AssetManager,
-    actors: Vec<Actor>,
-}
-
-#[cfg(feature = "bench-support")]
-impl SelectMusicWheelChartBench {
-    pub fn new() -> Self {
-        let mut state = init_placeholder();
-        state.entries = (0..MUSIC_WHEEL_SLOT_COUNT)
-            .map(|index| {
-                let mut song = (*bench_folder_stats_song(index)).clone();
-                song.has_lua = true;
-                MusicWheelEntry::Song(Arc::new(song))
-            })
-            .collect();
-        state.wheel_preferred_chart_ixs = state
-            .entries
-            .iter()
-            .filter_map(|entry| match entry {
-                MusicWheelEntry::Song(song) => Some((
-                    Arc::as_ptr(song) as usize,
-                    music_wheel::preferred_chart_indices(song, "dance-single"),
-                )),
-                MusicWheelEntry::PackHeader { .. } => None,
-            })
-            .collect();
-        state.selected_index = MUSIC_WHEEL_SLOT_COUNT / 2;
-        state.prev_selected_index = state.selected_index;
-        state.preferred_difficulty_index = 1;
-        state.p2_preferred_difficulty_index = 3;
-        state.session.play_style = profile_data::PlayStyle::Versus;
-        state.session.joined = [true, true];
-        state.policy.media.show_banners = false;
-        state.policy.media.show_cdtitles = false;
-        state.policy.media.show_folder_stats = false;
-        state.policy.media.show_previews = false;
-        state.policy.media.song_select_bg_mode = crate::config::SelectMusicSongSelectBgMode::Off;
-        state.music_wheel = MusicWheelRuntimeView {
-            joined: state.session.joined,
-            play_style: state.session.play_style,
-            ..MusicWheelRuntimeView::default()
-        };
-        Self {
-            state,
-            assets: AssetManager::new(),
-            actors: Vec::with_capacity(256),
-        }
-    }
-
-    pub fn frame(&mut self) -> usize {
-        let request = music_wheel_runtime_request(&self.state);
-        let request_checksum = request
-            .slots
-            .iter()
-            .map(|slot| match slot {
-                MusicWheelSlotRuntimeRequest::Song { chart_hashes, .. } => chart_hashes
-                    .iter()
-                    .flatten()
-                    .map(|hash| hash.len())
-                    .sum::<usize>(),
-                MusicWheelSlotRuntimeRequest::Empty
-                | MusicWheelSlotRuntimeRequest::Pack { .. }
-                | MusicWheelSlotRuntimeRequest::Series { .. } => 0,
-            })
-            .sum::<usize>();
-        self.actors.clear();
-        push_actors(
-            &mut self.actors,
-            &self.state,
-            &self.assets,
-            1,
-            crate::views::SimplyLoveVisualPolicyView::default(),
-        );
-        self.actors.len().wrapping_add(request_checksum)
-    }
-}
-
-#[cfg(feature = "bench-support")]
-impl Default for SelectMusicWheelChartBench {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub struct SelectMusicFolderStatsBench {
-    state: State,
-    assets: AssetManager,
-    smx: SmxAssignmentView,
-    actors: Vec<Actor>,
-}
-
-#[cfg(feature = "bench-support")]
-impl SelectMusicFolderStatsBench {
-    const SONGS: usize = 512;
-
-    pub fn new(versus: bool) -> Self {
-        let songs: Vec<_> = (0..Self::SONGS).map(bench_folder_stats_song).collect();
-        let mut entries = Vec::with_capacity(Self::SONGS + 1);
-        entries.push(MusicWheelEntry::PackHeader {
-            name: "Benchmark Pack".to_string(),
-            original_index: 0,
-            banner_path: None,
-            song_count: Self::SONGS,
-            pack_key: Some("benchmark-pack".to_string()),
-            parent_series: None,
-        });
-        entries.extend(songs.iter().cloned().map(MusicWheelEntry::Song));
-
-        let scores: Vec<_> = songs
-            .iter()
-            .flat_map(|song| {
-                song.charts.iter().map(|chart| {
-                    (
-                        chart.short_hash.clone(),
-                        score_data::CachedScore {
-                            grade: score_data::Grade::Tier02,
-                            score_percent: 0.95,
-                            lamp_index: None,
-                            lamp_judge_count: None,
-                        },
-                    )
-                })
-            })
-            .collect();
-        let mut state = init_placeholder();
-        state.all_entries = entries.clone();
-        state.group_entries = entries.clone();
-        state.folder_stats = FolderStatsCache::new(&state.group_entries);
-        state.entries = entries;
-        state.selected_index = Self::SONGS;
-        state.prev_selected_index = state.selected_index;
-        state.sort_mode = WheelSortMode::Group;
-        state.expanded_pack_name = Some("Benchmark Pack".to_string());
-        state.preferred_difficulty_index = 3;
-        state.p2_preferred_difficulty_index = 3;
-        state.policy.media.show_banners = false;
-        state.policy.media.show_cdtitles = false;
-        state.policy.media.show_folder_stats = true;
-        state.policy.media.show_previews = false;
-        state.session.play_style = if versus {
-            profile_data::PlayStyle::Versus
-        } else {
-            profile_data::PlayStyle::Single
-        };
-        state.session.joined = [true, versus];
-        state.session.guest = [false, !versus];
-        state.profiles.display_names = ["Player 1".to_string(), "Player 2".to_string()];
-        state.history.sides[0].available = true;
-        state.history.sides[0].cached_scores = scores.clone();
-        if versus {
-            state.history.sides[1].available = true;
-            state.history.sides[1].cached_scores = scores;
-        }
-        Self {
-            state,
-            assets: AssetManager::new(),
-            smx: SmxAssignmentView::default(),
-            actors: Vec::with_capacity(256),
-        }
-    }
-
-    pub fn frame(&mut self) -> usize {
-        let effect = update(&mut self.state, 0.0, &self.smx);
-        self.actors.clear();
-        push_actors(
-            &mut self.actors,
-            &self.state,
-            &self.assets,
-            1,
-            crate::views::SimplyLoveVisualPolicyView::default(),
-        );
-        self.actors.len() + usize::from(!matches!(effect, ThemeEffect::None))
-    }
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-fn bench_folder_stats_song(index: usize) -> Arc<SongData> {
-    let mut song = (*bench_media_song(index)).clone();
+#[cfg(test)]
+fn test_folder_stats_song(index: usize) -> Arc<SongData> {
+    let mut song = (*test_media_song(index)).clone();
     song.banner_path = None;
     song.background_path = None;
     song.cdtitle_path = None;
@@ -12244,8 +11906,8 @@ fn bench_folder_stats_song(index: usize) -> Arc<SongData> {
     Arc::new(song)
 }
 
-#[cfg(any(test, feature = "bench-support"))]
-fn bench_media_song(index: usize) -> Arc<SongData> {
+#[cfg(test)]
+fn test_media_song(index: usize) -> Arc<SongData> {
     Arc::new(SongData {
         simfile_path: PathBuf::from(format!("Songs/Bench/Song{index}/song.ssc")),
         title: format!("Media benchmark song {index}"),
@@ -14713,7 +14375,7 @@ mod tests {
 
     #[test]
     fn matrix_rating_cache_reuses_chart_and_rate_result() {
-        let mut song = (*super::bench_folder_stats_song(0)).clone();
+        let mut song = (*super::test_folder_stats_song(0)).clone();
         song.charts[0].matrix_rating = 10.0;
         song.charts[0].matrix_profile = Box::new([
             deadsync_chart::MatrixRatingInput {
@@ -15196,7 +14858,7 @@ mod tests {
     }
 
     fn folder_stats_state() -> super::State {
-        let song = super::bench_folder_stats_song(0);
+        let song = super::test_folder_stats_song(0);
         let entries = vec![
             super::MusicWheelEntry::PackHeader {
                 name: "Folder Stats Pack".to_string(),
@@ -15569,7 +15231,7 @@ mod tests {
         state.policy.presentation.show_scorebox = true;
         state.policy.presentation.scorebox_cycle_enabled = true;
 
-        let song = super::bench_folder_stats_song(0);
+        let song = super::test_folder_stats_song(0);
         state.entries = vec![super::MusicWheelEntry::Song(song.clone())];
         super::ensure_chart_cache_for_song(&mut state, &song, "dance-single", false);
         let chart_hash = super::immediate_selected_charts(&state, profile_data::PlayStyle::Single)
@@ -15792,7 +15454,7 @@ mod tests {
 
     #[test]
     fn chart_favorite_uses_player_chart_and_toggles_off() {
-        let song = super::bench_folder_stats_song(0);
+        let song = super::test_folder_stats_song(0);
         let p1_hash = song.charts[1].short_hash.clone();
         let p2_hash = song.charts[3].short_hash.clone();
         let mut state = init_placeholder();
@@ -17513,30 +17175,6 @@ mod tests {
     }
 
     #[test]
-    fn sync_heat_percentile_range_matches_legacy_two_sort_path() {
-        let cases: &[&[f64]] = &[
-            &[],
-            &[4.0],
-            &[3.0, 3.0, 3.0],
-            &[9.0, -1.0, 4.0, 2.0, 8.0, 0.0],
-            &[f64::NEG_INFINITY, -2.0, 7.0, f64::INFINITY],
-            &[f64::NAN, 1.0, -0.0, 0.0, 8.0],
-        ];
-        let percentile_ranges = [None, Some((3.0, 97.0)), Some((10.0, 90.0))];
-
-        let bits = |range: Option<(f64, f64)>| range.map(|(lo, hi)| (lo.to_bits(), hi.to_bits()));
-        for values in cases {
-            for clim_pct in percentile_ranges {
-                assert_eq!(
-                    bits(super::sync_heat_value_range(values, clim_pct)),
-                    bits(super::sync_heat_value_range_legacy(values, clim_pct)),
-                    "range changed for values={values:?}, clim_pct={clim_pct:?}"
-                );
-            }
-        }
-    }
-
-    #[test]
     fn horizontal_sync_heat_uses_zoomed_columns() {
         let matrix = [0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0];
         let full = build_sync_heat_image(
@@ -17919,8 +17557,8 @@ mod tests {
 
     #[test]
     fn duplicate_pack_display_titles_open_by_group_key() {
-        let upper_song = super::bench_folder_stats_song(0);
-        let lower_song = super::bench_folder_stats_song(1);
+        let upper_song = super::test_folder_stats_song(0);
+        let lower_song = super::test_folder_stats_song(1);
         let mut upper =
             test_pack_with_group("Stamina RPG 9 - PerfectTaste", "Stamina RPG 9", "SRPG");
         upper.songs.push(upper_song.clone());

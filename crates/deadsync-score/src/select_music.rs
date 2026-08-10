@@ -4,9 +4,6 @@ use rustc_hash::FxHashMap;
 use std::cmp::Reverse;
 use std::sync::Arc;
 
-#[cfg(any(test, feature = "bench-support"))]
-use std::collections::HashMap;
-
 pub const FOLDER_STATS_STAR_BUCKETS: usize = 5;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -235,58 +232,6 @@ fn chart_hash_song_indices(songs: &[Arc<SongData>]) -> FxHashMap<&str, usize> {
     hash_to_song_ix
 }
 
-#[cfg(any(test, feature = "bench-support"))]
-fn chart_hash_song_indices_legacy(songs: &[Arc<SongData>]) -> HashMap<&str, usize> {
-    let mut hash_to_song_ix = HashMap::with_capacity(songs.len().saturating_mul(8));
-    for (song_ix, song) in songs.iter().enumerate() {
-        for chart in &song.charts {
-            if chart.has_note_data {
-                hash_to_song_ix
-                    .entry(chart.short_hash.as_str())
-                    .or_insert(song_ix);
-            }
-        }
-    }
-    hash_to_song_ix
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-#[doc(hidden)]
-pub fn ranked_recent_song_indices_for_bench(
-    songs: &[Arc<SongData>],
-    recent_chart_hashes: &[&str],
-    limit: usize,
-) -> Vec<usize> {
-    ranked_recent_song_indices(songs, recent_chart_hashes.iter().copied(), limit)
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-#[doc(hidden)]
-pub fn ranked_recent_song_indices_legacy_for_bench(
-    songs: &[Arc<SongData>],
-    recent_chart_hashes: &[&str],
-    limit: usize,
-) -> Vec<usize> {
-    let hash_to_song_ix = chart_hash_song_indices_legacy(songs);
-    let mut recent_song_ixs = Vec::with_capacity(limit);
-    let mut seen_song_ix = vec![false; songs.len()];
-
-    for chart_hash in recent_chart_hashes {
-        let Some(&song_ix) = hash_to_song_ix.get(chart_hash) else {
-            continue;
-        };
-        if seen_song_ix[song_ix] {
-            continue;
-        }
-        seen_song_ix[song_ix] = true;
-        recent_song_ixs.push(song_ix);
-        if recent_song_ixs.len() >= limit {
-            break;
-        }
-    }
-    recent_song_ixs
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -474,23 +419,6 @@ mod tests {
         assert_eq!(ranked.len(), 2);
         assert!(Arc::ptr_eq(&ranked[0], &songs[0]));
         assert!(Arc::ptr_eq(&ranked[1], &songs[1]));
-    }
-
-    #[test]
-    fn recent_song_index_ranking_matches_legacy_limits_and_duplicates() {
-        let songs = vec![
-            Arc::new(song(vec![chart("Hard", "a"), chart("Challenge", "b")])),
-            Arc::new(song(vec![chart("Hard", "c")])),
-            Arc::new(song(vec![chart("Hard", "d"), chart("Edit", "e")])),
-        ];
-        let hashes = ["missing", "b", "a", "e", "d", "c", "b"];
-        for limit in [0, 1, 2, 3, 10] {
-            assert_eq!(
-                ranked_recent_song_indices_for_bench(&songs, &hashes, limit),
-                ranked_recent_song_indices_legacy_for_bench(&songs, &hashes, limit),
-                "limit {limit}"
-            );
-        }
     }
 
     #[test]

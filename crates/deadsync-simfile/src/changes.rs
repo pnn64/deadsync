@@ -315,58 +315,6 @@ fn summarize_bgchange_fallbacks(changes: &[SongBackgroundChange]) -> BgchangeFal
     summary
 }
 
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub fn summarize_bgchange_fallbacks_for_bench(
-    changes: &[SongBackgroundChange],
-) -> (bool, Option<usize>, bool, bool) {
-    let summary = summarize_bgchange_fallbacks(changes);
-    (
-        summary.has_explicit_movie,
-        summary.beat_zero_still_ix,
-        summary.blocks_beat_zero,
-        summary.has_any_file,
-    )
-}
-
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-#[allow(clippy::double_ended_iterator_last)]
-pub fn summarize_bgchange_fallbacks_legacy_for_bench(
-    changes: &[SongBackgroundChange],
-) -> (bool, Option<usize>, bool, bool) {
-    let has_explicit_movie = changes.iter().any(|change| {
-        matches!(
-            change.target,
-            SongBackgroundChangeTarget::File(ref path) if is_bgchange_movie_path(path)
-        )
-    });
-    let beat_zero_still_ix = changes
-        .iter()
-        .enumerate()
-        .filter(|(_, change)| {
-            change.start_beat <= 0.0
-                && matches!(
-                    change.target,
-                    SongBackgroundChangeTarget::File(ref path) if !is_bgchange_movie_path(path)
-                )
-        })
-        .map(|(index, _)| index)
-        .last();
-    let blocks_beat_zero = changes.iter().any(|change| {
-        change.start_beat <= 0.0 && !matches!(change.target, SongBackgroundChangeTarget::File(_))
-    });
-    let has_any_file = changes
-        .iter()
-        .any(|change| matches!(change.target, SongBackgroundChangeTarget::File(_)));
-    (
-        has_explicit_movie,
-        beat_zero_still_ix,
-        blocks_beat_zero,
-        has_any_file,
-    )
-}
-
 fn parse_background_change_set(
     song_dir: &Path,
     fields: &[String],

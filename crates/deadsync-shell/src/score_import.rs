@@ -128,11 +128,6 @@ impl Service {
         }
         events
     }
-
-    #[cfg(feature = "bench-support")]
-    pub(crate) fn poll_idle_legacy(&mut self) -> Vec<SimplyLoveScoreImportEvent> {
-        self.drain_events()
-    }
 }
 
 fn progress_view(progress: ScoreImportProgress) -> SimplyLoveScoreImportProgress {

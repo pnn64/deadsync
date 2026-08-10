@@ -49,19 +49,6 @@ fn normalize_song_path_with(song_path: &str, ascii_lowercase: bool) -> String {
     normalized
 }
 
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub fn normalize_song_path_legacy(song_path: &str) -> String {
-    song_path
-        .trim()
-        .trim_matches('/')
-        .replace('\\', "/")
-        .split('/')
-        .filter(|segment| !segment.is_empty())
-        .collect::<Vec<_>>()
-        .join("/")
-}
-
 pub fn pack_and_song_name_from_path(song_path: &str) -> Option<(String, String)> {
     let mut parts = song_path
         .trim()
@@ -155,77 +142,6 @@ pub fn build_playlist_song_lookup(
     lookup
 }
 
-#[cfg(feature = "bench-support")]
-#[derive(Clone, Debug, Default)]
-pub struct LegacyPlaylistSongLookup {
-    by_path: HashMap<String, Arc<SongData>>,
-    by_pack_song: HashMap<(String, String), Arc<SongData>>,
-    by_group: HashMap<String, Vec<Arc<SongData>>>,
-}
-
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub fn build_playlist_song_lookup_legacy(
-    sources: impl IntoIterator<Item = PlaylistSongSource>,
-) -> LegacyPlaylistSongLookup {
-    let mut lookup = LegacyPlaylistSongLookup::default();
-    for source in sources {
-        if let Some(path) = source.lobby_path.as_deref() {
-            lookup
-                .by_path
-                .entry(normalize_song_path(path).to_ascii_lowercase())
-                .or_insert_with(|| source.song.clone());
-        }
-
-        let group_key = source
-            .group_name
-            .as_deref()
-            .map(str::trim)
-            .filter(|name| !name.is_empty())
-            .map(str::to_ascii_lowercase);
-        let pack_dir_key = song_pack_and_dir_name(source.song.as_ref())
-            .map(|(pack_dir, _)| pack_dir.trim().to_ascii_lowercase());
-        let song_dir_key = song_pack_and_dir_name(source.song.as_ref())
-            .map(|(_, song_dir)| song_dir.trim().to_ascii_lowercase());
-
-        if let Some(song_dir) = song_dir_key {
-            if let Some(group_key) = group_key.as_ref() {
-                lookup
-                    .by_pack_song
-                    .entry((group_key.clone(), song_dir.clone()))
-                    .or_insert_with(|| source.song.clone());
-            }
-            if let Some(pack_dir) = pack_dir_key.as_ref() {
-                lookup
-                    .by_pack_song
-                    .entry((pack_dir.clone(), song_dir))
-                    .or_insert_with(|| source.song.clone());
-            }
-        }
-
-        if let Some(group_key) = group_key {
-            lookup
-                .by_group
-                .entry(group_key)
-                .or_default()
-                .push(source.song.clone());
-        }
-        if let Some(pack_dir) = pack_dir_key
-            && source
-                .group_name
-                .as_deref()
-                .is_none_or(|group| !group.trim().eq_ignore_ascii_case(pack_dir.as_str()))
-        {
-            lookup
-                .by_group
-                .entry(pack_dir)
-                .or_default()
-                .push(source.song);
-        }
-    }
-    lookup
-}
-
 pub fn playlist_entries_from_text(
     text: &str,
     fallback_name: &str,
@@ -288,38 +204,6 @@ fn find_playlist_song(lookup: &PlaylistSongLookup, line: &str) -> Option<Arc<Son
     let song = parts.next()?;
     let pack = parts.next()?;
     lookup.by_pack_song.get(pack)?.get(song).cloned()
-}
-
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub fn find_playlist_song_for_bench(
-    lookup: &PlaylistSongLookup,
-    line: &str,
-) -> Option<Arc<SongData>> {
-    find_playlist_song(lookup, line)
-}
-
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub fn find_playlist_song_legacy_for_bench(
-    lookup: &LegacyPlaylistSongLookup,
-    line: &str,
-) -> Option<Arc<SongData>> {
-    let normalized = normalize_song_path(line).to_ascii_lowercase();
-    if normalized.is_empty() {
-        return None;
-    }
-    if let Some(song) = lookup.by_path.get(normalized.as_str()) {
-        return Some(song.clone());
-    }
-
-    let mut parts = normalized.split('/').filter(|part| !part.is_empty()).rev();
-    let song = parts.next()?;
-    let pack = parts.next()?;
-    lookup
-        .by_pack_song
-        .get(&(pack.to_string(), song.to_string()))
-        .cloned()
 }
 
 fn push_playlist_section(

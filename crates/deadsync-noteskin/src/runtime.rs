@@ -2369,40 +2369,6 @@ fn tap_explosion_for_col_in_maps<'a, T>(
         .or_else(|| tap_explosions.get(window))
 }
 
-#[cfg(feature = "bench-support")]
-pub fn tap_explosion_for_col_for_bench<'a, T>(
-    tap_explosions: &'a TapExplosionMap<T>,
-    tap_explosions_by_col: &'a [TapExplosionMap<T>],
-    col: usize,
-    window: &str,
-    bright: bool,
-) -> Option<&'a TapExplosion<T>> {
-    tap_explosion_for_col_in_maps(tap_explosions, tap_explosions_by_col, col, window, bright)
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-pub fn tap_explosion_for_col_legacy_for_bench<'a, T>(
-    tap_explosions: &'a HashMap<String, TapExplosion<T>>,
-    tap_explosions_by_col: &'a [HashMap<String, TapExplosion<T>>],
-    col: usize,
-    window: &str,
-    bright: bool,
-) -> Option<&'a TapExplosion<T>> {
-    let lookup = |key: &str| {
-        tap_explosions_by_col
-            .get(col)
-            .and_then(|by_window| by_window.get(key))
-            .or_else(|| tap_explosions.get(key))
-    };
-    if bright
-        && let Some(key) = bright_tap_explosion_key(window)
-        && let Some(explosion) = lookup(key)
-    {
-        return Some(explosion);
-    }
-    lookup(window)
-}
-
 impl<T> NoteskinRuntime<T> {
     #[inline(always)]
     pub fn tap_explosion_for_col(&self, col: usize, window: &str) -> Option<&TapExplosion<T>> {
@@ -2718,7 +2684,7 @@ mod tests {
         itg_runtime_columns_compiled, itg_slot_with_active_model_draw,
         itg_tap_explosion_map_from_layers, itg_tap_explosion_map_from_resolved_layers,
         itg_tap_explosion_map_from_sources, itg_tap_explosions_by_col_compiled,
-        itg_tap_note_column, itg_tap_note_layers, tap_explosion_for_col_legacy_for_bench,
+        itg_tap_note_column, itg_tap_note_layers,
     };
     use crate::explosion::{
         ItgTapExplosionMode, ItgTapExplosionSource, itg_has_tap_explosion_command,
@@ -2807,66 +2773,6 @@ mod tests {
         assert_eq!(explosion.slot, Slot(2));
         assert_eq!(bright_tap_explosion_key("Held"), Some("HeldBright"));
         assert_eq!(bright_tap_explosion_key("Miss"), None);
-    }
-
-    #[test]
-    fn tap_explosion_registry_matches_hashmap_lookup_precedence() {
-        let make = |slot| TapExplosion::from_single(Slot(slot), ExplosionAnimation::default());
-        let legacy_default = HashMap::from([
-            ("W1".to_owned(), make(1)),
-            ("W1Bright".to_owned(), make(2)),
-            ("Miss".to_owned(), make(3)),
-            ("Custom".to_owned(), make(4)),
-        ]);
-        let legacy_by_col = vec![
-            HashMap::from([("W1".to_owned(), make(10)), ("Custom".to_owned(), make(40))]),
-            HashMap::from([
-                ("W1".to_owned(), make(11)),
-                ("W1Bright".to_owned(), make(20)),
-            ]),
-        ];
-        let current_default = TapExplosionMap::from([
-            ("W1", make(1)),
-            ("W1Bright", make(2)),
-            ("Miss", make(3)),
-            ("Custom", make(4)),
-        ]);
-        let current_by_col = vec![
-            TapExplosionMap::from([("W1", make(10)), ("Custom", make(40))]),
-            TapExplosionMap::from([("W1", make(11)), ("W1Bright", make(20))]),
-        ];
-        let current = NoteskinRuntime {
-            tap_explosions: current_default,
-            tap_explosions_by_col: current_by_col,
-            ..empty_runtime()
-        };
-
-        for (col, window, bright) in [
-            (0, "W1", false),
-            (0, "W1", true),
-            (1, "W1", true),
-            (2, "W1", false),
-            (2, "W1", true),
-            (0, "Miss", true),
-            (0, "Custom", true),
-            (1, "Missing", false),
-        ] {
-            let legacy = tap_explosion_for_col_legacy_for_bench(
-                &legacy_default,
-                &legacy_by_col,
-                col,
-                window,
-                bright,
-            )
-            .map(|explosion| explosion.slot.clone());
-            let selected = current
-                .tap_explosion_for_col_with_bright(col, window, bright)
-                .map(|explosion| explosion.slot.clone());
-            assert_eq!(
-                selected, legacy,
-                "lookup differed for col={col}, window={window}, bright={bright}"
-            );
-        }
     }
 
     #[test]

@@ -121,33 +121,6 @@ fn pack_search_index(id: u64, name: &str, metadata: [Option<&str>; 4]) -> (Strin
     (normalized_name, search_text)
 }
 
-#[cfg(feature = "bench-support")]
-pub fn pack_search_index_for_bench(
-    id: u64,
-    name: &str,
-    metadata: [Option<&str>; 4],
-) -> (String, String) {
-    pack_search_index(id, name, metadata)
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-pub fn pack_search_index_legacy_for_bench(
-    id: u64,
-    name: &str,
-    metadata: [Option<&str>; 4],
-) -> (String, String) {
-    let normalized_name = name.to_lowercase();
-    let mut search_text = String::with_capacity(normalized_name.len() + 80);
-    search_text.push_str(normalized_name.as_str());
-    for value in metadata.into_iter().flatten() {
-        search_text.push(' ');
-        search_text.push_str(value.to_lowercase().as_str());
-    }
-    search_text.push(' ');
-    search_text.push_str(id.to_string().as_str());
-    (normalized_name, search_text)
-}
-
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct InstallSnapshot {
     pub pack_id: u64,
@@ -290,38 +263,6 @@ fn is_lowercase(text: &str) -> bool {
     }
     text.chars()
         .all(|ch| ch.to_lowercase().eq(std::iter::once(ch)))
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-pub fn search_catalog_legacy_for_bench(catalog: &[PackInfo], query: &str) -> Vec<usize> {
-    let query = query.trim().to_lowercase();
-    if query.is_empty() {
-        return (0..catalog.len()).collect();
-    }
-    let tokens: Vec<&str> = query.split_whitespace().collect();
-    let mut buckets: [Vec<usize>; 5] = std::array::from_fn(|_| Vec::new());
-    for (idx, pack) in catalog.iter().enumerate() {
-        let rank = if pack.normalized_name == query {
-            Some(0)
-        } else if pack.normalized_name.starts_with(query.as_str()) {
-            Some(1)
-        } else if pack.normalized_name.contains(query.as_str()) {
-            Some(2)
-        } else if tokens
-            .iter()
-            .all(|token| pack.normalized_name.contains(token))
-        {
-            Some(3)
-        } else if tokens.iter().all(|token| pack.search_text.contains(token)) {
-            Some(4)
-        } else {
-            None
-        };
-        if let Some(rank) = rank {
-            buckets[rank].push(idx);
-        }
-    }
-    buckets.into_iter().flatten().collect()
 }
 
 pub fn parse_catalog(text: &str) -> Result<Vec<PackInfo>, StepManiaOnlineError> {
@@ -1299,59 +1240,6 @@ mod tests {
         assert_eq!(search_catalog(&catalog, "spectrum"), vec![1, 0, 2]);
         assert_eq!(search_catalog(&catalog, "other technical"), vec![2]);
         assert_eq!(search_catalog(&catalog, "   "), vec![0, 1, 2]);
-    }
-
-    #[test]
-    fn catalog_search_matches_legacy_ranking() {
-        let catalog = [
-            pack(1, "Technical Spectrum", Some("pad"), Some("technical")),
-            pack(2, "Spectrum", Some("keyboard"), Some("stamina")),
-            pack(3, "Other Technical Pack", Some("spectrum"), Some("speed")),
-            pack(4, "Ä°stanbul Mix", Some("pad"), Some("crossover")),
-            pack(5, "lowercase collection", None, None),
-        ];
-        for query in [
-            "",
-            "   ",
-            "spectrum",
-            "SPECTRUM",
-            "technical spectrum",
-            "spectrum technical",
-            "stamina keyboard",
-            "lowercase",
-            "Ä°STANBUL",
-            "not present",
-            "one two three four five six seven eight nine",
-        ] {
-            assert_eq!(
-                search_catalog(&catalog, query),
-                search_catalog_legacy_for_bench(&catalog, query),
-                "query {query:?}"
-            );
-        }
-    }
-
-    #[test]
-    fn catalog_search_index_matches_legacy_unicode_lowercasing() {
-        let cases = [
-            (
-                42,
-                "Technical Spectrum",
-                [Some("9MS"), Some("PAD"), Some("TECH"), Some("StepMania 5")],
-            ),
-            (
-                u64::MAX,
-                "İstanbul Über Mix",
-                [Some("ÄSYNC"), None, Some("Σtyle"), None],
-            ),
-            (7, "Pack", [None, None, None, None]),
-        ];
-        for (id, name, metadata) in cases {
-            assert_eq!(
-                pack_search_index(id, name, metadata),
-                pack_search_index_legacy_for_bench(id, name, metadata)
-            );
-        }
     }
 
     #[test]

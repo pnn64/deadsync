@@ -52,14 +52,14 @@ impl GameplayNoteRangeState {
     }
 
     #[inline(always)]
-    pub fn set_range_for_benchmark(&mut self, player: usize, range: (usize, usize)) {
+    pub fn set_range_for_test(&mut self, player: usize, range: (usize, usize)) {
         if let Some(slot) = self.ranges.get_mut(player) {
             *slot = range;
         }
     }
 
     #[inline(always)]
-    pub fn clear_for_benchmark(&mut self) {
+    pub fn clear_for_test(&mut self) {
         self.ranges.fill((0, 0));
     }
 }
@@ -139,7 +139,7 @@ impl GameplayLaneIndexState {
     }
 
     #[inline(always)]
-    pub fn clear_for_benchmark(&mut self) {
+    pub fn clear_for_test(&mut self) {
         for indices in &mut self.note_indices {
             indices.clear();
         }
@@ -190,7 +190,7 @@ impl GameplayRowIndexState {
     }
 
     #[inline(always)]
-    pub fn clear_for_benchmark(&mut self) {
+    pub fn clear_for_test(&mut self) {
         self.row_entry_ranges.fill((0, 0));
         self.judged_row_cursor.fill(0);
         for row_map_cache in &mut self.row_map_cache {
@@ -249,7 +249,7 @@ impl GameplayMineScanState {
     }
 
     #[inline(always)]
-    pub fn clear_for_benchmark(&mut self) {
+    pub fn clear_for_test(&mut self) {
         self.next_tap_miss_cursor.fill(0);
         self.next_mine_avoid_cursor.fill(0);
         self.next_mine_ix_cursor.fill(0);
@@ -349,7 +349,7 @@ impl GameplayHoldRuntimeState {
     }
 
     #[inline(always)]
-    pub fn clear_for_benchmark(&mut self) {
+    pub fn clear_for_test(&mut self) {
         self.active_holds.fill(None);
         self.active_hold_mask = 0;
         self.decaying_hold_indices.clear();
@@ -558,7 +558,7 @@ impl GameplayCueRuntimeState {
     }
 
     #[inline(always)]
-    pub fn set_column_cues_for_benchmark(&mut self, player: usize, cues: Vec<ColumnCue>) {
+    pub fn set_column_cues_for_test(&mut self, player: usize, cues: Vec<ColumnCue>) {
         if let Some(slot) = self.column_cues.get_mut(player) {
             *slot = cues;
             self.column_cue_cursor[player] = 0;
@@ -566,7 +566,7 @@ impl GameplayCueRuntimeState {
     }
 
     #[inline(always)]
-    pub fn clear_for_benchmark(&mut self) {
+    pub fn clear_for_test(&mut self) {
         for segments in &mut self.measure_counter_segments {
             segments.clear();
         }
@@ -797,7 +797,7 @@ impl GameplayVisualFeedbackState {
     }
 
     #[inline(always)]
-    pub fn set_tap_explosion_for_benchmark(
+    pub fn set_tap_explosion_for_test(
         &mut self,
         col: usize,
         explosion: Option<ActiveTapExplosion>,

@@ -429,14 +429,7 @@ impl LocalScoreCacheState {
     }
 }
 
-#[cfg(any(test, feature = "bench-support"))]
-fn score_cache_snapshot_keys(entry_count: usize) -> Vec<String> {
-    (0..entry_count.max(1))
-        .map(|index| format!("chart-{index:05}-0123456789abcdef"))
-        .collect()
-}
-
-#[cfg(any(test, feature = "bench-support"))]
+#[cfg(test)]
 fn score_cache_snapshot_score(index: usize) -> CachedScore {
     CachedScore {
         grade: if index.is_multiple_of(7) {
@@ -450,7 +443,7 @@ fn score_cache_snapshot_score(index: usize) -> CachedScore {
     }
 }
 
-#[cfg(any(test, feature = "bench-support"))]
+#[cfg(test)]
 fn score_cache_snapshot_header(index: usize) -> LocalScoreHeader {
     LocalScoreHeader {
         version: LOCAL_SCORE_VERSION,
@@ -473,194 +466,6 @@ fn score_cache_snapshot_header(index: usize) -> LocalScoreHeader {
         fail_time: None,
         beat0_time_ns: 0,
     }
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-fn gs_score_cache_snapshot_workload(entry_count: usize, updates: usize) -> u64 {
-    let keys = score_cache_snapshot_keys(entry_count);
-    let initial: HashMap<String, CachedScore> = keys
-        .iter()
-        .enumerate()
-        .map(|(index, key)| (key.clone(), score_cache_snapshot_score(index)))
-        .collect();
-    let mut cache = GsScoreCacheState::default();
-    cache.insert_loaded_profile("profile", initial);
-    let mut checksum = 0_u64;
-    for update in 0..updates {
-        let key = &keys[update % keys.len()];
-        let snapshot = cache
-            .set_profile_score(
-                "profile",
-                key.clone(),
-                score_cache_snapshot_score(entry_count + update),
-            )
-            .expect("benchmark profile is loaded");
-        checksum =
-            checksum.rotate_left(7) ^ snapshot.len() as u64 ^ snapshot[key].score_percent.to_bits();
-    }
-    checksum
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-fn gs_score_cache_snapshot_workload_legacy(entry_count: usize, updates: usize) -> u64 {
-    let keys = score_cache_snapshot_keys(entry_count);
-    let initial: HashMap<String, CachedScore> = keys
-        .iter()
-        .enumerate()
-        .map(|(index, key)| (key.clone(), score_cache_snapshot_score(index)))
-        .collect();
-    let mut loaded_profiles = HashMap::new();
-    loaded_profiles.insert("profile".to_string(), initial);
-    let mut checksum = 0_u64;
-    for update in 0..updates {
-        let key = &keys[update % keys.len()];
-        let map = loaded_profiles
-            .get_mut("profile")
-            .expect("benchmark profile is loaded");
-        map.insert(
-            key.clone(),
-            fix_gs_cached_score(score_cache_snapshot_score(entry_count + update)),
-        );
-        let snapshot = map.clone();
-        checksum =
-            checksum.rotate_left(7) ^ snapshot.len() as u64 ^ snapshot[key].score_percent.to_bits();
-    }
-    checksum
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-fn ac_score_cache_snapshot_workload(entry_count: usize, updates: usize) -> u64 {
-    let keys = score_cache_snapshot_keys(entry_count);
-    let initial = keys
-        .iter()
-        .map(|key| (key.clone(), ArrowCloudScores::default()))
-        .collect();
-    let mut cache = AcScoreCacheState::default();
-    cache.insert_loaded_profile("profile", initial);
-    let mut checksum = 0_u64;
-    for update in 0..updates {
-        let key = &keys[update % keys.len()];
-        let snapshot = cache
-            .set_profile_scores_bulk("profile", [(key.clone(), ArrowCloudScores::default())])
-            .expect("benchmark profile is loaded");
-        checksum =
-            checksum.rotate_left(7) ^ snapshot.len() as u64 ^ snapshot.contains_key(key) as u64;
-    }
-    checksum
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-fn ac_score_cache_snapshot_workload_legacy(entry_count: usize, updates: usize) -> u64 {
-    let keys = score_cache_snapshot_keys(entry_count);
-    let initial: HashMap<String, ArrowCloudScores> = keys
-        .iter()
-        .map(|key| (key.clone(), ArrowCloudScores::default()))
-        .collect();
-    let mut loaded_profiles = HashMap::new();
-    loaded_profiles.insert("profile".to_string(), initial);
-    let mut checksum = 0_u64;
-    for update in 0..updates {
-        let key = &keys[update % keys.len()];
-        let map = loaded_profiles
-            .get_mut("profile")
-            .expect("benchmark profile is loaded");
-        map.insert(key.clone(), ArrowCloudScores::default());
-        let snapshot = map.clone();
-        checksum =
-            checksum.rotate_left(7) ^ snapshot.len() as u64 ^ snapshot.contains_key(key) as u64;
-    }
-    checksum
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-fn local_score_cache_snapshot_workload(entry_count: usize, updates: usize) -> u64 {
-    let keys = score_cache_snapshot_keys(entry_count);
-    let mut initial = LocalScoreIndex::default();
-    for (index, key) in keys.iter().enumerate() {
-        update_local_score_index(&mut initial, key, &score_cache_snapshot_header(index));
-    }
-    let mut cache = LocalScoreCacheState::default();
-    cache.insert_loaded_profile("profile", initial);
-    let mut checksum = 0_u64;
-    for update in 0..updates {
-        let key = &keys[update % keys.len()];
-        let snapshot = cache
-            .update_loaded_profile_index(
-                "profile",
-                key,
-                &score_cache_snapshot_header(entry_count + update),
-            )
-            .expect("benchmark profile is loaded");
-        checksum = checksum.rotate_left(7)
-            ^ snapshot.best_itg.len() as u64
-            ^ (snapshot.best_ex.len() as u64).rotate_left(11)
-            ^ (snapshot.best_hard_ex.len() as u64).rotate_left(17)
-            ^ (snapshot.best_pass_rate.len() as u64).rotate_left(23)
-            ^ snapshot.best_itg[key].score_percent.to_bits();
-    }
-    checksum
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-fn local_score_cache_snapshot_workload_legacy(entry_count: usize, updates: usize) -> u64 {
-    let keys = score_cache_snapshot_keys(entry_count);
-    let mut index = LocalScoreIndex::default();
-    for (entry_index, key) in keys.iter().enumerate() {
-        update_local_score_index(&mut index, key, &score_cache_snapshot_header(entry_index));
-    }
-    let mut checksum = 0_u64;
-    for update in 0..updates {
-        let key = &keys[update % keys.len()];
-        update_local_score_index(
-            &mut index,
-            key,
-            &score_cache_snapshot_header(entry_count + update),
-        );
-        let snapshot = index.clone();
-        checksum = checksum.rotate_left(7)
-            ^ snapshot.best_itg.len() as u64
-            ^ (snapshot.best_ex.len() as u64).rotate_left(11)
-            ^ (snapshot.best_hard_ex.len() as u64).rotate_left(17)
-            ^ (snapshot.best_pass_rate.len() as u64).rotate_left(23)
-            ^ snapshot.best_itg[key].score_percent.to_bits();
-    }
-    checksum
-}
-
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub fn gs_score_cache_snapshot_for_bench(entry_count: usize, updates: usize) -> u64 {
-    gs_score_cache_snapshot_workload(entry_count, updates)
-}
-
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub fn gs_score_cache_snapshot_legacy_for_bench(entry_count: usize, updates: usize) -> u64 {
-    gs_score_cache_snapshot_workload_legacy(entry_count, updates)
-}
-
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub fn ac_score_cache_snapshot_for_bench(entry_count: usize, updates: usize) -> u64 {
-    ac_score_cache_snapshot_workload(entry_count, updates)
-}
-
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub fn ac_score_cache_snapshot_legacy_for_bench(entry_count: usize, updates: usize) -> u64 {
-    ac_score_cache_snapshot_workload_legacy(entry_count, updates)
-}
-
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub fn local_score_cache_snapshot_for_bench(entry_count: usize, updates: usize) -> u64 {
-    local_score_cache_snapshot_workload(entry_count, updates)
-}
-
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub fn local_score_cache_snapshot_legacy_for_bench(entry_count: usize, updates: usize) -> u64 {
-    local_score_cache_snapshot_workload_legacy(entry_count, updates)
 }
 
 impl MachineLocalScoreCacheState {
@@ -5731,40 +5536,6 @@ fn push_unique_import_chart_hash<'a>(
     }
 }
 
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub fn collect_unique_import_chart_hashes_for_bench<'a>(
-    chart_hashes: &[&'a str],
-    existing_scores: &HashSet<String>,
-) -> Vec<String> {
-    let mut seen = HashSet::with_capacity(chart_hashes.len());
-    let mut hashes = Vec::new();
-    for &chart_hash in chart_hashes {
-        push_unique_import_chart_hash(chart_hash, existing_scores, &mut seen, &mut hashes);
-    }
-    hashes
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-#[doc(hidden)]
-pub fn collect_unique_import_chart_hashes_legacy_for_bench(
-    chart_hashes: &[&str],
-    existing_scores: &HashSet<String>,
-) -> Vec<String> {
-    let mut seen = HashSet::with_capacity(chart_hashes.len());
-    let mut hashes = Vec::new();
-    for &chart_hash in chart_hashes {
-        let chart_hash = chart_hash.trim();
-        if chart_hash.is_empty() || existing_scores.contains(chart_hash) {
-            continue;
-        }
-        if seen.insert(chart_hash.to_string()) {
-            hashes.push(chart_hash.to_string());
-        }
-    }
-    hashes
-}
-
 pub fn gs_lamp_chart_stats_for_hash(
     song_packs: &[deadsync_chart::SongPack],
     chart_hash: &str,
@@ -6943,29 +6714,6 @@ mod tests {
     }
 
     #[test]
-    fn import_chart_hash_deduplication_preserves_order_and_filtering() {
-        let existing_scores = HashSet::from(["existing".to_string()]);
-        let chart_hashes = [
-            " first ", "existing", "second", "first", "", "  ", "third", "second ",
-        ];
-        let expected = vec![
-            "first".to_string(),
-            "second".to_string(),
-            "third".to_string(),
-        ];
-        let mut seen = HashSet::new();
-        let mut current = Vec::new();
-        for chart_hash in chart_hashes {
-            push_unique_import_chart_hash(chart_hash, &existing_scores, &mut seen, &mut current);
-        }
-        assert_eq!(current, expected);
-        assert_eq!(
-            current,
-            collect_unique_import_chart_hashes_legacy_for_bench(&chart_hashes, &existing_scores)
-        );
-    }
-
-    #[test]
     fn score_thresholds_match_itg_tiers() {
         assert_eq!(score_to_grade(10000.0), Grade::Tier01);
         assert_eq!(score_to_grade(9900.0), Grade::Tier02);
@@ -7248,24 +6996,6 @@ mod tests {
         local.insert_loaded_profile("profile", second_index);
         assert!(local.profile_is_loaded("profile"));
         assert_eq!(local.get_profile_itg_score("profile", "chart"), Some(first));
-    }
-
-    #[test]
-    fn score_cache_snapshots_match_legacy_clone_behavior() {
-        for (entries, updates) in [(1, 0), (8, 5), (64, 17)] {
-            assert_eq!(
-                gs_score_cache_snapshot_workload(entries, updates),
-                gs_score_cache_snapshot_workload_legacy(entries, updates)
-            );
-            assert_eq!(
-                ac_score_cache_snapshot_workload(entries, updates),
-                ac_score_cache_snapshot_workload_legacy(entries, updates)
-            );
-            assert_eq!(
-                local_score_cache_snapshot_workload(entries, updates),
-                local_score_cache_snapshot_workload_legacy(entries, updates)
-            );
-        }
     }
 
     #[test]

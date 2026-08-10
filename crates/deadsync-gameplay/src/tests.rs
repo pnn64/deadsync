@@ -7000,91 +7000,7 @@ mod tests {
         assert_eq!(windows[1].sustain_end_second, f32::MAX);
     }
 
-    #[test]
-    fn song_lua_ease_tail_index_matches_legacy_for_unsorted_windows() {
-        let mut windows = (0..320)
-            .map(|index| {
-                let slot: usize = (index * 73) % 320;
-                let start =
-                    (slot / 2) as f32 * 0.25 + if slot.is_multiple_of(2) { 0.0 } else { 0.0005 };
-                let end = start + 0.125 + (index % 3) as f32 * 0.05;
-                let target = match index % 8 {
-                    0 => SongLuaEaseMaskTarget::AppearanceStealth,
-                    1 => SongLuaEaseMaskTarget::VisualDrunk,
-                    2 => SongLuaEaseMaskTarget::VisualBumpyColumn(index % MAX_COLS),
-                    3 => SongLuaEaseMaskTarget::VisualMoveXColumn(index % MAX_COLS),
-                    4 => SongLuaEaseMaskTarget::ScrollReverse,
-                    5 => SongLuaEaseMaskTarget::MiniPercent,
-                    6 => SongLuaEaseMaskTarget::PlayerX,
-                    _ => SongLuaEaseMaskTarget::PlayerRotationZ,
-                };
-                song_lua_ease_mask_window(
-                    target,
-                    start,
-                    end,
-                    if index.is_multiple_of(5) {
-                        end + 3.0
-                    } else {
-                        end
-                    },
-                    index as f32,
-                    index as f32 + 1.0,
-                )
-            })
-            .collect::<Vec<_>>();
-        let mut mods = ParsedAttackMods::default();
-        mods.appearance.stealth = Some(1.0);
-        mods.visual.drunk = Some(1.0);
-        let constants = [
-            attack_mask_window(4.0, 12.0, mods),
-            attack_mask_window(
-                18.0,
-                24.0,
-                ParsedAttackMods {
-                    clear_all: true,
-                    ..ParsedAttackMods::default()
-                },
-            ),
-        ];
-        let mut legacy = windows.clone();
 
-        song_lua_extend_ease_tails_legacy_for_bench(&mut legacy, &constants);
-        song_lua_extend_ease_tails(&mut windows, &constants);
-
-        for (current, expected) in windows.iter().zip(&legacy) {
-            assert_eq!(current.target, expected.target);
-            assert_eq!(
-                current.sustain_end_second.to_bits(),
-                expected.sustain_end_second.to_bits()
-            );
-        }
-    }
-
-    #[test]
-    fn song_lua_ease_tail_index_preserves_nonfinite_legacy_behavior() {
-        let mut windows = vec![
-            song_lua_ease_mask_window(SongLuaEaseMaskTarget::VisualDrunk, 1.0, 2.0, 2.0, 0.0, 1.0),
-            song_lua_ease_mask_window(
-                SongLuaEaseMaskTarget::VisualDrunk,
-                f32::NAN,
-                3.0,
-                3.0,
-                1.0,
-                0.0,
-            ),
-        ];
-        let mut legacy = windows.clone();
-
-        song_lua_extend_ease_tails_legacy_for_bench(&mut legacy, &[]);
-        song_lua_extend_ease_tails(&mut windows, &[]);
-
-        for (current, expected) in windows.iter().zip(&legacy) {
-            assert_eq!(
-                current.sustain_end_second.to_bits(),
-                expected.sustain_end_second.to_bits()
-            );
-        }
-    }
 
     #[test]
     fn song_lua_column_offset_tails_stop_at_next_same_column() {
@@ -7131,39 +7047,6 @@ mod tests {
         assert_near(windows[2].sustain_end_second, 5.0);
     }
 
-    #[test]
-    fn song_lua_column_tail_index_matches_legacy_for_unsorted_windows() {
-        let mut windows = (0..256)
-            .map(|index| {
-                let slot: usize = (index * 61) % 256;
-                let start =
-                    (slot / 2) as f32 * 0.125 + if slot.is_multiple_of(2) { 0.0 } else { 0.0005 };
-                let end = start + 0.25;
-                song_lua_column_offset_window(
-                    index % MAX_COLS,
-                    start,
-                    end,
-                    if index.is_multiple_of(7) {
-                        end + 2.0
-                    } else {
-                        end
-                    },
-                )
-            })
-            .collect::<Vec<_>>();
-        let mut legacy = windows.clone();
-
-        song_lua_extend_column_offset_tails_legacy_for_bench(&mut legacy);
-        song_lua_extend_column_offset_tails(&mut windows);
-
-        for (current, expected) in windows.iter().zip(&legacy) {
-            assert_eq!(current.column, expected.column);
-            assert_eq!(
-                current.sustain_end_second.to_bits(),
-                expected.sustain_end_second.to_bits()
-            );
-        }
-    }
 
     #[test]
     fn song_lua_column_offset_window_runtime_copies_fields() {
@@ -7407,27 +7290,6 @@ mod tests {
         assert_near(flat[3].start_second, 4.0);
     }
 
-    #[test]
-    fn song_lua_overlay_ease_in_place_grouping_matches_legacy() {
-        let windows = (0..256)
-            .map(|index| {
-                let slot = (index * 43) % 256;
-                let start = (slot / 3) as f32 * 0.25;
-                song_lua_overlay_ease_window(
-                    index % 19,
-                    start,
-                    start + (index % 5 + 1) as f32 * 0.1,
-                    start + (index % 7 + 1) as f32 * 0.2,
-                    index.is_multiple_of(3).then_some(start + 1.0),
-                )
-            })
-            .collect::<Vec<_>>();
-
-        let legacy = group_song_lua_overlay_eases_legacy_for_bench(16, windows.clone());
-        let current = group_song_lua_overlay_eases(16, windows);
-
-        assert_eq!(current, legacy);
-    }
 
     #[test]
     fn song_lua_overlay_eases_offset_window_times_and_cutoffs() {
@@ -9914,7 +9776,7 @@ mod tests {
     }
 
     #[test]
-    fn note_range_state_returns_bounds_and_clears_for_benchmark() {
+    fn note_range_state_returns_bounds_and_clears_for_test() {
         let mut ranges = [(0usize, 0usize); MAX_PLAYERS];
         ranges[0] = (2, 5);
         ranges[1] = (8, 13);
@@ -9925,7 +9787,7 @@ mod tests {
         assert_eq!(state.range(MAX_PLAYERS), (0, 0));
         assert_eq!(state.ranges(), &ranges);
 
-        state.clear_for_benchmark();
+        state.clear_for_test();
         assert_eq!(state.ranges(), &[(0, 0); MAX_PLAYERS]);
     }
 
@@ -10278,7 +10140,7 @@ mod tests {
         assert_eq!(state.display_blue(0).w0, 1);
         assert_eq!(state.sources(MAX_PLAYERS).canonical.w1, 0);
 
-        state.set_player_for_benchmark(
+        state.set_player_for_test(
             1,
             WindowCounts {
                 w1: 3,
@@ -14324,7 +14186,7 @@ mod tests {
         assert!(state.note_indices(MAX_COLS).is_empty());
         assert_eq!(state.tap_row_hold_roll_flags(99), 0);
 
-        state.clear_for_benchmark();
+        state.clear_for_test();
 
         assert!(state.note_indices(1).is_empty());
         assert!(state.note_row_indices(1).is_empty());
@@ -14349,7 +14211,7 @@ mod tests {
         assert_eq!(state.row_map_cache[0][1], 4);
         assert_eq!(state.note_row_entry_indices[1], 1);
 
-        state.clear_for_benchmark();
+        state.clear_for_test();
 
         assert_eq!(state.row_entry_ranges, [(0, 0); MAX_PLAYERS]);
         assert_eq!(state.judged_row_cursor, [0; MAX_PLAYERS]);
@@ -14375,7 +14237,7 @@ mod tests {
 
         state.set_next_tap_miss_cursor(1, 9);
         state.pending_mine_hit_indices.push(4);
-        state.clear_for_benchmark();
+        state.clear_for_test();
 
         assert_eq!(state.next_tap_miss_cursor, [0; MAX_PLAYERS]);
         assert_eq!(state.next_mine_avoid_cursor, [0; MAX_PLAYERS]);
@@ -14409,7 +14271,7 @@ mod tests {
         assert!(state.pending_missed_hold_indices.is_empty());
 
         state.decaying_hold_indices.push(1);
-        state.clear_for_benchmark();
+        state.clear_for_test();
         assert!(state.decaying_hold_indices.is_empty());
         assert!(state.hold_decay_active.is_empty());
         assert!(state.tap_miss_held_window.is_empty());
@@ -14453,7 +14315,7 @@ mod tests {
         assert!(state.crossover_cues(0).is_empty());
         assert_eq!(state.crossover_cues(1)[0].columns[0].column, 5);
 
-        state.set_column_cues_for_benchmark(
+        state.set_column_cues_for_test(
             1,
             vec![ColumnCue {
                 start_time: 8.0,
@@ -14466,7 +14328,7 @@ mod tests {
         );
         assert_eq!(state.column_cues(1)[0].columns[0].column, 7);
 
-        state.clear_for_benchmark();
+        state.clear_for_test();
 
         assert!(state.measure_counter_segments(0).is_empty());
         assert!(state.column_cues(0).is_empty());
@@ -14636,7 +14498,7 @@ mod tests {
         assert_eq!(state.mine_started_at_screen_s(4), Some(8.0));
         assert!(state.mine_explosions(MAX_COLS, 1).is_empty());
 
-        state.set_tap_explosion_for_benchmark(
+        state.set_tap_explosion_for_test(
             0,
             Some(ActiveTapExplosion {
                 window: "W2",
@@ -16053,57 +15915,6 @@ mod tests {
         }));
     }
 
-    #[test]
-    fn mines_insert_batched_conversion_matches_legacy_chart() {
-        let last_row = 40 * ROWS_PER_BEAT as usize;
-        let timing = test_timing(last_row);
-        let mut current = (0..120)
-            .map(|index| {
-                let row = index * (ROWS_PER_BEAT as usize / 4);
-                let mut note = test_note_at(
-                    NoteType::Tap,
-                    None,
-                    false,
-                    row,
-                    row as f32 / ROWS_PER_BEAT as f32,
-                );
-                note.column = index % 4;
-                note
-            })
-            .collect::<Vec<_>>();
-        for (index, row) in [24, 96, 240, 480, 1584, 1596].into_iter().enumerate() {
-            let mut hold = test_note_at(
-                NoteType::Hold,
-                Some(test_hold()),
-                false,
-                row,
-                row as f32 / ROWS_PER_BEAT as f32,
-            );
-            hold.column = if index < 4 { index } else { 0 };
-            let hold_data = hold.hold.as_mut().expect("hold fixture");
-            hold_data.end_row_index = row + ROWS_PER_BEAT as usize;
-            hold_data.end_beat = hold_data.end_row_index as f32 / ROWS_PER_BEAT as f32;
-            current.push(hold);
-        }
-        let mut blocker = test_note_at(NoteType::Tap, None, false, 108, 2.25);
-        blocker.column = 1;
-        let context = vec![blocker];
-        let mut legacy = current.clone();
-
-        apply_mines_insert(&mut current, &context, &timing, 0, 4, 0, last_row);
-        apply_mines_insert_legacy_for_bench(&mut legacy, &context, &timing, 0, 4, 0, last_row);
-
-        assert_eq!(current.len(), legacy.len());
-        for (current, legacy) in current.iter().zip(&legacy) {
-            assert_eq!(current.row_index, legacy.row_index);
-            assert_eq!(current.column, legacy.column);
-            assert_eq!(current.note_type, legacy.note_type);
-            assert_eq!(
-                current.hold.as_ref().map(|hold| hold.end_row_index),
-                legacy.hold.as_ref().map(|hold| hold.end_row_index)
-            );
-        }
-    }
 
     #[test]
     fn intelligent_insert_adds_middle_tap_between_matching_endpoints() {

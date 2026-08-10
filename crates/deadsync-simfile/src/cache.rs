@@ -1274,7 +1274,7 @@ pub fn build_requested_gameplay_charts(
         .collect()
 }
 
-#[cfg(any(test, feature = "bench-support"))]
+#[cfg(test)]
 #[doc(hidden)]
 pub fn build_requested_gameplay_charts_legacy(
     song: &SerializableSongData,
@@ -1491,33 +1491,6 @@ fn encode_chart_payloads_borrowed(
         .collect()
 }
 
-#[cfg(any(test, feature = "bench-support"))]
-#[doc(hidden)]
-pub fn encode_chart_payloads_for_bench(data: &SerializableSongData) -> Vec<Vec<u8>> {
-    encode_chart_payloads_borrowed(data).expect("encode borrowed chart payloads")
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-#[doc(hidden)]
-pub fn encode_chart_payloads_legacy_for_bench(data: &SerializableSongData) -> Vec<Vec<u8>> {
-    data.charts
-        .iter()
-        .map(|chart| CachedChartPayload {
-            notes: chart.notes.clone(),
-            parsed_notes: chart.parsed_notes.clone(),
-            row_to_beat: chart.row_to_beat.clone(),
-            timing_segments: chart.timing_segments.clone(),
-            chart_attacks: chart.chart_attacks.clone(),
-        })
-        .collect::<Vec<_>>()
-        .into_iter()
-        .map(|payload| {
-            bincode::encode_to_vec(payload, bincode::config::standard())
-                .expect("encode owned chart payload")
-        })
-        .collect()
-}
-
 pub fn write_song_cache_file(
     cache_path: &Path,
     data: &SerializableSongData,
@@ -1602,37 +1575,6 @@ fn collect_requested_cached_charts(
         }
         let chart = load_chart(chart_ix)?;
         loaded_positions.insert(chart_ix, charts.len());
-        charts.push(chart);
-    }
-    Some(charts)
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-#[doc(hidden)]
-pub fn collect_requested_cached_charts_for_bench(
-    source: &[GameplayChartData],
-    requested_chart_ixs: &[usize],
-) -> Option<Vec<GameplayChartData>> {
-    collect_requested_cached_charts(requested_chart_ixs, |chart_ix| {
-        source.get(chart_ix).cloned()
-    })
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-#[doc(hidden)]
-pub fn collect_requested_cached_charts_legacy_for_bench(
-    source: &[GameplayChartData],
-    requested_chart_ixs: &[usize],
-) -> Option<Vec<GameplayChartData>> {
-    let mut charts = Vec::with_capacity(requested_chart_ixs.len());
-    let mut loaded = HashMap::<usize, GameplayChartData>::with_capacity(requested_chart_ixs.len());
-    for &chart_ix in requested_chart_ixs {
-        if let Some(chart) = loaded.get(&chart_ix) {
-            charts.push(chart.clone());
-            continue;
-        }
-        let chart = source.get(chart_ix)?.clone();
-        loaded.insert(chart_ix, chart.clone());
         charts.push(chart);
     }
     Some(charts)
@@ -2462,49 +2404,6 @@ mod tests {
     }
 
     #[test]
-    fn cached_chart_collection_loads_once_and_preserves_duplicates() {
-        let payload = |notes: &[u8]| CachedChartPayload {
-            notes: notes.to_vec(),
-            parsed_notes: Vec::new(),
-            row_to_beat: Vec::new(),
-            timing_segments: CachedTimingSegments::from(&TimingSegments::default()),
-            chart_attacks: None,
-        };
-        let source = vec![
-            build_gameplay_chart_from_payload(payload(b"first"), 0.0, 0.0),
-            build_gameplay_chart_from_payload(payload(b"second"), 0.0, 0.0),
-        ];
-        let requested = [1, 0, 1, 1];
-        let mut loads = 0;
-
-        let charts = collect_requested_cached_charts(&requested, |chart_ix| {
-            loads += 1;
-            source.get(chart_ix).cloned()
-        })
-        .unwrap();
-        let legacy = collect_requested_cached_charts_legacy_for_bench(&source, &requested).unwrap();
-
-        assert_eq!(loads, 2);
-        assert_eq!(
-            charts
-                .iter()
-                .map(|chart| chart.notes.as_slice())
-                .collect::<Vec<_>>(),
-            [b"second".as_slice(), b"first", b"second", b"second"]
-        );
-        assert_eq!(
-            charts
-                .iter()
-                .map(|chart| chart.notes.as_slice())
-                .collect::<Vec<_>>(),
-            legacy
-                .iter()
-                .map(|chart| chart.notes.as_slice())
-                .collect::<Vec<_>>()
-        );
-    }
-
-    #[test]
     fn requested_gameplay_charts_preserve_requested_order() {
         let mut song = cached_song(Path::new("song.sm"));
         let mut first = test_serializable_chart("dance-single", "Challenge", 0, None);
@@ -2585,20 +2484,6 @@ mod tests {
 
         assert_eq!(song.first_second, 4.0);
         assert_eq!(song.precise_last_second_seconds, 8.0);
-    }
-
-    #[test]
-    fn borrowed_chart_payload_encoding_matches_owned_shape() {
-        let mut song = cached_song(Path::new("song.ssc"));
-        let mut chart = test_serializable_chart("dance-single", "Challenge", 4, Some(8));
-        chart.notes = b"1000\n2000\n0000\n3000\n".to_vec();
-        chart.chart_attacks = Some("mod,0,1".to_string());
-        song.charts = vec![chart];
-
-        assert_eq!(
-            encode_chart_payloads_for_bench(&song),
-            encode_chart_payloads_legacy_for_bench(&song)
-        );
     }
 
     #[test]

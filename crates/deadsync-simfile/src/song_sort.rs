@@ -135,32 +135,6 @@ pub fn song_meters_for_sort(song: &SongData, chart_type: &str) -> Vec<u32> {
     meters
 }
 
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub fn song_meters_for_sort_legacy(song: &SongData, chart_type: &str) -> Vec<u32> {
-    use std::collections::HashSet;
-
-    let mut non_edit_meters: HashSet<u32> = HashSet::new();
-    let mut any_meters: HashSet<u32> = HashSet::new();
-    for chart in &song.charts {
-        if !chart.chart_type.eq_ignore_ascii_case(chart_type) || !chart.has_note_data {
-            continue;
-        }
-        any_meters.insert(chart.meter);
-        if !chart.difficulty.eq_ignore_ascii_case("edit") {
-            non_edit_meters.insert(chart.meter);
-        }
-    }
-    let meters = if !non_edit_meters.is_empty() {
-        non_edit_meters
-    } else {
-        any_meters
-    };
-    let mut result: Vec<u32> = meters.into_iter().collect();
-    result.sort_unstable();
-    result
-}
-
 pub fn title_grouped_songs(mut songs: Vec<Arc<SongData>>) -> Vec<GroupedSongs> {
     songs.sort_by(|left, right| {
         title_group_bucket(left)
@@ -313,20 +287,6 @@ fn grouped_contiguous_songs(
     }
 
     groups
-}
-
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub fn title_grouped_songs_legacy(mut songs: Vec<Arc<SongData>>) -> Vec<GroupedSongs> {
-    songs.sort_by_cached_key(|song| {
-        (
-            title_group_bucket(song.as_ref()),
-            song_title_sort_key(song.as_ref()),
-            song.title.clone(),
-            song.subtitle.clone(),
-        )
-    });
-    grouped_contiguous_songs(songs, |song| SongSortGroup::Title(title_group_bucket(song)))
 }
 
 #[cfg(test)]

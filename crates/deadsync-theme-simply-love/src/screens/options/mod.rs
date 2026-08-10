@@ -84,10 +84,6 @@ pub use reload::sync_reload_events;
 use reload::*;
 mod score_import;
 use score_import::*;
-#[cfg(feature = "bench-support")]
-pub use score_import::{
-    selected_pack_group_contains_for_bench, selected_pack_group_contains_legacy_for_bench,
-};
 mod apply_replaygain;
 use apply_replaygain::*;
 mod pack_sync;
@@ -95,8 +91,6 @@ pub(crate) mod qr_login;
 use pack_sync::*;
 mod download_packs;
 use download_packs::*;
-#[cfg(feature = "bench-support")]
-pub use download_packs::{aggregate_substyles_for_bench, aggregate_substyles_legacy_for_bench};
 mod layout;
 mod transitions;
 use layout::*;
@@ -115,8 +109,6 @@ pub use render::{clear_description_layout_cache, clear_render_cache, get_actors,
 pub use state::{State, init};
 pub use submenus::update_monitor_specs;
 pub use transitions::{in_transition, out_transition};
-#[cfg(feature = "bench-support")]
-pub use update::{benchmark_select_submenu, benchmark_submenu_count};
 pub use update::{
     is_smx_config_view, open_graphics_submenu, open_input_submenu, open_lights_submenu,
     open_smx_config_submenu, sync_display_mode, sync_display_resolution, sync_hide_mouse_cursor,

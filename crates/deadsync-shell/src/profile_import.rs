@@ -121,11 +121,6 @@ impl Service {
         }
         events
     }
-
-    #[cfg(feature = "bench-support")]
-    pub(crate) fn poll_idle_legacy(&mut self) -> Vec<SimplyLoveProfileImportEvent> {
-        self.drain_events()
-    }
 }
 
 fn profile_import_event_is_terminal(event: &SimplyLoveProfileImportEvent) -> bool {

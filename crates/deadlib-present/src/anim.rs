@@ -23,7 +23,6 @@
 //!     diffuse(s.tint[0], s.tint[1], s.tint[2], s.tint[3])
 //! );
 //! ```
-#![allow(unused_assignments, dead_code)]
 use smallvec::SmallVec;
 use std::collections::VecDeque;
 
@@ -804,7 +803,7 @@ impl RuntimeSegment {
         self.prepared_once = true;
     }
 
-    fn update(&mut self, s: &mut TweenState, mut dt: f32) -> bool {
+    fn update(&mut self, s: &mut TweenState, dt: f32) -> bool {
         // returns true if finished
         if self.dur == 0.0 {
             // apply final immediately
@@ -817,9 +816,7 @@ impl RuntimeSegment {
 
         self.prepare_if_needed(s);
 
-        let was_elapsed = self.elapsed;
         self.elapsed = (self.elapsed + dt).min(self.dur);
-        dt -= self.elapsed - was_elapsed;
 
         let a = ease_apply(self.ease, self.elapsed / self.dur);
 

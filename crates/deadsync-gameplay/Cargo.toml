@@ -4,59 +4,6 @@ version = "0.1.0"
 edition = "2024"
 license = "GPL-3.0"
 
-[features]
-bench-support = []
-
-[[bench]]
-name = "timing_cache"
-harness = false
-required-features = ["bench-support"]
-
-[[bench]]
-name = "transformed_chart_totals"
-harness = false
-required-features = ["bench-support"]
-
-[[bench]]
-name = "song_lua_messages"
-harness = false
-required-features = ["bench-support"]
-
-[[bench]]
-name = "mines_insert"
-harness = false
-required-features = ["bench-support"]
-
-[[bench]]
-name = "pending_mine_batch"
-harness = false
-required-features = ["bench-support"]
-
-[[bench]]
-name = "gameplay_event_prewarm"
-harness = false
-required-features = ["bench-support"]
-
-[[bench]]
-name = "gameplay_history_prewarm"
-harness = false
-required-features = ["bench-support"]
-
-[[bench]]
-name = "mini_indicator_stream_prep"
-harness = false
-required-features = ["bench-support"]
-
-[[bench]]
-name = "song_lua_window_preprocess"
-harness = false
-required-features = ["bench-support"]
-
-[[bench]]
-name = "gameplay_frame_hot_paths"
-harness = false
-required-features = ["bench-support"]
-
 [dependencies]
 deadsync-chart = { path = "../deadsync-chart" }
 deadsync-core = { path = "../deadsync-core" }

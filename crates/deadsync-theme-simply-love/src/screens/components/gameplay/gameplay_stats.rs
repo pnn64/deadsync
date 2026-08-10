@@ -14,10 +14,6 @@ use crate::step_stats::{
     StepStatsPaneParams,
 };
 use deadlib_present::actors::{Actor, InlineText, SizeSpec, TextAlign, TextContent};
-#[cfg(feature = "bench-support")]
-use deadlib_present::cache::{SharedStrCache, cached_shared_str};
-#[cfg(feature = "bench-support")]
-use deadlib_present::cache::{TextCache, cached_text, text_cache_with_capacity};
 use deadlib_present::color;
 use deadlib_present::compose::{
     ComposeScratch, TextLayoutCache, prewarm_prepared_inline_text_slot,
@@ -27,21 +23,15 @@ use deadlib_present::font;
 use deadlib_present::space::*;
 use deadlib_render::BlendMode;
 use deadsync_core::input::MAX_PLAYERS;
-#[cfg(feature = "bench-support")]
-use deadsync_gameplay::{FantasticWindowOptions, blue_fantastic_window_ms};
 use deadsync_profile as profile_data;
 use deadsync_profile_gameplay::score_display_mode_from_profile;
 use deadsync_rules::judgment::{self, JudgeGrade};
 use deadsync_rules::timing::LiveTimingSnapshot;
 use std::cell::RefCell;
-#[cfg(feature = "bench-support")]
-use std::collections::HashMap;
 use std::sync::{Arc, LazyLock};
 
 use super::{FRAME_TEXT_LIVE_TIMING_BASE, FRAME_TEXT_VERTEX_BUFFERS};
 
-#[cfg(feature = "bench-support")]
-const TEXT_CACHE_LIMIT: usize = 8192;
 const COUNT_PREWARM_CAP: u32 = 2048;
 const TIME_PREWARM_CAP_S: u32 = 600;
 const PEAK_NPS_GRAPH_PAD: f32 = 4.0;
@@ -49,12 +39,6 @@ const PEAK_NPS_ALPHA: f32 = 0.75;
 const DISABLED_WINDOW_RGBA: [f32; 4] = color::JUDGMENT_FA_PLUS_WHITE_EVAL_DIM_RGBA;
 
 static EMPTY_STATS_TEXT: LazyLock<Arc<str>> = LazyLock::new(|| Arc::from(""));
-
-#[cfg(feature = "bench-support")]
-thread_local! {
-    static BENCH_STATS_STR_CACHE: RefCell<SharedStrCache> =
-        RefCell::new(HashMap::with_capacity(16));
-}
 
 struct FixedTextCache<K, V, const N: usize> {
     entries: [Option<(K, V)>; N],
@@ -144,17 +128,6 @@ thread_local! {
     };
 }
 
-#[cfg(feature = "bench-support")]
-thread_local! {
-    static BENCH_PADDED_NUM_CACHE: RefCell<TextCache<(u32, u8)>> = RefCell::new(text_cache_with_capacity(2048));
-    static BENCH_PADDED_DIM_CACHE: RefCell<TextCache<(u32, u8)>> = RefCell::new(text_cache_with_capacity(2048));
-    static BENCH_PADDED_BRIGHT_CACHE: RefCell<TextCache<(u32, u8)>> = RefCell::new(text_cache_with_capacity(2048));
-    static BENCH_GAME_TIME_CACHE: RefCell<TextCache<(u32, u8)>> = RefCell::new(text_cache_with_capacity(1024));
-    static BENCH_LIVE_TIMING_CACHE: RefCell<TextCache<(i32, i32)>> = RefCell::new(text_cache_with_capacity(4096));
-    static BENCH_BLUE_WINDOW_LABEL_CACHE: RefCell<TextCache<i32>> = RefCell::new(text_cache_with_capacity(64));
-    static BENCH_PEAK_NPS_CACHE: RefCell<TextCache<u32>> = RefCell::new(text_cache_with_capacity(512));
-}
-
 static DIGIT_TEXT: LazyLock<[Arc<str>; 10]> =
     LazyLock::new(|| ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"].map(Arc::<str>::from));
 const ZERO_RUNS: [&str; 10] = [
@@ -236,34 +209,6 @@ const HOLDS_MINES_ROLLS_LABELS: [LookupKey; 3] = [
 ];
 
 #[inline(always)]
-#[cfg(feature = "bench-support")]
-fn step_info_label(index: usize, course: bool) -> Arc<str> {
-    let labels = if course {
-        &STEP_INFO_COURSE_LABELS
-    } else {
-        &STEP_INFO_LABELS
-    };
-    labels
-        .get(index)
-        .map(LookupKey::get)
-        .unwrap_or_else(|| Arc::from(""))
-}
-
-#[cfg(feature = "bench-support")]
-fn holds_mines_rolls_label(index: usize) -> Arc<str> {
-    HOLDS_MINES_ROLLS_LABELS
-        .get(index)
-        .map(LookupKey::get)
-        .unwrap_or_else(|| Arc::from(""))
-}
-
-#[cfg(feature = "bench-support")]
-fn judgment_label(index: usize) -> Arc<str> {
-    JUDGMENT_INFO
-        .get(index)
-        .map(|info| info.label.get())
-        .unwrap_or_else(|| Arc::from(""))
-}
 
 fn time_remaining_text(state: &State) -> Arc<str> {
     Arc::clone(&state.gameplay_stats_text.time_remaining)
@@ -313,22 +258,6 @@ impl GameplayStatsTextPlan {
             peak_nps,
             blue_window,
             blue_window_ms,
-        )
-    }
-
-    #[cfg(feature = "bench-support")]
-    fn from_parts(
-        song_artist: &str,
-        chart_text: [(&str, &str); MAX_PLAYERS],
-        course: bool,
-    ) -> Self {
-        Self::from_parts_with_derived(
-            song_artist,
-            chart_text,
-            course,
-            std::array::from_fn(|_| peak_nps_text(0.0)),
-            std::array::from_fn(|_| blue_window_label(0)),
-            [0.0; MAX_PLAYERS],
         )
     }
 
@@ -439,13 +368,11 @@ fn stats_text_checksum(checksum: usize, text: &Arc<str>) -> usize {
     checksum.rotate_left(5) ^ text.len()
 }
 
-/// Focused old/new harness for immutable Step Statistics text resolution.
+/// Transition macrobenchmark for prewarmed Step Statistics text.
 #[cfg(feature = "bench-support")]
 #[doc(hidden)]
 pub struct GameplayStatsTextBenchmark {
     plan: GameplayStatsTextPlan,
-    artist: String,
-    chart_text: [(String, String); MAX_PLAYERS],
 }
 
 #[cfg(feature = "bench-support")]
@@ -456,51 +383,21 @@ impl GameplayStatsTextBenchmark {
             ("Hard 11".to_string(), "P1 Credit".to_string()),
             ("Expert 13".to_string(), "P2 Credit".to_string()),
         ];
-        let plan = GameplayStatsTextPlan::from_parts(
+        let blue_window_ms = [15.0, 18.0];
+        let plan = GameplayStatsTextPlan::from_parts_with_derived(
             artist.as_str(),
             std::array::from_fn(|player| {
                 (chart_text[player].0.as_str(), chart_text[player].1.as_str())
             }),
             false,
+            [peak_nps_text(24.5), peak_nps_text(31.75)],
+            blue_window_ms.map(|ms| blue_window_label(ms as i32)),
+            blue_window_ms,
         );
-        let benchmark = Self {
-            plan,
-            artist,
-            chart_text,
-        };
-        std::hint::black_box(benchmark.legacy_frame(4.25));
-        benchmark
+        Self { plan }
     }
 
-    pub fn legacy_frame(&self, elapsed_seconds: f32) -> usize {
-        let mut checksum = 0usize;
-        for index in 0..4 {
-            checksum = stats_text_checksum(checksum, &step_info_label(index, false));
-        }
-        for index in 0..3 {
-            checksum = stats_text_checksum(checksum, &holds_mines_rolls_label(index));
-        }
-        for index in 0..6 {
-            checksum = stats_text_checksum(checksum, &judgment_label(index));
-        }
-        checksum = stats_text_checksum(checksum, &tr("Gameplay", "TimeRemaining"));
-        checksum = stats_text_checksum(checksum, &tr("Gameplay", "TimeSong"));
-        checksum = stats_text_checksum(
-            checksum,
-            &cached_shared_str(&BENCH_STATS_STR_CACHE, &self.artist, TEXT_CACHE_LIMIT),
-        );
-        for (description, credit) in &self.chart_text {
-            let texts = [description.as_str(), credit.as_str()];
-            let index = ((elapsed_seconds / 2.0).floor() as usize) % texts.len();
-            checksum = stats_text_checksum(
-                checksum,
-                &cached_shared_str(&BENCH_STATS_STR_CACHE, texts[index], TEXT_CACHE_LIMIT),
-            );
-        }
-        std::hint::black_box(checksum)
-    }
-
-    pub fn prewarmed_frame(&self, elapsed_seconds: f32) -> usize {
+    pub fn frame(&self, elapsed_seconds: f32) -> usize {
         let mut checksum = 0usize;
         for index in 0..4 {
             checksum = stats_text_checksum(checksum, &self.plan.step_info(index));
@@ -519,98 +416,6 @@ impl GameplayStatsTextBenchmark {
                 stats_text_checksum(checksum, &self.plan.description(player, elapsed_seconds));
         }
         std::hint::black_box(checksum)
-    }
-
-    pub fn behavior_matches(&self) -> bool {
-        [0.0, 2.0, 4.25, 7.9]
-            .into_iter()
-            .all(|elapsed| self.legacy_frame(elapsed) == self.prewarmed_frame(elapsed))
-    }
-}
-
-/// Focused old/new harness for song-invariant derived Step Statistics data.
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub struct GameplayStatsDerivedTextBenchmark {
-    plan: GameplayStatsTextPlan,
-    max_nps: [f32; MAX_PLAYERS],
-    rate: f32,
-}
-
-#[cfg(feature = "bench-support")]
-impl Default for GameplayStatsDerivedTextBenchmark {
-    fn default() -> Self {
-        let max_nps = [12.75, 18.5];
-        let rate = 1.1;
-        let peak_nps = max_nps.map(|peak| peak_nps_text(peak * rate));
-        let blue_window_ms = std::array::from_fn(benchmark_blue_window_ms);
-        let blue_window = blue_window_ms.map(|ms| blue_window_label(ms.round() as i32));
-        Self {
-            plan: GameplayStatsTextPlan::from_parts_with_derived(
-                "Artist",
-                [("Hard 11", "P1 Credit"), ("Expert 13", "P2 Credit")],
-                false,
-                peak_nps,
-                blue_window,
-                blue_window_ms,
-            ),
-            max_nps,
-            rate,
-        }
-    }
-}
-
-#[cfg(feature = "bench-support")]
-fn benchmark_blue_window_ms(player: usize) -> f32 {
-    blue_fantastic_window_ms(FantasticWindowOptions {
-        base_fa_plus_s: 0.015,
-        custom_fantastic_window_s: (player == 0).then_some(0.012),
-        fa_plus_10ms_blue_window: player == 1,
-    })
-}
-
-#[cfg(feature = "bench-support")]
-impl GameplayStatsDerivedTextBenchmark {
-    const SAMPLES: usize = 256;
-
-    pub fn legacy_peak_frame(&self, frame: usize) -> usize {
-        (0..Self::SAMPLES).fold(frame, |checksum, sample| {
-            let player = sample % MAX_PLAYERS;
-            let peak = (std::hint::black_box(self.max_nps[player]) * self.rate).max(0.0);
-            let text = cached_peak_nps_text_legacy(peak);
-            checksum.rotate_left(7) ^ text.len() ^ sample
-        })
-    }
-
-    pub fn planned_peak_frame(&self, frame: usize) -> usize {
-        (0..Self::SAMPLES).fold(frame, |checksum, sample| {
-            let player = sample % MAX_PLAYERS;
-            let text = self.plan.peak_nps(std::hint::black_box(player));
-            checksum.rotate_left(7) ^ text.len() ^ sample
-        })
-    }
-
-    pub fn legacy_blue_frame(&self, frame: usize) -> usize {
-        (0..Self::SAMPLES).fold(frame, |checksum, sample| {
-            let player = std::hint::black_box(sample % MAX_PLAYERS);
-            let ms = benchmark_blue_window_ms(player);
-            let text = cached_blue_window_label_legacy(ms.round() as i32);
-            checksum.rotate_left(7) ^ text.len() ^ ms.to_bits() as usize ^ sample
-        })
-    }
-
-    pub fn planned_blue_frame(&self, frame: usize) -> usize {
-        (0..Self::SAMPLES).fold(frame, |checksum, sample| {
-            let player = std::hint::black_box(sample % MAX_PLAYERS);
-            let ms = self.plan.blue_window_ms(player);
-            let text = self.plan.blue_window(player);
-            checksum.rotate_left(7) ^ text.len() ^ ms.to_bits() as usize ^ sample
-        })
-    }
-
-    pub fn behavior_matches(&self) -> bool {
-        self.legacy_peak_frame(17) == self.planned_peak_frame(17)
-            && self.legacy_blue_frame(17) == self.planned_blue_frame(17)
     }
 }
 
@@ -816,18 +621,6 @@ fn clip_density_life_points_impl(
 
 fn clip_density_life_points(points: &mut Vec<[f32; 2]>, offset: f32) {
     clip_density_life_points_impl(points, offset, DENSITY_LIFE_COMPACT_THRESHOLD);
-}
-
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub fn benchmark_clip_density_life_points_legacy(points: &mut Vec<[f32; 2]>, offset: f32) -> usize {
-    clip_density_life_points_impl(points, offset, 1)
-}
-
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub fn benchmark_clip_density_life_points(points: &mut Vec<[f32; 2]>, offset: f32) -> usize {
-    clip_density_life_points_impl(points, offset, DENSITY_LIFE_COMPACT_THRESHOLD)
 }
 
 #[cfg(test)]
@@ -1098,14 +891,6 @@ fn blue_window_label(ms: i32) -> Arc<str> {
     ))
 }
 
-#[cfg(feature = "bench-support")]
-#[inline(always)]
-fn cached_blue_window_label_legacy(ms: i32) -> Arc<str> {
-    cached_text(&BENCH_BLUE_WINDOW_LABEL_CACHE, ms, TEXT_CACHE_LIMIT, || {
-        blue_window_label(ms).as_ref().to_owned()
-    })
-}
-
 #[inline(always)]
 fn standard_row_disabled(disabled_windows: [bool; 5], row: usize) -> bool {
     row < 5 && disabled_windows[row]
@@ -1139,17 +924,6 @@ fn peak_nps_text(peak: f32) -> Arc<str> {
         "PeakNps",
         &[("peak_nps", &format!("{:.2}", peak.max(0.0)))],
     ))
-}
-
-#[cfg(feature = "bench-support")]
-#[inline(always)]
-fn cached_peak_nps_text_legacy(peak: f32) -> Arc<str> {
-    cached_text(
-        &BENCH_PEAK_NPS_CACHE,
-        peak.to_bits(),
-        TEXT_CACHE_LIMIT,
-        || peak_nps_text(peak).as_ref().to_owned(),
-    )
 }
 
 #[inline(always)]
@@ -1247,139 +1021,6 @@ fn game_time_mode(total_seconds: f32) -> u8 {
 #[inline(always)]
 fn game_time_key(seconds: f32, total_seconds: f32) -> (u32, u8) {
     (seconds.max(0.0) as u32, game_time_mode(total_seconds))
-}
-
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub fn benchmark_padded_runs_legacy(count: u32, digits: usize) -> (Arc<str>, Arc<str>) {
-    let digits = digits.clamp(1, u8::MAX as usize);
-    let build_run = |dim: bool| {
-        let full: Arc<str> = Arc::from(format!("{count:0digits$}"));
-        let split = padded_dim_len(full.as_ref(), count, digits);
-        Arc::from(if dim { &full[..split] } else { &full[split..] })
-    };
-    (build_run(true), build_run(false))
-}
-
-#[cfg(feature = "bench-support")]
-fn benchmark_cached_padded_num(count: u32, digits: u8) -> Arc<str> {
-    cached_text(
-        &BENCH_PADDED_NUM_CACHE,
-        (count, digits),
-        TEXT_CACHE_LIMIT,
-        || format!("{count:0width$}", width = digits as usize),
-    )
-}
-
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub fn benchmark_padded_runs_cached(count: u32, digits: usize) -> (Arc<str>, Arc<str>) {
-    let digits = digits.clamp(1, u8::MAX as usize) as u8;
-    let dim = cached_text(
-        &BENCH_PADDED_DIM_CACHE,
-        (count, digits),
-        TEXT_CACHE_LIMIT,
-        || {
-            let full = benchmark_cached_padded_num(count, digits);
-            let split = padded_dim_len(full.as_ref(), count, digits as usize);
-            full[..split].to_owned()
-        },
-    );
-    let bright = cached_text(
-        &BENCH_PADDED_BRIGHT_CACHE,
-        (count, digits),
-        TEXT_CACHE_LIMIT,
-        || {
-            let full = benchmark_cached_padded_num(count, digits);
-            let split = padded_dim_len(full.as_ref(), count, digits as usize);
-            full[split..].to_owned()
-        },
-    );
-    (dim, bright)
-}
-
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub fn benchmark_padded_runs(count: u32, digits: usize) -> (TextContent, TextContent) {
-    padded_runs(count, digits)
-}
-
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub fn benchmark_game_time_legacy(seconds: u32, mode: u8) -> Arc<str> {
-    let seconds = seconds as u64;
-    let minutes = seconds / 60;
-    let secs = seconds % 60;
-    Arc::from(match mode {
-        0 => {
-            let hours = seconds / 3600;
-            let mins = (seconds % 3600) / 60;
-            format!("{hours}:{mins:02}:{secs:02}")
-        }
-        1 => format!("{minutes:02}:{secs:02}"),
-        _ => format!("{minutes}:{secs:02}"),
-    })
-}
-
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub fn benchmark_game_time_cached(seconds: u32, mode: u8) -> Arc<str> {
-    cached_text(
-        &BENCH_GAME_TIME_CACHE,
-        (seconds, mode),
-        TEXT_CACHE_LIMIT,
-        || benchmark_game_time_legacy(seconds, mode).to_string(),
-    )
-}
-
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub fn benchmark_game_time(seconds: u32, mode: u8) -> TextContent {
-    game_time_text(seconds, mode)
-}
-
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub fn benchmark_live_timing_legacy(recent_ms: f32, all_ms: f32) -> Arc<str> {
-    let key = (timing_tenths(recent_ms), timing_tenths(all_ms));
-    Arc::from(format!(
-        "{:.1}/{:.1}",
-        key.0 as f32 * 0.1,
-        key.1 as f32 * 0.1
-    ))
-}
-
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub fn benchmark_live_timing_cached(recent_ms: f32, all_ms: f32) -> Arc<str> {
-    let key = (timing_tenths(recent_ms), timing_tenths(all_ms));
-    cached_text(&BENCH_LIVE_TIMING_CACHE, key, TEXT_CACHE_LIMIT, || {
-        format!("{:.1}/{:.1}", key.0 as f32 * 0.1, key.1 as f32 * 0.1)
-    })
-}
-
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub fn benchmark_live_timing(recent_ms: f32, all_ms: f32) -> TextContent {
-    live_timing_pair_text_in_slot(recent_ms, all_ms, 0)
-}
-
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub fn benchmark_judgment_rows_legacy(labels: &[Arc<str>; 6]) -> usize {
-    let labels = labels.iter().cloned().collect::<Vec<_>>();
-    labels.iter().fold(0usize, |sum, label| {
-        sum.wrapping_mul(31).wrapping_add(label.len())
-    })
-}
-
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub fn benchmark_judgment_rows(labels: &[Arc<str>; 6]) -> usize {
-    labels.iter().fold(0usize, |sum, label| {
-        let label = Arc::clone(label);
-        sum.wrapping_mul(31).wrapping_add(label.len())
-    })
 }
 
 #[cfg(test)]

@@ -7,8 +7,7 @@ use deadlib_present::font;
 use deadlib_render::{BlendMode, MeshVertex};
 use deadsync_theme_simply_love::screens::gameplay::{
     BENCH_NOTEFIELD_ACTOR_SCRATCH_CAPACITY, BENCH_NOTEFIELD_HUD_ACTOR_SCRATCH_CAPACITY,
-    benchmark_present_identity_notefield, benchmark_present_identity_notefield_legacy,
-    benchmark_present_transformed_notefield, benchmark_present_transformed_notefield_legacy,
+    benchmark_present_identity_notefield, benchmark_present_transformed_notefield,
 };
 use glam::{Mat4, Vec3};
 use std::alloc::{GlobalAlloc, Layout, System};
@@ -206,54 +205,55 @@ fn assert_zero_alloc(result: &BenchResult) {
     assert_eq!(result.allocated.bytes, 0);
 }
 
-fn peak_scratch_frame(presized: bool) -> f32 {
-    let mut checksum = 0.0;
-    for player in 0..2 {
-        let mut field = if presized {
-            Vec::with_capacity(PEAK_FIELD_ACTORS)
-        } else {
-            Vec::new()
-        };
-        let mut hud = if presized {
-            Vec::with_capacity(PEAK_HUD_ACTORS)
-        } else {
-            Vec::new()
-        };
-        let mut assembled = if presized {
-            Vec::with_capacity(PEAK_PLAYER_ACTORS)
-        } else {
-            Vec::new()
-        };
-        fill_incrementally(&mut field, PEAK_FIELD_ACTORS, player as f32 * 20_000.0);
-        fill_incrementally(
-            &mut hud,
-            PEAK_HUD_ACTORS,
-            player as f32 * 20_000.0 + 10_000.0,
-        );
-        benchmark_present_identity_notefield(&mut field, &mut hud, &mut assembled);
-        let first = match assembled.first() {
-            Some(Actor::CameraPush { view_proj }) => view_proj.w_axis.x,
-            _ => -1.0,
-        };
-        let last = match assembled.last() {
-            Some(Actor::CameraPush { view_proj }) => view_proj.w_axis.x,
-            _ => -1.0,
-        };
-        checksum += first + last + assembled.len() as f32;
-    }
-    checksum
+struct PeakScratch {
+    field: [Vec<Actor>; 2],
+    hud: [Vec<Actor>; 2],
+    assembled: [Vec<Actor>; 2],
 }
 
-fn measure_peak_scratch(presized: bool) -> BenchResult {
+impl PeakScratch {
+    fn new() -> Self {
+        Self {
+            field: std::array::from_fn(|_| Vec::with_capacity(PEAK_FIELD_ACTORS)),
+            hud: std::array::from_fn(|_| Vec::with_capacity(PEAK_HUD_ACTORS)),
+            assembled: std::array::from_fn(|_| Vec::with_capacity(PEAK_PLAYER_ACTORS)),
+        }
+    }
+
+    fn frame(&mut self) -> f32 {
+        let mut checksum = 0.0;
+        for player in 0..2 {
+            let field = &mut self.field[player];
+            let hud = &mut self.hud[player];
+            let assembled = &mut self.assembled[player];
+            fill_incrementally(field, PEAK_FIELD_ACTORS, player as f32 * 20_000.0);
+            fill_incrementally(hud, PEAK_HUD_ACTORS, player as f32 * 20_000.0 + 10_000.0);
+            benchmark_present_identity_notefield(field, hud, assembled);
+            let first = match assembled.first() {
+                Some(Actor::CameraPush { view_proj }) => view_proj.w_axis.x,
+                _ => -1.0,
+            };
+            let last = match assembled.last() {
+                Some(Actor::CameraPush { view_proj }) => view_proj.w_axis.x,
+                _ => -1.0,
+            };
+            checksum += first + last + assembled.len() as f32;
+        }
+        checksum
+    }
+}
+
+fn measure_peak_scratch() -> BenchResult {
+    let mut scratch = PeakScratch::new();
     for _ in 0..WARMUP_PEAK_FRAMES {
-        black_box(peak_scratch_frame(presized));
+        black_box(scratch.frame());
     }
     let before = ALLOC.snapshot();
     let before_cycles = read_cycles();
     let started = Instant::now();
     let mut checksum = 0.0;
     for _ in 0..MEASURE_PEAK_FRAMES {
-        checksum += black_box(peak_scratch_frame(presized));
+        checksum += black_box(scratch.frame());
     }
     BenchResult {
         elapsed: started.elapsed(),
@@ -279,7 +279,6 @@ fn print_peak_result(label: &str, result: &BenchResult) {
 struct TransformActors {
     field: Vec<Actor>,
     hud: Vec<Actor>,
-    out: Vec<Actor>,
 }
 
 fn transform_actor(vertices: &Arc<[MeshVertex]>, index: usize) -> Actor {
@@ -305,16 +304,12 @@ fn transform_batch(players: usize, vertices: &Arc<[MeshVertex]>) -> Vec<Transfor
             hud.extend(
                 (0..HUD_ACTORS).map(|index| transform_actor(vertices, base + FIELD_ACTORS + index)),
             );
-            TransformActors {
-                field,
-                hud,
-                out: Vec::with_capacity(FIELD_ACTORS + HUD_ACTORS + 4),
-            }
+            TransformActors { field, hud }
         })
         .collect()
 }
 
-fn measure_transform<const DIRECT: bool>(players: usize) -> BenchResult {
+fn measure_transform(players: usize) -> BenchResult {
     let vertices: Arc<[MeshVertex]> = Arc::from([
         MeshVertex {
             pos: [0.0, 0.0],
@@ -344,19 +339,9 @@ fn measure_transform<const DIRECT: bool>(players: usize) -> BenchResult {
         let started = Instant::now();
         let mut batch_checksum = 0.0f32;
         for actors in &mut actors {
-            if DIRECT {
-                let segments = benchmark_present_transformed_notefield(&actors.field, &actors.hud);
-                black_box(segments);
-                batch_checksum += (actors.field.len() + actors.hud.len()) as f32;
-            } else {
-                benchmark_present_transformed_notefield_legacy(
-                    &mut actors.field,
-                    &mut actors.hud,
-                    &mut actors.out,
-                );
-                black_box(&actors.out);
-                batch_checksum += actors.out.len() as f32;
-            }
+            let segments = benchmark_present_transformed_notefield(&actors.field, &actors.hud);
+            black_box(segments);
+            batch_checksum += (actors.field.len() + actors.hud.len()) as f32;
         }
         let batch_elapsed = started.elapsed();
         let batch_cycles = read_cycles().saturating_sub(before_cycles);
@@ -377,7 +362,7 @@ fn measure_transform<const DIRECT: bool>(players: usize) -> BenchResult {
     }
 }
 
-fn measure_transform_compose<const DIRECT: bool>(players: usize) -> BenchResult {
+fn measure_transform_compose(players: usize) -> BenchResult {
     let vertices: Arc<[MeshVertex]> = Arc::from([
         MeshVertex {
             pos: [0.0, 0.0],
@@ -412,27 +397,11 @@ fn measure_transform_compose<const DIRECT: bool>(players: usize) -> BenchResult 
         let started = Instant::now();
         let mut batch_checksum = 0.0f32;
         for frame_actors in actors.chunks_exact_mut(players) {
-            if !DIRECT {
-                for actors in frame_actors.iter_mut() {
-                    benchmark_present_transformed_notefield_legacy(
-                        &mut actors.field,
-                        &mut actors.hud,
-                        &mut actors.out,
-                    );
-                }
-            }
             let mut segments = [ActorSegment::new(&[]); 4];
             let mut segment_count = 0usize;
             for actors in frame_actors.iter() {
-                if DIRECT {
-                    for segment in
-                        benchmark_present_transformed_notefield(&actors.field, &actors.hud)
-                    {
-                        segments[segment_count] = segment;
-                        segment_count += 1;
-                    }
-                } else {
-                    segments[segment_count] = ActorSegment::new(&actors.out);
+                for segment in benchmark_present_transformed_notefield(&actors.field, &actors.hud) {
+                    segments[segment_count] = segment;
                     segment_count += 1;
                 }
             }
@@ -490,57 +459,41 @@ fn main() {
     deadlib_present::space::set_current_metrics(deadlib_present::space::metrics_for_window(
         854, 480,
     ));
-    let legacy = measure(benchmark_present_identity_notefield_legacy);
     let direct = measure(benchmark_present_identity_notefield);
-    assert_eq!(legacy.checksum, direct.checksum);
-    for result in [&legacy, &direct] {
-        assert_zero_alloc(result);
-    }
-    black_box((legacy.checksum, direct.checksum));
+    assert_zero_alloc(&direct);
+    black_box(direct.checksum);
 
-    println!("identity notefield presentation benchmark");
-    print_result("legacy per-actor", &legacy);
+    println!("dense notefield macrobenchmark");
     print_result("direct append", &direct);
 
-    let growing_scratch = measure_peak_scratch(false);
-    let presized_scratch = measure_peak_scratch(true);
-    assert_eq!(growing_scratch.checksum, presized_scratch.checksum);
-    black_box((growing_scratch.checksum, presized_scratch.checksum));
+    let presized_scratch = measure_peak_scratch();
+    assert_zero_alloc(&presized_scratch);
+    black_box(presized_scratch.checksum);
     println!(
         "\ngameplay actor scratch density-spike benchmark \
          (2 players, {PEAK_FIELD_ACTORS} field + {PEAK_HUD_ACTORS} HUD actors)"
     );
-    print_peak_result("zero capacity", &growing_scratch);
-    print_peak_result("presized", &presized_scratch);
+    print_peak_result("prewarmed", &presized_scratch);
 
     println!(
         "\nY-folded transformed player handoff benchmark \
          ({FIELD_ACTORS} field + {HUD_ACTORS} HUD mesh actors/player)"
     );
     for players in 1..=2 {
-        let materialized = measure_transform::<false>(players);
-        let direct = measure_transform::<true>(players);
-        assert_zero_alloc(&materialized);
+        let direct = measure_transform(players);
         assert_zero_alloc(&direct);
-        black_box((materialized.checksum, direct.checksum));
+        black_box(direct.checksum);
         println!("{players}P");
-        print_transform_result("materialized", &materialized, players);
         print_transform_result("borrowed segments", &direct, players);
     }
 
     println!("\nY-folded transformed player handoff + composition benchmark");
     for players in 1..=2 {
-        let materialized = measure_transform_compose::<false>(players);
-        let direct = measure_transform_compose::<true>(players);
-        assert_zero_alloc(&materialized);
+        let direct = measure_transform_compose(players);
         assert_zero_alloc(&direct);
-        // Semantic parity is covered by unit tests; the two representations may
-        // consolidate equivalent draw runs differently.
-        assert!(materialized.checksum > 0.0);
         assert!(direct.checksum > 0.0);
-        black_box((materialized.checksum, direct.checksum));
+        black_box(direct.checksum);
         println!("{players}P");
-        print_transform_result("materialized", &materialized, players);
         print_transform_result("borrowed segments", &direct, players);
     }
 }

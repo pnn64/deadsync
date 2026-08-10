@@ -33,56 +33,22 @@ pub use compose::{
     NotefieldNoteskinView, NotefieldOptions, NotefieldSongLuaView, NotefieldVisualState,
     PreparedNotefield, PreparedNotefieldNotes, prepare_notefield,
 };
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub use compose::{NotefieldPrepBench, NotefieldPrepBenchFrame};
 pub use display_mods::{
     DISPLAY_TURN_BLENDER, DISPLAY_TURN_LEFT, DISPLAY_TURN_LR_MIRROR, DISPLAY_TURN_MIRROR,
     DISPLAY_TURN_RANDOM, DISPLAY_TURN_RIGHT, DISPLAY_TURN_SHUFFLE, DISPLAY_TURN_UD_MIRROR,
     GameplayModsAttackMode, GameplayModsTextParams, gameplay_mods_text,
 };
 pub use error_bar::{ErrorBarModes, error_bar_boundaries_s};
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub use field_frame::{
-    CameraWrapBench, CameraWrapBenchFrame, HoldLaneFrameBench, HoldLaneFrameBenchFrame,
-};
 pub use field_frame::{NotefieldFieldFrameView, NotefieldFieldResult, compose_notefield_field};
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub use frame_feedback::{
-    FeedbackLaneCacheBench, FeedbackLaneCacheBenchFrame, TapExplosionCullBench,
-    TapExplosionCullBenchFrame,
-};
 pub use frame_feedback::{NotefieldFeedbackFrameView, NotefieldLaneFeedback};
 pub use frame_hud::{
     ComboHudFrame, CounterHudFrame, ErrorBarHudFrame, JudgmentHudFrame, MiniHudFrame,
     NotefieldHudComposeResult, NotefieldHudFrameView, TapJudgmentHudFrame, compose_notefield_hud,
 };
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub use frame_hud::{HudOptionGateBench, HudOptionGateBenchFrame};
 pub use holds::{HoldMeshScratch, HoldMeshScratchStats, offset_center};
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub use holds::{
-    HoldPairAcquireBenchmark, bench_fresh_hold_mesh_frame, bench_reused_hold_mesh_frame,
-};
 pub use hud::{COUNTER_TEXT_SLOTS_PER_PLAYER, MEASURE_COUNTER_LOOKAHEAD_MAX};
 pub use judgment_feedback::{IndicatorSprite, TapJudgmentSprite};
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub use measure_actors::{benchmark_edit_measure_text, benchmark_edit_measure_text_legacy};
 pub use measure_lines::MeasureLineMode;
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub use measure_lines::{
-    CueScanBench, CueScanBenchFrame, MeasureLinePlanBench, MeasureLinePlanBenchFrame,
-    MeasureLineTraversalBench, MeasureLineTraversalBenchFrame,
-};
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub use mini_indicator::benchmark_broken_run_segment_legacy;
 pub use mini_indicator::{
     BrokenRunLookup, MiniIndicatorColorStyle, MiniIndicatorMode, MiniIndicatorProgress,
     MiniIndicatorScoreType, MiniIndicatorSize, MiniIndicatorSubtractiveDisplay,
@@ -92,24 +58,12 @@ pub use mini_indicator::{
     zmod_percent_from_points, zmod_resolved_combo_color, zmod_resolved_mini_indicator_mode,
     zmod_static_combo_color, zmod_stream_prog_completion_for_beat, zmod_target_score_missed,
 };
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub use note_placement::{PlacementBench, PlacementBenchFrame};
 pub use notes::ScrollTravel;
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub use notes::{
-    CmodTimingBench, CmodTimingBenchFrame, HoldTravelReuseBench, IdentityAccelBench,
-    OneRateCmodBench, VisibleLaneCursorBench, VisibleRangeBench, XmodTimingBench,
-};
 pub use noteskin_model::{
     ModelMeshCache, ModelMeshCacheStats, NoteskinFrameCacheStats, noteskin_model_actor,
     noteskin_model_actor_from_draw, noteskin_model_actor_from_draw_cached,
     noteskin_model_actor_from_draw_depth_sorted_affine_cached_geometry,
 };
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub use noteskin_model::{SlotFrameBench, SlotFrameBenchOutput};
 pub use placement::{
     FieldLayout, FieldPlacement, HudLayoutYs, LayoutMiniIndicatorPosition, ProxyCaptureRequests,
     ViewOverride, ZmodLayoutParams, ZmodLayoutYs,
@@ -118,12 +72,6 @@ pub use song_lua::{
     SongLuaPlayerTransformRequest, song_lua_note_model_draw, song_lua_player_skew_x_matrix,
     song_lua_player_skew_y_matrix, song_lua_player_transform_matrix, song_lua_player_y_fold_actor,
 };
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub use transforms::{
-    CommonNoteTransformBench, CommonNoteTransformBenchFrame, LaneVisualCacheBench,
-    LaneVisualCacheBenchFrame,
-};
 pub use transforms::{
     TornadoBounds, clamp_rounded_i16, mod_percent_key, quantize_centi_i32, quantize_centi_u32,
 };
@@ -131,9 +79,27 @@ pub use transforms::{
 pub(crate) use actor_builder::{
     NotefieldFramePlanRequest, actor_with_world_z, notefield_frame_plan, share_actor_range,
 };
+#[cfg(test)]
+use display_mods::{
+    append_average_error_bar_part, append_disabled_timing_windows, append_mini_part,
+    append_perspective_parts, append_turn_parts, push_transform_parts,
+};
+#[cfg(test)]
+use error_bar::{
+    error_bar_color_for_window, error_bar_flash_alpha, error_bar_text_scalable_zoom,
+    error_bar_tick_alpha, timing_window_from_num,
+};
 pub(crate) use feedback::{
     ColumnFeedbackRequest, compose_column_feedback, field_effect_height, held_miss_zoom,
     itg_actor_glow_alpha,
+};
+#[cfg(test)]
+use feedback::{
+    JudgmentTiltParams, TapJudgmentRowsParams, column_cue_alpha, column_cue_alpha_anchored,
+    column_cue_alpha_with_fade, column_cue_height, column_cue_reverse_top_y, column_flash_alpha,
+    column_flash_alpha_at, column_flash_color, column_flash_height, column_flash_layout,
+    column_flash_reverse_top_y, crossover_cue_height, hold_glow_color, judgment_actor_zoom,
+    judgment_tilt_rotation_deg, tap_judgment_rows,
 };
 pub(crate) use frame_feedback::compose_notefield_feedback;
 pub(crate) use holds::{
@@ -142,16 +108,39 @@ pub(crate) use holds::{
     mine_part, scale_effect_size, scale_sprite_to_arrow, song_time_ns_to_seconds,
     tap_part_for_note_type, tap_replacement_head, translated_uv_rect,
 };
+#[cfg(test)]
+use holds::{
+    TapReplacementHead, bottom_cap_uv_window, clipped_hold_body_bounds,
+    hold_body_bottom_for_tail_cap, hold_body_segment_budget, hold_draw_span,
+    hold_head_part_for_roll, hold_segment_pose, hold_strip_actor, hold_strip_glow_actor,
+    hold_strip_quad, hold_strip_row_3d, hold_tail_cap_bounds,
+    maybe_mirror_uv_horiz_for_reverse_flipped, scale_cap_to_arrow, song_time_ns_delta_seconds,
+    top_cap_rotation_deg,
+};
+#[cfg(test)]
+use measure_actors::{append_beat_bar, append_cue_bar, append_edit_measure_number};
 pub(crate) use measure_lines::{MeasureComposeRequest, compose_measure_lines};
 #[cfg(test)]
+use measure_lines::{
+    beat_scroll_travel, edit_bar_candidate_step_rows, edit_bar_scroll_speed,
+    edit_beat_bar_info_for_row, edit_beat_scroll_travel,
+};
+#[cfg(test)]
 pub(crate) use mini_indicator::zmod_broken_run_segment;
+#[cfg(test)]
+use mini_indicator::{
+    rgba8, stream_segment_index_inclusive_end, zmod_combo_glow_color, zmod_combo_glow_pair,
+    zmod_combo_rainbow_color, zmod_combo_solid_color, zmod_indicator_default_color,
+    zmod_indicator_detailed_color, zmod_pacemaker_color, zmod_rival_color, zmod_stream_prog_color,
+    zmod_subtractive_counter_state, zmod_subtractive_points,
+};
 pub(crate) use mini_indicator::{
     stream_segment_index_exclusive_end, zmod_broken_run_counter_text, zmod_measure_counter_text,
     zmod_run_timer_index,
 };
 #[cfg(test)]
 pub(crate) use notes::for_each_visible_hold_index;
-#[cfg(any(test, feature = "bench-support"))]
+#[cfg(test)]
 pub(crate) use notes::for_each_visible_note_index;
 pub(crate) use notes::{
     MineLayerRequest, NoteLayerRequest, ScrollTravelRequest, compose_mine_layers,
@@ -159,11 +148,15 @@ pub(crate) use notes::{
     lane_hold_window_bounds_by_note_row_from_cursor, lane_window_bounds_by_note_row_from_cursor,
     mine_hides_after_resolution, scroll_travel,
 };
+#[cfg(test)]
+use notes::{find_first_displayed_beat, find_last_displayed_beat, note_itg_row};
 pub(crate) use placement::{
     FieldLayoutRequest, HudLayoutOffsets, HudLayoutParams, average_error_bar_mini_scale,
     combo_actor_zoom, effective_mini_value, field_layout, fill_lane_col_offsets,
     notefield_view_proj, player_metric_y,
 };
+#[cfg(test)]
+use placement::{default_column_x, hud_layout_ys, hud_y, zmod_layout_ys};
 pub(crate) use receptors::{
     ReceptorActorsRequest, ReceptorPress, compose_receptor_actors, hold_indicator_column_x,
     receptor_row_center,
@@ -177,61 +170,6 @@ pub(crate) use transforms::{
     visual_arrow_effect_zoom, visual_arrow_effect_zoom_cached, visual_confusion_rotation_deg,
     visual_hold_body_needs_z_buffer, visual_note_rotation_z_cached, visual_use_legacy_hold_sprites,
 };
-#[cfg(any(test, feature = "bench-support"))]
-pub(crate) use transforms::{
-    appearance_note_actor_alpha, appearance_note_alpha, appearance_note_glow,
-    compute_invert_distances, compute_tornado_bounds,
-};
-#[cfg(feature = "bench-support")]
-pub(crate) use transforms::{
-    appearance_note_actor_alpha_from_alpha, appearance_note_glow_from_alpha,
-};
-
-#[cfg(test)]
-use display_mods::{
-    append_average_error_bar_part, append_disabled_timing_windows, append_mini_part,
-    append_perspective_parts, append_turn_parts, push_transform_parts,
-};
-#[cfg(test)]
-use error_bar::{
-    error_bar_color_for_window, error_bar_flash_alpha, error_bar_text_scalable_zoom,
-    error_bar_tick_alpha, timing_window_from_num,
-};
-#[cfg(test)]
-use feedback::{
-    JudgmentTiltParams, TapJudgmentRowsParams, column_cue_alpha, column_cue_alpha_anchored,
-    column_cue_alpha_with_fade, column_cue_height, column_cue_reverse_top_y, column_flash_alpha,
-    column_flash_alpha_at, column_flash_color, column_flash_height, column_flash_layout,
-    column_flash_reverse_top_y, crossover_cue_height, hold_glow_color, judgment_actor_zoom,
-    judgment_tilt_rotation_deg, tap_judgment_rows,
-};
-#[cfg(test)]
-use holds::{
-    TapReplacementHead, bottom_cap_uv_window, clipped_hold_body_bounds,
-    hold_body_bottom_for_tail_cap, hold_body_segment_budget, hold_draw_span,
-    hold_head_part_for_roll, hold_segment_pose, hold_strip_actor, hold_strip_glow_actor,
-    hold_strip_quad, hold_strip_row_3d, hold_tail_cap_bounds,
-    maybe_mirror_uv_horiz_for_reverse_flipped, scale_cap_to_arrow, song_time_ns_delta_seconds,
-    top_cap_rotation_deg,
-};
-#[cfg(test)]
-use measure_actors::{append_beat_bar, append_cue_bar, append_edit_measure_number};
-#[cfg(test)]
-use measure_lines::{
-    beat_scroll_travel, edit_bar_candidate_step_rows, edit_bar_scroll_speed,
-    edit_beat_bar_info_for_row, edit_beat_scroll_travel,
-};
-#[cfg(test)]
-use mini_indicator::{
-    rgba8, stream_segment_index_inclusive_end, zmod_combo_glow_color, zmod_combo_glow_pair,
-    zmod_combo_rainbow_color, zmod_combo_solid_color, zmod_indicator_default_color,
-    zmod_indicator_detailed_color, zmod_pacemaker_color, zmod_rival_color, zmod_stream_prog_color,
-    zmod_subtractive_counter_state, zmod_subtractive_points,
-};
-#[cfg(test)]
-use notes::{find_first_displayed_beat, find_last_displayed_beat, note_itg_row};
-#[cfg(test)]
-use placement::{default_column_x, hud_layout_ys, hud_y, zmod_layout_ys};
 #[cfg(test)]
 use transforms::{
     appearance_needs_rows, apply_accel_y, apply_accel_y_with_peak, beat_x_extra, bumpy_angle,
@@ -239,6 +177,11 @@ use transforms::{
     signed_effect_active, sm_scale, tiny_spacing_scale, tornado_x_extra,
     visual_effect_params_for_col, visual_note_rotation_z, visual_pulse_inner_zoom,
     visual_pulse_zoom_for_y, visual_tiny_zoom,
+};
+#[cfg(test)]
+pub(crate) use transforms::{
+    appearance_note_actor_alpha, appearance_note_alpha, appearance_note_glow,
+    compute_invert_distances, compute_tornado_bounds,
 };
 #[cfg(test)]
 mod tests {

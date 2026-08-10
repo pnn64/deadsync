@@ -348,160 +348,6 @@ fn build_song_play_counts(
     song_play_counts
 }
 
-#[cfg(any(test, feature = "bench-support"))]
-fn build_song_lookup_legacy(
-    song_packs: &[SongPack],
-    played_chart_counts: &[(String, u32)],
-) -> (
-    HashMap<(String, String), Arc<SongData>>,
-    HashMap<String, Arc<SongData>>,
-    HashMap<String, Vec<Arc<SongData>>>,
-    Vec<Arc<SongData>>,
-    HashMap<String, u32>,
-) {
-    let mut by_group_song = HashMap::new();
-    let mut by_song = HashMap::new();
-    let mut songs_by_group: HashMap<String, Vec<Arc<SongData>>> = HashMap::new();
-    let mut all_songs = Vec::new();
-    let mut chart_to_song_key = HashMap::new();
-
-    for pack in song_packs {
-        let group_key = pack.group_name.trim().to_ascii_lowercase();
-        for song in &pack.songs {
-            let unique_song_key = song_unique_key(song);
-            all_songs.push(song.clone());
-            songs_by_group
-                .entry(group_key.clone())
-                .or_default()
-                .push(song.clone());
-            for chart in &song.charts {
-                chart_to_song_key
-                    .entry(chart.short_hash.clone())
-                    .or_insert_with(|| unique_song_key.clone());
-            }
-            let Some(song_key) = song_dir_key(song) else {
-                continue;
-            };
-            by_group_song.insert((group_key.clone(), song_key.clone()), song.clone());
-            by_song.entry(song_key).or_insert_with(|| song.clone());
-        }
-    }
-
-    let mut song_play_counts: HashMap<String, u32> = HashMap::new();
-    for (chart_hash, plays) in played_chart_counts {
-        if let Some(song_key) = chart_to_song_key.get(chart_hash.as_str()) {
-            song_play_counts
-                .entry(song_key.clone())
-                .and_modify(|count| *count = count.saturating_add(*plays))
-                .or_insert(*plays);
-        }
-    }
-
-    (
-        by_group_song,
-        by_song,
-        songs_by_group,
-        all_songs,
-        song_play_counts,
-    )
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-fn song_lookup_checksum(
-    by_group_song: &HashMap<(String, String), Arc<SongData>>,
-    by_song: &HashMap<String, Arc<SongData>>,
-    songs_by_group: &HashMap<String, Vec<Arc<SongData>>>,
-    all_songs: &[Arc<SongData>],
-    song_play_counts: &HashMap<String, u32>,
-) -> u64 {
-    let mut checksum = by_group_song.len() as u64
-        ^ (by_song.len() as u64).rotate_left(7)
-        ^ (songs_by_group.len() as u64).rotate_left(13)
-        ^ (all_songs.len() as u64).rotate_left(19)
-        ^ (song_play_counts.len() as u64).rotate_left(29);
-    for song in all_songs {
-        checksum = checksum.rotate_left(5)
-            ^ song.simfile_path.as_os_str().len() as u64
-            ^ (song.charts.len() as u64).rotate_left(31);
-    }
-    for songs in songs_by_group.values() {
-        checksum = checksum.wrapping_add((songs.len() as u64).rotate_left(37));
-    }
-    for (key, &plays) in song_play_counts {
-        checksum = checksum
-            .wrapping_add(u64::from(plays))
-            .wrapping_add((key.len() as u64).rotate_left(43));
-    }
-    checksum
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-#[doc(hidden)]
-pub fn select_course_song_lookup_workload_for_bench(
-    song_packs: &[SongPack],
-    played_chart_counts: &[(String, u32)],
-) -> u64 {
-    let (by_group_song, by_song, songs_by_group, all_songs, song_play_counts) =
-        build_song_lookup(song_packs, played_chart_counts);
-    song_lookup_checksum(
-        &by_group_song,
-        &by_song,
-        &songs_by_group,
-        &all_songs,
-        &song_play_counts,
-    )
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-#[doc(hidden)]
-pub fn select_course_song_lookup_workload_legacy_for_bench(
-    song_packs: &[SongPack],
-    played_chart_counts: &[(String, u32)],
-) -> u64 {
-    let (by_group_song, by_song, songs_by_group, all_songs, song_play_counts) =
-        build_song_lookup_legacy(song_packs, played_chart_counts);
-    song_lookup_checksum(
-        &by_group_song,
-        &by_song,
-        &songs_by_group,
-        &all_songs,
-        &song_play_counts,
-    )
-}
-
-#[cfg(test)]
-fn song_lookups_match_legacy_for_test(
-    song_packs: &[SongPack],
-    played_chart_counts: &[(String, u32)],
-) -> bool {
-    let (new_group, new_song, new_groups, new_all, new_counts) =
-        build_song_lookup(song_packs, played_chart_counts);
-    let (old_group, old_song, old_groups, old_all, old_counts) =
-        build_song_lookup_legacy(song_packs, played_chart_counts);
-
-    old_group.len() == new_group.len()
-        && old_group
-            .iter()
-            .all(|(key, old)| new_group.get(key).is_some_and(|new| Arc::ptr_eq(old, new)))
-        && old_song.len() == new_song.len()
-        && old_song
-            .iter()
-            .all(|(key, old)| new_song.get(key).is_some_and(|new| Arc::ptr_eq(old, new)))
-        && old_groups.len() == new_groups.len()
-        && old_groups.iter().all(|(key, old)| {
-            new_groups.get(key).is_some_and(|new| {
-                old.len() == new.len()
-                    && old.iter().zip(new).all(|(old, new)| Arc::ptr_eq(old, new))
-            })
-        })
-        && old_all.len() == new_all.len()
-        && old_all
-            .iter()
-            .zip(&new_all)
-            .all(|(old, new)| Arc::ptr_eq(old, new))
-        && old_counts == new_counts
-}
-
 #[inline(always)]
 fn course_group_name(path: &Path) -> String {
     path.parent()
@@ -2811,7 +2657,7 @@ mod song_lookup_tests {
     }
 
     #[test]
-    fn song_lookup_matches_legacy_sparse_duplicate_play_counts() {
+    fn song_lookup_handles_sparse_duplicate_play_counts() {
         let alpha = song("Songs/Pack A/Alpha/alpha.ssc", &["duplicate", "alpha"]);
         let beta = song("Songs/Pack A/Beta/beta.ssc", &["beta"]);
         let gamma = song("Songs/Pack B/Gamma/gamma.ssc", &["duplicate"]);
@@ -2827,8 +2673,6 @@ mod song_lookup_tests {
             ("beta".to_owned(), 3),
             ("missing".to_owned(), 99),
         ];
-
-        assert!(song_lookups_match_legacy_for_test(&packs, &played));
 
         let (_, _, groups, all, counts) = build_song_lookup(&packs, &played);
         assert_eq!(groups.len(), 2, "empty packs must not create lookup groups");

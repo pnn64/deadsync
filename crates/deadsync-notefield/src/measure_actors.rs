@@ -31,16 +31,6 @@ pub(crate) fn append_edit_measure_number(
     actors.push(text.build(0));
 }
 
-#[cfg(feature = "bench-support")]
-pub fn benchmark_edit_measure_text_legacy(measure: u64) -> TextContent {
-    measure.to_string().into()
-}
-
-#[cfg(feature = "bench-support")]
-pub fn benchmark_edit_measure_text(measure: u64) -> TextContent {
-    edit_measure_text(measure)
-}
-
 fn edit_measure_text(measure: u64) -> TextContent {
     u32::try_from(measure)
         .map(TextContent::inline_u32)

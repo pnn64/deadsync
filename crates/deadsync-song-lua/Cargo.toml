@@ -4,29 +4,6 @@ version = "0.1.0"
 edition = "2024"
 license = "GPL-3.0"
 
-[features]
-bench-support = []
-
-[[bench]]
-name = "prefsmgr_defaults"
-harness = false
-required-features = ["bench-support"]
-
-[[bench]]
-name = "media_path_classification"
-harness = false
-required-features = ["bench-support"]
-
-[[bench]]
-name = "runtime_mod_state"
-harness = false
-required-features = ["bench-support"]
-
-[[bench]]
-name = "noteskin_template_scan"
-harness = false
-required-features = ["bench-support"]
-
 [dependencies]
 deadlib-assets = { path = "../deadlib-assets" }
 deadlib-present = { path = "../deadlib-present" }

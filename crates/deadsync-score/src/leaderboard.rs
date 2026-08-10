@@ -167,18 +167,6 @@ fn leaderboard_neighbor_key(entry: &LeaderboardEntry, self_rank: Option<u32>) ->
     })
 }
 
-#[cfg(any(test, feature = "bench-support"))]
-fn next_prioritized_entry_legacy<'a>(
-    entries: &'a [LeaderboardEntry],
-    selected: &[&'a LeaderboardEntry],
-    include: impl Fn(&LeaderboardEntry) -> bool,
-) -> Option<&'a LeaderboardEntry> {
-    entries
-        .iter()
-        .filter(|entry| include(entry) && !selected_contains(selected, entry))
-        .min_by_key(|entry| entry.rank)
-}
-
 pub type PrioritizedLeaderboardEntryRefs<'a> = SmallVec<[&'a LeaderboardEntry; 10]>;
 
 fn fill_prioritized_entries<'a>(
@@ -284,46 +272,6 @@ pub fn neighboring_leaderboard_entry_refs(
     prioritized_leaderboard_entry_refs_with_neighbors(entries, max_rows, true)
 }
 
-#[cfg(any(test, feature = "bench-support"))]
-fn prioritized_leaderboard_entry_refs_legacy(
-    entries: &[LeaderboardEntry],
-    max_rows: usize,
-) -> Vec<&LeaderboardEntry> {
-    if max_rows == 0 {
-        return Vec::new();
-    }
-    if entries.len() <= max_rows {
-        return entries.iter().collect();
-    }
-
-    let mut selected = Vec::with_capacity(max_rows);
-    if let Some(top) = next_prioritized_entry_legacy(entries, selected.as_slice(), |_| true) {
-        selected.push(top);
-    }
-    if let Some(self_entry) =
-        next_prioritized_entry_legacy(entries, selected.as_slice(), |entry| entry.is_self)
-    {
-        selected.push(self_entry);
-    }
-    while selected.len() < max_rows {
-        let Some(rival) =
-            next_prioritized_entry_legacy(entries, selected.as_slice(), |entry| entry.is_rival)
-        else {
-            break;
-        };
-        selected.push(rival);
-    }
-    while selected.len() < max_rows {
-        let Some(entry) = next_prioritized_entry_legacy(entries, selected.as_slice(), |_| true)
-        else {
-            break;
-        };
-        selected.push(entry);
-    }
-    selected.sort_unstable_by_key(|entry| entry.rank);
-    selected
-}
-
 pub fn prioritized_leaderboard_entries(
     entries: &[LeaderboardEntry],
     max_rows: usize,
@@ -332,37 +280,6 @@ pub fn prioritized_leaderboard_entries(
         .into_iter()
         .cloned()
         .collect()
-}
-
-#[cfg(feature = "bench-support")]
-fn prioritized_leaderboard_checksum<'a>(
-    entries: impl IntoIterator<Item = &'a LeaderboardEntry>,
-) -> u64 {
-    entries.into_iter().fold(0_u64, |checksum, entry| {
-        checksum.rotate_left(7)
-            ^ u64::from(entry.rank)
-            ^ (entry.name.len() as u64).rotate_left(17)
-            ^ ((entry.is_self as u64) << 62)
-            ^ ((entry.is_rival as u64) << 61)
-    })
-}
-
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub fn prioritized_leaderboard_workload_for_bench(
-    entries: &[LeaderboardEntry],
-    max_rows: usize,
-) -> u64 {
-    prioritized_leaderboard_checksum(prioritized_leaderboard_entry_refs(entries, max_rows))
-}
-
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub fn prioritized_leaderboard_workload_legacy_for_bench(
-    entries: &[LeaderboardEntry],
-    max_rows: usize,
-) -> u64 {
-    prioritized_leaderboard_checksum(prioritized_leaderboard_entry_refs_legacy(entries, max_rows))
 }
 
 pub fn machine_leaderboard_entries(
@@ -695,25 +612,6 @@ fn contains_ignore_ascii_case(haystack: &str, needle: &str) -> bool {
             .as_bytes()
             .windows(needle.len())
             .any(|window| window.eq_ignore_ascii_case(needle))
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-#[doc(hidden)]
-#[inline(always)]
-pub fn scorebox_pane_kind_legacy_for_bench(pane: &LeaderboardPane) -> ScoreboxPaneKind {
-    if let Some(kind) = known_scorebox_pane_kind(pane) {
-        return kind;
-    }
-    let lower = pane.name.to_ascii_lowercase();
-    if lower.contains("srpg") || lower.contains("rpg") {
-        ScoreboxPaneKind::Srpg
-    } else if lower.contains("itl") {
-        ScoreboxPaneKind::Itl
-    } else if pane.is_ex {
-        ScoreboxPaneKind::Ex
-    } else {
-        ScoreboxPaneKind::Other
-    }
 }
 
 #[inline(always)]
@@ -1682,45 +1580,6 @@ mod tests {
         }
     }
 
-    #[test]
-    fn prioritized_leaderboard_refs_match_legacy_for_caps_duplicates_and_ties() {
-        let mut entries = vec![
-            entry(1, "WORLD", false, false),
-            entry(1, "world", true, true),
-            entry(1, "other-self", true, false),
-            entry(7, "RIVAL", false, true),
-            entry(7, "rival", false, true),
-            entry(7, "other-rival", false, true),
-        ];
-        entries.extend((0..96).map(|index| {
-            entry(
-                (index * 37 % 41 + 2) as u32,
-                &format!("player-{index:03}"),
-                index % 29 == 0,
-                index % 7 == 0,
-            )
-        }));
-
-        for max_rows in 0..=entries.len() + 2 {
-            let modern = prioritized_leaderboard_entry_refs(&entries, max_rows);
-            let legacy = prioritized_leaderboard_entry_refs_legacy(&entries, max_rows);
-            assert_eq!(modern.len(), legacy.len(), "cap {max_rows}");
-            assert!(
-                modern
-                    .iter()
-                    .zip(&legacy)
-                    .all(|(modern, legacy)| std::ptr::eq(*modern, *legacy)),
-                "cap {max_rows}"
-            );
-        }
-
-        assert_eq!(
-            prioritized_leaderboard_entry_refs(&entries, 1).len(),
-            2,
-            "preserve the existing top-plus-self single-row behavior"
-        );
-    }
-
     fn pane(
         name: &str,
         is_ex: bool,
@@ -1733,67 +1592,6 @@ mod tests {
             disabled: false,
             personalized: true,
             arrowcloud_kind,
-        }
-    }
-
-    #[test]
-    fn scorebox_pane_kind_classifies_known_leaderboards() {
-        let cases = [
-            (
-                pane("GrooveStats", false, None),
-                ScoreboxPaneKind::Gs,
-                "ITG",
-            ),
-            (pane("GrooveStats", true, None), ScoreboxPaneKind::Ex, "EX"),
-            (
-                pane("ArrowCloud", false, Some(ArrowCloudPaneKind::HardEx)),
-                ScoreboxPaneKind::HardEx,
-                "H.EX",
-            ),
-            (
-                pane("ArrowCloud", true, Some(ArrowCloudPaneKind::Ex)),
-                ScoreboxPaneKind::Ex,
-                "EX",
-            ),
-            (
-                pane("SRPG Event", false, None),
-                ScoreboxPaneKind::Srpg,
-                "SRPG",
-            ),
-            (pane("ITL 2025", false, None), ScoreboxPaneKind::Itl, "ITL"),
-            (
-                pane("Custom Board", false, None),
-                ScoreboxPaneKind::Other,
-                "Custom Board",
-            ),
-        ];
-
-        for (pane, kind, mode_text) in cases {
-            assert_eq!(scorebox_pane_kind(&pane), kind);
-            assert_eq!(
-                scorebox_pane_kind(&pane),
-                scorebox_pane_kind_legacy_for_bench(&pane)
-            );
-            assert_eq!(scorebox_pane_mode_text(kind, &pane), mode_text);
-        }
-    }
-
-    #[test]
-    fn scorebox_pane_kind_preserves_ascii_substring_behavior() {
-        for name in [
-            "pre-RpG-post",
-            "SRPG Event",
-            "ITL Online 2026",
-            "SŘPG Event",
-            "Custom Board",
-            "",
-        ] {
-            let pane = pane(name, false, None);
-            assert_eq!(
-                scorebox_pane_kind(&pane),
-                scorebox_pane_kind_legacy_for_bench(&pane),
-                "classification changed for {name:?}"
-            );
         }
     }
 

@@ -84,18 +84,6 @@ pub use render::{get_actors, push_actors};
 pub use row::{FixedStepchart, RowId};
 pub use state::State;
 
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub fn benchmark_select_pane(state: &mut State, pane_index: usize) {
-    let pane = [
-        OptionsPane::Main,
-        OptionsPane::Display,
-        OptionsPane::Advanced,
-        OptionsPane::Uncommon,
-    ][pane_index.min(OptionsPane::COUNT - 1)];
-    apply_pane(state, pane);
-}
-
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct HeartRateDeviceView {
     pub id: String,

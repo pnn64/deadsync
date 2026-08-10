@@ -76,17 +76,6 @@ impl CompiledLoader {
         })
     }
 
-    #[cfg(any(test, feature = "bench-support"))]
-    pub fn find_legacy_for_bench(
-        &self,
-        button: &str,
-        element: &str,
-    ) -> Option<&CompiledLoaderEntry> {
-        self.entries.iter().find(|entry| {
-            entry.button.eq_ignore_ascii_case(button) && entry.element.eq_ignore_ascii_case(element)
-        })
-    }
-
     pub fn load_request(&self, button: &str, element: &str) -> ItgLoadRequest {
         if let Some(entry) = self.find(button, element) {
             return ItgLoadRequest {
@@ -315,56 +304,6 @@ mod tests {
                 rotation_z: Some(90),
                 init_command: Some("zoom,2".to_string()),
             }
-        );
-    }
-
-    #[test]
-    fn compiled_loader_binary_lookup_matches_legacy_first_match() {
-        let entry = |button: &str, element: &str, marker: &str| CompiledLoaderEntry {
-            button: button.to_string(),
-            element: element.to_string(),
-            load_button: marker.to_string(),
-            load_element: String::new(),
-            blank: false,
-            rotation_x: None,
-            rotation_y: None,
-            rotation_z: None,
-            init_command: None,
-        };
-        let loader = CompiledLoader {
-            entries: vec![
-                entry("Down", "Explosion", "down-explosion"),
-                entry("down", "Tap Note", "first-down-tap"),
-                entry("DOWN", "tap note", "second-down-tap"),
-                entry("Left", "Receptor", "left-receptor"),
-                entry("Üp", "Tap Note", "non-ascii"),
-            ],
-            ..CompiledLoader::default()
-        };
-        let queries = [
-            ("DOWN", "TAP NOTE"),
-            ("left", "receptor"),
-            ("Üp", "tap note"),
-            ("Right", "Tap Note"),
-        ];
-
-        for (button, element) in queries {
-            let current = loader
-                .find(button, element)
-                .map(|entry| entry.load_button.as_str());
-            let legacy = loader
-                .find_legacy_for_bench(button, element)
-                .map(|entry| entry.load_button.as_str());
-            assert_eq!(
-                current, legacy,
-                "lookup mismatch for {button:?} {element:?}"
-            );
-        }
-        assert_eq!(
-            loader
-                .find("down", "tap note")
-                .map(|entry| entry.load_button.as_str()),
-            Some("first-down-tap")
         );
     }
 

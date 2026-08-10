@@ -149,25 +149,6 @@ fn replace_named_placeholder(text: &mut String, name: &str, value: &str) {
     }
 }
 
-#[cfg(any(test, feature = "bench-support"))]
-#[doc(hidden)]
-pub fn format_translation_template_for_bench(template: &str, args: &[(&str, &str)]) -> Arc<str> {
-    format_translation_template(template, args)
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-#[doc(hidden)]
-pub fn format_translation_template_legacy_for_bench(
-    template: &str,
-    args: &[(&str, &str)],
-) -> Arc<str> {
-    let mut text = template.to_owned();
-    for (name, value) in args {
-        text = text.replace(&format!("{{{name}}}"), value);
-    }
-    Arc::from(text)
-}
-
 /// Switch to shell-prepared language resources.
 pub fn set_locale(bundle: LanguageBundle) {
     let Some(lang_lock) = LANG.get() else {
@@ -261,21 +242,6 @@ mod tests {
             )
             .as_ref(),
             "After"
-        );
-    }
-
-    #[test]
-    fn template_formatting_preserves_repeats_cascades_and_missing_names() {
-        let template = "{player}: {score}; again {player}; keep {missing}";
-        let args = [("player", "{alias}"), ("alias", "ALICE"), ("score", "99")];
-
-        assert_eq!(
-            format_translation_template(template, &args).as_ref(),
-            "ALICE: 99; again ALICE; keep {missing}"
-        );
-        assert_eq!(
-            format_translation_template_for_bench(template, &args),
-            format_translation_template_legacy_for_bench(template, &args)
         );
     }
 }

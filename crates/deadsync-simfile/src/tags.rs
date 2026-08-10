@@ -44,16 +44,6 @@ pub fn latest_simfile_tag_values<const N: usize>(
     })
 }
 
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub fn latest_simfile_tag_value_legacy(simfile_data: &[u8], tag: &[u8]) -> String {
-    extract_named_tag_values(simfile_data, &[tag])
-        .last()
-        .copied()
-        .map(|raw| unescape_tag(decode_bytes(raw).as_ref()).into_owned())
-        .unwrap_or_default()
-}
-
 pub fn extract_named_tag_values<'a>(data: &'a [u8], tags: &[&[u8]]) -> Vec<&'a [u8]> {
     let mut out = Vec::new();
     let mut i = 0usize;

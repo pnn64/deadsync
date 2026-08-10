@@ -128,7 +128,6 @@ pub fn current_centering_matrix() -> Option<Matrix4> {
     Some(centering_matrix(tx, ty, aw, ah, pw, ph))
 }
 
-#[allow(dead_code)]
 #[inline(always)]
 pub fn screen_width() -> f32 {
     CURRENT_METRICS.with(|c| {
@@ -136,7 +135,6 @@ pub fn screen_width() -> f32 {
         m.right - m.left
     })
 }
-#[allow(dead_code)]
 #[inline(always)]
 pub fn screen_height() -> f32 {
     CURRENT_METRICS.with(|c| {
@@ -146,33 +144,27 @@ pub fn screen_height() -> f32 {
 }
 
 // Top-left origin to match SM (SCREEN_LEFT/TOP = 0)
-#[allow(dead_code)]
 #[inline(always)]
 pub const fn screen_left() -> f32 {
     0.0
 }
-#[allow(dead_code)]
 #[inline(always)]
 pub const fn screen_top() -> f32 {
     0.0
 }
-#[allow(dead_code)]
 #[inline(always)]
 pub fn screen_right() -> f32 {
     screen_width()
 }
-#[allow(dead_code)]
 #[inline(always)]
 pub fn screen_bottom() -> f32 {
     screen_height()
 }
 
-#[allow(dead_code)]
 #[inline(always)]
 pub fn screen_center_x() -> f32 {
     0.5 * screen_width()
 }
-#[allow(dead_code)]
 #[inline(always)]
 pub fn screen_center_y() -> f32 {
     0.5 * screen_height()

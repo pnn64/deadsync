@@ -63,16 +63,11 @@ resolver = "3"
 # `version.workspace = true`, so `env!("CARGO_PKG_VERSION")` and
 # `deadsync_version::current()` always agree. Bump THIS line on release.
 [workspace.package]
-version = "0.5.393"
+version = "0.5.395"
 
 [[bin]]
 name = "generate_pseudo"
 path = "scripts/generate_pseudo.rs"
-
-[[bin]]
-name = "replaygain_bench"
-path = "scripts/replaygain_bench.rs"
-
 
 [features]
 pipewire-audio = ["deadsync-audio-backend-native/pipewire-audio"]

@@ -7,14 +7,6 @@ license = "GPL-3.0"
 [features]
 test-util = []
 
-[[bench]]
-name = "backend_bindings"
-harness = false
-
-[[bench]]
-name = "camera_updates"
-harness = false
-
 [[test]]
 name = "frame_compare"
 required-features = ["test-util"]

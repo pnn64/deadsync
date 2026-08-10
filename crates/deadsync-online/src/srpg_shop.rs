@@ -948,40 +948,6 @@ fn clean_cell(text: &str) -> String {
     out
 }
 
-#[cfg(any(test, feature = "bench-support"))]
-fn clean_cell_legacy(text: &str) -> String {
-    let text = text
-        .replace("&apos;", "'")
-        .replace("&quot;", "\"")
-        .replace("&amp;", "&")
-        .replace("&lt;", "<")
-        .replace("&gt;", ">");
-    let mut out = String::with_capacity(text.len());
-    let mut in_tag = false;
-    for ch in text.chars() {
-        match ch {
-            '<' => in_tag = true,
-            '>' => {
-                in_tag = false;
-                out.push(' ');
-            }
-            _ if !in_tag => out.push(ch),
-            _ => {}
-        }
-    }
-    out.split_whitespace().collect::<Vec<_>>().join(" ")
-}
-
-#[cfg(feature = "bench-support")]
-pub fn clean_catalog_cell_for_bench(text: &str) -> String {
-    clean_cell(text)
-}
-
-#[cfg(feature = "bench-support")]
-pub fn clean_catalog_cell_legacy_for_bench(text: &str) -> String {
-    clean_cell_legacy(text)
-}
-
 fn absolutize_url(url: &str) -> String {
     let url = url.replace("\\/", "/");
     if url.starts_with("https://") || url.starts_with("http://") {
@@ -996,28 +962,6 @@ fn absolutize_url(url: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn single_pass_cell_cleaning_matches_legacy_pipeline() {
-        let fragments = [
-            "",
-            "plain",
-            "  spaced\ttext\n",
-            "<b>Bold</b>",
-            "&apos;&quot;&amp;&lt;&gt;",
-            "&amp;lt;tag&amp;gt;visible",
-            "&amp;apos; &amp;quot; &amp;amp;",
-            "unterminated <tag",
-            "stray > marker",
-            "Unicode\u{2003}space",
-        ];
-        for left in fragments {
-            for right in fragments {
-                let input = format!("{left}|{right}");
-                assert_eq!(clean_cell(&input), clean_cell_legacy(&input), "{input:?}");
-            }
-        }
-    }
 
     #[test]
     fn parses_catalog_song_and_relic_rows() {

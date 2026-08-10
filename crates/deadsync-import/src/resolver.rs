@@ -14,9 +14,6 @@ use std::hash::{Hash, Hasher};
 
 use deadsync_chart::{SongData, SongPack};
 
-#[cfg(any(test, feature = "bench-support"))]
-use std::collections::HashMap as StdHashMap;
-
 #[derive(PartialEq, Eq)]
 struct SongKey {
     pack: String,
@@ -152,7 +149,7 @@ impl<'a> ChartResolver<'a> {
 }
 
 /// Chooses the matching Edit chart by its description, with sensible fallbacks.
-#[cfg(any(test, feature = "bench-support"))]
+#[cfg(test)]
 fn pick_edit<'a>(
     candidates: &[&'a deadsync_chart::ChartData],
     description: &str,
@@ -232,164 +229,6 @@ fn song_dir_parts(dir: &str) -> Option<(&str, &str)> {
     Some((pack, song))
 }
 
-#[cfg(any(test, feature = "bench-support"))]
-pub fn normalize_song_dir_legacy_for_bench(dir: &str) -> Option<(String, String)> {
-    let trimmed = dir.trim().replace('\\', "/");
-    let mut parts: Vec<&str> = trimmed
-        .split('/')
-        .map(str::trim)
-        .filter(|part| !part.is_empty())
-        .collect();
-
-    if let Some(first) = parts.first()
-        && (first.eq_ignore_ascii_case("Songs") || first.eq_ignore_ascii_case("AdditionalSongs"))
-    {
-        parts.remove(0);
-    }
-
-    if parts.len() < 2 {
-        return None;
-    }
-    Some((
-        parts[0].to_ascii_lowercase(),
-        parts[parts.len() - 1].to_ascii_lowercase(),
-    ))
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-struct LegacyChartResolver<'a> {
-    by_song: StdHashMap<(String, String), &'a SongData>,
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-impl<'a> LegacyChartResolver<'a> {
-    fn build(packs: &'a [SongPack]) -> Self {
-        let mut by_song = StdHashMap::new();
-        for pack in packs {
-            let pack_keys = pack_keys(pack);
-            for song in &pack.songs {
-                if let Some(folder) = song_folder_name(song) {
-                    let folder_lc = folder.to_ascii_lowercase();
-                    for pk in &pack_keys {
-                        by_song
-                            .entry((pk.clone(), folder_lc.clone()))
-                            .or_insert(song.as_ref());
-                    }
-                }
-            }
-        }
-        Self { by_song }
-    }
-
-    fn resolve(
-        &self,
-        song_dir: &str,
-        steps_type: &str,
-        difficulty: &str,
-        description: &str,
-    ) -> Resolution<'a> {
-        let Some((pack, folder)) = normalize_song_dir(song_dir) else {
-            return Resolution::SongNotFound;
-        };
-        let Some(song) = self.by_song.get(&(pack, folder)).copied() else {
-            return Resolution::SongNotFound;
-        };
-
-        let mut found = None;
-        let mut edit_candidates = Vec::new();
-        for chart in &song.charts {
-            if !chart.chart_type.eq_ignore_ascii_case(steps_type)
-                || !chart.difficulty.eq_ignore_ascii_case(difficulty)
-            {
-                continue;
-            }
-            if difficulty.eq_ignore_ascii_case("Edit") {
-                edit_candidates.push(chart);
-            } else {
-                found = Some(chart.short_hash.as_str());
-                break;
-            }
-        }
-        if !difficulty.eq_ignore_ascii_case("Edit") {
-            return found.map_or(Resolution::ChartNotFound, Resolution::Found);
-        }
-        pick_edit(&edit_candidates, description)
-            .map_or(Resolution::ChartNotFound, Resolution::Found)
-    }
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-fn resolution_checksum(resolution: Resolution<'_>) -> u64 {
-    match resolution {
-        Resolution::Found(hash) => hash.bytes().fold(3_u64, |checksum, byte| {
-            checksum.rotate_left(5) ^ u64::from(byte)
-        }),
-        Resolution::SongNotFound => 1,
-        Resolution::ChartNotFound => 2,
-    }
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-#[doc(hidden)]
-pub fn chart_resolver_workload_for_bench(
-    packs: &[SongPack],
-    queries: &[(&str, &str, &str, &str)],
-    passes: usize,
-) -> u64 {
-    let resolver = ChartResolver::build(packs);
-    let mut checksum = 0_u64;
-    for _ in 0..passes {
-        for &(song_dir, steps_type, difficulty, description) in queries {
-            checksum = checksum.rotate_left(7)
-                ^ resolution_checksum(resolver.resolve(
-                    song_dir,
-                    steps_type,
-                    difficulty,
-                    description,
-                ));
-        }
-    }
-    checksum
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-#[doc(hidden)]
-pub fn chart_resolver_workload_legacy_for_bench(
-    packs: &[SongPack],
-    queries: &[(&str, &str, &str, &str)],
-    passes: usize,
-) -> u64 {
-    let resolver = LegacyChartResolver::build(packs);
-    let mut checksum = 0_u64;
-    for _ in 0..passes {
-        for &(song_dir, steps_type, difficulty, description) in queries {
-            checksum = checksum.rotate_left(7)
-                ^ resolution_checksum(resolver.resolve(
-                    song_dir,
-                    steps_type,
-                    difficulty,
-                    description,
-                ));
-        }
-    }
-    checksum
-}
-
-#[cfg(test)]
-pub(crate) fn chart_resolver_matches_legacy_for_test(
-    packs: &[SongPack],
-    queries: &[(&str, &str, &str, &str)],
-) -> bool {
-    let resolver = ChartResolver::build(packs);
-    let legacy = LegacyChartResolver::build(packs);
-    queries
-        .iter()
-        .all(|&(song_dir, steps_type, difficulty, description)| {
-            resolver.resolve(song_dir, steps_type, difficulty, description)
-                == legacy.resolve(song_dir, steps_type, difficulty, description)
-        })
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -427,28 +266,6 @@ mod tests {
         assert_eq!(normalize_song_dir("Songs/"), None);
         assert_eq!(normalize_song_dir("Songs/JustAPack/"), None);
         assert_eq!(normalize_song_dir(""), None);
-    }
-
-    #[test]
-    fn song_dir_normalization_matches_legacy_behavior() {
-        for dir in [
-            "Songs/My Pack/Cool Song/",
-            "AdditionalSongs/Pack/Song",
-            "Pack/Song/",
-            "Songs\\Win Pack\\Win Song\\",
-            " / SONGS // My Pack / Bonus / Cool Song / ",
-            "AdditionalSongs\\Pack / Nested\\Final Song",
-            "Songs/Ä Pack/Ö Song/",
-            "Songs/",
-            "Songs/JustAPack/",
-            "",
-        ] {
-            assert_eq!(
-                normalize_song_dir(dir),
-                normalize_song_dir_legacy_for_bench(dir),
-                "normalization changed for {dir:?}"
-            );
-        }
     }
 
     fn chart(diff: &str, desc: &str, name: &str, hash: &str) -> deadsync_chart::ChartData {

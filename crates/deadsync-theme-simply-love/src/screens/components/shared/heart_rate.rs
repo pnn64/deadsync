@@ -1,13 +1,7 @@
 use crate::act;
 use deadlib_present::actors::{Actor, TextContent};
-#[cfg(feature = "bench-support")]
-use deadlib_present::cache::{TextCache, cached_text, text_cache_with_capacity};
 use deadlib_present::color;
 use deadsync_core::input::MAX_PLAYERS;
-#[cfg(feature = "bench-support")]
-use std::cell::RefCell;
-#[cfg(feature = "bench-support")]
-use std::sync::Arc;
 
 const ZONE_RGBA: [[f32; 4]; 5] = [
     color::rgba_hex("#5CE087"),
@@ -16,12 +10,6 @@ const ZONE_RGBA: [[f32; 4]; 5] = [
     color::rgba_hex("#FF6B6B"),
     color::rgba_hex("#FF3030"),
 ];
-
-#[cfg(feature = "bench-support")]
-thread_local! {
-    static BENCH_TEXT_CACHE: RefCell<TextCache<u16>> =
-        RefCell::new(text_cache_with_capacity(512));
-}
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct HeartRatePlayerView {
@@ -132,111 +120,6 @@ pub fn push(
         xy(x + 16.0 * zoom, y): zoom(2.0 * zoom):
         diffuse(text_rgba[0], text_rgba[1], text_rgba[2], alpha): z(z)
     ));
-}
-
-#[cfg(feature = "bench-support")]
-#[inline(always)]
-fn cached_text_legacy(bpm: u16) -> Arc<str> {
-    cached_text(&BENCH_TEXT_CACHE, bpm, 512, || bpm.to_string())
-}
-
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub struct HeartRateTextBenchmark {
-    plan: HeartRateTextPlan,
-}
-
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub struct HeartRateViewSyncBenchmark {
-    plan: HeartRateTextPlan,
-    view: HeartRateView,
-    generation: u64,
-}
-
-#[cfg(feature = "bench-support")]
-impl HeartRateViewSyncBenchmark {
-    pub fn new(generation: u64, view: HeartRateView) -> Self {
-        let mut plan = HeartRateTextPlan::default();
-        plan.sync(view);
-        Self {
-            plan,
-            view,
-            generation,
-        }
-    }
-
-    pub fn sync_legacy(&mut self, view: HeartRateView) -> usize {
-        self.plan.sync(view);
-        self.view = view;
-        self.checksum()
-    }
-
-    pub fn sync_generation(
-        &mut self,
-        generation: u64,
-        build: impl FnOnce() -> HeartRateView,
-    ) -> usize {
-        if self.generation != generation {
-            let view = build();
-            self.plan.sync(view);
-            self.view = view;
-            self.generation = generation;
-        }
-        self.checksum()
-    }
-
-    fn checksum(&self) -> usize {
-        self.view
-            .players
-            .iter()
-            .enumerate()
-            .fold(0, |checksum, (player, reading)| {
-                checksum.rotate_left(3)
-                    ^ player
-                    ^ usize::from(reading.configured)
-                    ^ (usize::from(reading.connected) << 1)
-                    ^ (usize::from(reading.bpm.unwrap_or_default()) << 2)
-                    ^ self.plan.get(player).as_str().len()
-            })
-    }
-}
-
-#[cfg(feature = "bench-support")]
-impl Default for HeartRateTextBenchmark {
-    fn default() -> Self {
-        let mut plan = HeartRateTextPlan::default();
-        plan.sync(HeartRateView {
-            players: [
-                HeartRatePlayerView {
-                    configured: true,
-                    connected: true,
-                    bpm: Some(147),
-                },
-                HeartRatePlayerView::default(),
-            ],
-        });
-        Self { plan }
-    }
-}
-
-#[cfg(feature = "bench-support")]
-impl HeartRateTextBenchmark {
-    const SAMPLES: usize = 256;
-
-    pub fn legacy_frame(&self, frame: usize) -> usize {
-        (0..Self::SAMPLES).fold(frame, |checksum, sample| {
-            let text = cached_text_legacy(std::hint::black_box(147));
-            checksum.rotate_left(7) ^ text.len() ^ sample
-        })
-    }
-
-    pub fn planned_frame(&self, frame: usize) -> usize {
-        (0..Self::SAMPLES).fold(frame, |checksum, sample| {
-            let text = self.plan.get(std::hint::black_box(0));
-            checksum.rotate_left(7) ^ text.as_str().len() ^ sample
-        })
-    }
 }
 
 #[cfg(test)]

@@ -84,77 +84,6 @@ impl SimpleIni {
     }
 }
 
-#[cfg(any(test, feature = "bench-support"))]
-fn load_str_legacy(
-    content: &str,
-) -> std::collections::HashMap<String, std::collections::HashMap<String, String>> {
-    use std::collections::HashMap;
-
-    let mut sections = HashMap::<String, HashMap<String, String>>::new();
-    let mut current_section: Option<String> = None;
-
-    for raw_line in content.lines() {
-        let line = raw_line.trim();
-        if line.is_empty() || line.starts_with(';') || line.starts_with('#') {
-            continue;
-        }
-
-        if line.starts_with('[') && line.ends_with(']') && line.len() >= 2 {
-            let name = &line[1..line.len() - 1];
-            let section = name.trim().to_string();
-            current_section = Some(section.clone());
-            sections.entry(section).or_default();
-            continue;
-        }
-
-        if let Some(eq_idx) = line.find('=') {
-            let (key_raw, value_raw) = line.split_at(eq_idx);
-            let key = key_raw.trim();
-            if key.is_empty() {
-                continue;
-            }
-            let value = value_raw[1..].trim().to_string();
-            let section = current_section.clone().unwrap_or_default();
-            sections
-                .entry(section)
-                .or_default()
-                .insert(key.to_string(), value);
-        }
-    }
-
-    sections
-}
-
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub fn simple_ini_workload_for_bench(content: &str, lookups: &[(String, String)]) -> usize {
-    let mut ini = SimpleIni::new();
-    ini.load_str(content);
-    let mut checksum = ini.sections().len();
-    for (section, key) in lookups {
-        checksum = checksum.wrapping_add(
-            ini.get(section, key)
-                .map_or(0, |value| value.len().wrapping_add(1)),
-        );
-    }
-    checksum
-}
-
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub fn simple_ini_workload_legacy_for_bench(content: &str, lookups: &[(String, String)]) -> usize {
-    let ini = load_str_legacy(content);
-    let mut checksum = ini.len();
-    for (section, key) in lookups {
-        let value = ini
-            .get(section)
-            .and_then(|properties| properties.get(key))
-            .cloned();
-        checksum = checksum.wrapping_add(value.map_or(0, |value| value.len().wrapping_add(1)));
-    }
-    checksum
-}
-
 /// Unescape INI string escape sequences used by localized string values.
 pub fn unescape_ini_value(raw: &str) -> String {
     let mut out = String::with_capacity(raw.len());
@@ -181,61 +110,6 @@ pub fn unescape_ini_value(raw: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::collections::BTreeMap;
-
-    #[test]
-    fn optimized_parser_matches_legacy_behavior_exactly() {
-        let content = concat!(
-            "default = before section\r\n",
-            " = ignored\r\n",
-            "; comment\r\n",
-            "# another comment\r\n",
-            "[ First ]\r\n",
-            "alpha = one\r\n",
-            "duplicate = old\r\n",
-            "[Empty]\r\n",
-            "[First]\r\n",
-            "duplicate = new\r\n",
-            "spaced =   trimmed value   \r\n",
-            "[first]\r\n",
-            "case = distinct\r\n",
-            "[]\r\n",
-            "default = explicit empty section\r\n",
-            "not a property\r\n",
-        );
-        let legacy = load_str_legacy(content);
-        let mut optimized = SimpleIni::new();
-        optimized.load_str(content);
-
-        let legacy = legacy
-            .iter()
-            .map(|(section, properties)| {
-                (
-                    section.clone(),
-                    properties
-                        .iter()
-                        .map(|(key, value)| (key.clone(), value.clone()))
-                        .collect::<BTreeMap<_, _>>(),
-                )
-            })
-            .collect::<BTreeMap<_, _>>();
-        let optimized = optimized
-            .sections()
-            .iter()
-            .map(|(section, properties)| {
-                (
-                    section.clone(),
-                    properties
-                        .iter()
-                        .map(|(key, value)| (key.clone(), value.clone()))
-                        .collect::<BTreeMap<_, _>>(),
-                )
-            })
-            .collect::<BTreeMap<_, _>>();
-
-        assert_eq!(optimized, legacy);
-    }
-
     #[test]
     fn unescape_ini_value_handles_supported_escapes() {
         assert_eq!(unescape_ini_value(r"line\nnext"), "line\nnext");

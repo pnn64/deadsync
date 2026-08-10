@@ -966,7 +966,7 @@ where
             .set_global_offset_seconds(global_offset_seconds);
     }
 
-    pub fn set_song_position_for_benchmark(
+    pub fn set_song_position_for_test(
         &mut self,
         current_beat: f32,
         current_music_time_ns: SongTimeNs,
@@ -1303,12 +1303,12 @@ where
 
     #[inline(always)]
     pub fn clear_lane_indices(&mut self) {
-        self.chart_runtime.lane_indices.clear_for_benchmark();
+        self.chart_runtime.lane_indices.clear_for_test();
     }
 
     #[inline(always)]
     pub fn clear_row_indices(&mut self) {
-        self.chart_runtime.row_indices.clear_for_benchmark();
+        self.chart_runtime.row_indices.clear_for_test();
     }
 
     #[inline(always)]
@@ -1318,19 +1318,19 @@ where
 
     #[inline(always)]
     pub fn clear_mine_scan(&mut self) {
-        self.chart_runtime.mine_scan.clear_for_benchmark();
+        self.chart_runtime.mine_scan.clear_for_test();
     }
 
     #[inline(always)]
     pub fn clear_note_ranges(&mut self) {
-        self.chart_runtime.note_ranges.clear_for_benchmark();
+        self.chart_runtime.note_ranges.clear_for_test();
     }
 
     #[inline(always)]
     pub fn set_note_range(&mut self, player: usize, range: (usize, usize)) {
         self.chart_runtime
             .note_ranges
-            .set_range_for_benchmark(player, range);
+            .set_range_for_test(player, range);
     }
 
     #[inline(always)]
@@ -1347,7 +1347,7 @@ where
 
     #[inline(always)]
     pub fn clear_hold_runtime(&mut self) {
-        self.hold_runtime.clear_for_benchmark();
+        self.hold_runtime.clear_for_test();
     }
 
     #[inline(always)]
@@ -1394,12 +1394,12 @@ where
     pub fn set_column_cues(&mut self, player: usize, cues: Vec<ColumnCue>) {
         self.display
             .cue_runtime
-            .set_column_cues_for_benchmark(player, cues);
+            .set_column_cues_for_test(player, cues);
     }
 
     #[inline(always)]
     pub fn clear_cue_runtime(&mut self) {
-        self.display.cue_runtime.clear_for_benchmark();
+        self.display.cue_runtime.clear_for_test();
     }
 
     #[inline(always)]
@@ -1481,7 +1481,7 @@ where
     pub fn set_tap_explosion(&mut self, col: usize, explosion: Option<ActiveTapExplosion>) {
         self.display
             .visual_feedback
-            .set_tap_explosion_for_benchmark(col, explosion);
+            .set_tap_explosion_for_test(col, explosion);
     }
 
     pub fn course_display_carry(&self) -> [CourseDisplayCarry; MAX_PLAYERS] {
@@ -1530,7 +1530,7 @@ where
         ten_ms_blue: WindowCounts,
         display_blue: WindowCounts,
     ) {
-        self.progress.window_counts.set_player_for_benchmark(
+        self.progress.window_counts.set_player_for_test(
             player_idx,
             canonical,
             ten_ms_blue,
@@ -2066,7 +2066,7 @@ where
     }
 
     #[inline(always)]
-    pub fn reset_stage_runtime_for_benchmark(&mut self) {
+    pub fn reset_stage_runtime_for_test(&mut self) {
         self.progress.stage.autoplay_enabled = false;
         self.progress.stage.song_completed_naturally = false;
     }
@@ -2077,7 +2077,7 @@ where
     }
 
     #[inline(always)]
-    pub fn set_autoplay_enabled_for_benchmark(&mut self, enabled: bool) {
+    pub fn set_autoplay_enabled_for_test(&mut self, enabled: bool) {
         self.progress.stage.autoplay_enabled = enabled;
     }
 
@@ -2097,7 +2097,7 @@ where
     }
 
     #[inline(always)]
-    pub fn set_autosync_state_for_benchmark(
+    pub fn set_autosync_state_for_test(
         &mut self,
         mode: AutosyncMode,
         standard_deviation: f32,
@@ -2162,14 +2162,14 @@ where
     }
 
     #[inline(always)]
-    pub fn fill_visible_time_for_benchmark(&mut self, music_time_seconds: f32) {
+    pub fn fill_visible_time_for_test(&mut self, music_time_seconds: f32) {
         let music_time_ns = song_time_ns_from_seconds(music_time_seconds);
         for player in 0..MAX_PLAYERS {
             self.set_visible_time(player, music_time_ns, music_time_seconds, 0.0);
         }
     }
 
-    pub fn set_density_graph_top_for_benchmark(
+    pub fn set_density_graph_top_for_test(
         &mut self,
         first_second: f32,
         last_second: f32,
@@ -2360,10 +2360,10 @@ where
     }
 
     #[inline(always)]
-    pub fn set_receptor_bop_timer_for_benchmark(&mut self, col: usize, timer: f32) {
+    pub fn set_receptor_bop_timer_for_test(&mut self, col: usize, timer: f32) {
         self.display
             .receptor_feedback
-            .set_bop_timer_for_benchmark(col, timer);
+            .set_bop_timer_for_test(col, timer);
     }
 
     #[inline(always)]

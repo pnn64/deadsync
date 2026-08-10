@@ -363,7 +363,7 @@ pub fn zmod_broken_run_end(segs: &[StreamSegment], start_index: usize) -> (i32, 
     (end, broken)
 }
 
-#[cfg(any(test, feature = "bench-support"))]
+#[cfg(test)]
 pub(crate) fn zmod_broken_run_segment(
     segs: &[StreamSegment],
     curr_measure: f32,
@@ -381,15 +381,6 @@ pub(crate) fn zmod_broken_run_segment(
         }
     }
     None
-}
-
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub fn benchmark_broken_run_segment_legacy(
-    segments: &[StreamSegment],
-    current_measure: f32,
-) -> Option<(usize, i32, bool)> {
-    zmod_broken_run_segment(segments, current_measure)
 }
 
 pub(crate) fn zmod_run_timer_index(segs: &[StreamSegment], curr_measure: f32) -> Option<usize> {

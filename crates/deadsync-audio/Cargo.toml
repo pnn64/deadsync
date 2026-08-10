@@ -7,9 +7,6 @@ license = "GPL-3.0"
 [dependencies]
 rtrb = "0.3.4"
 
-[[bench]]
-name = "audio_blocks"
-harness = false
 
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = [

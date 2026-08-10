@@ -71,13 +71,14 @@ fn pseudolocalize(value: &str) -> String {
     while i < len {
         // Preserve {placeholder} tokens verbatim
         if chars[i] == '{'
-            && let Some(close) = chars[i..].iter().position(|&c| c == '}') {
-                for &c in &chars[i..=i + close] {
-                    out.push(c);
-                }
-                i += close + 1;
-                continue;
+            && let Some(close) = chars[i..].iter().position(|&c| c == '}')
+        {
+            for &c in &chars[i..=i + close] {
+                out.push(c);
             }
+            i += close + 1;
+            continue;
+        }
 
         // Preserve \n escape sequences
         if chars[i] == '\\' && i + 1 < len && chars[i + 1] == 'n' {
@@ -88,13 +89,14 @@ fn pseudolocalize(value: &str) -> String {
 
         // Preserve & glyph references like &START; &BACK;
         if chars[i] == '&'
-            && let Some(semi) = chars[i..].iter().position(|&c| c == ';') {
-                for &c in &chars[i..=i + semi] {
-                    out.push(c);
-                }
-                i += semi + 1;
-                continue;
+            && let Some(semi) = chars[i..].iter().position(|&c| c == ';')
+        {
+            for &c in &chars[i..=i + semi] {
+                out.push(c);
             }
+            i += semi + 1;
+            continue;
+        }
 
         out.push(accent_char(chars[i]));
         i += 1;

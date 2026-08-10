@@ -515,25 +515,6 @@ fn selected_pack_group_contains(selected: &HashSet<String>, group: &str) -> bool
     selected.contains(group.to_ascii_lowercase().as_str())
 }
 
-#[cfg(any(test, feature = "bench-support"))]
-#[inline(always)]
-fn selected_pack_group_contains_legacy(selected: &HashSet<String>, group: &str) -> bool {
-    selected.contains(&group.to_ascii_lowercase())
-}
-
-#[cfg(feature = "bench-support")]
-pub fn selected_pack_group_contains_for_bench(selected: &HashSet<String>, group: &str) -> bool {
-    selected_pack_group_contains(selected, group)
-}
-
-#[cfg(feature = "bench-support")]
-pub fn selected_pack_group_contains_legacy_for_bench(
-    selected: &HashSet<String>,
-    group: &str,
-) -> bool {
-    selected_pack_group_contains_legacy(selected, group)
-}
-
 fn score_import_selected_pack_count(state: &State) -> usize {
     if state.score_import_pack_selected.is_empty() {
         return state.score_import_pack_options.len();
@@ -923,38 +904,5 @@ pub(super) fn update_score_import_ui(score_import: &mut ScoreImportUiState, dt: 
     }
     if score_import.displayed_done > target {
         score_import.displayed_done = target;
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn stack_case_folded_pack_membership_matches_legacy() {
-        let selected: HashSet<String> = [
-            "technical".to_string(),
-            "stamina".to_string(),
-            "İstanbul".to_string(),
-            "a".repeat(GROUP_KEY_STACK_CAPACITY + 1),
-        ]
-        .into_iter()
-        .collect();
-        let long_upper = "A".repeat(GROUP_KEY_STACK_CAPACITY + 1);
-        for group in [
-            "technical",
-            "Technical",
-            "STAMINA",
-            "missing",
-            "İstanbul",
-            "istanbul",
-            long_upper.as_str(),
-        ] {
-            assert_eq!(
-                selected_pack_group_contains(&selected, group),
-                selected_pack_group_contains_legacy(&selected, group),
-                "group {group:?}"
-            );
-        }
     }
 }
