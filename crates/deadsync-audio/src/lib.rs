@@ -5,6 +5,7 @@ pub mod output;
 pub mod position;
 pub mod render;
 pub mod ring;
+pub mod sfx_ring;
 pub mod telemetry;
 
 pub use mixer::{
@@ -37,6 +38,7 @@ pub use ring::{
     AudioRenderHandle, AudioStreamHandle, MusicBlockTiming, MusicBlockWriter, PlayedMapReader,
     music_transport, played_map_drops,
 };
+pub use sfx_ring::{SfxDrain, SfxReceiver, SfxSender, sfx_transport};
 pub use telemetry::{
     AUDIO_STUTTER_DIAG_EVENT_COUNT, OutputTelemetryBackend, OutputTelemetryClock,
     OutputTimingQuality, StutterDiagAudioEvent, StutterDiagAudioEventKind,

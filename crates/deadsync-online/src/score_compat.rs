@@ -29,12 +29,12 @@ pub use deadsync_profile_gameplay::{
 };
 pub use deadsync_score::{
     Grade, gameplay_run_failed, gameplay_run_passed, is_itl_unlocks_pack, itl_points_for_chart,
+    runtime_cached_best_itg_scores as cached_best_itg_scores,
     runtime_lock_score_caches as lock_score_caches,
 };
 pub use profile::{
     cached_ac_scores_for_side as get_cached_ac_scores_for_side,
     cached_best_itg_score_for_side as get_cached_score_for_side,
-    cached_best_itg_score_with_profile as get_cached_score_with_profile,
     cached_gs_score_for_side as get_cached_gs_score_for_side,
     cached_itl_score_for_id as get_cached_itl_score_for_profile,
     cached_itl_score_for_side as get_cached_itl_score_for_side,

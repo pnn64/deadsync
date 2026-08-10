@@ -12,7 +12,7 @@ use coreaudio::audio_unit::{AudioUnit, Element, SampleFormat, Scope, StreamForma
 use deadlib_platform::host_time::now_nanos;
 use deadsync_audio::{
     AudioOutputMode, AudioRenderHandle, OutputBackendReady, OutputTelemetryClock,
-    OutputTimingQuality, QueuedSfx, RenderState,
+    OutputTimingQuality, RenderState, SfxReceiver,
 };
 use log::{info, warn};
 use mach2::mach_time::{mach_absolute_time, mach_timebase_info, mach_timebase_info_data_t};
@@ -31,7 +31,6 @@ use std::mem::size_of;
 use std::ptr::{NonNull, null};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
-use std::sync::mpsc::Receiver;
 
 pub struct CoreAudioOutputPrep {
     audio_unit: AudioUnit,
@@ -231,7 +230,7 @@ pub fn prepare(
 pub fn start(
     mut prep: CoreAudioOutputPrep,
     render_handle: AudioRenderHandle,
-    sfx_receiver: Receiver<QueuedSfx>,
+    mut sfx_receiver: SfxReceiver,
 ) -> Result<CoreAudioOutputStream, String> {
     let host_clock = CoreAudioHostClock::calibrate()?;
     let mut render = RenderState::new(render_handle, prep.channels);

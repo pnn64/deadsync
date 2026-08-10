@@ -8,6 +8,7 @@ use deadsync_rules::scroll::ScrollSpeedSetting;
 use deadsync_rules::{judgment, timing};
 use log::{debug, warn};
 use serde::Serialize;
+use smallvec::{SmallVec, smallvec};
 use std::collections::{HashMap, HashSet};
 use std::error::Error;
 use std::path::Path;
@@ -708,7 +709,7 @@ pub struct ScoreCacheWarmupResult {
 #[derive(Debug)]
 pub struct ScoreCacheAccess<T> {
     pub value: T,
-    pub results: Vec<(ScoreCacheRuntimeKind, ScoreCacheRuntimeResult)>,
+    pub results: SmallVec<[(ScoreCacheRuntimeKind, ScoreCacheRuntimeResult); 3]>,
 }
 
 type ProfilePathsFn = fn(&str) -> ScoreProfilePaths;
@@ -837,13 +838,13 @@ pub fn runtime_read_gs_score_for_profile(
     if profile_id.trim().is_empty() {
         return ScoreCacheAccess {
             value: None,
-            results: Vec::new(),
+            results: SmallVec::new(),
         };
     }
     let (value, result) = runtime_get_gs_score_for_profile(profile_id, chart_hash, score_paths);
     ScoreCacheAccess {
         value,
-        results: vec![(ScoreCacheRuntimeKind::GrooveStats, result)],
+        results: smallvec![(ScoreCacheRuntimeKind::GrooveStats, result)],
     }
 }
 
@@ -866,13 +867,13 @@ pub fn runtime_read_gs_chart_hashes_for_profile(
     if profile_id.trim().is_empty() {
         return ScoreCacheAccess {
             value: HashSet::new(),
-            results: Vec::new(),
+            results: SmallVec::new(),
         };
     }
     let (value, result) = runtime_gs_chart_hashes_for_profile(profile_id, score_paths);
     ScoreCacheAccess {
         value,
-        results: vec![(ScoreCacheRuntimeKind::GrooveStats, result)],
+        results: smallvec![(ScoreCacheRuntimeKind::GrooveStats, result)],
     }
 }
 
@@ -1068,13 +1069,13 @@ pub fn runtime_read_ac_scores_for_profile(
     if profile_id.trim().is_empty() {
         return ScoreCacheAccess {
             value: None,
-            results: Vec::new(),
+            results: SmallVec::new(),
         };
     }
     let (value, result) = runtime_get_ac_scores_for_profile(profile_id, chart_hash, score_paths);
     ScoreCacheAccess {
         value,
-        results: vec![(ScoreCacheRuntimeKind::ArrowCloud, result)],
+        results: smallvec![(ScoreCacheRuntimeKind::ArrowCloud, result)],
     }
 }
 
@@ -1097,13 +1098,13 @@ pub fn runtime_read_ac_chart_hashes_with_itg_for_profile(
     if profile_id.trim().is_empty() {
         return ScoreCacheAccess {
             value: HashSet::new(),
-            results: Vec::new(),
+            results: SmallVec::new(),
         };
     }
     let (value, result) = runtime_ac_chart_hashes_with_itg_for_profile(profile_id, score_paths);
     ScoreCacheAccess {
         value,
-        results: vec![(ScoreCacheRuntimeKind::ArrowCloud, result)],
+        results: smallvec![(ScoreCacheRuntimeKind::ArrowCloud, result)],
     }
 }
 
@@ -1340,14 +1341,14 @@ pub fn runtime_read_local_itg_score_for_profile(
     if profile_id.trim().is_empty() {
         return ScoreCacheAccess {
             value: None,
-            results: Vec::new(),
+            results: SmallVec::new(),
         };
     }
     let (value, result) =
         runtime_get_local_itg_score_for_profile(profile_id, chart_hash, score_paths);
     ScoreCacheAccess {
         value,
-        results: vec![(ScoreCacheRuntimeKind::Local, result)],
+        results: smallvec![(ScoreCacheRuntimeKind::Local, result)],
     }
 }
 
@@ -1372,14 +1373,14 @@ pub fn runtime_read_local_pass_rate_for_profile(
     if profile_id.trim().is_empty() {
         return ScoreCacheAccess {
             value: None,
-            results: Vec::new(),
+            results: SmallVec::new(),
         };
     }
     let (value, result) =
         runtime_get_local_pass_rate_for_profile(profile_id, chart_hash, score_paths);
     ScoreCacheAccess {
         value,
-        results: vec![(ScoreCacheRuntimeKind::Local, result)],
+        results: smallvec![(ScoreCacheRuntimeKind::Local, result)],
     }
 }
 
@@ -1406,14 +1407,14 @@ pub fn runtime_read_local_scalar_score_for_profile(
     if profile_id.trim().is_empty() {
         return ScoreCacheAccess {
             value: None,
-            results: Vec::new(),
+            results: SmallVec::new(),
         };
     }
     let (value, result) =
         runtime_get_local_scalar_score_for_profile(profile_id, chart_hash, hard_ex, score_paths);
     ScoreCacheAccess {
         value,
-        results: vec![(ScoreCacheRuntimeKind::Local, result)],
+        results: smallvec![(ScoreCacheRuntimeKind::Local, result)],
     }
 }
 
@@ -1425,7 +1426,7 @@ pub fn runtime_read_best_itg_score_for_profile(
     if profile_id.trim().is_empty() {
         return ScoreCacheAccess {
             value: None,
-            results: Vec::new(),
+            results: SmallVec::new(),
         };
     }
 
@@ -1438,7 +1439,7 @@ pub fn runtime_read_best_itg_score_for_profile(
         .map(|score| score.to_cached_score());
     ScoreCacheAccess {
         value: best_cached_itg_score([local, gs, ac]),
-        results: vec![
+        results: smallvec![
             (ScoreCacheRuntimeKind::Local, local_result),
             (ScoreCacheRuntimeKind::GrooveStats, gs_result),
             (ScoreCacheRuntimeKind::ArrowCloud, ac_result),
@@ -1823,6 +1824,24 @@ pub fn runtime_lock_score_caches() -> HeldScoreCaches {
         RUNTIME_GS_SCORE_CACHE.lock().unwrap(),
         RUNTIME_AC_SCORE_CACHE.lock().unwrap(),
     )
+}
+
+/// Resolve a prepared batch of score-cache queries under one lock acquisition.
+///
+/// Each query is `(profile_id, chart_hash)`. Callers must ensure the relevant
+/// profile caches are loaded before entering this read-only frame transaction.
+/// Empty slots remain `None`; the function allocates no storage and releases
+/// all three cache guards before returning.
+pub fn runtime_cached_best_itg_scores<const N: usize>(
+    queries: &[Option<(&str, &str)>; N],
+) -> [Option<CachedScore>; N] {
+    if queries.iter().all(Option::is_none) {
+        return [None; N];
+    }
+    let caches = runtime_lock_score_caches();
+    std::array::from_fn(|index| {
+        queries[index].and_then(|(profile_id, chart_hash)| caches.merged(profile_id, chart_hash))
+    })
 }
 
 pub fn best_cached_itg_score(
@@ -6996,6 +7015,43 @@ mod tests {
         local.insert_loaded_profile("profile", second_index);
         assert!(local.profile_is_loaded("profile"));
         assert_eq!(local.get_profile_itg_score("profile", "chart"), Some(first));
+    }
+
+    #[test]
+    fn batched_score_reads_match_merged_cache_policy_for_sparse_slots() {
+        const PROFILE: &str = "batch-score-profile";
+        let local_only = cached_score(Grade::Tier03, 0.96, Some(3), Some(4));
+        let local_shared = cached_score(Grade::Tier04, 0.94, Some(4), Some(5));
+        let gs_shared = cached_score(Grade::Tier01, 0.99, Some(1), Some(2));
+
+        let mut local_index = LocalScoreIndex::default();
+        local_index
+            .best_itg
+            .insert("local-only".to_string(), local_only);
+        local_index
+            .best_itg
+            .insert("shared".to_string(), local_shared);
+        RUNTIME_LOCAL_SCORE_CACHE
+            .lock()
+            .unwrap()
+            .insert_loaded_profile(PROFILE, local_index);
+        RUNTIME_GS_SCORE_CACHE
+            .lock()
+            .unwrap()
+            .insert_loaded_profile(PROFILE, HashMap::from([("shared".to_string(), gs_shared)]));
+
+        let queries = [
+            Some((PROFILE, "shared")),
+            None,
+            Some((PROFILE, "local-only")),
+            Some((PROFILE, "missing")),
+            Some(("", "shared")),
+        ];
+
+        assert_eq!(
+            runtime_cached_best_itg_scores(&queries),
+            [Some(gs_shared), None, Some(local_only), None, None]
+        );
     }
 
     #[test]

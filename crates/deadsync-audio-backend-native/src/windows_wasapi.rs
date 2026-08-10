@@ -2,13 +2,13 @@ use crate::telemetry::{publish_output_timing, report_audio_render_callback};
 use deadlib_platform::windows_rt::{ThreadRole, boost_current_thread};
 use deadsync_audio::{
     AudioOutputMode, AudioRenderHandle, OutputBackendReady, OutputTelemetryClock,
-    OutputTimingQuality, QueuedSfx, RenderState,
+    OutputTimingQuality, RenderState, SfxReceiver,
 };
 use log::{error, warn};
 use std::ffi::c_void;
 use std::mem::size_of;
 use std::slice;
-use std::sync::mpsc::{Receiver, Sender, channel};
+use std::sync::mpsc::{Sender, channel};
 use std::thread::{self, JoinHandle};
 use windows::Win32::Devices::FunctionDiscovery;
 use windows::Win32::Foundation::{self, CloseHandle, HANDLE, WAIT_FAILED};
@@ -227,7 +227,7 @@ pub fn prepare(
 pub fn start(
     prep: WasapiOutputPrep,
     render_handle: AudioRenderHandle,
-    sfx_receiver: Receiver<QueuedSfx>,
+    sfx_receiver: SfxReceiver,
 ) -> Result<WasapiOutputStream, String> {
     // SAFETY: creating an unnamed auto-reset event requires no borrowed Rust
     // memory; the returned handle is owned by the caller and closed on all exit
@@ -284,7 +284,7 @@ pub fn start(
 fn render_thread(
     prep: WasapiOutputPrep,
     render_handle: AudioRenderHandle,
-    sfx_receiver: Receiver<QueuedSfx>,
+    sfx_receiver: SfxReceiver,
     stop_event: HANDLE,
     ready_tx: Sender<Result<(), String>>,
 ) {
@@ -299,7 +299,7 @@ fn render_thread(
 fn render_thread_inner(
     prep: WasapiOutputPrep,
     render_handle: AudioRenderHandle,
-    sfx_receiver: Receiver<QueuedSfx>,
+    mut sfx_receiver: SfxReceiver,
     stop_event: HANDLE,
     ready_tx: &Sender<Result<(), String>>,
 ) -> Result<(), String> {
@@ -368,7 +368,7 @@ fn render_thread_inner(
         &audio_clock,
         &render_client,
         &mut render,
-        &sfx_receiver,
+        &mut sfx_receiver,
         &prep,
         max_frames_in_buffer,
         max_frames_in_buffer,
@@ -450,7 +450,7 @@ fn render_thread_inner(
             &audio_clock,
             &render_client,
             &mut render,
-            &sfx_receiver,
+            &mut sfx_receiver,
             &prep,
             frames_available,
             padding,
@@ -471,7 +471,7 @@ fn write_frames(
     audio_clock: &Audio::IAudioClock,
     render_client: &Audio::IAudioRenderClient,
     render: &mut RenderState,
-    sfx_receiver: &Receiver<QueuedSfx>,
+    sfx_receiver: &mut SfxReceiver,
     prep: &WasapiOutputPrep,
     frames_available: u32,
     playback_delay_frames: u32,

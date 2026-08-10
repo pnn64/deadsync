@@ -3,7 +3,7 @@ use deadlib_platform::dirs;
 use deadsync_audio::LinuxAudioBackend;
 use deadsync_audio::{
     Cut, InitConfig, MusicStreamClockSnapshot, OutputBackendReady, OutputDeviceInfo,
-    OutputTimingSnapshot, QueuedSfx, SfxLane, StutterDiagAudioEvent, normalized_music_rate,
+    OutputTimingSnapshot, SfxLane, SfxSender, StutterDiagAudioEvent, normalized_music_rate,
 };
 use deadsync_audio_backend_native::launch::{
     NativeBackendLaunch, build_audio_launch, start_output_backend,
@@ -13,7 +13,7 @@ use log::info;
 use std::path::PathBuf;
 use std::sync::OnceLock;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::{Receiver, Sender, SyncSender, channel};
+use std::sync::mpsc::{Receiver, Sender, channel};
 use std::thread;
 
 use crate::music_map::install_played_map;
@@ -30,7 +30,7 @@ static PRESERVE_PITCH_ENABLED: AtomicBool = AtomicBool::new(false);
 
 struct AudioEngine {
     command_sender: Sender<StreamCommand>,
-    sfx_sender: SyncSender<QueuedSfx>,
+    sfx_sender: SfxSender,
     sfx_cache: SfxCache,
     device_sample_rate: u32,
     device_channels: usize,
@@ -39,7 +39,7 @@ struct AudioEngine {
 
 struct AudioThreadReady {
     backend_ready: OutputBackendReady,
-    sfx_sender: SyncSender<QueuedSfx>,
+    sfx_sender: SfxSender,
 }
 
 #[inline(always)]

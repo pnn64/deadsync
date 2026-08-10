@@ -1,9 +1,8 @@
 use crate::{OutputFormat, load_and_resample_sfx};
-use deadsync_audio::{QueuedSfx, SfxLane, sfx_stop_generation};
+use deadsync_audio::{QueuedSfx, SfxLane, SfxSender, sfx_stop_generation};
 use log::{debug, warn};
 use std::collections::HashMap;
 use std::path::PathBuf;
-use std::sync::mpsc::SyncSender;
 use std::sync::{Arc, Mutex, OnceLock};
 
 const ASSIST_TICK_SFX_PATH: &str = "assets/sounds/assist_tick.ogg";
@@ -34,7 +33,7 @@ impl SfxCache {
         path: &str,
         lane: SfxLane,
         output: OutputFormat,
-        sender: &SyncSender<QueuedSfx>,
+        sender: &SfxSender,
         resolve_asset_path: impl FnOnce(&str) -> PathBuf,
     ) {
         if self.play_cached(path, lane, 0, sender) {
@@ -65,7 +64,7 @@ impl SfxCache {
         send_sfx(sender, sound_data, lane, 0);
     }
 
-    pub fn play_preloaded(&self, path: &str, lane: SfxLane, sender: &SyncSender<QueuedSfx>) {
+    pub fn play_preloaded(&self, path: &str, lane: SfxLane, sender: &SfxSender) {
         if !self.play_cached(path, lane, 0, sender) {
             warn!("Preloaded SFX cache miss for '{path}'; skipping synchronous decode");
         }
@@ -75,7 +74,7 @@ impl SfxCache {
         &self,
         path: &str,
         output: OutputFormat,
-        sender: &SyncSender<QueuedSfx>,
+        sender: &SfxSender,
         resolve_asset_path: impl FnOnce(&str) -> PathBuf,
     ) {
         if path == ASSIST_TICK_SFX_PATH
@@ -93,7 +92,7 @@ impl SfxCache {
         );
     }
 
-    pub fn play_preloaded_assist_tick(&self, path: &str, sender: &SyncSender<QueuedSfx>) {
+    pub fn play_preloaded_assist_tick(&self, path: &str, sender: &SfxSender) {
         if path == ASSIST_TICK_SFX_PATH
             && let Some(sound_data) = self.assist_tick.get().cloned()
         {
@@ -107,7 +106,7 @@ impl SfxCache {
         &self,
         path: &str,
         target_stream_frame: u64,
-        sender: &SyncSender<QueuedSfx>,
+        sender: &SfxSender,
     ) {
         if target_stream_frame == 0 {
             self.play_preloaded_assist_tick(path, sender);
@@ -166,7 +165,7 @@ impl SfxCache {
         path: &str,
         lane: SfxLane,
         target_stream_frame: u64,
-        sender: &SyncSender<QueuedSfx>,
+        sender: &SfxSender,
     ) -> bool {
         let cached = { self.sounds.lock().unwrap().get(path).cloned() };
         if let Some(sound_data) = cached {
@@ -189,12 +188,7 @@ impl Default for SfxCache {
     }
 }
 
-fn send_sfx(
-    sender: &SyncSender<QueuedSfx>,
-    data: Arc<[i16]>,
-    lane: SfxLane,
-    target_stream_frame: u64,
-) {
+fn send_sfx(sender: &SfxSender, data: Arc<[i16]>, lane: SfxLane, target_stream_frame: u64) {
     let _ = sender.try_send(QueuedSfx {
         data,
         lane,

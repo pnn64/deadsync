@@ -5,7 +5,7 @@ use crate::telemetry::{
 use deadlib_platform::host_time::now_nanos;
 use deadsync_audio::{
     AudioOutputMode, AudioRenderHandle, OutputBackendReady, OutputTelemetryClock,
-    OutputTimingQuality, QueuedSfx, RenderState,
+    OutputTimingQuality, RenderState, SfxReceiver,
 };
 use libc::{c_int, c_ulong};
 use log::info;
@@ -14,7 +14,7 @@ use std::mem::size_of;
 use std::os::fd::{AsRawFd, RawFd};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::{Receiver, Sender, channel};
+use std::sync::mpsc::{Sender, channel};
 use std::thread::{self, JoinHandle};
 
 const FREEBSD_PCM_FALLBACK_BUFFER_FRAMES: u32 = 1024;
@@ -220,7 +220,7 @@ pub fn prepare(
 pub fn start(
     prep: FreeBsdPcmOutputPrep,
     render_handle: AudioRenderHandle,
-    sfx_receiver: Receiver<QueuedSfx>,
+    sfx_receiver: SfxReceiver,
 ) -> Result<FreeBsdPcmOutputStream, String> {
     let stop_flag = Arc::new(AtomicBool::new(false));
     let stop_flag_thread = stop_flag.clone();
@@ -264,7 +264,7 @@ struct FreeBsdPcmParams {
 fn render_thread(
     prep: FreeBsdPcmOutputPrep,
     render_handle: AudioRenderHandle,
-    sfx_receiver: Receiver<QueuedSfx>,
+    sfx_receiver: SfxReceiver,
     stop_flag: Arc<AtomicBool>,
     ready_tx: Sender<Result<(), String>>,
 ) {
@@ -277,7 +277,7 @@ fn render_thread(
 fn render_thread_inner(
     prep: FreeBsdPcmOutputPrep,
     render_handle: AudioRenderHandle,
-    sfx_receiver: Receiver<QueuedSfx>,
+    mut sfx_receiver: SfxReceiver,
     stop_flag: &AtomicBool,
     ready_tx: &Sender<Result<(), String>>,
 ) -> Result<(), String> {

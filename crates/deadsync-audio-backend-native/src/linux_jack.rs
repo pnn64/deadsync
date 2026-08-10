@@ -4,7 +4,7 @@ use crate::telemetry::{
 use deadlib_platform::host_time::now_nanos;
 use deadsync_audio::{
     AudioOutputMode, AudioRenderHandle, OutputBackendReady, OutputTelemetryClock,
-    OutputTimingQuality, QueuedSfx, RenderState,
+    OutputTimingQuality, RenderState, SfxReceiver,
 };
 use libloading::Library;
 use log::{info, warn};
@@ -12,7 +12,6 @@ use std::ffi::{c_char, c_int, c_uint, c_void};
 use std::ptr;
 use std::slice;
 use std::sync::OnceLock;
-use std::sync::mpsc::Receiver;
 
 const JACK_DEFAULT_AUDIO_TYPE: &[u8] = b"32 bit float mono audio\0";
 const JACK_CLIENT_NAME: &[u8] = b"deadsync\0";
@@ -296,7 +295,7 @@ impl Drop for JackClient {
 struct JackCallbackState {
     api: &'static JackApi,
     render: RenderState,
-    sfx_receiver: Receiver<QueuedSfx>,
+    sfx_receiver: SfxReceiver,
     port_l: *mut JackPortRaw,
     port_r: *mut JackPortRaw,
     sample_rate_hz: u32,
@@ -438,7 +437,7 @@ pub fn prepare(
 pub fn start(
     prep: JackOutputPrep,
     render_handle: AudioRenderHandle,
-    sfx_receiver: Receiver<QueuedSfx>,
+    sfx_receiver: SfxReceiver,
 ) -> Result<JackOutputStream, String> {
     let JackOutputPrep {
         mut client,

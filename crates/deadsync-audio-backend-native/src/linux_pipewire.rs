@@ -4,7 +4,7 @@ use crate::telemetry::{
 use deadlib_platform::host_time::now_nanos;
 use deadsync_audio::{
     AudioOutputMode, AudioRenderHandle, OutputBackendReady, OutputTelemetryClock,
-    OutputTimingQuality, QueuedSfx, RenderState,
+    OutputTimingQuality, RenderState, SfxReceiver,
 };
 use log::{info, warn};
 use pipewire as pw;
@@ -14,7 +14,7 @@ use spa::param::format_utils;
 use spa::pod::Pod;
 use std::io::Cursor;
 use std::mem;
-use std::sync::mpsc::{Receiver, Sender, channel};
+use std::sync::mpsc::{Sender, channel};
 use std::thread::{self, JoinHandle};
 
 pub struct PipeWireOutputPrep {
@@ -54,7 +54,7 @@ impl Drop for PipeWireOutputStream {
 
 struct CallbackState {
     render: RenderState,
-    sfx_receiver: Receiver<QueuedSfx>,
+    sfx_receiver: SfxReceiver,
     format: spa::param::audio::AudioInfoRaw,
     fallback_rate_hz: u32,
     fallback_channels: usize,
@@ -64,7 +64,7 @@ struct CallbackState {
 impl CallbackState {
     fn new(
         render_handle: AudioRenderHandle,
-        sfx_receiver: Receiver<QueuedSfx>,
+        sfx_receiver: SfxReceiver,
         sample_rate_hz: u32,
         channels: usize,
     ) -> Self {
@@ -148,7 +148,7 @@ pub fn prepare(
 pub fn start(
     prep: PipeWireOutputPrep,
     render_handle: AudioRenderHandle,
-    sfx_receiver: Receiver<QueuedSfx>,
+    sfx_receiver: SfxReceiver,
 ) -> Result<PipeWireOutputStream, String> {
     let (ready_tx, ready_rx) = channel::<Result<(), String>>();
     let (stop_sender, stop_receiver) = pw::channel::channel::<()>();
@@ -179,7 +179,7 @@ pub fn start(
 fn render_thread(
     prep: PipeWireOutputPrep,
     render_handle: AudioRenderHandle,
-    sfx_receiver: Receiver<QueuedSfx>,
+    sfx_receiver: SfxReceiver,
     stop_receiver: pw::channel::Receiver<()>,
     ready_tx: Sender<Result<(), String>>,
 ) -> Result<(), String> {

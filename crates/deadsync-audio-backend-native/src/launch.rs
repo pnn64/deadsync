@@ -1,6 +1,6 @@
 use deadsync_audio::{
     AudioOutputMode, AudioStreamHandle, InitConfig, OutputBackendReady, OutputDeviceInfo,
-    QueuedSfx, music_transport,
+    SfxSender, music_transport, sfx_transport,
 };
 
 #[cfg(target_os = "freebsd")]
@@ -21,7 +21,6 @@ use crate::macos_coreaudio;
 #[cfg(target_os = "linux")]
 use deadsync_audio::LinuxAudioBackend;
 use log::{debug, info, warn};
-use std::sync::mpsc::{SyncSender, sync_channel};
 
 pub const SFX_QUEUE_CAP: usize = 128;
 
@@ -533,7 +532,7 @@ fn start_linux_alsa_backend(
     (
         NativeOutputBackend,
         OutputBackendReady,
-        SyncSender<QueuedSfx>,
+        SfxSender,
         AudioStreamHandle,
     ),
     String,
@@ -554,7 +553,7 @@ fn start_linux_alsa_backend(
     let mut ready = prep.ready();
     ready.requested_output_mode = alsa.output_mode;
     let (stream_handle, render_handle) = music_transport(ready.device_channels);
-    let (sfx_sender, sfx_receiver) = sync_channel::<QueuedSfx>(SFX_QUEUE_CAP);
+    let (sfx_sender, sfx_receiver) = sfx_transport(SFX_QUEUE_CAP);
     let stream = crate::linux_alsa::start(prep, render_handle, sfx_receiver)?;
     Ok((
         NativeOutputBackend::Alsa(stream),
@@ -572,7 +571,7 @@ fn start_linux_jack_backend(
     (
         NativeOutputBackend,
         OutputBackendReady,
-        SyncSender<QueuedSfx>,
+        SfxSender,
         AudioStreamHandle,
     ),
     String,
@@ -585,7 +584,7 @@ fn start_linux_jack_backend(
     let mut ready = prep.ready();
     ready.requested_output_mode = jack.output_mode;
     let (stream_handle, render_handle) = music_transport(ready.device_channels);
-    let (sfx_sender, sfx_receiver) = sync_channel::<QueuedSfx>(SFX_QUEUE_CAP);
+    let (sfx_sender, sfx_receiver) = sfx_transport(SFX_QUEUE_CAP);
     let stream = crate::linux_jack::start(prep, render_handle, sfx_receiver)?;
     Ok((
         NativeOutputBackend::Jack(stream),
@@ -603,7 +602,7 @@ fn start_linux_pipewire_backend(
     (
         NativeOutputBackend,
         OutputBackendReady,
-        SyncSender<QueuedSfx>,
+        SfxSender,
         AudioStreamHandle,
     ),
     String,
@@ -625,7 +624,7 @@ fn start_linux_pipewire_backend(
     let mut ready = prep.ready();
     ready.requested_output_mode = pipewire.output_mode;
     let (stream_handle, render_handle) = music_transport(ready.device_channels);
-    let (sfx_sender, sfx_receiver) = sync_channel::<QueuedSfx>(SFX_QUEUE_CAP);
+    let (sfx_sender, sfx_receiver) = sfx_transport(SFX_QUEUE_CAP);
     let stream = crate::linux_pipewire::start(prep, render_handle, sfx_receiver)?;
     Ok((
         NativeOutputBackend::PipeWire(stream),
@@ -643,7 +642,7 @@ fn start_linux_pulse_backend(
     (
         NativeOutputBackend,
         OutputBackendReady,
-        SyncSender<QueuedSfx>,
+        SfxSender,
         AudioStreamHandle,
     ),
     String,
@@ -665,7 +664,7 @@ fn start_linux_pulse_backend(
     let mut ready = prep.ready();
     ready.requested_output_mode = pulse.output_mode;
     let (stream_handle, render_handle) = music_transport(ready.device_channels);
-    let (sfx_sender, sfx_receiver) = sync_channel::<QueuedSfx>(SFX_QUEUE_CAP);
+    let (sfx_sender, sfx_receiver) = sfx_transport(SFX_QUEUE_CAP);
     let stream = crate::linux_pulse::start(prep, render_handle, sfx_receiver)?;
     Ok((
         NativeOutputBackend::Pulse(stream),
@@ -682,7 +681,7 @@ fn start_freebsd_pcm_backend(
     (
         NativeOutputBackend,
         OutputBackendReady,
-        SyncSender<QueuedSfx>,
+        SfxSender,
         AudioStreamHandle,
     ),
     String,
@@ -699,7 +698,7 @@ fn start_freebsd_pcm_backend(
     let mut ready = prep.ready();
     ready.requested_output_mode = pcm.output_mode;
     let (stream_handle, render_handle) = music_transport(ready.device_channels);
-    let (sfx_sender, sfx_receiver) = sync_channel::<QueuedSfx>(SFX_QUEUE_CAP);
+    let (sfx_sender, sfx_receiver) = sfx_transport(SFX_QUEUE_CAP);
     let stream = crate::freebsd_pcm::start(prep, render_handle, sfx_receiver)?;
     Ok((
         NativeOutputBackend::FreeBsdPcm(stream),
@@ -716,7 +715,7 @@ fn start_macos_coreaudio_backend(
     (
         NativeOutputBackend,
         OutputBackendReady,
-        SyncSender<QueuedSfx>,
+        SfxSender,
         AudioStreamHandle,
     ),
     String,
@@ -733,7 +732,7 @@ fn start_macos_coreaudio_backend(
     let mut ready = prep.ready();
     ready.requested_output_mode = coreaudio.output_mode;
     let (stream_handle, render_handle) = music_transport(ready.device_channels);
-    let (sfx_sender, sfx_receiver) = sync_channel::<QueuedSfx>(SFX_QUEUE_CAP);
+    let (sfx_sender, sfx_receiver) = sfx_transport(SFX_QUEUE_CAP);
     let stream = crate::macos_coreaudio::start(prep, render_handle, sfx_receiver)?;
     Ok((
         NativeOutputBackend::CoreAudio(stream),
@@ -749,7 +748,7 @@ pub fn start_output_backend(
     (
         NativeOutputBackend,
         OutputBackendReady,
-        SyncSender<QueuedSfx>,
+        SfxSender,
         AudioStreamHandle,
     ),
     String,
@@ -974,7 +973,7 @@ fn start_wasapi_backend(
     (
         crate::windows_wasapi::WasapiOutputStream,
         OutputBackendReady,
-        SyncSender<QueuedSfx>,
+        SfxSender,
         AudioStreamHandle,
     ),
     String,
@@ -1000,7 +999,7 @@ fn start_wasapi_backend(
     let mut ready = prep.ready();
     ready.requested_output_mode = wasapi.output_mode;
     let (stream_handle, render_handle) = music_transport(ready.device_channels);
-    let (sfx_sender, sfx_receiver) = sync_channel::<QueuedSfx>(SFX_QUEUE_CAP);
+    let (sfx_sender, sfx_receiver) = sfx_transport(SFX_QUEUE_CAP);
     let stream =
         crate::windows_wasapi::start(prep, render_handle, sfx_receiver).map_err(|err| {
             format!(

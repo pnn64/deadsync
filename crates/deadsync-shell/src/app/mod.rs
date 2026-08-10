@@ -178,13 +178,13 @@ use deadsync_theme::{AudioRequest, PlatformRequest, RevealPathKind};
 use deadsync_theme_simply_love::screens::SimplyLoveScreen as CurrentScreen;
 use deadsync_theme_simply_love::views::{
     EvaluationContextView, EvaluationInitPlayerView, EvaluationInitView, EvaluationPlayerView,
-    EvaluationPolicyView, EvaluationRuntimeView, EvaluationSubmissionView, MusicWheelRankSource,
-    MusicWheelRuntimeRequest, MusicWheelRuntimeView, MusicWheelSlotRuntimeRequest,
-    MusicWheelSlotRuntimeView, ScoreboxLocalView, ScoreboxMachineView, ScoreboxSideView,
-    ScreenBarBackgroundView, SelectCourseRuntimeView, SelectCourseScoreRequest,
-    SelectCourseScoreView, SimplyLoveDensityGraphSlot as DensityGraphSlot,
-    SimplyLoveGrooveStatsService, SimplyLoveLobbyRuntimeView, SimplyLoveVisualPolicyView,
-    VisualBackgroundView,
+    EvaluationPolicyView, EvaluationRuntimeView, EvaluationSubmissionView, MUSIC_WHEEL_SLOT_COUNT,
+    MusicWheelRankSource, MusicWheelRuntimeRequest, MusicWheelRuntimeView,
+    MusicWheelSlotRuntimeRequest, MusicWheelSlotRuntimeView, ScoreboxLocalView,
+    ScoreboxMachineView, ScoreboxSideView, ScreenBarBackgroundView, SelectCourseRuntimeView,
+    SelectCourseScoreRequest, SelectCourseScoreView,
+    SimplyLoveDensityGraphSlot as DensityGraphSlot, SimplyLoveGrooveStatsService,
+    SimplyLoveLobbyRuntimeView, SimplyLoveVisualPolicyView, VisualBackgroundView,
 };
 use deadsync_theme_simply_love::{
     SimplyLoveConfigRequest, SimplyLoveContentRequest, SimplyLoveEffect as ThemeEffect,
@@ -1834,6 +1834,20 @@ impl App {
             }
         });
         let favorite_membership = profile_data::runtime_favorite_membership(&favorite_queries);
+        let score_queries: [Option<(&str, &str)>; MUSIC_WHEEL_SLOT_COUNT * 2] =
+            std::array::from_fn(|query_idx| {
+                let slot_idx = query_idx / 2;
+                let side_idx = query_idx % 2;
+                match request.slots[slot_idx] {
+                    MusicWheelSlotRuntimeRequest::Song { chart_hashes, .. } => {
+                        profile_ids[side_idx].zip(chart_hashes[side_idx])
+                    }
+                    _ => None,
+                }
+            });
+        let cached_scores = request
+            .read_scores
+            .then(|| scores::cached_best_itg_scores(&score_queries));
         let slots = std::array::from_fn(|slot_idx| {
             let mut view = MusicWheelSlotRuntimeView::default();
             match request.slots[slot_idx] {
@@ -1869,14 +1883,9 @@ impl App {
                             !scores::is_itl_song_folder_unlocked_with_profile(song_dir, profile_id)
                         });
                         if let Some(chart_hash) = chart_hash {
-                            side_view.score = request
-                                .read_scores
-                                .then(|| {
-                                    profile_id.and_then(|id| {
-                                        scores::get_cached_score_with_profile(chart_hash, id)
-                                    })
-                                })
-                                .flatten();
+                            side_view.score = cached_scores
+                                .as_ref()
+                                .and_then(|scores| scores[slot_idx * 2 + side_idx]);
                             side_view.itl_rank = match request.rank_source {
                                 MusicWheelRankSource::None => None,
                                 MusicWheelRankSource::Chart => context
