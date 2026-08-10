@@ -1,3 +1,4 @@
+use deadsync_core::input::MAX_PLAYERS;
 use deadsync_gameplay::{
     AccelOverrides, ActiveAttackRefreshInput, ActiveAttackRefreshOutput, ActiveAttackRefreshState,
     AppearanceEffects, AppearanceOverrides, AttackMaskWindow, CROSSOVER_CUE_SEEK_GUARD_SECONDS,
@@ -598,27 +599,24 @@ fn legacy_row_entry_index(row_map: &[u32], row_index: usize) -> Option<usize> {
 
 fn row_lookup_benchmark() {
     let note_count = ROW_COUNT * 2;
-    let note_rows = (0..note_count)
-        .map(|note| note / 2 * ROW_STRIDE)
-        .collect::<Vec<_>>();
-    let mut dense_row_map = vec![u32::MAX; note_rows[note_count - 1] + 1];
+    let mut dense_row_map = vec![u32::MAX; (ROW_COUNT - 1) * ROW_STRIDE + 1];
     let note_row_entries = (0..note_count)
         .map(|note| (note / 2) as u32)
         .collect::<Vec<_>>();
-    for note in (0..note_count).step_by(2) {
-        dense_row_map[note_rows[note]] = note_row_entries[note];
+    for row in 0..ROW_COUNT {
+        dense_row_map[row * ROW_STRIDE] = row as u32;
     }
 
     let mut old_query = 0usize;
     let old = measure(ROW_LOOKUPS, || {
-        old_query = (old_query + 17) & (note_count - 1);
-        legacy_row_entry_index(black_box(&dense_row_map), black_box(note_rows[old_query]))
+        old_query = (old_query + 17) & (ROW_COUNT - 1);
+        legacy_row_entry_index(black_box(&dense_row_map), black_box(old_query * ROW_STRIDE))
             .unwrap_or_default() as u64
     });
     let mut new_query = 0usize;
     let new = measure(ROW_LOOKUPS, || {
-        new_query = (new_query + 17) & (note_count - 1);
-        row_entry_index_for_note(black_box(&note_row_entries), black_box(new_query))
+        new_query = (new_query + 17) & (ROW_COUNT - 1);
+        row_entry_index_for_note(black_box(&note_row_entries), black_box(new_query * 2))
             .unwrap_or_default() as u64
     });
     assert_eq!(old.checksum, new.checksum);
@@ -737,31 +735,68 @@ fn cue_state(cues: Vec<ColumnCue>) -> GameplayCueRuntimeState {
     )
 }
 
-fn legacy_cue_anchor_update(
-    cues: &[ColumnCue],
-    entries: &mut Vec<Option<f32>>,
-    cursor: &mut usize,
-    current_time: f32,
-) {
-    if entries.len() != cues.len() {
-        entries.clear();
-        entries.resize(cues.len(), None);
-        *cursor = 0;
-    }
-    let target = column_cue_cursor_from_hint(cues, current_time, *cursor);
-    if target > *cursor {
-        for index in *cursor..target {
-            let start = cues[index].start_time;
-            entries[index] = Some(if current_time - start < CROSSOVER_CUE_SEEK_GUARD_SECONDS {
-                start
-            } else {
-                current_time
-            });
+struct LegacyCueAnchorState {
+    cues: [Vec<ColumnCue>; MAX_PLAYERS],
+    entries: [Vec<Option<f32>>; MAX_PLAYERS],
+    cursors: [usize; MAX_PLAYERS],
+}
+
+impl LegacyCueAnchorState {
+    fn new(cues: Vec<ColumnCue>) -> Self {
+        let mut player_cues = std::array::from_fn(|_| Vec::new());
+        player_cues[0] = cues;
+        Self {
+            cues: player_cues,
+            entries: std::array::from_fn(|_| Vec::new()),
+            cursors: [0; MAX_PLAYERS],
         }
-    } else if target < *cursor {
-        entries[target..*cursor].fill(None);
     }
-    *cursor = target;
+
+    fn prewarmed(cues: Vec<ColumnCue>) -> Self {
+        let mut state = Self::new(cues);
+        state.entries[0] = vec![None; state.cues[0].len()];
+        state
+    }
+
+    fn update(&mut self, player: usize, current_time: f32) {
+        let Some(cues) = self.cues.get(player) else {
+            return;
+        };
+        let Some(entries) = self.entries.get_mut(player) else {
+            return;
+        };
+        if entries.len() != cues.len() {
+            entries.clear();
+            entries.resize(cues.len(), None);
+            self.cursors[player] = 0;
+        }
+        let cursor = self.cursors[player];
+        let target = column_cue_cursor_from_hint(cues, current_time, cursor);
+        if target > cursor {
+            for index in cursor..target {
+                let start = cues[index].start_time;
+                entries[index] = Some(if current_time - start < CROSSOVER_CUE_SEEK_GUARD_SECONDS {
+                    start
+                } else {
+                    current_time
+                });
+            }
+        } else if target < cursor {
+            entries[target..cursor].fill(None);
+        }
+        self.cursors[player] = target;
+    }
+
+    fn cursor(&self, player: usize) -> usize {
+        self.cursors.get(player).copied().unwrap_or_default()
+    }
+
+    fn entry_time(&self, player: usize, index: usize) -> Option<f32> {
+        self.entries
+            .get(player)
+            .and_then(|entries| entries.get(index).copied())
+            .flatten()
+    }
 }
 
 fn allocation_delta(operation: impl FnOnce()) -> AllocSnapshot {
@@ -778,11 +813,8 @@ fn cue_anchor_checksum(cursor: usize, anchor: Option<f32>) -> u64 {
 
 fn cue_anchor_benchmark() {
     let cues = benchmark_cues();
-    let mut old_first_entries = Vec::new();
-    let mut old_first_cursor = 0usize;
-    let old_first = allocation_delta(|| {
-        legacy_cue_anchor_update(&cues, &mut old_first_entries, &mut old_first_cursor, 0.0);
-    });
+    let mut old_first_state = LegacyCueAnchorState::new(cues.clone());
+    let old_first = allocation_delta(|| old_first_state.update(0, 0.0));
     let mut new_first_state = cue_state(cues.clone());
     let new_first = allocation_delta(|| new_first_state.update_crossover_cue_anchors(0, 0.0));
     assert_eq!(old_first.allocs, 1);
@@ -790,19 +822,19 @@ fn cue_anchor_benchmark() {
     assert_eq!(new_first.reallocs, 0);
     assert_eq!(new_first.bytes, 0);
 
-    let mut old_entries = vec![None; cues.len()];
-    let mut old_cursor = 0usize;
+    let mut old_state = LegacyCueAnchorState::prewarmed(cues.clone());
     let mut old_frame = 0usize;
     let cycle_seconds = CUE_COUNT as f32 * 0.25 + 1.0;
     let old = measure(CUE_ANCHOR_FRAMES, || {
         let now = (old_frame as f32 * 0.02) % cycle_seconds;
         old_frame += 1;
-        legacy_cue_anchor_update(&cues, &mut old_entries, &mut old_cursor, now);
+        old_state.update(0, now);
+        let cursor = old_state.cursor(0);
         cue_anchor_checksum(
-            old_cursor,
-            old_cursor
+            cursor,
+            cursor
                 .checked_sub(1)
-                .and_then(|index| old_entries[index]),
+                .and_then(|index| old_state.entry_time(0, index)),
         )
     });
     let mut new_state = cue_state(cues.clone());
@@ -820,6 +852,14 @@ fn cue_anchor_benchmark() {
         )
     });
     assert_eq!(old.checksum, new.checksum);
+    assert_eq!(old_state.cursor(0), new_state.crossover_cue_cursor(0));
+    for index in 0..cues.len() {
+        assert_eq!(
+            old_state.entry_time(0, index),
+            new_state.crossover_cue_entry_time(0, index),
+            "anchor mismatch at cue {index}",
+        );
+    }
     assert_zero_alloc(&old);
     assert_zero_alloc(&new);
 

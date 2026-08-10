@@ -228,8 +228,9 @@ pub(crate) struct ColumnFeedbackRequest<'a> {
     // can select the latest regular cue without another binary search.
     pub column_cue_cursor: Option<usize>,
     pub crossover_cues: Option<&'a [ColumnCue]>,
-    // Per-cue fade-in anchor times parallel to `crossover_cues`; NaN entries (or
-    // a missing slice) fall back to each cue's own start (natural fade-in).
+    // Per-cue fade-in anchor times parallel to `crossover_cues`. Only entries
+    // before `crossover_cue_cursor` are valid; a missing slice or cursor falls
+    // back to each cue's own start (natural fade-in).
     pub crossover_cue_entries: Option<&'a [f32]>,
     // The runtime already advances this cursor while updating crossover cue
     // entry anchors, so rendering can reuse it instead of searching again.
@@ -356,11 +357,14 @@ fn compose_column_cue(
             ColumnCueKind::Crossover => {
                 // Anchor the fade-in to where the cue first became visible so a
                 // cue you seek into ramps up instead of popping in at full alpha.
-                let entry_time = request
-                    .crossover_cue_entries
-                    .and_then(|entries| entries.get(cue_idx).copied())
-                    .filter(|entry| !entry.is_nan())
-                    .unwrap_or(cue.start_time);
+                let entry_time = if cue_idx < request.crossover_cue_cursor.unwrap_or_default() {
+                    request
+                        .crossover_cue_entries
+                        .and_then(|entries| entries.get(cue_idx).copied())
+                        .unwrap_or(cue.start_time)
+                } else {
+                    cue.start_time
+                };
                 let since_entry_real = (request.current_music_time - entry_time) / rate;
                 column_cue_alpha_anchored(
                     since_entry_real,

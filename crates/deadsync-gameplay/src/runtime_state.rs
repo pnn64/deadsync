@@ -412,11 +412,12 @@ pub struct GameplayCueRuntimeState {
     // reuses this cursor instead of repeating a binary search every frame.
     column_cue_cursor: [usize; MAX_PLAYERS],
     crossover_cues: [Vec<ColumnCue>; MAX_PLAYERS],
-    // Per crossover cue: NaN = not yet reached (or rewound before its start),
-    // otherwise the fade-in anchor time. The game thread owns these song-sized
-    // boxed slices and allocates them at gameplay setup. Live frames only write
-    // crossed/rewound entries: there is no growth, miss, eviction, or gameplay
-    // destruction, and the worst frame touches only the cues crossed by a seek.
+    // Per-crossover-cue fade-in times. Only the prefix ending at
+    // `crossover_cue_cursor[player]` is valid; newly crossed entries overwrite
+    // stale values after a rewind. The game thread owns these song-sized boxed
+    // slices and allocates them at gameplay setup. Live frames never grow,
+    // clear, evict, or destroy them, and the worst frame writes only the cues
+    // crossed by a forward seek.
     crossover_cue_entry: [Box<[f32]>; MAX_PLAYERS],
     // Number of leading crossover cues whose start has been crossed (and thus
     // anchored) at the last evaluated time. Lets the gate anchor/rewind only the
@@ -444,7 +445,7 @@ impl GameplayCueRuntimeState {
         crossover_cues: [Vec<ColumnCue>; MAX_PLAYERS],
     ) -> Self {
         let crossover_cue_entry = std::array::from_fn(|player| {
-            vec![f32::NAN; crossover_cues[player].len()].into_boxed_slice()
+            vec![0.0; crossover_cues[player].len()].into_boxed_slice()
         });
         Self {
             measure_counter_segments,
@@ -481,9 +482,8 @@ impl GameplayCueRuntimeState {
         self.crossover_cues.get(player).map_or(&[], Vec::as_slice)
     }
 
-    // Per-cue fade-in anchor times for a player's crossover cues, parallel to
-    // `crossover_cues(player)`. NaN entries have not been reached yet; callers
-    // fall back to the cue's own start (natural fade-in).
+    // Per-cue fade-in anchor times parallel to `crossover_cues(player)`. Only
+    // entries before `crossover_cue_cursor(player)` are valid.
     #[inline(always)]
     pub fn crossover_cue_entries(&self, player: usize) -> &[f32] {
         self.crossover_cue_entry
@@ -504,10 +504,12 @@ impl GameplayCueRuntimeState {
     // i.e. the natural fade-in).
     #[inline(always)]
     pub fn crossover_cue_entry_time(&self, player: usize, index: usize) -> Option<f32> {
+        if index >= self.crossover_cue_cursor(player) {
+            return None;
+        }
         self.crossover_cue_entry
             .get(player)
             .and_then(|entry| entry.get(index).copied())
-            .filter(|entry| !entry.is_nan())
     }
 
     #[inline(always)]
@@ -551,10 +553,6 @@ impl GameplayCueRuntimeState {
                 } else {
                     current_time
                 };
-            }
-        } else if target < cursor {
-            for slot in &mut entry[target..cursor] {
-                *slot = f32::NAN;
             }
         }
         self.crossover_cue_cursor[player] = target;

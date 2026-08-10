@@ -14643,12 +14643,9 @@ mod tests {
         // to its own start (natural fade-in).
         let mut state = new_state();
         assert_eq!(state.crossover_cue_entries(0).len(), 2);
-        assert!(
-            state
-                .crossover_cue_entries(0)
-                .iter()
-                .all(|entry| entry.is_nan())
-        );
+        assert_eq!(state.crossover_cue_cursor(0), 0);
+        assert_eq!(state.crossover_cue_entry_time(0, 0), None);
+        assert_eq!(state.crossover_cue_entry_time(0, 1), None);
         state.update_crossover_cue_anchors(0, 0.5);
         assert_eq!(state.crossover_cue_cursor(0), 0);
         state.update_crossover_cue_anchors(0, 1.0 + 0.01);
@@ -14676,6 +14673,53 @@ mod tests {
         assert_eq!(state.crossover_cue_entry_time(0, 99), None);
         assert_eq!(state.crossover_cue_entry_time(1, 0), None);
         assert_eq!(state.crossover_cue_cursor(MAX_PLAYERS), 0);
+    }
+
+    #[test]
+    fn compact_crossover_anchors_match_legacy_state_across_seeks() {
+        let cues = [1.0, 2.5, 5.0, 8.0]
+            .into_iter()
+            .map(|start_time| ColumnCue {
+                start_time,
+                duration: 1.0,
+                columns: ColumnCueColumns::default(),
+            })
+            .collect::<Vec<_>>();
+        let mut crossover_cues: [Vec<ColumnCue>; MAX_PLAYERS] =
+            std::array::from_fn(|_| Vec::new());
+        crossover_cues[0] = cues.clone();
+        let mut state = GameplayCueRuntimeState::new(
+            std::array::from_fn(|_| Vec::new()),
+            std::array::from_fn(|_| Vec::new()),
+            crossover_cues,
+        );
+        let mut legacy_entries = vec![None; cues.len()];
+        let mut legacy_cursor = 0usize;
+
+        for current_time in [0.0, 1.01, 6.0, 3.0, 2.51, 9.5, 0.5, 8.01] {
+            let target = column_cue_cursor_from_hint(&cues, current_time, legacy_cursor);
+            if target > legacy_cursor {
+                for index in legacy_cursor..target {
+                    let start = cues[index].start_time;
+                    legacy_entries[index] = Some(
+                        if current_time - start < CROSSOVER_CUE_SEEK_GUARD_SECONDS {
+                            start
+                        } else {
+                            current_time
+                        },
+                    );
+                }
+            } else if target < legacy_cursor {
+                legacy_entries[target..legacy_cursor].fill(None);
+            }
+            legacy_cursor = target;
+
+            state.update_crossover_cue_anchors(0, current_time);
+            assert_eq!(state.crossover_cue_cursor(0), legacy_cursor);
+            for (index, expected) in legacy_entries.iter().copied().enumerate() {
+                assert_eq!(state.crossover_cue_entry_time(0, index), expected);
+            }
+        }
     }
 
     #[test]

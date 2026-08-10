@@ -49,7 +49,7 @@ pub struct NotefieldFeedbackFrameView<'a> {
     pub column_cue_cursor: Option<usize>,
     /// Crossover cue columns use chart-global column indices.
     pub crossover_cues: Option<&'a [ColumnCue]>,
-    /// Per-cue fade-in anchor times parallel to `crossover_cues`; NaN is unset.
+    /// Per-cue fade-in anchors; only the prefix before the cursor is valid.
     pub crossover_cue_entries: Option<&'a [f32]>,
     /// First crossover cue after the current music time.
     pub crossover_cue_cursor: Option<usize>,

@@ -48,6 +48,13 @@ pub struct ColumnCueColumns {
     mines: LaneMask,
 }
 
+const _: () = {
+    assert!(MAX_COLS <= LaneMask::BITS as usize);
+    assert!(
+        std::mem::size_of::<ColumnCueColumns>() == std::mem::size_of::<LaneMask>() * 2
+    );
+};
+
 impl ColumnCueColumns {
     #[inline(always)]
     pub fn insert(&mut self, column: usize, is_mine: bool) -> bool {
