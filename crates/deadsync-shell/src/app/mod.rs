@@ -646,6 +646,16 @@ fn app_path_view(path: PathBuf) -> AppPathView {
     }
 }
 
+fn wheel_banner_path(entry: Option<&select_music::MusicWheelEntry>) -> Option<PathBuf> {
+    match entry {
+        Some(select_music::MusicWheelEntry::Song(song)) => song.banner_path.clone(),
+        Some(select_music::MusicWheelEntry::PackHeader { banner_path, .. }) => {
+            banner_path.as_deref().map(Path::to_path_buf)
+        }
+        None => None,
+    }
+}
+
 fn app_paths_view() -> AppPathsView {
     let dirs = deadlib_platform::dirs::app_dirs();
     AppPathsView {
@@ -7733,19 +7743,13 @@ impl App {
             select_music::prime_displayed_chart_data(&mut self.state.screens.select_music_state);
 
             // Load the selected entry's banner during the fade-in so it appears immediately.
-            let banner_path = match self
-                .state
-                .screens
-                .select_music_state
-                .entries
-                .get(self.state.screens.select_music_state.selected_index)
-            {
-                Some(select_music::MusicWheelEntry::Song(song)) => song.banner_path.clone(),
-                Some(select_music::MusicWheelEntry::PackHeader { banner_path, .. }) => {
-                    banner_path.as_deref().map(Path::to_path_buf)
-                }
-                None => None,
-            };
+            let banner_path = wheel_banner_path(
+                self.state
+                    .screens
+                    .select_music_state
+                    .entries
+                    .get(self.state.screens.select_music_state.selected_index),
+            );
             commands.push(Command::SetBanner(banner_path));
             let cdtitle_path = match self
                 .state
@@ -7878,19 +7882,13 @@ impl App {
                 );
             }
 
-            let banner_path = match self
-                .state
-                .screens
-                .select_course_state
-                .entries
-                .get(self.state.screens.select_course_state.selected_index)
-            {
-                Some(select_music::MusicWheelEntry::Song(song)) => song.banner_path.clone(),
-                Some(select_music::MusicWheelEntry::PackHeader { banner_path, .. }) => {
-                    banner_path.as_deref().map(Path::to_path_buf)
-                }
-                None => None,
-            };
+            let banner_path = wheel_banner_path(
+                self.state
+                    .screens
+                    .select_course_state
+                    .entries
+                    .get(self.state.screens.select_course_state.selected_index),
+            );
             commands.push(Command::SetBanner(banner_path));
             commands.push(Command::SetCdTitle(None));
         }
@@ -8209,6 +8207,25 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
 mod tests {
     use super::*;
     use deadsync_chart::{ArrowStats, ChartData, SongData, StaminaCounts, TechCounts};
+
+    #[test]
+    fn wheel_banner_path_owns_shared_pack_banner_for_shell_command() {
+        let banner: Arc<Path> = Arc::from(PathBuf::from("Packs/Test/banner.png"));
+        let entry = select_music::MusicWheelEntry::PackHeader {
+            name: Arc::from("Test"),
+            original_index: 0,
+            banner_path: Some(Arc::clone(&banner)),
+            song_count: 0,
+            pack_key: Some(Arc::from("Test")),
+            parent_series: None,
+        };
+
+        assert_eq!(
+            wheel_banner_path(Some(&entry)),
+            Some(PathBuf::from("Packs/Test/banner.png"))
+        );
+        assert_eq!(wheel_banner_path(None), None);
+    }
 
     fn test_evaluation_context(config: &config::Config) -> EvaluationContextView {
         let (profiles, avatars, _) = profile_data::runtime_evaluation_profile_view(
