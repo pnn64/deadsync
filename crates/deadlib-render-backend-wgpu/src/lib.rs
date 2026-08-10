@@ -982,6 +982,7 @@ pub fn draw(
                 cache_key,
                 vertices,
             )
+            .then_some(cache_key)
         });
         stats.storage = draw_storage_stats(frame, Some(uploads));
     }
@@ -1233,7 +1234,7 @@ pub fn draw(
                         last_bind = Some(bind_key);
                     }
                     if tmesh_buffer_cache.update_required(source) {
-                        if let Some(cache_key) = source.cache_key() {
+                        if let Some(cache_key) = source.buffer_key() {
                             let Some(entry) = state.cached_tmesh.get(&cache_key) else {
                                 tmesh_buffer_cache.reset();
                                 continue;

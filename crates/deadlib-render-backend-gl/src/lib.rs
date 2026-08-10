@@ -1010,6 +1010,7 @@ pub fn draw(
         let cached_tmesh_bytes = &mut state.cached_tmesh_bytes;
         resolve_textured_meshes(frame, uploads, |cache_key, vertices| {
             ensure_cached_tmesh(gl, cached_tmesh, cached_tmesh_bytes, cache_key, vertices)
+                .then_some(cache_key)
         });
     }
     let mut stats = DrawStats {
@@ -1320,7 +1321,7 @@ pub fn draw(
 
                         if tmesh_buffer_cache.update_required(source) {
                             let stride = std::mem::size_of::<TexturedMeshVertex>() as i32;
-                            let vertex_buffer = if let Some(cache_key) = source.cache_key() {
+                            let vertex_buffer = if let Some(cache_key) = source.buffer_key() {
                                 state.cached_tmesh.get(&cache_key).map(|entry| entry.vbo)
                             } else {
                                 Some(state.tmesh_vbo)
@@ -1692,7 +1693,7 @@ pub fn draw(
 
                         if tmesh_buffer_cache.update_required(source) {
                             let stride = std::mem::size_of::<TexturedMeshVertex>() as i32;
-                            let vertex_buffer = if let Some(cache_key) = source.cache_key() {
+                            let vertex_buffer = if let Some(cache_key) = source.buffer_key() {
                                 state.cached_tmesh.get(&cache_key).map(|entry| entry.vbo)
                             } else {
                                 Some(state.tmesh_vbo)

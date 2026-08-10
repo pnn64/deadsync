@@ -1511,10 +1511,10 @@ pub fn draw(
                 cache_key,
                 vertices,
             ) {
-                Ok(cached) => cached,
+                Ok(cached) => cached.then_some(cache_key),
                 Err(e) => {
                     warn!("Failed to cache Vulkan textured mesh {cache_key:#x}: {e}");
-                    false
+                    None
                 }
             },
         );
@@ -1829,7 +1829,7 @@ pub fn draw(
                     }
 
                     if tmesh_buffer_cache.update_required(source) {
-                        let vb = if let Some(cache_key) = source.cache_key() {
+                        let vb = if let Some(cache_key) = source.buffer_key() {
                             let Some(entry) = state.cached_tmesh.get(&cache_key) else {
                                 tmesh_buffer_cache.reset();
                                 continue;
@@ -1874,7 +1874,7 @@ pub fn draw(
                         last_set = set;
                     }
 
-                    let first_vertex = if source.cache_key().is_some() {
+                    let first_vertex = if source.buffer_key().is_some() {
                         0
                     } else {
                         base_first_tmesh_vertex.unwrap_or(0) + source.vertex_start()

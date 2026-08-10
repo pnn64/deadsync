@@ -7,6 +7,10 @@ license = "GPL-3.0"
 [features]
 cargo-clippy = []
 
+[[bench]]
+name = "gameplay_hot_path"
+harness = false
+
 [target.'cfg(target_os = "macos")'.dependencies]
 bytemuck = "1.25.2"
 core-graphics-types = "0.2.0"
@@ -19,6 +23,10 @@ log = "0.4.33"
 metal = "0.33.0"
 objc = "0.2.7"
 winit = "0.30.13"
+
+[dev-dependencies]
+deadlib-render = { path = "../deadlib-render" }
+rustc-hash = "2.1.3"
 
 [lints.clippy]
 perf = { level = "warn", priority = -1 }

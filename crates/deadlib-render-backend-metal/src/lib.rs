@@ -1,5 +1,7 @@
 #![cfg(target_os = "macos")]
 
+mod encoder_cache;
+
 use core_graphics_types::geometry::CGSize;
 use deadlib_render::{
     BlendMode, ClockDomainTrace, DrawOp, DrawStats, FastU64Map, MeshVertex, PresentModePolicy,
@@ -24,6 +26,8 @@ use winit::{
     raw_window_handle::{HasWindowHandle, RawWindowHandle},
     window::Window,
 };
+
+use encoder_cache::{BufferUpdate, CullMode, DrawKind, EncoderCache};
 
 const FRAMES_IN_FLIGHT: usize = 3;
 const IMAGE_WAIT_THRESHOLD_US: u32 = 1_000;
@@ -140,12 +144,14 @@ struct CacheStats {
 /// Direct Metal renderer state, owned and used only by the render thread.
 ///
 /// The three dynamic upload sets live for the session and are reused only after
-/// their command buffer completes. Retained textured-mesh geometry is warmed on
-/// first draw, capped at 16 MiB, and saturates instead of pruning. A saturated
-/// miss falls back to the current frame's bounded upload buffer. Cache entries
-/// are freed by the render thread during cleanup; hit/miss/saturation counters
-/// are logged then. Per-frame maintenance is O(draw ops + visible geometry), and
-/// the only unbounded GPU wait is explicit back pressure or reuse of one of the
+/// their command buffer completes. One session-lifetime render-pass descriptor
+/// is reconfigured without per-frame descriptor creation. Retained textured
+/// geometry is warmed on first draw, stored in dense slots behind a fast key
+/// map, capped at 16 MiB, and saturates instead of pruning. A saturated miss
+/// falls back to the current frame's bounded upload buffer. Cache entries are
+/// freed by the render thread during cleanup; hit/miss/saturation counters are
+/// logged then. Per-frame maintenance is O(draw ops + visible geometry), and the
+/// only unbounded GPU wait is explicit back pressure or reuse of one of the
 /// three in-flight frame slots.
 pub struct State {
     window: Arc<Window>,
@@ -158,12 +164,14 @@ pub struct State {
     depth_disabled: DepthStencilState,
     depth_enabled: DepthStencilState,
     depth: metal::Texture,
+    render_pass: RenderPassDescriptor,
     frames: [FrameBuffers; FRAMES_IN_FLIGHT],
     frame_index: usize,
     window_size: (u32, u32),
     projection: Matrix4,
     uploads: TexturedMeshUploads,
-    cached_tmeshes: FastU64Map<CachedTMesh>,
+    cached_tmesh_slots: FastU64Map<u32>,
+    cached_tmeshes: Vec<CachedTMesh>,
     cached_tmesh_bytes: usize,
     cache_stats: CacheStats,
     next_texture_id: u64,
@@ -219,6 +227,7 @@ pub fn init(
     )?;
     let (depth_disabled, depth_enabled) = build_depth_states(&device);
     let depth = create_depth_target(&device, size.width, size.height);
+    let render_pass = create_render_pass(&depth);
     let queue = device.new_command_queue_with_max_command_buffer_count(FRAMES_IN_FLIGHT as u64);
     queue.set_label("DeadSync native Metal queue");
     let frames = std::array::from_fn(|_| FrameBuffers::new(&device));
@@ -234,12 +243,14 @@ pub fn init(
         depth_disabled,
         depth_enabled,
         depth,
+        render_pass,
         frames,
         frame_index: 0,
         window_size,
         projection: ortho_for_window(size.width, size.height),
         uploads: TexturedMeshUploads::with_capacity(1024, 64),
-        cached_tmeshes: FastU64Map::default(),
+        cached_tmesh_slots: FastU64Map::with_capacity_and_hasher(256, Default::default()),
+        cached_tmeshes: Vec::with_capacity(256),
         cached_tmesh_bytes: 0,
         cache_stats: CacheStats::default(),
         next_texture_id: 1,
@@ -338,11 +349,20 @@ fn draw_inner(
     let prepare_started = Instant::now();
     {
         let device = &state.device;
+        let slots = &mut state.cached_tmesh_slots;
         let cache = &mut state.cached_tmeshes;
         let cache_bytes = &mut state.cached_tmesh_bytes;
         let cache_stats = &mut state.cache_stats;
         resolve_textured_meshes(frame, &mut state.uploads, |key, vertices| {
-            ensure_cached_tmesh(device, cache, cache_bytes, cache_stats, key, vertices)
+            ensure_cached_tmesh(
+                device,
+                slots,
+                cache,
+                cache_bytes,
+                cache_stats,
+                key,
+                vertices,
+            )
         });
         stats.storage = draw_storage_stats(frame, Some(&state.uploads));
     }
@@ -371,10 +391,11 @@ fn draw_inner(
     let submitted_id = next_present_id(state);
 
     let setup_started = Instant::now();
-    let pass = render_pass(drawable.texture(), &state.depth, frame.clear_color);
+    configure_render_pass(&state.render_pass, drawable.texture(), frame.clear_color);
     let command = state.queue.new_command_buffer();
     command.set_label("DeadSync native Metal frame");
-    let encoder = command.new_render_command_encoder(pass);
+    let encoder = command.new_render_command_encoder(&state.render_pass);
+    clear_render_target(&state.render_pass);
     encoder.set_label("DeadSync native Metal render pass");
     encoder.set_viewport(MTLViewport {
         originX: 0.0,
@@ -389,11 +410,7 @@ fn draw_inner(
 
     let record_started = Instant::now();
     let mut vertices_drawn = 0u32;
-    let mut last_kind = None;
-    let mut last_blend = None;
-    let mut last_camera = None;
-    let mut last_texture = None;
-    let mut last_depth = None;
+    let mut cache = EncoderCache::default();
     let mut tmesh_buffer_cache = TexturedMeshBufferCache::default();
     for op in &frame.ops {
         match op {
@@ -401,37 +418,43 @@ fn draw_inner(
                 let Some(texture) = textures.metal_texture(run.texture_handle) else {
                     continue;
                 };
-                if last_kind != Some(0) {
-                    encoder.set_cull_mode(MTLCullMode::Back);
-                    encoder.set_depth_stencil_state(&state.depth_disabled);
-                    last_kind = Some(0);
-                    last_blend = None;
-                    last_camera = None;
-                    last_texture = None;
-                    last_depth = Some(false);
-                    tmesh_buffer_cache.reset();
+                let sprite_offset =
+                    run.instance_start as u64 * mem::size_of::<SpriteInstanceRaw>() as u64;
+                match cache.instance_buffer(DrawKind::Sprite) {
+                    BufferUpdate::Bind => {
+                        tmesh_buffer_cache.reset();
+                        encoder.set_vertex_buffer(
+                            0,
+                            Some(&state.frames[slot_index].sprites.raw),
+                            sprite_offset,
+                        );
+                    }
+                    BufferUpdate::Offset => encoder.set_vertex_buffer_offset(0, sprite_offset),
                 }
-                if last_blend != Some(run.blend) {
+                if cache.cull_changed(CullMode::Back) {
+                    encoder.set_cull_mode(MTLCullMode::Back);
+                }
+                if cache.depth_changed(false) {
+                    encoder.set_depth_stencil_state(&state.depth_disabled);
+                }
+                if cache.pipeline_changed(DrawKind::Sprite, blend_key(run.blend)) {
                     encoder.set_render_pipeline_state(state.sprite_pipelines.get(run.blend));
-                    last_blend = Some(run.blend);
                 }
                 set_camera(
                     encoder,
                     1,
+                    0,
                     run.camera,
                     &frame.cameras,
                     state.projection,
-                    &mut last_camera,
+                    &mut cache,
                 );
-                if last_texture != Some((texture.id, false)) {
-                    bind_texture(encoder, texture, false);
-                    last_texture = Some((texture.id, false));
+                if cache.texture_changed(texture.id) {
+                    encoder.set_fragment_texture(0, Some(&texture.raw));
                 }
-                encoder.set_vertex_buffer(
-                    0,
-                    Some(&state.frames[slot_index].sprites.raw),
-                    run.instance_start as u64 * mem::size_of::<SpriteInstanceRaw>() as u64,
-                );
+                if cache.sampler_changed(texture.id, false) {
+                    encoder.set_fragment_sampler_state(0, Some(&texture.sampler));
+                }
                 encoder.draw_primitives_instanced(
                     MTLPrimitiveType::Triangle,
                     0,
@@ -444,28 +467,27 @@ fn draw_inner(
                 if run.vertex_count == 0 {
                     continue;
                 }
-                if last_kind != Some(1) {
-                    encoder.set_cull_mode(MTLCullMode::None);
-                    encoder.set_depth_stencil_state(&state.depth_disabled);
-                    encoder.set_vertex_buffer(0, Some(&state.frames[slot_index].meshes.raw), 0);
-                    last_kind = Some(1);
-                    last_blend = None;
-                    last_camera = None;
-                    last_texture = None;
-                    last_depth = Some(false);
+                if cache.kind_changed(DrawKind::Mesh) {
                     tmesh_buffer_cache.reset();
+                    encoder.set_vertex_buffer(0, Some(&state.frames[slot_index].meshes.raw), 0);
                 }
-                if last_blend != Some(run.blend) {
+                if cache.cull_changed(CullMode::None) {
+                    encoder.set_cull_mode(MTLCullMode::None);
+                }
+                if cache.depth_changed(false) {
+                    encoder.set_depth_stencil_state(&state.depth_disabled);
+                }
+                if cache.pipeline_changed(DrawKind::Mesh, blend_key(run.blend)) {
                     encoder.set_render_pipeline_state(state.mesh_pipelines.get(run.blend));
-                    last_blend = Some(run.blend);
                 }
                 set_camera(
                     encoder,
                     1,
+                    0,
                     run.camera,
                     &frame.cameras,
                     state.projection,
-                    &mut last_camera,
+                    &mut cache,
                 );
                 encoder.draw_primitives(
                     MTLPrimitiveType::Triangle,
@@ -484,46 +506,66 @@ fn draw_inner(
                 let Some(texture) = textures.metal_texture(run.texture_handle) else {
                     continue;
                 };
-                if last_kind != Some(2) {
-                    last_kind = Some(2);
-                    last_blend = None;
-                    last_camera = None;
-                    last_texture = None;
-                    last_depth = None;
-                    tmesh_buffer_cache.reset();
+                let instance_offset =
+                    run.instance_start as u64 * mem::size_of::<TexturedMeshInstanceRaw>() as u64;
+                match cache.instance_buffer(DrawKind::TexturedMesh) {
+                    BufferUpdate::Bind => {
+                        tmesh_buffer_cache.reset();
+                        cache.invalidate_camera(0);
+                        encoder.set_vertex_buffer(
+                            1,
+                            Some(&state.frames[slot_index].tmesh_instances.raw),
+                            instance_offset,
+                        );
+                    }
+                    BufferUpdate::Offset => {
+                        encoder.set_vertex_buffer_offset(1, instance_offset);
+                    }
                 }
-                if last_blend != Some(run.blend) {
+                if cache.pipeline_changed(DrawKind::TexturedMesh, blend_key(run.blend)) {
                     encoder.set_render_pipeline_state(state.tmesh_pipelines.get(run.blend));
-                    last_blend = Some(run.blend);
                 }
-                if last_depth != Some(run.depth_test) {
+                if cache.depth_changed(run.depth_test) {
                     encoder.set_depth_stencil_state(if run.depth_test {
                         &state.depth_enabled
                     } else {
                         &state.depth_disabled
                     });
+                }
+                let cull = if run.depth_test {
+                    CullMode::Back
+                } else {
+                    CullMode::None
+                };
+                if cache.cull_changed(cull) {
                     encoder.set_cull_mode(if run.depth_test {
                         MTLCullMode::Back
                     } else {
                         MTLCullMode::None
                     });
-                    last_depth = Some(run.depth_test);
                 }
                 set_camera(
                     encoder,
                     2,
+                    1,
                     run.camera,
                     &frame.cameras,
                     state.projection,
-                    &mut last_camera,
+                    &mut cache,
                 );
-                if last_texture != Some((texture.id, true)) {
-                    bind_texture(encoder, texture, true);
-                    last_texture = Some((texture.id, true));
+                if cache.texture_changed(texture.id) {
+                    encoder.set_fragment_texture(0, Some(&texture.raw));
+                }
+                if cache.sampler_changed(texture.id, true) {
+                    encoder.set_fragment_sampler_state(0, Some(&texture.repeat_sampler));
                 }
                 if tmesh_buffer_cache.update_required(source) {
-                    if let Some(key) = source.cache_key() {
-                        let Some(cached) = state.cached_tmeshes.get(&key) else {
+                    if let Some(buffer_key) = source.buffer_key() {
+                        let Some(index) = cached_tmesh_index(buffer_key) else {
+                            tmesh_buffer_cache.reset();
+                            continue;
+                        };
+                        let Some(cached) = state.cached_tmeshes.get(index) else {
                             tmesh_buffer_cache.reset();
                             continue;
                         };
@@ -536,11 +578,6 @@ fn draw_inner(
                         );
                     }
                 }
-                encoder.set_vertex_buffer(
-                    1,
-                    Some(&state.frames[slot_index].tmesh_instances.raw),
-                    run.instance_start as u64 * mem::size_of::<TexturedMeshInstanceRaw>() as u64,
-                );
                 encoder.draw_primitives_instanced(
                     MTLPrimitiveType::Triangle,
                     source.vertex_start() as u64,
@@ -623,6 +660,7 @@ pub fn resize(state: &mut State, width: u32, height: u32) {
     state.layer.set_contents_scale(state.window.scale_factor());
     set_layer_size(&state.layer, width, height);
     state.depth = create_depth_target(&state.device, width, height);
+    set_depth_target(&state.render_pass, &state.depth);
 }
 
 pub fn set_present_config(
@@ -653,6 +691,7 @@ pub fn cleanup(state: &mut State) {
         state.cache_stats.saturated,
         state.cached_tmesh_bytes,
     );
+    state.cached_tmesh_slots.clear();
     state.cached_tmeshes.clear();
     state.cached_tmesh_bytes = 0;
     if let Err(error) = detach_layer(&state.window) {
@@ -809,28 +848,43 @@ fn create_depth_target(device: &DeviceRef, width: u32, height: u32) -> metal::Te
     device.new_texture(&desc)
 }
 
-fn render_pass<'a>(
-    color: &TextureRef,
-    depth: &TextureRef,
-    clear: [f32; 4],
-) -> &'a RenderPassDescriptorRef {
-    let pass = RenderPassDescriptor::new();
+fn create_render_pass(depth: &TextureRef) -> RenderPassDescriptor {
+    let pass = RenderPassDescriptor::new().to_owned();
     let color_attachment = pass.color_attachments().object_at(0).expect("attachment 0");
-    color_attachment.set_texture(Some(color));
     color_attachment.set_load_action(MTLLoadAction::Clear);
     color_attachment.set_store_action(MTLStoreAction::Store);
-    color_attachment.set_clear_color(MTLClearColor::new(
-        f64::from(clear[0]),
-        f64::from(clear[1]),
-        f64::from(clear[2]),
-        1.0,
-    ));
     let depth_attachment = pass.depth_attachment().expect("depth attachment");
     depth_attachment.set_texture(Some(depth));
     depth_attachment.set_load_action(MTLLoadAction::Clear);
     depth_attachment.set_store_action(MTLStoreAction::DontCare);
     depth_attachment.set_clear_depth(1.0);
     pass
+}
+
+#[inline(always)]
+fn configure_render_pass(pass: &RenderPassDescriptorRef, color: &TextureRef, clear: [f32; 4]) {
+    let attachment = pass.color_attachments().object_at(0).expect("attachment 0");
+    attachment.set_texture(Some(color));
+    attachment.set_clear_color(MTLClearColor::new(
+        f64::from(clear[0]),
+        f64::from(clear[1]),
+        f64::from(clear[2]),
+        1.0,
+    ));
+}
+
+#[inline(always)]
+fn clear_render_target(pass: &RenderPassDescriptorRef) {
+    pass.color_attachments()
+        .object_at(0)
+        .expect("attachment 0")
+        .set_texture(None);
+}
+
+fn set_depth_target(pass: &RenderPassDescriptorRef, depth: &TextureRef) {
+    pass.depth_attachment()
+        .expect("depth attachment")
+        .set_texture(Some(depth));
 }
 
 fn create_sampler(device: &DeviceRef, sampler: SamplerDesc) -> SamplerState {
@@ -916,15 +970,17 @@ fn upload_texture(queue: &CommandQueueRef, texture: &TextureRef, image: &RgbaIma
 
 fn ensure_cached_tmesh(
     device: &DeviceRef,
-    cache: &mut FastU64Map<CachedTMesh>,
+    slots: &mut FastU64Map<u32>,
+    cache: &mut Vec<CachedTMesh>,
     cache_bytes: &mut usize,
     stats: &mut CacheStats,
     key: TMeshCacheKey,
     vertices: &[TexturedMeshVertex],
-) -> bool {
-    if let Some(entry) = cache.get(&key) {
+) -> Option<u64> {
+    if let Some(&slot) = slots.get(&key) {
         stats.hits = stats.hits.saturating_add(1);
-        return entry.vertex_count == vertices.len() as u32;
+        let entry = &cache[slot as usize];
+        return (entry.vertex_count == vertices.len() as u32).then_some(u64::from(slot) + 1);
     }
     stats.misses = stats.misses.saturating_add(1);
     let bytes = mem::size_of_val(vertices);
@@ -933,33 +989,33 @@ fn ensure_cached_tmesh(
         || cache_bytes.saturating_add(bytes) > TMESH_CACHE_MAX_BYTES
     {
         stats.saturated = stats.saturated.saturating_add(1);
-        return false;
+        return None;
     }
+    let slot = u32::try_from(cache.len()).ok()?;
     let buffer = device.new_buffer_with_data(
         vertices.as_ptr().cast(),
         bytes as u64,
         MTLResourceOptions::StorageModeShared,
     );
-    cache.insert(
-        key,
-        CachedTMesh {
-            buffer,
-            vertex_count: vertices.len() as u32,
-        },
-    );
+    cache.push(CachedTMesh {
+        buffer,
+        vertex_count: vertices.len() as u32,
+    });
+    slots.insert(key, slot);
     *cache_bytes = cache_bytes.saturating_add(bytes);
-    true
+    Some(u64::from(slot) + 1)
 }
 
 fn set_camera(
     encoder: &RenderCommandEncoderRef,
     buffer_index: u64,
+    cache_slot: usize,
     camera: u8,
     cameras: &[Matrix4],
     fallback: Matrix4,
-    last_camera: &mut Option<u8>,
+    cache: &mut EncoderCache,
 ) {
-    if *last_camera == Some(camera) {
+    if !cache.camera_changed(cache_slot, camera) {
         return;
     }
     let projection = cameras.get(camera as usize).copied().unwrap_or(fallback);
@@ -968,19 +1024,6 @@ fn set_camera(
         buffer_index,
         mem::size_of_val(&columns) as u64,
         columns.as_ptr().cast(),
-    );
-    *last_camera = Some(camera);
-}
-
-fn bind_texture(encoder: &RenderCommandEncoderRef, texture: &Texture, repeat: bool) {
-    encoder.set_fragment_texture(0, Some(&texture.raw));
-    encoder.set_fragment_sampler_state(
-        0,
-        Some(if repeat {
-            &texture.repeat_sampler
-        } else {
-            &texture.sampler
-        }),
     );
 }
 
@@ -1090,6 +1133,21 @@ fn read_screenshot(
 }
 
 #[inline(always)]
+const fn blend_key(blend: BlendMode) -> u8 {
+    match blend {
+        BlendMode::Alpha => 0,
+        BlendMode::Add => 1,
+        BlendMode::Multiply => 2,
+        BlendMode::Subtract => 3,
+    }
+}
+
+#[inline(always)]
+fn cached_tmesh_index(buffer_key: u64) -> Option<usize> {
+    usize::try_from(buffer_key.checked_sub(1)?).ok()
+}
+
+#[inline(always)]
 fn elapsed_us(started: Instant) -> u32 {
     started.elapsed().as_micros().min(u128::from(u32::MAX)) as u32
 }
@@ -1121,4 +1179,62 @@ fn ortho_for_window(width: u32, height: u32) -> Matrix4 {
     let half_w = 0.5 * w;
     let half_h = 0.5 * h;
     glam::camera::rh::proj::opengl::orthographic(-half_w, half_w, -half_h, half_h, -1.0, 1.0)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn retained_render_pass_keeps_identity_when_reconfigured() {
+        autoreleasepool(|| {
+            let device = Device::system_default().expect("Metal device");
+            let depth = create_depth_target(&device, 64, 64);
+            let color_desc = TextureDescriptor::new();
+            color_desc.set_texture_type(MTLTextureType::D2);
+            color_desc.set_pixel_format(COLOR_FORMAT);
+            color_desc.set_width(64);
+            color_desc.set_height(64);
+            color_desc.set_usage(MTLTextureUsage::RenderTarget);
+            let color = device.new_texture(&color_desc);
+            let pass = create_render_pass(&depth);
+            let identity = pass.as_ptr();
+
+            configure_render_pass(&pass, &color, [0.1, 0.2, 0.3, 1.0]);
+            clear_render_target(&pass);
+            configure_render_pass(&pass, &color, [0.4, 0.5, 0.6, 1.0]);
+            clear_render_target(&pass);
+
+            assert_eq!(pass.as_ptr(), identity);
+        });
+    }
+
+    #[test]
+    fn retained_mesh_cache_returns_stable_dense_slots() {
+        autoreleasepool(|| {
+            let device = Device::system_default().expect("Metal device");
+            let mut slots = FastU64Map::default();
+            let mut cache = Vec::new();
+            let mut bytes = 0;
+            let mut stats = CacheStats::default();
+            let vertices = [TexturedMeshVertex::default(); 3];
+
+            let first = ensure_cached_tmesh(
+                &device, &mut slots, &mut cache, &mut bytes, &mut stats, 41, &vertices,
+            );
+            let hit = ensure_cached_tmesh(
+                &device, &mut slots, &mut cache, &mut bytes, &mut stats, 41, &vertices,
+            );
+            let second = ensure_cached_tmesh(
+                &device, &mut slots, &mut cache, &mut bytes, &mut stats, 99, &vertices,
+            );
+
+            assert_eq!(first, Some(1));
+            assert_eq!(hit, first);
+            assert_eq!(second, Some(2));
+            assert_eq!(cache.len(), 2);
+            assert_eq!(stats.hits, 1);
+            assert_eq!(stats.misses, 2);
+        });
+    }
 }

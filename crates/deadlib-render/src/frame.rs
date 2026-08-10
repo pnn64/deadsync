@@ -63,7 +63,7 @@ pub enum DrawOp {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct TexturedMeshSource {
-    cache_key: TMeshCacheKey,
+    buffer_key: u64,
     vertex_start: u32,
     vertex_count: u32,
 }
@@ -72,17 +72,17 @@ impl TexturedMeshSource {
     #[inline(always)]
     pub const fn transient(vertex_start: u32, vertex_count: u32) -> Self {
         Self {
-            cache_key: INVALID_TMESH_CACHE_KEY,
+            buffer_key: INVALID_TMESH_CACHE_KEY,
             vertex_start,
             vertex_count,
         }
     }
 
     #[inline(always)]
-    pub const fn cached(cache_key: TMeshCacheKey, vertex_count: u32) -> Self {
-        debug_assert!(cache_key != INVALID_TMESH_CACHE_KEY);
+    pub const fn cached(buffer_key: u64, vertex_count: u32) -> Self {
+        debug_assert!(buffer_key != INVALID_TMESH_CACHE_KEY);
         Self {
-            cache_key,
+            buffer_key,
             vertex_start: 0,
             vertex_count,
         }
@@ -99,17 +99,21 @@ impl TexturedMeshSource {
     }
 
     #[inline(always)]
-    pub const fn cache_key(self) -> Option<TMeshCacheKey> {
-        if self.cache_key == INVALID_TMESH_CACHE_KEY {
+    /// Returns the backend-local identity of retained GPU storage.
+    ///
+    /// This is not the presentation geometry's cache key. Backends may return
+    /// a dense slot or another non-zero identity that makes recording cheap.
+    pub const fn buffer_key(self) -> Option<u64> {
+        if self.buffer_key == INVALID_TMESH_CACHE_KEY {
             None
         } else {
-            Some(self.cache_key)
+            Some(self.buffer_key)
         }
     }
 
     #[inline(always)]
     pub const fn shares_vertex_buffer(self, other: Self) -> bool {
-        self.cache_key == other.cache_key
+        self.buffer_key == other.buffer_key
     }
 }
 
@@ -166,12 +170,17 @@ impl TexturedMeshUploads {
     }
 }
 
+/// Resolves frame geometry to retained or frame-local upload storage.
+///
+/// `ensure_cached` returns a non-zero backend-local buffer identity when the
+/// geometry is retained. The same identity must always refer to the same GPU
+/// buffer for the lifetime of `uploads`' consumer.
 pub fn resolve_textured_meshes<EnsureCached>(
     frame: &RenderFrame,
     uploads: &mut TexturedMeshUploads,
     mut ensure_cached: EnsureCached,
 ) where
-    EnsureCached: FnMut(TMeshCacheKey, &[TexturedMeshVertex]) -> bool,
+    EnsureCached: FnMut(TMeshCacheKey, &[TexturedMeshVertex]) -> Option<u64>,
 {
     uploads.vertices.clear();
     uploads.sources.clear();
@@ -182,10 +191,10 @@ pub fn resolve_textured_meshes<EnsureCached>(
     for geometry in &frame.tmesh_geometries {
         let vertices = geometry.vertices.as_ref();
         if geometry.cache_key != INVALID_TMESH_CACHE_KEY
-            && ensure_cached(geometry.cache_key, vertices)
+            && let Some(buffer_key) = ensure_cached(geometry.cache_key, vertices)
         {
             uploads.sources.push(TexturedMeshSource::cached(
-                geometry.cache_key,
+                buffer_key,
                 saturating_u32(vertices.len()),
             ));
             continue;
@@ -322,15 +331,15 @@ mod tests {
         ]);
         let mut uploads = TexturedMeshUploads::default();
 
-        resolve_textured_meshes(&frame, &mut uploads, |key, _| key == 7);
+        resolve_textured_meshes(&frame, &mut uploads, |key, _| (key == 7).then_some(70));
 
         assert_eq!(uploads.sources.len(), 3);
-        assert_eq!(uploads.sources[0].cache_key(), Some(7));
+        assert_eq!(uploads.sources[0].buffer_key(), Some(70));
         assert_eq!(uploads.sources[0].vertex_count(), 2);
-        assert_eq!(uploads.sources[1].cache_key(), None);
+        assert_eq!(uploads.sources[1].buffer_key(), None);
         assert_eq!(uploads.sources[1].vertex_start(), 0);
         assert_eq!(uploads.sources[1].vertex_count(), 1);
-        assert_eq!(uploads.sources[2].cache_key(), None);
+        assert_eq!(uploads.sources[2].buffer_key(), None);
         assert_eq!(uploads.sources[2].vertex_start(), 1);
         assert_eq!(uploads.sources[2].vertex_count(), 2);
         assert_eq!(
@@ -350,11 +359,11 @@ mod tests {
             vertices: TexturedMeshVertices::Transient(vec![vertex(1.0), vertex(2.0)]),
             cache_key: INVALID_TMESH_CACHE_KEY,
         }]);
-        resolve_textured_meshes(&populated, &mut uploads, |_, _| false);
+        resolve_textured_meshes(&populated, &mut uploads, |_, _| None);
         let vertex_capacity = uploads.vertices.capacity();
         let source_capacity = uploads.sources.capacity();
 
-        resolve_textured_meshes(&frame(Vec::new()), &mut uploads, |_, _| false);
+        resolve_textured_meshes(&frame(Vec::new()), &mut uploads, |_, _| None);
 
         assert!(uploads.vertices.is_empty());
         assert!(uploads.sources.is_empty());
