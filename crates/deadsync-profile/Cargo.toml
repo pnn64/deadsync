@@ -13,7 +13,7 @@ required-features = ["bench-support"]
 bench-support = []
 
 [dependencies]
-bincode = "2.0.1"
+bincode = { package = "deadlib-bincode", version = "=2.0.1", path = "../deadlib-bincode" }
 bitflags = "2.13.1"
 chrono = "0.4.45"
 deadlib-platform = { path = "../deadlib-platform" }

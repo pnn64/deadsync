@@ -9,7 +9,7 @@ name = "score_cache_hot_paths"
 harness = false
 
 [dependencies]
-bincode = "2.0.1"
+bincode = { package = "deadlib-bincode", version = "=2.0.1", path = "../deadlib-bincode" }
 chrono = "0.4.45"
 deadsync-chart = { path = "../deadsync-chart" }
 deadsync-core = { path = "../deadsync-core" }

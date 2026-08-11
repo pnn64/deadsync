@@ -1,0 +1,55 @@
+[package]
+name = "deadlib-bincode"
+version = "2.0.1"
+edition = "2021"
+rust-version = "1.86.0"
+description = "DeadSync-maintained bincode 2-compatible binary codec"
+license = "MIT"
+repository = "https://github.com/pnn64/deadsync"
+documentation = "https://docs.rs/deadlib-bincode"
+readme = "README.md"
+categories = ["encoding", "network-programming"]
+keywords = ["binary", "encode", "decode", "serialization"]
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
+
+[features]
+alloc = ["serde?/alloc"]
+default = ["std", "derive"]
+derive = ["bincode_derive"]
+std = ["alloc", "serde?/std"]
+
+[lib]
+name = "bincode"
+path = "src/lib.rs"
+
+[dependencies]
+bincode_derive = { package = "deadlib-bincode-derive", version = "=2.0.1", path = "derive", optional = true }
+serde = { version = "1.0", optional = true, default-features = false }
+
+[dev-dependencies]
+bumpalo = { version = "3.16.0", features = ["collections"] }
+chrono = { version = "0.4", features = ["serde"] }
+criterion = "0.8.2"
+glam = { version = "0.33.3", features = ["serde"] }
+ouroboros = "0.18.3"
+rand = "0.10.2"
+serde = { version = "1.0", features = ["derive"] }
+serde_derive = "1.0"
+serde_json = { version = "1.0", default-features = false }
+tempfile = "3.2"
+uuid = { version = "1.1", features = ["serde"] }
+
+[[bench]]
+name = "inline"
+harness = false
+
+[[bench]]
+name = "string"
+harness = false
+
+[[bench]]
+name = "varint"
+harness = false

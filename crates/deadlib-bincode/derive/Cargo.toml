@@ -1,0 +1,23 @@
+[package]
+name = "deadlib-bincode-derive"
+version = "2.0.1"
+edition = "2021"
+rust-version = "1.86.0"
+description = "Derive macros for the DeadSync-maintained bincode 2 fork"
+license = "MIT"
+repository = "https://github.com/pnn64/deadsync"
+documentation = "https://docs.rs/deadlib-bincode-derive"
+readme = "README.md"
+categories = ["encoding", "network-programming"]
+keywords = ["binary", "encode", "decode", "serialization"]
+
+[lib]
+name = "bincode_derive"
+path = "src/lib.rs"
+proc-macro = true
+# Embedded Virtue docs describe its former standalone public API; bincode's
+# derive behavior is covered by this crate's unit tests and the parent suite.
+doctest = false
+
+[dev-dependencies]
+proc-macro2 = "1.0"
