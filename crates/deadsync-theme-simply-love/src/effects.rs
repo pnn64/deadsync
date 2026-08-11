@@ -7,8 +7,9 @@ use deadsync_config::prelude::{
     LogLevel, MachineBarColor, MachineEvaluationStyle, MachineFont, MachinePreferredPlayMode,
     MachinePreferredPlayStyle, NewPackMode, NoteScrollClock, RandomBackgroundMode,
     SelectMusicItlRankMode, SelectMusicItlWheelMode, SelectMusicPatternInfoMode,
-    SelectMusicScoreboxPlacement, SelectMusicSongSelectBgMode, SelectMusicStepArtistBoxMode,
-    SelectMusicWheelStyle, SmxPackName, SmxPadPreset, SrpgVariant, VersionOverlaySide, VisualStyle,
+    SelectMusicScoreboxPlacement, SelectMusicSeriesSource, SelectMusicSongSelectBgMode,
+    SelectMusicStepArtistBoxMode, SelectMusicWheelStyle, SmxPackName, SmxPadPreset, SrpgVariant,
+    VersionOverlaySide, VisualStyle,
 };
 use deadsync_input::{InputBinding, KeyCode, VirtualAction};
 use deadsync_profile::{ActiveProfile, PlayMode, PlayStyle, PlayerSide};
@@ -511,6 +512,7 @@ pub enum SimplyLoveSelectMusicConfigRequest {
     WheelStyle(SelectMusicWheelStyle),
     HideInactiveSeries(bool),
     SortBySeries(bool),
+    SeriesSource(SelectMusicSeriesSource),
     SongSelectBackground(SelectMusicSongSelectBgMode),
     AllowProfileSwitch(bool),
     ShowCdTitles(bool),

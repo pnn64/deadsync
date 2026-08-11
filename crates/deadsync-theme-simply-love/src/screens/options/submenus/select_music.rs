@@ -91,6 +91,15 @@ pub(in crate::screens::options) const SELECT_MUSIC_OPTIONS_ROWS: &[SubRow] = &[
         inline: true,
     },
     SubRow {
+        id: SubRowId::SeriesSource,
+        label: lookup_key("OptionsSelectMusic", "SeriesSource"),
+        choices: &[
+            localized_choice("OptionsSelectMusic", "SeriesSourcePackIni"),
+            localized_choice("OptionsSelectMusic", "SeriesSourceFolder"),
+        ],
+        inline: true,
+    },
+    SubRow {
         id: SubRowId::SongSelectBg,
         label: lookup_key("OptionsSelectMusic", "SongSelectBG"),
         choices: &[
@@ -361,6 +370,14 @@ pub(in crate::screens::options) const SELECT_MUSIC_OPTIONS_ITEMS: &[Item] = &[
         help: &[HelpEntry::Paragraph(lookup_key(
             "OptionsSelectMusicHelp",
             "SeriesSortHelp",
+        ))],
+    },
+    Item {
+        id: ItemId::SmSeriesSource,
+        name: lookup_key("OptionsSelectMusic", "SeriesSource"),
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsSelectMusicHelp",
+            "SeriesSourceHelp",
         ))],
     },
     Item {

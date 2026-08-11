@@ -245,6 +245,7 @@ pub(crate) fn policy_view(config: &config::Config) -> SelectMusicPolicyView {
             wheel_style: config.select_music_wheel_style,
             hide_inactive_series: config.hide_inactive_series,
             sort_by_series: config.sort_music_wheel_by_series,
+            series_source: config.select_music_series_source,
             new_pack_mode: config.select_music_new_pack_mode,
             show_srpg_shop: config.show_srpg_shop,
             srpg10_visuals: config.visual_style.is_srpg()

@@ -129,6 +129,7 @@ pub enum SubRowId {
     MusicWheelStyle,
     HideInactiveSeries,
     SeriesSort,
+    SeriesSource,
     SongSelectBg,
     SwitchProfile,
     ShowCdTitles,

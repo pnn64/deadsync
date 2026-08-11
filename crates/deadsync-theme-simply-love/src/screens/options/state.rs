@@ -1201,6 +1201,12 @@ pub fn init(view: OptionsInitView) -> State {
     set_choice_by_id(
         &mut state.sub[SubmenuKind::SelectMusic].choice_indices,
         SELECT_MUSIC_OPTIONS_ROWS,
+        SubRowId::SeriesSource,
+        select_music_series_source_choice_index(cfg.select_music_series_source),
+    );
+    set_choice_by_id(
+        &mut state.sub[SubmenuKind::SelectMusic].choice_indices,
+        SELECT_MUSIC_OPTIONS_ROWS,
         SubRowId::SongSelectBg,
         select_music_song_select_bg_mode_choice_index(cfg.select_music_song_select_bg_mode),
     );

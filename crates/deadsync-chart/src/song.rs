@@ -213,7 +213,10 @@ pub struct SongPack {
     pub name: String,
     pub sort_title: String,
     pub translit_title: String,
+    /// Series declared by the pack's `Pack.ini` metadata.
     pub series: String,
+    /// Series implied by `Songs/Series/Pack/Song` directory nesting.
+    pub folder_series: String,
     pub year: i32,
     pub sync_pref: SyncPref,
     pub directory: PathBuf,

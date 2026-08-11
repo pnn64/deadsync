@@ -148,6 +148,8 @@ pub struct Config {
     pub show_music_wheel_lamps: bool,
     /// Start Select Music in the nested Series sort instead of Group sort.
     pub sort_music_wheel_by_series: bool,
+    /// Choose whether Series names come from Pack.ini or one folder above each pack.
+    pub select_music_series_source: crate::theme::SelectMusicSeriesSource,
     /// Hide inactive parent-series folders while browsing an open section.
     pub hide_inactive_series: bool,
     pub select_music_itl_rank_mode: SelectMusicItlRankMode,
@@ -423,6 +425,7 @@ impl Default for Config {
             show_music_wheel_grades: select_music.show_wheel_grades,
             show_music_wheel_lamps: select_music.show_wheel_lamps,
             sort_music_wheel_by_series: select_music.sort_wheel_by_series,
+            select_music_series_source: select_music.series_source,
             hide_inactive_series: select_music.hide_inactive_series,
             select_music_itl_rank_mode: select_music.itl_rank_mode,
             select_music_itl_wheel_mode: select_music.itl_wheel_mode,

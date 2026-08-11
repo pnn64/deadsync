@@ -4,7 +4,7 @@ use crate::assets::{self, AssetManager};
 use crate::assets::{FontRole, machine_font_key};
 use crate::config::{
     BreakdownStyle, GraphOrientation, GraphOrigin, NewPackMode, SelectMusicPatternInfoMode,
-    SyncGraphMode,
+    SelectMusicSeriesSource, SyncGraphMode,
 };
 
 use crate::rgba_const;
@@ -2414,6 +2414,7 @@ enum SeriesTopLevel {
 fn series_pack_entries(
     group_entries: &[MusicWheelEntry],
     packs: &[SongPack],
+    source: SelectMusicSeriesSource,
 ) -> Vec<SeriesPackEntries> {
     let starts: Vec<usize> = group_entries
         .iter()
@@ -2445,7 +2446,11 @@ fn series_pack_entries(
             } else {
                 sort_title
             };
-            let series = (!pack.series.trim().is_empty()).then(|| pack.series.trim().to_string());
+            let series = match source {
+                SelectMusicSeriesSource::PackIni => pack.series.trim(),
+                SelectMusicSeriesSource::Folder => pack.folder_series.trim(),
+            };
+            let series = (!series.is_empty()).then(|| series.to_string());
             Some(SeriesPackEntries {
                 sort_key: sort_key.to_ascii_lowercase(),
                 series,
@@ -2470,13 +2475,14 @@ fn push_series_pack(
     entries.extend(pack.entries);
 }
 
-fn build_series_grouped_entries(
+fn build_series_grouped_entries_from(
     group_entries: &[MusicWheelEntry],
     packs: &[SongPack],
+    source: SelectMusicSeriesSource,
 ) -> Vec<MusicWheelEntry> {
     let mut series = FxHashMap::<String, Vec<SeriesPackEntries>>::default();
     let mut top_level = Vec::new();
-    for pack in series_pack_entries(group_entries, packs) {
+    for pack in series_pack_entries(group_entries, packs, source) {
         if let Some(name) = pack.series.clone() {
             series.entry(name).or_default().push(pack);
         } else {
@@ -2524,6 +2530,14 @@ fn build_series_grouped_entries(
         }
     }
     entries
+}
+
+#[cfg(test)]
+fn build_series_grouped_entries(
+    group_entries: &[MusicWheelEntry],
+    packs: &[SongPack],
+) -> Vec<MusicWheelEntry> {
+    build_series_grouped_entries_from(group_entries, packs, SelectMusicSeriesSource::PackIni)
 }
 
 fn song_group_color_indices(packs: &[SongPack]) -> Vec<usize> {
@@ -3450,8 +3464,12 @@ pub fn init(init_view: SelectMusicInitView) -> State {
         }
     }
 
-    let series_entries: Arc<[MusicWheelEntry]> =
-        build_series_grouped_entries(&all_entries, song_cache.as_slice()).into();
+    let series_entries: Arc<[MusicWheelEntry]> = build_series_grouped_entries_from(
+        &all_entries,
+        song_cache.as_slice(),
+        interaction.series_source,
+    )
+    .into();
     let title_entries = build_title_grouped_entries(&all_entries).into();
     let artist_entries = build_artist_grouped_entries(&all_entries).into();
     let genre_entries = build_genre_grouped_entries(&all_entries).into();
@@ -7253,25 +7271,9 @@ fn pack_and_song_name_from_lobby_path(song_path: &str) -> Option<(String, String
     deadsync_simfile::playlist::pack_and_song_name_from_path(song_path)
 }
 
-fn lobby_song_path(song: &SongData, song_scan_roots: &[PathBuf]) -> Option<String> {
-    let song_dir = song.simfile_path.parent()?;
-    for root in song_scan_roots {
-        if let Ok(relative) = song_dir.strip_prefix(root.as_path()) {
-            let normalized = normalize_lobby_song_path(relative.to_string_lossy().as_ref());
-            if !normalized.is_empty() {
-                return Some(normalized);
-            }
-        }
-    }
-
-    let song_dir = song_dir.file_name()?.to_string_lossy();
-    let group_dir = song
-        .simfile_path
-        .parent()?
-        .parent()?
-        .file_name()?
-        .to_string_lossy();
-    Some(format!("{group_dir}/{song_dir}"))
+fn lobby_song_path(song: &SongData, _song_scan_roots: &[PathBuf]) -> Option<String> {
+    let (pack, song) = song_pack_and_dir_name(song)?;
+    Some(format!("{pack}/{song}"))
 }
 
 fn find_song_by_lobby_path(state: &State, song_path: &str) -> Option<Arc<SongData>> {
@@ -14640,7 +14642,9 @@ mod tests {
         sync_beat_axis_rows, sync_beat_marker_rows, sync_beat_row_y, sync_bias_axis_pos,
         sync_graph_cols, sync_low_confidence_warning, sync_overlay_graph_size,
     };
-    use crate::config::{GraphOrientation, GraphOrigin, SelectMusicWheelStyle};
+    use crate::config::{
+        GraphOrientation, GraphOrigin, SelectMusicSeriesSource, SelectMusicWheelStyle,
+    };
     use crate::screens::ThemeEffect;
     use crate::screens::components::select_music::music_wheel;
     use crate::views::ProfilePickerView;
@@ -15424,6 +15428,17 @@ mod tests {
     }
 
     #[test]
+    fn lobby_song_path_omits_filesystem_series() {
+        let mut song = (*test_song_in_pack("Pack", "Song", "Nested Song")).clone();
+        song.simfile_path = PathBuf::from("/songs/Series/Pack/Song/chart.sm");
+
+        assert_eq!(
+            super::lobby_song_path(&song, &[PathBuf::from("/songs")]).as_deref(),
+            Some("Pack/Song")
+        );
+    }
+
+    #[test]
     fn replaygain_prewarm_emits_once_and_precedes_later_media() {
         let mut song_a = (*test_song("Song A1")).clone();
         song_a.music_path = Some(PathBuf::from("Pack A/Song A1/music.ogg"));
@@ -16198,6 +16213,7 @@ mod tests {
             sort_title: name.to_string(),
             translit_title: String::new(),
             series: series.to_string(),
+            folder_series: String::new(),
             year: 0,
             sync_pref: SyncPref::Default,
             directory: PathBuf::from(name),
@@ -17786,6 +17802,64 @@ mod tests {
                 ..
             } if name.as_ref() == "Pack B" && parent.as_ref() == "ITG Series"
         ));
+    }
+
+    #[test]
+    fn series_sort_can_use_filesystem_folder_source() {
+        let mut packs = [test_pack("Pack A", "Metadata A"), test_pack("Pack B", "")];
+        packs[0].folder_series = "Folder Series".to_string();
+        packs[1].folder_series = "Folder Series".to_string();
+
+        let entries = super::build_series_grouped_entries_from(
+            &test_entries(),
+            &packs,
+            SelectMusicSeriesSource::Folder,
+        );
+
+        assert!(matches!(
+            entries.first(),
+            Some(super::MusicWheelEntry::PackHeader {
+                name,
+                song_count: 3,
+                pack_key: None,
+                ..
+            }) if name.as_ref() == "Folder Series"
+        ));
+        assert!(!entries.iter().any(|entry| {
+            matches!(
+                entry,
+                super::MusicWheelEntry::PackHeader { name, .. }
+                    if name.as_ref() == "Metadata A"
+            )
+        }));
+    }
+
+    #[test]
+    fn filesystem_series_source_does_not_fall_back_to_pack_ini() {
+        let packs = [test_pack("Pack A", "Metadata Series")];
+
+        let entries = super::build_series_grouped_entries_from(
+            &test_entries(),
+            &packs,
+            SelectMusicSeriesSource::Folder,
+        );
+
+        assert!(matches!(
+            entries.first(),
+            Some(super::MusicWheelEntry::PackHeader {
+                name,
+                pack_key: Some(_),
+                parent_series: None,
+                ..
+            }) if name.as_ref() == "Pack A"
+        ));
+        assert!(!entries.iter().any(|entry| {
+            matches!(
+                entry,
+                super::MusicWheelEntry::PackHeader { name, .. }
+                    if name.as_ref() == "Metadata Series"
+            )
+        }));
     }
 
     #[test]

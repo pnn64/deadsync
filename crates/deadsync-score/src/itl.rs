@@ -2040,6 +2040,7 @@ mod tests {
             sort_title: String::new(),
             translit_title: String::new(),
             series: String::new(),
+            folder_series: String::new(),
             year: 0,
             sync_pref: deadsync_chart::SyncPref::Default,
             directory: PathBuf::new(),

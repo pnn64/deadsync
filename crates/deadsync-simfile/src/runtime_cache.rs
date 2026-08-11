@@ -247,6 +247,7 @@ mod tests {
             sort_title: group_name.to_string(),
             translit_title: String::new(),
             series: String::new(),
+            folder_series: String::new(),
             year: 0,
             sync_pref,
             directory: PathBuf::from("Songs").join(group_name),

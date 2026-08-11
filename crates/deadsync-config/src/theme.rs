@@ -400,6 +400,34 @@ impl FromStr for SelectMusicWheelStyle {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum SelectMusicSeriesSource {
+    #[default]
+    PackIni,
+    Folder,
+}
+
+impl SelectMusicSeriesSource {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::PackIni => "PackIni",
+            Self::Folder => "Folder",
+        }
+    }
+}
+
+impl FromStr for SelectMusicSeriesSource {
+    type Err = ();
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        match value.trim().to_ascii_lowercase().as_str() {
+            "packini" | "pack.ini" | "metadata" => Ok(Self::PackIni),
+            "folder" | "folders" | "directory" | "filesystem" => Ok(Self::Folder),
+            _ => Err(()),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum VisualStyle {
     Hearts,

@@ -24,6 +24,7 @@ pub struct PackScan {
     pub sort_title: String,
     pub translit_title: String,
     pub series: String,
+    pub folder_series: String,
     pub year: i32,
     pub sync_pref: SyncPref,
     pub banner_path: Option<PathBuf>,
@@ -467,23 +468,141 @@ pub fn scan_song_roots(song_roots: &[PathBuf]) -> (Vec<PackScan>, Vec<ScanFailur
     let mut packs = Vec::new();
     let mut failures = Vec::new();
     for songs_root in song_roots {
-        match rssp::pack::scan_songs_dir(songs_root, rssp::pack::ScanOpt::default()) {
-            Ok(found) => packs.extend(found.into_iter().map(PackScan::from)),
-            Err(error) => failures.push(ScanFailure {
-                path: songs_root.clone(),
-                error: format!("{error:?}"),
-            }),
+        let top_level = match child_dirs(songs_root) {
+            Ok(dirs) => dirs,
+            Err(error) => {
+                failures.push(ScanFailure {
+                    path: songs_root.clone(),
+                    error: error.to_string(),
+                });
+                continue;
+            }
+        };
+        for path in top_level {
+            let flat = match scan_pack(&path) {
+                Ok(pack) => pack,
+                Err(error) => {
+                    failures.push(ScanFailure { path, error });
+                    continue;
+                }
+            };
+            let mut nested = scan_nested_packs(&path, &mut failures);
+            if flat.is_some() && !nested.is_empty() {
+                failures.push(ScanFailure {
+                    path: path.clone(),
+                    error: "top-level song folder contains both direct songs and nested packs"
+                        .to_string(),
+                });
+                continue;
+            }
+            if let Some(pack) = flat {
+                packs.push(pack);
+            } else {
+                packs.append(&mut nested);
+            }
         }
     }
+    reject_series_collisions(&mut packs, &mut failures);
     (merge_pack_scans(packs), failures)
 }
 
-pub fn scan_pack_dirs(pack_dirs: &[PathBuf]) -> (Vec<PackScan>, Vec<ScanFailure>) {
+fn child_dirs(dir: &Path) -> std::io::Result<Vec<PathBuf>> {
+    let mut dirs = fs::read_dir(dir)?
+        .filter_map(Result::ok)
+        .map(|entry| entry.path())
+        .filter(|path| {
+            path.is_dir()
+                && !path
+                    .file_name()
+                    .is_some_and(|name| name.to_string_lossy().starts_with("._"))
+        })
+        .collect::<Vec<_>>();
+    dirs.sort_by_cached_key(|path| {
+        path.file_name()
+            .map(|name| name.to_string_lossy().to_ascii_lowercase())
+            .unwrap_or_default()
+    });
+    Ok(dirs)
+}
+
+fn scan_pack(path: &Path) -> Result<Option<PackScan>, String> {
+    rssp::pack::scan_pack_dir(path, rssp::pack::ScanOpt::default())
+        .map(|pack| pack.map(PackScan::from))
+        .map_err(|error| format!("{error:?}"))
+}
+
+fn scan_nested_packs(series_dir: &Path, failures: &mut Vec<ScanFailure>) -> Vec<PackScan> {
+    let series = series_dir
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or_default();
+    if series.is_empty() {
+        return Vec::new();
+    }
+    let nested_dirs = match child_dirs(series_dir) {
+        Ok(dirs) => dirs,
+        Err(error) => {
+            failures.push(ScanFailure {
+                path: series_dir.to_path_buf(),
+                error: error.to_string(),
+            });
+            return Vec::new();
+        }
+    };
+    let mut packs = Vec::new();
+    for path in nested_dirs {
+        match scan_pack(&path) {
+            Ok(Some(mut pack)) => {
+                pack.folder_series = series.to_string();
+                packs.push(pack);
+            }
+            Ok(None) => {}
+            Err(error) => failures.push(ScanFailure { path, error }),
+        }
+    }
+    packs
+}
+
+fn reject_series_collisions(packs: &mut Vec<PackScan>, failures: &mut Vec<ScanFailure>) {
+    let mut locations = HashMap::<String, (String, PathBuf)>::with_capacity(packs.len());
+    let mut rejected = Vec::new();
+    for pack in packs.iter() {
+        let group_key = ci_key(&pack.group_name);
+        let series_key = ci_key(&pack.folder_series);
+        if let Some((known_series, known_path)) = locations.get(&group_key) {
+            if known_series != &series_key {
+                rejected.push(group_key);
+                failures.push(ScanFailure {
+                    path: pack.dir.clone(),
+                    error: format!(
+                        "pack folder '{}' also exists under a different filesystem series at '{}'",
+                        pack.group_name,
+                        known_path.display()
+                    ),
+                });
+            }
+        } else {
+            locations.insert(group_key, (series_key, pack.dir.clone()));
+        }
+    }
+    rejected.sort_unstable();
+    rejected.dedup();
+    packs.retain(|pack| rejected.binary_search(&ci_key(&pack.group_name)).is_err());
+}
+
+pub fn scan_pack_dirs(
+    pack_dirs: &[PathBuf],
+    song_roots: &[PathBuf],
+) -> (Vec<PackScan>, Vec<ScanFailure>) {
     let mut packs = Vec::new();
     let mut failures = Vec::new();
     for pack_dir in pack_dirs {
         match rssp::pack::scan_pack_dir(pack_dir, rssp::pack::ScanOpt::default()) {
-            Ok(Some(pack)) => packs.push(PackScan::from(pack)),
+            Ok(Some(pack)) => {
+                let mut pack = PackScan::from(pack);
+                pack.folder_series = folder_series_for_pack(pack_dir, song_roots);
+                packs.push(pack);
+            }
             Ok(None) => {}
             Err(error) => failures.push(ScanFailure {
                 path: pack_dir.clone(),
@@ -491,7 +610,19 @@ pub fn scan_pack_dirs(pack_dirs: &[PathBuf]) -> (Vec<PackScan>, Vec<ScanFailure>
             }),
         }
     }
+    reject_series_collisions(&mut packs, &mut failures);
     (merge_pack_scans(packs), failures)
+}
+
+fn folder_series_for_pack(pack_dir: &Path, song_roots: &[PathBuf]) -> String {
+    song_roots
+        .iter()
+        .find_map(|root| {
+            let relative = pack_dir.strip_prefix(root).ok()?;
+            (relative.components().count() == 2)
+                .then(|| relative.parent()?.file_name()?.to_str().map(str::to_owned))?
+        })
+        .unwrap_or_default()
 }
 
 pub fn merge_pack_scans(mut packs: Vec<PackScan>) -> Vec<PackScan> {
@@ -536,11 +667,9 @@ pub fn collect_reload_pack_dirs(
             push_unique_path(dir.to_path_buf(), &mut pack_dirs, &mut pack_dir_keys);
         }
 
-        let Some(file_name) = dir.file_name().and_then(|name| name.to_str()) else {
-            continue;
-        };
+        let relative = reload_pack_relative_path(dir, song_roots);
         for root in song_roots {
-            let candidate = root.join(file_name);
+            let candidate = root.join(&relative);
             if candidate.is_dir() {
                 push_unique_path(candidate, &mut pack_dirs, &mut pack_dir_keys);
             }
@@ -550,6 +679,17 @@ pub fn collect_reload_pack_dirs(
     (pack_dirs, pack_keys)
 }
 
+fn reload_pack_relative_path(dir: &Path, song_roots: &[PathBuf]) -> PathBuf {
+    for root in song_roots {
+        if let Ok(relative) = dir.strip_prefix(root)
+            && matches!(relative.components().count(), 1 | 2)
+        {
+            return relative.to_path_buf();
+        }
+    }
+    dir.file_name().map(PathBuf::from).unwrap_or_default()
+}
+
 pub fn empty_song_pack_from_scan(pack: &PackScan) -> SongPack {
     SongPack {
         group_name: pack.group_name.clone(),
@@ -557,6 +697,7 @@ pub fn empty_song_pack_from_scan(pack: &PackScan) -> SongPack {
         sort_title: pack.sort_title.clone(),
         translit_title: pack.translit_title.clone(),
         series: pack.series.clone(),
+        folder_series: pack.folder_series.clone(),
         year: pack.year,
         sync_pref: pack.sync_pref,
         directory: pack.dir.clone(),
@@ -951,7 +1092,7 @@ pub fn reload_song_dirs_runtime<Progress, Process, NeverCache>(
         packs: pack_keys.len(),
     });
     let started = Instant::now();
-    let (packs, failures) = scan_pack_dirs(&scan_dirs);
+    let (packs, failures) = scan_pack_dirs(&scan_dirs, &input.song_roots);
     emit_scan_failures("pack dir", &failures, &mut event);
     let (reloaded_packs, stats) = load_runtime_pack_scans(
         packs,
@@ -1223,6 +1364,7 @@ impl From<RsspPackScan> for PackScan {
             sort_title: pack.sort_title,
             translit_title: pack.translit_title,
             series: pack.series,
+            folder_series: String::new(),
             year: pack.year,
             sync_pref: sync_pref_from_rssp(pack.sync_pref),
             banner_path: pack.banner_path,
@@ -1294,6 +1436,7 @@ mod tests {
             sort_title: display_title.to_string(),
             translit_title: display_title.to_string(),
             series: String::new(),
+            folder_series: String::new(),
             year: 0,
             version: i32::from(has_pack_ini),
             has_pack_ini,
@@ -1330,6 +1473,7 @@ mod tests {
             sort_title: sort_title.to_string(),
             translit_title: sort_title.to_string(),
             series: String::new(),
+            folder_series: String::new(),
             year: 0,
             sync_pref: SyncPref::Default,
             directory: root.join(group_name),
@@ -1679,6 +1823,113 @@ mod tests {
         assert_eq!(packs[0].songs[0].simfile, song.join("song.sm"));
         assert_eq!(failures.len(), 1);
         assert_eq!(failures[0].path, missing);
+
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn collect_reload_pack_dirs_preserves_series_relative_path() {
+        let root = test_dir("reload-nested-pack-dirs");
+        let base = root.join("base");
+        let extra = root.join("extra");
+        let base_pack = base.join("Series").join("Pack");
+        let extra_pack = extra.join("Series").join("Pack");
+        fs::create_dir_all(&base_pack).unwrap();
+        fs::create_dir_all(&extra_pack).unwrap();
+
+        let (dirs, keys) = collect_reload_pack_dirs(
+            &[base.clone(), extra.clone()],
+            std::slice::from_ref(&base_pack),
+        );
+
+        assert_eq!(dirs.len(), 2);
+        assert!(dirs.contains(&base_pack));
+        assert!(dirs.contains(&extra_pack));
+        assert_eq!(keys, ["pack"]);
+
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn scan_song_roots_loads_flat_and_one_level_nested_packs() {
+        let root = test_dir("scan-folder-series");
+        let flat_song = root.join("Flat Pack").join("Flat Song");
+        let nested_pack = root.join("Folder Series").join("Nested Pack");
+        let nested_song = nested_pack.join("Nested Song");
+        let too_deep = root
+            .join("Too Deep")
+            .join("Level Two")
+            .join("Deep Pack")
+            .join("Deep Song");
+        fs::create_dir_all(&flat_song).unwrap();
+        fs::create_dir_all(&nested_song).unwrap();
+        fs::create_dir_all(&too_deep).unwrap();
+        fs::write(flat_song.join("song.sm"), b"#TITLE:Flat;").unwrap();
+        fs::write(nested_song.join("song.sm"), b"#TITLE:Nested;").unwrap();
+        fs::write(too_deep.join("song.sm"), b"#TITLE:Deep;").unwrap();
+        fs::write(
+            nested_pack.join("Pack.ini"),
+            b"[Group]\nVersion=1\nSeries=Metadata Series\n",
+        )
+        .unwrap();
+
+        let (packs, failures) = scan_song_roots(std::slice::from_ref(&root));
+
+        assert!(failures.is_empty());
+        assert_eq!(packs.len(), 2);
+        let flat = packs
+            .iter()
+            .find(|pack| pack.group_name == "Flat Pack")
+            .unwrap();
+        assert!(flat.folder_series.is_empty());
+        let nested = packs
+            .iter()
+            .find(|pack| pack.group_name == "Nested Pack")
+            .unwrap();
+        assert_eq!(nested.series, "Metadata Series");
+        assert_eq!(nested.folder_series, "Folder Series");
+        assert_eq!(nested.dir, nested_pack);
+
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn scan_song_roots_rejects_mixed_pack_and_series_folder() {
+        let root = test_dir("scan-mixed-folder");
+        let direct_song = root.join("Mixed").join("Direct Song");
+        let nested_song = root.join("Mixed").join("Nested Pack").join("Nested Song");
+        fs::create_dir_all(&direct_song).unwrap();
+        fs::create_dir_all(&nested_song).unwrap();
+        fs::write(direct_song.join("song.sm"), b"#TITLE:Direct;").unwrap();
+        fs::write(nested_song.join("song.sm"), b"#TITLE:Nested;").unwrap();
+
+        let (packs, failures) = scan_song_roots(std::slice::from_ref(&root));
+
+        assert!(packs.is_empty());
+        assert_eq!(failures.len(), 1);
+        assert!(
+            failures[0]
+                .error
+                .contains("both direct songs and nested packs")
+        );
+
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn scan_song_roots_rejects_pack_names_shared_by_different_series() {
+        let root = test_dir("scan-series-collision");
+        for series in ["Series A", "Series B"] {
+            let song = root.join(series).join("Shared Pack").join("Song");
+            fs::create_dir_all(&song).unwrap();
+            fs::write(song.join("song.sm"), b"#TITLE:Song;").unwrap();
+        }
+
+        let (packs, failures) = scan_song_roots(std::slice::from_ref(&root));
+
+        assert!(packs.is_empty());
+        assert_eq!(failures.len(), 1);
+        assert!(failures[0].error.contains("different filesystem series"));
 
         let _ = fs::remove_dir_all(root);
     }

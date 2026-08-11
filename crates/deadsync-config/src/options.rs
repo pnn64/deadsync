@@ -43,10 +43,10 @@ use crate::theme::{
     GrooveStatsQrLoginWhen, LanguageFlag, LogLevel, MachineBarColor, MachineEvaluationStyle,
     MachineFont, MachinePreferredPlayMode, MachinePreferredPlayStyle, NewPackMode,
     RandomBackgroundMode, SelectMusicItlRankMode, SelectMusicItlWheelMode,
-    SelectMusicPatternInfoMode, SelectMusicScoreboxPlacement, SelectMusicSongSelectBgMode,
-    SelectMusicStepArtistBoxMode, SelectMusicWheelStyle, SrpgShopFolder, SrpgVariant,
-    SyncGraphMode, ThemeFlag, VersionOverlaySide, VisualStyle, auto_screenshot_bit,
-    auto_screenshot_mask_from_str, auto_screenshot_mask_to_str,
+    SelectMusicPatternInfoMode, SelectMusicScoreboxPlacement, SelectMusicSeriesSource,
+    SelectMusicSongSelectBgMode, SelectMusicStepArtistBoxMode, SelectMusicWheelStyle,
+    SrpgShopFolder, SrpgVariant, SyncGraphMode, ThemeFlag, VersionOverlaySide, VisualStyle,
+    auto_screenshot_bit, auto_screenshot_mask_from_str, auto_screenshot_mask_to_str,
 };
 use crate::writer::{push_bool, push_line};
 #[cfg(windows)]
@@ -1011,6 +1011,7 @@ pub struct SelectMusicOptions {
     pub show_wheel_grades: bool,
     pub show_wheel_lamps: bool,
     pub sort_wheel_by_series: bool,
+    pub series_source: SelectMusicSeriesSource,
     pub hide_inactive_series: bool,
     pub itl_rank_mode: SelectMusicItlRankMode,
     pub itl_wheel_mode: SelectMusicItlWheelMode,
@@ -1050,6 +1051,7 @@ impl Default for SelectMusicOptions {
             show_wheel_grades: DEFAULT_SHOW_MUSIC_WHEEL_GRADES,
             show_wheel_lamps: DEFAULT_SHOW_MUSIC_WHEEL_LAMPS,
             sort_wheel_by_series: DEFAULT_SORT_MUSIC_WHEEL_BY_SERIES,
+            series_source: SelectMusicSeriesSource::PackIni,
             hide_inactive_series: DEFAULT_HIDE_INACTIVE_SERIES,
             itl_rank_mode: SelectMusicItlRankMode::None,
             itl_wheel_mode: SelectMusicItlWheelMode::Score,
@@ -1131,6 +1133,10 @@ pub fn load_select_music_options(
             conf.get("Options", "SelectMusicSortBySeries"),
             default.sort_wheel_by_series,
         ),
+        series_source: conf
+            .get("Options", "SelectMusicSeriesSource")
+            .and_then(|value| SelectMusicSeriesSource::from_str(value).ok())
+            .unwrap_or(default.series_source),
         hide_inactive_series: parse_u8_bool_or_default(
             conf.get("Options", "SelectMusicHideInactiveSeries"),
             default.hide_inactive_series,
@@ -1266,6 +1272,11 @@ pub fn push_select_music_option_lines(content: &mut String, options: SelectMusic
         content,
         "SelectMusicSortBySeries",
         select.sort_wheel_by_series,
+    );
+    push_line(
+        content,
+        "SelectMusicSeriesSource",
+        select.series_source.as_str(),
     );
     push_bool(
         content,
@@ -1853,6 +1864,20 @@ pub const fn select_music_wheel_style_from_choice(idx: usize) -> SelectMusicWhee
     }
 }
 
+pub const fn select_music_series_source_choice_index(source: SelectMusicSeriesSource) -> usize {
+    match source {
+        SelectMusicSeriesSource::PackIni => 0,
+        SelectMusicSeriesSource::Folder => 1,
+    }
+}
+
+pub const fn select_music_series_source_from_choice(idx: usize) -> SelectMusicSeriesSource {
+    match idx {
+        1 => SelectMusicSeriesSource::Folder,
+        _ => SelectMusicSeriesSource::PackIni,
+    }
+}
+
 pub const fn select_music_song_select_bg_mode_choice_index(
     mode: SelectMusicSongSelectBgMode,
 ) -> usize {
@@ -2249,6 +2274,7 @@ mod tests {
             show_wheel_grades: true,
             show_wheel_lamps: false,
             sort_wheel_by_series: true,
+            series_source: SelectMusicSeriesSource::PackIni,
             hide_inactive_series: false,
             itl_rank_mode: SelectMusicItlRankMode::None,
             itl_wheel_mode: SelectMusicItlWheelMode::Off,
@@ -3083,6 +3109,7 @@ mod tests {
             SelectMusicWheelGrades=0
             SelectMusicWheelLamps=1
             SelectMusicSortBySeries=0
+            SelectMusicSeriesSource=Folder
             SelectMusicHideInactiveSeries=1
             SelectMusicWheelITLRank=Overall
             SelectMusicWheelITL=Points
@@ -3122,6 +3149,7 @@ mod tests {
         assert!(!loaded.show_wheel_grades);
         assert!(loaded.show_wheel_lamps);
         assert!(!loaded.sort_wheel_by_series);
+        assert_eq!(loaded.series_source, SelectMusicSeriesSource::Folder);
         assert!(loaded.hide_inactive_series);
         assert_eq!(loaded.itl_rank_mode, SelectMusicItlRankMode::Overall);
         assert_eq!(
@@ -3186,6 +3214,7 @@ mod tests {
                 "SelectMusicWheelGrades=1\n",
                 "SelectMusicWheelLamps=0\n",
                 "SelectMusicSortBySeries=1\n",
+                "SelectMusicSeriesSource=PackIni\n",
                 "SelectMusicHideInactiveSeries=0\n",
                 "SelectMusicWheelITLRank=None\n",
                 "SelectMusicWheelITL=Off\n",
@@ -3521,6 +3550,19 @@ mod tests {
         assert_eq!(
             select_music_wheel_style_from_choice(99),
             SelectMusicWheelStyle::Itg
+        );
+
+        assert_eq!(
+            select_music_series_source_choice_index(SelectMusicSeriesSource::PackIni),
+            0
+        );
+        assert_eq!(
+            select_music_series_source_from_choice(1),
+            SelectMusicSeriesSource::Folder
+        );
+        assert_eq!(
+            select_music_series_source_from_choice(99),
+            SelectMusicSeriesSource::PackIni
         );
 
         assert_eq!(

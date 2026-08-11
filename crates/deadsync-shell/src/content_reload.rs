@@ -418,6 +418,9 @@ pub(crate) fn cache_progress_lines(path: Option<&Path>) -> (String, String) {
     let Some(path) = path else {
         return (String::new(), String::new());
     };
+    if let Some(names) = song_cache_progress_lines(path) {
+        return names;
+    }
     let file_name = path
         .file_name()
         .and_then(|name| name.to_str())
@@ -461,6 +464,42 @@ pub(crate) fn cache_progress_lines(path: Option<&Path>) -> (String, String) {
         .unwrap_or("")
         .to_owned();
     (parent, file_stem)
+}
+
+fn song_cache_progress_lines(path: &Path) -> Option<(String, String)> {
+    let cache = deadsync_simfile::runtime_cache::get_song_cache();
+    for pack in cache.iter() {
+        if pack.banner_path.as_deref() == Some(path) {
+            let item = path
+                .file_stem()
+                .and_then(|name| name.to_str())
+                .unwrap_or_default()
+                .to_owned();
+            return Some((pack.group_name.clone(), item));
+        }
+        for song in &pack.songs {
+            let matches = [
+                song.music_path.as_deref(),
+                song.banner_path.as_deref(),
+                song.background_path.as_deref(),
+                song.cdtitle_path.as_deref(),
+            ]
+            .into_iter()
+            .flatten()
+            .any(|candidate| candidate == path);
+            if matches {
+                let song_name = song
+                    .simfile_path
+                    .parent()
+                    .and_then(|dir| dir.file_name())
+                    .and_then(|name| name.to_str())
+                    .unwrap_or_default()
+                    .to_owned();
+                return Some((pack.group_name.clone(), song_name));
+            }
+        }
+    }
+    None
 }
 
 fn send_finished(tx: &mpsc::SyncSender<SimplyLoveContentReloadEvent>) {

@@ -948,6 +948,9 @@ pub(super) fn apply_submenu_choice_delta(
             SubRowId::SeriesSort => crate::SimplyLoveSelectMusicConfigRequest::SortBySeries(
                 yes_no_from_choice(new_index),
             ),
+            SubRowId::SeriesSource => crate::SimplyLoveSelectMusicConfigRequest::SeriesSource(
+                select_music_series_source_from_choice(new_index),
+            ),
             SubRowId::SongSelectBg => {
                 crate::SimplyLoveSelectMusicConfigRequest::SongSelectBackground(
                     select_music_song_select_bg_mode_from_choice(new_index),

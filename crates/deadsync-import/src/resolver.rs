@@ -97,8 +97,7 @@ impl<'a> ChartResolver<'a> {
     /// `favorites.txt`, or a `Stats.xml` `Dir`) to the matching library song.
     /// Returns `None` when the song isn't in DeadSync's scanned library.
     pub fn resolve_song(&self, song_dir: &str) -> Option<&'a SongData> {
-        let (pack, folder) = song_dir_parts(song_dir)?;
-        self.by_song.get(&SongKeyRef { pack, folder }).copied()
+        self.song_for_dir(song_dir)
     }
 
     /// Resolves a score key to a chart `short_hash`.
@@ -109,10 +108,7 @@ impl<'a> ChartResolver<'a> {
         difficulty: &str,
         description: &str,
     ) -> Resolution<'a> {
-        let Some((pack, folder)) = song_dir_parts(song_dir) else {
-            return Resolution::SongNotFound;
-        };
-        let Some(song) = self.by_song.get(&SongKeyRef { pack, folder }).copied() else {
+        let Some(song) = self.song_for_dir(song_dir) else {
             return Resolution::SongNotFound;
         };
 
@@ -145,6 +141,17 @@ impl<'a> ChartResolver<'a> {
         } else {
             Resolution::ChartNotFound
         }
+    }
+
+    fn song_for_dir(&self, song_dir: &str) -> Option<&'a SongData> {
+        let (pack, folder) = nested_song_dir_parts(song_dir)?;
+        self.by_song
+            .get(&SongKeyRef { pack, folder })
+            .copied()
+            .or_else(|| {
+                let (pack, folder) = song_dir_parts(song_dir)?;
+                self.by_song.get(&SongKeyRef { pack, folder }).copied()
+            })
     }
 }
 
@@ -229,6 +236,18 @@ fn song_dir_parts(dir: &str) -> Option<(&str, &str)> {
     Some((pack, song))
 }
 
+fn nested_song_dir_parts(dir: &str) -> Option<(&str, &str)> {
+    let mut parts = dir
+        .trim()
+        .split(['/', '\\'])
+        .map(str::trim)
+        .filter(|part| !part.is_empty())
+        .rev();
+    let song = parts.next()?;
+    let pack = parts.next()?;
+    Some((pack, song))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -258,6 +277,10 @@ mod tests {
         assert_eq!(
             normalize_song_dir("AdditionalSongs\\Pack / Nested\\Final Song"),
             Some(("pack".into(), "final song".into()))
+        );
+        assert_eq!(
+            nested_song_dir_parts("Songs/Series/Pack/Song"),
+            Some(("Pack", "Song"))
         );
     }
 

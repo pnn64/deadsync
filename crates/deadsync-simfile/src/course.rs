@@ -788,13 +788,36 @@ pub fn resolve_song_dir(
         let Ok(entries) = fs::read_dir(songs_root) else {
             continue;
         };
-        for entry in entries.flatten() {
-            let group_dir = entry.path();
-            if !group_dir.is_dir() {
+        let group_dirs = entries
+            .flatten()
+            .map(|entry| entry.path())
+            .filter(|path| path.is_dir())
+            .map(|path| {
+                let is_pack = is_pack_dir(&path);
+                (path, is_pack)
+            })
+            .collect::<Vec<_>>();
+        for (group_dir, is_pack) in &group_dirs {
+            if !is_pack {
                 continue;
             }
-            if let Some(found) = is_dir_ci(&group_dir, song) {
+            if let Some(found) = is_dir_ci(group_dir, song) {
                 return Some(found);
+            }
+        }
+        for (series_dir, is_pack) in group_dirs {
+            if is_pack {
+                continue;
+            }
+            let Ok(pack_dirs) = fs::read_dir(series_dir) else {
+                continue;
+            };
+            for pack_dir in pack_dirs.flatten().map(|entry| entry.path()) {
+                if pack_dir.is_dir()
+                    && let Some(found) = is_dir_ci(&pack_dir, song)
+                {
+                    return Some(found);
+                }
             }
         }
     }
@@ -815,14 +838,39 @@ pub fn resolve_course_group_dir(
     }
     let mut path = None;
     for songs_root in song_roots.iter().rev() {
-        path = is_dir_ci(songs_root, group);
-        if path.is_some() {
+        if let Some(candidate) = is_dir_ci(songs_root, group)
+            && is_pack_dir(&candidate)
+        {
+            path = Some(candidate);
             break;
+        }
+    }
+    if path.is_none() {
+        'roots: for songs_root in song_roots.iter().rev() {
+            let Ok(series_dirs) = fs::read_dir(songs_root) else {
+                continue;
+            };
+            for series_dir in series_dirs.flatten().map(|entry| entry.path()) {
+                if !series_dir.is_dir() || is_pack_dir(&series_dir) {
+                    continue;
+                }
+                path = is_dir_ci(&series_dir, group);
+                if path.is_some() {
+                    break 'roots;
+                }
+            }
         }
     }
     let path = path?;
     group_dirs.insert(key, path.clone());
     Some(path)
+}
+
+fn is_pack_dir(path: &Path) -> bool {
+    rssp::pack::scan_pack_dir(path, rssp::pack::ScanOpt::default())
+        .ok()
+        .flatten()
+        .is_some()
 }
 
 fn collect_course_paths(root: &Path) -> Vec<PathBuf> {
@@ -1079,6 +1127,7 @@ mod tests {
             sort_title: String::new(),
             translit_title: String::new(),
             series: String::new(),
+            folder_series: String::new(),
             year: 0,
             sync_pref: SyncPref::Default,
             directory: PathBuf::new(),
@@ -1143,6 +1192,8 @@ mod tests {
         let extra_song = extra.join("Pack").join("Song");
         fs::create_dir_all(&base_song).unwrap();
         fs::create_dir_all(&extra_song).unwrap();
+        fs::write(base_song.join("song.sm"), b"#TITLE:Base;").unwrap();
+        fs::write(extra_song.join("song.sm"), b"#TITLE:Extra;").unwrap();
 
         let found = resolve_song_dir(
             &[base.clone(), extra.clone()],
@@ -1155,6 +1206,67 @@ mod tests {
         let group =
             resolve_course_group_dir(&[base.clone(), extra.clone()], &mut HashMap::new(), "pack");
         assert_eq!(group, Some(extra.join("Pack")));
+
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn resolve_song_dir_finds_pack_below_one_series_folder() {
+        let root = test_dir("resolve-nested-song-dir");
+        let song = root.join("Series").join("Pack").join("Song");
+        fs::create_dir_all(&song).unwrap();
+        fs::write(song.join("song.sm"), b"#TITLE:Song;").unwrap();
+
+        let mut groups = HashMap::new();
+        assert_eq!(
+            resolve_course_group_dir(std::slice::from_ref(&root), &mut groups, "pack"),
+            Some(root.join("Series").join("Pack"))
+        );
+        assert_eq!(
+            resolve_song_dir(
+                std::slice::from_ref(&root),
+                &mut groups,
+                Some("pack"),
+                "song",
+            ),
+            Some(song.clone())
+        );
+        assert_eq!(
+            resolve_song_dir(
+                std::slice::from_ref(&root),
+                &mut HashMap::new(),
+                None,
+                "song",
+            ),
+            Some(song)
+        );
+
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn course_resolution_does_not_treat_series_as_pack_or_song() {
+        let root = test_dir("resolve-series-name-collision");
+        let decoy_song = root.join("Pack").join("Decoy Pack").join("Decoy Song");
+        let wanted_song = root.join("Other Series").join("Pack").join("Song");
+        fs::create_dir_all(&decoy_song).unwrap();
+        fs::create_dir_all(&wanted_song).unwrap();
+        fs::write(decoy_song.join("song.sm"), b"#TITLE:Decoy;").unwrap();
+        fs::write(wanted_song.join("song.sm"), b"#TITLE:Song;").unwrap();
+
+        assert_eq!(
+            resolve_course_group_dir(std::slice::from_ref(&root), &mut HashMap::new(), "pack",),
+            Some(root.join("Other Series").join("Pack"))
+        );
+        assert_eq!(
+            resolve_song_dir(
+                std::slice::from_ref(&root),
+                &mut HashMap::new(),
+                None,
+                "Decoy Pack",
+            ),
+            None
+        );
 
         let _ = fs::remove_dir_all(root);
     }

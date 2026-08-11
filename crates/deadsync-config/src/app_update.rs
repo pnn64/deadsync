@@ -12,8 +12,9 @@ use crate::theme::{
     MachineBarColor, MachineEvaluationStyle, MachineFont, MachinePreferredPlayMode,
     MachinePreferredPlayStyle, NewPackMode, RandomBackgroundMode, SelectMusicItlRankMode,
     SelectMusicItlWheelMode, SelectMusicPatternInfoMode, SelectMusicScoreboxPlacement,
-    SelectMusicSongSelectBgMode, SelectMusicStepArtistBoxMode, SelectMusicWheelStyle,
-    SrpgShopFolder, SrpgVariant, SyncGraphMode, ThemeFlag, VersionOverlaySide, VisualStyle,
+    SelectMusicSeriesSource, SelectMusicSongSelectBgMode, SelectMusicStepArtistBoxMode,
+    SelectMusicWheelStyle, SrpgShopFolder, SrpgVariant, SyncGraphMode, ThemeFlag,
+    VersionOverlaySide, VisualStyle,
 };
 use deadlib_audio::AudioOutputMode;
 use deadlib_render::{BackendType, PresentModePolicy};
@@ -561,6 +562,10 @@ pub fn set_show_music_wheel_lamps(cfg: &mut Config, enabled: bool) -> bool {
 
 pub fn set_sort_music_wheel_by_series(cfg: &mut Config, enabled: bool) -> bool {
     set_if_changed(&mut cfg.sort_music_wheel_by_series, enabled)
+}
+
+pub fn set_select_music_series_source(cfg: &mut Config, source: SelectMusicSeriesSource) -> bool {
+    set_if_changed(&mut cfg.select_music_series_source, source)
 }
 
 pub fn set_hide_inactive_series(cfg: &mut Config, enabled: bool) -> bool {
