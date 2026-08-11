@@ -1,27 +1,71 @@
 use deadlib_audio::{
-    AudioOutputMode, AudioStreamHandle, InitConfig, MixControls, OutputBackendReady,
-    OutputDeviceInfo, RenderState, SfxReceiver, SfxSender, music_transport, sfx_transport,
+    AudioOutputMode, AudioStreamHandle, MixControls, OutputBackendReady, OutputDeviceInfo,
+    RenderState, SfxReceiver, SfxSender, music_transport, sfx_transport,
 };
 
-#[cfg(target_os = "freebsd")]
-use crate::freebsd_pcm;
 #[cfg(target_os = "linux")]
-use crate::linux_alsa;
-#[cfg(target_os = "linux")]
-#[cfg(has_jack_audio)]
-use crate::linux_jack;
-#[cfg(target_os = "linux")]
-#[cfg(has_pipewire_audio)]
-use crate::linux_pipewire;
-#[cfg(target_os = "linux")]
-#[cfg(has_pulse_audio)]
-use crate::linux_pulse;
+use deadlib_audio_backend_alsa as linux_alsa;
 #[cfg(target_os = "macos")]
-use crate::macos_coreaudio;
+use deadlib_audio_backend_coreaudio as macos_coreaudio;
+#[cfg(target_os = "freebsd")]
+use deadlib_audio_backend_freebsd_pcm as freebsd_pcm;
 #[cfg(target_os = "linux")]
-use deadlib_audio::LinuxAudioBackend;
+use deadlib_audio_backend_jack as linux_jack;
+#[cfg(target_os = "linux")]
+#[cfg(feature = "pipewire-audio")]
+use deadlib_audio_backend_pipewire as linux_pipewire;
+#[cfg(target_os = "linux")]
+use deadlib_audio_backend_pulse as linux_pulse;
+#[cfg(windows)]
+use deadlib_audio_backend_wasapi as windows_wasapi;
 use log::{debug, info, warn};
+use std::str::FromStr;
 use std::sync::Arc;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct InitConfig {
+    pub output_device_index: Option<u16>,
+    pub output_mode: AudioOutputMode,
+    #[cfg(target_os = "linux")]
+    pub linux_backend: LinuxAudioBackend,
+    pub sample_rate_hz: Option<u32>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LinuxAudioBackend {
+    Auto,
+    PipeWire,
+    PulseAudio,
+    Jack,
+    Alsa,
+}
+
+impl LinuxAudioBackend {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Auto => "Auto",
+            Self::PipeWire => "PipeWire",
+            Self::PulseAudio => "PulseAudio",
+            Self::Jack => "JACK",
+            Self::Alsa => "ALSA",
+        }
+    }
+}
+
+impl FromStr for LinuxAudioBackend {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.trim().to_ascii_lowercase().as_str() {
+            "auto" => Ok(Self::Auto),
+            "pipewire" | "pipe-wire" | "pw" => Ok(Self::PipeWire),
+            "pulseaudio" | "pulse" => Ok(Self::PulseAudio),
+            "jack" => Ok(Self::Jack),
+            "alsa" => Ok(Self::Alsa),
+            _ => Err(()),
+        }
+    }
+}
 
 pub const SFX_QUEUE_CAP: usize = 128;
 
@@ -66,7 +110,7 @@ struct AlsaBackendHint {
 }
 
 #[cfg(target_os = "linux")]
-#[cfg(has_jack_audio)]
+#[cfg(target_os = "linux")]
 #[derive(Clone, Debug)]
 struct JackBackendHint {
     pub requested_device_name: Option<String>,
@@ -75,7 +119,7 @@ struct JackBackendHint {
 }
 
 #[cfg(target_os = "linux")]
-#[cfg(has_pipewire_audio)]
+#[cfg(feature = "pipewire-audio")]
 #[derive(Clone, Debug)]
 struct PipeWireBackendHint {
     pub requested_device_name: Option<String>,
@@ -85,7 +129,7 @@ struct PipeWireBackendHint {
 }
 
 #[cfg(target_os = "linux")]
-#[cfg(has_pulse_audio)]
+#[cfg(target_os = "linux")]
 #[derive(Clone, Debug)]
 struct PulseBackendHint {
     pub requested_device_name: Option<String>,
@@ -123,13 +167,13 @@ struct NativeBackendLaunch {
     #[cfg(target_os = "linux")]
     pub alsa: Option<AlsaBackendHint>,
     #[cfg(target_os = "linux")]
-    #[cfg(has_jack_audio)]
+    #[cfg(target_os = "linux")]
     pub jack: Option<JackBackendHint>,
     #[cfg(target_os = "linux")]
-    #[cfg(has_pipewire_audio)]
+    #[cfg(feature = "pipewire-audio")]
     pub pipewire: Option<PipeWireBackendHint>,
     #[cfg(target_os = "linux")]
-    #[cfg(has_pulse_audio)]
+    #[cfg(target_os = "linux")]
     pub pulse: Option<PulseBackendHint>,
     #[cfg(target_os = "macos")]
     pub coreaudio: Option<CoreAudioBackendHint>,
@@ -142,34 +186,34 @@ struct NativeBackendLaunch {
 enum NativeOutputBackend {
     #[cfg(target_os = "linux")]
     Alsa {
-        _stream: crate::linux_alsa::AlsaOutputStream,
+        _stream: linux_alsa::AlsaOutputStream,
     },
     #[cfg(target_os = "linux")]
-    #[cfg(has_jack_audio)]
+    #[cfg(target_os = "linux")]
     Jack {
-        _stream: crate::linux_jack::JackOutputStream,
+        _stream: linux_jack::JackOutputStream,
     },
     #[cfg(target_os = "linux")]
-    #[cfg(has_pipewire_audio)]
+    #[cfg(feature = "pipewire-audio")]
     PipeWire {
-        _stream: crate::linux_pipewire::PipeWireOutputStream,
+        _stream: linux_pipewire::PipeWireOutputStream,
     },
     #[cfg(target_os = "linux")]
-    #[cfg(has_pulse_audio)]
+    #[cfg(target_os = "linux")]
     Pulse {
-        _stream: crate::linux_pulse::PulseOutputStream,
+        _stream: linux_pulse::PulseOutputStream,
     },
     #[cfg(target_os = "macos")]
     CoreAudio {
-        _stream: crate::macos_coreaudio::CoreAudioOutputStream,
+        _stream: macos_coreaudio::CoreAudioOutputStream,
     },
     #[cfg(target_os = "freebsd")]
     FreeBsdPcm {
-        _stream: crate::freebsd_pcm::FreeBsdPcmOutputStream,
+        _stream: freebsd_pcm::FreeBsdPcmOutputStream,
     },
     #[cfg(windows)]
     Wasapi {
-        _stream: crate::windows_wasapi::WasapiOutputStream,
+        _stream: windows_wasapi::WasapiOutputStream,
     },
 }
 
@@ -244,14 +288,14 @@ pub fn prepare_output(cfg: &InitConfig, controls: Arc<MixControls>) -> OutputPla
 pub fn available_linux_backends() -> Vec<LinuxAudioBackend> {
     let mut backends = Vec::with_capacity(5);
     backends.push(LinuxAudioBackend::Auto);
-    #[cfg(has_pipewire_audio)]
+    #[cfg(feature = "pipewire-audio")]
     backends.push(LinuxAudioBackend::PipeWire);
-    #[cfg(has_pulse_audio)]
+    #[cfg(target_os = "linux")]
     if linux_pulse::is_available() {
         backends.push(LinuxAudioBackend::PulseAudio);
     }
     backends.push(LinuxAudioBackend::Alsa);
-    #[cfg(has_jack_audio)]
+    #[cfg(target_os = "linux")]
     if linux_jack::is_available() {
         backends.push(LinuxAudioBackend::Jack);
     }
@@ -354,20 +398,20 @@ fn build_audio_launch(cfg: &InitConfig) -> (Vec<OutputDeviceProbe>, NativeBacken
                 channels: native_channels,
                 output_mode,
             }),
-            #[cfg(has_jack_audio)]
+            #[cfg(target_os = "linux")]
             jack: Some(JackBackendHint {
                 requested_device_name: explicit_device_requested.then_some(device_name.clone()),
                 requested_rate_hz: cfg.sample_rate_hz,
                 output_mode,
             }),
-            #[cfg(has_pipewire_audio)]
+            #[cfg(feature = "pipewire-audio")]
             pipewire: Some(PipeWireBackendHint {
                 requested_device_name: explicit_device_requested.then_some(device_name.clone()),
                 sample_rate_hz: native_sample_rate_hz,
                 channels: native_channels,
                 output_mode,
             }),
-            #[cfg(has_pulse_audio)]
+            #[cfg(target_os = "linux")]
             pulse: Some(PulseBackendHint {
                 requested_device_name: explicit_device_requested.then_some(device_name),
                 sample_rate_hz: native_sample_rate_hz,
@@ -522,13 +566,13 @@ fn build_audio_launch(cfg: &InitConfig) -> (Vec<OutputDeviceProbe>, NativeBacken
             #[cfg(target_os = "linux")]
             alsa: None,
             #[cfg(target_os = "linux")]
-            #[cfg(has_jack_audio)]
+            #[cfg(target_os = "linux")]
             jack: None,
             #[cfg(target_os = "linux")]
-            #[cfg(has_pipewire_audio)]
+            #[cfg(feature = "pipewire-audio")]
             pipewire: None,
             #[cfg(target_os = "linux")]
-            #[cfg(has_pulse_audio)]
+            #[cfg(target_os = "linux")]
             pulse: None,
             #[cfg(target_os = "macos")]
             coreaudio: None,
@@ -547,7 +591,7 @@ fn build_audio_launch(cfg: &InitConfig) -> (Vec<OutputDeviceProbe>, NativeBacken
 
 #[cfg(windows)]
 fn build_audio_launch(cfg: &InitConfig) -> (Vec<OutputDeviceProbe>, NativeBackendLaunch) {
-    let devices = match crate::windows_wasapi::enumerate_output_devices() {
+    let devices = match windows_wasapi::enumerate_output_devices() {
         Ok(devices) => devices,
         Err(err) => {
             warn!("Failed to enumerate WASAPI output devices at startup: {err}");
@@ -634,12 +678,10 @@ fn start_linux_alsa_backend(
     String,
 > {
     let access_mode = match alsa.output_mode {
-        AudioOutputMode::Exclusive => crate::linux_alsa::AlsaAccessMode::Exclusive,
-        AudioOutputMode::Auto | AudioOutputMode::Shared => {
-            crate::linux_alsa::AlsaAccessMode::Shared
-        }
+        AudioOutputMode::Exclusive => linux_alsa::AlsaAccessMode::Exclusive,
+        AudioOutputMode::Auto | AudioOutputMode::Shared => linux_alsa::AlsaAccessMode::Shared,
     };
-    let prep = crate::linux_alsa::prepare(
+    let prep = linux_alsa::prepare(
         alsa.pcm_id.clone(),
         alsa.device_name.clone(),
         alsa.sample_rate_hz,
@@ -650,7 +692,7 @@ fn start_linux_alsa_backend(
     ready.requested_output_mode = alsa.output_mode;
     let (stream_handle, render, sfx_sender, sfx_receiver) =
         output_transport(ready.device_channels, controls);
-    let stream = crate::linux_alsa::start(prep, render, sfx_receiver)?;
+    let stream = linux_alsa::start(prep, render, sfx_receiver)?;
     Ok((
         NativeOutputBackend::Alsa { _stream: stream },
         ready,
@@ -660,7 +702,7 @@ fn start_linux_alsa_backend(
 }
 
 #[cfg(target_os = "linux")]
-#[cfg(has_jack_audio)]
+#[cfg(target_os = "linux")]
 fn start_linux_jack_backend(
     jack: JackBackendHint,
     controls: &Arc<MixControls>,
@@ -676,13 +718,12 @@ fn start_linux_jack_backend(
     if matches!(jack.output_mode, AudioOutputMode::Exclusive) {
         return Err("JACK does not expose a separate exclusive output mode.".to_string());
     }
-    let prep =
-        crate::linux_jack::prepare(jack.requested_device_name.clone(), jack.requested_rate_hz)?;
+    let prep = linux_jack::prepare(jack.requested_device_name.clone(), jack.requested_rate_hz)?;
     let mut ready = prep.ready();
     ready.requested_output_mode = jack.output_mode;
     let (stream_handle, render, sfx_sender, sfx_receiver) =
         output_transport(ready.device_channels, controls);
-    let stream = crate::linux_jack::start(prep, render, sfx_receiver)?;
+    let stream = linux_jack::start(prep, render, sfx_receiver)?;
     Ok((
         NativeOutputBackend::Jack { _stream: stream },
         ready,
@@ -692,7 +733,7 @@ fn start_linux_jack_backend(
 }
 
 #[cfg(target_os = "linux")]
-#[cfg(has_pipewire_audio)]
+#[cfg(feature = "pipewire-audio")]
 fn start_linux_pipewire_backend(
     pipewire: PipeWireBackendHint,
     controls: &Arc<MixControls>,
@@ -714,7 +755,7 @@ fn start_linux_pipewire_backend(
             name
         );
     }
-    let prep = crate::linux_pipewire::prepare(
+    let prep = linux_pipewire::prepare(
         pipewire.requested_device_name.clone(),
         pipewire.sample_rate_hz,
         pipewire.channels,
@@ -723,7 +764,7 @@ fn start_linux_pipewire_backend(
     ready.requested_output_mode = pipewire.output_mode;
     let (stream_handle, render, sfx_sender, sfx_receiver) =
         output_transport(ready.device_channels, controls);
-    let stream = crate::linux_pipewire::start(prep, render, sfx_receiver)?;
+    let stream = linux_pipewire::start(prep, render, sfx_receiver)?;
     Ok((
         NativeOutputBackend::PipeWire { _stream: stream },
         ready,
@@ -733,7 +774,7 @@ fn start_linux_pipewire_backend(
 }
 
 #[cfg(target_os = "linux")]
-#[cfg(has_pulse_audio)]
+#[cfg(target_os = "linux")]
 fn start_linux_pulse_backend(
     pulse: PulseBackendHint,
     controls: &Arc<MixControls>,
@@ -755,7 +796,7 @@ fn start_linux_pulse_backend(
             name
         );
     }
-    let prep = crate::linux_pulse::prepare(
+    let prep = linux_pulse::prepare(
         pulse.requested_device_name.clone(),
         pulse.sample_rate_hz,
         pulse.channels,
@@ -764,7 +805,7 @@ fn start_linux_pulse_backend(
     ready.requested_output_mode = pulse.output_mode;
     let (stream_handle, render, sfx_sender, sfx_receiver) =
         output_transport(ready.device_channels, controls);
-    let stream = crate::linux_pulse::start(prep, render, sfx_receiver)?;
+    let stream = linux_pulse::start(prep, render, sfx_receiver)?;
     Ok((
         NativeOutputBackend::Pulse { _stream: stream },
         ready,
@@ -789,7 +830,7 @@ fn start_freebsd_pcm_backend(
     if matches!(pcm.output_mode, AudioOutputMode::Exclusive) {
         return Err("FreeBSD PCM exclusive output is not implemented yet.".to_string());
     }
-    let prep = crate::freebsd_pcm::prepare(
+    let prep = freebsd_pcm::prepare(
         pcm.dsp_path.clone(),
         pcm.device_name.clone(),
         pcm.sample_rate_hz,
@@ -799,7 +840,7 @@ fn start_freebsd_pcm_backend(
     ready.requested_output_mode = pcm.output_mode;
     let (stream_handle, render, sfx_sender, sfx_receiver) =
         output_transport(ready.device_channels, controls);
-    let stream = crate::freebsd_pcm::start(prep, render, sfx_receiver)?;
+    let stream = freebsd_pcm::start(prep, render, sfx_receiver)?;
     Ok((
         NativeOutputBackend::FreeBsdPcm { _stream: stream },
         ready,
@@ -824,7 +865,7 @@ fn start_macos_coreaudio_backend(
     if matches!(coreaudio.output_mode, AudioOutputMode::Exclusive) {
         return Err("CoreAudio exclusive output is not implemented yet.".to_string());
     }
-    let prep = crate::macos_coreaudio::prepare(
+    let prep = macos_coreaudio::prepare(
         coreaudio.device_uid.clone(),
         coreaudio.device_name.clone(),
         coreaudio.requested_rate_hz,
@@ -834,7 +875,7 @@ fn start_macos_coreaudio_backend(
     ready.requested_output_mode = coreaudio.output_mode;
     let (stream_handle, render, sfx_sender, sfx_receiver) =
         output_transport(ready.device_channels, controls);
-    let stream = crate::macos_coreaudio::start(prep, render, sfx_receiver)?;
+    let stream = macos_coreaudio::start(prep, render, sfx_receiver)?;
     Ok((
         NativeOutputBackend::CoreAudio { _stream: stream },
         ready,
@@ -863,13 +904,13 @@ fn start_output_backend(
         #[cfg(target_os = "linux")]
         alsa,
         #[cfg(target_os = "linux")]
-        #[cfg(has_jack_audio)]
+        #[cfg(target_os = "linux")]
         jack,
         #[cfg(target_os = "linux")]
-        #[cfg(has_pipewire_audio)]
+        #[cfg(feature = "pipewire-audio")]
         pipewire,
         #[cfg(target_os = "linux")]
-        #[cfg(has_pulse_audio)]
+        #[cfg(target_os = "linux")]
         pulse,
         #[cfg(target_os = "macos")]
         coreaudio,
@@ -884,33 +925,33 @@ fn start_output_backend(
         .map(|hint| hint.output_mode)
         .or({
             #[cfg(target_os = "linux")]
-            #[cfg(has_pipewire_audio)]
+            #[cfg(feature = "pipewire-audio")]
             {
                 pipewire.as_ref().map(|hint| hint.output_mode)
             }
-            #[cfg(not(all(target_os = "linux", has_pipewire_audio)))]
+            #[cfg(not(all(target_os = "linux", feature = "pipewire-audio")))]
             {
                 None
             }
         })
         .or({
             #[cfg(target_os = "linux")]
-            #[cfg(has_jack_audio)]
+            #[cfg(target_os = "linux")]
             {
                 jack.as_ref().map(|hint| hint.output_mode)
             }
-            #[cfg(not(all(target_os = "linux", has_jack_audio)))]
+            #[cfg(not(target_os = "linux"))]
             {
                 None
             }
         })
         .or({
             #[cfg(target_os = "linux")]
-            #[cfg(has_pulse_audio)]
+            #[cfg(target_os = "linux")]
             {
                 pulse.as_ref().map(|hint| hint.output_mode)
             }
-            #[cfg(not(all(target_os = "linux", has_pulse_audio)))]
+            #[cfg(not(target_os = "linux"))]
             {
                 None
             }
@@ -925,40 +966,40 @@ fn start_output_backend(
             start_linux_alsa_backend(alsa, &controls)
         }
         LinuxAudioBackend::Jack => {
-            #[cfg(has_jack_audio)]
+            #[cfg(target_os = "linux")]
             {
                 let Some(jack) = jack else {
                     return Err("JACK backend hint unavailable.".to_string());
                 };
                 start_linux_jack_backend(jack, &controls)
             }
-            #[cfg(not(has_jack_audio))]
+            #[cfg(not(target_os = "linux"))]
             {
                 Err("JACK backend support was not built into this binary.".to_string())
             }
         }
         LinuxAudioBackend::PipeWire => {
-            #[cfg(has_pipewire_audio)]
+            #[cfg(feature = "pipewire-audio")]
             {
                 let Some(pipewire) = pipewire else {
                     return Err("PipeWire backend hint unavailable.".to_string());
                 };
                 return start_linux_pipewire_backend(pipewire, &controls);
             }
-            #[cfg(not(has_pipewire_audio))]
+            #[cfg(not(feature = "pipewire-audio"))]
             {
                 Err("PipeWire backend support was not built into this binary.".to_string())
             }
         }
         LinuxAudioBackend::PulseAudio => {
-            #[cfg(has_pulse_audio)]
+            #[cfg(target_os = "linux")]
             {
                 let Some(pulse) = pulse else {
                     return Err("PulseAudio backend hint unavailable.".to_string());
                 };
                 start_linux_pulse_backend(pulse, &controls)
             }
-            #[cfg(not(has_pulse_audio))]
+            #[cfg(not(target_os = "linux"))]
             {
                 return Err(
                     "PulseAudio backend support was not built into this binary.".to_string()
@@ -987,7 +1028,7 @@ fn start_output_backend(
                     )
                 });
             }
-            #[cfg(has_pipewire_audio)]
+            #[cfg(feature = "pipewire-audio")]
             if let Some(pipewire) = pipewire {
                 match start_linux_pipewire_backend(pipewire, &controls) {
                     Ok(output) => return Ok(output),
@@ -998,8 +1039,8 @@ fn start_output_backend(
                     }
                 }
             }
-            #[cfg(has_pulse_audio)]
-            if crate::linux_pulse::is_available()
+            #[cfg(target_os = "linux")]
+            if linux_pulse::is_available()
                 && let Some(pulse) = pulse
             {
                 match start_linux_pulse_backend(pulse, &controls) {
@@ -1015,8 +1056,8 @@ fn start_output_backend(
                 match start_linux_alsa_backend(alsa, &controls) {
                     Ok(output) => return Ok(output),
                     Err(err) => {
-                        #[cfg(has_jack_audio)]
-                        if crate::linux_jack::is_available()
+                        #[cfg(target_os = "linux")]
+                        if linux_jack::is_available()
                             && let Some(jack) = jack
                         {
                             match start_linux_jack_backend(jack, &controls) {
@@ -1074,7 +1115,7 @@ fn start_wasapi_backend(
     controls: &Arc<MixControls>,
 ) -> Result<
     (
-        crate::windows_wasapi::WasapiOutputStream,
+        windows_wasapi::WasapiOutputStream,
         OutputBackendReady,
         SfxSender,
         AudioStreamHandle,
@@ -1082,12 +1123,10 @@ fn start_wasapi_backend(
     String,
 > {
     let access_mode = match wasapi.output_mode {
-        AudioOutputMode::Exclusive => crate::windows_wasapi::WasapiAccessMode::Exclusive,
-        AudioOutputMode::Auto | AudioOutputMode::Shared => {
-            crate::windows_wasapi::WasapiAccessMode::Shared
-        }
+        AudioOutputMode::Exclusive => windows_wasapi::WasapiAccessMode::Exclusive,
+        AudioOutputMode::Auto | AudioOutputMode::Shared => windows_wasapi::WasapiAccessMode::Shared,
     };
-    let prep = crate::windows_wasapi::prepare(
+    let prep = windows_wasapi::prepare(
         wasapi.device_id.clone(),
         wasapi.device_name.clone(),
         wasapi.requested_rate_hz,
@@ -1103,11 +1142,31 @@ fn start_wasapi_backend(
     ready.requested_output_mode = wasapi.output_mode;
     let (stream_handle, render, sfx_sender, sfx_receiver) =
         output_transport(ready.device_channels, controls);
-    let stream = crate::windows_wasapi::start(prep, render, sfx_receiver).map_err(|err| {
+    let stream = windows_wasapi::start(prep, render, sfx_receiver).map_err(|err| {
         format!(
             "failed to start native WASAPI output for '{}': {err}",
             wasapi.device_name
         )
     })?;
     Ok((stream, ready, sfx_sender, stream_handle))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::LinuxAudioBackend;
+    use std::str::FromStr;
+
+    #[test]
+    fn linux_backend_config_is_owned_by_the_native_facade() {
+        for (text, expected) in [
+            ("auto", LinuxAudioBackend::Auto),
+            ("pipe-wire", LinuxAudioBackend::PipeWire),
+            ("pulse", LinuxAudioBackend::PulseAudio),
+            ("jack", LinuxAudioBackend::Jack),
+            ("alsa", LinuxAudioBackend::Alsa),
+        ] {
+            assert_eq!(LinuxAudioBackend::from_str(text), Ok(expected));
+            assert_ne!(expected.as_str(), "");
+        }
+    }
 }

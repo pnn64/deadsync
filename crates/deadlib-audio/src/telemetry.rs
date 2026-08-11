@@ -419,55 +419,35 @@ pub fn current_output_timing_quality() -> OutputTimingQuality {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u8)]
+/// Stable diagnostic identifiers shared by every native backend build.
+///
+/// These variants are intentionally not target-gated: telemetry may be read
+/// or decoded in a different build context from the backend that produced it.
 pub enum OutputTelemetryBackend {
     Unknown = 0,
-    #[cfg(target_os = "linux")]
     AlsaShared = 1,
-    #[cfg(target_os = "linux")]
     AlsaExclusive = 2,
-    #[cfg(windows)]
-    WasapiShared = 1,
-    #[cfg(windows)]
-    WasapiExclusive = 2,
-    #[cfg(target_os = "linux")]
-    #[cfg(has_pulse_audio)]
     PulseAudioShared = 3,
-    #[cfg(target_os = "freebsd")]
-    FreeBsdPcm = 1,
-    #[cfg(target_os = "linux")]
-    #[cfg(has_jack_audio)]
     JackShared = 4,
-    #[cfg(target_os = "macos")]
-    CoreAudioShared = 1,
-    #[cfg(target_os = "linux")]
-    #[cfg(has_pipewire_audio)]
     PipeWireShared = 5,
+    WasapiShared = 6,
+    WasapiExclusive = 7,
+    FreeBsdPcm = 8,
+    CoreAudioShared = 9,
 }
 
 impl OutputTelemetryBackend {
     #[inline(always)]
     pub fn from_backend_name(name: &'static str) -> Self {
         match name {
-            #[cfg(target_os = "linux")]
             "alsa-shared" => Self::AlsaShared,
-            #[cfg(target_os = "linux")]
             "alsa-exclusive" => Self::AlsaExclusive,
-            #[cfg(windows)]
             "wasapi-shared" => Self::WasapiShared,
-            #[cfg(windows)]
             "wasapi-exclusive" => Self::WasapiExclusive,
-            #[cfg(target_os = "linux")]
-            #[cfg(has_pulse_audio)]
             "pulse-shared" => Self::PulseAudioShared,
-            #[cfg(target_os = "freebsd")]
             "freebsd-pcm" => Self::FreeBsdPcm,
-            #[cfg(target_os = "linux")]
-            #[cfg(has_jack_audio)]
             "jack-shared" => Self::JackShared,
-            #[cfg(target_os = "macos")]
             "coreaudio-shared" => Self::CoreAudioShared,
-            #[cfg(target_os = "linux")]
-            #[cfg(has_pipewire_audio)]
             "pipewire-shared" => Self::PipeWireShared,
             _ => Self::Unknown,
         }
@@ -476,27 +456,15 @@ impl OutputTelemetryBackend {
     #[inline(always)]
     pub const fn from_bits(bits: u8) -> Self {
         match bits {
-            #[cfg(target_os = "linux")]
             1 => Self::AlsaShared,
-            #[cfg(target_os = "linux")]
             2 => Self::AlsaExclusive,
-            #[cfg(windows)]
-            1 => Self::WasapiShared,
-            #[cfg(windows)]
-            2 => Self::WasapiExclusive,
-            #[cfg(target_os = "linux")]
-            #[cfg(has_pulse_audio)]
             3 => Self::PulseAudioShared,
-            #[cfg(target_os = "freebsd")]
-            1 => Self::FreeBsdPcm,
-            #[cfg(target_os = "linux")]
-            #[cfg(has_jack_audio)]
             4 => Self::JackShared,
-            #[cfg(target_os = "macos")]
-            1 => Self::CoreAudioShared,
-            #[cfg(target_os = "linux")]
-            #[cfg(has_pipewire_audio)]
             5 => Self::PipeWireShared,
+            6 => Self::WasapiShared,
+            7 => Self::WasapiExclusive,
+            8 => Self::FreeBsdPcm,
+            9 => Self::CoreAudioShared,
             _ => Self::Unknown,
         }
     }
@@ -505,26 +473,14 @@ impl OutputTelemetryBackend {
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Unknown => "unknown",
-            #[cfg(target_os = "linux")]
             Self::AlsaShared => "alsa-shared",
-            #[cfg(target_os = "linux")]
             Self::AlsaExclusive => "alsa-exclusive",
-            #[cfg(windows)]
             Self::WasapiShared => "wasapi-shared",
-            #[cfg(windows)]
             Self::WasapiExclusive => "wasapi-exclusive",
-            #[cfg(target_os = "linux")]
-            #[cfg(has_pulse_audio)]
             Self::PulseAudioShared => "pulse-shared",
-            #[cfg(target_os = "freebsd")]
             Self::FreeBsdPcm => "freebsd-pcm",
-            #[cfg(target_os = "linux")]
-            #[cfg(has_jack_audio)]
             Self::JackShared => "jack-shared",
-            #[cfg(target_os = "macos")]
             Self::CoreAudioShared => "coreaudio-shared",
-            #[cfg(target_os = "linux")]
-            #[cfg(has_pipewire_audio)]
             Self::PipeWireShared => "pipewire-shared",
         }
     }
@@ -678,4 +634,30 @@ pub struct StutterDiagAudioEvent {
     pub device_period_ns: u64,
     pub estimated_output_delay_ns: u64,
     pub timing_quality: OutputTimingQuality,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::OutputTelemetryBackend;
+
+    #[test]
+    fn backend_diagnostic_ids_round_trip_on_every_target() {
+        for backend in [
+            OutputTelemetryBackend::AlsaShared,
+            OutputTelemetryBackend::AlsaExclusive,
+            OutputTelemetryBackend::PulseAudioShared,
+            OutputTelemetryBackend::JackShared,
+            OutputTelemetryBackend::PipeWireShared,
+            OutputTelemetryBackend::WasapiShared,
+            OutputTelemetryBackend::WasapiExclusive,
+            OutputTelemetryBackend::FreeBsdPcm,
+            OutputTelemetryBackend::CoreAudioShared,
+        ] {
+            assert_eq!(OutputTelemetryBackend::from_bits(backend as u8), backend);
+            assert_eq!(
+                OutputTelemetryBackend::from_backend_name(backend.as_str()),
+                backend
+            );
+        }
+    }
 }

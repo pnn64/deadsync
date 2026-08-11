@@ -1,10 +1,10 @@
-#[cfg(target_os = "linux")]
-use deadlib_audio::LinuxAudioBackend;
 use deadlib_audio::{
-    InitConfig, MusicStreamClockSnapshot, OutputBackendReady, OutputDeviceInfo,
-    OutputTimingSnapshot, SfxSender, StutterDiagAudioEvent, normalized_music_rate,
+    MusicStreamClockSnapshot, OutputBackendReady, OutputDeviceInfo, OutputTimingSnapshot,
+    SfxSender, StutterDiagAudioEvent, normalized_music_rate,
 };
-use deadlib_audio_backend_native::{OutputPlan, prepare_output};
+#[cfg(target_os = "linux")]
+use deadlib_audio_backend_native::LinuxAudioBackend;
+use deadlib_audio_backend_native::{InitConfig, OutputPlan, prepare_output};
 use deadlib_platform::dirs;
 use deadsync_audio_replaygain as replaygain;
 use log::info;

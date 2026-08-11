@@ -1,12 +1,14 @@
-use crate::telemetry::{
-    note_output_clock_fallback, note_output_underrun, publish_output_timing,
-    publish_output_timing_quality, report_audio_render_callback,
-};
+#![cfg(target_os = "linux")]
+
 use alsa::pcm::{Access, Format, HwParams, PCM, State, SwParams, TstampType};
 use alsa::{Ctl, Direction, ValueOr};
 use deadlib_audio::{
     AudioOutputMode, CallbackClockSource, CallbackInfo, OutputBackendReady, OutputBufferMut,
     OutputTelemetryClock, OutputTimingQuality, RenderState, SfxReceiver,
+};
+use deadlib_audio_backend_telemetry::{
+    note_output_clock_fallback, note_output_underrun, publish_output_timing,
+    publish_output_timing_quality, report_audio_render_callback,
 };
 use deadlib_platform::host_time::now_nanos;
 use libc::timespec;

@@ -13,10 +13,10 @@ use crate::theme::{
     SyncGraphMode, ThemeFlag, VersionOverlaySide, VisualStyle,
 };
 use deadlib_audio::AudioOutputMode;
-#[cfg(target_os = "linux")]
-use deadlib_audio::LinuxAudioBackend;
 use deadlib_platform::logging;
 use deadlib_render::{BackendType, PresentModePolicy};
+#[cfg(target_os = "linux")]
+use deadsync_audio_stream::LinuxAudioBackend;
 #[cfg(target_os = "windows")]
 use deadsync_input_native::WindowsPadBackend;
 use deadsync_lights::{DriverKind as LightsDriverKind, GameplayPadLightMode};

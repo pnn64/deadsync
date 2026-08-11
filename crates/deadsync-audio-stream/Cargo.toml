@@ -9,6 +9,7 @@ name = "audio_sample_transforms"
 harness = false
 
 [features]
+pipewire-audio = ["deadlib-audio-backend-native/pipewire-audio"]
 test-support = []
 
 [dependencies]

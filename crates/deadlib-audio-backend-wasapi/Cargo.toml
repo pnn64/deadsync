@@ -1,0 +1,31 @@
+[package]
+name = "deadlib-audio-backend-wasapi"
+version = "0.1.0"
+edition = "2024"
+license = "GPL-3.0"
+
+[target.'cfg(windows)'.dependencies]
+deadlib-audio = { path = "../deadlib-audio" }
+deadlib-audio-backend-telemetry = { path = "../deadlib-audio-backend-telemetry" }
+deadlib-platform = { path = "../deadlib-platform" }
+log = "0.4.33"
+windows = { version = "0.62.2", features = [
+    "Win32_Foundation",
+    "Win32_Media",
+    "Win32_Media_Audio",
+    "Win32_Media_KernelStreaming",
+    "Win32_Media_Multimedia",
+    "Win32_Devices_FunctionDiscovery",
+    "Win32_System_Com",
+    "Win32_System_Com_StructuredStorage",
+    "Win32_System_LibraryLoader",
+    "Win32_Security",
+    "Win32_System_Threading",
+    "Win32_System_Variant",
+    "Win32_UI_Shell_PropertiesSystem",
+] }
+
+[lints.clippy]
+perf = { level = "warn", priority = -1 }
+
+inline_always = "allow"

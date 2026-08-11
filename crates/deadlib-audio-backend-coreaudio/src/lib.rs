@@ -1,7 +1,5 @@
-use crate::telemetry::{
-    note_output_clock_fallback, publish_output_timing, publish_output_timing_quality,
-    report_audio_render_callback,
-};
+#![cfg(target_os = "macos")]
+
 use coreaudio::audio_unit::audio_format::LinearPcmFlags;
 use coreaudio::audio_unit::macos_helpers::{
     audio_unit_from_device_id, get_audio_device_ids_for_scope, get_available_sample_rates,
@@ -12,6 +10,10 @@ use coreaudio::audio_unit::{AudioUnit, Element, SampleFormat, Scope, StreamForma
 use deadlib_audio::{
     AudioOutputMode, CallbackClockSource, CallbackInfo, OutputBackendReady, OutputBufferMut,
     OutputTelemetryClock, OutputTimingQuality, RenderState, SfxReceiver,
+};
+use deadlib_audio_backend_telemetry::{
+    note_output_clock_fallback, publish_output_timing, publish_output_timing_quality,
+    report_audio_render_callback,
 };
 use deadlib_platform::host_time::now_nanos;
 use log::{info, warn};

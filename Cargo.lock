@@ -1164,20 +1164,108 @@ dependencies = [
 ]
 
 [[package]]
-name = "deadlib-audio-backend-native"
+name = "deadlib-audio-backend-alsa"
 version = "0.1.0"
 dependencies = [
  "alsa",
- "coreaudio-rs",
  "deadlib-audio",
+ "deadlib-audio-backend-telemetry",
  "deadlib-platform",
  "libc",
- "libloading 0.9.0",
+ "log",
+]
+
+[[package]]
+name = "deadlib-audio-backend-coreaudio"
+version = "0.1.0"
+dependencies = [
+ "coreaudio-rs",
+ "deadlib-audio",
+ "deadlib-audio-backend-telemetry",
+ "deadlib-platform",
  "log",
  "mach2",
  "objc2-core-audio",
  "objc2-core-foundation",
+]
+
+[[package]]
+name = "deadlib-audio-backend-freebsd-pcm"
+version = "0.1.0"
+dependencies = [
+ "deadlib-audio",
+ "deadlib-audio-backend-telemetry",
+ "deadlib-platform",
+ "libc",
+ "log",
+]
+
+[[package]]
+name = "deadlib-audio-backend-jack"
+version = "0.1.0"
+dependencies = [
+ "deadlib-audio",
+ "deadlib-audio-backend-telemetry",
+ "deadlib-platform",
+ "libc",
+ "libloading 0.9.0",
+ "log",
+]
+
+[[package]]
+name = "deadlib-audio-backend-native"
+version = "0.1.0"
+dependencies = [
+ "deadlib-audio",
+ "deadlib-audio-backend-alsa",
+ "deadlib-audio-backend-coreaudio",
+ "deadlib-audio-backend-freebsd-pcm",
+ "deadlib-audio-backend-jack",
+ "deadlib-audio-backend-pipewire",
+ "deadlib-audio-backend-pulse",
+ "deadlib-audio-backend-wasapi",
+ "log",
+]
+
+[[package]]
+name = "deadlib-audio-backend-pipewire"
+version = "0.1.0"
+dependencies = [
+ "deadlib-audio",
+ "deadlib-audio-backend-telemetry",
+ "deadlib-platform",
+ "log",
  "pipewire",
+]
+
+[[package]]
+name = "deadlib-audio-backend-pulse"
+version = "0.1.0"
+dependencies = [
+ "deadlib-audio",
+ "deadlib-audio-backend-telemetry",
+ "deadlib-platform",
+ "libloading 0.9.0",
+ "log",
+]
+
+[[package]]
+name = "deadlib-audio-backend-telemetry"
+version = "0.1.0"
+dependencies = [
+ "deadlib-audio",
+ "deadlib-platform",
+ "log",
+]
+
+[[package]]
+name = "deadlib-audio-backend-wasapi"
+version = "0.1.0"
+dependencies = [
+ "deadlib-audio",
+ "deadlib-audio-backend-telemetry",
+ "deadlib-platform",
+ "log",
  "windows",
 ]
 
@@ -1346,7 +1434,7 @@ dependencies = [
 
 [[package]]
 name = "deadsync"
-version = "0.5.456"
+version = "0.5.457"
 dependencies = [
  "deadlib-audio-backend-native",
  "deadlib-platform",
@@ -1782,7 +1870,7 @@ dependencies = [
 
 [[package]]
 name = "deadsync-theme-simply-love"
-version = "0.5.456"
+version = "0.5.457"
 dependencies = [
  "bitflags 2.13.1",
  "chrono",
@@ -1841,7 +1929,7 @@ dependencies = [
 
 [[package]]
 name = "deadsync-version"
-version = "0.5.456"
+version = "0.5.457"
 dependencies = [
  "log",
  "semver",

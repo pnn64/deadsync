@@ -1,0 +1,17 @@
+[package]
+name = "deadlib-audio-backend-freebsd-pcm"
+version = "0.1.0"
+edition = "2024"
+license = "GPL-3.0"
+
+[target.'cfg(target_os = "freebsd")'.dependencies]
+deadlib-audio = { path = "../deadlib-audio" }
+deadlib-audio-backend-telemetry = { path = "../deadlib-audio-backend-telemetry" }
+deadlib-platform = { path = "../deadlib-platform" }
+libc = "0.2.189"
+log = "0.4.33"
+
+[lints.clippy]
+perf = { level = "warn", priority = -1 }
+
+inline_always = "allow"

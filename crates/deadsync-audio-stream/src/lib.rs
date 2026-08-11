@@ -8,10 +8,9 @@ mod sfx_cache;
 mod stream_runtime;
 mod stretch;
 
-pub use deadlib_audio::{
-    InitConfig, MusicStreamClockSnapshot, OutputDeviceInfo, OutputTimingSnapshot,
-};
 use deadlib_audio::{MusicBlockTiming, MusicBlockWriter, normalized_music_rate};
+pub use deadlib_audio::{MusicStreamClockSnapshot, OutputDeviceInfo, OutputTimingSnapshot};
+pub use deadlib_audio_backend_native::{InitConfig, LinuxAudioBackend};
 #[cfg(windows)]
 use deadlib_platform::windows_rt::{ThreadRole, boost_current_thread};
 use deadsync_audio_decode as decode;

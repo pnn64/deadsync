@@ -1,10 +1,12 @@
-use crate::telemetry::{
-    note_output_clock_fallback, publish_output_timing, publish_output_timing_quality,
-    report_audio_render_callback,
-};
+#![cfg(target_os = "linux")]
+
 use deadlib_audio::{
     AudioOutputMode, CallbackClockSource, CallbackInfo, OutputBackendReady, OutputBufferMut,
     OutputTelemetryClock, OutputTimingQuality, RenderState, SfxReceiver,
+};
+use deadlib_audio_backend_telemetry::{
+    note_output_clock_fallback, publish_output_timing, publish_output_timing_quality,
+    report_audio_render_callback,
 };
 use deadlib_platform::host_time::now_nanos;
 use libloading::Library;

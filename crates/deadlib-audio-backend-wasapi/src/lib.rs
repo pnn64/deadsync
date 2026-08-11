@@ -1,8 +1,10 @@
-use crate::telemetry::{publish_output_timing, report_audio_render_callback};
+#![cfg(windows)]
+
 use deadlib_audio::{
     AudioOutputMode, CallbackClockSource, CallbackInfo, OutputBackendReady, OutputBufferMut,
     OutputTelemetryClock, OutputTimingQuality, RenderState, SfxReceiver,
 };
+use deadlib_audio_backend_telemetry::{publish_output_timing, report_audio_render_callback};
 use deadlib_platform::windows_rt::{ThreadRole, boost_current_thread};
 use log::{error, warn};
 use std::ffi::c_void;

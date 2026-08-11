@@ -50,51 +50,6 @@ impl FromStr for AudioOutputMode {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum LinuxAudioBackend {
-    Auto,
-    PipeWire,
-    PulseAudio,
-    Jack,
-    Alsa,
-}
-
-impl LinuxAudioBackend {
-    pub const fn as_str(self) -> &'static str {
-        match self {
-            Self::Auto => "Auto",
-            Self::PipeWire => "PipeWire",
-            Self::PulseAudio => "PulseAudio",
-            Self::Jack => "JACK",
-            Self::Alsa => "ALSA",
-        }
-    }
-}
-
-impl FromStr for LinuxAudioBackend {
-    type Err = ();
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s.trim().to_ascii_lowercase().as_str() {
-            "auto" => Ok(Self::Auto),
-            "pipewire" | "pipe-wire" | "pw" => Ok(Self::PipeWire),
-            "pulseaudio" | "pulse" => Ok(Self::PulseAudio),
-            "jack" => Ok(Self::Jack),
-            "alsa" => Ok(Self::Alsa),
-            _ => Err(()),
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct InitConfig {
-    pub output_device_index: Option<u16>,
-    pub output_mode: AudioOutputMode,
-    #[cfg(target_os = "linux")]
-    pub linux_backend: LinuxAudioBackend,
-    pub sample_rate_hz: Option<u32>,
-}
-
 #[derive(Clone, Debug)]
 pub struct OutputDeviceInfo {
     pub name: String,

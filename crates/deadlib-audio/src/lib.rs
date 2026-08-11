@@ -13,10 +13,7 @@ pub use mixer::{
     QueuedSfx, ScheduledOnset, f32_to_i16, i16_to_f32, mix_active_sfx, push_queued_sfx,
     scheduled_onset_decision,
 };
-pub use output::{
-    AudioOutputMode, InitConfig, LinuxAudioBackend, OutputBackendReady, OutputDeviceInfo,
-    OutputTimingSnapshot,
-};
+pub use output::{AudioOutputMode, OutputBackendReady, OutputDeviceInfo, OutputTimingSnapshot};
 pub use position::{
     CallbackClockSource, CallbackClockWindow, MUSIC_POS_MAP_BACKLOG_FRAMES,
     MusicStreamClockSnapshot, PlaybackPosMap, activate_music_track, active_music_track_id,
