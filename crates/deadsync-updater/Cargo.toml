@@ -15,7 +15,7 @@ serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.151"
 sha2 = "0.11.0"
 tar = { version = "0.4.46", default-features = false }
-ureq = { version = "3.3.0", features = ["json", "rustls"] }
+ureq = { version = "3.4.0", features = ["json", "rustls"] }
 zip = { version = "8.6.0", default-features = false, features = ["deflate-flate2-zlib-rs"] }
 
 [target.'cfg(any(target_os = "linux", target_os = "freebsd", target_os = "macos"))'.dependencies]
