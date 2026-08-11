@@ -33,6 +33,7 @@ members = [
     "crates/deadsync-noteskin",
     "crates/deadsync-online",
     "crates/deadlib-assets",
+    "crates/deadlib-bincode",
     "crates/deadlib-platform",
     "crates/deadlib-present",
     "crates/deadsync-profile",
