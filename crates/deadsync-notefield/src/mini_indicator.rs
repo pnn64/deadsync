@@ -738,7 +738,10 @@ pub fn zmod_mini_indicator_output(
             })
         }
         MiniIndicatorMode::Pacemaker => {
-            let pace = (progress.current_score_percent.clamp(0.0, 100.0) * 100.0).floor();
+            // `current_score_percent` is already floored to two decimals.  Recover
+            // its integer hundredths without flooring a binary approximation such
+            // as `0.29 * 100.0` to 28 instead of the Lua-equivalent 29.
+            let pace = (progress.current_score_percent.clamp(0.0, 100.0) * 100.0).round();
             let target_ratio = (params.target_score_percent / 100.0).clamp(0.0, 1.0);
             let target =
                 (progress.current_possible_ratio * 1_000_000.0 * target_ratio).floor() / 100.0;

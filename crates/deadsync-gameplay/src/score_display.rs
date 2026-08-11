@@ -319,17 +319,25 @@ pub const fn target_score_setting_percent(setting: GameplayTargetScoreSetting) -
     }
 }
 
+const DEFAULT_TARGET_PERCENT: f64 = 92.0;
+
+fn valid_target_percent(percent: f64) -> Option<f64> {
+    (percent.is_finite() && percent > 0.0).then(|| percent.min(100.0))
+}
+
 pub fn resolve_target_score_percent(
     setting: GameplayTargetScoreSetting,
     specified_percent: f64,
     personal_best: Option<f64>,
     machine_best: Option<f64>,
 ) -> f64 {
-    match setting {
-        GameplayTargetScoreSetting::SpecifiedValue => Some(specified_percent.clamp(0.0, 100.0)),
+    let percent = match setting {
+        GameplayTargetScoreSetting::SpecifiedValue => Some(specified_percent),
         GameplayTargetScoreSetting::MachineBest => machine_best,
         GameplayTargetScoreSetting::PersonalBest => personal_best,
         fixed => target_score_setting_percent(fixed),
-    }
-    .unwrap_or(92.0)
+    };
+    percent
+        .and_then(valid_target_percent)
+        .unwrap_or(DEFAULT_TARGET_PERCENT)
 }

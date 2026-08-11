@@ -102,20 +102,26 @@ fn mini_indicator_personal_best(
     side: profile_data::PlayerSide,
     score_type: profile_data::MiniIndicatorScoreType,
 ) -> Option<f64> {
+    // zmod targets the local profile. EX and Hard EX are DeadSync extensions
+    // that follow the same local-only rule with their matching scalar records.
     match score_type {
         profile_data::MiniIndicatorScoreType::Itg => {
-            scores::get_cached_score_for_side(chart_hash, side)
-                .map(|score| (score.score_percent * 100.0).clamp(0.0, 100.0))
+            scores::get_cached_local_score_for_side(chart_hash, side)
+                .and_then(|score| mini_indicator_percent(score.score_percent * 100.0))
         }
         profile_data::MiniIndicatorScoreType::Ex => {
             scores::get_cached_local_ex_score_for_side(chart_hash, side)
-                .map(|score| score.percent.clamp(0.0, 100.0))
+                .and_then(|score| mini_indicator_percent(score.percent))
         }
         profile_data::MiniIndicatorScoreType::HardEx => {
             scores::get_cached_local_hard_ex_score_for_side(chart_hash, side)
-                .map(|score| score.percent.clamp(0.0, 100.0))
+                .and_then(|score| mini_indicator_percent(score.percent))
         }
     }
+}
+
+fn mini_indicator_percent(percent: f64) -> Option<f64> {
+    (percent.is_finite() && percent > 0.0).then(|| percent.min(100.0))
 }
 
 fn mini_indicator_machine_best(
@@ -124,14 +130,14 @@ fn mini_indicator_machine_best(
 ) -> Option<f64> {
     match score_type {
         profile_data::MiniIndicatorScoreType::Itg => scores::get_machine_record_local(chart_hash)
-            .map(|(_, score)| (score.score_percent * 100.0).clamp(0.0, 100.0)),
+            .and_then(|(_, score)| mini_indicator_percent(score.score_percent * 100.0)),
         profile_data::MiniIndicatorScoreType::Ex => {
             scores::get_machine_scalar_record_local(chart_hash, false)
-                .map(|(_, score)| score.percent.clamp(0.0, 100.0))
+                .and_then(|(_, score)| mini_indicator_percent(score.percent))
         }
         profile_data::MiniIndicatorScoreType::HardEx => {
             scores::get_machine_scalar_record_local(chart_hash, true)
-                .map(|(_, score)| score.percent.clamp(0.0, 100.0))
+                .and_then(|(_, score)| mini_indicator_percent(score.percent))
         }
     }
 }
@@ -623,8 +629,8 @@ pub(crate) fn handle_practice_raw_key(
 #[cfg(test)]
 mod tests {
     use super::{
-        background_chart, mini_indicator_rival_score, policy_view, scorebox_profiles,
-        smx_sensor_value,
+        background_chart, mini_indicator_percent, mini_indicator_rival_score, policy_view,
+        scorebox_profiles, smx_sensor_value,
     };
     use deadsync_chart::GameplayChartData;
     use deadsync_gameplay::GameplaySession;
@@ -778,6 +784,56 @@ mod tests {
         assert_eq!(
             mini_indicator_rival_score(Some(&snapshot), profile_data::MiniIndicatorScoreType::Itg,),
             Some(99.9),
+        );
+    }
+
+    #[test]
+    fn mini_indicator_target_percent_rejects_missing_scores() {
+        assert_eq!(mini_indicator_percent(91.23), Some(91.23));
+        assert_eq!(mini_indicator_percent(101.0), Some(100.0));
+        assert_eq!(mini_indicator_percent(0.0), None);
+        assert_eq!(mini_indicator_percent(-1.0), None);
+        assert_eq!(mini_indicator_percent(f64::NAN), None);
+        assert_eq!(mini_indicator_percent(f64::INFINITY), None);
+    }
+
+    #[test]
+    fn zero_personal_best_uses_s_pacemaker_target() {
+        let target = deadsync_gameplay::resolve_target_score_percent(
+            deadsync_gameplay::GameplayTargetScoreSetting::PersonalBest,
+            100.0,
+            mini_indicator_percent(0.0),
+            None,
+        );
+        let output = deadsync_notefield::zmod_mini_indicator_output(
+            &deadsync_notefield::MiniIndicatorProgress {
+                judged_any: true,
+                current_score_percent: 0.5,
+                current_possible_ratio: 0.005,
+                ..Default::default()
+            },
+            deadsync_notefield::ZmodMiniIndicatorParams {
+                mode: deadsync_notefield::MiniIndicatorMode::Pacemaker,
+                color_style: deadsync_notefield::MiniIndicatorColorStyle::Default,
+                subtractive_display:
+                    deadsync_notefield::MiniIndicatorSubtractiveDisplay::CountThenPercent,
+                score_type: deadsync_notefield::MiniIndicatorScoreType::Itg,
+                combo_color: [1.0; 4],
+                is_failing: false,
+                life: 1.0,
+                rival_score_percent: 0.0,
+                target_score_percent: target,
+                stream_completion: None,
+            },
+        );
+
+        assert_eq!(target, 92.0);
+        assert_eq!(
+            output.map(|output| output.text),
+            Some(deadsync_notefield::ZmodMiniIndicatorText::SignedPercent {
+                value: 0.04,
+                negative: false,
+            })
         );
     }
 

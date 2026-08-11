@@ -10513,6 +10513,37 @@ mod tests {
             ),
             92.0
         );
+
+        for invalid in [0.0, -1.0, f64::NAN, f64::INFINITY] {
+            assert_eq!(
+                resolve_target_score_percent(
+                    GameplayTargetScoreSetting::PersonalBest,
+                    100.0,
+                    Some(invalid),
+                    None,
+                ),
+                92.0
+            );
+            assert_eq!(
+                resolve_target_score_percent(
+                    GameplayTargetScoreSetting::SpecifiedValue,
+                    invalid,
+                    None,
+                    None,
+                ),
+                92.0
+            );
+        }
+
+        assert_eq!(
+            resolve_target_score_percent(
+                GameplayTargetScoreSetting::MachineBest,
+                100.0,
+                None,
+                Some(100.5),
+            ),
+            100.0
+        );
     }
 
     #[test]

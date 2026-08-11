@@ -2963,6 +2963,37 @@ mod tests {
                 negative: false,
             }),
         );
+
+        let behind = MiniIndicatorProgress {
+            judged_any: true,
+            current_score_percent: 4.0,
+            current_possible_ratio: 0.05,
+            ..MiniIndicatorProgress::default()
+        };
+        assert_eq!(
+            zmod_mini_indicator_output(&behind, params).map(|output| output.text),
+            Some(ZmodMiniIndicatorText::SignedPercent {
+                value: 0.6,
+                negative: true,
+            }),
+        );
+
+        // Lua computes floor(actual / possible * 10000) directly.  The progress
+        // value stores that result as 0.29%, whose binary representation must not
+        // be floored a second time to 0.28%.
+        let binary_floor_edge = MiniIndicatorProgress {
+            judged_any: true,
+            current_score_percent: 0.29,
+            current_possible_ratio: 0.01,
+            ..MiniIndicatorProgress::default()
+        };
+        assert_eq!(
+            zmod_mini_indicator_output(&binary_floor_edge, params).map(|output| output.text),
+            Some(ZmodMiniIndicatorText::SignedPercent {
+                value: 0.63,
+                negative: true,
+            }),
+        );
     }
 
     #[test]
