@@ -14768,7 +14768,7 @@ mod tests {
     fn song_search_results_text(state: &super::State) -> Option<&str> {
         match &state.song_search {
             super::select_music_menu::SongSearchState::Results(results) => {
-                Some(&results.search_text)
+                results.query_label.strip_prefix('"')?.strip_suffix('"')
             }
             _ => None,
         }

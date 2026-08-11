@@ -13,7 +13,7 @@ use crate::screens::input as screen_input;
 use crate::screens::{Screen, ThemeEffect};
 use crate::views::PostSongRuntimeView;
 use chrono::Local;
-use deadlib_present::actors::{Actor, SizeSpec};
+use deadlib_present::actors::{Actor, SizeSpec, TextContent};
 use deadlib_present::color;
 use deadlib_present::space::{screen_center_x, screen_height, screen_width, widescale};
 use deadsync_chart::ChartData;
@@ -22,7 +22,6 @@ use deadsync_input::{InputEvent, VirtualAction};
 use deadsync_profile as profile_data;
 use deadsync_score as score_data;
 use deadsync_score::stage_stats;
-use std::collections::HashSet;
 use std::sync::Arc;
 
 /* ---------------------------- transitions ---------------------------- */
@@ -193,17 +192,46 @@ fn difficulty_display_name(difficulty: &str, zmod_rating_box_text: bool) -> &'st
 }
 
 fn should_display_profile_names(stages: &[stage_stats::StageSummary]) -> bool {
-    let mut p1: HashSet<&str> = HashSet::new();
-    let mut p2: HashSet<&str> = HashSet::new();
-    for s in stages {
-        if let Some(p) = s.players.first().and_then(|p| p.as_ref()) {
-            p1.insert(p.profile_name.as_str());
-        }
-        if let Some(p) = s.players.get(1).and_then(|p| p.as_ref()) {
-            p2.insert(p.profile_name.as_str());
-        }
+    (0..2).any(|side| {
+        profile_name_changed(
+            stages
+                .iter()
+                .filter_map(|stage| stage.players.get(side)?.as_ref())
+                .map(|player| player.profile_name.as_str()),
+        )
+    })
+}
+
+#[inline]
+fn profile_name_changed<'a>(mut names: impl Iterator<Item = &'a str>) -> bool {
+    let Some(first) = names.next() else {
+        return false;
+    };
+    names.any(|name| name != first)
+}
+
+#[inline]
+fn fixed_2_text(value: f64) -> TextContent {
+    TextContent::inline_format(format_args!("{value:.2}"))
+        .unwrap_or_else(|| TextContent::Owned(format!("{value:.2}")))
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn benchmark_profile_name_changed(sides: [&[&str]; 2]) -> bool {
+    sides
+        .into_iter()
+        .any(|names| profile_name_changed(names.iter().copied()))
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn benchmark_eval_numeric_text(percent: f64, ex: f64, counts: &[u32; 8]) -> usize {
+    let mut bytes = fixed_2_text(percent).as_str().len() + fixed_2_text(ex).as_str().len();
+    for count in counts {
+        bytes += TextContent::inline_u32(*count).as_str().len();
     }
-    p1.len() > 1 || p2.len() > 1
+    bytes
 }
 
 fn build_player_stats(
@@ -262,7 +290,7 @@ fn build_player_stats(
     let showex = p.show_ex_score;
 
     // Percent score (trim '%' and remove leading whitespace, like Simply Love)
-    let percent_text = format!("{:.2}", (p.score_percent * 100.0).max(0.0));
+    let percent_text = fixed_2_text((p.score_percent * 100.0).max(0.0));
     let percent_rgba = if p.grade == score_data::Grade::Failed {
         [1.0, 0.0, 0.0, 1.0]
     } else {
@@ -293,7 +321,7 @@ fn build_player_stats(
     // EX score (only if W0 is enabled)
     if show_w0 {
         let ex_color = color::JUDGMENT_RGBA[0];
-        let ex_text = format!("{:.2}", p.ex_score_percent.max(0.0));
+        let ex_text = fixed_2_text(p.ex_score_percent.max(0.0));
         let (ex_zoom, ex_y) = if showex { (0.48, -32.0) } else { (0.38, -12.0) };
         let mut ex_actor = act!(text:
             font(machine_font_key(machine_font, FontRole::Header)):
@@ -340,7 +368,7 @@ fn build_player_stats(
         let (meter_zoom, meter_y) = if show_w0 { (0.3, 5.0) } else { (0.4, -1.0) };
         let mut a = act!(text:
             font(machine_font_key(machine_font, FontRole::Header)):
-            settext(p.chart.meter.to_string()):
+            settext(TextContent::inline_u32(p.chart.meter)):
             align(align1_x, 0.5):
             xy(col1x, meter_y):
             zoom(meter_zoom):
@@ -414,7 +442,7 @@ fn build_player_stats(
 
         let mut a = act!(text:
             font(machine_font_key(machine_font, FontRole::Header)):
-            settext(count.to_string()):
+            settext(TextContent::inline_u32(count)):
             align(align2_x, 0.5):
             xy(col2x, y):
             zoom(0.28):
@@ -600,11 +628,13 @@ pub fn push_actors(
 
     let pages = pages_for(stages.len());
     let page = state.page.clamp(1, pages);
+    let page_text = TextContent::inline_u32(page as u32);
+    let pages_text = TextContent::inline_u32(pages as u32);
 
     // Centered "Page x/y"
     actors.push(act!(text:
         font(machine_font_key(state.runtime.machine_font, FontRole::Header)):
-        settext(tr_fmt("EvaluationSummary", "PageFormat", &[("page", &page.to_string()), ("pages", &pages.to_string())])):
+        settext(tr_fmt("EvaluationSummary", "PageFormat", &[("page", page_text.as_str()), ("pages", pages_text.as_str())])):
         align(0.5, 0.5):
         xy(screen_center_x(), 15.0):
         zoom(widescale(0.5, 0.6)):
@@ -721,4 +751,30 @@ pub fn in_transition() -> (Vec<Actor>, f32) {
 
 pub fn out_transition() -> (Vec<Actor>, f32) {
     transitions::fade_out_black(TRANSITION_OUT_DURATION, 1100)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn profile_change_scan_matches_distinct_name_behavior() {
+        assert!(!profile_name_changed(std::iter::empty()));
+        assert!(!profile_name_changed(["Player"].into_iter()));
+        assert!(!profile_name_changed(["Player", "Player"].into_iter()));
+        assert!(profile_name_changed(["Player", "Guest"].into_iter()));
+        assert!(profile_name_changed(
+            ["Player", "Player", "Guest"].into_iter()
+        ));
+    }
+
+    #[test]
+    fn inline_fixed_precision_matches_standard_formatting() {
+        for value in [0.0, -0.0, 0.004, 98.7654, 100.0, f64::INFINITY] {
+            assert_eq!(fixed_2_text(value).as_str(), format!("{value:.2}"));
+        }
+
+        let large = f64::MAX;
+        assert_eq!(fixed_2_text(large).as_str(), format!("{large:.2}"));
+    }
 }

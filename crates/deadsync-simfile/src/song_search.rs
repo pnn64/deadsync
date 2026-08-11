@@ -7,7 +7,11 @@ use deadsync_chart::SongData;
 
 #[derive(Clone, Debug)]
 pub struct SongSearchCandidate {
-    pub pack_name: String,
+    pub pack_name: Arc<str>,
+    pub title: Arc<str>,
+    pub subtitle: Arc<str>,
+    pub bpm: Arc<str>,
+    pub difficulties: Arc<str>,
     pub song: Arc<SongData>,
 }
 
@@ -186,13 +190,18 @@ pub fn build_song_search_candidates<'a>(
     chart_type: &str,
 ) -> Vec<SongSearchCandidate> {
     let filter = parse_song_search_filter(search_text);
-    let mut out = Vec::new();
+    let entries = entries.into_iter();
+    let (entry_count, upper) = entries.size_hint();
+    let entry_count = upper.unwrap_or(entry_count);
+    let mut out = Vec::with_capacity(entry_count);
     let mut current_pack_name: Option<&str> = None;
+    let mut current_pack_shared: Option<Arc<str>> = None;
 
     for entry in entries {
         match entry {
             SongSearchCatalogEntry::PackHeader(name) => {
                 current_pack_name = Some(name);
+                current_pack_shared = None;
             }
             SongSearchCatalogEntry::Song(song) => {
                 if !song
@@ -245,8 +254,14 @@ pub fn build_song_search_candidates<'a>(
                     }
                 }
 
+                let pack_name =
+                    Arc::clone(current_pack_shared.get_or_insert_with(|| Arc::from(pack_name)));
                 out.push(SongSearchCandidate {
-                    pack_name: pack_name.to_string(),
+                    pack_name,
+                    title: Arc::from(song.display_title(false)),
+                    subtitle: Arc::from(song.display_subtitle(false)),
+                    bpm: Arc::from(song.formatted_chart_display_bpm(None)),
+                    difficulties: Arc::from(song_search_difficulties_text(song, chart_type)),
                     song: Arc::clone(song),
                 });
             }
@@ -402,8 +417,42 @@ mod tests {
         let candidates = build_song_search_candidates(entries, "warm/alpha", "dance-single");
 
         assert_eq!(candidates.len(), 1);
-        assert_eq!(candidates[0].pack_name, "Warmups");
+        assert_eq!(candidates[0].pack_name.as_ref(), "Warmups");
         assert_eq!(candidates[0].song.title, "Alpha");
+    }
+
+    #[test]
+    fn candidates_prepare_display_text_and_share_pack_storage() {
+        let alpha = test_song_with_bpm("Alpha", "128", 128.0, 128.0);
+        let beta = test_song_with_bpm("Beta", "128", 128.0, 128.0);
+        let entries = [
+            SongSearchCatalogEntry::PackHeader("Warmups"),
+            SongSearchCatalogEntry::Song(&alpha),
+            SongSearchCatalogEntry::Song(&beta),
+        ];
+
+        let candidates = build_song_search_candidates(entries, "", "dance-single");
+
+        assert_eq!(candidates.len(), 2);
+        assert!(Arc::ptr_eq(
+            &candidates[0].pack_name,
+            &candidates[1].pack_name
+        ));
+        for candidate in &candidates {
+            assert_eq!(
+                candidate.title.as_ref(),
+                candidate.song.display_title(false)
+            );
+            assert_eq!(
+                candidate.subtitle.as_ref(),
+                candidate.song.display_subtitle(false)
+            );
+            assert_eq!(
+                candidate.bpm.as_ref(),
+                candidate.song.formatted_chart_display_bpm(None)
+            );
+            assert_eq!(candidate.difficulties.as_ref(), "12");
+        }
     }
 
     #[test]

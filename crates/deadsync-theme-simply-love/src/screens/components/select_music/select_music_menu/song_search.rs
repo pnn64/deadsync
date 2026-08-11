@@ -2,13 +2,13 @@ use crate::act;
 use crate::assets::{FontRole, machine_font_key};
 use crate::config::MachineFont;
 use crate::screens::select_music::MusicWheelEntry;
-use deadlib_present::actors::Actor;
+use deadlib_present::actors::{Actor, TextContent};
 use deadlib_present::color;
 use deadlib_present::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 use deadsync_simfile::song_search::{
     SongSearchCandidate, SongSearchCatalogEntry, build_song_search_candidates,
-    song_search_difficulties_text,
 };
+use std::sync::Arc;
 
 use super::scroll_anim_dir;
 
@@ -32,11 +32,13 @@ const SONG_SEARCH_DETAIL_LABEL_W: f32 = 145.0;
 const SONG_SEARCH_DETAIL_VALUE_W: f32 = 115.0;
 const SONG_SEARCH_WHEEL_SLOTS: usize = 12;
 const SONG_SEARCH_WHEEL_FOCUS_SLOT: usize = SONG_SEARCH_WHEEL_SLOTS / 2 - 1;
+const SONG_SEARCH_DETAIL_LABELS: [&str; 5] =
+    ["Pack:", "Song:", "Subtitle:", "BPMs:", "Difficulties:"];
 
 #[derive(Clone, Debug)]
 pub struct SongSearchResultsState {
-    pub search_text: String,
-    pub chart_type: &'static str,
+    pub query_label: Arc<str>,
+    pub result_count_label: Arc<str>,
     pub candidates: Vec<SongSearchCandidate>,
     pub selected_index: usize,
     pub prev_selected_index: usize,
@@ -84,9 +86,11 @@ pub fn begin_song_search_results(
         &trimmed,
         chart_type,
     );
+    let query_label = Arc::from(format!("\"{trimmed}\""));
+    let result_count_label = Arc::from(format!("{} Results Found", candidates.len()));
     SongSearchState::Results(SongSearchResultsState {
-        search_text: trimmed,
-        chart_type,
+        query_label,
+        result_count_label,
         candidates,
         selected_index: 0,
         prev_selected_index: 0,
@@ -168,10 +172,17 @@ pub fn build_song_search_overlay(
     active_color_index: i32,
     machine_font: MachineFont,
 ) -> Option<Vec<Actor>> {
-    let mut actors = Vec::new();
     if matches!(state, SongSearchState::Hidden) {
         return None;
     }
+    let capacity = match state {
+        SongSearchState::Hidden => 0,
+        SongSearchState::TextEntry(_) => 7,
+        SongSearchState::Results(results) => {
+            19 + 10 * usize::from(song_search_focused_candidate(results).is_some())
+        }
+    };
+    let mut actors = Vec::with_capacity(capacity);
 
     actors.push(act!(quad:
         align(0.0, 0.0):
@@ -314,7 +325,7 @@ pub fn build_song_search_overlay(
             ));
             actors.push(act!(text:
                 font("miso"):
-                settext(format!("\"{}\"", results.search_text)):
+                settext(Arc::clone(&results.query_label)):
                 align(0.5, 0.5):
                 xy(pane_cx, pane_cy - SONG_SEARCH_PANE_H * 0.5 - SONG_SEARCH_TEXT_H * 3.0):
                 zoom(0.8):
@@ -325,7 +336,7 @@ pub fn build_song_search_overlay(
             ));
             actors.push(act!(text:
                 font("miso"):
-                settext(format!("{} Results Found", results.candidates.len())):
+                settext(Arc::clone(&results.result_count_label)):
                 align(0.5, 0.5):
                 xy(pane_cx, pane_cy - SONG_SEARCH_PANE_H * 0.5 - SONG_SEARCH_TEXT_H):
                 zoom(0.8):
@@ -342,13 +353,7 @@ pub fn build_song_search_overlay(
                 let y = (slot_pos + SONG_SEARCH_WHEEL_FOCUS_SLOT as f32 + 1.0)
                     .mul_add(SONG_SEARCH_ROW_SPACING, list_base_y);
                 let focused = slot_pos.abs() < 0.5;
-                let mut text = "Exit".to_string();
-                let mut base_rgb = [1.0, 0.2, 0.2];
-                if row_idx < results.candidates.len() {
-                    let song = &results.candidates[row_idx].song;
-                    text = song.display_title(false).to_string();
-                    base_rgb = [1.0, 1.0, 1.0];
-                }
+                let (text, base_rgb) = song_search_row_text(results, row_idx);
                 let focus_tint = if focused {
                     [selected_color[0], selected_color[1], selected_color[2]]
                 } else {
@@ -379,20 +384,12 @@ pub fn build_song_search_overlay(
             }
 
             if let Some(candidate) = song_search_focused_candidate(results) {
-                let details = [
-                    ("Pack", candidate.pack_name.clone()),
-                    ("Song", candidate.song.display_title(false).to_string()),
-                    (
-                        "Subtitle",
-                        candidate.song.display_subtitle(false).to_string(),
-                    ),
-                    ("BPMs", candidate.song.formatted_chart_display_bpm(None)),
-                    (
-                        "Difficulties",
-                        song_search_difficulties_text(candidate.song.as_ref(), results.chart_type),
-                    ),
-                ];
-                for (i, (label, value)) in details.iter().enumerate() {
+                let values = song_search_detail_values(candidate);
+                for (i, (label, value)) in SONG_SEARCH_DETAIL_LABELS
+                    .into_iter()
+                    .zip(values)
+                    .enumerate()
+                {
                     let zoom = 0.8;
                     // Matches Simply Love's visible cap from `zoom(0.8):maxwidth(width / zoom)`.
                     let row_i = i as f32;
@@ -406,7 +403,7 @@ pub fn build_song_search_overlay(
                         + 8.0 * value_row;
                     actors.push(act!(text:
                         font("miso"):
-                        settext(format!("{label}:")):
+                        settext(label):
                         align(0.0, 0.5):
                         xy(pane_cx + 10.0, label_y):
                         maxwidth(SONG_SEARCH_DETAIL_LABEL_W / zoom):
@@ -417,7 +414,7 @@ pub fn build_song_search_overlay(
                     ));
                     actors.push(act!(text:
                         font("miso"):
-                        settext(value.clone()):
+                        settext(Arc::clone(value)):
                         align(0.0, 0.5):
                         xy(pane_cx + 40.0, value_y):
                         maxwidth(SONG_SEARCH_DETAIL_VALUE_W / zoom):
@@ -432,6 +429,59 @@ pub fn build_song_search_overlay(
     }
 
     Some(actors)
+}
+
+#[inline]
+fn song_search_row_text(
+    results: &SongSearchResultsState,
+    row_idx: usize,
+) -> (TextContent, [f32; 3]) {
+    results.candidates.get(row_idx).map_or(
+        (TextContent::Static("Exit"), [1.0, 0.2, 0.2]),
+        |candidate| {
+            (
+                TextContent::Shared(Arc::clone(&candidate.title)),
+                [1.0, 1.0, 1.0],
+            )
+        },
+    )
+}
+
+#[inline]
+fn song_search_detail_values(candidate: &SongSearchCandidate) -> [&Arc<str>; 5] {
+    [
+        &candidate.pack_name,
+        &candidate.title,
+        &candidate.subtitle,
+        &candidate.bpm,
+        &candidate.difficulties,
+    ]
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn benchmark_song_search_frame_text(results: &SongSearchResultsState) -> usize {
+    let total_items = song_search_total_items(results).max(1);
+    let query = TextContent::Shared(Arc::clone(&results.query_label));
+    let result_count = TextContent::Shared(Arc::clone(&results.result_count_label));
+    let mut bytes = query.as_str().len() + result_count.as_str().len();
+    for slot_idx in 0..SONG_SEARCH_WHEEL_SLOTS {
+        let offset = slot_idx as isize - SONG_SEARCH_WHEEL_FOCUS_SLOT as isize;
+        let row_idx =
+            ((results.selected_index as isize + offset).rem_euclid(total_items as isize)) as usize;
+        let (text, _) = song_search_row_text(results, row_idx);
+        bytes += text.as_str().len();
+    }
+    if let Some(candidate) = song_search_focused_candidate(results) {
+        for (label, value) in SONG_SEARCH_DETAIL_LABELS
+            .into_iter()
+            .zip(song_search_detail_values(candidate))
+        {
+            let value = TextContent::Shared(Arc::clone(value));
+            bytes += label.len() + value.as_str().len();
+        }
+    }
+    bytes
 }
 
 #[cfg(test)]
@@ -487,12 +537,17 @@ mod tests {
         let pack = "Pack Name Long Enough To Need Horizontal Compression";
         let title = "Song Title Long Enough To Need Horizontal Compression";
         let subtitle = "Subtitle Long Enough To Need Horizontal Compression";
+        let song = test_song(title, subtitle);
         let state = SongSearchState::Results(SongSearchResultsState {
-            search_text: "long".to_string(),
-            chart_type: "dance-single",
+            query_label: Arc::from("\"long\""),
+            result_count_label: Arc::from("1 Results Found"),
             candidates: vec![SongSearchCandidate {
-                pack_name: pack.to_string(),
-                song: test_song(title, subtitle),
+                pack_name: Arc::from(pack),
+                title: Arc::from(title),
+                subtitle: Arc::from(subtitle),
+                bpm: Arc::from("128"),
+                difficulties: Arc::from("-"),
+                song,
             }],
             selected_index: 0,
             prev_selected_index: 0,

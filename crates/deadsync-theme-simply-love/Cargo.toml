@@ -33,6 +33,11 @@ name = "select_music_hot_paths"
 harness = false
 required-features = ["bench-support"]
 
+[[bench]]
+name = "screen_allocation_hot_paths"
+harness = false
+required-features = ["bench-support"]
+
 [dependencies]
 deadlib-assets = { path = "../deadlib-assets" }
 deadlib-present = { path = "../deadlib-present" }
