@@ -533,7 +533,10 @@ pub enum MusicWheelSlotRuntimeRequest<'a> {
         song: &'a deadsync_chart::SongData,
         chart_hashes: [Option<&'a str>; 2],
         lua_submit_allowed: [bool; 2],
+        has_edit: bool,
         is_srpg_event: bool,
+        unlock_song_dir: Option<&'a str>,
+        sync_pref: deadsync_chart::SyncPref,
     },
 }
 
@@ -570,10 +573,25 @@ pub struct MusicWheelSideRuntimeView {
     pub locked: bool,
 }
 
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct MusicWheelSlotRuntimeView {
     pub sides: [MusicWheelSideRuntimeView; 2],
     pub lua_submit_allowed: [bool; 2],
+    pub has_edit: bool,
+    pub is_srpg_event: bool,
+    pub sync_pref: deadsync_chart::SyncPref,
+}
+
+impl Default for MusicWheelSlotRuntimeView {
+    fn default() -> Self {
+        Self {
+            sides: Default::default(),
+            lua_submit_allowed: [false; 2],
+            has_edit: false,
+            is_srpg_event: false,
+            sync_pref: deadsync_chart::SyncPref::Default,
+        }
+    }
 }
 
 /// Fixed-size shell-prepared snapshot consumed by shared wheel composition.

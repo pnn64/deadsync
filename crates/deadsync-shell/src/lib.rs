@@ -52,6 +52,8 @@ mod window_state;
 pub(crate) use command::Command;
 pub(crate) use course::CourseRunState;
 pub(crate) use deadsync_theme::views::FrameStatsSample;
+#[cfg(feature = "bench-support")]
+pub use dynamic_media::benchmark_media_completion_budget;
 pub(crate) use frame_loop::FrameLoopState;
 pub(crate) use frame_pacing_trace::GameplayPacingTrace;
 pub(crate) use frame_stats::FrameStatsController;

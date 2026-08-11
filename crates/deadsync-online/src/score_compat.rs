@@ -51,7 +51,7 @@ pub use profile::{
     groovestats_score_service_allowed as is_gs_get_scores_service_allowed, import_itl_json,
     import_local_scores_for_id as import_local_scores,
     itl_song_folder_unlocked_for_side as is_itl_song_folder_unlocked_for_side,
-    itl_song_folder_unlocked_with_profile as is_itl_song_folder_unlocked_with_profile,
+    itl_song_folders_unlocked_with_profiles,
     machine_leaderboard_local_with_names as get_machine_leaderboard_local_with_names,
     machine_leaderboard_local_without_names as get_machine_leaderboard_local,
     machine_record_local as get_machine_record_local,

@@ -1,7 +1,9 @@
-use deadsync_chart::{SongData, SyncPref};
+use deadsync_chart::{STANDARD_DIFFICULTY_COUNT, STANDARD_DIFFICULTY_NAMES, SongData, SyncPref};
+use deadsync_score::is_itl_unlocks_pack;
+use deadsync_simfile::event_intro::is_srpg_event_song;
 use deadsync_theme_simply_love::screens::select_music::{
     MusicWheelEntry, benchmark_chart_info_text_new, benchmark_chart_info_text_old,
-    benchmark_fill_displayed_entries, benchmark_select_music_entries,
+    benchmark_fill_displayed_entries, benchmark_select_music_entries, benchmark_wheel_song_meta,
 };
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::alloc::{GlobalAlloc, Layout, System};
@@ -22,6 +24,7 @@ const LOOKUP_OPS: usize = 200_000;
 const SORT_OPS: usize = 2_000;
 const REFILL_OPS: usize = 5_000;
 const CHART_INFO_OPS: usize = 500_000;
+const WHEEL_META_OPS: usize = 200_000;
 
 struct CountingAlloc {
     enabled: AtomicBool,
@@ -395,6 +398,108 @@ fn lookup_checksum<S: BuildHasher>(
     checksum
 }
 
+struct LegacyWheelMeta {
+    preferred: FxHashMap<usize, [usize; STANDARD_DIFFICULTY_COUNT]>,
+    edits: FxHashSet<usize>,
+    pack_prefs: FxHashMap<String, SyncPref>,
+}
+
+fn legacy_preferred(song: &SongData) -> [usize; STANDARD_DIFFICULTY_COUNT] {
+    let mut exact = [usize::MAX; STANDARD_DIFFICULTY_COUNT];
+    let mut nearest = [usize::MAX; STANDARD_DIFFICULTY_COUNT];
+    let mut distance = [usize::MAX; STANDARD_DIFFICULTY_COUNT];
+    for (chart_index, chart) in song.charts.iter().enumerate() {
+        if !chart.chart_type.eq_ignore_ascii_case("dance-single") {
+            continue;
+        }
+        let Some(difficulty) = STANDARD_DIFFICULTY_NAMES
+            .iter()
+            .position(|name| chart.difficulty.eq_ignore_ascii_case(name))
+        else {
+            continue;
+        };
+        exact[difficulty] = exact[difficulty].min(chart_index);
+        if !chart.has_note_data {
+            continue;
+        }
+        for preferred in 0..STANDARD_DIFFICULTY_COUNT {
+            let next = difficulty.abs_diff(preferred);
+            if next < distance[preferred] {
+                distance[preferred] = next;
+                nearest[preferred] = chart_index;
+            }
+        }
+    }
+    std::array::from_fn(|index| {
+        if exact[index] == usize::MAX {
+            nearest[index]
+        } else {
+            exact[index]
+        }
+    })
+}
+
+fn legacy_wheel_meta(songs: &[Arc<SongData>]) -> LegacyWheelMeta {
+    let mut preferred = FxHashMap::with_capacity_and_hasher(songs.len(), Default::default());
+    let mut edits = FxHashSet::with_capacity_and_hasher(songs.len(), Default::default());
+    let mut pack_prefs = FxHashMap::with_capacity_and_hasher(songs.len(), Default::default());
+    for (index, song) in songs.iter().enumerate() {
+        let ptr = Arc::as_ptr(song) as usize;
+        preferred.insert(ptr, legacy_preferred(song));
+        if song.charts.iter().any(|chart| {
+            chart.chart_type.eq_ignore_ascii_case("dance-single")
+                && chart.difficulty.eq_ignore_ascii_case("edit")
+        }) {
+            edits.insert(ptr);
+        }
+        let pack = song
+            .simfile_path
+            .parent()
+            .and_then(Path::parent)
+            .and_then(Path::file_name)
+            .and_then(|name| name.to_str())
+            .unwrap();
+        pack_prefs.insert(
+            pack.to_string(),
+            if index % 2 == 0 {
+                SyncPref::Itg
+            } else {
+                SyncPref::Null
+            },
+        );
+    }
+    LegacyWheelMeta {
+        preferred,
+        edits,
+        pack_prefs,
+    }
+}
+
+fn legacy_wheel_meta_checksum(songs: &[Arc<SongData>], meta: &LegacyWheelMeta) -> u64 {
+    songs
+        .iter()
+        .enumerate()
+        .fold(0u64, |checksum, (index, song)| {
+            let ptr = Arc::as_ptr(song) as usize;
+            let pack = song
+                .simfile_path
+                .parent()
+                .and_then(Path::parent)
+                .and_then(Path::file_name)
+                .and_then(|name| name.to_str())
+                .unwrap();
+            let request_srpg = is_srpg_event_song(black_box(song));
+            let push_srpg = is_srpg_event_song(black_box(song));
+            checksum.wrapping_add(
+                meta.preferred[&ptr][index % STANDARD_DIFFICULTY_COUNT] as u64
+                    ^ u64::from(meta.edits.contains(&ptr)).rotate_left(8)
+                    ^ u64::from(request_srpg && push_srpg).rotate_left(16)
+                    ^ u64::from(is_itl_unlocks_pack(pack)).rotate_left(24)
+                    ^ (meta.pack_prefs[pack] as u64).rotate_left(32),
+            )
+        })
+}
+
 fn main() {
     deadsync_theme_simply_love::i18n::init(deadsync_assets::language::load_for_tests("en"));
     let shared = benchmark_select_music_entries(PACK_COUNT, SONGS_PER_PACK);
@@ -521,6 +626,23 @@ fn main() {
         CHART_INFO_OPS,
         &old_chart_info,
         &new_chart_info,
+    );
+
+    let wheel_meta = benchmark_wheel_song_meta(19);
+    let legacy_meta = legacy_wheel_meta(wheel_meta.songs());
+    assert_eq!(
+        legacy_wheel_meta_checksum(wheel_meta.songs(), &legacy_meta),
+        wheel_meta.prepared_checksum(),
+    );
+    let old_meta = measure(WHEEL_META_OPS, 500, || {
+        legacy_wheel_meta_checksum(wheel_meta.songs(), &legacy_meta)
+    });
+    let new_meta = measure(WHEEL_META_OPS, 500, || wheel_meta.prepared_checksum());
+    print_pair(
+        "5. prepared visible-song metadata",
+        WHEEL_META_OPS,
+        &old_meta,
+        &new_meta,
     );
 
     println!(

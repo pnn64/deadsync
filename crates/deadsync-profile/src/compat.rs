@@ -33,7 +33,7 @@ pub use crate::app_runtime::{
     ensure_score_caches_loaded_for_id, gameplay_side_for_player, get_arrowcloud_api_key_for_id,
     get_groovestats_api_key_for_id, groovestats_score_service_allowed, import_itl_json,
     import_local_scores_for_id, itl_song_folder_unlocked_for_side,
-    itl_song_folder_unlocked_with_profile,
+    itl_song_folders_unlocked_with_profiles,
     load_default_profiles_for_joined_sides_from_config as load_default_profiles_for_joined_sides,
     load_pad_configs, load_profiles_from_config as load, local_profile_dir_for_id,
     local_score_profile_source_for_id, local_score_profile_sources, machine_common_player_options,

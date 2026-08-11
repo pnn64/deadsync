@@ -979,6 +979,27 @@ pub fn cached_itl_song_folder_unlocked(profile_id: &str, song_folder: &str) -> b
         .song_folder_unlocked(profile_id, song_folder)
 }
 
+/// Resolve a fixed Select Music wheel transaction under one cache lock.
+/// Missing folders and guest/blank profiles are reported as locked.
+pub fn cached_itl_song_folders_unlocked<const N: usize>(
+    song_folders: &[Option<&str>; N],
+    profile_ids: [Option<&str>; 2],
+) -> [[bool; 2]; N] {
+    let profile_ids = profile_ids.map(|profile_id| {
+        profile_id
+            .map(str::trim)
+            .filter(|profile_id| !profile_id.is_empty())
+    });
+    let cache = ITL_SCORE_CACHE.lock().unwrap();
+    std::array::from_fn(|slot| {
+        std::array::from_fn(|side| {
+            song_folders[slot]
+                .zip(profile_ids[side])
+                .is_some_and(|(folder, profile_id)| cache.song_folder_unlocked(profile_id, folder))
+        })
+    })
+}
+
 pub fn runtime_cached_itl_song_folder_unlocked<L>(
     song_folder: &str,
     profile_id: Option<&str>,
@@ -992,6 +1013,33 @@ where
     };
     runtime_ensure_itl_score_profile_loaded(profile_id, &mut load_profile);
     cached_itl_song_folder_unlocked(profile_id, song_folder)
+}
+
+pub fn runtime_cached_itl_song_folders_unlocked<const N: usize, L>(
+    song_folders: &[Option<&str>; N],
+    profile_ids: [Option<&str>; 2],
+    mut load_profile: L,
+) -> [[bool; 2]; N]
+where
+    L: FnMut(&str) -> ItlFileData,
+{
+    if !song_folders.iter().any(Option::is_some) {
+        return [[false; 2]; N];
+    }
+    for (side, profile_id) in profile_ids.into_iter().enumerate() {
+        let Some(profile_id) = profile_id.map(str::trim).filter(|id| !id.is_empty()) else {
+            continue;
+        };
+        if side == 1
+            && profile_ids[0]
+                .map(str::trim)
+                .is_some_and(|first| first == profile_id)
+        {
+            continue;
+        }
+        runtime_ensure_itl_score_profile_loaded(profile_id, &mut load_profile);
+    }
+    cached_itl_song_folders_unlocked(song_folders, profile_ids)
 }
 
 pub fn cached_itl_chart_no_cmod_for_song(
@@ -2774,6 +2822,57 @@ mod tests {
             Some(profile_id),
             |_| ItlFileData::default()
         ));
+    }
+
+    #[test]
+    fn batched_itl_unlocks_match_scalar_queries_for_two_profiles() {
+        const SLOTS: usize = 5;
+        let p1 = "runtime-batch-itl-folders-p1";
+        let p2 = "runtime-batch-itl-folders-p2";
+        let folders = [Some("A"), None, Some("B"), Some("C"), Some("A")];
+        let mut p1_data = ItlFileData::default();
+        p1_data.unlock_folders.insert("A".to_string(), true);
+        p1_data.unlock_folders.insert("C".to_string(), true);
+        let mut p2_data = ItlFileData::default();
+        p2_data.unlock_folders.insert("B".to_string(), true);
+        set_itl_score_profile(p1, p1_data);
+        set_itl_score_profile(p2, p2_data);
+
+        let scalar: [[bool; 2]; SLOTS] = std::array::from_fn(|slot| {
+            [
+                folders[slot].is_some_and(|folder| {
+                    runtime_cached_itl_song_folder_unlocked(folder, Some(p1), |_| {
+                        ItlFileData::default()
+                    })
+                }),
+                folders[slot].is_some_and(|folder| {
+                    runtime_cached_itl_song_folder_unlocked(folder, Some(p2), |_| {
+                        ItlFileData::default()
+                    })
+                }),
+            ]
+        });
+        let batched =
+            runtime_cached_itl_song_folders_unlocked(&folders, [Some(p1), Some(p2)], |_| {
+                ItlFileData::default()
+            });
+
+        assert_eq!(batched, scalar);
+        assert_eq!(batched[0], [true, false]);
+        assert_eq!(batched[1], [false, false]);
+        assert_eq!(batched[2], [false, true]);
+
+        let mut unexpected_loads = 0;
+        let none = runtime_cached_itl_song_folders_unlocked(
+            &[None; SLOTS],
+            [Some("not-loaded-p1"), Some("not-loaded-p2")],
+            |_| {
+                unexpected_loads += 1;
+                ItlFileData::default()
+            },
+        );
+        assert_eq!(none, [[false; 2]; SLOTS]);
+        assert_eq!(unexpected_loads, 0);
     }
 
     #[test]

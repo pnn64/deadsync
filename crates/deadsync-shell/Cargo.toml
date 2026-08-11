@@ -4,6 +4,14 @@ version = "0.1.0"
 edition = "2024"
 license = "GPL-3.0"
 
+[features]
+bench-support = []
+
+[[bench]]
+name = "dynamic_media_completion_budget"
+harness = false
+required-features = ["bench-support"]
+
 
 [dependencies]
 deadlib-assets = { path = "../deadlib-assets" }
@@ -59,4 +67,3 @@ objc2-foundation = "0.3.2"
 perf = { level = "warn", priority = -1 }
 
 inline_always = "allow"
-

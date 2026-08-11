@@ -1,7 +1,9 @@
 use deadsync_score::{
-    CachedScore, Grade, ScoreCacheAccess, ScoreCacheRuntimeKind, ScoreCacheRuntimeResult,
-    ScoreProfilePaths, runtime_cached_best_itg_scores, runtime_lock_score_caches,
-    runtime_seed_gs_score, runtime_seed_local_itg_score,
+    CachedScore, Grade, ItlFileData, ScoreCacheAccess, ScoreCacheRuntimeKind,
+    ScoreCacheRuntimeResult, ScoreProfilePaths, runtime_cached_best_itg_scores,
+    runtime_cached_itl_song_folder_unlocked, runtime_cached_itl_song_folders_unlocked,
+    runtime_lock_score_caches, runtime_seed_gs_score, runtime_seed_local_itg_score,
+    set_itl_score_profile,
 };
 use smallvec::smallvec;
 use std::alloc::{GlobalAlloc, Layout, System};
@@ -14,8 +16,11 @@ static ALLOC: CountingAlloc = CountingAlloc::new();
 
 const DIAGNOSTIC_ITERS: usize = 2_000_000;
 const BATCH_ITERS: usize = 100_000;
+const UNLOCK_ITERS: usize = 100_000;
 const QUERY_COUNT: usize = 38;
 const PROFILE: &str = "score-cache-hot-path-benchmark";
+const UNLOCK_P1: &str = "score-cache-unlock-p1";
+const UNLOCK_P2: &str = "score-cache-unlock-p2";
 
 struct CountingAlloc {
     enabled: AtomicBool,
@@ -299,6 +304,31 @@ fn score_checksum(scores: &[Option<CachedScore>]) -> u64 {
         })
 }
 
+fn legacy_unlocks<const N: usize>(folders: &[Option<&str>; N]) -> [[bool; 2]; N] {
+    std::array::from_fn(|slot| {
+        std::array::from_fn(|side| {
+            folders[slot].is_some_and(|folder| {
+                runtime_cached_itl_song_folder_unlocked(
+                    folder,
+                    Some([UNLOCK_P1, UNLOCK_P2][side]),
+                    |_| ItlFileData::default(),
+                )
+            })
+        })
+    })
+}
+
+fn unlock_checksum<const N: usize>(membership: &[[bool; 2]; N]) -> u64 {
+    membership
+        .iter()
+        .enumerate()
+        .fold(0u64, |checksum, (slot, sides)| {
+            checksum.wrapping_add(
+                (u64::from(sides[0]) | (u64::from(sides[1]) << 1)).rotate_left(slot as u32),
+            )
+        })
+}
+
 fn main() {
     let score = CachedScore {
         grade: Grade::Tier02,
@@ -352,5 +382,46 @@ fn main() {
         BATCH_ITERS,
         &old_batch,
         &new_batch,
+    );
+
+    let unlock_folders: [String; 19] =
+        std::array::from_fn(|index| format!("ITL Unlock Song {index:02}"));
+    let unlock_queries: [Option<&str>; 19] =
+        std::array::from_fn(|index| (index % 5 != 4).then_some(unlock_folders[index].as_str()));
+    let mut p1 = ItlFileData::default();
+    let mut p2 = ItlFileData::default();
+    for (index, folder) in unlock_folders.iter().enumerate() {
+        if index % 2 == 0 {
+            p1.unlock_folders.insert(folder.clone(), true);
+        }
+        if index % 3 == 0 {
+            p2.unlock_folders.insert(folder.clone(), true);
+        }
+    }
+    set_itl_score_profile(UNLOCK_P1, p1);
+    set_itl_score_profile(UNLOCK_P2, p2);
+    let old_unlocks = legacy_unlocks(&unlock_queries);
+    let new_unlocks = runtime_cached_itl_song_folders_unlocked(
+        &unlock_queries,
+        [Some(UNLOCK_P1), Some(UNLOCK_P2)],
+        |_| ItlFileData::default(),
+    );
+    assert_eq!(old_unlocks, new_unlocks);
+
+    let old_unlock = measure(UNLOCK_ITERS, || {
+        unlock_checksum(&legacy_unlocks(&unlock_queries))
+    });
+    let new_unlock = measure(UNLOCK_ITERS, || {
+        unlock_checksum(&runtime_cached_itl_song_folders_unlocked(
+            &unlock_queries,
+            [Some(UNLOCK_P1), Some(UNLOCK_P2)],
+            |_| ItlFileData::default(),
+        ))
+    });
+    print_pair(
+        "fixed 19-slot / two-profile ITL unlock transaction",
+        UNLOCK_ITERS,
+        &old_unlock,
+        &new_unlock,
     );
 }

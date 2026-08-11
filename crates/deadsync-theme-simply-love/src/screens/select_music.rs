@@ -43,10 +43,12 @@ use deadlib_present::space::{
     widescale,
 };
 use deadlib_render::{BlendMode, MeshVertex, SamplerDesc, SamplerFilter};
+#[cfg(feature = "bench-support")]
+use deadsync_chart::SyncPref;
 use deadsync_chart::song::{chart_ix_for_steps_index, format_display_bpm_range};
 use deadsync_chart::{
     ChartData, ChartDisplayBpm, STANDARD_DIFFICULTY_COUNT, STANDARD_DIFFICULTY_NAMES, SongData,
-    SongPack, SyncPref,
+    SongPack,
 };
 use deadsync_config::prelude::GameFlag;
 use deadsync_core::input::InputSource;
@@ -1656,11 +1658,17 @@ pub struct State {
     cached_chart_ix_p2: Option<usize>,
     cached_edits: Option<EditSortCache>,
     cached_standard_chart_ixs: [Option<usize>; NUM_STANDARD_DIFFICULTIES],
-    wheel_preferred_chart_ixs: FxHashMap<usize, music_wheel::WheelPreferredChartIndices>,
+    /// Immutable wheel metadata, keyed by the stable `Arc<SongData>` address.
+    /// Select Music owns it on the main thread for the screen lifetime and
+    /// pre-sizes/populates it during initialization. Every accepted song has
+    /// one entry; content refresh replaces the whole screen state, so there is
+    /// no live miss, eviction, or incremental destruction path. A defensive
+    /// miss falls back to the exact scans used while building the cache.
+    /// `select_music_hot_paths` reports lookup cycles/allocation churn. The
+    /// worst steady-frame cost is one pointer-key lookup per visible song.
+    wheel_song_meta: FxHashMap<usize, music_wheel::WheelSongMeta>,
     pack_total_seconds_by_index: Vec<f64>,
     pack_color_indices: Vec<usize>,
-    song_has_edit_ptrs: FxHashSet<usize>,
-    pack_sync_prefs: FxHashMap<String, SyncPref>,
     new_pack_names: FxHashSet<String>,
 }
 
@@ -3333,13 +3341,9 @@ pub fn init(init_view: SelectMusicInitView) -> State {
 
     let mut all_entries = Vec::with_capacity(total_packs.saturating_add(total_songs));
     let mut scanned_pack_names = Vec::with_capacity(total_packs);
-    let mut pack_sync_prefs = FxHashMap::with_capacity_and_hasher(total_packs, Default::default());
     let mut pack_total_seconds_by_index = vec![0.0_f64; total_packs];
     let pack_color_indices = song_group_color_indices(song_cache);
-    let mut song_has_edit_ptrs =
-        FxHashSet::with_capacity_and_hasher(total_songs, Default::default());
-    let mut wheel_preferred_chart_ixs =
-        FxHashMap::with_capacity_and_hasher(total_songs, Default::default());
+    let mut wheel_song_meta = FxHashMap::with_capacity_and_hasher(total_songs, Default::default());
     let mut scored_pack_names = FxHashSet::default();
 
     let last_played = init_view.last_played.clone();
@@ -3381,12 +3385,17 @@ pub fn init(init_view: SelectMusicInitView) -> State {
             if !has_target_chart_type {
                 continue;
             }
-            if has_edit {
-                song_has_edit_ptrs.insert(Arc::as_ptr(song) as usize);
-            }
-            wheel_preferred_chart_ixs.insert(
+            let is_itl_unlock_pack = song_pack_and_dir_name(song)
+                .is_some_and(|(pack_dir, _)| score_data::is_itl_unlocks_pack(pack_dir));
+            wheel_song_meta.insert(
                 Arc::as_ptr(song) as usize,
-                music_wheel::preferred_chart_indices(song, target_chart_type),
+                music_wheel::wheel_song_meta(
+                    song,
+                    target_chart_type,
+                    has_edit,
+                    is_itl_unlock_pack,
+                    pack.sync_pref,
+                ),
             );
             if clear_new_packs_on_score
                 && !pack_has_cached_score
@@ -3435,7 +3444,6 @@ pub fn init(init_view: SelectMusicInitView) -> State {
             if pack_has_cached_score {
                 scored_pack_names.insert(key.clone());
             }
-            pack_sync_prefs.insert(key.clone(), pack.sync_pref);
             scanned_pack_names.push(key);
             pack_total_seconds_by_index[i] = pack_total_seconds;
         }
@@ -3733,11 +3741,9 @@ pub fn init(init_view: SelectMusicInitView) -> State {
         cached_chart_ix_p2: None,
         cached_edits: None,
         cached_standard_chart_ixs: [None; NUM_STANDARD_DIFFICULTIES],
-        wheel_preferred_chart_ixs,
+        wheel_song_meta,
         pack_total_seconds_by_index,
         pack_color_indices,
-        song_has_edit_ptrs,
-        pack_sync_prefs,
         new_pack_names,
     };
 
@@ -3974,11 +3980,9 @@ pub fn init_placeholder() -> State {
         cached_chart_ix_p2: None,
         cached_edits: None,
         cached_standard_chart_ixs: [None; NUM_STANDARD_DIFFICULTIES],
-        wheel_preferred_chart_ixs: FxHashMap::default(),
+        wheel_song_meta: FxHashMap::default(),
         pack_total_seconds_by_index: Vec::new(),
         pack_color_indices: Vec::new(),
-        song_has_edit_ptrs: FxHashSet::default(),
-        pack_sync_prefs: FxHashMap::default(),
         new_pack_names: FxHashSet::default(),
     }
 }
@@ -12069,7 +12073,7 @@ fn push_sl_select_music_wheel_cascade_mask(
     }
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "bench-support"))]
 fn test_folder_stats_song(index: usize) -> Arc<SongData> {
     let mut song = (*test_media_song(index)).clone();
     song.banner_path = None;
@@ -12183,6 +12187,72 @@ pub fn benchmark_select_music_entries(
         );
     }
     entries.into()
+}
+
+#[cfg(feature = "bench-support")]
+pub struct WheelSongMetaBench {
+    songs: Vec<Arc<SongData>>,
+    prepared: FxHashMap<usize, music_wheel::WheelSongMeta>,
+}
+
+#[cfg(feature = "bench-support")]
+impl WheelSongMetaBench {
+    pub fn songs(&self) -> &[Arc<SongData>] {
+        &self.songs
+    }
+
+    pub fn prepared_checksum(&self) -> u64 {
+        self.songs
+            .iter()
+            .enumerate()
+            .fold(0u64, |checksum, (index, song)| {
+                let meta = &self.prepared[&(Arc::as_ptr(song) as usize)];
+                checksum.wrapping_add(
+                    meta.preferred_chart_indices[index % STANDARD_DIFFICULTY_COUNT] as u64
+                        ^ u64::from(meta.has_edit).rotate_left(8)
+                        ^ u64::from(meta.is_srpg_event).rotate_left(16)
+                        ^ u64::from(meta.is_itl_unlock_pack).rotate_left(24)
+                        ^ (meta.sync_pref as u64).rotate_left(32),
+                )
+            })
+    }
+}
+
+#[cfg(feature = "bench-support")]
+pub fn benchmark_wheel_song_meta(song_count: usize) -> WheelSongMetaBench {
+    let mut songs = Vec::with_capacity(song_count);
+    let mut prepared = FxHashMap::with_capacity_and_hasher(song_count, Default::default());
+    for index in 0..song_count {
+        let mut song = (*test_folder_stats_song(index)).clone();
+        let pack = if index % 2 == 0 {
+            "Stamina RPG 10 Unlocks"
+        } else {
+            "Benchmark Pack"
+        };
+        song.simfile_path = PathBuf::from(format!("Songs/{pack}/Song {index:04}/song.ssc"));
+        let has_edit = index % 3 == 0;
+        if has_edit && let Some(chart) = song.charts.last_mut() {
+            chart.difficulty = "Edit".to_string();
+        }
+        let sync_pref = if index % 2 == 0 {
+            SyncPref::Itg
+        } else {
+            SyncPref::Null
+        };
+        let song = Arc::new(song);
+        prepared.insert(
+            Arc::as_ptr(&song) as usize,
+            music_wheel::wheel_song_meta(
+                &song,
+                "dance-single",
+                has_edit,
+                score_data::is_itl_unlocks_pack(pack),
+                sync_pref,
+            ),
+        );
+        songs.push(song);
+    }
+    WheelSongMetaBench { songs, prepared }
 }
 
 fn push_folder_stats_overlay(
@@ -12424,7 +12494,7 @@ pub fn music_wheel_runtime_request(state: &State) -> MusicWheelRuntimeRequest<'_
             state.p2_preferred_difficulty_index,
         ],
         play_style,
-        Some(&state.wheel_preferred_chart_ixs),
+        Some(&state.wheel_song_meta),
     );
     let (selected_chart_hashes, selected_is_srpg) = match slots[MUSIC_WHEEL_SLOT_COUNT / 2] {
         MusicWheelSlotRuntimeRequest::Song {
@@ -13728,7 +13798,7 @@ pub fn push_actors(
             song_box_color: None,
             song_text_color: None,
             song_text_color_overrides: None,
-            song_has_edit_ptrs: Some(&state.song_has_edit_ptrs),
+            show_pack_sync: presentation.pack_ini_offsets,
             show_music_wheel_grades: state.policy.wheel.show_grades,
             show_music_wheel_lamps: state.policy.wheel.show_lamps,
             itl_rank_mode: state.policy.wheel.itl_rank_mode,
@@ -13743,9 +13813,6 @@ pub fn push_actors(
                 WheelSortMode::Series | WheelSortMode::Group
             )
             .then_some(&state.new_pack_names),
-            pack_sync_prefs: presentation
-                .pack_ini_offsets
-                .then_some(&state.pack_sync_prefs),
             default_sync_offset: presentation.default_sync_offset,
             runtime: &state.music_wheel,
         },
@@ -14568,6 +14635,7 @@ mod tests {
     };
     use crate::config::{GraphOrientation, GraphOrigin, SelectMusicWheelStyle};
     use crate::screens::ThemeEffect;
+    use crate::screens::components::select_music::music_wheel;
     use crate::views::ProfilePickerView;
     use deadsync_chart::{SongData, SongPack, SyncPref};
     use deadsync_core::input::InputSource;
@@ -17554,19 +17622,20 @@ mod tests {
         assert_eq!(cache.pack_by_key.get("Missing"), None);
 
         let mut state = init_placeholder();
-        state
-            .pack_sync_prefs
-            .insert("Pack A".to_string(), SyncPref::Itg);
         state.new_pack_names.insert("Pack B".to_string());
         let super::MusicWheelEntry::Song(song) = &entries[1] else {
             panic!("fixture should contain a song after its pack header");
         };
         let song_ptr = Arc::as_ptr(song) as usize;
-        state.song_has_edit_ptrs.insert(song_ptr);
+        state.wheel_song_meta.insert(
+            song_ptr,
+            music_wheel::wheel_song_meta(song, "dance-single", true, false, SyncPref::Itg),
+        );
 
-        assert_eq!(state.pack_sync_prefs.get("Pack A"), Some(&SyncPref::Itg));
         assert!(state.new_pack_names.contains("Pack B"));
-        assert!(state.song_has_edit_ptrs.contains(&song_ptr));
+        let meta = state.wheel_song_meta.get(&song_ptr).unwrap();
+        assert!(meta.has_edit);
+        assert_eq!(meta.sync_pref, SyncPref::Itg);
     }
 
     #[test]

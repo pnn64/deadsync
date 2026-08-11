@@ -1762,7 +1762,9 @@ impl App {
     ) -> MusicWheelRuntimeView {
         let joined = [profiles.sides[0].joined, profiles.sides[1].joined];
         let profile_ids: [Option<&str>; 2] = std::array::from_fn(|side_idx| {
-            profiles.sides[side_idx].leaderboard.persistent_profile_id()
+            joined[side_idx]
+                .then(|| profiles.sides[side_idx].leaderboard.persistent_profile_id())
+                .flatten()
         });
         for side_idx in 0..2 {
             let Some(profile_id) = profile_ids[side_idx] else {
@@ -1834,6 +1836,14 @@ impl App {
             }
         });
         let favorite_membership = profile_data::runtime_favorite_membership(&favorite_queries);
+        let unlock_song_dirs = request.slots.map(|slot| match slot {
+            MusicWheelSlotRuntimeRequest::Song {
+                unlock_song_dir, ..
+            } => unlock_song_dir,
+            _ => None,
+        });
+        let unlock_membership =
+            scores::itl_song_folders_unlocked_with_profiles(&unlock_song_dirs, profile_ids);
         let score_queries: [Option<(&str, &str)>; MUSIC_WHEEL_SLOT_COUNT * 2] =
             std::array::from_fn(|query_idx| {
                 let slot_idx = query_idx / 2;
@@ -1863,13 +1873,15 @@ impl App {
                     song,
                     chart_hashes,
                     lua_submit_allowed,
+                    has_edit,
                     is_srpg_event,
+                    unlock_song_dir,
+                    sync_pref,
                 } => {
                     view.lua_submit_allowed = lua_submit_allowed;
-                    let unlock_song_dir = deadsync_simfile::playlist::song_pack_and_dir_name(song)
-                        .and_then(|(pack_dir, song_dir)| {
-                            scores::is_itl_unlocks_pack(pack_dir).then_some(song_dir)
-                        });
+                    view.has_edit = has_edit;
+                    view.is_srpg_event = is_srpg_event;
+                    view.sync_pref = sync_pref;
                     for side_idx in 0..2 {
                         if !joined[side_idx] {
                             continue;
@@ -1879,9 +1891,8 @@ impl App {
                         let context = itl_contexts[side_idx].as_ref();
                         let side_view = &mut view.sides[side_idx];
                         side_view.favorite = favorite_membership[slot_idx][side_idx];
-                        side_view.locked = unlock_song_dir.is_some_and(|song_dir| {
-                            !scores::is_itl_song_folder_unlocked_with_profile(song_dir, profile_id)
-                        });
+                        side_view.locked =
+                            unlock_song_dir.is_some() && !unlock_membership[slot_idx][side_idx];
                         if let Some(chart_hash) = chart_hash {
                             side_view.score = cached_scores
                                 .as_ref()

@@ -61,6 +61,25 @@ struct SongLuaVideoState {
 
 const MAX_CACHED_BANNER_VIDEO_PATHS: usize = 8;
 
+/// Maximum decoded media completions integrated by one live frame.
+///
+/// Worker threads own decode/open work and send owned results through mpsc;
+/// `DynamicMedia` alone receives them on the frame thread. The transport is
+/// unbounded, so this limits consumer work and not retained backlog memory; a
+/// bounded worker pool remains a separate architectural change. There is no
+/// eviction. Changed requests make old results stale, and both stale and
+/// current results consume this budget before their players are retired or
+/// installed. Shutdown/explicit reset still drains cleanup results outside the
+/// live-frame path. `dynamic_media_completion_budget` measures burst latency,
+/// cycles, and destruction churn. Worst live-frame integration is exactly this
+/// many results; remaining work is deferred to later frames.
+const MAX_MEDIA_COMPLETIONS_PER_FRAME: usize = 2;
+
+#[cfg(feature = "bench-support")]
+pub fn benchmark_media_completion_budget() -> usize {
+    MAX_MEDIA_COMPLETIONS_PER_FRAME
+}
+
 /// Render-thread snapshot of the desired banner-video set.
 ///
 /// Owner/threading: `DynamicMedia` on the render thread; no synchronization.
@@ -1137,7 +1156,10 @@ impl DynamicMedia {
         desired_path: Option<&Path>,
         looped: bool,
     ) {
-        while let Ok(result) = self.banner_video_prep_rx.try_recv() {
+        for _ in 0..MAX_MEDIA_COMPLETIONS_PER_FRAME {
+            let Ok(result) = self.banner_video_prep_rx.try_recv() else {
+                break;
+            };
             self.banner_video_workers = self.banner_video_workers.saturating_sub(1);
             match result {
                 BannerVideoPrepResult::Ready(prepared) => {
@@ -1184,7 +1206,10 @@ impl DynamicMedia {
         desired_paths: &[&Path],
         looped: bool,
     ) {
-        while let Ok(result) = self.banner_video_prep_rx.try_recv() {
+        for _ in 0..MAX_MEDIA_COMPLETIONS_PER_FRAME {
+            let Ok(result) = self.banner_video_prep_rx.try_recv() else {
+                break;
+            };
             self.banner_video_workers = self.banner_video_workers.saturating_sub(1);
             match result {
                 BannerVideoPrepResult::Ready(prepared) => {
@@ -1248,7 +1273,10 @@ impl DynamicMedia {
         desired_key: &str,
         timing: BgVideoTiming,
     ) {
-        while let Ok(result) = self.gameplay_background_prep_rx.try_recv() {
+        for _ in 0..MAX_MEDIA_COMPLETIONS_PER_FRAME {
+            let Ok(result) = self.gameplay_background_prep_rx.try_recv() else {
+                break;
+            };
             match result {
                 GameplayBackgroundPrepResult::Ready(prepared) => {
                     self.pending_gameplay_background_preps.remove(&prepared.key);
@@ -1525,6 +1553,42 @@ mod tests {
 
         media.retain_banner_video_prep(None, false);
         assert!(!media.banner_video_preps.contains_key(Path::new(&key)));
+    }
+
+    #[test]
+    fn banner_completion_bursts_drain_under_a_per_frame_budget() {
+        let mut assets = AssetManager::new();
+        let mut media = DynamicMedia::new();
+        let paths: Vec<PathBuf> = (0..5)
+            .map(|index| PathBuf::from(format!("stale-{index}.mp4")))
+            .collect();
+        for path in &paths {
+            media
+                .banner_video_preps
+                .insert(path.clone(), BannerVideoPrepState::pending(false));
+            media
+                .banner_video_prep_tx
+                .send(BannerVideoPrepResult::Failed {
+                    path: path.clone(),
+                    looped: false,
+                    msg: "stale".to_string(),
+                })
+                .unwrap();
+        }
+        media.banner_video_workers = paths.len();
+
+        media.drain_banner_video_preps(&mut assets, None, false);
+        assert_eq!(media.banner_video_workers, 3);
+        assert_eq!(media.banner_video_preps.len(), 3);
+
+        media.drain_banner_video_preps(&mut assets, None, false);
+        assert_eq!(media.banner_video_workers, 1);
+        assert_eq!(media.banner_video_preps.len(), 1);
+
+        media.drain_banner_video_preps(&mut assets, None, false);
+        assert_eq!(media.banner_video_workers, 0);
+        assert!(media.banner_video_preps.is_empty());
+        assert!(media.banner_video_prep_rx.try_recv().is_err());
     }
 
     #[test]

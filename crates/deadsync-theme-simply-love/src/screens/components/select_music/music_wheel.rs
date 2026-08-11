@@ -382,24 +382,8 @@ fn cached_str_ref(text: &str) -> Arc<str> {
     cached_shared_str(&STR_REF_CACHE, text, STR_REF_CACHE_LIMIT)
 }
 
-fn song_pack_sync_style(
-    song: &SongData,
-    prefs: Option<&FxHashMap<String, SyncPref>>,
-    default: DefaultSyncOffset,
-) -> Option<DefaultSyncOffset> {
-    let prefs = prefs?;
-    let pref = song
-        .simfile_path
-        .parent()
-        .and_then(|p| p.parent())
-        .and_then(|p| p.file_name())
-        .and_then(|s| s.to_str())
-        .and_then(|group| prefs.get(group).copied())
-        .unwrap_or(SyncPref::Default);
-    Some(DefaultSyncOffset::from_sync_pref(resolve_sync_pref(
-        pref,
-        default.sync_pref(),
-    )))
+fn song_pack_sync_style(pref: SyncPref, default: DefaultSyncOffset) -> DefaultSyncOffset {
+    DefaultSyncOffset::from_sync_pref(resolve_sync_pref(pref, default.sync_pref()))
 }
 
 #[inline(always)]
@@ -565,6 +549,31 @@ const NO_CHART_INDEX: usize = usize::MAX;
 
 pub(crate) type WheelPreferredChartIndices = [usize; STANDARD_DIFFICULTY_COUNT];
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct WheelSongMeta {
+    pub preferred_chart_indices: WheelPreferredChartIndices,
+    pub has_edit: bool,
+    pub is_srpg_event: bool,
+    pub is_itl_unlock_pack: bool,
+    pub sync_pref: SyncPref,
+}
+
+pub(crate) fn wheel_song_meta(
+    song: &SongData,
+    chart_type: &str,
+    has_edit: bool,
+    is_itl_unlock_pack: bool,
+    sync_pref: SyncPref,
+) -> WheelSongMeta {
+    WheelSongMeta {
+        preferred_chart_indices: preferred_chart_indices(song, chart_type),
+        has_edit,
+        is_srpg_event: is_srpg_event_song(song),
+        is_itl_unlock_pack,
+        sync_pref,
+    }
+}
+
 /// Precompute the exact result of preferred-or-nearest chart selection for
 /// every standard preference. Songs are immutable while Select Music is open,
 /// so these indices can be reused for every wheel frame.
@@ -619,7 +628,7 @@ pub(crate) fn runtime_slot_requests<'a>(
     selected_charts: [Option<&'a ChartData>; profile_data::PLAYER_SLOTS],
     preferred_difficulty_index: [usize; profile_data::PLAYER_SLOTS],
     play_style: profile_data::PlayStyle,
-    cached_indices: Option<&FxHashMap<usize, WheelPreferredChartIndices>>,
+    cached_meta: Option<&FxHashMap<usize, WheelSongMeta>>,
 ) -> [MusicWheelSlotRuntimeRequest<'a>; MUSIC_WHEEL_SLOT_COUNT] {
     if entries.is_empty() {
         return [MusicWheelSlotRuntimeRequest::Empty; MUSIC_WHEEL_SLOT_COUNT];
@@ -640,11 +649,12 @@ pub(crate) fn runtime_slot_requests<'a>(
                 key: pack_key.as_deref(),
             },
             MusicWheelEntry::Song(song) => {
+                let song_meta =
+                    cached_meta.and_then(|cache| cache.get(&(Arc::as_ptr(song) as usize)));
                 let charts = if slot == CENTER_WHEEL_SLOT_INDEX {
                     selected_charts
                 } else {
-                    let cached_song_indices =
-                        cached_indices.and_then(|cache| cache.get(&(Arc::as_ptr(song) as usize)));
+                    let cached_song_indices = song_meta.map(|meta| &meta.preferred_chart_indices);
                     if preferred_difficulty_index[0] == preferred_difficulty_index[1] {
                         let chart = chart_for_preferred_or_nearest_standard(
                             song,
@@ -685,7 +695,31 @@ pub(crate) fn runtime_slot_requests<'a>(
                     lua_submit_allowed: chart_hashes.map(|chart_hash| {
                         chart_hash.is_some_and(score_data::lua_chart_submit_allowed)
                     }),
-                    is_srpg_event: is_srpg_event_song(song),
+                    has_edit: song_meta.map_or_else(
+                        || {
+                            song.charts.iter().any(|chart| {
+                                chart.chart_type.eq_ignore_ascii_case(target_chart_type)
+                                    && chart.difficulty.eq_ignore_ascii_case("edit")
+                            })
+                        },
+                        |meta| meta.has_edit,
+                    ),
+                    is_srpg_event: song_meta
+                        .map_or_else(|| is_srpg_event_song(song), |meta| meta.is_srpg_event),
+                    unlock_song_dir: song_meta
+                        .map_or_else(
+                            || {
+                                deadsync_simfile::playlist::song_pack_and_dir_name(song)
+                                    .is_some_and(|(pack, _)| score_data::is_itl_unlocks_pack(pack))
+                            },
+                            |meta| meta.is_itl_unlock_pack,
+                        )
+                        .then(|| {
+                            deadsync_simfile::playlist::song_pack_and_dir_name(song)
+                                .map(|(_, song_dir)| song_dir)
+                        })
+                        .flatten(),
+                    sync_pref: song_meta.map_or(SyncPref::Default, |meta| meta.sync_pref),
                 }
             }
         }
@@ -704,7 +738,7 @@ pub struct MusicWheelParams<'a> {
     pub song_box_color: Option<[f32; 4]>,
     pub song_text_color: Option<[f32; 4]>,
     pub song_text_color_overrides: Option<&'a HashMap<usize, [f32; 4]>>,
-    pub song_has_edit_ptrs: Option<&'a FxHashSet<usize>>,
+    pub show_pack_sync: bool,
     pub show_music_wheel_grades: bool,
     pub show_music_wheel_lamps: bool,
     pub itl_rank_mode: SelectMusicItlRankMode,
@@ -715,7 +749,6 @@ pub struct MusicWheelParams<'a> {
     pub expanded_series_name: Option<&'a str>,
     pub expanded_pack_name: Option<&'a str>,
     pub new_pack_names: Option<&'a FxHashSet<String>>,
-    pub pack_sync_prefs: Option<&'a FxHashMap<String, SyncPref>>,
     pub default_sync_offset: DefaultSyncOffset,
     pub runtime: &'a MusicWheelRuntimeView,
 }
@@ -747,7 +780,6 @@ pub fn push(actors: &mut Vec<Actor>, p: MusicWheelParams) {
         1.0
     };
     let play_style = p.runtime.play_style;
-    let target_chart_type = play_style.chart_type();
     let [p1_joined, p2_joined] = p.runtime.joined;
     let side_joined = |side: profile_data::PlayerSide| match side {
         profile_data::PlayerSide::P1 => p1_joined,
@@ -1044,14 +1076,7 @@ pub fn push(actors: &mut Vec<Actor>, p: MusicWheelParams) {
                     let title = info.display_title(translated_titles);
                     let subtitle = info.display_subtitle(translated_titles);
                     let has_subtitle = !subtitle.trim().is_empty();
-                    let has_edit = if let Some(cached) = p.song_has_edit_ptrs {
-                        cached.contains(&song_ptr)
-                    } else {
-                        info.charts.iter().any(|c| {
-                            c.chart_type.eq_ignore_ascii_case(target_chart_type)
-                                && c.difficulty.eq_ignore_ascii_case("edit")
-                        })
-                    };
+                    let has_edit = runtime_slot.has_edit;
                     let has_lua = info.has_lua;
                     let lua_submit_allowed = lua_badge_submit_allowed(
                         has_lua,
@@ -1089,8 +1114,9 @@ pub fn push(actors: &mut Vec<Actor>, p: MusicWheelParams) {
                             1.0,
                         ));
                     }
-                    if song_pack_sync_style(info, p.pack_sync_prefs, p.default_sync_offset)
-                        == Some(DefaultSyncOffset::Null)
+                    if p.show_pack_sync
+                        && song_pack_sync_style(runtime_slot.sync_pref, p.default_sync_offset)
+                            == DefaultSyncOffset::Null
                     {
                         actors.push(act!(quad:
                             align(0.0, 0.5):
@@ -1273,7 +1299,7 @@ pub fn push(actors: &mut Vec<Actor>, p: MusicWheelParams) {
                         }
                     }
 
-                    let is_srpg_event = is_srpg_event_song(info);
+                    let is_srpg_event = runtime_slot.is_srpg_event;
                     if is_srpg_event && joined_sides == 1 {
                         for (side, rate_x) in [
                             (profile_data::PlayerSide::P1, grade_x_p2),
@@ -1574,6 +1600,7 @@ mod tests {
         itl_rank_color, itl_wheel_mode_for_sides, lua_badge_submit_allowed, pack_header_color,
         pack_header_text_x, preferred_chart_indices, runtime_slot_requests, song_select_bg_path,
         srpg_rate_color, visible_song_select_bg_paths, visible_song_select_bg_paths_match,
+        wheel_song_meta,
     };
     use crate::config::{
         SelectMusicItlRankMode, SelectMusicItlWheelMode, SelectMusicSongSelectBgMode,
@@ -1582,9 +1609,10 @@ mod tests {
     use crate::views::{MUSIC_WHEEL_SLOT_COUNT, MusicWheelSlotRuntimeRequest};
     use deadlib_present::color;
     use deadlib_present::space::{metrics_for_window, set_current_metrics};
-    use deadsync_chart::{ChartData, SongData};
+    use deadsync_chart::{ChartData, SongData, SyncPref};
     use deadsync_profile as profile_data;
     use deadsync_score::CachedItlScore;
+    use deadsync_simfile::event_intro::is_srpg_event_song;
     use std::path::PathBuf;
     use std::sync::Arc;
 
@@ -1840,6 +1868,42 @@ mod tests {
                 .map(|chart| chart.short_hash.as_str());
                 assert_eq!(cached, scanned, "preferred={preferred}");
             }
+        }
+    }
+
+    #[test]
+    fn prepared_song_metadata_matches_independent_scans() {
+        let mut song = (*song_with_art(None, None)).clone();
+        song.simfile_path = PathBuf::from("Songs/Stamina RPG 10/Test/song.ssc");
+        song.charts = vec![
+            chart_with_difficulty("dance-single", "Hard", "hard", true),
+            chart_with_difficulty("dance-single", "Edit", "edit", true),
+        ];
+
+        let meta = wheel_song_meta(&song, "dance-single", true, true, SyncPref::Itg);
+
+        assert_eq!(
+            meta.has_edit,
+            song.charts.iter().any(|chart| {
+                chart.chart_type.eq_ignore_ascii_case("dance-single")
+                    && chart.difficulty.eq_ignore_ascii_case("edit")
+            })
+        );
+        assert_eq!(meta.is_srpg_event, is_srpg_event_song(&song));
+        assert!(meta.is_itl_unlock_pack);
+        assert_eq!(meta.sync_pref, SyncPref::Itg);
+        for preferred in 0..deadsync_chart::STANDARD_DIFFICULTY_COUNT {
+            let scanned =
+                chart_for_preferred_or_nearest_standard(&song, "dance-single", preferred, None)
+                    .map(|chart| chart.short_hash.as_str());
+            let prepared = chart_for_preferred_or_nearest_standard(
+                &song,
+                "dance-single",
+                preferred,
+                Some(&meta.preferred_chart_indices),
+            )
+            .map(|chart| chart.short_hash.as_str());
+            assert_eq!(prepared, scanned, "preferred={preferred}");
         }
     }
 

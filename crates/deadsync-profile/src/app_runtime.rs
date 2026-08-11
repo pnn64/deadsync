@@ -775,10 +775,13 @@ pub fn itl_song_folder_unlocked_for_side(song_folder: &str, side: PlayerSide) ->
     )
 }
 
-pub fn itl_song_folder_unlocked_with_profile(song_folder: &str, profile_id: Option<&str>) -> bool {
-    deadsync_score::runtime_cached_itl_song_folder_unlocked(
-        song_folder,
-        profile_id,
+pub fn itl_song_folders_unlocked_with_profiles<const N: usize>(
+    song_folders: &[Option<&str>; N],
+    profile_ids: [Option<&str>; 2],
+) -> [[bool; 2]; N] {
+    deadsync_score::runtime_cached_itl_song_folders_unlocked(
+        song_folders,
+        profile_ids,
         read_itl_file_for_id,
     )
 }
