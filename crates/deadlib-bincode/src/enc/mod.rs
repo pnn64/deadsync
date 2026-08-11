@@ -13,7 +13,7 @@ pub use self::encoder::EncoderImpl;
 
 /// Any source that can be encoded. This trait should be implemented for all types that you want to be able to use with any of the `encode_with` methods.
 ///
-/// This trait will be automatically implemented if you enable the `derive` feature and add `#[derive(bincode::Encode)]` to your trait.
+/// This trait can be implemented automatically with `#[derive(bincode::Encode)]`.
 ///
 /// # Implementing this trait manually
 ///

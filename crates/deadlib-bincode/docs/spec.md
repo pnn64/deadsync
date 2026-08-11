@@ -53,19 +53,9 @@ Endianness can be configured with the following methods, allowing for big-endian
 - Serialization and deserialization do not alter the bit-level representation
 - Consistent with IEEE 754-2008 standard for floating-point arithmetic
 
-### Character Encoding
-
-- `char` is encoded as a 32-bit unsigned integer representing its Unicode Scalar Value
-- Valid Unicode Scalar Value range:
-  - 0x0000 to 0xD7FF (Basic Multilingual Plane)
-  - 0xE000 to 0x10FFFF (Supplementary Planes)
-- Surrogate code points (0xD800 to 0xDFFF) are not valid
-- Invalid Unicode characters can be acquired via unsafe code, this is handled as:
-  - during serialization: data is written as-is
-  - during deserialization: an error is raised [`DecodeError::InvalidCharEncoding`](https://docs.rs/bincode/2/bincode/error/enum.DecodeError.html#variant.InvalidCharEncoding)
-- No additional metadata or encoding scheme beyond the raw code point value
-
-All tuples have no additional bytes, and are encoded in their specified order, e.g.
+Tuples have no additional bytes and are encoded in their specified order. This
+fork implements tuple arities one through three, which covers DeadSync's stored
+schemas. For example:
 
 ```rust
 let tuple = (u32::min_value(), i32::max_value()); // 8 bytes

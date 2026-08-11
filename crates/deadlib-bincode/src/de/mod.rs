@@ -27,7 +27,9 @@ pub use self::decoder::DecoderImpl;
 ///
 /// Whenever you derive `Decode` for your type, the base trait `BorrowDecode` is automatically implemented.
 ///
-/// This trait will be automatically implemented with unbounded `Context` if you enable the `derive` feature and add `#[derive(bincode::Decode)]` to your type. Note that if the type contains any lifetimes, `BorrowDecode` will be implemented instead.
+/// This trait is implemented automatically by `#[derive(bincode::Decode)]` with
+/// an unbounded `Context`. Types containing lifetimes receive `BorrowDecode`
+/// instead.
 ///
 /// # Implementing this trait manually
 ///
@@ -87,19 +89,6 @@ pub use self::decoder::DecoderImpl;
 /// # }
 /// # bincode::impl_borrow_decode!(Foo);
 /// ```
-///
-/// You can use `Context` to require contexts for decoding a type:
-/// ```
-/// # /// # use bumpalo::Bump;
-/// use bincode::de::Decoder;
-/// use bincode::error::DecodeError;
-/// struct BytesInArena<'a>(bumpalo::collections::Vec<'a, u8>);
-/// impl<'a> bincode::Decode<&'a bumpalo::Bump> for BytesInArena<'a> {
-/// fn decode<D: Decoder>(decoder: &mut D) -> Result<Self, DecodeError> {
-///         todo!()
-///     }
-/// # }
-/// ```
 pub trait Decode<Context>: Sized {
     /// Attempt to decode this type with the given [Decode].
     fn decode<D: Decoder<Context = Context>>(decoder: &mut D) -> Result<Self, DecodeError>;
@@ -109,7 +98,8 @@ pub trait Decode<Context>: Sized {
 ///
 /// This trait should be implemented for types that contain borrowed data, like `&str` and `&[u8]`. If your type does not have borrowed data, consider implementing [Decode] instead.
 ///
-/// This trait will be automatically implemented if you enable the `derive` feature and add `#[derive(bincode::Decode)]` to a type with a lifetime.
+/// This trait is implemented automatically by `#[derive(bincode::Decode)]` for
+/// types containing a lifetime.
 pub trait BorrowDecode<'de, Context>: Sized {
     /// Attempt to decode this type with the given [BorrowDecode].
     fn borrow_decode<D: BorrowDecoder<'de, Context = Context>>(

@@ -28,5 +28,14 @@ Original license files are kept beside each incorporated component.
 - Add immutable bincode 2.0.1 wire fixtures.
 - Set the fork's initial MSRV to Rust 1.86 so its maintained benchmark stack can
   use current Criterion releases.
+- Reduce the runtime crate to DeadSync's persistence surface: owned in-memory
+  encode/decode, derives, standard containers, standard configuration, and
+  compile-time decode limits.
+- Remove Serde, `no_std` feature combinations, atomic and stream-I/O support,
+  unused standard-library types, tuple arities above three, and their tests.
+- Replace the broad upstream integration suite with focused retained-surface,
+  malformed-input, decode-limit, and immutable wire-compatibility tests while
+  keeping benchmarks for string graphs, varints, and limited decoding.
 
-None of these adaptations intentionally change the public API or encoded bytes.
+These adaptations intentionally reduce the public API. They do not change bytes
+produced by the retained surface under `config::standard()`.

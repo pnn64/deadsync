@@ -1,9 +1,8 @@
 # deadlib-bincode
 
-`deadlib-bincode` is DeadSync's maintained compatibility fork of bincode 2.0.1.
-It keeps the bincode 2 API and wire format while providing a controlled home for
-correctness fixes, compiler support, security hardening, and measured performance
-work.
+`deadlib-bincode` is DeadSync's maintained, project-scoped fork of bincode 2.0.1.
+It preserves the standard bincode 2.0.1 wire format while keeping only the API
+and type implementations used by DeadSync persistence.
 
 This is not an official continuation of the original bincode project. The exact
 source provenance and the small adaptations made for this fork are recorded in
@@ -15,16 +14,31 @@ requires procedural macros to compile as a separate crate. Virtue's required
 code-generation code is embedded there rather than maintained as another
 package.
 
+## Supported surface
+
+- `encode_to_vec`, `decode_from_slice`, and `config::standard()`
+- Compile-time decode limits through `Configuration::with_limit`
+- `Encode`, `Decode`, and `BorrowDecode` traits and derives
+- Booleans, integer and floating-point primitives, strings, vectors, options,
+  arrays, tuples up to three elements, boxed slices, hash maps, and hash sets
+- Manual implementations through `enc::Encoder`, `de::Decoder`, and
+  `de::BorrowDecoder`
+
+Serde integration, `no_std`/feature combinations, stream I/O helpers, atomics,
+and unused standard-library container/type implementations are intentionally not
+part of this fork.
+
 ## Compatibility policy
 
 - `config::standard()` must remain byte-for-byte compatible with bincode 2.0.1.
-- Existing public API is retained unless a major release documents a migration.
+- DeadSync's supported surface is retained unless a major release documents a
+  migration.
 - Wire-format changes require a major version and explicit migration support.
 - Security, soundness, supported-Rust, and measured performance fixes may ship in
   patch releases when they preserve API and wire compatibility.
 - The minimum supported Rust version is 1.86.0. Raising it is a breaking change.
 
-Golden wire fixtures and the imported upstream test suite enforce this policy.
+Golden bincode 2.0.1 fixtures and focused persistence tests enforce this policy.
 
 ## Use
 

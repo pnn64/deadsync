@@ -99,10 +99,7 @@ impl FromAttribute for ContainerAttributes {
     }
 }
 
-#[derive(Default)]
-pub struct FieldAttributes {
-    pub with_serde: bool,
-}
+pub struct FieldAttributes;
 
 impl FromAttribute for FieldAttributes {
     fn parse(group: &Group) -> Result<Option<Self>> {
@@ -110,20 +107,12 @@ impl FromAttribute for FieldAttributes {
             Some(body) => body,
             None => return Ok(None),
         };
-        let mut result = Self::default();
-        for attribute in attributes {
-            match attribute {
-                ParsedAttribute::Tag(i) if i.to_string() == "with_serde" => {
-                    result.with_serde = true;
-                }
-                ParsedAttribute::Tag(i) => {
-                    return Err(Error::custom_at("Unknown field attribute", i.span()))
-                }
-                ParsedAttribute::Property(key, _) => {
-                    return Err(Error::custom_at("Unknown field attribute", key.span()))
-                }
-            }
+        if let Some(attribute) = attributes.into_iter().next() {
+            let span = match attribute {
+                ParsedAttribute::Tag(key) | ParsedAttribute::Property(key, _) => key.span(),
+            };
+            return Err(Error::custom_at("Unsupported field attribute", span));
         }
-        Ok(Some(result))
+        Ok(Some(Self))
     }
 }

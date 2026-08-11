@@ -31,14 +31,7 @@ fn index_item_decode(c: &mut Criterion) {
     let data = build_data(100);
 
     let config = bincode::config::standard();
-    c.bench_function("bench v2 (standard)", |b| {
-        b.iter(|| {
-            let _ = black_box(bincode::encode_to_vec(black_box(&data), config)).unwrap();
-        });
-    });
-
-    let config = bincode::config::legacy();
-    c.bench_function("bench v2 (legacy)", |b| {
+    c.bench_function("string_graph_encode", |b| {
         b.iter(|| {
             let _ = black_box(bincode::encode_to_vec(black_box(&data), config)).unwrap();
         });
@@ -46,7 +39,7 @@ fn index_item_decode(c: &mut Criterion) {
 
     let encoded = bincode::encode_to_vec(&data, config).unwrap();
 
-    c.bench_function("bench v2 decode (legacy)", |b| {
+    c.bench_function("string_graph_decode", |b| {
         b.iter(|| {
             let _: (Vec<MyStruct>, _) =
                 black_box(bincode::decode_from_slice(black_box(&encoded), config)).unwrap();
