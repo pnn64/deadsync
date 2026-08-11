@@ -19,7 +19,7 @@ use crate::{
     },
 };
 use deadlib_platform::lock_wait::{LockWaitStats, lock_mutex};
-use deadsync_audio::AudioMixLevels;
+use deadsync_audio_stream::AudioMixLevels;
 use deadsync_input::Keymap;
 use null_or_die::BiasCfg;
 use std::fmt::Display;

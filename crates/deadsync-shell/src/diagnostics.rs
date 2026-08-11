@@ -1,5 +1,5 @@
+use deadlib_audio::OutputTimingSnapshot;
 use deadlib_render::{ClockDomainTrace, PresentStats};
-use deadsync_audio::OutputTimingSnapshot;
 use deadsync_theme::views::AudioTimingView;
 use deadsync_theme_simply_love::views::TimingHealth;
 
@@ -59,7 +59,7 @@ pub fn timing_health(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use deadsync_audio::{
+    use deadlib_audio::{
         AudioOutputMode, OutputTelemetryBackend, OutputTelemetryClock, OutputTimingQuality,
     };
 

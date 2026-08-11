@@ -1,21 +1,33 @@
 use crate::ring::{AudioRenderHandle, MusicBlock};
 use crate::{
-    ActiveSfx, CallbackClockSource, MAX_ACTIVE_SFX, MusicMapSeg, QueuedSfx, audio_mix_level_gains,
+    ActiveSfx, CallbackClockSource, MAX_ACTIVE_SFX, MixControls, MusicMapSeg, QueuedSfx,
     f32_to_i16, i16_to_f32, mark_music_track_started, mix_active_sfx, music_gain_snap_generation,
     music_map_generation, music_target_gain, music_total_frames, music_track_active_relaxed,
     music_track_has_started, music_track_start_frame, note_timing_diag_callback_gap,
     publish_callback_window_end, publish_callback_window_start_nanos, push_queued_sfx,
-    sfx_is_stale,
 };
+use std::sync::Arc;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct AudioRenderCallbackResult {
+pub struct RenderReport {
     pub output_underrun: bool,
     pub callback_gap_ns: u64,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct CallbackInfo {
+    pub anchor_nanos: u64,
+    pub clock: CallbackClockSource,
+}
+
+pub enum OutputBufferMut<'a> {
+    I16(&'a mut [i16]),
+    F32(&'a mut [f32]),
+}
+
 pub struct RenderState {
     transport: AudioRenderHandle,
+    controls: Arc<MixControls>,
     device_channels: usize,
     mix_f32: Vec<f32>,
     active_sfx: Vec<ActiveSfx>,
@@ -82,9 +94,14 @@ fn convert_music_samples(
 }
 
 impl RenderState {
-    pub fn new(transport: AudioRenderHandle, device_channels: usize) -> Self {
+    pub fn new(
+        transport: AudioRenderHandle,
+        controls: Arc<MixControls>,
+        device_channels: usize,
+    ) -> Self {
         Self {
             transport,
+            controls,
             device_channels,
             mix_f32: vec![0.0; MIX_CHUNK_FRAMES * device_channels.max(1)],
             active_sfx: Vec::with_capacity(MAX_ACTIVE_SFX),
@@ -113,12 +130,6 @@ impl RenderState {
             note_timing_diag_callback_gap(anchor_nanos, source).unwrap_or_default();
         publish_callback_window_start_nanos(total_before, anchor_nanos, source);
         (total_before, callback_gap_ns)
-    }
-
-    #[cfg(windows)]
-    #[inline(always)]
-    fn begin_callback_qpc(&mut self, anchor_nanos: u64) -> (u64, u64) {
-        self.begin_callback_nanos(anchor_nanos, CallbackClockSource::Qpc)
     }
 
     #[inline(always)]
@@ -248,28 +259,26 @@ impl RenderState {
         I: IntoIterator<Item = QueuedSfx>,
     {
         for new_sfx in queued_sfx {
-            push_queued_sfx(&mut self.active_sfx, new_sfx, sfx_is_stale);
+            push_queued_sfx(&mut self.active_sfx, new_sfx, &self.controls);
         }
     }
 
     fn mix_f32_buffer(&mut self, total_before: u64, len: usize) -> (usize, bool) {
         debug_assert!(len <= self.mix_f32.len());
-        let (music_vol, sfx_vol, assist_tick_vol) = audio_mix_level_gains();
+        let stream_gain = self.controls.stream_gain();
         let snap_gen = music_gain_snap_generation();
         if snap_gen != self.music_gain_snap_seen {
             self.music_gain_current = music_target_gain();
             self.music_gain_snap_seen = snap_gen;
         }
-        let popped = self.mix_music(total_before, len, music_vol);
+        let popped = self.mix_music(total_before, len, stream_gain);
 
         let mixed_sfx = mix_active_sfx(
             &mut self.active_sfx,
             &mut self.mix_f32[..len],
             total_before,
             self.device_channels.max(1),
-            sfx_vol,
-            assist_tick_vol,
-            sfx_is_stale,
+            &self.controls,
         );
 
         (popped, mixed_sfx)
@@ -302,7 +311,6 @@ impl RenderState {
         popped_samples
     }
 
-    #[cfg(any(windows, target_os = "linux", target_os = "freebsd"))]
     fn render_i16_chunks<I>(&mut self, out: &mut [i16], total_before: u64, queued_sfx: I) -> usize
     where
         I: IntoIterator<Item = QueuedSfx>,
@@ -346,76 +354,29 @@ impl RenderState {
         output_underrun
     }
 
-    #[cfg(windows)]
-    pub fn render_i16_qpc<I>(
+    pub fn render<I>(
         &mut self,
-        out: &mut [i16],
-        anchor_nanos: u64,
+        output: OutputBufferMut<'_>,
+        callback: CallbackInfo,
         queued_sfx: I,
-    ) -> AudioRenderCallbackResult
-    where
-        I: IntoIterator<Item = QueuedSfx>,
-    {
-        let (total_before, callback_gap_ns) = self.begin_callback_qpc(anchor_nanos);
-        let popped = self.render_i16_chunks(out, total_before, queued_sfx);
-        AudioRenderCallbackResult {
-            output_underrun: self.finish_callback(total_before, out.len(), popped),
-            callback_gap_ns,
-        }
-    }
-
-    #[cfg(any(target_os = "linux", target_os = "freebsd"))]
-    pub fn render_i16_host_nanos<I>(
-        &mut self,
-        out: &mut [i16],
-        anchor_nanos: u64,
-        queued_sfx: I,
-    ) -> AudioRenderCallbackResult
+    ) -> RenderReport
     where
         I: IntoIterator<Item = QueuedSfx>,
     {
         let (total_before, callback_gap_ns) =
-            self.begin_callback_nanos(anchor_nanos, CallbackClockSource::Instant);
-        let popped = self.render_i16_chunks(out, total_before, queued_sfx);
-        AudioRenderCallbackResult {
-            output_underrun: self.finish_callback(total_before, out.len(), popped),
-            callback_gap_ns,
-        }
-    }
-
-    #[cfg(not(windows))]
-    pub fn render_f32_host_nanos<I>(
-        &mut self,
-        out: &mut [f32],
-        anchor_nanos: u64,
-        queued_sfx: I,
-    ) -> AudioRenderCallbackResult
-    where
-        I: IntoIterator<Item = QueuedSfx>,
-    {
-        let (total_before, callback_gap_ns) =
-            self.begin_callback_nanos(anchor_nanos, CallbackClockSource::Instant);
-        let popped = self.render_f32_chunks(out, total_before, queued_sfx);
-        AudioRenderCallbackResult {
-            output_underrun: self.finish_callback(total_before, out.len(), popped),
-            callback_gap_ns,
-        }
-    }
-
-    #[cfg(windows)]
-    pub fn render_f32_qpc<I>(
-        &mut self,
-        out: &mut [f32],
-        anchor_nanos: u64,
-        queued_sfx: I,
-    ) -> AudioRenderCallbackResult
-    where
-        I: IntoIterator<Item = QueuedSfx>,
-    {
-        let (total_before, callback_gap_ns) = self.begin_callback_qpc(anchor_nanos);
-        let popped = self.render_f32_chunks(out, total_before, queued_sfx);
-        AudioRenderCallbackResult {
-            output_underrun: self.finish_callback(total_before, out.len(), popped),
+            self.begin_callback_nanos(callback.anchor_nanos, callback.clock);
+        let (emitted_samples, popped_samples) = match output {
+            OutputBufferMut::I16(out) => {
+                let len = out.len();
+                (len, self.render_i16_chunks(out, total_before, queued_sfx))
+            }
+            OutputBufferMut::F32(out) => {
+                let len = out.len();
+                (len, self.render_f32_chunks(out, total_before, queued_sfx))
+            }
+        };
+        RenderReport {
+            output_underrun: self.finish_callback(total_before, emitted_samples, popped_samples),
             callback_gap_ns,
         }
     }
@@ -430,16 +391,19 @@ impl Drop for RenderState {
 #[cfg(test)]
 mod tests {
     use super::{MIX_CHUNK_FRAMES, MUSIC_GAIN_MAX_STEP, RenderState};
-    use crate::ring::{MusicBlockTiming, MusicBlockWriter, PlayedMapReader, music_transport};
+    use crate::ring::{
+        AudioRenderHandle, MusicBlockTiming, MusicBlockWriter, PlayedMapReader, music_transport,
+    };
     use crate::{
-        AudioMixLevels, QueuedSfx, SfxLane, activate_music_track, bump_music_map_generation,
+        MixBus, MixControls, QueuedSfx, activate_music_track, bump_music_map_generation,
         i16_to_f32, music_map_generation, music_track_start_frame, reset_music_target_gain,
-        set_audio_mix_levels, set_music_target_gain, snap_music_gain_generation, stop_music_track,
+        set_music_target_gain, snap_music_gain_generation, stop_music_track,
     };
     use std::sync::Arc;
     use std::sync::atomic::{AtomicBool, Ordering};
 
     const CHANNELS: usize = 2;
+    const EFFECT_BUS: MixBus = MixBus::new(0);
     const SEC_PER_FRAME: f64 = 1.0 / 48_000.0;
     static GLOBAL_AUDIO_STATE_BUSY: AtomicBool = AtomicBool::new(false);
 
@@ -465,12 +429,10 @@ mod tests {
 
     fn reset_levels() {
         reset_music_target_gain();
-        set_audio_mix_levels(AudioMixLevels {
-            master_volume: 100,
-            music_volume: 100,
-            sfx_volume: 100,
-            assist_tick_volume: 100,
-        });
+    }
+
+    fn test_render(render_handle: AudioRenderHandle) -> RenderState {
+        RenderState::new(render_handle, Arc::new(MixControls::new()), CHANNELS)
     }
 
     fn push_all(
@@ -509,7 +471,7 @@ mod tests {
             .map(|sample| (sample as i32 * 97 % 60_000 - 30_000) as i16)
             .collect();
         push_all(&mut stream.writer, &input, generation, 0);
-        let mut render = RenderState::new(render_handle, CHANNELS);
+        let mut render = test_render(render_handle);
         let track_start = music_track_start_frame();
 
         let (popped, _) = render.mix_f32_buffer(track_start, 100 * CHANNELS);
@@ -549,7 +511,7 @@ mod tests {
             .map(|sample| (sample as i32 * 193 % 60_000 - 30_000) as i16)
             .collect();
         push_all(&mut stream.writer, &input, generation, 0);
-        let mut render = RenderState::new(render_handle, CHANNELS);
+        let mut render = test_render(render_handle);
         let mut output = vec![f32::NAN; input.len()];
 
         let popped = render.render_f32_chunks(
@@ -574,12 +536,12 @@ mod tests {
         let (mut stream, render_handle) = music_transport(CHANNELS);
         let input = vec![i16::MAX; 3000 * CHANNELS];
         push_all(&mut stream.writer, &input, generation, 0);
-        let mut render = RenderState::new(render_handle, CHANNELS);
+        let mut render = test_render(render_handle);
         let total_before = music_track_start_frame();
         let sfx = QueuedSfx {
             data: Arc::from([0, 0]),
-            lane: SfxLane::Effect,
-            stop_generation: 0,
+            bus: EFFECT_BUS,
+            generation: 0,
             target_stream_frame: total_before + MIX_CHUNK_FRAMES as u64 + 5,
         };
         let mut output = vec![f32::NAN; input.len()];
@@ -599,7 +561,7 @@ mod tests {
         let (mut stream, render_handle) = music_transport(CHANNELS);
         let old = vec![11_000; 256 * CHANNELS];
         push_all(&mut stream.writer, &old, old_generation, 0);
-        let mut render = RenderState::new(render_handle, CHANNELS);
+        let mut render = test_render(render_handle);
         let track_start = music_track_start_frame();
         assert_eq!(
             render.mix_f32_buffer(track_start, 20 * CHANNELS).0,
@@ -630,7 +592,7 @@ mod tests {
         let generation = music_map_generation();
         let (mut stream, render_handle) = music_transport(CHANNELS);
         push_all(&mut stream.writer, &[1234, -1234], generation, 0);
-        let mut render = RenderState::new(render_handle, CHANNELS);
+        let mut render = test_render(render_handle);
         let (popped, _) = render.mix_f32_buffer(music_track_start_frame(), 5);
 
         assert_eq!(popped, 2);
@@ -647,7 +609,7 @@ mod tests {
         let (mut stream, render_handle) = music_transport(CHANNELS);
         let input = [10_000, -10_000, 20_000, -20_000, 30_000, -30_000];
         push_all(&mut stream.writer, &input, generation, 0);
-        let mut render = RenderState::new(render_handle, CHANNELS);
+        let mut render = test_render(render_handle);
         set_music_target_gain(0.5);
 
         let (popped, _) = render.mix_f32_buffer(music_track_start_frame(), input.len());
@@ -673,7 +635,7 @@ mod tests {
         let generation = music_map_generation();
         let (mut stream, render_handle) = music_transport(CHANNELS);
         push_all(&mut stream.writer, &[1000, -1000], generation, 0);
-        let mut render = RenderState::new(render_handle, CHANNELS);
+        let mut render = test_render(render_handle);
         let delayed_callback = music_track_start_frame() + 123;
         activate_music_track();
 
@@ -703,7 +665,7 @@ mod tests {
         }
         let new_generation = bump_music_map_generation();
         push_all(&mut stream.writer, &[700, -700], new_generation, 0);
-        let mut render = RenderState::new(render_handle, CHANNELS);
+        let mut render = test_render(render_handle);
 
         let (popped, _) = render.mix_f32_buffer(music_track_start_frame(), CHANNELS);
         assert_eq!(popped, CHANNELS);

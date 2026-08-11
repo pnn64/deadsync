@@ -12,8 +12,8 @@ harness = false
 test-support = []
 
 [dependencies]
-deadsync-audio = { path = "../deadsync-audio" }
-deadsync-audio-backend-native = { path = "../deadsync-audio-backend-native" }
+deadlib-audio = { path = "../deadlib-audio" }
+deadlib-audio-backend-native = { path = "../deadlib-audio-backend-native" }
 deadsync-audio-decode = { path = "../deadsync-audio-decode" }
 deadsync-audio-replaygain = { path = "../deadsync-audio-replaygain" }
 deadlib-platform = { path = "../deadlib-platform" }

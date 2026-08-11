@@ -4,11 +4,11 @@ use crate::telemetry::{
 };
 use alsa::pcm::{Access, Format, HwParams, PCM, State, SwParams, TstampType};
 use alsa::{Ctl, Direction, ValueOr};
-use deadlib_platform::host_time::now_nanos;
-use deadsync_audio::{
-    AudioOutputMode, AudioRenderHandle, OutputBackendReady, OutputTelemetryClock,
-    OutputTimingQuality, RenderState, SfxReceiver,
+use deadlib_audio::{
+    AudioOutputMode, CallbackClockSource, CallbackInfo, OutputBackendReady, OutputBufferMut,
+    OutputTelemetryClock, OutputTimingQuality, RenderState, SfxReceiver,
 };
+use deadlib_platform::host_time::now_nanos;
 use libc::timespec;
 use log::{info, warn};
 use std::sync::Arc;
@@ -266,7 +266,7 @@ pub fn prepare(
 
 pub fn start(
     prep: AlsaOutputPrep,
-    render_handle: AudioRenderHandle,
+    render: RenderState,
     sfx_receiver: SfxReceiver,
 ) -> Result<AlsaOutputStream, String> {
     let stop_flag = Arc::new(AtomicBool::new(false));
@@ -274,15 +274,7 @@ pub fn start(
     let (ready_tx, ready_rx) = channel::<Result<(), String>>();
     let thread = thread::Builder::new()
         .name("alsa_out".to_string())
-        .spawn(move || {
-            render_thread(
-                prep,
-                render_handle,
-                sfx_receiver,
-                stop_flag_thread,
-                ready_tx,
-            )
-        })
+        .spawn(move || render_thread(prep, render, sfx_receiver, stop_flag_thread, ready_tx))
         .map_err(|e| format!("failed to spawn ALSA render thread: {e}"))?;
     match ready_rx.recv() {
         Ok(Ok(())) => Ok(AlsaOutputStream {
@@ -374,20 +366,19 @@ impl AlsaClockHealth {
 
 fn render_thread(
     prep: AlsaOutputPrep,
-    render_handle: AudioRenderHandle,
+    render: RenderState,
     sfx_receiver: SfxReceiver,
     stop_flag: Arc<AtomicBool>,
     ready_tx: Sender<Result<(), String>>,
 ) {
-    if let Err(err) = render_thread_inner(prep, render_handle, sfx_receiver, &stop_flag, &ready_tx)
-    {
+    if let Err(err) = render_thread_inner(prep, render, sfx_receiver, &stop_flag, &ready_tx) {
         let _ = ready_tx.send(Err(err));
     }
 }
 
 fn render_thread_inner(
     prep: AlsaOutputPrep,
-    render_handle: AudioRenderHandle,
+    mut render: RenderState,
     mut sfx_receiver: SfxReceiver,
     stop_flag: &AtomicBool,
     ready_tx: &Sender<Result<(), String>>,
@@ -428,7 +419,6 @@ fn render_thread_inner(
         return Ok(());
     }
 
-    let mut render = RenderState::new(render_handle, actual.channels);
     let mut mix = vec![0i16; actual.period_frames as usize * actual.channels];
     let mut clock_health = AlsaClockHealth::new();
     while !stop_flag.load(Ordering::Relaxed) {
@@ -438,9 +428,12 @@ fn render_thread_inner(
             actual.host_clock,
             &mut clock_health,
         );
-        let result = render.render_i16_host_nanos(
-            &mut mix,
-            timing_before.playback_host_nanos,
+        let result = render.render(
+            OutputBufferMut::I16(&mut mix),
+            CallbackInfo {
+                anchor_nanos: timing_before.playback_host_nanos,
+                clock: CallbackClockSource::Instant,
+            },
             sfx_receiver.try_iter(),
         );
         report_audio_render_callback(result);

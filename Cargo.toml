@@ -11,9 +11,9 @@ keywords = ["deadsync", "stepmania", "itg", "inthegroove", "rhythmgame", "vulkan
 [workspace]
 members = [
     ".",
-    "crates/deadsync-audio",
+    "crates/deadlib-audio",
     "crates/deadsync-audio-analysis",
-    "crates/deadsync-audio-backend-native",
+    "crates/deadlib-audio-backend-native",
     "crates/deadsync-audio-decode",
     "crates/deadsync-audio-replaygain",
     "crates/deadsync-audio-stream",
@@ -64,19 +64,19 @@ resolver = "3"
 # `version.workspace = true`, so `env!("CARGO_PKG_VERSION")` and
 # `deadsync_version::current()` always agree. Bump THIS line on release.
 [workspace.package]
-version = "0.5.455"
+version = "0.5.456"
 
 [[bin]]
 name = "generate_pseudo"
 path = "scripts/generate_pseudo.rs"
 
 [features]
-pipewire-audio = ["deadsync-audio-backend-native/pipewire-audio"]
+pipewire-audio = ["deadlib-audio-backend-native/pipewire-audio"]
 
 [dependencies]
 deadlib-platform = { path = "crates/deadlib-platform" }
 deadsync-audio-analysis = { path = "crates/deadsync-audio-analysis" }
-deadsync-audio-backend-native = { path = "crates/deadsync-audio-backend-native", optional = true }
+deadlib-audio-backend-native = { path = "crates/deadlib-audio-backend-native", optional = true }
 deadsync-audio-replaygain = { path = "crates/deadsync-audio-replaygain" }
 deadsync-audio-stream = { path = "crates/deadsync-audio-stream" }
 deadsync-assets = { path = "crates/deadsync-assets" }
@@ -127,6 +127,9 @@ lto = "thin"
 
 [profile.profiling]
 inherits = "release"
+debug = 1
+
+[profile.bench]
 debug = 1
 
 [lints.clippy]

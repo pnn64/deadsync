@@ -1,11 +1,12 @@
 use crate::telemetry::{
-    publish_output_timing, publish_output_timing_quality, report_audio_render_callback,
+    note_output_underrun, publish_output_timing, publish_output_timing_quality,
+    report_audio_render_callback,
+};
+use deadlib_audio::{
+    AudioOutputMode, CallbackClockSource, CallbackInfo, OutputBackendReady, OutputBufferMut,
+    OutputTelemetryClock, OutputTimingQuality, RenderState, SfxReceiver,
 };
 use deadlib_platform::host_time::now_nanos;
-use deadsync_audio::{
-    AudioOutputMode, AudioRenderHandle, OutputBackendReady, OutputTelemetryClock,
-    OutputTimingQuality, RenderState, SfxReceiver,
-};
 use log::{info, warn};
 use pipewire as pw;
 use pw::{properties::properties, spa};
@@ -58,23 +59,21 @@ struct CallbackState {
     format: spa::param::audio::AudioInfoRaw,
     fallback_rate_hz: u32,
     fallback_channels: usize,
-    interleaved: Vec<f32>,
 }
 
 impl CallbackState {
     fn new(
-        render_handle: AudioRenderHandle,
+        render: RenderState,
         sfx_receiver: SfxReceiver,
         sample_rate_hz: u32,
         channels: usize,
     ) -> Self {
         Self {
-            render: RenderState::new(render_handle, channels),
+            render,
             sfx_receiver,
             format: spa::param::audio::AudioInfoRaw::new(),
             fallback_rate_hz: sample_rate_hz.max(1),
             fallback_channels: channels.max(1),
-            interleaved: Vec::new(),
         }
     }
 
@@ -96,22 +95,27 @@ impl CallbackState {
         }
         let frames = data.len() / stride;
         let samples = frames.saturating_mul(channels);
-        if self.interleaved.len() != samples {
-            self.interleaved.resize(samples, 0.0);
+        let bytes = samples.saturating_mul(mem::size_of::<f32>());
+        if data.as_ptr().align_offset(mem::align_of::<f32>()) != 0 {
+            data[..bytes].fill(0);
+            note_output_underrun();
+            return bytes;
         }
+        // SAFETY: alignment was checked above, `samples` was derived from the
+        // available byte length, and PipeWire exclusively lends this writable
+        // mapped buffer for the duration of the process callback.
+        let output =
+            unsafe { std::slice::from_raw_parts_mut(data.as_mut_ptr().cast::<f32>(), samples) };
         let anchor_nanos = now_nanos();
-        let result = self.render.render_f32_host_nanos(
-            &mut self.interleaved,
-            anchor_nanos,
+        let result = self.render.render(
+            OutputBufferMut::F32(output),
+            CallbackInfo {
+                anchor_nanos,
+                clock: CallbackClockSource::Instant,
+            },
             self.sfx_receiver.try_iter(),
         );
         report_audio_render_callback(result);
-        for (src, chunk) in self.interleaved[..samples]
-            .iter()
-            .zip(data[..samples * mem::size_of::<f32>()].chunks_exact_mut(mem::size_of::<f32>()))
-        {
-            chunk.copy_from_slice(&src.to_le_bytes());
-        }
         let period_ns = frames_to_nanos(self.sample_rate_hz(), frames as u32);
         publish_output_timing(
             self.sample_rate_hz(),
@@ -123,7 +127,7 @@ impl CallbackState {
             period_ns,
         );
         publish_output_timing_quality(OutputTimingQuality::Trusted);
-        samples * mem::size_of::<f32>()
+        bytes
     }
 }
 
@@ -147,7 +151,7 @@ pub fn prepare(
 
 pub fn start(
     prep: PipeWireOutputPrep,
-    render_handle: AudioRenderHandle,
+    render: RenderState,
     sfx_receiver: SfxReceiver,
 ) -> Result<PipeWireOutputStream, String> {
     let (ready_tx, ready_rx) = channel::<Result<(), String>>();
@@ -155,7 +159,7 @@ pub fn start(
     let thread = thread::Builder::new()
         .name("pipewire_out".to_string())
         .spawn(move || {
-            let _ = render_thread(prep, render_handle, sfx_receiver, stop_receiver, ready_tx);
+            let _ = render_thread(prep, render, sfx_receiver, stop_receiver, ready_tx);
         })
         .map_err(|e| format!("failed to spawn PipeWire render thread: {e}"))?;
     match ready_rx.recv() {
@@ -178,7 +182,7 @@ pub fn start(
 
 fn render_thread(
     prep: PipeWireOutputPrep,
-    render_handle: AudioRenderHandle,
+    render: RenderState,
     sfx_receiver: SfxReceiver,
     stop_receiver: pw::channel::Receiver<()>,
     ready_tx: Sender<Result<(), String>>,
@@ -191,17 +195,12 @@ fn render_thread(
     let core = context
         .connect_rc(None)
         .map_err(|e| format!("failed to connect to PipeWire core: {e}"))?;
-    let state = CallbackState::new(
-        render_handle,
-        sfx_receiver,
-        prep.sample_rate_hz,
-        prep.channels,
-    );
+    let state = CallbackState::new(render, sfx_receiver, prep.sample_rate_hz, prep.channels);
 
     let channels_prop = prep.channels.to_string();
     let stream = pw::stream::StreamBox::new(
         &core,
-        "deadsync-audio",
+        "audio-output",
         properties! {
             *pw::keys::MEDIA_TYPE => "Audio",
             *pw::keys::MEDIA_CATEGORY => "Playback",

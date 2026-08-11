@@ -1,18 +1,19 @@
 #![forbid(unsafe_code)]
 
 mod clock;
+mod mix;
 mod music_map;
 mod runtime;
 mod sfx_cache;
 mod stream_runtime;
 mod stretch;
 
+pub use deadlib_audio::{
+    InitConfig, MusicStreamClockSnapshot, OutputDeviceInfo, OutputTimingSnapshot,
+};
+use deadlib_audio::{MusicBlockTiming, MusicBlockWriter, normalized_music_rate};
 #[cfg(windows)]
 use deadlib_platform::windows_rt::{ThreadRole, boost_current_thread};
-pub use deadsync_audio::{
-    Cut, InitConfig, MusicStreamClockSnapshot, OutputDeviceInfo, OutputTimingSnapshot,
-};
-use deadsync_audio::{MusicBlockTiming, MusicBlockWriter, normalized_music_rate};
 use deadsync_audio_decode as decode;
 use deadsync_audio_decode::resample::{
     OUT_FRAMES_PER_CALL, PLANAR_INPUT_CAP_FRAMES, PlanarAccum, apply_fade_envelope,
@@ -30,6 +31,7 @@ use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
 use std::thread;
 
 pub use clock::{music_stream_clock_snapshot, timing_diag_enabled};
+pub use mix::{AudioMixLevels, audio_mix_levels, set_audio_mix_levels};
 pub use music_map::{
     assist_tick_stream_frame_for_music_seconds, clear_music_pos_map, force_music_map_runtime,
     lookup_music_position,
@@ -48,6 +50,25 @@ pub use runtime::{
 pub use sfx_cache::SfxCache;
 pub use stream_runtime::{MusicStreamRuntime, StreamCommand};
 use stretch::SolaStretcher;
+
+#[derive(Clone, Copy, Debug)]
+pub struct Cut {
+    pub start_sec: f64,
+    pub length_sec: f64,
+    pub fade_in_sec: f64,
+    pub fade_out_sec: f64,
+}
+
+impl Default for Cut {
+    fn default() -> Self {
+        Self {
+            start_sec: 0.0,
+            length_sec: f64::INFINITY,
+            fade_in_sec: 0.0,
+            fade_out_sec: 0.0,
+        }
+    }
+}
 
 const SILENCE_CHUNK_FRAMES: usize = 2048;
 const MIN_MUSIC_RATE: f32 = 0.05;
@@ -456,7 +477,7 @@ fn music_decoder_thread_loop(
         let mut seek_ok = false;
         let mut seek_start_frame = 0u64;
         if start_floor > 0 && !bypass_seek {
-            let seek_frame = start_floor.saturating_sub(deadsync_audio::ring::PREROLL_IN_FRAMES);
+            let seek_frame = start_floor.saturating_sub(deadlib_audio::ring::PREROLL_IN_FRAMES);
             match reader.seek_frame(seek_frame) {
                 Ok(()) => {
                     seek_ok = true;
@@ -1040,7 +1061,7 @@ mod tests {
         MAX_SFX_PREALLOC_SAMPLES, OutputFormat, lead_in_silence_timing, music_output_start_sec,
         push_music_block, seek_preroll_in_frames, sfx_output_capacity,
     };
-    use deadsync_audio::{MusicBlockTiming, music_transport};
+    use deadlib_audio::{MusicBlockTiming, music_transport};
     use std::sync::Arc;
     use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
     use std::time::{Duration, Instant};

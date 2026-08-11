@@ -1,5 +1,5 @@
 [package]
-name = "deadsync-audio"
+name = "deadlib-audio"
 version = "0.1.0"
 edition = "2024"
 license = "GPL-3.0"

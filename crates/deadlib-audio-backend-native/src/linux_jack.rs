@@ -1,11 +1,12 @@
 use crate::telemetry::{
-    publish_output_timing, publish_output_timing_quality, report_audio_render_callback,
+    note_output_underrun, publish_output_timing, publish_output_timing_quality,
+    report_audio_render_callback,
+};
+use deadlib_audio::{
+    AudioOutputMode, CallbackClockSource, CallbackInfo, OutputBackendReady, OutputBufferMut,
+    OutputTelemetryClock, OutputTimingQuality, RenderState, SfxReceiver,
 };
 use deadlib_platform::host_time::now_nanos;
-use deadsync_audio::{
-    AudioOutputMode, AudioRenderHandle, OutputBackendReady, OutputTelemetryClock,
-    OutputTimingQuality, RenderState, SfxReceiver,
-};
 use libloading::Library;
 use log::{info, warn};
 use std::ffi::{c_char, c_int, c_uint, c_void};
@@ -14,8 +15,8 @@ use std::slice;
 use std::sync::OnceLock;
 
 const JACK_DEFAULT_AUDIO_TYPE: &[u8] = b"32 bit float mono audio\0";
-const JACK_CLIENT_NAME: &[u8] = b"deadsync\0";
-const JACK_PROBE_CLIENT_NAME: &[u8] = b"deadsync_probe\0";
+const JACK_CLIENT_NAME: &[u8] = b"audio_output\0";
+const JACK_PROBE_CLIENT_NAME: &[u8] = b"audio_output_probe\0";
 const JACK_LEFT_PORT_NAME: &[u8] = b"out_l\0";
 const JACK_RIGHT_PORT_NAME: &[u8] = b"out_r\0";
 const JACK_NO_START_SERVER: c_int = 1;
@@ -308,13 +309,24 @@ impl JackCallbackState {
     fn process(&mut self, nframes: u32) {
         let frames = nframes as usize;
         let samples = frames.saturating_mul(2);
-        if self.interleaved.len() != samples {
-            self.interleaved.resize(samples, 0.0);
+        if samples > self.interleaved.len() {
+            // JACK may change its period after startup. The realtime callback
+            // must not grow storage, so emit silence until the stream restarts.
+            // SAFETY: both port buffers belong to this callback invocation.
+            unsafe {
+                zero_port(self.api, self.port_l, nframes);
+                zero_port(self.api, self.port_r, nframes);
+            }
+            note_output_underrun();
+            return;
         }
         let anchor_nanos = now_nanos();
-        let result = self.render.render_f32_host_nanos(
-            &mut self.interleaved,
-            anchor_nanos,
+        let result = self.render.render(
+            OutputBufferMut::F32(&mut self.interleaved[..samples]),
+            CallbackInfo {
+                anchor_nanos,
+                clock: CallbackClockSource::Instant,
+            },
             self.sfx_receiver.try_iter(),
         );
         report_audio_render_callback(result);
@@ -436,7 +448,7 @@ pub fn prepare(
 
 pub fn start(
     prep: JackOutputPrep,
-    render_handle: AudioRenderHandle,
+    render: RenderState,
     sfx_receiver: SfxReceiver,
 ) -> Result<JackOutputStream, String> {
     let JackOutputPrep {
@@ -447,13 +459,13 @@ pub fn start(
     } = prep;
     let callback_state = Box::new(JackCallbackState {
         api: client.api,
-        render: RenderState::new(render_handle, 2),
+        render,
         sfx_receiver,
         port_l: client.port_l,
         port_r: client.port_r,
         sample_rate_hz,
         latency_frames: period_frames,
-        interleaved: Vec::new(),
+        interleaved: vec![0.0; period_frames as usize * 2],
     });
     let callback_state = Box::into_raw(callback_state);
     // SAFETY: `client.raw` is a live JACK client, `jack_process_callback` matches

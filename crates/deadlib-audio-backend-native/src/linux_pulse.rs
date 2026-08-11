@@ -2,11 +2,11 @@ use crate::telemetry::{
     note_output_clock_fallback, publish_output_timing, publish_output_timing_quality,
     report_audio_render_callback,
 };
-use deadlib_platform::host_time::now_nanos;
-use deadsync_audio::{
-    AudioOutputMode, AudioRenderHandle, OutputBackendReady, OutputTelemetryClock,
-    OutputTimingQuality, RenderState, SfxReceiver,
+use deadlib_audio::{
+    AudioOutputMode, CallbackClockSource, CallbackInfo, OutputBackendReady, OutputBufferMut,
+    OutputTelemetryClock, OutputTimingQuality, RenderState, SfxReceiver,
 };
+use deadlib_platform::host_time::now_nanos;
 use libloading::Library;
 use log::{info, warn};
 use std::ffi::{CStr, CString, c_char, c_int, c_void};
@@ -212,7 +212,7 @@ pub fn prepare(
 
 pub fn start(
     prep: PulseOutputPrep,
-    render_handle: AudioRenderHandle,
+    render: RenderState,
     sfx_receiver: SfxReceiver,
 ) -> Result<PulseOutputStream, String> {
     let stop_flag = Arc::new(AtomicBool::new(false));
@@ -220,15 +220,7 @@ pub fn start(
     let (ready_tx, ready_rx) = channel::<Result<(), String>>();
     let thread = thread::Builder::new()
         .name("pulse_out".to_string())
-        .spawn(move || {
-            render_thread(
-                prep,
-                render_handle,
-                sfx_receiver,
-                stop_flag_thread,
-                ready_tx,
-            )
-        })
+        .spawn(move || render_thread(prep, render, sfx_receiver, stop_flag_thread, ready_tx))
         .map_err(|e| format!("failed to spawn PulseAudio render thread: {e}"))?;
     match ready_rx.recv() {
         Ok(Ok(())) => Ok(PulseOutputStream {
@@ -254,7 +246,8 @@ struct PulseConnection {
 impl PulseConnection {
     fn open(prep: &PulseOutputPrep) -> Result<Self, String> {
         let api = pulse_api()?;
-        let app_name = CString::new("deadsync").unwrap();
+        let app_name = CString::new("audio-output")
+            .expect("static PulseAudio application name contains no NUL");
         let stream_name = CString::new("Gameplay").unwrap();
         let sample_spec = PaSampleSpec {
             format: PA_SAMPLE_S16LE,
@@ -369,20 +362,19 @@ impl PulseClockHealth {
 
 fn render_thread(
     prep: PulseOutputPrep,
-    render_handle: AudioRenderHandle,
+    render: RenderState,
     sfx_receiver: SfxReceiver,
     stop_flag: Arc<AtomicBool>,
     ready_tx: Sender<Result<(), String>>,
 ) {
-    if let Err(err) = render_thread_inner(prep, render_handle, sfx_receiver, &stop_flag, &ready_tx)
-    {
+    if let Err(err) = render_thread_inner(prep, render, sfx_receiver, &stop_flag, &ready_tx) {
         let _ = ready_tx.send(Err(err));
     }
 }
 
 fn render_thread_inner(
     prep: PulseOutputPrep,
-    render_handle: AudioRenderHandle,
+    mut render: RenderState,
     mut sfx_receiver: SfxReceiver,
     stop_flag: &AtomicBool,
     ready_tx: &Sender<Result<(), String>>,
@@ -404,14 +396,16 @@ fn render_thread_inner(
         return Ok(());
     }
 
-    let mut render = RenderState::new(render_handle, prep.channels);
     let mut mix = vec![0i16; prep.period_frames as usize * prep.channels];
     let mut clock_health = PulseClockHealth::new();
     while !stop_flag.load(Ordering::Relaxed) {
         let timing_before = playback_timing(&stream, prep.sample_rate_hz, &mut clock_health);
-        let result = render.render_i16_host_nanos(
-            &mut mix,
-            timing_before.playback_host_nanos,
+        let result = render.render(
+            OutputBufferMut::I16(&mut mix),
+            CallbackInfo {
+                anchor_nanos: timing_before.playback_host_nanos,
+                clock: CallbackClockSource::Instant,
+            },
             sfx_receiver.try_iter(),
         );
         report_audio_render_callback(result);

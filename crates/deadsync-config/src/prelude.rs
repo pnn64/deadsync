@@ -1,6 +1,7 @@
+pub use deadlib_audio::{AudioOutputMode, LinuxAudioBackend};
 pub use deadlib_platform::display::FullscreenType;
 pub use deadlib_present::color::Color;
-pub use deadsync_audio::{AudioMixLevels, AudioOutputMode, LinuxAudioBackend};
+pub use deadsync_audio_stream::AudioMixLevels;
 pub use deadsync_input_native::PadOrderBackend;
 #[cfg(windows)]
 pub use deadsync_input_native::WindowsPadBackend;

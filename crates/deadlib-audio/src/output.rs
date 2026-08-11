@@ -1,26 +1,6 @@
 use std::str::FromStr;
-use std::sync::atomic::{AtomicU32, Ordering};
 
 use crate::telemetry::{OutputTelemetryBackend, OutputTelemetryClock, OutputTimingQuality};
-
-#[derive(Clone, Copy, Debug)]
-pub struct Cut {
-    pub start_sec: f64,
-    pub length_sec: f64,
-    pub fade_in_sec: f64,
-    pub fade_out_sec: f64,
-}
-
-impl Default for Cut {
-    fn default() -> Self {
-        Self {
-            start_sec: 0.0,
-            length_sec: f64::INFINITY,
-            fade_in_sec: 0.0,
-            fade_out_sec: 0.0,
-        }
-    }
-}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AudioOutputMode {
@@ -113,85 +93,6 @@ pub struct InitConfig {
     #[cfg(target_os = "linux")]
     pub linux_backend: LinuxAudioBackend,
     pub sample_rate_hz: Option<u32>,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct AudioMixLevels {
-    pub master_volume: u8,
-    pub music_volume: u8,
-    pub sfx_volume: u8,
-    pub assist_tick_volume: u8,
-}
-
-const DEFAULT_AUDIO_MIX_LEVELS: AudioMixLevels = AudioMixLevels {
-    master_volume: 90,
-    music_volume: 100,
-    sfx_volume: 100,
-    assist_tick_volume: 100,
-};
-
-static AUDIO_MIX_LEVELS_PACKED: AtomicU32 = AtomicU32::new(pack_audio_mix_levels(
-    DEFAULT_AUDIO_MIX_LEVELS.master_volume,
-    DEFAULT_AUDIO_MIX_LEVELS.music_volume,
-    DEFAULT_AUDIO_MIX_LEVELS.sfx_volume,
-    DEFAULT_AUDIO_MIX_LEVELS.assist_tick_volume,
-));
-
-#[inline(always)]
-pub const fn pack_audio_mix_levels(
-    master_volume: u8,
-    music_volume: u8,
-    sfx_volume: u8,
-    assist_tick_volume: u8,
-) -> u32 {
-    u32::from_le_bytes([master_volume, music_volume, sfx_volume, assist_tick_volume])
-}
-
-#[inline(always)]
-pub const fn unpack_audio_mix_levels(packed: u32) -> AudioMixLevels {
-    let [master_volume, music_volume, sfx_volume, assist_tick_volume] = packed.to_le_bytes();
-    AudioMixLevels {
-        master_volume,
-        music_volume,
-        sfx_volume,
-        assist_tick_volume,
-    }
-}
-
-#[inline(always)]
-pub fn set_audio_mix_levels(levels: AudioMixLevels) {
-    AUDIO_MIX_LEVELS_PACKED.store(
-        pack_audio_mix_levels(
-            levels.master_volume,
-            levels.music_volume,
-            levels.sfx_volume,
-            levels.assist_tick_volume,
-        ),
-        Ordering::Release,
-    );
-}
-
-#[inline(always)]
-pub fn audio_mix_levels() -> AudioMixLevels {
-    unpack_audio_mix_levels(AUDIO_MIX_LEVELS_PACKED.load(Ordering::Acquire))
-}
-
-#[inline(always)]
-pub fn mix_level_gains(levels: AudioMixLevels) -> (f32, f32, f32) {
-    let master_vol = f32::from(levels.master_volume) * 0.01;
-    let music_vol = f32::from(levels.music_volume) * 0.01;
-    let sfx_vol = f32::from(levels.sfx_volume) * 0.01;
-    let assist_tick_vol = f32::from(levels.assist_tick_volume) * 0.01;
-    (
-        master_vol * music_vol,
-        master_vol * sfx_vol,
-        master_vol * assist_tick_vol,
-    )
-}
-
-#[inline(always)]
-pub fn audio_mix_level_gains() -> (f32, f32, f32) {
-    mix_level_gains(audio_mix_levels())
 }
 
 #[derive(Clone, Debug)]

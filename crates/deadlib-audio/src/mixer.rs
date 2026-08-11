@@ -1,5 +1,5 @@
 use std::sync::Arc;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
 
 /// Upper bound (in device frames) on how far ahead of the audible write head a
 /// scheduled SFX onset may sit before the mixer treats it as stale and drops it.
@@ -7,55 +7,108 @@ use std::sync::atomic::{AtomicU64, Ordering};
 /// handled by the caller's generation guard.
 pub const MAX_SCHEDULE_AHEAD_FRAMES: u64 = 192_000;
 pub const MAX_ACTIVE_SFX: usize = 32;
+pub const MAX_MIX_BUSES: usize = 8;
 
-#[derive(Clone, Copy, Debug)]
-pub enum SfxLane {
-    Effect,
-    Screen,
-    AssistTick,
+/// Stable index into the session's fixed mixer-bus table.
+///
+/// Bus meaning is deliberately supplied by the owning application. The mixer
+/// only applies the bus gain and generation associated with this index.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct MixBus(u8);
+
+impl MixBus {
+    pub const fn new(index: u8) -> Self {
+        assert!(
+            (index as usize) < MAX_MIX_BUSES,
+            "mixer bus index out of range"
+        );
+        Self(index)
+    }
+
+    #[inline(always)]
+    pub const fn index(self) -> usize {
+        self.0 as usize
+    }
 }
 
-static SCREEN_SFX_STOP_GEN: AtomicU64 = AtomicU64::new(0);
-static ASSIST_SFX_GEN: AtomicU64 = AtomicU64::new(0);
-
-#[inline(always)]
-pub fn bump_screen_sfx_generation() {
-    SCREEN_SFX_STOP_GEN.fetch_add(1, Ordering::AcqRel);
+/// Session-owned controls shared by producers and the realtime mixer.
+///
+/// The application thread updates atomic gains and generations. The audio
+/// callback only performs bounded atomic loads; it never locks or allocates.
+pub struct MixControls {
+    stream_gain: AtomicU32,
+    bus_gains: [AtomicU32; MAX_MIX_BUSES],
+    bus_generations: [AtomicU64; MAX_MIX_BUSES],
 }
 
-#[inline(always)]
-pub fn bump_assist_sfx_generation() {
-    ASSIST_SFX_GEN.fetch_add(1, Ordering::AcqRel);
+impl MixControls {
+    pub fn new() -> Self {
+        Self {
+            stream_gain: AtomicU32::new(1.0f32.to_bits()),
+            bus_gains: std::array::from_fn(|_| AtomicU32::new(1.0f32.to_bits())),
+            bus_generations: std::array::from_fn(|_| AtomicU64::new(0)),
+        }
+    }
+
+    #[inline(always)]
+    pub fn set_stream_gain(&self, gain: f32) {
+        self.stream_gain
+            .store(valid_gain(gain).to_bits(), Ordering::Release);
+    }
+
+    #[inline(always)]
+    pub fn stream_gain(&self) -> f32 {
+        f32::from_bits(self.stream_gain.load(Ordering::Acquire))
+    }
+
+    #[inline(always)]
+    pub fn set_bus_gain(&self, bus: MixBus, gain: f32) {
+        self.bus_gains[bus.index()].store(valid_gain(gain).to_bits(), Ordering::Release);
+    }
+
+    #[inline(always)]
+    pub fn bus_gain(&self, bus: MixBus) -> f32 {
+        f32::from_bits(self.bus_gains[bus.index()].load(Ordering::Acquire))
+    }
+
+    #[inline(always)]
+    pub fn bus_generation(&self, bus: MixBus) -> u64 {
+        self.bus_generations[bus.index()].load(Ordering::Acquire)
+    }
+
+    #[inline(always)]
+    pub fn stop_bus(&self, bus: MixBus) -> u64 {
+        self.bus_generations[bus.index()]
+            .fetch_add(1, Ordering::AcqRel)
+            .wrapping_add(1)
+    }
+
+    #[inline(always)]
+    pub fn is_current(&self, bus: MixBus, generation: u64) -> bool {
+        generation == self.bus_generation(bus)
+    }
 }
 
-#[inline(always)]
-pub fn assist_sfx_generation() -> u64 {
-    ASSIST_SFX_GEN.load(Ordering::Acquire)
-}
-
-#[inline(always)]
-pub fn sfx_stop_generation(lane: SfxLane) -> u64 {
-    match lane {
-        SfxLane::Screen => SCREEN_SFX_STOP_GEN.load(Ordering::Acquire),
-        SfxLane::AssistTick => ASSIST_SFX_GEN.load(Ordering::Acquire),
-        SfxLane::Effect => 0,
+impl Default for MixControls {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
 #[inline(always)]
-pub fn sfx_is_stale(lane: SfxLane, stop_generation: u64) -> bool {
-    match lane {
-        SfxLane::Screen => stop_generation != SCREEN_SFX_STOP_GEN.load(Ordering::Acquire),
-        SfxLane::AssistTick => stop_generation != ASSIST_SFX_GEN.load(Ordering::Acquire),
-        SfxLane::Effect => false,
+fn valid_gain(gain: f32) -> f32 {
+    if gain.is_finite() && gain >= 0.0 {
+        gain
+    } else {
+        1.0
     }
 }
 
 #[derive(Clone)]
 pub struct QueuedSfx {
     pub data: Arc<[i16]>,
-    pub lane: SfxLane,
-    pub stop_generation: u64,
+    pub bus: MixBus,
+    pub generation: u64,
     /// Absolute stream frame at which the first sample should become audible.
     /// `0` means "play immediately" at the start of the next buffer.
     pub target_stream_frame: u64,
@@ -65,8 +118,8 @@ pub struct QueuedSfx {
 pub struct ActiveSfx {
     pub data: Arc<[i16]>,
     pub cursor: usize,
-    pub lane: SfxLane,
-    pub stop_generation: u64,
+    pub bus: MixBus,
+    pub generation: u64,
     pub target_stream_frame: u64,
 }
 
@@ -76,20 +129,16 @@ impl ActiveSfx {
         Self {
             data: queued.data,
             cursor: 0,
-            lane: queued.lane,
-            stop_generation: queued.stop_generation,
+            bus: queued.bus,
+            generation: queued.generation,
             target_stream_frame: queued.target_stream_frame,
         }
     }
 }
 
 #[inline(always)]
-pub fn push_queued_sfx(
-    active: &mut Vec<ActiveSfx>,
-    queued: QueuedSfx,
-    is_stale: impl Fn(SfxLane, u64) -> bool,
-) {
-    if !is_stale(queued.lane, queued.stop_generation) && active.len() < MAX_ACTIVE_SFX {
+pub fn push_queued_sfx(active: &mut Vec<ActiveSfx>, queued: QueuedSfx, controls: &MixControls) {
+    if controls.is_current(queued.bus, queued.generation) && active.len() < MAX_ACTIVE_SFX {
         active.push(ActiveSfx::from_queued(queued));
     }
 }
@@ -99,14 +148,12 @@ pub fn mix_active_sfx(
     mix_f32: &mut [f32],
     total_before: u64,
     device_channels: usize,
-    sfx_vol: f32,
-    assist_tick_vol: f32,
-    is_stale: impl Fn(SfxLane, u64) -> bool,
+    controls: &MixControls,
 ) -> bool {
     let buf_len = mix_f32.len();
     let mut mixed_sfx = false;
     active.retain_mut(|sfx| {
-        if is_stale(sfx.lane, sfx.stop_generation) {
+        if !controls.is_current(sfx.bus, sfx.generation) {
             return false;
         }
         let start_sample = match scheduled_onset_decision(
@@ -122,12 +169,9 @@ pub fn mix_active_sfx(
         sfx.target_stream_frame = 0;
         let n = (sfx.data.len().saturating_sub(sfx.cursor)).min(buf_len - start_sample);
         mixed_sfx |= n > 0;
-        let lane_vol = match sfx.lane {
-            SfxLane::Effect | SfxLane::Screen => sfx_vol,
-            SfxLane::AssistTick => assist_tick_vol,
-        };
+        let bus_gain = controls.bus_gain(sfx.bus);
         for i in 0..n {
-            let sfx_sample_f32 = i16_to_f32(sfx.data[sfx.cursor + i]) * lane_vol;
+            let sfx_sample_f32 = i16_to_f32(sfx.data[sfx.cursor + i]) * bus_gain;
             mix_f32[start_sample + i] += sfx_sample_f32;
         }
         sfx.cursor += n;
@@ -188,7 +232,8 @@ pub fn i16_to_f32(sample: i16) -> f32 {
 #[cfg(test)]
 mod tests {
     use super::{
-        MAX_SCHEDULE_AHEAD_FRAMES, ScheduledOnset, f32_to_i16, i16_to_f32, scheduled_onset_decision,
+        MAX_SCHEDULE_AHEAD_FRAMES, MixBus, MixControls, ScheduledOnset, f32_to_i16, i16_to_f32,
+        scheduled_onset_decision,
     };
 
     #[test]
@@ -295,5 +340,27 @@ mod tests {
         assert_eq!(i16_to_f32(i16::MIN), -1.0);
         assert_eq!(i16_to_f32(0), 0.0);
         assert!((i16_to_f32(i16::MAX) - 0.999_969_5).abs() <= f32::EPSILON);
+    }
+
+    #[test]
+    fn mix_controls_keep_bus_policy_outside_the_mixer() {
+        let controls = MixControls::new();
+        let bus = MixBus::new(3);
+        controls.set_stream_gain(0.75);
+        controls.set_bus_gain(bus, 0.25);
+        assert_eq!(controls.stream_gain(), 0.75);
+        assert_eq!(controls.bus_gain(bus), 0.25);
+    }
+
+    #[test]
+    fn stopping_one_bus_only_invalidates_that_bus() {
+        let controls = MixControls::new();
+        let first = MixBus::new(1);
+        let second = MixBus::new(2);
+        let first_generation = controls.bus_generation(first);
+        let second_generation = controls.bus_generation(second);
+        controls.stop_bus(first);
+        assert!(!controls.is_current(first, first_generation));
+        assert!(controls.is_current(second, second_generation));
     }
 }

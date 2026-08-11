@@ -12,10 +12,10 @@ use crate::theme::{
     SelectMusicWheelStyle, SrpgShopFolder, SrpgVariant, SyncGraphMode, ThemeFlag,
     ThemePresentationOptions, VersionOverlaySide, VisualStyle,
 };
+use deadlib_audio::{AudioOutputMode, LinuxAudioBackend};
 use deadlib_platform::display::FullscreenType;
 use deadlib_present::color::Color;
 use deadlib_render::{BackendType, PresentModePolicy};
-use deadsync_audio::{AudioOutputMode, LinuxAudioBackend};
 use deadsync_input_native::WindowsPadBackend;
 use deadsync_lights::{DriverKind as LightsDriverKind, GameplayPadLightMode, SerialPortName};
 use deadsync_smx::SmxPadPreset;

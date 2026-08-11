@@ -9,11 +9,11 @@ use coreaudio::audio_unit::macos_helpers::{
 };
 use coreaudio::audio_unit::render_callback::{self, data};
 use coreaudio::audio_unit::{AudioUnit, Element, SampleFormat, Scope, StreamFormat};
-use deadlib_platform::host_time::now_nanos;
-use deadsync_audio::{
-    AudioOutputMode, AudioRenderHandle, OutputBackendReady, OutputTelemetryClock,
-    OutputTimingQuality, RenderState, SfxReceiver,
+use deadlib_audio::{
+    AudioOutputMode, CallbackClockSource, CallbackInfo, OutputBackendReady, OutputBufferMut,
+    OutputTelemetryClock, OutputTimingQuality, RenderState, SfxReceiver,
 };
+use deadlib_platform::host_time::now_nanos;
 use log::{info, warn};
 use mach2::mach_time::{mach_absolute_time, mach_timebase_info, mach_timebase_info_data_t};
 use objc2_core_audio::{
@@ -229,11 +229,10 @@ pub fn prepare(
 
 pub fn start(
     mut prep: CoreAudioOutputPrep,
-    render_handle: AudioRenderHandle,
+    mut render: RenderState,
     mut sfx_receiver: SfxReceiver,
 ) -> Result<CoreAudioOutputStream, String> {
     let host_clock = CoreAudioHostClock::calibrate()?;
-    let mut render = RenderState::new(render_handle, prep.channels);
     let sample_rate_hz = prep.sample_rate_hz;
     let buffer_frames = prep.buffer_frames.max(1);
     let downstream_latency_ns = Arc::new(AtomicU64::new(prep.latency.nanos));
@@ -246,9 +245,12 @@ pub fn start(
             let downstream_latency_ns = callback_downstream_latency_ns.load(Ordering::Acquire);
             let (callback_nanos, quality) = host_clock.callback_nanos(args.time_stamp.mHostTime);
             let anchor_nanos = callback_nanos.saturating_add(downstream_latency_ns);
-            let result = render.render_f32_host_nanos(
-                args.data.buffer,
-                anchor_nanos,
+            let result = render.render(
+                OutputBufferMut::F32(args.data.buffer),
+                CallbackInfo {
+                    anchor_nanos,
+                    clock: CallbackClockSource::Instant,
+                },
                 sfx_receiver.try_iter(),
             );
             report_audio_render_callback(result);

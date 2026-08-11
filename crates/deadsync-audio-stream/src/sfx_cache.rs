@@ -1,5 +1,6 @@
+use crate::mix::ASSIST_TICK_BUS;
 use crate::{OutputFormat, load_and_resample_sfx};
-use deadsync_audio::{QueuedSfx, SfxLane, SfxSender, sfx_stop_generation};
+use deadlib_audio::{MixBus, MixControls, QueuedSfx, SfxSender};
 use log::{debug, warn};
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -18,25 +19,28 @@ const ASSIST_TICK_SFX_PATH: &str = "assets/sounds/assist_tick.ogg";
 pub struct SfxCache {
     sounds: Mutex<HashMap<String, Arc<[i16]>>>,
     assist_tick: OnceLock<Arc<[i16]>>,
+    sender: Mutex<SfxSender>,
+    controls: Arc<MixControls>,
 }
 
 impl SfxCache {
-    pub fn new() -> Self {
+    pub fn new(controls: Arc<MixControls>, sender: SfxSender) -> Self {
         Self {
             sounds: Mutex::new(HashMap::new()),
             assist_tick: OnceLock::new(),
+            sender: Mutex::new(sender),
+            controls,
         }
     }
 
     pub fn play(
         &self,
         path: &str,
-        lane: SfxLane,
+        bus: MixBus,
         output: OutputFormat,
-        sender: &SfxSender,
         resolve_asset_path: impl FnOnce(&str) -> PathBuf,
     ) {
-        if self.play_cached(path, lane, 0, sender) {
+        if self.play_cached(path, bus, 0) {
             return;
         }
 
@@ -61,11 +65,11 @@ impl SfxCache {
                 .clone()
         };
         self.cache_assist_tick(path, sound_data.clone());
-        send_sfx(sender, sound_data, lane, 0);
+        self.send(sound_data, bus, 0);
     }
 
-    pub fn play_preloaded(&self, path: &str, lane: SfxLane, sender: &SfxSender) {
-        if !self.play_cached(path, lane, 0, sender) {
+    pub fn play_preloaded(&self, path: &str, bus: MixBus) {
+        if !self.play_cached(path, bus, 0) {
             warn!("Preloaded SFX cache miss for '{path}'; skipping synchronous decode");
         }
     }
@@ -74,54 +78,42 @@ impl SfxCache {
         &self,
         path: &str,
         output: OutputFormat,
-        sender: &SfxSender,
         resolve_asset_path: impl FnOnce(&str) -> PathBuf,
     ) {
         if path == ASSIST_TICK_SFX_PATH
             && let Some(sound_data) = self.assist_tick.get().cloned()
         {
-            send_sfx(sender, sound_data, SfxLane::AssistTick, 0);
+            self.send(sound_data, ASSIST_TICK_BUS, 0);
             return;
         }
-        self.play(
-            path,
-            SfxLane::AssistTick,
-            output,
-            sender,
-            resolve_asset_path,
-        );
+        self.play(path, ASSIST_TICK_BUS, output, resolve_asset_path);
     }
 
-    pub fn play_preloaded_assist_tick(&self, path: &str, sender: &SfxSender) {
+    pub fn play_preloaded_assist_tick(&self, path: &str) {
         if path == ASSIST_TICK_SFX_PATH
             && let Some(sound_data) = self.assist_tick.get().cloned()
         {
-            send_sfx(sender, sound_data, SfxLane::AssistTick, 0);
+            self.send(sound_data, ASSIST_TICK_BUS, 0);
             return;
         }
-        self.play_preloaded(path, SfxLane::AssistTick, sender);
+        self.play_preloaded(path, ASSIST_TICK_BUS);
     }
 
-    pub fn play_scheduled_assist_tick(
-        &self,
-        path: &str,
-        target_stream_frame: u64,
-        sender: &SfxSender,
-    ) {
+    pub fn play_scheduled_assist_tick(&self, path: &str, target_stream_frame: u64) {
         if target_stream_frame == 0 {
-            self.play_preloaded_assist_tick(path, sender);
+            self.play_preloaded_assist_tick(path);
             return;
         }
         if path == ASSIST_TICK_SFX_PATH
             && let Some(sound_data) = self.assist_tick.get().cloned()
         {
-            send_sfx(sender, sound_data, SfxLane::AssistTick, target_stream_frame);
+            self.send(sound_data, ASSIST_TICK_BUS, target_stream_frame);
             return;
         }
 
         let cached = { self.sounds.lock().unwrap().get(path).cloned() };
         if let Some(sound_data) = cached {
-            send_sfx(sender, sound_data, SfxLane::AssistTick, target_stream_frame);
+            self.send(sound_data, ASSIST_TICK_BUS, target_stream_frame);
         } else {
             warn!("Scheduled assist tick cache miss for '{path}'; skipping");
         }
@@ -160,16 +152,10 @@ impl SfxCache {
         self.cache_assist_tick(path, data);
     }
 
-    fn play_cached(
-        &self,
-        path: &str,
-        lane: SfxLane,
-        target_stream_frame: u64,
-        sender: &SfxSender,
-    ) -> bool {
+    fn play_cached(&self, path: &str, bus: MixBus, target_stream_frame: u64) -> bool {
         let cached = { self.sounds.lock().unwrap().get(path).cloned() };
         if let Some(sound_data) = cached {
-            send_sfx(sender, sound_data, lane, target_stream_frame);
+            self.send(sound_data, bus, target_stream_frame);
             return true;
         }
         false
@@ -180,19 +166,17 @@ impl SfxCache {
             let _ = self.assist_tick.set(data);
         }
     }
-}
 
-impl Default for SfxCache {
-    fn default() -> Self {
-        Self::new()
+    fn send(&self, data: Arc<[i16]>, bus: MixBus, target_stream_frame: u64) {
+        let mut sender = self
+            .sender
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let _ = sender.try_send(QueuedSfx {
+            data,
+            bus,
+            generation: self.controls.bus_generation(bus),
+            target_stream_frame,
+        });
     }
-}
-
-fn send_sfx(sender: &SfxSender, data: Arc<[i16]>, lane: SfxLane, target_stream_frame: u64) {
-    let _ = sender.try_send(QueuedSfx {
-        data,
-        lane,
-        stop_generation: sfx_stop_generation(lane),
-        target_stream_frame,
-    });
 }

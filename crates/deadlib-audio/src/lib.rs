@@ -9,15 +9,13 @@ pub mod sfx_ring;
 pub mod telemetry;
 
 pub use mixer::{
-    ActiveSfx, MAX_ACTIVE_SFX, MAX_SCHEDULE_AHEAD_FRAMES, QueuedSfx, ScheduledOnset, SfxLane,
-    assist_sfx_generation, bump_assist_sfx_generation, bump_screen_sfx_generation, f32_to_i16,
-    i16_to_f32, mix_active_sfx, push_queued_sfx, scheduled_onset_decision, sfx_is_stale,
-    sfx_stop_generation,
+    ActiveSfx, MAX_ACTIVE_SFX, MAX_MIX_BUSES, MAX_SCHEDULE_AHEAD_FRAMES, MixBus, MixControls,
+    QueuedSfx, ScheduledOnset, f32_to_i16, i16_to_f32, mix_active_sfx, push_queued_sfx,
+    scheduled_onset_decision,
 };
 pub use output::{
-    AudioMixLevels, AudioOutputMode, Cut, InitConfig, LinuxAudioBackend, OutputBackendReady,
-    OutputDeviceInfo, OutputTimingSnapshot, audio_mix_level_gains, audio_mix_levels,
-    mix_level_gains, pack_audio_mix_levels, set_audio_mix_levels, unpack_audio_mix_levels,
+    AudioOutputMode, InitConfig, LinuxAudioBackend, OutputBackendReady, OutputDeviceInfo,
+    OutputTimingSnapshot,
 };
 pub use position::{
     CallbackClockSource, CallbackClockWindow, MUSIC_POS_MAP_BACKLOG_FRAMES,
@@ -33,7 +31,7 @@ pub use position::{
     seeded_music_position, set_music_clock_rate, set_music_target_gain, snap_music_gain_generation,
     stop_music_track, stream_position_frames_from_window, timing_diag_last_callback_gap_ns,
 };
-pub use render::{AudioRenderCallbackResult, RenderState};
+pub use render::{CallbackInfo, OutputBufferMut, RenderReport, RenderState};
 pub use ring::{
     AudioRenderHandle, AudioStreamHandle, MusicBlockTiming, MusicBlockWriter, PlayedMapReader,
     music_transport, played_map_drops,

@@ -1,7 +1,7 @@
-use deadlib_platform::host_time::now_nanos;
 #[cfg(unix)]
-use deadsync_audio::OutputTimingQuality;
-use deadsync_audio::{AudioRenderCallbackResult, StutterDiagAudioEventKind};
+use deadlib_audio::OutputTimingQuality;
+use deadlib_audio::{RenderReport, StutterDiagAudioEventKind};
+use deadlib_platform::host_time::now_nanos;
 
 #[inline(always)]
 fn stutter_diag_enabled() -> bool {
@@ -18,7 +18,7 @@ pub fn publish_output_timing(
     queued_frames: u32,
     estimated_output_delay_ns: u64,
 ) {
-    deadsync_audio::publish_output_timing(
+    deadlib_audio::publish_output_timing(
         sample_rate_hz,
         device_period_ns,
         stream_latency_ns,
@@ -32,31 +32,31 @@ pub fn publish_output_timing(
 #[inline(always)]
 #[cfg(unix)]
 pub fn publish_output_timing_quality(quality: OutputTimingQuality) {
-    deadsync_audio::publish_output_timing_quality(quality);
+    deadlib_audio::publish_output_timing_quality(quality);
 }
 
 #[inline(always)]
 pub fn note_output_underrun() {
-    deadsync_audio::note_output_underrun(now_nanos(), stutter_diag_enabled());
+    deadlib_audio::note_output_underrun(now_nanos(), stutter_diag_enabled());
 }
 
 #[inline(always)]
 #[cfg(unix)]
 pub fn note_output_clock_fallback() {
-    deadsync_audio::note_output_clock_fallback(now_nanos(), stutter_diag_enabled());
+    deadlib_audio::note_output_clock_fallback(now_nanos(), stutter_diag_enabled());
 }
 
 #[inline(always)]
-pub fn report_audio_render_callback(result: AudioRenderCallbackResult) {
+pub fn report_audio_render_callback(result: RenderReport) {
     if result.callback_gap_ns != 0
         && stutter_diag_enabled()
-        && result.callback_gap_ns >= deadsync_audio::stutter_diag_callback_gap_threshold_ns()
+        && result.callback_gap_ns >= deadlib_audio::stutter_diag_callback_gap_threshold_ns()
     {
-        deadsync_audio::record_stutter_diag_event(
+        deadlib_audio::record_stutter_diag_event(
             StutterDiagAudioEventKind::CallbackGap,
             now_nanos(),
             result.callback_gap_ns,
-            deadsync_audio::current_output_timing_quality(),
+            deadlib_audio::current_output_timing_quality(),
         );
     }
     if result.output_underrun {

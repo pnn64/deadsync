@@ -1,4 +1,4 @@
-use deadsync_audio::{QueuedSfx, SfxLane, sfx_transport};
+use deadlib_audio::{MixBus, QueuedSfx, sfx_transport};
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::hint::black_box;
 use std::sync::Arc;
@@ -231,15 +231,15 @@ fn cycle_counter() -> Option<u64> {
 fn queued(data: &Arc<[i16]>, frame: u64) -> QueuedSfx {
     QueuedSfx {
         data: Arc::clone(data),
-        lane: SfxLane::Effect,
-        stop_generation: frame,
+        bus: MixBus::new(0),
+        generation: frame,
         target_stream_frame: frame,
     }
 }
 
 fn main() {
     let (old_sender, old_receiver) = sync_channel::<QueuedSfx>(QUEUE_CAPACITY);
-    let (new_sender, mut new_receiver) = sfx_transport(QUEUE_CAPACITY);
+    let (mut new_sender, mut new_receiver) = sfx_transport(QUEUE_CAPACITY);
     let old_empty = measure(EMPTY_CALLBACKS, || old_receiver.try_iter().count() as u64);
     let new_empty = measure(EMPTY_CALLBACKS, || new_receiver.try_iter().count() as u64);
     print_pair(

@@ -14,10 +14,10 @@ use crate::theme::{
     MachineFlowOptions, ThemePresentationOptions, ThemeShortcutOptions, load_machine_flow_options,
     load_theme_presentation_options, load_theme_shortcut_options,
 };
+use deadlib_audio::{AudioOutputMode, LinuxAudioBackend};
 use deadlib_platform::display::FullscreenType;
 use deadlib_present::color::Color;
 use deadlib_render::{BackendType, PresentModePolicy};
-use deadsync_audio::{AudioOutputMode, LinuxAudioBackend};
 use deadsync_input::parse_keycode_to_key;
 use deadsync_input_native::WindowsPadBackend;
 use deadsync_lights::{

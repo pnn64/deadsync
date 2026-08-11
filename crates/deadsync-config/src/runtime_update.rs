@@ -12,11 +12,11 @@ use crate::theme::{
     SelectMusicStepArtistBoxMode, SelectMusicWheelStyle, SrpgShopFolder, SrpgVariant,
     SyncGraphMode, ThemeFlag, VersionOverlaySide, VisualStyle,
 };
+use deadlib_audio::AudioOutputMode;
+#[cfg(target_os = "linux")]
+use deadlib_audio::LinuxAudioBackend;
 use deadlib_platform::logging;
 use deadlib_render::{BackendType, PresentModePolicy};
-use deadsync_audio::AudioOutputMode;
-#[cfg(target_os = "linux")]
-use deadsync_audio::LinuxAudioBackend;
 #[cfg(target_os = "windows")]
 use deadsync_input_native::WindowsPadBackend;
 use deadsync_lights::{DriverKind as LightsDriverKind, GameplayPadLightMode};
@@ -225,28 +225,28 @@ update_config_fn!(pub fn update_lights_simplify_bass(enabled: bool) => set_light
 
 pub fn update_master_volume(volume: u8) {
     if let Some(levels) = RUNTIME_CONFIG.update_master_volume(volume) {
-        deadsync_audio::set_audio_mix_levels(levels);
+        deadsync_audio_stream::set_audio_mix_levels(levels);
         save_without_keymaps();
     }
 }
 
 pub fn update_music_volume(volume: u8) {
     if let Some(levels) = RUNTIME_CONFIG.update_music_volume(volume) {
-        deadsync_audio::set_audio_mix_levels(levels);
+        deadsync_audio_stream::set_audio_mix_levels(levels);
         save_without_keymaps();
     }
 }
 
 pub fn update_sfx_volume(volume: u8) {
     if let Some(levels) = RUNTIME_CONFIG.update_sfx_volume(volume) {
-        deadsync_audio::set_audio_mix_levels(levels);
+        deadsync_audio_stream::set_audio_mix_levels(levels);
         save_without_keymaps();
     }
 }
 
 pub fn update_assist_tick_volume(volume: u8) {
     if let Some(levels) = RUNTIME_CONFIG.update_assist_tick_volume(volume) {
-        deadsync_audio::set_audio_mix_levels(levels);
+        deadsync_audio_stream::set_audio_mix_levels(levels);
         save_without_keymaps();
     }
 }
