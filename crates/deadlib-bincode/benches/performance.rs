@@ -24,6 +24,8 @@ static DEALLOC_BYTES: AtomicU64 = AtomicU64::new(0);
 #[global_allocator]
 static ALLOCATOR: CountingAlloc = CountingAlloc;
 
+// SAFETY: every operation forwards the caller's pointer, layout, and size
+// unchanged to `System`; the atomic counters do not affect allocation behavior.
 unsafe impl GlobalAlloc for CountingAlloc {
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
         // SAFETY: this forwards the exact layout supplied by the allocator caller.

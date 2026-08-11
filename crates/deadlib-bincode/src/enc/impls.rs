@@ -4,6 +4,22 @@ use crate::{
     error::EncodeError,
 };
 
+#[inline]
+fn encoded_bytes<T, C>(values: &[T]) -> Option<&[u8]>
+where
+    C: InternalEndianConfig + InternalIntEncodingConfig,
+{
+    if !crate::unty::type_equal::<T, u8>() && !crate::utils::can_memcpy::<T, C>() {
+        return None;
+    }
+
+    // SAFETY: T is u8 or `can_memcpy` restricted it to a padding-free numeric
+    // primitive whose in-memory representation has the configured byte order.
+    Some(unsafe {
+        core::slice::from_raw_parts(values.as_ptr().cast(), core::mem::size_of_val(values))
+    })
+}
+
 impl Encode for () {
     fn encode<E: Encoder>(&self, _: &mut E) -> Result<(), EncodeError> {
         Ok(())
@@ -193,18 +209,7 @@ where
     fn encode<E: Encoder>(&self, encoder: &mut E) -> Result<(), EncodeError> {
         super::encode_slice_len(encoder, self.len())?;
 
-        if crate::unty::type_equal::<T, u8>() {
-            // SAFETY: T = u8
-            let t: &[u8] = unsafe { core::mem::transmute(self) };
-            encoder.writer().write(t)?;
-            return Ok(());
-        }
-        if crate::utils::can_memcpy::<T, E::C>() {
-            // SAFETY: can_memcpy restricts T to numeric primitives and verifies
-            // that their in-memory representation has the configured byte order.
-            let bytes = unsafe {
-                core::slice::from_raw_parts(self.as_ptr().cast(), core::mem::size_of_val(self))
-            };
+        if let Some(bytes) = encoded_bytes::<T, E::C>(self) {
             encoder.writer().write(bytes)?;
             return Ok(());
         }
@@ -227,17 +232,7 @@ where
     T: Encode,
 {
     fn encode<E: Encoder>(&self, encoder: &mut E) -> Result<(), EncodeError> {
-        if crate::unty::type_equal::<T, u8>() {
-            // SAFETY: this is &[u8; N]
-            let array_slice: &[u8] =
-                unsafe { core::slice::from_raw_parts(self.as_ptr().cast(), N) };
-            encoder.writer().write(array_slice)
-        } else if crate::utils::can_memcpy::<T, E::C>() {
-            // SAFETY: can_memcpy restricts T to numeric primitives and verifies
-            // that their in-memory representation has the configured byte order.
-            let bytes = unsafe {
-                core::slice::from_raw_parts(self.as_ptr().cast(), core::mem::size_of_val(self))
-            };
+        if let Some(bytes) = encoded_bytes::<T, E::C>(self) {
             encoder.writer().write(bytes)
         } else {
             for item in self.iter() {

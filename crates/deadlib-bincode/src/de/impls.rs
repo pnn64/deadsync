@@ -8,6 +8,25 @@ use crate::{
     impl_borrow_decode,
 };
 
+#[inline]
+fn decode_u8_array<T, D: Decoder, const N: usize>(
+    decoder: &mut D,
+) -> Option<Result<[T; N], DecodeError>> {
+    if !crate::unty::type_equal::<T, u8>() {
+        return None;
+    }
+
+    let mut bytes = [0u8; N];
+    if let Err(error) = decoder.reader().read(&mut bytes) {
+        return Some(Err(error));
+    }
+
+    // SAFETY: `type_equal` established that T and u8 are identical types.
+    Some(Ok(unsafe {
+        (&bytes as *const [u8; N]).cast::<[T; N]>().read()
+    }))
+}
+
 impl<Context> Decode<Context> for bool {
     fn decode<D: Decoder<Context = Context>>(decoder: &mut D) -> Result<Self, DecodeError> {
         match u8::decode(decoder)? {
@@ -303,15 +322,8 @@ where
     fn decode<D: Decoder<Context = Context>>(decoder: &mut D) -> Result<Self, DecodeError> {
         decoder.claim_bytes_read(core::mem::size_of::<[T; N]>())?;
 
-        if crate::unty::type_equal::<T, u8>() {
-            let mut buf = [0u8; N];
-            decoder.reader().read(&mut buf)?;
-            let ptr = &mut buf as *mut _ as *mut [T; N];
-
-            // SAFETY: we know that T is a u8, so it is perfectly safe to
-            // translate an array of u8 into an array of T
-            let res = unsafe { ptr.read() };
-            Ok(res)
+        if let Some(result) = decode_u8_array(decoder) {
+            result
         } else {
             let result = super::impl_core::collect_into_array(&mut (0..N).map(|_| {
                 // See the documentation on `unclaim_bytes_read` as to why we're doing this here
@@ -335,15 +347,8 @@ where
     ) -> Result<Self, DecodeError> {
         decoder.claim_bytes_read(core::mem::size_of::<[T; N]>())?;
 
-        if crate::unty::type_equal::<T, u8>() {
-            let mut buf = [0u8; N];
-            decoder.reader().read(&mut buf)?;
-            let ptr = &mut buf as *mut _ as *mut [T; N];
-
-            // SAFETY: we know that T is a u8, so it is perfectly safe to
-            // translate an array of u8 into an array of T
-            let res = unsafe { ptr.read() };
-            Ok(res)
+        if let Some(result) = decode_u8_array(decoder) {
+            result
         } else {
             let result = super::impl_core::collect_into_array(&mut (0..N).map(|_| {
                 // See the documentation on `unclaim_bytes_read` as to why we're doing this here

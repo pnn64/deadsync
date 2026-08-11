@@ -93,6 +93,44 @@ fn owned_byte_decode_keeps_fallback_reader_behavior() {
 }
 
 #[test]
+fn numeric_batch_rejects_short_peek_buffer() {
+    struct ShortPeek<'a>(&'a [u8]);
+
+    impl bincode::de::read::Reader for ShortPeek<'_> {
+        fn read(&mut self, bytes: &mut [u8]) -> Result<(), bincode::error::DecodeError> {
+            if bytes.len() > self.0.len() {
+                return Err(bincode::error::DecodeError::UnexpectedEnd {
+                    additional: bytes.len() - self.0.len(),
+                });
+            }
+            let (read, remaining) = self.0.split_at(bytes.len());
+            bytes.copy_from_slice(read);
+            self.0 = remaining;
+            Ok(())
+        }
+
+        fn peek_read(&mut self, n: usize) -> Option<&[u8]> {
+            let returned = n - usize::from(n > 1);
+            self.0.get(..returned)
+        }
+
+        fn consume(&mut self, n: usize) {
+            self.0 = self.0.get(n..).unwrap_or_default();
+        }
+    }
+
+    let encoded =
+        bincode::encode_to_vec(vec![0.0f32, 1.0, 2.0], bincode::config::standard()).unwrap();
+    let mut decoder =
+        bincode::de::DecoderImpl::new(ShortPeek(&encoded), bincode::config::standard(), ());
+    let error = Vec::<f32>::decode(&mut decoder).unwrap_err();
+    assert!(matches!(
+        error,
+        bincode::error::DecodeError::UnexpectedEnd { additional: 1 }
+    ));
+}
+
+#[test]
 fn numeric_batches_keep_wire_format() {
     let floats = vec![0.0f32, -0.0, 1.25, f32::from_bits(0x7fc0_1234)];
     let expected = [

@@ -60,6 +60,12 @@ fn decode_raw_vec<T, D: Decoder>(
         None => return Some(Err(DecodeError::LimitExceeded)),
     };
     let source = decoder.reader().peek_read(byte_len)?;
+    if source.len() < byte_len {
+        return Some(Err(DecodeError::UnexpectedEnd {
+            additional: byte_len - source.len(),
+        }));
+    }
+    let source = &source[..byte_len];
     let mut values = Vec::<T>::with_capacity(len);
     // SAFETY: can_memcpy restricts T to numeric primitives where every bit
     // pattern is valid, the source contains exactly len complete values in
@@ -72,16 +78,31 @@ fn decode_raw_vec<T, D: Decoder>(
     Some(Ok(values))
 }
 
+#[inline]
+fn decode_u8_vec<T, D: Decoder>(
+    decoder: &mut D,
+    len: usize,
+) -> Option<Result<Vec<T>, DecodeError>> {
+    if !crate::unty::type_equal::<T, u8>() {
+        return None;
+    }
+
+    let mut bytes = vec![0u8; len];
+    if let Err(error) = decoder.reader().read(&mut bytes) {
+        return Some(Err(error));
+    }
+
+    // SAFETY: `type_equal` established that T and u8 are identical types.
+    Some(Ok(unsafe { std::mem::transmute::<Vec<u8>, Vec<T>>(bytes) }))
+}
+
 impl<Context, T: Decode<Context>> Decode<Context> for Vec<T> {
     fn decode<D: Decoder<Context = Context>>(decoder: &mut D) -> Result<Self, DecodeError> {
         let len = crate::de::decode_slice_len(decoder)?;
         decoder.claim_container_read::<T>(len)?;
 
-        if crate::unty::type_equal::<T, u8>() {
-            let mut bytes = vec![0u8; len];
-            decoder.reader().read(&mut bytes)?;
-            // SAFETY: type_equal established that T and u8 are identical types.
-            return Ok(unsafe { std::mem::transmute::<Vec<u8>, Vec<T>>(bytes) });
+        if let Some(values) = decode_u8_vec(decoder, len) {
+            return values;
         }
         if let Some(values) = decode_raw_vec(decoder, len) {
             return values;
@@ -103,11 +124,8 @@ impl<'de, T: BorrowDecode<'de, Context>, Context> BorrowDecode<'de, Context> for
         let len = crate::de::decode_slice_len(decoder)?;
         decoder.claim_container_read::<T>(len)?;
 
-        if crate::unty::type_equal::<T, u8>() {
-            let mut bytes = vec![0u8; len];
-            decoder.reader().read(&mut bytes)?;
-            // SAFETY: type_equal established that T and u8 are identical types.
-            return Ok(unsafe { std::mem::transmute::<Vec<u8>, Vec<T>>(bytes) });
+        if let Some(values) = decode_u8_vec(decoder, len) {
+            return values;
         }
         if let Some(values) = decode_raw_vec(decoder, len) {
             return values;
