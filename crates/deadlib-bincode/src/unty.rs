@@ -4,8 +4,8 @@ use core::{any::TypeId, marker::PhantomData, mem};
 
 /// Returns whether two generic types are equal, ignoring lifetimes.
 ///
-/// Bincode only calls this with `T` and `u8`, so the lifetime limitation of
-/// `non_static_type_id` cannot produce a false positive here.
+/// Bincode only compares `T` with lifetime-free numeric primitives, so the
+/// lifetime limitation of `non_static_type_id` cannot produce a false positive.
 pub(crate) fn type_equal<Src: ?Sized, Target: ?Sized>() -> bool {
     non_static_type_id::<Src>() == non_static_type_id::<Target>()
 }
@@ -31,7 +31,7 @@ fn non_static_type_id<T: ?Sized>() -> TypeId {
     let phantom_data = PhantomData::<T>;
     // SAFETY: The temporary trait object is used only to dispatch
     // `get_type_id`. The method does not access borrowed data, and bincode only
-    // compares a generic `T` with the lifetime-free type `u8`.
+    // compares a generic `T` with lifetime-free numeric primitives.
     NonStaticAny::get_type_id(unsafe {
         mem::transmute::<&dyn NonStaticAny, &(dyn NonStaticAny + 'static)>(&phantom_data)
     })

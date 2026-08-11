@@ -33,3 +33,7 @@ harness = false
 [[bench]]
 name = "varint"
 harness = false
+
+[[bench]]
+name = "performance"
+harness = false

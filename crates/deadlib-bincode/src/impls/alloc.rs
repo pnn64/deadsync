@@ -6,20 +6,11 @@ use crate::{
 };
 use std::{boxed::Box, string::String, vec::Vec};
 
-#[derive(Default)]
-struct VecWriter {
-    inner: Vec<u8>,
+struct VecWriter<'a> {
+    inner: &'a mut Vec<u8>,
 }
 
-impl VecWriter {
-    fn with_capacity(capacity: usize) -> Self {
-        Self {
-            inner: Vec::with_capacity(capacity),
-        }
-    }
-}
-
-impl enc::write::Writer for VecWriter {
+impl enc::write::Writer for VecWriter<'_> {
     #[inline(always)]
     fn write(&mut self, bytes: &[u8]) -> Result<(), EncodeError> {
         self.inner.extend_from_slice(bytes);
@@ -34,10 +25,51 @@ pub fn encode_to_vec<E: Encode, C: Config>(val: E, config: C) -> Result<Vec<u8>,
         val.encode(&mut encoder)?;
         encoder.into_writer().bytes_written
     };
-    let writer = VecWriter::with_capacity(size);
+    let mut bytes = Vec::with_capacity(size);
+    encode_into_vec(val, &mut bytes, config)?;
+    Ok(bytes)
+}
+
+/// Encode a value into a reusable byte vector.
+///
+/// The vector is cleared before encoding, but retains its allocation. After one
+/// sufficiently large call, repeated calls can therefore encode without any
+/// allocator traffic. If encoding fails, the vector contains the bytes written
+/// before the error.
+pub fn encode_into_vec<E: Encode, C: Config>(
+    val: E,
+    bytes: &mut Vec<u8>,
+    config: C,
+) -> Result<(), EncodeError> {
+    bytes.clear();
+    let writer = VecWriter { inner: bytes };
     let mut encoder = enc::EncoderImpl::<_, C>::new(writer, config);
-    val.encode(&mut encoder)?;
-    Ok(encoder.into_writer().inner)
+    val.encode(&mut encoder)
+}
+
+fn decode_raw_vec<T, D: Decoder>(
+    decoder: &mut D,
+    len: usize,
+) -> Option<Result<Vec<T>, DecodeError>> {
+    if !crate::utils::can_memcpy::<T, D::C>() {
+        return None;
+    }
+
+    let byte_len = match len.checked_mul(std::mem::size_of::<T>()) {
+        Some(len) => len,
+        None => return Some(Err(DecodeError::LimitExceeded)),
+    };
+    let source = decoder.reader().peek_read(byte_len)?;
+    let mut values = Vec::<T>::with_capacity(len);
+    // SAFETY: can_memcpy restricts T to numeric primitives where every bit
+    // pattern is valid, the source contains exactly len complete values in
+    // native byte order, and with_capacity allocated space for all of them.
+    unsafe {
+        std::ptr::copy_nonoverlapping(source.as_ptr(), values.as_mut_ptr().cast(), byte_len);
+        values.set_len(len);
+    }
+    decoder.reader().consume(byte_len);
+    Some(Ok(values))
 }
 
 impl<Context, T: Decode<Context>> Decode<Context> for Vec<T> {
@@ -50,6 +82,9 @@ impl<Context, T: Decode<Context>> Decode<Context> for Vec<T> {
             decoder.reader().read(&mut bytes)?;
             // SAFETY: type_equal established that T and u8 are identical types.
             return Ok(unsafe { std::mem::transmute::<Vec<u8>, Vec<T>>(bytes) });
+        }
+        if let Some(values) = decode_raw_vec(decoder, len) {
+            return values;
         }
 
         let mut values = Vec::with_capacity(len);
@@ -73,6 +108,9 @@ impl<'de, T: BorrowDecode<'de, Context>, Context> BorrowDecode<'de, Context> for
             decoder.reader().read(&mut bytes)?;
             // SAFETY: type_equal established that T and u8 are identical types.
             return Ok(unsafe { std::mem::transmute::<Vec<u8>, Vec<T>>(bytes) });
+        }
+        if let Some(values) = decode_raw_vec(decoder, len) {
+            return values;
         }
 
         let mut values = Vec::with_capacity(len);

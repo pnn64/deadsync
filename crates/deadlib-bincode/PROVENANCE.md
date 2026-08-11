@@ -39,3 +39,16 @@ Original license files are kept beside each incorporated component.
 
 These adaptations intentionally reduce the public API. They do not change bytes
 produced by the retained surface under `config::standard()`.
+
+## Performance adaptations
+
+- Add `encode_into_vec` so repeated persistence writes can retain capacity and
+  avoid allocator traffic after warmup.
+- Restore slice-backed borrowed decoding for allocation-free strings and byte
+  slices.
+- Batch native-endian floating-point slices and fixed-width integer slices into
+  contiguous copies while retaining scalar fallbacks for other configurations
+  and reader types.
+- Add paired old/new Criterion benchmarks with throughput, allocation churn,
+  and Windows thread-cycle reporting. Run them with
+  `cargo bench -p deadlib-bincode --bench performance -- --noplot`.

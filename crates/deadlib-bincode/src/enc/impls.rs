@@ -199,6 +199,15 @@ where
             encoder.writer().write(t)?;
             return Ok(());
         }
+        if crate::utils::can_memcpy::<T, E::C>() {
+            // SAFETY: can_memcpy restricts T to numeric primitives and verifies
+            // that their in-memory representation has the configured byte order.
+            let bytes = unsafe {
+                core::slice::from_raw_parts(self.as_ptr().cast(), core::mem::size_of_val(self))
+            };
+            encoder.writer().write(bytes)?;
+            return Ok(());
+        }
 
         for item in self {
             item.encode(encoder)?;
@@ -223,6 +232,13 @@ where
             let array_slice: &[u8] =
                 unsafe { core::slice::from_raw_parts(self.as_ptr().cast(), N) };
             encoder.writer().write(array_slice)
+        } else if crate::utils::can_memcpy::<T, E::C>() {
+            // SAFETY: can_memcpy restricts T to numeric primitives and verifies
+            // that their in-memory representation has the configured byte order.
+            let bytes = unsafe {
+                core::slice::from_raw_parts(self.as_ptr().cast(), core::mem::size_of_val(self))
+            };
+            encoder.writer().write(bytes)
         } else {
             for item in self.iter() {
                 item.encode(encoder)?;

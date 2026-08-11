@@ -40,7 +40,7 @@ pub mod error;
 pub use bincode_derive::{BorrowDecode, Decode, Encode};
 pub use de::{BorrowDecode, Decode};
 pub use enc::Encode;
-pub use impls::encode_to_vec;
+pub use impls::{encode_into_vec, encode_to_vec};
 
 use config::Config;
 use de::Decoder;
@@ -55,6 +55,22 @@ pub fn decode_from_slice<D: de::Decode<()>, C: Config>(
     let reader = de::read::SliceReader::new(src);
     let mut decoder = de::DecoderImpl::<_, C, ()>::new(reader, config, ());
     let result = D::decode(&mut decoder)?;
+    let bytes_read = src.len() - decoder.reader().slice.len();
+    Ok((result, bytes_read))
+}
+
+/// Decode a borrowed value from a byte slice using the given configuration.
+///
+/// The returned value may borrow strings and byte slices directly from `src`,
+/// avoiding the allocations required by owned decoding. The returned `usize`
+/// is the number of source bytes consumed.
+pub fn borrow_decode_from_slice<'a, D: de::BorrowDecode<'a, ()>, C: Config>(
+    src: &'a [u8],
+    config: C,
+) -> Result<(D, usize), error::DecodeError> {
+    let reader = de::read::SliceReader::new(src);
+    let mut decoder = de::DecoderImpl::<_, C, ()>::new(reader, config, ());
+    let result = D::borrow_decode(&mut decoder)?;
     let bytes_read = src.len() - decoder.reader().slice.len();
     Ok((result, bytes_read))
 }
