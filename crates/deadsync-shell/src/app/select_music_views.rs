@@ -157,14 +157,15 @@ impl App {
                 || config.select_music_scorebox_cycle_ex
                 || config.select_music_scorebox_cycle_hard_ex
                 || config.select_music_scorebox_cycle_tournaments);
-        let profile_view = profile_data::runtime_scorebox_view(
+        let profile_snapshot = profile_data::runtime_music_profile_snapshot(
             config.enable_groovestats,
             config.enable_arrowcloud,
             config.auto_populate_gs_scores,
         );
+        let profile_view = &profile_snapshot.scorebox;
         let music_wheel = Self::prepare_music_wheel_runtime(
             select_music::music_wheel_runtime_request(&self.state.screens.select_music_state),
-            &profile_view,
+            profile_view,
             config,
         );
         let mut scorebox_hashes: [Option<String>; 2] = Default::default();
@@ -233,7 +234,23 @@ impl App {
                     }),
                 }
             });
-        let [p1_profile, p2_profile] = profile_view.sides;
+        let session = SelectMusicSessionView {
+            play_style: profile_view.play_style,
+            player_side: profile_view.player_side,
+            joined: profile_view.sides.each_ref().map(|side| side.joined),
+            guest: profile_view.sides.each_ref().map(|side| side.guest),
+            music_rate: profile_snapshot.music_rate,
+        };
+        let profiles = SelectMusicProfileView {
+            display_names: profile_view
+                .sides
+                .each_ref()
+                .map(|side| side.display_name.clone()),
+            avatar_texture_keys: profile_snapshot.avatar_texture_keys,
+            local_profile_ids: profile_snapshot.local_profile_ids,
+            pad_profile_ids: profile_snapshot.pad_profile_ids,
+        };
+        let [p1_profile, p2_profile] = profile_snapshot.scorebox.sides;
         let [p1_hash, p2_hash] = scorebox_hashes;
         let [p1_leaderboards, p2_leaderboards] = scorebox_leaderboards;
         let pane_filter = super::scorebox_pane_filter(config);
@@ -243,8 +260,6 @@ impl App {
             Self::scorebox_side_view(p1_profile, p1_hash, p1_leaderboards, pane_filter, srpg10),
             Self::scorebox_side_view(p2_profile, p2_hash, p2_leaderboards, pane_filter, srpg10),
         ];
-        let session = crate::select_music::session_view();
-        let profiles = crate::select_music::profile_view();
         let favorites = (select_music::local_profile_ids(&self.state.screens.select_music_state)
             != &profiles.local_profile_ids)
             .then(deadsync_profile::runtime_favorite_snapshot);

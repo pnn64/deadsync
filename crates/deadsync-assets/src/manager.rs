@@ -11,7 +11,6 @@ use deadsync_theme::ThemeAssetManifest;
 use image::RgbaImage;
 use log::{debug, warn};
 use std::path::Path;
-use std::sync::Arc;
 
 pub struct AssetManager {
     pub(crate) store: AssetStore<RendererTexture>,
@@ -52,6 +51,11 @@ impl AssetManager {
     #[inline(always)]
     pub fn has_pending_texture_upload(&self, key: &str) -> bool {
         self.store.has_pending_texture_upload(key)
+    }
+
+    #[inline(always)]
+    pub fn has_pending_texture_upload_handle(&self, handle: TextureHandle) -> bool {
+        self.store.has_pending_texture_upload_handle(handle)
     }
 
     pub fn take_textures(&mut self) -> TextureHandleMap<RendererTexture> {
@@ -196,14 +200,14 @@ impl AssetManager {
         self.store.queue_texture_upload(key, image);
     }
 
-    pub fn queue_video_frame_upload_shared(
+    pub fn queue_video_frame_upload(
         &mut self,
-        key: Arc<str>,
+        handle: TextureHandle,
         frame: deadlib_video::VideoFrame,
     ) {
         let (image, recycle_tx) = frame.into_upload_parts();
         self.store
-            .queue_recyclable_texture_upload_shared(key, image, recycle_tx);
+            .queue_recyclable_texture_upload(handle, image, recycle_tx);
     }
 
     pub fn queue_pending_generated_textures(&mut self) {

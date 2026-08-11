@@ -1,15 +1,12 @@
 use crate::{
     FontStore, TextureDecodeJob, TextureKeyLoad, TextureStore, prepare_initial_texture_images,
     prepare_texture_key_load, register_texture_dims,
-    upload::{PendingTextureUpload, TextureUploadBudget, TextureUploadKey},
+    upload::{PendingTextureUpload, TextureUploadBudget},
 };
 use deadlib_present::font::{Font, FontMap};
 use deadlib_render::{SamplerDesc, TextureHandle, TextureHandleMap};
 use image::RgbaImage;
-use std::{
-    path::PathBuf,
-    sync::{Arc, mpsc::SyncSender},
-};
+use std::{path::PathBuf, sync::mpsc::SyncSender};
 
 pub enum TextureUploadAction<'a, T> {
     Update {
@@ -101,6 +98,11 @@ impl<T> AssetStore<T> {
         self.texture_store.has_pending_texture_upload(key)
     }
 
+    #[inline(always)]
+    pub fn has_pending_texture_upload_handle(&self, handle: TextureHandle) -> bool {
+        self.texture_store.has_pending_texture_upload_handle(handle)
+    }
+
     pub fn take_textures(&mut self) -> TextureHandleMap<T> {
         self.texture_store.take_textures()
     }
@@ -143,14 +145,14 @@ impl<T> AssetStore<T> {
         self.texture_store.queue_texture_upload(key, image);
     }
 
-    pub fn queue_recyclable_texture_upload_shared(
+    pub fn queue_recyclable_texture_upload(
         &mut self,
-        key: Arc<str>,
+        handle: TextureHandle,
         image: RgbaImage,
         recycle_tx: SyncSender<Vec<u8>>,
     ) {
         self.texture_store
-            .queue_recyclable_texture_upload_shared(key, image, recycle_tx);
+            .queue_recyclable_texture_upload(handle, image, recycle_tx);
     }
 
     pub fn queue_pending_generated_textures(&mut self) {
@@ -162,7 +164,7 @@ impl<T> AssetStore<T> {
         budget: TextureUploadBudget,
         drained_uploads: usize,
         drained_bytes: usize,
-    ) -> Option<(TextureUploadKey, PendingTextureUpload)> {
+    ) -> Option<(TextureHandle, PendingTextureUpload)> {
         self.texture_store
             .pop_next_upload(budget, drained_uploads, drained_bytes)
     }
@@ -176,14 +178,15 @@ impl<T> AssetStore<T> {
         let mut errors = Vec::new();
         let mut drained_uploads = 0usize;
         let mut drained_bytes = 0usize;
-        while let Some((key, upload)) = self.pop_next_upload(budget, drained_uploads, drained_bytes)
+        while let Some((handle, upload)) =
+            self.pop_next_upload(budget, drained_uploads, drained_bytes)
         {
             drained_uploads = drained_uploads.saturating_add(1);
             drained_bytes = drained_bytes.saturating_add(upload.bytes);
 
             let mut updated = false;
-            if let Some(texture) = self.uploaded_texture_mut(
-                key.as_str(),
+            if let Some(texture) = self.texture_store.apply_upload_update(
+                handle,
                 upload.image().width(),
                 upload.image().height(),
             ) {
@@ -193,7 +196,7 @@ impl<T> AssetStore<T> {
                 }) {
                     Ok(_) => updated = true,
                     Err(error) => errors.push(TextureUploadDrainError::Update {
-                        key: key.as_str().to_owned(),
+                        key: self.texture_store.texture_key(handle).to_owned(),
                         error,
                     }),
                 }
@@ -207,8 +210,8 @@ impl<T> AssetStore<T> {
                 sampler: upload.sampler,
             }) {
                 Ok(Some(texture)) => {
-                    let (_handle, old) = self.set_texture_for_key(
-                        key.into_string(),
+                    let old = self.texture_store.set_texture_for_handle(
+                        handle,
                         texture,
                         upload.image().width(),
                         upload.image().height(),
@@ -219,7 +222,7 @@ impl<T> AssetStore<T> {
                 }
                 Ok(None) => {}
                 Err(error) => errors.push(TextureUploadDrainError::Create {
-                    key: key.into_string(),
+                    key: self.texture_store.texture_key(handle).to_owned(),
                     error,
                 }),
             }
@@ -354,7 +357,8 @@ mod tests {
         let mut store = AssetStore::<u32>::new();
         let (recycle_tx, recycle_rx) = sync_channel(1);
         let image = RgbaImage::from_raw(2, 1, vec![1, 2, 3, 4, 5, 6, 7, 8]).unwrap();
-        store.queue_recyclable_texture_upload_shared(Arc::from("video"), image, recycle_tx);
+        let handle = store.reserve_texture_handle("video".to_string());
+        store.queue_recyclable_texture_upload(handle, image, recycle_tx);
 
         let (_, errors): (_, Vec<TextureUploadDrainError<()>>) = store.drain_texture_uploads_with(
             TextureUploadBudget {
@@ -369,6 +373,51 @@ mod tests {
 
         assert!(errors.is_empty());
         assert_eq!(recycle_rx.try_recv().unwrap(), vec![1, 2, 3, 4, 5, 6, 7, 8]);
+    }
+
+    #[test]
+    fn handle_keyed_video_upload_updates_then_replaces_on_resize() {
+        let mut store = AssetStore::<u32>::new();
+        store.insert_texture("video".to_string(), 7, 2, 1);
+        let handle = store.reserve_texture_handle("video".to_string());
+        let (recycle_tx, recycle_rx) = sync_channel(2);
+
+        store.queue_recyclable_texture_upload(handle, RgbaImage::new(2, 1), recycle_tx.clone());
+        let mut updates = 0;
+        let (retired, errors): (_, Vec<TextureUploadDrainError<()>>) = store
+            .drain_texture_uploads_with(
+                TextureUploadBudget {
+                    max_uploads: 1,
+                    max_bytes: 64,
+                },
+                |action| match action {
+                    TextureUploadAction::Update { texture, .. } => {
+                        assert_eq!(*texture, 7);
+                        updates += 1;
+                        Ok(None)
+                    }
+                    TextureUploadAction::Create { .. } => panic!("same-size frame recreated"),
+                },
+            );
+        assert_eq!(updates, 1);
+        assert!(retired.is_empty());
+        assert!(errors.is_empty());
+
+        store.queue_recyclable_texture_upload(handle, RgbaImage::new(4, 2), recycle_tx);
+        let (retired, errors): (_, Vec<TextureUploadDrainError<()>>) = store
+            .drain_texture_uploads_with(
+                TextureUploadBudget {
+                    max_uploads: 1,
+                    max_bytes: 64,
+                },
+                |action| match action {
+                    TextureUploadAction::Update { .. } => panic!("resized frame updated in place"),
+                    TextureUploadAction::Create { .. } => Ok(Some(11)),
+                },
+            );
+        assert_eq!(retired, vec![7]);
+        assert!(errors.is_empty());
+        assert_eq!(recycle_rx.try_iter().count(), 2);
     }
 
     #[test]

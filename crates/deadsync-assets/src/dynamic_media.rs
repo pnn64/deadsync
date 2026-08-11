@@ -1,6 +1,6 @@
 use crate::{AssetManager, media_cache, open_image_fallback, register_texture_dims};
 use deadlib_assets::dynamic;
-use deadlib_render::SamplerDesc;
+use deadlib_render::{SamplerDesc, TextureHandle};
 use deadlib_renderer::Backend;
 use deadlib_video as video;
 use deadsync_chart::{SongBackgroundChange, SongBackgroundChangeTarget, SongData};
@@ -8,12 +8,11 @@ use image::RgbaImage;
 use std::borrow::Cow;
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
 use std::time::Instant;
 
 pub struct DynamicVideoState {
     pub player: video::Player,
-    pub upload_key: Arc<str>,
+    pub upload_handle: TextureHandle,
     pub started_at: Option<Instant>,
     pub path: PathBuf,
     pub looped: bool,
@@ -270,7 +269,7 @@ pub fn set_video_background_texture(
         .create_texture(&video.poster, SamplerDesc::default())
         .map_err(|e| BackgroundTextureError::CreateVideo(e.to_string()))?;
     let key = path_texture_key(path);
-    assets.set_texture_for_key(
+    let upload_handle = assets.set_texture_for_key(
         backend,
         key.clone(),
         texture,
@@ -280,6 +279,7 @@ pub fn set_video_background_texture(
     register_texture_dims(&key, video.info.width, video.info.height);
     let state = DynamicBackgroundState::new(
         key.clone(),
+        upload_handle,
         path.to_path_buf(),
         Some(video.player),
         video_started_at_sec,
@@ -300,10 +300,12 @@ pub fn set_video_background_poster_texture(
         .create_texture(&rgba, SamplerDesc::default())
         .map_err(|e| BackgroundTextureError::CreatePoster(e.to_string()))?;
     let key = path_texture_key(path);
-    assets.set_texture_for_key(backend, key.clone(), texture, rgba.width(), rgba.height());
+    let upload_handle =
+        assets.set_texture_for_key(backend, key.clone(), texture, rgba.width(), rgba.height());
     register_texture_dims(&key, rgba.width(), rgba.height());
     let state = DynamicBackgroundState::new(
         key.clone(),
+        upload_handle,
         path.to_path_buf(),
         None,
         video_started_at_sec,
@@ -326,10 +328,12 @@ pub fn set_image_background_texture(
         .create_texture(&rgba, SamplerDesc::default())
         .map_err(|e| BackgroundTextureError::CreateImage(e.to_string()))?;
     let key = path_texture_key(path);
-    assets.set_texture_for_key(backend, key.clone(), texture, rgba.width(), rgba.height());
+    let upload_handle =
+        assets.set_texture_for_key(backend, key.clone(), texture, rgba.width(), rgba.height());
     register_texture_dims(&key, rgba.width(), rgba.height());
     let state = DynamicBackgroundState::new(
         key.clone(),
+        upload_handle,
         path.to_path_buf(),
         None,
         video_started_at_sec,
@@ -340,7 +344,7 @@ pub fn set_image_background_texture(
 
 pub struct DynamicBackgroundState {
     pub key: String,
-    upload_key: Arc<str>,
+    pub upload_handle: TextureHandle,
     pub path: PathBuf,
     pub video: Option<video::Player>,
     video_start_sec: f32,
@@ -350,15 +354,15 @@ pub struct DynamicBackgroundState {
 impl DynamicBackgroundState {
     pub fn new(
         key: String,
+        upload_handle: TextureHandle,
         path: PathBuf,
         video: Option<video::Player>,
         video_start_sec: f32,
         video_rate: f32,
     ) -> Self {
-        let upload_key = Arc::from(key.as_str());
         Self {
             key,
-            upload_key,
+            upload_handle,
             path,
             video,
             video_start_sec,
@@ -368,11 +372,6 @@ impl DynamicBackgroundState {
 
     pub fn video_play_time(&self, gameplay_time_sec: f32) -> f32 {
         self.video_timing.play_time(gameplay_time_sec)
-    }
-
-    #[inline(always)]
-    pub fn video_upload_key(&self) -> Arc<str> {
-        Arc::clone(&self.upload_key)
     }
 
     pub fn set_video_rate(&mut self, video_rate: f32, gameplay_time_sec: f32) {
@@ -528,6 +527,7 @@ mod tests {
     fn bg_timing_uses_neg_start() {
         let mut state = DynamicBackgroundState::new(
             "movie".to_owned(),
+            1,
             PathBuf::from("movie.mp4"),
             None,
             -3.0,

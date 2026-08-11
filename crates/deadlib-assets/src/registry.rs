@@ -140,7 +140,24 @@ static TEXTURE_METADATA: LazyLock<RwLock<TextureMetadataRegistry>> =
 static TEXTURE_HANDLES: LazyLock<RwLock<FxHashMap<String, TextureHandle>>> =
     LazyLock::new(|| RwLock::new(FxHashMap::default()));
 
-static TEXTURE_HANDLE_ALIASES: LazyLock<RwLock<FastU64Map<TextureHandle>>> =
+#[derive(Clone, Copy)]
+struct TextureHandleAlias {
+    handle: TextureHandle,
+    refs: usize,
+}
+
+/// Process-lifetime case-insensitive texture alias index.
+///
+/// Ownership/threading: all asset/render users share it behind this `RwLock`.
+/// Capacity/lifetime: at most one entry per folded registered key, grown during
+/// load/prewarm and cleared with the texture registry. Lookup misses fall back
+/// to the exact registry scan and never perform I/O. Unique removals are O(1);
+/// the deliberately rare ambiguous-hash removal rebuilds the bounded registry
+/// to recover the surviving exact handle. Destruction remains on the caller's
+/// render/transition path. `texture_identity_hot_paths` reports removal cost;
+/// no live counter exists yet. Worst-case work is one full registry scan only
+/// after removing an alias already marked ambiguous.
+static TEXTURE_HANDLE_ALIASES: LazyLock<RwLock<FastU64Map<TextureHandleAlias>>> =
     LazyLock::new(|| RwLock::new(FastU64Map::default()));
 
 static GENERATED_TEXTURES: LazyLock<RwLock<GeneratedTextureRegistry<GeneratedTexture>>> =
@@ -162,23 +179,27 @@ pub fn texture_registry_generation() -> u64 {
 }
 
 fn note_texture_handle_alias(
-    aliases: &mut FastU64Map<TextureHandle>,
+    aliases: &mut FastU64Map<TextureHandleAlias>,
     key: &str,
     handle: TextureHandle,
 ) {
     let folded = ascii_ci_hash(key);
     match aliases.get_mut(&folded) {
-        Some(existing) if *existing != handle => *existing = INVALID_TEXTURE_HANDLE,
-        Some(_) => {}
+        Some(existing) => {
+            if existing.handle != handle {
+                existing.handle = INVALID_TEXTURE_HANDLE;
+            }
+            existing.refs = existing.refs.saturating_add(1);
+        }
         None => {
-            aliases.insert(folded, handle);
+            aliases.insert(folded, TextureHandleAlias { handle, refs: 1 });
         }
     }
 }
 
 fn rebuild_texture_handle_aliases(
     handles: &FxHashMap<String, TextureHandle>,
-    aliases: &mut FastU64Map<TextureHandle>,
+    aliases: &mut FastU64Map<TextureHandleAlias>,
 ) {
     aliases.clear();
     aliases.reserve(handles.len());
@@ -187,14 +208,40 @@ fn rebuild_texture_handle_aliases(
     }
 }
 
+/// Remove a common unique alias in O(1). An already-colliding alias takes the
+/// rare rebuild path so deleting one collision restores exact fallback lookup.
+fn remove_texture_handle_alias(
+    handles: &FxHashMap<String, TextureHandle>,
+    aliases: &mut FastU64Map<TextureHandleAlias>,
+    key: &str,
+) {
+    let folded = ascii_ci_hash(key);
+    let Some(alias) = aliases.get_mut(&folded) else {
+        return;
+    };
+    if alias.handle == INVALID_TEXTURE_HANDLE {
+        rebuild_texture_handle_aliases(handles, aliases);
+    } else if alias.refs > 1 {
+        alias.refs -= 1;
+    } else {
+        aliases.remove(&folded);
+    }
+}
+
 pub fn register_texture_handle(key: &str, handle: TextureHandle) {
     let mut handles = TEXTURE_HANDLES.write().unwrap();
     let mut aliases = TEXTURE_HANDLE_ALIASES.write().unwrap();
-    let replaced = handles.insert(key.to_string(), handle);
-    if replaced.is_some_and(|old| old != handle) {
-        rebuild_texture_handle_aliases(&handles, &mut aliases);
+    if let Some((owned_key, old)) = handles.remove_entry(key) {
+        if old == handle {
+            handles.insert(owned_key, old);
+            return;
+        }
+        remove_texture_handle_alias(&handles, &mut aliases, key);
+        handles.insert(owned_key, handle);
+        note_texture_handle_alias(&mut aliases, key, handle);
         touch_texture_registry();
-    } else if replaced.is_none() {
+    } else {
+        handles.insert(key.to_string(), handle);
         note_texture_handle_alias(&mut aliases, key, handle);
         touch_texture_registry();
     }
@@ -206,7 +253,7 @@ pub fn remove_texture_handle(key: &str) {
         return;
     }
     let mut aliases = TEXTURE_HANDLE_ALIASES.write().unwrap();
-    rebuild_texture_handle_aliases(&handles, &mut aliases);
+    remove_texture_handle_alias(&handles, &mut aliases, key);
     touch_texture_registry();
 }
 
@@ -250,7 +297,7 @@ pub fn texture_handle(key: &str) -> TextureHandle {
         .read()
         .unwrap()
         .get(&ascii_ci_hash(key))
-        .copied()
+        .map(|alias| alias.handle)
         && handle != INVALID_TEXTURE_HANDLE
     {
         return handle;
@@ -290,6 +337,43 @@ pub fn take_pending_generated_texture_keys() -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn unique_alias_removal_updates_reference_count_without_rebuild() {
+        let mut handles = FxHashMap::default();
+        handles.insert("Banner.png".to_string(), 17);
+        handles.insert("banner.PNG".to_string(), 17);
+        let mut aliases = FastU64Map::default();
+        note_texture_handle_alias(&mut aliases, "Banner.png", 17);
+        note_texture_handle_alias(&mut aliases, "banner.PNG", 17);
+
+        handles.remove("Banner.png");
+        remove_texture_handle_alias(&handles, &mut aliases, "Banner.png");
+
+        let alias = aliases.get(&ascii_ci_hash("banner.png")).unwrap();
+        assert_eq!(alias.handle, 17);
+        assert_eq!(alias.refs, 1);
+    }
+
+    #[test]
+    fn colliding_alias_removal_rebuilds_the_surviving_handle() {
+        let mut handles = FxHashMap::default();
+        handles.insert("Banner.png".to_string(), 17);
+        handles.insert("banner.PNG".to_string(), 23);
+        let mut aliases = FastU64Map::default();
+        rebuild_texture_handle_aliases(&handles, &mut aliases);
+        assert_eq!(
+            aliases.get(&ascii_ci_hash("banner.png")).unwrap().handle,
+            INVALID_TEXTURE_HANDLE
+        );
+
+        handles.remove("Banner.png");
+        remove_texture_handle_alias(&handles, &mut aliases, "Banner.png");
+
+        let alias = aliases.get(&ascii_ci_hash("banner.png")).unwrap();
+        assert_eq!(alias.handle, 23);
+        assert_eq!(alias.refs, 1);
+    }
 
     #[test]
     fn texture_handle_lookup_tracks_registry_lifecycle() {

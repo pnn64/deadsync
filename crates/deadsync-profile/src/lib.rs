@@ -2098,6 +2098,19 @@ pub struct ScoreboxRuntimeView {
     pub sides: [ScoreboxProfileView; PLAYER_SLOTS],
 }
 
+/// Profile-owned Select Music data captured under one session lock and one
+/// profile lock. The snapshot copies only strings retained by the screen; full
+/// `Profile` values and their large favorite/history collections stay in the
+/// process-global store.
+#[derive(Debug, Clone)]
+pub struct MusicProfileSnapshot {
+    pub scorebox: ScoreboxRuntimeView,
+    pub music_rate: f32,
+    pub avatar_texture_keys: [Option<String>; PLAYER_SLOTS],
+    pub local_profile_ids: [Option<String>; PLAYER_SLOTS],
+    pub pad_profile_ids: [Option<String>; PLAYER_SLOTS],
+}
+
 pub fn scorebox_runtime_view(
     profiles: &[Profile; PLAYER_SLOTS],
     active_profiles: &[ActiveProfile; PLAYER_SLOTS],
@@ -2154,6 +2167,94 @@ pub fn runtime_scorebox_view(
         joined_mask,
         play_style,
         player_side,
+        enable_groovestats,
+        enable_arrowcloud,
+        auto_populate_gs_scores,
+    )
+}
+
+pub fn music_profile_snapshot(
+    profiles: &[Profile; PLAYER_SLOTS],
+    session: &SessionState,
+    enable_groovestats: bool,
+    enable_arrowcloud: bool,
+    auto_populate_gs_scores: bool,
+) -> MusicProfileSnapshot {
+    music_profile_snapshot_from_parts(
+        profiles,
+        &session.active_profiles,
+        session.joined_mask,
+        session.play_style,
+        session.player_side,
+        session.music_rate(),
+        enable_groovestats,
+        enable_arrowcloud,
+        auto_populate_gs_scores,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn music_profile_snapshot_from_parts(
+    profiles: &[Profile; PLAYER_SLOTS],
+    active_profiles: &[ActiveProfile; PLAYER_SLOTS],
+    joined_mask: u8,
+    play_style: PlayStyle,
+    player_side: PlayerSide,
+    music_rate: f32,
+    enable_groovestats: bool,
+    enable_arrowcloud: bool,
+    auto_populate_gs_scores: bool,
+) -> MusicProfileSnapshot {
+    let local_profile_ids = std::array::from_fn(|side_idx| {
+        active_profile_local_id(&active_profiles[side_idx]).map(str::to_owned)
+    });
+    let pad_profile_ids = std::array::from_fn(|pad| {
+        let side = side_for_physical_pad(play_style, player_side, pad == 1);
+        local_profile_ids[player_side_index(side)].clone()
+    });
+    MusicProfileSnapshot {
+        scorebox: scorebox_runtime_view(
+            profiles,
+            active_profiles,
+            joined_mask,
+            play_style,
+            player_side,
+            enable_groovestats,
+            enable_arrowcloud,
+            auto_populate_gs_scores,
+        ),
+        music_rate,
+        avatar_texture_keys: std::array::from_fn(|side_idx| {
+            profiles[side_idx].avatar_texture_key.clone()
+        }),
+        local_profile_ids,
+        pad_profile_ids,
+    }
+}
+
+pub fn runtime_music_profile_snapshot(
+    enable_groovestats: bool,
+    enable_arrowcloud: bool,
+    auto_populate_gs_scores: bool,
+) -> MusicProfileSnapshot {
+    let (active_profiles, joined_mask, play_style, player_side, music_rate) = {
+        let session = runtime_lock_session();
+        (
+            session.active_profiles.clone(),
+            session.joined_mask,
+            session.play_style,
+            session.player_side,
+            session.music_rate(),
+        )
+    };
+    let profiles = runtime_lock_profiles();
+    music_profile_snapshot_from_parts(
+        &profiles,
+        &active_profiles,
+        joined_mask,
+        play_style,
+        player_side,
+        music_rate,
         enable_groovestats,
         enable_arrowcloud,
         auto_populate_gs_scores,
@@ -10043,6 +10144,72 @@ mod tests {
             scorebox_profile_snapshot(&profile, true, false, false, true, Some("profile-1".into()));
         assert!(!disabled.gs_active);
         assert!(!disabled.include_arrowcloud());
+    }
+
+    #[test]
+    fn music_profile_snapshot_matches_separate_profile_reads() {
+        let mut profiles = [Profile::default(), Profile::default()];
+        profiles[0].display_name = "Alice".to_string();
+        profiles[0].avatar_texture_key = Some("avatar:p1".to_string());
+        profiles[0].groovestats_api_key = "p1-key".to_string();
+        profiles[1].display_name = "Bob".to_string();
+        profiles[1].avatar_texture_key = Some("avatar:p2".to_string());
+
+        let mut session = SessionState {
+            active_profiles: [
+                ActiveProfile::Local {
+                    id: "profile-p1".to_string(),
+                },
+                ActiveProfile::Local {
+                    id: "profile-p2".to_string(),
+                },
+            ],
+            joined_mask: joined_player_mask(true, true),
+            play_style: PlayStyle::Versus,
+            player_side: PlayerSide::P2,
+            ..SessionState::default()
+        };
+        session.set_music_rate(1.25);
+
+        let legacy = scorebox_runtime_view(
+            &profiles,
+            &session.active_profiles,
+            session.joined_mask,
+            session.play_style,
+            session.player_side,
+            true,
+            true,
+            true,
+        );
+        let snapshot = music_profile_snapshot(&profiles, &session, true, true, true);
+
+        assert_eq!(snapshot.scorebox.play_style, legacy.play_style);
+        assert_eq!(snapshot.scorebox.player_side, legacy.player_side);
+        for side_idx in 0..PLAYER_SLOTS {
+            let actual = &snapshot.scorebox.sides[side_idx];
+            let expected = &legacy.sides[side_idx];
+            assert_eq!(actual.joined, expected.joined);
+            assert_eq!(actual.guest, expected.guest);
+            assert_eq!(actual.display_name, expected.display_name);
+            assert_eq!(actual.leaderboard.api_key(), expected.leaderboard.api_key());
+            assert_eq!(
+                actual.leaderboard.persistent_profile_id(),
+                expected.leaderboard.persistent_profile_id()
+            );
+        }
+        assert_eq!(snapshot.music_rate, 1.25);
+        assert_eq!(
+            snapshot.avatar_texture_keys,
+            [Some("avatar:p1".to_string()), Some("avatar:p2".to_string())]
+        );
+        assert_eq!(
+            snapshot.local_profile_ids,
+            [
+                Some("profile-p1".to_string()),
+                Some("profile-p2".to_string())
+            ]
+        );
+        assert_eq!(snapshot.pad_profile_ids, snapshot.local_profile_ids);
     }
 
     #[test]

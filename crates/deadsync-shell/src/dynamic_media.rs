@@ -56,7 +56,7 @@ impl BannerVideoPrepState {
 
 struct SongLuaVideoState {
     player: video::Player,
-    upload_key: Arc<str>,
+    upload_handle: TextureHandle,
 }
 
 const MAX_CACHED_BANNER_VIDEO_PATHS: usize = 8;
@@ -596,8 +596,10 @@ impl DynamicMedia {
                 } else {
                     None
                 };
+                let upload_handle = assets.reserve_texture_handle(key.clone());
                 self.current_dynamic_background = Some(DynamicBackgroundState::new(
                     key.clone(),
+                    upload_handle,
                     path,
                     video,
                     video_started_at_sec,
@@ -781,8 +783,10 @@ impl DynamicMedia {
         }
         if !current_path_matches {
             self.destroy_current_dynamic_background(assets, backend);
+            let upload_handle = assets.reserve_texture_handle(desired_key.to_owned());
             self.current_dynamic_background = Some(DynamicBackgroundState::new(
                 desired_key.to_owned(),
+                upload_handle,
                 path.to_path_buf(),
                 None,
                 timing.start_sec.unwrap_or(timing.current_sec),
@@ -859,11 +863,12 @@ impl DynamicMedia {
                             path.display()
                         ),
                     }
+                    let upload_handle = assets.reserve_texture_handle(prepared.key.clone());
                     self.active_song_lua_videos.insert(
                         prepared.key.clone(),
                         SongLuaVideoState {
                             player: prepared.player,
-                            upload_key: Arc::from(prepared.key),
+                            upload_handle,
                         },
                     );
                 }
@@ -958,8 +963,8 @@ impl DynamicMedia {
         gameplay_time_sec: Option<f32>,
         ui_time_sec: f32,
     ) {
-        for (key, video) in &mut self.active_banner_videos {
-            if assets.has_pending_texture_upload(key) {
+        for video in self.active_banner_videos.values_mut() {
+            if assets.has_pending_texture_upload_handle(video.upload_handle) {
                 continue;
             }
             let play_time = video
@@ -967,29 +972,29 @@ impl DynamicMedia {
                 .map_or(0.0, |start| start.elapsed().as_secs_f32());
             if let Some(frame) = video.player.take_due_frame(play_time) {
                 video.started_at.get_or_insert_with(Instant::now);
-                assets.queue_video_frame_upload_shared(Arc::clone(&video.upload_key), frame);
+                assets.queue_video_frame_upload(video.upload_handle, frame);
             }
         }
 
         if let Some(state) = self.current_dynamic_background.as_mut()
-            && !assets.has_pending_texture_upload(&state.key)
+            && !assets.has_pending_texture_upload_handle(state.upload_handle)
         {
             let play_time = gameplay_time_sec.unwrap_or(ui_time_sec);
             let play_time = state.video_play_time(play_time);
             if let Some(video) = state.video.as_mut()
                 && let Some(frame) = video.take_due_frame(play_time)
             {
-                assets.queue_video_frame_upload_shared(state.video_upload_key(), frame);
+                assets.queue_video_frame_upload(state.upload_handle, frame);
             }
         }
 
         let song_lua_play_time = gameplay_time_sec.unwrap_or(0.0).max(0.0);
-        for (key, state) in &mut self.active_song_lua_videos {
-            if assets.has_pending_texture_upload(key) {
+        for state in self.active_song_lua_videos.values_mut() {
+            if assets.has_pending_texture_upload_handle(state.upload_handle) {
                 continue;
             }
             if let Some(frame) = state.player.take_due_frame(song_lua_play_time) {
-                assets.queue_video_frame_upload_shared(Arc::clone(&state.upload_key), frame);
+                assets.queue_video_frame_upload(state.upload_handle, frame);
             }
         }
     }
@@ -1142,12 +1147,12 @@ impl DynamicMedia {
                         continue;
                     }
                     assets.queue_texture_upload(prepared.key.clone(), prepared.poster);
-                    let upload_key = Arc::from(prepared.key.as_str());
+                    let upload_handle = assets.reserve_texture_handle(prepared.key.clone());
                     if let Some(old) = self.active_banner_videos.insert(
                         prepared.key,
                         DynamicVideoState {
                             player: prepared.player,
-                            upload_key,
+                            upload_handle,
                             started_at: None,
                             path: prepared.path,
                             looped: prepared.looped,
@@ -1192,12 +1197,12 @@ impl DynamicMedia {
                         continue;
                     }
                     assets.queue_texture_upload(prepared.key.clone(), prepared.poster);
-                    let upload_key = Arc::from(prepared.key.as_str());
+                    let upload_handle = assets.reserve_texture_handle(prepared.key.clone());
                     if let Some(old) = self.active_banner_videos.insert(
                         prepared.key,
                         DynamicVideoState {
                             player: prepared.player,
-                            upload_key,
+                            upload_handle,
                             started_at: None,
                             path: prepared.path,
                             looped: prepared.looped,
@@ -1263,8 +1268,10 @@ impl DynamicMedia {
                             let key = retire_dynamic_background_state(state);
                             self.release_texture_key(assets, backend, key);
                         }
+                        let upload_handle = assets.reserve_texture_handle(prepared.key.clone());
                         self.current_dynamic_background = Some(DynamicBackgroundState::new(
                             prepared.key,
+                            upload_handle,
                             prepared.path,
                             Some(prepared.player),
                             timing.start_sec.unwrap_or(timing.current_sec),
@@ -1325,6 +1332,7 @@ mod tests {
     fn bg_timing_resets_segment() {
         let mut state = DynamicBackgroundState::new(
             "movie".to_owned(),
+            1,
             PathBuf::from("movie.mp4"),
             None,
             -3.0,
@@ -1418,6 +1426,7 @@ mod tests {
         });
         media.current_dynamic_background = Some(DynamicBackgroundState::new(
             key.clone(),
+            1,
             path,
             None,
             0.0,

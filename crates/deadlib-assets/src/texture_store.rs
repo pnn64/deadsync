@@ -1,7 +1,7 @@
 use crate::{
     GeneratedTexture, TexMeta, clear_texture_handles, generated_texture, register_texture_dims,
     register_texture_handle, remove_texture_handle, take_pending_generated_texture_keys,
-    upload::{PendingTextureUpload, TextureUploadBudget, TextureUploadKey, TextureUploadQueue},
+    upload::{PendingTextureUpload, TextureUploadBudget, TextureUploadQueue},
 };
 use deadlib_render::{SamplerDesc, TextureHandle, TextureHandleMap};
 use image::RgbaImage;
@@ -11,7 +11,8 @@ use std::sync::{Arc, mpsc::SyncSender};
 pub struct TextureStore<T> {
     textures: TextureHandleMap<T>,
     uploaded_texture_dims: TextureHandleMap<TexMeta>,
-    texture_handles: FxHashMap<String, TextureHandle>,
+    texture_handles: FxHashMap<Arc<str>, TextureHandle>,
+    texture_keys: TextureHandleMap<Arc<str>>,
     next_texture_handle: TextureHandle,
     pending_texture_uploads: TextureUploadQueue,
 }
@@ -22,6 +23,7 @@ impl<T> TextureStore<T> {
             textures: TextureHandleMap::default(),
             uploaded_texture_dims: TextureHandleMap::default(),
             texture_handles: FxHashMap::default(),
+            texture_keys: TextureHandleMap::default(),
             next_texture_handle: 1,
             pending_texture_uploads: TextureUploadQueue::default(),
         }
@@ -46,27 +48,35 @@ impl<T> TextureStore<T> {
 
     #[inline(always)]
     pub fn has_pending_texture_upload(&self, key: &str) -> bool {
-        self.pending_texture_uploads.contains(key)
+        self.texture_handles
+            .get(key)
+            .is_some_and(|&handle| self.pending_texture_uploads.contains(handle))
+    }
+
+    #[inline(always)]
+    pub fn has_pending_texture_upload_handle(&self, handle: TextureHandle) -> bool {
+        self.pending_texture_uploads.contains(handle)
     }
 
     pub fn take_textures(&mut self) -> TextureHandleMap<T> {
         self.texture_handles.clear();
+        self.texture_keys.clear();
         clear_texture_handles();
         self.uploaded_texture_dims.clear();
         std::mem::take(&mut self.textures)
     }
 
     pub fn reserve_texture_handle(&mut self, key: String) -> TextureHandle {
-        match self.texture_handles.entry(key) {
-            std::collections::hash_map::Entry::Occupied(entry) => *entry.get(),
-            std::collections::hash_map::Entry::Vacant(entry) => {
-                let handle = self.next_texture_handle;
-                self.next_texture_handle = self.next_texture_handle.wrapping_add(1).max(1);
-                register_texture_handle(entry.key(), handle);
-                entry.insert(handle);
-                handle
-            }
+        if let Some(&handle) = self.texture_handles.get(key.as_str()) {
+            return handle;
         }
+        let handle = self.next_texture_handle;
+        self.next_texture_handle = self.next_texture_handle.wrapping_add(1).max(1);
+        register_texture_handle(&key, handle);
+        let key: Arc<str> = Arc::from(key);
+        self.texture_keys.insert(handle, Arc::clone(&key));
+        self.texture_handles.insert(key, handle);
+        handle
     }
 
     pub fn insert_texture(
@@ -88,8 +98,9 @@ impl<T> TextureStore<T> {
     }
 
     pub fn remove_texture(&mut self, key: &str) -> Option<(TextureHandle, T)> {
-        self.pending_texture_uploads.remove(key);
         let handle = self.texture_handles.remove(key)?;
+        self.pending_texture_uploads.remove(handle);
+        self.texture_keys.remove(&handle);
         remove_texture_handle(key);
         self.uploaded_texture_dims.remove(&handle);
         self.textures
@@ -104,8 +115,8 @@ impl<T> TextureStore<T> {
         width: u32,
         height: u32,
     ) -> (TextureHandle, Option<T>) {
-        self.pending_texture_uploads.remove(&key);
         let handle = self.reserve_texture_handle(key);
+        self.pending_texture_uploads.remove(handle);
         self.uploaded_texture_dims.insert(
             handle,
             TexMeta {
@@ -127,12 +138,35 @@ impl<T> TextureStore<T> {
         }
     }
 
-    #[inline(always)]
+    #[cfg(test)]
     fn uploaded_texture_dims_match(&self, key: &str, width: u32, height: u32) -> bool {
         self.texture_handles
             .get(key)
             .and_then(|handle| self.uploaded_texture_dims.get(handle))
             .is_some_and(|meta| meta.w == width && meta.h == height)
+    }
+
+    #[inline(always)]
+    fn uploaded_texture_mut_by_handle(
+        &mut self,
+        handle: TextureHandle,
+        width: u32,
+        height: u32,
+    ) -> Option<&mut T> {
+        let meta = self.uploaded_texture_dims.get(&handle).copied()?;
+        if meta.w == width && meta.h == height {
+            self.textures.get_mut(&handle)
+        } else {
+            None
+        }
+    }
+
+    #[inline(always)]
+    pub fn texture_key(&self, handle: TextureHandle) -> &str {
+        self.texture_keys
+            .get(&handle)
+            .map(AsRef::as_ref)
+            .unwrap_or("<released texture>")
     }
 
     pub fn queue_texture_upload_shared(
@@ -141,26 +175,30 @@ impl<T> TextureStore<T> {
         image: Arc<RgbaImage>,
         sampler: SamplerDesc,
     ) {
-        self.reserve_texture_handle(key.clone());
+        let handle = self.reserve_texture_handle(key.clone());
         register_texture_dims(&key, image.width(), image.height());
-        self.pending_texture_uploads.push(key, image, sampler);
+        self.pending_texture_uploads.push(handle, image, sampler);
     }
 
     pub fn queue_texture_upload(&mut self, key: String, image: RgbaImage) {
         self.queue_texture_upload_with_sampler(key, image, SamplerDesc::default());
     }
 
-    pub fn queue_recyclable_texture_upload_shared(
+    pub fn queue_recyclable_texture_upload(
         &mut self,
-        key: Arc<str>,
+        handle: TextureHandle,
         image: RgbaImage,
         recycle_tx: SyncSender<Vec<u8>>,
     ) {
-        if !self.uploaded_texture_dims_match(&key, image.width(), image.height()) {
-            register_texture_dims(&key, image.width(), image.height());
+        let dimensions_match = self
+            .uploaded_texture_dims
+            .get(&handle)
+            .is_some_and(|meta| meta.w == image.width() && meta.h == image.height());
+        if !dimensions_match {
+            register_texture_dims(self.texture_key(handle), image.width(), image.height());
         }
-        self.pending_texture_uploads.push_recyclable_shared(
-            key,
+        self.pending_texture_uploads.push_recyclable(
+            handle,
             image,
             SamplerDesc::default(),
             recycle_tx,
@@ -190,9 +228,35 @@ impl<T> TextureStore<T> {
         budget: TextureUploadBudget,
         drained_uploads: usize,
         drained_bytes: usize,
-    ) -> Option<(TextureUploadKey, PendingTextureUpload)> {
+    ) -> Option<(TextureHandle, PendingTextureUpload)> {
         self.pending_texture_uploads
             .pop_next(budget, drained_uploads, drained_bytes)
+    }
+
+    pub fn apply_upload_update(
+        &mut self,
+        handle: TextureHandle,
+        width: u32,
+        height: u32,
+    ) -> Option<&mut T> {
+        self.uploaded_texture_mut_by_handle(handle, width, height)
+    }
+
+    pub fn set_texture_for_handle(
+        &mut self,
+        handle: TextureHandle,
+        texture: T,
+        width: u32,
+        height: u32,
+    ) -> Option<T> {
+        self.uploaded_texture_dims.insert(
+            handle,
+            TexMeta {
+                w: width,
+                h: height,
+            },
+        );
+        self.textures.insert(handle, texture)
     }
 }
 

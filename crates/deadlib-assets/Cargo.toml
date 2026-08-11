@@ -4,6 +4,10 @@ version = "0.1.0"
 edition = "2024"
 license = "GPL-3.0"
 
+[[bench]]
+name = "texture_identity_hot_paths"
+harness = false
+
 [dependencies]
 deadlib-present = { path = "../deadlib-present" }
 deadlib-render = { path = "../deadlib-render" }
