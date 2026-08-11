@@ -11,6 +11,10 @@ test-util = []
 name = "frame_compare"
 required-features = ["test-util"]
 
+[[bench]]
+name = "texture_retirement_storage"
+harness = false
+
 [dependencies]
 bytemuck = { version = "1.25.2", features = ["derive"] }
 glam = "0.33.2"

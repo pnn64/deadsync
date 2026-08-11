@@ -227,6 +227,8 @@ thread_local! {
     static MUSIC_RATE_FMT_CACHE: RefCell<TextCache<u32>> = RefCell::new(text_cache_with_capacity(256));
     static MUSIC_RATE_BANNER_CACHE: RefCell<TextCache<u32>> = RefCell::new(text_cache_with_capacity(128));
     static CHART_INFO_CACHE: RefCell<TextCache<(u8, u32, u64, u64)>> = RefCell::new(text_cache_with_capacity(512));
+    #[cfg(any(test, feature = "bench-support"))]
+    static LEGACY_CHART_INFO_CACHE: RefCell<TextCache<(u8, u32, u64, u64)>> = RefCell::new(text_cache_with_capacity(512));
     static STAMINA_MONO_CACHE: RefCell<TextCache<u64>> = RefCell::new(text_cache_with_capacity(512));
     static STAMINA_CANDLES_CACHE: RefCell<TextCache<u64>> = RefCell::new(text_cache_with_capacity(512));
     static STREAM_TOTAL_CACHE: RefCell<TextCache<(u32, u32)>> = RefCell::new(text_cache_with_capacity(512));
@@ -265,6 +267,20 @@ fn cached_str_ref(text: &str) -> Arc<str> {
 }
 
 #[inline(always)]
+fn chart_matrix_rating_text(meter: u32, matrix_rating_rounded: f64) -> String {
+    if meter >= 11 && matrix_rating_rounded > 0.0 {
+        tr_fmt(
+            "SelectMusic",
+            "MrValue",
+            &[("value", &format!("{matrix_rating_rounded:.2}"))],
+        )
+        .to_string()
+    } else {
+        tr("SelectMusic", "MrNotAvailable").to_string()
+    }
+}
+
+#[inline(always)]
 fn cached_chart_info_text(
     show_peak_nps: bool,
     show_effective_bpm: bool,
@@ -291,18 +307,104 @@ fn cached_chart_info_text(
     }
     let effective_bpm = peak_nps * 15.0;
     let matrix_rating_rounded = (matrix_rating * 100.0).round() / 100.0;
-    let matrix_rating_text = if meter >= 11 && matrix_rating_rounded > 0.0 {
-        tr_fmt(
-            "SelectMusic",
-            "MrValue",
-            &[("value", &format!("{matrix_rating_rounded:.2}"))],
-        )
-        .to_string()
-    } else {
-        tr("SelectMusic", "MrNotAvailable").to_string()
-    };
     cached_text(
         &CHART_INFO_CACHE,
+        (mask, meter, peak_nps.to_bits(), matrix_rating.to_bits()),
+        TEXT_CACHE_LIMIT,
+        || match mask {
+            0b001 => tr_fmt(
+                "SelectMusic",
+                "PeakNpsOnly",
+                &[("peak_nps", &format!("{peak_nps:.1}"))],
+            )
+            .to_string(),
+            0b010 => tr_fmt(
+                "SelectMusic",
+                "PeakEbpmOnly",
+                &[("effective_bpm", &format!("{effective_bpm:.0}"))],
+            )
+            .to_string(),
+            0b011 => tr_fmt(
+                "SelectMusic",
+                "PnpsAndEbpm",
+                &[
+                    ("peak_nps", &format!("{peak_nps:.1}")),
+                    ("effective_bpm", &format!("{effective_bpm:.0}")),
+                ],
+            )
+            .to_string(),
+            0b100 => chart_matrix_rating_text(meter, matrix_rating_rounded),
+            0b101 => {
+                let matrix_rating_text = chart_matrix_rating_text(meter, matrix_rating_rounded);
+                tr_fmt(
+                    "SelectMusic",
+                    "PnpsAndMr",
+                    &[
+                        ("peak_nps", &format!("{peak_nps:.1}")),
+                        ("mr", &matrix_rating_text),
+                    ],
+                )
+                .to_string()
+            }
+            0b110 => {
+                let matrix_rating_text = chart_matrix_rating_text(meter, matrix_rating_rounded);
+                tr_fmt(
+                    "SelectMusic",
+                    "EbpmAndMr",
+                    &[
+                        ("effective_bpm", &format!("{effective_bpm:.0}")),
+                        ("mr", &matrix_rating_text),
+                    ],
+                )
+                .to_string()
+            }
+            _ => {
+                let matrix_rating_text = chart_matrix_rating_text(meter, matrix_rating_rounded);
+                tr_fmt(
+                    "SelectMusic",
+                    "PnpsEbpmAndMr",
+                    &[
+                        ("peak_nps", &format!("{peak_nps:.1}")),
+                        ("effective_bpm", &format!("{effective_bpm:.0}")),
+                        ("mr", &matrix_rating_text),
+                    ],
+                )
+                .to_string()
+            }
+        },
+    )
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn cached_chart_info_text_legacy(
+    show_peak_nps: bool,
+    show_effective_bpm: bool,
+    show_matrix_rating: bool,
+    meter: u32,
+    peak_nps: f64,
+    matrix_rating: f64,
+) -> Arc<str> {
+    let peak_nps = if peak_nps.is_finite() {
+        peak_nps.max(0.0)
+    } else {
+        0.0
+    };
+    let matrix_rating = if matrix_rating.is_finite() {
+        matrix_rating.max(0.0)
+    } else {
+        0.0
+    };
+    let mut mask = (show_peak_nps as u8)
+        | ((show_effective_bpm as u8) << 1)
+        | ((show_matrix_rating as u8) << 2);
+    if mask == 0 {
+        mask = 1;
+    }
+    let effective_bpm = peak_nps * 15.0;
+    let matrix_rating_rounded = (matrix_rating * 100.0).round() / 100.0;
+    let matrix_rating_text = chart_matrix_rating_text(meter, matrix_rating_rounded);
+    cached_text(
+        &LEGACY_CHART_INFO_CACHE,
         (mask, meter, peak_nps.to_bits(), matrix_rating.to_bits()),
         TEXT_CACHE_LIMIT,
         || match mask {
@@ -358,6 +460,16 @@ fn cached_chart_info_text(
             .to_string(),
         },
     )
+}
+
+#[cfg(feature = "bench-support")]
+pub fn benchmark_chart_info_text_old() -> Arc<str> {
+    cached_chart_info_text_legacy(true, true, true, 17, 12.5, 14.327)
+}
+
+#[cfg(feature = "bench-support")]
+pub fn benchmark_chart_info_text_new() -> Arc<str> {
+    cached_chart_info_text(true, true, true, 17, 12.5, 14.327)
 }
 
 #[inline(always)]
@@ -14500,6 +14612,38 @@ mod tests {
             text.as_ref(),
             format!("PNPS: 12.5 | MR: {matrix_rating:.2}")
         );
+    }
+
+    #[test]
+    fn chart_info_cached_formatter_matches_legacy_for_every_mask() {
+        let values = [
+            (8, 0.0, 0.0),
+            (10, 7.25, 12.345),
+            (11, 12.5, 14.327),
+            (20, f64::NAN, f64::INFINITY),
+        ];
+        for mask in 0u8..=0b111 {
+            for &(meter, peak_nps, matrix_rating) in &values {
+                let flags = (mask & 0b001 != 0, mask & 0b010 != 0, mask & 0b100 != 0);
+                let old = super::cached_chart_info_text_legacy(
+                    flags.0,
+                    flags.1,
+                    flags.2,
+                    meter,
+                    peak_nps,
+                    matrix_rating,
+                );
+                let new = super::cached_chart_info_text(
+                    flags.0,
+                    flags.1,
+                    flags.2,
+                    meter,
+                    peak_nps,
+                    matrix_rating,
+                );
+                assert_eq!(new, old, "mask={mask:03b}, meter={meter}");
+            }
+        }
     }
 
     #[test]

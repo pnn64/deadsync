@@ -1232,29 +1232,25 @@ fn queue_present_retirement(state: &mut State, textures: Vec<RetiredTexture>) {
         }));
 }
 
-pub fn retire_textures(state: &mut State, textures: Vec<Texture>) {
-    if textures.is_empty() {
-        return;
-    }
-
+pub fn retire_texture(state: &mut State, texture: Texture) {
     let retire_after_present_id = state.last_submitted_present_id;
-    let retired = textures
-        .into_iter()
-        .map(|texture| RetiredTexture {
-            retire_after_present_id,
-            _texture: texture,
-        })
-        .collect::<Vec<_>>();
+    let retired = RetiredTexture {
+        retire_after_present_id,
+        _texture: texture,
+    };
 
     // A newly replaced texture can still be referenced by the upload command currently being
     // recorded. Keep it with that upload batch; destroying it before vkEndCommandBuffer is invalid,
     // and destroying it after submission but before the frame fence completes is equally unsafe.
     if state.pending_tex_upload_cmd.is_some() {
-        state.pending_tex_retired.extend(retired);
+        state.pending_tex_retired.push(retired);
         return;
     }
 
-    queue_present_retirement(state, retired);
+    let completed = completed_present_id(state);
+    if retired.retire_after_present_id != 0 && retired.retire_after_present_id > completed {
+        state.retired_textures.push(retired);
+    }
 }
 
 pub fn retire_all_textures(state: &mut State) {

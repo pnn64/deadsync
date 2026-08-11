@@ -6,7 +6,7 @@ use std::time::Instant;
 
 use deadlib_platform::dirs;
 use deadlib_present::actors::Actor;
-use deadlib_render::{SamplerDesc, TextureHandleMap};
+use deadlib_render::SamplerDesc;
 use deadlib_renderer::Backend;
 use deadsync_assets::screenshot::{
     self as screenshot_data, ScreenshotPreviewTarget, ScreenshotRuntimeState, ScreenshotSaveError,
@@ -156,10 +156,8 @@ pub fn replace_screenshot_preview_texture(
     backend: &mut Backend,
     image: &image::RgbaImage,
 ) -> Result<(), ScreenshotFlowError> {
-    if let Some((handle, old)) = asset_manager.remove_texture(SCREENSHOT_PREVIEW_TEXTURE_KEY) {
-        let mut old_map = TextureHandleMap::default();
-        old_map.insert(handle, old);
-        backend.retire_textures(&mut old_map);
+    if let Some((_handle, old)) = asset_manager.remove_texture(SCREENSHOT_PREVIEW_TEXTURE_KEY) {
+        backend.retire_texture(old);
     }
 
     let texture = backend

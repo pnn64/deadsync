@@ -381,49 +381,16 @@ impl Backend {
         }
     }
 
-    pub fn retire_textures(&mut self, textures: &mut TextureHandleMap<Texture>) {
-        let old_textures = std::mem::take(textures);
-        match &mut self.0 {
+    pub fn retire_texture(&mut self, texture: Texture) {
+        match (&mut self.0, texture) {
             #[cfg(all(not(target_pointer_width = "32"), not(target_vendor = "win7")))]
-            BackendImpl::Vulkan(state) => {
-                let retired = old_textures
-                    .into_values()
-                    .filter_map(|texture| match texture {
-                        Texture::Vulkan(texture) => Some(texture),
-                        _ => None,
-                    })
-                    .collect();
-                vulkan::retire_textures(state, retired);
+            (BackendImpl::Vulkan(state), Texture::Vulkan(texture)) => {
+                vulkan::retire_texture(state, texture);
             }
-            #[cfg(all(not(target_pointer_width = "32"), not(target_vendor = "win7")))]
-            BackendImpl::VulkanWgpu(_) => {
-                drop(old_textures);
+            (BackendImpl::OpenGL(state), Texture::OpenGL(texture)) => {
+                opengl::delete_texture(state, &texture);
             }
-            #[cfg(target_os = "macos")]
-            BackendImpl::Metal(_) => {
-                drop(old_textures);
-            }
-            #[cfg(target_os = "macos")]
-            BackendImpl::MetalWgpu(_) => {
-                drop(old_textures);
-            }
-            BackendImpl::OpenGL(state) => {
-                for tex in old_textures.values() {
-                    if let Texture::OpenGL(texture) = tex {
-                        opengl::delete_texture(state, texture);
-                    }
-                }
-            }
-            BackendImpl::OpenGLWgpu(_) => {
-                drop(old_textures);
-            }
-            BackendImpl::Software(_) => {
-                drop(old_textures);
-            }
-            #[cfg(target_os = "windows")]
-            BackendImpl::DirectX(_) => {
-                drop(old_textures);
-            }
+            (_, texture) => drop(texture),
         }
     }
 

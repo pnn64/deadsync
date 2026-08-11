@@ -32,13 +32,13 @@ pub enum TextureKeyStoreLoad<E, T> {
     Missing { key: String },
     DecodeFailed { key: String, message: String },
     CreateFailed { key: String, error: E },
-    Loaded { retired: Option<(TextureHandle, T)> },
+    Loaded { retired: Option<T> },
 }
 
 pub struct InitialTextureLoad<T> {
     pub key: String,
     pub built_in: bool,
-    pub retired: Option<(TextureHandle, T)>,
+    pub retired: Option<T>,
 }
 
 pub struct AssetStore<T> {
@@ -171,7 +171,7 @@ impl<T> AssetStore<T> {
         &mut self,
         budget: TextureUploadBudget,
         mut apply: impl for<'a> FnMut(TextureUploadAction<'a, T>) -> Result<Option<T>, E>,
-    ) -> (Vec<(TextureHandle, T)>, Vec<TextureUploadDrainError<E>>) {
+    ) -> (Vec<T>, Vec<TextureUploadDrainError<E>>) {
         let mut retired = Vec::new();
         let mut errors = Vec::new();
         let mut drained_uploads = 0usize;
@@ -207,14 +207,14 @@ impl<T> AssetStore<T> {
                 sampler: upload.sampler,
             }) {
                 Ok(Some(texture)) => {
-                    let (handle, old) = self.set_texture_for_key(
+                    let (_handle, old) = self.set_texture_for_key(
                         key.into_string(),
                         texture,
                         upload.image().width(),
                         upload.image().height(),
                     );
                     if let Some(old) = old {
-                        retired.push((handle, old));
+                        retired.push(old);
                     }
                 }
                 Ok(None) => {}
@@ -247,14 +247,10 @@ impl<T> AssetStore<T> {
                 prepared.image.width(),
                 prepared.image.height(),
             );
-            let handle = self
-                .texture_store
-                .texture_handle(&prepared.key)
-                .expect("inserted texture must have a registered handle");
             loaded.push(InitialTextureLoad {
                 key: prepared.key,
                 built_in: prepared.built_in,
-                retired: old.map(|texture| (handle, texture)),
+                retired: old,
             });
         }
         Ok(loaded)
@@ -291,7 +287,7 @@ impl<T> AssetStore<T> {
                 register_dims,
             } => match create(image.as_ref(), sampler) {
                 Ok(texture) => {
-                    let (handle, old) = self.set_texture_for_key(
+                    let (_handle, old) = self.set_texture_for_key(
                         key.clone(),
                         texture,
                         image.width(),
@@ -300,9 +296,7 @@ impl<T> AssetStore<T> {
                     if register_dims {
                         register_texture_dims(&key, image.width(), image.height());
                     }
-                    TextureKeyStoreLoad::Loaded {
-                        retired: old.map(|texture| (handle, texture)),
-                    }
+                    TextureKeyStoreLoad::Loaded { retired: old }
                 }
                 Err(error) => TextureKeyStoreLoad::CreateFailed { key, error },
             },

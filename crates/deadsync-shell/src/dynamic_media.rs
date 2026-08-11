@@ -1044,8 +1044,8 @@ impl DynamicMedia {
         backend: &mut Backend,
         key: impl AsRef<str>,
     ) {
-        if let Some((handle, texture)) = self.take_releasable_texture(assets, key.as_ref()) {
-            assets.retire_texture(backend, handle, texture);
+        if let Some((_handle, texture)) = self.take_releasable_texture(assets, key.as_ref()) {
+            backend.retire_texture(texture);
         }
     }
 

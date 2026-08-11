@@ -132,17 +132,6 @@ impl AssetManager {
         self.store.remove_texture(key)
     }
 
-    pub fn retire_texture(
-        &mut self,
-        backend: &mut Backend,
-        handle: TextureHandle,
-        texture: RendererTexture,
-    ) {
-        let mut textures = TextureHandleMap::default();
-        textures.insert(handle, texture);
-        backend.retire_textures(&mut textures);
-    }
-
     pub fn set_texture_for_key(
         &mut self,
         backend: &mut Backend,
@@ -153,7 +142,7 @@ impl AssetManager {
     ) -> TextureHandle {
         let (handle, old) = self.store.set_texture_for_key(key, texture, width, height);
         if let Some(old) = old {
-            self.retire_texture(backend, handle, old);
+            backend.retire_texture(old);
         }
         handle
     }
@@ -240,8 +229,8 @@ impl AssetManager {
                 }
             },
         );
-        for (handle, texture) in retired {
-            self.retire_texture(backend, handle, texture);
+        for texture in retired {
+            backend.retire_texture(texture);
         }
         for error in errors {
             match error {

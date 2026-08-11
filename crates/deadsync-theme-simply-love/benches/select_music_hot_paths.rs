@@ -1,6 +1,7 @@
 use deadsync_chart::{SongData, SyncPref};
 use deadsync_theme_simply_love::screens::select_music::{
-    MusicWheelEntry, benchmark_fill_displayed_entries, benchmark_select_music_entries,
+    MusicWheelEntry, benchmark_chart_info_text_new, benchmark_chart_info_text_old,
+    benchmark_fill_displayed_entries, benchmark_select_music_entries,
 };
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::alloc::{GlobalAlloc, Layout, System};
@@ -20,6 +21,7 @@ const SONGS_PER_PACK: usize = 24;
 const LOOKUP_OPS: usize = 200_000;
 const SORT_OPS: usize = 2_000;
 const REFILL_OPS: usize = 5_000;
+const CHART_INFO_OPS: usize = 500_000;
 
 struct CountingAlloc {
     enabled: AtomicBool,
@@ -366,6 +368,12 @@ fn legacy_fill_displayed_entries(
     visible
 }
 
+fn text_checksum(text: &str) -> u64 {
+    text.bytes().fold(text.len() as u64, |checksum, byte| {
+        checksum.rotate_left(5) ^ u64::from(byte)
+    })
+}
+
 fn lookup_checksum<S: BuildHasher>(
     prefs: &HashMap<String, SyncPref, S>,
     new_packs: &HashSet<String, S>,
@@ -388,6 +396,7 @@ fn lookup_checksum<S: BuildHasher>(
 }
 
 fn main() {
+    deadsync_theme_simply_love::i18n::init(deadsync_assets::language::load_for_tests("en"));
     let shared = benchmark_select_music_entries(PACK_COUNT, SONGS_PER_PACK);
     let legacy = legacy_entries(&shared);
     let pack_names = (0..PACK_COUNT)
@@ -494,6 +503,24 @@ fn main() {
         REFILL_OPS,
         &old_refill,
         &new_refill,
+    );
+
+    assert_eq!(
+        benchmark_chart_info_text_old(),
+        benchmark_chart_info_text_new(),
+        "chart-info fixtures must agree before measurement"
+    );
+    let old_chart_info = measure(CHART_INFO_OPS, 500, || {
+        text_checksum(benchmark_chart_info_text_old().as_ref())
+    });
+    let new_chart_info = measure(CHART_INFO_OPS, 500, || {
+        text_checksum(benchmark_chart_info_text_new().as_ref())
+    });
+    print_pair(
+        "4. cached chart-info text",
+        CHART_INFO_OPS,
+        &old_chart_info,
+        &new_chart_info,
     );
 
     println!(

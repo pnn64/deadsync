@@ -4,6 +4,10 @@ version = "0.1.0"
 edition = "2024"
 license = "GPL-3.0"
 
+[[bench]]
+name = "srpg_classification"
+harness = false
+
 [dependencies]
 bincode = "2.0.1"
 deadlib-platform = { path = "../deadlib-platform" }

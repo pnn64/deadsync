@@ -75,8 +75,8 @@ impl AssetManager {
                 built_in,
                 retired,
             } = loaded;
-            if let Some((handle, texture)) = retired {
-                self.retire_texture(backend, handle, texture);
+            if let Some(texture) = retired {
+                backend.retire_texture(texture);
             }
             if built_in {
                 debug!("Loaded built-in texture: {key}");
@@ -126,8 +126,8 @@ impl AssetManager {
                 warn!("Failed to open texture for key '{key}': {message}");
             }
             TextureKeyStoreLoad::Loaded { retired } => {
-                if let Some((handle, texture)) = retired {
-                    self.retire_texture(backend, handle, texture);
+                if let Some(texture) = retired {
+                    backend.retire_texture(texture);
                 }
             }
             TextureKeyStoreLoad::CreateFailed { key, error } => {

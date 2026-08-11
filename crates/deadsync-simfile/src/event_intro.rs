@@ -11,9 +11,14 @@ pub fn song_pack_group(song: &SongData) -> Option<&str> {
 }
 
 pub fn is_srpg_event_group(pack_group: &str) -> bool {
-    let lower = pack_group.trim().to_ascii_lowercase();
-    lower.chars().any(|c| c.is_ascii_digit())
-        && (lower.contains("stamina rpg") || lower.contains("srpg"))
+    let name = pack_group.trim().as_bytes();
+    name.iter().any(u8::is_ascii_digit)
+        && (name
+            .windows(b"stamina rpg".len())
+            .any(|window| window.eq_ignore_ascii_case(b"stamina rpg"))
+            || name
+                .windows(b"srpg".len())
+                .any(|window| window.eq_ignore_ascii_case(b"srpg")))
 }
 
 pub fn is_srpg_event_song(song: &SongData) -> bool {
@@ -178,6 +183,32 @@ mod tests {
         assert!(!is_srpg_event_group("ITL Online 2026"));
         assert!(!is_srpg_event_group("Stamina RPG Songs"));
         assert!(!is_srpg_event_group("RPG Songs"));
+    }
+
+    #[test]
+    fn srpg_event_detection_matches_legacy_ascii_lowercase_policy() {
+        fn legacy(pack_group: &str) -> bool {
+            let lower = pack_group.trim().to_ascii_lowercase();
+            lower.chars().any(|c| c.is_ascii_digit())
+                && (lower.contains("stamina rpg") || lower.contains("srpg"))
+        }
+
+        let cases = [
+            "",
+            "  Stamina RPG 10  ",
+            "STAMINA rPg 9 Unlocks",
+            "srpg10",
+            "prefix-SrPg-2026-suffix",
+            "Stamina RPG Songs",
+            "SRPG",
+            "RPG 10",
+            "ITL Online 2026",
+            "\u{2003}Stamina RPG 10\u{2003}",
+            "Stamina RÖPG 10",
+        ];
+        for case in cases {
+            assert_eq!(is_srpg_event_group(case), legacy(case), "case: {case:?}");
+        }
     }
 
     #[test]
