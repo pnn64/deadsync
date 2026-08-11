@@ -9,12 +9,12 @@ name = "audio_sample_transforms"
 harness = false
 
 [features]
-pipewire-audio = ["deadlib-audio-backend-native/pipewire-audio"]
+pipewire-audio = ["deadlib-audio/pipewire-audio"]
 test-support = []
 
 [dependencies]
+deadlib-audio-core = { path = "../deadlib-audio-core" }
 deadlib-audio = { path = "../deadlib-audio" }
-deadlib-audio-backend-native = { path = "../deadlib-audio-backend-native" }
 deadsync-audio-decode = { path = "../deadsync-audio-decode" }
 deadsync-audio-replaygain = { path = "../deadsync-audio-replaygain" }
 deadlib-platform = { path = "../deadlib-platform" }

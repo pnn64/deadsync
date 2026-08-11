@@ -3,7 +3,7 @@
 mod encoder_cache;
 
 use core_graphics_types::geometry::CGSize;
-use deadlib_render::{
+use deadlib_render_core::{
     BlendMode, ClockDomainTrace, DrawOp, DrawStats, FastU64Map, MeshVertex, PresentModePolicy,
     PresentModeTrace, PresentStats, RenderFrame, SamplerDesc, SamplerFilter, SamplerWrap,
     SpriteInstanceRaw, TMeshCacheKey, TextureHandle, TexturedMeshBufferCache,

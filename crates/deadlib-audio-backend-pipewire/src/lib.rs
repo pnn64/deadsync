@@ -1,12 +1,9 @@
 #![cfg(target_os = "linux")]
 
-use deadlib_audio::{
+use deadlib_audio_core::{
     AudioOutputMode, CallbackClockSource, CallbackInfo, OutputBackendReady, OutputBufferMut,
-    OutputTelemetryClock, OutputTimingQuality, RenderState, SfxReceiver,
-};
-use deadlib_audio_backend_telemetry::{
-    note_output_underrun, publish_output_timing, publish_output_timing_quality,
-    report_audio_render_callback,
+    OutputTelemetryClock, OutputTimingQuality, RenderState, SfxReceiver, note_output_underrun,
+    publish_output_timing, publish_output_timing_quality, report_audio_render_callback,
 };
 use deadlib_platform::host_time::now_nanos;
 use log::{info, warn};
@@ -100,7 +97,7 @@ impl CallbackState {
         let bytes = samples.saturating_mul(mem::size_of::<f32>());
         if data.as_ptr().align_offset(mem::align_of::<f32>()) != 0 {
             data[..bytes].fill(0);
-            note_output_underrun();
+            note_output_underrun(now_nanos(), log::log_enabled!(log::Level::Trace));
             return bytes;
         }
         // SAFETY: alignment was checked above, `samples` was derived from the
@@ -117,7 +114,7 @@ impl CallbackState {
             },
             self.sfx_receiver.try_iter(),
         );
-        report_audio_render_callback(result);
+        report_audio_render_callback(result, now_nanos(), log::log_enabled!(log::Level::Trace));
         let period_ns = frames_to_nanos(self.sample_rate_hz(), frames as u32);
         publish_output_timing(
             self.sample_rate_hz(),

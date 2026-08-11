@@ -4,8 +4,8 @@ use std::time::Instant;
 
 use deadlib_platform::display::{self, FullscreenType, MonitorSpec};
 use deadlib_present::space::{self, Metrics};
-use deadlib_render::{BackendType, PresentModePolicy};
-use deadlib_renderer::{Backend, create_backend, render_size_for_physical, render_size_for_window};
+use deadlib_render::{Backend, create_backend, render_size_for_physical, render_size_for_window};
+use deadlib_render_core::{BackendType, PresentModePolicy};
 use deadsync_assets::AssetManager;
 use deadsync_config::app_config::DisplayMode;
 use deadsync_theme_simply_love::views::SimplyLoveDensityGraphSlot as DensityGraphSlot;

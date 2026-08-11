@@ -1,5 +1,5 @@
 use crate::lookup_music_position;
-use deadlib_audio::{
+use deadlib_audio_core::{
     CallbackClockSource, CallbackClockWindow, MusicStreamClockSnapshot,
     fallback_stream_position_frames, music_nanos_from_seconds, music_track_has_started,
     music_track_start_frame, seeded_music_position,
@@ -26,7 +26,7 @@ fn current_callback_clock_nanos(valid_at: Instant, source: CallbackClockSource) 
 }
 
 fn load_callback_clock_snapshot_now() -> (Instant, u64, CallbackClockSource, CallbackClockWindow) {
-    deadlib_audio::load_callback_clock_snapshot_now(current_callback_clock_nanos)
+    deadlib_audio_core::load_callback_clock_snapshot_now(current_callback_clock_nanos)
 }
 
 #[inline(always)]

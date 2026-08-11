@@ -5,8 +5,8 @@ use deadlib_assets::{
     graphic_texture_roots as discover_graphic_texture_roots, initial_texture_decode_jobs,
 };
 use deadlib_platform::dirs;
-use deadlib_render::{SamplerDesc, SamplerWrap};
-use deadlib_renderer::Backend;
+use deadlib_render::Backend;
+use deadlib_render_core::{SamplerDesc, SamplerWrap};
 use log::{debug, warn};
 use std::path::{Path, PathBuf};
 
@@ -140,7 +140,7 @@ impl AssetManager {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use deadlib_render::{SamplerFilter, SamplerWrap};
+    use deadlib_render_core::{SamplerFilter, SamplerWrap};
 
     #[test]
     fn model_sampler_forces_repeat_for_plain_textures() {

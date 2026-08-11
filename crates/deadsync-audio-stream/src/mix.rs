@@ -1,4 +1,4 @@
-use deadlib_audio::{MixBus, MixControls};
+use deadlib_audio_core::{MixBus, MixControls};
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, OnceLock};
 

@@ -94,9 +94,9 @@ use deadlib_platform::host_time;
 use deadlib_present::color;
 use deadlib_present::compose;
 use deadlib_present::space::{self as space, Metrics};
-use deadlib_render as renderer;
-use deadlib_render::{BackendType, PresentModePolicy};
-use deadlib_renderer as renderer_backend;
+use deadlib_render as renderer_backend;
+use deadlib_render_core as renderer;
+use deadlib_render_core::{BackendType, PresentModePolicy};
 use deadsync_assets::{AssetManager, PRESENT_TEXTURE_CONTEXT, TextureUploadBudget, media_cache};
 use deadsync_config::prelude::{
     self as config, FrameIntervalState, FrameLoopMode, elapsed_us_between, elapsed_us_since,

@@ -13,7 +13,7 @@ use deadlib_present::color;
 use deadlib_present::space::{
     screen_center_x, screen_center_y, screen_height, screen_width, widescale,
 };
-use deadlib_render::BlendMode;
+use deadlib_render_core::BlendMode;
 use deadsync_assets::noteskin::{
     self, NUM_QUANTIZATIONS, NoteAnimPart, Noteskin, Quantization, SpriteSlot,
 };

@@ -3,7 +3,7 @@ use deadlib_assets::{
     ascii_ci_hash, clear_texture_handles, register_texture_handle, remove_texture_handle,
     texture_handle,
 };
-use deadlib_render::{FastU64Map, INVALID_TEXTURE_HANDLE, SamplerDesc, TextureHandle};
+use deadlib_render_core::{FastU64Map, INVALID_TEXTURE_HANDLE, SamplerDesc, TextureHandle};
 use image::RgbaImage;
 use rustc_hash::FxHashMap;
 use std::alloc::{GlobalAlloc, Layout, System};

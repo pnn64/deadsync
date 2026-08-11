@@ -1,11 +1,14 @@
 #![cfg(windows)]
 
-use deadlib_audio::{
+use deadlib_audio_core::{
     AudioOutputMode, CallbackClockSource, CallbackInfo, OutputBackendReady, OutputBufferMut,
-    OutputTelemetryClock, OutputTimingQuality, RenderState, SfxReceiver,
+    OutputTelemetryClock, OutputTimingQuality, RenderState, SfxReceiver, publish_output_timing,
+    report_audio_render_callback,
 };
-use deadlib_audio_backend_telemetry::{publish_output_timing, report_audio_render_callback};
-use deadlib_platform::windows_rt::{ThreadRole, boost_current_thread};
+use deadlib_platform::{
+    host_time::now_nanos,
+    windows_rt::{ThreadRole, boost_current_thread},
+};
 use log::{error, warn};
 use std::ffi::c_void;
 use std::mem::size_of;
@@ -505,7 +508,11 @@ fn write_frames(
                     },
                     sfx_receiver.try_iter(),
                 );
-                report_audio_render_callback(result);
+                report_audio_render_callback(
+                    result,
+                    now_nanos(),
+                    log::log_enabled!(log::Level::Trace),
+                );
             }
             WasapiSampleFormat::F32 => {
                 let out = slice::from_raw_parts_mut(buffer as *mut f32, samples);
@@ -517,7 +524,11 @@ fn write_frames(
                     },
                     sfx_receiver.try_iter(),
                 );
-                report_audio_render_callback(result);
+                report_audio_render_callback(
+                    result,
+                    now_nanos(),
+                    log::log_enabled!(log::Level::Trace),
+                );
             }
         }
         render_client

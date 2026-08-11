@@ -1,6 +1,6 @@
 use crate::notes::LaneWindowCursor;
 use deadlib_present::actors::{Actor, SizeSpec};
-use deadlib_render::{BlendMode, TMeshCacheKey, TexturedMeshVertex};
+use deadlib_render_core::{BlendMode, TMeshCacheKey, TexturedMeshVertex};
 use deadsync_core::input::MAX_COLS;
 use deadsync_noteskin::{
     ModelDrawState, ModelMesh, ModelTweenCursor, NoteskinSlot, model_vertex_for_sprite,
@@ -542,7 +542,7 @@ fn actor_from_draw<S: NoteskinSlot>(
         xy,
         tint,
         vertices,
-        deadlib_render::INVALID_TMESH_CACHE_KEY,
+        deadlib_render_core::INVALID_TMESH_CACHE_KEY,
         local_transform,
         uv_scale,
         uv_offset,
@@ -1083,7 +1083,7 @@ mod tests {
         assert_eq!(tint, [0.4, 0.1, 0.2, 0.375]);
         assert_eq!(glow, [1.0, 1.0, 1.0, 0.0]);
         assert_eq!(vertices.len(), 1);
-        assert_eq!(geom_cache_key, deadlib_render::INVALID_TMESH_CACHE_KEY);
+        assert_eq!(geom_cache_key, deadlib_render_core::INVALID_TMESH_CACHE_KEY);
         assert_eq!(uv_scale, [0.7, 0.7]);
         assert_eq!(uv_offset, [0.1, 0.2]);
         assert_eq!(uv_tex_shift, [0.125, 0.25]);
@@ -1139,7 +1139,7 @@ mod tests {
         else {
             panic!("expected cached textured mesh actors");
         };
-        assert_ne!(key_a, deadlib_render::INVALID_TMESH_CACHE_KEY);
+        assert_ne!(key_a, deadlib_render_core::INVALID_TMESH_CACHE_KEY);
         assert_eq!(key_a, key_b);
         assert!(Arc::ptr_eq(&vertices_a, &vertices_b));
         assert_eq!(

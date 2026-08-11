@@ -3,7 +3,7 @@ use std::hint::black_box;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 
-use deadlib_audio::f32_to_i16;
+use deadlib_audio_core::f32_to_i16;
 use deadsync_audio_decode::resample::write_resampler_output;
 
 const FRAMES: usize = 4_096;

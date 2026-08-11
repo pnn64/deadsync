@@ -5,8 +5,7 @@ edition = "2024"
 license = "GPL-3.0"
 
 [target.'cfg(target_os = "linux")'.dependencies]
-deadlib-audio = { path = "../deadlib-audio" }
-deadlib-audio-backend-telemetry = { path = "../deadlib-audio-backend-telemetry" }
+deadlib-audio-core = { path = "../deadlib-audio-core" }
 deadlib-platform = { path = "../deadlib-platform" }
 log = "0.4.33"
 pipewire = "0.9.2"

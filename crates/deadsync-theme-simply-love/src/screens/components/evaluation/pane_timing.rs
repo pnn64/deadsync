@@ -7,7 +7,7 @@ use crate::screens::components::evaluation::eval_graphs::TimingHistogramScale;
 use crate::screens::evaluation::ScoreInfo;
 use deadlib_present::actors::{Actor, SizeSpec};
 use deadlib_present::color;
-use deadlib_render::{BlendMode, MeshVertex};
+use deadlib_render_core::{BlendMode, MeshVertex};
 use deadsync_profile as profile_data;
 use deadsync_rules::timing;
 

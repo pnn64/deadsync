@@ -28,7 +28,7 @@ use deadlib_present::space::widescale;
 use deadlib_present::space::{
     is_wide, screen_center_x, screen_center_y, screen_height, screen_width,
 };
-use deadlib_render::{
+use deadlib_render_core::{
     BlendMode, INVALID_TMESH_CACHE_KEY, MeshVertex, TMeshCacheKey, TexturedMeshVertex,
 };
 use deadsync_assets::noteskin::{self, Noteskin, SpriteSlot};
@@ -16377,7 +16377,7 @@ mod tests {
         NullTextureContext,
         build_screen_segments_cached_with_scratch_and_texture_context_and_actor_resources,
     };
-    use deadlib_render::frame_compare::compare_render_frames_semantic;
+    use deadlib_render_core::frame_compare::compare_render_frames_semantic;
 
     fn workspace_root() -> std::path::PathBuf {
         let manifest = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));

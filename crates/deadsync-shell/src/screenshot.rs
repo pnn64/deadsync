@@ -6,8 +6,8 @@ use std::time::Instant;
 
 use deadlib_platform::dirs;
 use deadlib_present::actors::Actor;
-use deadlib_render::SamplerDesc;
-use deadlib_renderer::Backend;
+use deadlib_render::Backend;
+use deadlib_render_core::SamplerDesc;
 use deadsync_assets::screenshot::{
     self as screenshot_data, ScreenshotPreviewTarget, ScreenshotRuntimeState, ScreenshotSaveError,
 };

@@ -13,4 +13,4 @@ pub mod space;
 pub mod texture;
 
 #[doc(hidden)]
-pub use deadlib_render as render;
+pub use deadlib_render_core as render;

@@ -1,7 +1,7 @@
 use crate::actors::{self, SizeSpec};
 use crate::{anim, font, space};
-use deadlib_render as renderer;
-use deadlib_render::{BlendMode, RenderFrame};
+use deadlib_render_core as renderer;
+use deadlib_render_core::{BlendMode, RenderFrame};
 use glam::{Mat4 as Matrix4, Vec2 as Vector2, Vec3 as Vector3, Vec4 as Vector4};
 use smallvec::SmallVec;
 use space::Metrics;
@@ -7959,7 +7959,7 @@ mod tests {
     use crate::font;
     use crate::font::{Font, Glyph, GlyphMap};
     use crate::space::Metrics;
-    use deadlib_render::{
+    use deadlib_render_core::{
         BlendMode, DrawOp, INVALID_TEXTURE_HANDLE, INVALID_TMESH_CACHE_KEY, MeshRun, MeshVertex,
         RenderFrame, SpriteInstanceRaw, SpriteRun, TMeshCacheKey, TexturedMeshGeometry,
         TexturedMeshInstanceRaw, TexturedMeshRun, TexturedMeshVertex,
@@ -7986,7 +7986,7 @@ mod tests {
             crate::font::parse_sprite_sheet_dims_from_key(key)
         }
 
-        fn texture_handle(&self, key: &str) -> deadlib_render::TextureHandle {
+        fn texture_handle(&self, key: &str) -> deadlib_render_core::TextureHandle {
             key.bytes()
                 .fold(0xcbf2_9ce4_8422_2325u64, |hash, byte| {
                     (hash ^ u64::from(byte)).wrapping_mul(0x100_0000_01b3)
@@ -8140,7 +8140,7 @@ mod tests {
         frame: &RenderFrame,
     ) -> Vec<(
         BlendMode,
-        deadlib_render::TextureHandle,
+        deadlib_render_core::TextureHandle,
         u8,
         SpriteInstanceRaw,
     )> {
@@ -8274,7 +8274,7 @@ mod tests {
     struct TestTextureContext {
         generation: u64,
         dims: HashMap<String, TextureMeta>,
-        handles: HashMap<String, deadlib_render::TextureHandle>,
+        handles: HashMap<String, deadlib_render_core::TextureHandle>,
     }
 
     impl TextureContext for TestTextureContext {
@@ -8290,11 +8290,11 @@ mod tests {
             crate::font::parse_sprite_sheet_dims_from_key(key)
         }
 
-        fn texture_handle(&self, key: &str) -> deadlib_render::TextureHandle {
+        fn texture_handle(&self, key: &str) -> deadlib_render_core::TextureHandle {
             self.handles
                 .get(key)
                 .copied()
-                .unwrap_or(deadlib_render::INVALID_TEXTURE_HANDLE)
+                .unwrap_or(deadlib_render_core::INVALID_TEXTURE_HANDLE)
         }
     }
 
@@ -8469,7 +8469,7 @@ mod tests {
             camera: 0,
             object_type: EditablePayload::TexturedMesh {
                 instance,
-                vertices: deadlib_render::TexturedMeshVertices::Transient(vec![
+                vertices: deadlib_render_core::TexturedMeshVertices::Transient(vec![
                     TexturedMeshVertex {
                         pos: [x, 0.0, 0.0],
                         ..TexturedMeshVertex::default()
@@ -9107,7 +9107,7 @@ mod tests {
             (1, 1)
         }
 
-        fn texture_handle(&self, key: &str) -> deadlib_render::TextureHandle {
+        fn texture_handle(&self, key: &str) -> deadlib_render_core::TextureHandle {
             self.handle_calls.set(self.handle_calls.get() + 1);
             let page = match key {
                 "fill_a" => 1,
@@ -9598,7 +9598,7 @@ mod tests {
                     [0.0, 0.0],
                     false,
                 ),
-                vertices: deadlib_render::TexturedMeshVertices::Transient(source),
+                vertices: deadlib_render_core::TexturedMeshVertices::Transient(source),
                 geom_cache_key: INVALID_TMESH_CACHE_KEY,
                 depth_test: false,
             },
@@ -9636,7 +9636,7 @@ mod tests {
         let EditablePayload::TexturedMesh { vertices, .. } = &obj.object_type else {
             panic!("clipped object should remain a textured mesh");
         };
-        let deadlib_render::TexturedMeshVertices::Transient(vertices) = vertices else {
+        let deadlib_render_core::TexturedMeshVertices::Transient(vertices) = vertices else {
             panic!("clipped transient geometry should remain recyclable");
         };
         assert_eq!(vertices.as_ptr(), chosen_ptr);
@@ -9667,7 +9667,7 @@ mod tests {
                     [0.0, 0.0],
                     false,
                 ),
-                vertices: deadlib_render::TexturedMeshVertices::Shared(vertices),
+                vertices: deadlib_render_core::TexturedMeshVertices::Shared(vertices),
                 geom_cache_key: 41,
                 depth_test: true,
             },
@@ -10211,7 +10211,7 @@ mod tests {
             assert_test_frames_semantic(&expected, &actual);
             assert!(actual.tmesh_geometries.iter().all(|geometry| matches!(
                 geometry.vertices,
-                deadlib_render::TexturedMeshVertices::Reusable(_)
+                deadlib_render_core::TexturedMeshVertices::Reusable(_)
             )));
             assert!(
                 actual
@@ -10267,10 +10267,10 @@ mod tests {
                 &mut scratch,
             );
             assert!(frame.tmesh_geometries.iter().all(|geometry| {
-                geometry.cache_key != deadlib_render::INVALID_TMESH_CACHE_KEY
+                geometry.cache_key != deadlib_render_core::INVALID_TMESH_CACHE_KEY
                     && matches!(
                         geometry.vertices,
-                        deadlib_render::TexturedMeshVertices::Reusable(_)
+                        deadlib_render_core::TexturedMeshVertices::Reusable(_)
                     )
             }));
             let key = frame.tmesh_geometries[0].cache_key;
@@ -10339,7 +10339,7 @@ mod tests {
         let mut saturated = compose("AB", &metrics, &fonts, &mut cache, &mut scratch);
         assert!(matches!(
             saturated.tmesh_geometries[0].vertices,
-            deadlib_render::TexturedMeshVertices::Transient(_)
+            deadlib_render_core::TexturedMeshVertices::Transient(_)
         ));
         assert_eq!(
             first.tmesh_geometries[0].vertices.as_ref(),
@@ -10352,7 +10352,7 @@ mod tests {
         let mut reused = compose("BA", &metrics, &fonts, &mut cache, &mut scratch);
         assert!(matches!(
             reused.tmesh_geometries[0].vertices,
-            deadlib_render::TexturedMeshVertices::Reusable(_)
+            deadlib_render_core::TexturedMeshVertices::Reusable(_)
         ));
         scratch.recycle_frame(&mut reused);
     }
@@ -10424,7 +10424,7 @@ mod tests {
     #[test]
     fn prepared_u32_banks_preserve_busy_frames_and_reuse_after_release() {
         fn reusable_ptr(frame: &RenderFrame) -> *const TexturedMeshVertex {
-            let deadlib_render::TexturedMeshVertices::Reusable(vertices) =
+            let deadlib_render_core::TexturedMeshVertices::Reusable(vertices) =
                 &frame.tmesh_geometries[0].vertices
             else {
                 panic!("prepared text should use reusable geometry");
@@ -10470,7 +10470,7 @@ mod tests {
         let mut saturated = compose(14, &metrics, &fonts, &mut cache, &mut scratch);
         assert!(matches!(
             saturated.tmesh_geometries[0].vertices,
-            deadlib_render::TexturedMeshVertices::Shared(_)
+            deadlib_render_core::TexturedMeshVertices::Shared(_)
         ));
         assert_eq!(
             first.tmesh_geometries[0].vertices.as_ref(),
@@ -10622,14 +10622,14 @@ mod tests {
     #[test]
     fn recycle_frame_recovers_transient_textured_mesh_vertices() {
         let mut scratch = ComposeScratch::default();
-        let mut render = deadlib_render::RenderFrame {
+        let mut render = deadlib_render_core::RenderFrame {
             clear_color: [0.0, 0.0, 0.0, 1.0],
             cameras: Vec::new(),
             sprite_instances: Vec::new(),
             mesh_vertices: Vec::new(),
             tmesh_instances: Vec::new(),
-            tmesh_geometries: vec![deadlib_render::TexturedMeshGeometry {
-                vertices: deadlib_render::TexturedMeshVertices::Transient(vec![
+            tmesh_geometries: vec![deadlib_render_core::TexturedMeshGeometry {
+                vertices: deadlib_render_core::TexturedMeshVertices::Transient(vec![
                     TexturedMeshVertex::default();
                     6
                 ]),
@@ -10671,7 +10671,7 @@ mod tests {
                     [0.0, 0.0],
                     false,
                 ),
-                vertices: deadlib_render::TexturedMeshVertices::Transient(source.clone()),
+                vertices: deadlib_render_core::TexturedMeshVertices::Transient(source.clone()),
                 geom_cache_key: INVALID_TMESH_CACHE_KEY,
                 depth_test: false,
             },
@@ -10703,7 +10703,7 @@ mod tests {
             .and_then(Option::as_ref)
             .expect("shadow should remain a textured mesh");
         let vertices = &shadow.vertices;
-        let deadlib_render::TexturedMeshVertices::Transient(vertices) = vertices else {
+        let deadlib_render_core::TexturedMeshVertices::Transient(vertices) = vertices else {
             panic!("transient shadow should keep recyclable ownership");
         };
         assert_eq!(vertices.as_ptr(), recycled_ptr);
@@ -10721,7 +10721,7 @@ mod tests {
         let mut builder = FrameBuilder::default();
         for (z, order) in [(5, 3), (4, 0), (5, 1), (5, 2)] {
             builder.push_mesh(
-                deadlib_render::INVALID_TEXTURE_HANDLE,
+                deadlib_render_core::INVALID_TEXTURE_HANDLE,
                 order,
                 z,
                 BlendMode::Alpha,
@@ -11112,7 +11112,7 @@ mod tests {
             tint: [1.0; 4],
             glow: [1.0, 1.0, 1.0, 0.0],
             vertices: Arc::clone(&vertices),
-            geom_cache_key: deadlib_render::INVALID_TMESH_CACHE_KEY,
+            geom_cache_key: deadlib_render_core::INVALID_TMESH_CACHE_KEY,
             uv_scale: [1.0; 2],
             uv_offset: [0.0; 2],
             uv_tex_shift: [0.0; 2],
@@ -11130,7 +11130,8 @@ mod tests {
         );
 
         let (_, _, geometry) = tmesh_draw(&render, 0);
-        let deadlib_render::TexturedMeshVertices::Reusable(render_vertices) = &geometry.vertices
+        let deadlib_render_core::TexturedMeshVertices::Reusable(render_vertices) =
+            &geometry.vertices
         else {
             panic!("reusable actor should preserve reusable renderer storage");
         };

@@ -28,7 +28,7 @@ mod tests {
         compose::{self, TextureContext, TextureMeta},
         space,
     };
-    use deadlib_render::{DrawOp, DrawStorageStats, frame_compare::compare_render_frames};
+    use deadlib_render_core::{DrawOp, DrawStorageStats, frame_compare::compare_render_frames};
     use deadsync_assets::noteskin::{self, Noteskin};
     use deadsync_assets::song_lua::compile_song_lua;
     use deadsync_chart::SongData;
@@ -493,7 +493,7 @@ mod tests {
             crate::assets::sprite_sheet_dims(key)
         }
 
-        fn texture_handle(&self, key: &str) -> deadlib_render::TextureHandle {
+        fn texture_handle(&self, key: &str) -> deadlib_render_core::TextureHandle {
             let hash = key.as_bytes().iter().fold(0x811c_9dc5u32, |hash, byte| {
                 (hash ^ u32::from(*byte)).wrapping_mul(0x0100_0193)
             });
@@ -620,7 +620,7 @@ mod tests {
         text_cache: &mut compose::TextLayoutCache,
         scratch: &mut compose::ComposeScratch,
         texture_ctx: &T,
-    ) -> deadlib_render::RenderFrame {
+    ) -> deadlib_render_core::RenderFrame {
         actors.clear();
         let segments = screen_gameplay::push_actors(
             actors,
@@ -651,7 +651,7 @@ mod tests {
         actors: &mut Vec<deadlib_present::actors::Actor>,
         text_cache: &mut compose::TextLayoutCache,
         scratch: &mut compose::ComposeScratch,
-    ) -> deadlib_render::RenderFrame {
+    ) -> deadlib_render_core::RenderFrame {
         compose_fixture_frame_with_textures(
             state,
             assets,
@@ -670,7 +670,7 @@ mod tests {
         actors: &mut Vec<deadlib_present::actors::Actor>,
         text_cache: &mut compose::TextLayoutCache,
         scratch: &mut compose::ComposeScratch,
-    ) -> deadlib_render::RenderFrame {
+    ) -> deadlib_render_core::RenderFrame {
         actors.clear();
         let segments = crate::screens::practice::push_actors(
             actors,
@@ -721,7 +721,7 @@ mod tests {
         actors: &mut Vec<deadlib_present::actors::Actor>,
         text_cache: &mut compose::TextLayoutCache,
         compose_scratch: &mut compose::ComposeScratch,
-    ) -> deadlib_render::RenderFrame {
+    ) -> deadlib_render_core::RenderFrame {
         assert_repeatable_composition(compose_scratch, |scratch| {
             compose_fixture_frame(state, assets, metrics, actors, text_cache, scratch)
         })
@@ -729,8 +729,8 @@ mod tests {
 
     fn assert_repeatable_composition(
         compose_scratch: &mut compose::ComposeScratch,
-        mut compose_frame: impl FnMut(&mut compose::ComposeScratch) -> deadlib_render::RenderFrame,
-    ) -> deadlib_render::RenderFrame {
+        mut compose_frame: impl FnMut(&mut compose::ComposeScratch) -> deadlib_render_core::RenderFrame,
+    ) -> deadlib_render_core::RenderFrame {
         let mut warm = compose_frame(compose_scratch);
         compose_scratch.recycle_frame(&mut warm);
 
@@ -946,7 +946,7 @@ L000
 
     #[cfg(target_os = "windows")]
     struct GpuCaptureApp {
-        backend_type: deadlib_render::BackendType,
+        backend_type: deadlib_render_core::BackendType,
         simfile: PathBuf,
         output_dir: PathBuf,
         result: Option<Result<GpuCaptureArtifacts, String>>,
@@ -1088,7 +1088,7 @@ L000
             deadsync_assets::sprite_sheet_dims(key)
         }
 
-        fn texture_handle(&self, key: &str) -> deadlib_render::TextureHandle {
+        fn texture_handle(&self, key: &str) -> deadlib_render_core::TextureHandle {
             self.keys.borrow_mut().insert(key.to_owned());
             deadsync_assets::texture_handle(key)
         }
@@ -1097,7 +1097,7 @@ L000
     #[cfg(target_os = "windows")]
     fn load_gpu_capture_assets(
         assets: &mut deadsync_assets::AssetManager,
-        backend: &mut deadlib_renderer::Backend,
+        backend: &mut deadlib_render::Backend,
     ) -> Result<(), String> {
         let texture_assets = crate::resources::initial_texture_assets().collect::<Vec<_>>();
         assets
@@ -1159,9 +1159,9 @@ L000
     #[cfg(target_os = "windows")]
     fn ensure_gpu_capture_texture(
         assets: &mut deadsync_assets::AssetManager,
-        backend: &mut deadlib_renderer::Backend,
+        backend: &mut deadlib_render::Backend,
         key: &str,
-        sampler: Option<deadlib_render::SamplerDesc>,
+        sampler: Option<deadlib_render_core::SamplerDesc>,
     ) -> Result<(), String> {
         if let Some(sampler) = sampler {
             assets.ensure_texture_for_key_with_sampler(backend, key, sampler);
@@ -1212,7 +1212,7 @@ L000
     fn prewarm_gpu_noteskins(
         state: &screen_gameplay::State,
         assets: &mut deadsync_assets::AssetManager,
-        backend: &mut deadlib_renderer::Backend,
+        backend: &mut deadlib_render::Backend,
     ) -> Result<(), String> {
         let mut seen = std::collections::HashSet::<String>::with_capacity(128);
         let mut seen_models = std::collections::HashSet::<String>::with_capacity(32);
@@ -1349,7 +1349,7 @@ L000
     fn run_gpu_timing_frame(
         state: &mut screen_gameplay::State,
         assets: &crate::assets::AssetManager,
-        backend: &mut deadlib_renderer::Backend,
+        backend: &mut deadlib_render::Backend,
         metrics: &space::Metrics,
         actors: &mut Vec<deadlib_present::actors::Actor>,
         text_cache: &mut compose::TextLayoutCache,
@@ -1424,8 +1424,8 @@ L000
     fn capture_gpu_timing(
         state: &mut screen_gameplay::State,
         assets: &crate::assets::AssetManager,
-        backend: &mut deadlib_renderer::Backend,
-        backend_type: deadlib_render::BackendType,
+        backend: &mut deadlib_render::Backend,
+        backend_type: deadlib_render_core::BackendType,
         metrics: &space::Metrics,
         actors: &mut Vec<deadlib_present::actors::Actor>,
         text_cache: &mut compose::TextLayoutCache,
@@ -1557,7 +1557,7 @@ L000
         name: &str,
         state: &mut screen_gameplay::State,
         assets: &mut crate::assets::AssetManager,
-        backend: &mut deadlib_renderer::Backend,
+        backend: &mut deadlib_render::Backend,
         metrics: &space::Metrics,
         actors: &mut Vec<deadlib_present::actors::Actor>,
         text_cache: &mut compose::TextLayoutCache,
@@ -1611,7 +1611,7 @@ L000
         {
             noteskin.for_each_slot(|slot| {
                 let handle = deadsync_assets::texture_handle(slot.texture_key());
-                if handle != deadlib_render::INVALID_TEXTURE_HANDLE
+                if handle != deadlib_render_core::INVALID_TEXTURE_HANDLE
                     && assets.textures().contains_key(&handle)
                 {
                     noteskin_handles.insert(handle);
@@ -1677,7 +1677,7 @@ L000
     #[cfg(target_os = "windows")]
     fn capture_sprite_core_gpu(
         event_loop: &winit::event_loop::ActiveEventLoop,
-        backend_type: deadlib_render::BackendType,
+        backend_type: deadlib_render_core::BackendType,
         simfile: &Path,
         output_dir: &Path,
     ) -> Result<GpuCaptureArtifacts, String> {
@@ -1698,11 +1698,11 @@ L000
                 size.width, size.height
             ));
         }
-        let mut backend = deadlib_renderer::create_backend(
+        let mut backend = deadlib_render::create_backend(
             backend_type,
             Arc::clone(&window),
             false,
-            deadlib_render::PresentModePolicy::Immediate,
+            deadlib_render_core::PresentModePolicy::Immediate,
             false,
             true,
         )
@@ -1819,9 +1819,9 @@ L000
         let backend_name = std::env::var("DEADSYNC_F0_BACKEND")
             .expect("set DEADSYNC_F0_BACKEND to opengl, vulkan, or vulkan-wgpu");
         let backend_type = backend_name
-            .parse::<deadlib_render::BackendType>()
+            .parse::<deadlib_render_core::BackendType>()
             .unwrap_or_else(|error| panic!("invalid DEADSYNC_F0_BACKEND: {error}"));
-        assert_ne!(backend_type, deadlib_render::BackendType::Software);
+        assert_ne!(backend_type, deadlib_render_core::BackendType::Software);
         let slug = backend_name
             .trim()
             .to_ascii_lowercase()
@@ -2421,7 +2421,7 @@ M000
                             &mut compose_scratch,
                         );
                         assert!(frame.tmesh_geometries.iter().any(|geometry| {
-                            geometry.cache_key != deadlib_render::INVALID_TMESH_CACHE_KEY
+                            geometry.cache_key != deadlib_render_core::INVALID_TMESH_CACHE_KEY
                         }));
                         frame
                     };

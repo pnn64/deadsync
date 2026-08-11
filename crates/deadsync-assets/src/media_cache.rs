@@ -1,7 +1,7 @@
 use crate::{AssetManager, open_image_fallback};
 use deadlib_assets::dynamic;
 use deadlib_platform::dirs;
-use deadlib_renderer::Backend;
+use deadlib_render::Backend;
 use deadlib_video as video;
 use image::RgbaImage;
 use log::warn;

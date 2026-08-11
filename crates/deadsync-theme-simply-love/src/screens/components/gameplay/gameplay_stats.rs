@@ -21,7 +21,7 @@ use deadlib_present::compose::{
 use deadlib_present::density;
 use deadlib_present::font;
 use deadlib_present::space::*;
-use deadlib_render::BlendMode;
+use deadlib_render_core::BlendMode;
 use deadsync_core::input::MAX_PLAYERS;
 use deadsync_profile as profile_data;
 use deadsync_profile_gameplay::score_display_mode_from_profile;

@@ -1,13 +1,16 @@
 [package]
-name = "deadlib-audio-backend-telemetry"
+name = "deadlib-audio-core"
 version = "0.1.0"
 edition = "2024"
 license = "GPL-3.0"
 
+[[bench]]
+name = "sfx_queue_hot_path"
+harness = false
+
 [dependencies]
-deadlib-audio = { path = "../deadlib-audio" }
-deadlib-platform = { path = "../deadlib-platform" }
-log = "0.4.33"
+rtrb = "0.3.4"
+
 
 [lints.clippy]
 perf = { level = "warn", priority = -1 }

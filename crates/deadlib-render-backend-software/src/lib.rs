@@ -1,4 +1,4 @@
-use deadlib_render::{
+use deadlib_render_core::{
     BlendMode, DrawOp, DrawStats, RenderFrame, SOFTWARE_MESH_STORAGE_SLOT,
     SOFTWARE_OBJECTS_STORAGE_SLOT, SOFTWARE_TMESH_STORAGE_SLOT, SamplerDesc, SamplerFilter,
     SamplerWrap, TextureHandle, draw_storage_stats,
@@ -747,7 +747,7 @@ fn prepare_mesh_vertices(
     out: &mut Vec<ScreenVertexColor>,
     mvp: &Matrix4,
     tint: [f32; 4],
-    vertices: &[deadlib_render::MeshVertex],
+    vertices: &[deadlib_render_core::MeshVertex],
     width: usize,
     height: usize,
 ) -> Option<(u32, u32)> {
@@ -798,7 +798,7 @@ fn prepare_tmesh_vertices(
     uv_scale: [f32; 2],
     uv_offset: [f32; 2],
     uv_tex_shift: [f32; 2],
-    vertices: &[deadlib_render::TexturedMeshVertex],
+    vertices: &[deadlib_render_core::TexturedMeshVertex],
     width: usize,
     height: usize,
 ) -> Option<(u32, u32)> {
@@ -962,7 +962,7 @@ fn rasterize_prepared_tmesh(
 fn rasterize_mesh_triangles(
     mvp: &Matrix4,
     tint: [f32; 4],
-    vertices: &[deadlib_render::MeshVertex],
+    vertices: &[deadlib_render_core::MeshVertex],
     blend: BlendMode,
     width: usize,
     height: usize,
@@ -1027,7 +1027,7 @@ fn rasterize_mesh_triangles(
 
 fn rasterize_textured_mesh_triangles(
     mvp: &Matrix4,
-    vertices: &[deadlib_render::TexturedMeshVertex],
+    vertices: &[deadlib_render_core::TexturedMeshVertex],
     tint: [f32; 4],
     uv_scale: [f32; 2],
     uv_offset: [f32; 2],
@@ -1733,7 +1733,7 @@ fn edge_function(x0: f32, y0: f32, x1: f32, y1: f32, px: f32, py: f32) -> f32 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use deadlib_render::{
+    use deadlib_render_core::{
         INVALID_TMESH_CACHE_KEY, MeshRun, MeshVertex, SpriteInstanceRaw, SpriteRun,
         TexturedMeshGeometry, TexturedMeshInstanceRaw, TexturedMeshRun, TexturedMeshVertex,
         TexturedMeshVertices,

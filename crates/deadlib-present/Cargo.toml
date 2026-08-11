@@ -5,7 +5,7 @@ edition = "2024"
 license = "GPL-3.0"
 
 [dependencies]
-deadlib-render = { path = "../deadlib-render" }
+deadlib-render-core = { path = "../deadlib-render-core" }
 glam = "0.33.3"
 image = "0.25.10"
 log = "0.4.33"

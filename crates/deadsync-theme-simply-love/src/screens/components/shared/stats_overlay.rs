@@ -3,7 +3,7 @@ use crate::views::{TimingHealth, VisibleStutterSample};
 use deadlib_present::actors::Actor;
 use deadlib_present::cache::{TextCache, cached_text, text_cache_with_capacity};
 use deadlib_present::space::{screen_height, screen_width};
-use deadlib_render::BackendType;
+use deadlib_render_core::BackendType;
 use std::cell::RefCell;
 use std::sync::Arc;
 

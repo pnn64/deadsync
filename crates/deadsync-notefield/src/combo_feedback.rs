@@ -1,7 +1,7 @@
 use crate::combo_actor_zoom;
 use deadlib_present::actors::{Actor, SpriteSource, TextAlign, TextContent};
 use deadlib_present::dsl::{SpriteBuilder, TextBuilder};
-use deadlib_render::BlendMode;
+use deadlib_render_core::BlendMode;
 use deadsync_gameplay::{
     ActiveComboMilestone, COMBO_HUNDRED_MILESTONE_DURATION, COMBO_THOUSAND_MILESTONE_DURATION,
     ComboMilestoneKind,

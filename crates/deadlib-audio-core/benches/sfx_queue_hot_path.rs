@@ -1,4 +1,4 @@
-use deadlib_audio::{MixBus, QueuedSfx, sfx_transport};
+use deadlib_audio_core::{MixBus, QueuedSfx, sfx_transport};
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::hint::black_box;
 use std::sync::Arc;

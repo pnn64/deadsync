@@ -4,7 +4,7 @@ use crate::{
 };
 use deadlib_present::actors::{ActorResourceArena, SpriteSource, TextureKeyHandle};
 use deadlib_present::texture as present_texture;
-use deadlib_render::INVALID_TEXTURE_HANDLE;
+use deadlib_render_core::INVALID_TEXTURE_HANDLE;
 use std::{
     collections::HashSet,
     fs,

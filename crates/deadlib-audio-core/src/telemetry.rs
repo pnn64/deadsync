@@ -386,6 +386,27 @@ pub fn note_output_clock_fallback(at_host_nanos: u64, stutter_diag_enabled: bool
     AUDIO_TELEMETRY.note_output_clock_fallback(at_host_nanos, stutter_diag_enabled);
 }
 
+pub fn report_audio_render_callback(
+    result: crate::RenderReport,
+    at_host_nanos: u64,
+    stutter_diag_enabled: bool,
+) {
+    if result.callback_gap_ns != 0
+        && stutter_diag_enabled
+        && result.callback_gap_ns >= stutter_diag_callback_gap_threshold_ns()
+    {
+        record_stutter_diag_event(
+            StutterDiagAudioEventKind::CallbackGap,
+            at_host_nanos,
+            result.callback_gap_ns,
+            current_output_timing_quality(),
+        );
+    }
+    if result.output_underrun {
+        note_output_underrun(at_host_nanos, stutter_diag_enabled);
+    }
+}
+
 #[inline(always)]
 pub fn record_stutter_diag_event(
     kind: StutterDiagAudioEventKind,

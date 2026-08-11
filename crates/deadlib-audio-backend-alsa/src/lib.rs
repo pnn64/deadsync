@@ -2,11 +2,9 @@
 
 use alsa::pcm::{Access, Format, HwParams, PCM, State, SwParams, TstampType};
 use alsa::{Ctl, Direction, ValueOr};
-use deadlib_audio::{
+use deadlib_audio_core::{
     AudioOutputMode, CallbackClockSource, CallbackInfo, OutputBackendReady, OutputBufferMut,
     OutputTelemetryClock, OutputTimingQuality, RenderState, SfxReceiver,
-};
-use deadlib_audio_backend_telemetry::{
     note_output_clock_fallback, note_output_underrun, publish_output_timing,
     publish_output_timing_quality, report_audio_render_callback,
 };
@@ -438,7 +436,7 @@ fn render_thread_inner(
             },
             sfx_receiver.try_iter(),
         );
-        report_audio_render_callback(result);
+        report_audio_render_callback(result, now_nanos(), log::log_enabled!(log::Level::Trace));
         write_period(
             &pcm,
             &io,
@@ -674,7 +672,7 @@ fn write_period(
                 written_frames = written_frames.saturating_add(frames);
             }
             Err(err) => {
-                note_output_underrun();
+                note_output_underrun(now_nanos(), log::log_enabled!(log::Level::Trace));
                 pcm.try_recover(err, true).map_err(|recover_err| {
                     format!(
                         "ALSA write failed for '{device_name}' and could not recover: {recover_err}"
@@ -767,7 +765,7 @@ fn fallback_timing(
     delay_ns: u64,
     clock_health: &mut AlsaClockHealth,
 ) -> PlaybackStatusTiming {
-    note_output_clock_fallback();
+    note_output_clock_fallback(now_nanos(), log::log_enabled!(log::Level::Trace));
     clock_health.note_fallback();
     PlaybackStatusTiming {
         playback_host_nanos: now_nanos().saturating_add(delay_ns),

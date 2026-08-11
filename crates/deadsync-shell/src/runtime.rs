@@ -3,7 +3,7 @@ use crate::{
     GameplayPacingTrace, ShellInteractionState, StutterDiagRecorder, TransitionState,
 };
 use deadlib_present::space::{self, Metrics};
-use deadlib_render::{DrawStats, PresentModePolicy, PresentStats};
+use deadlib_render_core::{DrawStats, PresentModePolicy, PresentStats};
 use deadsync_assets::screenshot::ScreenshotRuntimeState;
 use deadsync_config::app_config::{Config, DisplayMode};
 use deadsync_config::frame_pacing::{

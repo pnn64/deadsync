@@ -1,6 +1,6 @@
 use crate::Cut;
 use crate::{MusicDecodeContext, MusicStream, OutputFormat};
-use deadlib_audio::{MusicBlockWriter, activate_music_track, stop_music_track};
+use deadlib_audio_core::{MusicBlockWriter, activate_music_track, stop_music_track};
 use log::error;
 use std::path::PathBuf;
 use std::sync::atomic::Ordering;

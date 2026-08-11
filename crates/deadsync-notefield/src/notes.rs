@@ -10,7 +10,7 @@ use crate::{
 };
 use deadlib_present::actors::{Actor, SpriteSource};
 use deadlib_present::dsl::SpriteBuilder;
-use deadlib_render::BlendMode;
+use deadlib_render_core::BlendMode;
 use deadsync_core::song_time::SongTimeNs;
 use deadsync_core::timing::beat_to_note_row;
 use deadsync_noteskin::{ModelDrawState, NoteskinSlot};
@@ -1155,7 +1155,7 @@ mod tests {
         tipsy_y_extra,
     };
     use deadlib_present::actors::{Actor, SizeSpec, SpriteSource};
-    use deadlib_render::BlendMode;
+    use deadlib_render_core::BlendMode;
     use deadsync_core::note::NoteType;
     use deadsync_core::timing::beat_to_note_row;
     use deadsync_noteskin::{

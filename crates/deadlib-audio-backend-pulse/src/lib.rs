@@ -1,10 +1,8 @@
 #![cfg(target_os = "linux")]
 
-use deadlib_audio::{
+use deadlib_audio_core::{
     AudioOutputMode, CallbackClockSource, CallbackInfo, OutputBackendReady, OutputBufferMut,
     OutputTelemetryClock, OutputTimingQuality, RenderState, SfxReceiver,
-};
-use deadlib_audio_backend_telemetry::{
     note_output_clock_fallback, publish_output_timing, publish_output_timing_quality,
     report_audio_render_callback,
 };
@@ -410,7 +408,7 @@ fn render_thread_inner(
             },
             sfx_receiver.try_iter(),
         );
-        report_audio_render_callback(result);
+        report_audio_render_callback(result, now_nanos(), log::log_enabled!(log::Level::Trace));
         stream.write_i16(&mix)?;
         let timing_after = playback_timing(&stream, prep.sample_rate_hz, &mut clock_health);
         publish_output_timing_quality(worst_quality(
@@ -439,7 +437,7 @@ fn playback_timing(
 ) -> PulseTiming {
     let now = now_nanos();
     let Ok(latency_ns) = stream.latency_nanos() else {
-        note_output_clock_fallback();
+        note_output_clock_fallback(now_nanos(), log::log_enabled!(log::Level::Trace));
         if !clock_health.warned_fallback {
             warn!("PulseAudio latency query failed; falling back to host-time anchors.");
             clock_health.warned_fallback = true;

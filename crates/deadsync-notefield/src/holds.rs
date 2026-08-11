@@ -6,7 +6,7 @@ use crate::transforms::{
 };
 use deadlib_present::actors::{Actor, SizeSpec, SpriteSource};
 use deadlib_present::dsl::SpriteBuilder;
-use deadlib_render::{BlendMode, TexturedMeshVertex};
+use deadlib_render_core::{BlendMode, TexturedMeshVertex};
 use deadsync_core::song_time::SongTimeNs;
 use deadsync_core::{input::MAX_COLS, note::NoteType};
 use deadsync_gameplay::let_go_head_beat as gameplay_let_go_head_beat;
@@ -1793,7 +1793,7 @@ pub(crate) fn hold_strip_actor(
         tint: [1.0, 1.0, 1.0, 1.0],
         glow: [1.0, 1.0, 1.0, 0.0],
         vertices,
-        geom_cache_key: deadlib_render::INVALID_TMESH_CACHE_KEY,
+        geom_cache_key: deadlib_render_core::INVALID_TMESH_CACHE_KEY,
         uv_scale: [1.0, 1.0],
         uv_offset: [0.0, 0.0],
         uv_tex_shift: [0.0, 0.0],
@@ -1820,7 +1820,7 @@ pub(crate) fn hold_strip_glow_actor(
         tint: [1.0, 1.0, 1.0, 0.0],
         glow: [1.0, 1.0, 1.0, 1.0],
         vertices,
-        geom_cache_key: deadlib_render::INVALID_TMESH_CACHE_KEY,
+        geom_cache_key: deadlib_render_core::INVALID_TMESH_CACHE_KEY,
         uv_scale: [1.0, 1.0],
         uv_offset: [0.0, 0.0],
         uv_tex_shift: [0.0, 0.0],
@@ -1848,7 +1848,7 @@ fn hold_reusable_strip_actor(
         tint: [1.0, 1.0, 1.0, 1.0],
         glow: [1.0, 1.0, 1.0, 0.0],
         vertices,
-        geom_cache_key: deadlib_render::INVALID_TMESH_CACHE_KEY,
+        geom_cache_key: deadlib_render_core::INVALID_TMESH_CACHE_KEY,
         uv_scale: [1.0, 1.0],
         uv_offset: [0.0, 0.0],
         uv_tex_shift: [0.0, 0.0],
@@ -1875,7 +1875,7 @@ fn hold_reusable_strip_glow_actor(
         tint: [1.0, 1.0, 1.0, 0.0],
         glow: [1.0, 1.0, 1.0, 1.0],
         vertices,
-        geom_cache_key: deadlib_render::INVALID_TMESH_CACHE_KEY,
+        geom_cache_key: deadlib_render_core::INVALID_TMESH_CACHE_KEY,
         uv_scale: [1.0, 1.0],
         uv_offset: [0.0, 0.0],
         uv_tex_shift: [0.0, 0.0],

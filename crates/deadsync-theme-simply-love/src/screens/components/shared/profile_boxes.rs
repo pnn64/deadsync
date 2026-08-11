@@ -13,7 +13,7 @@ use deadsync_assets::noteskin::{self, Noteskin};
 use deadlib_present::actors::{self, Actor};
 use deadlib_present::color;
 use deadlib_present::space::{screen_center_x, screen_center_y};
-use deadlib_render::BlendMode;
+use deadlib_render_core::BlendMode;
 use deadsync_config::prelude::GameFlag;
 use deadsync_input::{InputEvent, VirtualAction};
 use deadsync_notefield::noteskin_model_actor;
@@ -913,9 +913,9 @@ fn apply_zoom_to_actor(actor: &mut Actor, pivot: [f32; 2], zoom: f32) {
                     *v *= zoom;
                 }
             }
-            let mut out: Vec<deadlib_render::MeshVertex> = Vec::with_capacity(vertices.len());
+            let mut out: Vec<deadlib_render_core::MeshVertex> = Vec::with_capacity(vertices.len());
             for v in vertices.iter() {
-                out.push(deadlib_render::MeshVertex {
+                out.push(deadlib_render_core::MeshVertex {
                     pos: [v.pos[0] * zoom, v.pos[1] * zoom],
                     color: v.color,
                 });
@@ -937,7 +937,7 @@ fn apply_zoom_to_actor(actor: &mut Actor, pivot: [f32; 2], zoom: f32) {
             }
             let mut out = Vec::with_capacity(vertices.len());
             for v in vertices.iter() {
-                out.push(deadlib_render::MeshVertex {
+                out.push(deadlib_render_core::MeshVertex {
                     pos: [v.pos[0] * zoom, v.pos[1] * zoom],
                     color: v.color,
                 });
@@ -957,10 +957,10 @@ fn apply_zoom_to_actor(actor: &mut Actor, pivot: [f32; 2], zoom: f32) {
                     *v *= zoom;
                 }
             }
-            let mut out: Vec<deadlib_render::TexturedMeshVertex> =
+            let mut out: Vec<deadlib_render_core::TexturedMeshVertex> =
                 Vec::with_capacity(vertices.len());
             for v in vertices.iter() {
-                out.push(deadlib_render::TexturedMeshVertex {
+                out.push(deadlib_render_core::TexturedMeshVertex {
                     pos: [v.pos[0] * zoom, v.pos[1] * zoom, v.pos[2] * zoom],
                     uv: v.uv,
                     tex_matrix_scale: v.tex_matrix_scale,

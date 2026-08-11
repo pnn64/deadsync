@@ -1,6 +1,6 @@
 use crate::{sprite_sheet_dims, texture_dims, texture_handle, texture_registry_generation};
 use deadlib_present::texture::{TextureContext, TextureMeta};
-use deadlib_render::TextureHandle;
+use deadlib_render_core::TextureHandle;
 
 pub struct AssetTextureContext;
 

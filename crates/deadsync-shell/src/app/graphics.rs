@@ -12,7 +12,7 @@ use crate::graphics::{
     runtime_display_mode_sync, start_renderer_runtime, startup_display_sync,
     sync_renderer_window_size,
 };
-use deadlib_render::{BackendType, PresentModePolicy};
+use deadlib_render_core::{BackendType, PresentModePolicy};
 use deadsync_config::prelude::{self as config, DisplayMode, FullscreenType};
 use deadsync_theme::views::{GraphicsMonitorView, GraphicsOptionsView, GraphicsVideoModeView};
 use deadsync_theme::{
@@ -122,7 +122,7 @@ pub(super) fn options_graphics_view() -> GraphicsOptionsView {
         vsync: cfg.vsync,
         present_policy: theme_present_policy(cfg.present_mode_policy),
         high_dpi: cfg.high_dpi,
-        software_thread_choices: deadlib_render::build_software_thread_choices(),
+        software_thread_choices: deadlib_render_core::build_software_thread_choices(),
         software_threads: cfg.software_renderer_threads,
     }
 }

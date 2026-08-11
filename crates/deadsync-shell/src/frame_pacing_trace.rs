@@ -1,5 +1,5 @@
 use deadlib_present::compose::{COMPOSE_STORAGE_NAMES, COMPOSE_STORAGE_SLOTS, ComposeStorageStats};
-use deadlib_render::{
+use deadlib_render_core::{
     ClockDomainTrace, DRAW_STORAGE_NAMES, DRAW_STORAGE_SLOTS, DrawStats, DrawStorageStats,
     PresentModeTrace,
 };

@@ -1,7 +1,7 @@
 use crate::actors::{Actor, IntoTextureKey, SizeSpec, SpriteSource, TextAlign, TextContent};
 use crate::texture::{TextureContext, cached_static_texture_source};
 use crate::{anim, font, runtime};
-use deadlib_render::BlendMode;
+use deadlib_render_core::BlendMode;
 use glam::Mat4 as Matrix4;
 use smallvec::SmallVec;
 use std::sync::atomic::AtomicU64;
@@ -1964,7 +1964,7 @@ mod tests {
             }
         }
 
-        fn texture_handle(&self, _key: &str) -> deadlib_render::TextureHandle {
+        fn texture_handle(&self, _key: &str) -> deadlib_render_core::TextureHandle {
             99
         }
     }
@@ -2028,7 +2028,7 @@ mod tests {
         assert_eq!(align, [0.0, 1.0]);
         assert_eq!(offset, [100.0, 50.0]);
         assert_eq!(tint, [0.1, 0.2, 0.3, 0.4]);
-        assert_eq!(blend, deadlib_render::BlendMode::Add);
+        assert_eq!(blend, deadlib_render_core::BlendMode::Add);
 
         crate::space::set_current_metrics(crate::space::metrics_for_window(854, 480));
     }
@@ -2062,7 +2062,7 @@ mod tests {
         assert_eq!(font, "common");
         assert_eq!(content.as_str(), "Ready");
         assert_eq!(align_text, TextAlign::Center);
-        assert_eq!(blend, deadlib_render::BlendMode::Multiply);
+        assert_eq!(blend, deadlib_render_core::BlendMode::Multiply);
     }
 
     #[test]

@@ -7,7 +7,7 @@ license = "GPL-3.0"
 [dependencies]
 bytemuck = { version = "1.25.2", features = ["derive"] }
 deadlib-platform = { path = "../deadlib-platform" }
-deadlib-render = { path = "../deadlib-render" }
+deadlib-render-core = { path = "../deadlib-render-core" }
 glam = "0.33.3"
 image = "0.25.10"
 log = "0.4.33"

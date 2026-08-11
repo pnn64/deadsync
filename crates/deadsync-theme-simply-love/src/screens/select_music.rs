@@ -42,7 +42,7 @@ use deadlib_present::space::{
     current_window_px, is_wide, screen_center_x, screen_center_y, screen_height, screen_width,
     widescale,
 };
-use deadlib_render::{BlendMode, MeshVertex, SamplerDesc, SamplerFilter};
+use deadlib_render_core::{BlendMode, MeshVertex, SamplerDesc, SamplerFilter};
 #[cfg(feature = "bench-support")]
 use deadsync_chart::SyncPref;
 use deadsync_chart::song::{chart_ix_for_steps_index, format_display_bpm_range};

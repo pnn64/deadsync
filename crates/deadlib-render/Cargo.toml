@@ -4,22 +4,19 @@ version = "0.1.0"
 edition = "2024"
 license = "GPL-3.0"
 
-[features]
-test-util = []
-
-[[test]]
-name = "frame_compare"
-required-features = ["test-util"]
-
-[[bench]]
-name = "texture_retirement_storage"
-harness = false
-
 [dependencies]
-bytemuck = { version = "1.25.2", features = ["derive"] }
-glam = "0.33.3"
-rustc-hash = "2.1.3"
-serde = { version = "1.0.229", features = ["derive"] }
+deadlib-render-core = { path = "../deadlib-render-core" }
+deadlib-render-backend-gl = { path = "../deadlib-render-backend-gl" }
+deadlib-render-backend-software = { path = "../deadlib-render-backend-software" }
+deadlib-render-backend-wgpu = { path = "../deadlib-render-backend-wgpu" }
+image = "0.25.10"
+winit = "0.30.13"
+
+[target.'cfg(all(not(target_pointer_width = "32"), not(target_vendor = "win7")))'.dependencies]
+deadlib-render-backend-vulkan = { path = "../deadlib-render-backend-vulkan" }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+deadlib-render-backend-metal = { path = "../deadlib-render-backend-metal" }
 
 [lints.clippy]
 perf = { level = "warn", priority = -1 }

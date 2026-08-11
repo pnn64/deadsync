@@ -1,5 +1,5 @@
-use deadlib_render::SamplerDesc;
-use deadlib_render::TextureHandle;
+use deadlib_render_core::SamplerDesc;
+use deadlib_render_core::TextureHandle;
 use image::RgbaImage;
 use rustc_hash::FxHashMap;
 use std::{

@@ -1,4 +1,4 @@
-use deadlib_render::BackendType;
+use deadlib_render_core::BackendType;
 use winit::{
     dpi::PhysicalSize,
     window::{Window, WindowAttributes},

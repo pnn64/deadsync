@@ -1,4 +1,4 @@
-use deadlib_audio::{
+use deadlib_audio_core::{
     AudioOutputMode, AudioStreamHandle, MixControls, OutputBackendReady, OutputDeviceInfo,
     RenderState, SfxReceiver, SfxSender, music_transport, sfx_transport,
 };

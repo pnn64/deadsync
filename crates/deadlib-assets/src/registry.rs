@@ -1,5 +1,5 @@
 use crate::{ascii_ci_hash, parse_sprite_sheet_dims};
-use deadlib_render::{FastU64Map, INVALID_TEXTURE_HANDLE, SamplerDesc, TextureHandle};
+use deadlib_render_core::{FastU64Map, INVALID_TEXTURE_HANDLE, SamplerDesc, TextureHandle};
 use image::RgbaImage;
 use rustc_hash::FxHashMap;
 use std::sync::{
@@ -386,14 +386,14 @@ mod tests {
         remove_texture_handle("Graphics/Banner.png");
         assert_eq!(
             texture_handle("graphics/banner.png"),
-            deadlib_render::INVALID_TEXTURE_HANDLE
+            deadlib_render_core::INVALID_TEXTURE_HANDLE
         );
 
         register_texture_handle("Other.png", 23);
         clear_texture_handles();
         assert_eq!(
             texture_handle("other.png"),
-            deadlib_render::INVALID_TEXTURE_HANDLE
+            deadlib_render_core::INVALID_TEXTURE_HANDLE
         );
     }
 

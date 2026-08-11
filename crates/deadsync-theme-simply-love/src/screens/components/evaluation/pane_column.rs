@@ -5,7 +5,7 @@ use deadlib_present::actors::Actor;
 use deadlib_present::color;
 use deadlib_present::font;
 use deadlib_present::space::screen_center_y;
-use deadlib_render::{BlendMode, SamplerDesc};
+use deadlib_render_core::{BlendMode, SamplerDesc};
 use deadsync_assets::noteskin::SpriteSlot;
 use deadsync_notefield::noteskin_model_actor;
 use deadsync_noteskin::{NUM_QUANTIZATIONS, Quantization};

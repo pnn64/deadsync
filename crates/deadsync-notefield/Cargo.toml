@@ -10,7 +10,7 @@ harness = false
 
 [dependencies]
 deadlib-present = { path = "../deadlib-present" }
-deadlib-render = { path = "../deadlib-render" }
+deadlib-render-core = { path = "../deadlib-render-core" }
 deadsync-core = { path = "../deadsync-core" }
 deadsync-gameplay = { path = "../deadsync-gameplay" }
 deadsync-noteskin = { path = "../deadsync-noteskin" }

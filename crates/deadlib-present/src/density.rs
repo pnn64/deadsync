@@ -1,4 +1,4 @@
-use deadlib_render::MeshVertex;
+use deadlib_render_core::MeshVertex;
 use std::sync::Arc;
 
 #[inline(always)]

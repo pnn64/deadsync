@@ -4,7 +4,7 @@ use crate::{
     open_image_fallback, parse_texture_hints, texture_key_sampler, texture_key_source_path,
 };
 use crate::{black_texture_image, fallback_texture_image, generated_texture, white_texture_image};
-use deadlib_render::SamplerDesc;
+use deadlib_render_core::SamplerDesc;
 use image::RgbaImage;
 use log::warn;
 use std::{
@@ -299,7 +299,7 @@ mod tests {
         assert_eq!(prepared[2].image.height(), 2);
         assert_eq!(
             prepared[2].sampler.wrap,
-            deadlib_render::SamplerWrap::Repeat
+            deadlib_render_core::SamplerWrap::Repeat
         );
     }
 

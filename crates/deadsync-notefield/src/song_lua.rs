@@ -523,7 +523,7 @@ mod tests {
     };
     use deadlib_present::actors::{Actor, SizeSpec, TextContent};
     use deadlib_present::dsl::{SpriteBuilder, TextBuilder};
-    use deadlib_render::{BlendMode, MeshVertex, TexturedMeshVertex};
+    use deadlib_render_core::{BlendMode, MeshVertex, TexturedMeshVertex};
     use glam::{Mat4 as Matrix4, Vec3 as Vector3};
     use std::sync::Arc;
 

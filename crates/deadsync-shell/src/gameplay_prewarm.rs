@@ -1,5 +1,5 @@
-use deadlib_render::SamplerDesc;
-use deadlib_renderer::Backend;
+use deadlib_render::Backend;
+use deadlib_render_core::SamplerDesc;
 use deadsync_assets::noteskin::Noteskin;
 use deadsync_assets::song_lua::{SongLuaOverlayActor, SongLuaOverlayKind};
 use deadsync_assets::{AssetManager, media_cache};

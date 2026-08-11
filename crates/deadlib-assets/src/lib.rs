@@ -52,7 +52,7 @@ pub use registry::{
 };
 pub use texture_store::TextureStore;
 
-use deadlib_render::{SamplerDesc, SamplerFilter, SamplerWrap};
+use deadlib_render_core::{SamplerDesc, SamplerFilter, SamplerWrap};
 use image::{ImageFormat, ImageReader, RgbaImage};
 use log::warn;
 use std::{

@@ -193,7 +193,7 @@ pub(crate) use transforms::{
 #[cfg(test)]
 mod tests {
     use deadlib_present::actors::{Actor, SizeSpec, SpriteSource, TextAlign};
-    use deadlib_render::BlendMode;
+    use deadlib_render_core::BlendMode;
     use deadsync_gameplay::VisualEffects;
     use deadsync_noteskin::NoteAnimPart;
     use std::sync::Arc;
@@ -3753,7 +3753,7 @@ mod tests {
                 align: [0.0, 0.0],
                 size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
                 glow: [1.0, 1.0, 1.0, 0.0],
-                geom_cache_key: deadlib_render::INVALID_TMESH_CACHE_KEY,
+                geom_cache_key: deadlib_render_core::INVALID_TMESH_CACHE_KEY,
                 depth_test: true,
                 ..
             }
@@ -3770,7 +3770,7 @@ mod tests {
                 size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
                 tint: [1.0, 1.0, 1.0, 0.0],
                 glow: [1.0, 1.0, 1.0, 1.0],
-                geom_cache_key: deadlib_render::INVALID_TMESH_CACHE_KEY,
+                geom_cache_key: deadlib_render_core::INVALID_TMESH_CACHE_KEY,
                 depth_test: true,
                 ..
             }

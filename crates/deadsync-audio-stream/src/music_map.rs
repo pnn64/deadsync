@@ -1,4 +1,4 @@
-use deadlib_audio::{
+use deadlib_audio_core::{
     PlaybackPosMap, PlayedMapReader, bump_music_map_generation, music_map_generation,
     music_track_start_frame,
 };

@@ -1,5 +1,7 @@
 use crate::anim;
-use deadlib_render::{BlendMode, MeshVertex, TMeshCacheKey, TextureHandle, TexturedMeshVertex};
+use deadlib_render_core::{
+    BlendMode, MeshVertex, TMeshCacheKey, TextureHandle, TexturedMeshVertex,
+};
 use glam::Mat4 as Matrix4;
 use std::cell::{Cell, Ref, RefCell};
 use std::collections::HashMap;
@@ -1282,7 +1284,7 @@ impl From<&Arc<str>> for TextContent {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use deadlib_render::BlendMode;
+    use deadlib_render_core::BlendMode;
     use std::sync::atomic::AtomicU64;
 
     fn approx_eq(lhs: f32, rhs: f32) {

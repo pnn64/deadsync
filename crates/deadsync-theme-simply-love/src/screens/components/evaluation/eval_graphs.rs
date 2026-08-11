@@ -1,5 +1,5 @@
 use deadlib_present::color;
-use deadlib_render::MeshVertex;
+use deadlib_render_core::MeshVertex;
 use deadsync_rules::timing::{self, HistogramMs, ScatterFoot, ScatterPoint};
 
 use super::utils::arrow_code_rgba;

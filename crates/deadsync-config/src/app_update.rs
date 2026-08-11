@@ -16,8 +16,8 @@ use crate::theme::{
     SelectMusicWheelStyle, SrpgShopFolder, SrpgVariant, SyncGraphMode, ThemeFlag,
     VersionOverlaySide, VisualStyle,
 };
-use deadlib_audio::AudioOutputMode;
-use deadlib_render::{BackendType, PresentModePolicy};
+use deadlib_audio_core::AudioOutputMode;
+use deadlib_render_core::{BackendType, PresentModePolicy};
 use deadsync_audio_stream::LinuxAudioBackend;
 use deadsync_input::clamp_input_debounce_seconds;
 use deadsync_input_native::WindowsPadBackend;

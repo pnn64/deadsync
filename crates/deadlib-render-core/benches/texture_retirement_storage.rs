@@ -1,4 +1,4 @@
-use deadlib_render::TextureHandleMap;
+use deadlib_render_core::TextureHandleMap;
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::hint::black_box;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};

@@ -1,4 +1,4 @@
-use deadlib_audio::OutputTimingSnapshot;
+use deadlib_audio_core::OutputTimingSnapshot;
 use deadsync_config::frame_pacing::{FixedFrameStatsRing, update_frame_stats_spike_hold};
 use deadsync_profile::PlayStyle;
 use deadsync_theme::views::{FrameStatsSample, FrameStatsSummary, OverlayAnchor, OverlayStyle};
@@ -550,7 +550,7 @@ impl FrameStatsController {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use deadlib_audio::{
+    use deadlib_audio_core::{
         AudioOutputMode, OutputTelemetryBackend, OutputTelemetryClock, OutputTimingQuality,
     };
 

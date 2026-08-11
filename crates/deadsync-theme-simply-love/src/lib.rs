@@ -1,5 +1,5 @@
 pub(crate) use deadlib_present::rgba_const;
-pub(crate) use deadlib_render as render;
+pub(crate) use deadlib_render_core as render;
 
 pub mod effects;
 pub mod fonts;

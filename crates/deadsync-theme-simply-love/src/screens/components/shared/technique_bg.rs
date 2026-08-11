@@ -2,7 +2,7 @@ use crate::act;
 use deadlib_present::actors::Actor;
 use deadlib_present::color;
 use deadlib_present::space::{screen_height, screen_width};
-use deadlib_render::{TMeshCacheKey, TexturedMeshVertex};
+use deadlib_render_core::{TMeshCacheKey, TexturedMeshVertex};
 use deadsync_assets::noteskin::{self, build_model_geometry};
 use deadsync_notefield::noteskin_model_actor_from_draw_depth_sorted_affine_cached_geometry;
 use deadsync_noteskin::{ModelDrawState, ModelEffectMode};
@@ -353,7 +353,7 @@ fn push_layers(
             uv,
             0.0,
             instance.color,
-            deadlib_render::BlendMode::Alpha,
+            deadlib_render_core::BlendMode::Alpha,
             MODEL_Z,
             Arc::clone(&layer.vertices),
             layer.geom_cache_key,
@@ -493,7 +493,10 @@ mod tests {
                 ..
             } = child
             {
-                assert_ne!(*geom_cache_key, deadlib_render::INVALID_TMESH_CACHE_KEY);
+                assert_ne!(
+                    *geom_cache_key,
+                    deadlib_render_core::INVALID_TMESH_CACHE_KEY
+                );
                 assert!(!vertices.is_empty());
                 cached_meshes += 1;
             }

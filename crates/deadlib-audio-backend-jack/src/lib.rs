@@ -1,12 +1,9 @@
 #![cfg(target_os = "linux")]
 
-use deadlib_audio::{
+use deadlib_audio_core::{
     AudioOutputMode, CallbackClockSource, CallbackInfo, OutputBackendReady, OutputBufferMut,
-    OutputTelemetryClock, OutputTimingQuality, RenderState, SfxReceiver,
-};
-use deadlib_audio_backend_telemetry::{
-    note_output_underrun, publish_output_timing, publish_output_timing_quality,
-    report_audio_render_callback,
+    OutputTelemetryClock, OutputTimingQuality, RenderState, SfxReceiver, note_output_underrun,
+    publish_output_timing, publish_output_timing_quality, report_audio_render_callback,
 };
 use deadlib_platform::host_time::now_nanos;
 use libloading::Library;
@@ -319,7 +316,7 @@ impl JackCallbackState {
                 zero_port(self.api, self.port_l, nframes);
                 zero_port(self.api, self.port_r, nframes);
             }
-            note_output_underrun();
+            note_output_underrun(now_nanos(), log::log_enabled!(log::Level::Trace));
             return;
         }
         let anchor_nanos = now_nanos();
@@ -331,7 +328,7 @@ impl JackCallbackState {
             },
             self.sfx_receiver.try_iter(),
         );
-        report_audio_render_callback(result);
+        report_audio_render_callback(result, now_nanos(), log::log_enabled!(log::Level::Trace));
         // SAFETY: JACK owns the port buffers for exactly this callback invocation,
         // and `port_buffer` returns slices over those frame-local buffers.
         let left = unsafe { port_buffer(self.api, self.port_l, nframes) };

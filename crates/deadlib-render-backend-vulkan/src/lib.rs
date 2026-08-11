@@ -4,7 +4,7 @@ use ash::{
     khr::{calibrated_timestamps, surface, swapchain},
     vk,
 };
-use deadlib_render::{
+use deadlib_render_core::{
     BlendMode, CameraUploadCache, ClockDomainTrace, DrawOp, DrawStats, FastU64Map, MeshVertex,
     PresentModePolicy, PresentModeTrace, PresentStats, RenderFrame, SamplerDesc, SamplerFilter,
     SamplerWrap, SpriteInstanceRaw as InstanceData, TMeshCacheKey, TextureHandle,
@@ -2890,7 +2890,7 @@ fn ensure_cached_tmesh(
     cached_tmesh: &mut FastU64Map<CachedTMeshGeom>,
     cached_tmesh_bytes: &mut usize,
     cache_key: TMeshCacheKey,
-    vertices: &[deadlib_render::TexturedMeshVertex],
+    vertices: &[deadlib_render_core::TexturedMeshVertex],
 ) -> Result<bool, Box<dyn Error>> {
     if let Some(entry) = cached_tmesh.get(&cache_key) {
         return Ok(entry.vertex_count == vertices.len() as u32);

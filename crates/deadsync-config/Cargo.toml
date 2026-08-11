@@ -7,8 +7,8 @@ license = "GPL-3.0"
 [dependencies]
 deadlib-platform = { path = "../deadlib-platform" }
 deadlib-present = { path = "../deadlib-present" }
-deadlib-render = { path = "../deadlib-render" }
-deadlib-audio = { path = "../deadlib-audio" }
+deadlib-render-core = { path = "../deadlib-render-core" }
+deadlib-audio-core = { path = "../deadlib-audio-core" }
 deadsync-audio-stream = { path = "../deadsync-audio-stream" }
 deadsync-chart = { path = "../deadsync-chart" }
 deadsync-input = { path = "../deadsync-input" }

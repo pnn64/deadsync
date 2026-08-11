@@ -1,6 +1,6 @@
 use crate::mix::ASSIST_TICK_BUS;
 use crate::{OutputFormat, load_and_resample_sfx};
-use deadlib_audio::{MixBus, MixControls, QueuedSfx, SfxSender};
+use deadlib_audio_core::{MixBus, MixControls, QueuedSfx, SfxSender};
 use log::{debug, warn};
 use std::collections::HashMap;
 use std::path::PathBuf;

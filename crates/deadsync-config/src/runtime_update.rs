@@ -12,9 +12,9 @@ use crate::theme::{
     SelectMusicSongSelectBgMode, SelectMusicStepArtistBoxMode, SelectMusicWheelStyle,
     SrpgShopFolder, SrpgVariant, SyncGraphMode, ThemeFlag, VersionOverlaySide, VisualStyle,
 };
-use deadlib_audio::AudioOutputMode;
+use deadlib_audio_core::AudioOutputMode;
 use deadlib_platform::logging;
-use deadlib_render::{BackendType, PresentModePolicy};
+use deadlib_render_core::{BackendType, PresentModePolicy};
 #[cfg(target_os = "linux")]
 use deadsync_audio_stream::LinuxAudioBackend;
 #[cfg(target_os = "windows")]

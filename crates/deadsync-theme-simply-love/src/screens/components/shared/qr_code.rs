@@ -1,6 +1,6 @@
 use crate::act;
 use deadlib_present::actors::{Actor, SizeSpec};
-use deadlib_render::{BlendMode, MeshVertex};
+use deadlib_render_core::{BlendMode, MeshVertex};
 use qrcodegen::{QrCode, QrCodeEcc};
 use rustc_hash::FxHashMap;
 use smallvec::{SmallVec, smallvec};

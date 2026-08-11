@@ -7,11 +7,9 @@ use coreaudio::audio_unit::macos_helpers::{
 };
 use coreaudio::audio_unit::render_callback::{self, data};
 use coreaudio::audio_unit::{AudioUnit, Element, SampleFormat, Scope, StreamFormat};
-use deadlib_audio::{
+use deadlib_audio_core::{
     AudioOutputMode, CallbackClockSource, CallbackInfo, OutputBackendReady, OutputBufferMut,
     OutputTelemetryClock, OutputTimingQuality, RenderState, SfxReceiver,
-};
-use deadlib_audio_backend_telemetry::{
     note_output_clock_fallback, publish_output_timing, publish_output_timing_quality,
     report_audio_render_callback,
 };
@@ -180,7 +178,7 @@ impl CoreAudioHostClock {
     #[inline(always)]
     fn callback_nanos(self, mach_time: u64) -> (u64, OutputTimingQuality) {
         if mach_time == 0 {
-            note_output_clock_fallback();
+            note_output_clock_fallback(now_nanos(), log::log_enabled!(log::Level::Trace));
             return (now_nanos(), OutputTimingQuality::Fallback);
         }
         let mach_nanos = scale_mach_time(mach_time, self.numer, self.denom);
@@ -255,7 +253,7 @@ pub fn start(
                 },
                 sfx_receiver.try_iter(),
             );
-            report_audio_render_callback(result);
+            report_audio_render_callback(result, now_nanos(), log::log_enabled!(log::Level::Trace));
             let period_frames = args.num_frames.max(1) as u32;
             let buffered_frames = buffer_frames.max(period_frames);
             let latency_frames = buffered_frames

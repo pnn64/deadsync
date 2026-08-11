@@ -18,7 +18,7 @@ use deadlib_present::cache::{
 use deadlib_present::color;
 use deadlib_present::space::widescale;
 use deadlib_present::space::{screen_center_x, screen_center_y, screen_height, screen_width};
-use deadlib_render::{BlendMode, MeshVertex};
+use deadlib_render_core::{BlendMode, MeshVertex};
 use deadsync_config::prelude::GameFlag;
 use deadsync_score as score_data;
 

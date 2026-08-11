@@ -1,4 +1,4 @@
-pub use deadlib_audio::AudioOutputMode;
+pub use deadlib_audio_core::AudioOutputMode;
 pub use deadlib_platform::display::FullscreenType;
 pub use deadlib_present::color::Color;
 pub use deadsync_audio_stream::AudioMixLevels;

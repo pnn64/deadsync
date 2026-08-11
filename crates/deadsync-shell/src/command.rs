@@ -1,6 +1,6 @@
 use deadlib_present::density;
-use deadlib_render::MeshVertex;
-use deadlib_renderer::Backend;
+use deadlib_render::Backend;
+use deadlib_render_core::MeshVertex;
 use deadsync_assets::{AssetManager, media_path_key};
 use deadsync_online::score_compat as scores;
 use deadsync_profile::compat as profile;

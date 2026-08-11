@@ -1,10 +1,8 @@
 #![cfg(target_os = "freebsd")]
 
-use deadlib_audio::{
+use deadlib_audio_core::{
     AudioOutputMode, CallbackClockSource, CallbackInfo, OutputBackendReady, OutputBufferMut,
     OutputTelemetryClock, OutputTimingQuality, RenderState, SfxReceiver,
-};
-use deadlib_audio_backend_telemetry::{
     note_output_clock_fallback, note_output_underrun, publish_output_timing,
     publish_output_timing_quality, report_audio_render_callback,
 };
@@ -318,7 +316,7 @@ fn render_thread_inner(
             },
             sfx_receiver.try_iter(),
         );
-        report_audio_render_callback(result);
+        report_audio_render_callback(result, now_nanos(), log::log_enabled!(log::Level::Trace));
         write_all(file.as_raw_fd(), &mix, stop_flag, &prep.device_name)?;
         let timing_after = playback_timing(
             file.as_raw_fd(),
@@ -463,7 +461,7 @@ fn write_all(
                 thread::yield_now();
             }
             _ => {
-                note_output_underrun();
+                note_output_underrun(now_nanos(), log::log_enabled!(log::Level::Trace));
                 return Err(format!(
                     "FreeBSD PCM write failed for '{device_name}': {err}"
                 ));
@@ -497,7 +495,7 @@ fn playback_timing(
     let timing_quality = if delay_frames.is_some() || queued_frames_from_space != 0 {
         OutputTimingQuality::Degraded
     } else {
-        note_output_clock_fallback();
+        note_output_clock_fallback(now_nanos(), log::log_enabled!(log::Level::Trace));
         OutputTimingQuality::Fallback
     };
     PlaybackTiming {

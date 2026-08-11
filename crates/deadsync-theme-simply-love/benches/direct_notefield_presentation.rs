@@ -4,7 +4,7 @@ use deadlib_present::compose::{
     build_screen_segments_cached_with_scratch_and_texture_context_and_actor_resources,
 };
 use deadlib_present::font;
-use deadlib_render::{BlendMode, MeshVertex};
+use deadlib_render_core::{BlendMode, MeshVertex};
 use deadsync_theme_simply_love::screens::gameplay::{
     BENCH_NOTEFIELD_ACTOR_SCRATCH_CAPACITY, BENCH_NOTEFIELD_HUD_ACTOR_SCRATCH_CAPACITY,
     benchmark_present_identity_notefield, benchmark_present_transformed_notefield,

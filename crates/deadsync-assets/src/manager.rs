@@ -5,8 +5,8 @@ use deadlib_assets::{
 };
 use deadlib_platform::dirs;
 use deadlib_present::font::{Font, FontMap};
-use deadlib_render::{SamplerDesc, TextureHandle, TextureHandleMap};
-use deadlib_renderer::{Backend, Texture as RendererTexture};
+use deadlib_render::{Backend, Texture as RendererTexture};
+use deadlib_render_core::{SamplerDesc, TextureHandle, TextureHandleMap};
 use deadsync_theme::ThemeAssetManifest;
 use image::RgbaImage;
 use log::{debug, warn};

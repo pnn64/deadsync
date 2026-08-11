@@ -1,5 +1,5 @@
-use deadlib_audio::StutterDiagAudioEvent;
-use deadlib_render::{ClockDomainTrace, DrawStats, PresentModeTrace};
+use deadlib_audio_core::StutterDiagAudioEvent;
+use deadlib_render_core::{ClockDomainTrace, DrawStats, PresentModeTrace};
 use deadsync_config::frame_pacing::{FixedFrameStatsRing, seconds_to_us_u32};
 use deadsync_gameplay::DisplayClockDiagEvent;
 use deadsync_theme_simply_love::screens::SimplyLoveScreen as Screen;
@@ -307,7 +307,7 @@ impl Default for StutterDiagRecorder {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use deadlib_audio::{OutputTimingQuality, StutterDiagAudioEventKind};
+    use deadlib_audio_core::{OutputTimingQuality, StutterDiagAudioEventKind};
     use deadsync_gameplay::{DisplayClockDiagEventKind, DisplayClockStepEvent};
 
     #[test]

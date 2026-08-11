@@ -4,7 +4,7 @@ use crate::{
     upload::{PendingTextureUpload, TextureUploadBudget},
 };
 use deadlib_present::font::{Font, FontMap};
-use deadlib_render::{SamplerDesc, TextureHandle, TextureHandleMap};
+use deadlib_render_core::{SamplerDesc, TextureHandle, TextureHandleMap};
 use image::RgbaImage;
 use std::{path::PathBuf, sync::mpsc::SyncSender};
 

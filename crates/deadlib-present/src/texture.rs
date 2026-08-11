@@ -1,6 +1,6 @@
 use crate::actors::{SpriteSource, TextureKeyHandle};
 use crate::font;
-use deadlib_render as renderer;
+use deadlib_render_core as renderer;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 

@@ -3,7 +3,7 @@ use crate::{
     register_texture_handle, remove_texture_handle, take_pending_generated_texture_keys,
     upload::{PendingTextureUpload, TextureUploadBudget, TextureUploadQueue},
 };
-use deadlib_render::{SamplerDesc, TextureHandle, TextureHandleMap};
+use deadlib_render_core::{SamplerDesc, TextureHandle, TextureHandleMap};
 use image::RgbaImage;
 use rustc_hash::FxHashMap;
 use std::sync::{Arc, mpsc::SyncSender};

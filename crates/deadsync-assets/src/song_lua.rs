@@ -1,7 +1,7 @@
 use std::path::{Path, PathBuf};
 
 use deadlib_present::actors::TextAttribute;
-use deadlib_render::{SamplerDesc, SamplerFilter, SamplerWrap, TexturedMeshVertex};
+use deadlib_render_core::{SamplerDesc, SamplerFilter, SamplerWrap, TexturedMeshVertex};
 use deadsync_noteskin::{NUM_QUANTIZATIONS, Style};
 use deadsync_song_lua::{
     compile_song_lua_with_default_host, overlay_model_layers_from_slots,

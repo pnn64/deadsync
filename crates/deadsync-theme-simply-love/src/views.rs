@@ -1,4 +1,4 @@
-use deadlib_render::{ClockDomainTrace, PresentModeTrace};
+use deadlib_render_core::{ClockDomainTrace, PresentModeTrace};
 use deadsync_assets::noteskin::Noteskin;
 use deadsync_input::Keymap;
 use deadsync_profile::{PlayMode, PlayStyle, PlayerSide};

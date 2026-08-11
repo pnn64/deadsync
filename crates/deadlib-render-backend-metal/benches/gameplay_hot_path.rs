@@ -1,7 +1,7 @@
 #[path = "../src/encoder_cache.rs"]
 mod encoder_cache;
 
-use deadlib_render::{
+use deadlib_render_core::{
     BlendMode, DrawOp, RenderFrame, TexturedMeshGeometry, TexturedMeshRun, TexturedMeshSource,
     TexturedMeshUploads, TexturedMeshVertex, TexturedMeshVertices, resolve_textured_meshes,
 };

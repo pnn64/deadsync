@@ -1,4 +1,4 @@
-use deadlib_render::{
+use deadlib_render_core::{
     BlendMode, DrawOp, MeshRun, MeshVertex, RenderFrame, SpriteInstanceRaw, SpriteRun,
     TexturedMeshGeometry, TexturedMeshInstanceRaw, TexturedMeshRun, TexturedMeshVertex,
     TexturedMeshVertices,

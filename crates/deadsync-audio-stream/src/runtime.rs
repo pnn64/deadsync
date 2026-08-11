@@ -1,10 +1,10 @@
-use deadlib_audio::{
+#[cfg(target_os = "linux")]
+use deadlib_audio::LinuxAudioBackend;
+use deadlib_audio::{InitConfig, OutputPlan, prepare_output};
+use deadlib_audio_core::{
     MusicStreamClockSnapshot, OutputBackendReady, OutputDeviceInfo, OutputTimingSnapshot,
     SfxSender, StutterDiagAudioEvent, normalized_music_rate,
 };
-#[cfg(target_os = "linux")]
-use deadlib_audio_backend_native::LinuxAudioBackend;
-use deadlib_audio_backend_native::{InitConfig, OutputPlan, prepare_output};
 use deadlib_platform::dirs;
 use deadsync_audio_replaygain as replaygain;
 use log::info;
@@ -53,11 +53,11 @@ fn output_format() -> OutputFormat {
 
 #[inline(always)]
 pub fn timing_diag_last_callback_gap_ns() -> u64 {
-    deadlib_audio::timing_diag_last_callback_gap_ns()
+    deadlib_audio_core::timing_diag_last_callback_gap_ns()
 }
 
 pub fn stutter_diag_trigger_seq() -> u64 {
-    deadlib_audio::stutter_diag_trigger_seq()
+    deadlib_audio_core::stutter_diag_trigger_seq()
 }
 
 pub fn collect_stutter_diag_events(
@@ -65,7 +65,7 @@ pub fn collect_stutter_diag_events(
     window_ns: u64,
     out: &mut Vec<StutterDiagAudioEvent>,
 ) {
-    deadlib_audio::collect_stutter_diag_events(now_host_nanos, window_ns, out);
+    deadlib_audio_core::collect_stutter_diag_events(now_host_nanos, window_ns, out);
 }
 
 #[inline(always)]
@@ -106,13 +106,13 @@ pub fn startup_output_devices() -> Vec<OutputDeviceInfo> {
 
 #[cfg(target_os = "linux")]
 pub fn available_linux_backends() -> Vec<LinuxAudioBackend> {
-    deadlib_audio_backend_native::available_linux_backends()
+    deadlib_audio::available_linux_backends()
 }
 
 pub fn set_replaygain_enabled(enabled: bool) {
     REPLAYGAIN_ENABLED.store(enabled, Ordering::Relaxed);
     if !enabled {
-        deadlib_audio::reset_music_target_gain();
+        deadlib_audio_core::reset_music_target_gain();
     }
 }
 
@@ -193,7 +193,7 @@ pub fn play_scheduled_assist_tick(path: &str, target_stream_frame: u64) {
         .play_scheduled_assist_tick(path, target_stream_frame);
 }
 
-fn play_preloaded_sfx_on_bus(path: &str, bus: deadlib_audio::MixBus) {
+fn play_preloaded_sfx_on_bus(path: &str, bus: deadlib_audio_core::MixBus) {
     #[cfg(test)]
     if !is_initialized() {
         return;
@@ -201,7 +201,7 @@ fn play_preloaded_sfx_on_bus(path: &str, bus: deadlib_audio::MixBus) {
     ENGINE.sfx_cache.play_preloaded(path, bus);
 }
 
-fn play_sfx_on_bus(path: &str, bus: deadlib_audio::MixBus) {
+fn play_sfx_on_bus(path: &str, bus: deadlib_audio_core::MixBus) {
     #[cfg(any(test, feature = "test-support"))]
     if !is_initialized() {
         return;
@@ -225,7 +225,7 @@ fn resolve_asset_path(path: &str) -> PathBuf {
 fn reset_music_stream_clock() -> u64 {
     // Reset immediately on the caller thread so async command handoff can't
     // leak the previous track's stream position into gameplay timing.
-    deadlib_audio::reset_music_stream_clock_state();
+    deadlib_audio_core::reset_music_stream_clock_state();
     // Invalidate any assist ticks scheduled against the previous timeline; their
     // absolute target frames no longer correspond to the music position.
     stop_assist_tick_bus();
@@ -235,18 +235,18 @@ fn reset_music_stream_clock() -> u64 {
 pub fn play_music(path: PathBuf, cut: Cut, looping: bool, rate: f32) {
     let rate = normalized_music_rate(rate);
     let generation = reset_music_stream_clock();
-    deadlib_audio::seed_music_stream_clock(cut.start_sec, rate);
+    deadlib_audio_core::seed_music_stream_clock(cut.start_sec, rate);
 
-    let track_id = deadlib_audio::next_music_track_id();
+    let track_id = deadlib_audio_core::next_music_track_id();
     let initial_gain = if replaygain_enabled() {
         replaygain::get_or_queue_gain_linear(&path, track_id).unwrap_or(1.0)
     } else {
         1.0
     };
-    deadlib_audio::set_music_target_gain(initial_gain);
+    deadlib_audio_core::set_music_target_gain(initial_gain);
     // Snap to the new target at the track boundary so the previous track's
     // gain doesn't audibly bleed into the start of this one.
-    deadlib_audio::snap_music_gain_generation();
+    deadlib_audio_core::snap_music_gain_generation();
 
     let _ = ENGINE.command_sender.send(StreamCommand::PlayMusic {
         path,
@@ -262,20 +262,20 @@ pub fn play_music(path: PathBuf, cut: Cut, looping: bool, rate: f32) {
 /// still corresponds to the currently active music track. Called by
 /// `deadsync_audio_replaygain`; safe to call from any thread.
 pub fn set_music_replaygain_if_matches(track_id: u64, gain_linear: f32) {
-    let active_id = deadlib_audio::active_music_track_id();
+    let active_id = deadlib_audio_core::active_music_track_id();
     if active_id != track_id {
         return;
     }
-    if !deadlib_audio::music_track_active() {
+    if !deadlib_audio_core::music_track_active() {
         return;
     }
-    deadlib_audio::set_music_target_gain(gain_linear);
+    deadlib_audio_core::set_music_target_gain(gain_linear);
 }
 
 pub fn stop_music() {
     let generation = reset_music_stream_clock();
-    deadlib_audio::reset_music_target_gain();
-    deadlib_audio::snap_music_gain_generation();
+    deadlib_audio_core::reset_music_target_gain();
+    deadlib_audio_core::snap_music_gain_generation();
     let _ = ENGINE
         .command_sender
         .send(StreamCommand::StopMusic { generation });
@@ -283,7 +283,7 @@ pub fn stop_music() {
 
 pub fn set_music_rate(rate: f32) {
     let rate = normalized_music_rate(rate);
-    deadlib_audio::set_music_clock_rate(rate);
+    deadlib_audio_core::set_music_clock_rate(rate);
     let generation = clear_music_pos_map();
     let _ = ENGINE
         .command_sender
@@ -306,12 +306,12 @@ pub fn get_music_stream_clock_snapshot() -> MusicStreamClockSnapshot {
 }
 
 pub fn get_output_timing_snapshot() -> OutputTimingSnapshot {
-    deadlib_audio::get_output_timing_snapshot()
+    deadlib_audio_core::get_output_timing_snapshot()
 }
 
 #[inline(always)]
 fn publish_output_backend_ready(ready: OutputBackendReady) {
-    deadlib_audio::publish_output_backend_ready(ready);
+    deadlib_audio_core::publish_output_backend_ready(ready);
 }
 
 fn init_engine_and_thread(cfg: InitConfig) -> AudioEngine {
@@ -369,7 +369,7 @@ fn audio_manager_thread(
         }
     };
     let (_session, ready, sfx_sender, stream_handle) = opened.into_parts();
-    let deadlib_audio::AudioStreamHandle { writer, played_map } = stream_handle;
+    let deadlib_audio_core::AudioStreamHandle { writer, played_map } = stream_handle;
     install_played_map(played_map);
     let stream_output = OutputFormat {
         sample_rate_hz: ready.device_sample_rate,

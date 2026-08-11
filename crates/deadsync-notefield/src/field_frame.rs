@@ -17,7 +17,7 @@ use crate::{
     visual_note_rotation_z_cached, visual_use_legacy_hold_sprites,
 };
 use deadlib_present::actors::{Actor, SpriteSource};
-use deadlib_render::BlendMode;
+use deadlib_render_core::BlendMode;
 use deadsync_core::{input::MAX_COLS, note::NoteType};
 use deadsync_gameplay::{
     AppearanceEffects, CompletedRowVisibility, VisualEffects, hold_head_render_flags,

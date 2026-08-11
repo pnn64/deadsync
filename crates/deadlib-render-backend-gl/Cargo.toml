@@ -6,7 +6,7 @@ license = "GPL-3.0"
 
 [dependencies]
 bytemuck = { version = "1.25.2", features = ["derive"] }
-deadlib-render = { path = "../deadlib-render" }
+deadlib-render-core = { path = "../deadlib-render-core" }
 glam = "0.33.3"
 glow = "0.18.0"
 glutin = "0.32.3"

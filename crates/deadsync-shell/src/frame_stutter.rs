@@ -1,6 +1,6 @@
 use deadlib_present::actors::{Actor, actor_tree_stats};
 use deadlib_present::compose::TextLayoutFrameStats;
-use deadlib_render::DrawStats;
+use deadlib_render_core::DrawStats;
 use deadsync_config::frame_pacing::stutter_severity;
 use deadsync_theme_simply_love::screens::SimplyLoveScreen as Screen;
 

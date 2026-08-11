@@ -3,7 +3,7 @@ use deadlib_platform::dirs;
 use deadlib_present::actors::{
     ActorResourceArena, SpriteSource as ActorSpriteSource, TextureKeyHandle,
 };
-use deadlib_render::{SamplerDesc, TexturedMeshVertex};
+use deadlib_render_core::{SamplerDesc, TexturedMeshVertex};
 use deadsync_noteskin::ModelVertex;
 use deadsync_noteskin::mine::{
     MINE_GRADIENT_SAMPLES, MineGradientSampleWarning, mine_fill_slots as crate_mine_fill_slots,
@@ -93,7 +93,7 @@ impl SpriteSource {
         };
         let generation = assets::texture_registry_generation();
         let handle = cached_handle.load(Ordering::Relaxed);
-        if handle != deadlib_render::INVALID_TEXTURE_HANDLE
+        if handle != deadlib_render_core::INVALID_TEXTURE_HANDLE
             && cached_generation.load(Ordering::Relaxed) == generation
         {
             return TextureKeyHandle {
@@ -138,7 +138,7 @@ impl SpriteSource {
         };
         let generation = assets::texture_registry_generation();
         let mut handle = cached_handle.load(Ordering::Relaxed);
-        if handle == deadlib_render::INVALID_TEXTURE_HANDLE
+        if handle == deadlib_render_core::INVALID_TEXTURE_HANDLE
             || cached_generation.load(Ordering::Relaxed) != generation
         {
             handle = assets::texture_handle(texture_key.as_ref());
@@ -510,7 +510,7 @@ pub fn test_model_slot() -> SpriteSlot {
         source: Arc::new(SpriteSource::Atlas {
             texture_key: Arc::from("test"),
             tex_dims: (64, 64),
-            cached_handle: AtomicU64::new(deadlib_render::INVALID_TEXTURE_HANDLE),
+            cached_handle: AtomicU64::new(deadlib_render_core::INVALID_TEXTURE_HANDLE),
             cached_generation: AtomicU64::new(u64::MAX),
             cached_actor_texture: AtomicU64::new(0),
         }),
@@ -629,7 +629,7 @@ fn source_from_plan(plan: SpriteSourcePlan) -> Arc<SpriteSource> {
         } => Arc::new(SpriteSource::Atlas {
             texture_key: texture_key.into(),
             tex_dims,
-            cached_handle: AtomicU64::new(deadlib_render::INVALID_TEXTURE_HANDLE),
+            cached_handle: AtomicU64::new(deadlib_render_core::INVALID_TEXTURE_HANDLE),
             cached_generation: AtomicU64::new(u64::MAX),
             cached_actor_texture: AtomicU64::new(0),
         }),
@@ -651,7 +651,7 @@ fn source_from_plan(plan: SpriteSourcePlan) -> Arc<SpriteSource> {
             frame_indices: frame_indices.map(Arc::<[usize]>::from),
             rate,
             frame_durations: frame_durations.map(Arc::<[f32]>::from),
-            cached_handle: AtomicU64::new(deadlib_render::INVALID_TEXTURE_HANDLE),
+            cached_handle: AtomicU64::new(deadlib_render_core::INVALID_TEXTURE_HANDLE),
             cached_generation: AtomicU64::new(u64::MAX),
             cached_actor_texture: AtomicU64::new(0),
         }),

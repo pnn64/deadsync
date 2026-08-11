@@ -1,7 +1,7 @@
 use crate::scale_effect_size;
 use deadlib_present::actors::{Actor, SpriteSource};
 use deadlib_present::dsl::SpriteBuilder;
-use deadlib_render::BlendMode;
+use deadlib_render_core::BlendMode;
 use deadsync_noteskin::{NoteskinSlot, TapExplosionLayer};
 
 #[derive(Clone, Copy, Debug, PartialEq)]

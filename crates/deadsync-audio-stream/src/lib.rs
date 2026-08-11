@@ -8,9 +8,9 @@ mod sfx_cache;
 mod stream_runtime;
 mod stretch;
 
-use deadlib_audio::{MusicBlockTiming, MusicBlockWriter, normalized_music_rate};
-pub use deadlib_audio::{MusicStreamClockSnapshot, OutputDeviceInfo, OutputTimingSnapshot};
-pub use deadlib_audio_backend_native::{InitConfig, LinuxAudioBackend};
+pub use deadlib_audio::{InitConfig, LinuxAudioBackend};
+use deadlib_audio_core::{MusicBlockTiming, MusicBlockWriter, normalized_music_rate};
+pub use deadlib_audio_core::{MusicStreamClockSnapshot, OutputDeviceInfo, OutputTimingSnapshot};
 #[cfg(windows)]
 use deadlib_platform::windows_rt::{ThreadRole, boost_current_thread};
 use deadsync_audio_decode as decode;
@@ -476,7 +476,8 @@ fn music_decoder_thread_loop(
         let mut seek_ok = false;
         let mut seek_start_frame = 0u64;
         if start_floor > 0 && !bypass_seek {
-            let seek_frame = start_floor.saturating_sub(deadlib_audio::ring::PREROLL_IN_FRAMES);
+            let seek_frame =
+                start_floor.saturating_sub(deadlib_audio_core::ring::PREROLL_IN_FRAMES);
             match reader.seek_frame(seek_frame) {
                 Ok(()) => {
                     seek_ok = true;
@@ -1060,7 +1061,7 @@ mod tests {
         MAX_SFX_PREALLOC_SAMPLES, OutputFormat, lead_in_silence_timing, music_output_start_sec,
         push_music_block, seek_preroll_in_frames, sfx_output_capacity,
     };
-    use deadlib_audio::{MusicBlockTiming, music_transport};
+    use deadlib_audio_core::{MusicBlockTiming, music_transport};
     use std::sync::Arc;
     use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
     use std::time::{Duration, Instant};

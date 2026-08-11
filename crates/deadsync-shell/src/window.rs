@@ -4,8 +4,8 @@ use std::sync::Arc;
 
 use deadlib_platform::dirs;
 use deadlib_platform::display::{self, FullscreenType};
-use deadlib_render::BackendType;
-use deadlib_renderer::{render_size_for_window, request_window_size, with_requested_window_size};
+use deadlib_render::{render_size_for_window, request_window_size, with_requested_window_size};
+use deadlib_render_core::BackendType;
 use deadsync_config::app_config::DisplayMode;
 use winit::dpi::{PhysicalPosition, PhysicalSize};
 use winit::event_loop::ActiveEventLoop;

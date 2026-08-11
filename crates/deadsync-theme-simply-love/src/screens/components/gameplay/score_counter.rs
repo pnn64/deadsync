@@ -146,7 +146,7 @@ mod tests {
     use deadlib_present::compose::build_screen;
     use deadlib_present::font::{Font, Glyph, GlyphMap};
     use deadlib_present::space::Metrics;
-    use deadlib_render::DrawOp;
+    use deadlib_render_core::DrawOp;
     use glam::Vec4;
     use std::collections::HashMap;
     use std::sync::Arc;

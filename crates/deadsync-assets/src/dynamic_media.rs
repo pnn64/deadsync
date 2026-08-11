@@ -1,7 +1,7 @@
 use crate::{AssetManager, media_cache, open_image_fallback, register_texture_dims};
 use deadlib_assets::dynamic;
-use deadlib_render::{SamplerDesc, TextureHandle};
-use deadlib_renderer::Backend;
+use deadlib_render::Backend;
+use deadlib_render_core::{SamplerDesc, TextureHandle};
 use deadlib_video as video;
 use deadsync_chart::{SongBackgroundChange, SongBackgroundChangeTarget, SongData};
 use image::RgbaImage;
