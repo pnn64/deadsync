@@ -490,7 +490,7 @@ fn child_xy(st: StarTransform, x: f32, y: f32) -> (f32, f32) {
 
 #[inline(always)]
 fn base_star_actor(st: StarTransform, p: EvalGradeParams, seed: u32) -> Actor {
-    let tint = if one_w2_taunt(p.taunt) && p.elapsed >= STAR_RAINBOW_DELAY_S {
+    let tint = if p.easter_eggs && one_w2_taunt(p.taunt) && p.elapsed >= STAR_RAINBOW_DELAY_S {
         rainbow_rgba(p.elapsed, seed)
     } else {
         [1.0, 1.0, 1.0, 1.0]
@@ -867,7 +867,7 @@ mod tests {
     }
 
     #[test]
-    fn disabled_easter_eggs_hide_grade_flag_taunts() {
+    fn disabled_easter_eggs_keep_grade_stars_plain() {
         for taunt in [
             grade_star_taunt_from_counts(counts(1, 0, 0, 0, 0)),
             grade_star_taunt_from_counts(counts(7, 1, 0, 0, 0)),
@@ -886,6 +886,7 @@ mod tests {
             assert_eq!(texture_count(&actors, AFFLUENT_TEX), 0);
             assert_eq!(texture_prefix_count(&actors, AFFLUENT_CLIP_KEY_PREFIX), 0);
             assert_eq!(texture_count(&actors, GOLDSTAR_TEX), 0);
+            assert_eq!(first_tint(&actors, STAR_TEX), Some([1.0, 1.0, 1.0, 1.0]));
         }
     }
 
