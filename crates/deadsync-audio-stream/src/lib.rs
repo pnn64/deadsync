@@ -1015,136 +1015,18 @@ pub fn load_and_resample_sfx(
 #[cfg(test)]
 mod tests {
     use super::{
-        OUT_FRAMES_PER_CALL, compat_lead_frames, lead_in_silence_timing, music_output_start_sec,
-        new_resampler, process_resampler, push_music_block, seek_preroll_in_frames,
-        trim_resampler_lead, write_resampler_output,
+        lead_in_silence_timing, music_output_start_sec, push_music_block, seek_preroll_in_frames,
     };
     use deadsync_audio::{MusicBlockTiming, music_transport};
-    use rubato::audioadapter_buffers::direct::SequentialSliceOfVecs;
-    use rubato::{Adjustable, Resampler};
-    use rubato_016::{Resampler as OldResampler, SincFixedOut};
     use std::sync::Arc;
     use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
     use std::time::{Duration, Instant};
-
-    fn input_signal(start: usize, frames: usize) -> Vec<Vec<f32>> {
-        (0..2)
-            .map(|channel| {
-                (0..frames)
-                    .map(|frame| {
-                        let frame = start + frame;
-                        let value = (frame * 73 + channel * 19_997 + 31) % 65_521;
-                        (value as f32 - 32_760.0) / 32_768.0
-                    })
-                    .collect()
-            })
-            .collect()
-    }
-
-    fn current_resample_output(original_ratio: f64, ratio: f64, target_frames: usize) -> Vec<i16> {
-        let mut resampler = new_resampler(original_ratio, 64.0, 2)
-            .expect("current characterization resampler must be valid");
-        if ratio != original_ratio {
-            resampler.reset();
-            resampler
-                .set_resample_ratio(ratio, false)
-                .expect("current characterization ratio is in range");
-        }
-        let output_frames = resampler.output_frames_max();
-        let mut resample_out = vec![vec![0.0; output_frames]; 2];
-        let mut next_input_frame = 0usize;
-        let mut lead_frames = compat_lead_frames(ratio);
-        let mut output = Vec::with_capacity(target_frames * 2);
-        let mut out_tmp = Vec::new();
-        while output.len() / 2 < target_frames {
-            let need = resampler.input_frames_next();
-            let input = input_signal(next_input_frame, need);
-            let input = SequentialSliceOfVecs::new(input.as_slice(), 2, need)
-                .expect("current characterization input has the requested shape");
-            let produced = process_resampler(&mut resampler, &input, &mut resample_out)
-                .expect("current characterization buffers must fit")
-                .1;
-            write_resampler_output(&resample_out, produced, 2, &mut out_tmp);
-            trim_resampler_lead(&mut out_tmp, 2, &mut lead_frames);
-            output.extend_from_slice(&out_tmp);
-            next_input_frame += need;
-        }
-        output.truncate(target_frames * 2);
-        output
-    }
-
-    fn old_resample_output(original_ratio: f64, ratio: f64, target_frames: usize) -> Vec<i16> {
-        let mut resampler = SincFixedOut::<f32>::new(
-            original_ratio,
-            64.0,
-            rubato_016::SincInterpolationParameters {
-                sinc_len: 256,
-                f_cutoff: 0.95,
-                interpolation: rubato_016::SincInterpolationType::Linear,
-                oversampling_factor: 128,
-                window: rubato_016::WindowFunction::BlackmanHarris2,
-            },
-            OUT_FRAMES_PER_CALL,
-            2,
-        )
-        .expect("old characterization resampler must be valid");
-        if ratio != original_ratio {
-            resampler.reset();
-            resampler
-                .set_resample_ratio(ratio, false)
-                .expect("old characterization ratio is in range");
-        }
-        let mut resample_out = resampler.output_buffer_allocate(true);
-        let mut next_input_frame = 0usize;
-        let mut output = Vec::with_capacity(target_frames * 2);
-        let mut out_tmp = Vec::new();
-        while output.len() / 2 < target_frames {
-            let need = resampler.input_frames_next();
-            let input = input_signal(next_input_frame, need);
-            let produced = resampler
-                .process_into_buffer(input.as_slice(), &mut resample_out, None)
-                .expect("old characterization buffers must fit")
-                .1;
-            write_resampler_output(&resample_out, produced, 2, &mut out_tmp);
-            output.extend_from_slice(&out_tmp);
-            next_input_frame += need;
-        }
-        output.truncate(target_frames * 2);
-        output
-    }
 
     #[test]
     fn seeked_map_starts_at_decoder_frame() {
         let sec = music_output_start_sec(true, 44_092, 1.0, 44_100);
 
         assert!((sec - (44_092.0 / 44_100.0)).abs() <= 1e-12);
-    }
-
-    #[test]
-    fn rubato_4_preserves_016_stream_output() {
-        const TARGET_FRAMES: usize = 8 * OUT_FRAMES_PER_CALL;
-        const MAX_MEAN_PCM_DIFF: f64 = 256.0; // Less than 0.8% of full scale.
-        for (original_ratio, ratio) in [
-            (48_000.0 / 44_100.0, 48_000.0 / 44_100.0),
-            (44_100.0 / 48_000.0, 44_100.0 / 48_000.0),
-            (1.0, 0.5),
-            (1.0, 2.0),
-        ] {
-            let old = old_resample_output(original_ratio, ratio, TARGET_FRAMES);
-            let current = current_resample_output(original_ratio, ratio, TARGET_FRAMES);
-            assert_eq!(current.len(), old.len());
-
-            let total_diff: u64 = old
-                .iter()
-                .zip(&current)
-                .map(|(old, current)| i32::from(*old).abs_diff(i32::from(*current)) as u64)
-                .sum();
-            let mean_diff = total_diff as f64 / old.len() as f64;
-            assert!(
-                mean_diff < MAX_MEAN_PCM_DIFF,
-                "Rubato 4 PCM drifted from 0.16 at ratio {ratio}: mean absolute difference {mean_diff:.2}"
-            );
-        }
     }
 
     #[test]

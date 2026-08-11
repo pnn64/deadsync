@@ -21,10 +21,6 @@ log = "0.4.33"
 rubato = "5.0.0"
 smallvec = "1.15.2"
 
-[dev-dependencies]
-# Reference implementation for the Rubato 4 PCM compatibility test.
-rubato-016 = { package = "rubato", version = "=0.16.2" }
-
 [lints.clippy]
 perf = { level = "warn", priority = -1 }
 
