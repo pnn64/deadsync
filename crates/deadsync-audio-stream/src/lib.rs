@@ -54,6 +54,10 @@ const MIN_MUSIC_RATE: f32 = 0.05;
 const MAX_MUSIC_RATE: f32 = 8.0;
 const MAX_PACKET_START_SNAP_SEC: f64 = 0.25;
 const RESAMPLE_MAX_RELATIVE_RATIO: f64 = 64.0;
+// Ignore implausibly large untrusted metadata instead of making one enormous
+// speculative allocation. Eight million i16 samples cover more than a minute
+// of stereo SFX at 48 kHz while keeping preload spikes bounded.
+const MAX_SFX_PREALLOC_SAMPLES: usize = 8 * 1024 * 1024;
 /// Threshold used everywhere to decide whether a music `rate` value is
 /// "effectively 1.0". Picked to be smaller than any musically meaningful
 /// rate change but well above the noise of `f32` round-tripping through
@@ -298,6 +302,22 @@ fn music_output_start_sec(
     } else {
         cut_start_sec.max(0.0)
     }
+}
+
+fn sfx_output_capacity(frames_total_hint: Option<u64>, in_hz: u32, output: OutputFormat) -> usize {
+    let Some(input_frames) = frames_total_hint else {
+        return 0;
+    };
+    if in_hz == 0 || output.sample_rate_hz == 0 || output.channels == 0 {
+        return 0;
+    }
+    let numerator = u128::from(input_frames) * u128::from(output.sample_rate_hz);
+    let output_frames = numerator.div_ceil(u128::from(in_hz));
+    let samples = output_frames.saturating_mul(output.channels as u128);
+    usize::try_from(samples)
+        .ok()
+        .filter(|&samples| samples <= MAX_SFX_PREALLOC_SAMPLES)
+        .unwrap_or(0)
 }
 
 fn music_decoder_thread_loop(
@@ -913,12 +933,14 @@ pub fn load_and_resample_sfx(
     let mut reader = opened.reader;
     let in_ch = opened.channels;
     let in_hz = opened.sample_rate_hz;
+    let frames_total_hint = opened.frames_total_hint;
     let out_ch = output.channels;
     let out_hz = output.sample_rate_hz;
+    let output_capacity = sfx_output_capacity(frames_total_hint, in_hz, output);
 
     if in_hz == out_hz {
         let mut pkt_buf = Vec::new();
-        let mut decoded_data = Vec::new();
+        let mut decoded_data = Vec::with_capacity(output_capacity);
         let mut out_tmp = Vec::new();
         while reader.read_dec_packet_into(&mut pkt_buf)? {
             if !pkt_buf.is_empty() {
@@ -941,7 +963,7 @@ pub fn load_and_resample_sfx(
     let mut resample_out = vec![vec![0.0; resampler.output_frames_max()]; in_ch];
     let mut out_tmp = Vec::with_capacity(OUT_FRAMES_PER_CALL * out_ch);
     let mut pkt_buf = Vec::new();
-    let mut resampled_data = Vec::new();
+    let mut resampled_data = Vec::with_capacity(output_capacity);
     let mut resampler_lead_frames = compat_lead_frames(ratio);
 
     while reader.read_dec_packet_into(&mut pkt_buf)? {
@@ -1015,7 +1037,8 @@ pub fn load_and_resample_sfx(
 #[cfg(test)]
 mod tests {
     use super::{
-        lead_in_silence_timing, music_output_start_sec, push_music_block, seek_preroll_in_frames,
+        MAX_SFX_PREALLOC_SAMPLES, OutputFormat, lead_in_silence_timing, music_output_start_sec,
+        push_music_block, seek_preroll_in_frames, sfx_output_capacity,
     };
     use deadsync_audio::{MusicBlockTiming, music_transport};
     use std::sync::Arc;
@@ -1044,6 +1067,45 @@ mod tests {
         assert_eq!(frames, 6 * SAMPLE_RATE as usize);
         assert!((music_sec_per_frame - 1.5 / f64::from(SAMPLE_RATE)).abs() <= f64::EPSILON);
         assert!((-9.0 + frames as f64 * music_sec_per_frame).abs() <= 1e-12);
+    }
+
+    #[test]
+    fn sfx_capacity_scales_frame_hint_to_output_format() {
+        assert_eq!(
+            sfx_output_capacity(
+                Some(44_100),
+                44_100,
+                OutputFormat {
+                    sample_rate_hz: 48_000,
+                    channels: 2,
+                }
+            ),
+            96_000
+        );
+        assert_eq!(
+            sfx_output_capacity(
+                Some(1),
+                44_100,
+                OutputFormat {
+                    sample_rate_hz: 48_000,
+                    channels: 2,
+                }
+            ),
+            4
+        );
+    }
+
+    #[test]
+    fn sfx_capacity_rejects_missing_or_unbounded_hints() {
+        let output = OutputFormat {
+            sample_rate_hz: 48_000,
+            channels: 2,
+        };
+        assert_eq!(sfx_output_capacity(None, 44_100, output), 0);
+        assert_eq!(
+            sfx_output_capacity(Some(MAX_SFX_PREALLOC_SAMPLES as u64), 1, output),
+            0
+        );
     }
 
     #[test]

@@ -14,6 +14,7 @@ pub(crate) struct OpenFile {
     pub reader: Reader,
     pub channels: usize,
     pub sample_rate_hz: u32,
+    pub frames_total_hint: Option<u64>,
 }
 
 pub struct Reader {
@@ -72,6 +73,7 @@ pub(crate) fn open_file(path: &Path) -> Result<OpenFile, Box<dyn std::error::Err
         reader,
         channels: spec.channels,
         sample_rate_hz: spec.sample_rate_hz,
+        frames_total_hint: Some(spec.frames_total),
     })
 }
 

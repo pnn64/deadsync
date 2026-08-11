@@ -12,6 +12,7 @@ pub struct OpenFile {
     pub reader: Reader,
     pub channels: usize,
     pub sample_rate_hz: u32,
+    pub frames_total_hint: Option<u64>,
 }
 
 pub enum Reader {
@@ -68,6 +69,7 @@ pub fn open_file(path: &Path) -> Result<OpenFile, Box<dyn std::error::Error + Se
             reader: Reader::Flac(opened.reader),
             channels: opened.channels,
             sample_rate_hz: opened.sample_rate_hz,
+            frames_total_hint: opened.frames_total_hint,
         });
     }
     if mp3::path_is_mp3(path) {
@@ -76,6 +78,7 @@ pub fn open_file(path: &Path) -> Result<OpenFile, Box<dyn std::error::Error + Se
             reader: Reader::Mp3(opened.reader),
             channels: opened.channels,
             sample_rate_hz: opened.sample_rate_hz,
+            frames_total_hint: opened.frames_total_hint,
         });
     }
     if wav::path_is_wav(path) {
@@ -84,6 +87,7 @@ pub fn open_file(path: &Path) -> Result<OpenFile, Box<dyn std::error::Error + Se
             reader: Reader::Wav(opened.reader),
             channels: opened.channels,
             sample_rate_hz: opened.sample_rate_hz,
+            frames_total_hint: opened.frames_total_hint,
         });
     }
     if opus::path_is_opus(path) {
@@ -92,6 +96,7 @@ pub fn open_file(path: &Path) -> Result<OpenFile, Box<dyn std::error::Error + Se
             reader: Reader::Opus(opened.reader),
             channels: opened.channels,
             sample_rate_hz: opened.sample_rate_hz,
+            frames_total_hint: opened.frames_total_hint,
         });
     }
     if ogg_vorbis::path_is_ogg_vorbis(path) {
@@ -100,6 +105,7 @@ pub fn open_file(path: &Path) -> Result<OpenFile, Box<dyn std::error::Error + Se
                 reader: Reader::Opus(opened.reader),
                 channels: opened.channels,
                 sample_rate_hz: opened.sample_rate_hz,
+                frames_total_hint: opened.frames_total_hint,
             });
         }
         let opened = ogg_vorbis::open_file(path)?;
@@ -107,6 +113,7 @@ pub fn open_file(path: &Path) -> Result<OpenFile, Box<dyn std::error::Error + Se
             reader: Reader::Ogg(opened.reader),
             channels: opened.channels,
             sample_rate_hz: opened.sample_rate_hz,
+            frames_total_hint: opened.frames_total_hint,
         });
     }
     Err(format!("unsupported audio format for '{}'", path.display()).into())

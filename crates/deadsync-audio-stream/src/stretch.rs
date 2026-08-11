@@ -442,10 +442,25 @@ fn find_closest_match(buffer: &[f32], correlate: &[f32]) -> usize {
     for i in 0..=distance {
         let mut score = 0.0f32;
         let frames = &buffer[i..i + correlate.len()];
-        for j in 0..correlate.len() {
+        let mut j = 0usize;
+        while j + 8 <= correlate.len() {
             score += (frames[j] - correlate[j]).abs();
+            score += (frames[j + 1] - correlate[j + 1]).abs();
+            score += (frames[j + 2] - correlate[j + 2]).abs();
+            score += (frames[j + 3] - correlate[j + 3]).abs();
+            score += (frames[j + 4] - correlate[j + 4]).abs();
+            score += (frames[j + 5] - correlate[j + 5]).abs();
+            score += (frames[j + 6] - correlate[j + 6]).abs();
+            score += (frames[j + 7] - correlate[j + 7]).abs();
+            j += 8;
             if score >= best_score {
                 break;
+            }
+        }
+        if score < best_score {
+            while j < correlate.len() {
+                score += (frames[j] - correlate[j]).abs();
+                j += 1;
             }
         }
         if score < best_score {
@@ -468,6 +483,60 @@ mod tests {
                 ((freq_hz * 2.0 * PI * t).sin() * 0.5 * 32767.0) as i16
             })
             .collect()
+    }
+
+    fn closest_match_legacy(buffer: &[f32], correlate: &[f32]) -> usize {
+        if buffer.len() <= correlate.len() {
+            return 0;
+        }
+        let distance = buffer.len() - correlate.len();
+        let mut best_offset = 0usize;
+        let mut best_score = f32::INFINITY;
+        for i in 0..=distance {
+            let frames = &buffer[i..i + correlate.len()];
+            let mut score = 0.0f32;
+            for j in 0..correlate.len() {
+                score += (frames[j] - correlate[j]).abs();
+                if score >= best_score {
+                    break;
+                }
+            }
+            if score < best_score {
+                best_score = score;
+                best_offset = i;
+            }
+        }
+        best_offset
+    }
+
+    #[test]
+    fn chunked_correlation_matches_per_sample_exit() {
+        for correlate_len in [1, 7, 8, 9, 31, 64, 127, 360] {
+            let correlate = (0..correlate_len)
+                .map(|i| {
+                    let bits = (i as u32)
+                        .wrapping_mul(747_796_405)
+                        .wrapping_add(2_891_336_453);
+                    (bits as f32 / u32::MAX as f32).mul_add(2.0, -1.0)
+                })
+                .collect::<Vec<_>>();
+            let mut search = (0..correlate_len + 97)
+                .map(|i| {
+                    let bits = (i as u32)
+                        .wrapping_mul(2_246_822_519)
+                        .wrapping_add(3_266_489_917);
+                    (bits as f32 / u32::MAX as f32).mul_add(2.0, -1.0)
+                })
+                .collect::<Vec<_>>();
+            let inserted_at = 53.min(search.len() - correlate.len());
+            search[inserted_at..inserted_at + correlate.len()].copy_from_slice(&correlate);
+
+            assert_eq!(
+                find_closest_match(&search, &correlate),
+                closest_match_legacy(&search, &correlate),
+                "correlate_len={correlate_len}"
+            );
+        }
     }
 
     fn fft_peak_bin(samples: &[f32]) -> usize {

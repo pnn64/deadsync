@@ -20,6 +20,7 @@ pub(crate) struct OpenFile {
     pub reader: Reader,
     pub channels: usize,
     pub sample_rate_hz: u32,
+    pub frames_total_hint: Option<u64>,
 }
 
 pub struct Reader {
@@ -77,7 +78,7 @@ fn vorbis_track(tracks: &[Track]) -> Option<(&Track, &AudioCodecParameters)> {
 pub(crate) fn open_file(path: &Path) -> Result<OpenFile, Box<dyn std::error::Error + Send + Sync>> {
     let format = probe_format(path)?;
 
-    let (track_id, channels, sample_rate_hz, start_ts, decoder) = {
+    let (track_id, channels, sample_rate_hz, frames_total_hint, start_ts, decoder) = {
         let (track, cp) = vorbis_track(format.tracks())
             .ok_or_else(|| format!("OGG '{}' has no Vorbis track", path.display()))?;
         let channels = cp.channels.as_ref().map(|c| c.count()).unwrap_or(0);
@@ -90,7 +91,14 @@ pub(crate) fn open_file(path: &Path) -> Result<OpenFile, Box<dyn std::error::Err
         let decoder = symphonia::default::get_codecs()
             .make_audio_decoder(cp, &AudioDecoderOptions::default())
             .map_err(|e| format!("Cannot create Vorbis decoder for '{}': {e}", path.display()))?;
-        (track.id, channels, sample_rate_hz, track.start_ts, decoder)
+        (
+            track.id,
+            channels,
+            sample_rate_hz,
+            track.num_frames,
+            track.start_ts,
+            decoder,
+        )
     };
 
     let mut reader = Reader {
@@ -125,6 +133,7 @@ pub(crate) fn open_file(path: &Path) -> Result<OpenFile, Box<dyn std::error::Err
         reader,
         channels,
         sample_rate_hz,
+        frames_total_hint,
     })
 }
 

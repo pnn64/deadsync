@@ -284,7 +284,8 @@ fn resize_output(out_tmp: &mut Vec<i16>, produced_samples: usize) {
 
 #[inline(always)]
 fn sample_to_i16(sample: f32) -> i16 {
-    (sample * 32767.0).round().clamp(-32768.0, 32767.0) as i16
+    // Rust float-to-integer casts already saturate and map NaN to zero.
+    (sample * 32767.0).round() as i16
 }
 
 #[cfg(test)]
@@ -337,6 +338,45 @@ mod tests {
 
         assert_eq!(frames, 2);
         assert_eq!(out_tmp, [0, -32767, 0, -32767, 32767, 16384, 32767, 16384]);
+    }
+
+    #[test]
+    fn resampler_sample_cast_matches_clamped_conversion() {
+        fn legacy(sample: f32) -> i16 {
+            (sample * 32767.0).round().clamp(-32768.0, 32767.0) as i16
+        }
+
+        let edges = [
+            f32::NEG_INFINITY,
+            -2.0,
+            -1.000_000_1,
+            -1.0,
+            -0.5,
+            -0.0,
+            0.0,
+            0.5,
+            1.0,
+            1.000_000_1,
+            2.0,
+            f32::INFINITY,
+            f32::NAN,
+        ];
+        for sample in edges {
+            assert_eq!(super::sample_to_i16(sample), legacy(sample));
+        }
+        for exponent in 0..=u8::MAX {
+            for mantissa in (0..=0x7f_ffffu32).step_by(65_521) {
+                for sign in [0, 1u32 << 31] {
+                    let sample = f32::from_bits(sign | u32::from(exponent) << 23 | mantissa);
+                    assert_eq!(
+                        super::sample_to_i16(sample),
+                        legacy(sample),
+                        "bits={:08x}",
+                        sample.to_bits()
+                    );
+                }
+            }
+        }
     }
 
     #[test]
